@@ -7,16 +7,19 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.cond :as cond]
+            [jobs.lib.danger :as danger]
             [jobs.lib.foods :as foods]
             [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.shelter.sense :as sh-sense]
-            [jobs.lib.shelter.sleepers :as sh-sleepers]))
+            [jobs.lib.shelter.sleepers :as sh-sleepers]
+            [jobs.lib.threats :as threats]))
 
 (def doc
   "Leave the server for a short stint, then come back: the night job's way to let another player's sleep skip the
   night. Waits for night (:not-night); impossible once a log-out
   was unsupported (:log-out-unsupported).
-  Stays away :offline-ms, at most until morning; until morning when hurt-past-healing? (it would come back to a dark it cannot heal in). Back while it is still night, it waits :news-ms for the server's sleep
+  Stays away :offline-ms, at most until morning; until morning when back-unsafe (a known hostile could reach or shoot the
+  spot it comes back to, or the body is hurt past healing). Back while it is still night, it waits :news-ms for the server's sleep
   count (sent on a join while anyone sleeps) before it ends.
   A listed job that finds another job logged the body out since it was queued is done at once without acting.
   Ends with the result {:ms :how}. How is ok, cut, unsupported or closed.
@@ -71,11 +74,24 @@
   [self]
   (and (foods/fragile? self) (< (.-food self) foods/top-up-food)))
 
+(defn back-unsafe
+  "Why coming back online at night to the spot the body leaves would walk into danger, as text, else nil: a known
+  hostile within its follow range (jobs.lib.threats) is a real danger there (jobs.lib.danger/dangers; a heard one counts
+  as seen, the unseen being the worse case; one that hurt the body lately counts whatever the way test says): it stays
+  near the spot while the body is away. Or the body is hurt-past-healing?."
+  [c]
+  (let [p (:primitives c)
+        self (.self p)
+        ds (->> (danger/dangers p threats/max-follow-range {:ranged-radius (danger/ranged-radius)}
+                                {:sight? false :hit-ids (danger/hit-ids (ctx/view c))})
+                (filter #(<= (danger/mob-distance p %) (threats/follow-range (.-name %)))))]
+    (cond (seq ds) (str "a " (.-name (first ds)) " could reach the spot")
+          (hurt-past-healing? self) (str "health " (.toFixed (.-health self) 1) " and food " (.-food self) " heal nothing"))))
+
 (defn away-ms [c]
-  (let [self (.self (:primitives c))
-        until-morning (sh-clock/ms-until-morning (.-timeOfDay self))]
+  (let [until-morning (sh-clock/ms-until-morning (.-timeOfDay (.self (:primitives c))))]
     (cond (not (pos? until-morning)) (:offline-ms (:args c))
-          (hurt-past-healing? self) until-morning
+          (back-unsafe c) until-morning
           :else (min (:offline-ms (:args c)) until-morning))))
 
 (defn ^:async quote-of [c]
@@ -83,6 +99,8 @@
     {:uses {:job-time [0 s s]}}))
 
 (defn ^:async log-out! [c]
+  (when-let [why (and (pos? (sh-clock/ms-until-morning (.-timeOfDay (.self (:primitives c))))) (back-unsafe c))]
+    (ctx/emit! c :log-out.till-morning :info {:text (str "staying logged out until morning: " why)}))
   (let [r (await (ctx/act c :offline #js {:ms (away-ms c) :why "logged-out-for-sleeping-player"}))
         how (.-status r)
         out {:ms (.-ms r) :how how}]

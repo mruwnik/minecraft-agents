@@ -55,7 +55,7 @@
   - a roofed :roofed-places place within the night.sites ::home-radius setting (bed to use or carry), or farther while the walk fits the time left before the dark plus a margin (night.sites home-walk-*; bed or not), and the body not roofed: jobs.survival.enter-room walks in (one try tonight); a carried bed is not put down in the open while one is close (night.bed-kept).
   - an open door of the closed room the body stands in is shut; the room's doorway is filled before a carried bed goes down (ledger :doorway; one that cannot be filled for want of blocks, or was filled, is :doorway-tried, not tried again tonight).
   - a bed to use (sh-beds/bed-to-use) whose walk is safe (bed-walk-safe?: a whole route priced no dearer than staying put), or carried: jobs.survival.bed-down, called again until it ends; one that stops hostile-near ends the round nothing-possible :monsters-near (the trigger fires again after its cooldown).
-  - someone else asleep: jobs.survival.log-out, a 30 s stint (till morning for a body hurt past healing), not retried tonight when not ok.
+  - someone else asleep: jobs.survival.log-out, a 30 s stint (till morning when coming back is unsafe, log-out/back-unsafe), not retried tonight when not ok.
   - the sky not dark yet (dusk, a bed term started it): done; the shelter ways below wait for the dark.
   - a roof over a room with a hole (shelter.room_open warn): walled in under the roof (:enclose).
   - roofed, buried or shut in a closed room: done {:night :roofed}.

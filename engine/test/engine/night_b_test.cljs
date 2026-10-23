@@ -23,6 +23,7 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.targets :as targets]
             [jobs.survival.dig-pit-site :as pit-site]
+            [jobs.survival.log-out :as log-out]
             [jobs.survival.night :as night]
             [jobs.survival.night.sites :as sites]
             [engine.night-support :refer [night noon roof holds? write! status! closed-hut holds-after? sleeper offline-why on-return! sleep-count! log-out-child fired wide-ground hillside breached-room run-night-in home-roof lit-world know-home! night-at-home with-child-log walled-home walled-pen bed-world bed-places dug-into-home stone-room block-at room-with-doorway doorway-shut-early dawn-holds-now? dark-world flee-home-night stone-and-dirt-patch flee-with cave-blocks cave-night zombie]]))
@@ -68,6 +69,15 @@
                     (await (tu/run-until-empty eng 3))
                     (is (= [ms] (st/ms-of-offline p)) why)))))))))
 
+(deftest a-log-out-stint-lasts-till-morning-while-a-known-hostile-could-reach-the-spot
+  (doseq [[entities ms why] [[[zombie] 175050 "a zombie with a way to the body: away until morning, not back beside it"]
+                             [[(assoc zombie :pos {:x 38 :y 64 :z 0})] 30000 "a zombie beyond its follow range: back after :offline-ms"]
+                             [[] 30000 "no hostile known: back after :offline-ms"]]]
+    (is (= ms (log-out/away-ms {:primitives (tu/fake {:floor tu/walk-floor :time 20000 :entities entities})
+                                :args {:offline-ms 30000}
+                                :view (fn [] {:data mem/empty-data :now 0})}))
+        why)))
+
 (deftest a-log-out-ends-done-with-how-it-went
   (async done
     (tu/run-async done
@@ -90,7 +100,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [job (get registry/jobs 'jobs.survival.log-out)
-              q (await ((:quote-of job) {:primitives (tu/fake {:time night}) :args {:offline-ms 20000 :news-ms 3000}}))]
+              q (await ((:quote-of job) {:primitives (tu/fake {:time night}) :args {:offline-ms 20000 :news-ms 3000}
+                                           :view (fn [] {:data mem/empty-data :now 0})}))]
           (is (nil? (contract/quote-problem q)))
           (is (<= 3 (second (get-in q [:uses :job-time])))))))))
 
