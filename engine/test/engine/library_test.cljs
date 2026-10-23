@@ -17,6 +17,7 @@
             [jobs.lib.cost :as cost]
             [jobs.forestry.fell-tree.log :as fell-log]
             [jobs.lib.near :as near]
+            [jobs.lib.threats :as threats]
             [jobs.lib.world-files :as ew]
             [jobs.storage.deposit :as dep]))
 
@@ -559,7 +560,8 @@
                                              :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 5 :y 64 :z 0}}]})]
           (core/submit! eng (list 'test.flight {:settings {:jobs.lib.danger/hostile-radius 8 :jobs.survival.respond.state/still-s 3600}}) {})
           (await (core/tick! eng))
-          (is (< (.-x (.-pos (.self p))) -30) "moved away from the zombie, along x, beyond its follow range")
+          (let [pos (.-pos (.self p))]
+            (is (> (js/Math.hypot (- (.-x pos) 5) (.-z pos)) (threats/follow-range "zombie")) "moved away from the zombie beyond its follow range"))
           (is (= [] (:list (core/state eng))) "one round"))))))
 
 (deftest retreat-reads-the-hostile-radius-from-the-danger-settings
