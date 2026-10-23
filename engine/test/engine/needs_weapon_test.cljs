@@ -51,7 +51,8 @@
 
 (defn holds-with-listed?
   ([label args] (holds-with-listed? label args nil))
-  ([label args ahead]
+  ([label args ahead] (holds-with-listed? label args ahead nil))
+  ([label args ahead own]
    (let [clock (atom 0)
          store (mem/open (tu/tmp-dir) {:now #(deref clock)})]
      (when ahead
@@ -59,6 +60,8 @@
        (mem/update-job! store "j0" [] assoc :contract ahead))
      (swap! clock inc)
      (mem/create-job! store "j1" label args)
+     (when own
+       (mem/update-job! store "j1" [] assoc :contract own))
      (nw/needs-weapon (tu/fake-on-floor {:floor [-10 -10 10 10] :inventory []}) (mem/view store) {} (world/of-data {} {}) (cond-> #{"j1"} ahead (conj "j0"))))))
 
 (deftest a-listed-job-that-brings-a-weapon-is-waited-for
@@ -73,3 +76,14 @@
       "a minute's wait costs a twentieth of the sword")
   (is (true? (holds-with-listed? "jobs.items.obtain" {:item "iron_sword"} {:call {} :ran-ms 0}))
       "behind a job with no end the wait costs the sword's whole worth, more than getting one now"))
+
+(deftest a-started-weapon-maker-is-waited-for-only-for-the-time-it-has-left
+  (is (false? (holds-with-listed? "jobs.items.obtain" {:item "iron_sword"} nil {:call {:spend {:job-time 60}} :ran-ms 0}))
+      "a minute left costs a twentieth of the sword")
+  (is (true? (holds-with-listed? "jobs.items.obtain" {:item "iron_sword"} nil {:call {:spend {:job-time 3600}} :ran-ms 0}))
+      "an hour left is past the need: the sword comes too late, a started job or not"))
+
+(deftest a-wait-past-the-need-is-no-gain-when-a-trip-costs-more-than-the-sword
+  (is (true? (settings/with-settings {:jobs.lib.cost.value/trip 100000}
+               #(holds-with-listed? "jobs.items.obtain" {:item "iron_sword"} {:call {} :ran-ms 0})))
+      "the wait costs the sword's whole worth, a trip costs more, but the sword is not there in time"))

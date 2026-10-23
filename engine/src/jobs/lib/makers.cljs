@@ -40,13 +40,13 @@
         ##Inf)))
 
 (defn wait-s
-  "Seconds before listed job id starts: 0 once it has; else the time-left of every listed job queued before it (their
-  :queued-t: the queue runs in that order)."
+  "Seconds before listed job id has the item: a started one's time-left; else the time-left of every listed job queued
+  before it (their :queued-t: the queue runs in that order), when it starts."
   [view live id]
   (let [mine (mem/job-mem view id [])
         now (:now view)]
     (if (:call (:contract mine))
-      0
+      (time-left mine now)
       (->> live
            (map #(mem/job-mem view % []))
            (filter #(< (:queued-t % ##Inf) (:queued-t mine 0)))
@@ -54,15 +54,17 @@
            (reduce + 0)))))
 
 (defn waiting-pays?
-  "Whether a listed job brings an item `wanted?` holds for soon enough that waiting for it (cost/wait-price over need-s,
-  the seconds until the item is needed, of the wait-s of the soonest) costs less than getting it now: a trip at least,
-  else what it is worth to the body (a priced search spends that)."
+  "Whether a listed job brings an item `wanted?` holds for in time, before need-s, the seconds until the item is needed, and
+  waiting for it (cost/wait-price over need-s, of the wait-s of the soonest) costs less than getting it now: a trip at
+  least, else what it is worth to the body (a priced search spends that)."
   [p view kn live wanted? need-s]
   (boolean
    (when-let [found (seq (makers view kn live wanted?))]
      (let [body (cost/death-body p view)
            at (u/self-pos {:primitives p})]
        (some (fn [[id names]]
-               (let [worth (cost/worth-to body names at)]
-                 (< (cost/wait-price worth (wait-s view live id) need-s) (max (cost/trip) worth))))
+               (let [worth (cost/worth-to body names at)
+                     wait (wait-s view live id)]
+                 (and (< wait need-s)
+                      (< (cost/wait-price worth wait need-s) (max (cost/trip) worth)))))
              found)))))

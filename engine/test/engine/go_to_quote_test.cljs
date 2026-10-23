@@ -4,7 +4,6 @@
             [engine.registry :as registry]
             [engine.settings :as settings]
             [engine.core :as core]
-            [engine.ctx :as ctx]
             [engine.event-api :as event-api]
             [engine.events :as events]
             [engine.fake :as fake]
@@ -122,8 +121,8 @@
     (is (< (js/Math.abs (- mean (+ 5 (* 4 cost-planner/walk-floor (quote-unseen-factor))))) 1e-9)
         "four blocks are left past the route's end, not the 30 of the body")))
 
-(deftest a-search-cut-by-the-deadline-is-a-straight-line-estimate
-  (let [r {:found false :reason :late :near 30 :goal [30 64 0]}
+(deftest a-search-still-going-on-is-a-straight-line-estimate
+  (let [r {:found false :reason :searching :near 30 :goal [30 64 0]}
         q (pv/quote-of-route r false)
         [least mean most] (get-in q [:uses :job-time])]
     (is (= 0 least))
@@ -203,19 +202,14 @@
           (is (< (:length (:partial out)) 7))
           (is (= [0 64 1] (pos-of p))))))))
 
-(deftest a-far-goal-is-one-plan-bounded-by-the-planners-node-limit
+(deftest a-far-goal-spends-one-round-of-search-and-is-quoted-as-an-estimate
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out]} (await (preview (floor 0 0 80 80) {:pos [400 64 40] :range 0}))]
+        (let [{:keys [out quote]} (await (preview (floor 0 0 80 80) {:pos [400 64 40] :range 0}))]
           (is (false? (:found out)))
-          (is (pos? (:nodes out)))
-          (is (<= (:nodes out) 200000) "the planner's maxNodes bounds the plan"))))))
-
-(deftest a-search-past-the-quote-deadline-is-cut
-  (let [c {:quote-deadline 10 :view (fn [] {:now 20})}]
-    (is (false? (ctx/alive? (pv/with-deadline c))))
-    (is (true? (ctx/alive? (pv/with-deadline (assoc c :quote-deadline 30)))))))
+          (is (= :searching (:reason out)) "the node budget of one round, not a clock, ends it")
+          (is (true? (:estimate quote)) "priced as a straight line until the search ends"))))))
 
 (defn pond
   "Land at y 63 from x 0 to 20 and z -10 to 10, with a pond of water over x 5-15 and z -8 to 8 (stone beneath at y 61)."

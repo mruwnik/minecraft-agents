@@ -356,6 +356,36 @@
           (is (= 2 (get-in e [:coverage :legs])) "two 16-block walks fit in 12 s, a third does not")
           (is (re-find #"the next walk costs \d+ s, more than the \d+ s left" (:text e))))))))
 
+(defn ^:async search-quoted!
+  "A priced search whose go-to quotes are answered by (quote-for n args) for the nth quote asked; {:state s :asked [args ...]}."
+  [quote-for]
+  (let [asked (atom [])
+        arity "cljs$core$IFn$_invoke$arity$3"
+        real (aget ctx/quote arity)]
+    (aset ctx/quote arity (fn [_ _ args] (js/Promise.resolve (quote-for (count (swap! asked conj args)) args))))
+    (let [state (try (await (search! {:target "diamond_block" :worth 12 :max-distance 20} {}))
+                     (finally (aset ctx/quote arity real)))]
+      {:state state :asked @asked})))
+
+(deftest a-leg-with-no-route-fails-alone-and-the-next-is-tried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [state asked]} (await (search-quoted! (fn [_ _] {:uses {:job-time [##Inf ##Inf ##Inf]}})))
+              e (not-found-of state)]
+          (is (not= :price (:why e)) "a leg no route reaches is not a price over the worth")
+          (is (< 1 (count (distinct (map :pos asked)))) "the next frontier is tried"))))))
+
+(deftest a-quote-search-that-has-not-ended-is-asked-again-next-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [state asked]} (await (search-quoted! (fn [n _] (if (= 1 n)
+                                                                         {:uses {:job-time [0 1 ##Inf]} :estimate true}
+                                                                         {:uses {:job-time [1 1 1]}}))))]
+          (is (= (:pos (first asked)) (:pos (second asked))) "the same leg is quoted again, not walked or priced on an estimate")
+          (is (not= :price (:why (not-found-of state)))))))))
+
 (deftest the-spiral-legs-nearest-the-body-come-first
   (let [c {:args {:pattern :spiral} :primitives #js {:self (fn [] #js {:pos #js {:x 42.5 :y 0 :z 0.5}})}}
         m {:origin [0 0 0]}

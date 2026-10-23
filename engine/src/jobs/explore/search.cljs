@@ -539,8 +539,9 @@
 
 (defn ^:async price-leg!
   "With :worth, the price of a walk toward leg before it starts (jobs.lib.cost/leg-price of go-to's quote, the death it
-  risks under rock or in the dark where the body stands), booked as :leg-price: nil when it is affordable (or unpriced),
-  else the :price ending."
+  risks under rock or in the dark where the body stands), booked as :leg-price: nil when it is affordable (or unpriced,
+  or no route is known: the walk fails that leg alone), :continue while go-to's quote search goes on (it resumes at the
+  next call), else the :price ending."
   [c leg]
   (when-let [worth (:worth (:args c))]
     (let [p (:primitives c)
@@ -548,10 +549,12 @@
           q (await (ctx/quote c 'jobs.movement.go-to (leg-args c leg)))
           price (cost/leg-price (cost/death-body p (ctx/view c)) q
                                 {:underground? (sh-sense/buried? p) :night? (look/dark-here? p)} {:x x :y y :z z})]
-      (if (> price (- worth (:spent (ctx/mem c) 0)))
-        (do (ctx/update-mem! c assoc :next-price price)
-            (finish! c :not-found :price))
-        (do (ctx/update-mem! c assoc :leg-price price) nil)))))
+      (cond
+        (:estimate q) :continue
+        (infinite? price) (do (ctx/update-mem! c dissoc :leg-price) nil)
+        (> price (- worth (:spent (ctx/mem c) 0))) (do (ctx/update-mem! c assoc :next-price price)
+                                                       (finish! c :not-found :price))
+        :else (do (ctx/update-mem! c assoc :leg-price price) nil)))))
 
 (defn ^:async walk!
   "One go-to call toward the leg (the last one before the failed legs in a row end the search may dig out); on its end book the leg arrived or failed. :continue when go-to yields, else :again
@@ -643,27 +646,31 @@
       (and (nil? (:worth (:args c))) (>= (:legs m 0) (settings/get settings ::max-legs)))
       (finish! c :not-found :legs)
       :else
-      (let [{:keys [leg step column tried failed skipped unloaded more held]} (choose-leg c m names ns)]
-        (ctx/update-mem! c (fn [m] (-> m
-                                       (update :tried (fnil into []) tried)
-                                       (update :failed (fnil into []) failed)
-                                       (update :skipped (fnil + 0) skipped)
-                                       (assoc :choosing (boolean (and more (not leg))))
-                                       (assoc :deferred (when (and more (not leg)) unloaded)))))
-        (cond
-          leg (or (await (price-leg! c leg))
-                  (do (ctx/update-mem! c (fn [m] (-> m (assoc :leg leg :leg-column column)
-                                                     (update :legs (fnil + 0) (if step 0 1)))))
-                      (note-leg-start! c leg)
-                      (await (walk! c))))
-          more :again
-          (and (empty? unloaded) (pos? held)) (do (ctx/update-mem! c dissoc :blocked) :again)
-          (empty? unloaded) (finish! c :not-found :distance)
-          (far-unloaded c unloaded) (or (await (price-leg! c (far-unloaded c unloaded)))
-                                        (do (ctx/update-mem! c assoc :leg (far-unloaded c unloaded) :leg-column nil)
-                                            (await (walk! c))))
-          :else (do (await (child/pause! c (/ (wait-ms) 1000) :chunks-loading))
-                    :continue))))))
+      (let [{:keys [leg step column tried failed skipped unloaded more held]} (choose-leg c m names ns)
+            priced (when leg (await (price-leg! c leg)))]
+        (if (= :continue priced)
+          :continue
+          (do
+            (ctx/update-mem! c (fn [m] (-> m
+                                           (update :tried (fnil into []) tried)
+                                           (update :failed (fnil into []) failed)
+                                           (update :skipped (fnil + 0) skipped)
+                                           (assoc :choosing (boolean (and more (not leg))))
+                                           (assoc :deferred (when (and more (not leg)) unloaded)))))
+            (cond
+              leg (or priced
+                      (do (ctx/update-mem! c (fn [m] (-> m (assoc :leg leg :leg-column column)
+                                                         (update :legs (fnil + 0) (if step 0 1)))))
+                          (note-leg-start! c leg)
+                          (await (walk! c))))
+              more :again
+              (and (empty? unloaded) (pos? held)) (do (ctx/update-mem! c dissoc :blocked) :again)
+              (empty? unloaded) (finish! c :not-found :distance)
+              (far-unloaded c unloaded) (or (await (price-leg! c (far-unloaded c unloaded)))
+                                            (do (ctx/update-mem! c assoc :leg (far-unloaded c unloaded) :leg-column nil)
+                                                (await (walk! c))))
+              :else (do (await (child/pause! c (/ (wait-ms) 1000) :chunks-loading))
+                        :continue))))))))
 
 (defn ^:async patch-round!
   "One pass of a :patch search: scan here; with none, the next leg."

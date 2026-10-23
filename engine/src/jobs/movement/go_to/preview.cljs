@@ -7,13 +7,13 @@
     opened or dug. :uses :job-time [s s 3s] from the planner's seconds (partial or no route: no most; none and no way that
     changes the world: ##Inf), :health the planned damage, :moves-to the goal cell, and :route {:found :length :seconds
     :summary :steps :moves :doors :waypoints :damage :drown :nodes :dark :dark-seconds} (:dark: feet cells seen dark, or unseen at night; :dark-seconds the planner's extra seconds for them), or {:found false :reason :near :partial} (:reason
-    as :why, :bad-pos and other refusals, :late past the quote deadline); with :unknown :unseen-floors and :dark-best."
+    as :why, :bad-pos and other refusals, :searching while the quote's budgeted search has not ended); with :unknown :unseen-floors and :dark-best."
   (:require [engine.contract :as contract]
-            [engine.ctx :as ctx]
             [jobs.lib.cost.planner :as cost-planner]
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.walk :as walk]
+            [jobs.lib.walk.search :as wsearch]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.world :as wworld]
             [jobs.movement.go-to.aim :as gaim]
@@ -83,18 +83,12 @@
                            (assoc seen :status :no-path)))
           (assoc :reason :unseen-floor-dark))))))
 
-(defn with-deadline
-  "c whose search is cut (ctx/alive? false, wplan/stop-if-cut!) once the clock passes its :quote-deadline."
-  [c]
-  (let [alive? (:alive? c) qd (:quote-deadline c)]
-    (cond-> c qd (assoc :alive? #(and (or (nil? alive?) (alive?)) (<= (ctx/now c) qd))))))
-
 (def refusals "Route reasons that say the call cannot start, not that no way was found." #{:bad-pos :bad-name :unknown-place :unsupported})
 
 (defn ^:async route!
   "The dry run of go-to call c (args with the body's food and the walk limits): its route, {:found true ...} or {:found
   false :reason ...} (report), with :goal the cell planned to and :nodes the search's expansions; a refusal {:found
-  false :reason :text}; :late (with :near, the blocks to the goal) when the search outran the quote deadline."
+  false :reason :text}; :searching (with :near, the blocks to the goal) when the search spent its round budget: it goes on at the next quote of the same walk (walk.search/searches)."
   [c]
   (let [{:keys [doors range tolls one-way unknown]} (:args c)
         refusal (gaim/args-refusal c)
@@ -107,23 +101,20 @@
             policy (cond-> (wworld/body-policy c)
                      (not= :never doors) (update :moves conj :open))
             spec (when unknown (wworld/with-seeds (wworld/unknown-spec) [(:x pos) (:y pos) (:z pos)] nil))
-            plan (try (await (near/plan! (with-deadline c) [(:x pos) (:y pos) (:z pos)] (or range 1) doors policy [] false
-                                         (when-not (= :closed one-way) :open) nil true
-                                         (wworld/dangers?) nil (wworld/dark?) tolls spec))
-                      (catch :default e
-                        (when-not (= "cut" (.-code e)) (throw e))))]
-        (if (nil? plan)
-          (let [near (u-dist c pos)]
-            (ctx/emit! c :go-to.quote-cut :debug {:goal [(:x pos) (:y pos) (:z pos)] :near near :text "the quote's search outran its deadline; priced as a straight line"})
-            {:found false :reason :late :near near :goal [(:x pos) (:y pos) (:z pos)] :text "the search outran the quote's deadline"})
-          (assoc (report c plan pos policy spec) :goal [(:x pos) (:y pos) (:z pos)] :nodes (some-> plan :r .-expanded)))))))
+            plan (await (near/plan! c [(:x pos) (:y pos) (:z pos)] (or range 1) doors policy [] false
+                                    (when-not (= :closed one-way) :open) wsearch/round-budget false
+                                    (wworld/dangers?) nil (wworld/dark?) tolls spec))
+            goal [(:x pos) (:y pos) (:z pos)]]
+        (if (= "searching" (:status plan))
+          {:found false :reason :searching :near (u-dist c pos) :goal goal :text "the quote's search goes on at the next quote"}
+          (assoc (report c plan pos policy spec) :goal goal :nodes (some-> plan :r .-expanded)))))))
 
 (defn quote-of-route
   "The quote of route r: time from the planner's seconds (most quote-most-factor times them); a partial route or none
-  adds quote-unseen-factor walk blocks (cost.planner/walk-floor) for each block still to go, from the route's end to the goal, and has no most; a search cut by the deadline (:late) is priced so too, from its :near blocks, marked :estimate true; none at all, or a refusal, is ##Inf unless escalating? (a way
+  adds quote-unseen-factor walk blocks (cost.planner/walk-floor) for each block still to go, from the route's end to the goal, and has no most; a search still going on (:searching) is priced so too, from its :near blocks, marked :estimate true; none at all, or a refusal, is ##Inf unless escalating? (a way
   that changes the world may still get there). Health: the planned damage. :moves-to the goal."
   [{:keys [found seconds partial near reason damage goal] :as r} escalating?]
-  (let [late? (= :late reason)
+  (let [searching? (= :searching reason)
         s (or seconds (:seconds partial) 0)
         [ex _ ez] (last (:waypoints partial))
         rest-blocks (if (and goal ex) (js/Math.round (js/Math.hypot (- (first goal) ex) (- (nth goal 2) ez))) (or near 0))
@@ -131,9 +122,9 @@
         time (cond
                found [s s (* s (quote-most-factor))]
                (refusals reason) (get-in contract/too-expensive [:uses :job-time])
-               (or partial late? escalating?) [s (+ s rest-s) ##Inf]
+               (or partial searching? escalating?) [s (+ s rest-s) ##Inf]
                :else (get-in contract/too-expensive [:uses :job-time]))]
     (cond-> {:uses {:job-time time} :route (dissoc r :goal)}
       (and found damage) (assoc-in [:uses :health] [0 damage damage])
-      late? (assoc :estimate true)
+      searching? (assoc :estimate true)
       goal (assoc :moves-to goal))))
