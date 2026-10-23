@@ -1,5 +1,6 @@
 ;; Card 0967797b: the died record lists the worn armour and the off-hand item, so recover-drops values a pile of worn iron armour and a shield (the body carries nothing else) and fetches it instead of skipping it as worthless.
 ;; The kit is put on with RCON (equip is not under test); the body dies at [14 0 14], well inside the plot (a drop flung against the wall is not found), and respawns at [4 0 4].
+;; Should-succeed: once the pile is collected the body wears it: helmet, chestplate, leggings, boots and the shield in the off hand (every case waits for that).
 {:defaults
  {:tags [:survival :death :jobs]
   :time :any
@@ -13,7 +14,8 @@
         [:kill-body]
         [:await {:source :body :kind :respawned} 30]
         [:until [:memory {:entries {:deaths [{:data {:pos [:any]}}]}}] 15]
-        [:job (jobs.survival.recover-drops)]]
+        [:job (jobs.survival.recover-drops)]
+        [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:head {:name "iron_helmet"} :torso {:name "iron_chestplate"} :legs {:name "iron_leggings"} :feet {:name "iron_boots"} :offHand {:name "shield"}}}] 120]]
   :limit-s 150}
  :cases
  [{:name "worn-armour-and-shield-pile-fetched"
@@ -22,7 +24,4 @@
             {:event {:source :job :kind :completed :data {:decision :collected}} :within-s 120 :of-job true}]}
   {:name "worn-gear-pile-spread-wide-fetched"
    :body {:at [26.5 0 26.5] :spawnpoint [4 0 4]}
-   :expect [{:event {:source :job :kind :completed :data {:decision :collected}} :within-s 120 :of-job true}]}
-  {:name "worn-armour-pile-is-worn-again"
-   :act [[:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:head {:name "iron_helmet"} :torso {:name "iron_chestplate"} :legs {:name "iron_leggings"} :feet {:name "iron_boots"}}}] 120]]
    :expect [{:event {:source :job :kind :completed :data {:decision :collected}} :within-s 120 :of-job true}]}]}
