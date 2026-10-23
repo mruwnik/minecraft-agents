@@ -16,6 +16,7 @@
             [jobs.lib.standing :as standing]
             [jobs.lib.steps :as steps]
             [jobs.lib.util :as u]
+            [jobs.lib.waits :as waits]
             [jobs.lib.hunting :as hunting]
             [jobs.lib.world :as known]))
 
@@ -329,7 +330,7 @@
       (ctx/end c :done nil (assoc out :text (str "maintain done: " (count adults) " adults, " (count babies) " babies"))))))
 
 (defn ^:async step-steps
-  "One step: finish, or one call of the next step's child. :again after it ended (a failed child is booked with its kind and cause), :yield while it waits on the world, :done at the end."
+  "One step: finish, or one call of the next step's child. :again after it ended (a failed child is booked with its kind and cause), :yield while it waits on the world (a child that ended condition-failed for a waits/wait-reasons reason, such as :dark, is called again then, not booked as failed), :done at the end."
   [c]
   (when-not (:todo (ctx/mem c))
     (ctx/update-mem! c assoc :todo steps :report {}))
@@ -339,7 +340,7 @@
       (finish! c (:report p))
       (let [step (:slot call)
             _ (ctx/update-mem! c assoc :call-args (:args call))
-            e (await (ctx/call c step (:job call) (:args call)))
+            e (waits/waiting-out c (await (ctx/call c step (:job call) (:args call))))
             book! (fn [entry] (ctx/update-mem! c #(-> % (update :todo rest) (dissoc :call-args) (assoc-in [:report step] entry))))]
         (cond
           (= :continue e) :yield

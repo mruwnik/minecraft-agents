@@ -2,6 +2,8 @@
   "jobs.animals.maintain against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
+            [engine.contract :as contract]
+            [engine.ctx :as ctx]
             [engine.hostile-test :as h]
             [engine.fake :as fake]
             [engine.settings :as settings]
@@ -137,6 +139,33 @@
           (is (= :stopped (:kind (done-event s))))
           (is (= :failed-steps (or (:cause (done-event s)) (get-in (done-event s) [:data :cause]))))
           (is (true? (finished? s))))))))
+
+(defn ^:async herd-ends
+  "The pass of a body with one adult in a pen of target 4, whose herd child ends condition-failed for reason."
+  [reason]
+  (let [call ctx/call]
+    (set! ctx/call (fn [c slot job args]
+                     (if (= :herd slot)
+                       (js/Promise.resolve (contract/ending :condition-failed {:reason reason :text "stub"} nil))
+                       (call c slot job args))))
+    (try (await (scenario {:target 4} {:entities [(cow 1 2)]} 12))
+         (finally (set! ctx/call call)))))
+
+(deftest a-herd-that-waits-for-light-is-waited-for-not-booked-failed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (herd-ends :dark))]
+          (is (nil? (done-event s)) "the pass has not ended")
+          (is (false? (finished? s))))))))
+
+(deftest a-herd-that-fails-for-another-reason-ends-the-pass
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (herd-ends :unreachable))]
+          (is (= :stopped (:kind (done-event s))))
+          (is (= :unreachable (get-in (done-event s) [:steps :herd :cause]))))))))
 
 (deftest one-adult-cannot-breed-herd-is-asked-for-another
   (async done
