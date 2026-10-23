@@ -25,14 +25,14 @@
 
 (defn note-child-wait!
   "A listed job's round returned :declined because its child's check waits, or :continue because its called child's
-  can-run? did (reason, or nil when the child gave none): the job waits with that reason, told once. Any other round result drops a wait taken from a child."
+  can-run? did (reason, or nil when the child gave none): the job waits with that reason, told once (its :recheck-after-ms rests the job, schedule/resting?). Any other round result drops a wait taken from a child."
   [eng id status reason]
   (let [before (get @(:waiting eng) id)]
     (cond
       (and (#{:declined :continue} status) reason)
-      (let [r (with-meta (wait-reason reason) {:child true})]
+      (let [r (with-meta (wait-reason reason) {:child true :t (now eng)})]
+        (swap! (:waiting eng) #(assoc (select-keys % (:list (state eng))) id r))
         (when (not= before r)
-          (swap! (:waiting eng) #(assoc (select-keys % (:list (state eng))) id r))
           (emit! eng (merge (job-fields eng id)
                             {:source :job :kind :waiting :level :info :data r :text (waiting-text r)}))))
       (:child (meta before))

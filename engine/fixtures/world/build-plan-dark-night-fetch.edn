@@ -1,6 +1,8 @@
 ;; Card 7c4f0664: jobs.build.from-plan at a dark site beyond the spawn-free radius at night, with no torch carried, fetches torches
 ;; (a seen chest holds 8) and lights the site (build.light-area) instead of waiting for dawn. Without a source the wait stays, naming its reason.
 ;; Should-succeed: torches-are-fetched-and-the-far-site-built. Should-fail (waits, never completes): no-torch-source-keeps-the-named-wait.
+;; Card 57a7feed: a-seq-waiting-for-light-is-not-rounded-every-tick: the seq's child waits for dawn (:recheck-after-ms), so the seq rests
+;; until then: at most 2 rounds in 40 s, not one per tick.
 ;; Needs night: run with --allow-time --time-log <the shared time log>.
 {:defaults
  {:tags [:build :light :night :fetch]
@@ -20,4 +22,8 @@
   {:name "no-torch-source-keeps-the-named-wait"
    :act [[:job (jobs.build.from-plan {:plan "$plan:floor"})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]}]}
+            {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]}
+  {:name "a-seq-waiting-for-light-is-not-rounded-every-tick"
+   :act [[:job (seq (jobs.build.from-plan {:plan "$plan:floor"}))]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 60 :of-job true}
+            {:count-event {:source :job :kind :round_started} :for-s 40 :at-most 2}]}]}

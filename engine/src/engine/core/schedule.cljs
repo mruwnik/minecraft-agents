@@ -30,16 +30,24 @@
 
 (defn note-waiting!
   "Listed job id's check declined with reason (or none): emit job.waiting when the reason is new for this wait, and
-  keep it for jobs show and observe. A passing check (reason ::passed) ends the wait."
+  keep it for jobs show and observe, with the time it was told (resting?). A passing check (reason ::passed) ends the wait."
   [eng id reason]
   (let [before (get @(:waiting eng) id)]
     (if (= ::passed reason)
       (when (and before (not (:child (meta before)))) (swap! (:waiting eng) dissoc id))
-      (let [r (wait-reason reason)]
+      (let [r (with-meta (wait-reason reason) {:t (now eng)})]
+        (swap! (:waiting eng) #(assoc (select-keys % (:list (state eng))) id r))
         (when (not= before r)
-          (swap! (:waiting eng) #(assoc (select-keys % (:list (state eng))) id r))
           (emit! eng (merge (job-fields eng id)
                             {:source :job :kind :waiting :level :info :data r :text (waiting-text r)})))))))
+
+(defn resting?
+  "Whether listed job id waits with a reason naming :recheck-after-ms (its own check's, or its round's child's) that has not
+  lapsed: it is neither checked nor given a round until then, as a held trigger is not. Never a job closing for its cleanup."
+  [eng id]
+  (let [w (get @(:waiting eng) id)
+        ms (:recheck-after-ms w)]
+    (boolean (and ms (< (- (now eng) (:t (meta w))) ms) (not (cleanup/closing? eng id []))))))
 
 (defn held-trigger
   "Why trigger id is held: the reason map of the start check of its job that declined, or nil."
@@ -70,14 +78,14 @@
     ok?)))
 
 (defn choose-listed
-  "The listed job to run next, never a failed one nor, while the body is dead, one kept through the death: a cancelled
+  "The listed job to run next, never a failed one, a resting? one nor, while the body is dead, one kept through the death: a cancelled
   job owing its cleanup, else the cut job, else round-robin from the cursor over passing checks."
   [eng]
   (let [{:keys [list instances resume cursor]} (state eng)
         n (count list)
         dead (dead? eng)
         failed? (fn [id] (contains? (:failed (state eng)) id))
-        runnable? (fn [id] (and (not (failed? id)) (not (and dead (:survive-death? (instances id)))) (check-passes? eng id)))
+        runnable? (fn [id] (and (not (failed? id)) (not (and dead (:survive-death? (instances id)))) (not (resting? eng id)) (check-passes? eng id)))
         closing (some #(when (and (cleanup/closing? eng % []) (runnable? %)) %) list)]
     (cond
       closing closing

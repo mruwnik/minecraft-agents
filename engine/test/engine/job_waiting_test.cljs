@@ -9,7 +9,8 @@
             [engine.event-api :as event-api]
             [engine.job-api :as job-api]
             [engine.test-util :as tu]
-            [jobs.lib.cond :as cond]))
+            [jobs.lib.cond :as cond]
+            [jobs.lib.waits :as waits]))
 
 (def gate
   "What the gated job's check answers: true (passes), or the :later status it waits with."
@@ -22,8 +23,20 @@
   (ctx/update-mem! c update :n (fnil inc 0))
   :continue)
 
+(def asked (atom 0))
+
+(def dark-later (contract/later :dark "dark" :recheck-after-ms 60000))
+
+(defn ^:async child-waits-round
+  "A round whose called child ended condition-failed :dark: it waits that out (:continue)."
+  [c]
+  (swap! asked inc)
+  (waits/waiting-out c (contract/ending :condition-failed (contract/status-cause dark-later) nil)))
+
 (def registry
   {'gated (tu/job [gate-condition] count-round)
+   'counted-dark (tu/job [(fn [_] (swap! asked inc) dark-later)] count-round)
+   'child-dark (tu/job child-waits-round)
    'never (tu/job [(constantly (contract/later :not-ready "not ready"))] count-round)
    'torch-lit {:can-start? (cond/because :few-torches (cond/>= (cond/inventory "torch") 4)) :round count-round}})
 
@@ -32,7 +45,7 @@
         [seen sink] (tu/legacy-capture-sink)
         eng (core/create {:primitives (tu/fake {}) :jobs registry :triggers {} :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    {:eng eng :seen seen}))
+    {:eng eng :seen seen :clock clock}))
 
 (defn ^:async ticks [eng n]
   (dotimes [_ n] (await (core/tick! eng))))
@@ -115,3 +128,18 @@
             (await night))
           (await (ticks eng 2))
           (is (nil? (:waiting (job-api/summary eng id))) "the reason goes with the reflex"))))))
+
+(deftest a-wait-naming-its-recheck-time-is-not-asked-again-before-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [spec ['(counted-dark) '(child-dark)]]
+          (reset! asked 0)
+          (let [{:keys [eng clock]} (setup)
+                id (core/submit! eng spec {})]
+            (dotimes [_ 40] (swap! clock + 250) (await (core/tick! eng)))
+            (is (= 1 @asked) (str spec ": 10 s of ticks inside a 60 s recheck, one check or round"))
+            (is (= :dark (get-in (job-api/summary eng id) [:waiting :reason])) (str spec " says why"))
+            (swap! clock + 60000)
+            (await (core/tick! eng))
+            (is (= 2 @asked) (str spec ": asked again once it lapsed"))))))))
