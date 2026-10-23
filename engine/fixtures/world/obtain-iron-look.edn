@@ -1,6 +1,6 @@
 ;; Iron wanted, none seen (obtain.plan/search-way): a look over the rock in sight against a strip tunnel from the feet.
-;; Should-succeed: a lit hall with a stone floor at y -41 (iron's small placement) and iron behind a wall: the look is
-;; cheaper than a deepslate tunnel, so the body searches, sees the ore and mines it.
+;; Should-succeed: a lit hall with a stone floor at y -41 (iron's small placement only) and iron behind a wall: for 8 raw
+;; iron the look pays and a tunnel there does not, so the body searches, sees the ore and goes to mine it.
 ;; Should-fail (no look): a dirt floor in a bedrock shell shows no rock: the mine tunnels for it, no search starts.
 {:defaults
  {:tags [:obtain :explore :mine] :time :any
@@ -11,13 +11,12 @@
  :cases
  [{:name "unseen-iron-in-a-stone-hall-is-looked-for-not-tunnelled"
    :blocks [[:fill [12 0 0] [12 4 17] "stone"] [:set [22 0 4] "iron_ore"]]
-   :act [[:job (jobs.items.obtain {:item "raw_iron" :count 1 :ways #{:gather}})]]
+   :act [[:job (jobs.items.obtain {:item "raw_iron" :count 8 :ways #{:gather}})]]
    :expect [{:event {:source :job :kind :obtain.exploring :data {:for ["deepslate_iron_ore" "iron_ore"]}} :within-s 60 :of-job true}
-            {:event {:source :job :kind :completed} :within-s 220 :of-job true}]
-   :after [[:item "raw_iron" [:>= 1]]]}
+            {:event {:source :job :kind :obtain.gathering :data {:item "raw_iron"}} :within-s 200 :of-job true}]}
   {:name "no-rock-in-sight-tunnels-for-iron-without-a-look"
    :plot {:light :lit :height 6 :length 48 :width 24 :floor "dirt"}
-   :act [[:job (jobs.items.obtain {:item "raw_iron" :count 1 :ways #{:gather}})]]
+   :act [[:job (jobs.items.obtain {:item "raw_iron" :count 8 :ways #{:gather}})]]
    :expect [{:event {:source :job :kind :obtain.gathering :data {:item "raw_iron"}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :obtain.exploring} :for-s 60 :until {:source :job :kind :obtain.gathering}}]
    :limit-s 90}]}
