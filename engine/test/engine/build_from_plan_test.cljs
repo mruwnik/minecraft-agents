@@ -257,7 +257,20 @@
                                    {"ring" plan} [] {'jobs.access.tunnel tunnel})
               _ (await (child-outcome eng job {:plan "ring"} 200))]
           (is (empty? @targets) "the cell was never seen in rock: no tunnel is begun")
-          (is (>= (.-z (.-pos (.self p))) 4) "the body dug out of the shell and walked toward the cell"))))))
+          (is (>= (.-z (.-pos (.self p))) 4) "the body dug out of the shell and walked toward the cell")
+          (is (= "dirt" (block p [12 64 8])) "the cell is placed: open ground at the edge of sight is not a wall"))))))
+
+(deftest a-place-beside-a-body-that-sees-only-a-little-open-ground-does-not-seal-it-in
+  (let [{:keys [p]} (start {:self {:pos {:x 4.5 :y 64 :z 4.5}} :sight 3} {} [])]
+    (is (not (fp-cells/seals? {:primitives p} [5 64 4])))
+    (is (not (fp-cells/seals? {:primitives p} [4 64 5])))))
+
+(deftest a-place-that-closes-the-last-gap-of-a-seen-room-seals-the-body-in-with-or-without-a-pickaxe
+  (let [room (into {} (for [x (range 3 6) z (range 3 6) y [64 65 66] :when (not (and (= x 4) (= z 4) (#{64 65} y)))]
+                        [(h/cell-key x y z) "stone"]))
+        gap (dissoc room (h/cell-key 5 64 4) (h/cell-key 5 65 4))
+        p (tu/seeing-all (tu/fake {:blocks gap :floor [-30 -30 30 30] :self {:pos {:x 4.5 :y 64 :z 4.5}} :inventory [{:name "dirt" :count 4}]}))]
+    (is (fp-cells/seals? {:primitives p} [5 64 4]))))
 
 (deftest a-dig-in-rock-with-no-pickaxe-is-given-up-no-tool-without-a-tunnel
   (async done

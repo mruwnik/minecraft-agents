@@ -118,13 +118,11 @@
     (shut-in? p (fn [x y z] (let [k (base x y z)] (if (keyword-identical? :water k) :solid k))))))
 
 (defn fill-kinds
-  "[filled open]: the kind-at fns of the two floods of a fill check. unseen :fill is the worse case for 'would this fill
-  shut me in?': a cell the body has not seen is a wall with the cell filled (nothing beyond it to walk to) and open ground
-  without it (the body has room now); else unseen as world-kinds reads it, for both."
+  "[filled open]: the kind-at fns of the two floods of a fill check. unseen :fill: a cell the body has not seen is open
+  ground in both, so a flood that reaches the edge of what it has seen is not shut in (a small sight alone must not read as
+  a wall); only a ring of seen walls is. Else unseen as world-kinds reads it, for both."
   [p unseen]
-  (if (keyword-identical? :fill unseen)
-    [(world-kinds p body-kind-of :solid) (world-kinds p body-kind-of :ground)]
-    (let [base (world-kinds p body-kind-of unseen)] [base base])))
+  (let [base (world-kinds p body-kind-of (if (keyword-identical? :fill unseen) :ground unseen))] [base base]))
 
 (defn closes-in?
   "Whether the body has room to walk now but would be left fewer than shut-room-cells cells with cell [x y z] solid.

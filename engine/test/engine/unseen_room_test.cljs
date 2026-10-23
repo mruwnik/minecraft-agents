@@ -1,6 +1,6 @@
 (ns engine.unseen-room-test
-  "A cell the body has not seen reads as the worse case for the question: a wall for 'would this fill shut me in?', open
-  ground for 'am I sheltered?'. Each caller moved off the true world answers differently when its walls are hidden."
+  "A cell the body has not seen reads as the worse case for the question: open ground (a way on) for 'would this fill shut me
+  in?' and 'am I sheltered?', a wall for 'am I shut in?'. Each caller moved off the true world answers differently when its walls are hidden."
   (:require [cljs.test :refer [deftest is]]
             [engine.test-util :as tu]
             [jobs.build.from-plan.cells :as fp-cells]
@@ -37,14 +37,14 @@
   []
   (hiding (tu/fake {:self {:pos body} :floor [-30 -30 30 30] :blocks sealed}) (set (map #(mapv js/parseInt (.split % ",")) (keys sealed)))))
 
-(deftest a-fill-of-one-doorway-shuts-in-a-body-whose-other-way-out-is-unseen
+(deftest a-fill-of-one-doorway-does-not-shut-in-a-body-whose-other-way-out-leads-to-unseen-ground
   (let [c {:primitives (doorways-p)}]
-    (is (true? (fp-cells/seals? c [1 64 0])))
-    (is (= :needed (restore/skip-why (assoc c :view (fn [] {}) :root "r" :slots []) {:cell [1 64 0]})))))
+    (is (false? (fp-cells/seals? c [1 64 0])))
+    (is (not= :needed (restore/skip-why (assoc c :view (fn [] {}) :root "r" :slots []) {:cell [1 64 0]})))))
 
-(deftest a-restore-that-fills-the-only-seen-way-out-skips-while-the-other-is-unseen
+(deftest a-restore-that-fills-a-seen-way-out-does-not-skip-while-the-other-leads-to-unseen-ground
   (let [c {:primitives (doorways-p)}]
-    (is (true? (restore-broken/seals-body? c {:cell [1 64 0] :action :dig} {:roomy (delay true)})))))
+    (is (false? (restore-broken/seals-body? c {:cell [1 64 0] :action :dig} {:roomy (delay true)})))))
 
 (deftest a-roof-and-walls-the-body-has-not-looked-at-give-no-shelter
   (let [p (walled-p)]
