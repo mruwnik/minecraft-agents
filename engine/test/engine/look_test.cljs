@@ -213,6 +213,13 @@
   (is (= 0 (dark-of day [0 64 5] [15 0])) "open sky by day")
   (is (= 1 (dark-of day [0 64 5] [0 0])) "a seen cave cell is dark by day"))
 
+(deftest an-unseen-cell-the-walk-reads-as-water-is-water-a-drowned-may-spawn-in
+  (let [p (seeing {:blocks (merge wall (tu/box 6 63 -1 8 63 1 "water"))})
+        class (fn [wet?] ((look/water-fn p wet?) 7 63 0))]
+    (is (= 2 (class (constantly true))) "behind the wall, never seen: the worse case")
+    (is (= 0 (class (constantly false))) "read as dry by the walk: no water")
+    (is (= 0 (class nil)))))
+
 (deftest dark-fn-says-whether-the-sky-is-dark
   (is (true? (:night? (look/dark-fn (seeing {:time midnight})))))
   (is (false? (:night? (look/dark-fn (seeing {:time day}))))))

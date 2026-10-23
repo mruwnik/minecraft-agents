@@ -51,6 +51,13 @@
     (is (= @void (state pw 3 64 0)) "behind the wall, never seen")
     (is (= @stone (state pw 1 63 0)) "the floor ahead, seen")))
 
+(deftest an-unseen-cell-is-read-as-water-where-the-walk-reads-water
+  (let [world (assoc wall-world :blocks (merge (:blocks wall-world) {"3,64,0" "water"}))
+        {:keys [w]} (sensed world)
+        wet? (fn [pw] ((wworld/water-read-fn pw) 3 64 0))]
+    (is (true? (wet? (wworld/path-world w))) "unmasked: the block the planner swims")
+    (is (false? (wet? (wworld/path-world w (wworld/unknown-spec)))) "masked with the head out of water: void_air")))
+
 (deftest the-spec-rides-on-the-snapshot-through-every-decoration
   (let [{:keys [w]} (sensed wall-world)
         spec (wworld/unknown-spec)

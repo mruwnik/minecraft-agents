@@ -239,7 +239,7 @@
      :equipment (cost/equipment-of (.-equipment self))
      :health (.-health self) :absorption (.-absorption self) :food (.-food self)}))
 
-(declare with-tolls with-edges)
+(declare with-tolls with-edges water-read-fn)
 
 (defn costed-world
   "pw (the primitives' pathWorld) costed the way go-to plans: with the mobs the body knows may hurt it, each over its
@@ -251,7 +251,7 @@
   (cond-> pw
     dangers? (-> (with-dangers (threats/planner-dangers c))
                  (with-tolls (if keep? (threats/tolls-of c (filter keep? (threats/known-threats c))) (threats/threat-tolls c))))
-    dark? (with-dark (look/dark-fn (:primitives c) {:unseen-dark? (nil? (unknown-of pw))}) (look/water-fn (:primitives c)) (kit-of c))
+    dark? (with-dark (look/dark-fn (:primitives c) {:unseen-dark? (nil? (unknown-of pw))}) (look/water-fn (:primitives c) (water-read-fn pw)) (kit-of c))
     true (with-edges (edges/tolls (:primitives c)))))
 
 (def avoid-factor
@@ -367,6 +367,14 @@
   [pw]
   (let [snapshot (.-snapshot pw) tops (.-top (.-table pw))]
     (fn [x y z] (>= (aget tops (.stateAt snapshot x y z)) base/WHOLE))))
+
+(defn water-read-fn
+  "Whether the planner reads x y z of a pathWorld as water (breath/swimmable): the mask's seagrass for an unseen cell under
+  water, else the block."
+  [pw]
+  (let [snapshot (.-snapshot pw)
+        ids (set (mapcat #(blocks/state-ids (.-table pw) %) breath/swimmable))]
+    (fn [x y z] (contains? ids (.stateAt snapshot x y z)))))
 
 (defn default-food [] (settings/get settings ::default-food))
 

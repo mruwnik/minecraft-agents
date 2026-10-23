@@ -409,9 +409,9 @@
 (defn water-fn
   "The planner's water class of a feet cell (options.dark.at past dark) for the body of primitives p: 2 for a cell seen
   as water whose column holds, down from it, a water cell at block light 0 over water, or reaches a cell not seen (dark
-  depths do not show), where a drowned can spawn; 3 for other seen water; 0 for any other cell.
-  nil without a perception."
-  [p]
+  depths do not show), where a drowned can spawn; 3 for other seen water; a cell never seen 2 when wet? (fn [x y z]: the
+  walk reads it as water) says so, the worse case; 0 for any other cell. nil without a perception."
+  [p wet?]
   (when-let [per (aget p "perception")]
     (when-let [^js raw (:raw per)]
       (let [^js st (:st per)
@@ -427,16 +427,19 @@
                            k
                            (let [w (= "water" (.-name ^js (.stateInfo raw (dec v))))] (.set kinds v w) w)))))]
         (fn [x y z]
-          (if-not (water? (id-at x y z))
-            0
-            (loop [y y]
-              (let [below (id-at x (dec y) z)
-                    dark? (zero? (bit-and (.lightAt raw x y z) 15))]
-                (cond
-                  (zero? below) 2
-                  (not (water? below)) 3
-                  dark? 2
-                  :else (recur (dec y)))))))))))
+          (let [v (id-at x y z)]
+            (cond
+              (zero? v) (if (and wet? (wet? x y z)) 2 0)
+              (not (water? v)) 0
+              :else
+              (loop [y y]
+                (let [below (id-at x (dec y) z)
+                      dark? (zero? (bit-and (.lightAt raw x y z) 15))]
+                  (cond
+                    (zero? below) 2
+                    (not (water? below)) 3
+                    dark? 2
+                    :else (recur (dec y))))))))))))
 
 (defn see-lit-fn
   "The planner's options.unknown.seeLit for the body of primitives p: (fn [x y z]) 1 when the cell's live light makes it
