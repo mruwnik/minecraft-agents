@@ -52,7 +52,7 @@
 (def ways need/fetch-ways)
 
 (def defaults {:spend {:job-time ::job-time-s}})
-(def safe? (price/staying :work (ready/safe-at-or-if-lit #(when (:pos (:args %)) (work-place/spot %)))))
+(def safe? (price/staying :work (ready/safe-at-or-roaming #(when (:pos (:args %)) (work-place/spot %)))))
 (def fit? ready/fit-to-forage)
 
 (defn rod-carried? [c] (boolean (some #(= "fishing_rod" (:name %)) (u/inventory (:primitives c)))))

@@ -410,7 +410,7 @@
       (:base (ctx/mem c))
       (:base (first (candidates c (:radius (:args c)) (:species (:args c)))))))
 
-(def safe? (price/staying :work (ready/safe-at-or-if-lit place)))
+(def safe? (price/staying :work (ready/safe-at-or place ready/safe-if-lit)))
 
 (def fit? "ready/fit-to-forage: a body only food heals felling wood (a rod, a hoe) is not held for health." ready/fit-to-forage)
 

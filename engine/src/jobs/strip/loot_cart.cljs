@@ -40,7 +40,7 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(def safe? (price/staying :long (ready/safe-at-or-if-lit #(a/cell (:near (:args %))))))
+(def safe? (price/staying :long (ready/safe-at-or #(a/cell (:near (:args %))) ready/safe-if-lit)))
 
 (def fit? ready/fit?)
 

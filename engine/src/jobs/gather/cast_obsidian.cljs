@@ -348,7 +348,7 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(def safe? ready/safe-if-lit)
+(def safe? ready/safe-roaming)
 
 (def fit? ready/fit?)
 

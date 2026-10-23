@@ -1,0 +1,18 @@
+;; gather.cast-obsidian leaves the room to reach lava, so its safe? is safe-roaming: shut in a closed hut under a dark sky it waits (:dark) instead of walking out.
+;; Needs night: run with --allow-time (night run owed while the time freeze holds). Should-fail: no walk out, nothing is cut, :dark waiting, no obsidian.
+{:defaults
+ {:tags [:gather :obsidian :night]
+  :time :night :time-why :dawn-decision
+  :plot {:length 48 :width 32 :height 10 :floor "dirt"}
+  :blocks [[:fill [2 0 14] [8 4 20] "stone" :hollow] [:fill [3 1 15] [7 3 19] "air"] [:set [5 3 17] "torch"]
+           [:set [8 1 17] "oak_door[facing=east,half=lower,hinge=left,open=false]"] [:set [8 2 17] "oak_door[facing=east,half=upper,hinge=left,open=false]"]
+           [:set [30 -1 14] "lava"]]
+  :body {:at [5.5 1 17.5] :settle-s 2 :effects [["resistance" 600 4] ["fire_resistance" 600 0]]
+         :inventory [["diamond_pickaxe" 1] ["water_bucket" 1]]}
+  :limit-s 60}
+ :cases
+ [{:name "lava-outside-a-closed-hut-waits-for-light"
+   :act [[:job (jobs.gather.cast-obsidian {:count 1})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :dark}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]
+   :after [[:item "obsidian" 0]]}]}

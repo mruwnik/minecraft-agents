@@ -354,13 +354,8 @@
      (with-meta (fn [c] (if (f c) (at c) (fallback c)))
        {::exposure (fn [c] (if (f c) ((::exposure (meta at)) c) ((::exposure (meta fallback)) c)))}))))
 
-(defn safe-at-or-if-lit
-  "The checker of a job that goes to the place (f c) when it has one, else roams: safe-at-by-night, or safe-if-lit when (f c) is nil."
-  [f]
-  (safe-at-or f safe-if-lit))
-
 (defn safe-at-or-roaming
-  "safe-at-or-if-lit for a job that leaves the room on its way: with no place it is safe-roaming."
+  "The checker of a job that goes to the place (f c) when it has one, else leaves the room on its way: safe-at-by-night there, else safe-roaming."
   ([f] (safe-at-or-roaming f false))
   ([f dug?] (safe-at-or f safe-roaming dug?)))
 

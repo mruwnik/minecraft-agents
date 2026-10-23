@@ -85,8 +85,8 @@
 
 (def safe?
   "A player is given to wherever they are: not threatened. A villager is looked for roaming: also no dark sky."
-  (with-meta (fn [c] (if (villager-to? c) (ready/safe-if-lit c) (ready/threatened c)))
-    {::ready/exposure (fn [c] (if (villager-to? c) ((::ready/exposure (meta ready/safe-if-lit)) c) (contract/ok :player "a player is given to where they stand")))}))
+  (with-meta (fn [c] (if (villager-to? c) (ready/safe-roaming c) (ready/threatened c)))
+    {::ready/exposure (fn [c] (if (villager-to? c) ((::ready/exposure (meta ready/safe-roaming)) c) (contract/ok :player "a player is given to where they stand")))}))
 
 (defn named
   "Never :bad-args unless a :to and an item name (a villager's food may be nil) are given."
