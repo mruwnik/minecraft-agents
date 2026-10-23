@@ -14,6 +14,7 @@
             [jobs.lib.crops :as crops]
             [jobs.lib.breath :as breath]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [jobs.lib.food-animals :as food-animals]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.surface-up :as surface-up]
@@ -65,14 +66,14 @@
   The ending's data: {:found [{:what :pos :id? (the uuid) :entity-id? (the number entities and combat.attack use) :noted? :by?}] :coverage {:legs :scans
   :failed [{:pos :reason}] :skipped :farthest} :why :text} and the ending:
   - :done: :count found.
-  - :nothing-possible :distance (no leg left), :no-way-up (animals that live at the surface, the body under rock and no stair up), :legs (::max-legs walked) or :stuck (three failed walks in a row).
+  - :nothing-possible :distance (no leg left), :no-way-up (animals that live at the surface, the body under rock and no stair up), :legs (::max-legs walked), :stuck (three failed walks in a row) or :price (with :worth, the next walk costs more than is left of it).
   - :limit-reached :job-time (the call's :spend :job-time, default ::job-time-s) or :wall-time (default ::wall-time-s); the engine ends it, with the data of done? ({:found :coverage :why}) and neither event; with :least targets found (default 1) the engine ends it :done instead.
   - A call with no :target and no :patch never runs (:bad-args).
 
   With :patch it looks for ground, not things: each look round (the origin first, then every leg's arrival) scans for a patch
   of the footprint (jobs.lib.patch, in slices) and ends :done at the first that has one, :found [{:what \"patch\" :pos :spots}]; notes are neither read nor written.
 
-  Memory: :origin :legs :scans :found :tried :failed :skipped :farthest :failed-in-row :stepped (the nearest a step has come to each unseen column: a step must end nearer) :blocked (the ways legs
+  Memory: :origin :legs :scans :found :tried :failed :skipped :farthest :failed-in-row :spent and :leg-price (with :worth: the prices of the walks done, and of the one under way) :stepped (the nearest a step has come to each unseen column: a step must end nearer) :blocked (the ways legs
   failed since the last arrival) :deferred (unloaded legs set aside while a sweep goes on), and :leg while
   a walk is under way, so a cut or restart resumes it.")
 
@@ -93,7 +94,8 @@
    :avoid {:doc "columns [x z] whose blocks do not count as found" :spec (a/coll-of (a/pred "an [x z] column" vector?)) :default nil}
    :patch {:doc "look for a patch of ground instead of named things: {:w :h :range :depth :limit :max-step :plan :farmland?} as jobs.lib.patch scans (jobs.farm.find-spot builds it); the search ends at the first look round with one, and :found is then [{:what \"patch\" :pos :spots}]" :spec map? :default nil}
    :forage {:doc "whether the search is for food (the body hunts or picks it to eat); nil: every target is a food animal or food block. A search for wool or leather from a food animal says false" :spec boolean? :default nil}
-   :use-notes {:doc "targets noted (by any body) within the max-distance setting count as found" :spec boolean? :default true}})
+   :use-notes {:doc "targets noted (by any body) within the max-distance setting count as found" :spec boolean? :default true}
+   :worth {:doc "seconds the find is worth: before each walk its price (jobs.lib.cost/leg-price of go-to's quote, the body as it is now) is weighed against what is left of it after the walks so far; the search ends :price at the first that costs more, and ::max-legs does not bind. nil: unpriced" :spec (a/num-in 0 nil) :default nil}})
 
 (a/defargs settings
   {::max-distance {:default 96 :doc "How far (XZ) from the origin a leg may go and a noted or remembered target still counts." :spec (a/int-in 1 nil)}
@@ -119,7 +121,12 @@
    ::leg-tried-ttl-s {:default 3600 :doc "Seconds a note of a walk started toward a spot lasts." :spec (a/num-in 0 nil)}
    ::roam-min-health {:default 10 :doc "A search that is not for food waits :low-health below this health while the body can not heal (cannot-heal?: food low, nothing edible carried), so a hurt, foodless body does not roam for wool or wood." :spec (a/num-in 0 20)}
    ::stand-cap {:default 48 :doc "Stand cells one choice reads; past it :more says candidates are left for the next step." :spec (a/int-in 0 nil)}})
-(defn distance-limit [] (settings/get settings ::max-distance))
+(defn distance-limit
+  "How far (XZ) from the origin legs go and findings count: the ::max-distance setting, or with :worth cost/search-radius of it."
+  [c]
+  (if-let [worth (:worth (:args c))]
+    (js/Math.ceil (cost/search-radius worth (settings/get settings ::spacing)))
+    (settings/get settings ::max-distance)))
 (defn time-s [] (settings/get settings ::job-time-s))
 (defn max-failed-in-row [] (settings/get settings ::max-failed-in-row))
 (defn wait-ms [] (settings/get settings ::wait-ms))
@@ -352,9 +359,11 @@
                                 (str "found " (count found) " " what " at " (str/join ", " (map finding-text found)))
                                 (str "no " what " found (" (name why) ") after " (:legs m 0) " legs, "
                                      (:scans m 0) " looks of " (:scan-radius (:args c)) " blocks round, " (:farthest m 0) " blocks out"
-                                     (if-let [t (and (= :stuck why) (refused-text c m))]
-                                       (str ", " t)
-                                       (when (pos? (:skipped m 0)) (str ", " (:skipped m) " legs skipped as already searched")))))}
+                                     (cond
+                                       (= :price why) (str ", the next walk costs " (js/Math.round (:next-price m)) " s, more than the "
+                                                           (js/Math.round (- (:worth (:args c)) (:spent m 0))) " s left of what the find is worth")
+                                       (and (= :stuck why) (refused-text c m)) (str ", " (refused-text c m))
+                                       (pos? (:skipped m 0)) (str ", " (:skipped m) " legs skipped as already searched"))))}
                  why (assoc :why why))]
     (case why
       nil (ctx/end c :done nil result)
@@ -422,7 +431,7 @@
 
 (defn candidates [c m]
   (let [{:keys [pattern heading]} (:args c)
-        max-distance (distance-limit)
+        max-distance (distance-limit c)
         spacing (leg-spacing)
         [ox _ oz] (:origin m)
         [x _ z] (here c)]
@@ -476,7 +485,7 @@
   points passed over for now (held?, m's :blocked)}; an unloaded column is not tried, so a later round looks again (m's
   :deferred ones are kept out of this sweep)."
   [c m names ns]
-  (let [max-distance (distance-limit)
+  (let [max-distance (distance-limit c)
         [ox y oz] (here c)
         origin [((:origin m) 0) ((:origin m) 2)]
         tried (into (set (:tried m)) (map (fn [{[x _ z] :pos}] [x z])) (:deferred m))
@@ -521,14 +530,36 @@
         n (inc (leg-tries (notes/notes c) names [x z]))]
     (notes/note! c [{:kind :leg-tried :what (vec names) :pos [x y z] :n n :ttl-ms (* 1000 (settings/get settings ::leg-tried-ttl-s))}])))
 
+(defn leg-args
+  "The go-to args of the walk toward the leg [x y z]."
+  [c [x y z]]
+  (cond-> {:pos {:x x :y y :z z} :range 2 :settings {:jobs.movement.go-to.tuning/goal-danger :end}}
+    (forage? c) (->> (ready/forage-walk c))
+    (< (:failed-in-row (ctx/mem c) 0) (dec (max-failed-in-row))) (assoc :ways #{:walk :clear-seal})))
+
+(defn ^:async price-leg!
+  "With :worth, the price of a walk toward leg before it starts (jobs.lib.cost/leg-price of go-to's quote, the death it
+  risks under rock or in the dark where the body stands), booked as :leg-price: nil when it is affordable (or unpriced),
+  else the :price ending."
+  [c leg]
+  (when-let [worth (:worth (:args c))]
+    (let [p (:primitives c)
+          [x y z] leg
+          q (await (ctx/quote c 'jobs.movement.go-to (leg-args c leg)))
+          price (cost/leg-price (cost/death-body p (ctx/view c)) q
+                                {:underground? (sh-sense/buried? p) :night? (look/dark-here? p)} {:x x :y y :z z})]
+      (if (> price (- worth (:spent (ctx/mem c) 0)))
+        (do (ctx/update-mem! c assoc :next-price price)
+            (finish! c :not-found :price))
+        (do (ctx/update-mem! c assoc :leg-price price) nil)))))
+
 (defn ^:async walk!
   "One go-to call toward the leg (the last one before the failed legs in a row end the search may dig out); on its end book the leg arrived or failed. :continue when go-to yields, else :again
   (or the ending when the failed legs in a row end the search)."
   [c]
-  (let [[x y z] (:leg (ctx/mem c))
-        r (await (child/call-walk* c :leg (cond-> {:pos {:x x :y y :z z} :range 2 :settings {:jobs.movement.go-to.tuning/goal-danger :end}}
-                                                           (forage? c) (->> (ready/forage-walk c))
-                                                           (< (:failed-in-row (ctx/mem c) 0) (dec (max-failed-in-row))) (assoc :ways #{:walk :clear-seal}))))]
+  (let [leg (:leg (ctx/mem c))
+        [x y z] leg
+        r (await (child/call-walk* c :leg (leg-args c leg)))]
     (if (= :continue r)
       :continue
       (let [{:keys [in-water why] :as data} (:data r)
@@ -540,7 +571,8 @@
             dangerous? (= :goal-dangerous (or why cause))
             in-row (cond arrived 0 dangerous? (:failed-in-row (ctx/mem c) 0) :else (inc (:failed-in-row (ctx/mem c) 0)))
             [hx _ hz] (here c)]
-        (ctx/update-mem! c (fn [m] (cond-> (assoc (dissoc m :leg :leg-column) :failed-in-row in-row)
+        (ctx/update-mem! c (fn [m] (cond-> (assoc (dissoc m :leg :leg-column :leg-price) :failed-in-row in-row)
+                                     (:leg-price m) (update :spent (fnil + 0) (:leg-price m))
                                      arrived (dissoc :blocked)
                                      (and arrived (:leg-column m)) (update-in [:stepped (:leg-column m)] (fnil min ##Inf) (xz-dist [hx hz] (:leg-column m)))
                                      (not (or arrived dangerous?)) (update :blocked (fnil conj []) {:at [hx hz] :leg [x z]})
@@ -557,7 +589,7 @@
   (let [a (:patch (:args c))
         _ (when-not (:patch-scan (ctx/mem c)) (await (look/survey! c :near (look/search-effort))))
         [x y z] (if (zero? (:scans (ctx/mem c) 0)) (:origin (ctx/mem c)) (here c))
-        far? (> (xz-dist [x z] (let [[ox _ oz] (:origin (ctx/mem c))] [ox oz])) (distance-limit))
+        far? (> (xz-dist [x z] (let [[ox _ oz] (:origin (ctx/mem c))] [ox oz])) (distance-limit c))
         spots (if far? nil (patch/scan-step! c a {:x x :y y :z z}))]
     (when-not (= :again spots)
       (let [[ox _ oz] (:origin (ctx/mem c))]
@@ -574,7 +606,7 @@
           me (here c)
           near (min (:scan-radius (:args c)) (near-sight))
           gone (if (pos? near) (departed ns (sense p names near) me near) #{})]
-      (->> (noted p ns names (:origin m) (distance-limit) gone (ctx/now c) (fresh-ms) (set (:revisited m)) true)
+      (->> (noted p ns names (:origin m) (distance-limit c) gone (ctx/now c) (fresh-ms) (set (:revisited m)) true)
            (takeable c)
            (sort-by #(xz-dist [(me 0) (me 2)] [((:pos %) 0) ((:pos %) 2)]))
            first))))
@@ -605,9 +637,10 @@
         :out :again
         (finish! c :not-found :no-way-up))
       stale
-      (do (ctx/update-mem! c (fn [m] (-> m (update :revisited (fnil conj #{}) (:id stale)) (assoc :leg (:pos stale) :leg-column nil))))
-          (await (walk! c)))
-      (>= (:legs m 0) (settings/get settings ::max-legs))
+      (or (await (price-leg! c (:pos stale)))
+          (do (ctx/update-mem! c (fn [m] (-> m (update :revisited (fnil conj #{}) (:id stale)) (assoc :leg (:pos stale) :leg-column nil))))
+              (await (walk! c))))
+      (and (nil? (:worth (:args c))) (>= (:legs m 0) (settings/get settings ::max-legs)))
       (finish! c :not-found :legs)
       :else
       (let [{:keys [leg step column tried failed skipped unloaded more held]} (choose-leg c m names ns)]
@@ -618,15 +651,17 @@
                                        (assoc :choosing (boolean (and more (not leg))))
                                        (assoc :deferred (when (and more (not leg)) unloaded)))))
         (cond
-          leg (do (ctx/update-mem! c (fn [m] (-> m (assoc :leg leg :leg-column column)
-                                                 (update :legs (fnil + 0) (if step 0 1)))))
-                  (note-leg-start! c leg)
-                  (await (walk! c)))
+          leg (or (await (price-leg! c leg))
+                  (do (ctx/update-mem! c (fn [m] (-> m (assoc :leg leg :leg-column column)
+                                                     (update :legs (fnil + 0) (if step 0 1)))))
+                      (note-leg-start! c leg)
+                      (await (walk! c))))
           more :again
           (and (empty? unloaded) (pos? held)) (do (ctx/update-mem! c dissoc :blocked) :again)
           (empty? unloaded) (finish! c :not-found :distance)
-          (far-unloaded c unloaded) (do (ctx/update-mem! c assoc :leg (far-unloaded c unloaded) :leg-column nil)
-                                        (await (walk! c)))
+          (far-unloaded c unloaded) (or (await (price-leg! c (far-unloaded c unloaded)))
+                                        (do (ctx/update-mem! c assoc :leg (far-unloaded c unloaded) :leg-column nil)
+                                            (await (walk! c))))
           :else (do (await (child/pause! c (/ (wait-ms) 1000) :chunks-loading))
                     :continue))))))
 
@@ -643,7 +678,7 @@
   "Look round; end when enough is found or the legs are used up, else start the next leg."
   [c]
   (let [{:keys [use-notes] want :count} (:args c)
-        max-distance (distance-limit)
+        max-distance (distance-limit c)
         names (targets c)
         resumed (:choosing (ctx/mem c))
         _ (when-not resumed (await (scan! c names)))
@@ -671,7 +706,7 @@
 (defn ^:async search-step!
   "One pass: end, walk the leg under way, or look and start the next leg. :again goes on, else a round result."
   [c]
-  (let [w (when-not (:origin (ctx/mem c)) (await (area/walk-within! c (distance-limit))))]
+  (let [w (when-not (:origin (ctx/mem c)) (await (area/walk-within! c (distance-limit c))))]
     (cond
       (= :there w) :again
       (= :continue w) :continue

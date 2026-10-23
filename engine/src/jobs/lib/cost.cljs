@@ -21,10 +21,11 @@
     planner  planner-costs-problem, planner-costs, planner-names: go-to's :costs, the per-move prices it may override; landing-problem, planner-landing: go-to's :landing, fall damage by landing block; air-profile, water-breathing-s, air-used, air-costs: the planner's air drain and grace from the body's helmet, the air a dive has used; swim-profile: its swimH from Depth Strider on the boots; swim-factor: a swim block in walk blocks (a flight's water price); gait-problem, gait-costs: go-to's :gait; unknown-prices: the planner's prices of unseen cells (jobs.lib.cost.planner); unseen-route-s, unseen-route-hp: those prices of a route's unseen steps, in seconds or hp.
     tolls    farm-tolls, zone-tolls: go-to's :tolls for planted cells and zone cells to cross only as a last resort
              (jobs.lib.cost.tolls).
-    death    experience-cost, death-cost, death-chance, route-death-cost: death as an ordinary cost, the walk back for the items plus the experience; a route pays its chance of dying x that; spawn-worth, search-reach: a respawn point's worth and how far a search for something may range; death-weight, terrain-danger: a remembered death's fade and the plan cost near a death by terrain (jobs.lib.cost.death).
+    death    experience-cost, death-cost, death-chance, route-death-cost: death as an ordinary cost, the walk back for the items plus the experience; a route pays its chance of dying x that; spawn-worth: a respawn point's worth; worth-to, leg-price, search-radius, wait-price: what a find is worth, a search leg's price, how far its legs may go, what waiting for a listed maker costs; death-weight, terrain-danger: a remembered death's fade and the plan cost near a death by terrain (jobs.lib.cost.death).
     base-rates  density, biome-chance, expected-density, peak-density: the ore a block of ground is expected to hold, from the game's
              own placements, and the chance of a biome on ground the body has not seen (jobs.lib.cost.base-rates)."
-  (:require [jobs.lib.cost.armour :as armour]
+  (:require [clojure.string :as str]
+            [jobs.lib.cost.armour :as armour]
             [jobs.lib.cost.base-rates :as base-rates]
             [jobs.lib.cost.danger :as danger]
             [jobs.lib.cost.death :as death]
@@ -211,7 +212,7 @@
 (def death-chance death/death-chance)
 (def route-death-cost death/route-death-cost)
 (def spawn-worth death/spawn-worth)
-(def search-reach death/search-reach)
+(def spawn-horizon-s death/spawn-horizon-s)
 (def death-weight death/death-weight)
 (def terrain-danger death/terrain-danger)
 
@@ -221,19 +222,43 @@
 (def peak-density base-rates/peak-density)
 
 (defn death-body
-  "The body of p as the death costs read it: :level, :health, :respawn (the live spawn bed, sh-spawn/spawn-bed-pos) and
-  :carried (the item-value of the inventory)."
+  "The body of p as the death costs read it: :level, :respawn (the live spawn bed, sh-spawn/spawn-bed-pos) and :carried
+  (the item-value of the inventory)."
   [p view]
   (let [self (.self p)]
     {:level (or (some-> self .-experience .-level) 0)
-     :health (or (.-health self) 20)
      :respawn (sh-spawn/spawn-bed-pos p view)
      :carried (:value (item-value (u/inventory p)))}))
 
+(defn bed? [n] (or (= "bed" n) (str/ends-with? n "_bed")))
+
 (defn worth-to
   "Seconds getting one of names is worth to body at `at`: the least item-value among them, a bed (it sets the respawn)
-  with its spawn-worth on top."
+  with its spawn-worth on top; 0 for no names."
   [body names at]
-  (apply min (map (fn [n] (+ (:value (item-value [{:name n :count 1}]))
-                             (if (.endsWith n "_bed") (spawn-worth body at) 0)))
-                  names)))
+  (if (seq names)
+    (apply min (map (fn [n] (+ (:value (item-value [{:name n :count 1}]))
+                               (if (bed? n) (spawn-worth body at) 0)))
+                    names))
+    0))
+
+(defn leg-price
+  "Seconds a search leg costs body: go-to's quote q of the walk to `at` (a found route its planner's price: seconds,
+  darkness by the kit, dangers and damage at the body's health; else the quote's mean time) and the death the leg risks
+  (route-death-cost of route {:underground? :night?})."
+  [body q route at]
+  (let [r (:route q)]
+    (+ (if (:found r) (or (:priced r) (:seconds r)) (second (get-in q [:uses :job-time])))
+       (route-death-cost body route at))))
+
+(defn search-radius
+  "Blocks from its origin a search's legs spacing apart may go for a find worth `worth`: the rings within it hold as
+  many legs as, each at least a walk of spacing blocks, the worth pays for. The legs' price binds first."
+  [worth spacing]
+  (js/Math.sqrt (/ (* (max 0 worth) spacing) (* js/Math.PI planner/walk-floor))))
+
+(defn wait-price
+  "Seconds waiting wait-s for a listed job to bring a find worth `worth` costs: the share of the need-s until it is
+  needed (default death/spawn-horizon-s) spent without it, all of it from need-s on."
+  ([worth wait-s] (wait-price worth wait-s (death/spawn-horizon-s)))
+  ([worth wait-s need-s] (* worth (min 1 (/ wait-s (max 1 need-s))))))

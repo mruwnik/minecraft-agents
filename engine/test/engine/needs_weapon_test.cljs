@@ -49,10 +49,17 @@
   (is (false? (holds-with-memory? (memory-with 2000 [:weapon-stowed 1000 {:item "stone_sword"}]))))
   (is (true? (holds-with-memory? (memory-with 2000)))))
 
-(defn holds-with-listed? [label args]
-  (let [store (mem/open (tu/tmp-dir) {:now (constantly 0)})]
-    (mem/create-job! store "j1" label args)
-    (nw/needs-weapon (tu/fake-on-floor {:floor [-10 -10 10 10] :inventory []}) (mem/view store) {} (world/of-data {} {}) #{"j1"})))
+(defn holds-with-listed?
+  ([label args] (holds-with-listed? label args nil))
+  ([label args ahead]
+   (let [clock (atom 0)
+         store (mem/open (tu/tmp-dir) {:now #(deref clock)})]
+     (when ahead
+       (mem/create-job! store "j0" "jobs.time.noop" {})
+       (mem/update-job! store "j0" [] assoc :contract ahead))
+     (swap! clock inc)
+     (mem/create-job! store "j1" label args)
+     (nw/needs-weapon (tu/fake-on-floor {:floor [-10 -10 10 10] :inventory []}) (mem/view store) {} (world/of-data {} {}) (cond-> #{"j1"} ahead (conj "j0"))))))
 
 (deftest a-listed-job-that-brings-a-weapon-is-waited-for
   (are [label args expected] (= expected (holds-with-listed? label args))
@@ -60,3 +67,9 @@
     "jobs.items.get-kit" {:items ["iron_helmet"]} true
     "jobs.items.obtain" {:item "stone_sword"} false
     "jobs.items.obtain" {:item "torch"} true))
+
+(deftest a-weapon-maker-queued-behind-a-long-job-is-waited-for-only-while-that-is-cheaper
+  (is (false? (holds-with-listed? "jobs.items.obtain" {:item "iron_sword"} {:call {:spend {:job-time 60}} :ran-ms 0}))
+      "a minute's wait costs a twentieth of the sword")
+  (is (true? (holds-with-listed? "jobs.items.obtain" {:item "iron_sword"} {:call {} :ran-ms 0}))
+      "behind a job with no end the wait costs the sword's whole worth, more than getting one now"))

@@ -176,7 +176,7 @@
 (defn within-site
   "Search options o kept within the site-radius setting of center (nil: unchanged)."
   [o center]
-  (cond-> o center (update :max-distance min (site-radius))))
+  (cond-> o center (update :max-distance (fnil min ##Inf) (site-radius))))
 
 (defn round-opts
   "The search options for search number k of a need: the first rings round the start, the rest outward along a heading."
@@ -205,11 +205,14 @@
         _ (when-not (= said (:explore-said (ctx/mem c)))
             (ctx/update-mem! c assoc :explore-said said)
             (ctx/emit! c :obtain.exploring :info
-                     {:message (str "nothing seen to get " (str/join "/" targets) ": walking to look for it, up to " (:max-distance o)
-                                    " blocks out and " (:max-legs o) " legs, from " (js/Math.floor (.-x here)) " "
+                     {:message (str "nothing seen to get " (str/join "/" targets) ": walking to look for it, "
+                                    (if (:worth o)
+                                      (str "each walk priced against the " (js/Math.round (:worth o)) " s it is worth")
+                                      (str "up to " (:max-distance o) " blocks out and " (:max-legs o) " legs"))
+                                    ", from " (js/Math.floor (.-x here)) " "
                                     (js/Math.floor (.-y here)) " " (js/Math.floor (.-z here)))
                       :attention :notice
-                      :for targets :max-distance (:max-distance o) :max-legs (:max-legs o) :heading (:heading o)
+                      :for targets :max-distance (:max-distance o) :max-legs (:max-legs o) :worth (:worth o) :heading (:heading o)
                       :from (mapv #(js/Math.floor %) [(.-x here) (.-y here) (.-z here)])}))
         e (waits/waiting-out c (await (ctx/call c :explore 'jobs.explore.search
                            (child/search-args (merge o (when-let [at (:center (:args c))] {:center at}) {:target targets :count 1 :scan-radius (search-scan-radius) :use-notes false :takeable true :avoid (vec (:cut-off (ctx/mem c)))}

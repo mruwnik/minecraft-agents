@@ -353,12 +353,28 @@
     (is (> lost (cost/spawn-worth {:respawn far} here) 0) "a far respawn bed is worth less to replace")
     (is (zero? (cost/spawn-worth {:respawn here} here)))))
 
-(deftest a-search-ranges-as-far-as-its-find-is-worth-and-less-when-hurt
-  (let [here {:x 0 :y 64 :z 0}
-        reach #(cost/search-reach {:health %1} %2 here)]
-    (is (> (reach 20 600) (reach 5 600) (reach 2 600) 0))
-    (is (> (reach 20 600) (reach 20 300)))
-    (is (zero? (reach 20 (cost/trip))) "a find worth no more than the trip is not searched for")))
+(deftest a-search-leg-costs-go-tos-price-and-the-death-it-risks
+  (let [body {:respawn {:x 0 :y 64 :z 0}}
+        found {:uses {:job-time [4 4 6]} :route {:found true :seconds 4 :priced 9}}
+        leg #(cost/leg-price body %1 %2 far)]
+    (is (= (+ 9 (cost/route-death-cost body {} far)) (leg found {})) "a found route: the planner's price, darkness and dangers in it")
+    (is (= (+ 7 (cost/route-death-cost body {} far)) (leg {:uses {:job-time [4 7 ##Inf]} :route {:found false :reason :partial}} {})) "else the quote's mean")
+    (is (> (leg found {:night? true}) (leg found {:underground? true}) (leg found {})) "a dark or underground leg risks more")))
+
+(deftest a-find-is-worth-its-value-a-bed-its-respawn-too-and-no-names-nothing
+  (let [here {:x 0 :y 64 :z 0}]
+    (is (> (cost/worth-to {} ["bed"] here) (cost/worth-to {} ["oak_planks"] here)) "a plan's bed block counts as a bed")
+    (is (= (cost/worth-to {} ["white_bed"] here) (cost/worth-to {} ["red_bed" "white_bed"] here)))
+    (is (zero? (cost/worth-to {} [] here)))))
+
+(deftest waiting-costs-the-share-of-the-time-until-needed-all-of-it-from-then
+  (is (= 25 (cost/wait-price 100 30 120)))
+  (is (= 100 (cost/wait-price 100 300 120)) "a wait past the need loses all of it")
+  (is (= 100 (cost/wait-price 100 ##Inf)) "a wait with no date"))
+
+(deftest a-search-radius-grows-with-the-worth
+  (is (> (cost/search-radius 600 16) (cost/search-radius 100 16) 0))
+  (is (zero? (cost/search-radius 0 16))))
 
 (deftest a-route-with-a-death-chance-costs-more-than-the-same-route-without
   (let [body {:respawn {:x 0 :y 64 :z 0} :level 3}

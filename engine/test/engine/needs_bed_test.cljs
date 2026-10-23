@@ -11,7 +11,7 @@
 
 (defn run
   "f over a fake world (night? and inv given), a view of the memory entries [[kind data age-days] ..] written age-days ago,
-  the world's plans {id plan} and the listed jobs [[id label args] ..]."
+  the world's plans {id plan} and the listed jobs [[id label args contract] ..], queued in that order (a contract: started)."
   [f {:keys [night inv entries time entities blocks plans jobs] :or {entries []}}]
   (let [clock (atom 0)
         store (mem/open (tu/tmp-dir) {:now #(deref clock)})]
@@ -19,7 +19,10 @@
       (reset! clock (- (* 10 sh-clock/ms-per-day) (* age sh-clock/ms-per-day)))
       (mem/write! store kind data {:cap 8 :ttl (* 20 sh-clock/ms-per-day)}))
     (reset! clock (* 10 sh-clock/ms-per-day))
-    (doseq [[id label args] jobs] (mem/create-job! store id label args))
+    (doseq [[id label args contract] jobs]
+      (swap! clock inc)
+      (mem/create-job! store id label args)
+      (when contract (mem/update-job! store id [] assoc :contract contract)))
     (f (tu/seeing-all (tu/fake-on-floor (cond-> {:floor [-10 -10 10 10] :inventory (or inv []) :entities entities :blocks blocks :time (or time 9000)} night (assoc :time 18000))))
        (mem/view store) {} (world/of-data (or plans {}) {}) (set (map first jobs)))))
 
@@ -103,3 +106,14 @@
     [["j1" "jobs.items.obtain" {:any-of ["white_bed" "red_bed"]}]] false
     [["j1" "jobs.items.get-kit" {}]] true
     [] true))
+
+(deftest a-bed-maker-that-starts-after-dusk-is-not-waited-for
+  ;; at tick 9000 dusk is 177 s off
+  (are [ahead expected] (= expected (holds? {:entries slept-long-ago :plans {"hut" hut} :jobs [ahead ["j2" "jobs.build.from-plan" {:plan "hut"}]]}))
+    ["j1" "jobs.time.noop" {} {:call {:spend {:job-time 600}} :ran-ms 0}] true
+    ["j1" "jobs.time.noop" {} {:call {:spend {:job-time 600}} :ran-ms 550000}] false
+    ["j1" "jobs.time.noop" {:spend {:job-time 30}}] false
+    ["j1" "jobs.time.noop" {}] true)
+  (is (false? (holds? {:entries slept-long-ago :plans {"hut" hut}
+                       :jobs [["j1" "jobs.build.from-plan" {:plan "hut"}] ["j2" "jobs.time.noop" {}]]}))
+      "a job queued after the maker does not hold it up"))

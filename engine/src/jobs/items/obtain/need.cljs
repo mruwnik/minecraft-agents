@@ -64,23 +64,23 @@
                         (or (= :ok (first s)) (lights-itself? c (contract/status-cause s))))))))))
 
 (defn priced-search
-  "{:max-distance :spend} of a :priced call's search: as far out as what is wanted is worth to the body here
-  (jobs.lib.cost/worth-to, search-reach), spending that worth's seconds less a trip; nil when it pays for no block."
+  "The search options of a :priced call: what is wanted is worth (jobs.lib.cost/worth-to) to the body here as the search's
+  :worth less a trip, which prices each walk, and that many seconds to spend. nil when the worth pays for no more than the trip."
   [c]
   (let [p (:primitives c)
         at (u/self-pos c)
-        body (cost/death-body p (ctx/view c))
-        worth (cost/worth-to body (or (seq (names-of (:args c))) (keys (:bill (:args c)))) at)
-        reach (js/Math.floor (cost/search-reach body worth at))]
-    (when (pos? reach)
-      {:max-distance reach :spend {:job-time (- worth (cost/trip))}})))
+        worth (- (cost/worth-to (cost/death-body p (ctx/view c)) (or (seq (names-of (:args c))) (keys (:bill (:args c)))) at)
+                 (cost/trip))]
+    (when (pos? worth)
+      {:worth worth
+       :spend {:job-time worth}})))
 
 (defn explore-opts
   "The search options, or nil when the :search way is off (or :explore false), or a :priced call's worth pays for none."
   [c]
   (when (and (:explore (:args c)) (way? c :search))
     (if (:priced (:args c))
-      (some->> (priced-search c) (merge (explore-setting)))
+      (priced-search c)
       (explore-setting))))
 
 (defn search-names

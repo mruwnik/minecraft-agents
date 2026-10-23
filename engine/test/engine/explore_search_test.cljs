@@ -346,6 +346,16 @@
           (is (= [:legs 2] ((juxt :why #(get-in % [:coverage :legs])) (not-found-of legs))))
           (is (= :job-time (:reason (event-of timed :stopped))) "the engine's time limit ends it"))))))
 
+(deftest a-priced-search-ends-at-the-first-walk-that-costs-more-than-is-left
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (search! {:target "diamond_block" :worth 12 :settings {:jobs.explore.search/max-legs 1}} {}))
+              e (not-found-of s)]
+          (is (= :price (:why e)) "the price ends it, not the legs setting")
+          (is (= 2 (get-in e [:coverage :legs])) "two 16-block walks fit in 12 s, a third does not")
+          (is (re-find #"the next walk costs \d+ s, more than the \d+ s left" (:text e))))))))
+
 (deftest the-spiral-legs-nearest-the-body-come-first
   (let [c {:args {:pattern :spiral} :primitives #js {:self (fn [] #js {:pos #js {:x 42.5 :y 0 :z 0.5}})}}
         m {:origin [0 0 0]}

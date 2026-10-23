@@ -38,18 +38,19 @@
   (is (= 192 (:max-distance (gather/within-site {:max-distance 192} nil))) "no centre: unbounded as before"))
 
 (defn search-at
-  "explore-opts of an obtain of args by a fake body with health."
-  [health args]
+  "explore-opts of an obtain of args by a fake body."
+  [args]
   (let [view (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)}))]
-    (need/explore-opts {:primitives (tu/fake-on-floor {:self {:health health}}) :view (constantly view) :args (merge {:explore true} args)})))
+    (need/explore-opts {:primitives (tu/fake-on-floor {}) :view (constantly view) :args (merge {:explore true} args)})))
 
 (def bed {:any-of ["white_bed" "red_bed"] :priced true})
 
-(deftest a-priced-search-ranges-as-far-as-the-find-is-worth-less-when-hurt
-  (let [full (:max-distance (search-at 20 bed))]
-    (is (< (:max-distance (search-at 4 bed)) full) "a hurt body ranges less")
-    (is (< (or (:max-distance (search-at 20 {:item "wooden_sword" :priced true})) 0) full) "a sword is worth a shorter search than a bed")
-    (is (= 64 (:max-distance (search-at 20 (dissoc bed :priced)))) "unpriced: the explore setting")))
+(deftest a-priced-search-is-worth-what-the-find-is-and-no-count-binds-it
+  (let [o (search-at bed)]
+    (is (< 0 (:worth (search-at {:item "stone_axe" :priced true})) (:worth o)) "an axe is worth a shorter search than a bed")
+    (is (= (:worth o) (get-in o [:spend :job-time])))
+    (is (not-any? o [:max-legs :max-distance]) "the walks' price binds it, not a count or a radius")
+    (is (= 64 (:max-distance (search-at (dissoc bed :priced)))) "unpriced: the explore setting")))
 
 (deftest logs-seen-only-in-a-foreign-zone-are-explored-past-and-then-named
   (async done
