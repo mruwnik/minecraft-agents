@@ -271,14 +271,20 @@
                            [[1 0] [-1 0] [0 1] [0 -1]]))
                    cells))))
 
-(defn unseen-room?
-  "Whether the cell pos {:x :y :z} holds a room that closes over what the body has seen but has a cell it has not seen
-  beside it (room* nil for that reason, not because the room is open): it is unknown, look first."
+(defn unseen-room
+  "The closed room (room*'s answer, doors included) around the cell pos {:x :y :z} that closes over what the body has seen
+  but has a cell it has not seen beside it (room* nil for that reason, not because the room is open): it is unknown, look
+  first. nil when the room is open or fully seen."
   [p {:keys [x y z]}]
   (let [kind-at (room-kind-at p (shut-kind-at p))
         in-door? (some-> (u/seen-block p {:x x :y y :z z}) .-name openable?)
         starts (if in-door? (map (fn [[dx dz]] [(+ x dx) y (+ z dz)]) [[1 0] [-1 0] [0 1] [0 -1]]) [[x y z]])]
-    (boolean (some (fn [[sx sy sz]] (:unseen? (room-flood p kind-at sx sy sz))) starts))))
+    (some (fn [[sx sy sz]] (let [f (room-flood p kind-at sx sy sz)] (when (:unseen? f) (room-of p (:cells f))))) starts)))
+
+(defn unseen-room?
+  "Whether the cell pos holds an unseen-room."
+  [p pos]
+  (some? (unseen-room p pos)))
 
 (defn unseen-sides
   "The feet cells [x y z] beside the room cells of the room around pos {:x :y :z} (as unseen-room?) that the body has not

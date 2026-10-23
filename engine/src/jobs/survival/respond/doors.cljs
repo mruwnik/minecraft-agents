@@ -57,17 +57,17 @@
       (door-to-shut c (danger-q/mob-pos p t)))))
 
 (defn sealing-doors
-  "How many open doors the closed room (room-lib/closed?) the body stands in has, when the door of door-for threats is
-  one of them: shutting them all closes the room. nil when the body is in no closed room (another opening, an unseen
-  cell) or that door is none of its room's."
+  "{:n :unseen?}: how many open doors the closed room (room-lib/room-doors) the body stands in has, when the door of
+  door-for threats is one of them: shutting them all closes the room; :unseen? when a cell of the room is not seen yet
+  (the worse case: a side may be open). nil when the body is in no closed room (another opening) or that door is none
+  of its room's."
   [c threats]
-  (let [p (:primitives c)
-        feet (sh-sense/feet p)]
+  (let [p (:primitives c)]
     (when-let [door (door-for c threats)]
-      (when (true? (room-lib/closed? c feet))
-        (let [open (->> (:doors (reach-room/room p feet)) (filter #(seal/open-openable p (:cell %))))]
+      (when-let [{:keys [doors unseen?]} (room-lib/room-doors c (sh-sense/feet p))]
+        (let [open (filter #(seal/open-openable p (:cell %)) doors)]
           (when (some #(= (door-key (:cell door)) (door-key (:cell %))) open)
-            (count open)))))))
+            {:n (count open) :unseen? unseen?}))))))
 
 (defn ^:async shut-door!
   "Shut door (door-to-shut) with one click; every door is clicked at most once a flight, so a door that will not stay

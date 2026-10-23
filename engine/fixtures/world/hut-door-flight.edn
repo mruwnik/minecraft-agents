@@ -1,7 +1,7 @@
 ;; Hut door in a flight from a hostile (card b335a1e4, fix ebba1382): retreat shuts an open door nearer the danger than
 ;; the body (retreat.door-shut, one click), never one behind the body, never a shut one, never an iron door (no hand).
 ;; door-behind-the-body: stone outside the north door, or the body would leave by it and shut it behind it (a door then nearer the hostile).
-;; Card d3633aa4: a hurt body's open door is a priced cover (:door) only while the room has no other opening.
+;; Cards d3633aa4, 1ab434a2: a hurt body's open door is a priced cover (:door) only while the room has no other opening; a room cell not seen yet counts as an open side, so the door is priced (dearer than walls here), not chosen.
 ;; Hut: stone walls x 12..20, z 12..20, roof y 3, interior 7x7. Body mid-room, skeleton (NoAI) 10 south of the south wall.
 {:defaults
  {:tags [:hostile :survival :door]
@@ -49,7 +49,16 @@
    :expect [{:no-event {:source :job :kind :retreat.door-shut} :for-s 25}]
    :after [[:block [16 0 20] "iron_door[half=lower,open=true]"]]
    :limit-s 40}
-  {:name "hurt-body-in-hut-covers-with-the-open-door"
+  {:name "hurt-body-in-hut-prices-the-open-door-cover"
+   :time :any
+   :body {:effects [] :at [16.5 0 18.5]}
+   :blocks [[:set [16 0 20] "oak_door[facing=south,half=lower,open=true]"]
+            [:set [16 1 20] "oak_door[facing=south,half=upper,open=true]"]]
+   :act [[:rcon "damage $BODY 15 minecraft:generic"]
+         [:summon "skeleton" [16.5 0 26.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:prices {:door [:any]}}} :within-s 40}]
+   :limit-s 60}
+  {:name "hurt-body-in-a-seen-hut-covers-with-the-open-door"
    :time :any
    :body {:effects [] :at [16.5 0 18.5]}
    :blocks [[:set [16 0 20] "oak_door[facing=south,half=lower,open=true]"]
@@ -66,7 +75,7 @@
    :blocks [[:set [16 0 20] "oak_door[facing=south,half=lower,open=true]"]
             [:set [16 1 20] "oak_door[facing=south,half=upper,open=true]"]
             [:set [20 0 16] "air"] [:set [20 1 16] "air"]]
-   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30] [:rcon "damage $BODY 15 minecraft:generic"]
+   :act [[:rcon "damage $BODY 15 minecraft:generic"]
          [:summon "skeleton" [16.5 0 26.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :hostile.decided} :within-s 40}
             {:no-event {:source :job :kind :hostile.decided :data {:cover :door}} :for-s 15}]

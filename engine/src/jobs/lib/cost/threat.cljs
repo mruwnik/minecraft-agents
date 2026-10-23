@@ -16,6 +16,7 @@
    ::difficulty {:default 1 :doc "The server difficulty mob hits are costed at: 0 peaceful, 1 easy, 2 normal, 3 hard (not read from the server)." :spec (a/int-in 0 3)}
    ::spot-occupied {:default {:k 1 :n 4} :spec (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)})
                     :doc "Of the death and near-death spots the trial bodies came back within 16 blocks of after 300 s or more 32 to 128 blocks off (vanilla: its killer had despawned), those where a hostile met the body within 60 s (k) of all (n): node tools/event-counts.mjs spot-returns, 2026-10-23."}
+   ::door-breaker-share {:default 0.1 :doc "The share of zombies, husks and zombie villagers drawn with the break-door goal at spawn: vanilla Zombie.finalizeSpawn sets it when nextFloat < 0.1 x the clamped regional difficulty (0 to 1), a value the body cannot read; costed at that cap 1, so 0.1 (the wiki's Zombie page: \"10% x regional difficulty\")." :spec (a/num-in 0 1)}
    ::hit-rate {:default 0.6 :doc "Hits a zombie or skeleton lands per second of exposure (measured over trial fights; the body is out of reach part of the time). Mobs not measured count one a second." :spec (a/num-in 0 nil)}
    ::spider-hit-rate {:default 0.35 :doc "Hits a spider or cave spider lands per second of exposure." :spec (a/num-in 0 nil)}
    ::trident-rate {:default 0.5 :doc "Throws a second of a drowned holding a trident (vanilla: one every 40 ticks)." :spec (a/num-in 0 nil)}
@@ -37,15 +38,28 @@
    "witch" 3 "drowned_trident" 8 "pillager" 2 "vindicator" 8 "slime" 2 "silverfish" 1 "endermite" 2 "phantom" 2 "enderman" 5})
 
 (def door-breakers
-  "Mobs that break a wooden door down (vanilla): zombies from hard on, vindicators from normal on."
-  {"zombie" 3 "zombie_villager" 3 "husk" 3 "drowned" 3 "vindicator" 2})
+  "Mobs that break a wooden door down, with the difficulty from which they do (vanilla BreakDoorGoal): a vindicator
+  from normal on; a zombie, husk or zombie villager from hard on and only when its break-door goal was drawn at spawn
+  (door-breaker-share). A drowned never has the goal (Drowned.supportsBreakDoorGoal is false)."
+  {"zombie" 3 "zombie_villager" 3 "husk" 3 "vindicator" 2})
+
+(def spawn-drawn #{"zombie" "zombie_villager" "husk"})
 
 (def door-break-s "Seconds a mob at a door needs to break it down (vanilla: 240 ticks)." 12)
 
-(defn breaks-door?
-  "Whether the mob called mob-name breaks a wooden door at the ::difficulty setting."
+(defn door-break-share
+  "The chance the mob called mob-name breaks a wooden door at the ::difficulty setting: 0 when it never does or the
+  difficulty is below its own; for a zombie kind the ::door-breaker-share it was drawn with; else 1."
   [mob-name]
-  (some-> (door-breakers mob-name) (<= (settings/get settings ::difficulty))))
+  (let [from (door-breakers mob-name)]
+    (cond (or (nil? from) (> from (settings/get settings ::difficulty))) 0
+          (spawn-drawn mob-name) (settings/get settings ::door-breaker-share)
+          :else 1)))
+
+(defn door-break-chance
+  "The chance at least one of mob-names breaks a door (door-break-share each)."
+  [mob-names]
+  (- 1 (reduce * (map #(- 1 (door-break-share %)) mob-names))))
 
 (def burns-in-sun
   "Mobs that burn in daylight under the open sky (vanilla; a drowned too, but it keeps to the water)."

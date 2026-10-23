@@ -108,6 +108,21 @@
                     (when-not (or v (reach-room/room p pos)) (mem/write! (:store (:engine c)) :refuge-open {:cell k} open-policy))
                     v))))))
 
+(defn room-doors
+  "{:doors [...] :unseen? bool}: the doors of the room around cell pos (reach-room/room's :doors) when closed? holds
+  there or answers :unseen (a cell of the room not seen: the doors of what is seen, :unseen? true); nil when it is no
+  closed room. A closed room's doors are kept in mem :refuge-room-doors with closed?'s answer."
+  [c pos]
+  (let [p (:primitives c) k (cell-key pos)]
+    (if-let [doors (get (:refuge-room-doors (ctx/mem c)) k)]
+      {:doors doors :unseen? false}
+      (let [closed (closed? c pos)]
+        (cond
+          (= :unseen closed) {:doors (:doors (reach-room/unseen-room p pos)) :unseen? true}
+          closed (let [doors (:doors (reach-room/room p pos))]
+                   (ctx/update-mem! c assoc-in [:refuge-room-doors k] doors)
+                   {:doors doors :unseen? false}))))))
+
 (declare shut-by)
 
 (defn doorway-room

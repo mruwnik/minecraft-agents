@@ -130,12 +130,19 @@
 
 (defn ^:async door-price
   "The :door price respond logged at its first decision for the hurt body in the open hut (with extra blocks) and the skeleton south of it, nil when no door cover was priced."
-  [extra]
+  ([extra] (door-price extra {}))
+  ([extra world]
   (let [{:keys [seen]} (await (ct/first-round '(jobs.survival.respond-to-hostile)
-                                              (merge (open-hut {:self {:pos {:x 5.5 :y 64 :z 1.5} :health 4.8 :food 13}
-                                                          :inventory [{:name "cobbled_deepslate" :count 20}]})
+                                              (merge (open-hut (merge {:self {:pos {:x 5.5 :y 64 :z 1.5} :health 4.8 :food 13}
+                                                          :inventory [{:name "cobbled_deepslate" :count 20}]} world))
                                                     {:blocks (merge (box 3 63 -2 7 63 2 "stone") (:blocks (hs/hut-world {:x 5.5 :y 64 :z 1.5} extra)))})))]
-    (-> (filter #(= :hostile.decided (:kind %)) @seen) first :prices :door)))
+    (-> (filter #(= :hostile.decided (:kind %)) @seen) first :prices :door))))
+
+(deftest an-unseen-room-cell-leaves-the-door-a-priced-cover
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (some? (await (door-price {} {:unloaded #{[5 64 -2] [5 65 -2]}}))) "a room cell not seen: the door cover is priced, not dropped")))))
 
 (deftest the-door-is-a-cover-only-where-the-room-has-no-other-opening
   (async done
@@ -144,14 +151,17 @@
         (is (some? (await (door-price {}))) "a closed hut: the shut door is a priced cover")
         (is (nil? (await (door-price {"7,64,0" "air" "7,65,0" "air"}))) "a gap in the wall beside the door: shutting it seals nothing")))))
 
-(deftest a-door-a-mob-breaks-holds-only-part-of-the-quiet
+(deftest a-door-a-mob-may-break-holds-only-part-of-the-quiet-by-the-chance
   (let [c {:args {}}
-        open-s (fn [difficulty mobs]
+        open-s (fn [difficulty mobs unseen?]
                  (settings/with-settings {:jobs.lib.cost.threat/difficulty difficulty}
-                   #(:open-s (shut-in/door-cover c 1 mobs))))]
-    (is (< (open-s 1 ["zombie"]) (open-s 3 ["zombie"])) "hard: the zombie breaks the door and the rest of the quiet is in the open")
-    (is (= (open-s 1 ["zombie"]) (open-s 3 ["skeleton"])) "a skeleton does not break a door")
-    (is (= (open-s 1 ["zombie"]) (open-s 2 ["zombie"])) "a zombie breaks doors only on hard")))
+                   #(:open-s (shut-in/door-cover c 1 mobs unseen?))))
+        none (open-s 1 ["zombie"] false)]
+    (is (< none (open-s 3 ["zombie"] false) (open-s 3 ["vindicator"] false)) "hard: a zombie breaks by its share, a vindicator always")
+    (is (= none (open-s 3 ["drowned"] false) (open-s 3 ["skeleton"] false) (open-s 2 ["zombie"] false)) "no breaker: a drowned never, a zombie below hard")
+    (is (= (open-s 3 ["vindicator"] false) (open-s 2 ["vindicator"] false)) "a vindicator breaks from normal on")
+    (is (< (open-s 3 ["zombie"] false) (open-s 3 ["zombie" "zombie"] false)) "two zombies: the chance one breaks is greater")
+    (is (< (open-s 3 ["vindicator"] false) (open-s 1 ["skeleton"] true)) "an unseen side: all the quiet is in the open")))
 
 (deftest the-cover-and-the-flight-pick-the-door-of-the-same-threat
   (let [world (assoc (hs/hut-world {:x 5.5 :y 64 :z 1.5} {"5,64,-2" "oak_door" "5,65,-2" "oak_door"})
