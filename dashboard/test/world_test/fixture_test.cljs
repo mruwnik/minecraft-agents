@@ -303,6 +303,12 @@
     (is (re-find #"no longer offends" (get (lint #{"f/a" "f/gone"}) "f/gone")) "a listed case that no longer exists")
     (is (some #(re-find #":time-why" %) (:problems d)))))
 
+(deftest an-alone-case-says-why-it-runs-alone
+  (let [ps (fn [m] (:problems (first (f/file-cases (pr-str (merge {:name "a"} m)) "f"))))]
+    (is (empty? (filter #(re-find #":alone" %) (ps {:alone true :alone-why "a neighbour keeps the killer"}))))
+    (is (some #(re-find #":alone-why" %) (ps {:alone true})) "no reason")
+    (is (some #(re-find #":alone-why" %) (ps {:alone-why "x"})) "a reason without the flag")))
+
 (deftest a-register-entry-takes-the-trigger-defaults-and-explains-each-override
   (let [defaults {:hungry {:job '(jobs.survival.get-food) :args 'triggers.survival.hungry/defaults :persistence :cooldown :cooldown-s 90}}
         lint (fn [e] (f/register-problems defaults [e]))]

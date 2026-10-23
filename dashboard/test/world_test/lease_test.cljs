@@ -184,6 +184,17 @@
   (let [files (atom {11 (want :night 3)})]
     (is (= {:waiting-on [11]} (l/try-share (fake-share files #{11 12}) 12 :night-x 5)))))
 
+(deftest an-alone-case-waits-for-every-present-case-and-keeps-later-ones-out
+  (let [files (atom {10 (hold :present) 12 (hold :present)})]
+    (is (= {:waiting-on [10 12]} (l/try-share (fake-share files #{10 11 12 13}) 11 :alone-x 5)))
+    (is (= {:waiting-on [11]} (l/try-share (fake-share files #{10 11 12 13}) 13 :present 9)) "a newer case queues behind the waiting alone case")
+    (is (= {:held true :first? false} (l/try-share (fake-share files #{10 11 12 13}) 12 :present 3)) "an older one is not blocked")))
+
+(deftest an-alone-case-holds-nothing-else-with-it
+  (let [files (atom {11 (hold :alone-x)})]
+    (is (= {:waiting-on [11]} (l/try-share (fake-share files #{11 12}) 12 :present 5)))
+    (is (= {:waiting-on [11]} (l/try-share (fake-share files #{11 12}) 12 :alone-x 5)))))
+
 (deftest time-phase-of-an-exclusive-night-case
   (is (= :night-x (l/time-phase {:time :night-exclusive}))))
 

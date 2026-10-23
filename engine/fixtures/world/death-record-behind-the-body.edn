@@ -53,6 +53,7 @@
    :expect [{:event {:source :job :kind :waiting :data {:reason :risky}} :within-s 30 :of-job true}]
    :after [[:item "wooden_pickaxe" 0]]}
   {:name "craft-towards-an-unseen-death-spot-the-body-respawned-far-from-is-free"
+   :alone true :alone-why "a player within 128 of the death spot keeps the killer; plots lie 96 apart"
    :blocks [[:set [20 0 16] "crafting_table"] [:set [16 3 16] "glowstone"]
             [:fill [26 -1 15] [28 1 17] "stone"] [:set [27 0 16] "air"]]
    :body {:inventory [["oak_planks" 6]]}
@@ -65,6 +66,7 @@
             {:no-event {:source :job :data {:reason :risky}} :for-s 5 :of-job true}]
    :after [[:item "wooden_pickaxe" 1]]}
   {:name "craft-towards-an-old-dark-death-spot-the-body-respawned-far-from-is-free"
+   :alone true :alone-why "a player within 128 of the death spot keeps the killer; plots lie 96 apart"
    :blocks [[:set [20 0 16] "crafting_table"] [:set [16 3 16] "glowstone"]
             [:fill [26 -1 15] [28 1 17] "stone"] [:set [27 0 16] "air"]]
    :body {:inventory [["oak_planks" 6]]}

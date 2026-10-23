@@ -879,23 +879,31 @@
             (pause-sync 5)
             (recur (inc tries))))))))
 
+(def presence-lock-dir (path/join shared-dir "mc-presence-lock"))
+
+(defn lock-dir-ops [dir]
+  (fs/mkdirSync dir #js {:recursive true})
+  (let [entry-file (fn [pid] (path/join dir (str pid)))]
+    {:guard with-guard
+     :entries (fn [] (into {} (keep (fn [f]
+                                      (let [pid (js/parseInt f 10)]
+                                        (when-let [e (try (reader/read-string (fs/readFileSync (path/join dir f) "utf8"))
+                                                          (catch :default _ nil))]
+                                          (when-not (js/isNaN pid) [pid e]))))
+                                    (fs/readdirSync dir))))
+     :put! (fn [pid e] (fs/writeFileSync (entry-file pid) (pr-str e)))
+     :remove! (fn [pid] (try (fs/unlinkSync (entry-file pid)) (catch :default _ nil)))
+     :alive? pid-alive?}))
+
 (defn time-entry-file [pid] (path/join time-lock-dir (str pid)))
 
-(defn time-lock-dir-ops []
-  (fs/mkdirSync time-lock-dir #js {:recursive true})
-  {:guard with-guard
-   :entries (fn [] (into {} (keep (fn [f]
-                                    (let [pid (js/parseInt f 10)]
-                                      (when-let [e (try (reader/read-string (fs/readFileSync (path/join time-lock-dir f) "utf8"))
-                                                        (catch :default _ nil))]
-                                        (when-not (js/isNaN pid) [pid e]))))
-                                  (fs/readdirSync time-lock-dir))))
-   :put! (fn [pid e] (fs/writeFileSync (time-entry-file pid) (pr-str e)))
-   :remove! (fn [pid] (try (fs/unlinkSync (time-entry-file pid)) (catch :default _ nil)))
-   :alive? pid-alive?})
+(defn time-lock-dir-ops [] (lock-dir-ops time-lock-dir))
 
 (defn release-time-lock! []
   (try (fs/unlinkSync (time-entry-file (.-pid js/process))) (catch :default _ nil)))
+
+(defn release-presence-lock! []
+  (try (fs/unlinkSync (path/join presence-lock-dir (str (.-pid js/process)))) (catch :default _ nil)))
 
 (defn lock-phase
   "The time-lock phase of case rc: its own when it depends on the time of day; else :day when the run may set the time
@@ -1134,6 +1142,14 @@
                       :read-phase #(.then (rcon! ["time query day"]) (fn [[reply]] (if (night? (daytime (or reply ""))) :night :day)))
                       :sleep sleep :log log!}
                      phase what)))
+
+(defn acquire-presence-lock!
+  "Resolves once this process may run case rc: every case holds :present together, a case flagged :alone holds :alone-x,
+  which waits for all of them and keeps every later one out (another runner's body near its plot would be sensed)."
+  [rc on-wait]
+  (acquire-shared! {:ops (lock-dir-ops presence-lock-dir) :on-wait on-wait :sleep sleep :log log!}
+                   (if (:alone rc) :alone-x :present)
+                   (str (:id rc) (when (:alone rc) (str " runs alone: " (:alone-why rc))))))
 
 (defn with-time-lock!
   "Runs thunk (a promise-returning fn) holding the time lock for phase; always releases it."
@@ -1993,7 +2009,7 @@
               batch (lock-batch opts rc)]
           (hold-phase!
            {:stop! stop!
-            :acquire! #(case-lock! phase (:id c) batch on-wait)
+            :acquire! #(.then (acquire-presence-lock! rc on-wait) (fn [_] (case-lock! phase (:id c) batch on-wait)))
             :first-set! (fn []
                           (-> (if (and (:sleep-skip rc) (not= :any phase))
                                 (reset-stray-sleep-rule! rcon! opts (str (:id c) " needs the vanilla night skip"))
@@ -2094,7 +2110,7 @@
                                     #(when (f/writes-shared? c) (drop-shared! opts))
                                     #(run! (fn [f] (when (fs/existsSync f) (fs/unlinkSync f))) @plan-files)])
                      (.then (constantly r)))))
-        (.finally (fn [] (stop-monitor) (@stop-sweep) (release-time-lock!) (restore-clock! opts))))))
+        (.finally (fn [] (stop-monitor) (@stop-sweep) (release-time-lock!) (release-presence-lock!) (restore-clock! opts))))))
 
 ;; ------------------------------------------------------------------ reporting
 

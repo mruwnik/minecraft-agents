@@ -99,11 +99,12 @@
   "entries: {pid {:phase :state (:hold or :want) :seq :batch}} of live processes. -> {:held true :first? bool} when pid may
   hold phase now (every holder shares the phase and no waiter of the other phase is older), else {:waiting-on pids}.
   :night-x (a sleeping case) shares with nobody but the :night-x entries of its own batch (nil batch: nobody): every other
-  holder and every older waiter blocks it, and it blocks all."
+  holder and every older waiter blocks it, and it blocks all. :alone-x (a case flagged :alone, in the presence lock where every
+  case holds :present) blocks and is blocked the same way."
   [entries pid phase seq batch]
   (let [others (dissoc entries pid)
         holders (filter (fn [[_ e]] (= :hold (:state e))) others)
-        solo? (fn [p] (contains? #{:night-x :weather-x} p))
+        solo? (fn [p] (contains? #{:night-x :weather-x :alone-x} p))
         same-batch? (fn [e] (and (some? batch) (= :night-x (:phase e)) (= batch (:batch e))))
         differs? (fn [e] (or (not= phase (:phase e)) (and (solo? phase) (not (same-batch? e)))))
         blockers (concat (filter (fn [[_ e]] (differs? e)) holders)
