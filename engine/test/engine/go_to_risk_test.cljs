@@ -93,10 +93,11 @@
 (def far-goal {:x 95 :y 64 :z 0})
 
 (defn with-death
-  "ctx c remembering a death of `cause` at pos, `age-ms` ago (clock at 10 hours)."
-  [c pos cause age-ms]
-  (let [now 36000000]
-    (assoc c :view (fn [] {:now now :data {:policies {:deaths core/deaths-policy} :entries {:deaths [{:t (- now age-ms) :data {:pos pos :cause cause :death-t (- now age-ms)}}]}}}))))
+  "ctx c remembering a death of `cause` at pos, `age-ms` ago (clock at 10 hours), and the entries {kind [entry]} of more."
+  ([c pos cause age-ms] (with-death c pos cause age-ms {}))
+  ([c pos cause age-ms more]
+   (let [now 36000000]
+     (assoc c :view (fn [] {:now now :data {:policies {:deaths core/deaths-policy} :entries (merge more {:deaths [{:t (- now age-ms) :data {:pos pos :cause cause :death-t (- now age-ms)}}]})}})))))
 
 (defn estimate-unseen
   "risk/estimate with the death spots never seen (the fake world sees every cell, which would clear them)."
@@ -135,8 +136,8 @@
 
 (deftest a-recent-death-near-the-goal-adds-its-fight-to-the-risk-even-by-day
   (let [c (ready-test/ctx-of day-world)
-        on-way (with-death c {:x 80 :y 64 :z 5} "zombie_villager" 60000)
-        off-way (with-death c {:x 50 :y 64 :z 5} "zombie_villager" 60000)]
+        on-way (with-death c {:x 80 :y 64 :z 5} "husk" 60000)
+        off-way (with-death c {:x 50 :y 64 :z 5} "husk" 60000)]
     (is (zero? (:hp (risk/estimate c far-goal))))
     (is (pos? (:death-hp (estimate-unseen on-way far-goal))))
     (is (zero? (:death-hp (estimate-unseen off-way far-goal))))))
@@ -159,7 +160,7 @@
 (deftest a-recent-hide-near-the-goal-adds-the-fight-with-its-mobs-to-the-risk
   (let [c (ready-test/ctx-of day-world)
         now 36000000
-        with-hide (fn [pos] (assoc c :view (fn [] {:now now :data {:policies {:hid hide-spot/policy} :entries {:hid [{:t (- now 60000) :data {:pos pos :mobs ["zombie"]}}]}}})))]
+        with-hide (fn [pos] (assoc c :view (fn [] {:now now :data {:policies {:hid hide-spot/policy} :entries {:hid [{:t (- now 60000) :data {:pos pos :mobs ["spider"]}}]}}})))]
     (is (pos? (:death-hp (risk/estimate (with-hide {:x 80 :y 64 :z 5}) far-goal))))
     (is (zero? (:death-hp (risk/estimate (with-hide {:x 50 :y 64 :z 5}) far-goal))))
     (is (zero? (:death-hp (risk/estimate (with-hide inside) {:x 20 :y 64 :z 0}))) "the hide the body stands in is no threat on a walk away from it")))
@@ -175,27 +176,35 @@
     (is (not (hide-spot/repeated? (with-hides 3) at [])) "a heard mob has no name to count")))
 
 (deftest a-death-fades-with-time
+  ;; seen lit before the death, within 32 blocks of the body: no new spawn, and its killer does not despawn
   (let [c (ready-test/ctx-of day-world)
-        at {:x 80 :y 64 :z 5}
-        hp-at #(:death-hp (estimate-unseen (with-death c at "zombie_villager" %) far-goal))]
+        at {:x 30 :y 64 :z 2}
+        hp-at #(with-redefs [look/seen-block (constantly {:name "air" :age-ms 1e8})]
+                 (:death-hp (risk/estimate (with-death c at "husk" %) {:x 40 :y 64 :z 0})))]
     (is (> (hp-at 60000) (hp-at 3600000)))
     (is (pos? (hp-at 3600000)))
     (is (zero? (hp-at 8000000)))))
 
+(defn in-lit-cave
+  "(f) with every cell seen lit before the deaths and roofed from the sky: no mob spawns there and none burns."
+  [f]
+  (with-redefs [look/seen-block (constantly {:name "air" :age-ms 1e8}) sh-sense/sky-reaches-from-above? (constantly false)] (f)))
+
 (deftest a-hungry-body-affords-less-risk-than-a-fed-one-unless-it-cannot-heal
-  (let [status-for (fn [food inventory] (let [c (-> (ready-test/ctx-of (assoc dark-spot-world :self {:pos inside :health 20 :food food} :inventory inventory))
-                                                    (with-death {:x 80 :y 64 :z 5} "skeleton" 5040000))]
-                                          (first (risk/status c far-goal))))
+  ;; a skeleton death 75 s ago, 75 blocks off: about a third of a chance it has not despawned
+  (let [status-for (fn [food inventory] (let [c (-> (ready-test/ctx-of (assoc day-world :self {:pos inside :health 20 :food food} :inventory inventory))
+                                                    (with-death {:x 80 :y 64 :z 5} "skeleton" 75000))]
+                                          (in-lit-cave #(first (risk/status c far-goal)))))
         bread [{:name "bread" :count 3}]]
     (is (= :ok (status-for 20 [])))
     (is (= :later (status-for 5 bread)))
     (is (= :ok (status-for 5 [])) "nothing to eat: waiting never lowers the risk, so the walk goes")))
 
 (deftest a-goal-worth-enough-lets-a-walk-take-a-risk-over-the-share-of-health
-  (let [status-for (fn [worth] (let [c (-> (ready-test/ctx-of (assoc dark-spot-world :self {:pos inside :health 20 :food 5} :inventory [{:name "bread" :count 3}]))
-                                           (with-death {:x 80 :y 64 :z 5} "skeleton" 5040000)
+  (let [status-for (fn [worth] (let [c (-> (ready-test/ctx-of (assoc day-world :self {:pos inside :health 20 :food 5} :inventory [{:name "bread" :count 3}]))
+                                           (with-death {:x 80 :y 64 :z 5} "skeleton" 75000)
                                            (assoc-in [:args :worth] worth))]
-                                 (first (risk/status c far-goal))))]
+                                 (in-lit-cave #(first (risk/status c far-goal)))))]
     (is (= :later (status-for nil)) "no worth said: the share of health decides")
     (is (= :later (status-for 5)) "a goal worth little buys little risk")
     (is (= :ok (status-for 400)))))
@@ -214,7 +223,7 @@
   (let [c (ready-test/ctx-of day-world)]
     (doseq [cause ["fall" "lava" "drown" "starve" "a_new_cause" nil]]
       (is (zero? (:death-hp (estimate-unseen (with-death c {:x 80 :y 64 :z 5} cause 60000) far-goal))) cause))
-    (is (pos? (:death-hp (estimate-unseen (with-death c {:x 80 :y 64 :z 5} "skeleton" 60000) far-goal))))))
+    (is (pos? (:death-hp (estimate-unseen (with-death c {:x 80 :y 64 :z 5} "spider" 60000) far-goal))))))
 
 (deftest a-far-goal-is-judged-on-a-bounded-number-of-reads
   (let [c (ready-test/ctx-of night-hut)
@@ -232,7 +241,7 @@
         with-hide (fn [pos] (assoc c :view (fn [] {:now now :data {:policies {:hid hide-spot/policy} :entries {:hid [{:t (- now 60000) :data {:pos pos :mobs ["zombie"]}}]}}})))]
     (is (zero? (:death-hp (estimate-unseen (with-death c {:x 93 :y 64 :z 2} "zombie" 60000) far-goal))))
     (is (zero? (:death-hp (risk/estimate (with-hide {:x 93 :y 64 :z 2}) far-goal))))
-    (is (pos? (:death-hp (estimate-unseen (with-death c {:x 80 :y 64 :z 5} "zombie" 60000) far-goal))))))
+    (is (pos? (:death-hp (estimate-unseen (with-death c {:x 80 :y 64 :z 5} "husk" 60000) far-goal))))))
 
 (deftest a-walk-that-does-not-approach-a-death-pays-nothing-for-it
   (let [c (ready-test/ctx-of day-world)
@@ -252,13 +261,17 @@
                 (:death-hp (risk/estimate (with-death (ready-test/ctx-of dark-spot-world) {:x 80 :y 64 :z 5} "enderman" 60000) far-goal))))
         "seen after the death but dark")))
 
-(deftest a-death-spot-the-body-sees-lit-now-is-near-free-a-dark-one-stays-dear
-  ;; the spot seen before the death (so not seen-clear?), lit now by the day sky, or dark as in a cave
-  (let [dark dark-spot-world
-        hp (fn [world cause] (with-redefs [look/seen-block (constantly {:name "air" :age-ms 120000})]
-                               (:death-hp (risk/estimate (with-death (ready-test/ctx-of world) {:x 80 :y 64 :z 5} cause 60000) far-goal))))]
-    (is (pos? (hp dark "skeleton")) "a cave skeleton's spot stays dear by day")
-    (is (< 0 (hp day-world "zombie") (* 0.11 (hp dark "zombie"))) "a night zombie's spot under the day sky is near free")))
+(deftest a-death-spot-costs-while-its-killer-may-still-be-there-or-a-like-one-spawn-there
+  ;; the spot seen before the death (so not seen-clear?), 75 blocks from the body a minute ago; dark-spot-world has no light data: all dark
+  (let [respawned-far {:respawned [{:t (- 36000000 50000) :data {:pos {:x 300 :y 64 :z 5}}}]}
+        hp (fn [world cause more] (with-redefs [look/seen-block (constantly {:name "air" :age-ms 120000})]
+                                    (:death-hp (risk/estimate (with-death (ready-test/ctx-of world) {:x 80 :y 64 :z 5} cause 60000 more) far-goal))))
+        dark (hp dark-spot-world "skeleton" {})]
+    (is (< (* 0.5 dark) (in-lit-cave #(hp day-world "skeleton" {})) dark) "a lit cave stops new spawns, not the old skeleton")
+    (is (< (* 0.5 (hp dark-spot-world "creeper" {})) (hp day-world "creeper" {})) "a creeper does not burn by day")
+    (is (zero? (hp day-world "zombie" {})) "a zombie burns under the day sky")
+    (is (pos? (hp day-world "creeper" {})))
+    (is (zero? (hp day-world "creeper" respawned-far)) "the body went 128 blocks off: it despawned")))
 
 (deftest a-death-spot-counts-as-lit-only-when-seen
   (let [p (:primitives (ready-test/ctx-of day-world))
@@ -271,7 +284,7 @@
   (let [zombies (for [i (range 3)] {:id (+ 7 i) :name "zombie" :kind "hostile" :pos {:x (- 2 i) :y 64 :z 3}})
         status-for (fn [entities]
                      (first (risk/status (-> (ready-test/ctx-of {:time st/noon :light {[80 64 5] [0 0]} :self {:pos inside :health 2.3 :food 5} :entities (vec entities)})
-                                             (with-death {:x 80 :y 64 :z 5} "zombie" 60000))
+                                             (with-death {:x 80 :y 64 :z 5} "zombie" 20000))
                                          far-goal)))]
     (is (= :ok (status-for zombies)) "hostiles reach the body where it stands, the walk leaves them behind: the walk is the cheaper risk")
     (is (= :later (status-for [])) "nothing near the body: waiting costs nothing, so it waits")))

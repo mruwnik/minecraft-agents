@@ -6,7 +6,8 @@
   as a zombie fight with the kit carried, jobs.lib.cost/fight-damage) plus what the known threats take off the body over
   the straight way (jobs.lib.cost/route-hurt, each over its field, jobs.lib.threats): every mob sensed now that catches
   the walk (live-catchers), and every death, near-death or hide spot the walk goes for (remembered-near-way), each
-  by its fade and the chance its mob is there now (death-spot/present-share: a lit spot by day is near free, a dark one is not).
+  by the chance its mob or a like one is there now (death-spot/present-share: one a sun-burning mob left seen sky-lit by day, or one
+  the body went far from, is near free).
   Seen lava within jobs.lib.lava-risk/radius of a cell the straight way steps into adds jobs.lib.lava-risk/hp, scaled by its closeness (a slip beside it is lethal); a body already at the goal, or a way clear of lava, adds none.
   Acceptable when it stays within jobs.lib.price/::risk-share of the health the body has now, or, when the caller says what the goal is worth (:worth), within the hp that worth buys (price/allowed)."
   (:require [engine.args :as a]

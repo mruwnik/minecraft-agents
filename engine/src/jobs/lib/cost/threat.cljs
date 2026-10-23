@@ -32,6 +32,24 @@
   {"zombie" 3 "husk" 3 "drowned" 3 "zombie_villager" 3 "skeleton" 2 "stray" 2 "parched" 2 "bogged" 2 "spider" 2 "cave_spider" 3
    "witch" 3 "pillager" 2 "vindicator" 8 "slime" 2 "silverfish" 1 "endermite" 2 "phantom" 2 "enderman" 5})
 
+(def burns-in-sun
+  "Mobs that burn in daylight under the open sky (vanilla; a drowned too, but it keeps to the water)."
+  #{"zombie" "zombie_villager" "skeleton" "stray" "bogged" "phantom"})
+
+(def despawn-blocks "Blocks from every player past which a hostile despawns at once (vanilla)." 128)
+(def idle-despawn-blocks "Blocks from every player past which an idle hostile may despawn (vanilla)." 32)
+(def idle-despawn-s "Seconds a hostile idles before it may despawn (vanilla: 600 ticks)." 30)
+(def idle-despawn-per-s "Chance a second an idle hostile despawns (vanilla: 1 in 800 a tick)." (/ 20 800))
+
+(defn left-alive
+  "The chance a hostile is not despawned (vanilla): 0 once a player was more than despawn-blocks from it (farthest), else
+  1 in 800 a tick after idle-despawn-s of away-s with none within idle-despawn-blocks. Above easy a zombie or skeleton
+  may pick up loot and stay (unknown: 1)."
+  [farthest away-s]
+  (cond (> (settings/get settings ::difficulty) 1) 1
+        (> farthest despawn-blocks) 0
+        :else (js/Math.exp (- (* idle-despawn-per-s (max 0 (- away-s idle-despawn-s)))))))
+
 (defn creeper-blast [] (settings/get settings ::creeper-blast))
 (defn creeper-exchange [] (settings/get settings ::creeper-exchange))
 (def provoked-only #{"enderman" "zombified_piglin"})
