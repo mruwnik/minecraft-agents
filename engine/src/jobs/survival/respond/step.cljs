@@ -17,7 +17,8 @@
             [jobs.survival.respond.goal :as respond.goal]
             [jobs.survival.respond.pillar :as pillar]
             [jobs.survival.respond.refuge :as refuge]
-            [jobs.lib.flee-walk :as walk]))
+            [jobs.lib.flee-walk :as walk]
+            [jobs.lib.walk :as lwalk]))
 
 (a/defargs settings
   {::eat-gap {:default 12 :doc "Blocks to the nearest hostile at which a bite is eaten per flee step." :spec (a/num-in 0 nil)}
@@ -120,7 +121,7 @@
 
 (defn ^:async walk-away!
   "The flee step when the body outruns the chasers: eat a bite, then take the stairs up, the goal leg or the open
-  target (stuck: the cornered fallback, called with its reason), or cover where it stands, or dig a side pocket first."
+  target (stuck: the cornered fallback, called with its reason; a target out of the line of fire is walked onto and centred on, not near), or cover where it stands, or dig a side pocket first."
   [c threats judged rooms covered? stuck]
   (let [p (:primitives c)
         threat (first threats)
@@ -151,11 +152,15 @@
             _ (when leg (respond.goal/start-leg! c))
             from (u/self-pos c)
             refused0 (:refused (ctx/mem c))
-            moved (await (cornered/leg-step! c :step target 1
+            cover? (and covered? (covered? target))
+            moved (await (cornered/leg-step! c :step target (if cover? 0 1)
                                     (cond (or (seq (close-hitters c)) (cornered/recently-hurt? c)) (cornered/close-leg-s)
                                           low? (low-leg-s)
                                           :else (cornered/flight-timeout-s))
-                                    (if leg (respond.goal/margin c) (respond.goal/leg-margin))))]
+                                    (if leg (respond.goal/margin c) (respond.goal/leg-margin))))
+            ;; go-to counts a body on the cell's edge as there, its box still in the line of fire
+            _ (when (and moved cover? (not= (select-keys target [:x :y :z]) (sh-sense/feet p)))
+                (await (lwalk/centre! c (+ (:x target) 0.5) (+ (:z target) 0.5))))]
         (ctx/update-mem! c #(if (and low? (< (u/dist from (u/self-pos c)) (stall-blocks)))
                               (update % :stalled (fnil inc 0))
                               (dissoc % :stalled)))

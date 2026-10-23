@@ -8,6 +8,7 @@
             [jobs.lib.hostile-fight :as hostile]
             [jobs.lib.checks :as checks]
             [jobs.lib.combat :as combat]
+            [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.look :as look]
             [jobs.lib.vantage :as vantage]
@@ -17,7 +18,8 @@
             [jobs.lib.ready :as ready]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
-            [jobs.lib.pace :as pace]))
+            [jobs.lib.pace :as pace]
+            [jobs.lib.walk.world :as wworld]))
 
 (def doc
   "Attack the entities :targets names until none is left within :radius.
@@ -265,12 +267,21 @@
         (>= (get quiet id 0) no-damage-hits) (give-up! c target :no-damage)
         (>= (get hits id 0) (max-hits)) (give-up! c target :too-many-hits)))))
 
+(defn fall-room
+  "The hp a walk to hostile target may spend on falls: the walk's damage budget less the fight with target that follows (cost/fight-damage,
+  its hits and health as counted so far), all of it, since a drop to it may leave no way back."
+  [c target]
+  (let [{:keys [hits health]} (ctx/mem c)
+        id (.-id target)
+        struck (cond-> {:hits (get hits id 0)} (number? (get health id)) (assoc :health (get health id)))]
+    (max 0 (- (wworld/damage-budget c) (cost/fight-damage (hostile/fight-of c [target] {id struck}))))))
+
 (defn walk-opts
-  "The options of one walk towards a target: a :hostiles fight leaves doors as they are and aims again every ::chase-timeout-s, the mob moves.
+  "The options of one walk towards target: a :hostiles fight leaves doors as they are, prices known dangers, falls only within fall-room and aims again every ::chase-timeout-s, the mob moves.
   A walk to an animal may spend hp (with a longer leg, ::forage-walk-timeout-s) while the body can not heal (ready/forage-walk): the animal is the food."
-  [c]
+  [c target]
   (if (hostile/hostiles? c)
-    {:dangers false :ways #{:walk :clear-seal} :look-round false :leg-s (hostile/chase-timeout-s)}
+    {:ways #{:walk :clear-seal} :look-round false :leg-s (hostile/chase-timeout-s) :max-damage (fall-room c target)}
     (let [walk (ready/forage-walk c {:dangers false :ways #{:walk :clear-seal} :look-round false :doors :shut :leg-s (settings/get settings ::walk-timeout-s)})]
       (cond-> walk (:floor walk) (assoc :leg-s (settings/get settings ::forage-walk-timeout-s))))))
 
@@ -298,7 +309,7 @@
       (hostile/held? c target) (do (await (combat/wait-gap! c (ctx/now c) chase-gap-ms))
                                                                  :held)
       :else
-      (case (await (near/go-near! c tpos 2 (walk-opts c)))
+      (case (await (near/go-near! c tpos 2 (walk-opts c target)))
         :there :arrived
         :partial :partial
         :blocked))))
@@ -322,7 +333,7 @@
 (defn ^:async close-in!
   "Walk right up to a target that cannot be hit from here, and count a failure."
   [c target]
-  (await (near/go-near! c (u/pos-of (.-pos target)) 1 (walk-opts c)))
+  (await (near/go-near! c (u/pos-of (.-pos target)) 1 (walk-opts c target)))
   (fail! c target))
 
 (defn ^:async swing-or-close-in!

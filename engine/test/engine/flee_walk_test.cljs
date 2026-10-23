@@ -85,6 +85,25 @@
     (is (neg? (:z (walk/choose-target flat all-seen from [threat] nil [] 6 {:swim-factor 2.2 :covered? covered?})))
         "the first direction whose end is out of the line of fire")))
 
+(defn shaft-closet-world
+  "Stone round a two-cell closet at y 9-10 (x 15-16, z 16) whose cell x 16 is open down a shaft to a floor at y -1."
+  [{:keys [x y z]}]
+  (cond
+    (and (= x 16) (= z 16) (<= 0 y 10)) "air"
+    (and (= x 15) (= z 16) (<= 9 y 10)) "air"
+    :else "stone"))
+
+(deftest a-flight-from-a-shooter-below-steps-one-block-aside-out-of-its-line
+  (let [over-shaft {:x 16.2 :y 9 :z 16.5}
+        skeleton {:x 16.5 :y 0 :z 16.5}
+        covered? (fn [end] (not= 16 (:x end)))]
+    (is (= {:x 15 :y 9 :z 16} (walk/choose-target shaft-closet-world all-seen over-shaft [skeleton] nil [] 6 {:covered? covered?}))
+        "the one cell beside, out of the line up the shaft, is cover though a step of one is too short to flee by")
+    (is (nil? (walk/choose-target shaft-closet-world all-seen over-shaft [skeleton] nil [] 6))
+        "no shooter: a one-block step gains nothing, the body is cornered")
+    (is (nil? (walk/choose-target shaft-closet-world #(= {:x 15 :y 8 :z 16} %) over-shaft [skeleton] nil [] 6 {:covered? covered?}))
+        "a floor not seen is no cover")))
+
 (defn leaf-wall-world
   "Flat stone floor at y 63; an oak_leaves wall at x 3, y 64-66, z -3..3."
   [x y z]

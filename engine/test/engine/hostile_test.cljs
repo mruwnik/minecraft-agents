@@ -362,6 +362,18 @@
           (is (every? #(< 60 (:y %)) (tu/walked-to eng))
               "no walk was aimed at the pit's floor"))))))
 
+(deftest hostile-attack-does-not-drop-into-a-pit-whose-fall-and-fight-it-cannot-afford
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pit-mob {:id 7 :name "skeleton" :kind "hostile" :pos {:x 7.5 :y 55 :z 0.5}}
+              pit (into {} (mapcat (fn [x] [[(str x ",63,0") "air"] [(str x ",54,0") "stone"]]) [5 6 7]))
+              {:keys [p eng]} (await (first-round-ms '(jobs.combat.attack {:targets :hostiles :ranged-radius 16 :radius 16})
+                                                     {:self {:pos {:x 4.5 :y 64 :z 0.5}} :blocks pit :entities [pit-mob]} 20))]
+          (is (seq (tu/walked-to eng)) "the fight walked toward the mob")
+          (is (empty? (calls p "steer"))
+              "a 9-block fall (6 hp, within the walk's budget of 7) into a fist fight with a skeleton is more than the body may spend: no step down"))))))
+
 (deftest hostile-attack-with-hold-waits-for-a-mob-beyond-reach-and-hits-it-when-it-comes
   (async done
     (tu/run-async done
@@ -496,8 +508,9 @@
               _ (await (tu/with-near-spy calls* (fn ^:async b [] (await (first-round-ms '(jobs.combat.attack {:targets :hostiles :ranged-radius 16 :radius 6}) {:inventory sword :entities [(zombie 5 0)]} 20)))))
               opts (map #(nth % 2) @calls*)]
           (is (seq opts))
-          (is (every? #(and (= #{:walk :clear-seal} (:ways %)) (= 10 (:leg-s %)) (false? (:look-round %)) (false? (:dangers %))) opts)
-              "a moving mob is chased in legs, never dug or pillared toward"))))))
+          (is (every? #(and (= #{:walk :clear-seal} (:ways %)) (= 10 (:leg-s %)) (false? (:look-round %)) (nil? (:dangers %))) opts)
+              "a moving mob is chased in legs, never dug or pillared toward, its dangers priced")
+          (is (every? #(< 0 (:max-damage %) 7) opts) "a sword fight with a zombie leaves part of the budget of 7 for falls"))))))
 
 (deftest hostile-attack-is-already-done-when-nothing-is-near
   (async done

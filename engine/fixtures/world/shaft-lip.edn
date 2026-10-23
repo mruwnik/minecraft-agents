@@ -5,8 +5,9 @@
 ;; not start from the cell under the centre (the act's own walk dropped the trial body down the shaft): the body steps onto
 ;; [15 9 16] and goes round the shaft (go-to). Should-succeed: dug and collected, no hurt, the body still up on the mass.
 ;; shot-up-a-shaft-under-the-body-fires-hostile-near: the body in a closet on the mass (walls and roof seen, lit), floor
-;; open under its centre down the shaft; a skeleton at the shaft's foot shoots up it. A hit shows the way, not the height:
-;; the hostile-near reflex must fire (the trial body took two hits there with the reflex silent).
+;; open under its centre down the shaft; a skeleton at the shaft's foot shoots up it. The hostile-near reflex must fire (the
+;; trial body took two hits there with the reflex silent), and the flight steps to the cell beside, out of the line, never
+;; down the shaft onto the skeleton.
 {:defaults
  {:tags [:survival :collect :hostile] :time :any
   :plot {:height 16}
@@ -26,5 +27,6 @@
    :blocks [[:fill [14 9 15] [17 11 17] "stone"] [:fill [15 9 16] [16 10 16] "air"]]
    :body {:at [16.2 9 16.5] :yaw -90 :settle-s 2 :effects [["regeneration" 120 1]]}
    :act [[:summon "skeleton" [16.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
-   :expect [{:event {:source :body :kind :hurt :data {:causes [:has "skeleton"]}} :within-s 60}
-            {:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 70}]}]}
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 70}
+            {:no-event {:source :body :kind :hurt :data {:causes [:has "fall"]}} :for-s 75}]
+   :after [[:body-far [16.5 0 16.5] 5]]}]}
