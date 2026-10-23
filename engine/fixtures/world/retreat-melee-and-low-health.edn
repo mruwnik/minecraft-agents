@@ -18,12 +18,16 @@
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 15}
             {:no-event {:source :job :kind #{:retreat_sealed}} :for-s 40}]
    :after [[:entities "type=zombie,tag=wt" [[0 0 0] [31 6 31]] 0]]}
-  {:name "armed-body-with-a-creeper-near-never-fights-it"
-   :body {:yaw 270 :inventory [["iron_sword" 1] ["cobblestone" 20]]}
-   :act [[:summon "creeper" [19.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
-   :expect [{:event {:source :job :kind :hostile.decided :data {:decision :flee}} :within-s 20}
-            {:no-event {:source :job :kind :child_started :data {:slot :fight}} :for-s 30}]
-   :after [[:entities "type=creeper,tag=wt" [[0 0 0] [31 6 31]] 1]]}
+  ;; Card 96596333 (design rule 4: a lone creeper is fought hit-and-back, so this is the e0dbcd37 scene): the zombie is fought,
+  ;; the creeper in sight across the plot (too far to reach the fight before it ends) is never the target; no resistance, so a blast would show.
+  {:name "armed-body-kills-the-zombie-and-leaves-a-creeper-across-the-plot-alone"
+   :body {:yaw 270 :inventory [["iron_sword" 1] ["cobblestone" 20]] :effects []}
+   :act [[:summon "zombie" [18.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "creeper" [30.5 0 28.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:mob "zombie" :decision :fight}} :within-s 15}
+            {:no-event {:source :body :kind :hurt} :for-s 30}]
+   :after [[:entities "type=zombie,tag=wt" [[0 0 0] [31 6 31]] 0]
+           [:entities "type=creeper,tag=wt" [[0 0 0] [31 6 31]] 1]]}
   {:name "zombie-near-and-skeleton-in-line-takes-cover-not-a-swing"
    :body {:inventory [["iron_sword" 1] ["cobblestone" 20]] :effects [["resistance" 600 1]]}
    :act [[:summon "skeleton" [25.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
