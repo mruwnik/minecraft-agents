@@ -96,16 +96,19 @@
         m (ctx/mem c)]
     (when (:unknown c)
       (wworld/with-seeds (:unknown c) (when (:y pos) (mapv #(js/Math.floor (% pos)) [:x :y :z])) (into (ledger/stair-stands c) (ledger/tunnel-stands c))))
-    (cond
-      (:restore-now m) (await (restore/restore-round! c))
-      (:escalation m) (await (esc/escalation-round! c pos))
-      (:escalate-now m) (do (ctx/update-mem! c dissoc :escalate-now)
-                            (await (esc/escalate! c pos nil)))
-      :else (or (when (:torch-fetching m) (await (torch/fetch-torches! c)))
-                (await (walk/walk! c pos
-                              (cond (and (= :guess (:column-open m)) (not (:column-near m))) (max (:range (:args c)) column/approach-range)
-                                    :else (:range (:args c)))
-                              (some-> (:doors (:args c)) keyword)))))))
+    (walk/surface-before-end!
+     c pos
+     (await
+      (cond
+        (:restore-now m) (await (restore/restore-round! c))
+        (:escalation m) (await (esc/escalation-round! c pos))
+        (:escalate-now m) (do (ctx/update-mem! c dissoc :escalate-now)
+                              (await (esc/escalate! c pos nil)))
+        :else (or (when (:torch-fetching m) (await (torch/fetch-torches! c)))
+                  (await (walk/walk! c pos
+                                (cond (and (= :guess (:column-open m)) (not (:column-near m))) (max (:range (:args c)) column/approach-range)
+                                      :else (:range (:args c)))
+                                (some-> (:doors (:args c)) keyword)))))))))
 
 (def target [:pos :place])
 

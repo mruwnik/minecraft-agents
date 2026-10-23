@@ -5,6 +5,7 @@
   Rules of go-to:
   - The walk settings (per world, body or call :settings): jobs.lib.walk.world/dark false plans dark cells like lit ones (default: a dark cell costs twice a lit one, so a lit route up to about 2x
     longer is taken: a cell seen and dark, or one never seen at night; look/dark-fn).
+  - A call that ends other than arrived with the head under water first swims to the air it knows (surface-before-end!).
   - Setting go-to.tuning/goal-danger :end gives up at once (:why :goal-dangerous, :mob, :mob-pos, :mob-distance) when the goal lies within the full-cost radius of a known mob the body would flee; :wait (default) walks on, an info goal-in-danger says so.
   - Setting jobs.lib.walk.world/dangers false plans straight past known dangers (default: the plans keep away from them, jobs.lib.threats). A
     Each steer is bounded by the call's :spend :job-time left (a caller's short leg), and the engine cuts the call at that limit; a search that goes on past it gives up :search-spent (the engine only notices at an act, and a search makes none).
@@ -22,7 +23,8 @@
   - A walk stuck or off its plan at a cell is a :walker-fault warn; the next plans of the call cost that cell
     (up to 16; after a fall also the cells above it) far more (wworld/with-avoid), so a way round is taken when there is one.
     A body such a walk left stuck in water first swims at a bank beside it (go-to.unstick, info go-to.unstuck)."
-  (:require [engine.ctx :as ctx]
+  (:require [engine.contract :as contract]
+            [engine.ctx :as ctx]
             [jobs.lib.breath :as breath]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
@@ -341,6 +343,18 @@
     (when (and last-air (breath/in-water? (:primitives c)) (not (breath/head-under? (:primitives c)))
                (<= (u/dist (u/self-pos c) last-air) 3))
       (await (near/walk-round! (assoc c :to-air true) (zipmap [:x :y :z] (mapv #(js/Math.floor (% last-air)) [:x :y :z])) 0 (dissoc opts :progress))))))
+
+(defn ^:async surface-before-end!
+  "A step's result r: a give-up (any ending that is not :done) with the head under water first swims to the air it knows
+  (air/swim-to-air!, last-air included), so a body is never left under water by a call that ends."
+  [c pos r]
+  (when (and (contract/ending? r) (not= :done (:kind r)))
+    (let [opts (dissoc (walk-opts c (some-> (:doors (:args c)) keyword)) :progress)]
+      (loop [n 0]
+        (when (and (< n air/max-surfacings) (ctx/alive? c) (breath/head-under? (:primitives c))
+                   (await (air/swim-to-air! c opts pos "ending under water" (fn []))))
+          (recur (inc n))))))
+  r)
 
 (def max-landings "Landings at the air a go-to call tries before it escalates from wherever it is." 3)
 

@@ -150,3 +150,13 @@
   (are [y expected] (= expected (:y (air/breathing-pos #js {:self (fn [] #js {:inWater true})} {:x 0.5 :y y :z 0.5})))
     -39.4 -39
     64 64))
+
+(deftest a-give-up-under-water-swims-to-the-air-it-has-seen-first
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (gt/go! {:self {:pos [5.5 64 8.5] :inWater true :oxygen 4 :yaw (/ js/Math.PI -2)} :blocks tunnel :light [15 15]
+                                              :seen tunnel-seen :jitter 0}
+                                             {:pos [12 68 8] :range 0 :unknown false :ways #{:walk :clear-seal}}))]
+          (is (false? (:arrived @out)) (pr-str @out))
+          (is (<= 65 (second (gt/at p))) (str "ended with its head in the pocket's air: at " (gt/at p))))))))
