@@ -499,14 +499,26 @@
         pick))))
 
 (defn sleep-inputs
-  "What staying asleep is priced on, read now: who else must still lie down (sh-sleepers/sleepers-short), the fight with
-  the hostiles known near (price/way-fight-hp), the health, and whether a log-out is open (sh-sleepers/log-out-open?)."
+  "What staying asleep is priced on, read now (bed-down/answers): who else must still lie down (sh-sleepers/sleepers-short),
+  whether the bed is sheltered, the spawn chance at the feet and at the cell the body gets up to, the fight with the
+  hostiles known near each (price/way-fight-hp), the hp price (cost/hp-price) only while some of those can hurt, and
+  whether a log-out is open (sh-sleepers/log-out-open?)."
   [c]
   (let [p (:primitives c)
-        view (ctx/view c)]
+        view (ctx/view c)
+        feet (sh-sense/feet p)
+        wake (bed-down/wake-cell p)
+        chance (bed-down/stay-chance p feet)
+        wake-chance (bed-down/stay-chance p wake)
+        fight (price/round1 (price/way-fight-hp c feet))
+        wake-fight (price/round1 (price/way-fight-hp c wake))]
     {:short (sh-sleepers/sleepers-short p view)
-     :fight (price/round1 (price/way-fight-hp c (u/self-pos c)))
-     :hp (.-health (.self p))
+     :sheltered (bed-down/bed-sheltered? p feet)
+     :chance chance
+     :wake-chance wake-chance
+     :fight fight
+     :wake-fight wake-fight
+     :hp-price (when (some pos? [chance wake-chance fight wake-fight]) (cost/hp-price (.-health (.self p))))
      :log-out (and (not (:log-out-failed (ctx/mem c))) (sh-sleepers/log-out-open? p view))}))
 
 (defn ^:async asleep!

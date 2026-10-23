@@ -15,6 +15,7 @@
             [jobs.lib.threats :as threats]
             [jobs.lib.need :as need]
             [jobs.lib.access :as access]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.blocks :as lb]
             [jobs.lib.seal :as seal]
             [jobs.lib.places :as places]
@@ -65,9 +66,29 @@
 
 (defn stay-chance
   "The spawn chance a second at the feet through the night: none underground or lit by a block (the sky's light goes with
-  the night), else a dark cell's (cost/spawn-chance)."
+  the night), else a dark cell's (cost/spawn-chance). The cell defaults to the feet."
+  ([p] (stay-chance p (sh-sense/feet p)))
+  ([p cell]
+   (if (or (sh-sense/buried-at? p cell) (pos? (or (sh-sense/block-light-at p cell) 0))) 0 (cost/spawn-chance [0 0 0]))))
+
+(defn wake-cell
+  "Where a body asleep in a bed stands when it gets up: the server puts it at the first of the cells round the bed it can
+  stand in (beside the head, beside the foot, then behind the foot, then the other side), else on the bed. Which side
+  comes first follows the body's yaw, which is not known: the facing's clockwise side is tried first."
   [p]
-  (if (or (sh-sense/buried? p) (pos? (or (sh-sense/block-light-at p (sh-sense/feet p)) 0))) 0 (cost/spawn-chance [0 0 0])))
+  (let [head (sh-sense/feet p)
+        bed? #(some-> (u/seen-name p %) (.endsWith "_bed"))
+        at (fn [[dx dz]] (-> head (update :x + dx) (update :z + dz)))
+        foot (first (filter bed? (map #(at %) [[1 0] [-1 0] [0 1] [0 -1]])))
+        stand? (fn [cell] (and (bs/air (u/seen-name p cell)) (bs/air (u/seen-name p (update cell :y inc)))
+                               (sh-sense/solid-at? p (update cell :y dec))))]
+    (or (when foot
+          (let [f [(- (:x head) (:x foot)) (- (:z head) (:z foot))]
+                r [(- (second f)) (first f)]
+                add (fn [[ax az] [bx bz] k] [(+ ax (* k bx)) (+ az (* k bz))])
+                neg (fn [[x z]] [(- x) (- z)])]
+            (first (filter stand? (map at [r (add r f -1) (add r f -2) (add [0 0] f -2) (add (neg r) f -2) (add (neg r) f -1) (neg r)])))))
+        head)))
 
 (defn shut-in?
   "Whether a bed beside the body lies sheltered: the body is shut in a closed roofed room or buried."
@@ -144,7 +165,7 @@
   :bed lying in `bed` (nil: the carried bed put down here, or the bed the body is asleep in): the night left lost unless
   the body's sleep skips it (sh-sleepers/sleepers-short 0), open (not bed-sheltered?) all that time, plus walk-s (the walk
   there, priced by the caller). :sealed (a carried bed in the open, seal-plan): the bed's row shut in first, its seconds
-  exposed, then lain in. :shelter sheltering here (sh/shelter-here-s exposed; a body sh/in-ground? works on after, else
+  exposed, then lain in. :shelter sheltering here, from where the bed is got up to (wake-cell) when asleep (sh/shelter-here-s exposed; a body sh/in-ground? works on after, else
   the night left is lost). :log-out (log-out?): jobs.survival.log-out's quoted seconds, the night left to the sleepers."
   [c {:keys [bed walk-s log-out?]}]
   (let [p (:primitives c)
@@ -154,6 +175,8 @@
         carried? (and (nil? bed) (not asleep?) (place-wanted? c))
         at (or bed feet)
         chance (stay-chance p)
+        stand (if asleep? (wake-cell p) feet)
+        stand-chance (stay-chance p stand)
         [_ left] (get-in (sh-clock/night-left-quote c) [:uses :job-time])
         lost (if (zero? (sh-sleepers/sleepers-short p view)) 0 left)
         sheltered? (if (or bed asleep?) (bed-sheltered? p at) (or (shut-in? p) (some? (closed-home c))))
@@ -161,7 +184,7 @@
         sealed (when (and carried? (not sheltered?)) (seal-plan c))
         shelter-s (min left (sh/shelter-here-s))
         out-s (when log-out? (get-in (await (ctx/quote c 'jobs.survival.log-out {})) [:uses :job-time 1]))]
-    (cond-> {:shelter (+ (if (sh/in-ground? p view) shelter-s left) (exposed-price c chance shelter-s feet))}
+    (cond-> {:shelter (+ (if (sh/in-ground? p view) shelter-s left) (exposed-price c stand-chance shelter-s stand))}
       (or bed asleep? carried?) (assoc :bed (+ (or walk-s 0) lost (if sheltered? 0 (exposed-price c chance lost at)) (if asleep? 0 (- (cost/spawn-worth body at)))))
       sealed (assoc :sealed (+ lost (:seconds sealed) (exposed-price c chance (:seconds sealed) feet) (- (cost/spawn-worth body (:foot (:layout sealed))))))
       (number? out-s) (assoc :log-out out-s))))
@@ -321,24 +344,33 @@
   (or (await (walk-into-home! c))
       (await (put-down-bed-here! c))))
 
+(defn bed-gone?
+  "Whether the cell is seen as something other than a bed."
+  [p cell]
+  (let [n (u/seen-name p cell)]
+    (boolean (and n (not (.endsWith n "_bed"))))))
+
 (defn ^:async seal-and-sleep!
   "The carried bed is down at job memory :seal's :bed, the body on its :stand cell: fill its row's :cells
   (jobs.blocks.fill-cells in place, ledger :shelter), write the night's :shelter entry (shut-in-night/end!, the walls
-  way: dug open again by day), then sleep. A row the fill leaves open ends nothing-possible :seal-failed."
+  way: dug open again by day), then sleep. A bed no longer there drops the :seal and yields; a row the fill leaves open
+  ends nothing-possible :seal-failed."
   [c]
   (let [p (:primitives c)
-        {:keys [bed cells]} (:seal (ctx/mem c))
-        e (await (ctx/call c :seal 'jobs.blocks.fill-cells {:cells (mapv u/cell-vec cells) :in-place true :purpose :shelter
-                                                             :use {:blocks (sin/blocks (night-c c))}}))
-        sealed? (and (not= :continue e) (sh-sense/shut-in-room? p))]
-    (when (not= :continue e)
-      (ctx/update-mem! c dissoc :seal)
-      (sin/end! (night-c c) :walls (select-keys (:data e) [:placed]) sealed?))
-    (cond
-      (= :continue e) :continue
-      sealed? (await (sleep! c bed true))
-      :else (ctx/end c :nothing-possible :seal-failed {:slept false :pos bed
-                                                      :text (str "could not shut the bed's row in (" (count (:left (:data e))) " cells left open); not lying in the open")}))))
+        {:keys [bed cells]} (:seal (ctx/mem c))]
+    (if (bed-gone? p bed)
+      (do (ctx/update-mem! c dissoc :seal) :continue)
+      (let [e (await (ctx/call c :seal 'jobs.blocks.fill-cells {:cells (mapv u/cell-vec cells) :in-place true :purpose :shelter
+                                                                :use {:blocks (sin/blocks (night-c c))}}))
+            sealed? (and (not= :continue e) (sh-sense/shut-in-room? p))]
+        (when (not= :continue e)
+          (ctx/update-mem! c dissoc :seal)
+          (sin/end! (night-c c) :walls (select-keys (:data e) [:placed]) sealed?))
+        (cond
+          (= :continue e) :continue
+          sealed? (await (sleep! c bed true))
+          :else (ctx/end c :nothing-possible :seal-failed {:slept false :pos bed
+                                                          :text (str "could not shut the bed's row in (" (count (:left (:data e))) " cells left open); not lying in the open")}))))))
 
 (defn ^:async place-bed-and-sleep!
   "A bed carried and none to use: set it down beside the body and sleep in it; answer :sealed shuts its row in first
