@@ -458,6 +458,13 @@
                                        "; sheltering here tonight")})
                 false)))))
 
+(defn ^:async walkable-bed
+  "The bed the night walks to now (sh-beds/bed-to-use; one whose walk bed-walk-safe? finds fine, unless a bed-down is already under way), else nil."
+  [c]
+  (let [p (:primitives c)
+        bed (await (sense/decide! c ::bed #(sh-beds/bed-to-use p (ctx/view c) (bed-down/radius c) (bed-down/bed-permit c))))]
+    (when (and bed (or (:bed-down (ctx/mem c)) (await (bed-walk-safe? c bed)))) bed)))
+
 (defn ^:async pass
   "One choice of the night (see doc): :again, or the round's end."
   [c]
@@ -489,14 +496,13 @@
                                    (breath/in-water? p) (ending/end-in-water! c)
                                    :else :again))
       (and (not sheltered) (seq @edge)) (do (hold/busy! c) (await (look-edge/look! c @edge)))
-      (and roofed (or (#{:slept :dug-in} sheltered) (dig-leave/sheltered-in c)))
+      (and roofed (or (#{:slept :dug-in} sheltered) (dig-leave/sheltered-in c)) (not (and bed-way (await (walkable-bed c)))))
       (do (when-not sheltered (hold/sheltered! c :dug-in))
           (cond
             (and bed-way (log-out-wanted? c)) (await (log-out-step c))
             :else (ctx/end c :done nil (ending/done-data c (:sheltered (ctx/mem c))))))
       :else
-      (let [bed (when bed-way (await (sense/decide! c ::bed #(sh-beds/bed-to-use p (ctx/view c) (bed-down/radius c) (bed-down/bed-permit c)))))
-            bed (when (and bed (or (:bed-down (ctx/mem c)) (await (bed-walk-safe? c bed)))) bed)
+      (let [bed (when bed-way (await (walkable-bed c)))
             bed-wanted (and bed-way (carried-bed-wanted? c))
             door (sh/open-room-door p (ctx/view c))
             home-near (when-not roofed (first (room-lib/roofed-places-in c (:args c) (sites/home-radius))))

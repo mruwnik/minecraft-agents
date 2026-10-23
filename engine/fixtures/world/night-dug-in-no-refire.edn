@@ -1,4 +1,5 @@
-;; The night trigger does not re-fire for a body shut in its own shelter (the job ends :dug-in at once): a sealed cell with a :shelter entry, a remembered bed far off, night. Needs night: --allow-time --time-log <the shared time log>.
+;; The night trigger does not re-fire for a body safe in its own shelter (the job ends :dug-in at once): a sealed cell with a :shelter entry, a remembered bed far off, night.
+;; Case 2: under one roof block (its :shelter entry, but no safe room) a bed 8 blocks off is still walked to and slept in. Should-fail: it stays under the roof. Needs night: --allow-time --time-log <the shared time log>.
 {:defaults
  {:tags [:night :survival :dig-in]
   :time :night :time-why :night-light
@@ -13,4 +14,11 @@
    :act [[:job (jobs.time.noop {:seconds 40 :why :idle})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.time.noop"}} :within-s 60 :of-job true}
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 40 :until {:source :job :kind :completed :data {:name "jobs.time.noop"}}}]
-   :limit-s 70}]}
+   :limit-s 70}
+  {:name "under-its-own-roof-that-is-no-safe-room-a-near-bed-is-slept-in"
+   :blocks [[:fill [16 2 16] [16 2 16] "stone"] [:set [24 0 16] "red_bed[facing=east,part=foot]"] [:set [25 0 16] "red_bed[facing=east,part=head]"]]
+   :memory [{:kind :shelter :data {:pos #xyz [16 0 16] :state :built} :policy {:cap 10 :ttl 1200000}}
+            {:kind :bed :data {:pos #xyz [24 0 16]} :policy {:cap 1 :ttl :forever}}]
+   :act [[:job (jobs.survival.night {:settings {:jobs.survival.night.sites/flee-radius 0}})]]
+   :expect [{:event {:source :action :kind :done :data {:name "sleep"}} :within-s 100}]
+   :limit-s 150}]}

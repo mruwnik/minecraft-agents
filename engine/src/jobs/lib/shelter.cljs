@@ -122,8 +122,8 @@
 
 (defn bed-holds?
   "The bed terms of night-holds?: night by the clock, awake, the :bed way, and a bed to use, a look round for one, a
-  carried bed to put down, or someone else asleep. Not a bed to use or put down while shut in the body's own shelter: the
-  night job ends :dug-in there before it walks to or sets down a bed."
+  carried bed to put down, or someone else asleep. Not a bed to put down while shut in the body's own shelter: the
+  night job ends :dug-in there before it sets one down (bed-to-use skips a bed whose walk leaves a safe shelter)."
   [p view args permit?]
   (let [buried (buried-outside-hut? p)
         own (sh-inside/in-own-shelter p (:data (mem/latest view :shelter)))]
@@ -131,7 +131,7 @@
      (and (sh-sense/night? p)
           (not (sh-sense/sleeping? p))
           (or (nil? (:ways args)) (contains? (:ways args) :bed))
-          (or (and (not own) (some? (sh-beds/bed-to-use p view (sh-beds/bed-radius view) permit?)))
+          (or (some? (sh-beds/bed-to-use p view (sh-beds/bed-radius view) permit?))
               (unlooked-for-bed? p view)
               (and (not buried) (not own) (sh-beds/bed-place-wanted? p view (sh-beds/bed-radius view) permit?))
               (and (or (not buried) own) (sh-sleepers/log-out-for-sleepers? p view)))))))

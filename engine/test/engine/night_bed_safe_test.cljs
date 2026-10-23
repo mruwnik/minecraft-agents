@@ -426,7 +426,7 @@
 
 (def roof-over-open-sides
   "A body under one roof block on open ground at night: shut in by its :shelter entry's roof test, not safe from the night."
-  {:time st/night :blocks (assoc st/ground "0,66,0" "stone") :self {:pos {:x 0 :y 64 :z 0}} :sees-all true})
+  {:time st/night :blocks (assoc st/ground "0,66,0" "stone" "40,64,0" "red_bed") :self {:pos {:x 0 :y 64 :z 0}} :sees-all true})
 
 (deftest a-body-shut-in-its-own-shelter-is-not-called-again-by-the-night
   (let [{:keys [eng p]} (setup roof-over-open-sides)
@@ -435,4 +435,18 @@
     (is (true? (sh/night-holds? p (view) {:ways #{:shelter :flee}} (constantly true))) "no shelter entry: unsafe, holds")
     (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :state :built} sh/shelter-policy)
     (is (false? (sh/night-holds? p (view) {:ways #{:shelter :flee}} (constantly true))) "dug in: the night job would end :dug-in at once")
-    (is (false? (sh/night-holds? p (view) {} (constantly true))) "nor for the known far bed, which it would not walk to")))
+    (is (true? (sh/night-holds? p (view) {} (constantly true))) "a bed in sight: the roof is no safe shelter to keep, the job prices the walk")
+    (mem/write! (:store eng) :bed-walk-unsafe {:pos far-bed} sh-beds/walk-unsafe-policy)
+    (is (false? (sh/night-holds? p (view) {} (constantly true))) "the walk priced unsafe: not called again")))
+
+(deftest a-body-under-its-own-roof-that-is-no-safe-room-walks-to-a-bed-it-can-reach
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup (-> roof-over-open-sides
+                                           (update :blocks assoc "10,64,0" "red_bed")
+                                           (assoc :floor tu/walk-floor :light {} :offlineScale 0.0001)))]
+          (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :state :built} sh/shelter-policy)
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (st/tick-n eng 4))
+          (is (seq (st/entries eng :bed-open)) "dug in under the roof, it still goes to the bed (and finds it in the open)"))))))
