@@ -2,8 +2,9 @@
   "tools/event-counts.mjs spot-returns: counts the measured prior jobs.lib.cost.threat ::spot-occupied from the trial bodies' event logs.
   A spot is a death by a mob, or a hurt by one down to near-death-hp. Its return is the first time the body is within
   return-blocks of it again after away-s or more with every known position 32 to 128 blocks off (vanilla: the killer has
-  despawned, and mobs spawn there again); a later spot, a position over 128 blocks off or memory-ms end the spot. k: returns
-  where a hostile was decided about or hurt the body within met-ms. Positions: :planned, :respawned, :hurt and :died.
+  despawned, and mobs spawn there again); a later spot elsewhere, a position over 128 blocks off or memory-ms end the spot.
+  k: returns where, within met-ms, a hostile was decided about within return-blocks of the spot, or hurt or killed the
+  body there. Positions: :planned, :respawned, :hurt and :died (a hostile.decided's is the mob's).
   Pure part: returns."
   (:require ["fs" :as fs]
             ["path" :as path]
@@ -46,20 +47,23 @@
 (defn- dist [a b] (js/Math.hypot (- (:x a) (:x b)) (- (:y a) (:y b)) (- (:z a) (:z b))))
 
 (defn- return-of
-  "The return [t met?] after spot (the records after it, by time), or nil."
+  "The return [t met?] after spot (the records after it, by time), or nil. A spot or a met record within return-blocks
+  of the spot (a hostile decided about there, or one hurting the body there) within met-ms of the return is met."
   [{spot :pos t0 :t} later]
-  (loop [[r & more] later near-t t0 away? false]
-    (cond
-      (or (nil? r) (> (- (:t r) t0) memory-ms) (= :spot (:k r))) nil
-      (nil? (:pos r)) (recur more near-t away?)
-      :else
-      (let [d (dist (:pos r) spot)]
-        (cond
-          (> d 128) nil
-          (and (<= d return-blocks) away? (>= (- (:t r) near-t) (* 1000 away-s)))
-          [(:t r) (boolean (some #(and (= :met (:k %)) (<= (:t r) (:t %) (+ (:t r) met-ms))) (cons r more)))]
-          (<= d 32) (recur more (:t r) false)
-          :else (recur more near-t true))))))
+  (let [there? #(and (:pos %) (<= (dist (:pos %) spot) return-blocks))
+        met? (fn [t rs] (boolean (some #(and (#{:met :spot} (:k %)) (there? %) (<= t (:t %) (+ t met-ms))) rs)))]
+    (loop [[r & more :as rs] later near-t t0 away? false]
+      (cond
+        (or (nil? r) (> (- (:t r) t0) memory-ms)) nil
+        (nil? (:pos r)) (recur more near-t away?)
+        :else
+        (let [d (dist (:pos r) spot)]
+          (cond
+            (> d 128) nil
+            (and (<= d return-blocks) away? (>= (- (:t r) near-t) (* 1000 away-s))) [(:t r) (met? (:t r) rs)]
+            (= :spot (:k r)) nil
+            (<= d 32) (recur more (:t r) false)
+            :else (recur more near-t true)))))))
 
 (defn returns
   "{:spots :n :k} of the records of one body, sorted by :t."

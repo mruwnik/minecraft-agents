@@ -56,17 +56,19 @@
                  reverse))))
 
 (defn recent
-  "The deaths and near-deaths of c still remembered: [{:pos {:x :y :z} :cause :mob? :weight :age-ms :died?}], weight falling from 1 to 0 with age
-  (a water mob's 1: it does not wander off its water), mob? by mob-cause?, died? a death's (its drops lie there)."
+  "The deaths and near-deaths of c still remembered: [{:pos {:x :y :z} :cause :mob? :weight :age-ms :drops}], weight falling from 1 to 0 with age
+  (a water mob's 1: it does not wander off its water), mob? by mob-cause?, drops a death's: the names of the items it left
+  there (its :died entry's inventory; :unknown once that entry is gone)."
   [c]
   (let [now (ctx/now c)
         hurt-ms (let [ttl (:ttl (or (mem/policy (ctx/view c) :hurt) mem/default-policy))] (when (number? ttl) ttl))
+        lost (into {} (map (juxt :t #(mapv :name (:inventory (:data %))))) (ctx/entries c :died))
         spot (fn [t data fade-ms]
                (let [age (- now t) {:keys [x y z]} (:pos data)
                      cause (if (:death-t data) (:cause data) (hurt-cause data))
                      w (cond (contains? field/water-mobs cause) 1 fade-ms (cost/death-weight age fade-ms) :else (cost/death-weight age))]
                  (when (and (pos? w) x)
-                   {:pos {:x x :y y :z z} :cause cause :mob? (mob-cause? (:primitives c) cause) :weight w :age-ms age :died? (some? (:death-t data))})))]
+                   {:pos {:x x :y y :z z} :cause cause :mob? (mob-cause? (:primitives c) cause) :weight w :age-ms age :drops (when-let [d (:death-t data)] (get lost d :unknown))})))]
     (vec (concat (keep #(spot (:death-t (:data %)) (:data %) nil) (ctx/entries c :deaths))
                  (keep #(spot (:t %) (:data %) hurt-ms) (near-deaths c))))))
 
@@ -109,11 +111,11 @@
 (defn present-share
   "The chance the mob that killed or hunted c's body at pos age-ms ago, or a like one, is there now, times the spot's weight
   (its fade): 1 - (1 - old)(1 - new). old, the mob itself: threat/left-alive by the farthest the body has been from the spot
-  since, the seconds since it was last within threat/idle-despawn-blocks (whereabouts) and whether its drops lie there
-  (died?), none while it burns there (burning?). new, one spawned since: threat/spawned-there over the cells its field
+  since, the seconds since it was last within threat/idle-despawn-blocks (whereabouts) and the drops it may have
+  picked up, none while it burns there (burning?). new, one spawned since: threat/spawned-there over the cells its field
   weighs 1 (cost/spawn-share; lit? ones spawn none) for the seconds since the body was last more than threat/despawn-blocks
   off (none spawns, and any there despawns, while it is). A water mob's is old alone: it keeps to its water, where it never burns."
-  [c {:keys [mob pos weight age-ms died?]}]
+  [c {:keys [mob pos weight age-ms drops]}]
   (let [p (:primitives c)
         now (ctx/now c)
         since (- now age-ms)
@@ -122,7 +124,7 @@
         farthest (reduce max 0 (map (comp off second) seen))
         last-near (reduce max since (keep (fn [[t at]] (when (<= (off at) threat/idle-despawn-blocks) t)) seen))
         last-far (reduce max since (keep (fn [[t at]] (when (> (off at) threat/despawn-blocks) t)) seen))
-        old (if (burning? p mob pos) 0 (threat/left-alive mob farthest (/ (- now last-near) 1000) died?))]
+        old (if (burning? p mob pos) 0 (threat/left-alive mob farthest (/ (- now last-near) 1000) drops (some-> p .self threat/clock-of)))]
     (* weight
        (if (contains? field/water-mobs mob)
          old

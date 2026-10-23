@@ -21,6 +21,9 @@
     (are [lines want] (= want (select-keys (counts lines) [:n :k]))
       [(line 10000 :respawned {:pos (at 60)}) (line 400000 :planned {:pos (at 5)}) (line 420000 :hostile.decided {:mob "zombie" :pos (at 5)})] {:n 1 :k 1}
       [(line 10000 :respawned {:pos (at 60)}) (line 400000 :planned {:pos (at 5)})] {:n 1 :k 0}
+      [(line 10000 :respawned {:pos (at 60)}) (line 400000 :planned {:pos (at 5)}) (line 420000 :hostile.decided {:mob "zombie" :pos (at 40)})] {:n 1 :k 0}
+      [(line 10000 :respawned {:pos (at 60)}) (line 400000 :planned {:pos (at 5)}) (line 420000 :hurt {:health 3 :causes ["skeleton"] :pos (at 4)})] {:n 1 :k 1}
+      [(line 10000 :respawned {:pos (at 60)}) (line 400000 :died {:attacker {:name "zombie"} :pos (at 2)})] {:n 1 :k 1}
       [(line 10000 :respawned {:pos (at 60)}) (line 100000 :planned {:pos (at 5)})] {:n 0 :k 0}
       [(line 10000 :respawned {:pos (at 300)}) (line 400000 :planned {:pos (at 5)})] {:n 0 :k 0}
       [(line 10000 :respawned {:pos (at 20)}) (line 400000 :planned {:pos (at 5)})] {:n 0 :k 0})))

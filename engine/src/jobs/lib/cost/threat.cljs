@@ -3,7 +3,8 @@
   deals over some seconds of exposure after the body's armour (jobs.lib.cost.armour).
   A witch's potions (poison, harming) bypass armour. A creeper is one blast of 43 (:explosion) however long the exposure; a ranged mob shoots (:projectile); any other
   hits for its mob-hit (3 if unknown, scaled by the server difficulty) one a second (:melee). Endermen and zombified piglins only fight when provoked."
-  (:require [engine.args :as a]
+  (:require [clojure.string :as str]
+            [engine.args :as a]
             [engine.game :as game]
             [engine.settings :as settings]
             ["minecraft-data" :as minecraft-data]
@@ -15,8 +16,8 @@
    ::creeper-exchange-hp {:default 3.06 :doc "k of the creeper exchange: hp creepers dealt over the swings (attack that hit or killed) of hit-and-back fights with a sword or axe against a lone creeper (a late step back lets the fuse run on); 1 trial run, 1 blast over 2 hp, all before 336cdd402 (the back-off) and none counted since. Recount: node tools/event-counts.mjs creeper-exchange (:armed); per-case evidence replaces it." :spec (a/num-in 0 nil)}
    ::creeper-exchange-swings {:default 5 :doc "n of the creeper exchange: the swings behind ::creeper-exchange-hp." :spec (a/num-in 1 nil)}
    ::difficulty {:default -1 :doc "Override of the server difficulty mob hits and door breaking are costed at: 0 peaceful, 1 easy, 2 normal, 3 hard. -1 (unset), the body's sensed difficulty counts (hard while it is unknown)." :spec (a/int-in -1 3)}
-   ::spot-occupied {:default {:k 1 :n 4} :spec (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)})
-                    :doc "Of the death and near-death spots the trial bodies came back within 16 blocks of after 300 s or more 32 to 128 blocks off (vanilla: its killer had despawned), those where a hostile met the body within 60 s (k) of all (n): node tools/event-counts.mjs spot-returns, 2026-10-23."}
+   ::spot-occupied {:default {:k 0 :n 4} :spec (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)})
+                    :doc "Of the death and near-death spots the trial bodies came back within 16 blocks of after 300 s or more 32 to 128 blocks off (vanilla: its killer had despawned), those where within 60 s a hostile was within 16 blocks of the spot or hurt the body there (k) of all (n), whatever the spot's light (the logs carry none): node tools/event-counts.mjs spot-returns, 2026-10-23."}
    ::hit-rate {:default 0.6 :doc "Hits a zombie or skeleton lands per second of exposure (measured over trial fights; the body is out of reach part of the time). Mobs not measured count one a second." :spec (a/num-in 0 nil)}
    ::spider-hit-rate {:default 0.35 :doc "Hits a spider or cave spider lands per second of exposure." :spec (a/num-in 0 nil)}
    ::trident-rate {:default 0.5 :doc "Throws a second of a drowned holding a trident (vanilla: one every 40 ticks)." :spec (a/num-in 0 nil)}
@@ -92,14 +93,18 @@
   [regional]
   (max 0 (min 1 (/ (- regional 2) 2))))
 
+(defn clock-special
+  "special-multiplier at the server difficulty under clock {:day-time :moon-phase :world-age} (ticks, the body's self).
+  The chunk's inhabited time is not sensed: at most the world age, so costed at that (unknown: the cap); an unknown day
+  time counts the longest, an unknown moon full."
+  [{:keys [day-time moon-phase world-age]}]
+  (special-multiplier (regional-difficulty (difficulty) (or day-time 1512000) (or world-age 3600000) (or moon-phase 0))))
+
 (defn breaker-draw
   "The share of zombie kinds drawn with the break-door goal at spawn (vanilla Zombie.finalizeSpawn: nextFloat < 0.1 x
-  special-multiplier) at the server difficulty, under clock {:day-time :moon-phase :world-age} (ticks, the body's
-  self). The chunk's inhabited time is not sensed: at most the world age, so costed at that (unknown: the cap); an
-  unknown day time counts the longest, an unknown moon full."
-  [{:keys [day-time moon-phase world-age]}]
-  (let [inhabited (or world-age 3600000)]
-    (* 0.1 (special-multiplier (regional-difficulty (difficulty) (or day-time 1512000) inhabited (or moon-phase 0))))))
+  special-multiplier) under clock (clock-special's)."
+  [clock]
+  (* 0.1 (clock-special clock)))
 
 (defn clock-of "breaker-draw's clock of a body's self (JS), nil fields unknown." [self]
   {:day-time (.-dayTime self) :moon-phase (.-moonPhase self) :world-age (.-worldAge self)})
@@ -129,19 +134,27 @@
 (def idle-despawn-per-s "Chance a second an idle hostile despawns (vanilla: 1 in 800 a tick)." (/ 20 800))
 
 (def loot-pickers
-  "Mobs that may spawn able to pick up loot (vanilla: chance 0.55 x the regional special multiplier, 0 below normal); one
-  that picked up an item never despawns."
+  "Mobs that may spawn able to pick up loot (vanilla: chance loot-share x the regional special multiplier); one that
+  picked up an item it equips never despawns."
   #{"zombie" "husk" "drowned" "zombie_villager" "zombified_piglin" "skeleton" "stray" "bogged" "parched" "wither_skeleton"})
 
 (def loot-share "The most of loot-pickers that spawn able to pick up loot (vanilla 0.55, at a special multiplier of 1)." 0.55)
 
+(def armed-pickers "Loot-pickers that spawn holding a bow or a sword (vanilla)." #{"skeleton" "stray" "bogged" "parched" "wither_skeleton" "zombified_piglin"})
+
+(defn takes?
+  "Whether loot-picker mob, as it spawned, equips the item called item-name (vanilla Mob.canReplaceCurrentItem): an
+  empty-handed one anything, one in armed-pickers only armour or a sword."
+  [mob item-name]
+  (boolean (or (not (contains? armed-pickers mob)) (pos? (armour/piece-points item-name)) (str/ends-with? (or item-name "") "_sword"))))
+
 (defn left-alive
   "The chance the hostile mob is not despawned (vanilla): 0 once a player was more than despawn-blocks from it (farthest;
   only where the server's simulation distance still ticks its chunk that far), else 1 in 800 a tick after idle-despawn-s of
-  away-s with none within idle-despawn-blocks; unless it picked up the body's drops (drops?): a loot-picker above easy, at
-  most loot-share (the chunk's inhabited time, which sets the multiplier, is unknown)."
-  [mob farthest away-s drops?]
-  (let [kept (if (and drops? (contains? loot-pickers mob) (> (difficulty) 1)) loot-share 0)
+  away-s with none within idle-despawn-blocks; unless it picked up one of drops, the names of the items the body left
+  there (:unknown: any), that it takes?: a loot-picker spawned able to, loot-share x clock-special under clock."
+  [mob farthest away-s drops clock]
+  (let [kept (if (and (contains? loot-pickers mob) (or (= :unknown drops) (some #(takes? mob %) drops))) (* loot-share (clock-special clock)) 0)
         despawned (if (and (> farthest despawn-blocks) (some-> (simulation-distance) (* 16) (> despawn-blocks))) 1 (- 1 (js/Math.exp (- (* idle-despawn-per-s (max 0 (- away-s idle-despawn-s)))))))]
     (- 1 (* (- 1 kept) despawned))))
 

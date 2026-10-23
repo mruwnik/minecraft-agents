@@ -499,14 +499,26 @@
     (is (= 1 (cost/kill-drops "spider" "string")) "0 to 2 string")
     (is (nil? (cost/kill-drops "spider" "bone")))))
 
+(deftest a-mob-outlives-the-body-going-far-only-when-it-could-pick-up-a-drop-it-equips
+  (game/select! (fake/create {:server {:difficulty "hard" :simulationDistance 10}}))
+  (are [mob drops clock kept] (= (js/Math.round (* 1000 kept)) (js/Math.round (* 1000 (threat/left-alive mob 200 0 drops clock))))
+    "zombie" ["dirt"] nil 0.55
+    "zombie" :unknown nil 0.55
+    "skeleton" ["dirt" "stick"] nil 0
+    "skeleton" ["iron_helmet"] nil 0.55
+    "skeleton" ["stone_sword"] nil 0.55
+    "zombie" [] nil 0
+    "zombie" nil nil 0
+    "creeper" :unknown nil 0
+    "zombie" ["dirt"] {:day-time 0 :moon-phase 4 :world-age 0} (* 0.55 0.125)))
+
 (deftest costs-follow-the-difficulty-and-simulation-distance-the-server-announced
   (let [zombie-s #(cost/mob-hurt (cost/armour-stats nil) "zombie" 10)]
     (game/select! (fake/create {:server {:difficulty "hard" :simulationDistance 6}}))
     (is (= 45 (zombie-s)) "hard prices a hit at 4.5")
     (is (pos? (threat/door-break-share "zombie")) "a zombie breaks doors on hard")
-    (is (< 0 (threat/left-alive "zombie" 200 0 true)) "above easy a loot-picker with the drops outlives the body going far")
     (is (= 6 (threat/simulation-distance)))
-    (is (< 0 (threat/left-alive "creeper" 200 600 false) 1) "6 chunks is 96 blocks: no tick reaches the instant-despawn zone, only the idle odds apply")
+    (is (< 0 (threat/left-alive "creeper" 200 600 nil nil) 1) "6 chunks is 96 blocks: no tick reaches the instant-despawn zone, only the idle odds apply")
     (is (= 25 (settings/with-settings {::threat/difficulty 1} zombie-s)) "the setting overrides what the server said")
     (is (= 0.0125 (threat/door-break-share "zombie" {:day-time 0 :moon-phase 4 :world-age 0}))
         "a fresh world: the regional difficulty 2.25, a zombie a breaker by 0.1 x 0.125")
@@ -519,7 +531,7 @@
     (is (= 45 (zombie-s)) "unknown: hard")
     (is (pos? (threat/door-break-share "zombie")) "unknown: a zombie breaks doors (hard)")
     (is (nil? (threat/simulation-distance)))
-    (is (< 0 (threat/left-alive "creeper" 200 0 false)) "unknown simulation distance: a far mob is not assumed despawned")
+    (is (< 0 (threat/left-alive "creeper" 200 0 nil nil)) "unknown simulation distance: a far mob is not assumed despawned")
     (game/select! (fake/create {:server {:simulationDistance 10}}))
     (is (= 0 (threat/door-break-share "zombie")) "a zombie breaks no door below hard")
-    (is (= 0 (threat/left-alive "creeper" 200 0 false)))))
+    (is (= 0 (threat/left-alive "creeper" 200 0 nil nil)))))

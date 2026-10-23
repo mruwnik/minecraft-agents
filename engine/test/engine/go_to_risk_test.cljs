@@ -378,12 +378,13 @@
     (is (= [0] (share {:respawned [{:t (- 36000000 60000) :data {:pos {:x 300 :y 64 :z 5}}}]})))))
 
 (defn dark-share
-  "present-share of each death or near-death spot by a mob in dark-spot-world, at difficulty (1 easy, 2 normal), its records `entries`;
+  "present-share of each death or near-death spot by a mob in dark-spot-world (simulation distance 10), at difficulty (1 easy, 2 normal), its records `entries`;
   over its weight with :unfaded."
   [difficulty entries & [unfaded]]
-  (settings/with-settings {::threat/difficulty difficulty}
-    #(let [c (assoc (ready-test/ctx-of dark-spot-world) :view (fn [] {:now 36000000 :data {:policies {:deaths core/deaths-policy} :entries entries}}))]
-       (mapv (fn [d] (/ (death-spot/present-share c (assoc d :mob (:cause d))) (if unfaded (:weight d) 1))) (filter :mob? (death-spot/recent c))))))
+  (with-redefs [threat/simulation-distance (constantly 10)]
+    (settings/with-settings {::threat/difficulty difficulty}
+      #(let [c (assoc (ready-test/ctx-of dark-spot-world) :view (fn [] {:now 36000000 :data {:policies {:deaths core/deaths-policy} :entries entries}}))]
+         (mapv (fn [d] (/ (death-spot/present-share c (assoc d :mob (:cause d))) (if unfaded (:weight d) 1))) (filter :mob? (death-spot/recent c)))))))
 
 (defn died [cause age-ms] {:deaths [{:t (- 36000000 age-ms) :data {:pos {:x 80 :y 64 :z 5} :cause cause :death-t (- 36000000 age-ms)}}]})
 (defn pct [x] (js/Math.round (* 1000 x)))
@@ -400,11 +401,19 @@
         "the respawn 128 blocks off despawned the creeper and any spawned there: only the 50 s since the body came back count")
     (is (= [(pct (since-back 600000 1))] (mapv pct (dark-share 1 (update (died "creeper" 600000) :deaths conj later-fall)))) "a later death far off is where the body was")))
 
-(deftest only-a-loot-picker-above-easy-that-got-the-drops-outlives-the-body-going-far
+(defn died-with
+  "died, the :died entry of the death holding items (names)."
+  [cause age-ms items]
+  (assoc (died cause age-ms) :died [{:t (- 36000000 age-ms) :data {:pos {:x 80 :y 64 :z 5} :inventory (mapv #(hash-map :name %) items)}}]))
+
+(deftest only-a-loot-picker-above-easy-that-could-pick-up-a-drop-it-equips-outlives-the-body-going-far
   (let [spawned (threat/spawned-there 1 50)]
     (are [difficulty entries kept] (= (pct (- 1 (* (- 1 kept) (- 1 spawned))))
                                       (pct (first (dark-share difficulty (merge entries respawned-far) :unfaded))))
       2 (died "zombie" 60000) 0.55
+      2 (died-with "zombie" 60000 ["dirt"]) 0.55
+      2 (died-with "skeleton" 60000 ["dirt" "oak_planks"]) 0
+      2 (died-with "skeleton" 60000 ["iron_boots"]) 0.55
       1 (died "zombie" 60000) 0
       2 (died "creeper" 60000) 0
       2 {:hurt [{:t (- 36000000 60000) :data {:health 3 :pos {:x 80 :y 64 :z 5} :attacker {:name "zombie"}}}]} 0)))
