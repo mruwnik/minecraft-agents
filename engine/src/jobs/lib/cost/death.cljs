@@ -73,13 +73,16 @@
 
 (defn blow-chance
   "The chance that blows of about hit hp, damage hp of them expected (their count a Poisson one), take the health and
-  absorption of body: at least life/hit of them land."
-  [{:keys [health absorption]} damage hit]
-  (let [hit (max 0.1 (or hit 1))
-        lam (/ (max 0 damage) hit)
-        k (js/Math.ceil (/ (+ (or health 20) (or absorption 0)) hit))
-        below (reduce + (take k (reductions (fn [p i] (/ (* p lam) i)) (js/Math.exp (- lam)) (iterate inc 1))))]
-    (max 0 (- 1 below))))
+  absorption of body: at least life/hit of them land. sure: hp of damage that lands for certain in big blows (a
+  creeper's blast), taken off the life first: the small blows count against what it leaves, not as parts of a big one."
+  ([body damage hit] (blow-chance body damage hit 0))
+  ([{:keys [health absorption]} damage hit sure]
+   (let [life (- (+ (or health 20) (or absorption 0)) sure)
+         hit (max 0.1 (or hit 1))
+         lam (/ (max 0 (- damage sure)) hit)
+         k (js/Math.ceil (/ life hit))
+         below (reduce + (take k (reductions (fn [p i] (/ (* p lam) i)) (js/Math.exp (- lam)) (iterate inc 1))))]
+     (if (pos? life) (max 0 (- 1 below)) 1))))
 
 (defn exposure-s
   "Seconds the route cells [{:x :y :z :s}] (:s the seconds spent there, default ::step-s) lie within a threat's reach

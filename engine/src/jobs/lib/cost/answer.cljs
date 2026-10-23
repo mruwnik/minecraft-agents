@@ -1,8 +1,9 @@
 (ns jobs.lib.cost.answer
   "The one price of each answer to hostiles, so the reflexes take the cheapest (decide). Pure.
 
-  An answer is {:damage hp :hit hp :seconds s :then [answer] :caught {:chance :damage :hit}}: the hp it is expected to
-  cost in blows of about :hit hp each, the seconds it takes, what may follow it (the cheapest of :then is paid too) and,
+  An answer is {:damage hp :hit hp :blasts [hp] :spread [hp] :seconds s :then [answer] :caught {:chance :damage :hit :blasts}}:
+  the hp it is expected to cost, the creeper blasts in it landing for certain (:spread: as many equally likely blast
+  totals) and the rest in blows of about :hit hp each, the seconds it takes, what may follow it (the cheapest of :then is paid too) and,
   for a walk away, the chance its mobs catch it and the blows they then land. answer-price: the hp at the health each
   leaves (health/hp-cost), the death the blows risk (death-chance x death/death-cost), the seconds, and the cheapest
   :then at full health.
@@ -16,7 +17,7 @@
   flee-answer: a walk away from the mobs, nil when one of them keeps up (outruns?: the flight's speed is body-speed over
   ::outrun-factor). A melee mob hits while within its reach, a ranged one while the body is within its bow's range (both
   follow at their chase speed; a body in water first swims to land against their swim speed), a creeper that reaches its swell start before the body gets going
-  (danger/flight-start-s) blows at the distance the body reached when its fuse ends. The mob is left alive:
+  (danger/flight-starts) blows at the distance the body reached when its fuse ends. The mob is left alive:
   :then the fight with it, or the same walk once more. A stub until the priced flee search (card ee045b60).
   build-answer: building a refuge (seal or pillar) for some seconds: the blows of the melee mobs that arrive meanwhile.
   cover-answer: shutting the body in (walls, pit or pocket) by build-answer, then hidden for the quiet.
@@ -71,12 +72,19 @@
     (blast-hurt stats swell-start)
     (threat/mob-hurt stats (threat/kind m) 1 identity 1)))
 
+(defn mean [xs] (if (seq xs) (/ (reduce + xs) (count xs)) 0))
+
 (defn blows-chance
-  "The chance the blows of answer kill body: death/blow-chance of its :damage, or of the :caught blows for its :chance."
-  [body {:keys [damage hit caught]}]
-  (let [clean (death/blow-chance body damage hit)]
+  "The chance the blows of answer kill body: death/blow-chance of its :damage, its :blasts sure (each of its :spread too,
+  averaged), or of the :caught blows for its :chance."
+  [body {:keys [caught] :as answer}]
+  (let [chance (fn [{:keys [damage hit blasts spread]}]
+                 (let [sure (reduce + 0 blasts)
+                       rest (- damage sure (mean spread))]
+                   (mean (map #(death/blow-chance body (+ rest sure %) hit (+ sure %)) (or (seq spread) [0])))))
+        clean (chance answer)]
     (if caught
-      (+ (* (- 1 (:chance caught)) clean) (* (:chance caught) (death/blow-chance body (:damage caught) (:hit caught))))
+      (+ (* (- 1 (:chance caught)) clean) (* (:chance caught) (chance caught)))
       clean)))
 
 (defn expected-damage [{:keys [damage caught]}]
@@ -133,8 +141,9 @@
   (a's blows landed either way) and what follows b."
   [a b]
   (if b
-    (cond-> (assoc a :damage (+ (:damage a) (:damage b)) :hit (max (:hit a) (:hit b)) :seconds (+ (:seconds a) (:seconds b)))
-      (:caught b) (assoc :caught (update (:caught b) :damage + (:damage a)))
+    (cond-> (assoc a :damage (+ (:damage a) (:damage b)) :hit (max (:hit a) (:hit b)) :seconds (+ (:seconds a) (:seconds b))
+                   :blasts (into (vec (:blasts a)) (:blasts b)) :spread (:spread b))
+      (:caught b) (assoc :caught (-> (:caught b) (update :damage + (:damage a)) (update :blasts #(into (vec (:blasts a)) %))))
       (:then b) (assoc :then (:then b))
       (not (:then b)) (dissoc :then))
     (assoc a :then [a])))
@@ -155,12 +164,13 @@
     {:in-reach in-reach :gap (max 0 (+ gap (* gain t))) :seconds t :away? (boolean (and out (= t out)))}))
 
 (defn flee-mob
-  "{:damage :hit :seconds} of a walk away from mob {:name :held :distance :follow (blocks it keeps chasing out to) :speed
+  "{:damage :hit :spread :seconds} of a walk away from mob {:name :held :distance :follow (blocks it keeps chasing out to) :speed
   (its chase speed, default danger/chase-speed of the name)} at speed v through the armour stats, nil when it keeps up.
   It hits while within its hit-range. A flight that starts in water first swims swim blocks to dry land (##Inf: no land
   known) at speed sv, the mob chasing at danger/swim-chase-speed, then walks from the gap the swim left. A creeper that
-  reaches its swell start within danger/flight-start-s (the body gains nothing yet) blows at the distance the body
-  reached when its fuse ends: a blast is not felt before it lands, as other mobs' blows are (respond's felt rate)."
+  reaches its swell start before the body gets going blows at the distance the body reached when its fuse ends, :spread
+  that blast for each of danger/flight-starts: a blast is not felt before it lands, as other mobs' blows are (respond's
+  felt rate)."
   ([stats v m] (flee-mob stats v nil m))
   ([stats v {:keys [sv swim]} {:keys [name distance follow speed] :as m}]
    (let [d (or distance 0)
@@ -177,12 +187,13 @@
      (cond
        (nil? escape) nil
        (= "creeper" name)
-       (let [start (danger/flight-start-s)
+       (let [starts (danger/flight-starts)
              swell (/ (max 0 (- d swell-start)) chase)
-             hurt (if (< swell start)
-                    (blast-hurt stats (+ (min d swell-start) (* v (max 0 (- fuse-s (- start swell))))))
-                    0)]
-         {:damage hurt :hit hurt :seconds (+ start escape)})
+             spread (mapv #(if (< swell %)
+                             (blast-hurt stats (+ (min d swell-start) (* v (max 0 (- fuse-s (- % swell))))))
+                             0)
+                          starts)]
+         {:damage (mean spread) :hit 0 :spread spread :seconds (+ (mean starts) escape)})
        :else
        {:damage (threat/mob-hurt stats (threat/kind m) (+ (:in-reach wet 0) (if (:away? wet) 0 (/ (max 0 (- r d)) gain))) identity (threat/lone-hit-rate (threat/kind m)))
         :hit (blow stats m) :seconds (+ (:seconds wet 0) escape)}))))
@@ -192,8 +203,8 @@
   goes back to its work), times 1 + returns (the flights from such mobs lately: each predicts another); :then the answer
   later (the fight with them, nil none) or the walk again. :caught: each flight is caught at chance caught (default
   ::caught-chance), its mobs then landing their blows (a creeper its blast) over the flight. A creeper that blows on the
-  walk is spent: what follows is the walk from the rest or later (none left: nothing). swim: the blocks a body in water
-  swims to dry land first (flee-mob's; ##Inf none known), at its planner/swim-speed over danger's outrun factor as on foot.
+  walk (at the median of its :spread) is spent: what follows is the walk from the rest or later (none left: nothing).
+  swim: the blocks a body in water swims to dry land first (flee-mob's; ##Inf none known), at its planner/swim-speed over danger's outrun factor as on foot.
   nil when a mob keeps up or none is given."
   [{:keys [food equipment mobs returns later caught swim] :as args}]
   (let [stats (armour/armour-stats equipment)
@@ -205,14 +216,17 @@
       (let [hit (reduce max 0 (map :hit per))
             walk {:damage (* times (reduce + (map :damage per)))
                   :hit hit
+                  :spread (when-let [s (seq (keep :spread per))] (mapv #(* times %) (apply map + s)))
                   :seconds (* 2 times (reduce max 0 (map :seconds per)))
                   :caught {:chance (- 1 (js/Math.pow (- 1 (or caught (settings/get settings ::caught-chance))) times))
                            :damage (reduce + 0 (map (fn [m f] (if (= "creeper" (:name m))
                                                                   (blow stats {:name "creeper"})
                                                                   (threat/mob-hurt stats (threat/kind m) (:seconds f) identity (threat/lone-hit-rate (threat/kind m)))))
                                                     mobs per))
-                           :hit hit}}]
-        (let [spent (set (keep (fn [[m f]] (when (and (= "creeper" (:name m)) (pos? (:damage f))) m)) (map vector mobs per)))
+                           :hit hit
+                           :blasts (vec (for [m mobs :when (= "creeper" (:name m))] (blow stats "creeper")))}}]
+        (let [blows? (fn [{:keys [spread]}] (pos? (nth (sort spread) (quot (count spread) 2))))
+              spent (set (keep (fn [[m f]] (when (and (= "creeper" (:name m)) (blows? f)) m)) (map vector mobs per)))
               left (remove spent mobs)]
           (cond
             (empty? spent) (assoc walk :then (cond-> [walk] later (conj later)))

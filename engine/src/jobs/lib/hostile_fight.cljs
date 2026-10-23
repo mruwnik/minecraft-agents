@@ -248,7 +248,7 @@
   the fight is followed at once by the walk away from those it leaves (flee-answer, cost/followed). A lone creeper is
   fought hit-and-back (nil when hit-and-back-ok? fails); any other creeper near, or by the way in time (blasting), is
   not fought: it blows where the fight is, beside its first mob, so its blast at its distance from that mob (at most its
-  swell start) is added."
+  swell start) is added, in :blasts."
   [c near struck-of]
   (let [p (:primitives c)
         lone-creeper? (and (= 1 (count near)) (combat/creeper? (first near)))
@@ -266,7 +266,8 @@
             spot (danger-q/mob-pos p (first fought))
             blasts (map #(cost/blast-hurt stats (min cost/swell-start (u/dist (danger-q/mob-pos p %) spot))) creepers)]
         (cond-> {:damage (+ (walk-hp c fought) (max (:damage a) (* rate (:seconds a))) (reduce + 0 blasts))
-                 :hit (reduce max (:hit a) (cons hardest blasts))
+                 :hit (max (:hit a) hardest)
+                 :blasts (vec (filter pos? blasts))
                  :seconds seconds
                  :creepers (vec creepers)}
           (seq left) (cost/followed (flee-answer c left nil nil)))))))

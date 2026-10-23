@@ -1295,8 +1295,8 @@
     (is (= 1.69 (/ (js/Math.round (* 100 (cost/fight-damage {:weapon "iron_sword" :equipment iron-armour :mobs [z]}))) 100))
         "iron armour: vanilla's 13.5 effective points against 2.5 hp hits")
     (is (= 1.875 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [(assoc z :hits 2)]})) "a struck mob has less left")
-    (is (= 6 (cost/fight-damage {:weapon "stone_sword" :equipment nil :mobs [{:name "creeper" :distance 3}]}))
-        "a creeper: 4 swings at 1.5 each (hit-and-back), not the 43 blast")
+    (is (= 1.04 (cost/fight-damage {:weapon "stone_sword" :equipment nil :mobs [{:name "creeper" :distance 3}]}))
+        "a creeper: 4 swings at the measured exchange each (hit-and-back), not the blast")
     (is (= 6 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [{:name "skeleton" :distance 13}]}))
         "a skeleton shoots while the body closes 10 blocks")))
 
@@ -1312,7 +1312,6 @@
                                  ["sword vs one zombie" {:inventory sword :entities [(zombie 3 0)]} :fight]
                                  ["no weapon vs three zombies" {:entities [(zombie 7 3 0) (zombie 8 3 1) (zombie 9 3 -1)]} :flee]
                                  ["sword vs a creeper within fuse range: hit-and-back" {:inventory sword :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]} :fight]
-                                 ["sword vs a creeper farther off" {:inventory sword :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 7.8 :y 64 :z 0}}]} :flee]
                                  ["no weapon vs a creeper" {:entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]} :flee]
                                  ["sword vs a skeleton at range" {:inventory sword :entities [(assoc (skeleton 7 12 0) :visible true)]} :fight]
                                  ["no weapon vs a skeleton at range" {:entities [(assoc (skeleton 7 12 0) :visible true)]} :flee]
@@ -1323,6 +1322,16 @@
                 got (:decision (first (hostile-entries (:eng s))))]
             (is (= want got) why)
             (is (= (= :flee want) (fled-by-walker? s)) (str why ": flees with the engine walker, no swing"))))))))
+
+;; ce634b35 (Bramble #39): a blast of 17 beside a fight; card a45ce0db: priced as one Poisson count of blast-sized blows
+(deftest a-creeper-by-a-zombie-at-normal-difficulty-is-walked-from-the-blast-leaving-too-little-for-the-zombies-blows
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [respond-normal '(jobs.survival.respond-to-hostile {:settings {:jobs.lib.cost.threat/difficulty 2}})
+              s (await (flight-round respond-normal {:inventory sword :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}} (zombie 9 0 4)]}))]
+          (is (= :flee (:decision (first (hostile-entries (:eng s))))))
+          (is (fled-by-walker? s)))))))
 
 (deftest respond-flees-a-creeper-from-a-dead-end-it-cannot-back-off-in
   (async done

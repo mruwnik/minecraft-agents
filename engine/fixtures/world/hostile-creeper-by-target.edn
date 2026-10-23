@@ -16,6 +16,14 @@
    :expect [{:event {:source :job :kind :hostile.decided :data {:decision :flee :mob "creeper"}} :within-s 20}
             {:no-event {:source :job :kind :hostile.decided :data {:decision :fight}} :for-s 20}]
    :limit-s 40}
+  ;; Card a45ce0db: a creeper 3 off by a zombie 4 off, the zombie fought there takes the blast (~15 at 1.4 blocks) and its blows
+  ;; land on what the blast leaves: fled, not fought (one Poisson count of blast-sized blows priced the fight at ~0.36 death).
+  {:name "a-zombie-with-a-creeper-beside-it-close-by-is-fled-not-fought"
+   :act [[:summon "creeper" [8.5 0 17.5] "{NoAI:1b}"] [:wait-s 3]
+         [:summon "zombie" [9.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:decision :flee}} :within-s 20}
+            {:no-event {:source :job :kind :hostile.decided :data {:decision :fight}} :for-s 20}]
+   :limit-s 40}
   {:name "a-lone-skeleton-is-fought"
    :act [[:summon "skeleton" [15.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :hostile.decided :data {:decision :fight :mob "skeleton"}} :within-s 20}]

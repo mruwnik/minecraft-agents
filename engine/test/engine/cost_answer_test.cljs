@@ -35,7 +35,10 @@
   (is (< (death/blow-chance {:health 20} 4 2.5) 0.01) "a fight of 4 hp at full health hardly kills")
   (is (< 0.4 (death/blow-chance {:health 5} 4 2.5) 0.6) "at 5 hp it may well")
   (is (< (death/blow-chance {:health 5 :absorption 4} 4 2.5) (death/blow-chance {:health 5} 4 2.5)) "absorption is health")
-  (is (= (death/blow-chance (body 5) 4 2.5) (cost/death-chance (body 5) {:damage 4 :hit 2.5})) "the death chance of an answer's blows"))
+  (is (= (death/blow-chance (body 5) 4 2.5) (cost/death-chance (body 5) {:damage 4 :hit 2.5})) "the death chance of an answer's blows")
+  (is (= 1 (cost/death-chance (body 20) {:damage 21 :hit 3 :blasts [20]})) "a blast that takes the health kills")
+  (is (> (cost/death-chance (body 20) {:damage 21 :hit 3 :blasts [16]}) (cost/death-chance (body 20) {:damage 21 :hit 16}))
+      "a blast of 16 leaves 4 hp against 5 hp of zombie blows, not 5/16 more of a blast"))
 
 (deftest the-cheapest-open-answer-is-taken
   (is (= {:answer :b :prices {:a 10 :b 5}}
@@ -70,13 +73,14 @@
 (deftest a-walk-from-a-mob-that-keeps-up-is-no-answer
   (is (nil? (cost/flee-answer {:food 20 :mobs [(mob "spider" 4)]})) "a spider outruns the body")
   (is (some? (cost/flee-answer {:food 20 :mobs [(mob "zombie" 4 35)]})))
-  (is (pos? (:damage (cost/flee-answer {:food 20 :mobs [(mob "creeper" 5)]}))) "a creeper 5 off swells before the walk gets going")
+  (is (pos? (:damage (cost/flee-answer {:food 20 :mobs [(mob "creeper" 2)]}))) "a creeper 2 off blows before the walk is out of its reach")
   (is (zero? (:damage (cost/flee-answer {:food 20 :mobs [(mob "creeper" 9)]})))))
 
 (deftest a-creeper-that-blows-on-the-walk-is-not-met-again
   (let [zombie (mob "zombie" 4 35)]
-    (is (nil? (:then (cost/flee-answer {:food 20 :mobs [(mob "creeper" 3)]}))) "a lone creeper blown is gone")
-    (is (= (cost/flee-answer {:food 20 :mobs [zombie]}) (first (:then (cost/flee-answer {:food 20 :mobs [(mob "creeper" 3) zombie]}))))
+    (is (nil? (:then (cost/flee-answer {:food 20 :mobs [(mob "creeper" 1)]}))) "a lone creeper blown is gone")
+    (is (some? (:then (cost/flee-answer {:food 20 :mobs [(mob "creeper" 3)]}))) "one 3 off mostly does not reach the walk")
+    (is (= (cost/flee-answer {:food 20 :mobs [zombie]}) (first (:then (cost/flee-answer {:food 20 :mobs [(mob "creeper" 1) zombie]}))))
         "after the blast only the zombie is walked from again")))
 
 (deftest a-body-that-can-neither-outrun-nor-outfight-a-spider-digs-in
@@ -98,13 +102,12 @@
   (let [walk #(cost/answer-price (body 20) (cost/flee-answer {:food 20 :mobs [(mob "skeleton" 10)] :returns %}) here)]
     (is (> (walk 2) (walk 1) (walk 0)))))
 
-(deftest a-creeper-near-enough-to-swell-before-the-walk-gets-going-or-that-keeps-coming-back-is-fought-hit-and-back
+(deftest a-lone-creeper-is-fought-hit-and-back-at-the-measured-exchange
   (let [price #(cost/answer-price (body %) (cost/fight-answer (fight sword (mob "creeper" 3))) here)]
     (is (> (price 10) (* 2 (price 20)))))
-  (are [health weapon distance returns expected] (= expected (choice health weapon [(mob "creeper" distance)] returns))
-    20 "stone_sword" 4 0 :fight
-    20 "stone_sword" 9 0 :flee
-    20 "stone_sword" 9 3 :fight))
+  (are [health weapon distance expected] (= expected (choice health weapon [(mob "creeper" distance)]))
+    20 "stone_sword" 4 :fight
+    20 "stone_sword" 9 :fight))
 
 (deftest a-creepers-blast-falls-off-to-nothing-at-twice-its-power
   (let [bare (cost/armour-stats nil)]

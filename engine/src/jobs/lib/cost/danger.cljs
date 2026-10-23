@@ -33,7 +33,7 @@
    ::sprint-food {:default 6 :doc "Food at or under which a body cannot sprint (reach-first?)." :spec (a/int-in 0 20)}
    ::chase-speed {:default 3 :doc "Blocks a second a chasing melee mob covers, a little over a zombie's (reach-first?)." :spec (a/num-in 0.1 nil)}
    ::baby-chase-speed {:default 5.1 :doc "Blocks a second a baby zombie covers chasing (chase-speed of mob-kind \"baby\")." :spec (a/num-in 0.1 nil)}
-   ::flight-start-s {:default 1.6 :doc "Seconds a flight stands, turns and gets going before it gains on its chasers (flight-start-s): trial flee steps of 6 blocks averaged 2.2 blocks a second, 2.7 s against 1.1 s sprinting." :spec (a/num-in 0 nil)}
+   ::flight-starts {:default [0 0.08 0.13 0.22 0.32 0.45 0.63 0.88 1.25 2.28] :doc "Seconds from a flight's decision until it gets going, its deciles (flight-starts): measured 2026-10-23 over the trial bodies' first flee decisions from a creeper (n=119, mean 0.64; any mob n=311, mean 0.76) as the time to 1 block off less that block at sprint speed. A blast on the walk is priced over each (cost.answer/flee-mob)." :spec (a/coll-of number?)}
    ::outrun-factor {:default 1.5 :doc "Times a mob's chase speed the body must run to get away from it on foot (outruns?): a flight goes in steps and round obstacles, the mob comes straight on." :spec (a/num-in 0 nil)}
    ::no-answer-scale {:default 60 :doc "How much dearer a mob's route danger is for each time over what the body can afford to lose in a fight with it (no-answer-factor)." :spec (a/num-in 0 nil)}
    ::race-margin-s {:default 0.5 :doc "Seconds the body must win a race to a refuge by (reach-first?)." :spec (a/num-in 0 nil)}
@@ -233,7 +233,7 @@
 
 (defn melee-reach [] (settings/get settings ::melee-reach))
 (defn outrun-factor [] (settings/get settings ::outrun-factor))
-(defn flight-start-s [] (settings/get settings ::flight-start-s))
+(defn flight-starts [] (settings/get settings ::flight-starts))
 
 (defn outruns?
   "Whether a body with food food gets away from every one of mob-names on foot: its flight-speed is at least each one's
