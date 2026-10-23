@@ -496,6 +496,21 @@
           (is (= 1 (:placed result)) (pr-str result))
           (is (empty? (:given-up result))))))))
 
+(deftest the-last-roof-cell-of-a-hut-beside-a-cliff-is-placed-from-the-ground-that-sees-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [hill (into {} (for [x (range -1 5) y (range 64 67) z (range -5 7)] [(h/cell-key x y z) "dirt"]))
+              hut (into {} (for [x (range 5 8) y (range 64 68) z (range 0 3)
+                                 :when (or (#{64 67} y) (not= [x z] [6 1]))
+                                 :when (not= [x y z] [7 67 1])]
+                             [(h/cell-key x y z) "stone"]))
+              plan {:id "hut" :parts [{:id "roof" :box [[5 67 0] [7 67 2]] :want "stone"}]}
+              {:keys [eng]} (start {:inventory [{:name "stone" :count 4} {:name "dirt" :count 10}] :blocks (merge hill hut) :self {:pos {:x 7.5 :y 64 :z -1.5}}} {"hut" plan})
+              result (await (child-outcome eng job {:plan "hut"} 300))]
+          (is (= 1 (:placed result)) (pr-str result))
+          (is (empty? (:given-up result))))))))
+
 (deftest a-place-that-says-already-for-a-cell-the-plan-reads-missing-is-given-up
   (async done
     (tu/run-async done

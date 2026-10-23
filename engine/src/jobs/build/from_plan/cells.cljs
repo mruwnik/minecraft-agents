@@ -148,11 +148,15 @@
               (and n (not (shape/air? n)) (not (#{"water" "lava"} n)))))
           [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]))
 
+(defn stand-reach
+  "How far from the middle of a stand cell the eye reaches wherever the body stands in it: :reach less the half diagonal of a cell."
+  []
+  (- (plan/reach) 0.71))
+
 (defn reaching
-  "The stands from which the body reaches cell pos wherever it stands in the stand cell (its eye within :reach, less the
-  half diagonal of a cell, from the cell's centre)."
+  "The stands from which the body reaches cell pos wherever it stands in the stand cell (stand-reach from the cell's centre)."
   [c stands pos]
-  (filter (fn [[x y z]] (<= (u/eye-dist {:x (+ x 0.5) :y y :z (+ z 0.5)} pos) (- (plan/reach) 0.71))) stands))
+  (filter (fn [[x y z]] (<= (u/eye-dist {:x (+ x 0.5) :y y :z (+ z 0.5)} pos) (stand-reach))) stands))
 
 (defn seeing
   "The stands of reaching whose eye also sees cell pos (jobs.lib.aim): from inside a hut the roof's edge is in reach but hidden."

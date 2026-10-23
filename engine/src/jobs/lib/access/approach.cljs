@@ -13,7 +13,7 @@
     :max-height tallest pillar considered, default 10
     :avoid      optional set of cells that are neither a stand nor a base (ones the walker could not reach)
     :beside?    optional, one target: no ground stand, only a pillar whose top is the feet cell level with and next to it
-    :sight?     optional: a stand also needs a clear line from its eye to the centre of every target (a hole in a roof is
+    :sight?     optional: a stand also needs a clear line from its eye to every target (jobs.lib.aim) (a hole in a roof is
                 placed from above the roof, not from beside the wall)
 
   Output, the first that applies:
@@ -32,9 +32,8 @@
   pillar."
   (:require [clojure.string :as str]
             [engine.args :as a]
-            [engine.game :as game]
             [engine.settings :as settings]
-            [engine.sight :as sight]
+            [jobs.lib.aim :as aim]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.solid :as solid]
@@ -89,15 +88,13 @@
     (every? #(<= (u/eye-dist here %) reach) targets)))
 
 (defn in-view?
-  "in-reach?, and with :sight? the eye also sees the centre of every target past the solid cells between."
+  "in-reach?, and with :sight? the eye also aims at every target past the solid cells between (jobs.lib.aim/sees-cell?)."
   [{:keys [reach targets block-at sight?]} [x y z :as stand]]
   (and (in-reach? reach targets stand)
        (or (not sight?)
-           (let [eye [(+ x 0.5) (+ y game/eye-height) (+ z 0.5)]]
-             (every? (fn [[tx ty tz]]
-                       (sight/line-clear (eye 0) (eye 1) (eye 2) (+ tx 0.5) (+ ty 0.5) (+ tz 0.5)
-                                         #(solid/solid? (block-at [%1 %2 %3]))))
-                     targets)))))
+           (let [eye (aim/eye-at {:x (+ x 0.5) :y y :z (+ z 0.5)})
+                 kind-at (fn [x y z] (when (solid/solid? (block-at [x y z])) :solid))]
+             (every? #(aim/sees-cell? kind-at eye %) targets)))))
 
 (defn dist3 [[ax ay az] [bx by bz]]
   (js/Math.hypot (- ax bx) (- ay by) (- az bz)))
@@ -187,9 +184,9 @@
                   (when-not (:ok v) v)))))
 
 (defn row-from
-  "The shortest bridge row from the standing cell start along one heading that brings every target in reach:
+  "The shortest bridge row from the standing cell start along one heading that brings every target in view (in-view?):
   {:from start :heading :length :stand}. Its cells are clear at body height and head room, floored or placeable."
-  [{:keys [block-at targets reach avoid] :as in} start limit]
+  [{:keys [block-at targets avoid] :as in} start limit]
   (let [[x y z] start]
     (first
      (for [[heading [dx dz]] headings
@@ -200,7 +197,7 @@
                                          (nil? (row-cell-verdict in (update cell 1 dec) prev))))
                                   (map vector steps (rest steps)))]
            [k [_ stand]] (map-indexed vector good)
-           :when (in-reach? reach targets stand)]
+           :when (in-view? in stand)]
        {:from start :heading heading :length (inc k) :stand stand}))))
 
 (defn starts

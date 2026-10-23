@@ -32,14 +32,16 @@
   (into (set (:scaffold-avoid (ctx/mem c))) (mapcat (fn [{:keys [pos]}] [pos (update pos 1 dec)])) cells))
 
 (defn approach-input
-  "The input of jobs.lib.access.approach for placing pos, with the plan's own footprint refusing a base. A target loaded but never seen
-  (a hole in a roof the body stands outside of) reads as air, and a stand must see it."
-  [c cells pos]
-  (let [in (access/rules-input c)
-        block-at (:block-at in)
-        hidden (dig-look/unknown? (:primitives c) pos)]
-    (assoc in :block-at #(or (block-at %) (when (and hidden (= % pos)) "air"))
-           :targets #{pos} :reach (plan/reach) :avoid (avoid-cells c cells) :sight? hidden)))
+  "The input of jobs.lib.access.approach for placing pos, with the plan's own footprint refusing a base; with sight? a
+  stand must see pos (one in reach behind a wall cannot place it). A target loaded but never seen (a hole in a roof the
+  body stands outside of) reads as air, and a stand must see it."
+  ([c cells pos] (approach-input c cells pos true))
+  ([c cells pos sight?]
+   (let [in (access/rules-input c)
+         block-at (:block-at in)
+         hidden (dig-look/unknown? (:primitives c) pos)]
+     (assoc in :block-at #(or (block-at %) (when (and hidden (= % pos)) "air"))
+            :targets #{pos} :reach (plan/reach) :avoid (avoid-cells c cells) :sight? (or sight? hidden)))))
 
 (defn blocks [c] (choose/filler-names c :pillar))
 
@@ -50,8 +52,8 @@
 (defn plan-for
   "The approach plan (jobs.lib.access.approach/plan) for placing pos. Where it finds none but stands the body could not
   walk to (a roof), a carried pillar whose top is beside the nearest of them, with that stand as its :onto."
-  [c cells pos]
-  (let [in (approach-input c cells pos)
+  [c cells pos sight?]
+  (let [in (approach-input c cells pos sight?)
         r (approach/plan in)
         beside (fn [onto] (let [p (:pillar (approach/plan (assoc in :targets #{onto} :beside? true)))]
                             (when (and p (<= (:height p) (carried-count c))) (assoc p :onto onto))))
@@ -97,10 +99,13 @@
   blocks can be had."
   [c cells cell result]
   (let [pos (:pos cell)
-        r (plan-for c cells pos)
+        way (fn [sight?]
+              (let [r (plan-for c cells pos sight?)]
+                [r (when (and (not (:pillar r)) (not (:stand r)) (not= :zone (:reason r)))
+                     (let [in (approach-input c cells pos sight?)] (approach/bridge in (approach/starts in))))]))
+        ;; a cell walled in on every side is seen from nowhere: a stand in reach is where the build tunnels to it or finds it has no tool
+        [r row] (let [[r row :as seen] (way true)] (if (or (:pillar r) (:stand r) row (= :zone (:reason r))) seen (way false)))
         height (get-in r [:pillar :height])
-        row (when (and (not (:pillar r)) (not (:stand r)) (not= :zone (:reason r)))
-              (let [in (approach-input c cells pos)] (approach/bridge in (approach/starts in))))
         lack (cond height (- height (carried-count c))
                    row (bridge-lack c (:length row)))]
     (cond

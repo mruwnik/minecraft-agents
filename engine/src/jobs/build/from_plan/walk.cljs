@@ -18,7 +18,7 @@
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.build.plan :as plan :refer [facing-of stands-for]]
             [jobs.lib.build.scaffold :as scaffold]
-            [jobs.build.from-plan.cells :refer [in-reach in-dig-reach exit-point buried? reaching seeing rock-bound? retreat-dists step-back needs-tool?]]
+            [jobs.build.from-plan.cells :refer [in-reach in-dig-reach exit-point buried? reaching seeing stand-reach rock-bound? retreat-dists step-back needs-tool?]]
             [jobs.build.from-plan.book :refer [walk-fail result-data]]))
 
 (a/defargs settings
@@ -197,7 +197,7 @@
                      cells)
         [x sy z] stand]
     (+ (:cost (cost/walk-cost {:distance (u/dist (u/self-pos c) {:x (+ x 0.5) :y sy :z (+ z 0.5)})}))
-       (cost/cover-tour-s [(+ x 0.5) (+ sy game/eye-height) (+ z 0.5)] (map #(mapv (partial + 0.5) (:pos %)) open) (- (plan/reach) 0.71)))))
+       (cost/cover-tour-s [(+ x 0.5) (+ sy game/eye-height) (+ z 0.5)] (map #(mapv (partial + 0.5) (:pos %)) open) (stand-reach)))))
 
 (defn ^:async walk-to-stand!
   "Walk to the cheapest (stand-price) stand cell beside cell, among those that see it first (:continue while the walk waits, else :again); a cell that cannot be walked to, or is still out of reach (or unseen, as :unseen) on arrival, counts a failure."
@@ -205,7 +205,7 @@
   (trace! c :walk-to! (:pos cell))
   (let [{:keys [all inner]} (stand-choices c cells cell)
         stands (or (seq (seeing c all (:pos cell))) (seq (reaching c all (:pos cell))) inner all)
-        stand (first (sort-by #(stand-price c cells cell %) stands))]
+        stand (second (first (sort-by first (map (juxt #(stand-price c cells cell %) identity) stands))))]
     (cond
       (not stand)
       (do (ctx/update-mem! c walk-fail (:pos cell) :unreachable (give-up) (u/self-pos c))

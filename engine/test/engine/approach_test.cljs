@@ -122,6 +122,11 @@
 (deftest a-bridge-row-is-refused-over-a-footprint
   (is (nil? (bridge :footprints #{[2 63 0]}))))
 
+(deftest a-bridge-row-must-see-the-target-when-sight-is-asked
+  (let [wall (apply world (into {} (for [x (range 1 60)] [[x 0] 62])) (mapcat identity (for [y (range 64 68) z [-1 0 1]] [[7 y z] "stone"])))]
+    (is (some? (bridge :block-at wall)) "in eye reach behind the wall")
+    (is (nil? (bridge :block-at wall :sight? true)))))
+
 (deftest a-bridge-row-longer-than-max-row-is-not-planned
   (is (nil? (bridge :targets #{[40 66 0]} :max-row 5))))
 
@@ -149,8 +154,9 @@
   (apply world {} (for [x (range 1 6) z (range -2 3) :let [c [x 66 z]] e [c (if (= c [3 66 0]) "air" "stone")]] e)))
 
 (deftest a-stand-must-see-the-target-when-sight-is-asked
-  (let [stands (fn [& {:as in}] (set (:stand (plan :targets #{[3 66 0]} :feet [0 64 0] :block-at roof-world :radius 3 in))))]
-    (is (contains? (stands) [0 64 0]) "in eye reach, though the roof hides the cell")
+  (let [hut (fn [[x y z :as c]] (if (and (#{64 65} y) (<= 1 x 5) (<= -2 z 2) (or (#{1 5} x) (#{-2 2} z))) "stone" (roof-world c)))
+        stands (fn [& {:as in}] (set (:stand (plan :targets #{[3 66 0]} :feet [0 64 0] :block-at hut :radius 3 in))))]
+    (is (contains? (stands) [0 64 0]) "in eye reach, though the wall and roof hide the cell")
     (is (not (contains? (stands :sight? true) [0 64 0])))
     (is (contains? (stands :sight? true) [3 67 1]) "on the roof, looking down")))
 
