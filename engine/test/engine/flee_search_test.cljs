@@ -20,14 +20,17 @@
   [blocks rects]
   (reduce (fn [b [x0 z0 x1 z1]] (merge b (box x0 64 z0 x1 65 z1 "air"))) blocks rects))
 
+(defn ctx-of
+  "A job ctx over p for the search; its events go into events (an atom of [kind fields])."
+  ([p] (ctx-of p (atom [])))
+  ([p events] {:primitives p :view (fn [] {:data mem/empty-data :now 0}) :emit (fn [kind _ fields] (swap! events conj [kind fields]))}))
+
 (defn ^:async ends-of
   "The flee search's ends from the body at start over blocks, run from chasers, with named targets; self merged into the
   fake's :self."
   [blocks start chasers named self]
-  (let [p (tu/fake {:blocks blocks :self (merge {:pos start} self)})
-        c {:primitives p :view (fn [] {:data mem/empty-data :now 0})}]
-    (await (settings/with-settings {::search/budget-ms 10000}
-             (fn ^:async run [] (await (search/search! c chasers named {})))))))
+  (let [p (tu/fake {:blocks blocks :self (merge {:pos start} self)})]
+    (await (search/search! (ctx-of p) chasers named {}))))
 
 (def rock
   "Stone at y 63 and walls two high over x -32..32, z -32..32: carve opens the ways."
@@ -49,6 +52,24 @@
           (is (= 2 (:x end)) (str "the step turns into the branch north: " (pr-str end)))
           (is (neg? (:z end)) (pr-str end)))))))
 
+(deftest a-flee-search-is-bounded-by-the-nodes-its-ring-expands
+  ;; the old search was cut by the clock: a slow machine planned fewer ways
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [work (fn ^:async search-work [ring-nodes]
+                     (let [events (atom [])
+                           c (ctx-of (tu/fake {:blocks junction :self {:pos {:x 0.5 :y 64 :z 0.5}}}) events)]
+                       (await (settings/with-settings {::search/ring-nodes ring-nodes}
+                                (fn ^:async run [] (await (search/search! c [{:name "zombie" :mob "zombie" :pos {:x -4.5 :y 64 :z 0.5}}] [] {})))))
+                       (some (fn [[kind fields]] (when (= :retreat.search-work kind) fields)) @events)))
+              whole (await (work 7200))
+              cut (await (work 300))]
+          (is (= 12 (:planned whole)) (pr-str whole))
+          (is (number? (:ms whole)))
+          (is (< (:planned cut) 12) (str "the ring stops once 300 nodes are spent " (pr-str cut whole)))
+          (is (<= 300 (:nodes cut) 310) (pr-str cut)))))))
+
 (deftest a-flight-down-a-dark-corridor-is-a-priced-way-on
   ;; the old search priced an unseen open cell lethal and cut each route before it: in the dark every end was a pocket
   ;; one cell off, and the body held "cornered"
@@ -59,9 +80,7 @@
                             :self {:pos {:x 0.5 :y 64 :z 0.5}} :yaw 270 :pitch 0})
               p (perception/wrap raw (perception/create (fake-raw/create raw) {:now (constantly 1000000)}))
               _ (perception/pass! (aget p "perception") {:effort 1 :reuse? true})
-              c {:primitives p :view (fn [] {:data mem/empty-data :now 0})}
-              ends (await (settings/with-settings {::search/budget-ms 10000}
-                            (fn ^:async run [] (await (search/search! c [{:name "zombie" :mob "zombie" :pos {:x -4.5 :y 64 :z 0.5}}] [] {})))))
+              ends (await (search/search! (ctx-of p) [{:name "zombie" :mob "zombie" :pos {:x -4.5 :y 64 :z 0.5}}] [] {}))
               dark (filter :unseen ends)
               e (search/choose ends {})]
           (is (some #(and (:open? %) (:unseen %)) ends) "a way on through the dark is planned to the ring")
