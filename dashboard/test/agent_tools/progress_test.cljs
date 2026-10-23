@@ -73,6 +73,10 @@
   (is (= [["iron_ingot" 3 24] ["iron_helmet" 1 1] ["iron_boots" 0 1]]
          (progress/want-counts inventory [["iron_ingot" 24] ["iron_helmet" 1] ["iron_boots" 1]]))))
 
+(deftest a-held-item-is-counted-once
+  (is (= [["iron_pickaxe" 1 1]]
+         (progress/want-counts {:counts {"iron_pickaxe" 1} :equipment {:mainHand {:name "iron_pickaxe"}}} [["iron_pickaxe" 1]]))))
+
 (deftest the-line-is-one-short-line-with-goal-counts-health-and-needs
   (let [line (progress/progress-line {:status busy-status :goal "j14" :want-counts [["iron_ingot" 3 24] ["iron_helmet" 1 1]]})]
     (is (not (str/includes? line "\n")))

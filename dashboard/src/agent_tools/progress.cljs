@@ -160,11 +160,11 @@
           (when (and (:idle s) (empty? rows)) ["idle: no jobs"])))))
 
 (defn want-counts
-  "[[item have wanted] ...] from a compact inventory (agent-tools.inventory/compact): carried plus worn."
+  "[[item have wanted] ...] from a compact inventory (agent-tools.inventory/compact): carried plus worn (the held item is already carried)."
   [inv want]
   (mapv (fn [[item n]]
           [item (+ (get (:counts inv) item 0)
-                   (count (filter #(and (map? %) (= item (:name %))) (vals (:equipment inv)))))
+                   (count (filter #(and (map? %) (= item (:name %))) (vals (dissoc (:equipment inv) :mainHand)))))
            n])
         want))
 
