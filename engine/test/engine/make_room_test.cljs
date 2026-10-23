@@ -196,12 +196,12 @@
                    {:name "stick" :count 3 :slot 3}
                    {:name "poppy" :count 3 :slot 4}]
         order (fn [recency] (names-of (ord/toss-order inventory {} recency 20)))]
-    (is (= ["dirt" "gravel" "stick" "poppy" "oak_log"] (order {})) "junk blocks first (bigger stack first), then by worth: stick and poppy equal (3, 3 by slot), the log dearer")
-    (is (= ["dirt" "gravel" "poppy" "stick" "oak_log"] (order {"stick" 100})) "the one picked up most recently goes last of its worth")
-    (is (= ["dirt" "gravel" "stick" "poppy" "oak_log"] (order {"poppy" 100 "gravel" 50 "dirt" 50}))
+    (is (= ["stick" "poppy" "dirt" "gravel" "oak_log"] (order {})) "by worth: stick and poppy equal (3, 3 by slot), then the blocks, the log dearer")
+    (is (= ["poppy" "stick" "dirt" "gravel" "oak_log"] (order {"stick" 100})) "the one picked up most recently goes last of its worth")
+    (is (= ["stick" "poppy" "dirt" "gravel" "oak_log"] (order {"poppy" 100 "gravel" 50 "dirt" 50}))
         "stick has no pick-up (0): before the picked-up names; later pick-ups after earlier ones")))
 
-(deftest toss-order-throws-junk-blocks-first-and-keeps-coal-and-ores-below-their-worth
+(deftest toss-order-throws-cheapest-blocks-first-and-keeps-coal-and-ores-below-their-worth
   (let [inventory [{:name "coal" :count 30 :slot 0}
                    {:name "raw_copper" :count 12 :slot 1}
                    {:name "tuff" :count 20 :slot 2}
@@ -209,10 +209,10 @@
                    {:name "granite" :count 64 :slot 4}
                    {:name "iron_ore" :count 5 :slot 5}
                    {:name "diamond" :count 2 :slot 6}]]
-    (is (= ["cobbled_deepslate" "granite" "tuff"]
+    (is (= ["tuff" "granite" "cobbled_deepslate"]
            (names-of (ord/toss-order inventory {} {} 3)))
-        "junk blocks first, whole stacks before partial; coal and raw copper are worth keeping")
-    (is (= ["cobbled_deepslate" "granite" "tuff" "iron_ore" "raw_copper" "coal"]
+        "cheapest first; coal and raw copper are worth keeping")
+    (is (= ["tuff" "granite" "cobbled_deepslate" "iron_ore" "raw_copper" "coal"]
            (names-of (ord/toss-order inventory {} {} 100)))
         "raised :toss-below lets the stacks of raw copper and coal go")))
 
@@ -232,7 +232,7 @@
   (let [inventory [{:name "cobblestone" :count 64 :slot 0} {:name "cobblestone" :count 64 :slot 1}
                    {:name "poppy" :count 2 :slot 2} {:name "granite" :count 3 :slot 3}]
         keep (ord/keep-counts inventory {:carry-food 16 :carry-blocks 64 :carry-seeds 16} nil)]
-    (is (= ["granite" "poppy" "cobblestone"] (names-of (ord/toss-order inventory keep {} 3.2))))))
+    (is (= ["poppy" "granite" "cobblestone"] (names-of (ord/toss-order inventory keep {} 3.2))))))
 
 (deftest toss-order-orders-by-recency-before-count
   (let [inventory [{:name "item_b" :count 9 :slot 0} {:name "item_a" :count 3 :slot 1}]]
@@ -251,6 +251,13 @@
     (is (= [] (names-of (ord/toss-order inventory {} {} 0))))
     (is (= ["dirt" "oak_log" "diamond"] (names-of (ord/toss-order inventory {} {} 1000))))))
 
+(deftest toss-order-keeps-a-stack-of-stone-and-throws-the-rest-when-the-bag-is-full
+  (let [inventory [{:name "cobblestone" :count 64 :slot 0} {:name "cobblestone" :count 64 :slot 1} {:name "cobblestone" :count 64 :slot 2}
+                   {:name "poppy" :count 2 :slot 3}]
+        keep (ord/keep-counts inventory {:carry-food 0 :carry-blocks 64 :carry-seeds 0} nil)]
+    (is (= {"cobblestone" 64 "poppy" 0} keep) "a body that builds or crafts with stone keeps a stack")
+    (is (= [3 0 1] (mapv :slot (ord/toss-order inventory keep {} 20))) "the cheapest stack first, then the surplus stone, never the kept stack")))
+
 (deftest toss-order-never-cuts-into-a-floor
   (let [stacks (fn [& counts] (vec (map-indexed (fn [i c] {:name "cobblestone" :count c :slot i}) counts)))]
     (are [counts floor expected] (= expected (mapv :slot (ord/toss-order (apply stacks counts) {"cobblestone" floor} {} 1)))
@@ -259,7 +266,7 @@
       [64 64 64] 192 []
       [64 64 64] 100 [0]
       [40 30] 64 []
-      [40 30] 30 [0]
+      [40 30] 30 [1]
       [10 64] 64 [0])))
 
 (deftest deposit-names-lists-the-names-above-their-keep-least-worth-keeping-first
@@ -275,12 +282,12 @@
       {"bread" 20 "cobblestone" 128 "dirt" 3} [])))
 
 (deftest deposit-names-puts-the-older-pick-up-first-among-equal-worth
-  (let [inventory [{:name "gravel" :count 64} {:name "sand" :count 64} {:name "dirt" :count 64}]
-        keep {"gravel" 0 "sand" 0 "dirt" 0}]
+  (let [inventory [{:name "oak_planks" :count 64} {:name "birch_planks" :count 64} {:name "spruce_planks" :count 64}]
+        keep {"oak_planks" 0 "birch_planks" 0 "spruce_planks" 0}]
     (are [recency expected] (= expected (ord/deposit-names inventory keep recency))
-      {} ["gravel" "sand" "dirt"]
-      {"gravel" 5} ["sand" "dirt" "gravel"]
-      {"gravel" 5 "sand" 3 "dirt" 9} ["sand" "gravel" "dirt"])))
+      {} ["oak_planks" "birch_planks" "spruce_planks"]
+      {"oak_planks" 5} ["birch_planks" "spruce_planks" "oak_planks"]
+      {"oak_planks" 5 "birch_planks" 3 "spruce_planks" 9} ["birch_planks" "oak_planks" "spruce_planks"])))
 
 ;; ------------------------------------------------------------------ the job
 
@@ -447,7 +454,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory (vec (concat (take 11 (map #(dissoc % :slot) linden-bag)) (same "diamond_pickaxe" 23 1)))})]
           (await (run-reflex eng {} {}))
-          (is (= ["diorite" "granite"] (mapv #(arg-of "item" %) (calls p "toss"))) "two tosses free the fourth slot")
+          (is (= ["oxeye_daisy" "cornflower"] (mapv #(arg-of "item" %) (calls p "toss"))) "the cheapest stacks go, two free the fourth slot")
           (is (= 36 (get (carried p) "dirt")))
           (is (= 58 (get (carried p) "cobblestone")))
           (is (= 63 (get (carried p) "wheat_seeds"))))))))
@@ -560,7 +567,7 @@
           (is (= [] (of-kind seen :make-room.stalled)))
           (is (= {} (:instances (core/state eng)))))))))
 
-(deftest junk-blocks-are-tossed-before-coal-and-copper-and-the-result-says-so
+(deftest cheap-blocks-are-tossed-before-coal-and-copper
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -568,11 +575,10 @@
                                                                    {:name "cobbled_deepslate" :count 64} {:name "tuff" :count 20}]
                                                                   (same "diamond_pickaxe" 30 1)))})]
           (await (run-reflex eng {:free 4 :carry-blocks 0} {}))
-          (is (= ["cobbled_deepslate" "tuff"] (mapv #(arg-of "item" %) (calls p "toss"))))
+          (is (= ["tuff" "cobbled_deepslate"] (mapv #(arg-of "item" %) (calls p "toss"))))
           (is (= {"coal" 30 "raw_copper" 12} (select-keys (carried p) ["coal" "raw_copper"])))
-          (is (= [{:item "cobbled_deepslate" :count 64} {:item "tuff" :count 20}]
-                 (mapv #(select-keys % [:item :count]) (of-kind seen :make-room.tossed))))
-          (is (some #(and (= :make-room.tossed (:kind %)) (:junk %)) @seen) "the event says it was a junk block"))))))
+          (is (= [{:item "tuff" :count 20} {:item "cobbled_deepslate" :count 64}]
+                 (mapv #(select-keys % [:item :count]) (of-kind seen :make-room.tossed)))))))))
 
 (deftest a-submitted-make-room-ends-done-after-the-toss-that-made-room
   (async done

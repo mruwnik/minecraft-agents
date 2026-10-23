@@ -55,7 +55,7 @@
   - done {:tossed [{:item :count}] :free :text} once :free slots are free;
   - nothing-possible :short (it acted, nothing more may go) or :nothing-to-go (it may put away or toss nothing),
     or :toss-failed after the toss-fails setting (3) failed tosses in a row (data :status); data :free, :tossed and :text. The report counts the free slots.
-  Also emits info make-room.tossed (with :junk) and make-room.swapped.")
+  Also emits info make-room.tossed and make-room.swapped.")
 
 (a/defargs args
   {:free {:doc "done once at least this many slots are free (above the trigger's 2, so it does not refire at once)" :spec (a/int-in 0 nil) :default 4}
@@ -187,7 +187,7 @@
         (do (ctx/update-mem! c dissoc :toss-fails)
             (tossed! c (:name stack) (:count stack) at dir)
             (ctx/emit! c :make-room.tossed :info
-                       (merge {:item (:name stack) :count (:count stack) :worth (:worth stack) :junk (boolean (:junk stack))
+                       (merge {:item (:name stack) :count (:count stack) :worth (:worth stack)
                                :text (str "tossed " (:count stack) " " (:name stack))}
                               fields))
             true)
@@ -311,7 +311,7 @@
   more than a throwable stack, or nil."
   [c {:keys [inventory keep recency]}]
   (some (fn [g]
-          (let [worth (ord/stack-worth g)]
+          (let [worth (ord/item-worth g)]
             (when-let [stack (first (ord/toss-order inventory keep recency worth))]
               {:item (assoc g :worth worth) :stack stack})))
         (ground-items c (swap-radius))))

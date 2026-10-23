@@ -14,17 +14,6 @@
 
 (def tool-like #{"bucket" "water_bucket" "lava_bucket"})
 
-(def junk-blocks
-  "Plain blocks a player throws first when the bag is full."
-  #{"dirt" "coarse_dirt" "cobblestone" "cobbled_deepslate" "deepslate" "stone" "granite" "diorite" "andesite"
-    "tuff" "gravel" "netherrack" "sand" "red_sand" "calcite" "dripstone_block"})
-
-(defn stack-worth
-  "item-worth, but 0 for a plain junk block: crafted-only ones (cobbled_deepslate) have no source in the item base and
-  would price above the toss line."
-  [item]
-  (if (contains? junk-blocks (:name item)) 0 (item-worth item)))
-
 (defn protected?
   "Never put away, never thrown: tools, weapons, armour, the buckets, torches and golden apples."
   [name]
@@ -77,8 +66,7 @@
 
 (defn toss-order
   "The stacks that may be thrown, first to throw first: [{:name :count :slot
-  :worth :junk}]: plain junk blocks (junk-blocks) first, the biggest stack
-  first (whole stacks before partial), then by worth, then when the name was
+  :worth}]: names without a keep before names with one, then by worth, then when the name was
   last picked up (never is 0, oldest), then count, then slot. A stack qualifies when its name is not
   protected or food, its worth is below max-worth, and its whole count fits in
   what the name carries above its keep, after the stacks of the name that come
@@ -89,13 +77,10 @@
   (let [totals (storage/carried-totals inventory)
         budgets (into {} (map (fn [[n total]] [n (- total (get keep n 0))])) totals)
         candidates (->> inventory
-                        (map #(assoc (select-keys % [:name :count :slot]) :worth (stack-worth %) :junk (contains? junk-blocks (:name %))))
+                        (map #(assoc (select-keys % [:name :count :slot]) :worth (item-worth %)))
                         (remove #(or (protected? (:name %)) (foods/edible? (:name %))))
                         (filter #(< (if total? (* (:worth %) (:count %)) (:worth %)) max-worth))
-                        (sort-by (fn [s] (let [kept (if (pos? (get keep (:name s) 0)) 1 0)]
-                                           (if (:junk s)
-                                             [kept 0 0 0 0 (- (:count s)) (:slot s)]
-                                             [kept 1 (:worth s) 0 (get recency (:name s) 0) (:count s) (:slot s)])))))]
+                        (sort-by (fn [s] [(if (pos? (get keep (:name s) 0)) 1 0) (:worth s) (get recency (:name s) 0) (:count s) (:slot s)])))]
     (first (reduce (fn [[chosen left] s]
                      (if (<= (:count s) (left (:name s)))
                        [(conj chosen s) (update left (:name s) - (:count s))]
@@ -115,7 +100,7 @@
         stacks (map-indexed (fn [i s] (assoc s :slot (or (:slot s) i))) inventory)
         order-key (fn [[n ss]]
                     [(if (pos? (get keep n 0)) 1 0)
-                     (apply min (map stack-worth ss))
+                     (apply min (map item-worth ss))
                      (get recency n 0)
                      (apply min (map :slot ss))])]
     (->> stacks

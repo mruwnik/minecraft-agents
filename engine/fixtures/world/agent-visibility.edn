@@ -25,5 +25,5 @@
    :body {:inventory [["dirt" 640] ["gravel" 640] ["sand" 640] ["andesite" 384]]}
    :act [[:job (jobs.storage.make-room {:free 6})]]
    :expect [{:event {:source :job :kind :make-room.tossed :data {:item [:any] :count [:>= 1]}} :within-s 60 :of-job true}
-            {:event {:source :job :kind :make-room.tossed :data {:item "gravel"}} :within-s 90 :of-job true}]
+            {:event {:source :job :kind :make-room.tossed :data {:item "sand"}} :within-s 90 :of-job true}]
    :limit-s 100}]}
