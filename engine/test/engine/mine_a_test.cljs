@@ -536,12 +536,12 @@
           (core/submit! eng '(mining-parent) {})
           (await (tu/run-ticks eng clock 10 700))
           (is (= {:status :stopped :got 0 :reason :no-tool :tool "pickaxe"} (select-keys @out [:status :got :reason :tool]))))))))
-;; a stone on an 8-high pillar: seen from the floor, no stand beside it. go-to walks nearer and looks before it gives up (the body may end far off, seeing no other ore), so one stone.
+;; stones on 8-high pillars: seen from the floor, no stand beside them.
 (deftest seen-ore-with-no-way-to-stand-beside-it-is-listed-unreached
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [stones [[0 -3]]
+        (let [stones [[-3 0] [3 0] [0 -3] [0 3]]
               pillars (into {} (for [[x z] stones]
                                  (into {(str x ",71," z) "stone"} (cells "bedrock" [x] (range 62 71) [z]))))
               s (await (scenario {:block "stone" :count 3 :radius 10 :ways #{:seen}}
@@ -549,7 +549,8 @@
               e (done-event s)]
           (is (= [:stopped 0] ((juxt :status :got) e)))
           (is (= (set (map (fn [[x z]] [x 71 z]) stones)) (set (:unreached e))))
-          (is (re-find #"seen ore out of reach" (:text e))))))))
+          (is (re-find #"seen ore out of reach" (:text e)))
+          (is (<= (js/Math.hypot (first (feet s)) (nth (feet s) 2)) 4) "the walled-in ore was judged from where the body stood"))))))
 
 ;; walled?: the pit has a wall round it, so no way round through unseen ground competes with the drop; open: the platform's other sides
 ;; lead off over unseen floor. The ore and the floor under the drop were seen from over the floor first (the platform's wall hides its foot from the rim, and go-to drops no deeper than 5 onto a floor it has not seen), so only go-to's health floor decides the drop.

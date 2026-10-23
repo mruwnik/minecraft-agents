@@ -5,7 +5,7 @@
   - rim-pillar: how high to pillar beside a wall to step onto its top (a pit too wide for pit-depth).
   - door: the cells of a thin wall straight ahead with a floor beyond it (jobs.access.clear-path digs them).
   - stair-heading: a heading with a solid block in front to stair up on (jobs.access.stair).
-  - wall-spot: the nearest cell beside a wall, for a body in a hollow with no wall next to it.
+  - wall-spot: the cheapest cell beside a wall (priced-spot), for a body in a hollow with no wall next to it.
   - stair-cuts: the cells a stair up cuts.
   - door-beside?: whether a door or gate borders the cells the body can walk to (a way out go-to handles).
   - choose: the escalation for a body here and a goal.
@@ -17,6 +17,7 @@
             [jobs.lib.access.rules :as rules]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.blocks :as b]
+            [jobs.lib.cost :as cost]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.reach :as reach]
@@ -39,6 +40,8 @@
 (def cardinals [[1 0] [-1 0] [0 1] [0 -1]])
 
 (def heading-names {[1 0] :east [-1 0] :west [0 1] :south [0 -1] :north})
+
+(def heading-dirs (into {} (map (fn [[k v]] [v k])) heading-names))
 
 (def protected
   "Blocks a way out never digs: doors, gates, trapdoors, beds, containers, signs, and what cannot be broken."
@@ -271,28 +274,61 @@
                (heading-names d))))
          dirs)))
 
-(defn wall-spot
-  "The nearest cell (breadth-first through standable cells, at most wall-search-radius away along x and z) that has
-  a solid side: one whose side along dir is solid when there is one, else the first with any. nil when none. Cells in
-  visited (already walked to) do not count."
-  ([p feet dir] (wall-spot p feet dir #{}))
-  ([p feet dir visited]
-  (let [block-at (block-at-of p)
-        [hx _ hz] feet
+(defn line-cells
+  "The cells a block apart on the straight line from cell a to cell b, both left out."
+  [a b]
+  (let [n (js/Math.ceil (apply js/Math.hypot (map - b a)))]
+    (for [i (range 1 n)] (mapv #(js/Math.round (+ %1 (* (- %2 %1) (/ i n)))) a b))))
+
+(defn level-steps
+  "(steps cell): the standable cells (seen, jobs.lib.reach/standable-cell?) beside cell, those a step up or down too
+  with climb?, within wall-search-radius of feet along x and z."
+  [p [hx _ hz] climb?]
+  (let [kind-at (reach/seen-lookup p)
         near? (fn [[x _ z]] (and (<= (js/Math.abs (- x hx)) wall-search-radius)
-                                 (<= (js/Math.abs (- z hz)) wall-search-radius)))
-        kind-at (reach/seen-lookup p)
-        standable? (fn [[x y z]] (reach/standable-cell? p {:x x :y y :z z} kind-at))
-        dirs (distinct (cond->> cardinals dir (cons dir)))]
-    (loop [queue #queue [feet] seen #{feet} fallback nil]
-      (if-let [cell (peek queue)]
-        (let [here? (= cell feet)]
-          (if (and dir (not here?) (not (visited cell)) (solid? (block-at (ahead cell dir 1))))
-            cell
-            (let [fallback (or fallback (when (and (not here?) (not (visited cell)) (walled-side? block-at cell)) cell))
-                  nbrs (->> dirs (map #(ahead cell % 1)) (filter #(and (not (seen %)) (near? %) (standable? %))))]
-              (recur (into (pop queue) nbrs) (into seen nbrs) fallback))))
-        fallback)))))
+                                 (<= (js/Math.abs (- z hz)) wall-search-radius)))]
+    (fn [cell]
+      (->> cardinals
+           (mapcat (fn [d] (map #(up (ahead cell d 1) %) (if climb? [0 -1 1] [0]))))
+           (filter #(and (near? %) (reach/standable-cell? p (zipmap [:x :y :z] %) kind-at)))))))
+
+(defn priced-spot
+  "The cheapest cell (jobs.lib.cost seconds: the walk there, plus the walk on to goal along the straight line with its
+  unseen cells at the planner's unknown prices, rest-s) other than feet and the cells in visited (already walked to)
+  for which (take? cell g rest-s), g its walk's seconds, over the cells steps (level-steps) reaches from feet: tried
+  cheapest first, at most cap tried (nil: no cap). nil when none."
+  [p feet goal steps take? visited cap]
+  (let [kind-at (reach/seen-lookup p reach/kind-of :ground)
+        walk-s (fn [a b] (:cost (cost/walk-cost {:distance (apply js/Math.hypot (map - b a))})))
+        rest-s (fn [cell] (+ (walk-s cell goal) (cost/unseen-route-s kind-at (map #(zipmap [:x :y :z] %) (line-cells cell goal)))))]
+    (loop [open (sorted-set [(rest-s feet) 0 0 feet]) best {feet 0} n 1 tried 0]
+      (when-let [[_ _ g cell :as top] (first open)]
+        (let [open (disj open top)
+              try? (and (= g (best cell)) (not= cell feet) (not (visited cell)))]
+          (cond
+            (< (best cell) g) (recur open best n tried)
+            (and try? (take? cell g rest-s)) cell
+            (and cap (>= tried cap)) nil
+            :else (let [nbrs (keep #(let [g2 (+ g (walk-s cell %))] (when (< g2 (get best % js/Infinity)) [% g2])) (steps cell))]
+                    (recur (into open (map-indexed (fn [i [c g2]] [(+ g2 (rest-s c)) (+ n i) g2 c]) nbrs))
+                           (into best nbrs) (+ n (count nbrs)) (cond-> tried try? inc)))))))))
+
+(defn wall-spot
+  "The cheapest cell (priced-spot through standable cells) with a solid side: one whose side toward goal is solid
+  when there is one, else one with any. nil when none. Cells in visited (already walked to) do not count."
+  ([p feet goal] (wall-spot p feet goal #{}))
+  ([p feet goal visited]
+   (let [block-at (block-at-of p)
+         steps (level-steps p feet false)
+         toward? (fn [cell _ _] (when-let [d (heading cell goal)] (solid? (block-at (ahead cell d 1)))))]
+     (or (priced-spot p feet goal steps toward? visited nil)
+         (priced-spot p feet goal steps (fn [cell _ _] (walled-side? block-at cell)) visited nil)))))
+
+(defn nearer?
+  "Whether cell is more than a block nearer goal than feet."
+  [feet goal cell]
+  (let [to-goal #(apply js/Math.hypot (map - goal %))]
+    (< (to-goal cell) (dec (to-goal feet)))))
 
 (defn pillar-item
   "{:item :count}: the carried climb block (choose/fillers-for, so reserves and an :avoid apply) with the largest count, or nil."
@@ -321,24 +357,17 @@
 (defn max-door [] (settings/get settings ::max-door))
 
 (defn door-spot
-  "The nearest cell (breadth-first through standable cells, within wall-search-radius) other than feet from which a
-  wall straight along dir is a door (door) whose every cell is diggable?: where to walk when the wall at feet cannot be
-  dug (an iron door or another's build in line). nil when none. Cells in visited (already walked to) do not count."
-  [p feet dir diggable visited]
+  "The cheapest cell (priced-spot through standable cells) from which a wall straight toward goal is a door (door)
+  whose every cell is diggable? and whose far side is nearer? goal than feet: where to walk when the wall at feet
+  cannot be dug (an iron door or another's build in line). nil when none. Cells in visited (already walked to) do not
+  count."
+  [p feet goal diggable visited]
   (let [block-at (block-at-of p)
-        [hx _ hz] feet
-        near? (fn [[x _ z]] (and (<= (js/Math.abs (- x hx)) wall-search-radius)
-                                 (<= (js/Math.abs (- z hz)) wall-search-radius)))
-        kind-at (reach/seen-lookup p)
-        standable? (fn [[x y z]] (reach/standable-cell? p {:x x :y y :z z} kind-at))
         unseen? (unseen-of p)
-        ok? (fn [cell] (when-let [gap (door block-at unseen? cell dir (max-door))] (every? diggable (:cells gap))))]
-    (loop [queue #queue [feet] seen #{feet}]
-      (when-let [cell (peek queue)]
-        (if (and (not= cell feet) (not (visited cell)) (ok? cell))
-          cell
-          (let [nbrs (->> cardinals (map #(ahead cell % 1)) (filter #(and (not (seen %)) (near? %) (standable? %))))]
-            (recur (into (pop queue) nbrs) (into seen nbrs))))))))
+        take? (fn [cell _ _] (when-let [d (heading cell goal)]
+                               (when-let [gap (door block-at unseen? cell d (max-door))]
+                                 (and (every? diggable (:cells gap)) (nearer? feet goal (:through gap))))))]
+    (priced-spot p feet goal (level-steps p feet false) take? visited nil)))
 
 (defn door-back
   "For a body in the free part of a shut door's cell feet: the cell on the free side, to step back to and look round
@@ -361,30 +390,32 @@
   "Standable cells way-spot tries choose from at most."
   12)
 
-(defn way-spot
-  "The nearest cell (breadth-first through standable cells a step up or down included, within wall-search-radius, at most way-spot-cap tried) other
-  than feet and the visited ones from which choose makes a way (a pillar, stair or clear-path) toward goal: where to walk
-  when no way can be made from feet itself, e.g. a body inside its hut beside the doorway it cannot cut through the wall to.
-  nil when none."
-  [p feet goal may-dig? opts visited]
-  (let [[hx _ hz] feet
-        near? (fn [[x _ z]] (and (<= (js/Math.abs (- x hx)) wall-search-radius)
-                                 (<= (js/Math.abs (- z hz)) wall-search-radius)))
-        kind-at (reach/seen-lookup p)
-        standable? (fn [[x y z]] (reach/standable-cell? p {:x x :y y :z z} kind-at))
-        opts (update opts :skip (fnil conj #{}) :approach)
-        way? (fn [cell] (#{:pillar :stair :clear-path} (:step (choose p cell goal may-dig? opts))))]
-    (loop [queue #queue [feet] seen #{feet} tried 0]
-      (when-let [cell (peek queue)]
-        (let [try? (and (not= cell feet) (not (visited cell)))]
-          (cond
-            (and try? (way? cell)) cell
-            (>= tried way-spot-cap) nil
-            :else (let [nbrs (->> cardinals (mapcat (fn [d] (map #(up (ahead cell d 1) %) [0 -1 1])))
-                                  (filter #(and (not (seen %)) (near? %) (standable? %))))]
-                    (recur (into (pop queue) nbrs) (into seen nbrs) (cond-> tried try? inc)))))))))
+(defn way-end
+  "Where way e (escape/choose's) made from cell leaves the body: a pillar's top, a stair's last step, a clear-path's far
+  side; nil for any other step."
+  [p cell goal {:keys [step height heading steps]}]
+  (case step
+    :pillar (up cell height)
+    :stair (let [[dx dz] (heading-dirs heading)] (add cell [(* steps dx) steps (* steps dz)]))
+    :clear-path (:through (door (block-at-of p) (unseen-of p) cell (heading cell goal) (max-door)))
+    nil))
 
-(def heading-dirs (into {} (map (fn [[k v]] [v k])) heading-names))
+(defn way-spot
+  "The cheapest cell (priced-spot through standable cells a step up or down included, at most way-spot-cap tried) from
+  which choose makes a way (a pillar, stair or clear-path) toward goal: where to walk when no way can be made from feet
+  itself, e.g. a body inside its hut beside the doorway it cannot cut through the wall to. A clear-path's far side must
+  be nearer? goal than feet; a stair or pillar up toward a higher goal must leave the walk there and on from its end
+  (way-end) cheaper than the walk from feet; one out of a pit or room counts as it is. nil when none."
+  [p feet goal may-dig? opts visited]
+  (let [opts (update opts :skip (fnil conj #{}) :approach)
+        take? (fn [cell g rest-s]
+                (let [e (choose p cell goal may-dig? opts)
+                      end (way-end p cell goal e)]
+                  (case (:step e)
+                    :clear-path (boolean (and end (nearer? feet goal end)))
+                    (:stair :pillar) (or (<= (goal 1) (cell 1)) (< (+ g (rest-s end)) (rest-s feet)))
+                    false)))]
+    (priced-spot p feet goal (level-steps p feet true) take? visited way-spot-cap)))
 
 (defn choose
   "How a body at feet (a cell) that cannot walk to goal (a cell) can make a way, cheapest first. It only ever digs
@@ -404,7 +435,7 @@
     to max-depth.
   - {:step :pillar :height n :item}, the last way before :none: beside a wall (a pit too wide to be walled on three
     sides) with no walk or dig way, n the rim-pillar.
-  - {:step :approach :pos cell}: no side of the body's cell is solid: walk to wall-spot first; in the free part of a
+  - {:step :approach :pos cell}: no side of the body's cell is solid: walk to wall-spot first; a wall in line it cannot dig: to door-spot; in the free part of a
     shut door's cell with no door-spot in sight, step back off the panel (door-back).
   - on a ledge (no side solid, no wall-spot) under a higher goal with a pillar block carried: a stair whose first
     floor the stair job lays.
@@ -437,7 +468,8 @@
                         (stair-heading block-at feet (remove #(contains? stands (ahead feet % 1)) stair-dirs) rise may-dig? own? true)))
          gap (when (and dir (not (skip :clear-path))) (door block-at (unseen-of p) feet dir (max-door)))
          spot (delay (when (and dir (not (skip :approach)) (not (skip :clear-path)) (walled-side? block-at feet))
-                       (door-spot p feet dir #(diggable? block-at may-dig? own? %) approached)))
+                       (door-spot p feet goal #(diggable? block-at may-dig? own? %) approached)))
+         wall (delay (wall-spot p feet goal approached))
          back (delay (when-not (or (skip :approach) (skip :clear-path)) (door-back p feet approached)))
          door? (and gap (every? #(diggable? block-at may-dig? own? %) (:cells gap)))
          rim (when (and rim-n (>= count rim-n)) rim-n)]
@@ -460,8 +492,8 @@
        @back
        {:step :approach :pos @back}
 
-       (and (not (skip :approach)) (not (and (skip :clear-path) (skip :stair))) (not (walled-side? block-at feet)) (wall-spot p feet dir approached))
-       {:step :approach :pos (wall-spot p feet dir approached)}
+       (and (not (skip :approach)) (not (and (skip :clear-path) (skip :stair))) (not (walled-side? block-at feet)) @wall)
+       {:step :approach :pos @wall}
 
        @ledge
        {:step :stair :heading @ledge :steps rise}
