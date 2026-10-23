@@ -125,8 +125,13 @@
       (some? (child-done e :smelt))
       (and (= :child_ended (:kind e)) (boolean? (get-in e [:data :ending :data :dug])))))
 
+(defn goal-end
+  "The event that ends the top-level goal job (completed or cancelled), or nil while it is listed."
+  [events goal-job]
+  (first (filter #(and (contains? #{:completed :cancelled} (:kind %)) (= [goal-job] (get-in % [:context :chain]))) events)))
+
 (defn stalls
-  "Gaps over stall-ms between progress events, while the goal job is listed: [{:from-ms :to-ms}] up to end-ms."
+  "Gaps over stall-ms between progress events: [{:from-ms :to-ms}] up to end-ms (the goal job's end, so none after it)."
   [events start-ms end-ms]
   (let [times (concat [start-ms] (map ms (filter progress? events)) [end-ms])]
     (vec (for [[a b] (partition 2 1 times) :when (> (- b a) stall-ms)] {:from-ms a :to-ms b}))))
@@ -163,10 +168,13 @@
   [{:keys [started-ms goal-job given]} events end-ms]
   (let [goal-job (or goal-job (goal-job-of events))
         m (milestones events)
+        ended (goal-end events goal-job)
+        end-ms (min end-ms (or (some-> ended ms) end-ms))
         days #(when % (/ (- % started-ms) ms-per-day))]
     {:given (vec given)
      :milestones (into (sorted-map) (map (fn [[k t]] [k {:ms (- t started-ms) :days (days t)}])) m)
      :deaths (deaths events)
+     :goal-cancelled (when (= :cancelled (:kind ended)) {:at-ms (- (ms ended) started-ms) :cause (get-in ended [:data :cause])})
      :stalls (stalls events started-ms end-ms)
      :give-ups (give-ups events)
      :interventions (interventions events goal-job)
@@ -176,10 +184,11 @@
 (defn clean
   "The clean criterion of a report -> {:clean? bool :failed [why ...] :review [what only a person can check]}: the kit done within max-days
   in-game days, no death, no intervention, no crash, every give-up states its reason."
-  [{:keys [kit-days deaths interventions crashes give-ups]}]
+  [{:keys [kit-days deaths interventions crashes give-ups goal-cancelled]}]
   (let [failed (cond-> []
                  (nil? kit-days) (conj :kit-not-done)
                  (and kit-days (> kit-days max-days)) (conj :kit-too-slow)
+                 goal-cancelled (conj :goal-cancelled)
                  (seq deaths) (conj :death)
                  (seq interventions) (conj :intervention)
                  (pos? crashes) (conj :crash)
@@ -204,16 +213,27 @@
       (= a "--allow-time") (recur more (assoc o :time? true))
       :else (recur more (update o :pos conj a)))))
 
+(defn log-file?
+  "An event log of the body: events.edn and its rotations, and the debug level files (picked-up is written only there)."
+  [name]
+  (some? (re-matches #"events\.edn(\.debug)?(\.\d+)?" name)))
+
+(defn submit-args
+  "The jobs tool arguments that submit the goal: it is the whole run, so it survives the body's death."
+  [body spec]
+  [body "--world" "test" "submit" spec "--survive-death"])
+
 (defn- read-events
   "The body's event logs (oldest rotation first) from start-ms on."
   [world body start-ms]
   (let [dir (path/join (repo) "worlds" world "agents" body "engine")
-        files (->> (array-seq (fs/readdirSync dir)) (filter #(re-matches #"events\.edn(\.\d+)?" %))
+        files (->> (array-seq (fs/readdirSync dir)) (filter log-file?)
                    (sort-by #(or (some-> (re-find #"\.(\d+)$" %) second js/parseInt) 0) >))]
     (->> files
          (mapcat #(str/split-lines (str (fs/readFileSync (path/join dir %) "utf8"))))
          (keep #(try (reader/read-string %) (catch :default _ nil)))
          (filter #(and (:time-ms %) (>= (:time-ms %) start-ms)))
+         (distinct)
          (sort-by :time-ms)
          vec)))
 
@@ -244,7 +264,7 @@
               (fs/mkdirSync (path/dirname p) #js {:recursive true})
               (fs/writeFileSync p (pr-str m)))
     :submit (let [[body spec] a]
-              (run-node! "engine/tools/jobs.mjs" [body "--world" "test" "submit" spec]))))
+              (run-node! "engine/tools/jobs.mjs" (submit-args body spec)))))
 
 (defn- table [{:keys [milestones]}]
   (str/join "\n" (for [[k {:keys [ms days]}] milestones]
