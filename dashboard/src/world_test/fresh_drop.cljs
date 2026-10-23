@@ -64,7 +64,7 @@
 (defn placed-ok?
   "The rcon answer of a spreadplayers: only the server's success line counts, anything else (an error, 'Could not') is a failure."
   [out]
-  (boolean (re-find #"Spread \d+ player" (str out))))
+  (boolean (re-find #"Spread \d+ entit" (str out))))
 
 (defn steps
   "The drop as data, in order: per body [:whitelist b] [:file path text] [:workspace b world] [:body-start b {:world :build}], then

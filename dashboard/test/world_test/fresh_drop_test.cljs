@@ -115,7 +115,7 @@
   (is (= [["spreadplayers" "1" "2" "0" "100" "false" "A"]] (d/place-commands ["A"] [1 2]))))
 
 (deftest only-the-success-line-counts-as-placed
-  (is (d/placed-ok? "Spread 1 player(s) around 1.0, 2.0 with an average distance of 3.1 blocks apart"))
+  (is (d/placed-ok? "Spread 1 entity/entities around 14103.5, -1291.5 with an average distance of 0.00 block(s) apart"))
   (is (not (d/placed-ok? "Incorrect argument for command at ...lse Oriel Bramble Teasel<--[HERE]")))
-  (is (not (d/placed-ok? "Could not spread 1 player around 1.0, 2.0 (too many players for space - try using spread of at most 4)")))
+  (is (not (d/placed-ok? "Could not spread 1 entity/entities around 14103.5, -1291.5 (too many entities for space - try using spread of at most 4)")))
   (is (not (d/placed-ok? ""))))
