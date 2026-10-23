@@ -30,7 +30,7 @@
             [jobs.lib.rooms :as room-lib]
             [jobs.survival.respond.pillar :as pillar]
             [jobs.survival.respond.refuge :as refuge]
-            [jobs.lib.flee-walk :as walk]))
+            [jobs.lib.flee-search :as search]))
 
 (def tool-weapons
   "Item name substrings a cornered body with no weapon and no seal swings: any of them beats the fist."
@@ -47,7 +47,7 @@
 
 
 (a/defargs settings
-  {::lost-memory-ms {:default 30000 :doc "Milliseconds a mob the flight lost (its :threat entry) still counts, at the place it was last known, when choosing where to flee; a creeper counts triple." :spec (a/int-in 0 nil)}
+  {::back-off-reach {:default 2 :doc "Blocks off the ring a back-off step's flee search plans its ends on (jobs.lib.flee-search: each heading's end within a block of it)." :spec (a/num-in 1 nil)}
    ::fist-sweeps {:default 1 :doc "Times a body with no weapon, every cornered option failed, looks for a way to walk before it punches a hostile it would not beat; 0: it punches at once." :spec (a/int-in 0 nil)}
    ::hit-reach {:default 3 :doc "Blocks within which a melee hostile counts as the one that hit the body." :spec (a/num-in 0 nil)}
    ::glance-reach {:default 3 :doc "Blocks along a direction to the feet cell a glance looks at." :spec (a/int-in 0 nil)}
@@ -177,18 +177,6 @@
   [c hostiles]
   (hostile/wins? c hostiles))
 
-(defn back-off-target
-  "A cell to back off to: of the ends of the open cells (escape/up to 2, see walk-cells) in the eight compass directions,
-  the farthest from threat, when it gains at least a block on it and passes no hazard; nil when none does."
-  [block-at from threat hazards]
-  (let [now (u/dist from threat)]
-    (->> (range 0 360 45)
-         (keep #(peek (walk/walk-cells block-at from (walk/rotate [1 0] %) 2)))
-         (remove #(walk/near-hazard? hazards from %))
-         (filter #(>= (u/dist % threat) (inc now)))
-         (sort-by #(- (u/dist % threat)))
-         first)))
-
 (defn glance-reach [] (settings/get settings ::glance-reach))
 
 (defn glance-memory [] (settings/get settings ::glance-memory))
@@ -223,7 +211,6 @@
 
 (defn close-leg-s [] (settings/get settings ::close-leg-s))
 
-(defn lost-memory-ms [] (settings/get settings ::lost-memory-ms))
 
 (defn ^:async leg-step!
   "One flee step to target as a jobs.movement.run-away child of at most leg-s seconds (y-margin (16) blocks past body and target bound its route): true when the body arrived or got on a leg nearer, false when go-to gave up, waited or was declined (mem :leg-timed-out: it ran out of the leg's seconds unhurt)."
@@ -246,13 +233,23 @@
 (defn step! [c slot target range] (leg-step! c slot target range (flight-timeout-s)))
 
 (defn ^:async back-off!
-  "Step back from the place from (back-off-target): :again, nil when there is no such cell or the walk is blocked."
-  [c from]
-  (when-let [target (back-off-target (block-at-fn (:primitives c)) (u/self-pos c) from
-                                     (keep (comp :pos :data) (ctx/entries c :hazard)))]
-    (if-not (await (step! c :back-off target 0))
-      (do (flight/tried! c :back-off) nil)
-      :again)))
+  "Step back from chasers ({:name (mob-kind) :pos}): to the best scored end of a flee search (flee-search/search!)
+  ::back-off-reach off that gains on them over standing still, on a route none catches, clear of :hazard places:
+  :again, nil when there is none or the walk is blocked."
+  [c chasers]
+  (let [hazards (keep (comp :pos :data) (ctx/entries c :hazard))
+        ends (await (search/search! c chasers [] {:reach (settings/get settings ::back-off-reach)}))
+        target (some->> ends
+                        (remove :caught?)
+                        (filter #(pos? (:gain %)))
+                        (remove #(search/hazard-near? hazards (:cells %)))
+                        seq
+                        (apply max-key :score)
+                        :end)]
+    (when target
+      (if-not (await (step! c :back-off target 0))
+        (do (flight/tried! c :back-off) nil)
+        :again))))
 
 (defn ^:async hold!
   "One hold (a pause of flight/wait-ms) in a spot an enderman cannot use: :again, or nil once the flight has held

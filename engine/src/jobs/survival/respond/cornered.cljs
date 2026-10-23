@@ -253,8 +253,8 @@
                   :water (await (stand! c :water :water "in water, away from the enderman"))
                   :roof (await (stand! c :roof :roof "under a roof, out of the enderman's reach"))
                   :swim-out (await (stand! c :swim-out :dry nil))
-                  :back-off (when-let [from (or (some->> threat (danger-q/mob-pos (:primitives c))) (first (flight/fire-spots c)))]
-                              (await (back-off! c from)))))]
+                  :back-off (when-let [chasers (seq (respond.goal/chasers c))]
+                              (await (back-off! c chasers)))))]
         (cond
           (some? r) r
           (seq more) (recur more)

@@ -4,7 +4,6 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
-            [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.ledger :as ledger]
@@ -17,13 +16,13 @@
             [jobs.survival.respond.goal :as respond.goal]
             [jobs.lib.rooms :as room-lib]
             [jobs.survival.respond.refuge :as refuge]
+            [jobs.lib.flee-search :as search]
             [jobs.lib.flee-walk :as walk]
             [jobs.survival.respond.options :as cornered]
             [jobs.survival.respond.cornered :as pick]))
 
 (a/defargs settings
   {::home-range {:default 64 :doc "Blocks within which the latest :bed or :home entry is a home a flight runs or leans to." :spec (a/num-in 0 nil)}
-   ::swim-factor {:default 0 :doc "Blocks of walking a block of swimming costs a flight; 0: jobs.lib.cost/swim-factor of the boots." :spec (a/num-in 0 nil)}
    ::way-reach {:default 14 :doc "Blocks within which the stairs the body cut and the places its recent walks began are a way out of a flight." :spec (a/num-in 0 nil)}})
 (defn home-range [] (settings/get settings ::home-range))
 (defn way-reach [] (settings/get settings ::way-reach))
@@ -47,7 +46,7 @@
 
 (def glance-turns
   "Degrees from the way away a flight turns to look before it chooses: the view cone (about 100 degrees wide) then
-  takes in every turn walk/choose-target tries."
+  takes in the ground ahead and to either side."
   [0 90 -90])
 
 
@@ -101,23 +100,6 @@
        (let [arrow-at (fn [x y z] (reach/arrow-kind-of (u/seen-block p {:x x :y y :z z})))]
          #(reach/out-of-fire? arrow-at at %))))))
 
-(defn swim-factor
-  "The flight's price of a swim block: ::swim-factor, else jobs.lib.cost/swim-factor of the boots worn."
-  [c]
-  (let [f (settings/get settings ::swim-factor)]
-    (if (pos? f) f (cost/swim-factor (.-equipment (.self (:primitives c)))))))
-
-(defn lost-spots
-  "The places of the mobs a flight lost within lost-memory-ms (:threat entries, other than the chasers now on), as walk
-  positions: a creeper three times, so the way away leans from it."
-  [c chasing]
-  (let [ids (set (map #(.-id %) chasing))]
-    (->> (threats/listed-threats (:primitives c) (ctx/since c :threat (- (ctx/now c) (cornered/lost-memory-ms))))
-         (map :data)
-         (remove #(contains? ids (:id %)))
-         (mapcat (fn [d] (when-let [pos (or (:pos d) (danger-q/rough-pos d))]
-                           (repeat (if (= "creeper" (:mob d)) 3 1) pos)))))))
-
 (defn trail-floors
   "The floors [x y z] under the places the body's recent walks (memory :moved) began: the way it came, as the stairs it cut are."
   [c]
@@ -151,32 +133,54 @@
          (filter #(<= (danger-q/mob-distance p %) (threats/follow-range (.-name %))))
          (map #(danger-q/mob-pos p %)))))
 
+(defn ^:async judge!
+  "The flight's goal, homes and flee search (respond.goal/judge!) after a glance along the way away (glance-away!):
+  homes the first of rooms (refuges) and home-pos, none with a creeper within blast reach (blast?)."
+  [c covered? rooms blast?]
+  (await (glance-away! c (search/away (u/self-pos c) (respond.goal/chasers c))))
+  (await (respond.goal/judge! c (if blast? [] (remove nil? [(:start (first rooms)) (home-pos c)])) covered?)))
+
 (defn ^:async flight-target!
-  "The walk target away from threats (walk/choose-target over what the body sees, after glance-away!; cover from the
-  ranged ones first, a swim slow), leaning toward the first of rooms (refuges), nil when none. covered? as cover-fn
-  (given so the caller shares one)."
-  ([c threats] (await (flight-target! c threats (cover-fn (:primitives c) threats (flight/fire-spots c)) (refuges c))))
-  ([c threats covered? rooms]
+  "The walk target away from threats: the stairs up (way-up), else the step to the end flee-search/choose takes of
+  judged's search (judge!; a :retreat.search debug event lists them): out of a ranged chaser's line of fire first, then a safe home (judged's :home), then an open end by
+  score, a pocket only in a closed cave; nil when cornered. Left out: ends under rock below the flight's floor
+  (flight/floor; not out of the line of fire, nor on stairs the body cut), ends go-to refused, routes near a :hazard,
+  wet ends while a dry one is left (none with a drowned among threats); then ends toward a hostile not chasing
+  (bystander-spots) and flight/avoid-ends, each while another end is left. judged and covered? given so the caller
+  shares them; dodge-shot! judges here."
+  ([c threats] (let [covered? (cover-fn (:primitives c) threats (flight/fire-spots c))]
+                 (await (flight-target! c threats covered? (await (judge! c covered? (refuges c) false))))))
+  ([c threats covered? judged]
    (if-let [way (way-up c threats)]
      way
-   (let [p (:primitives c)
-         from (u/self-pos c)
-         threat-pos (into (into (mapv #(danger-q/mob-pos p %) threats) (lost-spots c threats)) (flight/fire-spots c))
-         bystanders (bystander-spots c threats)
-         toward-bystander? (fn [end] (some #(< (u/dist end %) (u/dist from %)) bystanders))
-         refuge (:start (first rooms))
-         judged (respond.goal/judge c (remove nil? [refuge (home-pos c)]))
-         goal (respond.goal/usable judged)
-         home (or refuge (:home judged) goal (home-pos c))
-         flank? (and (some? (or refuge goal)) (cost/outruns-at? (room-lib/food p) (walk/flank-turn)))]
-     (await (glance-away! c (walk/direction from threat-pos home flank?)))
-     (walk/choose-target (cornered/block-at-fn p) #(nil? (u/seen-block p %)) from threat-pos home (keep (comp :pos :data) (ctx/entries c :hazard))
-                         (flight/walk-step) {:swim-factor (swim-factor c) :dry-only? (boolean (some #(= "drowned" (.-name %)) threats)) :covered? covered? :flank? flank?
-                          :avoid (cons toward-bystander? (flight/avoid-ends c))
-                          :refused (:refused (ctx/mem c))
-                          :waterlogged? #(:waterlogged? (u/seen-facts p %))
-                          :floor (flight/floor c)
-                          :known (ledger/ways-of c)})))))
+     (let [p (:primitives c)
+           from (u/self-pos c)
+           block-at (cornered/block-at-fn p)
+           bystanders (bystander-spots c threats)
+           floor (flight/floor c)
+           known (ledger/ways-of c)
+           home (:home judged)
+           e (search/choose (:ends judged)
+                            {:refused (:refused (ctx/mem c))
+                             :never? (fn [end] (and (< (:y end) floor) (walk/roofed? block-at end)
+                                                    (not (and covered? (covered? end)))
+                                                    (not (contains? known [(:x end) (dec (:y end)) (:z end)]))))
+                             :hazards (keep (comp :pos :data) (ctx/entries c :hazard))
+                             :wet? #(walk/wet? block-at (fn [cell] (:waterlogged? (u/seen-facts p cell))) %)
+                             :dry-only? (boolean (some #(= "drowned" (.-name %)) threats))
+                             :avoid (cons (fn [end] (some #(< (u/dist end %) (u/dist from %)) bystanders)) (flight/avoid-ends c))
+                             :prefer? (when home #(= home (:pos (:target %))))})
+           round1 #(/ (js/Math.round (* 10 %)) 10)]
+       (ctx/emit! c :retreat.search :debug
+                  {:chasers (mapv (fn [{:keys [name pos]}] [name (mapv #(js/Math.round (% pos)) [:x :y :z])]) (respond.goal/chasers c))
+                   :from (mapv js/Math.floor (search/cell-of from))
+                   :picked (some-> e :end search/cell-of)
+                   :ends (mapv (fn [e] (cond-> (select-keys e [:open? :caught? :cover?])
+                                         true (assoc :at (search/cell-of (:end e)) :score (round1 (:score e)) :s (round1 (:s e))
+                                                     :arrive (round1 (:arrive e)))
+                                         (:pos (:target e)) (assoc :kind (:kind (:target e)))))
+                               (:ends judged))})
+       (:step e)))))
 
 (defn ^:async take-cover!
   "Plug in (every way: walls, pit, pocket; refuge), unless that failed this sweep: its step's result, nil when it cannot be taken."

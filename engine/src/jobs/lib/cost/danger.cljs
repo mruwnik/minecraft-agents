@@ -199,15 +199,21 @@
   [e]
   (if (true? (.-baby e)) "baby" (.-name e)))
 
+(defn wins-race?
+  "Whether a body body-s seconds from a place gets there margin-s (default ::race-margin-s) before a chaser arrive-s
+  seconds from it."
+  ([body-s arrive-s] (wins-race? body-s arrive-s (settings/get settings ::race-margin-s)))
+  ([body-s arrive-s margin-s] (< (+ body-s margin-s) arrive-s)))
+
 (defn reach-first?
   "Whether a body with food food (body-speed), body-dist blocks from a refuge, gets there ::race-margin-s before every
   chaser, each (mob-dists) that many blocks from it at ::chase-speed, or its own chase-speed when that is more
   (mob-names, in the order of mob-dists). True with no chaser."
   ([body-dist mob-dists food] (reach-first? body-dist mob-dists food (repeat nil)))
   ([body-dist mob-dists food mob-names]
-   (let [body-s (+ (/ body-dist (body-speed food)) (settings/get settings ::race-margin-s))
+   (let [body-s (/ body-dist (body-speed food))
          floor (settings/get settings ::chase-speed)]
-     (every? true? (map #(< body-s (/ %1 (max floor (chase-speed %2)))) mob-dists mob-names)))))
+     (every? true? (map #(wins-race? body-s (/ %1 (max floor (chase-speed %2)))) mob-dists mob-names)))))
 
 (defn flight-speed
   "Blocks a second a flight gains away from its start: body-speed over ::outrun-factor."
@@ -223,22 +229,31 @@
   [food mob-names]
   (every? #(>= (flight-speed food) (chase-speed %)) mob-names))
 
-(defn outruns-at?
-  "Whether a body with food food (body-speed) running degrees off straight away from a chaser still gains on it (at
-  ::chase-speed)."
-  [food degrees]
-  (> (* (body-speed food) (js/Math.cos (* degrees (/ js/Math.PI 180)))) (settings/get settings ::chase-speed)))
+(defn arrival-s
+  "Seconds a chaser (mob-kind name) at pos takes to come within ::melee-reach of `at` ({:x :y :z}) at its chase-speed
+  (at least ::chase-speed)."
+  [chaser pos at]
+  (/ (max 0 (- (u/dist pos at) (melee-reach)))
+     (max (settings/get settings ::chase-speed) (chase-speed chaser))))
+
+(defn caught-on?
+  "Whether a melee chaser (mob-kind name) at pos lands a blow on a body walking route ([{:x :y :z :t}], :t the seconds
+  from the start the body is there): at some point of it the chaser arrives (arrival-s) before the body wins the race
+  there (wins-race?, by margin-s: default ::race-margin-s)."
+  [{:keys [chaser pos route margin-s]}]
+  (let [margin (or margin-s (settings/get settings ::race-margin-s))]
+    (boolean (some #(not (wins-race? (:t %) (arrival-s chaser pos %) margin)) route))))
 
 (defn catches?
   "Whether a melee chaser (mob-name, chaser its mob-kind) at pos lands a blow on a body with food food walking the straight
-  way from `from` to `to` ({:x :y :z}) before it is past: at some point of the way, every step blocks from the start,
-  the mob gets within ::melee-reach no later than the body (reach-first? lost: the body's start counts
-  ::race-margin-s). A mob at the heels or ahead by the way catches; one the walk leaves behind does not."
+  way from `from` to `to` ({:x :y :z}) before it is past (caught-on? over the way, a point every step blocks, at
+  body-speed). A mob at the heels or ahead by the way catches; one the walk leaves behind does not."
   [{:keys [chaser pos from to food step]}]
   (let [len (u/dist from to)
         n (js/Math.ceil (/ len step))
-        reach (settings/get settings ::melee-reach)]
-    (boolean (some (fn [i] (let [t (if (zero? n) 0 (/ i n))
-                                 pt (merge-with #(+ %1 (* t (- %2 %1))) (select-keys from [:x :y :z]) (select-keys to [:x :y :z]))]
-                             (not (reach-first? (* t len) [(max 0 (- (u/dist pos pt) reach))] food [chaser]))))
-                   (range (inc n))))))
+        speed (body-speed food)]
+    (caught-on? {:chaser chaser :pos pos
+                 :route (for [i (range (inc n))
+                              :let [t (if (zero? n) 0 (/ i n))]]
+                          (assoc (merge-with #(+ %1 (* t (- %2 %1))) (select-keys from [:x :y :z]) (select-keys to [:x :y :z]))
+                                 :t (/ (* t len) speed)))})))

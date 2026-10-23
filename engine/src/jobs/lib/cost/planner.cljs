@@ -71,12 +71,6 @@
          :swim-sub-h (max walk-floor (* (unchecked-get base/DEFAULT-COSTS "swimSubH") scale))})
       {})))
 
-(defn swim-factor
-  "How many blocks of walking a block of swimming at the surface costs the body (the planner's swimH over walk-floor,
-  Depth Strider on the boots counted: swim-profile): about 2.2 with none."
-  [equipment]
-  (/ (or (:swim-h (swim-profile equipment)) (unchecked-get base/DEFAULT-COSTS "swimH")) walk-floor))
-
 (defn air-used
   "The seconds of air a body with oxygen (0-20 bubbles, 15 s; unknown: full) has used; mineflayer rounds the air to a
   bubble, so 0.375 s (half a bubble) more."

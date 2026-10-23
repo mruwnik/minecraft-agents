@@ -26,7 +26,6 @@
    ::died-radius {:default 12 :doc "Blocks around a place the body died within which a flee step does not end, nor a goal lie, while another end is open; 0: off." :spec (a/num-in 0 nil)}
    ::died-ttl-ms {:default 3600000 :doc "Milliseconds after a death during which a flight keeps away from the place (::died-radius)." :spec (a/int-in 0 nil)}
    ::jump-blocks {:default 24 :doc "Blocks between two steps of a flight that no step could cover (a teleport, a respawn): the flight's measure for hostile.fled starts again there." :spec (a/num-in 0 nil)}
-   ::step {:default 6 :doc "Blocks per walk of a flight step." :spec (a/num-in 1 nil)}
    ::no-gain-steps {:default 20 :doc "Flight steps without a new best gap to the nearest chaser before the cornered options are tried." :spec (a/int-in 1 nil)}
    ::prefer-lit? {:default true :doc "By night or under ground a flee step ends on lit ground rather than dark (jobs.lib.look/dark-fn) while a lit end is open." :spec boolean?}
    ::hide-health {:default 12 :doc "At or under this health, in a ranged chaser's line of fire with no covered step, the body takes cover where it stands before walking on." :spec (a/num-in 0 20)}
@@ -43,7 +42,6 @@
 (defn fire-spots [c] (shot/view-spots (:primitives c) (ctx/view c)))
 
 (defn wait-ms [] (settings/get settings ::wait-ms))
-(defn walk-step [] (settings/get settings ::step))
 (defn no-gain-steps [] (settings/get settings ::no-gain-steps))
 
 (defn blocks
@@ -93,7 +91,7 @@
       (fn [{:keys [x y z]}] (= 1 (at x y z))))))
 
 (defn avoid-ends
-  "walk/choose-target's :avoid fns for a step of the flight: near a death, then dark ground."
+  "flee-search/pick's :avoid fns for a step of the flight: near a death, then dark ground."
   [c]
   (let [spots (died-spots c)]
     (cond-> []

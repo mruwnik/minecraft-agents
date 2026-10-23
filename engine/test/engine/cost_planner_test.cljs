@@ -142,11 +142,6 @@
     (is (= (swim-h 3) (swim-h 5)) "the effect stops at level 3")
     (is (< (:walkS pf/default-costs) (swim-h 3) (* 1.25 (:walkS pf/default-costs))) "level 3 swims a little slower than walking (half the effect off the ground)")))
 
-(deftest swim-factor-is-the-swim-price-in-walk-blocks
-  (is (< 2 (cost/swim-factor nil) 2.3) "about 2.2 blocks of walking a swim block")
-  (is (< 1 (cost/swim-factor {:feet {:name "iron_boots" :enchants [{:name "depth_strider" :level 3}]}}) (cost/swim-factor nil))
-      "Depth Strider swims quicker"))
-
 (deftest with-drops-sets-the-swim-price-under-the-callers-costs
   (is (= 0.3 (.. (wplan/with-drops #js {} {:swim-h 0.3}) -costs -swimH)))
   (is (= 2 (.. (wplan/with-drops #js {} {:swim-h 0.3 :costs {:swim-h 2}}) -costs -swimH)) "the caller's :costs :swim-h wins"))

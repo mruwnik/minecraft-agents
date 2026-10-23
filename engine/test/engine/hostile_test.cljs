@@ -719,13 +719,13 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup-flight {:entities [(zombie 0 5)]})]
+        (let [{:keys [eng seen]} (setup-flight {:entities [(zombie 0 5)]})]
           (remember! eng :bed {:pos {:x -20 :y 64 :z -20}})
           (core/submit! eng retreat {})
           (await (core/tick! eng))
-          (let [m (first-move eng)]
-            (is (< (:x m) -1) "pulled towards the bed's side")
-            (is (< (:z m) -1) "still away from the hostile")))
+          (let [[x _ z :as end] (:picked (first (filter #(= :retreat.search (:kind %)) @seen)))]
+            (is (and (<= (js/Math.abs (+ x 20)) 1) (<= (js/Math.abs (+ z 20)) 1)) (str "the flight runs to the bed " (pr-str end))))
+          (is (< (:z (first-move eng)) -1) "away from the hostile"))
         (let [{:keys [eng p]} (setup-flight {:entities [(zombie 0 5)]})]
           (remember! eng :home {:pos {:x 0 :y 64 :z 20}})
           (core/submit! eng retreat {})
@@ -760,7 +760,7 @@
           (core/submit! eng retreat {})
           (await (core/tick! eng))
           (let [m (first-move eng)]
-            (is (not= 0 (:z m)) "turned off the straight line through the lava")
+            (is (<= 2.5 (js/Math.hypot (+ (:x m) 6) (:z m))) (str "the step keeps clear of the lava " (pr-str m)))
             (is (< (:x m) 0) "and still away")))))))
 
 (def stone-box

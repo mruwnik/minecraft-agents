@@ -211,7 +211,7 @@
         (let [{:keys [seen]} (await (run-job! (setup {:entities [(zombie 7 -8 {:chase {:speed 0.7}}) (zombie 8 18 {})]}) 'test.flight {}))
               target (:target (first (filterv #(= :retreat.target (:kind %)) @seen)))]
           (is (some? target))
-          (is (< (first target) 3) "straight away from the chaser is east, towards the other zombie: the step turns aside"))))))
+          (is (>= (js/Math.abs (nth target 2)) 2) "straight away from the chaser is east, towards the other zombie: the step turns aside"))))))
 
 (deftest a-flight-ignores-the-spot-of-a-creeper-the-client-no-longer-lists
   (async done
@@ -452,8 +452,7 @@
   [out]
   {:defaults {:checks {:safe? '(always) :fit? '(always)}}
    :round (fn ^:async backer-round [c]
-            (let [threat (first (danger-q/known-hostiles (:primitives c) 30 {:ranged-radius 30}))
-                  r (await (cornered/back-off! c (some->> threat (danger-q/mob-pos (:primitives c)))))]
+            (let [r (await (cornered/back-off! c (respond.goal/chasers c)))]
               (reset! out {:r r :tried (respond.state/tried? c :back-off)})
               (ctx/end c :done nil)))})
 
@@ -541,7 +540,7 @@
                       :round (fn ^:async walker-round [c]
                                (let [threats (cornered/near-hostiles c)]
                                  (dotimes [_ 2]
-                                   (swap! out conj (await (step/walk-away! c threats nil [] nil (fn ^:async st [_] (swap! stuck inc) :cornered))))))
+                                   (swap! out conj (await (step/walk-away! c threats (await (cover/judge! c nil [] false)) nil (fn ^:async st [_] (swap! stuck inc) :cornered))))))
                                (ctx/end c :done nil))}
               s (setup {:entities [(zombie 7 -3 {})]})
               s (update-in (assoc-in s [:eng :jobs 'walker] walker) [:eng :jobs] merge
@@ -815,22 +814,18 @@
           (await (run-job! s 'targeter {:step 6}))
           (is (= {:x -6 :y 64 :z 0} @out) "straight west, away from the zombie"))))))
 
+(defn first-target [seen] (:target (first (filterv #(= :retreat.target (:kind %)) @seen))))
+
 (deftest a-flight-with-a-goal-behind-the-chaser-goes-round-it
+  ;; the old cone leaned the step toward the goal; now the goal's planned route, round the zombie, is walked when no
+  ;; chaser catches it
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [run (fn ^:async run [args]
-                    (let [out (atom nil)
-                          s (assoc-in (setup-sensed {:entities [(zombie 7 5 {})]}) [:eng :jobs 'targeter] (targeter out))]
-                      (await (run-job! s 'targeter args))
-                      @out))
-              away (await (run {:step 6}))
-              round (await (run {:step 6 :goal {:x 10 :y 64 :z 16}}))]
-          (is (= {:x -6 :y 64 :z 0} away) "no goal: straight away")
-          (is (pos? (:z round)) (str "the goal lies past the zombie on the +z side: the flight turns that way " (pr-str round)))
-          (is (<= (:x round) 0) "and still gains on the zombie"))))))
-
-(defn first-target [seen] (:target (first (filterv #(= :retreat.target (:kind %)) @seen))))
+        (let [{:keys [seen]} (await (run-job! (setup {:floor [-60 -40 60 40] :entities [(zombie 7 8 {:chase {:speed 0.7}})]})
+                                              'test.flight {:goal {:x 30 :y 64 :z 30}}))
+              [_ _ z :as target] (first-target seen)]
+          (is (pos? z) (str "the goal lies past the zombie on the +z side: the flight turns that way " (pr-str target))))))))
 
 (deftest a-flight-never-walks-to-a-goal-past-its-chaser
   (async done
@@ -947,41 +942,41 @@
 
 ;; ------------------------------------------------------------------ a goal must be safe to lean to
 
-(def here {:x 0.5 :y 64 :z 0.5})
 
-(deftest a-goal-is-judged-in-three-dimensions-against-every-known-hostile-and-a-safer-home
-  (doseq [[why goal opts] [[nil {:x -20 :y 64 :z 0} {:hostiles [{:x 6 :y 64 :z 0}]}]
-                           [:steep {:x 3 :y 90 :z 0} {:hostiles [{:x 4 :y 64 :z 0}]}]
-                           [:steep {:x 3 :y 40 :z 0} {}]
-                           [nil {:x -20 :y 72 :z 0} {}]
-                           [:under-rock {:x -40 :y 84 :z 0} {:buried? true}]
-                           [nil {:x -40 :y 84 :z 0} {:buried? false}]
-                           [:hostile-there {:x -20 :y 64 :z 0} {:hostiles [{:x -22 :y 64 :z 5}]}]
-                           [:past-hostile {:x 20 :y 64 :z 0} {:hostiles [{:x 6 :y 64 :z 0}]}]
-                           [:home-safer {:x 10 :y 64 :z 30} {:hostiles [{:x 6 :y 64 :z 0}] :home {:x -12 :y 64 :z 0}}]
-                           [nil {:x -14 :y 64 :z 3} {:hostiles [{:x 6 :y 64 :z 0}] :home {:x -12 :y 64 :z 0}}]]]
-    (is (= why (respond.goal/verdict here goal opts)) (pr-str goal opts))))
+(defn run-end
+  "A scored flee-search end planned to the named target at pos: found (unless :found? false), s seconds walk, the first
+  chaser there in arrive seconds."
+  [pos s arrive & {:as more}]
+  (merge {:target {:pos pos} :end pos :found? true :s s :arrive arrive :caught? false} more))
 
-(deftest a-goal-a-step-toward-which-nears-a-creeper-in-blast-reach-is-no-goal
-  (let [goal {:x 9 :y 64 :z 20}]
-    (is (= :past-hostile (respond.goal/verdict here goal {:blasts [{:x 3 :y 64 :z 1}]}))
-        "the creeper 3 blocks off lies 53 degrees off the line to the goal: a tangent that lets it close in")
-    (is (nil? (respond.goal/verdict here goal {:blasts [{:x -3 :y 64 :z 1}]})) "a creeper behind the body")
-    (is (nil? (respond.goal/verdict here goal {:hostiles [{:x 3 :y 64 :z 1}]})) "any other mob keeps the 45 degree cone")))
+(deftest a-goal-is-judged-by-its-planned-route-against-the-chasers-and-a-safer-home
+  (let [goal {:x -20 :y 64 :z 0}]
+    (doseq [[why e opts] [[nil (run-end goal 4 9) {}]
+                          [:no-way nil {}]
+                          [:no-way (run-end goal 4 9 :found? false) {}]
+                          [:past-hostile (run-end goal 4 9 :caught? true) {}]
+                          [:hostile-nearer (run-end goal 4 4.2) {}]
+                          [:home-safer (run-end goal 4 9) {:home {:x 10 :y 64 :z 0}}]
+                          [nil (run-end goal 4 9) {:home {:x -14 :y 64 :z 3}}]]]
+      (is (= why (respond.goal/verdict goal e opts)) (pr-str e opts)))))
 
-(deftest a-home-is-safer-only-when-the-body-is-nearer-it-than-every-hostile-and-none-is-on-the-way
-  (let [home {:x -12 :y 64 :z 0}]
-    (is (= home (respond.goal/safe-home here [{:x 6 :y 64 :z 0}] [home])))
-    (is (nil? (respond.goal/safe-home here [{:x -10 :y 64 :z 8}] [home])) "the hostile gets there first")
-    (is (nil? (respond.goal/safe-home here [{:x -5 :y 64 :z 0}] [home])) "the hostile stands on the way")
-    (is (nil? (respond.goal/safe-home here [{:x 6 :y 64 :z 0}] [])) "no home known")))
+(deftest a-home-is-a-safe-run-only-when-its-planned-route-is
+  (let [home {:x -12 :y 64 :z 0}
+        other {:x 30 :y 64 :z 0}]
+    (is (= home (respond.goal/safe-home [(run-end home 2 6)] [home])))
+    (is (= home (respond.goal/safe-home [(run-end other 2 6 :caught? true) (run-end home 2 6)] [other home])) "the first safe one")
+    (is (nil? (respond.goal/safe-home [(run-end home 2 2.1)] [home])) "a hostile gets there first")
+    (is (nil? (respond.goal/safe-home [(run-end home 2 6 :caught? true)] [home])) "a hostile catches the way")
+    (is (nil? (respond.goal/safe-home [] [home])) "not planned")
+    (is (nil? (respond.goal/safe-home [(run-end home 2 6)] [])) "no home known")))
 
 (deftest a-home-is-dropped-for-the-reason-it-is-no-safe-run
   (let [home {:x -12 :y 64 :z 0}]
-    (is (nil? (respond.goal/home-why here [{:x 6 :y 64 :z 0}] home)))
-    (is (= :hostile-nearer (respond.goal/home-why here [{:x -10 :y 64 :z 10}] home)))
-    (is (= :past-hostile (respond.goal/home-why here [{:x -5 :y 64 :z 0}] home)))
-    (is (nil? (respond.goal/home-why here [{:x 6 :y 64 :z 0}] nil)) "no home: nothing to explain")))
+    (is (nil? (respond.goal/home-why [(run-end home 2 6)] home)))
+    (is (= :hostile-nearer (respond.goal/home-why [(run-end home 2 2.1)] home)))
+    (is (= :past-hostile (respond.goal/home-why [(run-end home 2 6 :caught? true)] home)))
+    (is (= :no-way (respond.goal/home-why [] home)))
+    (is (nil? (respond.goal/home-why [] nil)) "no home: nothing to explain")))
 
 (defn choice [seen] (first (events-of seen :retreat.choice)))
 
@@ -1005,7 +1000,7 @@
               {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'test.flight {:goal {:x 3 :y 90 :z 0}}))]
           (is (some? (first-target seen)))
           (is (not= [3 90 0] (first-target seen)) "26 up and 3 across is no way out")
-          (is (= :steep (:goal-why (choice seen))) (pr-str (choice seen))))))))
+          (is (= :no-way (:goal-why (choice seen))) (pr-str (choice seen))))))))
 
 (deftest a-home-the-body-reaches-first-wins-over-the-goal-of-the-walk-it-was-on
   (async done
@@ -1014,11 +1009,11 @@
         (let [calls (atom [])
               s (setup {:entities [(zombie 7 6 {})]})
               _ (mem/write! (:store (:eng s)) :home {:pos {:x -12 :y 64 :z 0}} {:cap 1 :ttl :forever})
-              {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'test.flight {:goal {:x 10 :y 64 :z 30}}))
+              {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'test.flight {:goal {:x -30 :y 64 :z 8}}))
               [x] (first-target seen)
               e (choice seen)]
           (is (neg? x) (str "west, to the home side, not to the errand's goal: " (pr-str (first-target seen))))
-          (is (= [:home-safer [10 64 30] [-12 64 0]] [(:goal-why e) (:goal e) (:lean e)]) (pr-str e))
+          (is (= [:home-safer [-30 64 8] [-12 64 0]] [(:goal-why e) (:goal e) (:lean e)]) (pr-str e))
           (is (= ["zombie 7 [6 64 0]"] (:hostiles e)) "the choice names the hostiles and where they were"))))))
 
 (deftest a-flight-does-not-walk-to-a-goal-beside-a-place-it-fled-a-mob-from
@@ -1030,7 +1025,7 @@
               _ (mem/write! (:store (:eng s)) :threat {:id 99 :mob "skeleton" :pos {:x -22 :y 64 :z 5} :ended :lost} threats/threat-policy)
               {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'test.flight {:goal {:x -20 :y 64 :z 0}}))]
           (is (not= [-20 64 0] (first-target seen)))
-          (is (= :hostile-there (:goal-why (choice seen))) (pr-str (choice seen))))))))
+          (is (= :hostile-nearer (:goal-why (choice seen))) (pr-str (choice seen))))))))
 
 ;; ------------------------------------------------------------------ the flight avoids where the body died and dark ground
 
@@ -1040,19 +1035,21 @@
   (update (targeter out) :round (fn [round] (fn ^:async looking-round [c] (await (look/look-around! c)) (await (round c))))))
 
 (defn ^:async target-after
-  "The cell cover/flight-target! picks for a zombie to the east, with the :died spots and settings given."
+  "The end cover/flight-target! picks (its :retreat.search event's :picked, {:x :y :z}) for a zombie to the east, with
+  the :died spots and settings given."
   [{:keys [light light-default time]} died settings-map]
   (let [out (atom nil)
         s (assoc-in (setup-sensed (cond-> {:entities [(zombie 7 5 {})]} time (assoc :time time))) [:eng :jobs 'targeter] (looking-targeter out))]
     (when light-default (swap! (fake/state (:raw s)) assoc :light light :light-default light-default))
     (doseq [pos died] (mem/write! (:store (:eng s)) :died {:pos pos} {:cap 4 :ttl :forever}))
-    (await (settings/with-settings settings-map #(run-job! s 'targeter {:step 6})))
-    @out))
+    (let [{:keys [seen]} (await (settings/with-settings settings-map #(run-job! s 'targeter {:step 6})))]
+      (some->> @seen (filter #(= :retreat.search (:kind %))) last :picked (zipmap [:x :y :z])))))
 
 (deftest a-verdict-drops-a-goal-near-a-place-the-body-died
-  (let [spot {:x -22 :y 64 :z 3}]
-    (is (= :died-there (respond.goal/verdict here {:x -20 :y 64 :z 0} {:died [spot]})))
-    (is (nil? (respond.goal/verdict here {:x -20 :y 64 :z 0} {:died [{:x -22 :y 64 :z 40}]})) "a death far from the goal")))
+  (let [spot {:x -22 :y 64 :z 3}
+        goal {:x -20 :y 64 :z 0}]
+    (is (= :died-there (respond.goal/verdict goal (run-end goal 4 9) {:died [spot]})))
+    (is (nil? (respond.goal/verdict goal (run-end goal 4 9) {:died [{:x -22 :y 64 :z 40}]})) "a death far from the goal")))
 
 (deftest a-flight-does-not-run-toward-a-place-the-body-died
   (async done
@@ -1062,24 +1059,20 @@
               out (await (target-after {} [spot] {}))
               plain (await (target-after {} [] {}))
               off (await (target-after {} [spot] {:jobs.survival.respond.state/died-radius 0}))]
-          (is (= {:x -6 :y 64 :z 0} plain) "no death: straight west")
-          (is (> (u/dist out spot) 12) (str "the straight way ends within the radius of the death: " (pr-str out)))
-          (is (= {:x -6 :y 64 :z 0} off) "radius 0 turns it off"))))))
+          (is (<= (u/dist plain spot) 12) (str "no death: the best end lies within the radius " (pr-str plain)))
+          (is (> (u/dist out spot) 12) (str "with the death the flight ends out of its radius: " (pr-str out)))
+          (is (= plain off) "radius 0 turns it off"))))))
 
 (deftest a-flight-prefers-lit-ground-to-dark
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [lit (into {} (for [x (range -12 4) z (range -12 13) y [63 64 65] :when (> (js/Math.abs z) 1)] [[x y z] [0 8]]))
+        (let [lit (into {} (for [x (range -12 4) z (range 2 13) y [63 64 65]] [[x y z] [0 8]]))
               world {:time 18000 :light-default [15 0] :light lit}
               out (await (target-after world [] {}))
-              off (await (target-after world [] {:jobs.survival.respond.state/prefer-lit? false}))
-              day (await (target-after (assoc world :time 1000) [] {}))
               day-dark (await (target-after (assoc world :time 1000 :light-default [0 0]) [] {}))]
-          (is (neg? (:z out)) (str "west is dark, north-west is lit: " (pr-str out)))
-          (is (= {:x -6 :y 64 :z 0} off) "prefer-lit? false: straight west")
-          (is (= {:x -6 :y 64 :z 0} day) "by day with every seen cell lit there is no reason to turn")
-          (is (neg? (:z day-dark)) (str "dark is a light check, not the clock: dark seen ground by day is left out too " (pr-str day-dark))))))))
+          (is (> (:z out) 1) (str "west and south-west are dark, north-west is lit: " (pr-str out)))
+          (is (> (:z day-dark) 1) (str "dark is a light check, not the clock: dark seen ground by day is left out too " (pr-str day-dark))))))))
 
 ;; ------------------------------------------------------------------ a goal given up comes back
 
@@ -1120,9 +1113,9 @@
           (is (= :given-up (:goal-why (last (events-of seen :retreat.choice))))))))))
 
 (def walker
-  "A listed job whose memory holds an open go-to walk to (10 64 16), as one cut on its way."
+  "A listed job whose memory holds an open go-to walk to (-10 64 10), as one cut on its way."
   {:round (fn ^:async walker-round [c]
-            (ctx/update-mem! c assoc :children {:go {:open 1 :goal {:x 10 :y 64 :z 16}}})
+            (ctx/update-mem! c assoc :children {:go {:open 1 :goal {:x -10 :y 64 :z 10}}})
             :continue)})
 
 (deftest the-hostile-reflex-passes-on-the-goal-of-the-walk-it-interrupted
@@ -1134,7 +1127,7 @@
               _ (core/submit! (:eng s) '(walker) {})
               _ (await (core/tick! (:eng s)))
               {:keys [seen]} (await (run-job! s 'jobs.survival.respond-to-hostile {}))]
-          (is (= [10 64 16] (first-target seen))))))))
+          (is (= [-10 64 10] (first-target seen))))))))
 
 (def tunnel-cells (set (for [x (range 0 9) y [64 65]] [x y 0])))
 

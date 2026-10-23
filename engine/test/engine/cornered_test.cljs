@@ -134,8 +134,8 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (await (first-round retreat {:blocks stair :stair-way stair-floors :entities [(skeleton 3 67 0)]}))
               m (first-move eng)]
-          (is (< (:x m) -3) "away from the skeleton at the top")
-          (is (< (:y m) 61) "down the steps, not along its own height")
+          (is (neg? (:x m)) "away from the skeleton at the top")
+          (is (< (:y m) 64) "down the steps, not along its own height")
           (is (= 0 (:z m)) "in the stair's own column")
           (is (empty? (blocked-events seen))))))))
 
@@ -147,7 +147,7 @@
                                               {:blocks stair :stair-way stair-floors :inventory [{:name "stone_pickaxe" :count 1}]
                                                :entities [(skeleton 3 67 0)]}))]
           (is (zero? (count (calls p "attack"))) "a pickaxe is no weapon: it flees first")
-          (is (< (:y (first-move eng)) 61) "down the stair"))))))
+          (is (< (:y (first-move eng)) 64) "down the stair"))))))
 
 (def tunnel-cells
   "A flat 1-wide tunnel along x on z 0, feet and head height, x -8..8."

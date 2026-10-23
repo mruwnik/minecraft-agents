@@ -25,19 +25,16 @@
   2b. A lone melee mob (no creeper, enderman, spider, flyer or shooter) between ::cover-gap (5) and ::refuge-gap (10) that a fight would not win, with
      pillar-height blocks carried: pillar up, else seal in, before any flee step (a walk gains little on it); when neither can be
      done the flight walks. Each flee step emits debug retreat.step-speed {:blocks :seconds :bps}.
-  3. Walks a short step (the respond.state ::step setting, 6 blocks) away from all chasers (nearer ones weigh more) with a go-to child (:ways #{:walk :clear-seal}),
-     leaning toward the first closed room of 2. (else a home it is nearer to than every hostile it knows, none on the way; else the :goal, the destination of the walk the flight
-     interrupted, while it is safe: jobs.survival.respond.goal/verdict, judged every step in three dimensions against every hostile it knows and the places of those it fled lately; else the latest :bed or :home within respond.cover/home-range) when not through the
-     hostiles (a closed room behind them: turned lib.flee-walk ::flank-turn degrees toward it, to go round them, while it still gains on them so:
-     jobs.lib.cost/outruns-at?), avoiding :hazard positions.
-     When a wall blocks the way away it turns up to 120 degrees towards open ground (at least 2 clear cells).
-     It leaves out the ends within respond.state/::died-radius of a recent :died place, then dark ones
-     (respond.state/::prefer-lit?), each only while another end is open.
-     It prefers, in this order: a step whose end is out of every ranged chaser's line of fire (cover: leaves stop arrows),
-     the full step that takes least time (a swim block costs respond.cover/::swim-factor; with a drowned among the chasers no step ends in water: none dry is cornered), the most open.
-     It first looks away and to either side where it has not seen the ground (at most 3 looks); a cell still unseen
-     blocks the walk as rock, and an unseen floor under its way is priced (jobs.lib.cost/unseen-walk-s: under the end, a
-     drop into the unknown). An end go-to then finds no floor under is left out and the step chosen again (respond.step slow-step-cap in a row).
+  3. Walks a go-to leg (:ways #{:walk :clear-seal}) to the end jobs.lib.flee-search picks: it first looks away and to either
+     side where it has not seen the ground (at most 3 looks), then plans ring ends round it and the home and the :goal (the
+     destination of the walk the flight interrupted) over what it has seen, each priced and scored by when the first chaser
+     gets there; a route a chaser catches is no way. It prefers an end out of every ranged chaser's line of fire (leaves stop
+     arrows), then a safe home (planned, not caught, reached first), else the best open end; a pocket only when no heading is
+     open at all. The goal is walked to while jobs.survival.respond.goal/verdict holds (the same priced route, a safer home,
+     a death there). It leaves out ends below the flight's floor under rock, near a :hazard, in water while one is dry (all with
+     a drowned chasing), then those within respond.state/::died-radius of a recent :died place, then dark ones
+     (respond.state/::prefer-lit?), each only while another end is open. An end go-to then finds no floor under is left out
+     and the step chosen again (respond.step slow-step-cap in a row).
      Eats one bite a step (up to food 20) when the nearest chaser is at least eat-gap (12) blocks away and food is carried.
   Low on health (at most respond.state/::hide-health, 12) in a seen ranged chaser's line of fire (over the cells it has seen) with no
   covered step, it takes cover where it stands first: plug in (as below);
@@ -57,7 +54,7 @@
        plug block goes to the scaffold ledger (purpose :retreat-plug), taken back by jobs.access.cleanup once no hostile is near.
      - pillar up 3 (jobs.access.pillar, the carried block with the most, at least 3). Needs a solid floor, free cells above and no slope or ledge a mob could climb to beside its top.
        Not against a ranged mob or a spider (it climbs the pillar). Every block goes to the scaffold ledger (purpose :pillar) for jobs.access.cleanup.
-     - back off: a step of up to 2 cells in any of 8 directions that gains at least a block on the hostile.
+     - back off: a close leg's run (respond.options/back-off!) to the best flee-search end that gains on every chaser.
      - last of all, fight with the best weapon or tool (pickaxe, shovel, hoe) or the fist. A body with no weapon
        (the call's :use :tools, else jobs.lib.combat/default-weapons) first looks for a way to walk once more (respond.options ::fist-sweeps, 1).
        A pillared body that is hit raises the pillar `respond.pillar/::pillar-extend` (2) blocks, up to `::pillar-raises` (3) times, before the refuge fails.
@@ -166,8 +163,6 @@
         _ (when (and glanced? room inside?) (say-once! c room))
         early (when (and threat (not hit?) (not door) (nil? room) (not inside?)) (await (step/early-refuge! c)))
         home-now? (fn [] (or inside? (and (nil? survey) (room-lib/in-home? c (cover/home-pos c)))))
-        judged (when threat (respond.goal/judge c (if (seq blast) [] (remove nil? [(:start (first rooms)) (cover/home-pos c)]))))
-        _ (when threat (step/say-choice! c survey verdicts judged blast))
         stuck (fn ^:async stuck [why]
                 (if (seq (cornered/near-hostiles c))
                   (await (pick/cornered! c why (or inside? (and (seq blast) (room-lib/in-home? c (cover/home-pos c))))))
@@ -196,7 +191,9 @@
       :shut-door (await (respond.doors/shut-door! c door))
       :shut-home-door (await (respond.doors/shut-home-door! c (respond.doors/home-door c room)))
       :run-home (await (run-home! c room (or gap-way way)))
-      :walk (await (step/walk-away! c threats judged rooms covered? stuck)))))
+      :walk (let [judged (await (cover/judge! c covered? rooms (seq blast)))]
+              (step/say-choice! c survey verdicts judged blast)
+              (await (step/walk-away! c threats judged covered? stuck))))))
 
 (defn clear?
   "Whether no real danger is within range, nor a shot from an unseen shooter, and the flight holds no chaser, fled mob or

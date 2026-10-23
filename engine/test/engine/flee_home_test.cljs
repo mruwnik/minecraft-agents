@@ -77,13 +77,6 @@
     10 [8] 20 true
     10 [8] 6 false))
 
-(deftest a-flank-turn-is-taken-only-when-the-body-still-gains-on-a-chaser
-  (are [food degrees gains?] (= gains? (cost/outruns-at? food degrees))
-    20 60 false
-    20 45 true
-    6 60 false
-    20 0 true))
-
 (deftest cornered-at-home-the-body-never-digs-its-own-hut
   (is (= [:plug :pillar :back-off :fight] (choose/escape-order {:home? true}))))
 
@@ -186,14 +179,14 @@
           (is (> (:z (first (walk-targets eng))) 9) (str "the first step is not toward the zombie: " (walk-targets eng)))
           (is (not (in-room? (body p)))))))))
 
-(deftest a-zombie-between-the-body-and-its-door-is-flanked-never-run-past
+(deftest a-zombie-between-the-body-and-its-door-is-never-run-past
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (await (flee! (hut {:x 5.5 :y 64 :z 12.5} hs/door-states [(zombie 5.5 7.5 0.4)])))]
-          (is (<= 2 (js/Math.abs (- (:x (first (walk-targets eng))) 5)) 5) (str "the first step turns toward the hut's side: " (walk-targets eng)))
-          (is (< 12 (:z (first (walk-targets eng)))) (str "and still away from the zombie: " (walk-targets eng)))
-          (is (not (ran-home? seen)) "the zombie stays nearer the door than the body's way round")
+          (is (< 12 (:z (first (walk-targets eng)))) (str "the first step is away from the zombie: " (walk-targets eng)))
+          (is (some? (:home-why (first (filter #(= :retreat.choice (:kind %)) @seen))))
+              "the zombie between: the home is dropped (a run home later, once round it, is a race won)")
           (is (= [] (:list (core/state eng))) "the body gets away"))))))
 
 (deftest any-cell-of-the-room-is-home

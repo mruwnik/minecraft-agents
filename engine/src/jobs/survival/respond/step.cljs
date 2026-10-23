@@ -17,7 +17,6 @@
             [jobs.survival.respond.goal :as respond.goal]
             [jobs.survival.respond.pillar :as pillar]
             [jobs.survival.respond.refuge :as refuge]
-            [jobs.lib.flee-walk :as walk]
             [jobs.lib.walk :as lwalk]))
 
 (a/defargs settings
@@ -70,7 +69,7 @@
         goal (at (:goal judged))
         blast (mapv #(str (.-name %) " " (.-id %)) blast)
         lean (at (or (:start (first (:rooms survey))) (:home judged) (respond.goal/usable judged) (when (empty? blast) (cover/home-pos c))))
-        choice {:blast blast :rooms rooms :dropped (:dropped survey) :home (at (cover/home-pos c)) :home-why (respond.goal/home-why (u/self-pos c) (respond.goal/hostile-spots c) (cover/home-pos c)) :goal goal :goal-why (:why judged) :lean lean}]
+        choice {:blast blast :rooms rooms :dropped (:dropped survey) :home (at (cover/home-pos c)) :home-why (when (cover/home-pos c) (:home-why judged)) :goal goal :goal-why (:why judged) :lean lean}]
     (when (not= choice (:choice-said (ctx/mem c)))
       (ctx/update-mem! c assoc :choice-said choice)
       (ctx/emit! c :retreat.choice :info
@@ -120,18 +119,17 @@
         r))))
 
 (defn ^:async walk-away!
-  "The flee step when the body outruns the chasers: eat a bite, then take the stairs up, the goal leg or the open
-  target (stuck: the cornered fallback, called with its reason; a target out of the line of fire is walked onto and centred on, not near), or cover where it stands, or dig a side pocket first."
-  [c threats judged rooms covered? stuck]
+  "The flee step when the body outruns the chasers: eat a bite, then take the stairs up, the goal leg or the flight's
+  target (cover/flight-target! over judged, cover/judge!; stuck: the cornered fallback, called with its reason; a target out of the line of fire is walked onto and centred on, not near), or cover where it stands, or dig a side pocket first."
+  [c threats judged covered? stuck]
   (let [p (:primitives c)
         threat (first threats)
         _ (await (eat-on-the-run! c threat))
-        away? (fn [cell] (when (and cell (not (walk/too-close? (mapv #(danger-q/mob-pos p %) threats) cell))) cell))
         stair (cover/way-up c threats)
-        leg (when-not stair (away? (respond.goal/leg c judged)))
+        leg (when-not stair (respond.goal/leg c judged))
         gap0 (flight/nearest-gap p threats)
         goal-gap0 (when leg (u/dist (u/self-pos c) leg))
-        target (or leg (away? (await (cover/flight-target! c threats covered? rooms))))
+        target (or leg (await (cover/flight-target! c threats covered? judged)))
         grown? (and (zero? (:regrown (ctx/mem c) 0))
                     (seq (set/difference (set (map #(.-id %) (flight/look! c))) (set (map #(.-id %) threats)))))
         low? (cover/exposed-low? c covered?)
