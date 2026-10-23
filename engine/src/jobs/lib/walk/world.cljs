@@ -75,12 +75,22 @@
           ^js sections (store/store-of st (.-dim st))]
       (fn [cx sy cz] (some-> ^js (.get sections (store/section-key cx sy cz)) .-ids)))))
 
+(defonce ^:private counted (js/WeakMap.))
+
 (defn way-counts
   "The ways out of the seen stands nearest the body of primitives p (way-on/way-counts from its feet), {:k 0 :n 0}
-  without a perception."
+  without a perception. Kept while the body stands in one cell and no block it remembers changed (store writes): every
+  costed world of a flight step asks it."
   [p]
   (if-let [known (memory-sections p)]
-    (let [^js pos (.-pos (.self p))] (way-on/way-counts known (mapv js/Math.floor [(.-x pos) (.-y pos) (.-z pos)])))
+    (let [^js pos (.-pos (.self p))
+          ^js st (:st (aget p "perception"))
+          start (mapv js/Math.floor [(.-x pos) (.-y pos) (.-z pos)])
+          k [(.-dim st) (.-writes st) start (settings/get way-on/settings ::way-on/sample)]
+          hit (.get counted st)]
+      (if (= k (:k hit))
+        (:v hit)
+        (let [v (way-on/way-counts known start)] (.set counted st {:k k :v v}) v)))
     {:k 0 :n 0}))
 
 (declare kit-of)
@@ -217,20 +227,19 @@
   cell costs cost/dark-factor of kit (kit-of; nil: the floor) times its own seconds more. With a kit, a cell water
   (look/water-fn's class, nil: none) gives costs its class's cost/water-factors too, by day as well: a drowned keeps to the
   water, and a dark one pays the land mobs' dark-factor on top (classes 4 and 5: dark 2 and 3); a phantom floor beside
-  seen water its cost/unseen-water-factors (classes from look/lag-class)."
-  [pw dark water kit]
+  seen water its cost/unseen-water-factors (classes from look/lag-class): wet and phantom, those two of kit."
+  [pw dark water kit wet phantom]
   (if (nil? dark)
     pw
     (let [at (:at dark)]
       #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :avoid (.-avoid pw) :tolls (.-tolls pw)
            :dark (if (and kit water)
-                   (let [factor (cost/dark-factor kit)
-                         wet (cost/water-factors kit)]
+                   (let [factor (cost/dark-factor kit)]
                      #js {:at (fn [x y z] (let [w (water x y z)]
                                             (cond (>= w look/lag-class) w
                                                   (pos? w) (if (== 1 (at x y z)) (+ w 2) w)
                                                   :else (at x y z))))
-                          :factor factor :water (clj->js (concat wet (map #(+ factor %) wet) (cost/unseen-water-factors kit)))})
+                          :factor factor :water (clj->js (concat wet (map #(+ factor %) wet) phantom))})
                    #js {:at at :factor (if kit (cost/dark-factor kit) (cost/dark-factor))})})))
 
 (defn kit-of
@@ -255,7 +264,11 @@
   (cond-> pw
     dangers? (-> (with-dangers (threats/planner-dangers c))
                  (with-tolls (if keep? (threats/tolls-of c (filter keep? (threats/known-threats c))) (threats/threat-tolls c))))
-    dark? (with-dark (look/dark-fn (:primitives c) {:unseen-dark? (nil? (unknown-of pw))}) (look/water-fn (:primitives c) {:wet? (water-read-fn pw) :phantom? (phantom-read-fn pw) :lags (count (cost/unseen-water-factors (kit-of c)))}) (kit-of c))
+    dark? (as-> pw' (let [kit (kit-of c)
+                          wet (cost/water-factors kit)
+                          phantom (cost/unseen-water-factors kit wet)]
+                      (with-dark pw' (look/dark-fn (:primitives c) {:unseen-dark? (nil? (unknown-of pw))})
+                                 (look/water-fn (:primitives c) {:wet? (water-read-fn pw) :phantom? (phantom-read-fn pw) :lags (count phantom)}) kit wet phantom)))
     true (with-edges (edges/tolls (:primitives c)))))
 
 (def avoid-factor

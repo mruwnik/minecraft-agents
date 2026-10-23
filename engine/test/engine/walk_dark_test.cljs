@@ -3,6 +3,8 @@
   its answer's cost adds the dark seconds and a target may carry its own range."
   (:require [cljs.test :refer [deftest is]]
             [engine.fake.raw-world :as fake-raw]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.cost.answer :as answer]
             [engine.perception :as perception]
             [engine.test-util :as tu]
             [jobs.lib.targets :as targets]
@@ -31,6 +33,15 @@
     (is (fn? (.-at dark)))
     (is (< (js/Math.abs (- 1 (.-factor dark))) 1e-9) "a kit with no weapon or armour pays 1 extra: a dark cell costs 2x a lit one")
     (is (nil? (.-night dark)) "the planner no longer takes a night flag")))
+
+(deftest a-costed-world-prices-the-kits-water-once
+  (let [p (seen-world 18000)
+        n (atom 0)
+        counted (fn [f] (fn [& args] (swap! n inc) (apply f args)))]
+    (with-redefs [cost/water-factors (counted cost/water-factors)
+                  answer/water-factors (counted answer/water-factors)]
+      (is (some? (.-water (.-dark (options-of p {:dark? true})))))
+      (is (= 1 @n) "the deep and other water prices feed the phantom floor's"))))
 
 (deftest no-dark-cost-when-off-or-without-perception
   (is (nil? (.-dark (options-of (seen-world 18000) {:dark? false}))))

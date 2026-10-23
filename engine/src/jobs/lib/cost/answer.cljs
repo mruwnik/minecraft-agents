@@ -349,11 +349,12 @@
   "The planner's extra share of a second walked over a phantom floor (an unseen floor read as ground) whose nearest seen
   cell along an axis at its level, d blocks off, is water (the d-th entry): the chance it is water too, Beta(1,1) over
   ::unseen-water-lags, times the swim it is then over the walk: planner/swim-s a block (the body's Depth Strider), paying
-  the share of water a drowned can spawn in (water-factors' first: its depths are unseen), less the walk's planner/walk-floor."
-  [body]
-  (let [[wet] (water-factors body)
-        swim (/ (* (planner/swim-s (planner/depth-strider (:equipment body))) (inc wet)) planner/walk-floor)]
-    (mapv (fn [{:keys [k n]}] (* (/ (inc k) (+ n 2)) (dec swim))) (settings/get settings ::unseen-water-lags))))
+  the share of water a drowned can spawn in (water-factors' first: its depths are unseen), less the walk's planner/walk-floor.
+  wet-factors: water-factors of body, when the caller has it."
+  ([body] (unseen-water-factors body (water-factors body)))
+  ([body [wet]]
+   (let [swim (/ (* (planner/swim-s (planner/depth-strider (:equipment body))) (inc wet)) planner/walk-floor)]
+     (mapv (fn [{:keys [k n]}] (* (/ (inc k) (+ n 2)) (dec swim))) (settings/get settings ::unseen-water-lags)))))
 
 (defn life [{:keys [health absorption]}] (+ (or health 20) (or absorption 0)))
 

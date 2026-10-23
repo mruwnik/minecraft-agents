@@ -150,6 +150,15 @@
           (is (= [0 64 0] (at p)))
           (is (= [] (moved eng))))))))
 
+(deftest go-to-plans-a-walk-once
+  ;; a fresh call is quoted first only for a :least other than 1, and go-to's quote counts no units: it was a second plan
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out] :as r} (await (go! {:blocks flat} {:pos [10 64 0] :range 1}))]
+          (is (= {:arrived true} @out))
+          (is (= 1 (count (events-of r :planned)))))))))
+
 (deftest go-to-writes-a-moved-entry-for-the-walk
   (async done
     (tu/run-async done

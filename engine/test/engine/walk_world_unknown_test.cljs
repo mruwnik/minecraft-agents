@@ -14,6 +14,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.rock :as rock]
+            [jobs.lib.walk.way-on :as way-on]
             [jobs.lib.walk.world :as wworld]))
 
 (defn sensed
@@ -66,7 +67,7 @@
     (is (identical? (.-missed spec) missed) "one missed Set per spec: every pathWorld of a go-to attempt shares it")
     (doseq [decorated [(wworld/with-walls pw [{:x 1 :y 64 :z 0}]) (wworld/with-dangers pw #js [])
                        (wworld/with-avoid pw [[1 64 0]]) (wworld/with-tolls pw [{:x 1 :y 64 :z 0 :factor 2}])
-                       (wworld/with-dark pw {:at (fn [_ _ _] 0)} nil nil)]]
+                       (wworld/with-dark pw {:at (fn [_ _ _] 0)} nil nil nil nil)]]
       (is (identical? missed (.-missed (wworld/unknown-of decorated))))
       (is (= @void (state decorated 3 64 0))))
     (is (identical? (wworld/unknown-of pw) (.-unknown (wplan/plan-options pw 1 nil nil))) "the planner's options.unknown")))
@@ -180,3 +181,16 @@
     (is (= @void (state goal 4 64 0)) "3 from the goal")
     (is (= [@void @stone] [(state own -4 64 0) (state own 4 64 0)]) "3 from a cell of its own ways")
     (is (not= (wworld/unknown-key buried) (wworld/unknown-key sky)) "the guess is in a kept search's key")))
+
+(deftest the-ways-on-are-counted-once-a-memory
+  (let [{:keys [p w]} (sensed wall-world)
+        n (atom 0)
+        count-ways way-on/way-counts]
+    (with-redefs [way-on/way-counts (fn [& args] (swap! n inc) (apply count-ways args))]
+      (let [before (wworld/way-counts w)]
+        (is (= before (wworld/way-counts w)))
+        (is (= 1 @n) "the same cell and memory: counted once")
+        (fake/set-block! p [1 64 0] "stone")
+        (perception/pass! (aget w "perception"))
+        (is (not= before (wworld/way-counts w)) "a block seen to change counts again")
+        (is (= 2 @n))))))

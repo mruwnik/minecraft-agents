@@ -324,11 +324,11 @@
   (default: reach for the body's food) priced (price!) and scored against chasers ([{:name :pos}]), with covers on
   their routes when covered? is given. opts {:reach :y-margin :covered?}."
   [c chasers targets {:keys [covered?] :as opts}]
-  (let [self (.self (:primitives c))
+  (let [t0 (js/performance.now)
+        self (.self (:primitives c))
         from (u/self-pos c)
         chasers (with-ways c chasers)
         r (or (:reach opts) (reach (.-food self)))
-        t0 (js/performance.now)
         priced (await (price! c (into (vec targets) (ring from chasers r (settings/get settings ::bearings))) (assoc opts :reach r :chasers chasers)))
         ends (scored chasers from priced)]
     (ctx/emit! c :retreat.search-work :debug (assoc (meta priced) :ms (js/Math.round (- (js/performance.now) t0)) :targets (count targets)))

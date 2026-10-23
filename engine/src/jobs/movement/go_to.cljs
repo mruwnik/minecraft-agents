@@ -120,7 +120,7 @@
 
 (def meta {:own-tries? true})
 
-(def defaults {:least :all :spend {:job-time ::job-time-s :wall-time ::wall-time-s}})
+(def defaults {:spend {:job-time ::job-time-s :wall-time ::wall-time-s}})
 
 (defn limits-refusal
   "The refusal {:reason :bad-args :message} of the call's given :floor :health or :spend :job-time, nil when in range."
