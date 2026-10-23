@@ -12,8 +12,8 @@
 
 (a/defargs settings
   {::fist-gap-ms {:default 1300 :doc "Milliseconds between the hits a body with no sword or axe lands: the mob is knocked back and hops, so most of the time goes on walking up to it again." :spec (a/int-in 1 nil)}
-   ::drowned-wet-hits-per-swing {:default 0.63 :spec (a/num-in 0 nil)
-                                 :doc "Blows a drowned lands on a body that fights it in water, per swing the kill needs (swings): a swimming body reaches it seldom, so the fight drags on. (k + 0.5) / n over the trial bodies' sword fights in water on 2026-10-23, k=38 blows for n=61 swings (tools/event-counts.mjs drowned-meets :wet-fight); a land fight's is ::hit-rate x the swing gap, about 0.38."}})
+   ::drowned-wet-hits-per-swing {:default 0.67 :spec (a/num-in 0 nil)
+                                 :doc "Blows a drowned lands on a body that fights it in water, per swing the kill needs (swings): a swimming body reaches it seldom, so the fight drags on. (k + 0.5) / n over the trial bodies' sword fights in water on 2026-10-23, k=25 blows for n=38 swings (tools/event-counts.mjs drowned-meets :wet-fight); a land fight's is ::hit-rate x the swing gap, about 0.38."}})
 
 (defn swing-gap-ms
   "Milliseconds between the hits weapon lands: its attack gap, ::fist-gap-ms for anything that is no sword or axe."

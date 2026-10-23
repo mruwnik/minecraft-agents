@@ -332,7 +332,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [shallow (await (water-route (wade-pond 10) [12 64 1] {:held "stone_sword" :lit (torch-lit 10)}))
+        ;; half 15: the way round is about 2 s longer; the floor under the wade's first and last cells is not seen
+        ;; (priced as water a drowned may spawn in), which a way round only 0.5 s longer outweighs
+        (let [shallow (await (water-route (wade-pond 15) [12 64 1] {:held "stone_sword" :lit (torch-lit 15)}))
               deep (await (water-route (deep-pond 30) [12 64 1] {:held "stone_sword"}))]
           (is (swims? shallow) (str "the wade beats the way round: " (pr-str shallow)))
           (is (< (:dark-seconds shallow) (* 0.5 (:dark-seconds deep))) "no drowned spawns in it: well under the deep water's price (a floor cell not seen counts deep)"))))))

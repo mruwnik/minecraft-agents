@@ -38,10 +38,12 @@
 (a/defargs settings
   {::caught-chance {:default 0.15 :spec (a/num-in 0 1)
                     :doc "Chance a walk away is caught, its mobs landing their blows over the whole flight: the prior for a flight whose route is unknown, measured from the trial logs on 2026-10-23 (n=63)."}
-   ::drowned-meet-per-s {:default 0.0061 :spec (a/num-in 0 nil)
-                         :doc "Chance a second a drowned meets a body in water a drowned can spawn in (its column holds water over water at block light 0, look/water-fn), by day or night: (k+1)/n over the trial bodies' logs on 2026-10-23, k=34 meets in n=5767 s (tools/event-counts.mjs drowned-meets :prior :deep; river or ocean and other biomes, sky light high or low, met it alike)."}
-   ::drowned-meet-other-per-s {:default 0.0011 :spec (a/num-in 0 nil)
-                               :doc "As ::drowned-meet-per-s in any other water (one deep, or block-lit to its floor): k=4 in n=4602 s (:prior :other)."}})
+   ::drowned-meet-per-s {:default 0.0021 :spec (a/num-in 0 nil)
+                         :doc "Chance a second a drowned meets a body in water a drowned can spawn in (its column holds water over water at block light 0, look/water-fn), by day or night: (k+1)/n over the trial bodies' logs on 2026-10-23, k=11 meets in n=5767 s, each meet once (a respond run soon after another is the same meet) and classed by the body's cell (tools/event-counts.mjs drowned-meets :prior :deep; river or ocean and other biomes, sky light high or low, met it alike)."}
+   ::drowned-wet-death {:default 0.73 :spec (a/num-in 0 1)
+                        :doc "Chance a drowned met by a body in water kills it, whatever the body answers (wet-death): the trial bodies seldom land a swing or get away, and their health did not split it. (k + 0.5) / (n + 1) over first meets in water on 2026-10-23, k=9 deaths within 30 s of n=12 (tools/event-counts.mjs drowned-meets :wet-death; all before the swim-out answer of e0dee953d)."}
+   ::drowned-meet-other-per-s {:default 0.00043 :spec (a/num-in 0 nil)
+                               :doc "As ::drowned-meet-per-s in any other water (one deep, or block-lit to its floor): k=1 in n=4602 s (:prior :other)."}})
 
 (def blast-power "A creeper's explosion power (vanilla)." 3)
 (def swell-start "Blocks within which a creeper starts to swell (vanilla)." 3)
@@ -80,16 +82,23 @@
 
 (defn blows-chance
   "The chance the blows of answer kill body: death/blow-chance of its :damage, its :blasts sure (each of its :spread too,
-  averaged), or of the :caught blows for its :chance."
-  [body {:keys [caught] :as answer}]
+  averaged), or of the :caught blows for its :chance; at least its :death (a measured chance, wet-death)."
+  [body {:keys [caught death] :as answer}]
   (let [chance (fn [{:keys [damage hit blasts spread]}]
                  (let [sure (reduce + 0 blasts)
                        small (- damage sure (mean spread))]
                    (mean (map #(death/blow-chance body (+ small sure %) hit (+ sure %)) (or (seq spread) [0])))))
         clean (chance answer)]
-    (if caught
-      (+ (* (- 1 (:chance caught)) clean) (* (:chance caught) (chance caught)))
-      clean)))
+    (max (or death 0)
+         (if caught
+           (+ (* (- 1 (:chance caught)) clean) (* (:chance caught) (chance caught)))
+           clean))))
+
+(defn wet-death
+  "::drowned-wet-death when mobs [{:name}] hold a drowned met by a body in water (wet?), else nil."
+  [wet? mobs]
+  (when (and wet? (some #(= "drowned" (:name %)) mobs))
+    (settings/get settings ::drowned-wet-death)))
 
 (defn expected-damage [{:keys [damage caught]}]
   (if caught (+ (* (- 1 (:chance caught)) damage) (* (:chance caught) (:damage caught))) damage))
@@ -137,8 +146,9 @@
 (defn fight-answer
   "The answer of fight (fight/fight-damage's argument): its damage and seconds, :hit the hardest blow of its mobs. A mob
   with :reach? false (the body cannot get within a swing of it) is not fought: its blows land over the whole fight, the
-  fight's length as if it were fought when no mob is in reach; :left the mobs the fight leaves alive."
-  [{:keys [equipment mobs] :as fight}]
+  fight's length as if it were fought when no mob is in reach; :left the mobs the fight leaves alive; :death wet-death
+  of a fight in water (wet?)."
+  [{:keys [equipment mobs wet?] :as fight}]
   (let [stats (armour/armour-stats equipment)
         {left false fought true} (group-by #(not (false? (:reach? %))) mobs)
         fought (vec fought)
@@ -147,7 +157,8 @@
                         (reduce + 0 (map #(threat/mob-hurt stats (threat/kind %) seconds) left)))
              :hit (reduce max 0 (map #(blow stats %) mobs))
              :seconds seconds}
-      (seq left) (assoc :left (vec left)))))
+      (seq left) (assoc :left (vec left))
+      (wet-death wet? mobs) (assoc :death (wet-death wet? mobs)))))
 
 (defn kill-price
   "Seconds killing one mob-name met beside body costs at `at`: answer-price of fighting it with the body's :weapon and
@@ -157,14 +168,15 @@
 
 (defn followed
   "Answer a, then answer b at once (nil: a once more, later): the blows and seconds of both, b's chance of being caught
-  (a's blows landed either way) and what follows b."
+  (a's blows landed either way), the larger :death and what follows b."
   [a b]
   (if b
     (cond-> (assoc a :damage (+ (:damage a) (:damage b)) :hit (max (:hit a) (:hit b)) :seconds (+ (:seconds a) (:seconds b))
                    :blasts (into (vec (:blasts a)) (:blasts b)) :spread (:spread b))
       (:caught b) (assoc :caught (-> (:caught b) (update :damage + (:damage a)) (update :blasts #(into (vec (:blasts a)) %))))
       (:then b) (assoc :then (:then b))
-      (not (:then b)) (dissoc :then))
+      (not (:then b)) (dissoc :then)
+      (:death b) (assoc :death (max (:death a 0) (:death b))))
     (assoc a :then [a])))
 
 (defn swim-leg
@@ -248,6 +260,7 @@
   ::caught-chance), its mobs then landing their blows (a creeper its blast) over the flight. A creeper that blows on the
   walk (at the median of its :spread) is spent: what follows is the walk from the rest or later (none left: nothing).
   swim: the blocks a body in water swims to dry land first (flee-mob's; ##Inf none known) and land the blocks to walk on there, at its planner/swim-speed over danger's outrun factor as on foot.
+  :death wet-death of a flight that starts in water (the walk again, in :then, does not).
   nil when a mob keeps up or none is given."
   [{:keys [food equipment mobs returns later caught swim land] :as args}]
   (let [stats (armour/armour-stats equipment)
@@ -271,10 +284,11 @@
         (let [blows? (fn [{:keys [spread]}] (pos? (nth (sort spread) (quot (count spread) 2))))
               spent (set (keep (fn [[m f]] (when (and (= "creeper" (:name m)) (blows? f)) m)) (map vector mobs per)))
               left (remove spent mobs)]
-          (cond
-            (empty? spent) (assoc walk :then (cond-> [walk] later (conj later)))
-            (seq left) (assoc walk :then (cond-> [(flee-answer-on (assoc args :mobs left))] later (conj later)))
-            :else walk))))))
+          (cond-> (cond
+                    (empty? spent) (assoc walk :then (cond-> [walk] later (conj later)))
+                    (seq left) (assoc walk :then (cond-> [(flee-answer-on (assoc args :mobs left))] later (conj later)))
+                    :else walk)
+            (wet-death (some-> swim pos?) mobs) (assoc :death (wet-death true mobs))))))))
 
 (defn build-answer
   "The answer of building a refuge for seconds against mobs [flee-mob's] wearing equipment: the blows of each melee mob
@@ -326,11 +340,12 @@
 (defn water-factors
   "The planner's extra share of a second in water (options.dark.water) for body {:health :absorption :food :equipment
   :weapon}: [a cell a drowned can spawn in, other water], each its drowned meet rate (::drowned-meet-per-s,
-  ::drowned-meet-other-per-s) times the price of the cheapest of threat-answers to a drowned met beside the body in water
-  with no shore known (it swims away, never walks)."
+  ::drowned-meet-other-per-s) times the price of the cheapest of threat-answers to a drowned met beside the body: in the
+  first swimming with no shore known (it swims away, never walks), in the other standing (mostly a wade one deep)."
   [body]
-  (let [price (apply min (vals (:prices (decide body (threat-answers (assoc body :swim ##Inf) "drowned" nil) nil))))]
-    [(* (settings/get settings ::drowned-meet-per-s) price) (* (settings/get settings ::drowned-meet-other-per-s) price)]))
+  (let [price #(apply min (vals (:prices (decide body (threat-answers % "drowned" nil) nil))))]
+    [(* (settings/get settings ::drowned-meet-per-s) (price (assoc body :swim ##Inf)))
+     (* (settings/get settings ::drowned-meet-other-per-s) (price body))]))
 
 (defn life [{:keys [health absorption]}] (+ (or health 20) (or absorption 0)))
 
