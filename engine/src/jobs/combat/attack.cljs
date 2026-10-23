@@ -47,7 +47,8 @@
   toward (:nothing-possible :heard-only), never walked to. One beyond hostile-fight/::leash of where the fight began is not a target.
   A melee hostile beyond reach is waited for, never walked to, with :hold or when it stands in or beside unlit space (hostile-fight/dark-around?: a player
   does not chase into unlit space, more may be there unseen); the wait declines :nothing-possible :hold-timeout after hostile-fight/::hold-s
-  without a swing; a ranged one farther than hostile-fight/::ranged-chase while another is in range ends :too-far (not with :commit). No
+  without a swing; a ranged one that, with another in range, is better left than walked to (hostile-fight/too-far-to-chase?: the
+  priced answer says flee) ends :too-far; a creeper ends :creeper-unsafe once the priced answer to the hostiles in range is no fight. No
   hostile in range: :done :cleared. When the body lost health since the call began the job yields (:continue). Every ending
   but :done also carries :struck {id {:name :hits :health ...}}; a caller passes that ending's data back as :prior.")
 
@@ -57,7 +58,6 @@
    :ranged-radius {:doc "with :hostiles, ranged hostiles (skeletons and the like) within this many blocks count; nil: :radius" :spec (a/num-in 0 nil) :default nil}
    :hold {:doc "true: never walk toward a melee mob; strike one that comes within reach" :spec boolean? :default false}
    :prior {:doc "with :hostiles, the data of an earlier call's declined ending (:killed :given-up :names :struck): the fight goes on from its counts" :spec map? :default nil}
-   :commit {:doc "with :hostiles, fight to the end: a ranged hostile is walked to however far it is" :spec boolean? :default false}
    :skip {:doc "with :hostiles, entity ids already dead: not fought" :spec (a/coll-of number?) :default []}
    :absent {:doc ":done ends the job with reason :absent when no target is present after a 2 s grace; :wait makes the check decline until one is" :spec #{:done :wait} :default :done}})
 
@@ -439,7 +439,7 @@
     (cond
       (and target (hostile/held-idle? c (hostile/held? c target))) (declined c :hold-timeout)
       (and target (hostile/too-far-to-chase? c target)) (declined c :too-far)
-      (and target (combat/creeper? target) (not (hostile/hit-and-back-ok? c (hostile/in-range c)))) (declined c :creeper-unsafe)
+      (and target (combat/creeper? target) (not= :fight (:answer (hostile/answer c (hostile/in-range c) #(get (hostile/struck (ctx/mem c)) %))))) (declined c :creeper-unsafe)
       (and last-attack (< (.-health (.self p)) (:health0 (ctx/mem c)))) :continue
       (nil? target) (if-let [heard (hostile/heard c)]
                       (do (await (ctx/act c :look (let [{:keys [x y z]} (danger-q/mob-pos p heard)] #js {:pos #js {:x x :y (+ 1 y) :z z}})))

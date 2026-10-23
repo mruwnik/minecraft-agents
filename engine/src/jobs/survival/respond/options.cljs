@@ -210,10 +210,10 @@
          (reduce + 0 (map #(cost/mob-hurt stats (.-name %) s) (arriving c hostiles s))))))
 
 (defn pillar-cheaper?
-  "Whether a pillar (::pillar-s of blows, build-price) costs less than fighting hostiles (hostile/fight-price)."
+  "Whether a pillar (::pillar-s of blows, build-price) costs less than fighting hostiles (hostile/fight-answer)."
   [c hostiles]
   (< (build-price c hostiles (settings/get settings ::pillar-s))
-     (:damage (hostile/fight-price c hostiles (constantly nil)))))
+     (:damage (hostile/fight-answer c hostiles (constantly nil)) ##Inf)))
 
 (defn cover-gap [] (settings/get settings ::cover-gap))
 

@@ -68,10 +68,22 @@
                (+ (:cost (value/walk-cost {:distance (settings/get settings ::spawn-walk-blocks)})) (or (:carried body) 0)))]
     (+ (value/trip) walk (experience-cost body))))
 
+(defn blow-chance
+  "The chance that blows of about hit hp, damage hp of them expected (their count a Poisson one), take the health and
+  absorption of body: at least life/hit of them land."
+  [{:keys [health absorption]} damage hit]
+  (let [hit (max 0.1 (or hit 1))
+        lam (/ (max 0 damage) hit)
+        k (js/Math.ceil (/ (+ (or health 20) (or absorption 0)) hit))
+        below (reduce + (take k (reductions (fn [p i] (/ (* p lam) i)) (js/Math.exp (- lam)) (iterate inc 1))))]
+    (max 0 (- 1 below))))
+
 (defn death-chance
-  "The chance of dying on a route {:underground? :night?}; the body is not read yet."
-  [_body {:keys [underground? night?]}]
-  (settings/get settings (cond underground? ::chance-underground night? ::chance-surface-night :else ::chance-surface-day)))
+  "The chance of dying on a route {:underground? :night?}, or by the blows {:damage :hit} an answer to mobs takes (blow-chance of body)."
+  [body {:keys [underground? night? damage hit]}]
+  (if damage
+    (blow-chance body damage hit)
+    (settings/get settings (cond underground? ::chance-underground night? ::chance-surface-night :else ::chance-surface-day))))
 
 (defn route-death-cost
   "What a route adds to its cost for the death it risks: death-chance x death-cost at `at` (where it would die)."

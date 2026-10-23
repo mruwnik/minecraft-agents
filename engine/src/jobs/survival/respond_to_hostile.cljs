@@ -17,6 +17,8 @@
             [jobs.lib.shot :as shot]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.goal :as goal]
+            [jobs.survival.hide-out :as hide-out]
+            [jobs.survival.wall-in :as wall-in]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.threats :as threats]
@@ -40,8 +42,6 @@
    ::job-time-s {:default 480 :doc "Seconds a response to a hostile may take (a hide runs long)." :spec (a/num-in 0 nil)}
    ::hold-radius {:default 16 :doc "Hostiles known within this many blocks count for holding position in the dark." :spec (a/num-in 0 nil)}
    ::hit-window-s {:default 5 :doc "A flight hit twice within this long is failing: the body fights. Also how recent a hurt keeps a fight from leaving heard mobs, and makes a round look once more." :spec (a/num-in 0 nil)}
-   ::engage-radius {:default 8 :doc "Blocks within which a hostile is in the fight at hand; a begun fight goes on while at most ::engaged-cap of them are (farther ones are not yet in it)." :spec (a/num-in 0 nil)}
-   ::engaged-cap {:default 2 :doc "Hostiles within ::engage-radius up to which an armed body goes on with a begun fight instead of turning its back." :spec (a/int-in 1 nil)}
    ::max-unchanged {:default 3 :doc "Calls of a child in a row that leave the body and the dangers as they were before the reflex stops :no-response." :spec (a/int-in 1 nil)}
    ::struck-s {:default 30 :doc "Seconds the hits the fight landed outlive the round (:struck-hits), so a refired reflex still counts them." :spec (a/num-in 0 nil)}
    ::struck-cap {:default 8 :doc "How many :struck-hits entries memory keeps." :spec (a/int-in 1 nil)}
@@ -49,11 +49,6 @@
 
 (defn stay-inside? [] (settings/get settings ::stay-inside))
 (defn hold-radius [] (settings/get settings ::hold-radius))
-(defn few-engaged?
-  "Whether at most ::engaged-cap of the hostiles near are within ::engage-radius of the body."
-  [p near]
-  (<= (count (filter #(<= (danger-q/mob-distance p %) (settings/get settings ::engage-radius)) near))
-      (settings/get settings ::engaged-cap)))
 (defn hit-window-ms [] (* 1000 (settings/get settings ::hit-window-s)))
 (defn max-unchanged [] (settings/get settings ::max-unchanged))
 (defn struck-policy [] {:cap (settings/get settings ::struck-cap) :ttl (* 1000 (settings/get settings ::struck-s))})
@@ -116,7 +111,7 @@
         e (if (= :fight decision)
             (await (ctx/call c :fight 'jobs.combat.attack
                              {:targets :hostiles :radius (danger-q/hostile-radius) :ranged-radius (danger-q/ranged-radius)
-                              :use {:tools (combat/weapons c)} :hold (or hold (hold? c)) :commit (hostile/committed? c (near c)) :prior (:fight-prior (ctx/mem c))
+                              :use {:tools (combat/weapons c)} :hold (or hold (hold? c)) :prior (:fight-prior (ctx/mem c))
                               :checks {:safe? '(always) :fit? '(always)}}))
             (await (flight/flee! c)))]
     (cond
@@ -141,14 +136,16 @@
        (changed-text prev entry)))
 
 (defn log-encounter!
-  "One :hostile entry and event for each change of decision in a run (a fight turned flight is said, with the health)."
-  [c threat decision]
+  "One :hostile entry and event for each change of decision in a run (a fight turned flight is said, with the health;
+  the event has the answers' prices, seconds)."
+  [c threat decision prices]
   (when-not (= decision (:logged (ctx/mem c)))
     (let [prev (:data (mem/latest (ctx/view c) :hostile))
           entry (assoc (threats/place-of (:primitives c) threat) :mob (.-name threat) :decision decision
                        :health (js/Math.round (.-health (.self (:primitives c)))))]
       (ctx/remember! c :hostile entry hostile-policy)
-      (ctx/emit! c :hostile.decided :info (assoc (dissoc entry :from) :text (encounter-text entry prev))))
+      (ctx/emit! c :hostile.decided :info (cond-> (assoc (dissoc entry :from) :text (encounter-text entry prev))
+                                            prices (assoc :prices (update-vals prices js/Math.round)))))
     (ctx/update-mem! c assoc :logged decision)))
 
 (defn fight-struck
@@ -241,62 +238,37 @@
                     :text (str "the " mob " neither came nor hurt the body in the hold: no flight; it is watched for " mute-s
                                " s and answered again if it comes nearer or the body is hurt")}}))
 
-(defn begun-fight?
-  "Pure: whether the :hostile entry e (decision, mob, time t) is a fight against one of the mobs now near (names) that
-  was decided or last struck at (the later of e's time and last-hit-t) within window-ms of now."
-  [e last-hit-t names now window-ms]
-  (boolean (and e (= :fight (get-in e [:data :decision]))
-                (some #{(get-in e [:data :mob])} names)
-                (> (max (:t e) (or last-hit-t 0)) (- now window-ms)))))
-
-(defn fight-begun?
-  "Whether this call or the last refire decided to fight these mobs: a reflex that refired mid-fight is the same fight,
-  which lasts ::struck-s past its entry or its last hit; a fight against another mob is a fresh one."
-  [c m near]
-  (or (= :fight (:decision m))
-      (begun-fight? (mem/latest (ctx/view c) :hostile)
-                    (:t (mem/latest (ctx/view c) :struck-hits))
-                    (map #(.-name %) near)
-                    (ctx/now c)
-                    (* 1000 (settings/get settings ::struck-s)))))
-
-(defn creepers-beside
-  "The creepers known within danger/swell-range of a mob in hs and not in hs themselves: a fight walks up to that mob and
-  into the blast of one standing by it beyond the trigger's radius."
-  [p hs]
-  (let [ids (set (map #(.-id %) hs))]
-    (filterv (fn [cr] (and (not (ids (.-id cr)))
-                           (some #(<= (u/dist (danger-q/mob-pos p cr) (danger-q/mob-pos p %)) danger-q/swell-range) hs)))
-             (filter combat/creeper? (danger-q/known-hostiles p 64 {})))))
+(defn cover-answer
+  "The answer of walling the body in against near (jobs.survival.wall-in's quote; cost/build-answer over the seconds the
+  side toward the mobs stays open, wall-in/exposed-s), then the hide-out's quiet seconds hidden; then: what follows it, or the same cover once more.
+  nil with a creeper near (its blast takes the walls) or no walls possible here (no block carried: an infinite quote)."
+  [c near then]
+  (when-not (some combat/creeper? near)
+    (let [s (second (get-in (wall-in/quote-of c) [:uses :job-time]))
+          p (:primitives c)]
+      (when (and (number? s) (js/isFinite s))
+        (let [a (-> (cost/build-answer {:equipment (cost/equipment-of (.-equipment (.self p))) :mobs (mapv #(hostile/mob-near p %) near) :seconds (wall-in/exposed-s c)})
+                    (assoc :seconds (+ s (hide-out/quiet-s))))]
+          (assoc a :then (conj (vec then) a)))))))
 
 (defn ^:async respond [c near]
-  (let [reserve (danger-q/fight-reserve)
-        p (:primitives c)
+  (let [p (:primitives c)
         self (.self p)
         m (ctx/mem c)
         before (:last-health m (.-health self))
         entries (when-let [t (:last-at m)] (ctx/since c :hurt t))
         after (if (or (empty? entries) (some #(hurt/mob-hit? (:data %)) entries)) (.-health self) before)
         hits (note-hits (when (= :flee (:decision m)) (:hits m)) (ctx/now c) before after (hit-window-ms))
-        beside (creepers-beside p near)
         _ (ctx/update-mem! c assoc :hits hits :last-health (.-health self) :last-at (ctx/now c))
-        chosen (cond
-                 (some combat/enderman? near) :flee
-                 (hostile/committed? c near) :fight
-                 :else
-                 (cost/decide (merge (hostile/fight-price c near #(struck-of c %))
-                                     {:health (.-health self)
-                                      :fighting? (fight-begun? c m near)
-                                      :few? (few-engaged? p near)
-                                      :cannot-outrun? (not (cost/outruns? (or (.-food self) 20) (map cost/mob-kind (remove #(or (combat/ranged? %) (combat/flyer? %)) near))))
-                                      :creeper? (boolean (or (seq beside) (and (some combat/creeper? near) (not (hostile/hit-and-back? c near)))))
-                                      :reserve reserve})))
+        felt (when (= :flee (:decision m)) (:rate (hostile/incoming c)))
+        fight (when-not (some combat/enderman? near) (hostile/fight-answer c near #(struck-of c %)))
+        walk (when-not (some combat/enderman? near) (hostile/flee-answer c near fight felt))
+        cover (when-not (some combat/enderman? near) (cover-answer c near (or (:then walk) (when fight [fight]))))
+        weighed (hostile/weigh c {:fight fight :flee walk :cover cover})
         stay? (and (not (hurt-lately? c)) (stay-under-roof? c near))
-        decision (if (and (= :flee chosen) (>= (count hits) 2) (empty? beside) (not-any? #(or (combat/creeper? %) (combat/enderman? %) (combat/flyer? %)) near))
-                   :fight
-                   chosen)
-        decision (if stay? :fight decision)]
-    (log-encounter! c (if (and (= :flee decision) (seq beside)) (first beside) (first near)) decision)
+        decision (if (or stay? (= :fight (:answer weighed))) :fight :flee)
+        creeper (first (get-in weighed [:answers :fight :creepers]))]
+    (log-encounter! c (if (and (= :flee decision) creeper) creeper (first near)) decision (:prices weighed))
     (when (and stay? (not (:stay-noted (ctx/mem c))))
       (ctx/update-mem! c assoc :stay-noted true)
       (ctx/emit! c :hostile.sealed-hold :info {:text "under a roof: the mobs near are heard only or flyers, so the body stays in" :mobs (mapv #(.-name %) near)}))

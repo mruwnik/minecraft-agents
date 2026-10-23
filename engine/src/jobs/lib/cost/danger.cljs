@@ -192,10 +192,13 @@
               shape))))
 
 (defn stance
-  "What the hostile reflex would do about mob-name alone (fight/decide): :fight or :flee."
+  "How the planner prices mob-name alone: :fight when a fight with it leaves fight/default-reserve health (never a creeper), else :flee."
   [{:keys [health equipment weapon]} mob-name]
-  (fight/decide {:health health :reserve fight/default-reserve :creeper? (= "creeper" mob-name)
-                 :damage (fight/fight-damage {:weapon weapon :equipment equipment :mobs [{:name mob-name :distance 0}]})}))
+  (if (and (not= "creeper" mob-name)
+           (fight/leaves-reserve? {:health health :reserve fight/default-reserve
+                                   :damage (fight/fight-damage {:weapon weapon :equipment equipment :mobs [{:name mob-name :distance 0}]})}))
+    :fight
+    :flee))
 
 (defn hurt-rate
   "hp a second mob-name takes off a body wearing equipment while it can reach it."
@@ -275,12 +278,18 @@
          floor (settings/get settings ::chase-speed)]
      (every? true? (map #(< body-s (/ %1 (max floor (chase-speed %2)))) mob-dists mob-names)))))
 
+(defn flight-speed
+  "Blocks a second a flight gains away from its start: body-speed over ::outrun-factor."
+  [food]
+  (/ (body-speed food) (settings/get settings ::outrun-factor)))
+
+(defn melee-reach [] (settings/get settings ::melee-reach))
+
 (defn outruns?
-  "Whether a body with food food gets away from every one of mob-names on foot: its body-speed is at least
-  ::outrun-factor times each one's chase-speed. A spider is faster at any food, a zombie never."
+  "Whether a body with food food gets away from every one of mob-names on foot: its flight-speed is at least each one's
+  chase-speed. A spider is faster at any food, a zombie never."
   [food mob-names]
-  (let [factor (settings/get settings ::outrun-factor)]
-    (every? #(>= (body-speed food) (* factor (chase-speed %))) mob-names)))
+  (every? #(>= (flight-speed food) (chase-speed %)) mob-names))
 
 (defn outruns-at?
   "Whether a body with food food (body-speed) running degrees off straight away from a chaser still gains on it (at

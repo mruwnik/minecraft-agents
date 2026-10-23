@@ -8,7 +8,8 @@
     threat   hostile?, mob-hurt: what one mob does over some seconds, after armour (jobs.lib.cost.threat).
     weapon   attack-gap-ms, weapon-damage, remaining-health, mob-max-health, ranged-mobs: the fight inputs; the one tool-material table
              (tool-tier, weapon-rank, cheapness) (jobs.lib.cost.weapon).
-    fight    fight-damage, fight-seconds, decide: the damage (and length) of a fight with the current kit, :fight or :flee (jobs.lib.cost.fight).
+    fight    fight-damage, fight-seconds: the damage (and length) of a fight with the current kit (jobs.lib.cost.fight).
+    answer   fight-answer, flee-answer, build-answer, answer-price, decide: what each answer to hostiles costs and the cheapest; blast-hurt: a creeper's blast (jobs.lib.cost.answer).
     danger   route-danger, straight-route: the danger of a walk past mobs; hurt-rate, exposure-price: what standing exposed to them costs; stance, danger-rate, danger-list, habitat-factor: go-to's
              planner dangers; reach-first?, outruns-at?: a body's race to a refuge against its chasers; catches?: whether a chaser hits a walk before it is past (jobs.lib.cost.danger).
     health   hp-seconds, health-scale, hp-price, commute-s (a walk there and back against sheltering here), drown-prices, damage-budget, survivable-budget: what an hp costs and how many a walk may spend (jobs.lib.cost.health).
@@ -25,6 +26,7 @@
     base-rates  density, biome-chance, expected-density, peak-density: the ore a block of ground is expected to hold, from the game's
              own placements, and the chance of a biome on ground the body has not seen (jobs.lib.cost.base-rates)."
   (:require [clojure.string :as str]
+            [jobs.lib.cost.answer :as answer]
             [jobs.lib.cost.armour :as armour]
             [jobs.lib.cost.base-rates :as base-rates]
             [jobs.lib.cost.danger :as danger]
@@ -64,8 +66,16 @@
 
 (def default-reserve fight/default-reserve)
 (def fight-damage fight/fight-damage)
-(def decide fight/decide)
 (def fight-seconds fight/fight-seconds)
+(def walk-speed fight/walk-speed)
+
+(def fight-answer answer/fight-answer)
+(def flee-answer answer/flee-answer)
+(def build-answer answer/build-answer)
+(def answer-price answer/answer-price)
+(def decide answer/decide)
+(def blast-hurt answer/blast-hurt)
+(def swell-start answer/swell-start)
 (def leaves-reserve? fight/leaves-reserve?)
 
 (def route-danger danger/route-danger)
@@ -88,11 +98,13 @@
 (def outruns? danger/outruns?)
 (def catches? danger/catches?)
 (def mob-kind danger/mob-kind)
+(def chase-speed danger/chase-speed)
 
 (def hp-seconds health/hp-seconds)
 (def walk-hp-seconds health/walk-hp-seconds)
 (def health-scale health/health-scale)
 (def hp-price health/hp-price)
+(def hp-cost health/hp-cost)
 (def commute-s health/commute-s)
 (def drown-prices health/drown-prices)
 (def damage-budget health/damage-budget)

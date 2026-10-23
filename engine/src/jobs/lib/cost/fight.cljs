@@ -1,12 +1,12 @@
 (ns jobs.lib.cost.fight
-  "The cost of a fight with the current kit (fight-damage) and what the hostile reflex makes of it (decide)."
+  "The cost of a fight with the current kit (fight-damage, fight-seconds)."
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.cost.armour :as armour]
             [jobs.lib.cost.threat :as threat]))
 
-(def default-reserve "Health a fight must leave: the hostile reflexes' :reserve default and the planner's stance." 4)
+(def default-reserve "Health a fight must leave: the planner's stance and the cornered fight's." 4)
 
 (def walk-speed "Blocks a second a body closes on a mob it walks up to." 4)
 
@@ -58,16 +58,3 @@
   "Whether a fight costing damage leaves at least reserve of health."
   [{:keys [health damage reserve]}]
   (<= damage (- health reserve)))
-
-(defn decide
-  "Pure: :flee when creeper? (a creeper the body will not fight hit-and-back), else :fight when the expected damage leaves at least reserve
-  health, or when a fight already begun (fighting?) has few mobs in it (few?) and is expected to leave more than margin (the
-  caller's hardest recent hit, 0 none: one more such hit does not kill), or against a mob the body cannot outrun
-  (cannot-outrun?: the flight would lose as well), else :flee. Starting needs reserve, going on only margin: the gap stops a flip-flop."
-  [{:keys [health damage creeper? reserve fighting? few? cannot-outrun? margin]}]
-  (if (and (not creeper?)
-           (or (leaves-reserve? {:health health :damage damage :reserve reserve})
-               (and fighting? few? (> (- health damage) (or margin 0)))
-               (and fighting? cannot-outrun?)))
-    :fight
-    :flee))

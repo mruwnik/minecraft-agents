@@ -23,6 +23,11 @@
   (is (= [0 40 80] (vec (health/drown-prices 4 10 2))) "at most max-scale")
   (is (= 21 (count (health/drown-prices 20 10))) "every hp the body has, by default"))
 
+(deftest losing-hp-costs-each-at-the-hp-price-of-the-health-it-leaves
+  (is (= (peek (health/drown-prices 10 10 4)) (health/hp-cost 10 4)) "whole hp: as drowning prices them")
+  (is (= (+ (health/hp-cost 10 4) (* 0.5 (health/hp-price 6))) (health/hp-cost 10 4.5)) "a part hp pro rata")
+  (is (zero? (health/hp-cost 20 0))))
+
 (deftest the-budget-is-the-health-over-the-floor-less-a-margin
   (are [body settings budget] (= budget (health/damage-budget body settings))
     {:health 20 :food 20} {} 7

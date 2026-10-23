@@ -14,23 +14,17 @@
             [jobs.lib.body :as body]
             [jobs.lib.price :as price]
             [jobs.lib.reach :as reach]
+            [jobs.lib.threats :as threats]
             [jobs.lib.walk-risk :as risk]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
-  {::hold-s {:default 15 :doc "Seconds a held fight waits without a swing for a mob to come within reach before it declines." :spec (a/num-in 0 nil)}
-   ::ranged-chase {:default 6 :doc "Farthest a ranged mob may be for the body to cross open ground to it while another hostile is in range; beyond it the fight declines." :spec (a/num-in 0 nil)}
+  {::return-s {:default 600 :doc "Seconds a flight from a mob counts as a return of its kind: the next flight from one is priced to come again (flee-answer :returns)." :spec (a/num-in 0 nil)}
+   ::hold-s {:default 15 :doc "Seconds a held fight waits without a swing for a mob to come within reach before it declines." :spec (a/num-in 0 nil)}
    ::chase-timeout-s {:default 10 :doc "Seconds one walk toward a hostile may take: it moves, so the walk aims again at where it is now this often." :spec (a/num-in 0 nil)}
    ::point-blank {:default 1.5 :doc "Blocks within which a hostile (a shooter too, not a creeper or an enderman) is in the body's own cell or beside it: a cornered body fights a shooter this close instead of hiding from it." :spec (a/num-in 0 nil)}
-   ::creeper-range {:default 7 :doc "Blocks within which an armed, healthy body fights a lone creeper hit-and-back instead of fleeing it (a creeper met this near cannot be outrun)." :spec (a/num-in 0 nil)}
-   ::creeper-returns {:default 2 :doc "Flights from a creeper within ::creeper-return-s after which an armed, healthy body fights the next lone creeper however far it is (it keeps coming back). 0: never." :spec (a/int-in 0 nil)}
-   ::creeper-return-s {:default 600 :doc "Seconds a flight from a creeper counts toward ::creeper-returns." :spec (a/num-in 0 nil)}
-   ::creeper-health-floor {:default 14 :doc "Health below which the body never fights a creeper hit-and-back: a late step back lets part of a blast land." :spec (a/num-in 0 nil)}
-   ::ranged-returns {:default 2 :doc "Flights from ranged mobs (skeletons and the like) within ::ranged-return-s after which an armed body of at least ::commit-health fights the next ones to the end, however far, instead of fleeing again (arrows outrun a walker, so the flights only repeat). 0: never." :spec (a/int-in 0 nil)}
-   ::ranged-return-s {:default 600 :doc "Seconds a flight from a ranged mob counts toward ::ranged-returns." :spec (a/num-in 0 nil)}
-   ::commit-health {:default 10 :doc "Health below which the body does not commit to a fight with ranged mobs it has fled before (::ranged-returns)." :spec (a/num-in 0 nil)}
    ::back-step {:default 6 :doc "Blocks the body backs off from a creeper after each hit: its fuse runs on, so it ends out of the blast's reach (about 6)." :spec (a/num-in 1 nil)}
-   ::felt-s {:default 3 :doc "Seconds back the mob blows the body felt set the rate a fight is priced at (fight-price)." :spec (a/num-in 0 nil)}
+   ::felt-s {:default 3 :doc "Seconds back the mob blows the body felt set the rate a fight is priced at (fight-answer)." :spec (a/num-in 0 nil)}
    ::leash {:default 20 :doc "Blocks from where a hostile fight started beyond which a hostile is not chased." :spec (a/num-in 0 nil)}})
 
 (defn hostiles? [c] (= :hostiles (:targets (:args c))))
@@ -80,14 +74,6 @@
   "The first hostile in range the body only hears, or nil."
   [c]
   (first (remove danger-q/seen-only? (in-range c))))
-
-(defn too-far-to-chase?
-  "Whether target is a ranged mob beyond ::ranged-chase while another hostile is in range, unless the fight is committed (:commit)."
-  [c target]
-  (and (not (:commit (:args c)))
-       (combat/ranged? target)
-       (> (danger-q/mob-distance (:primitives c) target) (settings/get settings ::ranged-chase))
-       (some #(not= (.-id %) (.-id target)) (in-range c))))
 
 (defn dark-around?
   "Whether mob e stands in or beside unlit space: its cell, the four cells next to it and the one 2 past it from the body,
@@ -191,43 +177,99 @@
          (cost/unseen-route-hp kind-at route)))
     0))
 
-(defn fight-price
-  "{:damage :margin} of fighting near for decide: the walk there (walk-hp) plus the fight with near and the mobs by its
-  way (way-mobs), at least the mob blows felt lately (incoming :rate) over the fight's length; margin the hardest blow,
-  felt lately or one of the fight's mobs would deal through the armour worn (a creeper's is priced per swing instead)."
-  [c near struck-of]
-  (let [fight (fight-of c (concat near (way-mobs (:primitives c) near)) struck-of)
-        stats (cost/armour-stats (:equipment fight))
-        {:keys [rate hardest]} (incoming c)]
-    {:damage (+ (walk-hp c near) (max (cost/fight-damage fight) (* rate (cost/fight-seconds fight))))
-     :margin (reduce max hardest (map #(cost/mob-hurt stats (:name %) 1 identity 1) (remove #(= "creeper" (:name %)) (:mobs fight))))}))
-
-(defn creeper-fled-from
-  "How many times the body fled a creeper within ::creeper-return-s, by the :hostile entries (c is a ctx)."
+(defn body-of
+  "What the answers' prices read of the body of c: health, absorption, food and what a death costs it (cost/death-body)."
   [c]
-  (let [since (- (ctx/now c) (* 1000 (settings/get settings ::creeper-return-s)))]
-    (count (filter #(and (> (:t %) since) (= "creeper" (get-in % [:data :mob])) (= :flee (get-in % [:data :decision])))
-                   (ctx/entries c :hostile)))))
-
-(defn ranged-fled-from
-  "How many times the body fled a ranged mob within ::ranged-return-s, by the :hostile entries (c is a ctx)."
-  [c]
-  (let [since (- (ctx/now c) (* 1000 (settings/get settings ::ranged-return-s)))]
-    (count (filter #(and (> (:t %) since) (contains? weapon/ranged-mobs (get-in % [:data :mob])) (= :flee (get-in % [:data :decision])))
-                   (ctx/entries c :hostile)))))
-
-(defn committed?
-  "Whether the body fights hostiles to the end whatever it costs: all of them ranged, a sword or axe carried, health at
-  least ::commit-health and ::ranged-returns flights from ranged mobs lately (they keep coming back and a flight cannot outrun arrows)."
-  [c hostiles]
   (let [p (:primitives c)
-        returns (settings/get settings ::ranged-returns)]
-    (boolean (and (pos? returns)
-                  (seq hostiles)
-                  (every? combat/ranged? hostiles)
-                  (contains? weapon/weapon-damage-by-name (combat/best-weapon p (combat/weapons c)))
-                  (>= (.-health (.self p)) (settings/get settings ::commit-health))
-                  (>= (ranged-fled-from c) returns)))))
+        self (.self p)]
+    (assoc (cost/death-body p (ctx/view c))
+           :health (.-health self) :absorption (.-absorption self) :food (or (.-food self) 20))))
+
+(defn blasting
+  "The creepers known within ::price/way-radius of the way to the nearest of near (none of near) that come within their
+  swell start of the body or that mob before a fight of seconds ends, at their chase speed: the fight walks into their blast."
+  [p near seconds]
+  (when-let [t (first near)]
+    (let [ids (set (map #(.-id %) near))
+          t-pos (danger-q/mob-pos p t)
+          comes? (fn [cr] (let [at (danger-q/mob-pos p cr)
+                                d (min (danger-q/mob-distance p cr) (u/dist at t-pos))]
+                            (<= (/ (max 0 (- d cost/swell-start)) (cost/chase-speed (cost/mob-kind cr))) seconds)))]
+      (->> (danger-q/hostiles-near-way p t-pos (settings/get price/settings ::price/way-radius) {})
+           (filter combat/creeper?)
+           (remove #(ids (.-id %)))
+           (filter comes?)))))
+
+(declare hit-and-back-ok?)
+
+(defn fight-answer
+  "The answer of fighting near (nearest first) for cost/decide: the walk there (walk-hp) and the fight with near and the
+  mobs by its way (way-mobs), at least the mob blows felt lately (incoming :rate) over its length, :hit the hardest blow
+  felt lately or of its mobs. A lone creeper is fought hit-and-back (nil when hit-and-back-ok? fails); any other creeper
+  near, or by the way in time (blasting), is not fought: its blast at its swell start is added."
+  [c near struck-of]
+  (let [p (:primitives c)
+        lone-creeper? (and (= 1 (count near)) (combat/creeper? (first near)))
+        fought (if lone-creeper? near (remove combat/creeper? near))
+        others (remove combat/creeper? (way-mobs p fought))]
+    (when (and (seq fought) (or (not lone-creeper?) (hit-and-back-ok? c near)))
+      (let [fight (fight-of c (concat fought others) struck-of)
+            stats (cost/armour-stats (:equipment fight))
+            {:keys [rate hardest]} (incoming c)
+            a (cost/fight-answer fight)
+            seconds (+ (:seconds a) (/ (danger-q/mob-distance p (first fought)) cost/walk-speed))
+            creepers (if lone-creeper? [] (concat (filter combat/creeper? near) (blasting p near seconds)))
+            blasts (map (fn [_] (cost/blast-hurt stats cost/swell-start)) creepers)]
+        {:damage (+ (walk-hp c fought) (max (:damage a) (* rate (:seconds a))) (reduce + 0 blasts))
+         :hit (reduce max (:hit a) (cons hardest blasts))
+         :seconds seconds
+         :creepers (vec creepers)}))))
+
+(defn mob-near
+  "Hostile e as the answers take a mob: {:name :distance :speed (its chase speed) :follow (its follow range)}."
+  [p e]
+  {:name (.-name e) :distance (danger-q/mob-distance p e) :speed (cost/chase-speed (cost/mob-kind e)) :follow (threats/follow-range (.-name e))})
+
+(defn returns
+  "Flights from mobs named one of names within ::return-s, by the :hostile entries (c is a ctx)."
+  [c names]
+  (let [since (- (ctx/now c) (* 1000 (settings/get settings ::return-s)))
+        names (set names)]
+    (count (filter #(and (> (:t %) since) (names (get-in % [:data :mob])) (= :flee (get-in % [:data :decision])))
+                   (ctx/entries c :hostile)))))
+
+(defn flee-answer
+  "The answer of a walk away from near (cost/flee-answer: each at its chase speed and follow range, the flights from
+  such mobs lately its returns, later the answer after it), its damage at least felt (hp a second felt while fleeing,
+  nil none) over the walk; nil when a mob keeps up."
+  [c near later felt]
+  (let [p (:primitives c)
+        self (.self p)
+        a (cost/flee-answer {:food (or (.-food self) 20) :equipment (cost/equipment-of (.-equipment self))
+                             :mobs (mapv #(mob-near p %) near)
+                             :returns (returns c (map #(.-name %) near))
+                             :later later})]
+    (cond-> a
+      (and a felt) (update :damage max (* felt (/ (:seconds a) 2))))))
+
+(defn weigh
+  "cost/decide over answers ({key answer-or-nil}) for the body of c where it stands, with :answers; nil when none is open."
+  [c answers]
+  (some-> (cost/decide (body-of c) answers (u/self-pos c)) (assoc :answers answers)))
+
+(defn answer
+  "weigh fighting near (fight-answer) against walking away from them (flee-answer): {:answer :fight|:flee :prices :answers}."
+  [c near struck-of]
+  (let [fight (fight-answer c near struck-of)]
+    (weigh c {:fight fight :flee (flee-answer c near fight nil)})))
+
+(defn too-far-to-chase?
+  "Whether a ranged target is better left than walked to with other hostiles in range: answer over them all says :flee."
+  [c target]
+  (let [hs (in-range c)]
+    (boolean (and (combat/ranged? target)
+                  (some #(not= (.-id %) (.-id target)) hs)
+                  (= :flee (:answer (answer c (cons target (remove #(= (.-id %) (.-id target)) hs)) (constantly nil))))))))
 
 (defn back-cell
   "The cell n blocks (at most) from from in the open direction that ends farthest from threat, gaining at least a block on
@@ -249,29 +291,19 @@
     (back-cell (fn [{:keys [x y z]}] (at [x y z])) (u/self-pos c) (u/pos-of (.-pos creeper)) (back-step))))
 
 (defn hit-and-back-ok?
-  "Whether the body can fight hostiles hit-and-back: exactly one, a creeper, a sword or axe carried, health at least
-  ::creeper-health-floor and an open cell to back off to. Ends the fight when it stops holding."
+  "Whether the body can fight hostiles hit-and-back: exactly one, a creeper, a sword or axe carried and an open cell to
+  back off to. Ends the fight when it stops holding."
   [c hostiles]
   (let [p (:primitives c)
         creeper (first hostiles)]
     (boolean (and (= 1 (count hostiles))
                   (combat/creeper? creeper)
                   (contains? weapon/weapon-damage-by-name (combat/best-weapon p (combat/weapons c)))
-                  (>= (.-health (.self p)) (settings/get settings ::creeper-health-floor))
                   (back-cell-of c creeper)))))
 
-(defn hit-and-back?
-  "Whether the body starts a hit-and-back fight (combat.attack): hit-and-back-ok? and the creeper within ::creeper-range or
-  fled from ::creeper-returns times lately."
-  [c hostiles]
-  (let [returns (settings/get settings ::creeper-returns)]
-    (boolean (and (hit-and-back-ok? c hostiles)
-                  (or (<= (danger-q/mob-distance (:primitives c) (first hostiles)) (settings/get settings ::creeper-range))
-                      (and (pos? returns) (>= (creeper-fled-from c) returns)))))))
-
 (defn wins?
-  "Whether fighting hostiles leaves :reserve health (jobs.lib.danger/fight-reserve): the one weighing the response and the
-  flight's cornered options share. Never against a creeper (hit-and-back? decides that), nor against none, nor against an
+  "Whether fighting hostiles leaves :reserve health (jobs.lib.danger/fight-reserve; fight-answer's damage): the one weighing the flight's
+  cornered options share. Never against a creeper, nor against none, nor against an
   enderman: only thorns armour with tamed wolves would win, and the body cannot see wolves."
   ([c hostiles] (wins? c hostiles (constantly nil)))
   ([c hostiles struck-of]
@@ -279,4 +311,4 @@
                  (not-any? combat/creeper? hostiles)
                  (not-any? combat/enderman? hostiles)
                  (cost/leaves-reserve? {:health (.-health (.self (:primitives c))) :reserve (danger-q/fight-reserve)
-                                        :damage (:damage (fight-price c hostiles struck-of))})))))
+                                        :damage (:damage (fight-answer c hostiles struck-of))})))))
