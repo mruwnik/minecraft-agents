@@ -137,7 +137,7 @@
   "What fight-damage needs of hostile e: its name, distance (jobs.lib.danger/mob-distance: a heard one by its band) and
   the hits the attack has landed on it (struck, its :struck entry, or nil)."
   [p struck e]
-  (cond-> {:name (.-name e) :distance (danger-q/mob-distance p e) :hits (:hits struck 0)}
+  (cond-> {:name (.-name e) :held (.-held e) :distance (danger-q/mob-distance p e) :hits (:hits struck 0)}
     (number? (:health struck)) (assoc :health (:health struck))))
 
 (defn fight-of

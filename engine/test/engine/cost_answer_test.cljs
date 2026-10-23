@@ -3,7 +3,8 @@
   (:require [cljs.test :refer [deftest is are]]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.answer :as answer]
-            [jobs.lib.cost.death :as death]))
+            [jobs.lib.cost.death :as death]
+            [jobs.lib.cost.threat :as threat]))
 
 (def here {:x 0 :y 64 :z 0})
 
@@ -151,3 +152,13 @@
       "a swim is slower than a run")
   (is (pos? (:damage (cost/flee-answer {:food 20 :mobs [(assoc (mob "drowned" 8 35) :held "trident")] :swim 4})))
       "a trident is thrown from 10 blocks"))
+
+(deftest a-trident-drowned-is-priced-by-its-throws-not-a-melee-blow
+  (let [trident (assoc (mob "drowned" 8 35) :held "trident")
+        melee (mob "drowned" 8 35)
+        hit #(:hit (cost/flee-answer {:food 20 :mobs [%] :swim 4}))]
+    (is (= (threat/difficulty-scale 8) (hit trident)) "a throw is 8 hp, before the server difficulty")
+    (is (> (hit trident) (hit melee)))
+    (is (> (:damage (cost/fight-answer (fight "stone_sword" trident)))
+           (:damage (cost/fight-answer (fight "stone_sword" melee))))
+        "the fight prices its throws too")))

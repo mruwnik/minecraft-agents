@@ -15,6 +15,7 @@
    ::difficulty {:default 1 :doc "The server difficulty mob hits are costed at: 0 peaceful, 1 easy, 2 normal, 3 hard (not read from the server)." :spec (a/int-in 0 3)}
    ::hit-rate {:default 0.6 :doc "Hits a zombie or skeleton lands per second of exposure (measured over trial fights; the body is out of reach part of the time). Mobs not measured count one a second." :spec (a/num-in 0 nil)}
    ::spider-hit-rate {:default 0.35 :doc "Hits a spider or cave spider lands per second of exposure." :spec (a/num-in 0 nil)}
+   ::trident-rate {:default 0.5 :doc "Throws a second of a drowned holding a trident (vanilla: one every 40 ticks)." :spec (a/num-in 0 nil)}
    ::provoked-share {:default 0.1 :doc "What a provoked-only mob's threat counts for when it is met, not fought." :spec (a/num-in 0 nil)}
    ::default-follow-range {:default 16 :doc "Blocks a mob of unknown kind notices the body from." :spec (a/int-in 1 nil)}})
 
@@ -30,7 +31,7 @@
 (def mob-hit
   "Damage one hit of a mob deals at normal difficulty. Unknown mobs count as 3."
   {"zombie" 3 "husk" 3 "drowned" 3 "zombie_villager" 3 "skeleton" 2 "stray" 2 "parched" 2 "bogged" 2 "spider" 2 "cave_spider" 3
-   "witch" 3 "pillager" 2 "vindicator" 8 "slime" 2 "silverfish" 1 "endermite" 2 "phantom" 2 "enderman" 5})
+   "witch" 3 "drowned_trident" 8 "pillager" 2 "vindicator" 8 "slime" 2 "silverfish" 1 "endermite" 2 "phantom" 2 "enderman" 5})
 
 (def burns-in-sun
   "Mobs that burn in daylight under the open sky (vanilla; a drowned too, but it keeps to the water)."
@@ -69,9 +70,22 @@
       (or (= "hostile" (aget e "type")) (= "Hostile mobs" (aget e "category")))
       (= "hostile" kind))))
 
+(def trident-kind "The kind of a drowned holding a trident: it throws (vanilla: 8 hp a throw, every 2 s) rather than strikes." "drowned_trident")
+
+(defn kind
+  "The name the tables here are keyed by for mob {:name :held}: a drowned holding a trident is its own kind."
+  [{:keys [name held]}]
+  (if (and (= "drowned" name) (= "trident" held)) trident-kind name))
+
+(defn ranged?
+  "Whether mob {:name :held} shoots or throws."
+  [m]
+  (let [k (kind m)]
+    (or (= trident-kind k) (contains? weapon/ranged-mobs k))))
+
 (defn damage-type [mob-name]
   (cond (= "creeper" mob-name) :explosion
-        (contains? weapon/ranged-mobs mob-name) :projectile
+        (or (= trident-kind mob-name) (contains? weapon/ranged-mobs mob-name)) :projectile
         :else :melee))
 
 (defn difficulty-scale
@@ -88,7 +102,8 @@
 (defn lone-hit-rate
   "Hits a second of a lone sword fight: the measured rates of the zombie and skeleton families and spiders, else one a second."
   [mob-name]
-  (cond (contains? measured-hit-rate mob-name) (settings/get settings ::hit-rate)
+  (cond (= trident-kind mob-name) (settings/get settings ::trident-rate)
+        (contains? measured-hit-rate mob-name) (settings/get settings ::hit-rate)
         (contains? #{"spider" "cave_spider"} mob-name) (settings/get settings ::spider-hit-rate)
         :else 1))
 

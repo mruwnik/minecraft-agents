@@ -30,7 +30,7 @@
   "Seconds from now at which each of mobs dies, one at a time (see fight-damage)."
   [{:keys [weapon mobs]}]
   (let [gap-s (/ (swing-gap-ms weapon) 1000)
-        approach (fn [m] (if (contains? weapon/ranged-mobs (:name m)) (/ (max 0 (- (:distance m 0) 3)) walk-speed) 0))]
+        approach (fn [m] (if (threat/ranged? m) (/ (max 0 (- (:distance m 0) 3)) walk-speed) 0))]
     (rest (reductions + 0 (map #(+ (approach %) (* gap-s (swings weapon %))) mobs)))))
 
 (defn fight-seconds
@@ -51,7 +51,7 @@
         lone-sword? (and (= 1 (count mobs)) (contains? weapon/weapon-damage-by-name weapon))
         hurt (fn [m end] (if (= "creeper" (:name m))
                            (* (swings m) (threat/creeper-exchange))
-                           (threat/mob-hurt stats (:name m) end identity (when lone-sword? (threat/lone-hit-rate (:name m))))))]
+                           (threat/mob-hurt stats (threat/kind m) end identity (when lone-sword? (threat/lone-hit-rate (threat/kind m))))))]
     (reduce + 0 (map hurt mobs ends))))
 
 (defn leaves-reserve?

@@ -46,8 +46,8 @@
 
 (defn hit-range
   "Blocks from the body within which mob {:name :held} lands its blows: a trident's throw, a bow's shot, else a melee reach."
-  [{:keys [name held]}]
-  (cond (and (= "drowned" name) (= "trident" held)) trident-range
+  [{:keys [name] :as m}]
+  (cond (= threat/trident-kind (threat/kind m)) trident-range
         (contains? weapon/ranged-mobs name) bow-range
         :else (danger/melee-reach)))
 
@@ -65,11 +65,11 @@
   (armour/after-armour stats :explosion (blast-damage distance) 1))
 
 (defn blow
-  "hp one blow of mob-name deals through the armour stats: a creeper's is its blast at its swell start."
-  [stats mob-name]
-  (if (= "creeper" mob-name)
+  "hp one blow of mob {:name :held} deals through the armour stats: a creeper's is its blast at its swell start."
+  [stats m]
+  (if (= "creeper" (:name m))
     (blast-hurt stats swell-start)
-    (threat/mob-hurt stats mob-name 1 identity 1)))
+    (threat/mob-hurt stats (threat/kind m) 1 identity 1)))
 
 (defn blows-chance
   "The chance the blows of answer kill body: death/blow-chance of its :damage, or of the :caught blows for its :chance."
@@ -123,8 +123,8 @@
         fought (vec fought)
         seconds (fight/fight-seconds (assoc fight :mobs (if (seq fought) fought mobs)))]
     (cond-> {:damage (+ (fight/fight-damage (assoc fight :mobs fought))
-                        (reduce + 0 (map #(threat/mob-hurt stats (:name %) seconds) left)))
-             :hit (reduce max 0 (map #(blow stats (:name %)) mobs))
+                        (reduce + 0 (map #(threat/mob-hurt stats (threat/kind %) seconds) left)))
+             :hit (reduce max 0 (map #(blow stats %) mobs))
              :seconds seconds}
       (seq left) (assoc :left (vec left)))))
 
@@ -184,8 +184,8 @@
                     0)]
          {:damage hurt :hit hurt :seconds (+ start escape)})
        :else
-       {:damage (threat/mob-hurt stats name (+ (:in-reach wet 0) (if (:away? wet) 0 (/ (max 0 (- r d)) gain))) identity (threat/lone-hit-rate name))
-        :hit (blow stats name) :seconds (+ (:seconds wet 0) escape)}))))
+       {:damage (threat/mob-hurt stats (threat/kind m) (+ (:in-reach wet 0) (if (:away? wet) 0 (/ (max 0 (- r d)) gain))) identity (threat/lone-hit-rate (threat/kind m)))
+        :hit (blow stats m) :seconds (+ (:seconds wet 0) escape)}))))
 
 (defn flee-answer
   "The answer of a walk away from mobs [flee-mob's] by a body with food wearing equipment, the walk there and back (it
@@ -208,8 +208,8 @@
                   :seconds (* 2 times (reduce max 0 (map :seconds per)))
                   :caught {:chance (- 1 (js/Math.pow (- 1 (or caught (settings/get settings ::caught-chance))) times))
                            :damage (reduce + 0 (map (fn [m f] (if (= "creeper" (:name m))
-                                                                  (blow stats "creeper")
-                                                                  (threat/mob-hurt stats (:name m) (:seconds f) identity (threat/lone-hit-rate (:name m)))))
+                                                                  (blow stats {:name "creeper"})
+                                                                  (threat/mob-hurt stats (threat/kind m) (:seconds f) identity (threat/lone-hit-rate (threat/kind m)))))
                                                     mobs per))
                            :hit hit}}]
         (let [spent (set (keep (fn [[m f]] (when (and (= "creeper" (:name m)) (pos? (:damage f))) m)) (map vector mobs per)))
@@ -226,14 +226,14 @@
   [{:keys [equipment mobs seconds]}]
   (let [stats (armour/armour-stats equipment)
         hitting (remove #(or (#{"creeper" "enderman"} (:name %))
-                             (and (contains? weapon/ranged-mobs (:name %)) (> (or (:distance %) 0) bow-range)))
+                             (and (threat/ranged? %) (> (or (:distance %) 0) (hit-range %))))
                         mobs)
-        left (fn [{:keys [name distance speed]}]
-               (if (contains? weapon/ranged-mobs name)
+        left (fn [{:keys [name distance speed] :as m}]
+               (if (threat/ranged? m)
                  seconds
                  (max 0 (- seconds (/ (max 0 (- (or distance 0) (danger/melee-reach))) (or speed (danger/chase-speed name)))))))]
-    {:damage (reduce + 0 (map #(threat/mob-hurt stats (:name %) (left %) identity (threat/lone-hit-rate (:name %))) hitting))
-     :hit (reduce max 0 (map #(blow stats (:name %)) hitting))
+    {:damage (reduce + 0 (map #(threat/mob-hurt stats (threat/kind %) (left %) identity (threat/lone-hit-rate (threat/kind %))) hitting))
+     :hit (reduce max 0 (map #(blow stats %) hitting))
      :seconds seconds}))
 
 (defn cover-answer
