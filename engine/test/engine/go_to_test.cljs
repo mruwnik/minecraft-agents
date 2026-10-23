@@ -690,7 +690,7 @@
             (is (= {:arrived true} @out))
             (is (> @plans 3) "several search slices")
             (is (= [:done] @returns) "searched and walked in one call")
-            (is (>= @paces (dec @plans)) "every slice that walked nowhere awaited the pace timer")))))))
+            (is (>= @paces (- @plans 2)) "every walk slice after the first awaited the pace timer (the call's quote searches first, with none)")))))))
 
 (deftest a-cut-stops-the-search-loop-and-the-next-call-resumes-and-arrives
   (async done
