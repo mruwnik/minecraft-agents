@@ -1,6 +1,7 @@
 (ns engine.cost-test
   "jobs.lib.cost: one armour formula (vanilla's) under every calculator: fight cost, mob threat and the planner's rate."
   (:require [cljs.test :refer [deftest is are use-fixtures]]
+            [engine.constants :as constants]
             [engine.fake :as fake]
             [engine.game :as game]
             [engine.settings :as settings]
@@ -215,6 +216,15 @@
     #js {:name "skeleton"} "skeleton")
   (is (false? (cost/outruns? 20 [(cost/mob-kind #js {:name "zombie" :baby true})])))
   (is (true? (cost/outruns? 20 [(cost/mob-kind #js {:name "zombie"})]))))
+
+(deftest chase-speeds-follow-the-game-s-walk-formula-that-gives-a-player-its-speeds
+  (are [blocks-s speed] (= blocks-s (round2 speed))
+    4.32 (constants/ground-speed 0.98 0.1)
+    5.61 (constants/ground-speed 0.98 0.13)
+    2.28 (cost/chase-speed "zombie")
+    3.89 (cost/chase-speed "spider")
+    2.7 (cost/chase-speed "skeleton")
+    5.14 (cost/chase-speed "baby")))
 
 (deftest a-frontier-tour-costs-its-blocks-walked-and-more-with-each-walk
   (let [tour #(:cost (cost/tour-cost {:explored %1 :walks %2}))]

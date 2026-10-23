@@ -34,7 +34,6 @@
    ::max-rate {:default 4 :doc "Danger price: hp a second one known danger costs at most; above 4 it also raises the total of all dangers a second (the planner's dangerCap)." :spec a/pos-num?}
    ::sprint-food {:default 6 :doc "Food at or under which a body cannot sprint (reach-first?)." :spec (a/int-in 0 20)}
    ::chase-speed {:default 3 :doc "Blocks a second a chasing melee mob covers, a little over a zombie's (reach-first?)." :spec (a/num-in 0.1 nil)}
-   ::baby-chase-speed {:default 5.1 :doc "Blocks a second a baby zombie covers chasing (chase-speed of mob-kind \"baby\")." :spec (a/num-in 0.1 nil)}
    ::flight-starts {:default [0 0 0 0.05 0.37 0.5 0.75 1.08 1.91 4.14] :doc "Seconds from a flight's decision until it gets going, its deciles (flight-starts): the first flee decision from a creeper of each trial run, as the time to 1 block off less that block at sprint speed; n=80 (mean 0.87), 45 of them seen only across a position gap over 1 s and told at the middle of the gap; 71 decisions with no position in the 2 s before and 2 that never moved are left out (where the body stood is unknown). Recount: node tools/event-counts.mjs flight-starts. A blast on the walk is priced over each (cost.answer/flee-mob)." :spec (a/coll-of number?)}
    ::flee-walk-speed {:default 3.62 :doc "Blocks a second a flight's steps cover (flee-walk-speed): measured over the trial logs of 2026-10-22/23, 709 blocks in 196 s of 238 steps of 34 flights of two steps or more (retreat.step-speed), at food over ::sprint-food; one too hungry to sprint covers body-speed's share of it. Recount: tools/event-counts.mjs flee-pace (:bps; 3.54 over 65 flights to 2026-10-23, card 8c62e149)." :spec (a/num-in 0.1 nil)}
    ::flee-stop-s {:default 0.29 :doc "Seconds a flight stands between two of its steps, choosing the next: measured over the same flights, 60 s over 204 gaps (wall time less the steps' own). Recount: flee-pace :stop-s (0.42 over 349 gaps to 2026-10-23, median 0.14: a few pauses of 3-9 s carry the mean; which one a race should use is open on card 8c62e149)." :spec (a/num-in 0 nil)}
@@ -201,10 +200,10 @@
 (defn flee-stop-s [] (settings/get settings ::flee-stop-s))
 
 (defn chase-speed
-  "Blocks a second mob-name covers chasing the body: engine.constants/mob-speeds, ::baby-chase-speed for \"baby\" (mob-kind), ::chase-speed for a mob not listed there."
+  "Blocks a second mob-name covers chasing the body: engine.constants/mob-speeds, engine.constants/baby-speed for \"baby\" (mob-kind), ::chase-speed for a mob not listed there."
   [mob-name]
   (if (= mob-name "baby")
-    (settings/get settings ::baby-chase-speed)
+    constants/baby-speed
     (get constants/mob-speeds mob-name (settings/get settings ::chase-speed))))
 
 (def water-speeds

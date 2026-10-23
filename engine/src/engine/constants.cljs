@@ -18,9 +18,29 @@
 (def gravity "The speed a falling body gains each tick, before air-drag." (unchecked-get values "gravity"))
 (def air-drag "What is left of a body's vertical speed each tick." (unchecked-get values "airDrag"))
 (def regen-seconds-per-hp "Seconds a fed body (food 18 or more) takes to regenerate one hp." (unchecked-get values "regenSecondsPerHp"))
+(defn ground-speed
+  "Blocks a second a walker on open ground (slipperiness 0.6) settles at with move input `input` and movement_speed attribute
+  `speed`: vanilla adds input x speed to its velocity each tick and keeps slipperiness x 0.91 of it, so 20 x input x speed
+  / (1 - 0.546) a second. A player's input is 0.98 (walk 0.1: 4.32, sprint 0.13: 5.61); a mob's is 0.98 x its own speed
+  (Mob.setSpeed sets its forward input to the speed), so a mob goes as its speed squared."
+  [input speed]
+  (/ (* 20 input speed) (- 1 (* (unchecked-get values "groundSlipperiness") (unchecked-get values "groundDrag")))))
+
+(defn mob-ground-speed
+  "ground-speed of a mob of movement_speed attribute `speed` at chase speed modifier 1 (the melee and ranged attack goals of the mobs listed)."
+  [speed]
+  (ground-speed (* (unchecked-get values "moveInputScale") speed) speed))
+
+(def baby-speed
+  "Blocks a second a baby zombie covers chasing: the zombie's attribute raised by the baby speed boost (+50% of base)."
+  (mob-ground-speed (* (get (js->clj (unchecked-get values "mobMovementSpeed")) "zombie") (+ 1 (unchecked-get values "babySpeedBoost")))))
+
 (def mob-speeds
-  "Blocks a second each hostile covers chasing a body on open ground, from its speed attribute (not measured live). Spiders also leap 2 to 4 blocks. Read for the time a mob stays remembered (engine.perception.mobs) and for outrunning and racing it (jobs.lib.cost.danger)."
-  (js->clj (unchecked-get values "mobSpeeds")))
+  "Blocks a second each hostile covers chasing a body on open ground: mob-ground-speed of its vanilla movement_speed
+  attribute; mobOtherSpeeds for the mobs that hop, fly or swim (not from game data, not measured). Spiders also leap 2 to 4 blocks.
+  Read for the time a mob stays remembered (engine.perception.mobs) and for outrunning and racing it (jobs.lib.cost.danger)."
+  (merge (update-vals (js->clj (unchecked-get values "mobMovementSpeed")) mob-ground-speed)
+         (js->clj (unchecked-get values "mobOtherSpeeds"))))
 
 (def crop-ripe-age
   "The growth stage at which each crop block can be harvested (a sweet berry bush from 2)."

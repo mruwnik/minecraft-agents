@@ -169,4 +169,3 @@
         ender (mob 1 "enderman" 15 2)]
     (is (< 0 (danger p [ender] :health 20) 20) "provoked-only share, no death")
     (is (= 0 (danger p [(assoc ender :angry false)])) "a calm enderman adds nothing")))
-

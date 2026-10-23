@@ -340,7 +340,7 @@
       {:x -4 :y 64 :z 6} :ok
       nil :later)
     (is (= :later (first (ready/threatened-walking (ctx-of (merge at-origin {:entities [(assoc zombie :baby true)]})) {:x 0 :y 64 :z 6})))
-        "a sprinting body outwalks a zombie across its way, not a baby's 5.1 blocks a second")
+        "a sprinting body outwalks a zombie across its way, not a baby, whose speed attribute is half again the zombie's")
     (is (= :later (first (walk (ctx-of (merge at-origin {:time st/noon :entities [zombie]}))))) "no goal: the plain threat")))
 
 (deftest a-hostile-at-the-heels-is-no-walk-away
