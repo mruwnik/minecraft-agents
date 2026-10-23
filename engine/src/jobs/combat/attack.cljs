@@ -382,7 +382,9 @@
   [c creeper]
   (let [cell (hostile/back-cell-of c creeper)]
     (when cell
-      (await (ctx/call c :back 'jobs.movement.run-away {:pos cell :range 0 :leg-s back-leg-s :checks {:safe? '(always) :fit? '(always)}}))
+      ;; raw moveTo kept: the step must get going inside the fuse (1.5 s) the swing began; a run-away call (a job round,
+      ;; its search) starts later than that. back-cell is a straight open way over sensed cells.
+      (await (ctx/act c :moveTo (clj->js {:pos cell :range 0 :timeoutS back-leg-s})))
       (let [{:keys [x y z]} (u/pos-of (.-pos creeper))]
         (await (ctx/act c :look #js {:pos #js {:x x :y (+ 1 y) :z z}}))
         (await (ctx/act c :wait #js {:ms look-settle-ms}))

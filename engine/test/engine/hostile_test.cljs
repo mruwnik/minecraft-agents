@@ -17,7 +17,9 @@
             [jobs.survival.recover-drops :as recover-drops]
             [jobs.survival.recover-drops.danger :as recover-drops-danger]
             [jobs.survival.respond-to-hostile :as respond-to-hostile]
+            [jobs.survival.shut-in :as shut-in]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.answer :as answer]
             [jobs.lib.pace :as pace]
             [engine.events :as events]
             [engine.fake :as fake]
@@ -990,6 +992,28 @@
               r (await (tu/child-outcome eng 'jobs.combat.attack {:targets :hostiles :radius 16 :ranged-radius 16} 50))]
           (is (= :hold-timeout (:reason r))
               "after a back-off the creeper 6 blocks off is waited for, not declined though a walk away would now be cheaper: the parent weighs, not each step"))))))
+
+;; Card ad8c1e8b: live, the walls/pit/pocket quotes held the decision 2.4 s while a creeper closed in and lit its fuse
+(deftest no-cover-is-quoted-with-a-creeper-near
+  (with-redefs [shut-in/covers (fn [& _] (throw (js/Error. "quoted")))]
+    (is (nil? (respond-to-hostile/cover-answers {} [#js {:name "creeper"} #js {:name "zombie"}] nil)))))
+
+;; Card ad8c1e8b: a run-away call after the swing got going later than the fuse the swing began (10.7 hp lost live)
+(deftest a-creeper-hit-is-stepped-back-from-inside-its-fuse-by-one-move-with-no-job-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:inventory sword :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 2 :y 64 :z 0}}]} 20)
+              at (atom {})
+              stamp! (fn [name] (.override (.-world p) name (fn ^:async o [token args impl]
+                                                              (swap! at update name #(or % ((:now eng))))
+                                                              (await (impl token args)))))]
+          (stamp! "attack")
+          (stamp! "moveTo")
+          (core/submit! eng fight {})
+          (await (core/tick! eng))
+          (is (< (- (get @at "moveTo") (get @at "attack")) (* 1000 answer/fuse-s)) "the step back begins within the fuse")
+          (is (empty? (filter #(= :back (get-in % [:data :slot])) @seen)) "no child job for it"))))))
 
 (deftest a-body-that-fled-ranged-mobs-twice-fights-them-to-the-end-however-far
   (async done

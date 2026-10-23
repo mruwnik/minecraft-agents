@@ -244,11 +244,14 @@
 
 (defn cover-answers
   "{way answer} of shutting the body in against near by each way shut-in/covers finds possible here (cost/cover-answer:
-  the blows while a side is open, the quote, the hide-out's quiet; then: what follows it, or the same cover once more)."
+  the blows while a side is open, the quote, the hide-out's quiet; then: what follows it, or the same cover once more).
+  None with a creeper near (cost/cover-answer: its blast takes the walls), so its quotes are not asked for: they take
+  seconds the fuse does not leave."
   [c near then]
-  (let [p (:primitives c)
-        mobs {:equipment (cost/equipment-of (.-equipment (.self p))) :mobs (mapv #(hostile/mob-near p %) near) :then then}]
-    (into {} (keep (fn [[w cover]] (some->> (cost/cover-answer mobs cover) (vector w)))) (shut-in/covers c cover-ways))))
+  (when-not (some combat/creeper? near)
+    (let [p (:primitives c)
+          mobs {:equipment (cost/equipment-of (.-equipment (.self p))) :mobs (mapv #(hostile/mob-near p %) near) :then then}]
+      (into {} (keep (fn [[w cover]] (some->> (cost/cover-answer mobs cover) (vector w)))) (shut-in/covers c cover-ways)))))
 
 (defn ^:async respond [c near]
   (let [p (:primitives c)
