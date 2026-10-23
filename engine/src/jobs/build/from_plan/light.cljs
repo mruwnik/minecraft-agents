@@ -49,7 +49,7 @@
 
 (defn lights-itself
   "safe, but ok where it only waits for light (:exposed, lowered by :light) or no light comes (:exposed, a torch lowers it) and the body can hang torches
-  itself, or fetch them for the owed cells of (cells-of c)."
+  itself, or fetch them for the owed cells of (cells-of c). A wait for light names :item \"torch\": torches carried end it."
   [safe cells-of]
   (let [exposed? (fn [[_ _ data]] (= :exposed (:reason data)))
         wait-for-light? (fn [[kind :as s]] (and (= :later kind) (exposed? s) (contains? (:lowered-by (nth s 2)) :light)))
@@ -59,7 +59,7 @@
                               (if (and (or (wait-for-light? s) (no-light? s))
                                        (or (can-light? c) (fetch-due? c (when (wait-for-light? s) (wait-s s)) (plan/owed (cells-of c)))))
                                 (contract/ok :torches "dark: the body hangs torches to build by")
-                                s))))]
+                                (cond-> s (wait-for-light? s) (assoc-in [2 :item] "torch"))))))]
     (with-meta (lit safe) (update (meta safe) :jobs.lib.ready/exposure #(some-> % lit)))))
 
 (defn dark-site?

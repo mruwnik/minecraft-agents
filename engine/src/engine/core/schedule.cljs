@@ -2,7 +2,7 @@
   "The scheduling pass: readiness of listed jobs (checks, job.waiting, the next one to run), who holds
   the body, cuts, firing reflexes and holding them off during a section (ctx/atomic), tick! and do-now!."
   (:require [engine.args :as a]
-            [engine.core.base :refer [add-instance dead? drop-reflex-job! emit! flush-save-stats! free-owner! hold-trigger! job-fields job-of exclusive-job memory-flush-due? new-id! now paused? reflex-text running save-memory! state ttl-now wait-reason waiting waiting-text]]
+            [engine.core.base :refer [add-instance dead? drop-reflex-job! emit! flush-save-stats! free-owner! hold-trigger! job-fields job-of exclusive-job memory-flush-due? new-id! now paused? reflex-text running save-memory! state told-wait ttl-now wait-inputs waiting waiting-text]]
             [engine.core.attention :refer [request-attention!]]
             [engine.core.fruitless :refer [reset-backoff!]]
             [engine.core.register :refer [effective-register evaluate-register! expire-changes! levels preempts?]]
@@ -35,7 +35,7 @@
   (let [before (get @(:waiting eng) id)]
     (if (= ::passed reason)
       (when (and before (not (:child (meta before)))) (swap! (:waiting eng) dissoc id))
-      (let [r (with-meta (wait-reason reason) {:t (now eng)})]
+      (let [r (told-wait eng reason {})]
         (swap! (:waiting eng) #(assoc (select-keys % (:list (state eng))) id r))
         (when (not= before r)
           (emit! eng (merge (job-fields eng id)
@@ -43,11 +43,11 @@
 
 (defn resting?
   "Whether listed job id waits with a reason naming :recheck-after-ms (its own check's, or its round's child's) that has not
-  lapsed: it is neither checked nor given a round until then, as a held trigger is not. Never a job closing for its cleanup."
+  lapsed, and nothing it was judged on has changed since (base/wait-inputs): it is neither checked nor given a round until then, as a held trigger is not. Never a job closing for its cleanup."
   [eng id]
   (let [w (get @(:waiting eng) id)
         ms (:recheck-after-ms w)]
-    (boolean (and ms (< (- (now eng) (:t (meta w))) ms) (not (cleanup/closing? eng id []))))))
+    (boolean (and ms (< (- (now eng) (:t (meta w))) ms) (= (:inputs (meta w)) (wait-inputs eng w)) (not (cleanup/closing? eng id []))))))
 
 (defn held-trigger
   "Why trigger id is held: the reason map of the start check of its job that declined, or nil."

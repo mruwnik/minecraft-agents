@@ -7,7 +7,9 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.event-api :as event-api]
+            [engine.fake :as fake]
             [engine.job-api :as job-api]
+            [engine.primitive :as prim]
             [engine.test-util :as tu]
             [jobs.lib.cond :as cond]
             [jobs.lib.waits :as waits]))
@@ -33,19 +35,31 @@
   (swap! asked inc)
   (waits/waiting-out c (contract/ending :condition-failed (contract/status-cause dark-later) nil)))
 
+(defn torch-check
+  "Passes once a torch is carried, else waits :no-torches naming the torch, rechecked in 10 min."
+  [c]
+  (swap! asked inc)
+  (if (pos? (prim/carried (:primitives c) "torch"))
+    (contract/ok :torches "torches")
+    (contract/later :no-torches "no torches" :item "torch" :recheck-after-ms 600000)))
+
 (def registry
-  {'gated (tu/job [gate-condition] count-round)
+  {'torch-wait (tu/job [torch-check] count-round)
+   'gated (tu/job [gate-condition] count-round)
    'counted-dark (tu/job [(fn [_] (swap! asked inc) dark-later)] count-round)
    'child-dark (tu/job child-waits-round)
    'never (tu/job [(constantly (contract/later :not-ready "not ready"))] count-round)
    'torch-lit {:can-start? (cond/because :few-torches (cond/>= (cond/inventory "torch") 4)) :round count-round}})
 
-(defn setup []
+(defn setup
+  ([] (setup {}))
+  ([spec]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        eng (core/create {:primitives (tu/fake {}) :jobs registry :triggers {} :dir (tu/tmp-dir) :now #(deref clock)
+        p (tu/fake spec)
+        eng (core/create {:primitives p :jobs registry :triggers {} :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    {:eng eng :seen seen :clock clock}))
+    {:eng eng :seen seen :clock clock :p p})))
 
 (defn ^:async ticks [eng n]
   (dotimes [_ n] (await (core/tick! eng))))
@@ -143,3 +157,24 @@
             (swap! clock + 60000)
             (await (core/tick! eng))
             (is (= 2 @asked) (str spec ": asked again once it lapsed"))))))))
+
+(deftest a-resting-wait-wakes-the-tick-what-it-was-judged-on-changes
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[what change asked?] [["torches arrive" #(fake/give % "torch" 4) #(< 1 %)]
+                                      ["another item" #(fake/give % "dirt" 4) #{1}]
+                                      ["the body moves" #(assoc-in % [:self :pos] [5.5 64 0.5]) #{2}]
+                                      ["a torch lights its cell" #(assoc-in % [:light [0 64 0]] [15 14]) #{2}]
+                                      ["the time is set to night" #(assoc % :time 18000) #{2}]]]
+          (reset! asked 0)
+          (let [{:keys [eng clock p]} (setup {:time 1000 :light {}})]
+            (core/submit! eng '(seq (torch-wait)) {})
+            (dotimes [_ 10] (swap! clock + 250) (await (core/tick! eng)))
+            (is (= 1 @asked) (str what ": rests on its 10 min recheck"))
+            (swap! (fake/state p) change)
+            (swap! clock + 250)
+            (await (core/tick! eng))
+            (is (asked? @asked) (str what ": checked again in the next tick only when it was judged on it"))
+            (dotimes [_ 10] (swap! clock + 250) (await (core/tick! eng)))
+            (is (asked? @asked) (str what ": a wait told again rests again"))))))))

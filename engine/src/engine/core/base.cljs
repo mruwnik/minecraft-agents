@@ -9,6 +9,8 @@
             [engine.expr :as expr]
             [engine.fsutil :as fsu]
             [engine.memory :as mem]
+            [engine.perception.light :as light]
+            [engine.primitive :as prim]
             [engine.settings :as settings]
             ["path" :as path]))
 
@@ -340,6 +342,29 @@
   (cond (map? r) r
         (some? r) {:reason r}
         :else {:reason :not-ready}))
+
+(defn wait-inputs
+  "What wait w was judged on, read now: the body's cell, the count of the item it names (:item), the packed light at the
+  cell it names (:pos or :at, else the body's cell) and the sky's brightness in 16ths. A resting job wakes when one changes."
+  [eng w]
+  (let [^js p (:primitives eng)
+        ^js raw (.-rawWorld p)
+        pos (some-> (.self p) .-pos)
+        feet (when pos (mapv #(js/Math.floor (aget pos %)) ["x" "y" "z"]))
+        cell-of (fn [c] (let [v (if (map? c) ((juxt :x :y :z) c) c)]
+                          (when (and (sequential? v) (= 3 (count v)) (every? number? v)) (mapv js/Math.floor v))))
+        cell (or (some cell-of [(:pos w) (:at w)]) feet)]
+    {:feet feet
+     :item (when (string? (:item w)) (prim/carried p (:item w)))
+     :light (when (and raw cell) (let [[x y z] cell] (.lightAt raw x y z)))
+     :sky (when-let [^js sky (and raw (fn? (.-sky raw)) (.sky raw))]
+            (when (number? (.-timeOfDay sky)) (js/Math.round (* 16 (light/sky-darken (.-timeOfDay sky) (or (.-rain sky) 0) (or (.-thunder sky) 0))))))}))
+
+(defn told-wait
+  "reason as a wait (wait-reason) whose meta m gets the time it is told and what it was judged on (wait-inputs): schedule/resting? reads both."
+  [eng reason m]
+  (let [w (wait-reason reason)]
+    (with-meta w (assoc m :t (now eng) :inputs (wait-inputs eng w)))))
 
 (defn waiting-text [{:keys [reason text] :as r}]
   (if text

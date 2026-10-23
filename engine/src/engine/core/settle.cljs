@@ -2,7 +2,7 @@
   "Settling a round: booking a listed job's or a reflex job's outcome, judging reflex ends against the
   entry's persistence, and starting a round."
   (:require [engine.core.activity :as activity]
-            [engine.core.base :refer [delete-root! drop-instance! drop-reflex-job! emit! free-owner! hold-trigger! job-fields exclusive-job now paused? reflex-text remove-listed running save-memory! set-owner! state stopped-result? wait-reason waiting-text]]
+            [engine.core.base :refer [delete-root! drop-instance! drop-reflex-job! emit! free-owner! hold-trigger! job-fields exclusive-job now paused? reflex-text remove-listed running save-memory! set-owner! state stopped-result? told-wait waiting-text]]
             [engine.core.attention :refer [request-attention! resolve-job-attention!]]
             [engine.core.ending :refer [refused?]]
             [engine.core.fruitless :refer [book-round! note-fruitless! note-silent!]]
@@ -30,7 +30,7 @@
   (let [before (get @(:waiting eng) id)]
     (cond
       (and (#{:declined :continue} status) reason)
-      (let [r (with-meta (wait-reason reason) {:child true :t (now eng)})]
+      (let [r (told-wait eng reason {:child true})]
         (swap! (:waiting eng) #(assoc (select-keys % (:list (state eng))) id r))
         (when (not= before r)
           (emit! eng (merge (job-fields eng id)
