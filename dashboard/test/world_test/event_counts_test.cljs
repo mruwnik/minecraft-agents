@@ -84,5 +84,18 @@
     (is (= [:open] (ends far)) "a respond decision about the kind, the mob 6 blocks off, is a sighting still open")
     (is (= [:open] (ends nil)) "a heard mob has no spot")))
 
+(deftest one-hurt-or-decision-ends-one-sighting-of-the-kind-the-nearest-to-the-event
+  (let [ends (fn [event] (map (juxt :t :end) (sort-by :t (c/notices [(saw 0 "zombie" 20) (saw 1000 "zombie" 2) (pos 1500 1) event]))))]
+    (is (= [[0 :open] [1000 :caught]] (ends (rec 2000 :hurt :amount 3 :causes #{"zombie"} :at {:x 1 :y 64 :z 0})))
+        "two zombies seen, one hurt: the one nearest the body is caught, the other stays open")
+    (is (= [[0 :open] [1000 :caught]] (ends (rec 2000 :decided :mob "zombie" :at {:x 2 :y 64 :z 0})))
+        "a decision catches the sighting nearest the mob it places")))
+
+(deftest a-ranged-mob-is-caught-and-weighed-by-its-range-not-its-melee-reach
+  (let [decided (fn [mob] (c/notices [(saw 0 mob 12) (pos 1000 0) (rec 1500 :decided :mob mob :at {:x 12 :y 64 :z 0})]))]
+    (is (= [[1.5 :caught]] (map (juxt :s :end) (decided "skeleton"))) "12 blocks off, in range: weight 1, caught by a decision there")
+    (is (= [:open] (map :end (decided "zombie"))) "a zombie at 12 blocks is out of melee reach"))
+  (is (= [:other :ranged] (keys (:by-class (c/notice-report (c/notices [(saw 0 "skeleton" 12) (saw 0 "zombie" 12)])))))))
+
 (deftest a-sighting-out-of-follow-range-or-of-a-provoked-only-mob-is-not-followed
   (is (empty? (c/notices [(saw 0 "skeleton" 20) (saw 0 "enderman" 2)]))))

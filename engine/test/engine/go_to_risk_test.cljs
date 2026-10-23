@@ -363,9 +363,17 @@
   ;; on open ground: a zombie by the way 30 blocks off, whose field reaches the body's cell, and three 60 blocks off, whose fields do not; a notice rate at which the zombies get to the body on the walk as surely as at its cell
   (let [zombies (for [[i x] (map-indexed vector [30 60 61 62])] {:id (+ 7 i) :name "zombie" :kind "hostile" :pos {:x x :y 64 :z 3}})
         c (ready-test/ctx-of (assoc ready-test/open-night :self {:pos {:x 0 :y 64 :z 0} :health 2.3 :food 5} :entities (vec zombies)))
-        s (settings/with-settings {:jobs.lib.cost.death/notice-rate {:k 36 :n-s 100}} #(risk/status c far-goal))]
+        s (settings/with-settings {:jobs.lib.cost.death/notice-rate {:other {:k 36 :n-s 100} :ranged {:k 36 :n-s 100}}} #(risk/status c far-goal))]
     (is (= :never (first s)))
     (is (= :stranded (:reason (nth s 2))))))
+
+(deftest a-body-that-cannot-heal-among-zombies-at-the-measured-notice-rate-walks-when-the-walk-is-the-cheaper-risk
+  ;; the same field as the stranded case, at the shipped rate: the stay and the walk both near-certain deaths, the walk slightly less
+  (let [zombies (for [[i x] (map-indexed vector [30 60 61 62])] {:id (+ 7 i) :name "zombie" :kind "hostile" :pos {:x x :y 64 :z 3}})
+        c (ready-test/ctx-of (assoc ready-test/open-night :self {:pos {:x 0 :y 64 :z 0} :health 2.3 :food 5} :entities (vec zombies)))
+        s (risk/status c far-goal)]
+    (is (= :ok (first s)))
+    (is (= :cheaper-than-staying (:reason (nth s 2))))))
 
 (deftest a-healing-body-on-dark-open-ground-goes-on-when-waiting-there-costs-as-much
   (let [c (ready-test/ctx-of (assoc ready-test/open-night :self {:pos {:x 0 :y 64 :z 0} :health 5 :food 15} :inventory [{:name "bread" :count 3}]))

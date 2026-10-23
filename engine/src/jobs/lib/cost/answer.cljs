@@ -352,7 +352,7 @@
         hurt (memoize #(threat-hurt body %1 %2 at))]
     (min (life body)
          (reduce + 0 (for [{:keys [mob weight reach caught]} (when (seq cells) threats)
-                           :let [met (death/met-chance reach cells)]
+                           :let [met (death/met-chance mob reach cells)]
                            :when (pos? met)]
                        (* (or weight 1) met (hurt mob caught)))))))
 
@@ -364,7 +364,7 @@
   (let [at (or at (first cells))
         chance (memoize (fn [mob caught] (threat-chance body mob caught at)))
         survive (reduce (fn [s {:keys [mob weight reach caught]}]
-                          (let [met (death/met-chance reach cells)]
+                          (let [met (death/met-chance mob reach cells)]
                             (if (pos? met)
                               (* s (- 1 (* (or weight 1) met (chance mob caught))))
                               s)))

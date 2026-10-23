@@ -13,6 +13,7 @@
   each would cost more from the respawn the body has."
   (:require [engine.args :as a]
             [engine.settings :as settings]
+            [jobs.lib.cost.threat :as threat]
             [jobs.lib.cost.value :as value]))
 
 (a/defargs settings
@@ -24,8 +25,9 @@
                            :doc "Chance of dying on a route over the surface at night."}
    ::chance-underground {:default 0.002 :spec (a/num-in 0 1)
                          :doc "Chance of dying on a route underground."}
-   ::notice-rate {:default {:k 7 :n-s 41.5} :spec (a/map-with {:k (a/int-in 0 nil) :n-s (a/num-in 0 nil)})
-                  :doc "Of the weighted seconds n-s that 23 watch sightings of hostiles within follow range spent in the body's field (weight 1 within a few steps of the mob's way, less beyond), the catches k: a hurt from that kind, or a respond decision with the mob within melee reach. Priced by the Gamma posterior mean (k + 0.5) / n-s, the chance a second a hostile at weight 1 gets to the body (met-chance). 8 sightings ended in a position gap (censored: seconds up to it, no catch). Too few to split by mob (zombie 5 of 12.2 s, creeper 2 of 29.4 s). Recount: node tools/event-counts.mjs notice-rate, 2026-10-23; per-case evidence replaces it."}
+   ::notice-rate {:default {:other {:k 8 :n-s 42.4} :ranged {:k 0 :n-s 0}}
+                  :spec (let [counts (a/map-with {:k (a/int-in 0 nil) :n-s (a/num-in 0 nil)})] (a/map-with {:other counts :ranged counts}))
+                  :doc "Per class of mob (:ranged: threat/ranged?, caught by a line of fire within the ranged radius; :other: caught within melee reach) of the weighted seconds n-s that watch sightings of hostiles within follow range spent in the body's field (weight 1 within a few steps of the mob's way, or a ranged mob's range, less beyond), the catches k: a hurt from that kind, or a respond decision with the mob in reach; one catch ends the one sighting of the kind nearest the event (the events carry no entity id). Priced by the Gamma posterior mean (k + 0.5) / n-s, the chance a second a hostile at weight 1 gets to the body (met-chance). :other counts 24 sightings (8 ended in a position gap, censored: seconds up to it, no catch; zombie 6 of 13 s, creeper 2 of 29.4 s, too few to split by mob). :ranged has no seconds counted: every skeleton seen was first seen beyond its 16 blocks, so the :other counts price it. Recount: node tools/event-counts.mjs notice-rate, 2026-10-23; per-case evidence replaces it."}
    ::deaths-per-hour {:default 1.3 :spec (a/num-in 0 nil)
                       :doc "Deaths an hour of play, every cause: the fresh-start trials of 2026-10-21/22 (Wicken r5, 8 deaths in 6h15; docs/fresh-start-design.md section 1)."}
    ::spawn-walk-blocks {:default 5000 :spec (a/num-in 0 nil)
@@ -85,17 +87,18 @@
      (if (pos? life) (max 0 (- 1 below)) 1))))
 
 (defn notice-rate
-  "The mean (k + 0.5) / n-s of the Gamma posterior of ::notice-rate, per weighted second."
-  []
-  (let [{:keys [k n-s]} (settings/get settings ::notice-rate)]
+  "The mean (k + 0.5) / n-s of the Gamma posterior of ::notice-rate for mob, per weighted second: its class's counts (a ranged mob's own), the :other ones while the class has no seconds counted."
+  [mob]
+  (let [counts (settings/get settings ::notice-rate)
+        {:keys [k n-s]} (let [own (get counts (if (threat/ranged? {:name mob}) :ranged :other))] (if (pos? (:n-s own)) own (:other counts)))]
     (/ (+ k 0.5) (max 1e-9 n-s))))
 
 (defn met-chance
-  "The chance a threat whose reach (a fn of a cell x y z, its weight 0-1, nil outside) holds route cells [{:x :y :z :s}]
-  gets to the body on them: 1 - prod(1 - w r dt), r (notice-rate), dt the cell's :s, else the walk to it from the cell
+  "The chance a threat mob whose reach (a fn of a cell x y z, its weight 0-1, nil outside) holds route cells [{:x :y :z :s}]
+  gets to the body on them: 1 - prod(1 - w r dt), r (notice-rate of mob), dt the cell's :s, else the walk to it from the cell
   before (a block for the first)."
-  [reach cells]
-  (let [r (notice-rate)
+  [mob reach cells]
+  (let [r (notice-rate mob)
         speed (value/walk-blocks-per-s)]
     (- 1 (reduce (fn [miss [prev {:keys [x y z s] :as cell}]]
                    (if-let [w (reach (js/Math.floor x) (js/Math.floor y) (js/Math.floor z))]

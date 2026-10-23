@@ -873,9 +873,13 @@
       (mem/write! (:store eng) :deaths {:pos {:x i :y 64 :z 0} :death-t i} core/deaths-policy))
     (is (= 10 (count (deaths eng))))))
 
-(deftest the-notice-rate-is-the-posterior-mean-of-its-counts
-  (is (= 0.25 (settings/with-settings {:jobs.lib.cost.death/notice-rate {:k 9 :n-s 38}} death/notice-rate)))
-  (is (< (js/Math.abs (- 0.5 (settings/with-settings {:jobs.lib.cost.death/notice-rate {:k 9 :n-s 38}}
-                                                     #(death/met-chance (constantly 1) [{:x 0 :y 0 :z 0 :s 2}]))))
-         1e-9)
-      "2 s in the field at weight 1: 1 - (1 - 0.25 x 2)"))
+(deftest the-notice-rate-is-the-posterior-mean-of-the-counts-of-the-mobs-class
+  (let [counts {:jobs.lib.cost.death/notice-rate {:other {:k 9 :n-s 38} :ranged {:k 2 :n-s 5}}}
+        with #(settings/with-settings counts %)]
+    (is (= 0.25 (with #(death/notice-rate "zombie"))))
+    (is (= 0.25 (with #(death/notice-rate "creeper"))))
+    (is (= 0.5 (with #(death/notice-rate "skeleton"))) "a skeleton is priced by the ranged counts")
+    (is (= 0.25 (settings/with-settings {:jobs.lib.cost.death/notice-rate {:other {:k 9 :n-s 38} :ranged {:k 0 :n-s 0}}} #(death/notice-rate "skeleton")))
+        "a class with no seconds counted is priced by the other counts")
+    (is (< (js/Math.abs (- 0.5 (with #(death/met-chance "zombie" (constantly 1) [{:x 0 :y 0 :z 0 :s 2}])))) 1e-9)
+        "2 s in the field at weight 1: 1 - (1 - 0.25 x 2)")))
