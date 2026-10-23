@@ -308,7 +308,8 @@
     (mem/write! store :restart {})
     (save-memory! eng)
     (emit! eng {:source :system :kind (if saved :restored :started) :level :info
-                :list (:list (state eng)) :register (mapv :id (:register (state eng)))})
+                :list (:list (state eng)) :register (mapv :id (:register (state eng)))
+                :difficulty (game/difficulty) :simulation-distance (game/simulation-distance)})
     eng))
 
 (defn shutdown!

@@ -186,6 +186,7 @@
     (-> {:self (merge default-self self {:held (:held self)})
          :time (:time spec 1000)
          :players (vec (:players spec))
+         :server (:server spec)
          :raining (:raining spec false)
          :thundering (:thundering spec false)
          :blocks (cells (:blocks spec) identity)
@@ -1026,6 +1027,7 @@
               "isSettling" (fn [] (and (not (:offline @state)) (:settling @state)))
               "self" (fn [] (if (:offline @state) #js {:status "offline"} (self-view @state)))
               "worldAge" (fn [] (get-in @state [:self :worldAge]))
+              "serverRules" (fn [] (clj->js (:server @state)))
               "entities"
               (fn [a]
                 (let [{:keys [radius kind names ids max] :or {radius 16 max 32}} (js->clj (or a #js {}) :keywordize-keys true)

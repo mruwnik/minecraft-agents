@@ -39,10 +39,25 @@
   "The version game data (foods, drops) is read for; set once per engine (select!)."
   (atom default-version))
 
+(def rules-source
+  "A fn returning what the server announced, {:difficulty name :simulationDistance chunks} (nil fields unknown); set by select!."
+  (atom (constantly nil)))
+
 (defn select!
-  "Read game data for the version the body of primitives p is connected with."
+  "Read game data for the version the body of primitives p is connected with, and follow its server's rules."
   [p]
-  (reset! version (version-of p)))
+  (reset! version (version-of p))
+  (reset! rules-source #(when (fn? (.-serverRules p)) (js->clj (.serverRules p) :keywordize-keys true))))
+
+(def difficulties ["peaceful" "easy" "normal" "hard"])
+
+(defn difficulty
+  "The server difficulty the body senses, 0 peaceful to 3 hard, or nil while unknown."
+  []
+  (some->> (:difficulty (@rules-source)) (.indexOf difficulties) (#(when (>= % 0) %))))
+
+(defn simulation-distance "The server's simulation distance in chunks the body senses, or nil while unknown." []
+  (:simulationDistance (@rules-source)))
 
 (def despawn-ticks "How long dropped items lie before they despawn, in game ticks (5 minutes at 20 TPS)." 6000)
 

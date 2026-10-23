@@ -106,7 +106,7 @@
     (is (= "air" (:name (block-at p 3 64 0))))))
 
 (def not-acting
-  #{"world" "setOwner" "isOwner" "isOffline" "isSettling" "self" "worldAge" "entities" "blocks"
+  #{"world" "setOwner" "isOwner" "isOffline" "isSettling" "self" "worldAge" "serverRules" "entities" "blocks"
     "digTime" "clearTime" "harvestTools" "blockAt" "pathWorld" "onBodyEvent" "close"})
 
 (deftest the-primitive-table-has-every-acting-primitive-of-the-fake

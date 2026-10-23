@@ -4,6 +4,7 @@
   A witch's potions (poison, harming) bypass armour. A creeper is one blast of 43 (:explosion) however long the exposure; a ranged mob shoots (:projectile); any other
   hits for its mob-hit (3 if unknown, scaled by the server difficulty) one a second (:melee). Endermen and zombified piglins only fight when provoked."
   (:require [engine.args :as a]
+            [engine.game :as game]
             [engine.settings :as settings]
             ["minecraft-data" :as minecraft-data]
             [jobs.lib.cost.weapon :as weapon]
@@ -13,7 +14,8 @@
   {::creeper-blast {:default 43 :doc "Damage a creeper's blast is costed at." :spec (a/int-in 0 nil)}
    ::creeper-exchange-hp {:default 3.06 :doc "k of the creeper exchange: hp creepers dealt over the swings (attack that hit or killed) of hit-and-back fights with a sword or axe against a lone creeper (a late step back lets the fuse run on); 1 trial run, 1 blast over 2 hp, all before 336cdd402 (the back-off) and none counted since. Recount: node tools/event-counts.mjs creeper-exchange (:armed); per-case evidence replaces it." :spec (a/num-in 0 nil)}
    ::creeper-exchange-swings {:default 5 :doc "n of the creeper exchange: the swings behind ::creeper-exchange-hp." :spec (a/num-in 1 nil)}
-   ::difficulty {:default 1 :doc "The server difficulty mob hits are costed at: 0 peaceful, 1 easy, 2 normal, 3 hard (not read from the server)." :spec (a/int-in 0 3)}
+   ::difficulty {:default nil :doc "Override of the server difficulty mob hits and door breaking are costed at: 0 peaceful, 1 easy, 2 normal, 3 hard. Unset, the body's sensed difficulty counts (easy while it is unknown)." :spec (a/int-in 0 3)}
+   ::default-simulation-distance {:default 10 :doc "Chunks around a player that tick, when the server's simulation distance is unknown (vanilla default)." :spec (a/int-in 2 32)}
    ::spot-occupied {:default {:k 1 :n 4} :spec (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)})
                     :doc "Of the death and near-death spots the trial bodies came back within 16 blocks of after 300 s or more 32 to 128 blocks off (vanilla: its killer had despawned), those where a hostile met the body within 60 s (k) of all (n): node tools/event-counts.mjs spot-returns, 2026-10-23."}
    ::door-breaker-share {:default 0.1 :doc "The share of zombies, husks and zombie villagers drawn with the break-door goal at spawn: vanilla Zombie.finalizeSpawn sets it when nextFloat < 0.1 x the clamped regional difficulty (0 to 1), a value the body cannot read; costed at that cap 1, so 0.1 (the wiki's Zombie page: \"10% x regional difficulty\")." :spec (a/num-in 0 1)}
@@ -23,6 +25,14 @@
    ::provoked-share {:default 0.1 :doc "What a provoked-only mob's threat counts for when it is met, not fought." :spec (a/num-in 0 nil)}
    ::default-follow-range {:default 16 :doc "Blocks a mob of unknown kind notices the body from." :spec (a/int-in 1 nil)}
    ::field-close {:default 3 :doc "Steps of a mob's way within which its field weighs 1 (way-weight)." :spec (a/int-in 0 nil)}})
+
+(defn difficulty
+  "The server difficulty costs use: the ::difficulty override, else the sensed one, else easy."
+  []
+  (or (settings/get settings ::difficulty) (game/difficulty) 1))
+
+(defn simulation-distance "Chunks around a player that tick: the server's, else ::default-simulation-distance." []
+  (or (game/simulation-distance) (settings/get settings ::default-simulation-distance)))
 
 (def follow-ranges
   "Blocks a mob keeps chasing its target out to (vanilla follow_range attribute; its navigation goes no farther)."
@@ -61,7 +71,7 @@
   difficulty is below its own; for a zombie kind the ::door-breaker-share it was drawn with; else 1."
   [mob-name]
   (let [from (door-breakers mob-name)]
-    (cond (or (nil? from) (> from (settings/get settings ::difficulty))) 0
+    (cond (or (nil? from) (> from (difficulty))) 0
           (spawn-drawn mob-name) (settings/get settings ::door-breaker-share)
           :else 1)))
 
@@ -88,12 +98,12 @@
 
 (defn left-alive
   "The chance the hostile mob is not despawned (vanilla): 0 once a player was more than despawn-blocks from it (farthest;
-  its chunk still ticks there at the default simulation distance of 10), else 1 in 800 a tick after idle-despawn-s of
+  only where the server's simulation distance still ticks its chunk that far), else 1 in 800 a tick after idle-despawn-s of
   away-s with none within idle-despawn-blocks; unless it picked up the body's drops (drops?): a loot-picker above easy, at
   most loot-share (the chunk's inhabited time, which sets the multiplier, is unknown)."
   [mob farthest away-s drops?]
-  (let [kept (if (and drops? (contains? loot-pickers mob) (> (settings/get settings ::difficulty) 1)) loot-share 0)
-        despawned (if (> farthest despawn-blocks) 1 (- 1 (js/Math.exp (- (* idle-despawn-per-s (max 0 (- away-s idle-despawn-s)))))))]
+  (let [kept (if (and drops? (contains? loot-pickers mob) (> (difficulty) 1)) loot-share 0)
+        despawned (if (and (> farthest despawn-blocks) (> (* 16 (simulation-distance)) despawn-blocks)) 1 (- 1 (js/Math.exp (- (* idle-despawn-per-s (max 0 (- away-s idle-despawn-s)))))))]
     (- 1 (* (- 1 kept) despawned))))
 
 (defn spawned-there
@@ -151,7 +161,7 @@
 (defn difficulty-scale
   "vanilla's melee/arrow damage at the ::difficulty setting for a hit of normal damage d."
   [d]
-  (case (settings/get settings ::difficulty)
+  (case (difficulty)
     0 0
     1 (min (+ (/ d 2) 1) d)
     3 (* 1.5 d)

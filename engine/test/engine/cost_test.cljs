@@ -1,12 +1,15 @@
 (ns engine.cost-test
   "jobs.lib.cost: one armour formula (vanilla's) under every calculator: fight cost, mob threat and the planner's rate."
   (:require [cljs.test :refer [deftest is are]]
+            [engine.fake :as fake]
+            [engine.game :as game]
             [engine.settings :as settings]
             [engine.shelter-support :as st]
             [engine.sky-perception :as sky]
             [engine.test-util :as tu]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger]
+            [jobs.lib.cost.threat :as threat]
             [jobs.lib.look :as look]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]))
@@ -450,3 +453,17 @@
         "a fist fight lasts longer")
     (is (= 1 (cost/kill-drops "spider" "string")) "0 to 2 string")
     (is (nil? (cost/kill-drops "spider" "bone")))))
+
+(deftest costs-follow-the-difficulty-and-simulation-distance-the-server-announced
+  (let [zombie-s #(cost/mob-hurt (cost/armour-stats nil) "zombie" 10)]
+    (game/select! (fake/create {:server {:difficulty "hard" :simulationDistance 6}}))
+    (is (= 45 (zombie-s)) "hard prices a hit at 4.5")
+    (is (threat/breaks-door? "zombie"))
+    (is (< 0 (threat/left-alive "zombie" 200 0 true)) "above easy a loot-picker with the drops outlives the body going far")
+    (is (= 6 (threat/simulation-distance)))
+    (is (< 0 (threat/left-alive "creeper" 200 600 false) 1) "6 chunks is 96 blocks: no tick reaches the instant-despawn zone, only the idle odds apply")
+    (is (= 25 (settings/with-settings {::threat/difficulty 1} zombie-s)) "the setting overrides what the server said")
+    (game/select! (fake/create {}))
+    (is (= 25 (zombie-s)) "unknown: easy")
+    (is (= 10 (threat/simulation-distance)))
+    (is (= 0 (threat/left-alive "creeper" 200 0 false)))))
