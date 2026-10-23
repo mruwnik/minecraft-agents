@@ -188,7 +188,7 @@
         (await
          (settings/with-settings {:jobs.survival.leave-shelter/job-time-s 30} ; runs end on their budget: the hold spans several
            (fn ^:async held []
-             (let [{:keys [eng p clock]} (await (dug-in-world {:entities [far-zombie] :self {:health 3}}))
+             (let [{:keys [eng p clock]} (await (dug-in-world {:entities [(assoc far-zombie :pos {:x 8 :y 64 :z 0})] :self {:health 3}}))
                    sealed {:x 0.5 :y 64 :z 0.5}
                    held (atom nil)]
                (st/on-wait! p (fn [n]

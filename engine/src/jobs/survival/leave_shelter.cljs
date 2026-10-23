@@ -21,6 +21,7 @@
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.shelter.spawn :as sh-spawn]
+            [jobs.lib.threat-field :as field]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [engine.game :as game]
@@ -130,7 +131,8 @@
                    :let [cells (dig-leave/exit-cells p h)
                          mobs (map (fn [m] {:name (.-name m) :pos (danger/mob-pos p m)})
                                    (danger/dangers-opened p threats/max-follow-range (danger/ranged-radius) cells))
-                         hurt (:danger (cost/route-danger (game/version-of p) (danger/opened-lookup (reach/mob-lookup p) cells)
+                         lookups {:kind-at (danger/opened-lookup (reach/mob-lookup p) cells) :arrow-at (danger/opened-lookup (reach/arrow-lookup p) cells)}
+                         hurt (:danger (cost/route-danger (game/version-of p) #(field/reach-fn (field/field p {:mob (:name %) :pos (:pos %)} lookups))
                                                           (map #(zipmap [:x :y :z] %) cells) mobs (.-equipment self)
                                                           :weapon weapon :health (.-health self)))]]
                {:heading h :price (cost/opening-price body hurt route (sh-sense/feet p)) :hurt hurt}))))
