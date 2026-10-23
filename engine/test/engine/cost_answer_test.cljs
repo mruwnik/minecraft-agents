@@ -77,6 +77,14 @@
     (is (= (cost/flee-answer {:food 20 :mobs [zombie]}) (first (:then (cost/flee-answer {:food 20 :mobs [(mob "creeper" 3) zombie]}))))
         "after the blast only the zombie is walked from again")))
 
+(deftest a-body-that-can-neither-outrun-nor-outfight-a-spider-digs-in
+  (let [spider (mob "spider" 2)
+        answers {:fight (cost/fight-answer (fight nil spider)) :flee (cost/flee-answer {:food 20 :mobs [spider]})}]
+    (is (= :fight (:answer (cost/decide (body 20) answers here))) "with no cover the fist is all that is left")
+    (is (= :pit (:answer (cost/decide (body 20) (assoc answers :pit (cost/cover-answer {:mobs [spider]} {:open-s 4 :seconds 40})) here)))
+        "a pit dug in 4 s under the spider's blows beats a fist fight it hardly survives")
+    (is (nil? (cost/cover-answer {:mobs [(mob "creeper" 4)]} {:open-s 4 :seconds 40})) "a blast takes the cover")))
+
 (deftest a-mob-that-came-back-before-makes-a-walk-dearer
   (let [walk #(cost/answer-price (body 20) (cost/flee-answer {:food 20 :mobs [(mob "skeleton" 10)] :returns %}) here)]
     (is (> (walk 2) (walk 1) (walk 0)))))
@@ -99,7 +107,8 @@
   (let [build #(:damage (cost/build-answer {:mobs [(mob "zombie" %)] :seconds 2}))]
     (is (> (build 1) (build 4) (build 8)))
     (is (zero? (build 8)) "a zombie 8 off is not there within 2 s"))
-  (is (zero? (:damage (cost/build-answer {:mobs [(mob "skeleton" 1)] :seconds 2}))) "a shooter is no melee blow"))
+  (is (pos? (:damage (cost/build-answer {:mobs [(mob "skeleton" 10)] :seconds 2}))) "a shooter in bow range shoots meanwhile")
+  (is (zero? (:damage (cost/build-answer {:mobs [(mob "skeleton" 20)] :seconds 2}))) "one beyond it does not"))
 
 
 

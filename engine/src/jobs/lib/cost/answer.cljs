@@ -18,6 +18,7 @@
   (danger/flight-start-s) blows at the distance the body reached when its fuse ends. The mob is left alive:
   :then the fight with it, or the same walk once more. A stub until the priced flee search (card ee045b60).
   build-answer: building a refuge (seal or pillar) for some seconds: the blows of the melee mobs that arrive meanwhile.
+  cover-answer: shutting the body in (walls, pit or pocket) by build-answer, then hidden for the quiet.
 
   Game facts kept as constants: a creeper's explosion power (3; damage falls off to none at twice it), its swell start
   (3 blocks) and fuse (1.5 s), a skeleton's bow range (15 blocks)."
@@ -166,15 +167,29 @@
 
 (defn build-answer
   "The answer of building a refuge for seconds against mobs [flee-mob's] wearing equipment: the blows of each melee mob
-  (no creeper, enderman or shooter) from its arrival (its chase speed) to the end, at its measured hit rate."
+  from its arrival (its chase speed), and the arrows of each shooter within its bow's range, to the end, at its measured
+  hit rate; none from a creeper or an enderman."
   [{:keys [equipment mobs seconds]}]
   (let [stats (armour/armour-stats equipment)
-        melee (remove #(or (#{"creeper" "enderman"} (:name %)) (contains? weapon/ranged-mobs (:name %))) mobs)
+        hitting (remove #(or (#{"creeper" "enderman"} (:name %))
+                             (and (contains? weapon/ranged-mobs (:name %)) (> (or (:distance %) 0) bow-range)))
+                        mobs)
         left (fn [{:keys [name distance speed]}]
-               (max 0 (- seconds (/ (max 0 (- (or distance 0) (danger/melee-reach))) (or speed (danger/chase-speed name))))))]
-    {:damage (reduce + 0 (map #(threat/mob-hurt stats (:name %) (left %) identity (threat/lone-hit-rate (:name %))) melee))
-     :hit (reduce max 0 (map #(blow stats (:name %)) melee))
+               (if (contains? weapon/ranged-mobs name)
+                 seconds
+                 (max 0 (- seconds (/ (max 0 (- (or distance 0) (danger/melee-reach))) (or speed (danger/chase-speed name)))))))]
+    {:damage (reduce + 0 (map #(threat/mob-hurt stats (:name %) (left %) identity (threat/lone-hit-rate (:name %))) hitting))
+     :hit (reduce max 0 (map #(blow stats (:name %)) hitting))
      :seconds seconds}))
+
+(defn cover-answer
+  "The answer of shutting the body in against mobs [flee-mob's] wearing equipment by a cover {:open-s :seconds}
+  (jobs.survival.shut-in/covers: the seconds a side stays open, the seconds it takes with the quiet after it): the blows
+  of build-answer over open-s; then the same cover once more or one of then. nil with a creeper (its blast takes the walls)."
+  [{:keys [equipment mobs then]} {:keys [open-s seconds]}]
+  (when-not (some #(= "creeper" (:name %)) mobs)
+    (let [a (assoc (build-answer {:equipment equipment :mobs mobs :seconds open-s}) :seconds seconds)]
+      (assoc a :then (conj (vec then) a)))))
 
 (defn threat-answers
   "The answers {key answer-or-nil} body {:health :food :equipment :weapon :wall {:open-s :seconds}} has to mob-name met

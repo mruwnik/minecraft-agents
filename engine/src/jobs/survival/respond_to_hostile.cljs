@@ -17,8 +17,7 @@
             [jobs.lib.shot :as shot]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.goal :as goal]
-            [jobs.survival.hide-out :as hide-out]
-            [jobs.survival.wall-in :as wall-in]
+            [jobs.survival.shut-in :as shut-in]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.threats :as threats]
@@ -137,15 +136,16 @@
 
 (defn log-encounter!
   "One :hostile entry and event for each change of decision in a run (a fight turned flight is said, with the health;
-  the event has the answers' prices, seconds)."
-  [c threat decision prices]
+  the event has the answers' prices, seconds, and the cover way a flight begins with)."
+  [c threat decision prices cover]
   (when-not (= decision (:logged (ctx/mem c)))
     (let [prev (:data (mem/latest (ctx/view c) :hostile))
           entry (assoc (threats/place-of (:primitives c) threat) :mob (.-name threat) :decision decision
                        :health (js/Math.round (.-health (.self (:primitives c)))))]
       (ctx/remember! c :hostile entry hostile-policy)
       (ctx/emit! c :hostile.decided :info (cond-> (assoc (dissoc entry :from) :text (encounter-text entry prev))
-                                            prices (assoc :prices (update-vals prices js/Math.round)))))
+                                            prices (assoc :prices (update-vals prices js/Math.round))
+                                            cover (assoc :cover cover))))
     (ctx/update-mem! c assoc :logged decision)))
 
 (defn fight-struck
@@ -238,17 +238,17 @@
                     :text (str "the " mob " neither came nor hurt the body in the hold: no flight; it is watched for " mute-s
                                " s and answered again if it comes nearer or the body is hurt")}}))
 
-(defn cover-answer
-  "The answer of walling the body in against near (jobs.survival.wall-in's quote; cost/build-answer over the seconds the
-  side toward the mobs stays open, wall-in/exposed-s), then the hide-out's quiet seconds hidden; then: what follows it, or the same cover once more.
-  nil with a creeper near (its blast takes the walls) or no walls possible here (no block carried: an infinite quote)."
+(def cover-ways
+  "The covers respond prices, each a way of jobs.survival.shut-in where the body stands."
+  [:walls :pit :pocket])
+
+(defn cover-answers
+  "{way answer} of shutting the body in against near by each way shut-in/covers finds possible here (cost/cover-answer:
+  the blows while a side is open, the quote, the hide-out's quiet; then: what follows it, or the same cover once more)."
   [c near then]
-  (when-not (some combat/creeper? near)
-    (when-let [{:keys [open-s seconds]} (wall-in/wall-of c)]
-      (let [p (:primitives c)
-            a (-> (cost/build-answer {:equipment (cost/equipment-of (.-equipment (.self p))) :mobs (mapv #(hostile/mob-near p %) near) :seconds open-s})
-                  (assoc :seconds (+ seconds (hide-out/quiet-s))))]
-        (assoc a :then (conj (vec then) a))))))
+  (let [p (:primitives c)
+        mobs {:equipment (cost/equipment-of (.-equipment (.self p))) :mobs (mapv #(hostile/mob-near p %) near) :then then}]
+    (into {} (keep (fn [[w cover]] (some->> (cost/cover-answer mobs cover) (vector w)))) (shut-in/covers c cover-ways))))
 
 (defn ^:async respond [c near]
   (let [p (:primitives c)
@@ -262,16 +262,17 @@
         felt (when (= :flee (:decision m)) (:rate (hostile/incoming c)))
         fight (when-not (some combat/enderman? near) (hostile/fight-answer c near #(struck-of c %)))
         walk (when-not (some combat/enderman? near) (hostile/flee-answer c near fight felt))
-        cover (when-not (some combat/enderman? near) (cover-answer c near (or (:then walk) (when fight [fight]))))
-        weighed (hostile/weigh c {:fight fight :flee walk :cover cover})
+        covers (when-not (some combat/enderman? near) (cover-answers c near (or (:then walk) (when fight [fight]))))
+        weighed (hostile/weigh c (merge covers {:fight fight :flee walk}))
         stay? (and (not (hurt-lately? c)) (stay-under-roof? c near))
         decision (if (or stay? (= :fight (:answer weighed))) :fight :flee)
+        cover (when (and (not stay?) (contains? covers (:answer weighed))) (:answer weighed))
         creeper (first (get-in weighed [:answers :fight :creepers]))]
-    (log-encounter! c (if (and (= :flee decision) creeper) creeper (first near)) decision (:prices weighed))
+    (log-encounter! c (if (and (= :flee decision) creeper) creeper (first near)) decision (:prices weighed) cover)
     (when (and stay? (not (:stay-noted (ctx/mem c))))
       (ctx/update-mem! c assoc :stay-noted true)
       (ctx/emit! c :hostile.sealed-hold :info {:text "under a roof: the mobs near are heard only or flyers, so the body stays in" :mobs (mapv #(.-name %) near)}))
-    (ctx/update-mem! c assoc :decision decision)
+    (ctx/update-mem! c #(cond-> (assoc % :decision decision) cover (assoc :cover-way cover) (not cover) (dissoc :cover-way)))
     (let [result (await (run-child c decision stay?))]
       (keep-struck! c)
       (cond

@@ -9,7 +9,7 @@
     weapon   attack-gap-ms, weapon-damage, remaining-health, mob-max-health, ranged-mobs: the fight inputs; the one tool-material table
              (tool-tier, weapon-rank, cheapness) (jobs.lib.cost.weapon).
     fight    fight-damage, fight-seconds: the damage (and length) of a fight with the current kit (jobs.lib.cost.fight).
-    answer   fight-answer, flee-answer, build-answer, answer-price, decide: what each answer to hostiles costs and the cheapest; death-chance, route-death-cost, route-hurt: the one chance of dying (route-hurt the same in hp) (a known threat priced by the answer the body would take) and a route's death price; blast-hurt: a creeper's blast (jobs.lib.cost.answer).
+    answer   fight-answer, flee-answer, build-answer, cover-answer, answer-price, decide: what each answer to hostiles costs and the cheapest; death-chance, route-death-cost, route-hurt: the one chance of dying (route-hurt the same in hp) (a known threat priced by the answer the body would take) and a route's death price; blast-hurt: a creeper's blast (jobs.lib.cost.answer).
     danger   route-danger, straight-route: the danger of a walk past mobs; hurt-rate, exposure-price: what standing exposed to them costs; stance, danger-rate, threat-factor: go-to's
              planner dangers; reach-first?, outruns-at?: a body's race to a refuge against its chasers; catches?: whether a chaser hits a walk before it is past (jobs.lib.cost.danger).
     health   hp-seconds, health-scale, hp-price, commute-s (a walk there and back against sheltering here), drown-prices, damage-budget, survivable-budget: what an hp costs and how many a walk may spend (jobs.lib.cost.health).
@@ -74,6 +74,7 @@
 (def fight-answer answer/fight-answer)
 (def flee-answer answer/flee-answer)
 (def build-answer answer/build-answer)
+(def cover-answer answer/cover-answer)
 (def answer-price answer/answer-price)
 (def decide answer/decide)
 (def blast-hurt answer/blast-hurt)

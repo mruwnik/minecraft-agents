@@ -110,7 +110,8 @@
 
 (defn ^:async no-gap-run
   "Respond with the spec: no gap block is placed, the calls are the expected slots and the usual response is a flight
-  that hides sealed in (hold why hiding) or ends out of line."
+  that hides sealed in (hold why hiding) or ends out of line. Over the dirt ground the priced cover is a pit dug there
+  (respond-to-hostile cover-answers), the flight's first step."
   [spec slots hides?]
   (let [s (await (respond! spec))]
     (is (not (placed? s)))
@@ -122,22 +123,22 @@
 (deftest no-pickaxe-no-gap-placed-and-the-body-flees-and-hides
   (async done
     (tu/run-async done
-      (fn ^:async t [] (await (no-gap-run {:inventory [cobble8]} [:plug] true))))))
+      (fn ^:async t [] (await (no-gap-run {:inventory [cobble8]} [:plug-dig] true))))))
 
 (deftest no-blocks-no-gap-placed-and-the-body-flees-and-hides
   (async done
     (tu/run-async done
-      (fn ^:async t [] (await (no-gap-run {:inventory [pickaxe]} [:plug :plug-dig] true))))))
+      (fn ^:async t [] (await (no-gap-run {:inventory [pickaxe]} [:plug-dig] true))))))
 
 (deftest a-melee-mob-as-well-no-gap-placed-and-the-body-flees-and-hides
   (async done
     (tu/run-async done
-      (fn ^:async t [] (await (no-gap-run {:inventory [cobble8 pickaxe] :entities [g/pit-skeleton zombie]} [:plug] true))))))
+      (fn ^:async t [] (await (no-gap-run {:inventory [cobble8 pickaxe] :entities [g/pit-skeleton zombie]} [:plug-dig] true))))))
 
-(deftest open-ground-no-gap-placed-and-the-body-flees-out-of-line
+(deftest open-ground-no-gap-placed-and-the-body-digs-in
   (async done
     (tu/run-async done
-      (fn ^:async t [] (await (no-gap-run {:inventory [cobble8 pickaxe] :blocks (merge wide-ground g/pit canopy)} [:pocket :step :eat :step] false))))))
+      (fn ^:async t [] (await (no-gap-run {:inventory [cobble8 pickaxe] :blocks (merge wide-ground g/pit canopy)} [:plug-dig] true))))))
 
 (deftest a-gap-that-fails-refused-falls-back-to-the-usual-response
   (async done

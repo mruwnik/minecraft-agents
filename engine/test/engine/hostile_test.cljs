@@ -186,6 +186,16 @@
             (is (fought? s) (str "the fist is all that is left " self))
             (is (zero? (count (tu/walked-to eng))) (str "no flee step from a mob that outruns it " self))))))))
 
+(deftest respond-with-bare-hands-digs-in-from-a-spider-where-it-can
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [dirt (into {} (for [x (range -3 4) z (range -3 4) y (range 58 64)] [(str x "," y "," z) "dirt"]))
+              {:keys [p seen]} (await (flight-round respond {:self {:health 20 :food 20} :blocks dirt :entities [(spider 2)]}))]
+          (is (= [:pit] (keep :cover (filter #(= :hostile.decided (:kind %)) @seen))) "the pit is the cheapest answer")
+          (is (zero? (count (calls p "attack"))) "no fist fight while a pit can be dug")
+          (is (pos? (count (calls p "dig"))) "the flight begins with that pit"))))))
+
 (deftest hits-taken-while-fleeing-are-counted-in-a-window
   (are [hits now before after expected] (= expected (respond-to-hostile/note-hits hits now before after 5000))
     [] 10000 20 18 [10000]

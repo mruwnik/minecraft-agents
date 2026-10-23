@@ -6,6 +6,7 @@
   sight for respond.state/lost-s (4 s), a melee one beyond ::hostile-radius that stood at one place in sight for respond.state/still-s (5 s), or has no walkable way to the body (nor, ranged, a line of fire; a creeper within
   respond.state/::blast-reach (6) always has one: its blast).
   Each step, in this order:
+  0. The cover respond-to-hostile priced cheapest (walls, pit or pocket), once: that way's plug (cover-step!).
   1. A door, gate or trapdoor standing open within a hand's reach and nearer the nearest chaser than the body is shut
      with one click (retreat.door-shut info). Each door is clicked at most once a flight.
   2. Runs into a closed building first (not while a creeper chases: its blast would take the door and what is inside;
@@ -214,6 +215,14 @@
   [c]
   (ctx/update-mem! c #(select-keys % (concat (:pre-flight %) kept-keys))))
 
+(defn ^:async cover-step!
+  "The cover respond priced cheapest (:cover-way, taken once): its plug option (respond.refuge/plug-option!, :plug for the
+  walls, :plug-dig for a pit or pocket) by that way alone; nil with none, or when it cannot be begun (the steps choose)."
+  [c]
+  (when-let [way (:cover-way (ctx/mem c))]
+    (ctx/update-mem! c dissoc :cover-way)
+    (await (refuge/plug-option! c (if (= :walls way) :plug :plug-dig) #{way}))))
+
 (defn ^:async flee!
   "One whole flight: steps (flight-step!, or the refuge's) until it ends: its ending, or :continue when the round is cut or
   the response may not run on. An ending clears the flight's memory (forget-flight!)."
@@ -224,7 +233,7 @@
   (let [r (loop []
             (ctx/update-mem! c assoc :last-step (ctx/now c))
             (flight/note-position! c)
-            (let [r (await (if (:refuge (ctx/mem c)) (refuge/refuge-round! c) (flight-step! c)))
+            (let [r (await (if (:refuge (ctx/mem c)) (refuge/refuge-round! c) (or (await (cover-step! c)) (flight-step! c))))
                   clear? (and (= :again r) (ctx/alive? c) (clear? c))]
               (cond
                 (not= :again r) r

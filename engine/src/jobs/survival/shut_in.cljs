@@ -15,6 +15,7 @@
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.dig-pit :as dig-pit]
             [jobs.survival.dig-pocket :as dig-pocket]
+            [jobs.survival.hide-out :as hide-out]
             [jobs.survival.plug-way :as way]
             [jobs.survival.shut-in-night :as night]
             [jobs.survival.wall-in :as wall-in]))
@@ -107,6 +108,24 @@
   (if (or (zero? f) (infinite? seconds))
     seconds
     (+ seconds (* f (if-let [e (exposed-s way)] (e (update c :args merge (child-args c way))) seconds)))))
+
+(def quotes
+  "Each way's quote where the body stands (the :room walk is no cover here)."
+  {:walls wall-in/quote-of :pit dig-pit/quote-of :pocket dig-pocket/quote-of})
+
+(defn covers
+  "{way {:open-s :seconds}} of each of ways (default :walls :pit :pocket) that can shut the body in where it stands: its
+  seconds in the open (exposed-s), and its quoted seconds with the hide-out's quiet seconds after it, as
+  jobs.lib.cost/cover-answer reads them. The ways read c's :for (default :danger)."
+  ([c] (covers c [:walls :pit :pocket]))
+  ([c ways]
+   (let [c (update c :args #(merge {:for :danger} (select-keys % [:for :ignore-zones? :trespass? :on-lava])))]
+     (into {} (keep (fn [w]
+                      (let [s (get-in ((quotes w) c) [:uses :job-time 1])
+                            open ((exposed-s w) c)]
+                        (when (and (number? s) (js/isFinite s) (js/isFinite open))
+                          [w {:open-s open :seconds (+ s (hide-out/quiet-s))}]))))
+           ways))))
 
 (defn ^:async choose
   "{:way the cheapest allowed way not failed (nil when none) :dropped [ways that cannot be done]}: quoted seconds, under
