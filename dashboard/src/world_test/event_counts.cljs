@@ -7,16 +7,19 @@
   flight-starts: the first flee decision of each respond run from a creeper: seconds until the body is 1 block from where it stood,
   less that block at sprint speed (action done and planned events carry the body's position, so the stream is sparse); the deciles are the values at
   (i + 0.5) / 10 of the sorted starts.
-  notice-rate: the hostiles a watch first saw within their follow range (watch.saw, provoked-only mobs left out), each followed until a respond decision about its kind
-  (caught), the body more than the mob's follow range from where it was seen, or a position gap over give-up-ms: caught per second in its
-  field, each second weighted by cost.threat/way-weight of the body's straight distance from that spot (a lower bound on the mob's steps, so
-  an upper bound on the weight: the rate counts low).
+  notice-rate: the hostiles a watch first saw within their follow range (watch.saw, provoked-only mobs left out), each followed until it
+  reached the body (caught: a hurt from its kind, or a respond decision that places a seen mob within cost.danger/melee-reach of the body's last
+  position), the body more than the mob's follow range from where it was seen, or a position gap over give-up-ms (censored: the seconds up to
+  the gap count, no catch): catches per second in its field, each second weighted by cost.threat/way-weight of the body's straight distance
+  from that spot (a lower bound on the mob's steps, so an upper bound on the weight: the rate counts low). The setting death/::notice-rate
+  stores {:k catches :n-s weighted seconds}.
   Pure parts: scan-line, exchange, starts, deciles, notices."
   (:require ["fs" :as fs]
             ["path" :as path]
             ["zlib" :as zlib]
             [cljs.reader :as reader]
             [clojure.string :as str]
+            [jobs.lib.cost.danger :as danger]
             [jobs.lib.cost.threat :as threat]
             [world-test.fresh-drop :as fresh-drop]
             [world-test.spot-returns :as spot-returns]))
@@ -43,7 +46,8 @@
         (and (str/includes? line ":kind :hostile.decided") (str/includes? line ":hostile-near"))
         (let [e (whole)]
           {:k :decided :t t :gen gen :job (root-job (get-in e [:context :job-id]))
-           :mob (get-in e [:data :mob]) :decision (get-in e [:data :decision])})
+           :mob (get-in e [:data :mob]) :decision (get-in e [:data :decision])
+           :at (when-not (get-in e [:data :band]) (get-in e [:data :pos]))})
 
         (and (str/includes? line ":kind :watch.saw") (str/includes? line ":how :seen"))
         (let [{{:keys [name distance pos]} :data} (whole)]
@@ -203,10 +207,19 @@
 
 (defn notices
   "Rows [{:id [gen t mob] :t :mob :s :end}] of the sightings in records (sorted by :t): :s the seconds followed, each times the way-weight
-  of the body's distance from the mob's spot over it; :end :caught, :left (out of its follow range), :gap or :open (the log ends)."
+  of the body's distance from the mob's spot over it; :end :caught (the mob reached the body), :left (out of its follow range), :gap
+  (censored: :s stops at the last position) or :open (the log ends)."
   [records]
   (let [row (fn [{:keys [id t0 mob s]} end] {:id id :t t0 :mob mob :s s :end end})
         gain (fn [e t] (update e :s + (* (:w e) (/ (min (- t (:t e)) give-up-ms) 1000))))
+        reached? (fn [st gen t mob-at]
+                   (let [p (get-in st [:last gen])]
+                     (and mob-at p (<= (- t (:t p)) pos-age-ms) (<= (dist p mob-at) (danger/melee-reach)))))
+        catch (fn [st gen t pred]
+                (let [{caught true other false} (group-by pred (get-in st [:open gen] []))]
+                  (-> st
+                      (assoc-in [:open gen] (vec other))
+                      (update :rows into (map #(row (gain % t) :caught) caught)))))
         out (reduce
              (fn [{:keys [open] :as st} {:keys [k gen t mob] :as r}]
                (let [mine (get open gen [])]
@@ -215,18 +228,19 @@
                                 (> (:distance r) (threat/follow-range mob)))
                           st
                           (update-in st [:open gen] (fnil conj []) {:id [gen t mob] :t0 t :mob mob :at (:at r) :t t :s 0 :w (threat/way-weight (:distance r))}))
-                   :decided (let [{caught true other false} (group-by #(= mob (:mob %)) mine)]
-                              (-> st
-                                  (assoc-in [:open gen] (vec other))
-                                  (update :rows into (map #(row (gain % t) :caught) caught))))
+                   :hurt (catch st gen t #(and (contains? (:causes r) (:mob %)) (<= (- t (:t %)) give-up-ms)))
+                   :decided (if (reached? st gen t (:at r))
+                              (catch st gen t #(and (= mob (:mob %)) (<= (- t (:t %)) give-up-ms)))
+                              st)
                    :pos (let [{gone true kept false} (group-by #(> (- t (:t %)) give-up-ms) mine)
                               moved (map #(gain % t) kept)
                               {left true near false} (group-by #(> (dist r (:at %)) (threat/follow-range (:mob %))) moved)]
                           (-> st
+                              (assoc-in [:last gen] r)
                               (assoc-in [:open gen] (mapv #(assoc % :t t :w (threat/way-weight (dist r (:at %)))) near))
                               (update :rows into (concat (map #(row % :gap) gone) (map #(row % :left) left)))))
                    st)))
-             {:open {} :rows []}
+             {:open {} :rows [] :last {}}
              records)]
     (into (:rows out) (map #(row % :open)) (mapcat val (:open out)))))
 
@@ -235,7 +249,7 @@
         k (get ends :caught 0)
         s (reduce + 0 (map :s rows))]
     {:sightings (count rows) :caught k :ends ends :weighted-s (/ (js/Math.round (* 10 s)) 10)
-     :rate (when (pos? s) (/ (js/Math.round (* 10000 (/ k s))) 10000))}))
+     :rate (when (pos? s) (/ (js/Math.round (* 10000 (/ (+ k 0.5) s))) 10000))}))
 
 (defn notice-report [rows]
   {:all (notice-tally rows) :by-mob (into (sorted-map) (map (fn [[m rs]] [m (notice-tally rs)])) (group-by :mob rows))})

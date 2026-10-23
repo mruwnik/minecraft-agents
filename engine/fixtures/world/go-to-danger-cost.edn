@@ -2,6 +2,7 @@
 ;; (18-20 for the gap case) blocks ahead on the straight line, goal 68 blocks east. Unarmed: the walk skirts it (the reflex never fires); armed:
 ;; may pass nearer. A zombie the body cannot see (behind thick stone) or cannot reach (fenced pad) costs nothing.
 ;; A :threat spot of a creeper the client no longer tracks (it blew up) at the goal is dropped (gone-creeper-at-goal-does-not-block).
+;; Card f4ac9f0c: a zombie 2 blocks off the straight line (:time :any) costs 2 s in its field at the measured notice rate; the walk still bends round it (hostile-near, radius 8, never fires).
 ;; Case verdicts that need the path (min distance to the zombie) are read from the body's moved events by hand.
 {:defaults
  {:tags [:movement :hostile :planner]
@@ -13,6 +14,17 @@
  [{:name "unarmed-skirts-zombie"
    :register [{:trigger :hostile-near}]
    :act [[:summon "zombie" [22.5 0 24.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 0"]
+         [:until-seen {:entity "zombie"} 10]
+         [:job (jobs.movement.go-to {:pos #at [70 0 24] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 100 :of-job true}
+            {:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 100
+             :until {:source :job :kind :completed :data {:arrived true}}}]
+   :after [[:body-near [70.5 0 24.5] 3]]}
+  {:name "unarmed-detours-a-zombie-two-blocks-off-the-line"
+   :time :any
+   :register [{:trigger :hostile-near}]
+   :act [[:summon "zombie" [36.5 0 26.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 0"]
          [:until-seen {:entity "zombie"} 10]
          [:job (jobs.movement.go-to {:pos #at [70 0 24] :range 1 :ways #{:walk :clear-seal}})]]

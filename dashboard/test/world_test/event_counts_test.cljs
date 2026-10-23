@@ -69,12 +69,20 @@
 
 (defn saw [t mob d] (rec t :saw :mob mob :distance d :at {:x d :y 64 :z 0}))
 
-(deftest a-sighting-counts-its-weighted-seconds-until-its-kind-is-decided-about-or-left
+(deftest a-sighting-counts-its-weighted-seconds-until-its-kind-hurts-the-body-or-it-is-left
   (is (= [{:id ["g" 0 "zombie"] :t 0 :mob "zombie" :s 1.5 :end :caught}]
-         (c/notices [(saw 0 "zombie" 2) (pos 1000 8) (rec 2000 :decided :mob "zombie")]))
+         (c/notices [(saw 0 "zombie" 2) (pos 1000 8) (rec 2000 :hurt :amount 3 :causes #{"zombie"})]))
       "weight 1 within 3 steps: 1 s, then 1 s at 6 steps (weight 0.5)")
+  (is (= [:open] (map :end (c/notices [(saw 0 "zombie" 2) (pos 1000 8) (rec 2000 :hurt :amount 3 :causes #{"spider"})]))))
   (is (= [[1 :left]] (map (juxt :s :end) (c/notices [(saw 0 "zombie" 2) (pos 1000 40)]))))
   (is (= [[0 :gap]] (map (juxt :s :end) (c/notices [(saw 0 "zombie" 2) (pos 20000 2)])))))
+
+(deftest a-decision-is-no-catch-unless-it-places-the-seen-mob-within-melee-reach-of-the-body
+  (let [near {:x 7 :y 64 :z 0} far {:x 2 :y 64 :z 0}
+        ends (fn [at] (map :end (c/notices [(saw 0 "zombie" 2) (pos 1000 8) (rec 1500 :decided :mob "zombie" :at at)])))]
+    (is (= [:caught] (ends near)))
+    (is (= [:open] (ends far)) "a respond decision about the kind, the mob 6 blocks off, is a sighting still open")
+    (is (= [:open] (ends nil)) "a heard mob has no spot")))
 
 (deftest a-sighting-out-of-follow-range-or-of-a-provoked-only-mob-is-not-followed
   (is (empty? (c/notices [(saw 0 "skeleton" 20) (saw 0 "enderman" 2)]))))

@@ -16,6 +16,7 @@
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
             [jobs.lib.body :as body]
+            [jobs.lib.cost.death :as death]
             [jobs.survival.recover-drops :as recover-drops]
             [jobs.survival.recover-drops.config :as cfg]
             [jobs.survival.recover-drops.estimate :as est]
@@ -871,3 +872,10 @@
     (doseq [i (range 12)]
       (mem/write! (:store eng) :deaths {:pos {:x i :y 64 :z 0} :death-t i} core/deaths-policy))
     (is (= 10 (count (deaths eng))))))
+
+(deftest the-notice-rate-is-the-posterior-mean-of-its-counts
+  (is (= 0.25 (settings/with-settings {:jobs.lib.cost.death/notice-rate {:k 9 :n-s 38}} death/notice-rate)))
+  (is (< (js/Math.abs (- 0.5 (settings/with-settings {:jobs.lib.cost.death/notice-rate {:k 9 :n-s 38}}
+                                                     #(death/met-chance (constantly 1) [{:x 0 :y 0 :z 0 :s 2}]))))
+         1e-9)
+      "2 s in the field at weight 1: 1 - (1 - 0.25 x 2)"))

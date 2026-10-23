@@ -346,10 +346,10 @@
     (is (= :later (status-for [])) "nothing near the body: waiting costs nothing, so it waits")))
 
 (deftest a-body-that-cannot-heal-and-is-no-safer-staying-ends-stranded-instead-of-waiting
-  ;; on open ground: a zombie by the way 30 blocks off, whose field reaches the body's cell, and three 60 blocks off, whose fields do not
+  ;; on open ground: a zombie by the way 30 blocks off, whose field reaches the body's cell, and three 60 blocks off, whose fields do not; a notice rate at which the zombies get to the body on the walk as surely as at its cell
   (let [zombies (for [[i x] (map-indexed vector [30 60 61 62])] {:id (+ 7 i) :name "zombie" :kind "hostile" :pos {:x x :y 64 :z 3}})
         c (ready-test/ctx-of (assoc ready-test/open-night :self {:pos {:x 0 :y 64 :z 0} :health 2.3 :food 5} :entities (vec zombies)))
-        s (risk/status c far-goal)]
+        s (settings/with-settings {:jobs.lib.cost.death/notice-rate {:k 36 :n-s 100}} #(risk/status c far-goal))]
     (is (= :never (first s)))
     (is (= :stranded (:reason (nth s 2))))))
 
