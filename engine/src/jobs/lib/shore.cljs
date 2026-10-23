@@ -95,16 +95,18 @@
 
 (defn land-run
   "Blocks from stand, at most limit, the body can walk away over dry stand cells (a step up or down at a time); ##Inf when
-  ::land-cells cells were read and it still went on (that much land is room enough). A ledge with no land beyond it is 0."
+  ::land-cells cells were read and it still went on (that much land is room enough) or ground beside it was never seen (land not known to end). A ledge with no land beyond it is 0."
   [p stand limit]
   (let [work (settings/get settings ::land-cells)
         {sx :x sy :y sz :z} stand
-        visited (js/Set. #js [(cell-key sx sy sz)])]
+        visited (js/Set. #js [(cell-key sx sy sz)])
+        unseen (volatile! false)]
     (loop [layer [stand] far 0]
       (if (or (empty? layer) (>= far limit) (<= work (.-size visited)))
-        (if (<= work (.-size visited)) ##Inf (min far limit))
+        (if (or @unseen (<= work (.-size visited))) ##Inf (min far limit))
         (let [next (vec (for [{:keys [x y z]} layer [dx dz] sides dy [0 1 -1]
                               :let [c {:x (+ x dx) :y (+ y dy) :z (+ z dz)} k (cell-key (:x c) (:y c) (:z c))]
+                              :let [_ (when (and (zero? dy) (nil? (u/seen-name p (update c :y dec)))) (vreset! unseen true))]
                               :when (and (not (.has visited k)) (standable? p c))
                               :let [_ (.add visited k)]]
                           c))]
@@ -114,7 +116,7 @@
   "{:stand cell :swim blocks} of the nearest dry stand joined to the body by seen water and air cells (a flooded stair or
   shaft, however far up) with :land, the blocks (land-run, at most need) it can walk on from there, the swim the length of that way
   (flat diagonals count root 2), nearest by steps first; a stand with less land than need is passed over for one with enough, and
-  the nearest of them is the answer when the flood ends with none, and with no stand at all {:swim the farthest it reached :land 0}. A body
+  the nearest of them is the answer when the flood ends with none, and with no stand at all {:swim the farthest it reached :land 0}; {:swim blocks :open? true} instead when cells beside the water were never seen. A body
   swims up through water but not through air: it leaves an air cell sideways or down only, and an air cell is a cell of the
   way only over water (or a stand). The flood reads at most
   ::swim-cells cells; with no stand found by then {:swim blocks :open? true}: the shore is at least that far."
@@ -128,9 +130,11 @@
                       (.get names k)
                       (let [n (breath/seen-water-name p {:x x :y y :z z})] (.set names k n) n))))
         water? (fn [x y z] (contains? breath/swimmable (name-of x y z)))
+        unseen (volatile! false)
         open? (fn [x y z]
                 (and (>= y (dec fy))
                      (let [n (name-of x y z)]
+                       (when (nil? n) (vreset! unseen true))
                        (if (bs/air n)
                          (or (water? x (dec y) z) (standable? p {:x x :y y :z z}))
                          (breath/passable-water-or-air? n)))))
@@ -143,7 +147,7 @@
         (cond
           good good
           (<= work (.-size visited)) {:swim (reduce min ##Inf (map #(nth % 3) layer)) :open? true}
-          (empty? layer) (or ledge {:swim far :land 0})
+          (empty? layer) (cond @unseen {:swim far :open? true} ledge ledge :else {:swim far :land 0})
           :else
           (recur (vec (for [[x y z g] layer
                             :let [in-air? (bs/air (name-of x y z))]

@@ -73,6 +73,7 @@
 
 (def fight-answer answer/fight-answer)
 (def followed answer/followed)
+(def hit-range answer/hit-range)
 (def flee-answer answer/flee-answer)
 (def build-answer answer/build-answer)
 (def cover-answer answer/cover-answer)
