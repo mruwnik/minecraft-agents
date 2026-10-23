@@ -24,8 +24,6 @@
                            :doc "Chance of dying on a route over the surface at night."}
    ::chance-underground {:default 0.002 :spec (a/num-in 0 1)
                          :doc "Chance of dying on a route underground."}
-   ::step-s {:default 0.25 :spec (a/num-in 0 nil)
-             :doc "Seconds a route spends in one of its cells when the cell does not say (:s): a walking step."}
    ::deaths-per-hour {:default 1.3 :spec (a/num-in 0 nil)
                       :doc "Deaths an hour of play, every cause: the fresh-start trials of 2026-10-21/22 (Wicken r5, 8 deaths in 6h15; docs/fresh-start-design.md section 1)."}
    ::spawn-walk-blocks {:default 5000 :spec (a/num-in 0 nil)
@@ -84,14 +82,11 @@
          below (reduce + (take k (reductions (fn [p i] (/ (* p lam) i)) (js/Math.exp (- lam)) (iterate inc 1))))]
      (if (pos? life) (max 0 (- 1 below)) 1))))
 
-(defn exposure-s
-  "Seconds the route cells [{:x :y :z :s}] (:s the seconds spent there, default ::step-s) lie within a threat's reach
-  (a fn of a cell x y z, its weight 0-1, nil outside), each cell's seconds times its weight."
+(defn peak-weight
+  "The greatest weight a threat's reach (a fn of a cell x y z, its weight 0-1, nil outside) gives any of the route cells
+  [{:x :y :z}], 0 when it holds none: the share of a passing body the mob gets to."
   [reach cells]
-  (let [step (settings/get settings ::step-s)]
-    (reduce + 0 (keep (fn [{:keys [x y z s]}]
-                        (when-let [w (reach (js/Math.floor x) (js/Math.floor y) (js/Math.floor z))] (* w (or s step))))
-                      cells))))
+  (reduce max 0 (keep (fn [{:keys [x y z]}] (reach (js/Math.floor x) (js/Math.floor y) (js/Math.floor z))) cells)))
 
 (defn spawn-horizon-s [] (settings/get settings ::spawn-horizon-s))
 
