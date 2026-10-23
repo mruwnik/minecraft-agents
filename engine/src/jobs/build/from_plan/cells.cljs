@@ -1,6 +1,7 @@
 (ns jobs.build.from-plan.cells
   "Where the body can reach, stand and dig for jobs.build.from-plan: the cells of a plan read against the body's spot."
   (:require [engine.ctx :as ctx]
+            [jobs.lib.cost.ways :as cw]
             [jobs.lib.tools :as tools]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.reach :as reach]
@@ -49,6 +50,26 @@
         cy (second cell)]
     (boolean (and (<= by cy (+ by 2))
                   (reach-room/closes-in? p :fill cell)))))
+
+(defn seal-price
+  "Nil when placing at cell does not shut the body in, else {:cost s} (digging out through a wall the carried kit clears, none
+  of the plan's own cells, ways/seal-cost)
+  or {:cost nil :why ...} (no way out: a real trap, to be refused)."
+  [c cells cell]
+  (when (seals? c cell)
+    (let [p (:primitives c)
+          own (into #{} (map :pos) cells)
+          {:keys [x y z]} (u/self-pos c)
+          [bx by bz] (map #(js/Math.floor %) [x y z])
+          walls (for [dx (range -2 3) dz (range -2 3) dy (range 0 3)
+                      :let [n (u/seen-name p {:x (+ bx dx) :y (+ by dy) :z (+ bz dz)})]
+                      :when (and n (not (shape/air? n)) (not (#{"water" "lava"} n))
+                                 (not (own [(+ bx dx) (+ by dy) (+ bz dz)]))
+                                 (not (tools/needs-tool-to-clear? p n)))]
+              n)]
+      (if-let [cost (cw/seal-cost walls)]
+        {:cost cost}
+        {:cost nil :why (if (seq walls) "digging out of the room would cost too much" "no carried tool clears a wall of the room")}))))
 
 (defn shuts-out?
   "Whether placing cell would wall in the floor under another cell still owed at its height or above, which can then only

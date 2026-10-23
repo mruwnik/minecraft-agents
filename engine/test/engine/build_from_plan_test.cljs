@@ -265,12 +265,43 @@
     (is (not (fp-cells/seals? {:primitives p} [5 64 4])))
     (is (not (fp-cells/seals? {:primitives p} [4 64 5])))))
 
-(deftest a-place-that-closes-the-last-gap-of-a-seen-room-seals-the-body-in-with-or-without-a-pickaxe
-  (let [room (into {} (for [x (range 3 6) z (range 3 6) y [64 65 66] :when (not (and (= x 4) (= z 4) (#{64 65} y)))]
+(defn gap-room
+  "A 3x3x3 stone room around [4 64 4] with a two-high gap at x 5 z 4; the body inside with kit."
+  [kit]
+  (let [room (into {} (for [x (range 3 6) z (range 3 6) y [63 64 65 66] :when (not (and (= x 4) (= z 4) (#{64 65} y)))]
                         [(h/cell-key x y z) "stone"]))
-        gap (dissoc room (h/cell-key 5 64 4) (h/cell-key 5 65 4))
-        p (tu/seeing-all (tu/fake {:blocks gap :floor [-30 -30 30 30] :self {:pos {:x 4.5 :y 64 :z 4.5}} :inventory [{:name "dirt" :count 4}]}))]
-    (is (fp-cells/seals? {:primitives p} [5 64 4]))))
+        gap (dissoc room (h/cell-key 5 64 4) (h/cell-key 5 65 4))]
+    (start {:blocks gap :floor [-30 -30 30 30] :self {:pos {:x 4.5 :y 64 :z 4.5}} :inventory kit}
+           {"gap" {:id "gap" :parts [{:id "p" :cells [[5 64 4] [5 65 4]] :want "dirt"}]}})))
+
+(def dirt {:name "dirt" :count 4})
+(def gap-cells [{:pos [5 64 4]} {:pos [5 65 4]}])
+
+(deftest a-seal-is-priced-as-the-dig-out-with-a-pickaxe-and-a-trap-without
+  (let [priced (:cost (fp-cells/seal-price {:primitives (:p (gap-room [dirt {:name "stone_pickaxe" :count 1}]))} gap-cells [5 64 4]))
+        trap (fp-cells/seal-price {:primitives (:p (gap-room [dirt]))} gap-cells [5 64 4])]
+    (is (pos? priced))
+    (is (nil? (:cost trap)))
+    (is (string? (:why trap)))
+    (is (nil? (fp-cells/seal-price {:primitives (:p (gap-room [dirt]))} gap-cells [5 66 4])) "a cell that does not seal has no price")))
+
+(deftest a-body-with-a-pickaxe-places-the-cell-that-seals-it-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (gap-room [dirt {:name "stone_pickaxe" :count 1}])
+              result (await (child-outcome eng job {:plan "gap"} 300))]
+          (is (= "dirt" (block p [5 64 4])) "placed although it closes the room")
+          (is (empty? (:given-up result))))))))
+
+(deftest a-body-with-no-tool-to-dig-out-refuses-the-cell-that-seals-it-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (gap-room [dirt])
+              result (await (child-outcome eng job {:plan "gap"} 300))]
+          (is (not= "dirt" (block p [5 64 4])))
+          (is (= :unreachable (get (:given-up result) [5 64 4]))))))))
 
 (deftest a-dig-in-rock-with-no-pickaxe-is-given-up-no-tool-without-a-tunnel
   (async done

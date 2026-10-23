@@ -3,7 +3,8 @@
   step), a block of a pillar or a bridge (place, step), a block missing from the pack (fetched). Digging is priced by
   jobs.lib.cost/dig-cost per block."
   (:require [engine.args :as a]
-            [engine.settings :as settings]))
+            [engine.settings :as settings]
+            [jobs.lib.cost.table :as table]))
 
 (a/defargs settings
   {::stair-step-s {:default 3 :doc "Seconds one step of a stair, up or down, is reckoned to take." :spec (a/num-in 0 nil)}
@@ -12,6 +13,8 @@
    ::fill-place-s {:default 1.5 :doc "Seconds laying one carried block over a gap or a drop is reckoned to take (place, step)." :spec (a/num-in 0 nil)}
    ::fill-spent-s {:default 1 :doc "Seconds the one block a fill spends is reckoned to be worth (the block is not recovered)." :spec (a/num-in 0 nil)}
    ::fill-scarce {:default 2 :doc "A fill leaving fewer than this many blocks carried adds ::fetch-block-s: the pack is nearly out." :spec (a/num-in 0 nil)}
+   ::seal-place-s {:default 3 :doc "Seconds being sealed in is reckoned to cost on top of digging out (turn, step to the wall, climb out)." :spec (a/num-in 0 nil)}
+   ::seal-max-s {:default 30 :doc "A place that seals the body in is made only when digging out costs no more than this many seconds." :spec (a/num-in 0 nil)}
    ::fetch-block-s {:default 3 :doc "Seconds one block the pack lacks for a pillar or a bridge adds (fetching it)." :spec (a/num-in 0 nil)}})
 
 (defn stair-step-s [] (settings/get settings ::stair-step-s))
@@ -34,3 +37,11 @@
   [carried]
   (+ (settings/get settings ::fill-place-s) (settings/get settings ::fill-spent-s)
      (if (< (dec carried) (settings/get settings ::fill-scarce)) (settings/get settings ::fetch-block-s) 0)))
+
+(defn seal-cost
+  "Seconds being sealed in by a place costs, digging out through the cheapest of `walls` (block names the carried kit can
+  clear); nil when none can be (a real trap) or it costs more than ::seal-max-s."
+  [walls]
+  (when-let [dig (some->> walls (keep table/dig-cost) seq (apply min))]
+    (let [cost (+ dig (settings/get settings ::seal-place-s))]
+      (when (<= cost (settings/get settings ::seal-max-s)) cost))))

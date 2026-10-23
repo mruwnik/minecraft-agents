@@ -22,7 +22,7 @@
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.build.plan :as plan :refer [retry-distance max-retries facing-ok? body-cells count-fail plan-trouble owed need-of shortage hazards decide rules-input refuse permitted judged no-zones planned how placeable misplaced missing covered digging unseen buildable problem]]
             [jobs.lib.build.scaffold :as scaffold]
-            [jobs.build.from-plan.cells :refer [diggable in-reach in-dig-reach seals? shuts-out? off-low-floor support-looks retreat-dists fill-order]]
+            [jobs.build.from-plan.cells :refer [diggable in-reach in-dig-reach seal-price shuts-out? off-low-floor support-looks retreat-dists fill-order]]
             [jobs.build.from-plan.book :refer [walk-fail retry-walks warn-way-in! place-one! settle-placing! dig-one! result-data finish! book-failed!]]
             [jobs.build.from-plan.light :as light]
             [jobs.build.from-plan.walk :refer [give-up trace! leave! exit-of walk-to! reach-cell! look-for-support! shut-in?]]
@@ -262,7 +262,7 @@
                      (warn-way-in! c cells near)
                      (loop [left near]
                        (if (seq left)
-                         (if (do (trace! c :place-one! (:pos (first left))) (seals? c (:pos (first left))))
+                         (if (do (trace! c :place-one! (:pos (first left))) (let [seal (seal-price c cells (:pos (first left)))] (when (and seal (nil? (:cost seal))) (trace! c :seals-in (:pos (first left))) true)))
                            (do (ctx/update-mem! c #(-> (count-fail % (:pos (first left)) :unreachable (give-up))
                                                        (assoc :leave (exit-of c cells))))
                                :again)

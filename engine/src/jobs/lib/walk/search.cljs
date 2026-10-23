@@ -78,7 +78,7 @@
 (heap/gauge! :known-cells #(known-size :cells))
 (heap/gauge! :known-edges #(known-size :edges))
 (heap/gauge! :goal-floods #(count @goal-floods))
-(heap/gauge! :searches #(count @searches))
+(heap/gauge! :searches #(transduce (map count) + 0 (vals @searches)))
 
 (defn keep-search!
   "Keep unfinished search s of the body, or forget its key when s is nil."
