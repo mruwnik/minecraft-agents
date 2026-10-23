@@ -91,6 +91,42 @@
                            (keep (fn [line] (try (reader/read-string line) (catch :default _ nil)))))]
             (recur more (into out found))))))))
 
+(def hurt-tail-bytes 262144)
+(def hurt-window-ms 120000)
+(def hurt-shown 3)
+
+(defn hurt-text
+  "The newest hurt-shown :hurt events within hurt-window-ms of now-ms as \"cause amount Ns ago, ...\", newest first, else nil."
+  [events now-ms]
+  (let [hits (->> events
+                  (filter #(and (= :body (:source %)) (= :hurt (:kind %)) (<= 0 (- now-ms (:time-ms %)) hurt-window-ms)))
+                  (sort-by :seq) (take-last hurt-shown) reverse)]
+    (when (seq hits)
+      (str/join ", " (map (fn [{:keys [data time-ms]}]
+                            (str (str/join "+" (:causes data)) " " (:amount data) " "
+                                 (js/Math.round (/ (- now-ms time-ms) 1000)) "s ago"))
+                          hits)))))
+
+(defn ^:async recent-hurt!
+  "hurt-text of the hurt events in the last hurt-tail-bytes of the current log next to the socket, else nil."
+  [socket-path now-ms]
+  (let [file (.join path (.dirname path socket-path) "events.edn")
+        text (try
+               (let [h (await (.open fsp file "r"))]
+                 (try
+                   (let [size (.-size (await (.stat h)))
+                         start (max 0 (- size hurt-tail-bytes))
+                         buf (js/Buffer.alloc (- size start))]
+                     (await (.read h buf 0 (.-length buf) start))
+                     (.toString buf "utf8"))
+                   (finally (await (.close h)))))
+               (catch :default _ nil))]
+    (when text
+      (hurt-text (->> (str/split-lines text)
+                      (filter #(str/includes? % ":kind :hurt"))
+                      (keep #(try (reader/read-string %) (catch :default _ nil))))
+                 now-ms))))
+
 (defn ^:async read!
   "The query's answer from the retained history (job-results/history! with the result window; a --job's recorded end stands in when its stopped event has aged out): {:ok true :events .. :next-before ..
   :window {:scanned n :oldest-seq s :partial? bool}}, or {:ok false :reason :no-death-retained}."

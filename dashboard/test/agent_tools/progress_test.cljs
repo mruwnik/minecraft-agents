@@ -366,3 +366,6 @@
   (is (= 10 (:danger-below (request "Probe" "--world" "w" "--wait" "1m"))))
   (is (= 15 (:danger-below (request "Probe" "--world" "w" "--wait" "1m" "--danger-below" "15"))))
   (is (string? (:error (request "Probe" "--world" "w" "--wait" "1m" "--danger-below" "40")))))
+
+(deftest the-line-names-what-hurt
+  (is (str/includes? (progress/progress-line {:status {:health 10 :food 20 :hurt "spider 2 3s ago"}}) "hp 10 hit by spider 2 3s ago food 20")))

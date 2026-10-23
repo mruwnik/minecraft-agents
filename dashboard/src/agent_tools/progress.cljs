@@ -12,6 +12,7 @@
             [agent-tools.job-results :as job-results]
             [agent-tools.map :as map-tool]
             [agent-tools.observe :as observe]
+            [agent-tools.observe.events :as observe-events]
             [agent-tools.observe.request :as observe-request]
             [agent-tools.observe.status :as status :refer [clip coded code-of round1]]
             [agent-tools.vitals :as vitals]
@@ -188,7 +189,7 @@
   (let [current (:current s)
         needs (needs-you s)
         queued (get-in s [:jobs :total])
-        parts [(str "hp " (some-> (:health s) round1) " food " (:food s))
+        parts [(str "hp " (some-> (:health s) round1) (some->> (:hurt s) (str " hit by ")) " food " (:food s))
                (when goal (goal-text s goal goal-job))
                (when (and current (not= goal (:id current)))
                  (str "now " (:id current) " " (short-name (:name current)) " " (row-state current)))
@@ -218,7 +219,8 @@
         muted (try (let [r (await (read-edn! get! base "/triggers" signal))]
                      (when (= 200 (:status r)) (mapv :id (filter :muted (:items (:value r))))))
                    (catch :default error (when (fatal? error) (throw error))))
-        s (cond-> (status/compact-status (:value st)) (seq muted) (assoc :muted-triggers muted))
+        hurt (await (observe-events/recent-hurt! (:socket-path base) (js/Date.now)))
+        s (cond-> (status/compact-status (:value st)) (seq muted) (assoc :muted-triggers muted) hurt (assoc :hurt hurt))
         inv (inventory/compact (:value (await (read-edn! get! base "/inventory" signal))) :inventory)
         listed? (some #(= goal (:id %)) (job-rows s))
         goal-job (when (and goal (not listed?))

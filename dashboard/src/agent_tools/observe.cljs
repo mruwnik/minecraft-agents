@@ -469,7 +469,9 @@
       (and (starts? "/status") (not (:verbose request)) (= 200 status))
       (-> (missed! (:get! opts) (:socket-path request)
                    (checkpoint-file request))
-          (.then #(print! (cond-> (compact-status (data/read-edn text)) % (assoc :missed %))))
+          (.then (fn [missed]
+                   (-> (events/recent-hurt! (:socket-path request) (js/Date.now))
+                       (.then #(print! (cond-> (compact-status (data/read-edn text)) % (assoc :hurt %) missed (assoc :missed missed)))))))
           (.then (constantly 0)))
 
       (and (starts? "/inventory") (:inventory-mode request) (not (:raw request)) (= 200 status))

@@ -1606,3 +1606,25 @@
   (let [w (observe-status/classify (event :body :hurt {:health 6.5 :amount 5 :causes ["spider" "zombie"]})
                                    (assoc defaults :danger true) "Probe")]
     (is (= {:wake :danger :event :hurt :health 6.5 :amount 5 :causes ["spider" "zombie"]} (into {} w)))))
+
+(defn hit [n ago-s cause amount]
+  {:seq n :time-ms (- 1000000 (* ago-s 1000)) :source :body :kind :hurt :data {:amount amount :causes [cause]}})
+
+(deftest hurt-text-names-the-last-causes-newest-first
+  (is (= "spider 2 3s ago, spider 2 4s ago, zombie 6 9s ago"
+         (observe-events/hurt-text [(hit 1 30 "skeleton" 1) (hit 2 9 "zombie" 6) (hit 3 4 "spider" 2) (hit 4 3 "spider" 2)] 1000000))))
+
+(deftest hurt-text-leaves-out-old-hits-and-is-nil-without-any
+  (is (nil? (observe-events/hurt-text [(hit 1 300 "spider" 2)] 1000000)))
+  (is (nil? (observe-events/hurt-text [] 1000000))))
+
+(deftest recent-hurt-reads-the-hurt-events-of-the-log-next-to-the-socket
+  (async done
+    (let [dir (.mkdtempSync fs (.join path (os/tmpdir) "hurt-tail-"))
+          now (js/Date.now)]
+      (.writeFileSync fs (.join path dir "events.edn")
+                      (str "{:seq 1 :time-ms " (- now 2000) " :source :body :kind :hurt :data {:amount 6 :causes [\"spider\"]}}\n"
+                           "{:seq 2 :time-ms " now " :source :body :kind :idle :data {}}\n"))
+      (-> (observe-events/recent-hurt! (.join path dir "events.sock") now)
+          (.then (fn [text] (is (= "spider 6 2s ago" text))))
+          (.finally (fn [] (.rmSync fs dir #js {:recursive true}) (done)))))))
