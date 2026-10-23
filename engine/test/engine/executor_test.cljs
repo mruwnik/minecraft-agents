@@ -677,6 +677,10 @@
         r (ex/tick p (state-at dive 1) (wet 2.6 61.5 0.5 :under-water true))]
     (is (true? (:sprint (controls-of r))))
     (is (< (:pitch r) 0)))
+  (let [shaft [(step 2 62 0 :start {:swim true}) (step 2 60 0 :climb-down {:swim true})]
+        r (ex/tick p (state-at shaft 1) (wet 2.6 61.5 0.5 :under-water true))]
+    (is (true? (:sprint (controls-of r))) "a planned wet ladder descent sinks at the swim speed")
+    (is (< (:pitch r) 0)))
   (is (false? (:sprint (swim-controls pond 2 (wet 1.6 62 0.5)))) "head out: a paddle")
   (is (false? (:sprint (controls-of (ex/tick (assoc p :sprint false) (state-at pond 2) (wet 1.6 61.5 0.5 :under-water true)))))))
 

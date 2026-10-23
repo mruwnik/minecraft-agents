@@ -503,7 +503,7 @@
                       (< past (:gap-past policy))))
         (jump? policy step pose dist))))
 
-(def swim-sprint-moves #{:swim :swim-down})
+(def swim-sprint-moves #{:swim :swim-down :climb-down})
 
 (defn swim?
   "Under water on a :swim or :swim-down step: swim (sprint, the look pitch steering up or down) where the policy may
