@@ -66,7 +66,7 @@
                            (fish/can-run? {:primitives (tu/fake-on-floor {:blocks bank :inventory [rod]}) :args {:count 3}})))
         kind-reason (fn [mem] ((juxt first (comp :reason last)) (status mem)))]
     (is (= [:look :no-water] (kind-reason {})) "not looked yet: the round looks")
-    (is (= [:later :no-water] (kind-reason {:looked [0 64 0]})) "looked, still no water: waits")))
+    (is (= [:later :no-water] (kind-reason {:jobs.lib.look/looked [0 64 0]})) "looked, still no water: waits")))
 
 (deftest some-fish-then-a-stop-is-done-when-the-least-was-caught
   (let [c (fn [least] {:primitives (tu/fake {:inventory [{:name "cod" :count 2}]}) :root "j1" :slots [] :args {:count 3}
