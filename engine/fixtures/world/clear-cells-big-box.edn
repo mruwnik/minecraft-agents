@@ -1,5 +1,6 @@
 ;; Card 192dba2d: a big clear-cells box in the body's own plan area must not block the engine's event loop: jobs list keeps answering while it works.
 ;; Should-succeed: a 6x6x2 stone box inside the body's plan footprint, open air above, is cleared and every jobs list asked meanwhile answers :ok.
+;; Card a191ea07: the same with livestock near: a 10x10x2 box beside a fenced pen of cows, all in the body's plan; the pen's wall stays.
 {:defaults
  {:tags [:build]
   :time :any
@@ -16,4 +17,21 @@
          [:wait-s 3]
          [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 1}]]
    :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}]
-   :after [[:block [10 0 10] "air"] [:block [15 1 15] "air"]]}]}
+   :after [[:block [10 0 10] "air"] [:block [15 1 15] "air"]]}
+  {:name "big-own-box-beside-a-stocked-pen-keeps-jobs-list-answering"
+   :blocks [[:fill [10 0 10] [19 1 19] "stone"] [:fill [20 0 10] [26 0 10] "oak_fence"] [:fill [20 0 16] [26 0 16] "oak_fence"]
+            [:fill [20 0 11] [20 0 15] "oak_fence"] [:fill [26 0 11] [26 0 15] "oak_fence"]]
+   :plans [{:id "area" :metadata {:by "$body"} :parts [{:id "inside" :box [#at [8 0 8] #at [27 3 21]] :want [:any "air"]}]}]
+   :body {:at [8.5 0 15.5] :inventory [["iron_pickaxe" 1]] :effects [["resistance" 900 4] ["haste" 900 2]]}
+   :act [[:summon "cow" [22.5 0 13.5] "{PersistenceRequired:1b}"]
+         [:summon "cow" [24.5 0 13.5] "{PersistenceRequired:1b}"]
+         [:job (jobs.blocks.clear-cells {:area {:min #at [10 0 10] :max #at [19 1 19]}})]
+         [:wait-s 3]
+         [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 1}]
+         [:wait-s 3]
+         [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 1}]
+         [:wait-s 3]
+         [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 1}]]
+   :expect [{:event {:source :job :kind :completed :data {:dug 200}} :within-s 420 :of-job true}]
+   :after [[:block [10 0 10] "air"] [:block [19 1 19] "air"] [:block [20 0 13] "oak_fence"]]
+   :limit-s 480}]}

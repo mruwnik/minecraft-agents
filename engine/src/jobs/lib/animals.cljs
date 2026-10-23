@@ -48,11 +48,6 @@
 
 (def livestock (vec (remove #{"bee"} (keys breeding-food))))
 
-(defn any-near?
-  "Whether any livestock is listed within radius of the body (the cheap test before a pen is read to find who stands in it)."
-  [p radius]
-  (boolean (seq (look/seen-objs p {:radius radius :names livestock :max 1}))))
-
 (defn in-pen-rows
   "The livestock listed within radius of the body that stand on the pen's cells (answer of jobs.lib.pen/check), as
   {:kind :id :pos [x y z]} rows, so a log line dates a loss. also? (a fn of a pos {:x :y :z}) counts further animals as inside."

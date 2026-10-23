@@ -11,7 +11,9 @@
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
             [jobs.blocks.clear-cells :as clear-cells]
-            [jobs.lib.own-pen :as own-pen]))
+            [jobs.lib.access :as access]
+            [jobs.lib.own-pen :as own-pen]
+            [jobs.lib.pen :as pen]))
 
 (defn setup [world & [shared]]
   (let [clock (atom 1000000)
@@ -425,11 +427,16 @@
           (is (= {:dug 1 :skipped {}} (select-keys result [:dug :skipped])) "a cell well above the pen is not its wall")
           (is (= "air" (block-at p {:x 3 :y 68 :z 1}))))))))
 
-(deftest the-pen-wall-read-costs-no-block-reads-while-no-livestock-is-near
-  (let [{:keys [p]} (setup {:blocks stocked-pit :self {:pos {:x 8.5 :y 64 :z 1.5}}} (ew/of-data {} {} [pit-zone]))
-        reads (atom 0)
-        sensed (.-sensedAt p)
-        _ (aset p "sensedAt" (fn [pos] (swap! reads inc) (sensed pos)))
-        wall? (own-pen/box-wall? {:primitives p} (clear-cells/cells pit-rim-row))]
-    (is (false? (wall? [3 63 1])))
-    (is (zero? @reads) "a pen is read only to find the animals in it")))
+(def stocked-field-pit
+  (apply dissoc (tu/box -20 60 -20 20 63 20 "dirt") (for [x (range 3) y [61 62 63] z (range 3)] (str x "," y "," z))))
+
+(deftest the-pen-wall-read-checks-no-pen-from-starts-on-open-ground
+  (let [{:keys [p]} (setup {:blocks stocked-field-pit :entities [pit-cow] :self {:pos {:x 8.5 :y 64 :z 1.5}}})
+        checks (atom 0)
+        check pen/check
+        field (for [x (range 3 13) z (range -4 6)] [x 64 z])]
+    (with-redefs [access/in-own-area? (constantly true)
+                  pen/check (fn [opts] (swap! checks inc) (check opts))]
+      (let [wall? (own-pen/wall-fn {:primitives p} (concat field [[1 61 1]]))]
+        (is (true? (wall? [3 63 1])) "the pit the open ground drops into is still a pen")
+        (is (= 1 @checks) "only the pit start is checked: the field starts reach more than a pen holds")))))

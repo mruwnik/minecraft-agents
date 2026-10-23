@@ -7,6 +7,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.animals :as animals]
             [jobs.lib.pen :as pen]
+            [jobs.lib.pen-world :as pen-world]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -16,6 +17,25 @@
    ::wall-height {:default 3 :doc "Blocks above the highest cell inside a pen up to which a cell beside it counts as its wall." :spec (a/int-in 0 nil)}
    ::radius {:default 16 :doc "Blocks round the body in which livestock is looked for inside that pen." :spec (a/int-in 1 nil)}})
 
+(defn escapes-fn
+  "A fn of a start {:x :y :z}: whether the walk from it reaches ::max-cells cells, so pen/check from it finds no pen. A
+  start whose walk reaches one that escapes escapes too (it reaches all that one reaches), as does every cell on the way:
+  the walks from starts on one open field stop a few cells out instead of each filling ::max-cells."
+  [world]
+  (let [open (volatile! #{})]
+    (fn [at]
+      (let [seeds (pen-world/seeds-at world at)
+            [key] (map :key seeds)]
+        (cond
+          (empty? seeds) false
+          (contains? @open key) true
+          :else (let [{:keys [seen truncated? stopped]} (pen/fill* world seeds nil (settings/get settings ::max-cells) #(contains? @open %))
+                      from (fn [[x y z]] (:from (.get seen (pen-world/pack (:store world) x y z))))]
+                  (cond
+                    truncated? (do (vswap! open conj key) true)
+                    stopped (do (vswap! open into (take-while some? (iterate from (from stopped)))) true)
+                    :else false)))))))
+
 (defn wall-fn
   "A fn of a cell [x y z]: whether it is the wall of an own pen holding livestock that closes round one of the feet cells
   starts (beside a cell of the pen's inside or above it, up to ::wall-height above the highest inside cell). A start in an own area only; the pen is read once.
@@ -23,19 +43,19 @@
   [c starts]
   (let [p (:primitives c)
         block-at (u/seen-block-at-fn p)
-        pens (if-not (animals/any-near? p (settings/get settings ::radius))
-               []
-               (reduce (fn [pens [x y z :as feet]]
-                         (let [at (zipmap [:x :y :z] feet)]
-                           (if (or (some #(contains? (:inside %) feet) pens) (not (access/in-own-area? c at)))
-                             pens
-                             (let [answer (pen/check {:block-at block-at :at at :max-cells (settings/get settings ::max-cells)})
-                                   unseen? (and (= :unloaded (:reason answer)) (seq (:inside answer)))]
-                               (if (and (or (:closed? answer) unseen?)
-                                        (seq (animals/in-pen-rows p answer (settings/get settings ::radius) #(and unseen? (access/in-own-area? c %)))))
-                                 (conj pens answer)
-                                 pens)))))
-                       [] starts))
+        blocks (pen-world/store)
+        escapes? (escapes-fn (pen-world/make-world block-at #{} blocks))
+        pens (reduce (fn [pens [x y z :as feet]]
+                       (let [at (zipmap [:x :y :z] feet)]
+                         (if (or (some #(contains? (:inside %) feet) pens) (not (access/in-own-area? c at)) (escapes? at))
+                           pens
+                           (let [answer (pen/check {:block-at block-at :at at :blocks blocks :max-cells (settings/get settings ::max-cells)})
+                                 unseen? (and (= :unloaded (:reason answer)) (seq (:inside answer)))]
+                             (if (and (or (:closed? answer) unseen?)
+                                      (seq (animals/in-pen-rows p answer (settings/get settings ::radius) #(and unseen? (access/in-own-area? c %)))))
+                               (conj pens answer)
+                               pens)))))
+                     [] starts)
         walls (map (fn [{:keys [inside]}]
                      {:columns (into #{} (map (fn [[x _ z]] [x z])) inside) :floor (apply min (map second inside)) :ceiling (+ (apply max (map second inside)) (settings/get settings ::wall-height))})
                    pens)]

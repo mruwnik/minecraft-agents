@@ -37,34 +37,40 @@
 ;; ------------------------------------------------------------------ the fill
 
 (defn fill*
-  "fill with the seen cells in a JS Map from pack: {:seen map :order [key] :exits [...] :truncated? bool :last key}."
-  [world seeds box max-cells]
-  (let [seen (js/Map.)
-        o (:store world)
-        put! (fn [[x y z] v] (.set seen (pack o x y z) v))]
-    (doseq [{:keys [key s]} seeds] (put! key {:s s :from nil}))
-    (loop [queue (into cljs.core/PersistentQueue.EMPTY (map :key) seeds)
-           order (mapv :key seeds)
-           exits []]
-      (cond
-        (empty? queue) {:seen seen :order order :exits exits :truncated? false}
-        (>= (.-size seen) max-cells) {:seen seen :order order :exits exits :truncated? true :last (peek order)}
-        :else
-        (let [[x y z :as k] (peek queue)
-              s (:s (.get seen (pack o x y z)))
-              [order' exits' queue']
-              (reduce (fn [[order exits queue] [[dx dz] {:keys [top perch?]}]]
-                        (let [nx (+ x dx) nz (+ z dz)
-                              ny (floor-cell top)]
-                          (cond
-                            (and box (outside? box nx nz)) [order (conj exits {:from k :to [nx ny nz] :top top :perch? perch?}) queue]
-                            (.has seen (pack o nx ny nz)) [order exits queue]
-                            :else (let [nk [nx ny nz]]
-                                    (put! nk {:s top :from k :perch? perch?})
-                                    [(conj order nk) exits (conj queue nk)]))))
-                      [order exits (pop queue)]
-                      (moves world x z s))]
-          (recur queue' order' exits'))))))
+  "fill with the seen cells in a JS Map from pack: {:seen map :order [key] :exits [...] :truncated? bool :last key}.
+  stop? (a fn of a key) ends it at the first key reached that it holds for, as :stopped."
+  ([world seeds box max-cells] (fill* world seeds box max-cells nil))
+  ([world seeds box max-cells stop?]
+   (let [seen (js/Map.)
+         o (:store world)
+         put! (fn [[x y z] v] (.set seen (pack o x y z) v))]
+     (doseq [{:keys [key s]} seeds] (put! key {:s s :from nil}))
+     (loop [queue (into cljs.core/PersistentQueue.EMPTY (map :key) seeds)
+            order (mapv :key seeds)
+            exits []]
+       (cond
+         (empty? queue) {:seen seen :order order :exits exits :truncated? false}
+         (>= (.-size seen) max-cells) {:seen seen :order order :exits exits :truncated? true :last (peek order)}
+         :else
+         (let [[x y z :as k] (peek queue)
+               s (:s (.get seen (pack o x y z)))
+               [order' exits' queue' :as r]
+               (reduce (fn [[order exits queue] [[dx dz] {:keys [top perch?]}]]
+                         (let [nx (+ x dx) nz (+ z dz)
+                               ny (floor-cell top)]
+                           (cond
+                             (and box (outside? box nx nz)) [order (conj exits {:from k :to [nx ny nz] :top top :perch? perch?}) queue]
+                             (.has seen (pack o nx ny nz)) [order exits queue]
+                             :else (let [nk [nx ny nz]]
+                                     (put! nk {:s top :from k :perch? perch?})
+                                     (if (and stop? (stop? nk))
+                                       (reduced [(conj order nk) exits nil nk])
+                                       [(conj order nk) exits (conj queue nk)])))))
+                       [order exits (pop queue)]
+                       (moves world x z s))]
+           (if-let [stopped (get r 3)]
+             {:seen seen :order order' :exits exits' :truncated? false :stopped stopped}
+             (recur queue' order' exits'))))))))
 
 (defn fill
   "Breadth first from seeds ({:key :s}) until the queue is empty or max-cells are seen. With a box, a step
@@ -338,7 +344,8 @@
 (defn check
   "The pen check.
   opts: :block-at (required), :at {:x :y :z} (feet cell to start from) and/or :box {:min :max} (every surface in it
-  starts the fill and a step out of it is a leak), :max-cells (default 2000), :near [x y z] (the unloaded leaks
+  starts the fill and a step out of it is a leak), :max-cells (default 2000), :blocks (a jobs.lib.pen-world/store the
+  checks over one block-at share: each cell is read once), :near [x y z] (the unloaded leaks
   listed are the nearest to it, else the first by coordinate), :final? (no look is left: a fill that ran into unseen
   cells names the gap, open gate or wall top on its way out as a leak instead of waiting for a look).
   Returns {:closed? :reason :inside :leaks :gates :gate-drops}.
@@ -349,7 +356,7 @@
   :leaks is [{:pos {:x :y :z} :why}], :why one of :open-gate :gap :climb :perch-in :open :unloaded.
   :gate-drops is [{:gate :from :to :drop}]: a gate whose side of the pen is cut off from the rest by a drop of more than 1."
   [{:keys [max-cells] :or {max-cells default-max-cells} :as opts}]
-  (let [opts (assoc opts :max-cells max-cells :sealed #{} :blocks (store))
+  (let [opts (assoc opts :max-cells max-cells :sealed #{} :blocks (or (:blocks opts) (store)))
         {:keys [world fill leaks]} (analyse opts)]
     (if (or (not world) (and (empty? (:order fill)) (empty? leaks)))
       (answer false :no-start #{} [] [])
