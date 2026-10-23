@@ -200,6 +200,18 @@
                  (get-in (estimate/estimate {:primitives p :args {} :view #(mem/view (:store eng))} death 5000) [:parts :walk])))]
     (is (< (walk false) (walk true)) "the unseen half of the way is no free walk")))
 
+(deftest a-pile-in-cells-the-body-has-not-seen-may-be-under-water
+  (let [death {:pos dt/death-pos :inventory dt/death-pile-of-the-field-report}
+        est (fn [hide?]
+              (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities []})
+                    sensed (.-sensedAt p)]
+                (tu/set-sensed! p (fn [q] (if (and hide? (= (:x dt/death-pos) (.-x q)) (= (:z dt/death-pos) (.-z q)))
+                                            #js {:unknown true :pos q}
+                                            (sensed q))))
+                (estimate/estimate {:primitives p :args {} :view #(mem/view (:store eng))} death 5000)))]
+    (is (nil? (some #{"water"} (map :name (:top-mobs (est false))))) "seen dry ground is no water")
+    (is (some #{"water"} (map :name (:top-mobs (est true)))) "an unseen pile cell is priced as possibly wet")))
+
 (deftest a-pile-the-body-cannot-dive-to-on-one-breath-is-skipped-unless-it-carries-a-block
   (let [wet (into {} (for [y (range 40 65)] [(str (:x dt/death-pos) "," y "," (:z dt/death-pos)) "water"]))
         death {:pos {:x (:x dt/death-pos) :y 40 :z (:z dt/death-pos)} :inventory dt/death-pile-of-the-field-report}

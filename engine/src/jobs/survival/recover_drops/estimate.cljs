@@ -56,17 +56,25 @@
       decision (assoc :decision (:decision decision)
                       :text (str "the latest death is already decided: " (decision-text (:decision decision) decision nil))))))
 
+(def maybe-water?
+  "Whether a kind of the wet-lookup may be water: an unseen cell may be, the worse case for a drowning question."
+  #{:water :unseen})
+
 (defn wet-pile?
-  "Whether the pile's cell or the one above it is water (the body would swim to collect)."
+  "Whether the pile's cell or the one above it is, or may be (unseen), water (the body would swim to collect).
+  kind-at is the wet-lookup."
   [kind-at pos]
   (let [[x y z] (map js/Math.floor [(:x pos) (:y pos) (:z pos)])]
-    (boolean (and pos (or (= :water (kind-at x y z)) (= :water (kind-at x (inc y) z)))))))
+    (boolean (and pos (or (maybe-water? (kind-at x y z)) (maybe-water? (kind-at x (inc y) z)))))))
 
 (defn dive-s
-  "Seconds to swim down from the surface of the water over the pile's cell and back up: twice the water cells over it."
+  "Seconds to swim down from the surface of the water over the pile's cell and back up: twice the water cells over it;
+  the first unseen cell counts as one more and ends the column."
   [kind-at pos]
   (let [[x y z] (map js/Math.floor [(:x pos) (:y pos) (:z pos)])
-        depth (count (take-while #(= :water (kind-at x % z)) (range y (+ y 48))))]
+        kinds (map #(kind-at x % z) (range y (+ y 48)))
+        wet (count (take-while #(= :water %) kinds))
+        depth (if (= :unseen (nth kinds wet nil)) (inc wet) wet)]
     (/ (* 2 depth (breath/swim-ms)) 1000)))
 
 (defn no-air-way
@@ -134,6 +142,7 @@
         known (concat seen (remembered-mobs c known-spots))
         here (u/self-pos c)
         kind-at (reach/seen-lookup p reach/kind-of :ground)
+        wet-at (reach/seen-lookup p reach/kind-of :unseen)
         worth (cost/item-value inventory :overrides (:value-overrides (:args c)))
         route (when pos (conj (cost/straight-route kind-at here pos) pos)) ; the straight route keeps to the surface: a pile far below is its end all the same
         version (game/version-of p)
@@ -145,14 +154,14 @@
                                     :overrides (:danger-overrides (:args c)) :weapon (combat/best-weapon p combat/default-weapons) :health (.-health (.self p)))
                  {:danger 0 :mobs []})
         drown-hp (get-in quoted [:route :drown] 0)
-        wet (when (or (= "drowning" cause) (wet-pile? kind-at pos) (pos? drown-hp))
+        wet (when (or (= "drowning" cause) (wet-pile? wet-at pos) (pos? drown-hp))
               {:name (if (= "drowning" cause) "drowning" "water")
-               :danger (max drown-hp (if (or (= "drowning" cause) (wet-pile? kind-at pos)) (cfg/wet-danger) 0))})
+               :danger (max drown-hp (if (or (= "drowning" cause) (wet-pile? wet-at pos)) (cfg/wet-danger) 0))})
         quoted-s (let [mean (second (get-in quoted [:uses :job-time]))] (when (and (number? mean) (js/isFinite mean)) mean))
         threat (cond-> threat wet (-> (update :danger + (:danger wet)) (update :mobs #(vec (cons wet %)))))
         straight-s (when route (+ (/ (u/dist here pos) (cost/walk-blocks-per-s)) (cost/unseen-route-s kind-at route)))
         fetch (cost/fetch-cost {:distance (when pos (* (max straight-s (or quoted-s 0)) (cost/walk-blocks-per-s))) :danger (:danger threat) :elapsed-ms elapsed :cause cause})
-        drowns (when-not (:reason fetch) (no-air-way p kind-at pos drown-hp))]
+        drowns (when-not (:reason fetch) (no-air-way p wet-at pos drown-hp))]
     (cond-> {:value (+ (:value worth) (cost/experience-cost experience))
              :cost (if drowns js/Infinity (:cost fetch))
              :hold-ms (if (and (seq (:mobs threat)) (every? guard-spots (map :pos (:mobs threat))))
