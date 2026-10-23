@@ -9,6 +9,9 @@
 ;; dark-wade-pays-the-dark-price-too (card 14a87322; the night lake: a dark plot, a glowstone over the pond lights it while the
 ;; body looks, then is taken away, so the seen wade is at block light 0): the quote straight across the 1-deep pond prices its
 ;; wet cells the dark factor and the drowned share, about 1 s for a stone sword; the water share alone gave about 0.35 s.
+;; unseen-deep-pond-costs-the-drowned-share (card 441b0915): the body faces west and up and never sees the pond of the first case
+;; east of it; quoted with :unknown false (the planner reads the real blocks), the unseen water pays the share of water a drowned
+;; can spawn in, the worse case, so the way round still wins (an unseen cell gave no share before).
 ;; Should-fail (control): deep-pond-with-no-way-round-is-swum (the pond across the whole plot, quoted from x 4 to [16 4 12]:
 ;; no ban, the way across is taken; a guessed way round the plot's shell over unseen cells pays the unseen price).
 {:defaults
@@ -29,6 +32,12 @@
          [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [4 4 12] :range 0}] {:ok true :quote {:route {:found true :length [:> 20]}}}] 30]]
    :expect [{:no-event {:level :error} :for-s 2}]
    :after [[:body-near [15.5 4 12.5] 1.5]]}
+  {:name "unseen-deep-pond-costs-the-drowned-share"
+   :blocks [[:fill [0 0 0] [31 3 31] "stone"] [:fill [7 0 7] [13 3 17] "water"]]
+   :body {:yaw 90 :pitch -60}
+   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [15 4 12] :range 0 :unknown false}] {:ok true :quote {:route {:found true :length [:> 20]}}}] 30]]
+   :expect [{:no-event {:level :error} :for-s 2}]
+   :after [[:body-near [4.5 4 12.5] 1]]}
   {:name "deep-pond-with-no-way-round-is-swum"
    :blocks [[:fill [0 0 0] [31 3 31] "stone"] [:fill [7 0 0] [13 3 31] "water"]]
    :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [16 4 12] :range 0}] {:ok true :quote {:route {:found true :length [:< 16]}}}] 30]]
