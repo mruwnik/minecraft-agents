@@ -94,20 +94,34 @@
 (defn- cell-key [x y z] (+ (* (+ (* (+ x 32768) 65536) (+ z 32768)) 512) (+ y 64)))
 
 (defn land-run
-  "Blocks from stand, at most limit, the body can walk away over dry stand cells (a step up or down at a time); ##Inf when
-  ::land-cells cells were read and it still went on (that much land is room enough) or ground beside it was never seen (land not known to end). A ledge with no land beyond it is 0."
+  "{:run blocks :chance c} of the dry stand cells the body can walk away over from stand (a step up or down at a time):
+  :run at most limit blocks, ##Inf when ::land-cells cells were read and it still went on (that much land is room enough).
+  Ground beside the run never seen leaves the run a lower bound, no land assumed there, and :chance the chance (rule of
+  succession over the cells seen beside the run, water apart: stand cells to others) that land goes on there; nil when all was seen.
+  A ledge with no land beyond it is run 0."
   [p stand limit]
   (let [work (settings/get settings ::land-cells)
         {sx :x sy :y sz :z} stand
         visited (js/Set. #js [(cell-key sx sy sz)])
-        unseen (volatile! false)]
+        probed (js/Set.)
+        land (volatile! 0) other (volatile! 0) unseen (volatile! 0)]
     (loop [layer [stand] far 0]
       (if (or (empty? layer) (>= far limit) (<= work (.-size visited)))
-        (if (or @unseen (<= work (.-size visited))) ##Inf (min far limit))
+        (cond (<= work (.-size visited)) {:run ##Inf}
+              (zero? @unseen) {:run (min far limit)}
+              :else {:run (min far limit) :chance (/ (inc @land) (+ @land @other 2))})
         (let [next (vec (for [{:keys [x y z]} layer [dx dz] sides dy [0 1 -1]
                               :let [c {:x (+ x dx) :y (+ y dy) :z (+ z dz)} k (cell-key (:x c) (:y c) (:z c))]
-                              :let [_ (when (and (zero? dy) (nil? (u/seen-name p (update c :y dec)))) (vreset! unseen true))]
-                              :when (and (not (.has visited k)) (standable? p c))
+                              :when (not (.has visited k))
+                              :let [stand? (standable? p c)
+                                    _ (when (and (zero? dy) (not (.has probed k)))
+                                        (.add probed k)
+                                        (let [floor (u/seen-name p (update c :y dec))]
+                                          (cond (nil? floor) (vswap! unseen inc)
+                                                stand? (vswap! land inc)
+                                                (or (contains? breath/swimmable floor) (contains? breath/swimmable (u/seen-name p c))) nil
+                                                :else (vswap! other inc))))]
+                              :when stand?
                               :let [_ (.add visited k)]]
                           c))]
           (recur next (reduce max far (map #(js/Math.hypot (- (:x %) sx) (- (:z %) sz)) next))))))))
@@ -116,10 +130,10 @@
   "{:stand cell :swim blocks} of the nearest dry stand joined to the body by seen water and air cells (a flooded stair or
   shaft, however far up) with :land, the blocks (land-run, at most need) it can walk on from there, the swim the length of that way
   (flat diagonals count root 2), nearest by steps first; a stand with less land than need is passed over for one with enough, and
-  the nearest of them is the answer when the flood ends with none, and with no stand at all {:swim the farthest it reached :land 0}; {:swim blocks :open? true} instead when cells beside the water were never seen. A body
+  the nearest of them is the answer when the flood ends with none, and with no stand at all {:swim the farthest it reached :land 0}; with :chance (land-run's) the chance that land goes on past the :land seen. Water never seen beside the flood leaves a shore unfound, no shore assumed: :chance (stands + 1) / (stands + walls seen beside the flood + 2) (rule of succession) with the swim a lower bound. A body
   swims up through water but not through air: it leaves an air cell sideways or down only, and an air cell is a cell of the
   way only over water (or a stand). The flood reads at most
-  ::swim-cells cells; with no stand found by then {:swim blocks :open? true}: the shore is at least that far."
+  ::swim-cells cells; with no stand found by then {:swim blocks :land 0 :chance c}: the shore is at least that far."
   [p self-pos need]
   (let [work (settings/get settings ::swim-cells)
         fx (js/Math.floor (:x self-pos)) fy (js/Math.floor (:y self-pos)) fz (js/Math.floor (:z self-pos))
@@ -131,23 +145,29 @@
                       (let [n (breath/seen-water-name p {:x x :y y :z z})] (.set names k n) n))))
         water? (fn [x y z] (contains? breath/swimmable (name-of x y z)))
         unseen (volatile! false)
+        walls (volatile! 0)
         open? (fn [x y z]
                 (and (>= y (dec fy))
                      (let [n (name-of x y z)]
                        (when (nil? n) (vreset! unseen true))
                        (if (bs/air n)
                          (or (water? x (dec y) z) (standable? p {:x x :y y :z z}))
-                         (breath/passable-water-or-air? n)))))
+                         (or (breath/passable-water-or-air? n)
+                             (do (when n (vswap! walls inc)) false))))))
+        shore-chance (fn [stands] (/ (inc stands) (+ stands @walls 2)))
         visited (js/Set. #js [(cell-key fx fy fz)])]
     (loop [layer [[fx fy fz 0]] ledge nil far 0]
       (let [stands (sort-by first (keep (fn [[x y z g]] (when (and (bs/air (name-of x y z)) (standable? p {:x x :y y :z z})) [g {:x x :y y :z z}])) layer))
-            found (map (fn [[g stand]] {:stand stand :swim g :land (land-run p stand need)}) stands)
+            found (map (fn [[g stand]] (let [{:keys [run chance]} (land-run p stand need)] (cond-> {:stand stand :swim g :land run} chance (assoc :chance chance)))) stands)
             good (first (filter #(>= (:land %) need) found))
             ledge (or ledge (first found))]
         (cond
           good good
-          (<= work (.-size visited)) {:swim (reduce min ##Inf (map #(nth % 3) layer)) :open? true}
-          (empty? layer) (cond @unseen {:swim far :open? true} ledge ledge :else {:swim far :land 0})
+          (<= work (.-size visited)) {:swim (reduce min ##Inf (map #(nth % 3) layer)) :land 0 :chance (shore-chance 0)}
+          (empty? layer) (cond (and @unseen ledge) (update ledge :chance #(max (or % 0) (shore-chance 1)))
+                              ledge ledge
+                              @unseen {:swim far :land 0 :chance (shore-chance 0)}
+                              :else {:swim far :land 0})
           :else
           (recur (vec (for [[x y z g] layer
                             :let [in-air? (bs/air (name-of x y z))]

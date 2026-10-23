@@ -219,7 +219,29 @@
        {:damage (threat/mob-hurt stats (threat/kind m) (+ (:in-reach wet 0) (if (:away? wet) 0 (/ (max 0 (- r d)) gain))) identity (threat/lone-hit-rate (threat/kind m)))
         :hit (blow stats m) :seconds (+ (:seconds wet 0) escape)}))))
 
+(declare flee-answer-on)
+
 (defn flee-answer
+  "flee-answer-on over the land known; when that is no answer and open (the chance, 0..1, that land goes on past it, cells
+  never seen) is given, the answer over land enough, in which a flight whose land ends instead (chance 1 - open) is caught
+  on the shore as well, taking the blows of the fight ashore (ashore, else later; the flight's own when none)."
+  [{:keys [open later ashore] :as args}]
+  (let [args (dissoc args :open :ashore)
+        later (or ashore later)]
+    (or (flee-answer-on args)
+        (when open
+          (when-let [a (flee-answer-on (assoc args :land ##Inf))]
+            (let [{c0 :chance d0 :damage} (:caught a)
+                  ends (* (- 1 c0) (- 1 open))
+                  chance (+ c0 ends)]
+              (if (zero? chance)
+                a
+                (-> a
+                    (assoc-in [:caught :chance] chance)
+                    (assoc-in [:caught :damage] (/ (+ (* c0 d0) (* ends (:damage later d0))) chance))
+                    (update-in [:caught :hit] max (:hit later 0))))))))))
+
+(defn flee-answer-on
   "The answer of a walk away from mobs [flee-mob's] by a body with food wearing equipment, the walk there and back (it
   goes back to its work), times 1 + returns (the flights from such mobs lately: each predicts another); :then the answer
   later (the fight with them, nil none) or the walk again. :caught: each flight is caught at chance caught (default
@@ -251,7 +273,7 @@
               left (remove spent mobs)]
           (cond
             (empty? spent) (assoc walk :then (cond-> [walk] later (conj later)))
-            (seq left) (assoc walk :then (cond-> [(flee-answer (assoc args :mobs left))] later (conj later)))
+            (seq left) (assoc walk :then (cond-> [(flee-answer-on (assoc args :mobs left))] later (conj later)))
             :else walk))))))
 
 (defn build-answer

@@ -1979,3 +1979,22 @@
     (is (zero? (:land (swim false))) "with nothing to walk on")
     (is (= 11 (:x (:stand (swim true)))) "the bank, beyond the nearer ledge")
     (is (<= 3 (:land (swim true))))))
+
+(defn- seeing-up-to
+  "p seeing every block with x below x-hidden and none at or beyond it."
+  [p x-hidden]
+  (let [at (aget p "sensedAt")]
+    (tu/set-sensed! p (fn [pos] (if (>= (aget pos "x") x-hidden) #js {:unknown true :pos pos} (at pos))))
+    p))
+
+(deftest a-shore-whose-land-is-partly-unseen-has-the-land-seen-and-a-chance-more-lies-beyond
+  (let [swim (fn [lake hidden] (shore/swim-to-land (seeing-up-to (tu/seeing-all (tu/fake {:self {:inWater true :pos {:x 0.5 :y 64 :z 0.5}} :blocks lake})) hidden)
+                                                   {:x 0.5 :y 64 :z 0.5} 8))
+        near-bank (swim (ledge-lake 10) 14)
+        no-bank (swim (ledge-lake 10 false) 6)]
+    (is (= 11 (:x (:stand near-bank))))
+    (is (< 0 (:land near-bank) 8) "the land seen, a lower bound, never ##Inf")
+    (is (< 0 (:chance near-bank) 1) "land seen beside the unseen ground is the evidence for more")
+    (is (= {:land 0 :chance 0.5} (select-keys no-bank [:land :chance])) "water never seen: no shore assumed, even odds one is there")
+    (is (nil? (:stand no-bank)))
+    (is (nil? (:chance (swim (ledge-lake 10) 99))) "all seen: nothing left to chance")))

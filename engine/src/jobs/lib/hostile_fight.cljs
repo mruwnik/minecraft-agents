@@ -280,8 +280,8 @@
   {:name (.-name e) :held (.-held e) :distance (danger-q/mob-distance p e) :speed (cost/chase-speed (cost/mob-kind e)) :follow (threats/follow-range (.-name e))})
 
 (defn swim-out
-  "{:swim blocks :land blocks} of a body in water swimming to the nearest dry stand joined to it by water and air
-  (shore/swim-to-land: the way's length, a stand with land to walk on beyond the mobs' reach over a ledge) and the land it can walk on from there; with no stand in the joined water the swim is the farthest it reaches and the land 0, :land ##Inf when the flood stopped unfinished; nil on land. One flood a place, kept ::check-cache/ttl-ms."
+  "{:swim blocks :land blocks :chance c} of a body in water swimming to the nearest dry stand joined to it by water and air
+  (shore/swim-to-land: the way's length, a stand with land to walk on beyond the mobs' reach over a ledge) and the land it can walk on from there; with no stand in the joined water the swim is the farthest it reaches and the land 0; :chance the chance more land lies where nothing was seen (shore/land-run); nil on land. One flood a place, kept ::check-cache/ttl-ms."
   [c mobs]
   (let [p (:primitives c)]
     (when (breath/in-water? p)
@@ -290,10 +290,11 @@
         (check-cache/cached
          c [:swim-out (u/cell-vec me) reach]
          (fn []
-           (let [{:keys [swim stand land open?]} (shore/swim-to-land p me reach)]
-             (cond open? {:swim swim :land ##Inf}
-                   (zero? land) {:swim swim :land 0}
-                   :else {:swim swim :land (shore/land-run p stand ##Inf)}))))))))
+           (let [{:keys [stand land] :as found} (shore/swim-to-land p me reach)]
+             (if (or (nil? stand) (zero? land))
+               (assoc (select-keys found [:swim :land :chance]) :stand? (some? stand))
+               (let [{:keys [run chance]} (shore/land-run p stand ##Inf)]
+                 {:swim (:swim found) :land run :chance chance :stand? true})))))))))
 
 (defn returns
   "Flights from mobs named one of names within ::return-s, by the :hostile entries (c is a ctx): one for each other run
@@ -319,7 +320,8 @@
         swim (swim-out c mobs)
         a (cost/flee-answer {:food (or (.-food self) 20) :equipment (cost/equipment-of (.-equipment self))
                              :mobs mobs
-                             :swim (:swim swim) :land (:land swim)
+                             :swim (:swim swim) :land (:land swim) :open (:chance swim)
+                             :ashore (when (and (:chance swim) (:stand? swim)) (cost/fight-answer (fight-of c near (constantly nil))))
                              :returns (returns c (map #(.-name %) near))
                              :later later})]
     (cond-> a

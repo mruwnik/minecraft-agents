@@ -209,3 +209,14 @@
     (is (= 1 (cost/closed-chance 11 0)) "all seen: closed")
     (is (= (/ 12 13) (cost/closed-chance 11 1)) "one unseen of twelve: the rule of succession")
     (is (> (cost/closed-chance 11 1) (cost/closed-chance 2 1) (cost/closed-chance 2 3)))))
+
+(deftest a-swim-to-a-shore-whose-land-may-go-on-is-caught-at-the-chance-it-ends
+  (let [m (mob "drowned" 3 35)
+        known (cost/flee-answer {:food 20 :mobs [m] :swim 4 :land 0})
+        open (cost/flee-answer {:food 20 :mobs [m] :swim 4 :land 0 :open 0.25})
+        seen-land (cost/flee-answer {:food 20 :mobs [m] :swim 4 :land ##Inf})]
+    (is (nil? known) "the land seen ends at once and the mob keeps up")
+    (is (< (js/Math.abs (- 0.7875 (-> open :caught :chance))) 1e-9) "caught at 1 - (1 - 0.15) * 0.25")
+    (is (< (-> open :caught :damage) (-> (cost/flee-answer {:food 20 :mobs [m] :swim 4 :land 0 :open 0.25 :later {:damage 100 :hit 3 :seconds 5}}) :caught :damage)) "a later fight is what the ending flight takes")
+    (is (> (-> open :caught :chance) (-> seen-land :caught :chance)))
+    (is (= (:caught seen-land) (:caught (cost/flee-answer {:food 20 :mobs [m] :swim 4 :land ##Inf :open 0.25}))) "land enough already: the chance is no matter")))
