@@ -370,19 +370,9 @@
     (is (zero? (cost/spawn-worth {:respawn here} here)))))
 
 (deftest a-search-leg-costs-go-tos-price-and-the-death-it-risks
-  (let [body {:respawn {:x 0 :y 64 :z 0}}
-        found {:uses {:job-time [4 4 6]} :route {:found true :seconds 4 :priced 9}}
-        leg #(cost/leg-price body %1 %2 far)]
-    (is (= (+ 9 (cost/route-death-cost body {} far)) (leg found {})) "a found route: the planner's price, darkness and dangers in it")
-    (is (= (+ 7 (cost/route-death-cost body {} far)) (leg {:uses {:job-time [4 7 ##Inf]} :route {:found false :reason :partial}} {})) "else the quote's mean")
-    (is (> (leg found {:night? true}) (leg found {:underground? true}) (leg found {})) "a dark or underground leg risks more")))
-
-(deftest a-search-leg-past-a-known-threat-risks-its-death
-  (let [body {:respawn {:x 0 :y 64 :z 0} :health 20}
-        found {:uses {:job-time [4 4 6]} :route {:found true :seconds 4 :priced 9}}
-        cells (for [x (range 20)] {:x x :y 64 :z 0})
-        zombie {:mob "zombie" :weight 1 :reach (fn [x _ _] (when (< 5 x 10) 1))}]
-    (is (> (cost/leg-price body found {:cells cells :threats [zombie]} far) (cost/leg-price body found {:cells cells} far)))))
+  (let [found {:uses {:job-time [4 4 6]} :route {:found true :seconds 4 :priced 9}}]
+    (is (= 12 (cost/leg-price found 3)) "a found route: the planner's price, darkness and dangers in it")
+    (is (= 10 (cost/leg-price {:uses {:job-time [4 7 ##Inf]} :route {:found false :reason :partial}} 3)) "else the quote's mean")))
 
 (deftest a-find-is-worth-its-value-a-bed-its-respawn-too-and-no-names-nothing
   (let [here {:x 0 :y 64 :z 0}]

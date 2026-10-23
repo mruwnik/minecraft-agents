@@ -13,6 +13,7 @@
             [jobs.lib.foods :as foods]
             [jobs.lib.look :as look]
             [jobs.lib.pen-read :as pen-read]
+            [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -53,12 +54,12 @@
     (max (cost/food-worth (.-food (.self p))) stock)))
 
 (defn noted-cost
-  "Seconds walking to the noted animal n costs: the walk plus the death the route risks (cost/route-death-cost)."
+  "Seconds walking to the noted animal n costs: the walk plus the death the route risks past the known threats (threats/route-death-cost)."
   [c n]
   (let [p (:primitives c)
         at (zipmap [:x :y :z] (:pos n))]
     (+ (:cost (cost/walk-cost {:distance (u/flat-dist (u/self-pos c) at)}))
-       (cost/route-death-cost (cost/death-body p (ctx/view c)) {:underground? (sh-sense/buried? p) :night? false} at))))
+       (threats/route-death-cost c {:underground? (sh-sense/buried? p) :night? false} at))))
 
 (defn noted-target
   "The cheapest food animal a :seen note (any body's) places anywhere whose meat is worth more than the walk (noted-benefit over noted-cost), as the note, skipping the ids in `done`, babies and the animals tried; priced by noted-price, not cut at a radius."

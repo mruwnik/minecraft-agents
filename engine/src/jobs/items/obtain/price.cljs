@@ -1,7 +1,6 @@
 (ns jobs.items.obtain.price
   "What the call's shortfall costs the body to get: the cheapest way that would start, each with the death its walk risks."
-  (:require [engine.ctx :as ctx]
-            [engine.game :as game]
+  (:require [engine.game :as game]
             [jobs.items.obtain.base :refer [craft-step-s gathers? makes? names-of shortfall smelt-item-s way?]]
             [jobs.items.obtain.chest :refer [candidates]]
             [jobs.items.obtain.loose :as loose-way]
@@ -11,6 +10,7 @@
             [jobs.items.obtain.table :refer [gather-needs]]
             [jobs.lib.cost :as cost]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]))
 
 (defn steps-s
@@ -20,11 +20,10 @@
     (+ (* (craft-step-s) (count crafts)) (* (smelt-item-s) (reduce + 0 (map :count smelts))))))
 
 (defn death-s
-  "The death a walk to `at` risks (jobs.lib.cost/route-death-cost): underground when under? (an ore below the feet), else over the
+  "The death a walk to `at` risks past the known threats (jobs.lib.threats/route-death-cost): underground when under? (an ore below the feet), else over the
   surface at night while the open sky is dark."
   [c at under?]
-  (let [p (:primitives c)]
-    (cost/route-death-cost (cost/death-body p (ctx/view c)) {:underground? (boolean under?) :night? (sh-sense/dark-outside? p)} at)))
+  (threats/route-death-cost c {:underground? (boolean under?) :night? (sh-sense/dark-outside? (:primitives c))} at))
 
 (defn walk-s
   "A trip, the walk to `at` and back, and the death it risks."

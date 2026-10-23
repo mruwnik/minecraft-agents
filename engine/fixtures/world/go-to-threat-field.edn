@@ -1,0 +1,27 @@
+;; Card 613e5f29: go-to prices a known mob over its field (the cells its way and line of fire reach), not a sphere round it.
+;; Roofed stone block, a lit hall x 1..30, z 1..30 (feet y 0); a NoAI zombie at [15 0 15] in a glass pen x 13..17, z 13..17
+;; (walls y 0..2, roof y 3). The quote reports the planned route's :length from [3 0 15] to [27 0 15] and walks nowhere.
+;; Penned, its field is the pen: the plan skirts the pen (about 28; a 12-block sphere sent it 12 off, about 48).
+;; Should-fail (kept wide): the pen's east and west walls open, its way reaches the whole hall: the plan keeps well off it.
+{:defaults
+ {:tags [:movement :planner :danger]
+  :time :any
+  :plot {:light :lit :height 8}
+  :blocks [[:fill [0 -1 0] [31 4 31] "stone"]
+           [:fill [1 0 1] [30 3 30] "air"]
+           [:fill [13 0 13] [17 3 17] "glass"]
+           [:fill [14 0 14] [16 2 16] "air"]]
+  :body {:at [3.5 0 15.5] :yaw 270 :settle-s 4 :effects [["resistance" 600 4]]}
+  :limit-s 40}
+ :cases
+ [{:name "a-penned-zombie-is-passed-beside-its-pen"
+   :act [[:summon "zombie" [15.5 0 15.5] "{NoAI:1b,Silent:1b}"]
+         [:until-seen {:entity "zombie"} 10]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [27 0 15] :range 1 :unknown false}] {:ok true :quote {:route {:found true :length [:< 32]}}}] 30]]
+   :after [[:body-near [3.5 0 15.5] 2]]}
+  {:name "an-unpenned-zombie-is-kept-well-off"
+   :blocks [[:fill [13 0 14] [13 2 16] "air"] [:fill [17 0 14] [17 2 16] "air"]]
+   :act [[:summon "zombie" [15.5 0 15.5] "{NoAI:1b,Silent:1b}"]
+         [:until-seen {:entity "zombie"} 10]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [27 0 15] :range 1 :unknown false}] {:ok true :quote {:route {:found true :length [:> 34]}}}] 30]]
+   :after [[:entities "type=zombie,tag=wt" [[13 0 13] [17 2 17]] 1]]}]}

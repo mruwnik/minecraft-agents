@@ -272,13 +272,12 @@
     0))
 
 (defn leg-price
-  "Seconds a search leg costs body: go-to's quote q of the walk to `at` (a found route its planner's price: seconds,
-  darkness by the kit, dangers and damage at the body's health; else the quote's mean time) and the death the leg risks
-  (route-death-cost of route {:underground? :night? :cells :threats}, death-chance's route)."
-  [body q route at]
+  "Seconds a search leg costs: go-to's quote q of the walk (a found route its planner's price: seconds, darkness by the
+  kit, dangers and damage at the body's health; else the quote's mean time) and death-s, the death the leg risks
+  (route-death-cost; jobs.lib.threats/route-death-cost for a body's way past its known threats)."
+  [q death-s]
   (let [r (:route q)]
-    (+ (if (:found r) (or (:priced r) (:seconds r)) (second (get-in q [:uses :job-time])))
-       (route-death-cost body route at))))
+    (+ (if (:found r) (or (:priced r) (:seconds r)) (second (get-in q [:uses :job-time]))) death-s)))
 
 (defn opening-price
   "Seconds a way out costs body (death-body keys and :health): the hurt hp it expects (route-danger's :danger of the way),

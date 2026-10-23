@@ -556,10 +556,7 @@
           [x y z] leg
           q (await (ctx/quote c 'jobs.movement.go-to (leg-args c leg)))
           at {:x x :y y :z z}
-          price (cost/leg-price (merge (cost/death-body p (ctx/view c)) (threats/body-of p)) q
-                                {:underground? (sh-sense/buried? p) :night? (look/dark-here? p)
-                                 :cells (cost/straight-route (reach/mob-lookup p) (u/self-pos c) at) :threats (threats/threats-of c)}
-                                at)]
+          price (cost/leg-price q (threats/route-death-cost c {:underground? (sh-sense/buried? p) :night? (look/dark-here? p)} at))]
       (cond
         (:estimate q) :continue
         (infinite? price) (do (ctx/update-mem! c dissoc :leg-price) nil)
