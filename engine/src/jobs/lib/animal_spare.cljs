@@ -63,8 +63,10 @@
 (defn own-built?
   "Whether every fence or wall block of the enclosure is one this body placed itself (jobs.lib.built): its own pen, whatever the zones say."
   [c inside]
-  (let [fence (fence-cells c inside)]
-    (and (seq fence) (every? (built/cells (ctx/view c)) fence))))
+  (let [fence (fence-cells c inside)
+        own? (and (seq fence) (every? (built/cells (ctx/view c)) fence))]
+    (when own? (built/use! c fence))
+    own?))
 
 (defn enclosure
   "The feet cells ([x y z] set) of the fenced enclosure around cell, an open gate counted shut; nil when there is none."

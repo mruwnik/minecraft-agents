@@ -21,3 +21,15 @@
         less (built/drop-cell data [1 64 1])]
     (is (= #{[2 64 1] [40 64 1]} (booked less)))
     (is (= [[0 0]] (:order (built/drop-cell less [40 64 1]))))))
+
+(deftest a-pen-in-use-is-not-evicted-by-later-placements
+  (let [others (fn [from n] (for [i (range from (+ from n))] [(* 16 i) 64 0]))
+        pen [[0 64 0]]
+        placed (reduce built/add-cell {} (concat pen (others 1 (dec built/max-columns))))
+        rebooked (built/remember-cell placed [0 64 0])
+        used (built/refresh placed pen)
+        later #(booked (reduce built/add-cell % (others 1000 3)))]
+    (is (not (contains? (later placed) [0 64 0])) "unused: aged out")
+    (is (contains? (later rebooked) [0 64 0]) "a re-booked cell touches its column")
+    (is (contains? (later used) [0 64 0]) "a pen read as own touches its column")
+    (is (= placed (built/refresh placed [[5000 64 0]])) "cells never booked change nothing")))
