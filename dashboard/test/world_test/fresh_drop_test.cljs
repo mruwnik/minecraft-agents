@@ -106,3 +106,16 @@
          (d/read-line "{:generation-id \"g\", :source :job, :kind :hurt, :seq 9, :time-ms 5, :data {:pos {:x 1.5, :y 70, :z -3.0}}}")))
   (is (nil? (d/read-line "{:kind :player-joined, :time-ms 5, :data {:player \"T\", :pos {:x 1, :y 2, :z 3}}}")) "another player's position is not the body's")
   (is (= :died (:kind (d/read-line "{:kind :died, :time-ms 5, :data {:cause \"drown\"}}"))) "a full kind is read whole"))
+
+(deftest several-bodies-are-placed-by-one-spreadplayers-each
+  (is (= [["spreadplayers" "1" "2" "4" "8" "false" "A"]
+          ["execute" "at" "A" "run" "spreadplayers" "~" "~" "2" "4" "false" "B"]
+          ["execute" "at" "A" "run" "spreadplayers" "~" "~" "2" "4" "false" "C"]]
+         (d/place-commands ["A" "B" "C"] [1 2])))
+  (is (= [["spreadplayers" "1" "2" "0" "100" "false" "A"]] (d/place-commands ["A"] [1 2]))))
+
+(deftest only-the-success-line-counts-as-placed
+  (is (d/placed-ok? "Spread 1 player(s) around 1.0, 2.0 with an average distance of 3.1 blocks apart"))
+  (is (not (d/placed-ok? "Incorrect argument for command at ...lse Oriel Bramble Teasel<--[HERE]")))
+  (is (not (d/placed-ok? "Could not spread 1 player around 1.0, 2.0 (too many players for space - try using spread of at most 4)")))
+  (is (not (d/placed-ok? ""))))

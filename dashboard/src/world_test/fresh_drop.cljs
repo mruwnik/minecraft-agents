@@ -51,6 +51,21 @@
             t2 (bit-xor t1 (+ t1 (js/Math.imul (bit-xor t1 (unsigned-bit-shift-right t1 7)) (bit-or t1 61))))]
         (/ (unsigned-bit-shift-right (bit-xor t2 (unsigned-bit-shift-right t2 14)) 0) 4294967296)))))
 
+(defn place-commands
+  "bodies, spot [x z] -> the rcon argument vectors that put all bodies within a few blocks of the spot: spreadplayers takes one target,
+  so the first body is spread around the spot and each other body around the first."
+  [bodies [x z]]
+  (let [[b & more] bodies]
+    (if more
+      (into [["spreadplayers" (str x) (str z) "4" "8" "false" b]]
+            (map (fn [o] ["execute" "at" b "run" "spreadplayers" "~" "~" "2" "4" "false" o])) more)
+      [["spreadplayers" (str x) (str z) "0" "100" "false" b]])))
+
+(defn placed-ok?
+  "The rcon answer of a spreadplayers: only the server's success line counts, anything else (an error, 'Could not') is a failure."
+  [out]
+  (boolean (re-find #"Spread \d+ player" (str out))))
+
 (defn steps
   "The drop as data, in order: per body [:whitelist b] [:file path text] [:workspace b world] [:body-start b {:world :build}], then
   [:wait-online b] and the wipe for each, one [:place bodies spots], per body the spawn point and [:record path m].
@@ -253,6 +268,17 @@
                :when m]
            [(js/parseInt (nth m 1)) (js/parseInt (nth m 2))]))))
 
+(defn- today [] (.slice (.toISOString (js/Date.)) 0 10))
+
+(defn reset-workspace!
+  "Makes the body's workspace a working one on this repo: the old notes/ move aside to notes.old-<date> and the stale context.edn
+  goes, so the rebind and the wrapper refresh below are accepted."
+  [dir]
+  (let [notes (path/join dir "notes")
+        aside (str notes ".old-" (today))]
+    (when (and (fs/existsSync notes) (not (fs/existsSync aside))) (fs/renameSync notes aside))
+    (fs/rmSync (path/join dir "context.edn") #js {:force true})))
+
 (defn- run-node! [script args]
   (cp/spawnSync js/process.execPath (clj->js (into [(path/join (repo) script)] args)) #js {:stdio "inherit" :cwd (repo)}))
 
@@ -268,7 +294,8 @@
             (fs/writeFileSync p text))
     :workspace (let [[body world] a
                      worlds (fs/realpathSync (path/join (repo) "worlds"))]
-                 (run-node! "engine/tools/workspace.mjs" [(path/join worlds world "agents" body) "--body" body "--world" world "--worlds" worlds "--adopt-existing"]))
+                 (reset-workspace! (path/join worlds world "agents" body))
+                 (run-node! "engine/tools/workspace.mjs" [(path/join worlds world "agents" body) "--body" body "--world" world "--worlds" worlds "--adopt-existing" "--update-tools"]))
     :body-start (let [[body {:keys [world build]}] a
                       child (cp/spawn "sh"
                                       #js ["-c" "while :; do \"$@\"; [ $? -eq 75 ] || break; sleep 20; done" "sh" (path/join (repo) "tools/res-slot")
@@ -285,12 +312,13 @@
                        (cp/spawnSync "sleep" #js ["2"])
                        (recur (inc n)))))
     :place (let [[bodies spots] a
-                 [spread range] (if (next bodies) ["4" "8"] ["0" "100"])
-                 try-spot (fn [[x z]]
-                            (let [out (str (.-stdout (cp/spawnSync js/process.execPath (clj->js (into [(path/join (repo) "tools/rcon-raw.mjs") "spreadplayers" (str x) (str z) spread range "false"] bodies))
-                                                                  #js {:cwd (repo) :encoding "utf8"})))]
-                              (js/console.log (str/trim out))
-                              (not (str/includes? out "Could not"))))]
+                 try-spot (fn [spot]
+                            (every? (fn [args]
+                                      (let [out (str (.-stdout (cp/spawnSync js/process.execPath (clj->js (into [(path/join (repo) "tools/rcon-raw.mjs")] args))
+                                                                            #js {:cwd (repo) :encoding "utf8"})))]
+                                        (js/console.log (str/trim out))
+                                        (placed-ok? out)))
+                                    (place-commands bodies spot)))]
              (reset! placed (first (filter try-spot spots))))
     :rcon (run-node! "tools/rcon-raw.mjs" (str/split (first a) #" "))
     :record (let [[f m] a, p (path/join (repo) f)]
@@ -309,8 +337,15 @@
          (let [rnd (seeded-rnd (or seed (js/Date.now)))
                ss (steps {:bodies (if together pos [(first pos)]) :world world :build build :spots (pick-spots rnd (known-bases world) 8) :now (js/Date.now)})]
            (doseq [s ss] (js/console.log (pr-str s)))
-           (when (and go (= "drop" cmd)) (doseq [s ss] (exec-step! s)))
-           0))
+           (if-not (and go (= "drop" cmd))
+             0
+             (loop [[s & more] ss]
+               (if-not s
+                 0
+                 (do (exec-step! s)
+                     (if (and (= :place (first s)) (nil? @placed))
+                       (do (js/console.error "no candidate spot placed every body; stopping before the spawn points") 1)
+                       (recur more))))))))
        "report"
        (if (empty? pos)
          (do (js/console.error usage) 2)
