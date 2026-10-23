@@ -84,7 +84,7 @@
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 
-(defn hostile-entries [eng] (mapv #(dissoc (:data %) :health) (mem/entries (mem/view (:store eng)) :hostile)))
+(defn hostile-entries [eng] (mapv #(dissoc (:data %) :health :run) (mem/entries (mem/view (:store eng)) :hostile)))
 
 (defn zombie
   ([x z] (zombie 7 x z))
@@ -1014,6 +1014,25 @@
           (await (core/tick! eng))
           (is (< (- (get @at "moveTo") (get @at "attack")) (* 1000 answer/fuse-s)) "the step back begins within the fuse")
           (is (empty? (filter #(= :back (get-in % [:data :slot])) @seen)) "no child job for it"))))))
+
+;; Card c9b2f421: a run's own change from fight to flight counted as a return (each doubles the walk's price)
+(deftest a-runs-own-change-to-flight-is-no-return
+  (let [entry (fn [t decision run] {:t t :data (cond-> {:mob "zombie" :decision decision} run (assoc :run run))})
+        returns (fn [& entries] (hostile-fight/returns {:root "j1" :slots []
+                                                        :view (fn [] {:now 1000000 :data {:entries {:hostile (vec entries) :job/j1 [{:t 990000 :data {:run-at 5}}]}}})}
+                                                       ["zombie"]))]
+    (is (= 0 (returns (entry 990000 :fight 5) (entry 995000 :flee 5))) "this run's fight turned flight")
+    (is (= 1 (returns (entry 900000 :flee 3) (entry 905000 :fight 3) (entry 910000 :flee 3) (entry 995000 :flee 5))) "an earlier run that fled twice is one return")
+    (is (= 2 (returns (entry 900000 :flee nil) (entry 905000 :flee nil))) "entries without a run count each")))
+
+;; Card c9b2f421: the blows felt in the fight priced the walk once it began, so the run flipped back to the fight
+(deftest blows-felt-before-a-flight-do-not-price-its-walk
+  (let [hurt (fn [t] {:t t :data {:amount 2.5 :attacker {:name "zombie"}}})
+        felt (fn [mem hurts] (respond-to-hostile/walk-felt {:root "j1" :slots []
+                                                            :view (fn [] {:now 1000000 :data {:entries {:hurt (vec hurts) :job/j1 [{:t 990000 :data mem}]}}})}))]
+    (is (nil? (felt {:decision :fight} [(hurt 999000)])) "no flight: the fight is priced at them")
+    (is (zero? (felt {:decision :flee :flight-start 999500} [(hurt 998500) (hurt 999000)])) "felt in the fight before the flight")
+    (is (pos? (felt {:decision :flee :flight-start 999000} [(hurt 999500)])) "felt on the walk")))
 
 (deftest a-body-that-fled-ranged-mobs-twice-fights-them-to-the-end-however-far
   (async done

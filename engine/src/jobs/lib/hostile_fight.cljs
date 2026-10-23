@@ -151,14 +151,15 @@
      :mobs (mapv #(mob-of p (struck-of (.-id %)) %) hostiles)}))
 
 (defn incoming
-  "{:rate hp a second, :hardest hp} of the mob blows the body felt within ::felt-s (its hurt memory): their sum over the
-  time since the first (at least a second), and the largest one; zeros without any."
-  [c]
-  (let [now (ctx/now c)
-        hits (body/mob-hits-since (ctx/view c) (- now (* 1000 (settings/get settings ::felt-s))))
-        amounts (map :amount hits)]
-    {:rate (if (seq hits) (/ (reduce + amounts) (max 1 (/ (- now (:t (first hits))) 1000))) 0)
-     :hardest (reduce max 0 amounts)}))
+  "{:rate hp a second, :hardest hp} of the mob blows the body felt within ::felt-s (its hurt memory), none before
+  `since` (ms): their sum over the time since the first (at least a second), and the largest one; zeros without any."
+  ([c] (incoming c 0))
+  ([c since]
+   (let [now (ctx/now c)
+         hits (body/mob-hits-since (ctx/view c) (max since (- now (* 1000 (settings/get settings ::felt-s)))))
+         amounts (map :amount hits)]
+     {:rate (if (seq hits) (/ (reduce + amounts) (max 1 (/ (- now (:t (first hits))) 1000))) 0)
+      :hardest (reduce max 0 amounts)})))
 
 (defn way-mobs
   "The hostiles known (seen, or heard at their rough spot) within price ::way-radius of the way to the nearest of near,
@@ -296,17 +297,22 @@
                    :else {:swim swim :land (shore/land-run p stand follow)}))))))))
 
 (defn returns
-  "Flights from mobs named one of names within ::return-s, by the :hostile entries (c is a ctx)."
+  "Flights from mobs named one of names within ::return-s, by the :hostile entries (c is a ctx): one for each other run
+  that fled (its :run, the run's :run-at in memory); the run's own change to flight is no return."
   [c names]
   (let [since (- (ctx/now c) (* 1000 (settings/get settings ::return-s)))
-        names (set names)]
-    (count (filter #(and (> (:t %) since) (names (get-in % [:data :mob])) (= :flee (get-in % [:data :decision])))
-                   (ctx/entries c :hostile)))))
+        names (set names)
+        own (:run-at (ctx/mem c))]
+    (->> (ctx/entries c :hostile)
+         (filter #(and (> (:t %) since) (names (get-in % [:data :mob])) (= :flee (get-in % [:data :decision]))))
+         (keep-indexed (fn [i e] (let [run (get-in e [:data :run])] (cond (nil? run) [:entry i] (not= own run) run))))
+         distinct
+         count)))
 
 (defn flee-answer
   "The answer of a walk away from near (cost/flee-answer: each at its chase speed and follow range, the flights from
-  such mobs lately its returns, later the answer after it, in water first the swim-out), its damage at least felt (hp a second felt while fleeing,
-  nil none) over the walk; nil when a mob keeps up."
+  such mobs lately its returns, later the answer after it, in water first the swim-out), its damage at least felt (hp a
+  second felt since the flight began, nil none) over the walk; nil when a mob keeps up."
   [c near later felt]
   (let [p (:primitives c)
         self (.self p)

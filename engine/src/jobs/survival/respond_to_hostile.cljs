@@ -136,17 +136,19 @@
 
 (defn log-encounter!
   "One :hostile entry and event for each change of decision in a run (a fight turned flight is said, with the health;
-  the event has the answers' prices, seconds, and the cover way a flight begins with)."
+  the event has the answers' prices, seconds, and the cover way a flight begins with). The entry's :run is the run's
+  first decision time (hostile-fight/returns)."
   [c threat decision prices cover]
   (when-not (= decision (:logged (ctx/mem c)))
     (let [prev (:data (mem/latest (ctx/view c) :hostile))
+          run (or (:run-at (ctx/mem c)) (ctx/now c))
           entry (assoc (threats/place-of (:primitives c) threat) :mob (.-name threat) :decision decision
-                       :health (js/Math.round (.-health (.self (:primitives c)))))]
+                       :health (js/Math.round (.-health (.self (:primitives c)))) :run run)]
       (ctx/remember! c :hostile entry hostile-policy)
-      (ctx/emit! c :hostile.decided :info (cond-> (assoc (dissoc entry :from) :text (encounter-text entry prev))
+      (ctx/emit! c :hostile.decided :info (cond-> (assoc (dissoc entry :from :run) :text (encounter-text entry prev))
                                             prices (assoc :prices (update-vals prices js/Math.round))
-                                            cover (assoc :cover cover))))
-    (ctx/update-mem! c assoc :logged decision)))
+                                            cover (assoc :cover cover)))
+      (ctx/update-mem! c assoc :logged decision :run-at run))))
 
 (defn fight-struck
   "What the fight counted per mob: the running child's (hostile/struck), else the last declined ending's."
@@ -253,6 +255,14 @@
           mobs {:equipment (cost/equipment-of (.-equipment (.self p))) :mobs (mapv #(hostile/mob-near p %) near) :then then}]
       (into {} (keep (fn [[w cover]] (some->> (cost/cover-answer mobs cover) (vector w)))) (shut-in/covers c cover-ways)))))
 
+(defn walk-felt
+  "hp a second of the mob blows felt since the flight began (hostile/incoming), nil while not fleeing: a walk is priced at
+  the blows it fails to leave, not at the fight's before it (they would flip the choice back)."
+  [c]
+  (let [m (ctx/mem c)]
+    (when-let [start (and (= :flee (:decision m)) (:flight-start m))]
+      (:rate (hostile/incoming c start)))))
+
 (defn ^:async respond [c near]
   (let [p (:primitives c)
         self (.self p)
@@ -262,7 +272,7 @@
         after (if (or (empty? entries) (some #(hurt/mob-hit? (:data %)) entries)) (.-health self) before)
         hits (note-hits (when (= :flee (:decision m)) (:hits m)) (ctx/now c) before after (hit-window-ms))
         _ (ctx/update-mem! c assoc :hits hits :last-health (.-health self) :last-at (ctx/now c))
-        felt (when (= :flee (:decision m)) (:rate (hostile/incoming c)))
+        felt (walk-felt c)
         fight (when-not (some combat/enderman? near) (hostile/fight-answer c near #(struck-of c %)))
         walk (when-not (some combat/enderman? near) (hostile/flee-answer c near fight felt))
         covers (when-not (some combat/enderman? near) (cover-answers c near (or (:then walk) (when fight [fight]))))
