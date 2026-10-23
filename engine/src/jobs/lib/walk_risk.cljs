@@ -35,8 +35,6 @@
                    :doc "Blocks below the higher end of a walk that unseen ground still counts as open surface; deeper is underground, where only hostiles count."}
    ::exit-blocks {:default 8 :spec (a/num-in 0 nil)
                   :doc "Blocks of open ground a walk out of a night shelter crosses before it can go under, even to a goal underground."}
-   ::pile-radius {:default 6 :spec (a/num-in 0 nil)
-                  :doc "Blocks around the goal within which a remembered death or hide adds no risk: the body walking to the spot goes for its own things, and only a hostile known there counts."}
    ::heal-s-per-hp {:default 4 :spec (a/num-in 0 nil)
                     :doc "Seconds a body that can heal takes to regain an hp, for the wait that would make a risky walk affordable (stay-estimate)."}
    ::step {:default 4 :spec (a/num-in 1 nil)
@@ -91,11 +89,9 @@
 
 (defn remembered-near-way
   "The remembered threats of c (known, from threats/known-threats, :remembered, and threats/hide-threats) a walk from feet to goal
-  goes for: the walk ends nearer the spot than it starts (a body standing, or walking away, is no closer to it) and the
-  spot lies beyond ::pile-radius of the goal (a walk to the body's own drops: only a hostile known there counts)."
+  goes for: the walk ends nearer the spot than it starts (a body standing, or walking away, is no closer to it)."
   [c known feet goal]
-  (filterv #(and (< (u/dist goal (:pos %)) (u/dist feet (:pos %)))
-                 (> (u/dist goal (:pos %)) (settings/get settings ::pile-radius)))
+  (filterv #(< (u/dist goal (:pos %)) (u/dist feet (:pos %)))
            (concat (filter :remembered known) (threats/hide-threats c))))
 
 (defn- floor-cell [pos] {:x (js/Math.floor (:x pos)) :y (js/Math.floor (:y pos)) :z (js/Math.floor (:z pos))})

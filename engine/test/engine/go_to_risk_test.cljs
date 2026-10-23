@@ -320,12 +320,13 @@
     (is (< @reads 20000))
     (is (pos? (:dark-s est)))))
 
-(deftest a-death-or-hide-at-the-goal-adds-no-risk-but-one-further-off-does
+(deftest a-death-or-hide-near-the-goal-is-priced-like-one-further-off
   (let [c (ready-test/ctx-of day-world)
         now 36000000
         with-hide (fn [pos] (assoc c :view (fn [] {:now now :data {:policies {:hid hide-spot/policy} :entries {:hid [{:t (- now 60000) :data {:pos pos :mobs ["zombie"]}}]}}})))]
-    (is (zero? (:death-hp (estimate-unseen (with-death c {:x 93 :y 64 :z 2} "zombie" 60000) far-goal))))
-    (is (zero? (:death-hp (risk/estimate (with-hide {:x 93 :y 64 :z 2}) far-goal))))
+    (is (pos? (:death-hp (estimate-unseen (with-death c {:x 93 :y 64 :z 2} "zombie" 60000) far-goal))))
+    (is (pos? (:death-hp (estimate-unseen (with-death c {:x 88 :y 64 :z 5} "husk" 60000) far-goal))) "5 blocks from the goal")
+    (is (pos? (:death-hp (risk/estimate (with-hide {:x 93 :y 64 :z 2}) far-goal))))
     (is (pos? (:death-hp (estimate-unseen (with-death c {:x 80 :y 64 :z 5} "husk" 60000) far-goal))))))
 
 (deftest a-walk-that-does-not-approach-a-death-pays-nothing-for-it
@@ -454,7 +455,7 @@
 
 
 (deftest a-walk-round-a-never-seen-stone-cell-holding-a-fresh-skeleton-spot-holds
-  ;; the cell's inside and its far faces unseen: a way out for the skeleton (Q16); the goal a table 6.5 blocks past its spot (the pile radius), the way a corridor along the cell
+  ;; the cell's inside and its far faces unseen: a way out for the skeleton (Q16); the goal a table 6.5 blocks past its spot, the way a corridor along the cell
   (let [cx 21
         shell (into {} (for [x (range (dec cx) (+ cx 2)) y (range 63 66) z (range 15 18) :when (not= [x y z] [cx 64 16])] [(str x "," y "," z) "stone"]))
         corridor (into {} (for [x (range 12 31) y (range 63 68) z [13 19]] [(str x "," y "," z) "stone"]))
@@ -466,3 +467,4 @@
             (planned-status c {:x 27.5 :y 64 :z 18.5}))]
     (is (= :later (first s)))
     (is (= :risky (:reason (nth s 2))))))
+

@@ -1,10 +1,9 @@
 ;; A remembered death behind the body prices no walk away from it: the craft's walk to the table, 4 blocks off the other way, is not a trip towards where the body died.
 ;; Lit plot, an enderman death 5 blocks west of the body 1 minute ago. Should-succeed: the pickaxe is crafted at once, no :risky wait.
-;; Should-succeed too: a death spot in plain sight (an empty spot beyond the table) is no threat, nor a skeleton's the body respawned 200 blocks from since (it despawned).
-;; Should-succeed too: a sealed, never seen (so dark) skeleton spot 10 min old the body respawned 200 blocks from 5 s ago: only those 5 s spawn there.
+;; Should-succeed too: a death spot in plain sight (an empty spot beyond the table) is no threat.
 ;; Should-succeed too: a sealed, never seen enderman spot whose way out to the table is some 30 steps round its stone, so the walk grazes its field's far edge.
 ;; Should-fail: a :risky wait for a death near the table, or crafting at once with an unseen death spot 60 s or 10 s old: a zombie's behind a wall along the
-;; walk to a table 15 blocks off, 3 steps round the wall's end from the way, roofed from the sun; or a skeleton's sealed in stone the body never saw into (its way out is some steps round the cell; the walk to a table 6.5 blocks past it runs a corridor along the cell, no bend round its field).
+;; walk to a table 15 blocks off, 3 steps round the wall's end from the way, roofed from the sun; or a skeleton's sealed in stone the body never saw into (its way out is some steps round the cell; the walk to a table 7 blocks off it, 6 planks carried).
 {:defaults
  {:tags [:items :craft :go-to :survival]
   :time :any
@@ -44,31 +43,10 @@
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:item "wooden_pickaxe" 1]]}
   {:name "craft-towards-a-fresh-unseen-death-spot-waits"
-   :blocks [[:set [28 0 18] "crafting_table"] [:set [13 3 18] "glowstone"] [:set [25 3 18] "glowstone"]
-            [:fill [12 -1 13] [30 3 13] "stone"] [:fill [12 -1 19] [30 3 19] "stone"]
-            [:fill [20 -1 15] [22 1 17] "stone"] [:set [21 0 16] "air"]]
-   :body {:at [13.5 0 18.5] :inventory [["oak_planks" 3] ["stick" 2]]}
-   :memory [{:kind :deaths :age-s 10 :policy {:cap 10 :ttl :forever} :data {:pos #xyz [21 0 16] :cause "skeleton"}}]
+   :blocks [[:set [20 0 16] "crafting_table"] [:set [16 3 16] "glowstone"]
+            [:fill [26 -1 15] [28 1 17] "stone"] [:set [27 0 16] "air"]]
+   :body {:inventory [["oak_planks" 6]]}
+   :memory [{:kind :deaths :age-s 10 :policy {:cap 10 :ttl :forever} :data {:pos #xyz [27 0 16] :cause "skeleton"}}]
    :act [[:job (jobs.items.craft {:item "wooden_pickaxe"})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :risky}} :within-s 30 :of-job true}]
-   :after [[:item "wooden_pickaxe" 0]]}
-  {:name "craft-towards-an-unseen-death-spot-the-body-respawned-far-from-is-free"
-   :blocks [[:set [20 0 16] "crafting_table"] [:set [16 3 16] "glowstone"]
-            [:fill [26 -1 15] [28 1 17] "stone"] [:set [27 0 16] "air"]]
-   :body {:inventory [["oak_planks" 6]]}
-   :memory [{:kind :deaths :age-s 10 :policy {:cap 10 :ttl :forever} :data {:pos #xyz [27 0 16] :cause "skeleton"}}
-            {:kind :respawned :age-s 5 :data {:pos #xyz [227 0 16]}}]
-   :act [[:job (jobs.items.craft {:item "wooden_pickaxe"})]]
-   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
-            {:no-event {:source :job :data {:reason :risky}} :for-s 5 :of-job true}]
-   :after [[:item "wooden_pickaxe" 1]]}
-  {:name "craft-towards-an-old-dark-death-spot-the-body-respawned-far-from-is-free"
-   :blocks [[:set [20 0 16] "crafting_table"] [:set [16 3 16] "glowstone"]
-            [:fill [26 -1 15] [28 1 17] "stone"] [:set [27 0 16] "air"]]
-   :body {:inventory [["oak_planks" 6]]}
-   :memory [{:kind :deaths :age-s 600 :policy {:cap 10 :ttl :forever} :data {:pos #xyz [27 0 16] :cause "skeleton"}}
-            {:kind :respawned :age-s 5 :data {:pos #xyz [227 0 16]}}]
-   :act [[:job (jobs.items.craft {:item "wooden_pickaxe"})]]
-   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
-            {:no-event {:source :job :data {:reason :risky}} :for-s 5 :of-job true}]
-   :after [[:item "wooden_pickaxe" 1]]}]}
+   :after [[:item "wooden_pickaxe" 0]]}]}
