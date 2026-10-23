@@ -5,6 +5,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.cost.threat :as threat]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
@@ -17,8 +18,7 @@
 (defn ranged?
   "Whether e shoots or throws: a ranged mob, or a drowned holding a trident."
   [e]
-  (or (contains? weapon/ranged-mobs (.-name e))
-      (and (= "drowned" (.-name e)) (= "trident" (.-held e)))))
+  (threat/ranged? {:name (.-name e) :held (.-held e)}))
 
 (defn known-or-raw
   "Hostiles within radius as JS entities: the perception's known mobs (seen or heard) when p has them, else the raw

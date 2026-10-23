@@ -49,6 +49,11 @@
         "19 blocks off is 19 steps of its way: still within its follow range (35)")
     (is (= 0 (danger p [(mob 1 "vindicator" 15 19)])) "a vindicator follows 12")))
 
+(deftest a-drowned-holding-a-trident-is-worse-than-one-with-bare-hands
+  (let [p (world :blocks (into {} (for [x (range 13 18) z (range -2 4) y [63 64]] [(str x "," y "," z) "water"])))
+        drowned (mob 1 "drowned" 15 1)]
+    (is (> (danger p [(assoc drowned :held "trident")]) (danger p [drowned]) 0))))
+
 (deftest a-walled-off-skeleton-is-no-danger-and-an-open-one-is
   (is (= 0 (danger (world :blocks skeleton-wall) [(mob 1 "skeleton" 15 8)])))
   (is (pos? (danger (world) [(mob 1 "skeleton" 15 8)]))))

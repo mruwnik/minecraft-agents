@@ -4,7 +4,7 @@
             [engine.args :as a]
             [engine.memory :as mem]
             [engine.settings :as settings]
-            [jobs.lib.cost :as cost]
+            [jobs.lib.cost.threat :as threat]
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]))
@@ -21,7 +21,7 @@
   "Whether :hurt entry e is a ranged mob's hit: its attacker is one, or the damage is an arrow (the shooter untracked)."
   [e]
   (let [{:keys [attacker damageType]} (:data e)]
-    (or (contains? cost/ranged-mobs (:name attacker))
+    (or (threat/ranged? attacker)
         (= "arrow" (some-> damageType (str/replace #"^minecraft:" ""))))))
 
 (defn shot-spots
