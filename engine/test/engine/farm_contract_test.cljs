@@ -169,7 +169,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[least kind cause] [[1 :done nil] [2 :condition-failed :nothing-to-feed]]]
-          (let [e (await (ending-of (ct/setup {:inventory (ct/inv "wheat_seeds" 10) :blocks ct/comp-block}) compost
+          (let [e (await (ending-of (ct/setup {:inventory (ct/inv "wheat_seeds" 10) :blocks ct/comp-block :floor? true}) compost
                                     {:at ct/at :items ["wheat_seeds"] :times 2 :least least} 60))]
             (is (= {:kind kind :cause cause} (kc e)) (str ":least " least))
             (is (= 1 (get-in e [:data :bone-meal])))))))))
