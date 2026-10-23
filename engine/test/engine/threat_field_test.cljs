@@ -74,3 +74,24 @@
     (is (zero? (.-length (:cells before))) "no water seen yet: no field")
     (look!)
     (is (= 9 (.-length (:cells (field/field-of c drowned)))) "the pool seen: its cells")))
+
+(deftest a-field-is-not-kept-when-the-section-reads-were-cleared-during-its-read
+  (let [{:keys [c per look!]} (seen-body {})
+        zombie {:mob "zombie" :pos {:x 0.5 :y 64 :z 0.5}}
+        other {:mob "zombie" :pos {:x 20.5 :y 64 :z 10.5}}]
+    (look!)
+    (field/field-of c zombie)
+    (let [secs (.-secs ^js (.get field/memories (:primitives c)))]
+      (dotimes [i field/max-sections] (.set secs (- -1 i) #js {})))
+    (let [again (field/field-of c other)]
+      (is (not (identical? again (field/field-of c other))) "its entries are no longer in the body's section reads"))))
+
+(deftest the-kept-reads-start-over-in-another-dimension
+  (let [{:keys [c per look!]} (seen-body {})]
+    (look!)
+    (field/field-of c {:mob "zombie" :pos {:x 0.5 :y 64 :z 0.5}})
+    (let [mem ^js (.get field/memories (:primitives c))]
+      (is (= 1 (.-size (.-fields mem))))
+      (set! (.-dim ^js (:st per)) "the_nether")
+      (field/field-of c {:mob "zombie" :pos {:x 20.5 :y 64 :z 10.5}})
+      (is (= 1 (.-size (.-fields mem))) "the other dimension's fields are dropped"))))

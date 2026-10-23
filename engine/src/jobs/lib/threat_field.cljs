@@ -273,11 +273,13 @@
   "#js [kind-at arrow-at deps unloaded]: reach/mob-lookup and reach/arrow-lookup of p, each cell's kinds kept in secs
   (the body's, per 16^3 section of its memory: refresh!); deps: the sections read, key -> their kept reads; unloaded:
   the cell keys read that were not loaded (not kept: such a cell reads otherwise once its chunk loads, with no memory
-  write)."
+  write; nor is a cell that unloads after it was read: remembered terrain stays known). flags.cleared: secs was cleared
+  during the read, so entries of deps are no longer in it."
   [p ^js secs]
   (let [per (aget p "perception")
         deps (js/Map.)
         unloaded (js/Set.)
+        flags #js {:cleared false}
         last #js [nil nil nil nil]
         section (fn [cx sy cz]
                   (if (and (identical? cx (aget last 0)) (identical? sy (aget last 1)) (identical? cz (aget last 2)))
@@ -287,7 +289,7 @@
                                     (let [^js e (or (.get secs k)
                                                     (let [e #js {:cx cx :sy sy :cz cz :stamp nil :step nil :ids nil :version 0
                                                                  :walk (js/Uint8Array. 4096) :arrow (js/Uint8Array. 4096)}]
-                                                      (when (>= (.-size secs) max-sections) (.clear secs))
+                                                      (when (>= (.-size secs) max-sections) (.clear secs) (set! (.-cleared flags) true))
                                                       (.set secs k e)
                                                       e))]
                                       (refresh! per secs e)
@@ -313,7 +315,7 @@
                          (do (aset (.-walk e) i (code-of walk)) (aset (.-arrow e) i (code-of arrow)))
                          (.add unloaded (base/cell-key x y z)))
                        (if walk? walk arrow))))))]
-    #js [(read true) (read false) deps unloaded]))
+    #js [(read true) (read false) deps unloaded flags]))
 
 (defonce memories (js/WeakMap.))
 
@@ -327,19 +329,22 @@
     (if-not (some-> per :raw .eye)
       (shared c [::field k]
               #(thunk (shared c [::lookups] (fn [] {:kind-at (reach/mob-lookup p) :arrow-at (reach/arrow-lookup p)}))))
-      (let [^js mem (or (.get memories p) (let [m #js {:secs (js/Map.) :fields (js/Map.)}] (.set memories p m) m))
+      (let [^js mem (or (.get memories p) (let [m #js {:secs (js/Map.) :fields (js/Map.) :dim nil}] (.set memories p m) m))
+            dim (.-dim ^js (:st per))
+            _ (when-not (= dim (.-dim mem))
+                (.clear (.-secs mem)) (.clear (.-fields mem)) (set! (.-dim mem) dim))
             ^js secs (.-secs mem)
             ^js fields (.-fields mem)
             ks (pr-str k)
             ^js hit (.get fields ks)]
         (if (and hit (every? (fn [^js d] (let [^js e (refresh! per secs (aget d 0))] (== (aget d 1) (.-version e)))) (aget hit 1)))
           (aget hit 0)
-          (let [n (.-size secs)
-                reads (section-reads p secs)
-                v (thunk {:kind-at (aget reads 0) :arrow-at (aget reads 1)})]
+          (let [reads (section-reads p secs)
+                v (thunk {:kind-at (aget reads 0) :arrow-at (aget reads 1)})
+                cleared? (.-cleared ^js (aget reads 4))]
             ;; secs cleared (past max-sections): the kept fields' reads are no longer refreshed
-            (when (or (< (.-size secs) n) (>= (.-size fields) max-fields)) (.clear fields))
-            (if (pos? (.-size (aget reads 3)))
+            (when (or cleared? (>= (.-size fields) max-fields)) (.clear fields))
+            (if (or cleared? (pos? (.-size (aget reads 3))))
               (.delete fields ks)
               (let [es (vec (es6-iterator-seq (.values (aget reads 2))))]
                 (run! #(adopt! per %) es)
