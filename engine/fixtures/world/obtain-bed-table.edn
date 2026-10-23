@@ -1,7 +1,9 @@
 ;; Card 1353a855: obtain white_bed with planks and wool carried and no crafting table near puts a table down (4 planks) and crafts the bed
 ;; (3 planks, 3 wool); planks of two woods count together. With planks for the bed but not for the table too, the end names what is short.
 ;; Card 98058a28: with no sheep about and one wool short, 3 string carried and spiders seen on a lit plot, a spider is
-;; hunted for the fourth string (cheaper than a search for sheep) and the bed made: 3 string alone cannot make it.
+;; hunted for the fourth string (cheaper than a search for sheep) and the bed made: 3 string alone cannot make it. A spider
+;; near holds obtain :hostile-near for the hostile reflex, so the case registers it; the spiders stand 12 apart and
+;; 13 off, so the reflex meets one at a time (three at once it walls itself in with the planks).
 {:defaults
  {:tags [:fetch :crafting] :time :any
   :plot {:height 8}
@@ -20,10 +22,12 @@
    :after [[:item "white_bed" 0]]}
   {:name "seen-spider-is-hunted-for-the-string-of-a-white-bed"
    :plot {:height 8 :light :lit}
+   :mobs :keep
+   :register [{:trigger :hostile-near}]
    :body {:inventory [["iron_sword" 1] ["oak_planks" 7] ["white_wool" 2] ["string" 3]]}
-   :act [[:summon "spider" [20.5 0 16.5] "{NoAI:1b}"]
-         [:summon "spider" [20.5 0 18.5] "{NoAI:1b}"]
-         [:summon "spider" [20.5 0 14.5] "{NoAI:1b}"]
+   :act [[:summon "spider" [29.5 0 16.5] "{NoAI:1b}"]
+         [:summon "spider" [29.5 0 4.5] "{NoAI:1b}"]
+         [:summon "spider" [29.5 0 28.5] "{NoAI:1b}"]
          [:until-seen {:entity "spider"} 10]
          [:job (jobs.items.obtain {:any-of ["white_bed" "orange_bed" "magenta_bed" "light_blue_bed" "yellow_bed" "lime_bed" "pink_bed" "gray_bed" "light_gray_bed" "cyan_bed" "purple_bed" "blue_bed" "brown_bed" "green_bed" "red_bed" "black_bed"] :count 1 :explore true})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
