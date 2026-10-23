@@ -28,6 +28,17 @@
                 (map :id))
           (notes/notes c))))
 
+(defn noted-target
+  "The nearest food animal a :seen note (any body's) places anywhere, as the note, skipping the ids in `done`, babies and the animals tried; its walk is priced by go-to, not cut at a radius."
+  [c done]
+  (let [me (u/self-pos c)
+        skipped (set (:skipped-animals (ctx/mem c)))]
+    (->> (notes/notes c)
+         (filter #(and (= :seen (:kind %)) (contains? food-animals (:what %)) (:id %) (:pos %) (not (:baby %))
+                       (not (done (:id %))) (not (skipped (:id %)))))
+         (sort-by #(u/flat-dist me (zipmap [:x :y :z] (:pos %))))
+         first)))
+
 (defn note-seen!
   "Write the adults and babies of food animals in sight as :seen notes, so a later look at one of a pair counts the other."
   [c {:keys [radius]}]

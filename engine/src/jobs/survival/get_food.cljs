@@ -53,7 +53,7 @@
   :field Last: it walks to the nearest zone or plan of its own it has not visited in this job and cuts and replants the ripe wheat there
          (jobs.farm.harvest); the wheat is baked next (:bake).
   Then, once per job (:explore, default on; a starving body again after foods/::starving-rest-ms) it searches for food animals and crops (jobs.explore.search, the
-  ::explore setting; not while the search would wait (dark sky, danger near)) and goes on if it found some (an animal only a note gave, with none in sight, is walked toward first; a hungry body under rock climbs out first, jobs.lib.surface-up); at ::eat-bad-food (6) or below it then eats harmful food carried (rotten
+  ::explore setting; not while the search would wait (dark sky, danger near)) and goes on if it found some (an animal only a note gave, at any distance, with none in sight, is walked toward first, go-to pricing the walk, each note once a job; a hungry body under rock climbs out first, jobs.lib.surface-up); at ::eat-bad-food (6) or below it then eats harmful food carried (rotten
   flesh, with :allow-bad). Still nothing: it ends nothing-possible :no-food (the text says what was searched, the nearest known source) and writes
   :hungry, which widens the next search; the hungry trigger rests after that ending (its :rest-s).
   :eat false: only gathers, done when the pack holds :carry food points (jobs.survival.eat fetches this way; a job cannot call its own caller).
@@ -386,7 +386,11 @@
   covered remembered."
   [c]
   (when (explore-again? c) (ctx/update-mem! c dissoc :explored))
-  (let [e (:explore (:args c))]
+  (let [e (:explore (:args c))
+        noted (when (and e (nil? (:walk-to (ctx/mem c))) (nil? (animals/nearest c (animal-opts c false))))
+                (animals/noted-target c (set (:noted-walked (ctx/mem c)))))]
+    (when noted
+      (ctx/update-mem! c #(-> % (assoc :walk-to (:pos noted)) (update :noted-walked (fnil conj []) (:id noted)))))
     (cond
       (and e (:walk-to (ctx/mem c))) (await (walk-to-noted! c))
       (or (not e) (explore-done? (ctx/mem c) (starving? c) (ctx/now c) (foods/starving-rest-ms))) nil
