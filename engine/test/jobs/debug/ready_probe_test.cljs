@@ -13,4 +13,5 @@
        {} rt/night-hut :ok
        {:at [15 64 0]} rt/night-hut :later
        {:at [5 64 0]} rt/night-hut :ok
-       {:lit? true} rt/night-hut :later)))
+       {:lit? true} rt/open-night :later
+       {:lit? true} rt/night-hut :ok)))
