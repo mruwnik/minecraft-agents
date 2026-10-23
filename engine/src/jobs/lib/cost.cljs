@@ -19,7 +19,7 @@
              per-dark, dark-factor: the one price of a dark block, which go-to's planner costs; spawn-chance: the chance a mob spawns at a cell or
              over an area (a set or {:min :max} box of cells) per second, from the light the body knows (unseen counts as dark), spawn-share its share of cells that spawn; exposure: the chance a walk meets and
              what lowers it ({:chance :lowered-by #{:light}}).
-    planner  planner-costs-problem, planner-costs, planner-names: go-to's :costs, the per-move prices it may override; landing-problem, planner-landing: go-to's :landing, fall damage by landing block; air-profile, water-breathing-s, air-used, air-costs: the planner's air drain and grace from the body's helmet, the air a dive has used; air-left-s, wet-move-s, wet-way-s, wet-spare-s, wet-ok?: the air a walk over unseen water keeps back at its last breath, each move at its measured pace; swim-profile: its swimH from Depth Strider on the boots; gait-problem, gait-costs: go-to's :gait; unknown-prices: the planner's prices of unseen cells (jobs.lib.cost.planner); unseen-route-s, unseen-route-hp: those prices of a route's unseen steps, in seconds or hp; unseen-walk-s: with a drop onto an unseen end; unseen-way-cost: a flight's unseen part at the worse case (a dead end, a mob in the dark).
+    planner  planner-costs-problem, planner-costs, planner-names: go-to's :costs, the per-move prices it may override; landing-problem, planner-landing: go-to's :landing, fall damage by landing block; air-profile, water-breathing-s, air-used, air-costs: the planner's air drain and grace from the body's helmet, the air a dive has used; air-left-s, wet-move-s, wet-way-s, wet-spare-s, wet-ok?: the air a walk over unseen water keeps back at its last breath, each move at its measured pace; swim-profile: its swimH from Depth Strider on the boots; gait-problem, gait-costs: go-to's :gait; unknown-prices: the planner's prices of unseen cells (jobs.lib.cost.planner); unseen-route-s, unseen-route-hp: those prices of a route's unseen steps, in seconds or hp; unseen-walk-s: with a drop onto an unseen end; unseen-way-cost: a flight's unseen part at the worse case (a dead end, a mob in the dark); flight-caught-chance: the chance a flight is caught, from its search's ways.
     tolls    farm-tolls, zone-tolls: go-to's :tolls for planted cells and zone cells to cross only as a last resort; fail-chance,
              failing-step-s: a step the walker failed at, priced by its failures (jobs.lib.cost.tolls).
     death    experience-cost, death-cost: death as an ordinary cost, the walk back for the items plus the experience; spawn-worth: a respawn point's worth; worth-to, find-worth, items-find-worth, leg-price, search-radius, wait-price: what a find is worth, a search leg's price, how far its legs may go, what waiting for a listed maker costs; opening-price, hold-price: opening a shelter to mobs against holding on in it; death-weight, terrain-danger: a remembered death's fade and the plan cost near a death by terrain (jobs.lib.cost.death).
@@ -28,6 +28,7 @@
     look     look-answer, look-value, closed-chance, look-s: the value of a look before deciding, a boundary's unseen part closed (jobs.lib.cost.look).
     find     look-chance, find-chance, searched-for?: the chance a look round finds the animals a search is for, from their base rate and the ground already searched in vain, looked-area: that ground; search-s: a search's seconds per find, leg-spacing: the blocks between its legs (jobs.lib.cost.find)."
   (:require [clojure.string :as str]
+            [engine.settings :as settings]
             [jobs.lib.cost.answer :as answer]
             [jobs.lib.cost.armour :as armour]
             [jobs.lib.cost.base-rates :as base-rates]
@@ -168,12 +169,24 @@
 
 (defn unseen-way-cost
   "Seconds the unseen part of a route adds to its price, each unseen cell at its worse case but finite: the chance
-  (planner ::dead-end-chance) that the way ends unseen, times turning back (unseen-s seconds in and as many out,
+  (planner ::dead-end-chance, under ground when underground?) that the way ends unseen, times turning back (unseen-s seconds in and as many out,
   plus trapped, what the chasers met on the way back cost, nil none); and a mob that spawns or waits there (an
   unseen cell counts as dark): dark-factor of kit over unseen-s."
-  [{:keys [unseen-s trapped kit]}]
-  (+ (* (planner/dead-end-chance) (+ (* 2 unseen-s) (or trapped 0)))
+  [{:keys [unseen-s trapped kit underground?]}]
+  (+ (* (planner/dead-end-chance underground?) (+ (* 2 unseen-s) (or trapped 0)))
      (* (value/dark-factor kit) unseen-s)))
+
+(defn flight-caught-chance
+  "The chance a flight is caught (flee-answer :caught) by what its search found: ways, the ring routes it planned;
+  caught, those a chaser cuts; unseen?, whether the best one left runs through cells the body has not seen. 1 when
+  every way is cut or none was planned; else the measured prior (answer ::caught-chance) times (caught + 1)/(ways + 1),
+  the share cut counted with one more of each (a clear field lowers it, never to 0), and an unseen way also caught
+  when it ends unseen (planner ::dead-end-chance, under ground when underground?)."
+  [{:keys [ways caught unseen? underground?]}]
+  (if (>= caught ways)
+    1
+    (let [cut (* (settings/get answer/settings ::answer/caught-chance) (/ (inc caught) (inc ways)))]
+      (- 1 (* (- 1 cut) (- 1 (if unseen? (planner/dead-end-chance underground?) 0)))))))
 
 (defn unseen-route-hp
   "unseen-route-s in hp, at walk-hp-seconds an hp."

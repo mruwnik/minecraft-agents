@@ -178,6 +178,17 @@
     nil "zombie" 2 :fight
     "wooden_sword" "zombie" nil :fight))
 
+(deftest a-flight-down-a-dead-end-past-its-chaser-is-priced-caught
+  ;; the old weighing priced every flight at the 0.15 prior, whatever the flee search found
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walls (into {} (for [x (range -3 9) z [-1 1] y [64 65]] [(str x "," y "," z) "stone"]))
+              walls (into walls (for [y [64 65]] [(str "-3," y ",0") "stone"]))
+              {:keys [seen]} (await (flight-round respond {:self {:health 20 :food 20} :blocks walls :entities [(zombie 3 0)]}))
+              prices (:prices (first (filter #(= :hostile.decided (:kind %)) @seen)))]
+          (is (= :fight (:decision (first (filter #(= :hostile.decided (:kind %)) @seen)))) (pr-str prices)))))))
+
 (defn spider [x] {:id 5 :name "spider" :kind "hostile" :pos {:x x :y 64 :z 0}})
 
 (deftest respond-with-bare-hands-and-nowhere-to-hide-fights-a-spider-and-never-runs-in-the-open

@@ -84,7 +84,9 @@
           (is (seq baby) "the ways are planned")
           (is (every? :caught? baby) "a baby zombie runs faster than a body too hungry to sprint")
           (is (nil? (search/pick baby {})) "no flee step: the body is cornered")
-          (is (some? (search/pick zombie {})) "a grown zombie is left behind"))))))
+          (is (= 1 (search/caught-chance baby false)) "the fight-or-flee weighing prices the flight caught")
+          (is (some? (search/pick zombie {})) "a grown zombie is left behind")
+          (is (< (search/caught-chance zombie false) 0.15) "a clear way lowers the prior"))))))
 
 (def cliff
   "A plateau (feet y 64) for x <= 0 over a lowland (feet y 54) east of it, a stair one block wide down the cliff along

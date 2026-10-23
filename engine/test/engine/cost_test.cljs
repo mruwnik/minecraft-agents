@@ -265,7 +265,17 @@
         chased (cost/unseen-way-cost {:unseen-s 2 :trapped 30 :kit kit})]
     (is (> way 2) "more than walking it seen: a dead end to turn back from, a mob in the dark")
     (is (< way chased ##Inf) "dearer with chasers to meet on the way back, never refused")
-    (is (< (cost/unseen-way-cost {:unseen-s 2 :kit {:weapon "iron_sword" :equipment iron-set}}) way) "an armed, armoured body fears the dark less")))
+    (is (< (cost/unseen-way-cost {:unseen-s 2 :kit {:weapon "iron_sword" :equipment iron-set}}) way) "an armed, armoured body fears the dark less")
+    (is (< way (cost/unseen-way-cost {:unseen-s 2 :kit kit :underground? true})) "a cave's unseen way ends more often than open ground's")))
+
+(deftest a-flight-is-caught-by-what-its-search-found
+  (let [prior 0.15
+        clear (cost/flight-caught-chance {:ways 12 :caught 0})
+        half (cost/flight-caught-chance {:ways 12 :caught 6})]
+    (is (= 1 (cost/flight-caught-chance {:ways 12 :caught 12})) "every way cut: caught")
+    (is (= 1 (cost/flight-caught-chance {:ways 0 :caught 0})) "no way planned: caught")
+    (is (< 0 clear half prior) "a clear field lowers the prior, never to 0")
+    (is (< clear (cost/flight-caught-chance {:ways 12 :caught 0 :unseen? true})) "a way through the unseen may end there")))
 
 (deftest spawn-chance-is-zero-where-a-mob-cannot-spawn
   (let [lit (fn [block sky] (fn [_] {:block block :sky sky}))

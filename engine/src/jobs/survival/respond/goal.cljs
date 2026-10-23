@@ -107,6 +107,20 @@
                              {:home home :died (flight/died-spots c)
                               :beaten? (search/beaten-to? chs (u/self-pos c) (.-food (.self (:primitives c))) goal)})))}))
 
+(defn ^:async caught-chance!
+  "The chance a flight from where the body stands is caught (flee-search/caught-chance of a search from its chasers),
+  for the fight-or-flee weighing; kept (memory :caught-chance) while the body stays in its cell for a flee step's
+  seconds (flee-search ::step-s)."
+  [c]
+  (let [here (cell (u/self-pos c))
+        now (ctx/now c)
+        kept (:caught-chance (ctx/mem c))]
+    (if (and (= here (:cell kept)) (< (- now (:t kept)) (* 1000 (settings/get search/settings ::search/step-s))))
+      (:chance kept)
+      (let [chance (search/caught-chance (await (search/search! c (chasers c) [] {:y-margin (margin c)})) (sh-sense/buried? (:primitives c)))]
+        (ctx/update-mem! c assoc :caught-chance {:cell here :t now :chance chance})
+        chance))))
+
 (defn usable
   "The goal of judged (judge!) when nothing speaks against it, else nil."
   [{:keys [goal why]}]

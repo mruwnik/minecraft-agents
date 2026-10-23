@@ -311,9 +311,10 @@
 
 (defn flee-answer
   "The answer of a walk away from near (cost/flee-answer: each at its chase speed and follow range, the flights from
-  such mobs lately its returns, later the answer after it, in water first the swim-out), its damage at least felt (hp a
-  second felt since the flight began, nil none) over the walk; nil when a mob keeps up."
-  [c near later felt]
+  such mobs lately its returns, later the answer after it, in water first the swim-out, caught the chance it is
+  caught: the flee search's, flee-search/caught-chance; nil the prior), its damage at least felt (hp a second felt
+  since the flight began, nil none) over the walk; nil when a mob keeps up."
+  [c near later felt caught]
   (let [p (:primitives c)
         self (.self p)
         mobs (mapv #(mob-near p %) near)
@@ -323,7 +324,7 @@
                              :swim (:swim swim) :land (:land swim) :open (:chance swim)
                              :ashore (when (and (:chance swim) (:stand? swim)) (cost/fight-answer (fight-of c near (constantly nil))))
                              :returns (returns c (map #(.-name %) near))
-                             :later later})]
+                             :later later :caught caught})]
     (cond-> a
       (and a felt) (update :damage max (* felt (/ (:seconds a) 2))))))
 
@@ -336,7 +337,7 @@
   "weigh fighting near (fight-answer) against walking away from them (flee-answer): {:answer :fight|:flee :prices :answers}."
   [c near struck-of]
   (let [fight (fight-answer c near struck-of)]
-    (weigh c {:fight fight :flee (flee-answer c near fight nil)})))
+    (weigh c {:fight fight :flee (flee-answer c near fight nil nil)})))
 
 (defn too-far-to-chase?
   "Whether a ranged target is better left than walked to with other hostiles in range: answer over them all says :flee."

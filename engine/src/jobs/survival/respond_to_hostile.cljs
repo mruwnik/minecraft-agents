@@ -3,6 +3,7 @@
             [jobs.lib.ready :as ready]
             [jobs.survival.block-arrow-gap :as gap]
             [jobs.survival.respond-flight :as flight]
+            [jobs.survival.respond.goal :as respond.goal]
             [engine.args :as a]
             [jobs.lib.checks :as checks]
             [jobs.lib.body :as body]
@@ -314,7 +315,7 @@
         _ (ctx/update-mem! c assoc :hits hits :last-health (.-health self) :last-at (ctx/now c))
         felt (walk-felt c)
         fight (when-not (some combat/enderman? near) (hostile/fight-answer c near #(struck-of c %)))
-        walk (when-not (some combat/enderman? near) (hostile/flee-answer c near fight felt))
+        walk (when-not (some combat/enderman? near) (hostile/flee-answer c near fight felt (await (respond.goal/caught-chance! c))))
         then (or (:then walk) (when fight [fight]))
         sealing (when-not (some #(or (combat/creeper? %) (combat/enderman? %)) near) (doors/sealing-doors c near))
         covers (when-not (some combat/enderman? near) (cover-answers c near then sealing))

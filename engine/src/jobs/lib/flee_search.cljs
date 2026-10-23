@@ -110,12 +110,12 @@
 
 (defn unseen-price
   "Seconds the unseen part of r (seen-split) adds to its price (cost/unseen-way-cost: from its last seen cell on, kit
-  the body's), trapped-at a fn of that cell: what the chasers met there on the way back cost; 0 when it saw it all."
-  [{:keys [cells seen-n s unseen]} kit trapped-at]
+  the body's, underground? whether it is under ground), trapped-at a fn of that cell: what the chasers met there on the way back cost; 0 when it saw it all."
+  [{:keys [cells seen-n s unseen]} kit trapped-at underground?]
   (if-not unseen
     0
     (let [split (nth cells (dec seen-n))]
-      (cost/unseen-way-cost {:unseen-s (- s (:t split)) :trapped (trapped-at split) :kit kit}))))
+      (cost/unseen-way-cost {:unseen-s (- s (:t split)) :trapped (trapped-at split) :kit kit :underground? underground?}))))
 
 (defn ^:async plan-to!
   "The planner's result for query over pw, its search within max-nodes nodes, in slices with yields between them."
@@ -186,7 +186,7 @@
                                              :open? (or (:found? r) (and (nil? (:pos t)) (>= (u/dist from (:end r)) open-at)))
                                              :price (+ (:priced r)
                                                        (cost/route-death-cost body (assoc class :cells (dwelt (:cells r))) from)
-                                                       (unseen-price r kit trapped-at))))
+                                                       (unseen-price r kit trapped-at (:underground? class)))))
                           out)
                    (or t0 (when (nil? (:pos t)) (js/performance.now))))))))))
 
@@ -300,6 +300,18 @@
   cornered."
   [ends]
   (->> ends (sort-by :s) (keep :unseen) distinct seq))
+
+(defn caught-chance
+  "The chance a flight from where search ends (search!) ran is caught (cost/flight-caught-chance): its ring routes the
+  ways (a pocket is none: the chaser follows it in), those a chaser catches or that gain nothing on the chasers cut,
+  and the best of the rest by :score unseen or not; underground? whether the body is under ground."
+  [ends underground?]
+  (let [ways (filter #(and (:open? %) (not (:cover? %)) (nil? (:pos (:target %)))) ends)
+        cut? #(or (:caught? %) (not (pos? (:gain %))))
+        left (remove cut? ways)]
+    (cost/flight-caught-chance {:ways (count ways) :caught (count (filter cut? ways))
+                                :unseen? (boolean (some->> (seq left) (apply max-key :score) :unseen))
+                                :underground? underground?})))
 
 (defn named
   "The scored end of search ends planned to the named target at pos, nil when none."
