@@ -1,0 +1,23 @@
+;; Card 64cadd58: a night dig-pit whose walk to a relocation site waits (a NoAI zombie 3 behind the body: go-to says :later) and
+;; whose body is then moved far (rcon tp, as after a respawn the body was tp'd 220 blocks off) digs in where it now stands,
+;; not walking back to the old site. The failed pit is seeded at the start; the site it walks toward lies ~9 east of it (x 13).
+;; Dirt ground (dug by hand), dirt carried for the roof. dig-pit's night is its :for arg, not the clock.
+{:defaults
+ {:tags [:survival :shelter]
+  :time :any
+  :mobs :keep
+  :plot {:height 10 :length 64 :width 32}
+  :blocks [[:fill [0 -4 0] [63 -1 31] "dirt"]]
+  :body {:at [4.5 0 16.5] :effects [["resistance" 600 4]] :inventory [["dirt" 16]] :settle-s 4}}
+ :cases
+ [{:name "moved-far-digs-in-where-it-stands"
+   :memory [{:kind :shut-in-failed :data {:pos #xyz [4 0 16] :way :pit :reason :no-floor} :policy {:cap 5 :ttl 600000}}]
+   :act [[:summon "zombie" [1.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:job (jobs.survival.dig-pit {:for :night})]
+         [:await {:source :job :kind :waiting :data {:reason :hostile-near}} 30]
+         [:rcon "execute positioned $X $Y $Z run tp $BODY ~55 ~ ~16"]
+         [:until-pos {:x-min 54} 10]
+         [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]]
+   :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}]
+   :after [[:body-far [13.5 0 16.5] 25]]
+   :limit-s 110}]}

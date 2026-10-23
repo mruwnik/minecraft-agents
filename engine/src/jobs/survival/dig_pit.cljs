@@ -206,7 +206,7 @@
   [c]
   (when (and (night/night? c) (not (:pit (ctx/mem c))) (not (way/enclosed? c)))
     (let [m (:walk-to (ctx/mem c))
-          m (when-not (and m ((threats/danger-near-fn c) m)) m)
+          m (when (and m (site/kept-site? c m) (not ((threats/danger-near-fn c) m))) m)
           s (if m {:at :there :cell m} (site/site c))]
       (cond
         (nil? s) (fail! c :no-site "no ground in sight where a pit fits")

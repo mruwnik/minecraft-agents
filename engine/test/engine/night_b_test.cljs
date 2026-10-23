@@ -176,6 +176,23 @@
           (is (= [:hostile-near] (distinct (map :reason (filter #(= :waiting (:kind %)) @seen)))))
           (is (empty? (filter #(= :stopped (:kind %)) @seen)) "it waits, it does not end walk-failed"))))))
 
+(deftest a-site-chosen-before-the-body-was-moved-far-is-not-walked-back-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far-ground (into {} (for [x (range 95 106) z (range -2 3) y (range 60 64)] [(str x "," y "," z) "dirt"]))
+              {:keys [eng p seen]} (st/setup {:time night :blocks (merge wide-ground far-ground) :inventory st/dirt-stack
+                                              :floor [-30 -10 110 10] :entities [(assoc zombie :pos {:x -4.5 :y 64 :z 0.5})]})]
+          (mem/write! (:store eng) :shut-in-failed {:pos {:x 0 :y 64 :z 0} :way :pit :reason :no-floor} {:cap 5 :ttl 600000})
+          (core/submit! eng '(jobs.survival.dig-pit {:for :night}) {})
+          (await (st/tick-n eng 2))
+          (is (seq (filter #(= :waiting (:kind %)) @seen)) "the walk to the site waits on the zombie")
+          (swap! (fake/state p) assoc :entities [])
+          (st/teleport! p 100.5 64 0.5)
+          (await (tu/run-until-empty eng 5))
+          (is (seq (st/calls p "place")))
+          (is (every? #(< 90 (:x %)) (mapv st/arg-pos (st/calls p "place"))) "the pit is dug where the body was moved to"))))))
+
 (deftest a-pit-that-failed-for-water-beside-it-is-left-for-ground-a-few-blocks-off
   (async done
     (tu/run-async done

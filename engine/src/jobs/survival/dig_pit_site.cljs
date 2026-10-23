@@ -85,6 +85,12 @@
                   [0 -1 1 -2 2]))
           offsets)))
 
+(defn kept-site?
+  "Whether a site cell chosen earlier is still within what relocation-site picks from a failed site the body is at: a body
+  moved farther (a teleport, a fall, a flight) has left the failed site behind, and the site is chosen again from its feet."
+  [c cell]
+  (<= (u/dist (sh-sense/feet (:primitives c)) cell) (+ (settings/get settings ::reach) (shut-night/futile-radius))))
+
 (defn site
   "Where a night pit is dug from: {:at :here}, {:at :there :cell f} (walk there first: a pit failed at the feet, or a zone
   refuses them and a free site is near), or nil with none."
