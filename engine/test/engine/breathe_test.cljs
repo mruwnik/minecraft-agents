@@ -1948,3 +1948,31 @@
           (is (>= (:x (core/self-pos p)) 6) "up the stair, on a dry step")
           (is (not (.-inWater (.self p))))
           (is (= [[:completed nil]] (ended seen))))))))
+
+(defn ledge-lake
+  "A narrow lake (water y 62..65 over stone, x from -r to r, z within 2, air to y 69) with a bank of stone y 61..65 beyond x = r."
+  [r]
+  (merge (into {} (for [x (range (- r) (inc r)) z (range -2 3)
+                        [y n] (concat [[61 "stone"]] (map (fn [y] [y "water"]) (range 62 66)) (map (fn [y] [y "air"]) (range 66 70)))]
+                    [(str x "," y "," z) n]))
+         (into {} (for [x (range (inc r) (+ r 4)) z (range -2 3) y (range 61 70)] [(str x "," y "," z) (if (< y 66) "stone" "air")]))))
+
+(deftest a-shore-far-along-a-lake-is-found-at-the-length-of-its-swim
+  (let [swim (fn [r] (shore/swim-to-land (tu/seeing-all (tu/fake {:self {:inWater true :pos {:x 0.5 :y 64 :z 0.5}} :blocks (ledge-lake r)}))
+                                         {:x 0.5 :y 64 :z 0.5}))]
+    (is (= 48 (:swim (swim 45))) "46 along the lake and 2 up, beyond the reach of a 3D flood of the old radius")
+    (is (= {:x 46 :y 66 :z 0} (select-keys (:stand (swim 45)) [:x :y :z])))
+    (is (= 33 (:swim (swim 30))))))
+
+(deftest the-swim-to-a-dry-step-up-a-flooded-stair-is-the-length-of-its-way
+  (let [p (tu/seeing-all (tu/fake {:self {:inWater true :pos {:x 0.5 :y 64 :z 0.5}} :blocks (flooded-stair 6 9)}))
+        {:keys [stand swim]} (shore/swim-to-land p {:x 0.5 :y 64 :z 0.5})]
+    (is (= {:x 6 :y 70 :z 0} stand))
+    (is (= 12 swim) "6 along and 6 up, not the 8.5 of the straight line")))
+
+(deftest a-ledge-has-no-land-to-walk-on-and-a-shore-has
+  (let [pillar (into {} (for [y (range 62 66)] [(str "4," y ",0") "stone"]))
+        p (tu/seeing-all (tu/fake {:self {:inWater true :pos {:x 0.5 :y 64 :z 0.5}} :blocks (merge (ledge-lake 10) pillar)}))]
+    (is (= {:x 4 :y 66 :z 0} (select-keys (:stand (shore/swim-to-land p {:x 0.5 :y 64 :z 0.5})) [:x :y :z])) "the pillar's top is the nearest stand")
+    (is (zero? (shore/land-run p {:x 4 :y 66 :z 0} 20)) "a one-cell ledge with nothing round it")
+    (is (>= (shore/land-run p {:x 11 :y 66 :z 0} 2) 2) "the bank's top goes on")))

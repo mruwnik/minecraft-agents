@@ -13,6 +13,7 @@
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.body :as body]
             [jobs.lib.breath :as breath]
+            [jobs.lib.check-cache :as check-cache]
             [jobs.lib.shore :as shore]
             [engine.game :as game]
             [jobs.lib.price :as price]
@@ -278,14 +279,21 @@
   {:name (.-name e) :held (.-held e) :distance (danger-q/mob-distance p e) :speed (cost/chase-speed (cost/mob-kind e)) :follow (threats/follow-range (.-name e))})
 
 (defn swim-out
-  "Blocks a body in water swims to the nearest dry stand joined to it by water and air (shore/reachable-land) within
-  the follow range of mobs (farther, the swim alone gets away), ##Inf when none is seen; nil on land."
-  [p mobs]
-  (when (breath/in-water? p)
-    (let [me (u/self-pos {:primitives p})]
-      (if-let [stand (shore/reachable-land p me (reduce max 0 (map :follow mobs)) nil)]
-        (u/dist me {:x (+ 0.5 (:x stand)) :y (:y stand) :z (+ 0.5 (:z stand))})
-        ##Inf))))
+  "{:swim blocks :land blocks} of a body in water swimming to the nearest dry stand joined to it by water and air
+  (shore/swim-to-land: the way's length) and the land it can walk on from there up to the mobs' follow range; :swim ##Inf
+  when none is seen, :land ##Inf when unknown; nil on land. One flood a place, kept ::check-cache/ttl-ms."
+  [c mobs]
+  (let [p (:primitives c)]
+    (when (breath/in-water? p)
+      (let [me (u/self-pos c)
+            follow (reduce max 0 (map :follow mobs))]
+        (check-cache/cached
+         c [:swim-out (u/cell-vec me) follow]
+         (fn []
+           (let [{:keys [stand swim open?]} (shore/swim-to-land p me)]
+             (cond (nil? swim) {:swim ##Inf :land ##Inf}
+                   open? {:swim swim :land ##Inf}
+                   :else {:swim swim :land (shore/land-run p stand follow)}))))))))
 
 (defn returns
   "Flights from mobs named one of names within ::return-s, by the :hostile entries (c is a ctx)."
@@ -303,9 +311,10 @@
   (let [p (:primitives c)
         self (.self p)
         mobs (mapv #(mob-near p %) near)
+        swim (swim-out c mobs)
         a (cost/flee-answer {:food (or (.-food self) 20) :equipment (cost/equipment-of (.-equipment self))
                              :mobs mobs
-                             :swim (swim-out p mobs)
+                             :swim (:swim swim) :land (:land swim)
                              :returns (returns c (map #(.-name %) near))
                              :later later})]
     (cond-> a

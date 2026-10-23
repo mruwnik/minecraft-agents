@@ -165,3 +165,9 @@
     (is (> (:damage (cost/fight-answer (fight "stone_sword" trident)))
            (:damage (cost/fight-answer (fight "stone_sword" melee))))
         "the fight prices its throws too")))
+
+(deftest a-swim-to-a-ledge-with-no-land-to-walk-on-is-no-escape-from-a-drowned
+  (let [drowned (mob "drowned" 3 35)
+        flee #(cost/flee-answer {:food 20 :mobs [drowned] :swim 4 :land %})]
+    (is (nil? (flee 0)) "the drowned keeps up on a ledge")
+    (is (some? (flee ##Inf)) "land that goes on, or not known, is the walk away")))

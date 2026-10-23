@@ -167,12 +167,13 @@
   "{:damage :hit :spread :seconds} of a walk away from mob {:name :held :distance :follow (blocks it keeps chasing out to) :speed
   (its chase speed, default danger/chase-speed of the name)} at speed v through the armour stats, nil when it keeps up.
   It hits while within its hit-range. A flight that starts in water first swims swim blocks to dry land (##Inf: no land
-  known) at speed sv, the mob chasing at danger/swim-chase-speed, then walks from the gap the swim left. A creeper that
+  known) at speed sv, the mob chasing at danger/swim-chase-speed, then walks from the gap the swim left, over the land blocks
+  there is to walk on (a ledge with none: the mob keeps up). A creeper that
   reaches its swell start before the body gets going blows at the distance the body reached when its fuse ends, :spread
   that blast for each of danger/flight-starts: a blast is not felt before it lands, as other mobs' blows are (respond's
   felt rate)."
   ([stats v m] (flee-mob stats v nil m))
-  ([stats v {:keys [sv swim]} {:keys [name distance follow speed] :as m}]
+  ([stats v {:keys [sv swim land]} {:keys [name distance follow speed] :as m}]
    (let [d (or distance 0)
          follow (or follow d)
          chase (or speed (danger/chase-speed name))
@@ -183,7 +184,8 @@
          gain (- v chase)
          escape (cond (:away? wet) 0
                       (and wet (not (js/isFinite swim))) nil
-                      (pos? gain) (/ (max 0 (- follow d)) gain))]
+                      (pos? gain) (/ (max 0 (- follow d)) gain))
+         escape (when-not (and wet escape land (< land (* v escape))) escape)]
      (cond
        (nil? escape) nil
        (= "creeper" name)
@@ -204,12 +206,12 @@
   later (the fight with them, nil none) or the walk again. :caught: each flight is caught at chance caught (default
   ::caught-chance), its mobs then landing their blows (a creeper its blast) over the flight. A creeper that blows on the
   walk (at the median of its :spread) is spent: what follows is the walk from the rest or later (none left: nothing).
-  swim: the blocks a body in water swims to dry land first (flee-mob's; ##Inf none known), at its planner/swim-speed over danger's outrun factor as on foot.
+  swim: the blocks a body in water swims to dry land first (flee-mob's; ##Inf none known) and land the blocks to walk on there, at its planner/swim-speed over danger's outrun factor as on foot.
   nil when a mob keeps up or none is given."
-  [{:keys [food equipment mobs returns later caught swim] :as args}]
+  [{:keys [food equipment mobs returns later caught swim land] :as args}]
   (let [stats (armour/armour-stats equipment)
         v (danger/flight-speed (or food 20))
-        wet {:swim swim :sv (/ (planner/swim-speed equipment) (danger/outrun-factor))}
+        wet {:swim swim :land land :sv (/ (planner/swim-speed equipment) (danger/outrun-factor))}
         per (map #(flee-mob stats v wet %) mobs)
         times (inc (or returns 0))]
     (when (and (seq per) (every? some? per))
