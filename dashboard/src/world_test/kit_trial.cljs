@@ -2,7 +2,7 @@
   "tools/kit-trial.mjs: repeatable iron-kit trials on fresh bodies. A run is one spot and one new body name (no playerdata, no
   memory), set up by `start`, judged from the body's event log by `judge`. Terrain changes are never undone: the next run is a
   new body name on the next spot.
-  Commands: spots | plan SPOT [--n N] | start SPOT [--n N] --build DIR [--go] [--allow-time] | judge RUN [--world W]
+  Commands: spots | plan SPOT [--n N] | start SPOT [--n N] [--give ITEM[:N],...] --build DIR [--go] [--allow-time] | judge RUN [--world W]
   Pure parts: spots, run-name, steps, milestones, report, clean."
   (:require ["child_process" :as cp]
             ["fs" :as fs]
@@ -11,7 +11,7 @@
             [clojure.string :as str]))
 
 (def usage
-  (str "usage: node tools/kit-trial.mjs spots | plan SPOT [--n N] | start SPOT [--n N] --build DIR [--go] [--allow-time] | judge RUN [--world test]\n"
+  (str "usage: node tools/kit-trial.mjs spots | plan SPOT [--n N] [--give ITEM[:N],...] | start SPOT [--n N] [--give ITEM[:N],...] --build DIR [--go] [--allow-time] | judge RUN [--world test]\n"
        "plan prints the steps start would run (RCON, files, body start, the one goal job); start runs them only with --go (without it, the same as plan).\n"
        "judge reads worlds/<world>/kit-trials/RUN/run.edn and the body's event logs, prints the report EDN and the milestone table; exit 0 clean, 1 not clean."))
 
@@ -35,6 +35,13 @@
 (def max-days 3)
 (def stall-ms 300000)
 
+(defn parse-give
+  "\"white_bed,bread:8\" -> [[\"white_bed\" 1] [\"bread\" 8]]."
+  [text]
+  (vec (for [part (str/split text #",") :when (seq part)
+             :let [[item cnt] (str/split part #":")]]
+         [item (if cnt (js/parseInt cnt) 1)])))
+
 (defn run-name
   "The body name of run n on spot (letters and digits, at most 16): a name never played on the server before."
   [spot n]
@@ -44,8 +51,9 @@
 
 (defn steps
   "The setup of a run as data, in order: [:whitelist name] [:file path text] [:body-start name] [:rcon text] [:submit name spec] [:record path m].
-  Needs the spot's coordinates; :time? adds `time set 1000` (server-wide, only under --allow-time)."
-  [{:keys [spot n world build time? now] :or {world "test"}}]
+  Needs the spot's coordinates; :time? adds `time set 1000` (server-wide, only under --allow-time); :give [[item n] ...] gives
+  the items after the clear and is recorded as :given."
+  [{:keys [spot n world build time? now give] :or {world "test"}}]
   (let [body (run-name spot n)
         dir (run-dir world body)
         {:keys [x z]} spot]
@@ -60,9 +68,10 @@
           [[:rcon (str "spreadplayers " x " " z " 0 24 false " body)]
            [:rcon (str "effect give " body " minecraft:slow_falling 60 0 true")]
            [:rcon (str "gamemode survival " body)]
-           [:rcon (str "clear " body)]
-           [:rcon (str "effect give " body " minecraft:instant_health 1 5 true")]
-           [:record (str dir "/run.edn") {:run body :spot (:id spot) :n n :world world :build build :started-ms now :goal goal-spec}]
+           [:rcon (str "clear " body)]]
+          (for [[item cnt] give] [:rcon (str "give " body " minecraft:" item " " cnt)])
+          [           [:rcon (str "effect give " body " minecraft:instant_health 1 5 true")]
+           [:record (str dir "/run.edn") {:run body :spot (:id spot) :n n :world world :build build :started-ms now :goal goal-spec :given (vec give)}]
            [:submit body goal-spec]]))))
 
 ;; ---- judging
@@ -151,11 +160,12 @@
 
 (defn report
   "run (the run.edn map), events from its start, end-ms -> the report map."
-  [{:keys [started-ms goal-job]} events end-ms]
+  [{:keys [started-ms goal-job given]} events end-ms]
   (let [goal-job (or goal-job (goal-job-of events))
         m (milestones events)
         days #(when % (/ (- % started-ms) ms-per-day))]
-    {:milestones (into (sorted-map) (map (fn [[k t]] [k {:ms (- t started-ms) :days (days t)}])) m)
+    {:given (vec given)
+     :milestones (into (sorted-map) (map (fn [[k t]] [k {:ms (- t started-ms) :days (days t)}])) m)
      :deaths (deaths events)
      :stalls (stalls events started-ms end-ms)
      :give-ups (give-ups events)
@@ -189,6 +199,7 @@
       (= a "--n") (recur (rest more) (assoc o :n (js/parseInt (first more))))
       (= a "--build") (recur (rest more) (assoc o :build (first more)))
       (= a "--world") (recur (rest more) (assoc o :world (first more)))
+      (= a "--give") (recur (rest more) (assoc o :give (parse-give (first more))))
       (= a "--go") (recur more (assoc o :go true))
       (= a "--allow-time") (recur more (assoc o :time? true))
       :else (recur more (update o :pos conj a)))))
@@ -251,7 +262,7 @@
                           (if-not (and spot (or build (not go)))
                             (do (js/console.error usage) 2)
                             (try
-                              (let [ss (steps {:spot spot :n n :world world :build (or build "<build dir>") :time? (:time? o) :now (js/Date.now)})]
+                              (let [ss (steps {:spot spot :n n :world world :build (or build "<build dir>") :time? (:time? o) :give (:give o) :now (js/Date.now)})]
                                 (doseq [s ss] (js/console.log (pr-str s)))
                                 (when (and go (= "start" cmd))
                                   (doseq [s ss] (exec-step! s)))

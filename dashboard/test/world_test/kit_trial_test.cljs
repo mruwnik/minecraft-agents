@@ -67,3 +67,14 @@
     (is (not-any? #(= [:rcon "time set 1000"] %) ss) "no server clock change without the flag")
     (is (some #(= [:rcon "time set 1000"] %) (k/steps {:spot oak :n 2 :build "/b" :now t0 :time? true})))
     (is (thrown-with-msg? js/Error #"no coordinates" (k/steps {:spot (first (filter #(= :hills (:id %)) k/spots)) :n 1 :build "/b" :now t0})))))
+
+(deftest given-items-follow-the-clear-and-are-recorded
+  (let [oak (first (filter #(= :oak (:id %)) k/spots))
+        give (k/parse-give "white_bed,bread:8")
+        ss (k/steps {:spot oak :n 2 :build "/b" :now t0 :give give})
+        clear-i (.indexOf ss [:rcon "clear KitOak02"])]
+    (is (= [["white_bed" 1] ["bread" 8]] give))
+    (is (= [:rcon "give KitOak02 minecraft:white_bed 1"] (nth ss (+ clear-i 1))))
+    (is (= [:rcon "give KitOak02 minecraft:bread 8"] (nth ss (+ clear-i 2))))
+    (is (= give (:given (nth (first (filter #(= :record (first %)) ss)) 2))))
+    (is (= give (:given (k/report {:started-ms t0 :given give} [] (at 1)))))))
