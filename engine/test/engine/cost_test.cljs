@@ -261,26 +261,25 @@
     (is (< (js/Math.abs (- 1 unarmed)) 1e-9) "an unarmed body pays a dark cell 2x a lit one")
     (is (> unarmed sword armed-armoured floor) "a bare body pays most, armour and a sword less, never below the floor")))
 
-(deftest an-unseen-way-is-priced-at-its-worse-case-and-finite
+(deftest an-unseen-way-is-priced-by-how-often-the-seen-ways-near-it-go-on
   (let [kit {:weapon nil :equipment nil}
-        way (cost/unseen-way-cost {:unseen-s 2 :kit kit})
-        chased (cost/unseen-way-cost {:unseen-s 2 :trapped 30 :kit kit})]
-    (is (> way 2) "more than walking it seen: a dead end to turn back from, a mob in the dark")
-    (is (< way chased ##Inf) "dearer with chasers to meet on the way back, never refused")
-    (is (< (cost/unseen-way-cost {:unseen-s 2 :kit {:weapon "iron_sword" :equipment iron-set}}) way) "an armed, armoured body fears the dark less")
-    (is (< way (cost/unseen-way-cost {:unseen-s 2 :kit kit :underground? true})) "a cave's unseen way ends more often than open ground's")))
+        open {:k 98 :n 100}
+        closed {:k 50 :n 100}]
+    (is (= 0.5 (cost/way-on-chance {:k 0 :n 0})) "nothing seen: the uniform prior")
+    (is (= 0.75 (cost/way-on-chance {:k 2 :n 2})))
+    (is (> (cost/unseen-share closed kit) (cost/unseen-share open kit) (cost/dark-factor kit))
+        "seen dead ends round it make an unseen way dearer, open ground cheaper, never below a dark cell's price")
+    (is (< (cost/unseen-share open {:weapon "iron_sword" :equipment iron-set}) (cost/unseen-share open kit)) "an armed, armoured body fears the dark less")
+    (is (< 0 (cost/dead-end-cost open 30) (cost/dead-end-cost closed 30) 30) "the chasers met on the way back, at the dead end's chance")))
 
-(deftest a-flight-is-caught-by-what-its-search-found
+(deftest a-flight-is-caught-by-the-way-it-takes
   (let [prior 0.15
-        clear (cost/flight-caught-chance {:ways 12 :caught 0})
-        half (cost/flight-caught-chance {:ways 12 :caught 6})]
-    (is (= 1 (cost/flight-caught-chance {:ways 12 :caught 12})) "every way cut: caught")
-    (is (= 1 (cost/flight-caught-chance {:ways 0 :caught 0})) "no way planned: caught")
-    (is (< 0 clear half prior) "a clear field lowers the prior, never to 0")
-    (is (< clear (cost/flight-caught-chance {:ways 12 :caught 10 :unseen 2})) "both ways left run unseen: each may end there")
-    (is (= clear (cost/flight-caught-chance {:ways 12 :caught 0 :unseen 11})) "one way left in sight: no dead end")
-    (is (> (cost/flight-caught-chance {:ways 12 :caught 11 :unseen 1}) (cost/flight-caught-chance {:ways 12 :caught 10 :unseen 2}))
-        "one unseen way is a dead end likelier than two")))
+        open {:k 98 :n 100}
+        closed {:k 50 :n 100}
+        unseen #(cost/flight-caught-chance {:way? true :unseen? true :counts %})]
+    (is (= 1 (cost/flight-caught-chance {:way? false})) "no way left: caught")
+    (is (< (js/Math.abs (- prior (cost/flight-caught-chance {:way? true :counts closed}))) 1e-9) "a way in sight: the measured prior")
+    (is (< prior (unseen open) (unseen closed) 1) "a way into unseen cells may end there, the likelier where the seen ways end")))
 
 (deftest spawn-chance-is-zero-where-a-mob-cannot-spawn
   (let [lit (fn [block sky] (fn [_] {:block block :sky sky}))

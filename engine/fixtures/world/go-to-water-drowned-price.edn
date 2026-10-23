@@ -9,8 +9,8 @@
 ;; dark-wade-pays-the-dark-price-too (card 14a87322; the night lake: a dark plot, a glowstone over the pond lights it while the
 ;; body looks, then is taken away, so the seen wade is at block light 0): the quote straight across the 1-deep pond prices its
 ;; wet cells the dark factor and the drowned share, about 1 s for a stone sword; the water share alone gave about 0.35 s.
-;; Should-fail (control): deep-pond-with-no-way-round-is-swum (the pond across the plot between two walls 2 high at its
-;; edges, seen by look-around, so no guessed way round the plot's shell over unseen cells, quoted from x 4 to [16 4 12]: no ban, the way across is taken).
+;; Should-fail (control): deep-pond-with-no-way-round-is-swum (the pond across the whole plot, quoted from x 4 to [16 4 12]:
+;; no ban, the way across is taken; a guessed way round the plot's shell over unseen cells pays the unseen price).
 {:defaults
  {:tags [:movement :planner :water]
   :time :any
@@ -30,10 +30,8 @@
    :expect [{:no-event {:level :error} :for-s 2}]
    :after [[:body-near [15.5 4 12.5] 1.5]]}
   {:name "deep-pond-with-no-way-round-is-swum"
-   :blocks [[:fill [0 0 0] [31 3 31] "stone"] [:fill [7 0 1] [13 3 30] "water"]
-            [:fill [0 4 0] [31 5 0] "stone"] [:fill [0 4 31] [31 5 31] "stone"]]
-   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
-         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [16 4 12] :range 0}] {:ok true :quote {:route {:found true :length [:< 16]}}}] 30]]
+   :blocks [[:fill [0 0 0] [31 3 31] "stone"] [:fill [7 0 0] [13 3 31] "water"]]
+   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [16 4 12] :range 0}] {:ok true :quote {:route {:found true :length [:< 16]}}}] 30]]
    :expect [{:no-event {:level :error} :for-s 2}]
    :after [[:body-near [4.5 4 12.5] 1]]}
   {:name "dark-wade-pays-the-dark-price-too"

@@ -179,11 +179,11 @@
      m)))
 
 (def unknown-prices
-  "The planner's prices of cells the body has not seen (options.unknown), seconds: :cell a share of a move's own seconds per
-  unseen feet or head cell, :floor the same for a stand on an unseen floor, :peek-s a drop onto one (a stop at the edge to
-  look), :aim-s a level or up step onto one (a look down at the takeoff); and the depths, in blocks: :see-lit-depth the deepest
-  drop a lit landing is seen over from the walk's worst peek stop, :light-depth the deepest a torch at the takeoff lights."
-  {:cell 0.1 :floor 0.3 :peek-s 0.7 :aim-s 0.1 :see-lit-depth 10 :light-depth 5})
+  "The planner's prices of stands on floors the body has not seen (options.unknown), seconds: :peek-s a drop onto one (a stop
+  at the edge to look), :aim-s a level or up step onto one (a look down at the takeoff); and the depths, in blocks:
+  :see-lit-depth the deepest drop a lit landing is seen over from the walk's worst peek stop, :light-depth the deepest a
+  torch at the takeoff lights. The price of the unseen cells themselves is jobs.lib.cost/unseen-share."
+  {:peek-s 0.7 :aim-s 0.1 :see-lit-depth 10 :light-depth 5})
 
 (a/defargs settings
   {::drop-cost {:default 1 :doc "Scales the cost of a drop (fall seconds and damage; 1 as is, 0 free, 5 dear); false: no drop of 2 or 3 at all. :one-way :closed instead refuses only a drop the body cannot climb back." :spec (a/or-of (a/num-in 0 nil) false?)}
@@ -196,8 +196,7 @@
                :doc "Map of move kind (:swim :swim-up :swim-down :climb-up :climb-down) to how many times its planner price a step of it really takes under water in a walk over unseen cells, which stops to look and replan (wet-move-s); :swim and :climb-up measured live, the others left at the safer 2.5 until measured."
                :spec (a/pred "a map of :swim :swim-up :swim-down :climb-up :climb-down to numbers > 0" #(and (map? %) (= #{:swim :swim-up :swim-down :climb-up :climb-down} (set (keys %))) (every? (fn [v] (and (number? v) (pos? v))) (vals %))))}
    ::wet-margin-s {:default 2 :doc "Seconds of air a walk over unseen water keeps for when it is back at its last breath (wet-ok?)." :spec (a/num-in 0 nil)}
-   ::dead-end-chance {:default {:underground 0.5 :surface 0.1} :doc "Chance a way on through cells the body has not seen ends unseen, a dead end it must turn back from (jobs.lib.cost/unseen-way-cost), :underground (jobs.lib.shelter.sense/buried?) and on the :surface: not measured yet (n=0), the stand-ins even odds in a cave and one in ten on open ground." :spec (a/pred "a map of :underground and :surface to chances 0-1" #(and (map? %) (every? (fn [k] (<= 0 (get % k -1) 1)) [:underground :surface])))}
-   ::unknown-prices {:default false :doc "Map of :cell :floor :peek-s :aim-s :see-lit-depth :light-depth to numbers overriding the prices of cells a walk over :unknown has not seen (unknown-prices); a go-to :unknown map wins over it." :spec (a/or-of false? (a/valid-by "a map of unknown-price name to a number >= 0" (fn [m] (when-not (or (nil? m) (and (map? m) (every? #(and (contains? unknown-prices (key %)) (number? (val %)) (>= (val %) 0)) m))) "not a map of unknown-price names to numbers >= 0"))))}})
+   ::unknown-prices {:default false :doc "Map of :peek-s :aim-s :see-lit-depth :light-depth to numbers overriding the prices of cells a walk over :unknown has not seen (unknown-prices); a go-to :unknown map wins over it." :spec (a/or-of false? (a/valid-by "a map of unknown-price name to a number >= 0" (fn [m] (when-not (or (nil? m) (and (map? m) (every? #(and (contains? unknown-prices (key %)) (number? (val %)) (>= (val %) 0)) m))) "not a map of unknown-price names to numbers >= 0"))))}})
 
 (def wet-prices
   "Per move under water: the planner price of one step (a level step swims with the head under, swimSubH), the kind of
@@ -259,7 +258,5 @@
 
 (defn walk-landing "The setting ::landing, nil when none." [] (or (settings/get settings ::landing) nil))
 (defn walk-drop-cost "The setting ::drop-cost." [] (settings/get settings ::drop-cost))
-(defn dead-end-chance "The setting ::dead-end-chance under ground (underground?) or on the surface." [underground?]
-  (get (settings/get settings ::dead-end-chance) (if underground? :underground :surface)))
 (defn walk-unknown-prices "The unknown-prices as set: the defaults over the setting ::unknown-prices." []
   (merge unknown-prices (or (settings/get settings ::unknown-prices) nil)))

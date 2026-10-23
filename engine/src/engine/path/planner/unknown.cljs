@@ -113,20 +113,19 @@
 
   ;; True when the move from node p into x y z is refused for options.unknown: its stand is on a phantom floor that the walk
   ;; cannot stop to check first (unseen-refused), or was missed or cannot be seen, and is not lit (dark-refused). Else sets what it
-  ;; costs (move-unk, seconds: cell per unseen feet or head cell and floor for a phantom floor, both times dsec, and a peek
-  ;; over a drop or an aim at a level or up one, and light-cost when a torch must light it) and move-light.
+  ;; costs (move-unk, seconds: cell times dsec when its feet, head or floor is unseen, and a peek over a drop or an aim at a
+  ;; level or up one onto a phantom floor, and light-cost when a torch must light it) and move-light.
   (unseenRefuses [s x y z move p dsec]
     (set! (.-move-light s) 0)
-    (let [cells (* dsec (.-unk-cell s) (.unknownCells s x y z))]
-      (if-not ^boolean (.phantomAt s x y z)
-        (do (set! (.-move-unk s) cells)
-            false)
-        (let [d (js/Math.max 0 (- (aget (.-ys s) p) y))
-              priced (+ cells (* dsec (.-unk-floor s)) (if (pos? d) (.-peek-s s) (.-aim-s s)))]
-          (cond
-            (not ^boolean (.gateCheckable s move p)) (do (set! (.-unseen-refused s) true) true)
-            (and (not ^boolean (.missedAt s x (dec y) z)) ^boolean (.seeable s x y z d)) (do (set! (.-move-unk s) priced) false)
-            ^boolean (.lightable s p d) (do (set! (.-move-unk s) (+ priced (.-light-cost s)))
-                                            (set! (.-move-light s) 1)
-                                            false)
-            :else (do (.darkRefuse s x y z) true)))))))
+    (if-not ^boolean (.phantomAt s x y z)
+      (do (set! (.-move-unk s) (if (pos? (.unknownCells s x y z)) (* dsec (.-unk-cell s)) 0))
+          false)
+      (let [d (js/Math.max 0 (- (aget (.-ys s) p) y))
+            priced (+ (* dsec (.-unk-cell s)) (if (pos? d) (.-peek-s s) (.-aim-s s)))]
+        (cond
+          (not ^boolean (.gateCheckable s move p)) (do (set! (.-unseen-refused s) true) true)
+          (and (not ^boolean (.missedAt s x (dec y) z)) ^boolean (.seeable s x y z d)) (do (set! (.-move-unk s) priced) false)
+          ^boolean (.lightable s p d) (do (set! (.-move-unk s) (+ priced (.-light-cost s)))
+                                          (set! (.-move-light s) 1)
+                                          false)
+          :else (do (.darkRefuse s x y z) true))))))

@@ -75,8 +75,8 @@
 (deftest the-spec-holds-the-prices-the-mask-id-and-sight
   (let [{:keys [w]} (sensed wall-world)
         u (wworld/unknown-of (wworld/path-world w (settings/with-settings {:jobs.lib.cost.planner/unknown-prices {:peek-s 2}} wworld/unknown-spec)))]
-    (is (= [@void 2 (:aim-s cost/unknown-prices) (:cell cost/unknown-prices) (:floor cost/unknown-prices)]
-           [(.-id u) (.-peekS u) (.-aimS u) (.-cell u) (.-floor u)]))
+    (is (= [@void 2 (:aim-s cost/unknown-prices) (wworld/unseen-share w)]
+           [(.-id u) (.-peekS u) (.-aimS u) (.-cell u)]))
     (is (= 1 (.-seeDepth u)) "no torch in hand: near 4")
     (is (fn? (.-seeLit u)))))
 

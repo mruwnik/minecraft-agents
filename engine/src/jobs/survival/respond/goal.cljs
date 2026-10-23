@@ -12,7 +12,8 @@
             [jobs.lib.util :as u]
             [jobs.survival.respond.state :as flight]
             [jobs.lib.flee-search :as search]
-            [jobs.lib.flee-walk :as walk]))
+            [jobs.lib.flee-walk :as walk]
+            [jobs.lib.walk.world :as wworld]))
 
 (a/defargs settings
   {::drift {:default 3 :doc "Blocks a walk to the goal may take the body farther from the goal's height than where that walk began: a leg that does ends the walk to the goal (a plan that ends under or over the goal, nearer only in x and z, is no way to it)." :spec (a/num-in 0 nil)}
@@ -120,7 +121,7 @@
         kept (:caught-chance (ctx/mem c))]
     (if (and (= here (:cell kept)) (< (- now (:t kept)) (* 1000 (settings/get search/settings ::search/step-s))))
       (:chance kept)
-      (let [chance (search/caught-chance (await (search/search! c (chasers c) [] {:y-margin (margin c)})) (sh-sense/buried? (:primitives c)))]
+      (let [chance (search/caught-chance (await (search/search! c (chasers c) [] {:y-margin (margin c)})) (wworld/way-counts (:primitives c)))]
         (ctx/update-mem! c assoc :caught-chance {:cell here :t now :chance chance})
         chance))))
 

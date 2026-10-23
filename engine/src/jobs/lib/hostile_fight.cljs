@@ -20,6 +20,7 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.threats :as threats]
             [jobs.lib.walk-risk :as risk]
+            [jobs.lib.walk.world :as wworld]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -172,8 +173,8 @@
 
 (defn walk-hp
   "hp the walk to the nearest of near costs: go-to's own route price (risk/estimate of a walk not planned: the straight
-  way priced unseen; its hostiles left out: they are in the fight) plus the drops of the straight way there over the ground the body has seen, its unseen steps at the planner's
-  unknown prices (cost/unseen-route-hp)."
+  way priced unseen; its hostiles left out: they are in the fight) plus the drops of the straight way there over the ground the body has seen, its unseen steps at the
+  unseen price (cost/unseen-route-hp, wworld/unseen-share)."
   [c near]
   (if-let [t (first near)]
     (let [p (:primitives c)
@@ -183,7 +184,7 @@
           route (cost/straight-route kind-at (u/pos-of (.-pos (.self p))) goal)]
       (+ hp
          (cost/route-fall-damage (cost/equipment-of (.-equipment (.self p))) route)
-         (cost/unseen-route-hp kind-at route)))
+         (cost/unseen-route-hp (wworld/unseen-share p) kind-at route)))
     0))
 
 (defn body-of

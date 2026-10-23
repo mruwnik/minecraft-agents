@@ -71,7 +71,7 @@
   ;; cannot make up a 1.5 times dearer step), the more so as the unseen land is most of what lies between a far goal and the body.
   (heuristic [s x z]
     (let [cheapest (js/Math.min (.-c-walk-s s) (.-c-sprint-s s) (.-c-swim-h s))
-          per-block (if (neg? (.-unk-id s)) cheapest (+ (* cheapest (+ 1 (* 2 (.-unk-cell s)) (.-unk-floor s))) (/ (.-aim-s s) SQRT2)))]
+          per-block (if (neg? (.-unk-id s)) cheapest (+ (* cheapest (+ 1 (.-unk-cell s))) (/ (.-aim-s s) SQRT2)))]
       (if (pos? (.-n-goals s))
         (loop [i 0 best js/Infinity]
           (if (< i (.-n-goals s))

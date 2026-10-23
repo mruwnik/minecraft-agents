@@ -142,13 +142,13 @@
    ;; (LETHAL-S times the dearest second the caller's prices allow, see drownCost)
    ^:mutable drown-runs ^:mutable drown-closed ^:mutable move-run ^:mutable move-closed lethal-s
    ;; options.unknown (unk-id -1: off, see unseenRefuses): the state id of a cell the body has not seen (void_air: air to
-   ;; the body), the id a phantom floor (an unseen floor stood on) reads as, the prices (a share of a move's seconds per
-   ;; unseen feet or head cell, the same for a phantom floor; the seconds of a peek over a drop onto one and of an aim at a
+   ;; the body), the id a phantom floor (an unseen floor stood on) reads as, the prices (a share of the seconds of a move
+   ;; with an unseen feet, head or floor cell; the seconds of a peek over a drop onto a phantom floor and of an aim at a
    ;; level or up one), how deep a drop the walk can see from its peek (see-depth) and the caller's test of a lit landing
    ;; (see-lit, fn x y z -> 1 or 0, nil: none; cached in see-keys and see-flags as darkOf) seen to a drop of see-lit-depth, how deep a drop a torch at the takeoff lights (light-depth), a torch's price (light-cost, -1:
    ;; no torches), its test of a takeoff (light-ok, fn x y z, nil: every one), the floors a torch stands on (torch-base, by
    ;; state id), and the floor cells the walk could not see and the takeoffs where a torch failed (Sets of cell-key, nil: none)
-   unk-id unk-floor-id unk-cell unk-floor see-depth ^js see-lit see-lit-depth light-depth peek-s aim-s light-cost ^js light-ok ^js torch-base
+   unk-id unk-floor-id unk-cell see-depth ^js see-lit see-lit-depth light-depth peek-s aim-s light-cost ^js light-ok ^js torch-base
    ^js missed ^js no-light ^js see-keys ^js see-flags ^js slip-keys ^js slip-flags
    ;; what the move being made adds (set by unseenRefuses): seconds, and 1 when it lights its landing; each node's light flag;
    ;; a phantom floor was refused for want of sight (dark-refused; the refused stand nearest the goal, dark-best-*) or because

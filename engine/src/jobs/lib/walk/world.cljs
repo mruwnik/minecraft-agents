@@ -20,6 +20,7 @@
             [jobs.lib.walk.edges :as edges]
             [jobs.lib.walk.rock :as rock]
             [jobs.lib.walk.sight :as wsight]
+            [jobs.lib.walk.way-on :as way-on]
             [engine.perception.store :as store]))
 
 (a/defargs settings
@@ -42,8 +43,8 @@
   (jobs.lib.cost/walk-unknown-prices) and one missed Set, shared by every pathWorld made with this spec (the floors the
   walk looked for and could not see), and one blocked Set of cells it looked at and could not see (they read as stone)."
   []
-  (let [{:keys [cell floor peek-s aim-s see-lit-depth light-depth]} (cost/walk-unknown-prices)]
-    #js {:cell cell :floor floor :peekS peek-s :aimS aim-s :seeLitDepth see-lit-depth :lightDepth light-depth :missed (js/Set.)
+  (let [{:keys [peek-s aim-s see-lit-depth light-depth]} (cost/walk-unknown-prices)]
+    #js {:peekS peek-s :aimS aim-s :seeLitDepth see-lit-depth :lightDepth light-depth :missed (js/Set.)
          :noLight (js/Set.) :blocked (js/Set.)}))
 
 (def torch-base*
@@ -73,6 +74,22 @@
     (let [^js st (:st per)
           ^js sections (store/store-of st (.-dim st))]
       (fn [cx sy cz] (some-> ^js (.get sections (store/section-key cx sy cz)) .-ids)))))
+
+(defn way-counts
+  "The ways out of the seen stands nearest the body of primitives p (way-on/way-counts from its feet), {:k 0 :n 0}
+  without a perception."
+  [p]
+  (if-let [known (memory-sections p)]
+    (let [^js pos (.-pos (.self p))] (way-on/way-counts known (mapv js/Math.floor [(.-x pos) (.-y pos) (.-z pos)])))
+    {:k 0 :n 0}))
+
+(declare kit-of)
+
+(defn unseen-share
+  "Seconds a second of the body's walk over cells it has not seen adds here (cost/unseen-share of way-counts and its
+  kit): the planner's options.unknown.cell."
+  [p]
+  (cost/unseen-share (way-counts p) (kit-of {:primitives p})))
 
 (defn- see-depth-now
   "The deepest drop the body sees the landing floor of in the dark from a peek, with what it holds now."
@@ -125,7 +142,7 @@
   "The primitives' pathWorld sensing (a snapshot over the world) with the planner's block table and free-space module, nil when
   they have none or cannot sense now. With unknown (unknown-spec), over a body with a perception: cells the body never saw
   or felt read void_air (its known cells read as they are now), and the snapshot carries the planner's options.unknown:
-  the spec with the mask's id, seeDepth (from what the body holds now) and seeLit (look/see-lit-fn). Under ground
+  the spec with the mask's id, cell (unseen-share), seeDepth (from what the body holds now) and seeLit (look/see-lit-fn). Under ground
   (sh-sense/buried?, head not under water, not :edge), an unseen cell past ::rock-beyond of every seen open cell, the
   feet and the spec's seeds (with-seeds) reads stone (jobs.lib.walk.rock); the mask's rockBeyond says so (0: none)."
   ([p] (path-world p nil))
@@ -139,7 +156,7 @@
            mask (when known
                   (js/Object.assign #js {} unknown
                                     #js {:id (if (.-edge unknown) unloaded-id (first (blocks/state-ids table (if under? "seagrass" "void_air")))) :blockedId stone :known known
-                                         :seeDepth (see-depth-now p) :seeLit (look/see-lit-fn p) :rockBeyond (or k 0)}))]
+                                         :cell (unseen-share p) :seeDepth (see-depth-now p) :seeLit (look/see-lit-fn p) :rockBeyond (or k 0)}))]
        (when-let [pw (if mask (.pathWorld p mask) (.pathWorld p))]
          (let [pw (js/Object.assign #js {:table table :space space/space} pw)]
            (when k

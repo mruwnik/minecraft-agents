@@ -407,11 +407,11 @@
       (fn ^:async t []
         (let [heard (zombie 7 0.5 -5.5)
               stay '(jobs.survival.respond-to-hostile {:settings {:jobs.survival.respond-to-hostile/stay-inside false}})]
-          (doseq [[world spec decision held? why]
-                  [[{:time 14000 :entities [heard]} respond :flee false "no roof: it flees"]
-                   [{:time 14000 :blocks roofed-passage :entities [heard]} respond :fight true "roofed, heard only: it stays"]
-                   [{:time 14000 :blocks roofed-passage :entities [heard]} stay :flee false "stay-inside off: it flees"]
-                   [{:time 1000 :blocks roofed-passage :entities [heard]} respond :fight true "day: it stays too (the roof, not the clock)"]]]
+          (doseq [[world spec decision held? muted? why]
+                  [[{:time 14000 :entities [heard]} respond :fight false true "no roof: no hold; at the measured caught chance the price fights it"]
+                   [{:time 14000 :blocks roofed-passage :entities [heard]} respond :fight true true "roofed, heard only: it stays"]
+                   [{:time 14000 :blocks roofed-passage :entities [heard]} stay :flee false false "stay-inside off: it flees"]
+                   [{:time 1000 :blocks roofed-passage :entities [heard]} respond :fight true true "day: it stays too (the roof, not the clock)"]]]
             (let [{:keys [eng p seen]} (setup-seeing (assoc world :self {:health 5} :inventory sword :pitch -80) nil 1000)]
               (perception/pass! (aget p "perception"))
               (swap! (fake/state p) assoc :pitch 0)
@@ -419,7 +419,7 @@
               (await (core/tick! eng))
               (is (= decision (:decision (first (hostile-entries eng)))) why)
               (is (= held? (boolean (:text (first (filter #(= :hostile.sealed-hold (:kind %)) @seen))))) (str why ": sealed-hold event with its reason"))
-              (is (= held? (boolean (seq (filterv :mute-s @seen)))) (str why ": a held body with nothing to fight ends done, leaving the heard mob (not no-response)")))))))))
+              (is (= muted? (boolean (seq (filterv :mute-s @seen)))) (str why ": a body with nothing to fight ends done, leaving the heard mob (not no-response)")))))))))
 
 (deftest a-roofed-body-hit-lately-does-not-stay-for-a-mob-it-only-hears
   (async done
@@ -1714,7 +1714,7 @@
     (is (<= (:x cell) -2) "three blocks straight away from the creeper")
     (is (nil? (hostile-fight/back-cell (constantly "stone") {:x 0.5 :y 64 :z 0.5} {:x 2.5 :y 64 :z 0.5} 3)) "walled in: no cell")))
 
-(deftest a-fight-walk-prices-the-drop-it-sees-and-an-unseen-way-at-the-unknown-prices
+(deftest a-fight-walk-prices-the-drop-it-sees-and-an-unseen-way-at-the-unseen-price
   (let [ledge (merge (tu/box 0 63 -2 2 63 2 "stone") (tu/box 3 59 -2 9 59 2 "stone"))
         zed (clj->js {:id 7 :name "zombie" :kind "hostile" :visible true :pos {:x 8.5 :y 60 :z 0.5}})
         hp (fn [p] (hostile-fight/walk-hp {:primitives p :args {} :root "j1" :slots [] :view (fn [] {:now 0 :data {:entries {}}})} [zed]))
@@ -1723,9 +1723,9 @@
         sensed (.-sensedAt dark)]
     (tu/set-sensed! dark (fn [q] (if (<= 3 (.-x q)) #js {:unknown true :pos q} (sensed q))))
     (is (<= 1 (hp seen)) "the 4-block drop to the zombie, seen, costs its fall")
-    (is (< (hp dark) (hp seen)) "the ground beyond the ledge never seen: no drop known, its steps at the unknown prices")
-    (is (pos? (cost/unseen-route-hp (constantly :ground) [{:x 0 :y 64 :z 0}])) "an unseen step is not free")
-    (is (zero? (cost/unseen-route-hp (constantly :open) [{:x 0 :y 64 :z 0}])))))
+    (is (< (hp dark) (hp seen)) "the ground beyond the ledge never seen: no drop known, its steps at the unseen price")
+    (is (pos? (cost/unseen-route-hp 1 (constantly :ground) [{:x 0 :y 64 :z 0}])) "an unseen step is not free")
+    (is (zero? (cost/unseen-route-hp 1 (constantly :open) [{:x 0 :y 64 :z 0}])))))
 
 (def pond
   "A pond east of the body: water at x 2..4, y 62 and 63 (the shore floor's level is 63), z -2..2, stone under it."

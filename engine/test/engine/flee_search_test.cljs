@@ -105,10 +105,10 @@
           (is (seq baby) "the ways are planned")
           (is (every? :caught? baby) "a baby zombie runs faster than a body too hungry to sprint")
           (is (nil? (search/pick baby {})) "no flee step: the body is cornered")
-          (is (= 1 (search/caught-chance baby false)) "the fight-or-flee weighing prices the flight caught")
+          (is (= 1 (search/caught-chance baby {:k 0 :n 0})) "the fight-or-flee weighing prices the flight caught")
           (is (every? :caught? spider) "a spider 4 behind catches a flight")
           (is (some? (search/pick far {})) "one 7 behind is left behind over the ring")
-          (is (< (search/caught-chance far false) 0.15) "a clear way lowers the prior"))))))
+          (is (< (search/caught-chance far {:k 0 :n 0}) 1) "a way left: not caught for sure"))))))
 
 (deftest a-chaser-behind-a-wall-is-timed-along-its-way-round-it
   ;; the old arrival ran a straight line through the wall: every way was caught

@@ -15,6 +15,7 @@
             [jobs.lib.threat-field :as field]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
+            [jobs.lib.walk.world :as wworld]
             [jobs.survival.recover-drops.config :as cfg]))
 
 (defn finite [n] (if (js/isFinite n) n :infinite))
@@ -161,7 +162,7 @@
                :danger (max drown-hp (if (or (= "drowning" cause) (wet-pile? wet-at pos)) (cfg/wet-danger) 0))})
         quoted-s (let [mean (second (get-in quoted [:uses :job-time]))] (when (and (number? mean) (js/isFinite mean)) mean))
         threat (cond-> threat wet (-> (update :danger + (:danger wet)) (update :mobs #(vec (cons wet %)))))
-        straight-s (when route (+ (/ (u/dist here pos) (cost/walk-blocks-per-s)) (cost/unseen-route-s kind-at route)))
+        straight-s (when route (+ (/ (u/dist here pos) (cost/walk-blocks-per-s)) (cost/unseen-route-s (wworld/unseen-share p) kind-at route)))
         fetch (cost/fetch-cost {:distance (when pos (* (max straight-s (or quoted-s 0)) (cost/walk-blocks-per-s))) :danger (:danger threat) :elapsed-ms elapsed :cause cause})
         drowns (when-not (:reason fetch) (no-air-way p wet-at pos drown-hp))]
     (cond-> {:value (+ (:value worth) (cost/experience-cost experience))

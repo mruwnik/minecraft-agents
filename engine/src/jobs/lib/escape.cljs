@@ -294,13 +294,14 @@
 
 (defn priced-spot
   "The cheapest cell (jobs.lib.cost seconds: the walk there, plus the walk on to goal along the straight line with its
-  unseen cells at the planner's unknown prices, rest-s) other than feet and the cells in visited (already walked to)
+  unseen cells at the unseen price, wworld/unseen-share, rest-s) other than feet and the cells in visited (already walked to)
   for which (take? cell g rest-s), g its walk's seconds, over the cells steps (level-steps) reaches from feet: tried
   cheapest first, at most cap tried (nil: no cap). nil when none."
   [p feet goal steps take? visited cap]
   (let [kind-at (reach/seen-lookup p reach/kind-of :ground)
         walk-s (fn [a b] (:cost (cost/walk-cost {:distance (apply js/Math.hypot (map - b a))})))
-        rest-s (fn [cell] (+ (walk-s cell goal) (cost/unseen-route-s kind-at (map #(zipmap [:x :y :z] %) (line-cells cell goal)))))]
+        share (wworld/unseen-share p)
+        rest-s (fn [cell] (+ (walk-s cell goal) (cost/unseen-route-s share kind-at (map #(zipmap [:x :y :z] %) (line-cells cell goal)))))]
     (loop [open (sorted-set [(rest-s feet) 0 0 feet]) best {feet 0} n 1 tried 0]
       (when-let [[_ _ g cell :as top] (first open)]
         (let [open (disj open top)

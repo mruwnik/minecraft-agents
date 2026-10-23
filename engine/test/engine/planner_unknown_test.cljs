@@ -17,7 +17,7 @@
   [& cells]
   (pf/snapshot {:blocks (mapv (fn [[x y name props]] (cond-> [x y 2 name] props (conj props))) cells)}))
 
-(def prices {:cell 0.1 :floor 0.3 :peekS 0.7 :aimS 0.1})
+(def prices {:cell 0.4 :peekS 0.7 :aimS 0.1})
 
 (defn unk [m] {:unknown (merge prices m)})
 
@@ -52,27 +52,27 @@
 
 ;; ---- phantom floors ----
 
-(deftest a-level-walk-over-an-unseen-floor-costs-the-aim-and-the-floor
+(deftest a-level-walk-over-an-unseen-floor-costs-the-aim-and-the-unseen-share
   (let [w (line [0 63 "stone"] [1 63 U])
         r (run w (pf/near 1 64 2) (unk {}))]
     (is (found? r))
     (is (= [[0 64 2] [1 64 2]] (pf/cells r)))
-    (is (near? (+ 0.1 (* 0.3 (step-secs r))) (dark-secs r)))
+    (is (near? (+ 0.1 (* 0.4 (step-secs r))) (dark-secs r)))
     (testing "off: void_air is air, nothing to stand on"
       (is (not (found? (run w (pf/near 1 64 2) {})))))))
 
-(deftest unseen-feet-and-head-cells-cost-the-cell-price-each
-  (let [w (line [0 63 "stone"] [1 63 "stone"] [1 64 U] [1 65 U])
-        r (run w (pf/near 1 64 2) (unk {}))]
-    (is (found? r))
-    (is (near? (* 0.1 2 (step-secs r)) (dark-secs r)))))
+(deftest a-move-into-unseen-cells-costs-the-unseen-share-once
+  (doseq [unseen [[[1 64 U] [1 65 U]] [[1 65 U]]]]
+    (let [r (run (apply line [0 63 "stone"] [1 63 "stone"] unseen) (pf/near 1 64 2) (unk {}))]
+      (is (found? r))
+      (is (near? (* 0.4 (step-secs r)) (dark-secs r))))))
 
 (deftest a-jump-up-onto-an-unseen-floor-costs-the-aim
   (let [w (line [0 63 "stone"] [1 64 U])
         r (run w (pf/near 1 65 2) (unk {}))]
     (is (found? r))
     (is (= (:jump pf/MOVE) (:move (last-step r))))
-    (is (near? (+ 0.1 (* 0.3 (step-secs r))) (dark-secs r)))))
+    (is (near? (+ 0.1 (* 0.4 (step-secs r))) (dark-secs r)))))
 
 (def drop-1 (line [0 63 "stone"] [1 62 U]))
 (def drop-2 (line [0 63 "stone"] [1 61 U]))
@@ -81,7 +81,7 @@
   (let [r (run drop-1 (pf/near 1 63 2) (unk {:seeDepth 1}))]
     (is (found? r))
     (is (= (:drop pf/MOVE) (:move (last-step r))))
-    (is (near? (+ 0.7 (* 0.3 (step-secs r))) (dark-secs r)))
+    (is (near? (+ 0.7 (* 0.4 (step-secs r))) (dark-secs r)))
     (is (not (:darkRefused r)))))
 
 (deftest a-drop-past-the-see-depth-is-refused-in-the-dark
@@ -137,7 +137,7 @@
   (let [r (run drop-2 (pf/near 1 62 2) (lights {}))]
     (is (found? r))
     (is (true? (:light (last-step r))))
-    (is (near? (+ 5 0.7 (* 0.3 (step-secs r))) (dark-secs r)))))
+    (is (near? (+ 5 0.7 (* 0.4 (step-secs r))) (dark-secs r)))))
 
 (deftest light-only-at-a-lightable-takeoff
   (let [deep (fn [d] (pf/snapshot {:blocks [[0 63 2 "stone"] [1 (- 63 d) 2 U]] :fill [[0 40 2 0 62 2 "stone"]]}))
@@ -410,3 +410,19 @@
                            (found? (run w (pf/near 0 65 2 0) (unk {:id @seagrass-id}) {:x 10 :y y :z 2})))
     false 70
     true 70))
+
+;; ---- the unseen price decides a way round ----
+
+(def pond-across
+  "Stone ground x 0..14, z 0..8 (stand y 64), a pond 3 deep across all of it at x 4..10; past its end, at z -1, a row of
+  cells the body has not seen (ground and air): the only dry way round is a guess."
+  (pf/snapshot {:fill [[0 60 0 14 63 8 "stone"] [4 61 0 10 63 8 "water"] [3 60 -1 11 66 -1 U]]}))
+
+(deftest a-way-round-over-unseen-cells-against-a-seen-swim-is-decided-by-the-unseen-price
+  (let [kit {:weapon "stone_sword" :equipment nil}
+        round? (fn [counts]
+                 (let [r (run pond-across (pf/near 12 64 2) (unk {:cell (cost/unseen-share counts kit)}) {:x 2 :y 64 :z 2})]
+                   (is (found? r))
+                   (boolean (some #(neg? (:z %)) (get-in r [:path :steps])))))]
+    (is (true? (round? {:k 98 :n 100})) "past open ground the unseen way round likely goes on: shorter than the swim")
+    (is (false? (round? {:k 50 :n 100})) "among dead ends it likely ends: the swim is taken")))

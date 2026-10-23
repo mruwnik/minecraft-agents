@@ -70,7 +70,7 @@
      damage, so no damageBudget), the first k hp costing options.drownPrices[k] seconds (nil: damageWeight each); drowning
      with the plan's certain damage to options.health (20) is lethal, each air-out (under since the last breath) counting its 2 hp hits as ceil(seconds + costs.drownSlack (1)): refused (reason air-lethal) unless options.costs.lethalAir is 1 (go-to :costs :lethal-air, breathe's), then it costs LETHAL-S (times the dearest second the caller's prices allow) more, so a lethal plan comes back only when no other does. Any
      other plan swims no further than airLimit from airUsed.
-   - options.unknown (nil: off, every loaded cell as it is) {id floorId cell floor seeDepth seeLit seeLitDepth lightDepth peekS aimS lightCost lightOk
+   - options.unknown (nil: off, every loaded cell as it is) {id floorId cell seeDepth seeLit seeLitDepth lightDepth peekS aimS lightCost lightOk
      torchBase missed noLight}: a cell of state id (void_air) is one the body has not seen, air to the body (but never breath: a swim in water under an unseen head cell drains the air like a dive). A stand on such a
      floor is a phantom floor (read as floorId, stone; not under water): allowed only after a move the walk can stop before
      (walk, diagonal, corner, jump, drop; not after a gap, climb, trapdoor open, swim, exit or bounce: else result unseenRefused; a
@@ -78,8 +78,8 @@
      up: 0) within seeDepth, or within seeLitDepth (10) over known air that seeLit(x, y, z) calls lit (1), or
      lit by a torch (lightCost seconds, the step's light true) from a takeoff whose feet are known air on a torchBase floor
      (Uint8Array by state id), d at most lightDepth (5), lightOk(x, y, z) not false and not in noLight; else result darkRefused and
-     darkBest {x y z h}. A floor in missed is never seen, only lit. The floor under a door's lower half is implied. Each unseen feet or
-     head cell costs cell, a phantom floor floor, times the move's seconds, and peekS a drop onto it, aimS a level or up step
+     darkBest {x y z h}. A floor in missed is never seen, only lit. The floor under a door's lower half is implied. A move with an
+     unseen feet, head or floor cell costs cell times its seconds, and peekS a drop onto a phantom floor, aimS a level or up step
      (in cost.darkSeconds; jobs.lib.cost/unknown-prices). No fall goes into an unseen cell, risk looks stop there, and no
      goal-enclosed, goal-not-standable or start-enclosed proof rests on one. missed and noLight are Sets of cell-key.
    - options.stopAtEdge: with the goal unloaded, the search names the first node it expands at the loaded edge (edgeStop)
@@ -254,12 +254,12 @@
 (defn- first-id [^js table name] (aget (.get (.-nameIds table) name) 0))
 
 (defn- unknown-factor
-  "The most options.unknown adds to a second of walking (for lethal-seconds): two unseen cells and a phantom floor, and the
-  dearest of a peek, an aim and a torch over the shortest move (a sprinted block); 0 when off."
+  "The most options.unknown adds to a second of walking (for lethal-seconds): an unseen move, and the dearest of a peek, an
+  aim and a torch over the shortest move (a sprinted block); 0 when off."
   [^js unknown ^js costs]
   (if (nil? unknown)
     0
-    (+ (* 2 (or-else (.-cell unknown) 0)) (or-else (.-floor unknown) 0)
+    (+ (or-else (.-cell unknown) 0)
        (/ (+ (js/Math.max (or-else (.-peekS unknown) 0) (or-else (.-aimS unknown) 0)) (js/Math.max 0 (or-else (.-lightCost unknown) 0)))
           (js/Math.min (unchecked-get costs "walkS") (unchecked-get costs "sprintS"))))))
 
@@ -405,10 +405,10 @@
      (not (pos? (or-else (unchecked-get costs "lethalAir") 0))) false
      ;; drown-runs drown-closed move-run move-closed lethal-s
      (js/Float64Array. cap) (js/Float64Array. cap) 0 0 lethal-s
-     ;; unk-id unk-floor-id unk-cell unk-floor see-depth see-lit see-lit-depth light-depth peek-s aim-s light-cost light-ok torch-base missed no-light
+     ;; unk-id unk-floor-id unk-cell see-depth see-lit see-lit-depth light-depth peek-s aim-s light-cost light-ok torch-base missed no-light
      (if unk (or-else (.-id unknown) (first-id table "void_air")) -1)
      (if unk (or-else (.-floorId unknown) (first-id table "stone")) 0)
-     (if unk (or-else (.-cell unknown) 0) 0) (if unk (or-else (.-floor unknown) 0) 0)
+     (if unk (or-else (.-cell unknown) 0) 0)
      (if unk (or-else (.-seeDepth unknown) 0) 0) see-lit
      (if unk (or-else (.-seeLitDepth unknown) unk-defaults/SEE-LIT-DEPTH) 0) (if unk (or-else (.-lightDepth unknown) unk-defaults/LIGHT-DEPTH) 0)
      (if unk (or-else (.-peekS unknown) 0) 0) (if unk (or-else (.-aimS unknown) 0) 0)
