@@ -421,21 +421,23 @@
         seen-ttl-s (settings/get settings ::seen-ttl-s)
         entity-ttl-s (settings/get settings ::entity-ttl-s)
         searched-ttl-s (settings/get settings ::searched-ttl-s)
-        seen #(vec (takeable c (sense (:primitives c) names scan-radius)))
+        sensed #(sense (:primitives c) names scan-radius)
         short-by? #(< (count (add-found (:found (ctx/mem c) []) % want)) want)
-        short? #(short-by? (seen))
-        first-look (seen)
+        short? #(short-by? (vec (takeable c (sensed))))
+        first-sensed (sensed)
+        first-look (vec (takeable c first-sensed))
         looking? (short-by? first-look)
         _ (when looking?
             (if (breath/in-water? (:primitives c))
               (look/see! c (look/search-effort) :search)
               (when-not (await (look/survey! c :near (look/search-effort))) (look/see! c (look/search-effort) :search))))
         _ (do (ctx/update-mem! c dissoc :vantage) (when looking? (await (hear-lead! c names short?))))
-        sighted (if looking? (seen) first-look)
+        all-seen (if looking? (sensed) first-sensed)
+        sighted (if looking? (vec (takeable c all-seen)) first-look)
         [x y z] (here c)
         [ox _ oz] (:origin (ctx/mem c))]
     (notes/note! c (conj (mapv #(assoc % :kind :seen :ttl-ms (* 1000 (if (:id %) entity-ttl-s seen-ttl-s))) sighted)
-                         {:kind :searched :what names :pos [x y z] :r scan-radius :ttl-ms (* 1000 searched-ttl-s)}))
+                         {:kind :searched :what names :saw (vec (distinct (map :what all-seen))) :pos [x y z] :r scan-radius :ttl-ms (* 1000 searched-ttl-s)}))
     (ctx/update-mem! c (fn [m] (-> m
                                    (update :scans (fnil inc 0))
                                    (update :farthest (fnil max 0) (js/Math.round (xz-dist [x z] [ox oz])))
@@ -560,7 +562,7 @@
   risks under rock or in the dark where the body stands and past the known threats along the straight way, jobs.lib.threats/threats-of), booked as :leg-price: nil when it is affordable (or unpriced,
   or no route is known: the walk fails that leg alone), :continue while go-to's quote search goes on (it resumes at the
   next call), else the :price ending: the price is more than what is left of the worth times the chance a look round
-  there finds one (cost/look-chance over the searched notes; 1 for a walk to a noted target, sure?)."
+  there finds one (cost/look-chance over every live searched note, :use-notes false too; 1 for a walk to a noted target, sure?)."
   [c leg sure?]
   (when-let [worth (:worth (:args c))]
     (let [p (:primitives c)
@@ -568,7 +570,7 @@
           q (await (ctx/quote c 'jobs.movement.go-to (leg-args c leg)))
           at {:x x :y y :z z}
           price (cost/leg-price q (threats/route-death-cost c {:underground? (sh-sense/buried? p) :night? (look/dark-here? p)} at))
-          chance (if sure? 1 (cost/look-chance (searched-notes c (ctx/mem c) (notes/notes c)) (targets c) [x z] (:scan-radius (:args c))))]
+          chance (if sure? 1 (cost/look-chance (notes/notes c) (targets c) [x z] (:scan-radius (:args c))))]
       (cond
         (:estimate q) :continue
         (infinite? price) (do (ctx/update-mem! c dissoc :leg-price) nil)

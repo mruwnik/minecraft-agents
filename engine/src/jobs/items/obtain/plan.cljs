@@ -4,9 +4,10 @@
             [engine.game :as game]
             [jobs.lib.crafting-table :as crafting-table]
             [jobs.items.obtain.base :refer [craft-radius plan-allowed? seen-radius way?]]
-            [jobs.items.obtain.seen :refer [seen-of sheep-in-range shears-source wool-keep]]
+            [jobs.items.obtain.seen :refer [seen-of sheep-in-range shears-source]]
             [jobs.items.obtain.table :refer [gather-needs grass-seeds hand-dug leaves-of material-blocks need-way source-opts stalks wool-color wool?]]
             [jobs.items.recipes :as recipes]
+            [jobs.lib.animal-spare :as spare]
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -45,8 +46,8 @@
     (if-not (some (comp seq wool-of) plans)
       (furnace-free plans)
       (let [sorted (sort-by #(reduce + 0 (vals (wool-of %))) plans)
-            keep-n (if (shears-source c) 0 wool-keep)
-            colors (set (keep (fn [[k n]] (when (or (= 1 n) (> n keep-n)) k)) (frequencies (keep #(.-color %) (sheep-in-range c)))))
+            keep-n (if (shears-source c) 0 spare/wool-keep)
+            colors (set (keep (fn [[k n]] (when (pos? (spare/takeable-adults keep-n n)) k)) (frequencies (keep #(.-color %) (sheep-in-range c)))))
             colors-of (fn [pl] (map wool-color (keys (wool-of pl))))
             ok? (fn [pl] (every? colors (colors-of pl)))
             chosen (or (first (filter ok? sorted)) (first sorted))

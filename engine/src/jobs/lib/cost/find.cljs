@@ -21,8 +21,14 @@
 (defn searched-for? [names {:keys [kind what]}]
   (and (= :searched kind) (every? (set what) names)))
 
+(defn in-vain?
+  "Whether note is a :searched note for every one of names whose look saw none of them (its :saw: kept, barred or
+  baby ones seen still show the land has them)."
+  [names n]
+  (and (searched-for? names n) (not-any? (set (:saw n)) names)))
+
 (defn looked-area
-  "Blocks of ground within ::region (XZ) of [x z] that the :searched notes of ns for every one of names looked over,
+  "Blocks of ground within ::region (XZ) of [x z] that the :searched notes of ns for every one of names looked over in vain (in-vain?),
   each square of `cell` counted once."
   [ns names [x z]]
   (let [region (settings/get settings ::region)
@@ -34,7 +40,7 @@
                                    (<= (js/Math.hypot (- cx x) (- cz z)) region))]
                     (+ (* i 1000003) j)))]
     (->> ns
-         (filter #(searched-for? names %))
+         (filter #(in-vain? names %))
          (filter (fn [{[nx _ nz] :pos r :r}] (<= (js/Math.hypot (- nx x) (- nz z)) (+ region r))))
          (into #{} (mapcat squares))
          count

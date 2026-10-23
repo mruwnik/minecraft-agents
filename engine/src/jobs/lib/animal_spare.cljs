@@ -7,6 +7,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.built :as built]
             [jobs.lib.pen :as pen]
+            [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -31,6 +32,19 @@
   (cond (contains? (off-limits) kind) :off-limits
         (and (spare-pens?) in-own-area?) :pen
         (and (<= 2 adults-of-kind keep) (not starved?)) :kept))
+
+(def wool-keep "Sheep of a colour combat.hunt spares (its :keep default for animals); shears spare them all." 2)
+
+(defn takeable-adults
+  "Of n adults of a kind in sight, how many a hunt sparing `keep` takes: a lone one is no pair (allowed-by :lone)."
+  [keep n]
+  (if (< n 2) n (max 0 (- n keep))))
+
+(defn shears-at-hand
+  "How the inventory gives shears: :carried, :craft (2 iron ingots), else nil."
+  [inv]
+  (cond (pos? (storage/carried inv "shears")) :carried
+        (>= (storage/carried inv "iron_ingot") 2) :craft))
 
 (defn allowed-by
   "Which rule let a hunt take an adult why left alone: :pen-taken (::spare-pens false and it stood in a pen), :lone (the only

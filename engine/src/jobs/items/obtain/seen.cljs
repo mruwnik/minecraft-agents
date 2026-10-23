@@ -3,6 +3,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.items.obtain.base :refer [animal-radius seen-radius]]
             [jobs.lib.access :as access]
+            [jobs.lib.animal-spare :as spare]
             [jobs.items.obtain.chest :as chest]
             [jobs.items.obtain.table :refer [grass-seeds]]
             [jobs.lib.animals :as animals]
@@ -18,18 +19,13 @@
   [c]
   (remove #(or (true? (.-baby %)) (true? (.-sheared %))) (animals/herd (:primitives c) "sheep" (animal-radius))))
 
-(def wool-keep "Sheep of a colour combat.hunt spares (its :keep default for animals); a colour with no more is no source." 2)
-
 (defn shears-source
   "How the body gets shears for wool: :carried, :craft (2 iron ingots carried), :chest (shears or 2 iron ingots in a
   booked chest the chest source would walk to: allowed, not given up, not beyond far-chest), else nil."
   [c]
-  (let [inv (u/inventory (:primitives c))
-        in-chest (fn [item n] (some #(>= (get (:stock %) item 0) n) (chest/candidates c [item])))]
-    (cond
-      (pos? (storage/carried inv "shears")) :carried
-      (>= (storage/carried inv "iron_ingot") 2) :craft
-      (or (in-chest "shears" 1) (in-chest "iron_ingot" 2)) :chest)))
+  (let [in-chest (fn [item n] (some #(>= (get (:stock %) item 0) n) (chest/candidates c [item])))]
+    (or (spare/shears-at-hand (u/inventory (:primitives c)))
+        (when (or (in-chest "shears" 1) (in-chest "iron_ingot" 2)) :chest))))
 
 (defn gather-carried [p {:keys [key]}]
   (reduce + 0 (for [[k v] (storage/carried-totals (u/inventory p)) :when (if (= "log" key) (trees/log-name? k) (= key k))] v)))

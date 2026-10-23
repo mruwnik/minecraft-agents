@@ -124,7 +124,7 @@
 (defn searched-for [what r]
   (for [x (range (- r) (inc r) 16) z (range (- r) (inc r) 16)] {:kind :searched :what [what] :pos [x 64 z] :r 24}))
 
-(def sheep {:id 9 :name "sheep" :kind "passive" :pos {:x 6 :y 64 :z 0}})
+(defn sheep [id color] {:id id :name "sheep" :kind "passive" :color color :pos {:x (+ 4 id) :y 64 :z 0}})
 
 (deftest land-searched-for-sheep-in-vain-holds-the-errand-till-wool-or-a-sheep-or-new-ground
   (are [opts expected] (= expected (holds? (merge {:entries slept-long-ago} opts)))
@@ -133,8 +133,15 @@
     {:notes (searched-for "sheep" 128)} false
     {:notes (searched-for "cow" 128)} true
     {:notes (map #(update % :pos (fn [[x y z]] [(+ x 1000) y z])) (searched-for "sheep" 128))} true
-    {:notes (searched-for "sheep" 128) :entities [sheep]} true
-    {:notes (searched-for "sheep" 128) :entities [(assoc sheep :baby true)]} false
+    {:notes (map #(assoc % :saw ["sheep"]) (searched-for "sheep" 128))} true
+    {:notes (searched-for "sheep" 128) :inv [{:name "white_wool" :count 1}] :entities [(sheep 1 "white")]} false
+    {:notes (searched-for "sheep" 128) :inv [{:name "white_wool" :count 2}] :entities [(sheep 1 "white")]} true
+    {:notes (searched-for "sheep" 128) :inv [{:name "white_wool" :count 2}] :entities [(sheep 1 "red")]} false
+    {:notes (searched-for "sheep" 128) :inv [{:name "white_wool" :count 2}] :entities [(assoc (sheep 1 "white") :baby true)]} false
+    {:notes (searched-for "sheep" 128) :inv [{:name "white_wool" :count 1}] :entities [(sheep 1 "white") (sheep 2 "white")]} false
+    {:notes (searched-for "sheep" 128) :inv [{:name "white_wool" :count 1}] :entities (map #(sheep % "white") (range 1 5))} true
+    {:notes (searched-for "sheep" 128) :inv [{:name "white_wool" :count 1} {:name "shears" :count 1}] :entities [(sheep 1 "white") (sheep 2 "white")]} true
+    {:notes (searched-for "sheep" 128) :inv [{:name "white_wool" :count 1} {:name "iron_ingot" :count 2}] :entities [(sheep 1 "white") (sheep 2 "white")]} true
     {:notes (searched-for "sheep" 128) :inv [{:name "red_wool" :count 3}]} true
     {:notes (searched-for "sheep" 128) :inv [{:name "white_wool" :count 2} {:name "string" :count 4}]} true
     {:notes (searched-for "sheep" 128) :inv [{:name "white_wool" :count 2} {:name "red_wool" :count 1}]} false))

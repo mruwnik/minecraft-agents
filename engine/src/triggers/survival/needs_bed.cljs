@@ -11,6 +11,7 @@
   (:require [clojure.string :as str]
             [engine.notes :as notes]
             [engine.settings :as settings]
+            [jobs.lib.animal-spare :as spare]
             [jobs.lib.body :as body]
             [jobs.lib.cost :as cost]
             [jobs.lib.dawn :as dawn]
@@ -39,26 +40,31 @@
 (def bed-wool "Wool of one colour the game's bed recipe takes." 3)
 
 (defn wool-carried
-  "The most wool of one colour carried, every 4 string counting a white one (the game's string recipe)."
+  "Wool carried by colour (\"white\"), every 4 string counting a white one (the game's string recipe)."
   [items]
   (let [t (storage/carried-totals items)]
-    (apply max (+ (get t "white_wool" 0) (quot (get t "string" 0) 4))
-           (keep (fn [[k v]] (when (str/ends-with? k "_wool") v)) t))))
+    (merge-with + {"white" (quot (get t "string" 0) 4)}
+                (into {} (keep (fn [[k v]] (when (str/ends-with? k "_wool") [(subs k 0 (- (count k) 5)) v]))) t))))
 
 (defn wool-way?
-  "Whether the body knows a way to a bed's wool that pays: enough carried, an adult unsheared sheep in sight, or a look
-  round where it stands that is worth a trip: cost/look-chance over the ground the notes (kn's store) searched for sheep
-  in vain round here, times what the bed is worth (cost/find-worth). Ground nobody searched for sheep pays; every look
-  that found none lowers the chance, so the errand comes again only on new ground or with a sheep seen."
+  "Whether the body knows a way to a bed's wool that pays: a colour whose wool carried and the adult unsheared sheep of
+  it in sight a hunt or shear takes (animal-spare/takeable-adults: a hunt spares the last wool-keep, shears none) make
+  bed-wool, or a look round where it stands worth a trip: cost/look-chance over the ground the notes (kn's store)
+  searched for sheep in vain round here, times what the bed is worth. Ground nobody searched for sheep pays; every look
+  that found none lowers the chance, so the errand comes again only on new ground or with sheep enough seen."
   [p view kn]
   (let [at (u/self-pos {:primitives p})
+        inv (u/inventory p)
+        spared (if (spare/shears-at-hand inv) 0 spare/wool-keep)
+        sheep (frequencies (keep #(when-not (or (true? (.-baby %)) (true? (.-sheared %))) (.-color %))
+                                 (look/seen-objs p {:names ["sheep"]})))
+        wool (merge-with + (wool-carried inv) (into {} (map (fn [[k n]] [k (spare/takeable-adults spared n)])) sheep))
         ns (some-> (:notes kn) (notes/all (:now view)))
         r (some #(when (cost/searched-for? ["sheep"] %) (:r %)) ns)]
     (boolean
-     (or (>= (wool-carried (u/inventory p)) bed-wool)
-         (seq (remove #(or (true? (.-baby %)) (true? (.-sheared %))) (look/seen-objs p {:names ["sheep"]})))
+     (or (some #(>= % bed-wool) (vals wool))
          (nil? r)
-         (> (* (cost/look-chance ns ["sheep"] [(:x at) (:z at)] r) (cost/find-worth (cost/death-body p view) ["white_bed"] at 1))
+         (> (* (cost/look-chance ns ["sheep"] [(:x at) (:z at)] r) (cost/worth-to (cost/death-body p view) ["white_bed"] at))
             (cost/trip))))))
 
 (defn needs-bed

@@ -22,4 +22,17 @@
    :act [[:job (jobs.explore.search {:target "sheep" :worth 1000 :within 12 :scan-radius 8 :settings {:jobs.explore.search/spacing 8} :spend {:job-time 60}})]]
    :expect [{:event {:source :job :kind :stopped :data {:why :distance}} :within-s 70 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:why :price}} :for-s 70 :of-job true :until {:source :job :kind :stopped}}]
-   :after [[:body-far [16.5 0 16.5] 4]]}]}
+   :after [[:body-far [16.5 0 16.5] 4]]}
+  ;; ffb7623c: a look that saw a sheep the body may not take (in another's zone) noted its ground, but not as searched in vain for
+  ;; sheep: should-fail of the first case, the priced search walks its legs.
+  {:name "a-look-that-saw-a-sheep-in-anothers-zone-is-no-ground-searched-in-vain"
+   :zones [{:name "fold" :min [24 -2 12] :max [30 4 20] :owner "Other"}]
+   :act [[:summon "sheep" [27.5 0 16.5] "{NoAI:1b}"]
+         [:job (jobs.explore.search {:target "sheep" :takeable true :scan-radius 128 :settings {:jobs.explore.search/max-legs 0}})]
+         [:await {:source :job :kind :stopped :data {:why :legs}} 30]
+         [:job (jobs.movement.go-to {:pos #at [10 0 16] :range 1})]
+         [:await {:source :job :kind :completed} 30]
+         [:job (jobs.explore.search {:target "sheep" :takeable true :worth 1000 :within 12 :scan-radius 8 :settings {:jobs.explore.search/spacing 8} :spend {:job-time 60}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:why :distance}} :within-s 70 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:why :price}} :for-s 70 :of-job true :until {:source :job :kind :stopped}}]
+   :after [[:body-far [10.5 0 16.5] 4]]}]}

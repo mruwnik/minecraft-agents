@@ -297,7 +297,9 @@
               any (await (search! {:target "sheep" :max-distance 20 :settings {:jobs.explore.search/max-legs 0}} spec))
               own (await (search! {:target "sheep" :takeable true :max-distance 20 :settings {:jobs.explore.search/max-legs 0}} spec))]
           (is (= [[6 64 6]] (map :pos (:found (found-of any)))))
-          (is (= :stopped (:kind (not-found-of own))) "the sheep in another's zone is not counted"))))))
+          (is (= :stopped (:kind (not-found-of own))) "the sheep in another's zone is not counted")
+          (is (= ["sheep"] (:saw (first (filter #(= :searched (:kind %)) (file-notes own)))))
+              "its look still saw a sheep: the ground is not searched in vain (cost/look-chance)"))))))
 
 (deftest a-target-seen-beyond-the-scan-radius-is-found-without-a-leg
   (async done
@@ -369,8 +371,10 @@
         (let [marks (fn [what] (for [[x z] (search/spiral-points [0 0] 16 128)]
                                  {:kind :searched :what [what] :pos [x 64 z] :r 24 :by "Other" :t 1 :until 9e15}))
               sheep (not-found-of (await (search! {:target "sheep" :worth 1000 :max-distance 32} {} 400 #(write-other! % "Other" (marks "sheep")))))
+              fresh (not-found-of (await (search! {:target "sheep" :worth 1000 :max-distance 32 :use-notes false} {} 400 #(write-other! % "Other" (marks "sheep")))))
               cows (await (search! {:target "sheep" :worth 1000 :max-distance 32} {} 400 #(write-other! % "Other" (marks "cow"))))]
           (is (= [:price 0] ((juxt :why #(get-in % [:coverage :legs])) sheep)) "no sheep for 128 blocks round: a look here is not worth a walk")
+          (is (= [:price 0] ((juxt :why #(get-in % [:coverage :legs])) fresh)) "older looks price the chance under :use-notes false too")
           (is (re-find #"at a \d+\.\d% chance a look there finds one" (:text sheep)))
           (is (seq (walks cows)) "ground searched for cows says nothing of sheep"))))))
 
