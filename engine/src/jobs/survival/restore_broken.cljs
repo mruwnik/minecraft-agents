@@ -90,8 +90,7 @@
   [c]
   (let [p (:primitives c)]
     {:kind-at (reach/seen-lookup p)
-     ;; raw on purpose: enclosure confirms go-to's own shut-in verdict, and a dark pocket's walls are unseen
-     :enclosed (delay (reach-room/enclosed? p :raw))
+     :enclosed (delay (reach-room/enclosed? p :ground))
      :reaches (volatile! {})
      :seals (volatile! {})
      :cells-left (volatile! (max-search-cells))}))

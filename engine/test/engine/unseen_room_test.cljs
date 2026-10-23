@@ -5,6 +5,8 @@
             [engine.test-util :as tu]
             [jobs.build.from-plan.cells :as fp-cells]
             [jobs.farm.harvest :as harvest]
+            [jobs.gather.mine.targets :as targets]
+            [jobs.lib.tidy :as tidy]
             [jobs.lib.shelter.inside :as inside]
             [jobs.movement.go-to.escalate-choose :as choose]
             [jobs.movement.go-to.restore :as restore]
@@ -57,3 +59,22 @@
                        (set (for [x [-1 0 1] z [-1 0 1] y [64 65 66] :when (not= 0 x z)] [x y z])))]
     (is (true? (choose/air-pocket? {:primitives seen} {:reason :air})))
     (is (false? (choose/air-pocket? {:primitives hidden} {:reason :air})))))
+
+(def one-doorway
+  "The sealed cell with a doorway east, its outside and the cell above the doorway not looked at."
+  (apply dissoc sealed ["1,64,0" "1,65,0"]))
+
+(defn doorway-p []
+  (hiding (tu/fake {:self {:pos body} :floor [-30 -30 30 30] :blocks one-doorway :inventory [{:name "stone" :count 4}]})
+          (set (for [x (range 2 8) z (range -3 4) y [64 65]] [x y z]))))
+
+(deftest an-escalation-hole-is-kept-while-the-only-way-out-is-unseen
+  (let [hole {:cell [1 66 0] :action :dig :was "stone" :now "air" :escalation true :any-of ["stone"]}]
+    (is (= :shut-in (tidy/why-not (doorway-p) hole)))))
+
+(deftest a-restore-pass-reads-hidden-walls-as-open-ground-for-the-enclosure
+  (is (false? @(:enclosed (restore-broken/probe {:primitives (walled-p)})))))
+
+(deftest digging-the-floor-of-a-way-whose-headroom-is-unseen-is-not-the-last-exit
+  (let [p (hiding (tu/fake {:self {:pos body} :floor [-30 -30 30 30] :blocks one-doorway}) #{[1 65 0]})]
+    (is (false? (targets/last-exit? {:primitives p} [1 63 0])))))

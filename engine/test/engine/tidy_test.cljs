@@ -204,7 +204,7 @@
           (is (= "1 broken blocks not restored, 2 restored" (:text (first (zs/trespass seen :stopped)))))
           (is (= 1 (count (tidy-entries eng)))))))))
 
-(def standing-in-the-cell {:floor [-5 -5 5 5] :inventory [{:name "stone" :count 2}]})
+(def standing-in-the-cell {:floor [-25 -25 25 25] :inventory [{:name "stone" :count 2}]})
 
 (deftest restore-steps-clear-of-the-cell-before-placing-in-it
   (async done
@@ -227,7 +227,7 @@
           (is (= 1 (count (tidy-entries eng))) "kept for when the body is out")
           (is (= [[{:cell [0 65 0] :was "stone" :why :occupied}]] (mapv :cells (not-restored-runs seen)))))))))
 
-(def with-hitbox {:bodyHitbox true :floor [-8 -8 8 8] :inventory [{:name "stone" :count 12}]})
+(def with-hitbox {:bodyHitbox true :floor [-25 -25 25 25] :inventory [{:name "stone" :count 12}]})
 
 (defn dug-cell [cell] {:cell cell :action :dig :was "stone" :now "air" :zone "vault" :tries 0})
 
@@ -308,7 +308,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup (assoc enclosed-body :floor [-5 -5 5 5] :inventory [{:name "stone" :count 2}])
+        (let [{:keys [eng p]} (setup (assoc enclosed-body :floor [-25 -25 25 25] :inventory [{:name "stone" :count 2}])
                                              [(zs/whole-zone "Miles")])]
           (core/register-reflex! eng {:trigger :tidy-pending})
           (core/submit! eng '(jobs.survival.breathe) {})
