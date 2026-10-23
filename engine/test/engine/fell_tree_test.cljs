@@ -626,7 +626,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [world {:blocks (merge (lt/tree 6 0 "oak" 4) {"7,65,0" "oak_log" "7,66,0" "oak_log"}) :inventory []}
+        (let [world {:blocks (merge (lt/tree 6 0 "oak" 4) {"6,63,0" "dirt" "7,65,0" "oak_log" "7,66,0" "oak_log"}) :inventory []}
               {:keys [p out]} (await (fell world {:radius 10 :ways #{:carried :pillar}} 100))]
           (is (= 6 (:logs out)) "trunk and branch")
           (is (= 6 (count (fm/digs p))))
@@ -636,7 +636,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [world {:blocks (merge (lt/tree 6 0 "oak" 4) {"7,65,0" "oak_log" "7,66,0" "oak_log"}) :inventory []}
+        (let [world {:blocks (merge (lt/tree 6 0 "oak" 4) {"6,63,0" "dirt" "7,65,0" "oak_log" "7,66,0" "oak_log"}) :inventory []}
               zones [{:name "vault" :min [7 65 0] :max [7 66 0] :allow #{:place}}]
               {:keys [p out]} (await (fm/with-zones zones #(fell world {:radius 10 :ways #{:carried :pillar}} 100)))]
           (is (= 4 (:logs out)) "the trunk only")

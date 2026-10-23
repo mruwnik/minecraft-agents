@@ -885,6 +885,8 @@
         wall (tu/box 3 64 -2 3 66 2 "stone")]
     (is (holds-after-hurt? {} 1500 arrow) "shot from the east in the open")
     (is (not (holds-after-hurt? {:blocks wall} 1500 arrow)) "a wall between the body and the shooter's spot stops the arrows")
+    (is (holds-after-hurt? {:blocks (assoc wall "0,63,0" "air")} 1500 arrow)
+        "the floor open under the body: a hit shows the way, not the height, so a shooter down the shaft has a line of fire")
     (is (not (holds-after-hurt? {} 1500 {:damageType "arrow"})) "no way known: no spot")
     (is (not (holds-after-hurt? {} 1500 {:attacker {:name "zombie"} :dir {:x 1 :z 0}})) "a melee hit")
     (is (not (holds-after-hurt? {} -4000 arrow)) "the shot is older than the shot window")))

@@ -29,7 +29,9 @@
   An item is tried once; one that is gone, cannot be reached or picked up is skipped. A drop that slid to another cell while the body
   walked or dug to it is judged again there (at most ::max-moves times).
   An item more than 2 blocks off (not above the feet), or more than a block lower than the feet, is walked to first (a jobs.movement.go-to child, range 1, which prices
-  falls and dangers); one it cannot reach is left, with a debug collect-drops.left {:reason :unreachable}.
+  falls and dangers); one it cannot reach is left, with a debug collect-drops.left {:reason :unreachable}. A nearer one whose
+  straight way crosses a drop (a shaft between) is walked to the same way. A body whose centre overhangs a drop first steps onto
+  the block holding it up; failing that the drop is left {:reason :unsafe-floor}.
   A drop in water with a known hostile within the hostile radius of it is left, with {:reason :water-danger}.
   An item lower than the feet in a hole the caller dug (:holes) is walked to only when it lies one block down at most and
   the body has seen the floor under it solid and safe and the cells round it (no lava, fluid or cave opening, nothing
@@ -234,6 +236,37 @@
   "Whether item lies beyond the act's last step (over 2 blocks off) and not above the feet: its walk goes through go-to, which prices the route."
   [c item]
   (boolean (and (.-pos item) (not (high? c item)) (> (u/dist (sh-sense/feet (:primitives c)) (u/pos-of (.-pos item))) 2))))
+
+(defn gap-on-way?
+  "Whether the act's own walk to item (it plans on the raw world, unpriced) would cross a drop: from the feet column to
+  the one before the item's, along the straight line, a column with no seen solid block at the feet height or the two
+  under it. Such a walk goes through go-to, which prices the fall."
+  [c item]
+  (let [p (:primitives c)
+        {fx :x fy :y fz :z} (u/self-pos c)
+        [ix _ iz] (item-cell item)
+        {px :x pz :z} (u/pos-of (.-pos item))
+        y (js/Math.floor fy)
+        n (js/Math.ceil (* 4 (js/Math.hypot (- px fx) (- pz fz))))
+        cols (distinct (for [i (range (inc n))
+                             :let [t (/ i (max n 1))]]
+                         [(js/Math.floor (+ fx (* t (- px fx)))) (js/Math.floor (+ fz (* t (- pz fz))))]))]
+    (boolean (some (fn [[x z]] (not-any? #(sh-sense/solid-at? p {:x x :y % :z z}) [y (dec y) (- y 2)]))
+                   (remove #{[ix iz]} cols)))))
+
+(defn ^:async footing!
+  "A body whose centre overhangs a drop (held up by the edge of a side block, reach/standing-cell) first steps onto
+  the middle of that block's cell: the act's walk starts from the cell under the centre and drops the body. true when
+  the centre is over a floor (now or after the step)."
+  [c]
+  (let [p (:primitives c)
+        feet (sh-sense/feet p)
+        {:keys [x y z] :as stand} (reach/standing-cell p)]
+    (or (= stand feet)
+        (sh-sense/solid-at? p (update feet :y dec))
+        ;; raw moveTo kept: a step within the cell the body already stands on (go-to counts it there already)
+        (do (await (ctx/act c :moveTo #js {:pos #js {:x (+ x 0.5) :y y :z (+ z 0.5)} :range 0.15}))
+            (sh-sense/solid-at? p (update (sh-sense/feet p) :y dec))))))
 
 (defn ^:async walk-down!
   "Walk within a block of item, more than a block lower than the feet (or, with ways, higher: a column top is climbed by
@@ -562,8 +595,10 @@
   (let [item-name (some-> (.-item item) .-name)
         hole? (in-hole? c item)
         moving? (and (at-hole? c item) (nothing-under? c item) (settling? c item))
-        why (when (and hole? (not moving?)) (await (hole-problem! c item)))
-        walk (when (and (not hole?) (or (deep? c item) (far? c item))) (await (walk-down! c item)))
+        why (when-not (await (footing! c)) :unsafe-floor)
+        why (or why (when (and hole? (not moving?)) (await (hole-problem! c item))))
+        walk (when (and (not why) (not hole?) (or (deep? c item) (far? c item) (and (not (high? c item)) (gap-on-way? c item))))
+               (await (walk-down! c item)))
         dig? (and (:dig (:args c)) (or (= :unreachable walk) (= :too-deep why)))
         dug (when dig? (await (dig-to! c item)))
         dig-why (when-not (#{nil :dug :continue} dug) dug)

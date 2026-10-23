@@ -1,0 +1,30 @@
+;; Card fc1247d8 (trial: a body held up by the edge of a block, its centre over a 9-deep shaft into a skeleton's cave).
+;; A stone mass x 12..20, z 12..20, y 0..8 (lit cell); the shaft is the column x 16 z 16, y 0..8, open to the plot floor.
+;; The body stands at [16.2 9 16.5]: its box reaches 0.1 into x 15, so the block [15 8 16] holds it up.
+;; dig-from-a-shaft-lip-collects-without-falling: blocks.dig of the stone [17 9 16] across the shaft. The drop's walk must
+;; not start from the cell under the centre (the act's own walk dropped the trial body down the shaft): the body steps onto
+;; [15 9 16] and goes round the shaft (go-to). Should-succeed: dug and collected, no hurt, the body still up on the mass.
+;; shot-up-a-shaft-under-the-body-fires-hostile-near: the body in a closet on the mass (walls and roof seen, lit), floor
+;; open under its centre down the shaft; a skeleton at the shaft's foot shoots up it. A hit shows the way, not the height:
+;; the hostile-near reflex must fire (the trial body took two hits there with the reflex silent).
+{:defaults
+ {:tags [:survival :collect :hostile] :time :any
+  :plot {:height 16}
+  :blocks [[:fill [12 0 12] [20 8 20] "stone"] [:fill [16 0 16] [16 8 16] "air"]]
+  :limit-s 90}
+ :cases
+ [{:name "dig-from-a-shaft-lip-collects-without-falling"
+   :blocks [[:set [17 9 16] "stone"]]
+   :body {:at [16.2 9 16.5] :yaw -90 :settle-s 2 :inventory [["iron_pickaxe" 1]]}
+   :act [[:job (jobs.blocks.dig {:pos #xyz [17 9 16]})]]
+   :expect [{:event {:source :job :kind :completed :data {:dug true :collected 1}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:block [17 9 16] "air"] [:item "cobblestone" 1] [:body-far [16.5 0 16.5] 5]]}
+  {:name "shot-up-a-shaft-under-the-body-fires-hostile-near"
+   :mobs :keep
+   :register [{:trigger :hostile-near}]
+   :blocks [[:fill [14 9 15] [17 11 17] "stone"] [:fill [15 9 16] [16 10 16] "air"]]
+   :body {:at [16.2 9 16.5] :yaw -90 :settle-s 2 :effects [["regeneration" 120 1]]}
+   :act [[:summon "skeleton" [16.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :body :kind :hurt :data {:causes [:has "skeleton"]}} :within-s 60}
+            {:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 70}]}]}

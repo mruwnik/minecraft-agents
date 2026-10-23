@@ -473,6 +473,23 @@
             (is (= 1 (:collected result)))
             (is (empty? (:left result)))))))))
 
+(deftest a-body-held-up-by-the-edge-of-a-shaft-steps-onto-its-floor-and-walks-round-the-shaft-to-the-drop
+  ;; the collect act plans from the cell under the body's centre: from the lip it walked the body into the shaft
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (bd/setup {:self {:pos {:x 1.2 :y 64 :z 0.5}} :bodyHitbox true :blocks {"1,63,0" "air"}})
+              at-collect (atom [])]
+          (drop! p [2 64 0] "cobblestone")
+          (.override (.-world p) "collect"
+                     (fn [token args impl] (swap! at-collect conj (get-in @(fake/state p) [:self :pos])) (impl token args)))
+          (let [result (await (tu/child-outcome eng job {:radius 6} 30))]
+            (is (= 1 (:collected result)))
+            (is (seq @at-collect))
+            (is (not-any? (fn [[x _ z]] (= [1 0] [(js/Math.floor x) (js/Math.floor z)])) @at-collect)
+                "the act never starts with the body's centre over the shaft")
+            (is (some #(and (= :child_started (:kind %)) (= :walk (:slot %))) @seen) "go-to took the way past the shaft")))))))
+
 (deftest a-drop-that-entered-the-inventory-without-the-collect-act-reporting-it-is-counted
   (async done
     (tu/run-async done

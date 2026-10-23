@@ -1428,10 +1428,13 @@
 (deftest an-unseen-shooters-place-is-a-point-out-along-the-way-the-arrow-came-from
   (let [entry (fn [data] {:data data})
         arrow {:damageType "arrow" :dir {:x 1 :z 0}}]
-    (is (= [{:x 12.5 :y 64 :z 0.5}] (shot/shot-spots [(entry arrow)] {:x 0.5 :y 64 :z 0.5} 12)))
-    (is (= [{:x 0.5 :y 64 :z -11.5}]
-           (shot/shot-spots [(entry {:attacker {:name "pillager"} :dir {:x 0 :z -1}})] {:x 0.5 :y 64 :z 0.5} 12))
+    (is (= {:x 12.5 :y 64 :z 0.5} (first (shot/shot-spots [(entry arrow)] {:x 0.5 :y 64 :z 0.5} 12))))
+    (is (= {:x 0.5 :y 64 :z -11.5}
+           (first (shot/shot-spots [(entry {:attacker {:name "pillager"} :dir {:x 0 :z -1}})] {:x 0.5 :y 64 :z 0.5} 12)))
         "a ranged attacker is a shooter")
+    (is (= [{:x 0.5 :y 52 :z 0.5} {:x 0.5 :y 56 :z 0.5} {:x 0.5 :y 60 :z 0.5}]
+           (take-last 3 (shot/shot-spots [(entry arrow)] {:x 0.5 :y 64 :z 0.5} 12)))
+        "the way gives no height: the spots go up and down it, and straight down a shaft")
     (is (= [] (shot/shot-spots [(entry {:attacker {:name "zombie"} :dir {:x 1 :z 0}}) (entry {:damageType "arrow"})]
                                  {:x 0 :y 64 :z 0} 12))
         "a melee hit, and a shot with no way known, give no spot")))
