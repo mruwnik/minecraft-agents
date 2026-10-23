@@ -1,6 +1,6 @@
 (ns world-test.event-counts
   "tools/event-counts.mjs: recounts the measured combat priors from the trial bodies' event logs, so a setting can cite its k and n.
-  Commands: fold | creeper-exchange | flight-starts | notice-rate | drowned-meets (world-test.drowned-meets; trial bodies only), each [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S]; each folds the logs into the durable counts file first (rows by run id, so counts only grow as logs rotate).
+  Commands: fold | creeper-exchange | flight-starts | notice-rate | drowned-meets (world-test.drowned-meets; trial bodies only) | flee-pace (trial bodies only), each [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S]; each folds the logs into the durable counts file first (rows by run id, so counts only grow as logs rotate).
   spot-returns [--agents DIR] (world-test.spot-returns) and vein-seen [--agents DIR] count from the logs alone, no fold.
   vein-seen: the ore blocks one look saw together (26-connected, a vein's plain and deepslate blocks as one ore) per group, from the
   look tool's :look.observed lists; :capped counts the lists the tool cut short (nearest first, so a far group may be cut).
@@ -17,7 +17,9 @@
   stores {:k catches :n-s weighted seconds} for each class: :other (reach: danger/melee-reach) and :ranged (a mob of threat/ranged?, caught within
   its threat/fire-range, whose line of fire the logs do not hold, so its weight is an upper bound too). A catch ends one sighting: the events
   carry no entity id, so it is the open sighting of the kind nearest the event's spot.
-  Pure parts: scan-line, exchange, starts, deciles, notices, groups, vein-seen."
+  flee-pace: the flee steps (retreat.step-speed) of flights of two steps or more: blocks over the steps' own seconds, and the seconds
+  stood between two steps (cost.danger/::flee-walk-speed, ::flee-stop-s).
+  Pure parts: scan-line, exchange, starts, deciles, notices, groups, vein-seen, flee-steps, pace-report."
   (:require ["fs" :as fs]
             ["path" :as path]
             ["zlib" :as zlib]
@@ -55,6 +57,10 @@
           {:k :decided :t t :gen gen :job (root-job (get-in e [:context :job-id]))
            :mob (get-in e [:data :mob]) :decision (get-in e [:data :decision]) :health (get-in e [:data :health])
            :at (when-not (get-in e [:data :band]) (get-in e [:data :pos]))})
+
+        (str/includes? line ":kind :retreat.step-speed")
+        {:k :step :t t :gen gen :job (second (re-find #":job-id \"([^\"]*)\"" line))
+         :s (num-of #":seconds (-?[\d.]+)" line) :blocks (num-of #":blocks (-?[\d.]+)" line)}
 
         (and (str/includes? line ":kind :watch.saw") (str/includes? line ":how :seen"))
         (let [{{:keys [name distance pos id]} :data} (whole)]
@@ -186,6 +192,27 @@
                  {:last-pos {} :pending [] :out []})
          :out)))
 
+(defn flee-steps
+  "Rows [{:id [gen t] :flight [gen job] :t :s :blocks}] of the flee steps in records (retreat.step-speed: :s the step's own
+  seconds, ending at :t)."
+  [records]
+  (vec (for [{:keys [k gen job t s blocks]} records :when (and (= :step k) s blocks)]
+         {:id [gen t] :flight [gen job] :t t :s s :blocks blocks})))
+
+(defn pace-report
+  "The pace of the flights of two steps or more among rows (flee-steps): blocks over the steps' own seconds (:bps), and the
+  seconds stood between two steps of a flight (:stop-s: from one step's end to the next one's start, over the gaps)."
+  [rows]
+  (let [flights (filter #(>= (count %) 2) (map #(sort-by :t %) (vals (group-by :flight rows))))
+        steps (apply concat flights)
+        gaps (mapcat (fn [f] (map (fn [a b] (max 0 (/ (- (:t b) (* 1000 (:s b)) (:t a)) 1000))) f (rest f))) flights)
+        sum #(reduce + 0 %)
+        r2 #(/ (js/Math.round (* 100 %)) 100)
+        blocks (sum (map :blocks steps)) secs (sum (map :s steps)) stood (sum gaps)]
+    {:flights (count flights) :steps (count steps) :blocks (r2 blocks) :seconds (r2 secs)
+     :bps (when (pos? secs) (r2 (/ blocks secs))) :gaps (count gaps) :gap-s (r2 stood)
+     :stop-s (when (seq gaps) (r2 (/ stood (count gaps))))}))
+
 (defn deciles
   "The values of sorted xs at (i + 0.5) / 10, i = 0..9, rounded to 2 places."
   [xs]
@@ -202,7 +229,7 @@
      :sparse (count (filter :sparse? rows)) :no-pos (count (filter #(= :no-pos (:drop %)) rows)) :never (count (filter #(= :never (:drop %)) rows))}))
 
 ;; The durable counts: the rows of each prior by run id, so the counts only grow while the raw logs rotate away.
-(def empty-counts {:exchange {} :starts {} :notices {} :drowned-exposure {} :drowned-meets {}})
+(def empty-counts {:exchange {} :starts {} :notices {} :drowned-exposure {} :drowned-meets {} :flee-steps {}})
 
 (defn better-exchange "Of two rows of one fight, the one that saw more swings (a rotation may have cut the older read short), then the older." [a b]
   (if (> (:swings b) (:swings a)) b a))
@@ -342,7 +369,7 @@
        (sort-by :t)
        vec))
 
-(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | spot-returns | vein-seen [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S]
+(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | spot-returns | vein-seen [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S]
   every command first folds the logs into the counts file (default worlds/test/priors-counts.edn), then reports from the file; --since-ms keeps the rows of fights started after it.")
 
 (defn- parse-args [argv]
@@ -366,7 +393,8 @@
                     [b (read-agent (path/join agents-dir b "engine") 0)])
         counts (reduce (fn [c [b records]]
                          (cond-> (fold c (exchange records) (starts records sprint) (notices records))
-                           (not (probe? b)) (drowned/fold (drowned/exposure at records) (drowned/meets at records))))
+                           (not (probe? b)) (-> (drowned/fold (drowned/exposure at records) (drowned/meets at records))
+                                                (update :flee-steps #(reduce (fn [m r] (assoc m (:id r) r)) % (flee-steps records))))))
                        (load-counts counts-file) per-agent)]
     (save-counts! counts-file counts)
     counts))
@@ -385,7 +413,7 @@
   (let [{[cmd] :pos :keys [agents counts since-ms sprint] :or {since-ms 0 sprint 5.6}} (parse-args (vec (array-seq argv)))
         repo (or js/process.env.WORLD_TEST_REPO ".")
         agents (or agents (path/join repo "worlds" "test" "agents"))
-        folded (when (#{"fold" "creeper-exchange" "flight-starts" "notice-rate" "drowned-meets"} cmd)
+        folded (when (#{"fold" "creeper-exchange" "flight-starts" "notice-rate" "drowned-meets" "flee-pace"} cmd)
                  (fold-logs! agents (or counts (path/join repo "worlds" "test" "priors-counts.edn")) sprint
                              (cell-reader open-chunks (path/join agents ".." "chunks"))))
         since (fn [rows] (filter #(>= (:t %) since-ms) (vals rows)))]
@@ -399,5 +427,6 @@
        "vein-seen" (do (println (pr-str (vein-seen (mapcat #(read-agent (path/join agents % "engine") since-ms)
                                                        (filter #(fs/existsSync (path/join agents % "engine")) (array-seq (fs/readdirSync agents)))))))
                        0)
+       "flee-pace" (do (println (pr-str (assoc (pace-report (since (:flee-steps folded))) :since-ms since-ms))) 0)
        "notice-rate" (do (println (pr-str (assoc (notice-report (since (:notices folded))) :since-ms since-ms))) 0)
        (do (js/console.error usage) 2)))))

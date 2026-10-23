@@ -117,3 +117,9 @@
                                                              ["iron_ore" [9 0 0]]]}
                        {:k :observed :blocks [["iron_ore" [0 0 0]]]}
                        {:k :hurt}]))))
+
+(deftest the-flee-pace-is-blocks-over-the-steps-own-seconds-and-the-stops-between-them
+  (let [step (fn [t job s blocks] (rec t :step :job job :s s :blocks blocks))
+        rows (c/flee-steps [(step 1000 "j1/flee" 1 4) (step 2500 "j1/flee" 1 3) (step 3000 "j1/flee" 0.5 2) (step 9000 "j2/flee" 1 5)])]
+    (is (= {:flights 1 :steps 3 :blocks 9 :seconds 2.5 :bps 3.6 :gaps 2 :gap-s 0.5 :stop-s 0.25} (c/pace-report rows))
+        "a lone step is no flight; the stops run from a step's end to the next one's start")))
