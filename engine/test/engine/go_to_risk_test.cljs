@@ -141,10 +141,13 @@
     (is (zero? (:death-hp (estimate-unseen off-way far-goal))))))
 
 (deftest the-planner-keeps-away-from-a-recent-death-until-a-mob-death-spot-is-seen-lit
+  ;; a death by a mob is a known threat (tolls over its killer's field), one by terrain a planner danger
   (let [dark (assoc day-world :light {[80 64 5] [0 0]})
         spots (fn [world cause seen]
                 (with-redefs [look/seen-block (constantly seen)]
-                  (mapv (juxt :x :mob) (js->clj (threats/planner-dangers (with-death (ready-test/ctx-of world) {:x 80 :y 64 :z 5} cause 60000)) :keywordize-keys true))))]
+                  (let [c (with-death (ready-test/ctx-of world) {:x 80 :y 64 :z 5} cause 60000)]
+                    (into (mapv (juxt :x :mob) (js->clj (threats/planner-dangers c) :keywordize-keys true))
+                          (map (juxt (comp :x :pos) :mob)) (threats/known-threats c)))))]
     (doseq [[world cause seen want why] [[day-world "zombie" {:unknown true} [[80 "zombie"]] "never seen"]
                                          [day-world "zombie" {:age-ms 1000} [] "seen lit since the death"]
                                          [dark "zombie" {:age-ms 1000} [[80 "zombie"]] "seen since but dark: the killer spawns there again"]

@@ -154,8 +154,7 @@
   (doseq [[k bad] [[:jobs.lib.cost.health/hp-seconds [0 -1 "x" js/Infinity]]
                    [:jobs.lib.cost.danger/flee-factor [-1 "x" js/Infinity]]
                    [:jobs.lib.cost.danger/fight-factor [-1 "x" js/Infinity]]
-                   [:jobs.lib.cost.danger/max-rate [0 -1 "x" js/Infinity]]
-                   [:jobs.lib.cost.danger/shape ["x" {:sensed {:radius -1}} {:sensed {:close 5 :radius 2}} {:bogus {}}]]]
+                   [:jobs.lib.cost.danger/max-rate [0 -1 "x" js/Infinity]]]
           v bad]
     (is (string? (a/setting-problem k v)) (pr-str k v))))
 

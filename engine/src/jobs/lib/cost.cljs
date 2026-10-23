@@ -10,7 +10,7 @@
              (tool-tier, weapon-rank, cheapness) (jobs.lib.cost.weapon).
     fight    fight-damage, fight-seconds: the damage (and length) of a fight with the current kit (jobs.lib.cost.fight).
     answer   fight-answer, flee-answer, build-answer, answer-price, decide: what each answer to hostiles costs and the cheapest; blast-hurt: a creeper's blast (jobs.lib.cost.answer).
-    danger   route-danger, straight-route: the danger of a walk past mobs; hurt-rate, exposure-price: what standing exposed to them costs; stance, danger-rate, danger-list, habitat-factor: go-to's
+    danger   route-danger, straight-route: the danger of a walk past mobs; hurt-rate, exposure-price: what standing exposed to them costs; stance, danger-rate, threat-factor: go-to's
              planner dangers; reach-first?, outruns-at?: a body's race to a refuge against its chasers; catches?: whether a chaser hits a walk before it is past (jobs.lib.cost.danger).
     health   hp-seconds, health-scale, hp-price, commute-s (a walk there and back against sheltering here), drown-prices, damage-budget, survivable-budget: what an hp costs and how many a walk may spend (jobs.lib.cost.health).
     food     food-reserve: the food a body keeps carried, 3 days of it; cook-worth?, cook-gain: whether cooking raw food beats eating it now; meat-factor, meat-animal: raw meat's replacement cost, dear for hunted, 1 with a working pen (jobs.lib.cost.food).
@@ -85,14 +85,12 @@
 (def hurt-rate danger/hurt-rate)
 (def exposure-price danger/exposure-price)
 (def danger-opts danger/danger-opts)
-(def habitat-factor danger/habitat-factor)
-(def danger-shape-problem danger/danger-shape-problem)
-(def danger-list danger/danger-list)
+(def threat-factor danger/threat-factor)
+(def threat-factor-cap danger/threat-factor-cap)
 (def max-dangers danger/max-dangers)
 (def danger-stances danger/stances)
 (def danger-max-rate danger/max-rate)
 (def danger-cap danger/danger-cap)
-(def danger-default-shape danger/danger-shape)
 (def reach-first? danger/reach-first?)
 (def outruns-at? danger/outruns-at?)
 (def outruns? danger/outruns?)

@@ -4,7 +4,7 @@
   a weight 0-1.
   A walker's field is its way (jobs.lib.reach/forward over mob-lookup: a cell the body has not seen is ground) out to its
   follow range in steps (cost.threat/follow-range: vanilla navigation goes no farther), weight 1 within ::close steps,
-  falling to 0 at the range. A ranged mob adds the standing cells within danger/ranged-radius it has a line of fire to
+  then ::close / steps. A ranged mob adds the standing cells within danger/ranged-radius it has a line of fire to
   (weight 1). A mob that lives in water (water-mobs) keeps to the water it was met in: every seen cell of that body of
   water (water-body), weight 1. At most ::max-cells cells, read once per check-cache window (field-of)."
   (:require [engine.args :as a]
@@ -18,7 +18,7 @@
             [jobs.lib.util :as u]))
 
 (a/defargs settings
-  {::close {:default 2 :doc "Steps of a mob's way within which its field weighs 1." :spec (a/int-in 0 nil)}
+  {::close {:default 3 :doc "Steps of a mob's way within which its field weighs 1." :spec (a/int-in 0 nil)}
    ::max-cells {:default 4000 :doc "The most cells one mob's field holds, the nearest first." :spec (a/int-in 1 nil)}
    ::fire-rise {:default 6 :doc "Blocks above or below a ranged mob that its line of fire is tried to." :spec (a/int-in 0 nil)}
    ::water-cells {:default 8000 :doc "The most seen water cells one water mob's body of water is costed over (water-body)." :spec (a/int-in 1 nil)}})
@@ -31,12 +31,13 @@
 
 (defn walk-field
   "The cells #js [x y z w] a walker at start [x y z] steps to over kind-at within range steps (forward), at most n,
-  nearest first: w 1 within close steps, falling linearly to 0 at range (a cell at range is left out)."
+  nearest first: w 1 within close steps, close/steps past them (the farther its way, the more the body passing has
+  walked on before it gets there), none from range on."
   [kind-at [sx sy sz] range close n]
   (let [key (reach/keyer sx sz)
         seen (js/Set.)
         out #js []
-        weight (fn [steps] (if (<= steps close) 1 (/ (- range steps) (- range close))))]
+        weight (fn [steps] (if (<= steps close) 1 (/ close steps)))]
     (.add seen (key sx sy sz))
     (loop [queue #js [#js [sx sy sz 0]] head 0]
       (if (or (>= head (.-length queue)) (>= (.-length out) n))
@@ -128,7 +129,11 @@
          (.set weights k (max (aget c 3) (or (.get weights k) 0)))))
      {:cells cells :weights weights})))
 
-(defn field-key [{:keys [mob pos]}] [mob (some-> pos (update-vals js/Math.floor))])
+(defn field-key
+  "What one field is kept under: the mob and its place to 2 blocks across (a mob stepping about keeps its field, and the
+  tolls built from it stay one vector)."
+  [{:keys [mob pos]}]
+  [mob (some-> pos (update-vals #(js/Math.floor %)) (update :x #(js/Math.floor (/ % 2))) (update :z #(js/Math.floor (/ % 2))))])
 
 (defonce bodies (js/WeakMap.))
 
@@ -148,7 +153,7 @@
         v))))
 
 (defn field-of
-  "field of threat {:mob :pos} for job c, read once per check-cache window for the same mob and cell (shared)."
+  "field of threat {:mob :pos} for job c, read once per check-cache window for the same mob and field-key (shared)."
   [c threat]
   (shared c [::field (field-key threat)]
           #(field (:primitives c) threat (shared c [::lookups] (fn [] {:kind-at (reach/mob-lookup (:primitives c)) :arrow-at (reach/arrow-lookup (:primitives c))})))))

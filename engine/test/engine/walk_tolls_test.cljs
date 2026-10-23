@@ -1,6 +1,6 @@
 (ns engine.walk-tolls-test
   "go-to's :tolls (jobs.lib.near/plan!, wworld/with-tolls): the cells a caller prices cost more on a walk's plan, so it
-  bends round them; jobs.lib.cost farm-tolls and zone-tolls build them, and jobs.lib.threats/water-tolls the water a drowned was met in."
+  bends round them; jobs.lib.cost farm-tolls and zone-tolls build them, and jobs.lib.threats/threat-tolls the known mobs (the water a drowned was met in)."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -84,7 +84,7 @@
 
 (deftest a-drowned-met-at-a-lake-tolls-all-its-water-not-a-sphere-round-the-spot
   (let [c (met-in-the-lake "drowned")
-        tolls (threats/water-tolls c)
+        tolls (threats/threat-tolls c)
         cells (set (map (juxt :x :y :z) tolls))
         costed (fn [dangers?] (wworld/tolls-key (wworld/costed-world c (wworld/path-world (:primitives c)) {:dangers? dangers?})))]
     (is (= (* 41 4 3) (count cells)) "every water cell of the lake, the far end 39 blocks off too")
@@ -93,8 +93,8 @@
     (is (every? #(pos? (:factor %)) tolls))
     (is (= cells (set (map (juxt :x :y :z) (costed true)))) "go-to's costed world carries them")
     (is (nil? (costed false)) "a walk that ignores dangers does not")
-    (is (= [] (threats/water-tolls (met-in-the-lake "zombie"))) "a land mob is priced round its point (planner-dangers)")
-    (is (= [] (threats/water-tolls (ready-test/ctx-of lake))) "nothing met: no tolls")))
+    (is (= [] (threats/threat-tolls (met-in-the-lake "zombie"))) "a hit by a land mob above near-death: no threat")
+    (is (= [] (threats/threat-tolls (ready-test/ctx-of lake))) "nothing met: no tolls")))
 
 (deftest tolls-problem-names-a-malformed-entry
   (is (nil? (wworld/tolls-problem nil)))

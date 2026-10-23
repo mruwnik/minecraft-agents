@@ -208,12 +208,12 @@
 (declare with-tolls)
 
 (defn costed-world
-  "pw (the primitives' pathWorld) costed the way go-to plans: with the dangers the body knows of now and the water a water mob
-  was met in (dangers?, jobs.lib.threats planner-dangers and water-tolls) and with dark cells (dark?, look/dark-fn; over a
+  "pw (the primitives' pathWorld) costed the way go-to plans: with the mobs the body knows may hurt it, each over its
+  field (dangers?, jobs.lib.threats threat-tolls; planner-dangers keeps plans off sensed mobs' cells and deaths by terrain) and with dark cells (dark?, look/dark-fn; over a
   masked pw an unseen cell is priced by the mask, not as dark). Every search that ranks routes by cost plans over this."
   [c pw {:keys [dangers? dark?]}]
   (cond-> pw
-    dangers? (-> (with-dangers (threats/planner-dangers c)) (with-tolls (threats/water-tolls c)))
+    dangers? (-> (with-dangers (threats/planner-dangers c)) (with-tolls (threats/threat-tolls c)))
     dark? (with-dark (look/dark-fn (:primitives c) {:unseen-dark? (nil? (unknown-of pw))}) (kit-of c))))
 
 (def avoid-factor
@@ -261,7 +261,7 @@
            :cells cells})))
 
 (defn with-tolls
-  "pw whose plans cost the cells of tolls ([{:x :y :z :factor}], jobs.lib.cost farm-tolls and zone-tolls, jobs.lib.threats water-tolls) factor times their
+  "pw whose plans cost the cells of tolls ([{:x :y :z :factor}], jobs.lib.cost farm-tolls and zone-tolls, jobs.lib.threats threat-tolls) factor times their
   own seconds more, on top of pw's own tolls (the planner's options.tolls; a cell tolled twice costs both; none: pw).
   The same tolls on the same base are merged once (a cached threat tolls vector is one object)."
   [pw tolls]

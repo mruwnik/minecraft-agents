@@ -6,6 +6,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.ready-test :as ready-test]
             [engine.registry :as registry]
             [engine.settings :as settings]
             [engine.test-util :as tu]
@@ -59,12 +60,10 @@
         (let [plain (await (plan-past {:entities [zombie]} [] true))
               default (await (plan-past {:entities [zombie]} [] true {:jobs.lib.cost.danger/flee-factor 4 :jobs.lib.cost.danger/fight-factor 0.1 :jobs.lib.cost.danger/max-rate 4}))
               cheap-flee (await (plan-past {:entities [zombie]} [] true {:jobs.lib.cost.danger/flee-factor 0.1}))
-              capped (await (plan-past {:entities [zombie]} [] true {:jobs.lib.cost.danger/max-rate 0.2}))
-              narrow (await (plan-past {:entities [zombie]} [] true {:jobs.lib.cost.danger/shape {:sensed {:close 1 :radius 3}}}))]
+              capped (await (plan-past {:entities [zombie]} [] true {:jobs.lib.cost.danger/max-rate 0.2}))]
           (is (= (mapv (juxt :x :z) plain) (mapv (juxt :x :z) default)) "today's values as options: the same plan")
           (is (< (nearest cheap-flee) (nearest plain)) "a cheaper flee passes nearer")
-          (is (< (nearest capped) (nearest plain)) "a lower cap passes nearer")
-          (is (< (nearest narrow) (nearest plain)) "a narrower danger passes nearer"))))))
+          (is (< (nearest capped) (nearest plain)) "a lower cap passes nearer"))))))
 
 (deftest a-sword-passes-nearer-and-dangers-off-goes-straight
   (async done
@@ -112,9 +111,8 @@
     (is (not= (with z) (with z (assoc z :mob "skeleton"))) "another came")))
 
 (defn key-of [world]
-  (let [p (tu/fake-on-floor (merge {:floor [-5 -20 45 20]} world))
-        pw (wworld/with-dangers (wworld/path-world p) (clj->js (threats/known-dangers p [])))]
-    (wworld/danger-key pw)))
+  (let [c (ready-test/ctx-of (merge {:floor [-5 -20 45 20]} world))]
+    (wworld/tolls-key (wworld/costed-world c (wworld/path-world (:primitives c)) {:dangers? true}))))
 
 (deftest the-search-key-follows-the-body-s-weapon-and-health
   (let [unarmed (key-of {:entities [zombie]})

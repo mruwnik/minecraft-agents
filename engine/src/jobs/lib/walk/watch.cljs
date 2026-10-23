@@ -6,7 +6,7 @@
             [engine.hurt :as hurt]
             [engine.settings :as settings]
             [jobs.lib.combat :as combat]
-            [jobs.lib.cost.danger :as danger]
+            [jobs.lib.threat-field :as field]
             [jobs.lib.threats :as threats]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.world :as wworld]))
@@ -22,11 +22,6 @@
   this many ticks (1 s) in a 1-wide way ahead is planned round at once."
   {:window 10 :check-every 5 :min-refresh-ticks 80 :planner-share 0.05 :better-by 2
    :mob-waits 3 :mob-wait-ms 1000 :mob-reach 2.5 :mob-still-ticks 20})
-
-(def danger-reach
-  "Blocks from a step of the way ahead within which a newly sensed danger makes the walk plan again: the radius of a
-  sensed danger's cost (jobs.lib.cost.danger/danger-shape), past which it costs nothing."
-  (get-in danger/danger-shape [:sensed :radius]))
 
 (def max-watch-replans
   "Replans a look-ahead may start in one follow! (changes, refreshes, mobs; not those that learned an unseen cell, :learned); past it the plan is walked unwatched."
@@ -199,20 +194,20 @@
            {:x (cell 0) :y (+ dy (cell 1)) :z (cell 2)}))))
 
 (defn new-danger-keys
-  "The keys of the sensed dangers ([{:key :pos}], watch :sense) not yet in known that lie within danger-reach of a step
-  from index i on."
-  [sensed known steps i]
+  "The keys of the sensed dangers ([{:key :name :pos}], watch :sense) not yet in known whose reach (reach-of a danger: a fn
+  of a cell x y z, threat-field/reach-fn) holds a step from index i on."
+  [sensed known reach-of steps i]
   (let [ahead (subvec (vec steps) (min i (count steps)))]
-    (vec (for [{:keys [key pos]} sensed
+    (vec (for [{:keys [key] :as d} sensed
                :when (and (not (contains? known key))
-                          (some (fn [s] (<= (js/Math.hypot (- (:x pos) (:px s)) (- (:z pos) (:pz s))) danger-reach)) ahead))]
+                          (let [reach (reach-of d)] (some (fn [s] (reach (js/Math.floor (:x s)) (js/Math.floor (:y s)) (js/Math.floor (:z s)))) ahead)))]
            key))))
 
 (defn danger-stop
   "The :replan done map for the dangers newly sensed near the way ahead (new-danger-keys; their keys join watch :known), or nil."
-  [{:keys [sense known]} steps i at]
+  [{:keys [sense known reach-of]} steps i at]
   (when sense
-    (when-let [ks (seq (new-danger-keys (sense) @known steps i))]
+    (when-let [ks (seq (new-danger-keys (sense) @known reach-of steps i))]
       (swap! known into ks)
       {:status :replan :why :danger :at at :step i})))
 
@@ -278,7 +273,8 @@
   (cond-> {:base (:pw plan) :fresh #(wworld/path-world (:primitives c) (wworld/unknown-of (:pw plan))) :ahead [] :skip (opens-cells (:steps plan))
    :mobs #(combat/sensed (:primitives c) {:radius 8 :max 64}) :seen (atom {}) :opens (atom nil)
    :status (:status plan) :interval (refresh-ticks (:ms plan) (settings/physics-ms (:primitives c))) :budget #(wworld/damage-budget c)}
-    known (assoc :known known :sense #(threats/sensed-mobs (:primitives c) {})))))
+    known (assoc :known known :sense #(threats/sensed-mobs (:primitives c) {})
+                 :reach-of (fn [{:keys [name pos]}] (field/reach-fn (field/field-of c {:mob name :pos pos})))))))
 
 (defn mob-cells
   "The cells {:x :y :z} (feet and head) of the entities, not items and not the body, that stand on the leg the body is

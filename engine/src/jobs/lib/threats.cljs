@@ -2,10 +2,10 @@
   "Mobs that chase: how far each follows its target (vanilla follow_range), and the :threat entries a flight leaves in
   body memory. One :threat entry per mob fled per flight {:mob :id :uuid :key :pos (last known) :ended}, kept
   threat-policy. The third flight from one mob (same :key, uuid else id) within the ttl warns hostile.chased.
-  planner-dangers: the known dangers go-to's searches cost (the planner's options.dangers), costed by
-  jobs.lib.cost/danger-list. known-threats: every mob the body knows may hurt it, seen, fled from or met at a death;
+  planner-dangers: the cells of sensed mobs and deaths by terrain go-to's searches keep off (the planner's
+  options.dangers). known-threats: every mob the body knows may hurt it, seen, fled from or met at a death;
   threats-of gives each its reach (jobs.lib.threat-field) for jobs.lib.cost/death-chance, tolls-of prices each one's field
-  for the planner (options.tolls; water-tolls: the water mobs')."
+  for the planner (options.tolls, threat-tolls)."
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [engine.ctx :as ctx]
@@ -24,7 +24,6 @@
   {::chased-flights {:default 3 :doc "Flights from one mob within the ttl that tell the agent." :spec (a/int-in 1 nil)}
    ::fled-memory-ms {:default 180000 :doc "Milliseconds after a flight during which a mob it fled from still counts as near the place it was last known (errands that walk to a spot hold off), and the body is not sent out on a comfort errand." :spec (a/int-in 0 nil)}
    ::fled-radius {:default 40 :doc "Blocks around a fled mob's last known place that an errand's walk treats as dangerous." :spec (a/num-in 0 nil)}
-   ::sensed-radius {:default 24 :doc "Blocks out to which a sensed real danger is costed." :spec (a/int-in 1 nil)}
    ::max-threats {:default 8 :doc "The most known threats (known-threats) a price reads, the nearest first." :spec (a/int-in 1 nil)}})
 
 (def follow-range threat/follow-range)
@@ -96,59 +95,37 @@
 
 ;; ---------------------------------------------------------------- dangers for the planner
 
-(defn sensed-radius [] (settings/get settings ::sensed-radius))
-
 (defn body-of [p]
   (let [self (.self p)]
     {:health (.-health self) :equipment (cost/equipment-of (.-equipment self))
      :weapon (combat/best-weapon p combat/default-weapons) :pos (u/pos-of (.-pos self))}))
 
 (defn sensed-mobs
-  "The real dangers primitives p senses within sensed-radius (jobs.lib.danger/dangers: seen or heard, with a way to the body
-  or a line of fire; never x-ray; danger-opts as danger-q/danger-in?), as [{:key :name :pos}]."
+  "The real dangers primitives p senses (jobs.lib.danger/dangers within its known-scan: seen or heard, with a way to the
+  body or a line of fire; never x-ray; danger-opts as danger-q/danger-in?), as [{:key :name :pos}]."
   [p danger-opts]
   (mapv (fn [e] {:key (mob-key e) :name (.-name e) :pos (danger-q/mob-pos p e)})
-        (danger-q/dangers p (sensed-radius) {:ranged-radius (sensed-radius)} danger-opts)))
+        (danger-q/dangers p (danger-q/known-scan) {:ranged-radius (danger-q/known-scan)} danger-opts)))
 
 (defn remembered-spots
   "The places of the :threat entries of c whose mob the client still tracks, as {:pos ..} data with a :pos (a mob
-  that blew up or died is gone; a hidden one is still listed), for known-dangers."
+  that blew up or died is gone; a hidden one is still listed), for known-threats."
   [c]
   (keep #(let [d (:data %)] (when-let [at (rough-pos d)] (assoc d :pos at)))
         (listed-threats (:primitives c) (ctx/entries c :threat))))
 
-(defn known-dangers
-  "danger-list of the body of primitives p: sensed-mobs and the remembered :threat entries' data."
-  ([p remembered] (known-dangers p remembered nil))
-  ([p remembered opts] (cost/danger-list (body-of p) (sensed-mobs p {:way? false}) remembered opts)))
-
-(defn death-dangers
-  "The uncleared recent deaths of c (death-spot/uncleared) as remembered dangers [{:key :mob :pos :weight :terrain?}]: the plan keeps away from where the body died lately, at a cost: the spot stays a cell a walk to the body's pile may enter."
-  [c]
-  (map-indexed (fn [i {:keys [pos cause weight mob?]}] {:key (str "death-" i) :mob cause :pos pos :weight weight :block false :terrain? (not mob?)}) (death-spot/uncleared c)))
-
 (defn planner-dangers
-  "The planner's options.dangers for the body of c (JS array, nil for none): known-dangers with the :threat spots its
-  flights left and the spots of its recent deaths."
-  [c]
-  (let [ds (known-dangers (:primitives c) (concat (remembered-spots c) (death-dangers c)) (cost/danger-opts))]
-    (when (seq ds) (clj->js ds))))
-
-(defn danger-near-fn
-  "A fn of a cell pos: the nearest known mob (known-dangers of c: sensed or remembered) the body would flee that has pos
-  within its full-cost radius, as {:mob :mob-pos :mob-distance}, else nil. Dangers are read once."
+  "The planner's options.dangers for the body of c (JS array, nil for none): the cell of each sensed mob (sensed-mobs,
+  nearest first), no way through it (:block; its price is its field's tolls, threat-tolls), and each uncleared death by
+  terrain (death/terrain-danger: the cells that killed are near its spot); at most cost/max-dangers."
   [c]
   (let [p (:primitives c)
-        body (body-of p)
-        ds (known-dangers p (remembered-spots c) (cost/danger-opts))]
-    (fn [pos]
-      (->> ds
-           (keep (fn [{:keys [mob close] :as d}]
-                   (let [dist (u/dist pos d)]
-                     (when (and (<= dist close) (= :flee (cost/stance body mob)))
-                       {:mob mob :mob-pos (select-keys d [:x :y :z]) :mob-distance (js/Math.round dist)}))))
-           (sort-by :mob-distance)
-           first))))
+        here (u/pos-of (.-pos (.self p)))
+        ds (concat (for [{:keys [name pos]} (sort-by #(u/dist here (:pos %)) (sensed-mobs p {:way? false}))]
+                     {:x (:x pos) :y (:y pos) :z (:z pos) :close 0 :radius 0 :rate 0 :mob name :block true})
+                   (for [{:keys [pos cause weight mob?]} (death-spot/uncleared c) :when (not mob?)]
+                     (cost/terrain-danger {:pos pos :cause cause :weight weight})))]
+    (when (seq ds) (clj->js (vec (take cost/max-dangers ds))))))
 
 ;; ---------------------------------------------------------------- the threats every price reads
 
@@ -179,7 +156,7 @@
                        :when (and (field/water-mobs cause) (:pos data) (pos? w))]
                    {:mob cause :pos (:pos data) :weight w}))
          (filter #(and (string? (:mob %)) (:pos %)))
-         (group-by field/field-key)
+         (group-by (juxt :key field/field-key))
          vals
          (map #(apply max-key :weight %))
          (sort-by #(u/dist here (:pos %)))
@@ -191,31 +168,45 @@
   [c]
   (mapv #(assoc % :reach (field/reach-fn (field/field-of c %))) (known-threats c)))
 
+(defn danger-near-fn
+  "A fn of a cell pos: the nearest known threat (threats-of c) the body would flee whose field weighs the cell in full
+  (within threat-field ::close steps of its way), as {:mob :mob-pos :mob-distance}, else nil. Threats are read once."
+  [c]
+  (let [body (body-of (:primitives c))
+        ts (filterv #(= :flee (cost/stance body (:mob %))) (threats-of c))]
+    (fn [{:keys [x y z] :as pos}]
+      (->> ts
+           (keep (fn [{:keys [mob reach] :as t}]
+                   (when (= 1 (reach (js/Math.floor x) (js/Math.floor y) (js/Math.floor z)))
+                     {:mob mob :mob-pos (select-keys (:pos t) [:x :y :z]) :mob-distance (js/Math.round (u/dist pos (:pos t)))})))
+           (sort-by :mob-distance)
+           first))))
+
 (defn tolls-of
   "go-to's tolls ([{:x :y :z :factor}]) for threats ({:mob :pos :weight}) of c: every cell of each one's field costs
-  cost/habitat-factor (the mob, its weight x the cell's) more a second; the dearest of one kind of mob where it is known
-  twice, the kinds summed."
+  cost/threat-factor (the mob, its weight x the cell's) more a second; the dearest of one kind of mob where it is known
+  twice, the kinds summed, at most cost/threat-factor-cap."
   [c threats]
   (let [body (body-of (:primitives c))
+        cap (cost/threat-factor-cap body)
         by-cell (js/Map.)]
     (doseq [{:keys [mob weight] :as t} threats
-            :let [f (cost/habitat-factor body mob weight)]
+            :let [f (cost/threat-factor body mob weight)]
             :when (pos? f)
             ^js cell (:cells (field/field-of c t))]
       (let [x (aget cell 0) y (aget cell 1) z (aget cell 2)
             k (str x "," y "," z)
             ^js row (or (.get by-cell k) (let [r #js {:x x :y y :z z :mobs {}}] (.set by-cell k r) r))]
         (set! (.-mobs row) (update (.-mobs row) mob (fnil max 0) (* f (aget cell 3))))))
-    (mapv (fn [^js r] {:x (.-x r) :y (.-y r) :z (.-z r) :factor (reduce + 0 (vals (.-mobs r)))})
+    (mapv (fn [^js r] {:x (.-x r) :y (.-y r) :z (.-z r) :factor (min cap (reduce + 0 (vals (.-mobs r))))})
           (es6-iterator-seq (.values by-cell)))))
 
-(defn water-tolls
-  "tolls-of the known-threats of c that live in water (threat-field/water-mobs): the whole body of water each was met
-  in. Read once per check-cache window for the same threats (threat-field/shared: one vector, so walk.world/with-tolls
-  merges it once)."
+(defn threat-tolls
+  "tolls-of the known-threats of c: go-to's price of every known mob (the planner's options.tolls). Read once per
+  check-cache window for the same threats (threat-field/shared: one vector, so walk.world/with-tolls merges it once)."
   [c]
-  (let [ts (filterv #(field/water-mobs (:mob %)) (known-threats c))]
+  (let [ts (known-threats c)]
     (if (empty? ts)
       []
-      (field/shared c [::water-tolls (mapv (fn [t] [(field/field-key t) (/ (js/Math.round (* 20 (:weight t))) 20)]) ts)]
-                          #(tolls-of c ts)))))
+      (field/shared c [::threat-tolls (mapv (fn [t] [(field/field-key t) (/ (js/Math.round (* 20 (:weight t))) 20)]) ts)]
+                    #(tolls-of c ts)))))

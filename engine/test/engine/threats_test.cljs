@@ -1,8 +1,9 @@
 (ns engine.threats-test
-  "jobs.lib.threats' dangers for the planner (jobs.lib.cost/danger-list): sensed real dangers and remembered :threat spots, costed by what the hostile
+  "jobs.lib.threats' known threats and their tolls for the planner: sensed real dangers and remembered :threat spots, costed by what the hostile
   reflex would do (flee: dear, fight: cheap)."
   (:require [cljs.test :refer [deftest is are]]
             [engine.memory :as mem]
+            [engine.ready-test :as ready-test]
             [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.lib.cost :as cost]
@@ -28,52 +29,38 @@
         "10 iron points: vanilla's 8.5 effective points against a 2.5 hp hit take off more")
     (is (= 4 (rate armed "creeper")) "a creeper is always fled")))
 
-(deftest the-list-has-sensed-mobs-then-remembered-spots-and-the-sensed-place-wins
-  (let [sensed [{:key "a" :name "zombie" :pos {:x 5 :y 64 :z 0}}]
-        remembered [{:key "a" :mob "zombie" :pos {:x 30 :y 64 :z 0}}
-                    {:key "b" :mob "skeleton" :pos {:x 40 :y 64 :z 0}}
-                    {:key "c" :mob "zombie" :pos {:x 10 :y 64 :z 0}}]
-        ds (cost/danger-list unarmed sensed remembered)]
-    (is (= [[5 12] [10 16] [40 16]] (mapv (juxt :x :radius) ds)) "sensed a first; a's old spot left out; c nearer than b")
-    (is (= {:close 4 :radius 8} (select-keys (first (cost/danger-list unarmed [{:key "k" :name "creeper" :pos {:x 1 :y 64 :z 0}}] []))
-                                             [:close :radius])))))
-
-(deftest at-most-max-dangers
-  (is (= cost/max-dangers
-         (count (cost/danger-list unarmed [] (for [i (range 20)] {:key i :mob "zombie" :pos {:x i :y 64 :z 0}}))))))
-
 (defn zombie [id x z] {:id id :name "zombie" :kind "hostile" :pos {:x x :y 64 :z z}})
 
 (def wall (into {} (for [x [2 3] y [64 65 66] z (range -4 5)] [(str x "," y "," z) "stone"])))
 
-(deftest known-dangers-lists-only-what-the-body-senses-and-could-be-reached-by
-  (is (= [[6 4]] (mapv (juxt :x :rate) (threats/known-dangers (tu/fake-on-floor {:entities [(zombie 1 6 0)]}) [])))
-      "a zombie in sight on open ground")
-  (is (= [[6 0.25]] (mapv (juxt :x #(/ (js/Math.round (* 100 (:rate %))) 100)) (threats/known-dangers (tu/fake-on-floor {:entities [(zombie 1 6 0)]
-                                                                                    :inventory [{:name "diamond_sword" :count 1}]})
-                                                                 [])))
-      "the same with a diamond sword: a fight, cheap")
-  (is (= [] (threats/known-dangers (tu/fake-on-floor {:blocks wall :entities [(zombie 1 6 0)]}) []))
-      "behind a wall the body never saw it through: not listed (no x-ray)"))
+(defn tolls [world] (into {} (map (juxt (juxt :x :y :z) :factor)) (threats/threat-tolls (ready-test/ctx-of world))))
+
+(deftest a-sensed-zombie-tolls-its-way-dear-to-flee-cheap-to-fight
+  (let [bare (tolls {:entities [(zombie 1 6 0)]})
+        armed (tolls {:entities [(zombie 1 6 0)] :inventory [{:name "diamond_sword" :count 1}]})]
+    (is (> (get bare [6 64 0]) (get bare [-14 64 0]) 0) "dearest at the zombie, less along its way")
+    (is (< (get armed [6 64 0]) (get bare [6 64 0])) "with a diamond sword: a fight, cheap")
+    (is (= {} (tolls {:blocks wall :entities [(zombie 1 6 0)]})) "behind a wall the body never saw it through: not known (no x-ray)")))
+
+(deftest the-sensed-place-wins-over-a-flight-from-the-same-mob-and-at-most-max-threats
+  (let [c (assoc (ready-test/ctx-of {:entities [(assoc (zombie 1 6 0) :uuid "a")]}) :view
+                 (fn [] {:now 0 :data {:entries {:threat [{:t 0 :data {:mob "zombie" :id 1 :uuid "a" :key "a" :pos {:x 30 :y 64 :z 0}}}]}}}))]
+    (is (= [6] (mapv (comp :x :pos) (threats/known-threats c)))))
+  (is (= (threats/max-threats)
+         (count (threats/known-threats (ready-test/ctx-of {:entities (for [i (range 12)] (zombie i (* 2 i) 0))}))))))
 
 (deftest danger-terms-are-options-and-the-defaults-keep-the-price
-  (let [rate #(cost/danger-rate unarmed "zombie" %)
-        sensed [{:key "a" :name "zombie" :pos {:x 5 :y 64 :z 0}}]
-        shape #(select-keys (first (cost/danger-list unarmed sensed [] %)) [:close :radius :rate])]
+  (let [rate #(cost/danger-rate unarmed "zombie" %)]
     (is (= (rate nil) (rate {})) "no options: today's rate")
     (is (= 4 (rate {})) "default 2.5 hp a second x 4 (flee), capped at 4")
     (is (= 1.25 (rate {:stances {:flee 0.5}})) "the flee factor scales the rate")
     (is (< (js/Math.abs (- 0.5 (cost/danger-rate armed "zombie" {:stances {:fight 0.2}}))) 1e-9) "the fight factor")
     (is (= 2 (rate {:max-rate 2})) "max-rate caps one danger")
-    (is (= 8 (rate {:max-rate 8 :stances {:flee 8}})) "a higher cap lets more through: 12 capped at 8")
-    (is (= {:close 3 :radius 12 :rate 4} (shape nil)) "default shape")
-    (is (= {:close 5 :radius 20 :rate 4} (shape {:shape {:sensed {:close 5 :radius 20}}})) "the shape is an option")
-    (is (= {:close 3 :radius 7 :rate 4} (shape {:shape {:sensed {:radius 7}}})) "a partial shape keeps the other term")))
+    (is (= 8 (rate {:max-rate 8 :stances {:flee 8}})) "a higher cap lets more through: 12 capped at 8")))
 
 (deftest the-danger-settings-name-the-danger-options
-  (is (= {:stances {:flee 2 :fight 0.5} :max-rate 3 :shape {:sensed {:radius 9}}}
-         (settings/with-settings {:jobs.lib.cost.danger/flee-factor 2 :jobs.lib.cost.danger/fight-factor 0.5 :jobs.lib.cost.danger/max-rate 3
-                                  :jobs.lib.cost.danger/shape {:sensed {:radius 9}}}
+  (is (= {:stances {:flee 2 :fight 0.5} :max-rate 3}
+         (settings/with-settings {:jobs.lib.cost.danger/flee-factor 2 :jobs.lib.cost.danger/fight-factor 0.5 :jobs.lib.cost.danger/max-rate 3}
            cost/danger-opts)))
   (is (= {:stances {:flee 4 :fight 0.1} :max-rate 4} (cost/danger-opts)) "the defaults"))
 

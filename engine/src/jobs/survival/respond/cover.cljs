@@ -142,13 +142,13 @@
                        (filter #(seen-stand? p %) floors) (way-reach)))))
 
 (defn bystander-spots
-  "The places of the hostiles the body knows within threats/sensed-radius that are not chasing it (not in chasing, not killed): a flight step does not end nearer to one of them, so the body does not run from one mob into another."
+  "The places of the hostiles the body knows within their follow range of it (threats/follow-range: they would notice it) that are not chasing it (not in chasing, not killed): a flight step does not end nearer to one of them, so the body does not run from one mob into another."
   [c chasing]
   (let [p (:primitives c)
         skip (into (set (map #(.-id %) chasing)) (flight/dead-ids c))]
     (->> (flight/known-chasers p)
          (remove #(skip (.-id %)))
-         (filter #(<= (danger-q/mob-distance p %) (threats/sensed-radius)))
+         (filter #(<= (danger-q/mob-distance p %) (threats/follow-range (.-name %))))
          (map #(danger-q/mob-pos p %)))))
 
 (defn ^:async flight-target!

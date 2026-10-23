@@ -1,7 +1,7 @@
 (ns jobs.lib.cost.danger
   "Danger of mobs the body knows (an input, e.g. jobs.lib.danger/known-hostiles; no world entity reads): route-danger, the
-  expected damage of walking a route past them (recover-drops' fetch cost), and danger-rate / danger-list, the hp a
-  go-to planner costs near a known danger (its options.dangers).
+  expected damage of walking a route past them (recover-drops' fetch cost), and danger-rate / threat-factor, what a
+  second within a known mob's reach costs go-to's planner (jobs.lib.threats/threat-tolls).
 
   route-danger per mob: hostile (jobs.lib.cost.threat; provoked-only mobs x0.1) or named in overrides; mob-hurt over 3 s
   after armour, dearer for a body that cannot afford to fight it (no-answer-factor; not for a provoked-only mob, which is never fought, and a mob with :angry false adds none);
@@ -10,20 +10,17 @@
 
   exposure-price: the seconds a second exposed to mobs that reach the body costs (hurt-rate, the hp a second, at the hp price).
 
-  danger-rate: mob-hurt over 1 s x stance factor (:flee x4, :fight x0.1), at most max-rate: hp a second (the factors, the cap and
-  shape are settings, danger-opts), which the planner prices at go-to's hp price (:hp-seconds x health-scale) like a drop's damage."
+  danger-rate: mob-hurt over 1 s x stance factor (:flee x4, :fight x0.1), at most max-rate: hp a second (the factors and the
+  cap are settings, danger-opts); threat-factor prices it at the hp price of the body's health."
   (:require [engine.args :as a]
             [engine.constants :as constants]
             [engine.settings :as settings]
             [jobs.lib.cost.armour :as armour]
-            [jobs.lib.cost.death :as death]
             [jobs.lib.cost.fight :as fight]
             [jobs.lib.cost.health :as health]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]))
-
-(declare danger-shape-problem)
 
 (a/defargs settings
   {::max-fire-checks {:default 8 :doc "Route cells a ranged mob's line of fire is tried to, nearest first." :spec (a/int-in 1 nil)}
@@ -36,8 +33,6 @@
    ::flee-factor {:default 4 :doc "Danger price: a known mob the body would flee costs this times its hp a second." :spec (a/num-in 0 nil)}
    ::fight-factor {:default 0.1 :doc "Danger price: a known mob the body would fight costs this times its hp a second." :spec (a/num-in 0 nil)}
    ::max-rate {:default 4 :doc "Danger price: hp a second one known danger costs at most; above 4 it also raises the total of all dangers a second (the planner's dangerCap)." :spec a/pos-num?}
-   ::shape {:default false :doc "Danger price: {:sensed|:remembered|:creeper {:close :radius}} blocks, full within :close, none past :radius; only the terms given replace the defaults (sensed 3 12, remembered 3 16, creeper 4 8). false: the defaults."
-            :spec (a/or-of false? (a/valid-by "a map of :sensed, :remembered or :creeper to {:close :radius} numbers >= 0, :close under :radius" #(danger-shape-problem %)))}
    ::sprint-food {:default 6 :doc "Food at or under which a body cannot sprint (reach-first?)." :spec (a/int-in 0 20)}
    ::chase-speed {:default 3 :doc "Blocks a second a chasing melee mob covers, a little over a zombie's (reach-first?)." :spec (a/num-in 0.1 nil)}
    ::baby-chase-speed {:default 5.1 :doc "Blocks a second a baby zombie covers chasing (chase-speed of mob-kind \"baby\")." :spec (a/num-in 0.1 nil)}
@@ -160,36 +155,16 @@
 ;; ---------------------------------------------------------------- the planner's danger rate
 
 (def max-dangers 8)
-(def danger-shape
-  "close and radius of a danger's cost (planner options.dangers): full within close blocks, 0 past radius. A remembered
-  spot is wider: the mob has moved on from it."
-  {:sensed {:close 3 :radius 12} :remembered {:close 3 :radius 16} :creeper {:close 4 :radius 8}})
 (def stances "Rate factor: :flee from a mob costs the body far more than one it would :fight." {:flee 4 :fight 0.1})
 (def max-rate "hp a second one danger costs at most." 4)
 (def danger-cap "hp a second all known dangers together cost at most (the planner's dangerCap); a larger ::max-rate raises it." 4)
 
 (defn danger-opts
-  "The danger options as the {:stances :max-rate :shape} that danger-rate and danger-list take, from the settings
-  ::flee-factor, ::fight-factor, ::max-rate and ::shape."
+  "The danger options as the {:stances :max-rate} that danger-rate takes, from the settings ::flee-factor,
+  ::fight-factor and ::max-rate."
   []
-  (let [shape (settings/get settings ::shape)]
-    (cond-> {:stances {:flee (settings/get settings ::flee-factor) :fight (settings/get settings ::fight-factor)}
-             :max-rate (settings/get settings ::max-rate)}
-      shape (assoc :shape shape))))
-
-(defn danger-shape-problem
-  "Why shape (the setting ::shape) is not usable, else nil: a map of :sensed, :remembered or :creeper to {:close :radius}
-  numbers >= 0, close under radius (against what the default has for the term not given)."
-  [shape]
-  (when (some? shape)
-    (or (when-not (map? shape) (str "the danger shape must be a map, got " (pr-str shape)))
-        (some (fn [[k v]]
-                (let [m (merge (get danger-shape k) v)
-                      ok? #(and (number? %) (js/isFinite %) (>= % 0))]
-                  (cond (not (contains? danger-shape k)) (str "the danger shape has no " (pr-str k) ", only :sensed :remembered :creeper")
-                        (not (and (map? v) (every? #{:close :radius} (keys v)) (ok? (:close m)) (ok? (:radius m)) (< (:close m) (:radius m))))
-                        (str "the danger shape " (pr-str k) " must be {:close :radius} numbers >= 0 with :close under :radius, got " (pr-str v)))))
-              shape))))
+  {:stances {:flee (settings/get settings ::flee-factor) :fight (settings/get settings ::fight-factor)}
+   :max-rate (settings/get settings ::max-rate)})
 
 (defn stance
   "How the planner prices mob-name alone: :fight when a fight with it leaves fight/default-reserve health (never a creeper), else :flee."
@@ -219,35 +194,18 @@
   [{:keys [health equipment]} mob-names]
   (* (reduce + 0 (map #(hurt-rate equipment %) mob-names)) (health/hp-price (if (number? health) health 20))))
 
-(defn habitat-factor
-  "Seconds more each second in the water a mob-name lives in costs body {:health :equipment :weapon}: its danger-rate x
-  weight (a fading memory, 0-1) at the hp price of the body's health (the planner's options.tolls factor)."
+(defn threat-factor
+  "Seconds more each second within a known mob's reach costs body {:health :equipment :weapon}: mob-name's danger-rate x
+  weight (0-1: a fading memory, the cell's place in its field) at the hp price of the body's health (the planner's
+  options.tolls factor)."
   [{:keys [health] :as body} mob-name weight]
   (* weight (danger-rate body mob-name (danger-opts)) (health/hp-price (if (number? health) health 20))))
 
-(defn danger-of [body kind {:keys [name pos]} {:keys [shape] :as opts}]
-  (let [k (if (= "creeper" name) :creeper kind)]
-    (merge {:x (:x pos) :y (:y pos) :z (:z pos) :rate (danger-rate body name opts) :mob name :block true}
-           (get danger-shape k) (get shape k))))
-
-(defn danger-list
-  "The dangers ({:x :y :z :close :radius :rate :mob :block}; :block true: a known mob's cell is no way) of the sensed mobs [{:key :name :pos}] (nearest first) and the
-  remembered :threat entries' data [{:key :mob :pos}, with a :weight 0-1 scaling the rate for a fading memory, :block false for a spot that costs but may be crossed, :terrain? true for a death by terrain (death/terrain-danger)] (nearest the body first; one whose :key is sensed now is left out:
-  the sensed place wins), at most max-dangers. body {:health :equipment :weapon :pos}. opts: danger-opts (default none)."
-  ([body sensed remembered] (danger-list body sensed remembered nil))
-  ([body sensed remembered opts]
-  (let [now (set (map :key sensed))
-        spots (->> remembered
-                   (remove #(contains? now (:key %)))
-                   (filter :pos)
-                   (sort-by #(u/dist (:pos body) (:pos %))))]
-    (vec (take max-dangers (concat (map #(danger-of body :sensed % opts) sensed)
-                                   (map #(if (:terrain? %)
-                                           (death/terrain-danger {:pos (:pos %) :cause (:mob %) :weight (:weight %)})
-                                           (cond-> (danger-of body :remembered {:name (:mob %) :pos (:pos %)} opts)
-                                             (:weight %) (update :rate * (:weight %))
-                                             (false? (:block %)) (assoc :block false)))
-                                        spots)))))))
+(defn threat-factor-cap
+  "The most threat-factor all known mobs together cost a cell for body: the danger cap (or a larger ::max-rate) at the hp
+  price of its health."
+  [{:keys [health]}]
+  (* (max danger-cap (:max-rate (danger-opts))) (health/hp-price (if (number? health) health 20))))
 
 ;; ---------------------------------------------------------------- the race to a refuge
 
