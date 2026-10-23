@@ -7,6 +7,7 @@
             [engine.core :as core]
             [engine.core.ending :as ending]
             [engine.ctx :as ctx]
+            [engine.registry :as registry]
             [engine.fake :as fake]
             [engine.fetch-test :as f]
             [engine.game :as game]
@@ -285,6 +286,18 @@
           (await (f/run-ticks s 200))
           (is (= 3 (get (f/inv s) "iron_ingot")))
           (is (empty? (f/listed s))))))))
+
+;; The smelt child's fetches (coal, furnace) are worth the obtain's goal, not their own find-worth.
+(deftest the-smelt-and-craft-children-carry-the-obtains-search-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s0 (f/start (ore-world {"1,64,2" "furnace"} [{:name "raw_iron" :count 3} {:name "coal" :count 1}]) [f/own-zone])
+              got (atom {})
+              spy (fn [sym] (assoc (get registry/jobs sym) :round (fn [c] (swap! got assoc sym (:search-worth (:args c))) (ctx/end c :done nil))))
+              s (reduce (fn [s sym] (assoc-in s [:eng :jobs sym] (spy sym))) s0 ['jobs.items.smelt 'jobs.items.craft])]
+          (await (obtain! s {:item "iron_ingot" :count 3 :ways #{:craft :smelt :gather} :search-worth 777} 6))
+          (is (= 777 (get @got 'jobs.items.smelt))))))))
 
 (deftest an-iron-pickaxe-from-seen-ore-is-mined-smelted-and-crafted
   (async done

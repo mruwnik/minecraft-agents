@@ -426,6 +426,17 @@
 (defn wheat-batches-world [chest-count]
   {:blocks (merge table-block wheat-chest) :containers {"-2,64,3" [{:name "wheat" :count chest-count}]}})
 
+;; The ingredient's search is worth the goal that asked for the craft, not the ingredient's own find-worth.
+(deftest craft-fetch-carries-the-callers-search-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:inventory [{:name "wheat" :count 2}] :blocks table-block})
+              got (atom [])
+              stub (assoc (get registry/jobs 'jobs.items.obtain) :round (fn [c] (swap! got conj (:args c)) (ctx/end c :done nil)))]
+          (await (child-outcome (assoc-in eng [:jobs 'jobs.items.obtain] stub) job {:item "bread" :search-worth 777} 40))
+          (is (= [{:item "wheat" :search-worth 777}] (mapv #(select-keys % [:item :search-worth]) (take 1 @got)))))))))
+
 (deftest craft-fetches-again-for-each-batch-while-fetches-bring-progress
   (async done
     (tu/run-async done

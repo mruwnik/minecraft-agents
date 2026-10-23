@@ -11,6 +11,7 @@
             [jobs.lib.trees :as trees]
             [jobs.lib.util :as u]
             [jobs.lib.need :as need]
+            [jobs.items.obtain.need :as obtain-need]
             [jobs.lib.waits :as waits]))
 
 (defn fruitless! [c why]
@@ -45,7 +46,7 @@
   [c step]
   (ctx/update-mem! c assoc-in [:craft :step] step)
   (let [e (waits/waiting-out c (await (ctx/call c :smelt 'jobs.items.smelt
-                           (cond-> {:item (:item step) :count (:count step) :ways (child-ways c) :explore (boolean (:explore (:args c)))}
+                           (cond-> {:item (:item step) :count (:count step) :ways (child-ways c) :explore (boolean (:explore (:args c))) :search-worth (obtain-need/search-worth c)}
                              (= "charcoal" (:item step)) (assoc :fuel (wood-fuel c))))))]
     (if (= :continue e)
       :continue
@@ -81,6 +82,7 @@
       (do (ctx/update-mem! c assoc-in [:craft :step] step)
           (let [before (carried-of (u/inventory (:primitives c)) [(:item step)])
                 e (waits/waiting-out c (await (ctx/call c :craft 'jobs.items.craft {:item (:item step) :count (need/carry-count c :craft [(:item step)] (:count step)) :ways #{:carried} :avoid (:avoid (:args c)) :for-plan (:for-plan (:args c))
+                                                                    :search-worth (obtain-need/search-worth c)
                                                                     :keep-table (nil? (:for-plan (:args c)))})))]
             (if (= :continue e)
               :continue

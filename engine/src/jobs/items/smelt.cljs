@@ -50,6 +50,7 @@
    :count {:doc "how many; all carried (at most one stack) when nil" :spec (a/int-in 0 nil) :default nil}
    :fuel {:doc "fuel item to load; the best carried when nil" :spec a/item? :default nil}
    :explore {:doc "look beyond what is seen for a missing input, fuel or furnace (passed to the fetches)" :spec boolean? :default false}
+   :search-worth {:doc "seconds a search for a missing input, fuel or furnace is worth to the goal it serves (passed to the fetches); nil: the item's own worth" :spec (a/num-in nil nil) :default nil}
    :ignore-zones? :shared})
 
 (a/defargs settings

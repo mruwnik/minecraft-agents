@@ -972,6 +972,16 @@
           (is (= :furnace-not-placed (:reason r)) "not 'no-furnace-seen': a furnace is carried")
           (is (re-find #"footprint" (str (:why r)))))))))
 
+;; The fetch children price their search at the goal that asked for them, not at the item's own worth.
+(deftest the-furnace-fetch-carries-the-callers-search-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [got (atom [])
+              stub (assoc (get registry/jobs 'jobs.items.obtain) :round (fn [c] (swap! got conj (:args c)) (ctx/end c :done nil)))]
+          (await (fetched-run {:inventory iron-and-coal} {:item "raw_iron" :count 3 :search-worth 777} {'jobs.items.obtain stub}))
+          (is (= [{:item "furnace" :search-worth 777}] (mapv #(select-keys % [:item :search-worth]) @got))))))))
+
 (deftest a-missing-furnace-is-fetched-from-a-seen-chest
   (async done
     (tu/run-async done

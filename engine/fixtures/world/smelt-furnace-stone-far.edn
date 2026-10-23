@@ -1,0 +1,20 @@
+;; Smelt with no furnace and no cobblestone in sight: the only stone stands 40 blocks east. The furnace fetch searches as far as
+;; the caller's goal is worth (:search-worth, as a kit bill passes it), not the cobblestone's own cheap worth.
+;; Plot 220 x 64, open sky over a glowstone floor; body at the west end with raw iron, coal, a table and a wooden pickaxe.
+;; Should-succeed: :search-worth 500 walks to the stone, mines 8, makes and places a furnace and smelts. Should-fail: with no :search-worth the stone is not worth the walk, the smelt ends without a furnace.
+{:defaults
+ {:tags [:items :smelt :explore :large :jobs]
+  :time :any
+  :plot {:height 12 :length 220 :width 64 :floor "glowstone" :light :sky}
+  :body {:at [1.5 0 32.5] :yaw 270 :settle-s 2 :inventory [["raw_iron" 2] ["coal" 2] ["crafting_table" 1] ["wooden_pickaxe" 1]] :effects [["resistance" 600 4]]}
+  :blocks [[:fill [40 0 32] [42 2 34] "stone"]]
+  :limit-s 600}
+ :cases
+ [{:name "furnace-stone-far-off-is-searched-for-at-the-goals-worth"
+   :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2 :explore true :search-worth 500})]]
+   :expect [{:event {:source :job :kind :completed :data {:smelted 2}} :within-s 580 :of-job true}]
+   :after [[:item "iron_ingot" 2]]}
+  {:name "furnace-stone-far-off-is-not-searched-for-without-a-goal"
+   :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2 :explore true})]]
+   :expect [{:event {:source :job :kind :stopped} :within-s 300 :of-job true}]
+   :after [[:item "iron_ingot" 0]]}]}

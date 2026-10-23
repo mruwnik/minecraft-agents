@@ -19,7 +19,7 @@
   [c stage]
   (let [how (need/fetch-how c)]
     (when (seq how)
-      {:how how :explore (:explore (:args c)) :slot (keyword (str "need-" (name stage)))})))
+      {:how how :explore (:explore (:args c)) :search-worth (:search-worth (:args c)) :slot (keyword (str "need-" (name stage)))})))
 
 (defn want-count
   "How many items are to be smelted: :count, else what is carried of the input (at least 1 when nothing is)."

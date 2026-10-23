@@ -39,7 +39,8 @@
    :table {:doc "crafting table position; the nearest seen within the table-radius setting when nil and the recipe needs one" :spec ::a/pos :default nil}
    :keep-table {:doc "leave a table this call put down standing; false: it is dug up again when the call ends" :spec boolean? :default false}
    :avoid {:doc "cells [x y z] a table is never put in or dug for: the dig line of a job that crafts as its child" :spec (a/coll-of a/position?) :default nil}
-   :for-plan {:doc "id of the plan whose work this is: a table may stand in its own cells; nil: no plan's cells are used" :spec a/name? :default nil}})
+   :for-plan {:doc "id of the plan whose work this is: a table may stand in its own cells; nil: no plan's cells are used" :spec a/name? :default nil}
+   :search-worth {:doc "seconds a search for a missing ingredient or table is worth to the goal it serves; nil: the item's own worth" :spec (a/num-in nil nil) :default nil}})
 
 (a/defargs settings
   {::job-time-s {:default 120 :doc "Seconds a craft may take: the walk, the batches and the table." :spec (a/num-in 0 nil)}
@@ -232,7 +233,7 @@
   [c problem]
   (loop []
     (when-let [{:keys [item count]} (and (seq (need/fetch-how c)) (problem c))]
-      (let [e (await (need/item! c item count {:how (need/fetch-how c) :slot (keyword (str "need-" item)) :for-plan (:for-plan (:args c))}))]
+      (let [e (await (need/item! c item count {:how (need/fetch-how c) :slot (keyword (str "need-" item)) :for-plan (:for-plan (:args c)) :search-worth (:search-worth (:args c))}))]
         (cond
           (= :continue e) :continue
           (not= :done (:kind e)) nil
