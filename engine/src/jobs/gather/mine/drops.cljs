@@ -83,16 +83,17 @@
 
 (defn drop-cut
   "The cells to dig, in walking order, for the cheapest way (jobs.lib.dig-route, falls of 1 at most, a cell never seen
-  taken for stone) from the body's cell to a stand within 1 of the dug cell, at most max-digs of them; nil with no such way."
+  taken for stone) from the body's cell to a stand within 1 of the dug cell, at most max-digs of them; nil with no such way,
+  :searching while a search that spent its nodes goes on (kept: ask again)."
   [c dug max-digs]
   (let [p (:primitives c)
         at (fn [[x y z]] (or (u/seen-name p {:x x :y y :z z}) "stone"))
-        from (u/cell-vec (u/self-pos c))]
-    (->> [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 -1 0] [0 1 0]]
-         (keep #(:dig (dig-route/route at from (mapv + dug %) {:max-digs max-digs :max-fall 1})))
-         (filter #(<= (count %) max-digs))
-         (sort-by count)
-         first)))
+        from (u/cell-vec (u/self-pos c))
+        routes (mapv #(let [goal (mapv + dug %)]
+                        (dig-route/route-resumed [(:id c) :drop-cut from goal max-digs] at from goal {:max-digs max-digs :max-fall 1}))
+                     [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 -1 0] [0 1 0]])]
+    (or (->> routes (keep :dig) (filter #(<= (count %) max-digs)) (sort-by count) first)
+        (when (some #{:searching} (map :problem routes)) :searching))))
 
 (defn ^:async cut-to-drop!
   "Open a way beside the cell dug (drop-cut), one dig child per cell, at most cap tries per cell (a dug cell's drop: ::drop-cut-max; a seen ore: ::target-cut-max); the
@@ -104,6 +105,7 @@
           cells (drop-cut c dug (- cap n))]
       (cond
         (nil? cells) nil
+        (= :searching cells) :partial
         (empty? cells) :cut
         :else (let [cell (first cells)
                     o (await (dig-cell! c (zipmap [:x :y :z] cell)))]

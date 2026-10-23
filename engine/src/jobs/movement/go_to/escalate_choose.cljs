@@ -352,19 +352,24 @@
 (defn dig-leg
   "A buried body's next leg of a dig toward a goal: {:step
   :dig-route :cells :leg-s} to the farthest of leg-ends that route-cells reaches, :leg-s its dig seconds; nil when none
-  does; {:step :none :why :dig-budget} when the call's legs so far (memory :leg-dig-s) and this one would dig longer than
-  the caller's :worth, else the call's job time left."
-  [c from goal may-dig? {:keys [own? skip fetch?]}]
+  does; {:step :searching} while opts :slice's search goes on; {:step :none :why :dig-budget} when the call's legs so far
+  (memory :leg-dig-s) and this one would dig longer than the caller's :worth, else the call's job time left."
+  [c from goal may-dig? {:keys [own? skip fetch? slice]}]
   (when-not (skip :dig-route)
     (let [p (:primitives c)
-          budget (or (:worth (:args c)) (get-in (ctx/left c) [:spend :job-time] ##Inf))]
-      (when-let [[cells s] (some (fn [end]
-                                   (when-let [cells (seq (route-cells p from end may-dig? own? false fetch? {:margin leg-margin}))]
-                                     [(vec cells) (route-s p (map :cell cells) own? fetch?)]))
-                                 (leg-ends from goal))]
-        (if (<= (+ (:leg-dig-s (ctx/mem c) 0) s) budget)
-          {:step :dig-route :cells cells :leg-s s}
-          {:step :none :why :dig-budget :dug-s (:leg-dig-s (ctx/mem c) 0) :budget-s budget})))))
+          budget (or (:worth (:args c)) (get-in (ctx/left c) [:spend :job-time] ##Inf))
+          found (loop [ends (leg-ends from goal)]
+                  (when-let [end (first ends)]
+                    (let [cells (route-cells p from end may-dig? own? false fetch? (cond-> {:margin leg-margin} slice (assoc :slice slice)))]
+                      (cond (= :searching cells) :searching
+                            (seq cells) [(vec cells) (route-s p (map :cell cells) own? fetch?)]
+                            :else (recur (rest ends))))))]
+      (if (= :searching found)
+        {:step :searching}
+        (when-let [[cells s] found]
+          (if (<= (+ (:leg-dig-s (ctx/mem c) 0) s) budget)
+            {:step :dig-route :cells cells :leg-s s}
+            {:step :none :why :dig-budget :dug-s (:leg-dig-s (ctx/mem c) 0) :budget-s budget}))))))
 
 (defn nearest-stand
   "A cell [x y z] the body can walk to (a flood of at most reach-room/room-cells cells) nearest goal: of the cells no farther
@@ -413,16 +418,20 @@
 
 (defn detour-way
   "A buried body's way to a goal its only found way reaches by a long detour (walk.cljs :detour): the cheapest cells
-  dug from the feet into goal pos (dig-way), else a stair when the goal is above; nil when the call may not escalate,
-  tried it already (memory :detour-tried) or neither is there."
+  dug from the feet into goal pos (dig-way), {:step :searching} while that search goes on (kept for the call: ask again),
+  else a stair when the goal is above; nil when the call may not escalate, tried it already (memory :detour-tried) or
+  neither is there."
   [c pos]
   (when (and (ways/escalating? c) (not (:detour-tried (ctx/mem c))))
     (let [p (:primitives c)
           feet (end/feet-cell c)
           goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
-          opts {:own? (own-placed-fn c) :skip (skips c) :fetch? (fetch-tool? c) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c)}
-          may-dig? (may-dig-fn c)]
-      (or (dig-way p feet goal may-dig? opts)
+          slice (route-slice (route-owner c))
+          opts {:own? (own-placed-fn c) :skip (skips c) :fetch? (fetch-tool? c) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c) :slice slice}
+          may-dig? (may-dig-fn c)
+          e (dig-way p feet goal may-dig? opts)]
+      (keep-routes! slice)
+      (or e
           (when (> (second goal) (second feet))
             (let [e (escape/choose p feet goal may-dig? opts)]
               (when (= :stair (:step e)) e)))))))

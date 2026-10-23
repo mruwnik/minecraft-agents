@@ -271,14 +271,17 @@
 (defn drop-route
   "dig-route/route from a feet cell to the cell of a drop lying at goal; block-at answers a cell's name or nil when never
   seen; a cell never seen is taken for stone (a rim sees no floor down a dug column), except under a seen open cell: it may
-  be air of any depth (a trench), so no step lands on it. A drop at rest has a solid floor, seen or not."
-  [block-at from [gx gy gz :as goal]]
-  (dig-route/route (fn [cell]
-                     (or (block-at cell)
-                         (when (or (= cell [gx (dec gy) gz]) (not (open-above? block-at cell))) "stone")))
-                   from goal
-                   {:max-digs (settings/get settings ::dig-max-cells) :margin (settings/get settings ::dig-margin)
-                    :max-fall (settings/get settings ::dig-max-fall)}))
+  be air of any depth (a trench), so no step lands on it. A drop at rest has a solid floor, seen or not. With an owner (a job
+  id) a search that spends its nodes is kept and gone on at the next call: {:problem :searching} till it ends."
+  ([block-at from goal] (drop-route nil block-at from goal))
+  ([owner block-at from [gx gy gz :as goal]]
+   ((if owner (partial dig-route/route-resumed [owner :drop-route from goal]) dig-route/route)
+    (fn [cell]
+      (or (block-at cell)
+          (when (or (= cell [gx (dec gy) gz]) (not (open-above? block-at cell))) "stone")))
+    from goal
+    {:max-digs (settings/get settings ::dig-max-cells) :margin (settings/get settings ::dig-margin)
+     :max-fall (settings/get settings ::dig-max-fall)})))
 
 (defn ^:async look-pit!
   "A route over cells never seen takes them for stone, so a drop in a pit is dug to round the pit: first a look at the unsensed
@@ -324,9 +327,11 @@
     (loop [pass 0]
       (let [from (u/cell-vec (u/self-pos c))
             _ (await (look-pit! c from (item-cell item)))
-            r (drop-route (fn [[x y z]] (u/seen-name p {:x x :y y :z z})) from (item-cell item))]
-        (if (:problem r)
-          :no-route
+            r (drop-route (:id c) (fn [[x y z]] (u/seen-name p {:x x :y y :z z})) from (item-cell item))]
+        (case (:problem r)
+          :searching :continue
+          :no-route :no-route
+          nil
           (let [d (await (dig-cells! c (:dig r)))]
             (cond
               (= :dug d) :dug

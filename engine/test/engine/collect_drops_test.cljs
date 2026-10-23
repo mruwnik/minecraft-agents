@@ -602,3 +602,12 @@
           (let [result (await (tu/child-outcome eng job {:radius 6 :items ["oak_log"] :near {:x 6 :y 64 :z 0} :search 3 :dig true} 200))]
             (is (= 1 (bd/carried p "oak_log")))
             (is (= 1 (:collected result)))))))))
+
+(deftest a-drop-route-that-spends-its-nodes-goes-on-at-the-next-call
+  (let [seen (fn [[x y z]] (cond (and (<= 16 x 22) (<= 0 y 1) (= z 16)) "air"
+                                 (and (<= 16 x 22) (= y -1) (= z 16)) "stone"))
+        ask #(job-ns/drop-route "resume" seen [16 0 16] [22 0 16])
+        first-ask (settings/with-settings {:jobs.lib.dig-route/max-nodes 3} ask)]
+    (is (= {:problem :searching} first-ask))
+    (is (= {:dig []} (settings/with-settings {:jobs.lib.dig-route/max-nodes 3}
+                       #(loop [n 0] (let [r (ask)] (if (and (:problem r) (< n 3000)) (recur (inc n)) r))))))))

@@ -569,3 +569,12 @@
                                                  {:pos [9 57 0]}))]
           (is (true? (:arrived @out)) (pr-str @out))
           (is (= #{:dig-route} (set (map :step (gt/events-of s :go-to.escalated)))) (pr-str (map #(select-keys % [:step :at]) (gt/events-of s :go-to.escalated)))))))))
+
+(deftest a-detour-dig-whose-search-spends-its-nodes-goes-on-next-round-not-to-a-give-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out] :as s} (await (settings/with-settings {:jobs.lib.dig-route/max-nodes 30}
+                                            #(climb! (assoc in-loop :blocks rock-loop :inventory [{:name "stone_pickaxe" :count 1}]) {:pos across :range 0 :unknown false})))]
+          (is (true? (:arrived @out)) (pr-str (select-keys @out [:why :text])))
+          (is (= [:dig-route] (map :step (gt/events-of s :go-to.escalated)))))))))

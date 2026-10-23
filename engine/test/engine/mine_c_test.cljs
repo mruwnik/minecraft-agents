@@ -652,3 +652,12 @@
 
 (deftest a-walk-to-a-drop-plans-no-dive
   (is (false? (:dive drops/drop-walk-opts)) "a drop sunk into deep water is not swum after"))
+
+(deftest a-cut-search-that-spends-its-nodes-goes-on-at-the-next-call
+  (let [s (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})
+        c {:primitives (:p s) :id "cut-resume"}
+        asks (settings/with-settings {:jobs.lib.dig-route/max-nodes 1}
+               #(vec (take-while #{:searching} (repeatedly (fn [] (drops/drop-cut c [2 64 0] 4))))))]
+    (is (seq asks) "the first call is cut short")
+    (is (= [[1 64 0]] (settings/with-settings {:jobs.lib.dig-route/max-nodes 1}
+                        #(loop [n 0] (let [r (drops/drop-cut c [2 64 0] 4)] (if (and (= :searching r) (< n 200)) (recur (inc n)) r))))))))

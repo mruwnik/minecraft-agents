@@ -84,3 +84,11 @@
     (is (< 3 (count slices)) "the search spans slices")
     (is (seq (:dig (first (run 40)))))
     (is (= (dr/route w [0 10 0] [20 4 6] (assoc opts :max-nodes 100000)) (first (run 40))))))
+
+(deftest a-search-that-spends-its-nodes-goes-on-at-the-next-call-with-its-key
+  (let [w (world {[20 4 6] "air" [20 5 6] "air"})
+        opts {:dig-s (constantly 0.5) :step-s 0.2 :max-nodes 40}
+        asks (loop [rs []] (let [r (dr/route-resumed [:t 1] w [0 10 0] [20 4 6] opts)] (if (and (= {:problem :searching} r) (< (count rs) 300)) (recur (conj rs r)) (conj rs r))))
+        done (peek asks)]
+    (is (< 3 (count asks)) "each call is one slice")
+    (is (= (dr/route w [0 10 0] [20 4 6] (assoc opts :max-nodes 100000)) done))))

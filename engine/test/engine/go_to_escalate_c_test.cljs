@@ -767,3 +767,15 @@
               {:keys [out p]} (await (run-job! {:self {:pos {:x 61.5 :y 69 :z 9.5}} :blocks blocks :light [0 0]} {:pos [63 69 12] :range 1}))]
           (is (false? (:arrived @out)) (pr-str @out))
           (is (= 69 (second (feet p))) "the body did not drop into the pit"))))))
+
+(deftest a-dig-leg-whose-search-spends-its-slice-goes-on-in-the-next
+  (let [p (tu/fake {:blocks (box -2 60 -2 20 70 2 "stone") :inventory [{:name "stone_pickaxe" :count 1}]})
+        c {:primitives p :args {}}
+        slice (atom nil)
+        leg #(let [s (choose/route-slice "leg-resume")] (reset! slice s) (choose/dig-leg c [0 64 0] [12 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice s}))]
+    (with-redefs [ctx/mem (constantly {}) ctx/left (constantly {})]
+      (settings/with-settings {:jobs.lib.dig-route/max-nodes 5}
+        #(let [first-leg (leg)
+               legs (loop [n 0] (let [e (leg)] (if (and (= :searching (:step e)) (< n 300)) (recur (inc n)) e)))]
+           (is (= {:step :searching} first-leg))
+           (is (= :dig-route (:step legs)) (pr-str (:step legs))))))))

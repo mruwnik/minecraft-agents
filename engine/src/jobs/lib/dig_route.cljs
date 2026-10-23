@@ -152,3 +152,21 @@
   or {:problem :budget} when :max-nodes cells were expanded first (search goes on past it)."
   [block-at from goal opts]
   (or (first ((search block-at from goal opts) (get opts :max-nodes (settings/get settings ::max-nodes)))) {:problem :budget}))
+
+(defonce ^{:doc "{key search-fn} of the searches route-resumed left unfinished, the oldest dropped past kept-max."} kept (js/Map.))
+
+(def kept-max 16)
+
+(defn route-resumed
+  "route, but a search that spends :max-nodes is kept under key and gone on by the next call with the same key:
+  {:problem :searching} till it ends. A key names the caller and the search ([job-id :kind from goal]); a search never
+  asked again falls out of kept."
+  [key block-at from goal opts]
+  (let [key (pr-str key)
+        run (or (.get kept key) (search block-at from goal opts))
+        [a] (run (get opts :max-nodes (settings/get settings ::max-nodes)))]
+    (.delete kept key)
+    (when-not a
+      (.set kept key run)
+      (when (> (.-size kept) kept-max) (.delete kept (.-value (.next (.keys kept))))))
+    (or a {:problem :searching})))

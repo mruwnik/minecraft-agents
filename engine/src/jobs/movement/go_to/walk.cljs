@@ -452,9 +452,11 @@
 
           (and (= "stair" status) (:detour (:why walked)))
           (let [why (dissoc (:why walked) :detour)]
-            (if-let [e (choose/detour-way c pos)]
-              (esc/detour-escalate! c (:blocked (ctx/mem c) 0) why e)
-              (end/give-up! c pos {:status :no-path :reason :detour} why)))
+            (let [e (choose/detour-way c pos)]
+              (case (:step e)
+                nil (end/give-up! c pos {:status :no-path :reason :detour} why)
+                :searching :again
+                (esc/detour-escalate! c (:blocked (ctx/mem c) 0) why e))))
 
           (and (= "stair" status) (:air-spent (:why walked)) (< (:landings (ctx/mem c) 0) max-landings))
           (do (await (air/surface! c (dissoc opts :progress) pos))
