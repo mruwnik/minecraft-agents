@@ -167,7 +167,9 @@
    (let [pend (when (noting? c last-resort?) (pending c :dig pos))
          r (await (ctx/act c :dig (clj->js (merge opts {:pos pos}))))
          _ (await (tools/note-wear! c))]
-     (when (= "dug" (.-status r)) (record! c pend "air"))
+     (when (= "dug" (.-status r))
+       (built/forget! c (spent/cell-vec pos))
+       (record! c pend "air"))
      r)))
 
 (defn ^:async place!

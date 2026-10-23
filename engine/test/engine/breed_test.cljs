@@ -460,7 +460,7 @@
   (await (settings/with-settings {:jobs.animals.breed/calf-wait-s 0}
            #(let [s (setup {:inventory (wheat 2) :blocks (pen-blocks true) :states {"6,64,0" {:open false :facing "east"}}
                             :entities [(cow 1 14 {:pos {:x 14 :y 64 :z 1}}) (cow 2 14 {:pos {:x 14 :y 64 :z -1}})]})]
-              (mem/write! (:store (:eng s)) built/kind {:cells placed} built/policy)
+              (mem/write! (:store (:eng s)) built/kind (reduce built/add-cell {} placed) built/policy)
               (core/submit! (:eng s) '(jobs.animals.breed {:mob "cow"}) {})
               (.then (run-ticks s 12 700) (fn [_] s))))))
 
