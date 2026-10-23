@@ -110,14 +110,15 @@
     (is (> (:dark-s detour) (* 1.5 (:dark-s straight))) "50 dark blocks against 30")
     (is (> (:spawn-hp detour) (:spawn-hp straight)))))
 
-(deftest a-partial-plan-prices-its-unplanned-rest-as-unseen
-  (let [c (ready-test/ctx-of {:time st/night :self {:pos {:x 0.5 :y 64 :z 0.5}}})
-        goal {:x 30 :y 64 :z 0}
-        dark-s #(:dark-s (risk/estimate c goal {:plan %}))]
-    (with-redefs [sh-sense/block-light-at (constantly 15)]
-      (is (zero? (dark-s (plan-of straight-cells))) "every seen cell of the way torch-lit")
-      (is (pos? (dark-s {:status "partial" :steps (take 10 straight-cells)})) "the 20 blocks past the partial plan's end are unseen")
-      (is (= (dark-s {:status "partial" :steps []}) (dark-s nil)) "a walk not planned yet is all rest"))))
+(deftest a-partial-plan-prices-its-unplanned-rest-on-the-straight-line
+  (let [c (ready-test/ctx-of {:time st/noon :floor [0 -24 80 24] :self {:pos {:x 2.5 :y 64 :z 0.5}}
+                              :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 36.5 :y 64 :z 2.5}}]})
+        goal {:x 70 :y 64 :z 0}
+        line (for [x (range 3 71)] {:x x :y 64 :z 0})
+        round (concat (for [z (range -1 -21 -1)] {:x 2 :y 64 :z z}) (for [x (range 3 71)] {:x x :y 64 :z -20}) (for [z (range -19 1)] {:x 70 :y 64 :z z}))
+        hurt #(:hostile-hp (risk/estimate c goal {:plan %}))]
+    (is (> (hurt {:status "partial" :steps (take 8 line)}) (* 4 (hurt (plan-of round)))) "the rest past x 10 runs by the zombie; the found way keeps 22 blocks off")
+    (is (= (hurt {:status "partial" :steps (take 8 line)}) (hurt (plan-of line))) "the rest is the line")))
 
 (deftest a-hostile-beside-the-straight-line-is-priced-on-go-to-s-plan-round-its-field-the-cells-it-walks
   (async done

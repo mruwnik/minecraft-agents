@@ -1,7 +1,7 @@
 (ns jobs.lib.walk-risk
   "go-to's walk risk: the risk of the walk to the goal, in hit points, against what the body can afford, priced on the way
   go-to plans (way): its plan's cells, and past a plan that is not found (partial, or none yet) the rest to the goal on the
-  straight line, priced as unseen. It replaces any wait for dawn: a night walk is judged by the light the body perceives along
+  straight line. It replaces any wait for dawn: a night walk is judged by the light the body perceives along
   the way (Q334), a walk underground by the hostiles it can reach and the dark halls it crosses (a roofed dark cell prices
   spawns only where dark floor beyond the spawn-free radius is reachable: ready/hall-at?, Q345).
   Risk = the mobs expected to spawn on the exposed stretches (jobs.lib.cost/spawn-chance per second of walking, each costed
@@ -55,12 +55,12 @@
 
 (defn- chance-at
   "The spawn chance per second at `cell` for a body at feet: a seen cell by its light (sky reaching it down its column; a roofed cell is dark only in a dark hall), an unseen one
-  (any, with unseen?) by the open-sky guess when it lies within the surface band of `top`; underground-unseen cells carry none."
-  [p cell top underground? & [unseen?]]
+  by the open-sky guess when it lies within the surface band of `top`; underground-unseen cells carry none."
+  [p cell top underground?]
   (let [night (not (look/lit-light? 0 15 (sh-sense/sky-subtract-now p)))
         sky (if night 0 15)
         cell (if (sh-sense/solid-at? p cell) (update cell :y inc) cell)
-        block (when (and (not unseen?) (or (sh-sense/seen-cell? p cell) (look/glimpse? p cell))) (sh-sense/block-light-at p cell))]
+        block (when (or (sh-sense/seen-cell? p cell) (look/glimpse? p cell)) (sh-sense/block-light-at p cell))]
     (cond
       block (cost/spawn-chance [(:x cell) (:y cell) (:z cell)]
                                {:light (constantly {:block block :sky (cond (sh-sense/sky-reaches-from-above? p cell) sky (and (< block (look/dark-light)) (ready/hall-at? p cell)) 0 :else 15)})})
@@ -101,15 +101,14 @@
 (defn- floor-cell [pos] {:x (js/Math.floor (:x pos)) :y (js/Math.floor (:y pos)) :z (js/Math.floor (:z pos))})
 
 (defn way
-  "The cells a walk from feet to goal is priced on, {:cells :rest-from}: cells {:x :y :z} from the body's cell along the
-  steps of plan (go-to's, {:status :steps}), then, unless the plan is \"found\" (a partial one, or none), the rest to the goal
-  a block apart on the straight line; rest-from the index of the first of the rest, priced as unseen: the planner has not
-  said where it runs."
+  "The cells {:x :y :z} a walk from feet to goal is priced on: from the body's cell along the steps of plan (go-to's,
+  {:status :steps}), then, unless the plan is \"found\" (a partial one, or none), the rest to the goal a block apart on
+  the straight line, which the planner has not said it avoids: each priced by what the body knows of it (an unseen cell
+  as unseen)."
   [feet goal {:keys [status steps]}]
   (let [planned (into [] (dedupe) (cons (floor-cell feet) (map floor-cell steps)))
         end (peek planned)]
-    {:cells (into planned (when-not (= "found" status) (remove #{end} (cells-along end goal 1))))
-     :rest-from (count planned)}))
+    (into planned (when-not (= "found" status) (remove #{end} (cells-along end goal 1))))))
 
 (defn- along
   "The blocks walked from the first of cells to each of them."
@@ -117,15 +116,15 @@
   (vec (reductions + 0 (map u/dist cells (rest cells)))))
 
 (defn- dark-seconds
-  "Seconds of the walk over cells where a mob could spawn (chance-at, the rest from rest-from on as unseen): every k-th
-  cell and the last stand for the stretch walked since the one before, k the larger of ::step and the cells over ::max-cells."
-  [p cells rest-from top underground?]
+  "Seconds of the walk over cells where a mob could spawn (chance-at): every k-th cell and the last stand for the stretch
+  walked since the one before, k the larger of ::step and the cells over ::max-cells."
+  [p cells top underground?]
   (let [n (count cells)
         k (js/Math.ceil (max (settings/get settings ::step) (/ n (settings/get settings ::max-cells))))
         blocks (along cells)
         ends (distinct (concat (range k n k) [(dec n)]))]
     (/ (reduce + (for [[a b] (map vector (cons 0 ends) ends)
-                       :when (pos? (chance-at p (nth cells b) top underground? (>= b rest-from)))]
+                       :when (pos? (chance-at p (nth cells b) top underground?))]
                    (- (blocks b) (blocks a))))
        (cost/walk-blocks-per-s))))
 
@@ -143,9 +142,9 @@
         underground? (and (sh-sense/buried? p)
                           (or (sh-sense/buried-at? p goal) (ready/hidden-below? p goal)))
         leaves? (sh-inside/walk-leaves-shelter? p (:data (ctx/latest c :shelter)) goal 1)
-        {:keys [cells rest-from]} (way feet goal plan)
+        cells (way feet goal plan)
         exit (if leaves? (settings/get settings ::exit-blocks) 0)
-        exposed-s (+ (/ exit (cost/walk-blocks-per-s)) (dark-seconds p cells rest-from top underground?))
+        exposed-s (+ (/ exit (cost/walk-blocks-per-s)) (dark-seconds p cells top underground?))
         spawns (* exposed-s (cost/spawn-chance [0 0 0]))
         body (threats/death-body c)
         threat-hp (fn [ts] (if (seq ts) (cost/route-hurt body {:cells cells :threats (threats/with-reach c ts)}) 0))
