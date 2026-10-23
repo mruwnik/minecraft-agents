@@ -106,10 +106,6 @@
   [c]
   (reach-room/enclosed? (:primitives c) :raw #{} (settings/get settings ::pocket-cells)))
 
-(defn far-above-or-below?
-  [c cell]
-  (> (js/Math.abs (- (second (:pos cell)) (:y (u/self-pos c)))) (plan/reach)))
-
 (defn shut-in-walk?
   "Whether the last walk ended because the body is shut in (go-to refuses to dig or build out of a restricted walk) and the
   room it can walk in is a pocket of at most ::pocket-cells: a larger closed hall still has room to bridge or pillar in. Read from the true world as go-to's plan is: it confirms go-to's shut-in verdict, and in the dark the walls of a pocket are not seen."
@@ -135,36 +131,35 @@
   "A cell shut in by rock: with a pickaxe, cut a way (jobs.access.tunnel) to the deepest such cell, so the body stands in the
   plan's cells and fills them while backing out; without one the cell is given up :no-tool at once. :continue while the
   tunnel waits, :again once it is cut or failed (a failure counts against the cell), nil when the cell is open to air or
-  the body already stands at the end of the way. Not from a closed pocket for a cell more than a reach above or below it:
-  unseen faces read as rock there, the tunnel cannot climb from a level start, and go-to's escalation digs the body out first."
+  the body already stands at the end of the way. A cell beyond the body's reach with faces never seen is walked to first (rock-bound?)."
   [c cells cell]
   (let [p (:primitives c)
         closed (merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
         shut? #(shut-in? c %)]
-    (when (and (shut? cell) (not (and (far-above-or-below? c cell) (in-pocket? c))))
-      (if (needs-tool? p cell)
-        (let [pos (:pos cell)
-              near? (<= (u/eye-dist (u/self-pos c) pos) (plan/reach))
-              [x y z] pos
-              by-rock? (some #(= :no-tool (get (:given-up (ctx/mem c)) %)) [[(inc x) y z] [(dec x) y z] [x (inc y) z] [x (dec y) z] [x y (inc z)] [x y (dec z)]])]
-          (cond
-            (and near? (not (contains? (:rock-looked (ctx/mem c)) pos)))
-            (do (ctx/update-mem! c update :rock-looked (fnil conj #{}) pos)
-                (await (dig-look/look-at! c pos))
-                :again)
-            (or near? by-rock?)
-            (do (ctx/update-mem! c assoc-in [:given-up pos] :no-tool)
-                :again)))
-        (let [body (u/self-pos c)
-              _ (ctx/update-mem! c update :mouth #(or % (mapv js/Math.floor [(:x body) (:y body) (:z body)])))
-              open (filter #(and (not= :match (:answer %)) (not (:companion %)) (not (contains? closed (:pos %))) (shut? %)) cells)
-              deepest (if (seq open) (apply max-key #(u/dist body (zipmap [:x :y :z] (:pos %))) open) cell)
-              r (await (ctx/call c :tunnel 'jobs.access.tunnel {:target (:pos deepest) :through (:plan (:args c)) :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
-          (cond
-            (= :continue r) :continue
-            (and (= :done (:kind r)) (= :already (:reason (:data r)))) nil
-            (= :done (:kind r)) (do (ctx/update-mem! c #(-> (update % :sightless disj (:pos deepest)) (update-in [:tunnels (:pos deepest)] (fnil inc 0)))) :again)
-            :else (do (ctx/update-mem! c walk-fail (:pos deepest) :unreachable (give-up) (u/self-pos c)) :again)))))))
+    (when (shut? cell)
+      (let [pos (:pos cell)
+            near? (<= (u/eye-dist (u/self-pos c) pos) (plan/reach))]
+        (if (and near? (not (contains? (:rock-looked (ctx/mem c)) pos)))
+          (do (ctx/update-mem! c update :rock-looked (fnil conj #{}) pos)
+              (await (dig-look/look-at! c pos))
+              :again)
+          (if (needs-tool? p cell)
+            (let [[x y z] pos
+                  by-rock? (some #(= :no-tool (get (:given-up (ctx/mem c)) %)) [[(inc x) y z] [(dec x) y z] [x (inc y) z] [x (dec y) z] [x y (inc z)] [x y (dec z)]])]
+              (cond
+                (or near? by-rock?)
+                (do (ctx/update-mem! c assoc-in [:given-up pos] :no-tool)
+                    :again)))
+            (let [body (u/self-pos c)
+                  _ (ctx/update-mem! c update :mouth #(or % (mapv js/Math.floor [(:x body) (:y body) (:z body)])))
+                  open (filter #(and (not= :match (:answer %)) (not (:companion %)) (not (contains? closed (:pos %))) (shut? %)) cells)
+                  deepest (if (seq open) (apply max-key #(u/dist body (zipmap [:x :y :z] (:pos %))) open) cell)
+                  r (await (ctx/call c :tunnel 'jobs.access.tunnel {:target (:pos deepest) :through (:plan (:args c)) :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+            (cond
+              (= :continue r) :continue
+              (and (= :done (:kind r)) (= :already (:reason (:data r)))) nil
+              (= :done (:kind r)) (do (ctx/update-mem! c #(-> (update % :sightless disj (:pos deepest)) (update-in [:tunnels (:pos deepest)] (fnil inc 0)))) :again)
+              :else (do (ctx/update-mem! c walk-fail (:pos deepest) :unreachable (give-up) (u/self-pos c)) :again)))))))))
 
 (defn ^:async walk-to-stand!
   "Walk to a stand cell beside cell (:continue while the walk waits, else :again); a cell that cannot be walked to, or is still out of reach (or unseen, as :unseen) on arrival, counts a failure."

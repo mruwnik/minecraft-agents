@@ -51,7 +51,7 @@
   ([spec plans zones] (start spec plans zones nil))
   ([spec plans zones jobs]
   (let [[seen sink] (tu/legacy-capture-sink)
-        p (tu/seeing-all (tu/fake-on-floor spec))
+        p (cond-> (tu/seeing-all (tu/fake-on-floor spec)) (:sight spec) (tu/seeing-within (:sight spec)))
         w (world/of-data plans {} zones)
         eng (core/create {:primitives p :jobs (merge registry/jobs jobs) :triggers triggers/all :dir (tu/tmp-dir) :now #(deref h/clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref h/clock)})
@@ -241,20 +241,23 @@
           (is (= [[3 64 2] "ring"] (distinct @targets)) "the target, and the plan whose footprint the tunnel may cut")
           (is (= {[3 64 2] :unreachable} (:given-up result)) "a tunnel that fails gives the cell up"))))))
 
-(deftest a-body-shut-in-a-pocket-digs-out-before-any-tunnel-for-a-cell-in-rock
+(deftest a-cell-never-seen-beyond-a-pocket-wall-is-walked-to-not-tunnelled-to
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [targets (atom [])
-              tunnel {:round (fn ^:async w [c] (swap! targets conj (js/Math.floor (:x (u/self-pos c)))) (ctx/end c :nothing-possible :dig-failed {}))}
-              plan {:id "ring" :parts [{:id "p" :cells [[3 75 2]] :want "dirt"}]}
-              rock (into {} (for [x (range -2 15) z (range -4 9) y (range 62 80)] [(str x "," y "," z) "stone"]))
+              tunnel {:round (fn ^:async w [c] (swap! targets conj (:target (:args c))) (ctx/end c :nothing-possible :dig-failed {}))}
+              plan {:id "ring" :parts [{:id "p" :cells [[12 64 7]] :want "dirt"}]}
+              shell (into {} (for [x (range 11 14) z (range 1 4) y (range 62 67)
+                                   :when (not (and (= x 12) (= z 2) (#{64 65} y)))]
+                               [(str x "," y "," z) "stone"]))
               {:keys [eng]} (start {:inventory [{:name "stone_pickaxe" :count 1} {:name "dirt" :count 4}]
-                                    :blocks (assoc rock "12,64,2" "air" "12,65,2" "air")
+                                    :blocks (assoc shell "12,63,7" "stone") :sight 4
                                     :self {:pos {:x 12.5 :y 64 :z 2.5}}}
-                                   {"ring" plan} [] {'jobs.access.tunnel tunnel})]
-          (await (child-outcome eng job {:plan "ring"} 200))
-          (is (not-any? #{12} @targets) "no tunnel is begun from the pocket; go-to digs the body out first"))))))
+                                   {"ring" plan} [] {'jobs.access.tunnel tunnel})
+              result (await (child-outcome eng job {:plan "ring"} 200))]
+          (is (empty? @targets) "the cell was never seen in rock: no tunnel, the body digs out and walks")
+          (is (= 1 (:placed result)) "and builds it"))))))
 
 (deftest a-dig-in-rock-with-no-pickaxe-is-given-up-no-tool-without-a-tunnel
   (async done

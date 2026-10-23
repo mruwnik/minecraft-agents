@@ -121,11 +121,16 @@
 
 (defn rock-bound?
   "Whether rock holds cell in on every side: no air beside it to stand in or see it from (a face not loaded yet counts as
-  open: it will load; a neighbour dug open is air). A face never seen counts as rock."
+  open: it will load; a neighbour dug open is air). A face never seen counts as rock only once the cell is within
+  :reach of the body (it has walked up and looked): a cell farther off is walked to first, not tunnelled to."
   [p cell]
   (let [[x y z] (:pos cell)
+        near? (<= (u/eye-dist (u/pos-of (.-pos (.self p))) (:pos cell)) (plan/reach))
         solid? (fn [n] (let [b (u/sensed p (pos-map n))]
-                         (and (some? b) (or (true? (.-unknown b)) (not (or (bs/passable? (.-name b)) (bs/fluids (.-name b))))))))]
+                         (and (some? b)
+                              (if (true? (.-unknown b))
+                                near?
+                                (not (or (bs/passable? (.-name b)) (bs/fluids (.-name b))))))))]
     (every? solid? [[(inc x) y z] [(dec x) y z] [x (inc y) z] [x (dec y) z] [x y (inc z)] [x y (dec z)]])))
 
 (defn retreat-dists
