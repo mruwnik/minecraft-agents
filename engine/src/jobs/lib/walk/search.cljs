@@ -35,6 +35,10 @@
   "Blocks nearer the goal an unfinished search's progress end must be for a budgeted plan-walk! to walk to it."
   8)
 
+(def finished-max-age-ms
+  "A found plan a quote left under its key is walked as it is by the next plan of that key within this age (the land it read may have changed since)."
+  5000)
+
 (def kept-max "Unfinished searches kept per body: another plan between a quote's rounds does not restart it." 3)
 
 (defonce ^{:doc "The unfinished budgeted searches of each body (keyed by its primitives, so a new body of the same name starts clean), each under its key: {key {:key :t :walled :limited :r :unlimited}}, the oldest dropped past kept-max. key says
@@ -264,20 +268,22 @@
   is unfinished-plan's (progress, default true: whether it may walk to where the search has got to). With frontier, the
   searches read and add to the body's known land toward the goal (known-land): a frontier in land an earlier search
   knew to its end is walked to only when there is no other (:frontier-taken :known)."
-  [c pw to range weight {:keys [policy walls one-way frontier budget progress] :or {progress true}}]
+  [c pw to range weight {:keys [policy walls one-way frontier budget progress quoted] :or {progress true}}]
   (let [t (js/performance.now)
         who (:primitives c)
         k (search-key c to range weight policy walls pw)
         kept (get-in @searches [who k])
         known (when frontier (known-cells! c to range))
-        fresh? (not (go-on? c kept k pw to policy))
+        on? (go-on? c kept k pw to policy)
+        done (when (and on? (:within kept) (< (- (now c) (:t-done kept)) finished-max-age-ms)) (:within kept))
+        fresh? (not (and on? (or done (not (:within kept)))))
         search (if-not fresh?
                  kept
                  (new-search c (wworld/with-walls pw walls) to range weight policy k known (goal-flood! c to range weight policy walls (wworld/unknown-key pw))))
-        [search within] (await (run-search! c search budget policy to range weight))
+        [search within] (if done [search done] (await (run-search! c search budget policy to range weight)))
         ms (- (js/performance.now) t)]
     (if within
-      (do (keep-search! who k nil)
+      (do (keep-search! who k (when (and quoted (not done) (= "found" (.-status ^js (:r within)))) (assoc search :within within :t-done (now c))))
           (when known (learn-known! known (:r within)))
           (wplan/walk-plan c (:walled search) (:walled search) to one-way frontier within))
       (let [plan (assoc (unfinished-plan search ms one-way progress (if (:unknown c) (wplan/masked-wet-ok c) (constantly false)) #(wplan/one-way-priced? c to %1 %2)) :fresh fresh?)]

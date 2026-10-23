@@ -52,8 +52,9 @@
   With avoid (a set of [x y z] cells), each plan costs entering them much more (wworld/with-avoid): a way round is taken when there is one.
   With tolls ([{:x :y :z :factor}], jobs.lib.cost farm-tolls and zone-tolls), each plan costs those cells factor times their seconds more (wworld/with-tolls); a toll of ##Inf is a wall.
   With unknown (wworld/unknown-spec), each plan reads the cells the body never saw as unknown (wworld/path-world).
+  With quoted, a found plan stays kept for the next plan of the same search key (walk/plan-walk-budgeted!), so go-to's walk does not search the quoted route again.
   A promise: the searches run in slices with yields between them (walk/plan-walk!), so the body's API answers meanwhile."
-  [c to range doors policy walls explore one-way budget progress dangers & [avoid dark tolls unknown]]
+  [c to range doors policy walls explore one-way budget progress dangers & [avoid dark tolls unknown quoted]]
   (loop [walls (into (vec walls) (map #(select-keys % [:x :y :z])) (filter #(infinite? (:factor %)) tolls))]
     (let [tolls (remove #(infinite? (:factor %)) tolls)
           pw (cond-> (wworld/costed-world c (wworld/path-world (:primitives c) unknown) {:dangers? dangers :dark? (not (false? dark))})
@@ -61,7 +62,7 @@
                (seq tolls) (wworld/with-tolls tolls))
           plan (await (walk/plan-walk! c pw to range (walk/default-weight)
                                        {:policy policy :walls walls :one-way one-way :frontier explore :budget budget
-                                        :progress progress}))
+                                        :progress progress :quoted quoted}))
           iron (when-not (= :never doors) (iron-cells c (:steps plan)))]
       (when budget
         (let [^js r (:r plan)]

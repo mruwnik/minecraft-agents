@@ -16,6 +16,7 @@
             [engine.perception.rays :as rays]
             [jobs.lib.danger :as danger-q]
             [engine.fake.raw-world :as fake-raw]
+            [engine.path.planner-tuned :as planner]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.search :as wsearch]
@@ -691,6 +692,19 @@
             (is (> @plans 3) "several search slices")
             (is (= [:done] @returns) "searched and walked in one call")
             (is (>= @paces (- @plans 2)) "every walk slice after the first awaited the pace timer (the call's quote searches first, with none)")))))))
+
+(deftest a-fresh-call-whose-quote-found-the-route-plans-it-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [searches (atom 0)
+              create-plan planner/create-plan]
+          (reset! wsearch/searches {})
+          (set! planner/create-plan (fn [& args] (swap! searches inc) (apply create-plan args)))
+          (let [{:keys [out]} (try (await (go-returns! {:blocks flat} {:pos [10 64 0] :range 0}))
+                                   (finally (set! planner/create-plan create-plan)))]
+            (is (= {:arrived true} @out))
+            (is (= 1 @searches) "the walk took the plan the quote found")))))))
 
 (deftest a-cut-stops-the-search-loop-and-the-next-call-resumes-and-arrives
   (async done

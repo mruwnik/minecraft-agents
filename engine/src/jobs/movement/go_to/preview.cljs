@@ -9,9 +9,11 @@
     :summary :steps :moves :doors :waypoints :damage :drown :nodes :dark :dark-seconds} (:dark: feet cells seen dark, or unseen at night; :dark-seconds the planner's extra seconds for them), or {:found false :reason :near :partial} (:reason
     as :why, :bad-pos and other refusals, :searching while the quote's budgeted search has not ended); with :unknown :unseen-floors and :dark-best."
   (:require [engine.contract :as contract]
+            [engine.ctx :as ctx]
             [jobs.lib.cost.planner :as cost-planner]
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
+            [jobs.lib.toll-cells :as tc]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.search :as wsearch]
             [jobs.lib.walk.plan :as wplan]
@@ -103,7 +105,8 @@
             spec (when unknown (wworld/with-seeds (wworld/unknown-spec) [(:x pos) (:y pos) (:z pos)] nil))
             plan (await (near/plan! c [(:x pos) (:y pos) (:z pos)] (or range 1) doors policy [] false
                                     (when-not (= :closed one-way) :open) wsearch/round-budget false
-                                    (wworld/dangers?) nil (wworld/dark?) tolls spec))
+                                    (wworld/dangers?) (set (:fault-cells (ctx/mem c))) (wworld/dark?)
+                                    (cond-> tolls (wworld/zone-tolls?) (-> vec (into (tc/zone-walk-tolls c pos)))) spec true))
             goal [(:x pos) (:y pos) (:z pos)]]
         (if (= "searching" (:status plan))
           {:found false :reason :searching :near (u-dist c pos) :goal goal :text "the quote's search goes on at the next quote"}
