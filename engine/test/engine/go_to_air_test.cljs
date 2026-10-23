@@ -1,8 +1,9 @@
 (ns engine.go-to-air-test
   "go-to from under water to a goal with its head in air: the planner counts only air the body has seen (airSeen), so an
   unseen goal head would refuse the way for :air."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [are deftest is async]]
             [engine.go-to-test :as gt]
+            [jobs.movement.go-to.air :as air]
             [engine.test-util :as tu :refer [box]]))
 
 ;; go-to-air-budget drowning-body-swims-to-seen-air: a 2 high water tunnel (feet 64, head 65) under a stone roof, an air
@@ -144,3 +145,8 @@
                                                  {:pos [12 64 8] :range 1 :ways #{:walk :clear-seal}}))]
           (is (false? (:arrived @out)) (pr-str @out))
           (is (< ticks 30) "ends"))))))
+
+(deftest an-afloat-body-breathes-at-the-feet-cell-under-its-eye
+  (are [y expected] (= expected (:y (air/breathing-pos #js {:self (fn [] #js {:inWater true})} {:x 0.5 :y y :z 0.5})))
+    -39.4 -39
+    64 64))

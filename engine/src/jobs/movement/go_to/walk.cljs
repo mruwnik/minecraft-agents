@@ -379,7 +379,7 @@
             floor (assoc :dive-floor floor :dive-stair (climb-stair))
             (and floor (not (:cave-ok (ctx/mem c0)))) (assoc :cave-floor (- (+ floor (climb-dip)) (climb/cave-dip))))
         from (u/self-pos c)
-        _ (when-not (breath/head-under? (:primitives c)) (ctx/update-mem! c0 assoc :last-air from))
+        _ (when-not (breath/head-under? (:primitives c)) (ctx/update-mem! c0 assoc :last-air (air/breathing-pos (:primitives c) from)))
         d (u/dist from pos)
         pw (wworld/path-world (:primitives c))
         stand (when (and pw (not way) (or (:lookout-due (ctx/mem c)) (hidden-in-ground? c pos))) (lookout c pos))]

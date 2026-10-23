@@ -354,7 +354,10 @@
   ;; region -1: every region of a tight cell (the goal flood does not know which one it comes from)
   (expandMoves [s x y z h slow-from i region]
     (if (== (aget (.-tbl-kind s) (.stateAt ^js (.-snapshot s) x y z)) WATER)
-      (.expandSwim s x y z i region)
+      (do (.expandSwim s x y z i region)
+          ;; an unseen cell read as water, in a shaft above a seen ladder: the way down is the ladder (swimming has no cell to enter)
+          (when (and (not ^boolean (.-quiet s)) ^boolean (.isUnknown s (.stateAt ^js (.-snapshot s) x y z)) ^boolean (.shaftAbove s x y z))
+            (.climbDown s i x y z h region)))
       (let [h0 (+ (* y 16) h)
             tight-src ^boolean (.tightAt s x y z)
             ;; (the same quiet test as for tight cells: no climbable within reach of the cell either)

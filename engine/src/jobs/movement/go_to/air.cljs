@@ -106,6 +106,13 @@
             (recur more))))
       true)))
 
+(defn breathing-pos
+  "pos of the body with its head out of water, as the position it breathes at: afloat, the feet cell the planner takes is the one under
+  the eye cell (its head cell breathes), not the cell the feet float in."
+  [p pos]
+  (cond-> pos
+    (breath/in-water? p) (assoc :y (dec (js/Math.floor (+ (:y pos) game/eye-height))))))
+
 (defn last-air
   "The cell the body last stood with its head out of water in this call (mem :last-air), the way it came by, when it is within
   twice the air-radius setting and not the cell it stands in: a swim back to the air it breathed last, along cells it swam through."

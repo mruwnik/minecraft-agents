@@ -399,3 +399,14 @@
                                 (= 79 (apply max (map second (pf/cells r)))))
     U {:facing "west"} false
     "seagrass" {:facing "west" :waterlogged "true"} true))
+
+(deftest a-way-down-is-planned-through-the-unseen-water-above-a-seen-ladder
+  (are [start-ladder? y] (let [w (pf/snapshot {:fill (cond-> [[0 63 2 11 63 2 "stone"] [0 64 1 11 80 1 "stone"] [0 64 3 11 80 3 "stone"]
+                                                              [11 64 2 11 80 2 "stone"] [-1 64 2 -1 80 2 "stone"] [0 68 2 9 81 2 "stone"] [1 67 2 9 67 2 "stone"]
+                                                              [0 64 2 9 65 2 "water"] [0 66 2 0 67 2 "air"]
+                                                              [10 64 2 10 65 2 "ladder" {:facing "west" :waterlogged "true"}]
+                                                              [10 66 2 10 80 2 "seagrass"]]
+                                                       start-ladder? (conj [10 70 2 10 70 2 "ladder" {:facing "west" :waterlogged "true"}]))})]
+                           (found? (run w (pf/near 0 65 2 0) (unk {:id @seagrass-id}) {:x 10 :y y :z 2})))
+    false 70
+    true 70))
