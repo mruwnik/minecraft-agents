@@ -143,6 +143,12 @@
                     (if (.has names k)
                       (.get names k)
                       (let [n (breath/seen-water-name p {:x x :y y :z z})] (.set names k n) n))))
+        seen (js/Map.)
+        seen-name (fn [{:keys [x y z] :as cell}]
+                    (let [k (cell-key x y z)]
+                      (if (.has seen k) (.get seen k) (let [n (u/seen-name p cell)] (.set seen k n) n))))
+        ;; a cell is asked from each side the flood reaches it by: each read is kept
+        standable? (fn [cell] (land/land-cell? seen-name cell))
         water? (fn [x y z] (contains? breath/swimmable (name-of x y z)))
         unseen (volatile! false)
         walls (volatile! 0)
@@ -151,13 +157,13 @@
                      (let [n (name-of x y z)]
                        (when (nil? n) (vreset! unseen true))
                        (if (bs/air n)
-                         (or (water? x (dec y) z) (standable? p {:x x :y y :z z}))
+                         (or (water? x (dec y) z) (standable? {:x x :y y :z z}))
                          (or (breath/passable-water-or-air? n)
                              (do (when n (vswap! walls inc)) false))))))
         shore-chance (fn [stands] (/ (inc stands) (+ stands @walls 2)))
         visited (js/Set. #js [(cell-key fx fy fz)])]
     (loop [layer [[fx fy fz 0]] ledge nil far 0]
-      (let [stands (sort-by first (keep (fn [[x y z g]] (when (and (bs/air (name-of x y z)) (standable? p {:x x :y y :z z})) [g {:x x :y y :z z}])) layer))
+      (let [stands (sort-by first (keep (fn [[x y z g]] (when (and (bs/air (name-of x y z)) (standable? {:x x :y y :z z})) [g {:x x :y y :z z}])) layer))
             found (map (fn [[g stand]] (let [{:keys [run chance]} (land-run p stand need)] (cond-> {:stand stand :swim g :land run} chance (assoc :chance chance)))) stands)
             good (first (filter #(>= (:land %) need) found))
             ledge (or ledge (first found))]

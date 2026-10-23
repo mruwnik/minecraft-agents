@@ -1965,6 +1965,14 @@
     (is (= {:x 46 :y 66 :z 0} (select-keys (:stand (swim 45)) [:x :y :z])))
     (is (= 33 (:swim (swim 30))))))
 
+(deftest the-flood-to-a-shore-reads-each-cell-at-most-twice
+  (let [p (tu/seeing-all (tu/fake {:self {:inWater true :pos {:x 0.5 :y 64 :z 0.5}} :blocks (ledge-lake 30)}))
+        at (.-sensedAt p)
+        reads (atom {})]
+    (aset p "sensedAt" (fn [q] (swap! reads update [(.-x q) (.-y q) (.-z q)] (fnil inc 0)) (at q)))
+    (shore/swim-to-land p {:x 0.5 :y 64 :z 0.5} 0)
+    (is (>= 2 (reduce max (vals @reads))) "once as water, once as ground: not again from every side the flood comes by")))
+
 (deftest the-swim-to-a-dry-step-up-a-flooded-stair-is-the-length-of-its-way
   (let [p (tu/seeing-all (tu/fake {:self {:inWater true :pos {:x 0.5 :y 64 :z 0.5}} :blocks (flooded-stair 6 9)}))
         {:keys [stand swim]} (shore/swim-to-land p {:x 0.5 :y 64 :z 0.5} 0)]
