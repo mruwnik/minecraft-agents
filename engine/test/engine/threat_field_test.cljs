@@ -56,3 +56,21 @@
     (look!)
     (is (some? ((field/reach-fn before) 6 64 0)))
     (is (nil? ((field/reach-fn (field/field-of c zombie)) 6 64 0)) "a pillar seen on its way: no longer in its field")))
+
+(defn seen-body
+  "A primitives-and-perception pair over a floor with the body at x 12.5; (look!) turns it all round."
+  [spec]
+  (let [raw (tu/fake-on-floor (merge {:floor [-40 -20 40 20] :self {:pos {:x 12.5 :y 64 :z 0.5}}} spec))
+        per (perception/create (fake-raw/create raw) {:now (constantly 1000000)})]
+    {:c {:primitives (perception/wrap raw per) :view (fn [] {:now 0 :data {}})}
+     :per per
+     :look! #(doseq [yaw [0 90 180 270]] (swap! (fake/state raw) assoc :yaw yaw) (rays/pass! per))}))
+
+(deftest a-water-mobs-field-follows-the-water-the-body-sees
+  (let [pool (into {} (for [x (range 8 11) z (range -1 2)] [(str x ",63," z) "water"]))
+        {:keys [c look!]} (seen-body {:blocks pool})
+        drowned {:mob "drowned" :pos {:x 9.5 :y 63 :z 0.5}}
+        before (field/field-of c drowned)]
+    (is (zero? (.-length (:cells before))) "no water seen yet: no field")
+    (look!)
+    (is (= 9 (.-length (:cells (field/field-of c drowned)))) "the pool seen: its cells")))

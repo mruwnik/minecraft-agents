@@ -124,30 +124,30 @@
 
 ;; ---------------------------------------------------------------- water mobs
 
-(defn water? [p x y z] (= "water" (u/seen-name p {:x x :y y :z z})))
+(defn water? [kind-at x y z] (keyword-identical? :water (kind-at x y z)))
 
 (defn water-surface
   "[x y z] of the top seen water cell of the column at or next to pos (the cell, up to 2 below it, or a side neighbour's:
   a body hit from the water stood on its shore), nil when no water is seen there."
-  [p {:keys [x y z]}]
+  [kind-at {:keys [x y z]}]
   (let [x (js/Math.floor x) y (js/Math.floor y) z (js/Math.floor z)]
     (some (fn [[dx dz]]
-            (when-let [wy (some #(when (water? p (+ x dx) % (+ z dz)) %) [y (dec y) (- y 2)])]
-              [(+ x dx) (loop [wy wy] (if (water? p (+ x dx) (inc wy) (+ z dz)) (recur (inc wy)) wy)) (+ z dz)]))
+            (when-let [wy (some #(when (water? kind-at (+ x dx) % (+ z dz)) %) [y (dec y) (- y 2)])]
+              [(+ x dx) (loop [wy wy] (if (water? kind-at (+ x dx) (inc wy) (+ z dz)) (recur (inc wy)) wy)) (+ z dz)]))
           [[0 0] [1 0] [-1 0] [0 1] [0 -1]])))
 
 (defn water-body
   "The seen water cells [x y z] of the body of water whose top cell is surface: the columns whose cell at its level is seen
   water, side by side from it, each from that level down while seen water; at most n cells, the nearest columns first."
-  [p [sx sy sz] n]
+  [kind-at [sx sy sz] n]
   (loop [queue #queue [[sx sz]] seen #{[sx sz]} cells (transient [])]
     (if (or (empty? queue) (>= (count cells) n))
       (persistent! cells)
       (let [[x z] (peek queue)
-            column (take-while #(water? p x % z) (range sy (- sy 384) -1))
+            column (take-while #(water? kind-at x % z) (range sy (- sy 384) -1))
             more (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
                        :let [k [(+ x dx) (+ z dz)]]
-                       :when (and (not (contains? seen k)) (water? p (first k) sy (second k)))]
+                       :when (and (not (contains? seen k)) (water? kind-at (first k) sy (second k)))]
                    k)]
         (recur (into (pop queue) more) (into seen more) (reduce #(conj! %1 [x %2 z]) cells (take (- n (count cells)) column)))))))
 
@@ -162,8 +162,8 @@
    (let [cells (cond
                  (not (and (string? mob) pos)) #js []
                  (contains? water-mobs mob)
-                 (if-let [top (water-surface p pos)]
-                   (into-array (map (fn [[x y z]] #js [x y z 1]) (water-body p top (settings/get settings ::water-cells))))
+                 (if-let [top (water-surface kind-at pos)]
+                   (into-array (map (fn [[x y z]] #js [x y z 1]) (water-body kind-at top (settings/get settings ::water-cells))))
                    #js [])
                  :else
                  (let [walk (walk-field kind-at (reach/cell-of pos) (threat/follow-range mob) (settings/get settings ::close) (max-cells))]
