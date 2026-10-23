@@ -33,6 +33,17 @@
   {"zombie" 3 "husk" 3 "drowned" 3 "zombie_villager" 3 "skeleton" 2 "stray" 2 "parched" 2 "bogged" 2 "spider" 2 "cave_spider" 3
    "witch" 3 "drowned_trident" 8 "pillager" 2 "vindicator" 8 "slime" 2 "silverfish" 1 "endermite" 2 "phantom" 2 "enderman" 5})
 
+(def door-breakers
+  "Mobs that break a wooden door down (vanilla): zombies from hard on, vindicators from normal on."
+  {"zombie" 3 "zombie_villager" 3 "husk" 3 "drowned" 3 "vindicator" 2})
+
+(def door-break-s "Seconds a mob at a door needs to break it down (vanilla: 240 ticks)." 12)
+
+(defn breaks-door?
+  "Whether the mob called mob-name breaks a wooden door at the ::difficulty setting."
+  [mob-name]
+  (some-> (door-breakers mob-name) (<= (settings/get settings ::difficulty))))
+
 (def burns-in-sun
   "Mobs that burn in daylight under the open sky (vanilla; a drowned too, but it keeps to the water)."
   #{"zombie" "zombie_villager" "skeleton" "stray" "bogged" "phantom"})

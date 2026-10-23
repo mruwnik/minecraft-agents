@@ -145,7 +145,7 @@
         threats (flight/look! c)
         threat (first threats)
         hit? (or (cornered/hit-on-the-run! c) (pick/beaten? c) (pick/shot-on-the-run? c) (pick/bare-boxed-in? c (cornered/near-hostiles c)))
-        door (when threat (respond.doors/door-to-shut c (danger-q/mob-pos p threat)))
+        door (when threat (respond.doors/door-for c threats))
         covered? (cover/cover-fn p threats (flight/fire-spots c))
         blast (filterv #(flight/blaster? p %) threats)
         survey-now (fn []

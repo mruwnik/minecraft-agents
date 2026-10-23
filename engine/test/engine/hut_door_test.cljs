@@ -9,8 +9,12 @@
             [engine.cornered-test :as ct]
             [engine.fake :as fake]
             [engine.hut-shelter-test :as hs]
-            [engine.test-util :as tu]
+            [engine.test-util :as tu :refer [box]]
+            [engine.settings :as settings]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.seal :as seal]
+            [jobs.survival.respond.doors :as doors]
+            [jobs.survival.shut-in :as shut-in]
             [jobs.survival.dig-in-cells :as dig-cells]))
 
 (def open-door-states
@@ -121,3 +125,41 @@
           (is (false? (:open (get-in @(fake/state p) [:states [1 64 0]]))) "the door is shut")
           (is (= "oak_door" (.-name (.blockAt p (tu/pos 1 64 0)))) "not dug")
           (is (empty? (filterv #(= 1 (.. % -args -pos -x)) (ct/calls p "dig")))))))))
+
+(defn zombie-at [id z] {:id id :name "zombie" :kind "hostile" :pos {:x 5.5 :y 64 :z z} :health 20 :visible true})
+
+(defn ^:async door-price
+  "The :door price respond logged at its first decision for the hurt body in the open hut (with extra blocks) and the skeleton south of it, nil when no door cover was priced."
+  [extra]
+  (let [{:keys [seen]} (await (ct/first-round '(jobs.survival.respond-to-hostile)
+                                              (merge (open-hut {:self {:pos {:x 5.5 :y 64 :z 1.5} :health 4.8 :food 13}
+                                                          :inventory [{:name "cobbled_deepslate" :count 20}]})
+                                                    {:blocks (merge (box 3 63 -2 7 63 2 "stone") (:blocks (hs/hut-world {:x 5.5 :y 64 :z 1.5} extra)))})))]
+    (-> (filter #(= :hostile.decided (:kind %)) @seen) first :prices :door)))
+
+(deftest the-door-is-a-cover-only-where-the-room-has-no-other-opening
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (some? (await (door-price {}))) "a closed hut: the shut door is a priced cover")
+        (is (nil? (await (door-price {"7,64,0" "air" "7,65,0" "air"}))) "a gap in the wall beside the door: shutting it seals nothing")))))
+
+(deftest a-door-a-mob-breaks-holds-only-part-of-the-quiet
+  (let [c {:args {}}
+        open-s (fn [difficulty mobs]
+                 (settings/with-settings {:jobs.lib.cost.threat/difficulty difficulty}
+                   #(:open-s (shut-in/door-cover c 1 mobs))))]
+    (is (< (open-s 1 ["zombie"]) (open-s 3 ["zombie"])) "hard: the zombie breaks the door and the rest of the quiet is in the open")
+    (is (= (open-s 1 ["zombie"]) (open-s 3 ["skeleton"])) "a skeleton does not break a door")
+    (is (= (open-s 1 ["zombie"]) (open-s 2 ["zombie"])) "a zombie breaks doors only on hard")))
+
+(deftest the-cover-and-the-flight-pick-the-door-of-the-same-threat
+  (let [world (assoc (hs/hut-world {:x 5.5 :y 64 :z 1.5} {"5,64,-2" "oak_door" "5,65,-2" "oak_door"})
+                     :states (merge open-door-states {"5,64,-2" {:open true :half "lower" :facing "north"} "5,65,-2" {:open true :half "upper" :facing "north"}})
+                     :entities [(zombie-at 9 5.5) (zombie-at 10 -9.5)])
+        p (tu/fake world)
+        c {:primitives p :view (fn [] {:data {} :now 0}) :args {}}
+        threats (vec (danger-q/known-hostiles p 40 {}))
+        cell #(some-> (doors/door-for c %) :cell)]
+    (is (some? (cell threats)))
+    (is (= (cell threats) (cell (vec (reverse threats)))) "whatever the order the threats come in")))

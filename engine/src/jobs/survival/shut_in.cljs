@@ -8,6 +8,7 @@
             [jobs.lib.breath :as breath]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.threat :as threat]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.spent :as spent]
@@ -128,10 +129,14 @@
            ways))))
 
 (defn door-cover
-  "The cover of an open door shut with one click: a placement's seconds in the open and to do, then the hide-out's quiet."
-  [c]
-  (let [s (way/place-s c)]
-    {:open-s s :seconds (+ s (hide-out/quiet-s))}))
+  "The cover of the open doors (n) shut with a click each: their placements' seconds in the open and to do, then the
+  hide-out's quiet. A door a mob of mob-names breaks (threat/breaks-door?) holds only threat/door-break-s of the quiet,
+  the rest of it is spent with the side open."
+  [c n mob-names]
+  (let [s (* n (way/place-s c))
+        quiet (hide-out/quiet-s)
+        broken (if (some threat/breaks-door? mob-names) (max 0 (- quiet threat/door-break-s)) 0)]
+    {:open-s (+ s broken) :seconds (+ s quiet)}))
 
 (defn ^:async choose
   "{:way the cheapest allowed way not failed (nil when none) :dropped [ways that cannot be done]}: quoted seconds, under

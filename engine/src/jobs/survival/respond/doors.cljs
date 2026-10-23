@@ -8,6 +8,8 @@
             [jobs.lib.util :as u]
             [jobs.lib.seal :as seal]
             [jobs.survival.respond.options :as cornered]
+            [jobs.lib.danger :as danger-q]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.rooms :as room-lib]))
 
 (a/defargs settings
@@ -46,6 +48,26 @@
          (filter #(< (u/dist threat-pos (mid (:cell %))) (u/dist threat-pos self)))
          (sort-by #(u/dist self (mid (:cell %))))
          first)))
+
+(defn door-for
+  "door-to-shut against the nearest of threats (JS entities): the one door both the flight's step and respond's cover price."
+  [c threats]
+  (let [p (:primitives c)]
+    (when-let [t (first (sort-by #(danger-q/mob-distance p %) threats))]
+      (door-to-shut c (danger-q/mob-pos p t)))))
+
+(defn sealing-doors
+  "How many open doors the closed room (room-lib/closed?) the body stands in has, when the door of door-for threats is
+  one of them: shutting them all closes the room. nil when the body is in no closed room (another opening, an unseen
+  cell) or that door is none of its room's."
+  [c threats]
+  (let [p (:primitives c)
+        feet (sh-sense/feet p)]
+    (when-let [door (door-for c threats)]
+      (when (true? (room-lib/closed? c feet))
+        (let [open (->> (:doors (reach-room/room p feet)) (filter #(seal/open-openable p (:cell %))))]
+          (when (some #(= (door-key (:cell door)) (door-key (:cell %))) open)
+            (count open)))))))
 
 (defn ^:async shut-door!
   "Shut door (door-to-shut) with one click; every door is clicked at most once a flight, so a door that will not stay

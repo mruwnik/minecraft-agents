@@ -248,16 +248,17 @@
 (defn cover-answers
   "{way answer} of shutting the body in against near by each way shut-in/covers finds possible here (cost/cover-answer:
   the blows while a side is open, the quote, the hide-out's quiet; then: what follows it, or the same cover once more).
-  An open door the flight would shut (respond.doors/door-to-shut) is the cover :door (shut-in/door-cover), done by the flight's own door step.
+  The open doors of the closed room the body stands in, when the flight would shut one (respond.doors/sealing-doors), are the cover :door (shut-in/door-cover), done by the flight's own door step.
   None with a creeper near (cost/cover-answer: its blast takes the walls), so its quotes are not asked for: they take
   seconds the fuse does not leave."
   [c near then]
   (when-not (some combat/creeper? near)
     (let [p (:primitives c)
-          mobs {:equipment (cost/equipment-of (.-equipment (.self p))) :mobs (mapv #(hostile/mob-near p %) near) :then then}]
+          mobs {:equipment (cost/equipment-of (.-equipment (.self p))) :mobs (mapv #(hostile/mob-near p %) near) :then then}
+          open-doors (doors/sealing-doors c near)]
       (into {} (keep (fn [[w cover]] (some->> (cost/cover-answer mobs cover) (vector w))))
             (cond-> (shut-in/covers c cover-ways)
-              (doors/door-to-shut c (danger-q/mob-pos p (first near))) (assoc :door (shut-in/door-cover c)))))))
+              open-doors (assoc :door (shut-in/door-cover c open-doors (map #(.-name %) near))))))))
 
 (defn walk-felt
   "hp a second of the mob blows felt since the flight began (hostile/incoming), nil while not fleeing: a walk is priced at
