@@ -114,6 +114,14 @@
     (is (> (hurt {:status "partial" :steps (take 8 line)}) (* 4 (hurt (plan-of round)))) "the rest past x 10 runs by the zombie; the found way keeps 22 blocks off")
     (is (= (hurt {:status "partial" :steps (take 8 line)}) (hurt (plan-of line))) "the rest is the line")))
 
+(deftest a-partial-plan-prices-its-rest-by-what-the-body-sees-of-it
+  (let [c (ready-test/ctx-of {:time st/night :floor [0 -24 80 24] :self {:pos {:x 2.5 :y 64 :z 0.5}}
+                              :light (into {} (for [x (range 0 81)] [[x 64 0] [0 15]]))})
+        goal {:x 70 :y 64 :z 0}
+        dark-s #(:dark-s (risk/estimate c goal {:plan {:status "partial" :steps (for [x (range 3 11)] {:x x :y 64 :z 0})}}))]
+    (is (zero? (dark-s)) "the rest is a seen, torch-lit line at night")
+    (is (pos? (with-redefs [sh-sense/seen-cell? (constantly false) look/glimpse? (constantly false)] (dark-s))) "an unseen rest is open ground at night")))
+
 (deftest unseen-ground-below-the-surface-band-is-priced-as-a-dark-cave
   (let [c (ready-test/ctx-of day-world)]
     (with-redefs [sh-sense/seen-cell? (constantly false) look/glimpse? (constantly false)]
