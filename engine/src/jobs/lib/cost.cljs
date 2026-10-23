@@ -161,6 +161,7 @@
 (def tour-cost value/tour-cost)
 (def tour-worth value/tour-worth)
 (def food-worth value/food-worth)
+(def food-point-worth value/food-point-worth)
 (defn trip [] (value/trip))
 (def light-cost value/light-cost)
 (def per-danger value/per-danger)

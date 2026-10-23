@@ -228,6 +228,11 @@
      (pos? worth) (max 0 (- worth (trip) (:cost (walk-cost {:distance straight}))))
      :else (+ (trip) (* (settings/get settings ::tour-ratio) (:cost (walk-cost {:distance (max straight (settings/get settings ::tour-floor-blocks))})))))))
 
+(defn food-point-worth
+  "Seconds one hunger point of food is worth while the pack lacks the food reserve."
+  []
+  (settings/get settings ::food-worth-per-point))
+
 (defn food-worth
   "Seconds reaching food is worth to a body with `food` points: rising as the bar falls, 0 from ::food-worth-from up."
   [food]

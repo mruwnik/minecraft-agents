@@ -4,6 +4,8 @@
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.food :as food-cost]
+            [jobs.lib.shelter.sense :as sh-sense]
             [engine.notes :as notes]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
@@ -37,14 +39,36 @@
   (/ (:cost (cost/walk-cost {:distance (u/flat-dist me (zipmap [:x :y :z] (:pos n)))}))
      (max 1 (or (foods/points (meat (:what n))) 1))))
 
+(def expected-drops "Meat items a kill is counted to give." 2)
+
+(defn noted-benefit
+  "Seconds the meat of the noted animal n is worth the body: the hunger worth of reaching food, or the points of the food
+  reserve (:carry, default the 3-day one) the pack lacks that the meat would fill, at cost/food-point-worth each."
+  [c n]
+  (let [p (:primitives c)
+        item (meat (:what n))
+        gain (* expected-drops (or (foods/points item) 1))
+        short (max 0 (- (:carry (:args c) food-cost/reserve-points) (foods/stock-points (u/inventory p))))
+        stock (* (cost/food-point-worth) (min gain short))]
+    (max (cost/food-worth (.-food (.self p))) stock)))
+
+(defn noted-cost
+  "Seconds walking to the noted animal n costs: the walk plus the death the route risks (cost/route-death-cost)."
+  [c n]
+  (let [p (:primitives c)
+        at (zipmap [:x :y :z] (:pos n))]
+    (+ (:cost (cost/walk-cost {:distance (u/flat-dist (u/self-pos c) at)}))
+       (cost/route-death-cost (cost/death-body p (ctx/view c)) {:underground? (sh-sense/buried? p) :night? false} at))))
+
 (defn noted-target
-  "The cheapest food animal a :seen note (any body's) places anywhere, as the note, skipping the ids in `done`, babies and the animals tried; priced by noted-price, not cut at a radius."
+  "The cheapest food animal a :seen note (any body's) places anywhere whose meat is worth more than the walk (noted-benefit over noted-cost), as the note, skipping the ids in `done`, babies and the animals tried; priced by noted-price, not cut at a radius."
   [c done]
   (let [me (u/self-pos c)
         skipped (set (:skipped-animals (ctx/mem c)))]
     (->> (notes/notes c)
          (filter #(and (= :seen (:kind %)) (contains? food-animals (:what %)) (:id %) (:pos %) (not (:baby %))
-                       (not (done (:id %))) (not (skipped (:id %)))))
+                       (not (done (:id %))) (not (skipped (:id %)))
+                       (> (noted-benefit c %) (noted-cost c %))))
          (sort-by #(noted-price me %))
          first)))
 

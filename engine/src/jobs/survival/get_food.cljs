@@ -353,12 +353,12 @@
   "The walk toward an animal the search found only in a note (nothing is in sight to hunt): :continue while it goes, :again once it ends."
   [c]
   (let [pos (:walk-to (ctx/mem c))
-        e (await (child/run!* c :noted-walk 'jobs.movement.go-to (ready/forage-walk c {:pos (zipmap [:x :y :z] pos) :range (if (:noted-near (ctx/mem c)) noted-near-range noted-range) :ways #{:walk} :torches :fetch :worth (sources/food-worth c)})))]
+        e (await (child/run!* c :noted-walk 'jobs.movement.go-to (ready/forage-walk c {:pos (zipmap [:x :y :z] pos) :range (if (:noted-near (ctx/mem c)) noted-near-range noted-range) :ways #{:walk} :torches :fetch :worth (:walk-worth (ctx/mem c))})))]
     (cond
       (= :continue e) :continue
       (and (not (:noted-near (ctx/mem c))) (nil? (animals/nearest c (animal-opts c false))))
       (do (ctx/update-mem! c assoc :noted-near true) :again)
-      :else (do (ctx/update-mem! c #(cond-> (dissoc % :walk-to :noted-near)
+      :else (do (ctx/update-mem! c #(cond-> (dissoc % :walk-to :walk-worth :noted-near)
                                       (not= :done (:kind e)) (assoc :noted-lost {:pos pos :why (get-in e [:data :text] "the walk ended")})))
                 :again))))
 
@@ -404,7 +404,7 @@
         (do (when-not done? (ctx/update-mem! c assoc :explored "not searched: no way up out of the cave")) nil))
       (or noted (:walk-to (ctx/mem c)))
       (do (when noted
-            (ctx/update-mem! c #(-> % (assoc :walk-to (:pos noted)) (update :noted-walked (fnil conj []) (:id noted)))))
+            (ctx/update-mem! c #(-> % (assoc :walk-to (:pos noted) :walk-worth (animals/noted-benefit c noted)) (update :noted-walked (fnil conj []) (:id noted)))))
           (await (walk-to-noted! c)))
       done? nil
       :else

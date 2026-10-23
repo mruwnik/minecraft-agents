@@ -570,6 +570,20 @@
             (recur (inc n))))
           (is (some #(= :noted-walk (:slot %)) (events-of seen :child_started)) "once the search found nothing, a remembered animal is a candidate at any distance, priced by go-to"))))))
 
+(deftest a-noted-animal-is-walked-toward-only-when-its-meat-is-worth-the-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[x walked?] [[150 true] [20000 false]]]
+          (let [note [{:kind :seen :what "cow" :id "u1" :pos [x 64 0] :by "Other" :t 999900 :until 9e15}]
+                {:keys [eng seen]} (setup {:time 6000 :self {:food 17 :health 20}} :step-ms 5 :other-notes note)]
+            (await (one-round! eng {:carry 60}))
+            (loop [n 0] (when (and (< n 80) (not-any? #(= :noted-walk (:slot %)) (events-of seen :child_started)))
+              (await (core/tick! eng))
+              (recur (inc n))))
+            (is (= walked? (boolean (some #(= :noted-walk (:slot %)) (events-of seen :child_started))))
+                "a fed body carrying no food gains the food reserve from the meat; a walk that costs more is not made")))))))
+
 (deftest a-noted-animal-is-not-walked-toward-in-the-dark-or-from-under-rock
   (async done
     (tu/run-async done
@@ -579,7 +593,7 @@
                          {:time 6000 :blocks {"0,66,0" "stone" "1,64,0" "stone" "1,65,0" "stone"} :self {:food 8 :health 10}}]]
             (let [{:keys [eng seen]} (setup world :step-ms 5 :other-notes note)]
               (await (one-round! eng {}))
-              (is (not-any? #(= :noted-walk (:slot %)) (events-of seen :child_ended)) "the same checks as the search: no walk in the dark or under rock"))))))))
+              (is (not-any? #(= :noted-walk (:slot %)) (events-of seen :child_started)) "the same checks as the search: no walk in the dark or under rock"))))))))
 
 (deftest a-noted-animal-the-walk-cannot-reach-is-named-in-the-no-food-text
   (async done
