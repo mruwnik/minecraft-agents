@@ -30,28 +30,28 @@
             {:no-event {:source :job :kind :child_started :data {:slot :go}} :for-s 30}]
    :after [[:body-near [4.5 0 4.5] 4]]
    :limit-s 80}
-  {:name "guarded-pile-is-fetched-under-the-danger-when-the-window-cannot-hold-a-wait"
+  {:name "guarded-pile-is-left-when-its-danger-costs-more-than-it-is-worth"
    :register [{:trigger :died :why "danger-overrides price the zombies for the recovery walk under test" :job (jobs.survival.recover-drops {:danger-overrides {"zombie" 100000}})}]
    :act [[:summon "zombie" [31.5 0 26.5] "{NoAI:1b,Silent:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}]}"]
          [:until-seen {:entity "zombie"} 10]
          [:kill-body]
          [:await {:source :body :kind :respawned} 30]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :danger}} :within-s 60}
-            {:event {:source :job :kind :recover.under-danger} :within-s 300}
-            {:event {:source :reflex :kind :ended :data {:decision :collected}} :within-s 330}]
-   :after [[:item "raw_iron" 24]]
-   :limit-s 340}
-  {:name "pile-with-an-adjacent-zombie-is-fetched-under-the-danger"
+            {:event {:source :reflex :kind :ended :data {:decision :skip}} :within-s 300}
+            {:no-event {:source :job :kind :child_started :data {:slot :go}} :for-s 30}]
+   :after [[:body-near [4.5 0 4.5] 4]]
+   :limit-s 320}
+  {:name "pile-with-an-adjacent-zombie-is-left-when-the-danger-costs-more"
    :register [{:trigger :died :why "danger-overrides price the zombies for the recovery walk under test" :job (jobs.survival.recover-drops {:danger-overrides {"zombie" 100000}})}]
    :act [[:summon "zombie" [27.5 0 26.5] "{NoAI:1b,Silent:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}]}"]
          [:until-seen {:entity "zombie"} 10]
          [:kill-body]
          [:await {:source :body :kind :respawned} 30]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :danger}} :within-s 60}
-            {:event {:source :job :kind :recover.under-danger} :within-s 300}
-            {:event {:source :reflex :kind :ended :data {:decision :collected}} :within-s 330}]
-   :after [[:item "raw_iron" 24]]
-   :limit-s 340}
+            {:event {:source :reflex :kind :ended :data {:decision :skip}} :within-s 300}
+            {:no-event {:source :job :kind :child_started :data {:slot :go}} :for-s 30}]
+   :after [[:body-near [4.5 0 4.5] 4]]
+   :limit-s 320}
   {:name "kit-pile-left-to-a-skeleton-pack-that-would-kill-an-unarmed-body"
    :register []
    :body {:inventory [["iron_pickaxe" 1] ["iron_sword" 1] ["iron_axe" 1] ["iron_shovel" 1] ["iron_helmet" 1] ["iron_chestplate" 1]

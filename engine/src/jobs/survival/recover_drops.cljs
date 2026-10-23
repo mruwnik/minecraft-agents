@@ -138,30 +138,21 @@
     (ctx/end c :condition-failed :danger {:top-mobs (:top-mobs decided) :hold-s (js/Math.round (/ hold-ms 1000)) :pos (:pos (:data entry))})
     :next))
 
-(defn go-under-danger!
-  "The window cannot hold a wait for the danger to pass (a pile worth fetching were the route safe): fetch it now with the
-  danger left out of the cost, the hostile reflexes meeting the mobs on the way (Q367: never wait out a pile)."
-  [c entry decided room-ms]
-  (ctx/emit! c :recover.under-danger :info
-             {:text (str "fetching under the danger: " (js/Math.round (/ (max 0 room-ms) 1000)) " s of the window are left after the walk, too little to wait for it to pass")})
-  (ctx/update-mem! c update :decided assoc :cost (- (:cost decided) (get-in decided [:parts :danger])) :under-danger true)
-  (dth/save-trip! c)
-  :next)
-
 (defn ^:async retry-later!
   "A skip for danger backs off while the trip can still come back: report it, forget the estimate, remember the danger
   (:recover-danger, for ::danger-memory-ms; an assumed killer alone only while its guard lasts; at most until ::hold-slack
   times the walk back from the flight's end (est/flight-s) and the collect, as trip-s quotes them, would end at the despawn)
   and end condition-failed :danger: the hostile reflex takes the body away. The died trigger and the check rest for this
   death meanwhile, then the danger is weighed anew. A hold under ::min-hold-s is no wait, and neither is a second hold
-  for the same mobs where a finished hold saw them: the pile is fetched under the danger."
+  for the same mobs where a finished hold saw them: the pile is left (its worth is under the full cost, danger in; Q367 rules out
+  waiting, not leaving)."
   [c entry decided]
   (let [need-ms (* 1000 (cfg/hold-slack) (+ (second (await (trip-s c (:pos (:data entry))))) (:flight-s decided 0)))
         room (- (window-ms c entry) need-ms)
         hold-ms (min room (:hold-ms decided (cfg/danger-memory-ms)))]
     (if (and (>= hold-ms (cfg/min-hold-ms)) (not (est/unchanged-after-hold? c decided)))
       (retreat! c entry decided hold-ms)
-      (go-under-danger! c entry decided room))))
+      (end/finish! c :skip decided))))
 
 (defn ^:async dig-down!
   "A stair down to the pile (jobs.access.tunnel): :next once it ended there, else the trip ends :abandoned. Not when
@@ -208,7 +199,7 @@
           (end/finish! c :abandoned (assoc decided :reason :unreachable :detail (est/unreachable-detail c pos)))
           (end/finish! c :skip decided)))
 
-      (and (>= (:cuts (ctx/mem c) 0) (cfg/max-hostile-cuts)) (not (:under-danger decided)))
+      (>= (:cuts (ctx/mem c) 0) (cfg/max-hostile-cuts))
       (end/finish! c :abandoned (assoc decided :reason :danger))
 
       (child/exhausted? c :go)

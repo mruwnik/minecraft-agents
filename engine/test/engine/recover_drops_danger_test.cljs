@@ -487,14 +487,14 @@
           (core/submit! eng dear {})
           (await (run-until-empty eng 20))
           (is (= 1 (count (mem/entries (mem/view (:store eng)) :recover-danger))) "no second hold for the same mob")
-          (is (= :collected (:decision (recovered eng)))))))))
+          (is (= :skip (:decision (recovered eng))) "the danger is still in the price: the pile is left"))))))
 
-(deftest a-pile-worth-fetching-is-fetched-under-the-danger-when-the-window-cannot-hold-a-wait
+(deftest a-pile-worth-less-than-the-trip-with-its-danger-is-left-when-the-window-cannot-hold-a-wait
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [pile dt/death-pile-of-the-field-report
-              {:keys [eng clock]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops pile)) dt/zombie-by-the-way)})]
+              {:keys [eng clock p]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops pile)) dt/zombie-by-the-way)})]
           (die! eng {:pos dt/death-pos :inventory pile})
           (swap! clock + 270000)
           (mem/write! (:store eng) :recover-trip {:death-t (:t (mem/latest (mem/view (:store eng)) :died)) :cuts 2 :hostile-cut true :phase :go}
@@ -502,7 +502,8 @@
           (core/submit! eng '(jobs.survival.recover-drops {:danger-overrides {"zombie" 1000}}) {})
           (await (run-until-empty eng 20))
           (is (empty? (mem/entries (mem/view (:store eng)) :recover-danger)) "no wait for the danger to pass was set")
-          (is (= :collected (:decision (recovered eng)))))))))
+          (is (= :skip (:decision (recovered eng))))
+          (is (= [] (tu/walk-calls p))))))))
 
 (deftest a-climb-toward-a-pile-far-above-is-progress-though-the-distance-hardly-shrinks
   (let [pile {:x 220 :y 79 :z 174}]
