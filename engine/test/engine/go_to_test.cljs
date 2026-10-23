@@ -42,10 +42,12 @@
         [lo hi] (for [f [min max]] (mapv (fn [i] (apply f (map #(nth % i) ks))) [0 1 2]))]
     (vec (concat (map #(- % 3) lo) (map #(+ % 3) hi)))))
 
+(def sight-steps-per-tick 20)
+
 (defn setup
   "A world key :light [sky block] makes the body see through perception, in that light everywhere; :jitter (0.5) fixes
-  where each pass's rays fall in their grid cells; :clock is the atom of the fake time (ms); :sight true runs the sight
-  passes on a timer as the body's does (main.cljs starts them), else the body sees only what its jobs look at; :stop stops them.
+  where each pass's rays fall in their grid cells; :clock is the atom of the fake time (ms); :sight true gives :step, which
+  runs the sight passes (sight-steps-per-tick of them; tick-out! calls it before each tick), else the body sees only what its jobs look at.
   :seen is :all (the box round the blocks) or boxes [x0 y0 z0 x1 y1 z1] whose cells the body has already seen (memory takes their true state), for the
   planner's :unknown default: a world with :light and no :seen is one the body has never looked at."
   ([world] (setup world nil))
@@ -65,9 +67,8 @@
                                   :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}
                            shared (assoc :world shared)))]
     {:eng eng :p p :seen seen
-     :stop (if (:sight world)
-             (let [timer (doto (js/setInterval #(rays/step! (aget p "perception")) 2) .unref)] #(js/clearInterval timer))
-             (fn []))})))
+     :step (when (:sight world) #(dotimes [_ sight-steps-per-tick] (rays/step! (aget p "perception"))))
+     :stop (fn [])})))
 
 (defn recording-parent
   "A parent that runs go-to with args as its child (ctx/call) and keeps the child's result (result-of) in out."
@@ -79,22 +80,24 @@
                 (do (reset! out (result-of e)) (ctx/end c :done nil)))))})
 
 (defn ^:async tick-out!
-  "Tick until the list is empty, at most n ticks; the ticks used."
-  [eng n]
+  "Tick until the list is empty, at most n ticks, running step (sight passes) before each; the ticks used."
+  ([eng n] (tick-out! eng n nil))
+  ([eng n step]
   (loop [i 0]
     (if (or (>= i n) (empty? (:list (core/state eng))))
       i
-      (do (await (core/tick! eng))
-          (recur (inc i))))))
+      (do (when step (step))
+          (await (core/tick! eng))
+          (recur (inc i)))))))
 
 (defn ^:async go!
   "Run go-to with args as a child over world; {:eng :p :seen :out :ticks}, out the child's result."
   [world args]
-  (let [{:keys [eng stop] :as s} (setup world)
+  (let [{:keys [eng stop step] :as s} (setup world)
         out (atom :not-done)
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out args)))]
     (core/submit! eng '(recording-parent) {})
-    (let [ticks (await (tick-out! eng 30))]
+    (let [ticks (await (tick-out! eng 30 step))]
       (stop)
       (assoc s :eng eng :out out :ticks ticks))))
 
