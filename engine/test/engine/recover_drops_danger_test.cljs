@@ -301,12 +301,17 @@
         :when (not (some #{[x y z]} plug-cells))]
     [x y z]))
 
+(def cell-floor
+  "Stone under the cell's columns: fake-on-floor leaves a column holding a block floorless, a drop the pile's collect refuses."
+  (into {} (for [x (range 19 22) z [-1 0 1]] [(str x ",63," z) "stone"])))
+
 (deftest a-pile-inside-the-bodys-own-seal-is-dug-out-and-recovered
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [pile dt/death-pile-of-the-field-report
-              blocks (merge (into {} (map (fn [[x y z]] [(str x "," y "," z) "stone"])) stone-cell)
+              blocks (merge cell-floor
+                            (into {} (map (fn [[x y z]] [(str x "," y "," z) "stone"])) stone-cell)
                             (into {} (map (fn [[x y z]] [(str x "," y "," z) "dirt"])) plug-cells))
               {:keys [eng]} (setup {:floor tu/walk-floor :blocks blocks :entities (vec (pile-drops pile))})]
           (ledger/write! (:store eng) (mapv (fn [cell] {:cell cell :item "dirt" :before "air" :job "j9" :purpose :retreat-plug :state :placed}) plug-cells))
@@ -319,7 +324,8 @@
   "The field-report pile inside the stone cell closed by the plug cells; extra ledger entries and world spec merged in."
   [extra-entries spec]
   (let [pile dt/death-pile-of-the-field-report
-        blocks (merge (into {} (map (fn [[x y z]] [(str x "," y "," z) "stone"])) stone-cell)
+        blocks (merge cell-floor
+                      (into {} (map (fn [[x y z]] [(str x "," y "," z) "stone"])) stone-cell)
                       (into {} (map (fn [[x y z]] [(str x "," y "," z) "dirt"])) plug-cells)
                       (:blocks spec))
         {:keys [eng seen p]} (setup (merge {:floor tu/walk-floor :entities (vec (pile-drops pile))} spec {:blocks blocks}))]
