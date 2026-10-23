@@ -171,3 +171,10 @@
         flee #(cost/flee-answer {:food 20 :mobs [drowned] :swim 4 :land %})]
     (is (nil? (flee 0)) "the drowned keeps up on a ledge")
     (is (some? (flee ##Inf)) "land that goes on, or not known, is the walk away")))
+
+(deftest a-lethal-threat-costs-the-body-its-life-not-more
+  ;; a fist fight with a witch is 26 punches 1.3 s apart under her potions: 84 hp expected
+  (let [route (fn [weight & mobs] {:cells [here] :threats (for [m mobs] {:mob m :weight weight :reach (constantly 1)})})]
+    (is (= 20 (cost/route-hurt (body 20) (route 1 "witch"))))
+    (is (= 20 (cost/route-hurt (body 20) (route 1 "witch" "witch"))) "nor do two")
+    (is (< 5.99 (cost/route-hurt (body 20) (route 0.3 "witch")) 6.01) "a faded one its share of the life")))

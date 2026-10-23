@@ -282,21 +282,29 @@
     (* (if (contains? threat/provoked-only mob-name) (threat/provoked-share) 1)
        (answer-death-chance body (get answers answer) at))))
 
+(defn life [{:keys [health absorption]}] (+ (or health 20) (or absorption 0)))
+
+(defn threat-hurt
+  "hp mob-name met beside body takes off it at `at`: the expected-damage of the answer decide takes of threat-answers, at
+  most the body's life (a lethal answer costs the life, its death is death-chance's); a provoked-only mob
+  threat/provoked-share of it."
+  [body mob-name caught at]
+  (let [answers (threat-answers body mob-name caught)]
+    (* (if (contains? threat/provoked-only mob-name) (threat/provoked-share) 1)
+       (min (life body) (expected-damage (get answers (:answer (decide body answers at))))))))
+
 (defn route-hurt
-  "hp the known threats of route {:cells :threats :at} (death-chance's) are expected to take off body: for each, the
-  expected-damage of the answer decide takes of threat-answers at :at (default the first cell), times its weight and the
-  peak weight its reach gives the :cells (death/peak-weight; a provoked-only mob threat/provoked-share more): death-chance
-  in hp, for a walk priced against health."
+  "hp the known threats of route {:cells :threats :at} (death-chance's) are expected to take off body, at most its life:
+  for each, its threat-hurt at :at (default the first cell) times its weight and the peak weight its reach gives the
+  :cells (death/peak-weight): death-chance in hp, for a walk priced against health."
   [body {:keys [cells threats at]}]
   (let [at (or at (first cells))
-        hurt (memoize (fn [mob caught]
-                        (let [answers (threat-answers body mob caught)]
-                          (* (if (contains? threat/provoked-only mob) (threat/provoked-share) 1)
-                             (expected-damage (get answers (:answer (decide body answers at))))))))]
-    (reduce + 0 (for [{:keys [mob weight reach caught]} (when (seq cells) threats)
-                      :let [peak (death/peak-weight reach cells)]
-                      :when (pos? peak)]
-                  (* (or weight 1) peak (hurt mob caught))))))
+        hurt (memoize #(threat-hurt body %1 %2 at))]
+    (min (life body)
+         (reduce + 0 (for [{:keys [mob weight reach caught]} (when (seq cells) threats)
+                           :let [peak (death/peak-weight reach cells)]
+                           :when (pos? peak)]
+                       (* (or weight 1) peak (hurt mob caught)))))))
 
 (defn threats-chance
   "The chance the known threats of route {:cells :threats :at} kill body (death-chance's, the route's class left out): for
