@@ -330,7 +330,7 @@
             r (drop-route (:id c) (fn [[x y z]] (u/seen-name p {:x x :y y :z z})) from (item-cell item))]
         (case (:problem r)
           :searching :continue
-          :no-route :no-route
+          (:no-route :budget) :no-route
           nil
           (let [d (await (dig-cells! c (:dig r)))]
             (cond

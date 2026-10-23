@@ -1,6 +1,7 @@
 (ns jobs.items.obtain.need
   "Whether a source would start: viability of the gather and tool sources, and the tool a mined need wants."
-  (:require [engine.contract :as contract]
+  (:require [engine.composite :as composite]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.game :as game]
             [jobs.items.get-tool :as get-tool]
@@ -61,7 +62,7 @@
            (boolean (if (tools-wanted c names need)
                       (tool-viable? c names need)
                       (let [s (ctx/child-status c (gather-slot need) (:job need) (:args need))]
-                        (or (= :ok (first s)) (lights-itself? c (contract/status-cause s))))))))))
+                        (or (composite/startable? s) (lights-itself? c (contract/status-cause s))))))))))
 
 (defn priced-search
   "The search options of a :priced call: what is wanted is worth (jobs.lib.cost/worth-to) to the body here as the search's
@@ -140,5 +141,5 @@
       (if-let [tools (tools-wanted c names need)]
         (gather-held c tools 1)
         (let [s (ctx/child-status c (gather-slot need) (:job need) (:args need))]
-          (when-not (or (= :ok (first s)) (lights-itself? c (contract/status-cause s)))
+          (when-not (or (composite/startable? s) (lights-itself? c (contract/status-cause s)))
             (with-meta (contract/status-cause s) {:kind (first s)})))))))

@@ -3,7 +3,9 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.settings :as settings]
             [jobs.items.obtain.gather :as gather]
+            [engine.contract :as contract]
             [engine.core :as core]
+            [engine.core.ending :as ending]
             [engine.ctx :as ctx]
             [engine.fake :as fake]
             [engine.fetch-test :as f]
@@ -514,3 +516,21 @@
         twice (gather/note-skipped once [[1 2 3]])]
     (is (empty? (:skip-cells once)))
     (is (= #{[1 2 3]} (:skip-cells twice)))))
+
+(deftest ore-whose-mine-child-is-a-look-is-gathered-not-none-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (ore-world {"1,64,4" "iron_ore"} [{:name "stone_pickaxe" :count 1}]) [])
+              asked (atom 0)
+              mine (-> (get-in s [:eng :jobs 'jobs.gather.mine])
+                       (dissoc :check :engine.core.ending/wrapped)
+                       (assoc :can-start? (fn [_] (swap! asked inc) (contract/look :unseen "the roof is unseen"))
+                              :round (fn ^:async f [c] (ctx/end c :impossible {:reason :hazard :text "water beside the target"})))
+                       ending/wrap)
+              eng (assoc-in (:eng s) [:jobs 'jobs.gather.mine] mine)
+              s (assoc s :eng eng)]
+          (await (obtain! s {:item "raw_iron" :count 1 :ways #{:craft :smelt :gather} :explore false} 200))
+          (is (pos? @asked) "the mine child's can-start? was read")
+          (is (seq (f/events-of s :obtain.gathering)) "the mine child was called")
+          (is (not-any? #(#{:none-seen :no-source} (:reason %)) (f/events-of s :waiting))))))))
