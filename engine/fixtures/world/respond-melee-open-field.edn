@@ -1,6 +1,6 @@
 ;; Card d31ee27f: a zombie walks up to a body in an open field beside a mound (as KitOak01 j6, woken in a bed in the open). respond
 ;; prices the fight, the walk away and the covers the mound offers (walls, pit, pocket) and answers: armed and whole it fights,
-;; unarmed it gets away (a cover or a walk). Open plot 48 wide, lit underground; resistance keeps the body alive.
+;; unarmed it gets away (a cover or a walk), hurt too. Open plot 48 wide, lit underground; resistance keeps the body alive.
 {:defaults
  {:tags [:hostile :survival :reflex]
   :time :any
@@ -21,4 +21,15 @@
    :body {:inventory [["dirt" 16]]}
    :act [[:summon "zombie" [22.5 0 24.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :hostile.decided :data {:decision :flee}} :within-s 20}
+            {:no-event {:source :body :kind :died} :for-s 30}]}
+  {:name "hurt-unarmed-body-does-not-fist-fight-a-zombie"
+   ;; 8 hp: a fist fight's death is near certain, so a cover's or a walk's own death chance is weighed against it, not
+   ;; what follows them as though the body always lived (card eb1279f4). Resistance V afterwards keeps it alive.
+   :body {:inventory [["dirt" 16]]}
+   :act [[:rcon "effect clear $BODY minecraft:resistance"]
+         [:rcon "effect give $BODY minecraft:instant_damage 1 1 true"]
+         [:rcon "effect give $BODY minecraft:resistance 600 4 true"]
+         [:summon "zombie" [22.5 0 24.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:decision :flee}} :within-s 20}
+            {:no-event {:source :job :kind :hostile.decided :data {:decision :fight}} :for-s 20}
             {:no-event {:source :body :kind :died} :for-s 30}]}]}

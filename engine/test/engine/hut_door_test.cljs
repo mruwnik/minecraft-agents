@@ -213,9 +213,10 @@
           (is (= :hostile.look-first (:kind e)) "one wall cell unseen, the door seen open: look, then shut the door")
           (is (< (:look (:prices e)) (:walls (:prices e)))))))))
 
-(deftest a-zombie-at-the-door-leaves-no-time-for-a-look
+(deftest a-zombie-at-the-door-on-hard-is-not-fist-fought
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [e (await (first-choice {:unloaded #{"5,63,-2" "5,64,-2" "5,65,-2"} :entities [(zombie-at 9 3.5)] :server {:difficulty "hard"}}))]
-          (is (= :hostile.decided (:kind e)) "a zombie 2 blocks off on hard: no look first"))))))
+        (let [{:keys [kind prices]} (await (first-choice {:unloaded #{"5,63,-2" "5,64,-2" "5,65,-2"} :entities [(zombie-at 9 3.5)] :server {:difficulty "hard"}}))]
+          (is (< (:walls prices) (:fight prices)) "walls beat a fist fight the body at 4.8 hp cannot live through")
+          (is (= :hostile.look-first kind) "a look of 0.1 s, then most likely the door shut, beats the walls too"))))))

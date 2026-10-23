@@ -1,11 +1,15 @@
 (ns engine.cost-answer-test
   "jobs.lib.cost.answer: one price for each answer to hostiles (fight, walk away, build a refuge) and the cheapest."
-  (:require [cljs.test :refer [deftest is are]]
+  (:require [cljs.test :refer [deftest is are use-fixtures]]
+            [engine.fake :as fake]
+            [engine.game :as game]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.answer :as answer]
             [jobs.lib.cost.death :as death]
             [jobs.lib.cost.threat :as threat]
             [engine.settings :as settings]))
+
+(use-fixtures :each {:before #(game/select! (fake/create {}))})
 
 (def here {:x 0 :y 64 :z 0})
 
@@ -49,7 +53,11 @@
       "hp are dearer near the floor")
   (is (> (cost/answer-price (body 20) {:damage 0 :seconds 5 :then [{:damage 0 :seconds 7}]} here)
          (cost/answer-price (body 20) {:damage 0 :seconds 5} here))
-      "what follows is paid too"))
+      "what follows is paid too")
+  (is (< (- (cost/answer-price (body 5) {:damage 100 :hit 5 :seconds 1 :then [{:damage 0 :seconds 50}]} here)
+            (cost/answer-price (body 5) {:damage 100 :hit 5 :seconds 1} here))
+         0.01)
+      "a death all but sure ends the meet: what would follow it is not paid"))
 
 (deftest a-fight-is-taken-when-it-is-cheaper-than-walking-away-and-meeting-the-mob-again
   (are [health weapon mobs expected] (= expected (choice health weapon mobs))
