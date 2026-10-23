@@ -81,7 +81,7 @@
   (is (nil? (cost/flee-answer {:food 20 :mobs [(mob "spider" 4)]})) "a spider outruns the body")
   (is (some? (cost/flee-answer {:food 20 :mobs [(mob "zombie" 4 35)]})))
   (is (pos? (:damage (cost/flee-answer {:food 20 :mobs [(mob "creeper" 2)]}))) "a creeper 2 off blows before the walk is out of its reach")
-  (is (zero? (:damage (cost/flee-answer {:food 20 :mobs [(mob "creeper" 9)]})))))
+  (is (zero? (:damage (cost/flee-answer {:food 20 :mobs [(mob "creeper" 16)]}))) "far off, even the slowest start of the measured ones gets out of its reach"))
 
 (deftest a-creeper-that-blows-on-the-walk-is-not-met-again
   (let [zombie (mob "zombie" 4 35)]

@@ -1,6 +1,6 @@
 (ns world-test.event-counts
   "tools/event-counts.mjs: recounts the measured combat priors from the trial bodies' event logs, so a setting can cite its k and n.
-  Commands: creeper-exchange | flight-starts, each [--agents DIR] [--since-ms MS] [--sprint BLOCKS-PER-S].
+  Commands: fold | creeper-exchange | flight-starts, each [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S]; each folds the logs into the durable counts file first (rows by run id, so counts only grow as logs rotate).
   creeper-exchange: respond runs that only decided about creepers and fought (a :fight decision) with at least one swing: hp the creepers
   dealt (hurt events inside the run) per swing (attack that hit or killed), overall and per weapon equipped in the run, and the runs with a blast over 2 hp.
   flight-starts: the first flee decision of each respond run from a creeper: seconds until the body is 1 block from where it stood,
@@ -70,67 +70,83 @@
           {} records))
 
 (defn exchange
-  "Rows [{:weapon item-or-nil :swings :hp :blast?}] of the creeper-only fights in records: runs of only creeper decisions with a :fight
+  "Rows [{:id :t :weapon item-or-nil :swings :hp :blast?}] of the creeper-only fights in records: runs of only creeper decisions with a :fight
   one and an end. The hp is the creeper hurt inside the run (start to end plus tail-ms)."
   [records]
   (let [hurts (filter #(= :hurt (:k %)) records)]
-    (for [[[gen _] {:keys [decisions start end hits items]}] (runs records)
+    (for [[[gen job] {:keys [decisions start end hits items]}] (runs records)
           :when (and end
                      (every? #(= "creeper" (:mob %)) decisions)
                      (some #(= :fight (:decision %)) decisions))
           :let [mine (filter #(and (= gen (:gen %)) (<= start (:t %) (+ end tail-ms)) (= #{"creeper"} (:causes %))) hurts)
                 amounts (map :amount mine)
                 first-hit (first (sort hits))]]
-      {:weapon (->> items (filter #(<= (first %) first-hit)) (sort-by first) last second)
+      {:id [gen job] :t start
+       :weapon (->> items (filter #(<= (first %) first-hit)) (sort-by first) last second)
        :swings (count hits)
        :hp (reduce + 0 amounts)
        :blast? (boolean (some #(> % blast-hp) amounts))})))
 
+(def sword-or-axe? "Whether a weapon is one the body backs off between swings with (fight/fight-damage)." #(boolean (some->> % (re-find #"_(sword|axe)$"))))
+
 (defn tally
   "Runs with a swing, their swings and hp, the runs with a blast, the runs without a swing in the logs (the debug log that holds the attack
-  actions rotates away sooner than the plain one)."
+  actions rotates away sooner than the plain one). :hp-per-swing is the mean of the Gamma-Poisson posterior of hp per swing under the
+  Jeffreys prior (shape 0.5, rate 0): (hp + 0.5) / swings, with :sd sqrt(hp + 0.5) / swings."
   [all-rows]
   (let [rows (filter (comp pos? :swings) all-rows)
         swings (reduce + 0 (map :swings rows))
-        hp (reduce + 0 (map :hp rows))]
+        hp (reduce + 0 (map :hp rows))
+        r3 #(/ (js/Math.round (* 1000 %)) 1000)]
     {:runs (count rows) :no-swings (- (count all-rows) (count rows)) :swings swings :hp (/ (js/Math.round (* 100 hp)) 100) :blasts (count (filter :blast? rows))
-     :hp-per-swing (when (pos? swings) (/ (js/Math.round (* 1000 (/ hp swings))) 1000))}))
+     :hp-per-swing (when (pos? swings) (r3 (/ (+ hp 0.5) swings)))
+     :sd (when (pos? swings) (r3 (/ (js/Math.sqrt (+ hp 0.5)) swings)))}))
 
-(defn exchange-report [rows]
-  {:all (tally rows) :by-weapon (into (sorted-map) (map (fn [[w rs]] [(or w "unknown") (tally rs)])) (group-by :weapon rows))})
+(defn exchange-report
+  "The pooled tally over fights with a sword or axe (the weapons fight-damage prices the exchange for), the tally of every fight, and
+  the tally per weapon, so a setting splits by weapon only where the counts separate."
+  [rows]
+  {:armed (tally (filter (comp sword-or-axe? :weapon) rows))
+   :all (tally rows)
+   :by-weapon (into (sorted-map) (map (fn [[w rs]] [(or w "unknown") (tally rs)])) (group-by :weapon rows))})
 
 (defn dist [a b] (js/Math.sqrt (+ (js/Math.pow (- (:x a) (:x b)) 2) (js/Math.pow (- (:y a) (:y b)) 2) (js/Math.pow (- (:z a) (:z b)) 2))))
 
 (defn starts
-  "Seconds of each first flee decision from a creeper (per respond run) until the body is stay-m from where it stood, less that block at
-  sprint speed, from records (sorted by :t). {:starts [s] :no-pos n :never n :sparse n}: no position within pos-age-ms before the decision, none moved in time, or the move showed only across a gap over sparse-ms."
+  "The first flee decision from a creeper of each respond run (records sorted by :t), as {:id [gen job] :t decision-ms :s seconds :sparse? bool} until the
+  body is stay-m from where it stood, less that block at sprint speed; or {:id :t :drop :no-pos|:never}: no position within pos-age-ms before
+  the decision (where it stood is unknown), or none moved in give-up-ms. A move first seen across a gap over sparse-ms is kept, told at
+  the middle of the gap (the true moment lies in it), flagged :sparse?."
   [records sprint]
   (let [first-flee (->> records
                         (filter #(and (= :decided (:k %)) (= "creeper" (:mob %)) (= :flee (:decision %))))
                         (reduce (fn [acc r] (let [id [(:gen r) (:job r)]] (if (acc id) acc (assoc acc id r)))) {})
-                        vals set)]
+                        vals set)
+        secs (fn [t0 t] (max 0 (- (/ (- t t0) 1000) (/ stay-m sprint))))]
     (->> records
-         (reduce (fn [{:keys [last-pos pending] :as st} {:keys [k gen t] :as r}]
+         (reduce (fn [{:keys [last-pos pending] :as st} {:keys [k gen job t] :as r}]
                    (case k
                      :decided (if-not (first-flee r)
                                 st
                                 (let [p (get last-pos gen)]
                                   (if (and p (<= (- t (:t p)) pos-age-ms))
-                                    (update st :pending conj {:gen gen :t t :from p})
-                                    (update st :no-pos inc))))
+                                    (update st :pending conj {:gen gen :id [gen job] :t t :from p})
+                                    (update st :out conj {:id [gen job] :t t :drop :no-pos}))))
                      :pos (let [{here true waiting false} (group-by #(= gen (:gen %)) pending)
                                 {moved true still false} (group-by #(>= (dist r (:from %)) stay-m) here)
-                                {late true wait false} (group-by #(> (- t (:t %)) give-up-ms) still)]
+                                {late true wait false} (group-by #(> (- t (:t %)) give-up-ms) still)
+                                tl (get-in last-pos [gen :t])
+                                sparse? (> (- t tl) sparse-ms)]
                             (-> st
                                 (assoc-in [:last-pos gen] r)
                                 (assoc :pending (vec (concat waiting wait)))
-                                (update :never + (count late))
-                                (update :sparse + (if (> (- t (get-in last-pos [gen :t])) sparse-ms) (count moved) 0))
-                                (update :starts into (when (<= (- t (get-in last-pos [gen :t])) sparse-ms)
-                                                       (map #(max 0 (- (/ (- t (:t %)) 1000) (/ stay-m sprint))) moved)))))
+                                (update :out into (map (fn [m] {:id (:id m) :t (:t m) :drop :never})) late)
+                                (update :out into (map (fn [m] {:id (:id m) :t (:t m) :sparse? sparse?
+                                                                :s (secs (:t m) (if sparse? (/ (+ (max tl (:t m)) t) 2) t))}))
+                                        moved)))
                      st))
-                 {:last-pos {} :pending [] :starts [] :no-pos 0 :never 0 :sparse 0})
-         (#(select-keys % [:starts :no-pos :never :sparse])))))
+                 {:last-pos {} :pending [] :out []})
+         :out)))
 
 (defn deciles
   "The values of sorted xs at (i + 0.5) / 10, i = 0..9, rounded to 2 places."
@@ -139,9 +155,38 @@
     (when (pos? n)
       (mapv #(/ (js/Math.round (* 100 (nth v (min (dec n) (js/Math.floor (* (/ (+ % 0.5) 10) n)))))) 100) (range 10)))))
 
-(defn starts-report [{:keys [starts no-pos never sparse]}]
-  (let [n (count starts)]
-    {:n n :mean (when (pos? n) (/ (js/Math.round (* 100 (/ (reduce + 0 starts) n))) 100)) :deciles (deciles starts) :no-pos no-pos :never never :sparse sparse}))
+(defn starts-report
+  "n, mean and deciles of the kept starts (rows of starts), how many were told across a gap, and the dropped decisions by reason."
+  [rows]
+  (let [xs (keep :s rows)
+        n (count xs)]
+    {:n n :mean (when (pos? n) (/ (js/Math.round (* 100 (/ (reduce + 0 xs) n))) 100)) :deciles (deciles xs)
+     :sparse (count (filter :sparse? rows)) :no-pos (count (filter #(= :no-pos (:drop %)) rows)) :never (count (filter #(= :never (:drop %)) rows))}))
+
+;; The durable counts: the rows of each prior by run id, so the counts only grow while the raw logs rotate away.
+(def empty-counts {:exchange {} :starts {}})
+
+(defn better-exchange "Of two rows of one fight, the one that saw more swings (a rotation may have cut the older read short), then the older." [a b]
+  (if (> (:swings b) (:swings a)) b a))
+
+(defn fold
+  "counts with the rows of exchange-rows and start-rows merged in by id; a row already there stays unless a fight row saw more swings
+  or a start was dropped and is now told."
+  [counts exchange-rows start-rows]
+  (-> counts
+      (update :exchange #(reduce (fn [m r] (update m (:id r) (fn [old] (if old (better-exchange old r) r)))) % exchange-rows))
+      (update :starts #(reduce (fn [m r] (update m (:id r) (fn [old] (if (and old (not (:drop old))) old r)))) % start-rows))))
+
+(defn load-counts [file]
+  (if (fs/existsSync file) (merge empty-counts (reader/read-string (fs/readFileSync file "utf8"))) empty-counts))
+
+(defn save-counts!
+  "Written whole to a temporary file and renamed over, so a reader never sees half a file."
+  [file counts]
+  (let [tmp (str file ".tmp")]
+    (fs/mkdirSync (path/dirname file) #js {:recursive true})
+    (fs/writeFileSync tmp (str (pr-str counts) "\n"))
+    (fs/renameSync tmp file)))
 
 (defn event-files
   "The event files of a body's directory listing: the plain log (events.edn, its rotations) and the debug log (action events),
@@ -163,27 +208,40 @@
        (sort-by :t)
        vec))
 
-(def usage "usage: node tools/event-counts.mjs creeper-exchange|flight-starts [--agents DIR] [--since-ms MS] [--sprint BLOCKS-PER-S]")
+(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S]
+  every command first folds the logs into the counts file (default worlds/test/priors-counts.edn), then reports from the file; --since-ms keeps the rows of fights started after it.")
 
 (defn- parse-args [argv]
   (loop [[a & more] argv o {}]
     (case a
       nil o
       "--agents" (recur (rest more) (assoc o :agents (first more)))
+      "--counts" (recur (rest more) (assoc o :counts (first more)))
       "--since-ms" (recur (rest more) (assoc o :since-ms (js/parseFloat (first more))))
       "--sprint" (recur (rest more) (assoc o :sprint (js/parseFloat (first more))))
       (recur more (update o :pos (fnil conj []) a)))))
 
+(defn fold-logs!
+  "Reads every body's logs under agents-dir and folds the rows into the counts file; returns the new counts."
+  [agents-dir counts-file sprint]
+  (let [per-agent (for [b (array-seq (fs/readdirSync agents-dir))
+                        :when (fs/existsSync (path/join agents-dir b "engine"))]
+                    (read-agent (path/join agents-dir b "engine") 0))
+        counts (reduce (fn [c records] (fold c (exchange records) (starts records sprint))) (load-counts counts-file) per-agent)]
+    (save-counts! counts-file counts)
+    counts))
+
 (defn main
   "argv (array) -> promise of the exit code."
   [argv]
-  (let [{[cmd] :pos :keys [agents since-ms sprint] :or {since-ms 0 sprint 5.6}} (parse-args (vec (array-seq argv)))
-        dir (or agents (path/join (or js/process.env.WORLD_TEST_REPO ".") "worlds" "test" "agents"))
-        per-agent (fn [f] (for [b (array-seq (fs/readdirSync dir))
-                                :when (fs/existsSync (path/join dir b "engine"))]
-                            (f (read-agent (path/join dir b "engine") since-ms))))]
+  (let [{[cmd] :pos :keys [agents counts since-ms sprint] :or {since-ms 0 sprint 5.6}} (parse-args (vec (array-seq argv)))
+        repo (or js/process.env.WORLD_TEST_REPO ".")
+        folded (when (#{"fold" "creeper-exchange" "flight-starts"} cmd)
+                 (fold-logs! (or agents (path/join repo "worlds" "test" "agents")) (or counts (path/join repo "worlds" "test" "priors-counts.edn")) sprint))
+        since (fn [rows] (filter #(>= (:t %) since-ms) (vals rows)))]
     (js/Promise.resolve
      (case cmd
-       "creeper-exchange" (do (println (pr-str (assoc (exchange-report (mapcat identity (per-agent exchange))) :since-ms since-ms))) 0)
-       "flight-starts" (do (println (pr-str (assoc (starts-report (apply merge-with (fn [a b] (if (number? a) (+ a b) (into a b))) (per-agent #(starts % sprint)))) :since-ms since-ms :sprint sprint))) 0)
+       "fold" (do (println (pr-str {:exchange (count (:exchange folded)) :starts (count (:starts folded))})) 0)
+       "creeper-exchange" (do (println (pr-str (assoc (exchange-report (since (:exchange folded))) :since-ms since-ms))) 0)
+       "flight-starts" (do (println (pr-str (assoc (starts-report (since (:starts folded))) :since-ms since-ms :sprint sprint))) 0)
        (do (js/console.error usage) 2)))))

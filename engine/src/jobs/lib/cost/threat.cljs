@@ -11,7 +11,8 @@
 
 (a/defargs settings
   {::creeper-blast {:default 43 :doc "Damage a creeper's blast is costed at." :spec (a/int-in 0 nil)}
-   ::creeper-exchange {:default 0.51 :doc "hp from creepers per swing (attack that hit or killed) of a hit-and-back fight with a lone creeper (a late step back lets the fuse run on): 3.06 hp over 6 swings in 2 respond runs that only fought creepers, 1 with a blast over 2 hp; all stone swords, so not split by weapon (the swings a weapon needs are fight/swings). Recount: node tools/event-counts.mjs creeper-exchange; per-case evidence replaces it." :spec (a/num-in 0 nil)}
+   ::creeper-exchange-hp {:default 3.06 :doc "k of the creeper exchange: hp creepers dealt over the swings (attack that hit or killed) of hit-and-back fights with a sword or axe against a lone creeper (a late step back lets the fuse run on); 1 trial run, 1 blast over 2 hp, all before 336cdd402 (the back-off) and none counted since. Recount: node tools/event-counts.mjs creeper-exchange (:armed); per-case evidence replaces it." :spec (a/num-in 0 nil)}
+   ::creeper-exchange-swings {:default 5 :doc "n of the creeper exchange: the swings behind ::creeper-exchange-hp." :spec (a/num-in 1 nil)}
    ::difficulty {:default 1 :doc "The server difficulty mob hits are costed at: 0 peaceful, 1 easy, 2 normal, 3 hard (not read from the server)." :spec (a/int-in 0 3)}
    ::hit-rate {:default 0.6 :doc "Hits a zombie or skeleton lands per second of exposure (measured over trial fights; the body is out of reach part of the time). Mobs not measured count one a second." :spec (a/num-in 0 nil)}
    ::spider-hit-rate {:default 0.35 :doc "Hits a spider or cave spider lands per second of exposure." :spec (a/num-in 0 nil)}
@@ -68,7 +69,10 @@
   {"spider" 100 "zombie" 95 "zombie_villager" 5 "skeleton" 100 "creeper" 100 "enderman" 10 "witch" 5})
 
 (defn creeper-blast [] (settings/get settings ::creeper-blast))
-(defn creeper-exchange [] (settings/get settings ::creeper-exchange))
+(defn creeper-exchange
+  "hp from creepers per swing: the mean of the Gamma-Poisson posterior under the Jeffreys prior, (k + 0.5) / n of the two settings, so a small n is pulled toward an even half hp per swing."
+  []
+  (/ (+ (settings/get settings ::creeper-exchange-hp) 0.5) (settings/get settings ::creeper-exchange-swings)))
 (def provoked-only #{"enderman" "zombified_piglin"})
 (defn provoked-share [] (settings/get settings ::provoked-share))
 
