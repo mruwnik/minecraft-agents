@@ -4,6 +4,8 @@
 ;; hurts, never rises, no sun burn). Torches on the shores light the lake: the body sees the shore it swims to. A hunger effect drains the food (no regeneration), then `damage` leaves 13 hp, as in the trial deaths.
 ;; Should-succeed: with a stone sword at 13 hp (a drowned only heard afterwards is fought held and muted, by design), the drowned 3 blocks off and 7 down, the shore 4 blocks off: :flee, the body
 ;; leaves the water and the drowned is left alive.
+;; Should-fail (ledge): the shores walled 2 high so the only dry stand is a one-cell stone pillar (card bb51d3df): a swim to it is no escape (the
+;; drowned comes ashore), so respond decides no :flee in the first 8 s (a walled pond is a trap: the body is not kept alive past that).
 ;; Should-fail (control): the drowned just under the surface beside the body is in reach: an iron sword fights and kills it.
 {:defaults
  {:tags [:hostile :survival :water]
@@ -25,6 +27,16 @@
             {:event {:source :job :kind :retreat.step-speed :data {:slot :dry}} :within-s 20}]
    :after [[:body-far [7.5 8 16.5] 3] [:entities "type=drowned,tag=wt" [[3 0 9] [30 12 23]] 1]]
    :limit-s 60}
+  {:name "ledge-only-shore-is-no-flight-from-a-deep-drowned"
+   :blocks [[:fill [3 9 9] [15 10 9]  "stone"] [:fill [3 9 23] [15 10 23] "stone"] [:fill [3 9 10] [3 10 22] "stone"] [:fill [15 9 10] [15 10 22] "stone"]
+            [:fill [9 1 16] [9 8 16] "stone"]
+            [:set [3 11 12] "torch"] [:set [3 11 20] "torch"] [:set [15 11 12] "torch"] [:set [15 11 20] "torch"] [:set [9 9 16] "torch"]]
+   :body {:inventory [["stone_sword" 1]]}
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 60 true"] [:until-effect-gone "hunger" 30] [:rcon "damage $BODY 7 minecraft:generic"]
+         [:summon "drowned" [10.5 1 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:mob "drowned"}} :within-s 10}
+            {:no-event {:source :job :kind :hostile.decided :data {:mob "drowned" :decision :flee}} :for-s 8}]
+   :limit-s 30}
   {:name "armed-body-fights-a-drowned-in-reach"
    :body {:inventory [["iron_sword" 1]]}
    :act [[:summon "drowned" [8.5 7 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]

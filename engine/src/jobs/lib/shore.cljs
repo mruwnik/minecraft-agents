@@ -93,48 +93,6 @@
 
 (defn- cell-key [x y z] (+ (* (+ (* (+ x 32768) 65536) (+ z 32768)) 512) (+ y 64)))
 
-(defn swim-to-land
-  "{:stand cell :swim blocks} of the nearest dry stand joined to the body by seen water and air cells (a flooded stair or
-  shaft, however far up), the swim the length of that way (flat diagonals count root 2), nearest by steps first. A body
-  swims up through water but not through air: it leaves an air cell sideways or down only, and an air cell is a cell of the
-  way only over water (or a stand). The flood reads at most
-  ::swim-cells cells; with no stand found by then {:swim blocks :open? true}: the shore is at least that far. nil when the
-  joined water ends with no stand in it."
-  [p self-pos]
-  (let [work (settings/get settings ::swim-cells)
-        fx (js/Math.floor (:x self-pos)) fy (js/Math.floor (:y self-pos)) fz (js/Math.floor (:z self-pos))
-        names (js/Map.)
-        name-of (fn [x y z]
-                  (let [k (cell-key x y z)]
-                    (if (.has names k)
-                      (.get names k)
-                      (let [n (breath/seen-water-name p {:x x :y y :z z})] (.set names k n) n))))
-        water? (fn [x y z] (contains? breath/swimmable (name-of x y z)))
-        open? (fn [x y z]
-                (and (>= y (dec fy))
-                     (let [n (name-of x y z)]
-                       (if (bs/air n)
-                         (or (water? x (dec y) z) (standable? p {:x x :y y :z z}))
-                         (breath/passable-water-or-air? n)))))
-        visited (js/Set. #js [(cell-key fx fy fz)])]
-    (loop [layer [[fx fy fz 0]]]
-      (let [stands (keep (fn [[x y z g]] (when (and (bs/air (name-of x y z)) (standable? p {:x x :y y :z z})) [g {:x x :y y :z z}])) layer)]
-        (cond
-          (seq stands) (let [[g stand] (apply min-key first stands)] {:stand stand :swim g})
-          (empty? layer) nil
-          (<= work (.-size visited)) {:swim (reduce min ##Inf (map #(nth % 3) layer)) :open? true}
-          :else
-          (recur (vec (for [[x y z g] layer
-                            :let [in-air? (bs/air (name-of x y z))]
-                            [dx dy dz len] flat-moves
-                            :when (not (and in-air? (pos? dy)))
-                            :let [nx (+ x dx) ny (+ y dy) nz (+ z dz) k (cell-key nx ny nz)]
-                            :when (and (not (.has visited k))
-                                       (open? nx ny nz)
-                                       (or (zero? dx) (zero? dz) (and (open? nx y z) (open? x y nz))))
-                            :let [_ (.add visited k)]]
-                        [nx ny nz (+ g len)]))))))))
-
 (defn land-run
   "Blocks from stand, at most limit, the body can walk away over dry stand cells (a step up or down at a time); ##Inf when
   ::land-cells cells were read and it still went on (that much land is room enough). A ledge with no land beyond it is 0."
@@ -151,3 +109,51 @@
                               :let [_ (.add visited k)]]
                           c))]
           (recur next (reduce max far (map #(js/Math.hypot (- (:x %) sx) (- (:z %) sz)) next))))))))
+
+(defn swim-to-land
+  "{:stand cell :swim blocks} of the nearest dry stand joined to the body by seen water and air cells (a flooded stair or
+  shaft, however far up) with :land, the blocks (land-run, at most need) it can walk on from there, the swim the length of that way
+  (flat diagonals count root 2), nearest by steps first; a stand with less land than need is passed over for one with enough, and
+  the nearest of them is the answer when the flood ends with none, and with no stand at all {:swim the farthest it reached :land 0}. A body
+  swims up through water but not through air: it leaves an air cell sideways or down only, and an air cell is a cell of the
+  way only over water (or a stand). The flood reads at most
+  ::swim-cells cells; with no stand found by then {:swim blocks :open? true}: the shore is at least that far."
+  [p self-pos need]
+  (let [work (settings/get settings ::swim-cells)
+        fx (js/Math.floor (:x self-pos)) fy (js/Math.floor (:y self-pos)) fz (js/Math.floor (:z self-pos))
+        names (js/Map.)
+        name-of (fn [x y z]
+                  (let [k (cell-key x y z)]
+                    (if (.has names k)
+                      (.get names k)
+                      (let [n (breath/seen-water-name p {:x x :y y :z z})] (.set names k n) n))))
+        water? (fn [x y z] (contains? breath/swimmable (name-of x y z)))
+        open? (fn [x y z]
+                (and (>= y (dec fy))
+                     (let [n (name-of x y z)]
+                       (if (bs/air n)
+                         (or (water? x (dec y) z) (standable? p {:x x :y y :z z}))
+                         (breath/passable-water-or-air? n)))))
+        visited (js/Set. #js [(cell-key fx fy fz)])]
+    (loop [layer [[fx fy fz 0]] ledge nil far 0]
+      (let [stands (sort-by first (keep (fn [[x y z g]] (when (and (bs/air (name-of x y z)) (standable? p {:x x :y y :z z})) [g {:x x :y y :z z}])) layer))
+            found (map (fn [[g stand]] {:stand stand :swim g :land (land-run p stand need)}) stands)
+            good (first (filter #(>= (:land %) need) found))
+            ledge (or ledge (first found))]
+        (cond
+          good good
+          (<= work (.-size visited)) {:swim (reduce min ##Inf (map #(nth % 3) layer)) :open? true}
+          (empty? layer) (or ledge {:swim far :land 0})
+          :else
+          (recur (vec (for [[x y z g] layer
+                            :let [in-air? (bs/air (name-of x y z))]
+                            [dx dy dz len] flat-moves
+                            :when (not (and in-air? (pos? dy)))
+                            :let [nx (+ x dx) ny (+ y dy) nz (+ z dz) k (cell-key nx ny nz)]
+                            :when (and (not (.has visited k))
+                                       (open? nx ny nz)
+                                       (or (zero? dx) (zero? dz) (and (open? nx y z) (open? x y nz))))
+                            :let [_ (.add visited k)]]
+                        [nx ny nz (+ g len)]))
+                 ledge
+                 (reduce max far (map #(nth % 3) layer))))))))

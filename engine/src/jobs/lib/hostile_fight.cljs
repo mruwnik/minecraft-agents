@@ -281,8 +281,7 @@
 
 (defn swim-out
   "{:swim blocks :land blocks} of a body in water swimming to the nearest dry stand joined to it by water and air
-  (shore/swim-to-land: the way's length) and the land it can walk on from there up to the mobs' follow range; :swim ##Inf
-  when none is seen, :land ##Inf when unknown; nil on land. One flood a place, kept ::check-cache/ttl-ms."
+  (shore/swim-to-land: the way's length, a stand with land to walk on over a ledge) and that land up to the mobs' follow range; with no stand in the joined water the swim is the farthest it reaches and the land 0, :land ##Inf when the flood stopped unfinished; nil on land. One flood a place, kept ::check-cache/ttl-ms."
   [c mobs]
   (let [p (:primitives c)]
     (when (breath/in-water? p)
@@ -291,10 +290,9 @@
         (check-cache/cached
          c [:swim-out (u/cell-vec me) follow]
          (fn []
-           (let [{:keys [stand swim open?]} (shore/swim-to-land p me)]
-             (cond (nil? swim) {:swim ##Inf :land ##Inf}
-                   open? {:swim swim :land ##Inf}
-                   :else {:swim swim :land (shore/land-run p stand follow)}))))))))
+           (let [{:keys [swim land open?]} (shore/swim-to-land p me follow)]
+             (cond open? {:swim swim :land ##Inf}
+                   :else {:swim swim :land land}))))))))
 
 (defn returns
   "Flights from mobs named one of names within ::return-s, by the :hostile entries (c is a ctx): one for each other run
