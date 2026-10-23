@@ -11,6 +11,7 @@
             [engine.test-util :as tu]
             [jobs.items.collect-drops :as job-ns]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [jobs.lib.loose :as loose]
             [jobs.lib.shelter.sense :as sh-sense]))
 
@@ -35,12 +36,12 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (bd/setup {:self body :blocks steps})]
-          (drop! p [3 61 0] "porkchop")
+          (drop! p [3 61 0] "diamond")
           (seen-from-above! p)
-          (let [result (await (tu/child-outcome eng job {:radius 6 :items ["porkchop"]} 30))]
+          (let [result (await (tu/child-outcome eng job {:radius 6 :items ["diamond"]} 30))]
             (is (= 1 (:collected result)))
             (is (= :done (:status result)))
-            (is (= 1 (bd/carried p "porkchop")))
+            (is (= 1 (bd/carried p "diamond")))
             (is (empty? (bd/left-drops seen)))
             (is (some #(and (= :child_started (:kind %)) (= :walk (:slot %))) @seen) "a go-to walk took it down the slope")
             (is (every? #(= 1 (:maxDropDown %)) (collect-args p)) "the act's own walk never drops more than a block")))))))
@@ -309,6 +310,21 @@
           (is (= [:done 1] ((juxt :status :collected) result)))
           (is (= 1 @walks) "no second search walk once the log came in"))))))
 
+(deftest a-walk-to-drops-may-risk-what-the-drops-in-sight-are-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (bd/setup {:self body})
+              walks (atom [])
+              record (let [f (fn [_ _ _ args] (swap! walks conj args) (js/Promise.resolve :continue))]
+                       (aset f "cljs$core$IFn$_invoke$arity$4" f)
+                       f)]
+          (drop! p [4 64 0] "diamond")
+          (drop! p [5 64 0] "diamond")
+          (with-redefs [child/run!* record]
+            (await (tu/child-outcome eng job {:radius 6 :items ["diamond"]} 10)))
+          (is (= (:value (cost/item-value [{:name "diamond" :count 2}])) (:worth (first @walks)))))))))
+
 (deftest ids-not-in-sight-are-left-unseen
   (async done
     (tu/run-async done
@@ -387,11 +403,11 @@
                                     :when (not= [5 58 0] [x y z])]
                                 [(str x "," y "," z) "stone"]))
               {:keys [eng p seen]} (bd/setup {:self body :inventory [{:name "wooden_pickaxe" :count 1}] :blocks pocket})]
-          (drop! p [5 58 0] "dirt")
+          (drop! p [5 58 0] "diamond")
           (seen-from-above! p)
           (let [result (await (tu/child-outcome eng job {:radius 8 :dig true} 80))]
             (is (pos? (:collected result)) "the dug stone came in with it")
-            (is (= 1 (bd/carried p "dirt")))
+            (is (= 1 (bd/carried p "diamond")))
             (is (empty? (:left result)))))))))
 
 (deftest a-dug-cell-the-dark-hides-is-lit-with-a-carried-torch-and-looked-at-again
@@ -495,14 +511,14 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (bd/setup {:self body :blocks steps})]
-          (drop! p [3 61 0] "porkchop")
+          (drop! p [3 61 0] "diamond")
           (seen-from-above! p)
           (.override (.-world p) "collect"
                      (fn [token args impl]
                        (impl token args)
                        #js {:status "ok" :gained #js []}))
-          (let [result (await (tu/child-outcome eng job {:radius 6 :items ["porkchop"]} 30))]
-            (is (= 1 (bd/carried p "porkchop")))
+          (let [result (await (tu/child-outcome eng job {:radius 6 :items ["diamond"]} 30))]
+            (is (= 1 (bd/carried p "diamond")))
             (is (= 1 (:collected result)))
             (is (= :done (:status result)))))))))
 

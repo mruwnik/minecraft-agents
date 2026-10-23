@@ -1,0 +1,35 @@
+;; collect-drops :near the pile of a zombie death a minute old walks with the pile's worth (jobs.lib.cost/item-value): go-to's
+;; walk risk prices the killer's remembered spot (death-spot/present-share), and the pile may take what it is worth (Q24).
+;; Open sky plot, glowstone over the body (x 8.5): the light does not hang on the clock. The pile lies 20 blocks east.
+;; Should-succeed: a pile in plain sight, lit, is collected at once: a spot seen clear since the death is no threat.
+;; Should-succeed: diamonds at the dark end of a sealed corridor (x 10..29, 1 wide, glowstone in its roof at x 13: x 27..29
+;; are block light 0, and the sky light from the mouth is gone by x 25) are fetched: the spot is not seen clear, and they are worth its risk.
+;; Should-fail (waits): one rotten flesh at the same dark end is not worth the risk: the walk waits :risky, nothing collected.
+{:defaults
+ {:tags [:collect-drops :survival :go-to]
+  :time :any
+  :plot {:height 6 :floor "stone" :light :sky :length 40}
+  :blocks [[:set [8 4 16] "glowstone"]]
+  :body {:at [8.5 0 16.5] :yaw 270 :settle-s 2 :effects [["resistance" 600 4]]}
+  :memory [{:kind :deaths :age-s 60 :policy {:cap 10 :ttl :forever} :data {:pos #xyz [28 0 16] :cause "zombie"}}]
+  :limit-s 120}
+ :cases
+ [{:name "a-lit-pile-in-plain-sight-is-collected"
+   :blocks [[:set [28 3 16] "glowstone"]]
+   :act [[:summon "item" [28.5 0.2 16.5] "{Item:{id:\"minecraft:iron_ingot\",count:3}}"]
+         [:job (jobs.items.collect-drops {:near #xyz [28 0 16] :radius 3})]]
+   :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 90 :of-job true}
+            {:no-event {:source :job :data {:reason :risky}} :for-s 5 :of-job true}]
+   :after [[:item "iron_ingot" 3]]}
+  {:name "diamonds-at-a-dark-corridor-end-are-worth-the-walk"
+   :blocks [[:fill [10 0 15] [30 2 17] "stone"] [:fill [10 0 16] [29 1 16] "air"] [:set [13 2 16] "glowstone"]]
+   :act [[:summon "item" [28.5 0.2 16.5] "{Item:{id:\"minecraft:diamond\",count:3}}"]
+         [:job (jobs.items.collect-drops {:near #xyz [28 0 16] :radius 3})]]
+   :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 90 :of-job true}]
+   :after [[:item "diamond" 3]]}
+  {:name "rotten-flesh-at-a-dark-corridor-end-waits"
+   :blocks [[:fill [10 0 15] [30 2 17] "stone"] [:fill [10 0 16] [29 1 16] "air"] [:set [13 2 16] "glowstone"]]
+   :act [[:summon "item" [28.5 0.2 16.5] "{Item:{id:\"minecraft:rotten_flesh\",count:1}}"]
+         [:job (jobs.items.collect-drops {:near #xyz [28 0 16] :radius 3})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :risky}} :within-s 40 :of-job true}]
+   :after [[:item "rotten_flesh" 0]]}]}

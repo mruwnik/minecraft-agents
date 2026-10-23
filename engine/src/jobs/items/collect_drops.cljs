@@ -11,6 +11,7 @@
             [jobs.lib.blocks :as blocks]
             [jobs.lib.body :as body]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-route :as dig-route]
@@ -29,7 +30,7 @@
   An item is tried once; one that is gone, cannot be reached or picked up is skipped. A drop that slid to another cell while the body
   walked or dug to it is judged again there (at most ::max-moves times).
   An item more than 2 blocks off (not above the feet), or more than a block lower than the feet, is walked to first (a jobs.movement.go-to child, range 1, which prices
-  falls and dangers); one it cannot reach is left, with a debug collect-drops.left {:reason :unreachable}. A nearer one whose
+  falls and dangers against the worth of the drops in sight, :worth); one it cannot reach is left, with a debug collect-drops.left {:reason :unreachable}. A nearer one whose
   straight way crosses a drop (a shaft between) is walked to the same way. A body whose centre overhangs a drop first steps onto
   the block holding it up; failing that the drop is left {:reason :unsafe-floor}.
   A drop in water with a known hostile within the hostile radius of it is left, with {:reason :water-danger}.
@@ -268,12 +269,19 @@
         (do (await (ctx/act c :moveTo #js {:pos #js {:x (+ x 0.5) :y y :z (+ z 0.5)} :range 0.15}))
             (sh-sense/solid-at? p (update (sh-sense/feet p) :y dec))))))
 
+(defn drops-worth
+  "Seconds the drops in sight round the anchor are worth (jobs.lib.cost/item-value): what a walk to them may risk."
+  [c]
+  (:value (cost/item-value (for [e (candidates c (or (:anchor (ctx/mem c)) (:near (:args c)) (u/self-pos c)))
+                                 :let [{:keys [name count]} (js->clj (.-item e) :keywordize-keys true)]]
+                             {:name name :count (or count 1)}))))
+
 (defn ^:async walk-down!
   "Walk within a block of item, more than a block lower than the feet (or, with ways, higher: a column top is climbed by
   go-to's pillar or stair): one go-to call (child/run!*, slot :walk). :arrived, :continue (go-to waits on the world) or :unreachable."
   ([c item] (walk-down! c item #{:walk :clear-seal}))
   ([c item ways]
-  (let [r (await (child/run!* c :walk 'jobs.movement.go-to (walk-args c {:pos (item-cell item) :range 1 :ways ways})))]
+  (let [r (await (child/run!* c :walk 'jobs.movement.go-to (walk-args c {:pos (item-cell item) :range 1 :ways ways :worth (drops-worth c)})))]
     (cond
       (= :continue r) :continue
       (and (= :done (:kind r)) (:arrived (:data r))) :arrived
