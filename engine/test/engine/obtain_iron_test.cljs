@@ -128,11 +128,11 @@
             (is (re-find #"raw_iron \(from deepslate_iron_ore/iron_ore\)" (str (:text w)))))
           (is (empty? (f/calls s "dig"))))))))
 
-(deftest raw-iron-unseen-with-explore-goes-to-the-mine-not-a-surface-walk
+(deftest raw-iron-unseen-with-explore-on-ground-with-no-rock-in-sight-goes-to-the-mine-not-a-surface-walk
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (f/start (assoc (ore-world {} [{:name "stone_pickaxe" :count 1}]) :floor [-30 -30 40 30]) [f/own-zone])]
+        (let [s (f/start (assoc (ore-world {} [{:name "stone_pickaxe" :count 1}]) :floor [-30 -30 40 30] :floor-block "dirt") [f/own-zone])]
           (await (obtain! s {:item "raw_iron" :ways #{:craft :smelt :gather} :explore true} 4))
           (is (empty? (f/events-of s :obtain.exploring)) "no surface search")
           (is (seq (mine-events s)) "the mine child ran"))))))
@@ -141,7 +141,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (f/start (assoc (ore-world {} [{:name "stone_pickaxe" :count 1} {:name "stick" :count 2} {:name "crafting_table" :count 1}]) :floor [-30 -30 40 30]) [f/own-zone])]
+        (let [s (f/start (assoc (ore-world {} [{:name "stone_pickaxe" :count 1} {:name "stick" :count 2} {:name "crafting_table" :count 1}]) :floor [-30 -30 40 30] :floor-block "dirt") [f/own-zone])]
           (await (obtain! s {:item "iron_pickaxe"} 4))
           (is (empty? (f/events-of s :waiting)) "no silent wait")
           (is (seq (mine-events s)) "the mine child ran"))))))

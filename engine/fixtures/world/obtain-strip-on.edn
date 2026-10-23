@@ -12,13 +12,13 @@
  :cases
  [{:name "unseen-ore-mined-on-past-an-empty-tunnel"
    :act [[:job (jobs.items.obtain {:item "raw_iron" :count 1 :ways #{:craft :smelt :gather}
-                                   :settings {:jobs.lib.child/max-fruitless 1 :jobs.gather.mine.descent/ore-levels {}}})]]
+                                   :settings {:jobs.lib.child/max-fruitless 1 :jobs.lib.cost.find/ore-levels {}}})]]
    :expect [{:event {:source :job :kind :obtain.strip-on} :within-s 300 :of-job true}
             {:event {:source :job :kind :completed} :within-s 390 :of-job true}]
    :after [[:item "raw_iron" [:>= 1]]]}
   {:name "barren-ground-ends-after-the-empty-tunnel"
    :act [[:job (jobs.items.obtain {:item "raw_iron" :count 1 :ways #{:craft :smelt :gather}
-                                   :settings {:jobs.lib.child/max-fruitless 1 :jobs.gather.mine.descent/ore-levels {} :jobs.items.obtain.base/barren-ore 0}})]]
+                                   :settings {:jobs.lib.child/max-fruitless 1 :jobs.lib.cost.find/ore-levels {} :jobs.items.obtain.base/barren-ore 0}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 300 :of-job true}
             {:no-event {:source :job :kind :obtain.strip-on} :for-s 300 :until {:source :job :kind :stopped}}]
    :after [[:item "raw_iron" [:= 0]]]}]}

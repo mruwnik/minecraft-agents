@@ -12,6 +12,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.stair-time :as stair-time]
             [jobs.lib.storage :as storage]
             [jobs.lib.threats :as threats]
             [jobs.lib.torch :as torch]
@@ -133,29 +134,57 @@
     (cond
       (not dark?) (+ walk risk dig)
       (not (pos? torches)) js/Infinity
-      :else (+ dig risk (* walk (inc (cost/dark-factor))) (* (js/Math.ceil (/ d 8)) (:cost (cost/light-cost {:carried torches})))))))
+      :else (+ dig risk (cost/dark-way-s walk d torches)))))
 
-(defn search-cost
+(defn look-cost
   "Seconds per find of a search for an unseen need (cost/search-s): legs of the search's spacing, each the walk and the
-  death it risks now, a look of the gather's scan radius (cost/leg-chance: an animal's over ground the notes searched in
-  vain round the body, an ore's over the faces of rock the body has seen within that radius), within the call's
-  search-worth, then the walk to what it saw. Infinity when the call may not search, its search for the need ran
-  already (it found none: the seen way is next), the need is tunnelled for or no chance is priced (logs and other blocks)."
+  death it risks now, a look of the gather's scan radius (cost/look-leg-chance), within the call's search-worth, then
+  the walk to what it saw. Infinity when the call may not search, its search for the need ran already (it found none:
+  the seen way or the tunnel is next) or no chance is priced (logs and other blocks)."
   [c need]
-  (if-not (and (explore-opts c) (searchable? need) (not (:tunnel? need)) (zero? (get-in (ctx/mem c) [:explored (:key need)] 0)))
+  (if-not (and (explore-opts c) (searchable? need) (zero? (get-in (ctx/mem c) [:explored (:key need)] 0)))
     js/Infinity
     (let [p (:primitives c)
           self (u/self-pos c)
-          names (search-names need)
           r (search-scan-radius)
           leg (+ (:cost (cost/walk-cost {:distance (cost/leg-spacing)}))
-                 (cost/route-death-cost (threats/death-body c) (route-class p) self))
-          chance (cost/leg-chance names {:looked (cost/looked-area (notes/notes c) names [(:x self) (:z self)])
-                                         :a (* js/Math.PI r r)
-                                         :seen (when-let [ore (cost/ore-of names)]
-                                                 (look/seen-blocks p {:names (vec (cost/host-blocks ore)) :radius r :max js/Infinity}))})]
-      (+ (cost/search-s chance leg (search-worth c))
+                 (cost/route-death-cost (threats/death-body c) (route-class p) self))]
+      (+ (cost/search-s (cost/look-leg-chance p (notes/notes c) (search-names need) [(:x self) (:z self)] r) leg (search-worth c))
          (:cost (cost/walk-cost {:distance r}))))))
+
+(defn tunnel-way
+  "{:way :tunnel :cost :y} of a tunnelled ore need as jobs.gather.mine gets it unseen: a stair down from the feet to
+  its cost/ore-level (where the body stands when that is higher or none is set), then a strip tunnel there, legs of the cost/torch-gap
+  one torch lights finding by cost/tunnel-chance within the call's search-worth (cost/search-s). Stair and legs are dark ways
+  (cost/dark-way-s over stair-time's seconds a step), each risking a death under rock. :cost Infinity for a need not
+  tunnelled for or not an ore."
+  [c need]
+  (let [block (:block (:args need))
+        ore (cost/ore-of [block])
+        level (cost/ore-level block)]
+    (if-not (and (:tunnel? need) ore)
+      {:way :tunnel :cost js/Infinity}
+      (let [self (u/self-pos c)
+            feet (js/Math.floor (:y self))
+            y (min feet (or level feet))
+            at (assoc self :y y)
+            torches (storage/carried (u/inventory (:primitives c)) "torch")
+            risk (threats/route-death-cost c {:underground? true :night? false} at)
+            n cost/torch-gap
+            leg (+ risk (cost/dark-way-s (stair-time/steps-s :level n) n torches))
+            down (+ risk (cost/dark-way-s (stair-time/steps-s :down (- feet y)) (- feet y) torches))]
+        {:way :tunnel :y y
+         :cost (+ down (cost/search-s (cost/tunnel-chance ore y n) leg (search-worth c)))}))))
+
+(defn search-way
+  "How an unseen need is best looked for: {:way :look :cost} (look-cost), or for a tunnelled one its tunnel-way when that
+  costs less."
+  [c need]
+  (let [look {:way :look :cost (look-cost c need)}
+        tunnel (when (:tunnel? need) (tunnel-way c need))]
+    (if (and tunnel (<= (:cost tunnel) (:cost look))) tunnel look)))
+
+(defn search-cost "Seconds per find of the cheaper search-way for an unseen need." [c need] (:cost (search-way c need)))
 
 (defn plan-cost
   "Seconds to gather a plan's raw needs (need-cost, search-cost when a need has no block seen) and smelt what it smelts."

@@ -4,6 +4,7 @@
             [jobs.lib.need :as need]
             [jobs.lib.waits :as waits]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
@@ -22,10 +23,7 @@
             [jobs.gather.mine.tunnel :refer [heading-stops turn-heading! result-of]]))
 
 (a/defargs settings
-  {::ore-levels {:default {"iron_ore" 16 "copper_ore" 48 "gold_ore" -16 "lapis_ore" 0 "redstone_ore" -54 "diamond_ore" -54}
-                 :doc "The feet height a strip tunnel for an ore runs at when :level is nil, by the ore's stone kind; an ore not listed tunnels where the body stands."
-                 :spec (a/map-of string? (a/int-in nil nil))}
-   ::level-slack {:default 12 :doc "Blocks above the tunnel level a stopped stair may leave the body and the strip tunnel still run there; higher, the run ends :descent-stopped (ore is not found that far above its level)." :spec (a/int-in 0 nil)}
+  {::level-slack {:default 12 :doc "Blocks above the tunnel level a stopped stair may leave the body and the strip tunnel still run there; higher, the run ends :descent-stopped (ore is not found that far above its level)." :spec (a/int-in 0 nil)}
    ::own-stair-reach {:default 32 :doc "Blocks from the body the top of a stair it cut earlier may lie for the descent to walk down that stair instead of cutting a new one." :spec (a/int-in 0 nil)}
    ::dig-here-reach {:default 8 :doc "Stone gathered on soil or sand: a seen stone block farther than this from the body is not walked to; the stair down is cut where the body stands, as a player digs down to stone." :spec (a/num-in 0 nil)}
    ::back-reach {:default 32 :doc "Blocks from the stair's last step the body may be for the descent to walk back onto it; farther, only a whole way back quoted no longer than cutting a stair down to it again is walked, else it starts a new stair where it stands." :spec (a/int-in 0 nil)}
@@ -37,13 +35,13 @@
 (defn level-slack [] (settings/get settings ::level-slack))
 
 (defn tunnel-level
-  "The feet height the strip tunnel should run at (args a): :level, else the ore's ::ore-levels entry; nil for none (:level false, or no descending way)."
+  "The feet height the strip tunnel should run at (args a): :level, else the ore's cost/ore-level; nil for none (:level false, or no descending way)."
   [{:keys [level] :as args}]
   (cond (or (not (ways/descends? args)) (false? level)) nil
         (sequential? level) (second level)
         (map? level) (:y level)
         (some? level) level
-        :else (get (settings/get settings ::ore-levels) (base-ore (main-block args)))))
+        :else (cost/ore-level (base-ore (main-block args)))))
 
 (def stone-types #{"stone" "cobblestone" "deepslate" "andesite" "granite" "diorite" "tuff"})
 

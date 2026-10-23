@@ -1,13 +1,8 @@
-;; Card 703b4ee3: torches wanted, no coal seen. A coal search is priced by the rock the body sees round it (the game's vein
-;; placement at each face's height, jobs.lib.cost.find), charcoal by the walk to the logs seen and the smelt.
-;; Should-succeed: on a stone floor at the surface plots' height (y 150, where coal is placed), a stand of logs 42 blocks off and a coal
-;; ore 24 off behind a wall (out of sight from the start, in sight from the first ring of legs): the coal search is cheaper,
-;; so the body looks for coal, mines it and makes the torches; no log is smelted.
-;; Should-succeed: the same without the coal: the search finds none and the logs are gathered for charcoal.
-;; Should-fail (no coal search): on a dirt floor (dirt holds no ore) with a tree beside the body: charcoal is made and no walk
-;; to look for coal starts.
-;; Both on sky plots (y 150): coal is placed only above y 0 and the underground cells lie at y -41, where no coal search is
-;; ever priced. A layer of light blocks keeps the plot lit at any time (a night plot waits for light).
+;; Torches wanted, no coal seen: a coal search is priced by the rock in sight, charcoal by the walk to logs and the smelt.
+;; Should-succeed: stone floor, logs 42 off, coal 24 off behind a wall: coal is searched for and mined, no log smelted.
+;; Should-succeed: no coal: the search finds none and the logs are gathered for charcoal.
+;; Should-fail (no coal search): dirt floor (no ore), a tree beside the body: charcoal, no look for coal.
+;; Sky plots (y 150): coal lies only above y 0. Light blocks keep the plot lit at any time.
 {:defaults
  {:tags [:obtain :explore] :time :any
   :plot {:height 8 :length 64 :width 64 :light :sky}

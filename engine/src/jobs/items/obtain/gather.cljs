@@ -6,7 +6,7 @@
             [engine.game :as game]
             [jobs.items.obtain.base :refer [barren-ore explore-opts own-worth search-names search-scan-radius search-worth site-radius tried! ways-of]]
             [jobs.items.obtain.need :refer [gather-viable? pickaxe-first? light-settling? tools-wanted torch-due trees-unreachable?]]
-            [jobs.items.obtain.plan :refer [gather-plan]]
+            [jobs.items.obtain.plan :refer [gather-plan search-way]]
             [jobs.items.obtain.seen :refer [gather-carried gather-slot seen-of shears-source with-avoid with-block with-count]]
             [jobs.lib.breath :as breath]
             [jobs.lib.cost :as cost]
@@ -173,16 +173,16 @@
   "Walk and look for need (a jobs.explore.search child): :again once it is seen; a search that finds none stops the
   gather source, as does the search for one need, unless at its start (other-way?) said the plan gathers something else
   once this search is spent (it was priced as tried before that seen way, obtain.plan/search-cost): then the body walks
-  back to where the search started (:approach), where that way was seen, and :again. Also :again when none is found and the body is still under rock (the next round stairs up), and after a search that ran out of its own time (no verdict: not counted, the next round looks from where the body stands)."
+  back to where the search started (:approach), where that way was seen, and :again. Also :again when none is found and the body is still under rock (the next round stairs up), and after a search that ran out of its own time (no verdict: not counted, the next round looks from where the body stands). A tunnelled need (a cave looked over first,
+  obtain.plan/search-way) is tunnelled for next: :again."
   [c need other-way?]
   (let [targets (search-names need)
         k0 (get-in (ctx/mem c) [:explored (:key need)] 0)
         here (.-pos (.self (:primitives c)))
-        _ (when (and (zero? k0) (not (:explore-start (ctx/mem c))))
+        _ (when (and (zero? k0) (not= (:key need) (:key (:explore-start (ctx/mem c)))))
             (ctx/update-mem! c assoc-in [:explored (:key need)] 1)
-            (let [alt? (other-way?)]
-              (ctx/update-mem! c update :explored dissoc (:key need))
-              (when alt? (ctx/update-mem! c assoc :explore-start {:x (.-x here) :y (.-y here) :z (.-z here)}))))
+            (let [alt? (try (other-way?) (finally (ctx/update-mem! c update :explored dissoc (:key need))))]
+              (ctx/update-mem! c assoc :explore-start {:key (:key need) :pos (when alt? {:x (.-x here) :y (.-y here) :z (.-z here)})})))
         o (round-opts c)
         said [(:key need) k0]
         _ (when-not (= said (:explore-said (ctx/mem c)))
@@ -201,12 +201,14 @@
     (if (= :continue e)
       :continue
       (let [res (:data e)
+            start (:pos (:explore-start (ctx/mem c)))
             timed-out? (boolean (some #(= :limit-reached (:kind %)) (take-while some? (iterate :because e))))
             timeouts (if timed-out? (inc (get-in (ctx/mem c) [:explore-timeouts (:key need)] 0)) 0)
             ;; a search that ran out of its own time is not counted, unless that keeps happening
             out-of-time? (and timed-out? (<= timeouts max-search-timeouts))
             k (cond-> (get-in (ctx/mem c) [:explored (:key need)] 0) (not out-of-time?) inc)]
         (ctx/update-mem! c dissoc :explore-said)
+        (when-not out-of-time? (ctx/update-mem! c dissoc :explore-start))
         (ctx/update-mem! c assoc-in [:explore-timeouts (:key need)] (if out-of-time? timeouts 0))
         (ctx/update-mem! c assoc-in [:explored (:key need)] k)
         (ctx/update-mem! c update :gather update :unreachable dissoc (:key need))
@@ -216,15 +218,13 @@
           (when (and pos (not lead?) (< 12 (let [now (.-pos (.self (:primitives c)))] (js/Math.hypot (- x (.-x now)) (- z (.-z now))))))
             (ctx/update-mem! c assoc :approach {:x x :y y :z z}))
           (cond
-            (or (and found? (seen-of c need)) (surfacing? c need) out-of-time?) :again
+            (or (and found? (seen-of c need)) (:tunnel? need) (surfacing? c need) out-of-time?) :again
             lead? (do (ctx/emit! c :obtain.lead :info {:message (str "found " (str/join "/" targets) " at " (str/join " " pos) " out of sight: walking to it") :pos pos})
                       (ctx/update-mem! c assoc-in [:gather :lead] {:key (:key need) :pos pos})
                       :again)
-            (:explore-start (ctx/mem c))
-            (let [start (:explore-start (ctx/mem c))]
-              (ctx/update-mem! c dissoc :explore-start)
-              (when (< approach-range (u/dist start (u/self-pos c))) (ctx/update-mem! c assoc :approach start))
-              :again)
+            start
+            (do (when (< approach-range (u/dist start (u/self-pos c))) (ctx/update-mem! c assoc :approach start))
+                :again)
             :else (tried! c :gather (cond-> {:searched (:key need) :for targets :result (or (:reason res) (contract/cause-key e))}
                                       (:why res) (assoc :why (:why res))
                                       (:coverage res) (assoc :legs (:legs (:coverage res)) :farthest (:farthest (:coverage res)))))))))))
@@ -334,9 +334,10 @@
       (and (not (get-in (ctx/mem c) [:gather :before])) (explore-opts c) (searchable? need) (not (:tunnel? need))
            (surfacing? c need))
       (await (surface-step! c))
-      (and (not (get-in (ctx/mem c) [:gather :before])) (explore-opts c) (searchable? need) (not (:tunnel? need))
+      (and (not (get-in (ctx/mem c) [:gather :before])) (explore-opts c) (searchable? need)
            (or (not (seen-of c need)) (get-in (ctx/mem c) [:gather :unreachable (:key need)]) (trees-unreachable? c need))
-           (zero? (get-in (ctx/mem c) [:explored (:key need)] 0)))
+           (zero? (get-in (ctx/mem c) [:explored (:key need)] 0))
+           (or (not (:tunnel? need)) (= :look (:way (search-way c need)))))
       (await (explore-walk! c need #(not= (:key need) (some-> (gather-plan c names (- target have)) :gather (gather-need (game/version-of p)) :key))))
       (and (not (get-in (ctx/mem c) [:gather :before])) (torch-due c (start-cause c need)))
       (book-light! c (torch-due c (start-cause c need)))

@@ -69,7 +69,7 @@
   The ending's data: {:found [{:what :pos :id? (the uuid) :entity-id? (the number entities and combat.attack use) :noted? :by?}] :coverage {:legs :scans
   :failed [{:pos :reason}] :skipped :farthest} :why :text} and the ending:
   - :done: :count found.
-  - :nothing-possible :distance (no leg left), :no-way-up (animals that live at the surface, the body under rock and no stair up), :legs (::max-legs walked), :stuck (three failed walks in a row) or :price (with :worth, the next walk costs more than is left of it times the chance a look there finds one, cost/look-chance: below 1 only for farm animals, falling with the ground searched round there in vain).
+  - :nothing-possible :distance (no leg left), :no-way-up (animals that live at the surface, the body under rock and no stair up), :legs (::max-legs walked), :stuck (three failed walks in a row) or :price (with :worth, the next walk costs more than is left of it times the chance a look there finds one, cost/look-leg-chance: farm animals' falls with the ground searched round there in vain, ore's is that of the rock seen; 1 for other blocks).
   - :limit-reached :job-time (the call's :spend :job-time, default ::job-time-s) or :wall-time (default ::wall-time-s); the engine ends it, with the data of done? ({:found :coverage :why}) and neither event; with :least targets found (default 1) the engine ends it :done instead.
   - A call with no :target and no :patch never runs (:bad-args).
 
@@ -563,7 +563,8 @@
   risks under rock or in the dark where the body stands and past the known threats along the straight way, jobs.lib.threats/threats-of), booked as :leg-price: nil when it is affordable (or unpriced,
   or no route is known: the walk fails that leg alone), :continue while go-to's quote search goes on (it resumes at the
   next call), else the :price ending: the price is more than what is left of the worth times the chance a look round
-  there finds one (cost/look-chance over every live searched note, :use-notes false too; 1 for a walk to a noted target, sure?)."
+  there finds one (cost/look-leg-chance: over every live searched note, :use-notes false too, or for ore the rock seen
+  round the body; 1 for logs and other blocks, and for a walk to a noted target, sure?)."
   [c leg sure?]
   (when-let [worth (:worth (:args c))]
     (let [p (:primitives c)
@@ -571,7 +572,7 @@
           q (await (ctx/quote c 'jobs.movement.go-to (leg-args c leg)))
           at {:x x :y y :z z}
           price (cost/leg-price q (threats/route-death-cost c {:underground? (sh-sense/buried? p) :night? (look/dark-here? p)} at))
-          chance (if sure? 1 (cost/look-chance (notes/notes c) (targets c) [x z] (:scan-radius (:args c))))]
+          chance (if sure? 1 ((or (cost/look-leg-chance p (notes/notes c) (targets c) [x z] (:scan-radius (:args c))) (constantly 1)) 0))]
       (cond
         (:estimate q) :continue
         (infinite? price) (do (ctx/update-mem! c dissoc :leg-price) nil)

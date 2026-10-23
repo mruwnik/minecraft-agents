@@ -7,6 +7,7 @@
             [engine.settings :as settings]
             [engine.test-util :as tu]
             [engine.memory :as mem]
+            [engine.ctx :as ctx]
             [jobs.items.obtain.gather :as gather]
             [jobs.items.obtain.base :as base]
             [jobs.items.obtain.seen :as seen]
@@ -166,3 +167,25 @@
           (await (obtain! s {:worth 500 :item "water_bucket" :explore true} 2000))
           (is (seq (f/events-of s :obtain.exploring)) "walks to look for water")
           (is (= 1 (get (f/inv s) "water_bucket" 0))))))))
+
+(deftest a-search-that-found-its-need-leaves-no-start-for-the-next-need-to-walk-back-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [m (atom {})
+              view (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)}))
+              c {:primitives (tu/seeing-all (tu/fake-on-floor {})) :view (constantly view)
+                 :args {:item "torch" :count 1 :ways #{:gather :search} :explore true :worth 500}}
+              ends (atom [{:kind :done :data {:reason :found :found [{:what "oak_log" :pos [3 64 3]}]}}
+                          {:kind :nothing-possible :data {:reason :not-found}}])
+              logs {:key "log" :count 1 :seen #{"oak_log"}}
+              coal {:key "coal" :count 1 :seen #{"coal_ore"}}]
+          (with-redefs [ctx/mem (fn [_] @m)
+                        ctx/update-mem! (fn [_ f & args] (apply swap! m f args))
+                        ctx/emit! (fn ([_ _ _]) ([_ _ _ _]))
+                        ctx/call (fn [& _] (let [e (first @ends)] (swap! ends rest) (js/Promise.resolve e)))
+                        seen/seen-of (fn [_ need] (when (= "log" (:key need)) {:name "oak_log" :pos {:x 3 :y 64 :z 3}}))]
+            (is (= :again (await (gather/explore-walk! c logs (constantly true)))))
+            (is (= :again (await (gather/explore-walk! c coal (constantly false))))))
+          (is (nil? (:explore-start @m)))
+          (is (= "coal" (get-in @m [:tried :gather :searched])) "the coal search's verdict is kept, not lost to a walk back to the log search's start"))))))

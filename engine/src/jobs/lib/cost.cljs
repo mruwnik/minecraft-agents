@@ -16,7 +16,7 @@
     food     food-reserve: the food a body keeps carried, 3 days of it; cook-worth?, cook-gain: whether cooking raw food beats eating it now; meat-factor, meat-animal: raw meat's replacement cost, dear for hunted, 1 with a working pen (jobs.lib.cost.food).
     value    item-value, reserve-cost (using a reserved unit: value x s/(1-s)), fetch-cost, walk-cost, walk-beats-making (walk to what exists vs make one and place it), detour-cost: what items are worth, what fetching them, walking or a pick-up detour costs; tour-cost, tour-worth, food-worth: a tour of
              frontiers against what its goal is worth; cover-tour-s: the walk that brings a set of points within reach; light-cost: a torch go-to places; light-wait-worth: what n torches fetched save over a wait for light; dig-cost: the seconds a block takes to dig, kill-drops: the items a kill drops (jobs.lib.cost.value);
-             per-dark, dark-factor: the one price of a dark block, which go-to's planner costs; spawn-chance: the chance a mob spawns at a cell or
+             per-dark, dark-factor: the one price of a dark block, which go-to's planner costs; dark-way-s, torch-gap: a dark way lit as it goes; spawn-chance: the chance a mob spawns at a cell or
              over an area (a set or {:min :max} box of cells) per second, from the light the body knows (unseen counts as dark), spawn-share its share of cells that spawn; exposure: the chance a walk meets and
              what lowers it ({:chance :lowered-by #{:light}}).
     planner  planner-costs-problem, planner-costs, planner-names: go-to's :costs, the per-move prices it may override; landing-problem, planner-landing: go-to's :landing, fall damage by landing block; air-profile, water-breathing-s, air-used, air-costs: the planner's air drain and grace from the body's helmet, the air a dive has used; air-left-s, wet-move-s, wet-way-s, wet-spare-s, wet-ok?: the air a walk over unseen water keeps back at its last breath, each move at its measured pace; swim-profile: its swimH from Depth Strider on the boots; gait-problem, gait-costs: go-to's :gait; unknown-prices: the planner's prices of unseen cells (jobs.lib.cost.planner); unseen-route-s, unseen-route-hp: those prices of a route's unseen steps, in seconds or hp; unseen-walk-s: with a drop onto an unseen end; unseen-way-cost: a flight's unseen part at the worse case (a dead end, a mob in the dark); flight-caught-chance: the chance a flight is caught, from its search's ways.
@@ -26,7 +26,7 @@
     base-rates  density, biome-chance, expected-density, peak-density: the ore a block of ground is expected to hold, from the game's
              own placements, host-blocks: the rock its veins replace, and the chance of a biome on ground the body has not seen (jobs.lib.cost.base-rates).
     look     look-answer, look-value, closed-chance, look-s: the value of a look before deciding, a boundary's unseen part closed (jobs.lib.cost.look).
-    find     look-chance, find-chance, searched-for?: the chance a look round finds the animals a search is for, from their base rate and the ground already searched in vain, looked-area: that ground; ore-of, seen-ore, tunnel-ore, ore-chance: an ore's blocks expected among the faces a look sees or a tunnel cuts and the chance of a vein there; leg-chance: a search leg's chance of either; leg-stops?: a search's :price stop; search-s: its seconds per find, leg-spacing: the blocks between its legs (jobs.lib.cost.find)."
+    find     look-chance, find-chance, searched-for?: the chance a look round finds the animals a search is for, from their base rate and the ground already searched in vain, looked-area: that ground; ore-of, seen-ore, tunnel-ore, ore-chance: an ore's blocks expected among the faces a look sees or a tunnel cuts and the chance of a vein there; ore-level: the height a tunnel for it runs at; leg-chance, look-leg-chance (from what the body saw), tunnel-chance: a search leg's or a tunnel leg's chance of a find; leg-stops?: a search's :price stop; search-s: its seconds per find, leg-spacing: the blocks between its legs (jobs.lib.cost.find)."
   (:require [clojure.string :as str]
             [engine.settings :as settings]
             [jobs.lib.cost.answer :as answer]
@@ -49,6 +49,7 @@
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.shelter.spawn :as sh-spawn]
+            [jobs.lib.torch-plan :as torch-plan]
             [jobs.lib.util :as u]))
 
 (def equipment-of armour/equipment-of)
@@ -312,10 +313,29 @@
 (def ore-of find/ore-of)
 (def seen-ore find/seen-ore)
 (def tunnel-ore find/tunnel-ore)
+(def tunnel-chance find/tunnel-chance)
+(def ore-level find/ore-level)
 (def ore-chance find/ore-chance)
 (defn leg-spacing [] (find/leg-spacing))
 (def looked-area find/looked-area)
 (def searched-for? find/searched-for?)
+
+(defn look-leg-chance
+  "leg-chance of a search for names by the body p, its looks of radius r: an animal's over the ground the notes ns
+  searched in vain round [x z], an ore's over the faces of its host rock p has seen within r."
+  [p ns names [x z] r]
+  (leg-chance names {:looked (looked-area ns names [x z])
+                     :a (* js/Math.PI r r)
+                     :seen (when-let [ore (ore-of names)]
+                             (look/seen-blocks p {:names (vec (host-blocks ore)) :radius r :max js/Infinity}))}))
+
+(def torch-gap "Blocks of a dark way one torch lights: its light's spread (jobs.lib.torch-plan) to each side." (inc (* 2 torch-plan/spread)))
+
+(defn dark-way-s
+  "Seconds a dark way of s seconds over n blocks costs lit as it goes: s at the dark price (dark-factor) and a torch
+  (light-cost, carried of them carried) every torch-gap blocks."
+  [s n carried]
+  (+ (* s (inc (dark-factor))) (* (js/Math.ceil (/ n torch-gap)) (:cost (light-cost {:carried carried})))))
 
 (defn death-body
   "The body of p as the death costs read it: :level, :respawn (the live spawn bed, sh-spawn/spawn-bed-pos) and :carried

@@ -378,6 +378,16 @@
           (is (re-find #"at a \d+\.\d% chance a look there finds one" (:text sheep)))
           (is (seq (walks cows)) "ground searched for cows says nothing of sheep"))))))
 
+(deftest a-priced-ore-search-is-priced-by-the-rock-in-sight-and-on-grass-walks-no-leg
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [iron {:target ["iron_ore" "deepslate_iron_ore"] :worth 1000 :max-distance 32}
+              grass (not-found-of (await (search! iron {})))
+              rock (await (search! iron {:blocks (tu/box -40 63 -40 40 63 40 "stone")}))]
+          (is (= [:price 0] ((juxt :why #(get-in % [:coverage :legs])) grass)) "no rock seen holds iron: no look pays for a walk")
+          (is (seq (walks rock)) "stone round the body may hold iron: the legs are walked"))))))
+
 (deftest a-cheap-find-far-off-is-not-searched-for-and-a-dear-one-is
   (async done
     (tu/run-async done

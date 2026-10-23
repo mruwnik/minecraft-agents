@@ -30,13 +30,13 @@
 (def sight-opts {:radius 16 :ray-deg 2})
 
 (defn start
-  "An engine over a fake world on an andesite floor, seeing through perception (one sight pass first, ray jitter fixed unless sight gives :rand), with zones."
+  "An engine over a fake world on an andesite floor (or the world's :floor-block), seeing through perception (one sight pass first, ray jitter fixed unless sight gives :rand), with zones."
   ([world zones] (start world zones sight-opts))
   ([world zones sight] (start world zones sight {}))
   ([world zones sight plans]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        raw (tu/fake-on-floor (assoc world :floor-block "andesite"))
+        raw (tu/fake-on-floor (update world :floor-block #(or % "andesite")))
         p (perception/wrap raw (perception/create (fake-raw/create raw) (merge {:rand (constantly 0.5)} sight {:now #(deref clock)})))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                           :now #(deref clock) :world (ew/of-data plans {} zones)
