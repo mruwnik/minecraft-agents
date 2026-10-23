@@ -422,8 +422,29 @@
     (let [fx (world-fixture)
           ctx {:world-dir (.join path (:worlds fx) "w")}]
       (write-pose! fx (pose {:status "offline"}))
-      (-> (snap/wake-dump! ctx "B")
+      (-> (snap/wake-dump! ctx "B" (fn [_ _] (js/Promise.resolve {:offline {:by :night}})))
           (.then (fn [dumped]
-                   (is (nil? dumped))
+                   (is (nil? dumped) "a log-out stint ends by itself")
                    (is (not (.existsSync fs (.join path (:view fx) "watching"))))))
+          (.finally done)))))
+
+(deftest wake-dump-wakes-a-respawning-body-whose-pose-says-offline-but-whose-engine-answers
+  (async done
+    (let [fx (world-fixture)
+          ctx {:world-dir (.join path (:worlds fx) "w")}]
+      (write-pose! fx (pose {:status "offline"}))
+      (js/setTimeout #(write-pose! fx (pose {:t 2})) 300)
+      (-> (snap/wake-dump! ctx "B" (fn [_ _] (js/Promise.resolve {:ok true})))
+          (.then (fn [dumped]
+                   (is (true? dumped))
+                   (is (.existsSync fs (.join path (:view fx) "watching")))))
+          (.finally done)))))
+
+(deftest wake-dump-leaves-a-body-whose-engine-is-gone-alone
+  (async done
+    (let [fx (world-fixture)
+          ctx {:world-dir (.join path (:worlds fx) "w")}]
+      (write-pose! fx (pose {:status "offline"}))
+      (-> (snap/wake-dump! ctx "B" (fn [_ _] (js/Promise.resolve nil)))
+          (.then (fn [dumped] (is (nil? dumped))))
           (.finally done)))))

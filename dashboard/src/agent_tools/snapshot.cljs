@@ -253,13 +253,18 @@
                    snapshot
                    (throw (js/Error. (str "the body's /entities answered " status)))))))))
 
-(defn fetch-away
-  "A promise of the engine's /status :offline map ({:by :why :back-at}) when the body is in a log-out stint, else nil."
+(defn fetch-status
+  "A promise of the engine's /status map, or nil when it does not answer."
   [ctx body]
   (-> (http/request {:socket-path (.join path (:world-dir ctx) "agents" body "engine" "events.sock") :path "/status"
                      :label "status" :timeout-ms entities-timeout-ms :max-bytes entities-max-bytes})
-      (.then (fn [{:keys [status text]}] (when (= 200 status) (:offline (data/read-edn text)))))
+      (.then (fn [{:keys [status text]}] (when (= 200 status) (data/read-edn text))))
       (.catch (fn [_] nil))))
+
+(defn fetch-away
+  "A promise of the engine's /status :offline map ({:by :why :back-at}) when the body is in a log-out stint, else nil."
+  [ctx body]
+  (.then (fetch-status ctx body) :offline))
 
 (defn away-problem
   "A body-offline problem whose engine says it is only logged out (a stint it ends itself) says so, not 'start it'."
@@ -317,7 +322,7 @@
                                     {:eye (mapv #(round1 (get-in pose [:eye %])) [:x :y :z])
                                      :columns (unchecked-get out "columns") :render-ms (js/Math.round (unchecked-get out "ms"))}))))))))))))
 
-(def pose-wait-ms 4000)
+(def pose-wait-ms 8000)
 (def poll-ms 200)
 (def column-settle-ms 1500)
 
@@ -342,12 +347,16 @@
       :else (do (await (sleep! poll-ms)) (recur deadline)))))
 
 (defn ^:async wake-dump!
-  "Asks an online body to dump its view (it writes pose.json only while watched) and waits for a fresh pose."
-  [ctx body]
-  (when (= "online" (:status (read-pose ctx body)))
-    (let [t (js/Date.now)]
-      (touch-watch! ctx body t)
-      (await (wait-for-dump! ctx body t #(js/Promise. (fn [ok] (js/setTimeout ok %))) #(js/Date.now))))))
+  "Asks a body to dump its view (it writes pose.json only while watched) and waits for a fresh pose. A body whose pose
+  says offline but whose engine answers and is not in a log-out stint (respawning, reconnecting) is woken too."
+  ([ctx body] (wake-dump! ctx body fetch-status))
+  ([ctx body status-fn]
+   (when (or (= "online" (:status (read-pose ctx body)))
+             (let [status (await (status-fn ctx body))]
+               (and status (not (:offline status)))))
+     (let [t (js/Date.now)]
+       (touch-watch! ctx body t)
+       (await (wait-for-dump! ctx body t #(js/Promise. (fn [ok] (js/setTimeout ok %))) #(js/Date.now)))))))
 
 (defn main!
   "Exit code 0 drawn, 1 refused (body offline, no pose), 2 bad arguments or a failure."
