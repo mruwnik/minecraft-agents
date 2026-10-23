@@ -532,7 +532,7 @@
                              "crimson" "nether_wart_block"
                              "warped" "warped_wart_block"
                              (str (:tree want) "_leaves"))
-    :else (block-name (:block want))))
+    :else (some-> (:block want) block-name)))
 
 ;; ---------------------------------------------------------------- entrances
 (defn door-block? [want]

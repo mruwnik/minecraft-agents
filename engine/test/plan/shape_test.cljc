@@ -419,7 +419,8 @@
     "oak_door[half=lower]" "oak_door"
     {:block "oak_fence_gate[facing=north]"} "oak_fence_gate"
     [:any "oak_fence_gate[facing=east]" "stone"] "oak_fence_gate"
-    :clear nil))
+    :clear nil
+    nil nil))
 
 (deftest a-door-want-with-a-state-is-still-a-door
   (is (shape/door-block? "oak_door[half=lower]")))
