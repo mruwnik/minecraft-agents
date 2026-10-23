@@ -108,20 +108,29 @@
                     (when-not (or v (reach-room/room p pos)) (mem/write! (:store (:engine c)) :refuge-open {:cell k} open-policy))
                     v))))))
 
+(defn world-key
+  "What the body's picture of the world stands on (reach-room/steady-key: a block changed or newly seen, the clock in coarse
+  steps); a constant offline, where nothing changes."
+  [p]
+  (or (some-> (aget p "perception") reach-room/steady-key) ""))
+
 (defn room-doors
-  "{:doors [...] :unseen? bool}: the doors of the room around cell pos (reach-room/room's :doors) when closed? holds
-  there or answers :unseen (a cell of the room not seen: the doors of what is seen, :unseen? true); nil when it is no
-  closed room. A closed room's doors are kept in mem :refuge-room-doors with closed?'s answer."
+  "{:doors [...] :unseen? bool}: the doors of the room around cell pos as the body sees it now: reach-room/room's :doors when
+  it is closed past the edge of sight (closed-past-sight?), the doors of what is seen when a cell of the room is not seen
+  yet (:unseen? true); nil when it is no closed room or known-open?. A closed room's doors are kept in mem
+  :refuge-room-doors while the world-key stays the same, so a wall broken or a gap filled since prices anew."
   [c pos]
-  (let [p (:primitives c) k (cell-key pos)]
-    (if-let [doors (get (:refuge-room-doors (ctx/mem c)) k)]
-      {:doors doors :unseen? false}
-      (let [closed (closed? c pos)]
-        (cond
-          (= :unseen closed) {:doors (:doors (reach-room/unseen-room p pos)) :unseen? true}
-          closed (let [doors (:doors (reach-room/room p pos))]
-                   (ctx/update-mem! c assoc-in [:refuge-room-doors k] doors)
-                   {:doors doors :unseen? false}))))))
+  (when-not (known-open? c pos)
+    (let [p (:primitives c) k (cell-key pos) wk (world-key p)
+          kept (get (:refuge-room-doors (ctx/mem c)) k)]
+      (if (= wk (:key kept))
+        {:doors (:doors kept) :unseen? false}
+        (let [room (reach-room/room p pos)]
+          (if room
+            (when (closed-past-sight? p room)
+              (ctx/update-mem! c assoc-in [:refuge-room-doors k] {:key wk :doors (:doors room)})
+              {:doors (:doors room) :unseen? false})
+            (when-let [unseen (reach-room/unseen-room p pos)] {:doors (:doors unseen) :unseen? true})))))))
 
 (declare shut-by)
 
