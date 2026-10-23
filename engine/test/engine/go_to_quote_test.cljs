@@ -292,10 +292,10 @@
           (is (false? (:found (:out never)))))))))
 
 (defn ^:async water-route
-  "The quote's :route for a walk from 0 64 1 to goal over blocks by day, seen through the body's perception (every
-  cell's light [15 0], `lit` {[x y z] [sky block]} over some), for a body holding held."
-  [blocks goal {:keys [lit held]}]
-  (let [raw-p (tu/fake {:blocks blocks :time 1000 :offlineScale 0.0001 :self {:pos {:x 0.5 :y 64 :z 1.5} :held held}
+  "The quote's :route for a walk from 0 64 1 to goal over blocks at time (default 1000, day), seen through the body's
+  perception (every cell's light [15 0], `lit` {[x y z] [sky block]} over some), for a body holding held."
+  [blocks goal {:keys [lit held time]}]
+  (let [raw-p (tu/fake {:blocks blocks :time (or time 1000) :offlineScale 0.0001 :self {:pos {:x 0.5 :y 64 :z 1.5} :held held}
                         :inventory (if held [{:name held :count 1}] [])})
         _ (swap! (fake/state raw-p) merge {:light-default [15 0] :light lit})
         per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000) :rand (constantly 0.5)})
@@ -337,3 +337,11 @@
           (is (swims? shallow) (str "the wade beats the way round: " (pr-str shallow)))
           (is (< (:dark-seconds shallow) (* 0.5 (:dark-seconds deep))) "no drowned spawns in it: well under the deep water's price (a floor cell not seen counts deep)"))))))
 
+(deftest a-night-wade-pays-the-dark-price-and-the-drowned-share
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [wade (await (water-route (wade-pond 30) [12 64 1] {:held "stone_sword" :time 18000}))
+              dry (await (water-route (box -1 59 -32 13 63 32 "stone") [12 64 1] {:held "stone_sword" :time 18000}))]
+          (is (swims? wade))
+          (is (> (:dark-seconds wade) (:dark-seconds dry)) (str "the dark wade costs more than the dark walk: " (pr-str wade dry))))))))

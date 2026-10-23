@@ -198,15 +198,18 @@
 (defn with-dark
   "pw whose plans cost dark cells more (the planner's options.dark): dark is look/dark-fn's {:at ..} (nil: pw). A dark
   cell costs cost/dark-factor of kit (kit-of; nil: the floor) times its own seconds more. With a kit, a cell water
-  (look/water-fn's class, nil: none) gives costs its class's cost/water-factors instead, by day too: a drowned keeps to the water."
+  (look/water-fn's class, nil: none) gives costs its class's cost/water-factors too, by day as well: a drowned keeps to the
+  water, and a dark one pays the land mobs' dark-factor on top (classes 4 and 5: dark 2 and 3)."
   [pw dark water kit]
   (if (nil? dark)
     pw
     (let [at (:at dark)]
       #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :avoid (.-avoid pw) :tolls (.-tolls pw)
            :dark (if (and kit water)
-                   #js {:at (fn [x y z] (let [w (water x y z)] (if (pos? w) w (at x y z))))
-                        :factor (cost/dark-factor kit) :water (clj->js (cost/water-factors kit))}
+                   (let [factor (cost/dark-factor kit)
+                         wet (cost/water-factors kit)]
+                     #js {:at (fn [x y z] (let [w (water x y z)] (if (pos? w) (if (== 1 (at x y z)) (+ w 2) w) (at x y z))))
+                          :factor factor :water (clj->js (into wet (map #(+ factor %)) wet))})
                    #js {:at at :factor (if kit (cost/dark-factor kit) (cost/dark-factor))})})))
 
 (defn kit-of

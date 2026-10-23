@@ -6,6 +6,9 @@
 ;; across it. The quote's route reports its :length and never walks.
 ;; Should-succeed: deep-pond-dry-way-round-wins (pond 4 deep, z 7..17: the way round, about 23 blocks, beats the 11-block swim);
 ;; shallow-wade-is-waded (a pond 1 deep, z 2..22: the wade is taken).
+;; dark-wade-pays-the-dark-price-too (card 14a87322; the night lake: a dark plot, a glowstone over the pond lights it while the
+;; body looks, then is taken away, so the seen wade is at block light 0): the quote straight across the 1-deep pond prices its
+;; wet cells the dark factor and the drowned share, about 1 s for a stone sword; the water share alone gave about 0.35 s.
 ;; Should-fail (control): deep-pond-with-no-way-round-is-swum (the pond across the whole plot, quoted from x 4 to [16 4 12]:
 ;; no ban, the way across is taken).
 {:defaults
@@ -29,6 +32,15 @@
   {:name "deep-pond-with-no-way-round-is-swum"
    :blocks [[:fill [0 0 0] [31 3 31] "stone"] [:fill [7 0 0] [13 3 31] "water"]]
    :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [16 4 12] :range 0}] {:ok true :quote {:route {:found true :length [:< 16]}}}] 30]]
+   :expect [{:no-event {:level :error} :for-s 2}]
+   :after [[:body-near [4.5 4 12.5] 1]]}
+  {:name "dark-wade-pays-the-dark-price-too"
+   :plot {:light :dark :height 16}
+   :blocks [[:fill [0 0 0] [31 3 31] "stone"] [:fill [7 3 0] [13 3 31] "water"] [:fill [10 6 12] [10 6 12] "glowstone"]]
+   :act [[:wait-s 4]
+         [:rcon "execute positioned $X $Y $Z run setblock ~10 ~6 ~12 air"]
+         [:wait-s 2]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [16 4 12] :range 0}] {:ok true :quote {:route {:found true :length [:< 16] :dark-seconds [:> 0.7]}}}] 30]]
    :expect [{:no-event {:level :error} :for-s 2}]
    :after [[:body-near [4.5 4 12.5] 1]]}
   {:name "shallow-wade-is-waded"
