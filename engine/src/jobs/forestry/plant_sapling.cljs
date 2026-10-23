@@ -61,8 +61,6 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(def safe? (price/staying :work (ready/safe-at-by-night (fn [c] (a/cell (or (:at (:args c)) (:near (:args c))))))))
-
 (defn fit? [c] (ready/fit-min (settings/get settings ::min-health) c))
 
 (defn sapling-at?
@@ -83,6 +81,9 @@
         ds (if (seq reachable) reachable all)
         carried (when-not (:species (:args c)) (seq (with-sapling ds (u/inventory (:primitives c)))))]
     (target-of (or carried ds) (:args c))))
+
+(def safe?
+  (price/staying :work (ready/safe-at-by-night (fn [c] (some-> (current-target c) :pos a/cell)))))
 
 (defn refusal
   "Why the job may not plant at pos (:refused or :no-zones; one warn per job), or nil."

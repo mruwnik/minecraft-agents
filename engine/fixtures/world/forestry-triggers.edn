@@ -58,6 +58,18 @@
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :for-s 30}]
    :after [[:block [16 6 16] "oak_log"]]
    :limit-s 40}
+  ;; Card 446e0517: a body in a lit closed room, a replant debt outside in the dark: replant-owed prices the debt's cell, not the
+  ;; body's feet, so it does not fire (it refired every 120 s all night while plant-sapling's place child stopped on the dark).
+  {:name "replant-owed-waits-for-a-dark-debt-outside-a-lit-room"
+   :plot {:height 24 :floor "grass_block" :light :dark}
+   :register [{:trigger :replant-owed}]
+   :blocks [[:fill [12 0 20] [16 3 24] "stone" :hollow] [:fill [13 0 21] [15 2 23] "air"]
+            [:set [14 0 22] "torch"]]
+   :memory [{:kind :forestry/replant :data {:pos #xyz [20 0 22] :species "oak"}}]
+   :body {:at [14.5 0 22.5] :inventory [["oak_sapling" 1]]}
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :replant-owed}} :for-s 40}]
+   :after [[:not-block [20 0 22] "oak_sapling"]]
+   :limit-s 50}
   {:name "part-cut-tree-trigger-leaves-a-whole-tree"
    :register [{:trigger :part-cut-tree}]
    :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]

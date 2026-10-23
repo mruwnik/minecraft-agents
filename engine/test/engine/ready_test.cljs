@@ -12,6 +12,7 @@
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
             [jobs.explore.look :as look]
+            [jobs.forestry.plant-sapling :as plant-sapling]
             [jobs.forestry.fell-tree :as fell-tree]
             [jobs.explore.search :as search]
             [jobs.combat.attack :as attack]
@@ -719,3 +720,10 @@
     st/noon {:x 5 :y 64 :z 0}
     st/night {:x 5 :y 64 :z 5}
     st/night {:x 5 :y 64 :z 0}))
+
+(deftest plant-sapling-prices-the-debt-spot-not-the-feet
+  (let [debt {:pos outside :species "oak"}]
+    (with-redefs [plant-sapling/current-target (constantly debt)]
+      (is (= :later (kind plant-sapling/safe? night-hut)) "sealed in at night, the debt outside in the dark waits"))
+    (with-redefs [plant-sapling/current-target (constantly {:pos {:x 6 :y 64 :z 0} :species "oak"})]
+      (is (= :ok (kind plant-sapling/safe? night-hut)) "a debt inside the hut is planted"))))
