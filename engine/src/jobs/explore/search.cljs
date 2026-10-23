@@ -45,7 +45,7 @@
 
   For farm animals (cow, pig, sheep, chicken, rabbit) a body under rock first climbs out (jobs.lib.surface-up), and a leg whose stand is under rock (no sky light) is skipped (:underground), as is one whose ground lies more than ::surface-dip (8) below the feet (a pit, ravine or cave mouth): they live on the open surface.
 
-  Legs are ::spacing apart: :spiral points on rings round the origin, the one nearest the body first (so a body in a corridor walks on), or :outward ahead along :heading (a :heading alone means :outward), then the sides, and on further ahead once those are tried or searched. A
+  Legs are cost/leg-spacing apart: :spiral points on rings round the origin, the one nearest the body first (so a body in a corridor walks on), or :outward ahead along :heading (a :heading alone means :outward), then the sides, and on further ahead once those are tried or searched. A
   leg is never tried twice and never goes beyond the max-distance setting (XZ) of the origin. It is skipped (:skipped)
   when a live :searched note of any body, this one included, listing every target name lies within half its
   radius (for farm animals only a note younger than ::animal-searched-ttl-s: they wander); with :use-notes false only a note this job made counts.
@@ -117,7 +117,6 @@
    ::descent {:default 40 :doc "How far below its feet a leg's ground is looked for, in blocks (go-to does the descent)." :spec (a/int-in 0 nil)}
    ::surface-dip {:default 8 :doc "Farm animals live on open ground: a leg whose ground lies deeper than this below the feet (a pit, ravine or cave mouth) is skipped." :spec (a/int-in 0 nil)}
    ::rise {:default 12 :doc "How far above its feet a leg's ground is looked for, in blocks." :spec (a/int-in 0 nil)}
-   ::spacing {:default 16 :doc "Blocks between legs." :spec (a/int-in 4 64)}
    ::held-angle {:default 60 :doc "A leg lies the way a failed leg went when the angle between them, seen from the body, is under this many degrees." :spec (a/num-in 0 180)}
    ::held-near {:default 4 :doc "Blocks from where a leg failed within which its way still holds others back." :spec (a/num-in 0 nil)}
    ::near-sight {:default 6 :doc "Within this many blocks a look misses no animal: a noted animal not seen there is taken as gone." :spec (a/num-in 0 nil)}
@@ -125,18 +124,20 @@
    ::leg-tried-ttl-s {:default 3600 :doc "Seconds a note of a walk started toward a spot lasts." :spec (a/num-in 0 nil)}
    ::roam-min-health {:default 10 :doc "A search that is not for food waits :low-health below this health while the body can not heal (cannot-heal?: food low, nothing edible carried), so a hurt, foodless body does not roam for wool or wood." :spec (a/num-in 0 20)}
    ::stand-cap {:default 48 :doc "Stand cells one choice reads; past it :more says candidates are left for the next step." :spec (a/int-in 0 nil)}})
+
+(defn leg-spacing [] (cost/leg-spacing))
+
 (defn distance-limit
   "How far (XZ) from the origin legs go and findings count: the ::max-distance setting, or with :worth cost/search-radius of it (at most :within)."
   [c]
   (let [{:keys [worth within]} (:args c)]
     (if worth
-      (min (js/Math.ceil (cost/search-radius worth (settings/get settings ::spacing))) (or within ##Inf))
+      (min (js/Math.ceil (cost/search-radius worth (leg-spacing))) (or within ##Inf))
       (settings/get settings ::max-distance))))
 (defn time-s [] (settings/get settings ::job-time-s))
 (defn max-failed-in-row [] (settings/get settings ::max-failed-in-row))
 (defn wait-ms [] (settings/get settings ::wait-ms))
 (defn rise [] (settings/get settings ::rise))
-(defn leg-spacing [] (settings/get settings ::spacing))
 (defn descent [] (settings/get settings ::descent))
 (def target [:target :center])
 

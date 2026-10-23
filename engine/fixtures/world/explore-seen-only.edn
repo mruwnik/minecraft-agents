@@ -30,14 +30,14 @@
          [:job (jobs.explore.look {:entity-names ["zombie"] :radius 16 :max-blocks 0})]]
    :expect [{:event {:source :job :kind :completed :data {:entities [{:name "zombie" :heard? true}]}} :within-s 30 :of-job true}]}
   {:name "search-finds-the-exposed-ore"
-   :act [[:job (jobs.explore.search {:target "iron_ore" :count 1 :scan-radius 16 :spend {:job-time 40} :settings {:jobs.explore.search/max-distance 8 :jobs.explore.search/spacing 4}})]]
+   :act [[:job (jobs.explore.search {:target "iron_ore" :count 1 :scan-radius 16 :spend {:job-time 40} :settings {:jobs.explore.search/max-distance 8 :jobs.lib.cost.find/leg-spacing 4}})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :found :found [{:what "iron_ore"}]}} :within-s 40 :of-job true}]}
   {:name "search-does-not-find-buried-ore"
    ;; the exposed ore is mined out first: only buried ore is left, none in view, so the search ends not-found (the room is sealed and the body has
    ;; no pickaxe: its legs fail) and never reports the rock-bound ones
    :blocks [[:set [18 0 16] "stone"]]
    :body {:inventory []}
-   :act [[:job (jobs.explore.search {:target "iron_ore" :count 1 :scan-radius 16 :spend {:job-time 40} :settings {:jobs.explore.search/max-distance 8 :jobs.explore.search/spacing 4}})]]
+   :act [[:job (jobs.explore.search {:target "iron_ore" :count 1 :scan-radius 16 :spend {:job-time 40} :settings {:jobs.explore.search/max-distance 8 :jobs.lib.cost.find/leg-spacing 4}})]]
    :expect [{:event {:source :job :kind :stopped} :within-s 50 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 50 :of-job true :until {:source :job :kind :stopped}}]
    :limit-s 70

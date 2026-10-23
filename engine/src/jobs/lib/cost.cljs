@@ -25,7 +25,7 @@
     death    experience-cost, death-cost: death as an ordinary cost, the walk back for the items plus the experience; spawn-worth: a respawn point's worth; worth-to, find-worth, items-find-worth, leg-price, search-radius, wait-price: what a find is worth, a search leg's price, how far its legs may go, what waiting for a listed maker costs; opening-price, hold-price: opening a shelter to mobs against holding on in it; death-weight, terrain-danger: a remembered death's fade and the plan cost near a death by terrain (jobs.lib.cost.death).
     base-rates  density, biome-chance, expected-density, peak-density: the ore a block of ground is expected to hold, from the game's
              own placements, and the chance of a biome on ground the body has not seen (jobs.lib.cost.base-rates).
-    find     look-chance, find-chance, searched-for?: the chance a look round finds the animals a search is for, from their base rate and the ground already searched in vain, looked-area: that ground; search-s: a search's seconds per find (jobs.lib.cost.find)."
+    find     look-chance, find-chance, searched-for?: the chance a look round finds the animals a search is for, from their base rate and the ground already searched in vain, looked-area: that ground; search-s: a search's seconds per find, leg-spacing: the blocks between its legs (jobs.lib.cost.find)."
   (:require [clojure.string :as str]
             [jobs.lib.cost.answer :as answer]
             [jobs.lib.cost.armour :as armour]
@@ -272,6 +272,7 @@
 (def find-chance find/find-chance)
 (def look-chance find/look-chance)
 (def search-s find/search-s)
+(defn leg-spacing [] (find/leg-spacing))
 (def looked-area find/looked-area)
 (def searched-for? find/searched-for?)
 

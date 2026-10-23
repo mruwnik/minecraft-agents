@@ -8,7 +8,10 @@
 
 (a/defargs settings
   {::region {:default 128 :spec (a/num-in 1 nil)
-             :doc "Blocks round a spot whose searched ground tells the chance of a find there: the game sets animals by biome, and a biome spans a few hundred blocks."}})
+             :doc "Blocks round a spot whose searched ground tells the chance of a find there: the game sets animals by biome, and a biome spans a few hundred blocks."}
+   ::leg-spacing {:default 16 :doc "Blocks between a search's legs (jobs.explore.search)." :spec (a/int-in 4 64)}})
+
+(defn leg-spacing [] (settings/get settings ::leg-spacing))
 
 (def cell "Blocks on a side of the squares searched ground is counted in." 8)
 

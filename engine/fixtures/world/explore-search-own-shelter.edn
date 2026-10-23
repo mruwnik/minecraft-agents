@@ -18,6 +18,6 @@
  :cases
  [{:name "sealed-in-its-shelter-leaves-and-finds-the-target"
    :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :scan-radius 8 :use-notes false
-                                     :settings {:jobs.explore.search/max-distance 60 :jobs.explore.search/spacing 8 :jobs.explore.search/max-legs 16}})]]
+                                     :settings {:jobs.explore.search/max-distance 60 :jobs.lib.cost.find/leg-spacing 8 :jobs.explore.search/max-legs 16}})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 150 :of-job true}]
    :limit-s 190}]}

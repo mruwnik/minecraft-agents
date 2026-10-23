@@ -233,7 +233,7 @@
               animal (await (notes-of "cow"))
               block (await (notes-of "diamond_block"))
               p (tu/seeing-all (tu/fake {:blocks (ground 36)}))
-              leg (fn [age-s] (:leg (settings/with-settings {:jobs.explore.search/spacing 4 :jobs.explore.search/max-distance 8}
+              leg (fn [age-s] (:leg (settings/with-settings {:jobs.lib.cost.find/leg-spacing 4 :jobs.explore.search/max-distance 8}
                                       #(search/choose-leg {:args {:pattern :spiral} :primitives p :view (constantly {:now 1000000})} {:origin [0 64 0]} ["cow"]
                                                           [{:kind :searched :what ["cow"] :pos [0 64 0] :r 200 :t (- 1000000 (* 1000 age-s))}]))))]
           (is (= 86400000 (- (:until animal) (:t animal))) "its looks still tell the chance of a find for a day")
@@ -833,7 +833,7 @@
                                                    (fn [pos] (swap! reads inc) (.blockAt t pos))
                                                    (let [v (aget t k)] (if (fn? v) (.bind v t) v))))})
         c {:args {:pattern :spiral} :primitives counting}
-        r (settings/with-settings {:jobs.explore.search/spacing 4 :jobs.explore.search/max-distance 128}
+        r (settings/with-settings {:jobs.lib.cost.find/leg-spacing 4 :jobs.explore.search/max-distance 128}
             #(search/choose-leg c {:origin [0 64 0]} ["diamond_block"] []))]
     (is (nil? (:leg r)))
     (is (:more r))
@@ -844,7 +844,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup {} 0)]
-          (core/submit! (:eng s) '(jobs.explore.search {:target "diamond_block" :settings {:jobs.explore.search/max-distance 40 :jobs.explore.search/spacing 4}}) {})
+          (core/submit! (:eng s) '(jobs.explore.search {:target "diamond_block" :settings {:jobs.explore.search/max-distance 40 :jobs.lib.cost.find/leg-spacing 4}}) {})
           (await (run-until-done s 400))
           (let [e (not-found-of s)]
             (is (<= (get-in e [:coverage :scans]) 2) "a step that only goes on choosing points does not look again")
@@ -860,7 +860,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (search! {:target "iron_ore" :count 1 :max-distance 8 :settings {:jobs.explore.search/spacing 4} :scan-radius 16 :spend {:job-time 40}}
+        (let [s (await (search! {:target "iron_ore" :count 1 :max-distance 8 :settings {:jobs.lib.cost.find/leg-spacing 4} :scan-radius 16 :spend {:job-time 40}}
                                 {:blocks sealed-room :cone? true :self {:pos {:x 16.5 :y 64 :z 16.5}}} 60))]
           (is (nil? (found-of s)) (pr-str (:found (found-of s)))))))))
 
@@ -868,7 +868,7 @@
   (let [p (tu/seeing-all (tu/fake {:blocks (ground 36)}))
         note (fn [t] {:kind :searched :what ["diamond_block"] :pos [0 64 0] :r 200 :t t})
         choose (fn [use-notes? ns]
-                 (settings/with-settings {:jobs.explore.search/spacing 4 :jobs.explore.search/max-distance 8}
+                 (settings/with-settings {:jobs.lib.cost.find/leg-spacing 4 :jobs.explore.search/max-distance 8}
                    #(search/choose-leg {:args {:pattern :spiral :use-notes use-notes?} :primitives p} {:origin [0 64 0] :t0 100} ["diamond_block"] ns)))]
     (is (nil? (:leg (choose true [(note 50)]))) "default: an old note covers the ground")
     (is (some? (:leg (choose false [(note 50)]))) "fresh look: an old note is ignored")
@@ -877,7 +877,7 @@
 (deftest a-leg-for-farm-animals-never-stands-under-rock-but-one-for-ore-may
   (let [p (tu/seeing-all (tu/fake {:blocks (ground 36)}))
         choose (fn [names] (with-redefs [sh-sense/sky-light-at (constantly 0)]
-                             (settings/with-settings {:jobs.explore.search/spacing 4 :jobs.explore.search/max-distance 8}
+                             (settings/with-settings {:jobs.lib.cost.find/leg-spacing 4 :jobs.explore.search/max-distance 8}
                                #(search/choose-leg {:args {:pattern :spiral} :primitives p} {:origin [0 64 0]} names []))))]
     (is (nil? (:leg (choose ["cow" "pig"]))))
     (is (every? #(= :underground (:reason %)) (:failed (choose ["cow" "pig"]))))
@@ -885,7 +885,7 @@
 
 (deftest a-leg-for-farm-animals-never-stands-in-a-pit-below-the-feet-but-one-for-ore-may
   (let [p (tu/seeing-all (tu/fake {:blocks (tu/box -36 45 -36 36 45 36 "grass_block") :self {:pos {:x 0.5 :y 64 :z 0.5}}}))
-        choose (fn [names] (settings/with-settings {:jobs.explore.search/spacing 4 :jobs.explore.search/max-distance 8}
+        choose (fn [names] (settings/with-settings {:jobs.lib.cost.find/leg-spacing 4 :jobs.explore.search/max-distance 8}
                              #(search/choose-leg {:args {:pattern :spiral} :primitives p} {:origin [0 64 0]} names [])))]
     (is (nil? (:leg (choose ["chicken"]))))
     (is (every? #(= :underground (:reason %)) (:failed (choose ["chicken"]))))

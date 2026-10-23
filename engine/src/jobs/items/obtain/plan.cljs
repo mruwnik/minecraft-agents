@@ -3,7 +3,6 @@
   (:require [engine.ctx :as ctx]
             [engine.game :as game]
             [engine.notes :as notes]
-            [jobs.explore.search :as search]
             [jobs.lib.crafting-table :as crafting-table]
             [jobs.items.obtain.base :refer [craft-radius explore-opts plan-allowed? search-names search-scan-radius search-worth seen-radius way?]]
             [jobs.items.obtain.seen :refer [seen-of sheep-in-range shears-source]]
@@ -146,7 +145,7 @@
           self (u/self-pos c)
           names (search-names need)
           r (search-scan-radius)
-          leg (+ (:cost (cost/walk-cost {:distance (search/leg-spacing)}))
+          leg (+ (:cost (cost/walk-cost {:distance (cost/leg-spacing)}))
                  (cost/route-death-cost (threats/death-body c) (route-class p) self))]
       (+ (cost/search-s names (cost/looked-area (notes/notes c) names [(:x self) (:z self)]) (* js/Math.PI r r) leg (search-worth c))
          (:cost (cost/walk-cost {:distance r}))))))

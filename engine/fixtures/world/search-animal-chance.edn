@@ -19,7 +19,7 @@
    :expect [{:event {:source :job :kind :stopped :data {:why :price}} :within-s 40 :of-job true}]
    :after [[:body-near [10.5 0 16.5] 2]]}
   {:name "no-ground-searched-a-priced-sheep-search-walks-its-legs"
-   :act [[:job (jobs.explore.search {:target "sheep" :worth 1000 :within 12 :scan-radius 8 :settings {:jobs.explore.search/spacing 8} :spend {:job-time 60}})]]
+   :act [[:job (jobs.explore.search {:target "sheep" :worth 1000 :within 12 :scan-radius 8 :settings {:jobs.lib.cost.find/leg-spacing 8} :spend {:job-time 60}})]]
    :expect [{:event {:source :job :kind :stopped :data {:why :distance}} :within-s 70 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:why :price}} :for-s 70 :of-job true :until {:source :job :kind :stopped}}]
    :after [[:body-far [16.5 0 16.5] 4]]}
@@ -33,7 +33,7 @@
          [:await {:source :job :kind :stopped :data {:why :legs}} 30]
          [:job (jobs.movement.go-to {:pos #at [10 0 16] :range 1})]
          [:await {:source :job :kind :completed} 30]
-         [:job (jobs.explore.search {:target "sheep" :takeable true :worth 1000 :within 12 :scan-radius 8 :settings {:jobs.explore.search/spacing 8 :jobs.explore.search/animal-searched-ttl-s 0} :spend {:job-time 60}})]]
+         [:job (jobs.explore.search {:target "sheep" :takeable true :worth 1000 :within 12 :scan-radius 8 :settings {:jobs.lib.cost.find/leg-spacing 8 :jobs.explore.search/animal-searched-ttl-s 0} :spend {:job-time 60}})]]
    :expect [{:event {:source :job :kind :stopped :data {:why :distance}} :within-s 70 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:why :price}} :for-s 70 :of-job true :until {:source :job :kind :stopped}}]
    :after [[:body-far [10.5 0 16.5] 4]]}]}

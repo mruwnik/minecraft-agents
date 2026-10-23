@@ -30,7 +30,7 @@
    :time-why :dawn-decision
    :body {:at [4.5 0 12.5] :settle-s 2}
    :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :west :scan-radius 8
-                                     :use-notes false :settings {:jobs.explore.search/max-distance 16 :jobs.explore.search/spacing 8 :jobs.explore.search/max-legs 2} :spend {:job-time 60}})]
+                                     :use-notes false :settings {:jobs.explore.search/max-distance 16 :jobs.lib.cost.find/leg-spacing 8 :jobs.explore.search/max-legs 2} :spend {:job-time 60}})]
          [:await {:source :job :kind :waiting :data {:reason :dark}} 30]
          [:wait-s 10]
          [:time-set 1000]]
