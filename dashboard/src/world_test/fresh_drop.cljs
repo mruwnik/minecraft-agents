@@ -280,12 +280,24 @@
     (fs/rmSync (path/join dir "context.edn") #js {:force true})))
 
 (defn body-process?
-  "True for the argv (a vector) of the node process running body's engine: not the res-slot shell that restarts it, not a pgrep."
+  "True for the argv (a vector) of a process running body's engine or its restart wrapper (the sh loop, which would relaunch the old
+  build after its 20 s busy sleep): not a pgrep."
   [argv body world]
   (let [s (str/join " " argv)]
-    (and (not (re-find #"(^| )(sh|pgrep)( |$)" (first argv)))
+    (and (not (re-find #"(^| )pgrep( |$)" (first argv)))
          (str/includes? s "body-release.cjs")
-         (str/includes? s (str "--agent " body " --world " world)))))
+         (str/includes? s (str "--agent " body " --world " world " ")))))
+
+(defn wrapper-process?
+  "True for the argv of the sh restart loop of body's engine."
+  [argv body world]
+  (and (body-process? argv body world) (boolean (re-find #"(^|/)sh$" (first argv)))))
+
+(defn online?
+  "True when body is exactly one of the names in an rcon `list` answer (\"There are 2 of a max of 20 players online: Al, Alice\")."
+  [out body]
+  (let [names (str/split (str/trim (str (second (re-find #"online:(.*)" (str out))))) #",\s*")]
+    (boolean (some #{body} names))))
 
 (defn status-commit
   "The build commit in an `observe status` answer (EDN text), or nil."
@@ -298,40 +310,48 @@
   (let [f (path/join build "engine/out/build-id.edn")]
     (when (fs/existsSync f) (:commit (reader/read-string (fs/readFileSync f "utf8"))))))
 
+(def stop-wait-s "Longest wait for a stopped body to leave the process table and the server's player list (its login timeout is shorter)." 30)
+(def build-check-polls "Status polls (2 s apart) for a started body to report the drop's build: the engine start and login take about a minute." 60)
+(def online-polls "Polls (2 s apart) for a started body to log in: it waits for a body slot, which can be busy for minutes." 300)
+
 (defn- sleep! [s] (cp/spawnSync "sleep" #js [(str s)]))
 
-(defn- body-pids [body world]
+(defn- body-pids
+  "Pids of body's processes passing pred, wrapper shells first when wrappers? so no restart loop outlives the engine."
+  [body world pred]
   (let [out (str (.-stdout (cp/spawnSync "pgrep" #js ["-f" "--" (str "--agent " body " --world " world)] #js {:encoding "utf8"})))]
     (filterv (fn [pid]
                (try (let [argv (vec (remove empty? (str/split (fs/readFileSync (str "/proc/" pid "/cmdline") "utf8") "\u0000")))]
-                      (body-process? argv body world))
+                      (pred argv body world))
                     (catch :default _ false)))
              (remove empty? (str/split-lines out)))))
 
 (defn- body-online? [body]
-  (str/includes? (str (.-stdout (cp/spawnSync js/process.execPath #js [(path/join (repo) "tools/rcon-raw.mjs") "list"] #js {:cwd (repo) :encoding "utf8"}))) body))
+  (online? (.-stdout (cp/spawnSync js/process.execPath #js [(path/join (repo) "tools/rcon-raw.mjs") "list"] #js {:cwd (repo) :encoding "utf8"})) body))
 
 (defn- stop-body!
   "Ends the running engine for body (a second one for the same name exits on the duplicate login and --fresh never takes);
-  throws when it is still there after 30 s."
+  throws when it is still there after stop-wait-s. The restart wrapper goes first: stopped after the engine it could relaunch it."
   [body world]
-  (doseq [pid (body-pids body world)] (js/process.kill (js/parseInt pid) "SIGTERM"))
+  (doseq [pred [wrapper-process? body-process?]
+          pid (body-pids body world pred)]
+    (js/process.kill (js/parseInt pid) "SIGTERM"))
   (loop [n 0]
-    (when (or (seq (body-pids body world)) (body-online? body))
-      (when (>= n 30) (throw (js/Error. (str body " is still running or online 30 s after it was told to stop"))))
+    (when (or (seq (body-pids body world body-process?)) (body-online? body))
+      (when (>= n stop-wait-s) (throw (js/Error. (str body " is still running or online " stop-wait-s " s after it was told to stop"))))
       (sleep! 1)
       (recur (inc n)))))
 
-(defn- check-build!
-  "Waits for the body's status to report the drop's build commit; throws when it never does."
+(defn check-build!
+  "Waits for the body's status to report the drop's build commit; throws at once without a build-id.edn, and when the commit never shows."
   [body world build]
-  (let [want (build-commit build)
+  (let [want (or (build-commit build) (throw (js/Error. (str "no engine/out/build-id.edn in " build ": cannot check which build " body " runs"))))
         status #(str (.-stdout (cp/spawnSync js/process.execPath #js [(path/join (repo) "worlds" world "agents" body "bin/observe") "status"] #js {:encoding "utf8"})))]
     (loop [n 0]
       (let [got (status-commit (status))]
         (cond
-          (and want (= want got)) nil
-          (>= n 60) (throw (js/Error. (str body " reports build " (pr-str got) ", the drop's build is " (pr-str want))))
+          (= want got) nil
+          (>= n build-check-polls) (throw (js/Error. (str body " reports build " (pr-str got) ", the drop's build is " (pr-str want))))
           :else (do (sleep! 2) (recur (inc n))))))))
 
 (defn- run-node! [script args]
@@ -366,7 +386,7 @@
                   (.unref child))
     :wait-online (let [body (first a)]
                    (loop [n 0]
-                     (when-not (or (body-online? body) (>= n 300))
+                     (when-not (or (body-online? body) (>= n online-polls))
                        (cp/spawnSync "sleep" #js ["2"])
                        (recur (inc n)))))
     :place (let [[bodies spots] a

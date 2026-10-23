@@ -97,7 +97,21 @@
     (is (d/body-process? argv "Oriel" "test"))
     (is (not (d/body-process? argv "Ori" "test")) "a name that is only a prefix of the body's")
     (is (not (d/body-process? argv "Bramble" "test")))
-    (is (not (d/body-process? ["sh" "-c" "while :; do \"$@\"; done" "sh" "tools/res-slot" "body" "--" "node" "out/body-release.cjs" "--agent" "Oriel" "--world" "test"] "Oriel" "test")) "the restart wrapper")))
+    (is (not (d/body-process? ["pgrep" "-f" "--" "--agent Oriel --world test"] "Oriel" "test")))
+    (is (not (d/wrapper-process? argv "Oriel" "test")))))
+
+(deftest the-restart-wrapper-is-a-body-process-and-a-wrapper
+  (let [w ["sh" "-c" "while :; do \"$@\"; done" "sh" "tools/res-slot" "body" "--" "node" "out/body-release.cjs" "--agent" "Oriel" "--world" "test" "--fresh"]]
+    (is (d/body-process? w "Oriel" "test"))
+    (is (d/wrapper-process? w "Oriel" "test"))
+    (is (not (d/wrapper-process? w "Ori" "test")))))
+
+(deftest online-matches-the-exact-name-in-the-list-answer
+  (let [out "There are 2 of a max of 20 players online: Alice, Bob\n"]
+    (is (d/online? out "Alice"))
+    (is (not (d/online? out "Al")))
+    (is (not (d/online? out "ob")))
+    (is (not (d/online? "There are 0 of a max of 20 players online: " "Al")))))
 
 (deftest the-build-commit-is-read-from-the-status-answer
   (is (= "4ea21a6d4" (d/status-commit "{:mode :scheduled :build {:commit \"4ea21a6d4\" :started-at 1792748846902} :pos [1 2 3]}")))
@@ -152,3 +166,6 @@
       (is (not (fs/existsSync (path/join dir "context.edn"))))
       (is (= 2 (count (filter #(.startsWith % "notes.old-1970-01-01-") (array-seq (fs/readdirSync dir))))))
       (finally (fs/rmSync dir #js {:recursive true :force true})))))
+
+(deftest check-build-fails-at-once-without-a-build-id
+  (is (thrown-with-msg? js/Error #"no engine/out/build-id.edn" (d/check-build! "Oriel" "test" "/nonexistent-build"))))
