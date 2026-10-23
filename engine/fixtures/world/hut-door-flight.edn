@@ -78,7 +78,8 @@
             [:set [16 1 20] "oak_door[facing=south,half=upper,open=true]"]]
    :act [[:rcon "damage $BODY 15 minecraft:generic"]
          [:summon "skeleton" [16.5 0 26.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
-   :expect [{:event {:source :job :kind :hostile.decided :data {:cover :door}} :within-s 40}
+   :expect [{:event {:source :job :kind :hostile.look-first} :within-s 40}
+            {:event {:source :job :kind :hostile.decided :data {:cover :door}} :within-s 40}
             {:event {:source :job :kind :retreat.door-shut} :within-s 40}]
    :after [[:block [16 0 20] "oak_door[half=lower,open=false]"] [:not-block [16 0 19] "cobblestone"]]
    :limit-s 60}
