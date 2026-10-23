@@ -10,7 +10,8 @@
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
-            [jobs.blocks.clear-cells :as clear-cells]))
+            [jobs.blocks.clear-cells :as clear-cells]
+            [jobs.lib.own-pen :as own-pen]))
 
 (defn setup [world & [shared]]
   (let [clock (atom 1000000)
@@ -423,3 +424,12 @@
               result (await (child-outcome eng job {:area {:min {:x 3 :y 68 :z 1} :max {:x 3 :y 68 :z 1}}} 60))]
           (is (= {:dug 1 :skipped {}} (select-keys result [:dug :skipped])) "a cell well above the pen is not its wall")
           (is (= "air" (block-at p {:x 3 :y 68 :z 1}))))))))
+
+(deftest the-pen-wall-read-costs-no-block-reads-while-no-livestock-is-near
+  (let [{:keys [p]} (setup {:blocks stocked-pit :self {:pos {:x 8.5 :y 64 :z 1.5}}} (ew/of-data {} {} [pit-zone]))
+        reads (atom 0)
+        sensed (.-sensedAt p)
+        _ (aset p "sensedAt" (fn [pos] (swap! reads inc) (sensed pos)))
+        wall? (own-pen/box-wall? {:primitives p} (clear-cells/cells pit-rim-row))]
+    (is (false? (wall? [3 63 1])))
+    (is (zero? @reads) "a pen is read only to find the animals in it")))

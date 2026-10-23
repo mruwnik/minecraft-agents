@@ -1,0 +1,19 @@
+;; Card 192dba2d: a big clear-cells box in the body's own plan area must not block the engine's event loop: jobs list keeps answering while it works.
+;; Should-succeed: a 6x6x2 stone box inside the body's plan footprint, open air above, is cleared and every jobs list asked meanwhile answers :ok.
+{:defaults
+ {:tags [:build]
+  :time :any
+  :plot {:height 8 :floor "grass_block"}
+  :blocks [[:fill [10 0 10] [15 1 15] "stone"]]
+  :plans [{:id "area" :metadata {:by "$body"} :parts [{:id "inside" :box [#at [10 0 10] #at [15 3 15]] :want [:any "air"]}]}]
+  :body {:at [8.5 0 15.5] :inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 200}
+ :cases
+ [{:name "big-own-box-keeps-jobs-list-answering"
+   :act [[:job (jobs.blocks.clear-cells {:area {:min #at [10 0 10] :max #at [15 1 15]}})]
+         [:wait-s 3]
+         [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 1}]
+         [:wait-s 3]
+         [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 1}]]
+   :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}]
+   :after [[:block [10 0 10] "air"] [:block [15 1 15] "air"]]}]}

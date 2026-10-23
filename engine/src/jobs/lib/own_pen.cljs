@@ -23,17 +23,19 @@
   [c starts]
   (let [p (:primitives c)
         block-at (u/seen-block-at-fn p)
-        pens (reduce (fn [pens [x y z :as feet]]
-                       (let [at (zipmap [:x :y :z] feet)]
-                         (if (or (some #(contains? (:inside %) feet) pens) (not (access/in-own-area? c at)))
-                           pens
-                           (let [answer (pen/check {:block-at block-at :at at :max-cells (settings/get settings ::max-cells)})
-                                 unseen? (and (= :unloaded (:reason answer)) (seq (:inside answer)))]
-                             (if (and (or (:closed? answer) unseen?)
-                                      (seq (animals/in-pen-rows p answer (settings/get settings ::radius) #(and unseen? (access/in-own-area? c %)))))
-                               (conj pens answer)
-                               pens)))))
-                     [] starts)
+        pens (if-not (animals/any-near? p (settings/get settings ::radius))
+               []
+               (reduce (fn [pens [x y z :as feet]]
+                         (let [at (zipmap [:x :y :z] feet)]
+                           (if (or (some #(contains? (:inside %) feet) pens) (not (access/in-own-area? c at)))
+                             pens
+                             (let [answer (pen/check {:block-at block-at :at at :max-cells (settings/get settings ::max-cells)})
+                                   unseen? (and (= :unloaded (:reason answer)) (seq (:inside answer)))]
+                               (if (and (or (:closed? answer) unseen?)
+                                        (seq (animals/in-pen-rows p answer (settings/get settings ::radius) #(and unseen? (access/in-own-area? c %)))))
+                                 (conj pens answer)
+                                 pens)))))
+                       [] starts))
         walls (map (fn [{:keys [inside]}]
                      {:columns (into #{} (map (fn [[x _ z]] [x z])) inside) :floor (apply min (map second inside)) :ceiling (+ (apply max (map second inside)) (settings/get settings ::wall-height))})
                    pens)]
