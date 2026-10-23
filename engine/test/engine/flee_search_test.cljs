@@ -2,7 +2,9 @@
   "jobs.lib.flee-search: flee ends planned by the go-to planner and scored by when the chasers get there (against the
   fake world), and pick's choice among scored ends (pure)."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.fake.raw-world :as fake-raw]
             [engine.memory :as mem]
+            [engine.perception :as perception]
             [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.lib.flee-search :as search]
@@ -46,6 +48,27 @@
           (is (some #(and (not (:found? %)) (= 0 (:z (:end %)))) ends) "east is planned only part way: a pocket")
           (is (= 2 (:x end)) (str "the step turns into the branch north: " (pr-str end)))
           (is (neg? (:z end)) (pr-str end)))))))
+
+(deftest a-flight-down-a-dark-corridor-is-a-priced-way-on
+  ;; the old search priced an unseen open cell lethal and cut each route before it: in the dark every end was a pocket
+  ;; one cell off, and the body held "cornered"
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [raw (tu/fake {:blocks (merge junction (box -32 66 -32 32 66 32 "stone")) :light-default [0 0]
+                            :self {:pos {:x 0.5 :y 64 :z 0.5}} :yaw 270 :pitch 0})
+              p (perception/wrap raw (perception/create (fake-raw/create raw) {:now (constantly 1000000)}))
+              _ (perception/pass! (aget p "perception") {:effort 1 :reuse? true})
+              c {:primitives p :view (fn [] {:data mem/empty-data :now 0})}
+              ends (await (settings/with-settings {::search/budget-ms 10000}
+                            (fn ^:async run [] (await (search/search! c [{:name "zombie" :pos {:x -4.5 :y 64 :z 0.5}}] [] {})))))
+              dark (filter :unseen ends)
+              e (search/choose ends {})]
+          (is (some #(and (:open? %) (:unseen %)) ends) "a way on through the dark is planned to the ring")
+          (is (seq dark))
+          (is (every? #(> (:price %) (:priced %)) dark) "its unseen part is priced on top of the planner's")
+          (is (some? e) "a step, not cornered")
+          (is (<= (:x (:step e)) 2) (str "the step stays in what the body has seen, a cell into the dark at most: " (pr-str (:step e)))))))))
 
 (def field (box -32 63 -32 32 63 32 "stone"))
 
@@ -96,6 +119,10 @@
   (is (= {:x 9 :y 64 :z 0} (search/step-of {:end {:x 9 :y 64 :z 0} :cells [{:x 0 :y 64 :z 0 :t 0} {:x 5 :y 64 :z 0 :t 1.3} {:x 9 :y 64 :z 0 :t 2}]} #{[5 64 0]}))
       "a cell go-to refused is walked past on the route")
   (is (nil? (search/step-of {:end {:x 5 :y 64 :z 0} :cells [{:x 0 :y 64 :z 0 :t 0} {:x 5 :y 64 :z 0 :t 1.3}]} #{[5 64 0]})))
+  (is (= {:x 1 :y 64 :z 0} (search/step-of {:end {:x 9 :y 64 :z 0} :seen-n 2 :cells [{:x 0 :y 64 :z 0 :t 0} {:x 1 :y 64 :z 0 :t 0.4} {:x 5 :y 64 :z 0 :t 1.3} {:x 9 :y 64 :z 0 :t 2}]}))
+      "only the seen part of the route is walked")
+  (is (= {:x 1 :y 64 :z 0} (search/step-of {:end {:x 9 :y 64 :z 0} :seen-n 1 :cells [{:x 0 :y 64 :z 0 :t 0} {:x 1 :y 64 :z 0 :t 0.4} {:x 5 :y 64 :z 0 :t 1.3} {:x 9 :y 64 :z 0 :t 2}]}))
+      "seen no further than where it stands: one cell into the dark")
   (is (nil? (search/step-of {:end {:x 0 :y 64 :z 0} :cover? true :cells [{:x 0 :y 64 :z 0 :t 0} {:x 1 :y 64 :z 0 :t 0.2} {:x 0 :y 64 :z 0 :t 0.4}]}))
       "an end where the route starts is no step"))
 
@@ -113,8 +140,8 @@
         "the open way leads back to the chaser (a wall's foot): a pocket along the wall")
     (is (nil? (search/pick [(end-of 3 3 8 :found? false :gain 0.2 :s 0.3)] {}))
         "a pocket that buys less time than its walk takes is no step")
-    (is (= {:x 3 :y 64 :z 3} (search/pick [(end-of 3 3 8 :found? false :gain 0.2 :s 0.3 :unseen [4 64 3])] {}))
-        "unless it stops before a cell the body has not seen: a step round the corner to look")))
+    (is (nil? (search/pick [(end-of 3 3 8 :found? false :gain 0.2 :s 0.3 :unseen [4 64 3])] {}))
+        "nor one whose route goes on unseen: unseen counts as the worse case, a dead end")))
 
 (deftest pick-orders-cover-then-a-safe-home-then-the-score
   (let [home (assoc (end-of 0 9 1) :target {:pos {:x 0 :y 64 :z 9} :kind :home})

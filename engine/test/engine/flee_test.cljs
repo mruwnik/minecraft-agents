@@ -1127,7 +1127,9 @@
 
 (def tunnel-cells (set (for [x (range 0 9) y [64 65]] [x y 0])))
 
-(deftest a-flight-target-never-reads-unseen-rock-as-a-way
+(deftest a-flight-target-never-crosses-seen-rock-to-the-cave-behind-it
+  ;; the tunnel's sides stay unseen after the looks: priced, not read as rock (card 16f510ad), the step stays on the
+  ;; tunnel cells the body saw
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -1138,7 +1140,7 @@
               s (setup-sensed {:blocks rock :entities [(zombie 7 5 {})]})
               s (assoc-in s [:eng :jobs 'targeter] (targeter out))]
           (await (run-job! s 'targeter {:step 6}))
-          (is (nil? @out) (str "the cave behind its rock wall is no way: " (pr-str @out))))))))
+          (is (= {:x 1 :y 64 :z 0} @out) (str "the cave behind its rock wall is no way: " (pr-str @out))))))))
 
 (deftest a-buried-flight-takes-the-stair-the-body-cut-instead-of-a-hop-across-the-cave
   (async done

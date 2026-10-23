@@ -4,10 +4,10 @@
   stair or a cliff is its business) and the targets a caller names (a goal, a home). Each is planned by the go-to
   planner over what the body has seen, costed as go-to's walks are (known dangers, darkness, unseen cells), within
   ::max-nodes (a named target ::target-max-nodes) and the whole search within ::budget-ms, ring headings away from the
-  chasers first. A heading with no route gives the end of the planner's partial route, a pocket (:found? false); a ring
-  route stops before the first cell the body has not seen (seen-part).
+  chasers first. A heading with no route gives the end of the planner's partial route, a pocket (:found? false). Ring
+  routes plan through unseen cells as through seen ones (no rock guess), a flee step walks only the seen part.
   Each end is priced (the planner's price plus the death the route risks past the known threats, a death about where
-  the body stands: cost/route-death-cost) and scored against
+  the body stands: cost/route-death-cost, plus its unseen part at the worse case: unseen-price) and scored against
   the chasers: :arrive, the seconds the first of them takes to reach it (cost/arrival-s); :caught?, whether one lands
   a blow on the route (cost/caught-on?); :score, arrive less price. pick chooses a flee step's end."
   (:require [engine.args :as a]
@@ -98,21 +98,24 @@
 
 (defn cell-of [{:keys [x y z]}] [x y z])
 
-(defn seen-part
-  "Route r (routed) cut before its first cell whose feet or head cell p has not seen: a flight runs only through open
-  cells the body saw (go-to's prices let the planner cross unseen cells), an unseen floor priced as go-to guesses it
-  (in the dark a floor is seen late). Cut, it is
-  :found? false, priced at the seconds walked (the planner's price counts the unseen cells past it), :unseen the
-  cell it stopped before."
+(defn seen-split
+  "Route r (routed) with :seen-n, how many of its cells from the start the body has seen (feet and head), and :unseen,
+  the first cell past them it has not ([x y z], nil when it saw them all): a flee step walks only the seen part
+  (step-of), the rest is priced as unseen (unseen-price)."
   [p {:keys [cells] :as r}]
   (let [unseen (fn [{:keys [x y z]}] (some #(when-not (u/seen-block p {:x x :y % :z z}) [x % z]) [y (inc y)]))
-        seen? (comp nil? unseen)
-        i (or (first (keep-indexed #(when (and (pos? %1) (not (seen? %2))) %1) cells)) (count cells))
-        part (subvec cells 0 i)]
-    (cond
-      (= i (count cells)) r
-      :else (assoc r :found? false :cells part :end (select-keys (peek part) [:x :y :z]) :s (:t (peek part))
-                     :priced (:t (peek part)) :unseen (unseen (nth cells i))))))
+        i (or (first (keep-indexed #(when (and (pos? %1) (unseen %2)) %1) cells)) (count cells))]
+    (cond-> (assoc r :seen-n i)
+      (< i (count cells)) (assoc :unseen (unseen (nth cells i))))))
+
+(defn unseen-price
+  "Seconds the unseen part of r (seen-split) adds to its price (cost/unseen-way-cost: from its last seen cell on, kit
+  the body's), trapped-at a fn of that cell: what the chasers met there on the way back cost; 0 when it saw it all."
+  [{:keys [cells seen-n s unseen]} kit trapped-at]
+  (if-not unseen
+    0
+    (let [split (nth cells (dec seen-n))]
+      (cost/unseen-way-cost {:unseen-s (- s (:t split)) :trapped (trapped-at split) :kit kit}))))
 
 (defn ^:async plan-to!
   "The planner's result for query over pw, its search within max-nodes nodes, in slices with yields between them."
@@ -138,24 +141,22 @@
 
 (defn costed
   "The pathWorld a flee route plans over: what the body has seen (go-to's :unknown, the cell goal spared by the rock
-  guess; with seen-only? an unseen open cell costs the planner's lethal price, so a ring route crosses one only when
-  no seen way leads on: a flight runs through cells the body saw open), costed as go-to's
-  walks but for the threats keep? leaves out (the chasers: their danger is the race); nil when the body cannot sense
-  the world."
-  [c goal keep? seen-only?]
-  (some-> (wworld/path-world (:primitives c) (wworld/with-seeds (cond-> (wworld/unknown-spec)
-                                                                  seen-only? (doto (unchecked-set "cell" base/LETHAL-S)))
-                                                                goal nil))
+  guess; with priced? no rock guess: an unseen cell keeps the planner's unknown price and the search adds its worse
+  case, unseen-price), costed as go-to's walks but for the threats keep? leaves out (the chasers: their danger is the
+  race); nil when the body cannot sense the world."
+  [c goal keep? priced?]
+  (some-> (wworld/path-world (:primitives c) (wworld/with-seeds (cond-> (wworld/unknown-spec) priced? wworld/without-rock) goal nil))
           (#(wworld/costed-world c % {:dangers? (wworld/dangers?) :dark? (wworld/dark?) :keep? keep?}))))
 
 (defn floor-cell [pos] (mapv #(js/Math.floor (% pos)) [:x :y :z]))
 
 (defn ^:async price!
   "Each of targets (named ones {:pos :range :kind}, then ring ends {:x :z}) planned from where the body stands (see the ns
-  doc): [{:target :found? :open? :end :s :priced :price :cells}] (:open? found, or a ring end whose partial route
-  covers ::open-share of reach), the ones the planner found no way nearer to, and the ring ends
+  doc): [{:target :found? :open? :end :s :priced :price :cells :seen-n :unseen}] (:open? found, or a ring end whose
+  partial route covers ::open-share of reach), the ones the planner found no way nearer to, and the ring ends
   left when ::budget-ms (counted from the first ring end: named ones have their node cap) ran out, left out. opts {:y-margin :reach :chasers}: blocks past body and end the routes may plan, blocks
-  to the ring, the chasers (their danger is the race, so death-chance weighs only the other known threats)."
+  to the ring, the chasers (their danger is the race, so death-chance weighs only the other known threats; met on the
+  way back from an unseen dead end, they catch the body: unseen-price)."
   [c targets {:keys [y-margin reach chasers]}]
   (let [p (:primitives c)
         from (u/self-pos c)
@@ -166,6 +167,9 @@
         policy (cond-> (wworld/body-policy c) y-margin (assoc :y-margin y-margin))
         body (threats/death-body c)
         class {:underground? (sh-sense/buried? p) :night? (sh-sense/dark-outside? p) :threats (threats/threats-of c other?)}
+        caught-by (mapv #(assoc % :caught 1) (threats/threats-of c (complement other?)))
+        trapped-at (fn [cell] (cost/route-death-cost body (assoc class :cells [cell] :threats caught-by) cell))
+        kit (wworld/kit-of c)
         slow (pace (.-food (.self p)))]
     (if (nil? ring-world)
       []
@@ -173,14 +177,16 @@
         (if (or (nil? t) (and t0 (>= (- (js/performance.now) t0) (settings/get settings ::budget-ms))))
           out
           (let [pw (if-let [pos (:pos t)] (costed c (floor-cell pos) other? false) ring-world)
-                r (routed (await (plan-to! c pw policy (query c t)
-                                           (settings/get settings (if (:pos t) ::target-max-nodes ::max-nodes))))
-                          slow)
-                r (if (:pos t) r (some->> r (seen-part p)))]
+                r (some->> (routed (await (plan-to! c pw policy (query c t)
+                                                    (settings/get settings (if (:pos t) ::target-max-nodes ::max-nodes))))
+                                   slow)
+                           (seen-split p))]
             (recur more (if r
                           (conj out (assoc r :target t
                                              :open? (or (:found? r) (and (nil? (:pos t)) (>= (u/dist from (:end r)) open-at)))
-                                             :price (+ (:priced r) (cost/route-death-cost body (assoc class :cells (dwelt (:cells r))) from))))
+                                             :price (+ (:priced r)
+                                                       (cost/route-death-cost body (assoc class :cells (dwelt (:cells r))) from)
+                                                       (unseen-price r kit trapped-at))))
                           out)
                    (or t0 (when (nil? (:pos t)) (js/performance.now))))))))))
 
@@ -223,23 +229,24 @@
     (boolean (some (fn [cell] (some #(< (u/dist % cell) r) hazards)) cells))))
 
 (defn step-of
-  "The cell a flee step walks to of a picked end entry: its route's first cell ::step-s or more in that is not in
-  refused ([x y z] cells go-to refused) nor where the route starts, else its end; a cover end whole; nil when they
-  are all refused."
+  "The cell a flee step walks to of a picked end entry: of its route's seen part (:seen-n cells, at least the first past
+  the start: a step into the dark is one cell), the first cell ::step-s or more in that is not in refused ([x y z]
+  cells go-to refused) nor where the route starts, else the part's last; a cover end whole; nil when they are all
+  refused."
   ([e] (step-of e #{}))
-  ([{:keys [end cells cover?]} refused]
+  ([{:keys [end cells cover? seen-n]} refused]
    (let [s (settings/get settings ::step-s)
          start (some-> (first cells) cell-of)
+         walk (subvec cells 0 (min (count cells) (max 2 (or seen-n (count cells)))))
          ok #(when-not (or (contains? refused (cell-of %)) (= start (cell-of %))) (select-keys % [:x :y :z]))]
      (if cover?
        (ok end)
-       (or (some #(when (>= (:t %) s) (ok %)) cells) (ok end))))))
+       (or (some #(when (>= (:t %) s) (ok %)) walk) (ok (peek walk)))))))
 
 (defn choose
   "The end entry a flee step takes among scored ends (scored, covers), its :step the cell the step walks to (step-of,
   past the cells go-to refused: refused [x y z]); nil when cornered. Left out: caught ones, those (but cover) that gain
-  nothing on the chasers over standing still, pockets that gain less than their walk takes (but those stopped before an
-  unseen cell: the way may go on past it, a peek round a corner), those with every step
+  nothing on the chasers over standing still, pockets that gain less than their walk takes, those with every step
   cell refused, those never? holds of (at the step cell or the end, as for wet?), those passing near hazards; wet ones (wet?) while a dry one is left, all with
   dry-only?; then the ends each of avoid (cell -> bool, most wanted first) holds of, while that leaves some: the route
   there is the planner's, its first steps often shared by every end. Of the rest, in this order: a :cover? end, a
@@ -251,7 +258,7 @@
         ok (->> ends
                 (remove :caught?)
                 (filter #(or (:cover? %) (pos? (:gain %))))
-                (filter #(or (:open? %) (:unseen %) (> (:gain %) (:s %))))
+                (filter #(or (:open? %) (> (:gain %) (:s %))))
                 (keep #(when-let [step (step-of % (or refused #{}))] (assoc % :step step)))
                 (remove #(and never? ((either never?) %)))
                 (remove #(hazard-near? hazards (:cells %))))
@@ -265,6 +272,12 @@
         (when prefer? (best (filter prefer? ok)))
         (best (filter :open? ok))
         (when-not traps? (best ok)))))
+
+(defn into-unseen?
+  "Whether the step of end entry e (choose) is cut short by a cell the body has not seen: its route's seen part ends
+  less than ::step-s in (a cover end is walked to whole)."
+  [{:keys [unseen cover? cells seen-n]}]
+  (boolean (and unseen (not cover?) (< (:t (nth cells (dec seen-n))) (settings/get settings ::step-s)))))
 
 (defn pick
   "The cell the flee step choose takes walks to, nil when cornered."
@@ -283,8 +296,8 @@
     (cond-> ends covered? (into (covers chasers from covered? ends)))))
 
 (defn unseen-ahead
-  "The cells ([x y z], nearest first) ends' ring routes stopped before, unseen: where to look before the flight counts
-  itself cornered."
+  "The first unseen cells ([x y z], nearest first) of ends' routes: where to look before the flight counts itself
+  cornered."
   [ends]
   (->> ends (sort-by :s) (keep :unseen) distinct seq))
 

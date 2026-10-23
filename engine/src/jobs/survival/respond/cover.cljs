@@ -142,7 +142,7 @@
     (assoc (await (respond.goal/judge! c homes covered?)) :homes homes)))
 
 (defn ^:async look-ahead!
-  "judged again (respond.goal/judge! over its :homes) after a look at the unseen cells its routes stopped before
+  "judged again (respond.goal/judge! over its :homes) after a look at the first unseen cells of its routes
   (flee-search/unseen-ahead; each once a flight, as glances are); nil when there is none to look at."
   [c covered? judged]
   (when-let [cells (seq (remove (set (:glanced (ctx/mem c))) (search/unseen-ahead (:ends judged))))]
@@ -153,8 +153,9 @@
 (defn ^:async flight-target!
   "The walk target away from threats: the stairs up (way-up), else the step to the end flee-search/choose takes of
   judged's search (judge!; a :retreat.search debug event lists them): out of a ranged chaser's line of fire first, then a safe home (judged's :home), then an open end by
-  score, a pocket only in a closed cave; with none, after a look at the unseen cells the routes stopped before
-  (look-ahead!), the same over the search run again; nil when cornered. Left out: ends under rock below the flight's floor
+  score, a pocket only in a closed cave; with none, or when its step is into a cell the body has not seen
+  (flee-search/into-unseen?), after a look at the routes' first unseen cells (look-ahead!), the same over the search
+  run again (nothing left to look at: the step as it was); nil when cornered. Left out: ends under rock below the flight's floor
   (flight/floor; not out of the line of fire, nor on stairs the body cut), ends go-to refused, routes near a :hazard,
   wet ends while a dry one is left (none with a drowned among threats); then ends toward a hostile not chasing
   (bystander-spots) and flight/avoid-ends, each while another end is left. judged and covered? given so the caller
@@ -179,9 +180,11 @@
                  :dry-only? (boolean (some #(= "drowned" (.-name %)) threats))
                  :avoid (cons (fn [end] (some #(< (u/dist end %) (u/dist from %)) bystanders)) (flight/avoid-ends c))
                  :prefer? (when-let [home (:home judged)] #(= home (:pos (:target %))))}
-           e (or (search/choose (:ends judged) opts)
-                 (when-let [again (await (look-ahead! c covered? judged))]
-                   (search/choose (:ends again) (assoc opts :prefer? (when-let [home (:home again)] #(= home (:pos (:target %))))))))
+           first-pick (search/choose (:ends judged) opts)
+           again (when (or (nil? first-pick) (search/into-unseen? first-pick)) (await (look-ahead! c covered? judged)))
+           e (if again
+               (search/choose (:ends again) (assoc opts :prefer? (when-let [home (:home again)] #(= home (:pos (:target %))))))
+               first-pick)
            round1 #(/ (js/Math.round (* 10 %)) 10)]
        (ctx/emit! c :retreat.search :debug
                   {:chasers (mapv (fn [{:keys [name pos]}] [name (mapv #(js/Math.round (% pos)) [:x :y :z])]) (respond.goal/chasers c))
@@ -191,7 +194,7 @@
                                          true (assoc :at (search/cell-of (:end e)) :score (round1 (:score e)) :gain (round1 (:gain e)) :s (round1 (:s e))
                                                      :arrive (round1 (:arrive e)))
                                          (:pos (:target e)) (assoc :kind (:kind (:target e)))))
-                               (:ends judged))})
+                               (:ends (or again judged)))})
        (:step e)))))
 
 (defn ^:async take-cover!

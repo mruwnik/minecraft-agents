@@ -259,6 +259,14 @@
     (is (< (js/Math.abs (- 1 unarmed)) 1e-9) "an unarmed body pays a dark cell 2x a lit one")
     (is (> unarmed sword armed-armoured floor) "a bare body pays most, armour and a sword less, never below the floor")))
 
+(deftest an-unseen-way-is-priced-at-its-worse-case-and-finite
+  (let [kit {:weapon nil :equipment nil}
+        way (cost/unseen-way-cost {:unseen-s 2 :kit kit})
+        chased (cost/unseen-way-cost {:unseen-s 2 :trapped 30 :kit kit})]
+    (is (> way 2) "more than walking it seen: a dead end to turn back from, a mob in the dark")
+    (is (< way chased ##Inf) "dearer with chasers to meet on the way back, never refused")
+    (is (< (cost/unseen-way-cost {:unseen-s 2 :kit {:weapon "iron_sword" :equipment iron-set}}) way) "an armed, armoured body fears the dark less")))
+
 (deftest spawn-chance-is-zero-where-a-mob-cannot-spawn
   (let [lit (fn [block sky] (fn [_] {:block block :sky sky}))
         dark (cost/spawn-chance [0 0 0] {:light (lit 0 0)})]

@@ -85,9 +85,9 @@
 
 (defn rock-guess?
   "Whether a walk over mask spec unknown (nil: none) reads far unseen cells as rock (path-world): ::rock-beyond is on, the
-  body is under ground (sh-sense/buried?) with its head out of water, and the mask is not :edge."
+  body is under ground (sh-sense/buried?) with its head out of water, and the mask is neither :edge nor without-rock."
   [p ^js unknown]
-  (boolean (and unknown (not (.-edge unknown)) (rock-beyond) (not (breath/head-under? p)) (sh-sense/buried? p))))
+  (boolean (and unknown (not (.-edge unknown)) (not (.-noRock unknown)) (rock-beyond) (not (breath/head-under? p)) (sh-sense/buried? p))))
 
 (defn- rock-seeds
   "The cells path-world's rock guess spares for a walk over mask spec unknown: the feet and the spec's seeds (with-seeds)."
@@ -109,6 +109,11 @@
       (if (or rock blocked)
         (fn [x y z] (if (or (and blocked (.has blocked (str x "," y "," z))) (and rock (rock x y z))) :solid :ground))
         :ground))))
+
+(defn without-rock
+  "The mask spec unknown with no rock guess: a walk whose search prices unseen cells itself (jobs.lib.flee-search)."
+  [^js unknown]
+  (doto unknown (unchecked-set "noRock" true)))
 
 (defn with-seeds
   "The mask spec unknown with the cells its rock guess spares (path-world): goal ([x y z], or nil) and own (feet cells the
