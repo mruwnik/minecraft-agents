@@ -59,17 +59,19 @@
   cells within r + margin links to the seeds (where the body may walk back), and the cells there kind-at cannot name.
   kind-at: cell -> jobs.lib.seal/kind of the seen block, nil when not seen."
   [kind-at own seeds centre r]
-  (let [box? #(within? centre (+ r margin) %)
+  (let [kind-at (memoize kind-at)
+        box? #(within? centre (+ r margin) %)
         way? #(and (box? %) (not (own %)) (= :open (kind-at %)))
-        back (loop [todo (filterv way? seeds) seen (set todo)]
-               (if-let [cell (peek todo)]
-                 (let [more (remove seen (filter way? (beside cell)))]
-                   (recur (into (pop todo) more) (into seen more)))
-                 seen))
         sides (sort (distinct (for [cell own :when (within? centre r cell)
                                     side (beside cell) :when (not (own side))]
-                                side)))]
-    {:open (filterv #(and (= :open (kind-at %)) (not (back %))) sides)
+                                side)))
+        candidates (filterv #(= :open (kind-at %)) sides)
+        back (loop [todo (filterv way? seeds) seen (set todo)]
+               (if-let [cell (and (not-every? seen candidates) (peek todo))]
+                 (let [more (remove seen (filter way? (beside cell)))]
+                   (recur (into (pop todo) more) (into seen more)))
+                 seen))]
+    {:open (filterv (complement back) candidates)
      :unseen (filterv #(nil? (kind-at %)) sides)}))
 
 (defn centre [c] (u/cell-vec (or (a/cell (:at (:args c))) (u/self-pos c))))

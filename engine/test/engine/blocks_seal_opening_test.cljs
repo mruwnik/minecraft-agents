@@ -44,6 +44,13 @@
     (is (= [unseen] (:unseen f)))
     (is (not-any? #{unseen} open))))
 
+(deftest an-open-world-is-read-once-per-cell
+  (let [reads (atom 0)
+        open-air (fn [cell] (swap! reads inc) (when-not (own cell) :open))
+        {:keys [open]} (so/openings open-air own [[3 64 0]] [3 61 0] 8)]
+    (is (empty? open) "the seed links every open side")
+    (is (<= @reads (* 23 23 23)) "one read per cell of the box, however many neighbours ask")))
+
 (defn key-of [[x y z]] (str/join "," [x y z]))
 
 (def world-blocks
