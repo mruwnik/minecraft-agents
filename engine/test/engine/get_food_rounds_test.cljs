@@ -565,7 +565,21 @@
         (let [note [{:kind :seen :what "cow" :id "u1" :pos [150 64 0] :by "Other" :t 999900 :until 9e15}]
               {:keys [eng seen]} (setup {:time 6000 :self {:food 8 :health 10}} :step-ms 5 :other-notes note)]
           (await (one-round! eng {}))
-          (is (some #(= :noted-walk (:slot %)) (events-of seen :child_ended)) "a remembered animal is a candidate at any distance, priced by go-to"))))))
+          (loop [n 0] (when (and (< n 80) (not-any? #(= :noted-walk (:slot %)) (events-of seen :child_started)))
+            (await (core/tick! eng))
+            (recur (inc n))))
+          (is (some #(= :noted-walk (:slot %)) (events-of seen :child_started)) "once the search found nothing, a remembered animal is a candidate at any distance, priced by go-to"))))))
+
+(deftest a-noted-animal-is-not-walked-toward-in-the-dark-or-from-under-rock
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [note [{:kind :seen :what "cow" :id "u1" :pos [150 64 0] :by "Other" :t 999900 :until 9e15}]]
+          (doseq [world [{:time 15000 :self {:food 8 :health 10}}
+                         {:time 6000 :blocks {"0,66,0" "stone" "1,64,0" "stone" "1,65,0" "stone"} :self {:food 8 :health 10}}]]
+            (let [{:keys [eng seen]} (setup world :step-ms 5 :other-notes note)]
+              (await (one-round! eng {}))
+              (is (not-any? #(= :noted-walk (:slot %)) (events-of seen :child_ended)) "the same checks as the search: no walk in the dark or under rock"))))))))
 
 (deftest a-noted-animal-the-walk-cannot-reach-is-named-in-the-no-food-text
   (async done

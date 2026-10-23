@@ -1,0 +1,29 @@
+;; survival.get-food walks toward a food animal a note places out of sight once its own search found nothing, and not before.
+;; Open grass under the day sky (an enclosed cell at night is a room the search must not leave); hungry by RCON (hunger effect, hp 15); body at x 12.5 with a sword; three cows 14 east, sighted and noted by a search, then hidden by a stone wall (x 22, 9 high, z 8..24).
+;; get-food's own search is cut to no legs, so only the note can lead it to them.
+;; Should-succeed: the body walks round the wall and kills one cow (the herd keeps two).
+;; Should-fail: the same cows with no note (nothing was sighted first): the :no-food ending, all three stay.
+{:defaults
+ {:tags [:survival :get-food :animals]
+  :plot {:floor "grass_block" :height 12 :light :sky :length 48}
+  :body {:at [12.5 0 16.5] :yaw 270 :inventory [["iron_sword" 1]] :settle-s 2}
+  :limit-s 200}
+ :cases
+ [{:name "noted-cows-behind-a-wall-are-walked-to"
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 5 minecraft:generic"]
+         [:summon "cow" [26.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [27.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [26.5 0 17.5] "{NoAI:1b}"]
+         [:job (jobs.explore.search {:target "cow" :scan-radius 24 :use-notes false :settings {:jobs.explore.search/max-legs 0}})]
+         [:await {:source :job :kind :completed} 60]
+         [:rcon "execute at $BODY run fill ~10 ~ ~-8 ~10 ~8 ~8 stone"]
+         [:job (jobs.survival.get-food {:explore {:max-legs 0 :use-notes false}})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:name "jobs.survival.get-food"}} :within-s 150}]
+   :after [[:entities "type=cow,tag=wt" [[0 0 0] [40 3 40]] 2]]}
+  {:name "no-note-no-walk"
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 5 minecraft:generic"]
+         [:summon "cow" [26.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [27.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [26.5 0 17.5] "{NoAI:1b}"]
+         [:rcon "execute at $BODY run fill ~10 ~ ~-8 ~10 ~8 ~8 stone"]
+         [:job (jobs.survival.get-food {:explore {:max-legs 0 :use-notes false}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 150}]
+   :after [[:entities "type=cow,tag=wt" [[0 0 0] [40 3 40]] 3]]}]}

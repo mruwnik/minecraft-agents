@@ -3,6 +3,7 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [engine.notes :as notes]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
@@ -28,15 +29,23 @@
                 (map :id))
           (notes/notes c))))
 
+(def meat "The raw meat each food animal drops." {"cow" "beef" "pig" "porkchop" "sheep" "mutton" "chicken" "chicken" "rabbit" "rabbit"})
+
+(defn noted-price
+  "Seconds per hunger point of walking to the :seen note n: jobs.lib.cost/walk-cost of the straight distance over the points its kind's meat gives."
+  [me n]
+  (/ (:cost (cost/walk-cost {:distance (u/flat-dist me (zipmap [:x :y :z] (:pos n)))}))
+     (max 1 (or (foods/points (meat (:what n))) 1))))
+
 (defn noted-target
-  "The nearest food animal a :seen note (any body's) places anywhere, as the note, skipping the ids in `done`, babies and the animals tried; its walk is priced by go-to, not cut at a radius."
+  "The cheapest food animal a :seen note (any body's) places anywhere, as the note, skipping the ids in `done`, babies and the animals tried; priced by noted-price, not cut at a radius."
   [c done]
   (let [me (u/self-pos c)
         skipped (set (:skipped-animals (ctx/mem c)))]
     (->> (notes/notes c)
          (filter #(and (= :seen (:kind %)) (contains? food-animals (:what %)) (:id %) (:pos %) (not (:baby %))
                        (not (done (:id %))) (not (skipped (:id %)))))
-         (sort-by #(u/flat-dist me (zipmap [:x :y :z] (:pos %))))
+         (sort-by #(noted-price me %))
          first)))
 
 (defn note-seen!

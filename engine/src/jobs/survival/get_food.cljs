@@ -53,7 +53,7 @@
   :field Last: it walks to the nearest zone or plan of its own it has not visited in this job and cuts and replants the ripe wheat there
          (jobs.farm.harvest); the wheat is baked next (:bake).
   Then, once per job (:explore, default on; a starving body again after foods/::starving-rest-ms) it searches for food animals and crops (jobs.explore.search, the
-  ::explore setting; not while the search would wait (dark sky, danger near)) and goes on if it found some (an animal only a note gave, at any distance, with none in sight, is walked toward first, go-to pricing the walk, each note once a job; a hungry body under rock climbs out first, jobs.lib.surface-up); at ::eat-bad-food (6) or below it then eats harmful food carried (rotten
+  ::explore setting; not while the search would wait (dark sky, danger near)) and goes on if it found some (an animal only a note gave, with none in sight, is walked toward once the search found nothing, the cheapest note at any distance, under the same checks as the search, each note once a job; a hungry body under rock climbs out first, jobs.lib.surface-up); at ::eat-bad-food (6) or below it then eats harmful food carried (rotten
   flesh, with :allow-bad). Still nothing: it ends nothing-possible :no-food (the text says what was searched, the nearest known source) and writes
   :hungry, which widens the next search; the hungry trigger rests after that ending (its :rest-s).
   :eat false: only gathers, done when the pack holds :carry food points (jobs.survival.eat fetches this way; a job cannot call its own caller).
@@ -387,26 +387,30 @@
   [c]
   (when (explore-again? c) (ctx/update-mem! c dissoc :explored))
   (let [e (:explore (:args c))
-        noted (when (and e (nil? (:walk-to (ctx/mem c))) (nil? (animals/nearest c (animal-opts c false))))
+        done? (explore-done? (ctx/mem c) (starving? c) (ctx/now c) (foods/starving-rest-ms))
+        noted (when (and e done? (:searched (ctx/mem c)) (nil? (:walk-to (ctx/mem c))) (nil? (animals/nearest c (animal-opts c false))))
                 (animals/noted-target c (set (:noted-walked (ctx/mem c)))))]
-    (when noted
-      (ctx/update-mem! c #(-> % (assoc :walk-to (:pos noted)) (update :noted-walked (fnil conj []) (:id noted)))))
     (cond
-      (and e (:walk-to (ctx/mem c))) (await (walk-to-noted! c))
-      (or (not e) (explore-done? (ctx/mem c) (starving? c) (ctx/now c) (foods/starving-rest-ms))) nil
+      (not e) nil
+      (and done? (not noted) (nil? (:walk-to (ctx/mem c)))) nil
       (risk/search-refused? c)
-      (do (ctx/update-mem! c assoc :explored (str "not searched: " (:too-dangerous (ctx/mem c)))) nil)
+      (do (when-not done? (ctx/update-mem! c assoc :explored (str "not searched: " (:too-dangerous (ctx/mem c))))) nil)
       (search-waits? c)
-      (do (ctx/update-mem! c assoc :explored "not searched: dark or danger near") nil)
+      (do (when-not done? (ctx/update-mem! c assoc :explored "not searched: dark or danger near")) nil)
       (and (sh-sense/buried? (:primitives c)) (not (starving? c)) (not (surface/climbed? c)))
       (case (await (surface/step! c))
         :continue :continue
         :out :again
-        (do (ctx/update-mem! c assoc :explored "not searched: no way up out of the cave") nil))
+        (do (when-not done? (ctx/update-mem! c assoc :explored "not searched: no way up out of the cave")) nil))
+      (or noted (:walk-to (ctx/mem c)))
+      (do (when noted
+            (ctx/update-mem! c #(-> % (assoc :walk-to (:pos noted)) (update :noted-walked (fnil conj []) (:id noted)))))
+          (await (walk-to-noted! c)))
+      done? nil
       :else
       (do
         (when-not (= "started" (:explored (ctx/mem c)))
-          (ctx/update-mem! c #(-> % (assoc :explored "started" :explored-at (ctx/now c) :explored-spared (count (spared-uuids c))) (update :explore-runs (fnil inc 0)))))
+          (ctx/update-mem! c #(-> % (assoc :explored "started" :searched true :explored-at (ctx/now c) :explored-spared (count (spared-uuids c))) (update :explore-runs (fnil inc 0)))))
         (let [opts (widen-explore (merge (settings/get settings ::explore) (when (map? e) e)) (widen c))
               e (await (child/run!* c :explore 'jobs.explore.search
                                     (child/search-args (assoc opts :skip-ids (vec (spared-uuids c)) :target (vec (concat (sort animals/food-animals) (keys crops/food-ripe-age) (keys crops/wild-food)))))
@@ -424,7 +428,7 @@
                                    (report/explored-text res))
                   (when-let [noted (and (nil? (animals/nearest c (animal-opts c false))) (first (filter :id (:found res))))]
                     (ctx/update-mem! c assoc :walk-to (:pos noted)))
-                  (when (= :done (:kind e)) :again))))))))))
+                  (when (or (= :done (:kind e)) (animals/noted-target c (set (:noted-walked (ctx/mem c))))) :again))))))))))
 
 (defn rod-carried?
   "Whether a fishing rod is carried: jobs.food.fish itself looks for a bank beside seen water two deep within its ::bank-radius."
@@ -485,7 +489,7 @@
   [c]
   (let [have (foods/stock-points (u/inventory (:primitives c)))]
     (stop! c :no-carry (str "not hungry (food " (food-level c) ", nothing eaten) but carries " have " of " (:carry (:args c))
-                            " food points and found no more within " (js/Math.round (hunt-radius c)) " blocks"
+                            " food points and found no more in sight or searched for" (when (:noted-lost (ctx/mem c)) (str ", a noted animal could not be reached: " (:why (:noted-lost (ctx/mem c)))))
                             (when-let [x (:explored (ctx/mem c))] (str ", explored: " x))
                             (report/animals-text (animals/passed-over c (animal-opts c false)) (animals/nearby c (hunt-radius c))))
            :food (food-level c) :carry (:carry (:args c)) :have have)))
