@@ -214,9 +214,10 @@
 
 (defn ^:async cover-step!
   "The cover respond priced cheapest (:cover-way, taken once): its plug option (respond.refuge/plug-option!, :plug for the
-  walls, :plug-dig for a pit or pocket) by that way alone; nil with none, or when it cannot be begun (the steps choose)."
+  walls, :plug-dig for a pit or pocket) by that way alone; nil with none, or when it cannot be begun (the steps choose).
+  The cover :door has no plug: the door step shuts it."
   [c]
-  (when-let [way (:cover-way (ctx/mem c))]
+  (when-let [way (when-not (= :door (:cover-way (ctx/mem c))) (:cover-way (ctx/mem c)))]
     (ctx/update-mem! c dissoc :cover-way)
     (await (refuge/plug-option! c (if (= :walls way) :plug :plug-dig) #{way}))))
 

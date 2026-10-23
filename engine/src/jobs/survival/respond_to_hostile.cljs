@@ -17,6 +17,7 @@
             [jobs.lib.shot :as shot]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.goal :as goal]
+            [jobs.survival.respond.doors :as doors]
             [jobs.survival.shut-in :as shut-in]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -241,19 +242,22 @@
                                " s and answered again if it comes nearer or the body is hurt")}}))
 
 (def cover-ways
-  "The covers respond prices, each a way of jobs.survival.shut-in where the body stands."
+  "The covers respond prices, each a way of jobs.survival.shut-in where the body stands (and :door, below)."
   [:walls :pit :pocket])
 
 (defn cover-answers
   "{way answer} of shutting the body in against near by each way shut-in/covers finds possible here (cost/cover-answer:
   the blows while a side is open, the quote, the hide-out's quiet; then: what follows it, or the same cover once more).
+  An open door the flight would shut (respond.doors/door-to-shut) is the cover :door (shut-in/door-cover), done by the flight's own door step.
   None with a creeper near (cost/cover-answer: its blast takes the walls), so its quotes are not asked for: they take
   seconds the fuse does not leave."
   [c near then]
   (when-not (some combat/creeper? near)
     (let [p (:primitives c)
           mobs {:equipment (cost/equipment-of (.-equipment (.self p))) :mobs (mapv #(hostile/mob-near p %) near) :then then}]
-      (into {} (keep (fn [[w cover]] (some->> (cost/cover-answer mobs cover) (vector w)))) (shut-in/covers c cover-ways)))))
+      (into {} (keep (fn [[w cover]] (some->> (cost/cover-answer mobs cover) (vector w))))
+            (cond-> (shut-in/covers c cover-ways)
+              (doors/door-to-shut c (danger-q/mob-pos p (first near))) (assoc :door (shut-in/door-cover c)))))))
 
 (defn walk-felt
   "hp a second of the mob blows felt since the flight began (hostile/incoming), nil while not fleeing: a walk is priced at

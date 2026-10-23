@@ -127,6 +127,12 @@
                           [w {:open-s open :seconds (+ s (hide-out/quiet-s))}]))))
            ways))))
 
+(defn door-cover
+  "The cover of an open door shut with one click: a placement's seconds in the open and to do, then the hide-out's quiet."
+  [c]
+  (let [s (way/place-s c)]
+    {:open-s s :seconds (+ s (hide-out/quiet-s))}))
+
 (defn ^:async choose
   "{:way the cheapest allowed way not failed (nil when none) :dropped [ways that cannot be done]}: quoted seconds, under
   fire plus what each way's seconds in the open cost (price)."
