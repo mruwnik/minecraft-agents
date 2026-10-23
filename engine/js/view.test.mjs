@@ -85,6 +85,15 @@ test('attach marks columns already loaded dirty, so the spawn column is written 
   assert.equal(fs.readdirSync(worldChunks(dir)).length, 2)
 })
 
+test('a flush writes the columns nearest the body first', async () => {
+  const columns = { '50,50': makeColumn() }
+  for (const [x, z] of [[0, -1], [1, -1], [-1, -1], [0, 0], [0, -2], [1, 0], [-1, 0], [1, -2]]) columns[`${x},${z}`] = makeColumn()
+  const { view, dir } = makeView(fakeBot({ columns, listing: true }))
+  await view.flushColumns()
+  assert.ok(!fs.readdirSync(worldChunks(dir)).includes('50.50.bin'))
+  assert.equal(view.pendingCount(), 1)
+})
+
 test('attach to a world without a column listing still works', () => {
   const { view } = makeView(fakeBot({ columns: { '0,0': makeColumn() } }))
   assert.equal(view.pendingCount(), 0)

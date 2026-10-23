@@ -468,7 +468,10 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
       pending.clear() // the server sends no light update after a block change, so perception needs the relit overlay even with no dump
       return Promise.resolve()
     }
-    for (const key of [...pending]) {
+    const at = target.entity?.position
+    // nearest first, so a snapshot taken just after the dump turns on has the ground under and around the body
+    const chunkDist = key => { const [cx, cz] = key.split(',').map(Number); return at ? (cx * 16 + 8 - at.x) ** 2 + (cz * 16 + 8 - at.z) ** 2 : 0 }
+    for (const key of [...pending].sort((a, b) => chunkDist(a) - chunkDist(b))) {
       if (writes.length >= MAX_COLUMNS_PER_FLUSH) break
       if (inflight.has(key) || blocked.has(key)) continue
       pending.delete(key)
