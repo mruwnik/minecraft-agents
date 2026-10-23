@@ -1,0 +1,27 @@
+;; Card 1824f7b1 (Teasel #6: a skeleton heard in a cave kept the body's seal for ever). The shelter keeps a seal only
+;; while a known hostile could reach the body or shoot it through it; a heard mob is not in a cell the body sees, and the
+;; hut's seen wall stops its arrows. Lit plot: the seal opens onto no dark (no :night keep).
+{:defaults
+ {:tags [:access :go-to :hostile :shelter] :time :any
+  :body {:inventory [["iron_pickaxe" 1] ["iron_sword" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "heard-skeleton-in-a-sealed-cave-the-seal-is-taken-back"
+   ;; a dirt hut (inside x 8..10 z 10..12, roof y 2) whose east wall cells [11 0 11] [11 1 11] are its :shelter seal; a
+   ;; sealed stone cave (inside x 2..5) against its west wall holds a NoAI skeleton, heard, never seen; the walk east to
+   ;; [18 0 11] takes the seal back and goes out through it, every other wall and the cave stay
+   :plot {:height 12 :light :lit}
+   :blocks [[:fill [7 0 9] [11 2 13] "dirt"] [:fill [8 0 10] [10 1 12] "air"] [:set [8 0 10] "torch"]
+            [:fill [1 0 9] [6 3 13] "stone"] [:fill [2 0 10] [5 1 12] "air"]]
+   :memory [{:kind :scaffold :data {:entries [{:cell #at [11 0 11] :item "dirt" :before "air" :job "j1" :purpose :shelter :state :placed}
+                                              {:cell #at [11 1 11] :item "dirt" :before "air" :job "j1" :purpose :shelter :state :placed}]}}]
+   :body {:at [9.5 0 11.5]}
+   :act [[:summon "skeleton" [3.5 0 11.5] "{NoAI:1b,PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:wait-s 3]
+         [:job (jobs.movement.go-to {:pos #at [18 0 11] :range 1 :checks {:safe? (always)}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 80 :of-job true}]
+   :after [[:not-block [11 0 11] "dirt"] [:not-block [11 1 11] "dirt"]
+           [:block [7 0 10] "dirt"] [:block [7 0 11] "dirt"] [:block [7 0 12] "dirt"] [:block [7 1 10] "dirt"] [:block [7 1 11] "dirt"] [:block [7 1 12] "dirt"]
+           [:block [6 0 11] "stone"] [:block [6 1 11] "stone"]
+           [:block [11 0 10] "dirt"] [:block [11 0 12] "dirt"] [:block [11 1 10] "dirt"] [:block [11 1 12] "dirt"]
+           [:block [9 0 9] "dirt"] [:block [9 0 13] "dirt"]]}]}

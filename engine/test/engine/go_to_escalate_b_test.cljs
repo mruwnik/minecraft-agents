@@ -92,15 +92,15 @@
                               (map #(let [pos (.-pos (.-args %))] [(.-x pos) (.-y pos) (.-z pos)]) (calls p "dig"))))
               "a dug block of its own leaves the ledger at once: a block built there later is not its own"))))))
 
-(deftest a-body-its-shelter-keeps-in-for-a-hostile-cuts-no-other-way-out
-  ;; Wicken #139: the take-back kept the night seal for a hostile, and clear-path cut the hut's dirt wall beside it
+(deftest a-body-its-shelter-keeps-in-for-a-hostile-cuts-another-way-out
+  ;; Wicken #139: the take-back kept the night seal for a hostile; Teasel #6: giving up there left the body shut in for ever
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [seal [{:cell [3 64 1] :item "dirt" :before "air" :job "j0" :purpose :shelter :state :placed}
                     {:cell [3 65 1] :item "dirt" :before "air" :job "j0" :purpose :shelter :state :placed}]
               {:keys [eng p]} (setup {:self {:pos {:x 2.5 :y 64 :z 0.5}} :blocks room
-                                      :entities [{:id 1 :name "zombie" :kind "hostile" :pos {:x 11.5 :y 64 :z 5.5}}]})
+                                      :entities [{:id 1 :name "zombie" :kind "hostile" :pos {:x 11.5 :y 64 :z 5.5} :visible true}]})
               out (atom :not-done)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent
                                           (recording-parent out 'jobs.movement.go-to {:pos [8 64 0] :range 1 :checks {:safe? '(always)}
@@ -108,8 +108,9 @@
           (ledger/write! (:store eng) seal)
           (core/submit! eng '(recording-parent) {})
           (await (tick-out! eng 1000))
-          (is (= [false :seal-kept] ((juxt :arrived :why) @out)) (pr-str @out))
-          (is (empty? (calls p "dig")) "neither the seal nor the wall beside it is dug"))))))
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (seq (calls p "dig")) "another wall is cut")
+          (is (= ["dirt" "dirt"] (mapv #(block p %) [[3 64 1] [3 65 1]])) "the seal the zombie would come in by stays"))))))
 
 (deftest leave-shelter-agrees-with-go-to-that-a-body-its-seal-keeps-in-is-not-out
   ;; Wicken #155: leave-shelter said "out of the shelter" while go-to gave up :seal-kept
@@ -118,8 +119,9 @@
       (fn ^:async t []
         (let [seal [{:cell [3 64 1] :item "dirt" :before "air" :job "j0" :purpose :shelter :state :placed}
                     {:cell [3 65 1] :item "dirt" :before "air" :job "j0" :purpose :shelter :state :placed}]
-              {:keys [eng p seen]} (setup {:self {:pos {:x 2.5 :y 64 :z 0.5}} :blocks room
-                                           :entities [{:id 1 :name "zombie" :kind "hostile" :pos {:x 11.5 :y 64 :z 5.5}}]})
+              ;; past the dawn grace: the seal is kept for the zombie, not held for it at first light
+              {:keys [eng p seen]} (setup {:self {:pos {:x 2.5 :y 64 :z 0.5}} :blocks room :time 9000
+                                           :entities [{:id 1 :name "zombie" :kind "hostile" :pos {:x 11.5 :y 64 :z 5.5} :visible true}]})
               out (atom :not-done)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.survival.leave-shelter {})))]
           (ledger/write! (:store eng) seal)

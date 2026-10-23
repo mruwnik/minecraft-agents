@@ -1020,6 +1020,23 @@
           (is (= [] @digs) "Juniper j658: the plug dug next to the skeleton let it in")
           (is (= #{:hostile-near} (set (map :reason (:open @out))))))))))
 
+(deftest a-retreat-plug-is-taken-back-from-a-skeleton-walled-off-by-seen-rock
+  ;; Teasel #6: a skeleton heard in a sealed cave kept the plug for ever. The body's pocket opens east by its plug; the
+  ;; skeleton is heard west, behind the pocket's wall, which stops its arrows whether the plug is open or not
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cells [[4 64 0] [4 65 0]]
+              pocket (zipmap ["2,64,0" "2,65,0" "3,64,1" "3,65,1" "3,64,-1" "3,65,-1" "3,66,0"] (repeat "stone"))
+              cave (apply dissoc (tu/box -6 63 -2 -2 67 2 "stone") ["-4,64,0" "-4,65,0"])
+              {:keys [eng p out digs] :as s} (setup {:self {:x 3.5 :y 64 :z 0.5} :blocks (merge (pillar-blocks cells) pocket cave)
+                                                     :entries (mapv #(entry % :purpose :retreat-plug) cells)})]
+          (fake/add-entity! p {:id 9 :name "skeleton" :kind "hostile" :pos {:x -3.5 :y 64 :z 0.5} :health 20})
+          (core/submit! eng '(recording-parent) {})
+          (await (ticks s eng 60))
+          (is (= (set cells) (set (map first @digs))))
+          (is (empty? (:open @out))))))))
+
 (deftest a-far-scaffold-block-beside-a-known-hostile-is-not-walked-to
   (async done
     (tu/run-async done

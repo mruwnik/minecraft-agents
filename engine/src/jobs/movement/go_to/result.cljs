@@ -125,7 +125,6 @@
            :goal-cut-off "the goal is cut off by a drop: no walkable way leads to it"
            :goal-on-magma "every cell in range is on magma or in a magma bubble column, where a route never ends"
            :start-enclosed "the body is shut in and nothing it can walk reaches out"
-           :seal-kept "the body is shut in by its own shelter, kept while a known hostile is near: no other way out is cut"
            :exhausted (if shut-in
                         "the body is shut in and this walk may not dig or build out"
                         "no walkable way leads there from here")

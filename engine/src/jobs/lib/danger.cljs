@@ -8,6 +8,7 @@
   The mobs of one query share block reads (reach/mob-lookup, reach/arrow-lookup: the cells the body has not seen are a way
   for the mob) and walk proofs (reach.proofs)."
   (:require [engine.args :as a]
+            [engine.game :as game]
             [engine.settings :as settings]
             [engine.entity-observations :as obs]
             [jobs.lib.body :as body]
@@ -166,17 +167,38 @@
 
 (def swell-range "Blocks within which a creeper swells and its blast reaches." 7)
 
+(defn sight-lookup
+  "A kind-at for the body's sight: what it has seen, a cell it has not seen blocking (arrow-kind-of: glass and leaves count as blocking too)."
+  [p]
+  (reach/seen-lookup p reach/arrow-kind-of :solid))
+
+(defn in-sight?
+  "Whether the body's eye (feet body-pos) has a clear line over sight-at to the middle or the top of cell [x y z]: a
+  hostile standing there would be seen (engine.senses/can-see?), so a heard one is not there."
+  [sight-at body-pos [x y z]]
+  (let [eye [(:x body-pos) (+ (:y body-pos) game/eye-height) (:z body-pos)]]
+    (boolean (some #(reach/ray-clear? sight-at eye [(+ x 0.5) (+ y %) (+ z 0.5)]) [0.5 1.5]))))
+
 (defn open-cell-from
-  "The cell [x y z] of a heard mob's rough spot (mob-pos) when it is not rock; else the first non-solid cell outward from the body
-  along the same line, up to half obs/near-band beyond it; nil when the line is rock to there (no mob stands in rock)."
-  [kind-at body-pos rough]
-  (let [dx (- (:x rough) (:x body-pos)) dz (- (:z rough) (:z body-pos))
-        len (js/Math.hypot dx dz)
-        cell-at (fn [d] (reach/cell-of (assoc rough :x (+ (:x body-pos) (* d (/ dx len))) :z (+ (:z body-pos) (* d (/ dz len))))))
-        open? (fn [[x y z]] (not (keyword-identical? :solid (kind-at x y z))))]
-    (if (zero? len)
-      (reach/cell-of rough)
-      (->> (range len (+ len (/ obs/near-band 2) 1) 1) (map cell-at) (filter open?) first))))
+  "The cell [x y z] a heard mob may stand in: from its rough spot (mob-pos) outward from the body along the same line,
+  up to half obs/near-band beyond it, the first cell that is not rock and that the body has no clear sight of (with
+  sight-at; nil: any open cell); nil when there is none (no mob stands in rock, and one in clear sight would be seen)."
+  ([kind-at body-pos rough] (open-cell-from kind-at nil body-pos rough))
+  ([kind-at sight-at body-pos rough]
+   (let [dx (- (:x rough) (:x body-pos)) dz (- (:z rough) (:z body-pos))
+         len (js/Math.hypot dx dz)
+         cell-at (fn [d] (reach/cell-of (assoc rough :x (+ (:x body-pos) (* d (/ dx len))) :z (+ (:z body-pos) (* d (/ dz len))))))
+         may? (fn [[x y z :as cell]] (and (not (keyword-identical? :solid (kind-at x y z)))
+                                          (not (and sight-at (in-sight? sight-at body-pos cell)))))]
+     (if (zero? len)
+       (reach/cell-of rough)
+       (->> (range len (+ len (/ obs/near-band 2) 1) 1) (map cell-at) (filter may?) first)))))
+
+(defn heard-pos
+  "Where a heard-only mob may be for a way or a line of fire: the feet of open-cell-from's cell, nil when there is none."
+  [p kind-at sight-at e]
+  (when-let [[x y z] (open-cell-from kind-at sight-at (u/pos-of (.-pos (.self p))) (mob-pos p e))]
+    {:x (+ x 0.5) :y y :z (+ z 0.5)}))
 
 (defn surfaced
   "Cell [x y z] of mob e when it swims (a drowned): raised to the top of the water column it stands in, as it surfaces to
@@ -189,16 +211,18 @@
 (defn danger-in?
   "danger? reading blocks through kind-at (shared by the mobs of one query) and, with pr, sharing walk proofs. opts
   :arrow-at is the query's shared arrow lookup (reach/arrow-lookup p); without it a ranged mob builds its own.
+  :sight-at (sight-lookup) places a heard mob at open-cell-from's cell, not rock and not in the body's clear sight, where it
+  would be seen (none: no danger); without it a heard ranged mob is taken at its rough spot.
   :ignore-heard? leaves out every mob the body has not seen (a muted heard mob, jobs.lib.body/heard-muted?).
   :watched ({id blocks-off-when-watched}) leaves out those mobs while they stay beyond answered-within.
   :way? false takes a melee mob without a way to the body (on a pillar or behind a door) as one: it stands where the body's walk will land.
   :hit-ids (hit-ids) are melee mobs that hurt the body lately: each known one is a danger, seen or not, whatever the way test says.
-  A melee mob heard but not seen counts as seen (by its rough spot) outside or in a large cave; in closed quarters
+  A melee mob heard but not seen counts as seen (by open-cell-from's cell) outside or in a large cave; in closed quarters
   (closed-quarters?) it is one only when heard close (heard-close?) and it could stand beside the body that way
   (beside-toward?): a heard mob in clear, lit sight is already seen (engine.perception), so a look would find nothing.
   A fusing creeper (hissing, seen or heard) within swell-range is always one; beyond it the usual tests apply."
   ([p kind-at e opts] (danger-in? p kind-at nil e opts))
-  ([p kind-at pr e {:keys [sight? arrow-at ignore-heard? watched way? hit-ids] :or {sight? true way? true}}]
+  ([p kind-at pr e {:keys [sight? arrow-at sight-at ignore-heard? watched way? hit-ids] :or {sight? true way? true}}]
    (cond
      (and (contains? hit-ids (.-id e)) (not (combat/ranged? e))) true
      (and (contains? watched (.-id e)) (> (mob-distance p e) (answered-within (get watched (.-id e))))) false
@@ -210,13 +234,14 @@
      (combat/ranged? e)
      (and (or (not sight?) (seen-only? e) (<= (mob-distance p e) obs/near-band))
           (or (not sight?) (seen-only? e) (not (closed-quarters? kind-at (reach/cell-of (u/pos-of (.-pos (.self p)))))))
-          (reach/line-of-fire? (or arrow-at (reach/arrow-lookup p)) (mob-pos p e) (u/pos-of (.-pos (.self p)))))
+          (when-let [at (if (or (seen-only? e) (not sight-at)) (mob-pos p e) (heard-pos p kind-at sight-at e))]
+            (reach/line-of-fire? (or arrow-at (reach/arrow-lookup p)) at (u/pos-of (.-pos (.self p))))))
      :else
      (and (or (seen-mob? e) (not sight?))
           (or (not way?)
               (let [from (u/pos-of (.-pos (.self p)))
                     body (reach/cell-of from)
-                    mob (if (seen-only? e) (surfaced kind-at e (reach/cell-of (mob-pos p e))) (open-cell-from kind-at from (mob-pos p e)))]
+                    mob (if (seen-only? e) (surfaced kind-at e (reach/cell-of (mob-pos p e))) (open-cell-from kind-at sight-at from (mob-pos p e)))]
                 (or (and (heard-close? p e)
                          (beside-toward? kind-at body (:direction (obs/rough-hearing from (u/pos-of (.-pos e))))))
                     (and mob
@@ -230,6 +255,17 @@
   have been sensed (heard only: see danger-in?)."
   ([p e] (danger? p e {}))
   ([p e opts] (danger-in? p (reach/mob-lookup p) e opts)))
+
+(defn danger-opened?
+  "Whether a known hostile within radius (ranged ones within ranged-radius) would be a real danger (danger-in?) to the
+  body were the cells ([x y z]) open: a way through them to the body, or a line of fire through them. A heard mob is
+  placed by what the body sees now (open-cell-from): it is not in a cell the cells' opening would show."
+  [p radius ranged-radius cells]
+  (let [open (set cells)
+        over (fn [look] (fn [x y z] (if (contains? open [x y z]) :open (look x y z))))
+        kind-at (over (reach/mob-lookup p))
+        opts {:arrow-at (over (reach/arrow-lookup p)) :sight-at (sight-lookup p)}]
+    (boolean (some #(danger-in? p kind-at % opts) (known-hostiles p radius {:ranged-radius ranged-radius})))))
 
 (defn query-proofs [p] (proofs/proofs (reach/cell-of (u/pos-of (.-pos (.self p))))))
 

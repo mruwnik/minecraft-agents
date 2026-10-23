@@ -23,16 +23,19 @@
 (defn may-dig-fn
   "(may-dig? cell): no other owner's zone, claim or plan footprint refuses a dig there (jobs.lib.tidy/refusal), and
   when spare? (default: the access/spare-own-builds setting) no plan this body made covers it and, when pens? (default spare?), it is
-  not the wall of the own pen holding livestock the body stands in (jobs.lib.own-pen)."
+  not the wall of the own pen holding livestock the body stands in (jobs.lib.own-pen), nor a shelter block the call keeps
+  for a hostile (mem :seal-kept)."
   ([c] (may-dig-fn c (access/spare-own-builds)))
   ([c spare?] (may-dig-fn c spare? spare?))
   ([c spare? pens?]
    (let [own-plan (own-plan-fn c)
          pen-wall? (if pens? (own-pen/wall? c (end/feet-cell c)) (constantly false))
          ;; tidy/refusal's input read once: a route search asks of hundreds of cells
-         rules (delay (access/rules-input c {:ignore-zones? false}))]
+         rules (delay (access/rules-input c {:ignore-zones? false}))
+         kept (:seal-kept (ctx/mem c) #{})]
      (fn [cell]
-       (and (or (not spare?) (nil? (own-plan cell)))
+       (and (not (contains? kept (vec cell)))
+            (or (not spare?) (nil? (own-plan cell)))
             (not (pen-wall? cell))
             (or (boolean (:ignore-zones? (:args c))) (nil? (access/trespass-refusal @rules :dig (zipmap [:x :y :z] cell)))))))))
 

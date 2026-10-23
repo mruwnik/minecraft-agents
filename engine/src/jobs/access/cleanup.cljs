@@ -83,7 +83,7 @@
   With :of :orphans, scaffold out of dig reach that jobs.lib.ledger/walk-blocker refuses (far below, near a death, roofed, submerged) is not walked to (held :walk-blocked). A walk leg also stops while a mob the body fled from within
   jobs.lib.threats/fled-memory-ms was last known within jobs.lib.threats/fled-radius of the cell or the body (:danger).
 
-  A shelter's block (purpose :shelter or :retreat-plug) stays while a known hostile is near (:hostile-near) and while it opens onto a dark cell (:night; setting jobs.lib.shelter.keep ::at-night?): a neighbour that is not solid and not lit by what the body knows (an unseen one is guessed by the sky), whatever the hour, unless the body stands in the light outside any roof (then the dark inside an emptied shelter is not its use): it keeps the hostile out of the body's refuge. A run that removed a block and leaves only :night cells holds none of them (the light of the opened side may not have reached the body yet).
+  A shelter's block (purpose :shelter or :retreat-plug) stays while a known hostile could reach the body or shoot it were the shelter's blocks open (:hostile-near) and while it opens onto a dark cell (:night; setting jobs.lib.shelter.keep ::at-night?): a neighbour that is not solid and not lit by what the body knows (an unseen one is guessed by the sky), whatever the hour, unless the body stands in the light outside any roof (then the dark inside an emptied shelter is not its use): it keeps the hostile out of the body's refuge. A run that removed a block and leaves only :night cells holds none of them (the light of the opened side may not have reached the body yet).
 
   A block whose walk go-to prices over ::worth-hp for seen lava near it (jobs.lib.lava-risk/hp) is left open (:lava-near: no walk, no dig) unless :accept names :lava-adjacent: a tidy-up is no reason to go near lava.
 
@@ -136,9 +136,11 @@
 (defn danger-radius [] (settings/get settings ::danger-radius))
 
 (defn hostile-near?
-  "Whether a known hostile (heard or seen) is within the longest follow range (ranged ones within the danger ranged radius)."
-  [p]
-  (boolean (seq (danger-q/known-hostiles p threats/max-follow-range {:ranged-radius (danger-q/ranged-radius)}))))
+  "Whether a known hostile (heard or seen) within the longest follow range (ranged ones within the danger ranged radius)
+  could reach the body or shoot it were the shelter blocks of ledger l open (danger-q/danger-opened?): one walled off
+  by rock the body has seen is no reason to keep the shelter."
+  [p l]
+  (danger-q/danger-opened? p threats/max-follow-range (danger-q/ranged-radius) (keep #(when (stay/shelter-purposes (:purpose %)) (:cell %)) l)))
 
 (defn danger-ahead?
   "Whether walking to cell is unsafe: a known hostile (seen or heard) near the cell, or a mob the body fled from lately
@@ -180,7 +182,7 @@
             :can-clear? #(not (tools/needs-tool-to-clear? (:primitives c) %))
             :lava-near? (memoize #(> (lava-risk/hp (:primitives c) %) (worth-hp)))
             :bucket? (boolean (some #(= "bucket" (:name %)) (u/inventory (:primitives c))))
-            :hostile-near? (hostile-near? (:primitives c)) :opens-dark? (stay/opens-dark? (:primitives c)) :keep-at-night? (stay/at-night?)
+            :hostile-near? (and (some (comp stay/shelter-purposes :purpose) entries) (hostile-near? (:primitives c) l)) :opens-dark? (stay/opens-dark? (:primitives c)) :keep-at-night? (stay/at-night?)
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach (dig-reach)
             :spare-own-builds (access/spare-own-builds)
             :walk-blocker (when (= :orphans (:of (:args c))) (walk-blocker-of c l))

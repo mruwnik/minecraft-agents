@@ -250,9 +250,9 @@
   "A goal the walk could not reach (:goal-enclosed, :goal-cut-off, or a search that ran out of land: :exhausted, :out-of-sight, :ladder-gap, :start-enclosed)
   with blocks of the body's own ledger within ledger/seal-clear-radius of the goal (a dig-in's seal beside a gate, a plug in a stair
   mouth) or of its feet (a retreat's seal that shuts the body in, once the hostile is gone): one jobs.access.cleanup
-  child takes them back: :again, so the walk is planned again. A body shut in that the cleanup left in for a known hostile
-  (an open cell held :hostile-near or :danger: the shelter keeps the hostile out) gives up :seal-kept instead: no other
-  way out is cut while the shelter holds."
+  child takes them back: :again, so the walk is planned again. The cells the cleanup left for a known hostile (held
+  :hostile-near or :danger: the shelter keeps the hostile out) are kept (mem :seal-kept): no escalation of the call cuts
+  them (holes/may-dig-fn), so the way out it prices goes another side."
   [c pos result]
   (when (and (ways/way? c :clear-seal) (#{:goal-enclosed :goal-cut-off :exhausted :out-of-sight :ladder-gap :start-enclosed} (some-> (:reason result) keyword)) (not (:seal-cleared (ctx/mem c))))
     (let [at (fn [[x y z]] {:pos {:x (js/Math.floor x) :y (js/Math.floor y) :z (js/Math.floor z)} :radius ledger/seal-clear-radius})
@@ -261,10 +261,8 @@
       (when near
         (ctx/update-mem! c assoc :seal-cleared true)
         (let [r (await (ctx/call c :seal-cleanup 'jobs.access.cleanup {:of :all :near near :checks {:fit? '(always)}}))]
-          (if (and (some (comp #{:hostile-near :danger} :reason) (get-in r [:data :open]))
-                   (escape/walk-enclosed? c))
-            (end/give-up! c pos {:status :no-path :reason :seal-kept})
-            :again))))))
+          (ctx/update-mem! c assoc :seal-kept (into #{} (keep #(when (#{:hostile-near :danger} (:reason %)) (:cell %))) (get-in r [:data :open])))
+          :again)))))
 
 (defn budget-s
   "Seconds the call chain has left (ctx/left: job time, wall time, deadline), ##Inf when nothing bounds it."
