@@ -184,7 +184,7 @@
 
 (deftest a-hungry-body-affords-less-risk-than-a-fed-one-unless-it-cannot-heal
   (let [status-for (fn [food inventory] (let [c (-> (ready-test/ctx-of (assoc dark-spot-world :self {:pos inside :health 20 :food food} :inventory inventory))
-                                                    (with-death {:x 80 :y 64 :z 5} "witch" 5040000))]
+                                                    (with-death {:x 80 :y 64 :z 5} "skeleton" 5040000))]
                                           (first (risk/status c far-goal))))
         bread [{:name "bread" :count 3}]]
     (is (= :ok (status-for 20 [])))
@@ -193,7 +193,7 @@
 
 (deftest a-goal-worth-enough-lets-a-walk-take-a-risk-over-the-share-of-health
   (let [status-for (fn [worth] (let [c (-> (ready-test/ctx-of (assoc dark-spot-world :self {:pos inside :health 20 :food 5} :inventory [{:name "bread" :count 3}]))
-                                           (with-death {:x 80 :y 64 :z 5} "witch" 5040000)
+                                           (with-death {:x 80 :y 64 :z 5} "skeleton" 5040000)
                                            (assoc-in [:args :worth] worth))]
                                  (first (risk/status c far-goal))))]
     (is (= :later (status-for nil)) "no worth said: the share of health decides")
