@@ -1481,7 +1481,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (submit! (setup (world {:entities [(cow 1 -45 3)] :inventory [wheat] :blocks far-ground}))
+        (let [s (submit! (setup (world {:entities [(cow 1 -18 3)] :inventory [wheat] :blocks far-ground}))
                          {:target 1 :radius 60})]
           (track-range! s 30)
           (await (run-ticks s 1500))

@@ -7,6 +7,7 @@
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.animals :as animals]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [engine.ctx :as ctx]
             [jobs.lib.pen :as pen]
             [jobs.lib.pen-read :as pen-read]
@@ -148,9 +149,11 @@
   (let [{:keys [mob radius]} (:args c)
         [origin _] (range-from-origin c)
         seen (count (animals/herd (:primitives c) mob 24))
-        e (await (ctx/call c :explore 'jobs.explore.search
-                           (child/search-args {:target mob :count (inc seen) :center origin :max-distance (min 128 (max 1 (long radius)))
-                                               :max-legs 12 :takeable true})))]
+        worth (- (cost/animal-worth mob) (cost/trip))
+        e (when (pos? worth)
+            (await (ctx/call c :explore 'jobs.explore.search
+                             (child/search-args {:target mob :count (inc seen) :center origin :max-distance (max 1 (long radius))
+                                                 :worth worth :takeable true}))))]
     (when-not (= :continue e) (ctx/update-mem! c assoc :searched true))
     :continue))
 

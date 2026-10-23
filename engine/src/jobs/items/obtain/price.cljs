@@ -55,10 +55,10 @@
          (reduce + 0 (map #(death-s c (or (:pos (seen-of c %)) (u/self-pos c)) (below? c %)) needs))))))
 
 (defn search-s
-  "A search for an unseen raw need: the seconds it may spend and the death risked where the body stands."
+  "A search for an unseen raw need: a trip (each walk of it is priced against the need's worth as it goes) and the death risked where the body stands."
   [c names n]
   (when (and (gathers? c) (explorable? c names n))
-    (+ (get-in (explore-opts c) [:spend :job-time] 0) (death-s c (u/self-pos c) false))))
+    (+ (cost/trip) (death-s c (u/self-pos c) false))))
 
 (defn price-of
   "Seconds getting the call's shortfall of its :item or :any-of costs the body: 0 when carried, else the cheapest way that would

@@ -4,6 +4,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [jobs.lib.need :as need]
             [jobs.lib.next-call :as next-call]
             [jobs.lib.pace :as pace]
@@ -30,7 +31,7 @@
   A :fence needs :lead and :box or :uuid need :lure; either with the other way is never startable (:bad-way). Without
   :mob or a destination it can never start (:no-mob, :no-destination). Fetching what the way needs (a lead, the food) is
   the child's. A child that ends with no animal to take (:no-animal, :none; not with :uuid) is followed by up to 3
-  jobs.explore.search calls for the mob, then called again, its :radius widened to reach what was found.
+  jobs.explore.search calls for the mob (priced by cost/animal-worth), then called again, its :radius widened to reach what was found.
 
   Result: the child's. Both ways give {:end :animal :animal-at :at :reason :text}; :end is :tie (tied to the post), :free
   (let go at :pos; lead only), :led (lure only: the animal stands at the spot and still follows) or :short (lure with :box: it was led there but none of the kind stands in the box at the end; ends nothing-possible :animal-outside); lead adds :still-led
@@ -123,9 +124,12 @@
   "No animal in reach: walk and look for one (jobs.explore.search; one in view beyond :radius counts). :continue while it
   runs, :again once it found one (the child is called again), else nil."
   [c]
-  (let [e (await (ctx/call c :explore 'jobs.explore.search
-                           (child/search-args {:target (:mob (:args c)) :count 1 :max-legs 12 :takeable true})))]
+  (let [worth (- (cost/animal-worth (:mob (:args c))) (cost/trip))
+        e (when (pos? worth)
+            (await (ctx/call c :explore 'jobs.explore.search
+                             (child/search-args {:target (:mob (:args c)) :count 1 :worth worth :takeable true}))))]
     (cond
+      (nil? e) (do (ctx/update-mem! c assoc :searches max-searches) nil)
       (= :continue e) :continue
       (= :done (:kind e)) (let [me (u/self-pos c)
                                 far (apply max 0 (keep #(some->> (:pos %) (zipmap [:x :y :z]) (u/flat-dist me)) (:found (:data e))))]

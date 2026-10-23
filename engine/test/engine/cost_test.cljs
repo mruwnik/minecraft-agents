@@ -419,3 +419,18 @@
     (is (> (chance fist {:cells [{:x 0 :y 64 :z 0 :s 30}]} {:mob "zombie" :weight 1 :reach (near-x 0)})
            (chance fist {:cells [{:x 0 :y 64 :z 0 :s 3}]} {:mob "zombie" :weight 1 :reach (near-x 0)}))
         "a spot held longer within its reach")))
+(deftest a-torch-fetch-costs-its-torches-a-trip-and-a-source-walk-with-the-death-it-risks
+  (let [body {:respawn {:x 0 :y 64 :z 0} :level 3}
+        at {:x 100 :y 64 :z 0}
+        fetch (fn [m] (cost/torch-fetch-cost body (merge {:n 1 :route {:night? false} :at at} m)))]
+    (is (> (fetch {:n 4}) (fetch {:n 1})) "more torches cost more")
+    (is (> (fetch {:distance 100}) (fetch {})) "a known source adds its walk there and back")
+    (is (> (fetch {:distance 100 :route {:night? true}}) (fetch {:distance 100})) "night adds the likelier death")))
+
+
+(deftest a-find-is-worth-its-count-less-a-trip-and-an-animal-its-meat
+  (let [body {:level 0 :carried 0}]
+    (is (= (- (* 3 (cost/worth-to body ["oak_log"] nil)) (cost/trip)) (cost/find-worth body ["oak_log"] nil 3)))
+    (is (< (cost/find-worth body ["oak_log"] nil 1) (cost/find-worth body ["oak_log"] nil 3)))
+    (is (< (cost/animal-worth "horse") (cost/animal-worth "cow")) "a cow is worth its beef, a kind with no meat the unknown item")
+    (is (= (cost/animal-worth "cow") (cost/animal-worth "sheep")) "mutton as dear as beef")))

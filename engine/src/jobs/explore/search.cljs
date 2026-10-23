@@ -98,6 +98,7 @@
    :patch {:doc "look for a patch of ground instead of named things: {:w :h :range :depth :limit :max-step :plan :farmland?} as jobs.lib.patch scans (jobs.farm.find-spot builds it); the search ends at the first look round with one, and :found is then [{:what \"patch\" :pos :spots}]" :spec map? :default nil}
    :forage {:doc "whether the search is for food (the body hunts or picks it to eat); nil: every target is a food animal or food block. A search for wool or leather from a food animal says false" :spec boolean? :default nil}
    :use-notes {:doc "targets noted (by any body) within the max-distance setting count as found" :spec boolean? :default true}
+   :within {:doc "blocks (XZ) from the origin a leg may go at most, a caller's own scope (a site, a pen's radius); nil: only what :worth pays for" :spec (a/num-in 1 nil) :default nil}
    :worth {:doc "seconds the find is worth: before each walk its price (jobs.lib.cost/leg-price of go-to's quote, the body as it is now) is weighed against what is left of it after the walks so far; the search ends :price at the first that costs more, and ::max-legs does not bind. nil: unpriced" :spec (a/num-in 0 nil) :default nil}})
 
 (a/defargs settings
@@ -125,11 +126,12 @@
    ::roam-min-health {:default 10 :doc "A search that is not for food waits :low-health below this health while the body can not heal (cannot-heal?: food low, nothing edible carried), so a hurt, foodless body does not roam for wool or wood." :spec (a/num-in 0 20)}
    ::stand-cap {:default 48 :doc "Stand cells one choice reads; past it :more says candidates are left for the next step." :spec (a/int-in 0 nil)}})
 (defn distance-limit
-  "How far (XZ) from the origin legs go and findings count: the ::max-distance setting, or with :worth cost/search-radius of it."
+  "How far (XZ) from the origin legs go and findings count: the ::max-distance setting, or with :worth cost/search-radius of it (at most :within)."
   [c]
-  (if-let [worth (:worth (:args c))]
-    (js/Math.ceil (cost/search-radius worth (settings/get settings ::spacing)))
-    (settings/get settings ::max-distance)))
+  (let [{:keys [worth within]} (:args c)]
+    (if worth
+      (min (js/Math.ceil (cost/search-radius worth (settings/get settings ::spacing))) (or within ##Inf))
+      (settings/get settings ::max-distance))))
 (defn time-s [] (settings/get settings ::job-time-s))
 (defn max-failed-in-row [] (settings/get settings ::max-failed-in-row))
 (defn wait-ms [] (settings/get settings ::wait-ms))

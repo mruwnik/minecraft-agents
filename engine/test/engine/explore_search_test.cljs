@@ -356,6 +356,15 @@
           (is (= 2 (get-in e [:coverage :legs])) "two 16-block walks fit in 12 s, a third does not")
           (is (re-find #"the next walk costs \d+ s, more than the \d+ s left" (:text e))))))))
 
+(deftest a-cheap-find-far-off-is-not-searched-for-and-a-dear-one-is
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cheap (await (search! {:target "diamond_block" :worth 5 :max-distance 50} {:blocks diamond}))
+              dear (await (search! {:target "diamond_block" :worth 600 :max-distance 50} {:blocks diamond}))]
+          (is (nil? (found-of cheap)) "28 blocks off is past what 5 s pays for")
+          (is (= [{:what "diamond_block" :pos [28 64 3]}] (:found (found-of dear))))))))) 
+
 (defn ^:async search-quoted!
   "A priced search whose go-to quotes are answered by (quote-for n args) for the nth quote asked; {:state s :asked [args ...]}."
   [quote-for]

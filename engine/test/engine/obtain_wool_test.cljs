@@ -208,7 +208,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:item "leather" :count 1 :explore true}
+        (let [s (await (scenario {:item "leather" :count 1 :explore true :worth 500}
                                  {:inventory h/sword :entities [(cow 1 30) (cow 2 31) (cow 3 32)]} 150))]
           (is (seq (filter #(= :obtain.exploring (:kind %)) @(:seen s))) "a search for the cow began")
           (is (seq (attacked s)) "the cow found was attacked"))))))

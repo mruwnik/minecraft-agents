@@ -53,9 +53,9 @@
   :field Last: it walks to the nearest zone or plan of its own it has not visited in this job and cuts and replants the ripe wheat there
          (jobs.farm.harvest); the wheat is baked next (:bake).
   Then, once per job (:explore, default on; a starving body again after foods/::starving-rest-ms) it searches for food animals and crops (jobs.explore.search, the
-  ::explore setting; not while the search would wait (dark sky, danger near)) and goes on if it found some (an animal only a note gave, with none in sight, is walked toward once the search found nothing, the cheapest note at any distance, under the same checks as the search, each note once a job; a hungry body under rock climbs out first, jobs.lib.surface-up); at ::eat-bad-food (6) or below it then eats harmful food carried (rotten
+  priced by what food is worth the body (food-animals/search-benefit); not while the search would wait (dark sky, danger near)) and goes on if it found some (an animal only a note gave, with none in sight, is walked toward once the search found nothing, the cheapest note at any distance, under the same checks as the search, each note once a job; a hungry body under rock climbs out first, jobs.lib.surface-up); at ::eat-bad-food (6) or below it then eats harmful food carried (rotten
   flesh, with :allow-bad). Still nothing: it ends nothing-possible :no-food (the text says what was searched, the nearest known source) and writes
-  :hungry, which widens the next search; the hungry trigger rests after that ending (its :rest-s).
+  :hungry, which widens the hunt radius; the hungry trigger rests after that ending (its :rest-s).
   :eat false: only gathers, done when the pack holds :carry food points (jobs.survival.eat fetches this way; a job cannot call its own caller).
   :carry n (default the 3-day reserve, 60 points; 0: only feed): a fed body also takes the ways until the pack holds n food points, else ends nothing-possible :no-carry.
   A fed body (not hungry, nothing to top up with, no :carry short) is done at once.
@@ -76,7 +76,7 @@
 (a/defargs args
   {:food {:doc "hungry below this much food (of 20)" :spec (a/num-in 0 20) :default foods/default-food}
    :health {:doc "below this health eat up to a full bar" :spec (a/num-in 0 20) :default foods/default-health}
-   :explore {:doc "with nothing known or seen, walk and look for food animals and crops once per job (a starving body again after foods/::starving-rest-ms; a hungry body under rock first climbs out; a starving one searches there): false, true (the ::explore setting) or a map of the search's options over it (:max-distance, :max-legs, :spend; not :radius)" :spec (a/or-of boolean? map?) :default true}
+   :explore {:doc "with nothing known or seen, walk and look for food animals and crops once per job (a starving body again after foods/::starving-rest-ms; a hungry body under rock first climbs out; a starving one searches there): false, true (a search priced by what food is worth the body now) or a map of the search's options over it (:max-distance, :spend; not :radius)" :spec (a/or-of boolean? map?) :default true}
    :carry {:doc "carry food worth this many hunger points: a fed body takes the ways below until the pack holds it (0: only feed)" :spec (a/num-in 0 nil) :default food-cost/reserve-points}
    :eat {:doc "eat what is carried and what the ways bring: false only gathers (the way jobs.survival.eat fetches: it is the caller, and a job cannot call its own caller), done when the pack holds :carry food points" :spec boolean? :default true}
    :ignore-zones? :shared})
@@ -100,7 +100,6 @@
   {::hunt-radius {:default 24 :doc "How far to look for animals and wild crops, in blocks (widened by recent give-ups)." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 1800 :doc "Seconds one attempt at getting fed may take: a hunt, a search, a cook." :spec (a/num-in 0 nil)}
    ::drop-radius {:default 8 :doc "Blocks around the body in which dropped food is picked up." :spec (a/int-in 0 nil)}
-   ::explore {:default {:max-distance 64 :max-legs 12 :spend {:job-time 120}} :doc "jobs.explore.search options of the search for food (:explore true)." :spec map?}
    ::kept-lifted-below {:default -1 :doc "At this much food or less, with no food carried, the last adults of a kind (kept for breeding) are hunted too; -1 (default) never." :spec (a/int-in -1 20)}
    ::eat-bad-food {:default 6 :doc "At this much food or less the last resort eats harmful food carried (rotten flesh); above it harmful food is not food." :spec (a/num-in 0 20)}
    ::max-chases {:default 3 :doc "Chases of one animal in a call before it is passed over as tried: a missed chase is repeated, a fleeing rabbit is chased again." :spec (a/int-in 1 nil)}
@@ -341,11 +340,6 @@
   [mem starving? now rest-ms]
   (boolean (and (:explored mem) (not= "started" (:explored mem)) (not (and starving? (>= (- now (:explored-at mem 0)) rest-ms))))))
 
-(def search-max-distance "The largest :max-distance jobs.explore.search accepts." 128)
-
-(defn widen-explore [opts k]
-  (-> opts (update :max-distance #(some-> % (* k) (min search-max-distance))) (update :max-legs #(some-> % (* k))) (update-in [:spend :job-time] #(some-> % (* k)))))
-
 (def noted-range "Blocks from an animal another body noted that the walk toward it ends; its place is then looked at." 12)
 (def noted-near-range "The range of the second walk, when the first ended in range with the animal still not in sight (behind rock or a ledge)." 3)
 
@@ -407,11 +401,14 @@
             (ctx/update-mem! c #(-> % (assoc :walk-to (:pos noted) :walk-worth (animals/noted-benefit c noted)) (update :noted-walked (fnil conj []) (:id noted)))))
           (await (walk-to-noted! c)))
       done? nil
+      (not (pos? (animals/search-benefit c)))
+      (do (ctx/update-mem! c assoc :explored "not searched: food is worth no walk") nil)
       :else
       (do
         (when-not (= "started" (:explored (ctx/mem c)))
           (ctx/update-mem! c #(-> % (assoc :explored "started" :searched true :explored-at (ctx/now c) :explored-spared (count (spared-uuids c))) (update :explore-runs (fnil inc 0)))))
-        (let [opts (widen-explore (merge (settings/get settings ::explore) (when (map? e) e)) (widen c))
+        (let [worth (animals/search-benefit c)
+              opts (merge {:worth worth :spend {:job-time worth}} (when (map? e) e))
               e (await (child/run!* c :explore 'jobs.explore.search
                                     (child/search-args (assoc opts :skip-ids (vec (spared-uuids c)) :target (vec (concat (sort animals/food-animals) (keys crops/food-ripe-age) (keys crops/wild-food)))))
                                     {:max-calls 1}))]

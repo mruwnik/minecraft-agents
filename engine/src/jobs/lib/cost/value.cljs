@@ -39,6 +39,7 @@
   item. A row [regex price :per-stack] prices the whole stack, not each item."
   (:require [engine.args :as a]
             ["minecraft-data" :as minecraft-data]
+            [clojure.set :as set]
             [clojure.string :as str]
             [jobs.lib.cost.table :as tbl]
             [jobs.lib.cost.fight :as fight]
@@ -251,6 +252,13 @@
   "Seconds reaching food is worth to a body with `food` points: rising as the bar falls, 0 from ::food-worth-from up."
   [food]
   (* (settings/get settings ::food-worth-per-point) (max 0 (- (settings/get settings ::food-worth-from) food))))
+
+(def expected-drops "Meat items a kill is counted to give." 2)
+
+(defn animal-worth
+  "Seconds an animal of kind `mob` is worth: the expected-drops of its raw meat (the item-value of the animal's own name for a kind with none)."
+  [mob]
+  (:value (item-value [{:name (get (set/map-invert game/meat-animal) mob mob) :count expected-drops}])))
 
 (defn per-climb [] (settings/get settings ::per-climb))
 

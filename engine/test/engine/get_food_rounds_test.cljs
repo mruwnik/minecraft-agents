@@ -19,6 +19,7 @@
             [engine.triggers :as triggers]
             [jobs.survival.get-food.report :as report]
             [jobs.lib.child :as child]
+            [jobs.lib.food-animals :as animals]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.survival.get-food :as get-food]))
@@ -737,7 +738,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:time 6000 :blocks {"0,66,0" "stone"} :self {:food 8 :health 10}} :step-ms 5)]
-          (await (one-round! eng {}))
+          (await (one-round! eng {:explore {:max-distance 20}}))
           (is (= 1 (count (searches seen))) "no wall and no stand on free ground counts as out (surface-up): the search runs from there, once"))))))
 
 (deftest a-starving-body-underground-explores-the-caves
@@ -821,8 +822,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {:self {:food 10 :health 2} :time 6000} :step-ms 5)]
-          (await (one-round! eng {}))
+        (let [{:keys [eng seen]} (setup {:self {:food 9 :health 2} :time 6000} :step-ms 5)]
+          (await (one-round! eng {:explore {:max-distance 20}}))
           (is (= 1 (count (searches seen)))))))))
 
 
@@ -1152,6 +1153,12 @@
           (is (= 1 (count (searches seen))) "searched though it gave up a minute ago")
           (is (= :no-carry (:reason (first (ended seen))))))))))
 
+(deftest a-search-for-food-is-worth-what-reaching-food-is-to-the-body
+  (let [benefit (fn [food carry] (let [{:keys [p]} (setup {:self {:food food}})] (animals/search-benefit {:primitives p :args {:carry carry}})))]
+    (is (zero? (benefit 20 0)) "fed and asked to carry nothing: no walk is worth it")
+    (is (pos? (benefit 20 60)) "fed but short of the 3-day reserve")
+    (is (< (benefit 8 0) (benefit 2 0)) "the hungrier, the more a walk to food is worth")))
+
 (deftest explore-is-done-once-per-job-unless-starving-and-rested
   (is (false? (get-food/explore-done? nil false 100 60000)))
   (is (true? (get-food/explore-done? {:explored "x" :explored-at 0} false 999999 60000)))
@@ -1163,11 +1170,6 @@
   (let [{:keys [p]} (setup {:self {:food 15 :health 6.5}} :step-ms 5)
         c {:primitives p :args {}}]
     (is (get-food/starving? c) "health below 7 and hungry")))
-
-(deftest the-widened-search-stays-within-what-explore-search-accepts
-  (let [opts (get-food/widen-explore {:max-distance 64 :max-legs 12 :spend {:job-time 120}} get-food/widen-max)]
-    (is (= 128 (:max-distance opts)))
-    (is (= 36 (:max-legs opts)))))
 
 (def pond
   (merge (into {} (for [x (range 0 9) z (range 0 9) y [62 63]] [(str x "," y "," z) "water"]))

@@ -40,18 +40,26 @@
   (/ (:cost (cost/walk-cost {:distance (u/flat-dist me (zipmap [:x :y :z] (:pos n)))}))
      (max 1 (or (foods/points (meat (:what n))) 1))))
 
-(def expected-drops "Meat items a kill is counted to give." 2)
 
-(defn noted-benefit
-  "Seconds the meat of the noted animal n is worth the body: the hunger worth of reaching food, or the points of the food
+(defn meat-benefit
+  "Seconds the meat item is worth the body: the hunger worth of reaching food, or the points of the food
   reserve (:carry, default the 3-day one) the pack lacks that the meat would fill, at cost/food-point-worth each."
-  [c n]
+  [c item]
   (let [p (:primitives c)
-        item (meat (:what n))
-        gain (* expected-drops (or (foods/points item) 1))
+        gain (* cost/expected-drops (or (foods/points item) 1))
         short (max 0 (- (:carry (:args c) food-cost/reserve-points) (foods/stock-points (u/inventory p))))
         stock (* (cost/food-point-worth) (min gain short))]
     (max (cost/food-worth (.-food (.self p))) stock)))
+
+(defn noted-benefit
+  "Seconds the meat of the noted animal n is worth the body (meat-benefit)."
+  [c n]
+  (meat-benefit c (meat (:what n))))
+
+(defn search-benefit
+  "Seconds a search for food is worth the body: the least meat-benefit among the food animals, a find being any of them."
+  [c]
+  (apply min (map #(meat-benefit c %) (vals meat))))
 
 (defn noted-cost
   "Seconds walking to the noted animal n costs: the walk plus the death the route risks past the known threats (threats/route-death-cost)."

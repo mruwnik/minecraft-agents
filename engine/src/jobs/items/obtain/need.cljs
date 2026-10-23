@@ -5,7 +5,7 @@
             [engine.ctx :as ctx]
             [engine.game :as game]
             [jobs.items.get-tool :as get-tool]
-            [jobs.items.obtain.base :refer [explore-setting gathers? makes? names-of way?]]
+            [jobs.items.obtain.base :refer [gathers? makes? names-of way?]]
             [jobs.items.obtain.chest :refer [candidates]]
             [jobs.items.obtain.plan :refer [craft-plan gather-plan]]
             [jobs.items.obtain.seen :refer [gather-slot seen-of with-block]]
@@ -65,24 +65,21 @@
                         (or (composite/startable? s) (lights-itself? c (contract/status-cause s))))))))))
 
 (defn priced-search
-  "The search options of a :priced call: what is wanted is worth (jobs.lib.cost/worth-to) to the body here as the search's
-  :worth less a trip, which prices each walk, and that many seconds to spend. nil when the worth pays for no more than the trip."
+  "The search options: the :worth arg, else what is wanted (:count of it) is worth (jobs.lib.cost/find-worth) to the body here, as the search's :worth, which
+  prices each walk, and that many seconds to spend. A worth that pays for no more than the trip is 0: the search ends :price at its first walk."
   [c]
   (let [p (:primitives c)
-        at (u/self-pos c)
-        worth (- (cost/worth-to (cost/death-body p (ctx/view c)) (or (seq (names-of (:args c))) (keys (:bill (:args c)))) at)
-                 (cost/trip))]
-    (when (pos? worth)
-      {:worth worth
-       :spend {:job-time worth}})))
+        worth (or (:worth (:args c))
+                  (cost/find-worth (cost/death-body p (ctx/view c)) (or (seq (names-of (:args c))) (keys (:bill (:args c)))) (u/self-pos c)
+                                   (:count (:args c) 1)))]
+    {:worth (max 0 worth)
+     :spend {:job-time (max 1 worth)}}))
 
 (defn explore-opts
-  "The search options, or nil when the :search way is off (or :explore false), or a :priced call's worth pays for none."
+  "The search options, or nil when the :search way is off (or :explore false)."
   [c]
   (when (and (:explore (:args c)) (way? c :search))
-    (if (:priced (:args c))
-      (priced-search c)
-      (explore-setting))))
+    (priced-search c)))
 
 (defn search-names
   "The block or animal names a search for a need looks for."

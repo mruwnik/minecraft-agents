@@ -4,7 +4,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.game :as game]
-            [jobs.items.obtain.base :refer [animal-radius barren-ore explore-far-setting explore-rounds search-scan-radius site-radius tried! ways-of]]
+            [jobs.items.obtain.base :refer [animal-radius barren-ore search-scan-radius site-radius tried! ways-of]]
             [jobs.items.obtain.need :refer [explore-opts gather-viable? pickaxe-first? light-settling? search-names tools-wanted torch-due trees-unreachable?]]
             [jobs.items.obtain.plan :refer [gather-plan]]
             [jobs.items.obtain.seen :refer [gather-carried gather-slot seen-of shears-source with-avoid with-block with-count]]
@@ -60,11 +60,6 @@
         (update :skipped-once (fnil into #{}) cells)
         (update :skip-cells (fnil into #{}) again))))
 
-(defn search-rounds
-  "Searches for one raw need: one for a :priced call (its worth buys one), else the explore-rounds setting."
-  [c]
-  (if (:priced (:args c)) 1 (explore-rounds)))
-
 (defn gather-failed!
   "A gather run that brought nothing (a mine that ended :wet or :flooded leaves its ore's column out of the next sight). Trees seen but unreachable (:no-tree) with :explore on send the body to look
   elsewhere (bounded by [:explored key]); a mine that lost its pickaxe (:no-tool) that the pickaxe step can replace
@@ -72,7 +67,7 @@
   glass, bedrock) is :unreachable, not a missing source."
   [c names need why e]
   (cond
-    (and (= :no-tree why) (explore-opts c) (< (get-in (ctx/mem c) [:explored (:key need)] 0) (search-rounds c)))
+    (and (= :no-tree why) (explore-opts c) (zero? (get-in (ctx/mem c) [:explored (:key need)] 0)))
     (do (ctx/update-mem! c assoc-in [:gather :unreachable (:key need)] true) :again)
 
     (and (= :no-tool why) (pickaxe-first? c names need)) :again
@@ -160,59 +155,36 @@
 
 (def max-search-timeouts 3)
 
-(def heading-ring [:north :north-east :east :south-east :south :south-west :west :north-west])
-
-(defn far-heading
-  "The heading of search number k (1 up): the first runs on away from where the first began (north when the body is still
-  there), each later one turns 135 degrees, so eight searches take eight ways."
-  [start [x _ z] k]
-  (let [[sx _ sz] start
-        angle (js/Math.atan2 (- x sx) (- (- z sz)))
-        base (if (< (js/Math.hypot (- x sx) (- z sz)) 16)
-               0
-               (mod (js/Math.round (/ angle (/ js/Math.PI 4))) 8))]
-    (heading-ring (mod (+ base (* 3 (dec k))) 8))))
-
 (defn within-site
   "Search options o kept within the site-radius setting of center (nil: unchanged)."
   [o center]
   (cond-> o center (update :max-distance (fnil min ##Inf) (site-radius))))
 
 (defn round-opts
-  "The search options for search number k of a need: the first rings round the start, the rest outward along a heading."
-  [c k]
-  (let [center (:center (:args c))]
-    (within-site
-     (if (zero? k)
-       (explore-opts c)
-       (let [start (or center (:explore-start (ctx/mem c)) [0 0 0])
-             p (.-pos (.self (:primitives c)))]
-         (assoc (explore-far-setting) :pattern :outward
-                :heading (far-heading start [(.-x p) (.-y p) (.-z p)] k))))
-     center)))
+  "The search options for a need: its priced search, kept within the site of :center."
+  [c]
+  (within-site (explore-opts c) (:center (:args c))))
 
 (defn ^:async explore-walk!
   "Walk and look for need (a jobs.explore.search child): :again once it is seen; a search that finds none stops the
-  gather source, as does the last of the explore-rounds searches for one need. Also :again when none is found and the body is still under rock (the next round stairs up), and after a search that ran out of its own time (no verdict: not counted, the next round looks from where the body stands)."
+  gather source, as does the search for one need. Also :again when none is found and the body is still under rock (the next round stairs up), and after a search that ran out of its own time (no verdict: not counted, the next round looks from where the body stands)."
   [c need]
   (let [targets (search-names need)
         k0 (get-in (ctx/mem c) [:explored (:key need)] 0)
         here (.-pos (.self (:primitives c)))
         _ (when (and (zero? k0) (not (:explore-start (ctx/mem c))))
             (ctx/update-mem! c assoc :explore-start [(.-x here) (.-y here) (.-z here)]))
-        o (round-opts c k0)
+        o (round-opts c)
         said [(:key need) k0]
         _ (when-not (= said (:explore-said (ctx/mem c)))
             (ctx/update-mem! c assoc :explore-said said)
             (ctx/emit! c :obtain.exploring :info
                      {:message (str "nothing seen to get " (str/join "/" targets) ": walking to look for it, "
-                                    (if (:worth o)
-                                      (str "each walk priced against the " (js/Math.round (:worth o)) " s it is worth")
-                                      (str "up to " (:max-distance o) " blocks out and " (:max-legs o) " legs"))
+                                    "each walk priced against the " (js/Math.round (:worth o)) " s it is worth"
                                     ", from " (js/Math.floor (.-x here)) " "
                                     (js/Math.floor (.-y here)) " " (js/Math.floor (.-z here)))
                       :attention :notice
-                      :for targets :max-distance (:max-distance o) :max-legs (:max-legs o) :worth (:worth o) :heading (:heading o)
+                      :for targets :max-distance (:max-distance o) :worth (:worth o)
                       :from (mapv #(js/Math.floor %) [(.-x here) (.-y here) (.-z here)])}))
         e (waits/waiting-out c (await (ctx/call c :explore 'jobs.explore.search
                            (child/search-args (merge o (when-let [at (:center (:args c))] {:center at}) {:target targets :count 1 :scan-radius (search-scan-radius) :use-notes false :takeable true :avoid (vec (:cut-off (ctx/mem c)))}
@@ -239,7 +211,6 @@
             lead? (do (ctx/emit! c :obtain.lead :info {:message (str "found " (str/join "/" targets) " at " (str/join " " pos) " out of sight: walking to it") :pos pos})
                       (ctx/update-mem! c assoc-in [:gather :lead] {:key (:key need) :pos pos})
                       :again)
-            (< k (search-rounds c)) :again
             :else (tried! c :gather (cond-> {:searched (:key need) :for targets :result (or (:reason res) (contract/cause-key e))}
                                       (:why res) (assoc :why (:why res))
                                       (:coverage res) (assoc :legs (:legs (:coverage res)) :farthest (:farthest (:coverage res)))))))))))
@@ -352,7 +323,7 @@
       (await (surface-step! c))
       (and (not (get-in (ctx/mem c) [:gather :before])) (explore-opts c) (searchable? need) (not (:tunnel? need))
            (or (not (seen-of c need)) (get-in (ctx/mem c) [:gather :unreachable (:key need)]) (trees-unreachable? c need))
-           (< (get-in (ctx/mem c) [:explored (:key need)] 0) (search-rounds c)))
+           (zero? (get-in (ctx/mem c) [:explored (:key need)] 0)))
       (await (explore-walk! c need))
       (and (not (get-in (ctx/mem c) [:gather :before])) (torch-due c (start-cause c need)))
       (book-light! c (torch-due c (start-cause c need)))

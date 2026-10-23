@@ -32,7 +32,7 @@
             {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 80}]
    :after [[:item "red_bed" [:>= 1]] [:item "white_bed" 0]]}
   ;; d2a66a22, 1c50b7f5: one wool, planks, no sheep and no shears: no bed can be made here, so the obtain searches, as far as a bed is
-  ;; worth to a body with no respawn (a :priced obtain: each walk priced against what is left of that, which reaches past the plot, so its no-source end is not waited for); needs the dusk window (time-set 9000)
+  ;; worth to a body with no respawn (a priced obtain: each walk priced against what is left of that, which reaches past the plot, so its no-source end is not waited for); needs the dusk window (time-set 9000)
   {:name "no-wool-source-searches-as-far-as-a-bed-is-worth"
    :memory [{:kind :spawn-bed :data {:pos #xyz [8 0 16]} :age-s 60}
             {:kind :spawn-reset :data {:pos #xyz [8 0 16]} :age-s 30}]

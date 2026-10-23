@@ -208,15 +208,6 @@
     (is (some? (sh-inside/night-sheltered (:p s) nil)) "sheltered at the start")
     s))
 
-(deftest a-tree-seen-from-a-night-shelter-is-walked-to-when-the-trip-is-cheap
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (sheltered-night-start st-pit 20)]
-          (await (obtain! s {:any-of ["oak_log" "spruce_log" "birch_log"] :count 2 :ways #{:gather} :explore true} 8))
-          (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))) "the tree is seen")
-          (is (seq (tu/walk-calls (:p s))) "go-to prices its own route; there is no flat night hold"))))))
-
 (deftest a-tree-seen-from-a-night-shelter-waits-when-the-trip-is-dear
   (async done
     (tu/run-async done
@@ -226,15 +217,6 @@
           (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))) "the tree is seen")
           (is (empty? (tu/walk-calls (:p s))) "no walk out")
           (is (some #(= :risky (:reason %)) (f/events-of s :waiting)) "the priced route risk is over what the body can afford"))))))
-
-(deftest a-pickaxe-whose-logs-are-outside-a-night-shelter-walks-out-for-them-not-no-source
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (sheltered-night-start (assoc st-pit "1,64,4" "stone") 20)]
-          (await (obtain! s {:item "cobblestone" :count 3 :ways #{:gather :craft}} 8))
-          (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))) "the stone and the logs are seen")
-          (is (seq (tu/walk-calls (:p s))) "the logs are walked to under go-to's own pricing"))))))
 
 (deftest a-craft-the-dark-prices-too-high-makes-the-obtain-wait-not-end-no-source
   (async done

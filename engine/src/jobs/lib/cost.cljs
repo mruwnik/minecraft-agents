@@ -173,6 +173,8 @@
 (def tour-worth value/tour-worth)
 (def cover-tour-s value/cover-tour-s)
 (def food-worth value/food-worth)
+(def animal-worth value/animal-worth)
+(def expected-drops value/expected-drops)
 (def food-point-worth value/food-point-worth)
 (defn trip [] (value/trip))
 (def light-cost value/light-cost)
@@ -296,6 +298,12 @@
   "Seconds fetching n torches to light a site is worth instead of waiting wait-s for light: the wait less placing them (light-cost)."
   [wait-s n]
   (- wait-s (* n (:place (:parts (light-cost {:carried 1}))))))
+
+(defn find-worth
+  "Seconds getting `n` of names is worth to body at `at` less a trip: a search's :worth for it (leg-price weighs each
+  walk against it). Not positive: the trip takes it all."
+  [body names at n]
+  (- (* n (worth-to body names at)) (trip)))
 
 (defn search-radius
   "Blocks from its origin a search's legs spacing apart may go for a find worth `worth`: the rings within it hold as

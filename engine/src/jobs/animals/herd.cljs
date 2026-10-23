@@ -39,7 +39,7 @@
   A lured or led animal follows only within about 10 blocks: from where it was met the body walks to the pen in short legs,
   holding still while the animal trails more than 7 behind, and gives it up (given-up :lost unseen 3 s after a walk back to where it was last seen, :animal-stalled when it stops coming nearer for 10 s) rather than outrun it.
 
-  With no animal of the kind listed within :radius of the start and none brought, the body searches for one once (jobs.explore.search, within :radius of the start, up to 12 legs) before ending :none.
+  With no animal of the kind listed within :radius of the start and none brought, the body searches for one once (jobs.explore.search, within :radius of the start, each walk priced against the animal's worth: cost/animal-worth) before ending :none.
 
   The pen checks. At the start the pen as the body sees and remembers it is judged (a start condition, the setting herd-pen/precheck? false
   skips it): a refusal waits (condition-failed under a parent) with the cause {:reason :text} and the fields below. A pen

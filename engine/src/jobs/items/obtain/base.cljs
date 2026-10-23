@@ -20,11 +20,8 @@
    :jobs.items.obtain.base/gather-need-s {:default 60 :doc "Guess of the seconds one raw need takes to gather: a walk, a fell or a dig (the quote)." :spec (a/num-in 0 nil)}
    :jobs.items.obtain.base/loose-radius {:default 16 :doc "Blocks within which a loose item of the wanted kind is picked up (the :loose way)." :spec (a/num-in 0 32)}
    :jobs.items.obtain.base/bill-item-s {:default 2700 :doc "Seconds each item of a bill may take (its obtain child's :spend :job-time)." :spec (a/num-in 0 nil)}
-   :jobs.items.obtain.base/explore {:default {:max-distance 64 :max-legs 12 :spend {:job-time 300}} :doc "jobs.explore.search options of the first search for a raw need (:explore true): rings round the start." :spec map?}
-   :jobs.items.obtain.base/explore-far {:default {:max-distance 192 :max-legs 16 :spend {:job-time 600}} :doc "jobs.explore.search options of every search after the first: it walks on outward along one heading (a body in a treeless desert or on an island goes further and swims over water)." :spec map?}
    :jobs.items.obtain.base/site-radius {:default 96 :doc "How far from the :center cell (a build's site) a search for a raw need goes at most." :spec (a/num-in 1 nil)}
-   :jobs.items.obtain.base/barren-ore {:default 20 :doc "Ore blocks the rock a mine for an unseen ore cut in a row with no find would be expected to lay bare (jobs.lib.cost base rates at its height) before the gather counts its runs fruitless again." :spec (a/num-in 0 nil)}
-   :jobs.items.obtain.base/explore-rounds {:default 6 :doc "Searches for one raw need before the gather source gives up; each after the first heads another way." :spec (a/int-in 1 nil)}})
+   :jobs.items.obtain.base/barren-ore {:default 20 :doc "Ore blocks the rock a mine for an unseen ore cut in a row with no find would be expected to lay bare (jobs.lib.cost base rates at its height) before the gather counts its runs fruitless again." :spec (a/num-in 0 nil)}})
 (defn max-inspections [] (settings/get settings :jobs.items.obtain.base/max-inspections))
 (defn animal-radius [] (settings/get settings :jobs.items.obtain.base/animal-radius))
 (defn near-chest [] (settings/get settings :jobs.items.obtain.base/near-chest))
@@ -38,11 +35,8 @@
 (defn craft-radius [] (settings/get settings :jobs.items.obtain.base/craft-radius))
 (defn loose-radius [] (settings/get settings :jobs.items.obtain.base/loose-radius))
 (defn bill-item-s [] (settings/get settings :jobs.items.obtain.base/bill-item-s))
-(defn explore-setting [] (settings/get settings :jobs.items.obtain.base/explore))
-(defn explore-far-setting [] (settings/get settings :jobs.items.obtain.base/explore-far))
 (defn site-radius [] (settings/get settings :jobs.items.obtain.base/site-radius))
 (defn barren-ore [] (settings/get settings :jobs.items.obtain.base/barren-ore))
-(defn explore-rounds [] (settings/get settings :jobs.items.obtain.base/explore-rounds))
 
 (defn names-of [{:keys [item any-of]}]
   (vec (if item [item] any-of)))

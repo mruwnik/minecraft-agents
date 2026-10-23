@@ -16,7 +16,7 @@
          [:job (jobs.explore.search {:target "cow" :scan-radius 24 :use-notes false :settings {:jobs.explore.search/max-legs 0}})]
          [:await {:source :job :kind :completed} 60]
          [:rcon "execute at $BODY run fill ~10 ~ ~-8 ~10 ~8 ~8 stone"]
-         [:job (jobs.survival.get-food {:explore {:max-legs 0 :use-notes false}})]]
+         [:job (jobs.survival.get-food {:explore {:worth 0 :use-notes false}})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:name "jobs.survival.get-food"}} :within-s 150}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [40 3 40]] 2]]}
   {:name "no-note-no-walk"
@@ -24,6 +24,6 @@
          [:rcon "damage $BODY 5 minecraft:generic"]
          [:summon "cow" [26.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [27.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [26.5 0 17.5] "{NoAI:1b}"]
          [:rcon "execute at $BODY run fill ~10 ~ ~-8 ~10 ~8 ~8 stone"]
-         [:job (jobs.survival.get-food {:explore {:max-legs 0 :use-notes false}})]]
+         [:job (jobs.survival.get-food {:explore {:worth 0 :use-notes false}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 150}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [40 3 40]] 3]]}]}

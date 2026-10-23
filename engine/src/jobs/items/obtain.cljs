@@ -46,9 +46,8 @@
    :for-plan {:doc "id of the plan whose work this is: a crafting table may stand in its own cells; passed to the craft steps" :spec a/name? :default nil}
    :avoid {:doc "cells [x y z] a crafting table is never put in or dug for (a caller's dig line); passed to the craft steps" :spec (a/coll-of a/position?) :default nil}
    :center {:doc "a cell [x y z] the searches for an unseen block or animal centre on (a build's site): each starts there and stays within the ::site-radius setting of it; nil: where the body stands" :spec a/position? :default nil}
-   :explore {:doc "false drops the :search way (the base ::explore setting's search for a raw need not seen): fails :no-source instead" :spec boolean? :default true}
-   :worth {:doc "seconds the count is worth to the caller: the start check waits :not-worth while price-of (the cheapest way that would start, the death its walk risks) is more; nil: any price (a bill: unpriced)" :spec (a/num-in nil nil) :default nil}
-   :priced {:doc "one search only, worth what is wanted is worth to the body where it starts less a trip (jobs.lib.cost/worth-to): each walk is priced against what is left of that as the body is then (jobs.explore.search :worth); none when the trip takes it all" :spec boolean? :default false}})
+   :worth {:doc "seconds the count is worth to the caller: the start check waits :not-worth while price-of (the cheapest way that would start, the death its walk risks) is more, and each walk of a search for an unseen need is priced against it (jobs.explore.search :worth); nil: any price (a bill: unpriced), the search worth what the item (:count of it) is to the body (jobs.lib.cost/find-worth)" :spec (a/num-in nil nil) :default nil}
+   :explore {:doc "false drops the :search way (the search, priced by what the need is worth, for a raw need not seen): fails :no-source instead" :spec boolean? :default true}})
 
 (a/defargs settings
   {::job-time-s {:default 600 :doc "Seconds an obtain of one unit may run (its default :spend :job-time)." :spec (a/num-in 0 nil)}
