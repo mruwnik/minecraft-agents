@@ -186,3 +186,11 @@
     (is (= 20 (cost/route-hurt (body 20) (route 1 "witch"))))
     (is (= 20 (cost/route-hurt (body 20) (route 1 "witch" "witch"))) "nor do two")
     (is (< 5.99 (cost/route-hurt (body 20) (route 0.3 "witch")) 6.01) "a faded one its share of the life")))
+
+(deftest a-second-in-water-costs-the-drowned-meet-rate-times-the-cheapest-answer-to-one
+  (let [kit (assoc (body 20) :weapon "stone_sword")
+        price (apply min (vals (:prices (cost/decide kit (answer/threat-answers (assoc kit :swim ##Inf) "drowned" nil) nil))))
+        [deep] (cost/water-factors kit)]
+    (is (< (js/Math.abs (- deep (* 0.0062 price))) 1e-9) "water a drowned can spawn in: its measured meet rate")
+    (is (< deep (first (cost/water-factors (body 20)))) "a bare body pays more than one with a sword")
+    (is (< deep (first (cost/water-factors (assoc kit :health 8)))) "and a hurt one more than a whole one")))

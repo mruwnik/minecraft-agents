@@ -42,8 +42,8 @@
    - options.dangers: known hostiles, an array of {x y z close radius rate block} (at most 8): a move adds to its risk rate
      (hp a second) times its seconds within close blocks of a danger's point, falling linearly to 0 at radius; all the
      dangers together add at most options.dangerCap (4) a second (see dangerRisk), each hp priced at options.damageWeight. A danger with block true (a seen mob) also fills its cell: no plan enters it. jobs.lib.threats builds them.
-   - options.dark {at, factor}: a cell that at(x, y, z) calls dark (returns 1) costs factor times its own seconds
-     more, in g and in cost.darkSeconds (see darkOf; jobs.lib.look builds at).
+   - options.dark {at, factor, water}: a cell that at(x, y, z) calls dark (returns 1) costs factor times its own seconds
+     more, one it gives class 2 or more water[class - 2] times, in g and in cost.darkSeconds (see darkOf; jobs.lib.walk.world builds at).
    - options.tolls {cells}: cells is a Map of cell-key (planner/cell-key) to a factor: entering such a cell costs factor
      times its own seconds more, in g and in cost.darkSeconds (the caller's price of a cell; no zone knowledge here); Infinity: no plan enters it.
      tolls.edges (optional): a Map of a cell's cell-key to a flat array of [move, to cell-key, seconds]: that move out of the
@@ -298,12 +298,12 @@
         ^js dark (.-dark options)
         ^js tolls (.-tolls options)
         dark-at (when (some? dark) (.-at dark))
-        dark-factor (if (some? dark) (or-else (.-factor dark) 1) 0)
+        ^js dark-shares (when (some? dark) (.concat #js [0 (or-else (.-factor dark) 1)] (or-else (.-water dark) #js [])))
         ^js unknown (.-unknown options)
         unk (some? unknown)
         see-lit (when unk (.-seeLit unknown))
         rw (option options "riskWeight" 2)
-        lethal-s (lethal-seconds rw (option options "damageWeight" rw) (* risk-scale (option options "dangerCap" 4)) dark-factor
+        lethal-s (lethal-seconds rw (option options "damageWeight" rw) (* risk-scale (option options "dangerCap" 4)) (if (some? dark-shares) (apply max (array-seq dark-shares)) 0)
                                  (when (some? tolls) (.-cells tolls)) (if (some? avoid) (or-else (.-factor avoid) 0) 0)
                                  (unknown-factor unknown costs) (.-drownPrices options))]
     (->Search
@@ -390,8 +390,8 @@
      ;; dangers n-dangers danger-cap dbx0 dbx1 dby0 dby1 dbz0 dbz1
      dangers n-dangers (* risk-scale (option options "dangerCap" 4))
      (aget dbox 0) (aget dbox 1) (aget dbox 2) (aget dbox 3) (aget dbox 4) (aget dbox 5)
-     ;; dark-at dark-factor dark-keys dark-flags darks
-     dark-at dark-factor
+     ;; dark-at dark-shares dark-keys dark-flags darks
+     dark-at dark-shares
      (when (some? dark-at) (js/Float64Array. TABLE)) (when (some? dark-at) (js/Uint8Array. TABLE)) (js/Float64Array. cap)
      ;; tolls edge-tolls
      (when (some? tolls) (.-cells tolls)) (when (some? tolls) (.-edges tolls))

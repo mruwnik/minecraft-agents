@@ -293,7 +293,7 @@
         :else
         (let [drisk (if (pos? (.-n-dangers s)) (+ drisk (.dangerRisk s x y z dsec)) drisk)
               extra (if ^boolean (.-avoiding s) (.avoidCost s x y z move dsec drisk) 0)
-              ddark (+ (if (some? (.-dark-at s)) (* (.-dark-factor s) dsec (.darkOf s x y z)) 0)
+              ddark (+ (if (some? (.-dark-at s)) (* dsec (.darkOf s x y z)) 0)
                        (if (some? (.-tolls s)) (* dsec (.tollOf s x y z)) 0)
                        (if (some? (.-edge-tolls s)) (.edgeToll s x y z move parent-node) 0)
                        (.-move-unk s)

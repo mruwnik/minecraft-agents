@@ -8,14 +8,17 @@
 (extend-type Search
   Object
 
-  ;; 1 when the caller's test (options.dark.at) calls the cell x,y,z dark, else 0. The test runs about once per cell:
-  ;; its answer is kept in a direct-mapped cache (the key stored +1 so zeroed memory reads as empty).
+  ;; The extra cost of the cell x,y,z as a share of its own seconds: that of the class the caller's test
+  ;; (options.dark.at) gives it (0 lit; one it does not price counts lit). The test runs about once per cell: its class
+  ;; is kept in a direct-mapped cache (stored +1 so zeroed memory reads as empty).
   (darkOf [s x y z]
     (let [key (inc (.keyOf s x y z 0))
-          slot (bit-and (.hashOf s x y z 0) (dec TABLE))]
+          slot (bit-and (.hashOf s x y z 0) (dec TABLE))
+          ^js shares (.-dark-shares s)]
       (if (== (aget (.-dark-keys s) slot) key)
-        (- (aget (.-dark-flags s) slot) 1)
-        (let [dark (if (== (.call ^js (.-dark-at s) nil x y z) 1) 1 0)]
+        (aget shares (- (aget (.-dark-flags s) slot) 1))
+        (let [c (.call ^js (.-dark-at s) nil x y z)
+              c (if (and (>= c 0) (< c (.-length shares))) c 0)]
           (aset (.-dark-keys s) slot key)
-          (aset (.-dark-flags s) slot (inc dark))
-          dark)))))
+          (aset (.-dark-flags s) slot (inc c))
+          (aget shares c))))))

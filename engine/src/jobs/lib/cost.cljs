@@ -9,7 +9,7 @@
     weapon   attack-gap-ms, weapon-damage, remaining-health, mob-max-health, ranged-mobs: the fight inputs; the one tool-material table
              (tool-tier, weapon-rank, cheapness) (jobs.lib.cost.weapon).
     fight    fight-damage, fight-seconds: the damage (and length) of a fight with the current kit (jobs.lib.cost.fight).
-    answer   fight-answer, followed, flee-answer, build-answer, cover-answer, answer-price, decide: what each answer to hostiles costs and the cheapest; kill-price: a kill of one mob; death-chance, route-death-cost, route-hurt, threat-hurt, threats-chance, spawns-chance, lethal-hp: the one chance of dying (route-hurt the same in hp, at most the life; threat-hurt one mob met; threats-chance its known threats, spawns-chance that of mobs spawned beside the body, lethal-hp a death chance in hp) (a known threat priced by the answer the body would take) and a route's death price; blast-hurt: a creeper's blast (jobs.lib.cost.answer).
+    answer   fight-answer, followed, flee-answer, build-answer, cover-answer, answer-price, decide: what each answer to hostiles costs and the cheapest; kill-price: a kill of one mob; death-chance, route-death-cost, route-hurt, threat-hurt, threats-chance, spawns-chance, lethal-hp: the one chance of dying (route-hurt the same in hp, at most the life; threat-hurt one mob met; water-factors the planner's price of a second in water, a drowned met there; threats-chance its known threats, spawns-chance that of mobs spawned beside the body, lethal-hp a death chance in hp) (a known threat priced by the answer the body would take) and a route's death price; blast-hurt: a creeper's blast (jobs.lib.cost.answer).
     danger   route-danger, straight-route: the danger of a walk past mobs; hurt-rate, exposure-price: what standing exposed to them costs; stance, danger-rate, threat-factor: go-to's
              planner dangers; reach-first?, wins-race?: a body's race to a refuge against its chasers; catches?, caught-on?: whether a chaser hits a walk (straight, or a timed route) before it is past; arrival-s: a chaser's seconds to a point; body-speed (jobs.lib.cost.danger).
     health   hp-seconds, health-scale, hp-price, commute-s (a walk there and back against sheltering here), drown-prices, damage-budget, survivable-budget: what an hp costs and how many a walk may spend (jobs.lib.cost.health).
@@ -257,6 +257,7 @@
 (def spawns-chance answer/spawns-chance)
 (def lethal-hp answer/lethal-hp)
 (def threat-hurt answer/threat-hurt)
+(def water-factors answer/water-factors)
 (def route-death-cost answer/route-death-cost)
 (def kill-price answer/kill-price)
 (def spawn-worth death/spawn-worth)

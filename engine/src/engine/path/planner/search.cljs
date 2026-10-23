@@ -113,10 +113,10 @@
    ;; known dangers (options.dangers, see dangerRisk): x y z close radius rate each (nil: none), their count, the most risk
    ;; a second of walking takes from all of them (options.dangerCap), and the box round every danger's radius
    ^js dangers n-dangers danger-cap dbx0 dbx1 dby0 dby1 dbz0 dbz1
-   ;; options.dark (see darkOf): the test of a cell (nil: none), the extra cost of a dark cell as a share of its own
-   ;; seconds, a direct-mapped cache of the test (keys stored +1, flags 1 lit and
-   ;; 2 dark) and the seconds of dark cells on the path to each node
-   ^js dark-at dark-factor ^js dark-keys ^js dark-flags ^:mutable darks
+   ;; options.dark (see darkOf): the test of a cell (nil: none), the extra cost of a cell of each class the test gives as
+   ;; a share of its own seconds (0 lit, 1 dark, then the water classes), a direct-mapped cache of the test (keys
+   ;; stored +1, flags the class +1) and the seconds of dark cells on the path to each node
+   ^js dark-at ^js dark-shares ^js dark-keys ^js dark-flags ^:mutable darks
    ;; options.tolls.cells (nil: none): a Map of cell-key to the factor of the cell's own seconds it costs more (see tollOf)
    ^js tolls
    ;; options.tolls.edges (nil: none): a Map of the from cell's cell-key to a flat array of [move, to cell-key or -1 (any

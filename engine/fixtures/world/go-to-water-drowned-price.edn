@@ -1,0 +1,44 @@
+;; Card 23bc5b25: go-to prices seen water by a drowned met in it (look/water-fn, cost/water-factors): water whose column holds
+;; dark water over water at its measured meet rate, a 1-deep wade at the lower rate of other water. Stone ground x 0..31,
+;; z 0..31, y 0..3 (stand y 4) in a lit cell 16 high: the ground buries the low light layer, so the top one lights the stands
+;; (block light 3) and the pond's surface (2, enough to make out) and leaves its depths dark (y 1 at 0, over water). The body
+;; (stone sword) walks round the pond (x 7..13) from x 4 by z 23 to [15 4 12], then quotes the way back to [4 4 12] straight
+;; across it. The quote's route reports its :length and never walks.
+;; Should-succeed: deep-pond-dry-way-round-wins (pond 4 deep, z 7..17: the way round, about 23 blocks, beats the 11-block swim);
+;; shallow-wade-is-waded (a pond 1 deep, z 2..22: the wade is taken).
+;; Should-fail (control): deep-pond-with-no-way-round-is-swum (the pond across the whole plot, quoted from x 4 to [16 4 12]:
+;; no ban, the way across is taken).
+{:defaults
+ {:tags [:movement :planner :water]
+  :time :any
+  :plot {:light :lit :height 16}
+  :body {:at [4.5 4 12.5] :yaw 270 :pitch 30 :inventory [["stone_sword" 1]] :settle-s 4}
+  :limit-s 120}
+ :cases
+ [{:name "deep-pond-dry-way-round-wins"
+   :blocks [[:fill [0 0 0] [31 3 31] "stone"] [:fill [7 0 7] [13 3 17] "water"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [5 4 23] :range 0})]
+         [:until-pos {:z-min 22} 30]
+         [:job (jobs.movement.go-to {:pos #at [15 4 23] :range 0}) [:alongside]]
+         [:until-pos {:x-min 14} 30]
+         [:job (jobs.movement.go-to {:pos #at [15 4 12] :range 0}) [:alongside]]
+         [:until-pos {:z-max 13} 30]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [4 4 12] :range 0}] {:ok true :quote {:route {:found true :length [:> 20]}}}] 30]]
+   :expect [{:no-event {:level :error} :for-s 2}]
+   :after [[:body-near [15.5 4 12.5] 1.5]]}
+  {:name "deep-pond-with-no-way-round-is-swum"
+   :blocks [[:fill [0 0 0] [31 3 31] "stone"] [:fill [7 0 0] [13 3 31] "water"]]
+   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [16 4 12] :range 0}] {:ok true :quote {:route {:found true :length [:< 16]}}}] 30]]
+   :expect [{:no-event {:level :error} :for-s 2}]
+   :after [[:body-near [4.5 4 12.5] 1]]}
+  {:name "shallow-wade-is-waded"
+   :blocks [[:fill [0 0 0] [31 3 31] "stone"] [:fill [7 3 2] [13 3 22] "water"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [5 4 23] :range 0})]
+         [:until-pos {:z-min 22} 30]
+         [:job (jobs.movement.go-to {:pos #at [15 4 23] :range 0}) [:alongside]]
+         [:until-pos {:x-min 14} 30]
+         [:job (jobs.movement.go-to {:pos #at [15 4 12] :range 0}) [:alongside]]
+         [:until-pos {:z-max 13} 30]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [4 4 12] :range 0}] {:ok true :quote {:route {:found true :length [:< 16]}}}] 30]]
+   :expect [{:no-event {:level :error} :for-s 2}]
+   :after [[:body-near [15.5 4 12.5] 1.5]]}]}

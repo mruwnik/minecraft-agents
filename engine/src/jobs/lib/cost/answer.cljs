@@ -37,7 +37,11 @@
 
 (a/defargs settings
   {::caught-chance {:default 0.15 :spec (a/num-in 0 1)
-                    :doc "Chance a walk away is caught, its mobs landing their blows over the whole flight: the prior for a flight whose route is unknown, measured from the trial logs on 2026-10-23 (n=63)."}})
+                    :doc "Chance a walk away is caught, its mobs landing their blows over the whole flight: the prior for a flight whose route is unknown, measured from the trial logs on 2026-10-23 (n=63)."}
+   ::drowned-meet-per-s {:default 0.0062 :spec (a/num-in 0 nil)
+                         :doc "Chance a second a drowned meets a body in water a drowned can spawn in (its column holds water over water at block light 0, look/water-fn), by day or night: (k+1)/n over the trial bodies' logs on 2026-10-23, k=34 meets in n=5689 s (tools/drowned-prior.mjs; river or ocean and other biomes, sky light high or low, met it alike)."}
+   ::drowned-meet-other-per-s {:default 0.0011 :spec (a/num-in 0 nil)
+                               :doc "As ::drowned-meet-per-s in any other water (one deep, or block-lit to its floor): k=4 in n=4549 s."}})
 
 (def blast-power "A creeper's explosion power (vanilla)." 3)
 (def swell-start "Blocks within which a creeper starts to swell (vanilla)." 3)
@@ -268,14 +272,14 @@
       (assoc a :then (conj (vec then) a)))))
 
 (defn threat-answers
-  "The answers {key answer-or-nil} body {:health :food :equipment :weapon :covers} has to mob-name met beside it: the
-  fight, the walk away (caught at chance caught, nil the prior) and each of :covers {way {:open-s :seconds}}
+  "The answers {key answer-or-nil} body {:health :food :equipment :weapon :covers :swim} has to mob-name met beside it: the
+  fight, the walk away (caught at chance caught, nil the prior; :swim, flee-answer's, for a body in water) and each of :covers {way {:open-s :seconds}}
   (jobs.survival.shut-in/covers) by cover-answer, as respond prices them."
-  [{:keys [food equipment weapon covers]} mob-name caught]
+  [{:keys [food equipment weapon covers swim]} mob-name caught]
   (let [m {:name mob-name :distance 0 :follow (threat/follow-range mob-name)}
         fight (fight-answer {:weapon weapon :equipment equipment :mobs [m]})]
     (into {:fight fight
-           :flee (flee-answer {:food food :equipment equipment :mobs [m] :caught caught :later fight})}
+           :flee (flee-answer {:food food :equipment equipment :mobs [m] :caught caught :later fight :swim swim})}
           (map (fn [[way cover]] [way (cover-answer {:equipment equipment :mobs [m]} cover)]))
           covers)))
 
@@ -287,6 +291,15 @@
         {:keys [answer]} (decide body answers at)]
     (* (if (contains? threat/provoked-only mob-name) (threat/provoked-share) 1)
        (answer-death-chance body (get answers answer) at))))
+
+(defn water-factors
+  "The planner's extra share of a second in water (options.dark.water) for body {:health :absorption :food :equipment
+  :weapon}: [a cell a drowned can spawn in, other water], each its drowned meet rate (::drowned-meet-per-s,
+  ::drowned-meet-other-per-s) times the price of the cheapest of threat-answers to a drowned met beside the body in water
+  with no shore known (it swims away, never walks)."
+  [body]
+  (let [price (apply min (vals (:prices (decide body (threat-answers (assoc body :swim ##Inf) "drowned" nil) nil))))]
+    [(* (settings/get settings ::drowned-meet-per-s) price) (* (settings/get settings ::drowned-meet-other-per-s) price)]))
 
 (defn life [{:keys [health absorption]}] (+ (or health 20) (or absorption 0)))
 

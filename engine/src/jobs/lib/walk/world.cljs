@@ -192,19 +192,27 @@
 
 (defn with-dark
   "pw whose plans cost dark cells more (the planner's options.dark): dark is look/dark-fn's {:at ..} (nil: pw). A dark
-  cell costs cost/dark-factor of kit ({:weapon :equipment}; nil: the floor) times its own seconds more."
-  [pw dark kit]
+  cell costs cost/dark-factor of kit (kit-of; nil: the floor) times its own seconds more. With a kit, a cell water
+  (look/water-fn's class, nil: none) gives costs its class's cost/water-factors instead, by day too: a drowned keeps to the water."
+  [pw dark water kit]
   (if (nil? dark)
     pw
-    #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :avoid (.-avoid pw) :tolls (.-tolls pw)
-         :dark #js {:at (:at dark) :factor (if kit (cost/dark-factor kit) (cost/dark-factor))}}))
+    (let [at (:at dark)]
+      #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :avoid (.-avoid pw) :tolls (.-tolls pw)
+           :dark (if (and kit water)
+                   #js {:at (fn [x y z] (let [w (water x y z)] (if (pos? w) w (at x y z))))
+                        :factor (cost/dark-factor kit) :water (clj->js (cost/water-factors kit))}
+                   #js {:at at :factor (if kit (cost/dark-factor kit) (cost/dark-factor))})})))
 
 (defn kit-of
-  "{:weapon :equipment} of the body: its best default weapon (jobs.lib.combat) and the armour worn."
+  "{:weapon :equipment :health :absorption :food} of the body: its best default weapon (jobs.lib.combat), the armour worn
+  and what the answers' prices read of it."
   [c]
-  (let [p (:primitives c)]
+  (let [p (:primitives c)
+        self (.self p)]
     {:weapon (combat/best-weapon p combat/default-weapons)
-     :equipment (cost/equipment-of (.-equipment (.self p)))}))
+     :equipment (cost/equipment-of (.-equipment self))
+     :health (.-health self) :absorption (.-absorption self) :food (.-food self)}))
 
 (declare with-tolls with-edges)
 
@@ -218,7 +226,7 @@
   (cond-> pw
     dangers? (-> (with-dangers (threats/planner-dangers c))
                  (with-tolls (if keep? (threats/tolls-of c (filter keep? (threats/known-threats c))) (threats/threat-tolls c))))
-    dark? (with-dark (look/dark-fn (:primitives c) {:unseen-dark? (nil? (unknown-of pw))}) (kit-of c))
+    dark? (with-dark (look/dark-fn (:primitives c) {:unseen-dark? (nil? (unknown-of pw))}) (look/water-fn (:primitives c)) (kit-of c))
     true (with-edges (edges/tolls (:primitives c)))))
 
 (def avoid-factor
