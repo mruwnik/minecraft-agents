@@ -686,7 +686,7 @@
 (deftest an-attack-walk-to-an-animal-spends-hp-only-while-the-body-cannot-heal
   (let [hurt {:pos {:x 0 :y 64 :z 0} :health 5}]
     (are [food targets expected]
-         (= expected (select-keys (attack/walk-opts (assoc (ctx-of {:self (assoc hurt :food food) :inventory []}) :args {:targets targets})) [:floor :leg-s]))
+         (= expected (select-keys (attack/walk-opts (assoc (ctx-of {:self (assoc hurt :food food) :inventory []}) :args {:targets targets}) #js {:id 1 :name "cow" :pos #js {:x 3 :y 64 :z 0}}) [:floor :leg-s]))
       8 ["cow"] {:floor {:health 0} :leg-s 30}
       20 ["cow"] {:leg-s 5}
       8 :hostiles {:leg-s 10})))
