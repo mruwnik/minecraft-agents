@@ -97,7 +97,7 @@
     (when (pos? items) (await (child/run!* c :wear-pile 'jobs.items.equip {})))
     (cond
       (empty? left) (end/finish! c :collected (assoc decided :items items))
-      (zero? items) (end/finish! c :abandoned (assoc decided :items 0 :reason :nothing-found))
+      (and (zero? items) (empty? ids)) (end/finish! c :abandoned (assoc decided :items 0 :reason :nothing-found))
       :else (end/finish! c :partial (assoc decided :items items :left left :reason (if (seq ids) :unreachable :not-visible))))))
 
 (defn ^:async find-ids!

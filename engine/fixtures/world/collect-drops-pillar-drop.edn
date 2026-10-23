@@ -1,0 +1,16 @@
+;; Card b26294ff: a body on top of a 3-high pillar of its own walks down to a pile on the ground beside it; the 3-block drop onto open ground is no trap.
+;; Should succeed: the drop is taken and the iron collected. The pillar is the only way off, so every step is a drop.
+{:defaults
+ {:tags [:collect-drops :survival :jobs]
+  :plot {:height 12}
+  :blocks [[:fill [12 0 12] [12 2 12] "cobblestone"]]
+  :body {:at [12.5 3 12.5]}
+  :limit-s 90}
+ :cases
+ [{:name "pile-on-the-ground-below-the-pillar-top-is-walked-down-to"
+   :time :any
+   :act [[:summon "item" [15.5 0 12.5] "{Item:{id:\"minecraft:iron_ingot\",count:3}}"]
+         [:wait-s 2]
+         [:job (jobs.items.collect-drops {:radius 10})]]
+   :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 60 :of-job true}]
+   :after [[:item "iron_ingot" 3]]}]}

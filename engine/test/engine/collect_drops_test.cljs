@@ -628,3 +628,18 @@
     (is (= {:problem :searching} first-ask))
     (is (= {:dig []} (settings/with-settings {:jobs.lib.dig-route/max-nodes 3}
                        #(loop [n 0] (let [r (ask)] (if (and (:problem r) (< n 3000)) (recur (inc n)) r))))))))
+
+(def pillar "A 3-high column under the body: every way off it is a 3-block drop."
+  {"0,64,0" "cobblestone" "0,65,0" "cobblestone" "0,66,0" "cobblestone"})
+
+(deftest a-pile-below-the-body-s-own-pillar-is-walked-down-to-for-what-it-is-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (bd/setup {:self {:pos {:x 0.5 :y 67 :z 0.5}} :blocks pillar})]
+          (drop! p [3 64 0] "iron_ingot")
+          (seen-from-above! p)
+          (let [result (await (tu/child-outcome eng job {:radius 8 :items ["iron_ingot"]} 30))]
+            (is (= 1 (:collected result)))
+            (is (= 1 (bd/carried p "iron_ingot")))))))))
+
