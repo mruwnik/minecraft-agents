@@ -56,7 +56,10 @@
     (is (< (cost/mob-hurt blast "creeper" 1) (cost/mob-hurt plain "creeper" 1)))
     (is (= (cost/mob-hurt blast "zombie" 1) (cost/mob-hurt plain "zombie" 1)) "blast protection does nothing for a zombie")
     (is (= (cost/mob-hurt plain "creeper" 1) (cost/mob-hurt plain "creeper" 10)) "one blast, however long the exposure")
-    (is (= 43 (cost/mob-hurt (cost/armour-stats nil) "creeper" 1)))))
+    (are [difficulty hurt] (= hurt (settings/with-settings {:jobs.lib.cost.threat/difficulty difficulty} #(cost/mob-hurt (cost/armour-stats nil) "creeper" 1)))
+      1 22.5
+      2 43
+      3 64.5)))
 
 (deftest a-witchs-potions-ignore-armour
   (let [bare (cost/armour-stats nil)

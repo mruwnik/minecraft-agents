@@ -1,7 +1,7 @@
 (ns engine.recover-drops-danger-test
   "recover-drops against the mobs that killed the body: the killer is priced at the pile, and a trip cut by hostiles
   over and over is given up."
-  (:require [cljs.test :refer [use-fixtures deftest is async]]
+  (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.death-test :as dt :refer [die! job recovered recovered-trip pile-drops]]
@@ -16,8 +16,6 @@
             [jobs.survival.recover-drops.fetch :as fetch]
             [engine.test-util :as tu :refer [run-until-empty]]
             [triggers.survival.died :as died]))
-
-(use-fixtures :once dt/far-from-a-bed)
 
 (defn fetch-run
   "Die with the field-report pile and cause, run the job to its decision."
@@ -65,6 +63,18 @@
         (let [{:keys [eng seen]} (await ((fetch-run "skeleton")))]
           (is (nil? (recovered eng)) "a danger skip stays open")
           (is (re-find #"skip: .*danger [1-9][0-9.]*,.*: skeleton" (decided-text eng))))))))
+
+(deftest an-unarmed-body-whose-bed-is-beside-the-pile-fetches-it-past-its-killer
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pile dt/death-pile-of-the-field-report
+              {:keys [eng]} (setup {:floor tu/walk-floor :entities (vec (pile-drops pile)) :blocks {"20,64,3" "red_bed"}})]
+          (mem/write! (:store eng) :spawn-bed {:pos {:x 20 :y 64 :z 3}} {:cap 1 :ttl :forever})
+          (die! eng {:pos dt/death-pos :inventory pile :cause "skeleton"})
+          (core/submit! eng job {})
+          (await (run-until-empty eng 20))
+          (is (= :collected (:decision (recovered eng))) "a death on the way costs a short walk back, not the pile"))))))
 
 (deftest a-whole-iron-kit-is-left-to-a-pack-of-skeletons-that-would-kill-an-unarmed-body
   (async done

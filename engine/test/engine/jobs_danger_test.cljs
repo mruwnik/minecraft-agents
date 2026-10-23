@@ -22,7 +22,10 @@
                  :when (or (#{13 17} x) (#{6 10} z) (= y 67))]
              [(str x "," y "," z) "stone"])))
 
-(defn world [& {:keys [blocks]}] (tu/fake {:self {:pos body} :floor [-10 -20 40 20] :blocks (or blocks {})}))
+(defn world
+  "A fake body on the floor, selected so costs read the rules it announces (easy), as the engine does at start."
+  [& {:keys [blocks]}]
+  (doto (tu/fake {:self {:pos body} :floor [-10 -20 40 20] :blocks (or blocks {})}) game/select!))
 
 (def naked {})
 (def iron-armour {:head {:name "iron_helmet"} :torso {:name "iron_chestplate"}
@@ -30,9 +33,9 @@
 
 (defn reach-of [p] (fn [m] (field/reach-fn (field/field p {:mob (:name m) :pos (:pos m)}))))
 
-(def death-s "Seconds one death costs: a few minutes of walking back." 300)
+(defn death-s "Seconds a death on the route costs a body whose bed is where the route starts." [] (d/death-cost {:respawn body} (nth route 15)))
 
-(defn route-danger [p route mobs equipment & opts] (apply d/route-danger game/default-version (reach-of p) route mobs equipment :death-s death-s :health 1000 opts))
+(defn route-danger [p route mobs equipment & opts] (apply d/route-danger game/default-version (reach-of p) route mobs equipment :death-s (death-s) opts))
 
 (defn danger [p mobs & opts] (:danger (apply route-danger p route mobs naked opts)))
 
@@ -75,11 +78,13 @@
   (let [r (route-danger (world) route [(mob 1 "zombie" 15 2) (mob 2 "zombie" 16 2)] naked)]
     (is (= [7.5 7.5] (mapv :threat (:mobs r))) "3 s of exposure, one hit of 2.5 (easy) a second each")))
 
+(defn threat-of [p name & opts] (:threat (first (:mobs (apply route-danger p route [(mob 1 name 15 2)] naked opts)))))
+
 (deftest overrides-set-a-mob-s-threat
   (let [p (world)]
     (is (= 0 (danger p [(mob 1 "zombie" 15 2)] :overrides {"zombie" 0})))
     (is (> (danger p [(mob 1 "zombie" 15 2)] :overrides {"zombie" 100}) (danger p [(mob 1 "zombie" 15 2)])))
-    (is (< (js/Math.abs (- (* 2 (danger p [(mob 1 "zombie" 15 2)])) (danger p [(mob 1 "zombie" 15 2)] :overrides {"zombie" {:times 2}}))) 1e-6))))
+    (is (= (* 2 (threat-of p "zombie")) (threat-of p "zombie" :overrides {"zombie" {:times 2}})))))
 
 (deftest armour-lowers-the-danger
   (let [p (world)]
@@ -133,14 +138,15 @@
 
 (deftest a-danger-is-at-most-the-hurt-and-one-death
   (let [spider (mob 1 "spider" 15 0)
-        hp-death (/ death-s 10)]
+        hp-death (/ (death-s) d/per-danger)]
     (is (<= (armed-danger spider nil 20) (+ 20 hp-death)) "a fist fight with a spider costs the health and a death, not a multiple of it")
     (is (<= (armed-danger spider nil 6) (+ 6 hp-death)))))
 
-(deftest an-unarmed-body-beside-its-bed-prices-a-spider-far-below-the-pile-it-guards
-  (let [r (route-danger (world) route [(mob 1 "spider" 15 0)] naked :weapon nil :health 20 :death-s 13)]
-    (is (< (* 10 (:danger r)) 222.7) "a spider at 582 hp (5820 s) priced the death of a body that wakes 3 blocks from its pile")
-    (is (pos? (:danger r)))))
+(deftest an-unarmed-body-beside-its-bed-prices-a-spider-below-the-pile-it-guards
+  (let [pile {:x 15 :y 64 :z 0}
+        worth (:value (d/item-value [{:name "oak_log" :count 15} {:name "feather" :count 1} {:name "oak_planks" :count 2}]))
+        r (route-danger (world) route [(mob 1 "spider" 15 0)] naked :death-s (d/death-cost {:respawn {:x 15 :y 64 :z 3}} pile))]
+    (is (< 0 (* d/per-danger (:danger r)) worth) "the trial's pile, its bed 3 blocks off: the spider was priced 5820 s")))
 
 (deftest a-body-that-would-win-the-fight-is-priced-alike-whatever-it-wins-with
   (let [zombie (mob 1 "zombie" 15 2)
@@ -151,7 +157,8 @@
 
 (deftest the-weaker-the-body-the-dearer-the-danger
   (let [zombie (mob 1 "zombie" 15 2)]
-    (is (> (armed-danger zombie "iron_sword" 6 iron-armour) (armed-danger zombie "iron_sword" 20 iron-armour)))))
+    (is (> (armed-danger zombie "iron_sword" 6 iron-armour) (armed-danger zombie "iron_sword" 20 iron-armour))
+        "a fist fight with a zombie kills at 6 and at 20 alike, so the health only caps the hurt; a sword fight is lost only by the weaker")))
 
 (deftest an-unreachable-or-passive-mob-stays-free-however-weak-the-body
   (is (= 0 (:danger (route-danger (world :blocks skeleton-wall) route [(mob 1 "skeleton" 15 8)] naked :weapon nil :health 4))))
@@ -162,3 +169,4 @@
         ender (mob 1 "enderman" 15 2)]
     (is (< 0 (danger p [ender] :health 20) 20) "provoked-only share, no death")
     (is (= 0 (danger p [(assoc ender :angry false)])) "a calm enderman adds nothing")))
+

@@ -1,7 +1,7 @@
 (ns engine.recover-drops-flight-test
   "recover-drops owns the danger it priced: no decline by radius on a priced mob, a mob new since the decision is
   weighed, and a trip turned dear backs off only while the walk back still fits the despawn window."
-  (:require [cljs.test :refer [use-fixtures deftest is async]]
+  (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.death-test :as dt :refer [die! job recovered pile-drops emitted]]
             [engine.library-test :refer [setup]]
@@ -9,8 +9,6 @@
             [engine.memory :as mem]
             [engine.recover-drops-danger-test :refer [iron-kit death-t]]
             [engine.test-util :as tu :refer [run-until-empty]]))
-
-(use-fixtures :once dt/far-from-a-bed)
 
 (def guard
   "A skeleton 5.7 blocks from the pile: inside the hostile-near radius of the body once it stands there."

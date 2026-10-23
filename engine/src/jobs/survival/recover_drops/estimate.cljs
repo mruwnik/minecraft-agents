@@ -154,7 +154,7 @@
         threat (if route
                  (cost/route-danger version #(field/reach-fn (field/field-of c {:mob (:name %) :pos (:pos %)})) route (concat known guard) (.-equipment (.self p))
                                     :overrides (:danger-overrides (:args c)) :weapon (combat/best-weapon p combat/default-weapons) :health (.-health (.self p))
-                                    :death-s (cost/death-cost (cost/death-body p (ctx/view c)) pos))
+                                    :death-s (cost/death-cost (update (cost/death-body p (ctx/view c)) :carried + (:value worth)) pos)) ; with no bed to wake at, a death on the way loses the pile too
                  {:danger 0 :mobs []})
         drown-hp (get-in quoted [:route :drown] 0)
         wet (when (or (= "drowning" cause) (wet-pile? wet-at pos) (pos? drown-hp))

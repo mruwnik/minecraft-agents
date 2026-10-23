@@ -1,7 +1,7 @@
 (ns jobs.lib.cost.threat
   "What one mob does to a body: hostile? from minecraft-data, the damage type of its attack, and mob-hurt, the damage it
   deals over some seconds of exposure after the body's armour (jobs.lib.cost.armour).
-  A witch's potions (poison, harming) bypass armour. A creeper is one blast of 43 (:explosion) however long the exposure; a ranged mob shoots (:projectile); any other
+  A witch's potions (poison, harming) bypass armour. A creeper is one blast of 43 at normal difficulty (:explosion) however long the exposure; a ranged mob shoots (:projectile); any other
   hits for its mob-hit (3 if unknown, scaled by the server difficulty) one a second (:melee). Endermen and zombified piglins only fight when provoked."
   (:require [clojure.string :as str]
             [engine.args :as a]
@@ -12,7 +12,7 @@
             [jobs.lib.cost.armour :as armour]))
 
 (a/defargs settings
-  {::creeper-blast {:default 43 :doc "Damage a creeper's blast is costed at." :spec (a/int-in 0 nil)}
+  {::creeper-blast {:default 43 :doc "Damage a creeper's blast is costed at, at normal difficulty (vanilla scales it as a mob's hit)." :spec (a/int-in 0 nil)}
    ::creeper-exchange-hp {:default 3.06 :doc "k of the creeper exchange: hp creepers dealt over the swings (attack that hit or killed) of hit-and-back fights with a sword or axe against a lone creeper (a late step back lets the fuse run on); 1 trial run, 1 blast over 2 hp, all before 336cdd402 (the back-off) and none counted since. Recount: node tools/event-counts.mjs creeper-exchange (:armed); per-case evidence replaces it." :spec (a/num-in 0 nil)}
    ::creeper-exchange-swings {:default 5 :doc "n of the creeper exchange: the swings behind ::creeper-exchange-hp." :spec (a/num-in 1 nil)}
    ::difficulty {:default -1 :doc "Override of the server difficulty mob hits and door breaking are costed at: 0 peaceful, 1 easy, 2 normal, 3 hard. -1 (unset), the body's sensed difficulty counts (hard while it is unknown)." :spec (a/int-in -1 3)}
@@ -211,7 +211,7 @@
         :else :melee))
 
 (defn difficulty-scale
-  "vanilla's melee/arrow damage at the ::difficulty setting for a hit of normal damage d."
+  "vanilla's damage to a player from a mob's hit, arrow or blast at the ::difficulty setting, for normal damage d."
   [d]
   (case (difficulty)
     0 0
@@ -235,7 +235,7 @@
   ([mob-name seconds] (base-threat mob-name seconds nil))
   ([mob-name seconds rate]
    (if (= "creeper" mob-name)
-     {:threat (creeper-blast) :hits 1}
+     {:threat (difficulty-scale (creeper-blast)) :hits 1}
      (let [hits (* seconds (or rate 1))]
        {:threat (* hits (difficulty-scale (get mob-hit mob-name 3))) :hits hits}))))
 

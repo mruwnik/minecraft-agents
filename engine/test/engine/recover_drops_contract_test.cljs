@@ -1,6 +1,6 @@
 (ns engine.recover-drops-contract-test
   "jobs.survival.recover-drops as a contract job: what each way of ending a run is."
-  (:require [cljs.test :refer [use-fixtures deftest is async]]
+  (:require [cljs.test :refer [deftest is async]]
             [engine.contract :as contract]
             [engine.core :as core]
             [engine.death-test :as dt :refer [die! job recovered]]
@@ -10,8 +10,6 @@
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]))
-
-(use-fixtures :once dt/far-from-a-bed)
 
 (defn setup
   "library-test/setup with the canonical event sink, so a root's ending data (its :kind and :reason) is readable."

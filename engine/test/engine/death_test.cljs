@@ -24,13 +24,6 @@
 
 ;; The value and cost functions are jobs.lib.cost (jobs_value_test, cost_test); route danger jobs_danger_test.
 
-(def far-from-a-bed
-  "A :once fixture: a respawn ten times the default walk from the pile, so a death costs what a fresh body's dearly does and a danger that can kill it outweighs a pile worth hours."
-  (let [saved (atom nil)]
-    {:before #(do (reset! saved @settings/state)
-                  (reset! settings/state {:body nil :specs {} :values {:jobs.lib.cost.death/spawn-walk-blocks 50000} :layers {:jobs.lib.cost.death/spawn-walk-blocks :test}}))
-     :after #(reset! settings/state @saved)}))
-
 (def sword "The body carries a weapon, so a zombie on the way is a fight it can afford." [{:name "iron_sword" :count 1}])
 
 (def junk
