@@ -857,7 +857,8 @@
     #js {:name name :token token :args copy}))
 
 (defn create
-  "The fake primitives object over the world spec (see the ns docstring)."
+  "The fake primitives object over the world spec (see the ns docstring). It becomes the body engine.game senses its
+  version and server rules from, as select! does for the live one."
   ([] (create {}))
   ([spec]
    (let [state (atom (initial-state spec))
@@ -1100,4 +1101,5 @@
               "close" (fn [])}]
        (aset p k f))
      (aset p "world" world)
+     (game/select! p)
      p)))

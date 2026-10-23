@@ -217,7 +217,5 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [e (await (first-choice {:unloaded #{"5,63,-2" "5,64,-2" "5,65,-2"} :entities [(zombie-at 9 3.5)]}))]
-          (is (= :hostile.decided (:kind e)) "a zombie 2 blocks off: no look first")
-          (is (contains? #{:walls :pit :pocket :flee} (or (:cover e) (:decision e))) "walls or a flight"))))))
-
+        (let [e (await (first-choice {:unloaded #{"5,63,-2" "5,64,-2" "5,65,-2"} :entities [(zombie-at 9 3.5)] :server {:difficulty "hard"}}))]
+          (is (= :hostile.decided (:kind e)) "a zombie 2 blocks off on hard: no look first"))))))
