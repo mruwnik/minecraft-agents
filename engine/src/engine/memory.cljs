@@ -122,6 +122,19 @@
   [view kind]
   (:pos (:data (latest view kind))))
 
+(defn places
+  "Every recorded place as {:name kind :pos pos}, a retracted one as {:name kind :gone true :was pos}, by name."
+  [view]
+  (->> (keys (get-in view [:data :entries]))
+       (keep (fn [kind]
+               (let [data (:data (latest view kind))]
+                 (when (and (= place-policy (policy view kind)) (or (:pos data) (:gone data)))
+                   (if (:pos data)
+                     {:name kind :pos (:pos data)}
+                     {:name kind :gone true :was (:was data)})))))
+       (sort-by :name)
+       vec))
+
 (defn slot-path
   "The get-in path of a job's sub-map for slots [s1 s2 ...]."
   [slots]

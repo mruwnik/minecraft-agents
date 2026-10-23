@@ -1,6 +1,6 @@
 (ns engine.event-api
   "The engine's private HTTP API on a local Unix socket (mode 0600). The wire format is EDN.
-  GET   /snapshot, /status, /inventory, /seen, /chests, /light, /events, /job, /jobs, /results, /triggers, /catalog, /quote, /settings
+  GET   /snapshot, /status, /inventory, /seen, /chests, /places, /light, /events, /job, /jobs, /results, /triggers, /catalog, /quote, /settings
   POST  /jobs and /triggers (changes), /attention/resolve, /chat, /settings/reload, /settings/set, /settings/unset
   Bodies are limited (a setting, 16 KB). Lists are paged and bounded."
   (:require [engine.args :as a]
@@ -236,6 +236,16 @@
                                     :age-ms (- (:now view) (:t e)) :items (:items (:data e))})))
                     (sort-by :distance))]
       (cond-> {:ok true :chests (vec (take max rows))}
+        (> (count rows) max) (assoc :more? true)))))
+
+(defn places-view
+  "Read-only: the places in body memory (set-place, offer!), by name, as {:name :pos}; a retracted one {:name :gone true :was}. q: :max (cut at 64)."
+  [eng {:keys [max]}]
+  (if (core/offline? eng)
+    {:ok false :reason :offline :offline (core/away eng)}
+    (let [max (min (or max 64) 64)
+          rows (mem/places (mem/view (:store eng)))]
+      (cond-> {:ok true :places (vec (take max rows))}
         (> (count rows) max) (assoc :more? true)))))
 
 (defn light-query
@@ -573,6 +583,11 @@
                         (and (= method "GET") (= pathname "/chests"))
                         (if-let [max (number-param (.-searchParams url) "max" 16 64)]
                           (respond! res 200 (chests-view eng {:max max}))
+                          (bad! res 400 :bad-query))
+
+                        (and (= method "GET") (= pathname "/places"))
+                        (if-let [max (number-param (.-searchParams url) "max" 64 64)]
+                          (respond! res 200 (places-view eng {:max max}))
                           (bad! res 400 :bad-query))
 
                         (and (= method "GET") (= pathname "/light"))

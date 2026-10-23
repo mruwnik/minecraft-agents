@@ -586,6 +586,21 @@
     (is (= [[5 64 0]] (mapv :pos (:chests (event-api/chests-view eng {:max 1})))))
     (is (true? (:more? (event-api/chests-view eng {:max 1}))))))
 
+(deftest places-view-lists-recorded-places-by-name-and-retracted-ones
+  (let [store (atom {:now (constantly 100000) :data {}})
+        eng {:store store :primitives #js {:isOffline (fn [] false)}}
+        pp {:cap 1 :ttl :forever}]
+    (swap! store assoc :data {:policies {:home pp :bed pp :chest pp :hurt {:cap 5 :ttl 1000}}
+                              :entries {:home [{:t 1 :data {:pos {:x 1 :y 64 :z 2}}}]
+                                        :bed [{:t 1 :data {:gone true :was {:x 3 :y 64 :z 4}}}]
+                                        :hurt [{:t 99000 :data {:pos {:x 9 :y 9 :z 9}}}]}})
+    (is (= {:ok true
+            :places [{:name :bed :gone true :was {:x 3 :y 64 :z 4}}
+                     {:name :home :pos {:x 1 :y 64 :z 2}}]}
+           (event-api/places-view eng {})) "other memory kinds are not places")
+    (is (= [:bed] (mapv :name (:places (event-api/places-view eng {:max 1})))))
+    (is (true? (:more? (event-api/places-view eng {:max 1}))))))
+
 (deftest light-query-takes-a-whole-cell-and-a-bounded-radius
   (let [q #(event-api/light-query (js/URLSearchParams. %))]
     (is (= {} (q "")) "the feet")

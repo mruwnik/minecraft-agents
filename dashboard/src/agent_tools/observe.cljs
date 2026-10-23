@@ -462,7 +462,7 @@
       (not (http/edn-response? content-type))
       (-> (output "{:ok false :reason :bad-response :detail :unexpected-content-type}\n") (.then (constantly 1)))
 
-      (and (starts? "/status" "/job" "/catalog" "/inventory" "/seen" "/chests" "/light") (http/unsupported-route? response))
+      (and (starts? "/status" "/job" "/catalog" "/inventory" "/seen" "/chests" "/places" "/light") (http/unsupported-route? response))
       (-> (output (str (legacy-notice request) "\n")) (.then (constantly 2)))
 
       (and (starts? "/status") (not (:verbose request)) (= 200 status))

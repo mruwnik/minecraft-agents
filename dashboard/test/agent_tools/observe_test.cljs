@@ -135,6 +135,13 @@
                           [["status" "--radius" "5"] #"only valid for seen"]]]
     (is (re-find pattern (:error (apply request "--world" "w" "ProbeBody" argv))) (pr-str argv))))
 
+(deftest places-is-a-read-only-observe-query
+  (is (= "/places?max=64" (:path (request "--world" "w" "ProbeBody" "places"))))
+  (is (= "/places?max=5" (:path (request "--world" "w" "ProbeBody" "places" "--limit" "5"))))
+  (doseq [[argv pattern] [[["places" "x"] #"takes no positional"]
+                          [["places" "--offset" "5"] #"not valid for places"]]]
+    (is (re-find pattern (:error (apply request "--world" "w" "ProbeBody" argv))))))
+
 (deftest chests-is-a-read-only-observe-query
   (is (= "/chests?max=16" (:path (request "--world" "w" "ProbeBody" "chests"))))
   (is (= "/chests?max=5" (:path (request "--world" "w" "ProbeBody" "chests" "--limit" "5"))))
