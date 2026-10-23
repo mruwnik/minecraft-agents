@@ -200,6 +200,33 @@
              (and (= :budget (some-> (:reason result) keyword)) (some-> (:goal-left result) (<= (budget-near)))))
          (not @shut?)))))
 
+(defn gap-walled?
+  "Whether a give-up with result is one whose only way on is a gap jump the walker refuses (a low ceiling, a
+  step up over a hole) that no carried block can fill (gap-fill): the goal is walled off by the gap: a free body
+  goes round it (goal-way), a shut-in one digs toward the goal."
+  [c result skip]
+  (boolean
+   (and (= :abilities (some-> (:reason result) keyword))
+        (#{:gap-low-ceiling :gap-up} (some-> (:kind result) keyword))
+        (nil? (gap-fill c result skip)))))
+
+(defn gap-dig
+  "{:step :dig-route :cells [{:cell riser :block}]} for a step up over a one-cell gap (:gap-up of result, the landing :at a step above the
+  takeoff :from): the block at the takeoff's height on the landing side, with a solid floor under it, cut so the jump
+  is level; nil for any other refusal, or a riser the body may not cut or that is not seen to be solid."
+  [c result may-dig? {:keys [own? skip]}]
+  (let [{:keys [at from]} result
+        block-at (escape/block-at-of (:primitives c))]
+    (when (and (= :gap-up (some-> (:kind result) keyword)) (not (skip :dig-route)) at from
+               (= (second at) (inc (second from))))
+      (let [riser (assoc (vec at) 1 (second from))
+            floor (escape/up riser -1)]
+        (when (and (= 2 (u/dist (zipmap [:x :y :z] riser) (zipmap [:x :y :z] from)))
+                   (escape/solid? (block-at riser))
+                   (escape/diggable? block-at may-dig? own? riser)
+                   (escape/solid? (block-at floor)))
+          {:step :dig-route :cells [{:cell riser :block (block-at riser)}]})))))
+
 (defn goal-lava?
   "Whether the goal cell [x y z] is refused outright, whatever is dug: it is lava, it stands over lava, or lava lies
   beside it on all four sides (at its level or the floor's). Cells never seen read as not lava."

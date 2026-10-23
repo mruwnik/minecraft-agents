@@ -646,7 +646,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out returns eng]} (await (go-returns! (assoc gap-up-world :self {:pos {:x 0 :y 64 :z 1}})
-                                                            {:pos [10 65 1]}))]
+                                                            {:pos [10 65 1] :ways #{:walk}}))]
           (is (= :unreachable (:reason @out)))
           (is (= ["blocked" "blocked" "blocked"] (mapv :status (moved eng))) "three fruitless walks")
           (is (= [:done] @returns) "all of them in one call"))))))

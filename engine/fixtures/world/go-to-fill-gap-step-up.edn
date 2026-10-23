@@ -1,7 +1,7 @@
 ;; A hut doorway whose sill was dug: a 1-cell hole in a tunnel floor with the floor one block higher beyond it (a jump up over a gap, which
 ;; the walker refuses). go-to fills the hole with a carried block and walks on. Stone mass x 2..30, z 14..18, y -3..3, tunnel 1x2 along z 16
 ;; from x 4 to x 16 (air y 0..3, high enough for the lifted jump), hole at x 16 (floor y -1, stone under it), then raised floor (stone y 0) and air y 1..4 from x 17 to x 28.
-;; Should-succeed: dirt carried: fill-gap, arrived at the far end, the hole holds dirt. Should-fail: nothing carried: stopped, body at the near end.
+;; Should-succeed: dirt carried: fill-gap, arrived at the far end, the hole holds dirt. Nothing carried: no fill-gap, arrived by hand digging, the hole empty.
 {:defaults
  {:tags [:movement :access]
   :time :any
@@ -16,9 +16,9 @@
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :fill-gap}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 100 :of-job true}]
    :after [[:block [16 -1 16] "dirt"] [:body-near [27.5 1 16.5] 2]]}
-  {:name "nothing-to-fill-it-with-stops"
+  {:name "nothing-to-fill-it-digs-round-and-arrives"
    :act [[:job (jobs.movement.go-to {:pos #at [27 1 16] :range 0})]]
-   :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]}} :within-s 90 :of-job true}
-            {:no-event {:source :job :kind :go-to.escalated :data {:step :fill-gap}} :for-s 90 :until {:source :job :kind :stopped}}]
-   :after [[:not-block [16 -1 16] "dirt"] [:body-far [27.5 1 16.5] 8]]
-   :limit-s 100}]}
+   :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 240 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalated :data {:step :fill-gap}} :for-s 240 :until {:source :job :kind :completed}}]
+   :after [[:not-block [16 -1 16] "dirt"] [:body-near [27.5 1 16.5] 2]]
+   :limit-s 250}]}

@@ -370,14 +370,37 @@
           (is (= [:approach :stair] (distinct (mapv :step (events-of seen :go-to.escalated))))
               "a stair cut from the doorway, not through the hut wall"))))))
 
-(deftest go-to-gives-up-at-a-gap-under-a-low-ceiling-with-nothing-to-fill-it
+(deftest go-to-digs-round-a-gap-under-a-low-ceiling-with-nothing-to-fill-it
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p]} (await (run-job! {:self {:pos {:x 1.5 :y 64 :z 0.5}} :blocks gap-tunnel}
-                                               {:pos [9 64 0] :range 0}))]
-          (is (false? (:arrived @out)))
-          (is (= "air" (block p [5 63 0]))))))))
+        (let [{:keys [out seen]} (await (run-job! {:self {:pos {:x 1.5 :y 64 :z 0.5}} :blocks gap-tunnel :inventory [{:name "stone_pickaxe" :count 1}]}
+                                                  {:pos [9 64 0] :range 0}))]
+          (is (= {:arrived true} @out))
+          (is (not-any? #{:fill-gap} (map :step (events-of seen :go-to.escalated)))))))))
+
+(def step-up-tunnel
+  "A 4-high tunnel (x 0..14, z 0) in stone with a 1-cell hole at x 5 (floor y 62, stone under it), then a raised floor (stone y 63) from x 6 and air y 64..67 to x 14."
+  (apply dissoc (merge (box -2 60 -2 16 69 2 "stone"))
+         (concat (for [x (range 0 6) y (range 63 67)] (str x "," y ",0"))
+                 (for [x (range 6 15) y (range 64 68)] (str x "," y ",0"))
+                 ["5,62,0"])))
+
+(deftest go-to-cuts-the-riser-beyond-a-hole-before-a-step-up-with-nothing-to-fill-it
+  "The far tunnel is not seen from here (dark), as from a sealed tunnel: no dig route reaches the goal, the riser is the way."
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [inner? (fn [x y z] (every? #(contains? step-up-tunnel (str (+ x (% 0)) "," (+ y (% 1)) "," (+ z (% 2))))
+                                         [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]))
+              {:keys [eng p seen]} (setup {:self {:pos {:x 1.5 :y 63 :z 0.5}} :blocks step-up-tunnel})
+              out (atom :not-done)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [12 64 0] :range 0})))]
+          (dark-at p (for [x (range -2 17) y (range 60 70) z (range -2 3) :when (or (>= x 7) (and (contains? step-up-tunnel (str x "," y "," z)) (inner? x y z)))] [x y z]))
+          (core/submit! eng '(recording-parent) {})
+          (await (tick-out! eng 1000))
+          (is (= :dig-route (:step (first (events-of seen :go-to.escalated)))) "the riser is cut before any stair")
+          (is (= "air" (block p [6 63 0])) "the step up beyond the gap is cut level with the takeoff"))))))
 
 (deftest go-to-digs-a-stair-up-instead-of-a-long-priced-walk
   (async done
