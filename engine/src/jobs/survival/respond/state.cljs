@@ -92,17 +92,11 @@
     (when-let [{:keys [at]} (look/dark-fn p)]
       (fn [{:keys [x y z]}] (= 1 (at x y z))))))
 
-(defn unseen-floor-end?
-  "Whether the floor under a feet cell is one the body has not seen: the walk reads it as rock, go-to's planner does not
-  stand there (goal-not-standable)."
-  [p {:keys [x y z]}]
-  (nil? (u/seen-block p {:x x :y (dec y) :z z})))
-
 (defn avoid-ends
-  "walk/choose-target's :avoid fns for a step of the flight: an unseen floor first, near a death, then dark ground."
+  "walk/choose-target's :avoid fns for a step of the flight: near a death, then dark ground."
   [c]
   (let [spots (died-spots c)]
-    (cond-> [#(unseen-floor-end? (:primitives c) %)]
+    (cond-> []
       (seq spots) (conj #(near-died? spots %))
       (dark-end? (:primitives c)) (conj (dark-end? (:primitives c))))))
 

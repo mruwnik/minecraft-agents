@@ -5,6 +5,7 @@
             [engine.settings :as settings]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.breath :as breath]
+            [jobs.lib.cost :as cost]
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]))
 
@@ -221,18 +222,21 @@
 (defn choose-target
   "The walk target, a feet cell, among the directions (turns from the preferred one) that avoid every hazard and are
   worth walking (see worth?): first one whose end (covered? true: out of a ranged mob's line of fire) gives cover, a
-  full step before a short one; else the full step that takes least time per block of distance gained (walk-time: a swim is slow), turn order
-  breaking ties; else the most open. A direction that ends in water counts only when none ends dry (a swim is
+  full step before a short one; else the full step that takes least time per block of distance gained (walk-time: a swim is slow;
+  its unseen floors at cost/unseen-walk-s, an unseen end floor a drop into the unknown), turn order breaking ties; else the most
+  open. unseen?: cell -> whether the body has not seen it (block-at gives the walk's own read of such a cell). A direction that ends in water counts only when none ends dry (a swim is
   slow and drowned wait in it); :dry-only? (a drowned is a threat: it hunts in water) leaves wet ends out even then. nil when cornered. opts {:swim-factor (default 1) :dry-only? :covered? (end -> bool)
   :flank? (home is a refuge: direction) :refused (set of [x y z] ends go-to refused, never chosen) :avoid (end -> bool fns, most wanted first: ends one is true of are left out unless that leaves none) :waterlogged? (cell -> bool: a waterlogged block is wet) :floor (lowest feet y an end under rock may have, unless it is out of a ranged mob's line of fire or on a floor of known, a set of [x y z] floors of stairs the body cut)}."
-  ([block-at from threats home hazards step] (choose-target block-at from threats home hazards step nil))
-  ([block-at from threats home hazards step {:keys [swim-factor dry-only? covered? flank? floor known avoid refused waterlogged?] :or {swim-factor 1 waterlogged? (constantly false)}}]
+  ([block-at unseen? from threats home hazards step] (choose-target block-at unseen? from threats home hazards step nil))
+  ([block-at unseen? from threats home hazards step {:keys [swim-factor dry-only? covered? flank? floor known avoid refused waterlogged?] :or {swim-factor 1 waterlogged? (constantly false)}}]
    (let [dir (direction from threats home flank?)
+         kind-at (fn [x y z] (when (unseen? {:x x :y y :z z}) :ground))
          options (->> turns
                       (map #(rotate dir %))
                       (map (fn [d] (let [cells (walk-cells block-at from d step)]
                                      {:open (count cells) :dir d :end (peek cells)
-                                      :cost (/ (walk-time block-at waterlogged? cells swim-factor) (gain from threats (peek cells)))})))
+                                      :cost (/ (+ (walk-time block-at waterlogged? cells swim-factor) (/ (cost/unseen-walk-s kind-at cells) (cost/per-block)))
+                                               (gain from threats (peek cells)))})))
                       (remove #(near-hazard? hazards from (point-along from (:dir %) step)))
                       (filter #(worth? from threats %))
                       (remove #(too-close? threats (:end %)))

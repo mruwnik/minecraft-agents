@@ -15,14 +15,16 @@
     (= y 63) (if (and (>= x 1) (<= (js/Math.abs z) 2)) "water" "stone")
     :else "air"))
 
+(def all-seen (constantly false))
+
 (def from {:x 0.5 :y 64 :z 0.5})
 (def threat {:x -5 :y 64 :z 0.5})
 
 (deftest a-flight-takes-a-full-step-on-dry-ground-over-a-swim-straight-away
-  (let [end (walk/choose-target pond-world from [threat] nil [] 6 {:swim-factor 2.2})]
+  (let [end (walk/choose-target pond-world all-seen from [threat] nil [] 6 {:swim-factor 2.2})]
     (is (not (walk/wet? pond-world end)) "dry ground beats swimming the pond")
     (is (< 2 (js/Math.abs (:z end))) "round the band, not through it"))
-  (is (not (walk/wet? pond-world (walk/choose-target pond-world from [threat] nil [] 6 {:swim-factor 1})))
+  (is (not (walk/wet? pond-world (walk/choose-target pond-world all-seen from [threat] nil [] 6 {:swim-factor 1})))
       "dry ground beats the pond even when water is as fast as ground"))
 
 (defn walled-pond-world
@@ -35,19 +37,19 @@
 
 (deftest a-flight-takes-a-short-dry-step-over-a-swim
   (is (contains? #{{:x 0 :y 64 :z 3} {:x 0 :y 64 :z -3}}
-                 (walk/choose-target walled-pond-world from [threat] nil [] 6 {:swim-factor 2.2}))
+                 (walk/choose-target walled-pond-world all-seen from [threat] nil [] 6 {:swim-factor 2.2}))
       "a drowned or a lost breath waits in water: a dry step of 3 beats a full swim"))
 
 (deftest a-refused-end-is-never-chosen-again
   (let [flat (fn [{:keys [y]}] (if (<= y 63) "stone" "air"))
-        first-end (walk/choose-target flat from [threat] nil [] 6)
+        first-end (walk/choose-target flat all-seen from [threat] nil [] 6)
         refused #{[(:x first-end) (:y first-end) (:z first-end)]}
-        again (walk/choose-target flat from [threat] nil [] 6 {:refused refused})]
+        again (walk/choose-target flat all-seen from [threat] nil [] 6 {:refused refused})]
     (is (some? again) "another heading is open")
     (is (not= first-end again) "the refused end is left out")))
 
 (deftest a-flight-without-options-still-goes-round-the-pond
-  (is (not (walk/wet? pond-world (walk/choose-target pond-world from [threat] nil [] 6)))))
+  (is (not (walk/wet? pond-world (walk/choose-target pond-world all-seen from [threat] nil [] 6)))))
 
 (deftest a-cell-is-wet-when-the-feet-or-the-floor-are-water
   (is (walk/wet? pond-world {:x 3 :y 63 :z 0}) "feet in water")
@@ -60,9 +62,9 @@
 (deftest a-waterlogged-block-is-wet-and-a-flight-swims-round-it
   (is (walk/wet? flat-stone logged-band {:x 3 :y 64 :z 0}) "on a waterlogged floor")
   (is (not (walk/wet? flat-stone logged-band {:x 3 :y 64 :z 5})))
-  (let [end (walk/choose-target flat-stone from [threat] nil [] 6 {:swim-factor 2.2 :waterlogged? logged-band})]
+  (let [end (walk/choose-target flat-stone all-seen from [threat] nil [] 6 {:swim-factor 2.2 :waterlogged? logged-band})]
     (is (< 2 (js/Math.abs (:z end))) "round the waterlogged band, as round a pond"))
-  (is (= {:x 6 :y 64 :z 0} (walk/choose-target flat-stone from [threat] nil [] 6 {:swim-factor 2.2}))
+  (is (= {:x 6 :y 64 :z 0} (walk/choose-target flat-stone all-seen from [threat] nil [] 6 {:swim-factor 2.2}))
       "unread, the band is dry"))
 
 (deftest a-walk-is-priced-by-the-distance-it-gains
@@ -78,9 +80,9 @@
 (deftest a-flight-from-a-ranged-mob-takes-a-covered-end-first
   (let [flat (fn [{:keys [y]}] (if (<= y 63) "stone" "air"))
         covered? (fn [end] (neg? (:z end)))]
-    (is (= {:x 6 :y 64 :z 0} (walk/choose-target flat from [threat] nil [] 6 {:swim-factor 2.2}))
+    (is (= {:x 6 :y 64 :z 0} (walk/choose-target flat all-seen from [threat] nil [] 6 {:swim-factor 2.2}))
         "no cover asked: straight away")
-    (is (neg? (:z (walk/choose-target flat from [threat] nil [] 6 {:swim-factor 2.2 :covered? covered?})))
+    (is (neg? (:z (walk/choose-target flat all-seen from [threat] nil [] 6 {:swim-factor 2.2 :covered? covered?})))
         "the first direction whose end is out of the line of fire")))
 
 (defn leaf-wall-world
@@ -129,23 +131,23 @@
 
 (deftest a-flight-does-not-run-down-into-a-roofed-place-below-its-floor
   (let [floor 61
-        end (walk/choose-target (slope-world {:roofed? true}) from [threat] nil [] 6 {:floor floor})]
+        end (walk/choose-target (slope-world {:roofed? true}) all-seen from [threat] nil [] 6 {:floor floor})]
     (is (>= (:y end) floor) "a level way sideways is taken over the slope under the rock")
-    (is (nil? (walk/choose-target (slope-world {:roofed? true :corridor? true}) from [threat] nil [] 6 {:floor floor}))
+    (is (nil? (walk/choose-target (slope-world {:roofed? true :corridor? true}) all-seen from [threat] nil [] 6 {:floor floor}))
         "no way but down under the rock: cornered, not deeper")))
 
 (deftest a-flight-may-descend-in-the-open
-  (is (= 58 (:y (walk/choose-target (slope-world {}) from [threat] nil [] 6 {:floor 61})))
+  (is (= 58 (:y (walk/choose-target (slope-world {}) all-seen from [threat] nil [] 6 {:floor 61})))
       "under open sky the slope is no cave")
-  (is (= 58 (:y (walk/choose-target (slope-world {:roofed? true}) from [threat] nil [] 6)))
+  (is (= 58 (:y (walk/choose-target (slope-world {:roofed? true}) all-seen from [threat] nil [] 6)))
       "no floor given: unchanged"))
 
 (deftest a-flight-may-descend-under-rock-out-of-a-ranged-mobs-fire
-  (is (= 58 (:y (walk/choose-target (slope-world {:roofed? true}) from [threat] nil [] 6 {:floor 61 :covered? (constantly true)})))
+  (is (= 58 (:y (walk/choose-target (slope-world {:roofed? true}) all-seen from [threat] nil [] 6 {:floor 61 :covered? (constantly true)})))
       "cover from arrows outweighs depth"))
 
 (deftest a-flight-may-descend-a-stair-the-body-cut
-  (is (= 58 (:y (walk/choose-target (slope-world {:roofed? true}) from [threat] nil [] 6
+  (is (= 58 (:y (walk/choose-target (slope-world {:roofed? true}) all-seen from [threat] nil [] 6
                                     {:floor 61 :known (set (for [x (range 0 9)] [x (- 63 x) 0]))})))
       "known floors are no unknown cave"))
 
@@ -170,9 +172,9 @@
 
 (deftest a-flight-never-ends-within-keep-away-of-a-threat
   (let [close {:x -0.5 :y 64 :z 0.5}]
-    (is (nil? (walk/choose-target corridor-world from [close] nil [] 3 {}))
+    (is (nil? (walk/choose-target corridor-world all-seen from [close] nil [] 3 {}))
         "a 3 block step gains 2.5 blocks but ends inside keep-away: cornered")
-    (is (some? (walk/choose-target corridor-world from [close] nil [] 6 {}))
+    (is (some? (walk/choose-target corridor-world all-seen from [close] nil [] 6 {}))
         "a 6 block step ends outside it")))
 
 (deftest the-way-up-is-not-taken-to-a-cell-within-keep-away-of-a-threat
@@ -193,17 +195,24 @@
 
 (deftest a-flight-leaves-out-the-ends-it-is-asked-to-avoid-unless-nothing-else-is-open
   (let [ahead? (fn [end] (pos? (- (:x end) 3)))
-        straight (walk/choose-target flat-world from [threat] nil [] 6 {})
-        avoided (walk/choose-target flat-world from [threat] nil [] 6 {:avoid [ahead?]})]
+        straight (walk/choose-target flat-world all-seen from [threat] nil [] 6 {})
+        avoided (walk/choose-target flat-world all-seen from [threat] nil [] 6 {:avoid [ahead?]})]
     (is (= {:x 6 :y 64 :z 0} straight))
     (is (not= straight avoided) "the end straight away is avoided, another turn is taken")
-    (is (= straight (walk/choose-target flat-world from [threat] nil [] 6 {:avoid [(constantly true)]}))
+    (is (= straight (walk/choose-target flat-world all-seen from [threat] nil [] 6 {:avoid [(constantly true)]}))
         "every end avoided: the preferred one stays")))
+
+(deftest an-unseen-end-floor-is-priced-as-a-drop-into-the-unknown
+  (let [unseen-side? (fn [{:keys [y z]}] (and (= y 63) (>= z 0)))]
+    (is (neg? (:z (walk/choose-target flat-world unseen-side? from [threat] nil [] 6 {})))
+        "a seen floor beats the straight way over unseen ones")
+    (is (= {:x 6 :y 64 :z 0} (walk/choose-target flat-world (fn [{:keys [y]}] (= y 63)) from [threat] nil [] 6 {}))
+        "with every floor unseen the priced straight way is still taken")))
 
 (deftest an-avoid-that-would-empty-the-options-gives-way-to-the-next
   (let [no-ahead (fn [end] (>= (:x end) 3))
         no-left (fn [end] (pos? (:z end)))
-        end (walk/choose-target flat-world from [threat] nil [] 6 {:avoid [no-ahead (constantly true) no-left]})]
+        end (walk/choose-target flat-world all-seen from [threat] nil [] 6 {:avoid [no-ahead (constantly true) no-left]})]
     (is (< (:x end) 3) "the first avoid holds")
     (is (not (pos? (:z end))) "the all-avoiding one is skipped, the last holds")))
 
@@ -213,7 +222,7 @@
                        (not= y 64) "air"
                        (even? (+ x z)) "cornflower"
                        :else "rail"))]
-    (is (< 3 (:x (walk/choose-target meadow from [threat] nil [] 6)))
+    (is (< 3 (:x (walk/choose-target meadow all-seen from [threat] nil [] 6)))
         "flowers and rails are no walls: the flight runs straight away from the threat")))
 
 (deftest the-places-recent-walks-began-are-ways-back-like-stairs
@@ -224,9 +233,9 @@
 
 (deftest a-drowned-chaser-is-never-fled-into-water
   (let [all-water (fn [{:keys [y]}] (cond (<= y 62) "stone" (= y 63) "water" :else "air"))]
-    (is (not (walk/wet? pond-world (walk/choose-target pond-world from [threat] nil [] 6 {:swim-factor 1 :dry-only? true})))
+    (is (not (walk/wet? pond-world (walk/choose-target pond-world all-seen from [threat] nil [] 6 {:swim-factor 1 :dry-only? true})))
         "even with water as fast as ground, the dry way round the pond")
-    (is (nil? (walk/choose-target all-water from [threat] nil [] 6 {:swim-factor 1 :dry-only? true}))
+    (is (nil? (walk/choose-target all-water all-seen from [threat] nil [] 6 {:swim-factor 1 :dry-only? true}))
         "only water to flee through: cornered, not a swim")))
 
 (def ledge-world
@@ -240,5 +249,5 @@
 
 (deftest a-flight-jumps-down-a-three-block-ledge-it-sees-the-floor-of
   (is (= 3 (walk/open-cells ledge-world {:x 0.5 :y 64 :z 0.5} [1 0] 3)) "dropped onto the stone three blocks down, not blocked at the lip")
-  (is (= {:x 6 :y 61 :z 0} (walk/choose-target ledge-world {:x 0.5 :y 64 :z 0.5} [{:x -5 :y 64 :z 0.5}] nil [] 6))
+  (is (= {:x 6 :y 61 :z 0} (walk/choose-target ledge-world all-seen {:x 0.5 :y 64 :z 0.5} [{:x -5 :y 64 :z 0.5}] nil [] 6))
       "a creeper behind on the plateau: the flight runs off the ledge"))
