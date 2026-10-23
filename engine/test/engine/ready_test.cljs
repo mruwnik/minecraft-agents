@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is are]]
             [engine.hut-shelter-test :as hut]
             [engine.ctx :as ctx]
+            [engine.game :as game]
             [engine.memory :as mem]
             [engine.core.ending :as ending]
             [engine.registry :as registry]
@@ -63,6 +64,7 @@
   "A job's ctx over a fake body built from world (a fresh job id: the check cache is per job), staying at its place long enough that no exposure is affordable (jobs.lib.price)."
   [world]
   (let [p (cond-> (tu/seeing-all (tu/fake (merge {:floor tu/walk-floor} world))) (not (:light world)) sky/with-sky)]
+    (game/select! p)
     {::price/stay-s 1e6 :id (str (random-uuid)) :slots [] :engine {:warned (atom #{}) :jobs registry/jobs} :primitives p :view (fn [] {:now 0 :data {}})}))
 
 (def inside {:x 5 :y 64 :z 0})
