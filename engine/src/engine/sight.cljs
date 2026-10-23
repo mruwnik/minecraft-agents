@@ -17,13 +17,14 @@
     (loop [i 0 cx cx cy cy cz cz mx (t-max dx cx fx tdx) my (t-max dy cy fy tdy) mz (t-max dz cz fz tdz)]
       (if (>= i budget)
         true
-        (let [axis (cond (and (<= mx my) (<= mx mz)) :x (<= my mz) :y :else :z)
-              t (case axis :x mx :y my :z mz)]
+        ;; axis 0 1 2 (x y z): numbers compare inline, keywords through cljs.core/=
+        (let [axis (cond (and (<= mx my) (<= mx mz)) 0 (<= my mz) 1 :else 2)
+              t (case axis 0 mx 1 my mz)]
           (if (> t 1)
             true
-            (let [cx (if (= axis :x) (+ cx sx) cx) cy (if (= axis :y) (+ cy sy) cy) cz (if (= axis :z) (+ cz sz) cz)
-                  mx (if (= axis :x) (+ mx tdx) mx) my (if (= axis :y) (+ my tdy) my) mz (if (= axis :z) (+ mz tdz) mz)]
-              (cond (and (= cx ex) (= cy ey) (= cz ez)) true
+            (let [cx (if (== axis 0) (+ cx sx) cx) cy (if (== axis 1) (+ cy sy) cy) cz (if (== axis 2) (+ cz sz) cz)
+                  mx (if (== axis 0) (+ mx tdx) mx) my (if (== axis 1) (+ my tdy) my) mz (if (== axis 2) (+ mz tdz) mz)]
+              (cond (and (== cx ex) (== cy ey) (== cz ez)) true
                     (solid? cx cy cz) false
                     :else (recur (inc i) cx cy cz mx my mz)))))))))
 

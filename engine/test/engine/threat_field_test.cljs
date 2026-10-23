@@ -1,7 +1,12 @@
 (ns engine.threat-field-test
   "jobs.lib.threat-field: a known mob's field is the cells its way and line of fire reach, not a sphere round it; jobs.lib.cost/death-chance prices a route by it."
   (:require [cljs.test :refer [deftest is]]
+            [engine.fake :as fake]
+            [engine.fake.raw-world :as fake-raw]
+            [engine.perception :as perception]
+            [engine.perception.rays :as rays]
             [engine.test-util :as tu]
+            [jobs.lib.check-cache :as check-cache]
             [jobs.lib.cost :as cost]
             [jobs.lib.threat-field :as field]))
 
@@ -34,3 +39,20 @@
         chance (fn [spec] (cost/death-chance body (assoc route :threats [{:mob "zombie" :weight 1 :reach (reach-of spec "zombie" {:x 0.5 :y 64 :z 0.5})}])))]
     (is (> (chance {}) (chance {:blocks pen})))
     (is (= (cost/death-chance body {}) (chance {:blocks pen})) "penned in: only the route's class")))
+
+(deftest a-kept-field-holds-until-the-body-sees-a-cell-of-it-change
+  (let [raw (tu/fake-on-floor {:floor [-40 -20 40 20] :self {:pos {:x 12.5 :y 64 :z 0.5}}})
+        per (perception/create (fake-raw/create raw) {:now (constantly 1000000)})
+        c {:primitives (perception/wrap raw per) :view (fn [] {:now 0 :data {}})}
+        look! #(doseq [yaw [0 90 180 270]] (swap! (fake/state raw) assoc :yaw yaw) (rays/pass! per))
+        zombie {:mob "zombie" :pos {:x 0.5 :y 64 :z 0.5}}
+        _ (look!)
+        before (field/field-of c zombie)]
+    (swap! (fake/state raw) fake/put-block [-60 64 0] "stone")
+    (rays/touch! per [-60 64 0])
+    (is (identical? before (field/field-of (check-cache/fresh c) zombie))
+        "a cell it did not read changed: the same field, for a fresh check too")
+    (swap! (fake/state raw) #(-> % (fake/put-block [6 64 0] "stone") (fake/put-block [6 65 0] "stone")))
+    (look!)
+    (is (some? ((field/reach-fn before) 6 64 0)))
+    (is (nil? ((field/reach-fn (field/field-of c zombie)) 6 64 0)) "a pillar seen on its way: no longer in its field")))

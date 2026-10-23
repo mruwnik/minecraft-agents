@@ -128,7 +128,9 @@
                    (if (zero? k) (mutable-id? st id) (== k 1)))
         ;; a remembered door that aged out reads unknown; seeing it again answers differently with the same id
         aged? (and mutable? (== (aget ids i) v) (> (- now (cell-seen sec i)) rerecord-bump-ms))]
-    (when (or aged? (not (== (aget ids i) v))) (set! (.-writes st) (inc (.-writes st))))
+    (when (or aged? (not (== (aget ids i) v)))
+      (set! (.-writes st) (inc (.-writes st)))
+      (set! (.-wrote sec) (.-writes st)))
     (aset ids i v)
     (aset (.-times sec) i (if (and (identical? sec (.-minSec st)) (== now (.-minNow st))) (.-minVal st) (minute-of! st sec now)))
     (if mutable?
@@ -142,6 +144,22 @@
   (set! (.-lastKey st) -1))
 
 ;; ---- reading memory
+
+(defn section-stamp
+  "The section cx sy cz of dimension dim as one number: twice st's writes count at its last write (0: none since it was
+  loaded), plus 1 when it keeps a mutable state's time (fine-times: it, or a cell beside it, may age to unknown, see
+  remembered); -1 when it is not in memory. Its cells answer the same while the number stays, and while the clock does
+  where it is odd."
+  [^js st dim cx sy cz]
+  (if-let [^js sec (.get (store-of st dim) (section-key cx sy cz))]
+    (+ (* 2 (or (.-wrote sec) 0)) (if (.-fine sec) 1 0))
+    -1))
+
+(defn section-ids
+  "The state ids (each plus 1, 0: never seen) of section cx sy cz of dimension dim by cell-index, nil when it is not in
+  memory. The section's own array: copy it to keep it."
+  [^js st dim cx sy cz]
+  (some-> ^js (.get (store-of st dim) (section-key cx sy cz)) .-ids))
 
 (defn remembered
   "[state id, seen time in ms] of the remembered cell (x y z) in the current dimension, or nil when never seen."
