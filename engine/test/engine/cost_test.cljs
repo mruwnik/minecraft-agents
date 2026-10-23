@@ -458,7 +458,7 @@
   (let [zombie-s #(cost/mob-hurt (cost/armour-stats nil) "zombie" 10)]
     (game/select! (fake/create {:server {:difficulty "hard" :simulationDistance 6}}))
     (is (= 45 (zombie-s)) "hard prices a hit at 4.5")
-    (is (threat/breaks-door? "zombie"))
+    (is (pos? (threat/door-break-share "zombie")) "a zombie breaks doors on hard")
     (is (< 0 (threat/left-alive "zombie" 200 0 true)) "above easy a loot-picker with the drops outlives the body going far")
     (is (= 6 (threat/simulation-distance)))
     (is (< 0 (threat/left-alive "creeper" 200 600 false) 1) "6 chunks is 96 blocks: no tick reaches the instant-despawn zone, only the idle odds apply")
