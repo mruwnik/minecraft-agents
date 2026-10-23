@@ -14,6 +14,8 @@
    ::creeper-exchange-hp {:default 3.06 :doc "k of the creeper exchange: hp creepers dealt over the swings (attack that hit or killed) of hit-and-back fights with a sword or axe against a lone creeper (a late step back lets the fuse run on); 1 trial run, 1 blast over 2 hp, all before 336cdd402 (the back-off) and none counted since. Recount: node tools/event-counts.mjs creeper-exchange (:armed); per-case evidence replaces it." :spec (a/num-in 0 nil)}
    ::creeper-exchange-swings {:default 5 :doc "n of the creeper exchange: the swings behind ::creeper-exchange-hp." :spec (a/num-in 1 nil)}
    ::difficulty {:default 1 :doc "The server difficulty mob hits are costed at: 0 peaceful, 1 easy, 2 normal, 3 hard (not read from the server)." :spec (a/int-in 0 3)}
+   ::spot-occupied {:default {:k 1 :n 4} :spec (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)})
+                    :doc "Of the death and near-death spots the trial bodies came back within 16 blocks of after 300 s or more 32 to 128 blocks off (vanilla: its killer had despawned), those where a hostile met the body within 60 s (k) of all (n): node tools/event-counts.mjs spot-returns, 2026-10-23."}
    ::hit-rate {:default 0.6 :doc "Hits a zombie or skeleton lands per second of exposure (measured over trial fights; the body is out of reach part of the time). Mobs not measured count one a second." :spec (a/num-in 0 nil)}
    ::spider-hit-rate {:default 0.35 :doc "Hits a spider or cave spider lands per second of exposure." :spec (a/num-in 0 nil)}
    ::trident-rate {:default 0.5 :doc "Throws a second of a drowned holding a trident (vanilla: one every 40 ticks)." :spec (a/num-in 0 nil)}
@@ -54,14 +56,34 @@
 (def idle-despawn-s "Seconds a hostile idles before it may despawn (vanilla: 600 ticks)." 30)
 (def idle-despawn-per-s "Chance a second an idle hostile despawns (vanilla: 1 in 800 a tick)." (/ 20 800))
 
+(def loot-pickers
+  "Mobs that may spawn able to pick up loot (vanilla: chance 0.55 x the regional special multiplier, 0 below normal); one
+  that picked up an item never despawns."
+  #{"zombie" "husk" "drowned" "zombie_villager" "zombified_piglin" "skeleton" "stray" "bogged" "parched" "wither_skeleton"})
+
+(def loot-share "The most of loot-pickers that spawn able to pick up loot (vanilla 0.55, at a special multiplier of 1)." 0.55)
+
 (defn left-alive
-  "The chance a hostile is not despawned (vanilla): 0 once a player was more than despawn-blocks from it (farthest), else
-  1 in 800 a tick after idle-despawn-s of away-s with none within idle-despawn-blocks. Above easy a zombie or skeleton
-  may pick up loot and stay (unknown: 1)."
-  [farthest away-s]
-  (cond (> (settings/get settings ::difficulty) 1) 1
-        (> farthest despawn-blocks) 0
-        :else (js/Math.exp (- (* idle-despawn-per-s (max 0 (- away-s idle-despawn-s)))))))
+  "The chance the hostile mob is not despawned (vanilla): 0 once a player was more than despawn-blocks from it (farthest;
+  its chunk still ticks there at the default simulation distance of 10), else 1 in 800 a tick after idle-despawn-s of
+  away-s with none within idle-despawn-blocks; unless it picked up the body's drops (drops?): a loot-picker above easy, at
+  most loot-share (the chunk's inhabited time, which sets the multiplier, is unknown)."
+  [mob farthest away-s drops?]
+  (let [kept (if (and drops? (contains? loot-pickers mob) (> (settings/get settings ::difficulty) 1)) loot-share 0)
+        despawned (if (> farthest despawn-blocks) 1 (- 1 (js/Math.exp (- (* idle-despawn-per-s (max 0 (- away-s idle-despawn-s)))))))]
+    (- 1 (* (- 1 kept) despawned))))
+
+(defn spawned-there
+  "The chance a mob spawned since is at a place a mob spawns at a share of (jobs.lib.cost/spawn-share), after seconds with
+  the nearest player 32 to 128 blocks off: vanilla spawns at a steady rate, each mob idles idle-despawn-s and then despawns
+  idle-despawn-per-s, so the count there is Poisson, the rate times the expected life so far. The rate is the one at which a
+  wholly dark spot is held (k+1)/(n+2) of the time, ::spot-occupied."
+  [share seconds]
+  (let [{:keys [k n]} (settings/get settings ::spot-occupied)
+        held (/ (inc k) (+ n 2))
+        idle (min seconds idle-despawn-s)
+        life (+ idle (/ (- 1 (js/Math.exp (- (* idle-despawn-per-s (max 0 (- seconds idle-despawn-s)))))) idle-despawn-per-s))]
+    (- 1 (js/Math.pow (- 1 held) (* share (/ life (+ idle-despawn-s (/ 1 idle-despawn-per-s))))))))
 
 (def spawn-weights
   "The weights the overworld's common monster spawns are drawn by (vanilla, most biomes); slimes, kept to slime chunks and

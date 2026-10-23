@@ -1,6 +1,7 @@
 (ns world-test.event-counts
   "tools/event-counts.mjs: recounts the measured combat priors from the trial bodies' event logs, so a setting can cite its k and n.
   Commands: fold | creeper-exchange | flight-starts, each [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S]; each folds the logs into the durable counts file first (rows by run id, so counts only grow as logs rotate).
+  spot-returns [--agents DIR] (world-test.spot-returns) counts from the logs alone, no fold.
   creeper-exchange: respond runs that only decided about creepers and fought (a :fight decision) with at least one swing: hp the creepers
   dealt (hurt events inside the run) per swing (attack that hit or killed), overall and per weapon equipped in the run, and the runs with a blast over 2 hp.
   flight-starts: the first flee decision of each respond run from a creeper: seconds until the body is 1 block from where it stood,
@@ -12,7 +13,8 @@
             ["zlib" :as zlib]
             [cljs.reader :as reader]
             [clojure.string :as str]
-            [world-test.fresh-drop :as fresh-drop]))
+            [world-test.fresh-drop :as fresh-drop]
+            [world-test.spot-returns :as spot-returns]))
 
 (def blast-hp "hp over which one hurt event from a creeper is its blast." 2)
 (def tail-ms "Time after a run ends within which a hurt still counts as its own." 1500)
@@ -208,7 +210,7 @@
        (sort-by :t)
        vec))
 
-(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S]
+(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | spot-returns [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S]
   every command first folds the logs into the counts file (default worlds/test/priors-counts.edn), then reports from the file; --since-ms keeps the rows of fights started after it.")
 
 (defn- parse-args [argv]
@@ -244,4 +246,5 @@
        "fold" (do (println (pr-str {:exchange (count (:exchange folded)) :starts (count (:starts folded))})) 0)
        "creeper-exchange" (do (println (pr-str (assoc (exchange-report (since (:exchange folded))) :since-ms since-ms))) 0)
        "flight-starts" (do (println (pr-str (assoc (starts-report (since (:starts folded))) :since-ms since-ms :sprint sprint))) 0)
+       "spot-returns" (do (println (pr-str (spot-returns/count-in (or agents (path/join repo "worlds" "test" "agents"))))) 0)
        (do (js/console.error usage) 2)))))

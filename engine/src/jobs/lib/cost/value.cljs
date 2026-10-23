@@ -168,17 +168,20 @@
     (number? (first place)) [place]
     :else place))
 
+(defn spawn-share
+  "The share of place's cells (a cell, a set of cells or a {:min :max} box) a mob spawns at. :light (cell -> {:block :sky} as
+  the body saw it, the sky light already less the sky's darkening and 0 where it no longer lights; nil or missing: unseen,
+  dark). A cell spawns only at block light 0 and sky light 0."
+  [place {:keys [light]}]
+  (let [cells (cells-of place)
+        spawns? (fn [cell] (let [{:keys [block sky] :or {block 0 sky 0}} (when light (light cell))]
+                             (and (zero? block) (zero? sky))))]
+    (/ (count (filter spawns? cells)) (max 1 (count cells)))))
+
 (defn spawn-chance
-  "The chance per second a mob spawns at place (a cell, a set of cells or a {:min :max} box: the mean over its cells).
-  :light (cell -> {:block :sky} as the body saw it, the sky light already less the sky's darkening and 0 where it no
-  longer lights; nil or missing: unseen, dark). A cell spawns only at block light 0 and sky light 0."
+  "The chance per second a mob spawns at place and reaches a body standing there: ::spawn-chance-per-s x spawn-share."
   ([place] (spawn-chance place nil))
-  ([place {:keys [light]}]
-   (let [cells (cells-of place)
-         spawns? (fn [cell] (let [{:keys [block sky] :or {block 0 sky 0}} (when light (light cell))]
-                              (and (zero? block) (zero? sky))))]
-     (* (settings/get settings ::spawn-chance-per-s)
-        (/ (count (filter spawns? cells)) (max 1 (count cells)))))))
+  ([place opts] (* (settings/get settings ::spawn-chance-per-s) (spawn-share place opts))))
 
 (defn dark-factor
   "The planner's extra cost of a dark cell as a share of its own seconds (options.dark.factor): per-dark over per-block

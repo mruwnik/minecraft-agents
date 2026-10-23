@@ -1,0 +1,86 @@
+(ns world-test.spot-returns
+  "tools/event-counts.mjs spot-returns: counts the measured prior jobs.lib.cost.threat ::spot-occupied from the trial bodies' event logs.
+  A spot is a death by a mob, or a hurt by one down to near-death-hp. Its return is the first time the body is within
+  return-blocks of it again after away-s or more with every known position 32 to 128 blocks off (vanilla: the killer has
+  despawned, and mobs spawn there again); a later spot, a position over 128 blocks off or memory-ms end the spot. k: returns
+  where a hostile was decided about or hurt the body within met-ms. Positions: :planned, :respawned, :hurt and :died.
+  Pure part: returns."
+  (:require ["fs" :as fs]
+            ["path" :as path]
+            ["zlib" :as zlib]
+            [clojure.string :as str]
+            [world-test.fresh-drop :as fresh-drop]))
+
+(def hostiles #{"zombie" "husk" "drowned" "zombie_villager" "skeleton" "stray" "bogged" "spider" "cave_spider" "creeper" "witch"
+                "enderman" "slime" "phantom" "pillager" "vindicator"})
+(def near-death-hp "jobs.lib.death-spot ::near-death-hp's default." 6)
+(def return-blocks 16)
+(def away-s 300)
+(def met-ms 60000)
+(def memory-ms "jobs.lib.cost.death ::memory-ms's default: how long a spot counts." 7200000)
+
+(defn- num-of [re line] (some-> (re-find re line) second js/parseFloat))
+
+(defn- hostile-cause [line]
+  (or (some-> (re-find #":attacker \{[^}]*:name \"([^\"]+)\"" line) second hostiles)
+      (some->> (re-find #":causes \[([^\]]*)\]" line) second (re-seq #"\"([^\"]+)\"") (map second) (some hostiles))))
+
+(defn scan-line
+  "One log line -> {:t :k :pos :cause}, :k one of :spot :pos :met, or nil."
+  [line]
+  (let [t (num-of #":time-ms (\d+)" line)
+        [_ x y z] (re-find #":pos \{:x (-?[\d.]+(?:E-?\d+)?), :y (-?[\d.]+(?:E-?\d+)?), :z (-?[\d.]+(?:E-?\d+)?)\}" line)
+        pos (when x {:x (js/parseFloat x) :y (js/parseFloat y) :z (js/parseFloat z)})
+        body? (str/includes? line ":source :body")
+        cause (hostile-cause line)
+        r {:t t :pos pos :cause cause}]
+    (when t
+      (cond
+        (and body? (str/includes? line ":kind :died")) (assoc r :k (if cause :spot :pos))
+        (and body? (str/includes? line ":kind :hurt")) (assoc r :k (cond (and cause (<= (or (num-of #":health (-?[\d.]+)" line) 99) near-death-hp)) :spot
+                                                                         cause :met
+                                                                         :else :pos))
+        (str/includes? line ":kind :hostile.decided") (assoc r :k :met)
+        (or (str/includes? line ":kind :planned") (str/includes? line ":kind :respawned")) (assoc r :k :pos)))))
+
+(defn- dist [a b] (js/Math.hypot (- (:x a) (:x b)) (- (:y a) (:y b)) (- (:z a) (:z b))))
+
+(defn- return-of
+  "The return [t met?] after spot (the records after it, by time), or nil."
+  [{spot :pos t0 :t} later]
+  (loop [[r & more] later near-t t0 away? false]
+    (cond
+      (or (nil? r) (> (- (:t r) t0) memory-ms) (= :spot (:k r))) nil
+      (nil? (:pos r)) (recur more near-t away?)
+      :else
+      (let [d (dist (:pos r) spot)]
+        (cond
+          (> d 128) nil
+          (and (<= d return-blocks) away? (>= (- (:t r) near-t) (* 1000 away-s)))
+          [(:t r) (boolean (some #(and (= :met (:k %)) (<= (:t r) (:t %) (+ (:t r) met-ms))) (cons r more)))]
+          (<= d 32) (recur more (:t r) false)
+          :else (recur more near-t true))))))
+
+(defn returns
+  "{:spots :n :k} of the records of one body, sorted by :t."
+  [records]
+  (let [rs (vec records)
+        spots (keep-indexed (fn [i r] (when (and (= :spot (:k r)) (:pos r)) i)) rs)
+        backs (keep #(return-of (rs %) (subvec rs (inc %))) spots)]
+    {:spots (count spots) :n (count backs) :k (count (filter second backs))}))
+
+(defn- read-body [dir]
+  (->> (fresh-drop/log-files (array-seq (fs/readdirSync dir)))
+       (mapcat (fn [f] (let [p (path/join dir f)
+                             text (if (str/ends-with? f ".gz") (.toString (zlib/gunzipSync (fs/readFileSync p)) "utf8") (fs/readFileSync p "utf8"))]
+                         (keep scan-line (str/split-lines text)))))
+       (sort-by :t)))
+
+(defn count-in
+  "{:spots :n :k} over the bodies under dir (each body's engine/ event logs)."
+  [dir]
+  (apply merge-with + {:spots 0 :n 0 :k 0}
+         (for [b (array-seq (fs/readdirSync dir))
+               :let [d (path/join dir b "engine")]
+               :when (fs/existsSync d)]
+           (returns (read-body d)))))
