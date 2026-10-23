@@ -576,6 +576,18 @@
           (is (some #(> % (quot (settings/get dig-route/settings ::dig-route/max-nodes) 2)) @per-call) "a search spent most of a call's slice and went on")
           (is (< (count (events-of seen :go-to.escalated)) 8) (pr-str (map (juxt :step :at) (events-of seen :go-to.escalated)))))))))
 
+(deftest a-body-shut-in-on-a-plateau-digs-down-to-the-seen-plain-toward-a-goal-too-far-for-one-route
+  ;; seeing 30 round it, the pocket 70 off reads as through rock (no dig route); the plain below the edge is seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks (merge (box 0 50 0 99 54 63 "stone") (box 0 55 0 20 60 20 "stone") {"80,51,56" "air" "80,52,56" "air"})
+              {:keys [out p seen]} (await (run-job! {:sight 30 :self {:pos {:x 10.5 :y 61 :z 10.5}} :blocks blocks :inventory [{:name "stone_pickaxe" :count 1}]}
+                                                    {:pos [80 51 56] :range 0}))]
+          (is (true? (:arrived @out)) (pr-str (select-keys @out [:why :text :escalation])))
+          (is (= [80 51 56] (feet p)))
+          (is (= {:step :dig-route :at [10 61 10]} (select-keys (first (events-of seen :go-to.escalated)) [:step :at])) "the first way is the dig off the edge"))))))
+
 (deftest a-dig-route-planned-again-over-the-slice-still-reaches-a-far-goal
   ;; the stone over the pocket is dirt, and the cell 4 down shows only once the cell above is dug (a guessed cell seen
   ;; otherwise): with a slice of 30 nodes the route from there is planned on over several rounds, not read as no route
