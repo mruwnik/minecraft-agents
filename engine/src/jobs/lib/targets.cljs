@@ -65,25 +65,6 @@
     (let [reason (keyword (.-reason r))]
       {:status :none :reason reason :proved (and (contains? proof-reasons reason) (nil? (.-frontier r)))})))
 
-(defn route
-  "The cells [{:x :y :z}] of the way a search costed as go-to's plans (new-search) finds from the body's cell to within
-  range of the cell to [x y z], searched here at once within wsearch/round-budget expansions and wsearch/round-ms: what a
-  check prices a walk on before go-to plans it. nil when it finds no way within them."
-  [c to range]
-  (when-let [pw (wworld/path-world (:primitives c))]
-    (let [^js p (:plan (new-search c pw [{:x (to 0) :y (to 1) :z (to 2)}] range nil {}))
-          t0 (js/performance.now)]
-      (loop [used wplan/chunk-expansions]
-        (cond
-          ^boolean (.step p wplan/chunk-expansions)
-          (let [^js r (.result p)]
-            (when (= "found" (.-status r))
-              (mapv (fn [^js s] {:x (.-x s) :y (.-y s) :z (.-z s)}) (.. r -path -steps))))
-
-          (or (>= used wsearch/round-budget) (>= (- (js/performance.now) t0) wsearch/round-ms)) nil
-
-          :else (recur (+ used wplan/chunk-expansions)))))))
-
 (defn ^:async nearest!
   "The target of targets ({:x :y :z} cells, nearest first; the first max-targets are searched) the body reaches soonest
   by walking to within range of it: {:status :found :target :index :cost}, {:status :searching} (the search goes on at

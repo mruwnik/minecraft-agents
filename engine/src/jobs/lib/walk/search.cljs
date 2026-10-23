@@ -274,7 +274,8 @@
 (defn ^:async plan-walk-budgeted!
   "plan-walk! that runs at most budget expansions of search (run-search!), going on with the body's unfinished search
   (searches) when it plans the same thing from the same cell. A search that ends is plan-walk!'s answer; one that does not
-  is unfinished-plan's (progress, default true: whether it may walk to where the search has got to). With frontier, the
+  is unfinished-plan's (progress, default true: whether it may walk to where the search has got to); a partial one drops
+  the search, which its :search-on (fn []) keeps to go on with instead (a walk held before its first step). With frontier, the
   searches read and add to the body's known land toward the goal (known-land): a frontier in land an earlier search
   knew to its end is walked to only when there is no other (:frontier-taken :known)."
   [c pw to range weight {:keys [policy walls one-way frontier budget progress quoted] :or {progress true}}]
@@ -295,6 +296,7 @@
       (do (keep-search! who k (when (and quoted (not done) (= "found" (.-status ^js (:r within)))) (assoc search :within within)))
           (when known (learn-known! known (:r within)))
           (wplan/walk-plan c (:walled search) (:walled search) to one-way frontier within))
-      (let [plan (assoc (unfinished-plan search ms one-way progress (if (:unknown c) (wplan/masked-wet-ok c) (constantly false)) #(wplan/one-way-priced? c to %1 %2)) :fresh fresh?)]
-        (keep-search! who k (when-not (= "partial" (:status plan)) search))
-        plan))))
+      (let [plan (assoc (unfinished-plan search ms one-way progress (if (:unknown c) (wplan/masked-wet-ok c) (constantly false)) #(wplan/one-way-priced? c to %1 %2)) :fresh fresh?)
+            partial? (= "partial" (:status plan))]
+        (keep-search! who k (when-not partial? search))
+        (cond-> plan partial? (assoc :search-on #(keep-search! who k search)))))))

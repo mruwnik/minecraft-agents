@@ -171,8 +171,8 @@
       (remove #(ids (.-id %)) (danger-q/hostiles-near-way p (danger-q/mob-pos p t) (settings/get price/settings ::price/way-radius) {})))))
 
 (defn walk-hp
-  "hp the walk to the nearest of near costs: go-to's own route price (risk/estimate, its hostiles left out: they are in the
-  fight) plus the drops of the straight way there over the ground the body has seen, its unseen steps at the planner's
+  "hp the walk to the nearest of near costs: go-to's own route price (risk/estimate of a walk not planned: the straight
+  way priced unseen; its hostiles left out: they are in the fight) plus the drops of the straight way there over the ground the body has seen, its unseen steps at the planner's
   unknown prices (cost/unseen-route-hp)."
   [c near]
   (if-let [t (first near)]

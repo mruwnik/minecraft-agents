@@ -415,6 +415,7 @@
                    seen-goal? (assoc :explore false))
             stair-check (reprice/check c pos (lookout-check c pos (plan-check c pos (choose/stair-check c pos) (straight-from! c d))))
             {walked :result status :status to :to} (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) pos range (assoc opts :see-cell (see-cell c) :stair-check stair-check)))
+            status (if (and (= "stair" status) (:searching (:why walked))) "searching" status)
             _ (ctx/hold-still! c (when (= "searching" status) :searching))
             fetched (when (= :no-torch (:status walked)) (await (fetch-torches! c)))
             aided? (when (and (not fetched) (not= "arrived" status) (torch/torch-aid? c walked)) (await (torch/hold-torch! c)))
@@ -453,8 +454,8 @@
           (:learn-spent walked)
           (await (esc/give-up-or-escalate! c pos (max-blocked) status (cond-> {:status :no-path :reason :unseen-floors :cells (:cells walked)} (none-held? c) (assoc :torches :none))))
 
-          (and (= "stair" status) (:hostile (:why walked)))
-          (reprice/end c (:hostile (:why walked)))
+          (and (= "stair" status) (:risk (:why walked)))
+          (reprice/end c (:risk (:why walked)))
 
           (and (= "stair" status) (= :dives (:why walked)))
           (esc/dive-refused! c pos)

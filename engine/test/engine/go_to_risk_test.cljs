@@ -3,8 +3,10 @@
   with the figures in the reason; a way that goes mostly underground costs far less than the same distance over open ground."
   (:require [cljs.test :refer [are deftest is async]]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.fake :as fake]
             [engine.hut-shelter-test :as hut]
+            [engine.path.planner-tuned :as planner]
             [engine.ready-test :as ready-test]
             [engine.settings :as settings]
             [engine.shelter-support :as st]
@@ -23,10 +25,18 @@
             [jobs.lib.ready :as ready]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.walk-risk :as risk]
+            [jobs.lib.walk.drive :as drive]
             [jobs.movement.go-to.reprice :as reprice]))
 
 (def inside {:x 5 :y 64 :z 0})
 (def night-hut (merge (hut/hut-world inside {}) {:time st/night}))
+
+(defn plan-of "A found plan of go-to over cells." [cells] {:status "found" :steps (vec cells)})
+
+(defn straight-plan "A found plan of the body of c on the straight way to goal." [c goal]
+  (plan-of (rest (cost/straight-route (reach/mob-lookup (:primitives c)) (sh-sense/feet (:primitives c)) goal))))
+
+(defn planned-status "risk/status of the walk to goal planned straight." [c goal] (risk/status c goal (straight-plan c goal)))
 
 (deftest a-way-down-from-the-hut-is-less-exposed-than-the-same-way-over-open-ground
   (let [c (ready-test/ctx-of night-hut)
@@ -48,7 +58,7 @@
   (let [c (ready-test/ctx-of (assoc night-hut :time st/noon :blocks {"22,64,20" "lava"}))
         here {:x 21 :y 64 :z 20}]
     (is (pos? (lava-risk/hp (:primitives c) [21 64 20])))
-    (is (zero? (risk/route-lava-hp (:primitives c) here here 1)))))
+    (is (zero? (risk/route-lava-hp (:primitives c) [here])))))
 
 (deftest a-dark-way-by-day-is-not-exposed
   (let [c (ready-test/ctx-of (assoc night-hut :time st/noon))]
@@ -58,8 +68,8 @@
   (let [c (ready-test/ctx-of (assoc night-hut :time st/noon))]
     (with-redefs [sh-sense/sky-reaches-from-above? (constantly false)
                   sh-sense/block-light-at (constantly 0)]
-      (is (zero? (:hp (with-redefs [ready/hall-at? (constantly false)] (risk/estimate c {:x 95 :y 64 :z 0})))) "a small dark tunnel is free")
-      (is (pos? (:hp (with-redefs [ready/hall-at? (constantly true)] (risk/estimate c {:x 95 :y 64 :z 0})))) "a dark hall costs spawns"))))
+      (is (zero? (:hp (with-redefs [ready/hall-at? (constantly false)] (risk/estimate c {:x 95 :y 64 :z 0} {:plan (straight-plan c {:x 95 :y 64 :z 0})})))) "a small dark tunnel is free")
+      (is (pos? (:hp (with-redefs [ready/hall-at? (constantly true)] (risk/estimate c {:x 95 :y 64 :z 0} {:plan (straight-plan c {:x 95 :y 64 :z 0})})))) "a dark hall costs spawns"))))
 
 (deftest hostiles-near-the-way-hold-a-walk-with-the-risk-in-the-reason
   (async done
@@ -84,29 +94,82 @@
     {:x 15 :y 64 :z 3} true
     {:x -10 :y 64 :z 0} false))
 
-(deftest a-hostile-beside-the-straight-line-is-priced-on-the-planned-way-round-its-field
-  (let [c (ready-test/ctx-of {:time st/noon :floor [0 -24 80 24] :self {:pos {:x 2.5 :y 64 :z 0.5}}
-                              :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 36.5 :y 64 :z 2.5}}]})
-        goal {:x 70 :y 64 :z 0}
-        straight (cost/route-hurt (threats/death-body c)
-                                  {:cells (cost/straight-route (reach/mob-lookup (:primitives c)) {:x 2.5 :y 64 :z 0.5} goal)
-                                   :threats (threats/threats-of c)})
-        {:keys [hostile-hp hostiles]} (risk/estimate c goal)]
-    (is (= 1 hostiles))
-    (is (< hostile-hp (/ straight 4)) "the planned way bends round the field")
-    (is (= :ok (first (risk/status c goal))))))
+(def straight-cells (for [x (range 1 31)] {:x x :y 64 :z 0}))
 
-(deftest a-hostile-seen-mid-walk-asks-go-to-s-check-again-for-the-rest-of-it
-  (let [c (ready-test/ctx-of {:time st/noon :self {:pos {:x 0 :y 64 :z 0}}})
+(def detour-cells
+  "A way from [0 64 0] to [30 64 0] out to z 10 and back."
+  (concat (for [z (range 1 11)] {:x 0 :y 64 :z z}) (for [x (range 1 31)] {:x x :y 64 :z 10}) (for [z (range 9 -1 -1)] {:x 30 :y 64 :z z})))
+
+(deftest a-longer-detour-pays-its-spawn-and-lava-parts-on-its-own-cells
+  (let [c (ready-test/ctx-of {:time st/night :self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks {"15,64,12" "lava"}})
+        goal {:x 30 :y 64 :z 0}
+        straight (risk/estimate c goal {:plan (plan-of straight-cells)})
+        detour (risk/estimate c goal {:plan (plan-of detour-cells)})]
+    (is (zero? (:lava-hp straight)))
+    (is (pos? (:lava-hp detour)) "lava beside the detour, 12 blocks off the line")
+    (is (> (:dark-s detour) (* 1.5 (:dark-s straight))) "50 dark blocks against 30")
+    (is (> (:spawn-hp detour) (:spawn-hp straight)))))
+
+(deftest a-partial-plan-prices-its-unplanned-rest-as-unseen
+  (let [c (ready-test/ctx-of {:time st/night :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+        goal {:x 30 :y 64 :z 0}
+        dark-s #(:dark-s (risk/estimate c goal {:plan %}))]
+    (with-redefs [sh-sense/block-light-at (constantly 15)]
+      (is (zero? (dark-s (plan-of straight-cells))) "every seen cell of the way torch-lit")
+      (is (pos? (dark-s {:status "partial" :steps (take 10 straight-cells)})) "the 20 blocks past the partial plan's end are unseen")
+      (is (= (dark-s {:status "partial" :steps []}) (dark-s nil)) "a walk not planned yet is all rest"))))
+
+(deftest a-hostile-beside-the-straight-line-is-priced-on-go-to-s-plan-round-its-field-the-cells-it-walks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:time st/noon :floor [0 -24 80 24] :self {:pos {:x 2.5 :y 64 :z 0.5}}
+                     :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 36.5 :y 64 :z 2.5}}]}
+              c (ready-test/ctx-of world)
+              goal {:x 70 :y 64 :z 0}
+              searches (atom 0)
+              priced (atom [])
+              walked (atom [])
+              create-plan planner/create-plan
+              way risk/way
+              follow! drive/follow!]
+          (set! planner/create-plan (fn [snapshot query options] (swap! searches inc) (create-plan snapshot query options)))
+          (is (= :ok (first (reprice/status c goal))) "the start check before a plan")
+          (is (zero? @searches) "the start check searches nothing")
+          (is (> (:hostile-hp (risk/estimate c goal)) 1) "the straight line runs through the zombie's field")
+          (set! risk/way (fn [feet goal plan] (swap! priced conj (:steps plan)) (way feet goal plan)))
+          (set! drive/follow! (fn [c plan opts] (swap! walked conj (:steps plan)) (follow! c plan opts)))
+          (try
+            (let [{:keys [eng p]} (let [r (st/setup world)] (sky/with-sky (:p r)) r)]
+              (core/submit! eng '(jobs.movement.go-to {:pos [70 64 0] :unknown false}) {})
+              (await (st/tick-n eng 40))
+              (is (seq @walked) "go-to walks")
+              (is (= (first @walked) (first @priced)) "its first plan is the way priced")
+              (is (< (:hostile-hp (risk/estimate c goal {:plan {:status "found" :steps (first @walked)}})) 1) "round the field")
+              (is (> (:x (st/pos-of p)) 30) "past the zombie"))
+            (finally
+              (set! planner/create-plan create-plan)
+              (set! risk/way way)
+              (set! drive/follow! follow!))))))))
+
+(deftest a-round-s-first-plan-and-a-hostile-seen-mid-walk-ask-go-to-s-check-for-the-rest-of-it
+  (let [m (atom {})
+        c (assoc (ready-test/ctx-of {:time st/noon :self {:pos {:x 0 :y 64 :z 0}}}) :update-mem (fn [f args] (apply swap! m f args)))
         goal {:x 30 :y 64 :z 0}
         check (reprice/check c goal nil)
-        replaced (reprice/check (assoc c :quote-call {:checks {:safe? '(always)}}) goal nil)]
-    (is (= :ok (first (reprice/status c goal))) "the round start's check, cached")
-    (is (nil? (check {} false)) "no hostile known")
+        replaced (reprice/check (assoc c :quote-call {:checks {:safe? '(always)}}) goal nil)
+        plan (plan-of straight-cells)]
+    (is (nil? (check plan true)) "the first plan, no hostile known")
+    (is (nil? (check plan false)) "no new hostile")
     (fake/add-entity! (:primitives c) {:id 7 :name "zombie" :kind "hostile" :pos {:x 4 :y 64 :z 0}})
-    (is (nil? (check {} true)) "the round's first plan: the engine has just asked")
-    (is (= :later (first (:hostile (check {} false)))) "a zombie ahead on the way holds the rest of the walk")
-    (is (nil? (replaced {} false)) "a caller's :checks :safe? replaces go-to's")))
+    (is (= :later (first (:risk (check plan false)))) "a zombie ahead on the way holds the rest of the walk")
+    (is (= :later (first (with-redefs [ctx/mem (fn [_] @m)] (reprice/status c goal)))) "the start check holds on the plan the round held on")
+    (let [kept (atom false)]
+      (is (:searching ((reprice/check c goal nil) {:status "partial" :steps (take 10 straight-cells) :r #js {:reason "searching"} :search-on #(reset! kept true)} true))
+          "an unfinished search searches on")
+      (is @kept "its search kept to go on with"))
+    (is (nil? (replaced plan false)) "a caller's :checks :safe? replaces go-to's")))
+
 (def far-goal {:x 95 :y 64 :z 0})
 
 (defn with-death
@@ -215,7 +278,7 @@
   ;; a skeleton death 75 s ago, 75 blocks off: about a third of a chance it has not despawned; a bed by the body
   (let [status-for (fn [food inventory] (let [c (-> (ready-test/ctx-of (assoc bed-world :self {:pos inside :health 20 :food food} :inventory inventory))
                                                     (with-death {:x 80 :y 64 :z 5} "skeleton" 75000 with-bed))]
-                                          (in-lit-cave #(first (risk/status c far-goal)))))
+                                          (in-lit-cave #(first (planned-status c far-goal)))))
         bread [{:name "bread" :count 3}]]
     (is (= :ok (status-for 20 [])))
     (is (= :later (status-for 5 bread)))
@@ -225,7 +288,7 @@
   (let [status-for (fn [worth] (let [c (-> (ready-test/ctx-of (assoc bed-world :self {:pos inside :health 20 :food 5} :inventory [{:name "bread" :count 3}]))
                                            (with-death {:x 80 :y 64 :z 5} "skeleton" 75000 with-bed)
                                            (assoc-in [:args :worth] worth))]
-                                 (in-lit-cave #(first (risk/status c far-goal)))))]
+                                 (in-lit-cave #(first (planned-status c far-goal)))))]
     (is (= :later (status-for nil)) "no worth said: the share of health decides")
     (is (= :later (status-for 5)) "a goal worth little buys little risk")
     (is (= :ok (status-for 400)))))
@@ -302,7 +365,7 @@
   (let [c (with-death (ready-test/ctx-of day-world) {:x 80 :y 64 :z 5} "skeleton" 10000)
         {:keys [lethal-hp]} (estimate-unseen c far-goal)]
     (is (> lethal-hp (price/allowed c)))
-    (is (= :later (first (with-redefs [look/seen-block (constantly {:unknown true})] (risk/status c far-goal)))))))
+    (is (= :later (first (with-redefs [look/seen-block (constantly {:unknown true})] (planned-status c far-goal)))))))
 
 (deftest a-drowned-death-spot-holds-while-the-body-stays-near-its-water-and-goes-once-it-went-far
   ;; 3 h old, past the 2 h fade of a walker's spot; 25 blocks from the body
@@ -354,17 +417,17 @@
 (deftest a-walk-over-the-allowance-goes-when-staying-costs-more
   (let [zombies (for [i (range 3)] {:id (+ 7 i) :name "zombie" :kind "hostile" :pos {:x (- 2 i) :y 64 :z 3}})
         status-for (fn [entities]
-                     (first (risk/status (-> (ready-test/ctx-of {:time st/noon :light {[80 64 5] [0 0]} :self {:pos inside :health 2.3 :food 5} :entities (vec entities)})
+                     (first (planned-status (-> (ready-test/ctx-of {:time st/noon :light {[80 64 5] [0 0]} :self {:pos inside :health 2.3 :food 5} :entities (vec entities)})
                                              (with-death {:x 80 :y 64 :z 5} "zombie" 20000))
                                          far-goal)))]
     (is (= :ok (status-for zombies)) "hostiles reach the body where it stands, the walk leaves them behind: the walk is the cheaper risk")
     (is (= :later (status-for [])) "nothing near the body: waiting costs nothing, so it waits")))
 
 (deftest a-body-that-cannot-heal-and-is-no-safer-staying-ends-stranded-instead-of-waiting
-  ;; on open ground: a zombie by the way 30 blocks off, whose field reaches the body's cell, and three 60 blocks off, whose fields do not; a notice rate at which the zombies get to the body on the walk as surely as at its cell
+  ;; on open ground: a zombie by the way 30 blocks off, whose field reaches the body's cell, and three 60 blocks off, whose fields do not; a notice rate at which the zombies get to the body on the walk as surely as at its cell; lava by the goal
   (let [zombies (for [[i x] (map-indexed vector [30 60 61 62])] {:id (+ 7 i) :name "zombie" :kind "hostile" :pos {:x x :y 64 :z 3}})
-        c (ready-test/ctx-of (assoc ready-test/open-night :self {:pos {:x 0 :y 64 :z 0} :health 2.3 :food 5} :entities (vec zombies)))
-        s (settings/with-settings {:jobs.lib.cost.death/notice-rate {:other {:k 36 :n-s 100} :ranged {:k 36 :n-s 100}}} #(risk/status c far-goal))]
+        c (ready-test/ctx-of (assoc ready-test/open-night :self {:pos {:x 0 :y 64 :z 0} :health 2.3 :food 5} :entities (vec zombies) :blocks {"94,64,2" "lava"}))
+        s (settings/with-settings {:jobs.lib.cost.death/notice-rate {:other {:k 36 :n-s 100} :ranged {:k 36 :n-s 100}}} #(planned-status c far-goal))]
     (is (= :never (first s)))
     (is (= :stranded (:reason (nth s 2))))))
 
@@ -372,7 +435,7 @@
   ;; the same field as the stranded case, at the shipped rate: the stay and the walk both near-certain deaths, the walk slightly less
   (let [zombies (for [[i x] (map-indexed vector [30 60 61 62])] {:id (+ 7 i) :name "zombie" :kind "hostile" :pos {:x x :y 64 :z 3}})
         c (ready-test/ctx-of (assoc ready-test/open-night :self {:pos {:x 0 :y 64 :z 0} :health 2.3 :food 5} :entities (vec zombies)))
-        s (risk/status c far-goal)]
+        s (planned-status c far-goal)]
     (is (= :ok (first s)))
     (is (= :cheaper-than-staying (:reason (nth s 2))))))
 
@@ -380,13 +443,13 @@
   (let [c (ready-test/ctx-of (assoc ready-test/open-night :self {:pos {:x 0 :y 64 :z 0} :health 5 :food 15} :inventory [{:name "bread" :count 3}]))
         goal {:x 40 :y 64 :z 0}]
     (is (> (:hp (risk/estimate c goal)) (price/allowed c)) "over the half-of-health allowance")
-    (is (= :ok (first (risk/status c goal))))))
+    (is (= :ok (first (planned-status c goal))))))
 
 (deftest a-hostile-near-the-far-end-of-a-way-does-not-make-staying-dear-enough-to-walk-past-lava
   (let [zombie {:id 9 :name "zombie" :kind "hostile" :pos {:x 20 :y 64 :z 40}}
         c (ready-test/ctx-of (assoc day-world :self {:pos inside :health 3 :food 5} :entities [zombie] :blocks {"22,64,20" "lava"}))]
     (is (> (:lava-hp (risk/estimate c {:x 20 :y 64 :z 20})) (price/allowed c)))
-    (is (= :later (first (risk/status c {:x 20 :y 64 :z 20}))))))
+    (is (= :later (first (planned-status c {:x 20 :y 64 :z 20}))))))
 
 
 (deftest a-walk-round-a-never-seen-stone-cell-holding-a-fresh-skeleton-spot-holds
@@ -399,6 +462,6 @@
         real u/seen-block
         hidden? (fn [{:keys [x y z]}] (and (<= cx x (inc cx)) (<= 63 y 65) (<= 15 z 17)))
         s (with-redefs [u/seen-block (fn [p pos] (when-not (hidden? pos) (real p pos))) look/seen-block (constantly {:unknown true})]
-            (risk/status c {:x 27.5 :y 64 :z 18.5}))]
+            (planned-status c {:x 27.5 :y 64 :z 18.5}))]
     (is (= :later (first s)))
     (is (= :risky (:reason (nth s 2))))))
