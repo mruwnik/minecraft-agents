@@ -1,6 +1,6 @@
 (ns world-test.event-counts
   "tools/event-counts.mjs: recounts the measured combat priors from the trial bodies' event logs, so a setting can cite its k and n.
-  Commands: fold | creeper-exchange | flight-starts | notice-rate, each [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S]; each folds the logs into the durable counts file first (rows by run id, so counts only grow as logs rotate).
+  Commands: fold | creeper-exchange | flight-starts | notice-rate | drowned-meets (world-test.drowned-meets; trial bodies only), each [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S]; each folds the logs into the durable counts file first (rows by run id, so counts only grow as logs rotate).
   spot-returns [--agents DIR] (world-test.spot-returns) and vein-seen [--agents DIR] count from the logs alone, no fold.
   vein-seen: the ore blocks one look saw together (26-connected, a vein's plain and deepslate blocks as one ore) per group, from the
   look tool's :look.observed lists; :capped counts the lists the tool cut short (nearest first, so a far group may be cut).
@@ -25,6 +25,7 @@
             [clojure.string :as str]
             [jobs.lib.cost.danger :as danger]
             [jobs.lib.cost.threat :as threat]
+            [world-test.drowned-meets :as drowned]
             [world-test.fresh-drop :as fresh-drop]
             [world-test.spot-returns :as spot-returns]))
 
@@ -36,6 +37,8 @@
 (def give-up-ms "A decision whose body has not moved this long after it is dropped." 10000)
 
 (defn root-job [id] (first (str/split (str id) #"/")))
+
+(def pos-re #":pos \{:x (-?[\d.]+(?:E-?\d+)?), :y (-?[\d.]+(?:E-?\d+)?), :z (-?[\d.]+(?:E-?\d+)?)\}")
 
 (defn- num-of [re line] (some-> (re-find re line) second js/parseFloat))
 
@@ -50,7 +53,7 @@
         (and (str/includes? line ":kind :hostile.decided") (str/includes? line ":hostile-near"))
         (let [e (whole)]
           {:k :decided :t t :gen gen :job (root-job (get-in e [:context :job-id]))
-           :mob (get-in e [:data :mob]) :decision (get-in e [:data :decision])
+           :mob (get-in e [:data :mob]) :decision (get-in e [:data :decision]) :health (get-in e [:data :health])
            :at (when-not (get-in e [:data :band]) (get-in e [:data :pos]))})
 
         (and (str/includes? line ":kind :watch.saw") (str/includes? line ":how :seen"))
@@ -58,7 +61,8 @@
           {:k :saw :t t :gen gen :mob name :id id :distance distance :at pos})
 
         (and (str/includes? line ":kind :ended") (str/includes? line ":hostile-near"))
-        {:k :ended :t t :gen gen :job (root-job (second (re-find #":job-id \"([^\"]*)\"" line)))}
+        {:k :ended :t t :gen gen :job (root-job (second (re-find #":job-id \"([^\"]*)\"" line)))
+         :wear (second (re-find #":wear \{\"([^\"]*_(?:sword|axe))\"" line))}
 
         (and (str/includes? line ":kind :look.observed") (str/includes? line "_ore\""))
         (let [e (whole)]
@@ -67,7 +71,10 @@
 
         (and (str/includes? line ":kind :hurt") (str/includes? line ":source :body"))
         (let [e (whole)]
-          {:k :hurt :t t :gen gen :amount (get-in e [:data :amount]) :causes (set (get-in e [:data :causes])) :at (get-in e [:data :pos])})
+          {:k :hurt :t t :gen gen :amount (get-in e [:data :amount]) :hits (get-in e [:data :hits]) :causes (set (get-in e [:data :causes])) :at (get-in e [:data :pos])})
+
+        (and (str/includes? line ":kind :died") (str/includes? line ":source :body"))
+        {:k :died :t t :gen gen :cause (second (re-find #":cause \"([^\"]*)\"" line))}
 
         (and (str/includes? line ":kind :started") (str/includes? line ":name \"equip\""))
         {:k :equip :t t :gen gen :job (root-job (second (re-find #":job-id \"([^\"]*)\"" line)))
@@ -76,9 +83,16 @@
         (and (str/includes? line ":kind :done") (str/includes? line ":name \"attack\"") (re-find #":status \"(hit|killed)\"" line))
         {:k :hit :t t :gen gen :job (root-job (second (re-find #":job-id \"([^\"]*)\"" line)))}
 
+        (and (str/includes? line ":kind :done") (str/includes? line ":name \"attack\""))
+        {:k :miss :t t :gen gen :job (root-job (second (re-find #":job-id \"([^\"]*)\"" line)))}
+
         (or (and (str/includes? line ":source :action") (str/includes? line ":kind :done")) (str/includes? line ":kind :planned"))
-        (when-let [[_ x y z] (last (re-seq #":pos \{:x (-?[\d.]+(?:E-?\d+)?), :y (-?[\d.]+(?:E-?\d+)?), :z (-?[\d.]+(?:E-?\d+)?)\}" line))]
-          {:k :pos :t t :gen gen :x (js/parseFloat x) :y (js/parseFloat y) :z (js/parseFloat z)})))))
+        (when-let [[_ x y z] (last (re-seq pos-re line))]
+          {:k :pos :t t :gen gen :x (js/parseFloat x) :y (js/parseFloat y) :z (js/parseFloat z)})
+
+        :else
+        (when-let [[_ x y z] (re-find pos-re line)]
+          {:k :at :t t :gen gen :x (js/parseFloat x) :y (js/parseFloat y) :z (js/parseFloat z)})))))
 
 (defn runs
   "{[gen job] {:decisions [{:mob :decision}] :start :end :hits [t] :items [[t item]]}} of the respond runs in records (sorted by :t)."
@@ -188,7 +202,7 @@
      :sparse (count (filter :sparse? rows)) :no-pos (count (filter #(= :no-pos (:drop %)) rows)) :never (count (filter #(= :never (:drop %)) rows))}))
 
 ;; The durable counts: the rows of each prior by run id, so the counts only grow while the raw logs rotate away.
-(def empty-counts {:exchange {} :starts {} :notices {}})
+(def empty-counts {:exchange {} :starts {} :notices {} :drowned-exposure {} :drowned-meets {}})
 
 (defn better-exchange "Of two rows of one fight, the one that saw more swings (a rotation may have cut the older read short), then the older." [a b]
   (if (> (:swings b) (:swings a)) b a))
@@ -328,7 +342,7 @@
        (sort-by :t)
        vec))
 
-(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | spot-returns | vein-seen [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S]
+(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | spot-returns | vein-seen [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S]
   every command first folds the logs into the counts file (default worlds/test/priors-counts.edn), then reports from the file; --since-ms keeps the rows of fights started after it.")
 
 (defn- parse-args [argv]
@@ -341,33 +355,49 @@
       "--sprint" (recur (rest more) (assoc o :sprint (js/parseFloat (first more))))
       (recur more (update o :pos (fnil conj []) a)))))
 
+(def probe? "Bodies whose logs the drowned counts leave out: world-test probes, not trial play." #(re-find #"^(Claude)?Probe" %))
+
 (defn fold-logs!
-  "Reads every body's logs under agents-dir and folds the rows into the counts file; returns the new counts."
-  [agents-dir counts-file sprint]
+  "Reads every body's logs under agents-dir and folds the rows into the counts file; returns the new counts. at: the
+  chunks' cell reader (world-test.drowned-meets/class-of)."
+  [agents-dir counts-file sprint at]
   (let [per-agent (for [b (array-seq (fs/readdirSync agents-dir))
                         :when (fs/existsSync (path/join agents-dir b "engine"))]
-                    (read-agent (path/join agents-dir b "engine") 0))
-        counts (reduce (fn [c records] (fold c (exchange records) (starts records sprint) (notices records))) (load-counts counts-file) per-agent)]
+                    [b (read-agent (path/join agents-dir b "engine") 0)])
+        counts (reduce (fn [c [b records]]
+                         (cond-> (fold c (exchange records) (starts records sprint) (notices records))
+                           (not (probe? b)) (drowned/fold (drowned/exposure at records) (drowned/meets at records))))
+                       (load-counts counts-file) per-agent)]
     (save-counts! counts-file counts)
     counts))
 
+(defn cell-reader
+  "(fn [x y z]) -> {:name :block :sky :biome} or nil of the chunks open-chunks (the JS adapter, nil: none) reads from dir."
+  [open-chunks dir]
+  (if (and open-chunks (fs/existsSync dir))
+    (let [^js read (open-chunks dir)]
+      (fn [x y z] (when-let [^js c (read x y z)] {:name (.-name c) :block (.-block c) :sky (.-sky c) :biome (.-biome c)})))
+    (constantly nil)))
+
 (defn main
-  "argv (array) -> promise of the exit code."
-  [argv]
+  "argv (array) -> promise of the exit code. open-chunks: tools/event-counts.mjs's reader of the recorded chunks."
+  [argv open-chunks]
   (let [{[cmd] :pos :keys [agents counts since-ms sprint] :or {since-ms 0 sprint 5.6}} (parse-args (vec (array-seq argv)))
         repo (or js/process.env.WORLD_TEST_REPO ".")
-        folded (when (#{"fold" "creeper-exchange" "flight-starts" "notice-rate"} cmd)
-                 (fold-logs! (or agents (path/join repo "worlds" "test" "agents")) (or counts (path/join repo "worlds" "test" "priors-counts.edn")) sprint))
+        agents (or agents (path/join repo "worlds" "test" "agents"))
+        folded (when (#{"fold" "creeper-exchange" "flight-starts" "notice-rate" "drowned-meets"} cmd)
+                 (fold-logs! agents (or counts (path/join repo "worlds" "test" "priors-counts.edn")) sprint
+                             (cell-reader open-chunks (path/join agents ".." "chunks"))))
         since (fn [rows] (filter #(>= (:t %) since-ms) (vals rows)))]
     (js/Promise.resolve
      (case cmd
-       "fold" (do (println (pr-str {:exchange (count (:exchange folded)) :starts (count (:starts folded)) :notices (count (:notices folded))})) 0)
+       "fold" (do (println (pr-str (update-vals folded count))) 0)
        "creeper-exchange" (do (println (pr-str (assoc (exchange-report (since (:exchange folded))) :since-ms since-ms))) 0)
        "flight-starts" (do (println (pr-str (assoc (starts-report (since (:starts folded))) :since-ms since-ms :sprint sprint))) 0)
-       "spot-returns" (do (println (pr-str (spot-returns/count-in (or agents (path/join repo "worlds" "test" "agents"))))) 0)
-       "vein-seen" (let [dir (or agents (path/join repo "worlds" "test" "agents"))]
-                     (println (pr-str (vein-seen (mapcat #(read-agent (path/join dir % "engine") since-ms)
-                                                         (filter #(fs/existsSync (path/join dir % "engine")) (array-seq (fs/readdirSync dir)))))))
-                     0)
+       "spot-returns" (do (println (pr-str (spot-returns/count-in agents))) 0)
+       "drowned-meets" (do (println (pr-str (assoc (drowned/report (since (:drowned-exposure folded)) (since (:drowned-meets folded))) :since-ms since-ms))) 0)
+       "vein-seen" (do (println (pr-str (vein-seen (mapcat #(read-agent (path/join agents % "engine") since-ms)
+                                                       (filter #(fs/existsSync (path/join agents % "engine")) (array-seq (fs/readdirSync agents)))))))
+                       0)
        "notice-rate" (do (println (pr-str (assoc (notice-report (since (:notices folded))) :since-ms since-ms))) 0)
        (do (js/console.error usage) 2)))))
