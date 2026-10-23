@@ -37,9 +37,9 @@
             {:event {:source :job :kind :completed :data {:decision :collected}} :within-s 190}]
    :after [[:item "iron_sword" 1] [:item "raw_iron" 6]]}
   {:name "unarmed-body-with-its-bed-beside-the-pile-fetches-past-the-skeleton"
-   :body {:spawnpoint [20 0 22]}
-   :blocks [[:set [20 0 22] "white_bed[part=foot,facing=east]"] [:set [21 0 22] "white_bed[part=head,facing=east]"]]
-   :memory [{:kind :spawn-bed :data {:pos #xyz [20 0 22]} :age-s 60}]
+   :body {:spawnpoint [26 0 24]}
+   :blocks [[:set [26 0 24] "white_bed[part=foot,facing=east]"] [:set [27 0 24] "white_bed[part=head,facing=east]"]]
+   :memory [{:kind :spawn-bed :data {:pos #xyz [26 0 24]} :age-s 60}]
    :act [[:job (jobs.survival.recover-drops)]]
    :expect [{:event {:source :job :kind :child_started :data {:slot :go}} :within-s 120}
             {:event {:source :job :kind :completed :data {:decision :collected}} :within-s 190}]
