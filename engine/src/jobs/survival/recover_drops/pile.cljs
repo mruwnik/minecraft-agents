@@ -5,6 +5,7 @@
             [jobs.lib.storage :as storage]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
+            [jobs.survival.pit-drops :as pit]
             [jobs.survival.recover-drops.config :as cfg]))
 
 (defn recovered-items
@@ -19,10 +20,12 @@
 
 (defn baseline
   "The carried totals the pile's return is counted from: what the body holds less what it picked up since the death at
-  death-t (the :picked-up memory), so drops it woke beside and took before the trip count as back."
-  [c death-t]
-  (let [picked (reduce (fn [m {:keys [data]}] (update m (:item data) (fnil + 0) (:count data))) {}
-                       (filter #(>= (:t %) death-t) (mem/entries (ctx/view c) :picked-up)))]
+  death-t (the :picked-up memory) within pickup reach of the pile (radius round pos), so drops it woke beside and took
+  before the trip count as back, and a same-named stack picked up elsewhere does not."
+  [c death-t pos radius]
+  (let [near? #(when-let [at (:pos %)] (<= (u/dist pos at) (+ radius (pit/pickup-reach))))
+        picked (reduce (fn [m {:keys [data]}] (update m (:item data) (fnil + 0) (:count data))) {}
+                       (filter #(and (>= (:t %) death-t) (near? (:data %))) (mem/entries (ctx/view c) :picked-up)))]
     (reduce-kv (fn [m k n] (assoc m k (max 0 (- n (get picked k 0))))) {} (storage/carried-totals (u/inventory (:primitives c))))))
 
 (defn pile-ids

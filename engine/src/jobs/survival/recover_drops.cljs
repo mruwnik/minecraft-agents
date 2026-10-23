@@ -121,7 +121,7 @@
           e (-> (est/estimate c (:data entry) (settings/ticks->ms (game/ticks-since entry (ctx/view c))) quoted)
                 (update :cost est/finite)
                 (assoc :at (ctx/now c)))]
-      (ctx/update-mem! c #(cond-> (assoc % :decided e :reestimated true :recheck false) (nil? (:baseline %)) (assoc :baseline (pl/baseline c (:t entry)))))
+      (ctx/update-mem! c #(cond-> (assoc % :decided e :reestimated true :recheck false) (nil? (:baseline %)) (assoc :baseline (pl/baseline c (:t entry) (:pos (:data entry)) (settings/get settings ::collect-radius)))))
       (dth/save-trip! c)
       e)))
 
