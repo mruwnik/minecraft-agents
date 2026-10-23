@@ -21,7 +21,8 @@
    ::spider-hit-rate {:default 0.35 :doc "Hits a spider or cave spider lands per second of exposure." :spec (a/num-in 0 nil)}
    ::trident-rate {:default 0.5 :doc "Throws a second of a drowned holding a trident (vanilla: one every 40 ticks)." :spec (a/num-in 0 nil)}
    ::provoked-share {:default 0.1 :doc "What a provoked-only mob's threat counts for when it is met, not fought." :spec (a/num-in 0 nil)}
-   ::default-follow-range {:default 16 :doc "Blocks a mob of unknown kind notices the body from." :spec (a/int-in 1 nil)}})
+   ::default-follow-range {:default 16 :doc "Blocks a mob of unknown kind notices the body from." :spec (a/int-in 1 nil)}
+   ::field-close {:default 3 :doc "Steps of a mob's way within which its field weighs 1 (way-weight)." :spec (a/int-in 0 nil)}})
 
 (def follow-ranges
   "Blocks a mob keeps chasing its target out to (vanilla follow_range attribute; its navigation goes no farther)."
@@ -29,6 +30,14 @@
    "enderman" 64 "pillager" 32 "vindicator" 12 "evoker" 12 "blaze" 48 "ghast" 100})
 
 (defn follow-range [mob-name] (get follow-ranges mob-name (settings/get settings ::default-follow-range)))
+
+(defn field-close [] (settings/get settings ::field-close))
+
+(defn way-weight
+  "The weight a walker's field (jobs.lib.threat-field) gives a cell `steps` of its way out: 1 within ::field-close
+  steps, close / steps past them (the farther its way, the more the body passing has walked on before it gets there)."
+  ([steps] (way-weight (field-close) steps))
+  ([close steps] (if (<= steps close) 1 (/ close steps))))
 
 (def max-follow-range (apply max (vals follow-ranges)))
 

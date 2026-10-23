@@ -139,8 +139,8 @@
 
 (defn stay-estimate
   "hp the body expects to lose staying at its cell instead of walking `route-hp` to `goal`: what the known threats
-  sensed now whose field holds the body's cell take off it there (cost/route-hurt, each at full weight: a sensed mob
-  within its field gets to a body that stays; one near the far end of the way does not reach it) plus the spawns met at
+  sensed now whose field holds the body's cell take off it there (cost/route-hurt, each at full weight over the stay: a
+  sensed mob within its field gets to a body that stays; one near the far end of the way does not reach it) plus the spawns met at
   its cell by the light seen there (price/stay-parts), and the death both risk in hp (cost/threats-chance,
   cost/lethal-hp), for the time the walk takes, or, for a body that can heal, for the wait until its health would afford
   the route (::heal-s-per-hp an hp)."

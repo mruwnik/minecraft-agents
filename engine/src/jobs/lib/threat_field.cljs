@@ -3,8 +3,7 @@
   the body has not seen the worse case): its field, the cells [x y z] a body standing in is within its reach, each with
   a weight 0-1.
   A walker's field is its way (jobs.lib.reach/forward over mob-lookup: a cell the body has not seen is ground) out to its
-  follow range in steps (cost.threat/follow-range: vanilla navigation goes no farther), weight 1 within ::close steps,
-  then ::close / steps. A ranged mob adds the standing cells within danger/ranged-radius it has a line of fire to
+  follow range in steps (cost.threat/follow-range: vanilla navigation goes no farther), weighted by cost.threat/way-weight. A ranged mob adds the standing cells within danger/ranged-radius it has a line of fire to
   (weight 1). A mob that lives in water (water-mobs) keeps to the water it was met in: every seen cell of that body of
   water (water-body), weight 1. At most ::max-cells cells, kept per body while what it read stays (field-of)."
   (:require [engine.args :as a]
@@ -19,8 +18,7 @@
             [jobs.lib.util :as u]))
 
 (a/defargs settings
-  {::close {:default 3 :doc "Steps of a mob's way within which its field weighs 1." :spec (a/int-in 0 nil)}
-   ::max-cells {:default 4000 :doc "The most cells one mob's field holds, the nearest first." :spec (a/int-in 1 nil)}
+  {::max-cells {:default 4000 :doc "The most cells one mob's field holds, the nearest first." :spec (a/int-in 1 nil)}
    ::fire-per-column {:default 3 :doc "The most standing cells of one column a ranged mob's line of fire is tried to, the nearest its height first (unseen ground stands at every height)." :spec (a/int-in 1 nil)}
    ::fire-rise {:default 6 :doc "Blocks above or below a ranged mob that its line of fire is tried to." :spec (a/int-in 0 nil)}
    ::water-cells {:default 8000 :doc "The most seen water cells one water mob's body of water is costed over (water-body)." :spec (a/int-in 1 nil)}})
@@ -57,21 +55,19 @@
 
 (defn walk-field
   "The cells #js [x y z w] a walker at start [x y z] steps to over kind-at within range steps (forward), at most n,
-  nearest first: w 1 within close steps, close/steps past them (the farther its way, the more the body passing has
-  walked on before it gets there), none from range on."
+  nearest first: w threat/way-weight of its steps (close the field-close steps), none from range on."
   [kind-at [sx sy sz :as start] range close n]
   (let [kind-at (boxed kind-at start range 16)
         key (reach/keyer sx sz)
         seen (js/Set.)
-        out #js []
-        weight (fn [steps] (if (<= steps close) 1 (/ close steps)))]
+        out #js []]
     (.add seen (key sx sy sz))
     (loop [queue #js [#js [sx sy sz 0]] head 0]
       (if (or (>= head (.-length queue)) (>= (.-length out) n))
         out
         (let [c (aget queue head)
               x (aget c 0) y (aget c 1) z (aget c 2) steps (aget c 3)]
-          (.push out #js [x y z (weight steps)])
+          (.push out #js [x y z (threat/way-weight close steps)])
           (when (< (inc steps) range)
             (let [nexts (reach/forward kind-at x y z)]
               (dotimes [i (.-length nexts)]
@@ -166,7 +162,7 @@
                    (into-array (map (fn [[x y z]] #js [x y z 1]) (water-body kind-at top (settings/get settings ::water-cells))))
                    #js [])
                  :else
-                 (let [walk (walk-field kind-at (reach/cell-of pos) (threat/follow-range mob) (settings/get settings ::close) (max-cells))]
+                 (let [walk (walk-field kind-at (reach/cell-of pos) (threat/follow-range mob) (threat/field-close) (max-cells))]
                    (if (= :projectile (threat/damage-type mob))
                      (.concat walk (fire-cells kind-at arrow-at (update pos :y js/Math.floor) (danger-q/ranged-radius) (max-cells)))
                      walk)))

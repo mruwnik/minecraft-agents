@@ -62,4 +62,19 @@
                    (c/fold [(fight 3)] [(start {:s 0.4})])
                    (c/fold [(fight 1) {:id ["g" "j2"] :t 1 :swings 1 :hp 0}] [(start {:s 9})]))]
     (is (= [3 2] [(get-in folded [:exchange ["g" "j1"] :swings]) (count (:exchange folded))]))
-    (is (= {:id ["g" "j1"] :t 0 :s 0.4} (get-in folded [:starts ["g" "j1"]])))))
+    (is (= {:id ["g" "j1"] :t 0 :s 0.4} (get-in folded [:starts ["g" "j1"]]))))
+  (let [sighting (fn [end] {:id ["g" 0 "zombie"] :t 0 :mob "zombie" :s 1 :end end})
+        folded (-> c/empty-counts (c/fold [] [] [(sighting :open)]) (c/fold [] [] [(sighting :caught)]) (c/fold [] [] [(sighting :gap)]))]
+    (is (= :caught (get-in folded [:notices ["g" 0 "zombie"] :end])) "a sighting open when its log ended is replaced, a closed one stays")))
+
+(defn saw [t mob d] (rec t :saw :mob mob :distance d :at {:x d :y 64 :z 0}))
+
+(deftest a-sighting-counts-its-weighted-seconds-until-its-kind-is-decided-about-or-left
+  (is (= [{:id ["g" 0 "zombie"] :t 0 :mob "zombie" :s 1.5 :end :caught}]
+         (c/notices [(saw 0 "zombie" 2) (pos 1000 8) (rec 2000 :decided :mob "zombie")]))
+      "weight 1 within 3 steps: 1 s, then 1 s at 6 steps (weight 0.5)")
+  (is (= [[1 :left]] (map (juxt :s :end) (c/notices [(saw 0 "zombie" 2) (pos 1000 40)]))))
+  (is (= [[0 :gap]] (map (juxt :s :end) (c/notices [(saw 0 "zombie" 2) (pos 20000 2)])))))
+
+(deftest a-sighting-out-of-follow-range-or-of-a-provoked-only-mob-is-not-followed
+  (is (empty? (c/notices [(saw 0 "skeleton" 20) (saw 0 "enderman" 2)]))))

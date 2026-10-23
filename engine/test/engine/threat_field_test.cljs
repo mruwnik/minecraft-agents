@@ -96,10 +96,18 @@
       (field/field-of c {:mob "zombie" :pos {:x 20.5 :y 64 :z 10.5}})
       (is (= 1 (.-size (.-fields mem))) "the other dimension's fields are dropped"))))
 
-(deftest a-walk-grazing-the-edge-of-a-zombies-field-costs-a-share-of-one-through-its-close-cells
+(deftest the-time-a-route-spends-in-a-zombies-field-prices-with-how-close-it-comes
   (let [body {:health 20}
         threats [{:mob "zombie" :weight 1 :reach (reach-of {} "zombie" {:x -20.5 :y 64 :z 0.5})}]
-        route (fn [x0] {:cells (for [x (range x0 (+ x0 3))] {:x x :y 64 :z 0}) :threats threats})
-        base (cost/death-chance body {})]
-    (is (< (* 5 (cost/route-hurt body (route 10))) (cost/route-hurt body (route -20))))
-    (is (< (* 5 (- (cost/death-chance body (route 10)) base)) (- (cost/death-chance body (route -20)) base)))))
+        route (fn [cells] {:cells cells :threats threats})
+        crossing (route (for [x (range 10 13)] {:x x :y 64 :z 0}))
+        along (route (for [z (range -8 9)] {:x 10 :y 64 :z z}))
+        close (route (for [x (range -22 -18)] {:x x :y 64 :z 0}))
+        stay (fn [s] (route [{:x 10 :y 64 :z 0 :s s}]))
+        base (cost/death-chance body {})
+        hurt #(cost/route-hurt body %)
+        dies #(- (cost/death-chance body %) base)]
+    (is (< 0 (hurt crossing) (hurt along) (hurt close)) "a long walk along the far edge over a short crossing of it, a close crossing over both")
+    (is (< 0 (dies crossing) (dies along) (dies close)))
+    (is (< 0 (hurt (stay 1)) (hurt (stay 600))) "600 s at a far-edge cell over 1 s there")
+    (is (< 0 (dies (stay 1)) (dies (stay 600))))))

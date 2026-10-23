@@ -182,7 +182,7 @@
 
 (deftest a-lethal-threat-costs-the-body-its-life-not-more
   ;; a fist fight with a witch is 26 punches 1.3 s apart under her potions: 84 hp expected
-  (let [route (fn [weight & mobs] {:cells [here] :threats (for [m mobs] {:mob m :weight weight :reach (constantly 1)})})]
+  (let [route (fn [weight & mobs] {:cells [(assoc here :s 60)] :threats (for [m mobs] {:mob m :weight weight :reach (constantly 1)})})]
     (is (= 20 (cost/route-hurt (body 20) (route 1 "witch"))))
     (is (= 20 (cost/route-hurt (body 20) (route 1 "witch" "witch"))) "nor do two")
     (is (< 5.99 (cost/route-hurt (body 20) (route 0.3 "witch")) 6.01) "a faded one its share of the life")))

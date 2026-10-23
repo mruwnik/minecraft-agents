@@ -24,6 +24,8 @@
                            :doc "Chance of dying on a route over the surface at night."}
    ::chance-underground {:default 0.002 :spec (a/num-in 0 1)
                          :doc "Chance of dying on a route underground."}
+   ::notice-rate {:default 0.36 :spec (a/num-in 0 nil)
+                  :doc "Chance a second a hostile gets to a body in its field at weight 1 (met-chance): 7 caught over 19.6 weighted seconds of 23 watch sightings within follow range (zombies 4 of 17, creepers 3 of 5; too few to split by mob). Recount: node tools/event-counts.mjs notice-rate; per-case evidence replaces it."}
    ::deaths-per-hour {:default 1.3 :spec (a/num-in 0 nil)
                       :doc "Deaths an hour of play, every cause: the fresh-start trials of 2026-10-21/22 (Wicken r5, 8 deaths in 6h15; docs/fresh-start-design.md section 1)."}
    ::spawn-walk-blocks {:default 5000 :spec (a/num-in 0 nil)
@@ -82,11 +84,18 @@
          below (reduce + (take k (reductions (fn [p i] (/ (* p lam) i)) (js/Math.exp (- lam)) (iterate inc 1))))]
      (if (pos? life) (max 0 (- 1 below)) 1))))
 
-(defn peak-weight
-  "The greatest weight a threat's reach (a fn of a cell x y z, its weight 0-1, nil outside) gives any of the route cells
-  [{:x :y :z}], 0 when it holds none: the share of a passing body the mob gets to."
+(defn met-chance
+  "The chance a threat whose reach (a fn of a cell x y z, its weight 0-1, nil outside) holds route cells [{:x :y :z :s}]
+  gets to the body on them: 1 - prod(1 - w r dt), r ::notice-rate, dt the cell's :s, else the walk to it from the cell
+  before (a block for the first)."
   [reach cells]
-  (reduce max 0 (keep (fn [{:keys [x y z]}] (reach (js/Math.floor x) (js/Math.floor y) (js/Math.floor z))) cells)))
+  (let [r (settings/get settings ::notice-rate)
+        speed (value/walk-blocks-per-s)]
+    (- 1 (reduce (fn [miss [prev {:keys [x y z s] :as cell}]]
+                   (if-let [w (reach (js/Math.floor x) (js/Math.floor y) (js/Math.floor z))]
+                     (* miss (- 1 (min 1 (* w r (or s (/ (if prev (js/Math.hypot (- x (:x prev)) (- y (:y prev)) (- z (:z prev))) 1) speed))))))
+                     miss))
+                 1 (map vector (cons nil cells) cells)))))
 
 (defn spawn-horizon-s [] (settings/get settings ::spawn-horizon-s))
 

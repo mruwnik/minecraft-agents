@@ -1,18 +1,23 @@
 (ns world-test.event-counts
   "tools/event-counts.mjs: recounts the measured combat priors from the trial bodies' event logs, so a setting can cite its k and n.
-  Commands: fold | creeper-exchange | flight-starts, each [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S]; each folds the logs into the durable counts file first (rows by run id, so counts only grow as logs rotate).
+  Commands: fold | creeper-exchange | flight-starts | notice-rate, each [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S]; each folds the logs into the durable counts file first (rows by run id, so counts only grow as logs rotate).
   spot-returns [--agents DIR] (world-test.spot-returns) counts from the logs alone, no fold.
   creeper-exchange: respond runs that only decided about creepers and fought (a :fight decision) with at least one swing: hp the creepers
   dealt (hurt events inside the run) per swing (attack that hit or killed), overall and per weapon equipped in the run, and the runs with a blast over 2 hp.
   flight-starts: the first flee decision of each respond run from a creeper: seconds until the body is 1 block from where it stood,
   less that block at sprint speed (action done and planned events carry the body's position, so the stream is sparse); the deciles are the values at
   (i + 0.5) / 10 of the sorted starts.
-  Pure parts: scan-line, exchange, starts, deciles."
+  notice-rate: the hostiles a watch first saw within their follow range (watch.saw, provoked-only mobs left out), each followed until a respond decision about its kind
+  (caught), the body more than the mob's follow range from where it was seen, or a position gap over give-up-ms: caught per second in its
+  field, each second weighted by cost.threat/way-weight of the body's straight distance from that spot (a lower bound on the mob's steps, so
+  an upper bound on the weight: the rate counts low).
+  Pure parts: scan-line, exchange, starts, deciles, notices."
   (:require ["fs" :as fs]
             ["path" :as path]
             ["zlib" :as zlib]
             [cljs.reader :as reader]
             [clojure.string :as str]
+            [jobs.lib.cost.threat :as threat]
             [world-test.fresh-drop :as fresh-drop]
             [world-test.spot-returns :as spot-returns]))
 
@@ -39,6 +44,10 @@
         (let [e (whole)]
           {:k :decided :t t :gen gen :job (root-job (get-in e [:context :job-id]))
            :mob (get-in e [:data :mob]) :decision (get-in e [:data :decision])})
+
+        (and (str/includes? line ":kind :watch.saw") (str/includes? line ":how :seen"))
+        (let [{{:keys [name distance pos]} :data} (whole)]
+          {:k :saw :t t :gen gen :mob name :distance distance :at pos})
 
         (and (str/includes? line ":kind :ended") (str/includes? line ":hostile-near"))
         {:k :ended :t t :gen gen :job (root-job (second (re-find #":job-id \"([^\"]*)\"" line)))}
@@ -166,18 +175,20 @@
      :sparse (count (filter :sparse? rows)) :no-pos (count (filter #(= :no-pos (:drop %)) rows)) :never (count (filter #(= :never (:drop %)) rows))}))
 
 ;; The durable counts: the rows of each prior by run id, so the counts only grow while the raw logs rotate away.
-(def empty-counts {:exchange {} :starts {}})
+(def empty-counts {:exchange {} :starts {} :notices {}})
 
 (defn better-exchange "Of two rows of one fight, the one that saw more swings (a rotation may have cut the older read short), then the older." [a b]
   (if (> (:swings b) (:swings a)) b a))
 
 (defn fold
-  "counts with the rows of exchange-rows and start-rows merged in by id; a row already there stays unless a fight row saw more swings
-  or a start was dropped and is now told."
-  [counts exchange-rows start-rows]
-  (-> counts
-      (update :exchange #(reduce (fn [m r] (update m (:id r) (fn [old] (if old (better-exchange old r) r)))) % exchange-rows))
-      (update :starts #(reduce (fn [m r] (update m (:id r) (fn [old] (if (and old (not (:drop old))) old r)))) % start-rows))))
+  "counts with the rows of exchange-rows, start-rows and notice-rows merged in by id; a row already there stays unless a fight row saw
+  more swings, a start was dropped and is now told, or a sighting was still open when its log ended."
+  ([counts exchange-rows start-rows] (fold counts exchange-rows start-rows []))
+  ([counts exchange-rows start-rows notice-rows]
+   (-> counts
+       (update :exchange #(reduce (fn [m r] (update m (:id r) (fn [old] (if old (better-exchange old r) r)))) % exchange-rows))
+       (update :starts #(reduce (fn [m r] (update m (:id r) (fn [old] (if (and old (not (:drop old))) old r)))) % start-rows))
+       (update :notices #(reduce (fn [m r] (update m (:id r) (fn [old] (if (and old (not= :open (:end old))) old r)))) % notice-rows)))))
 
 (defn load-counts [file]
   (if (fs/existsSync file) (merge empty-counts (reader/read-string (fs/readFileSync file "utf8"))) empty-counts))
@@ -189,6 +200,45 @@
     (fs/mkdirSync (path/dirname file) #js {:recursive true})
     (fs/writeFileSync tmp (str (pr-str counts) "\n"))
     (fs/renameSync tmp file)))
+
+(defn notices
+  "Rows [{:id [gen t mob] :t :mob :s :end}] of the sightings in records (sorted by :t): :s the seconds followed, each times the way-weight
+  of the body's distance from the mob's spot over it; :end :caught, :left (out of its follow range), :gap or :open (the log ends)."
+  [records]
+  (let [row (fn [{:keys [id t0 mob s]} end] {:id id :t t0 :mob mob :s s :end end})
+        gain (fn [e t] (update e :s + (* (:w e) (/ (min (- t (:t e)) give-up-ms) 1000))))
+        out (reduce
+             (fn [{:keys [open] :as st} {:keys [k gen t mob] :as r}]
+               (let [mine (get open gen [])]
+                 (case k
+                   :saw (if (or (contains? threat/provoked-only mob) (some #(= mob (:mob %)) mine)
+                                (> (:distance r) (threat/follow-range mob)))
+                          st
+                          (update-in st [:open gen] (fnil conj []) {:id [gen t mob] :t0 t :mob mob :at (:at r) :t t :s 0 :w (threat/way-weight (:distance r))}))
+                   :decided (let [{caught true other false} (group-by #(= mob (:mob %)) mine)]
+                              (-> st
+                                  (assoc-in [:open gen] (vec other))
+                                  (update :rows into (map #(row (gain % t) :caught) caught))))
+                   :pos (let [{gone true kept false} (group-by #(> (- t (:t %)) give-up-ms) mine)
+                              moved (map #(gain % t) kept)
+                              {left true near false} (group-by #(> (dist r (:at %)) (threat/follow-range (:mob %))) moved)]
+                          (-> st
+                              (assoc-in [:open gen] (mapv #(assoc % :t t :w (threat/way-weight (dist r (:at %)))) near))
+                              (update :rows into (concat (map #(row % :gap) gone) (map #(row % :left) left)))))
+                   st)))
+             {:open {} :rows []}
+             records)]
+    (into (:rows out) (map #(row % :open)) (mapcat val (:open out)))))
+
+(defn notice-tally [rows]
+  (let [ends (frequencies (map :end rows))
+        k (get ends :caught 0)
+        s (reduce + 0 (map :s rows))]
+    {:sightings (count rows) :caught k :ends ends :weighted-s (/ (js/Math.round (* 10 s)) 10)
+     :rate (when (pos? s) (/ (js/Math.round (* 10000 (/ k s))) 10000))}))
+
+(defn notice-report [rows]
+  {:all (notice-tally rows) :by-mob (into (sorted-map) (map (fn [[m rs]] [m (notice-tally rs)])) (group-by :mob rows))})
 
 (defn event-files
   "The event files of a body's directory listing: the plain log (events.edn, its rotations) and the debug log (action events),
@@ -210,7 +260,7 @@
        (sort-by :t)
        vec))
 
-(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | spot-returns [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S]
+(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | spot-returns [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S]
   every command first folds the logs into the counts file (default worlds/test/priors-counts.edn), then reports from the file; --since-ms keeps the rows of fights started after it.")
 
 (defn- parse-args [argv]
@@ -229,7 +279,7 @@
   (let [per-agent (for [b (array-seq (fs/readdirSync agents-dir))
                         :when (fs/existsSync (path/join agents-dir b "engine"))]
                     (read-agent (path/join agents-dir b "engine") 0))
-        counts (reduce (fn [c records] (fold c (exchange records) (starts records sprint))) (load-counts counts-file) per-agent)]
+        counts (reduce (fn [c records] (fold c (exchange records) (starts records sprint) (notices records))) (load-counts counts-file) per-agent)]
     (save-counts! counts-file counts)
     counts))
 
@@ -238,13 +288,14 @@
   [argv]
   (let [{[cmd] :pos :keys [agents counts since-ms sprint] :or {since-ms 0 sprint 5.6}} (parse-args (vec (array-seq argv)))
         repo (or js/process.env.WORLD_TEST_REPO ".")
-        folded (when (#{"fold" "creeper-exchange" "flight-starts"} cmd)
+        folded (when (#{"fold" "creeper-exchange" "flight-starts" "notice-rate"} cmd)
                  (fold-logs! (or agents (path/join repo "worlds" "test" "agents")) (or counts (path/join repo "worlds" "test" "priors-counts.edn")) sprint))
         since (fn [rows] (filter #(>= (:t %) since-ms) (vals rows)))]
     (js/Promise.resolve
      (case cmd
-       "fold" (do (println (pr-str {:exchange (count (:exchange folded)) :starts (count (:starts folded))})) 0)
+       "fold" (do (println (pr-str {:exchange (count (:exchange folded)) :starts (count (:starts folded)) :notices (count (:notices folded))})) 0)
        "creeper-exchange" (do (println (pr-str (assoc (exchange-report (since (:exchange folded))) :since-ms since-ms))) 0)
        "flight-starts" (do (println (pr-str (assoc (starts-report (since (:starts folded))) :since-ms since-ms :sprint sprint))) 0)
        "spot-returns" (do (println (pr-str (spot-returns/count-in (or agents (path/join repo "worlds" "test" "agents"))))) 0)
+       "notice-rate" (do (println (pr-str (assoc (notice-report (since (:notices folded))) :since-ms since-ms))) 0)
        (do (js/console.error usage) 2)))))
