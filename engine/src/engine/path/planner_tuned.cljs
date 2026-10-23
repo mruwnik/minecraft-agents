@@ -46,6 +46,9 @@
      more, in g and in cost.darkSeconds (see darkOf; jobs.lib.look builds at).
    - options.tolls {cells}: cells is a Map of cell-key (planner/cell-key) to a factor: entering such a cell costs factor
      times its own seconds more, in g and in cost.darkSeconds (the caller's price of a cell; no zone knowledge here); Infinity: no plan enters it.
+     tolls.edges (optional): a Map of a cell's cell-key to a flat array of [move, to cell-key, seconds]: that move out of the
+     cell into the to cell costs those seconds more, the same way; a to cell-key of -1 prices every move of that kind out of
+     the cell that has no entry of its own (a step the walker failed at, jobs.lib.walk.edges).
    - options.damageBudget (Infinity): the most hp of certain damage a path may take (falls over 3 blocks, plants that hurt on
      touch); a move over it is refused, and a search that finds nothing for that reason says damageRefused true. options.maxDrop
      is still the length of the longest fall. options.damageWeight (riskWeight): seconds an hp of that damage costs.
@@ -390,8 +393,8 @@
      ;; dark-at dark-factor dark-keys dark-flags darks
      dark-at dark-factor
      (when (some? dark-at) (js/Float64Array. TABLE)) (when (some? dark-at) (js/Uint8Array. TABLE)) (js/Float64Array. cap)
-     ;; tolls
-     (when (some? tolls) (.-cells tolls))
+     ;; tolls edge-tolls
+     (when (some? tolls) (.-cells tolls)) (when (some? tolls) (.-edges tolls))
      ;; damage-budget damage-weight fall-factor land-factors land-seen
      (option options "damageBudget" js/Infinity) (option options "damageWeight" (option options "riskWeight" 2)) (option options "fallFactor" 1)
      (.-landing options) (.-landingSeen options)

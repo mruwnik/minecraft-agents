@@ -17,6 +17,7 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
+            [jobs.lib.walk.edges :as edges]
             [jobs.lib.walk.rock :as rock]
             [jobs.lib.walk.sight :as wsight]
             [engine.perception.store :as store]))
@@ -205,18 +206,20 @@
     {:weapon (combat/best-weapon p combat/default-weapons)
      :equipment (cost/equipment-of (.-equipment (.self p)))}))
 
-(declare with-tolls)
+(declare with-tolls with-edges)
 
 (defn costed-world
   "pw (the primitives' pathWorld) costed the way go-to plans: with the mobs the body knows may hurt it, each over its
   field (dangers?, jobs.lib.threats threat-tolls; planner-dangers keeps plans off sensed mobs' cells and deaths by terrain) and with dark cells (dark?, look/dark-fn; over a
-  masked pw an unseen cell is priced by the mask, not as dark). Every search that ranks routes by cost plans over this.
+  masked pw an unseen cell is priced by the mask, not as dark) and with the steps the walker failed at (jobs.lib.walk.edges).
+  Every search that ranks routes by cost plans over this.
   keep? (a fn of a known threat): only the threats it holds of are tolled (a flight races its chasers instead)."
   [c pw {:keys [dangers? dark? keep?]}]
   (cond-> pw
     dangers? (-> (with-dangers (threats/planner-dangers c))
                  (with-tolls (if keep? (threats/tolls-of c (filter keep? (threats/known-threats c))) (threats/threat-tolls c))))
-    dark? (with-dark (look/dark-fn (:primitives c) {:unseen-dark? (nil? (unknown-of pw))}) (kit-of c))))
+    dark? (with-dark (look/dark-fn (:primitives c) {:unseen-dark? (nil? (unknown-of pw))}) (kit-of c))
+    true (with-edges (edges/tolls (:primitives c)))))
 
 (def avoid-factor
   "How many times a cell's own cost an avoided cell costs more (the planner's options.avoid.factor): a detour is taken
@@ -275,12 +278,26 @@
                    (:v kept)
                    (let [v (merged-tolls base tolls)] (.set toll-merges tolls {:base base :v v}) v))]
       #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :dark (.-dark pw) :avoid (.-avoid pw)
-           :tolls merged})))
+           :tolls (if-let [^js t (.-tolls pw)]
+                    #js {:list (.-list merged) :cells (.-cells merged) :edges (.-edges t) :edgeRows (.-edgeRows t)}
+                    merged)})))
+
+(defn with-edges
+  "pw whose plans price the steps the walker failed at (jobs.lib.walk.edges/tolls, [edges rows]; nil: pw), on top of pw's
+  tolls."
+  [pw [edges rows]]
+  (if (nil? edges)
+    pw
+    (let [^js t (.-tolls pw)]
+      #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :dark (.-dark pw) :avoid (.-avoid pw)
+           :tolls #js {:list (some-> t .-list) :cells (some-> t .-cells) :edges edges :edgeRows rows}})))
 
 (defn tolls-key
-  "What a kept search's key holds of pw's tolls (with-tolls): the cells with their factors, nil for none."
+  "What a kept search's key holds of pw's tolls (with-tolls, with-edges): the cells with their factors and the edges with
+  their seconds, nil for none."
   [pw]
-  (some-> (.-tolls pw) .-list))
+  (when-let [^js t (.-tolls pw)]
+    (if-let [rows (.-edgeRows t)] [(.-list t) rows] (.-list t))))
 
 (defn avoid-key
   "What a kept search's key holds of pw's avoided cells (with-avoid): the cells, nil for none."

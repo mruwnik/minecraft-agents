@@ -295,6 +295,7 @@
               extra (if ^boolean (.-avoiding s) (.avoidCost s x y z move dsec drisk) 0)
               ddark (+ (if (some? (.-dark-at s)) (* (.-dark-factor s) dsec (.darkOf s x y z)) 0)
                        (if (some? (.-tolls s)) (* dsec (.tollOf s x y z)) 0)
+                       (if (some? (.-edge-tolls s)) (.edgeToll s x y z move parent-node) 0)
                        (.-move-unk s)
                        (if (pos? (.-c-descent s)) (* (.-c-descent s) (js/Math.max 0 (- (aget (.-ys s) parent-node) y))) 0))]
           (when-not (neg? extra)
@@ -368,6 +369,22 @@
   (tollOf [s x y z]
     (let [f (.get ^js (.-tolls s) (cell-key x y z))]
       (if (some? f) f 0)))
+
+  ;; the seconds the caller's edge toll (options.tolls.edges) adds to entering x,y,z by `move` from parent-node's cell: its
+  ;; own entry, else the entry for any cell that move goes to, else 0
+  (edgeToll [s x y z move parent-node]
+    (let [^js e (.get ^js (.-edge-tolls s) (cell-key (aget (.-xs s) parent-node) (aget (.-ys s) parent-node) (aget (.-zs s) parent-node)))]
+      (if (nil? e)
+        0
+        (let [to (cell-key x y z)
+              n (.-length e)]
+          (loop [i 0 any 0]
+            (cond
+              (>= i n) any
+              (not (== (aget e i) move)) (recur (+ i 3) any)
+              (== (aget e (inc i)) to) (aget e (+ i 2))
+              (== (aget e (inc i)) -1) (recur (+ i 3) (aget e (+ i 2)))
+              :else (recur (+ i 3) any)))))))
 
   ;; what entering x,y,z by `move` adds to its cost in a search for an alternative path: -1 refuses a move of a kind avoided;
   ;; a cell within 1 block of an earlier path costs avoid-factor times its own cost more

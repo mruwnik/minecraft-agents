@@ -13,6 +13,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
+            [jobs.lib.walk.edges :as edges]
             [jobs.lib.walk.light :as wlight]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.search :as wsearch]
@@ -322,6 +323,7 @@
         steer-for (steer-s c timeout-s)
         r (await (ctx/act c :steer (steer-args steer-for decide)))
         ms (- (js/Date.now) t)]
+    (when (= "done" (.-status r)) (edges/note-walk! p steps (:i (:exec @state)) @last-done))
     [(case (.-status r)
        "done" @last-done
        "timeout" (cond-> {:status :stuck :why (str "walk timed out after " timeout-s " s")

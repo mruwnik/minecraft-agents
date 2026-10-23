@@ -24,3 +24,14 @@
   "tolls for the cells of zones the body has no business in."
   [cells]
   (tolls cells zone-factor))
+
+(defn fail-chance
+  "The chance a step fails that failed k of n tries: the measured-prior convention, (k+1)/(n+2)."
+  [k n]
+  (/ (inc k) (+ n 2)))
+
+(defn failing-step-s
+  "Seconds a step that failed k of n tries costs more: the failed tries expected before it goes, p/(1-p) at its
+  fail-chance p, each costing fail-s."
+  [k n fail-s]
+  (* fail-s (/ (inc k) (inc (- n k)))))

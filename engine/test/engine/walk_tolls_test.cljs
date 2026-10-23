@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.fake :as fake]
             [engine.registry :as registry]
             [engine.ready-test :as ready-test]
             [engine.test-util :as tu]
@@ -12,6 +13,7 @@
             [jobs.lib.cost.tolls :as tolls]
             [jobs.lib.near :as near]
             [jobs.lib.threats :as threats]
+            [jobs.lib.walk.edges :as edges]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.walk.plan :as wplan]))
 
@@ -68,6 +70,19 @@
     (is (= (wworld/tolls-key tolled) (wworld/tolls-key (wworld/with-dangers tolled nil))) "other costs keep the tolls")
     (is (= [[5 64 0 12] [6 64 1 10]] (mapv (juxt :x :y :z :factor) (wworld/tolls-key (wworld/with-tolls tolled [{:x 5 :y 64 :z 0 :factor 2}]))))
         "tolls added later add to the cells already tolled")))
+
+(deftest a-failed-step-is-priced-by-its-tries-until-a-cell-round-it-changes
+  (let [p (tu/fake-on-floor {:floor [-5 -5 5 5]})
+        steps [{:x 0 :y 64 :z 0 :move :start} {:x 1 :y 64 :z 0 :move :walk}]
+        rows #(second (edges/tolls p))]
+    (is (nil? (edges/tolls p)) "nothing failed: no edge tolls")
+    (edges/note-walk! p steps 1 {:status :stuck :step 1})
+    (is (= [[[0 64 0] :walk nil 6] [[0 64 0] :walk [1 64 0] 6]] (rows)) "1 of 1 failed: chance 2/3, two 3 s tries expected")
+    (edges/note-walk! p steps 2 {:status :arrived})
+    (is (= [3 3] (mapv peek (rows))) "1 of 2 failed: chance 1/2")
+    (is (not= (wworld/tolls-key (wworld/with-edges #js {} (edges/tolls p))) (wworld/tolls-key #js {})) "the edges are in the search key")
+    (swap! (fake/state p) update :blocks assoc [1 63 0] "air")
+    (is (= [[[0 64 0] :walk nil 3]] (rows)) "the to cell's floor changed: its edge is forgotten, the pool out of the start stays")))
 
 (def lake
   "A fake world: the floor x -10..50, z -10..10 with a lake x 0..40, z 5..8, water y 61..63 (its top level with the floor)."

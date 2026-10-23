@@ -1072,6 +1072,41 @@
           (is (= 1 (count (events-of s :walker-fault))) "the walker's fault stays visible as a warn")
           (is (every? (fn [[_ z]] (<= -1 z 1)) @visited) "a short detour, not a wide one"))))))
 
+(defn east-stall-at-start!
+  "Steer override: heading east out of the cell [0 64 0] the body makes no headway (a fault of that cell's own way out);
+  a diagonal or any other step goes."
+  [p]
+  (.override (.-world p) "steer"
+             (fn [token ^js a impl]
+               (let [decide (.-decide a)
+                     wrapped (fn [pose]
+                               (let [^js out (decide pose)]
+                                 (if (and (not (.-done out)) (= [0 0] [(js/Math.floor (.-x pose)) (js/Math.floor (.-z pose))])
+                                          (some-> (steer/heading (js->clj (.-controls out) :keywordize-keys true) (.-yaw out))
+                                                  (- east-yaw) js/Math.abs (< 0.3)))
+                                   #js {:controls #js {} :yaw (.-yaw out)}
+                                   out)))]
+                 (impl token (js/Object.assign #js {} a #js {:decide wrapped}))))))
+
+(deftest a-later-go-to-takes-another-way-out-of-a-start-cell-whose-cheap-step-stalled
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p] :as s} (setup {:blocks flat})
+              home (get-in @(fake/state p) [:self :pos])
+              go (fn ^:async go []
+                   (let [out (atom :not-done)
+                         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out {:pos [6 64 0] :range 0})))]
+                     (core/submit! eng '(recording-parent) {})
+                     (await (tick-out! eng 30))
+                     @out))]
+          (east-stall-at-start! p)
+          (is (true? (:arrived (await (go)))))
+          (is (= 1 (count (events-of s :walker-fault))) "the first call stalls once on the walk east")
+          (swap! (fake/state p) assoc-in [:self :pos] home)
+          (is (true? (:arrived (await (go)))))
+          (is (= 1 (count (events-of s :walker-fault))) "the second call remembers the stall: it leaves by the dearer diagonal"))))))
+
 (deftest go-to-still-gives-up-stuck-when-the-only-way-runs-over-the-faulty-cell
   (async done
     (tu/run-async done
