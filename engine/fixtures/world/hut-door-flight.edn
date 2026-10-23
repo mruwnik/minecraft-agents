@@ -2,6 +2,7 @@
 ;; the body (retreat.door-shut, one click), never one behind the body, never a shut one, never an iron door (no hand).
 ;; door-behind-the-body: stone outside the north door, or the body would leave by it and shut it behind it (a door then nearer the hostile).
 ;; Cards d3633aa4, 1ab434a2: a hurt body's open door is a priced cover (:door) only while the room has no other opening; a room cell not seen yet counts as an open side, so the door is priced (dearer than walls here), not chosen.
+;; Card 1738008c: with a room cell unseen the body looks first (hostile.look-first, a glance at the unseen sides) when the door it may then shut is worth it.
 ;; Hut: stone walls x 12..20, z 12..20, roof y 3, interior 7x7. Body mid-room, skeleton (NoAI) 10 south of the south wall.
 {:defaults
  {:tags [:hostile :survival :door]
@@ -65,6 +66,17 @@
    :blocks [[:set [16 0 20] "oak_door[facing=south,half=lower,open=true]"]
             [:set [16 1 20] "oak_door[facing=south,half=upper,open=true]"]]
    :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30] [:rcon "damage $BODY 15 minecraft:generic"]
+         [:summon "skeleton" [16.5 0 26.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:cover :door}} :within-s 40}
+            {:event {:source :job :kind :retreat.door-shut} :within-s 40}]
+   :after [[:block [16 0 20] "oak_door[half=lower,open=false]"] [:not-block [16 0 19] "cobblestone"]]
+   :limit-s 60}
+  {:name "hurt-body-in-an-unseen-hut-looks-then-shuts-the-door"
+   :time :any
+   :body {:effects [] :at [16.5 0 18.5]}
+   :blocks [[:set [16 0 20] "oak_door[facing=south,half=lower,open=true]"]
+            [:set [16 1 20] "oak_door[facing=south,half=upper,open=true]"]]
+   :act [[:rcon "damage $BODY 15 minecraft:generic"]
          [:summon "skeleton" [16.5 0 26.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :hostile.decided :data {:cover :door}} :within-s 40}
             {:event {:source :job :kind :retreat.door-shut} :within-s 40}]

@@ -25,6 +25,7 @@
     death    experience-cost, death-cost: death as an ordinary cost, the walk back for the items plus the experience; spawn-worth: a respawn point's worth; worth-to, find-worth, items-find-worth, leg-price, search-radius, wait-price: what a find is worth, a search leg's price, how far its legs may go, what waiting for a listed maker costs; opening-price, hold-price: opening a shelter to mobs against holding on in it; death-weight, terrain-danger: a remembered death's fade and the plan cost near a death by terrain (jobs.lib.cost.death).
     base-rates  density, biome-chance, expected-density, peak-density: the ore a block of ground is expected to hold, from the game's
              own placements, and the chance of a biome on ground the body has not seen (jobs.lib.cost.base-rates).
+    look     look-answer, look-value, closed-chance, look-s: the value of a look before deciding, a boundary's unseen part closed (jobs.lib.cost.look).
     find     look-chance, find-chance, searched-for?: the chance a look round finds the animals a search is for, from their base rate and the ground already searched in vain, looked-area: that ground; search-s: a search's seconds per find, leg-spacing: the blocks between its legs (jobs.lib.cost.find)."
   (:require [clojure.string :as str]
             [jobs.lib.cost.answer :as answer]
@@ -34,6 +35,7 @@
             [jobs.lib.cost.death :as death]
             [jobs.lib.cost.fight :as fight]
             [jobs.lib.cost.find :as find]
+            [jobs.lib.cost.look :as glance]
             [jobs.lib.cost.food :as food]
             [jobs.lib.cost.health :as health]
             [jobs.lib.cost.planner :as planner]
@@ -79,6 +81,10 @@
 (def cover-answer answer/cover-answer)
 (def answer-price answer/answer-price)
 (def decide answer/decide)
+(def look-answer glance/look-answer)
+(def look-value glance/look-value)
+(def closed-chance glance/closed-chance)
+(def look-s glance/look-s)
 (def blast-hurt answer/blast-hurt)
 (def swell-start answer/swell-start)
 (def leaves-reserve? fight/leaves-reserve?)

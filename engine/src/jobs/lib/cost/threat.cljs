@@ -18,7 +18,6 @@
    ::default-simulation-distance {:default 10 :doc "Chunks around a player that tick, when the server's simulation distance is unknown (vanilla default)." :spec (a/int-in 2 32)}
    ::spot-occupied {:default {:k 1 :n 4} :spec (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)})
                     :doc "Of the death and near-death spots the trial bodies came back within 16 blocks of after 300 s or more 32 to 128 blocks off (vanilla: its killer had despawned), those where a hostile met the body within 60 s (k) of all (n): node tools/event-counts.mjs spot-returns, 2026-10-23."}
-   ::door-breaker-share {:default 0.1 :doc "The share of zombies, husks and zombie villagers drawn with the break-door goal at spawn: vanilla Zombie.finalizeSpawn sets it when nextFloat < 0.1 x the clamped regional difficulty (0 to 1), a value the body cannot read; costed at that cap 1, so 0.1 (the wiki's Zombie page: \"10% x regional difficulty\")." :spec (a/num-in 0 1)}
    ::hit-rate {:default 0.6 :doc "Hits a zombie or skeleton lands per second of exposure (measured over trial fights; the body is out of reach part of the time). Mobs not measured count one a second." :spec (a/num-in 0 nil)}
    ::spider-hit-rate {:default 0.35 :doc "Hits a spider or cave spider lands per second of exposure." :spec (a/num-in 0 nil)}
    ::trident-rate {:default 0.5 :doc "Throws a second of a drowned holding a trident (vanilla: one every 40 ticks)." :spec (a/num-in 0 nil)}
@@ -58,27 +57,60 @@
 
 (def door-breakers
   "Mobs that break a wooden door down, with the difficulty from which they do (vanilla BreakDoorGoal): a vindicator
-  from normal on; a zombie, husk or zombie villager from hard on and only when its break-door goal was drawn at spawn
-  (door-breaker-share). A drowned never has the goal (Drowned.supportsBreakDoorGoal is false)."
+  from normal on, only in a raid (Vindicator.VindicatorBreakDoorGoal, which the body does not sense: counted as one); a
+  zombie, husk or zombie villager on hard only, when its break-door goal was drawn at spawn (breaker-draw). A drowned
+  never has the goal (Drowned.supportsBreakDoorGoal is false)."
   {"zombie" 3 "zombie_villager" 3 "husk" 3 "vindicator" 2})
 
 (def spawn-drawn #{"zombie" "zombie_villager" "husk"})
 
 (def door-break-s "Seconds a mob at a door needs to break it down (vanilla: 240 ticks)." 12)
 
+(def moon-brightness "Moon brightness by moon phase, full moon first (vanilla DimensionType.MOON_BRIGHTNESS_PER_PHASE)." [1 0.75 0.5 0.25 0 0.25 0.5 0.75])
+
+(defn regional-difficulty
+  "The regional (local) difficulty at the difficulty d (0-3) of a chunk inhabited for inhabited ticks, at day-time ticks
+  under the moon phase (vanilla DifficultyInstance.calculateDifficulty, the wiki's Difficulty page)."
+  [d day-time inhabited moon-phase]
+  (if (zero? d)
+    0
+    (let [clamp #(max 0 (min 1 %))
+          time (* 0.25 (clamp (/ (- day-time 72000) 1440000)))
+          chunk (+ (* (clamp (/ inhabited 3600000)) (if (= 3 d) 1 0.75))
+                   (max 0 (min time (* 0.25 (moon-brightness (mod moon-phase 8))))))]
+      (* d (+ 0.75 time (if (= 1 d) (* 0.5 chunk) chunk))))))
+
+(defn special-multiplier
+  "The clamped regional difficulty, 0 to 1 (vanilla DifficultyInstance.getSpecialMultiplier): 0 under 2, 1 over 4."
+  [regional]
+  (max 0 (min 1 (/ (- regional 2) 2))))
+
+(defn breaker-draw
+  "The share of zombie kinds drawn with the break-door goal at spawn (vanilla Zombie.finalizeSpawn: nextFloat < 0.1 x
+  special-multiplier) at the server difficulty, under clock {:day-time :moon-phase :world-age} (ticks, the body's
+  self). The chunk's inhabited time is not sensed: at most the world age, so costed at that (unknown: the cap); an
+  unknown day time counts the longest, an unknown moon full."
+  [{:keys [day-time moon-phase world-age]}]
+  (let [inhabited (or world-age 3600000)]
+    (* 0.1 (special-multiplier (regional-difficulty (difficulty) (or day-time 1512000) inhabited (or moon-phase 0))))))
+
+(defn clock-of "breaker-draw's clock of a body's self (JS), nil fields unknown." [self]
+  {:day-time (.-dayTime self) :moon-phase (.-moonPhase self) :world-age (.-worldAge self)})
+
 (defn door-break-share
-  "The chance the mob called mob-name breaks a wooden door at the ::difficulty setting: 0 when it never does or the
-  difficulty is below its own; for a zombie kind the ::door-breaker-share it was drawn with; else 1."
-  [mob-name]
-  (let [from (door-breakers mob-name)]
-    (cond (or (nil? from) (> from (difficulty))) 0
-          (spawn-drawn mob-name) (settings/get settings ::door-breaker-share)
-          :else 1)))
+  "The chance the mob called mob-name breaks a wooden door at the server difficulty under clock (breaker-draw's): 0
+  when it never does or the difficulty is below its own; for a zombie kind its breaker-draw; else 1."
+  ([mob-name] (door-break-share mob-name nil))
+  ([mob-name clock]
+   (let [from (door-breakers mob-name)]
+     (cond (or (nil? from) (> from (difficulty))) 0
+           (spawn-drawn mob-name) (breaker-draw clock)
+           :else 1))))
 
 (defn door-break-chance
-  "The chance at least one of mob-names breaks a door (door-break-share each)."
-  [mob-names]
-  (- 1 (reduce * (map #(- 1 (door-break-share %)) mob-names))))
+  "The chance at least one of mob-names breaks a door (door-break-share each, under clock)."
+  ([mob-names] (door-break-chance mob-names nil))
+  ([mob-names clock] (- 1 (reduce * (map #(- 1 (door-break-share % clock)) mob-names)))))
 
 (def burns-in-sun
   "Mobs that burn in daylight under the open sky (vanilla; a drowned too, but it keeps to the water)."

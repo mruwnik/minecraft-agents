@@ -997,7 +997,7 @@
 ;; Card ad8c1e8b: live, the walls/pit/pocket quotes held the decision 2.4 s while a creeper closed in and lit its fuse
 (deftest no-cover-is-quoted-with-a-creeper-near
   (with-redefs [shut-in/covers (fn [& _] (throw (js/Error. "quoted")))]
-    (is (nil? (respond-to-hostile/cover-answers {} [#js {:name "creeper"} #js {:name "zombie"}] nil)))))
+    (is (nil? (respond-to-hostile/cover-answers {} [#js {:name "creeper"} #js {:name "zombie"}] nil nil)))))
 
 ;; Card ad8c1e8b: a run-away call after the swing got going later than the fuse the swing began (10.7 hp lost live)
 (deftest a-creeper-hit-is-stepped-back-from-inside-its-fuse-by-one-move-with-no-job-round

@@ -248,17 +248,35 @@
 (defn cover-answers
   "{way answer} of shutting the body in against near by each way shut-in/covers finds possible here (cost/cover-answer:
   the blows while a side is open, the quote, the hide-out's quiet; then: what follows it, or the same cover once more).
-  The open doors of the closed (or not yet all seen) room the body stands in, when the flight would shut one (respond.doors/sealing-doors), are the cover :door (shut-in/door-cover), done by the flight's own door step.
+  The open doors of the closed (or not yet all seen) room the body stands in, when the flight would shut one (sealing, respond.doors/sealing-doors), are the cover :door (shut-in/door-cover), done by the flight's own door step.
   None with a creeper near (cost/cover-answer: its blast takes the walls), so its quotes are not asked for: they take
   seconds the fuse does not leave."
-  [c near then]
+  [c near then sealing]
   (when-not (some combat/creeper? near)
     (let [p (:primitives c)
-          mobs {:equipment (cost/equipment-of (.-equipment (.self p))) :mobs (mapv #(hostile/mob-near p %) near) :then then}
-          sealing (doors/sealing-doors c near)]
+          mobs {:equipment (cost/equipment-of (.-equipment (.self p))) :mobs (mapv #(hostile/mob-near p %) near) :then then}]
       (into {} (keep (fn [[w cover]] (some->> (cost/cover-answer mobs cover) (vector w))))
             (cond-> (shut-in/covers c cover-ways)
               sealing (assoc :door (shut-in/door-cover c (:n sealing) (map #(.-name %) near) (:unseen? sealing))))))))
+
+(defn look-answer
+  "{:answer :room :value :cost}: looking into the room first (respond.doors/room-look) when a cell of it is unseen: the
+  room is closed by cost/closed-chance of its seen and unseen boundary cells, then the door shut as in a seen room, else
+  the answers now without the door (cost/look-answer, cost/look-value). nil when there is nothing to look at."
+  [c near now sealing then]
+  (when-let [{:keys [seen unseen headings] :as room} (doors/room-look c sealing)]
+    (let [p (:primitives c)
+          body (hostile/body-of c)
+          equipment (cost/equipment-of (.-equipment (.self p)))
+          mobs (mapv #(hostile/mob-near p %) near)
+          door (cost/cover-answer {:equipment equipment :mobs mobs :then then}
+                                  (shut-in/door-cover c (:n sealing) (map #(.-name %) near) false))
+          closed (cost/closed-chance seen unseen)
+          answer (cost/look-answer body {:equipment equipment :mobs mobs :looks (* 2 (count headings))
+                                         :outcomes [[closed (assoc now :door door)] [(- 1 closed) (dissoc now :door)]]}
+                                   (u/self-pos c))]
+      (when answer
+        (assoc (cost/look-value body now answer (u/self-pos c)) :answer answer :room room :closed closed)))))
 
 (defn walk-felt
   "hp a second of the mob blows felt since the flight began (hostile/incoming), nil while not fleeing: a walk is priced at
@@ -267,6 +285,23 @@
   (let [m (ctx/mem c)]
     (when-let [start (and (= :flee (:decision m)) (:flight-start m))]
       (:rate (hostile/incoming c start)))))
+
+(defn ^:async respond-with!
+  "The rest of respond once it has weighed the answers: log the decision, run its child, the other one when it declines."
+  [c near weighed decision cover creeper stay?]
+  (log-encounter! c (if (and (= :flee decision) creeper) creeper (first near)) decision (:prices weighed) cover)
+  (when (and stay? (not (:stay-noted (ctx/mem c))))
+    (ctx/update-mem! c assoc :stay-noted true)
+    (ctx/emit! c :hostile.sealed-hold :info {:text "under a roof: the mobs near are heard only or flyers, so the body stays in" :mobs (mapv #(.-name %) near)}))
+  (ctx/update-mem! c #(cond-> (assoc % :decision decision) cover (assoc :cover-way cover) (not cover) (dissoc :cover-way)))
+  (let [result (await (run-child c decision stay?))]
+    (keep-struck! c)
+    (cond
+      (not= :declined result) result
+      (and (= :fight decision) (leave-heard? c near)) (leave-heard! c near)
+      stay? result
+      (and (= :fight decision) (leave-watched? c near)) (leave-watched! c near)
+      :else (await (run-child c (other decision) false)))))
 
 (defn ^:async respond [c near]
   (let [p (:primitives c)
@@ -280,25 +315,23 @@
         felt (walk-felt c)
         fight (when-not (some combat/enderman? near) (hostile/fight-answer c near #(struck-of c %)))
         walk (when-not (some combat/enderman? near) (hostile/flee-answer c near fight felt))
-        covers (when-not (some combat/enderman? near) (cover-answers c near (or (:then walk) (when fight [fight]))))
-        weighed (hostile/weigh c (merge covers {:fight fight :flee walk}))
+        then (or (:then walk) (when fight [fight]))
+        sealing (when-not (some #(or (combat/creeper? %) (combat/enderman? %)) near) (doors/sealing-doors c near))
+        covers (when-not (some combat/enderman? near) (cover-answers c near then sealing))
+        now (merge covers {:fight fight :flee walk})
+        look (when (seq covers) (look-answer c near now sealing then))
+        weighed (hostile/weigh c (cond-> now look (assoc :look (:answer look))))
         stay? (and (not (hurt-lately? c)) (stay-under-roof? c near))
         decision (if (or stay? (= :fight (:answer weighed))) :fight :flee)
         cover (when (and (not stay?) (contains? covers (:answer weighed))) (:answer weighed))
         creeper (first (get-in weighed [:answers :fight :creepers]))]
-    (log-encounter! c (if (and (= :flee decision) creeper) creeper (first near)) decision (:prices weighed) cover)
-    (when (and stay? (not (:stay-noted (ctx/mem c))))
-      (ctx/update-mem! c assoc :stay-noted true)
-      (ctx/emit! c :hostile.sealed-hold :info {:text "under a roof: the mobs near are heard only or flyers, so the body stays in" :mobs (mapv #(.-name %) near)}))
-    (ctx/update-mem! c #(cond-> (assoc % :decision decision) cover (assoc :cover-way cover) (not cover) (dissoc :cover-way)))
-    (let [result (await (run-child c decision stay?))]
-      (keep-struck! c)
-      (cond
-        (not= :declined result) result
-        (and (= :fight decision) (leave-heard? c near)) (leave-heard! c near)
-        stay? result
-        (and (= :fight decision) (leave-watched? c near)) (leave-watched! c near)
-        :else (await (run-child c (other decision) false))))))
+    (if (and (= :look (:answer weighed)) (not stay?))
+      (do (ctx/emit! c :hostile.look-first :info {:prices (update-vals (:prices weighed) js/Math.round) :value (:value look) :cost (:cost look)
+                                                 :closed (:closed look) :sides (:sides (:room look))
+                                                 :text (str "a side of the room is unseen: a look first (closed by chance " (.toFixed (:closed look) 2)
+                                                            ", worth " (js/Math.round (:value look)) " s, costs " (.toFixed (:cost look) 1) " s)")})
+          (await (doors/look-into-room! c (:room look))))
+      (respond-with! c near weighed decision cover creeper stay?))))
 
 (def cover-sides
   "Of the four sides of the body's cell, how many must be walled (feet and head cell solid) for it to hold cover: a

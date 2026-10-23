@@ -194,3 +194,18 @@
     (is (< (js/Math.abs (- deep (* 0.0062 price))) 1e-9) "water a drowned can spawn in: its measured meet rate")
     (is (< deep (first (cost/water-factors (body 20)))) "a bare body pays more than one with a sword")
     (is (< deep (first (cost/water-factors (assoc kit :health 8)))) "and a hurt one more than a whole one")))
+
+(deftest a-look-is-worth-what-it-may-change-less-what-it-costs
+  (let [walls (cost/cover-answer {:mobs [(mob "skeleton" 8)]} {:open-s 9 :seconds 39})
+        door (cost/cover-answer {:mobs [(mob "skeleton" 8)]} {:open-s 3 :seconds 33})
+        now {:walls walls}
+        look (fn [mobs chance] (cost/look-answer (body 5) {:mobs mobs :looks 4 :outcomes [[chance {:walls walls :door door}] [(- 1 chance) now]]} here))
+        value (fn [mobs chance] (cost/look-value (body 5) now (look mobs chance) here))]
+    (is (zero? (:value (cost/look-value (body 5) now (cost/look-answer (body 5) {:mobs [] :looks 4 :outcomes [[1 now]]} here) here)))
+        "a look that can show nothing new changes nothing")
+    (is (< (:cost (value [] 0.9)) (:value (value [] 0.9))) "likely closed: the cheaper door is worth the look")
+    (is (= :look (:answer (cost/decide (body 5) (assoc now :look (look [] 0.9)) here))) "decide takes it")
+    (is (> (:value (value [] 0.9)) (:value (value [] 0.2))) "the less likely the door, the less the look is worth")
+    (is (= 1 (cost/closed-chance 11 0)) "all seen: closed")
+    (is (= (/ 12 13) (cost/closed-chance 11 1)) "one unseen of twelve: the rule of succession")
+    (is (> (cost/closed-chance 11 1) (cost/closed-chance 2 1) (cost/closed-chance 2 3)))))

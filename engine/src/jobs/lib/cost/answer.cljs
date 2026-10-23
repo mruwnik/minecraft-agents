@@ -96,26 +96,35 @@
 
 (defn healed [body] (assoc body :health 20 :absorption 0))
 
+(defn after
+  "body once answer's expected blows have landed (at least 1 hp left: a death in them is the answer's own)."
+  [{:keys [health] :as body} answer]
+  (assoc body :health (max 1 (- (or health 20) (expected-damage answer)))))
+
 (defn answer-price
   "Seconds answer costs body {:health :absorption, death-cost's :respawn :level :carried} at `at` (see the ns doc); :then
-  is priced at full health: the body meets the mob again once it has healed."
-  [{:keys [health] :as body} {:keys [seconds then] :as answer} at]
+  is priced at full health: the body meets the mob again once it has healed. :outcomes [[chance answer]] (a look's,
+  jobs.lib.cost.look) are each paid by its chance, at the health the answer's blows leave."
+  [{:keys [health] :as body} {:keys [seconds then outcomes] :as answer} at]
   (let [health (or health 20)
         own (+ (health/hp-cost health (min (expected-damage answer) health))
                (* (blows-chance body answer) (death/death-cost body at))
                seconds)]
-    (if (seq then)
-      (+ own (apply min (map #(answer-price (healed body) % at) then)))
-      own)))
+    (cond
+      (seq outcomes) (+ own (reduce + (map (fn [[chance a]] (* chance (answer-price (after body answer) a at))) outcomes)))
+      (seq then) (+ own (apply min (map #(answer-price (healed body) % at) then)))
+      :else own)))
 
 (defn answer-death-chance
-  "The chance answer kills body: its blows (blows-chance), then the cheapest of its :then (answer-price at `at`) at full health."
-  [body {:keys [then] :as answer} at]
+  "The chance answer kills body: its blows (blows-chance), then the cheapest of its :then (answer-price at `at`) at full
+  health, or each of its :outcomes by its chance."
+  [body {:keys [then outcomes] :as answer} at]
   (let [own (blows-chance body answer)
-        after (when (seq then) (apply min-key #(answer-price (healed body) % at) then))]
-    (if after
-      (- 1 (* (- 1 own) (- 1 (answer-death-chance (healed body) after at))))
-      own)))
+        next (when (seq then) (apply min-key #(answer-price (healed body) % at) then))]
+    (cond
+      (seq outcomes) (- 1 (* (- 1 own) (- 1 (reduce + (map (fn [[chance a]] (* chance (answer-death-chance (after body answer) a at))) outcomes)))))
+      next (- 1 (* (- 1 own) (- 1 (answer-death-chance (healed body) next at))))
+      :else own)))
 
 (defn decide
   "{:answer key :prices {key seconds}}: the cheapest of answers {key answer-or-nil} (nil: not open to the body) by

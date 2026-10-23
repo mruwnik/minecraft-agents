@@ -130,13 +130,13 @@
 
 (defn door-cover
   "The cover of the open doors (n) shut with a click each: their placements' seconds in the open and to do, then the
-  hide-out's quiet. A door a mob of mob-names breaks (threat/door-break-chance) holds only threat/door-break-s of the
+  hide-out's quiet. A door a mob of mob-names breaks (threat/door-break-chance, under the body's clock) holds only threat/door-break-s of the
   quiet, the rest of it is spent with the side open, by that chance. With unseen? a side of the room may be open: the
   quiet is all spent in the open."
   [c n mob-names unseen?]
   (let [s (* n (way/place-s c))
         quiet (hide-out/quiet-s)
-        broken (* (threat/door-break-chance mob-names) (max 0 (- quiet threat/door-break-s)))]
+        broken (* (threat/door-break-chance mob-names (some-> (:primitives c) .self threat/clock-of)) (max 0 (- quiet threat/door-break-s)))]
     {:open-s (+ s (if unseen? quiet broken)) :seconds (+ s quiet)}))
 
 (defn ^:async choose

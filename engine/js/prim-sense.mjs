@@ -86,6 +86,9 @@ export function createSense (env) {
       timeOfDay: env.bot.time.timeOfDay,
       // the world age in game ticks (stands still while the tick is frozen)
       worldAge: env.bot.time.age ?? null,
+      // the day time in ticks (the dimension clock, set by /time) and the moon phase 0-7: the regional difficulty reads them
+      dayTime: env.bot.time.time ?? null,
+      moonPhase: env.bot.time.moonPhase ?? null,
       // the raw levels; engine.senses derives isDay, raining and thundering
       rainState: env.bot.rainState ?? 0,
       thunderState: env.bot.thunderState ?? 0,

@@ -286,22 +286,28 @@
   [p pos]
   (some? (unseen-room p pos)))
 
-(defn unseen-sides
-  "The feet cells [x y z] beside the room cells of the room around pos {:x :y :z} (as unseen-room?) that the body has not
-  seen: what a look into the room has to show."
+(defn boundary
+  "{:seen n :unseen [[x y z]]} of the room around pos {:x :y :z} (as unseen-room?): how many feet cells beside its room
+  cells the body has seen (its walls and doors, as the flood closed over them) and those it has not seen, what a look
+  into the room has to show."
   [p {:keys [x y z]}]
   (let [kind-at (room-kind-at p (shut-kind-at p))
         in-door? (some-> (u/seen-block p {:x x :y y :z z}) .-name openable?)
-        starts (if in-door? (map (fn [[dx dz]] [(+ x dx) y (+ z dz)]) [[1 0] [-1 0] [0 1] [0 -1]]) [[x y z]])]
-    (->> starts
-         (mapcat (fn [[sx sy sz]]
-                   (for [c (:cells (room-flood p kind-at sx sy sz))
-                         [dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
-                         :let [cell [(+ (aget c 0) dx) (aget c 1) (+ (aget c 2) dz)]]
-                         :when (nil? (u/seen-block p {:x (cell 0) :y (cell 1) :z (cell 2)}))]
-                     cell)))
-         distinct
-         vec)))
+        starts (if in-door? (map (fn [[dx dz]] [(+ x dx) y (+ z dz)]) [[1 0] [-1 0] [0 1] [0 -1]]) [[x y z]])
+        floods (keep (fn [[sx sy sz]] (:cells (room-flood p kind-at sx sy sz))) starts)
+        cells (set (map vec (mapcat identity floods)))
+        sides (->> cells
+                   (mapcat (fn [[cx cy cz]] (map (fn [[dx dz]] [(+ cx dx) cy (+ cz dz)]) [[1 0] [-1 0] [0 1] [0 -1]])))
+                   (remove cells)
+                   distinct)
+        {unseen true seen false} (group-by (fn [[cx cy cz]] (nil? (u/seen-block p {:x cx :y cy :z cz}))) sides)]
+    {:seen (count seen) :unseen (vec unseen)}))
+
+(defn unseen-sides
+  "The feet cells [x y z] beside the room cells of the room around pos {:x :y :z} (as unseen-room?) that the body has not
+  seen (boundary's :unseen)."
+  [p pos]
+  (:unseen (boundary p pos)))
 
 (defn unroofed-cell
   "{:cell :closed?}: the first cell a walker flood from pos {:x :y :z} (doors shut, within room-cells) reaches with no

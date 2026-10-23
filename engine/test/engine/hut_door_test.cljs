@@ -143,7 +143,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (some? (await (door-price {} {:unloaded #{[5 64 -2] [5 65 -2]}}))) "a room cell not seen: the door cover is priced, not dropped")))))
+        (is (some? (await (door-price {} {:unloaded #{"5,63,-2" "5,64,-2" "5,65,-2"}}))) "a room cell not seen: the door cover is priced, not dropped")))))
 
 (def world-key rooms/world-key)
 
@@ -194,3 +194,30 @@
         cell #(some-> (doors/door-for c %) :cell)]
     (is (some? (cell threats)))
     (is (= (cell threats) (cell (vec (reverse threats)))) "whatever the order the threats come in")))
+
+(defn ^:async first-choice
+  "The first :hostile.decided or :hostile.look-first event of respond for the hurt body in the open hut (open-hut, more merged)."
+  [more]
+  (let [{:keys [seen]} (await (ct/first-round '(jobs.survival.respond-to-hostile)
+                                              (merge (open-hut {:self {:pos {:x 5.5 :y 64 :z 1.5} :health 4.8 :food 13}
+                                                                :inventory [{:name "cobbled_deepslate" :count 20}]})
+                                                     {:blocks (merge (box 3 63 -2 7 63 2 "stone") (:blocks (hs/hut-world {:x 5.5 :y 64 :z 1.5} {})))}
+                                                     more)))]
+    (first (filter #(#{:hostile.decided :hostile.look-first} (:kind %)) @seen))))
+
+(deftest an-unseen-hut-wall-is-looked-at-first-when-the-door-may-then-win
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [e (await (first-choice {:unloaded #{"5,63,-2" "5,64,-2" "5,65,-2"}}))]
+          (is (= :hostile.look-first (:kind e)) "one wall cell unseen, the door seen open: look, then shut the door")
+          (is (< (:look (:prices e)) (:walls (:prices e)))))))))
+
+(deftest a-zombie-at-the-door-leaves-no-time-for-a-look
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [e (await (first-choice {:unloaded #{"5,63,-2" "5,64,-2" "5,65,-2"} :entities [(zombie-at 9 3.5)]}))]
+          (is (= :hostile.decided (:kind e)) "a zombie 2 blocks off: no look first")
+          (is (contains? #{:walls :pit :pocket :flee} (or (:cover e) (:decision e))) "walls or a flight"))))))
+
