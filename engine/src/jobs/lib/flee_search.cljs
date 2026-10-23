@@ -18,6 +18,7 @@
             [engine.path.planner-tuned :as planner]
             [engine.settings :as settings]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.threat :as threat]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.threat-field :as field]
             [jobs.lib.threats :as threats]
@@ -216,10 +217,11 @@
 
 (defn with-ways
   "chasers each with :way, the field/way-fn of its threat field to within cost/melee-reach, when it has a :mob name
-  (a shot spot has none) other than a creeper (its blast passes walls: the straight line stands)."
+  (a shot spot has none) other than a creeper or a shooter (a blast or an arrow passes where it cannot walk: the
+  straight line stands)."
   [c chasers]
   (mapv (fn [{:keys [mob pos] :as ch}]
-          (cond-> ch (and mob (not= "creeper" mob))
+          (cond-> ch (and mob (not= "creeper" mob) (not= :projectile (threat/damage-type mob)))
             (assoc :way (field/way-fn (field/field-of c {:mob mob :pos pos}) (floor-cell pos) (cost/melee-reach)))))
         chasers))
 

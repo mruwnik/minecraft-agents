@@ -122,6 +122,16 @@
           (is (every? :caught? open) "in the open a baby zombie keeps up")
           (is (some? (search/pick walled {})) "round a wall it falls behind"))))))
 
+(deftest a-shooter-shut-in-is-timed-in-a-straight-line
+  ;; it shoots where it cannot walk: timed by the way out of its box it has none, so every end read as never reached
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [boxed (merge field (box 6 64 -2 10 66 2 "stone") (box 7 64 -1 9 65 1 "air"))
+              ends (await (ends-of boxed {:x 0.5 :y 64 :z 0.5} [{:name "skeleton" :mob "skeleton" :pos {:x 8.5 :y 64 :z 0.5}}] [] nil))]
+          (is (seq ends))
+          (is (every? #(js/isFinite (:arrive %)) ends) (pr-str (map :arrive ends))))))))
+
 (def cliff
   "A plateau (feet y 64) for x <= 0 over a lowland (feet y 54) east of it, a stair one block wide down the cliff along
   z 0 from x 1 to x 9."
