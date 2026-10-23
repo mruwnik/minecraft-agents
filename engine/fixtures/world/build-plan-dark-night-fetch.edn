@@ -1,0 +1,23 @@
+;; Card 7c4f0664: jobs.build.from-plan at a dark site beyond the spawn-free radius at night, with no torch carried, fetches torches
+;; (a seen chest holds 8) and lights the site (build.light-area) instead of waiting for dawn. Without a source the wait stays, naming its reason.
+;; Should-succeed: torches-are-fetched-and-the-far-site-built. Should-fail (waits, never completes): no-torch-source-keeps-the-named-wait.
+;; Needs night: run with --allow-time --time-log <the shared time log>.
+{:defaults
+ {:tags [:build :light :night :fetch]
+  :time :night :time-why :night-light
+  :plot {:height 8 :floor "grass_block" :length 64}
+  :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["cobblestone" 4]]}
+  :plans [{:id "floor" :metadata {:by "$body"} :parts [{:id "p" :cells [#at [50 0 16] #at [51 0 16]] :want "cobblestone"}]}]
+  :limit-s 200}
+ :cases
+ [{:name "torches-are-fetched-and-the-far-site-built"
+   :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:torch\",count:8}]}"]]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 45 20"] [:until-seen {:block "chest"} 10]
+         [:job (jobs.build.from-plan {:plan "$plan:floor"})]]
+   :expect [{:event {:source :job :kind :child_started :data {:slot :need}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :completed :data {:missing []}} :within-s 180 :of-job true}]
+   :after [[:block [50 0 16] "cobblestone"] [:block [51 0 16] "cobblestone"]]}
+  {:name "no-torch-source-keeps-the-named-wait"
+   :act [[:job (jobs.build.from-plan {:plan "$plan:floor"})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]}]}

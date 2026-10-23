@@ -20,6 +20,10 @@
             [jobs.build.from-plan :as build]
             [jobs.build.from-plan.book :as fp-book]
             [jobs.build.from-plan.cells :as fp-cells]
+            [jobs.build.from-plan.light :as fp-light]
+            [jobs.lib.need :as need]
+            [jobs.lib.torch :as torch]
+            [engine.contract :as contract]
             [jobs.build.from-plan.walk :as fp-walk]
             [jobs.lib.near :as near]
             [jobs.lib.build.plan :as plan]
@@ -2058,3 +2062,19 @@
                   escape/walk-spec (fn [_ goal] (swap! goals conj goal) nil)]
       (fp-walk/in-pocket? c))
     (is (= [[6 55 0]] @goals))))
+
+(defn dark-wait [s] (contract/later :exposed "dark at 1 65 1 until light" :lowered-by #{:light} :chance 0.005 :recheck-after-ms (* 1000 s)))
+
+(defn lit-check
+  "The start check lights-itself makes of a dark wait of wait-s seconds for a body with torches? and a fetch allowed when fetch?."
+  [wait-s torches? fetch? mem]
+  (with-redefs [torch/lightable? (constantly torches?) need/fetch-opts (constantly (when fetch? {:how #{:gather}})) ctx/mem (constantly mem)]
+    (first ((fp-light/lights-itself (constantly (dark-wait wait-s))) {:primitives nil}))))
+
+(deftest a-torchless-build-waiting-long-for-light-fetches-torches-instead
+  (are [wait-s torches? fetch? mem kind] (= kind (lit-check wait-s torches? fetch? mem))
+    3000 false true {} :ok
+    3000 true false {} :ok
+    3000 false false {} :later
+    3000 false true {:torches-tried true} :later
+    1 false true {} :later))
