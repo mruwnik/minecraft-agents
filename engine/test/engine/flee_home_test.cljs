@@ -394,21 +394,20 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [reads (atom 0)
+        (let [counts (atom {})
               per-step (atom [])
               step retreat/flight-step!
+              restores [(counting! counts :closed-room #(identity rooms/refuge-room?) #(set! rooms/refuge-room? %))
+                        (counting! counts :room #(identity reach-room/room) #(set! reach-room/room %))]
               world (assoc (hut {:x 5.5 :y 64 :z 6.5} (merge hs/door-states lone-door-states) [(zombie 5.5 9.5 0.4)] lone-doors)
                            :home false)
-              {:keys [eng p]} (setup world)
-              _ (reading! p reads)
-              _ (set! retreat/flight-step! (fn [c] (let [before @reads]
-                                                     (.then (step c) (fn [r] (swap! per-step conj (- @reads before)) r)))))]
+              {:keys [eng]} (setup world)
+              _ (set! retreat/flight-step! (fn [c] (let [before @counts] (.then (step c) (fn [r] (swap! per-step conj (merge-with - @counts before)) r)))))]
           (core/submit! eng '(test.flight) {})
           (try (await (tu/run-until-empty eng 2))
-               (finally (set! retreat/flight-step! step)))
-          (let [flood (let [before @reads] (reach-room/closed-room? p {:x -6 :y 64 :z 5}) (- @reads before))]
-            (is (seq @per-step))
-            (is (< (first @per-step) flood) (str "cells read by the first step, fewer than one open room flood (" flood "): " @per-step))))))))
+               (finally (set! retreat/flight-step! step) (doseq [r restores] (r))))
+          (is (seq @per-step))
+          (is (= {} (first @per-step)) (str "room judgements made by the first step, none: " @per-step)))))))
 
 (deftest a-body-in-its-home-room-hit-on-the-run-is-cornered-inside
   (async done
