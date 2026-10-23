@@ -1,6 +1,8 @@
 ;; Card 89b0286a: jobs.build.from-plan builds a dark site by torchlight: with torches carried it lights the work area first
 ;; (build.light-area over the owed cells' box) instead of waiting for light, then places the plan.
 ;; Sealed dark plot (no clock). Should-succeed: dark-room-is-lit-then-built (planks placed, a room corner lit by a torch it hung).
+;; Card 192c8214: dark-hall-torches-are-fetched-then-built: a torchless body in a long dark hall (no dawn lights it) fetches the torches a seen chest
+;; holds and lights the site instead of waiting for ever.
 ;; Also: no-torch-dark-room-is-still-built-unlit (no torch, none craftable: nothing is hung, the build still ends done underground).
 {:defaults
  {:tags [:build :light :torches] :time :any
@@ -27,4 +29,13 @@
          [:wait-s 1]
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [11 0 20]] {:ok true :light {:lit? false}}]]
    :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 150 :of-job true}]
-   :after [[:block [5 0 14] "oak_planks"]]}]}
+   :after [[:block [5 0 14] "oak_planks"]]}
+  {:name "dark-hall-torches-are-fetched-then-built"
+   :blocks [[:fill [0 0 8] [60 3 24] "stone"] [:fill [3 0 12] [58 1 20] "air"] [:set [10 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:torch\",count:8}]}"]]
+   :body {:inventory [["oak_planks" 6]]}
+   :plans [{:id "floor" :metadata {:by "$body"} :parts [{:id "p" :cells [#at [50 0 16] #at [51 0 16]] :want "oak_planks"}]}]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 45 20"] [:until-seen {:block "chest"} 10]
+         [:job (jobs.build.from-plan {:plan "$plan:floor"})]]
+   :expect [{:event {:source :job :kind :child_started :data {:slot :need}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :completed :data {:missing []}} :within-s 180 :of-job true}]
+   :after [[:block [50 0 16] "oak_planks"] [:block [51 0 16] "oak_planks"]]}]}

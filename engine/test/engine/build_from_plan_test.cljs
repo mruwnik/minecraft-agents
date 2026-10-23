@@ -13,6 +13,8 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [jobs.lib.util :as u]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.look :as look]
             [engine.triggers :as triggers]
             [jobs.lib.escape :as escape]
             [jobs.lib.reach.room :as reach-room]
@@ -2064,17 +2066,26 @@
     (is (= [[6 55 0]] @goals))))
 
 (defn dark-wait [s] (contract/later :exposed "dark at 1 65 1 until light" :lowered-by #{:light} :chance 0.005 :recheck-after-ms (* 1000 s)))
+(def no-light (contract/never :exposed "dark at 1 65 1, a hall of dark floor" :lowered-by #{:torch} :chance 0.005))
 
 (defn lit-check
-  "The start check lights-itself makes of a dark wait of wait-s seconds for a body with torches? and a fetch allowed when fetch?."
-  [wait-s torches? fetch? mem]
-  (with-redefs [torch/lightable? (constantly torches?) need/fetch-opts (constantly (when fetch? {:how #{:gather}})) ctx/mem (constantly mem)]
-    (first ((fp-light/lights-itself (constantly (dark-wait wait-s))) {:primitives nil}))))
+  "The start check lights-itself makes of status for a body with torches? and a fetch allowed when fetch?, a chest holding torches `chest-blocks` east of it (nil: none known)."
+  [status torches? fetch? chest-blocks mem]
+  (with-redefs [torch/lightable? (constantly torches?) need/fetch-opts (constantly (when fetch? {:how #{:gather}})) ctx/mem (constantly mem) ctx/view (constantly nil)
+                fp-light/torch-chest (constantly (when chest-blocks {:x chest-blocks :y 0 :z 0}))
+                u/self-pos (constantly {:x 0 :y 0 :z 0}) cost/death-body (constantly {}) look/dark-here? (constantly true)]
+    (first ((fp-light/lights-itself (constantly status)) {:primitives nil}))))
 
-(deftest a-torchless-build-waiting-long-for-light-fetches-torches-instead
-  (are [wait-s torches? fetch? mem kind] (= kind (lit-check wait-s torches? fetch? mem))
-    3000 false true {} :ok
-    3000 true false {} :ok
-    3000 false false {} :later
-    3000 false true {:torches-tried true} :later
-    1 false true {} :later))
+(deftest a-torchless-build-fetches-torches-when-the-wait-costs-more
+  (are [status torches? fetch? chest mem kind] (= kind (lit-check status torches? fetch? chest mem))
+    (dark-wait 3000) false true nil {} :ok
+    (dark-wait 3000) true false nil {} :ok
+    (dark-wait 3000) false false nil {} :later
+    (dark-wait 3000) false true nil {:torches-tried true} :later
+    (dark-wait 1) false true nil {} :later
+    (dark-wait 300) false true 20 {} :ok
+    ;; a far source costs more to walk than the night is long
+    (dark-wait 300) false true 600 {} :later
+    ;; no light ever comes, so any trip beats the wait
+    no-light false true 600 {} :ok
+    no-light false false nil {} :never))

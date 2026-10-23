@@ -381,3 +381,11 @@
         night (cost/route-death-cost body {:night? true} far)]
     (is (pos? night))
     (is (> night (cost/route-death-cost body {:night? false} far)) "night is the likelier death")))
+
+(deftest a-torch-fetch-costs-its-torches-a-trip-and-a-source-walk-with-the-death-it-risks
+  (let [body {:respawn {:x 0 :y 64 :z 0} :level 3}
+        at {:x 100 :y 64 :z 0}
+        fetch (fn [m] (cost/torch-fetch-cost body (merge {:n 1 :route {:night? false} :at at} m)))]
+    (is (> (fetch {:n 4}) (fetch {:n 1})) "more torches cost more")
+    (is (> (fetch {:distance 100}) (fetch {})) "a known source adds its walk there and back")
+    (is (> (fetch {:distance 100 :route {:night? true}}) (fetch {:distance 100})) "night adds the likelier death")))
