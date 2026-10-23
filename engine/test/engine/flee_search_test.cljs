@@ -109,6 +109,8 @@
         "no way out at all (a closed cave): the best pocket")
     (is (nil? (search/pick [(end-of 0 6 5 :gain 0) (end-of 3 3 8 :found? false :gain -1)] {}))
         "no end gains on the chasers over standing still: no step")
+    (is (= {:x 3 :y 64 :z 3} (search/pick [(end-of 0 6 5 :gain -1) (end-of 3 3 2 :found? false :gain 2)] {}))
+        "the open way leads back to the chaser (a wall's foot): a pocket along the wall")
     (is (nil? (search/pick [(end-of 3 3 8 :found? false :gain 0.2 :s 0.3)] {}))
         "a pocket that buys less time than its walk takes is no step")
     (is (= {:x 3 :y 64 :z 3} (search/pick [(end-of 3 3 8 :found? false :gain 0.2 :s 0.3 :unseen [4 64 3])] {}))

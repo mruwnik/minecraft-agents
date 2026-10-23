@@ -243,9 +243,9 @@
   cell refused, those never? holds of (at the step cell or the end, as for wet?), those passing near hazards; wet ones (wet?) while a dry one is left, all with
   dry-only?; then the ends each of avoid (cell -> bool, most wanted first) holds of, while that leaves some: the route
   there is the planner's, its first steps often shared by every end. Of the rest, in this order: a :cover? end, a
-  preferred one (prefer?: end entry -> bool, e.g. a safe home), an :open? end, and only when no ring end is open at
-  all (a closed cave) a pocket; the best :score of each. An open way that every chaser cuts leaves the pockets out:
-  they are traps."
+  preferred one (prefer?: end entry -> bool, e.g. a safe home), an :open? end, and only when none of those is left (a
+  closed cave, a wall's foot) a pocket; the best :score of each. Open ways that every chaser cuts leave the pockets
+  out: they are traps."
   [ends {:keys [refused never? hazards wet? dry-only? avoid prefer?]}]
   (let [either (fn [f] (fn [e] (or (f (:step e)) (f (:end e)))))
         ok (->> ends
@@ -259,11 +259,12 @@
         ok (if (or dry-only? (seq dry)) dry ok)
         ok (reduce (fn [os bad?] (let [kept (remove #(bad? (:end %)) os)] (if (seq kept) kept os))) ok avoid)
         best (fn [xs] (when (seq xs) (apply max-key :score (reverse xs))))
-        pockets? (not-any? #(and (:open? %) (nil? (:pos (:target %)))) ends)]
+        ways (filter #(and (:open? %) (nil? (:pos (:target %)))) ends)
+        traps? (and (seq ways) (every? :caught? ways))]
     (or (best (filter :cover? ok))
         (when prefer? (best (filter prefer? ok)))
         (best (filter :open? ok))
-        (when pockets? (best ok)))))
+        (when-not traps? (best ok)))))
 
 (defn pick
   "The cell the flee step choose takes walks to, nil when cornered."

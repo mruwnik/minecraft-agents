@@ -188,7 +188,7 @@
                    :from (mapv js/Math.floor (search/cell-of from))
                    :picked (some-> e :end search/cell-of)
                    :ends (mapv (fn [e] (cond-> (select-keys e [:open? :caught? :cover? :unseen])
-                                         true (assoc :at (search/cell-of (:end e)) :score (round1 (:score e)) :s (round1 (:s e))
+                                         true (assoc :at (search/cell-of (:end e)) :score (round1 (:score e)) :gain (round1 (:gain e)) :s (round1 (:s e))
                                                      :arrive (round1 (:arrive e)))
                                          (:pos (:target e)) (assoc :kind (:kind (:target e)))))
                                (:ends judged))})
