@@ -173,7 +173,7 @@
           (is (= [{:x 20 :y 64 :z 0}] (mapv st/arg-pos (st/calls p "sleep"))) "the only player: its sleep ends the night")
           (is (empty? (st/calls p "place")) "not dug in"))))))
 
-(deftest the-night-digs-in-beside-an-open-bed-instead-of-sleeping-in-it
+(deftest the-night-shelters-where-it-stands-rather-than-walk-to-an-open-bed-its-sleep-does-not-end-the-night-in
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -182,10 +182,8 @@
           (core/submit! eng '(jobs.survival.night) {})
           (await (tu/run-until-empty eng 40))
           (is (empty? (st/calls p "sleep")) "an unwalled, unroofed bed is no place to lie")
-          (is (not (re-find #"dug in" (str (st/ending-text (first (st/child-ended-because seen :bed-down :bed-open)))))) "said before any dig")
-          (is (= 1 (count (st/child-ended-because seen :bed-down :bed-open))) "the open bed is judged once")
-          (is (= 1 (count (filterv #(and (= :child_started (:kind %)) (= :sleep (:slot %))) @seen))) "one sleep call for it")
-          (is (<= (Math/abs (- 20 (:x (st/pos-of p)))) 3) "the body dug in beside the bed"))))))
+          (is (= :shelter (:pick (first (st/emitted seen :night.answers)))) "lying there all night is priced above sheltering")
+          (is (<= (Math/abs (:x (st/pos-of p))) 3) "where it stood, not by the bed"))))))
 
 (deftest after-a-far-flight-the-night-takes-a-bed-beyond-the-usual-radius
   (async done

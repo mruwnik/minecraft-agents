@@ -10,20 +10,49 @@
   :time :night-exclusive
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]] :settle-s 3}}
  :cases
- ;; Card 923cacf8: with other players online and awake (the server needs every one asleep, its gamerule left as it is), the body's
- ;; sleep would not end the night, so lying in the open is no refuge: the carried bed stays in the bag and the night logs out.
- ;; Should-fail: a place or a sleep call. A server where the body is alone fails the list step (the skip case is a unit test).
- [{:name "carried-bed-in-the-open-stays-in-the-bag-while-others-are-awake"
-   :time :night
+ ;; Cards ecf33d85, 4ae26dbd: the ways through the night are priced against each other (bed-down/answers). The sleep count is
+ ;; seeded (:sleep-status, 0 of 2: the body's sleep does not end the night) and a log-out is seeded unsupported, so who else is
+ ;; online changes nothing; no :respawn is known, so a bed's respawn point is worth its walk back from world spawn.
+ ;; Should-fail of the first two: a bed lain in unsealed (old code put it down in the open and slept).
+ [{:name "carried-bed-in-the-dark-open-is-shut-in-then-slept-in"
+   :time :night-exclusive
    :time-why :sleep
-   :act [[:until-rcon "list" "There are ([2-9]|[1-9][0-9]+) of" 5]
-         [:rcon "give $BODY red_bed 1"]
+   :memory [{:kind :sleep-status :data {:sleeping 0 :needed 2}} {:kind :log-out :data {:ms 0 :status "unsupported"}}]
+   :act [[:rcon "give $BODY red_bed 1"]
+         [:rcon "give $BODY dirt 40"]
          [:job (jobs.survival.night {:settings {:jobs.survival.night.sites/flee-radius 0}})]]
-   :expect [{:event {:source :job :kind :child_started :data {:slot :log-out}} :within-s 60}
-            {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 60}
-            {:no-event {:source :action :kind :started :data {:name "sleep"}} :for-s 60}]
+   :expect [{:event {:source :action :kind :done :data {:name "place" :status "placed"}} :within-s 60}
+            {:event {:source :job :kind :shut-in.sealed} :within-s 120}
+            {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 150}]
+   :after [[:item "red_bed" 0]]
+   :limit-s 180}
+  {:name "carried-bed-in-the-dark-open-stays-in-the-bag-with-nothing-to-shut-it-in"
+   :time :night-exclusive
+   :time-why :sleep
+   :memory [{:kind :sleep-status :data {:sleeping 0 :needed 2}} {:kind :log-out :data {:ms 0 :status "unsupported"}}]
+   :act [[:rcon "give $BODY red_bed 1"]
+         [:job (jobs.survival.night {:settings {:jobs.survival.night.sites/flee-radius 0}})]]
+   :expect [{:no-event {:source :action :kind :started :data {:name "sleep"}} :for-s 60}]
    :after [[:item "red_bed" 1]]
    :limit-s 90}
+  ;; Lit by a glowstone floor: no mob spawns at the bed, so lying there costs no more than any other way, whatever the count,
+  ;; and sets the respawn point: slept in, and at day the bed stays as the respawn bed.
+  {:name "carried-bed-on-lit-open-ground-is-slept-in-and-kept-at-day"
+   :time :night-exclusive
+   :time-why :sleep
+   :blocks [[:fill [12 -1 12] [20 -1 20] "glowstone"]]
+   :memory [{:kind :log-out :data {:ms 0 :status "unsupported"}}]
+   :act [[:rcon "give $BODY red_bed 1"]
+         [:job (jobs.survival.night {:settings {:jobs.survival.night.sites/flee-radius 0}})]
+         [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 90]
+         [:until-rcon "data get entity $BODY SleepTimer" "data: (6[0-9]|[7-9][0-9]|[0-9]{3})s" 10]
+         [:time-set 1000]]
+   :expect [{:event {:source :action :kind :done :data {:name "place" :status "placed"}} :within-s 70}
+            {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 90}
+            {:no-event {:source :job :kind :night.bed-left} :for-s 60}
+            {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 150 :of-job true}]
+   :after [[:item "red_bed" 0] [:memory {:entries {:spawn-bed [{:data {:pos [:any]}}]}}]]
+   :limit-s 180}
   {:name "no-bed-anywhere-logs-out-and-ends-exposed-then-fires-again"
    :time :night
    :time-why :dawn-decision

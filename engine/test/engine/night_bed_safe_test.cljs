@@ -443,10 +443,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (setup (-> roof-over-open-sides
-                                           (update :blocks assoc "10,64,0" "red_bed")
-                                           (assoc :floor tu/walk-floor :light {} :offlineScale 0.0001 :players ["Alex" "Bo"])))]
+        (let [{:keys [eng raw]} (setup (-> roof-over-open-sides
+                                               (update :blocks assoc "10,64,0" "red_bed")
+                                               (assoc :floor tu/walk-floor :light {} :offlineScale 0.0001)))]
           (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :state :built} sh/shelter-policy)
           (core/submit! eng '(jobs.survival.night) {})
-          (await (st/tick-n eng 4))
-          (is (seq (st/entries eng :bed-open)) "dug in under the roof, it still goes to the bed (and finds it in the open)"))))))
+          (await (st/tick-n eng 10))
+          (is (= [{:x 10 :y 64 :z 0}] (mapv st/arg-pos (st/calls raw "sleep"))) "dug in under the roof, it still goes to the bed its sleep ends the night in"))))))

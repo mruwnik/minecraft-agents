@@ -49,14 +49,19 @@
                                (or (:skipping (:data status)) (pos? (:sleeping (:data status) 0)))))
                  (seq (sleeping-players p (default-player-radius)))))))
 
-(defn log-out-for-sleepers?
-  "Night, awake, someone else asleep (others-asleep?), and no log-out tonight that failed (unsupported, closed)."
+(defn log-out-open?
+  "Night, someone else asleep (others-asleep?), and no log-out tonight that failed (unsupported, closed)."
   [p view]
   (let [out (sh-clock/latest-since view :log-out (sh-clock/tonight p view))]
-    (and (sh-sense/night? p) (not (sh-sense/sleeping? p))
+    (and (sh-sense/night? p)
          (not (log-out-unsupported? view))
          (or (nil? out) (contains? #{"ok" "cut"} (:status (:data out))))
          (others-asleep? p view))))
+
+(defn log-out-for-sleepers?
+  "log-out-open? for a body awake."
+  [p view]
+  (and (not (sh-sense/sleeping? p)) (log-out-open? p view)))
 
 (defn sleepers-short
   "How many players besides the body must still lie down for the night to skip (0: its own sleep skips it): tonight's

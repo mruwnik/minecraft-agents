@@ -48,14 +48,13 @@
   Condition at the start: the night trigger's (a listed night waits :not-night, :spawn with the respawn bed's state); sheltered with nothing for the night to do, it is done before its first round. Quote: the time left of the night.
   Each pass chooses again from the world as it is, the first that applies:
   - light outside and no bed term of the trigger (over?): a furnace the hold put down is dug up once more; then the night is over: done {:night :slept|:dug-in|:logged-out|:roofed :fled n}, or nothing-possible :exposed after a night with no shelter.
-  - asleep: hold (:sleeping).
+  - asleep: hold (:sleeping), priced again whenever what it was priced on changes (asleep!): up (night.bed-left) when staying in bed is no longer the cheapest answer.
   - afloat: swim to the nearest dry land first (surface-up/leave-water!); none seen: nothing-possible :in-water. A swimmer is never roofed or sheltered.
   - roofed or buried in a closed region with sides never seen: a look at the nearest, else a walk to it, 15 failed cells and 200 steps a night at most (an unseen side is open until seen: a lit tunnel with its walls seen is shelter, one with an unseen branch is not).
   - sheltered (slept, dug in, shut in): log out for a stint while someone else sleeps, else end so the queue runs (no all-night hold: listed jobs run when their own start checks pass).
   - a roofed :roofed-places place within the night.sites ::home-radius setting (bed to use or carry), or farther while the walk fits the time left before the dark plus a margin (night.sites home-walk-*; bed or not), and the body not roofed: jobs.survival.enter-room walks in (one try tonight); a carried bed is not put down in the open while one is close (night.bed-kept).
   - an open door of the closed room the body stands in is shut; the room's doorway is filled before a carried bed goes down (ledger :doorway; one that cannot be filled for want of blocks, or was filled, is :doorway-tried, not tried again tonight).
-  - a bed to use (sh-beds/bed-to-use) whose walk is safe (bed-walk-safe?: a whole route priced no dearer than staying put), or carried and bed-down/place-here-ok? (a shut-in body, a closed home, or an open bed priced no dearer than sheltering here: on a night the body's sleep does not skip, lying in the open is no refuge): jobs.survival.bed-down, called again until it ends; one that stops hostile-near ends the round nothing-possible :monsters-near (the trigger fires again after its cooldown).
-  - someone else asleep: jobs.survival.log-out, a 30 s stint (till morning when coming back costs more, log-out/back-unsafe), not retried tonight when not ok.
+  - a bed to use (sh-beds/bed-to-use) whose walk is safe (bed-walk-safe?: a whole route priced no dearer than staying put), a carried bed, or someone else asleep: the cheapest of bed-down/answers (night-answer, debug night.answers): lie in the bed (its walk priced in) or the carried one put down here, put the carried bed down and shut its row in first (:sealed), jobs.survival.log-out (a 30 s stint, till morning when coming back costs more, log-out/back-unsafe; not retried tonight when not ok), or shelter (on below). A bed is jobs.survival.bed-down, called again until it ends; one that stops hostile-near ends the round nothing-possible :monsters-near (the trigger fires again after its cooldown).
   - the sky not dark yet (dusk, a bed term started it): done; the shelter ways below wait for the dark.
   - a roof over a room with a hole (shelter.room_open warn): walled in under the roof (:enclose).
   - roofed, buried or shut in a closed room: done {:night :roofed}.
@@ -181,17 +180,18 @@
       :else (do (ctx/update-mem! c assoc :log-out-failed true) :again))))
 
 (defn ^:async bed-down-step
-  "Sleep in bed, or put the carried bed down (bed nil) and sleep: jobs.survival.bed-down. Asleep it is :sheltered :slept;
-  the next pass chooses again. While the child goes on (:continue) job memory :bed-down holds {:bed bed}, so the next
+  "Sleep in bed, or put the carried bed down (bed nil) and sleep, answer :sealed its row shut in first: jobs.survival.bed-down. Asleep it is :sheltered :slept;
+  the next pass chooses again. While the child goes on (:continue) job memory :bed-down holds {:bed bed :answer answer}, so the next
   pass calls it again rather than choosing anew. In a closed home (jobs.lib.rooms/closed-home?) the bed goes down under the roof only (:roofed-only)."
-  [c bed]
+  [c bed answer]
   (hold/busy! c)
   (let [d (await (ctx/call c :bed-down 'jobs.survival.bed-down
                                  (cond-> {}
                                    bed (assoc :bed bed)
+                                   (and (nil? bed) answer) (assoc :answer answer)
                                    (room-lib/closed-home? (:primitives c)) (assoc :roofed-only true))))]
     (if (= :continue d)
-      (ctx/update-mem! c assoc :bed-down {:bed bed})
+      (ctx/update-mem! c assoc :bed-down {:bed bed :answer answer})
       (ctx/update-mem! c dissoc :bed-down))
     (when (and (= :done (:kind d)) (:slept (:data d)))
       (hold/sheltered! c :slept))
@@ -441,13 +441,13 @@
 (defn ^:async bed-walk-safe?
   "Whether the night may walk to bed: within 2 blocks, or go-to's quote finds a whole route there whose price
   (bed-walk-price) is no more than staying put costs: a body on dark open ground walks, one underground stays unless the way
-  is lit and short. Else :bed-walk-unsafe {:pos bed} is remembered (sh-beds/bed-to-use skips the bed meanwhile) with a
+  is lit and short (its price kept in job memory :bed-walk {:bed :walk-s}, for night-answer). Else :bed-walk-unsafe {:pos bed} is remembered (sh-beds/bed-to-use skips the bed meanwhile) with a
   night.bed-walk-unsafe info, and false."
   [c bed]
   (or (<= (u/dist (u/self-pos c) bed) 2)
       (let [r (:route (await (ctx/quote c 'jobs.movement.go-to {:pos bed :range 2})))
             {:keys [walk stay]} (when (:found r) (bed-walk-price c bed r))]
-        (or (and (:found r) (<= walk stay))
+        (or (and (:found r) (<= walk stay) (do (ctx/update-mem! c assoc :bed-walk {:bed bed :walk-s walk}) true))
             (do (ctx/remember! c :bed-walk-unsafe {:pos bed} sh-beds/walk-unsafe-policy)
                 (ctx/emit! c :night.bed-walk-unsafe :info
                            {:bed bed :found (boolean (:found r)) :walk-s walk :stay-s stay
@@ -464,6 +464,76 @@
   (let [p (:primitives c)
         bed (await (sense/decide! c ::bed #(sh-beds/bed-to-use p (ctx/view c) (bed-down/radius c) (bed-down/bed-permit c))))]
     (when (and bed (or (:bed-down (ctx/mem c)) (await (bed-walk-safe? c bed)))) bed)))
+
+(defn ^:async answer-pass
+  "The rest of a pass (see doc) once pick, night-answer's choice, is known: bed the bed to use, nil for the carried one."
+  [c sheltered bed pick]
+  (let [p (:primitives c)]
+        (cond
+          (#{:bed :sealed} pick) (await (bed-down-step c bed pick))
+          (= :log-out pick) (await (log-out-step c))
+          (not (sh-sense/dark-outside? p)) (ctx/end c :done nil (assoc (ending/done-data c sheltered) :text "no bed to take and the sky is not dark yet"))
+          (and (:enclose (ctx/mem c)) (not= :dug-in sheltered)) (await (enclose! c))
+          (and (sh-inside/safe-from-night? p) (empty? (sh/open-room-doors p)))
+          (do (ctx/end c :done nil (ending/done-data c (if (= :logged-out sheltered) :logged-out :roofed))))
+          (and (ctx/way? c :shelter) (await (light/wanted? c))) (await (light/light! c))
+          (:fleeing (ctx/mem c)) (await (flee/flee! c (:fleeing (ctx/mem c))))
+          (= :exposed sheltered) (await (exposed! c))
+          (not (ctx/way? c :shelter)) (await (flee-or-hold! c))
+          (:no-site (ctx/mem c)) (await (no-site! c))
+          :else (await (shelter! c)))))
+
+(defn ^:async night-answer
+  "The cheapest way through the night from here (bed-down/answers, bed-down/cheapest): :bed (bed, its walk's price from
+  :bed-walk, else with carried? the carried bed here), :sealed, :log-out (log-out-wanted?) or :shelter; nil when there is
+  neither a bed nor a log-out to weigh."
+  [c bed carried?]
+  (let [log-out? (log-out-wanted? c)
+        walk (:bed-walk (ctx/mem c))]
+    (when (or bed carried? log-out?)
+      (let [prices (await (bed-down/answers c {:bed bed :walk-s (when (= bed (:bed walk)) (:walk-s walk)) :log-out? log-out?}))
+            prices (if (or bed carried?) prices (dissoc prices :bed :sealed))
+            pick (bed-down/cheapest c prices)]
+        (ctx/emit! c :night.answers :debug {:pick pick :prices (into {} (map (fn [[k v]] [k (price/round1 v)])) prices)
+                                            :text (str "ways through the night priced (seconds): " (pr-str (into {} (map (fn [[k v]] [k (price/round1 v)])) prices)) "; taking " (name pick))})
+        pick))))
+
+(defn sleep-inputs
+  "What staying asleep is priced on, read now: who else must still lie down (sh-sleepers/sleepers-short), the fight with
+  the hostiles known near (price/way-fight-hp), the health, and whether a log-out is open (sh-sleepers/log-out-open?)."
+  [c]
+  (let [p (:primitives c)
+        view (ctx/view c)]
+    {:short (sh-sleepers/sleepers-short p view)
+     :fight (price/round1 (price/way-fight-hp c (u/self-pos c)))
+     :hp (.-health (.self p))
+     :log-out (and (not (:log-out-failed (ctx/mem c))) (sh-sleepers/log-out-open? p view))}))
+
+(defn ^:async asleep!
+  "Asleep: priced again (bed-down/answers) whenever what it was priced on changes (sleep-inputs, against job memory
+  :sleep-judged). While staying in bed is the cheapest, hold (:sleeping); else get up (any act leaves the bed;
+  night.bed-left) and choose again."
+  [c]
+  (let [p (:primitives c)
+        inputs (sleep-inputs c)
+        judged (:sleep-judged (ctx/mem c))
+        prices (if (= inputs (:inputs judged)) (:prices judged) (await (bed-down/answers c {:log-out? (:log-out inputs)})))
+        pick (bed-down/cheapest c prices)]
+    (when-not (= inputs (:inputs judged))
+      (ctx/emit! c :night.answers :debug {:pick pick :inputs inputs :prices (into {} (map (fn [[k v]] [k (price/round1 v)])) prices)
+                                          :text (str "asleep, priced again on " (pr-str inputs) ": " (pr-str (into {} (map (fn [[k v]] [k (price/round1 v)])) prices)))}))
+    (ctx/update-mem! c assoc :sleep-judged {:inputs inputs :prices prices})
+    (if (= :bed pick)
+      (do (when-not (= :slept (:sheltered (ctx/mem c))) (hold/sheltered! c :slept))
+          (await (hold/hold! c :sleeping)))
+      (let [{:keys [x y z]} (sh-sense/feet p)]
+        (hold/busy! c)
+        (ctx/update-mem! c dissoc :sheltered :sleep-judged)
+        (ctx/emit! c :night.bed-left :info {:pos (sh-sense/feet p) :answer pick :prices (into {} (map (fn [[k v]] [k (price/round1 v)])) prices) :inputs inputs
+                                            :text (str "getting up: staying in bed is priced " (price/round1 (:bed prices)) " s, " (name pick) " " (price/round1 (pick prices)) " s"
+                                                       (when (pos? (:short inputs)) (str " (" (:short inputs) " more must sleep for the night to skip)")))})
+        (await (ctx/act c :look #js {:pos #js {:x (+ x 0.5) :y (- y 0.5) :z (+ z 0.5)}}))
+        :again))))
 
 (defn ^:async pass
   "One choice of the night (see doc): :again, or the round's end."
@@ -490,7 +560,7 @@
       (over? c) (if (= :exposed sheltered)
                                          (ending/end-exposed! c)
                                          (ctx/end c :done nil (ending/done-data c sheltered)))
-      (sh-sense/sleeping? p) (do (when-not (= :slept sheltered) (hold/sheltered! c :slept)) (await (hold/hold! c :sleeping)))
+      (sh-sense/sleeping? p) (await (asleep! c))
       (breath/in-water? p) (let [w (await (surface/leave-water! c))]
                              (cond (not= :out w) w
                                    (breath/in-water? p) (ending/end-in-water! c)
@@ -515,22 +585,11 @@
             (ctx/update-mem! c assoc :enclose (sh-sense/feet p))))
         (cond
           door (await (enter-room! c nil))
-          (:bed-down (ctx/mem c)) (await (bed-down-step c (:bed (:bed-down (ctx/mem c)))))
+          (:bed-down (ctx/mem c)) (let [{:keys [bed answer]} (:bed-down (ctx/mem c))] (await (bed-down-step c bed answer)))
           (and roofed bed-wanted (not bed) (sh-beds/bed-layout c true) (room-lib/gap c)) (await (enter-room! c nil))
           (and home-near (walk-home-wanted? c) (or bed bed-wanted)) (await (enter-room! c (:name home-near)))
           far-home (await (enter-room! c (:name far-home)))
-          (or bed (and bed-wanted (not home-near) (bed-down/place-here-ok? c))) (await (bed-down-step c bed))
-          (and bed-way (log-out-wanted? c)) (await (log-out-step c))
-          (not (sh-sense/dark-outside? p)) (ctx/end c :done nil (assoc (ending/done-data c sheltered) :text "no bed to take and the sky is not dark yet"))
-          (and (:enclose (ctx/mem c)) (not= :dug-in sheltered)) (await (enclose! c))
-          (and (sh-inside/safe-from-night? p) (empty? (sh/open-room-doors p)))
-          (do (ctx/end c :done nil (ending/done-data c (if (= :logged-out sheltered) :logged-out :roofed))))
-          (and (ctx/way? c :shelter) (await (light/wanted? c))) (await (light/light! c))
-          (:fleeing (ctx/mem c)) (await (flee/flee! c (:fleeing (ctx/mem c))))
-          (= :exposed sheltered) (await (exposed! c))
-          (not (ctx/way? c :shelter)) (await (flee-or-hold! c))
-          (:no-site (ctx/mem c)) (await (no-site! c))
-          :else (await (shelter! c)))))))
+          :else (await (answer-pass c sheltered bed (when bed-way (await (night-answer c bed (and bed-wanted (not home-near))))))))))))
 
 (defn ^:async round
   "The whole night in one round (see doc): passes until one ends it or done? holds."
