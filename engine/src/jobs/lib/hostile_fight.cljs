@@ -282,7 +282,8 @@
 
 (defn swim-out
   "{:swim blocks :land blocks :chance c} of a body in water swimming to the nearest dry stand joined to it by water and air
-  (shore/swim-to-land: the way's length, a stand with land to walk on beyond the mobs' reach over a ledge) and the land it can walk on from there; with no stand in the joined water the swim is the farthest it reaches and the land 0; :chance the chance more land lies where nothing was seen (shore/land-run); nil on land. One flood a place, kept ::check-cache/ttl-ms."
+  (shore/swim-to-land: the way's length, a stand with land to walk on beyond the mobs' reach over a ledge) and the land it can walk on from there; with no stand in the joined water the swim is the farthest it reaches and the land 0; :chance the chance more land lies where nothing was seen (shore/land-run); nil on land. One flood a place, the land of
+  one stand, kept ::check-cache/ttl-ms."
   [c mobs]
   (let [p (:primitives c)]
     (when (breath/in-water? p)
@@ -294,7 +295,7 @@
            (let [{:keys [stand land] :as found} (shore/swim-to-land p me reach)]
              (if (or (nil? stand) (zero? land))
                (assoc (select-keys found [:swim :land :chance]) :stand? (some? stand))
-               (let [{:keys [run chance]} (shore/land-run p stand ##Inf)]
+               (let [{:keys [run chance]} (check-cache/cached c [:land-run (u/cell-vec stand)] #(shore/land-run p stand ##Inf))]
                  {:swim (:swim found) :land run :chance chance :stand? true})))))))))
 
 (defn returns

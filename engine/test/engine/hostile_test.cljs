@@ -18,6 +18,7 @@
             [jobs.survival.recover-drops.danger :as recover-drops-danger]
             [jobs.survival.respond-to-hostile :as respond-to-hostile]
             [jobs.survival.shut-in :as shut-in]
+            [jobs.lib.shore :as shore]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.answer :as answer]
             [jobs.lib.cost.threat :as threat]
@@ -1785,3 +1786,17 @@
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (= [:fight :flee] (mapv :decision (decided seen))) "each change of decision is one event")
           (is (re-find #"earlier fight at 20 hp, now 1 hp" (:text (last (filter #(= :hostile.decided (:kind %)) @seen))))))))))
+
+(deftest the-land-past-the-shore-a-body-swims-to-is-walked-once-however-it-swims
+  (let [lake (merge (into {} (for [x (range -6 7) z (range -2 3) [y n] [[61 "stone"] [62 "water"] [63 "water"] [64 "water"] [65 "water"] [66 "air"] [67 "air"]]]
+                               [(str x "," y "," z) n]))
+                    (into {} (for [x (range 7 14) z (range -2 3) y (range 61 68)] [(str x "," y "," z) (if (< y 66) "stone" "air")])))
+        p (tu/seeing-all (tu/fake {:self {:inWater true :pos {:x 0.5 :y 64 :z 0.5}} :blocks lake}))
+        c {:primitives p :engine {:warned (atom nil)} :view (fn [] {:now 0 :data {}}) :id "j1" :slots []}
+        runs (atom 0)
+        land-run shore/land-run]
+    (with-redefs [shore/land-run (fn [p stand limit] (when (infinite? limit) (swap! runs inc)) (land-run p stand limit))]
+      (hostile-fight/swim-out c [{:name "zombie"}])
+      (swap! (fake/state p) assoc-in [:self :pos] {:x 1.5 :y 64 :z 0.5})
+      (hostile-fight/swim-out c [{:name "zombie"}]))
+    (is (= 1 @runs) "one stand, one walk of its land, from both cells")))
