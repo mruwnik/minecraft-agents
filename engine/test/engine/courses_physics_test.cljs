@@ -81,3 +81,9 @@
 (deftest a-vine-pit-below-a-ledge-with-leaves-over-its-exit-is-walked
   (let [r (walk-course "vine-pit-ledge")]
     (is (= :arrived (:status r)) (pr-str r))))
+
+;; standing on the floor of a vine cell, the step down off it (a drop, a gap jump down) is walked: no floor below to wait for
+(deftest a-step-down-from-the-floor-of-a-vine-cell-is-walked
+  (doseq [name ["vine-ledge-drop" "vine-ledge-gap"]]
+    (let [r (walk-course name)]
+      (is (= :arrived (:status r)) (pr-str name r)))))

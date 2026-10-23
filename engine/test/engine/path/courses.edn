@@ -2907,4 +2907,15 @@
           "fill 2878 161 3217 2878 163 3217 oak_log"
           "setblock 2878 161 3216 vine[west=true,north=true,south=true]"
           "fill 2879 163 3215 2881 163 3217 oak_leaves"]}]
+ ["vine-ledge-drop" {:family :hazards
+   :start {:x 2858.31 :y 162 :z 3216.5} :to {:x 2870 :y 161 :z 3216}
+   :cmds ["fill 2857 161 3214 2857 164 3218 stone"
+          "fill 2858 161 3214 2858 161 3218 stone"
+          "setblock 2858 162 3216 vine[west=true]"]}]
+ ["vine-ledge-gap" {:family :hazards
+   :start {:x 2858.31 :y 163 :z 3216.5} :to {:x 2870 :y 162 :z 3216}
+   :cmds ["fill 2857 161 3214 2857 165 3218 stone"
+          "fill 2858 161 3214 2858 162 3218 stone"
+          "fill 2860 161 3214 2875 161 3218 stone"
+          "setblock 2858 163 3216 vine[west=true]"]}]
 ]

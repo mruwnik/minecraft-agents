@@ -843,7 +843,10 @@
     vine-exit-steps 1 (pose 0.5 64.05 3.5 {:on-ground false :on-climbable true}) true
     vine-exit-steps 1 (pose 0.5 64.9 3.5 {:on-ground false :on-climbable false}) true
     [(step 0 64 3 :start) (step 0 66 3 :climb-up {:px 0.5 :pz 3.5})] 1 (pose 0.3 64.9 3.5 {:on-ground false :on-climbable true}) true
-    [(step 0 64 3 :start) (step 1 66 3 :walk)] 1 (pose 0.5 64.9 3.5 {:on-ground false :on-climbable true}) true))
+    [(step 0 64 3 :start) (step 1 66 3 :walk)] 1 (pose 0.5 64.9 3.5 {:on-ground false :on-climbable true}) true
+    ;; on the floor of a vine cell, a step down: there is no lower floor to fall to
+    [(step 0 64 3 :start) (step 2 63 3 :gap)] 1 (pose 0.31 64 3.5 {:on-climbable true}) true
+    [(step 0 64 3 :start) (step 1 63 3 :drop)] 1 (pose 0.31 64 3.5 {:on-climbable true}) true))
 
 (deftest a-bend-step-is-reached-only-within-its-point
   (let [bend (step 2 64 3 :walk {:bend true :px 2.3 :pz 3.5})]

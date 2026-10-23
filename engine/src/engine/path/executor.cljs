@@ -545,10 +545,12 @@
   (Math/atan2 (- (- ax x)) (- (- az z))))
 
 (defn climb-hold?
-  "A body on a climbable above the stand height of a non-climb step: pushing forward there with a block over the exit makes
-  the client climb, so it holds (no forward) and falls to the floor first."
-  [policy step {:keys [y on-climbable]}]
+  "A body off the ground on a climbable above the stand height of a non-climb step: pushing forward there with a block over
+  the exit makes the client climb, so it holds (no forward) and falls to the floor first. On the floor it has nowhere to
+  fall: a drop or gap down from a vine cell walks on."
+  [policy step {:keys [y on-ground on-climbable]}]
   (boolean (and on-climbable
+                (not on-ground)
                 (not (contains? climb-moves (:move step)))
                 (> y (+ (stand-y step) (:climb-settle policy))))))
 

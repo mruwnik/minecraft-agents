@@ -1,0 +1,25 @@
+;; Card d8933128: a body standing on the floor of a vine cell steps down off it. The walker held forward on any climbable above
+;; the next step's height, so every step down from the vine cell (a drop, a gap jump down) stuck after 3 s ("stuck on gap").
+;; A one-cell stone ledge against a wall, a vine on the wall in the cell over the ledge; the body starts in the vine cell.
+;; Should-succeed: off a 1-high ledge (a drop) and a 2-high one (a drop or a gap jump onto a lower platform), no walker fault.
+{:defaults
+ {:tags [:movement :go-to :climb]
+  :time :any
+  :plot {:height 8}
+  :limit-s 60}
+ :cases
+ [{:name "steps-down-off-a-vine-ledge"
+   :blocks [[:fill [10 0 11] [10 3 11] "stone"] [:fill [11 0 11] [11 0 11] "stone"] [:fill [11 1 11] [11 1 11] "vine[west=true]"]]
+   :body {:at [11.31 1 11.5] :yaw 270 :settle-s 2}
+   :act [[:job (jobs.movement.go-to {:pos #at [16 0 11] :range 0})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :walker-fault} :for-s 40 :until {:source :job :kind :completed}}]
+   :after [[:body-near [16.5 0 11.5] 1.5]]}
+  {:name "jumps-down-off-a-high-vine-ledge"
+   :blocks [[:fill [10 0 11] [10 4 11] "stone"] [:fill [11 0 11] [11 1 11] "stone"] [:fill [11 2 11] [11 2 11] "vine[west=true]"]
+            [:fill [13 0 9] [17 0 13] "stone"]]
+   :body {:at [11.31 2 11.5] :yaw 270 :settle-s 2}
+   :act [[:job (jobs.movement.go-to {:pos #at [16 1 11] :range 0})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :walker-fault} :for-s 40 :until {:source :job :kind :completed}}]
+   :after [[:body-near [16.5 1 11.5] 1.5]]}]}
