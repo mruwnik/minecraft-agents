@@ -33,7 +33,7 @@
   (is (< (death/blow-chance {:health 20} 4 2.5) 0.01) "a fight of 4 hp at full health hardly kills")
   (is (< 0.4 (death/blow-chance {:health 5} 4 2.5) 0.6) "at 5 hp it may well")
   (is (< (death/blow-chance {:health 5 :absorption 4} 4 2.5) (death/blow-chance {:health 5} 4 2.5)) "absorption is health")
-  (is (= (death/blow-chance (body 5) 4 2.5) (death/death-chance (body 5) {:damage 4 :hit 2.5})) "the death chance of an answer's blows"))
+  (is (= (death/blow-chance (body 5) 4 2.5) (cost/death-chance (body 5) {:damage 4 :hit 2.5})) "the death chance of an answer's blows"))
 
 (deftest the-cheapest-open-answer-is-taken
   (is (= {:answer :b :prices {:a 10 :b 5}}
@@ -52,6 +52,18 @@
     20 nil [(mob "zombie" 3 35)] :flee
     20 sword [(mob "zombie" 3 35) (mob "zombie" 3 35) (mob "zombie" 3 35)] :flee
     20 sword [(mob "skeleton" 10)] :fight))
+
+(deftest a-walk-away-is-caught-at-the-prior-and-so-loses-to-a-fight-or-a-wall-it-would-beat-on-an-open-way
+  (let [zombie (mob "zombie" 3 35)
+        f (cost/fight-answer (fight sword zombie))
+        flee #(cost/flee-answer {:food 20 :mobs [zombie] :later f :caught %})
+        wall (assoc (cost/build-answer {:mobs [zombie] :seconds 2}) :seconds 120)
+        pick #(:answer (cost/decide (body 8) %1 here))]
+    (is (= :flee (pick {:fight f :flee (flee 0)})) "at 8 hp an open way beats the fight")
+    (is (= :fight (pick {:fight f :flee (flee nil)})))
+    (is (= :flee (pick {:wall wall :flee (flee 0)})) "a wall that holds the body long costs more than an open way")
+    (is (= :wall (pick {:wall wall :flee (flee nil)})))
+    (is (> (cost/death-chance (body 20) (flee 1)) 0.9) "caught, the zombie lands its blows all the flight")))
 
 (deftest a-walk-from-a-mob-that-keeps-up-is-no-answer
   (is (nil? (cost/flee-answer {:food 20 :mobs [(mob "spider" 4)]})) "a spider outruns the body")

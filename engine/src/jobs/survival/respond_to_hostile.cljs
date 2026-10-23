@@ -244,12 +244,11 @@
   nil with a creeper near (its blast takes the walls) or no walls possible here (no block carried: an infinite quote)."
   [c near then]
   (when-not (some combat/creeper? near)
-    (let [s (second (get-in (wall-in/quote-of c) [:uses :job-time]))
-          p (:primitives c)]
-      (when (and (number? s) (js/isFinite s))
-        (let [a (-> (cost/build-answer {:equipment (cost/equipment-of (.-equipment (.self p))) :mobs (mapv #(hostile/mob-near p %) near) :seconds (wall-in/exposed-s c)})
-                    (assoc :seconds (+ s (hide-out/quiet-s))))]
-          (assoc a :then (conj (vec then) a)))))))
+    (when-let [{:keys [open-s seconds]} (wall-in/wall-of c)]
+      (let [p (:primitives c)
+            a (-> (cost/build-answer {:equipment (cost/equipment-of (.-equipment (.self p))) :mobs (mapv #(hostile/mob-near p %) near) :seconds open-s})
+                  (assoc :seconds (+ seconds (hide-out/quiet-s))))]
+        (assoc a :then (conj (vec then) a))))))
 
 (defn ^:async respond [c near]
   (let [p (:primitives c)

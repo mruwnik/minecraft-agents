@@ -1,5 +1,6 @@
 ;; Card b8378d59 (Oriel #14): a log-out beside a known zombie stays away until morning instead of a 30 s stint that
-;; brings the body back beside it; with no hostile near it comes back after :offline-ms. Log-out needs night.
+;; brings the body back beside it; with no hostile near, or a sword or blocks to answer it (card 64957886), it comes back
+;; after :offline-ms. Log-out needs night.
 {:defaults
  {:tags [:night :survival :hostile]
   :time :night :time-why :sleep
@@ -15,6 +16,20 @@
          [:until [:cli "observe" ["$body" "--world" "$world" "status"] {:offline {:back-in-s [:>= 60]}}] 30]
          [:http :cancel-all]]
    :expect [{:event {:source :job :kind :log-out.till-morning} :within-s 30}]}
+  {:name "log-out-beside-a-known-zombie-with-a-sword-comes-back-after-its-stint"
+   :body {:at [16.5 0 16.5] :spawnpoint [4 0 4] :inventory [["diamond_sword" 1]]}
+   :act [[:summon "zombie" [19.5 0 16.5] "{NoAI:1b,PersistenceRequired:1b}"]
+         [:wait-s 3]
+         [:http :submit (jobs.survival.log-out {:offline-ms 3000 :news-ms 500}) [] {:ok true}]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.log-out"}} :within-s 60}
+            {:no-event {:source :job :kind :log-out.till-morning} :for-s 30}]}
+  {:name "log-out-beside-a-known-zombie-with-blocks-to-wall-in-comes-back-after-its-stint"
+   :body {:at [16.5 0 16.5] :spawnpoint [4 0 4] :inventory [["cobblestone" 32]]}
+   :act [[:summon "zombie" [19.5 0 16.5] "{NoAI:1b,PersistenceRequired:1b}"]
+         [:wait-s 3]
+         [:http :submit (jobs.survival.log-out {:offline-ms 3000 :news-ms 500}) [] {:ok true}]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.log-out"}} :within-s 60}
+            {:no-event {:source :job :kind :log-out.till-morning} :for-s 30}]}
   {:name "log-out-with-no-hostile-near-comes-back-after-its-stint"
    :act [[:http :submit (jobs.survival.log-out {:offline-ms 3000 :news-ms 500}) [] {:ok true}]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.log-out"}} :within-s 60}

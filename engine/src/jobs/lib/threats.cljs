@@ -97,7 +97,7 @@
 
 (defn body-of [p]
   (let [self (.self p)]
-    {:health (.-health self) :equipment (cost/equipment-of (.-equipment self))
+    {:health (.-health self) :food (.-food self) :equipment (cost/equipment-of (.-equipment self))
      :weapon (combat/best-weapon p combat/default-weapons) :pos (u/pos-of (.-pos self))}))
 
 (defn sensed-mobs

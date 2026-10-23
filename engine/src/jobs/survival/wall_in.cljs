@@ -83,6 +83,14 @@
   [c]
   (* (way/place-s c) (min 2 (count (dig-cells/open-cells (:primitives c) (sh-sense/feet (:primitives c)))))))
 
+(defn wall-of
+  "{:open-s :seconds} of walling the body in where it stands (exposed-s, the quote's seconds), as cost/death-chance's body
+  :wall reads it; nil when no walls are possible here (no block carried: an infinite quote)."
+  [c]
+  (let [s (second (get-in (quote-of c) [:uses :job-time]))]
+    (when (and (number? s) (js/isFinite s))
+      {:open-s (exposed-s c) :seconds s})))
+
 (def safe? ready/ok)
 (def fit? ready/ok)
 

@@ -1,10 +1,14 @@
 (ns jobs.lib.cost.answer
   "The one price of each answer to hostiles, so the reflexes take the cheapest (decide). Pure.
 
-  An answer is {:damage hp :hit hp :seconds s :then [answer]}: the hp it is expected to cost in blows of about :hit hp
-  each, the seconds it takes, and what may follow it (the cheapest of :then is paid too). answer-price: the hp at the
-  health each leaves (health/hp-cost), the death the blows risk (death/death-chance x death-cost), the seconds, and the
-  cheapest :then at full health.
+  An answer is {:damage hp :hit hp :seconds s :then [answer] :caught {:chance :damage :hit}}: the hp it is expected to
+  cost in blows of about :hit hp each, the seconds it takes, what may follow it (the cheapest of :then is paid too) and,
+  for a walk away, the chance its mobs catch it and the blows they then land. answer-price: the hp at the health each
+  leaves (health/hp-cost), the death the blows risk (death-chance x death/death-cost), the seconds, and the cheapest
+  :then at full health.
+
+  death-chance: the one chance of dying every route, spot, wait or answer is priced by. A known threat on a route costs
+  the death of the answer the body would take to it (decide over fight, walk away and, with :wall, walling in).
 
   fight-answer: a fight with the kit (fight/fight-damage, fight-seconds). A lone creeper fought hit-and-back risks the
   blast of a late step back: its :hit is the blast at the creeper's swell start.
@@ -17,13 +21,19 @@
 
   Game facts kept as constants: a creeper's explosion power (3; damage falls off to none at twice it), its swell start
   (3 blocks) and fuse (1.5 s), a skeleton's bow range (15 blocks)."
-  (:require [jobs.lib.cost.armour :as armour]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
+            [jobs.lib.cost.armour :as armour]
             [jobs.lib.cost.danger :as danger]
             [jobs.lib.cost.death :as death]
             [jobs.lib.cost.fight :as fight]
             [jobs.lib.cost.health :as health]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.cost.weapon :as weapon]))
+
+(a/defargs settings
+  {::caught-chance {:default 0.15 :spec (a/num-in 0 1)
+                    :doc "Chance a walk away is caught, its mobs landing their blows over the whole flight: the prior for a flight whose route is unknown, measured from the trial logs on 2026-10-23 (n=63)."}})
 
 (def blast-power "A creeper's explosion power (vanilla)." 3)
 (def swell-start "Blocks within which a creeper starts to swell (vanilla)." 3)
@@ -50,16 +60,38 @@
     (blast-hurt stats swell-start)
     (threat/mob-hurt stats mob-name 1 identity 1)))
 
+(defn blows-chance
+  "The chance the blows of answer kill body: death/blow-chance of its :damage, or of the :caught blows for its :chance."
+  [body {:keys [damage hit caught]}]
+  (let [clean (death/blow-chance body damage hit)]
+    (if caught
+      (+ (* (- 1 (:chance caught)) clean) (* (:chance caught) (death/blow-chance body (:damage caught) (:hit caught))))
+      clean)))
+
+(defn expected-damage [{:keys [damage caught]}]
+  (if caught (+ (* (- 1 (:chance caught)) damage) (* (:chance caught) (:damage caught))) damage))
+
+(defn healed [body] (assoc body :health 20 :absorption 0))
+
 (defn answer-price
   "Seconds answer costs body {:health :absorption, death-cost's :respawn :level :carried} at `at` (see the ns doc); :then
   is priced at full health: the body meets the mob again once it has healed."
-  [{:keys [health] :as body} {:keys [damage hit seconds then]} at]
+  [{:keys [health] :as body} {:keys [seconds then] :as answer} at]
   (let [health (or health 20)
-        own (+ (health/hp-cost health (min damage health))
-               (* (death/death-chance body {:damage damage :hit hit}) (death/death-cost body at))
+        own (+ (health/hp-cost health (min (expected-damage answer) health))
+               (* (blows-chance body answer) (death/death-cost body at))
                seconds)]
     (if (seq then)
-      (+ own (apply min (map #(answer-price (assoc body :health 20 :absorption 0) % at) then)))
+      (+ own (apply min (map #(answer-price (healed body) % at) then)))
+      own)))
+
+(defn answer-death-chance
+  "The chance answer kills body: its blows (blows-chance), then the cheapest of its :then (answer-price at `at`) at full health."
+  [body {:keys [then] :as answer} at]
+  (let [own (blows-chance body answer)
+        after (when (seq then) (apply min-key #(answer-price (healed body) % at) then))]
+    (if after
+      (- 1 (* (- 1 own) (- 1 (answer-death-chance (healed body) after at))))
       own)))
 
 (defn decide
@@ -106,16 +138,25 @@
 (defn flee-answer
   "The answer of a walk away from mobs [flee-mob's] by a body with food wearing equipment, the walk there and back (it
   goes back to its work), times 1 + returns (the flights from such mobs lately: each predicts another); :then the answer
-  later (the fight with them, nil none) or the walk again. nil when a mob keeps up or none is given."
-  [{:keys [food equipment mobs returns later]}]
+  later (the fight with them, nil none) or the walk again. :caught: each flight is caught at chance caught (default
+  ::caught-chance), its mobs then landing their blows (a creeper its blast) over the flight. nil when a mob keeps up or
+  none is given."
+  [{:keys [food equipment mobs returns later caught]}]
   (let [stats (armour/armour-stats equipment)
         v (danger/flight-speed (or food 20))
         per (map #(flee-mob stats v %) mobs)
         times (inc (or returns 0))]
     (when (and (seq per) (every? some? per))
-      (let [walk {:damage (* times (reduce + (map :damage per)))
-                  :hit (reduce max 0 (map :hit per))
-                  :seconds (* 2 times (reduce max 0 (map :seconds per)))}]
+      (let [hit (reduce max 0 (map :hit per))
+            walk {:damage (* times (reduce + (map :damage per)))
+                  :hit hit
+                  :seconds (* 2 times (reduce max 0 (map :seconds per)))
+                  :caught {:chance (- 1 (js/Math.pow (- 1 (or caught (settings/get settings ::caught-chance))) times))
+                           :damage (reduce + 0 (map (fn [m f] (if (= "creeper" (:name m))
+                                                                  (blow stats "creeper")
+                                                                  (threat/mob-hurt stats (:name m) (:seconds f) identity (threat/lone-hit-rate (:name m)))))
+                                                    mobs per))
+                           :hit hit}}]
         (assoc walk :then (cond-> [walk] later (conj later)))))))
 
 (defn build-answer
@@ -129,3 +170,50 @@
     {:damage (reduce + 0 (map #(threat/mob-hurt stats (:name %) (left %) identity (threat/lone-hit-rate (:name %))) melee))
      :hit (reduce max 0 (map #(blow stats (:name %)) melee))
      :seconds seconds}))
+
+(defn threat-answers
+  "The answers {key answer-or-nil} body {:health :food :equipment :weapon :wall {:open-s :seconds}} has to mob-name met
+  beside it: the fight, the walk away (caught at chance caught, nil the prior) and, with :wall (the seconds walling in
+  leaves a side open, and takes with the quiet after it), walling in, none against a creeper (its blast takes the walls)."
+  [{:keys [food equipment weapon wall]} mob-name caught]
+  (let [m {:name mob-name :distance 0 :follow (threat/follow-range mob-name)}
+        fight (fight-answer {:weapon weapon :equipment equipment :mobs [m]})
+        cover (when (and wall (not= "creeper" mob-name))
+                (assoc (build-answer {:equipment equipment :mobs [m] :seconds (:open-s wall)}) :seconds (:seconds wall)))]
+    {:fight fight
+     :flee (flee-answer {:food food :equipment equipment :mobs [m] :caught caught :later fight})
+     :wall (some-> cover (assoc :then [cover]))}))
+
+(defn threat-chance
+  "The chance mob-name met beside body kills it at `at`: the answer-death-chance of the answer decide takes of
+  threat-answers; a provoked-only mob counts threat/provoked-share."
+  [body mob-name caught at]
+  (let [answers (threat-answers body mob-name caught)
+        {:keys [answer]} (decide body answers at)]
+    (* (if (contains? threat/provoked-only mob-name) (threat/provoked-share) 1)
+       (answer-death-chance body (get answers answer) at))))
+
+(defn death-chance
+  "The chance of dying on route {:underground? :night? :cells :threats :at}: the chance by its class (underground, surface
+  at night or by day: the mobs not yet known) and, for each known threat {:mob :weight :reach :caught} (weight 0-1, reach
+  a fn of a cell x y z, its weight 0-1, nil outside: jobs.lib.threat-field; caught the chance a walk away from it is
+  caught, nil the prior) whose reach the route :cells enter (death/exposure-s), its threat-chance at :at (default the
+  first cell) times its weight. body as threat-answers, with answer-price's. An answer {:damage :hit :caught}: its
+  blows-chance."
+  [body {:keys [underground? night? cells threats damage at] :as route}]
+  (if damage
+    (blows-chance body route)
+    (let [base (settings/get death/settings (cond underground? ::death/chance-underground night? ::death/chance-surface-night :else ::death/chance-surface-day))
+          at (or at (first cells))
+          chance (memoize (fn [mob caught] (threat-chance body mob caught at)))
+          survive (reduce (fn [s {:keys [mob weight reach caught]}]
+                            (if (pos? (death/exposure-s reach cells))
+                              (* s (- 1 (* (or weight 1) (chance mob caught))))
+                              s))
+                          1 (when (seq cells) threats))]
+      (+ base (* (- 1 base) (- 1 survive))))))
+
+(defn route-death-cost
+  "What a route adds to its cost for the death it risks: death-chance x death/death-cost at `at` (where it would die)."
+  [body route at]
+  (* (death-chance body (assoc route :at at)) (death/death-cost body at)))

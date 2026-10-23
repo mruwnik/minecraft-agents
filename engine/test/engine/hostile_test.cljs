@@ -205,7 +205,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup-flight {:inventory sword :entities [(zombie 100 3 0)]})
-              health-after [16 4]
+              health-after [16 1]
               n (atom 0)]
           (.override (.-world p) "attack"
                      (fn [token a impl]
@@ -214,7 +214,7 @@
           (core/submit! eng respond {})
           (await (core/tick! eng))
           (is (= 2 (count (calls p "attack")))
-              "health 16, the zombie at 15: 2.8 expected damage costs less than walking away: a second swing; health 4 then: none")
+              "health 16, the zombie at 15: 2.8 expected damage costs less than walking away: a second swing; health 1 then: none")
           (is (pos? (count (tu/walked-to eng))) "it retreats instead"))))))
 
 (deftest respond-writes-one-hostile-entry-per-encounter
@@ -1661,8 +1661,8 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:health 20} :inventory sword :entities [(zombie 3 0)]})
               eng (assoc-in eng [:jobs 'jobs.combat.attack]
-                            {:round (fn ^:async f [_c] (fake/swap-self! p assoc :health 6) :continue)})]
+                            {:round (fn ^:async f [_c] (fake/swap-self! p assoc :health 1) :continue)})]
           (core/submit! eng respond {})
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (= [:fight :flee] (mapv :decision (decided seen))) "each change of decision is one event")
-          (is (re-find #"earlier fight at 20 hp, now 6 hp" (:text (last (filter #(= :hostile.decided (:kind %)) @seen))))))))))
+          (is (re-find #"earlier fight at 20 hp, now 1 hp" (:text (last (filter #(= :hostile.decided (:kind %)) @seen))))))))))
