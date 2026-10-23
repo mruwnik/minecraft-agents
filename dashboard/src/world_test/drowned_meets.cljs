@@ -54,7 +54,7 @@
        vals))
 
 (defn meets
-  "Rows [{:id [gen job] :t :class :health :decisions :seconds :hp :hits :hp-window :died :tried :landed :weapon}] of the respond
+  "Rows [{:id [gen job] :t :again? :class :health :decisions :seconds :hp :hits :hp-window :died :tried :landed :weapon}] of the respond
   runs whose first decision is about a drowned, in records (sorted by :t)."
   [at records]
   (let [by-gen (group-by :gen records)]
@@ -70,6 +70,7 @@
                 own (fn [k] (filter #(and (= k (:k %)) (= job (:job %))) in-run))
                 swings (concat (own :hit) (own :miss))]]
       {:id [gen job] :t t
+       :again? (boolean (some #(and (= :decided (:k %)) (= "drowned" (:mob %)) (not= job (:job %)) (< (- t window-ms) (:t %) t)) rs))
        :class (some->> (last (filter #(< (- t gap-ms) (:t %) (inc t)) (positions rs))) (class-of at))
        :health (:health first-d)
        :decisions (mapv :decision ds)
@@ -83,11 +84,12 @@
        :weapon (or (some :item (own :equip)) (some #(when (= job (:job %)) (:wear %)) (filter #(= :ended (:k %)) in-run)))})))
 
 (defn prior
-  "{:deep {:k :n :per-s} :other {...}} over exposure and meet rows: k meets and n seconds in water a drowned can spawn in
+  "{:deep {:k :n :per-s} :other {...}} over exposure and meet rows: k meets (not again?: a run after another about a
+  drowned within window-ms is the same meet going on) and n seconds in water a drowned can spawn in
   (deep) and in other water, per-s (k + 1) / n; :rows the same by class."
   [exposure-rows meet-rows]
   (let [secs (apply merge-with + (map :seconds exposure-rows))
-        ks (frequencies (keep :class meet-rows))
+        ks (frequencies (keep #(when-not (:again? %) (:class %)) meet-rows))
         rows (into (sorted-map) (map (fn [c] [c {:k (get ks c 0) :n (js/Math.round (get secs c 0))}])) (into (set (keys secs)) (keys ks)))
         pooled (fn [pick] (let [rs (filter (comp pick key) rows)
                                 k (reduce + 0 (map (comp :k val) rs))
@@ -137,12 +139,22 @@
         n (reduce + 0 (map #(fight/swings (:weapon %) {:name "drowned"}) rs))]
     {:runs (count rs) :k k :n n :per-swing (when (pos? n) (/ (js/Math.round (* 100 (/ (+ k 0.5) n))) 100))}))
 
+(defn wet-death
+  "{:k :n :chance} of the first meets in water in rows (not again?): k followed by a death within window-ms, chance
+  (k + 0.5) / (n + 1) (answer ::drowned-wet-death)."
+  [rows]
+  (let [rs (filter #(and (:class %) (not (:again? %))) rows)
+        k (count (filter :died rs))
+        n (count rs)]
+    {:k k :n n :chance (/ (js/Math.round (* 100 (/ (+ k 0.5) (inc n)))) 100)}))
+
 (defn report
-  "The prior, the in-water fight's blows per swing (wet-fight), and the outcomes of the meets in water (a class) by first decision, and by it and the weapon (unknown: none in the logs; priced as a fist)."
+  "The prior, the in-water fight's blows per swing (wet-fight), the death share of a meet in water (wet-death), and the outcomes of the meets in water (a class) by first decision, and by it and the weapon (unknown: none in the logs; priced as a fist)."
   [exposure-rows meet-rows]
   (let [wet (filter :class meet-rows)]
     {:prior (prior exposure-rows meet-rows)
      :wet-fight (wet-fight meet-rows)
+     :wet-death (wet-death meet-rows)
      :meets (count meet-rows) :in-water (count wet)
      :outcome (into (sorted-map) (map (fn [[d rs]] [d (outcome rs)])) (group-by (comp first :decisions) wet))
      :by-weapon (into (sorted-map) (map (fn [[k rs]] [k (outcome rs)])) (group-by (juxt (comp first :decisions) #(or (:weapon %) "unknown")) wet))}))

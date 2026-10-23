@@ -39,12 +39,16 @@
             :hp 5 :hits 2 :hp-window 13 :died ["drowned" 9100] :tried 1 :landed 0}
            (select-keys m [:id :class :health :decisions :seconds :hp :hits :hp-window :died :tried :landed])))))
 
+(deftest a-run-soon-after-another-about-a-drowned-is-the-same-meet-again
+  (is (= [false true] (map :again? (sort-by :t (d/meets (pond #{}) [(rec 0 :decided :mob "drowned" :decision :fight)
+                                                                    (rec 5000 :decided :mob "drowned" :decision :fight :job "j2")]))))))
+
 (deftest a-run-that-first-decided-about-another-mob-is-no-drowned-meet
   (is (empty? (d/meets (pond #{}) [(rec 0 :decided :mob "zombie" :decision :fight) (rec 10 :decided :mob "drowned" :decision :fight)]))))
 
-(deftest the-prior-pools-deep-and-other-water-as-k-plus-one-over-n
+(deftest the-prior-pools-deep-and-other-water-as-k-plus-one-over-n-each-meet-once
   (let [p (d/prior [{:seconds {"other/lit/deep" 300 "river-ocean/dark-at-night/deep" 700 "other/lit/shallow" 500}}]
-                   [{:class "other/lit/deep"} {:class "other/lit/shallow"} {:class nil}])]
+                   [{:class "other/lit/deep"} {:class "other/lit/shallow"} {:class "other/lit/shallow" :again? true} {:class nil}])]
     (is (= {:k 1 :n 1000 :per-s 0.002} (:deep p)))
     (is (= {:k 1 :n 500 :per-s 0.004} (:other p)))))
 
@@ -59,3 +63,8 @@
          (c/scan-line "{:generation-id \"g\", :source :body, :kind :died, :time-ms 5, :data {:cause \"drowned\", :pos {:x 1, :y 2, :z 3}}}")))
   (is (= {:k :at :t 5 :gen "g" :x 1 :y 62.5 :z -3}
          (c/scan-line "{:generation-id \"g\", :source :job, :kind :waiting, :time-ms 5, :data {:pos {:x 1, :y 62.5, :z -3}}}"))))
+
+(deftest the-wet-death-share-counts-first-meets-in-water
+  (is (= {:k 1 :n 2 :chance 0.5}
+         (d/wet-death [{:class "other/lit/deep" :died ["drowned" 1]} {:class "other/lit/deep"} {:class "other/lit/deep" :again? true :died ["drowned" 1]}
+                       {:class nil :died ["drowned" 2]}]))))
