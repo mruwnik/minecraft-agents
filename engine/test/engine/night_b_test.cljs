@@ -69,11 +69,12 @@
                     (await (tu/run-until-empty eng 3))
                     (is (= [ms] (st/ms-of-offline p)) why)))))))))
 
-(deftest a-log-out-stint-lasts-till-morning-while-a-known-hostile-could-reach-the-spot
-  (doseq [[entities ms why] [[[zombie] 175050 "a zombie with a way to the body: away until morning, not back beside it"]
-                             [[(assoc zombie :pos {:x 38 :y 64 :z 0})] 30000 "a zombie beyond its follow range: back after :offline-ms"]
-                             [[] 30000 "no hostile known: back after :offline-ms"]]]
-    (is (= ms (log-out/away-ms {:primitives (tu/fake {:floor tu/walk-floor :time 20000 :entities entities})
+(deftest a-log-out-stint-lasts-till-morning-when-coming-back-costs-more-than-the-longer-stint
+  (doseq [[entities world ms why] [[[zombie] {:self {:health 10}} 175050 "a zombie with a way to a body at 10 hp, no respawn bed: away until morning, not back beside it"]
+                                   [[zombie] {:self {:health 10} :inventory [{:name "diamond_sword" :count 1}]} 30000 "the same zombie a diamond sword answers: the death it risks is worth less than the longer stint"]
+                                   [[(assoc zombie :pos {:x 38 :y 64 :z 0})] {} 30000 "a zombie beyond its follow range: back after :offline-ms"]
+                                   [[] {} 30000 "no hostile known: back after :offline-ms"]]]
+    (is (= ms (log-out/away-ms {:primitives (tu/fake (merge {:floor tu/walk-floor :time 20000 :entities entities} world))
                                 :args {:offline-ms 30000}
                                 :view (fn [] {:data mem/empty-data :now 0})}))
         why)))

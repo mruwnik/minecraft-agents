@@ -4,22 +4,24 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
+            [engine.settings :as settings]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.cond :as cond]
-            [jobs.lib.danger :as danger]
+            [jobs.lib.cost :as cost]
             [jobs.lib.foods :as foods]
             [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.shelter.sleepers :as sh-sleepers]
-            [jobs.lib.threats :as threats]))
+            [jobs.lib.threats :as threats]
+            [jobs.lib.util :as u]))
 
 (def doc
   "Leave the server for a short stint, then come back: the night job's way to let another player's sleep skip the
   night. Waits for night (:not-night); impossible once a log-out
   was unsupported (:log-out-unsupported).
-  Stays away :offline-ms, at most until morning; until morning when back-unsafe (a known hostile could reach or shoot the
-  spot it comes back to, or the body is hurt past healing). Back while it is still night, it waits :news-ms for the server's sleep
+  Stays away :offline-ms, at most until morning; until morning when back-unsafe (the death coming back to the spot risks,
+  jobs.lib.cost/death-chance over the known threats, costs more than the longer stint, or the body is hurt past healing). Back while it is still night, it waits :news-ms for the server's sleep
   count (sent on a join while anyone sleeps) before it ends.
   A listed job that finds another job logged the body out since it was queued is done at once without acting.
   Ends with the result {:ms :how}. How is ok, cut, unsupported or closed.
@@ -52,7 +54,8 @@
 (def can-start? (cond/and (checks/night :not-night) supported))
 
 (a/defargs settings
-  {::job-time-s {:default 900 :doc "Seconds a log-out stint and the wait for the sleep count may take (a stint lasts at most until morning)." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 900 :doc "Seconds a log-out stint and the wait for the sleep count may take (a stint lasts at most until morning)." :spec (a/num-in 0 nil)}
+   ::return-s {:default 3 :doc "Seconds a body back online stands at its spot before it can answer a mob there (back-death-cost)." :spec (a/num-in 0 nil)}})
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
@@ -74,24 +77,31 @@
   [self]
   (and (foods/fragile? self) (< (.-food self) foods/top-up-food)))
 
-(defn back-unsafe
-  "Why coming back online at night to the spot the body leaves would walk into danger, as text, else nil: a known
-  hostile within its follow range (jobs.lib.threats) is a real danger there (jobs.lib.danger/dangers; a heard one counts
-  as seen, the unseen being the worse case; one that hurt the body lately counts whatever the way test says): it stays
-  near the spot while the body is away. Or the body is hurt-past-healing?."
+(defn back-death-cost
+  "Seconds the death coming back online to the spot the body leaves risks: route-death-cost of the spot held ::return-s
+  at night with the known threats (threats/threats-of: sensed, heard counting as seen, fled from or met at a death): one
+  whose field holds the spot counts in full, it has the whole stint to walk there."
   [c]
   (let [p (:primitives c)
-        self (.self p)
-        ds (->> (danger/dangers p threats/max-follow-range {:ranged-radius (danger/ranged-radius)}
-                                {:sight? false :hit-ids (danger/hit-ids (ctx/view c))})
-                (filter #(<= (danger/mob-distance p %) (threats/follow-range (.-name %)))))]
-    (cond (seq ds) (str "a " (.-name (first ds)) " could reach the spot")
+        at (u/pos-of (.-pos (.self p)))
+        body (merge (cost/death-body p (ctx/view c)) (threats/body-of p))]
+    (cost/route-death-cost body {:night? true :cells [(assoc at :s (settings/get settings ::return-s))] :threats (mapv (fn [{:keys [reach] :as t}] (assoc t :reach #(when (reach %1 %2 %3) 1))) (threats/threats-of c))} at)))
+
+(defn back-unsafe
+  "Why coming back online at night to the spot the body leaves costs more than staying away until morning, as text, else
+  nil: its back-death-cost is more than the seconds the longer stint adds (until-morning-ms less the stint of :offline-ms), or the body is
+  hurt-past-healing?."
+  [c until-morning-ms]
+  (let [self (.self (:primitives c))
+        more-s (/ (- until-morning-ms (min (:offline-ms (:args c)) until-morning-ms)) 1000)
+        risk (back-death-cost c)]
+    (cond (> risk more-s) (str "coming back risks a death worth " (js/Math.round risk) " s, more than " (js/Math.round more-s) " s more away")
           (hurt-past-healing? self) (str "health " (.toFixed (.-health self) 1) " and food " (.-food self) " heal nothing"))))
 
 (defn away-ms [c]
   (let [until-morning (sh-clock/ms-until-morning (.-timeOfDay (.self (:primitives c))))]
     (cond (not (pos? until-morning)) (:offline-ms (:args c))
-          (back-unsafe c) until-morning
+          (back-unsafe c until-morning) until-morning
           :else (min (:offline-ms (:args c)) until-morning))))
 
 (defn ^:async quote-of [c]
@@ -99,7 +109,7 @@
     {:uses {:job-time [0 s s]}}))
 
 (defn ^:async log-out! [c]
-  (when-let [why (and (pos? (sh-clock/ms-until-morning (.-timeOfDay (.self (:primitives c))))) (back-unsafe c))]
+  (when-let [why (let [until (sh-clock/ms-until-morning (.-timeOfDay (.self (:primitives c))))] (and (pos? until) (back-unsafe c until)))]
     (ctx/emit! c :log-out.till-morning :info {:text (str "staying logged out until morning: " why)}))
   (let [r (await (ctx/act c :offline #js {:ms (away-ms c) :why "logged-out-for-sleeping-player"}))
         how (.-status r)

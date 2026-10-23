@@ -96,8 +96,8 @@
                       cells))))
 
 (defn threat-hurt
-  "hp mob-name is expected to take off body {:health :equipment :weapon} over seconds within its reach: what the fight
-  costs when the fight leaves fight/default-reserve (never a creeper; a fight ends the exposure), else its hits over the seconds after
+  "hp mob-name is expected to take off body {:health :equipment :weapon} over seconds within its reach: what the whole
+  fight costs when it leaves fight/default-reserve (never a creeper: the body fights it out), else its hits over the seconds after
   armour (a creeper its blast, a share of it for less than ::fuse-s). A provoked-only mob counts threat/provoked-share."
   [{:keys [health equipment weapon]} mob-name seconds]
   (let [health (if (number? health) health 20)
@@ -108,7 +108,7 @@
                   (threat/mob-hurt stats mob-name seconds))
         fight (fight/fight-damage {:weapon weapon :equipment equipment :mobs [{:name mob-name :distance 0}]})
         fights? (and (not= "creeper" mob-name) (fight/leaves-reserve? {:health health :reserve fight/default-reserve :damage fight}))]
-    (* share (if fights? (min fight exposed) exposed))))
+    (* share (if fights? fight exposed))))
 
 (defn kill-chance
   "The chance that hurt (expected hp) kills a body with health: the damage taken as spread exponentially about hurt,
