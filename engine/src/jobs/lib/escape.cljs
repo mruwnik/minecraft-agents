@@ -22,7 +22,8 @@
             [jobs.lib.reach.room :as reach-room]
             
             [jobs.lib.tidy :as tidy]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.lib.walk.world :as wworld]))
 
 (a/defargs settings
   {::max-depth {:default 8 :doc "How deep an escape digs or climbs at most." :spec (a/int-in 1 nil)}
@@ -133,19 +134,18 @@
 
 (defn enclosed?
   "reach-room/enclosed?, with every shut door, gate and trapdoor a wall when doors is :never (the walk will not open them).
-  unseen (reach/world-kinds, default :ground): a flood that reaches the edge of what the body has seen is not shut in."
-  ([p doors] (enclosed? p doors :ground))
-  ([p doors unseen]
-   (if (not= :never doors)
-     (reach-room/enclosed? p unseen)
-     (reach-room/shut-in? p (reach/world-kinds p reach/kind-of unseen)))))
+  unseen: how a cell the body has not seen reads (reach/world-kinds), the worse case for the caller's question."
+  [p doors unseen]
+  (if (not= :never doors)
+    (reach-room/enclosed? p unseen)
+    (reach-room/shut-in? p (reach/world-kinds p reach/kind-of unseen))))
 
 (defn walk-enclosed?
-  "enclosed? for the go-to of c (its :doors), over the world its plans read: as it is under :unknown false, else what
-  the body has seen."
-  [c]
-  (let [args (:args c)]
-    (enclosed? (:primitives c) (some-> (:doors args) keyword) (if (false? (:unknown args)) :raw :ground))))
+  "enclosed? for a go-to with args (its :doors and :unknown; spec its mask spec, nil: a fresh one), over the world its
+  plans read (wworld/unseen-kind): the verdict must agree with the way the walk could not find."
+  ([c] (walk-enclosed? (:primitives c) (:args c) (:unknown c)))
+  ([p args spec]
+   (enclosed? p (some-> (:doors args) keyword) (wworld/unseen-kind p (when-not (false? (:unknown args)) (or spec #js {}))))))
 
 (defn scan-doors
   "Whether a door or gate the body can open borders a cell it can walk to from feet, with room behind it for the body

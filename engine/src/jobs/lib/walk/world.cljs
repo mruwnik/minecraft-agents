@@ -88,6 +88,27 @@
   [p ^js unknown]
   (boolean (and unknown (not (.-edge unknown)) (rock-beyond) (not (breath/head-under? p)) (sh-sense/buried? p))))
 
+(defn- rock-seeds
+  "The cells path-world's rock guess spares for a walk over mask spec unknown: the feet and the spec's seeds (with-seeds)."
+  [p ^js unknown]
+  (let [{:keys [x y z]} (sh-sense/feet p)]
+    (cond-> (into [[x y z]] (.-own unknown)) (.-goal unknown) (conj (.-goal unknown)))))
+
+(defn unseen-kind
+  "How a walk over mask spec unknown (nil: over the world as it is) reads a cell the body has not seen, as a
+  jobs.lib.reach/world-kinds unseen policy: :raw with no spec; else :solid where its plans read stone (the rock guess, a
+  cell looked at and not seen), else :ground. A flood asking whether that walk can get out reads this."
+  [p ^js unknown]
+  (if-not unknown
+    :raw
+    (let [rock (when-let [known (and (rock-guess? p unknown) (memory-sections p))]
+                 (rock/rock-at {:k (rock-beyond) :known known :seeds (rock-seeds p unknown)}))
+          ^js blocked (.-blocked unknown)
+          blocked (when (and blocked (pos? (.-size blocked))) blocked)]
+      (if (or rock blocked)
+        (fn [x y z] (if (or (and blocked (.has blocked (str x "," y "," z))) (and rock (rock x y z))) :solid :ground))
+        :ground))))
+
 (defn with-seeds
   "The mask spec unknown with the cells its rock guess spares (path-world): goal ([x y z], or nil) and own (feet cells the
   body dug its ways through itself); the spec is per call, the seeds per round."
@@ -116,9 +137,7 @@
        (when-let [pw (if mask (.pathWorld p mask) (.pathWorld p))]
          (let [pw (js/Object.assign #js {:table table :space space/space} pw)]
            (when k
-             (let [{:keys [x y z]} (sh-sense/feet p)]
-               (set! (.-snapshot pw) (rock/with-rock (.-snapshot pw) {:mask (.-id mask) :stone stone :k k :known known
-                                                                      :seeds (cond-> (into [[x y z]] (.-own unknown)) (.-goal unknown) (conj (.-goal unknown)))}))))
+             (set! (.-snapshot pw) (rock/with-rock (.-snapshot pw) {:mask (.-id mask) :stone stone :k k :known known :seeds (rock-seeds p unknown)})))
            pw))))))
 
 (defn unknown-of

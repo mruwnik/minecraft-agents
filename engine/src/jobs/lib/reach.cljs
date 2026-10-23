@@ -101,7 +101,8 @@
 
 (defn seen-lookup
   "As lookup, over what the body sees or remembers (u/seen-block): a cell it has not seen reads unseen, default :solid,
-  so a flood or a drop edge never goes through a cell it has not looked at. One lookup serves one query."
+  so a flood or a drop edge never goes through a cell it has not looked at; a fn of x y z gives it per cell. One lookup
+  serves one query."
   ([p] (seen-lookup p kind-of))
   ([p block-kind] (seen-lookup p block-kind :solid))
   ([p block-kind unseen]
@@ -114,7 +115,7 @@
          (if (some? hit)
            hit
            (let [b (u/seen-block p {:x x :y y :z z})
-                 v (if (nil? b) unseen (block-kind b))]
+                 v (if (nil? b) (if (fn? unseen) (unseen x y z) unseen) (block-kind b))]
              (.set cache k v)
              v)))))))
 
@@ -127,8 +128,8 @@
 (defn world-kinds
   "A kind-at fn (block-kind of each cell) by one policy for a cell the body has not seen: :raw reads the true world
   (lookup: only for a walk planned over the world as it is, go-to :unknown false), :solid reads it as a wall, :ground as
-  open ground with a floor (seen-lookup). Pick the worse case for the question: :solid for 'would this fill shut me in?',
-  :ground for 'am I sheltered?' and 'am I shut in?'."
+  open ground with a floor (seen-lookup), a fn of x y z per cell (jobs.lib.walk.world/unseen-kind: as a walk's plans read
+  it). Pick the worse case for the question: :solid for 'would this fill shut me in?', :ground for 'am I sheltered?'."
   [p block-kind unseen]
   (if (keyword-identical? :raw unseen)
     (lookup p block-kind)

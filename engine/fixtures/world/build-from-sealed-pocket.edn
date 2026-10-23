@@ -13,4 +13,9 @@
             :parts [{:id "walls" :outline [#at [18 15 18] #at [20 16 20]] :want "dirt"}]}]
    :act [[:job (jobs.build.from-plan {:plan "$plan:ring"})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 240 :of-job true}]
-   :after [[:block [18 15 18] "dirt"] [:block [20 16 20] "dirt"] [:block [19 15 20] "dirt"]]}]}
+   :after [[:block [18 15 18] "dirt"] [:block [20 16 20] "dirt"] [:block [19 15 20] "dirt"]]}
+  {:name "sealed-pocket-walk-only-gives-up-shut-in"
+   ;; card cbade1ca: walls behind the body never seen in the dark read as rock to the plans, so the give-up says shut in
+   :act [[:job (jobs.movement.go-to {:pos #at [19 15 17] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false :shut-in true}} :within-s 90 :of-job true}]
+   :after [[:body-near [12.5 5 20.5] 1]]}]}

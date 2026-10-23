@@ -53,8 +53,8 @@
 (deftest escape-enclosed-counts-doors-as-walls-under-doors-never
   (let [wide (merge room (box -20 63 -20 30 63 20 "stone"))
         p (tu/fake (merge in-room {:blocks (assoc wide "3,64,0" "oak_door" "3,65,0" "oak_door")}))]
-    (is (false? (escape/enclosed? p :shut)) "a wooden door is a way out")
-    (is (true? (escape/enclosed? p :never)) "doors :never: the room is shut")))
+    (is (false? (escape/enclosed? p :shut :ground)) "a wooden door is a way out")
+    (is (true? (escape/enclosed? p :never :ground)) "doors :never: the room is shut")))
 
 ;; ------------------------------------------------------------------ other headings (card 4ad29ed7)
 (deftest escape-choose-skips-only-the-refused-stair-heading

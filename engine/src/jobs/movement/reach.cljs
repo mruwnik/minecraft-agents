@@ -104,7 +104,7 @@
         block-at (escape/block-at-of p)
         may-dig? (holes/may-dig-fn c)
         own? (holes/own-placed-fn c)
-        opts {:own? own? :skip skip :fetch? (choose/fetch-tool? p (:doors (:walk (:args c)))) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c)}
+        opts {:own? own? :skip skip :fetch? (choose/fetch-tool? p (:walk (:args c))) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c)}
         stair-from (fn [cell] (span/down-stair block-at cell goal may-dig? own? skip))
         stair (when (allowed? c :stair)
                 (let [here (stair-from feet)
@@ -208,7 +208,7 @@
   (a walk would take the body back to the nearest point)."
   [c]
   (let [{:keys [span from built]} (ctx/mem c)
-        [job args] (span-job span (boolean (:ignore-zones? (:args c))) (choose/fetch-tool? (:primitives c) (:doors (:walk (:args c)))))
+        [job args] (span-job span (boolean (:ignore-zones? (:args c))) (choose/fetch-tool? (:primitives c) (:walk (:args c))))
         r (waits/waiting-out c (await (ctx/call c (keyword (str "span-" (or built 0))) job args)))
         moved? (not= from (feet-of c))]
     (when-not (= :continue r)

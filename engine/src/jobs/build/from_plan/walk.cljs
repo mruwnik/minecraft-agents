@@ -10,6 +10,7 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.util :as u]
+            [jobs.lib.walk.world :as wworld]
             [jobs.lib.near :as near]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.build.plan :as plan :refer [facing-of stands-for]]
@@ -102,10 +103,11 @@
       :else w)))
 
 (defn in-pocket?
-  "Whether the body stands in a closed room of at most ::pocket-cells walkable cells, over what it has seen (a flood
-  that reaches the edge of that is no pocket)."
+  "Whether the body stands in a closed room of at most ::pocket-cells walkable cells, over the world go-to's plans read
+  (wworld/unseen-kind): it confirms go-to's shut-in verdict."
   [c]
-  (reach-room/enclosed? (:primitives c) :ground #{} (settings/get settings ::pocket-cells)))
+  (let [p (:primitives c)]
+    (reach-room/enclosed? p (wworld/unseen-kind p #js {}) #{} (settings/get settings ::pocket-cells))))
 
 (defn shut-in-walk?
   "Whether the last walk ended because the body is shut in (go-to refuses to dig or build out of a restricted walk) and the

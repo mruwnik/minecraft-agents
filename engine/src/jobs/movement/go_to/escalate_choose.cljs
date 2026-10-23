@@ -96,8 +96,8 @@
 (defn fetch-tool?
   "Whether the escalation may fetch a pickaxe (the stair's and a :dig-route dig's ways): the body is free (a shut-in body
   cannot walk to one; by-hand is its fallback) and carries one pickaxe or none, so the last one breaking is no stop."
-  ([c] (fetch-tool? (:primitives c) (:doors (:args c)) (delay (escape/walk-enclosed? c))))
-  ([p doors] (fetch-tool? p doors (delay (escape/enclosed? p (some-> doors keyword)))))
+  ([c] (fetch-tool? (:primitives c) nil (delay (escape/walk-enclosed? c))))
+  ([p walk] (fetch-tool? p nil (delay (escape/walk-enclosed? p walk nil))))
   ([p _ shut?]
    (and (<= (count (filter #(str/ends-with? (str (:name %)) "_pickaxe") (u/inventory p))) 1)
         (not @shut?))))

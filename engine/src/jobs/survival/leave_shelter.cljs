@@ -79,10 +79,11 @@
 (def seal-purposes "Ledger purposes of the blocks that shut a body in for the night." #{:shelter :retreat-plug})
 
 (defn seals
-  "The open, unheld :shelter and :retreat-plug ledger entries within jobs.lib.ledger/seal-clear-radius of the feet while the body is enclosed (the test go-to gives up on)."
+  "The open, unheld :shelter and :retreat-plug ledger entries within jobs.lib.ledger/seal-clear-radius of the feet while the body is enclosed, a cell it has not seen a wall (a
+  seal left up shuts it in)."
   [c]
   (let [p (:primitives c)]
-    (when (escape/enclosed? p nil)
+    (when (escape/enclosed? p nil :solid)
       (let [{:keys [x y z]} (sh-sense/feet p)
             held (ledger/held-cells (ctx/view c))]
         (seq (remove (some-fn (comp held :cell) (complement (comp seal-purposes :purpose)))
@@ -131,7 +132,7 @@
       (and sealed (not (:dig-out (ctx/mem c))) (not (dig-leave/sheltered-in c)))
       (let [r (await (ctx/call c :seal-cleanup 'jobs.access.cleanup
                                {:of :all :purpose seal-purposes :near {:pos (u/self-pos c) :radius ledger/seal-clear-radius} :checks {:fit? '(always) :safe? '(not (threatened))}}))]
-        (if (and (not= :continue r) (some (comp #{:hostile-near :danger} :reason) (get-in r [:data :open])) (escape/enclosed? p nil))
+        (if (and (not= :continue r) (some (comp #{:hostile-near :danger} :reason) (get-in r [:data :open])) (escape/enclosed? p nil :solid))
           (ctx/end c :nothing-possible :seal-kept {:text "still shut in by its own blocks, kept while a known hostile is near; giving the body back"})
           :again))
       (or (:dig-out (ctx/mem c)) shelter)

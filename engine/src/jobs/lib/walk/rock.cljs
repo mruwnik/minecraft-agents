@@ -119,24 +119,28 @@
                 (aset out (bit-or cells lx) (- 1 (aget b (+ row lx))))))))
         (or (shaft! known out cx sy cz) out)))))
 
-(defn with-rock
-  "snapshot read with every cell that reads mask (the unseen cells' id) and is guessed rock (rock-section, built once a
-  section) read as stone instead."
-  [^js snapshot {:keys [mask stone k known seeds]}]
+(defn rock-at
+  "(fn [x y z]) true where an unseen cell is guessed rock (rock-section, built once a section)."
+  [{:keys [k known seeds]}]
   (let [open (open-ids)
         cache (js/Map.)
         last-key (volatile! nil)
-        last-rock (volatile! nil)
-        rock-at (fn [x y z]
-                  (let [cx (bit-shift-right x 4) sy (bit-shift-right y 4) cz (bit-shift-right z 4)
-                        key (store/section-key cx sy cz)
-                        ^js r (if (== key @last-key)
-                                @last-rock
-                                (let [r (or (.get cache key)
-                                            (let [r (rock-section known open k cx sy cz seeds)] (.set cache key r) r))]
-                                  (vreset! last-key key)
-                                  (vreset! last-rock r)))]
-                    (== 1 (aget r (store/cell-index x y z)))))
+        last-rock (volatile! nil)]
+    (fn [x y z]
+      (let [cx (bit-shift-right x 4) sy (bit-shift-right y 4) cz (bit-shift-right z 4)
+            key (store/section-key cx sy cz)
+            ^js r (if (== key @last-key)
+                    @last-rock
+                    (let [r (or (.get cache key)
+                                (let [r (rock-section known open k cx sy cz seeds)] (.set cache key r) r))]
+                      (vreset! last-key key)
+                      (vreset! last-rock r)))]
+        (== 1 (aget r (store/cell-index x y z)))))))
+
+(defn with-rock
+  "snapshot read with every cell that reads mask (the unseen cells' id) and is guessed rock (rock-at) read as stone instead."
+  [^js snapshot {:keys [mask stone] :as guess}]
+  (let [rock-at (rock-at guess)
         view (js/Object.create snapshot)]
     (set! (.-stateAt view) (fn [x y z]
                              (let [s (.stateAt snapshot x y z)]

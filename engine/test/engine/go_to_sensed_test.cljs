@@ -16,6 +16,7 @@
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.test-util :as tu :refer [box]]
             [engine.triggers :as triggers]
             [jobs.lib.dig-look :as dig-look]
@@ -876,3 +877,18 @@
           (is (true? (:arrived out)) (pr-str (select-keys out [:why :text :escalation]) (map (juxt :step :at) (filter #(= :go-to.escalated (:kind %)) seen))))
           (is (<= (count (filter #(= 61 (second (:at %))) (filter #(= :go-to.escalated (:kind %)) seen))) 2) "no tour round the top")
           (is (= [80 51 56] (mapv js/Math.floor ((juxt :x :y :z) (u/pos-of (.-pos (.self p))))))))))))
+
+(deftest a-buried-bodys-shut-in-verdict-reads-the-unseen-rock-as-its-plans-do
+  ;; a dark 1x2 pocket in a stone mass, its walls mostly unseen: the plans read unseen cells past rock-beyond as stone and
+  ;; find no way, so the verdict must too (read as open ground, the body was free: no escalation on :start-enclosed,
+  ;; :goal-unloaded or a loop, a pickaxe fetched, a give-up without :shut-in)
+  (let [{:keys [p w]} (sensed-only {:self {:pos {:x 0.5 :y 55 :z 0.5}} :blocks (dissoc (box -8 50 -8 8 60 8 "stone") "0,55,0" "0,56,0")})
+        shut? (fn [spec] (escape/walk-enclosed? {:primitives w :args {} :unknown spec}))
+        looked (wworld/unknown-spec)
+        no-guess #(settings/with-settings {:jobs.lib.walk.world/rock-beyond false} %)]
+    (swap! (fake/state p) assoc :light-default [0 0])
+    (doseq [[x y z] [[1 55 0] [-1 55 0] [0 55 1] [0 55 -1] [1 56 0] [-1 56 0] [0 56 1] [0 56 -1] [0 54 0] [0 57 0]]]
+      (.add ^js (.-blocked looked) (str x "," y "," z)))
+    (is (true? (shut? (wworld/unknown-spec))) "buried: the unseen rock is rock")
+    (is (false? (no-guess #(shut? (wworld/unknown-spec)))) "no rock guess: unseen cells are open, as the plans read them")
+    (is (true? (no-guess #(shut? looked))) "walls looked at and not seen read stone, as the plans read them")))
