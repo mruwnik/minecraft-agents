@@ -110,6 +110,7 @@
    :purpose {:doc "only the entries of these purposes (a keyword or a set), e.g. :doorway; nil: any" :spec (a/or-of keyword? (a/coll-of keyword?)) :default nil}
    :accept {:doc "dig hazards accepted: :fluid-adjacent (water beside), :lava-adjacent, :falling-block"
             :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{:fluid-adjacent}}
+   :accept-hostiles? {:doc "open shelter blocks although a known hostile could reach the body through them: the caller priced that" :spec boolean? :default false}
    :ignore-zones? :shared})
 
 
@@ -182,7 +183,7 @@
             :can-clear? #(not (tools/needs-tool-to-clear? (:primitives c) %))
             :lava-near? (memoize #(> (lava-risk/hp (:primitives c) %) (worth-hp)))
             :bucket? (boolean (some #(= "bucket" (:name %)) (u/inventory (:primitives c))))
-            :hostile-near? (and (some (comp stay/shelter-purposes :purpose) entries) (hostile-near? (:primitives c) l)) :opens-dark? (stay/opens-dark? (:primitives c)) :keep-at-night? (stay/at-night?)
+            :hostile-near? (and (not (:accept-hostiles? (:args c))) (some (comp stay/shelter-purposes :purpose) entries) (hostile-near? (:primitives c) l)) :opens-dark? (stay/opens-dark? (:primitives c)) :keep-at-night? (stay/at-night?)
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach (dig-reach)
             :spare-own-builds (access/spare-own-builds)
             :walk-blocker (when (= :orphans (:of (:args c))) (walk-blocker-of c l))

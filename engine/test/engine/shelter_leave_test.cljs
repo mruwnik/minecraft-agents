@@ -9,7 +9,8 @@
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.fake :as fake]))
+            [engine.fake :as fake]
+            [jobs.survival.leave-shelter :as ls]))
 
 (def shut-in-trigger :dawn)
 
@@ -179,3 +180,14 @@
         (is (= [nil nil true] (await (held-in-then-out [] 3))) "fragile, nobody near: out at first light")
         (is (= [true true true] (await (held-in-then-out [far-zombie] 3)))
             "fragile, a zombie that could walk in were it open: still in after the grace, out once it is gone")))))
+
+(deftest leaving-a-shelter-toward-a-hostile-is-priced-against-the-hunger-of-staying
+  (let [costs (fn [n health food] (ls/leave-and-stay-costs {:dead 100 :chance 0.002 :n n :health health :food food}))
+        leaves? (fn [n health food] (let [[leave stay] (costs n health food)] (<= leave stay)))]
+    (is (false? (leaves? 1 3 18)) "food 18: it heals, nothing is gained by leaving")
+    (is (false? (leaves? 1 3 12)) "hungry a little: staying is cheaper")
+    (is (true? (leaves? 1 3 0)) "food 0: staying kills too, leave")
+    (is (false? (leaves? 3 3 0)) "three dangers outside make leaving dearer")
+    (is (false? (leaves? 1 1 0)) "at 1 hp the same danger weighs heavier")
+    (is (true? (leaves? 1 6 0)) "less hurt, cheaper to leave")
+    (is (= 100 (first (costs 100 1 0))) "a chance never passes 1")))
