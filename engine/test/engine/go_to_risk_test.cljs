@@ -19,6 +19,7 @@
             [jobs.lib.price :as price]
             [jobs.lib.reach :as reach]
             [jobs.lib.threats :as threats]
+            [jobs.lib.util :as u]
             [jobs.lib.ready :as ready]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.walk-risk :as risk]
@@ -387,3 +388,16 @@
     (is (> (:lava-hp (risk/estimate c {:x 20 :y 64 :z 20})) (price/allowed c)))
     (is (= :later (first (risk/status c {:x 20 :y 64 :z 20}))))))
 
+
+(deftest a-walk-round-a-never-seen-stone-cell-holding-a-fresh-skeleton-spot-holds
+  ;; the cell's inside and its far faces unseen: a way out for the skeleton (Q16); the goal a table 6.5 blocks past its spot (the pile radius), the way round the cell
+  (let [cx 21
+        shell (into {} (for [x (range (dec cx) (+ cx 2)) y (range 63 66) z (range 15 18) :when (not= [x y z] [cx 64 16])] [(str x "," y "," z) "stone"]))
+        c (-> (ready-test/ctx-of {:time st/noon :light {[cx 64 16] [0 0]} :blocks shell :self {:pos {:x 13.5 :y 64 :z 18.5} :health 20 :food 20}})
+              (with-death {:x cx :y 64 :z 16} "skeleton" 10000))
+        real u/seen-block
+        hidden? (fn [{:keys [x y z]}] (and (<= cx x (inc cx)) (<= 63 y 65) (<= 15 z 17)))
+        s (with-redefs [u/seen-block (fn [p pos] (when-not (hidden? pos) (real p pos))) look/seen-block (constantly {:unknown true})]
+            (risk/status c {:x 27.5 :y 64 :z 19.5}))]
+    (is (= :later (first s)))
+    (is (= :risky (:reason (nth s 2))))))

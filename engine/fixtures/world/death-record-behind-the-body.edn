@@ -4,7 +4,7 @@
 ;; Should-succeed too: a sealed, never seen (so dark) skeleton spot 10 min old the body respawned 200 blocks from 5 s ago: only those 5 s spawn there.
 ;; Should-succeed too: a sealed, never seen enderman spot whose way out to the table is some 30 steps round its stone, so the walk grazes its field's far edge.
 ;; Should-fail: a :risky wait for a death near the table, or crafting at once with an unseen death spot 60 s or 10 s old: a zombie's behind a wall along the
-;; walk to a table 15 blocks off, 3 steps round the wall's end from the way, roofed from the sun; or a skeleton's sealed in stone.
+;; walk to a table 15 blocks off, 3 steps round the wall's end from the way, roofed from the sun; or a skeleton's sealed in stone the body never saw into (its way out is some steps round the cell, so the walk round the cell to a table 6.5 blocks past it is priced).
 {:defaults
  {:tags [:items :craft :go-to :survival]
   :time :any
@@ -44,10 +44,10 @@
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:item "wooden_pickaxe" 1]]}
   {:name "craft-towards-a-fresh-unseen-death-spot-waits"
-   :blocks [[:set [20 0 16] "crafting_table"] [:set [16 3 16] "glowstone"]
-            [:fill [26 -1 15] [28 1 17] "stone"] [:set [27 0 16] "air"]]
-   :body {:inventory [["oak_planks" 6]]}
-   :memory [{:kind :deaths :age-s 10 :policy {:cap 10 :ttl :forever} :data {:pos #xyz [27 0 16] :cause "skeleton"}}]
+   :blocks [[:set [28 0 19] "crafting_table"] [:set [13 3 18] "glowstone"] [:set [25 3 19] "glowstone"]
+            [:fill [20 -1 15] [22 1 17] "stone"] [:set [21 0 16] "air"]]
+   :body {:at [13.5 0 18.5] :inventory [["oak_planks" 3] ["stick" 2]]}
+   :memory [{:kind :deaths :age-s 10 :policy {:cap 10 :ttl :forever} :data {:pos #xyz [21 0 16] :cause "skeleton"}}]
    :act [[:job (jobs.items.craft {:item "wooden_pickaxe"})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :risky}} :within-s 30 :of-job true}]
    :after [[:item "wooden_pickaxe" 0]]}
