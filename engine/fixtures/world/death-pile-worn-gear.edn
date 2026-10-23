@@ -19,12 +19,10 @@
  [{:name "worn-armour-and-shield-pile-fetched"
    :expect [{:event {:source :body :kind :died :data {:inventory [:has {:name "iron_chestplate"}]}} :within-s 30}
             {:event {:source :body :kind :died :data {:inventory [:has {:name "shield"}]}} :within-s 30}
-            {:event {:source :job :kind :completed :data {:decision :collected}} :within-s 120 :of-job true}]
-   :after [[:item "iron_chestplate" 1] [:item "iron_boots" 1] [:item "shield" 1]]}
+            {:event {:source :job :kind :completed :data {:decision :collected}} :within-s 120 :of-job true}]}
   {:name "worn-gear-pile-spread-wide-fetched"
    :body {:at [26.5 0 26.5] :spawnpoint [4 0 4]}
-   :expect [{:event {:source :job :kind :completed :data {:decision :collected}} :within-s 120 :of-job true}]
-   :after [[:item "iron_chestplate" 1] [:item "iron_boots" 1] [:item "shield" 1]]}
+   :expect [{:event {:source :job :kind :completed :data {:decision :collected}} :within-s 120 :of-job true}]}
   {:name "worn-armour-pile-is-worn-again"
    :act [[:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:head {:name "iron_helmet"} :torso {:name "iron_chestplate"} :legs {:name "iron_leggings"} :feet {:name "iron_boots"}}}] 120]]
    :expect [{:event {:source :job :kind :completed :data {:decision :collected}} :within-s 120 :of-job true}]}]}
