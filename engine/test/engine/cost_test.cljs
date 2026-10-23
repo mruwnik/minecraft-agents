@@ -214,6 +214,13 @@
     (is (< (tour 50 3) (tour 100 3)) "the farther it walked away")
     (is (< (tour 100 1) (tour 100 4)) "the more walks it took")))
 
+(deftest a-cover-tour-walks-only-as-far-as-brings-each-point-within-reach
+  (is (zero? (cost/cover-tour-s [0 0 0] [[3 0 0] [0 4 0]] 4)) "all in reach: no walk")
+  (is (= (:cost (cost/walk-cost {:distance 6})) (cost/cover-tour-s [0 0 0] [[3 0 0] [10 0 0]] 4)) "one walk to reach of the far point")
+  (is (= (+ (:cost (cost/walk-cost {:distance 2})) (:cost (cost/walk-cost {:distance 8})))
+         (cost/cover-tour-s [0 0 0] [[10 0 0] [-6 0 0]] 4))
+      "the nearest point first, then on from where that walk stopped"))
+
 (deftest a-goal-is-worth-a-trip-and-more-the-farther-it-lies
   (is (= (cost/trip) (settings/with-settings {:jobs.lib.cost.value/tour-floor-blocks 0} #(cost/tour-worth 0))))
   (is (< (cost/tour-worth 40) (cost/tour-worth 80))))

@@ -1539,6 +1539,22 @@
                               (fn ^:async b [] (await (child-outcome eng job {:plan "far" :settings {:jobs.build.from-plan.walk/pocket-cells 1}} 30)))))]
           (is (not= :shut-in (:reason result))))))))
 
+(deftest a-stand-is-priced-by-the-walk-there-and-the-walks-on-to-the-cells-it-leaves
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/fake {:floor [-30 -30 30 30] :self {:pos [4.5 64 0.5]}})
+              c {:primitives p :view (constantly {:data {} :now 0}) :update-mem (constantly nil)}
+              row (mapv (fn [x] {:pos [x 64 3] :want "dirt"}) (range 5 12))
+              walked (atom nil)]
+          ;; [4 64 2] is nearest but reaches only the row's west half; [8 64 2] reaches all of it
+          (with-redefs [fp-walk/stand-choices (constantly {:all [[4 64 2] [8 64 2]]})
+                        fp-cells/seeing (fn [_ stands _] stands)
+                        fp-walk/walk-stand! (fn [_ _ stand _] (reset! walked stand) (js/Promise.resolve :there))
+                        near/last-walk (constantly nil)]
+            (await (fp-walk/walk-to-stand! c row (nth row 1))))
+          (is (= [8 64 2] @walked)))))))
+
 (deftest a-shut-in-verdict-counts-a-pocket-only-over-walls-the-body-has-seen
   (let [p (tu/fake {:blocks (apply dissoc (tu/box -1 64 -1 3 66 1 "stone") (for [x (range 0 3) y [64 65]] (str x "," y ",0")))
                     :floor [-30 -30 30 30] :self {:pos [1 64 0]}})

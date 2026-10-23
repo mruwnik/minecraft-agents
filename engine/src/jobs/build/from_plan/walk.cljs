@@ -3,10 +3,12 @@
   (:require [jobs.lib.child :as child]
             [engine.args :as a]
             [engine.ctx :as ctx]
+            [engine.game :as game]
             [engine.settings :as settings]
             [jobs.lib.aim :as aim]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.breath :as breath]
+            [jobs.lib.cost :as cost]
             [jobs.lib.escape :as escape]
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
@@ -184,14 +186,26 @@
   (or (aim/body-sees? c (:pos cell))
       (empty? (seeing c (:all (stand-choices c cells cell)) (:pos cell)))))
 
+(defn stand-price
+  "Seconds stand costs the build (jobs.lib.cost): the walk there, plus cover-tour-s from its eye over the open cells of
+  cell's layer, those it reaches wherever it stands in the cell (as reaching) placed from it and the rest priced by the walks on."
+  [c cells cell stand]
+  (let [closed (merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
+        y (second (:pos cell))
+        open (filter #(and (= y (second (:pos %))) (= (boolean (:dig? cell)) (boolean (:dig? %))) (not= :match (:answer %))
+                           (not (:companion %)) (not (contains? closed (:pos %))))
+                     cells)
+        [x sy z] stand]
+    (+ (:cost (cost/walk-cost {:distance (u/dist (u/self-pos c) {:x (+ x 0.5) :y sy :z (+ z 0.5)})}))
+       (cost/cover-tour-s [(+ x 0.5) (+ sy game/eye-height) (+ z 0.5)] (map #(mapv (partial + 0.5) (:pos %)) open) (- (plan/reach) 0.71)))))
+
 (defn ^:async walk-to-stand!
-  "Walk to a stand cell beside cell, one that sees it first (:continue while the walk waits, else :again); a cell that cannot be walked to, or is still out of reach (or unseen, as :unseen) on arrival, counts a failure."
+  "Walk to the cheapest (stand-price) stand cell beside cell, among those that see it first (:continue while the walk waits, else :again); a cell that cannot be walked to, or is still out of reach (or unseen, as :unseen) on arrival, counts a failure."
   [c cells cell]
   (trace! c :walk-to! (:pos cell))
-  (let [body (u/self-pos c)
-        {:keys [all inner]} (stand-choices c cells cell)
+  (let [{:keys [all inner]} (stand-choices c cells cell)
         stands (or (seq (seeing c all (:pos cell))) (seq (reaching c all (:pos cell))) inner all)
-        stand (first (sort-by #(u/dist body (zipmap [:x :y :z] %)) stands))]
+        stand (first (sort-by #(stand-price c cells cell %) stands))]
     (cond
       (not stand)
       (do (ctx/update-mem! c walk-fail (:pos cell) :unreachable (give-up) (u/self-pos c))

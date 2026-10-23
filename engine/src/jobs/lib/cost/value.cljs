@@ -217,6 +217,19 @@
   (let [parts {:walk (:cost (walk-cost {:distance explored})) :walks (* (settings/get settings ::per-frontier-walk) walks)}]
     {:cost (reduce + (vals parts)) :parts parts}))
 
+(defn cover-tour-s
+  "Seconds (walk-cost) of a greedy walk from point `from` ([x y z]) that brings every one of `points` within `reach`
+  blocks: each leg walks to reach of the nearest point still beyond it; the points within reach of a stop are done."
+  [from points reach]
+  (let [d (fn [a b] (apply js/Math.hypot (map - a b)))]
+    (loop [at from left points s 0]
+      (let [left (remove #(<= (d at %) reach) left)]
+        (if (empty? left)
+          s
+          (let [p (apply min-key #(d at %) left)
+                gap (d at p)]
+            (recur (mapv #(+ %2 (* (- %1 %2) (/ reach gap))) at p) (remove #{p} left) (+ s (:cost (walk-cost {:distance (- gap reach)}))))))))))
+
 (defn tour-worth
   "Seconds of tour a goal `straight` blocks off is worth. The setting ::tour-worth, when set, is the worth. Else with the
   caller's `worth` of arrival (seconds, when above 0), that less the trip and the straight walk (0 at least). Else a trip, and tour-ratio
