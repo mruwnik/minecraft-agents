@@ -109,7 +109,7 @@
 
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 
-(def safe? (ready/unless-outmatched (price/staying :long (ready/safe-at-or work-place/dig-spot ready/safe-if-lit true))))
+(def safe? (ready/unless-outmatched (price/staying :long (ready/safe-at-or-roaming work-place/dig-spot true))))
 
 (def fit? ready/fit?)
 
