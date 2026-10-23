@@ -107,8 +107,8 @@
             (is (empty? (waiting-events seen)))))))))
 
 (def cw-lake
-  "cross-water-test's lake: water at y 63, x 4..6, z -3..3; the far bank x 7."
-  (into {} (for [x (range 4 7) z (range -3 4)] [(str x ",63," z) "water"])))
+  "cross-water-test's lake: water at y 63 over a stone bed, x 4..6, z -3..3; the far bank x 7."
+  (into {} (for [x (range 4 7) z (range -3 4) [y b] [[63 "water"] [62 "stone"]]] [(str x "," y "," z) b])))
 
 (deftest cross-water-looks-at-a-given-far-shore-it-has-never-seen
   (async done

@@ -13,8 +13,8 @@
             [jobs.movement.cross-water :as cw]))
 
 (def lake
-  "Water at y 63 at x 4..6, z -3..3 in the stone floor: the near bank is x 3, the far bank x 7 (a boat needs room round it: no bank block beside its cell)."
-  (into {} (for [x (range 4 7) z (range -3 4)] [(str x ",63," z) "water"])))
+  "Water at y 63 at x 4..6, z -3..3 in the stone floor, a stone bed under it (a drop lands only in water that holds the fall): the near bank is x 3, the far bank x 7 (a boat needs room round it: no bank block beside its cell)."
+  (into {} (for [x (range 4 7) z (range -3 4) [y b] [[63 "water"] [62 "stone"]]] [(str x "," y "," z) b])))
 
 (def boat-item {:name "oak_boat" :count 1})
 (def far {:x 7 :y 64 :z 0})
