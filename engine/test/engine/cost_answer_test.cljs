@@ -2,6 +2,7 @@
   "jobs.lib.cost.answer: one price for each answer to hostiles (fight, walk away, build a refuge) and the cheapest."
   (:require [cljs.test :refer [deftest is are]]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.answer :as answer]
             [jobs.lib.cost.death :as death]))
 
 (def here {:x 0 :y 64 :z 0})
@@ -84,6 +85,13 @@
     (is (= :pit (:answer (cost/decide (body 20) (assoc answers :pit (cost/cover-answer {:mobs [spider]} {:open-s 4 :seconds 40})) here)))
         "a pit dug in 4 s under the spider's blows beats a fist fight it hardly survives")
     (is (nil? (cost/cover-answer {:mobs [(mob "creeper" 4)]} {:open-s 4 :seconds 40})) "a blast takes the cover")))
+
+(deftest a-threats-cover-is-priced-as-respond-prices-it
+  (let [cover {:open-s 2 :seconds 50}
+        zombie (mob "zombie" 0 35)]
+    (is (= (cost/cover-answer {:mobs [zombie]} cover)
+           (:walls (answer/threat-answers {:food 20 :covers {:walls cover}} "zombie" nil)))
+        "one cover-answer over shut-in/covers' seconds, the hide-out's quiet in them, for death-chance and respond alike")))
 
 (deftest a-mob-that-came-back-before-makes-a-walk-dearer
   (let [walk #(cost/answer-price (body 20) (cost/flee-answer {:food 20 :mobs [(mob "skeleton" 10)] :returns %}) here)]

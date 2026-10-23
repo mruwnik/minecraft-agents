@@ -8,7 +8,7 @@
   :then at full health.
 
   death-chance: the one chance of dying every route, spot, wait or answer is priced by. A known threat on a route costs
-  the death of the answer the body would take to it (decide over fight, walk away and, with :wall, walling in).
+  the death of the answer the body would take to it (decide over fight, walk away and the covers it has).
 
   fight-answer: a fight with the kit (fight/fight-damage, fight-seconds). A lone creeper fought hit-and-back risks the
   blast of a late step back: its :hit is the blast at the creeper's swell start.
@@ -192,17 +192,16 @@
       (assoc a :then (conj (vec then) a)))))
 
 (defn threat-answers
-  "The answers {key answer-or-nil} body {:health :food :equipment :weapon :wall {:open-s :seconds}} has to mob-name met
-  beside it: the fight, the walk away (caught at chance caught, nil the prior) and, with :wall (the seconds walling in
-  leaves a side open, and takes with the quiet after it), walling in, none against a creeper (its blast takes the walls)."
-  [{:keys [food equipment weapon wall]} mob-name caught]
+  "The answers {key answer-or-nil} body {:health :food :equipment :weapon :covers} has to mob-name met beside it: the
+  fight, the walk away (caught at chance caught, nil the prior) and each of :covers {way {:open-s :seconds}}
+  (jobs.survival.shut-in/covers) by cover-answer, as respond prices them."
+  [{:keys [food equipment weapon covers]} mob-name caught]
   (let [m {:name mob-name :distance 0 :follow (threat/follow-range mob-name)}
-        fight (fight-answer {:weapon weapon :equipment equipment :mobs [m]})
-        cover (when (and wall (not= "creeper" mob-name))
-                (assoc (build-answer {:equipment equipment :mobs [m] :seconds (:open-s wall)}) :seconds (:seconds wall)))]
-    {:fight fight
-     :flee (flee-answer {:food food :equipment equipment :mobs [m] :caught caught :later fight})
-     :wall (some-> cover (assoc :then [cover]))}))
+        fight (fight-answer {:weapon weapon :equipment equipment :mobs [m]})]
+    (into {:fight fight
+           :flee (flee-answer {:food food :equipment equipment :mobs [m] :caught caught :later fight})}
+          (map (fn [[way cover]] [way (cover-answer {:equipment equipment :mobs [m]} cover)]))
+          covers)))
 
 (defn threat-chance
   "The chance mob-name met beside body kills it at `at`: the answer-death-chance of the answer decide takes of

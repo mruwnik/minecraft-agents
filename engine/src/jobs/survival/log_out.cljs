@@ -15,7 +15,7 @@
             [jobs.lib.shelter.sleepers :as sh-sleepers]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
-            [jobs.survival.wall-in :as wall-in]))
+            [jobs.survival.shut-in :as shut-in]))
 
 (def doc
   "Leave the server for a short stint, then come back: the night job's way to let another player's sleep skip the
@@ -82,11 +82,11 @@
   "Seconds the death coming back online to the spot the body leaves risks: route-death-cost of the spot held ::return-s
   at night with the known threats (threats/threats-of: sensed, heard counting as seen, fled from or met at a death): one
   whose field holds the spot counts in full, it has the whole stint to walk there, and costs the answer the body would
-  take to it there (walling in for the night when it carries blocks: wall-in/wall-of)."
+  take to it there (walling in for the night when it carries blocks: shut-in/covers)."
   [c]
   (let [p (:primitives c)
         at (u/pos-of (.-pos (.self p)))
-        body (assoc (threats/death-body c) :wall (wall-in/wall-of (assoc c :args {:for :night})))]
+        body (assoc (threats/death-body c) :covers (shut-in/covers (assoc c :args {:for :night}) [:walls]))]
     (cost/route-death-cost body {:night? true :cells [(assoc at :s (settings/get settings ::return-s))] :threats (mapv (fn [{:keys [reach] :as t}] (assoc t :reach #(when (reach %1 %2 %3) 1))) (threats/threats-of c))} at)))
 
 (defn back-unsafe

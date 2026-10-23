@@ -410,7 +410,7 @@
     (is (< (- (chance {:health 20 :weapon "diamond_sword"} (route 40) (zombie)) base) 0.01) "a body that would fight it takes only the fight")
     (is (< (- (chance fist (route 40) (zombie :caught 0)) base) 0.01) "a flight with an open way out hardly kills")
     (is (< 0.9 (chance fist (route 40) (zombie :caught 1))) "no way out, no blocks: the fist fight")
-    (is (< (- (chance (assoc fist :wall {:open-s 1 :seconds 5}) (route 40) (zombie :caught 1)) base) 0.01) "no way out, blocks carried: the body walls in")))
+    (is (< (- (chance (assoc fist :covers {:walls {:open-s 1 :seconds 5}}) (route 40) (zombie :caught 1)) base) 0.01) "no way out, blocks carried: the body walls in")))
 
 (deftest a-find-is-worth-its-count-less-a-trip-and-an-animal-its-meat
   (let [body {:level 0 :carried 0}]
