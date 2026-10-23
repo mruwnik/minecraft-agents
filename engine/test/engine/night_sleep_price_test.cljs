@@ -81,9 +81,10 @@
 
 (defn ^:async asleep-until-answers
   "Alone in an open bed in dark-bed-world-like world; at hold 3 (f p) changes the world. The asleep :night.answers events (those with :inputs) once the
-  body has held on to hold 6."
-  [world f]
+  body has held on to hold 6. `others` sleepers (of 4 needed) lie down before it starts."
+  [world f & [others]]
   (let [{:keys [eng p seen]} (st/setup world)]
+    (when others (sleep-count! p others 4))
     (st/know-bed! eng {:x 2 :y 64 :z 0})
     (st/dawn-after! p 40 (fn [n] (when (= n 3) (f p))))
     (core/submit! eng '(jobs.survival.night) {})
@@ -110,6 +111,17 @@
           (is (= 2 (count dark)) "the dark bed risks hp: a lower health costs more per hp")
           (is (= 1 (count lit)) "no spawn chance and no mob near: the hp price is in no price"))))))
 
+(deftest health-prices-the-night-again-while-a-log-out-is-open-in-a-lit-bed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [lit-world (assoc dark-bed-world :light-default [15 4])
+              hurt! #(fake/swap-self! % assoc :health 3 :food 2)
+              open (await (asleep-until-answers lit-world hurt! 2))
+              closed (await (asleep-until-answers lit-world hurt!))]
+          (is (= 2 (count (distinct (map :inputs open)))) "back online at 3 hp is dearer than at 20: the log-out quote reads it, priced again")
+          (is (= 1 (count closed)) "no log-out to price: health prices nothing in a lit bed"))))))
+
 (deftest the-log-out-answer-is-taken-when-it-is-the-cheapest
   (async done
     (tu/run-async done
@@ -131,16 +143,27 @@
             (is (number? (get-in left [:prices :log-out])))
             (is (= :log-out (:answer left)))))))))
 
-(defn wake-cell-with
-  "bed-down/wake-cell for a body asleep at the head cell 3,64,0 of a bed whose foot is 2,64,0, floor under only `floor` cells."
+(defn wake-cells-with
+  "bed-down/wake-cells for a body asleep at the head cell 3,64,0 of a bed whose foot is 2,64,0, floor under only `floor` cells."
   [floor]
   (let [{:keys [p]} (st/setup {:time night :floor [100 100 100 100] :self {:pos {:x 3.5 :y 64 :z 0.5}}
                                :blocks (into {"2,64,0" "red_bed" "3,64,0" "red_bed"} (map #(vector % "stone")) floor)})]
-    (select-keys (bed-down/wake-cell p) [:x :z])))
+    (mapv (juxt :x :z) (bed-down/wake-cells p))))
 
-(deftest the-body-gets-up-at-the-first-cell-round-the-bed-it-can-stand-in
-  (is (= {:x 3 :z 1} (wake-cell-with ["3,63,1" "2,63,1" "1,63,0"])) "beside the head first")
-  (is (= {:x 2 :z 1} (wake-cell-with ["2,63,1" "1,63,0"])) "no floor there: beside the foot")
-  (is (= {:x 1 :z 0} (wake-cell-with ["1,63,0" "3,63,-1"])) "behind the foot, the stand cell of a sealed row, before the other side")
-  (is (= {:x 3 :z -1} (wake-cell-with ["3,63,-1"])) "the other side last")
-  (is (= {:x 3 :z 0} (wake-cell-with [])) "nowhere to stand: on the bed"))
+(deftest the-body-may-get-up-at-any-cell-round-the-bed-it-can-stand-in
+  (is (= [[3 1] [2 1] [1 0]] (wake-cells-with ["3,63,1" "2,63,1" "1,63,0"])) "beside the head, beside the foot, behind it")
+  (is (= [[1 0] [3 -1]] (wake-cells-with ["1,63,0" "3,63,-1"])) "behind the foot, then the other side")
+  (is (= [[3 0]] (wake-cells-with [])) "nowhere to stand: on the bed"))
+
+(deftest the-shelter-is-priced-from-the-worst-cell-the-body-may-get-up-at
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (-> dark-bed-world (dissoc :light :light-default) (assoc-in [:blocks "1,64,0"] "red_bed"))
+              shelter (fn ^:async s [light]
+                        (let [ev (await (asleep-until-answers (cond-> world (seq light) (assoc :light light)) (fn [_])))]
+                          (get-in (first ev) [:prices :shelter])))
+              dark (await (shelter {}))
+              one-lit (await (shelter {[2 64 1] [15 4]}))]
+          (is (number? dark))
+          (is (= dark one-lit) "a lit cell to get up at changes nothing while another may be the one"))))))

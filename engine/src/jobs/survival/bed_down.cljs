@@ -71,10 +71,10 @@
   ([p cell]
    (if (or (sh-sense/buried-at? p cell) (pos? (or (sh-sense/block-light-at p cell) 0))) 0 (cost/spawn-chance [0 0 0]))))
 
-(defn wake-cell
-  "Where a body asleep in a bed stands when it gets up: the server puts it at the first of the cells round the bed it can
-  stand in (beside the head, beside the foot, then behind the foot, then the other side), else on the bed. Which side
-  comes first follows the body's yaw, which is not known: the facing's clockwise side is tried first."
+(defn wake-cells
+  "Where a body asleep in a bed may stand when it gets up: every cell round the bed it can stand in (beside the head,
+  beside the foot, behind the foot, the other side), else the bed. The server takes one by the sleeper's yaw, which is
+  not known: callers price the worst."
   [p]
   (let [head (sh-sense/feet p)
         bed? #(some-> (u/seen-name p %) (.endsWith "_bed"))
@@ -87,8 +87,8 @@
                 r [(- (second f)) (first f)]
                 add (fn [[ax az] [bx bz] k] [(+ ax (* k bx)) (+ az (* k bz))])
                 neg (fn [[x z]] [(- x) (- z)])]
-            (first (filter stand? (map at [r (add r f -1) (add r f -2) (add [0 0] f -2) (add (neg r) f -2) (add (neg r) f -1) (neg r)])))))
-        head)))
+            (not-empty (filterv stand? (map at [r (add r f -1) (add r f -2) (add [0 0] f -2) (add (neg r) f -2) (add (neg r) f -1) (neg r)])))))
+        [head])))
 
 (defn shut-in?
   "Whether a bed beside the body lies sheltered: the body is shut in a closed roofed room or buried."
@@ -165,7 +165,7 @@
   :bed lying in `bed` (nil: the carried bed put down here, or the bed the body is asleep in): the night left lost unless
   the body's sleep skips it (sh-sleepers/sleepers-short 0), open (not bed-sheltered?) all that time, plus walk-s (the walk
   there, priced by the caller). :sealed (a carried bed in the open, seal-plan): the bed's row shut in first, its seconds
-  exposed, then lain in. :shelter sheltering here, from where the bed is got up to (wake-cell) when asleep (sh/shelter-here-s exposed; a body sh/in-ground? works on after, else
+  exposed, then lain in. :shelter sheltering here, from the worst of the cells the bed is got up to (wake-cells) when asleep (sh/shelter-here-s exposed; a body sh/in-ground? works on after, else
   the night left is lost). :log-out (log-out?): jobs.survival.log-out's quoted seconds, the night left to the sleepers."
   [c {:keys [bed walk-s log-out?]}]
   (let [p (:primitives c)
@@ -175,8 +175,7 @@
         carried? (and (nil? bed) (not asleep?) (place-wanted? c))
         at (or bed feet)
         chance (stay-chance p)
-        stand (if asleep? (wake-cell p) feet)
-        stand-chance (stay-chance p stand)
+        stands (if asleep? (wake-cells p) [feet])
         [_ left] (get-in (sh-clock/night-left-quote c) [:uses :job-time])
         lost (if (zero? (sh-sleepers/sleepers-short p view)) 0 left)
         sheltered? (if (or bed asleep?) (bed-sheltered? p at) (or (shut-in? p) (some? (closed-home c))))
@@ -184,7 +183,7 @@
         sealed (when (and carried? (not sheltered?)) (seal-plan c))
         shelter-s (min left (sh/shelter-here-s))
         out-s (when log-out? (get-in (await (ctx/quote c 'jobs.survival.log-out {})) [:uses :job-time 1]))]
-    (cond-> {:shelter (+ (if (sh/in-ground? p view) shelter-s left) (exposed-price c stand-chance shelter-s stand))}
+    (cond-> {:shelter (+ (if (sh/in-ground? p view) shelter-s left) (apply max (map #(exposed-price c (stay-chance p %) shelter-s %) stands)))}
       (or bed asleep? carried?) (assoc :bed (+ (or walk-s 0) lost (if sheltered? 0 (exposed-price c chance lost at)) (if asleep? 0 (- (cost/spawn-worth body at)))))
       sealed (assoc :sealed (+ lost (:seconds sealed) (exposed-price c chance (:seconds sealed) feet) (- (cost/spawn-worth body (:foot (:layout sealed))))))
       (number? out-s) (assoc :log-out out-s))))
