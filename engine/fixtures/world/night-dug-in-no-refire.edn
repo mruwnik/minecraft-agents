@@ -1,0 +1,16 @@
+;; The night trigger does not re-fire for a body shut in its own shelter (the job ends :dug-in at once): a sealed cell with a :shelter entry, a remembered bed far off, night. Needs night: --allow-time --time-log <the shared time log>.
+{:defaults
+ {:tags [:night :survival :dig-in]
+  :time :night :time-why :night-light
+  :plot {:height 12}
+  :register [{:trigger :night}]
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}}
+ :cases
+ [{:name "sealed-in-own-shelter-is-not-called-again"
+   :blocks [[:fill [14 -1 14] [18 4 18] "stone"] [:fill [16 0 16] [16 1 16] "air"]]
+   :memory [{:kind :shelter :data {:pos #xyz [16 0 16] :state :built} :policy {:cap 10 :ttl 1200000}}
+            {:kind :bed :data {:pos #xyz [400 0 16]} :policy {:cap 1 :ttl :forever}}]
+   :act [[:job (jobs.time.noop {:seconds 40 :why :idle})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.time.noop"}} :within-s 60 :of-job true}
+            {:no-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 40 :until {:source :job :kind :completed :data {:name "jobs.time.noop"}}}]
+   :limit-s 70}]}

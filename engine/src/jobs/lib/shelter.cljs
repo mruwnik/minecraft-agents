@@ -122,17 +122,19 @@
 
 (defn bed-holds?
   "The bed terms of night-holds?: night by the clock, awake, the :bed way, and a bed to use, a look round for one, a
-  carried bed to put down, or someone else asleep."
+  carried bed to put down, or someone else asleep. Not a bed to use or put down while shut in the body's own shelter: the
+  night job ends :dug-in there before it walks to or sets down a bed."
   [p view args permit?]
-  (let [buried (buried-outside-hut? p)]
+  (let [buried (buried-outside-hut? p)
+        own (sh-inside/in-own-shelter p (:data (mem/latest view :shelter)))]
     (boolean
      (and (sh-sense/night? p)
           (not (sh-sense/sleeping? p))
           (or (nil? (:ways args)) (contains? (:ways args) :bed))
-          (or (some? (sh-beds/bed-to-use p view (sh-beds/bed-radius view) permit?))
+          (or (and (not own) (some? (sh-beds/bed-to-use p view (sh-beds/bed-radius view) permit?)))
               (unlooked-for-bed? p view)
-              (and (not buried) (sh-beds/bed-place-wanted? p view (sh-beds/bed-radius view) permit?))
-              (and (or (not buried) (sh-inside/in-own-shelter p (:data (mem/latest view :shelter)))) (sh-sleepers/log-out-for-sleepers? p view)))))))
+              (and (not buried) (not own) (sh-beds/bed-place-wanted? p view (sh-beds/bed-radius view) permit?))
+              (and (or (not buried) own) (sh-sleepers/log-out-for-sleepers? p view)))))))
 
 (defn night-holds?
   "Whether the night trigger holds (see triggers.survival.night). permit? decides whether a bed may be used (bed-permit).
@@ -141,12 +143,14 @@
   mines on); with :buried-works in args (the trigger) it is not unsafe from the night either: no sky light reaches it,
   so waiting changes nothing, and cave dangers are the hostile reflexes'. The night job asked for by hand still shelters
   or lights it. The bed terms hold by the clock (a bed takes a sleeper from dusk); the shelter terms only while the sky
-  is dark (sh-sense/dark-outside?), as the night job's own end is. By day never (leave-wanted?)."
+  is dark (sh-sense/dark-outside?), as the night job's own end is, and not in the body's own shut-in shelter (the job ends
+  :dug-in there at once, so holding would re-fire it for ever). By day never (leave-wanted?)."
   [p view args permit?]
   (boolean
    (and (not (sh-sense/sleeping? p))
         (or (bed-holds? p view args permit?)
             (and (sh-sense/dark-outside? p)
+                 (not (sh-inside/in-own-shelter p (:data (mem/latest view :shelter))))
                  (or (and (not (and (buried-outside-hut? p) (:buried-works args))) (not (sh-inside/safe-from-night? p)))
                      (breached-home? p view)
                      (seq (open-doors p view))))))))

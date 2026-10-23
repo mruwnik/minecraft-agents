@@ -423,3 +423,16 @@
         room-at (fn [hidden] (reach-room/room* (seeing p (apply disj all hidden)) {:x 12 :y 64 :z 11}))]
     (is (some? (room-at #{[12 65 9]})) "an unseen cell over a seen wall block with a seen wall over it is no step up")
     (is (nil? (room-at #{[12 65 9] [12 66 9]})) "with the cell two over unseen too, the step up cannot be ruled out")))
+
+(def roof-over-open-sides
+  "A body under one roof block on open ground at night: shut in by its :shelter entry's roof test, not safe from the night."
+  {:time st/night :blocks (assoc st/ground "0,66,0" "stone") :self {:pos {:x 0 :y 64 :z 0}} :sees-all true})
+
+(deftest a-body-shut-in-its-own-shelter-is-not-called-again-by-the-night
+  (let [{:keys [eng p]} (setup roof-over-open-sides)
+        view #(mem/view (:store eng))]
+    (st/looked-round! eng p)
+    (is (true? (sh/night-holds? p (view) {:ways #{:shelter :flee}} (constantly true))) "no shelter entry: unsafe, holds")
+    (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :state :built} sh/shelter-policy)
+    (is (false? (sh/night-holds? p (view) {:ways #{:shelter :flee}} (constantly true))) "dug in: the night job would end :dug-in at once")
+    (is (false? (sh/night-holds? p (view) {} (constantly true))) "nor for the known far bed, which it would not walk to")))
