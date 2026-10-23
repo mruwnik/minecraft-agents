@@ -97,20 +97,22 @@
 
 (defn iron-way
   "search-way of 3 unseen raw iron (worth the call's :search-worth, given) for a body on a floor of block at y (every block
-  in sight seen), torches carried, and the price of the plan that gathers them."
-  [block y & {:keys [worth]}]
+  in sight seen), carrying a stone pickaxe and inventory (16 torches by default), and the price of the plan that gathers them."
+  [block y & {:keys [worth inventory ways] :or {inventory [{:name "torch" :count 16}] ways #{:craft :smelt :gather :search}}}]
   (let [p (tu/seeing-all (tu/fake-on-floor {:floor [y -50 -45 50 45] :floor-block block :time 6000
                                             :self {:pos [0.5 (inc y) 0.5]}
-                                            :inventory [{:name "stone_pickaxe" :count 1} {:name "torch" :count 16}]}))
+                                            :inventory (into [{:name "stone_pickaxe" :count 1}] inventory)}))
         view (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)}))
         c {:primitives p :view (constantly view)
-           :args (cond-> {:item "raw_iron" :count 3 :ways #{:craft :smelt :gather :search} :explore true :ignore-zones? true}
+           :args (cond-> {:item "raw_iron" :count 3 :ways ways :explore true :ignore-zones? true}
                    worth (assoc :search-worth worth))}
         v (game/version-of p)
         need (first (table/gather-needs {"raw_iron" 3} v))]
     (assoc (plan/search-way c need)
            :tunnel (:cost (plan/tunnel-way c need))
            :plan (plan/plan-cost c v {:steps [] :gather {"raw_iron" 3}}))))
+
+(def kit-worth (cost/items-find-worth (zipmap makers/iron-kit (repeat 1))))
 
 (deftest unseen-iron-is-tunnelled-for-at-its-level-unless-a-cave-of-rock-in-sight-is-cheaper-to-look-over
   (let [grass (iron-way "grass_block" 69)
@@ -119,6 +121,15 @@
     (is (< (:plan grass) js/Infinity) "the get-kit plan for iron has a price")
     (is (= :look (:way cave)) "a cave floor of stone seen at y 40 shows iron more cheaply than a stair and a tunnel")
     (is (< (:cost cave) (:tunnel cave) js/Infinity))
-    (is (< (:tunnel (iron-way "dirt" -42 :worth (cost/items-find-worth (zipmap makers/iron-kit (repeat 1)))))
-           js/Infinity)
-        "deep below iron's level, where only its small placement reaches, the iron kit's bill (get-kit's search worth) still pays a tunnel at the feet")))
+    (is (< (:tunnel (iron-way "dirt" -42 :worth kit-worth)) js/Infinity)
+        "deep below iron's level, where only its small placement reaches, the iron kit's bill (get-kit's search worth) still pays a tunnel at the feet")
+    (is (= :look (:way (iron-way "stone" -41 :worth kit-worth)))
+        "a hall floored with stone at y -41 (obtain-iron-look) is looked over at the kit's worth, not tunnelled")))
+
+(deftest a-tunnel-without-torches-pays-for-getting-them-and-none-to-be-got-is-no-tunnel
+  (let [stocked (:tunnel (iron-way "stone" 39))
+        coal (:tunnel (iron-way "stone" 39 :inventory [{:name "coal" :count 4} {:name "stick" :count 4}]))
+        planks (:tunnel (iron-way "stone" 39 :inventory [{:name "oak_planks" :count 4}]))
+        no-source (:tunnel (iron-way "stone" 39 :inventory [{:name "oak_planks" :count 4}] :ways #{:search}))]
+    (is (< stocked coal planks js/Infinity) "the torches carried; crafted from coal and sticks carried; their coal searched for")
+    (is (infinite? no-source) "no way to get torches: the tunnel's dark stair and legs are not dug")))

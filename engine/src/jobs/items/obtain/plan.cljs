@@ -4,7 +4,9 @@
             [engine.game :as game]
             [engine.notes :as notes]
             [jobs.lib.crafting-table :as crafting-table]
-            [jobs.items.obtain.base :refer [craft-radius explore-opts plan-allowed? search-names search-scan-radius search-worth seen-radius way?]]
+            [jobs.items.obtain.base :refer [craft-radius craft-step-s explore-opts gathers? makes? plan-allowed? search-names search-scan-radius search-worth seen-radius smelt-item-s way?]]
+            [jobs.items.obtain.chest :refer [candidates]]
+            [jobs.items.obtain.loose :as loose-way]
             [jobs.items.obtain.seen :refer [seen-of sheep-in-range shears-source]]
             [jobs.items.obtain.table :refer [gather-needs grass-seeds hand-dug leaves-of material-blocks need-way searchable? source-opts stalks wool-color wool?]]
             [jobs.items.recipes :as recipes]
@@ -16,6 +18,7 @@
             [jobs.lib.storage :as storage]
             [jobs.lib.threats :as threats]
             [jobs.lib.torch :as torch]
+            [jobs.lib.trip :as trip]
             [jobs.lib.trees :as trees]
             [jobs.lib.util :as u]))
 
@@ -109,12 +112,66 @@
   [p]
   {:underground? (sh-sense/buried? p) :night? (sh-sense/dark-outside? p)})
 
+(defn steps-s
+  "Seconds the craft and smelt steps of a plan take."
+  [pl]
+  (let [{smelts true crafts false} (group-by #(= :smelt (:op %)) (:steps pl))]
+    (+ (* (craft-step-s) (count crafts)) (* (smelt-item-s) (reduce + 0 (map :count smelts))))))
+
+(defn death-s
+  "The death a walk to `at` risks past the known threats (jobs.lib.threats/route-death-cost), of the class route-class says."
+  [c at]
+  (threats/route-death-cost c (route-class (:primitives c)) at))
+
+(defn walk-s
+  "A trip, the walk to `at` and back, and the death it risks."
+  [c at]
+  (+ (cost/trip) (:cost (cost/walk-cost {:distance (* 2 (u/dist (u/self-pos c) at))})) (death-s c at)))
+
+(defn chest-s
+  "The walk to the nearest chest the chest way would try: one booked as holding a name, or a seen one not looked into yet."
+  [c names]
+  (when (way? c :chest)
+    (some->> (candidates c names) first :pos (walk-s c))))
+
+(defn loose-s [c names]
+  (when (way? c :loose)
+    (some->> (loose-way/seen c names) first .-position u/pos-of (walk-s c))))
+
+(defn craft-s [c names n]
+  (when (makes? c)
+    (some-> (craft-plan c names n) steps-s)))
+
+(declare gather-plan gathered-s)
+
+(defn torch-get-s
+  "Seconds getting k torches costs the body: none when carried, else the cheapest of a chest to try, a loose one, a craft
+  from what is carried and a gather of their raw needs (plan-cost and the crafts; none while torches are priced for that
+  gather: a dark way to its coal would need the torches it is for); Infinity when none would."
+  [c k]
+  (let [n (- k (storage/carried (u/inventory (:primitives c)) "torch"))
+        names ["torch"]
+        inner (assoc c ::torches true)
+        gather (when (and (gathers? c) (not (::torches c)))
+                 (some->> (gather-plan inner names n) (gathered-s inner)))]
+    (if (pos? n)
+      (apply min js/Infinity (keep identity [(chest-s c names) (loose-s c names) (craft-s c names n) gather]))
+      0)))
+
+(defn stock-s
+  "Seconds the torches a lit dig gets before it sets out cost (jobs.lib.torch-stock: with fewer than trip/torch-low
+  carried, up to trip/torch-stock): torch-get-s of them; none with some carried and none to be got (the dig goes on
+  with them)."
+  [c]
+  (let [held (storage/carried (u/inventory (:primitives c)) "torch")
+        s (if (< held (trip/torch-low)) (torch-get-s c (trip/torch-stock)) 0)]
+    (if (and (infinite? s) (pos? held)) 0 s)))
+
 (defn need-cost
   "Seconds to gather a need whose nearest block is seen: the walk there with the death it risks (threats/route-death-cost),
   the digs, a hostile mob's kills (cost/kill-price, as many as cost/kill-drops says the count takes; Infinity when its
-  loot holds none), and for an ore seen
-  below the feet a dark way (cost/dark-way-s) unless its cell is lit; Infinity when it
-  is dark and no torch is carried: the way down is lit by the torches it is wanted for."
+  loot holds none), and for an ore seen below the feet whose cell is unlit, go-to's walk there dark (cost/dark-way-s of
+  the body's kit); Infinity when it is dark and no torch is carried."
   [c need]
   (let [p (:primitives c)
         src (seen-of c need)
@@ -129,12 +186,11 @@
                   (* (js/Math.ceil (/ (:count need) drops)) (cost/kill-price (threats/death-body c) mob self))
                   js/Infinity))
         dig (+ (or kills 0) (* (:count need) (or (cost/dig-cost name) 0)))
-        torches (storage/carried (u/inventory p) "torch")
         dark? (and (:ore? need) (below? c need) (unlit? p pos))]
     (cond
       (not dark?) (+ walk risk dig)
-      (not (pos? torches)) js/Infinity
-      :else (+ dig risk (cost/dark-way-s walk d torches (threats/body-of p))))))
+      (not (pos? (storage/carried (u/inventory p) "torch"))) js/Infinity
+      :else (+ dig risk (cost/dark-way-s walk d (threats/body-of p))))))
 
 (defn look-cost
   "Seconds per find of a search for an unseen need (cost/search-s): legs of the search's spacing, each the walk and the
@@ -153,11 +209,11 @@
          (:cost (cost/walk-cost {:distance r}))))))
 
 (defn tunnel-way
-  "{:way :tunnel :cost :y} of a tunnelled ore need as jobs.gather.mine gets it unseen: a stair down from the feet to
-  its cost/ore-level (where the body stands when that is higher or none is set), then a strip tunnel there, legs of the cost/torch-gap
-  one torch lights finding by cost/tunnel-chance within the call's search-worth (cost/search-s). Stair and legs are dark ways
-  (cost/dark-way-s over stair-time's seconds a step), each risking a death under rock. :cost Infinity for a need not
-  tunnelled for or not an ore."
+  "{:way :tunnel :cost :y} of a tunnelled ore need as jobs.gather.mine gets it unseen: the torches it stocks first
+  (stock-s), a stair down from the feet to its cost/ore-level (where the body stands when that is higher or none is set),
+  then a strip tunnel there, legs of the cost/torch-gap one torch lights finding by cost/tunnel-chance within the call's
+  search-worth (cost/search-s). Stair and legs are lit as they go (cost/lit-way-s over stair-time's seconds a step), each
+  risking a death under rock. :cost Infinity for a need not tunnelled for or not an ore."
   [c need]
   (let [block (:block (:args need))
         ore (cost/ore-of [block])
@@ -168,15 +224,12 @@
             feet (js/Math.floor (:y self))
             y (min feet (or level feet))
             at (assoc self :y y)
-            p (:primitives c)
-            torches (storage/carried (u/inventory p) "torch")
-            kit (threats/body-of p)
             risk (threats/route-death-cost c {:underground? true :night? false} at)
             n cost/torch-gap
-            leg (+ risk (cost/dark-way-s (stair-time/steps-s :level n) n torches kit))
-            down (+ risk (cost/dark-way-s (stair-time/steps-s :down (- feet y)) (- feet y) torches kit))]
+            leg (+ risk (cost/lit-way-s (stair-time/steps-s :level n) n))
+            down (+ risk (cost/lit-way-s (stair-time/steps-s :down (- feet y)) (- feet y)))]
         {:way :tunnel :y y
-         :cost (+ down (cost/search-s (cost/tunnel-chance ore y n) leg (search-worth c)))}))))
+         :cost (+ (stock-s c) down (cost/search-s (cost/tunnel-chance ore y n) leg (search-worth c)))}))))
 
 (defn search-way
   "How an unseen need is best looked for: {:way :look :cost} (look-cost), or for a tunnelled one its tunnel-way when that
@@ -193,6 +246,12 @@
   [c version pl]
   (+ (reduce + 0 (map #(if (seen-of c %) (need-cost c %) (search-cost c %)) (some-> pl :gather (gather-needs version))))
      (* cost/smelt-step (count (filter #(= :smelt (:op %)) (:steps pl))))))
+
+(defn gathered-s
+  "Seconds a gather plan takes: its plan-cost (the death each walk risks with it) and its craft steps."
+  [c pl]
+  (+ (plan-cost c (game/version-of (:primitives c)) pl)
+     (* (craft-step-s) (count (remove #(= :smelt (:op %)) (:steps pl))))))
 
 (defn preferred
   "The gather plan pl, or when it gathers a need with no source seen, or mines an ore seen below the feet, and the same

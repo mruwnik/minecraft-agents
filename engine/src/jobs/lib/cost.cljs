@@ -16,7 +16,7 @@
     food     food-reserve: the food a body keeps carried, 3 days of it; cook-worth?, cook-gain: whether cooking raw food beats eating it now; meat-factor, meat-animal: raw meat's replacement cost, dear for hunted, 1 with a working pen (jobs.lib.cost.food).
     value    item-value, reserve-cost (using a reserved unit: value x s/(1-s)), fetch-cost, walk-cost, walk-beats-making (walk to what exists vs make one and place it), detour-cost: what items are worth, what fetching them, walking or a pick-up detour costs; tour-cost, tour-worth, food-worth: a tour of
              frontiers against what its goal is worth; cover-tour-s: the walk that brings a set of points within reach; light-cost: a torch go-to places; light-wait-worth: what n torches fetched save over a wait for light; dig-cost: the seconds a block takes to dig, kill-drops: the items a kill drops (jobs.lib.cost.value);
-             per-dark, dark-factor: the one price of a dark block, which go-to's planner costs; dark-way-s, torch-gap: a dark way, lit as it goes or walked dark; spawn-chance: the chance a mob spawns at a cell or
+             per-dark, dark-factor: the one price of a dark block, which go-to's planner costs; lit-way-s, torch-gap: a way lit as it goes; dark-way-s: one walked or dug dark; spawn-chance: the chance a mob spawns at a cell or
              over an area (a set or {:min :max} box of cells) per second, from the light the body knows (unseen counts as dark), spawn-share its share of cells that spawn; exposure: the chance a walk meets and
              what lowers it ({:chance :lowered-by #{:light}}).
     planner  planner-costs-problem, planner-costs, planner-names: go-to's :costs, the per-move prices it may override; landing-problem, planner-landing: go-to's :landing, fall damage by landing block; air-profile, water-breathing-s, air-used, air-costs: the planner's air drain and grace from the body's helmet, the air a dive has used; air-left-s, wet-move-s, wet-way-s, wet-spare-s, wet-ok?: the air a walk over unseen water keeps back at its last breath, each move at its measured pace; swim-profile: its swimH from Depth Strider on the boots; gait-problem, gait-costs: go-to's :gait; unknown-prices: the planner's peek and aim prices of unseen cells (jobs.lib.cost.planner); way-on-chance, unseen-share: the one price of walking over unseen cells, a dead end and a mob in the dark at the worse case, from how often the seen ways near the body go on (the planner's :cell); unseen-route-s, unseen-route-hp: that price of a route's unseen steps, in seconds or hp; dead-end-cost: the chasers met on the way back from an unseen dead end; flight-caught-chance: the chance a flight is caught, from its search's ways.
@@ -331,12 +331,17 @@
 
 (def torch-gap "Blocks of a dark way one torch lights: its light's spread (jobs.lib.torch-plan) to each side." (inc (* 2 torch-plan/spread)))
 
+(defn lit-way-s
+  "Seconds a way of s seconds over n blocks costs lit as it goes (the mine's stair and tunnel): s and a torch every
+  torch-gap blocks, each its worth and placing (light-cost of one carried)."
+  [s n]
+  (+ s (* (js/Math.ceil (/ n torch-gap)) (:cost (light-cost {:carried 1})))))
+
 (defn dark-way-s
-  "Seconds a dark way of s seconds over n blocks costs: s and the cheaper of lighting it as it goes, a torch (light-cost,
-  carried of them carried) every torch-gap blocks, and walking it dark, its n blocks' walk at dark-factor of kit."
-  [s n carried kit]
-  (+ s (min (* (js/Math.ceil (/ n torch-gap)) (:cost (light-cost {:carried carried})))
-            (* (dark-factor kit) (:cost (walk-cost {:distance n}))))))
+  "Seconds a way of s seconds over n blocks costs walked or dug dark: s, its n blocks' walk at the planner's dark price
+  (dark-factor), and the hurt a spawn costs the body of kit over its s seconds (the kit's share of dark-factor, a rate)."
+  [s n kit]
+  (+ s (* (dark-factor) (:cost (walk-cost {:distance n}))) (* (- (dark-factor kit) (dark-factor)) s)))
 
 (defn death-body
   "The body of p as the death costs read it: :level, :respawn (the live spawn bed, sh-spawn/spawn-bed-pos) and :carried
