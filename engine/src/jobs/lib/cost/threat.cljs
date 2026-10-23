@@ -15,7 +15,17 @@
    ::difficulty {:default 1 :doc "The server difficulty mob hits are costed at: 0 peaceful, 1 easy, 2 normal, 3 hard (not read from the server)." :spec (a/int-in 0 3)}
    ::hit-rate {:default 0.6 :doc "Hits a zombie or skeleton lands per second of exposure (measured over trial fights; the body is out of reach part of the time). Mobs not measured count one a second." :spec (a/num-in 0 nil)}
    ::spider-hit-rate {:default 0.35 :doc "Hits a spider or cave spider lands per second of exposure." :spec (a/num-in 0 nil)}
-   ::provoked-share {:default 0.1 :doc "What a provoked-only mob's threat counts for when it is met, not fought." :spec (a/num-in 0 nil)}})
+   ::provoked-share {:default 0.1 :doc "What a provoked-only mob's threat counts for when it is met, not fought." :spec (a/num-in 0 nil)}
+   ::default-follow-range {:default 16 :doc "Blocks a mob of unknown kind notices the body from." :spec (a/int-in 1 nil)}})
+
+(def follow-ranges
+  "Blocks a mob keeps chasing its target out to (vanilla follow_range attribute; its navigation goes no farther)."
+  {"zombie" 35 "husk" 35 "drowned" 35 "zombie_villager" 35 "zombified_piglin" 35
+   "enderman" 64 "pillager" 32 "vindicator" 12 "evoker" 12 "blaze" 48 "ghast" 100})
+
+(defn follow-range [mob-name] (get follow-ranges mob-name (settings/get settings ::default-follow-range)))
+
+(def max-follow-range (apply max (vals follow-ranges)))
 
 (def mob-hit
   "Damage one hit of a mob deals at normal difficulty. Unknown mobs count as 3."

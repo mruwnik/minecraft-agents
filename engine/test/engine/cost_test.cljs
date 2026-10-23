@@ -398,3 +398,27 @@
     (is (pos? night))
     (is (> night (cost/route-death-cost body {:night? false} far)) "night is the likelier death")))
 
+(deftest a-known-threat-adds-the-chance-it-kills-over-the-seconds-the-route-is-within-its-reach
+  (let [fist {:health 20}
+        route (fn [n] {:cells (for [x (range n)] {:x x :y 64 :z 0})})
+        near-x (fn [x0] (fn [x _ _] (when (<= x0 x) 1)))
+        chance (fn [body route & threats] (cost/death-chance body (assoc route :threats threats)))
+        base (cost/death-chance fist {})]
+    (is (= base (chance fist (route 10))) "no threat: the chance of the route's class")
+    (is (= base (chance fist (route 10) {:mob "zombie" :weight 1 :reach (constantly nil)})) "a threat whose reach the route misses adds nothing")
+    (is (> (chance fist (route 40) {:mob "zombie" :weight 1 :reach (near-x 0)})
+           (chance fist (route 40) {:mob "zombie" :weight 1 :reach (near-x 30)})
+           base)
+        "longer within its reach, likelier death")
+    (is (> (chance fist (route 40) {:mob "zombie" :weight 1 :reach (near-x 0)})
+           (chance fist (route 40) {:mob "zombie" :weight 0.2 :reach (near-x 0)}))
+        "a fading memory weighs less")
+    (is (> (chance {:health 6} (route 40) {:mob "zombie" :weight 1 :reach (near-x 0)})
+           (chance fist (route 40) {:mob "zombie" :weight 1 :reach (near-x 0)}))
+        "the same walk past it is likelier death at low health")
+    (is (> (chance fist (route 40) {:mob "zombie" :weight 1 :reach (near-x 0)})
+           (chance {:health 20 :weapon "diamond_sword"} (route 40) {:mob "zombie" :weight 1 :reach (near-x 0)}))
+        "a body that would fight it takes only the fight")
+    (is (> (chance fist {:cells [{:x 0 :y 64 :z 0 :s 30}]} {:mob "zombie" :weight 1 :reach (near-x 0)})
+           (chance fist {:cells [{:x 0 :y 64 :z 0 :s 3}]} {:mob "zombie" :weight 1 :reach (near-x 0)}))
+        "a spot held longer within its reach")))

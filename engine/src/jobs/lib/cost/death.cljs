@@ -1,11 +1,10 @@
 (ns jobs.lib.cost.death
   "Death as an ordinary cost, in seconds like every other: the time to get the carried items back plus what the lost
-  experience is worth. A route pays chance-of-dying x death-cost. All are stubs to expand; each takes the body, which
-  today only experience-cost and death-cost read. Pure.
+  experience is worth. A route pays chance-of-dying x death-cost: death-chance, the one chance of dying every route,
+  spot or wait is priced by, reads the known threats by their reach (jobs.lib.threat-field). Pure.
 
-  body: {:level experience levels, :respawn {:x :y :z} where it would wake}.
-
-  body: also :carried, the seconds the carried items are worth (item-value).
+  body: {:level experience levels, :respawn {:x :y :z} where it would wake, :carried the seconds the carried items are
+  worth (item-value), :health :equipment :weapon (death-chance)}.
 
   A remembered death fades: death-weight. One by terrain (a fall, water, lava, a wall) costs go-to's plans near its spot
   as terrain-danger.
@@ -14,6 +13,9 @@
   each would cost more from the respawn the body has."
   (:require [engine.args :as a]
             [engine.settings :as settings]
+            [jobs.lib.cost.armour :as armour]
+            [jobs.lib.cost.fight :as fight]
+            [jobs.lib.cost.threat :as threat]
             [jobs.lib.cost.value :as value]))
 
 (a/defargs settings
@@ -25,6 +27,10 @@
                            :doc "Chance of dying on a route over the surface at night."}
    ::chance-underground {:default 0.002 :spec (a/num-in 0 1)
                          :doc "Chance of dying on a route underground."}
+   ::step-s {:default 0.25 :spec (a/num-in 0 nil)
+             :doc "Seconds a route spends in one of its cells when the cell does not say (:s): a walking step."}
+   ::fuse-s {:default 1.5 :spec (a/num-in 0.01 nil)
+             :doc "Seconds a creeper swells before it blows (vanilla 30 ticks): a shorter exposure is a share of its blast."}
    ::deaths-per-hour {:default 1.3 :spec (a/num-in 0 nil)
                       :doc "Deaths an hour of play, every cause: the fresh-start trials of 2026-10-21/22 (Wicken r5, 8 deaths in 6h15; docs/fresh-start-design.md section 1)."}
    ::spawn-walk-blocks {:default 5000 :spec (a/num-in 0 nil)
@@ -78,12 +84,53 @@
         below (reduce + (take k (reductions (fn [p i] (/ (* p lam) i)) (js/Math.exp (- lam)) (iterate inc 1))))]
     (max 0 (- 1 below))))
 
+(defn exposure-s
+  "Seconds the route cells [{:x :y :z :s}] (:s the seconds spent there, default ::step-s) lie within a threat's reach
+  (a fn of a cell x y z, its weight 0-1, nil outside), each cell's seconds times its weight."
+  [reach cells]
+  (let [step (settings/get settings ::step-s)]
+    (reduce + 0 (keep (fn [{:keys [x y z s]}]
+                        (when-let [w (reach (js/Math.floor x) (js/Math.floor y) (js/Math.floor z))] (* w (or s step))))
+                      cells))))
+
+(defn threat-hurt
+  "hp mob-name is expected to take off body {:health :equipment :weapon} over seconds within its reach: what the fight
+  costs when the fight leaves fight/default-reserve (never a creeper; a fight ends the exposure), else its hits over the seconds after
+  armour (a creeper its blast, a share of it for less than ::fuse-s). A provoked-only mob counts threat/provoked-share."
+  [{:keys [health equipment weapon]} mob-name seconds]
+  (let [health (if (number? health) health 20)
+        share (if (contains? threat/provoked-only mob-name) (threat/provoked-share) 1)
+        stats (armour/armour-stats equipment)
+        exposed (if (= "creeper" mob-name)
+                  (* (min 1 (/ seconds (settings/get settings ::fuse-s))) (threat/mob-hurt stats mob-name seconds))
+                  (threat/mob-hurt stats mob-name seconds))
+        fight (fight/fight-damage {:weapon weapon :equipment equipment :mobs [{:name mob-name :distance 0}]})
+        fights? (and (not= "creeper" mob-name) (fight/leaves-reserve? {:health health :reserve fight/default-reserve :damage fight}))]
+    (* share (if fights? (min fight exposed) exposed))))
+
+(defn kill-chance
+  "The chance that hurt (expected hp) kills a body with health: the damage taken as spread exponentially about hurt,
+  the chance it reaches the health."
+  [hurt health]
+  (if (pos? hurt) (js/Math.exp (- (/ (if (number? health) health 20) hurt))) 0))
+
 (defn death-chance
-  "The chance of dying on a route {:underground? :night?}, or by the blows {:damage :hit} an answer to mobs takes (blow-chance of body)."
-  [body {:keys [underground? night? damage hit]}]
+  "The chance of dying on route {:underground? :night? :cells :threats}: the chance by its class (underground, surface at
+  night or by day: the mobs not yet known) and, for each known threat {:mob :weight :reach} (weight 0-1, reach a fn of a
+  cell x y z, its weight 0-1, nil outside: jobs.lib.threat-field), the kill-chance of its threat-hurt over the
+  exposure-s of the route :cells, times its weight. body {:health :equipment :weapon}. An answer to mobs that takes
+  the blows {:damage :hit}: their blow-chance."
+  [body {:keys [underground? night? cells threats damage hit]}]
   (if damage
     (blow-chance body damage hit)
-    (settings/get settings (cond underground? ::chance-underground night? ::chance-surface-night :else ::chance-surface-day))))
+    (let [base (settings/get settings (cond underground? ::chance-underground night? ::chance-surface-night :else ::chance-surface-day))
+          survive (reduce (fn [s {:keys [mob weight reach]}]
+                            (let [secs (exposure-s reach cells)]
+                              (if (pos? secs)
+                                (* s (- 1 (* (or weight 1) (kill-chance (threat-hurt body mob secs) (:health body)))))
+                                s)))
+                          1 (when (seq cells) threats))]
+      (+ base (* (- 1 base) (- 1 survive))))))
 
 (defn route-death-cost
   "What a route adds to its cost for the death it risks: death-chance x death-cost at `at` (where it would die)."

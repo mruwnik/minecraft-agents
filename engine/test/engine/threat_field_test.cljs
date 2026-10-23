@@ -1,0 +1,36 @@
+(ns engine.threat-field-test
+  "jobs.lib.threat-field: a known mob's field is the cells its way and line of fire reach, not a sphere round it; jobs.lib.cost/death-chance prices a route by it."
+  (:require [cljs.test :refer [deftest is]]
+            [engine.test-util :as tu]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.threat-field :as field]))
+
+(defn reach-of [spec mob pos] (field/reach-fn (field/field (tu/seeing-all (tu/fake-on-floor spec)) {:mob mob :pos pos})))
+
+(def pen
+  "A stone ring 3 high (y 64..66) round x -3..3, z -3..3: the floor beyond the floor rectangle is unseen, a way for a mob."
+  (into {} (for [x (range -3 4) z (range -3 4) :when (or (#{-3 3} x) (#{-3 3} z)) y [64 65 66]] [(str x "," y "," z) "stone"])))
+
+(deftest a-walkers-field-is-its-way-out-to-its-follow-range-not-a-sphere
+  (let [reach (reach-of {} "zombie" {:x -20.5 :y 64 :z 0.5})]
+    (is (= 1 (reach -20 64 0)) "its own cell")
+    (is (< 0 (reach 10 64 0) (reach -10 64 0) 1) "falling off along its way: 30 steps off still counts, past a 16 or 24 block sphere")
+    (is (nil? (reach 16 64 0)) "past its follow range (35)"))
+  (let [reach (reach-of {:blocks pen} "zombie" {:x 0.5 :y 64 :z 0.5})]
+    (is (= 1 (reach 1 64 0)))
+    (is (nil? (reach 5 64 0)) "5 blocks off outside a pen it cannot leave: outside")))
+
+(deftest a-ranged-mobs-field-adds-the-cells-it-can-shoot
+  (let [pillar {"6,64,0" "stone" "6,65,0" "stone" "6,66,0" "stone"}
+        skeleton (reach-of {:blocks pillar} "skeleton" {:x 0.5 :y 64 :z 0.5})
+        zombie (reach-of {:blocks pillar} "zombie" {:x 0.5 :y 64 :z 0.5})]
+    (is (nil? (zombie 6 67 0)) "a melee mob does not climb the pillar")
+    (is (= 1 (skeleton 6 67 0)) "a skeleton shoots the body on it"))
+  (is (nil? ((reach-of {:blocks pen} "skeleton" {:x 0.5 :y 64 :z 0.5}) 5 64 0)) "no line of fire through the pen's wall"))
+
+(deftest a-walk-within-a-zombies-way-is-a-likelier-death-than-one-past-a-pen
+  (let [body {:health 20}
+        route {:cells (for [x (range 5 15)] {:x x :y 64 :z 0})}
+        chance (fn [spec] (cost/death-chance body (assoc route :threats [{:mob "zombie" :weight 1 :reach (reach-of spec "zombie" {:x 0.5 :y 64 :z 0.5})}])))]
+    (is (> (chance {}) (chance {:blocks pen})))
+    (is (= (cost/death-chance body {}) (chance {:blocks pen})) "penned in: only the route's class")))

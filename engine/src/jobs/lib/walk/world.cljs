@@ -243,20 +243,37 @@
       :else (when-let [[bad] (seq (remove ok? tolls))]
               (str "a toll is {:x :y :z :factor}: x y z finite numbers, factor 0 or more (##Inf: never entered); got " (pr-str bad))))))
 
+(defonce toll-merges (js/WeakMap.))
+
+(defn merged-tolls
+  "base and tolls ([{:x :y :z :factor}], base nil for none) as one list, a cell tolled twice once at the sum, in cell-key
+  order, with the planner's Map of cell-key to factor: #js {:list :cells}."
+  [base tolls]
+  (let [rows (js/Map.)]
+    (doseq [{:keys [x y z factor]} (concat base tolls)]
+      (let [k (planner/cell-key x y z)
+            ^js r (.get rows k)]
+        (if r (aset r 3 (+ (aget r 3) factor)) (.set rows k #js [x y z factor]))))
+    (let [ks (.sort (js/Array.from (.keys rows)) (fn [a b] (- a b)))
+          cells (js/Map.)]
+      (doseq [k ks] (.set cells k (aget (.get rows k) 3)))
+      #js {:list (mapv (fn [k] (let [r (.get rows k)] {:x (aget r 0) :y (aget r 1) :z (aget r 2) :factor (aget r 3)})) ks)
+           :cells cells})))
+
 (defn with-tolls
   "pw whose plans cost the cells of tolls ([{:x :y :z :factor}], jobs.lib.cost farm-tolls and zone-tolls, jobs.lib.threats water-tolls) factor times their
-  own seconds more, on top of pw's own tolls (the planner's options.tolls; a cell tolled twice costs both; none: pw)."
+  own seconds more, on top of pw's own tolls (the planner's options.tolls; a cell tolled twice costs both; none: pw).
+  The same tolls on the same base are merged once (a cached threat tolls vector is one object)."
   [pw tolls]
   (if (empty? tolls)
     pw
-    (let [tolls (->> (concat (some-> (.-tolls pw) .-list) tolls)
-                     (group-by (juxt :x :y :z))
-                     (map (fn [[[x y z] ts]] {:x x :y y :z z :factor (reduce + (map :factor ts))}))
-                     (sort-by (juxt :x :y :z))
-                     vec)]
+    (let [base (some-> (.-tolls pw) .-list)
+          kept (.get toll-merges tolls)
+          merged (if (and kept (identical? base (:base kept)))
+                   (:v kept)
+                   (let [v (merged-tolls base tolls)] (.set toll-merges tolls {:base base :v v}) v))]
       #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :dark (.-dark pw) :avoid (.-avoid pw)
-           :tolls #js {:list tolls
-                       :cells (js/Map. (clj->js (mapv (fn [{:keys [x y z factor]}] [(planner/cell-key x y z) factor]) tolls)))}})))
+           :tolls merged})))
 
 (defn tolls-key
   "What a kept search's key holds of pw's tolls (with-tolls): the cells with their factors, nil for none."
