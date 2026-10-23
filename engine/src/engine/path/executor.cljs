@@ -25,6 +25,7 @@
             :swim :swim-up :swim-down :exit}
    :max-replans 5          ; re-plans before giving up
    :no-progress-ticks 60   ; 3 s on one step without nearer or (in water) higher/lower toward it -> stuck
+   :line-up-xz 0.15       ; in water inside a corner's free cell, this far off the stand point's line: line up first
    :progress-xz 0.1        ; nearer the aim by this much restarts the no-progress clock
    :swim-float 0.2         ; in water, jump while the feet are below the step's height plus this (head out at the surface)
    :bend-xz 0.15           ; a bend step (a corner round a stalk inside a tight cell) is reached this close to its point
@@ -409,13 +410,17 @@
 
 (defn aim-point
   "Where to steer on this step: the midpoint towards a corner's free cell, the crossing point, or the
-  stand point."
-  [policy {:keys [px pz cx cz free] :as step} {:keys [x z] :as pose}]
+  stand point. A body in water inside a corner's free cell first lines up with the stand point across it, so its box
+  clears the blocked side instead of pressing on it."
+  [policy {:keys [px pz cx cz free] :as step} {:keys [x z in-water] :as pose}]
   (let [[fx fz] free
         in-free? (and free (= fx (Math/floor x)) (= fz (Math/floor z)))
-        in-step? (in-cell? step pose)]
+        in-step? (in-cell? step pose)
+        along-z? (= fx (:x step))]
     (cond
       (and free (not in-free?) (not in-step?)) [(/ (+ fx 0.5 px) 2) (/ (+ fz 0.5 pz) 2)]
+      (and in-free? in-water (> (Math/abs (if along-z? (- x px) (- z pz))) (:line-up-xz policy)))
+      (if along-z? [px (+ fz 0.5)] [(+ fx 0.5) pz])
       (and (some? cx) (not in-step?) (> (dist-xz x z cx cz) (:crossing-xz policy))) [cx cz]
       :else [px pz])))
 

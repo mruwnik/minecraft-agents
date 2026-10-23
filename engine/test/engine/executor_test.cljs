@@ -305,6 +305,14 @@
     (let [r (ex/tick p st (pose 0.5 64 1.2))]
       (is (yaw-eq? (:yaw r) (Math/atan2 (- (- 1.5 0.5)) (- (- 1.5 1.2))))))))
 
+(deftest corner-in-water-lines-up-in-the-free-cell-first
+  (let [steps [(step 1 64 0 :start) (step 0 64 -1 :corner {:corner true :free [0 0] :px 0.5 :pz -0.5})]
+        st (state-at steps 1)
+        yaw-of (fn [x z] (:yaw (ex/tick p st (pose x 64 z {:in-water true}))))]
+    (is (yaw-eq? (yaw-of 0.97 0.31) (Math/atan2 (- (- 0.5 0.97)) (- (- 0.5 0.31)))))
+    (is (yaw-eq? (yaw-of 0.55 0.31) (Math/atan2 (- (- 0.5 0.55)) (- (- -0.5 0.31)))))
+    (is (yaw-eq? (:yaw (ex/tick p st (pose 0.97 64 0.31))) (Math/atan2 (- (- 0.5 0.97)) (- (- -0.5 0.31)))))))
+
 (deftest yaw-by-direction
   (let [steps [(step 0 64 3 :start) (step 5 64 3 :walk {:px 5.5 :pz 3.5})
                (step 5 64 3 :walk) (step 5 64 3 :walk)]
