@@ -71,6 +71,12 @@
   (is (pos? (:damage (cost/flee-answer {:food 20 :mobs [(mob "creeper" 5)]}))) "a creeper 5 off swells before the walk gets going")
   (is (zero? (:damage (cost/flee-answer {:food 20 :mobs [(mob "creeper" 9)]})))))
 
+(deftest a-creeper-that-blows-on-the-walk-is-not-met-again
+  (let [zombie (mob "zombie" 4 35)]
+    (is (nil? (:then (cost/flee-answer {:food 20 :mobs [(mob "creeper" 3)]}))) "a lone creeper blown is gone")
+    (is (= (cost/flee-answer {:food 20 :mobs [zombie]}) (first (:then (cost/flee-answer {:food 20 :mobs [(mob "creeper" 3) zombie]}))))
+        "after the blast only the zombie is walked from again")))
+
 (deftest a-mob-that-came-back-before-makes-a-walk-dearer
   (let [walk #(cost/answer-price (body 20) (cost/flee-answer {:food 20 :mobs [(mob "skeleton" 10)] :returns %}) here)]
     (is (> (walk 2) (walk 1) (walk 0)))))

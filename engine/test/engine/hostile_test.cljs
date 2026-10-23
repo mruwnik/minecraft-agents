@@ -957,6 +957,30 @@
           (is (= [["creeper" :flee]] (await (decisions [skel creeper])))
               "a creeper 8 off the skeleton and the body, beyond both the trigger's radius and its blast, comes to the fight in 2 s: flee"))))))
 
+(deftest a-creeper-blows-where-the-fight-is-so-one-by-the-mob-fought-costs-more
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [fight-price (fn ^:async f [creeper-x]
+                            (let [{:keys [seen]} (await (flight-round respond {:self {:health 20} :inventory sword
+                                                                               :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x creeper-x :y 64 :z 0}} (zombie 9 4 1)]}))]
+                              (get-in (first (filter #(= :hostile.decided (:kind %)) @seen)) [:prices :fight])))]
+          (is (> (await (fight-price 3)) (await (fight-price -3)))
+              "both creepers are 3 blocks from the body; the one a block from the zombie blows beside the fight"))))))
+
+(deftest a-creeper-with-company-is-never-swung-at-and-a-lone-one-backed-off-from-is-still-fought
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [creeper {:id 8 :name "creeper" :kind "hostile" :pos {:x 2 :y 64 :z 0}}
+              {:keys [p]} (await (first-round-ms fight {:inventory sword :entities [creeper (zombie 7 3 0)]} 20))]
+          (is (= [7 7 7 7] (take 4 (mapv #(.-id (.-args %)) (calls p "attack"))))
+              "the nearer creeper is left to blow where the fight is; the zombie is the target"))
+        (let [{:keys [eng]} (setup {:inventory sword :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 6.4 :y 64 :z 0}}]} 20)
+              r (await (tu/child-outcome eng 'jobs.combat.attack {:targets :hostiles :radius 16 :ranged-radius 16} 50))]
+          (is (= :hold-timeout (:reason r))
+              "after a back-off the creeper 6 blocks off is waited for, not declined though a walk away would now be cheaper: the parent weighs, not each step"))))))
+
 (deftest a-body-that-fled-ranged-mobs-twice-fights-them-to-the-end-however-far
   (async done
     (tu/run-async done

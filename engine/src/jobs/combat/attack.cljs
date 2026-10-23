@@ -48,7 +48,8 @@
   A melee hostile beyond reach is waited for, never walked to, with :hold or when it stands in or beside unlit space (hostile-fight/dark-around?: a player
   does not chase into unlit space, more may be there unseen); the wait declines :nothing-possible :hold-timeout after hostile-fight/::hold-s
   without a swing; a ranged one that, with another in range, is better left than walked to (hostile-fight/too-far-to-chase?: the
-  priced answer says flee) ends :too-far; a creeper ends :creeper-unsafe once the priced answer to the hostiles in range is no fight. No
+  priced answer says flee) ends :too-far; a creeper is a target only alone in range (hostile-fight/targets) and ends :creeper-unsafe when
+  it cannot be fought hit-and-back (hostile-fight/hit-and-back-ok?) or only creepers are left: the parent, not each step, weighs fight against flight. No
   hostile in range: :done :cleared. When the body lost health since the call began the job yields (:continue). Every ending
   but :done also carries :struck {id {:name :hits :health ...}}; a caller passes that ending's data back as :prior.")
 
@@ -439,12 +440,15 @@
     (cond
       (and target (hostile/held-idle? c (hostile/held? c target))) (declined c :hold-timeout)
       (and target (hostile/too-far-to-chase? c target)) (declined c :too-far)
-      (and target (combat/creeper? target) (not= :fight (:answer (hostile/answer c (hostile/in-range c) #(get (hostile/struck (ctx/mem c)) %))))) (declined c :creeper-unsafe)
+      (and target (combat/creeper? target) (not (hostile/hit-and-back-ok? c (hostile/in-range c)))) (declined c :creeper-unsafe)
       (and last-attack (< (.-health (.self p)) (:health0 (ctx/mem c)))) :continue
       (nil? target) (if-let [heard (hostile/heard c)]
                       (do (await (ctx/act c :look (let [{:keys [x y z]} (danger-q/mob-pos p heard)] #js {:pos #js {:x x :y (+ 1 y) :z z}})))
                           (declined c :heard-only))
-                      (if (seq (hostile/in-range c)) (declined c :given-up) (finish! c :cleared)))
+                      (let [hs (hostile/in-range c)]
+                        (cond (some combat/creeper? hs) (declined c :creeper-unsafe)
+                              (seq hs) (declined c :given-up)
+                              :else (finish! c :cleared))))
       (combat/within-gap? c (swing-gap-ms c target)) (do (await (wait-swing-gap! c target)) :again)
       :else (do (ctx/update-mem! c update :seen (fnil conj #{}) (.-id target))
                 (await (engage! c target))

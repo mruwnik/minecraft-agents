@@ -139,9 +139,9 @@
   "The answer of a walk away from mobs [flee-mob's] by a body with food wearing equipment, the walk there and back (it
   goes back to its work), times 1 + returns (the flights from such mobs lately: each predicts another); :then the answer
   later (the fight with them, nil none) or the walk again. :caught: each flight is caught at chance caught (default
-  ::caught-chance), its mobs then landing their blows (a creeper its blast) over the flight. nil when a mob keeps up or
-  none is given."
-  [{:keys [food equipment mobs returns later caught]}]
+  ::caught-chance), its mobs then landing their blows (a creeper its blast) over the flight. A creeper that blows on the
+  walk is spent: what follows is the walk from the rest or later (none left: nothing). nil when a mob keeps up or none is given."
+  [{:keys [food equipment mobs returns later caught] :as args}]
   (let [stats (armour/armour-stats equipment)
         v (danger/flight-speed (or food 20))
         per (map #(flee-mob stats v %) mobs)
@@ -157,7 +157,12 @@
                                                                   (threat/mob-hurt stats (:name m) (:seconds f) identity (threat/lone-hit-rate (:name m)))))
                                                     mobs per))
                            :hit hit}}]
-        (assoc walk :then (cond-> [walk] later (conj later)))))))
+        (let [spent (set (keep (fn [[m f]] (when (and (= "creeper" (:name m)) (pos? (:damage f))) m)) (map vector mobs per)))
+              left (remove spent mobs)]
+          (cond
+            (empty? spent) (assoc walk :then (cond-> [walk] later (conj later)))
+            (seq left) (assoc walk :then (cond-> [(flee-answer (assoc args :mobs left))] later (conj later)))
+            :else walk))))))
 
 (defn build-answer
   "The answer of building a refuge for seconds against mobs [flee-mob's] wearing equipment: the blows of each melee mob

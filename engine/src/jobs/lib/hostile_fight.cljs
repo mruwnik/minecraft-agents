@@ -65,10 +65,13 @@
        (<= (danger-q/mob-distance (:primitives c) e) (settings/get settings ::point-blank))))
 
 (defn targets
-  "The hostiles in range the body has seen, within the leash and not given up on, nearest first."
+  "The hostiles in range the body has seen, within the leash and not given up on, nearest first; a creeper only when it is
+  the one hostile in range (fought hit-and-back): with company it is left to blow where the fight is (fight-answer)."
   [c]
-  (let [given-up (:given-up (ctx/mem c) {})]
-    (->> (in-range c) (filter danger-q/seen-only?) (filter #(in-leash? c %)) (remove #(contains? given-up (.-id %))))))
+  (let [given-up (:given-up (ctx/mem c) {})
+        hs (in-range c)
+        lone? (= 1 (count hs))]
+    (->> hs (remove #(and (combat/creeper? %) (not lone?))) (filter danger-q/seen-only?) (filter #(in-leash? c %)) (remove #(contains? given-up (.-id %))))))
 
 (defn heard
   "The first hostile in range the body only hears, or nil."
@@ -206,7 +209,8 @@
   "The answer of fighting near (nearest first) for cost/decide: the walk there (walk-hp) and the fight with near and the
   mobs by its way (way-mobs), at least the mob blows felt lately (incoming :rate) over its length, :hit the hardest blow
   felt lately or of its mobs. A lone creeper is fought hit-and-back (nil when hit-and-back-ok? fails); any other creeper
-  near, or by the way in time (blasting), is not fought: its blast at its swell start is added."
+  near, or by the way in time (blasting), is not fought: it blows where the fight is, beside its first mob, so its blast
+  at its distance from that mob (at most its swell start) is added."
   [c near struck-of]
   (let [p (:primitives c)
         lone-creeper? (and (= 1 (count near)) (combat/creeper? (first near)))
@@ -219,7 +223,8 @@
             a (cost/fight-answer fight)
             seconds (+ (:seconds a) (/ (danger-q/mob-distance p (first fought)) cost/walk-speed))
             creepers (if lone-creeper? [] (concat (filter combat/creeper? near) (blasting p near seconds)))
-            blasts (map (fn [_] (cost/blast-hurt stats cost/swell-start)) creepers)]
+            spot (danger-q/mob-pos p (first fought))
+            blasts (map #(cost/blast-hurt stats (min cost/swell-start (u/dist (danger-q/mob-pos p %) spot))) creepers)]
         {:damage (+ (walk-hp c fought) (max (:damage a) (* rate (:seconds a))) (reduce + 0 blasts))
          :hit (reduce max (:hit a) (cons hardest blasts))
          :seconds seconds
