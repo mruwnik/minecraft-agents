@@ -649,6 +649,22 @@
                                 #(mem/write! (:store (:eng %)) :shelter {:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built} {:cap 10 :ttl st/day-ms})))]
           (is (seq (walks s)) "no flat dark hold: each leg's go-to prices its own route"))))))
 
+(deftest a-leg-given-up-for-the-sealed-night-shelter-waits-for-light-not-stuck
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [kept {:kind :nothing-possible :cause {:reason :unreachable :why :seal-kept}
+                    :data {:inside-own-shelter {:x 0 :y 64 :z 0} :arrived false}}
+              calls (atom 0)
+              s (with-redefs [child/call-walk* (fn [_ _ _] (swap! calls inc) (js/Promise.resolve kept))]
+                  (await (search! {:target "diamond_block" :max-distance 23}
+                                  {:time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks night-pit}
+                                  40
+                                  #(mem/write! (:store (:eng %)) :shelter {:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built} {:cap 10 :ttl st/day-ms}))))]
+          (is (not (finished? s)) "a kept seal is no failed leg")
+          (is (= 1 @calls) "go-to is not asked again while the night keeps the seal")
+          (is (some #(and (= :waiting (:kind %)) (= :dark (:reason %))) @(:seen s))))))))
+
 ;; live (Juniper, card e51d1fe9): three legs east all failed at the same rim and the search ended stuck; a leg that lies
 ;; the way a leg just failed from here waits until a leg arrives, so the next leg goes another way
 (deftest a-leg-the-way-a-leg-just-failed-waits-for-one-that-arrives

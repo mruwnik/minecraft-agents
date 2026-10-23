@@ -535,7 +535,9 @@
   (are [shelter goal expected] (= expected (kind-in-shelter (ready/safe-at-by-night (constantly goal)) tunnel shelter))
     dug-in-entry {:x 8 :y 64 :z 0} :later
     dug-in-entry {:x 20 :y 64 :z 0} :later
-    dug-in-entry {:x 4 :y 64 :z 0} :ok))
+    dug-in-entry {:x 4 :y 64 :z 0} :ok)
+  (is (= :later (lit 15 0 #(kind-in-shelter (ready/safe-at-by-night (constantly {:x 20 :y 64 :z 0})) tunnel dug-in-entry)))
+      "a lit place too: the night keeps the seal"))
 
 (deftest felling-a-tree-outside-the-night-shelter-waits-for-day-instead-of-walking-out
   (let [check (fn [at] (let [c (assoc (ctx-of tunnel) :args {:at at} :view (fn [] {:now 0 :data {:entries {:shelter [{:t 0 :data dug-in-entry}]}}}))]

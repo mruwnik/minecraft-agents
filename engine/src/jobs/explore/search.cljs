@@ -2,6 +2,7 @@
   (:require [jobs.lib.block-sets :as bs]
             [jobs.lib.reach :as reach]
             [jobs.lib.ready :as ready]
+            [jobs.lib.result :as result]
             [engine.settings :as settings]
             [engine.args :as a]
             [clojure.string :as str]
@@ -36,7 +37,8 @@
   the spot (:searched) (engine.notes). Blocks the body saw earlier anywhere within the max-distance setting of the origin count as
   found too, nearest first. It ends when :count are found. Otherwise it walks the next leg with
   jobs.movement.go-to as a child (range 2). One call is the whole search; it yields (:continue) only while go-to waits
-  on the world or for leg columns to load (:chunks-loading).
+  on the world, for leg columns to load (:chunks-loading), or (waiting :dark, the leg kept) when go-to gave a leg up because the
+  body is sealed in its own shelter under a dark sky.
 
   Under rock a step toward an unseen column is only taken to a seen open cell (a tunnel or cave), never at feet height into unseen rock: the search then ends :distance when no tunnel leads on.
 
@@ -75,7 +77,7 @@
 
   Memory: :origin :legs :scans :found :tried :failed :skipped :farthest :failed-in-row :spent and :leg-price (with :worth: the prices of the walks done, and of the one under way) :stepped (the nearest a step has come to each unseen column: a step must end nearer) :blocked (the ways legs
   failed since the last arrival) :deferred (unloaded legs set aside while a sweep goes on), and :leg while
-  a walk is under way, so a cut or restart resumes it.")
+  a walk is under way, so a cut or restart resumes it (:shelter-held while it waits for light).")
 
 (def diagonal 0.7071)
 (def headings {:north [0 -1] :east [1 0] :south [0 1] :west [-1 0]
@@ -352,7 +354,8 @@
   "End the call: done when found (or nothing was left to find), else the ending of why; the text and findings are the ending's data."
   [c reason why]
   (let [m (ctx/mem c)
-        what (str/join "/" (targets c))
+        what (or (not-empty (str/join "/" (targets c)))
+                 (let [{:keys [w h]} (:patch (:args c))] (str w "x" h " patch")))
         found (aged c (:found m []))
         result (cond-> {:reason reason :found found :coverage (coverage m)
                         :text (if (= :found reason)
@@ -556,13 +559,25 @@
                                                        (finish! c :not-found :price))
         :else (do (ctx/update-mem! c assoc :leg-price price) nil)))))
 
+(defn sheltered-dark
+  "ready/sheltered-dark when it is later (:dark), else nil."
+  [c]
+  (let [s (ready/sheltered-dark c)]
+    (when (= :later (first s)) s)))
+
 (defn ^:async walk!
-  "One go-to call toward the leg (the last one before the failed legs in a row end the search may dig out); on its end book the leg arrived or failed. :continue when go-to yields, else :again
+  "One go-to call toward the leg (the last one before the failed legs in a row end the search may dig out); on its end book the leg arrived or failed. :continue when go-to yields
+  or gave the leg up for the body's own shelter (result/body-side?) under a dark sky: the night keeps the seal, so the round
+  waits :dark (sheltered-dark) with the leg kept, and go-to is not asked again till that lifts. Else :again
   (or the ending when the failed legs in a row end the search)."
   [c]
   (let [leg (:leg (ctx/mem c))
         [x y z] leg
-        r (await (child/call-walk* c :leg (leg-args c leg)))]
+        held (when (:shelter-held (ctx/mem c)) (sheltered-dark c))
+        r (if held :held (await (child/call-walk* c :leg (leg-args c leg))))
+        wait (or held (when (result/body-side? r) (sheltered-dark c)))
+        _ (ctx/update-mem! c #(if wait (assoc % :shelter-held true) (dissoc % :shelter-held)))
+        r (if wait (do (some-> (:child-wait c) (reset! (contract/status-cause wait))) :continue) r)]
     (if (= :continue r)
       :continue
       (let [{:keys [in-water why] :as data} (:data r)

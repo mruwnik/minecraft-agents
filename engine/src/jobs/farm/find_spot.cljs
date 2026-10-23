@@ -22,9 +22,9 @@
   is found it walks that job's legs and scans where each ends, and stops at the first patch.
   With a :plan the patch is as big as the plan's cells in x and z, the farmland score counts only when the plan has crops or farmland, and
   the plan's own cells are not in the way.
-  Ends with data {:spot pos :spots [...]}: done with the spots, or nothing-possible :none with :why :distance (no leg left), :legs
+  Ends with data {:spot pos :spots [...]}: done with the spots, or nothing-possible with cause and :why :distance (no leg left), :legs
   (the search's max legs walked), :stuck (three walks in a row failed), :time (the call's :job-time spent) or :no-plan (the plan is
-  missing or unreadable).
+  missing or unreadable), and the search's :text. A leg go-to gives up for the body's own shelter under a dark sky waits :dark (jobs.explore.search).
   :spots best first up to ::limit, each {:pos :w :h :score :level :work :step :water-share :sky :away :y :farmable :dark?}; :step is
   the largest height difference between two neighbouring cells of the patch. A pos is the north-west (minimum x and z) corner at
   ground level of the :w x :h patch, not its centre; :spot is the first spot's pos. :away is the distance from the patch's centre
@@ -109,8 +109,9 @@
             (if (seq spots)
               (do (ctx/update-mem! c assoc :spots spots)
                   (ctx/end c :done nil {:spot (:pos (first spots)) :spots spots}))
-              (ctx/end c :nothing-possible :none {:spot nil :why (or (:why res) :time)})))))
-      (ctx/end c :nothing-possible :none {:spot nil :why :no-plan}))))
+              (let [why (or (:why res) :time)]
+                (ctx/end c :nothing-possible why (cond-> {:spot nil :why why} (:text res) (assoc :text (:text res)))))))))
+      (ctx/end c :nothing-possible :no-plan {:spot nil :why :no-plan :text (str "plan " (:plan a) " is missing, unreadable or has no cells")}))))
 
 (defn ^:async round
   "The whole attempt: the search child."

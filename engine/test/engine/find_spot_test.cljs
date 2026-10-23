@@ -184,7 +184,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:blocks (merge (patch 2 0 3 3 63 "water") (patch -4 0 3 3 63 "lava"))})
               r (await (child-outcome eng job small 4))]
-          (is (= {:spot nil :reason :none :why :distance} r)))))))
+          (is (= {:spot nil :reason :distance :why :distance} (dissoc r :text))))))))
 
 (deftest no-ground-is-none
   (async done
@@ -192,7 +192,8 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:blocks {}})
               r (await (child-outcome eng job small 4))]
-          (is (= {:spot nil :reason :none :why :distance} r)))))))
+          (is (= {:spot nil :reason :distance :why :distance} (dissoc r :text)))
+          (is (re-find #"^no 3x3 patch found \(distance\)" (:text r))))))))
 
 (def bumpy
   "Ground x -12 to 60, z -3 to 3, in a checker of heights 63 and 64: no patch of it is flat."
@@ -212,7 +213,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:blocks bumpy})
               r (await (child-outcome eng job (assoc small :max-step 0) 200))]
-          (is (= {:spot nil :reason :none :why :distance} r)))))))
+          (is (= {:spot nil :reason :distance :why :distance} (dissoc r :text))))))))
 
 (deftest exploring-stops-at-the-first-patch
   (async done
@@ -229,7 +230,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:blocks (patch 4 0 3 3 63 "dirt")})
               r (await (child-outcome eng job {:plan "no-such-plan"} 4))]
-          (is (= {:spot nil :reason :none :why :no-plan} r)))))))
+          (is (= {:spot nil :reason :no-plan :why :no-plan} (dissoc r :text))))))))
 
 (deftest footprint-table
   (are [cells expected] (= expected (fs/footprint cells))
@@ -352,7 +353,7 @@
           (await (run-until-empty eng 40))
           (is (empty? (:list (core/state eng))) "the job ends")
           (is (<= @reads 66000) (str "reads over the slice cap: " @reads))
-          (is (= :none (:reason @out))))))))
+          (is (= :distance (:reason @out))))))))
 
 (deftest a-body-moved-mid-scan-does-not-change-the-rows-scanned
   (async done
