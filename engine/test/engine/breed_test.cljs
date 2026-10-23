@@ -208,7 +208,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:mob "cow"} {:inventory (wheat 2) :entities [(cow 1 2) (cow 2 3 {:baby true})]} 4))]
-          (is (= "breed done: too-few, fed 0, adults 1, babies 1" (:text (done-event s)))))))))
+          (is (= "breed done: too-few, fed 0, adults 1, babies 1 (fewer than two cow adults within 16 blocks; go to the herd, widen :radius or pass :box)" (:text (done-event s)))))))))
 
 (deftest feeds-only-the-ready-animals
   (async done
@@ -567,11 +567,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[owner reason] [["Miles" :refused] [nil :no-zones]]]
+        (doseq [[owner reason why] [["Miles" :refused "zone rules refused every adult"] [nil :no-zones "no zone list was read"]]]
           (let [{:keys [eng] :as s} (setup {:inventory (wheat 2) :entities [(cow 1 2) (cow 2 2)]} 0 (h/zone-store 2 owner))]
             (core/submit! eng (list 'jobs.animals.breed {:mob "cow"}) {})
             (await (tu/run-ticks eng (:clock s) 20 700))
-            (is (= reason (:reason (done-event s))) (pr-str owner))))))))
+            (is (= reason (:reason (done-event s))) (pr-str owner))
+            (is (re-find (re-pattern why) (:why (done-event s))) (pr-str owner))))))))
 
 (def chest-at "-2,64,3")
 

@@ -36,7 +36,7 @@
   - Given up: :unreachable (walk blocked, or two feedings out of reach), :gone, :cannot, :failed, or :baby
     (the food was eaten without love; a baby the sensing missed, warn breed.baby).
 
-  The data {:reason :fed [keys]
+  The data {:reason :why (a sentence with the next step, on every ending but done) :fed [keys]
   :refused [keys] :given-up {key reason} :food item :adults n :babies n :hand} and the ending by the reason:
   - :done :fed: the pairs were fed and a calf is in view that was not there at the start. Any stop after at least :least animals were fed
     (default 2: a pair) with a calf in view is done, with the stop as the data reason; :least :all is all the animals of the pairs.
@@ -204,6 +204,27 @@
         (ctx/update-mem! c assoc :calf-from from)
         (< (- now from) (calf-wait-ms))))))
 
+(defn why-of
+  "A sentence naming why the run ended with reason and what to do next; nil for a plain finish."
+  [c reason]
+  (let [m (ctx/mem c)
+        {:keys [mob radius]} (:args c)
+        n (count (distinct (:penned m)))]
+    (case reason
+      (:refused :no-zones)
+      (cond
+        (pos? n) (str n " " mob "(s) stand in a fenced pen or zone that is not the body's own; pass :box for a pen you were told about, or ask the owner")
+        (= :no-zones reason) "no zone list was read; try again shortly"
+        (seq (:refused m)) (str (count (:refused m)) " took no food (on breeding cooldown or already in love); try again in a few minutes")
+        :else "the zone rules refused every adult; move to a free area or pass :ignore-zones? true if the owner allows it")
+      :too-few (str "fewer than two " mob " adults within " radius " blocks; go to the herd, widen :radius or pass :box")
+      :no-food (str "no food for " mob " carried and none fetched; bring some")
+      :food-out "the food ran out; bring more"
+      :unreachable "an animal could not be reached; open a way in or pass :box"
+      :unpaired "an odd number was fed; another adult is needed"
+      :no-baby "a pair was fed but no calf showed; look again later"
+      nil)))
+
 (defn result
   "The run's result so far: why it ended, who was fed, refused and given up on, what is in view and a text."
   [c reason]
@@ -217,7 +238,10 @@
                 :food (or (animals/food-carried p mob) (:food m))
                 :adults (count (animals/adults p mob radius))
                 :babies (count (animals/babies p mob radius))}]
-    (assoc result :text (str "breed done: " (name reason) ", fed " (count (:fed m)) ", adults " (:adults result) ", babies " (:babies result)))))
+    (let [why (why-of c reason)]
+      (cond-> (assoc result :text (str "breed done: " (name reason) ", fed " (count (:fed m)) ", adults " (:adults result) ", babies " (:babies result)
+                                       (when why (str " (" why ")"))))
+        why (assoc :why why)))))
 
 (defn finish-now!
   "Emit the outcome and end the call; see finish!."
