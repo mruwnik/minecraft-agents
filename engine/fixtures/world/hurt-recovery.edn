@@ -1,7 +1,7 @@
 ;; Card 9f4392d4 (Oriel #11, Teasel #7): a critically hurt body that cannot heal (food under 18, none carried) stays shut
-;; in. The rest waits out the night in its sealed room instead of walking out for food; by day a fragile body's
-;; leave-shelter keeps its seal while a zombie could walk in through it and the hunger costs less, and leaves once
-;; nothing could or staying costs more.
+;; in. The rest waits out the night in its sealed room instead of walking out for food. By day a fragile body's
+;; leave-shelter (card e32f6036) holds while a hostile could get in, until the hold has cost as much as the cheapest way
+;; out, and leaves by that way: through the far wall when the hostile is behind its seal, at once.
 ;; Food 8 (hunger 5 s amp 255, no regeneration), hp 3 (fragile). Clock cases: the rest's wait is for the night outside,
 ;; and leave-shelter starts only by day.
 {:defaults
@@ -20,14 +20,39 @@
             {:event {:source :job :kind :holding :context {:reflex-id :low-health}} :within-s 40}
             {:no-event {:source :action :kind :started :data {:name "steer"}} :for-s 60 :until {:source :reflex :kind :fired :context {:reflex-id :low-health}}}]
    :after [[:body-near [16.5 1 16.5] 2]]}
-  {:name "fragile-body-keeps-its-seal-by-day-while-a-zombie-could-walk-in"
+  {:name "fragile-body-digs-out-away-from-a-zombie-behind-its-seal"
    ;; a stone pocket [16 1 16] (two cells) sealed east by its own glass :shelter blocks; a roofed stone room east
-   ;; (x 18..22) holds a NoAI zombie it sees through the glass: the seal stays past the dawn grace
+   ;; (x 18..22) holds a NoAI zombie it sees through the glass. The west wall (one stone, open air beyond) is the
+   ;; cheap way out: the body digs it and leaves, the glass seal stays.
    :time :day :time-why :dawn-decision
    :blocks [[:fill [15 0 15] [23 4 17] "stone"] [:fill [16 1 16] [16 2 16] "air"] [:fill [18 1 16] [22 2 16] "air"]
             [:set [17 1 16] "glass"] [:set [17 2 16] "glass"] [:set [20 3 16] "glowstone"]]
    :memory [{:kind :scaffold :data {:entries [{:cell #at [17 1 16] :item "glass" :before "air" :job "j1" :purpose :shelter :state :placed}
                                               {:cell #at [17 2 16] :item "glass" :before "air" :job "j1" :purpose :shelter :state :placed}]}}]
+   :body {:inventory [["iron_sword" 1] ["stone_pickaxe" 1]]}
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 17 minecraft:generic"]
+         [:summon "zombie" [21.5 1 16.5] "{NoAI:1b,PersistenceRequired:1b}"]
+         [:wait-s 3]
+         [:job (jobs.survival.leave-shelter)]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:block [17 1 16] "glass"] [:block [17 2 16] "glass"] [:not-block [15 1 16] "stone"]]}
+  {:name "fragile-body-held-by-a-zombie-on-every-side-leaves-once-the-hold-has-cost-the-way-out"
+   ;; a glass block [15..17 1..3 15..17] with the body's two cells hollowed out, on the open plot; the sides and the lid
+   ;; are its own :shelter blocks. A NoAI zombie 5 east could walk to any side were it open. The body holds, then
+   ;; leaves by the west, the side farthest from it.
+   :time :day :time-why :dawn-decision
+   :limit-s 400
+   :blocks [[:fill [15 1 15] [17 3 17] "glass"] [:fill [16 1 16] [16 2 16] "air"]]
+   :memory [{:kind :scaffold :data {:entries [{:cell #at [15 1 16] :item "glass" :before "air" :job "j1" :purpose :shelter :state :placed}
+                                              {:cell #at [15 2 16] :item "glass" :before "air" :job "j1" :purpose :shelter :state :placed}
+                                              {:cell #at [17 1 16] :item "glass" :before "air" :job "j1" :purpose :shelter :state :placed}
+                                              {:cell #at [17 2 16] :item "glass" :before "air" :job "j1" :purpose :shelter :state :placed}
+                                              {:cell #at [16 1 15] :item "glass" :before "air" :job "j1" :purpose :shelter :state :placed}
+                                              {:cell #at [16 2 15] :item "glass" :before "air" :job "j1" :purpose :shelter :state :placed}
+                                              {:cell #at [16 1 17] :item "glass" :before "air" :job "j1" :purpose :shelter :state :placed}
+                                              {:cell #at [16 2 17] :item "glass" :before "air" :job "j1" :purpose :shelter :state :placed}
+                                              {:cell #at [16 3 16] :item "glass" :before "air" :job "j1" :purpose :shelter :state :placed}]}}]
    :body {:inventory [["iron_sword" 1]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 17 minecraft:generic"]
@@ -35,24 +60,9 @@
          [:wait-s 3]
          [:job (jobs.survival.leave-shelter)]]
    :expect [{:event {:source :job :kind :night.dawn-hold} :within-s 20}
-            {:no-event {:source :job :kind #{:completed :stopped}} :of-job true :for-s 90}]
-   :after [[:block [17 1 16] "glass"] [:block [17 2 16] "glass"] [:body-near [16.5 1 16.5] 1]]}
-  {:name "starving-fragile-body-leaves-its-seal-by-day-though-a-zombie-stays"
-   ;; as the case above, but food 0: staying heals nothing and costs more than opening toward the zombie, so the
-   ;; seal is opened after the grace. Same pocket, glass seal and NoAI zombie room as above.
-   :time :day :time-why :dawn-decision
-   :blocks [[:fill [15 0 15] [23 4 17] "stone"] [:fill [16 1 16] [16 2 16] "air"] [:fill [18 1 16] [22 2 16] "air"]
-            [:set [17 1 16] "glass"] [:set [17 2 16] "glass"] [:set [20 3 16] "glowstone"]]
-   :memory [{:kind :scaffold :data {:entries [{:cell #at [17 1 16] :item "glass" :before "air" :job "j1" :purpose :shelter :state :placed}
-                                              {:cell #at [17 2 16] :item "glass" :before "air" :job "j1" :purpose :shelter :state :placed}]}}]
-   :body {:inventory [["iron_sword" 1]]}
-   :act [[:rcon "effect give $BODY minecraft:hunger 30 255 true"] [:until-effect-gone "hunger" 60]
-         [:rcon "damage $BODY 17 minecraft:generic"]
-         [:summon "zombie" [21.5 1 16.5] "{NoAI:1b,PersistenceRequired:1b}"]
-         [:wait-s 3]
-         [:job (jobs.survival.leave-shelter)]]
-   :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}]
-   :after [[:not-block [17 1 16] "glass"] [:not-block [17 2 16] "glass"]]}
+            {:no-event {:source :job :kind #{:completed :stopped}} :of-job true :for-s 30}
+            {:event {:source :job :kind :completed} :within-s 360 :of-job true}]
+   :after [[:not-block [15 1 16] "glass"] [:block [17 1 16] "glass"]]}
   {:name "fragile-body-leaves-its-seal-by-day-with-nothing-near"
    :time :day :time-why :dawn-decision
    :blocks [[:fill [15 0 15] [23 4 17] "stone"] [:fill [16 1 16] [16 2 16] "air"] [:fill [18 1 16] [22 2 16] "air"]

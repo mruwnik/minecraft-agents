@@ -256,15 +256,19 @@
   ([p e] (danger? p e {}))
   ([p e opts] (danger-in? p (reach/mob-lookup p) e opts)))
 
+(defn opened-lookup
+  "The reach lookup look with cells ([x y z]) open."
+  [look cells]
+  (let [open (set cells)]
+    (fn [x y z] (if (contains? open [x y z]) :open (look x y z)))))
+
 (defn dangers-opened
   "The known hostiles within radius (ranged ones within ranged-radius) that would be a real danger (danger-in?) to the
   body were the cells ([x y z]) open: a way through them to the body, or a line of fire through them, nearest first. A
   heard mob is placed by what the body sees now (open-cell-from): it is not in a cell the cells' opening would show."
   [p radius ranged-radius cells]
-  (let [open (set cells)
-        over (fn [look] (fn [x y z] (if (contains? open [x y z]) :open (look x y z))))
-        kind-at (over (reach/mob-lookup p))
-        opts {:arrow-at (over (reach/arrow-lookup p)) :sight-at (sight-lookup p)}]
+  (let [kind-at (opened-lookup (reach/mob-lookup p) cells)
+        opts {:arrow-at (opened-lookup (reach/arrow-lookup p) cells) :sight-at (sight-lookup p)}]
     (filter #(danger-in? p kind-at % opts) (known-hostiles p radius {:ranged-radius ranged-radius}))))
 
 (defn danger-opened?

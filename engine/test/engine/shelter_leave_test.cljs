@@ -10,7 +10,7 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [engine.fake :as fake]
-            [jobs.survival.leave-shelter :as ls]))
+            [engine.settings :as settings]))
 
 (def shut-in-trigger :dawn)
 
@@ -181,13 +181,27 @@
         (is (= [true true true] (await (held-in-then-out [far-zombie] 3)))
             "fragile, a zombie that could walk in were it open: still in after the grace, out once it is gone")))))
 
-(deftest leaving-a-shelter-toward-a-hostile-is-priced-against-the-hunger-of-staying
-  (let [costs (fn [n health food] (ls/leave-and-stay-costs {:dead 100 :chance 0.002 :n n :health health :food food}))
-        leaves? (fn [n health food] (let [[leave stay] (costs n health food)] (<= leave stay)))]
-    (is (false? (leaves? 1 3 18)) "food 18: it heals, nothing is gained by leaving")
-    (is (false? (leaves? 1 3 12)) "hungry a little: staying is cheaper")
-    (is (true? (leaves? 1 3 0)) "food 0: staying kills too, leave")
-    (is (false? (leaves? 3 3 0)) "three dangers outside make leaving dearer")
-    (is (false? (leaves? 1 1 0)) "at 1 hp the same danger weighs heavier")
-    (is (true? (leaves? 1 6 0)) "less hurt, cheaper to leave")
-    (is (= 100 (first (costs 100 1 0))) "a chance never passes 1")))
+(deftest a-fragile-body-held-by-a-zombie-that-stays-leaves-once-the-hold-has-cost-the-cheapest-way-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await
+         (settings/with-settings {:jobs.survival.leave-shelter/job-time-s 30} ; runs end on their budget: the hold spans several
+           (fn ^:async held []
+             (let [{:keys [eng p clock]} (await (dug-in-world {:entities [far-zombie] :self {:health 3}}))
+                   sealed {:x 0.5 :y 64 :z 0.5}
+                   held (atom nil)]
+               (st/on-wait! p (fn [n]
+                                (swap! clock + 5000) ; a hold's wait takes its 5 s
+                                (when (= n 2) (reset! held [(= sealed (st/pos-of p)) (count (st/entries eng :fragile-hold))]))))
+               (.setTime (.-world p) grace-passed)
+               (core/load-scenario! eng (scenario/parse (str "{:register [{:trigger " shut-in-trigger "}]}")))
+               (loop [i 0] ; ticks 11 s apart: the dawn trigger's 10 s cooldown passes between runs
+                 (when (< i 80)
+                   (swap! clock + 11000)
+                   (await (core/tick! eng))
+                   (recur (inc i))))
+               (is (= [true 1] @held) "held, the start of the hold kept in body memory")
+               (is (some #{7} (map :id (:entities @(fake/state p)))) "the zombie never left")
+               (is (< (:x (st/pos-of p)) 0) "out through the west wall, the side farthest from the zombie (east)")
+               (is (empty? (st/entries eng :fragile-hold)) "the hold forgotten once out")))))))))

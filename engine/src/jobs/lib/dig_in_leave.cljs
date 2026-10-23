@@ -176,30 +176,42 @@
           (skip-cell! c cell (keyword (.-status r))))
         :continue))))
 
+(defn door-of
+  "escape/door through the wall from the feet along heading h, or nil."
+  [p h]
+  (let [{:keys [x y z]} (sh-sense/feet p)]
+    (escape/door (escape/block-at-of p) (escape/unseen-of p) [x y z] (get headings h) (escape/max-door))))
+
+(defn exit-cells
+  "The cells of a way out along heading h, as [x y z]: its door's (door-of) and the cell beyond, else the two beside the
+  body that way."
+  [p h]
+  (let [{:keys [x y z]} (sh-sense/feet p)
+        [dx dz] (get headings h)]
+    (if-let [{:keys [cells through]} (door-of p h)]
+      (conj (vec cells) through)
+      [[(+ x dx) y (+ z dz)] [(+ x dx) (inc y) (+ z dz)]])))
+
 (defn level-exit
-  "{:heading :cells :through} for the first heading (nearest toward first) not yet tried (leave-mem :level-tried) whose wall
+  "{:heading :cells :through} for the first heading of order not yet tried (leave-mem :level-tried) whose wall
   is at most escape/max-door thick, has a floor beyond at the feet's level and may be dug here; else nil."
-  [c toward]
+  [c order]
   (let [p (:primitives c)
-        feet (sh-sense/feet p)
-        cell [(:x feet) (:y feet) (:z feet)]
-        block-at (escape/block-at-of p)
         tried (:level-tried (leave-mem c))]
     (some (fn [h]
             (when-not (contains? tried h)
-              (let [d (get headings h)
-                    {:keys [cells through] :as door} (escape/door block-at (escape/unseen-of p) cell d (escape/max-door))]
+              (let [{:keys [cells through] :as door} (door-of p h)]
                 (when (and door (not-any? #(tidy/refusal c :dig (zipmap [:x :y :z] %)) cells))
                   {:heading h :cells cells :through through}))))
-          (heading-order feet toward))))
+          order)))
 
 (defn ^:async level-exit!
   "One step of walking out of a shelter that records neither a door nor a pit start, at the floor through the wall as a
   player would, not by a stair up: digs the exit's solid cells, then steps through. nil when no wall can be dug (the
   stair is the way)."
-  [c toward]
+  [c order]
   (let [p (:primitives c)
-        e (or (:exit (leave-mem c)) (level-exit c toward))]
+        e (or (:exit (leave-mem c)) (level-exit c order))]
     (when e
       (update-leave! c assoc :exit e)
       (if-let [cell (first (filter #(sh-sense/solid-at? p (zipmap [:x :y :z] %)) (:cells e)))]
@@ -212,17 +224,19 @@
         (let [[x y z] (:through e)]
           ;; raw moveTo kept: a step through the hole the job just dug, range 0.5; the planner has no standable goal in its own wall.
           (await (ctx/act c :moveTo (clj->js {:pos {:x x :y y :z z} :range 0.5})))
-          (update-leave! c #(-> % (update :level-tried (fnil conj #{}) (:heading e)) (dissoc :exit)))
+          (update-leave! c #(-> % (update :level-tried (fnil conj #{}) (:heading e)) (dissoc :exit) (assoc :stepped true)))
           :continue)))))
 
 (defn ^:async climb!
   "One stair attempt out of a pit (jobs.access.stair :up, a child of the caller): to the :start height, or with no
   :start one step at a time until nothing solid is within sh-sense/roof-height above, at most max-climb steps. A
   stopped stair books its reason and the next heading is tried; so does one that cannot start (it lacks a slot), and it digs on with a worn last pickaxe (a way out),
-  instead of waiting, because the caller (jobs.survival.night) must end failed, not wait, when trapped."
-  [c {:keys [start]} toward]
-  (let [{:keys [i order tries climbed] :or {i 0 tries [] climbed 0}} (leave-mem c)
-        order (or order (heading-order (sh-sense/feet (:primitives c)) toward))
+  instead of waiting, because the caller (jobs.survival.night) must end failed, not wait, when trapped. The headings go
+  in order, else the one nearest toward first."
+  ([c entry toward] (climb! c entry toward nil))
+  ([c {:keys [start]} toward order]
+  (let [{:keys [i tries climbed] :or {i 0 tries [] climbed 0}} (leave-mem c)
+        order (or (:order (leave-mem c)) order (heading-order (sh-sense/feet (:primitives c)) toward))
         _ (update-leave! c assoc :order order)
         attempt (get (exit-attempts order) i)]
     (cond
@@ -245,20 +259,22 @@
                                           (update :tries (fnil conj [])
                                                   (merge {:heading (:heading attempt)} (select-keys data [:cell :heading])
                                                          {:reason (contract/cause-key e)}))))
-                    :continue))))))
+                    :continue)))))))
 
 (defn ^:async leave!
   "One round of getting the body out of the shelter shut-in built. The shelter job calls it by day.
   Progress is in the caller's job memory under :dig-out. The stair is its child :dig-out-<i>.
   Resolves to :continue while working, else {:status :done|:stopped :reason :out|:unsafe|:no-way-out :at [x y z]}
   plus :why (:unsafe), :heading (the stair that got it out) or :tries ({:heading :reason :cell} per stopped stair).
-  The shelter is the latest :shelter entry when the body stands in its :pos and is shut in. Without one: done, :out.
+  The shelter is the latest :shelter entry when the body stands in its :pos and is shut in. Without one: done, :out,
+  once a level exit the caller began (level-exit!) is through.
   At night nothing is dug: stopped, :unsafe, :why :night. By day it leaves whatever hostiles are around.
-  - A walled shelter: digs its :door cells (feet, then head), then steps through to the cell beyond if it has a floor;
+  - A walled shelter: digs its :door cells (feet, then head), then steps through to the cell beyond if it has a floor
+    (with :order, through the first heading of it with a level exit instead);
     still shut in by a pit :start with the door open, it climbs.
   - A pit (:start) or a roofed shaft (no :start, no :door): a stair up (jobs.access.stair :up) to the start height.
     A shaft goes one step at a time until nothing solid is within 4 above (at most 32 steps, else :too-deep).
-    The heading nearest :toward goes first. The stair refuses lava, water, falling blocks and a missing floor,
+    The headings go in :order (e.g. cheapest first), else the one nearest :toward first. The stair refuses lava, water, falling blocks and a missing floor,
     and then the next heading is tried. With no pickaxe it digs by hand (the drop is lost), as a player would.
   - Only when a heading stopped for an access reason (:zone :claim :footprint :no-zones),
     all four are tried again with :ignore-zones?, the survival last resort.
@@ -269,19 +285,24 @@
   With :any-time? (go-to's escalation, whose route risk priced the exit) the body leaves at night too.
   Events: dig-in.left (info), dig-in.staying (info, unsafe), dig-in.trapped (warn, no way out)."
   ([c] (leave! c {}))
-  ([c {:keys [toward take-back? any-time?] :or {take-back? true}}]
+  ([c {:keys [order toward take-back? any-time?] :or {take-back? true}}]
    (let [p (:primitives c)
+         priced order
+         order (or priced (heading-order (sh-sense/feet p) toward))
          entry (or (:entry (leave-mem c)) (sheltered-in c))
          _ (when entry (update-leave! c assoc :entry entry))
          shut? (and entry (shut-in? p entry))
          step? (and entry (:door entry) (not shut?) (not (:stepped (leave-mem c))))
          unsafe (when-not any-time? (leave-unsafe p))
-         why (when shut? unsafe)]
+         why (when shut? unsafe)
+         level-first? (and priced (:door entry) shut? (not why) (or (:exit (leave-mem c)) (level-exit c order)))]
      (cond
+       (and (not entry) (:exit (leave-mem c)) (not unsafe)) (await (level-exit! c order))
        step? (await (open-door! c (:door entry)))
        (and (not shut?) take-back? (not unsafe) (= :continue (await (take-back! c)))) :continue
        (not shut?) (leave-result! c :done :out (select-keys (leave-mem c) [:heading]))
        why (leave-result! c :stopped :unsafe {:why why})
+       level-first? (await (level-exit! c order))
        (some #(sh-sense/solid-at? p %) (:door entry)) (await (open-door! c (:door entry)))
-       (and (not (:start entry)) (not (:door entry)) (or (:exit (leave-mem c)) (level-exit c toward))) (await (level-exit! c toward))
-       :else (await (climb! c entry toward))))))
+       (and (not (:start entry)) (not (:door entry)) (or (:exit (leave-mem c)) (level-exit c order))) (await (level-exit! c order))
+       :else (await (climb! c entry toward priced))))))

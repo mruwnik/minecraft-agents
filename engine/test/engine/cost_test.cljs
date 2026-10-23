@@ -339,6 +339,15 @@
     (is (> (cost/death-cost (assoc body :level 10) far) (cost/death-cost body far)))
     (is (= (cost/experience-cost {:level 10}) (- (cost/death-cost (assoc body :level 10) far) (cost/death-cost body far))))))
 
+(deftest a-hold-costs-its-seconds-and-hp-lost-and-a-way-out-its-hurt-and-death-risk
+  (let [body {:respawn {:x 0 :y 64 :z 0} :level 0 :health 3}
+        route {:underground? true}]
+    (is (= 100 (cost/hold-price {:held-s 100 :hp-lost 0 :health 3})))
+    (is (= (+ 100 (* 2 (cost/hp-price 3))) (cost/hold-price {:held-s 100 :hp-lost 2 :health 3})) "hunger's hp at the price of the health left")
+    (is (= (cost/route-death-cost body route far) (cost/opening-price body 0 route far)) "no hurt: the death risk alone")
+    (is (< (cost/opening-price (assoc body :health 20) 2 route far) (cost/opening-price body 2 route far)) "the same hurt is dearer to a weaker body")
+    (is (= (cost/opening-price body 3 route far) (cost/opening-price body 300 route far)) "no more hp than the body has")))
+
 (deftest a-death-by-terrain-costs-plans-near-its-spot-fading-with-age
   (let [at {:x 1 :y 64 :z 2}
         danger #(cost/terrain-danger {:pos at :cause "fall" :weight (cost/death-weight %)})]

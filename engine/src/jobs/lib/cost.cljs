@@ -21,7 +21,7 @@
     planner  planner-costs-problem, planner-costs, planner-names: go-to's :costs, the per-move prices it may override; landing-problem, planner-landing: go-to's :landing, fall damage by landing block; air-profile, water-breathing-s, air-used, air-costs: the planner's air drain and grace from the body's helmet, the air a dive has used; air-left-s, wet-move-s, wet-way-s, wet-spare-s, wet-ok?: the air a walk over unseen water keeps back at its last breath, each move at its measured pace; swim-profile: its swimH from Depth Strider on the boots; swim-factor: a swim block in walk blocks (a flight's water price); gait-problem, gait-costs: go-to's :gait; unknown-prices: the planner's prices of unseen cells (jobs.lib.cost.planner); unseen-route-s, unseen-route-hp: those prices of a route's unseen steps, in seconds or hp; unseen-walk-s: with a drop onto an unseen end.
     tolls    farm-tolls, zone-tolls: go-to's :tolls for planted cells and zone cells to cross only as a last resort
              (jobs.lib.cost.tolls).
-    death    experience-cost, death-cost, death-chance, route-death-cost: death as an ordinary cost, the walk back for the items plus the experience; a route pays its chance of dying x that; spawn-worth: a respawn point's worth; worth-to, leg-price, search-radius, wait-price: what a find is worth, a search leg's price, how far its legs may go, what waiting for a listed maker costs; death-weight, terrain-danger: a remembered death's fade and the plan cost near a death by terrain (jobs.lib.cost.death).
+    death    experience-cost, death-cost, death-chance, route-death-cost: death as an ordinary cost, the walk back for the items plus the experience; a route pays its chance of dying x that; spawn-worth: a respawn point's worth; worth-to, leg-price, search-radius, wait-price: what a find is worth, a search leg's price, how far its legs may go, what waiting for a listed maker costs; opening-price, hold-price: opening a shelter to mobs against holding on in it; death-weight, terrain-danger: a remembered death's fade and the plan cost near a death by terrain (jobs.lib.cost.death).
     base-rates  density, biome-chance, expected-density, peak-density: the ore a block of ground is expected to hold, from the game's
              own placements, and the chance of a biome on ground the body has not seen (jobs.lib.cost.base-rates)."
   (:require [clojure.string :as str]
@@ -267,6 +267,18 @@
   (let [r (:route q)]
     (+ (if (:found r) (or (:priced r) (:seconds r)) (second (get-in q [:uses :job-time])))
        (route-death-cost body route at))))
+
+(defn opening-price
+  "Seconds a way out costs body (death-body keys and :health): the hurt hp it expects (route-danger's :danger of the way),
+  at most its health (the rest is the death), at hp-price of its health, and the death it risks (route-death-cost of
+  route at `at`)."
+  [body hurt route at]
+  (+ (* (min hurt (:health body)) (hp-price (:health body))) (route-death-cost body route at)))
+
+(defn hold-price
+  "Seconds a hold has cost: the seconds held and the hp lost meanwhile (hunger), each at hp-price of the health left."
+  [{:keys [held-s hp-lost health]}]
+  (+ held-s (* (max 0 hp-lost) (hp-price health))))
 
 (defn light-wait-worth
   "Seconds fetching n torches to light a site is worth instead of waiting wait-s for light: the wait less placing them (light-cost)."

@@ -10,6 +10,8 @@
             [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.lib.escape :as escape]
             [jobs.lib.foods :as foods]
+            [jobs.lib.look :as look]
+            [jobs.lib.reach :as reach]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.waits :as waits]
             [jobs.lib.shelter.clock :as sh-clock]
@@ -21,6 +23,7 @@
             [jobs.lib.shelter.spawn :as sh-spawn]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
+            [engine.game :as game]
             [jobs.survival.night.hold :as hold]))
 
 (def doc
@@ -30,19 +33,15 @@
   dug, a pit climbed, the shelter's valuable blocks taken back), no doorway the night filled (still holding a block it
   put there) to dig again, no bed it put down outside its own zones (never the live respawn bed: it stays) to pick up, no drop to walk
   over. A shelter with no way out ends nothing-possible :no-way-out (the cell is remembered as :shelter-trapped, so the
-  trigger lets go). A shelter it left is remembered the same way, so a walk back through its cell is no new dawn. A body shut in stays while a known hostile is near and the dawn grace lasts (night.dawn-hold; longer with no weapon carried), and a fragile one (jobs.lib.foods/fragile?) after it too while a hostile could reach or shoot it were the shelter open and leaving costs more than staying (fragile-hold: death risk against the hunger of a body that heals nothing).
+  trigger lets go). A shelter it left is remembered the same way, so a walk back through its cell is no new dawn. A body shut in stays while a known hostile is near and the dawn grace lasts (night.dawn-hold; longer with no weapon carried), and a fragile one (jobs.lib.foods/fragile?) after it too while a hostile could reach or shoot it were the shelter open, until the hold has cost as much as the cheapest way out (fragile-hold); it then leaves by that way.
   A doorway cell it could not open is warned night.doorway-stuck once and tried again quietly.
   The doorway blocks and the bed are scaffold-ledger entries (purposes :doorway, :bed); one jobs.access.cleanup call takes them back.
-  Memory: job memory :dig-out, :take-back; body memory :shelter-trapped, :doorway-stuck-warned.")
+  Memory: job memory :dig-out, :take-back; body memory :shelter-trapped, :doorway-stuck-warned, :fragile-hold.")
 
 (a/defargs args {})
 
 (a/defargs settings
-  {::danger-factor {:default 50 :spec (a/num-in 0 nil)
-                    :doc "How many times deadlier than an ordinary underground route one opening toward a hostile that could reach or shoot the body is, at fragile-health (more as health falls)."}
-   ::hunger-factor {:default 150 :spec (a/num-in 0 nil)
-                    :doc "How many times deadlier than an ordinary underground route staying shut in with no regeneration is, at food 0 (in proportion to the food missing from jobs.lib.foods/top-up-food)."}
-   ::job-time-s {:default 600 :doc "Seconds leaving the shelter may take: a bound against a runaway morning." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 600 :doc "Seconds leaving the shelter may take: a bound against a runaway morning." :spec (a/num-in 0 nil)}
    ::morning-s {:default 60 :doc "Seconds the morning (out of the shelter, a put-down bed picked up) is reckoned to take at most, in the quote." :spec (a/num-in 0 nil)}})
 
 (def target [])
@@ -116,37 +115,43 @@
     (when (foods/fragile? (.self p))
       (seq (danger/dangers-opened p threats/max-follow-range (danger/ranged-radius) (opened-cells c))))))
 
-(defn leave-and-stay-costs
-  "[leave stay] in seconds for a body of `health` and `food` with n dangers, a death costing `dead` seconds and an
-  ordinary underground route killing with chance `chance`: leaving risks chance x ::danger-factor x n, scaled by
-  fragile-health over health; staying with food under top-up-food heals nothing and risks chance x ::hunger-factor x the
-  food missing over top-up-food. Each is a chance of dying (at most 1) times `dead`."
-  [{:keys [dead chance n health food]}]
-  (let [weak (/ (settings/get foods/settings ::foods/fragile-health) (max 1 health))
-        missing (/ (max 0 (- foods/top-up-food food)) foods/top-up-food)]
-    [(* dead (min 1 (* chance n weak (settings/get settings ::danger-factor))))
-     (* dead (min 1 (* chance missing (settings/get settings ::hunger-factor))))]))
+(defn exits
+  "The headings out of the shelter, cheapest first, as {:heading :price :hurt}: cost/opening-price of the way through
+  its cells (dig-leave/exit-cells), the hurt of cost/route-danger from the hostiles that could reach or shoot the body
+  were they open (jobs.lib.danger/dangers-opened); at one price (a hurt past the health), the least hurt first."
+  [c]
+  (let [p (:primitives c)
+        self (.self p)
+        body (assoc (cost/death-body p (ctx/view c)) :health (.-health self))
+        route {:underground? (sh-sense/buried? p) :night? (look/dark-here? p)}
+        weapon (combat/best-weapon p (combat/weapons c))]
+    (sort-by (juxt :price :hurt)
+             (for [h (keys dig-leave/headings)
+                   :let [cells (dig-leave/exit-cells p h)
+                         mobs (map (fn [m] {:name (.-name m) :pos (danger/mob-pos p m)})
+                                   (danger/dangers-opened p threats/max-follow-range (danger/ranged-radius) cells))
+                         hurt (:danger (cost/route-danger (game/version-of p) (danger/opened-lookup (reach/mob-lookup p) cells)
+                                                          (map #(zipmap [:x :y :z] %) cells) mobs (.-equipment self)
+                                                          :weapon weapon :health (.-health self)))]]
+               {:heading h :price (cost/opening-price body hurt route (sh-sense/feet p)) :hurt hurt}))))
+
+(def hold-policy
+  "Policy of :fragile-hold, the start of the hold under way: it outlives the runs the dawn trigger fires again (a run's
+  budget ends it, the hold does not), and step! forgets it once nothing holds the body."
+  {:cap 1 :ttl :forever})
 
 (defn fragile-hold
-  "The fragile-dangers a fragile body stays shut in for after the dawn grace: while leaving costs more than staying
-  (leave-and-stay-costs). Past that it leaves, digging out away from them (fragile-away)."
-  [c]
-  (when-let [ds (fragile-dangers c)]
-    (let [p (:primitives c)
-          self (.self p)
-          body (cost/death-body p (ctx/view c))
-          [leave stay] (leave-and-stay-costs {:dead (cost/death-cost body (sh-sense/feet p))
-                                              :chance (cost/death-chance body {:underground? true})
-                                              :n (count ds) :health (.-health self) :food (.-food self)})]
-      (when (> leave stay) ds))))
-
-(defn fragile-away
-  "A point on the far side of the feet from the nearest fragile danger, for leave!'s :toward; nil with none."
-  [c]
-  (when-let [d (first (fragile-dangers c))]
-    (let [f (sh-sense/feet (:primitives c))
-          m (u/pos-of (.-pos d))]
-      {:x (- (* 2 (:x f)) (:x m)) :z (- (* 2 (:z f)) (:z m))})))
+  "The fragile-dangers a fragile body stays shut in for after the dawn grace, while the hold since its :fragile-hold
+  start (cost/hold-price: seconds held, hp lost) costs less than the cheapest of exits: waiting longer than leaving
+  costs is never worth it when how long the danger stays is unknown."
+  [c ds]
+  (when ds
+    (let [health (.-health (.self (:primitives c)))
+          {:keys [since] :as start} (or (:data (ctx/latest c :fragile-hold)) {:since (ctx/now c) :health health})]
+      (when (< (cost/hold-price {:held-s (/ (- (ctx/now c) since) 1000) :hp-lost (- (:health start) health) :health health})
+               (:price (first (exits c))))
+        (when-not (ctx/latest c :fragile-hold) (ctx/remember! c :fragile-hold start hold-policy))
+        ds))))
 
 (defn pending?
   "Whether the morning still has work (by night too, so a run then is no \"nothing left\"): a dig-out, a shelter to leave, a doorway the night filled to open, a
@@ -178,8 +183,10 @@
         doorway (sh-beds/doorway-to-open p (ctx/view c))
         sealed (seals c)
         shelter (or doorway (dig-leave/sheltered-in c) sealed)
+        fragile (when shelter (fragile-dangers c))
         grace (when shelter (seq (dawn/hostile-hold p (boolean (combat/best-weapon p (combat/weapons c))))))
-        ds (when shelter (mapv #(dawn/describe p %) (or grace (fragile-hold c))))]
+        ds (when shelter (mapv #(dawn/describe p %) (or grace (fragile-hold c fragile))))]
+    (when-not fragile (ctx/forget-where! c :fragile-hold (constantly true)))
     (cond
       (seq ds)
       (let [what (dawn/hostile-text ds)
@@ -192,18 +199,21 @@
                                                :hostiles ds}))
         (await (hold/hold! c (if grace (str "first light: " what) (str "health " hp ", " what)))))
       doorway (await (take-back! c))
+      (and sealed fragile (not (:dig-out (ctx/mem c))) (not (dig-leave/sheltered-in c))
+           (= :continue (await (dig-leave/level-exit! c (map :heading (exits c))))))
+      :again
       (and sealed (not (:dig-out (ctx/mem c))) (not (dig-leave/sheltered-in c)))
       (let [r (await (ctx/call c :seal-cleanup 'jobs.access.cleanup
-                               {:of :all :purpose seal-purposes :accept-hostiles? (boolean (fragile-dangers c)) :near {:pos (u/self-pos c) :radius ledger/seal-clear-radius} :checks {:fit? '(always) :safe? '(not (threatened))}}))]
+                               {:of :all :purpose seal-purposes :near {:pos (u/self-pos c) :radius ledger/seal-clear-radius} :checks {:fit? '(always) :safe? '(not (threatened))}}))]
         (if (and (not= :continue r) (some (comp #{:hostile-near :danger} :reason) (get-in r [:data :open])) (escape/enclosed? p nil :solid))
           (ctx/end c :nothing-possible :seal-kept {:text "still shut in by its own blocks, kept while a known hostile is near; giving the body back"})
           :again))
       (or (:dig-out (ctx/mem c)) shelter)
-      (let [r (await (dig-leave/leave! c {:toward (fragile-away c)}))]
+      (let [r (await (dig-leave/leave! c (when fragile {:order (map :heading (exits c))})))]
         (cond
           (= :continue r) :again
           (= :out (:reason r))
-          (do (ctx/remember! c :shelter-trapped {:pos (:pos (:data (ctx/latest c :shelter)))} sh-inside/left-policy)
+          (do (when-let [pos (:pos (:data (ctx/latest c :shelter)))] (ctx/remember! c :shelter-trapped {:pos pos} sh-inside/left-policy))
               :again)
           (= :no-way-out (:reason r))
           (let [text "no way out of the shelter by day; giving the body back"]
