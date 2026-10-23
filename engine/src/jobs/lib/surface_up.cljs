@@ -131,5 +131,5 @@
               (cond
                 (= :continue r) :continue
                 (:arrived (:data r)) (do (ctx/update-mem! c dissoc :leave-water) :out)
-                :else (do (ctx/update-mem! c update :leave-water #(-> % (dissoc :stand) (update :failed (fnil conj #{}) ((juxt :x :y :z) stand))))
+                :else (do (ctx/update-mem! c update :leave-water #(-> % (dissoc :stand) (update :failed (fnil conj #{}) (select-keys stand [:x :y :z]))))
                           :again))))))

@@ -245,20 +245,23 @@
     (is (= [] (wplan/dry-end [(s 0)])) "without wet-ok? swimming steps are cut")))
 
 (defn- masked-kept
-  "How many of 30 swimming steps of move after a dry step a masked plan of a body with oxygen keeps (masked-cut)."
-  [oxygen move]
-  (let [ok (wplan/masked-wet-ok {:primitives (tu/fake {:self {:pos [0 64 0] :inWater true :oxygen oxygen}})})
+  "How many of 30 swimming steps of move after a dry step a masked plan of a body with oxygen (and the walk's food) keeps (masked-cut)."
+  ([oxygen move] (masked-kept oxygen move 20))
+  ([oxygen move food]
+  (let [ok (wplan/masked-wet-ok {:primitives (tu/fake {:self {:pos [0 64 0] :inWater true :oxygen oxygen}}) :args {:food food}})
         steps (into [{:x 0 :move :walk}] (map (fn [x] {:x x :move move :swim true})) (range 1 31))]
-    (dec (count (first (wplan/masked-cut steps ok))))))
+    (dec (count (first (wplan/masked-cut steps ok)))))))
 
 (deftest masked-wet-ok-keeps-a-swim-while-the-way-back-leaves-the-air-margin
-  ;; 15 s of air, 1.5 s margin; a step out and back at each kind's pace: a level swim 2 x 0.39 s, a climb down 0.83 s out and 1.12 s back up
-  (are [costs oxygen move kept] (= kept (settings/with-settings {:jobs.lib.cost.planner/wet-margin-s 1.5 :jobs.lib.cost.planner/costs costs} #(masked-kept oxygen move)))
-    false 20 :swim 17
-    false 20 :climb-down 6
-    false 17 :swim 10
-    false 11 :swim 0
-    {:swim-sub-h 0.52} 20 :swim 8))
+  ;; 15 s of air, 1.5 s margin; a step out and back at each kind's pace: a level swim 2 x 0.39 s, a climb down 0.83 s out and 1.12 s back up;
+  ;; a body that does not sprint (food 6) swims a level cell at swimH, 2 x 0.75 s, as the planner prices it
+  (are [costs oxygen move food kept] (= kept (settings/with-settings {:jobs.lib.cost.planner/wet-margin-s 1.5 :jobs.lib.cost.planner/costs costs} #(masked-kept oxygen move food)))
+    false 20 :swim 20 17
+    false 20 :climb-down 20 6
+    false 17 :swim 20 10
+    false 11 :swim 20 0
+    {:swim-sub-h 0.45} 20 :swim 20 10
+    false 20 :swim 6 9))
 
 (deftest stop-short-ends-a-partial-plan-out-of-reach-of-a-blocking-mob
   (let [steps (mapv (fn [x] {:x x :y 12 :z 16}) (range 0 12))

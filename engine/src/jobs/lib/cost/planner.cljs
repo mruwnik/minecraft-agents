@@ -211,10 +211,14 @@
 
 (defn wet-move-s
   "Real seconds a body takes for one step of move under water: the price the planner has for it under policy (policy-costs)
-  times the setting ::wet-pace of its kind; a move without a price (the start) takes none."
+  times the setting ::wet-pace of its kind; a move without a price (the start) takes none. As in the planner, swimSubH is at
+  most swimH: a body that does not sprint (swimSubH infinite) swims a level cell at swimH."
   [policy move]
   (if-let [[price kind] (get wet-prices move)]
-    (* (unchecked-get (policy-costs policy) price) (get (settings/get settings ::wet-pace) kind))
+    (let [costs (policy-costs policy)
+          s (cond-> (unchecked-get costs price)
+              (= "swimSubH" price) (min (unchecked-get costs "swimH")))]
+      (* s (get (settings/get settings ::wet-pace) kind)))
     0))
 
 (defn air-left-s
