@@ -218,7 +218,7 @@
 (def death-chance death/death-chance)
 (def route-death-cost death/route-death-cost)
 (def spawn-worth death/spawn-worth)
-(def spawn-horizon-s death/spawn-horizon-s)
+(defn spawn-horizon-s [] (death/spawn-horizon-s))
 (def death-weight death/death-weight)
 (def terrain-danger death/terrain-danger)
 
