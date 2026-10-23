@@ -496,6 +496,31 @@
         (do (swap! left dec) {:error "ETIMEDOUT"})
         (ok call)))))
 
+(defn flaky-post-engine
+  "engine whose first `failures` job POSTs time out (a busy engine; the job is queued each time)."
+  [failures]
+  (let [left (atom failures)]
+    (fn [{:keys [method] :as call}]
+      (if (and (= "POST" method) (pos? @left))
+        (do (swap! left dec) {:error "ETIMEDOUT"})
+        (engine call)))))
+
+(deftest a-submit-that-times-out-is-sent-again-with-the-same-request-id
+  (let [state (state-dir)
+        spec "(jobs.time.wait-for-light)"]
+    (async done
+      (-> (run-main! state ["submit" spec] (flaky-post-engine 2))
+          (.then (fn [{:keys [code seen]}]
+                   (let [posts (filterv #(= "POST" (:method %)) seen)]
+                     (is (= 0 code) "the third try answers")
+                     (is (= 3 (count posts)))
+                     (is (= 1 (count (set (map :body posts)))) "every try carries the one request ID"))))
+          (.then (fn [_] (run-main! state ["submit" spec] (flaky-post-engine 9))))
+          (.then (fn [{:keys [code out]}]
+                   (is (= 2 code))
+                   (is (= :unknown (:confirmation (data/read-edn out))) out)))
+          (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
+
 (deftest a-busy-engine-does-not-let-a-twin-submit-through-the-guard
   (let [state (state-dir)
         twin [{:id "j1" :name "jobs.gather.mine" :status :running}]]

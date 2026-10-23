@@ -247,16 +247,30 @@
     request
     (update request :spec stamp-from position (takes-from? (:spec request)))))
 
+(def mutation-attempts 3)
+
+(defn retrying-timeouts
+  "A promise of (send!), sent again (up to mutation-attempts times) when it timed out: a mutation carries its request ID
+  and generation, so the engine answers a repeat with the first result and a busy engine does not leave the caller unsure."
+  [send!]
+  (letfn [(attempt [left]
+            (.catch (send!) (fn [error]
+                              (if (and (> left 1) (= :timeout (http/transport-reason error)))
+                                (attempt (dec left))
+                                (throw error)))))]
+    (attempt mutation-attempts)))
+
 (defn exchange! [r opts]
   (cond
     (:resolve r) (post! (:socketPath r) (:request r) (assoc opts :path (:path r)))
     (:mutating r)
-    (.then (get! (:socketPath r) "/snapshot" opts)
+    (.then (retrying-timeouts #(get! (:socketPath r) "/snapshot" opts))
            (fn [snapshot]
              (when-not (and (= 200 (:status snapshot)) (http/edn-response? (:content-type snapshot)))
                (throw (js/Error. "snapshot unavailable")))
-             (let [generation (generation-for! r snapshot)]
-               (post! (:socketPath r) (-> (stamped (:request r) (:position (data/read-edn (:text snapshot)))) (assoc :generation-id generation)) (assoc opts :path (:path r))))))
+             (let [generation (generation-for! r snapshot)
+                   body (-> (stamped (:request r) (:position (data/read-edn (:text snapshot)))) (assoc :generation-id generation))]
+               (retrying-timeouts #(post! (:socketPath r) body (assoc opts :path (:path r)))))))
     :else (get! (:socketPath r) (:path r) opts)))
 
 (defn job-detail [value]
