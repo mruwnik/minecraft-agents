@@ -1,0 +1,20 @@
+;; Card cd3e838f: a hurt body (11.5 hp) that cannot heal searches for sheep with go-to's spend-down floor (all but 1 hp
+;; may be spent); a 20-block drop (17 hp) is still beyond that. A pit 20 deep cuts the lit plot from side to side
+;; with no sheep anywhere: the search roams but never steps off the rim.
+;; Should-succeed: no fall hurt while the search roams.
+{:defaults
+ {:tags [:explore :search :movement]
+  :time :any
+  :plot {:light :lit :height 6 :length 48 :width 32}
+  :blocks [[:fill [14 -20 0] [33 -1 31] "air"]]
+  :body {:at [6.5 0 16.5] :settle-s 2}
+  :limit-s 60}
+ :cases
+ [{:name "hurt-hungry-search-does-not-walk-off-a-pit"
+   :body {:at [6.5 0 16.5] :effects [["hunger" 120 255]]}
+   :act [[:wait-s 3]
+         [:rcon "damage $BODY 8.5 minecraft:generic"]
+         [:job (jobs.explore.search {:target ["sheep"] :count 1 :settings {:jobs.explore.search/max-legs 6}})]]
+   :expect [{:event {:source :job :kind :planned} :within-s 30 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 40 :until {:source :job :kind #{:completed :stopped}}}]
+}]}
