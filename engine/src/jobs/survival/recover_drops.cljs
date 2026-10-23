@@ -14,7 +14,6 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.ready :as ready]
             [jobs.lib.shelter.spawn :as sh-spawn]
-            [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]
             [jobs.survival.recover-drops.danger :as dg]
             [jobs.survival.recover-drops.config :as cfg]
@@ -122,7 +121,7 @@
           e (-> (est/estimate c (:data entry) (settings/ticks->ms (game/ticks-since entry (ctx/view c))) quoted)
                 (update :cost est/finite)
                 (assoc :at (ctx/now c)))]
-      (ctx/update-mem! c #(cond-> (assoc % :decided e :reestimated true :recheck false) (nil? (:baseline %)) (assoc :baseline (storage/carried-totals (u/inventory (:primitives c))))))
+      (ctx/update-mem! c #(cond-> (assoc % :decided e :reestimated true :recheck false) (nil? (:baseline %)) (assoc :baseline (pl/baseline c (:t entry)))))
       (dth/save-trip! c)
       e)))
 

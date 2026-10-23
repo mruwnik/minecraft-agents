@@ -749,6 +749,18 @@
                                              :item {:name name :count count}})
                items))
 
+(deftest recover-drops-counts-drops-picked-up-on-waking-beside-them-before-the-trip
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pile [{:name "raw_iron" :count 6 :slot 0} {:name "cobblestone" :count 36 :slot 1}]
+              {:keys [eng p]} (setup {:floor tu/walk-floor :entities (vec (pile-drops (take 1 pile))) :inventory [{:name "cobblestone" :count 36}]})]
+          (die! eng {:pos death-pos :inventory pile})
+          (mem/write! (:store eng) :picked-up {:item "cobblestone" :count 36 :pos {:x 0.5 :y 64 :z 0.5}} {:cap 64 :ttl :forever})
+          (core/submit! eng job {})
+          (await (run-until-empty eng 30))
+          (is (= {:decision :collected :items 42} (select-keys (recovered eng) [:decision :items]))))))))
+
 (deftest recover-drops-ends-partial-unreachable-when-the-pile-is-in-sight-and-none-comes-back
   (async done
     (tu/run-async done
