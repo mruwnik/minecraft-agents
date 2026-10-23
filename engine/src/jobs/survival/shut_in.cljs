@@ -5,6 +5,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.breath :as breath]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
@@ -28,7 +29,7 @@
   It quotes the ways the call allows, starts the cheapest (ties in the order room, walls, pit, pocket; under fire each way's seconds in the open
   are priced too, see price) and, when that one ends other than
   :done, the next cheapest (after a :continue step when a hostile is within 2 blocks); a way that cannot be done here (quote ##Inf) is dropped. Blocks are the call's :use :blocks, else every
-  :build filler (for :night the shelter fillers), carried or dug. None left is nothing-possible :no-way {:text :tried [ways that failed] :dropped [ways that cannot be done]
+  :build filler (for :night the shelter fillers), carried or dug. For :night no way starts with the body in water (nothing-possible :in-water: the caller leaves the water first). None left is nothing-possible :no-way {:text :tried [ways that failed] :dropped [ways that cannot be done]
   :why {way the child's cause} :stops {way {:reason :needs}} (dig-pit's stop reason)}.
   :placed the blocks placed ({:cell [x y z] :item}), also with an ending other than :done. Every placed block goes to the scaffold ledger with :for (default :danger, ledger :retreat-plug, taken back by jobs.access.cleanup once no
   hostile is near; :night: ledger :shelter, left alone). A cell in another's zone is used only as a last resort (each way's quote adds plug-way's ::trespass-s).
@@ -206,8 +207,13 @@
   "Start the cheapest way; one that ends other than :done is dropped for this call and the next is chosen on the next step when a hostile is at the body, else at once."
   [c]
   (loop []
-    (if (and (way/enclosed? c) (not (:way (ctx/mem c))))
+    (cond
+      (and (way/enclosed? c) (not (:way (ctx/mem c))))
       (end! c :done nil {:pos (sh-sense/feet (:primitives c)) :way (:way (ctx/mem c))})
+      (and (night/night? c) (not (:way (ctx/mem c))) (breath/in-water? (:primitives c)))
+      (do (await (restore-hand! c))
+          (end! c :nothing-possible :in-water {:text "the body stands in water: a night shelter is not made in water"}))
+      :else
       (let [_ (await (prepare! c))
             chosen (when-not (:way (ctx/mem c)) (await (choose c)))
             _ (when chosen (ctx/update-mem! c #(-> % (assoc :way (:way chosen) :last-way (:way chosen)) (update :dropped (fn [d] (vec (distinct (into (or d []) (:dropped chosen))))))

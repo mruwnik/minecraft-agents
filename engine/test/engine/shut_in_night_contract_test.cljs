@@ -88,3 +88,12 @@
               e (await (shut-in! p {}))]
           (is (= :done (:kind e)))
           (is (empty? (filter #(#{"place" "dig"} (.-name %)) (.-calls (.-world p))))))))))
+
+(deftest no-night-shelter-is-made-with-the-body-in-water
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/fake {:self {:pos {:x 0 :y 65 :z 0}} :blocks (assoc seen/ground "0,65,0" "water") :inventory seen/kit :time 14000})
+              e (await (shut-in! p {}))]
+          (is (= [:nothing-possible :in-water] (ending-of e)))
+          (is (empty? (:placed (:data e))) "nothing placed: the night leaves the water first"))))))

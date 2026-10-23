@@ -1214,12 +1214,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [cell ["0,64,0" "0,65,0"]]
+        (doseq [[cell reason] [["0,64,0" nil] ["0,65,0" :fluid-here]]]
           (let [{:keys [eng p]} (setup {:time night :blocks (merge ground {cell "water"})})]
             (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
             (await (run-until-empty eng 8))
             (is (empty? (calls p "dig")) cell)
-            (is (= :fluid-here (:reason (first (entries eng :shut-in-failed)))) cell)))))))
+            (is (= reason (:reason (first (entries eng :shut-in-failed)))) (str cell ": feet in water try no way (:in-water), the site is not at fault"))))))))
 
 (deftest dig-in-stops-digging-when-fluid-appears-above-the-roof-cell
   (async done

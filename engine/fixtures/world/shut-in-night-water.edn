@@ -1,0 +1,23 @@
+;; Card 2a37782c: no night shelter is made in water (jobs.survival.shut-in {:for :night}). A dark roofed stone hall (feet y 0) with a
+;; wading pool x 10..20, z 10..20 (water y 0 over stone), 64 dirt carried. Standing in the pool: nothing-possible :in-water at once,
+;; nothing placed (the night job leaves the water first). Standing on the dry floor beside it: walled in, done.
+{:defaults
+ {:tags [:survival :night :water]
+  :time :any
+  :plot {:light :dark :height 8}
+  :register []
+  :blocks [[:fill [0 -1 0] [31 3 31] "stone"]
+           [:fill [1 0 1] [30 2 30] "air"]
+           [:fill [10 0 10] [20 0 20] "water"]]
+  :body {:effects [["resistance" 600 4]] :inventory [["dirt" 64]] :settle-s 3}
+  :limit-s 60}
+ :cases
+ [{:name "wading-body-makes-no-shelter-in-water"
+   :body {:at [15.5 0 15.5]}
+   :act [[:job (jobs.survival.shut-in {:for :night :ways #{:walls :pit}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :in-water}} :within-s 20 :of-job true}
+            {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 20}]}
+  {:name "dry-body-beside-the-pool-walls-in"
+   :body {:at [5.5 0 15.5]}
+   :act [[:job (jobs.survival.shut-in {:for :night :ways #{:walls}})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 45 :of-job true}]}]}
