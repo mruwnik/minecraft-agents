@@ -58,7 +58,7 @@
     :removing before the dig, so a cut or restart is decided from the cell. No other block is dug to get at it
     (jobs.blocks.dig :through false): a wall in the aim line is walked round.
   - Else walk to within 3 of the nearest (jobs.movement.go-to as a child, :ways #{:walk}: never digging a way), in legs of
-    ::leg-s. Before each leg a known hostile within ::danger-radius of the cell, or a flight from one near it or the body,
+    ::leg-s. Before each leg a known threat whose field holds the cell (jobs.lib.threats/threats-of), or a flight whose field holds the body,
     holds that cell :danger instead (the hostile reflex acts; the cell is offered again after the hold).
   - Else finish.
 
@@ -80,8 +80,8 @@
 
   Ready: safe? is jobs.lib.ready/safe-at-build here (:hostile-near; a dark cell within the spawn-free radius is no wait); fit? is jobs.lib.ready/fit-armed (:low-health, :poisoned,
   :unarmed: no weapon carried). Both are the :checks defaults, so a caller or trigger overrides them (:checks {:fit? '(always)}).
-  With :of :orphans, scaffold out of dig reach that jobs.lib.ledger/walk-blocker refuses (far below, near a death, roofed, submerged) is not walked to (held :walk-blocked). A walk leg also stops while a mob the body fled from within
-  jobs.lib.threats/fled-memory-ms was last known within jobs.lib.threats/fled-radius of the cell or the body (:danger).
+  With :of :orphans, scaffold out of dig reach that jobs.lib.ledger/walk-blocker refuses (far below, near a death, roofed, submerged) is not walked to (held :walk-blocked). A walk leg also stops while such a threat or flight
+  holds (:danger).
 
   A shelter's block (purpose :shelter or :retreat-plug) stays while a known hostile could reach the body or shoot it were the shelter's blocks open (:hostile-near) and while it opens onto a dark cell (:night; setting jobs.lib.shelter.keep ::at-night?): a neighbour that is not solid and not lit by what the body knows (an unseen one is guessed by the sky), whatever the hour, unless the body stands in the light outside any roof (then the dark inside an emptied shelter is not its use): it keeps the hostile out of the body's refuge. A run that removed a block and leaves only :night cells holds none of them (the light of the opened side may not have reached the body yet).
 
@@ -118,7 +118,6 @@
    ::give-up {:default 2 :doc "Walks ending out of reach, or failed digs, after which a cell is held." :spec (a/int-in 1 nil)}
    ::walk-range {:default 3 :doc "How near a scaffold block the body walks before it digs it." :spec (a/int-in 0 nil)}
    ::max-collect-radius {:default 48 :doc "Blocks around the body in which dropped scaffold is collected, at most." :spec (a/int-in 0 nil)}
-   ::danger-radius {:default 16 :doc "Blocks around a scaffold block within which a known hostile holds it (:danger) instead of a walk." :spec (a/num-in 0 nil)}
    ::worth-hp {:default 1 :doc "Hit points of risk a walk to one scaffold block may cost, at full health: the block is worth little (the walk's go-to :worth)." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 600 :doc "Seconds a cleanup may take: the digs, the walks, the collecting." :spec (a/num-in 0 nil)}})
 (defn time-s [] (settings/get settings ::job-time-s))
@@ -133,7 +132,6 @@
 
 (defn give-up [] (settings/get settings ::give-up))
 
-(defn danger-radius [] (settings/get settings ::danger-radius))
 
 (defn hostile-near?
   "Whether a known hostile (heard or seen) within the longest follow range (ranged ones within the danger ranged radius)
@@ -142,17 +140,16 @@
   [p l]
   (danger-q/danger-opened? p threats/max-follow-range (danger-q/ranged-radius) (keep #(when (stay/shelter-purposes (:purpose %)) (:cell %)) l)))
 
+(def beside (for [dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]] [dx dy dz]))
+
 (defn danger-ahead?
-  "Whether walking to cell is unsafe: a known hostile (seen or heard) near the cell, or a mob the body fled from lately
-  last known near the cell or the body (a danger near the body is safe?'s)."
+  "Whether walking to cell is unsafe: the field of a known threat holds it or a cell beside it, where the body stands to
+  dig it (seen, heard, fled from or met at a death), or
+  that of a mob the body fled from lately holds the body (a danger near the body is safe?'s)."
   [c cell]
-  (let [p (:primitives c)
-        r (danger-radius)
-        [x y z] cell]
-    (boolean (or (threats/fled-near? p (ctx/view c) {:x x :y y :z z})
-                 (threats/fled-near? p (ctx/view c) (u/self-pos c))
-                 (some #(<= (u/dist (danger-q/mob-pos p %) {:x x :y y :z z}) r)
-                       (danger-q/known-hostiles p (+ r (danger-q/known-scan)) {}))))))
+  (let [[x y z] cell]
+    (boolean (or (threats/fled-near? c (u/self-pos c))
+                 (some (fn [{:keys [reach]}] (some (fn [[dx dy dz]] (reach (+ x dx) (+ y dy) (+ z dz))) beside)) (threats/threats-of c))))))
 
 (defn floor-at
   "block-at for the cell under a floor block: what the body has seen, else the item of an entry of the ledger l in that cell,

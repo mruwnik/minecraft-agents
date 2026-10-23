@@ -51,11 +51,13 @@
   ([age-ms] (death-weight age-ms (settings/get settings ::memory-ms)))
   ([age-ms memory-ms] (max 0 (min 1 (- 1 (/ age-ms memory-ms))))))
 
+(defn terrain-radius [] (settings/get settings ::terrain-radius))
+
 (defn terrain-danger
   "The planner danger {:x :y :z :close :radius :rate :mob :block} of a death by terrain `cause` at pos, its rate ::terrain-rate x weight
   (death-weight): never a block, the body may cross the spot."
   [{:keys [pos cause weight]}]
-  {:x (:x pos) :y (:y pos) :z (:z pos) :close (settings/get settings ::terrain-close) :radius (settings/get settings ::terrain-radius)
+  {:x (:x pos) :y (:y pos) :z (:z pos) :close (settings/get settings ::terrain-close) :radius (terrain-radius)
    :rate (* weight (settings/get settings ::terrain-rate)) :mob cause :block false})
 
 (defn experience-cost

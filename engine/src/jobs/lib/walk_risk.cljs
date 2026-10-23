@@ -5,7 +5,7 @@
   Risk = the mobs expected to spawn on the exposed stretches (jobs.lib.cost/spawn-chance per second of walking, each costed
   as a zombie fight with the kit carried, jobs.lib.cost/fight-damage) plus the fight with every hostile known near the way, lit or dark, that catches the walk
   (a ranged one, or a melee one ready/melee-catches?: one the walk leaves behind is no cost).
-  A walk to a goal within the death-spot radius of a place a mob killed the body lately (jobs.lib.death-spot, fading with time) adds the fight with what killed it, weighted by how fresh the death is, underground too, only when the walk ends nearer the death than it starts (a body standing, or walking away from the spot, is no closer to it) and the spot is not seen lit since the death (fresh sight of a lit spot beats the record; a hostile seen there prices as a known hostile); not within ::pile-radius of the goal (a walk to the body's own drops: only a hostile known there counts).
+  A walk to a goal its killer's field holds from a place a mob killed the body lately (jobs.lib.death-spot, fading with time) adds the fight with what killed it, weighted by how fresh the death is, underground too, only when the walk ends nearer the death than it starts (a body standing, or walking away from the spot, is no closer to it) and the spot is not seen lit since the death (fresh sight of a lit spot beats the record; a hostile seen there prices as a known hostile); not within ::pile-radius of the goal (a walk to the body's own drops: only a hostile known there counts).
   Seen lava within jobs.lib.lava-risk/radius of a cell the straight way steps into adds jobs.lib.lava-risk/hp, scaled by its closeness (a slip beside it is lethal); a body already at the goal, or a way clear of lava, adds none.
   Acceptable when it stays within jobs.lib.price/::risk-share of the health the body has now, or, when the caller says what the goal is worth (:worth), within the hp that worth buys (price/allowed)."
   (:require [engine.args :as a]
@@ -102,9 +102,9 @@
         hostiles (danger/hostiles-near-way p goal (settings/get price/settings ::price/way-radius) {})
         away-from-goal (fn [records] (filterv #(> (u/dist goal (:pos %)) (settings/get settings ::pile-radius)) records))
         nearer-goal? (fn [records] (filterv #(< (u/dist goal (:pos %)) (u/dist feet (:pos %))) records))
-        deaths (nearer-goal? (away-from-goal (death-spot/near (filter :mob? (death-spot/uncleared c)) goal)))
+        deaths (nearer-goal? (away-from-goal (death-spot/near c (filter :mob? (death-spot/uncleared c)) goal)))
         death-hp (reduce + (for [{:keys [cause weight]} deaths] (* weight (hit [{:name cause :distance 0 :hits 0}]))))
-        hide-hp (reduce + (for [{:keys [mobs]} (nearer-goal? (away-from-goal (hide-spot/near (hide-spot/recent c) goal)))] (hit (mapv (fn [n] {:name n :distance 0 :hits 0}) mobs))))
+        hide-hp (reduce + (for [{:keys [mobs]} (nearer-goal? (away-from-goal (hide-spot/near c (hide-spot/recent c) goal)))] (hit (mapv (fn [n] {:name n :distance 0 :hits 0}) mobs))))
         lava (route-lava-hp p feet goal step)
         spawn-hp (* spawns (hit [{:name "zombie" :distance 0 :hits 0}]))
         catchers (filterv #(or (combat/ranged? %) (ready/melee-catches? p % goal)) hostiles)

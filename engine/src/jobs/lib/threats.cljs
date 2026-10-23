@@ -23,7 +23,6 @@
 (a/defargs settings
   {::chased-flights {:default 3 :doc "Flights from one mob within the ttl that tell the agent." :spec (a/int-in 1 nil)}
    ::fled-memory-ms {:default 180000 :doc "Milliseconds after a flight during which a mob it fled from still counts as near the place it was last known (errands that walk to a spot hold off), and the body is not sent out on a comfort errand." :spec (a/int-in 0 nil)}
-   ::fled-radius {:default 40 :doc "Blocks around a fled mob's last known place that an errand's walk treats as dangerous." :spec (a/num-in 0 nil)}
    ::max-threats {:default 8 :doc "The most known threats (known-threats) a price reads, the nearest first." :spec (a/int-in 1 nil)}})
 
 (def follow-range threat/follow-range)
@@ -33,8 +32,6 @@
 (def threat-policy {:cap 20 :ttl (* 5 60 1000)})
 
 (defn fled-memory-ms [] (settings/get settings ::fled-memory-ms))
-
-(defn fled-radius [] (settings/get settings ::fled-radius))
 
 (defn fresh-threats
   "The :threat entries of view written within ::fled-memory-ms."
@@ -54,9 +51,11 @@
   (boolean (seq (listed-threats p (fresh-threats view)))))
 
 (defn fled-near?
-  "Whether a listed mob fled from in the last ::fled-memory-ms was last known within ::fled-radius of spot {:x :y :z}."
-  [p view spot]
-  (boolean (some #(some-> (danger-q/rough-pos (:data %)) (u/dist spot) (<= (fled-radius))) (listed-threats p (fresh-threats view)))))
+  "Whether the field (jobs.lib.threat-field) of a listed mob fled from in the last ::fled-memory-ms, from where it was
+  last known, holds the cell of spot {:x :y :z}."
+  [c spot]
+  (boolean (some #(when-let [at (danger-q/rough-pos (:data %))] (field/reaches? c {:mob (:mob (:data %)) :pos at} spot))
+                 (listed-threats (:primitives c) (fresh-threats (ctx/view c))))))
 
 (defn chased-flights [] (settings/get settings ::chased-flights))
 

@@ -20,6 +20,7 @@
 (a/defargs settings
   {::close {:default 3 :doc "Steps of a mob's way within which its field weighs 1." :spec (a/int-in 0 nil)}
    ::max-cells {:default 4000 :doc "The most cells one mob's field holds, the nearest first." :spec (a/int-in 1 nil)}
+   ::fire-per-column {:default 3 :doc "The most standing cells of one column a ranged mob's line of fire is tried to, the nearest its height first (unseen ground stands at every height)." :spec (a/int-in 1 nil)}
    ::fire-rise {:default 6 :doc "Blocks above or below a ranged mob that its line of fire is tried to." :spec (a/int-in 0 nil)}
    ::water-cells {:default 8000 :doc "The most seen water cells one water mob's body of water is costed over (water-body)." :spec (a/int-in 1 nil)}})
 
@@ -57,8 +58,8 @@
 
 (defn fire-cells
   "The cells #js [x y z 1] within radius of a ranged mob at pos ({:x :y :z}, feet) and ::fire-rise of its height where a
-  body stands (reach/standable? over kind-at) in its line of fire (reach/line-of-fire? over arrow-at), the nearest
-  columns first, at most n."
+  body stands (reach/standable? over kind-at; ::fire-per-column of each column, the nearest its height first) in its
+  line of fire (reach/line-of-fire? over arrow-at), the nearest columns first, at most n."
   [kind-at arrow-at pos radius n]
   (let [[mx my mz] (reach/cell-of pos)
         rise (settings/get settings ::fire-rise)
@@ -70,9 +71,10 @@
                      (sort-by first))]
     (into-array
      (take n (for [[_ x z] columns
-                   y (range (- my rise) (inc (+ my rise)))
-                   :when (and (reach/standable? kind-at x y z)
-                              (reach/line-of-fire? arrow-at pos {:x (+ x 0.5) :y y :z (+ z 0.5)}))]
+                   y (->> (cons my (mapcat (fn [k] [(+ my k) (- my k)]) (range 1 (inc rise))))
+                          (filter #(reach/standable? kind-at x % z))
+                          (take (settings/get settings ::fire-per-column)))
+                   :when (reach/line-of-fire? arrow-at pos {:x (+ x 0.5) :y y :z (+ z 0.5)})]
                #js [x y z 1])))))
 
 ;; ---------------------------------------------------------------- water mobs
@@ -162,3 +164,8 @@
   "A fn of a cell x y z: its weight in field (0-1), nil outside it."
   [{:keys [weights]}]
   (fn [x y z] (.get weights (base/cell-key x y z))))
+
+(defn reaches?
+  "Whether the field of threat {:mob :pos} (field-of c) holds the cell of pos {:x :y :z}."
+  [c threat {:keys [x y z]}]
+  (some? ((reach-fn (field-of c threat)) (js/Math.floor x) (js/Math.floor y) (js/Math.floor z))))

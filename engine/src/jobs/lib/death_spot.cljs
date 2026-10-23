@@ -1,7 +1,9 @@
 (ns jobs.lib.death-spot
   "Where the body died lately, by any cause, from the :deaths memory (engine.core/record-death!), and where it was hurt down to ::near-death-hp:
   a place a player avoids or goes back to prepared. A death or near-death weighs 1 when fresh and fades to 0 (jobs.lib.cost/death-weight);
-  it counts for cells within ::radius of its spot. A near-death fades over the :hurt memory's own ttl, and counts once with a death or newer near-death within ::merge-radius."
+  it counts for the cells its killer's field from its spot holds (jobs.lib.threat-field), a death by terrain for those within
+  cost.death ::terrain-radius (the cells that killed). A near-death fades over the :hurt memory's own ttl, and counts once with a
+  death or newer near-death that counts for its spot (covers?)."
   (:require [clojure.string :as str]
             [engine.args :as a]
             [engine.ctx :as ctx]
@@ -12,12 +14,12 @@
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.look :as look]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.threat-field :as field]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
   {::near-death-hp {:default 6 :doc "Health at or under which a hit makes its spot count like a death." :spec (a/num-in 0 nil)}
-   ::merge-radius {:default 8 :doc "Blocks within which near-death hits are one spot (the newest)." :spec (a/num-in 0 nil)}
-   ::radius {:default 24 :doc "Blocks around a death spot that the death still counts for." :spec (a/num-in 0 nil)}})
+})
 
 (defn mob-cause?
   "Whether `cause` (the killer's name, else a damage type like fall or lava) is a mob the danger code knows; any other is a death by terrain."
@@ -29,15 +31,24 @@
   [{:keys [attacker damageType cause]}]
   (or (:name attacker) (some-> damageType (str/replace #"^minecraft:" "")) cause))
 
+(defn covers?
+  "Whether a death or near-death {:pos :cause} of c counts for the cell of pos: its killer's field from its spot holds it
+  (mob-cause?), else (terrain) it lies within cost.death ::terrain-radius of the spot."
+  [c {:keys [cause] :as d} pos]
+  (if (mob-cause? (:primitives c) cause)
+    (field/reaches? c {:mob cause :pos (:pos d)} pos)
+    (<= (u/dist pos (:pos d)) (cost/terrain-radius))))
+
 (defn near-deaths
-  "The :hurt entries of c that left the body at or under ::near-death-hp and carry a :pos, newest first, one per ::merge-radius and none within it of a death."
+  "The :hurt entries of c that left the body at or under ::near-death-hp and carry a :pos, newest first, none a death or
+  newer one kept covers? the spot of."
   [c]
   (let [limit (settings/get settings ::near-death-hp)
-        merge-r (settings/get settings ::merge-radius)
-        deaths (keep #(:pos (:data %)) (ctx/entries c :deaths))]
+        deaths (keep #(when (:pos (:data %)) {:pos (:pos (:data %)) :cause (:cause (:data %))}) (ctx/entries c :deaths))
+        record (fn [e] {:pos (:pos (:data e)) :cause (hurt-cause (:data e))})]
     (reduce (fn [kept {:keys [data] :as e}]
-              (if (or (some #(<= (u/dist (:pos data) %) merge-r) deaths)
-                      (some #(<= (u/dist (:pos data) (:pos (:data %))) merge-r) kept))
+              (if (or (some #(covers? c % (:pos data)) deaths)
+                      (some #(covers? c (record %) (:pos data)) kept))
                 kept
                 (conj kept e)))
             []
@@ -59,9 +70,9 @@
                  (keep #(spot (:t %) (:data %) hurt-ms) (near-deaths c))))))
 
 (defn near
-  "The remembered deaths of `deaths` (from recent) within ::radius of cell `pos`."
-  [deaths pos]
-  (filterv #(<= (u/dist pos (:pos %)) (settings/get settings ::radius)) deaths))
+  "The remembered deaths of `deaths` (from recent) that count for cell `pos` (covers?)."
+  [c deaths pos]
+  (filterv #(covers? c % pos) deaths))
 
 (defn lit?
   "Whether the body has seen the cell at pos and senses it lit enough that no mob spawns there (shelter.sense/lit-here?)."

@@ -166,8 +166,8 @@
 (deftest only-seen-mobs-count-towards-repeated-hides
   (let [c (ready-test/ctx-of day-world)
         now 36000000
-        with-hides (fn [n] (assoc c :view (fn [] {:now now :data {:policies {:hid hide-spot/policy} :entries {:hid (vec (repeat n {:t (- now 60000) :data {:pos {:x 0 :y 0 :z 0} :mobs ["zombie"]}}))}}})))
-        at {:x 1 :y 0 :z 1}]
+        with-hides (fn [n] (assoc c :view (fn [] {:now now :data {:policies {:hid hide-spot/policy} :entries {:hid (vec (repeat n {:t (- now 60000) :data {:pos {:x 0 :y 64 :z 0} :mobs ["zombie"]}}))}}})))
+        at {:x 1 :y 64 :z 1}]
     (is (hide-spot/repeated? (with-hides 3) at ["zombie"]))
     (is (not (hide-spot/repeated? (with-hides 2) at ["zombie"])))
     (is (not (hide-spot/repeated? (with-hides 3) at ["spider"])))

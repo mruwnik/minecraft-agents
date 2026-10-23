@@ -171,7 +171,7 @@
                     (map (fn [[pos]] (let [v (access/may-dig? in pos)] [pos v (access/judge v accept)]))))]
     {:side side
      :far (when stay? (into [] (comp (remove #(stay/beside-body? (cell-of here) %)) (remove (set (map :pos side))) (map access/cell)) seen))
-     :targets (->> judged (filter #(= :ok (nth % 2))) (map first) (sort-by (juxt #(if (or (seq (death-spot/near deaths %)) (seq (hide-spot/near hides %))) 1 0) #(if (ground %) 1 0) #(if (floor-hole? c %) 1 0) #(u/dist here %) #(- (:y %)))) vec)
+     :targets (->> judged (filter #(= :ok (nth % 2))) (map first) (sort-by (juxt #(if (or (seq (death-spot/near c deaths %)) (seq (hide-spot/near c hides %))) 1 0) #(if (ground %) 1 0) #(if (floor-hole? c %) 1 0) #(u/dist here %) #(- (:y %)))) vec)
      :refused (into [] (comp (filter #(= :refused (nth % 2))) (map second)) judged)
      :wet? (boolean (some #(= :wet (second %)) graded))
      :wet-n (count (filter #(= :wet (second %)) graded))}))

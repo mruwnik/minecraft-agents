@@ -243,6 +243,7 @@
 (defn spawn-horizon-s [] (death/spawn-horizon-s))
 (def death-weight death/death-weight)
 (def terrain-danger death/terrain-danger)
+(def terrain-radius death/terrain-radius)
 
 (def density base-rates/density)
 (def biome-chance base-rates/biome-chance)

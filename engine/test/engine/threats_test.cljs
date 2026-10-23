@@ -75,6 +75,12 @@
     (reset! now 1000)
     (mem/view s)))
 
+(defn ctx-on "A job ctx over primitives p and memory view v." [p v] {:primitives p :view (fn [] v) :id "j" :slots [] :engine {:warned (atom #{})}})
+
+(def pen
+  "A stone ring 3 high round x 7..13, z -3..3 (the skeleton's place at its middle)."
+  (into {} (for [x (range 7 14) z (range -3 4) :when (or (#{7 13} x) (#{-3 3} z)) y [64 65 66]] [(str x "," y "," z) "stone"])))
+
 (def skeleton-9 {:id 9 :name "skeleton" :kind "hostile" :pos {:x 10 :y 64 :z 0}})
 
 (deftest a-flight-counts-for-the-fled-memory-window-only
@@ -85,21 +91,27 @@
     (is (false? (threats/fled-recently? p (fled-view))))
     (is (false? (threats/fled-recently? (tu/fake-on-floor {}) v)) "the fled mob was killed: no danger to keep away from")))
 
-(deftest a-fled-mob-is-near-a-spot-within-the-radius-of-where-it-was-last-known
+(deftest a-fled-mob-counts-only-where-its-field-reaches
+  (let [v (fled-view 0 {:mob "zombie" :id 9 :pos {:x 10 :y 64 :z 0}})
+        p (tu/seeing-all (tu/fake-on-floor {:blocks pen :entities [(assoc skeleton-9 :name "zombie")]}))]
+    (is (true? (threats/fled-near? (ctx-on p v) {:x 11 :y 64 :z 1})) "inside its pen")
+    (is (false? (threats/fled-near? (ctx-on p v) {:x 16 :y 64 :z 0})) "6 blocks off outside the pen it cannot leave")))
+
+(deftest a-fled-mob-is-near-a-spot-its-field-holds-from-where-it-was-last-known
   (let [v (fled-view 0 {:mob "skeleton" :id 9 :pos {:x 10 :y 64 :z 0}})
         p (tu/fake-on-floor {:entities [skeleton-9]})]
-    (are [spot near?] (= near? (threats/fled-near? p v spot))
+    (are [spot near?] (= near? (threats/fled-near? (ctx-on p v) spot))
       {:x 12 :y 64 :z 0} true
       {:x 100 :y 64 :z 0} false)
-    (is (false? (settings/with-settings {::threats/fled-memory-ms 500} #(threats/fled-near? p v {:x 12 :y 64 :z 0}))))))
+    (is (false? (settings/with-settings {::threats/fled-memory-ms 500} #(threats/fled-near? (ctx-on p v) {:x 12 :y 64 :z 0}))))))
 
 (deftest a-fled-mob-the-client-no-longer-lists-is-not-near-anywhere
   (let [v (fled-view 0 {:mob "creeper" :id 9 :pos {:x 10 :y 64 :z 0}})
         p (tu/fake-on-floor {})]
-    (is (false? (threats/fled-near? p v {:x 12 :y 64 :z 0})))
+    (is (false? (threats/fled-near? (ctx-on p v) {:x 12 :y 64 :z 0})))
     (is (= [] (threats/listed-threats p (mem/entries v :threat))))))
 
 (deftest a-fled-mob-heard-only-is-placed-by-its-direction-and-band
   (let [v (fled-view 0 {:mob "zombie" :id 9 :direction :north :band :near :from {:x 0 :y 64 :z 0}})
         p (tu/fake-on-floor {:entities [(assoc skeleton-9 :name "zombie")]})]
-    (is (true? (threats/fled-near? p v {:x 0 :y 64 :z -5})))))
+    (is (true? (threats/fled-near? (ctx-on p v) {:x 0 :y 64 :z -5})))))
