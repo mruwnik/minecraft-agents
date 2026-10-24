@@ -290,7 +290,9 @@
     (is (seq (ps {:name "a" :act [[:teleport]]})))
     (is (seq (ps {:name "a" :expect [{:event {:kind :x}}]})) "an :event needs :within-s")
     (is (seq (ps {:name "a" :expect [{:no-event {:kind :x}}]})) "a :no-event needs :for-s")
-    (is (seq (ps {:name "a" :plot {:height 40}})))))
+    (is (seq (ps {:name "a" :plot {:height 40}})) "a sky plot stops at 31")
+    (is (empty? (ps {:name "a" :after [[:block [1 0 1] "stone"]] :plot {:light :dark :height 70}})) "an underground cell goes up to 80")
+    (is (seq (ps {:name "a" :after [[:block [1 0 1] "stone"]] :plot {:light :dark :height 81}})))))
 
 (deftest a-time-lock-needs-a-clock-reason-or-a-place-on-the-shrinking-allow-list
   (let [[a b c d] (f/file-cases "{:defaults {:time :night} :cases [{:name \"a\"} {:name \"b\" :time-why :sleep} {:name \"c\" :time :any} {:name \"d\" :time-why :nap}]}" "f")

@@ -1,0 +1,27 @@
+;; Iron wanted, none seen, the body 55 levels under iron's tunnel level (obtain.plan/tunnel-way, priced at a search-worth of 1000): a stair up to it, then a strip tunnel.
+;; Tall rock cell (plot y 0 is world y -40): stone x 0..139, y 0..69; the body in a hollow lit by two light blocks (a row of them would hide the roof from the body) at plot y 1 (world y -39) in the middle of the plot, iron
+;; at plot y 56 (world y 16, the level base-rates/best-level gives iron) 5 blocks past the stair's top on each side (the stair climbs the way the body faces, east or west).
+;; Should-succeed: obtain.climbed (the stair up), then the strip tunnel finds the ore and the body mines it.
+;; Should-fail: a bedrock roof at plot y 3, seen from the hollow and from every tunnel under it, bars the stair (obtain.plan/climb-sealed?): no climb, the tunnel keeps the
+;; body's height, finds nothing and obtain stops :no-source.
+{:defaults
+ {:tags [:obtain :mine :stairs :jobs] :time :any
+  :plot {:light :lit :height 70 :length 140 :width 16 :floor "stone"}
+  :blocks [[:fill [0 0 0] [139 69 15] "stone"] [:fill [65 1 6] [75 3 8] "air"] [:set [66 2 6] "light"] [:set [74 2 8] "light"]
+           [:set [10 56 7] "iron_ore"] [:set [130 56 7] "iron_ore"]]
+  :body {:at [70.5 1 7.5] :yaw 270 :settle-s 3 :inventory [["stone_pickaxe" 2] ["torch" 16] ["cobblestone" 16]] :effects [["resistance" 900 4]]}
+  :limit-s 600}
+ :cases
+ [{:name "iron-far-above-is-reached-by-a-stair-up-and-a-tunnel"
+   :act [[:job (jobs.items.obtain {:item "raw_iron" :count 1 :search-worth 1000 :ways #{:craft :smelt :gather}})]]
+   :expect [{:event {:source :job :kind :obtain.climbed} :within-s 400 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 590 :of-job true}]
+   :after [[:item "raw_iron" [:>= 1]]]}
+  {:name "a-seen-bedrock-roof-bars-the-stair-and-no-iron-is-found"
+   :blocks [[:fill [0 3 0] [139 3 15] "bedrock"]]
+   :act [[:job (jobs.items.obtain {:item "raw_iron" :count 1 :search-worth 1000 :ways #{:craft :smelt :gather}
+                                   :settings {:jobs.lib.child/max-fruitless 1}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 700 :of-job true}
+            {:no-event {:source :job :kind :obtain.climbed} :for-s 700 :until {:source :job :kind :stopped}}]
+   :limit-s 720
+   :after [[:item "raw_iron" [:= 0]]]}]}

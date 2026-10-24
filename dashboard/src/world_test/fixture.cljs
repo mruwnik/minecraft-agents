@@ -44,6 +44,11 @@
 
 (def underground-cells (* (:cols underground) (:rows underground)))
 
+(def max-height
+  "Most :plot :height of an underground cell (a sky plot: 31): rock from the cell's y -40 up to y 40, over iron's level (16),
+  for cases that climb; a cell's shell stays below the surface."
+  {:underground 80 :sky 31})
+
 (defn mob-cols [{:keys [cols]}] (quot (+ cols (dec mob-stride)) mob-stride))
 
 (defn mob-plot-count [grid] (* (quot (+ mob-rows (dec mob-stride)) mob-stride) (mob-cols grid)))
@@ -482,7 +487,7 @@
       (and (:alone c) (not (and (string? (:alone-why c)) (not (str/blank? (:alone-why c)))))) (conj ":alone needs an :alone-why string")
       (and (:alone-why c) (not (:alone c))) (conj ":alone-why without :alone")
       (not (contains? #{nil :rain :thunder :clear} (:weather c))) (conj ":weather must be :rain, :thunder or :clear")
-      (not (and (int? h) (< 1 h 32))) (conj ":plot :height must be an integer 2..31")
+      (not (and (int? h) (<= 2 h (if (= :sky (light-of c)) (:sky max-height) (:underground max-height))))) (conj (str ":plot :height must be an integer 2.." (if (= :sky (light-of c)) (:sky max-height) (:underground max-height))))
       (not (every? #(and (keyword? (:kind %)) (map? (:data %))) (:memory c))) (conj ":memory entries need a keyword :kind and a map :data")
       (not (every? #(or (nil? (:age-s %)) (number? (:age-s %))) (:memory c))) (conj ":memory :age-s must be a number of seconds")
       (not (or (nil? (get-in c [:body :pitch])) (number? (get-in c [:body :pitch])))) (conj ":body :pitch must be a number of degrees")
@@ -800,8 +805,8 @@
   (let [plot {:plot {:height 31 :floor "stone"}}]
     (if (:underground? grid)
       (-> (vec (forceload-commands "add" grid origin))
-          (conj (kill-command grid origin 31))
-          (into (solid-commands grid origin 31))
+          (conj (kill-command grid origin (:underground max-height)))
+          (into (solid-commands grid origin (:underground max-height)))
           (into (forceload-commands "remove" grid origin)))
       (into (setup-commands grid origin plot) (forceload-commands "remove" grid origin)))))
 
@@ -945,7 +950,7 @@
   (str "summon " type " " (xyz-str (abs-pos origin pos)) " " (nbt-with-tag nbt)))
 
 (def park-height
-  "How far above a plot's origin the body waits between cases: beyond its sight (48) over the tallest plot (31), so a
+  "How far above a plot's origin the body waits between cases: beyond its sight (48) over the tallest sky plot (31); an idle underground cell is solid rock, so a
   restarted body, which logs in where it stood, never sees a plot before its blocks are built (memory would keep air)."
   100)
 
