@@ -260,7 +260,12 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
       const tick = async () => {
         if (closed) return
         await step()
-        if (!closed) timers.add(setTimeout(tick, ms))
+        if (closed) return
+        const timer = setTimeout(() => {
+          timers.delete(timer)
+          tick()
+        }, ms)
+        timers.add(timer)
       }
       tick()
     }

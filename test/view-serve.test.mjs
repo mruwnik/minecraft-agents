@@ -172,6 +172,21 @@ test('SSE sends the pose and hud on connect, then a pose event on change', async
   writeAt(path.join(viewDir, 'pose.json'), JSON.stringify(pose), 1000)
 })
 
+test('a stream keeps only its pending timers, so closing it clears a handful, not one per tick', async () => {
+  const realClear = globalThis.clearTimeout
+  let cleared = 0
+  const response = await get('/pose/w1/Bob?radius=1')
+  await sleep(1500)
+  globalThis.clearTimeout = timer => {
+    cleared++
+    realClear(timer)
+  }
+  await response.body.cancel()
+  await sleep(100)
+  globalThis.clearTimeout = realClear
+  assert.ok(cleared <= 4, `cleared ${cleared} timers`)
+})
+
 test('a streamed body gets a fresh watch marker, which stops being touched once the stream closes', async () => {
   const marker = path.join(viewDir, 'watching')
   fs.rmSync(marker, { force: true })

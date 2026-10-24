@@ -245,7 +245,6 @@
         (-> (srv-engine-state/refresh-live-engine! body)
             (.then (fn [_] (srv-engine-state/refresh-live-engine! body)))
             (.then (fn [_]
-                     (is (= 2 (count (:events (cached body)))))
                      (is (= 2 (get-in (cached body) [:cursor :seq])))
                      (is (false? (:reset? (cached body))))
                      (is (= ["?stream-id=s4&after=0&limit=1000" "?stream-id=s4&after=2&limit=1000"]
@@ -260,7 +259,6 @@
                      (swap! config update :events conj (ev 3 "g7"))
                      (srv-engine-state/refresh-live-engine! body)))
             (.then (fn [_]
-                     (is (= [1 2 3] (mapv :seq (:events (cached body)))))
                      (is (= 3 (get-in (cached body) [:cursor :seq])))
                      (is (= "?stream-id=s4&after=2&limit=1000" (peek (:events-queries @received)))))))))))
 
@@ -275,7 +273,6 @@
             (.then (fn [_]
                      (is (true? (:reset? (cached body))))
                      (is (= "g8" (:generation-id (cached body))))
-                     (is (= ["g8" "g8" "g8"] (mapv :generation-id (:events (cached body)))))
                      (is (= "?stream-id=s4&after=0&limit=1000" (peek (:events-queries @received)))))))))))
 
 (deftest poller-takes-a-fresh-tail-on-a-gap-reply
@@ -288,7 +285,6 @@
                      (srv-engine-state/refresh-live-engine! body)))
             (.then (fn [_]
                      (is (true? (:reset? (cached body))))
-                     (is (= [1 2 3 4 5] (mapv :seq (:events (cached body)))))
                      (is (= 5 (get-in (cached body) [:cursor :seq])))
                      (is (= ["?stream-id=s4&after=0&limit=1000" "?stream-id=s4&after=2&limit=1000"
                              "?stream-id=s4&after=0&limit=1000"]
@@ -316,6 +312,4 @@
         (-> (srv-engine-state/refresh-live-engines-in! [alpha beta])
             (.then (fn [_]
                      (is (= {:stream-id "s4" :seq 2} (:cursor (cached alpha))))
-                     (is (= {:stream-id "s9" :seq 3} (:cursor (cached beta))))
-                     (is (= 2 (count (:events (cached alpha)))))
-                     (is (= 3 (count (:events (cached beta))))))))))))
+                     (is (= {:stream-id "s9" :seq 3} (:cursor (cached beta)))))))))))

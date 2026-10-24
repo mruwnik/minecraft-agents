@@ -124,12 +124,10 @@
                                         (let [events (:events page)
                                               actual-reset? (or local-reset? gap-reset?)
                                               folded (ee/fold-engine (if actual-reset? ee/empty-engine (:folded previous)) events)
-                                              combined (if actual-reset? events (into (vec (:events previous)) events))
                                               page-seq (last-seq events after)
                                               next-cursor {:stream-id (:stream-id (state-cursor snapshot))
                                                            :seq page-seq}
                                               cache {:snapshot snapshot :generation-id (:generation-id snapshot) :cursor next-cursor :folded folded
-                                                     :events (vec (take-last event-page-size combined))
                                                      :reset? actual-reset?}]
                                           (swap! live-errors dissoc name)
                                           (swap! live-engines assoc name cache)
