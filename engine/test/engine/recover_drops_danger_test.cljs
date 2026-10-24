@@ -563,6 +563,25 @@
             (await (run-until-empty eng 20))
             (is (= :collected (:decision (recovered eng))))))))))
 
+(deftest a-drowned-unseen-at-the-pile-still-keeps-it-declined-when-the-hold-runs-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pile dt/death-pile-of-the-field-report
+              wet (into {} (for [x (range 18 23) y [64 65] z (range -2 3)] [(str x "," y "," z) "water"]))
+              {:keys [eng p clock]} (setup {:floor tu/walk-floor :blocks wet :entities (vec (pile-drops pile))})
+              dear (list 'jobs.survival.recover-drops {:value-overrides {"raw_iron" 20 "cobblestone" 0.5 "oak_planks" 0.5}})]
+          (die-noted! eng {:pos dt/death-pos :inventory pile :cause "drowned"} 5000)
+          (core/submit! eng dear {})
+          (await (run-until-empty eng 5))
+          (is (nil? (recovered eng)) "the first weigh declines")
+          (swap! clock + 151000)
+          (is (true? (died/died nil (mem/view (:store eng)) {})) "the hold has run out")
+          (await (run-until-empty eng 20))
+          (is (= :skip (:decision (recovered eng))) "the drowned is not forgotten with the guard")
+          (is (re-find #"danger [1-9][0-9.]*,.*: drowned" (decided-text eng)))
+          (is (= [] (tu/walk-calls p))))))))
+
 (deftest a-mob-still-standing-where-a-finished-hold-saw-it-is-no-reason-to-hold-again
   (async done
     (tu/run-async done
