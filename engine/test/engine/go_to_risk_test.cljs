@@ -231,7 +231,7 @@
         (is (nil? (check (plan-of (take 10 straight-cells)) true)) "a found plan within the affordable")
         (is (nil? (check (plan-of straight-cells) false)) "is not priced again without a hostile new")))))
 
-(deftest the-stay-a-risky-walk-is-weighed-against-is-priced-where-the-body-stands
+(deftest the-stay-a-risky-walk-is-weighed-against-is-priced-where-the-body-stands-at-its-health
   (let [c (ready-test/ctx-of {:time st/noon :self {:pos {:x 0.5 :y 64 :z 0.5}}})
         goal {:x 30 :y 64 :z 0}
         plan {:status "partial" :steps (vec (take 10 straight-cells))}
@@ -241,7 +241,9 @@
       (risk/status c goal plan)
       (swap! (fake/state (:primitives c)) assoc-in [:self :pos] [10.5 64 0.5])
       (risk/status c goal plan)
-      (is (= [[0 64 0] [10 64 0]] @stays) "at the prefix end the stay is priced there, not at the start"))))
+      (swap! (fake/state (:primitives c)) assoc-in [:self :health] 6)
+      (risk/status c goal plan)
+      (is (= [[0 64 0] [10 64 0] [10 64 0]] @stays) "at the prefix end the stay is priced there, not at the start, and again once the body is hurt"))))
 
 (def far-goal {:x 95 :y 64 :z 0})
 

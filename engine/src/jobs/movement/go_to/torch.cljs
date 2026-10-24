@@ -114,7 +114,7 @@
   search ran out of land a buried body's rock guess closed (mem :rock-edge), the guessed rock reads as the loaded edge
   (:rockEdge, wworld/path-world)."
   [c]
-  (let [u (cond-> (:unknown c) (and (:unknown c) (:rock-edge (ctx/mem c))) (#(js/Object.assign #js {} % #js {:rockEdge true})))
+  (let [u (some-> (:unknown c) (cond-> (:rock-edge (ctx/mem c)) (#(js/Object.assign #js {} % #js {:rockEdge true}))))
         n (ltorch/torches-held (:primitives c))]
     (cond
       (and u (:edge-mode (ctx/mem c))) (js/Object.assign #js {} u #js {:edge true})
