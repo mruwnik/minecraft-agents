@@ -133,7 +133,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [blocks (-> (box -12 40 -12 12 72 12 "stone")
+        (let [blocks (-> (box -24 40 -24 24 72 24 "stone")
                          (merge (box -1 69 -1 1 72 1 "bedrock"))
                          (assoc "0,50,0" "air" "0,51,0" "air" "0,70,0" "air" "0,71,0" "air"))
               {:keys [eng p seen clock]} (setup {:self {:pos {:x 0.5 :y 50 :z 0.5}} :blocks blocks :inventory [{:name "stone_pickaxe" :count 1}]})
