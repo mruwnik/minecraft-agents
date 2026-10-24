@@ -619,12 +619,13 @@
         up? (and stuck? (high? c item))
         walked-up (when up? (await (walk-down! c item #{:walk :pillar :stair :clear-seal})))
         up (if (= :unreachable walked-up) (or (await (pillar-to! c item)) walked-up) walked-up)
-        dug2 (when (and stuck? (not up?) (:dig (:args c))) (await (dig-to! c item)))
+        near-walk (when (and stuck? (not up?) (nil? walk)) (await (walk-down! c item)))
+        dug2 (when (and stuck? (not up?) (not= :arrived near-walk) (:dig (:args c))) (await (dig-to! c item)))
         dig2-why (when-not (#{nil :dug :continue} dug2) dug2)
         walk2 (when (= :dug dug2) (await (walk-down! c item)))
-        r2 (when (or (= :arrived up) (and (= :dug dug2) (not= :continue walk2))) (await (collect!)))
+        r2 (when (or (= :arrived up) (= :arrived near-walk) (and (= :dug dug2) (not= :continue walk2))) (await (collect!)))
         r2-stuck? (and r2 (= "unreachable" (.-status r2)))]
-    (if (or moving? (= :continue walk) (= :continue dug) (= :continue dug2) (= :continue walk2) (= :continue up))
+    (if (or moving? (= :continue walk) (= :continue dug) (= :continue dug2) (= :continue walk2) (= :continue up) (= :continue near-walk))
       {:wait true}
       {:acts (remove nil? [r r2])
        :left (cond
@@ -632,7 +633,7 @@
                why why
                (= :unreachable walk) :unreachable
                dig2-why dig2-why
-               (and stuck? (not= :dug dug2) (not= :arrived up)) :unreachable
+               (and stuck? (not= :dug dug2) (not= :arrived up) (not= :arrived near-walk)) :unreachable
                r2-stuck? :unreachable)
        :retry? (and (not why) (< (get-in (ctx/mem c) [:moves (.-id item)] 0) (max-moves))
                     (or dig-why (= :unreachable walk) dig2-why stuck? r2-stuck?)

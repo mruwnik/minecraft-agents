@@ -44,7 +44,17 @@
             (is (= 1 (bd/carried p "diamond")))
             (is (empty? (bd/left-drops seen)))
             (is (some #(and (= :child_started (:kind %)) (= :walk (:slot %))) @seen) "a go-to walk took it down the slope")
+            (is (seq (collect-args p)))
             (is (every? #(= 1 (:maxDropDown %)) (collect-args p)) "the act's own walk never drops more than a block")))))))
+
+(deftest a-near-drop-the-capped-act-cannot-reach-is-walked-to-by-go-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (bd/setup {:self body :unreachable ["2,64,0"]})]
+          (drop! p [2 64 0] "porkchop")
+          (await (tu/child-outcome eng job {:radius 6 :items ["porkchop"]} 30))
+          (is (some #(and (= :child_started (:kind %)) (= :walk (:slot %))) @seen) "go-to prices the detour the capped act refused"))))))
 
 (deftest a-sweep-that-takes-fewer-than-expected-sweeps-again-a-few-times
   (async done
@@ -517,7 +527,7 @@
             (is (= 1 (:collected result)))
             (is (= :done (:status result)))))))))
 
-(deftest a-hole-drop-the-collect-action-calls-unreachable-is-dug-to-and-collected-again-with-dig-true
+(deftest a-hole-drop-the-collect-action-calls-unreachable-is-dug-to-with-dig-true
   (async done
     (tu/run-async done
       (fn ^:async t []
