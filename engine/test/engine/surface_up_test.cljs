@@ -4,6 +4,7 @@
             [engine.test-util :as tu :refer [box]]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.ways :as cw]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.surface-up :as surface]))
 
@@ -53,10 +54,19 @@
        (is (< near far) "a taller rise to the seen sky costs more")
        (is (zero? open) "a body on open ground climbs nothing"))))
 
+(deftest a-rise-through-seen-cave-air-is-priced-as-walk-steps-not-stair-steps
+  (let [p (tu/with-sky-only (tu/seeing-all (tu/fake {:self {:pos {:x 0.5 :y 64 :z 0.5}}
+                                                      :blocks (dissoc (box -3 63 -3 3 71 3 "stone") "0,64,0" "0,65,0" "0,66,0" "0,67,0" "0,68,0" "0,69,0" "0,70,0" "0,71,0")})))
+        c {:primitives p}]
+    (aset (.-rawWorld p) "lightAt" (fn [_ y _] (if (>= y 72) 240 0)))
+    (with-mem {} #(is (< (surface/climb-s c) (/ (cw/stair-cost (surface/rise c)) 2))
+                         "cut-free steps are walk steps, as dig-route prices them"))))
+
 (deftest a-surface-not-seen-is-expected-from-the-bodys-height-not-from-the-rock-it-sees
   (with-mem {}
-    #(let [at-64 (surface/climb-s (buried-body 64 67 nil))
-           at-16 (surface/climb-s (buried-body 16 19 nil))]
+    #(let [sees-4 (fn [c] (update c :primitives tu/seeing-within 4))
+           at-64 (surface/climb-s (sees-4 (buried-body 64 67 nil)))
+           at-16 (surface/climb-s (sees-4 (buried-body 16 19 nil)))]
        (is (< 0 at-64) "near the surface the prior puts the sky a few blocks up")
        (is (< (* 3 at-64) at-16) "at y 16 about 50 blocks of stair are expected, not the rock guess")
        (is (= (surface/rise (buried-body 16 19 nil)) (js/Math.ceil (cost/expected-rise 16 (+ 3 (dig-look/rock-depth) 1) nil)))

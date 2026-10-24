@@ -134,7 +134,7 @@
 
 (defn climb-s
   "Seconds the stair up from a buried body's feet to the sky takes: rise blocks, each a walk step with the cuts of its
-  three cells (a seen open cell costs none, the rest stone), at least cw/stair-cost of one step; 0 for a body that is not
+  three cells (a seen open cell costs none, the rest stone), a step that cuts at least cw/stair-cost of one step; 0 for a body that is not
   buried, has climbed out already (climbed?) or has a stair of its own to walk up (own-top)."
   [c]
   (let [p (:primitives c)]
@@ -143,10 +143,11 @@
       (let [step-s (:cost (cost/walk-cost {:distance 1}))
             unseen-s (cost/unseen-route-s (wworld/unseen-share p) (constantly :ground) [{:x 0 :y 0 :z 0}])
             feet (sh-sense/feet p)
-            cut-s (fn [n] (if (and (sh-sense/seen-cell? p n) (not (sh-sense/solid-at? p n))) 0 (or (cost/dig-cost (or (u/seen-name p n) "stone")) 0)))
+            cut-s (fn [n] (when-not (and (sh-sense/seen-cell? p n) (not (sh-sense/solid-at? p n)))
+                            (or (cost/dig-cost (or (u/seen-name p n) "stone")) ##Inf)))
             leg (fn [dy] (let [cells (map #(assoc feet :y (+ (:y feet) dy %)) (range 3))]
-                           (+ (cw/stair-leg-cost (+ step-s (transduce (map cut-s) + 0 cells)) step-s (cw/stair-cost 1))
-                              (if (some #(not (sh-sense/seen-cell? p %)) (cons (assoc feet :y (+ (:y feet) dy -1)) cells)) unseen-s 0))))]
+                           (cw/stair-step-cost step-s (cw/stair-cost 1) (map cut-s cells)
+                                              (if (some #(not (sh-sense/seen-cell? p %)) (cons (assoc feet :y (+ (:y feet) dy -1)) cells)) unseen-s 0))))]
         (transduce (map leg) + 0 (range 1 (inc (rise c))))))))
 
 (defn ^:async climb!
