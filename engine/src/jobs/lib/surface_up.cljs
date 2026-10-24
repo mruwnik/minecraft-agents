@@ -79,20 +79,47 @@
          (sort-by #(u/dist feet %))
          first)))
 
+(def sky-scan "Blocks out from the feet, and between columns, of the look for a surface the body remembers." {:reach 8 :step 4 :height 80})
+
+(defn known-surface
+  "The y of the open ground the body knows above its feet, else nil: the top of the highest stair it cut, else the median
+  of the lowest sky-lit stands (open, seen solid under) it remembers in the columns round it."
+  [c]
+  (let [p (:primitives c)
+        {:keys [x y z] :as feet} (sh-sense/feet p)
+        {:keys [reach step height]} sky-scan
+        stair-top (some->> (ledger/stair-stands c) (map second) (filter #(> % y)) seq (apply max))
+        stand-in (fn [cx cz]
+                   (some (fn [cy] (let [cell {:x cx :y cy :z cz}]
+                                    (when (and (sh-sense/seen-cell? p cell) (not (sh-sense/solid-at? p cell))
+                                               (pos? (or (sh-sense/sky-light-at p cell) 0))
+                                               (sh-sense/seen-cell? p (update cell :y dec)) (sh-sense/solid-at? p (update cell :y dec)))
+                                      cy)))
+                         (range (inc y) (+ y height))))
+        stands (sort (keep (fn [[dx dz]] (stand-in (+ x dx) (+ z dz)))
+                           (for [dx (range (- reach) (inc reach) step) dz (range (- reach) (inc reach) step) :when (not= 0 dx dz)] [dx dz])))]
+    (or stair-top (nth stands (quot (count stands) 2) nil))))
+
 (defn rise
-  "Blocks from the feet up to the sky of the feet column: to the first seen open cell the sky reaches, else past the last
-  rock seen in it by the rock guess (dig-look/rock-depth: further than that the body has no reason to take for rock)."
-  [p]
-  (let [{:keys [y] :as feet} (sh-sense/feet p)]
-    (loop [dy 1 last-rock 0]
+  "Blocks from the feet up to the sky of the feet column: to the first seen open cell the sky reaches. Seen rock and cave
+  air above count; past the last seen rock and a gap of cells never seen or of unread light (more than dig-look/rock-depth: further than that
+  the body has no reason to take for rock) the sky is where the body knows it (known-surface) or the surface prior puts it
+  (cost/expected-rise), never nearer than that rock."
+  [c]
+  (let [p (:primitives c)
+        {:keys [y] :as feet} (sh-sense/feet p)]
+    (loop [dy 1 last-rock 0 gap 0]
       (let [cell (assoc feet :y (+ y dy))
-            seen? (sh-sense/seen-cell? p cell)]
+            seen? (sh-sense/seen-cell? p cell)
+            solid? (and seen? (sh-sense/solid-at? p cell))
+            light (when (and seen? (not solid?)) (sh-sense/sky-light-at p cell))]
         (cond
           (>= (+ y dy) places/max-y) dy
-          (and seen? (not (sh-sense/solid-at? p cell)) (pos? (or (sh-sense/sky-light-at p cell) 0))) dy
-          (and seen? (sh-sense/solid-at? p cell)) (recur (inc dy) dy)
-          (> (- dy last-rock) (dig-look/rock-depth)) (+ last-rock (dig-look/rock-depth) 1)
-          :else (recur (inc dy) last-rock))))))
+          (pos? (or light 0)) dy
+          solid? (recur (inc dy) dy 0)
+          (and (nil? light) (> (inc gap) (dig-look/rock-depth)))
+          (js/Math.ceil (cost/expected-rise y (+ last-rock (dig-look/rock-depth) 1) (known-surface c)))
+          :else (recur (inc dy) last-rock (if (nil? light) (inc gap) gap)))))))
 
 (defn climb-s
   "Seconds the stair up from a buried body's feet to the sky takes: rise blocks, each a walk step with the cuts of its
@@ -107,7 +134,7 @@
             cut-s (fn [n] (if (and (sh-sense/seen-cell? p n) (not (sh-sense/solid-at? p n))) 0 (or (cost/dig-cost (or (u/seen-name p n) "stone")) 0)))
             leg (fn [dy] (cw/stair-leg-cost (+ step-s (transduce (map #(cut-s (assoc feet :y (+ (:y feet) dy %)))) + 0 (range 3)))
                                             step-s (cw/stair-cost 1)))]
-        (transduce (map leg) + 0 (range 1 (inc (rise p))))))))
+        (transduce (map leg) + 0 (range 1 (inc (rise c))))))))
 
 (defn ^:async climb!
   "One stair step up from a wall (jobs.lib.dig-in-leave/climb!): :continue while it goes on, :stopped when no stair goes up."

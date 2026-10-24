@@ -5,7 +5,7 @@
             [engine.ctx :as ctx]
             [engine.game :as game]
             [jobs.items.obtain.base :refer [barren-ore explore-opts own-worth search-names search-scan-radius search-worth site-radius tried! ways-of]]
-            [jobs.items.obtain.need :refer [gather-viable? pickaxe-first? light-settling? tools-wanted torch-due trees-unreachable?]]
+            [jobs.items.obtain.need :refer [climbs-first? gather-viable? pickaxe-first? tree? light-settling? tools-wanted torch-due trees-unreachable?]]
             [jobs.items.obtain.plan :refer [gather-plan search-way]]
             [jobs.items.obtain.seen :refer [animal-cell animals-of approach-bound gather-carried gather-slot hunt-worth lead-args seen-of shears-source with-avoid with-block with-count]]
             [jobs.lib.breath :as breath]
@@ -107,18 +107,13 @@
           (tried! c :gather {:pickaxe (contract/cause-key e)}))
       :else :again)))
 
-(defn tree?
-  "Whether a gather need is a log felled from a tree: trees stand at the surface."
-  [need]
-  (= 'jobs.forestry.harvest-wood (:job need)))
-
 (defn surfacing?
   "surface/surfacing? for a need not seen: an animal, a tree or a water source in sight is walked to, not climbed toward. A tree
   need not in sight is climbed toward from under rock before any search, as a player would."
   [c need]
   (and (not (and (or (animal? need) (tree? need) (= "water_bucket" (:key need))) (seen-of c need)))
        (or (surface/surfacing? c need)
-           (and (tree? need) (not (seen-of c need)) (not (surface/climbed? c)) (sh-sense/buried? (:primitives c))))))
+           (climbs-first? c need))))
 
 (defn ^:async surface-step!
   "One round of the way up (jobs.lib.surface-up), never through the :avoid cells: :continue while it goes on, else the gather source fails (:no-way-up)."

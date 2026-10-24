@@ -7,7 +7,9 @@
             [engine.hostile-test :as h]
             [engine.memory :as mem]
             [engine.test-util :as tu]
+            [jobs.items.obtain :as obtain]
             [jobs.items.obtain.plan :as plan]
+            [jobs.items.obtain.price :as price]
             [jobs.items.obtain.table :as table]
             [jobs.items.recipes :as recipes]
             [jobs.lib.cost :as cost]
@@ -165,3 +167,24 @@
     (with-redefs [plan/stock-s (constantly 100)]
       (is (= [:tunnel :tunnel] (map (comp :way #(plan/search-way c %)) needs)))
       (is (= (- (reduce + (map #(plan/search-cost c %) needs)) 100) (plan/plan-cost c v pl))))))
+
+(defn buried-search
+  "search-s of a call for item by a body in a 2-high pocket of rock at y 40 that has seen no sky, carrying a stone pickaxe."
+  [item & [worth]]
+  (let [p (tu/with-sky-only (tu/seeing-all (tu/fake {:self {:pos {:x 0.5 :y 40 :z 0.5}} :inventory [{:name "stone_pickaxe" :count 1}]
+                                                      :blocks (dissoc (tu/box -3 39 -3 3 43 3 "stone") "0,40,0" "0,41,0")})))
+        view (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)}))
+        c {:primitives p :view (constantly view) :args {:item item :count 1 :ways #{:craft :gather :search} :explore true :ignore-zones? true :worth worth}}]
+    (with-redefs [ctx/mem (constantly {}) ctx/entries (constantly [])]
+      {:price (price/search-s c [item] 1) :not-worth (obtain/not-worth c)})))
+
+(deftest a-buried-bodys-search-pays-the-stair-up-only-when-the-gather-climbs-first
+  (let [ore (:price (buried-search "raw_iron"))
+        log (:price (buried-search "oak_log"))]
+    (is (= (cost/trip) ore) "an unseen ore is tunnelled to: no stair up in its price")
+    (is (< (cost/trip) log) "a tree is climbed toward before any search: the stair is in its price")))
+
+(deftest the-start-check-refuses-a-buried-bodys-log-search-worth-less-than-trip-and-stair-but-not-its-ore-search
+  (let [worth (+ (cost/trip) 1)]
+    (is (nil? (:not-worth (buried-search "raw_iron" worth))) "the ore is tunnelled to: the trip is within the worth")
+    (is (= :not-worth (:reason (:not-worth (buried-search "oak_log" worth)))) "the log search adds the stair up")))

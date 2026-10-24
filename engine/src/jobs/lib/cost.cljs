@@ -26,7 +26,8 @@
     base-rates  density, biome-chance, expected-density, peak-density: the ore a block of ground is expected to hold, from the game's
              own placements, host-blocks: the rock its veins replace, and the chance of a biome on ground the body has not seen (jobs.lib.cost.base-rates).
     look     look-answer, look-value, closed-chance, look-s: the value of a look before deciding, a boundary's unseen part closed (jobs.lib.cost.look).
-    find     look-chance, find-chance, searched-for?: the chance a look round finds the animals a search is for, from their base rate and the ground already searched in vain, looked-area: that ground; ore-of, seen-ore, tunnel-ore, ore-chance: an ore's blocks expected among the faces a look sees or a tunnel cuts and the chance of a vein there; ore-level: the height a tunnel for it runs at; leg-chance, look-leg-chance (from what the body saw), tunnel-chance: a search leg's or a tunnel leg's chance of a find; leg-stops?: a search's :price stop; search-s: its seconds per find, leg-spacing: the blocks between its legs (jobs.lib.cost.find)."
+    find     look-chance, find-chance, searched-for?: the chance a look round finds the animals a search is for, from their base rate and the ground already searched in vain, looked-area: that ground; ore-of, seen-ore, tunnel-ore, ore-chance: an ore's blocks expected among the faces a look sees or a tunnel cuts and the chance of a vein there; ore-level: the height a tunnel for it runs at; leg-chance, look-leg-chance (from what the body saw), tunnel-chance: a search leg's or a tunnel leg's chance of a find; leg-stops?: a search's :price stop; search-s: its seconds per find, leg-spacing: the blocks between its legs (jobs.lib.cost.find).
+    rise     expected-rise: the blocks up to a sky the body has not seen, from its height, what it knows of the surface, and a prior on the ground height (jobs.lib.cost.rise)."
   (:require [clojure.string :as str]
             [engine.settings :as settings]
             [jobs.lib.cost.answer :as answer]
@@ -37,6 +38,7 @@
             [jobs.lib.cost.fight :as fight]
             [jobs.lib.cost.find :as find]
             [jobs.lib.cost.look :as glance]
+            [jobs.lib.cost.rise :as rise]
             [jobs.lib.cost.food :as food]
             [jobs.lib.cost.health :as health]
             [jobs.lib.cost.planner :as planner]
@@ -320,6 +322,7 @@
 (def tunnel-chance find/tunnel-chance)
 (def ore-level find/ore-level)
 (def ore-chance find/ore-chance)
+(def expected-rise rise/expected-rise)
 (defn leg-spacing [] (find/leg-spacing))
 (def looked-area find/looked-area)
 (def searched-for? find/searched-for?)

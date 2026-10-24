@@ -11,6 +11,8 @@
             [jobs.items.obtain.seen :refer [gather-slot seen-of with-block]]
             [jobs.items.obtain.table :refer [gather-needs searchable?]]
             [jobs.lib.cost :as cost]
+            [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.surface-up :as surface]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.trees :as trees]))
@@ -73,15 +75,30 @@
          (and (#{:later :look} (first s))
               (= :no-tree (:reason (contract/status-cause s)))))))
 
+(defn tree?
+  "Whether a gather need is a log felled from a tree: trees stand at the surface."
+  [need]
+  (= 'jobs.forestry.harvest-wood (:job need)))
+
+(defn climbs-first?
+  "Whether the gather climbs toward the need before any search: a tree not in sight, for a body under rock that has not climbed out. An unseen ore or stone is tunnelled to, not climbed to."
+  [c need]
+  (boolean (and (tree? need) (not (seen-of c need)) (not (surface/climbed? c)) (sh-sense/buried? (:primitives c)))))
+
+(defn explorable-needs
+  "The raw needs of the chain a search solves: not seen, or logs seen but not fellable, and the tool that harvests the block can be had (tool-viable?)."
+  [c names n]
+  (when (explore-opts c)
+    (filter #(and (searchable? %) (or (not (seen-of c %)) (trees-unreachable? c (with-block c %)))
+                  (or (not (tools-wanted c names %)) (tool-viable? c names %)))
+            (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c)))))))
+
 (defn explorable?
   "Whether :explore is on and a raw need of the chain is not seen, or its logs are seen but not fellable: the search
   child solves it, when the tool that harvests its block (an unseen ore is mined by the pickaxe for its block) can be
   had (tool-viable?)."
   [c names n]
-  (boolean (and (explore-opts c)
-                (some #(and (searchable? %) (or (not (seen-of c %)) (trees-unreachable? c (with-block c %)))
-                            (or (not (tools-wanted c names %)) (tool-viable? c names %)))
-                      (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c))))))))
+  (boolean (seq (explorable-needs c names n))))
 
 (defn tools-wanted
   "For a mined need (dirt is dug by hand) whose block the carried tools do not harvest, with :craft allowed: the tools
