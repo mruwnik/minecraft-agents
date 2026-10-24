@@ -31,10 +31,24 @@
       (let [below (.stateAt ^js (.-snapshot s) x (dec y) z)]
         (and (not (== below UNLOADED)) (== (aget (.-tbl-climb-name s) below) LADDER)))))
 
+  ;; Does a section of the column's last SHAFT-REACH cells up to y hold any climbable state? Without one no shaft is above, and
+  ;; the walk down the column need not read its cells (a walk over unseen land asks this of every cell).
+  (climbableBelow [s x y z]
+    (let [snap (.-snapshot s)
+          sy1 (bit-shift-right (- y (.-min-y s)) 4)
+          sx (bit-shift-right x 4)
+          sz (bit-shift-right z 4)]
+      (loop [sy (bit-shift-right (- (- y SHAFT-REACH) (.-min-y s)) 4)]
+        (cond
+          (> sy sy1) false
+          (true? (.sectionHas snap (.-tbl-climb s) sx sy sz)) true
+          :else (recur (inc sy))))))
+
   ;; An unseen cell (options.unknown) straight above a climbable, or above unseen cells that are above one: a shaft goes on
   ;; until seen otherwise, as unseen land is walked on, so a climb is planned up it and the climb shows the way.
   (shaftAbove [s x y z]
     (and (>= (.-unk-id s) 0)
+         ^boolean (.climbableBelow s x y z)
          (loop [y2 y]
            (let [id (.stateAt ^js (.-snapshot s) x y2 z)]
              (cond
