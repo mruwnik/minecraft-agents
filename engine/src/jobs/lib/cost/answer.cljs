@@ -256,8 +256,8 @@
   "The answer of a walk away from mobs [flee-mob's] by a body with food wearing equipment, the walk there and back (it
   goes back to its work), times 1 + returns (the flights from such mobs lately: each predicts another); :then the answer
   later (the fight with them, nil none) or the walk again. :caught: each flight is caught at chance caught (default
-  ::caught-chance), its mobs then landing their blows (a creeper its blast) over caught-s seconds of it (the flee
-  search's race; nil: the whole flight). A creeper that blows on the
+  ::caught-chance), its mobs then landing their blows (a creeper its blast) over the flight, a melee mob over caught-s
+  seconds of it when given (the flee search's race). A creeper that blows on the
   walk (at the median of its :spread) is spent: what follows is the walk from the rest or later (none left: nothing).
   swim: the blocks a body in water swims to dry land first (flee-mob's; ##Inf none known) and land the blocks to walk on there, at its planner/swim-speed over danger's outrun factor as on foot.
   nil when a mob keeps up or none is given."
@@ -276,7 +276,7 @@
                   :caught {:chance (- 1 (js/Math.pow (- 1 (or caught (settings/get settings ::caught-chance))) times))
                            :damage (reduce + 0 (map (fn [m f] (if (= "creeper" (:name m))
                                                                   (blow stats {:name "creeper"})
-                                                                  (threat/mob-hurt stats (threat/kind m) (min (or caught-s ##Inf) (:seconds f)) identity (threat/lone-hit-rate (threat/kind m)))))
+                                                                  (threat/mob-hurt stats (threat/kind m) (cond-> (:seconds f) (and caught-s (= (hit-range m) (danger/melee-reach))) (min caught-s)) identity (threat/lone-hit-rate (threat/kind m)))))
                                                     mobs per))
                            :hit hit
                            :blasts (vec (for [m mobs :when (= "creeper" (:name m))] (blow stats m)))}}]

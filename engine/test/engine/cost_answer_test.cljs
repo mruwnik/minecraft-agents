@@ -79,7 +79,10 @@
     (is (= :wall (pick {:wall wall :flee (flee nil)})))
     (is (> (cost/death-chance (body 20) (flee 1)) 0.9) "caught, the zombie lands its blows all the flight")
     (is (< (cost/death-chance (body 20) (cost/flee-answer {:food 20 :mobs [zombie] :later f :caught 1 :caught-s 0.5})) 0.1)
-        "caught for the half second the race gives it, only those blows")))
+        "caught for the half second the race gives it, only those blows")
+    (is (= (:caught (cost/flee-answer {:food 20 :mobs [(mob "skeleton" 10)] :caught 1 :caught-s 0.5}))
+           (:caught (cost/flee-answer {:food 20 :mobs [(mob "skeleton" 10)] :caught 1})))
+        "a shooter is no melee race: its arrows land all the flight")))
 
 (deftest a-walk-caught-beside-a-creeper-takes-its-blast-as-a-sure-part-of-the-life
   (let [walk (cost/flee-answer {:food 20 :mobs [(mob "creeper" 1) (mob "zombie" 3 35)] :caught 1})

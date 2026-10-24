@@ -295,6 +295,12 @@
        (ok end)
        (or (some #(when (>= (:t %) s) (ok %)) walk) (ok (peek walk)))))))
 
+(defn gets-away?
+  "Whether a flight on scored end e outruns its chasers by the end: an open ring way that gains on them and whose end
+  no chaser gets to before the body does."
+  [e]
+  (and (:open? e) (not (:cover? e)) (nil? (:pos (:target e))) (pos? (:gain e)) (> (:arrive e) (:s e))))
+
 (defn choose
   "The end entry a flee step takes among scored ends (scored, covers), its :step the cell the step walks to (step-of,
   past the cells go-to refused: refused [x y z]); nil when cornered. Left out: caught ones, those (but cover) that gain
@@ -360,12 +366,12 @@
 (defn caught-chance
   "{:chance :seconds} of a flight from where search ends (search!) ran: the chance it is caught
   (cost/flight-caught-chance) and, when every way is caught, the seconds its chasers are within their blow on the way
-  least so (:caught-s; nil: the whole flight). A way is a ring route that is open (a pocket is none: the chaser follows
-  it in) and gains on the chasers; of those not caught the flight takes the best :score, and whether it runs unseen
-  weighs its dead end at counts (wworld/way-counts)."
+  it gets away on (gets-away?) least so (:caught-s; nil, none: the whole flight). A way is a ring
+  route that is open (a pocket is none: the chaser follows it in) and gains on the chasers; of those not caught the
+  flight takes the best :score, and whether it runs unseen weighs its dead end at counts (wworld/way-counts)."
   [ends counts]
-  (let [ways (filter #(and (:open? %) (not (:cover? %)) (nil? (:pos (:target %))) (pos? (:gain %))) ends)
-        left (remove :caught? ways)
+  (let [left (filter #(and (:open? %) (not (:cover? %)) (nil? (:pos (:target %))) (not (:caught? %)) (pos? (:gain %))) ends)
+        ways (filter gets-away? ends)
         best (when (seq left) (apply max-key :score left))]
     (cond-> {:chance (cost/flight-caught-chance {:way? (some? best) :unseen? (some? (:unseen best)) :counts counts})}
       (and (nil? best) (seq ways)) (assoc :seconds (reduce min (map :caught-s ways))))))
