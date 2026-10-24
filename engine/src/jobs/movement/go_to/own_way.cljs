@@ -76,7 +76,7 @@
         feet (end/feet-cell c)
         top (js/Math.floor (:y pos))
         route (when (and (or floor (:own-way-on m)) (climb/own-way) (not (:own-way-done m))) (climb/own-route c feet top))
-        weighed (when (and route (next route) (not (:own-way-on m))) (climb/weigh route (- top (second feet)) (choose/new-stair-step-s)))]
+        weighed (when (and route (next route) (not (:own-way-on m))) (climb/weigh route (- top (second feet)) (choose/new-stair-step-s (:primitives c))))]
     (when weighed (ctx/emit! c :go-to.own-way :info weighed))
     (if (false? (:take weighed))
       (do (ctx/update-mem! c assoc :own-way-done true) nil)
