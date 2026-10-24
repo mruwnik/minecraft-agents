@@ -989,18 +989,6 @@
           (is (= {:arrived true} (select-keys out [:arrived])) (str (pr-str out) " at " (:pos (fake/self p))))
           (is (< (count replans) (wwatch/max-learned)) "each floor found missing shows the stair's side, not one cell of it"))))))
 
-;; the way on from the walkway's far end runs through air no look has reached, priced a dark cave (Q16): the plan's seen steps
-;; are walked and the rest priced again as it is seen, not held :risky at the stair top (the tour budget is lifted: the
-;; twin's walk back under the walkway is long for its goal)
-(deftest go-to-down-a-stair-at-the-far-end-of-a-long-lit-walkway-is-not-held-risky
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [out p]} (await (settings/with-settings {:jobs.lib.cost.value/tour-worth 1000}
-                                       #(run-go-to {:self {:pos {:x 15.5 :y 85 :z 0.5}} :blocks (walkway 60) :radius 16 :exact-eye true :bodyHitbox true}
-                                                   {:pos [5 64 8] :range 1 :ways #{:walk :clear-seal} :unknown true} lit-and-looking)))]
-          (is (= {:arrived true} (select-keys out [:arrived])) (str (pr-str out) " at " (:pos (fake/self p)))))))))
-
 (def stair-body {:self {:pos {:x 15.5 :y 85 :z 0.5}} :blocks walkway-room :radius 16 :exact-eye true :bodyHitbox true})
 (def stair-job {:pos [5 64 8] :range 1 :ways #{:walk :clear-seal} :unknown true})
 

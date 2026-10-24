@@ -47,11 +47,6 @@
       (or underground? (< (:y cell) (- feet-y (settings/get settings ::surface-band)))) (if caves-free? 0 (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block 0 :sky 0})}))
       :else (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block 0 :sky sky})}))))
 
-(defn cave-guess?
-  "Whether chance-at prices cell dark only by the unseen worst case, a dark cave (caves-free? undoes it)."
-  [p cell feet-y underground?]
-  (and (pos? (chance-at p cell feet-y underground? false)) (zero? (chance-at p cell feet-y underground? true))))
-
 (defn dark-seconds
   "Seconds of the walk over cells where a mob could spawn (chance-at), times (seconds from the start at each cell): every
   k-th cell and the last stand for the stretch walked since the one before, k the larger of ::step and the cells over
