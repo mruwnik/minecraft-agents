@@ -5,6 +5,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.food :as food-cost]
+            [engine.game :as game]
             [engine.notes :as notes]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
@@ -17,6 +18,10 @@
 
 (a/defargs settings
   {::note-ttl-s {:default 600 :doc "Seconds a note of a food animal seen lasts: it counts toward the pair a hunt keeps." :spec (a/num-in 0 nil)}
+   ::meat-pen-adults {:default 2 :doc "Penned adults of an animal kind in sight that make a working breeding pen: the body's raw meat of that kind is then valued at its cooking gain only." :spec (a/int-in 1 nil)}
+   ::meat-wild-premium {:default 3 :doc "Extra worth of raw meat from wild animals (times its cooking gain) when none of the kind is near and no pen breeds it: every hunt leaves fewer." :spec (a/num-in 0 nil)}
+   ::meat-wild-relief {:default 4 :doc "Wild adults of a kind in sight that halve the wild premium." :spec (a/num-in 0.1 nil)}
+   ::meat-radius {:default 32 :doc "Blocks within which the animals of a kind count toward the replacement cost of its meat." :spec (a/int-in 1 nil)}
    ::pen-look-range {:default 4 :doc "Blocks from a food animal the body walks to when the cells round it were out of sight and may be a fenced pen." :spec (a/num-in 0 nil)}})
 
 (def food-animals #{"cow" "pig" "sheep" "chicken" "rabbit"})
@@ -46,14 +51,32 @@
   [me n]
   (/ (noted-cost me n) (max 1 (or (foods/points (meat (:what n))) 1))))
 
+(defn meat-opts [] {:pen-adults (settings/get settings ::meat-pen-adults)
+                    :wild-premium (settings/get settings ::meat-wild-premium)
+                    :wild-relief (settings/get settings ::meat-wild-relief)})
+
+(defn animals-seen
+  "{:wild n :penned n}: the adult animals of a kind in sight within ::meat-radius, outside and inside a zone or enclosure of the body's own."
+  [c animal]
+  (let [pens (atom [])
+        adults (->> (look/seen-objs (:primitives c) {:radius (settings/get settings ::meat-radius) :kind "passive"
+                                                        :names [animal] :max 32})
+                    (remove #(true? (.-baby %))))
+        penned (count (filter #(spare/penned? c pens %) adults))]
+    {:wild (- (count adults) penned) :penned penned}))
+
 (defn meat-benefit
-  "Seconds the meat item is worth the body: the hunger worth of reaching food, or the points of the food
-  reserve (:carry, default the 3-day one) the pack lacks that the meat would fill, at cost/food-point-worth each."
+  "Seconds the meat item is worth the body: the hunger worth of reaching food, or the item-value of the meat of one
+  kill (its mean drops from the game data) that the food reserve (:carry, default the 3-day one) lacks, times
+  cost/meat-factor: dear while hunting leaves fewer animals, 1 with a working pen."
   [c item]
   (let [p (:primitives c)
-        gain (* cost/expected-drops (or (foods/points item) 1))
+        pts (or (foods/points item) 1)
+        drops (or (cost/kill-drops (cost/meat-animal item) item :version (game/version-of p)) cost/expected-drops)
         short (max 0 (- (:carry (:args c) food-cost/reserve-points) (foods/stock-points (u/inventory p))))
-        stock (* (cost/food-point-worth) (min gain short))]
+        n (min drops (/ short pts))
+        stock (* (cost/meat-factor (animals-seen c (cost/meat-animal item)) (meat-opts))
+                 (:value (cost/item-value [{:name item :count n}])))]
     (max (cost/food-worth (.-food (.self p))) stock)))
 
 (defn noted-benefit

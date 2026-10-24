@@ -610,6 +610,10 @@
             (is (re-find #"animal noted at \[40 64 0\] was not reached" text))
             (is (not (re-find #"no food source is known" text)))))))))
 
+(deftest a-noted-animal-priced-out-is-named-with-the-walk-and-the-meat-figures
+  (is (= "the walk costs 301 s and the meat is worth 120 s" (get-food/quote-why {} 300.6 120.2)))
+  (is (= "no way" (get-food/quote-why {:data {:text "no way"}} 300.6 120.2)) "a refusal's own words win"))
+
 (deftest a-noted-animal-within-range-but-out-of-sight-is-walked-up-to
   (async done
     (tu/run-async done
@@ -1161,6 +1165,16 @@
     (is (zero? (benefit 20 0)) "fed and asked to carry nothing: no walk is worth it")
     (is (pos? (benefit 20 60)) "fed but short of the 3-day reserve")
     (is (< (benefit 8 0) (benefit 2 0)) "the hungrier, the more a walk to food is worth")))
+
+(deftest the-meat-of-a-kill-is-worth-more-hunted-than-from-a-working-pen
+  (let [benefit (fn [world] (let [{:keys [p]} (setup (merge {:self {:food 20}} world))]
+                              (animals/meat-benefit {:primitives p :args {:carry 60}} "beef")))
+        zones [{:name "home" :owner "Fake" :min [-20 60 -20] :max [20 70 20]}]
+        wild (benefit {})
+        penned (let [{:keys [p]} (setup {:self {:food 20} :entities (take 2 herd)} :zones zones)]
+                 (animals/meat-benefit {:primitives p :args {:carry 60}} "beef"))]
+    (is (pos? penned))
+    (is (> wild penned) "with no pen the replacement of the meat is dear, with a breeding pen it is the meat's own worth")))
 
 (deftest explore-is-done-once-per-job-unless-starving-and-rested
   (is (false? (get-food/explore-done? nil false 100 60000)))

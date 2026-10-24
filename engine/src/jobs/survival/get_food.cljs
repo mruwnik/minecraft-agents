@@ -349,9 +349,10 @@
   (ready/forage-walk c {:pos (zipmap [:x :y :z] pos) :range (if near? noted-near-range animals/noted-range) :ways #{:walk} :torches :fetch :worth worth}))
 
 (defn quote-why
-  "Why go-to's quote q of a walk prices it out: its refusal's text or reason, else its price."
-  [q]
-  (or (get-in q [:data :text]) (get-in q [:route :text]) (some-> (get-in q [:route :reason]) name) "it costs more than the meat is worth"))
+  "Why go-to's quote q of a walk costing `s` seconds prices it out against meat worth `worth`: its refusal's text or reason, else the two figures."
+  [q s worth]
+  (or (get-in q [:data :text]) (get-in q [:route :text]) (some-> (get-in q [:route :reason]) name)
+      (str "the walk costs " (js/Math.round s) " s and the meat is worth " (js/Math.round worth) " s")))
 
 (defn ^:async cheapest-noted!
   "The noted animal (animals/noted-targets) whose walk costs least per hunger point of its meat and less than the meat is
@@ -361,10 +362,11 @@
         points #(max 1 (or (foods/points (animals/meat (:what %))) 1))
         out (volatile! nil)
         price (fn [n q]
-                (let [s (pick/quoted-s c q)]
-                  (if (< s (pick/ev-worth (animals/noted-benefit c n) q))
+                (let [s (pick/quoted-s c q)
+                      worth (pick/ev-worth (animals/noted-benefit c n) q)]
+                  (if (< s worth)
                     (/ s (points n))
-                    (do (when-not @out (vreset! out {:pos (:pos n) :why (quote-why q)})) ##Inf))))
+                    (do (when-not @out (vreset! out {:pos (:pos n) :why (quote-why q s worth)})) ##Inf))))
         pick (:pick (await (pick/best! c (animals/noted-targets c done)
                                        {:bound #(animals/noted-price me %)
                                         :args #(noted-walk-args c (:pos %) (animals/noted-benefit c %) false)
