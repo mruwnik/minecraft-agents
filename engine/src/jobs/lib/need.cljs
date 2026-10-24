@@ -12,6 +12,7 @@
   the first fetch began; return! walks back to it once a fetch has ended, done or not. Both live in the caller's job memory, so a cut
   goes on with them."
   (:require [clojure.set :as set]
+            [clojure.string :as str]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -107,6 +108,15 @@
 
 (def full-reasons "Fetch endings that mean the bag has no room." #{:inventory-full :bag-full})
 
+(defn ending-text
+  "Words for a fetch that failed: what was wanted (reason :need) or the bag, and why the child gave up."
+  [reason wanted why e]
+  (let [names (or (some-> (:item wanted) vector) (:any-of wanted))
+        what (cond (= :free-slots reason) "free slots"
+                   (= :tool reason) (str "a tool for " (some wanted [:block :item :kind]))
+                   :else (str (:count wanted 1) " " (str/join "/" names)))]
+    (str "needs " what ": " (or (get-in e [:data :text]) (some-> why name)))))
+
 (defn ending-for
   "Child ending e of a fetch for wanted (a map of what was asked, e.g. {:item .. :count ..}) as this job's ending:
   :done and :continue pass; a bag-full ending has the cause :free-slots, else cause-reason (:need or :tool)."
@@ -115,7 +125,7 @@
     e
     (let [why (contract/cause-key e)
           reason (if (full-reasons why) :free-slots cause-reason)]
-      (-> (contract/ending (:kind e) (assoc wanted :reason reason :why why) (:data e))
+      (-> (contract/ending (:kind e) (assoc wanted :reason reason :why why :text (ending-text reason wanted why e)) (:data e))
           (contract/with-because e)))))
 
 (defn counts

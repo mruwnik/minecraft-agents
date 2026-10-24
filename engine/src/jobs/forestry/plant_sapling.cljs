@@ -128,11 +128,14 @@
       (= :cramped (:state space)) (assoc (select-keys space [:at :block]) :reason :cramped :pos pos)
       (and light (< light (settings/get settings ::min-light))) {:reason :too-dark :pos pos :light light})))
 
+(defn target-unfit
+  "Why the current target's spot cannot grow its sapling (unfit), or nil."
+  [c]
+  (let [t (current-target c)]
+    (when (and t (not (#{"crimson" "warped"} (:species t)))) (unfit c (:pos t) (:species t)))))
+
 (def spot-unfit
-  (checks/refusing :spot-fit "the spot has soil, light and room"
-                   (fn [c]
-                     (let [t (current-target c)]
-                       (when (and t (not (#{"crimson" "warped"} (:species t)))) (unfit c (:pos t) (:species t)))))))
+  (checks/refusing :spot-fit "the spot has soil, light and room" target-unfit))
 
 (def spot-refused
   (checks/refusing :spot-allowed "the spot may be planted"
@@ -223,6 +226,7 @@
         e (cond
             (nil? t) (ctx/end c :done nil {})
             (refused) (ctx/end c :condition-failed (refused) {:pos (:pos t)})
+            (target-unfit c) (ctx/end c :condition-failed (target-unfit c) {:pos (:pos t)})
             (nil? sapling) (await (fetch-sapling! c (problem c)))
             :else (await (place! c t sapling)))]
     (when (and t (map? e) (not= :cut-off (:kind e)) (not= :done (:kind e)))

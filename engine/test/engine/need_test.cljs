@@ -93,7 +93,7 @@
       (fn ^:async t []
         (await (run! #(need/item! % "iron_ingot" 3) (stop-with :no-source)))
         (is (= :condition-failed (:kind (last @got))) "no-source is a missing fact")
-        (is (= {:reason :need :why :no-source :item "iron_ingot" :count 3} (:cause (last @got))))
+        (is (= {:reason :need :why :no-source :item "iron_ingot" :count 3 :text "needs 3 iron_ingot: no-source"} (:cause (last @got))))
         (is (= :no-source (contract/cause-key (:because (last @got)))))))))
 
 (deftest a-fetch-that-waits-for-dawn-is-not-called-but-another-later-is
@@ -128,7 +128,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [r (await (run! #(need/tool! % {:block "stone"} {:explore true}) {:tool-step (constantly :no-source)}))]
-          (is (= {:reason :tool :why :no-source :block "stone"} (:cause (last @got))))
+          (is (= {:reason :tool :why :no-source :block "stone" :text "needs a tool for stone: no-source"} (:cause (last @got))))
           (is (= {:block "stone" :explore true} (select-keys (first @(:tool r)) [:block :explore]))))))))
 
 (deftest a-waiting-child-is-continue-and-the-options-pass-on

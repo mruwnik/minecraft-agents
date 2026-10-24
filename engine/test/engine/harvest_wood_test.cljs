@@ -167,6 +167,18 @@
           (await (tu/run-until-empty eng 12))
           (is (= [:occupied] (mapv :reason (filterv #(= :stopped (:kind %)) @seen)))))))))
 
+(deftest a-later-debt-without-soil-ends-the-job-as-no-soil-instead-of-a-place-failure
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (lt/setup {:blocks {"3,63,0" "grass_block" "6,63,0" "short_grass"} :inventory [{:name "oak_sapling" :count 2}]})]
+          (doseq [x [3 6]]
+            (mem/write! (:store eng) :forestry/replant {:pos {:x x :y 64 :z 0} :species "oak"} {:cap 50 :ttl :forever}))
+          (core/submit! eng '(jobs.forestry.plant-sapling) {})
+          (await (tu/run-until-empty eng 30))
+          (is (= [[3 64 0]] (mapv (juxt :x :y :z) (map #(js->clj (.-pos (.-args %)) :keywordize-keys true) (lt/calls p "place")))) "only the first is planted")
+          (is (= [:no-soil] (mapv :reason (filterv #(= :stopped (:kind %)) @seen)))))))))
+
 (deftest the-same-sapling-already-on-the-planting-spot-counts-as-planted
   (async done
     (tu/run-async done

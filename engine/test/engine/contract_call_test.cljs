@@ -70,7 +70,7 @@
           (await (core/tick! eng))
           (let [stopped (:data (first (filter #(= [:job :stopped] [(:source %) (:kind %)]) @seen)))]
             (is (= :condition-failed (:kind stopped)))
-            (is (= {:reason :need :why :duplicate-call :item "ping"} (:cause stopped)))))))))
+            (is (= {:reason :need :why :duplicate-call :item "ping" :text "needs 1 ping: duplicate-call"} (:cause stopped)))))))))
 
 (deftest a-same-job-chain-on-new-targets-ends-too-deep
   (async done
