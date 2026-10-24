@@ -7,8 +7,11 @@
             [engine.memory :as mem]
             [engine.perception :as perception]
             [engine.settings :as settings]
+            [engine.shelter-support :as st]
+            [engine.sky-perception :as sky]
             [engine.test-util :as tu]
             [jobs.lib.flee-search :as search]
+            [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.walk.world :as wworld]
             [jobs.survival.respond.goal :as respond.goal]))
 
@@ -71,6 +74,27 @@
           (is (number? (:ms whole)))
           (is (< (:planned cut) 12) (str "the ring stops once 300 nodes are spent " (pr-str cut whole)))
           (is (<= 300 (:nodes cut) 310) (pr-str cut)))))))
+
+(defn ^:async open-field-prices
+  "{ring end: price} of the flee search on open ground at time (a zombie 5 blocks west of the body), with spawns-over
+  forced to 0 when unspawned?."
+  [time unspawned?]
+  (let [p (sky/with-sky (tu/fake {:floor [-32 -32 32 32] :time time :self {:pos {:x 0.5 :y 64 :z 0.5}}
+                                  :entities [{:id 7 :uuid "u7" :name "zombie" :kind "hostile" :pos {:x -4.5 :y 64 :z 0.5}}]}))
+        spawns-over spawn-light/spawns-over]
+    (when unspawned? (set! spawn-light/spawns-over (constantly 0)))
+    (try (into {} (map (juxt :target :price)) (await (search/search! (ctx-of p) [{:name "zombie" :mob "zombie" :pos {:x -4.5 :y 64 :z 0.5}}] [] {})))
+         (finally (set! spawn-light/spawns-over spawns-over)))))
+
+(deftest a-flight-under-the-night-sky-is-priced-with-the-mobs-met-spawning-on-its-way
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[night night-unspawned day day-unspawned] [(await (open-field-prices st/night false)) (await (open-field-prices st/night true))
+                                                         (await (open-field-prices st/noon false)) (await (open-field-prices st/noon true))]]
+          (is (= 12 (count night)) (pr-str night))
+          (is (every? #(> (night %) (night-unspawned %)) (keys night)) (str "each way under the night sky costs its spawns " (pr-str night night-unspawned)))
+          (is (= day day-unspawned) "by day nothing spawns on the ways"))))))
 
 (deftest a-flight-down-a-dark-corridor-is-a-priced-way-on
   ;; the old search priced an unseen open cell lethal and cut each route before it: in the dark every end was a pocket

@@ -10,7 +10,9 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [engine.fake :as fake]
-            [engine.settings :as settings]))
+            [engine.settings :as settings]
+            [jobs.lib.spawn-light :as spawn-light]
+            [jobs.survival.leave-shelter :as leave-shelter]))
 
 (def shut-in-trigger :dawn)
 
@@ -205,3 +207,16 @@
                (is (some #{7} (map :id (:entities @(fake/state p)))) "the zombie never left")
                (is (< (:x (st/pos-of p)) 0) "out through the west wall, the side farthest from the zombie (east)")
                (is (empty? (st/entries eng :fragile-hold)) "the hold forgotten once out")))))))))
+
+(def shell
+  "Stone walls two high round the cell 0 64 0 and a roof over it: a dug-in shelter."
+  (into {"0,66,0" "stone"} (for [x [-1 0 1] z [-1 0 1] y [64 65] :when (not= [x z] [0 0])] [(str x "," y "," z) "stone"])))
+
+(deftest a-way-out-by-night-is-priced-with-the-mobs-met-spawning-on-it
+  (let [p (tu/fake {:floor tu/walk-floor :time st/night :blocks shell :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+        c {:primitives p :view (fn [] {:data mem/empty-data :now 0})}
+        prices #(into {} (map (juxt :heading :price)) (leave-shelter/exits c))
+        priced (prices)
+        unspawned (with-redefs [spawn-light/spawns-over (constantly 0)] (prices))]
+    (is (= 4 (count priced)))
+    (is (every? #(> (priced %) (unspawned %)) (keys priced)) (str "each way out under the night sky costs its spawns " (pr-str priced unspawned)))))
