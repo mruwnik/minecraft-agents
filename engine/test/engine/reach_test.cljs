@@ -149,6 +149,12 @@
     (is (= [] (danger-q/dangers p 8 {} {:sight? false})))
     (is (= [9] (map #(.-id %) (danger-q/dangers q 16 {:ranged-radius 16} {:sight? false}))))))
 
+(deftest a-skeleton-past-its-follow-range-is-no-danger-whatever-the-radius
+  (let [at (fn [x] (tu/fake {:self {:pos body} :floor [-30 -30 30 30]
+                             :entities [{:id 9 :name "skeleton" :kind "hostile" :pos {:x (+ x 0.5) :y 64 :z 0.5}}]}))]
+    (is (= [9] (map #(.-id %) (danger-q/dangers (at 15) 20 {:ranged-radius 20} {}))))
+    (is (= [] (danger-q/dangers (at 19) 20 {:ranged-radius 20} {})))))
+
 (deftest a-mob-walks-through-plants-a-body-stands-behind
   (doseq [name ["wheat" "poppy" "sugar_cane" "kelp" "soul_torch" "oak_sapling"]]
     (let [plants (into {} (map (fn [[k _]] [k name])) walls)
