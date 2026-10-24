@@ -6,7 +6,8 @@
             [engine.settings :as settings]))
 
 (a/defargs settings
-  {::ttl-ms {:default 2000 :doc "How long a check reuses what it read off the world, in ms of body clock." :spec (a/int-in 0 nil)}})
+  {::ttl-ms {:default 2000 :doc "How long a check reuses what it read off the world, in ms of body clock." :spec (a/int-in 0 nil)}
+   ::keep {:default 4 :doc "How many sets of inputs a keyed check keeps a value for, per job and tag (the latest)." :spec (a/int-in 1 nil)}})
 (defn ttl-ms [] (settings/get settings ::ttl-ms))
 
 (defonce engines (js/WeakMap.))
@@ -42,7 +43,18 @@
   (reuse c k thunk (fn [now hit] (<= 0 (- now (:t hit)) (ttl-ms)))))
 
 (defn keyed
-  "The value of (thunk) for key k of this job, reused whatever its age (never under fresh): for a thunk whose key holds
-  every input it reads. Entries older than ten ttl-ms are dropped as others are written."
-  [c k thunk]
-  (reuse c k thunk (constantly true)))
+  "The value of (thunk) for the inputs of tag (the values the thunk reads, as gathered) of this job, whatever its age
+  (never under fresh): the latest ::keep inputs of a tag are kept, with the settings they were read under."
+  [c tag inputs thunk]
+  (let [entries (entries-of c)
+        id [(:id c) (:slots c) tag]
+        now (ctx/now c)
+        look {:in inputs :values (:values @settings/state) :scope (.getStore settings/call-scope)}
+        same? (fn [e] (and (identical? (:values e) (:values look)) (= (:scope e) (:scope look)) (= (:in e) inputs)))
+        hit (when-not (::fresh c) (first (filter same? (:recent (get @entries id)))))]
+    (if hit
+      (:v hit)
+      (let [v (thunk)]
+        (swap! entries (fn [m] (assoc (into {} (remove (fn [[_ e]] (> (- now (:t e)) (* 10 (ttl-ms))))) m) id
+                                      {:t now :recent (take (settings/get settings ::keep) (cons (assoc look :v v) (remove same? (:recent (get m id)))))})))
+        v))))

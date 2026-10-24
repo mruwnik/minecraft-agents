@@ -265,6 +265,35 @@
       (is (= [[[0 64 0] []] [[10 64 0] []] [[10 64 0] []] [[10 64 0] [20.5]] [[10 64 0] [15.5]]] @stays)
           "the stay is priced where the body stands, again once it is hurt, not again while nothing it reads changed, and again as a zombie comes closer"))))
 
+(deftest the-stay-is-priced-anew-when-only-the-sky-darkens
+  (let [c (ready-test/ctx-of {:time st/noon :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+        state (fake/state (:primitives c))
+        goal {:x 30 :y 64 :z 0}
+        plan {:status "partial" :steps (vec (take 10 straight-cells))}
+        chances (atom [])]
+    (with-redefs [risk/estimate-of prefix-estimate-of
+                  risk/stay-estimate (fn [_ {:keys [chance]}] (swap! chances conj chance) {:hp 0 :hostiles 0})]
+      (risk/status c goal plan)
+      (swap! state assoc :time st/night)
+      (risk/status c goal plan)
+      (is (= 2 (count @chances)) "the stay is priced again at dusk, no block written and the body unmoved")
+      (is (< (first @chances) (second @chances)) "at the chance of the dark"))))
+
+(deftest the-walk-is-priced-anew-when-only-the-light-along-it-changes
+  (let [c (ready-test/ctx-of {:time st/night :floor [0 -24 80 24] :self {:pos {:x 0.5 :y 64 :z 0.5}}
+                              :light (into {} (for [x (range 0 81)] [[x 64 0] [0 15]]))})
+        state (fake/state (:primitives c))
+        goal {:x 30 :y 64 :z 0}
+        plan {:status "found" :steps (vec straight-cells)}
+        dark (atom [])
+        orig risk/estimate-of]
+    (with-redefs [risk/estimate-of (fn [c in] (let [e (orig c in)] (swap! dark conj (:dark-s e)) e))]
+      (risk/status c goal plan)
+      (swap! state assoc :light (into {} (for [x (range 0 81)] [[x 64 0] [0 0]])))
+      (risk/status c goal plan)
+      (is (= 2 (count @dark)) "priced again with no block written")
+      (is (and (zero? (first @dark)) (pos? (second @dark))) "by the light now seen along the way"))))
+
 (def far-goal {:x 95 :y 64 :z 0})
 
 (defn with-death

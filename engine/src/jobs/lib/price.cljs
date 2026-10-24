@@ -62,7 +62,7 @@
   (let [body (threats/death-body c)
         at (u/self-pos c)
         spawns (* chance seconds)]
-    (check-cache/keyed c [::stay spawns body at]
+    (check-cache/keyed c ::stay [spawns body at]
                        (fn [] {:hurt (cost/spawns-hurt body spawns at)
                                :dies (cost/spawns-chance body spawns at)}))))
 

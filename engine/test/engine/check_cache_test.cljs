@@ -1,6 +1,7 @@
 (ns engine.check-cache-test
   "jobs.lib.check-cache: a value read once per window and per job instance."
   (:require [cljs.test :refer [deftest is]]
+            [engine.settings :as settings]
             [jobs.lib.check-cache :as cc]))
 
 (def engine {:warned (atom #{})})
@@ -25,3 +26,25 @@
         read #(swap! n inc)
         other (assoc (ctx-at "d" 0) :engine {:warned (atom #{})})]
     (is (= [1 2] [(cc/cached (ctx-at "d" 0) :k read) (cc/cached other :k read)]))))
+
+(deftest keyed-values-are-reused-whatever-their-age-and-only-the-latest-inputs-are-kept
+  (let [n (atom 0)
+        read #(swap! n inc)
+        keep (settings/get cc/settings ::cc/keep)
+        at #(cc/keyed (ctx-at "k" 0) :t % read)]
+    (is (= 1 (at 1)))
+    (is (= 1 (cc/keyed (ctx-at "k" 10000000) :t 1 read)) "an old value is reused")
+    (doseq [i (range 2 (+ 2 keep))] (at i))
+    (is (= (inc keep) @n))
+    (at 1)
+    (is (= (+ 2 keep) @n) "inputs older than the latest kept are read again")
+    (at (+ 1 keep))
+    (is (= (+ 2 keep) @n) "the latest are kept")))
+
+(deftest keyed-values-are-read-again-when-a-setting-changes
+  (let [n (atom 0)
+        read #(swap! n inc)
+        c (ctx-at "s" 0)]
+    (cc/keyed c :t 1 read)
+    (settings/scoped {::cc/ttl-ms 5} #(cc/keyed c :t 1 read))
+    (is (= 2 @n))))
