@@ -4,7 +4,7 @@
   are priced by the answer the body would take to each). Pure.
 
   body: {:level experience levels, :respawn {:x :y :z} where it would wake, :carried the seconds the carried items are
-  worth (item-value)}.
+  worth (item-value), :stake the seconds of worth a death loses besides}.
 
   A remembered death fades: death-weight. One by terrain (a fall, water, lava, a wall) costs go-to's plans near its spot
   as terrain-danger.
@@ -66,14 +66,18 @@
 
 (defn death-cost
   "Seconds a death at `at` ({:x :y :z}) costs: the walk from the body's :respawn to `at` and back for the items (a trip
-  and the walk price), plus experience-cost. A body with no :respawn walks ::spawn-walk-blocks from world spawn and loses
-  what it :carried: the pile despawns long before it gets there."
+  and the walk price), plus experience-cost. What the death leaves, the :carried items and the :stake (seconds of worth
+  it loses besides: the pile a recover-drops walk goes for), is lost when the walk back cannot beat the despawn
+  (value/fetch-cost's :too-far), as with no :respawn: that body walks ::spawn-walk-blocks from world spawn."
   [body at]
   (let [from (:respawn body)
-        walk (if from
-               (:cost (value/walk-cost {:distance (js/Math.hypot (- (:x from) (:x at)) (- (:y from) (:y at)) (- (:z from) (:z at)))}))
-               (+ (:cost (value/walk-cost {:distance (settings/get settings ::spawn-walk-blocks)})) (or (:carried body) 0)))]
-    (+ (value/trip) walk (experience-cost body))))
+        blocks (if from
+                 (js/Math.hypot (- (:x from) (:x at)) (- (:y from) (:y at)) (- (:z from) (:z at)))
+                 (settings/get settings ::spawn-walk-blocks))
+        left (if (and from (not (:reason (value/fetch-cost {:distance blocks}))))
+               0
+               (+ (or (:carried body) 0) (or (:stake body) 0)))]
+    (+ (value/trip) (:cost (value/walk-cost {:distance blocks})) left (experience-cost body))))
 
 (defn blow-chance
   "The chance that blows of about hit hp, damage hp of them expected, take the health and absorption of body: at least

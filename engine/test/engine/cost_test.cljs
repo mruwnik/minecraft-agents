@@ -418,6 +418,12 @@
     (is (> (cost/death-cost (assoc body :level 10) far) (cost/death-cost body far)))
     (is (= (cost/experience-cost {:level 10}) (- (cost/death-cost (assoc body :level 10) far) (cost/death-cost body far))))))
 
+(deftest a-death-loses-its-stake-and-load-unless-the-walk-back-beats-the-despawn
+  (let [lost #(- (cost/death-cost (assoc % :stake 500 :carried 3000) far) (cost/death-cost % far))]
+    (is (zero? (lost {:respawn {:x 0 :y 64 :z 0}})) "a bed 100 blocks off: the walk back gets both piles")
+    (is (= 3500 (lost {:respawn {:x 3000 :y 64 :z 0}})) "a bed too far for the despawn window")
+    (is (= 3500 (lost {})) "no bed: world spawn")))
+
 (deftest a-hold-costs-its-seconds-and-hp-lost-and-a-way-out-its-hurt-and-death-risk
   (let [body {:respawn {:x 0 :y 64 :z 0} :level 0 :health 3}
         route {:underground? true}]

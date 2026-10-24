@@ -39,12 +39,13 @@
 
 (defn ^:async walk-leg!
   "One leg of the walk to pos: [:danger d] when a danger the trip has not priced is near (no walk is made), else [r] of
-  a chase leg of ::leg-s seconds (:continue, or its ending; its :data has the result, with :arrived or :leg). go-to's :worth is the pile's value."
+  a chase leg of ::leg-s seconds (:continue, or its ending; its :data has the result, with :arrived or :leg). go-to's :worth and :stake
+  are the pile's value, as the decision's quote priced it (estimate/quote-trip)."
   [c pos]
   (let [worth (:value (:decided (ctx/mem c)))]
     (if-let [d (dg/threatened? c)]
       [:danger d]
-      [(await (child/call-chase* c :go {:pos pos :range (cfg/arrive-range) :leg-s (* (cfg/leg-s) (if (:blocked (ctx/mem c)) blocked-leg-factor 1)) :walk (cond-> {:checks cfg/own-checks} (number? worth) (assoc :worth worth))}))])))
+      [(await (child/call-chase* c :go {:pos pos :range (cfg/arrive-range) :leg-s (* (cfg/leg-s) (if (:blocked (ctx/mem c)) blocked-leg-factor 1)) :walk (cond-> {:checks cfg/own-checks} (number? worth) (assoc :worth worth :stake worth))}))])))
 
 (defn refused?
   "Whether the walk's ending r is go-to's verdict on the goal cell alone, given before any search (as chase passes it on)."
