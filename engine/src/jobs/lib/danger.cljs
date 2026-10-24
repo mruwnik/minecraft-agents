@@ -216,6 +216,7 @@
   would be seen (none: no danger); without it a heard ranged mob is taken at its rough spot.
   :ignore-heard? leaves out every mob the body has not seen (a muted heard mob, jobs.lib.body/heard-muted?).
   :watched ({id blocks-off-when-watched}) leaves out those mobs while they stay beyond answered-within.
+  :any-range? true keeps a ranged mob past its follow range (pricing a walk that may bring the body within it).
   :way? false takes a melee mob without a way to the body (on a pillar or behind a door) as one: it stands where the body's walk will land.
   :hit-ids (hit-ids) are melee mobs that hurt the body lately: each known one is a danger, seen or not, whatever the way test says.
   A melee mob heard but not seen counts as seen (by open-cell-from's cell) outside or in a large cave; in closed quarters
@@ -223,7 +224,7 @@
   (beside-toward?): a heard mob in clear, lit sight is already seen (engine.perception), so a look would find nothing.
   A fusing creeper (hissing, seen or heard) within swell-range is always one; beyond it the usual tests apply."
   ([p kind-at e opts] (danger-in? p kind-at nil e opts))
-  ([p kind-at pr e {:keys [sight? arrow-at sight-at ignore-heard? watched way? hit-ids] :or {sight? true way? true}}]
+  ([p kind-at pr e {:keys [sight? arrow-at sight-at ignore-heard? watched way? hit-ids any-range?] :or {sight? true way? true}}]
    (cond
      (and (contains? hit-ids (.-id e)) (not (combat/ranged? e))) true
      (and (contains? watched (.-id e)) (> (mob-distance p e) (answered-within (get watched (.-id e))))) false
@@ -233,7 +234,7 @@
      (and (true? (.-fusing e)) (<= (mob-distance p e) swell-range)) true
      (and ignore-heard? (not (seen-only? e))) false
      (combat/ranged? e)
-     (and (<= (mob-distance p e) (threat/follow-range (.-name e)))
+     (and (or any-range? (<= (mob-distance p e) (threat/follow-range (.-name e))))
           (or (not sight?) (seen-only? e) (<= (mob-distance p e) obs/near-band))
           (or (not sight?) (seen-only? e) (not (closed-quarters? kind-at (reach/cell-of (u/pos-of (.-pos (.self p)))))))
           (when-let [at (if (or (seen-only? e) (not sight-at)) (mob-pos p e) (heard-pos p kind-at sight-at e))]

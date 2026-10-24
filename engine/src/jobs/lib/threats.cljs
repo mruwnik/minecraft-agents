@@ -121,7 +121,7 @@
   [c]
   (let [p (:primitives c)
         here (u/pos-of (.-pos (.self p)))
-        ds (concat (for [{:keys [name pos]} (sort-by #(u/dist here (:pos %)) (sensed-mobs p {:way? false}))]
+        ds (concat (for [{:keys [name pos]} (sort-by #(u/dist here (:pos %)) (sensed-mobs p {:way? false :any-range? true}))]
                      {:x (:x pos) :y (:y pos) :z (:z pos) :close 0 :radius 0 :rate 0 :mob name :block true})
                    (for [{:keys [pos cause weight mob?]} (death-spot/uncleared c) :when (not mob?)]
                      (cost/terrain-danger {:pos pos :cause cause :weight weight})))]
@@ -143,7 +143,7 @@
         now (ctx/now c)
         ttl (:ttl (or (mem/policy (ctx/view c) :hurt) mem/default-policy))
         fade (fn [age] (if (number? ttl) (cost/death-weight age ttl) (cost/death-weight age)))
-        sensed (sensed-mobs p {:way? false})
+        sensed (sensed-mobs p {:way? false :any-range? true})
         now-keys (set (map :key sensed))
         here (u/pos-of (.-pos (.self p)))]
     (->> (concat (for [{:keys [key name chaser pos]} sensed] {:mob name :pos pos :weight 1 :key key :chaser chaser})
