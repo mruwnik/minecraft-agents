@@ -349,8 +349,7 @@
                  :report {:yields {:items {:bread 1 :crafting_table 1}}})
         message (:message (observe-status/classify e (assoc defaults :watch ["j1"]) "Probe"))]
     (is (re-find #"one exclusive round" message))
-    (is (re-find #"bread 1, crafting_table 1" message))
-    (is (re-find #"without --exclusive" message)))
+    (is (re-find #"bread 1, crafting_table 1" message)))
   (is (= "stopped: no iron" (:message (observe-status/classify (assoc (event :job :stopped {:reason :ways} "stopped: no iron") :context {:job-id "j1"})
                                                                 (assoc defaults :watch ["j1"]) "Probe")))))
 

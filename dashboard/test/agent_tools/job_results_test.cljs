@@ -108,11 +108,19 @@
     (is (= :stopped (:status r)))
     (is (= {:kind :nothing-possible :cause {:ways {:a :x}} :reason :ways} (:ending r)))))
 
-(deftest a-yielded-stop-carries-a-note-naming-its-yields
-  (let [stop (assoc (event 2 "j4" :stopped {:status :stopped :reason :yielded}) :report {:yields {:items {:bread 1}}})
-        r (results/project "j4" "g" [(event 1 "j4" :queued {}) stop] false)]
-    (is (re-find #"one exclusive round.*Got done: bread 1" (:note r))))
-  (is (not (contains? (results/project "j4" "g" [(event 1 "j4" :queued {}) (event 2 "j4" :stopped {:reason :ways})] false) :note))))
+(defn exclusive-stop
+  "The events of an exclusive run j4 that stopped with data (and the text its stopped event carried)."
+  [data text]
+  [(assoc (event 1 "j4" :queued {}) :exclusive true)
+   (assoc (event 2 "j4" :stopped data) :text text :report {:yields {:items {:bread 1}}})])
+
+(deftest an-exclusive-run-that-did-not-finish-carries-a-note-per-ending
+  (let [note (fn [data text] (:note (results/project "j4" "g" (exclusive-stop data text) false)))]
+    (is (re-find #"Yielded after its one exclusive round.*Got done: bread 1" (note {:status :stopped :reason :yielded} "stopped: yielded")))
+    (is (re-find #"Declined to run \(no tool\); nothing ran" (note {:status :stopped :reason :declined} "no tool")))
+    (is (re-find #"Waited after its one exclusive round \(waiting: a table\)" (note {:status :stopped :reason :need} "waiting: a table")))
+    (is (nil? (note {:status :stopped :reason :cut} "cut")))
+    (is (nil? (:note (results/project "j4" "g" [(event 1 "j4" :queued {}) (event 2 "j4" :stopped {:reason :ways})] false))))))
 
 (defn unknown-id-get
   "A get! over a log of n filler events whose snapshot says ids below j5 were issued; counts its requests in calls."

@@ -49,16 +49,17 @@
                                         (when (seq again) (str "resubmit " (spec (first again))))])))))
 
 (defn yielded-text
-  "For a job that ended :stopped :yielded or :declined (an exclusive run gets one round and is then dropped, so a
-  resubmit starts it over): what that round got done (the event's report yields) and how to go on; else nil."
-  [e]
-  (when (and (= :stopped (:kind e)) (#{:yielded :declined} (get-in e [:data :reason])))
-    (let [items (get-in e [:report :yields :items])]
-      (str "yielded after its one exclusive round, so it did not finish; the job is gone, not waiting, and a resubmit starts it over. "
-           (if (seq items)
-             (str "Got done: " (str/join ", " (map (fn [[item n]] (str (name item) " " n)) (sort-by (comp str key) items))) ". ")
-             "It yielded nothing to the pack. ")
-           "To finish: submit the remaining steps one call each (for a seq, its later steps on their own), or submit without --exclusive so it continues across rounds."))))
+  "For a job that an exclusive run ended without finishing (:stopped :yielded, :declined, or its child's wait reason
+  when exclusive?; the job is dropped, so a resubmit starts over): one sentence on why and what the round got done; else nil."
+  [e exclusive?]
+  (let [reason (get-in e [:data :reason])]
+    (when (and (= :stopped (:kind e)) (not= :cut reason) (or exclusive? (#{:yielded :declined} reason)))
+      (let [items (get-in e [:report :yields :items])
+            done (when (seq items) (str " Got done: " (str/join ", " (map (fn [[item n]] (str (name item) " " n)) (sort-by (comp str key) items))) "."))]
+        (case reason
+          :declined (str "Declined to run (" (:text e) "); nothing ran.")
+          :yielded (str "Yielded after its one exclusive round and is gone." done " Submit the remaining steps as separate calls, or without --exclusive.")
+          (str "Waited after its one exclusive round (" (:text e) ") and is gone." done " Resubmit once that is met, or submit without --exclusive."))))))
 
 (defn never-issued?
   "True when id cannot be a job of this generation: ids are j<n> from a counter, next-id being the next to issue."
@@ -77,6 +78,7 @@
         terminal (last (filter #(and (= id (get-in % [:context :job-id]))
                                      (terminal-kinds (:kind %))) matching))
         queued? (some #(and (= id (get-in % [:context :job-id])) (= :queued (:kind %))) matching)
+        exclusive? (some #(and (= id (get-in % [:context :job-id])) (= :queued (:kind %)) (:exclusive %)) matching)
         observations (filterv #(not (internal-kinds (:kind %))) matching)
         selected (take-last event-limit observations)
         clipped (bounded (mapv (fn [e] (cond-> {:event (:kind e)}
@@ -93,7 +95,7 @@
                        {:state (if (some #(and (= id (get-in % [:context :job-id])) (= :round_started (:kind %))) matching)
                                  :running :queued)}))
         (seq (:data terminal)) (assoc :result (:value (bounded (:data terminal))))
-        (yielded-text terminal) (assoc :note (yielded-text terminal))
+        (yielded-text terminal exclusive?) (assoc :note (yielded-text terminal exclusive?))
         (seq selected) (assoc :events (:value clipped))
         (or (> (count observations) event-limit) (:truncated? clipped)) (assoc :events-truncated? true)
         (:kind (:data terminal)) (assoc :ending (select-keys (:data terminal) [:kind :cause :reason]))

@@ -262,7 +262,7 @@
 
       (and (= :job source) (job-results/terminal-kinds kind) (some #{(get-in e [:context :job-id])} (:watch opts)))
       (clean-pairs :wake :job-finished :job (get-in e [:context :job-id]) :result (:kind e)
-                   :message (or (some-> (job-results/yielded-text e) (clip 600)) (clip (or (:error d) (:message e)))) :next (job-results/next-text (or (:next d) (get-in d [:cause :next]))))
+                   :message (clip (or (job-results/yielded-text e false) (:error d) (:message e))) :next (job-results/next-text (or (:next d) (get-in d [:cause :next]))))
 
       (and (= :notice (:attention e)) (not (:quiet-notices opts)) (not (job-results/terminal-kinds kind))
            (not (unwatched-notice? e opts)))
