@@ -552,7 +552,7 @@
   "node argv for a body: V8 flags must be on the command line (heap cap: RSS 335 -> ~255 MB)."
   ([opts scenario] (body-argv opts scenario false))
   ([opts scenario restore?]
-   (into-array (concat ["--max-old-space-size=160" "--heap-growing-percent=100" "--max-semi-space-size=8" "out/body-release.cjs"]
+   (into-array (concat ["--max-old-space-size=192" "--heap-growing-percent=100" "--max-semi-space-size=8" "out/body-release.cjs"]
                        (body-args opts scenario restore?)))))
 
 (defn await-online!
