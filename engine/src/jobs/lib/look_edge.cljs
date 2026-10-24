@@ -53,7 +53,7 @@
   "Whether the body is under a roof, leaves or earth, or has a cell unseen over its head where a roof may be: only then is
   the region round it a shelter to be judged."
   [p]
-  (or (sh-sense/roofed? p (sh-sense/room-roof-height)) (sh-sense/leaf-roofed? p (sh-sense/room-roof-height)) (sh-sense/buried? p)
+  (or (sh-sense/roofed? p (sh-sense/room-roof-height)) (sh-sense/leaf-roofed? p (sh-sense/room-roof-height)) (sh-sense/sealed? p)
       (unseen-roof? p (sh-sense/feet p))))
 
 (defn pending

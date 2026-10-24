@@ -4,7 +4,7 @@
 
   Rules of go-to:
   - The walk settings (per world, body or call :settings): jobs.lib.walk.world/dark false plans dark cells like lit ones (default: a dark cell costs twice a lit one, so a lit route up to about 2x
-    longer is taken: a cell seen and dark, or one never seen at night; look/dark-fn).
+    longer is taken: a cell seen and dark, or one never seen at night; sh-sense/dark-fn).
   - A call that ends other than arrived with the head under water first swims to the air it knows (surface-before-end!).
   - Setting go-to.tuning/goal-danger :end gives up at once (:why :goal-dangerous, :mob, :mob-pos, :mob-distance) when the goal lies within the full-cost radius of a known mob the body would flee; :wait (default) walks on, an info goal-in-danger says so.
   - Setting jobs.lib.walk.world/dangers false plans straight past known dangers (default: the plans keep away from them, jobs.lib.threats). A

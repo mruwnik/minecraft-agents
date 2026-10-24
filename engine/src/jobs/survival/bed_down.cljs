@@ -91,9 +91,9 @@
         [head])))
 
 (defn shut-in?
-  "Whether a bed beside the body lies sheltered: the body is shut in a closed roofed room or buried."
+  "Whether a bed beside the body lies sheltered: the body is shut in a closed roofed room or sealed from the sky."
   [p]
-  (or (sh-sense/shut-in-room? p) (sh-sense/buried? p)))
+  (or (sh-sense/shut-in-room? p) (sh-sense/sealed? p)))
 
 (defn closed-home
   "The :home of a body outside it when it lies in a closed roofed room (the carried bed goes down there), else nil."
@@ -110,9 +110,9 @@
        (boolean (some #(.endsWith (:name %) "_bed") (reserve/free c :night)))))
 
 (defn bed-sheltered?
-  "Whether a bed at cell lies sheltered: shut in a closed roofed room, or the body buried."
+  "Whether a bed at cell lies sheltered: shut in a closed roofed room, or the body sealed from the sky."
   [p cell]
-  (or (sh-sense/shut-in-room? p cell) (sh-sense/buried? p)))
+  (or (sh-sense/shut-in-room? p cell) (sh-sense/sealed? p)))
 
 (defn seal-cells
   "The cells to fill round a bed layout's row (stand, foot, head) to shut it in: its sides at feet and head height, a

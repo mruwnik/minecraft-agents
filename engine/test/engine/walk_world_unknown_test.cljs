@@ -199,6 +199,24 @@
     (is (= @void (read 8)) "the water aged to unseen: 8 stays unseen, not rock")
     (is (= @stone (read 10)) "4 from the water's cell: rock")))
 
+(def hall-world
+  "A body on a stone floor (y 63) of a hall roofed 10 over its feet (y 74), x, z -12..12."
+  {:self {:pos {:x 0.5 :y 64 :z 0.5}}
+   :blocks (merge (box -12 63 -12 12 63 12 "stone") (box -12 74 -12 12 74 12 "stone"))})
+
+(defn rock-guess-in
+  "rock-guess? of a body in world sealed from the sky, at block light block."
+  [world block]
+  (let [{:keys [p w]} (sensed world)]
+    (swap! (fake/state p) assoc :light-default [0 block])
+    (wworld/rock-guess? w (wworld/unknown-spec))))
+
+(deftest the-rock-guess-follows-the-light-and-the-rock-the-body-sees-not-the-sky
+  (is (false? (rock-guess-in (assoc hall-world :pitch -80) 14)) "a block-lit hall, its roof seen high over the head: lit open land (Q31)")
+  (is (true? (rock-guess-in hall-world 14)) "the same hall before it looked up: the roof may be close")
+  (is (true? (rock-guess-in (assoc hall-world :pitch -80) 0)) "the same hall dark: a cave")
+  (is (true? (rock-guess-in (assoc pocket-world :pitch -80) 14)) "a lit pocket in rock: its roof is seen close over the head"))
+
 (deftest the-ways-on-are-counted-once-a-memory
   (let [{:keys [p w]} (sensed wall-world)
         n (atom 0)

@@ -48,7 +48,7 @@
   search goes on at the next call) or a walk to where an unfinished search has got to (never, with progress false).
   With budget, each plan's search is an info :planned event {:ms :status :sprint :why :nodes} (:sprint: whether the policy lets the plan sprint; nodes only once the search is over); with the head under water also :oxygen (0-20) and :swim-steps (the plan's swimming steps).
   With dangers, each plan costs the dangers the body knows of now (jobs.lib.threats/planner-dangers): it keeps away from them.
-  With dark (default: unless false), each plan costs dark cells more by the hp a zombie would cost the kit, up to twice a lit cell unarmed (wworld/with-dark: look/dark-fn).
+  With dark (default: unless false), each plan costs dark cells more by the hp a zombie would cost the kit, up to twice a lit cell unarmed (wworld/with-dark: sh-sense/dark-fn).
   With avoid (a set of [x y z] cells), each plan costs entering them much more (wworld/with-avoid): a way round is taken when there is one.
   With tolls ([{:x :y :z :factor}], jobs.lib.cost farm-tolls and zone-tolls), each plan costs those cells factor times their seconds more (wworld/with-tolls); a toll of ##Inf is a wall.
   With unknown (wworld/unknown-spec), each plan reads the cells the body never saw as unknown (wworld/path-world).

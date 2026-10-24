@@ -11,7 +11,7 @@
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.cost.planner :as cost-planner]
-            [jobs.lib.look :as look]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.near :as near]
             [jobs.lib.toll-cells :as tc]
             [jobs.lib.walk :as walk]
@@ -54,10 +54,10 @@
     (pos? (or (.-drown (.-cost path)) 0)) (assoc :drown (/ (js/Math.round (* 10 (.-drown (.-cost path)))) 10))))
 
 (defn dark-cells
-  "How many feet cells of steps look/dark-fn reads dark (seen dark; unseen at night unless unknown, whose mask prices
+  "How many feet cells of steps sh-sense/dark-fn reads dark (seen dark; unseen at night unless unknown, whose mask prices
   them), nil without a perception."
   [p steps unknown]
-  (when-let [{:keys [at]} (look/dark-fn p {:unseen-dark? (nil? unknown)})]
+  (when-let [{:keys [at]} (sh-sense/dark-fn p {:unseen-dark? (nil? unknown)})]
     (count (into #{} (comp (map (fn [s] (mapv #(js/Math.floor (% s)) [:x :y :z]))) (filter (fn [[x y z]] (= 1 (at x y z))))) steps))))
 
 (defn u-dist

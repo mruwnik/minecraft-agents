@@ -329,7 +329,7 @@
     #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers dangers :avoid (.-avoid pw) :dark (.-dark pw) :tolls (.-tolls pw)}))
 
 (defn with-dark
-  "pw whose plans cost dark cells more (the planner's options.dark): dark is look/dark-fn's {:at ..} (nil: pw). A dark
+  "pw whose plans cost dark cells more (the planner's options.dark): dark is sh-sense/dark-fn's {:at ..} (nil: pw). A dark
   cell costs cost/dark-factor of kit (kit-of; nil: the floor) times its own seconds more. With a kit, a cell water
   (look/water-fn's class, nil: none) gives costs its class's cost/water-factors too, by day as well: a drowned keeps to the
   water, and a dark one pays the land mobs' dark-factor on top (classes 4 and 5: dark 2 and 3); a phantom floor beside
@@ -362,7 +362,7 @@
 
 (defn costed-world
   "pw (the primitives' pathWorld) costed the way go-to plans: with the mobs the body knows may hurt it, each over its
-  field (dangers?, jobs.lib.threats threat-tolls; planner-dangers keeps plans off sensed mobs' cells and deaths by terrain) and with dark cells (dark?, look/dark-fn; over a
+  field (dangers?, jobs.lib.threats threat-tolls; planner-dangers keeps plans off sensed mobs' cells and deaths by terrain) and with dark cells (dark?, sh-sense/dark-fn; over a
   masked pw an unseen cell is priced by the mask, not as dark) and with the steps the walker failed at (jobs.lib.walk.edges).
   Every search that ranks routes by cost plans over this.
   keep? (a fn of a known threat): only the threats it holds of are tolled (a flight races its chasers instead)."
@@ -373,7 +373,7 @@
     dark? (as-> pw' (let [kit (kit-of c)
                           wet (cost/water-factors kit)
                           phantom (cost/unseen-water-factors kit wet)]
-                      (with-dark pw' (look/dark-fn (:primitives c) {:unseen-dark? (nil? (unknown-of pw))})
+                      (with-dark pw' (sh-sense/dark-fn (:primitives c) {:unseen-dark? (nil? (unknown-of pw))})
                                  (look/water-fn (:primitives c) {:wet? (water-read-fn pw) :phantom? (phantom-read-fn pw) :lags (count phantom)}) kit wet phantom)))
     true (with-edges (edges/tolls (:primitives c)))))
 

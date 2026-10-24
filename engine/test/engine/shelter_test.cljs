@@ -195,13 +195,16 @@
     (perception/pass! per)
     (mapv #(sh-sense/buried-at? p %) cells)))
 
-(deftest buried-at-judges-any-cell-by-its-sky-light-when-the-body-has-seen-it
+(deftest buried-at-judges-any-cell-by-its-light-and-roof-when-the-body-has-seen-it
   (are [world cell expected] (= [expected] (buried-cells world [cell]))
     (merge dark {:blocks (stone-above 2 1)}) {:x 0 :y 64 :z 0} true
     ;; seen, open sky, a roof one block thick: lit, not buried
     {:blocks (stone-above 3 1) :light {[0 65 0] [15 0] [0 66 0] [15 0]}} {:x 0 :y 65 :z 0} false
     ;; seen cell in a tall cave: no sky light, ceiling far over
     (merge dark {:blocks (stone-above 10 1)}) {:x 0 :y 65 :z 0} true
+    ;; the same cave lit by a block, its column seen open past roof-height: lit open land (Q31); under a low roof still underground
+    (merge dark {:blocks (stone-above 10 1) :light {[0 64 0] [0 14]}}) {:x 0 :y 64 :z 0} false
+    (merge dark {:blocks (stone-above 3 1) :light {[0 64 0] [0 14]}}) {:x 0 :y 64 :z 0} true
     ;; never seen
     (merge dark {:blocks (stone-above 2 1)}) {:x 30 :y 64 :z 0} false
     (merge dark {:blocks (stone-above 2 1)}) {:x 0 :y 64 :z 1} false))

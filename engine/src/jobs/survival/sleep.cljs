@@ -74,10 +74,10 @@
   (.endsWith (or (u/seen-name (:primitives c) bed) "") "_bed"))
 
 (defn open-bed?
-  "Whether the body, standing beside its bed, would lie in the open: not shut in a closed room under a roof nor buried."
+  "Whether the body, standing beside its bed, would lie in the open: not shut in a closed room under a roof nor sealed from the sky."
   [c]
   (let [p (:primitives c)]
-    (not (or (sh-sense/shut-in-room? p) (sh-sense/buried? p)))))
+    (not (or (sh-sense/shut-in-room? p) (sh-sense/sealed? p)))))
 
 (defn bed-open
   "The cause :bed-open when :open-bed is false, the body stands within 3 blocks of its bed and would lie in the open."

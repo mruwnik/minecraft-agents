@@ -118,7 +118,7 @@
   (let [failed (:door (:data (mem/latest view :night-door-failed)))]
     (first (remove #(= failed (door-key (:cell %))) (open-doors p view)))))
 
-(defn buried-outside-hut? [p] (and (sh-sense/buried? p) (not (sh-sense/shut-in-hut? p))))
+(defn buried-outside-hut? [p] (and (sh-sense/sealed? p) (not (sh-sense/shut-in-hut? p))))
 
 (defn bed-holds?
   "The bed terms of night-holds?: night by the clock, awake, the :bed way, and a bed to use, a look round for one, a
@@ -192,11 +192,11 @@
 (defn shelter-here-s [] (settings/get settings ::shelter-here-s))
 
 (defn in-ground?
-  "Whether the body could work on through the night where it stands: buried, or roofed and ::ground-depth or more
+  "Whether the body could work on through the night where it stands: sealed from the sky (sh-sense/sealed?), or roofed and ::ground-depth or more
   under its home-target. Its work does not wait for the light, so a walk home and back is time lost."
   [p view]
   (boolean
-   (or (sh-sense/buried? p)
+   (or (sh-sense/sealed? p)
        (let [home (home-target view)]
          (and home (sh-sense/roofed? p (sh-sense/roof-height))
               (<= (settings/get settings ::ground-depth) (- (:y home) (:y (sh-sense/feet p)))))))))

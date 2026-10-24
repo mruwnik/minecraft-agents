@@ -9,7 +9,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-look :as dig-look]
-            [jobs.lib.look :as look]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.reach :as reach]
             [jobs.lib.shot :as shot]
             [jobs.lib.threats :as threats]
@@ -27,7 +27,7 @@
    ::died-ttl-ms {:default 3600000 :doc "Milliseconds after a death during which a flight keeps away from the place (::died-radius)." :spec (a/int-in 0 nil)}
    ::jump-blocks {:default 24 :doc "Blocks between two steps of a flight that no step could cover (a teleport, a respawn): the flight's measure for hostile.fled starts again there." :spec (a/num-in 0 nil)}
    ::no-gain-steps {:default 20 :doc "Flight steps without a new best gap to the nearest chaser before the cornered options are tried." :spec (a/int-in 1 nil)}
-   ::prefer-lit? {:default true :doc "By night or under ground a flee step ends on lit ground rather than dark (jobs.lib.look/dark-fn) while a lit end is open." :spec boolean?}
+   ::prefer-lit? {:default true :doc "By night or under ground a flee step ends on lit ground rather than dark (jobs.lib.shelter.sense/dark-fn) while a lit end is open." :spec boolean?}
    ::hide-health {:default 12 :doc "At or under this health, in a ranged chaser's line of fire with no covered step, the body takes cover where it stands before walking on." :spec (a/num-in 0 20)}
    ::lost-s {:default 4 :doc "Seconds out of line of sight after which a mob has stopped chasing." :spec (a/num-in 0 nil)}
    ::still-s {:default 5 :doc "Seconds a melee mob in sight, beyond the hostile radius, stands at one place after which it has stopped chasing (a chaser would be coming)." :spec (a/num-in 0 nil)}})
@@ -84,10 +84,10 @@
   (boolean (some #(<= (u/dist % pos) (settings/get settings ::died-radius)) spots)))
 
 (defn dark-end?
-  "A fn of a feet cell: whether it is dark (look/dark-fn) when ::prefer-lit? holds, else nil."
+  "A fn of a feet cell: whether it is dark (sh-sense/dark-fn) when ::prefer-lit? holds, else nil."
   [p]
   (when (settings/get settings ::prefer-lit?)
-    (when-let [{:keys [at]} (look/dark-fn p)]
+    (when-let [{:keys [at]} (sh-sense/dark-fn p)]
       (fn [{:keys [x y z]}] (= 1 (at x y z))))))
 
 (defn avoid-ends

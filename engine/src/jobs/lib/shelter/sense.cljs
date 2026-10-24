@@ -75,25 +75,6 @@
   (let [b (look/seen-block p cell)]
     (boolean (and b (not (:unknown b))))))
 
-(defn buried-at?
-  "Whether the cell is underground: no sky light at it and the cell over it (a cell at 0 is sealed from the sky, so
-  the night changes nothing there; a ravine, shaft or cave mouth keeps sky light and stays unsafe). The brightness of
-  a cell the body has seen is sensed like the light at its feet; an unseen cell is not buried. Without light data there,
-  buried-by-column? decides."
-  [p {:keys [x y z] :as cell}]
-  (let [own (feet p)
-        own? (= [x y z] [(:x own) (:y own) (:z own)])
-        lights (keep #(sky-light-at p %) [cell {:x x :y (inc y) :z z}])]
-    (cond
-      (not (or own? (seen-cell? p cell))) false
-      (seq lights) (every? zero? lights)
-      :else (buried-by-column? p cell))))
-
-(defn buried?
-  "The body is underground (buried-at? its feet)."
-  [p]
-  (buried-at? p (feet p)))
-
 (defn night? [p] (not (.-isDay (.self p))))
 
 (defn sleeping? [p] (boolean (.-isSleeping (.self p))))
@@ -108,6 +89,50 @@
   (let [raw (look/raw-of p)]
     (when (and raw (look/light-known? raw x y z))
       (bit-and (.lightAt ^js raw x y z) 15))))
+
+(defn sealed-at?
+  "Whether the cell is sealed from the sky: no sky light at it and the cell over it, so the night changes nothing there (a
+  ravine, shaft or cave mouth keeps sky light). The light of a cell the body has seen is sensed like the light at its
+  feet; an unseen cell is not sealed. Without light data there, buried-by-column? decides."
+  [p {:keys [x y z] :as cell}]
+  (let [own (feet p)
+        own? (= [x y z] [(:x own) (:y own) (:z own)])
+        lights (keep #(sky-light-at p %) [cell {:x x :y (inc y) :z z}])]
+    (cond
+      (not (or own? (seen-cell? p cell))) false
+      (seq lights) (every? zero? lights)
+      :else (buried-by-column? p cell))))
+
+(defn open-overhead?
+  "Whether the body has seen the column over the cell open past roof-height: no seen solid block within roof-height and a
+  seen open cell above that, up to room-roof-height. An unseen roof may be there."
+  [p {:keys [x y z]}]
+  (let [seen (map #(look/seen-block p {:x x :y (+ y %) :z z}) (range 1 (inc (room-roof-height))))
+        seen-as? (fn [solid?] (fn [b] (and b (not (:unknown b)) (= solid? (solid/solid? (:name b))))))]
+    (boolean (and (not-any? (seen-as? true) (take (roof-height) seen)) (some (seen-as? false) (drop (roof-height) seen))))))
+
+(defn buried-at?
+  "Whether the cell is under ground as the body perceives it: sealed from the sky (sealed-at?), unless lit (look/lit-light?
+  by block light) with its column seen open over it (open-overhead?): a block-lit hall reads as lit open land, a lit
+  tunnel, a dark cave and a roof not yet seen stay under ground."
+  [p cell]
+  (and (sealed-at? p cell)
+       (not (and (some-> (block-light-at p cell) (look/lit-light? 0 0)) (open-overhead? p cell)))))
+
+(defn sealed?
+  "The body's feet are sealed from the sky (sealed-at?): the night changes nothing there."
+  [p]
+  (sealed-at? p (feet p)))
+
+(defn buried?
+  "The body is underground (buried-at? its feet)."
+  [p]
+  (buried-at? p (feet p)))
+
+(defn dark-fn
+  "look/dark-fn for the body, with an unseen cell guessed dark under ground (buried?)."
+  ([p] (dark-fn p nil))
+  ([p opts] (look/dark-fn p (assoc opts :underground? (buried? p)))))
 
 (defn light-at
   "Effective light (0-15) of the cell: the brighter of its block light and its sky light less the sky's darkening now; nil
@@ -145,10 +170,10 @@
    (boolean (some #(some-> (u/seen-name p {:x x :y (+ y %) :z z}) (.endsWith "_leaves")) (range 1 (inc height))))))
 
 (defn room-roofed?
-  "Whether the cell has a roof (solid or leaves) over it within room-roof-height blocks. Sealed from the sky (buried?)
+  "Whether the cell has a roof (solid or leaves) over it within room-roof-height blocks. Sealed from the sky (sealed-at?)
   counts as roofed: the roof over the feet cannot be looked at from inside."
   [p cell]
-  (boolean (or (roofed? p (room-roof-height) cell) (leaf-roofed? p (room-roof-height) cell) (buried-at? p cell))))
+  (boolean (or (roofed? p (room-roof-height) cell) (leaf-roofed? p (room-roof-height) cell) (sealed-at? p cell))))
 
 (defn shut-in-room?
   "Whether the body stands in a closed room (reach-room/closed-room?) with a roof (room-roofed?): safe from the night

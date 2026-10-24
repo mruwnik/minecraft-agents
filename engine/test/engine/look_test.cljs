@@ -6,7 +6,8 @@
             [engine.perception :as perception]
             [engine.test-util :as tu]
             [jobs.explore.look :as explore-look]
-            [jobs.lib.look :as look]))
+            [jobs.lib.look :as look]
+            [jobs.lib.shelter.sense :as sh-sense]))
 
 (defn seeing
   "Fake primitives over world with a perception (the body's rules, a shorter radius), one sight pass done."
@@ -200,7 +201,7 @@
 (deftest an-unseen-cell-is-dark-by-day-when-the-body-is-underground
   (let [p (seeing {:time day :blocks wall})]
     (swap! (fake/state p) assoc :light {[0 64 0] [0 0] [0 65 0] [0 0]})
-    (is (= 1 ((:at (look/dark-fn p)) 6 64 0)))))
+    (is (= 1 ((:at (sh-sense/dark-fn p)) 6 64 0)))))
 
 (deftest dark-guess-is-open-sky-less-its-darkening
   (is (true? (look/dark-guess? (seeing {:time midnight}))))
