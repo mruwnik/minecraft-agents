@@ -330,8 +330,7 @@
           (die-noted! eng {:pos (update dt/death-pos :x - 6) :inventory [] :cause "skeleton"} 5000)
           (core/submit! eng cheap-pile {})
           (await (run-until-empty eng 5))
-          (is (re-find #"skip: value [1-9].*: skeleton" (decided-text eng)) (decided-text eng))
-          (is (= [] (tu/walk-calls p))))))))
+          (is (re-find #"danger [1-9][0-9.]*.*: skeleton, skeleton" (decided-text eng)) (str "both deaths' killers guard the pile: " (decided-text eng))))))))
 
 (deftest a-death-with-nothing-carried-starts-no-walk
   (async done

@@ -36,8 +36,10 @@
             [jobs.lib.cost.weapon :as weapon]))
 
 (a/defargs settings
-  {::caught-chance {:default 0.15 :spec (a/num-in 0 1)
-                    :doc "Chance a walk away is caught, its mobs landing their blows over the whole flight: the prior for a flight whose route is unknown or that the race calls free, measured from the trial logs on 2026-10-23 (n=63)."}
+  {::caught {:default {:bands [{:from 0 :k 19 :n 29} {:from 10 :k 15 :n 41}] :blows 6.26}
+             :spec (a/map-with {:bands (a/coll-of (a/map-with {:from (a/num-in 0 nil) :k (a/int-in 0 nil) :n (a/int-in 0 nil)}))
+                                :blows (a/num-in 0 nil)})
+             :doc "The prior of a walk away being caught whatever its route (caught-prior): per band of the health it starts at (at least :from), k of n flights from the zombie family caught (killed by it or two blows or more within 30 s), and :blows, the Poisson mean of a caught flight's blows, fitted to the caught flights' deaths. Model deaths: 0.65 x 0.99 at 5 hp (measured 18 of 29 under 10 hp). Recount: node tools/event-counts.mjs caught-flights (trial bodies, easy), 2026-10-25."}
    ::drowned-meet-per-s {:default 0.0021 :spec (a/num-in 0 nil)
                          :doc "Chance a second a drowned meets a body in water a drowned can spawn in (its column holds water over water at block light 0, look/water-fn), by day or night: (k+1)/n over the trial bodies' logs on 2026-10-23, k=11 meets in n=5767 s, each meet once (a respond run soon after another is the same meet) and classed by the body's cell (tools/event-counts.mjs drowned-meets :prior :deep; river or ocean and other biomes, sky light high or low, met it alike)."}
    ::drowned-meet-other-per-s {:default 0.00043 :spec (a/num-in 0 nil)
@@ -84,6 +86,14 @@
   (if (= "creeper" (:name m))
     (blast-hurt stats swell-start)
     (threat/mob-hurt stats (threat/kind m) 1 identity 1)))
+
+(defn caught-prior
+  "{:chance :seconds} of ::caught for a flight begun at health: its band's Beta(k + 1, n - k + 1) posterior mean, and the
+  seconds a melee mob is in reach of a caught flight, its :blows at one each melee-gap-s."
+  [health]
+  (let [{:keys [bands blows]} (settings/get settings ::caught)
+        {:keys [k n]} (last (filter #(<= (:from %) (or health 20)) (sort-by :from bands)))]
+    {:chance (/ (inc k) (+ n 2)) :seconds (* blows melee-gap-s)}))
 
 (defn mean [xs] (if (seq xs) (/ (reduce + xs) (count xs)) 0))
 
@@ -306,14 +316,18 @@
   "The answer of a walk away from mobs [flee-mob's] by a body with food wearing equipment, the walk there and back (it
   goes back to its work), times 1 + returns (the flights from such mobs lately: each predicts another); :then the answer
   later (the fight with them, nil none) or the walk again, one return more, from a mob's :again (the distance it is met at
-  on the way back, default its :distance) when nearer. :caught: each flight is caught at chance caught (default
-  ::caught-chance), its mobs then landing their blows (a creeper its blast) over the flight, a melee mob over caught-s
-  seconds of it when given (the flee search's race, at reach-rate), and never fewer than the walk's own, as widely spread. A creeper that blows on the
+  on the way back, default its :distance) when nearer. :caught: each flight is caught at caught-prior of the body's
+  health, or else by its way (caught: the flee search's chance of it, nil 0), its mobs then landing their blows (a creeper
+  its blast) over the flight, a melee mob over caught-s seconds of it (the flee search's race; nil: the prior's, or with
+  its way's chance the whole flight), at reach-rate, and never fewer than the walk's own, as widely spread. A creeper that blows on the
   walk (at the median of its :spread) is spent: what follows is the walk from the rest or later (none left: nothing).
   swim: the blocks a body in water swims to dry land first (flee-mob's; ##Inf none known) and land the blocks to walk on there, at its planner/swim-speed over danger's outrun factor as on foot.
   nil when a mob keeps up or none is given."
-  [{:keys [food equipment mobs returns later caught caught-s swim land] :as args}]
+  [{:keys [health food equipment mobs returns later caught caught-s swim land] :as args}]
   (let [stats (armour/armour-stats equipment)
+        prior (caught-prior health)
+        caught-s (or caught-s (when-not (pos? (or caught 0)) (:seconds prior)))
+        caught (- 1 (* (- 1 (:chance prior)) (- 1 (or caught 0))))
         v (danger/flight-speed (or food 20))
         wet {:swim swim :land land :sv (/ (planner/swim-speed equipment) (danger/outrun-factor))}
         per-of (fn [mobs] (map #(flee-mob stats v wet %) mobs))
@@ -327,7 +341,7 @@
                                   :spread (when-let [s (seq (keep :spread per))] (mapv #(* times %) (apply map + s)))
                                   :seconds (* 2 times (reduce max 0 (map :seconds per)))
                                   :near (reduce max 0 (map :seconds per))
-                                  :caught {:chance (- 1 (js/Math.pow (- 1 (or caught (settings/get settings ::caught-chance))) times))
+                                  :caught {:chance (- 1 (js/Math.pow (- 1 caught) times))
                                            :damage (reduce + 0 (map (fn [m f] (if (= "creeper" (:name m))
                                                                                   (blow stats {:name "creeper"})
                                                                                   (max (:damage f)
@@ -387,13 +401,13 @@
 (defn threat-answers
   "The answers {key answer-or-nil} body {:health :food :equipment :weapon :covers :swim :distance} has to mob-name (or
   a coll of names, met together) met :distance blocks off (default 0, beside it): the
-  fight (in water with :swim, fight/fight-damage's wet?), the walk away (caught at chance caught, nil the prior; :swim, flee-answer's, for a body in water) and each of :covers {way {:open-s :seconds}}
+  fight (in water with :swim, fight/fight-damage's wet?), the walk away (caught by its way at chance caught, nil none, and at the prior of :health; :swim, flee-answer's, for a body in water) and each of :covers {way {:open-s :seconds}}
   (jobs.survival.shut-in/covers) by cover-answer, as respond prices them."
-  [{:keys [food equipment weapon covers swim distance]} mob-name caught]
+  [{:keys [health food equipment weapon covers swim distance]} mob-name caught]
   (let [ms (mapv (fn [n] {:name n :distance (or distance 0) :follow (threat/follow-range n)}) (if (string? mob-name) [mob-name] mob-name))
         fight (fight-answer {:weapon weapon :equipment equipment :mobs ms :wet? (some? swim)})]
     (into {:fight fight
-           :flee (flee-answer {:food food :equipment equipment :mobs ms :caught caught :later fight :swim swim})}
+           :flee (flee-answer {:health health :food food :equipment equipment :mobs ms :caught caught :later fight :swim swim})}
           (map (fn [[way cover]] [way (cover-answer {:equipment equipment :mobs ms} cover)]))
           covers)))
 

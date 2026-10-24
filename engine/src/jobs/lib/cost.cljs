@@ -19,7 +19,7 @@
              per-dark, dark-factor: the one price of a dark block, which go-to's planner costs; lit-way-s, torch-gap: a way lit as it goes; dark-way-s: one walked or dug dark; spawn-chance: the chance a mob spawns at a cell or
              over an area (a set or {:min :max} box of cells) per second, from the light the body knows (unseen counts as dark), spawn-share its share of cells that spawn; exposure: the chance a walk meets and
              what lowers it ({:chance :lowered-by #{:light}}).
-    planner  planner-costs-problem, planner-costs, planner-names: go-to's :costs, the per-move prices it may override; least-block-s: the least a plan prices a block; landing-problem, planner-landing: go-to's :landing, fall damage by landing block; air-profile, water-breathing-s, air-used, air-costs: the planner's air drain and grace from the body's helmet, the air a dive has used; air-left-s, wet-move-s, wet-way-s, wet-spare-s, wet-ok?: the air a walk over unseen water keeps back at its last breath, each move at its measured pace; swim-profile: its swimH from Depth Strider on the boots; gait-problem, gait-costs: go-to's :gait; unknown-prices: the planner's peek and aim prices of unseen cells (jobs.lib.cost.planner); way-on-chance, unseen-share: the one price of walking over unseen cells, a dead end and a mob in the dark at the worse case, from how often the seen ways near the body go on (the planner's :cell); unseen-route-s: that price of a route's unseen steps; dead-end-cost: what an unseen dead end costs a flight; flight-caught-chance: the chance a flight is caught, from its search's ways.
+    planner  planner-costs-problem, planner-costs, planner-names: go-to's :costs, the per-move prices it may override; least-block-s: the least a plan prices a block; landing-problem, planner-landing: go-to's :landing, fall damage by landing block; air-profile, water-breathing-s, air-used, air-costs: the planner's air drain and grace from the body's helmet, the air a dive has used; air-left-s, wet-move-s, wet-way-s, wet-spare-s, wet-ok?: the air a walk over unseen water keeps back at its last breath, each move at its measured pace; swim-profile: its swimH from Depth Strider on the boots; gait-problem, gait-costs: go-to's :gait; unknown-prices: the planner's peek and aim prices of unseen cells (jobs.lib.cost.planner); way-on-chance, unseen-share: the one price of walking over unseen cells, a dead end and a mob in the dark at the worse case, from how often the seen ways near the body go on (the planner's :cell); unseen-route-s: that price of a route's unseen steps; dead-end-cost: what an unseen dead end costs a flight; flight-caught-chance: the chance a flight is caught by its way, from its search's ways.
     tolls    farm-tolls, zone-tolls: go-to's :tolls for planted cells and zone cells to cross only as a last resort; fail-chance,
              failing-step-s: a step the walker failed at, priced by its failures (jobs.lib.cost.tolls).
     death    experience-cost, death-cost: death as an ordinary cost, the walk back for the items plus the experience; spawn-worth: a respawn point's worth; worth-to, find-worth, items-find-worth, search-radius, wait-price: what a find is worth, how far its legs may go, what waiting for a listed maker costs; opening-price, hold-price: opening a shelter to mobs against holding on in it; death-weight, terrain-danger: a remembered death's fade and the plan cost near a death by terrain (jobs.lib.cost.death).
@@ -199,16 +199,14 @@
        (count (filter (fn [{:keys [x y z]}] (or (unseen? x y z) (unseen? x (inc y) z) (unseen? x (dec y) z))) route)))))
 
 (defn flight-caught-chance
-  "The chance a flight is caught (flee-answer :caught) by what its search found: 1 with no way left (way? false: every
-  way it planned is cut); else the measured prior (answer ::caught-chance: the race said the way is free, a chaser
-  caught the body anyway) and, when the way it takes runs on into cells the body has not seen (unseen?), that way's dead
-  end (1 less way-on-chance of counts): met on the way back, the chasers catch it."
+  "The chance a flight is caught by the way its search found (flee-answer :caught; answer/caught-prior is added there,
+  whatever the way): 1 with no way left (way? false: every way it planned is cut); 0 on a way the race calls free; when
+  the way runs on into cells the body has not seen (unseen?), that way's dead end (1 less way-on-chance of counts): met
+  on the way back, the chasers catch it."
   [{:keys [way? unseen? counts]}]
-  (if-not way?
-    1
-    (let [prior (settings/get answer/settings ::answer/caught-chance)
-          dead (if unseen? (- 1 (way-on-chance counts)) 0)]
-      (- 1 (* (- 1 prior) (- 1 dead))))))
+  (cond (not way?) 1
+        unseen? (- 1 (way-on-chance counts))
+        :else 0))
 
 (def item-value value/item-value)
 (def wear-saved value/wear-saved)

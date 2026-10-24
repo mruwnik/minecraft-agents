@@ -37,7 +37,7 @@
   ([health weapon mobs returns]
    (let [f (cost/fight-answer (apply fight weapon mobs))]
      (:answer (cost/decide (body health)
-                           {:fight f :flee (cost/flee-answer {:food 20 :mobs mobs :returns returns :later f})}
+                           {:fight f :flee (cost/flee-answer {:health health :food 20 :mobs mobs :returns returns :later f})}
                            here)))))
 
 (deftest an-uncertain-blow-rate-widens-the-blow-count
@@ -85,7 +85,7 @@
 (deftest a-fight-is-taken-when-it-is-cheaper-than-walking-away-and-meeting-the-mob-again
   (are [health weapon mobs expected] (= expected (choice health weapon mobs))
     20 sword [(mob "zombie" 3 35)] :fight
-    5 sword [(mob "zombie" 3 35)] :flee
+    5 sword [(mob "zombie" 3 35)] :fight
     20 nil [(mob "zombie" 3 35)] :flee
     20 sword [(mob "zombie" 3 35) (mob "zombie" 3 35) (mob "zombie" 3 35)] :flee
     20 sword [(mob "skeleton" 10)] :fight))
@@ -122,19 +122,17 @@
     (is (= :fight (choose (assoc (mob "skeleton" 12) :again 1))) "the way back passes a block from it: the walk again is from its feet, the whole bow range")
     (is (= (choose (mob "skeleton" 12)) (choose (assoc (mob "skeleton" 12) :again 14))) "a way that passes farther than it stands changes nothing")))
 
-(deftest a-walk-away-is-caught-at-the-prior-and-so-loses-to-a-fight-or-a-wall-it-would-beat-on-an-open-way
+(deftest a-walk-away-is-caught-at-the-prior-of-its-health-and-so-loses-to-a-fight-or-a-wall-at-low-health
+  ;; under 10 hp 19 of 29 flights were caught (18 died), from 10 up 15 of 41
   (let [zombie (mob "zombie" 4 35)
         f (cost/fight-answer (fight sword zombie))
-        flee #(cost/flee-answer {:food 20 :mobs [zombie] :later f :caught %})
+        flee #(cost/flee-answer {:health %1 :food 20 :mobs [zombie] :later f :caught %2})
         wall (assoc (cost/build-answer {:mobs [zombie] :seconds 2}) :seconds 240)
-        pick #(:answer (cost/decide (body 8) %1 here))]
-    (is (= :flee (settings/with-settings {:jobs.lib.cost.danger/flight-starts {"pooled" {:n 1 :deciles (vec (repeat 10 0.5))}}}
-                   (fn [] (pick {:fight f :flee (cost/flee-answer {:food 20 :mobs [zombie] :later f :caught 0})}))))
-        "at 8 hp an open way the body gets going on beats the fight")
-    (is (= :fight (pick {:fight f :flee (flee nil)})))
-    (is (= :flee (pick {:wall wall :flee (flee 0)})) "a wall that holds the body long costs more than an open way")
-    (is (= :wall (pick {:wall wall :flee (flee nil)})))
-    (is (> (cost/death-chance (body 20) (flee 1)) 0.9) "caught, the zombie lands its blows all the flight")
+        pick #(:answer (cost/decide (body %1) %2 here))]
+    (is (= :fight (pick 8 {:fight f :flee (flee 8 0)})) "at 8 hp a free way is still caught at the prior")
+    (is (= :wall (pick 8 {:wall wall :flee (flee 8 0)})))
+    (is (< (get-in (flee 20 0) [:caught :chance]) (get-in (flee 8 0) [:caught :chance])) "less often caught from full health")
+    (is (> (cost/death-chance (body 20) (flee 20 1)) 0.9) "caught on its way, the zombie lands its blows all the flight")
     (is (< (cost/death-chance (body 20) (cost/flee-answer {:food 20 :mobs [zombie] :later f :caught 1 :caught-s 0.5})) 0.1)
         "caught for the half second the race gives it, only those blows")
     (is (= (:caught (cost/flee-answer {:food 20 :mobs [(mob "skeleton" 10)] :caught 1 :caught-s 0.5}))
@@ -310,7 +308,7 @@
         open (cost/flee-answer {:food 20 :mobs [m] :swim 4 :land 0 :open 0.25})
         seen-land (cost/flee-answer {:food 20 :mobs [m] :swim 4 :land ##Inf})]
     (is (nil? known) "the land seen ends at once and the mob keeps up")
-    (is (< (js/Math.abs (- 0.7875 (-> open :caught :chance))) 1e-9) "caught at 1 - (1 - 0.15) * 0.25")
+    (is (< (js/Math.abs (- (- 1 (* (- 1 (/ 16 43)) 0.25)) (-> open :caught :chance))) 1e-9) "caught at 1 - (1 - the prior at 20 hp) x 0.25")
     (is (< (-> open :caught :damage) (-> (cost/flee-answer {:food 20 :mobs [m] :swim 4 :land 0 :open 0.25 :later {:damage 100 :hit 3 :seconds 5}}) :caught :damage)) "a later fight is what the ending flight takes")
     (is (> (-> open :caught :chance) (-> seen-land :caught :chance)))
     (is (= (:caught seen-land) (:caught (cost/flee-answer {:food 20 :mobs [m] :swim 4 :land ##Inf :open 0.25}))) "land enough already: the chance is no matter")))

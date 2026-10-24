@@ -87,13 +87,12 @@
       (is (zero? (:hp (with-redefs [spawn-light/hall-at? (constantly false)] (risk/estimate c {:x 95 :y 64 :z 0} {:plan (straight-plan c {:x 95 :y 64 :z 0})})))) "a small dark tunnel is free")
       (is (pos? (:hp (with-redefs [spawn-light/hall-at? (constantly true)] (risk/estimate c {:x 95 :y 64 :z 0} {:plan (straight-plan c {:x 95 :y 64 :z 0})})))) "a dark hall costs spawns"))))
 
-(deftest hostiles-near-the-way-hold-a-walk-with-the-risk-in-the-reason
+(deftest a-walk-over-dark-open-ground-at-night-is-held-with-the-risk-in-the-reason
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [zombies (for [i (range 3)] {:id (+ 7 i) :name "zombie" :kind "hostile" :pos {:x (+ 40 (* 4 i)) :y 64 :z 6}})
-              {:keys [eng p]} (let [r (st/setup (assoc night-hut :entities (vec zombies)))] (sky/with-sky (:p r)) r)
-              id (core/submit! eng '(jobs.movement.go-to {:pos [95 64 0]}) {})]
+        (let [{:keys [eng p]} (let [r (st/setup night-hut)] (sky/with-sky (:p r)) r)
+              id (core/submit! eng '(jobs.movement.go-to {:pos [195 64 0]}) {})]
           (await (st/tick-n eng 6))
           (is (= inside (st/pos-of p)) "the body stays in")
           (let [w (core/waiting eng id)]

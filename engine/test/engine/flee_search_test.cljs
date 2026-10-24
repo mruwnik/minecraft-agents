@@ -353,7 +353,7 @@
 (deftest a-search-that-routed-nothing-is-no-certain-catch
   (let [open (search/caught-chance [] {:k 0 :n 0} {} nil)
         boxed (search/caught-chance [] {:k 0 :n 40} {} nil)]
-    (is (< 0.15 (:chance open) 1) "unseen is the worse case, priced by the ways seen round the body")
+    (is (< 0 (:chance open) 1) "unseen is the worse case, priced by the ways seen round the body")
     (is (< (:chance open) (:chance boxed) 1) "seen walls on every side make it likelier")
     (is (nil? (:seconds open)) "no way timed: the blows run over the whole flight")))
 
@@ -361,8 +361,8 @@
   (let [free (end-of 4 0 5 :caught? false :caught-s 0 :arrive 5)
         caught (fn [s] (end-of 0 4 9 :caught? true :caught-s s :arrive 5))
         c (fn [ends] (update (search/caught-chance ends {:k 10 :n 10} {} nil) :chance #(/ (js/Math.round (* 1e6 %)) 1e6)))]
-    (is (= {:chance 0.15 :seconds 0.5} (c [free (caught 2) (caught 0.5) (caught 1)])) "the other headings only choose the way: the prior, the least seconds of a caught one")
-    (is (= {:chance 0.15} (c [free])) "no heading caught: nothing bounds the blows")
+    (is (= {:chance 0 :seconds 0.5} (c [free (caught 2) (caught 0.5) (caught 1)])) "the other headings only choose the way: nothing on top of the prior, the least seconds of a caught one")
+    (is (= {:chance 0} (c [free])) "no heading caught: nothing bounds the blows")
     (is (= {:chance 1 :seconds 0.5 :cornered? true} (c [(caught 2) (caught 0.5)])) "every way caught: the flight is the cornered step")
     (is (= {:chance 1 :cornered? false} (c [(end-of 4 0 1 :found? false :caught? false :caught-s 0 :gain 2)]))
         "a pocket the flight still runs to, with no way out to call free: a walk caught for certain")))
@@ -370,7 +370,7 @@
 (deftest ways-that-stop-at-unseen-cells-are-priced-by-the-ways-seen-not-caught
   (let [stops (fn [& more] (apply end-of 4 0 1 :found? false :unseen [5 64 0] :caught-s 0 :caught? false :arrive 5 more))
         chance #(:chance (search/caught-chance % {:k 10 :n 10} {} nil))]
-    (is (< (js/Math.abs (- (- 1 (* 0.85 (/ 11 12))) (chance [(stops) (stops)]))) 1e-9) "a way into the unseen: the prior and its dead end, (k+1)/(n+2) of the seen ways on, not a catch")
+    (is (< (js/Math.abs (- (- 1 (/ 11 12)) (chance [(stops) (stops)]))) 1e-9) "a way into the unseen: its dead end, (k+1)/(n+2) of the seen ways on, not a catch")
     (is (= 1 (chance [(end-of 4 0 1 :found? false :caught-s 0 :caught? false)])) "a pocket with nothing unseen in it is a trap")))
 
 (deftest ways-all-caught-keep-the-seconds-they-are-in-reach-when-they-run-into-the-unseen
@@ -383,7 +383,7 @@
   (let [caught (fn [& more] (apply end-of 4 0 1 :found? false :caught? true :caught-s 0.6 more))
         looked (search/caught-chance [(caught :unseen [5 64 0])] {:k 10 :n 10} {} nil)]
     (is (not (:cornered? looked)) "the flight looks first: it is not yet cornered")
-    (is (< (js/Math.abs (- (- 1 (* 0.85 (/ 11 12))) (:chance looked))) 1e-9) "the look finds a way at (k+1)/(n+2): priced as an unseen way")
+    (is (< (js/Math.abs (- (- 1 (/ 11 12)) (:chance looked))) 1e-9) "the look finds a way at (k+1)/(n+2): priced as an unseen way")
     (is (:cornered? (search/caught-chance [(caught)] {:k 10 :n 10} {} nil)) "nothing left to look at: cornered, caught for sure")
     (is (= {:chance 1 :cornered? true :seconds 0.6} (search/caught-chance [(caught :unseen [5 64 0])] {:k 10 :n 10} {} [[5 64 0]]))
         "the flight looked at that cell already and looks at it no more: cornered")

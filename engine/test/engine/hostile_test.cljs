@@ -255,9 +255,9 @@
                            (.then (fn [r] (fake/swap-self! p assoc :health (get health-after @n 6)) (swap! n inc) r)))))
           (core/submit! eng respond {})
           (await (core/tick! eng))
-          (is (= 2 (count (calls p "attack")))
-              "health 16, the zombie at 15: 2.8 expected damage costs less than walking away: a second swing; health 1 then: none")
-          (is (pos? (count (tu/walked-to eng))) "it retreats instead"))))))
+          (is (= 4 (count (calls p "attack")))
+              "health 16, the zombie at 15: 2.8 expected damage costs less than walking away; at health 1 too: a flight under 10 hp is caught more often than not (19 of 29)")
+          (is (zero? (count (tu/walked-to eng))) "no retreat"))))))
 
 (deftest respond-writes-one-hostile-entry-per-encounter
   (async done
@@ -448,7 +448,7 @@
           (doseq [[world spec decision held? muted? why]
                   [[{:time 14000 :entities [heard]} respond :flee false false "no roof: no hold; over open ground a body at 5 health flees it"]
                    [{:time 14000 :blocks roofed-passage :entities [heard]} respond :fight true true "roofed, heard only: it stays"]
-                   [{:time 14000 :blocks roofed-passage :entities [heard]} stay :flee false false "stay-inside off: it flees"]
+                   [{:time 14000 :blocks roofed-passage :entities [heard]} stay :fight false true "stay-inside off: no hold, and at 5 hp a flight is caught more often than not: it would fight, with nothing in sight to swing at"]
                    [{:time 1000 :blocks roofed-passage :entities [heard]} respond :fight true true "day: it stays too (the roof, not the clock)"]]]
             (let [{:keys [eng p seen]} (setup-seeing (assoc world :self {:health 5} :inventory sword :pitch -80) nil 1000)]
               (perception/pass! (aget p "perception"))
@@ -1436,14 +1436,13 @@
     (is (nil? (again (assoc (cut {:x 30 :y 64 :z 0}) :job/j1 [{:t 950 :data {:goal {:x 30 :y 64 :z 0} :goal-reached true}}]))) "a goal reached is behind it")))
 
 ;; ce634b35 (Bramble #39): a blast of 17 beside a fight; card a45ce0db: priced as one Poisson count of blast-sized blows
-(deftest a-creeper-by-a-zombie-at-normal-difficulty-is-walked-from-the-blast-leaving-too-little-for-the-zombies-blows
+(deftest a-creeper-by-a-zombie-at-normal-difficulty-is-fought-as-a-flight-from-both-is-caught-at-the-zombies-prior
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [respond-normal '(jobs.survival.respond-to-hostile {:settings {:jobs.lib.cost.threat/difficulty 2}})
               s (await (flight-round respond-normal {:inventory sword :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}} (zombie 9 0 4)]}))]
-          (is (= :flee (:decision (first (hostile-entries (:eng s))))))
-          (is (fled-by-walker? s)))))))
+          (is (= :fight (:decision (first (hostile-entries (:eng s))))) "fight 988 s, flee 1251 s: caught at 16 of 43 the flight takes the blast and the zombie's blows"))))))
 
 (deftest respond-flees-a-creeper-from-a-dead-end-it-cannot-back-off-in
   (async done
@@ -1871,7 +1870,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[d decision prices] [[1 :fight {:fight 26 :flee 32}] [2 :fight {:fight 34 :flee 39}] [3 :flee {:fight 88 :flee 78}]]]
+        (doseq [[d decision prices] [[1 :fight {:fight 26 :flee 32}] [2 :fight {:fight 34 :flee 39}] [3 :flee {:fight 88 :flee 79}]]]
           (let [world {:inventory sword :equipment iron-armour :entities [(assoc (skeleton 1 10 0) :visible true)]}
                 {:keys [seen]} (await (settings/with-settings {:jobs.lib.cost.threat/difficulty d} #(flight-round respond world)))
                 [e] (filter #(= :hostile.decided (:kind %)) @seen)]
