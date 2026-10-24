@@ -489,7 +489,12 @@
     (is (< (- (chance {:health 20 :weapon "diamond_sword"} (route 40) (zombie)) base) 0.01) "a body that would fight it takes only the fight")
     (is (< 0.01 (- (chance fist (route 40) (zombie :caught 0)) base) 0.05) "a flight with an open way out kills only when it starts late: the slowest tenth stands 4 s beside the mob")
     (is (< 0.9 (chance fist (route 40) (zombie :caught 1))) "no way out, no blocks: the fist fight")
-    (is (< (- (chance (assoc fist :covers {:walls {:open-s 1 :seconds 5}}) (route 40) (zombie :caught 1)) base) 0.01) "no way out, blocks carried: the body walls in")))
+    (is (< (- (chance (assoc fist :covers {:walls {:open-s 1 :seconds 5}}) (route 40) (zombie :caught 1)) base) 0.01) "no way out, blocks carried: the body walls in")
+    (let [met #(cost/threats-chance fist {:cells (:cells (route 40)) :threats %})
+          skeleton (zombie :mob "skeleton")
+          alone (met [skeleton])]
+      (is (> (met [skeleton skeleton skeleton]) (- 1 (js/Math.pow (- 1 alone) 3)))
+          "three shooting on one walk land their arrows together: a likelier death than three walks each meeting one"))))
 
 (deftest a-find-is-worth-its-count-less-a-trip-and-an-animal-its-meat
   (let [body {:level 0 :carried 0}]

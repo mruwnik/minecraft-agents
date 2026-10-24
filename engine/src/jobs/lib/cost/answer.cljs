@@ -355,16 +355,16 @@
       (assoc a :then (conj (vec then) a)))))
 
 (defn threat-answers
-  "The answers {key answer-or-nil} body {:health :food :equipment :weapon :covers :swim :distance} has to mob-name met
-  :distance blocks off (default 0, beside it): the
+  "The answers {key answer-or-nil} body {:health :food :equipment :weapon :covers :swim :distance} has to mob-name (or
+  a coll of names, met together) met :distance blocks off (default 0, beside it): the
   fight (in water with :swim, fight/fight-damage's wet?), the walk away (caught at chance caught, nil the prior; :swim, flee-answer's, for a body in water) and each of :covers {way {:open-s :seconds}}
   (jobs.survival.shut-in/covers) by cover-answer, as respond prices them."
   [{:keys [food equipment weapon covers swim distance]} mob-name caught]
-  (let [m {:name mob-name :distance (or distance 0) :follow (threat/follow-range mob-name)}
-        fight (fight-answer {:weapon weapon :equipment equipment :mobs [m] :wet? (some? swim)})]
+  (let [ms (mapv (fn [n] {:name n :distance (or distance 0) :follow (threat/follow-range n)}) (if (string? mob-name) [mob-name] mob-name))
+        fight (fight-answer {:weapon weapon :equipment equipment :mobs ms :wet? (some? swim)})]
     (into {:fight fight
-           :flee (flee-answer {:food food :equipment equipment :mobs [m] :caught caught :later fight :swim swim})}
-          (map (fn [[way cover]] [way (cover-answer {:equipment equipment :mobs [m]} cover)]))
+           :flee (flee-answer {:food food :equipment equipment :mobs ms :caught caught :later fight :swim swim})}
+          (map (fn [[way cover]] [way (cover-answer {:equipment equipment :mobs ms} cover)]))
           covers)))
 
 (defn threat-chance
@@ -421,20 +421,32 @@
                            :when (pos? met)]
                        (* (or weight 1) met (hurt mob caught)))))))
 
+(defn met-counts
+  "P(K = k) for k from 0, K the count of independent events of chances ps (Poisson-binomial)."
+  [ps]
+  (reduce (fn [dist q] (mapv + (conj (mapv #(* (- 1 q) %) dist) 0) (into [0] (map #(* q %) dist)))) [1] ps))
+
 (defn threats-chance
-  "The chance the known threats of route {:cells :threats :at} kill body (death-chance's, the route's class left out): for
-  each, its threat-chance at :at (default the first cell) times its weight and the chance it gets to the body on the
-  :cells (death/met-chance)."
+  "The chance the known threats of route {:cells :threats :at} kill body (death-chance's, the route's class left out).
+  Each gets to the body at its weight times the chance it does on the :cells (death/met-chance), a provoked-only one at
+  threat/provoked-share of it, each on its own (met-counts); the k that do are met together, their blows adding up: the
+  answer-death-chance at :at (default the first cell) of the answer decide takes of threat-answers to the k likeliest,
+  caught at the worst of their chances."
   [body {:keys [cells threats at]}]
   (let [at (or at (first cells))
-        chance (memoize (fn [mob caught] (threat-chance body mob caught at)))
-        survive (reduce (fn [s {:keys [mob weight reach caught]}]
-                          (let [met (death/met-chance mob reach cells)]
-                            (if (pos? met)
-                              (* s (- 1 (* (or weight 1) met (chance mob caught))))
-                              s)))
-                        1 (when (seq cells) threats))]
-    (- 1 survive)))
+        met (->> (when (seq cells) threats)
+                 (keep (fn [{:keys [mob weight reach caught]}]
+                         (let [q (* (or weight 1) (death/met-chance mob reach cells)
+                                    (if (contains? threat/provoked-only mob) (threat/provoked-share) 1))]
+                           (when (pos? q) {:mob mob :caught caught :q (min 1 q)}))))
+                 (sort-by (comp - :q))
+                 vec)
+        together (fn [k]
+                   (let [group (subvec met 0 k)
+                         caught (some->> (seq (keep :caught group)) (apply max))
+                         answers (threat-answers body (mapv :mob group) caught)]
+                     (answer-death-chance body (get answers (:answer (decide body answers at))) at)))]
+    (reduce + 0 (map-indexed (fn [k pk] (if (pos? k) (* pk (together k)) 0)) (met-counts (map :q met))))))
 
 (defn death-chance
   "The chance of dying on route {:underground? :night? :cells :threats :at} (cells {:x :y :z :s}, :s the seconds spent

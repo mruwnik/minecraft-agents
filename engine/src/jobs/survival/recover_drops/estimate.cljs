@@ -115,10 +115,11 @@
 
 (defn ^:async quote-trip
   "go-to's quote of the walk to the pile of death `entry` (its planned seconds, its walk risk, and the hp the route drowns),
-  nil without a pos; its risk prices a death on the way as losing the pile too (:stake, pile-worth, lain :stake-age-ms)."
+  nil without a pos: onto the pile itself, where the collect picks it up (the walk's ::arrive-range may end outside a
+  mob's reach the pile lies in); its risk prices a death on the way as losing the pile too (:stake, pile-worth, lain :stake-age-ms)."
   [c entry]
   (let [{:keys [pos] :as data} (:data entry)]
-    (when pos (await (ctx/quote c 'jobs.movement.go-to {:pos pos :range (cfg/arrive-range) :stake (pile-worth c data) :stake-age-ms (pile-age-ms c entry)})))))
+    (when pos (await (ctx/quote c 'jobs.movement.go-to {:pos pos :range 0 :stake (pile-worth c data) :stake-age-ms (pile-age-ms c entry)})))))
 
 (defn estimate
   "{:value :cost :parts :reason :top-items :top-mobs :hold-ms :flight-s} (:hold-ms: how long a skip for this danger is remembered,
