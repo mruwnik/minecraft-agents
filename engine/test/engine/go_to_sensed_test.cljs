@@ -48,9 +48,9 @@
   snapshot (reach/lookup) reads it. A spec's :jitter fixes the sight passes' ray jitter (perception's :rand), its :radius
   how far they see."
   [spec]
-  (let [p (tu/fake (dissoc spec :jitter :radius))
+  (let [p (tu/fake (dissoc spec :jitter :radius :now))
         raw (fake-raw/create p)
-        per (perception/create raw (cond-> {:now (constantly 1000000)}
+        per (perception/create raw (cond-> {:now (or (:now spec) (constantly 1000000))}
                                      (:jitter spec) (assoc :rand (constantly (:jitter spec)))
                                      (:radius spec) (assoc :radius (:radius spec))))
         w (perception/wrap p per)]
@@ -723,6 +723,19 @@
           (is (= (.stateAt snapshot 6 64 0) (.stateAt snapshot 5 64 0) (.stateAt snapshot 5 65 0)) "remembered air")
           (is (true? (:found route)) (pr-str route))
           (is (= 8 (:length route)) (pr-str route)))))))
+
+(deftest the-masked-planner-reads-a-remembered-fluid-older-than-the-memory-limit-as-unseen
+  (let [clock (atom 1000000)
+        {:keys [w]} (sensed-only (assoc-in (assoc corridor :yaw 90 :now #(deref clock)) [:blocks "5,64,0"] "water"))
+        _ (perception/pass! (aget w "perception"))
+        read (fn [] (let [^js s (.-snapshot (wworld/path-world w (wworld/unknown-spec)))]
+                      {:water (.stateAt s 5 64 0) :stone (.stateAt s 5 63 0) :unseen (.-id (wworld/unknown-of (wworld/path-world w (wworld/unknown-spec))))}))
+        fresh (read)
+        _ (swap! clock + 11000)
+        aged (read)]
+    (is (not= (:unseen fresh) (:water fresh)) "fresh: remembered as water")
+    (is (= (:unseen aged) (:water aged)) "aged: unknown, as perception reads it")
+    (is (= (:stone fresh) (:stone aged)) "stone keeps its memory")))
 
 (deftest go-to-walks-into-a-wall-built-out-of-sight-sees-it-and-digs-through
   (async done

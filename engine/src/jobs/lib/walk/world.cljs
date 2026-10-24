@@ -21,6 +21,7 @@
             [jobs.lib.walk.rock :as rock]
             [jobs.lib.walk.sight :as wsight]
             [jobs.lib.walk.way-on :as way-on]
+            [engine.perception :as perception]
             [engine.perception.store :as store]))
 
 (a/defargs settings
@@ -66,14 +67,39 @@
   [^js unknown light-cost light-ok]
   (js/Object.assign #js {} unknown #js {:lightCost light-cost :torchBase (torch-base) :lightOk light-ok}))
 
+(defonce ^:private aged-cache (js/WeakMap.))
+
+(defn- unaged-ids
+  "The section's memory ids with the cells perception reads unknown (perception/remembered-age nil: a mutable state or a
+  cell beside a fluid, older than :mutable-max-ms) zeroed. The section's own array when none aged; kept per store write
+  and second of the clock."
+  [^js st ^js sec cx sy cz]
+  (let [now ((.-nowFn st))
+        k [(.-writes st) (js/Math.floor (/ now 1000))]
+        hit (.get aged-cache sec)]
+    (if (= k (:k hit))
+      (:v hit)
+      (let [^js ids (.-ids sec)
+            limit (.-mutableMaxMs st)
+            out (volatile! nil)]
+        (dotimes [i 4096]
+          (when (and (pos? (aget ids i)) (> (- now (store/cell-seen sec i)) limit))
+            (let [x (+ (* cx 16) (bit-and i 15)) y (+ (* sy 16) (bit-shift-right i 8)) z (+ (* cz 16) (bit-and (bit-shift-right i 4) 15))]
+              (when-not (perception/remembered-age st x y z)
+                (when-not @out (vreset! out (.slice ids)))
+                (aset ^js @out i 0)))))
+        (let [v (or @out ids)] (.set aged-cache sec {:k k :v v}) v)))))
+
 (defn memory-sections
-  "(fn [cx sy cz]) the ids of the body's memory of that section (sy the world's section y; ids + 1, 0 never seen), or nil;
-  nil without a perception."
+  "(fn [cx sy cz]) the ids of the body's memory of that section (sy the world's section y; ids + 1, 0 never seen or read
+  unknown by perception's rule), or nil; nil without a perception."
   [p]
   (when-let [per (aget p "perception")]
     (let [^js st (:st per)
           ^js sections (store/store-of st (.-dim st))]
-      (fn [cx sy cz] (some-> ^js (.get sections (store/section-key cx sy cz)) .-ids)))))
+      (fn [cx sy cz]
+        (when-let [^js sec (.get sections (store/section-key cx sy cz))]
+          (unaged-ids st sec cx sy cz))))))
 
 (defn- memory-writes
   "(fn []) the memory's write count, which moves whenever a cell is seen or changed (a masked view kept for a while re-reads memory only then)."
