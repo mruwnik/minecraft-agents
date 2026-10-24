@@ -264,6 +264,20 @@
           (is (= [[2 64 2]] (map :pos (:cells e))))
           (is (re-find #"ground level" (:text e))))))))
 
+(deftest a-plan-field-filled-with-ground-ends-nothing-to-do-naming-the-blocks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run {:area {:plan "mix"}}
+                            (world-of (ground "farmland" (concat wheat-cells carrot-cells))
+                                      {:blocks (into {} (map (fn [[x z]] [(k x 64 z) "grass_block"])) (concat wheat-cells carrot-cells))}
+                                      all-seed)
+                            {"mix" (plan-of)} 30))
+              w (last (events-of s :waiting))]
+          (is (= :nothing-to-do (:reason w)))
+          (is (= 4 (:blocked w)))
+          (is (re-find #"4 crop cells hold grass_block.*ground level" (str (:text w) (:message w)))))))))
+
 (deftest maintain-clears-a-tree-on-its-crop-cells-but-not-a-chest-or-the-ground
   (async done
     (tu/run-async done

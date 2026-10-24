@@ -155,12 +155,19 @@
     (facts c)
     (check-cache/cached c [:facts (fa/part c)] #(facts c))))
 
+(defn blocked-text
+  "Why crop cells stay unsown: n of them hold the blocks found (tidy digs none of those), ground of them at soil level."
+  [n found ground]
+  (str n " crop cells hold " (str/join ", " found) " that tidy does not dig"
+       (when (pos? ground) (str "; " ground " are at ground level: the plan's crop layer must be one above the soil"))))
+
 (defn nothing-to-do-reason
   "The wait reason when no step would run: :covered counts tillable cells with a block over them (the box sits too low),
   :refused untilled cells a zone or claim refuses, :food-reserve the seed the reserve keeps from dry cells."
   [f]
-  (cond-> (into (into {:reason :nothing-to-do} (filter (comp pos? val)) (select-keys f [:covered :refused :blocked])) (:refusers f))
-    (:till-held f) (assoc :food-reserve (:till-held f))))
+  (cond-> (into (into {:reason :nothing-to-do} (filter (comp pos? val)) (select-keys f [:covered :refused :blocked :ground-level])) (:refusers f))
+    (:till-held f) (assoc :food-reserve (:till-held f))
+    (pos? (:blocked f 0)) (assoc :text (blocked-text (:blocked f) (:blocked-found f) (:ground-level f 0)))))
 
 (defn part-status
   "Why no step of the part in c would run, a :later status, or nil when a run is under way or a step would call a child.
@@ -333,7 +340,13 @@
     (cond
       (some #(apply worked? %) summaries) (ctx/end c :done nil done)
       (some (fn [[_ s]] (not (:skipped s))) summaries) (ctx/end c :nothing-possible :gave-up out)
-      :else (ctx/end c :condition-failed {:reason :nothing-to-do} out))))
+      :else (let [blocked (mapcat :blocked fields)]
+              (ctx/end c :condition-failed
+                       (cond-> {:reason :nothing-to-do}
+                         (seq blocked) (assoc :blocked (count blocked)
+                                              :text (blocked-text (count blocked) (sort (distinct (map :found blocked)))
+                                                                  (count (tend-plan/ground-level-cells blocked)))))
+                       out)))))
 
 (defn after-till
   "Memory after a till child ended: the cell is tried, its tilled cells counted, the step stays to be decided again."

@@ -163,6 +163,7 @@
         wet (filter (fn [[pos _]] (farm/wet? p pos)) unseeded)
         dry (remove (set wet) unseeded)
         tilled-cells (concat seeded wet)
+        blocked (blocked-cells p crops)
         [ground-box dry-n] (when (:irrigate (:args c)) (dry-box c answer crops))]
     {:field {:cells (vec (keys crops))}
      :ground-box ground-box
@@ -173,7 +174,9 @@
      :till-short (count dry)
      :till-held (reserve-held c dry)
      :refusers (refusers c plan (map key untilled))
-     :blocked (count (blocked-cells p crops))
+     :blocked (count blocked)
+     :ground-level (count (ground-level-cells blocked))
+     :blocked-found (vec (sort (distinct (map :found blocked))))
      :bare (- (count bare) (count (:refused sowing)))
      :seed (boolean (seq (:ready sowing)))
      :short (:short sowing)
