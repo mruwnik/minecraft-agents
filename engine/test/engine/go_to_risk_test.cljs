@@ -125,6 +125,15 @@
     (is (< 0 there both) "the way back is in its fire range too")
     (is (< both (- 1 (js/Math.pow (- 1 there) 2))) "a skeleton that noticed the body going has it coming back: no second draw of its notice")))
 
+(deftest a-walk-back-into-the-fire-range-of-a-skeleton-the-flight-left-beyond-follow-range-is-still-priced
+  (let [c (ready-test/ctx-of {:time st/noon :self {:pos {:x 0.5 :y 64 :z 0.5}}
+                              :entities [{:id 7 :name "skeleton" :kind "hostile" :pos {:x 17.5 :y 64 :z 0}}]})
+        goal {:x 30 :y 64 :z 0}
+        away {:x -30 :y 64 :z 0}
+        risk-of (fn [to cells] (risk/estimate c to {:plan (plan-of cells)}))]
+    (is (pos? (:death-chance (risk-of goal straight-cells))) "17 blocks off, past the trigger's cut at 16, the way past it is not free")
+    (is (zero? (:death-chance (risk-of away (for [x (range -1 -31 -1)] {:x x :y 64 :z 0})))) "the way off from it is")))
+
 (deftest standing-at-the-goal-is-priced-in-the-skeletons-fire-range-there
   (let [c (ready-test/ctx-of {:time st/noon :self {:pos {:x 0.5 :y 64 :z 0.5}}
                               :entities [{:id 7 :name "skeleton" :kind "hostile" :pos {:x 42 :y 64 :z 0}}]})

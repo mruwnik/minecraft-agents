@@ -104,6 +104,14 @@
     (is (= :fight (choose 2 0)) "fled twice, the walks again dearer than the fight, if the walk to it is free (go-to's lower bound)")
     (is (= :flee (choose 2 4)) "4 hp of go-to's quote of the walk to it: the walks away are the cheaper")))
 
+(deftest a-flight-ending-past-follow-range-is-not-flown-again-when-the-way-back-passes-the-skeleton
+  (let [choose (fn [again returns]
+                 (let [skeleton (cond-> (mob "skeleton" 15) again (assoc :again again))
+                       f (cost/fight-answer (assoc (fight sword skeleton) :mobs [skeleton]))]
+                   (:answer (cost/decide (body 20) {:fight f :flee (cost/flee-answer {:food 20 :mobs [skeleton] :returns returns :later f})} here))))]
+    (is (= [:fight :fight] (mapv #(choose 1 %) [0 1])) "the goal lies past it: the trigger refiring on the walk back is already priced, at the first meet and after a flight, so the body does not pendulum at 16")
+    (is (= [:flee :flee] (mapv #(choose nil %) [0 1])) "no way back past it: the flight is the last")))
+
 (deftest a-mob-between-the-body-and-its-goal-is-walked-from-again-from-where-the-way-back-passes-it
   (let [fight (cost/fight-answer (fight sword (mob "skeleton" 12)))
         choose #(:answer (cost/decide (body 20) {:fight fight :flee (cost/flee-answer {:food 20 :mobs [%] :later fight})} here))]
