@@ -125,4 +125,6 @@ step it cannot price stops it.
     node tools/solid-shares.mjs [chunks-dir]
 
 Writes `engine/src/jobs/lib/cost/solid_shares.json` (a Beta prior by section height on the share of solid blocks, read by
-`base-rates/solid-prior`) from the recorded columns in `worlds/test/chunks`. Rerun when the world or the game version changes.
+`base-rates/solid-prior`) from the recorded columns in `worlds/test/chunks`, less the fixture plot grid and lanes; solid as
+the engine counts it (the planner block table in the compile cache: run an engine build first). Rerun when the world or
+the game version changes.

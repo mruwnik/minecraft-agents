@@ -1,7 +1,7 @@
 // Why JavaScript: node --test file for tools/solid-shares.mjs (a Node tool over recorded chunk columns).
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { betaOf, fitWindows } from './solid-shares.mjs'
+import { betaOf, fitWindows, reserved, solidStates } from './solid-shares.mjs'
 
 const grid = (counts) => {
   const columns = new Map()
@@ -21,4 +21,9 @@ test('only windows with all 9 columns count, each its share of solid blocks over
   const fits = fitWindows(grid(() => [4096, 2048, 0]), -64)
   assert.deepEqual(fits.map(f => [f.y, f.n]), [[-64, 9], [-48, 9], [-32, 9]])
   assert.deepEqual(fits.map(f => (f.a / (f.a + f.b)).toFixed(3)), ['0.750', '0.500', '0.250'])
+})
+
+test('solid is the engine rule by block kind, and the fixture plot grid is left out', () => {
+  assert.deepEqual([...solidStates([0, 1, 2, 3, 4, 5, 6])], [0, 1, 0, 0, 0, 0, 1], 'open, solid, water, lava, climb, openable, narrow')
+  assert.deepEqual([[1246, 1246], [1245, 1300], [1300, 1245]].map(([cx, cz]) => reserved(cx, cz)), [true, false, false])
 })
