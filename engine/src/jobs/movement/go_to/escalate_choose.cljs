@@ -10,6 +10,7 @@
             [jobs.lib.dig-route :as dig-route]
             [jobs.lib.escape :as escape]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.per-body :as per-body]
             [jobs.lib.places :as places]
             [jobs.lib.breath :as breath]
             [jobs.lib.column-kinds :as kinds]
@@ -253,6 +254,8 @@
 (defonce ^{:doc "Per go-to call (route-owner): {key search-fn} of the dig-route searches its last escalate! left unfinished
   (jobs.lib.dig-route/search), gone on by later ones (route-slice)."}
   kept-routes (atom {}))
+
+(per-body/store! ::kept-routes #(reset! kept-routes {}))
 
 (defn route-owner
   "The key of go-to call c's kept searches (kept-routes), made once a call (memory :route-owner): a job id comes again

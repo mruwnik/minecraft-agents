@@ -5,6 +5,7 @@
             [engine.settings :as settings]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.block-sets :as bs]
+            [jobs.lib.per-body :as per-body]
             [jobs.lib.reach :as reach]))
 
 (a/defargs settings
@@ -154,6 +155,8 @@
   (or (first ((search block-at from goal opts) (get opts :max-nodes (settings/get settings ::max-nodes)))) {:problem :budget}))
 
 (defonce ^{:doc "{key search-fn} of the searches route-resumed left unfinished, the oldest dropped past kept-max."} kept (js/Map.))
+
+(per-body/store! ::kept #(.clear kept))
 
 (def kept-max 16)
 

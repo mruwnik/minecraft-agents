@@ -9,6 +9,7 @@
   targets (kept per body and tag, for at most wsearch/search-max-age-ms)."
   (:require [engine.path.executor :as executor]
             [engine.path.planner-tuned :as planner]
+            [jobs.lib.per-body :as per-body]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.walk.plan :as wplan]
@@ -30,6 +31,8 @@
 (defonce ^{:doc "The unfinished search of each [body primitives, tag]: {:key :t :plan}. key is [body cell, targets, range]; t when
   it began (ms); plan the planner's create-plan."}
   searches (atom {}))
+
+(per-body/store! ::searches #(reset! searches {}))
 
 (defn query
   "The planner query from the body's cell to within range of any of targets ({:x :y :z (:range)} cells; a target's own

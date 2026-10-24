@@ -5,6 +5,7 @@
             [engine.heap :as heap]
             [engine.path.executor :as executor]
             [engine.path.planner-tuned :as planner]
+            [jobs.lib.per-body :as per-body]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.world :as wworld]))
 
@@ -75,6 +76,7 @@
 (heap/gauge! :known-edges #(known-size :edges))
 (heap/gauge! :goal-floods #(count @goal-floods))
 (heap/gauge! :searches #(transduce (map count) + 0 (vals @searches)))
+(per-body/store! ::walk #(do (reset! searches {}) (reset! known-land {}) (reset! goal-floods {})))
 
 (defn keep-search!
   "Keep unfinished search s of the body, or forget its key when s is nil."

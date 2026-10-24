@@ -1,8 +1,9 @@
 (ns engine.timing-test
   "Not a test: test-run hooks. When MC_TEST_TIMINGS names a file, appends a {:started} line at load, one JSON line per test var ({:var :ms}) and the process peak RSS on exit (tools/test-shards.mjs reads them).
   When TEST_EVENTS=1, prints the live-tests @@test lines: plan (var count), one result per var, progress per namespace.
-  After every test var the server rules are unselected, so a test that never selects a fake's rules prices as unknown instead of inheriting the previous test's difficulty."
+  After every test var the server rules are unselected, so a test that never selects a fake's rules prices as unknown instead of inheriting the previous test's difficulty, and the per-body stores (jobs.lib.per-body/store!) are emptied, so a finished test's world is not kept alive by them."
   (:require [engine.game :as game]
+            [jobs.lib.per-body :as per-body]
             [engine.test-events :as ev]))
 
 (def out-file (some-> js/process .-env (aget "MC_TEST_TIMINGS")))
@@ -20,6 +21,6 @@
                                  :heap-kb (js/Math.round (/ (.-heapUsed (.memoryUsage js/process)) 1024))}))))
   (.on js/process "exit" (fn [] (line! {:peak-rss-kb (.-maxRSS (.resourceUsage js/process))}))))
 
-(ev/hook! :end-test-var (fn [_] (reset! game/rules-source (constantly nil))))
+(ev/hook! :end-test-var (fn [_] (reset! game/rules-source (constantly nil)) (per-body/clear-stores!)))
 
 (ev/install!)
