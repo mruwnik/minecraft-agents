@@ -418,7 +418,7 @@ const withWaitDir = (files, f) => {
   process.env.RES_SLOT_DIR = dir
   fs.mkdirSync(path.join(dir, 'heavy-wait'))
   for (const [name, body] of Object.entries(files)) fs.writeFileSync(path.join(dir, 'heavy-wait', name), body)
-  try { return f(dir) } finally { process.env.RES_SLOT_DIR = prev; fs.rmSync(dir, { recursive: true, force: true }) }
+  try { return f(dir) } finally { if (prev === undefined) delete process.env.RES_SLOT_DIR; else process.env.RES_SLOT_DIR = prev; fs.rmSync(dir, { recursive: true, force: true }) }
 }
 const tidOf = () => fs.readdirSync(`/proc/${process.pid}/task`).map(Number).find((t) => t !== process.pid)
 

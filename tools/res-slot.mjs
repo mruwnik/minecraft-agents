@@ -106,7 +106,7 @@ export const rampingLoad = (grants, kind, now, rampMs, alive = () => true) =>
   grants.filter((g) => g.kind === kind && now - g.t < rampMs && alive(g.pid)).reduce((a, g) => a + (g.cores ?? 0), 0)
 // Pure: the load ceiling of a kind from its `maxLoadPerCore` and the machine's core count, or undefined for no gate.
 export const maxLoadOf = (k, cores) => k.maxLoadPerCore === undefined ? undefined : k.maxLoadPerCore * cores
-// Heavy waiters: <dir>/heavy-wait/<kind>.<pid>[.<n>], holding the JSON list of slots the waiter tries (empty: any slot). While one is alive, light runs of the kind leave those slots alone, so a freed slot reaches the heavy run.
+// Heavy waiters: <dir>/heavy-wait/<kind>.<pid>[.<n>], holding JSON {start, slots}: the waiter's start time and the slots it tries (null: any slot). While one is alive, light runs of the kind leave those slots alone, so a freed slot reaches the heavy run.
 export const isHeavy = (cwd = process.cwd()) => !!process.env.RES_SLOT_HEAVY || hasHeavyMarker(cwd)
 // Pure: the free slots a light run may take. waits: one entry per live heavy waiter, the slots it tries, or null (any slot).
 export const freeForLight = (free, waits) => waits.includes(null) ? [] : free.filter((i) => !waits.some((w) => w.includes(i)))
