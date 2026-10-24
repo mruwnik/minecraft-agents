@@ -92,7 +92,7 @@
       (contract/later :exposed (str "dark at " where " until light") :lowered-by lowered-by :chance chance :recheck-after-ms (* 1000 light-in))
       (contains? lowered-by :light)
       (contract/never :exposed (str "dark at " where ", light is " (js/Math.round light-in) " s away, over the " (js/Math.round patience) " s it waits") :chance chance)
-      (spawn-light/hall-at? p to) (contract/never :exposed (str "dark at " where ", a hall of dark floor beyond " sh-inside/spawn-free-radius " blocks: mobs spawn in it, waiting never lights it, a torch does") :lowered-by #{:torch} :chance chance :at (spawn-light/hall-cell p to))
+      (spawn-light/hall-at? p to) (contract/never :exposed (str "dark at " where ", and a mob can walk from dark floor farther than " sh-inside/spawn-free-radius " blocks off (a hall, or an open side of this room): mobs spawn there, waiting never lights it, a torch does") :lowered-by #{:torch} :chance chance :at (spawn-light/hall-cell p to))
       :else (contract/ok :sealed (str "dark at " where ", no dark floor reaches beyond " sh-inside/spawn-free-radius " blocks: nothing spawns near the body")))))
 
 (defn hall-status
@@ -101,7 +101,7 @@
   (let [p (:primitives c)
         to (update-vals (or to (sh-sense/feet p)) js/Math.floor)]
     (price/priced c (if (and (sh-sense/buried? p) (spawn-light/hall-at? p to))
-                      (contract/never :exposed (str "dark at " (place-text to) ", a hall of dark floor beyond " sh-inside/spawn-free-radius " blocks: mobs spawn in it, a torch lowers it")
+                      (contract/never :exposed (str "dark at " (place-text to) ", and a mob can walk from dark floor farther than " sh-inside/spawn-free-radius " blocks off (a hall, or an open side of this room): a torch lowers it")
                                       :lowered-by #{:torch} :at (spawn-light/hall-cell p to) :chance (:chance (cost/exposure p to (:data (ctx/latest c :shelter)))))
                       (contract/ok :day "an unseen place's light is no reason to wait")))))
 

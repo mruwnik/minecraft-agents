@@ -391,6 +391,14 @@
     true [:never :exposed]
     false [:ok :sealed]))
 
+(deftest the-hall-text-says-a-walker-reaches-far-dark-floor-not-that-the-cell-is-far
+  (with-redefs [sh-sense/block-light-at (constantly 0)
+                sh-sense/sky-light-at (constantly 0)
+                sh-inside/dark-hall-at? (constantly true)]
+    (let [text (second (ready/at-status (ctx-of (assoc open-night :time st/noon)) outside))]
+      (is (re-find #"a mob can walk from dark floor farther than 24 blocks off" text))
+      (is (not (re-find #"a hall of dark floor beyond" text))))))
+
 (deftest a-way-out-of-a-dark-hall-underground-is-no-exposure-but-other-work-there-is
   (with-redefs [ready/hall-status (fn [_ _] [:never "hall" {:reason :exposed}])]
     (are [check expected] (= expected (kind check (assoc tunnel :time st/noon)))
