@@ -916,10 +916,11 @@
     (doseq [blocks [2 5 9 13] s [1 3.8 10]]
       (is (< (js/Math.abs (- (met blocks s) (- 1 (death/posterior-missed post blocks s)))) 0.04)
           (str "the shared Gamma keeps the posterior's chance " blocks " blocks off over " s " s")))
-    (doseq [blocks [2 5 13]]
-      (is (<= (- (own blocks 3.8) 0.01) (met blocks 3.8))
-          (str blocks " blocks off is priced no lower than its own case's counts, but for the shared Gamma's fit")))
-    (is (<= (- (met 13 3.8) 0.01) (met 15 3.8)) "past the farthest case the price holds, it does not carry a fall on")
+    (doseq [blocks [2 5 9 13] s [1 3.8 10]]
+      (is (<= (- (own blocks s) 1e-6) (met blocks s))
+          (str blocks " blocks off over " s " s is priced no lower than its own case's counts, but for the shared Gamma's fit")))
+    (doseq [s [1 3.8 10]]
+      (is (<= (- (met 13 s) 1e-6) (met 15 s)) (str "past the farthest case the price holds over " s " s, it does not carry a fall on")))
     (is (<= (met 2 3.8) (met nil 3.8)) "a skeleton whose place is unknown is priced at the nearest")))
 
 (deftest cases-that-disagree-price-the-near-mob-no-lower-than-cases-that-agree
