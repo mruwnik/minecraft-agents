@@ -15,7 +15,6 @@
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.health :as health]
-            [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.foods :as foods]
             [jobs.lib.look :as look]
@@ -78,16 +77,6 @@
              :when (not (settled? p drop [(.-x b) (.-y b) (.-z b)]))]
          drop)))
 
-(defn lip-unsafe?
-  "Whether looking over the edge of drop is held back: a hostile the body knows of near the lip, or lava seen in the drop's column or beside it."
-  [c {:keys [from floor]}]
-  (let [p (:primitives c)
-        [fx fy fz] from
-        [tx ty tz] floor]
-    (or (seq (danger-q/hostiles-near-way p {:x fx :y fy :z fz} (danger-q/hostile-radius) {:ranged-radius (danger-q/ranged-radius)}))
-        (some (fn [[dx dz]] (some #(some-> (u/seen-block p {:x (+ tx dx) :y % :z (+ tz dz)}) .-name (= "lava")) (range ty (inc fy))))
-              [[0 0] [1 0] [-1 0] [0 1] [0 -1]]))))
-
 (defn ^:async at-lip-cell!
   "Whether the body stands on the takeoff cell [x y z] of a drop, walking there with a go-to child if it does not (the lean
   is a straight steer, which goes off any edge on the way). The child may spend no health, so it never meets the budget
@@ -105,11 +94,11 @@
   [c]
   (let [m (ctx/mem c)
         {:keys [from floor] :as drop} (first (remove (set (:drops-looked m)) (:probe-drops m)))]
-    (when (and drop (not (lip-unsafe? c drop)))
+    (when (and drop (not (drive/lip-unsafe? c drop)))
       (let [arrived? (await (at-lip-cell! c from))]
-        (when-not (and arrived? (lip-unsafe? c drop))
+        (when-not (and arrived? (drive/lip-unsafe? c drop))
           (ctx/update-mem! c update :drops-looked (fnil conj []) drop))
-        (when (and arrived? (not (lip-unsafe? c drop)))
+        (when (and arrived? (not (drive/lip-unsafe? c drop)))
           (await (drive/lean-to! c (drive/lip from floor)))
           (await (dig-look/look-at! c floor))
           (look/see! c)

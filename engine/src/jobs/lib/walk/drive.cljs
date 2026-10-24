@@ -6,6 +6,7 @@
             [engine.path.executor :as executor]
             [engine.settings :as settings]
             [jobs.lib.cost :as cost]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
@@ -104,24 +105,35 @@
   (when (some #(unknown? [x (- y %) z]) (range 1 (inc depth)))
     {:x (+ x 0.5) :y (+ (- y depth) 0.5) :z (+ z 0.5)}))
 
+(defn lip-unsafe?
+  "Whether looking over the edge of drop is held back: a hostile the body knows of near the lip, or lava seen in the drop's column or beside it."
+  [c {:keys [from floor]}]
+  (let [p (:primitives c)
+        [fx fy fz] from
+        [tx ty tz] floor]
+    (or (seq (danger-q/hostiles-near-way p {:x fx :y fy :z fz} (danger-q/hostile-radius) {:ranged-radius (danger-q/ranged-radius)}))
+        (some (fn [[dx dz]] (some #(some-> (u/seen-block p {:x (+ tx dx) :y % :z (+ tz dz)}) .-name (= "lava")) (range ty (inc fy))))
+              [[0 0] [1 0] [-1 0] [0 1] [0 -1]]))))
+
 (defn ^:async look-over-edge!
   "A floor the body learned is not there (a drop at the takeoff's edge): lean to the lip toward it when it is beside the
   body's cell (from the middle of a step, the step itself hides what lies beside and under it), look down the column it is
   missing from, to the deepest lit drop the planner takes as seen (see-lit-depth), then at the unseen ground round the
   body at several distances, as a player looks over an edge once, so the next plan drops neither one cell deeper nor at
-  the next unseen column."
+  the next unseen column. Not while a hostile is near or lava is seen at the edge (lip-unsafe?)."
   [c [x y z :as cell]]
   (let [p (:primitives c)
         pos (u/self-pos c)
         [ax _ az :as at] (mapv #(js/Math.floor (% pos)) [:x :y :z])]
-    (when (and (<= (js/Math.abs (- x ax)) 1) (<= (js/Math.abs (- z az)) 1) (not= [x z] [ax az]))
-      (await (lean-to! c (lip at cell))))
-    (loop [points (keep identity (cons (column-point cell (:see-lit-depth (cost/walk-unknown-prices)) #(dig-look/unknown? p %))
-                                       (edge-points pos y #(unseen-round? p %))))]
-      (when-let [pt (first points)]
-        (await (ctx/act c :look (clj->js {:pos pt})))
-        (look/see! c)
-        (recur (rest points))))))
+    (when-not (lip-unsafe? c {:from at :floor cell})
+      (when (and (<= (js/Math.abs (- x ax)) 1) (<= (js/Math.abs (- z az)) 1) (not= [x z] [ax az]))
+        (await (lean-to! c (lip at cell))))
+      (loop [points (keep identity (cons (column-point cell (:see-lit-depth (cost/walk-unknown-prices)) #(dig-look/unknown? p %))
+                                         (edge-points pos y #(unseen-round? p %))))]
+        (when-let [pt (first points)]
+          (await (ctx/act c :look (clj->js {:pos pt})))
+          (look/see! c)
+          (recur (rest points)))))))
 
 (defn ^:async follow!
   "Walk plan (a plan-walk! result) and plan again from the body's cell, in the same call, whenever the walk stops for it:

@@ -27,6 +27,7 @@
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.vehicle :as vehicle]
+            [jobs.lib.walk.drive :as drive]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.watch :as wwatch]
             [jobs.lib.walk.world :as wworld]
@@ -983,3 +984,37 @@
               replans (filter #(= :replan (:kind %)) seen)]
           (is (= {:arrived true} (select-keys out [:arrived])) (str (pr-str out) " at " (:pos (fake/self p))))
           (is (< (count replans) (wwatch/max-learned)) "each floor found missing shows the stair's side, not one cell of it"))))))
+
+(def stair-body {:self {:pos {:x 15.5 :y 85 :z 0.5}} :blocks walkway-room :radius 16 :exact-eye true :bodyHitbox true})
+(def stair-job {:pos [5 64 8] :range 1 :ways #{:walk :clear-seal} :unknown true})
+
+(def look-over-walkway-end
+  "A job that looks over the walkway's east end (the body on [20 84 0]) toward the missing floor [21 83 0]."
+  {:round (fn ^:async look-round [c]
+            (await (drive/look-over-edge! c [21 83 0]))
+            (ctx/end c :done {}))})
+
+(defn walkway-end-sneaks
+  "The sneaking steer ticks of look-over-edge! at the walkway end, with the extra spec."
+  [extra]
+  (let [acts (atom [])]
+    (-> (run-job look-over-walkway-end (merge {:self {:pos {:x 20.5 :y 85 :z 0.5}} :blocks walkway-room :radius 16 :exact-eye true :bodyHitbox true} extra)
+                 {} (record-moves! acts))
+        (.then (fn [_] (filter #(get-in % [1 "sneak"]) @acts))))))
+
+(deftest a-hostile-near-holds-back-the-lean-to-a-lip-the-walk-learned-is-missing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (seq (await (walkway-end-sneaks {}))) "control: with no hostile the body leans")
+        (is (empty? (await (walkway-end-sneaks {:entities [{:id 1 :name "zombie" :kind "hostile" :pos {:x 24 :y 80 :z 0}}]}))))))))
+
+(deftest go-to-down-a-stair-in-a-dark-room-ends-with-bounded-replans
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen]} (await (run-go-to stair-body stair-job
+                                                   (fn [{:keys [p]}] (swap! (fake/state p) assoc :light-default [0 0] :pitch 30))))
+              replans (filter #(= :replan (:kind %)) seen)]
+          (is (or (:arrived out) (:why out) (:ended out) (:status out)) (pr-str out))
+          (is (<= (count replans) (inc (wwatch/max-learned))) (str (count replans) " replans")))))))
