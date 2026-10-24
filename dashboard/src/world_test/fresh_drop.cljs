@@ -8,6 +8,7 @@
             ["path" :as path]
             ["zlib" :as zlib]
             [cljs.reader :as reader]
+            [world-test.build :as wb]
             [clojure.string :as str]))
 
 (def usage
@@ -377,10 +378,11 @@
                  (run-node! "engine/tools/workspace.mjs" [(path/join worlds world "agents" body) "--body" body "--world" world "--worlds" worlds "--adopt-existing" "--update-tools"]))
     :body-start (let [[body {:keys [world build]}] a
                       child (cp/spawn "sh"
-                                      #js ["-c" "while :; do \"$@\"; [ $? -eq 75 ] || break; sleep 20; done" "sh" (path/join (repo) "tools/res-slot")
-                                           "body" "--" js/process.execPath "--max-old-space-size=192" "--heap-growing-percent=100" "out/body-release.cjs" "--agent" body "--world" world
-                                           "--scenario" (path/join build "engine/scenarios/survival.edn")
-                                           "--worlds" (path/join (repo) "worlds") "--blueprints" (path/join (repo) "blueprints") "--fresh"]
+                                      (into-array (concat ["-c" "while :; do \"$@\"; [ $? -eq 75 ] || break; sleep 20; done" "sh" (path/join (repo) "tools/res-slot")
+                                                           "body" "--" js/process.execPath] wb/body-v8-flags
+                                                          ["out/body-release.cjs" "--agent" body "--world" world
+                                                           "--scenario" (path/join build "engine/scenarios/survival.edn")
+                                                           "--worlds" (path/join (repo) "worlds") "--blueprints" (path/join (repo) "blueprints") "--fresh"]))
                                       #js {:cwd (path/join build "engine") :detached true :stdio "ignore"
                                            :env (js/Object.assign #js {} js/process.env #js {:NODE_COMPILE_CACHE (path/join (repo) "engine/out/compile-cache")})})]
                   (.unref child))

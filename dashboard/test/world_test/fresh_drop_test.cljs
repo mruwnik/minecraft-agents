@@ -93,7 +93,7 @@
     (is (< (i [:wait-online "A"]) (i [:check-build "A" "test" "/b"]) (i [:place ["A"] [[1 2]]])))))
 
 (deftest only-the-engine-node-process-of-that-body-is-a-body-process
-  (let [argv ["node" "--max-old-space-size=192" "out/body-release.cjs" "--agent" "Oriel" "--world" "test" "--fresh"]]
+  (let [argv ["node" "--max-old-space-size=256" "out/body-release.cjs" "--agent" "Oriel" "--world" "test" "--fresh"]]
     (is (d/body-process? argv "Oriel" "test"))
     (is (not (d/body-process? argv "Ori" "test")) "a name that is only a prefix of the body's")
     (is (not (d/body-process? argv "Bramble" "test")))
