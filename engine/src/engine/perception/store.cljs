@@ -1,13 +1,14 @@
 (ns engine.perception.store
-  "Block memory: per dimension and 16^3 section, the state ids and seen times of the cells the body has seen, capped by
-  forgetting the least recently seen section; and reading it back (seen-block, seen-blocks).
+  "Block memory: per dimension and 16^3 section, the state ids and seen times (to the second) of the cells the body has
+  seen, capped by forgetting the least recently seen section; and reading it back (seen-block, seen-blocks).
   A cell holding a mutable state (fluid, door, gate, trapdoor, fire: `mutable-id?`) also keeps its seen time to the ms,
   in the section's :fine Float32Array (ms after its base, NaN: none; off the V8 heap; not saved to file)."
   (:require [engine.game :as game]
             [plan.shape :as shape]))
 
-(def section-bytes 12288) ; ids (8192) and per-cell seen times (4096)
-(def minute-ms 60000)
+(def section-bytes 16384) ; ids (8192) and per-cell seen times (8192)
+(def second-ms 1000)
+(def max-age-s "Seconds after its base a cell time may reach (255 min): older cells are moved up to it." 15300)
 (def max-seen-radius 64)
 
 (defn section-key [cx sy cz]
@@ -43,7 +44,7 @@
         ^js sec (or found
                     (do (while (>= (.-count st) (.-cap st)) (evict-oldest! st))
                         (set! (.-count st) (inc (.-count st)))
-                        #js {:ids (js/Uint16Array. 4096) :times (js/Uint8Array. 4096) :base now :seen now :stamp -1 :cx cx :sy sy :cz cz}))]
+                        #js {:ids (js/Uint16Array. 4096) :times (js/Uint16Array. 4096) :base now :seen now :stamp -1 :cx cx :sy sy :cz cz}))]
     (when (not= (.-stamp sec) (.-stamp st))
       (.delete store key)
       (.set store key sec)
@@ -53,38 +54,38 @@
     (set! (.-lastSec st) sec)
     sec))
 
-(defn minute-of!
-  "The cell time (minutes after the section's base) for a write at now; the base moves on when it would pass 255. The
+(defn second-of!
+  "The cell time (seconds after the section's base) for a write at now; the base moves on when it would pass max-age-s. The
   last answer is kept for the same section and now: a pass writes thousands of cells at one now."
   [^js st ^js sec now]
   (if (and (identical? sec (.-minSec st)) (== now (.-minNow st)))
     (.-minVal st)
-    (let [m (js/Math.max 0 (js/Math.floor (/ (- now (.-base sec)) minute-ms)))
-          m (if (<= m 255)
+    (let [m (js/Math.max 0 (js/Math.floor (/ (- now (.-base sec)) second-ms)))
+          m (if (<= m max-age-s)
               m
-              (let [shift (- m 255) ^js times (.-times sec)]
+              (let [shift (- m max-age-s) ^js times (.-times sec)]
                 (dotimes [i 4096] (aset times i (js/Math.max 0 (- (aget times i) shift))))
                 (when-let [^js fine (.-fine sec)]
-                  (let [ms (* shift minute-ms)]
+                  (let [ms (* shift second-ms)]
                     (dotimes [i 4096] (aset fine i (let [t (- (aget fine i) ms)] (if (neg? t) js/NaN t))))))
-                (set! (.-base sec) (+ (.-base sec) (* shift minute-ms)))
-                255))]
+                (set! (.-base sec) (+ (.-base sec) (* shift second-ms)))
+                max-age-s))]
       (set! (.-minSec st) sec)
       (set! (.-minNow st) now)
       (set! (.-minVal st) m)
       m)))
 
 (defn cell-seen
-  "When the cell was last seen, in ms: to the ms for a mutable state, else to the minute (never later than the truth)."
+  "When the cell was last seen, in ms: to the ms for a mutable state, else to the second (never later than the truth)."
   [^js sec i]
   (let [t (some-> ^js (.-fine sec) (aget i))]
     (if (and (some? t) (not (js/isNaN t)))
       (+ (.-base sec) t)
-      (+ (.-base sec) (* minute-ms (aget (.-times sec) i))))))
+      (+ (.-base sec) (* second-ms (aget (.-times sec) i))))))
 
 (defn fine-times
   "The section's :fine array, made (all NaN) when first asked for. Float32 holds a whole ms up to 2^24 (279 min) past
-  the base exactly; minute-of! keeps cells within 255 min of it."
+  the base exactly; second-of! keeps cells within max-age-s of it."
   [^js sec]
   (or (.-fine sec) (set! (.-fine sec) (.fill (js/Float32Array. 4096) js/NaN))))
 
@@ -143,7 +144,7 @@
       (set! (.-writes st) (inc (.-writes st)))
       (set! (.-wrote sec) (.-writes st)))
     (aset ids i v)
-    (aset (.-times sec) i (if (and (identical? sec (.-minSec st)) (== now (.-minNow st))) (.-minVal st) (minute-of! st sec now)))
+    (aset (.-times sec) i (if (and (identical? sec (.-minSec st)) (== now (.-minNow st))) (.-minVal st) (second-of! st sec now)))
     (if mutable?
       (aset (fine-times sec) i (- now (.-base sec)))
       (when-let [^js fine (.-fine sec)] (aset fine i js/NaN)))))

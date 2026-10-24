@@ -116,7 +116,7 @@
     (is (= [(+ t0 (* 300 60000) 1234) true]
            [(store/cell-seen sec (store/cell-index 1 65 4)) (> (.-base sec) t0)]))
     (store/record! st store 1 65 4 stone @clock)
-    (is (= 0 (mod (- (store/cell-seen sec (store/cell-index 1 65 4)) (.-base sec)) 60000)) "stone is timed to the minute")))
+    (is (= 0 (mod (- (store/cell-seen sec (store/cell-index 1 65 4)) (.-base sec)) 1000)) "stone is timed to the second")))
 
 (deftest a-remembered-air-cell-next-to-remembered-fluid-reads-unknown-after-the-max-age
   (let [{:keys [p per clock]} (rig {"0,65,4" "lava" "1,65,4" "air" "3,65,4" "air" "4,65,4" "stone"})]
@@ -221,3 +221,15 @@
     (is (zero? (again!)) "seen again soon: the answer was known all along")
     (swap! clock + 20000)
     (is (= 1 (again!)) "seen again after it read unknown: kept room answers are judged again")))
+
+(deftest a-stone-cell-seen-seconds-after-a-mark-reads-newer-than-it
+  (let [{:keys [per clock]} (rig {"1,65,3" "stone"})
+        ^js st (:st per)
+        id (:state-id (perception/glance! per [1 65 3]))
+        store (store/store-of st "overworld")
+        ^js sec (.get store (store/section-key 0 4 0))
+        mark (+ @clock 30500)]
+    (store/record! st store 1 65 3 id (+ @clock 31200))
+    (store/record! st store 2 65 3 id (+ (.-base sec) 90000))
+    (is (= (+ (.-base sec) 90000) (store/cell-seen sec (store/cell-index 2 65 3))) "a cell seen 90 s after the base reads 90 s, not the minute")
+    (is (< mark (store/cell-seen sec (store/cell-index 1 65 3))) "31 s after the base is newer than a mark at 30.5 s, though both fall in one minute")))

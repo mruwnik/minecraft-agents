@@ -14,7 +14,7 @@ const withSeen = async (dim, body) => {
     ids[0] = 2
     await saveSeen(path.join(root, 'w', 'agents', 'B', 'engine', 'seen.bin'), {
       version: '1.21.4',
-      sections: [{ dim, cx: 0, sy: 0, cz: 0, seen: 1, base: 0, ids, times: new Uint8Array(4096) }]
+      sections: [{ dim, cx: 0, sy: 0, cz: 0, seen: 1, base: 0, ids, times: new Uint16Array(4096) }]
     })
     return body(root)
   } finally { fs.rmSync(root, { recursive: true, force: true }) }

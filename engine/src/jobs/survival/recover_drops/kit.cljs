@@ -4,7 +4,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [engine.game :as game]
-                        [jobs.lib.armour :as armour]
+            [jobs.lib.armour :as armour]
             [jobs.lib.child :as child]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]

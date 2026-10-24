@@ -146,7 +146,7 @@ async function writeSeen (fx, body, cells, seenAt) {
   const sections = new Map()
   for (const [x, y, z, name, dim = 'minecraft:overworld'] of cells) {
     const key = [dim, x >> 4, y >> 4, z >> 4].join()
-    if (!sections.has(key)) sections.set(key, { dim, cx: x >> 4, sy: y >> 4, cz: z >> 4, seen: seenAt, base: seenAt, ids: new Uint16Array(4096), times: new Uint8Array(4096) })
+    if (!sections.has(key)) sections.set(key, { dim, cx: x >> 4, sy: y >> 4, cz: z >> 4, seen: seenAt, base: seenAt, ids: new Uint16Array(4096), times: new Uint16Array(4096) })
     sections.get(key).ids[((y & 15) << 8) | ((z & 15) << 4) | (x & 15)] = registry.blocksByName[name].defaultState + 1
   }
   await saveSeen(path.join(dir, 'seen.bin'), { version, sections: [...sections.values()] })

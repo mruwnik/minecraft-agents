@@ -10,7 +10,6 @@
             [engine.game :as game]
             [engine.memory :as mem]
             [engine.settings :as settings]
-            [jobs.lib.aim :as aim]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.look :as look]
@@ -83,30 +82,21 @@
   [p pos]
   (boolean (and (sh-sense/cell-light p pos) (sh-sense/lit-here? p pos))))
 
-(def looked-policy "The :spot-looked memory: a look counts for a death no older than its pile." {:cap 16 :ttl 600000})
-
 (defn ^:async look-at!
-  "Turn to the cell of pos and look (full effort); when the body sees it from where it stands, remember :spot-looked
-  {:pos [x y z]} (seen-clear? reads it: the block memory keeps a cell's seen time to the minute, too coarse for a death
-  seconds old)."
+  "Turn to the cell of pos and look (full effort): the block memory keeps what the body sees of it (seen-clear? reads its seen time)."
   [c pos]
   (let [cell (mapv js/Math.floor [(:x pos) (:y pos) (:z pos)])]
     (await (ctx/act c :look (clj->js {:pos (zipmap [:x :y :z] (map #(+ % 0.5) cell))})))
-    (look/see! c (look/search-effort))
-    (when (aim/body-sees? c cell)
-      (ctx/remember! c :spot-looked {:pos cell} looked-policy))))
+    (look/see! c (look/search-effort))))
 
 (defn seen-clear?
   "Whether a mob death's spot is clear: looked at since the death (fresh sight beats the record: the block memory's seen
-  time, or a :spot-looked look-at! wrote) and lit, as a dark spot spawns the killer again. A death by terrain never clears
+  time) and lit, as a dark spot spawns the killer again. A death by terrain never clears
   by sight: the place itself killed."
   [c {:keys [pos age-ms mob?]}]
   (let [p (:primitives c)
-        b (look/seen-block p pos)
-        cell (mapv js/Math.floor [(:x pos) (:y pos) (:z pos)])
-        since (- (ctx/now c) age-ms)
-        looked? (some #(and (> (:t %) since) (= cell (:pos (:data %)))) (ctx/entries c :spot-looked))]
-    (boolean (and mob? b (not (:unknown b)) (or (< (:age-ms b) age-ms) looked?) (lit? p pos)))))
+        b (look/seen-block p pos)]
+    (boolean (and mob? b (not (:unknown b)) (< (:age-ms b) age-ms) (lit? p pos)))))
 
 (defn whereabouts
   "[t pos] of where c's body is known to have been since t: now, and its deaths, respawns, hurts and walks (go-to's and

@@ -8,6 +8,7 @@
             [engine.library-test :refer [setup]]
             [jobs.lib.child :as child]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.look :as look]
             [engine.memory :as mem]
             [engine.shelter-support :as st]
             [engine.sky-perception :as sky]
@@ -68,7 +69,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (looked-at-pile? (:p (await ((fetch-run "skeleton" {} cheap-pile))))) "a lit spot seen empty would clear it")
+        (let [p (:p (await ((fetch-run "skeleton" {} cheap-pile))))]
+          (is (looked-at-pile? p) "a lit spot seen empty would clear it")
+          (is (< (:age-ms (look/seen-block p dt/death-pos)) 5000) "the look is in the block memory newer than the death, which is what seen-clear? reads"))
         (is (not (looked-at-pile? (:p (await ((fetch-run "fall")))))) "a death by terrain: the place itself killed")))))
 
 (deftest a-damage-type-cause-adds-no-danger

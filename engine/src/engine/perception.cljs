@@ -23,10 +23,10 @@
     daylight, a torch in hand), else every `:still-ms`.
     What is behind the body is seen only once it turns.
 
-  Block memory. Per dimension and 16^3 section: a Uint16Array of stateId + 1 (0 = unknown), a Uint8Array of each
-  cell's seen time (whole minutes after the section's :base) and the section's last-seen time.
-    A cell more than 255 minutes older than the newest write reads as 255 minutes older.
-    Capped at `:cap-bytes` (32 MB, 2730 sections of 12 KB) by forgetting the least recently seen section.
+  Block memory. Per dimension and 16^3 section: a Uint16Array of stateId + 1 (0 = unknown), a Uint16Array of each
+  cell's seen time (whole seconds after the section's :base) and the section's last-seen time.
+    A cell more than 255 minutes (15300 s) older than the newest write reads as 255 minutes older.
+    Capped at `:cap-bytes` (32 MB, 2048 sections of 16 KB) by forgetting the least recently seen section.
     Saved to and loaded from a file (engine/js/seen-file.mjs).
     A block change in view (cone, line of sight, light) updates memory at once.
     A change out of view leaves the old state, a true memory error.
@@ -49,7 +49,7 @@
     felt         the cell touches the body (hitbox grown by 0.1, and the cell under the feet), any light;
     visible      a glance: one ray, by the pass's rules (cone, line, light or near); memory takes it;
     remembered   the state last seen, :age-ms old (to the ms for fluids, doors, gates, trapdoors and fire; else
-                 to the minute); one of those mutable states older than `:mutable-max-ms` (10 s) reads unknown;
+                 to the second); one of those mutable states older than `:mutable-max-ms` (10 s) reads unknown;
     unknown      {:unknown true :pos}.
   Answers are cached for one tick (`:step-ms`) while the eye and the raw world's epoch stay the same.
   A cell outside the cone needs a turn first: the wrapped look glances its cell and the 6 neighbours once it settles.

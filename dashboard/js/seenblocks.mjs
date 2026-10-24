@@ -5,7 +5,7 @@ import prismarineBlock from 'prismarine-block'
 import { worldsDir } from '../../engine/js/bodies.mjs'
 import { loadSeen } from '../../engine/js/seen-file.mjs'
 
-const MINUTE_MS = 60000
+const SECOND_MS = 1000
 const OVERWORLD = 'overworld'
 const bare = dim => String(dim).replace(/^minecraft:/, '')
 
@@ -35,7 +35,7 @@ export function createSeenBlocks ({ stateDir, world, body, dim = OVERWORLD }) {
     },
     seenAt: (x, y, z) => {
       const c = cell(x, y, z)
-      return c ? c.s.base + MINUTE_MS * c.s.times[c.i] : null
+      return c ? c.s.base + SECOND_MS * c.s.times[c.i] : null
     },
     close: () => {}
   }
