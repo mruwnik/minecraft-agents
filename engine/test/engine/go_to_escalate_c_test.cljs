@@ -314,6 +314,13 @@
     (is (true? (escape/open-door-beside? door-seen [0 64 0])))
     (is (false? (escape/open-door-beside? door-dark [0 64 0])) "the only way to the door runs through a cell never seen")))
 
+(deftest door-spot-is-the-cheapest-cell-whose-door-leaves-the-body-cheaper-off-toward-the-goal
+  (let [yard (merge (box -12 63 -8 12 63 8 "stone") (box 5 64 -8 5 65 8 "stone") (box -5 64 -8 -5 65 8 "stone"))
+        p (tu/fake {:blocks yard :self {:pos {:x 0.5 :y 64 :z 0.5}}})]
+    (is (= [4 64 0] (escape/door-spot p [0 64 0] [10 64 0] (constantly true) #{})) "the wall ahead is the door; the one behind is not")
+    (is (nil? (escape/door-spot p [0 64 0] [10 64 0] (constantly false) #{})) "a wall that may not be dug is no door")
+    (is (not= [4 64 0] (escape/door-spot p [0 64 0] [10 64 0] (constantly true) #{[4 64 0]})) "a cell walked to already is not offered again")))
+
 (deftest wall-spot-is-the-cheapest-wall-toward-the-goal-not-the-nearest
   (let [yard (merge (box -12 63 -8 12 63 8 "stone") (box -2 64 2 -2 65 2 "stone") (box 7 64 0 7 65 0 "stone"))
         p (tu/fake {:blocks yard :self {:pos {:x 0.5 :y 64 :z 0.5}}})]
