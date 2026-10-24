@@ -56,13 +56,15 @@
          (if (cannot-heal? c) (max share (dec health)) share))))))
 
 (defn stay-parts
-  "{:hurt :dies} of staying `seconds` where mobs spawn at `chance` per second: hurt the hp, each a zombie fight with the
-  kit carried; dies the chance they kill the body (cost/spawns-chance)."
+  "{:hurt :dies} of staying `seconds` where mobs spawn at `chance` per second: hurt the hp they take (cost/spawns-hurt),
+  dies the chance they kill the body (cost/spawns-chance)."
   [c chance seconds]
   (check-cache/cached c [::stay chance seconds]
-                      #(let [spawns (* chance seconds)]
-                         {:hurt (* spawns (cost/fight-damage (assoc (wworld/kit-of c) :mobs [{:name "zombie" :distance 0 :hits 0}])))
-                          :dies (cost/spawns-chance (threats/death-body c) spawns (u/self-pos c))})))
+                      #(let [spawns (* chance seconds)
+                             body (threats/death-body c)
+                             at (u/self-pos c)]
+                         {:hurt (cost/spawns-hurt body spawns at)
+                          :dies (cost/spawns-chance body spawns at)})))
 
 (defn stay-hp
   "The hp staying `seconds` where mobs spawn at `chance` per second risks: stay-parts' hurt and its death in hp (cost/lethal-hp)."

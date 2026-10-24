@@ -54,6 +54,13 @@
     (is (pos? (lava-risk/hp (:primitives c) [21 64 20])))
     (is (zero? (risk/route-lava-hp (:primitives c) [here])))))
 
+(deftest each-mob-spawned-on-a-dark-way-hurts-a-bare-body-at-most-its-life
+  ;; the death past the life is the lethal part's: a fist fight that would cost 65 hp is no more hurt than 20
+  (let [c (ready-test/ctx-of (assoc ready-test/open-night :self {:pos {:x 0 :y 64 :z 0} :health 20 :food 20}))
+        {:keys [spawn-hp dark-s]} (risk/estimate c {:x 95 :y 64 :z 0})]
+    (is (pos? spawn-hp))
+    (is (<= spawn-hp (* dark-s (cost/spawn-chance [0 0 0]) 20)))))
+
 (deftest a-dark-way-by-day-is-not-exposed
   (let [c (ready-test/ctx-of (assoc night-hut :time st/noon))]
     (is (zero? (:hp (risk/estimate c {:x 95 :y 64 :z 0}))))))
@@ -126,6 +133,7 @@
   (let [c (ready-test/ctx-of day-world)]
     (with-redefs [sh-sense/seen-cell? (constantly false) look/glimpse? (constantly false)]
       (is (zero? (:dark-s (risk/estimate c {:x 95 :y 64 :z 0}))) "unseen open ground by day is lit by the sky")
+      (is (zero? (:dark-s (risk/estimate c {:x 95 :y 84 :z 0}))) "a goal above the body makes no cave of the ground at its level")
       (is (pos? (:dark-s (risk/estimate c {:x 5 :y 20 :z 90}))) "unseen ground far below may be a cave")
       (is (pos? (with-redefs [sh-sense/buried? (constantly true)] (:dark-s (risk/estimate c {:x 95 :y 64 :z 0}))))
           "by day too, unseen ground level with a body underground may be a cave"))))

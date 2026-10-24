@@ -4,8 +4,8 @@
   straight line. It replaces any wait for dawn: a night walk is judged by the light the body perceives along
   the way (Q334), a walk underground by the hostiles it can reach and the dark halls it crosses (a roofed dark cell prices
   spawns only where dark floor beyond the spawn-free radius is reachable: ready/hall-at?, Q345).
-  Risk = the mobs expected to spawn on the exposed stretches (jobs.lib.cost/spawn-chance per second of walking, each costed
-  as a zombie fight with the kit carried, jobs.lib.cost/fight-damage) plus what the known threats take off the body over
+  Risk = the hurt of the mobs expected to spawn on the exposed stretches (jobs.lib.cost/spawn-chance per second of walking,
+  jobs.lib.cost/spawns-hurt) plus what the known threats take off the body over
   the way (jobs.lib.cost/route-hurt, each over its field, jobs.lib.threats): every mob sensed now that catches
   the walk (live-catchers), and every death, near-death or hide spot the walk goes for (remembered-near-way), each
   by the chance its mob or a like one is there now (death-spot/present-share: one a sun-burning mob left seen sky-lit by day, or one
@@ -27,12 +27,11 @@
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.threats :as threats]
-            [jobs.lib.util :as u]
-            [jobs.lib.walk.world :as wworld]))
+            [jobs.lib.util :as u]))
 
 (a/defargs settings
   {::surface-band {:default 4 :spec (a/num-in 0 nil)
-                   :doc "Blocks below the higher end of a walk that unseen ground still counts as open surface; deeper is underground, where only hostiles count."}
+                   :doc "Blocks below the body's feet that unseen ground still counts as open surface; deeper is underground, where only hostiles count."}
    ::exit-blocks {:default 8 :spec (a/num-in 0 nil)
                   :doc "Blocks of open ground a walk out of a night shelter crosses before it can go under, even to a goal underground."}
    ::heal-s-per-hp {:default 4 :spec (a/num-in 0 nil)
@@ -53,8 +52,9 @@
 
 (defn- chance-at
   "The spawn chance per second at `cell` for a body at feet: a seen cell by its light (sky reaching it down its column; a roofed cell is dark only in a dark hall), an unseen one
-  at the worse case (Q16): by the open-sky guess when it lies within the surface band of `top` and the body is not underground, else as a dark cave."
-  [p cell top underground?]
+  at the worse case (Q16): by the open-sky guess when it lies within the surface band below the feet and the body is not
+  underground, else as a dark cave (a goal above the body is no sign that the ground at its own level is a cave)."
+  [p cell feet-y underground?]
   (let [night (not (look/lit-light? 0 15 (sh-sense/sky-subtract-now p)))
         sky (if night 0 15)
         cell (if (sh-sense/solid-at? p cell) (update cell :y inc) cell)
@@ -62,7 +62,7 @@
     (cond
       block (cost/spawn-chance [(:x cell) (:y cell) (:z cell)]
                                {:light (constantly {:block block :sky (cond (sh-sense/sky-reaches-from-above? p cell) sky (and (< block (look/dark-light)) (ready/hall-at? p cell)) 0 :else 15)})})
-      (or underground? (< (:y cell) (- top (settings/get settings ::surface-band)))) (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block 0 :sky 0})})
+      (or underground? (< (:y cell) (- feet-y (settings/get settings ::surface-band)))) (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block 0 :sky 0})})
       :else (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block 0 :sky sky})}))))
 
 (def lava-scan-radius 128)
@@ -114,13 +114,13 @@
 (defn- dark-seconds
   "Seconds of the walk over cells where a mob could spawn (chance-at): every k-th cell and the last stand for the stretch
   walked since the one before, k the larger of ::step and the cells over ::max-cells."
-  [p cells top underground?]
+  [p cells feet-y underground?]
   (let [n (count cells)
         k (js/Math.ceil (max (settings/get settings ::step) (/ n (settings/get settings ::max-cells))))
         blocks (along cells)
         ends (distinct (concat (range k n k) [(dec n)]))]
     (/ (reduce + (for [[a b] (map vector (cons 0 ends) ends)
-                       :when (pos? (chance-at p (nth cells b) top underground?))]
+                       :when (pos? (chance-at p (nth cells b) feet-y underground?))]
                    (- (blocks b) (blocks a))))
        (cost/walk-blocks-per-s))))
 
@@ -134,12 +134,11 @@
   (let [p (:primitives c)
         feet (sh-sense/feet p)
         goal (update goal :y #(or % (:y feet)))
-        top (max (:y feet) (:y goal))
         underground? (sh-sense/buried? p)
         leaves? (sh-inside/walk-leaves-shelter? p (:data (ctx/latest c :shelter)) goal 1)
         cells (way feet goal plan)
         exit (if leaves? (settings/get settings ::exit-blocks) 0)
-        exposed-s (+ (/ exit (cost/walk-blocks-per-s)) (dark-seconds p cells top underground?))
+        exposed-s (+ (/ exit (cost/walk-blocks-per-s)) (dark-seconds p cells (:y feet) underground?))
         spawns (* exposed-s (cost/spawn-chance [0 0 0]))
         body (threats/death-body c)
         threat-hp (fn [ts] (if (seq ts) (cost/route-hurt body {:cells cells :threats (threats/with-reach c ts)}) 0))
@@ -153,7 +152,7 @@
                      (- 1 (cost/spawns-chance body spawns feet))))
         lethal (cost/lethal-hp body dies goal)
         lava (route-lava-hp p cells)
-        spawn-hp (* spawns (cost/fight-damage (assoc (wworld/kit-of c) :mobs [{:name "zombie" :distance 0 :hits 0}])))
+        spawn-hp (cost/spawns-hurt body spawns feet)
         hostile-hp (threat-hp catchers)]
     {:hp (+ spawn-hp hostile-hp death-hp lethal lava) :lava-hp lava :spawn-hp spawn-hp :hostile-hp hostile-hp :death-hp death-hp :lethal-hp lethal
      :dark-s exposed-s :hostiles (count catchers)}))
