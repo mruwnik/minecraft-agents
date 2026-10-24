@@ -210,6 +210,23 @@
           (is (seq (st/calls p "place")))
           (is (every? #(< 90 (:x %)) (mapv st/arg-pos (st/calls p "place"))) "the pit is dug where the body was moved to"))))))
 
+(deftest a-site-walked-to-is-given-up-for-good-ground-the-body-stands-on-whatever-the-distance
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (st/setup {:time night :blocks wide-ground :inventory st/dirt-stack
+                                              :entities [(assoc zombie :pos {:x -4.5 :y 64 :z 0.5})]})]
+          (mem/write! (:store eng) :shut-in-failed {:pos {:x 0 :y 64 :z 0} :way :pit :reason :no-floor} {:cap 5 :ttl 600000})
+          (core/submit! eng '(jobs.survival.dig-pit {:for :night}) {})
+          (await (st/tick-n eng 2))
+          (is (seq (filter #(= :waiting (:kind %)) @seen)) "the walk to the site waits on the zombie")
+          (swap! (fake/state p) assoc :entities [])
+          (st/teleport! p -12.5 64 0.5)
+          (await (tu/run-until-empty eng 5))
+          (is (seq (st/calls p "place")))
+          (is (every? #(< (:x %) -5) (mapv st/arg-pos (st/calls p "place")))
+              "21 blocks from the site it had chosen, within the old reach and futile radius, the body digs where it stands"))))))
+
 (deftest a-pit-that-failed-for-water-beside-it-is-left-for-ground-a-few-blocks-off
   (async done
     (tu/run-async done

@@ -4,6 +4,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
+            [jobs.lib.rooms :as rooms]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.solid :as solid]
             [jobs.lib.threats :as threats]
@@ -85,11 +86,17 @@
                   [0 -1 1 -2 2]))
           offsets)))
 
-(defn kept-site?
-  "Whether a site cell chosen earlier is still within what relocation-site picks from a failed site the body is at: a body
-  moved farther (a teleport, a fall, a flight) has left the failed site behind, and the site is chosen again from its feet."
-  [c cell]
-  (<= (u/dist (sh-sense/feet (:primitives c)) cell) (+ (settings/get settings ::reach) (shut-night/futile-radius))))
+(defn ^:async keeps?
+  "Whether a site cell m chosen earlier is still the one to walk to, given fresh (site, from the feet now): the same cell; or
+  go-to's quote for m is finite and no dearer than its quote for the fresh cell (none: m stays if it can be walked to), unless
+  the feet are a pit site themselves (a walk that left the failed site behind on good ground digs there, for nothing)."
+  [c m fresh]
+  (cond
+    (and (= :here (:at fresh)) (pit-site? (:primitives c) (sh-sense/feet (:primitives c)))) false
+    (= m (:cell fresh)) true
+    :else (let [qm (await (rooms/route-cost c {:pos m :range 0}))
+                qf (when (:cell fresh) (await (rooms/route-cost c {:pos (:cell fresh) :range 0})))]
+            (boolean (and qm (or (nil? qf) (<= qm qf)))))))
 
 (defn site
   "Where a night pit is dug from: {:at :here}, {:at :there :cell f} (walk there first: a pit failed at the feet, or a zone
