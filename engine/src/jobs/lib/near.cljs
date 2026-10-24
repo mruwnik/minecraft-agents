@@ -140,7 +140,7 @@
   dangers: whether the plans keep away from known dangers (plan!). avoid: cells the plans keep off (plan!). dark: false plans dark cells like lit ones. tolls: cells the plans price (plan!).
   unknown: the mask spec (plan!); the result then says what the last plan said of unseen floors (with-sight).
   sight: (fn [x y z]) of a feet cell, the policy's :goal-seen: only a cell in range that answers true is the goal.
-  stair-check: (fn [plan first?]) asked of the first plan and of every re-plan inside the walk; a why ends the walk before it starts (a re-plan: at once), {:status :stair-cheaper :why why}."
+  stair-check: (fn [plan first?]) asked of the first plan and of every re-plan inside the walk; a why ends the walk before it starts (a re-plan: at once), {:status :stair-cheaper :why why}, but {:cut plan'}, whose plan' is walked in its place."
   [c to range doors shut-also timeout-s explore one-way budget progress dangers & [avoid dark tolls unknown sight stair-check]]
   (await (walk/settle! c))
   (let [policy-of (fn [] (cond-> (wworld/body-policy c) (not= :never doors) (update :moves conj :open) (some? sight) (assoc :goal-seen sight)))
@@ -154,16 +154,20 @@
                    (let [plan (await (plan! c to range doors (policy-of) walls explore one-way budget progress dangers avoid dark tolls unknown))]
                      (if-let [no (wplan/no-walk plan 0 (policy-of))]
                        (if stuck (door-stuck stuck) (with-sight no plan to))
-                       (if-let [why (and stair-check (empty? walls) (stair-check plan true))]
+                       (let [why (and stair-check (empty? walls) (stair-check plan true))]
+                       (if (and why (not (:cut why)))
                          {:status :stair-cheaper :why why}
-                       (let [began (ctx/now c)
+                       (let [plan (or (:cut why) plan)
+                             began (ctx/now c)
                              {done :done last-plan :plan planned :damage}
                              (await (drive/follow! c plan {:plan-fn (fn ^:async replan [cells]
                                                                 (await (walk/settle! c))
                                                                 (let [fresh (await (plan! c to range doors (policy-of) (into walls cells) explore one-way (wsearch/replan-budget budget) progress dangers avoid dark tolls unknown))]
-                                                                  (if-let [why (and stair-check (nil? (wplan/no-walk fresh 0 (policy-of))) (stair-check fresh false))]
-                                                                    (assoc fresh :steps [] :refused true :stop {:status :stair-cheaper :why why})
-                                                                    fresh)))
+                                                                  (let [why (and stair-check (nil? (wplan/no-walk fresh 0 (policy-of))) (stair-check fresh false))]
+                                                                    (cond
+                                                                      (:cut why) (:cut why)
+                                                                      why (assoc fresh :steps [] :refused true :stop {:status :stair-cheaper :why why})
+                                                                      :else fresh))))
                                                           :walk-fn walk-fn :to to :policy (policy-of) :announce! announce! :dangers dangers}))
                              _ (drive/note-mismatch! c planned began nil)]
                          (cond
@@ -175,7 +179,7 @@
                              (:known (:frontier-taken last-plan)) (assoc :frontier-known true
                                                          :frontier-target (:target (:frontier-taken last-plan))))
                            stuck (door-stuck (:cells done))
-                           :else (recur (into walls (:cells done)) (:cells done))))))))]
+                           :else (recur (into walls (:cells done)) (:cells done)))))))))]
       (when (and (not= :never doors) (= :arrived (:status result)))
         (await (step-out! c to range doors shut-also timeout-s (policy-of))))
       ;; however the walk ended, what it opened and could not shut yet (the body was in its column) is shut when in reach

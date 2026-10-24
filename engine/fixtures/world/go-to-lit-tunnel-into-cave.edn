@@ -1,0 +1,29 @@
+;; Cards 1d68d801 / 3910d752: a buried body walks a glowstone-lit tunnel (x 1..30, z 16) that turns north at x 30 into a cave
+;; (x 22..38, z 19..32) its rock hides until the turn. The plan runs on through the unseen cave, priced a dark cave (Q16): go-to
+;; walks only up to the first step where a mob could spawn, looks there and prices what it then sees. The risk share is set to
+;; 0.01 so any priced spawn is over it. Should-succeed: the cave is lit too, the body arrives. Should-fail: the cave is dark past
+;; the light the turn spills into it; the body waits :risky at the turn, never inside.
+{:defaults
+ {:tags [:movement :dark] :time :any
+  :plot {:light :dark :height 8 :length 64 :width 34}
+  :settings {:jobs.lib.price/risk-share 0.01}
+  :body {:at [2.5 0 16.5] :yaw 270 :settle-s 3 :effects [["resistance" 600 4]]}
+  :blocks [[:fill [0 0 0] [60 6 33] "stone"]
+           [:fill [1 0 16] [30 1 16] "air"]
+           [:fill [30 0 17] [30 1 18] "air"]
+           [:fill [22 0 19] [38 4 32] "air"]
+           [:set [4 2 16] "glowstone"] [:set [10 2 16] "glowstone"] [:set [16 2 16] "glowstone"]
+           [:set [22 2 16] "glowstone"] [:set [28 2 16] "glowstone"] [:set [30 2 17] "glowstone"]]
+  :limit-s 200}
+ :cases
+ [{:name "lit-cave-past-the-turn-arrives"
+   :blocks [[:set [24 5 21] "glowstone"] [:set [29 5 21] "glowstone"] [:set [34 5 21] "glowstone"]
+            [:set [24 5 26] "glowstone"] [:set [29 5 26] "glowstone"] [:set [34 5 26] "glowstone"]
+            [:set [24 5 31] "glowstone"] [:set [29 5 31] "glowstone"] [:set [34 5 31] "glowstone"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [30 0 31] :range 1})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 150 :of-job true}]
+   :after [[:body-near [30.5 0 31.5] 2]]}
+  {:name "dark-cave-past-the-turn-waits-risky-outside"
+   :act [[:job (jobs.movement.go-to {:pos #at [30 0 31] :range 1})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :risky}} :within-s 120}]
+   :after [[:body-near [30.5 0 16.5] 2.4]]}]}

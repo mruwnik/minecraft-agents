@@ -495,6 +495,19 @@
        (and (or lit? near?)
             (rays/line-clear? raw (.sightTable raw) (.-x eye) (.-y eye) (.-z eye) (+ x 0.5) (+ y 0.5) (+ z 0.5)))))))
 
+(defn dark-in-sight?
+  "Whether a look at the cell {:x :y :z} would show it dark: within sight's :radius, a clear line from the eye, neither lit
+  enough to see nor within near-of. False without a perception."
+  [p {:keys [x y z]}]
+  (boolean
+   (when-let [per (aget p "perception")]
+     (let [^js raw (:raw per)
+           ^js eye (.eye raw)
+           d (js/Math.hypot (- (+ x 0.5) (.-x eye)) (- (+ y 0.5) (.-y eye)) (- (+ z 0.5) (.-z eye)))]
+       (and (<= d (:radius (:opts per))) (> d (near-of p))
+            (not= 1 ((see-lit-fn p) x y z))
+            (rays/line-clear? raw (.sightTable raw) (.-x eye) (.-y eye) (.-z eye) (+ x 0.5) (+ y 0.5) (+ z 0.5)))))))
+
 (defn drops
   "Item entities of name within radius as [{:id :pos :count}], nearest first; only those within toss-reach of near
   (a position) when given."

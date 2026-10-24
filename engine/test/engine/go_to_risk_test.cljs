@@ -253,7 +253,7 @@
         prefix {:status "partial" :steps (vec (take 10 straight-cells))}]
     (with-redefs [risk/estimate prefix-estimate risk/estimate-of prefix-estimate-of]
       (is (= :later (first (reprice/status c goal prefix))) "the whole walk is over the affordable")
-      (is (true? (reprice/safe-prefix? c goal prefix)))
+      (is (identical? prefix (reprice/safe-prefix c goal prefix)) "no step of it where a mob could spawn: walked whole, not cut")
       (let [check (reprice/check c goal nil)]
         (is (nil? (check prefix true)) "the prefix is walked")
         (is (= :later (first (:risk (check (plan-of straight-cells) false)))) "a refresh past the prefix, no hostile new, holds"))

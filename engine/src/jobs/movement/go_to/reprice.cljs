@@ -10,7 +10,10 @@
             [jobs.lib.danger :as danger]
             [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
+            [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.util :as u]
+            [jobs.lib.walk :as wwalk]
             [jobs.lib.walk-risk :as risk]))
 
 (defn status
@@ -28,24 +31,36 @@
   [plan]
   (= "searching" (some-> ^js (:r plan) .-reason)))
 
-(defn safe-prefix?
-  "Whether plan stops short of pos, the walk to pos is within price/allowed but for the unseen cells guessed dark caves
-  (risk/estimate's caves-free?), and the walk on the plan's own steps to their end passes status: walking that and
-  looking turns unseen into seen, so the walk is priced again from there rather than held on a guess."
+(defn safe-prefix
+  "The plan to walk of a plan that stops short of pos and whose walk to pos is within price/allowed but for the unseen
+  cells guessed dark caves (risk/estimate's caves-free?): its steps before the first where a mob could spawn
+  (spawn-light/chance-at), when that step is such a guess (spawn-light/cave-guess?: a look may show it lit), and they leave
+  the body's cell and pass status, with :cut-rest the look-ahead steps from that step on (drive/follow! walks to the cut,
+  looks there and plans again, priced by what it then sees: a dark cave stays dark to a look, so it is never walked on a
+  cut); the plan itself when no step is one and it passes status to its end. Else nil."
   [c pos plan]
-  (let [end (peek (:steps plan))
+  (let [p (:primitives c)
+        feet-y (:y (sh-sense/feet p))
+        underground? (sh-sense/buried? p)
+        [prefix more] (split-with #(zero? (spawn-light/chance-at p % feet-y underground? false)) (:steps plan))
+        steps (vec prefix)
+        end (peek steps)
         feet (mapv js/Math.floor ((juxt :x :y :z) (u/self-pos c)))]
-    (and (not= "found" (:status plan)) end
-         (not= feet (mapv js/Math.floor ((juxt :x :y :z) end)))
-         (<= (:hp (risk/estimate c pos {:plan plan :caves-free? true})) (price/allowed c))
-         (= :ok (first (status c end (assoc plan :status "found")))))))
+    (when (and (not= "found" (:status plan)) end
+               (or (empty? more) (spawn-light/cave-guess? p (first more) feet-y underground?))
+               (not= feet (mapv js/Math.floor ((juxt :x :y :z) end)))
+               (<= (:hp (risk/estimate c pos {:plan plan :caves-free? true})) (price/allowed c))
+               (= :ok (first (status c end (assoc plan :status "found" :steps steps)))))
+      (if (seq more)
+        (-> plan (assoc :steps steps :status "partial" :cut-rest (vec (take wwalk/look-ahead-steps more))) (dissoc :frontier-taken))
+        plan))))
 
 (defn check
   "near/walk-round!'s :stair-check: check's why, else status of the round's first plan, of every re-plan once a plan
-  passed by safe-prefix? (a re-plan would walk on past the prefix unpriced), and of a re-plan that knows of a
+  passed by safe-prefix, and of a re-plan that knows of a
   hostile near the way to pos not known before (at the first plan or a re-plan that passed), read anew (check-cache/fresh):
   {:risk s} when s is :later or :never, the plan kept (risk/note-plan!) for the start check to hold the call on, unless
-  the plan stops short of pos with a safe-prefix? (walked, then priced again), or
+  the plan stops short of pos with a safe-prefix, then {:cut prefix} (walked in its place) when that is not the plan, or
   {:searching true} for a plan to where a search that has not ended has got to, whose rest is priced unseen: the search
   goes on rather than hold (a :refresh re-plan keeps its old plan whatever the check says, so a failed hostile is asked
   again). Other re-plans read only the hostile list. None under a caller's :checks :safe?, which replaces go-to's."
@@ -65,8 +80,9 @@
                   (cond
                     (not (#{:later :never} (first s))) (do (swap! known into now) nil)
                     (unfinished? plan) (do (some-> (:search-on plan) (apply [])) {:searching true})
-                    (safe-prefix? c' pos plan) (do (reset! prefixed true) nil)
-                    :else (do (risk/note-plan! c pos plan) {:risk s}))))))))))
+                    :else (if-let [cut (safe-prefix c' pos plan)]
+                            (do (reset! prefixed true) (when-not (identical? cut plan) {:cut cut}))
+                            (do (risk/note-plan! c pos plan) {:risk s})))))))))))
 
 (defn end
   "The step result for a walk stopped by check's {:risk s}: as pace/steps! treats a can-run? that fails between steps; a

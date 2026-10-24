@@ -150,7 +150,8 @@
   "Walk plan (a plan-walk! result) and plan again from the body's cell, in the same call, whenever the walk stops for it:
   the look-ahead saw the way change (:changed: the new plan is walked), a partial plan is due a refresh (:refresh: the new
   plan is walked only when take-refresh? says it is clearly better, else the rest of the old one), or the body is stuck with
-  a mob in its way (:mob: wait, plan round it). A replan that proves the goal cut off or enclosed ends the call with that
+  a mob in its way (:mob: wait, plan round it), or a plan cut short of what it does not know yet (:cut-rest, the steps
+  after the cut: walked to its end, look at them, then plan again). A replan that proves the goal cut off or enclosed ends the call with that
   no-walk; so does one the caller refused (plan-fn's {:refused true}, with its :stop) for any why but :refresh, whose old
   plan nothing speaks against. At most max-watch-replans; past that the plan is walked unwatched (a kept plan counts as a replan, and is watched). A replan with :learned (a gate or the look-ahead gave an unseen cell up or found it solid) is not counted against it, up to free-learned of them: a void edge teaches one column per replan. The max-learned-th learned replan since the body last got a block nearer :to (learned-progress), or one past the replan cap, ends the call instead: the done map with :learn-spent and the cells learned.
   opts: :plan-fn (fn [walls]) -> a plan-walk! result (or a promise of one: plan-walk!) from where the body stands now, the
@@ -255,6 +256,18 @@
             (if (walkable? fresh)
               (recur fresh (:steps fresh) (inc n) ms walked' damage')
               (finish done plan walked')))
+
+          (and (= :arrived (:status done)) (:cut-rest plan))
+          (do (when (:unknown c) (await (walk/look-ahead! c (into [(peek steps)] (:cut-rest plan)))))
+              (if (< spent wwatch/max-watch-replans)
+                (let [t (clock/now)
+                      fresh (await (plan-fn []))
+                      plan-ms (- (clock/now) t)]
+                  (tell! :cut plan-ms false)
+                  (if (walkable? fresh)
+                    (recur (assoc fresh :ms plan-ms) (:steps fresh) (inc n) ms walked' damage')
+                    (finish (wplan/no-walk fresh 0 policy) fresh walked')))
+                (finish done plan walked')))
 
           :else (finish done plan walked'))))))
 

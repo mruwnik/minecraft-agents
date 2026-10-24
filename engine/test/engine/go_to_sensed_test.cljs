@@ -391,19 +391,22 @@
          (concat (for [x (range -12 65) y [64 65] z [0 10]] (str x "," y "," z))
                  (when join (for [z (range 1 10) y [64 65]] (str "64," y "," z))))))
 
-(defn lit-and-looking
-  "The world lit by block light alone, and a sight pass to each side from every cell the body comes to (a body's passes
-  run on a timer as it walks)."
-  [{:keys [p w]}]
-  (let [look! (fn [] (let [yaw (:yaw @(fake/state p))]
-                       (doseq [y [0 90 180 270]]
-                         (swap! (fake/state p) assoc :yaw y)
-                         (perception/pass! (aget w "perception")))
-                       (swap! (fake/state p) assoc :yaw yaw)))
-        cell #(mapv js/Math.floor (:pos (:self %)))]
-    (swap! (fake/state p) assoc :light-default [0 15] :pitch 0)
-    (look!)
-    (add-watch (fake/state p) :sight (fn [_ _ a b] (when (not= (cell a) (cell b)) (look!))))))
+(defn looking
+  "The world lit as light says ({:light-default [sky block] :light {[x y z] [sky block]}}), and a sight pass to each side
+  from every cell the body comes to (a body's passes run on a timer as it walks)."
+  [light]
+  (fn [{:keys [p w]}]
+    (let [look! (fn [] (let [yaw (:yaw @(fake/state p))]
+                         (doseq [y [0 90 180 270]]
+                           (swap! (fake/state p) assoc :yaw y)
+                           (perception/pass! (aget w "perception")))
+                         (swap! (fake/state p) assoc :yaw yaw)))
+          cell #(mapv js/Math.floor (:pos (:self %)))]
+      (swap! (fake/state p) merge light {:pitch 0})
+      (look!)
+      (add-watch (fake/state p) :sight (fn [_ _ a b] (when (not= (cell a) (cell b)) (look!)))))))
+
+(def lit-and-looking "The world lit by block light alone, looking as it walks." (looking {:light-default [0 15]}))
 
 (defn corner-world
   "round-the-corner with the body at x 40, seeing 16 blocks, its loaded land 1 chunk round it: the goal (x -12) is
@@ -988,6 +991,57 @@
               replans (filter #(= :replan (:kind %)) seen)]
           (is (= {:arrived true} (select-keys out [:arrived])) (str (pr-str out) " at " (:pos (fake/self p))))
           (is (< (count replans) (wwatch/max-learned)) "each floor found missing shows the stair's side, not one cell of it"))))))
+
+;; the way on from the walkway's far end runs through air no look has reached, guessed a dark cave (Q16): the walk goes to
+;; the cut before the first guessed step, looks there and is priced again (reprice/safe-prefix), not held :risky at the
+;; stair top (the tour budget is lifted: the twin's walk back under the walkway is long for its goal)
+(deftest go-to-down-a-stair-at-the-far-end-of-a-long-lit-walkway-is-not-held-risky
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (settings/with-settings {:jobs.lib.cost.value/tour-worth 1000}
+                                       #(run-go-to {:self {:pos {:x 15.5 :y 85 :z 0.5}} :blocks (walkway 60) :radius 16 :exact-eye true :bodyHitbox true}
+                                                   {:pos [5 64 8] :range 1 :ways #{:walk :clear-seal} :unknown true} lit-and-looking)))]
+          (is (= {:arrived true} (select-keys out [:arrived])) (str (pr-str out) " at " (:pos (fake/self p)))))))))
+
+(def tunnel-into-cave
+  "A buried stone tunnel (floor y 63, feet and head y 64..65) lit from x -2 to 20 along z 0 and on to z 2 at x 20, where it
+  opens north into a dark cave (x 14..26, y 64..68, z 3..34) the tunnel's rock hides until the turn."
+  {:blocks (apply dissoc (box -3 63 -1 27 69 35 "stone")
+                  (concat (for [x (range -2 21) y [64 65]] (str x "," y ",0"))
+                          (for [z [1 2] y [64 65]] (str "20," y "," z))
+                          (for [x (range 14 27) y (range 64 69) z (range 3 35)] (str x "," y "," z))))
+   :light (into {} (for [[x z] (concat (for [x (range -2 21)] [x 0]) [[20 1] [20 2]]) y [64 65]] [[x y z] [0 15]]))})
+
+;; the plan runs on from the lit tunnel into the cave, unseen when planned: its walk stops at the cut before the first step
+;; guessed a dark cave, looks, and is priced by the dark it then sees, on every way the walk could go on past the cut
+;; unpriced: the look-ahead finding the cells open, a refresh refused (the old plan kept), the plan walked unwatched
+(defn ^:async walk-into-cave
+  "go-to from the tunnel's west end to the cave, the risk the body may take cut to 1 hp: {:out :cave} (cave the cells of the cave it stood in)."
+  []
+  (let [cells (atom #{})
+        look! (looking {:light-default [0 0] :light (:light tunnel-into-cave)})
+        track! (fn [{:keys [p] :as s}]
+                 (look! s)
+                 (add-watch (fake/state p) :track (fn [_ _ _ b] (swap! cells conj (mapv js/Math.floor (:pos (:self b)))))))
+        {:keys [out]} (await (settings/with-settings {:jobs.lib.price/risk-share 0.05}
+                               #(run-go-to {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (:blocks tunnel-into-cave) :radius 16 :exact-eye true :bodyHitbox true}
+                                           {:pos [20 64 32] :range 1 :ways #{:walk} :unknown true} track!)))]
+    {:out out :cave (sort (filter #(>= (nth % 2) 3) @cells))}))
+
+(deftest go-to-from-a-lit-tunnel-into-a-dark-cave-prices-the-cave-before-it-walks-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out cave]} (await (walk-into-cave))]
+          (is (= :risky (:reason out)) (pr-str out))
+          (is (empty? cave) "the look-ahead finds the cells open"))
+        (let [{:keys [out cave]} (with-redefs [wwatch/take-refresh? (constantly false)] (await (walk-into-cave)))]
+          (is (= :risky (:reason out)) (pr-str out))
+          (is (empty? cave) "a refresh refused keeps the old plan"))
+        (let [{:keys [out cave]} (with-redefs [wwatch/max-watch-replans 0] (await (walk-into-cave)))]
+          (is (= :risky (:reason out)) (pr-str out))
+          (is (empty? cave) "the plan walked unwatched"))))))
 
 (def stair-body {:self {:pos {:x 15.5 :y 85 :z 0.5}} :blocks walkway-room :radius 16 :exact-eye true :bodyHitbox true})
 (def stair-job {:pos [5 64 8] :range 1 :ways #{:walk :clear-seal} :unknown true})

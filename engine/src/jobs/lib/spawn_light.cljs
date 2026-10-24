@@ -31,6 +31,16 @@
   [p to]
   (sh-inside/dark-hall-at? p (hall-cell p to)))
 
+(defn deep?
+  "Whether an unseen cell is guessed a cave, not open surface: the body is underground, or the cell lies below the surface band."
+  [cell feet-y underground?]
+  (or underground? (< (:y cell) (- feet-y (settings/get settings ::surface-band)))))
+
+(defn seen-light
+  "The block light of cell, nil when the body has not seen it and cannot see it by turning to it."
+  [p cell]
+  (when (or (sh-sense/seen-cell? p cell) (look/glimpse? p cell)) (sh-sense/block-light-at p cell)))
+
 (defn chance-at
   "The spawn chance per second at `cell` for a body at feet: a seen cell by its light (sky reaching it down its column; a roofed cell is dark only in a dark hall), an unseen one
   at the worse case (Q16): by the open-sky guess when it lies within the surface band below the feet and the body is not
@@ -40,12 +50,22 @@
   (let [night (not (look/lit-light? 0 15 (sh-sense/sky-subtract-now p)))
         sky (if night 0 15)
         cell (if (sh-sense/solid-at? p cell) (update cell :y inc) cell)
-        block (when (or (sh-sense/seen-cell? p cell) (look/glimpse? p cell)) (sh-sense/block-light-at p cell))]
+        block (seen-light p cell)]
     (cond
       block (cost/spawn-chance [(:x cell) (:y cell) (:z cell)]
                                {:light (constantly {:block block :sky (cond (sh-sense/sky-reaches-from-above? p cell) sky (and (< block (look/dark-light)) (hall-at? p cell)) 0 :else 15)})})
-      (or underground? (< (:y cell) (- feet-y (settings/get settings ::surface-band)))) (if caves-free? 0 (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block 0 :sky 0})}))
+      (deep? cell feet-y underground?) (if caves-free? 0 (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block 0 :sky 0})}))
       :else (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block 0 :sky sky})}))))
+
+(defn cave-guess?
+  "Whether chance-at prices cell only by the unseen worst case of a dark cave (caves-free? undoes it) that a look may yet
+  show lit: one a look would show dark (look/dark-in-sight?) is no guess."
+  [p cell feet-y underground?]
+  (let [cell (if (sh-sense/solid-at? p cell) (update cell :y inc) cell)]
+    (and (deep? cell feet-y underground?)
+         (nil? (seen-light p cell))
+         (pos? (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block 0 :sky 0})}))
+         (not (look/dark-in-sight? p cell)))))
 
 (defn dark-seconds
   "Seconds of the walk over cells where a mob could spawn (chance-at), times (seconds from the start at each cell): every
