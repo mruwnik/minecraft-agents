@@ -323,6 +323,10 @@ test('the workspace guide points at the seen-blocks listing for workstations, ch
   assert.match(fs.readFileSync(path.join(f.workspace, 'WORKSPACE.md'), 'utf8'), /`\.\/bin\/observe seen`/)
 })
 
+test('the tool-owned WORKSPACE.md points at PLAYING.md, so a workspace with an old AGENTS.md learns of it', t => {
+  assert.match(fs.readFileSync(path.join(fixture(t).workspace, 'WORKSPACE.md'), 'utf8'), /Read `PLAYING\.md`/)
+})
+
 test('the generated PLAYING.md play recipe names only real jobs and default triggers, in at most 40 lines', t => {
   const text = fs.readFileSync(path.join(fixture(t).workspace, 'PLAYING.md'), 'utf8')
   const jobs = [...text.matchAll(/\(jobs\.([a-z-]+)\.([a-z-]+)/g)]
