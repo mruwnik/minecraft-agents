@@ -20,7 +20,10 @@
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [jobs.lib.cost.health :as health]
+            [jobs.lib.price :as price]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.targets :as targets]
             [jobs.survival.dig-pit-site :as pit-site]
             [jobs.survival.log-out :as log-out]
@@ -80,6 +83,16 @@
                                 :args {:offline-ms 30000}
                                 :view (fn [] {:data mem/empty-data :now 0})}))
         why)))
+
+(deftest coming-back-online-to-a-dark-spot-risks-the-stay-prices-death-for-the-same-seconds
+  (let [c {:primitives (tu/fake {:floor tu/walk-floor :time 20000}) :args {:offline-ms 30000} :id "j1" :slots []
+           :engine {:warned (atom #{})} :view (fn [] {:data mem/empty-data :now 0})}
+        p (:primitives c)
+        secs (settings/get log-out/settings ::log-out/return-s)
+        chance (spawn-light/chance-at p (sh-sense/feet p) (:y (sh-sense/feet p)) false false)
+        stay-lethal (- (price/stay-hp c chance secs) (:hurt (price/stay-parts c chance secs)))]
+    (is (pos? stay-lethal) "a dark open spot at night: mobs may spawn there")
+    (is (> 1e-9 (js/Math.abs (- stay-lethal (/ (log-out/back-death-cost c) health/hp-seconds)))) "no flat night prior: the stay price's death, in seconds")))
 
 (deftest a-log-out-ends-done-with-how-it-went
   (async done

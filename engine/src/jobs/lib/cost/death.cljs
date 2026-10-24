@@ -19,12 +19,6 @@
 (a/defargs settings
   {::seconds-per-level {:default 5 :spec (a/num-in 0 nil)
                         :doc "Worth of one experience level lost at a death, in seconds (the game drops a few levels' worth)."}
-   ::chance-surface-day {:default 0.0005 :spec (a/num-in 0 1)
-                         :doc "Chance of dying on a route over the surface by day."}
-   ::chance-surface-night {:default 0.005 :spec (a/num-in 0 1)
-                           :doc "Chance of dying on a route over the surface at night."}
-   ::chance-underground {:default 0.002 :spec (a/num-in 0 1)
-                         :doc "Chance of dying on a route underground."}
    ::notice-rate {:default {:other {:k 8 :n-s 42.4} :ranged {:k 0 :n-s 0}}
                   :spec (let [counts (a/map-with {:k (a/int-in 0 nil) :n-s (a/num-in 0 nil)})] (a/map-with {:other counts :ranged counts}))
                   :doc "Per class of mob (:ranged: threat/ranged?, caught by a line of fire within the ranged radius; :other: caught within melee reach) of the weighted seconds n-s that watch sightings of hostiles within follow range spent in the body's field (weight 1 within a few steps of the mob's way, or a ranged mob's range, less beyond), the catches k: a hurt from that kind, or a respond decision with the mob in reach; one catch ends the one sighting of the kind nearest the event (the events carry no entity id). Priced by the Gamma posterior mean (k + 0.5) / n-s, the chance a second a hostile at weight 1 gets to the body (met-chance). :other counts 24 sightings (8 ended in a position gap, censored: seconds up to it, no catch; zombie 6 of 13 s, creeper 2 of 29.4 s, too few to split by mob). :ranged has no seconds counted: every skeleton seen was first seen beyond its 15 blocks (threat/fire-range), so ::ranged-notice-rate prices it, not the melee counts. Recount: node tools/event-counts.mjs notice-rate, 2026-10-23; per-case evidence replaces it."}

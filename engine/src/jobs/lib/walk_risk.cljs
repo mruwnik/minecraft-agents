@@ -3,7 +3,7 @@
   go-to plans (way): its plan's cells, and past a plan that is not found (partial, or none yet) the rest to the goal on the
   straight line. It replaces any wait for dawn: a night walk is judged by the light the body perceives along
   the way (Q334), a walk underground by the hostiles it can reach and the dark halls it crosses (a roofed dark cell prices
-  spawns only where dark floor beyond the spawn-free radius is reachable: ready/hall-at?, Q345).
+  spawns only where dark floor beyond the spawn-free radius is reachable: spawn-light/hall-at?, Q345).
   Risk = the hurt of the mobs expected to spawn on the exposed stretches (jobs.lib.cost/spawn-chance per second of walking,
   jobs.lib.cost/spawns-hurt) plus what the known threats take off the body over
   the way (jobs.lib.cost/route-hurt, each over its field, jobs.lib.threats): every mob sensed now that catches
@@ -22,24 +22,18 @@
             [jobs.lib.lava-risk :as lava-risk]
             [jobs.lib.look :as look]
             [jobs.lib.price :as price]
-            [jobs.lib.ready :as ready]
             [jobs.lib.sense :as sense]
+            [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
-  {::surface-band {:default 4 :spec (a/num-in 0 nil)
-                   :doc "Blocks below the body's feet that unseen ground still counts as open surface; deeper is underground, where only hostiles count."}
-   ::exit-blocks {:default 8 :spec (a/num-in 0 nil)
+  {::exit-blocks {:default 8 :spec (a/num-in 0 nil)
                   :doc "Blocks of open ground a walk out of a night shelter crosses before it can go under, even to a goal underground."}
    ::heal-s-per-hp {:default 4 :spec (a/num-in 0 nil)
-                    :doc "Seconds a body that can heal takes to regain an hp, for the wait that would make a risky walk affordable (stay-estimate)."}
-   ::step {:default 4 :spec (a/num-in 1 nil)
-           :doc "Blocks between the cells of the way whose light is judged; a way longer than ::max-cells steps is judged at that many cells, spaced wider."}
-   ::max-cells {:default 256 :spec (a/int-in 1 nil)
-                :doc "Most cells of the way whose light is judged, so a far goal costs a bounded number of reads."}})
+                    :doc "Seconds a body that can heal takes to regain an hp, for the wait that would make a risky walk affordable (stay-estimate)."}})
 
 (defn- cells-along
   "The cells {:x :y :z} every step blocks along the straight way from `from` to `to`, floored, the goal last."
@@ -49,22 +43,6 @@
     (for [i (range 1 (inc n))
           :let [t (/ i n)]]
       (update-vals (merge-with #(+ %1 (* t (- %2 %1))) from to) js/Math.floor))))
-
-(defn- chance-at
-  "The spawn chance per second at `cell` for a body at feet: a seen cell by its light (sky reaching it down its column; a roofed cell is dark only in a dark hall), an unseen one
-  at the worse case (Q16): by the open-sky guess when it lies within the surface band below the feet and the body is not
-  underground, else as a dark cave (a goal above the body is no sign that the ground at its own level is a cave), none
-  under caves-free?."
-  [p cell feet-y underground? caves-free?]
-  (let [night (not (look/lit-light? 0 15 (sh-sense/sky-subtract-now p)))
-        sky (if night 0 15)
-        cell (if (sh-sense/solid-at? p cell) (update cell :y inc) cell)
-        block (when (or (sh-sense/seen-cell? p cell) (look/glimpse? p cell)) (sh-sense/block-light-at p cell))]
-    (cond
-      block (cost/spawn-chance [(:x cell) (:y cell) (:z cell)]
-                               {:light (constantly {:block block :sky (cond (sh-sense/sky-reaches-from-above? p cell) sky (and (< block (look/dark-light)) (ready/hall-at? p cell)) 0 :else 15)})})
-      (or underground? (< (:y cell) (- feet-y (settings/get settings ::surface-band)))) (if caves-free? 0 (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block 0 :sky 0})}))
-      :else (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block 0 :sky sky})}))))
 
 (def lava-scan-radius 128)
 
@@ -112,19 +90,6 @@
   [cells]
   (vec (reductions + 0 (map u/dist cells (rest cells)))))
 
-(defn- dark-seconds
-  "Seconds of the walk over cells where a mob could spawn (chance-at): every k-th cell and the last stand for the stretch
-  walked since the one before, k the larger of ::step and the cells over ::max-cells."
-  [p cells feet-y underground? caves-free?]
-  (let [n (count cells)
-        k (js/Math.ceil (max (settings/get settings ::step) (/ n (settings/get settings ::max-cells))))
-        blocks (along cells)
-        ends (distinct (concat (range k n k) [(dec n)]))]
-    (/ (reduce + (for [[a b] (map vector (cons 0 ends) ends)
-                       :when (pos? (chance-at p (nth cells b) feet-y underground? caves-free?))]
-                   (- (blocks b) (blocks a))))
-       (cost/walk-blocks-per-s))))
-
 (defn timed-way
   "The cells of the walk of c's body to goal on plan (way), each with :t the seconds from the start the body is there at its pace by its food."
   [c goal plan]
@@ -136,7 +101,7 @@
 (defn estimate
   "{:hp :walk-hp :spawn-hp :hostile-hp :death-hp :lethal-hp :lava-hp :dark-s :hostiles :threats} of the walk of c's body to `goal` ({:x :y :z})
   on the way of :plan (go-to's plan of it, {:status :steps}; none: all of it unplanned): hp the expected damage and lethal-hp,
-  the death the spawns and known threats risk (cost/spawns-chance, cost/threats-chance) in hp (cost/lethal-hp), a death losing
+  the death the spawns and known threats risk (cost/death-chance) in hp (cost/lethal-hp), a death losing
   :stake seconds of worth besides (go-to's :stake, as death-cost prices it, lain :stake-age-ms); walk-hp the
   same leaving out the sensed mobs that catch the walk, their hurt and their death share both (a fight with them prices
   them); dark-s the seconds walked where a mob could spawn (caves-free?: no unseen cell guessed a dark cave); threats [{:mob :pos}] the known threats priced."
@@ -148,7 +113,8 @@
         leaves? (sh-inside/walk-leaves-shelter? p (:data (ctx/latest c :shelter)) goal 1)
         cells (way feet goal plan)
         exit (if leaves? (settings/get settings ::exit-blocks) 0)
-        exposed-s (+ (/ exit (cost/walk-blocks-per-s)) (dark-seconds p cells (:y feet) underground? caves-free?))
+        exposed-s (+ (/ exit (cost/walk-blocks-per-s))
+                     (spawn-light/dark-seconds p cells (mapv #(/ % (cost/walk-blocks-per-s)) (along cells)) (:y feet) underground? caves-free?))
         spawns (* exposed-s (cost/spawn-chance [0 0 0]))
         body (assoc (threats/death-body c) :stake stake :stake-age-ms (when stake-age-ms (+ stake-age-ms (* 1000 (/ (u/dist feet goal) (cost/walk-blocks-per-s))))))
         threat-hp (fn [ts] (if (seq ts) (cost/route-hurt body {:cells cells :threats (threats/with-reach c ts)}) 0))
@@ -156,9 +122,7 @@
         catchers (live-catchers known (timed-way c goal plan))
         remembered (remembered-near-way c known feet goal)
         death-hp (threat-hp remembered)
-        spawn-dies (cost/spawns-chance body spawns feet)
-        dies (fn [met] (- 1 (* (- 1 (if (seq met) (cost/threats-chance body {:cells cells :threats (threats/with-reach c met)}) 0))
-                               (- 1 spawn-dies))))
+        dies (fn [met] (cost/death-chance body {:cells cells :threats (threats/with-reach c met) :spawns spawns :at feet}))
         lethal (cost/lethal-hp body (dies (concat catchers remembered)) goal)
         lava (route-lava-hp p cells)
         spawn-hp (cost/spawns-hurt body spawns feet)
@@ -191,7 +155,7 @@
   "hp the body expects to lose staying at its cell instead of walking `route-hp` to `goal`: what the known threats
   sensed now whose field holds the body's cell take off it there (cost/route-hurt, each at full weight over the stay: a
   sensed mob within its field gets to a body that stays; one near the far end of the way does not reach it) plus the spawns met at
-  its cell by the light seen there (price/stay-parts), and the death both risk in hp (cost/threats-chance,
+  its cell by the light seen there (price/stay-parts), and the death both risk in hp (cost/death-chance,
   cost/lethal-hp), for the time the walk takes, or, for a body that can heal, for the wait until its health would afford
   the route (::heal-s-per-hp an hp)."
   [c goal route-hp]
@@ -203,12 +167,10 @@
         here [(assoc feet :s secs)]
         live (mapv (fn [{:keys [reach] :as t}] (assoc t :reach (fn [x y z] (when (reach x y z) 1))))
                    (threats/with-reach c (remove #(or (:fled %) (:remembered %)) (threats/known-threats c))))
-        chance (chance-at p (update-vals feet js/Math.floor) (:y feet) false false)
+        chance (spawn-light/chance-at p (update-vals feet js/Math.floor) (:y feet) false false)
         body (threats/death-body c)]
-    {:hp (let [{:keys [hurt dies]} (price/stay-parts c chance secs)
-               met (if (seq live) (cost/threats-chance body {:cells here :threats live}) 0)]
-           (+ (cost/route-hurt body {:cells here :threats live}) hurt
-              (cost/lethal-hp body (- 1 (* (- 1 met) (- 1 dies))) feet)))
+    {:hp (+ (cost/route-hurt body {:cells here :threats live}) (:hurt (price/stay-parts c chance secs))
+            (cost/lethal-hp body (cost/death-chance body {:cells here :threats live :spawns (* chance secs) :at feet}) feet))
      :hostiles (count (filter #((:reach %) (:x feet) (:y feet) (:z feet)) live))}))
 
 (defn status

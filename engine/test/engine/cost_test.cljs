@@ -432,7 +432,7 @@
 
 (deftest a-hold-costs-its-seconds-and-hp-lost-and-a-way-out-its-hurt-and-death-risk
   (let [body {:respawn {:x 0 :y 64 :z 0} :level 0 :health 3}
-        route {:underground? true}]
+        route {:spawns 0.5}]
     (is (= 100 (cost/hold-price {:held-s 100 :hp-lost 0 :health 3})))
     (is (= (+ 100 (* 2 (cost/hp-price 3))) (cost/hold-price {:held-s 100 :hp-lost 2 :health 3})) "hunger's hp at the price of the health left")
     (is (= (cost/route-death-cost body route far) (cost/opening-price body 0 route far)) "no hurt: the death risk alone")
@@ -470,26 +470,30 @@
 
 (deftest a-route-with-a-death-chance-costs-more-than-the-same-route-without
   (let [body {:respawn {:x 0 :y 64 :z 0} :level 3}
-        night (cost/route-death-cost body {:night? true} far)]
-    (is (pos? night))
-    (is (> night (cost/route-death-cost body {:night? false} far)) "night is the likelier death")))
+        dark (cost/route-death-cost body {:spawns 0.1} far)]
+    (is (pos? dark))
+    (is (zero? (cost/route-death-cost body {} far)) "no mob met spawning, no known threat: no death")))
 
 (deftest a-known-threat-the-route-meets-costs-the-death-of-the-answer-the-body-would-take
   (let [fist {:health 20}
         route (fn [n] {:cells (for [x (range n)] {:x x :y 64 :z 0})})
         near-x (fn [x0] (fn [x _ _] (when (<= x0 x) 1)))
         chance (fn [body route & threats] (cost/death-chance body (assoc route :threats threats)))
-        zombie (fn [& kvs] (apply assoc {:mob "zombie" :weight 1 :reach (near-x 0)} kvs))
-        base (cost/death-chance fist {})]
-    (is (= base (chance fist (route 10))) "no threat: the chance of the route's class")
-    (is (= base (chance fist (route 10) {:mob "zombie" :weight 1 :reach (constantly nil)})) "a threat whose reach the route misses adds nothing")
-    (is (> (chance fist (route 40) (zombie)) (chance fist (route 40) (zombie :weight 0.2)) base) "a fading memory weighs less")
+        zombie (fn [& kvs] (apply assoc {:mob "zombie" :weight 1 :reach (near-x 0)} kvs))]
+    (is (zero? (chance fist (route 10))) "no threat, no spawns: no death")
+    (is (zero? (chance fist (route 10) {:mob "zombie" :weight 1 :reach (constantly nil)})) "a threat whose reach the route misses adds nothing")
+    (is (> 1e-12 (js/Math.abs (- (cost/spawns-chance fist 0.5 {:x 0 :y 64 :z 0}) (cost/death-chance fist (assoc (route 10) :spawns 0.5)))))
+        "the mobs met spawning on it: the stay price's chance, no flat prior for the route's kind")
+    (is (> 1e-12 (js/Math.abs (- (- 1 (* (- 1 (cost/spawns-chance fist 0.5 {:x 0 :y 64 :z 0})) (- 1 (chance fist (route 40) (zombie)))))
+                                 (cost/death-chance fist (assoc (route 40) :spawns 0.5 :threats [(zombie)])))))
+        "spawns and known threats: either kills")
+    (is (> (chance fist (route 40) (zombie)) (chance fist (route 40) (zombie :weight 0.2)) 0) "a fading memory weighs less")
     (is (> (chance {:health 6} (route 40) (zombie)) (chance fist (route 40) (zombie))) "the same walk away is likelier death at low health")
-    (is (< 0.2 (- (chance fist (route 40) (zombie)) base) 0.35) "a fist walks away now and again when it meets the mob later, each caught at the prior")
-    (is (< (- (chance {:health 20 :weapon "diamond_sword"} (route 40) (zombie)) base) 0.01) "a body that would fight it takes only the fight")
-    (is (< 0.01 (- (chance fist (route 40) (zombie :caught 0)) base) 0.05) "a flight with an open way out kills only when it starts late: the slowest tenth stands 4 s beside the mob")
+    (is (< 0.2 (chance fist (route 40) (zombie)) 0.35) "a fist walks away now and again when it meets the mob later, each caught at the prior")
+    (is (< (chance {:health 20 :weapon "diamond_sword"} (route 40) (zombie)) 0.01) "a body that would fight it takes only the fight")
+    (is (< 0.01 (chance fist (route 40) (zombie :caught 0)) 0.05) "a flight with an open way out kills only when it starts late: the slowest tenth stands 4 s beside the mob")
     (is (< 0.9 (chance fist (route 40) (zombie :caught 1))) "no way out, no blocks: the fist fight")
-    (is (< (- (chance (assoc fist :covers {:walls {:open-s 1 :seconds 5}}) (route 40) (zombie :caught 1)) base) 0.01) "no way out, blocks carried: the body walls in")
+    (is (< (chance (assoc fist :covers {:walls {:open-s 1 :seconds 5}}) (route 40) (zombie :caught 1)) 0.01) "no way out, blocks carried: the body walls in")
     (let [met #(cost/threats-chance fist {:cells (:cells (route 40)) :threats %})
           skeleton (zombie :mob "skeleton")
           alone (met [skeleton])]

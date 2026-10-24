@@ -22,7 +22,7 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
-            [jobs.lib.ready :as ready]
+            [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.walk-risk :as risk]
@@ -63,6 +63,16 @@
     (is (pos? spawn-hp))
     (is (<= spawn-hp (* dark-s (cost/spawn-chance [0 0 0]) 20)))))
 
+(deftest a-flight-and-a-walk-over-the-same-cells-meet-the-same-spawns
+  ;; the flee search prices its routes' spawns by spawn-light/spawns-over, walk-risk a walk's by its dark seconds
+  (let [c (ready-test/ctx-of (assoc ready-test/open-night :self {:pos {:x 0 :y 64 :z 0} :health 20 :food 20}))
+        p (:primitives c)
+        goal {:x 40 :y 64 :z 0}
+        plan (straight-plan c goal)
+        walk (* (:dark-s (risk/estimate c goal {:plan plan})) (cost/spawn-chance [0 0 0]))]
+    (is (pos? walk))
+    (is (= walk (spawn-light/spawns-over p (spawn-light/walked (sh-sense/feet p) (:steps plan)))))))
+
 (deftest a-dark-way-by-day-is-not-exposed
   (let [c (ready-test/ctx-of (assoc night-hut :time st/noon))]
     (is (zero? (:hp (risk/estimate c {:x 95 :y 64 :z 0}))))))
@@ -71,8 +81,8 @@
   (let [c (ready-test/ctx-of (assoc night-hut :time st/noon))]
     (with-redefs [sh-sense/sky-reaches-from-above? (constantly false)
                   sh-sense/block-light-at (constantly 0)]
-      (is (zero? (:hp (with-redefs [ready/hall-at? (constantly false)] (risk/estimate c {:x 95 :y 64 :z 0} {:plan (straight-plan c {:x 95 :y 64 :z 0})})))) "a small dark tunnel is free")
-      (is (pos? (:hp (with-redefs [ready/hall-at? (constantly true)] (risk/estimate c {:x 95 :y 64 :z 0} {:plan (straight-plan c {:x 95 :y 64 :z 0})})))) "a dark hall costs spawns"))))
+      (is (zero? (:hp (with-redefs [spawn-light/hall-at? (constantly false)] (risk/estimate c {:x 95 :y 64 :z 0} {:plan (straight-plan c {:x 95 :y 64 :z 0})})))) "a small dark tunnel is free")
+      (is (pos? (:hp (with-redefs [spawn-light/hall-at? (constantly true)] (risk/estimate c {:x 95 :y 64 :z 0} {:plan (straight-plan c {:x 95 :y 64 :z 0})})))) "a dark hall costs spawns"))))
 
 (deftest hostiles-near-the-way-hold-a-walk-with-the-risk-in-the-reason
   (async done

@@ -79,6 +79,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [raw (tu/fake {:blocks (merge junction (box -32 66 -32 32 66 32 "stone")) :light-default [0 0]
+                            :entities [{:id 7 :uuid "u7" :name "zombie" :kind "hostile" :pos {:x -4.5 :y 64 :z 0.5}}]
                             :self {:pos {:x 0.5 :y 64 :z 0.5}} :yaw 270 :pitch 0})
               p (perception/wrap raw (perception/create (fake-raw/create raw) {:now (constantly 1000000)}))
               _ (perception/pass! (aget p "perception") {:effort 1 :reuse? true})
@@ -87,7 +88,7 @@
               e (search/choose ends {})]
           (is (some #(and (:open? %) (:unseen %)) ends) "a way on through the dark is planned to the ring")
           (is (seq dark))
-          (is (every? #(> (:price %) (:priced %)) dark) "its unseen part is priced on top of the planner's")
+          (is (every? #(> (:price %) (:priced %)) dark) "its unseen part is priced on top of the planner's: the zombie met on the way back from a dead end")
           (is (some? e) "a step, not cornered")
           (is (<= (:x (:step e)) 2) (str "the step stays in what the body has seen, a cell into the dark at most: " (pr-str (:step e)))))))))
 

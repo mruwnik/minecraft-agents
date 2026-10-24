@@ -10,7 +10,6 @@
             [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.lib.escape :as escape]
             [jobs.lib.foods :as foods]
-            [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.waits :as waits]
@@ -21,6 +20,7 @@
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.shelter.spawn :as sh-spawn]
+            [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.threat-field :as field]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
@@ -118,13 +118,12 @@
 
 (defn exits
   "The headings out of the shelter, cheapest first, as {:heading :price :hurt}: cost/opening-price of the way through
-  its cells (dig-leave/exit-cells), the hurt of cost/route-danger from the hostiles that could reach or shoot the body
+  its cells (dig-leave/exit-cells, the mobs met spawning on them: spawn-light/spawns-over), the hurt of cost/route-danger from the hostiles that could reach or shoot the body
   were they open (jobs.lib.danger/dangers-opened); at one price (a hurt past the health), the least hurt first."
   [c]
   (let [p (:primitives c)
         self (.self p)
         body (assoc (cost/death-body p (ctx/view c)) :health (.-health self))
-        route {:underground? (sh-sense/buried? p) :night? (look/dark-here? p)}
         weapon (combat/best-weapon p (combat/weapons c))]
     (sort-by (juxt :price :hurt)
              (for [h (keys dig-leave/headings)
@@ -135,7 +134,7 @@
                          hurt (:danger (cost/route-danger (game/version-of p) #(field/reach-fn (field/field p {:mob (:name %) :pos (:pos %)} lookups))
                                                           (map #(zipmap [:x :y :z] %) cells) mobs (.-equipment self)
                                                           :weapon weapon :health (.-health self)))]]
-               {:heading h :price (cost/opening-price body hurt route (sh-sense/feet p)) :hurt hurt}))))
+               {:heading h :price (cost/opening-price body hurt {:spawns (spawn-light/spawns-over p (spawn-light/walked (sh-sense/feet p) cells))} (sh-sense/feet p)) :hurt hurt}))))
 
 (def hold-policy
   "Policy of :fragile-hold, the start of the hold under way: it outlives the runs the dawn trigger fires again (a run's

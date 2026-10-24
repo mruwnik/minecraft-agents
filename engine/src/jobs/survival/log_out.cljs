@@ -13,6 +13,7 @@
             [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.shelter.sleepers :as sh-sleepers]
+            [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.survival.shut-in :as shut-in]))
@@ -80,14 +81,16 @@
 
 (defn back-death-cost
   "Seconds the death coming back online to the spot the body leaves risks: route-death-cost of the spot held ::return-s
-  at night with the known threats (threats/threats-of: sensed, heard counting as seen, fled from or met at a death): one
+  with the mobs met spawning there by its light (spawn-light/spawns-at, as the stay price counts them) and the known threats (threats/threats-of: sensed, heard counting as seen, fled from or met at a death): one
   whose field holds the spot counts in full, it has the whole stint to walk there, and costs the answer the body would
   take to it there (walling in for the night when it carries blocks: shut-in/covers)."
   [c]
   (let [p (:primitives c)
         at (u/pos-of (.-pos (.self p)))
-        body (assoc (threats/death-body c) :covers (shut-in/covers (assoc c :args {:for :night}) [:walls]))]
-    (cost/route-death-cost body {:night? true :cells [(assoc at :s (settings/get settings ::return-s))] :threats (mapv (fn [{:keys [reach] :as t}] (assoc t :reach #(when (reach %1 %2 %3) 1))) (threats/threats-of c))} at)))
+        body (assoc (threats/death-body c) :covers (shut-in/covers (assoc c :args {:for :night}) [:walls]))
+        secs (settings/get settings ::return-s)]
+    (cost/route-death-cost body {:cells [(assoc at :s secs)] :spawns (spawn-light/spawns-at p at secs)
+                                 :threats (mapv (fn [{:keys [reach] :as t}] (assoc t :reach #(when (reach %1 %2 %3) 1))) (threats/threats-of c))} at)))
 
 (defn back-unsafe
   "Why coming back online at night to the spot the body leaves costs more than staying away until morning, as text, else

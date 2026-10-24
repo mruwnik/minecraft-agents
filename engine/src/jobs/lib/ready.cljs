@@ -25,6 +25,7 @@
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]))
 
@@ -66,17 +67,6 @@
   [c cells]
   (every? (sense/round-looked c) cells))
 
-(defn hall-cell
-  "The open cell the body would stand in at `to`: the feet when `to` is solid rock or unseen. A torch there ends a hall-at?."
-  [p to]
-  (let [to (update-vals to js/Math.floor)]
-    (if (or (nil? (:y to)) (sh-sense/solid-at? p to) (not (sh-sense/seen-cell? p to))) (sh-sense/feet p) to)))
-
-(defn hall-at?
-  "Whether the dark place `to` is in a dark hall (sh-inside/dark-hall-at?), judged from its hall-cell."
-  [p to]
-  (sh-inside/dark-hall-at? p (hall-cell p to)))
-
 (defn at-status
   "The status of the exposure of the walk of c's body to `to`: ok while sheltered or the chance is within ::risk-limit,
   else by what lowers it; darkness no sky light reaches (a cave: dawn never lifts it) is exposed only in a dark hall (hall-at?), :never, lowered by a torch, else no exposure; light further off than ::light-patience-s is not waited for."
@@ -102,7 +92,7 @@
       (contract/later :exposed (str "dark at " where " until light") :lowered-by lowered-by :chance chance :recheck-after-ms (* 1000 light-in))
       (contains? lowered-by :light)
       (contract/never :exposed (str "dark at " where ", light is " (js/Math.round light-in) " s away, over the " (js/Math.round patience) " s it waits") :chance chance)
-      (hall-at? p to) (contract/never :exposed (str "dark at " where ", a hall of dark floor beyond " sh-inside/spawn-free-radius " blocks: mobs spawn in it, waiting never lights it, a torch does") :lowered-by #{:torch} :chance chance :at (hall-cell p to))
+      (spawn-light/hall-at? p to) (contract/never :exposed (str "dark at " where ", a hall of dark floor beyond " sh-inside/spawn-free-radius " blocks: mobs spawn in it, waiting never lights it, a torch does") :lowered-by #{:torch} :chance chance :at (spawn-light/hall-cell p to))
       :else (contract/ok :sealed (str "dark at " where ", no dark floor reaches beyond " sh-inside/spawn-free-radius " blocks: nothing spawns near the body")))))
 
 (defn hall-status
@@ -110,9 +100,9 @@
   [c to]
   (let [p (:primitives c)
         to (update-vals (or to (sh-sense/feet p)) js/Math.floor)]
-    (price/priced c (if (and (sh-sense/buried? p) (hall-at? p to))
+    (price/priced c (if (and (sh-sense/buried? p) (spawn-light/hall-at? p to))
                       (contract/never :exposed (str "dark at " (place-text to) ", a hall of dark floor beyond " sh-inside/spawn-free-radius " blocks: mobs spawn in it, a torch lowers it")
-                                      :lowered-by #{:torch} :at (hall-cell p to) :chance (:chance (cost/exposure p to (:data (ctx/latest c :shelter)))))
+                                      :lowered-by #{:torch} :at (spawn-light/hall-cell p to) :chance (:chance (cost/exposure p to (:data (ctx/latest c :shelter)))))
                       (contract/ok :day "an unseen place's light is no reason to wait")))))
 
 (defn exposed

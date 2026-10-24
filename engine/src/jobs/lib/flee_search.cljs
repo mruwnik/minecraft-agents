@@ -7,8 +7,8 @@
   from the chasers first. A heading with no route gives the end of the planner's partial route, a pocket (:found? false) unless the
   chasers have given the body up there. Ring
   routes plan through unseen cells as through seen ones (no rock guess), a flee step walks only the seen part.
-  Each end is priced (the planner's price plus the death the route risks past the known threats, a death about where
-  the body stands: cost/route-death-cost, plus the chasers met on the way back from an unseen dead end: unseen-price) and scored against
+  Each end is priced (the planner's price plus the death the route risks from the known threats not chasing and the mobs
+  met spawning on it (spawn-light/spawns-over), a death about where the body stands: cost/route-death-cost, plus the chasers met on the way back from an unseen dead end: unseen-price) and scored against
   the chasers: :arrive, the seconds the first of them takes to reach it (cost/arrival-s over its way, its threat
   field's; the body timed at cost/flee-walk-speed, cost/flee-stop-s between steps); :caught-s, the seconds one is within its blow on the route
   (cost/reach-s), :caught? whether that is any; :score, arrive less price. pick chooses a flee step's end."
@@ -21,7 +21,7 @@
             [jobs.lib.breath :as breath]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.threat :as threat]
-            [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.threat-field :as field]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
@@ -189,7 +189,8 @@
 (defonce ^:private kept-prices (js/WeakMap.))
 
 (defn gather
-  "Every input of price-all!'s result, read once: {:dim :writes (the remembered world) :pos :kit :food :body :class :caught-by
+  "Every input of price-all!'s result, read once: {:dim :writes (the remembered world) :pos :kit :food :body :others (the
+  known threats not chasing, with their reach fns) :caught-by
   (the threats priced, with their reach fns) :policy (wworld/body-policy: the job's args, effects, oxygen and fire
   through it) :targets :y-margin :chasers (their cells) :dangers (the planner's: cells, fades and radii as they come to) :tolls
   (the steps the walker failed at) :near :sky (the sky's light darkening) :difficulty :values :scope}.
@@ -200,7 +201,7 @@
         raw (look/raw-of p)]
     {:dim (some-> ^js st .-dim) :writes (some-> ^js st .-writes) :pos (u/self-pos c) :kit (wworld/kit-of c) :food (.-food (.self p))
      :body (threats/death-body c)
-     :class {:underground? (sh-sense/buried? p) :night? (sh-sense/dark-outside? p) :threats (threats/threats-of c other?)}
+     :others (threats/threats-of c other?)
      :caught-by (mapv #(assoc % :caught 1) (threats/threats-of c (complement other?)))
      :policy (cond-> (wworld/body-policy c) y-margin (assoc :y-margin y-margin))
      :targets targets :y-margin y-margin :chasers chasers :chased chased
@@ -213,7 +214,7 @@
   by name, mob, calm and cell, its policy without the fns it carries (the air it counts is the remembered world's)."
   [in]
   (-> in
-      (update-in [:class :threats] #(mapv cell-key-of %))
+      (update :others #(mapv cell-key-of %))
       (update :caught-by #(mapv cell-key-of %))
       (update :chasers #(mapv (juxt :name :mob :calm? :pos) %))
       (update :policy #(into {} (remove (comp fn? val)) %))))
@@ -244,10 +245,10 @@
 
 (defn ^:async price-all!
   "price! without the kept result, over the inputs gathered (gather); the landings its plans asked about are kept in landings."
-  [c {:keys [targets chasers pos body class caught-by policy food]} other? landings]
+  [c {:keys [targets chasers pos body others caught-by policy food]} other? landings]
   (let [p (:primitives c)
         ring-world (costed c nil other? true)
-        trapped-at (fn [cell] (cost/route-death-cost body (assoc class :cells [cell] :threats caught-by) cell))
+        trapped-at (fn [cell] (cost/route-death-cost body {:cells [cell] :threats caught-by} cell))
         counts (wworld/way-counts p)
         slow (pace food)]
     (if (nil? ring-world)
@@ -265,7 +266,7 @@
                           (conj out (assoc r :target t
                                              :open? (or (:found? r) (and (nil? (:pos t)) (given-up? chasers (:end r))))
                                              :price (+ (:priced r)
-                                                       (cost/route-death-cost body (assoc class :cells (dwelt (:cells r))) pos)
+                                                       (cost/route-death-cost body {:cells (dwelt (:cells r)) :threats others :spawns (spawn-light/spawns-over p (:cells r))} pos)
                                                        (unseen-price r counts trapped-at))))
                           out)
                    (+ nodes spent)

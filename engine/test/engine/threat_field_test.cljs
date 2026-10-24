@@ -63,7 +63,7 @@
         route {:cells (for [x (range 5 15)] {:x x :y 64 :z 0})}
         chance (fn [spec] (cost/death-chance body (assoc route :threats [{:mob "zombie" :weight 1 :reach (reach-of spec "zombie" {:x 0.5 :y 64 :z 0.5})}])))]
     (is (> (chance {}) (chance {:blocks pen})))
-    (is (= (cost/death-chance body {}) (chance {:blocks pen})) "penned in: only the route's class")))
+    (is (zero? (chance {:blocks pen})) "penned in: the zombie never meets the walk")))
 
 (deftest a-kept-field-holds-until-the-body-sees-a-cell-of-it-change
   (let [raw (tu/fake-on-floor {:floor [-40 -20 40 20] :self {:pos {:x 12.5 :y 64 :z 0.5}}})
@@ -129,9 +129,8 @@
         along (route (for [z (range -8 9)] {:x 10 :y 64 :z z}))
         close (route (for [x (range -22 -18)] {:x x :y 64 :z 0}))
         stay (fn [s] (route [{:x 10 :y 64 :z 0 :s s}]))
-        base (cost/death-chance body {})
         hurt #(cost/route-hurt body %)
-        dies #(- (cost/death-chance body %) base)]
+        dies #(cost/death-chance body %)]
     (is (< 0 (hurt crossing) (hurt along) (hurt close)) "a long walk along the far edge over a short crossing of it, a close crossing over both")
     (is (< 0 (dies crossing) (dies along) (dies close)))
     (is (< 0 (hurt (stay 1)) (hurt (stay 600))) "600 s at a far-edge cell over 1 s there")
