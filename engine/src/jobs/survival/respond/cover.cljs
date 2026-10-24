@@ -154,7 +154,8 @@
   the fight-or-flee weighing, from what that step judges by: its chasers (flight/look over the memory flee! resumes,
   flight/resume-flight), their cover-fn and blast, its rooms (survey, kept nowhere), its stair up (way-up: a seen way,
   flee-search/way-up-chance, no search), else its search (respond.goal/judge! over homes), choose options
-  (respond.goal/choose-opts) and cells looked at (memory :glanced), no glance taken. Kept (memory :caught-chance) for a
+  (respond.goal/choose-opts) and cells looked at (memory :glanced), no glance taken; :way-scan the way counts it priced
+  with (wworld/way-scan, for jobs.lib.walk.way-log). Kept (memory :caught-chance) for a
   flee step's seconds (flee-search ::step-s) while its cell, its looks, its chasers and its stair up stay the same."
   [c]
   (let [p (:primitives c)
@@ -165,12 +166,14 @@
         in {:cell (respond.goal/cell (u/self-pos c)) :glanced glanced :chasers (mapv #(.-id %) threats) :up up}]
     (if (and (= in (:in kept)) (< (- now (:t kept)) (* 1000 (settings/get search/settings ::search/step-s))))
       (:chance kept)
-      (let [counts (wworld/way-counts p)
+      (let [scan (wworld/way-scan p)
+            counts (if scan (select-keys scan [:k :n]) {:k 0 :n 0})
             chance (if up
                      (search/way-up-chance counts)
                      (let [covered? (cover-fn p threats (flight/fire-spots c))
                            judged (await (respond.goal/judge! c (homes c (:rooms (survey c threats false)) (seq (blast p threats))) covered?))]
-                       (search/caught-chance (:ends judged) counts (respond.goal/choose-opts c threats covered? (:home judged)) glanced)))]
+                       (search/caught-chance (:ends judged) counts (respond.goal/choose-opts c threats covered? (:home judged)) glanced)))
+            chance (cond-> chance (and chance scan) (assoc :way-scan scan))]
         (ctx/update-mem! c assoc :caught-chance {:in in :t now :chance chance})
         chance))))
 

@@ -188,8 +188,8 @@
 (deftest the-ways-on-are-counted-once-a-memory
   (let [{:keys [p w]} (sensed wall-world)
         n (atom 0)
-        count-ways way-on/way-counts]
-    (with-redefs [way-on/way-counts (fn [& args] (swap! n inc) (apply count-ways args))]
+        count-ways way-on/scan]
+    (with-redefs [way-on/scan (fn [& args] (swap! n inc) (apply count-ways args))]
       (let [before (wworld/way-counts w)]
         (is (= before (wworld/way-counts w)))
         (is (= 1 @n) "the same cell and memory: counted once")

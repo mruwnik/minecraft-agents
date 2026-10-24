@@ -83,12 +83,12 @@
 
 (defonce ^:private counted (js/WeakMap.))
 
-(defn way-counts
-  "The seen stands nearest the body of primitives p, and how many lead out (way-on/way-counts from its feet), {:k 0 :n 0}
-  without a perception. Kept while the body stands in one cell and no block it remembers changed (store writes): every
-  costed world of a flight step asks it."
+(defn way-scan
+  "way-on/scan from the body's feet ({:k :n :ways}: the seen stands nearest the body of primitives p, how many lead out, its
+  first unseen ways), nil without a perception. Kept while the body stands in one cell and no block it remembers changed
+  (store writes): every costed world of a flight step asks it."
   [p]
-  (if-let [known (memory-sections p)]
+  (when-let [known (memory-sections p)]
     (let [^js pos (.-pos (.self p))
           ^js st (:st (aget p "perception"))
           start (mapv js/Math.floor [(.-x pos) (.-y pos) (.-z pos)])
@@ -96,8 +96,12 @@
           hit (.get counted st)]
       (if (= k (:k hit))
         (:v hit)
-        (let [v (way-on/way-counts known start)] (.set counted st {:k k :v v}) v)))
-    {:k 0 :n 0}))
+        (let [v (way-on/scan known start)] (.set counted st {:k k :v v}) v)))))
+
+(defn way-counts
+  "{:k :n} of way-scan, {:k 0 :n 0} without a perception."
+  [p]
+  (if-let [v (way-scan p)] (select-keys v [:k :n]) {:k 0 :n 0}))
 
 (declare kit-of)
 

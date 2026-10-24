@@ -140,9 +140,9 @@
 
 (defn log-encounter!
   "One :hostile entry and event for each change of decision in a run (a fight turned flight is said, with the health;
-  the event has the answers' prices, seconds, and the cover way a flight begins with). The entry's :run is the run's
-  first decision time (hostile-fight/returns)."
-  [c threat decision prices cover]
+  the event has the answers' prices, seconds, and the cover way a flight begins with; way-log/log-priced! the way counts
+  scan the flight was priced with, when it was). The entry's :run is the run's first decision time (hostile-fight/returns)."
+  [c threat decision prices cover scan]
   (when-not (= decision (:logged (ctx/mem c)))
     (let [prev (:data (mem/latest (ctx/view c) :hostile))
           run (or (:run-at (ctx/mem c)) (ctx/now c))
@@ -152,7 +152,7 @@
       (ctx/emit! c :hostile.decided :info (cond-> (assoc (dissoc entry :from :run) :text (encounter-text entry prev))
                                             prices (assoc :prices (update-vals prices js/Math.round))
                                             cover (assoc :cover cover)))
-      (way-log/log-priced! c)
+      (way-log/log-priced! c scan)
       (ctx/update-mem! c assoc :logged decision :run-at run))))
 
 (defn fight-struck
@@ -296,7 +296,7 @@
 (defn ^:async respond-with!
   "The rest of respond once it has weighed the answers: log the decision, run its child, the other one when it declines."
   [c near weighed decision cover creeper stay?]
-  (log-encounter! c (if (and (= :flee decision) creeper) creeper (first near)) decision (:prices weighed) cover)
+  (log-encounter! c (if (and (= :flee decision) creeper) creeper (first near)) decision (:prices weighed) cover (:way-scan weighed))
   (when (and stay? (not (:stay-noted (ctx/mem c))))
     (ctx/update-mem! c assoc :stay-noted true)
     (ctx/emit! c :hostile.sealed-hold :info {:text "under a roof: the mobs near are heard only or flyers, so the body stays in" :mobs (mapv #(.-name %) near)}))
@@ -332,7 +332,7 @@
         now (merge covers {:fight fight :flee walk})
         now-of (fn [mobs] (merge (cover-answers equipment mobs then specs) {:fight fight :flee (when walk (hostile/flee-answer c near fight felt caught mobs))}))
         look (when (seq covers) (look-answer c near now now-of sealing then))
-        weighed (hostile/weigh c (cond-> now look (assoc :look (:answer look))))
+        weighed (some-> (hostile/weigh c (cond-> now look (assoc :look (:answer look)))) (assoc :way-scan (:way-scan caught)))
         stay? (and (not (hurt-lately? c)) (stay-under-roof? c near))
         decision (if (or stay? (= :fight (:answer weighed))) :fight :flee)
         cover (when (and (not stay?) (contains? covers (:answer weighed))) (:answer weighed))

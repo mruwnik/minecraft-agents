@@ -27,7 +27,8 @@
          [:rcon "damage $BODY 16 minecraft:generic"]
          [:summon "creeper" [68.5 3 16.5]]
          [:wait-s 3]]
-   ;; the counts and the light the flee decision priced with, for node tools/event-counts.mjs way-on
-   :expect [{:event {:source :job :kind :way-on.priced :data {:set :lit :k [:>= 0] :n [:>= 0]}} :within-s 10}
+   ;; the counts and the light the flee decision priced with, for node tools/event-counts.mjs way-on: open ground lit by
+   ;; glowstone, so seen stands round the feet and some leading on past them
+   :expect [{:event {:source :job :kind :way-on.priced :data {:set :lit :k [:>= 1] :n [:>= 1] :ways [:any]}} :within-s 10}
             {:no-event {:source :body :kind :died} :for-s 10}]
    :limit-s 30}]}

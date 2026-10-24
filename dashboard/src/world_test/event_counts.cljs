@@ -552,7 +552,7 @@
                        0)
        "way-on" (let [per (for [b (array-seq (fs/readdirSync agents)) :when (fs/existsSync (path/join agents b "engine"))]
                             (way-prior/places (way-events (path/join agents b "engine") since-ms)))]
-                  (println (pr-str (assoc (way-prior/report (mapcat :places per) (reduce + (map :unread per))) :since-ms since-ms)))
+                  (println (pr-str (assoc (way-prior/report (mapcat :places per) (reduce + (map :evicted per))) :since-ms since-ms)))
                   0)
        "flee-pace" (do (println (pr-str (assoc (pace-report (since (:flight-steps folded))) :since-ms since-ms))) 0)
        "notice-rate" (do (println (pr-str (assoc (notice-report (since (:notices folded))) :since-ms since-ms))) 0)
