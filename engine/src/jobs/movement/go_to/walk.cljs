@@ -394,7 +394,7 @@
         _ (when-not (breath/head-under? (:primitives c)) (ctx/update-mem! c0 assoc :last-air (air/breathing-pos (:primitives c) from)))
         d (u/dist from pos)
         pw (wworld/path-world (:primitives c))
-        stand (when (and pw (not way) (or (:lookout-due (ctx/mem c)) (hidden-in-ground? c pos))) (lookout c pos))]
+        stand (when (and pw (not way) (or (:lookout-due (ctx/mem c)) (and (not (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))) (hidden-in-ground? c pos)))) (lookout c pos))]
     (cond
       (and (here? c pos range) (not (refused-hang c pos)))
       (await (arrive! c pos))
