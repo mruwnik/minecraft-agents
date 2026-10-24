@@ -177,17 +177,3 @@
       [(c/scan-line (line 2000 :child_started {:slot :eat}))]
       [(c/scan-line (line 2000 :started {:name "place"}))]
       [(step 2000 :back-off)])))
-
-(deftest a-fixture-sighting-runs-from-its-firing-to-the-first-hurt-from-its-kind-or-the-window
-  (let [shown (fn [& rs] (map (juxt :s :end :label) (c/exposures (sort-by :t rs))))
-        exposed (rec 1000 :exposed :mob "skeleton" :label "skeleton lit 9" :window-ms 20000)]
-    (is (= [[1.5 :caught "skeleton lit 9"]] (shown exposed (rec 2500 :hurt :amount 3 :causes #{"skeleton"}) (rec 4000 :hurt :amount 3 :causes #{"skeleton"}))))
-    (is (= [[20 :window "skeleton lit 9"]] (shown exposed (rec 30000 :hurt :amount 3 :causes #{"skeleton"}) (rec 2000 :hurt :amount 1 :causes #{"fall"}))))
-    (is (empty? (shown exposed (rec 600 :hurt :amount 3 :causes #{"skeleton"}))) "shot before it was seen: left out")
-    (is (= [[1 :caught "skeleton lit 9"]] (shown exposed (rec 2500 :hurt :amount 3 :causes #{"skeleton"} :since 1500)))
-        "the hit came within the health sample it was seen in: its middle")
-    (is (= 1 (get-in (c/notice-report (c/exposures [exposed (rec 2000 :hurt :amount 3 :causes #{"skeleton"})])) [:by-class :ranged :caught])))))
-
-(deftest a-ranged-notice-text-is-a-fixture-sighting
-  (is (= {:k :exposed :t 5 :gen "g" :mob "skeleton" :label "skeleton lit 9" :window-ms 20000}
-         (c/scan-line "{:generation-id \"g\", :source :job, :kind :job.notify, :context {:job-id \"j1\", :reflex-id :hostile-near}, :time-ms 5, :message \"ranged-notice skeleton lit 9 20 | health 20\"}"))))

@@ -6,7 +6,6 @@
             [engine.game :as game]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.answer :as answer]
-            [jobs.lib.cost.armour :as armour]
             [jobs.lib.cost.death :as death]
             [jobs.lib.cost.danger :as danger]
             [jobs.lib.cost.fight :as fight]
@@ -335,15 +334,6 @@
     (is (= :flee (:answer (cost/decide (body 20) (answer/threat-answers (body 20) "zombie" nil) here))))
     (is (= (/ (:seconds flee) 2) (:near (answer/group-parts (body 20) ["zombie"] nil here)))
         "another mob joins the flight only while the first still chases it")))
-
-(deftest a-skeleton-gets-to-the-body-at-its-first-hit-so-that-arrow-has-landed-before-the-answer
-  (let [arrow (answer/blow (armour/armour-stats nil) {:name "skeleton"})
-        met #(answer/group-parts (body %) ["skeleton"] nil here)
-        flee (fn [h] (let [as (answer/threat-answers (body h) "skeleton" nil)] (get as (:answer (cost/decide (body h) as here)))))]
-    (is (= 1 (:chance (met arrow))) "a body one arrow kills dies when the skeleton gets to it")
-    (is (< (js/Math.abs (- (:hurt (met 20)) (+ arrow (answer/expected-damage (flee (- 20 arrow)))))) 1e-9)
-        "the hurt is that arrow and the answer's blows after it")
-    (is (= (:near (met 20)) (:near (flee (- 20 arrow)))) "the answer starts at the hit")))
 
 (defn partitions
   "Every partition of coll into blocks."

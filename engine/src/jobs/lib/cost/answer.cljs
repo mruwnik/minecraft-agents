@@ -417,18 +417,11 @@
 (defn group-parts
   "{:chance :hurt :near} of mob names met together by body at `at`, caught at caught: the answer decide takes of
   threat-answers, its answer-death-chance, its expected-damage at most the body's life, and the seconds it holds the body
-  at or near the place (its :near, a flight's way out; else its :seconds). A ranged mob gets to the body at its first hit
-  (death/notice-prior's count): that blow has landed before the answer, whose blows are the ones after it."
+  at or near the place (its :near, a flight's way out; else its :seconds)."
   [body names caught at]
-  (let [stats (armour/armour-stats (:equipment body))
-        first-hits (reduce + 0 (map #(blow stats {:name %}) (filter #(threat/ranged? {:name %}) names)))
-        shield (or (:absorption body) 0)
-        struck (assoc body :absorption (max 0 (- shield first-hits)) :health (- (or (:health body) 20) (max 0 (- first-hits shield))))
-        answers (threat-answers struck names caught)
-        a (get answers (:answer (decide struck answers at)))]
-    {:chance (if (pos? (life struck)) (answer-death-chance struck a at) 1)
-     :hurt (min (life body) (+ first-hits (expected-damage a)))
-     :near (or (:near a) (:seconds a) 0)}))
+  (let [answers (threat-answers body names caught)
+        a (get answers (:answer (decide body answers at)))]
+    {:chance (answer-death-chance body a at) :hurt (min (life body) (expected-damage a)) :near (or (:near a) (:seconds a) 0)}))
 
 (defn met-threats
   "The known threats of route {:cells :threats} (death-chance's) that may get to the body, [{:mob :caught :c :prior
