@@ -58,7 +58,9 @@
   (are [n s] (= s (obtain/default-time {:count n}))
     nil 600
     1 600
-    27 2160))
+    27 2160)
+  (is (= 5400 (obtain/default-time {:bill {"jungle_log" 36 "stone_sword" 1}}))
+      "a bill runs its items' children, each with ::bill-item-s, so its own limit is their sum"))
 
 (deftest planks-crafted-from-a-carried-log-are-done-with-what-was-got
   (async done

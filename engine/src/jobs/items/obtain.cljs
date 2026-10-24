@@ -5,7 +5,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.items.obtain.base :refer [args-error carried-of craft-step-s gather-need-s gathers? holds makes? max-inspections names-of near-chest smelt-item-s shortfall tried! wanted-fields way?]]
+            [jobs.items.obtain.base :refer [args-error carried-of bill-item-s craft-step-s gather-need-s gathers? holds makes? max-inspections names-of near-chest smelt-item-s shortfall tried! wanted-fields way?]]
             [jobs.items.obtain.bill :as bill]
             [jobs.items.obtain.loose :as loose-way]
             [jobs.items.obtain.chest :refer [blocked-text candidates cheapest! inspect! withdraw!]]
@@ -35,7 +35,7 @@
   A bill runs one obtain child per item still missing (not carried or worn), in order, after the furnace material (iron_ingot ..) the missing items need together, which is got in one go and reserved against deposits; each child gets a :spend :job-time of the ::bill-item-s setting. The first child that fails ends the bill with its kind and cause, data {:item the one it stopped at :why}.
 
   Needs: valid :item or :any-of and :count, or a :bill (else impossible :bad-args); a source (else condition-failed :no-source with :why naming what each way lacks); with :worth, a way priced within it (jobs.items.obtain.price/price-of: walk there and back, the death it risks; else :later :not-worth).
-  Returns :done {:got n :item name} only with the count carried (the call's :least, default :all, may name fewer) (a bill: {:have [items]}); nothing-possible :no-source, :table-unreachable or the gather's walk cause (:zone-exit ..) when every allowed way was tried, data {:got :tried :why :next} (:next: jobs.lib.next-call, the gather for the first unseen raw need); limit-reached :timeout after :spend :job-time (default-time: ::job-time-s, ::unit-s more per unit of :count beyond the first).
+  Returns :done {:got n :item name} only with the count carried (the call's :least, default :all, may name fewer) (a bill: {:have [items]}); nothing-possible :no-source, :table-unreachable or the gather's walk cause (:zone-exit ..) when every allowed way was tried, data {:got :tried :why :next} (:next: jobs.lib.next-call, the gather for the first unseen raw need); limit-reached :timeout after :spend :job-time (default-time: ::job-time-s, ::unit-s more per unit of :count beyond the first; a bill ::bill-item-s per item).
   Quote: the count as yield, time a guess per step, no most for a gather; a bill two gathers' time per missing item.")
 
 (a/defargs args
@@ -56,9 +56,11 @@
 (defn time-s [] (settings/get settings ::job-time-s))
 
 (defn default-time
-  "The call's default :spend :job-time: ::job-time-s, plus ::unit-s for each unit of the count beyond the first (27 raw iron are many mines, not one)."
-  [{:keys [count]}]
-  (+ (time-s) (* (settings/get settings ::unit-s) (max 0 (dec (or count 1))))))
+  "The call's default :spend :job-time: ::job-time-s, plus ::unit-s for each unit of the count beyond the first (27 raw iron are many mines, not one); a bill the ::bill-item-s each of its items' children get."
+  [{:keys [count bill]}]
+  (if (seq bill)
+    (* (bill-item-s) (clojure.core/count bill))
+    (+ (time-s) (* (settings/get settings ::unit-s) (max 0 (dec (or count 1)))))))
 
 (def target [:item :any-of :bill])
 
