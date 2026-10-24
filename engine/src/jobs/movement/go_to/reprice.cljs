@@ -10,6 +10,8 @@
             [jobs.lib.danger :as danger]
             [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
+            [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.util :as u]
             [jobs.lib.walk-risk :as risk]))
 
@@ -30,15 +32,20 @@
 
 (defn safe-prefix?
   "Whether plan stops short of pos, the walk to pos is within price/allowed but for the unseen cells guessed dark caves
-  (risk/estimate's caves-free?), and the walk on the plan's own steps to their end passes status: walking that and
-  looking turns unseen into seen, so the walk is priced again from there rather than held on a guess."
+  (risk/estimate's caves-free?), and the walk on the plan's own steps up to the first of them guessed a dark cave
+  (spawn-light/cave-guess?) passes status: walking that and looking turns unseen into seen, and every re-plan of the walk
+  is priced again (check), rather than held on a guess."
   [c pos plan]
-  (let [end (peek (:steps plan))
+  (let [p (:primitives c)
+        feet-y (:y (sh-sense/feet p))
+        underground? (sh-sense/buried? p)
+        steps (vec (take-while #(not (spawn-light/cave-guess? p % feet-y underground?)) (:steps plan)))
+        end (peek steps)
         feet (mapv js/Math.floor ((juxt :x :y :z) (u/self-pos c)))]
     (and (not= "found" (:status plan)) end
          (not= feet (mapv js/Math.floor ((juxt :x :y :z) end)))
          (<= (:hp (risk/estimate c pos {:plan plan :caves-free? true})) (price/allowed c))
-         (= :ok (first (status c end (assoc plan :status "found")))))))
+         (= :ok (first (status c end (assoc plan :status "found" :steps steps)))))))
 
 (defn check
   "near/walk-round!'s :stair-check: check's why, else status of the round's first plan, of every re-plan once a plan
