@@ -226,24 +226,31 @@
        (some->> (room-lib/gap c) first (#(ctx/remember! c :doorway-tried % room-lib/doorway-tried-policy))))
      :again)))
 
-(defn ^:async fits-the-light?
-  "Whether enter-room's quote for args walks in within the time left before the dark plus a margin (its walk with dark cells priced in; no quote for a room that cannot be closed)."
+(defn ^:async walk-seconds
+  "Seconds enter-room's quote for args walks in (its walk with dark cells priced in; none for a room that cannot be closed), nil when none."
   [c args]
   (let [[_ mean] (get-in (await (ctx/quote c 'jobs.survival.enter-room args)) [:uses :job-time])]
-    (boolean (and mean (<= mean (sites/home-walk-budget-s (:primitives c)))))))
+    (when (and mean (not (infinite? mean))) mean)))
 
 (defn ^:async walkable-far-home
-  "The nearest remembered roofed place (:roofed-places) beyond the walk radius (nearer ones shut-in prices against digging
-  in) that fits-the-light?; with none remembered, the closed room the body has seen (enter-room/nearest-seen, an unfinished
-  house with no home set yet) when that fits: {:seen true}. Else nil."
+  "The remembered roofed place (:roofed-places) beyond the walk radius (nearer ones shut-in prices against digging in) whose
+  enter-room quote is the least, when that walk fits the time left before the dark plus a margin; with none remembered, the
+  closed room the body has seen (enter-room/nearest-seen, an unfinished house with no home set yet) on the same terms:
+  {:seen true}. Else nil."
   [c]
   (let [p (:primitives c)
-        beyond? #(< (sites/walk-radius) (u/dist (sh-sense/feet p) (:pos %)))
-        places (room-lib/roofed-places-in c (:args c) (sites/home-walk-radius p))]
-    (if-let [place (first (filter beyond? places))]
-      (when (await (fits-the-light? c {:place (:name place)})) place)
-      (when (and (empty? places) (enter-room/nearest-seen c) (await (fits-the-light? c {})))
-        {:seen true}))))
+        places (room-lib/roofed-places-in c (:args c) ##Inf)
+        beyond (filter #(< (sites/walk-radius) (u/dist (sh-sense/feet p) (:pos %))) places)
+        budget (sites/home-walk-budget-s p)
+        priced (loop [[place & more] beyond out []]
+                 (if-not place
+                   out
+                   (let [s (await (walk-seconds c {:place (:name place)}))]
+                     (recur more (cond-> out s (conj [s place]))))))
+        [s place] (first (sort-by first priced))]
+    (cond
+      (seq places) (when (and place (<= s budget)) place)
+      (enter-room/nearest-seen c) (when-let [s (await (walk-seconds c {}))] (when (<= s budget) {:seen true})))))
 
 (defn ^:async exposed!
   "Nothing shelters the body tonight (the first time one shelter.exposed warn): a log-out stint (jobs.survival.log-out) while
