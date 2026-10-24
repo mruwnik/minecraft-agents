@@ -60,3 +60,17 @@
     (swap! state update :instances dissoc "x")
     (cc/keyed (c "z") :t 1 (constantly 1))
     (is (= #{"y" "z"} (ids)) "x ended: gone; y still runs: kept; z is the caller's own")))
+
+(deftest child-call-entries-live-with-their-root-instance
+  (let [state (atom {:instances {"j1" {}}})
+        eng {:warned (atom #{}) :state state}
+        c (fn [id] (assoc (ctx-at id 0) :engine eng))
+        ids #(set (map first (keys @(cc/entries-of (c "j1")))))]
+    (cc/keyed (c "j1") :planned 1 (constantly 1))
+    (cc/keyed (c "j1/kid") :planned 1 (constantly 1))
+    (cc/keyed (c "j1/kid/lever") :planned 1 (constantly 1))
+    (is (= #{"j1" "j1/kid" "j1/kid/lever"} (ids)) "a child's first store keeps its live ancestors")
+    (cc/keyed (c "j10") :planned 1 (constantly 1))
+    (swap! state update :instances dissoc "j1")
+    (cc/keyed (c "j2/kid") :planned 1 (constantly 1))
+    (is (= #{"j2/kid"} (ids)) "j1 ended: it and its children are gone; j10 is no instance either")))

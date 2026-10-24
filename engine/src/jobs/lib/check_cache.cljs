@@ -3,7 +3,8 @@
   window. A check cannot write job memory, so the values live here, per job instance, and are lost on restart."
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
-            [engine.settings :as settings]))
+            [engine.settings :as settings]
+            [clojure.string]))
 
 (a/defargs settings
   {::ttl-ms {:default 2000 :doc "How long a check reuses what it read off the world, in ms of body clock." :spec (a/int-in 0 nil)}
@@ -19,14 +20,19 @@
     (or (.get engines key)
         (let [e (atom {})] (.set engines key e) e))))
 
+(defn root-id
+  "The instance id a (child) call id descends from: child call ids are the parent's id plus \"/name\"."
+  [id]
+  (first (clojure.string/split id #"/" 2)))
+
 (defn without-ended
   "entries m without the ids of jobs that are no longer instances of c's engine (but c's own): the engine drops an instance
-  at every kind of end, so this frees a job's entries however it ended."
+  at every kind of end, so this frees a job's entries however it ended. Child calls are not instances: they live with their root."
   [c m]
   (let [live (some-> (:state (:engine c)) deref :instances)]
     (if (nil? live)
       m
-      (into {} (filter (fn [[[job]]] (or (= job (:id c)) (contains? live job)))) m))))
+      (into {} (filter (fn [[[job]]] (or (= job (:id c)) (contains? live (root-id job))))) m))))
 
 (defn store
   "m with entry e under id; an entry of a new job id also frees those of ended jobs."
