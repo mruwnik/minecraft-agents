@@ -69,11 +69,28 @@
     (aset (.-rawWorld p) "lightAt" (fn [_ y _] (if (>= y 80) 240 0)))
     (with-mem {} #(is (= 16 (surface/rise {:primitives p})) "the air from y 67 to 71 is seen, the stone over it too, and the sky from 80 is the rise"))))
 
-(deftest a-stair-of-the-bodys-own-sets-where-the-surface-is
-  (let [c (buried-body 16 19 nil)
-        feet-dim (.-dimension (.self (:primitives c)))]
-    (with-redefs [ctx/mem (constantly {}) ctx/entries (constantly [{:data {:dim feet-dim :floors [[2 39 0]]}}])]
-      (is (= 40 (surface/known-surface c)) "the highest step it cut"))))
+(defn known-surface-with
+  "known-surface of a body at y 16 in a 7-wide block of rock, with extra blocks and the floors of the stairs it cut."
+  [extra floors]
+  (let [c (assoc (buried-body 16 19 nil) :primitives (tu/with-sky-only (tu/seeing-all (tu/fake {:self {:pos {:x 0.5 :y 16 :z 0.5}}
+                                                                                                :blocks (merge (dissoc (box -3 15 -3 3 19 3 "stone") "0,16,0" "0,17,0") extra)}))))
+        dim (.-dimension (.self (:primitives c)))]
+    (with-redefs [ctx/mem (constantly {}) ctx/entries (constantly [{:data {:dim dim :floors floors}}])]
+      (surface/known-surface c))))
+
+(deftest a-stair-of-the-bodys-own-that-ends-under-the-sky-near-it-sets-where-the-surface-is
+  (is (= 40 (known-surface-with {"2,39,0" "stone"} [[2 39 0]])) "the top it cut, one block over"))
+
+(deftest a-stair-too-far-to-reach-or-ending-in-rock-is-no-surface
+  (is (nil? (known-surface-with {"900,119,900" "stone"} [[900 119 900]])) "a stair far off: no stair from here gets there")
+  (is (nil? (known-surface-with {"2,29,0" "stone" "2,31,0" "stone"} [[2 29 0]])) "a stair that stopped mid-mine has rock over its top, not the sky"))
+
+(deftest the-nearest-remembered-surface-sets-the-rise-not-the-median
+  (let [p (tu/with-sky-only (tu/seeing-all (tu/fake {:self {:pos {:x 0.5 :y 16 :z 0.5}}
+                                                      :blocks (assoc (dissoc (box -9 59 -9 9 59 9 "stone") "4,59,0") "4,39,0" "stone")})))]
+    (aset (.-rawWorld p) "lightAt" (fn [_ y _] (if (>= y 40) 240 0)))
+    (with-redefs [ctx/mem (constantly {}) ctx/entries (constantly [])]
+      (is (= 40 (surface/known-surface {:primitives p})) "the stand 4 blocks off is the nearest; most columns round it stand at 60"))))
 
 (deftest a-body-that-climbed-out-or-has-a-stair-to-its-top-climbs-nothing
   (let [c (buried-body 67 nil)

@@ -62,8 +62,8 @@
            (and (pos? (get-in (ctx/mem c) [:explored (:key need)] 0))
                 (sh-sense/buried? (:primitives c))))))
 
-(defn own-top
-  "The nearest top of a stair of the body's own that ends under the open sky above its feet, as {:x :y :z}, else nil."
+(defn open-tops
+  "The tops of the stairs of the body's own that end under the open sky above its feet, as {:x :y :z} (the stand on the last step)."
   [c]
   (let [p (:primitives c)
         feet (sh-sense/feet p)
@@ -75,30 +75,40 @@
                                 (= y (kinds/top surface-at x z))))]
     (->> stairs
          (filter (fn [[_ y _ :as cell]] (and (> y (inc (:y feet))) (top? cell))))
-         (map (fn [[x y z]] {:x x :y y :z z}))
-         (sort-by #(u/dist feet %))
-         first)))
+         (map (fn [[x y z]] {:x x :y y :z z})))))
+
+(defn own-top
+  "The nearest top of a stair of the body's own that ends under the open sky above its feet (open-tops), else nil."
+  [c]
+  (let [feet (sh-sense/feet (:primitives c))]
+    (first (sort-by #(u/dist feet %) (open-tops c)))))
 
 (def sky-scan "Blocks out from the feet, and between columns, of the look for a surface the body remembers." {:reach 8 :step 4 :height 80})
 
 (defn known-surface
-  "The y of the open ground the body knows above its feet, else nil: the top of the highest stair it cut, else the median
-  of the lowest sky-lit stands (open, seen solid under) it remembers in the columns round it."
+  "The y of the open ground the body knows above its feet, else nil: the nearest (by the flat distance from the feet) of the
+  tops of its own stairs that end under the open sky and the lowest sky-lit stands (open, seen solid under) it remembers in
+  the columns round it. Only a ground a stair straight toward it reaches (flat distance within its rise) counts: a stair
+  rises a block for each block it goes along."
   [c]
   (let [p (:primitives c)
         {:keys [x y z] :as feet} (sh-sense/feet p)
         {:keys [reach step height]} sky-scan
-        stair-top (some->> (ledger/stair-stands c) (map second) (filter #(> % y)) seq (apply max))
         stand-in (fn [cx cz]
                    (some (fn [cy] (let [cell {:x cx :y cy :z cz}]
                                     (when (and (sh-sense/seen-cell? p cell) (not (sh-sense/solid-at? p cell))
                                                (pos? (or (sh-sense/sky-light-at p cell) 0))
                                                (sh-sense/seen-cell? p (update cell :y dec)) (sh-sense/solid-at? p (update cell :y dec)))
-                                      cy)))
+                                      cell)))
                          (range (inc y) (+ y height))))
-        stands (sort (keep (fn [[dx dz]] (stand-in (+ x dx) (+ z dz)))
-                           (for [dx (range (- reach) (inc reach) step) dz (range (- reach) (inc reach) step) :when (not= 0 dx dz)] [dx dz])))]
-    (or stair-top (nth stands (quot (count stands) 2) nil))))
+        stands (keep (fn [[dx dz]] (stand-in (+ x dx) (+ z dz)))
+                     (for [dx (range (- reach) (inc reach) step) dz (range (- reach) (inc reach) step) :when (not= 0 dx dz)] [dx dz]))
+        flat #(u/flat-dist feet %)]
+    (->> (concat (open-tops c) stands)
+         (filter #(<= (flat %) (- (:y %) y)))
+         (sort-by (juxt flat :y))
+         first
+         :y)))
 
 (defn rise
   "Blocks from the feet up to the sky of the feet column: to the first seen open cell the sky reaches. Seen rock and cave

@@ -4,8 +4,14 @@
             [engine.settings :as settings]))
 
 (a/defargs settings
-  {::surface-prior {:default [[63 0.25] [67 0.25] [72 0.25] [80 0.15] [95 0.10]]
-                    :doc "The overworld's ground height over a spot nothing is known of, as [y weight] pairs (sea level 63; most land a few blocks above, hills and mountains a tail)."
+  {::surface-prior {:default [[2 2] [10 1] [14 1] [18 4] [22 135] [26 152] [30 65] [34 19]
+                             [38 44] [42 113] [46 221] [50 854] [54 841] [58 3063] [62 352690] [66 215919]
+                             [70 160457] [74 60515] [78 36919] [82 20368] [86 17932] [90 20194] [94 24568] [98 14608]
+                             [102 18933] [106 10741] [110 13034] [114 10508] [118 10193] [122 9222] [126 6327] [130 3012]
+                             [134 2628] [138 1271] [142 1329] [146 831] [150 5536] [154 1304] [158 999] [162 543]
+                             [166 227] [170 562] [174 86] [178 47] [182 103] [186 111] [190 2] [202 1046]
+                             [206 6]]
+                    :doc "The overworld's ground height over a spot nothing is known of, as [y weight] pairs: the y a body stands at (one over the highest block that is no air, plant or tree; water counts) in 4-block bins named by their middle, weighted by the columns counted (1028352 columns of 4017 recorded chunk files, every 20th, the fixture plot grid left out; 2026-10-24). Recount: node tools/event-counts.mjs surface-heights --stride 20. The recorded land is where the trial bodies went."
                     :spec (a/coll-of (a/coll-of (a/num-in 0 nil)))}})
 
 (defn surface-prior [] (settings/get settings ::surface-prior))
