@@ -27,8 +27,8 @@
   (known-of (fn [[_ y _]] (< y 64)) {} seen-box))
 
 (def corridors
-  "Rock seen 8 round the body, a corridor along x at z 0 (y 64 and 65) with three dead-end stubs off it, each two long."
-  (let [open (into #{} (concat (for [x (range -6 7) y [64 65]] [x y 0])
+  "Rock seen 8 round the body, a corridor along x at z 0 (y 64 and 65) that runs on out of the seen box, with three dead-end stubs off it, each two long."
+  (let [open (into #{} (concat (for [x (range -8 9) y [64 65]] [x y 0])
                                (for [x [-4 0 4] z [1 2] y [64 65]] [x y z])))]
     (known-of (fn [cell] (not (open cell))) {} seen-box)))
 
@@ -40,13 +40,28 @@
   "Rock seen 8 round the body, a corridor of two cells along x (x 0 and 1, y 64 and 65): shut at both ends."
   (known-of (fn [[x y z]] (not (and (= z 0) (#{0 1} x) (#{64 65} y)))) {} seen-box))
 
+(defn carved
+  "Rock seen 8 round the body with the cells open? holds air."
+  [open?]
+  (known-of (fn [cell] (not (open? cell))) {} seen-box))
+
+(def shut-corridor
+  "A corridor of five cells along x from the body (x 0 to 4, y 64 and 65), shut at both ends."
+  (carved (fn [[x y z]] (and (= z 0) (<= 0 x 4) (#{64 65} y)))))
+
+(def closed-room
+  "A closed room 5 by 5 round the body (x and z -2 to 2, y 64 and 65)."
+  (carved (fn [[x y z]] (and (<= -2 x 2) (<= -2 z 2) (#{64 65} y)))))
+
 (defn dead-end [known] (- 1 (cost/way-on-chance (way-on/way-counts known [0 64 0]))))
 
 (deftest the-ways-out-of-open-ground-and-a-corridor-go-on-and-a-pocket-ends
   (is (< (dead-end open-ground) 0.01) "open ground: a way on seldom ends")
   (is (< (dead-end open-corridor) 0.15) "a 1-wide corridor open at its end: the walls beside it are no ways, it goes on")
   (is (< (dead-end open-corridor) (dead-end corridors) 0.4) "a corridor with three stubs and shut ends: some ways end")
-  (is (> (dead-end pocket) 0.5) "a shut pocket: the way ends"))
+  (is (> (dead-end pocket) 0.5) "a shut pocket: the way ends")
+  (is (> (dead-end shut-corridor) 0.5) "a shut corridor of five: no cell of it leads out")
+  (is (> (dead-end closed-room) 0.5) "a closed room: no cell of it leads out"))
 
 (deftest a-cell-not-seen-counts-neither-way
   (is (= {:k 0 :n 0} (way-on/way-counts (constantly nil) [0 64 0])) "nothing seen: no count, the prior stands")

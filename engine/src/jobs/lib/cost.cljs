@@ -155,7 +155,7 @@
 
 (defn way-on-chance
   "The chance a way on through cells the body has not seen goes on: a uniform Beta(1,1) prior updated by counts {:k :n}
-  of the ways out of the seen stands near it (jobs.lib.walk.way-on/way-counts: n seen, k of them open), (k+1)/(n+2)."
+  of the seen stands near it (jobs.lib.walk.way-on/way-counts: n seen, k of them with a way that leads out), (k+1)/(n+2)."
   [{:keys [k n]}]
   (/ (inc (or k 0)) (+ (or n 0) 2)))
 

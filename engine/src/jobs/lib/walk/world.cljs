@@ -78,7 +78,7 @@
 (defonce ^:private counted (js/WeakMap.))
 
 (defn way-counts
-  "The ways out of the seen stands nearest the body of primitives p (way-on/way-counts from its feet), {:k 0 :n 0}
+  "The seen stands nearest the body of primitives p, and how many lead out (way-on/way-counts from its feet), {:k 0 :n 0}
   without a perception. Kept while the body stands in one cell and no block it remembers changed (store writes): every
   costed world of a flight step asks it."
   [p]
