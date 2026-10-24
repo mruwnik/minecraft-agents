@@ -105,14 +105,32 @@
 
 
 (defn stair-route-s
-  "Seconds the stair way e takes from feet, each step as jobs.lib.dig-route (route-answer) prices a step that cuts: a walk
-  step and the dig-cost of its three cuts, at least cw/stair-cost of one step."
+  "Seconds the stair way e takes from feet, each step as jobs.lib.dig-route (route-answer) prices one: cw/stair-step-cost of a
+  walk step, the dig-cost of its cuts and the unseen step price when a cut or its floor is unseen."
   [p feet {:keys [heading steps]}]
   (let [block-at (escape/block-at-of p)
+        unseen? (escape/unseen-of p)
         step-s (:cost (cost/walk-cost {:distance 1}))
-        cut-s (fn [cell] (let [n (block-at cell)] (if (dig-route/open? n) 0 (or (cost/dig-cost n) 0))))]
-    (transduce (map #(cw/stair-leg-cost (+ step-s (transduce (map cut-s) + 0 %)) step-s (cw/stair-cost 1))) +
-               0 (partition 3 (escape/stair-cuts feet (escape/heading-dirs (keyword heading)) steps)))))
+        unseen-s (cost/unseen-route-s (wworld/unseen-share p) (constantly :ground) [{:x 0 :y 0 :z 0}])
+        cut-s (fn [cell] (let [n (block-at cell)] (when-not (dig-route/open? n) (or (cost/dig-cost n) 0))))]
+    (transduce (map (fn [cuts] (cw/stair-step-cost step-s (cw/stair-cost 1) (map cut-s cuts)
+                                                    (if (some unseen? (cons (escape/add (nth cuts 2) [0 -1 0]) cuts)) unseen-s 0))))
+               + 0 (partition 3 (escape/stair-cuts feet (escape/heading-dirs (keyword heading)) steps)))))
+
+(defn new-stair-step-s
+  "Seconds one step of a stair not yet laid out (no heading chosen) takes: its three cuts priced as stone."
+  []
+  (let [step-s (:cost (cost/walk-cost {:distance 1}))]
+    (cw/stair-step-cost step-s (cw/stair-cost 1) (repeat 3 (or (cost/dig-cost "stone") 0)) 0)))
+
+(defn pillar-route-s
+  "Seconds the pillar of height blocks up from feet takes as jobs.lib.dig-route prices one: cw/pillar-cost, and the unseen step
+  price for each block whose cell or the two over it is unseen."
+  [p feet height]
+  (let [unseen? (escape/unseen-of p)
+        unseen-s (cost/unseen-route-s (wworld/unseen-share p) (constantly :ground) [{:x 0 :y 0 :z 0}])]
+    (+ (cw/pillar-cost height)
+       (* unseen-s (count (filter #(some unseen? (map (fn [dy] (escape/up feet (+ % dy))) [1 2])) (range height)))))))
 
 (defn price
   "Seconds way e from feet is reckoned to take (jobs.lib.cost): a stair, a pillar, a bridge or a fill by its blocks, a dug door or
@@ -122,7 +140,7 @@
         dig-s (fn [cells] (transduce (map #(+ (/ (tools/clear-ms p (@block-at %)) 1000) (:cost (cost/walk-cost {:distance 1})))) + 0 cells))]
     (case step
       :stair (+ (stair-route-s p feet e) (* (:aside e 0) (or (cost/dig-cost "stone") 1)))
-      :pillar (cw/pillar-cost (:height e))
+      :pillar (pillar-route-s p feet (:height e))
       :bridge (cw/bridge-cost (:length e) (:short e 0))
       :fill-gap (cw/fill-cost (:count e 1))
       :dig-route (dig-s (map :cell (:cells e)))
@@ -573,12 +591,11 @@
   "How far above the feet a goal is for a found plan to be weighed against a stair up."
   8)
 
-(defn stair-step-s-here
-  "stair-step-s, dearer by the dark factor where the body stands dark: the plan's seconds carry its dark surcharge, and the
+(defn stair-dark-factor
+  "How many times dearer a stair is cut where the body stands dark: the plan's seconds carry its dark surcharge, and the
   stair is cut in that dark too."
   [c]
-  (cond-> (cw/stair-step-s)
-    (and (wworld/dark?) (look/dark-here? (:primitives c))) (* (+ 1 (cost/dark-factor (wworld/kit-of c))))))
+  (if (and (wworld/dark?) (look/dark-here? (:primitives c))) (+ 1 (cost/dark-factor (wworld/kit-of c))) 1))
 
 (defn stair-check
   "A fn of a plan and whether it is the first of its round, saying why it is not walked and a stair up is cut instead (a
@@ -608,7 +625,7 @@
             (and cave (climb/dives? steps cave (ledger/ways-of c)) @stair) :dives
             (and back (climb/returns? steps back (ledger/stair-stands c)) @stair) :dives
             (and retreats? (= "partial" status) (climb/returns? steps (second feet) (ledger/stair-stands c)) @way) :retreats
-            (and first? cheaper? (= "found" status) (number? seconds) @stair (> seconds (* 3 (stair-step-s-here c) (:steps @stair)))) :cheaper))))))
+            (and first? cheaper? (= "found" status) (number? seconds) @stair (> seconds (* 3 (cw/stair-step-s) (stair-dark-factor c) (:steps @stair)))) :cheaper))))))
 
 (defn escalate?
   "Whether a give-up after tries fruitless walks with result may escalate instead: a carried block fills the 1-cell gap it was refused (gap-fill), its only way dives (dive?), the goal is walled in (goal-walled?), or the walker failed max-blocked walks running (walker-fault?; one stuck walk of a :tries 1 caller is no proof) and no door or gate borders where it can walk

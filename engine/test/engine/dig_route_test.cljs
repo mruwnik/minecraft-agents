@@ -124,3 +124,10 @@
     (is (not= [1 10 0] (:to (last (butlast (:steps (up #{[1 12 0]})))))) "the cell over the head of the step up is a guess")
     (is (some #{[1 10 0]} (map :place (:steps (laid #{})))))
     (is (not-any? #{[1 10 0]} (map :place (:steps (laid #{[1 9 0]})))) "the only face of the laid block is a guess")))
+
+(deftest a-stair-that-turns-back-never-stands-on-a-floor-it-dug-away
+  (let [block-at (fn [[x y z]] (if (and (zero? x) (zero? z) (= y 10)) "air" (if (< y 30) "stone" "air")))]
+    (doseq [goal [[0 13 0] [0 14 0] [0 15 0] [0 16 0]]
+            :let [r (dr/route block-at [0 10 0] goal {:step-s 0.2 :margin 2 :max-nodes 100000})
+                  stood (reductions (fn [dug s] (into dug (:dig s))) #{} (:steps r))]]
+      (is (every? true? (map (fn [dug {[x y z] :to}] (not (dug [x (dec y) z]))) stood (:steps r)))))))

@@ -1,7 +1,8 @@
 (ns engine.go-to-escalate-c-test
   "jobs.movement.go-to escalation (pillar, stair, clear-path, a walk to a wall) and jobs.lib.escape, against the fake
   world."
-  (:require [engine.contract :as contract]
+  (:require [clojure.string :as str]
+            [engine.contract :as contract]
             [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -10,7 +11,9 @@
             [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.settings :as settings]
+            [jobs.lib.cost :as cost]
             [jobs.lib.cost.ways :as cw]
+            [jobs.lib.walk.world :as wworld]
             [jobs.lib.dig-route :as dig-route]
             [jobs.lib.escape :as escape]
             [jobs.lib.near :as near]
@@ -338,6 +341,30 @@
     (is (= 3 (count (:steps route))))
     (is (< 0 (:seconds route)))
     (is (= (:seconds route) (choose/price p [0 64 0] {:step :stair :heading :east :steps 3})))))
+
+(def open-stair-mass
+  "stone-mass with the cells of a 3-step stair east from [0 64 0] already open."
+  (apply dissoc stone-mass (map #(str (clojure.string/join "," %)) (escape/stair-cuts [0 64 0] [1 0] 3))))
+
+(deftest a-stair-through-open-cells-is-priced-as-the-climb-route-prices-it
+  (let [p (tu/fake {:blocks open-stair-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}]})
+        route (choose/route-answer p [0 64 0] [3 67 0] (constantly true) (constantly false) false false {})]
+    (is (= 3 (count (:steps route))))
+    (is (= (:seconds route) (choose/price p [0 64 0] {:step :stair :heading :east :steps 3})))
+    (is (< (:seconds route) (cw/stair-cost 3)) "a cut-free step is no dearer than a walk step")))
+
+(deftest an-unseen-stair-and-pillar-are-priced-as-the-climb-route-prices-them
+  (let [inv [{:name "iron_pickaxe" :count 1}]
+        body #(tu/seeing-within (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory inv}) %)
+        p (body 4.2)
+        route (choose/route-answer p [0 64 0] [3 67 0] (constantly true) (constantly false) false false {})
+        stair {:step :stair :heading :east :steps 3}
+        unseen-s (cost/unseen-route-s (wworld/unseen-share p) (constantly :ground) [{:x 0 :y 0 :z 0}])]
+    (is (= (:seconds route) (choose/price p [0 64 0] stair)))
+    (is (< (choose/price (body 50) [0 64 0] stair) (choose/price p [0 64 0] stair)) "unseen cells cost more")
+    (are [r n] (= (+ (cw/pillar-cost 2) (* n unseen-s)) (choose/price (body r) [0 64 0] {:step :pillar :height 2}))
+      50 0
+      2.9 1)))
 
 (deftest a-fill-competes-by-price-with-the-stair-and-the-pillar
   (let [p (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}]})

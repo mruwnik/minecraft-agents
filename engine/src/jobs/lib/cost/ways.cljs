@@ -25,6 +25,14 @@
   [s0 step-s stair-s]
   (+ (- s0 step-s) (max step-s stair-s)))
 
+(defn stair-step-cost
+  "Seconds one step of a stair takes as the dig route prices it: a walk step of `step-s` and the seconds of each cut (nil for
+  a cell already open), the step itself at least `stair-s` when it cuts, and `unseen-s` on top when a cell of it is unseen."
+  [step-s stair-s cuts unseen-s]
+  (let [dug (remove nil? cuts)
+        s0 (+ step-s (reduce + 0 dug))]
+    (+ (if (seq dug) (stair-leg-cost s0 step-s stair-s) s0) unseen-s)))
+
 (defn pillar-cost
   "Seconds a pillar of `blocks` blocks takes, `short` of them to be fetched."
   ([blocks] (pillar-cost blocks 0))

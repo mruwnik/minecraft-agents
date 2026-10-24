@@ -14,6 +14,7 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.places :as places]
             [jobs.lib.util :as u]
+            [jobs.lib.walk.world :as wworld]
             [jobs.lib.column-kinds :as kinds]))
 
 (def wall-reach "Blocks out from the feet the nearest wall is looked for." 8)
@@ -140,10 +141,12 @@
     (if (or (not (sh-sense/buried? p)) (climbed? c) (own-top c))
       0
       (let [step-s (:cost (cost/walk-cost {:distance 1}))
+            unseen-s (cost/unseen-route-s (wworld/unseen-share p) (constantly :ground) [{:x 0 :y 0 :z 0}])
             feet (sh-sense/feet p)
             cut-s (fn [n] (if (and (sh-sense/seen-cell? p n) (not (sh-sense/solid-at? p n))) 0 (or (cost/dig-cost (or (u/seen-name p n) "stone")) 0)))
-            leg (fn [dy] (cw/stair-leg-cost (+ step-s (transduce (map #(cut-s (assoc feet :y (+ (:y feet) dy %)))) + 0 (range 3)))
-                                            step-s (cw/stair-cost 1)))]
+            leg (fn [dy] (let [cells (map #(assoc feet :y (+ (:y feet) dy %)) (range 3))]
+                           (+ (cw/stair-leg-cost (+ step-s (transduce (map cut-s) + 0 cells)) step-s (cw/stair-cost 1))
+                              (if (some #(not (sh-sense/seen-cell? p %)) (cons (assoc feet :y (+ (:y feet) dy -1)) cells)) unseen-s 0))))]
         (transduce (map leg) + 0 (range 1 (inc (rise c))))))))
 
 (defn ^:async climb!

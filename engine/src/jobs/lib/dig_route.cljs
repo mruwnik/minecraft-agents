@@ -123,7 +123,7 @@
                                   (cond (or (keyword-identical? :seen a) (keyword-identical? :seen b) (keyword-identical? :seen c)
                                             (keyword-identical? :seen d) (keyword-identical? :seen e)) :seen
                                         (or a b c d e) :unseen))))
-        ;; the cost of opening cell x y z for a step, accumulated in acc #js [seconds digs dig-seconds]; false when it may not be
+        ;; the cost of opening cell x y z for a step, accumulated in acc #js [seconds digs dig-seconds dug-keys]; false when it may not be
         open-cell! (fn [^js acc x y z]
                      (let [^js k (at x y z)
                            d (.-cost k)]
@@ -135,8 +135,9 @@
                          :else (let [s (dig-at (.-name k) x y z)]
                                  (if (nil? s)
                                    false
-                                   (do (aset acc 0 (+ (aget acc 0) s)) (aset acc 1 (+ (aget acc 1) d)) (aset acc 2 (+ (aget acc 2) s)) true))))))
-        ;; key -> #js [seconds digs dig-seconds prev-key move blocks-placed] of the cheapest way found to the cell
+                                   (do (aset acc 0 (+ (aget acc 0) s)) (aset acc 1 (+ (aget acc 1) d)) (aset acc 2 (+ (aget acc 2) s)) (.push ^js (aget acc 3) (key x y z)) true))))))
+        ;; key -> #js [seconds digs dig-seconds prev-key move blocks-placed dug] of the cheapest way found to the cell, dug the set
+        ;; of the keys of every cell its steps dug
         best (js/Map.) done (js/Set.) queue #js []
         tick (volatile! 1)
         answer (volatile! nil)
@@ -149,21 +150,12 @@
                      (let [nd (+ (aget from-node 0) (aget acc 0) (unseen-at nx ny nz))
                            ^js old (.get best nk)]
                        (when (or (nil? old) (< nd (aget old 0)))
-                         (.set best nk #js [nd k ds ck move placed])
+                         (.set best nk #js [nd k ds ck move placed (let [dug (aget from-node 6) ks (aget acc 3)] (if (zero? (alength ks)) dug (into dug (array-seq ks))))])
                          (heap-push! queue #js [(+ nd (heuristic nx ny nz)) @tick nk])
                          (vswap! tick inc))))))
-        ;; whether one of the last steps to the cell of key k opened cell x y z: a floor the route itself digs away is
-        ;; none (a stair that turns back over its own cut)
-        dug-behind? (fn [k x y z]
-                      (loop [k k i 0]
-                        (let [pk (aget (.get best k) 3)]
-                          (if (or (nil? pk) (>= i 4))
-                            false
-                            (let [[px py pz] (cell-of pk) [mx my mz] (cell-of k)]
-                              (if (or (and (== x px) (== z pz) (== y (+ py 2)) (> my py))
-                                      (and (== x mx) (== z mz) (<= my y (if (< my py) (inc py) (inc my)))))
-                                true
-                                (recur pk (inc i))))))))
+        ;; whether a step of the way to the cell of key k opened cell x y z: a floor the route itself digs away is none (a
+        ;; stair that turns back over its own cut)
+        dug-behind? (fn [k x y z] (contains? (aget (.get best k) 6) (key x y z)))
         expand! (fn [ck]
                   (let [[mx my mz] (cell-of ck)
                         node (.get best ck)
@@ -175,7 +167,7 @@
                                  (let [acc #js [(+ s0 (if (and unseen? (zero? (unseen-at nx ny nz))
                                                                (or unseen-face? (and head? (unseen-cell? mx (+ my 2) mz))))
                                                         unseen-step-s 0))
-                                                0 0]]
+                                                0 0 #js []]]
                                    (when (and (or (not head?) (open-cell! acc mx (+ my 2) mz))
                                               (loop [y top] (or (< y bot) (and (open-cell! acc nx y nz) (recur (dec y))))))
                                      ;; a step up that cuts or lays its floor is a stair's step: no less than :stair-s
@@ -206,7 +198,7 @@
                                   (recur (inc dy) (and clear? below-open?))))))
                           (recur (+ i 2)))))))
         start-key (key fx (from 1) fz)]
-    (.set best start-key #js [0 0 0 nil nil 0])
+    (.set best start-key #js [0 0 0 nil nil 0 #{}])
     (heap-push! queue #js [(heuristic fx (from 1) fz) 0 start-key])
     (fn [n]
       (let [start (.-size done)
