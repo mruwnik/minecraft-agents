@@ -51,15 +51,16 @@
   #{"ladder" "vine" "water"})
 
 (defn grounded?
-  "Whether the body stands on the ground, or its feet cell (felt) is a climbable or water."
+  "Whether the body is not in a free fall: it stands on the ground, is in a fluid (water, lava, a bubble column, waterlogged
+  plants: the body's own flags), or its feet cell (felt) is a climbable."
   [p]
   (let [s (.self p)
         pos (.-pos s)
         b (u/feel p {:x (js/Math.floor (.-x pos)) :y (js/Math.floor (.-y pos)) :z (js/Math.floor (.-z pos))})]
-    (or (.-onGround s) (contains? held-in (some-> b .-name)))))
+    (or (.-onGround s) (.-inWater s) (.-inLava s) (contains? held-in (some-> b .-name)))))
 
 (defn ^:async settle!
-  "Wait (100 ms at a time) until the body stands on the ground, in a climbable or in water; a body not on the ground
+  "Wait (100 ms at a time) until the body is out of a free fall: on the ground, in a fluid or in a climbable; a body not on the ground
   whose height no longer changes (a cobweb holds it) is as settled as it will get."
   [c]
   (let [p (:primitives c)
