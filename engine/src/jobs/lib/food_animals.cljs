@@ -12,7 +12,8 @@
             [jobs.lib.foods :as foods]
             [jobs.lib.look :as look]
             [jobs.lib.pen-read :as pen-read]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.lib.walk-pick :as pick]))
 
 (a/defargs settings
   {::note-ttl-s {:default 600 :doc "Seconds a note of a food animal seen lasts: it counts toward the pair a hunt keeps." :spec (a/num-in 0 nil)}
@@ -32,12 +33,18 @@
 
 (def meat "The raw meat each food animal drops." {"cow" "beef" "pig" "porkchop" "sheep" "mutton" "chicken" "chicken" "rabbit" "rabbit"})
 
-(defn noted-price
-  "Seconds per hunger point of walking to the :seen note n: jobs.lib.cost/walk-cost of the straight distance over the points its kind's meat gives."
-  [me n]
-  (/ (:cost (cost/walk-cost {:distance (u/flat-dist me (zipmap [:x :y :z] (:pos n)))}))
-     (max 1 (or (foods/points (meat (:what n))) 1))))
+(def noted-range "Blocks from an animal another body noted that the walk toward it ends; its place is then looked at." 12)
 
+(defn noted-cost
+  "Seconds the walk from `me` toward the noted animal n takes at the least (walk-pick/walk-s, within noted-range): a lower
+  bound (its danger is go-to's to price)."
+  [me n]
+  (pick/walk-s me {:pos (zipmap [:x :y :z] (:pos n)) :range noted-range}))
+
+(defn noted-price
+  "Seconds per hunger point of the walk toward the :seen note n (noted-cost) over the points its kind's meat gives: a lower bound."
+  [me n]
+  (/ (noted-cost me n) (max 1 (or (foods/points (meat (:what n))) 1))))
 
 (defn meat-benefit
   "Seconds the meat item is worth the body: the hunger worth of reaching food, or the points of the food
@@ -59,11 +66,6 @@
   [c]
   (apply min (map #(meat-benefit c %) (vals meat))))
 
-(defn noted-cost
-  "Seconds of the straight walk to the noted animal n: a lower bound of the walk (its danger is go-to's to price)."
-  [c n]
-  (:cost (cost/walk-cost {:distance (u/flat-dist (u/self-pos c) (zipmap [:x :y :z] (:pos n)))})))
-
 (defn noted-targets
   "The food animals a :seen note (any body's) places anywhere whose meat may be worth the walk (noted-benefit over
   noted-cost), as the notes, cheapest first by noted-price, skipping the ids in `done`, babies and the animals tried; not cut at a radius."
@@ -73,7 +75,7 @@
     (->> (notes/notes c)
          (filter #(and (= :seen (:kind %)) (contains? food-animals (:what %)) (:id %) (:pos %) (not (:baby %))
                        (not (done (:id %))) (not (skipped (:id %)))
-                       (> (noted-benefit c %) (noted-cost c %))))
+                       (> (noted-benefit c %) (noted-cost me %))))
          (sort-by #(noted-price me %)))))
 
 (defn noted-target "The first of noted-targets, nil when none." [c done] (first (noted-targets c done)))

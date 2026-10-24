@@ -145,7 +145,7 @@
   "Set the lead to the animal in sight of the need whose walk costs least (jobs.lib.walk-pick); :again."
   [c need]
   (let [cell #(mapv js/Math.floor ((juxt :x :y :z) (u/pos-of (.-pos %))))
-        best (await (pick/pick! c (animals-of c need) {:bound #(pick/walk-s c (u/pos-of (.-pos %)))
+        best (await (pick/pick! c (animals-of c need) {:bound #(pick/walk-s (u/self-pos c) (lead-args (cell %)))
                                                         :args (comp lead-args cell)
                                                         :price (fn [_ q] (pick/quoted-s c q))}))]
     (ctx/update-mem! c update-in [:gather :approaches (:key need)] (fnil inc 0))

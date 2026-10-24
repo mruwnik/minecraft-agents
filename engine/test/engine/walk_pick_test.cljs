@@ -2,7 +2,11 @@
   "jobs.lib.walk-pick: candidates quoted best-first by their bound, until the best quoted is no dearer than every bound left."
   (:require [cljs.test :refer [deftest is async]]
             [engine.contract :as contract]
+            [engine.core :as core]
+            [engine.ctx :as ctx]
+            [engine.library-test :as lib]
             [engine.test-util :as tu]
+            [jobs.lib.util :as u]
             [jobs.lib.walk-pick :as pick]))
 
 (defn ^:async picked
@@ -39,3 +43,21 @@
     (is (zero? (pick/quoted-s c (contract/ending :done nil nil))) "already there")
     (is (infinite? (pick/quoted-s c (contract/ending :nothing-possible {:reason :no-path} nil))))
     (is (infinite? (pick/quoted-s c {:uses {:job-time [4 ##Inf ##Inf]}})))))
+
+(deftest the-bound-is-never-more-than-go-tos-quote-of-a-straight-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (lib/setup {:floor tu/walk-floor})
+              out (atom [])
+              walks [{:pos {:x 14 :y 64 :z 0} :range 3} {:pos {:x -20 :y 64 :z 5} :range 6} {:pos {:x 30 :y 64 :z 0} :range 0}]
+              parent {:round (fn ^:async r [c]
+                               (doseq [args walks]
+                                 (swap! out conj [(pick/walk-s (u/self-pos c) args) (second (get-in (await (pick/quote! c args)) [:uses :job-time]))]))
+                               (ctx/end c :done nil))}]
+          (let [eng (assoc-in eng [:jobs 'quoting-parent] parent)]
+            (core/submit! eng '(quoting-parent) {})
+            (await (tu/run-until-empty eng 10)))
+          (is (= 3 (count @out)))
+          (doseq [[bound mean] @out]
+            (is (< 0 bound mean) "a sprint over the flat blocks less the range: under the planner's seconds")))))))

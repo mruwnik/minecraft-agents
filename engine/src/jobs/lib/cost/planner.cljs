@@ -14,6 +14,11 @@
   would make the search inadmissible (the spec refusal names it)."
   base/WALK-S)
 
+(def least-block-s
+  "Seconds the planner prices a block of horizontal way at the least, a sprint's (its heuristic's floor, the cheapest of a
+  walk, a sprint and a swim): no plan crosses a block quicker."
+  base/SPRINT-S)
+
 (def swim-sub-ms
   "Milliseconds a swim block takes with the head under water (the planner's swimSubH): breathe's trigger prices the swim to air the same."
   (* 1000 (unchecked-get base/DEFAULT-COSTS "swimSubH")))

@@ -341,13 +341,12 @@
   [mem starving? now rest-ms]
   (boolean (and (:explored mem) (not= "started" (:explored mem)) (not (and starving? (>= (- now (:explored-at mem 0)) rest-ms))))))
 
-(def noted-range "Blocks from an animal another body noted that the walk toward it ends; its place is then looked at." 12)
 (def noted-near-range "The range of the second walk, when the first ended in range with the animal still not in sight (behind rock or a ledge)." 3)
 
 (defn noted-walk-args
   "The go-to args of the walk toward pos [x y z] of a noted animal worth `worth` seconds (near?: the second, nearer walk)."
   [c pos worth near?]
-  (ready/forage-walk c {:pos (zipmap [:x :y :z] pos) :range (if near? noted-near-range noted-range) :ways #{:walk} :torches :fetch :worth worth}))
+  (ready/forage-walk c {:pos (zipmap [:x :y :z] pos) :range (if near? noted-near-range animals/noted-range) :ways #{:walk} :torches :fetch :worth worth}))
 
 (defn quote-why
   "Why go-to's quote q of a walk prices it out: its refusal's text or reason, else its price."

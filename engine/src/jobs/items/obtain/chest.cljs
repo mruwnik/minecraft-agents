@@ -53,7 +53,7 @@
   "The candidate of cs whose walk costs least (jobs.lib.walk-pick/pick!: go-to's quote with its walk risk, best-first by the
   straight walk), nil when cs is empty."
   [c cs]
-  (await (pick/pick! c cs {:bound #(pick/walk-s c (:pos %))
+  (await (pick/pick! c cs {:bound #(pick/walk-s (u/self-pos c) (chests/walk-args c (:pos %)))
                            :args #(chests/walk-args c (:pos %))
                            :price (fn [_ q] (pick/quoted-s c q))})))
 

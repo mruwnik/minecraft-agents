@@ -1,6 +1,6 @@
 (ns jobs.lib.walk-pick
-  "The one rule for choosing among places to walk to: rank the candidates by a lower bound of their price (the straight
-  walk's seconds, walk-s, plus what does not hang on the way), quote the best through go-to (its plan, priced by
+  "The one rule for choosing among places to walk to: rank the candidates by a lower bound of their price (the least
+  seconds of the walk, walk-s, plus what does not hang on the way), quote the best through go-to (its plan, priced by
   jobs.lib.walk-risk: the one danger figure), and go on best-first until the quoted best is no dearer than every bound
   left. Danger has no straight-line bound: it comes from the quote alone."
   (:require [engine.contract :as contract]
@@ -9,9 +9,11 @@
             [jobs.lib.util :as u]))
 
 (defn walk-s
-  "Seconds of the straight walk from the body to pos: a lower bound of any walk there."
-  [c pos]
-  (/ (u/dist (u/self-pos c) pos) (cost/walk-blocks-per-s)))
+  "Seconds a walk from `from` into :range of :pos (go-to args) takes at the least: the flat blocks between their cells
+  less the range (arrival is within the range of the goal cell), at cost/least-block-s. A lower bound of any plan's."
+  [from {:keys [pos range]}]
+  (let [cell #(update-vals (select-keys % [:x :z]) js/Math.floor)]
+    (* (max 0 (- (u/flat-dist (cell from) (cell pos)) (or range 0))) cost/least-block-s)))
 
 (defn risk-s
   "Seconds the risk of go-to's quote q costs the body (cost/risk-s): the hp its plan takes (its :uses :health) and
