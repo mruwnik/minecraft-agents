@@ -1024,7 +1024,7 @@
                                                    (fn [{:keys [p]}] (swap! (fake/state p) assoc :light-default [0 0] :pitch 30))))
               replans (filter #(= :replan (:kind %)) seen)]
           (is (= :one-way (:why out)) (pr-str out))
-          (is (<= (count replans) (+ (wwatch/max-learned) 2)) (str (count replans) " replans")))))))
+          (is (= 9 (count replans)) "the same count every run: the walk clock is stopped"))))))
 
 ;; the walls hide the room: past what sight has reached the planner reads the next wall cell as open, so the walk learns
 ;; a wall cell a sight's reach on, again and again, while it walks on; none of that is a stretch to give up

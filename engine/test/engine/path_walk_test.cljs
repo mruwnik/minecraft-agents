@@ -63,7 +63,7 @@
         (let [[{:keys [result walked walk-ms]} announced at] (await (walk-to (floor (range 12)) [10 64 1] start))]
           (is (= {:status :arrived :replans 0} (select-keys result [:status :replans])))
           (is (pos? walked))
-          (is (number? walk-ms) "the walk time is reported (0 on the stopped test clock)")
+          (is (zero? walk-ms) "the walk time is read off the stopped test clock")
           (is (= [:plan] announced))
           (is (> (first at) 9)))))))
 

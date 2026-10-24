@@ -2,6 +2,7 @@
   "jobs.lib.targets: the nearest of many targets by walking cost, one bounded search a call, against the fake world."
   (:require [cljs.test :refer [deftest is async]]
             [engine.memory :as mem]
+            [jobs.lib.clock :as clock]
             [jobs.lib.targets :as targets]
             [jobs.lib.walk.plan :as wplan]
             [engine.test-util :as tu]))
@@ -60,6 +61,21 @@
           (is (> calls 3) "several calls")
           (is (= whole a))
           (is (= {} @targets/searches) "the search is over"))))))
+
+(deftest a-search-over-the-round-time-goes-on-at-the-next-call-and-gives-the-same-answer
+  ;; the budget is out of reach, so only the clock ends a round: each read of the ticking clock is 1000 ms
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks (merge floor (sealed 6 2))
+              [whole] (await (answer-of blocks [near-sealed far-open] 0 nil))
+              stopped clock/now
+              ticks (atom 0)
+              _ (set! clock/now #(swap! ticks + 1000))
+              [a calls] (try (await (answer-of blocks [near-sealed far-open] 0 {:budget 1e9}))
+                             (finally (set! clock/now stopped)))]
+          (is (> calls 3) "the time cut ends rounds before the search is over")
+          (is (= whole a)))))))
 
 (deftest every-target-walled-off-ends-on-the-node-cap-unproved
   (async done
