@@ -486,6 +486,26 @@
           (is (true? (:learn-spent (:done r))))
           (is (seq (:cells (:done r)))))))))
 
+;; a walkway's wall seen a sight's reach on teaches a cell every 16 blocks: the walk goes on, each one a new stretch
+(deftest learned-replans-a-walk-left-behind-do-not-spend-the-learned-cap
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walks (atom 0)
+              n (+ 2 (wwatch/max-learned))
+              walk-fn (fn [_ _]
+                        (let [i (swap! walks inc) x (* 16 i)]
+                          (js/Promise.resolve [(if (< i n)
+                                                 {:status :replan :why :unseen :learned true :cells [[(inc x) 85 1]] :step 1 :at [(+ x 0.2) 85 0.5]}
+                                                 {:status :arrived :at [(+ x 0.5) 85 0.5]})
+                                               1])))
+              c {:primitives (tu/fake-on-floor {:floor [-5 -5 20 5]})}
+              r (await (drive/follow! c {:status "found" :r #js {} :steps (line 10) :ms 5}
+                                      {:plan-fn (fn [_] (js/Promise.resolve {:status "found" :r #js {} :steps (line 10) :ms 5}))
+                                       :walk-fn walk-fn :to [9 64 0] :policy executor/policy}))]
+          (is (= n @walks))
+          (is (= :arrived (:status (:done r))) (pr-str (:done r))))))))
+
 ;; a re-plan the caller refused (near/walk-once!'s stair-check): {:refused true} with its :stop
 (def refused {:status "found" :r #js {} :steps [] :stop {:status :stair-cheaper :why :dives} :refused true :ms 5})
 

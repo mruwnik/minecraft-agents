@@ -965,14 +965,17 @@
 
 ;; ---- go-to :unknown in a lit room: a walled walkway whose way down is a stair at its east end
 
-(def walkway-room
-  "A lit stone room (inside x -2..44, y 64..87, z -4..10; floor y 63): a walkway (floor y 84, z 0, x 0..20) walled at
-  z -1 and 1 (y 85..86) and shut at x -1, and a 3-wide stair (z -1..1) down east of it, x 21 (top y 83) to x 41 (y 63).
+(defn walkway
+  "A lit stone room (inside x -2..len+24, y 64..87, z -4..10; floor y 63): a walkway (floor y 84, z 0, x 0..len) walled at
+  z -1 and 1 (y 85..86) and shut at x -1, and a 3-wide stair (z -1..1) down east of it, x len+1 (top y 83) to x len+21 (y 63).
   The walls hide the air beside the walkway, each step the air under the step beside it."
-  (merge (apply dissoc (box -3 63 -5 45 88 11 "stone")
-                (for [x (range -2 45) y (range 64 88) z (range -4 11)] (str x "," y "," z)))
-         (box 0 84 0 20 84 0 "stone") (box -1 85 -1 20 86 -1 "stone") (box -1 85 1 20 86 1 "stone") (box -1 85 0 -1 86 0 "stone")
-         (into {} (for [i (range 21) z [-1 0 1]] [(str (+ 21 i) "," (- 83 i) "," z) "stone"]))))
+  [len]
+  (merge (apply dissoc (box -3 63 -5 (+ len 25) 88 11 "stone")
+                (for [x (range -2 (+ len 25)) y (range 64 88) z (range -4 11)] (str x "," y "," z)))
+         (box 0 84 0 len 84 0 "stone") (box -1 85 -1 len 86 -1 "stone") (box -1 85 1 len 86 1 "stone") (box -1 85 0 -1 86 0 "stone")
+         (into {} (for [i (range 21) z [-1 0 1]] [(str (+ len 1 i) "," (- 83 i) "," z) "stone"]))))
+
+(def walkway-room (walkway 20))
 
 ;; live twin: walkway-stair-out-of-view/stair-100-east-arrives
 (deftest go-to-down-a-stair-past-unseen-air-beside-it-in-a-lit-room
@@ -1022,3 +1025,20 @@
               replans (filter #(= :replan (:kind %)) seen)]
           (is (or (:arrived out) (:why out) (:ended out) (:status out)) (pr-str out))
           (is (<= (count replans) (inc (wwatch/max-learned))) (str (count replans) " replans")))))))
+
+;; the walls hide the room: past what sight has reached the planner reads the next wall cell as open, so the walk learns
+;; a wall cell a sight's reach on, again and again, while it walks on; none of that is a stretch to give up
+(deftest go-to-along-a-long-walkway-learns-its-wall-without-spending-the-learned-cap
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [follow! drive/follow!
+              spent (atom [])
+              {:keys [out p]} (with-redefs [drive/follow! (fn ^:async f [c plan opts]
+                                                                 (let [r (await (follow! c plan opts))]
+                                                                   (when (:learn-spent (:done r)) (swap! spent conj (:at (:done r))))
+                                                                   r))]
+                                     (await (run-go-to {:self {:pos {:x 0.5 :y 85 :z 0.5}} :blocks (walkway 140) :radius 16 :exact-eye true :bodyHitbox true}
+                                                       {:pos [140 64 8] :range 1 :ways #{:walk :clear-seal} :unknown true} lit-and-looking)))]
+          (is (= {:arrived true} (select-keys out [:arrived])) (str (pr-str out) " at " (:pos (fake/self p))))
+          (is (= [] @spent) "no walk ends learn-spent"))))))

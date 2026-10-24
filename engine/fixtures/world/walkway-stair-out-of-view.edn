@@ -22,7 +22,14 @@
     [:fill [340 0 7] [340 0 9] "stone"]
     [:fill [341 -1 7] [341 -1 9] "stone"]]}
  :cases
- [  {:name "stair-100-east-arrives"
+ [  ;; from the west end the plan steps over the wall cell just past what sight has reached, toward the goal under the east
+    ;; end: the wall cells learned on the way must not spend the learned-replan cap the stair needs
+    {:name "walkway-300-east-learns-its-wall-arrives"
+   :body {:at [25.5 11 8.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [325 0 16] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 280 :of-job true}]
+   :after [[:body-near [325.5 0 16.5] 3]]}
+  {:name "stair-100-east-arrives"
    :body {:at [230.5 11 8.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [60 0 16] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 280 :of-job true}]
