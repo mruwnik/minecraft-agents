@@ -2,7 +2,8 @@
 ;; Should-succeed: a lit hall with a stone floor at y -41 (iron's small placement only) and iron behind a wall: for a raw
 ;; iron worth a goal's search (:search-worth, about 8 raw iron's own) the look pays and a tunnel there does not, so the
 ;; body searches, sees the ore and mines it.
-;; Should-fail (no look): a dirt floor in a bedrock shell shows no rock: the mine tunnels for it, no search starts.
+;; Should-fail (no look, no climb): a dirt floor in a bedrock shell shows no rock and a roof no stair goes up through: the mine
+;; tunnels for it at the feet, no search starts.
 {:defaults
  {:tags [:obtain :explore :mine] :time :any
   :plot {:light :lit :height 6 :length 48 :width 24 :floor "stone"}
@@ -21,5 +22,6 @@
    :plot {:light :lit :height 6 :length 48 :width 24 :floor "dirt"}
    :act [[:job (jobs.items.obtain {:item "raw_iron" :count 8 :ways #{:gather}})]]
    :expect [{:event {:source :job :kind :obtain.gathering :data {:item "raw_iron"}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :obtain.exploring} :for-s 60 :until {:source :job :kind :obtain.gathering}}]
+            {:no-event {:source :job :kind :obtain.exploring} :for-s 60 :until {:source :job :kind :obtain.gathering}}
+            {:no-event {:source :job :kind :obtain.climbed} :for-s 60 :until {:source :job :kind :obtain.gathering}}]
    :limit-s 90}]}

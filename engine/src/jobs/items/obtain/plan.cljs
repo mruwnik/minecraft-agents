@@ -10,6 +10,7 @@
             [jobs.items.obtain.seen :refer [seen-of sheep-in-range shears-source]]
             [jobs.items.obtain.table :refer [gather-needs grass-seeds hand-dug leaves-of material-blocks need-way searchable? source-opts stalks wool-color wool?]]
             [jobs.items.recipes :as recipes]
+            [jobs.lib.access.rules :as rules]
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
@@ -206,12 +207,22 @@
       (+ (cost/search-s (cost/look-leg-chance p (notes/notes c) (search-names need) [(:x self) (:z self)] r) leg (search-worth c))
          (:cost (cost/walk-cost {:distance r}))))))
 
+(defn climb-sealed?
+  "Whether the body has seen an unbreakable block (jobs.lib.access.rules) over its head within climb blocks: a stair up
+  that far runs into it (a world-test shell, the nether's roof)."
+  [p self climb]
+  (let [head (inc (js/Math.floor (:y self)))]
+    (boolean (some #(> (:y (:pos %)) head)
+                   (look/seen-blocks p {:names (vec rules/unbreakable) :radius (inc climb) :max js/Infinity})))))
+
 (defn tunnel-way
   "{:way :tunnel :cost :y} of a tunnelled ore need as jobs.gather.mine gets it unseen: the torches it stocks first
-  (stock-s), a stair down from the feet to its cost/ore-level (where the body stands when that is higher or none is set),
-  then a strip tunnel there, legs of the cost/torch-gap one torch lights finding by cost/tunnel-chance within the call's
-  search-worth (cost/search-s). Stair and legs are lit as they go (cost/lit-way-s over stair-time's seconds a step), each
-  risking a death under rock. :cost Infinity for a need not tunnelled for or not an ore."
+  (stock-s), a stair from the feet to the tunnel height y, then a strip tunnel there, legs of the cost/torch-gap one
+  torch lights finding by cost/tunnel-chance within the call's search-worth (cost/search-s). y is the cheaper of the
+  feet (a stair down to cost/ore-level when that is lower) and, with the ore's level above the feet, that level by a
+  stair up (obtain.gather climbs it: not once climbed, nor through a climb-sealed? rock). The stair down and the legs
+  are lit as they go (cost/lit-way-s), the stair up is dug dark (cost/dark-way-s of the kit), each over stair-time's
+  seconds a step and risking a death under rock. :cost Infinity for a need not tunnelled for or not an ore."
   [c need]
   (let [block (:block (:args need))
         ore (cost/ore-of [block])
@@ -219,15 +230,25 @@
     (if-not (and (:tunnel? need) ore)
       {:way :tunnel :cost js/Infinity}
       (let [self (u/self-pos c)
+            p (:primitives c)
             feet (js/Math.floor (:y self))
-            y (min feet (or level feet))
-            at (assoc self :y y)
-            risk (threats/route-death-cost c {:underground? true :night? false} at)
+            kit (threats/body-of p)
             n cost/torch-gap
-            leg (+ risk (cost/lit-way-s (stair-time/steps-s :level n) n))
-            down (+ risk (cost/lit-way-s (stair-time/steps-s :down (- feet y)) (- feet y)))]
-        {:way :tunnel :y y
-         :cost (+ (stock-s c) down (cost/search-s (cost/tunnel-chance ore y n) leg (search-worth c)))}))))
+            stock (stock-s c)
+            at-y (fn [y]
+                   (let [risk (threats/route-death-cost c {:underground? true :night? false} (assoc self :y y))
+                         dy (- feet y)
+                         stair (if (neg? dy)
+                                 (cost/dark-way-s (stair-time/steps-s :up (- dy)) (- dy) kit)
+                                 (cost/lit-way-s (stair-time/steps-s :down dy) dy))
+                         leg (+ risk (cost/lit-way-s (stair-time/steps-s :level n) n))]
+                     {:way :tunnel :y y
+                      :cost (+ stock risk stair (cost/search-s (cost/tunnel-chance ore y n) leg (search-worth c)))}))
+            here (at-y (min feet (or level feet)))
+            up (when (and level (> level feet) (not (get-in (ctx/mem c) [:gather :climbed (:key need)]))
+                          (not (climb-sealed? p self (- level feet))))
+                 (at-y level))]
+        (if (and up (< (:cost up) (:cost here))) up here)))))
 
 (defn search-way
   "How an unseen need is best looked for: {:way :look :cost} (look-cost), or for a tunnelled one its tunnel-way when that

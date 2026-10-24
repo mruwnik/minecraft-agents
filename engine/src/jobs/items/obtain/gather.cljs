@@ -246,6 +246,31 @@
     (or (await (fetch-need/return! c))
         (await (torch-stock/torches! c)))))
 
+(defn climb-y
+  "The height a stair up goes to before a mine for an ore not seen starts: the one under way, else (once a need) the
+  tunnel height obtain.plan/search-way prices when that lies above the feet, else nil."
+  [c need]
+  (or (get-in (ctx/mem c) [:gather :climb])
+      (when (and (:tunnel? need) (= 'jobs.gather.mine (:job need)) (not (seen-of c need))
+                 (not (get-in (ctx/mem c) [:gather :climbed (:key need)])))
+        (let [{:keys [way y]} (search-way c need)]
+          (when (and (= :tunnel way) (> y (js/Math.floor (:y (u/self-pos c))))) y)))))
+
+(defn ^:async climb-step!
+  "Stair up to y (a jobs.access.stair child, slot :climb; it hangs no torch), the mine then tunnelling where it ends.
+  :continue while it runs, else :again with the climb booked for the need (not tried again), info obtain.climbed."
+  [c need y]
+  (ctx/update-mem! c assoc-in [:gather :climb] y)
+  (let [r (waits/waiting-out c (await (ctx/call c :climb 'jobs.access.stair {:dir :up :y y :ways (fetch-need/pass-ways c)
+                                                                            :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
+    (if (= :continue r)
+      :continue
+      (let [at (js/Math.floor (:y (u/self-pos c)))]
+        (ctx/update-mem! c #(-> % (update :gather dissoc :climb) (assoc-in [:gather :climbed (:key need)] true)))
+        (ctx/emit! c :obtain.climbed :info {:item (:key need) :y at :to y
+                                            :message (str "stair up for " (:key need) " ended at y " at (when (< at y) (str ", short of y " y)))})
+        :again))))
+
 (defn start-cause
   "The cause of the need's child's start check now."
   [c need]
@@ -343,6 +368,8 @@
       (book-light! c (torch-due c (start-cause c need)))
       (and (not (get-in (ctx/mem c) [:gather :before])) (light-settling? c (start-cause c need)))
       :continue
+      (and (not (get-in (ctx/mem c) [:gather :before])) (climb-y c need))
+      (await (climb-step! c need (climb-y c need)))
       (and (not (get-in (ctx/mem c) [:gather :before]))
            (not (if (explore-opts c)
                   ;; :later (dark, night) is the child's to wait out and :look its to look up at, not a sign that nothing is there

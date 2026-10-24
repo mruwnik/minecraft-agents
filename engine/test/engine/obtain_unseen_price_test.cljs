@@ -98,8 +98,8 @@
 (defn iron-way
   "search-way of 3 unseen raw iron (worth the call's :search-worth, given) for a body on a floor of block at y (every block
   in sight seen), carrying a stone pickaxe and inventory (16 torches by default), and the price of the plan that gathers them."
-  [block y & {:keys [worth inventory ways] :or {inventory [{:name "torch" :count 16}] ways #{:craft :smelt :gather :search}}}]
-  (let [p (tu/seeing-all (tu/fake-on-floor {:floor [y -50 -45 50 45] :floor-block block :time 6000
+  [block y & {:keys [worth inventory ways blocks] :or {inventory [{:name "torch" :count 16}] ways #{:craft :smelt :gather :search}}}]
+  (let [p (tu/seeing-all (tu/fake-on-floor {:floor [y -50 -45 50 45] :floor-block block :time 6000 :blocks blocks
                                             :self {:pos [0.5 (inc y) 0.5]}
                                             :inventory (into [{:name "stone_pickaxe" :count 1}] inventory)}))
         view (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)}))
@@ -121,8 +121,10 @@
     (is (< (:plan grass) js/Infinity) "the get-kit plan for iron has a price")
     (is (= :look (:way cave)) "a cave floor of stone seen at y 40 shows iron more cheaply than a stair and a tunnel")
     (is (< (:cost cave) (:tunnel cave) js/Infinity))
-    (is (< (:tunnel (iron-way "dirt" -42 :worth kit-worth)) js/Infinity)
-        "deep below iron's level, where only its small placement reaches, the iron kit's bill (get-kit's search worth) still pays a tunnel at the feet")
+    (is (= [:tunnel 16] ((juxt :way :y) (iron-way "dirt" -42 :worth kit-worth)))
+        "deep below iron's level, where only its small placement reaches, a stair up to iron's level and a tunnel there")
+    (is (= [:tunnel -41] ((juxt :way :y) (iron-way "dirt" -42 :worth kit-worth :blocks {"3,-36,3" "bedrock"})))
+        "under a seen bedrock roof no stair goes up: the kit's bill still pays a tunnel at the feet")
     (is (= :look (:way (iron-way "stone" -41 :worth kit-worth)))
         "a hall floored with stone at y -41 (obtain-iron-look) is looked over at the kit's worth, not tunnelled")))
 
