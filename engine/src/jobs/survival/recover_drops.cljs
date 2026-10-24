@@ -78,9 +78,9 @@
         (contract/later :recovering (str n " of " total " items back") :units :items :done n :left (- total n))))))
 
 (defn ^:async trip-s
-  "[least mean] seconds of the walk to the pile of :died data as go-to quotes it, the mean with ::collect-s at the pile."
-  [c data]
-  (let [[least mean] (or (get-in (await (est/quote-trip c data)) [:uses :job-time]) [0 0])]
+  "[least mean] seconds of the walk to the pile of death `entry` as go-to quotes it, the mean with ::collect-s at the pile."
+  [c entry]
+  (let [[least mean] (or (get-in (await (est/quote-trip c entry)) [:uses :job-time]) [0 0])]
     [least (+ mean (settings/get settings ::collect-s))]))
 
 (defn window-ms
@@ -93,7 +93,7 @@
   [c]
   (let [d (first (dth/open-deaths c))
         window-s (if d (/ (window-ms c d) 1000) 0)
-        [least mean] (await (trip-s c (:data d)))]
+        [least mean] (await (trip-s c d))]
     {:uses {:job-time [least mean (max mean window-s)]}}))
 
 (defn ^:async wait-while!
@@ -122,8 +122,8 @@
   (if (and (:decided (ctx/mem c)) (not (:recheck (ctx/mem c))) (or (zero? (:cuts (ctx/mem c) 0)) (:reestimated (ctx/mem c))))
     (:decided (ctx/mem c))
     (let [_ (await (look-at-pile! c (:pos (:data entry))))
-          quoted (await (est/quote-trip c (:data entry)))
-          e (-> (est/estimate c (:data entry) (settings/ticks->ms (game/ticks-since entry (ctx/view c))) quoted)
+          quoted (await (est/quote-trip c entry))
+          e (-> (est/estimate c (:data entry) (est/pile-age-ms c entry) quoted)
                 (update :cost est/finite)
                 (assoc :at (ctx/now c)))]
       (ctx/update-mem! c #(cond-> (assoc % :decided e :reestimated true :recheck false) (nil? (:baseline %)) (assoc :baseline (pl/baseline c (:t entry) (:pos (:data entry)) (settings/get settings ::collect-radius)))))
@@ -151,7 +151,7 @@
   for the same mobs where a finished hold saw them: the pile is left (its worth is under the full cost, danger in; Q367 rules out
   waiting, not leaving)."
   [c entry decided]
-  (let [need-ms (* 1000 (cfg/hold-slack) (+ (second (await (trip-s c (:data entry)))) (:flight-s decided 0)))
+  (let [need-ms (* 1000 (cfg/hold-slack) (+ (second (await (trip-s c entry))) (:flight-s decided 0)))
         room (- (window-ms c entry) need-ms)
         hold-ms (min room (:hold-ms decided (cfg/danger-memory-ms)))]
     (if (and (>= hold-ms (cfg/min-hold-ms)) (not (est/unchanged-after-hold? c decided)))

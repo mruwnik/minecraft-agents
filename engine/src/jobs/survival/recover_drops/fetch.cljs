@@ -10,6 +10,7 @@
             [jobs.survival.recover-drops.danger :as dg]
             [jobs.survival.recover-drops.deaths :as dth]
             [jobs.survival.recover-drops.ending :as end]
+            [jobs.survival.recover-drops.estimate :as est]
             [jobs.survival.recover-drops.pile :as pl]))
 
 (defn own-seal-near
@@ -45,7 +46,7 @@
   (let [worth (:value (:decided (ctx/mem c)))]
     (if-let [d (dg/threatened? c)]
       [:danger d]
-      [(await (child/call-chase* c :go {:pos pos :range (cfg/arrive-range) :leg-s (* (cfg/leg-s) (if (:blocked (ctx/mem c)) blocked-leg-factor 1)) :walk (cond-> {:checks cfg/own-checks} (number? worth) (assoc :worth worth :stake worth))}))])))
+      [(await (child/call-chase* c :go {:pos pos :range (cfg/arrive-range) :leg-s (* (cfg/leg-s) (if (:blocked (ctx/mem c)) blocked-leg-factor 1)) :walk (cond-> {:checks cfg/own-checks} (number? worth) (assoc :worth worth :stake worth :stake-age-ms (est/pile-age-ms c (dth/current-death c))))}))])))
 
 (defn refused?
   "Whether the walk's ending r is go-to's verdict on the goal cell alone, given before any search (as chase passes it on)."

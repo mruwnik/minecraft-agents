@@ -37,7 +37,7 @@
         feet (mapv js/Math.floor ((juxt :x :y :z) (u/self-pos c)))]
     (and (not= "found" (:status plan)) end
          (not= feet (mapv js/Math.floor ((juxt :x :y :z) end)))
-         (<= (:hp (risk/estimate c pos {:plan plan :stake (:stake (:args c)) :caves-free? true})) (price/allowed c))
+         (<= (:hp (risk/estimate c pos {:plan plan :stake (:stake (:args c)) :stake-age-ms (:stake-age-ms (:args c)) :caves-free? true})) (price/allowed c))
          (= :ok (first (status c end (assoc plan :status "found")))))))
 
 (defn check

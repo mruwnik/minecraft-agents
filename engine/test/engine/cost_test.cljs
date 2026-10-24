@@ -424,6 +424,12 @@
     (is (= 3500 (lost {:respawn {:x 3000 :y 64 :z 0}})) "a bed too far for the despawn window")
     (is (= 3500 (lost {})) "no bed: world spawn")))
 
+(deftest a-stake-pile-that-has-lain-long-is-lost-though-the-bed-is-near-but-the-fresh-load-is-not
+  (let [bed {:respawn {:x 0 :y 64 :z 0}}
+        lost #(- (cost/death-cost (assoc bed :stake 500 :carried 3000 :stake-age-ms %) far) (cost/death-cost bed far))]
+    (is (zero? (lost 0)))
+    (is (= 500 (lost 280000)) "100 blocks of walk past 280 s of 300: the stake pile despawns first, the carried items are fresh")))
+
 (deftest a-hold-costs-its-seconds-and-hp-lost-and-a-way-out-its-hurt-and-death-risk
   (let [body {:respawn {:x 0 :y 64 :z 0} :level 0 :health 3}
         route {:underground? true}]

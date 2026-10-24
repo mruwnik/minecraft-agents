@@ -4,7 +4,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [engine.game :as game]
-            [jobs.lib.armour :as armour]
+                        [jobs.lib.armour :as armour]
             [jobs.lib.child :as child]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
@@ -55,8 +55,8 @@
   and the walk to it is dangerous: go-to's quote of it names the mobs it risks (est/estimate)."
   [c entry]
   (let [{:keys [pos cause]} (:data entry)
-        elapsed (settings/ticks->ms (game/ticks-since entry (ctx/view c)))
-        e (est/estimate c (:data entry) elapsed (await (est/quote-trip c (:data entry))))
+        elapsed (est/pile-age-ms c entry)
+        e (est/estimate c (:data entry) elapsed (await (est/quote-trip c entry)))
         safe (cost/fetch-cost {:distance (when pos (u/dist (u/self-pos c) pos)) :elapsed-ms elapsed :cause cause})
         safe-cost (if (js/isFinite (:cost safe)) (:cost safe) js/Infinity)]
     (boolean (and (seq (:seen-mobs e)) (> (:value e) (+ safe-cost (cfg/margin)))))))

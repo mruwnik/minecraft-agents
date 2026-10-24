@@ -2,7 +2,9 @@
   "What a pile is worth against the trip to it: value, cost with its parts, the texts that say so, deep piles."
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
+            [engine.game :as game]
             [engine.memory :as mem]
+            [engine.settings :as settings]
             [jobs.lib.breath :as breath]
             [jobs.lib.escape :as escape]
             [jobs.lib.cost :as cost]
@@ -106,11 +108,17 @@
   [c {:keys [inventory experience]}]
   (+ (:value (cost/item-value inventory :overrides (:value-overrides (:args c)))) (cost/experience-cost experience)))
 
+(defn pile-age-ms
+  "Milliseconds the pile of death `entry` has lain."
+  [c entry]
+  (settings/ticks->ms (game/ticks-since entry (ctx/view c))))
+
 (defn ^:async quote-trip
-  "go-to's quote of the walk to the pile of :died data (its planned seconds, its walk risk, and the hp the route drowns),
-  nil without a pos; its risk prices a death on the way as losing the pile too (:stake, pile-worth)."
-  [c {:keys [pos] :as data}]
-  (when pos (await (ctx/quote c 'jobs.movement.go-to {:pos pos :range (cfg/arrive-range) :stake (pile-worth c data)}))))
+  "go-to's quote of the walk to the pile of death `entry` (its planned seconds, its walk risk, and the hp the route drowns),
+  nil without a pos; its risk prices a death on the way as losing the pile too (:stake, pile-worth, lain :stake-age-ms)."
+  [c entry]
+  (let [{:keys [pos] :as data} (:data entry)]
+    (when pos (await (ctx/quote c 'jobs.movement.go-to {:pos pos :range (cfg/arrive-range) :stake (pile-worth c data) :stake-age-ms (pile-age-ms c entry)})))))
 
 (defn estimate
   "{:value :cost :parts :reason :top-items :top-mobs :hold-ms :flight-s} (:hold-ms: how long a skip for this danger is remembered,
