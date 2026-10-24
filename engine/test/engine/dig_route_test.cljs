@@ -130,4 +130,5 @@
     (doseq [goal [[0 13 0] [0 14 0] [0 15 0] [0 16 0]]
             :let [r (dr/route block-at [0 10 0] goal {:step-s 0.2 :margin 2 :max-nodes 100000})
                   stood (reductions (fn [dug s] (into dug (:dig s))) #{} (:steps r))]]
+      (is (seq (:steps r)) "a route is found")
       (is (every? true? (map (fn [dug {[x y z] :to}] (not (dug [x (dec y) z]))) stood (:steps r)))))))
