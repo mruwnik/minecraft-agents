@@ -54,31 +54,34 @@
 
 (defn way-counts
   "{:k :n} over the seen stands nearest start ([x y z] feet cell; at most ::sample of them, breadth first over the
-  seen ways between them): n the ways out of them (four headings, each level, one up or one down) whose cells are all
-  seen, k those that lead to another stand. known: (fn [cx sy cz]) the memory's ids + 1 of a section."
+  ways between them): n the ways out of them (four headings, each level, one up or one down) whose cells are all
+  seen, k those that lead to another stand. A level way with a cell not seen is gone through uncounted (the cells by
+  the feet a body looking ahead has not seen, between it and the ground it sees), at most ::sample times 8 cells in
+  all. known: (fn [cx sy cz]) the memory's ids + 1 of a section."
   [known [sx sy sz]]
   (let [at (cell-fn known)
         cap (settings/get settings ::sample)
         qx #js [sx] qy #js [sy] qz #js [sz]
-        seen (js/Set. #js [(str sx "," sy "," sz)])]
-    (loop [i 0 k 0 n 0]
-      (if (or (>= i (.-length qx)) (>= i cap))
+        seen (js/Set. #js [(str sx "," sy "," sz)])
+        visit! (fn [x y z] (let [key (str x "," y "," z)]
+                             (when-not (.has seen key)
+                               (.add seen key) (.push qx x) (.push qy y) (.push qz z))))]
+    (loop [i 0 stands 0 k 0 n 0]
+      (if (or (>= i (.-length qx)) (>= stands cap) (>= i (* 8 cap)))
         {:k k :n n}
         (let [x (aget qx i) y (aget qy i) z (aget qz i)
-              [k n] (loop [d 0 k k n n]
-                      (if (== d 4)
-                        [k n]
-                        (let [nx (+ x (aget dxs d)) nz (+ z (aget dzs d))
-                              col #(at nx (+ y %) nz)
-                              level (all-of (holds (col -1)) (pass (col 0)) (pass (col 1)))
-                              up (all-of (holds (col 0)) (pass (col 1)) (pass (col 2)) (pass (at x (+ y 2) z)))
-                              down (all-of (holds (col -2)) (pass (col -1)) (pass (col 0)) (pass (col 1)))
-                              ny (cond (== level 1) y (== up 1) (inc y) (== down 1) (dec y))]
-                          (cond
-                            ny (let [key (str nx "," ny "," nz)]
-                                 (when-not (.has seen key)
-                                   (.add seen key) (.push qx nx) (.push qy ny) (.push qz nz))
-                                 (recur (inc d) (inc k) (inc n)))
-                            (and (zero? level) (zero? up) (zero? down)) (recur (inc d) k (inc n))
-                            :else (recur (inc d) k n)))))]
-          (recur (inc i) k n))))))
+              [k' n'] (loop [d 0 k k n n]
+                        (if (== d 4)
+                          [k n]
+                          (let [nx (+ x (aget dxs d)) nz (+ z (aget dzs d))
+                                col #(at nx (+ y %) nz)
+                                level (all-of (holds (col -1)) (pass (col 0)) (pass (col 1)))
+                                up (all-of (holds (col 0)) (pass (col 1)) (pass (col 2)) (pass (at x (+ y 2) z)))
+                                down (all-of (holds (col -2)) (pass (col -1)) (pass (col 0)) (pass (col 1)))
+                                ny (cond (== level 1) y (== up 1) (inc y) (== down 1) (dec y))]
+                            (cond
+                              ny (do (visit! nx ny nz) (recur (inc d) (inc k) (inc n)))
+                              (and (zero? level) (zero? up) (zero? down)) (recur (inc d) k (inc n))
+                              (neg? level) (do (visit! nx y nz) (recur (inc d) k n))
+                              :else (recur (inc d) k n)))))]
+          (recur (inc i) (if (> n' n) (inc stands) stands) k' n'))))))

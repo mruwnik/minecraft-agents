@@ -409,7 +409,7 @@
         (let [heard (zombie 7 0.5 -5.5)
               stay '(jobs.survival.respond-to-hostile {:settings {:jobs.survival.respond-to-hostile/stay-inside false}})]
           (doseq [[world spec decision held? muted? why]
-                  [[{:time 14000 :entities [heard]} respond :fight false true "no roof: no hold; at the measured caught chance the price fights it"]
+                  [[{:time 14000 :entities [heard]} respond :flee false false "no roof: no hold; over open ground a body at 5 health flees it"]
                    [{:time 14000 :blocks roofed-passage :entities [heard]} respond :fight true true "roofed, heard only: it stays"]
                    [{:time 14000 :blocks roofed-passage :entities [heard]} stay :flee false false "stay-inside off: it flees"]
                    [{:time 1000 :blocks roofed-passage :entities [heard]} respond :fight true true "day: it stays too (the roof, not the clock)"]]]
