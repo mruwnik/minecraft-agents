@@ -404,6 +404,16 @@
           (is (= 1 (get (inv s) "raw_iron")))
           (is (= :count (:reason (done-event s)))))))))
 
+(deftest a-tunnel-child-refused-for-a-dark-hall-a-torch-ends-ends-the-mine-with-that-cause
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [hall {:reason :exposed :text "dark hall" :lowered-by #{:torch} :at {:x 0 :y 64 :z 0}}
+              refuse (assoc (get registry/jobs 'jobs.gather.strip-tunnel) :round (fn ^:async f [c] (ctx/end c :impossible hall)))
+              {:keys [out]} (await (as-child {:trip true :block "iron_ore" :count 1 :direction "east" :tunnel-length 3 :ways #{:seen :strip-tunnel}}
+                                             (deep-rock {}) nil 120 {:jobs {'jobs.gather.strip-tunnel refuse}}))]
+          (is (= (select-keys hall [:reason :lowered-by :at]) (select-keys (:cause out) [:reason :lowered-by :at])) (pr-str out)))))))
+
 ;; ------------------------------------------------------------------ :stay-level
 (deftest stay-level-tunnels-at-the-start-height-without-a-stair
   (async done

@@ -172,6 +172,8 @@
             (book-cut! c (:dug res))
             (cond
               (:cause res) (stop! c (:reason (:cause res)) (select-keys (:cause res) [:tool :why :text]))
+              (and (nil? stop) (map? (:cause r)) (not= :done (:kind r)))
+              (stop! c (contract/cause-key r) (select-keys (:cause r) [:text :lowered-by :at]))
               (= :watch stop) :again
               (and (= :tunnel-length stop) (branch/due? c now)) (do (branch/begin! c (:tunnel (ctx/mem c))) :again)
               (= :no-torches stop) (stop! c :no-torches {:text (torches/no-torches-text false)})
