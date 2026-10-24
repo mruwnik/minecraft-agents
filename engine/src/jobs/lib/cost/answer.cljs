@@ -114,16 +114,14 @@
   "Seconds answer costs body {:health :absorption, death-cost's :respawn :level :carried} at `at` (see the ns doc); :then
   is priced at full health: the body meets the mob again once it has healed. :outcomes [[chance answer]] (a look's,
   jobs.lib.cost.look) are each paid by its chance, at the health the answer's blows leave. Both are paid only by the
-  chance the body lives through the answer's own blows: a death ends the meet (as answer-death-chance). :worth, seconds
-  the answer is worth when lived through (a fight's kills, hostile-fight/::kill-worth), is taken off its price."
-  [{:keys [health] :as body} {:keys [seconds then outcomes worth] :as answer} at]
+  chance the body lives through the answer's own blows: a death ends the meet (as answer-death-chance)."
+  [{:keys [health] :as body} {:keys [seconds then outcomes] :as answer} at]
   (let [health (or health 20)
         dies (blows-chance body answer)
         lives (- 1 dies)
         own (+ (health/hp-cost health (min (expected-damage answer) health))
                (* dies (death/death-cost body at))
-               seconds
-               (- (* lives (or worth 0))))]
+               seconds)]
     (cond
       (seq outcomes) (+ own (* lives (reduce + (map (fn [[chance a]] (* chance (answer-price (after body answer) a at))) outcomes))))
       (seq then) (+ own (* lives (apply min (map #(answer-price (healed body) % at) then))))

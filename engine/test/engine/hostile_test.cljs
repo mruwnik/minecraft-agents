@@ -1002,7 +1002,7 @@
         (let [skel (skeleton 1 0.5 10)
               creeper {:id 20 :name "creeper" :kind "hostile" :pos {:x 2 :y 64 :z 10.5}}
               decisions (fn ^:async f [es] (mapv (juxt :mob :decision) (decided (:seen (await (flight-round respond {:inventory sword :entities es}))))))]
-          (is (= [["skeleton" :fight]] (await (settings/with-settings {:jobs.lib.hostile-fight/kill-worth 0} #(decisions [skel])))) "a lone skeleton, its kill worth the bother, is fought")
+          (is (= [["skeleton" :fight]] (await (decisions [skel]))) "a lone skeleton is fought")
           (is (= [["creeper" :flee]] (await (decisions [skel creeper]))) "with a creeper beside it the body flees and says why")
           (let [{:keys [eng seen]} (setup-seeing {:inventory sword :entities [skel creeper]} [15 15] 1000)]
             (core/submit! eng respond {})
@@ -1016,7 +1016,7 @@
         (let [skel (skeleton 1 0.5 10)
               creeper {:id 20 :name "creeper" :kind "hostile" :pos {:x 7 :y 64 :z 5}}
               decisions (fn ^:async f [es] (mapv (juxt :mob :decision) (decided (:seen (await (flight-round respond {:inventory sword :entities es}))))))]
-          (is (= [["skeleton" :fight]] (await (settings/with-settings {:jobs.lib.hostile-fight/kill-worth 0} #(decisions [skel])))) "a lone skeleton, its kill worth the bother, is fought")
+          (is (= [["skeleton" :fight]] (await (decisions [skel]))) "a lone skeleton is fought")
           (is (= [["creeper" :flee]] (await (decisions [skel creeper])))
               "a creeper 8 off the skeleton and the body, beyond both the trigger's radius and its blast, comes to the fight in 2 s: flee"))))))
 
@@ -1863,14 +1863,12 @@
       (hostile-fight/swim-out c [{:name "zombie"}]))
     (is (= 1 @runs) "one stand, one walk of its land, from both cells")))
 
-(deftest a-body-in-full-iron-with-a-sword-walks-away-from-a-lone-skeleton-unless-a-kill-is-worth-more
+(deftest a-body-in-full-iron-with-a-sword-fights-a-lone-skeleton-at-10-on-easy-and-normal-and-walks-away-on-hard
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [choice (fn ^:async f [worth]
-                       (let [world {:inventory sword :equipment iron-armour :entities [(assoc (skeleton 1 10 0) :visible true)]}
-                             run #(flight-round respond world)
-                             {:keys [seen]} (await (if worth (settings/with-settings {:jobs.lib.hostile-fight/kill-worth worth} run) (run)))]
-                         (:decision (first (decided seen)))))]
-          (is (= :flee (await (choice nil))) "by default a fight with nothing to show for it is the dearer: it steps away")
-          (is (= :fight (await (choice 0))) "drops and the way cleared worth the bother: it fights"))))))
+        (doseq [[d decision prices] [[1 :fight {:fight 26 :flee 32}] [2 :fight {:fight 34 :flee 39}] [3 :flee {:fight 90 :flee 78}]]]
+          (let [world {:inventory sword :equipment iron-armour :entities [(assoc (skeleton 1 10 0) :visible true)]}
+                {:keys [seen]} (await (settings/with-settings {:jobs.lib.cost.threat/difficulty d} #(flight-round respond world)))
+                [e] (filter #(= :hostile.decided (:kind %)) @seen)]
+            (is (= [decision prices] [(:decision e) (:prices e)]) (str "difficulty " d))))))))
