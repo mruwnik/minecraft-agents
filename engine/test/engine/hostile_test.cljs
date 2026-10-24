@@ -1,7 +1,8 @@
 (ns engine.hostile-test
   "respond-to-hostile, retreat and the hostile-near trigger
   against the fake world."
-  (:require [cljs.test :refer [deftest is are async]]
+  (:require [cljs.test :refer [deftest is are async use-fixtures]]
+            [engine.game :as game]
             [engine.registry :as registry]
             [engine.flight-job :as fj]
             [engine.settings :as settings]
@@ -38,6 +39,8 @@
   [p es]
   (swap! (fake/state p) assoc :entities [])
   (doseq [e es] (fake/add-entity! p e)))
+
+(use-fixtures :each {:before #(game/select! (fake/create {}))})
 
 (def flight-floor
   "Ground wide enough for a whole flight from a mob that stands still: 35 blocks (a zombie's follow range) every way."

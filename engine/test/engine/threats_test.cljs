@@ -1,13 +1,17 @@
 (ns engine.threats-test
   "jobs.lib.threats' known threats and their tolls for the planner: sensed real dangers and remembered :threat spots, costed by what the hostile
   reflex would do (flee: dear, fight: cheap)."
-  (:require [cljs.test :refer [deftest is are]]
+  (:require [cljs.test :refer [deftest is are use-fixtures]]
+            [engine.fake :as fake]
+            [engine.game :as game]
             [engine.memory :as mem]
             [engine.ready-test :as ready-test]
             [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.lib.cost :as cost]
             [jobs.lib.threats :as threats]))
+
+(use-fixtures :each {:before #(game/select! (fake/create {}))})
 
 (def unarmed {:health 20 :equipment nil :weapon nil :pos {:x 0 :y 64 :z 0}})
 (def armed (assoc unarmed :weapon "diamond_sword"))
