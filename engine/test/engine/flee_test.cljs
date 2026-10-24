@@ -39,7 +39,11 @@
   with the body's acts."
   1000)
 
-(def big-floor [-200 -12 20 12])
+(def big-floor
+  "Room past the chasers' give-up range (a zombie's 35 blocks) every way but far west."
+  [-200 -48 60 48])
+
+(def strip "The floor 24 wide the rock tunnel case was built on." [-200 -12 20 12])
 
 (defn setup
   "An engine over a fake on big-floor; world's :ms-per-call (default ms-per-call) is the game time one call takes."
@@ -1136,7 +1140,7 @@
               rock (into {} (for [x (range -6 10) y (range 63 68) z [-1 0 1]
                                   :when (not (or (tunnel-cells [x y z]) (and (<= -4 x -2) (#{64 65} y) (zero? z))))]
                               [(key-of x y z) "stone"]))
-              s (setup-sensed {:blocks rock :entities [(zombie 7 5 {})]})
+              s (setup-sensed {:floor strip :blocks rock :entities [(zombie 7 5 {})]})
               s (assoc-in s [:eng :jobs 'targeter] (targeter out))]
           (await (run-job! s 'targeter {:step 6}))
           (is (nil? @out) (str "the cave behind its rock wall is no way, nor the tunnel past the zombie: " (pr-str @out))))))))

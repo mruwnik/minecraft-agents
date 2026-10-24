@@ -984,7 +984,8 @@
                                       ["zombie" (assoc (zombie 3.5 64 0.5) :visible true)]]]
           (when what
             (let [{:keys [eng p]}
-                  (await (first-act-round retreat {:self {:pos [0.5 64 0.5] :health 8}
+                  ;; the floor runs on west past where the zombie gives the body up (35 blocks)
+                  (await (first-act-round retreat {:floor [-60 -10 40 10] :self {:pos [0.5 64 0.5] :health 8}
                                                    :inventory [{:name "cobblestone" :count 20}]
                                                    :entities [(assoc (skeleton 6.5 64 0.5) :visible true) close]}))]
               (is (not-any? #(>= (first %) 0) (placed-cells p)) (str what ": no seal beside it, only past where it walked off " (placed-cells p)))

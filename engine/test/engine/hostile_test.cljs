@@ -1239,7 +1239,7 @@
           (is (= 1 (count (calls p "attack"))) "15 left is not nearly dead")
           (is (pos? (count (tu/walked-to eng))) "it flees"))))))
 
-(deftest retreat-eats-once-when-the-gap-is-wide
+(deftest retreat-eats-only-once-the-gap-is-wide
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -1250,7 +1250,7 @@
                      (fn [token a impl] (reset! walks-before-eat (count (tu/walked-to eng))) (impl token a)))
           (core/submit! eng retreat {})
           (await (core/tick! eng))
-          (is (= 1 (count (calls p "eat"))) "once per flight")
+          (is (pos? (count (calls p "eat"))) "a bite once the gap is wide (one a flee step: flee-test retreat-eats-one-bite-per-flee-step)")
           (is (pos? @walks-before-eat) "the skeleton was 5 away at the start: no time to eat before the gap opened"))))))
 
 (deftest a-cornered-fight-is-kept-while-the-hostile-is-close

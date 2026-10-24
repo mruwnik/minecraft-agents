@@ -1,19 +1,20 @@
 ;; Card ee045b60: the flee search plans its ends with the go-to planner, so a corridor that runs straight away from the chaser into a dead
-;; end is a pocket, and the way out that turns off it is taken. Stone x 0..40, z 0..31, y 0..5 (feet y 3, walls three high, open to the sky);
-;; a corridor along z 16 from x 4 to a dead end at x 30, at x 18 a branch north to a field x 12..28, z 0..5. The body stands in the corridor
+;; end is a pocket, and the way out that turns off it is taken. Stone x 0..79, z 0..31, y 0..5 (feet y 3, walls three high, open to the sky);
+;; a corridor along z 16 from x 4 to a dead end at x 30, at x 18 a branch north to a field x 12..76, z 0..5 that runs on past where the
+;; zombie gives the body up (35 blocks; card 6e5f61f4: a way that ends short of that is a pocket too). The body stands in the corridor
 ;; at x 12, a zombie (NoAI, helmeted) 6 west of it: straight away is the dead end. Unlit (card 16f510ad: a flight in the dark sees
-;; about a cell ahead; the unseen ways are priced, not refused). Should-succeed: the flight starts and the body ends in the
-;; branch or the field, not in the corridor.
+;; about a cell ahead; the unseen ways are priced, not refused). Should-succeed: the flight starts and the body leaves the corridor
+;; for the branch or the field (in the corridor only its mouth at the branch is over 6 from the start and 10 from the dead end).
 {:defaults
  {:tags [:hostile :survival :flee]
   :time :any
   :mobs :keep
   :register [{:trigger :hostile-near}]
-  :plot {:length 41 :width 32 :height 8}
-  :blocks [[:fill [0 0 0] [40 5 31] "stone"]
+  :plot {:length 80 :width 32 :height 8}
+  :blocks [[:fill [0 0 0] [79 5 31] "stone"]
            [:fill [4 3 16] [30 5 16] "air"]
            [:fill [18 3 6] [18 5 16] "air"]
-           [:fill [12 3 0] [28 5 5] "air"]]
+           [:fill [12 3 0] [76 5 5] "air"]]
   :body {:at [12.5 3 16.5] :yaw 90 :effects [["resistance" 600 4]]}
   :limit-s 60}
  :cases
@@ -21,4 +22,4 @@
    :act [[:summon "zombie" [6.5 3 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :retreat.target} :within-s 25}
             {:no-event {:source :body :kind :died} :for-s 30}]
-   :after [[:body-near [20.5 3 2.5] 12]]}]}
+   :after [[:body-far [12.5 3 16.5] 6] [:body-far [30.5 3 16.5] 10]]}]}

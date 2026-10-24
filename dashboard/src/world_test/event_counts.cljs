@@ -18,8 +18,9 @@
   stores {:k catches :n-s weighted seconds} for each class: :other (reach: danger/melee-reach) and :ranged (a mob of threat/ranged?, caught within
   its threat/fire-range, whose line of fire the logs do not hold, so its weight is an upper bound too). A catch ends one sighting: the events
   carry no entity id, so it is the open sighting of the kind nearest the event's spot.
-  flee-pace: the flee steps (retreat.step-speed) of flights of two steps or more: blocks over the steps' own seconds, and the seconds
-  stood between two steps (cost.danger/::flee-walk-speed, ::flee-stop-s).
+  flee-pace: the flee steps (retreat.step-speed, slot :step) of flights of two steps or more: blocks over the steps' own seconds, and the
+  seconds stood between two steps while still in flight (a look, a re-decide, a replan, a respond delay; a gap in which another
+  answer, action or child ran is left out) (cost.danger/::flee-walk-speed, ::flee-stop-s).
   Pure parts: scan-line, exchange, starts, deciles, notices, groups, vein-seen, flee-steps, pace-report."
   (:require ["fs" :as fs]
             ["path" :as path]
@@ -44,7 +45,21 @@
 
 (def pos-re #":pos \{:x (-?[\d.]+(?:E-?\d+)?), :y (-?[\d.]+(?:E-?\d+)?), :z (-?[\d.]+(?:E-?\d+)?)\}")
 
+(def flight-actions "Actions a flight runs between its steps (a look, the walk's steering, a wait to respond): a gap with any other was no stop of the flight." #{"steer" "look" "wait"})
+(def flight-slots "Children a flight runs between its steps (step, run, walk, pause): a gap with any other (eat, plug, back-off, cornered...) ended the flight." #{"step" "run" "walk" "pause"})
+
 (defn- num-of [re line] (some-> (re-find re line) second js/parseFloat))
+
+(defn off-flight
+  "record (scan-line's, nil: none) with :off the line's root job when the line starts, inside a respond run, an action or a
+  child no flight runs between its steps (flight-actions, flight-slots): flee-steps ends the flight's stop there."
+  [line t gen record]
+  (if (and (str/includes? line ":reflex-id :hostile-near")
+           (or (and (str/includes? line ":kind :started") (str/includes? line ":source :action")
+                    (not (flight-actions (second (re-find #":name \"([^\"]*)\"" line)))))
+               (and (str/includes? line ":kind :child_started") (not (flight-slots (second (re-find #":slot :([a-z-]+)" line)))))))
+    (assoc (or record {:k :off :t t :gen gen}) :off (root-job (second (re-find #":job-id \"([^\"]*)\"" line))))
+    record))
 
 (defn scan-line
   "One log line -> a small record, or nil for a line the counts do not read. Only the few kinds they read are parsed whole."
@@ -53,6 +68,7 @@
         gen (some-> (re-find #":generation-id \"([^\"]*)\"" line) second)
         whole #(try (reader/read-string line) (catch :default _ nil))]
     (when (and t gen)
+      (off-flight line t gen
       (cond
         (and (str/includes? line ":kind :hostile.decided") (str/includes? line ":hostile-near"))
         (let [e (whole)]
@@ -61,8 +77,10 @@
            :at (when-not (get-in e [:data :band]) (get-in e [:data :pos]))})
 
         (str/includes? line ":kind :retreat.step-speed")
-        {:k :step :t t :gen gen :job (second (re-find #":job-id \"([^\"]*)\"" line))
+        {:k :step :t t :gen gen :job (root-job (second (re-find #":job-id \"([^\"]*)\"" line)))
+         :slot (some-> (re-find #":slot :([a-z-]+)" line) second keyword)
          :s (num-of #":seconds (-?[\d.]+)" line) :blocks (num-of #":blocks (-?[\d.]+)" line)}
+
 
         (and (str/includes? line ":kind :watch.saw") (str/includes? line ":how :seen"))
         (let [{{:keys [name distance pos id]} :data} (whole)]
@@ -100,7 +118,7 @@
 
         :else
         (when-let [[_ x y z] (re-find pos-re line)]
-          {:k :at :t t :gen gen :x (js/parseFloat x) :y (js/parseFloat y) :z (js/parseFloat z)})))))
+          {:k :at :t t :gen gen :x (js/parseFloat x) :y (js/parseFloat y) :z (js/parseFloat z)}))))))
 
 (defn runs
   "{[gen job] {:decisions [{:mob :decision}] :start :end :hits [t] :items [[t item]]}} of the respond runs in records (sorted by :t)."
@@ -195,24 +213,37 @@
          :out)))
 
 (defn flee-steps
-  "Rows [{:id [gen t] :flight [gen job] :t :s :blocks}] of the flee steps in records (retreat.step-speed: :s the step's own
-  seconds, ending at :t)."
+  "Rows [{:id [gen t] :flight [gen job] :t :s :blocks :off?}] of the flee steps in records (sorted by :t;
+  retreat.step-speed of slot :step: :s the step's own seconds, ending at :t). :off? when, since the flight's step before,
+  another answer's step or an action or child no flight runs between its steps came (:off): the flight had ended, so
+  the gap before it was no stop."
   [records]
-  (vec (for [{:keys [k gen job t s blocks]} records :when (and (= :step k) s blocks)]
-         {:id [gen t] :flight [gen job] :t t :s s :blocks blocks})))
+  (:rows
+   (reduce (fn [{:keys [off] :as st} {:keys [k gen job t s blocks slot] :as r}]
+             (let [f [gen job]]
+               (cond
+                 (:off r) (assoc-in st [:off [gen (:off r)]] true)
+                 (not (and (= :step k) s blocks)) st
+                 (not= :step slot) (assoc-in st [:off f] true)
+                 :else (-> st
+                           (update :rows conj {:id [gen t] :flight f :t t :s s :blocks blocks :off? (boolean (get off f))})
+                           (update :off dissoc f)))))
+           {:off {} :rows []} records)))
 
 (defn pace-report
   "The pace of the flights of two steps or more among rows (flee-steps): blocks over the steps' own seconds (:bps), and the
-  seconds stood between two steps of a flight (:stop-s: from one step's end to the next one's start, over the gaps)."
+  seconds stood between two steps of a flight (:stop-s: from one step's end to the next one's start, over the gaps a
+  flight stood in, :off? ones left out and counted as :off-gaps)."
   [rows]
   (let [flights (filter #(>= (count %) 2) (map #(sort-by :t %) (vals (group-by :flight rows))))
         steps (apply concat flights)
-        gaps (mapcat (fn [f] (map (fn [a b] (max 0 (/ (- (:t b) (* 1000 (:s b)) (:t a)) 1000))) f (rest f))) flights)
+        pairs (mapcat (fn [f] (map vector f (rest f))) flights)
+        gaps (keep (fn [[a b]] (when-not (:off? b) (max 0 (/ (- (:t b) (* 1000 (:s b)) (:t a)) 1000)))) pairs)
         sum #(reduce + 0 %)
         r2 #(/ (js/Math.round (* 100 %)) 100)
         blocks (sum (map :blocks steps)) secs (sum (map :s steps)) stood (sum gaps)]
     {:flights (count flights) :steps (count steps) :blocks (r2 blocks) :seconds (r2 secs)
-     :bps (when (pos? secs) (r2 (/ blocks secs))) :gaps (count gaps) :gap-s (r2 stood)
+     :bps (when (pos? secs) (r2 (/ blocks secs))) :gaps (count gaps) :gap-s (r2 stood) :off-gaps (- (count pairs) (count gaps))
      :stop-s (when (seq gaps) (r2 (/ stood (count gaps))))}))
 
 (defn deciles
@@ -231,7 +262,7 @@
      :sparse (count (filter :sparse? rows)) :no-pos (count (filter #(= :no-pos (:drop %)) rows)) :never (count (filter #(= :never (:drop %)) rows))}))
 
 ;; The durable counts: the rows of each prior by run id, so the counts only grow while the raw logs rotate away.
-(def empty-counts {:exchange {} :starts {} :notices {} :drowned-exposure {} :drowned-meets {} :flee-steps {}})
+(def empty-counts {:exchange {} :starts {} :notices {} :drowned-exposure {} :drowned-meets {} :flight-steps {}})
 
 (defn better-exchange "Of two rows of one fight, the one that saw more swings (a rotation may have cut the older read short), then the older." [a b]
   (if (> (:swings b) (:swings a)) b a))
@@ -246,8 +277,10 @@
        (update :starts #(reduce (fn [m r] (update m (:id r) (fn [old] (if (and old (not (:drop old))) old r)))) % start-rows))
        (update :notices #(reduce (fn [m r] (update m (:id r) (fn [old] (if (and old (not= :open (:end old))) old r)))) % notice-rows)))))
 
-(defn load-counts [file]
-  (if (fs/existsSync file) (merge empty-counts (reader/read-string (fs/readFileSync file "utf8"))) empty-counts))
+(defn load-counts
+  "The counts file's priors (empty-counts' keys; a retired key such as :flee-steps, rows with no flight class, is dropped)."
+  [file]
+  (if (fs/existsSync file) (merge empty-counts (select-keys (reader/read-string (fs/readFileSync file "utf8")) (keys empty-counts))) empty-counts))
 
 (defn save-counts!
   "Written whole to a temporary file and renamed over, so a reader never sees half a file."
@@ -397,7 +430,7 @@
         counts (reduce (fn [c [b records]]
                          (cond-> (fold c (exchange records) (starts records sprint) (notices records))
                            (not (probe? b)) (-> (drowned/fold (drowned/exposure at records) (drowned/meets at records))
-                                                (update :flee-steps #(reduce (fn [m r] (assoc m (:id r) r)) % (flee-steps records))))))
+                                                (update :flight-steps #(reduce (fn [m r] (assoc m (:id r) r)) % (flee-steps records))))))
                        (load-counts counts-file) per-agent)]
     (save-counts! counts-file counts)
     counts))
@@ -433,6 +466,6 @@
        "vein-seen" (do (println (pr-str (vein-seen (mapcat #(read-agent (path/join agents % "engine") since-ms)
                                                        (filter #(fs/existsSync (path/join agents % "engine")) (array-seq (fs/readdirSync agents)))))))
                        0)
-       "flee-pace" (do (println (pr-str (assoc (pace-report (since (:flee-steps folded))) :since-ms since-ms))) 0)
+       "flee-pace" (do (println (pr-str (assoc (pace-report (since (:flight-steps folded))) :since-ms since-ms))) 0)
        "notice-rate" (do (println (pr-str (assoc (notice-report (since (:notices folded))) :since-ms since-ms))) 0)
        (do (js/console.error usage) 2)))))

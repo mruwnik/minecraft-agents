@@ -117,12 +117,14 @@
       (fn ^:async t []
         (let [from {:x 0.5 :y 64 :z 0.5}
               zombie [{:name "baby" :mob "zombie" :pos {:x -2.5 :y 64 :z 0.5}}]
-              ;; a ring of 4 s: its ways round the wall stay within the zombie's follow range
-              short (fn ^:async short-ring [blocks] (await (settings/with-settings {::search/horizon-s 4} (fn ^:async run [] (await (ends-of blocks from zombie [] nil))))))
-              open (await (short field))
-              walled (await (short (merge field (box -2 64 -6 -2 65 6 "stone"))))]
+              ;; ends 11 out: the way round the wall is a large share of the zombie's walk there
+              ends (fn ^:async near-ends [blocks] (await (search/search! (ctx-of (tu/fake {:blocks blocks :self {:pos from}})) zombie [] {:reach 11})))
+              open (await (ends field))
+              walled (await (ends (merge field (box -2 64 -6 -2 65 6 "stone"))))
+              arrive (fn [ends] (into {} (map (juxt :target :arrive)) ends))
+              later (merge-with - (arrive walled) (arrive open))]
           (is (every? :caught? open) "in the open a baby zombie keeps up")
-          (is (some? (search/pick walled {})) "round a wall it falls behind"))))))
+          (is (some #(> % 1) (vals later)) (str "round a wall it comes later to the ends behind it: " (pr-str later))))))))
 
 (deftest a-shooter-shut-in-is-timed-in-a-straight-line
   ;; it shoots where it cannot walk: timed by the way out of its box it has none, so every end read as never reached

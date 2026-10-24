@@ -119,7 +119,20 @@
                        {:k :hurt}]))))
 
 (deftest the-flee-pace-is-blocks-over-the-steps-own-seconds-and-the-stops-between-them
-  (let [step (fn [t job s blocks] (rec t :step :job job :s s :blocks blocks))
-        rows (c/flee-steps [(step 1000 "j1/flee" 1 4) (step 2500 "j1/flee" 1 3) (step 3000 "j1/flee" 0.5 2) (step 9000 "j2/flee" 1 5)])]
-    (is (= {:flights 1 :steps 3 :blocks 9 :seconds 2.5 :bps 3.6 :gaps 2 :gap-s 0.5 :stop-s 0.25} (c/pace-report rows))
+  (let [step (fn [t job s blocks] (rec t :step :job job :slot :step :s s :blocks blocks))
+        rows (c/flee-steps [(step 1000 "j1" 1 4) (step 2500 "j1" 1 3) (step 3000 "j1" 0.5 2) (step 9000 "j2" 1 5)])]
+    (is (= {:flights 1 :steps 3 :blocks 9 :seconds 2.5 :bps 3.6 :gaps 2 :gap-s 0.5 :off-gaps 0 :stop-s 0.25} (c/pace-report rows))
         "a lone step is no flight; the stops run from a step's end to the next one's start")))
+
+(deftest a-gap-in-which-the-flight-ended-is-no-stop
+  (let [step (fn [t slot] (rec t :step :job "j1" :slot slot :s 1 :blocks 4))
+        line (fn [t kind data] (pr-str {:generation-id "g" :time-ms t :source (if (= :started kind) :action :job) :kind kind
+                                        :context {:job-id "j1/step" :reflex-id :hostile-near} :data data}))
+        report (fn [between] (c/pace-report (c/flee-steps (sort-by :t (remove nil? (concat [(step 1000 :step) (step 4000 :step)] between))))))]
+    (is (= {:gaps 1 :off-gaps 0 :stop-s 2} (select-keys (report [(c/scan-line (line 2000 :started {:name "look"}))]) [:gaps :off-gaps :stop-s]))
+        "a look on the way: the flight stood, the chaser coming")
+    (is (some? (c/scan-line (line 2000 :child_started {:slot :eat}))))
+    (are [between] (= {:gaps 0 :off-gaps 1} (select-keys (report between) [:gaps :off-gaps]))
+      [(c/scan-line (line 2000 :child_started {:slot :eat}))]
+      [(c/scan-line (line 2000 :started {:name "place"}))]
+      [(step 2000 :back-off)])))

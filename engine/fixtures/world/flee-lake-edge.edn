@@ -1,20 +1,22 @@
 ;; Card d3715ad7 (flee side): a flight never steps down into a lake it would have to swim (retreat next-y), with the hostile coming from the
-;; far side. Stone block x 2..30, z 0..31, y 0..2 (top feet y 3); a lake x 2..9, z 8..24 carved in it, water y 0..1 (surface one below the
+;; far side. Stone block x 2..30, z 0..63, y 0..2 (top feet y 3); a lake x 2..9, z 24..40 carved in it, water y 0..1 (surface one below the
 ;; platform). The body stands on the platform 5 east of the lake edge, the zombie (NoAI, helmeted) 5 east of the body: the way away from it is
-;; the lake. Should-succeed: the flight starts (retreat.target) and the body is still on the platform at the end, no drowning.
+;; the lake; along the shore the platform runs 31 blocks each way, to where the zombie gives the body up (card 6e5f61f4: a shore that ends
+;; short of that is a pocket). Should-succeed: the flight starts (retreat.target) and the body is still on the platform at the end, no drowning.
 {:defaults
  {:tags [:hostile :survival :flee :water]
   :time :any
   :mobs :keep
   :register [{:trigger :hostile-near :why "the mobs stand beyond the default radius" :args {:radius 12 :ranged-radius 16} :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 12}})}]
-  :blocks [[:fill [2 0 0] [30 2 31] "stone"]
-           [:fill [2 0 8] [9 2 24] "air"]
-           [:fill [2 0 8] [9 1 24] "water"]]
-  :body {:at [14.5 3 16.5] :yaw 90 :effects [["resistance" 600 4]]}
+  :plot {:length 32 :width 64 :height 8}
+  :blocks [[:fill [2 0 0] [30 2 63] "stone"]
+           [:fill [2 0 24] [9 2 40] "air"]
+           [:fill [2 0 24] [9 1 40] "water"]]
+  :body {:at [14.5 3 32.5] :yaw 90 :effects [["resistance" 600 4]]}
   :limit-s 60}
  :cases
  [{:name "flight-does-not-step-down-into-the-lake"
-   :act [[:summon "zombie" [19.5 3 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :act [[:summon "zombie" [19.5 3 32.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :retreat.target} :within-s 25}
             {:no-event {:source :body :kind :hurt :data {:causes ["drown"]}} :for-s 40}]
-   :after [[:body-far [5.5 1 16.5] 4]]}]}
+   :after [[:body-far [5.5 1 32.5] 4]]}]}

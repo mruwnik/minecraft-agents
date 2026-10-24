@@ -1,10 +1,11 @@
 (ns jobs.lib.flee-search
   "The one priced flee search: where a body fleeing its chasers walks to.
-  Candidates: ring ends (x-z discs at ::bearings headings, reach blocks off: the planner finds the height, so a slope, a
+  Candidates: ring ends (x-z discs at ::bearings headings, reach blocks off, where the chasers give the body up: the planner finds the height, so a slope, a
   stair or a cliff is its business) and the targets a caller names (a goal, a home). Each is planned by the go-to
   planner over what the body has seen, costed as go-to's walks are (known dangers, darkness, unseen cells), within
   ::max-nodes (a named target ::target-max-nodes) and the ring ends together within ::ring-nodes, ring headings away
-  from the chasers first. A heading with no route gives the end of the planner's partial route, a pocket (:found? false). Ring
+  from the chasers first. A heading with no route gives the end of the planner's partial route, a pocket (:found? false) unless the
+  chasers have given the body up there. Ring
   routes plan through unseen cells as through seen ones (no rock guess), a flee step walks only the seen part.
   Each end is priced (the planner's price plus the death the route risks past the known threats, a death about where
   the body stands: cost/route-death-cost, plus the chasers met on the way back from an unseen dead end: unseen-price) and scored against
@@ -29,20 +30,28 @@
 
 (a/defargs settings
   {::bearings {:default 12 :doc "Headings round the body a flee search plans a ring end at." :spec (a/int-in 1 64)}
-   ::horizon-s {:default 8 :doc "Seconds of a flight (reach) whose distance is the ring a flee search plans its ends on: a way that leads that far is open, one that stops short a pocket (8 s at the flee pace, about 22 blocks: a dead end that far ahead shows)." :spec (a/num-in 0.5 nil)}
    ::max-nodes {:default 600 :doc "Planner nodes one ring end's search may expand: past it the end is its partial route's." :spec (a/int-in 50 nil)}
    ::target-max-nodes {:default 2400 :doc "Planner nodes the search of a named target (a goal, a home) may expand." :spec (a/int-in 50 nil)}
-   ::open-share {:default 0.5 :doc "Share of the reach a ring end's partial route must cover to count as a way on (a lake, a tree or a wall at the ring); one that stops shorter is a pocket." :spec (a/num-in 0 1)}
    ::step-s {:default 1 :doc "Seconds a flee step walks of the chosen route before the flight stops to choose again (the cell of the route that far in; a cover end is walked to whole)." :spec (a/num-in 0.1 nil)}
    ::ring-nodes {:default 7200 :doc "Planner nodes the ring ends of one flee search may expand together; the ring headings not planned by then are left out (the ones most away from the chasers are planned first)." :spec (a/int-in 50 nil)}
    ::hazard-clearance {:default 2.5 :doc "Blocks a flee route keeps from a remembered hazard: a route with a cell nearer is not taken." :spec (a/num-in 0 nil)}})
 
+(defn give-up-at
+  "Blocks from chaser {:name :mob} past which it gives the body up (threat/give-up-range of its kind)."
+  [{:keys [name mob]}]
+  (threat/give-up-range (or mob name)))
+
+(defn given-up?
+  "Whether at pos every one of chasers ({:pos}) not :calm? (a calm one does not follow) has given the body up (give-up-at)."
+  [chasers pos]
+  (every? #(>= (u/dist (:pos %) pos) (give-up-at %)) (remove :calm? chasers)))
+
 (defn reach
-  "Blocks to the ring of a flee search for a body with food food: what a flight covers in ::horizon-s, its steps of
-  ::step-s at cost/flee-walk-speed with cost/flee-stop-s between them."
-  [food]
-  (let [step (settings/get settings ::step-s)]
-    (* (cost/flee-walk-speed food) (settings/get settings ::horizon-s) (/ step (+ step (cost/flee-stop-s))))))
+  "Blocks to the ring of a flee search from `from`: where the chasers give the body up, the most over chasers not
+  :calm? of give-up-at less its distance now; at least one flee step (::step-s at cost/flee-walk-speed of food)."
+  [from chasers food]
+  (reduce max (* (cost/flee-walk-speed food) (settings/get settings ::step-s))
+          (map #(- (give-up-at %) (u/dist from (:pos %))) (remove :calm? chasers))))
 
 (defn away
   "The unit [ux uz] from `from` away from the chasers ({:pos}), each weighing 1/distance; [1 0] when they cancel out."
@@ -164,15 +173,13 @@
 (defn ^:async price!
   "Each of targets (named ones {:pos :range :kind}, then ring ends {:x :z}) planned from where the body stands (see the ns
   doc): [{:target :found? :open? :end :s :priced :price :cells :seen-n :unseen}] (:open? found, or a ring end whose
-  partial route covers ::open-share of reach), the ones the planner found no way nearer to, and the ring ends
+  partial route ends where the chasers have given the body up: given-up?), the ones the planner found no way nearer to, and the ring ends
   left when ::ring-nodes ran out (named ones have their own node cap), left out; its meta {:nodes :planned} the nodes
-  expanded and the targets planned. opts {:y-margin :reach :chasers}: blocks past body and end the routes may plan, blocks
-  to the ring, the chasers (their danger is the race, so death-chance weighs only the other known threats; met on the
+  expanded and the targets planned. opts {:y-margin :chasers}: blocks past body and end the routes may plan, the chasers (their danger is the race, so death-chance weighs only the other known threats; met on the
   way back from an unseen dead end, they catch the body: unseen-price)."
-  [c targets {:keys [y-margin reach chasers]}]
+  [c targets {:keys [y-margin chasers]}]
   (let [p (:primitives c)
         from (u/self-pos c)
-        open-at (* (settings/get settings ::open-share) (or reach 0))
         chased (set (map #(floor-cell (:pos %)) chasers))
         other? #(not (chased (floor-cell (:pos %))))
         ring-world (costed c nil other? true)
@@ -195,7 +202,7 @@
                 r (some->> (routed res slow) (seen-split p))]
             (recur more (if r
                           (conj out (assoc r :target t
-                                             :open? (or (:found? r) (and (nil? (:pos t)) (>= (u/dist from (:end r)) open-at)))
+                                             :open? (or (:found? r) (and (nil? (:pos t)) (given-up? chasers (:end r))))
                                              :price (+ (:priced r)
                                                        (cost/route-death-cost body (assoc class :cells (dwelt (:cells r))) from)
                                                        (unseen-price r counts trapped-at))))
@@ -321,14 +328,14 @@
 
 (defn ^:async search!
   "The flee search from where the body stands: the targets (named, {:pos :range :kind}) and the ring ends at reach
-  (default: reach for the body's food) priced (price!) and scored against chasers ([{:name :pos}]), with covers on
+  (default: reach, where the chasers give the body up) priced (price!) and scored against chasers ([{:name :pos}]), with covers on
   their routes when covered? is given. opts {:reach :y-margin :covered?}."
   [c chasers targets {:keys [covered?] :as opts}]
   (let [t0 (js/performance.now)
         self (.self (:primitives c))
         from (u/self-pos c)
         chasers (with-ways c chasers)
-        r (or (:reach opts) (reach (.-food self)))
+        r (or (:reach opts) (reach from chasers (.-food self)))
         priced (await (price! c (into (vec targets) (ring from chasers r (settings/get settings ::bearings))) (assoc opts :reach r :chasers chasers)))
         ends (scored chasers from priced)]
     (ctx/emit! c :retreat.search-work :debug (assoc (meta priced) :ms (js/Math.round (- (js/performance.now) t0)) :targets (count targets)))

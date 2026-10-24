@@ -47,6 +47,13 @@
 
 (defn fire-range [mob-name] (get fire-ranges mob-name (settings/get settings ::default-fire-range)))
 
+(declare ranged?)
+
+(defn give-up-range
+  "Blocks from mob-name past which it no longer gets at the body: its follow range, or a shooter's fire range when longer."
+  [mob-name]
+  (max (follow-range mob-name) (if (ranged? {:name mob-name}) (fire-range mob-name) 0)))
+
 (defn field-close [] (settings/get settings ::field-close))
 
 (defn way-weight
