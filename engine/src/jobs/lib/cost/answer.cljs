@@ -437,8 +437,8 @@
   weight there, on (Int32Array) the cells it weighs."
   [{:keys [cells threats]} dts]
   (into []
-        (keep (fn [{:keys [mob weight reach caught]}]
-                (let [{:keys [met xs prior exposure]} (death/met-stretch mob reach cells dts)
+        (keep (fn [{:keys [mob weight reach caught pos]}]
+                (let [{:keys [met xs prior exposure]} (death/met-stretch mob reach cells dts pos)
                       c (min 1 (* (or weight 1) (if (contains? threat/provoked-only mob) (threat/provoked-share) 1)))
                       n (count xs)
                       before (js/Float64Array. n)
@@ -646,8 +646,8 @@
 (defn death-chance
   "The chance of dying on route {:cells :threats :spawns :spawn-kill :at} (cells {:x :y :z :s}, :s the seconds spent there,
   death/met-stretch): its spawns (the expected count of mobs met spawning, spawns-chance at :at, default the first cell, each at :spawn-kill when given)
-  or route-parts' :chance of its threats, for each known threat {:mob :weight :reach :caught} (weight 0-1, reach a fn of a cell x y z,
-  its weight 0-1, nil outside: jobs.lib.threat-field; caught the chance a walk away from it is caught, nil the prior),
+  or route-parts' :chance of its threats, for each known threat {:mob :pos :weight :reach :caught} (pos its place, for death/notice-factor; weight 0-1, reach a fn of a
+  cell x y z, its weight 0-1, nil outside: jobs.lib.threat-field; caught the chance a walk away from it is caught, nil the prior),
   kill the body. body as threat-answers, with answer-price's. An answer {:damage :hit :caught}: its blows-chance."
   [body {:keys [damage spawns] :as route}]
   (if damage

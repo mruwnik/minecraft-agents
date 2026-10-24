@@ -904,10 +904,24 @@
     (is (= {:shape 2.5 :rate 5} (with #(death/notice-prior "skeleton"))) "a skeleton is priced by the ranged counts")
     (is (= {:shape 9.5 :rate 38} (settings/with-settings {:jobs.lib.cost.death/notice-rate {:other [{:k 9 :n-s 38}] :ranged {:k 2 :n-s 5}}} #(death/notice-prior "zombie")))
         "one case counted apart is that case's posterior")
-    (let [alike (settings/with-settings {:jobs.lib.cost.death/notice-rate {:other [{:k 5 :n-s 20} {:k 5 :n-s 20}] :ranged {:k 2 :n-s 5}}} #(death/notice-prior "zombie"))
-          apart (settings/with-settings {:jobs.lib.cost.death/notice-rate {:other [{:k 9 :n-s 20} {:k 1 :n-s 20}] :ranged {:k 2 :n-s 5}}} #(death/notice-prior "zombie"))]
-      (is (= {:shape 10.5 :rate 40} alike) "cases that agree pool to the posterior of their sums")
-      (is (< (js/Math.abs (- (/ (:shape apart) (:rate apart)) (/ 10.5 40))) 1e-9) "cases that disagree keep the mean of their sums")
-      (is (< (:shape apart) 5) "and widen it by their spread"))
     (is (< (js/Math.abs (- (- 1 (js/Math.pow (+ 1 (/ 2 38)) -9.5)) (with #(:met (death/met-stretch "zombie" (constantly 1) [{:x 0 :y 0 :z 0 :s 2}]))))) 1e-9)
         "2 s in the field at weight 1: 1 - E[e^(-2r)] over the posterior")))
+
+(deftest a-skeleton-gets-to-the-body-at-the-rate-its-distance-gives
+  (let [met (fn [blocks s] (:met (death/met-stretch "skeleton" (constantly 1) [{:x 16 :y 0 :z 16 :s s}] [s] (when blocks {:x (+ 16.5 blocks) :y 0 :z 16.5}))))
+        cases (death/class-cases "skeleton")
+        post (death/notice-posterior cases (settings/get death/settings ::death/notice-slope-sd) (settings/get death/settings ::death/notice-spread-scale))]
+    (is (< (met 9 3.8) (met 5 3.8) (met 2 3.8)) "the body knows how far off it is: a near one notices sooner")
+    (doseq [blocks [2 5 9 13] s [1 3.8 10]]
+      (is (< (js/Math.abs (- (met blocks s) (- 1 (death/posterior-missed post blocks s)))) 0.04)
+          (str "the shared Gamma keeps the posterior's chance " blocks " blocks off over " s " s")))
+    (is (<= (met 2 3.8) (met nil 3.8)) "a skeleton whose place is unknown is priced at the nearest")))
+
+(deftest cases-that-disagree-price-the-near-mob-no-lower-than-cases-that-agree
+  (let [met (fn [cases] (settings/with-settings {:jobs.lib.cost.death/notice-rate {:other {:k 8 :n-s 42.4} :ranged cases}}
+                          #(:met (death/met-stretch "skeleton" (constantly 1) [{:x 0 :y 0 :z 0 :s 3.8}] [3.8] {:x 2.5 :y 0 :z 0.5}))))
+        agree (met [{:blocks 2 :k 8 :n-s 40} {:blocks 5 :k 8 :n-s 40} {:blocks 9 :k 8 :n-s 40} {:blocks 13 :k 8 :n-s 40}])
+        fall (met [{:blocks 2 :k 14 :n-s 40} {:blocks 5 :k 10 :n-s 40} {:blocks 9 :k 6 :n-s 40} {:blocks 13 :k 2 :n-s 40}])]
+    (is (< (+ agree 0.1) fall) "the same counts spread by distance are evidence on the near rate, not doubt that lowers it")
+    (is (<= (met [{:blocks 2 :k 8 :n-s 40} {:blocks 2 :k 5 :n-s 25}]) (met [{:blocks 2 :k 12 :n-s 25} {:blocks 2 :k 1 :n-s 40}]))
+        "cases at one distance that disagree price it no lower than cases that agree on the same counts (Q16)")))

@@ -353,14 +353,14 @@
   "Rows of the fixture sightings in records (sorted by :t): world fixtures that stand a body still (a notify job in place of the
   hostile-near job, text `ranged-notice <mob> <light> <blocks> <window-s>`) with a mob of that kind shooting at it from a clear line
   of fire. The first firing of a run is the sighting (weight 1: in range with a line of fire); :s the seconds until the first hurt
-  from the kind (the middle of the health sample it was seen in), :caught, or the window, :window (censored). A hurt before the firing was a shot from an unseen shooter and leaves
+  from the kind (its first hit's time, the hurt's :since-ms), :caught, or the window, :window (censored). A hurt before the firing was a shot from an unseen shooter and leaves
   the run out: the counts price a danger the body has seen."
   [records]
   (for [[_ rs] (group-by :gen records)
         :let [{:keys [t mob gen label window-ms] :as start} (first (filter #(= :exposed (:k %)) rs))]
         :when (and start (not-any? #(and (= :hurt (:k %)) (contains? (:causes %) mob) (<= (:t %) t)) rs))
         :let [hit (first (filter #(and (= :hurt (:k %)) (contains? (:causes %) mob) (< t (:t %))) rs))
-              hit-t (when hit (max t (/ (+ (:t hit) (or (:since hit) (:t hit))) 2)))
+              hit-t (when hit (max t (or (:since hit) (:t hit))))
               caught? (and hit (<= (- hit-t t) window-ms))]]
     {:id [gen t mob] :t t :mob mob :label label :end (if caught? :caught :window)
      :s (/ (if caught? (- hit-t t) window-ms) 1000)}))

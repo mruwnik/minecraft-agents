@@ -20,12 +20,17 @@
   {::seconds-per-level {:default 5 :spec (a/num-in 0 nil)
                         :doc "Worth of one experience level lost at a death, in seconds (the game drops a few levels' worth)."}
    ::notice-rate {:default {:other {:k 8 :n-s 42.4}
-                            :ranged [{:case "lit 2" :k 8 :n-s 15.2} {:case "lit 5" :k 8 :n-s 22.7} {:case "lit 9" :k 9 :n-s 51.4}
-                                     {:case "lit 13" :k 8 :n-s 25.2} {:case "dark 9" :k 4 :n-s 29.7}]}
+                            :ranged [{:case "lit 2" :blocks 2 :k 8 :n-s 11.2} {:case "lit 5" :blocks 5 :k 8 :n-s 18.7}
+                                     {:case "lit 9" :blocks 9 :k 9 :n-s 46.9} {:case "lit 13" :blocks 13 :k 8 :n-s 21.2}
+                                     {:case "dark 9" :blocks 9 :k 4 :n-s 27.7}]}
                   :spec (let [counts (a/map-with {:k (a/int-in 0 nil) :n-s (a/num-in 0 nil)})
                               class (a/or-of counts (a/coll-of counts))]
                           (a/map-with {:other class :ranged class}))
-                  :doc "Per class of mob (:ranged: threat/ranged?; :other: caught within melee reach), the counts {:k :n-s} of one case or of each case counted apart: n-s the weighted seconds sightings spent in the body's field (weight 1 within a few steps of the mob's way, or a ranged mob's range, less beyond), k the catches (a melee mob: a hurt from it, or a respond decision with it in reach; a ranged mob: its first hit, at the middle of the health sample it was seen in). notice-prior pools the cases. :other: 24 trial sightings (8 censored by a position gap; zombie 6 of 13 s, creeper 2 of 29.4 s). :ranged: the world fixture ranged-notice (a bow skeleton, a clear line of fire, a body standing still), by distance in blocks and light; trial play first saw every skeleton beyond its range. Recount: node tools/event-counts.mjs notice-rate (:by-case), 2026-10-24."}
+                  :doc "Per class of mob (:ranged: threat/ranged?; :other: caught within melee reach), the counts {:k :n-s} of one case or of each case counted apart (:blocks, when given, the mob's distance from the body in it): n-s the weighted seconds sightings spent in the body's field (weight 1 within a few steps of the mob's way, or a ranged mob's range, less beyond), k the catches (a melee mob: a hurt from it, or a respond decision with it in reach; a ranged mob: its first hit, at the time of that hit). notice-prior and notice-factor read them. :other: 24 trial sightings (8 censored by a position gap; zombie 6 of 13 s, creeper 2 of 29.4 s). :ranged: the world fixture ranged-notice (a bow skeleton, a clear line of fire, a body standing still), by distance in blocks and light; trial play first saw every skeleton beyond its range. Recount: node tools/event-counts.mjs notice-rate (:by-case), 2026-10-24."}
+   ::notice-slope-sd {:default 0.2 :spec a/pos-num?
+                      :doc "The sd of the normal prior (mean 0) on how much the log notice rate of a class whose cases give :blocks changes a block farther (notice-posterior): one sd is a factor e^0.2 a block, about 20 over a skeleton's 15 blocks."}
+   ::notice-spread-scale {:default 1 :spec a/pos-num?
+                          :doc "The scale of the half-Cauchy prior on how far a class's cases' notice rates spread round its rate at their distance, as their coefficient of variation (notice-posterior): weak, the usual prior for a spread over few cases."}
    ::deaths-per-hour {:default 1.3 :spec (a/num-in 0 nil)
                       :doc "Deaths an hour of play, every cause: the fresh-start trials of 2026-10-21/22 (Wicken r5, 8 deaths in 6h15; docs/fresh-start-design.md section 1)."}
    ::spawn-walk-blocks {:default 5000 :spec (a/num-in 0 nil)
@@ -92,27 +97,103 @@
          below (reduce + (take k (reductions step p0 (iterate inc 1))))]
      (if (pos? life) (max 0 (- 1 below)) 1))))
 
-(defn notice-prior
-  "{:shape :rate} of the Gamma over the notice rate of mob, per weighted second, its class's ::notice-rate cases pooled
-  partially: the mean (k + 0.5) / n-s of all of them, the variance that mean's own (the posterior Gamma(k + 0.5, n-s) of
-  one case) plus the cases' spread round it (DerSimonian-Laird over the cases' k / n-s, each of Poisson variance mean / n-s).
-  The mobs of a class share the one rate."
+(defn log-rising
+  "ln (alpha (alpha + 1) ... (alpha + k - 1)), ln Gamma(alpha + k) / Gamma(alpha) for a count k."
+  [alpha k]
+  (loop [j 0 acc 0] (if (< j k) (recur (inc j) (+ acc (js/Math.log (+ alpha j)))) acc)))
+
+(def notice-posterior
+  "{:near :points} of a class's cases [{:blocks :k :n-s}] (two or more), counted apart: the posterior on a grid
+  (:points #js [a b alpha w], those of weight w over 1e-7) of a hierarchical Gamma-Poisson. A case d blocks off has notice
+  rate e^(a + b (d - near)) e, near its nearest case's blocks (none: 0) and e its own spread round that, Gamma(alpha,
+  alpha) of mean 1; k notices in n-s seconds a Poisson count. Priors: e^a, the rate at near, Jeffreys' (rate^-1/2, as
+  one case's Gamma(k + 0.5, n-s)); b normal of sd slope-sd; 1/sqrt(alpha), the cases' coefficient of variation,
+  half-Cauchy of scale spread-scale. Memoized: a few classes."
+  (memoize
+    (fn [cases slope-sd spread-scale]
+      (let [blocks #(or (:blocks %) 0)
+            near (apply min (map blocks cases))
+            a0 (js/Math.log (/ (+ (reduce + (map :k cases)) 0.5) (reduce + (map :n-s cases))))
+            grid (fn [lo hi n] (map #(+ lo (/ (* (- hi lo) %) (dec n))) (range n)))
+            logs (for [a (grid (- a0 4) (+ a0 4) 25)
+                       b (grid (* -3 slope-sd) (* 3 slope-sd) 21)
+                       lt (grid (js/Math.log 0.02) (js/Math.log 5) 16)
+                       :let [t (js/Math.exp lt) alpha (/ 1 (* t t))]]
+                   [a b alpha
+                    (reduce + (+ (* 0.5 a) (- (/ (* b b) (* 2 slope-sd slope-sd))) (- (js/Math.log1p (js/Math.pow (/ t spread-scale) 2))) lt)
+                            (map (fn [{:keys [k n-s] :as c}]
+                                   (let [m (* n-s (js/Math.exp (+ a (* b (- (blocks c) near)))))]
+                                     (+ (log-rising alpha k) (* alpha (js/Math.log (/ alpha (+ alpha m)))) (* k (js/Math.log (/ m (+ alpha m)))))))
+                                 cases))])
+            top (apply max (map peek logs))
+            ws (map #(js/Math.exp (- (peek %) top)) logs)
+            total (reduce + ws)]
+        {:near near
+         :points (into-array (keep identity (map (fn [[a b alpha] w] (when (< 1e-7 (/ w total)) #js [a b alpha (/ w total)])) logs ws)))}))))
+
+(defn posterior-missed
+  "The chance a mob d blocks off gets no notice in x weighted seconds, over notice-posterior {:near :points}: e^(-r x)
+  at its class's rate there, e^(a + b (d - near)). A case's own spread is taken at its mean, 1: a doubt about a danger
+  never prices it lower (Q16), while the doubt about the class's rate is the posterior's."
+  [{:keys [near points]} d x]
+  (areduce points i acc 0
+           (let [p (aget points i)]
+             (+ acc (* (aget p 3) (js/Math.exp (- (* x (js/Math.exp (+ (aget p 0) (* (aget p 1) (- d near))))))))))))
+
+(def notice-fit
+  "{:shape :rate :factors} of notice-posterior: the Gamma whose chances of a notice 0.2 and 0.8 come at the exposures x1
+  and x2 the posterior gives them at its nearest case, and :factors, a fn of whole blocks d: what the rate there is
+  times, so the Gamma gives d's chance at x1. Memoized: a few classes."
+  (memoize
+    (fn [cases slope-sd spread-scale]
+      (let [post (notice-posterior cases slope-sd spread-scale)
+            solve (fn [f lo hi] (loop [lo lo hi hi i 0] (if (< i 60) (let [m (/ (+ lo hi) 2)] (if (f m) (recur m hi (inc i)) (recur lo m (inc i)))) lo)))
+            at (fn [q] (js/Math.exp (solve #(< (- 1 q) (posterior-missed post (:near post) (js/Math.exp %))) -12 12)))
+            x1 (at 0.2)
+            x2 (at 0.8)
+            spread (fn [s] (/ (- (js/Math.pow 0.2 (/ -1 s)) 1) (- (js/Math.pow 0.8 (/ -1 s)) 1)))
+            shape (js/Math.exp (solve #(< (/ x2 x1) (spread (js/Math.exp %))) -8 12))
+            rate (/ x1 (- (js/Math.pow 0.8 (/ -1 shape)) 1))]
+        {:shape shape :rate rate
+         :factors (memoize (fn [d] (* (/ rate x1) (- (js/Math.pow (posterior-missed post d x1) (/ -1 shape)) 1))))}))))
+
+(defn class-cases
+  "The ::notice-rate cases of mob's class with seconds counted: the counts of one case as one."
   [mob]
-  (let [counts (get (settings/get settings ::notice-rate) (if (threat/ranged? {:name mob}) :ranged :other))
-        cases (filter #(pos? (:n-s %)) (if (map? counts) [counts] counts))
-        k (reduce + 0 (map :k cases))
-        s (max 1e-9 (reduce + 0 (map :n-s cases)))
-        m (/ k s)
-        ws (map #(/ (:n-s %) (max 1e-9 m)) cases)
-        q (reduce + 0 (map (fn [{:keys [k n-s]} w] (* w (js/Math.pow (- (/ k n-s) m) 2))) cases ws))
-        spread (if (and (pos? m) (< 1 (count cases)))
-                 (max 0 (/ (- q (dec (count cases))) (- (reduce + ws) (/ (reduce + (map * ws ws)) (reduce + ws)))))
-                 0)
-        mean (/ (+ k 0.5) s)
-        v (+ spread (/ mean s))]
-    (if (pos? spread)
-      {:shape (/ (* mean mean) v) :rate (/ mean v)}
-      {:shape (+ k 0.5) :rate s})))
+  (let [counts (get (settings/get settings ::notice-rate) (if (threat/ranged? {:name mob}) :ranged :other))]
+    (filterv #(pos? (:n-s %)) (if (map? counts) [counts] counts))))
+
+(defn case-fit
+  "notice-fit of mob's class, nil when it has fewer than two cases."
+  [mob]
+  (let [cases (class-cases mob)]
+    (when (< 1 (count cases))
+      (notice-fit cases (settings/get settings ::notice-slope-sd) (settings/get settings ::notice-spread-scale)))))
+
+(defn notice-prior
+  "{:shape :rate} of the Gamma over the notice rate of mob, per weighted second, the mobs of a class sharing the one
+  rate: its class's ::notice-rate cases fitted (notice-fit), the rate at the nearest case's distance (times
+  notice-factor elsewhere); one case, the posterior (k + 0.5, n-s) of its counts."
+  [mob]
+  (if-let [fit (case-fit mob)]
+    (select-keys fit [:shape :rate])
+    (let [[{:keys [k n-s]}] (class-cases mob)]
+      {:shape (+ (or k 0) 0.5) :rate (max 1e-9 (or n-s 0))})))
+
+(defn notice-factor
+  "A fn of a cell x y z: what mob's notice rate is times there (notice-fit's factors, the distance from the cell's
+  middle to pos, at most threat/fire-range for a ranged mob; with no pos the most of any distance, the worse case), or
+  nil when its class's cases give no distance."
+  [mob pos]
+  (let [fit (case-fit mob)]
+    (when (and fit (some :blocks (class-cases mob)))
+      (let [far (if (threat/ranged? {:name mob}) (threat/fire-range mob) threat/max-follow-range)
+            f (:factors fit)
+            at (fn [d] (let [d (min d far) i (js/Math.floor d)] (+ (f i) (* (- d i) (- (f (inc i)) (f i))))))
+            most (apply max (map f (range (inc (js/Math.ceil far)))))]
+        (if pos
+          (fn [x y z] (at (js/Math.hypot (- (+ x 0.5) (:x pos)) (- y (:y pos)) (- (+ z 0.5) (:z pos)))))
+          (constantly most))))))
 
 (defn missed
   "The chance a mob of notice prior {:shape :rate} gets no notice in x weighted seconds: e^(-r x) over the Gamma of r."
@@ -144,13 +225,19 @@
           (cons nil cells) cells)))
 
 (defn met-stretch
-  "{:met :exposure :prior :xs} of a threat mob whose reach (a fn of a cell x y z, its weight 0-1, nil outside) holds
-  route cells [{:x :y :z :s}]: xs the weighted seconds sum(w dt) up to and with each cell, dt its cell-seconds (dts, when
-  the caller has them), exposure the whole sum; prior its notice-prior and met the chance it gets to the body, 1 - missed."
-  ([mob reach cells] (met-stretch mob reach cells (cell-seconds cells)))
-  ([mob reach cells dts]
+  "{:met :exposure :prior :xs} of a threat mob at pos whose reach (a fn of a cell x y z, its weight 0-1, nil outside) holds
+  route cells [{:x :y :z :s}]: xs the weighted seconds sum(w f dt) up to and with each cell, dt its cell-seconds (dts,
+  when the caller has them), f its notice-factor (1 when none), exposure the whole sum; prior its notice-prior and met
+  the chance it gets to the body, 1 - missed."
+  ([mob reach cells] (met-stretch mob reach cells (cell-seconds cells) nil))
+  ([mob reach cells dts] (met-stretch mob reach cells dts nil))
+  ([mob reach cells dts pos]
    (let [prior (notice-prior mob)
-         xs (vec (rest (reductions + 0 (map (fn [{:keys [x y z]} dt] (* dt (or (reach (js/Math.floor x) (js/Math.floor y) (js/Math.floor z)) 0)))
+         factor (or (notice-factor mob pos) (constantly 1))
+         xs (vec (rest (reductions + 0 (map (fn [{:keys [x y z]} dt]
+                                              (let [x (js/Math.floor x) y (js/Math.floor y) z (js/Math.floor z)
+                                                    w (or (reach x y z) 0)]
+                                                (if (pos? w) (* dt w (factor x y z)) 0)))
                                             cells dts))))
          e (or (peek xs) 0)]
      {:met (- 1 (missed prior e)) :exposure e :prior prior :xs xs})))

@@ -184,8 +184,8 @@
     (is (= [[1.5 :caught "skeleton lit 9"]] (shown exposed (rec 2500 :hurt :amount 3 :causes #{"skeleton"}) (rec 4000 :hurt :amount 3 :causes #{"skeleton"}))))
     (is (= [[20 :window "skeleton lit 9"]] (shown exposed (rec 30000 :hurt :amount 3 :causes #{"skeleton"}) (rec 2000 :hurt :amount 1 :causes #{"fall"}))))
     (is (empty? (shown exposed (rec 600 :hurt :amount 3 :causes #{"skeleton"}))) "shot before it was seen: left out")
-    (is (= [[1 :caught "skeleton lit 9"]] (shown exposed (rec 2500 :hurt :amount 3 :causes #{"skeleton"} :since 1500)))
-        "the hit came within the health sample it was seen in: its middle")
+    (is (= [[0.5 :caught "skeleton lit 9"]] (shown exposed (rec 2500 :hurt :amount 3 :causes #{"skeleton"} :since 1500)))
+        "the hurt is emitted a merge window after its first hit, whose time is :since")
     (is (= 1 (get-in (c/notice-report (c/exposures [exposed (rec 2000 :hurt :amount 3 :causes #{"skeleton"})])) [:by-class :ranged :caught])))))
 
 (deftest a-ranged-notice-text-is-a-fixture-sighting
