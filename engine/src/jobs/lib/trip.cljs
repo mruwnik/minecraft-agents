@@ -213,7 +213,7 @@
   optional) is spare-need's. The job's fetch off (ways #{:carried}) crafts the stone spare from what is carried (:how #{:craft}: cobblestone, sticks, a table or its planks) and tells tool.no-spare (reason :fetch-off) when it cannot, silently for a dear first tool; a job under a spare
   fetch skips it (no spare of a spare). A dear first tool's spare is got only within the wear its digs save (cost/wear-saved: the
   obtain's :worth, its start check pricing the cheapest way), else not tried: info tool.spare-skipped with the tool, the price and the
-  wear saved (:worth), told once per ten minutes in body memory. A start check that only waits for now (not :not-worth) is asked again next round."
+  wear saved (:worth), told once per tool, item, price and worth in body memory (told again when those change or the tool breaks). A start check that only waits for now (not :not-worth) is asked again next round."
   ([c block-name] (tool-ready! c block-name nil))
   ([c block-name amount]
    (let [p (:primitives c)
@@ -239,10 +239,12 @@
            (let [[kind text data] skip]
              (when (or (= :never kind) (= :not-worth (:reason data)))
                (ctx/update-mem! c update :spare-tried (fnil conj #{}) tool-name)
-               (when-not (some #(= tool-name (:name (:data %))) (ctx/entries c tools/spare-skip-told-kind))
-                 (ctx/remember! c tools/spare-skip-told-kind {:name tool-name} {:cap 10 :ttl 600000})
-                 (ctx/emit! c :tool.spare-skipped :info {:tool tool-name :item (:item worn) :price (:price data) :worth worth :reason (:reason data)
-                                                         :text (str "no spare " tool-name ": " text)})))
+               (let [r1 #(when % (/ (js/Math.round (* 10 %)) 10))
+                     told {:name tool-name :item (:item worn) :price (r1 (:price data)) :worth (r1 worth)}]
+                 (when-not (some #(= told (:data %)) (ctx/entries c tools/spare-skip-told-kind))
+                   (ctx/remember! c tools/spare-skip-told-kind told {:cap 10 :ttl :forever})
+                   (ctx/emit! c :tool.spare-skipped :info {:tool tool-name :item (:item worn) :price (:price data) :worth worth :reason (:reason data)
+                                                           :text (str "no spare " tool-name ": " text)}))))
              nil)
            (let [e (await (need/fetch! c 'jobs.items.obtain (cond-> {:item tool-name :count 1 :avoid (line-ahead c)} worth (assoc :worth worth))
                                        :need {:item tool-name :count 1} o))]

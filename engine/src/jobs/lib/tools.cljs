@@ -57,7 +57,7 @@
 (def told-kind "Body memory kind of the tools told low (:name, :durability), so a later job does not tell it again." :tool.low-told)
 
 (def no-spare-told-kind "Body memory kind of the tools whose missing spare was told (:name), so no later job tells it again." :tool.no-spare-told)
-(def spare-skip-told-kind "Body memory kind of the tools whose dear spare was skipped as not worth it (:name), so the dig steps of one trip tell it once." :tool.spare-skip-told)
+(def spare-skip-told-kind "Body memory kind of the tools whose dear spare was skipped as not worth it (:name), (:name :item :price :worth, rounded), so it is told once until those change or the tool breaks." :tool.spare-skip-told)
 
 (defn low-told?
   "Whether this tool (snapshot) was told low already and has not been replaced: an entry of its name at or above its durability."
@@ -90,7 +90,8 @@
                           (str "the " (:name prev) " is worn (" (:durability now) " uses left)"))})
       (if (= ev :tool-broke)
         (do (ctx/forget-where! c told-kind #(= (:name prev) (:name %)))
-            (ctx/forget-where! c no-spare-told-kind #(= (:name prev) (:name %))))
+            (ctx/forget-where! c no-spare-told-kind #(= (:name prev) (:name %)))
+            (ctx/forget-where! c spare-skip-told-kind #(= (:name prev) (:item %))))
         (ctx/remember! c told-kind {:name (:name prev) :durability (:durability now)} {:cap 20 :ttl :forever}))
       (when (and (= ev :tool-broke) (zero? (:n now))
                  (not-any? #(str/ends-with? (:name %) (str "_" (last (str/split (:name prev) #"_")))) (u/inventory p)))

@@ -2,6 +2,7 @@
   "jobs.gather.mine, the trip around jobs.gather.dig-for: equip, call the dig, mend, walk back. The dig's own cases are engine.mine-a..e."
   (:require [cljs.test :refer [deftest is async]]
             [engine.contract :as contract]
+            [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.fake :as fake]
             [jobs.lib.need :as need]
@@ -107,7 +108,8 @@
           (let [ev (first (m/events-of s :tool.spare-skipped))]
             (is (= ["stone_pickaxe" "iron_pickaxe" :not-worth] ((juxt :tool :item :reason) ev)) (pr-str ev))
             (is (< (:worth ev) (:price ev)) "the start price passed the wear saved")
-            (is (= 1 (count (m/events-of s :tool.spare-skipped))) (pr-str (map #(select-keys % [:job :slot :t :id]) (m/events-of s :tool.spare-skipped)))))
+            (let [evs (m/events-of s :tool.spare-skipped)]
+              (is (= (count evs) (count (distinct (map (juxt :tool :item :price :worth) evs)))) "each decision is told once")))
           (is (= [] (into [] (comp (map (comp str :job)) (filter #(re-find #"/spare(/|$)" %)) (distinct)) @(:seen s))) "a spare dearer than the wear it saves is not looked for")
           (is (= [:tunnel-length 4] [(:stop e) (:length e)]) (pr-str (dissoc e :report))))))))
 
@@ -125,3 +127,49 @@
             (is (pos? @asked) "the start check was asked")
             (is (nil? (:spare-tried (m/job-mem s))) "a wait that is not :not-worth does not give the spare up for the job")
             (is (empty? (m/events-of s :tool.spare-skipped)))))))))
+
+(def iron-world (assoc (rock-world {}) :inventory [{:name "iron_pickaxe" :count 1 :durability 250 :max-durability 250} {:name "cobblestone" :count 8}]))
+
+(defn ^:async run-dig!
+  "Submit one more coal dig on s (a fresh job, same body) in direction dir; run it out."
+  [s dir]
+  (core/submit! (:eng s) (m/spec {:block "coal_ore" :count 1 :direction dir :tunnel-length 4 :radius 8 :torches false :trip true}) {})
+  (await (m/run-ticks s 300)))
+
+(defn ^:async with-price
+  "Run (f) with the spare's start check answering not-worth at the price in the atom."
+  [price f]
+  (let [orig need/item-status]
+    (set! need/item-status (fn [& _] [:never "too dear" {:reason :not-worth :price @price}]))
+    (try (await (f)) (finally (set! need/item-status orig)))))
+
+(deftest a-skipped-dear-spare-is-told-once-over-fresh-jobs-until-its-numbers-change-or-the-tool-breaks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [price (atom 100)
+              s (m/start {:world iron-world})
+              told #(count (m/events-of s :tool.spare-skipped))
+              before (atom 0)
+              grew? #(let [n (told)] (when (> n @before) (reset! before n) true))
+              same? #(= @before (told))]
+          (await (with-price price
+                   (fn ^:async f []
+                     (await (run-dig! s "east"))
+                     (is (grew?) "first job tells it")
+                     (await (run-dig! s "west"))
+                     (is (same?) "a fresh job with the same numbers does not")
+                     (reset! price 200)
+                     (await (run-dig! s "north"))
+                     (is (grew?) "a changed price tells it again")
+                     (swap! (fake/state (:p s)) assoc :inventory [{:name "iron_pickaxe" :count 1 :durability 15 :max-durability 250} {:name "cobblestone" :count 8}])
+                     (.override (.-world (:p s)) "dig"
+                                (fn ^:async f [token a impl]
+                                  (let [r (await (impl token a))]
+                                    (swap! (fake/state (:p s)) assoc :inventory [{:name "stone_pickaxe" :count 1 :durability 131 :max-durability 131}])
+                                    r)))
+                     (await (run-dig! s "south"))
+                     (is (= 1 (count (m/events-of s :tool.broke))) "the iron pickaxe broke")
+                     (swap! (fake/state (:p s)) assoc :inventory [{:name "iron_pickaxe" :count 1 :durability 250 :max-durability 250} {:name "cobblestone" :count 8}])
+                     (await (run-dig! s "east"))
+                     (is (grew?) "after the break the same numbers are told afresh")))))))))
