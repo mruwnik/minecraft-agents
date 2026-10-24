@@ -435,6 +435,24 @@
                       (death/rate-nodes (:prior (first group))))))
        (reduce convolve [1])))
 
+(def max-met-sets "Threats of a meeting priced by which of them get to the body (met-sets), the likeliest k above it: a mixed meeting of n costs up to 2^n - 1 answers (6 skeletons and 3 zombies: 27, 24 ms against 9 and 10 ms)." 6)
+
+(defn met-sets
+  "[[threats p]] for every set of threats [{:c :exposure :prior}] (met-counts') that may get to the body together, p the
+  chance just those do: at each of death/rate-nodes of a prior its threats' sets by their chances there, the priors'
+  sets independent."
+  [ts]
+  (->> (vals (group-by :prior ts))
+       (map (fn [group]
+              (let [nodes (death/rate-nodes (:prior (first group)))
+                    sets (reduce (fn [sets {:keys [c exposure] :as t}]
+                                   (let [qs (mapv (fn [[r]] (* c (- 1 (js/Math.exp (- (* r exposure)))))) nodes)]
+                                     (into (mapv (fn [[g ps]] [g (mapv #(* %1 (- 1 %2)) ps qs)]) sets)
+                                           (map (fn [[g ps]] [(conj g t) (mapv * ps qs)]) sets))))
+                                 [[[] (mapv (constantly 1) nodes)]] group)]
+                (mapv (fn [[g ps]] [g (reduce + (map (fn [p [_ w]] (* p w)) ps nodes))]) sets))))
+       (reduce (fn [a b] (for [[g p] a [h q] b] [(into g h) (* p q)])) [[[] 1]])))
+
 (defn meetings
   "The meetings of the known threats of route {:cells :threats} (death-chance's) with the body: each threat gets to it at
   c (its weight, a provoked-only one's times threat/provoked-share) times the chance it does on the :cells
@@ -465,20 +483,21 @@
     {:chance (answer-death-chance body a at) :hurt (min (life body) (expected-damage a))}))
 
 (defn meeting-parts
-  "{:chance :hurt} of one meeting (a meetings entry): the k of its threats that get to the body (met-counts) are met
-  together, their blows adding up: (parts names caught) of the k likeliest, caught at the worst of their chances, each by
-  the chance of k."
+  "{:chance :hurt} of one meeting (a meetings entry): the threats that get to the body are met together, their blows
+  adding up: (parts names caught) of each set of them (met-sets), caught at the worst of their chances, by its chance;
+  a meeting of more than max-met-sets the k likeliest by the chance of k (met-counts)."
   [parts meeting]
-  (let [parts (fn [k]
-                (let [group (subvec meeting 0 k)]
-                  (parts (mapv :mob group) (some->> (seq (keep :caught group)) (apply max)))))]
-    (reduce (fn [acc [k pk]]
-              (if (pos? k)
-                (let [{:keys [chance hurt]} (parts k)]
-                  (-> acc (update :chance + (* pk chance)) (update :hurt + (* pk hurt))))
+  (let [set-key (fn [group] [(vec (sort (map :mob group))) (some->> (seq (keep :caught group)) (apply max))])
+        sets (if (< max-met-sets (count meeting))
+               (map-indexed (fn [k pk] [(subvec meeting 0 k) pk]) (met-counts meeting))
+               (met-sets meeting))]
+    (reduce (fn [acc [[names caught] p]]
+              (if (and (seq names) (pos? p))
+                (let [{:keys [chance hurt]} (parts names caught)]
+                  (-> acc (update :chance + (* p chance)) (update :hurt + (* p hurt))))
                 acc))
             {:chance 0 :hurt 0}
-            (map-indexed vector (met-counts meeting)))))
+            (reduce (fn [m [group p]] (update m (set-key group) (fnil + 0) p)) {} sets))))
 
 (defn route-parts
   "{:chance :hurt} of the known threats of route {:cells :threats :at} for body: each meeting's meeting-parts at :at

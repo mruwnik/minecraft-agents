@@ -315,3 +315,13 @@
   (is (some? (a/problem :jobs.lib.cost.danger/flight-starts {"zombie" {:n 3 :deciles (vec (repeat 10 0))}}))
       "a setting with no pool is refused, not read as no starts"))
 
+
+(deftest a-meeting-prices-each-set-of-its-threats-that-may-come-not-the-likeliest-k
+  (let [b (body 20)
+        threat (fn [mob weight] {:mob mob :weight weight :reach (constantly 1)})
+        route {:cells [(assoc here :s 1e6)] :threats [(threat "creeper" 0.5) (threat "zombie" 0.5)] :at here}
+        alone #(:chance (answer/group-parts b % nil here))]
+    (is (< (js/Math.abs (- (:chance (cost/route-parts b route))
+                           (+ (* 0.25 (alone ["creeper" "zombie"])) (* 0.25 (alone ["creeper"])) (* 0.25 (alone ["zombie"])))))
+           1e-6)
+        "sure to notice, each there half the time: a quarter both, a quarter each alone, a quarter none")))
