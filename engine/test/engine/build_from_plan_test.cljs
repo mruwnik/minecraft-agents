@@ -2126,7 +2126,7 @@
       (fp-walk/in-pocket? c))
     (is (= [[6 55 0]] @goals))))
 
-(defn dark-wait [s] (contract/later :exposed "dark at 1 65 1 until light" :lowered-by #{:light} :chance 0.005 :recheck-after-ms (* 1000 s)))
+(defn dark-wait [s] (contract/later :exposed "dark at 1 65 1 until light" :lowered-by #{:light} :chance 0.005 :recheck-after-ms (* 1000 s) :wait-ms (* 1000 s)))
 (def no-light (contract/never :exposed "dark at 1 65 1, a hall of dark floor" :lowered-by #{:torch} :chance 0.005))
 
 (defn lit-check

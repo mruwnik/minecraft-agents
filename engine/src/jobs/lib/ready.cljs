@@ -84,7 +84,7 @@
       (<= chance (settings/get settings ::risk-limit)) (contract/ok :unexposed (str "no spawn risk at " where ": open ground under a lit sky"))
       (spawn-light/deep? to feet-y false) (contract/never :exposed (str "dark at " where ": guessed a cave, which dawn does not light") :lowered-by #{:torch} :chance chance)
       (<= light-in patience) (contract/later :exposed (str "dark at " where ": guessed open ground, dark until light") :lowered-by #{:light} :chance chance
-                                             :recheck-after-ms (* 1000 light-in))
+                                             :recheck-after-ms (* 1000 light-in) :wait-ms (* 1000 light-in))
       :else (contract/never :exposed (str "dark at " where ", light is " (js/Math.round light-in) " s away, over the " (js/Math.round patience) " s it waits") :chance chance))))
 
 (defn at-status
@@ -112,7 +112,7 @@
       (unseen-status c to)
       (contains? lowered-by :look) (contract/look :exposed (str "light at " where " not seen") :look-at look-at)
       (and (contains? lowered-by :light) (<= light-in patience))
-      (contract/later :exposed (str "dark at " where " until light") :lowered-by lowered-by :chance chance :recheck-after-ms (* 1000 light-in))
+      (contract/later :exposed (str "dark at " where " until light") :lowered-by lowered-by :chance chance :recheck-after-ms (* 1000 light-in) :wait-ms (* 1000 light-in))
       (contains? lowered-by :light)
       (contract/never :exposed (str "dark at " where ", light is " (js/Math.round light-in) " s away, over the " (js/Math.round patience) " s it waits") :chance chance)
       (spawn-light/hall-at? p to) (contract/never :exposed (str "dark at " where ", and a mob can walk from dark floor farther than " sh-inside/spawn-free-radius " blocks off (a hall, or an open side of this room): mobs spawn there, waiting never lights it, a torch does") :lowered-by #{:torch} :chance chance :at (spawn-light/hall-cell p to))
@@ -269,7 +269,7 @@
   (let [p (:primitives c)]
     (when (and (= :dug-in (sh-inside/walk-leaves-shelter? p (:data (ctx/latest c :shelter)) to 1)) (not (sh-inside/in-room? p to 1)))
       (contract/later :dark "sealed in the night shelter, the walk would leave it under a dark sky"
-                      :recheck-after-ms (* 1000 (sh-sense/sky-in p))))))
+                      :recheck-after-ms (* 1000 (sh-sense/sky-in p)) :wait-ms (* 1000 (sh-sense/sky-in p))))))
 
 (defn safe-at-by-night
   "The checker of a job that goes to the place (f c): while the place is dark safe-at it, by day or when body and place are both
@@ -369,7 +369,7 @@
     (if (and (not (sh-sense/lit-here? p (sh-sense/feet p))) (open-to-sky? p) (day-would-light? p))
       (if-let [cell (unseen-overhead c)]
         (contract/look :dark "dark sky above ground unless a roof is over the feet; looks up" :look-at [cell])
-        (contract/later :dark "dark sky above ground, waits for light"))
+        (apply contract/later :dark "dark sky above ground, waits for light" (when-let [s (sh-sense/sky-in p)] [:wait-ms (* 1000 s)])))
       (contract/ok :lit "lit or underground"))))
 
 (def safe-if-lit
@@ -388,7 +388,7 @@
         waits (keep #(let [s (sh-sense/light-in p %)] (when (and s (pos? s)) s)) (some->> room (sh-inside/way-out-cells p)))]
     (if (seq waits)
       (contract/later :dark "sheltered for the night, a walk with no place leaves the room into ground dark till dawn"
-                      :recheck-after-ms (* 1000 (apply min waits)))
+                      :recheck-after-ms (* 1000 (apply min waits)) :wait-ms (* 1000 (apply min waits)))
       (contract/ok :lit "no way out of the room that dawn lights"))))
 
 (def safe-roaming

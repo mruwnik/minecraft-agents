@@ -8,6 +8,7 @@
             [engine.settings :as settings]
             [jobs.lib.animals :as animals]
             [jobs.lib.checks :as checks]
+            [jobs.lib.cost :as cost]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
@@ -263,14 +264,33 @@
       later? (contract/later :plan-trouble trouble :why trouble)
       :else (contract/never :plan-trouble trouble :why trouble))))
 
+(declare quote-of)
+
+(def shear-wool "Wool a shorn sheep drops, the game's 1 to 3: 2 on average." 2)
+
+(defn pass
+  "{:worth :work-s} of a pass, as jobs.lib.standing/away-cause weighs it: cost/animal-worth of the animals its herd, breed
+  (one pair, one calf) and cull steps would add or kill, the item-value of the wool its shear and of the drops its collect
+  would take; and the mean job time of quote-of."
+  [c]
+  (let [{:keys [mob target]} (:args c)
+        {:keys [adults babies drops shearable]} (facts c)
+        animals (+ (max 0 (- (min 2 target) adults))
+                   (if (and (>= adults 2) (< (+ adults babies) target)) 1 0)
+                   (max 0 (- adults (max 2 (- target babies)))))
+        items (cond-> (mapv (fn [n] {:name n :count 1}) drops)
+                (= "sheep" mob) (conj {:name "white_wool" :count (* shear-wool shearable)}))]
+    {:worth (+ (* animals (cost/animal-worth mob)) (:value (cost/item-value items)))
+     :work-s (second (get-in (quote-of c) [:uses :job-time]))}))
+
 (defn can-start?
-  "Never :no-box without a box or a plan, :no-mob without :mob or a plan; later for :plan-trouble, :away (another job can run) or nothing to do."
+  "Never :no-box without a box or a plan, :no-mob without :mob or a plan; later for :plan-trouble, :away (another job can run, or the trip would delay the waiting ones by more than the pass is worth: jobs.lib.standing) or nothing to do."
   [c]
   (let [{:keys [plan box mob]} (:args c)
         {:keys [trouble] :as pen} (pen-read/pen-of c)
         c (if pen (with-pen c pen) c)
         {:keys [min max]} (pen-read/arg-box c)
-        away (when min (standing/away-cause c {:x (/ (+ (:x min) (:x max)) 2) :y (:y min) :z (/ (+ (:z min) (:z max)) 2)}))]
+        away (when min (standing/away-cause c {:x (/ (+ (:x min) (:x max)) 2) :y (:y min) :z (/ (+ (:z min) (:z max)) 2)} pass))]
     (cond
       (not (or plan box)) (contract/never :no-box "maintain needs a :box or a :plan")
       (not (or plan mob)) (contract/never :no-mob "maintain needs a :mob or a :plan")

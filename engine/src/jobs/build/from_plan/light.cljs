@@ -54,7 +54,7 @@
   (let [exposed? (fn [[_ _ data]] (= :exposed (:reason data)))
         wait-for-light? (fn [[kind :as s]] (and (= :later kind) (exposed? s) (contains? (:lowered-by (nth s 2)) :light)))
         no-light? (fn [[kind :as s]] (and (= :never kind) (exposed? s) (contains? (:lowered-by (nth s 2)) :torch)))
-        wait-s (fn [[_ _ data]] (some-> (:recheck-after-ms data) (/ 1000)))
+        wait-s (fn [[_ _ data]] (some-> (:wait-ms data) (/ 1000)))
         lit (fn [f] (fn [c] (let [s (f c)]
                               (if (and (or (wait-for-light? s) (no-light? s))
                                        (or (can-light? c) (fetch-due? c (when (wait-for-light? s) (wait-s s)) (plan/owed (cells-of c)))))

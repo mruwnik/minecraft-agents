@@ -204,7 +204,7 @@
         p (:primitives c)]
     (if (and (not error) (keep/kept-tonight p (ctx/view c) (b/cell pos)))
       (contract/later :dark (str "the block at " (b/cell pos) " shuts the night shelter; it is dug by day")
-                      :pos pos :recheck-after-ms (* 1000 (sh-sense/sky-in p)))
+                      :pos pos :recheck-after-ms (* 1000 (sh-sense/sky-in p)) :wait-ms (* 1000 (sh-sense/sky-in p)))
       (contract/ok :allowed "no night shelter block"))))
 
 (def safe? (ready/safe-at-build (fn [c] (a/cell (:pos (:args c))))))

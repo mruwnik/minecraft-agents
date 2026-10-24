@@ -45,7 +45,7 @@
   within 4 blocks of water, level or one up, are tilled anyway), :no-bare, :fertilize-off, :no-bone-meal, :none-unripe or :declined (the child declined).
   A step that ran keeps its summary even if it is skipped later in the same run.
   Start facts, failed conditions: impossible {:reason :no-box} unless the area is a box with a crop layer and at most 2048 cells, or a plan;
-  {:reason :away :site :others} while another job that is not standing and not waiting is listed;
+  {:reason :away :site :others} while another job that is not standing and not waiting is listed, or (with :delay-s :worth) while they all wait and the walk and the pass would delay the soonest by more than the pass is worth (jobs.lib.standing);
   {:reason :nothing-to-do} (with :covered, :refused, :blocked (plan crop cells another block fills), :food-reserve) or {:reason :short-seed :seeds} when no
   step would run, after one look round from here when a cell was never seen; a field cell never seen that no look from here
   shows (look/look-shows?) or one look round did not show is walked to first (go-to, :range 8, once a run) when go-to's quote of the walk
@@ -273,11 +273,18 @@
       (contract/ok :args "a box or plan given")
       (contract/never :no-box "no usable box or plan area"))))
 
+(declare quote-of)
+
+(defn pass
+  "{:worth :work-s} of a pass over the field, as jobs.lib.standing/away-cause weighs it: pass-worth, and the mean job time of quote-of."
+  [c]
+  {:worth (pass-worth c) :work-s (second (get-in (quote-of c) [:uses :job-time]))})
+
 (defn problem
   "Why no run can start (a started run decides through its steps), a status: away while another
   runnable job is listed, else the status of the last part (the first to ask for a look), ok when some part has work."
   [c]
-  (let [away (standing/away-cause c (site c))]
+  (let [away (standing/away-cause c (site c) pass)]
     (if away
       (checks/cause-status :later away)
       (let [statuses (map #(part-status (for-part c %)) (parts-of c))]

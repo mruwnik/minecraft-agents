@@ -4,6 +4,7 @@
             [jobs.lib.price :as price]
             [clojure.string :as str]
             [jobs.lib.checks :as checks]
+            [jobs.lib.cost :as cost]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -36,8 +37,8 @@
   A step with nothing to do is skipped and booked {:skipped reason}: :no-food, :no-wheat, :no-table (none seen or carried, the call's :ways #{:carried}), :no-chest, :stocked,
   :nothing-to-store. A step whose child stops is booked with its summary and the stop as :reason; the pass goes on.
   Needs (can-start?, a listed job waits): a step that would run (raw food carried above the
-  reserve with a cooked shortfall, wheat for a loaf), so a body with nothing to cook is not held, and not too far from
-  the chest (:away). can-run? (between steps): a chest place lost mid-pass waits :no-chest, a chest cell seen to hold
+  reserve with a cooked shortfall, wheat for a loaf), so a body with nothing to cook is not held, and no other job runnable
+  nor delayed by the trip to the chest by more than the pass is worth (:away, jobs.lib.standing). can-run? (between steps): a chest place lost mid-pass waits :no-chest, a chest cell seen to hold
   another block is never :chest-gone. There is no rest timer: a pass that cannot cook ends with its stop and repeat decides.
   Every pass ends with data {:steps {step summary} :text}, the text naming what was smelted, baked and stored; smelt summaries are keyed by food, the deposit's has :stored {name n}. It ends done
   when something was cooked, baked or stored; otherwise with the ending of the first step that stopped (its kind and
@@ -183,10 +184,27 @@
 
 (defn would-run? [c f] (boolean (some :call (vals (decisions c f)))))
 
-(defn away
-  "The cause of a kitchen declining while another job can run (jobs.lib.standing/away-cause), or nil."
+(declare quote-of)
+
+(defn pass
+  "{:worth :work-s} of a pass, as jobs.lib.standing/away-cause weighs it: the item-value of the cooked food and bread it
+  would stock (the shortfall its carried raw food and wheat cover), and the mean job time of quote-of."
   [c]
-  (standing/away-cause c (storage/chest-of (ctx/view c) (:args c))))
+  (let [{:keys [foods stock] :as a} (:args c)
+        f (facts c)
+        reserve (or (:reserve a) {})
+        cooked (keep (fn [food]
+                       (let [n (min (:carried (usable reserve food f)) (shortfall stock (foods/cooked-of food) f))]
+                         (when (pos? n) {:name (foods/cooked-of food) :count n})))
+                     foods)
+        bread (loaves a f)]
+    {:worth (:value (cost/item-value (cond-> (vec cooked) (pos? bread) (conj {:name "bread" :count bread}))))
+     :work-s (second (get-in (quote-of c) [:uses :job-time]))}))
+
+(defn away
+  "The cause of a kitchen declining while another job can run, or while they all wait and the trip would delay them by more than the pass is worth (jobs.lib.standing/away-cause), or nil."
+  [c]
+  (standing/away-cause c (storage/chest-of (ctx/view c) (:args c)) pass))
 
 (defn nothing-to-do
   "The cause of a kitchen with no step to run: each step's skip."

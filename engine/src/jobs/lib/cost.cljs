@@ -231,6 +231,7 @@
 (def expected-drops value/expected-drops)
 (def food-point-worth value/food-point-worth)
 (defn trip [] (value/trip))
+(def unknown-wait-s value/unknown-wait-s)
 (def light-cost value/light-cost)
 (def per-danger value/per-danger)
 (def spawn-chance value/spawn-chance)
