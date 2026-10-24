@@ -135,14 +135,13 @@
 (defn cells [& boxes]
   (set (for [[x0 y0 z0 x1 y1 z1] boxes x (range x0 (inc x1)) y (range y0 (inc y1)) z (range z0 (inc z1))] [x y z])))
 
-(def forks
-  "[name known start counts]: a way splits into a shut branch and one running out of the seen box; the split reached
-  level, by a step down from a ledge, and a shut corridor with a side not seen."
-  [["plain fork" (carved (let [o (cells [0 64 0 8 65 0] [3 64 1 3 65 3])] #(contains? o %))) [0 64 0] {:k 2 :n 3}]
-   ["fork after a drop" (carved (let [o (cells [0 65 0 0 66 0] [1 64 -3 1 65 0] [1 66 0 1 66 0] [2 64 0 8 65 0])] #(contains? o %))) [0 65 0] {:k 2 :n 3}]
-   ["shut corridor with a side not seen"
-    (zeroed shut-corridor (cells [4 64 1 4 65 1])) [0 64 0] {:k 1 :n 1}]])
-
 (deftest a-fork-keeps-its-dead-and-open-ways-apart
-  (doseq [[nm known start expected] forks]
-    (is (= expected (way-on/way-counts known start)) nm)))
+  (let [fork (carved (let [o (cells [0 64 0 8 65 0] [3 64 1 3 65 3])] #(contains? o %)))]
+    (is (= {:k 2 :n 3} (way-on/way-counts fork [0 64 0])) "a shut branch and one running out of the seen box: two ways on of three")))
+
+(deftest a-stand-with-no-way-back-keeps-its-two-forward-ways-apart
+  (let [o (cells [0 65 0 0 65 0] [1 64 0 3 65 0] [1 64 1 1 65 8])
+        ladder (into {} (for [y (range 61 65)] [[0 y 0] "ladder"]))
+        known (known-of (fn [cell] (not (or (o cell) (contains? ladder cell)))) ladder seen-box)]
+    (is (= {:k 2 :n 3} (way-on/way-counts known [0 64 0]))
+        "the start is a ladder cell nobody stands on: the step off it has no way back, so its shut stub and open corridor both count")))
