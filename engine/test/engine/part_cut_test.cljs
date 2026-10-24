@@ -134,7 +134,17 @@
     (is (false? (holds pct/part-cut-tree blocks need [{:name "dirt" :count 4}])) "too few")
     (is (true? (holds pct/part-cut-tree blocks need [{:name "dirt" :count 5}])) "carried now")
     (is (true? (holds pct/part-cut-tree blocks [[trees/need-kind {:column [9 9] :any-of ["dirt"] :count 5}]])) "another column")
-    (is (false? (holds pct/part-cut-tree blocks [[trees/need-kind {:column :any :any-of ["dirt"] :count 5}]])) "a need before any column was chosen holds all")))
+    (is (false? (holds pct/part-cut-tree blocks [[trees/need-kind {:column :any :any-of ["dirt"] :count 5 :trees [[6 0]]}]])) "a need before any column was chosen holds the trunks it was written with")
+    (is (true? (holds pct/part-cut-tree blocks [[trees/need-kind {:column :any :any-of ["dirt"] :count 5 :trees [[9 9]]}]])) "a trunk it was not written with lets the trigger fire again")))
+
+(deftest fell-tree-ending-otherwise-drops-an-any-need
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (lt/setup {:blocks (merge (fm/ground [[6 0]]) (part-cut 6))})]
+          (mem/write! (:store eng) trees/need-kind {:column :any :any-of ["dirt"] :count 5 :trees []} trees/need-policy)
+          (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:part-cut? true :radius 12 :ways #{:carried}} 150))
+          (is (empty? (mem/entries (mem/view (:store eng)) trees/need-kind))))))))
 
 (deftest the-part-cut-tree-trigger-is-a-bounded-chore
   (let [blocks (merge (fm/ground [[6 0]]) (part-cut 6))

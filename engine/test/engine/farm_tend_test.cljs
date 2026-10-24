@@ -509,7 +509,7 @@
     (await (tu/run-ticks (:eng s) (:clock s) 3 700))
     s))
 
-(deftest a-tend-under-repeat-far-below-its-field-walks-up-when-nothing-else-is-listed
+(deftest a-tend-under-repeat-far-below-its-field-does-not-wait-away
   (async done
     (tu/run-async done
       (fn ^:async t []

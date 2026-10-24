@@ -54,11 +54,12 @@
         {:keys [body at seen]} @last-read]
     (if (and (identical? body p) (< (- now at) (* 1000 (settings/get settings ::recheck-s))))
       seen
-      (let [seen (let [lacking (needing view (u/inventory p))
+      (let [trunks (part-cut/part-cut-trees p default-radius nil)
+            col #(vector (:x (:column %)) (:z (:column %)))
+            seen (let [lacking (needing view (u/inventory p) (map col trunks))
                        given-up (into (recently-unreachable view) lacking) home (sh/home-target view)]
                    (boolean (and (not (lacking :any))
-                                 (seq (remove #(or (refused? p kn %) (too-far? home %) (given-up [(:x (:column %)) (:z (:column %))]))
-                                              (part-cut/part-cut-trees p default-radius nil))))))]
+                                 (seq (remove #(or (refused? p kn %) (too-far? home %) (given-up (col %))) trunks)))))]
         (reset! last-read {:body p :at now :seen seen})
         seen))))
 

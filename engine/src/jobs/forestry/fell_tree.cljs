@@ -395,14 +395,21 @@
 ;; ------------------------------------------------------------------ the contract
 
 (defn ^:async cleanup
-  "However the call ends: take the pillar back; a need ending keeps its column (:any before one was chosen) and what it lacked for the part-cut-tree trigger."
+  "However the call ends: take the pillar back; a need ending keeps its column (:any before one was chosen, with the part-cut
+  columns in sight) and what it lacked for the part-cut-tree trigger; any other ending, or a chosen column, drops an :any need."
   [c e]
   (let [cause (:cause e)
         col (or (some-> (:column (ctx/mem c)) ((juxt :x :z))) :any)
-        items (or (seq (:any-of cause)) (some-> (:item cause) vector))]
-    (when (and items (= :need (contract/cause-key e)))
+        items (or (seq (:any-of cause)) (some-> (:item cause) vector))
+        need? (and items (= :need (contract/cause-key e)))]
+    (when-not (and need? (= :any col))
+      (ctx/forget-where! c trees/need-kind #(= :any (:column %))))
+    (when need?
       (ctx/forget-where! c trees/need-kind #(= col (:column %)))
-      (ctx/remember! c trees/need-kind {:column col :any-of (vec items) :count (:count cause 1)} trees/need-policy)))
+      (ctx/remember! c trees/need-kind
+                     (cond-> {:column col :any-of (vec items) :count (:count cause 1)}
+                       (= :any col) (assoc :trees (mapv (comp (juxt :x :z) :column) (part-cut/part-cut-trees (:primitives c) default-radius nil))))
+                     trees/need-policy)))
   (await (pillar/cleanup c e)))
 
 (def target [:at])

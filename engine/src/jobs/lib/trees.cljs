@@ -141,16 +141,18 @@
   (into #{} (map (comp :column :data)) (mem/entries memory unreachable-kind)))
 
 (def need-kind
-  "Entries {:column [x z] or :any, :any-of [names] :count n}, one per column, a fell-tree ending :need writes: the part-cut-tree trigger leaves the column alone until the body carries what the need named."
+  "Entries {:column [x z] or :any, :any-of [names] :count n, :trees [[x z]..] (with :any: the part-cut columns in sight)}, one per column, a fell-tree ending :need writes: the part-cut-tree trigger leaves the column alone until the body carries what the need named."
   :forestry/tree-need)
 
 (def need-policy {:cap 20 :ttl :forever})
 
 (defn needing
-  "The set of [x z] columns (or :any) a fell-tree need ending named items for that the inventory inv still lacks, read from memory."
-  [memory inv]
-  (let [carried (fn [names] (transduce (comp (filter (comp (set names) :name)) (map :count)) + 0 inv))]
-    (into #{} (comp (map :data) (filter #(< (carried (:any-of %)) (:count % 1))) (map :column)) (mem/entries memory need-kind))))
+  "The set of [x z] columns (or :any) a fell-tree need ending named items for that the inventory inv still lacks, read from
+  memory. An :any need counts only while every column of cols (the part-cut columns in sight now) is one it was written with."
+  [memory inv cols]
+  (let [carried (fn [names] (transduce (comp (filter (comp (set names) :name)) (map :count)) + 0 inv))
+        known? (fn [{:keys [column trees]}] (or (not= :any column) (every? (set trees) cols)))]
+    (into #{} (comp (map :data) (filter #(< (carried (:any-of %)) (:count % 1))) (filter known?) (map :column)) (mem/entries memory need-kind))))
 
 (defn debts [c]
   (mapv :data (ctx/entries c replant-kind)))
