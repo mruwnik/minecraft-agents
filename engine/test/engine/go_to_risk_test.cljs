@@ -28,7 +28,9 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.walk-risk :as risk]
             [jobs.lib.walk.drive :as drive]
-            [jobs.movement.go-to.reprice :as reprice]))
+            [jobs.movement.go-to.preview :as preview]
+            [jobs.movement.go-to.reprice :as reprice]
+            [jobs.survival.recover-drops.estimate :as drops-est]))
 
 (def inside {:x 5 :y 64 :z 0})
 (def night-hut (merge (hut/hut-world inside {}) {:time st/night}))
@@ -660,3 +662,26 @@
     (is (= :later (first s)))
     (is (= :risky (:reason (nth s 2))))))
 
+
+(def skeleton-world {:time st/noon :self {:pos {:x 0.5 :y 64 :z 0.5}}
+                     :entities [{:id 7 :name "skeleton" :kind "hostile" :pos {:x 42 :y 64 :z 0}}]})
+
+(deftest a-go-to-quote-with-back-prices-the-walk-risk-there-and-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [chance (fn ^:async f [args]
+                       (:death-chance (:risk (await (preview/route! (assoc (ready-test/ctx-of skeleton-world) :emit (fn [_ _ _]) :args (merge {:pos [30 64 0] :range 0} args)))))))
+              there (await (chance {}))
+              both (await (chance {:back true}))]
+          (is (< 0 there both) "the way back is in the skeleton's fire range too"))))))
+
+(deftest recover-drops-quotes-its-trip-there-and-back-with-the-collect-stay
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [asked (atom nil)
+              c (assoc (ready-test/ctx-of {}) :quote (fn [_ args _ _] (reset! asked args) (js/Promise.resolve nil)))]
+          (await (drops-est/quote-trip c {:data {:pos {:x 30 :y 64 :z 0} :inventory {}}}))
+          (is (true? (:back @asked)))
+          (is (some? (:stay-s @asked))))))))
