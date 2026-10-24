@@ -240,7 +240,10 @@
                                                   :on-event (fn [e] (some-> @eng-ref (core/emit! e)))})
                           (fn []))
         stop-heap (heap/start! #(core/emit! eng %) (:stats-ms eng))
-        _ (js/setTimeout (:body/warm hooks/all) 0)]
+        _ (js/setTimeout (fn [] (try ((:body/warm hooks/all))
+                                     (catch :default e
+                                       (core/emit! eng {:source :system :kind :warm-failed :level :warn :text (str "warming the tables failed: " (or (ex-message e) e))}))))
+                         0)]
     (let [event-socket (event-api/create (path/join (:engine-dir cfg) "events.sock") eng
                                              {:died game/death-status :build build/status-extra})]
       (try
