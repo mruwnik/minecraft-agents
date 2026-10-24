@@ -266,6 +266,16 @@
           (is (= 4 (reduce + (map :count (get-in @(fake/state p) [:containers [1 64 0]])))) "the raw iron went into the new chest")
           (is (zero? (count (calls p "toss"))) "and none was tossed, nor the chest"))))))
 
+(deftest craft-with-a-full-inventory-and-no-chest-carried-does-not-make-one-from-its-own-logs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [filler (mapv (fn [_] {:name "raw_iron" :count 1}) (range 35))
+              [result p] (await (craft {:inventory (conj filler {:name "oak_log" :count 4})} {:item "oak_planks"}))]
+          (is (= {:item "oak_planks" :made 0 :status :stopped :reason :full} (dissoc result :text)))
+          (is (= 4 (get (inv p) "oak_log")) "the logs were not turned into a chest")
+          (is (empty? (filter #(= "chest" (.-name %)) (.-inventory (.self p))))))))))
+
 (deftest craft-with-a-full-inventory-never-tosses-the-recipes-inputs-to-make-room
   (async done
     (tu/run-async done

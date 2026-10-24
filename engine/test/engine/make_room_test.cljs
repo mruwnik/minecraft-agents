@@ -400,6 +400,18 @@
           (is (= 0 (count (calls p "transfer"))))
           (is (= 3 (count (calls p "toss")))))))))
 
+(deftest an-unusable-main-chest-leaves-the-nearest-group-chest-in-use
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory (many "junk" 35) :containers {"10,64,0" [] "12,64,0" []}})]
+          (know-chest! eng chest-pos)
+          (mem/write! (:store eng) :storage/chests {:pos {:x 12 :y 64 :z 0}} {:cap 16 :ttl :forever})
+          (mem/write! (:store eng) :chest-unusable {:pos chest-pos :reason "full"} (mr/unusable-policy))
+          (await (run-reflex eng {} {}))
+          (is (pos? (count (calls p "transfer"))) "the group chest took the junk")
+          (is (zero? (count (calls p "toss")))))))))
+
 (deftest no-chest-tosses-the-cheapest-first-and-stops-at-the-free-target
   (async done
     (tu/run-async done

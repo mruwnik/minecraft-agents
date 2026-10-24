@@ -2,7 +2,7 @@
 ;; deposit puts down beside the body; the recipe's inputs and the chest are never tossed; a pack of tools has nothing to give and stops :full).
 ;; Open plot, body at [16.5 0 16.5]. 36 stacks: 35 of one item and an oak log to craft planks from.
 ;; Should-succeed: nugget pack crafts after tossing; raw-iron pack crafts after a chest is put down and none of it is tossed.
-;; Should-fail: a pack of iron pickaxes stops :full.
+;; Should-fail: a pack of iron pickaxes stops :full; raw iron and no chest carried ends with the logs and raw iron kept and no chest made.
 {:defaults
  {:tags [:items :storage :craft :jobs]
   :time :any
@@ -24,4 +24,9 @@
   {:name "full-pack-of-tools-stops-with-full"
    :body {:inventory [["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["oak_log" 1]]}
    :act [[:job (jobs.items.craft {:item "oak_planks" :count 4})]]
-   :expect [{:event {:source :job :kind :stopped :data {:cause {:reason :full}}} :within-s 120 :of-job true}]}]}
+   :expect [{:event {:source :job :kind :stopped :data {:cause {:reason :full}}} :within-s 120 :of-job true}]}
+  {:name "full-pack-of-dear-stacks-and-no-chest-makes-no-chest-from-the-logs"
+   :body {:inventory [["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["raw_iron" 1] ["oak_log" 4]]}
+   :act [[:job (jobs.items.craft {:item "oak_planks" :count 4})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 120 :of-job true}]
+   :after [[:item "oak_log" [:>= 3]] [:item "raw_iron" [:>= 35]] [:item "chest" [:<= 0]]]}]}

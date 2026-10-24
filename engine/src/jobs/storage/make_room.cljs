@@ -43,7 +43,7 @@
      then the one picked up longest ago (:picked-up entries), then the smaller stack. The body turns to the first
      of the four directions with two free cells ahead at eye level and tosses; with none (walled in, after one look around) nothing is
      thrown or swapped, since it would come straight back.
-  With :stuck? and nothing cheaper than a chest to toss, the dearer stacks go into a chest put down beside the body (deposit makes it, by its own ways).
+  With :stuck? and nothing cheaper than a chest to toss, the dearer stacks go into a chest put down beside the body (deposit puts down a carried chest only; with none the call ends with its reason).
   After tossing, the cleanup export (however the call ends; it also notes the :make-room-rest memory the inventory trigger rests on) walks up to :away blocks from where the items were thrown (a go-to child; the farthest cell back
   that is no seen obstacle; none: a step to the back edge of the cell, out of the pickup reach of items stopped by a wall 1.5 ahead), so it does not pick them up again.
   Resume: a toss or swap writes its intent first; a run that finds one (after a cut or a restart) checks the
@@ -134,14 +134,14 @@
   (boolean (some #(= chest (:pos (:data %))) (ctx/entries c :chest-unusable))))
 
 (defn usable-chest
-  "The known chest (the :chest place, else a storage group one) when within range and not marked unusable, else nil."
+  "The nearest of the body's storage chests (the :chest place and its group) within range and not marked unusable, else nil."
   [c]
-  (let [view (ctx/view c)
-        chest (or (mem/place view :chest) (some->> (first (storage/group view)) (zipmap [:x :y :z])))]
-    (when (and chest
-               (<= (u/dist (u/self-pos c) chest) (chest-range))
-               (not (unusable? c chest)))
-      chest)))
+  (let [me (u/self-pos c)]
+    (->> (storage/group (ctx/view c))
+         (map #(zipmap [:x :y :z] %))
+         (remove #(or (> (u/dist me %) (chest-range)) (unusable? c %)))
+         (sort-by #(u/dist me %))
+         first)))
 
 (defn state
   "What the round decides on: inventory, floors and recency."
@@ -296,8 +296,8 @@
   (let [before (u/free-slots (:primitives c))
         room (room-limit (u/inventory (:primitives c)) names keep (slots-short c))
         e (await (ctx/call c :deposit 'jobs.storage.deposit
-                           (cond-> (merge (select-keys (:args c) [:ignore-zones?]) {:items (:names room) :carry (:keep room) :make-chests? true})
-                                  chest (assoc :chest chest :ways #{:carried}))))]
+                           (cond-> (merge (select-keys (:args c) [:ignore-zones?]) {:items (:names room) :carry (:keep room) :make-chests? true :ways #{:carried}})
+                                  chest (assoc :chest chest))))]
     (when (and chest (get-in e [:data :gave-up]))
       (ctx/remember! c :chest-unusable {:pos chest :reason (contract/cause-key e)} (unusable-policy)))
     (when (> (u/free-slots (:primitives c)) before)
