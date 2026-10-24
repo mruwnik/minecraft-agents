@@ -405,11 +405,18 @@
        (= :searching a) a
        a (mapv (fn [cell] {:cell cell :block (block-at cell) :guess (dig-look/unknown? p cell)}) (:dig a))))))
 
+(def dig-margin
+  "Blocks round its two ends a dig route (dig-way, frontier-way) may stray. Not a price of guessed cells (unseen-step-s
+  prices those): it bounds the flood, which with no route spreads over about 270k cells of rock within max-route-s.
+  search-bound's stand-still bound alone (the whole way without a route, ~100 s on a far goal) is too loose for that.
+  A climb (climb-route) has none."
+  3)
+
 (defn search-opts
-  "route-answer's route-opts for a choice's opts: its :slice, its :spent searches and the floors under its :stands (the
-  body's own stairs) as :ways. No margin: search-bound ends a search by the standing still it costs."
+  "route-answer's route-opts for a choice's opts: its :slice, dig-margin, its :spent searches and the floors under its
+  :stands (the body's own stairs) as :ways."
   [{:keys [stands slice spent]}]
-  (cond-> {:ways (into #{} (map (fn [[x y z]] [x (dec y) z])) stands)} slice (assoc :slice slice) (seq spent) (assoc :spent spent)))
+  (cond-> {:ways (into #{} (map (fn [[x y z]] [x (dec y) z])) stands) :margin dig-margin} slice (assoc :slice slice) (seq spent) (assoc :spent spent)))
 
 (defn dig-way
   "{:step :dig-route :cells (route-cells)} when there are cells to dig, {:step :searching} while opts :slice's search
