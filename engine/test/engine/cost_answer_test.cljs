@@ -289,3 +289,10 @@
       (is (= :flee (:answer (cost/decide fist answers here))) "a bare body a block from shore swims out")
       (is (< (* 2 (answer/answer-death-chance fist (:flee answers) here)) (answer/answer-death-chance fist (:fight answers) here))
           "and that swim risks far less than a fight with it"))))
+
+(deftest a-flight-whose-land-ends-where-the-mob-reaches-is-never-cheaper-than-the-fight-it-ends-in
+  (let [m (mob "drowned" 4 35)
+        fought (cost/fight-answer (fight "stone_sword" m))
+        flee (cost/flee-answer {:food 20 :mobs [m] :swim 14 :land 0 :open 0 :later fought :caught 0.15 :caught-s 0.4})]
+    (is (<= (:damage fought) (-> flee :caught :damage)) "caught on the way, the blows are the end's too")
+    (is (= :fight (:answer (cost/decide (body 13) {:fight fought :flee flee} here))))))
