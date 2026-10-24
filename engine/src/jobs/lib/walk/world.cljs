@@ -84,10 +84,11 @@
     (bit-or (bit-and i (bit-not 240)) (bit-shift-left c 4))))
 
 (defn- section-index
-  "{:mut :fluid}: the cell indices of the section's mutable states and of its fluids, kept per write of the section."
+  "{:mut :fluid}: the cell indices of the section's mutable states and of its fluids, kept per write of the section (and
+  once the sight table is known: mutable-id? is false before it)."
   [^js st ^js sec]
   (let [hit (.get candidate-cache sec)
-        k (.-wrote sec)]
+        k [(.-wrote sec) (some? (.-sight st))]]
     (if (and hit (= k (:k hit)))
       (:v hit)
       (let [^js ids (.-ids sec)
@@ -101,14 +102,14 @@
 
 (defn- aging-cells
   "The cell indices of the section that perception/remembered-age can read unknown: its mutable states and the cells beside
-  a fluid (of it or of a neighbour section's face); kept per write of the section and of its neighbours."
+  a fluid (of it or of a neighbour section's face); kept per write of the section and of its neighbours (and once the sight table is known)."
   [^js st ^js sections ^js sec cx sy cz]
   (let [{:keys [mut fluid]} (section-index st sec)
         neighbours (mapv (fn [[dx dy dz axis face]]
                            (when-let [^js n (.get sections (store/section-key (+ cx dx) (+ sy dy) (+ cz dz)))]
                              [n axis face (- 15 face)]))
                          face-steps)
-        k (into [(.-wrote sec)] (map #(some-> ^js (first %) .-wrote)) neighbours)
+        k (into [(.-wrote sec) (some? (.-sight st))] (map #(some-> ^js (first %) .-wrote)) neighbours)
         hit (.get cells-cache sec)]
     (if (= k (:k hit))
       (:v hit)

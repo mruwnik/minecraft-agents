@@ -217,6 +217,43 @@
   (is (true? (rock-guess-in (assoc hall-world :pitch -80) 0)) "the same hall dark: a cave")
   (is (true? (rock-guess-in (assoc pocket-world :pitch -80) 14)) "a lit pocket in rock: its roof is seen close over the head"))
 
+(def ^:private tunnel
+  (apply dissoc (box -8 62 -8 30 67 8 "stone") (for [x (range 0 21) y [64 65]] (str x "," y ",0"))))
+
+(defn- aging-world
+  "The tunnel with the body at x 10 facing east; read-at is a fn of the world's fns that reads cell [15 64 0] after the clock moved."
+  []
+  (let [clock (atom 1000000)
+        {:keys [p w]} (sensed {:self {:pos {:x 10.5 :y 64 :z 0.5}} :yaw 270 :now #(deref clock) :blocks tunnel})]
+    {:clock clock :p p :w w
+     :ids (fn [] (let [ids ((wworld/memory-sections w) 0 4 0)] (aget ids (+ 15 (* 256 0) (* 16 0)))))}))
+
+(deftest a-fluid-seen-in-a-neighbour-section-after-the-index-was-built-ages-the-cell-beside-it-to-unseen
+  (let [{:keys [clock p w ids]} (aging-world)
+        _ (swap! (fake/state p) assoc :light-default [0 15])
+        before (ids)]
+    (fake/set-block! p [16 64 0] "water")
+    (perception/pass! (aget w "perception"))
+    (swap! clock + 11000)
+    (is (pos? before) "seen")
+    (is (zero? (ids)) "beside water older than the limit: unknown")))
+
+(deftest an-index-built-before-the-sight-table-is-known-is-built-again-once-it-is
+  (let [{:keys [clock p w ids]} (aging-world)
+        ^js st (:st (aget w "perception"))
+        sight (.-sight st)
+        kinds (.-kinds st)]
+    (fake/set-block! p [15 64 0] "water")
+    (perception/pass! (aget w "perception"))
+    (swap! clock + 11000)
+    (set! (.-sight st) nil)
+    (set! (.-kinds st) nil)
+    (ids)
+    (set! (.-sight st) sight)
+    (set! (.-kinds st) kinds)
+    (swap! clock + 1000)
+    (is (zero? (ids)) "the water aged out of a section whose first index was empty")))
+
 (deftest the-ways-on-are-counted-once-a-memory
   (let [{:keys [p w]} (sensed wall-world)
         n (atom 0)

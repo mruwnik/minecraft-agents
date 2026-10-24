@@ -725,11 +725,11 @@
           (is (= 8 (:length route)) (pr-str route)))))))
 
 (deftest the-masked-planner-reads-a-remembered-mutable-cell-older-than-the-memory-limit-as-unseen
-  (doseq [[block at read-at yaw] [["water" "5,64,0" [5 64 0]] ["oak_door" "5,64,0" [5 64 0]] ["oak_fence_gate" "5,64,0" [5 64 0]]
-                              ["oak_trapdoor" "5,64,0" [5 64 0]] ["fire" "5,64,0" [5 64 0]] ["water" "5,64,0" [6 64 0]]
+  (doseq [[block at read-at yaw] [["water" "5,64,0" [5 64 0] 90] ["oak_door" "5,64,0" [5 64 0] 90] ["oak_fence_gate" "5,64,0" [5 64 0] 90]
+                              ["oak_trapdoor" "5,64,0" [5 64 0] 90] ["fire" "5,64,0" [5 64 0] 90] ["water" "5,64,0" [6 64 0] 90]
                               ["water" "16,64,0" [15 64 0] 270]]]
     (let [clock (atom 1000000)
-          {:keys [w]} (sensed-only (assoc-in (assoc corridor :yaw (or yaw 90) :now #(deref clock)) [:blocks at] block))
+          {:keys [w]} (sensed-only (assoc-in (assoc corridor :yaw yaw :now #(deref clock)) [:blocks at] block))
           _ (perception/pass! (aget w "perception"))
           read (fn [] (let [pw (wworld/path-world w (wworld/unknown-spec))
                             ^js s (.-snapshot pw)
