@@ -67,58 +67,126 @@
   [^js unknown light-cost light-ok]
   (js/Object.assign #js {} unknown #js {:lightCost light-cost :torchBase (torch-base) :lightOk light-ok}))
 
-(defonce ^:private aged-cache (js/WeakMap.))
+(defonce ^:private cells-cache (js/WeakMap.))
+(defonce ^:private candidate-cache (js/WeakMap.))
+
+(def ^:private face-steps
+  "[dcx dsy dcz] of the six neighbour sections, with the axis (0 x, 1 y, 2 z) and the cell coordinate on the neighbour's face
+  touching the section."
+  [[1 0 0 0 0] [-1 0 0 0 15] [0 1 0 1 0] [0 -1 0 1 15] [0 0 1 2 0] [0 0 -1 2 15]])
+
+(defn- coord [i axis] (case axis 0 (bit-and i 15) 1 (bit-shift-right i 8) (bit-and (bit-shift-right i 4) 15)))
+
+(defn- with-coord [i axis c]
+  (case axis
+    0 (bit-or (bit-and i (bit-not 15)) c)
+    1 (bit-or (bit-and i 255) (bit-shift-left c 8))
+    (bit-or (bit-and i (bit-not 240)) (bit-shift-left c 4))))
+
+(defn- section-index
+  "{:mut :fluid}: the cell indices of the section's mutable states and of its fluids, kept per write of the section."
+  [^js st ^js sec]
+  (let [hit (.get candidate-cache sec)
+        k (.-wrote sec)]
+    (if (and hit (= k (:k hit)))
+      (:v hit)
+      (let [^js ids (.-ids sec)
+            mut (volatile! []) fluid (volatile! [])]
+        (dotimes [i 4096]
+          (let [v (aget ids i)]
+            (when (and (pos? v) (store/mutable-id? st (dec v)))
+              (vswap! mut conj i)
+              (when (store/fluid-id? st (dec v)) (vswap! fluid conj i)))))
+        (let [v {:mut @mut :fluid @fluid}] (.set candidate-cache sec {:k k :v v}) v)))))
+
+(defn- aging-cells
+  "The cell indices of the section that perception/remembered-age can read unknown: its mutable states and the cells beside
+  a fluid (of it or of a neighbour section's face); kept per write of the section and of its neighbours."
+  [^js st ^js sections ^js sec cx sy cz]
+  (let [{:keys [mut fluid]} (section-index st sec)
+        neighbours (mapv (fn [[dx dy dz axis face]]
+                           (when-let [^js n (.get sections (store/section-key (+ cx dx) (+ sy dy) (+ cz dz)))]
+                             [n axis face (- 15 face)]))
+                         face-steps)
+        k (into [(.-wrote sec)] (map #(some-> ^js (first %) .-wrote)) neighbours)
+        hit (.get cells-cache sec)]
+    (if (= k (:k hit))
+      (:v hit)
+      (let [cells (js/Set. (clj->js mut))]
+        (doseq [f fluid
+                axis [0 1 2]
+                :let [c (coord f axis)]
+                c' [(dec c) (inc c)]
+                :when (<= 0 c' 15)]
+          (.add cells (with-coord f axis c')))
+        (doseq [[^js n axis face across] (keep identity neighbours)
+                f (:fluid (section-index st n))
+                :when (= face (coord f axis))]
+          (.add cells (with-coord f axis across)))
+        (let [v (vec cells)] (.set cells-cache sec {:k k :v v}) v)))))
+
+(defonce ^:private unaged-cache (js/WeakMap.))
 
 (defn- unaged-ids
   "The section's memory ids with the cells perception reads unknown (perception/remembered-age nil: a mutable state or a
-  cell beside a fluid, older than :mutable-max-ms) zeroed. The section's own array when none aged; kept per store write
-  and second of the clock."
+  cell beside a fluid, older than :mutable-max-ms) zeroed. The section's own array when none aged; kept per
+  perception/memory-epoch. Only the cells that can age are tested (aging-cells)."
   [^js st ^js sec cx sy cz]
-  (let [now ((.-nowFn st))
-        k [(.-writes st) (js/Math.floor (/ now 1000))]
-        hit (.get aged-cache sec)]
+  (let [k (perception/memory-epoch st)
+        hit (.get unaged-cache sec)]
     (if (= k (:k hit))
       (:v hit)
-      (let [^js ids (.-ids sec)
+      (let [now ((.-nowFn st))
             limit (.-mutableMaxMs st)
+            ^js ids (.-ids sec)
             out (volatile! nil)]
-        (dotimes [i 4096]
+        (doseq [i (aging-cells st (store/store-of st (.-dim st)) sec cx sy cz)]
           (when (and (pos? (aget ids i)) (> (- now (store/cell-seen sec i)) limit))
             (let [x (+ (* cx 16) (bit-and i 15)) y (+ (* sy 16) (bit-shift-right i 8)) z (+ (* cz 16) (bit-and (bit-shift-right i 4) 15))]
               (when-not (perception/remembered-age st x y z)
                 (when-not @out (vreset! out (.slice ids)))
                 (aset ^js @out i 0)))))
-        (let [v (or @out ids)] (.set aged-cache sec {:k k :v v}) v)))))
+        (let [v (or @out ids)] (.set unaged-cache sec {:k k :v v}) v)))))
 
-(defn memory-sections
-  "(fn [cx sy cz]) the ids of the body's memory of that section (sy the world's section y; ids + 1, 0 never seen or read
-  unknown by perception's rule), or nil; nil without a perception."
-  [p]
+(defn- sections-reader
+  "(fn [cx sy cz]) over the body's memory sections, nil without a perception; read-ids gets the store, the section and its cx sy cz."
+  [p read-ids]
   (when-let [per (aget p "perception")]
     (let [^js st (:st per)
           ^js sections (store/store-of st (.-dim st))]
       (fn [cx sy cz]
         (when-let [^js sec (.get sections (store/section-key cx sy cz))]
-          (unaged-ids st sec cx sy cz))))))
+          (read-ids st sec cx sy cz))))))
+
+(defn memory-sections
+  "(fn [cx sy cz]) the ids of the body's memory of that section (sy the world's section y; ids + 1, 0 never seen or read
+  unknown by perception's rule), or nil; nil without a perception."
+  [p]
+  (sections-reader p unaged-ids))
+
+(defn- raw-sections
+  "memory-sections with the ids as stored: a cell that aged to unknown still counts as seen (the rock guess spares what lies round it)."
+  [p]
+  (sections-reader p (fn [_ ^js sec _ _ _] (.-ids sec))))
 
 (defn- memory-writes
-  "(fn []) the memory's write count, which moves whenever a cell is seen or changed (a masked view kept for a while re-reads memory only then)."
+  "(fn []) perception/memory-epoch, which moves whenever a cell is seen or changed or the clock passes a second (a masked view kept for a while re-reads memory only then)."
   [p]
   (when-let [per (aget p "perception")]
-    (let [^js st (:st per)] (fn [] (.-writes st)))))
+    (let [^js st (:st per)] (fn [] (perception/memory-epoch st)))))
 
 (defonce ^:private counted (js/WeakMap.))
 
 (defn way-scan
   "way-on/scan from the body's feet ({:k :n :ways}: the seen stands nearest the body of primitives p, how many lead out, its
   first unseen ways), nil without a perception. Kept while the body stands in one cell and no block it remembers changed
-  (store writes): every costed world of a flight step asks it."
+  or aged (perception/memory-epoch): every costed world of a flight step asks it."
   [p]
   (when-let [known (memory-sections p)]
     (let [^js pos (.-pos (.self p))
           ^js st (:st (aget p "perception"))
           start (mapv js/Math.floor [(.-x pos) (.-y pos) (.-z pos)])
-          k [(.-dim st) (.-writes st) start (settings/get way-on/settings ::way-on/sample)]
+          k [(.-dim st) (perception/memory-epoch st) start (settings/get way-on/settings ::way-on/sample)]
           hit (.get counted st)]
       (if (= k (:k hit))
         (:v hit)
@@ -166,7 +234,7 @@
   (if-not unknown
     :raw
     (let [rock (when-let [known (and (rock-guess? p unknown) (memory-sections p))]
-                 (rock/rock-at {:k (rock-beyond) :known known :seeds (rock-seeds p unknown)}))
+                 (rock/rock-at {:k (rock-beyond) :known (raw-sections p) :seeds (rock-seeds p unknown)}))
           ^js blocked (.-blocked unknown)
           blocked (when (and blocked (pos? (.-size blocked))) blocked)]
       (if (or rock blocked)
@@ -208,7 +276,7 @@
          (let [pw (js/Object.assign #js {:table table :space space/space} pw)]
            (when k
              (set! (.-snapshot pw) (rock/with-rock (.-snapshot pw) {:mask (.-id mask) :stone (if (.-rockEdge unknown) unloaded-id stone) :edge (true? (.-rockEdge unknown))
-                                                                    :k k :known known :seeds (rock-seeds p unknown)})))
+                                                                    :k k :known (raw-sections p) :seeds (rock-seeds p unknown)})))
            pw))))))
 
 (defn unknown-of

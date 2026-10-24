@@ -20,9 +20,9 @@
 (defn sensed
   "Fake primitives for spec wrapped with a perception that has made one sight pass from the body."
   [spec]
-  (let [p (tu/fake spec)
+  (let [p (tu/fake (dissoc spec :now))
         raw (fake-raw/create p)
-        per (perception/create raw {:now (constantly 1000000)})
+        per (perception/create raw {:now (or (:now spec) (constantly 1000000))})
         w (perception/wrap p per)]
     (aset w "rawWorld" raw)
     (perception/pass! per)
@@ -184,6 +184,20 @@
     (is (= @void (state goal 4 64 0)) "3 from the goal")
     (is (= [@void @stone] [(state own -4 64 0) (state own 4 64 0)]) "3 from a cell of its own ways")
     (is (not= (wworld/unknown-key buried) (wworld/unknown-key sky)) "the guess is in a kept search's key")))
+
+(deftest under-ground-a-seen-fluid-that-aged-to-unseen-still-keeps-the-rock-guess-off-its-surroundings
+  (let [clock (atom 1000000)
+        tunnel (-> (apply dissoc (box -8 62 -8 12 67 8 "stone") (for [x (range 0 7) y [64 65]] (str x "," y ",0")))
+                   (assoc "6,64,0" "water"))
+        {:keys [p w]} (sensed {:self {:pos {:x 0.5 :y 64 :z 0.5}} :yaw 270 :now #(deref clock) :blocks tunnel})
+        _ (swap! (fake/state p) assoc :light-default [0 15])
+        _ (perception/pass! (aget w "perception"))
+        read #(state (wworld/path-world w (wworld/unknown-spec)) %1 64 0)
+        fresh (read 8)
+        _ (swap! clock + 11000)]
+    (is (= @void fresh) "water at 6 seen: 8 is within 3 of it, unseen")
+    (is (= @void (read 8)) "the water aged to unseen: 8 stays unseen, not rock")
+    (is (= @stone (read 10)) "4 from the water's cell: rock")))
 
 (deftest the-ways-on-are-counted-once-a-memory
   (let [{:keys [p w]} (sensed wall-world)

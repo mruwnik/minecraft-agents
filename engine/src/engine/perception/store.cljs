@@ -244,6 +244,11 @@
         (.sort found by-distance)
         (into [] (comp (take max) (map (fn [^js r] {:name (.-name r) :pos (.-pos r) :distance (.-distance r) :age-ms (.-ageMs r)}))) found)))))
 
+(defn fluid-id?
+  "Whether state id holds a remembered-fluid block (kept per id like mutable-id?)."
+  [^js st id]
+  (id-flag? st "fluidIds" id #(contains? fluid-names (.-name ^js %))))
+
 (defn beside-fluid?
   "Whether the remembered cell (x y z) with state id holds a non-solid block next to a remembered fluid: fluids flow, so
   its memory goes stale like a fluid's."
@@ -251,6 +256,6 @@
   (and (id-flag? st "emptyIds" id #(= "empty" (.-boundingBox ^js %)))
        (let [fluid? (fn [nx ny nz]
                       (let [n (remembered-id st nx ny nz)]
-                        (and (>= n 0) (id-flag? st "fluidIds" n #(contains? fluid-names (.-name ^js %))))))]
+                        (and (>= n 0) (fluid-id? st n))))]
          (or (fluid? (inc x) y z) (fluid? (dec x) y z) (fluid? x (inc y) z) (fluid? x (dec y) z)
              (fluid? x y (inc z)) (fluid? x y (dec z))))))

@@ -15,6 +15,7 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.path.executor :as executor]
+            [engine.perception :as perception]
             [engine.perception.rays :as rays]
             [engine.path.planner.base :as base]
             [engine.path.planner-tuned :as planner]
@@ -200,7 +201,7 @@
   [c st targets {:keys [y-margin chasers]} chased other?]
   (let [p (:primitives c)
         raw (look/raw-of p)]
-    {:dim (some-> ^js st .-dim) :writes (some-> ^js st .-writes) :epoch (some-> raw rays/epoch-of) :pos (u/self-pos c) :kit (wworld/kit-of c) :food (.-food (.self p))
+    {:dim (some-> ^js st .-dim) :writes (some-> ^js st perception/memory-epoch) :epoch (some-> raw rays/epoch-of) :pos (u/self-pos c) :kit (wworld/kit-of c) :food (.-food (.self p))
      :body (threats/death-body c)
      :others (threats/threats-of c other?)
      :caught-by (mapv #(assoc % :caught 1) (threats/threats-of c (complement other?)))

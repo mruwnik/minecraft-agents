@@ -104,10 +104,10 @@
     (if (= (:at m) (look/cell-of (u/self-pos c))) (:cells m) #{})))
 
 (defn known-writes
-  "How many times a block the body remembers has changed (its perception's writes): the same while all it knows of the
-  world is; nil without a perception."
+  "perception/memory-epoch of the body's perception: the same while all it knows of the world is (changed, or aged
+  into unknown); nil without a perception."
   [p]
-  (some-> ^js (:st (aget p "perception")) .-writes))
+  (some-> ^js (:st (aget p "perception")) perception/memory-epoch))
 
 (defn step-ms
   "[total max] ms perception's sight steps have taken so far, nil without a perception."

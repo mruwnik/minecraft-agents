@@ -724,18 +724,25 @@
           (is (true? (:found route)) (pr-str route))
           (is (= 8 (:length route)) (pr-str route)))))))
 
-(deftest the-masked-planner-reads-a-remembered-fluid-older-than-the-memory-limit-as-unseen
-  (let [clock (atom 1000000)
-        {:keys [w]} (sensed-only (assoc-in (assoc corridor :yaw 90 :now #(deref clock)) [:blocks "5,64,0"] "water"))
-        _ (perception/pass! (aget w "perception"))
-        read (fn [] (let [^js s (.-snapshot (wworld/path-world w (wworld/unknown-spec)))]
-                      {:water (.stateAt s 5 64 0) :stone (.stateAt s 5 63 0) :unseen (.-id (wworld/unknown-of (wworld/path-world w (wworld/unknown-spec))))}))
-        fresh (read)
-        _ (swap! clock + 11000)
-        aged (read)]
-    (is (not= (:unseen fresh) (:water fresh)) "fresh: remembered as water")
-    (is (= (:unseen aged) (:water aged)) "aged: unknown, as perception reads it")
-    (is (= (:stone fresh) (:stone aged)) "stone keeps its memory")))
+(deftest the-masked-planner-reads-a-remembered-mutable-cell-older-than-the-memory-limit-as-unseen
+  (doseq [[block at read-at yaw] [["water" "5,64,0" [5 64 0]] ["oak_door" "5,64,0" [5 64 0]] ["oak_fence_gate" "5,64,0" [5 64 0]]
+                              ["oak_trapdoor" "5,64,0" [5 64 0]] ["fire" "5,64,0" [5 64 0]] ["water" "5,64,0" [6 64 0]]
+                              ["water" "16,64,0" [15 64 0] 270]]]
+    (let [clock (atom 1000000)
+          {:keys [w]} (sensed-only (assoc-in (assoc corridor :yaw (or yaw 90) :now #(deref clock)) [:blocks at] block))
+          _ (perception/pass! (aget w "perception"))
+          read (fn [] (let [pw (wworld/path-world w (wworld/unknown-spec))
+                            ^js s (.-snapshot pw)
+                            [x y z] read-at]
+                        {:cell (.stateAt s x y z) :stone (.stateAt s 5 63 0) :unseen (.-id (wworld/unknown-of pw))}))
+          fresh (read)
+          scan (wworld/way-scan w)
+          _ (swap! clock + 11000)
+          aged (read)]
+      (is (not= (:unseen fresh) (:cell fresh)) (str block " at " read-at " fresh: remembered"))
+      (is (= (:unseen aged) (:cell aged)) (str block " at " read-at " aged: unknown, as perception reads it"))
+      (is (= (:stone fresh) (:stone aged)) "stone keeps its memory")
+      (is (not (identical? scan (wworld/way-scan w))) (str block ": way-scan reads again once the memory aged")))))
 
 (deftest go-to-walks-into-a-wall-built-out-of-sight-sees-it-and-digs-through
   (async done

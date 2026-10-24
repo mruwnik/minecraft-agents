@@ -385,6 +385,24 @@
           (reset! now 30000)
           (is (not (identical? base (await (price)))) "the death has faded: the danger it gives the plan is another"))))))
 
+(deftest a-memory-that-aged-with-no-write-to-the-world-is-priced-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              raw (tu/fake {:blocks junction :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+              p (perception/wrap raw (perception/create (fake-raw/create raw) {:now #(deref clock)}))
+              _ (perception/pass! (aget p "perception") {:effort 1 :reuse? true})
+              c (ctx-of p)
+              chasers [{:name "zombie" :mob "zombie" :pos {:x -4.5 :y 64 :z 0.5}}]
+              ends (search/ring {:x 0.5 :z 0.5} chasers 10 4)
+              price (fn ^:async price [] (await (search/price! c ends {:chasers chasers})))
+              _ (await (price))
+              base (await (price))]
+          (is (identical? base (await (price))) "the memory as it was: the kept price")
+          (swap! clock + 11000)
+          (is (not (identical? base (await (price)))) "the clock passed the memory limit: priced again"))))))
+
 (deftest a-landing-seen-again-with-no-write-to-the-world-is-priced-again
   (async done
     (tu/run-async done
