@@ -44,7 +44,7 @@
   Start facts, failed conditions: impossible {:reason :no-box} unless the area is a box with a crop layer and at most 2048 cells, or a plan;
   {:reason :away :site :others} while another job that is not standing and not waiting is listed;
   {:reason :nothing-to-do} (with :covered, :refused, :blocked (plan crop cells another block fills), :food-reserve) or {:reason :short-seed :seeds} when no
-  step would run, after one look round from here when a cell was never seen. A started run always continues. A step under
+  step would run, after one look round from here when a cell was never seen (a field never seen and farther than 16 blocks is walked to first). A started run always continues. A step under
   way is not re-decided.
   Ends :done with data {:steps {step summary} :field {:crops :bare :untilled}} (a plan adds :wrong and, when crop cells hold a tree or other block, :blocked [{:pos :found}] with one farm-tend.blocked warn) when some step
   changed something (units steps); nothing-possible :gave-up with the same data when children ran and none did;
@@ -82,7 +82,7 @@
 (def target [:area])
 (def ways need/fetch-ways)
 (def defaults {:least 1 :spend {:job-time ::job-time-s}})
-(def safe? (price/staying :work (ready/safe-at-by-night work-place/spot)))
+(def safe? (price/staying :work (ready/safe-at-by-night (ready/near-unseen-here work-place/spot ##Inf))))
 
 (a/defargs settings
   {::min-health {:default 0 :spec (a/num-in 0 20)
@@ -148,6 +148,23 @@
                (and (:irrigate (:args c)) (look/unseen? (:primitives c) (water-reach-cells c)))
                (and (fa/plan c) (fld/unwatched? (:primitives c) (:crops (tend-plan/planned c)))))))
 
+(defn site
+  "A position of the field: the box's centre, else the plan's first crop cell; nil when there is neither."
+  [c]
+  (if-let [{lo :min hi :max} (fa/arg-box c)]
+    (when lo {:x (/ (+ (:x lo) (:x hi)) 2) :y (:y lo) :z (/ (+ (:z lo) (:z hi)) 2)})
+    (when (fa/plan c) (first (keys (:crops (tend-plan/planned c)))))))
+
+(def near
+  "Blocks from the field within which its cells are in sight, as far as a look from here goes."
+  16)
+
+(defn walk-due?
+  "The field's site when the field is unseen and the body is farther than near from it: a look from here shows nothing, so the run walks there first."
+  [c]
+  (let [site (site c)]
+    (when (and site (needs-look? c) (> (u/dist (u/self-pos c) site) near)) site)))
+
 (defn check-facts
   "The facts the check decides from: read once per check-cache window, and fresh while a cell was never seen."
   [c]
@@ -178,7 +195,7 @@
     (if trouble
       (checks/cause-status :later {:reason :plan-trouble :why trouble})
       (let [f (check-facts c)]
-        (when-not (would-run? c f)
+        (when-not (or (would-run? c f) (walk-due? c))
           (checks/cause-status (if (and (needs-look? c) (not (look/surveyed? c :near))) :look :later)
                                (if (seq (:short f)) {:reason :short-seed :seeds (vec (sort (:short f)))} (nothing-to-do-reason f))))))))
 
@@ -191,13 +208,6 @@
   (if (seq (fa/parts c)) (vec (fa/parts c)) [(fa/part c)]))
 
 (defn for-part [c part] (fa/with-part c part))
-
-(defn site
-  "A position of the field: the box's centre, else the plan's first crop cell; nil when there is neither."
-  [c]
-  (if-let [{lo :min hi :max} (fa/arg-box c)]
-    (when lo {:x (/ (+ (:x lo) (:x hi)) 2) :y (:y lo) :z (/ (+ (:z lo) (:z hi)) 2)})
-    (when (fa/plan c) (first (keys (:crops (tend-plan/planned c)))))))
 
 (defn usable-args
   "Never :no-box without a usable box (or plan)."
@@ -444,12 +454,24 @@
       (do (ctx/update-mem! c update :reach-tried (fnil conj #{}) cell)
           (await (look/look-around! c (look/search-effort)))))))
 
+(defn ^:async walk-to-site!
+  "Walk to the unseen field before the pass, as a player does: :again once there, :continue while the walk waits, or the walk's own ending."
+  [c site]
+  (let [e (await (ctx/call c :walk 'jobs.movement.go-to {:pos (update site :y inc) :range 8}))]
+    (cond
+      (= :continue e) :continue
+      (= :done (:kind e)) :again
+      :else (ctx/end c (:kind e) (contract/cause-key e)
+                     {:steps {} :text (str "farm tend: could not walk to the field, go there first: " (contract/cause-key e))}))))
+
 (defn ^:async step
-  "A run over a field partly never seen looks around first and yields (the check decides on what is seen then)."
+  "A run over a field partly never seen walks to it when far, looks around and yields (the check decides on what is seen then)."
   [c]
   (cond
     (and (fa/plan c) (:trouble (tend-plan/planned c)))
     :continue
+    (and (not (:todo (ctx/mem c))) (walk-due? c))
+    (await (walk-to-site! c (walk-due? c)))
     (and (not (:todo (ctx/mem c))) (not (look/surveyed? c)) (needs-look? c))
     (await (look/survey! c :run (look/search-effort)))
     (and (not (:todo (ctx/mem c))) (some? (unseen-reach-target c)))

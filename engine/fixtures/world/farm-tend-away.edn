@@ -1,6 +1,6 @@
-;; Card 43f765ae: a standing (repeat) farm.tend with no other job listed never waits :away, far below its field or on it (tend does not walk to an unseen field; farm.maintain does).
+;; A standing (repeat) farm.tend with no other job listed never waits :away; far below its field, it walks up to the unseen field and cuts the wheat.
 ;; Field on a stone platform x 6..20, z 12..22, y 0..11: farmland y 11, wheat y 12, water beside.
-;; Should-succeed: body 12 below the field (no :away wait); body on the field (wheat cut). Should-fail: none.
+;; Should-succeed: body 12 below the field (walks up, wheat cut, no :away wait); body on the field (wheat cut). Should-fail: none.
 {:defaults
  {:tags [:farm :tend :jobs]
   :time :any
@@ -16,9 +16,9 @@
  [{:name "body-far-below-the-field-does-not-wait-away"
    :body {:at [3.5 0 16.5]}
    :act [[:http :submit (repeat (jobs.farm.tend {:area {:min #xyz [10 11 16] :max #xyz [13 12 16]}})) [] {:ok true}]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :resting}} :within-s 40}
-            {:no-event {:source :job :kind :waiting :data {:reason :away}} :for-s 30}]
-   :limit-s 60}
+   :expect [{:no-event {:source :job :kind :waiting :data {:reason :away}} :for-s 30}]
+   :after [[:not-block [10 12 16] "wheat[age=7]"]]
+   :limit-s 120}
   {:name "body-on-the-field-cuts-the-wheat"
    :body {:at [11.5 12 15.5]}
    :act [[:http :submit (repeat (jobs.farm.tend {:area {:min #xyz [10 11 16] :max #xyz [13 12 16]}})) [] {:ok true}]]

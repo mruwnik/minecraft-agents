@@ -61,7 +61,7 @@
 (def target [:area])
 (def ways need/fetch-ways)
 (def defaults {:spend {:job-time ::job-time-s}})
-(def safe? (price/staying :work (ready/when-fed (ready/safe-at-by-night work-place/spot))))
+(def safe? (price/staying :work (ready/when-fed (ready/safe-at-by-night (ready/near-unseen-here work-place/spot ##Inf)))))
 
 (def steps [:tidy :tend :compost :deposit])
 
@@ -116,7 +116,7 @@
 
 (defn tidy-work? [c] (boolean (:call (decide :tidy (:args c) (facts c)))))
 
-(def near 16)
+(def near tend/near)
 
 (defn far-from-field?
   "The field's site when the body is farther than near from it, else nil."

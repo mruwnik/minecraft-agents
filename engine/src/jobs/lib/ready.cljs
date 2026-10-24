@@ -229,15 +229,16 @@
      {::exposure (fn [c] (exposed c (f c))) ::plain true})))
 
 (defn near-unseen-here
-  "f, but an unseen place within ::unseen-judged-here-within blocks of the feet is judged where the body stands: a look cannot show a cell
-  behind a wall (the job walks round to it), so asking for one would wait for ever."
-  [f]
-  (fn [c]
-    (let [p (:primitives c)
-          at (f c)]
-      (when-not (and at (:y at) (not (sh-sense/seen-cell? p (update-vals at js/Math.floor)))
-                     (<= (u/dist (sh-sense/feet p) at) (settings/get settings ::unseen-judged-here-within)))
-        at))))
+  "f, but an unseen place within `within` (default ::unseen-judged-here-within) blocks of the feet is judged where the body stands: a look cannot show a cell
+  behind a wall (the job walks round to it), so asking for one would wait for ever. A job that walks to its unseen site before it works passes ##Inf."
+  ([f] (near-unseen-here f (settings/get settings ::unseen-judged-here-within)))
+  ([f within]
+   (fn [c]
+     (let [p (:primitives c)
+           at (f c)]
+       (when-not (and at (:y at) (not (sh-sense/seen-cell? p (update-vals at js/Math.floor)))
+                      (<= (u/dist (sh-sense/feet p) at) within))
+         at)))))
 
 (defn leaving-sealed-shelter
   "Later :dark while a walk to `to` ({:x :y :z}, floored) leaves the body's own sealed night shelter (sh-inside/walk-leaves-shelter?

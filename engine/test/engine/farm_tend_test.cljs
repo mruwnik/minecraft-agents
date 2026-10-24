@@ -517,6 +517,19 @@
           (is (seq (events-of s :round_started)))
           (is (empty? (filter #(= :away (:reason %)) (events-of s :waiting)))))))))
 
+(def unseen-cells (for [x (range 42 45) z (range 2 5)] [x z]))
+
+(deftest a-tend-under-repeat-walks-to-a-field-it-has-not-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup (assoc (world (farm "wheat" 7 unseen-cells unseen-cells) wheat-drops) :floor [-5 -5 60 15]))]
+          (tu/seeing-within (:p s) 24)
+          (core/submit! (:eng s) (list 'repeat (list 'jobs.farm.tend {:area {:min {:x 42 :y 63 :z 2} :max {:x 44 :y 64 :z 4}}})) {})
+          (await (tu/run-ticks (:eng s) (:clock s) 60 700))
+          (is (seq (tu/walk-calls (:p s))) "the body goes to the field")
+          (is (= (set (map (fn [[x z]] [x z]) unseen-cells)) (dug s)) "and cuts the wheat there"))))))
+
 (deftest a-lone-tend-far-below-its-field-walks-up
   (async done
     (tu/run-async done

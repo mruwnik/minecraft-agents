@@ -458,6 +458,19 @@
           (is (some #(= :away (:reason %)) (events-of listed :waiting)) "the wait says the body is away")
           (is (seq (events-of alone :round_started)) "alone in the queue it goes"))))))
 
+(deftest a-pen-under-repeat-far-off-and-unseen-is-walked-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup {:inventory [(wheat 4)] :entities [(cow 1 42) (cow 2 43)] :time 15000 :light {} :light-default [0 15] :floor [-5 -8 60 8]} 50)]
+          (tu/seeing-within (:p s) 24)
+          (let [p (:p s) entities (.-entities p)]
+            (aset p "entities" (fn [q] (let [me (.-pos (.self p))]
+                                         (.filter (.call entities p q) (fn [e] (<= (js/Math.hypot (- (.-x (.-pos e)) (.-x me)) (- (.-z (.-pos e)) (.-z me))) 24)))))))
+          (core/submit! (:eng s) (list 'repeat (spec {:box {:min {:x 40 :y 63 :z -3} :max {:x 46 :y 66 :z 3}} :target 2})) {})
+          (await (tu/run-ticks (:eng s) (:clock s) 40 700))
+          (is (seq (tu/walk-calls (:p s))) "the body goes to the pen"))))))
+
 (deftest animals-behind-the-body-in-the-box-are-looked-for-before-the-pass-concludes
   (async done
     (tu/run-async done
