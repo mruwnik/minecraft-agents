@@ -491,13 +491,18 @@
     {:chance (- 1 (reduce * 1 (map #(- 1 (:chance %)) parts)))
      :hurt (min (life body) (reduce + 0 (map :hurt parts)))}))
 
+(defn spawn-kill-chance
+  "The chance one mob spawned beside body kills it at `at`: each its threat-chance, caught at the prior, over
+  threat/spawn-weights."
+  [body at]
+  (/ (reduce + (map (fn [[mob w]] (* w (threat-chance body mob nil at))) threat/spawn-weights))
+     (reduce + (vals threat/spawn-weights))))
+
 (defn spawns-chance
-  "The chance spawns mobs (an expected count, a Poisson one) spawned beside body kill it at `at`: each its threat-chance,
-  caught at the prior, over threat/spawn-weights."
-  [body spawns at]
-  (let [per (/ (reduce + (map (fn [[mob w]] (* w (threat-chance body mob nil at))) threat/spawn-weights))
-               (reduce + (vals threat/spawn-weights)))]
-    (- 1 (js/Math.exp (- (* spawns per))))))
+  "The chance spawns mobs (an expected count, a Poisson one) spawned beside body kill it at `at`, each at kill (default
+  spawn-kill-chance: a caller pricing many routes at one place passes it once)."
+  ([body spawns at] (spawns-chance body spawns at nil))
+  ([body spawns at kill] (- 1 (js/Math.exp (- (* spawns (or kill (spawn-kill-chance body at))))))))
 
 (defn spawns-hurt
   "hp spawns mobs (an expected count) spawned beside body take off it at `at`, at most its life (the death past it is
@@ -508,15 +513,15 @@
                     (reduce + (vals threat/spawn-weights))))))
 
 (defn death-chance
-  "The chance of dying on route {:cells :threats :spawns :at} (cells {:x :y :z :s}, :s the seconds spent there,
-  death/met-stretch): its spawns (the expected count of mobs met spawning, spawns-chance at :at, default the first cell)
+  "The chance of dying on route {:cells :threats :spawns :spawn-kill :at} (cells {:x :y :z :s}, :s the seconds spent there,
+  death/met-stretch): its spawns (the expected count of mobs met spawning, spawns-chance at :at, default the first cell, each at :spawn-kill when given)
   or route-parts' :chance of its threats, for each known threat {:mob :weight :reach :caught} (weight 0-1, reach a fn of a cell x y z,
   its weight 0-1, nil outside: jobs.lib.threat-field; caught the chance a walk away from it is caught, nil the prior),
   kill the body. body as threat-answers, with answer-price's. An answer {:damage :hit :caught}: its blows-chance."
   [body {:keys [damage spawns] :as route}]
   (if damage
     (blows-chance body route)
-    (let [spawn-dies (if (pos? (or spawns 0)) (spawns-chance body spawns (or (:at route) (first (:cells route)))) 0)]
+    (let [spawn-dies (if (pos? (or spawns 0)) (spawns-chance body spawns (or (:at route) (first (:cells route))) (:spawn-kill route)) 0)]
       (- 1 (* (- 1 spawn-dies) (- 1 (:chance (route-parts body route))))))))
 
 (defn lethal-hp

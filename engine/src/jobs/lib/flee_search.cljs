@@ -250,6 +250,7 @@
         ring-world (costed c nil other? true)
         trapped-at (fn [cell] (cost/route-death-cost body {:cells [cell] :threats caught-by} cell))
         counts (wworld/way-counts p)
+        spawn-kill (delay (cost/spawn-kill-chance body pos))
         slow (pace food)]
     (if (nil? ring-world)
       []
@@ -266,7 +267,8 @@
                           (conj out (assoc r :target t
                                              :open? (or (:found? r) (and (nil? (:pos t)) (given-up? chasers (:end r))))
                                              :price (+ (:priced r)
-                                                       (cost/route-death-cost body {:cells (dwelt (:cells r)) :threats others :spawns (spawn-light/spawns-over p (:cells r))} pos)
+                                                       (let [spawns (spawn-light/spawns-over p (:cells r))]
+                                                         (cost/route-death-cost body {:cells (dwelt (:cells r)) :threats others :spawns spawns :spawn-kill (when (pos? spawns) @spawn-kill)} pos))
                                                        (unseen-price r counts trapped-at))))
                           out)
                    (+ nodes spent)

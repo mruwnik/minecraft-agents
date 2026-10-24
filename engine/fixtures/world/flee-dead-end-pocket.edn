@@ -22,4 +22,12 @@
    :act [[:summon "zombie" [6.5 3 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :retreat.target} :within-s 25}
             {:no-event {:source :body :kind :died} :for-s 30}]
+   :after [[:body-far [12.5 3 16.5] 6] [:body-far [30.5 3 16.5] 10]]}
+  ;; Card 4ce05f1a: the same under a stone roof, a dark cave, so every route's spawns are judged by dark-hall floods (spawn-light/hall-at?);
+  ;; a light of 3 at the zombie (still dark) lets the body see it, not only hear it.
+  {:name "roofed-flight-turns-off-a-dead-end-corridor"
+   :blocks [[:fill [0 6 0] [79 6 31] "stone"] [:set [6 4 16] "minecraft:light[level=3]"]]
+   :act [[:summon "zombie" [6.5 3 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :retreat.target} :within-s 25}
+            {:no-event {:source :body :kind :died} :for-s 30}]
    :after [[:body-far [12.5 3 16.5] 6] [:body-far [30.5 3 16.5] 10]]}]}
