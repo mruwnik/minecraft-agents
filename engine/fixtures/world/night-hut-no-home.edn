@@ -1,0 +1,26 @@
+;; A finished hut with a shut door and no :home remembered (the build seq sets the home last): the night walks in by the door and puts the
+;; carried bed down, instead of digging a pocket outside. Control: a closed room with no door seen is no room to walk into, so it digs in.
+;; Hut as in bed-hold-lapses-with-child: planks x 12..18, z 12..18, room 13..17, shut door at [15 0..1 18].
+{:defaults
+ {:tags [:night :survival :shelter]
+  :time :night :time-why :sleep
+  :register [{:trigger :night}]
+  :body {:at [15.5 0 22.5] :yaw 180 :effects [["resistance" 600 4]] :settle-s 3 :inventory [["red_bed" 1] ["dirt" 20] ["iron_pickaxe" 1]]}
+  :limit-s 150}
+ :cases
+ [{:name "finished-hut-with-a-door-and-no-home-is-entered-and-the-bed-put-down"
+   :blocks [[:fill [12 0 12] [18 3 18] "oak_planks" :hollow]
+            [:fill [13 0 13] [17 2 17] "air"]
+            [:set [15 2 13] "glowstone"]
+            [:fill [15 0 18] [15 1 18] "air"]
+            [:set [15 0 18] "oak_door[facing=south,half=lower,hinge=left,open=false]"]
+            [:set [15 1 18] "oak_door[facing=south,half=upper,hinge=left,open=false]"]]
+   :expect [{:event {:source :job :kind :night.bed-placed} :within-s 120}
+            {:no-event {:source :job :kind :shut-in.sealed} :for-s 60}]
+   :after [[:body-near [15 0 15] 4]]}
+  {:name "closed-room-with-no-door-seen-is-dug-in-beside"
+   :blocks [[:fill [12 0 12] [18 3 18] "oak_planks" :hollow]
+            [:fill [13 0 13] [17 2 17] "air"]
+            [:set [15 2 13] "glowstone"]]
+   :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 120}]
+   :after [[:body-far [15 0 15] 4]]}]}
