@@ -255,6 +255,18 @@
     (is (= @unloaded (at-state snapshot [1000 64 1000])))
     (is (false? (.hasColumn ^js snapshot 62 62)))))
 
+(deftest masked-reads-an-unseen-cell-as-the-unknown-id-and-keeps-seen-pinned-and-unloaded-cells
+  (let [{:keys [snapshot]} (steer/path-world @(:state (rig {[3 64 0] "oak_planks" [4 64 0] "oak_planks" [5 64 0] "oak_planks"} [0 64 0])))
+        mem (js/Uint8Array. 4096)
+        local (fn [x y z] (bit-or (bit-shift-left (bit-and y 15) 8) (bit-shift-left (bit-and z 15) 4) (bit-and x 15)))
+        _ (aset mem (local 3 64 0) 1)
+        unknown #js {:id 77 :known (fn [cx sy cz] (when (= [cx sy cz] [0 4 0]) mem))}
+        view (steer/masked snapshot unknown #{[5 64 0]})
+        planks (state-id "oak_planks" {})]
+    (is (= [planks 77 planks 77] (mapv #(at-state view %) [[3 64 0] [4 64 0] [5 64 0] [3 64 1]])))
+    (is (= @unloaded (at-state view [1000 64 1000])))
+    (is (= 77 (at-state view [4 64 0])))))
+
 (deftest cells-near-an-unreachable-or-no-path-target-are-stone-to-the-planner-the-bodys-own-cells-are-not
   (let [w @(:state (rig {} [0 64 0] {:blocks (floor 63 -8 12) :unreachable #{[8 64 0]} :no-path #{[0 64 6]}}))
         {:keys [snapshot]} (steer/path-world w)

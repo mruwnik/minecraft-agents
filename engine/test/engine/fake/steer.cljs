@@ -298,20 +298,44 @@
 (defn masked
   "snapshot read through unknown, live-snapshot.mjs's mask option: a cell the body's memory ((.known unknown cx sy cz), sy the
   world section y: ids + 1, 0 never seen; nil: none of it seen) has not got reads (.-id unknown); unloaded stays unloaded. It
-  carries unknown, as the live snapshot does. sectionHas stays unmasked (live masks it): it is the planner's pre-check
-  that lets it skip reading cells, so a true where live says false only makes it read the masked cells, same plan.
+  carries unknown, as the live snapshot does. Like the live one a section is masked once, on its first read, into a copy
+  (a per-cell masked read was 11% of the planner tests' CPU); the copies are dropped when (.writes unknown), the memory's
+  write count, moves, as a view kept across rounds read memory live. sectionHas stays unmasked (live masks it): it is the planner's
+  pre-check that lets it skip reading cells, so a true where live says false only makes it read the masked cells, same plan.
   pinned (a set of [x y z], the buried cells of :unreachable and :no-path) stay as they are: they stand for the old
   walker's refusal, which no unseen cell can hide."
   [^js snapshot ^js unknown pinned]
   (let [view (js/Object.create snapshot)
         id (.-id unknown)
-        pinned? (if (seq pinned) #(contains? pinned [%1 %2 %3]) (constantly false)) ; building a vector key per unknown cell was a hot cost
-        known? (fn [x y z]
-                 (when-let [^js mem (.known unknown (bit-shift-right x 4) (bit-shift-right y 4) (bit-shift-right z 4))]
-                   (pos? (aget mem (bit-or (bit-shift-left (bit-and y 15) 8) (bit-shift-left (bit-and z 15) 4) (bit-and x 15))))))]
+        pinned-by-section (delay (group-by (fn [[x y z]] [(bit-shift-right x 4) (bit-shift-right y 4) (bit-shift-right z 4)]) pinned))
+        writes (or (.-writes unknown) (constantly 0))
+        sections (js/Map.)
+        last #js {:cx nil :sy nil :cz nil :ids nil :writes -1}
+        section-of (fn [cx sy cz]
+                     (let [key (+ (* (+ (* (bit-and cx 0xFFFF) 65536) (bit-and cz 0xFFFF)) 64) (+ sy 16))]
+                       (or (.get sections key)
+                           (let [ids (js/Uint16Array. 4096)
+                                 mem (.known unknown cx sy cz)
+                                 x0 (bit-shift-left cx 4) y0 (bit-shift-left sy 4) z0 (bit-shift-left cz 4)]
+                             (dotimes [i 4096]
+                               (let [s (.stateAt snapshot (+ x0 (bit-and i 15)) (+ y0 (bit-shift-right i 8)) (+ z0 (bit-and (bit-shift-right i 4) 15)))]
+                                 (aset ids i (if (or (== s 0xFFFF) (and mem (pos? (aget mem i)))) s id))))
+                             (doseq [[x y z] (get @pinned-by-section [cx sy cz])]
+                               (aset ids (bit-or (bit-shift-left (bit-and y 15) 8) (bit-shift-left (bit-and z 15) 4) (bit-and x 15))
+                                     (.stateAt snapshot x y z)))
+                             (.set sections key ids)
+                             ids))))]
     (set! (.-stateAt view) (fn [x y z]
-                             (let [s (.stateAt snapshot x y z)]
-                               (if (or (== s 0xFFFF) (known? x y z) (pinned? x y z)) s id))))
+                             (let [cx (bit-shift-right x 4) sy (bit-shift-right y 4) cz (bit-shift-right z 4)
+                                   w (writes)]
+                               (when-not (== w (.-writes last))
+                                 (.clear sections)
+                                 (set! (.-writes last) w)
+                                 (set! (.-cx last) nil))
+                               (when-not (and (== cx (.-cx last)) (== sy (.-sy last)) (== cz (.-cz last)))
+                                 (set! (.-ids last) (section-of cx sy cz))
+                                 (set! (.-cx last) cx) (set! (.-sy last) sy) (set! (.-cz last) cz))
+                               (aget (.-ids last) (bit-or (bit-shift-left (bit-and y 15) 8) (bit-shift-left (bit-and z 15) 4) (bit-and x 15))))))
     (set! (.-unknown view) unknown)
     view))
 

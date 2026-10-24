@@ -75,6 +75,12 @@
           ^js sections (store/store-of st (.-dim st))]
       (fn [cx sy cz] (some-> ^js (.get sections (store/section-key cx sy cz)) .-ids)))))
 
+(defn- memory-writes
+  "(fn []) the memory's write count, which moves whenever a cell is seen or changed (a masked view kept for a while re-reads memory only then)."
+  [p]
+  (when-let [per (aget p "perception")]
+    (let [^js st (:st per)] (fn [] (.-writes st)))))
+
 (defonce ^:private counted (js/WeakMap.))
 
 (defn way-counts
@@ -166,7 +172,7 @@
            k (when (and known (rock-guess? p unknown)) (rock-beyond))
            mask (when known
                   (js/Object.assign #js {} unknown
-                                    #js {:id (if (.-edge unknown) unloaded-id (first (blocks/state-ids table (if under? "seagrass" "void_air")))) :blockedId stone :known known
+                                    #js {:id (if (.-edge unknown) unloaded-id (first (blocks/state-ids table (if under? "seagrass" "void_air")))) :blockedId stone :known known :writes (memory-writes p)
                                          :cell (unseen-share p) :seeDepth (see-depth-now p) :seeLit (look/see-lit-fn p) :rockBeyond (or k 0)}))]
        (when-let [pw (if mask (.pathWorld p mask) (.pathWorld p))]
          (let [pw (js/Object.assign #js {:table table :space space/space} pw)]
