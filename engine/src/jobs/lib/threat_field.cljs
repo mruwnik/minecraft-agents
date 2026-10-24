@@ -78,6 +78,32 @@
                     (.push queue #js [(aget nc 0) (aget nc 1) (aget nc 2) (inc steps)]))))))
           (recur queue (inc head)))))))
 
+(defn walk-steps
+  "The steps of walk-field's cells (the same walk, the first n of them) as a Map of base/cell-key to the steps of the way
+  there, without the cell arrays; and the steps of the last."
+  [kind-at [sx sy sz :as start] range n]
+  (let [kind-at (boxed kind-at start range 16)
+        steps (js/Map.)
+        queue #js [sx sy sz 0]]
+    (.set steps (base/cell-key sx sy sz) 0)
+    (loop [head 0 done 0 last 0]
+      (if (or (>= head (.-length queue)) (>= done n))
+        (do (loop [i head]
+              (when (< i (.-length queue))
+                (.delete steps (base/cell-key (aget queue i) (aget queue (+ i 1)) (aget queue (+ i 2))))
+                (recur (+ i 4))))
+            {:steps steps :last last})
+        (let [x (aget queue head) y (aget queue (+ head 1)) z (aget queue (+ head 2)) at (aget queue (+ head 3))]
+          (when (< (inc at) range)
+            (let [nexts (reach/forward kind-at x y z)]
+              (dotimes [i (.-length nexts)]
+                (let [nc (aget nexts i)
+                      k (base/cell-key (aget nc 0) (aget nc 1) (aget nc 2))]
+                  (when-not (.has steps k)
+                    (.set steps k (inc at))
+                    (.push queue (aget nc 0) (aget nc 1) (aget nc 2) (inc at)))))))
+          (recur (+ head 4) (inc done) at))))))
+
 (def columns-within
   "The columns #js [dx dz] within radius of 0 0, the nearest first (ties by dx, then dz): the same for every mob."
   (memoize
@@ -156,37 +182,48 @@
 
 (defn diamond "The cells within r steps of a cell on flat ground." [r] (inc (* 2 r (inc r))))
 
+(defn steps-only?
+  "Whether the field of threat {:mob :extent} holds its steps only: a walker met over an extent (jobs.lib.flee-search
+  times the chasers over their way) has no cells or weights."
+  [{:keys [mob extent]}]
+  (and extent (string? mob) (not (contains? water-mobs mob)) (not= :projectile (threat/damage-type mob))))
+
 (defn field
   "The field of mob {:mob :pos :extent} known to the body of primitives p (see the ns doc): {:cells #js [#js [x y z w] ...]
   :weights (a Map of base/cell-key to w) :steps (a walker's: a Map of base/cell-key to the steps of its way there)
   :whole? (its way shut in: ended short of its follow range and of ::max-cells, from a cell it stands on)}; a water mob met
-  where no water is seen, and a mob of no name or place, has none.
+  where no water is seen, and a mob of no name or place, has none. A walker given an :extent holds :steps and :whole? only
+  (steps-only?).
   lookups {:kind-at :arrow-at}: reach/mob-lookup and reach/arrow-lookup of p, shared by the fields of one window."
   ([p threat] (field p threat {:kind-at (reach/mob-lookup p) :arrow-at (reach/arrow-lookup p)}))
-  ([p {:keys [mob pos extent]} {:keys [kind-at arrow-at]}]
+  ([p {:keys [mob pos extent] :as threat} {:keys [kind-at arrow-at]}]
    (let [span (if (string? mob) (walk-range mob extent) 0)
-         cap (max (max-cells) (diamond span))
-         cells (cond
-                 (not (and (string? mob) pos)) #js []
-                 (contains? water-mobs mob)
-                 (if-let [top (water-surface kind-at pos)]
-                   (into-array (map (fn [[x y z]] #js [x y z 1]) (water-body kind-at top (settings/get settings ::water-cells))))
-                   #js [])
-                 :else
-                 (let [walk (walk-field kind-at (reach/cell-of pos) span (threat/field-close) cap)]
-                   (if (= :projectile (threat/damage-type mob))
-                     (.concat walk (fire-cells kind-at arrow-at (update pos :y js/Math.floor) (threat/fire-range mob) (max-cells)))
-                     walk)))
-         weights (js/Map.)
-         steps (js/Map.)]
-     (doseq [^js c cells]
-       (let [k (base/cell-key (aget c 0) (aget c 1) (aget c 2))]
-         (.set weights k (max (aget c 3) (or (.get weights k) 0)))
-         (when-let [n (aget c 4)] (when-not (.has steps k) (.set steps k n)))))
-     {:cells cells :weights weights :steps steps
-      :whole? (and (string? mob)
-                   (< 1 (.-size steps) cap)
-                   (< (reduce max 0 (es6-iterator-seq (.values steps))) (dec span)))})))
+         cap (max (max-cells) (diamond span))]
+     (if (and pos (steps-only? threat))
+       (let [{:keys [steps last]} (walk-steps kind-at (reach/cell-of pos) span cap)]
+         {:cells #js [] :weights (js/Map.) :steps steps
+          :whole? (and (< 1 (.-size steps) cap) (< last (dec span)))})
+       (let [cells (cond
+                     (not (and (string? mob) pos)) #js []
+                     (contains? water-mobs mob)
+                     (if-let [top (water-surface kind-at pos)]
+                       (into-array (map (fn [[x y z]] #js [x y z 1]) (water-body kind-at top (settings/get settings ::water-cells))))
+                       #js [])
+                     :else
+                     (let [walk (walk-field kind-at (reach/cell-of pos) span (threat/field-close) cap)]
+                       (if (= :projectile (threat/damage-type mob))
+                         (.concat walk (fire-cells kind-at arrow-at (update pos :y js/Math.floor) (threat/fire-range mob) (max-cells)))
+                         walk)))
+             weights (js/Map.)
+             steps (js/Map.)]
+         (doseq [^js c cells]
+           (let [k (base/cell-key (aget c 0) (aget c 1) (aget c 2))]
+             (.set weights k (max (aget c 3) (or (.get weights k) 0)))
+             (when-let [n (aget c 4)] (when-not (.has steps k) (.set steps k n)))))
+         {:cells cells :weights weights :steps steps
+          :whole? (and (string? mob)
+                       (< 1 (.-size steps) cap)
+                       (< (reduce max 0 (es6-iterator-seq (.values steps))) (dec span)))})))))
 
 (defn field-key
   "What one field is kept under: the mob, its place to 2 blocks across (a mob stepping about keeps its field, and the

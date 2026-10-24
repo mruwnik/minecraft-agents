@@ -6,8 +6,10 @@
             [engine.perception :as perception]
             [engine.perception.rays :as rays]
             [engine.test-util :as tu]
+            [engine.path.planner.base :as base]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.cost :as cost]
+            [jobs.lib.reach :as reach]
             [jobs.lib.threat-field :as field]))
 
 (defn reach-of [spec mob pos] (field/reach-fn (field/field (tu/seeing-all (tu/fake-on-floor spec)) {:mob mob :pos pos})))
@@ -26,9 +28,21 @@
     (is (nil? (reach 5 64 0)) "5 blocks off outside a pen it cannot leave: outside")))
 
 (deftest a-field-given-an-extent-holds-the-way-to-every-cell-within-it
-  (let [at (fn [threat] (field/reach-fn (field/field (tu/seeing-all (tu/fake-on-floor {})) (merge {:mob "zombie" :pos {:x 0.5 :y 64 :z 0.5}} threat))))]
+  (let [at (fn [threat] (let [{:keys [steps]} (field/field (tu/seeing-all (tu/fake-on-floor {})) (merge {:mob "zombie" :pos {:x 0.5 :y 64 :z 0.5}} threat))]
+                          (fn [x y z] (.get steps (base/cell-key x y z)))))]
     (is (nil? ((at {}) 30 64 14)) "44 steps along the grid: past its follow range (35)")
-    (is (some? ((at {:extent 35}) 30 64 14)) "within 35 blocks as the crow flies: its way there is held")))
+    (is (= 44 ((at {:extent 35}) 30 64 14)) "within 35 blocks as the crow flies: its way there is held")))
+
+(deftest an-extent-field-holds-the-steps-the-walk-gives-and-no-cells
+  (let [p (tu/seeing-all (tu/fake-on-floor {:blocks (merge pen {"9,64,2" "stone" "9,65,2" "stone" "10,64,2" "stone" "10,65,2" "stone"})}))
+        pos {:x 4.5 :y 64 :z 0.5}
+        extent 20
+        span (field/walk-range "zombie" extent)
+        walked (field/walk-field (reach/mob-lookup p) (reach/cell-of pos) span 10 4000)
+        expected (into {} (map (fn [^js c] [(base/cell-key (aget c 0) (aget c 1) (aget c 2)) (aget c 4)])) walked)
+        f (field/field p {:mob "zombie" :pos pos :extent extent})]
+    (is (= expected (into {} (map vec) (es6-iterator-seq (.entries ^js (:steps f))))) "the steps of the walk to the range")
+    (is (zero? (.-length (:cells f))) "no cells, no weights")))
 
 (deftest a-ranged-mobs-field-adds-the-cells-it-can-shoot
   (let [pillar {"6,64,0" "stone" "6,65,0" "stone" "6,66,0" "stone"}

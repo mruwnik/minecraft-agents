@@ -388,10 +388,11 @@
         self (.self (:primitives c))
         from (u/self-pos c)
         chasers (with-ways c chasers)
+        ways-ms (js/Math.round (- (js/performance.now) t0))
         r (or (:reach opts) (reach from chasers (.-food self)))
         priced (await (price! c (into (vec targets) (ring from chasers r (settings/get settings ::bearings))) (assoc opts :reach r :chasers chasers)))
         ends (scored chasers from priced)]
-    (ctx/emit! c :retreat.search-work :debug (assoc (meta priced) :ms (js/Math.round (- (js/performance.now) t0)) :targets (count targets)))
+    (ctx/emit! c :retreat.search-work :debug (assoc (meta priced) :ms (js/Math.round (- (js/performance.now) t0)) :ways-ms ways-ms :targets (count targets)))
     (with-meta (cond-> ends covered? (into (covers chasers from covered? ends))) (meta priced))))
 
 (defn unseen-ahead
