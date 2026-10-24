@@ -138,10 +138,13 @@
         (== 1 (aget r (store/cell-index x y z)))))))
 
 (defn with-rock
-  "snapshot read with every cell that reads mask (the unseen cells' id) and is guessed rock (rock-at) read as stone instead."
-  [^js snapshot {:keys [mask stone] :as guess}]
+  "snapshot read with every cell that reads mask (the unseen cells' id) and is guessed rock (rock-at) read as stone (an id)
+  instead. With edge, stone is the unloaded id and the view is the planner's loaded edge (snapshot edge): the guessed rock
+  is where the land may go on, a frontier."
+  [^js snapshot {:keys [mask stone edge] :as guess}]
   (let [rock-at (rock-at guess)
         view (js/Object.create snapshot)]
+    (when edge (set! (.-edge view) true))
     (set! (.-stateAt view) (fn [x y z]
                              (let [s (.stateAt snapshot x y z)]
                                (if (and (== s mask) (rock-at x y z)) stone s))))

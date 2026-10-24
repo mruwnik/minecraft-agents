@@ -40,12 +40,14 @@
 
 (defn sensed-only
   "Wrapped fake primitives for spec, lit, whose raw blockAt throws. rawWorld stays, as on the body: go-to's planner
-  snapshot (reach/lookup) reads it. A spec's :jitter fixes the sight passes' ray jitter (perception's :rand)."
+  snapshot (reach/lookup) reads it. A spec's :jitter fixes the sight passes' ray jitter (perception's :rand), its :radius
+  how far they see."
   [spec]
-  (let [p (tu/fake (dissoc spec :jitter))
+  (let [p (tu/fake (dissoc spec :jitter :radius))
         raw (fake-raw/create p)
         per (perception/create raw (cond-> {:now (constantly 1000000)}
-                                     (:jitter spec) (assoc :rand (constantly (:jitter spec)))))
+                                     (:jitter spec) (assoc :rand (constantly (:jitter spec)))
+                                     (:radius spec) (assoc :radius (:radius spec))))
         w (perception/wrap p per)]
     (aset w "rawWorld" raw)
     (aset w "blockAt" (fn [_] (throw (js/Error. "raw blockAt"))))
@@ -376,6 +378,54 @@
                                                {:pos [9 58 0] :range 1 :unknown true}
                                                dark-and-looked shelter-entry!))]
           (is (= :leave-shelter (first (mapv :step (filter #(= :go-to.escalated (:kind %)) seen)))) (pr-str out)))))))
+
+;; ---- go-to :unknown under ground, lit: a tunnel whose way on turns a corner out of sight
+
+(defn round-the-corner
+  "Rock (stone x -14..66, y 62..67, z -2..12), lit by torches (no sky): a tunnel through the body's cell (x -12..64, y 64..65,
+  z 0) and one to the goal (z 10, x -12..64), joined (with join) by a passage south at x 64."
+  [join]
+  (apply dissoc (box -14 62 -2 66 67 12 "stone")
+         (concat (for [x (range -12 65) y [64 65] z [0 10]] (str x "," y "," z))
+                 (when join (for [z (range 1 10) y [64 65]] (str "64," y "," z))))))
+
+(defn lit-and-looking
+  "The world lit by block light alone, and a sight pass to each side from every cell the body comes to (a body's passes
+  run on a timer as it walks)."
+  [{:keys [p w]}]
+  (let [look! (fn [] (let [yaw (:yaw @(fake/state p))]
+                       (doseq [y [0 90 180 270]]
+                         (swap! (fake/state p) assoc :yaw y)
+                         (perception/pass! (aget w "perception")))
+                       (swap! (fake/state p) assoc :yaw yaw)))
+        cell #(mapv js/Math.floor (:pos (:self %)))]
+    (swap! (fake/state p) assoc :light-default [0 15] :pitch 0)
+    (look!)
+    (add-watch (fake/state p) :sight (fn [_ _ a b] (when (not= (cell a) (cell b)) (look!))))))
+
+(defn corner-world
+  "round-the-corner with the body at x 40, seeing 16 blocks, its loaded land 1 chunk round it: the goal (x -12) is
+  unloaded at the start and the passage (x 64) is past sight; from the dead end by the goal the seen rim is unloaded."
+  [join]
+  {:self {:pos {:x 40.5 :y 64 :z 0.5}} :blocks (round-the-corner join) :viewChunks 1 :radius 16})
+
+;; live twin: walkway-stair-out-of-view/stair-100-east-arrives. The rock guess (cells 4 past all seen open read stone)
+;; closes the unseen passage, so every search ends exhausted; the body must tour to the rim of what it saw, not give up
+(deftest go-to-under-ground-tours-past-the-rock-it-guessed-round-a-corner
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (run-go-to (corner-world true)
+                                                {:pos [-12 64 10] :range 1 :ways #{:walk :clear-seal} :unknown true} lit-and-looking))]
+          (is (= {:arrived true} (select-keys out [:arrived])) (str (pr-str out) " at " (:pos (fake/self p)))))))))
+
+(deftest go-to-under-ground-gives-up-a-tunnel-with-no-way-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (run-go-to (corner-world false)
+                                              {:pos [-12 64 10] :range 1 :ways #{:walk :clear-seal} :unknown true} lit-and-looking))]
+          (is (= {:arrived false :reason :unreachable} (select-keys out [:arrived :reason])) (pr-str out)))))))
 
 (deftest rounds-from-one-cell-with-no-gain-are-a-loop
   (let [rounds (fn [bests] (reduce (fn [[starts _] best] (gwalk/note-start starts [13 85 -237] best)) [{} false] bests))]

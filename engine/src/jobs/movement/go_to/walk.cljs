@@ -368,16 +368,15 @@
 (def max-column-reaims "Times a learn-spent walk to a column re-aims at its newly seen ground before it gives up." 3)
 
 (defn ^:async look-or-re-aim-column!
-  "A walk to a column's estimate spent its learned replans: the column goal aims again if its ground has come into view
-  (up to max-column-reaims times), else the body looks around once from where it stands (a slope bumped into column by
-  column is seen at a glance). True when either happened."
+  "A walk spent its learned replans: a column goal aims again if its ground has come into view (up to
+  max-column-reaims times), else the body looks around once from near where it stands (a slope bumped into column by
+  column, or the drop beside a lit stair, is seen at a glance). True when either happened."
   [c pos]
-  (when (:column-open (ctx/mem c))
-    (let [aimed-pos (when (< (:column-reaims (ctx/mem c) 0) max-column-reaims)
-                      (:pos (aimed c {:x (:x pos) :z (:z pos)})))]
-      (if (and aimed-pos (not= (:y aimed-pos) (:y pos)))
-        (do (ctx/update-mem! c update :column-reaims (fnil inc 0)) true)
-        (boolean (await (look/survey! c :near)))))))
+  (let [aimed-pos (when (and (:column-open (ctx/mem c)) (< (:column-reaims (ctx/mem c) 0) max-column-reaims))
+                    (:pos (aimed c {:x (:x pos) :z (:z pos)})))]
+    (if (and aimed-pos (not= (:y aimed-pos) (:y pos)))
+      (do (ctx/update-mem! c update :column-reaims (fnil inc 0)) true)
+      (boolean (await (look/survey! c :near))))))
 
 (defn ^:async walk! [c0 pos range doors]
   (let [way (own-way c0 pos (dive-floor! c0 pos))
@@ -535,6 +534,10 @@
                          (= :budget (some-> (:reason result) keyword)) (assoc :goal-left left))
                 progress? (and (not looped?) (or (< left (dec best)) explored? nearer? (learned-round? result)))
                 edge-start? (and (not progress?) (:unknown c) (= :budget (some-> (:reason result) keyword)) (not (:edge-mode (ctx/mem c))))
+                ;; land closed by the rock guess is not searched to its end: a call that cannot dig tours its rim first
+                rock-start? (and (not progress?) (not edge-start?) (= :exhausted (some-> (:reason result) keyword)) (not (:rock-edge (ctx/mem c)))
+                                 (not (ways/escalating? c)) (wworld/rock-guess? (:primitives c) (:unknown c)))
+                edge-start? (or edge-start? rock-start?)
                 tries (cond edge-start? 0 looped? (max-blocked) progress? 0 :else (inc (:blocked (ctx/mem c) 0)))]
             (when-not edge-start? (when-not progress? (ctx/book-try! c 'jobs.movement.go-to (or (:reason result) :no-progress))))
             (ctx/update-mem! c assoc :blocked tries :starts starts :searching 0 :wet-fresh 0 :best (if (< left (dec best)) left best)
@@ -542,9 +545,15 @@
                              :frontier-best (cond-> fbests frontier (assoc frontier (min fbest (u/dist to fcell))))
                              :target-best (cond-> tbests target (assoc target (min tdist (get tbests target js/Infinity)))))
             (when (and progress? (:restore-pending (ctx/mem c))) (restore/restore-next! c))
-            (when edge-start?
-              (ctx/update-mem! c assoc :edge-mode true)
-              (ctx/emit! c :go-to.edge-tour :info {:text "the search over unseen land ran out of nodes: touring to the edge of what the body has seen" :at (mapv #(js/Math.floor (% from)) [:x :y :z])}))
+            (cond
+              rock-start?
+              (do (ctx/update-mem! c assoc :rock-edge true)
+                  (wsearch/forget-known! c)
+                  (ctx/emit! c :go-to.edge-tour :info {:text "the search ran out of land where the body guessed rock it never saw: touring to the edge of what it has seen" :at (mapv #(js/Math.floor (% from)) [:x :y :z])}))
+
+              edge-start?
+              (do (ctx/update-mem! c assoc :edge-mode true)
+                  (ctx/emit! c :go-to.edge-tour :info {:text "the search over unseen land ran out of nodes: touring to the edge of what the body has seen" :at (mapv #(js/Math.floor (% from)) [:x :y :z])})))
             (if (or unstuck? edge-start?
                     (and (or progress? (and (< tries (max-blocked)) (< tries (ctx/own-tries c)) (pos? (ctx/tries-left c)))) (not (#{:goal-enclosed :goal-cut-off :goal-on-magma} (:reason result)))))
               (do (when (and (pos? tries) (not unstuck?)) (retrying! c result tries))

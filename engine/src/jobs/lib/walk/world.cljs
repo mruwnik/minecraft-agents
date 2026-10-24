@@ -154,7 +154,8 @@
   or felt read void_air (its known cells read as they are now), and the snapshot carries the planner's options.unknown:
   the spec with the mask's id, cell (unseen-share), seeDepth (from what the body holds now) and seeLit (look/see-lit-fn). Under ground
   (sh-sense/buried?, head not under water, not :edge), an unseen cell past ::rock-beyond of every seen open cell, the
-  feet and the spec's seeds (with-seeds) reads stone (jobs.lib.walk.rock); the mask's rockBeyond says so (0: none)."
+  feet and the spec's seeds (with-seeds) reads stone (jobs.lib.walk.rock), or with the spec's rockEdge the loaded edge (a
+  frontier, the snapshot's edge); the mask's rockBeyond says so (0: none)."
   ([p] (path-world p nil))
   ([p unknown]
    (when (fn? (.-pathWorld p))
@@ -170,7 +171,8 @@
        (when-let [pw (if mask (.pathWorld p mask) (.pathWorld p))]
          (let [pw (js/Object.assign #js {:table table :space space/space} pw)]
            (when k
-             (set! (.-snapshot pw) (rock/with-rock (.-snapshot pw) {:mask (.-id mask) :stone stone :k k :known known :seeds (rock-seeds p unknown)})))
+             (set! (.-snapshot pw) (rock/with-rock (.-snapshot pw) {:mask (.-id mask) :stone (if (.-rockEdge unknown) unloaded-id stone) :edge (true? (.-rockEdge unknown))
+                                                                    :k k :known known :seeds (rock-seeds p unknown)})))
            pw))))))
 
 (defn unknown-of
@@ -180,10 +182,10 @@
 
 (defn unknown-key
   "What a kept search's key holds of pw's mask: nil unmasked, else the floors missed so far, the see depth, the takeoffs
-  where a torch failed, the torch price and the rock guess."
+  where a torch failed, the torch price and the rock guess (and whether it reads as the loaded edge)."
   [pw]
   (when-let [^js u (unknown-of pw)]
-    [(.-size ^js (.-missed u)) (.-size ^js (.-blocked u)) (.-seeDepth u) (some-> ^js (.-noLight u) .-size) (.-lightCost u) (.-rockBeyond u)]))
+    [(.-size ^js (.-missed u)) (.-size ^js (.-blocked u)) (.-seeDepth u) (some-> ^js (.-noLight u) .-size) (.-lightCost u) (.-rockBeyond u) (true? (.-rockEdge u))]))
 
 (defn wall-id
   "A state id of a full block with no collision tricks (stone, the first state that is one), of a state table."

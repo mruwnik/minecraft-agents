@@ -175,8 +175,11 @@
         sky (pocket 15 (wworld/unknown-spec))
         off (settings/with-settings {:jobs.lib.walk.world/rock-beyond false} #(pocket 0 (wworld/unknown-spec)))
         goal (pocket 0 (wworld/with-seeds (wworld/unknown-spec) [7 64 0] nil))
-        own (pocket 0 (wworld/with-seeds (wworld/unknown-spec) nil [[-7 64 0]]))]
+        own (pocket 0 (wworld/with-seeds (wworld/unknown-spec) nil [[-7 64 0]]))
+        rim (pocket 0 (js/Object.assign #js {} (wworld/unknown-spec) #js {:rockEdge true}))]
     (is (= [@void @stone @void] (map #(state buried % 64 0) [3 4 -3])) "3 from the feet unseen, 4 rock")
+    (is (= [@void 0xFFFF true] [(state rim 3 64 0) (state rim 4 64 0) (.-edge (.-snapshot rim))]) "with :rockEdge the guessed rock is the loaded edge")
+    (is (not= (wworld/unknown-key buried) (wworld/unknown-key rim)))
     (is (= [@void @void] (map #(state % 4 64 0) [sky off])) "under the sky, or the setting off: unseen")
     (is (= @void (state goal 4 64 0)) "3 from the goal")
     (is (= [@void @stone] [(state own -4 64 0) (state own 4 64 0)]) "3 from a cell of its own ways")

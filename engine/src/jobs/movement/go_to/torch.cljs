@@ -110,9 +110,11 @@
 (defn round-unknown
   "The mask spec of this round (c's :unknown): with :torches not :never and a torch carried or a fetch still open, torches on
   (wworld/with-light), priced by jobs.lib.cost/light-cost. After a masked search ran out of nodes (mem :edge-mode) the mask
-  reads unseen cells as the loaded edge instead (:edge): the walk tours to the edge of what the body has seen."
+  reads unseen cells as the loaded edge instead (:edge): the walk tours to the edge of what the body has seen. After a
+  search ran out of land a buried body's rock guess closed (mem :rock-edge), the guessed rock reads as the loaded edge
+  (:rockEdge, wworld/path-world)."
   [c]
-  (let [u (:unknown c)
+  (let [u (cond-> (:unknown c) (and (:unknown c) (:rock-edge (ctx/mem c))) (#(js/Object.assign #js {} % #js {:rockEdge true})))
         n (ltorch/torches-held (:primitives c))]
     (cond
       (and u (:edge-mode (ctx/mem c))) (js/Object.assign #js {} u #js {:edge true})
