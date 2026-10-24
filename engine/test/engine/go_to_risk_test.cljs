@@ -123,6 +123,13 @@
     (is (< 0 there both) "the way back is in its fire range too")
     (is (< both (- 1 (js/Math.pow (- 1 there) 2))) "a skeleton that noticed the body going has it coming back: no second draw of its notice")))
 
+(deftest standing-at-the-goal-is-priced-in-the-skeletons-fire-range-there
+  (let [c (ready-test/ctx-of {:time st/noon :self {:pos {:x 0.5 :y 64 :z 0.5}}
+                              :entities [{:id 7 :name "skeleton" :kind "hostile" :pos {:x 42 :y 64 :z 0}}]})
+        goal {:x 30 :y 64 :z 0}
+        chance (fn [opts] (:death-chance (risk/estimate c goal (merge {:plan (plan-of straight-cells) :back? true} opts))))]
+    (is (< (chance {}) (chance {:stay-s 10}) (chance {:stay-s 30})) "the longer it stands in the fire range, the likelier it dies")))
+
 (deftest a-longer-detour-pays-its-spawn-and-lava-parts-on-its-own-cells
   (let [c (ready-test/ctx-of {:time st/night :self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks {"15,64,12" "lava"}})
         goal {:x 30 :y 64 :z 0}

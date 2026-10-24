@@ -41,9 +41,7 @@
    :retry {:doc "try a pile again that an earlier run ended :abandoned or declined for a danger still remembered, while its despawn window is open (a reflex run keeps the decision; an agent asks for another try)" :spec boolean? :default false}})
 
 (a/defargs settings
-  {::collect-radius {:default 10 :doc "Blocks from the death point within which the pile's drops are collected (a pile on open ground rolls 6-8 out)." :spec (a/num-in 0 nil)}
-   ::job-time-s {:default 300 :doc "Seconds of the call's time limit: the despawn window, which the job keeps itself in game ticks." :spec (a/num-in 0 nil)}
-   ::collect-s {:default 10 :doc "Seconds a collect pass at the pile is reckoned to take, in the job's quote." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 300 :doc "Seconds of the call's time limit: the despawn window, which the job keeps itself in game ticks." :spec (a/num-in 0 nil)}})
 
 (def ways need/fetch-ways)
 
@@ -78,10 +76,10 @@
         (contract/later :recovering (str n " of " total " items back") :units :items :done n :left (- total n))))))
 
 (defn ^:async trip-s
-  "[least mean] seconds of the walk to the pile of death `entry` as go-to quotes it, the mean with ::collect-s at the pile."
+  "[least mean] seconds of the walk to the pile of death `entry` as go-to quotes it, the mean with the collect at the pile (pl/collect-s)."
   [c entry]
   (let [[least mean] (or (get-in (await (est/quote-trip c entry)) [:uses :job-time]) [0 0])]
-    [least (+ mean (settings/get settings ::collect-s))]))
+    [least (+ mean (pl/collect-s c (:data entry)))]))
 
 (defn window-ms
   "Milliseconds left before the drops of death entry despawn."
@@ -89,7 +87,7 @@
   (settings/ticks->ms (game/despawn-left-ticks entry (ctx/view c))))
 
 (defn ^:async quote-of
-  "The walk to the pile as go-to quotes it, then ::cfg/collect-s at the pile; at most the despawn window left."
+  "The walk to the pile as go-to quotes it, then the collect at the pile; at most the despawn window left."
   [c]
   (let [d (first (dth/open-deaths c))
         window-s (if d (/ (window-ms c d) 1000) 0)
@@ -126,7 +124,7 @@
           e (-> (est/estimate c (:data entry) (est/pile-age-ms c entry) quoted)
                 (update :cost est/finite)
                 (assoc :at (ctx/now c)))]
-      (ctx/update-mem! c #(cond-> (assoc % :decided e :reestimated true :recheck false) (nil? (:baseline %)) (assoc :baseline (pl/baseline c (:t entry) (:pos (:data entry)) (settings/get settings ::collect-radius)))))
+      (ctx/update-mem! c #(cond-> (assoc % :decided e :reestimated true :recheck false) (nil? (:baseline %)) (assoc :baseline (pl/baseline c (:t entry) (:pos (:data entry)) (cfg/collect-radius)))))
       (dth/save-trip! c)
       e)))
 
@@ -189,7 +187,7 @@
   "The decision, then the walk and the collect passes of a trip inside its window."
   [c entry]
   (let [margin (cfg/margin)
-        radius-to-collect (settings/get settings ::collect-radius)
+        radius-to-collect (cfg/collect-radius)
         kit (await (kt/kit! c entry))
         decided (when-not kit (await (decide! c entry)))
         pos (:pos (:data entry))]

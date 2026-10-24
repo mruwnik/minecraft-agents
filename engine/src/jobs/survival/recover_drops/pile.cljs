@@ -2,6 +2,7 @@
   "A pile in the inventory and on the ground: what of it is back, what is left, which of its items are in sight."
   (:require [engine.ctx :as ctx]
             [engine.memory :as mem]
+            [jobs.lib.cost :as cost]
             [jobs.lib.storage :as storage]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
@@ -36,6 +37,30 @@
          (filter #(wanted (some-> (.-item %) .-name)))
          (filter #(<= (u/dist pos (u/pos-of (.-pos %))) radius))
          (mapv #(.-id %)))))
+
+(defn tour-blocks
+  "Blocks of the walk from `from` through all of points, each time to the nearest one left."
+  [from points]
+  (loop [at from left (vec points) total 0]
+    (if (empty? left)
+      total
+      (let [[d i] (apply min-key first (map-indexed (fn [i q] [(u/dist at q) i]) left))]
+        (recur (nth left i) (into (subvec left 0 i) (subvec left (inc i))) (+ total d))))))
+
+(defn collect-s
+  "Seconds the body stands collecting the pile of :died data: items are picked up by walking over them, so the walk from
+  the pile's cell to each stack in turn, the nearest first. A stack in sight lies where it is seen; the others are scattered
+  over the ::collect-radius round the pile, whose shortest tour is 0.7124 sqrt(n area) (Beardwood-Halton-Hammersley)."
+  [c {:keys [pos inventory]}]
+  (let [radius (cfg/collect-radius)
+        wanted (set (map :name inventory))
+        seen (->> (look/seen-items (:primitives c) {:radius (+ radius (cfg/stray-range) 4) :max 64})
+                  (filter #(wanted (some-> (.-item %) .-name)))
+                  (map #(u/pos-of (.-pos %)))
+                  (filter #(<= (u/dist pos %) radius)))
+        unseen (max 0 (- (count inventory) (count seen)))]
+    (/ (+ (tour-blocks pos seen) (* 0.7124 radius (js/Math.sqrt (* js/Math.PI unseen))))
+       (cost/walk-blocks-per-s))))
 
 (defn left-over
   "{item name count} of the pile not yet back in the inventory."

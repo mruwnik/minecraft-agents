@@ -4,7 +4,8 @@
             [engine.settings :as settings]))
 
 (a/defargs settings
-  {::arrive-range {:default 2 :doc "How near the death point the walk back ends, in blocks." :spec (a/int-in 0 nil)}
+  {::collect-radius {:default 10 :doc "Blocks from the death point within which the pile's drops are collected (a pile on open ground rolls 6-8 out)." :spec (a/num-in 0 nil)}
+   ::arrive-range {:default 2 :doc "How near the death point the walk back ends, in blocks." :spec (a/int-in 0 nil)}
    ::top-n {:default 3 :doc "Items and mobs named in the report of a death site, at most." :spec (a/int-in 0 nil)}
    ::max-collect-passes {:default 3 :doc "Walks back to the pile after a collect pass that left visible items of it behind." :spec (a/int-in 0 nil)}
    ::stray-range {:default 5 :doc "A body this far from the death point in the collect phase (a flee cut the trip) walks back first." :spec (a/int-in 0 nil)}
@@ -26,6 +27,8 @@
    ::mob-spot-radius {:default 6 :doc "A known hostile of the same kind this near a remembered mob's place is that mob." :spec (a/num-in 0 nil)}
    ::moved-blocks {:default 10 :doc "A pile skipped as too far to reach before it despawns is weighed again, window permitting, once the body stands this far from where it skipped." :spec (a/num-in 0 nil)}
    ::bed-away-blocks {:default 10 :doc "A respawn farther than this from the bed the body slept in is reported." :spec (a/int-in 0 nil)}})
+
+(defn collect-radius [] (settings/get settings ::collect-radius))
 
 (defn seal-radius [] (settings/get settings ::seal-radius))
 

@@ -18,6 +18,7 @@
             [engine.settings :as settings]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.death :as death]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.lava-risk :as lava-risk]
             [jobs.lib.look :as look]
@@ -109,27 +110,33 @@
   darkening now, the cells its look round has looked at, and what the way is priced by as perceived now: its cells, the
   seconds of it spent where a mob could spawn and the hp of the lava seen near it, and the reach of the threats it prices
   (:weights, their fields' cells, which change as cells they read are seen anew). :cells, :catchers and :remembered are derived, left out of a key."
-  [c goal & [{:keys [plan caves-free? back?]}]]
+  [c goal & [{:keys [plan caves-free? back? stay-s]}]]
   (let [p (:primitives c)
         feet (sh-sense/feet p)
         goal (update goal :y #(or % (:y feet)))
         underground? (sh-sense/buried? p)
         shelter (:data (ctx/latest c :shelter))
-        cells (cond-> (way feet goal plan) back? (#(into % (rest (rseq %)))))
+        there (way feet goal plan)
+        stay-s (or stay-s 0)
+        stay-at (dec (count there))
+        there (cond-> there (pos? stay-s) (update stay-at assoc :s (+ stay-s (peek (death/cell-seconds there)))))
+        cells (cond-> there back? (#(into % (rest (rseq %)))))
         exit (if (sh-inside/walk-leaves-shelter? p shelter goal 1) (settings/get settings ::exit-blocks) 0)
         food (or (.-food (.self p)) 20)
         known (threats/known-threats c)
         hides (threats/hide-threats c)
         speed (cost/body-speed food)
-        catchers (live-catchers known (mapv #(assoc %1 :t (/ %2 speed)) cells (along cells)))
+        later (fn [i] (if (and (pos? stay-s) (> i stay-at)) stay-s 0))
+        catchers (live-catchers known (mapv (fn [i cell d] (assoc cell :t (+ (/ d speed) (later i)))) (range) cells (along cells)))
         remembered (remembered-near-way known hides feet goal)]
-    {:goal goal :plan (select-keys plan [:status :steps]) :back? back?
+    {:goal goal :plan (select-keys plan [:status :steps]) :back? back? :stay-at (when (pos? stay-s) stay-at) :stay-s stay-s
      :feet feet :cells cells :body (threats/death-body c) :food food
      :known known :hides hides :catchers catchers :remembered remembered
      :weights (mapv #(:weights (field/field-of c %)) (concat catchers remembered))
      :writes (sense/known-writes p) :sky (sh-sense/sky-subtract-now p) :looked (sense/round-looked c)
      :exposed-s (+ (/ exit (cost/walk-blocks-per-s))
-                   (spawn-light/dark-seconds p cells (mapv #(/ % (cost/walk-blocks-per-s)) (along cells)) (:y feet) underground? caves-free?))
+                   (spawn-light/dark-seconds p cells (mapv #(/ % (cost/walk-blocks-per-s)) (along cells)) (:y feet) underground? caves-free?)
+                   (if (and (pos? stay-s) (pos? (spawn-light/chance-at p (nth cells stay-at) (:y feet) underground? caves-free?))) stay-s 0))
      :lava (route-lava-hp p cells)}))
 
 (defn estimate-of
@@ -155,7 +162,8 @@
 (defn estimate
   "{:hp :walk-hp :spawn-hp :hostile-hp :death-hp :lethal-hp :death-chance :lava-hp :dark-s :hostiles :threats} of the walk of c's body to `goal` ({:x :y :z})
   on the way of :plan (go-to's plan of it, {:status :steps}; none: all of it unplanned), and with :back? back on the same way
-  as one walk (a mob that noticed the body going still has it coming back): hp the expected damage and lethal-hp,
+  as one walk (a mob that noticed the body going still has it coming back), and with :stay-s standing that many seconds at the
+  goal first (its cell's seconds in the route, its spawns by the light there): hp the expected damage and lethal-hp,
   the death the spawns and known threats risk (cost/death-chance) in hp (cost/lethal-hp), walk-hp the
   same leaving out the sensed mobs that catch the walk, their hurt and their death share both (a fight with them prices
   them); death-hp the remembered threats' hurt, hostile-hp what the catchers add to it, all met in one route-parts; dark-s the seconds walked where a mob could spawn (caves-free?: no unseen cell guessed a dark cave); threats [{:mob :pos}] the known threats priced."

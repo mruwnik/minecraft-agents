@@ -144,6 +144,25 @@
         (let [{:keys [eng]} (await ((fetch-run "skeleton" iron-kit)))]
           (is (re-find #"^fetch: " (decided-text eng))))))))
 
+(defn survive-pct
+  "The survival chance in percent the decision of a run over a pile of stacks (killed by a skeleton that guards the pile) names."
+  [stacks]
+  (let [pile (mapv #(hash-map :name (str "item_" %) :count 1) (range stacks))]
+    (fn ^:async t []
+      (let [{:keys [eng]} (setup {:floor tu/walk-floor :entities (vec (concat (pile-drops pile) [{:id 20 :name "skeleton" :kind "hostile" :pos {:x 20 :y 64 :z 8}}]))})]
+        (die! eng {:pos dt/death-pos :inventory pile :cause "skeleton"})
+        (core/submit! eng '(jobs.survival.recover-drops {:value-overrides {"unknown" 100}}) {})
+        (await (run-until-empty eng 20))
+        (js/parseFloat (second (re-find #"x ([0-9.]+)% survive" (decided-text eng))))))))
+
+(deftest the-body-stands-longer-collecting-a-pile-of-more-stacks-in-a-skeletons-range
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [few (await ((survive-pct 1)))
+              many (await ((survive-pct 8)))]
+          (is (< many few) "the collect tour is longer, and a body that stands in the fire range dies likelier"))))))
+
 ;; ------------------------------------------------------------ cut trips
 
 (defn death-t [eng] (:t (mem/latest (mem/view (:store eng)) :died)))
