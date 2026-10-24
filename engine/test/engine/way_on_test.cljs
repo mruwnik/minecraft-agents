@@ -32,11 +32,21 @@
                                (for [x [-4 0 4] z [1 2] y [64 65]] [x y z])))]
     (known-of (fn [cell] (not (open cell))) {} seen-box)))
 
+(def open-corridor
+  "A corridor along x at z 0 (y 64 and 65) in rock, seen 8 round the body, that runs on out of the seen box at both ends."
+  (known-of (fn [[_ y z]] (not (and (= z 0) (#{64 65} y)))) {} seen-box))
+
+(def pocket
+  "Rock seen 8 round the body, a corridor of two cells along x (x 0 and 1, y 64 and 65): shut at both ends."
+  (known-of (fn [[x y z]] (not (and (= z 0) (#{0 1} x) (#{64 65} y)))) {} seen-box))
+
 (defn dead-end [known] (- 1 (cost/way-on-chance (way-on/way-counts known [0 64 0]))))
 
-(deftest the-ways-out-of-open-ground-go-on-and-a-corridors-often-end
+(deftest the-ways-out-of-open-ground-and-a-corridor-go-on-and-a-pocket-ends
   (is (< (dead-end open-ground) 0.01) "open ground: a way on seldom ends")
-  (is (< 0.4 (dead-end corridors) 0.7) "corridors among dead ends: about every other way out is a wall"))
+  (is (< (dead-end open-corridor) 0.15) "a 1-wide corridor open at its end: the walls beside it are no ways, it goes on")
+  (is (< (dead-end open-corridor) (dead-end corridors) 0.4) "a corridor with three stubs and shut ends: some ways end")
+  (is (> (dead-end pocket) 0.5) "a shut pocket: the way ends"))
 
 (deftest a-cell-not-seen-counts-neither-way
   (is (= {:k 0 :n 0} (way-on/way-counts (constantly nil) [0 64 0])) "nothing seen: no count, the prior stands")
