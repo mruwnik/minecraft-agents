@@ -654,3 +654,9 @@
     (game/select! (fake/create {:server {:simulationDistance 10}}))
     (is (= 0 (threat/door-break-share "zombie")) "a zombie breaks no door below hard")
     (is (= 0 (threat/left-alive "creeper" 200 0 nil nil)))))
+
+(deftest heights-nobody-recorded-keep-a-pseudo-count-in-the-surface-prior
+  (let [rise #(settings/with-settings % (fn [] (cost/expected-rise 60 0 nil)))]
+    (is (= 2 (rise {:jobs.lib.cost.rise/surface-prior [[62 1000]] :jobs.lib.cost.rise/surface-floor 0})))
+    (is (< 2 (rise {:jobs.lib.cost.rise/surface-prior [[62 1000]] :jobs.lib.cost.rise/surface-floor 1}))
+        "the unseen bins above weigh in")))

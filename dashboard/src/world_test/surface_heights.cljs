@@ -1,10 +1,12 @@
 (ns world-test.surface-heights
   "tools/event-counts.mjs surface-heights: counts the measured prior jobs.lib.cost.rise ::surface-prior from the recorded chunk
   columns (worlds/<world>/chunks): the y a body would stand at on the ground of a column (one over its highest block that is
-  not air, a plant or a tree, jobs.lib.surface/open? and canopy?; water counts as ground), in bins of bin blocks, as
-  {bin-middle columns}. The fixture plot grid (world-test.water-lags/reserved?) is left out: built courses, not terrain.
-  Every stride-th column file in name order is read. Pure part: tally."
+  not air, a plant or a tree, jobs.lib.surface/open? and canopy?), in bins of bin blocks, as {bin-middle columns}. A column
+  whose ground is a fluid (sea, river, lava lake) is left out: a stair exit cannot stand on it. The fixture plot grid
+  (world-test.water-lags/reserved?) is left out: built courses, not terrain. Every stride-th column file in name order is
+  read, all 256 columns of each. Pure part: tally."
   (:require ["fs" :as fs]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.surface :as surface]
             [world-test.water-lags :as water-lags]))
 
@@ -13,13 +15,15 @@
 (def bin "Blocks one count row spans." 4)
 
 (defn stand-y
-  "The y a body stands at on the ground of column x z by at ((fn [x y z]) -> {:name} or nil), or nil when the column holds no ground."
+  "The y a body stands at on the ground of column x z by at ((fn [x y z]) -> {:name} or nil), or nil when the column holds no
+  ground or its ground is a fluid."
   [at x z]
   (loop [y top-y]
     (when (>= y bottom-y)
       (let [n (:name (at x y z))]
         (cond (nil? n) nil
               (or (surface/open? n) (surface/canopy? n)) (recur (dec y))
+              (bs/fluids n) nil
               :else (inc y))))))
 
 (defn tally
