@@ -118,7 +118,8 @@
   (let [note (fn [data text] (:note (results/project "j4" "g" (exclusive-stop data text) false)))]
     (is (re-find #"Yielded after its one exclusive round.*Got done: bread 1" (note {:status :stopped :reason :yielded} "stopped: yielded")))
     (is (re-find #"Declined to run \(no tool\); nothing ran" (note {:status :stopped :reason :declined} "no tool")))
-    (is (re-find #"Waited after its one exclusive round \(waiting: a table\)" (note {:status :stopped :reason :need} "waiting: a table")))
+    (is (re-find #"Waited after its one exclusive round \(waiting: a table\)" (note {:status :stopped :reason :need :text "a table"} "waiting: a table")))
+    (is (nil? (note {:status :stopped :kind :nothing-possible :cause {:ways {:a :x}} :reason :ways} "no iron")))
     (is (nil? (note {:status :stopped :reason :cut} "cut")))
     (is (nil? (:note (results/project "j4" "g" [(event 1 "j4" :queued {}) (event 2 "j4" :stopped {:reason :ways})] false))))))
 

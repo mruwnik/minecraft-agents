@@ -50,7 +50,7 @@
 
 (defn yielded-text
   "For a job that an exclusive run ended without finishing (:stopped :yielded, :declined, or its child's wait reason
-  when exclusive?; the job is dropped, so a resubmit starts over): one sentence on why and what the round got done; else nil."
+  when exclusive?, which carries no :kind; a real ending such as :ways gets nil; the job is dropped, so a resubmit starts over): one sentence on why and what the round got done; else nil."
   [e exclusive?]
   (let [reason (get-in e [:data :reason])]
     (when (and (= :stopped (:kind e)) (not= :cut reason) (or exclusive? (#{:yielded :declined} reason)))
@@ -59,7 +59,8 @@
         (case reason
           :declined (str "Declined to run (" (:text e) "); nothing ran.")
           :yielded (str "Yielded after its one exclusive round and is gone." done " Submit the remaining steps as separate calls, or without --exclusive.")
-          (str "Waited after its one exclusive round (" (:text e) ") and is gone." done " Resubmit once that is met, or submit without --exclusive."))))))
+          (when-not (:kind (:data e))
+            (str "Waited after its one exclusive round (" (:text e) ") and is gone." done " Resubmit once that is met, or submit without --exclusive.")))))))
 
 (defn never-issued?
   "True when id cannot be a job of this generation: ids are j<n> from a counter, next-id being the next to issue."
