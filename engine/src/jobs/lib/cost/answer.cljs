@@ -408,45 +408,65 @@
     (* (if (contains? threat/provoked-only mob-name) (threat/provoked-share) 1)
        (min (life body) (expected-damage (get answers (:answer (decide body answers at))))))))
 
-(defn route-hurt
-  "hp the known threats of route {:cells :threats :at} (death-chance's) are expected to take off body, at most its life:
-  for each, its threat-hurt at :at (default the first cell) times its weight and the chance it gets to the body on the
-  :cells (death/met-chance): death-chance in hp, for a walk priced against health."
-  [body {:keys [cells threats at]}]
-  (let [at (or at (first cells))
-        hurt (memoize #(threat-hurt body %1 %2 at))]
-    (min (life body)
-         (reduce + 0 (for [{:keys [mob weight reach caught]} (when (seq cells) threats)
-                           :let [met (death/met-chance mob reach cells)]
-                           :when (pos? met)]
-                       (* (or weight 1) met (hurt mob caught)))))))
-
 (defn met-counts
   "P(K = k) for k from 0, K the count of independent events of chances ps (Poisson-binomial)."
   [ps]
   (reduce (fn [dist q] (mapv + (conj (mapv #(* (- 1 q) %) dist) 0) (into [0] (map #(* q %) dist)))) [1] ps))
 
-(defn threats-chance
-  "The chance the known threats of route {:cells :threats :at} kill body (death-chance's, its spawns left out).
-  Each gets to the body at its weight times the chance it does on the :cells (death/met-chance), a provoked-only one at
-  threat/provoked-share of it, each on its own (met-counts); the k that do are met together, their blows adding up: the
-  answer-death-chance at :at (default the first cell) of the answer decide takes of threat-answers to the k likeliest,
-  caught at the worst of their chances."
-  [body {:keys [cells threats at]}]
-  (let [at (or at (first cells))
-        met (->> (when (seq cells) threats)
+(defn meetings
+  "The meetings of the known threats of route {:cells :threats} (death-chance's) with the body: each threat gets to it at
+  its weight times the chance it does on the :cells (death/met-stretch), a provoked-only one at threat/provoked-share of
+  it; threats whose stretches of the cells overlap meet the body at once, one meeting, others apart. [[{:mob :caught :q}]],
+  each meeting its threats likeliest first."
+  [{:keys [cells threats]}]
+  (let [met (->> (when (seq cells) threats)
                  (keep (fn [{:keys [mob weight reach caught]}]
-                         (let [q (* (or weight 1) (death/met-chance mob reach cells)
-                                    (if (contains? threat/provoked-only mob) (threat/provoked-share) 1))]
-                           (when (pos? q) {:mob mob :caught caught :q (min 1 q)}))))
-                 (sort-by (comp - :q))
-                 vec)
-        together (fn [k]
-                   (let [group (subvec met 0 k)
-                         caught (some->> (seq (keep :caught group)) (apply max))
-                         answers (threat-answers body (mapv :mob group) caught)]
-                     (answer-death-chance body (get answers (:answer (decide body answers at))) at)))]
-    (reduce + 0 (map-indexed (fn [k pk] (if (pos? k) (* pk (together k)) 0)) (met-counts (map :q met))))))
+                         (let [{:keys [met from to]} (death/met-stretch mob reach cells)
+                               q (* (or weight 1) met (if (contains? threat/provoked-only mob) (threat/provoked-share) 1))]
+                           (when (pos? q) {:mob mob :caught caught :q (min 1 q) :from from :to to}))))
+                 (sort-by :from))]
+    (->> (reduce (fn [groups {:keys [from to] :as t}]
+                   (let [g (peek groups)]
+                     (if (and g (<= from (:to g)))
+                       (conj (pop groups) (-> g (update :ts conj t) (update :to max to)))
+                       (conj groups {:to to :ts [t]}))))
+                 [] met)
+         (mapv #(vec (sort-by (comp - :q) (map (fn [t] (dissoc t :from :to)) (:ts %))))))))
+
+(defn group-parts
+  "{:chance :hurt} of mob names met together by body at `at`, caught at caught: the answer decide takes of threat-answers,
+  its answer-death-chance and its expected-damage at most the body's life."
+  [body names caught at]
+  (let [answers (threat-answers body names caught)
+        a (get answers (:answer (decide body answers at)))]
+    {:chance (answer-death-chance body a at) :hurt (min (life body) (expected-damage a))}))
+
+(defn meeting-parts
+  "{:chance :hurt} of one meeting (a meetings entry): the k of its threats that get to the body (met-counts) are met
+  together, their blows adding up: (parts names caught) of the k likeliest, caught at the worst of their chances, each by
+  the chance of k."
+  [parts meeting]
+  (let [parts (fn [k]
+                (let [group (subvec meeting 0 k)]
+                  (parts (mapv :mob group) (some->> (seq (keep :caught group)) (apply max)))))]
+    (reduce (fn [acc [k pk]]
+              (if (pos? k)
+                (let [{:keys [chance hurt]} (parts k)]
+                  (-> acc (update :chance + (* pk chance)) (update :hurt + (* pk hurt))))
+                acc))
+            {:chance 0 :hurt 0}
+            (map-indexed vector (met-counts (map :q meeting))))))
+
+(defn route-parts
+  "{:chance :hurt} of the known threats of route {:cells :threats :at} for body: each meeting's meeting-parts at :at
+  (default the first cell), the meetings apart, so their chances of death combine as independent ones and their hurt adds
+  up, at most the body's life."
+  [body {:keys [cells at] :as route}]
+  (let [at (or at (first cells))
+        group (memoize #(group-parts body %1 %2 at))
+        parts (map #(meeting-parts group %) (meetings route))]
+    {:chance (- 1 (reduce * 1 (map #(- 1 (:chance %)) parts)))
+     :hurt (min (life body) (reduce + 0 (map :hurt parts)))}))
 
 (defn spawns-chance
   "The chance spawns mobs (an expected count, a Poisson one) spawned beside body kill it at `at`: each its threat-chance,
@@ -466,15 +486,15 @@
 
 (defn death-chance
   "The chance of dying on route {:cells :threats :spawns :at} (cells {:x :y :z :s}, :s the seconds spent there,
-  death/met-chance): its spawns (the expected count of mobs met spawning, spawns-chance at :at, default the first cell)
-  or its threats-chance, for each known threat {:mob :weight :reach :caught} (weight 0-1, reach a fn of a cell x y z,
+  death/met-stretch): its spawns (the expected count of mobs met spawning, spawns-chance at :at, default the first cell)
+  or route-parts' :chance of its threats, for each known threat {:mob :weight :reach :caught} (weight 0-1, reach a fn of a cell x y z,
   its weight 0-1, nil outside: jobs.lib.threat-field; caught the chance a walk away from it is caught, nil the prior),
   kill the body. body as threat-answers, with answer-price's. An answer {:damage :hit :caught}: its blows-chance."
   [body {:keys [damage spawns] :as route}]
   (if damage
     (blows-chance body route)
     (let [spawn-dies (if (pos? (or spawns 0)) (spawns-chance body spawns (or (:at route) (first (:cells route)))) 0)]
-      (- 1 (* (- 1 spawn-dies) (- 1 (threats-chance body route)))))))
+      (- 1 (* (- 1 spawn-dies) (- 1 (:chance (route-parts body route))))))))
 
 (defn lethal-hp
   "The hp a death chance of body at `at` weighs beside the hp it risks: chance x death/death-cost, at health/hp-seconds an hp."

@@ -900,5 +900,5 @@
     (is (= 0.5 (with #(death/notice-rate "skeleton"))) "a skeleton is priced by the ranged counts")
     (is (= 2 (settings/with-settings {:jobs.lib.cost.death/notice-rate {:other {:k 9 :n-s 38} :ranged {:k 0 :n-s 0}}} #(death/notice-rate "skeleton")))
         "a ranged class with no seconds counted is not priced by the melee counts: it notices at the vanilla target-goal rate")
-    (is (< (js/Math.abs (- 0.5 (with #(death/met-chance "zombie" (constantly 1) [{:x 0 :y 0 :z 0 :s 2}])))) 1e-9)
+    (is (< (js/Math.abs (- 0.5 (with #(:met (death/met-stretch "zombie" (constantly 1) [{:x 0 :y 0 :z 0 :s 2}]))))) 1e-9)
         "2 s in the field at weight 1: 1 - (1 - 0.25 x 2)")))

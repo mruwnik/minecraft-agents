@@ -129,7 +129,7 @@
         along (route (for [z (range -8 9)] {:x 10 :y 64 :z z}))
         close (route (for [x (range -22 -18)] {:x x :y 64 :z 0}))
         stay (fn [s] (route [{:x 10 :y 64 :z 0 :s s}]))
-        hurt #(cost/route-hurt body %)
+        hurt #(:hurt (cost/route-parts body %))
         dies #(cost/death-chance body %)]
     (is (< 0 (hurt crossing) (hurt along) (hurt close)) "a long walk along the far edge over a short crossing of it, a close crossing over both")
     (is (< 0 (dies crossing) (dies along) (dies close)))

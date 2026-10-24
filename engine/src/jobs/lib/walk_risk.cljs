@@ -6,7 +6,7 @@
   spawns only where dark floor beyond the spawn-free radius is reachable: spawn-light/hall-at?, Q345).
   Risk = the hurt of the mobs expected to spawn on the exposed stretches (jobs.lib.cost/spawn-chance per second of walking,
   jobs.lib.cost/spawns-hurt) plus what the known threats take off the body over
-  the way (jobs.lib.cost/route-hurt, each over its field, jobs.lib.threats): every mob sensed now that catches
+  the way (jobs.lib.cost/route-parts, each over its field, jobs.lib.threats, in meetings): every mob sensed now that catches
   the walk (live-catchers), and every death, near-death or hide spot the walk goes for (remembered-near-way), each
   by the chance its mob or a like one is there now (death-spot/present-share: one a sun-burning mob left seen sky-lit by day, or one
   the body went far from, is near free).
@@ -117,17 +117,19 @@
                      (spawn-light/dark-seconds p cells (mapv #(/ % (cost/walk-blocks-per-s)) (along cells)) (:y feet) underground? caves-free?))
         spawns (* exposed-s (cost/spawn-chance [0 0 0]))
         body (assoc (threats/death-body c) :stake stake :stake-age-ms (when stake-age-ms (+ stake-age-ms (* 1000 (/ (u/dist feet goal) (cost/walk-blocks-per-s))))))
-        threat-hp (fn [ts] (if (seq ts) (cost/route-hurt body {:cells cells :threats (threats/with-reach c ts)}) 0))
+        parts (fn [ts] (if (seq ts) (cost/route-parts body {:cells cells :threats ts :at feet}) {:chance 0 :hurt 0}))
         known (threats/known-threats c)
-        catchers (live-catchers known (timed-way c goal plan))
-        remembered (remembered-near-way c known feet goal)
-        death-hp (threat-hp remembered)
-        dies (fn [met] (cost/death-chance body {:cells cells :threats (threats/with-reach c met) :spawns spawns :at feet}))
-        lethal (cost/lethal-hp body (dies (concat catchers remembered)) goal)
+        catchers (threats/with-reach c (live-catchers known (timed-way c goal plan)))
+        remembered (threats/with-reach c (remembered-near-way c known feet goal))
+        met-remembered (parts remembered)
+        death-hp (:hurt met-remembered)
+        spawn-dies (cost/death-chance body {:spawns spawns :at feet})
+        dies (fn [{:keys [chance]}] (- 1 (* (- 1 chance) (- 1 spawn-dies))))
+        lethal (cost/lethal-hp body (dies (parts (concat catchers remembered))) goal)
         lava (route-lava-hp p cells)
         spawn-hp (cost/spawns-hurt body spawns feet)
-        hostile-hp (threat-hp catchers)
-        unfought (if (seq catchers) (cost/lethal-hp body (dies remembered) goal) lethal)]
+        hostile-hp (:hurt (parts catchers))
+        unfought (if (seq catchers) (cost/lethal-hp body (dies met-remembered) goal) lethal)]
     {:hp (+ spawn-hp hostile-hp death-hp lethal lava)
      :walk-hp (+ spawn-hp death-hp unfought lava) :lava-hp lava :spawn-hp spawn-hp :hostile-hp hostile-hp :death-hp death-hp :lethal-hp lethal
      :dark-s exposed-s :hostiles (count catchers) :threats (mapv #(select-keys % [:mob :pos]) (concat catchers remembered))}))
@@ -153,7 +155,7 @@
 
 (defn stay-estimate
   "hp the body expects to lose staying at its cell instead of walking `route-hp` to `goal`: what the known threats
-  sensed now whose field holds the body's cell take off it there (cost/route-hurt, each at full weight over the stay: a
+  sensed now whose field holds the body's cell take off it there (cost/route-parts, each at full weight over the stay: a
   sensed mob within its field gets to a body that stays; one near the far end of the way does not reach it) plus the spawns met at
   its cell by the light seen there (price/stay-parts), and the death both risk in hp (cost/death-chance,
   cost/lethal-hp), for the time the walk takes, or, for a body that can heal, for the wait until its health would afford
@@ -169,7 +171,7 @@
                    (threats/with-reach c (remove #(or (:fled %) (:remembered %)) (threats/known-threats c))))
         chance (spawn-light/chance-at p (update-vals feet js/Math.floor) (:y feet) false false)
         body (threats/death-body c)]
-    {:hp (+ (cost/route-hurt body {:cells here :threats live}) (:hurt (price/stay-parts c chance secs))
+    {:hp (+ (if (seq live) (:hurt (cost/route-parts body {:cells here :threats live :at feet})) 0) (:hurt (price/stay-parts c chance secs))
             (cost/lethal-hp body (cost/death-chance body {:cells here :threats live :spawns (* chance secs) :at feet}) feet))
      :hostiles (count (filter #((:reach %) (:x feet) (:y feet) (:z feet)) live))}))
 

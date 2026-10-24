@@ -493,12 +493,28 @@
     (is (< (chance {:health 20 :weapon "diamond_sword"} (route 40) (zombie)) 0.01) "a body that would fight it takes only the fight")
     (is (< 0.01 (chance fist (route 40) (zombie :caught 0)) 0.05) "a flight with an open way out kills only when it starts late: the slowest tenth stands 4 s beside the mob")
     (is (< 0.9 (chance fist (route 40) (zombie :caught 1))) "no way out, no blocks: the fist fight")
-    (is (< (chance (assoc fist :covers {:walls {:open-s 1 :seconds 5}}) (route 40) (zombie :caught 1)) 0.01) "no way out, blocks carried: the body walls in")
-    (let [met #(cost/threats-chance fist {:cells (:cells (route 40)) :threats %})
-          skeleton (zombie :mob "skeleton")
-          alone (met [skeleton])]
-      (is (> (met [skeleton skeleton skeleton]) (- 1 (js/Math.pow (- 1 alone) 3)))
-          "three shooting on one walk land their arrows together: a likelier death than three walks each meeting one"))))
+    (is (< (chance (assoc fist :covers {:walls {:open-s 1 :seconds 5}}) (route 40) (zombie :caught 1)) 0.01) "no way out, blocks carried: the body walls in")))
+
+(deftest threats-met-at-once-are-one-meeting-and-threats-met-apart-are-each-their-own
+  (let [fist {:health 20}
+        armed {:health 20 :weapon "iron_sword" :equipment {:head {:name "iron_helmet"} :torso {:name "iron_chestplate"} :legs {:name "iron_leggings"} :feet {:name "iron_boots"}}}
+        cells (for [x (range 120)] {:x x :y 64 :z 0})
+        on (fn [mob lo hi] {:mob mob :weight 1 :reach (fn [x _ _] (when (<= lo x hi) 1))})
+        parts (fn [body ts] (cost/route-parts body {:cells cells :threats ts}))
+        chance #(:chance (parts %1 %2))
+        hurt #(:hurt (parts %1 %2))
+        apart (fn [mob] [(on mob 0 10) (on mob 50 60) (on mob 100 110)])
+        at-once (fn [mob] [(on mob 0 10) (on mob 5 15) (on mob 8 12)])
+        alone (fn [body mob] (chance body [(on mob 0 10)]))
+        independent (fn [body mob] (- 1 (js/Math.pow (- 1 (alone body mob)) 3)))]
+    (is (< (js/Math.abs (- (chance fist (apart "zombie")) (independent fist "zombie"))) 1e-9)
+        "three zombies a walk passes one by one: three meetings, each its own flight and catch")
+    (is (> (chance fist (at-once "skeleton")) (+ (independent fist "skeleton") 0.01))
+        "three skeletons shooting at once: their arrows add up in one meeting")
+    (is (> (hurt armed (at-once "zombie")) (* 3.3 (hurt armed [(on "zombie" 0 10)])))
+        "three zombies fought at once: each hits while the others are fought")
+    (is (< (js/Math.abs (- (hurt armed (apart "zombie")) (* 3 (hurt armed [(on "zombie" 0 10)])))) 1e-9)
+        "three fought one by one: three fights' hurt")))
 
 (deftest a-find-is-worth-its-count-less-a-trip-and-an-animal-its-meat
   (let [body {:level 0 :carried 0}]
