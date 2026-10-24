@@ -70,7 +70,7 @@
 
 (deftest a-cell-not-seen-counts-neither-way
   (is (= {:k 0 :n 0} (way-on/way-counts (constantly nil) [0 64 0])) "nothing seen: no count, the prior stands")
-  (is (= 0.5 (cost/way-on-chance (way-on/way-counts (constantly nil) [0 64 0])))))
+  (is (= (cost/way-on-chance {:k 0 :n 0}) (cost/way-on-chance (way-on/way-counts (constantly nil) [0 64 0])))))
 
 (deftest an-unseen-way-costs-more-where-the-seen-ways-end
   (let [kit {:weapon "stone_sword" :equipment nil}

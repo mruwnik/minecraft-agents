@@ -7,7 +7,10 @@
             [engine.settings :as settings]))
 
 (a/defargs settings
-  {::sample {:default 256 :doc "Seen stands, nearest the start first (breadth first over the seen ways between them), whose ways out way-counts counts: the work bound of one count." :spec (a/int-in 1 nil)}})
+  {::sample {:default 256 :doc "Seen stands, nearest the start first (breadth first over the seen ways between them), whose ways out way-counts counts: the work bound of one count." :spec (a/int-in 1 nil)}
+   ::prior {:default {:a 0.607 :b 0.112 :spots 2233}
+            :doc "Beta(a, b), the chance a place's ways out lead on before its own counts (jobs.lib.cost/way-on-chance): the :setting of node tools/event-counts.mjs way-on, the beta-binomial's maximum-likelihood a, b over the way-counts at the spots (one per 16-block section per body) where a trial body's flight or walk started, read in its seen.bin; 1538 spots with no seen stand left out. Its mean 0.84 and strength a + b 0.72: a place's ways mostly all lead on or all shut."
+            :spec (a/map-with {:a (a/num-in 0.001 nil) :b (a/num-in 0.001 nil) :spots (a/int-in 0 nil)})}})
 
 (def classes*
   (delay (let [^js t (blocks/default-state-table)

@@ -50,6 +50,7 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.shelter.spawn :as sh-spawn]
             [jobs.lib.torch-plan :as torch-plan]
+            [jobs.lib.walk.way-on :as way-on]
             [jobs.lib.util :as u]))
 
 (def equipment-of armour/equipment-of)
@@ -154,10 +155,11 @@
 (def unknown-prices planner/unknown-prices)
 
 (defn way-on-chance
-  "The chance a way on through cells the body has not seen goes on: a uniform Beta(1,1) prior updated by counts {:k :n}
-  of the seen stands near it (jobs.lib.walk.way-on/way-counts: n seen, k of them with a way that leads out), (k+1)/(n+2)."
+  "The chance a way on through cells the body has not seen goes on: the measured prior Beta(a, b) (way-on ::prior) updated
+  by counts {:k :n} of the seen ways near it (jobs.lib.walk.way-on/way-counts: n seen, k of them lead out), (k+a)/(n+a+b)."
   [{:keys [k n]}]
-  (/ (inc (or k 0)) (+ (or n 0) 2)))
+  (let [{:keys [a b]} (settings/get way-on/settings ::way-on/prior)]
+    (/ (+ (or k 0) a) (+ (or n 0) a b))))
 
 (defn dark-factor
   "The planner's extra cost of a dark cell as a share of its own seconds (options.dark.factor): value/dark-factor, the

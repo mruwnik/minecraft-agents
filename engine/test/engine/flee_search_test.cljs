@@ -10,6 +10,7 @@
             [engine.shelter-support :as st]
             [engine.sky-perception :as sky]
             [engine.test-util :as tu]
+            [jobs.lib.cost :as cost]
             [jobs.lib.flee-search :as search]
             [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.walk.world :as wworld]
@@ -302,7 +303,7 @@
 (deftest ways-that-stop-at-unseen-cells-are-priced-by-the-ways-seen-not-caught
   (let [stops (fn [& more] (apply end-of 4 0 1 :found? false :unseen [5 64 0] :caught-s 0 :caught? false :arrive 5 more))
         chance #(:chance (search/caught-chance % {:k 10 :n 10} {} nil))]
-    (is (< (js/Math.abs (- (- 1 (* 0.85 (/ 11 12))) (chance [(stops) (stops)]))) 1e-9) "a way into the unseen: the prior and its dead end, (k+1)/(n+2) of the seen ways on, not a catch")
+    (is (< (js/Math.abs (- (- 1 (* 0.85 (cost/way-on-chance {:k 10 :n 10}))) (chance [(stops) (stops)]))) 1e-9) "a way into the unseen: the prior and its dead end, way-on-chance of the seen ways on, not a catch")
     (is (= 1 (chance [(end-of 4 0 1 :found? false :caught-s 0 :caught? false)])) "a pocket with nothing unseen in it is a trap")))
 
 (deftest ways-all-caught-keep-the-seconds-they-are-in-reach-when-they-run-into-the-unseen
@@ -315,7 +316,7 @@
   (let [caught (fn [& more] (apply end-of 4 0 1 :found? false :caught? true :caught-s 0.6 more))
         looked (search/caught-chance [(caught :unseen [5 64 0])] {:k 10 :n 10} {} nil)]
     (is (not (:cornered? looked)) "the flight looks first: it is not yet cornered")
-    (is (< (js/Math.abs (- (- 1 (* 0.85 (/ 11 12))) (:chance looked))) 1e-9) "the look finds a way at (k+1)/(n+2): priced as an unseen way")
+    (is (< (js/Math.abs (- (- 1 (* 0.85 (cost/way-on-chance {:k 10 :n 10}))) (:chance looked))) 1e-9) "the look finds a way at way-on-chance: priced as an unseen way")
     (is (:cornered? (search/caught-chance [(caught)] {:k 10 :n 10} {} nil)) "nothing left to look at: cornered, caught for sure")
     (is (= {:chance 1 :cornered? true :seconds 0.6} (search/caught-chance [(caught :unseen [5 64 0])] {:k 10 :n 10} {} [[5 64 0]]))
         "the flight looked at that cell already and looks at it no more: cornered")

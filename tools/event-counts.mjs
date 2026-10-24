@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Why JavaScript: thin entry point; the counting tool is cljs (dashboard/src/world_test/event_counts.cljs), run from the world-test bundle.
-// openChunks is the one other part: it reads the recorded chunk columns (binary) through engine/js/view-column.mjs and prismarine-chunk.
+// openChunks and loadSeen are the other parts: they read the recorded chunk columns and a body's seen.bin (binary) through
+// engine/js/view-column.mjs, prismarine-chunk and engine/js/seen-file.mjs.
 // Recounts the measured combat priors from the trial bodies' event logs (`node tools/event-counts.mjs` prints the usage).
 import fs from 'node:fs'
 import path from 'node:path'
@@ -50,5 +51,6 @@ async function chunkReader () {
 }
 
 const openChunks = process.argv[2] === 'spot-returns' ? null : await chunkReader()
+const { loadSeen } = await import('../engine/js/seen-file.mjs')
 process.env.WORLD_TEST_REPO = fs.realpathSync(process.env.WORLD_TEST_REPO ?? path.join(import.meta.dirname, '..'))
-process.exitCode = await createRequire(import.meta.url)(bundle).eventCounts(process.argv.slice(2), openChunks)
+process.exitCode = await createRequire(import.meta.url)(bundle).eventCounts(process.argv.slice(2), openChunks, loadSeen)
