@@ -208,10 +208,10 @@
   sensed mob within its field gets to a body that stays; one near the far end of the way does not reach it) plus the spawns met at
   its cell by the light seen there (price/stay-parts), and the death both risk in hp (cost/death-chance,
   cost/lethal-hp), for the time the walk takes, or, for a body that can heal, for the wait until its health would afford
-  the route (::heal-s-per-hp an hp)."
-  [c {:keys [goal route-hp feet health cannot-heal? body live chance]}]
+  the route (::heal-s-per-hp an hp); for :secs when given."
+  [c {:keys [goal route-hp feet health cannot-heal? body live chance secs]}]
   (let [heal-s (if cannot-heal? 0 (* (settings/get settings ::heal-s-per-hp) (max 0 (- (min 20 (/ route-hp (settings/get price/settings ::price/risk-share))) health))))
-        secs (max heal-s (/ (u/dist feet goal) (cost/walk-blocks-per-s)))
+        secs (or secs (max heal-s (/ (u/dist feet goal) (cost/walk-blocks-per-s))))
         here [(assoc feet :s secs)]
         live (mapv (fn [{:keys [reach] :as t}] (assoc t :reach (fn [x y z] (when (reach x y z) 1)))) (threats/with-reach c live))]
     {:hp (+ (if (seq live) (:hurt (cost/route-parts body {:cells here :threats live :at feet})) 0) (:hurt (price/stay-parts c chance secs))

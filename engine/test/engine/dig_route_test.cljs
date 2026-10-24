@@ -1,6 +1,5 @@
 (ns engine.dig-route-test
   (:require [cljs.test :refer [deftest is testing]]
-            [engine.settings :as settings]
             [jobs.lib.dig-route :as dr]))
 
 (defn world
@@ -45,8 +44,12 @@
     (is (not-any? (comp #{"obsidian"} w) (:dig (dr/route w [-1 10 0] [3 10 0] {:dig-s #(if (= "obsidian" %) 50 1) :step-s 0.2})))
         "priced, it digs under the wall")))
 
-(deftest the-default-fall-is-the-longest-that-costs-no-hp
-  (is (= 3 (settings/get dr/settings ::dr/max-fall))))
+(deftest a-fall-is-priced-by-the-callers-seconds
+  (let [w (world {[1 9 0] "air" [1 8 0] "air" [1 7 0] "air" [1 6 0] "air"})]
+    (is (= [] (:dig (dr/route w [0 10 0] [1 6 0] {:max-fall 4 :fall-s (constantly 0)}))))
+    (is (seq (:dig (dr/route w [0 10 0] [1 6 0] {:max-fall 4 :fall-s #(if (> % 3) 100 0) :margin 3}))) "a dear fall is dug round")
+    (is (= {:problem :no-route} (dr/route (world {[1 6 0] "air" [1 7 0] "air"}) [0 10 0] [1 6 0] {:max-fall 4 :fall-s #(if (> % 3) 1 0) :max-digs 2 :margin 2}))
+        "no hole is dug to fall down it at a price in hp")))
 
 (deftest a-pillar-climbs-out-of-a-pit-without-digging-when-blocks-are-carried
   (let [w (world {[0 8 0] "air" [0 9 0] "air"})
@@ -111,3 +114,13 @@
         done (peek asks)]
     (is (< 3 (count asks)) "each call is one slice")
     (is (= (dr/route w [0 10 0] [20 4 6] (assoc opts :max-nodes 100000)) done))))
+
+(deftest a-steps-guessed-cells-over-the-head-it-leaves-and-under-a-laid-block-are-priced
+  (let [flat (world {})
+        up (fn [unseen] (dr/route (world {[2 10 0] "stone"}) [0 10 0] [2 11 0] {:step-s 0.2 :unseen? unseen :unseen-step-s 5 :margin 2}))
+        laid (fn [unseen] (dr/route (fn [c] (or ({[2 11 0] "stone"} c) (flat c))) [0 10 0] [2 12 0]
+                                    {:step-s 0.2 :place-s 1 :unseen? unseen :unseen-step-s 5 :margin 2}))]
+    (is (= [1 10 0] (:to (last (butlast (:steps (up #{})))))))
+    (is (not= [1 10 0] (:to (last (butlast (:steps (up #{[1 12 0]})))))) "the cell over the head of the step up is a guess")
+    (is (some #{[1 10 0]} (map :place (:steps (laid #{})))))
+    (is (not-any? #{[1 10 0]} (map :place (:steps (laid #{[1 9 0]})))) "the only face of the laid block is a guess")))

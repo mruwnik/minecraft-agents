@@ -10,9 +10,7 @@
             [jobs.lib.reach :as reach]))
 
 (a/defargs settings
-  {::max-nodes {:default 500 :doc "The most cells a route search expands before it gives up (:budget)." :spec (a/int-in 1 nil)}
-   ::max-fall {:default (last (take-while #(zero? (armour/fall-damage nil %)) (range 1 17)))
-               :doc "The longest fall (blocks) a route's step may drop: the longest that costs no hp." :spec (a/int-in 0 nil)}})
+  {::max-nodes {:default 500 :doc "The most cells a route search expands before it gives up (:budget)." :spec (a/int-in 1 nil)}})
 
 (def falling #{"sand" "red_sand" "gravel"})
 
@@ -81,7 +79,7 @@
   "route's search begun: a fn of n that runs it on for at most n more cells expanded, [answer expanded]: answer route's
   once the search has ended (the same each run after), nil while it goes on; expanded the cells this run expanded.
   Plain numbers throughout (a cell is a key, its reads are cached by key): a climb expands about 10k cells."
-  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s max-places unseen? unseen-step-s ways max-dig-s margin] :or {dig-s (constantly 1) step-s 0 ways #{}} :as opts}]
+  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-dig-s margin] :or {dig-s (constantly 1) step-s 0 ways #{}} :as opts}]
   (let [[fx _ fz] from
         [gx gy gz] goal
         ;; one number a cell, for js Maps and Sets (a vector key is compared by identity there)
@@ -106,16 +104,24 @@
         unseen-at (fn [x y z] (if (and unseen? (or (unseen-cell? x y z) (unseen-cell? x (inc y) z) (unseen-cell? x (dec y) z))) unseen-step-s 0))
         way-keys (let [s (js/Set.)] (doseq [[x y z] ways] (.add s (key x y z))) s)
         max-digs (:max-digs opts)
-        max-fall (get opts :max-fall (settings/get settings ::max-fall))
+        ;; without a body's own, the drops a body with no hp to spend takes
+        max-fall (or (:max-fall opts) (:max-drop (armour/fall-profile {})))
+        fall-prices (let [a #js []] (dotimes [dy (inc max-fall)] (.push a (if (and fall-s (pos? dy)) (fall-s dy) 0))) a)
+        ;; a fall that costs hp is taken only into a hole already open: dug, the stair down beside it costs no hp
+        free-fall (count (take-while zero? fall-prices))
         [lx ly lz] (when margin (mapv #(- (min %1 %2) margin) from goal))
         [hx hy hz] (when margin (mapv #(+ (max %1 %2) margin) from goal))
         inside? (fn [x y z] (or (nil? margin) (and (<= lx x hx) (<= ly y hy) (<= lz z hz))))
         heuristic (fn [x y z] (* step-s (max (+ (js/Math.abs (- x gx)) (js/Math.abs (- z gz))) (- gy y))))
         solid-at? (fn [x y z] (let [^js k (at x y z)] (and (some? (.-name k)) (not (.-open k)))))
-        ;; a block is placed only against a face (a solid neighbour), never on a step of the body's own stair (it would shut it)
-        placeable? (fn [x y z] (and (not (.has way-keys (key x (dec y) z)))
-                                    (or (solid-at? x (dec y) z) (solid-at? (inc x) y z) (solid-at? (dec x) y z)
-                                        (solid-at? x y (inc z)) (solid-at? x y (dec z)))))
+        ;; a block is placed only against a face (a solid neighbour), never on a step of the body's own stair (it would shut
+        ;; it): :seen, :unseen when every face is a guess (it may be air), nil
+        face (fn [x y z] (when (solid-at? x y z) (if (and unseen? (unseen-cell? x y z)) :unseen :seen)))
+        placeable (fn [x y z] (when-not (.has way-keys (key x (dec y) z))
+                                (let [a (face x (dec y) z) b (face (inc x) y z) c (face (dec x) y z) d (face x y (inc z)) e (face x y (dec z))]
+                                  (cond (or (keyword-identical? :seen a) (keyword-identical? :seen b) (keyword-identical? :seen c)
+                                            (keyword-identical? :seen d) (keyword-identical? :seen e)) :seen
+                                        (or a b c d e) :unseen))))
         ;; the cost of opening cell x y z for a step, accumulated in acc #js [seconds digs dig-seconds]; false when it may not be
         open-cell! (fn [^js acc x y z]
                      (let [^js k (at x y z)
@@ -161,17 +167,22 @@
                   (let [[mx my mz] (cell-of ck)
                         node (.get best ck)
                         ;; a step to n opening the cell over m's head when head?, and n's column from top down to bot
-                        try! (fn [nx ny nz move s0 head? top bot]
+                        ;; a step's unseen cells are priced once (relax!'s unseen-at): the cell over m's head and a guessed face
+                        ;; (unseen-face?) only when n's own cells are seen
+                        try! (fn [nx ny nz move s0 head? top bot unseen-face?]
                                (when (and (inside? nx ny nz) (not (.has done (key nx ny nz))))
-                                 (let [acc #js [s0 0 0]]
+                                 (let [acc #js [(+ s0 (if (and unseen? (zero? (unseen-at nx ny nz))
+                                                               (or unseen-face? (and head? (unseen-cell? mx (+ my 2) mz))))
+                                                        unseen-step-s 0))
+                                                0 0]]
                                    (when (and (or (not head?) (open-cell! acc mx (+ my 2) mz))
                                               (loop [y top] (or (< y bot) (and (open-cell! acc nx y nz) (recur (dec y))))))
                                      ;; a step up that cuts or lays its floor is a stair's step: no less than :stair-s
                                      (when (and stair-s (> ny my) (not= :pillar move) (or (= :laid move) (pos? (aget acc 1))))
                                        (aset acc 0 (max (aget acc 0) (+ stair-s (- s0 step-s)))))
                                      (relax! ck node acc nx ny nz move)))))]
-                    (when (and pillar-s (placeable? mx my mz))
-                      (try! mx (inc my) mz :pillar pillar-s true 0 1))
+                    (when-let [pf (and pillar-s (placeable mx my mz))]
+                      (try! mx (inc my) mz :pillar pillar-s true 0 1 (= :unseen pf)))
                     (loop [i 0]
                       (when (< i 8)
                         (let [nx (+ mx (aget dirs i)) nz (+ mz (aget dirs (inc i)))
@@ -179,16 +190,19 @@
                               dug? (and (.-floor f) (dug-behind? ck nx my nz))]
                           ;; up: the head cell over m, n and its head
                           (cond
-                            (and (.-floor f) (not dug?)) (try! nx ny nz :walk step-s true (inc ny) ny)
-                            (and place-s (or dug? (and (.-open f) (not (.-fluid f)))) (placeable? nx my nz))
-                            (try! nx ny nz :laid (+ step-s place-s) true (inc ny) ny))
+                            (and (.-floor f) (not dug?)) (try! nx ny nz :walk step-s true (inc ny) ny false)
+                            (and place-s (or dug? (and (.-open f) (not (.-fluid f)))))
+                            (when-let [pf (placeable nx my nz)]
+                              (try! nx ny nz :laid (+ step-s place-s) true (inc ny) ny (= :unseen pf))))
                           ;; down by up to max-fall, through the cells it falls by, and level: n and its head
-                          (loop [dy max-fall]
-                            (when (>= dy 0)
-                              (let [ny (- my dy)]
+                          (loop [dy 0 clear? (and (.-open ^js (at nx (inc my) nz)) (.-open ^js (at nx my nz)))]
+                            (when (<= dy max-fall)
+                              (let [ny (- my dy)
+                                    below-open? (.-open ^js (at nx (dec ny) nz))]
                                 (when (and (.-floor ^js (at nx (dec ny) nz)) (not (dug-behind? ck nx (dec ny) nz)))
-                                  (try! nx ny nz :walk step-s false (if (zero? dy) (inc ny) (inc my)) ny)))
-                              (recur (dec dy))))
+                                  (try! nx ny nz :walk (+ step-s (aget fall-prices dy)) false (if (zero? dy) (inc ny) (inc my)) ny false))
+                                (when (or (< (inc dy) free-fall) (and clear? below-open?))
+                                  (recur (inc dy) (and clear? below-open?))))))
                           (recur (+ i 2)))))))
         start-key (key fx (from 1) fz)]
     (.set best start-key #js [0 0 0 nil nil 0])
@@ -222,12 +236,13 @@
 
 (defn route
   "The cells to dig (head cell first within a step, in walking order) of the cheapest route from feet cell from to feet
-  cell goal, falls of at most :max-fall; each step's floor must be a seen solid block, unless the step is up and
+  cell goal, falls of at most :max-fall blocks (default: those a body with no hp to spend takes, cost.armour/fall-profile),
+  each priced :fall-s (blocks -> seconds) on top of its step; each step's floor must be a seen solid block, unless the step is up and
   :place-s prices laying one (against a face, the stair job's floor). A* with the walked steps' price as the lower bound.
   Priced :step-s a step, (:dig-s name cell) a cell dug (default 0 and 1: the fewest digs), a step up that digs or
   lays its floor at least :stair-s (a stair's step) and :place-s a floor laid,
   :pillar-s a jump-placed block (a step straight up; none without it) and :unseen-step-s a step whose feet, head or
-  floor is (:unseen? cell); a
+  floor is (:unseen? cell), or on a step up the cell over the head it leaves, or every face its placed block rests on; a
   block :dig-s prices nil is not dug, nor a cell under sand or gravel (it would fall on the body walking in), nor a
   floor of :ways (the floors of the body's own stairs), on which nothing is placed either. Bounds, each only when
   given: :max-dig-s seconds of digging, :max-digs cells, :max-places blocks laid or jump-placed (the blocks carried),

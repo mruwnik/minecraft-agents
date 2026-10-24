@@ -321,7 +321,7 @@
 
 (defn route-answer
   "The dig-route answer {:dig :steps} of the cheapest way from feet cell from into goal (jobs.lib.dig-route priced by
-  jobs.lib.cost: a step's walk-cost, a block's dig-cost, a stair's step at least its stair-cost, a step's unseen cells at the unseen walk's price
+  jobs.lib.cost: a step's walk-cost, a fall's hp (fall-damage at hp-cost, the falls the body survives), a block's dig-cost, a stair's step at least its stair-cost, a step's unseen cells at the unseen walk's price
   (wworld/unseen-share), never a floor of the body's own stairs (route-opts :ways)), every cell to dig escape/diggable?
   and may-dig?; :searching while route-opts :slice's search goes on; nil when there is none, or when its digging takes the
   body longer than max-route-s (blocks of the body's own, a scaffold it left, not counted) with what it carries, or with
@@ -347,7 +347,11 @@
                              access/hidden-guess)))))
         ;; dig-cost merges the whole cost basis a call, and a search asks it of every cell
         dig-cost (memoize cost/dig-cost)
-        opts (fn [refused] (merge {:dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) own? cell)) (dig-cost name)))
+        self (.self p)
+        equipment (cost/equipment-of (.-equipment self))
+        opts (fn [refused] (merge {:max-fall (:max-drop (cost/fall-profile {:equipment equipment :damage-budget (cost/survivable-budget (wworld/self-body p) {})}))
+                                   :fall-s (fn [blocks] (cost/hp-cost (.-health self) (cost/fall-damage equipment blocks)))
+                                   :dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) own? cell)) (dig-cost name)))
                                    :step-s (:cost (cost/walk-cost {:distance 1}))
                                    :stair-s (cw/stair-cost 1)
                                    :unseen? (fn [[x y z]] (true? (some-> (sensed x y z) .-unknown)))
@@ -385,9 +389,9 @@
        a (mapv (fn [cell] {:cell cell :block (block-at cell) :guess (dig-look/unknown? p cell)}) (:dig a))))))
 
 (def dig-margin
-  "Blocks round its two ends a dig route (dig-way, frontier-way) may stray: it is dug before it is walked, and cells
-  farther off than what the body sees round its ends are guesses; past them frontier-way walks to the edge to look. A
-  climb (climb-route) has none: each of its ways looks as it goes and the climb is searched again when one stops."
+  "Blocks round its two ends a dig route (dig-way, frontier-way) may stray. Not a price of guessed cells (unseen-step-s
+  prices those): it bounds the flood, which with no route spreads over about 270k cells of rock within max-route-s.
+  A climb (climb-route) has none: search-bound ends its long search by the standing still it costs."
   3)
 
 (defn search-opts
@@ -425,6 +429,11 @@
                                    (mapv #(js/Math.floor (+ %1 0.5 (* (/ i d) (- %2 %1)))) feet goal)))
       (pos? d) [goal])))
 
+(defn call-budget-s
+  "Seconds the go-to call c may spend on a way: the caller's :worth, else the call's job time left."
+  [c]
+  (or (:worth (:args c)) (get-in (ctx/left c) [:spend :job-time] ##Inf)))
+
 (defn dig-leg
   "A buried body's next leg of a dig toward a goal: {:step
   :dig-route :cells :leg-s} to the farthest of leg-ends that route-cells reaches, :leg-s its dig seconds; nil when none
@@ -433,7 +442,7 @@
   [c from goal may-dig? {:keys [own? skip fetch? slice] :as opts}]
   (when-not (skip :dig-route)
     (let [p (:primitives c)
-          budget (or (:worth (:args c)) (get-in (ctx/left c) [:spend :job-time] ##Inf))
+          budget (call-budget-s c)
           found (loop [ends (leg-ends from goal)]
                   (when-let [end (first ends)]
                     (let [cells (route-cells p from end may-dig? own? false fetch? (assoc (search-opts opts) :margin leg-margin))]

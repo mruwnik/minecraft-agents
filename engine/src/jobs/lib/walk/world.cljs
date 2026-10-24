@@ -410,12 +410,17 @@
   (let [food (:food (:args c))]
     (if (number? food) food (default-food))))
 
+(defn self-body
+  "The body of primitives p as {:health :absorption :on-fire :effects} for jobs.lib.cost/survivable-budget."
+  [p]
+  (let [self (.self p)]
+    {:health (.-health self) :absorption (.-absorption self) :on-fire (.-onFire self)
+     :effects (map #(.-name %) (array-seq (.-effects self)))}))
+
 (defn damage-body
   "The body's {:health :absorption :food :on-fire :effects} for jobs.lib.cost/damage-budget; the food is the job's (food-of)."
   [c]
-  (let [self (.self (:primitives c))]
-    {:health (.-health self) :absorption (.-absorption self) :food (food-of c) :on-fire (.-onFire self)
-     :effects (map #(.-name %) (array-seq (.-effects self)))}))
+  (assoc (self-body (:primitives c)) :food (food-of c)))
 
 (defn dangers? "Whether walks keep away from known dangers (the setting ::dangers)." [] (settings/get settings ::dangers))
 (defn zone-tolls? "Whether walks toll other bodies' zones (the setting ::zone-tolls)." [] (settings/get settings ::zone-tolls))

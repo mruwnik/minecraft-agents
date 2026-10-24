@@ -9,6 +9,9 @@
             [engine.test-util :as tu :refer [box]]
             [engine.core :as core]
             [engine.fake :as fake]
+            [engine.settings :as settings]
+            [jobs.movement.go-to.escalation :as esc]
+            [jobs.lib.dig-route :as dig-route]
             [engine.go-to-escalate-support :refer [setup recording-parent tick-out! run-job! feet events-of]]))
 
 (defn block-at-of-map [blocks] (fn [[x y z]] (get blocks (str x "," y "," z) "air")))
@@ -73,7 +76,7 @@
   "p that sees the cells of dark only as a player in the dark does: within 4 blocks of its eye, along a line of open cells."
   [p dark]
   (let [sensed (.-sensedAt p)
-        open? (fn [[x y z]] (= "air" (get-in @(fake/state p) [:blocks (str x "," y "," z)] "air")))
+        open? (fn [cell] (= "air" (get-in @(fake/state p) [:blocks cell] "air")))
         near? (fn [cell]
                 (let [pos (.-pos (.self p))
                       eye [(.-x pos) (+ 1.62 (.-y pos)) (.-z pos)]
@@ -98,6 +101,54 @@
           (is (true? (:arrived @out)) (pr-str @out (feet p) (keep #(when (re-find #"^(go-to|reach)\." (name (:kind %))) [(:kind %) (:at %) (:text %)]) @seen)))
           (is (not-any? #(#{:undercuts-way :unbreakable} (:reason %)) (events-of seen :go-to.escalation-stopped)))
           (is (some #(= :climb-on (:why %)) (events-of seen :go-to.escalated)) "one route, its ways run back to back"))))))
+
+(deftest a-climb-whose-guessed-rock-keeps-showing-open-ends-once-its-replans-are-spent
+  ;; a body shut in a pocket in stone under a goal 12 across and 3 up; shafts of air along the way read as rock till the
+  ;; body is near: each one seen sends the climb to be searched again, a replan counted, and past max-route-replans its
+  ;; dig routes fail :no-route instead of the climb being chosen again for every guess the looks undo
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [shafts (for [x [5 7 9] y [64 65 67 68]] [x y 0])
+              blocks (reduce #(assoc %1 (str (%2 0) "," (%2 1) "," (%2 2)) "air")
+                             (box -4 58 -4 16 72 4 "stone") (concat [[0 64 0] [0 65 0] [12 67 0] [12 68 0]] shafts))
+              {:keys [eng p seen]} (setup {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks blocks :inventory [{:name "stone_pickaxe" :count 1}]})
+              out (atom :not-done)
+              replans (atom 0) replan esc/replan-route!
+              eng (assoc-in eng [:jobs 'recording-parent] (recording-parent out 'jobs.movement.go-to {:pos [12 67 0] :range 0}))]
+          (dark-but-near p (set shafts))
+          (with-redefs [esc/replan-route! (fn [& args] (swap! replans inc) (apply replan args))]
+            (core/submit! eng '(recording-parent) {})
+            (await (settings/with-settings {:jobs.movement.go-to.tuning/max-route-replans 1} #(tick-out! eng 2000))))
+          (is (not= :not-done @out) "the call ended")
+          (is (some #(= [:dig-route :no-route] ((juxt :step :reason) %)) (events-of seen :go-to.escalation-stopped))
+              (pr-str @replans (keep #(when (re-find #"^go-to\.esc" (name (:kind %))) [(:kind %) (:step %) (:reason %) (:why %) (:at %)]) @seen)))
+          (is (<= @replans 2) "one replan counted, the next spends the count"))))))
+
+(deftest a-climb-search-with-no-route-ends-once-standing-for-it-costs-what-the-stair-does
+  ;; the goal sealed in bedrock 20 above a body shut in stone: no climb reaches it, and its search floods the rock round
+  ;; over many rounds; each round of it stands the body still a second here, so once that has cost the stair's price
+  ;; the stair is taken and no search is begun again from that cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks (-> (box -12 40 -12 12 72 12 "stone")
+                         (merge (box -1 69 -1 1 72 1 "bedrock"))
+                         (assoc "0,50,0" "air" "0,51,0" "air" "0,70,0" "air" "0,71,0" "air"))
+              {:keys [eng p seen clock]} (setup {:self {:pos {:x 0.5 :y 50 :z 0.5}} :blocks blocks :inventory [{:name "stone_pickaxe" :count 1}]})
+              out (atom :not-done)
+              runs (atom []) search dig-route/search
+              eng (assoc-in eng [:jobs 'recording-parent] (recording-parent out 'jobs.movement.go-to {:pos [0 70 0] :range 0}))]
+          (with-redefs [dig-route/search (fn [& args] (let [run (apply search args)]
+                                                        (fn [n] (swap! clock + 1000) (swap! runs conj (feet p)) (run n))))]
+            (core/submit! eng '(recording-parent) {})
+            (await (tick-out! eng 3000)))
+          (let [spent (events-of seen :go-to.search-spent)
+                at (:at (first spent))]
+            (is (not= :not-done @out) "the call ended")
+            (is (seq spent) (pr-str (count @runs) (map (juxt :kind :step :at) (filter #(#{:go-to.escalated :go-to.search-spent} (:kind %)) @seen))))
+            (is (some #(and (= at (:at %)) (= :stair (:step %))) (events-of seen :go-to.escalated)) "the stair is taken from where the search stopped")
+            (is (<= (count (filter #{at} @runs)) 30) "a stair's price in seconds of search there, a second a round")))))))
 
 (deftest the-ways-are-priced-in-seconds-by-their-blocks
   (is (< (cost/pillar-cost 3) (cost/stair-cost 3)))
