@@ -34,6 +34,20 @@
   (core/submit! (:eng s) (list 'jobs.items.obtain args) {})
   (await (f/run-ticks s n)))
 
+(defn ^:async obtain-until!
+  "Submit obtain with args; tick in fives up to n ticks, ending 10 ticks after (stop? s) first holds: the assertion's
+  point, not the job's end."
+  [s args n stop?]
+  (core/submit! (:eng s) (list 'jobs.items.obtain args) {})
+  (loop [left n after nil]
+    (when (and (pos? left) (or (nil? after) (pos? after)))
+      (await (f/run-ticks s 5))
+      (recur (- left 5) (cond after (- after 5) (stop? s) 10)))))
+
+(def ores [{:x 1 :y 64 :z 4} {:x 3 :y 64 :z 5} {:x 0 :y 64 :z 6}])
+
+(defn gathered-at [s] (set (map :at (filter (comp #{:obtain.gathering} :kind) @(:seen s)))))
+
 (defn mine-events [s] (filterv #(re-find #"^mine\." (name (:kind %))) @(:seen s)))
 
 (deftest the-plan-for-an-iron-chestplate-from-nothing-gathers-raw-iron-and-smelts
@@ -350,13 +364,14 @@
 (defn coal-seen? [s] (boolean (seq (look/seen-blocks (:p s) {:match #(= "coal_ore" %) :radius 32 :max 4}))))
 
 (defn ^:async torches-with-coal-below!
-  "Obtain 4 torches with a coal ore below, after one sight pass so it is seen when the plan is made."
-  [light inv]
+  "Obtain 4 torches with a coal ore below, after one sight pass so it is seen when the plan is made. With stop? the run
+  ends shortly after (stop? s) holds (obtain-until!)."
+  [light inv & [stop?]]
   (let [s (f/start (coal-below-world inv) [f/own-zone])]
     (swap! (fake/state (:p s)) assoc :light (into {} (for [x (range 0 3) y (range 60 67) z (range 6 11)] [[x y z] light])))
     (await (f/run-ticks s 2))
     (let [seen (coal-seen? s)] (is seen "the coal below is seen before the plan is made"))
-    (await (obtain! s {:item "torch" :count 4 :ways #{:craft :smelt :gather}} 60))
+    (await (obtain-until! s {:item "torch" :count 4 :ways #{:craft :smelt :gather}} 60 (or stop? (constantly false))))
     s))
 
 (deftest a-torch-with-dark-coal-seen-below-and-no-torch-is-made-from-charcoal-of-seen-logs
@@ -371,7 +386,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (torches-with-coal-below! [0 15] [{:name "stick" :count 2} {:name "wooden_pickaxe" :count 1}]))]
+        (let [s (await (torches-with-coal-below! [0 15] [{:name "stick" :count 2} {:name "wooden_pickaxe" :count 1}]
+                                                   #(or (seq (mine-events %)) (seq (f/events-of % :smelt.loaded)))))]
           (is (seq (mine-events s)) "a coal seen in the light is mined")
           (is (empty? (f/events-of s :smelt.loaded)) "no logs were smelted"))))))
 
@@ -436,9 +452,8 @@
               eng (assoc-in (:eng s) [:jobs 'jobs.gather.mine :round]
                             (fn ^:async f [c] (ctx/end c :impossible {:reason :exposed :text "dark hall"})))
               s (assoc s :eng eng)]
-          (await (obtain! s {:item "raw_iron" :count 1} 200))
-          (is (every? (set (map :at (filter (comp #{:obtain.gathering} :kind) @(:seen s))))
-                      [{:x 1 :y 64 :z 4} {:x 3 :y 64 :z 5} {:x 0 :y 64 :z 6}])
+          (await (obtain-until! s {:item "raw_iron" :count 1} 200 #(every? (gathered-at %) ores)))
+          (is (every? (gathered-at s) ores)
               "each refused ore is left for the next, none counted as nothing seen")
           (is (not-any? #(= :none-seen (:reason %)) (f/events-of s :waiting))))))))
 
@@ -451,9 +466,8 @@
               eng (assoc-in (:eng s) [:jobs 'jobs.gather.mine :round]
                             (fn ^:async f [c] (ctx/end c :impossible {:reason :hazard :text "water beside the target"})))
               s (assoc s :eng eng)]
-          (await (obtain! s {:item "raw_iron" :count 1} 200))
-          (is (every? (set (map :at (filter (comp #{:obtain.gathering} :kind) @(:seen s))))
-                      [{:x 1 :y 64 :z 4} {:x 3 :y 64 :z 5} {:x 0 :y 64 :z 6}])
+          (await (obtain-until! s {:item "raw_iron" :count 1} 200 #(every? (gathered-at %) ores)))
+          (is (every? (gathered-at s) ores)
               "each refused ore is left for the next, none counted as nothing seen")
           (is (not-any? #(= :none-seen (:reason %)) (f/events-of s :waiting))))))))
 

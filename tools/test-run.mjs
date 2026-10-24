@@ -50,7 +50,7 @@ export const FIRST_RESULT_S = 300
 export const UNKNOWN_NS_MS = 30000
 // The k slowest test vars of a timings file as printable lines (a targeted run keeps no timings file, so this is its only per-test ms).
 export const slowestLines = (lines, k = 8) => lines.filter(Boolean).map((l) => { try { return JSON.parse(l) } catch { return {} } }).filter((r) => r.var)
-  .sort((a, b) => b.ms - a.ms).slice(0, k).map((r) => `  ${String(r.ms).padStart(6)} ms  ${r.var}`)
+  .sort((a, b) => b.ms - a.ms).slice(0, k).map((r) => `  ${String(r.ms).padStart(6)} ms  ${r.var}${r['cpu-ms'] == null ? '' : ` (cpu ${r['cpu-ms']} ms)`}`)
 
 export const slowestPriorMs = (nss, lines) => {
   const rows = lines.filter(Boolean).map((l) => { try { return JSON.parse(l) } catch { return {} } })
