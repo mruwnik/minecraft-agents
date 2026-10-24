@@ -413,102 +413,189 @@
     (* (if (contains? threat/provoked-only mob-name) (threat/provoked-share) 1)
        (min (life body) (expected-damage (get answers (:answer (decide body answers at))))))))
 
-(defn poisson-binomial
-  "P(K = k) for k from 0, K the count of independent events of chances ps."
-  [ps]
-  (reduce (fn [dist q] (mapv + (conj (mapv #(* (- 1 q) %) dist) 0) (into [0] (map #(* q %) dist)))) [1] ps))
-
-(defn convolve [a b]
-  (mapv (fn [k] (reduce + (for [i (range (count a)) :let [j (- k i)] :when (< -1 j (count b))] (* (a i) (b j)))))
-        (range (+ (count a) (count b) -1))))
-
-(defn met-counts
-  "P(K = k) for k from 0, K the count of threats [{:c :exposure :prior}] that get to the body, each at c (1 - e^(-r
-  exposure)): r the notice rate of its prior (death/notice-prior), one rate shared by the threats of a prior, so a pack
-  is missed together (poisson-binomial at each of death/rate-nodes); the priors' counts independent."
-  [ts]
-  (->> (vals (group-by :prior ts))
-       (map (fn [group]
-              (reduce (fn [acc [r w]]
-                        (mapv + acc (map #(* w %) (poisson-binomial (map (fn [{:keys [c exposure]}] (* c (- 1 (js/Math.exp (- (* r exposure)))))) group)))))
-                      (vec (repeat (inc (count group)) 0))
-                      (death/rate-nodes (:prior (first group))))))
-       (reduce convolve [1])))
-
-(def max-met-sets "Threats of a meeting priced by which of them get to the body (met-sets), the likeliest k above it: a mixed meeting of n costs up to 2^n - 1 answers (6 skeletons and 3 zombies: 27, 24 ms against 9 and 10 ms)." 6)
-
-(defn met-sets
-  "[[threats p]] for every set of threats [{:c :exposure :prior}] (met-counts') that may get to the body together, p the
-  chance just those do: at each of death/rate-nodes of a prior its threats' sets by their chances there, the priors'
-  sets independent."
-  [ts]
-  (->> (vals (group-by :prior ts))
-       (map (fn [group]
-              (let [nodes (death/rate-nodes (:prior (first group)))
-                    sets (reduce (fn [sets {:keys [c exposure] :as t}]
-                                   (let [qs (mapv (fn [[r]] (* c (- 1 (js/Math.exp (- (* r exposure)))))) nodes)]
-                                     (into (mapv (fn [[g ps]] [g (mapv #(* %1 (- 1 %2)) ps qs)]) sets)
-                                           (map (fn [[g ps]] [(conj g t) (mapv * ps qs)]) sets))))
-                                 [[[] (mapv (constantly 1) nodes)]] group)]
-                (mapv (fn [[g ps]] [g (reduce + (map (fn [p [_ w]] (* p w)) ps nodes))]) sets))))
-       (reduce (fn [a b] (for [[g p] a [h q] b] [(into g h) (* p q)])) [[[] 1]])))
-
-(defn meetings
-  "The meetings of the known threats of route {:cells :threats} (death-chance's) with the body: each threat gets to it at
-  c (its weight, a provoked-only one's times threat/provoked-share) times the chance it does on the :cells
-  (death/met-stretch, q that chance); threats whose stretches of the cells overlap meet the body at once, one meeting,
-  others apart. [[{:mob :caught :q :c :exposure :prior}]], each meeting its threats likeliest first."
-  [{:keys [cells threats]}]
-  (let [met (->> (when (seq cells) threats)
-                 (keep (fn [{:keys [mob weight reach caught]}]
-                         (let [{:keys [met exposure prior from to]} (death/met-stretch mob reach cells)
-                               c (min 1 (* (or weight 1) (if (contains? threat/provoked-only mob) (threat/provoked-share) 1)))
-                               q (* c met)]
-                           (when (pos? q) {:mob mob :caught caught :q q :c c :exposure exposure :prior prior :from from :to to}))))
-                 (sort-by :from))]
-    (->> (reduce (fn [groups {:keys [from to] :as t}]
-                   (let [g (peek groups)]
-                     (if (and g (<= from (:to g)))
-                       (conj (pop groups) (-> g (update :ts conj t) (update :to max to)))
-                       (conj groups {:to to :ts [t]}))))
-                 [] met)
-         (mapv #(vec (sort-by (comp - :q) (map (fn [t] (dissoc t :from :to)) (:ts %))))))))
-
 (defn group-parts
-  "{:chance :hurt} of mob names met together by body at `at`, caught at caught: the answer decide takes of threat-answers,
-  its answer-death-chance and its expected-damage at most the body's life."
+  "{:chance :hurt :seconds} of mob names met together by body at `at`, caught at caught: the answer decide takes of
+  threat-answers, its answer-death-chance, its expected-damage at most the body's life, and its seconds."
   [body names caught at]
   (let [answers (threat-answers body names caught)
         a (get answers (:answer (decide body answers at)))]
-    {:chance (answer-death-chance body a at) :hurt (min (life body) (expected-damage a))}))
+    {:chance (answer-death-chance body a at) :hurt (min (life body) (expected-damage a)) :seconds (or (:seconds a) 0)}))
 
-(defn meeting-parts
-  "{:chance :hurt} of one meeting (a meetings entry): the threats that get to the body are met together, their blows
-  adding up: (parts names caught) of each set of them (met-sets), caught at the worst of their chances, by its chance;
-  a meeting of more than max-met-sets the k likeliest by the chance of k (met-counts)."
-  [parts meeting]
-  (let [set-key (fn [group] [(vec (sort (map :mob group))) (some->> (seq (keep :caught group)) (apply max))])
-        sets (if (< max-met-sets (count meeting))
-               (map-indexed (fn [k pk] [(subvec meeting 0 k) pk]) (met-counts meeting))
-               (met-sets meeting))]
-    (reduce (fn [acc [[names caught] p]]
-              (if (and (seq names) (pos? p))
-                (let [{:keys [chance hurt]} (parts names caught)]
-                  (-> acc (update :chance + (* p chance)) (update :hurt + (* p hurt))))
-                acc))
-            {:chance 0 :hurt 0}
-            (reduce (fn [m [group p]] (update m (set-key group) (fnil + 0) p)) {} sets))))
+(defn met-threats
+  "The known threats of route {:cells :threats} (death-chance's) that may get to the body, [{:mob :caught :c :prior
+  :exposure :before :w :on}]: c its weight (a provoked-only one's times threat/provoked-share), prior and exposure its
+  death/met-stretch over the cells' seconds dts, before (Float64Array) its weighted seconds before each cell, w its
+  weight there, on (Int32Array) the cells it weighs."
+  [{:keys [cells threats]} dts]
+  (into []
+        (keep (fn [{:keys [mob weight reach caught]}]
+                (let [{:keys [met xs prior exposure]} (death/met-stretch mob reach cells dts)
+                      c (min 1 (* (or weight 1) (if (contains? threat/provoked-only mob) (threat/provoked-share) 1)))
+                      n (count xs)
+                      before (js/Float64Array. n)
+                      w (js/Float64Array. n)]
+                  (when (pos? (* c met))
+                    (dotimes [a n]
+                      (let [x0 (if (pos? a) (nth xs (dec a)) 0)]
+                        (aset before a x0)
+                        (aset w a (if (pos? (nth dts a)) (/ (- (nth xs a) x0) (nth dts a)) 0))))
+                    {:mob mob :caught caught :c c :prior prior :exposure exposure :before before :w w
+                     :on (js/Int32Array.from (filter #(pos? (aget w %)) (range n)))}))))
+        (when (seq cells) threats)))
+
+(defn notice-view
+  "How threat t ({:before :w :on :prior}, met-threats') gets to the body on each cell it weighs, over its prior (its notice
+  rate unknown): {:s0 the chance it has not by each cell's start, :h its rate of doing so there, the Gamma posterior's mean
+  after the exposure before (no notice in it), :shape the prior's}."
+  [{:keys [before w on prior]}]
+  (let [n (alength w) s0 (js/Float64Array. n) h (js/Float64Array. n)
+        {:keys [shape rate]} prior]
+    (dotimes [i (alength on)]
+      (let [a (aget on i) x (aget before a)]
+        (aset s0 a (death/missed prior x))
+        (aset h a (/ (* shape (aget w a)) (+ rate x)))))
+    {:s0 s0 :h h :shape shape}))
+
+(defn met-with
+  "The chance threat j gets to the body in one answer with threat k, given k does, at notice rate r of k's class (and of
+  j's, jv nil; else jv j's notice-view): on each cell both weigh (cells, an Int32Array), the first of the two to get to the
+  body there (its rate h of the two's, within the cell's seconds dts, a Float64Array) is answered for its :seconds while the other, not
+  there yet, joins it: within those seconds standing there, over j's Gamma when its rate is unknown."
+  [k r j jv dts cells]
+  (let [{bk :before wk :w sk :seconds} k
+        {bj :before wj :w sj :seconds} j
+        {hj :h s0j :s0 shape :shape} jv
+        got (- (js/Math.expm1 (- (* r (:exposure k)))))]
+    (if (pos? got)
+      (loop [i 0 acc 0]
+        (if (< i (alength cells))
+          (let [a (aget cells i)
+                x (* r (aget wk a))
+                y (if jv (aget hj a) (* r (aget wj a)))
+                h (+ x y)
+                s0 (if jv (* (js/Math.exp (- (* r (aget bk a)))) (aget s0j a)) (js/Math.exp (- (* r (+ (aget bk a) (aget bj a))))))
+                joins-j (if jv (- 1 (js/Math.pow (+ 1 (/ (* y sk) shape)) (- shape))) (- (js/Math.expm1 (- (* y sk)))))]
+            (recur (inc i) (+ acc (* s0 (/ (- (js/Math.expm1 (- (* h (aget dts a))))) h)
+                                     (+ (* x joins-j) (* y (- (js/Math.expm1 (- (* x sj))))))))))
+          (min 1 (/ acc got))))
+      0)))
+
+(defn met-states
+  "The sets of threats `earlier` threat k may meet at once, by the count of each kind [mob caught] (mixed radix: per earlier
+  threat its kind's :stride and :radix, :n sets): :without and :with, fns of a set's index, its (parts names caught) met
+  without k and with it (the worst caught of them), none {:chance 0 :hurt 0}; each priced once, when asked."
+  [parts k earlier]
+  (let [kind (juxt :mob :caught)
+        kinds (vec (distinct (map kind earlier)))
+        counts (frequencies (map kind earlier))
+        radices (mapv #(inc (counts %)) kinds)
+        strides (vec (reductions * 1 radices))
+        index (zipmap kinds (range))
+        members (fn [s] (mapcat (fn [kd r st] (repeat (mod (quot s st) r) kd)) kinds radices strides))
+        price (fn [ms] (if (seq ms)
+                         (parts (vec (sort (map first ms))) (some->> (seq (keep second ms)) (apply max)))
+                         {:chance 0 :hurt 0}))
+        cached (fn [f] (let [seen (js/Map.)] (fn [s] (or (.get seen s) (let [v (f s)] (.set seen s v) v)))))]
+    {:n (peek strides)
+     :stride (mapv #(strides (index (kind %))) earlier)
+     :radix (mapv #(radices (index (kind %))) earlier)
+     :without (cached #(price (members %)))
+     :with (cached #(price (cons (kind k) (members %))))}))
+
+(defn met-chances
+  "Float64Array of the chance of each set of states (met-states) being the one met, each earlier threat in it at its
+  chance of rhos (a Float64Array)."
+  [{:keys [n stride radix]} rhos]
+  (let [p (js/Float64Array. n)]
+    (aset p 0 1)
+    (dotimes [j (alength rhos)]
+      (let [st (nth stride j) r (nth radix j) rho (aget rhos j)]
+        (when (pos? rho)
+          (loop [s (dec n)]
+            (when (>= s 0)
+              (aset p s (+ (* (- 1 rho) (aget p s)) (if (pos? (mod (quot s st) r)) (* rho (aget p (- s st))) 0)))
+              (recur (dec s)))))))
+    p))
+
+(defn joins
+  "What threat k, the i-th of found (route-parts', by when each first may get to the body), adds at each of nodes, the
+  death/rate-nodes [[r w]] of its class: {:times :adds} (Float64Arrays: the survival of the threats before it, Z, becomes
+  Z times + adds) and :hurt, the hurt it adds over the nodes. group: group-parts of names and caught; view: notice-view of
+  a threat of found by its index."
+  [group view found i nodes]
+  (let [k (found i)
+        states (met-states group k (subvec found 0 i))
+        pairs (into [] (keep (fn [j] (let [cs (.filter (:on k) #(pos? (aget (:w (found j)) %)))]
+                                       (when (pos? (alength cs)) [j (not= (:prior (found j)) (:prior k)) cs]))))
+                    (range i))
+        lone (:chance (group [(:mob k)] (:caught k)))
+        at-nodes (mapv (fn [[r]]
+                         (let [rhos (js/Float64Array. i)]
+                           (doseq [[j cross cs] pairs]
+                             (aset rhos j (* (:c (found j)) (met-with k r (found j) (when cross (view j)) (:dts k) cs))))
+                           [(* (:c k) (- (js/Math.expm1 (- (* r (:exposure k)))))) (met-chances states rhos)]))
+                       nodes)
+        n (:n states)
+        with (js/Float64Array. n)
+        without (js/Float64Array. n)
+        more (js/Float64Array. n)
+        _ (dotimes [s n]
+            (when (some (fn [[_ p]] (pos? (aget p s))) at-nodes)
+              (let [w ((:with states) s) wo ((:without states) s)]
+                (aset with s (- 1 (:chance w)))
+                (aset without s (- 1 (:chance wo)))
+                (aset more s (- (:hurt w) (:hurt wo))))))
+        sum (fn [p xs] (areduce p s acc 0 (+ acc (* (aget p s) (aget xs s)))))
+        times (js/Float64Array. (count nodes))
+        adds (js/Float64Array. (count nodes))]
+    (doseq [[ri [q p]] (map-indexed vector at-nodes)]
+      (aset times ri (- 1 (* q lone)))
+      (aset adds ri (* q (- (sum p with) (* (- 1 lone) (sum p without))))))
+    {:times times :adds adds
+     :hurt (reduce + (map (fn [[_ w] [q p]] (* w q (sum p more))) nodes at-nodes))}))
 
 (defn route-parts
-  "{:chance :hurt} of the known threats of route {:cells :threats :at} for body: each meeting's meeting-parts at :at
-  (default the first cell), the meetings apart, so their chances of death combine as independent ones and their hurt adds
-  up, at most the body's life."
+  "{:chance :hurt} of the known threats of route {:cells :threats :at} for body, priced at :at (default the first cell). A
+  threat that gets to the body is answered there (group-parts) while the walk stands still; each other one that gets to it
+  meanwhile, or whose answer it comes in, is met in that answer (met-with: a chance for each pair, no hard meetings).
+  Taken by when they first may get to the body, each threat k joins the set of earlier ones it meets (met-states, each in
+  it at its met-with chance, met-chances): with q its chance of getting to the body, D and H a set's chance of death and
+  hurt, the survival of the threats so far Z becomes Z (1 - q D(k)) + q (E[1 - D(set + k)] - (1 - D(k)) E[1 - D(set)]), the
+  hurt grows by q (E[H(set + k)] - E[H(set)]) (joins): exact for two threats, and for any that meet surely at once or never.
+  A class's notice rate (death/notice-prior) is one unknown over the whole route: Z is kept at each of the classes'
+  death/rate-nodes, a threat's sets reckoned at its own class's rate, other classes' notices over their priors. The hurt at
+  most the body's life."
   [body {:keys [cells at] :as route}]
   (let [at (or at (first cells))
         group (memoize #(group-parts body %1 %2 at))
-        parts (map #(meeting-parts group %) (meetings route))]
-    {:chance (- 1 (reduce * 1 (map #(- 1 (:chance %)) parts)))
-     :hurt (min (life body) (reduce + 0 (map :hurt parts)))}))
+        dts (death/cell-seconds cells)
+        dt (js/Float64Array.from dts)
+        found (->> (met-threats route dts)
+                   (map (fn [{:keys [mob caught on] :as t}] (assoc t :seconds (:seconds (group [mob] caught)) :first (aget on 0) :dts dt)))
+                   (sort-by :first)
+                   vec)
+        view (memoize #(notice-view (found %)))
+        priors (vec (distinct (map :prior found)))
+        nodes (mapv death/rate-nodes priors)
+        strides (vec (reductions * 1 (map count nodes)))
+        grid (peek strides)
+        z (.fill (js/Float64Array. grid) 1)
+        weights (.fill (js/Float64Array. grid) 1)
+        _ (doseq [[rs st] (map vector nodes strides)]
+            (dotimes [g grid] (aset weights g (* (aget weights g) (second (rs (mod (quot g st) (count rs))))))))
+        hurt (reduce (fn [hurt i]
+                       (let [c (.indexOf priors (:prior (found i)))
+                             {:keys [times adds] :as step} (joins group view found i (nodes c))
+                             st (strides c)
+                             radix (count (nodes c))]
+                         (dotimes [g grid]
+                           (let [ri (mod (quot g st) radix)]
+                             (aset z g (+ (* (aget times ri) (aget z g)) (aget adds ri)))))
+                         (+ hurt (:hurt step))))
+                     0 (range (count found)))
+        survives (areduce z g acc 0 (+ acc (* (aget weights g) (aget z g))))]
+    {:chance (min 1 (max 0 (- 1 survives)))
+     :hurt (min (life body) (max 0 hurt))}))
 
 (defn spawn-kill-chance
   "The chance one mob spawned beside body kills it at `at`: each its threat-chance, caught at the prior, over

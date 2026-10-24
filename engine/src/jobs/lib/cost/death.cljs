@@ -122,25 +122,26 @@
             total (reduce + ws)]
         (mapv (fn [u w] [(js/Math.exp u) (/ w total)]) us ws)))))
 
+(defn cell-seconds
+  "The seconds spent on each of route cells [{:x :y :z :s}]: a cell's :s, else the walk to it from the cell before (a
+  block for the first)."
+  [cells]
+  (let [speed (value/walk-blocks-per-s)]
+    (mapv (fn [prev {:keys [x y z s]}]
+            (or s (/ (if prev (js/Math.hypot (- x (:x prev)) (- y (:y prev)) (- z (:z prev))) 1) speed)))
+          (cons nil cells) cells)))
+
 (defn met-stretch
-  "{:met :exposure :prior :from :to} of a threat mob whose reach (a fn of a cell x y z, its weight 0-1, nil outside) holds
-  route cells [{:x :y :z :s}]: exposure the weighted seconds sum(w dt) on them, dt the cell's :s, else the walk to it from
-  the cell before (a block for the first); prior its notice-prior and met the chance it gets to the body, 1 - missed;
-  from and to the indices of the cells where its exposure reaches a quarter and three quarters: the middle half of
-  where it gets to the body, not its field's faint tail (nil: none)."
-  [mob reach cells]
-  (let [speed (value/walk-blocks-per-s)
-        prior (notice-prior mob)
-        parts (loop [i 0 prev nil cells (seq cells) acc []]
-                (if-let [{:keys [x y z s] :as cell} (first cells)]
-                  (if-let [w (reach (js/Math.floor x) (js/Math.floor y) (js/Math.floor z))]
-                    (recur (inc i) cell (next cells)
-                           (conj acc [i (* w (or s (/ (if prev (js/Math.hypot (- x (:x prev)) (- y (:y prev)) (- z (:z prev))) 1) speed)))]))
-                    (recur (inc i) cell (next cells) acc))
-                  acc))
-        e (reduce + 0 (map second parts))
-        at (fn [share] (some (fn [[i sum]] (when (>= sum (* share e)) i)) (map vector (map first parts) (reductions + (map second parts)))))]
-    {:met (- 1 (missed prior e)) :exposure e :prior prior :from (when (pos? e) (at 0.25)) :to (when (pos? e) (at 0.75))}))
+  "{:met :exposure :prior :xs} of a threat mob whose reach (a fn of a cell x y z, its weight 0-1, nil outside) holds
+  route cells [{:x :y :z :s}]: xs the weighted seconds sum(w dt) up to and with each cell, dt its cell-seconds (dts, when
+  the caller has them), exposure the whole sum; prior its notice-prior and met the chance it gets to the body, 1 - missed."
+  ([mob reach cells] (met-stretch mob reach cells (cell-seconds cells)))
+  ([mob reach cells dts]
+   (let [prior (notice-prior mob)
+         xs (vec (rest (reductions + 0 (map (fn [{:keys [x y z]} dt] (* dt (or (reach (js/Math.floor x) (js/Math.floor y) (js/Math.floor z)) 0)))
+                                            cells dts))))
+         e (or (peek xs) 0)]
+     {:met (- 1 (missed prior e)) :exposure e :prior prior :xs xs})))
 
 (defn spawn-horizon-s [] (settings/get settings ::spawn-horizon-s))
 

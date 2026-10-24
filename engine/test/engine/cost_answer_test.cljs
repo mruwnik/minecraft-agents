@@ -316,12 +316,15 @@
       "a setting with no pool is refused, not read as no starts"))
 
 
-(deftest a-meeting-prices-each-set-of-its-threats-that-may-come-not-the-likeliest-k
+(deftest two-threats-are-met-in-one-answer-when-the-second-comes-while-the-first-is-answered
   (let [b (body 20)
         threat (fn [mob weight] {:mob mob :weight weight :reach (constantly 1)})
         route {:cells [(assoc here :s 1e6)] :threats [(threat "creeper" 0.5) (threat "zombie" 0.5)] :at here}
-        alone #(:chance (answer/group-parts b % nil here))]
-    (is (< (js/Math.abs (- (:chance (cost/route-parts b route))
-                           (+ (* 0.25 (alone ["creeper" "zombie"])) (* 0.25 (alone ["creeper"])) (* 0.25 (alone ["zombie"])))))
-           1e-6)
-        "sure to notice, each there half the time: a quarter both, a quarter each alone, a quarter none")))
+        alone #(answer/group-parts b % nil here)
+        [c z cz] (map (comp :chance alone) [["creeper"] ["zombie"] ["creeper" "zombie"]])
+        [tc tz] (map (comp :seconds alone) [["creeper"] ["zombie"]])
+        both (fn [r] (* 0.25 0.5 (+ (- 1 (js/Math.exp (- (* r tc)))) (- 1 (js/Math.exp (- (* r tz)))))))
+        lives (reduce + (map (fn [[r w]] (* w (+ (* (- 1 (* 0.5 c)) (- 1 (* 0.5 z))) (* (both r) (- (- 1 cz) (* (- 1 c) (- 1 z)))))))
+                             (death/rate-nodes (death/notice-prior "zombie"))))]
+    (is (< (js/Math.abs (- (:chance (cost/route-parts b route)) (- 1 lives))) 1e-9)
+        "each there half the time, sure to notice over the stay, one rate for both: whichever comes first is answered while the other may come")))
