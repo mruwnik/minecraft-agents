@@ -148,11 +148,12 @@
     (cost/dead-end-cost counts (trapped-at (nth cells (dec seen-n))))))
 
 (defn ^:async plan-to!
-  "The planner's result for query over pw, its search within max-nodes nodes, in slices with yields between them."
-  [c pw policy query max-nodes]
+  "The planner's result for query over pw, its search within max-nodes nodes, in slices with yields between them; the
+  landings it asked about are kept in landing-memo (wworld/landing-seen's)."
+  [c pw policy query max-nodes landing-memo]
   (let [options (wplan/with-drops (wplan/plan-options pw (walk/default-weight) (executor/planner-limits policy (wworld/solid-fn pw))
                                                       (assoc (wplan/box-of policy) :maxNodes max-nodes))
-                                  policy (wworld/landing-seen (:primitives c)))
+                                  policy (wworld/landing-seen (:primitives c) landing-memo))
         ^js p (planner/create-plan (.-snapshot pw) query options)]
     (loop []
       (wplan/stop-if-cut! c)
@@ -191,9 +192,9 @@
   "Every input of price-all!'s result, read once: {:dim :writes (the remembered world) :pos :kit :food :body :class :caught-by
   (the threats priced, with their reach fns) :policy (wworld/body-policy: the job's args, effects, oxygen and fire
   through it) :targets :y-margin :chasers (their cells) :dangers (the planner's: cells, fades and radii as they come to) :tolls
-  (the steps the walker failed at) :near :sky (the sky's light darkening) :difficulty :landing-epoch :values :scope}.
-  What a price reads that is time-dependent enters as the value it computes to: the death fade through :dangers, the
-  landing memory's age cut-off (wworld/landing-memory-ms) as the ::step-s window of the clock it is read in."
+  (the steps the walker failed at) :near :sky (the sky's light darkening) :difficulty :values :scope}.
+  What a price reads that is time-dependent enters as the value it computes to: the death fade through :dangers; the
+  landings the planner asked about are kept with the result and read again (wworld/landing-reads-hold?)."
   [c st targets {:keys [y-margin chasers]} chased other?]
   (let [p (:primitives c)
         raw (look/raw-of p)]
@@ -205,7 +206,6 @@
      :targets targets :y-margin y-margin :chasers chasers :chased chased
      :dangers (some-> (threats/planner-dangers c) js->clj)
      :tolls (second (edges/tolls p)) :near (look/near-of p) :sky (some-> raw look/sky-subtract) :difficulty (threat/difficulty)
-     :landing-epoch (js/Math.floor (/ (ctx/now c) (* 1000 (settings/get settings ::step-s))))
      :values (:values @settings/state) :scope (js->clj (.getStore settings/call-scope))}))
 
 (defn priced-key
@@ -235,15 +235,16 @@
         in (gather c st targets opts chased other?)
         k (when st (priced-key in))
         hit (when st (.get kept-prices st))]
-    (if (and k (= k (:k hit)))
+    (if (and k (= k (:k hit)) (wworld/landing-reads-hold? (:primitives c) (:landings hit)))
       (:v hit)
-      (let [v (await (price-all! c in other?))]
-        (when st (.set kept-prices st {:k k :v v}))
+      (let [landings (js/Map.)
+            v (await (price-all! c in other? landings))]
+        (when st (.set kept-prices st {:k k :v v :landings landings}))
         v))))
 
 (defn ^:async price-all!
-  "price! without the kept result, over the inputs gathered (gather)."
-  [c {:keys [targets chasers pos body class caught-by policy food]} other?]
+  "price! without the kept result, over the inputs gathered (gather); the landings its plans asked about are kept in landings."
+  [c {:keys [targets chasers pos body class caught-by policy food]} other? landings]
   (let [p (:primitives c)
         ring-world (costed c nil other? true)
         trapped-at (fn [cell] (cost/route-death-cost body (assoc class :cells [cell] :threats caught-by) cell))
@@ -256,7 +257,8 @@
           (with-meta out {:nodes nodes :planned planned :unrouted unrouted})
           (let [pw (if-let [target (:pos t)] (costed c (floor-cell target) other? false) ring-world)
                 ^js res (await (plan-to! c pw policy (query c t)
-                                         (if (:pos t) (settings/get settings ::target-max-nodes) (min ring-left (settings/get settings ::max-nodes)))))
+                                         (if (:pos t) (settings/get settings ::target-max-nodes) (min ring-left (settings/get settings ::max-nodes)))
+                                         landings))
                 spent (or (.-expanded res) 0)
                 r (some->> (routed res slow) (seen-split p) (#(update % :cells (partial swum p))))]
             (recur more (if r

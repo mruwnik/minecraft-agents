@@ -9,6 +9,7 @@
             [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.lib.flee-search :as search]
+            [jobs.lib.walk.world :as wworld]
             [jobs.survival.respond.goal :as respond.goal]))
 
 (defn box
@@ -299,7 +300,58 @@
           (is (changed? base (await (price (ctx {:gait :sneak})))) "a job arg the walk reads")
           (is (changed? base (await (price (ctx {:max-damage 3})))) "the damage the walk keeps")
           (is (changed? base (await (settings/with-settings {:jobs.lib.cost.threat/difficulty 1} #(price (ctx nil))))) "the server difficulty")
-          (reset! now 61000)
-          (is (changed? base (await (price (ctx nil)))) "the clock, once the landing memory's window moved on")
-          (swap! (fake-world/state raw) assoc-in [:self :onFire] true)
-          (is (changed? base (await (price (ctx nil)))) "the body on fire"))))))
+          (let [base (await (price (ctx nil)))]
+            (reset! now 61000)
+            (is (identical? base (await (price (ctx nil)))) "the clock alone is no input, whatever the landing memory's window")
+            (swap! (fake-world/state raw) assoc :time 18000)
+            (let [dark (await (price (ctx nil)))]
+              (is (changed? base dark) "the sky's light")
+              (swap! (fake-world/state raw) assoc-in [:self :onFire] true)
+              (is (changed? dark (await (price (ctx nil)))) "the body on fire"))))))))
+
+(deftest a-death-by-terrain-fades-in-the-kept-price-as-the-clock-moves
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [raw (tu/fake {:blocks junction :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+              p (perception/wrap raw (perception/create (fake-raw/create raw) {:now (constantly 1000000)}))
+              _ (perception/pass! (aget p "perception") {:effort 1 :reuse? true})
+              now (atom 0)
+              data (mem/add-entry mem/empty-data :deaths {:t 0 :data {:pos {:x 3 :y 64 :z 0} :cause "lava" :death-t 0}} nil)
+              c (assoc (ctx-of p) :view (fn [] {:data data :now @now}))
+              chasers [{:name "zombie" :mob "zombie" :pos {:x -4.5 :y 64 :z 0.5}}]
+              ends (search/ring {:x 0.5 :z 0.5} chasers 10 4)
+              price (fn ^:async price [] (await (search/price! c ends {:chasers chasers})))
+              _ (await (price))
+              base (await (price))]
+          (is (identical? base (await (price))) "the same death, the same price")
+          (reset! now 30000)
+          (is (not (identical? base (await (price)))) "the death has faded: the danger it gives the plan is another"))))))
+
+(deftest a-landing-seen-again-with-no-write-to-the-world-is-priced-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [raw (tu/fake {:blocks junction :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+              p (perception/wrap raw (perception/create (fake-raw/create raw) {:now (constantly 1000000)}))
+              _ (perception/pass! (aget p "perception") {:effort 1 :reuse? true})
+              c (ctx-of p)
+              seen? (atom false)
+              plan-to! search/plan-to!
+              chasers [{:name "zombie" :mob "zombie" :pos {:x -4.5 :y 64 :z 0.5}}]
+              ends (search/ring {:x 0.5 :z 0.5} chasers 10 4)
+              answer wworld/landing-answer
+              price (fn ^:async price []
+                      (set! wworld/landing-answer (fn [_ _ _ _ _] @seen?))
+                      (set! search/plan-to! (fn ^:async asking [c pw policy q n memo]
+                                              ((wworld/landing-seen p memo) 2 63 0 false)
+                                              (await (plan-to! c pw policy q n memo))))
+                      (let [v (await (search/price! c ends {:chasers chasers}))]
+                        (set! wworld/landing-answer answer)
+                        (set! search/plan-to! plan-to!)
+                        v))
+              _ (await (price))
+              base (await (price))]
+          (is (identical? base (await (price))) "the landing as it was: the kept price")
+          (reset! seen? true)
+          (is (not (identical? base (await (price)))) "an aged landing seen again, the store untouched: priced again"))))))

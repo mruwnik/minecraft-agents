@@ -533,21 +533,32 @@
 
 (def landing-memory-ms "How long after the body saw a block it still counts as seen for a landing: a look over an edge outlasts the head turning back." 30000)
 
+(defn landing-answer
+  "Whether the body of primitives p counts the block at x y z as seen for a landing (landing-seen); wall? as there."
+  [p x y z wall?]
+  (let [^js b (u/sensed p {:x x :y y :z z})]
+    (boolean (and b (or (true? (.-visible b)) (true? (.-felt b))
+                        (and (not (true? (.-unknown b))) (or wall? (<= (or (.-ageMs b) js/Infinity) landing-memory-ms))))))))
+
 (defn landing-seen
   "The planner's options.landingSeen for the body of primitives p: (fn [x y z wall?]) true when the body sees or feels the
   block, or saw it landing-memory-ms ago or less, so a bounce is priced only on a pad it has looked at (an older memory
   or an unknown block is not); nil without a perception. As a wall of the pad (wall?) a block remembered at any age
   counts: the walls of a 1x1 shaft face away from the edge a body drops from. A block never seen or an unloaded one
-  never counts."
-  [p]
-  (when (some? (.-sensedAt p))
-    (let [memo (js/Map.)]
-      (fn [x y z wall?]
-        (let [k (str x "," y "," z "," (boolean wall?))]
-          (if (.has memo k)
-            (.get memo k)
-            (let [^js b (u/sensed p {:x x :y y :z z})
-                  seen (boolean (and b (or (true? (.-visible b)) (true? (.-felt b))
-                                   (and (not (true? (.-unknown b))) (or wall? (<= (or (.-ageMs b) js/Infinity) landing-memory-ms))))))]
-              (.set memo k seen)
-              seen)))))))
+  never counts. Each answer is kept in memo (a js/Map of [x y z wall?] to bool; default a private one) for landing-reads-hold?."
+  ([p] (landing-seen p (js/Map.)))
+  ([p ^js memo]
+   (when (some? (.-sensedAt p))
+     (fn [x y z wall?]
+       (let [k #js [x y z (boolean wall?)]
+             ks (.join k ",")]
+         (if (.has memo ks)
+           (.-seen (.get memo ks))
+           (let [seen (landing-answer p x y z wall?)]
+             (.set memo ks #js {:cell k :seen seen})
+             seen)))))))
+
+(defn landing-reads-hold?
+  "Whether every answer kept in memo (landing-seen's) is the answer now: a price planned over them is still the price."
+  [p ^js memo]
+  (every? (fn [^js e] (let [[x y z wall?] (.-cell e)] (= (.-seen e) (landing-answer p x y z wall?)))) (es6-iterator-seq (.values memo))))
