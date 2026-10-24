@@ -37,24 +37,28 @@
 (defn pos [t x] (rec t :pos :x x :y 64 :z 0))
 (defn flee [t job] (rec t :decided :mob "creeper" :decision :flee :job job))
 
-(deftest a-start-is-the-time-to-a-block-off-less-the-block-at-sprint-speed
-  (is (= [(- 1.4 0.2)] (map :s (c/starts [(pos 0 0) (flee 100 "j1") (pos 600 0.5) (pos 1500 2)] 5)))))
+(deftest a-start-lies-between-the-last-position-still-there-and-the-first-a-block-off-less-the-block-at-sprint-speed
+  (is (= [[0.3 1.2]] (map (juxt :lo :hi) (c/starts [(pos 0 0) (flee 100 "j1") (pos 600 0.5) (pos 1500 2)] 5)))))
 
 (deftest only-the-first-flee-of-a-run-counts-and-a-decision-with-no-recent-position-is-dropped
   (is (= [{:id ["g" "j1"] :mob "creeper" :t 5000 :drop :no-pos}] (c/starts [(flee 5000 "j1")] 5)))
   (is (= 1 (count (c/starts [(pos 0 0) (flee 10 "j1") (flee 20 "j1") (pos 500 3)] 5)))))
 
-(deftest a-move-seen-only-across-a-long-gap-is-kept-at-the-middle-of-the-gap
-  (let [[row :as rows] (c/starts [(pos 0 0) (flee 100 "j1") (pos 3000 2)] 5)]
-    (is (= 1 (count rows)))
-    (is (true? (:sparse? row)))
-    (is (< (js/Math.abs (- 1.25 (:s row))) 1e-9)) ; the middle of (100, 3000] is 1.45 s after the decision, less the block at sprint speed
-    (is (= {:n 1 :sparse 1 :no-pos 0 :never 0} (select-keys (c/starts-report rows) [:n :sparse :no-pos :never])))))
+(deftest a-move-seen-only-across-a-long-gap-is-the-whole-gap
+  (is (= [[0 59.8]] (map (juxt :lo :hi) (c/starts [(pos 0 0) (flee 0 "j1") (pos 60000 2)] 5)))))
 
-(deftest a-start-told-across-a-gap-whose-middle-is-over-give-up-is-no-start
-  (let [rows (c/starts [(pos 0 0) (flee 100 "j1") (pos 60000 2)] 5)]
-    (is (= [:never] (map :drop rows)))
-    (is (= {:n 0 :never 1} (select-keys (c/starts-report [{:id ["g" "j1"] :t 100 :sparse? true :s 30}]) [:n :never])))))
+(deftest a-flight-no-longer-watched-before-it-moves-is-right-censored-at-its-last-still-position
+  (are [stop] (= [[2.8 nil]] (map (juxt :lo :hi) (c/starts [(pos 0 0) (flee 0 "j1") (pos 3000 0.5) stop (pos 9000 5)] 5)))
+    (rec 4000 :ended)
+    (rec 4000 :held)
+    (rec 4000 :decided :mob "creeper" :decision :fight)
+    (rec 4000 :died))
+  (is (= [[0 nil]] (map (juxt :lo :hi) (c/starts [(pos 0 0) (flee 100 "j1")] 5))) "the logs end"))
+
+(deftest a-respond-run-holding-still-is-read-as-held
+  (is (= :held (:k (c/scan-line "{:generation-id \"g\", :source :job, :kind :holding, :context {:job-id \"j54\", :reflex-id :hostile-near}, :time-ms 5, :message \"holding: hiding\", :data {:pos {:x 1, :y 2, :z 3}}}"))))
+  (is (= :pos (:k (c/scan-line "{:generation-id \"g\", :source :job, :kind :holding, :context {:job-id \"j54\", :reflex-id :hostile-near}, :time-ms 5, :message \"holding: searching\", :data {:pos {:x 1, :y 2, :z 3}}}")))
+      "a search is part of the start; the engine stamped the body's place on it"))
 
 (deftest each-mob-kind-has-its-own-first-flee-and-the-report-splits-them
   (let [zombie (fn [t job] (rec t :decided :mob "zombie" :decision :flee :job job))
@@ -64,8 +68,13 @@
     (is (= [1 1] [(get-in r [:by-mob "creeper" :n]) (get-in r [:by-mob "zombie" :n])]))
     (is (= 2 (get-in r [:melee :n])))))
 
-(deftest deciles-are-the-sorted-values-at-the-tenths-midpoints
-  (is (= [0 1 2 3 4 5 6 7 8 9] (c/deciles (range 10)))))
+(deftest the-setting-holds-each-melee-kind-shrunk-toward-the-others-and-the-pool-of-all
+  (let [row (fn [mob lo hi] {:id [mob lo] :mob mob :t 0 :lo lo :hi hi})
+        rows (concat (map #(row "zombie" (* 0.05 %) (* 0.05 %)) (range 40)) (map #(row "creeper" (* 0.02 %) (* 0.02 %)) (range 80))
+                     [(row "skeleton" 9 9) (row "creeper" 0.5 nil) {:id [0] :mob "zombie" :t 0 :drop :no-pos}])
+        {:keys [setting melee]} (c/starts-by-mob rows)]
+    (is (= #{"pooled" "creeper" "zombie"} (set (keys setting))) "no row for a ranged kind")
+    (is (= [121 120 1] [(:n melee) (get-in setting ["pooled" :n]) (:censored melee)]) "the pool's n counts the starts seen to end")))
 
 (deftest folding-merges-rows-by-run-id-so-the-counts-only-grow
   (let [fight (fn [swings] {:id ["g" "j1"] :t 0 :swings swings :hp 1})
@@ -73,12 +82,18 @@
         folded (-> c/empty-counts
                    (c/fold [(fight 0)] [(start {:drop :no-pos})])
                    (c/fold [(fight 3)] [(start {:s 0.4})])
-                   (c/fold [(fight 1) {:id ["g" "j2"] :t 1 :swings 1 :hp 0}] [(start {:s 9})]))]
+                   (c/fold [(fight 1) {:id ["g" "j2"] :t 1 :swings 1 :hp 0}] [(start {:drop :no-pos})]))]
     (is (= [3 2] [(get-in folded [:exchange ["g" "j1"] :swings]) (count (:exchange folded))]))
-    (is (= {:id ["g" "j1"] :t 0 :s 0.4} (get-in folded [:starts ["g" "j1"]]))))
+    (is (= {:id ["g" "j1"] :t 0 :s 0.4} (get-in folded [:starts ["g" "j1"]])) "a told start stays when its logs rotate away")
+    (is (= {:id ["g" "j1"] :t 0 :lo 0.3 :hi 0.5}
+           (get-in (-> folded (c/fold [] [(start {:lo 0.3 :hi 0.5})]) (c/fold [] [(start {:s 9})])) [:starts ["g" "j1"]]))
+        "bounds replace a start told before they were kept, and stay"))
   (let [sighting (fn [end] {:id ["g" 0 "zombie"] :t 0 :mob "zombie" :s 1 :end end})
         folded (-> c/empty-counts (c/fold [] [] [(sighting :open)]) (c/fold [] [] [(sighting :caught)]) (c/fold [] [] [(sighting :gap)]))]
     (is (= :caught (get-in folded [:notices ["g" 0 "zombie"] :end])) "a sighting open when its log ended is replaced, a closed one stays")))
+
+(deftest a-start-folded-before-bounds-were-kept-is-exact-or-censored-at-give-up
+  (is (= [[0.4 0.4] [10 nil] nil] (map c/bounds [{:s 0.4} {:drop :never} {:drop :no-pos}]))))
 
 (defn saw [t mob d] (rec t :saw :mob mob :distance d :at {:x d :y 64 :z 0}))
 

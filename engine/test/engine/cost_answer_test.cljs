@@ -1,6 +1,7 @@
 (ns engine.cost-answer-test
   "jobs.lib.cost.answer: one price for each answer to hostiles (fight, walk away, build a refuge) and the cheapest."
   (:require [cljs.test :refer [deftest is are use-fixtures]]
+            [engine.args :as a]
             [engine.fake :as fake]
             [engine.game :as game]
             [jobs.lib.cost :as cost]
@@ -91,7 +92,9 @@
         flee #(cost/flee-answer {:food 20 :mobs [zombie] :later f :caught %})
         wall (assoc (cost/build-answer {:mobs [zombie] :seconds 2}) :seconds 240)
         pick #(:answer (cost/decide (body 8) %1 here))]
-    (is (= :flee (pick {:fight f :flee (flee 0)})) "at 8 hp an open way beats the fight")
+    (is (= :flee (settings/with-settings {:jobs.lib.cost.danger/flight-starts {"pooled" {:n 1 :deciles (vec (repeat 10 0.5))}}}
+                   (fn [] (pick {:fight f :flee (cost/flee-answer {:food 20 :mobs [zombie] :later f :caught 0})}))))
+        "at 8 hp an open way the body gets going on beats the fight")
     (is (= :fight (pick {:fight f :flee (flee nil)})))
     (is (= :flee (pick {:wall wall :flee (flee 0)})) "a wall that holds the body long costs more than an open way")
     (is (= :wall (pick {:wall wall :flee (flee nil)})))
@@ -113,7 +116,7 @@
   (is (nil? (cost/flee-answer {:food 20 :mobs [(mob "spider" 4)]})) "a spider outruns the body")
   (is (some? (cost/flee-answer {:food 20 :mobs [(mob "zombie" 4 35)]})))
   (is (pos? (:damage (cost/flee-answer {:food 20 :mobs [(mob "creeper" 2)]}))) "a creeper 2 off blows before the walk is out of its reach")
-  (is (zero? (:damage (cost/flee-answer {:food 20 :mobs [(mob "creeper" 16)]}))) "far off, even the slowest start of the measured ones gets out of its reach"))
+  (is (zero? (:damage (cost/flee-answer {:food 20 :mobs [(mob "creeper" 24 24)]}))) "far off, even the slowest start of the measured ones gets out of its reach"))
 
 (deftest a-creeper-that-blows-on-the-walk-is-not-met-again
   (let [zombie (mob "zombie" 4 35)]
@@ -305,9 +308,10 @@
     (is (> (price 1 :flee) (price 1 :fight)) "at 3 hp a zombie beside the body lands its blows while the flight starts")
     (is (< (price 6 :flee) (price 6 :fight)) "one 6 off is left behind before it reaches the body")))
 
-(deftest a-kinds-flight-starts-are-its-own-counts-and-the-pooled-ones-together
+(deftest a-kinds-flight-starts-are-its-row-and-a-kind-with-none-the-pool
   (settings/with-settings {:jobs.lib.cost.danger/flight-starts {"pooled" {:n 10 :deciles (vec (repeat 10 1))}
                                                                  "fast" {:n 30 :deciles (vec (repeat 10 0))}}}
-    #(do
-       (is (= (vec (repeat 10 1)) (danger/flight-starts "unseen kind")) "a kind with no row is the pool")
-       (is (= [0 0 0 0 0 0 0 0 1 1] (danger/flight-starts "fast")) "30 starts at 0 and the pool's 10 at 1: the top quarter is the pool's, the 75th percentile still 0"))))
+    #(is (= [(vec (repeat 10 0)) (vec (repeat 10 1))] [(danger/flight-starts "fast") (danger/flight-starts "unseen kind")])))
+  (is (some? (a/problem :jobs.lib.cost.danger/flight-starts {"zombie" {:n 3 :deciles (vec (repeat 10 0))}}))
+      "a setting with no pool is refused, not read as no starts"))
+
