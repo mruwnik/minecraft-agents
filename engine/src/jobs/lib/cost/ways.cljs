@@ -19,6 +19,12 @@
 
 (defn stair-cost "Seconds a stair of `steps` steps takes." [steps] (* steps (stair-step-s)))
 
+(defn stair-leg-cost
+  "Seconds one step up of a stair takes when walking it would take `s0` (a walk step of `step-s`, plus its cuts and unseen
+  cells): the cuts are paid on top, and the step itself is at least `stair-s`."
+  [s0 step-s stair-s]
+  (+ (- s0 step-s) (max step-s stair-s)))
+
 (defn pillar-cost
   "Seconds a pillar of `blocks` blocks takes, `short` of them to be fetched."
   ([blocks] (pillar-cost blocks 0))

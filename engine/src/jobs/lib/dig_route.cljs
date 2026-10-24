@@ -6,6 +6,7 @@
             [jobs.lib.access.rules :as rules]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.cost.armour :as armour]
+            [jobs.lib.cost.ways :as cw]
             [jobs.lib.per-body :as per-body]
             [jobs.lib.reach :as reach]))
 
@@ -179,7 +180,7 @@
                                               (loop [y top] (or (< y bot) (and (open-cell! acc nx y nz) (recur (dec y))))))
                                      ;; a step up that cuts or lays its floor is a stair's step: no less than :stair-s
                                      (when (and stair-s (> ny my) (not= :pillar move) (or (= :laid move) (pos? (aget acc 1))))
-                                       (aset acc 0 (max (aget acc 0) (+ stair-s (- s0 step-s)))))
+                                       (aset acc 0 (cw/stair-leg-cost (aget acc 0) step-s stair-s)))
                                      (relax! ck node acc nx ny nz move)))))]
                     (when-let [pf (and pillar-s (placeable mx my mz))]
                       (try! mx (inc my) mz :pillar pillar-s true 0 1 (= :unseen pf)))
@@ -227,7 +228,7 @@
                                                 (= :laid move) (assoc :place (update n 1 dec))
                                                 (= :pillar move) (assoc :place m))))
                                           path (rest path))]
-                          {:dig (vec (distinct (mapcat :dig steps))) :steps steps})
+                          {:dig (vec (distinct (mapcat :dig steps))) :steps steps :seconds (aget (.get best ck) 0)})
                         ;; the popped cell goes back: the next run expands it first
                         (>= (.-size done) limit) (do (heap-push! queue top) nil)
                         :else (do (.add done ck) (expand! ck) (recur))))))]
@@ -247,7 +248,7 @@
   floor of :ways (the floors of the body's own stairs), on which nothing is placed either. Bounds, each only when
   given: :max-dig-s seconds of digging, :max-digs cells, :max-places blocks laid or jump-placed (the blocks carried),
   :margin cells round the two ends.
-  {:dig [cell ..] :steps [{:to feet :move :walk|:laid|:pillar :dig [cell ..] :place cell} ..]}, {:problem :no-route},
+  {:dig [cell ..] :steps [{:to feet :move :walk|:laid|:pillar :dig [cell ..] :place cell} ..] :seconds the route's price}, {:problem :no-route},
   or {:problem :budget} when :max-nodes cells were expanded first (search goes on past it)."
   [block-at from goal opts]
   (or (first ((search block-at from goal opts) (get opts :max-nodes (settings/get settings ::max-nodes)))) {:problem :budget}))

@@ -327,14 +327,26 @@
           (is (= "dirt" (block p [5 63 0])) "the block went into the gap")
           (is (empty? (calls p "dig"))))))))
 
+(def stone-mass
+  "Solid stone x -1..12, y 60..80, z -2..2 with the body's cell [0 64 0] and the cell over it open."
+  (dissoc (box -1 60 -2 12 80 2 "stone") "0,64,0" "0,65,0"))
+
+(deftest a-stair-is-priced-as-the-climb-route-prices-it
+  (let [p (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}]})
+        route (choose/route-answer p [0 64 0] [3 67 0] (constantly true) (constantly false) false false {})]
+    (is (= [:walk] (distinct (map :move (:steps route)))))
+    (is (= 3 (count (:steps route))))
+    (is (< 0 (:seconds route)))
+    (is (= (:seconds route) (choose/price p [0 64 0] {:step :stair :heading :east :steps 3})))))
+
 (deftest a-fill-competes-by-price-with-the-stair-and-the-pillar
-  (let [fill #(hash-map :step :fill-gap :cell [5 63 0] :item "dirt" :count %)
-        stair #(hash-map :step :stair :heading :east :steps %)]
-    (are [way carried expected] (= expected (:step (choose/cheaper-fill nil [0 64 0] way (fill carried))))
-      (stair 1) 9 :fill-gap
-      (stair 1) 2 :stair
-      (stair 2) 2 :fill-gap
-      (stair 4) 9 :fill-gap
+  (let [p (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}]})
+        fill #(hash-map :step :fill-gap :cell [5 63 0] :item "dirt" :count %)
+        stair #(hash-map :step :stair :heading :east :steps %)
+        three (stair 3)]
+    (is (< (cw/fill-cost 9) (choose/price p [0 64 0] three)))
+    (are [way carried expected] (= expected (:step (choose/cheaper-fill p [0 64 0] way (fill carried))))
+      three 9 :fill-gap
       {:step :pillar :height 1} 9 :pillar
       {:step :pillar :height 2} 9 :fill-gap
       {:step :none :why :no-dig} 9 :fill-gap

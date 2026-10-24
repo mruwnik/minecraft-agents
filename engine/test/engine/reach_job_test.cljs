@@ -12,6 +12,7 @@
             [engine.settings :as settings]
             [jobs.movement.go-to.escalation :as esc]
             [jobs.lib.dig-route :as dig-route]
+            [jobs.movement.go-to.escalate-choose :as choose]
             [engine.go-to-escalate-support :refer [setup recording-parent tick-out! run-job! feet events-of]]))
 
 (defn block-at-of-map [blocks] (fn [[x y z]] (get blocks (str x "," y "," z) "air")))
@@ -148,7 +149,7 @@
             (is (not= :not-done @out) "the call ended")
             (is (seq spent) (pr-str (count @runs) (map (juxt :kind :step :at) (filter #(#{:go-to.escalated :go-to.search-spent} (:kind %)) @seen))))
             (is (some #(and (= at (:at %)) (= :stair (:step %))) (events-of seen :go-to.escalated)) "the stair is taken from where the search stopped")
-            (is (<= (count (filter #{at} @runs)) 30) "a stair's price in seconds of search there, a second a round")))))))
+            (is (<= (count (filter #{at} @runs)) (+ (:fallback-s (first spent)) choose/route-searches)) "the stair's price in seconds of search there, a second a run, the last round's runs over")))))))
 
 (deftest the-ways-are-priced-in-seconds-by-their-blocks
   (is (< (cost/pillar-cost 3) (cost/stair-cost 3)))

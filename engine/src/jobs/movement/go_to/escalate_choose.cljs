@@ -104,6 +104,16 @@
         (not @shut?))))
 
 
+(defn stair-route-s
+  "Seconds the stair way e takes from feet, each step as jobs.lib.dig-route (route-answer) prices a step that cuts: a walk
+  step and the dig-cost of its three cuts, at least cw/stair-cost of one step."
+  [p feet {:keys [heading steps]}]
+  (let [block-at (escape/block-at-of p)
+        step-s (:cost (cost/walk-cost {:distance 1}))
+        cut-s (fn [cell] (let [n (block-at cell)] (if (dig-route/open? n) 0 (or (cost/dig-cost n) 0))))]
+    (transduce (map #(cw/stair-leg-cost (+ step-s (transduce (map cut-s) + 0 %)) step-s (cw/stair-cost 1))) +
+               0 (partition 3 (escape/stair-cuts feet (escape/heading-dirs (keyword heading)) steps)))))
+
 (defn price
   "Seconds way e from feet is reckoned to take (jobs.lib.cost): a stair, a pillar, a bridge or a fill by its blocks, a dug door or
   route by what its cells take to dig with the tool carried, plus a step a cell; 0 for a step that is no span."
@@ -111,7 +121,7 @@
   (let [block-at (delay (escape/block-at-of p))
         dig-s (fn [cells] (transduce (map #(+ (/ (tools/clear-ms p (@block-at %)) 1000) (:cost (cost/walk-cost {:distance 1})))) + 0 cells))]
     (case step
-      :stair (+ (cw/stair-cost (:steps e)) (* (:aside e 0) (or (cost/dig-cost "stone") 1)))
+      :stair (+ (stair-route-s p feet e) (* (:aside e 0) (or (cost/dig-cost "stone") 1)))
       :pillar (cw/pillar-cost (:height e))
       :bridge (cw/bridge-cost (:length e) (:short e 0))
       :fill-gap (cw/fill-cost (:count e 1))
@@ -551,10 +561,6 @@
             (let [e (escape/choose p feet goal may-dig? opts)]
               (when (= :stair (:step e)) e)))))))
 
-(def stair-step-s
-  "Seconds one step of a stair up is reckoned to take (two cuts and a step), against a found plan's seconds."
-  3)
-
 (def stair-first-rise
   "How far above the feet a goal is for a found plan to be weighed against a stair up."
   8)
@@ -563,7 +569,7 @@
   "stair-step-s, dearer by the dark factor where the body stands dark: the plan's seconds carry its dark surcharge, and the
   stair is cut in that dark too."
   [c]
-  (cond-> stair-step-s
+  (cond-> (cw/stair-step-s)
     (and (wworld/dark?) (look/dark-here? (:primitives c))) (* (+ 1 (cost/dark-factor (wworld/kit-of c))))))
 
 (defn stair-check
