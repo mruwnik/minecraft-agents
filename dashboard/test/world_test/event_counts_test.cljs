@@ -50,10 +50,14 @@
 (deftest a-flight-no-longer-watched-before-it-moves-is-right-censored-at-its-last-still-position
   (are [stop] (= [[2.8 nil]] (map (juxt :lo :hi) (c/starts [(pos 0 0) (flee 0 "j1") (pos 3000 0.5) stop (pos 9000 5)] 5)))
     (rec 4000 :ended)
-    (rec 4000 :held)
     (rec 4000 :decided :mob "creeper" :decision :fight)
     (rec 4000 :died))
   (is (= [[0 nil]] (map (juxt :lo :hi) (c/starts [(pos 0 0) (flee 100 "j1")] 5))) "the logs end"))
+
+(deftest a-run-that-holds-still-before-it-moves-answered-otherwise-and-gives-no-start
+  (let [rows (c/starts [(pos 0 0) (flee 0 "j1") (pos 3000 0.5) (rec 4000 :held) (pos 9000 5)] 5)]
+    (is (= [{:id ["g" "j1"] :mob "creeper" :t 0 :drop :held}] rows))
+    (is (= 0 (get-in (c/starts-by-mob rows) [:melee :n])))))
 
 (deftest a-respond-run-holding-still-is-read-as-held
   (is (= :held (:k (c/scan-line "{:generation-id \"g\", :source :job, :kind :holding, :context {:job-id \"j54\", :reflex-id :hostile-near}, :time-ms 5, :message \"holding: hiding\", :data {:pos {:x 1, :y 2, :z 3}}}"))))
@@ -74,7 +78,7 @@
                      [(row "skeleton" 9 9) (row "creeper" 0.5 nil) {:id [0] :mob "zombie" :t 0 :drop :no-pos}])
         {:keys [setting melee]} (c/starts-by-mob rows)]
     (is (= #{"pooled" "creeper" "zombie"} (set (keys setting))) "no row for a ranged kind")
-    (is (= [121 120 1] [(:n melee) (get-in setting ["pooled" :n]) (:censored melee)]) "the pool's n counts the starts seen to end")))
+    (is (= [121 121 1] [(:n melee) (get-in setting ["pooled" :n]) (:censored melee)]) "the pool's n counts its censored start too")))
 
 (deftest folding-merges-rows-by-run-id-so-the-counts-only-grow
   (let [fight (fn [swings] {:id ["g" "j1"] :t 0 :swings swings :hp 1})
@@ -87,7 +91,9 @@
     (is (= {:id ["g" "j1"] :t 0 :s 0.4} (get-in folded [:starts ["g" "j1"]])) "a told start stays when its logs rotate away")
     (is (= {:id ["g" "j1"] :t 0 :lo 0.3 :hi 0.5}
            (get-in (-> folded (c/fold [] [(start {:lo 0.3 :hi 0.5})]) (c/fold [] [(start {:s 9})])) [:starts ["g" "j1"]]))
-        "bounds replace a start told before they were kept, and stay"))
+        "bounds replace a start told before they were kept, and stay")
+    (is (= {:id ["g" "j1"] :t 0 :drop :held} (get-in (-> folded (c/fold [] [(start {:lo 2.8 :hi nil})]) (c/fold [] [(start {:drop :held})])) [:starts ["g" "j1"]]))
+        "a run read again as held replaces the start it was folded as before held runs were left out"))
   (let [sighting (fn [end] {:id ["g" 0 "zombie"] :t 0 :mob "zombie" :s 1 :end end})
         folded (-> c/empty-counts (c/fold [] [] [(sighting :open)]) (c/fold [] [] [(sighting :caught)]) (c/fold [] [] [(sighting :gap)]))]
     (is (= :caught (get-in folded [:notices ["g" 0 "zombie"] :end])) "a sighting open when its log ended is replaced, a closed one stays")))

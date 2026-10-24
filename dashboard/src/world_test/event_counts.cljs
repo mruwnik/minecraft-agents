@@ -9,7 +9,8 @@
   dealt (hurt events inside the run) per swing (attack that hit or killed), overall and per weapon equipped in the run, and the runs with a blast over 2 hp.
   flight-starts: the first flee decision of each respond run from each mob kind: seconds until the body is 1 block from where it stood,
   less that block at sprint speed, known within the gap between two positions (the engine stamps the body's position on some
-  events, stamped-re, so the stream is sparse) or right-censored when the flight stopped being watched; per kind and melee kinds pooled, the
+  events, stamped-re, so the stream is sparse) or right-censored when the flight stopped being watched (a run that held still first is
+  no start); per kind and melee kinds pooled, the
   deciles at (i + 0.5) / 10 of their Turnbull fit, and :setting, the value of danger/::flight-starts (starts-by-mob).
   notice-rate: the hostiles a watch first saw within their follow range (watch.saw, one per mob that became known; provoked-only mobs left out), each followed until it
   reached the body (caught: a hurt from its kind, or a respond decision that places a seen mob within cost.danger/melee-reach of the body's last
@@ -194,8 +195,9 @@
   "The first flee decision from each mob kind of each respond run (records sorted by :t), as {:id :mob :t decision-ms :lo :hi}: the
   seconds until the body is stay-m from where it stood, less that block at sprint speed (at least 0), lie in [:lo, :hi]: from the last
   position that still stood there to the first that did not. :hi nil (right-censored) when the flight was no longer watched
-  before the body moved: its run ended, decided other than to flee or held still (held-re), the body died, or the logs end.
-  {:id :mob :t :drop :no-pos}: no position within pos-age-ms before the decision (where it stood is unknown).
+  before the body moved: its run ended, decided other than to flee, the body died, or the logs end. :end says which (:moved when it
+  did). {:id :mob :t :drop :no-pos}: no position within pos-age-ms before the decision (where it stood is unknown); :drop :held: the
+  run held still (held-re) first, another answer than a flight, so no start.
   :id [gen job] for a creeper and [gen job mob] for any other kind."
   [records sprint]
   (let [first-flee (->> records
@@ -203,12 +205,14 @@
                         (reduce (fn [acc r] (let [id (start-id r)] (if (acc id) acc (assoc acc id r)))) {})
                         vals set)
         secs (fn [t0 t] (max 0 (- (/ (- t t0) 1000) (/ stay-m sprint))))
-        row (fn [{:keys [id mob t still]} hi] {:id id :mob mob :t t :lo (secs t (max t still)) :hi hi})
-        close (fn [st done?] (let [{gone true kept false} (group-by (comp boolean done?) (:pending st))]
-                               (-> st (assoc :pending (vec kept)) (update :out into (map #(row % nil)) gone))))
+        row (fn [{:keys [id mob t still]} hi end] {:id id :mob mob :t t :lo (secs t (max t still)) :hi hi :end end})
+        close (fn [st done? end] (let [{gone true kept false} (group-by (comp boolean done?) (:pending st))]
+                                   (-> st (assoc :pending (vec kept))
+                                       (update :out into (map #(if (= :held end) (assoc (select-keys % [:id :mob :t]) :drop :held) (row % nil end))) gone))))
+        run? (fn [gen job] #(= [gen job] [(:gen %) (:job %)]))
         watch (fn [{:keys [last-pos] :as st} {:keys [k gen job t decision] :as r}]
                 (case k
-                  :decided (cond-> (if (= :flee decision) st (close st #(= [gen job] [(:gen %) (:job %)])))
+                  :decided (cond-> (if (= :flee decision) st (close st (run? gen job) :decided))
                              (first-flee r)
                              (as-> st (let [p (get last-pos gen)]
                                         (if (and p (<= (- t (:t p)) pos-age-ms))
@@ -219,11 +223,11 @@
                          (-> st
                              (assoc-in [:last-pos gen] r)
                              (assoc :pending (vec (concat waiting (map #(assoc % :still t) still))))
-                             (update :out into (map #(row % (secs (:t %) t))) moved)))
-                  (:ended :held) (close st #(= [gen job] [(:gen %) (:job %)]))
-                  :died (close st #(= gen (:gen %)))
+                             (update :out into (map #(row % (secs (:t %) t) :moved)) moved)))
+                  (:ended :held) (close st (run? gen job) k)
+                  :died (close st #(= gen (:gen %)) :died)
                   st))]
-    (:out (close (reduce watch {:last-pos {} :pending [] :out []} records) identity))))
+    (:out (close (reduce watch {:last-pos {} :pending [] :out []} records) identity :logs-end))))
 
 (defn flee-steps
   "Rows [{:id [gen t] :flight [gen job] :t :s :blocks :off?}] of the flee steps in records (sorted by :t;
@@ -286,16 +290,17 @@
   "starts-report of each mob kind's rows (:by-mob; a row counted before kinds were kept is a creeper's) and of the melee kinds' (not
   threat/ranged?, the kinds danger/flight-starts prices) together (:melee); the melee kinds' spread (world-test.censored/between); and
   :setting, danger/::flight-starts: each melee kind's deciles shrunk toward the other melee kinds' (censored/shrink), \"pooled\" all
-  melee kinds' together, for a kind with no row; its :n the starts seen to end (censored/seen)."
+  melee kinds' together, for a kind with no row; its :n the starts it holds; :spread's :information each kind's (censored/shrink's n)."
   [rows]
   (let [melee (remove #(ranged-mob? (mob-of %)) rows)
         groups (into {} (keep (fn [[mob rs]] (when-let [xs (seq (keep bounds rs))] [mob (vec xs)]))) (group-by mob-of melee))
         shrunk (censored/shrink groups tenths)]
     {:by-mob (into (sorted-map) (map (fn [[mob rs]] [mob (starts-report rs)])) (group-by mob-of rows))
      :melee (starts-report melee)
-     :spread (update-vals (censored/between groups) #(if (js/isFinite %) (/ (js/Math.round (* 1000 %)) 1000) %))
-     :setting (into {"pooled" {:n (censored/seen (keep bounds melee)) :deciles (:deciles (starts-report melee))}}
-                    (map (fn [[mob {:keys [n w pooled]}]] [mob {:n n :w (r2 w) :deciles (mapv r2 pooled)}]))
+     :spread (assoc (update-vals (censored/between groups) #(if (js/isFinite %) (/ (js/Math.round (* 1000 %)) 1000) %))
+                    :information (update-vals shrunk (comp r2 :n)))
+     :setting (into {"pooled" {:n (count (keep bounds melee)) :deciles (:deciles (starts-report melee))}}
+                    (map (fn [[mob {:keys [w pooled]}]] [mob {:n (count (groups mob)) :w (r2 w) :deciles (mapv r2 pooled)}]))
                     shrunk)}))
 
 ;; The durable counts: the rows of each prior by run id, so the counts only grow while the raw logs rotate away.
@@ -304,8 +309,10 @@
 (defn better-exchange "Of two rows of one fight, the one that saw more swings (a rotation may have cut the older read short), then the older." [a b]
   (if (> (:swings b) (:swings a)) b a))
 
-(defn start-rank "A start row with bounds over one folded before they were kept, over a dropped one." [r]
-  (cond (contains? r :lo) 2 (:s r) 1 :else 0))
+(defn start-rank
+  "A start row that says how it ended (a held run its drop) over one with bounds folded before, over one folded before bounds were
+  kept, over a dropped one." [r]
+  (cond (or (:end r) (= :held (:drop r))) 3 (contains? r :lo) 2 (:s r) 1 :else 0))
 
 (defn fold
   "counts with the rows of exchange-rows, start-rows and notice-rows merged in by id; a row already there stays unless a fight row saw

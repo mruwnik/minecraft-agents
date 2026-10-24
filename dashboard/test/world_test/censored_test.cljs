@@ -19,6 +19,9 @@
       3 0.375
       4 0.375)))
 
+(deftest a-time-censored-at-a-tie-is-past-it-as-kaplan-meier-has-it
+  (is (near? (/ 1 3) (mass-at (c/fit [[0 0] [0 nil] [5 5]]) 0))))
+
 (deftest a-time-seen-within-a-gap-goes-where-the-exact-times-say
   (is (near? 0.75 (mass-at (c/fit [[0 2] [1 1] [1 1] [3 3]]) 1))))
 
@@ -44,5 +47,12 @@
     (is (= ##Inf (:alpha (c/between same))))
     (is (= 0 (get-in (c/shrink same [0.5]) ["a" :w])))))
 
-(deftest a-kind-seen-only-censored-is-the-others
+(deftest a-censored-time-tells-of-the-mean-as-much-as-the-others-spread-it-closes
+  (is (near? 2 (c/information [[1 1] [0 nil] [9 nil]] (c/fit (ramp 20 0 2)))) "seen 1, censored before all others 0, past all 1"))
+
+(deftest a-kind-censored-past-every-other-start-weighs-as-one-seen
+  (let [late (assoc kinds "late" [[5 nil]])]
+    (is (near? (/ 1 (+ 1 (:alpha (c/between late)))) (get-in (c/shrink late [0.5]) ["late" :w])))))
+
+(deftest a-kind-censored-before-every-other-start-is-the-others
   (is (= 0 (get-in (c/shrink (assoc kinds "unseen" [[0 nil]]) [0.5]) ["unseen" :w]))))

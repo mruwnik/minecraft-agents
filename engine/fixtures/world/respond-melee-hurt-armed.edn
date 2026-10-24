@@ -1,0 +1,16 @@
+;; Card b9c9b080: at 8 hp with an iron sword, a zombie walking up on a bare floor with no cover is fought: the measured flight
+;; starts' slow tail (danger/flight-starts, zombie top decile 5.2 s) lets it reach a walk away, so the fight prices cheaper
+;; (cost-answer: fight 218.5 against flee 221.0 at 4 blocks). Lit plot underground; resistance after the damage keeps the body alive
+;; (the costs do not read it).
+{:name "hurt-armed-body-fights-a-zombie-walking-up"
+ :tags [:hostile :survival :reflex]
+ :time :any
+ :plot {:length 48 :width 48 :height 8 :floor "stone"}
+ :register [{:trigger :hostile-near}]
+ :body {:at [24.5 0 24.5] :inventory [["iron_sword" 1]]}
+ :act [[:rcon "effect give $BODY minecraft:instant_damage 1 1 true"]
+       [:rcon "effect give $BODY minecraft:resistance 600 4 true"]
+       [:summon "zombie" [20.5 0 24.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+ :expect [{:event {:source :job :kind :hostile.decided :data {:decision :fight}} :within-s 20}
+          {:no-event {:source :body :kind :died} :for-s 30}]
+ :limit-s 60}
