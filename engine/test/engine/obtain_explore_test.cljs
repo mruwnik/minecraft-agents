@@ -153,16 +153,18 @@
           (is (= [:done] (map :reason (f/events-of s :obtain.climbed))) "with the stair's ending")
           (is (= 1 (get (f/inv s) "raw_iron" 0)) "and the mine after it got the ore"))))))
 
-(deftest a-stair-out-of-the-own-zone-is-not-walked-back-down-between-its-steps
+(deftest a-walk-out-of-the-own-zone-is-not-walked-back-to-its-start-on-the-way
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (f/start (ore-world (rock-room 5) [{:name "stone_pickaxe" :count 1} {:name "torch" :count 16}]) [f/own-zone] (assoc f/sight-opts :radius 8))]
           (with-redefs [plan/search-way (fn [_ _] {:way :tunnel :y 68 :cost 1})]
             (await (obtain! s {:item "raw_iron" :count 1 :ways #{:gather}} 100)))
-          (let [steps (map :at (filter #(re-find #"gather-raw_iron/leave/" (str (:job %))) (f/events-of s :stair.step)))]
-            (is (seq steps) "the mine's walk out of the zone cut a stair up through the roof")
-            (is (apply distinct? steps) "each step of it once: the mine did not walk the body back to where it started between them")))))))
+          (let [mine #(re-find #"^j1/gather-raw_iron" (str (:job %)))
+                left (first (filter mine (f/events-of s :mine.left-zone)))
+                backs (filter #(and (mine %) (= :back (:slot %)) (< (:seq %) (:seq left))) (f/events-of s :child_started))]
+            (is left "the mine shut in after the climb walked out of its zone")
+            (is (empty? backs) "and never back to where it started on the way: each try goes on from where the last one ended")))))))
 
 (deftest an-ore-whose-tunnel-is-priced-above-the-feet-is-climbed-to-once
   (let [p (tu/seeing-all (tu/fake-on-floor {:inventory [{:name "stone_pickaxe" :count 1}]}))
