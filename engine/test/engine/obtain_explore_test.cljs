@@ -141,7 +141,7 @@
                                   :when (not (and (<= -2 x 2) (<= -2 z 2) (<= 64 y 65)))]
                               [(str x "," y "," z) "stone"]))
               rock (assoc rock "0,68,5" "iron_ore") ; hidden in rock, so the mine after the climb is short
-              s (f/start (ore-world rock [{:name "stone_pickaxe" :count 1} {:name "torch" :count 16}]) [f/own-zone] (assoc f/sight-opts :radius 8))]
+              s (f/start (ore-world rock [{:name "stone_pickaxe" :count 1} {:name "torch" :count 16}]) [] (assoc f/sight-opts :radius 8))]
           (with-redefs [plan/search-way (fn [_ _] {:way :tunnel :y 68 :cost 1})]
             (await (obtain! s {:item "raw_iron" :count 1 :ways #{:gather}} 100)))
           (is (seq (f/events-of s :stair.step)) "a stair was cut up")
