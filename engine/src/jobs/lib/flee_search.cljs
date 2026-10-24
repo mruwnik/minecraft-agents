@@ -452,6 +452,11 @@
                        :cornered? (not (or free? look?))}
                 timed (assoc :seconds (reduce min (map :caught-s timed))))))))
 
+(defn way-up-chance
+  "{:chance} of a flight that takes a stair up it has seen (respond.cover/way-up): a seen way, at wworld/way-counts counts."
+  [counts]
+  {:chance (cost/flight-caught-chance {:way? true :unseen? false :counts counts})})
+
 (defn named
   "The scored end of search ends planned to the named target at pos, nil when none."
   [ends pos]

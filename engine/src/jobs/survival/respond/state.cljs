@@ -207,26 +207,26 @@
   [p e now]
   (merge {:id (.-id e) :uuid (.-uuid e) :mob (.-name e) :seen-t now} (threats/place-of p e)))
 
-(defn look!
-  "Update the flight's chasers (job memory :chasers, by id): the real dangers within :radius (ranged :ranged-radius)
-  join or are seen afresh; one that stopped chasing (stopped-chasing) moves to :fled with :ended why. The chasers
-  still on, as JS entities, nearest first. A mob that hurt the body in its refuge (:reached) has a way whatever the map says."
-  [c]
+(defn look
+  "What look! makes of the hostiles from the flight's memory mem, written nowhere: {:on the chasers still on, as JS
+  entities, nearest first; :update the fn look! applies to job memory}. The flee price (respond.cover/caught-chance!)
+  asks it for the chasers the flight's next step runs from."
+  [c mem]
   (let [radius (danger-q/hostile-radius)
         ranged-radius (danger-q/ranged-radius)
         p (:primitives c)
         low? (<= (.-health (.self p)) (hide-health))
         now (ctx/now c)
-        dead (set (dead-ids c))
+        dead (set (:dead mem))
         live (remove #(dead (.-id %)) (known-chasers p))
         listed (into {} (map (juxt #(.-id %) identity)) live)
-        reached (set (:reached (ctx/mem c)))
+        reached (set (:reached mem))
         joining (remove #(dead (.-id %)) (concat (danger-q/dangers p radius {:ranged-radius ranged-radius} {:sight? false})
                                                  (filter #(reached (.-id %)) live)))
-        chasers (merge (:chasers (ctx/mem c)) (into {} (map (juxt #(.-id %) #(chaser-entry p % now))) joining))
-        looked (set (:looked-back (ctx/mem c)))
+        chasers (merge (:chasers mem) (into {} (map (juxt #(.-id %) #(chaser-entry p % now))) joining))
+        looked (set (:looked-back mem))
         stills (into {} (keep (fn [e] (when (and (sensed-now? e) (true? (.-visible e)))
-                                        (let [pos (u/pos-of (.-pos e)) old (get (:still (ctx/mem c)) (.-id e))]
+                                        (let [pos (u/pos-of (.-pos e)) old (get (:still mem) (.-id e))]
                                           [(.-id e) (if (and old (<= (u/dist (:pos old) pos) 0.3)) old {:pos pos :since now})]))))
                      live)
         judged (for [[id ch] chasers
@@ -241,12 +241,21 @@
         on (filter #(nil? (:why %)) judged)
         back (filter :look-back? judged)
         off (remove #(or (nil? (:why %)) (:look-back? %)) judged)]
-    (ctx/update-mem! c #(-> %
-                            (assoc :chasers (into {} (map (juxt :id :ch)) (concat on back)))
-                            (assoc :look-back (mapv :ch back) :still stills)
-                            (update :looked-back (fn [ids] (vec (remove (set (keep (fn [{:keys [id e]}] (when (sensed-now? e) id)) judged)) ids))))
-                            (update :fled (fnil into []) (map (fn [{:keys [ch why]}] (assoc ch :ended why))) off)))
-    (sort-by #(danger-q/mob-distance p %) (map :e on))))
+    {:on (sort-by #(danger-q/mob-distance p %) (map :e on))
+     :update #(-> %
+                  (assoc :chasers (into {} (map (juxt :id :ch)) (concat on back)))
+                  (assoc :look-back (mapv :ch back) :still stills)
+                  (update :looked-back (fn [ids] (vec (remove (set (keep (fn [{:keys [id e]}] (when (sensed-now? e) id)) judged)) ids))))
+                  (update :fled (fnil into []) (map (fn [{:keys [ch why]}] (assoc ch :ended why))) off))}))
+
+(defn look!
+  "Update the flight's chasers (job memory :chasers, by id): the real dangers within :radius (ranged :ranged-radius)
+  join or are seen afresh; one that stopped chasing (stopped-chasing) moves to :fled with :ended why. The chasers
+  still on, as JS entities, nearest first. A mob that hurt the body in its refuge (:reached) has a way whatever the map says."
+  [c]
+  (let [{:keys [on] write :update} (look c (ctx/mem c))]
+    (ctx/update-mem! c write)
+    on))
 
 (defn ^:async look-back!
   "Turn to each chaser look! held back (job memory :look-back: lost while unsensed) at its last known place, once until it

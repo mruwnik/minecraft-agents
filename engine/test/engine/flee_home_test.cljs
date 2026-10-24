@@ -432,7 +432,9 @@
               c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
               _ (.setOwner (:primitives eng) "tx")
               unjudged #(count (filter (comp #{:unjudged} :why) (:dropped (rooms/survey c nil %))))
+              dry [(unjudged 0) (do (rooms/survey c nil 2 false) (unjudged 0))]
               counts [(unjudged 0) (unjudged 2) (unjudged 2)]]
+          (is (apply = dry) (str "a survey that keeps nothing (the flee price's) leaves the next step the same door sides to judge: " dry))
           (is (pos? (first counts)) (str "none judged at first: " counts))
           (is (apply > counts) (str "each later step judges more: " counts)))))))
 

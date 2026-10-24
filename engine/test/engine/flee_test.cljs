@@ -810,11 +810,16 @@
 
 (defn price-after-flight
   "The flight's target (cover/flight-target!), asked step after step until it looks at no more cells (at most 6), and
-  then the flee price (cover/caught-chance!) in world: the price the next step asks, the flight's looks taken."
+  then the flee price (cover/caught-chance!) in world: the price the next step asks, the flight's looks taken. world's
+  :stair: the floors of a stair the body cut, no sky light (under ground)."
   [world]
   (let [out (atom nil)
         threats #(danger-q/known-hostiles (:primitives %) 30 {:ranged-radius 30})
-        s (assoc-in (setup-sensed world) [:eng :jobs 'targeter]
+        s (setup-sensed (dissoc world :stair))
+        _ (when-let [floors (:stair world)]
+            (swap! (fake/state (:raw s)) assoc :light-default [0 14])
+            (mem/write! (:store (:eng s)) :stair-way {:dim "overworld" :floors floors}))
+        s (assoc-in s [:eng :jobs 'targeter]
                     {:round (fn ^:async r [c]
                               (loop [n 6]
                                 (let [glanced (:glanced (ctx/mem c))
@@ -833,15 +838,45 @@
                  :when (not (or (tunnel-cells [x y z]) (and (<= -4 x -2) (#{64 65} y) (zero? z))))]
              [(key-of x y z) "stone"])))
 
+(def stair-rock
+  "tunnel-rock with its west cave filled and a step cut up behind the body (floor [-1 64 0]), rock over and past it: a
+  stair whose top the body has not dug on from."
+  (-> (into tunnel-rock (for [x (range -4 -1) y [64 65]] [(key-of x y 0) "stone"]))
+      (dissoc (key-of -1 65 0) (key-of -1 66 0))))
+
 (deftest the-flee-price-and-the-flight-agree-on-whether-the-body-is-cornered
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [field (await (price-after-flight {:entities [(zombie 7 5 {})]}))
-              tunnel (await (price-after-flight {:floor strip :blocks tunnel-rock :entities [(zombie 7 5 {})]}))]
+              tunnel (await (price-after-flight {:floor strip :blocks tunnel-rock :entities [(zombie 7 5 {})]}))
+              stair (await (price-after-flight {:floor strip :blocks stair-rock :stair [[-1 64 0]] :entities [(zombie 7 5 {})]}))]
           (is (= [true false] [(some? (:target field)) (boolean (:cornered? (:price field)))]) (str "an open field: a way " (pr-str field)))
           (is (= [nil true] [(:target tunnel) (:cornered? (:price tunnel))])
-              (str "a tunnel whose unseen sides the flight has looked at: cornered, the price too " (pr-str tunnel))))))))
+              (str "a tunnel whose unseen sides the flight has looked at: cornered, the price too " (pr-str tunnel)))
+          (is (= [{:x -1 :y 65 :z 0} (:chance (:price field))] [(:target stair) (:chance (:price stair))])
+              (str "the same tunnel with a stair the body cut: the flight takes it, so the price is a seen way's like the field's, not a way through the unseen cells the flight never looks at " (pr-str stair))))))))
+
+(deftest the-flee-price-runs-from-the-chasers-the-flight-runs-from
+  ;; a zombie standing 13 blocks off, beyond the danger radius, chases neither: both step away from it as a bystander
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [priced (atom nil)
+              opts respond.goal/choose-opts
+              s (setup-sensed {:entities [(zombie 7 5 {}) (assoc (zombie 8 0 {}) :pos {:x 12 :y 64 :z 6})]})
+              s (assoc-in s [:eng :jobs 'pricer]
+                          {:round (fn ^:async r [c]
+                                    (look/see! c)
+                                    (with-redefs [respond.goal/choose-opts (fn [c threats & more]
+                                                                             (reset! priced (set (map #(.-id %) threats)))
+                                                                             (apply opts c threats more))]
+                                      (await (cover/caught-chance! c)))
+                                    (reset! priced [(set (map #(.-id %) (respond.state/known-chasers (:primitives c)))) @priced
+                                                    (set (map #(.-id %) (respond.state/look! c)))])
+                                    (ctx/end c :done nil))})]
+          (await (run-job! s 'pricer {}))
+          (is (= [#{7 8} #{7} #{7}] @priced) "both known; the price and the flight's step both run from the chasing zombie alone"))))))
 
 (deftest a-flight-target-behind-the-body-is-looked-at-first
   (async done

@@ -12,7 +12,7 @@
   2. Runs into a closed building first (not while a creeper chases: its blast would take the door and what is inside;
      with a creeper within blast reach no room is looked for, and the one the body stands in is no refuge: it steps away
      or takes the cornered options): the latest :bed or :home within respond.cover/home-range (64), or a room behind a wooden door or
-     gate the body has seen (jobs.lib.rooms/rooms, bounded by its settings), that is a closed room (walls,
+     gate the body has seen (respond.cover/survey, bounded by its settings), that is a closed room (walls,
      doors that shut: jobs.lib.reach.room/room) whose door it walks to (over seen blocks, at its own speed) ahead of every
      melee chaser (jobs.lib.cost/reach-first?), the fewest steps of those, with a go-to child to the room cell inside
      that door (retreat.home info, once a flight); a building dropped only for unseen cells, with its door side within 6 blocks, is looked into once a flight from its doorway (then from one cell beyond it), up to ::door-looks (4) looks at its unseen sides (room-lib/glance-in!; never with a creeper chasing) before the choice; a step that gets no nearer drops that room for the flight. Not while
@@ -147,15 +147,10 @@
         hit? (or (cornered/hit-on-the-run! c) (pick/beaten? c) (pick/shot-on-the-run? c) (pick/bare-boxed-in? c (cornered/near-hostiles c)))
         door (when threat (respond.doors/door-for c threats))
         covered? (cover/cover-fn p threats (flight/fire-spots c))
-        blast (filterv #(flight/blaster? p %) threats)
-        survey-now (fn []
-                     (room-lib/survey c (cover/home-pos c)
-                                          (if (some #(and (not (combat/ranged? %)) (<= (danger-q/mob-distance p %) (cornered/cover-gap))) threats)
-                                            0
-                                            (room-lib/judge-per-step))))
-        survey0 (when (and threat (not hit?) (empty? blast)) (survey-now))
+        blast (cover/blast p threats)
+        survey0 (when (and threat (not hit?)) (cover/survey c threats true))
         glanced? (boolean (and survey0 (not-any? combat/creeper? threats) (await (room-lib/glance-in! c survey0))))
-        survey (if glanced? (survey-now) survey0)
+        survey (if glanced? (cover/survey c threats true) survey0)
         rooms (:rooms survey)
         verdicts (when survey (room-lib/verdicts p rooms threats (not (cover/exposed-low? c covered?))))
         {:keys [room way inside?]} (room-lib/pick verdicts)

@@ -119,12 +119,6 @@
   (let [at (access/sensed-at p access/hidden-guess)]
     (fn [{:keys [x y z]}] (at [x y z]))))
 
-(defn live-chasers
-  "The hostile mobs the body knows of within the longest follow range, this flight's dead skipped."
-  [c]
-  (let [dead (set (flight/dead-ids c))]
-    (remove #(dead (.-id %)) (flight/known-chasers (:primitives c)))))
-
 (defn bystander-spots
   "The places of the hostiles the body knows within their follow range of it (threats/follow-range: they would notice it) that are not chasing it (not in chasing, not killed): a flight step does not end nearer to one of them, so the body does not run from one mob into another."
   [c chasing]

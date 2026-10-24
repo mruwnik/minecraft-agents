@@ -94,19 +94,21 @@
 (defn closed?
   "Whether cell pos holds a closed room (refuge-room?), kept in mem :refuge-rooms for the job; no closed room at all
   (reach-room/room nil) also in body memory (known-open?) for a while. :unseen, kept nowhere, when a cell of the room is not
-  seen yet (reach-room/unseen-room?): judged again at the next look."
-  [c pos]
-  (let [k (cell-key pos)
-        known (get (:refuge-rooms (ctx/mem c)) k)]
-    (cond
-      (some? known) known
-      (known-open? c pos) false
-      :else (let [p (:primitives c) v (refuge-room? p pos)]
-              (if (and (not v) (reach-room/unseen-room? p pos))
-                :unseen
-                (do (ctx/update-mem! c assoc-in [:refuge-rooms k] v)
-                    (when-not (or v (reach-room/room p pos)) (mem/write! (:store (:engine c)) :refuge-open {:cell k} open-policy))
-                    v))))))
+  seen yet (reach-room/unseen-room?): judged again at the next look. keep? false keeps nothing."
+  ([c pos] (closed? c pos true))
+  ([c pos keep?]
+   (let [k (cell-key pos)
+         known (get (:refuge-rooms (ctx/mem c)) k)]
+     (cond
+       (some? known) known
+       (known-open? c pos) false
+       :else (let [p (:primitives c) v (refuge-room? p pos)]
+               (cond
+                 (and (not v) (reach-room/unseen-room? p pos)) :unseen
+                 (not keep?) v
+                 :else (do (ctx/update-mem! c assoc-in [:refuge-rooms k] v)
+                           (when-not (or v (reach-room/room p pos)) (mem/write! (:store (:engine c)) :refuge-open {:cell k} open-policy))
+                           v)))))))
 
 (defn world-key
   "What the body's picture of the world stands on (reach-room/steady-key: a block changed or newly seen, the clock in coarse
@@ -166,9 +168,11 @@
   nearest; and {:dropped [{:at [x y z] :own? :why}]}, the cells that are none: :run-failed (a run to it failed this
   flight), :not-closed, :unseen (a cell of the room not seen yet), or :unjudged (a door side not judged this flight beyond the fresh ones
   it may flood now; the home is always judged). A home with a bare doorway gap counts as a room (doorway-room: its :gap; :fill? when a
-  block is carried to fill it)."
+  block is carried to fill it). keep? false: the judgements are kept nowhere (closed?), so the flee price surveys what the
+  flight's step then surveys."
   ([c home] (survey c home js/Infinity))
-  ([c home fresh]
+  ([c home fresh] (survey c home fresh true))
+  ([c home fresh keep?]
    (let [p (:primitives c)
          me (u/self-pos c)
          failed (:refuges-failed (ctx/mem c) #{})
@@ -178,7 +182,7 @@
                    (cond
                      (some? known) (when-not known :not-closed)
                      (or home? (pos? @left)) (do (when-not home? (vswap! left dec))
-                                                 (case (closed? c pos) true nil :unseen :unseen :not-closed))
+                                                 (case (closed? c pos keep?) true nil :unseen :unseen :not-closed))
                      :else :unjudged)))
          judged (mapv (fn [{:keys [pos home?] :as s}]
                         (let [why (if (failed (cell-key pos)) :run-failed (judge pos home?))
@@ -247,11 +251,6 @@
             (do (await (walk-to! inner))
                 (await (look-at-sides! 0 #{}))
                 true)))))))
-
-(defn rooms
-  "The closed rooms to flee to (survey), none a run to failed this flight."
-  [c home]
-  (:rooms (survey c home)))
 
 (defn inside?
   "Whether the body is in room (jobs.lib.reach.room/room): its feet cell or the cell it stands on (as go-to arrives) is one of
