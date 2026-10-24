@@ -314,9 +314,8 @@
   (let [kit {:weapon nil :equipment nil}
         open {:k 98 :n 100}
         closed {:k 50 :n 100}]
-    (is (= [0.5 0.75] (settings/with-settings {:jobs.lib.walk.way-on/prior {:a 1 :b 1 :spots 0}} #(mapv cost/way-on-chance [{:k 0 :n 0} {:k 2 :n 2}])))
-        "the prior's a and b count as ways that led on and ways that shut")
-    (is (> (cost/way-on-chance {:k 0 :n 0}) 0.5) "nothing seen: the measured prior, most places' ways lead on")
+    (is (= 0.5 (cost/way-on-chance {:k 0 :n 0})) "nothing seen: the uniform prior")
+    (is (= 0.75 (cost/way-on-chance {:k 2 :n 2})))
     (is (> (cost/unseen-share closed kit) (cost/unseen-share open kit) (cost/dark-factor kit))
         "seen dead ends round it make an unseen way dearer, open ground cheaper, never below a dark cell's price")
     (is (< (cost/unseen-share open {:weapon "iron_sword" :equipment iron-set}) (cost/unseen-share open kit)) "an armed, armoured body fears the dark less")

@@ -1,6 +1,6 @@
 (ns world-test.event-counts
   "tools/event-counts.mjs: recounts the measured combat priors from the trial bodies' event logs, so a setting can cite its k and n.
-  Commands: fold | creeper-exchange | flight-starts | notice-rate | way-on (world-test.way-prior; trial bodies only) | drowned-meets (world-test.drowned-meets; trial bodies only) | flee-pace (trial bodies only), each [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S]; each folds the logs into the durable counts file first (rows by run id, so counts only grow as logs rotate).
+  Commands: fold | creeper-exchange | flight-starts | notice-rate | drowned-meets (world-test.drowned-meets; trial bodies only) | flee-pace (trial bodies only), each [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S]; each folds the logs into the durable counts file first (rows by run id, so counts only grow as logs rotate).
   spot-returns [--agents DIR] (world-test.spot-returns) and vein-seen [--agents DIR] count from the logs alone, no fold;
   water-lags [--agents DIR] [--stride N] (world-test.water-lags) from the recorded chunks beside DIR.
   vein-seen: the ore blocks one look saw together (26-connected, a vein's plain and deepslate blocks as one ore) per group, from the
@@ -30,15 +30,12 @@
             [cljs.reader :as reader]
             [clojure.string :as str]
             [jobs.lib.cost.danger :as danger]
-            [engine.path.offsets :as offsets]
-            [engine.perception.store :as store]
             [jobs.lib.cost.threat :as threat]
             [world-test.censored :as censored]
             [world-test.drowned-meets :as drowned]
             [world-test.fresh-drop :as fresh-drop]
             [world-test.spot-returns :as spot-returns]
-            [world-test.water-lags :as water-lags]
-            [world-test.way-prior :as way-prior]))
+            [world-test.water-lags :as water-lags]))
 
 (def blast-hp "hp over which one hurt event from a creeper is its blast." 2)
 (def tail-ms "Time after a run ends within which a hurt still counts as its own." 1500)
@@ -55,9 +52,6 @@
 
 (def stamped-re "Events the engine stamps with the body's position (events/emit!: no emitter's own :pos), besides an action's :done."
   #":kind :(?:planned|started|fired|round_started|memory_written|child_started|child_ended|holding)[,}]")
-
-(defn walk-plan? "A walk child's plan (a way-prior walk spot)." [line]
-  (boolean (and (str/includes? line ":kind :planned") (re-find #":job-id \"[^\"]*/walk\"" line))))
 
 (def held-re "A respond run's events that it holds still on purpose (hides, seals, is cornered): its flight does not get going."
   #":kind :(?:retreat_sealed|hostile\.sealed-hold|holding, .*:message \"holding: (?:hiding|cornered|under a roof))")
@@ -131,8 +125,7 @@
 
         (or (and (str/includes? line ":source :action") (str/includes? line ":kind :done")) (re-find stamped-re line))
         (when-let [[_ x y z] (last (re-seq pos-re line))]
-          (cond-> {:k :pos :t t :gen gen :x (js/parseFloat x) :y (js/parseFloat y) :z (js/parseFloat z)}
-            (walk-plan? line) (assoc :walk? true)))
+          {:k :pos :t t :gen gen :x (js/parseFloat x) :y (js/parseFloat y) :z (js/parseFloat z)})
 
         :else
         (when-let [[_ x y z] (re-find pos-re line)]
@@ -313,7 +306,7 @@
                     shrunk)}))
 
 ;; The durable counts: the rows of each prior by run id, so the counts only grow while the raw logs rotate away.
-(def empty-counts {:exchange {} :starts {} :notices {} :drowned-exposure {} :drowned-meets {} :flight-steps {} :way-spots {}})
+(def empty-counts {:exchange {} :starts {} :notices {} :drowned-exposure {} :drowned-meets {} :flight-steps {}})
 
 (defn better-exchange "Of two rows of one fight, the one that saw more swings (a rotation may have cut the older read short), then the older." [a b]
   (if (> (:swings b) (:swings a)) b a))
@@ -458,7 +451,7 @@
        (sort-by :t)
        vec))
 
-(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | way-on | drowned-meets | flee-pace | spot-returns | vein-seen | water-lags [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N]
+(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | spot-returns | vein-seen | water-lags [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N]
   every command first folds the logs into the counts file (default worlds/test/priors-counts.edn), then reports from the file; --since-ms keeps the rows of fights started after it.")
 
 (defn- parse-args [argv]
@@ -474,30 +467,17 @@
 
 (def probe? "Bodies whose logs the drowned counts leave out: world-test probes, not trial play." #(re-find #"^(Claude)?Probe" %))
 
-(defn seen-sections
-  "(fn [cx sy cz]) the overworld ids + 1 of a section of the seen.bin file (load-seen: engine/js/seen-file.mjs loadSeen), nil
-  without one."
-  [load-seen file]
-  (when-let [^js data (and load-seen (fs/existsSync file) (load-seen file))]
-    (let [m (js/Map.)]
-      (doseq [^js s (.-sections data) :when (= "overworld" (.-dim s))]
-        (.set m (store/section-key (.-cx s) (.-sy s) (.-cz s)) (.-ids s)))
-      (fn [cx sy cz] (.get m (store/section-key cx sy cz))))))
-
 (defn fold-logs!
   "Reads every body's logs under agents-dir and folds the rows into the counts file; returns the new counts. at: the
-  chunks' cell reader (world-test.drowned-meets/class-of); load-seen: the seen.bin reader (way-prior's spots)."
-  [agents-dir counts-file sprint at load-seen]
+  chunks' cell reader (world-test.drowned-meets/class-of)."
+  [agents-dir counts-file sprint at]
   (let [per-agent (for [b (array-seq (fs/readdirSync agents-dir))
                         :when (fs/existsSync (path/join agents-dir b "engine"))]
                     [b (read-agent (path/join agents-dir b "engine") 0)])
         counts (reduce (fn [c [b records]]
                          (cond-> (fold c (exchange records) (starts records sprint) (notices records))
                            (not (probe? b)) (-> (drowned/fold (drowned/exposure at records) (drowned/meets at records))
-                                                (update :flight-steps #(reduce (fn [m r] (assoc m (:id r) r)) % (flee-steps records)))
-                                                (update :way-spots way-prior/fold
-                                                        (way-prior/rows b records (seen-sections load-seen (path/join agents-dir b "engine" "seen.bin"))
-                                                                        #(:sky (at %1 %2 %3)))))))
+                                                (update :flight-steps #(reduce (fn [m r] (assoc m (:id r) r)) % (flee-steps records))))))
                        (load-counts counts-file) per-agent)]
     (save-counts! counts-file counts)
     counts))
@@ -511,16 +491,14 @@
     (constantly nil)))
 
 (defn main
-  "argv (array) -> promise of the exit code. open-chunks: tools/event-counts.mjs's reader of the recorded chunks; load-seen
-  its seen.bin reader."
-  [argv open-chunks load-seen]
+  "argv (array) -> promise of the exit code. open-chunks: tools/event-counts.mjs's reader of the recorded chunks."
+  [argv open-chunks]
   (let [{[cmd] :pos :keys [agents counts since-ms sprint stride] :or {since-ms 0 sprint 5.6 stride 1}} (parse-args (vec (array-seq argv)))
         repo (or js/process.env.WORLD_TEST_REPO ".")
         agents (or agents (path/join repo "worlds" "test" "agents"))
-        folded (when (#{"fold" "creeper-exchange" "flight-starts" "notice-rate" "drowned-meets" "flee-pace" "way-on"} cmd)
-                 (offsets/set-root! (path/join repo "engine"))
+        folded (when (#{"fold" "creeper-exchange" "flight-starts" "notice-rate" "drowned-meets" "flee-pace"} cmd)
                  (fold-logs! agents (or counts (path/join repo "worlds" "test" "priors-counts.edn")) sprint
-                             (cell-reader open-chunks (path/join agents ".." "chunks")) load-seen))
+                             (cell-reader open-chunks (path/join agents ".." "chunks"))))
         since (fn [rows] (filter #(>= (:t %) since-ms) (vals rows)))]
     (js/Promise.resolve
      (case cmd
@@ -536,6 +514,5 @@
                                                        (filter #(fs/existsSync (path/join agents % "engine")) (array-seq (fs/readdirSync agents)))))))
                        0)
        "flee-pace" (do (println (pr-str (assoc (pace-report (since (:flight-steps folded))) :since-ms since-ms))) 0)
-       "way-on" (do (println (pr-str (assoc (way-prior/report (since (:way-spots folded))) :since-ms since-ms))) 0)
        "notice-rate" (do (println (pr-str (assoc (notice-report (since (:notices folded))) :since-ms since-ms))) 0)
        (do (js/console.error usage) 2)))))
