@@ -87,6 +87,20 @@
     20 sword [(mob "zombie" 3 35) (mob "zombie" 3 35) (mob "zombie" 3 35)] :flee
     20 sword [(mob "skeleton" 10)] :fight))
 
+(deftest the-walk-again-comes-as-one-flight-more
+  (let [skeleton (mob "skeleton" 10)
+        again (first (:then (cost/flee-answer {:food 20 :mobs [skeleton]})))]
+    (is (= (dissoc (cost/flee-answer {:food 20 :mobs [skeleton] :returns 1}) :then) again)
+        "a mob walked from is met again on the way back: that walk is priced as the next decision would price it, a return")
+    (is (nil? (:then again)) "and nothing after it")))
+
+(deftest a-mob-between-the-body-and-its-goal-is-walked-from-again-from-where-the-way-back-passes-it
+  (let [fight (cost/fight-answer (fight sword (mob "skeleton" 12)))
+        choose #(:answer (cost/decide (body 20) {:fight fight :flee (cost/flee-answer {:food 20 :mobs [%] :later fight})} here))]
+    (is (= :flee (choose (mob "skeleton" 12))) "nothing past it: stepping out of its range now and again is cheaper than closing 12 blocks under its arrows")
+    (is (= :fight (choose (assoc (mob "skeleton" 12) :again 1))) "the way back passes a block from it: the walk again is from its feet, the whole bow range")
+    (is (= (choose (mob "skeleton" 12)) (choose (assoc (mob "skeleton" 12) :again 14))) "a way that passes farther than it stands changes nothing")))
+
 (deftest a-walk-away-is-caught-at-the-prior-and-so-loses-to-a-fight-or-a-wall-it-would-beat-on-an-open-way
   (let [zombie (mob "zombie" 4 35)
         f (cost/fight-answer (fight sword zombie))
@@ -123,7 +137,7 @@
   (let [zombie (mob "zombie" 4 35)]
     (is (nil? (:then (cost/flee-answer {:food 20 :mobs [(mob "creeper" 1)]}))) "a lone creeper blown is gone")
     (is (some? (:then (cost/flee-answer {:food 20 :mobs [(mob "creeper" 3)]}))) "one 3 off mostly does not reach the walk")
-    (is (= (cost/flee-answer {:food 20 :mobs [zombie]}) (first (:then (cost/flee-answer {:food 20 :mobs [(mob "creeper" 1) zombie]}))))
+    (is (= (cost/flee-answer {:food 20 :mobs [zombie] :returns 1}) (first (:then (cost/flee-answer {:food 20 :mobs [(mob "creeper" 1) zombie]}))))
         "after the blast only the zombie is walked from again")))
 
 (deftest a-body-that-can-neither-outrun-nor-outfight-a-spider-digs-in
@@ -217,11 +231,11 @@
     (is (some? (flee ##Inf)) "land that goes on, or not known, is the walk away")))
 
 (deftest a-lethal-threat-costs-the-body-its-life-not-more
-  ;; a fist fight with a witch is 26 punches 1.3 s apart under her potions: 84 hp expected
+  ;; a fist fight with a witch is 26 punches 1.3 s apart under her potions: 84 hp expected; the walk out of her range about 13
   (let [route (fn [weight & mobs] {:cells [(assoc here :s 60)] :threats (for [m mobs] {:mob m :weight weight :reach (constantly 1)})})]
-    (is (<= 19.5 (:hurt (cost/route-parts (body 20) (route 1 "witch"))) 20) "60 s in her range: she seldom misses the body")
-    (is (<= 19.5 (:hurt (cost/route-parts (body 20) (route 1 "witch" "witch"))) 20) "nor do two")
-    (is (< 5.9 (:hurt (cost/route-parts (body 20) (route 0.3 "witch"))) 6) "a faded one its share of the life")))
+    (is (<= 7.8 (:hurt (cost/route-parts (body 8) (route 1 "witch"))) 8) "60 s in her range: she seldom misses the body")
+    (is (<= 7.8 (:hurt (cost/route-parts (body 8) (route 1 "witch" "witch"))) 8) "nor do two")
+    (is (< 2.35 (:hurt (cost/route-parts (body 8) (route 0.3 "witch"))) 2.4) "a faded one its share of the life")))
 
 (deftest a-second-in-water-costs-the-drowned-meet-rate-times-the-cheapest-answer-to-one
   (let [kit (assoc (body 20) :weapon "stone_sword")
@@ -344,6 +358,22 @@
     (is (< (js/Math.abs (- (:hurt (met 20)) (+ arrow (answer/expected-damage (flee (- 20 arrow)))))) 1e-9)
         "the hurt is that arrow and the answer's blows after it")
     (is (= (:near (met 20)) (:near (flee (- 20 arrow)))) "the answer starts at the hit")))
+
+(deftest a-skeleton-stands-and-shoots-while-the-body-walks-out-of-its-bow-range
+  (let [v (danger/flight-speed 20)
+        walk (cost/flee-answer {:food 20 :mobs [(mob "skeleton" 0)]})
+        shot-s (/ answer/bow-range v)]
+    (is (< (js/Math.abs (- (:damage walk) (threat/mob-hurt (armour/armour-stats nil) "skeleton" shot-s identity (threat/lone-hit-rate "skeleton")))) 1e-9)
+        "shot only while the body walks out of its bow range at flight speed: vanilla's ranged attack goals stop the shooter within range")
+    (is (< (js/Math.abs (- (:near walk) (+ shot-s (/ 1 (- v (danger/chase-speed "skeleton")))))) 1e-9)
+        "past its range it chases, out to its follow range")))
+
+(deftest on-hard-a-fed-body-beside-a-lone-skeleton-walks-away-and-most-likely-lives
+  (settings/with-settings {::threat/difficulty 3}
+    #(let [as (answer/threat-answers (body 20) "skeleton" nil)]
+       (is (= :flee (:answer (cost/decide (body 20) as here))) "a fist fight is certain death")
+       (is (< (:chance (answer/group-parts (body 20) ["skeleton"] nil here)) 0.5)
+           "the walk out of a 15-block bow range takes 4 s: two hard shots at most (2 s cycle), under 8 hp each, against 20 hp"))))
 
 (defn partitions
   "Every partition of coll into blocks."

@@ -453,9 +453,9 @@
   (with-redefs [look/seen-block (constantly {:name "air" :age-ms 1e8}) sh-sense/sky-reaches-from-above? (constantly false)] (f)))
 
 (deftest a-hungry-body-affords-less-risk-than-a-fed-one-unless-it-cannot-heal
-  ;; a skeleton death 75 s ago, 75 blocks off: about a third of a chance it has not despawned; a bed by the body
+  ;; a skeleton death 30 s ago, 75 blocks off: most likely it has not despawned; a bed by the body
   (let [status-for (fn [food inventory] (let [c (-> (ready-test/ctx-of (assoc bed-world :self {:pos inside :health 20 :food food} :inventory inventory))
-                                                    (with-death {:x 80 :y 64 :z 5} "skeleton" 75000 with-bed))]
+                                                    (with-death {:x 80 :y 64 :z 5} "skeleton" 30000 with-bed))]
                                           (in-lit-cave #(first (planned-status c far-goal)))))
         bread [{:name "bread" :count 3}]]
     (is (= :ok (status-for 20 [])))
@@ -464,7 +464,7 @@
 
 (deftest a-goal-worth-enough-lets-a-walk-take-a-risk-over-the-share-of-health
   (let [status-for (fn [worth] (let [c (-> (ready-test/ctx-of (assoc bed-world :self {:pos inside :health 20 :food 5} :inventory [{:name "bread" :count 3}]))
-                                           (with-death {:x 80 :y 64 :z 5} "skeleton" 75000 with-bed)
+                                           (with-death {:x 80 :y 64 :z 5} "skeleton" 30000 with-bed)
                                            (assoc-in [:args :worth] worth))]
                                  (in-lit-cave #(first (planned-status c far-goal)))))]
     (is (= :later (status-for nil)) "no worth said: the share of health decides")
@@ -544,7 +544,7 @@
 
 (deftest a-walk-for-an-unseen-fresh-death-spot-risks-the-death-of-meeting-its-killer
   ;; a fist body with no bed; the death risk alone is over half its health
-  (let [c (with-death (ready-test/ctx-of day-world) {:x 80 :y 64 :z 5} "skeleton" 10000)
+  (let [c (with-death (ready-test/ctx-of day-world) {:x 80 :y 64 :z 5} "zombie" 10000)
         {:keys [lethal-hp]} (estimate-unseen c far-goal)]
     (is (> lethal-hp (price/allowed c)))
     (is (= :later (first (with-redefs [look/seen-block (constantly {:unknown true})] (planned-status c far-goal)))))))
@@ -652,13 +652,13 @@
     (is (= :later (first (planned-status c {:x 20 :y 64 :z 20}))))))
 
 
-(deftest a-walk-round-a-never-seen-stone-cell-holding-a-fresh-skeleton-spot-holds
+(deftest a-walk-round-a-never-seen-stone-cell-holding-a-fresh-zombie-spot-holds
   ;; the cell's inside and its far faces unseen: a way out for the skeleton (Q16); the goal a table 6.5 blocks past its spot, the way a corridor along the cell
   (let [cx 21
         shell (into {} (for [x (range (dec cx) (+ cx 2)) y (range 63 66) z (range 15 18) :when (not= [x y z] [cx 64 16])] [(str x "," y "," z) "stone"]))
         corridor (into {} (for [x (range 12 31) y (range 63 68) z [13 19]] [(str x "," y "," z) "stone"]))
         c (-> (ready-test/ctx-of {:time st/noon :light {[cx 64 16] [0 0]} :blocks (merge shell corridor) :self {:pos {:x 13.5 :y 64 :z 18.5} :health 20 :food 20}})
-              (with-death {:x cx :y 64 :z 16} "skeleton" 10000))
+              (with-death {:x cx :y 64 :z 16} "zombie" 10000))
         real u/seen-block
         hidden? (fn [{:keys [x y z]}] (and (<= cx x (inc cx)) (<= 63 y 65) (<= 15 z 17)))
         s (with-redefs [u/seen-block (fn [p pos] (when-not (hidden? pos) (real p pos))) look/seen-block (constantly {:unknown true})]
@@ -689,3 +689,4 @@
           (await (drops-est/quote-trip c {:data {:pos {:x 30 :y 64 :z 0} :inventory {}}}))
           (is (true? (:back @asked)))
           (is (some? (:stay-s @asked))))))))
+

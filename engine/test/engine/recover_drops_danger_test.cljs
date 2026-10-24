@@ -91,9 +91,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (await ((fetch-run "skeleton" {} cheap-pile)))]
+        (let [{:keys [eng seen]} (await ((fetch-run "zombie" {} cheap-pile)))]
           (is (nil? (recovered eng)) "a danger skip stays open")
-          (is (re-find #"skip: .*danger [1-9][0-9.]*,.*: skeleton" (decided-text eng))))))))
+          (is (re-find #"skip: .*danger [1-9][0-9.]*,.*: zombie" (decided-text eng))))))))
 
 (deftest an-unarmed-body-whose-bed-is-beside-the-pile-fetches-it-past-its-killer
   (async done
@@ -147,13 +147,13 @@
           (is (re-find #"^fetch: " (decided-text eng))))))))
 
 (defn survive-pct
-  "The survival chance in percent the decision of a run over a pile of stacks (killed by a skeleton that guards the pile) names."
+  "The survival chance in percent the decision of a run over a pile of stacks (killed by a skeleton that guards the pile) names: a pile worth too little to fetch, so both are the decision at the start."
   [stacks]
   (let [pile (mapv #(hash-map :name (str "item_" %) :count 1) (range stacks))]
     (fn ^:async t []
       (let [{:keys [eng]} (setup {:floor tu/walk-floor :entities (vec (concat (pile-drops pile) [{:id 20 :name "skeleton" :kind "hostile" :pos {:x 20 :y 64 :z 8}}]))})]
         (die! eng {:pos dt/death-pos :inventory pile :cause "skeleton"})
-        (core/submit! eng '(jobs.survival.recover-drops {:value-overrides {"unknown" 100}}) {})
+        (core/submit! eng '(jobs.survival.recover-drops {:value-overrides {"unknown" 10}}) {})
         (await (run-until-empty eng 20))
         (js/parseFloat (second (re-find #"x ([0-9.]+)% survive" (decided-text eng))))))))
 

@@ -10,6 +10,7 @@
             [jobs.lib.block-sets :as bs]
             [jobs.lib.look :as look]
             [jobs.lib.flee-walk :as walk]
+            [jobs.lib.goal :as goal]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.body :as body]
             [jobs.lib.breath :as breath]
@@ -19,6 +20,7 @@
             [jobs.lib.price :as price]
             [jobs.lib.reach :as reach]
             [jobs.lib.threats :as threats]
+            [jobs.lib.toll-cells :as toll-cells]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -312,10 +314,26 @@
          distinct
          count)))
 
+(defn met-again
+  "mobs (mob-near's, one per entity of near) with :again, the distance each is passed at on the straight way from the body
+  to the goal of the walk the hostiles cut, when there is one (the :goal the job keeps in its memory, respond-to-hostile's,
+  unless :goal-reached; else jobs.lib.goal/interrupted-goal): a mob between the body and its goal is met nearer on the way back."
+  [c near mobs]
+  (if-let [g (let [m (ctx/mem c)]
+               (if (contains? m :goal) (when-not (:goal-reached m) (:goal m)) (goal/interrupted-goal (ctx/view c) (:root c))))]
+    (let [g (if (vector? g) (zipmap [:x :y :z] g) g)
+          me (u/self-pos c)
+          p (:primitives c)]
+      (vec (map-indexed (fn [i m] (if-let [{:keys [x z]} (some->> (get (vec near) i) (danger-q/mob-pos p))]
+                                    (assoc m :again (toll-cells/segment-distance me g x z))
+                                    m))
+                        mobs)))
+    mobs))
+
 (defn flee-answer
   "The answer of a walk away from near (cost/flee-answer: each at its chase speed and follow range, the flights from
   such mobs lately its returns, later the answer after it, in water first the swim-out, caught {:chance :seconds} of
-  its being caught: the flee search's, flee-search/caught-chance; nil the prior), its damage at least felt (hp a second felt
+  its being caught: the flee search's, flee-search/caught-chance; nil the prior), each mob met again as met-again says, its damage at least felt (hp a second felt
   since the flight began, nil none) over the walk; nil when a mob keeps up, or on land when the search finds the body
   cornered (:cornered?: what runs is the cornered step, priced by its own answers). mobs: near as mob-near reads them
   (default where they stand now)."
@@ -323,7 +341,7 @@
   ([c near later felt caught mobs]
   (let [p (:primitives c)
         self (.self p)
-        mobs (or mobs (mapv #(mob-near p %) near))
+        mobs (met-again c near (or mobs (mapv #(mob-near p %) near)))
         swim (swim-out c mobs)
         a (when-not (and (:cornered? caught) (nil? swim))
             (cost/flee-answer {:food (or (.-food self) 20) :equipment (cost/equipment-of (.-equipment self))

@@ -1085,20 +1085,22 @@
     (is (zero? (felt {:decision :flee :flight-start 999500} [(hurt 998500) (hurt 999000)])) "felt in the fight before the flight")
     (is (pos? (felt {:decision :flee :flight-start 999000} [(hurt 999500)])) "felt on the walk")))
 
-(deftest a-body-that-fled-ranged-mobs-twice-fights-them-to-the-end-however-far
+(deftest a-body-that-fled-a-ranged-mob-twice-fights-it-unless-the-fight-is-dearer-than-every-walk
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [world {:self {:health 14} :inventory sword :entities [(skeleton 1 10 0) (skeleton 2 11 1)]}
-              fled-before (fn [n] (fn [{:keys [eng]}] (dotimes [_ n] (mem/write! (:store eng) :hostile {:mob "skeleton" :decision :flee} respond-to-hostile/hostile-policy))))
-              round (fn ^:async f [n]
+        (let [fled-before (fn [n] (fn [{:keys [eng]}] (dotimes [_ n] (mem/write! (:store eng) :hostile {:mob "skeleton" :decision :flee} respond-to-hostile/hostile-policy))))
+              round (fn ^:async f [world n]
                       (let [s (setup-flight world)]
                         ((fled-before n) s)
                         (core/submit! (:eng s) respond {})
                         (await (core/tick! (:eng s)))
-                        s))]
-          (is (= [:flee] (map :decision (decided (:seen (await (round 0)))))) "no flight so far: the fight is too dear, retreat")
-          (is (= [:fight] (map :decision (decided (:seen (await (round 2)))))) "the second return: the walk only comes again, fight"))))))
+                        s))
+              one {:inventory sword :entities [(assoc (skeleton 1 12 0) :visible true)]}
+              two {:self {:health 14} :inventory sword :entities [(skeleton 1 10 0) (skeleton 2 11 1)]}]
+          (is (= [:flee] (map :decision (decided (:seen (await (round one 0)))))) "no flight so far: a step out of its range is cheaper than closing 12 blocks under its arrows")
+          (is (= [:fight] (map :decision (decided (:seen (await (round one 2)))))) "the second return: the walk only comes again, fight")
+          (is (= [:flee] (map :decision (decided (:seen (await (round two 2)))))) "two shooting an unarmoured body: the fight is likelier death than three walks"))))))
 
 (deftest hostile-attack-walks-to-far-ranged-mobs-only-when-the-fight-is-the-cheaper-answer
   (async done
@@ -1111,7 +1113,7 @@
                         (await (core/tick! eng))
                         (count (tu/walked-to eng))))]
           (is (zero? (await (walks 0))) "two shooting: walking away is cheaper, declined, no walk")
-          (is (pos? (await (walks 2))) "fled twice lately, the walk only comes again: walked up to them"))))))
+          (is (zero? (await (walks 2))) "fled twice lately: three walks still cost less than closing on two shooters unarmoured"))))))
 
 (deftest hostile-near-counts-ranged-mobs-out-to-the-ranged-radius
   (is (holds? {:entities [(skeleton 1 13 0)]} {:radius 8 :ranged-radius 16}) "a skeleton at 13")
@@ -1407,7 +1409,7 @@
                                  ["no weapon vs three zombies" {:entities [(zombie 7 3 0) (zombie 8 3 1) (zombie 9 3 -1)]} :flee]
                                  ["sword vs a creeper within fuse range: hit-and-back" {:inventory sword :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]} :fight]
                                  ["no weapon vs a creeper" {:entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]} :flee]
-                                 ["sword vs a skeleton at range" {:inventory sword :entities [(assoc (skeleton 7 12 0) :visible true)]} :fight]
+                                 ["sword vs a skeleton at range, nothing past it: a step out of its range" {:inventory sword :entities [(assoc (skeleton 7 12 0) :visible true)]} :flee]
                                  ["no weapon vs a skeleton at range" {:entities [(assoc (skeleton 7 12 0) :visible true)]} :flee]
                                  ["sword vs two zombies, no armour" {:inventory sword :entities [(zombie 7 3 0) (zombie 8 3 1)]} :flee]
                                  ["sword vs two zombies in diamond" {:inventory sword :equipment diamond-armour
@@ -1416,6 +1418,18 @@
                 got (:decision (first (hostile-entries (:eng s))))]
             (is (= want got) why)
             (is (= (= :flee want) (fled-by-walker? s)) (str why ": flees with the engine walker, no swing"))))))))
+
+(deftest a-mob-between-the-body-and-the-goal-of-its-cut-walk-is-met-again-where-the-way-passes-it
+  (let [p (tu/fake-on-floor {:floor flight-floor :entities [(assoc (skeleton 7 12 3) :visible true)]})
+        near (danger-q/dangers p 16 {:ranged-radius 16} {})
+        again (fn [entries] (:again (first (hostile-fight/met-again {:primitives p :root "j1" :slots [] :view (fn [] {:now 1000 :data {:entries entries}})}
+                                                                     near (mapv #(hostile-fight/mob-near p %) near)))))
+        cut (fn [goal] {:job/j9 [{:t 900 :data {:job "jobs.movement.go-to" :open 1 :goal goal}}]})]
+    (is (< 2.5 (again (cut {:x 30 :y 64 :z 0})) 3.5) "the way to a goal past it passes 3 blocks from it")
+    (is (< 11.5 (again (cut [-30 64 0])) 12.5) "a goal behind the body: no nearer than it stands")
+    (is (nil? (again {})) "no cut walk: met again where it stands")
+    (is (< 11.5 (again (assoc (cut {:x 30 :y 64 :z 0}) :job/j1 [{:t 950 :data {:goal {:x -30 :y 64 :z 0}}}])) 12.5) "the respond job's own goal first")
+    (is (nil? (again (assoc (cut {:x 30 :y 64 :z 0}) :job/j1 [{:t 950 :data {:goal {:x 30 :y 64 :z 0} :goal-reached true}}]))) "a goal reached is behind it")))
 
 ;; ce634b35 (Bramble #39): a blast of 17 beside a fight; card a45ce0db: priced as one Poisson count of blast-sized blows
 (deftest a-creeper-by-a-zombie-at-normal-difficulty-is-walked-from-the-blast-leaving-too-little-for-the-zombies-blows

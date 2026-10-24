@@ -110,8 +110,9 @@
 
 (defn ^:async no-gap-run
   "Respond with the spec: no gap block is placed, the calls are the expected slots and the usual response is a flight
-  that hides sealed in (hold why hiding) or ends out of line. Over the dirt ground the priced cover is a pit dug there
-  (respond-to-hostile cover-answers), the flight's first step."
+  that hides sealed in (hold why hiding) or ends out of line. Over the dirt ground the walk out of a lone skeleton's range
+  is priced under the pit dug there (respond-to-hostile cover-answers): the flight tries a pocket, then steps away; with a
+  zombie by it too the pit is the flight's first step."
   [spec slots hides?]
   (let [s (await (respond! spec))]
     (is (not (placed? s)))
@@ -120,25 +121,25 @@
     (is (= hides? (hiding-seen? s)))
     s))
 
-(deftest no-pickaxe-no-gap-placed-and-the-body-flees-and-hides
+(deftest no-pickaxe-no-gap-placed-and-the-body-walks-away
   (async done
     (tu/run-async done
-      (fn ^:async t [] (await (no-gap-run {:inventory [cobble8]} [:plug-dig] true))))))
+      (fn ^:async t [] (await (no-gap-run {:inventory [cobble8]} [:pocket :step] false))))))
 
-(deftest no-blocks-no-gap-placed-and-the-body-flees-and-hides
+(deftest no-blocks-no-gap-placed-and-the-body-walks-away
   (async done
     (tu/run-async done
-      (fn ^:async t [] (await (no-gap-run {:inventory [pickaxe]} [:plug-dig] true))))))
+      (fn ^:async t [] (await (no-gap-run {:inventory [pickaxe]} [:pocket :step] false))))))
 
 (deftest a-melee-mob-as-well-no-gap-placed-and-the-body-flees-and-hides
   (async done
     (tu/run-async done
       (fn ^:async t [] (await (no-gap-run {:inventory [cobble8 pickaxe] :entities [g/pit-skeleton zombie]} [:plug-dig] true))))))
 
-(deftest open-ground-no-gap-placed-and-the-body-digs-in
+(deftest open-ground-no-gap-placed-and-the-body-walks-away
   (async done
     (tu/run-async done
-      (fn ^:async t [] (await (no-gap-run {:inventory [cobble8 pickaxe] :blocks (merge wide-ground g/pit canopy)} [:plug-dig] true))))))
+      (fn ^:async t [] (await (no-gap-run {:inventory [cobble8 pickaxe] :blocks (merge wide-ground g/pit canopy)} [:pocket :step] false))))))
 
 (deftest a-gap-that-fails-refused-falls-back-to-the-usual-response
   (async done
