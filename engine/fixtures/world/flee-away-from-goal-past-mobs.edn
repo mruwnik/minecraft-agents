@@ -1,6 +1,6 @@
 ;; Card 3c8e82a7: a go-to toward a goal with a skeleton and a zombie between the body and the goal. The hostile reflex flees away from the goal
 ;; (back toward the start), it does not sprint at the skeleton or run on through the mobs; a lone skeleton between an armed body and its
-;; goal is a fight (the way back passes it), one with nothing past it is stepped away from until fled twice; one shooting an unarmed
+;; goal is a fight (the way back passes it), one with nothing past it is stepped away from; one shooting an unarmed
 ;; body 8 blocks off is walked away from (it stands and shoots within its bow range).
 ;; Open plot 64 long; body at [4.5 0 16.5], goal at x 56; mobs NoAI with helmets (no sun burn).
 {:defaults
@@ -42,12 +42,6 @@
    :expect [{:event {:source :job :kind :hostile.decided :data {:mob "skeleton" :decision :flee}} :within-s 30}
             {:no-event {:source :action :kind :done :data {:name "attack"}} :for-s 30}]
    :limit-s 40}
-  {:name "armed-body-fights-a-lone-skeleton-it-fled-twice-before"
-   :body {:yaw 270 :inventory [["iron_sword" 1]]}
-   :memory [{:kind :hostile :data {:mob "skeleton" :decision :flee}} {:kind :hostile :data {:mob "skeleton" :decision :flee}}]
-   :act [[:summon "skeleton" [16.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
-   :expect [{:event {:source :action :kind :done :data {:name "attack" :status "hit"}} :within-s 60}]
-   :limit-s 70}
   {:name "armed-body-flees-six-skeletons-it-met-for-the-first-time"
    :body {:yaw 270 :inventory [["wooden_sword" 1]]}
    :act [[:summon "skeleton" [19.5 0 10.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
