@@ -129,6 +129,8 @@ A fresh start, in this order (skip a step already done). First site the base wit
 
     ./bin/jobs submit '(jobs.farm.find-spot {:w 16 :h 16})' --wait
 
+On hilly ground no 16 x 16 patch may be flat enough and find-spot ends `:limit-reached`: ask for a smaller one (`{:w 10 :h 10}`), or search from elsewhere (`:center {:x X :y Y :z Z}`, `:range` up to 48).
+
 Then queue the rest at once, without `--wait`; each prints its job id:
 
     ./bin/jobs submit '(jobs.items.obtain {:bill {\"stone_pickaxe\" 1 \"stone_sword\" 1 \"stone_axe\" 1}})'
@@ -136,10 +138,10 @@ Then queue the rest at once, without `--wait`; each prints its job id:
     ./bin/jobs submit '(jobs.survival.get-food)'
     ./bin/jobs submit '(repeat (jobs.farm.maintain {:area {:plan \"P\" :part \"field\"}}))'
     ./bin/jobs submit '(jobs.items.get-kit)'
-    ./bin/jobs submit '(jobs.build.pen {:plan \"P\" :part \"pen\"})'
+    ./bin/jobs submit '(jobs.build.pen {:plan \"P\"})'
     ./bin/jobs submit '(repeat (jobs.animals.maintain {:plan \"P\" :part \"pen\"}))'
 
-`(seq a b ...)` runs its jobs one after another; `(repeat a)` keeps a standing job going. Then `./bin/progress --goal jN --wait 60m` on the job you are waiting for.
+`jobs.build.pen` builds every fence, wall and gate cell of the plan (its `:part` must hold fence cells); `animals.maintain` takes the part that is the pen box with its herd. `(seq a b ...)` runs its jobs one after another; `(repeat a)` keeps a standing job going. Then `./bin/progress --goal jN --wait 60m` on the job you are waiting for.
 
 A stair or tunnel of yours that broke into a cave (a drop, water, deaths there): `./bin/jobs submit '(jobs.blocks.seal-opening)'` near it fills the openings and leaves the way back open.
 
