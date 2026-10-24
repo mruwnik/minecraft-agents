@@ -7,6 +7,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { spawn } from 'node:child_process'
+import { pidAlive } from './res-slot.mjs'
 import { slotArgv, bodyName, claimBody, releaseBody } from './world-test-slots.mjs'
 
 const bundle = path.join(import.meta.dirname, '..', 'dashboard', 'out', 'world-test.cjs')
@@ -21,7 +22,7 @@ if (args.includes('--bodies') && !args.includes('--list') && !args.includes('--c
 }
 if (!process.env.WORLD_TEST_SLOT_HELD && !args.includes('--list') && !args.includes('--check') && !args.includes('--refresh-build') && !args.includes('--stop-stale-bodies') && !args.includes('--night-batch-end') && !args.includes('--sleep-rule-restore') && !args.includes('--sleep-rule-restore-dead')) {
   const claimDir = process.env.RES_SLOT_DIR ?? '/tmp/mc-res', body = bodyName(args)
-  const claim = claimBody(claimDir, body, process.pid, (pid) => { try { process.kill(pid, 0); return true } catch (e) { return e.code === 'EPERM' } })
+  const claim = claimBody(claimDir, body, process.pid, pidAlive)
   if (!claim.ok) { console.error(`world-test: ${claim.why}`); process.exit(75) }
   process.on('exit', () => releaseBody(claimDir, body, process.pid))
   const [cmd, ...argv] = slotArgv(args, path.join(import.meta.dirname, 'res-slot'), process.execPath, process.argv[1], process.env.RES_SLOT_HELD ?? '')

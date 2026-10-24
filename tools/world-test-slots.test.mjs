@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { pidAlive, pidFileBody } from './res-slot.mjs'
 import { slotKinds, slotArgv, bodyName, claimBody, releaseBody } from './world-test-slots.mjs'
 
 test('slotKinds: a run holds the body slot only', () => {
@@ -42,6 +43,14 @@ test('claimBody: a live holder of the same body refuses, naming its pid', () => 
   assert.match(r.why, /ProbeX.*pid 4242/)
   fs.rmSync(d, { recursive: true })
 })
+test('claimBody: a claim whose pid lives on but with another start time is stale; a pid-only claim is judged by the pid alone', () => {
+  const d = lockDir()
+  fs.writeFileSync(path.join(d, 'world-body.ProbeX.pid'), `${process.pid} 1`)
+  assert.equal(claimBody(d, 'ProbeX', 4242, pidAlive).ok, true, 'a reused pid is not the holder')
+  fs.writeFileSync(path.join(d, 'world-body.ProbeX.pid'), String(process.pid))
+  assert.equal(claimBody(d, 'ProbeX', 4242, pidAlive).ok, false, 'an old claim without a start time still holds')
+})
+
 test('claimBody: a different body does not conflict', () => {
   const d = lockDir()
   claimBody(d, 'ProbeX', 4242, isAlive)
@@ -52,7 +61,7 @@ test('claimBody: a dead holder is stale and gets replaced', () => {
   const d = lockDir()
   claimBody(d, 'ProbeX', 999999, () => true)
   assert.equal(claimBody(d, 'ProbeX', process.pid, isAlive).ok, true)
-  assert.equal(fs.readFileSync(path.join(d, 'world-body.ProbeX.pid'), 'utf8').trim(), String(process.pid))
+  assert.equal(fs.readFileSync(path.join(d, 'world-body.ProbeX.pid'), 'utf8').trim(), pidFileBody(process.pid))
   fs.rmSync(d, { recursive: true })
 })
 test('claimBody: a claim replaced while the holder was being checked is not removed', () => {

@@ -41,7 +41,7 @@ export const usableSlots = (free, max, reserve, heavy) => heavy ? free : free.fi
 // A world sweep (tools/world-test-pool.mjs) writes its pid to <dir>/sweep-active; while that pid lives, a light run of a kind with `sweepCap` starts only while fewer than that many slots are held by light runs (heavy holders have the reserve).
 export const capDuringSweep = (free, heldCount, cap, sweeping) => !sweeping || cap === undefined || heldCount < cap ? free : []
 const sweepActive = () => {
-  try { return pidAlive(Number(fs.readFileSync(path.join(dir(), 'sweep-active'), 'utf8'))) } catch { return false }
+  try { const { pid, start } = parsePidFile(fs.readFileSync(path.join(dir(), 'sweep-active'), 'utf8')); return pidAlive(pid, start) } catch { return false }
 }
 
 // Slot indices a run tries, in order: `want` own slots (0..want-1); a heavy run tries the reserved ones (max-reserve..max-1) first, still `want` in all.
@@ -140,6 +140,9 @@ export const pidAlive = (pid, start) => {
   if (s === null || (start !== undefined && s !== start)) return false
   try { return Number(fs.readFileSync(`/proc/${pid}/status`, 'utf8').match(/^Tgid:\s*(\d+)/m)?.[1]) === pid } catch { return false }
 }
+// A pid marker file holds "<pid> <start>"; an older one holds the pid alone (start undefined: pid + Tgid check only).
+export const pidFileBody = (pid) => `${pid} ${procStart(pid)}`
+export const parsePidFile = (text) => { const [pid, start] = text.trim().split(/\s+/).map(Number); return { pid, start: Number.isFinite(start) ? start : undefined } }
 const readGrants = () => {
   if (!fs.existsSync(grantDir())) return []
   return fs.readdirSync(grantDir()).flatMap((f) => {

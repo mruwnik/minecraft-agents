@@ -6,6 +6,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { splitForms, scanForms, failSig, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed, unitsWithCases, noCasesSelected, serverProbe, matchIdsFrom, parseNightClasses, nightBatchEndArgs, sleepRuleRestoreArgs, nightBatches, durationsById, runNightBatches, waitForBodies, PRECHECK_EXIT, BOOT_EXIT, traceDirOf, durationFiles, main, parseMspt, gateLoad, SWEEP_MIN_BODIES, markSweep, skipKnown, withoutUnskipped, childMatchArgs } from './world-test-pool.mjs'
+import { pidFileBody } from './res-slot.mjs'
 
 const form = (id, status, secs = 1, extra = '') =>
   `{:plot 0, :file "${id.split('/')[0]}", :expects [{:status :pass, :evidence "a } \\" {"}], :status :${status}, :id "${id}", :elapsed-s ${secs}${extra}}`
@@ -852,7 +853,7 @@ test('markSweep: a pool of SWEEP_MIN_BODIES or more bodies writes its pid to the
   assert.equal(markSweep(dir, SWEEP_MIN_BODIES - 1), null)
   assert.equal(fs.existsSync(file), false)
   const clear = markSweep(dir, SWEEP_MIN_BODIES)
-  assert.equal(fs.readFileSync(file, 'utf8'), String(process.pid))
+  assert.equal(fs.readFileSync(file, 'utf8'), pidFileBody(process.pid))
   clear()
   assert.equal(fs.existsSync(file), false)
   fs.rmSync(dir, { recursive: true, force: true })

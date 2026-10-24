@@ -357,6 +357,8 @@ test('integration: while the sweep marker names a live pid a second light run is
     assert.match(capped.stderr, /sweep/)
     const heavy = run(['t', '--heavy', '--', 'echo', 'ran'], env)
     assert.equal(heavy.status, 0)
+    fs.writeFileSync(path.join(dir, 'sweep-active'), `${process.pid} 1`)
+    assert.equal(run(['t', '--', 'echo', 'ran'], env).status, 0, 'a live pid with another start time caps nothing')
     fs.writeFileSync(path.join(dir, 'sweep-active'), '999999999')
     assert.equal(run(['t', '--', 'echo', 'ran'], env).status, 0, 'a dead sweep pid caps nothing')
   } finally { process.kill(-holder.pid, 'SIGKILL') }

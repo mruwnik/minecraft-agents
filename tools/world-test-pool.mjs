@@ -34,7 +34,7 @@ import os from 'node:os'
 import net from 'node:net'
 import { spawn, spawnSync, execFile } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { slotDir } from './res-slot.mjs'
+import { slotDir, pidFileBody } from './res-slot.mjs'
 
 const PLOTS_PER_BODY = 20
 const LOAD_POLL_MS = 5000
@@ -649,12 +649,12 @@ export const gateLoad = async ({ mspt, loadavg, cores, limit }) => {
   const m = await mspt().catch(() => null)
   return m ?? loadavg() / (cores * LOAD_PER_CORE) * limit
 }
-// <dir>/sweep-active holds this pool's pid while it runs a sweep-sized pass; tools/res-slot reads it. Returns the remover, or null for a small pool.
+// <dir>/sweep-active holds this pool's pid and start time while it runs a sweep-sized pass; tools/res-slot reads it. Returns the remover, or null for a small pool.
 export const markSweep = (dir, bodies) => {
   if (bodies < SWEEP_MIN_BODIES) return null
   const file = path.join(dir, 'sweep-active')
   fs.mkdirSync(dir, { recursive: true })
-  fs.writeFileSync(file, String(process.pid))
+  fs.writeFileSync(file, pidFileBody(process.pid))
   return () => fs.rmSync(file, { force: true })
 }
 

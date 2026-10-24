@@ -8,6 +8,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { pidAlive } from './res-slot.mjs'
 
 const tools = path.dirname(fileURLToPath(import.meta.url))
 const repo = path.resolve(tools, '..')
@@ -106,13 +107,9 @@ export const isolate = (engineDir, tag, root = '/tmp', nss = null) => {
   return { runDir, cleanup: () => fs.rmSync(runDir, { recursive: true, force: true }) }
 }
 
-const pidAlive = (pid) => {
-  try { process.kill(pid, 0); return true } catch (e) { return e.code === 'EPERM' }
-}
-
 // Removes the run dirs of dead pids (a SIGKILLed run leaves its copy in RAM): <root>/mc-test-run-<digits> and the test process's
 // <root>/engine-test-<digits>-<random> temp dirs (engine/test/engine/test_util.cljs tmp-dir) and the failing-shard logs <root>/mc-test-run-<digits>-shard-<n>.log (tools/test-shards.mjs); never a live pid.
-export const sweepStale = (root = '/tmp', alive = pidAlive) => {
+export const sweepStale = (root = '/tmp', alive = (pid) => pidAlive(pid)) => {
   const removed = []
   for (const name of fs.readdirSync(root)) {
     const m = /^(?:mc-test-run-(\d+)(?:-shard-\d+\.log)?|engine-test-(\d+)-.+)$/.exec(name)
