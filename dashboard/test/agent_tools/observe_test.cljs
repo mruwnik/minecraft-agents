@@ -343,6 +343,17 @@
                 " then resubmit (jobs.items.get-kit {})")
            (:next (observe-status/classify e (assoc defaults :watch ["j1"]) "Probe"))))))
 
+(deftest a-yielded-exclusive-runs-wake-says-what-it-got-done-and-how-to-finish
+  (let [e (assoc (event :job :stopped {:status :stopped :reason :yielded} "stopped: yielded")
+                 :context {:job-id "j1"}
+                 :report {:yields {:items {:bread 1 :crafting_table 1}}})
+        message (:message (observe-status/classify e (assoc defaults :watch ["j1"]) "Probe"))]
+    (is (re-find #"one exclusive round" message))
+    (is (re-find #"bread 1, crafting_table 1" message))
+    (is (re-find #"without --exclusive" message)))
+  (is (= "stopped: no iron" (:message (observe-status/classify (assoc (event :job :stopped {:reason :ways} "stopped: no iron") :context {:job-id "j1"})
+                                                                (assoc defaults :watch ["j1"]) "Probe")))))
+
 (deftest a-repeating-notice-wakes-once-per-kind-and-job
   (let [a (notice "j1" :retreat "back")
         b (notice "j2" :retreat "back")

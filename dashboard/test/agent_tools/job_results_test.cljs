@@ -108,6 +108,12 @@
     (is (= :stopped (:status r)))
     (is (= {:kind :nothing-possible :cause {:ways {:a :x}} :reason :ways} (:ending r)))))
 
+(deftest a-yielded-stop-carries-a-note-naming-its-yields
+  (let [stop (assoc (event 2 "j4" :stopped {:status :stopped :reason :yielded}) :report {:yields {:items {:bread 1}}})
+        r (results/project "j4" "g" [(event 1 "j4" :queued {}) stop] false)]
+    (is (re-find #"one exclusive round.*Got done: bread 1" (:note r))))
+  (is (not (contains? (results/project "j4" "g" [(event 1 "j4" :queued {}) (event 2 "j4" :stopped {:reason :ways})] false) :note))))
+
 (defn unknown-id-get
   "A get! over a log of n filler events whose snapshot says ids below j5 were issued; counts its requests in calls."
   [n calls]

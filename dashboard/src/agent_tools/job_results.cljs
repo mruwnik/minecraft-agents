@@ -48,6 +48,18 @@
       (str/join ", then " (remove nil? [(when (seq fixes) (str/join " or " (map spec fixes)))
                                         (when (seq again) (str "resubmit " (spec (first again))))])))))
 
+(defn yielded-text
+  "For a job that ended :stopped :yielded or :declined (an exclusive run gets one round and is then dropped, so a
+  resubmit starts it over): what that round got done (the event's report yields) and how to go on; else nil."
+  [e]
+  (when (and (= :stopped (:kind e)) (#{:yielded :declined} (get-in e [:data :reason])))
+    (let [items (get-in e [:report :yields :items])]
+      (str "yielded after its one exclusive round, so it did not finish; the job is gone, not waiting, and a resubmit starts it over. "
+           (if (seq items)
+             (str "Got done: " (str/join ", " (map (fn [[item n]] (str (name item) " " n)) (sort-by (comp str key) items))) ". ")
+             "It yielded nothing to the pack. ")
+           "To finish: submit the remaining steps one call each (for a seq, its later steps on their own), or submit without --exclusive so it continues across rounds."))))
+
 (defn never-issued?
   "True when id cannot be a job of this generation: ids are j<n> from a counter, next-id being the next to issue."
   [id next-id]
@@ -81,6 +93,7 @@
                        {:state (if (some #(and (= id (get-in % [:context :job-id])) (= :round_started (:kind %))) matching)
                                  :running :queued)}))
         (seq (:data terminal)) (assoc :result (:value (bounded (:data terminal))))
+        (yielded-text terminal) (assoc :note (yielded-text terminal))
         (seq selected) (assoc :events (:value clipped))
         (or (> (count observations) event-limit) (:truncated? clipped)) (assoc :events-truncated? true)
         (:kind (:data terminal)) (assoc :ending (select-keys (:data terminal) [:kind :cause :reason]))
