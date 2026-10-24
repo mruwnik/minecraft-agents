@@ -1,7 +1,6 @@
-;; Card f9b00be4 (91cbdb7d3, 28d3cbb41): a standing (repeat) farm.tend does not start while the body is more than jobs.lib.standing/away-depth (8)
-;; below its field, even with no other job listed: it waits :away (the gap after a trip job ends), so it does not pull the body home. The same job
-;; with the body on the field runs: the ripe wheat is cut. Field on a stone platform x 6..20, z 12..22, y 0..11: farmland y 11, wheat y 12, water beside.
-;; Should-fail (control): the body 12 below the field leaves the wheat standing.
+;; Card 43f765ae: a standing (repeat) farm.tend with no other job listed walks up to its field from far below it and cuts the ripe wheat; it never waits :away.
+;; Field on a stone platform x 6..20, z 12..22, y 0..11: farmland y 11, wheat y 12, water beside; a one-wide ramp at x 8 climbs to it.
+;; Should-succeed: body 12 below the field, and body on the field. Should-fail: none.
 {:defaults
  {:tags [:farm :tend :jobs]
   :time :any
@@ -14,12 +13,13 @@
   :body {:effects [["resistance" 600 4]] :settle-s 2}
   :limit-s 100}
  :cases
- [{:name "body-far-below-the-field-waits-away"
-   :body {:at [3.5 0 16.5]}
+ [{:name "body-far-below-the-field-walks-up-and-cuts-the-wheat"
+   :blocks [[:fill [8 0 1] [8 0 1] "stone"] [:fill [8 0 2] [8 1 2] "stone"] [:fill [8 0 3] [8 2 3] "stone"] [:fill [8 0 4] [8 3 4] "stone"] [:fill [8 0 5] [8 4 5] "stone"] [:fill [8 0 6] [8 5 6] "stone"] [:fill [8 0 7] [8 6 7] "stone"] [:fill [8 0 8] [8 7 8] "stone"] [:fill [8 0 9] [8 8 9] "stone"] [:fill [8 0 10] [8 9 10] "stone"] [:fill [8 0 11] [8 10 11] "stone"]]
+   :body {:at [8.5 0 0.5]}
    :act [[:http :submit (repeat (jobs.farm.tend {:area {:min #xyz [10 11 16] :max #xyz [13 12 16]}})) [] {:ok true}]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :away}} :within-s 40}]
-   :after [[:block [10 12 16] "wheat[age=7]"] [:block [13 12 16] "wheat[age=7]"] [:body-near [3.5 0 16.5] 2]]
-   :limit-s 60}
+   :expect [{:no-event {:source :job :kind :waiting :data {:reason :away}} :for-s 30}]
+   :after [[:not-block [10 12 16] "wheat[age=7]"]]
+   :limit-s 100}
   {:name "body-on-the-field-cuts-the-wheat"
    :body {:at [11.5 12 15.5]}
    :act [[:http :submit (repeat (jobs.farm.tend {:area {:min #xyz [10 11 16] :max #xyz [13 12 16]}})) [] {:ok true}]]

@@ -231,10 +231,11 @@
       :take :deposit)))
 
 (defn ^:async run-beside
-  "Submit the job wait-for-light (listed, dark at night), then form, over the world; tick 3 times."
+  "Submit a job that always continues (listed, runnable), then form, over the world; tick 3 times."
   [form world]
-  (let [{:keys [eng] :as s} (setup (assoc world :time 15000))]
-    (core/submit! eng '(jobs.time.wait-for-light) {})
+  (let [{:keys [eng] :as s} (update (setup (assoc world :time 15000)) :eng #(assoc-in % [:jobs 'busy-other] {:round (fn ^:async busy [_c] :continue)}))
+        eng (:eng s)]
+    (core/submit! eng '(busy-other) {})
     (core/submit! eng form {})
     (dotimes [_ 3] (await (core/tick! eng)))
     s))
@@ -246,7 +247,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (run-beside (list job (assoc args :chest far-chest)) {:inventory [(item "beef" 3)] :containers {"200,64,0" []}}))]
-          (is (empty? (events-of s :round_started)) "no pass starts")
+          (is (empty? (remove #(= "busy-other" (:name %)) (events-of s :round_started))) "no pass starts")
           (is (some #(= :away (:reason %)) (events-of s :waiting)) "the wait says the body is away"))))))
 
 (deftest a-kitchen-far-from-its-chest-runs-when-nothing-else-is-listed

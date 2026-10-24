@@ -471,10 +471,10 @@
           :ages (into {} (map (fn [[x z]] [(k (+ x 200) 64 z) 7])) all-cells)}))
 
 (defn ^:async far-run
-  "Ripe wheat 200 blocks off; wait-for-light (listed, dark at night) first when listed?."
+  "Ripe wheat 200 blocks off; a job that always continues (listed, runnable) first when listed?."
   [listed?]
-  (let [s (setup (assoc far-ripe :time 15000))]
-    (when listed? (core/submit! (:eng s) '(jobs.time.wait-for-light) {}))
+  (let [s (update (setup (assoc far-ripe :time 15000)) :eng #(assoc-in % [:jobs 'busy-other] {:round (fn ^:async busy [_c] :continue)}))]
+    (when listed? (core/submit! (:eng s) '(busy-other) {}))
     (core/submit! (:eng s) (list 'jobs.farm.tend {:area far-box}) {})
     (await (tu/run-ticks (:eng s) (:clock s) 3 700))
     s))
@@ -484,7 +484,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (far-run true))]
-          (is (empty? (events-of s :round_started)))
+          (is (empty? (remove #(= "busy-other" (:name %)) (events-of s :round_started))))
           (is (some #(= :away (:reason %)) (events-of s :waiting))))))))
 
 (deftest a-tend-far-from-its-field-runs-when-nothing-else-is-listed
@@ -509,13 +509,13 @@
     (await (tu/run-ticks (:eng s) (:clock s) 3 700))
     s))
 
-(deftest a-tend-under-repeat-far-below-its-field-declines-though-nothing-else-is-listed
+(deftest a-tend-under-repeat-far-below-its-field-walks-up-when-nothing-else-is-listed
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (below-run true))]
-          (is (empty? (events-of s :round_started)))
-          (is (some #(= :away (:reason %)) (events-of s :waiting))))))))
+          (is (seq (events-of s :round_started)))
+          (is (empty? (filter #(= :away (:reason %)) (events-of s :waiting)))))))))
 
 (deftest a-lone-tend-far-below-its-field-walks-up
   (async done

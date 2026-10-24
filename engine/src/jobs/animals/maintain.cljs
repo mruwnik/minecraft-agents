@@ -264,7 +264,7 @@
       :else (contract/never :plan-trouble trouble :why trouble))))
 
 (defn can-start?
-  "Never :no-box without a box or a plan, :no-mob without :mob or a plan; later for :plan-trouble, :away (far from the pen while another job is listed) or nothing to do."
+  "Never :no-box without a box or a plan, :no-mob without :mob or a plan; later for :plan-trouble, :away (another job can run) or nothing to do."
   [c]
   (let [{:keys [plan box mob]} (:args c)
         {:keys [trouble] :as pen} (pen-read/pen-of c)

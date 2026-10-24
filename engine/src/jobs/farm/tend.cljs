@@ -42,7 +42,7 @@
   within 4 blocks of water, level or one up, are tilled anyway), :no-bare, :fertilize-off, :no-bone-meal, :none-unripe or :declined (the child declined).
   A step that ran keeps its summary even if it is skipped later in the same run.
   Start facts, failed conditions: impossible {:reason :no-box} unless the area is a box with a crop layer and at most 2048 cells, or a plan;
-  {:reason :away :site :limit} far from the field while another job is listed, or deep below it;
+  {:reason :away :site :others} while another job that is not standing and not waiting is listed;
   {:reason :nothing-to-do} (with :covered, :refused, :blocked (plan crop cells another block fills), :food-reserve) or {:reason :short-seed :seeds} when no
   step would run, after one look round from here when a cell was never seen. A started run always continues. A step under
   way is not re-decided.
@@ -208,8 +208,8 @@
       (contract/never :no-box "no usable box or plan area"))))
 
 (defn problem
-  "Why no run can start (a started run decides through its steps), a status: away while the field is far and another
-  job is listed, else the status of the last part (the first to ask for a look), ok when some part has work."
+  "Why no run can start (a started run decides through its steps), a status: away while another
+  runnable job is listed, else the status of the last part (the first to ask for a look), ok when some part has work."
   [c]
   (let [away (standing/away-cause c (site c))]
     (if away

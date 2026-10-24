@@ -447,14 +447,14 @@
     (tu/run-async done
       (fn ^:async t []
         (let [world {:inventory [(wheat 4)] :entities [(cow 1 202) (cow 2 203)] :time 15000}
-              listed (h/setup world 50)
+              listed (update (h/setup world 50) :eng #(assoc-in % [:jobs 'busy-other] {:round (fn ^:async busy [_c] :continue)}))
               alone (h/setup world 50)]
-          (core/submit! (:eng listed) '(jobs.time.wait-for-light) {})
+          (core/submit! (:eng listed) '(busy-other) {})
           (core/submit! (:eng listed) (spec {:box far-box}) {})
           (core/submit! (:eng alone) (spec {:box far-box}) {})
           (await (tu/run-ticks (:eng listed) (:clock listed) 3 700))
           (await (tu/run-ticks (:eng alone) (:clock alone) 3 700))
-          (is (empty? (events-of listed :round_started)))
+          (is (empty? (remove #(= "busy-other" (:name %)) (events-of listed :round_started))))
           (is (some #(= :away (:reason %)) (events-of listed :waiting)) "the wait says the body is away")
           (is (seq (events-of alone :round_started)) "alone in the queue it goes"))))))
 

@@ -1,4 +1,4 @@
-;; Card 7d401a4b (c31904f0): two one-shot site jobs, farm.tend at field A and animals.maintain at pen B, both more than jobs.lib.standing/away-limit (48)
+;; Card 7d401a4b (c31904f0): two one-shot site jobs, farm.tend at field A and animals.maintain at pen B, both far
 ;; from the body and from each other, do not hold each other off or drag the body between the sites: each walks to its own site and finishes.
 ;; Flat grass, 160 long. Body at x 8; wheat field at x 70..73 (ripe wheat on farmland, water beside); fenced pen x 130..138 with two cows inside.
 ;; Should-succeed: both jobs complete, the wheat is cut, the body ends at the field it worked last (maintain ran first, then tend walked back), and neither waits :away. Should-fail: none.

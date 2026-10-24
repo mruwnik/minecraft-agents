@@ -184,7 +184,7 @@
 (defn would-run? [c f] (boolean (some :call (vals (decisions c f)))))
 
 (defn away
-  "The cause of a kitchen far from its chest while another job is listed (jobs.lib.standing/away-cause), or nil."
+  "The cause of a kitchen declining while another job can run (jobs.lib.standing/away-cause), or nil."
   [c]
   (standing/away-cause c (storage/chest-of (ctx/view c) (:args c))))
 
