@@ -48,19 +48,28 @@
       (str/join ", then " (remove nil? [(when (seq fixes) (str/join " or " (map spec fixes)))
                                         (when (seq again) (str "resubmit " (spec (first again))))])))))
 
+(defn waited?
+  "True when stopped event e is a wait ending: the engine told the same wait in a :waiting event of the job just before
+  (end-slot! merges the wait map into the stop's data). A result a job returned with status :stopped never was one."
+  [e waits]
+  (let [data (dissoc (:data e) :status)]
+    (boolean (some #(= data (merge {:reason (:reason %)} (dissoc % :reason))) waits))))
+
 (defn yielded-text
-  "For a job that an exclusive run ended without finishing (:stopped :yielded, :declined, or its child's wait reason
-  when exclusive?, which carries no :kind; a real ending such as :ways gets nil; the job is dropped, so a resubmit starts over): one sentence on why and what the round got done; else nil."
-  [e exclusive?]
-  (let [reason (get-in e [:data :reason])]
-    (when (and (= :stopped (:kind e)) (not= :cut reason) (or exclusive? (#{:yielded :declined} reason)))
-      (let [items (get-in e [:report :yields :items])
-            done (when (seq items) (str " Got done: " (str/join ", " (map (fn [[item n]] (str (name item) " " n)) (sort-by (comp str key) items))) "."))]
-        (case reason
-          :declined (str "Declined to run (" (:text e) "); nothing ran.")
-          :yielded (str "Yielded after its one exclusive round and is gone." done " Submit the remaining steps as separate calls, or without --exclusive.")
-          (when-not (:kind (:data e))
-            (str "Waited after its one exclusive round (" (:text e) ") and is gone." done " Resubmit once that is met, or submit without --exclusive.")))))))
+  "For a job that an exclusive run ended without finishing (:stopped :yielded, :declined, or a wait it was told, waits
+  being the :data of the job's :waiting events; a real ending such as :ways or a returned :stopped result gets nil; the
+  job is dropped, so a resubmit starts over): one sentence on why and what the round got done; else nil."
+  ([e exclusive?] (yielded-text e exclusive? nil))
+  ([e exclusive? waits]
+   (let [reason (get-in e [:data :reason])]
+     (when (and (= :stopped (:kind e)) (not= :cut reason) (or exclusive? (#{:yielded :declined} reason)))
+       (let [items (get-in e [:report :yields :items])
+             done (when (seq items) (str " Got done: " (str/join ", " (map (fn [[item n]] (str (name item) " " n)) (sort-by (comp str key) items))) "."))]
+         (case reason
+           :declined (str "Declined to run (" (:text e) "); nothing ran.")
+           :yielded (str "Yielded after its one exclusive round and is gone." done " Submit the remaining steps as separate calls, or without --exclusive.")
+           (when (waited? e waits)
+             (str "Waited after its one exclusive round (" (:text e) ") and is gone." done " Resubmit once that is met, or submit without --exclusive."))))))))
 
 (defn never-issued?
   "True when id cannot be a job of this generation: ids are j<n> from a counter, next-id being the next to issue."
@@ -80,6 +89,7 @@
                                      (terminal-kinds (:kind %))) matching))
         queued? (some #(and (= id (get-in % [:context :job-id])) (= :queued (:kind %))) matching)
         exclusive? (some #(and (= id (get-in % [:context :job-id])) (= :queued (:kind %)) (:exclusive %)) matching)
+        waits (keep #(when (and (= id (get-in % [:context :job-id])) (= :waiting (:kind %))) (:data %)) matching)
         observations (filterv #(not (internal-kinds (:kind %))) matching)
         selected (take-last event-limit observations)
         clipped (bounded (mapv (fn [e] (cond-> {:event (:kind e)}
@@ -96,7 +106,7 @@
                        {:state (if (some #(and (= id (get-in % [:context :job-id])) (= :round_started (:kind %))) matching)
                                  :running :queued)}))
         (seq (:data terminal)) (assoc :result (:value (bounded (:data terminal))))
-        (yielded-text terminal exclusive?) (assoc :note (yielded-text terminal exclusive?))
+        (yielded-text terminal exclusive? waits) (assoc :note (yielded-text terminal exclusive? waits))
         (seq selected) (assoc :events (:value clipped))
         (or (> (count observations) event-limit) (:truncated? clipped)) (assoc :events-truncated? true)
         (:kind (:data terminal)) (assoc :ending (select-keys (:data terminal) [:kind :cause :reason]))
