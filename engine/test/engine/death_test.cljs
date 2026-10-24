@@ -910,11 +910,16 @@
 (deftest a-skeleton-gets-to-the-body-at-the-rate-its-distance-gives
   (let [met (fn [blocks s] (:met (death/met-stretch "skeleton" (constantly 1) [{:x 16 :y 0 :z 16 :s s}] [s] (when blocks {:x (+ 16.5 blocks) :y 0 :z 16.5}))))
         cases (death/class-cases "skeleton")
-        post (death/notice-posterior cases (settings/get death/settings ::death/notice-slope-sd) (settings/get death/settings ::death/notice-spread-scale))]
+        post (death/notice-posterior cases (settings/get death/settings ::death/notice-spread-scale))
+        own (fn [blocks s] (let [{:keys [k n-s]} (first (filter #(= blocks (:blocks %)) cases))] (- 1 (js/Math.pow (+ 1 (/ s n-s)) (- (+ k 0.5))))))]
     (is (< (met 9 3.8) (met 5 3.8) (met 2 3.8)) "the body knows how far off it is: a near one notices sooner")
     (doseq [blocks [2 5 9 13] s [1 3.8 10]]
       (is (< (js/Math.abs (- (met blocks s) (- 1 (death/posterior-missed post blocks s)))) 0.04)
           (str "the shared Gamma keeps the posterior's chance " blocks " blocks off over " s " s")))
+    (doseq [blocks [2 5 13]]
+      (is (<= (- (own blocks 3.8) 0.01) (met blocks 3.8))
+          (str blocks " blocks off is priced no lower than its own case's counts, but for the shared Gamma's fit")))
+    (is (<= (- (met 13 3.8) 0.01) (met 15 3.8)) "past the farthest case the price holds, it does not carry a fall on")
     (is (<= (met 2 3.8) (met nil 3.8)) "a skeleton whose place is unknown is priced at the nearest")))
 
 (deftest cases-that-disagree-price-the-near-mob-no-lower-than-cases-that-agree
