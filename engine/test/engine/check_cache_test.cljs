@@ -48,3 +48,15 @@
     (cc/keyed c :t 1 read)
     (settings/scoped {::cc/ttl-ms 5} #(cc/keyed c :t 1 read))
     (is (= 2 @n))))
+
+(deftest entries-of-an-ended-job-are-freed-and-a-running-sibling-keeps-its-own
+  (let [state (atom {:instances {"x" {} "y" {}}})
+        eng {:warned (atom #{}) :state state}
+        c (fn [id] (assoc (ctx-at id 0) :engine eng))
+        ids #(set (map first (keys @(cc/entries-of (c "x")))))]
+    (cc/keyed (c "x") :t 1 (constantly 1))
+    (cc/cached (c "y") :k (constantly 1))
+    (is (= #{"x" "y"} (ids)))
+    (swap! state update :instances dissoc "x")
+    (cc/keyed (c "z") :t 1 (constantly 1))
+    (is (= #{"y" "z"} (ids)) "x ended: gone; y still runs: kept; z is the caller's own")))

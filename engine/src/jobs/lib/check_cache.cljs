@@ -19,6 +19,20 @@
     (or (.get engines key)
         (let [e (atom {})] (.set engines key e) e))))
 
+(defn without-ended
+  "entries m without the ids of jobs that are no longer instances of c's engine (but c's own): the engine drops an instance
+  at every kind of end, so this frees a job's entries however it ended."
+  [c m]
+  (let [live (some-> (:state (:engine c)) deref :instances)]
+    (if (nil? live)
+      m
+      (into {} (filter (fn [[[job]]] (or (= job (:id c)) (contains? live job)))) m))))
+
+(defn store
+  "m with entry e under id; an entry of a new job id also frees those of ended jobs."
+  [c m id e]
+  (assoc (if (some (fn [[[job]]] (= job (first id))) m) m (without-ended c m)) id e))
+
 (defn fresh
   "c whose cached reads read the world anew (and renew the entries): for a check asked again because the world changed."
   [c]
@@ -34,7 +48,7 @@
     (if (and hit (not (::fresh c)) (fresh? now hit))
       (:v hit)
       (let [v (thunk)]
-        (swap! entries (fn [m] (assoc (into {} (remove (fn [[_ e]] (and (not (:recent e)) (> (- now (:t e)) (* 10 (ttl-ms)))))) m) id {:t now :v v})))
+        (swap! entries (fn [m] (store c (into {} (remove (fn [[_ e]] (and (not (:recent e)) (> (- now (:t e)) (* 10 (ttl-ms)))))) m) id {:t now :v v})))
         v))))
 
 (defn cached
@@ -55,5 +69,5 @@
     (if hit
       (:v hit)
       (let [v (thunk)]
-        (swap! entries (fn [m] (assoc m id {:t now :recent (into [] (take (settings/get settings ::keep)) (cons (assoc look :v v) (remove same? (:recent (get m id)))))})))
+        (swap! entries (fn [m] (store c m id {:t now :recent (into [] (take (settings/get settings ::keep)) (cons (assoc look :v v) (remove same? (:recent (get m id)))))})))
         v))))
