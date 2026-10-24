@@ -305,6 +305,7 @@
                   :hit hit
                   :spread (when-let [s (seq (keep :spread per))] (mapv #(* times %) (apply map + s)))
                   :seconds (* 2 times (reduce max 0 (map :seconds per)))
+                  :near (reduce max 0 (map :seconds per))
                   :caught {:chance (- 1 (js/Math.pow (- 1 (or caught (settings/get settings ::caught-chance))) times))
                            :damage (reduce + 0 (map (fn [m f] (if (= "creeper" (:name m))
                                                                   (blow stats {:name "creeper"})
@@ -414,12 +415,13 @@
        (min (life body) (expected-damage (get answers (:answer (decide body answers at))))))))
 
 (defn group-parts
-  "{:chance :hurt :seconds} of mob names met together by body at `at`, caught at caught: the answer decide takes of
-  threat-answers, its answer-death-chance, its expected-damage at most the body's life, and its seconds."
+  "{:chance :hurt :near} of mob names met together by body at `at`, caught at caught: the answer decide takes of
+  threat-answers, its answer-death-chance, its expected-damage at most the body's life, and the seconds it holds the body
+  at or near the place (its :near, a flight's way out; else its :seconds)."
   [body names caught at]
   (let [answers (threat-answers body names caught)
         a (get answers (:answer (decide body answers at)))]
-    {:chance (answer-death-chance body a at) :hurt (min (life body) (expected-damage a)) :seconds (or (:seconds a) 0)}))
+    {:chance (answer-death-chance body a at) :hurt (min (life body) (expected-damage a)) :near (or (:near a) (:seconds a) 0)}))
 
 (defn met-threats
   "The known threats of route {:cells :threats} (death-chance's) that may get to the body, [{:mob :caught :c :prior
@@ -444,40 +446,56 @@
         (when (seq cells) threats)))
 
 (defn notice-view
-  "How threat t ({:before :w :on :prior}, met-threats') gets to the body on each cell it weighs, over its prior (its notice
-  rate unknown): {:s0 the chance it has not by each cell's start, :h its rate of doing so there, the Gamma posterior's mean
-  after the exposure before (no notice in it), :shape the prior's}."
-  [{:keys [before w on prior]}]
-  (let [n (alength w) s0 (js/Float64Array. n) h (js/Float64Array. n)
-        {:keys [shape rate]} prior]
+  "How threat t ({:before :w :on :prior :exposure :dts}, met-threats') gets to the body over its prior (its notice rate
+  unknown), as one of a known rate in the prior's cumulative hazard H(x) = shape ln(1 + x/rate), x the weighted seconds:
+  {:h0 H at each cell's start, :y its rate over the cell (exact at both ends), :total H over the route, :prior}."
+  [{:keys [before w on prior exposure dts]}]
+  (let [n (alength w) h0 (js/Float64Array. n) y (js/Float64Array. n)
+        {:keys [shape rate]} prior
+        hz #(* shape (js/Math.log1p (/ % rate)))]
     (dotimes [i (alength on)]
-      (let [a (aget on i) x (aget before a)]
-        (aset s0 a (death/missed prior x))
-        (aset h a (/ (* shape (aget w a)) (+ rate x)))))
-    {:s0 s0 :h h :shape shape}))
+      (let [a (aget on i) b (aget before a)]
+        (aset h0 a (hz b))
+        (aset y a (/ (* shape (js/Math.log1p (/ (* (aget w a) (aget dts a)) (+ rate b)))) (aget dts a)))))
+    {:h0 h0 :y y :total (hz exposure) :prior prior}))
+
+(defn met-in-cell
+  "Of two threats neither at the body at a cell's start: the chance the one coming at rate u comes first within the cell's
+  d seconds and the other (rate v) comes while it is answered, within window A of its hazard and the R it has left on
+  the route, so never past its own chance of coming: the integral over t of u e^(-(u+v)t) (1 - e^(-min(A, R - v t)))."
+  [u v A R d]
+  (let [h (+ u v)
+        t1 (if (pos? v) (min d (max 0 (/ (- R A) v))) (if (< A R) d 0))
+        within (fn [c s] (if (pos? c) (/ (- (js/Math.expm1 (- (* c s)))) c) s))]
+    (+ (* u (- (js/Math.expm1 (- A))) (within h t1))
+       (* u (js/Math.exp (- (* h t1))) (within h (- d t1)))
+       (* -1 (js/Math.exp (- (+ R (* u t1)))) (- (js/Math.expm1 (- (* u (- d t1)))))))))
 
 (defn met-with
   "The chance threat j gets to the body in one answer with threat k, given k does, at notice rate r of k's class (and of
   j's, jv nil; else jv j's notice-view): on each cell both weigh (cells, an Int32Array), the first of the two to get to the
-  body there (its rate h of the two's, within the cell's seconds dts, a Float64Array) is answered for its :seconds while the other, not
-  there yet, joins it: within those seconds standing there, over j's Gamma when its rate is unknown."
+  body there (within the cell's seconds dts, a Float64Array) is answered for its :near seconds while the other, not there
+  yet, may join it at its rate there (met-in-cell): its coming then is the coming it would have had on the rest of the
+  route, so j comes in k's answer only where it comes at all and the chance is at most j's own."
   [k r j jv dts cells]
-  (let [{bk :before wk :w sk :seconds} k
-        {bj :before wj :w sj :seconds} j
-        {hj :h s0j :s0 shape :shape} jv
-        got (- (js/Math.expm1 (- (* r (:exposure k)))))]
+  (let [{bk :before wk :w sk :near ek :exposure} k
+        {bj :before wj :w sj :near ej :exposure} j
+        got (- (js/Math.expm1 (- (* r ek))))
+        {:keys [shape rate]} (:prior jv)]
     (if (pos? got)
       (loop [i 0 acc 0]
         (if (< i (alength cells))
           (let [a (aget cells i)
                 x (* r (aget wk a))
-                y (if jv (aget hj a) (* r (aget wj a)))
-                h (+ x y)
-                s0 (if jv (* (js/Math.exp (- (* r (aget bk a)))) (aget s0j a)) (js/Math.exp (- (* r (+ (aget bk a) (aget bj a))))))
-                joins-j (if jv (- 1 (js/Math.pow (+ 1 (/ (* y sk) shape)) (- shape))) (- (js/Math.expm1 (- (* y sk)))))]
-            (recur (inc i) (+ acc (* s0 (/ (- (js/Math.expm1 (- (* h (aget dts a))))) h)
-                                     (+ (* x joins-j) (* y (- (js/Math.expm1 (- (* x sj))))))))))
-          (min 1 (/ acc got))))
+                h0k (* r (aget bk a))
+                y (if jv (aget (:y jv) a) (* r (aget wj a)))
+                h0j (if jv (aget (:h0 jv) a) (* r (aget bj a)))
+                aj (if jv (* shape (js/Math.log1p (/ (* (aget wj a) sk) (+ rate (aget bj a))))) (* y sk))
+                rj (- (if jv (:total jv) (* r ej)) h0j)
+                d (aget dts a)]
+            (recur (inc i) (+ acc (* (js/Math.exp (- (+ h0k h0j)))
+                                     (+ (met-in-cell x y aj rj d) (met-in-cell y x (* x sj) (- (* r ek) h0k) d))))))
+          (/ acc got)))
       0)))
 
 (defn met-states
@@ -556,7 +574,7 @@
 
 (defn route-parts
   "{:chance :hurt} of the known threats of route {:cells :threats :at} for body, priced at :at (default the first cell). A
-  threat that gets to the body is answered there (group-parts) while the walk stands still; each other one that gets to it
+  threat that gets to the body is answered there (group-parts, for its :near seconds) while the walk stands still; each other one that gets to it
   meanwhile, or whose answer it comes in, is met in that answer (met-with: a chance for each pair, no hard meetings).
   Taken by when they first may get to the body, each threat k joins the set of earlier ones it meets (met-states, each in
   it at its met-with chance, met-chances): with q its chance of getting to the body, D and H a set's chance of death and
@@ -571,7 +589,7 @@
         dts (death/cell-seconds cells)
         dt (js/Float64Array.from dts)
         found (->> (met-threats route dts)
-                   (map (fn [{:keys [mob caught on] :as t}] (assoc t :seconds (:seconds (group [mob] caught)) :first (aget on 0) :dts dt)))
+                   (map (fn [{:keys [mob caught on] :as t}] (assoc t :near (:near (group [mob] caught)) :first (aget on 0) :dts dt)))
                    (sort-by :first)
                    vec)
         view (memoize #(notice-view (found %)))

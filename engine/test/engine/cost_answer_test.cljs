@@ -322,9 +322,75 @@
         route {:cells [(assoc here :s 1e6)] :threats [(threat "creeper" 0.5) (threat "zombie" 0.5)] :at here}
         alone #(answer/group-parts b % nil here)
         [c z cz] (map (comp :chance alone) [["creeper"] ["zombie"] ["creeper" "zombie"]])
-        [tc tz] (map (comp :seconds alone) [["creeper"] ["zombie"]])
+        [tc tz] (map (comp :near alone) [["creeper"] ["zombie"]])
         both (fn [r] (* 0.25 0.5 (+ (- 1 (js/Math.exp (- (* r tc)))) (- 1 (js/Math.exp (- (* r tz)))))))
         lives (reduce + (map (fn [[r w]] (* w (+ (* (- 1 (* 0.5 c)) (- 1 (* 0.5 z))) (* (both r) (- (- 1 cz) (* (- 1 c) (- 1 z)))))))
                              (death/rate-nodes (death/notice-prior "zombie"))))]
     (is (< (js/Math.abs (- (:chance (cost/route-parts b route)) (- 1 lives))) 1e-9)
         "each there half the time, sure to notice over the stay, one rate for both: whichever comes first is answered while the other may come")))
+
+(deftest a-flight-holds-the-body-near-the-mob-for-its-way-out-not-the-way-back
+  (let [flee (:flee (answer/threat-answers (body 20) "zombie" nil))]
+    (is (= :flee (:answer (cost/decide (body 20) (answer/threat-answers (body 20) "zombie" nil) here))))
+    (is (= (/ (:seconds flee) 2) (:near (answer/group-parts (body 20) ["zombie"] nil here)))
+        "another mob joins the flight only while the first still chases it")))
+
+(defn partitions
+  "Every partition of coll into blocks."
+  [[x & more]]
+  (if (nil? x)
+    [[]]
+    (mapcat (fn [p] (cons (cons [x] p) (map (fn [i] (update (vec p) i conj x)) (range (count p))))) (partitions more))))
+
+(defn met-envelope
+  "[lo hi], the least and the most chance that threats ts (met-threats') kill body on their route, over every way of
+  meeting those that come (each partition of them into answers); nodes [[[r ...] w]] of their notice rates, one a threat."
+  [b ts nodes]
+  (let [alive (memoize #(- 1 (:chance (answer/group-parts b (vec (sort %)) nil here))))
+        subsets (reduce (fn [ss i] (concat ss (map #(conj % i) ss))) [[]] (range (count ts)))
+        lives (memoize (fn [s] (map (fn [p] (reduce * (map #(alive (map (comp :mob ts) %)) p))) (partitions s))))
+        q (fn [r t] (* (:c t) (- 1 (js/Math.exp (- (* r (:exposure t)))))))
+        expect (fn [pick] (reduce + (map (fn [[rs w]]
+                                           (let [qs (mapv q rs ts)]
+                                             (* w (reduce + (map (fn [s] (* (reduce * (map-indexed (fn [i qi] (if (some #{i} s) qi (- 1 qi))) qs))
+                                                                            (apply pick (lives s))))
+                                                                 subsets)))))
+                                         nodes)))]
+    [(- 1 (expect max)) (- 1 (expect min))]))
+
+(def armed
+  (assoc (body 20) :weapon sword
+         :equipment {:head {:name "iron_helmet"} :torso {:name "iron_chestplate"} :legs {:name "iron_leggings"} :feet {:name "iron_boots"}}))
+
+(defn rate-grid
+  "[[[r ...] w]]: the notice rates of mobs ms over their classes' death/rate-nodes, one rate a class."
+  [ms]
+  (let [ps (distinct (map death/notice-prior ms))
+        grid (reduce (fn [g p] (for [[rs w] g [r v] (death/rate-nodes p)] [(assoc rs p r) (* w v)])) [[{} 1]] ps)]
+    (map (fn [[rs w]] [(mapv #(rs (death/notice-prior %)) ms) w]) grid)))
+
+(deftest a-pair-is-priced-between-met-apart-and-met-at-once-whenever-both-come
+  (let [cells (for [x (range 160)] {:x x :y 64 :z 0})
+        field (fn [mob x0] {:mob mob :weight 1 :reach (fn [x _ _] (let [d (js/Math.abs (- x x0))] (when (<= d (threat/follow-range mob)) (threat/way-weight d))))})]
+    (doseq [[kit b] [["unarmed" (body 20)] ["armed" armed]]
+            [m1 m2] [["zombie" "zombie"] ["skeleton" "skeleton"] ["zombie" "skeleton"]]
+            gap [5 15 20 35 60]]
+      (let [ts [(field m1 40) (field m2 (+ 40 gap))]
+            chance (:chance (cost/route-parts b {:cells cells :threats ts}))
+            [lo hi] (met-envelope b (answer/met-threats {:cells cells :threats ts} (death/cell-seconds cells)) (rate-grid [m1 m2]))]
+        (is (<= (- lo 1e-12) chance (+ hi 1e-12))
+            (str m1 " and " m2 " " gap " apart, " kit ": " chance " in " [lo hi]))))))
+
+(deftest the-order-three-threats-are-taken-in-moves-their-price-by-under-a-quarter-of-what-meeting-them-can
+  (let [cells (for [x (range 100)] {:x x :y 64 :z 0})
+        ;; every field also weighs the first cell, so all three are first met there and taken in the order given
+        field (fn [mob x0 w] {:mob mob :weight w :reach (fn [x _ _] (let [d (js/Math.abs (- x x0))] (when (or (zero? x) (<= d (threat/follow-range mob))) (threat/way-weight d))))})
+        orders (fn [[a b c]] [[a b c] [a c b] [b a c] [b c a] [c a b] [c b a]])]
+    (doseq [[kit b] [["unarmed" (body 20)] ["armed" armed]]
+            ms [["zombie" "zombie" "zombie"] ["skeleton" "skeleton" "zombie"] ["creeper" "zombie" "skeleton"]]
+            [g1 g2] [[0 10] [5 20] [15 30]]]
+      (let [ts (map field ms [10 (+ 10 g1) (+ 10 g2)] [1 0.7 0.4])
+            cs (map #(:chance (cost/route-parts b {:cells cells :threats %})) (orders ts))
+            [lo hi] (met-envelope b (answer/met-threats {:cells cells :threats ts} (death/cell-seconds cells)) (rate-grid ms))
+            what (str (apply str (interpose " " ms)) " at 10, " (+ 10 g1) ", " (+ 10 g2) ", " kit ": " (vec cs) " in " [lo hi])]
+        (is (<= (- (apply max cs) (apply min cs)) (* 0.25 (- hi lo))) what)))))
