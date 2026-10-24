@@ -55,6 +55,13 @@
     (is (> thin wide) "fewer meets behind the same mean: a likelier death")
     (is (nil? (:shape (cost/fight-answer {:weapon nil :mobs [(mob "drowned" 0)] :wet? true}))) "a fist fight is out of the fit: hit as on land")))
 
+(deftest a-wet-fight-followed-by-a-blast-keeps-the-width-of-its-blow-count
+  (let [wet (cost/fight-answer {:weapon "stone_sword" :mobs [(mob "drowned" 0)] :wet? true})]
+    (doseq [[what b] [["a blast" {:damage 9 :hit 0 :blasts [9] :seconds 1}]
+                      ["a creeper's spread" {:damage 6 :hit 0 :spread [0 12] :seconds 1}]]]
+      (is (< (js/Math.abs (- (:shape (answer/followed wet b)) (:shape wet))) 1e-9)
+          (str what " lands no small blows: the count's width is the fight's alone")))))
+
 (deftest blows-that-may-take-the-health-are-the-death-risk
   (is (zero? (death/blow-chance {:health 20} 0 3)))
   (is (< (death/blow-chance {:health 20} 4 2.5) 0.01) "a fight of 4 hp at full health hardly kills")

@@ -97,14 +97,19 @@
 
 (defn mean [xs] (if (seq xs) (/ (reduce + xs) (count xs)) 0))
 
+(defn small
+  "hp of answer's damage in its small blows, the ones its :shape is the width of: less its :blasts and its :spread's mean."
+  [{:keys [damage blasts spread]}]
+  (- damage (reduce + 0 blasts) (mean spread)))
+
 (defn blows-outcome
   "{:dies :lived} of the blows of answer against body (death/blow-outcome's): of its :damage (its count's :shape), its
   :blasts sure (each of its :spread too, averaged), or of the :caught blows for its :chance."
   [body {:keys [caught] :as answer}]
-  (let [outcome (fn [{:keys [damage hit blasts spread shape]}]
+  (let [outcome (fn [{:keys [hit blasts spread shape] :as a}]
                   (let [sure (reduce + 0 blasts)
-                        small (- damage sure (mean spread))
-                        os (map #(death/blow-outcome body (+ small sure %) hit (+ sure %) shape) (or (seq spread) [0]))]
+                        blows (small a)
+                        os (map #(death/blow-outcome body (+ blows sure %) hit (+ sure %) shape) (or (seq spread) [0]))]
                     {:dies (mean (map :dies os)) :lived (mean (map :lived os))}))
         clean (outcome answer)]
     (if caught
@@ -196,12 +201,12 @@
 
 (defn followed
   "Answer a, then answer b at once (nil: a once more, later): the blows and seconds of both, b's chance of being caught
-  (a's blows landed either way) and what follows b."
+  (a's blows landed either way) and what follows b. a's spread is kept at its mean, a part of the small blows."
   [a b]
   (if b
     (cond-> (assoc a :damage (+ (:damage a) (:damage b)) :hit (max (:hit a) (:hit b)) :seconds (+ (:seconds a) (:seconds b))
                    :blasts (into (vec (:blasts a)) (:blasts b)) :spread (:spread b)
-                   :shape (fight/sum-shape [[(:damage a) (:shape a)] [(:damage b) (:shape b)]]))
+                   :shape (fight/sum-shape [[(small a) (:shape a)] [(mean (:spread a)) nil] [(small b) (:shape b)]]))
       (:caught b) (assoc :caught (-> (:caught b) (update :damage + (:damage a)) (update :blasts #(into (vec (:blasts a)) %))))
       (:then b) (assoc :then (:then b))
       (not (:then b)) (dissoc :then))

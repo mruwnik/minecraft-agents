@@ -269,7 +269,8 @@
   "{:answer :room :value :cost}: looking into the room first (respond.doors/room-look) when a cell of it is unseen: the
   room is closed by cost/closed-chance of its seen and unseen boundary cells, then the door shut as in a seen room, else
   the answers now without the door (cost/look-answer, cost/look-value); now-of: the same of mobs [hostile/mob-near's]
-  come nearer during the look. nil when there is nothing to look at."
+  come nearer during the look, the fight kept as now (hostile/fight-answer reads the mobs where they stand: a nearer mob
+  only shortens the walk up to it and the shots taken on it, so the look's fight is priced a little high). nil when there is nothing to look at."
   [c near now now-of sealing then]
   (when-let [{:keys [seen unseen headings] :as room} (doors/room-look c sealing)]
     (let [p (:primitives c)
