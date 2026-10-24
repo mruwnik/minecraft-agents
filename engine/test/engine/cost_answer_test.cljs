@@ -61,6 +61,9 @@
   (is (< 0.4 (death/blow-chance {:health 5} 4 2.5) 0.6) "at 5 hp it may well")
   (is (< (death/blow-chance {:health 5 :absorption 4} 4 2.5) (death/blow-chance {:health 5} 4 2.5)) "absorption is health")
   (is (= (death/blow-chance (body 5) 4 2.5) (cost/death-chance (body 5) {:damage 4 :hit 2.5})) "the death chance of an answer's blows")
+  (is (< 3.99 (:lived (death/blow-outcome {:health 20} 4 2.5 0 nil)) 4) "blows that hardly kill take their hp")
+  (let [{:keys [dies lived]} (death/blow-outcome {:health 5} 4 2.5 0 nil)]
+    (is (< lived (* (- 1 dies) 5)) "a death's hp are not counted in what the blows take"))
   (is (= 1 (cost/death-chance (body 20) {:damage 21 :hit 3 :blasts [20]})) "a blast that takes the health kills")
   (is (> (cost/death-chance (body 20) {:damage 21 :hit 3 :blasts [16]}) (cost/death-chance (body 20) {:damage 21 :hit 16}))
       "a blast of 16 leaves 4 hp against 5 hp of zombie blows, not 5/16 more of a blast"))
@@ -248,12 +251,17 @@
     (is (nil? (flee 0)) "the drowned keeps up on a ledge")
     (is (some? (flee ##Inf)) "land that goes on, or not known, is the walk away")))
 
-(deftest a-lethal-threat-costs-the-body-its-life-not-more
+(deftest a-lethal-threat-costs-the-body-its-death-not-the-hp-it-would-have-lost-too
   ;; a fist fight with a witch is 26 punches 1.3 s apart under her potions: 84 hp expected; the walk out of her range about 13
   (let [route (fn [weight & mobs] {:cells [(assoc here :s 60)] :threats (for [m mobs] {:mob m :weight weight :reach (constantly 1)})})]
-    (is (<= 7.8 (:hurt (cost/route-parts (body 8) (route 1 "witch"))) 8) "60 s in her range: she seldom misses the body")
-    (is (<= 7.8 (:hurt (cost/route-parts (body 8) (route 1 "witch" "witch"))) 8) "nor do two")
-    (is (< 2.35 (:hurt (cost/route-parts (body 8) (route 0.3 "witch"))) 2.4) "a faded one its share of the life")))
+    (doseq [r [(route 1 "witch") (route 0.3 "witch")]]
+      (let [{:keys [chance hurt]} (cost/route-parts (body 8) r)]
+        (is (< 0 hurt (* (- 1 chance) 8)) "the hp are paid only where the body lives: under its life by the chance it lives")))
+    (is (< 0.6 (:chance (cost/route-parts (body 8) (route 1 "witch")))) "60 s in her range: she seldom misses the body")
+    (is (<= (:hurt (cost/route-parts (body 8) (route 1 "witch" "witch"))) 8) "two take no more than the life"))
+  (let [death (death/death-cost (body 5) here)]
+    (is (< (js/Math.abs (- (cost/answer-price (body 5) {:damage 100 :hit 5 :seconds 1} here) (+ death 1))) 1e-3)
+        "a sure death is its death-cost and seconds: respawn heals the hp")))
 
 (deftest a-second-in-water-costs-the-drowned-meet-rate-times-the-cheapest-answer-to-one
   (let [kit (assoc (body 20) :weapon "stone_sword")
@@ -373,8 +381,10 @@
         met #(answer/group-parts (body %) ["skeleton"] nil here)
         flee (fn [h] (let [as (answer/threat-answers (body h) "skeleton" nil)] (get as (:answer (cost/decide (body h) as here)))))]
     (is (= 1 (:chance (met arrow))) "a body one arrow kills dies when the skeleton gets to it")
-    (is (< (js/Math.abs (- (:hurt (met 20)) (+ arrow (answer/expected-damage (flee (- 20 arrow)))))) 1e-9)
-        "the hurt is that arrow and the answer's blows after it")
+    (is (< (js/Math.abs (- (:hurt (met 20)) (let [struck (body (- 20 arrow)) a (flee (- 20 arrow))]
+                                              (+ (* arrow (- 1 (answer/blows-chance struck a))) (answer/lived-damage struck a)))))
+           1e-9)
+        "the hurt is that arrow and the answer's blows after it, where the body lives through them")
     (is (= (:near (met 20)) (:near (flee (- 20 arrow)))) "the answer starts at the hit")))
 
 (deftest a-skeleton-stands-and-shoots-while-the-body-walks-out-of-its-bow-range

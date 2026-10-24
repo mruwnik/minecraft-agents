@@ -171,11 +171,11 @@
             "two are fightable in diamond: their blows cost less than walking away and meeting them again")))))
 
 (defn fist-stance
-  "What decide makes of a body at full health with weapon against one mob 2 blocks off (health: what is left of it, nil
-  full): fight it, or walk away and meet it again."
+  "What decide makes of a body at full health with no bed (a death walks it back from world spawn) with weapon against
+  one mob 2 blocks off (health: what is left of it, nil full): fight it, or walk away and meet it again."
   [weapon mob health]
   (let [f (cost/fight-answer {:weapon weapon :mobs [{:name mob :distance 2 :health health}]})]
-    (:answer (cost/decide {:health 20 :food 20 :level 0 :carried 0 :respawn {:x 40 :y 64 :z 0}}
+    (:answer (cost/decide {:health 20 :food 20 :level 0 :carried 0}
                           {:fight f :flee (cost/flee-answer {:food 20 :mobs [{:name mob :distance 2 :follow 35}] :later f})}
                           {:x 0 :y 64 :z 0}))))
 
@@ -1871,7 +1871,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[d decision prices] [[1 :fight {:fight 26 :flee 32}] [2 :fight {:fight 34 :flee 39}] [3 :flee {:fight 90 :flee 78}]]]
+        (doseq [[d decision prices] [[1 :fight {:fight 26 :flee 32}] [2 :fight {:fight 34 :flee 39}] [3 :flee {:fight 88 :flee 78}]]]
           (let [world {:inventory sword :equipment iron-armour :entities [(assoc (skeleton 1 10 0) :visible true)]}
                 {:keys [seen]} (await (settings/with-settings {:jobs.lib.cost.threat/difficulty d} #(flight-round respond world)))
                 [e] (filter #(= :hostile.decided (:kind %)) @seen)]

@@ -76,24 +76,33 @@
         left (if (gets 0) 0 (or (:carried body) 0))]
     (+ (value/trip) (:cost (value/walk-cost {:distance blocks})) left (experience-cost body))))
 
+(defn blow-outcome
+  "{:dies :lived} of blows of about hit hp, damage hp of them expected, against the health and absorption of body: dies the
+  chance at least life/hit of them land, lived the hp they take in the counts the body lives through, each by its chance
+  (E[damage, alive]: the hp of a death is not paid, respawn heals it). Their count is a Poisson one, or with shape (a
+  Gamma-distributed rate: an uncertain fit) a negative binomial one, the Poisson's posterior predictive. sure: hp of
+  damage that lands for certain in big blows (a creeper's blast), taken off the life first: the small blows count against
+  what it leaves, not as parts of a big one."
+  [{:keys [health absorption]} damage hit sure shape]
+  (let [life (- (+ (or health 20) (or absorption 0)) sure)
+        hit (max 0.1 (or hit 1))
+        lam (/ (max 0 (- damage sure)) hit)
+        k (js/Math.ceil (/ life hit))
+        [p0 step] (if shape
+                    (let [q (/ lam (+ shape lam))]
+                      [(js/Math.exp (* shape (js/Math.log1p (- q)))) (fn [p i] (/ (* p q (+ shape i -1)) i))])
+                    [(js/Math.exp (- lam)) (fn [p i] (/ (* p lam) i))])
+        ps (vec (take k (reductions step p0 (iterate inc 1))))
+        below (reduce + ps)]
+    (if (pos? life)
+      {:dies (max 0 (- 1 below)) :lived (reduce + (map-indexed (fn [i p] (* p (+ sure (* i hit)))) ps))}
+      {:dies 1 :lived 0})))
+
 (defn blow-chance
-  "The chance that blows of about hit hp, damage hp of them expected, take the health and absorption of body: at least
-  life/hit of them land. Their count is a Poisson one, or with shape (a Gamma-distributed rate: an uncertain fit) a
-  negative binomial one, the Poisson's posterior predictive. sure: hp of damage that lands for certain in big blows (a
-  creeper's blast), taken off the life first: the small blows count against what it leaves, not as parts of a big one."
+  "The :dies of blow-outcome."
   ([body damage hit] (blow-chance body damage hit 0 nil))
   ([body damage hit sure] (blow-chance body damage hit sure nil))
-  ([{:keys [health absorption]} damage hit sure shape]
-   (let [life (- (+ (or health 20) (or absorption 0)) sure)
-         hit (max 0.1 (or hit 1))
-         lam (/ (max 0 (- damage sure)) hit)
-         k (js/Math.ceil (/ life hit))
-         [p0 step] (if shape
-                     (let [q (/ lam (+ shape lam))]
-                       [(js/Math.exp (* shape (js/Math.log1p (- q)))) (fn [p i] (/ (* p q (+ shape i -1)) i))])
-                     [(js/Math.exp (- lam)) (fn [p i] (/ (* p lam) i))])
-         below (reduce + (take k (reductions step p0 (iterate inc 1))))]
-     (if (pos? life) (max 0 (- 1 below)) 1))))
+  ([body damage hit sure shape] (:dies (blow-outcome body damage hit (or sure 0) shape))))
 
 (defn log-rising
   "ln (alpha (alpha + 1) ... (alpha + k - 1)), ln Gamma(alpha + k) / Gamma(alpha) for a count k."

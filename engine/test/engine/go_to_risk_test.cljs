@@ -449,8 +449,9 @@
         both (estimate (with-death (ready-test/ctx-of live) {:x 31 :y 64 :z 2} "zombie" 60000))]
     (is (pos? (:hostile-hp alone)))
     (is (pos? (:death-hp remembered)))
-    (is (> (+ (:hostile-hp both) (:death-hp both)) (* 1.05 (+ (:hostile-hp alone) (:death-hp remembered))))
-        "fought at once, each zombie hits while the other is fought")))
+    (is (> (+ (:hostile-hp both) (:death-hp both) (:lethal-hp both))
+           (* 1.05 (+ (:hostile-hp alone) (:death-hp remembered) (:lethal-hp alone) (:lethal-hp remembered))))
+        "fought at once, each zombie hits while the other is fought: the hp it takes where the body lives and the death")))
 
 (def bed-world "day-world with a bed beside the body's place, which with-bed sets its respawn at: a death costs a short walk back." (update day-world :blocks assoc "5,64,1" "red_bed"))
 

@@ -5,7 +5,7 @@
   the hp it is expected to cost, the creeper blasts in it landing for certain (:spread: as many equally likely blast
   totals) and the rest in blows of about :hit hp each (:shape: their count's width, death/blow-chance), the seconds it takes, what may follow it (the cheapest of :then is paid too) and,
   for a walk away, the chance its mobs catch it and the blows they then land. answer-price: the hp at the health each
-  leaves (health/hp-cost), the death the blows risk (death-chance x death/death-cost), the seconds, and the cheapest
+  leaves in the outcomes it lives through (lived-damage, health/hp-cost), the death the blows risk (death-chance x death/death-cost), the seconds, and the cheapest
   :then at full health.
 
   death-chance: the one chance of dying every route, spot, wait or answer is priced by. A known threat on a route costs
@@ -87,28 +87,42 @@
 
 (defn mean [xs] (if (seq xs) (/ (reduce + xs) (count xs)) 0))
 
-(defn blows-chance
-  "The chance the blows of answer kill body: death/blow-chance of its :damage (its count's :shape), its :blasts sure
-  (each of its :spread too, averaged), or of the :caught blows for its :chance."
+(defn blows-outcome
+  "{:dies :lived} of the blows of answer against body (death/blow-outcome's): of its :damage (its count's :shape), its
+  :blasts sure (each of its :spread too, averaged), or of the :caught blows for its :chance."
   [body {:keys [caught] :as answer}]
-  (let [chance (fn [{:keys [damage hit blasts spread shape]}]
-                 (let [sure (reduce + 0 blasts)
-                       small (- damage sure (mean spread))]
-                   (mean (map #(death/blow-chance body (+ small sure %) hit (+ sure %) shape) (or (seq spread) [0])))))
-        clean (chance answer)]
+  (let [outcome (fn [{:keys [damage hit blasts spread shape]}]
+                  (let [sure (reduce + 0 blasts)
+                        small (- damage sure (mean spread))
+                        os (map #(death/blow-outcome body (+ small sure %) hit (+ sure %) shape) (or (seq spread) [0]))]
+                    {:dies (mean (map :dies os)) :lived (mean (map :lived os))}))
+        clean (outcome answer)]
     (if caught
-      (+ (* (- 1 (:chance caught)) clean) (* (:chance caught) (chance caught)))
+      (let [c (:chance caught) o (outcome caught)]
+        {:dies (+ (* (- 1 c) (:dies clean)) (* c (:dies o))) :lived (+ (* (- 1 c) (:lived clean)) (* c (:lived o)))})
       clean)))
+
+(defn blows-chance
+  "The chance the blows of answer kill body: blows-outcome's :dies."
+  [body answer]
+  (:dies (blows-outcome body answer)))
 
 (defn expected-damage [{:keys [damage caught]}]
   (if caught (+ (* (- 1 (:chance caught)) damage) (* (:chance caught) (:damage caught))) damage))
 
+(defn lived-damage
+  "hp answer's blows take off body in the outcomes it lives through, by their chance (blows-outcome's :lived): a death's
+  hp is not paid, respawn heals it."
+  [body answer]
+  (:lived (blows-outcome body answer)))
+
 (defn healed [body] (assoc body :health 20 :absorption 0))
 
 (defn after
-  "body once answer's expected blows have landed (at least 1 hp left: a death in them is the answer's own)."
+  "body once answer's blows have landed, given it lives through them: their mean over those outcomes (at least 1 hp left)."
   [{:keys [health] :as body} answer]
-  (assoc body :health (max 1 (- (or health 20) (expected-damage answer)))))
+  (let [{:keys [dies lived]} (blows-outcome body answer)]
+    (assoc body :health (max 1 (- (or health 20) (if (< dies 1) (/ lived (- 1 dies)) 0))))))
 
 (defn answer-price
   "Seconds answer costs body {:health :absorption, death-cost's :respawn :level :carried} at `at` (see the ns doc); :then
@@ -117,9 +131,9 @@
   chance the body lives through the answer's own blows: a death ends the meet (as answer-death-chance)."
   [{:keys [health] :as body} {:keys [seconds then outcomes] :as answer} at]
   (let [health (or health 20)
-        dies (blows-chance body answer)
+        {:keys [dies lived]} (blows-outcome body answer)
         lives (- 1 dies)
-        own (+ (health/hp-cost health (min (expected-damage answer) health))
+        own (+ (if (pos? lives) (* lives (health/hp-cost health (min (/ lived lives) health))) 0)
                (* dies (death/death-cost body at))
                seconds)]
     (cond
@@ -416,17 +430,16 @@
 (defn life [{:keys [health absorption]}] (+ (or health 20) (or absorption 0)))
 
 (defn threat-hurt
-  "hp mob-name met beside body takes off it at `at`: the expected-damage of the answer decide takes of threat-answers, at
-  most the body's life (a lethal answer costs the life, its death is death-chance's); a provoked-only mob
-  threat/provoked-share of it."
+  "hp mob-name met beside body takes off it at `at`: the lived-damage of the answer decide takes of threat-answers (its
+  death is threat-chance's); a provoked-only mob threat/provoked-share of it."
   [body mob-name caught at]
   (let [answers (threat-answers body mob-name caught)]
     (* (if (contains? threat/provoked-only mob-name) (threat/provoked-share) 1)
-       (min (life body) (expected-damage (get answers (:answer (decide body answers at))))))))
+       (lived-damage body (get answers (:answer (decide body answers at)))))))
 
 (defn group-parts
   "{:chance :hurt :near} of mob names met together by body at `at`, caught at caught: the answer decide takes of
-  threat-answers, its answer-death-chance, its expected-damage at most the body's life, and the seconds it holds the body
+  threat-answers, its answer-death-chance, the hp taken in the outcomes the body lives through (lived-damage), and the seconds it holds the body
   at or near the place (its :near, a flight's way out; else its :seconds). A ranged mob gets to the body at its first hit
   (death/notice-prior's count): that blow has landed before the answer, whose blows are the ones after it."
   [body names caught at]
@@ -437,7 +450,9 @@
         answers (threat-answers struck names caught)
         a (get answers (:answer (decide struck answers at)))]
     {:chance (if (pos? (life struck)) (answer-death-chance struck a at) 1)
-     :hurt (min (life body) (+ first-hits (expected-damage a)))
+     :hurt (if (pos? (life struck))
+             (let [{:keys [dies lived]} (blows-outcome struck a)] (+ (* first-hits (- 1 dies)) lived))
+             0)
      :near (or (:near a) (:seconds a) 0)}))
 
 (defn met-threats
@@ -646,7 +661,7 @@
   ([body spawns at kill] (- 1 (js/Math.exp (- (* spawns (or kill (spawn-kill-chance body at))))))))
 
 (defn spawns-hurt
-  "hp spawns mobs (an expected count) spawned beside body take off it at `at`, at most its life (the death past it is
+  "hp spawns mobs (an expected count) spawned beside body take off it at `at`, at most its life (their death is
   spawns-chance's): each its threat-hurt, caught at the prior, over threat/spawn-weights."
   [body spawns at]
   (min (life body)
