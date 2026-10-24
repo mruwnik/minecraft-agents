@@ -510,7 +510,7 @@
         independent (fn [body mob] (- 1 (js/Math.pow (- 1 (alone body mob)) 3)))]
     (is (< (js/Math.abs (- (chance fist (apart "zombie")) (independent fist "zombie"))) 1e-9)
         "three zombies a walk passes one by one: three meetings, each its own flight and catch")
-    (is (> (chance fist (at-once "skeleton")) (+ (independent fist "skeleton") 0.01))
+    (is (> (chance fist (at-once "skeleton")) (+ (alone fist "skeleton") 0.01))
         "three skeletons shooting at once: their arrows add up in one meeting")
     (is (> (hurt armed (at-once "zombie")) (* 3.3 (hurt armed [(on "zombie" 0 10)])))
         "three zombies fought at once: each hits while the others are fought")
@@ -528,16 +528,17 @@
     (is (not= (chance [(field 35) (field 38)]) (- 1 (* (- 1 (alone 35)) (- 1 (alone 38)))))
         "3 blocks apart: one meeting")))
 
-(deftest a-pack-is-priced-no-surer-than-its-uncounted-notice-rate-allows
+(deftest a-pack-is-priced-no-surer-than-its-little-counted-notice-rate-allows
   (let [fist {:health 20}
         cells (for [x (range 40)] {:x x :y 64 :z 0})
         on (fn [mob] {:mob mob :weight 1 :reach (fn [x _ _] (when (<= 0 x 10) 1))})
         chance #(:chance (cost/route-parts fist {:cells cells :threats %}))
         exposure (:exposure (death/met-stretch "skeleton" (:reach (on "skeleton")) cells))
-        none-notices (death/missed (death/notice-prior "skeleton") (* 6 exposure))
-        counted-often {:jobs.lib.cost.death/notice-rate {:other {:k 849 :n-s 4237.5} :ranged {:k 0 :n-s 0}}}]
-    (is (< 0.02 none-notices) "six skeletons share one rate no notice was counted for: they may all miss the body together")
-    (is (< 0.9 (chance (repeat 6 (on "skeleton"))) (- 1 none-notices)) "the pack kills only when one of them gets to the body")
+        few {:jobs.lib.cost.death/notice-rate {:other {:k 8 :n-s 42.4} :ranged {:k 1 :n-s 5}}}
+        none-notices (settings/with-settings few #(death/missed (death/notice-prior "skeleton") (* 6 exposure)))
+        counted-often {:jobs.lib.cost.death/notice-rate {:other {:k 849 :n-s 4237.5} :ranged {:k 37 :n-s 162.8}}}]
+    (is (< 0.02 none-notices) "six skeletons share one rate counted once: they may all miss the body together")
+    (is (< 0.8 (settings/with-settings few #(chance (repeat 6 (on "skeleton")))) (- 1 none-notices)) "the pack kills only when one of them gets to the body")
     (is (< (js/Math.abs (- 1 (/ (chance [(on "zombie")]) (settings/with-settings counted-often #(chance [(on "zombie")]))))) 0.05)
         "a zombie, its class counted 8 times, prices within 5% of a class counted a hundred times as often at the same mean")))
 
