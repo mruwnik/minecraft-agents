@@ -1,10 +1,11 @@
 ;; Card 417e96f3: recover-drops ranks above flee and backs off from a guard it cannot afford, coming back before the despawn.
 ;; The body dies at [26 0 26], respawns at [4 0 4]; a zombie with AI (helmet, kept) guards the pile and chases the body,
-;; dearer than the pile (cheapened by :value-overrides) on go-to's quote of the walk. The trip backs off (the reflex stops condition-failed :danger),
+;; dearer than the pile (cheapened by :value-overrides to 77 s, room left for a spawn price on the walk back) on go-to's quote of the walk. The trip backs off (the reflex stops condition-failed :danger),
 ;; hostile-near takes the body away, the zombie is killed, and the died trigger brings the body back for the pile.
 {:defaults
  {:tags [:survival :death :jobs :hostile]
-  :register [{:trigger :died :why "value-overrides cheapen the pile below the walk past the zombie" :job (jobs.survival.recover-drops {:value-overrides {"raw_iron" 1 "cobblestone" 0.05}})}
+  :time :any
+  :register [{:trigger :died :why "value-overrides cheapen the pile below the walk past the zombie" :job (jobs.survival.recover-drops {:value-overrides {"raw_iron" 3 "cobblestone" 0.05}})}
              {:trigger :hostile-near}]
   :body {:at [26.5 0 26.5] :spawnpoint [4 0 4] :effects [["resistance" 600 4]]
          :inventory [["raw_iron" 24] ["cobblestone" 64] ["cobblestone" 36]]}
