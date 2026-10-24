@@ -118,7 +118,7 @@
 (def mob-kind danger/mob-kind)
 (def chase-speed danger/chase-speed)
 
-(def hp-seconds health/hp-seconds)
+(def hp-seconds health/walk-hp-seconds)
 (def walk-hp-seconds health/walk-hp-seconds)
 (def health-scale health/health-scale)
 (def hp-price health/hp-price)
@@ -166,7 +166,7 @@
   floor; with a kit {:weapon :equipment :health :food} the hurt of a mob spawned beside it (spawns-hurt) times
   spawn-chance of a dark cell and hp-seconds on top: a bare body pays more than an armed, armoured one."
   ([] (value/dark-factor))
-  ([kit] (+ (value/dark-factor) (* (answer/spawns-hurt kit 1 nil) (value/spawn-chance [0 0 0]) health/hp-seconds))))
+  ([kit] (+ (value/dark-factor) (* (answer/spawns-hurt kit 1 nil) (value/spawn-chance [0 0 0]) (health/walk-hp-seconds)))))
 
 (defn unseen-share
   "Seconds a second of walk over cells the body has not seen adds, at the worse case but finite: the chance the way does

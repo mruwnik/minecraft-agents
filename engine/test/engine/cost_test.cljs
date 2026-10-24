@@ -291,7 +291,7 @@
         sword (cost/dark-factor {:weapon "iron_sword" :equipment nil})
         armed-armoured (cost/dark-factor {:weapon "iron_sword" :equipment iron-set})]
     (is (zero? floor) "the bare factor is the flat floor")
-    (is (= unarmed (* (cost/spawns-hurt {:weapon nil :equipment nil} 1 nil) (cost/spawn-chance [0 0 0]) cost/hp-seconds))
+    (is (= unarmed (* (cost/spawns-hurt {:weapon nil :equipment nil} 1 nil) (cost/spawn-chance [0 0 0]) (cost/hp-seconds)))
         "an unarmed body pays the hurt of the spawn mix, the one spawn price walk-risk uses")
     (is (> unarmed sword armed-armoured floor) "a bare body pays most, armour and a sword less, never below the floor")))
 

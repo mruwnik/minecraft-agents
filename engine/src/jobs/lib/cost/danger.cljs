@@ -110,7 +110,7 @@
                      :let [hurt (min (if (number? health) health 20) (* weight (threat/mob-hurt stats kind (exposure-s) threat-fn)))
                            dies (if (contains? threat/provoked-only (:name m)) 0 (fight-death-chance equipment weapon health kind d (* weight (if (pos? base) (/ threat base) 1))))]]
                  {:name (:name m) :pos (:pos m) :distance d :weight weight :threat threat
-                  :danger (+ hurt (/ (* dies death-s) health/hp-seconds))}))
+                  :danger (+ hurt (/ (* dies death-s) (health/walk-hp-seconds)))}))
         rows (vec (sort-by :danger > rows))]
     {:danger (reduce + 0 (map :danger rows)) :mobs rows}))
 

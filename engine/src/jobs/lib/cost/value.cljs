@@ -196,7 +196,7 @@
   "The floor of the planner's extra cost of a dark cell as a share of its own seconds: per-dark over per-block
   (jobs.lib.cost/dark-factor adds a kit's spawn hurt)."
   [] (/ (per-dark) (per-block)))
-(def per-danger "One expected point of damage (jobs.lib.cost/route-danger): what an hp costs (jobs.lib.cost.health)." health/hp-seconds)
+(defn per-danger "One expected point of damage (jobs.lib.cost/route-danger): what an hp costs (jobs.lib.cost.health)." [] (health/walk-hp-seconds))
 (defn own-place-blocks [] (settings/get settings ::own-place-blocks))
 (defn walk-blocks-per-s [] (settings/get settings ::walk-blocks-per-s))
 (def lethal-causes ["lava" "fire" "burn" "void" "out_of_world"])

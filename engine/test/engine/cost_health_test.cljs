@@ -9,14 +9,14 @@
             [jobs.lib.walk.world :as wworld]))
 
 (deftest an-hp-costs-ten-seconds-more-the-nearer-the-floor
-  (is (= 10 health/hp-seconds))
+  (is (= 10 (health/walk-hp-seconds)))
   (are [hp scale] (= scale (health/health-scale hp))
     20 1
     10 2
     5 4
     1 4
     0 4)
-  (is (= 10 cost/per-danger) "the fetch price of a point of damage is the same figure"))
+  (is (= 10 (cost/per-danger)) "the fetch price of a point of damage is the same figure"))
 
 (deftest drowning-prices-each-hp-at-the-health-it-leaves
   (is (= [0 20 42 67 96] (mapv js/Math.round (health/drown-prices 10 10 4))) "20/10, 20/9, 20/8, 20/7 x 10 s")
@@ -152,3 +152,9 @@
     true 30 48
     true 5 -2
     false 30 0))
+
+(deftest the-hp-seconds-setting-prices-every-death-term
+  (let [body {:health 20 :food 20 :level 0 :carried 0}
+        lethal #(settings/with-settings {:jobs.lib.cost.health/hp-seconds %} (fn [] (cost/lethal-hp body 0.5 {:x 0 :y 64 :z 0})))]
+    (is (< (js/Math.abs (- (lethal 10) (* 2 (lethal 20)))) 1e-9) "a dearer hp makes the same death fewer hp")
+    (is (= 20 (settings/with-settings {:jobs.lib.cost.health/hp-seconds 20} cost/per-danger)))))

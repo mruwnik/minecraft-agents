@@ -30,7 +30,10 @@
    ::point-blank {:default 1.5 :doc "Blocks within which a hostile (a shooter too, not a creeper or an enderman) is in the body's own cell or beside it: a cornered body fights a shooter this close instead of hiding from it." :spec (a/num-in 0 nil)}
    ::back-step {:default 6 :doc "Blocks the body backs off from a creeper after each hit: its fuse runs on, so it ends out of the blast's reach (about 6)." :spec (a/num-in 1 nil)}
    ::felt-s {:default 3 :doc "Seconds back the mob blows the body felt set the rate a fight is priced at (fight-answer)." :spec (a/num-in 0 nil)}
+   ::kill-worth {:default -8 :doc "Seconds one hostile killed is worth to the body, taken off the price of the fight: the value of its drops and of the way cleared, less the bother of a fight (readying, stepping back, healing up, arrows to pick up). Drops are not picked up after a fight yet, so the default is the bother alone: the body walks away from a mob it can cheaply, and a higher value makes it fight. Negative: a fight costs more." :spec (a/num-in nil nil)}
    ::leash {:default 20 :doc "Blocks from where a hostile fight started beyond which a hostile is not chased." :spec (a/num-in 0 nil)}})
+
+(defn kill-worth [] (settings/get settings ::kill-worth))
 
 (defn hostiles? [c] (= :hostiles (:targets (:args c))))
 
@@ -274,6 +277,7 @@
         (cond-> {:damage (+ (walk-hp walk-q) (max (:damage a) (* rate (:seconds a))) (reduce + 0 blasts))
                  :hit (max (:hit a) hardest)
                  :blasts (vec (filter pos? blasts))
+                 :worth (* (count fought) (kill-worth))
                  :seconds seconds
                  :creepers (vec creepers)}
           (seq left) (cost/followed (flee-answer c left nil nil nil)))))))

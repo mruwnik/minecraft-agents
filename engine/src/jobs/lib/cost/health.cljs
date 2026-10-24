@@ -20,8 +20,6 @@
    ::hp-seconds {:default 10 :doc "Seconds one hp costs at full health when the planner weighs a drop, a plant's prick or a danger against a longer way (more at low health)." :spec a/pos-num?}
    ::max-scale {:default 4 :doc "The most the price of an hp rises near zero health." :spec (a/int-in 1 nil)}})
 
-(def hp-seconds "Seconds one hp costs at full health." 10)
-
 (defn walk-hp-seconds "Seconds an hp costs a walk at full health: the setting ::hp-seconds." []
   (settings/get settings ::hp-seconds))
 
@@ -56,7 +54,7 @@
   "Seconds a walk's risk costs a body at health: the hurt hp it expects at hp-cost (at most the health: past it is the
   death) and its death chance in hp (lethal hp, jobs.lib.cost/lethal-hp) at hp-seconds, the rate lethal-hp divided by."
   [health hurt lethal]
-  (+ (hp-cost health (min (max 0 hurt) health)) (* hp-seconds lethal)))
+  (+ (hp-cost health (min (max 0 hurt) health)) (* (walk-hp-seconds) lethal)))
 
 (defn commute-s
   "Seconds a walk of secs away costs over sheltering where the body stands, which takes shelter-s: for a body in the ground

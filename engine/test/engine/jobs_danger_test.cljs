@@ -131,7 +131,7 @@
 
 (deftest a-danger-is-at-most-the-hurt-and-one-death
   (let [spider (mob 1 "spider" 15 0)
-        hp-death (/ (death-s) d/per-danger)]
+        hp-death (/ (death-s) (d/per-danger))]
     (is (<= (armed-danger spider nil 20) (+ 20 hp-death)) "a fist fight with a spider costs the health and a death, not a multiple of it")
     (is (<= (armed-danger spider nil 6) (+ 6 hp-death)))))
 
@@ -139,7 +139,7 @@
   (let [pile {:x 15 :y 64 :z 0}
         worth (:value (d/item-value [{:name "oak_log" :count 15} {:name "feather" :count 1} {:name "oak_planks" :count 2}]))
         r (route-danger (world) route [(mob 1 "spider" 15 0)] naked :death-s (d/death-cost {:respawn {:x 15 :y 64 :z 3}} pile))]
-    (is (< 0 (* d/per-danger (:danger r)) worth) "the trial's pile, its bed 3 blocks off: the spider was priced 5820 s")))
+    (is (< 0 (* (d/per-danger) (:danger r)) worth) "the trial's pile, its bed 3 blocks off: the spider was priced 5820 s")))
 
 (deftest a-body-that-would-win-the-fight-is-priced-alike-whatever-it-wins-with
   (let [zombie (mob 1 "zombie" 15 2)

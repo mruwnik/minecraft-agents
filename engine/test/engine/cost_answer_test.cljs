@@ -434,3 +434,10 @@
             [lo hi] (met-envelope b (answer/met-threats {:cells cells :threats ts} (death/cell-seconds cells)) (rate-grid ms))
             what (str (apply str (interpose " " ms)) " at 10, " (+ 10 g1) ", " (+ 10 g2) ", " kit ": " (vec cs) " in " [lo hi])]
         (is (<= (- (apply max cs) (apply min cs)) (* 0.25 (- hi lo))) what)))))
+
+(deftest what-a-fight-is-worth-when-lived-through-is-taken-off-its-price
+  (let [fight (cost/fight-answer {:weapon sword :mobs [(mob "zombie" 3)]})
+        price #(cost/answer-price (body 20) (assoc fight :worth %) here)
+        lives (- 1 (cost/death-chance (body 20) fight))]
+    (is (< (js/Math.abs (- (price 0) (price 10) (* lives 10))) 1e-9) "paid by the chance the body lives")
+    (is (> (price -8) (price 0)) "a negative worth is a cost: the bother of a fight")))

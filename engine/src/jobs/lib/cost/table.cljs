@@ -162,7 +162,7 @@
         damage (weapon/weapon-damage weapon)]
     (reduce (fn [acc [mob hp]]
               (let [kill (* gap (js/Math.ceil (/ hp damage)))
-                    hurt (if (passive mob) 0 (* health/hp-seconds hurt-hp-per-hp hp (get danger mob 1)))
+                    hurt (if (passive mob) 0 (* (health/walk-hp-seconds) hurt-hp-per-hp hp (get danger mob 1)))
                     cost (+ kill hurt (if (passive mob) (:passive find) (:hostile find)))]
                 (reduce (fn [acc e]
                           (let [n (* (.-dropChance e) (mean-range (.-stackSizeRange e)))]

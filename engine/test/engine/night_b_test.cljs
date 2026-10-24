@@ -92,7 +92,7 @@
         chance (spawn-light/chance-at p (sh-sense/feet p) (:y (sh-sense/feet p)) false false)
         stay-lethal (- (price/stay-hp c chance secs) (:hurt (price/stay-parts c chance secs)))]
     (is (pos? stay-lethal) "a dark open spot at night: mobs may spawn there")
-    (is (> 1e-9 (js/Math.abs (- stay-lethal (/ (log-out/back-death-cost c) health/hp-seconds)))) "no flat night prior: the stay price's death, in seconds")))
+    (is (> 1e-9 (js/Math.abs (- stay-lethal (/ (log-out/back-death-cost c) (health/walk-hp-seconds))))) "no flat night prior: the stay price's death, in seconds")))
 
 (deftest a-log-out-ends-done-with-how-it-went
   (async done
