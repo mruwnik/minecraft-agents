@@ -669,7 +669,7 @@
   (let [m (ctx/mem c)
         stale (revisit c m names ns)]
     (cond
-      (and (surface-only? names) (sh-sense/buried? (:primitives c)))
+      (and (surface-only? names) (not (surface-up/climbed? c)) (sh-sense/buried? (:primitives c)))
       (case (await (surface-up/step! c))
         :continue :continue
         :out :again

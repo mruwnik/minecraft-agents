@@ -884,6 +884,16 @@
                                 {:blocks sealed-room :cone? true :self {:pos {:x 16.5 :y 64 :z 16.5}}} 60))]
           (is (nil? (found-of s)) (pr-str (:found (found-of s)))))))))
 
+(deftest a-farm-animal-search-under-rock-with-no-wall-to-climb-goes-on-instead-of-looping-the-way-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (search! {:target "sheep" :scan-radius 16 :settings {:jobs.explore.search/max-legs 0}}
+                                {:blocks {"0,66,0" "stone"} :self {:pos {:x 0.5 :y 64 :z 0.5}}} 60
+                                #(swap! (fake/state (:p %)) assoc :light-default [0 0])))]
+          (is (finished? s) "a body surface-up counts as out but still under rock leaves the way up to the legs")
+          (is (nil? (found-of s))))))))
+
 (deftest use-notes-false-ignores-searched-notes-older-than-the-job
   (let [p (tu/seeing-all (tu/fake {:blocks (ground 36)}))
         note (fn [t] {:kind :searched :what ["diamond_block"] :pos [0 64 0] :r 200 :t t})
