@@ -47,3 +47,15 @@
         share #(cost/unseen-share (way-on/way-counts % [0 64 0]) kit)]
     (is (> (share corridors) (share open-ground)) "the same unseen corridor ahead: dearer among dead ends than past open ground")))
 
+
+(deftest the-ground-past-the-unseen-cells-by-the-feet-is-counted
+  (let [by-feet (set (for [x (range -2 3) z (range -2 3) y [63 64 65] :when (not= [x z] [0 0])] [x y z]))
+        known (fn [cx sy cz]
+                (when-let [^js ids (open-ground cx sy cz)]
+                  (let [a (js/Uint16Array.from ids)]
+                    (doseq [[x y z] by-feet
+                            :when (= [cx sy cz] (mapv #(bit-shift-right % 4) [x y z]))]
+                      (aset a (store/cell-index x y z) 0))
+                    a)))]
+    (is (pos? (:n (way-on/way-counts known [0 64 0]))) "a body that has not seen its own footing still counts the ground ahead")
+    (is (< (dead-end known) 0.05))))
