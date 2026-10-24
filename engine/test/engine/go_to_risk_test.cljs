@@ -490,8 +490,8 @@
     (is (= :stranded (:reason (nth s 2))))))
 
 (deftest a-body-that-cannot-heal-among-zombies-at-the-measured-notice-rate-walks-when-the-walk-is-the-cheaper-risk
-  ;; the same field as the stranded case, at the shipped rate: the stay and the walk both near-certain deaths, the walk slightly less
-  (let [zombies (for [[i x] (map-indexed vector [30 60 61 62])] {:id (+ 7 i) :name "zombie" :kind "hostile" :pos {:x x :y 64 :z 3}})
+  ;; the stranded case's open night at the shipped rate, the zombies behind the body: staying meets them, the walk leaves them
+  (let [zombies (for [[i x] (map-indexed vector [-4 -5 -6 -7])] {:id (+ 7 i) :name "zombie" :kind "hostile" :pos {:x x :y 64 :z 3}})
         c (ready-test/ctx-of (assoc ready-test/open-night :self {:pos {:x 0 :y 64 :z 0} :health 2.3 :food 5} :entities (vec zombies)))
         s (planned-status c far-goal)]
     (is (= :ok (first s)))
