@@ -42,7 +42,7 @@
 
   A walk that gave up because the body itself is shut in skips nothing: the job ends nothing-possible :shut-in at once.
 
-  Skipped blocks: a cell in a zone that bars :dig or in an active plan's footprint is skipped for good and
+  Skipped blocks: a cell in a zone that bars :dig or in an active plan's footprint (not one the body made itself) is skipped for good and
   remembered. So is one with a hazard not in :accept, one whose walk is blocked or partial, and one whose dig
   is neither dug nor missing (tall grass takes its other half with it, so missing is fine).
 
@@ -259,7 +259,7 @@
   "The positions the rules permit to dig, in order. A refused one is skipped for good and remembered, a hazard
   not in :accept skips it; one not loaded is left for later."
   [c poss]
-  (let [in (access/rules-input c)
+  (let [in (access/rules-input c {:own-plans-ok? true})
         accept (:accept (:args c))]
     (reduce (fn [ok pos]
               (let [v (access/may-dig? in pos)]
@@ -284,7 +284,7 @@
       (and (= :blocked walked) (shut-in-walk? c)) :shut-in
       (= :blocked walked) (do (skip! c pos) :skipped)
       :else
-      (let [v (access/may-dig? (access/rules-input c) pos)
+      (let [v (access/may-dig? (access/rules-input c {:own-plans-ok? true}) pos)
             judged (access/judge v (:accept (:args c)))]
         (if (not= :ok judged)
           (do (if (= :refused judged) (refuse! c pos v) (skip! c pos)) :skipped)

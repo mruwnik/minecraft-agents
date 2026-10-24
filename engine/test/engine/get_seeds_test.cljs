@@ -494,6 +494,15 @@
             (is (= [(assoc expected :reason :refused)] (gave-up-fields s)))
             (is (= :refused (:reason (done-event s))))))))))
 
+(deftest grass-in-a-plan-the-body-made-is-cut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (ew/of-data {"pad" (assoc (plan-over "pad" [3 64 0] "short_grass") :metadata {:by "Fake"})} {} [])
+              s (await (in-world {:count 1} {:blocks {"3,64,0" "short_grass"} :drops seed-drops} w 20))]
+          (is (= [[3 64 0]] (dug-cells s)))
+          (is (empty? (gave-up-fields s))))))))
+
 (deftest grass-beside-lava-is-left-unless-the-hazard-is-accepted
   (async done
     (tu/run-async done
