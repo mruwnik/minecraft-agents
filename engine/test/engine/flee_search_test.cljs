@@ -112,9 +112,42 @@
               e (search/choose ends {})]
           (is (some #(and (:open? %) (:unseen %)) ends) "a way on through the dark is planned to the ring")
           (is (seq dark))
-          (is (every? #(> (:price %) (:priced %)) dark) "its unseen part is priced on top of the planner's: the zombie met on the way back from a dead end")
+          (is (every? #(pos? (:dead-end %)) dark) "its unseen part carries the zombie met on the way back from a dead end, priced when that cuts the way back")
           (is (some? e) "a step, not cornered")
           (is (<= (:x (:step e)) 2) (str "the step stays in what the body has seen, a cell into the dark at most: " (pr-str (:step e)))))))))
+
+(def long-dead-end
+  "junction's corridor run on east to a dead end at x 30: past the branch at x 2 the way on east may be shut."
+  (carve rock [[-30 -10 -9 10] [-8 0 30 0] [2 -13 2 -1] [-10 -30 14 -14]]))
+
+(defn seeing-only
+  "p sensing only the cells known? ([x z] -> bool) holds of: a cell elsewhere is {:unknown true}, never seen."
+  [p known?]
+  (let [seen? #(known? [(js/Math.floor (.-x %)) (js/Math.floor (.-z %))])]
+    (tu/set-sensed! p (fn [pos] (if (seen? pos) (.blockAt (tu/oracle p) pos) #js {:unknown true :pos pos})))
+    (aset p "seenBlockAt" (fn [pos] (if (seen? pos)
+                                      (let [b (.blockAt (tu/oracle p) pos)] #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0})
+                                      #js {:unknown true :pos pos})))
+    p))
+
+(deftest a-flight-past-a-dark-branch-turns-back-to-it-before-a-dead-end-ahead-would-cut-its-way-back
+  ;; card 6699a4ea: the old search priced a dead end the same wherever it lay, so the straight way on through the dark
+  ;; beat the branch behind, and the body learnt of the dead end only once the zombie held the branch. As in the dark
+  ;; corridor of flee-dead-end-pocket: the body has walked 9 blocks past the branch, seeing 3 cells ahead and 3 into
+  ;; it; at 6 past it, on its way back, it keeps going back (no pacing)
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zombie {:x -8.5 :y 64 :z 0.5}]
+          (doseq [x [8.5 5.5]]
+            (let [p (seeing-only (tu/fake {:blocks long-dead-end :self {:pos {:x x :y 64 :z 0.5}}
+                                           :entities [{:id 7 :uuid "u7" :name "zombie" :kind "hostile" :pos zombie}]})
+                                 (fn [[x z]] (and (<= -12 x 11) (<= -3 z 1))))
+                  ends (await (search/search! (ctx-of p) [{:name "zombie" :mob "zombie" :pos zombie}] [] {}))
+                  e (search/choose ends {})]
+              (is (some #(and (:unseen %) (> (:x (:end %)) 11)) ends) "the way on east runs into the dark")
+              (is (< (:x (:step e)) x) (str "at " x " the step turns back toward the branch: " (pr-str (select-keys e [:end :step :score :unseen]))))
+              (is (neg? (:z (:end e))) (pr-str (:end e))))))))))
 
 (def field (box -32 63 -32 32 63 32 "stone"))
 
