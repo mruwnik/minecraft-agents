@@ -1655,3 +1655,8 @@
       (-> (observe-events/recent-hurt! (.join path dir "events.sock") now)
           (.then (fn [text] (is (= "spider 6 2s ago" text))))
           (.finally (fn [] (.rmSync fs dir #js {:recursive true}) (done)))))))
+
+(deftest line-events-leaves-out-a-line-cut-by-the-tail-start
+  (let [cut "ime-ms 5 :source :body :kind :hurt :data {:amount 3 :causes [\"zombie\"]}}"
+        whole "{:seq 2 :time-ms 5 :source :body :kind :hurt :data {:amount 6 :causes [\"spider\"]}}"]
+    (is (= [2] (mapv :seq (observe-events/line-events (str cut "\n" whole "\n") [":kind :hurt"]))))))

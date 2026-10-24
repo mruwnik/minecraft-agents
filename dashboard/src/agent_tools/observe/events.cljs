@@ -74,6 +74,13 @@
   (let [rank #(if-let [n (second (re-matches #"events\.edn\.(\d+)" %))] (- (js/parseInt n)) 1)]
     (->> names (filter #(re-matches #"events\.edn(\.\d+)?" %)) (sort-by rank))))
 
+(defn line-events
+  "The events of the lines of text that hold one of needles; a line that does not read as a map (a cut one) is left out."
+  [text needles]
+  (->> (str/split-lines text)
+       (filter (fn [line] (some #(str/includes? line %) needles)))
+       (keep (fn [line] (let [e (try (reader/read-string line) (catch :default _ nil))] (when (map? e) e))))))
+
 (defn ^:async kept-events!
   "The events of the given kinds (and deaths, for --since/--until death) in every kept log file next to the socket,
   or nil when there is no log there. A substring test on each line skips the parse of the rest."
@@ -85,11 +92,8 @@
       (loop [[f & more] names out []]
         (if-not f
           out
-          (let [text (try (await (.readFile fsp (.join path dir f) "utf8")) (catch :default _ ""))
-                found (->> (str/split-lines text)
-                           (filter (fn [line] (some #(str/includes? line %) needles)))
-                           (keep (fn [line] (try (reader/read-string line) (catch :default _ nil)))))]
-            (recur more (into out found))))))))
+          (let [text (try (await (.readFile fsp (.join path dir f) "utf8")) (catch :default _ ""))]
+            (recur more (into out (line-events text needles)))))))))
 
 (def hurt-tail-bytes 262144)
 (def hurt-window-ms 120000)
@@ -108,7 +112,7 @@
                           hits)))))
 
 (defn ^:async recent-hurt!
-  "hurt-text of the hurt events in the last hurt-tail-bytes of the current log next to the socket, else nil."
+  "hurt-text of the hurt events in the last hurt-tail-bytes of the current log next to the socket (a rotated events.edn.1 is not read), else nil."
   [socket-path now-ms]
   (let [file (.join path (.dirname path socket-path) "events.edn")
         text (try
@@ -122,10 +126,7 @@
                    (finally (await (.close h)))))
                (catch :default _ nil))]
     (when text
-      (hurt-text (->> (str/split-lines text)
-                      (filter #(str/includes? % ":kind :hurt"))
-                      (keep #(try (reader/read-string %) (catch :default _ nil))))
-                 now-ms))))
+      (hurt-text (line-events text [":kind :hurt"]) now-ms))))
 
 (defn ^:async read!
   "The query's answer from the retained history (job-results/history! with the result window; a --job's recorded end stands in when its stopped event has aged out): {:ok true :events .. :next-before ..
