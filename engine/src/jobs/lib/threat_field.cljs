@@ -3,7 +3,8 @@
   the body has not seen the worse case): its field, the cells [x y z] a body standing in is within its reach, each with
   a weight 0-1.
   A walker's field is its way (jobs.lib.reach/forward over mob-lookup: a cell the body has not seen is ground) out to its
-  follow range in steps (cost.threat/follow-range: vanilla navigation goes no farther), weighted by cost.threat/way-weight. A ranged mob adds the standing cells within cost.threat/fire-range of its kind it has a line of fire to
+  follow range in steps (cost.threat/follow-range: vanilla navigation goes no farther), or the steps of a path to every
+  cell within the threat's :extent blocks when that is longer (a race to a far cell is timed along its way), weighted by cost.threat/way-weight. A ranged mob adds the standing cells within cost.threat/fire-range of its kind it has a line of fire to
   (weight 1). A mob that lives in water (water-mobs) keeps to the water it was met in: every seen cell of that body of
   water (water-body), weight 1. At most ::max-cells cells, kept per body while what it read stays (field-of)."
   (:require [engine.args :as a]
@@ -148,22 +149,31 @@
 
 ;; ---------------------------------------------------------------- the field
 
+(defn walk-range
+  "Steps a walker of kind mob is followed: its follow range, or the longest 4-way path to a cell within extent blocks (nil: none) when longer."
+  [mob extent]
+  (max (threat/follow-range mob) (if extent (js/Math.ceil (* js/Math.SQRT2 extent)) 0)))
+
+(defn diamond "The cells within r steps of a cell on flat ground." [r] (inc (* 2 r (inc r))))
+
 (defn field
-  "The field of mob {:mob :pos} known to the body of primitives p (see the ns doc): {:cells #js [#js [x y z w] ...]
+  "The field of mob {:mob :pos :extent} known to the body of primitives p (see the ns doc): {:cells #js [#js [x y z w] ...]
   :weights (a Map of base/cell-key to w) :steps (a walker's: a Map of base/cell-key to the steps of its way there)
   :whole? (its way shut in: ended short of its follow range and of ::max-cells, from a cell it stands on)}; a water mob met
   where no water is seen, and a mob of no name or place, has none.
   lookups {:kind-at :arrow-at}: reach/mob-lookup and reach/arrow-lookup of p, shared by the fields of one window."
   ([p threat] (field p threat {:kind-at (reach/mob-lookup p) :arrow-at (reach/arrow-lookup p)}))
-  ([p {:keys [mob pos]} {:keys [kind-at arrow-at]}]
-   (let [cells (cond
+  ([p {:keys [mob pos extent]} {:keys [kind-at arrow-at]}]
+   (let [span (if (string? mob) (walk-range mob extent) 0)
+         cap (max (max-cells) (diamond span))
+         cells (cond
                  (not (and (string? mob) pos)) #js []
                  (contains? water-mobs mob)
                  (if-let [top (water-surface kind-at pos)]
                    (into-array (map (fn [[x y z]] #js [x y z 1]) (water-body kind-at top (settings/get settings ::water-cells))))
                    #js [])
                  :else
-                 (let [walk (walk-field kind-at (reach/cell-of pos) (threat/follow-range mob) (threat/field-close) (max-cells))]
+                 (let [walk (walk-field kind-at (reach/cell-of pos) span (threat/field-close) cap)]
                    (if (= :projectile (threat/damage-type mob))
                      (.concat walk (fire-cells kind-at arrow-at (update pos :y js/Math.floor) (threat/fire-range mob) (max-cells)))
                      walk)))
@@ -175,14 +185,14 @@
          (when-let [n (aget c 4)] (when-not (.has steps k) (.set steps k n)))))
      {:cells cells :weights weights :steps steps
       :whole? (and (string? mob)
-                   (< 1 (.-size steps) (max-cells))
-                   (< (reduce max 0 (es6-iterator-seq (.values steps))) (dec (threat/follow-range mob))))})))
+                   (< 1 (.-size steps) cap)
+                   (< (reduce max 0 (es6-iterator-seq (.values steps))) (dec span)))})))
 
 (defn field-key
-  "What one field is kept under: the mob and its place to 2 blocks across (a mob stepping about keeps its field, and the
-  tolls built from it stay one vector)."
-  [{:keys [mob pos]}]
-  [mob (some-> pos (update-vals #(js/Math.floor %)) (update :x #(js/Math.floor (/ % 2))) (update :z #(js/Math.floor (/ % 2))))])
+  "What one field is kept under: the mob, its place to 2 blocks across (a mob stepping about keeps its field, and the
+  tolls built from it stay one vector) and its extent."
+  [{:keys [mob pos extent]}]
+  [mob (some-> pos (update-vals #(js/Math.floor %)) (update :x #(js/Math.floor (/ % 2))) (update :z #(js/Math.floor (/ % 2)))) extent])
 
 (defonce bodies (js/WeakMap.))
 

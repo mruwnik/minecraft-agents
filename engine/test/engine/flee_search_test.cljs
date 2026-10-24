@@ -117,8 +117,7 @@
       (fn ^:async t []
         (let [from {:x 0.5 :y 64 :z 0.5}
               zombie [{:name "baby" :mob "zombie" :pos {:x -2.5 :y 64 :z 0.5}}]
-              ;; ends 11 out: the way round the wall is a large share of the zombie's walk there
-              ends (fn ^:async near-ends [blocks] (await (search/search! (ctx-of (tu/fake {:blocks blocks :self {:pos from}})) zombie [] {:reach 11})))
+              ends (fn ^:async near-ends [blocks] (await (search/search! (ctx-of (tu/fake {:blocks blocks :self {:pos from}})) zombie [] {})))
               open (await (ends field))
               walled (await (ends (merge field (box -2 64 -6 -2 65 6 "stone"))))
               arrive (fn [ends] (into {} (map (juxt :target :arrive)) ends))

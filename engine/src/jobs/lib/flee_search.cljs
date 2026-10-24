@@ -267,13 +267,13 @@
   (reduce min ##Inf (map #(cost/arrival-s (:name %) (:pos %) pos (way-at % pos)) chasers)))
 
 (defn with-ways
-  "chasers each with :way, the field/way-fn of its threat field to within cost/melee-reach, when it has a :mob name
+  "chasers each with :way, the field/way-fn of its threat field over its give-up range (the ring's extent) to within cost/melee-reach, when it has a :mob name
   (a shot spot has none) other than a creeper or a shooter (a blast or an arrow passes where it cannot walk: the
   straight line stands)."
   [c chasers]
   (mapv (fn [{:keys [mob pos] :as ch}]
           (cond-> ch (and mob (not= "creeper" mob) (not= :projectile (threat/damage-type mob)))
-            (assoc :way (field/way-fn (field/field-of c {:mob mob :pos pos}) (floor-cell pos) (cost/melee-reach)))))
+            (assoc :way (field/way-fn (field/field-of c {:mob mob :pos pos :extent (give-up-at ch)}) (floor-cell pos) (cost/melee-reach)))))
         chasers))
 
 (def unreached-s

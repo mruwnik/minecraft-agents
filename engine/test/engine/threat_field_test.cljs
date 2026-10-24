@@ -25,6 +25,11 @@
     (is (= 1 (reach 1 64 0)))
     (is (nil? (reach 5 64 0)) "5 blocks off outside a pen it cannot leave: outside")))
 
+(deftest a-field-given-an-extent-holds-the-way-to-every-cell-within-it
+  (let [at (fn [threat] (field/reach-fn (field/field (tu/seeing-all (tu/fake-on-floor {})) (merge {:mob "zombie" :pos {:x 0.5 :y 64 :z 0.5}} threat))))]
+    (is (nil? ((at {}) 30 64 14)) "44 steps along the grid: past its follow range (35)")
+    (is (some? ((at {:extent 35}) 30 64 14)) "within 35 blocks as the crow flies: its way there is held")))
+
 (deftest a-ranged-mobs-field-adds-the-cells-it-can-shoot
   (let [pillar {"6,64,0" "stone" "6,65,0" "stone" "6,66,0" "stone"}
         skeleton (reach-of {:blocks pillar} "skeleton" {:x 0.5 :y 64 :z 0.5})
