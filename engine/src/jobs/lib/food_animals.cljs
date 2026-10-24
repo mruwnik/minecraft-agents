@@ -66,9 +66,8 @@
     {:wild (- (count adults) penned) :penned penned}))
 
 (defn meat-benefit
-  "Seconds the meat item is worth the body: the hunger worth of reaching food, or the item-value of the meat of one
-  kill (its mean drops from the game data) that the food reserve (:carry, default the 3-day one) lacks, times
-  cost/meat-factor: dear while hunting leaves fewer animals, 1 with a working pen."
+  "Seconds the meat item is worth the body: the hunger worth of reaching food, or the item-value of one kill's mean
+  drops that the food reserve lacks, times cost/meat-factor."
   [c item]
   (let [p (:primitives c)
         pts (or (foods/points item) 1)

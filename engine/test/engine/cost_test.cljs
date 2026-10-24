@@ -561,7 +561,9 @@
     (is (= (- (* 3 (cost/worth-to body ["oak_log"] nil)) (cost/trip)) (cost/find-worth body ["oak_log"] nil 3)))
     (is (< (cost/find-worth body ["oak_log"] nil 1) (cost/find-worth body ["oak_log"] nil 3)))
     (is (< (cost/animal-worth "horse") (cost/animal-worth "cow")) "a cow is worth its beef, a kind with no meat the unknown item")
-    (is (= (cost/animal-worth "cow") (cost/animal-worth "sheep")) "mutton as dear as beef")))
+    (is (= (cost/animal-worth "cow") (cost/animal-worth "sheep")) "mutton as dear as beef")
+    (is (= (:value (cost/item-value [{:name "chicken" :count (cost/kill-drops "chicken" "chicken")}])) (cost/animal-worth "chicken"))
+        "a kill counts the drops the game data lists, not a flat count")))
 
 (deftest a-look-for-animals-pays-less-the-more-ground-round-it-showed-none
   (let [note (fn [x z] {:kind :searched :what ["sheep"] :pos [x 64 z] :r 24})

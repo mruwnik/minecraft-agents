@@ -266,12 +266,13 @@
   [food]
   (* (settings/get settings ::food-worth-per-point) (max 0 (- (settings/get settings ::food-worth-from) food))))
 
-(def expected-drops "Meat items a kill is counted to give." 2)
+(def expected-drops "Meat items a kill is counted to give when the game data lists none." 2)
 
 (defn animal-worth
-  "Seconds an animal of kind `mob` is worth: the expected-drops of its raw meat (the item-value of the animal's own name for a kind with none)."
+  "Seconds an animal of kind `mob` is worth: the kill-drops of its raw meat (the item-value of the animal's own name for a kind with none)."
   [mob]
-  (:value (item-value [{:name (get (set/map-invert game/meat-animal) mob mob) :count expected-drops}])))
+  (let [meat (get (set/map-invert game/meat-animal) mob mob)]
+    (:value (item-value [{:name meat :count (or (tbl/kill-drops mob meat) expected-drops)}]))))
 
 (defn per-climb [] (settings/get settings ::per-climb))
 
