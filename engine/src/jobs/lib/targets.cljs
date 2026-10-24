@@ -8,6 +8,7 @@
   and wsearch/round-ms. A search not over answers :searching and goes on at the next call from the same cell to the same
   targets (kept per body and tag, for at most wsearch/search-max-age-ms)."
   (:require [engine.path.executor :as executor]
+            [jobs.lib.clock :as clock]
             [engine.path.planner-tuned :as planner]
             [jobs.lib.per-body :as per-body]
             [jobs.lib.walk :as walk]
@@ -91,7 +92,7 @@
                       kept
                       (new-search c pw targets range k opts))
              ^js p (:plan search)
-             t0 (js/performance.now)]
+             t0 (clock/now)]
          (loop [used wplan/chunk-expansions]
            (wplan/stop-if-cut! c)
            (cond
@@ -99,7 +100,7 @@
              (do (swap! searches dissoc who)
                  (answer targets (.result p)))
 
-             (or (>= used budget) (>= (- (js/performance.now) t0) wsearch/round-ms))
+             (or (>= used budget) (>= (- (clock/now) t0) wsearch/round-ms))
              (do (swap! searches assoc who search)
                  {:status :searching})
 

@@ -14,10 +14,10 @@
             [engine.fast-pace :as fast-pace]
             [engine.fsutil :as fsu]
             [engine.memory :as mem]
+            [jobs.lib.clock :as clock]
             [jobs.lib.waits :as waits]
             [jobs.lib.near :as near]
-            [jobs.lib.walk.plan :as wplan]
-            [jobs.lib.walk.search :as wsearch]))
+            [jobs.lib.walk.plan :as wplan]))
 
 (def require-here node/require-here)
 
@@ -42,6 +42,10 @@
                              (write! file data))))
     (set! fsu/read-edn (fn [file] (if (and (mem-file? file) (contains? @saved file)) (@saved file) (read-edn file))))
     saved))
+
+;; Work timed by the wall clock (a search round's cut, a refresh's interval, a steer's time left) differs with the machine's
+;; load, and the job then takes another path (one var cost 51-392 s of CPU on the same code): tests stop that clock.
+(defonce stopped-clock (set! clock/now (constantly 0)))
 
 (def real-memory-disk-fixture
   "A :once fixture for the namespaces that read or break memory.edn on disk: the engine's memory saves are otherwise
@@ -244,16 +248,12 @@
   (doseq [row rows] (await (f row))))
 
 (defn ^:async with-expansion-budget
-  "Run the thunk f (sync or promise) with wplan/chunk-expansions n and the wall-clock cap wsearch/round-ms lifted, so
-  a loaded machine cannot end a budgeted search early; restores both."
+  "Run the thunk f (sync or promise) with wplan/chunk-expansions n; restores it."
   [n f]
-  (let [chunk wplan/chunk-expansions
-        ms wsearch/round-ms]
+  (let [chunk wplan/chunk-expansions]
     (set! wplan/chunk-expansions n)
-    (set! wsearch/round-ms 1e9)
     (try (await (f))
-         (finally (set! wplan/chunk-expansions chunk)
-                  (set! wsearch/round-ms ms)))))
+         (finally (set! wplan/chunk-expansions chunk)))))
 
 (defn run-async
   "Run the promise-returning thunk f inside a cljs.test async block."

@@ -5,6 +5,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.clock :as clock]
             [jobs.lib.access :as access]
             [jobs.lib.breath :as breath]
             [jobs.lib.dig-look :as dig-look]
@@ -141,7 +142,7 @@
         until (breath/look-until (.self p))
         surface (loop [k 0]
                   (let [found (find-surface)]
-                    (if (and (< k (:rounds edge-looks)) (< (js/Date.now) until) (await (look-along-water! c pos found)))
+                    (if (and (< k (:rounds edge-looks)) (< (clock/now) until) (await (look-along-water! c pos found)))
                       (recur (inc k))
                       found)))
         stair? (and surface (nil? (column)))

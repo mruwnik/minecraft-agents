@@ -5,6 +5,7 @@
             [engine.heap :as heap]
             [engine.path.executor :as executor]
             [engine.path.planner-tuned :as planner]
+            [jobs.lib.clock :as clock]
             [jobs.lib.per-body :as per-body]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.world :as wworld]))
@@ -217,7 +218,7 @@
   ends there (the planner's endSweep), with its frontier."
   [c search budget policy to range weight]
   (let [walled (:walled search)
-        t0 (js/performance.now)]
+        t0 (clock/now)]
     (loop [search search used 0]
       (wplan/stop-if-cut! c)
       (let [^js phase (or (:unlimited search) (:limited search))
@@ -236,7 +237,7 @@
                      used)
               [search (wplan/within-of walled r)]))
 
-          (or (>= used budget) (>= (- (js/performance.now) t0) (* round-ms (max 1 (/ budget round-budget)))))
+          (or (>= used budget) (>= (- (clock/now) t0) (* round-ms (max 1 (/ budget round-budget)))))
           (if ^boolean (.endSweep phase) (recur search used) [search nil])
 
           :else (do (await (wplan/yield!))
@@ -281,7 +282,7 @@
   searches read and add to the body's known land toward the goal (known-land): a frontier in land an earlier search
   knew to its end is walked to only when there is no other (:frontier-taken :known)."
   [c pw to range weight {:keys [policy walls one-way frontier budget progress quoted] :or {progress true}}]
-  (let [t (js/performance.now)
+  (let [t (clock/now)
         who (:primitives c)
         k (search-key c to range weight policy walls pw)
         kept (get-in @searches [who k])
@@ -293,11 +294,11 @@
                  kept
                  (new-search c (wworld/with-walls pw walls) to range weight policy k known (goal-flood! c to range weight policy walls (wworld/unknown-key pw))))
         [search within] (if done [search done] (await (run-search! c search budget policy to range weight)))
-        ms (- (js/performance.now) t)]
+        ms (- (clock/now) t)]
     (if within
       (do (keep-search! who k (when (and quoted (not done) (= "found" (.-status ^js (:r within)))) (assoc search :within within)))
           (when known (learn-known! known (:r within)))
-          (wplan/walk-plan c (:walled search) (:walled search) to one-way frontier within))
+          (assoc (wplan/walk-plan c (:walled search) (:walled search) to one-way frontier within) :ms ms))
       (let [plan (assoc (unfinished-plan search ms one-way progress (if (:unknown c) (wplan/masked-wet-ok c) (constantly false)) #(wplan/one-way-priced? c to %1 %2)) :fresh fresh?)
             partial? (= "partial" (:status plan))]
         (keep-search! who k (when-not partial? search))

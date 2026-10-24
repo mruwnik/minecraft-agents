@@ -15,6 +15,7 @@
   sand, paths, plants and fluids never do. The eye cell is the suffocating trigger's business."
   (:require [jobs.lib.access.rules :as rules]
             [jobs.lib.block-sets :as bs]
+            [jobs.lib.clock :as clock]
             [jobs.lib.cost.planner :as planner]
             [engine.args :as a]
             [engine.ctx :as ctx]
@@ -408,9 +409,9 @@
                          (* (settings/get settings ::ticks-per-health) (max 0 (or (.-health self) 20))))))
 
 (defn look-until
-  "Epoch ms the looks for air stop at: the ::look-share of the air left from now."
+  "The clock ms the looks for air stop at: the ::look-share of the air left from now."
   [self]
-  (+ (js/Date.now) (* (settings/get settings ::look-share) (air-left-ms self))))
+  (+ (clock/now) (* (settings/get settings ::look-share) (air-left-ms self))))
 
 (defn ^:async look-column!
   "Look up the column x z from fy, one look per cell not yet seen, until a seen cell that is neither water nor air or
@@ -440,7 +441,7 @@
     (or (nearest-air p pos radius reach failed true)
         (when-not (column-open? p fx fz fy reach)
           (loop [todo (rest (columns radius))]
-            (when (and (seq todo) (< (js/Date.now) until))
+            (when (and (seq todo) (< (clock/now) until))
               (let [[dx dz] (first todo)]
                 (await (look-column! c (+ fx dx) (+ fz dz) fy reach true))
                 (recur (rest todo)))))

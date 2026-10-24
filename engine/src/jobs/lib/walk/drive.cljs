@@ -5,6 +5,7 @@
             [engine.ctx :as ctx]
             [engine.path.executor :as executor]
             [engine.settings :as settings]
+            [jobs.lib.clock :as clock]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-look :as dig-look]
@@ -41,14 +42,14 @@
   (let [{:keys [mob-waits mob-wait-ms]} wwatch/watch-policy]
     (loop [n 1]
       (await (ctx/act c :wait #js {:ms mob-wait-ms}))
-      (let [t (js/performance.now)
+      (let [t (clock/now)
             walls (wwatch/mob-cells c steps k)
             plan (await (plan-fn walls))
-            ms (- (js/performance.now) t)]
+            ms (- (clock/now) t)]
         (if (or (walkable? plan) (>= n mob-waits))
           (if (or (walkable? plan) (empty? walls))
             [plan ms]
-            (let [t (js/performance.now) plan (await (plan-fn []))] [plan (- (js/performance.now) t)]))
+            (let [t (clock/now) plan (await (plan-fn []))] [plan (- (clock/now) t)]))
           (recur (inc n)))))))
 
 (defn ^:async back-off!
@@ -189,9 +190,9 @@
                                         :text (str "re-plan " (inc n) " (" (name why) (when kept ", kept the plan") ")")}))]
         (cond
           (and (= :replan (:status done)) (= :mob (:why done)))
-          (let [t (js/performance.now)
+          (let [t (clock/now)
                 fresh (await (plan-fn (:cells done)))
-                plan-ms (- (js/performance.now) t)]
+                plan-ms (- (clock/now) t)]
             (tell! :mob plan-ms false)
             (cond
               (walkable? fresh) (recur (assoc fresh :ms plan-ms) (:steps fresh) (inc n) ms walked' damage')
@@ -202,18 +203,18 @@
           (finish {:status :stair-cheaper :why {:air-spent true}} plan walked')
 
           (and (= :replan (:status done)) (= :health (:why done)))
-          (let [t (js/performance.now)
+          (let [t (clock/now)
                 fresh (await (plan-fn []))
-                plan-ms (- (js/performance.now) t)]
+                plan-ms (- (clock/now) t)]
             (tell! :health plan-ms false)
             (if (walkable? fresh)
               (recur (assoc fresh :ms plan-ms) (:steps fresh) (inc n) ms walked' damage')
               (finish (wplan/no-walk fresh 0 policy) fresh walked')))
 
           (and (= :replan (:status done)) (= :danger (:why done)))
-          (let [t (js/performance.now)
+          (let [t (clock/now)
                 fresh (await (plan-fn []))
-                plan-ms (- (js/performance.now) t)]
+                plan-ms (- (clock/now) t)]
             (tell! :danger plan-ms (not (or (walkable? fresh) (searching? fresh) (:refused fresh))))
             (when (or (:stopped-short (wplan/no-walk fresh 0 policy)) (and (searching? fresh) (:stopped-short fresh)))
               (await (back-off! c fresh (subvec steps 0 (min (count steps) (inc k))) walk-fn policy)))
@@ -231,9 +232,9 @@
                 _ (when (:learned done) (do (swap! learned conj [(:cells done) (:why done)]) (swap! track learned-progress (:at done) to)))
                 _ (when (and (:learned done) (= :changed (:why done)) (not (:felt done)) (settings/get settings ::look-over-edge))
                     (await (look-over-edge! c (first (:cells done)))))
-                t (js/performance.now)
+                t (clock/now)
                 fresh (await (plan-fn []))
-                plan-ms (- (js/performance.now) t)
+                plan-ms (- (clock/now) t)
                 fresh (assoc fresh :ms plan-ms)]
             (if (= :refresh (:why done))
               (let [take? (and (walkable? fresh) (wwatch/take-refresh? steps fresh to plan))

@@ -69,6 +69,7 @@ Layout:
 - `src/triggers/` the triggers, plain fns by area (`triggers.survival.hungry`); `defaults.edn` is the default set.
 - `scenarios/*.edn` scenarios (`survival.edn`, `woodcutter.edn`, ...; `scratch/` is git-ignored for hand-run probe starts; `idle.edn` is the idle template).
 - `test/engine/` cljs tests (helpers in `engine.test-util`); `test/engine/fake.cljs` is the scriptable fake world.
+- `jobs.lib.clock/now`: the wall clock jobs time their own work by (search round cuts, plan ms, steer time left, looks for air); `engine.test-util` stops it, so a test does the same work under any load.
 - `tools/*.mjs` agent CLI tools (below). `fixtures/world/` holds EDN world fixtures run by `../tools/world-test.mjs` (`--check` also fails an event kind no source emits, and a summon, body or go-to `#at` goal inside a solid `:blocks` cell).
 
 The cljs side loads JS modules with `js/require`; from `out/`, `(js/require "../js/sight.mjs")` is `engine/js/sight.mjs`.

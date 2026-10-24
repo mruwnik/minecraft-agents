@@ -4,6 +4,7 @@
   namespace; jobs.lib.walk.drive holds the loop (walk-to!, follow!); this one holds its pieces (plan-walk!, walk!); more live in jobs.lib.walk.plan (planning), .search (the budgeted search a round), .watch (the look-ahead) and .world (the pathWorld and its decorations) and .light (a torch for an unseen floor)."
   (:require [engine.args :as a]
             [engine.settings :as settings]
+            [jobs.lib.clock :as clock]
             [engine.ctx :as ctx]
             [engine.game :as game]
             [engine.path.blocks :as blocks]
@@ -139,8 +140,10 @@
   ([c pw to range weight {:keys [policy walls one-way frontier budget] :or {policy (wworld/body-policy c)} :as opts}]
    (if budget
      (await (wsearch/plan-walk-budgeted! c pw to range weight (assoc opts :policy policy)))
-     (let [walled (wworld/with-walls pw walls)]
-       (wplan/walk-plan c pw walled to one-way frontier (await (wplan/plan-within! c walled to range weight policy)))))))
+     (let [walled (wworld/with-walls pw walls)
+           t (clock/now)
+           within (await (wplan/plan-within! c walled to range weight policy))]
+       (assoc (wplan/walk-plan c pw walled to one-way frontier within) :ms (- (clock/now) t))))))
 
 (def sneak-moves
   "The steps a sneaking walk holds sneak on: level ground and jumps up. A drop or gap lets go (sneak stops at the edge),
@@ -321,10 +324,10 @@
                      (do (vreset! last-done done) #js {:done (clj->js done)})
                      (let [out (glance pose {:controls controls :yaw yaw :pitch pitch})]
                        #js {:controls (clj->js (:controls out)) :yaw (:yaw out) :pitch (:pitch out)}))))
-        t (js/Date.now)
+        t (clock/now)
         steer-for (steer-s c timeout-s)
         r (await (ctx/act c :steer (steer-args steer-for decide)))
-        ms (- (js/Date.now) t)]
+        ms (- (clock/now) t)]
     (when (= "done" (.-status r)) (edges/note-walk! p steps (:i (:exec @state)) @last-done))
     [(case (.-status r)
        "done" @last-done

@@ -9,6 +9,7 @@
             [engine.events :as events]
             [engine.settings :as settings]
             [engine.path.planner-tuned :as planner]
+            [jobs.lib.clock :as clock]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.drive :as drive]
             [jobs.lib.walk.world :as wworld]
@@ -62,7 +63,7 @@
         (let [[{:keys [result walked walk-ms]} announced at] (await (walk-to (floor (range 12)) [10 64 1] start))]
           (is (= {:status :arrived :replans 0} (select-keys result [:status :replans])))
           (is (pos? walked))
-          (is (pos? walk-ms))
+          (is (number? walk-ms) "the walk time is reported (0 on the stopped test clock)")
           (is (= [:plan] announced))
           (is (> (first at) 9)))))))
 
@@ -173,6 +174,18 @@
             (is (= "found" (:status plan) (:status whole)))
             (is (= (:steps whole) (:steps plan)))
             (is (> (count (:steps plan)) 100))))))))
+
+(deftest a-plans-ms-is-read-off-the-jobs-clock
+  ;; the ms sets the walk's refresh interval; the planner's own wall-clock time would make a test's path hang on load
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/fake {:blocks (walkways true) :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+              stopped clock/now
+              t (atom 0)]
+          (set! clock/now #(swap! t + 1000))
+          (try (is (= 1000 (:ms (await (walk/plan-walk! {:primitives p} (.pathWorld p) [6 64 0] 0 (walk/default-weight))))))
+               (finally (set! clock/now stopped))))))))
 
 (deftest a-goal-sealed-in-stone-is-no-path
   (async done

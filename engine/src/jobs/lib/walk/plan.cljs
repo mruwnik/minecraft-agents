@@ -380,7 +380,6 @@
               steps)
         walked (if (= "partial" status) (stop-short dry (.-dangers walled)) dry)]
     {:r r :steps walked :beyond beyond :status status :pw pw
-     :ms (or (some-> r .-ms) 0)
      :one-way-taken (when (and past (not refused)) step)
      :frontier-taken (when (and edge (> (count walked) 1)) (cond-> {:at (:at edge)} (:known edge) (assoc :known true) (:target edge) (assoc :target (:target edge))))
      :searched-out out
