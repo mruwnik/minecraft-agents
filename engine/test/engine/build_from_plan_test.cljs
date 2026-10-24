@@ -584,6 +584,23 @@
           (is (= :no-items (:reason result)))
           (is (= 0 (count (h/calls p "place")))))))))
 
+(deftest a-cell-still-unseen-after-the-look-does-not-stop-the-start-while-a-fetch-is-due
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[seen sink] (tu/legacy-capture-sink)
+              p (tu/seeing-after-look (tu/fake-on-floor {:inventory []}))
+              hidden? (fn [pos] (let [[x y z] (if (array? pos) pos [(.-x pos) (.-y pos) (.-z pos)])] (= [2 65 2] [x y z])))
+              seen-at (.-seenBlockAt p)
+              sensed-at (.-sensedAt p)
+              _ (aset p "seenBlockAt" (fn [pos] (if (hidden? pos) #js {:unknown true :pos pos} (seen-at pos))))
+              _ (tu/set-sensed! p (fn [pos] (if (hidden? pos) #js {:unknown true} (sensed-at pos))))
+              eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref h/clock)
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref h/clock)})
+                                :world (world/of-data {"pen" (pen-plan)} {} [])})
+              result (await (child-outcome eng job {:plan "pen"} 200))]
+          (is (seq (:fetch-failed result)) (pr-str result)))))))
+
 (deftest unseen-cells-the-body-carries-the-items-for-are-not-a-no-items-wait
   (async done
     (tu/run-async done

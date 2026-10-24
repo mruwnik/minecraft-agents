@@ -78,7 +78,7 @@
   Start facts: no zone list read (unless :ignore-zones?) is a
   failed condition {:reason :no-zones}; a plan that is missing, unreadable or has no cells to
   build (in :part) is impossible {:reason :plan-trouble :why text} (a plan missing or unreadable waits), at the start and later in the call; at the start, with nothing to place, dig, fetch or
-  look at, a failed condition {:reason :no-items :needs {item n}}.
+  look at, a failed condition {:reason :no-items :needs {item n}}; a fetch that is due (even with some cells unseen) is never that.
   Wood: a generic wood want (jobs.lib.build.wood: planks, logs, wooden_stairs, wooden_slabs, wooden_doors, wooden_fences,
   fence_gates, wooden_trapdoors ...) is built in one species chosen for the plan (carried most, else the nearest log seen,
   else oak), booked, fetched by that species, and named in the result (:wood \"birch\"); a species name (oak_planks) stays exact.
@@ -156,8 +156,8 @@
       (let [here (u/self-pos c)
             near (filter #(and (<= (u/eye-dist here %) (look-range)) (sense/unknown? (:primitives c) %)) (sense/targets (:primitives c) here cells-of #{}))]
         (cond
+          (some? (need-of c cells)) nil
           (and (seq hidden) (not= (count near) (count cells-of))) nil
-          (and (empty? hidden) (some? (need-of c cells))) nil
           :else (cond-> {:reason :no-items :plan (:plan (:args c)) :part (:part (:args c))
                          :needs (into {} (shortage (owed cells) carried))}
                   (seq hidden) (assoc :look-at (vec near))))))))

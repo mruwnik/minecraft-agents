@@ -99,6 +99,15 @@
             (let [e (await (ending-of (b/start (spec kit) plans zones) job {:plan "pen"} 10))]
               (is (= [kind reason] [(:kind e) (get-in e [:cause :reason])])))))))))
 
+(deftest a-part-without-fence-cells-names-the-parts-that-hold-the-fence
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan (update (ring-plan) :parts conj {:id "pen" :box [[2 64 2] [4 64 4]] :want "air"})
+              e (await (ending-of (b/start (spec kit) {"pen" plan} []) job {:plan "pen" :part "pen"} 10))]
+          (is (= :plan-trouble (get-in e [:cause :reason])))
+          (is (re-find #"in part pen; parts with some: fence, gate" (get-in e [:cause :why]))))))))
+
 ;; ---------------------------------------------------------------- the body ends outside
 
 (defn body-cell [p] (mapv #(int (js/Math.floor %)) (get-in @(fake/state p) [:self :pos])))

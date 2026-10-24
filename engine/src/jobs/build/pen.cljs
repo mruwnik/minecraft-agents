@@ -53,7 +53,7 @@
   short or refused after its work (data) goes on to the check, which reports the shortage as leaks with :built. A
   shut-gate child that did not end done is named in the data as :shut.
   Start facts, all waits or refusals of can-start?:
-  - {:reason :plan-trouble :why text}: a wait while the plan is missing or unreadable; never when it has no cells (in :part) or no fence cells.
+  - {:reason :plan-trouble :why text}: a wait while the plan is missing or unreadable; never when it has no cells (in :part) or no fence cells (with a :part the text names the parts that hold fence).
   - {:reason :uneven :why text}: its ring steps more than 1 between neighbouring fences, or a gate is more than 1 above
     the ground of an inside neighbour (animals will not step down 2), unless :uneven? true.
   - {:reason :no-zones}: no zone list has been read (unless :ignore-zones?).
@@ -123,6 +123,13 @@
                                :gate-blocked (str "gate " (pr-str gate) " opens onto the blocked cell " (pr-str outside))))
                            (take 4 (sort-by #(- (or (:step %) (:drop %) 9)) problems))))))
 
+(defn no-barrier-text
+  "Why the cells have no fence: with a :part, the parts of the plan that do hold fence, wall or gate cells."
+  [answer part]
+  (let [holders (when part (keep #(when (and (:want %) (pen-read/barrier? (:want %))) (:id %)) (:parts (:plan answer))))]
+    (str "the plan has no fence, wall or gate cells"
+         (when part (str " in part " part (if (seq holders) (str "; parts with some: " (str/join ", " holders) ", or build the pen without :part") ""))))))
+
 (defn planned
   "{:cells judged} for the plan in the args, or {:trouble text}."
   [c]
@@ -132,7 +139,7 @@
         cells (when (and answer (not (:broken answer)))
                 (plan/judged p answer part (set (keys (storage/carried-totals (u/inventory p)))) nil))
         trouble (or (plan/plan-trouble answer cells)
-                    (when-not (pen-read/barrier-box cells) "the plan has no fence, wall or gate cells")
+                    (when-not (pen-read/barrier-box cells) (no-barrier-text answer part))
                     (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) plan/no-zones))]
     (if-not trouble
       {:cells cells}
