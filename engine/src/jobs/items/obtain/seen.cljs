@@ -148,13 +148,15 @@
     need))
 
 (defn with-avoid
-  "The need with the columns of trees found cut off in its args when it fells trees, and the cells a mine gave up on when it mines."
+  "The need with the columns of trees found cut off in its args when it fells trees, and the cells a mine gave up on when it mines,
+  the mine heading along the stair it climbed until it has cut tunnel (a torch hung at the top turns the body round)."
   [c need]
   (let [cut (seq (:cut-off (ctx/mem c)))
-        skip (seq (:skip-cells (ctx/mem c)))]
+        skip (seq (:skip-cells (ctx/mem c)))
+        heading (when-not (get-in (ctx/mem c) [:gather :dug (:key need)]) (get-in (ctx/mem c) [:gather :climb-heading]))]
     (case (:job need)
       jobs.forestry.harvest-wood (cond-> need cut (assoc-in [:args :avoid] (vec cut)))
-      jobs.gather.mine (cond-> need skip (assoc-in [:args :skip] (vec skip)))
+      jobs.gather.mine (cond-> need skip (assoc-in [:args :skip] (vec skip)) heading (assoc-in [:args :heading] heading))
       need)))
 
 (defn gather-slot

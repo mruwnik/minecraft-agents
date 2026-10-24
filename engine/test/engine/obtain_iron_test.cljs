@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.settings :as settings]
             [jobs.items.obtain.gather :as gather]
+            [jobs.items.obtain.seen :as seen]
             [engine.contract :as contract]
             [engine.core :as core]
             [engine.core.ending :as ending]
@@ -524,6 +525,12 @@
                                         (fn [def lit] (update def :round (fn [r] (fn [c] (if (seq @lit) (r c) (ctx/end c :impossible hall-cause))))))]]]
           (is (= [[[{:x 0 :y 64 :z 0}]] 1] (await (hall-refusal-run refuse))) (str "refused by " how ": the hall cell is lit once, then the ore mined"))
           (when more (recur more)))))))
+
+(deftest a-mine-after-a-climb-heads-along-the-stair-until-it-has-cut-tunnel
+  (let [need {:key "raw_iron" :job 'jobs.gather.mine :args {:block "iron_ore"}}
+        heading (fn [mem] (with-redefs [ctx/mem (constantly mem)] (get-in (seen/with-avoid {} need) [:args :heading])))]
+    (is (= "west" (heading {:gather {:climb-heading "west"}})))
+    (is (nil? (heading {:gather {:climb-heading "west" :dug {"raw_iron" {:n0 8}}}})) "tunnel is cut: the mine turns round obstacles itself")))
 
 (deftest a-body-standing-in-water-walks-to-dry-land-before-it-mines
   (async done

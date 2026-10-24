@@ -282,7 +282,7 @@
     (if (= :continue r)
       :continue
       (let [at (js/Math.floor (:y (u/self-pos c)))]
-        (ctx/update-mem! c #(-> % (update :gather dissoc :climb) (assoc-in [:gather :climbed (:key need)] true)))
+        (ctx/update-mem! c #(-> % (update :gather dissoc :climb) (assoc-in [:gather :climbed (:key need)] true) (assoc-in [:gather :climb-heading] (look/facing (:primitives c)))))
         (ctx/emit! c :obtain.climbed :info {:item (:key need) :y at :to y :reason (contract/cause-key r)
                                             :message (str "stair up for " (:key need) " ended " (name (contract/cause-key r)) " at y " at (when (< at y) (str ", short of y " y)))})
         :again))))
@@ -338,7 +338,7 @@
   (let [pos (u/self-pos c)
         total (dug-total (ctx/mem c) (:key need) pos n)
         y (js/Math.floor (:y pos))]
-    (ctx/update-mem! c assoc-in [:gather :dug (:key need)] {:n0 total :at pos})
+    (ctx/update-mem! c #(-> % (assoc-in [:gather :dug (:key need)] {:n0 total :at pos}) (update :gather dissoc :climb-heading)))
     (if (barren? c need total)
       (do (ctx/update-mem! c assoc-in [:gather :why] (str "cut " total " blocks down to y " y " and saw no " (:key need) ": too little there to mine on"))
           false)
