@@ -20,6 +20,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.price :as price]
             [jobs.lib.reach :as reach]
+            [jobs.lib.threat-field :as field]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.lib.spawn-light :as spawn-light]
@@ -302,6 +303,24 @@
       (risk/status c goal plan)
       (is (= 2 (count @dark)) "priced again with no block written")
       (is (and (zero? (first @dark)) (pos? (second @dark))) "by the light now seen along the way"))))
+
+(deftest the-walk-and-the-stay-are-priced-anew-when-only-a-threats-reach-changes
+  (let [c (ready-test/ctx-of {:time st/noon :self {:pos {:x 0.5 :y 64 :z 0.5}} :entities [{:id 7 :name "zombie" :kind "hostile" :pos [20.5 64 0.5]}]})
+        goal {:x 30 :y 64 :z 0}
+        plan {:status "found" :steps (vec straight-cells)}
+        weights (atom (js/Map.))
+        orig field/field-of
+        walks (atom 0)
+        stays (atom 0)]
+    (with-redefs [field/field-of (fn [c t] (assoc (orig c t) :weights @weights))
+                  risk/estimate-of (fn [c in] (swap! walks inc) (prefix-estimate-of c in))
+                  risk/stay-estimate (fn [_ _] (swap! stays inc) {:hp 0 :hostiles 0})]
+      (risk/status c goal plan)
+      (risk/status c goal plan)
+      (is (= [1 1] [@walks @stays]) "nothing changed: priced once")
+      (reset! weights (js/Map.))
+      (risk/status c goal plan)
+      (is (= [2 2] [@walks @stays]) "a cell its field read aged out under the sensed zombie: both priced again"))))
 
 (def far-goal {:x 95 :y 64 :z 0})
 

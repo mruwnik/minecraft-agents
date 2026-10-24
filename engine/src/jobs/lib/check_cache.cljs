@@ -34,7 +34,7 @@
     (if (and hit (not (::fresh c)) (fresh? now hit))
       (:v hit)
       (let [v (thunk)]
-        (swap! entries (fn [m] (assoc (into {} (remove (fn [[_ e]] (> (- now (:t e)) (* 10 (ttl-ms))))) m) id {:t now :v v})))
+        (swap! entries (fn [m] (assoc (into {} (remove (fn [[_ e]] (and (not (:recent e)) (> (- now (:t e)) (* 10 (ttl-ms)))))) m) id {:t now :v v})))
         v))))
 
 (defn cached
@@ -55,6 +55,5 @@
     (if hit
       (:v hit)
       (let [v (thunk)]
-        (swap! entries (fn [m] (assoc (into {} (remove (fn [[_ e]] (> (- now (:t e)) (* 10 (ttl-ms))))) m) id
-                                      {:t now :recent (take (settings/get settings ::keep) (cons (assoc look :v v) (remove same? (:recent (get m id)))))})))
+        (swap! entries (fn [m] (assoc m id {:t now :recent (into [] (take (settings/get settings ::keep)) (cons (assoc look :v v) (remove same? (:recent (get m id)))))})))
         v))))
