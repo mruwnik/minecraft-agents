@@ -106,7 +106,7 @@
 
 (defn stair-route-s
   "Seconds the stair way e takes from feet, each step as jobs.lib.dig-route (route-answer) prices one: cw/stair-step-cost of a
-  walk step, the dig-cost of its cuts, a fill for an open floor and the unseen step price when a cut or its floor is unseen."
+  walk step, the dig-cost of its cuts, a fill for an open floor (never, with no block to fill it) and the unseen step price when a cut or its floor is unseen."
   [p feet {:keys [heading steps]}]
   (let [block-at (escape/block-at-of p)
         unseen? (escape/unseen-of p)
@@ -118,7 +118,7 @@
                                  :else (or (cost/dig-cost (or n "stone")) ##Inf))))]
     (transduce (map (fn [cuts] (cw/stair-step-cost step-s (cw/stair-cost 1)
                                                     (cond-> (mapv cut-s cuts)
-                                                      (dig-route/open? (block-at (escape/add (nth cuts 2) [0 -1 0]))) (conj (cw/fill-cost 1)))
+                                                      (dig-route/open? (block-at (escape/add (nth cuts 2) [0 -1 0]))) (conj (if (escape/carried-pillar-item p) (cw/fill-cost 1) ##Inf)))
                                                     (if (some unseen? (cons (escape/add (nth cuts 2) [0 -1 0]) cuts)) unseen-s 0))))
                + 0 (partition 3 (escape/stair-cuts feet (escape/heading-dirs (keyword heading)) steps)))))
 
