@@ -487,6 +487,19 @@
        (and (or lit? near?)
             (rays/line-clear? raw (.sightTable raw) (.-x eye) (.-y eye) (.-z eye) (+ x 0.5) (+ y 0.5) (+ z 0.5)))))))
 
+(defn look-shows?
+  "Whether a look from where the body stands would show the cell {:x :y :z} or [x y z]: within sight's :radius and a clear
+  line from the eye (lit, it is seen; dark, it is seen dark). False without a perception."
+  [p cell]
+  (boolean
+   (when-let [per (aget p "perception")]
+     (let [[x y z] (if (map? cell) [(:x cell) (:y cell) (:z cell)] cell)
+           ^js raw (:raw per)
+           ^js eye (.eye raw)]
+       (and eye
+            (<= (js/Math.hypot (- (+ x 0.5) (.-x eye)) (- (+ y 0.5) (.-y eye)) (- (+ z 0.5) (.-z eye))) (:radius (:opts per)))
+            (rays/line-clear? raw (.sightTable raw) (.-x eye) (.-y eye) (.-z eye) (+ x 0.5) (+ y 0.5) (+ z 0.5)))))))
+
 (defn dark-in-sight?
   "Whether a look at the cell {:x :y :z} would show it dark: within sight's :radius, a clear line from the eye, neither lit
   enough to see nor within near-of. False without a perception."

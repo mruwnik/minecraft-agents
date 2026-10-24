@@ -1,7 +1,7 @@
 (ns jobs.lib.ready
   "The readiness checkers a job binds as its safe? and fit? exports: fns of the ctx giving a status (engine.contract).
   safe-at, safe-at-by-night and safe-if-lit are :later while the place is exposed and the stay there is not affordable (jobs.lib.price/priced; the estimate of jobs.lib.cost/exposure is
-  above ::risk-limit; :look while the light there is unseen and the body has not looked round, then :later; :never when light is further off than the job waits; a dark hall no sky light reaches is exposed by its spawn chance, :never lowered by a torch; a small dark place is no exposure) or a danger is near
+  above ::risk-limit; :look while the light there is unseen and a look from here would show it, else priced as unseen (unseen-status); :never when light is further off than the job waits; a dark hall no sky light reaches is exposed by its spawn chance, :never lowered by a torch; a small dark place is no exposure) or a danger is near
   (threatened); fit? is :later below the risky health or while poisoned (fit-armed also while unarmed); ok never refuses."
   (:require [jobs.lib.cost.health :as cost-health]
             [clojure.string :as str]
@@ -19,6 +19,7 @@
             [jobs.lib.price :as price]
             [jobs.lib.dawn :as dawn]
             [jobs.lib.foods :as foods]
+            [jobs.lib.look :as look]
             [jobs.lib.look-edge :as look-edge]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.reserve :as reserve]
@@ -67,9 +68,29 @@
   [c cells]
   (every? (sense/round-looked c) cells))
 
+(defn unseen-status
+  "The exposure of the unseen place `to` no look from here shows, priced as unseen at its chance (Q16): spawn-light/chance-at's
+  worse case, open ground under the sky now within the surface band below the feet, a dark cave deeper. Open ground dark
+  under the night sky waits for dawn (::light-patience-s), a cave guess is :never lowered by a torch; jobs.lib.price/priced
+  prices either for the stay."
+  [c to]
+  (let [p (:primitives c)
+        feet-y (:y (sh-sense/feet p))
+        chance (spawn-light/chance-at p to feet-y false false)
+        light-in (or (sh-sense/sky-in p) ##Inf)
+        patience (settings/get settings ::light-patience-s)
+        where (str "unseen " (place-text to) ", which no look from here shows")]
+    (cond
+      (<= chance (settings/get settings ::risk-limit)) (contract/ok :unexposed (str "no spawn risk at " where ": open ground under a lit sky"))
+      (spawn-light/deep? to feet-y false) (contract/never :exposed (str "dark at " where ": guessed a cave, which dawn does not light") :lowered-by #{:torch} :chance chance)
+      (<= light-in patience) (contract/later :exposed (str "dark at " where ": guessed open ground, dark until light") :lowered-by #{:light} :chance chance
+                                             :recheck-after-ms (* 1000 light-in))
+      :else (contract/never :exposed (str "dark at " where ", light is " (js/Math.round light-in) " s away, over the " (js/Math.round patience) " s it waits") :chance chance))))
+
 (defn at-status
   "The status of the exposure of the walk of c's body to `to`: ok while sheltered or the chance is within ::risk-limit,
-  else by what lowers it; darkness no sky light reaches (a cave: dawn never lifts it) is exposed only in a dark hall (hall-at?), :never, lowered by a torch, else no exposure; light further off than ::light-patience-s is not waited for."
+  else by what lowers it; darkness no sky light reaches (a cave: dawn never lifts it) is exposed only in a dark hall (hall-at?), :never, lowered by a torch, else no exposure; light further off than ::light-patience-s is not waited for.
+  Unseen light no look from here would show is unseen-status's."
   [c to]
   (let [p (:primitives c)
         shelter (:data (ctx/latest c :shelter))
@@ -87,6 +108,8 @@
       (contract/ok :sealed (str "unseen below at " where ": underground, no look shows it and dawn does not light it; only threats count"))
       (and (contains? lowered-by :look) (sense-looked? c look-at) (sh-sense/buried? p) (not (u/within? (sh-sense/feet p) to 0)))
       (at-status c (sh-sense/feet p))
+      (and (contains? lowered-by :look) (not-any? #(look/look-shows? p %) look-at))
+      (unseen-status c to)
       (contains? lowered-by :look) (contract/look :exposed (str "light at " where " not seen") :look-at look-at)
       (and (contains? lowered-by :light) (<= light-in patience))
       (contract/later :exposed (str "dark at " where " until light") :lowered-by lowered-by :chance chance :recheck-after-ms (* 1000 light-in))
@@ -229,16 +252,15 @@
      {::exposure (fn [c] (exposed c (f c))) ::plain true})))
 
 (defn near-unseen-here
-  "f, but an unseen place within `within` (default ::unseen-judged-here-within) blocks of the feet is judged where the body stands: a look cannot show a cell
-  behind a wall (the job walks round to it), so asking for one would wait for ever. A job that walks to its unseen site before it works passes ##Inf."
-  ([f] (near-unseen-here f (settings/get settings ::unseen-judged-here-within)))
-  ([f within]
-   (fn [c]
-     (let [p (:primitives c)
-           at (f c)]
-       (when-not (and at (:y at) (not (sh-sense/seen-cell? p (update-vals at js/Math.floor)))
-                      (<= (u/dist (sh-sense/feet p) at) within))
-         at)))))
+  "f, but an unseen place within ::unseen-judged-here-within blocks of the feet is judged where the body stands: a look cannot show a cell
+  behind a wall (the job walks round to it), so asking for one would wait for ever."
+  [f]
+  (fn [c]
+    (let [p (:primitives c)
+          at (f c)]
+      (when-not (and at (:y at) (not (sh-sense/seen-cell? p (update-vals at js/Math.floor)))
+                     (<= (u/dist (sh-sense/feet p) at) (settings/get settings ::unseen-judged-here-within)))
+        at))))
 
 (defn leaving-sealed-shelter
   "Later :dark while a walk to `to` ({:x :y :z}, floored) leaves the body's own sealed night shelter (sh-inside/walk-leaves-shelter?

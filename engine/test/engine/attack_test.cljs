@@ -1,6 +1,7 @@
 (ns engine.attack-test
   "jobs.combat.attack and its helpers against the fake world."
   (:require [cljs.test :refer [deftest is async]]
+            [jobs.lib.look :as lib-look]
             [engine.contract :as contract]
             [engine.core :as core]
             [engine.hostile-test :as h]
@@ -39,6 +40,13 @@
     (await (run-ticks s n 700))
     s))
 
+(defn ^:async with-looks-showing
+  "(f)'s result with a look from here showing every cell: the fake's sky-only perception has no loaded cell, so no line from the eye is clear."
+  [f]
+  (let [shows lib-look/look-shows?]
+    (set! lib-look/look-shows? (constantly true))
+    (try (await (f)) (finally (set! lib-look/look-shows? shows)))))
+
 (defn ^:async scenario
   "Submit the job with args in a world; run n ticks 700 ms apart; the setup map."
   [args world n]
@@ -65,7 +73,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [day (await (scenario {:targets [1]} {:inventory h/sword :entities [(zed 1 2)]} 6))
-              night (await (scenario {:targets [1]} {:inventory h/sword :time st/night :entities [(zed 1 2)]} 6))]
+              night (await (with-looks-showing #(scenario {:targets [1]} {:inventory h/sword :time st/night :entities [(zed 1 2)]} 6)))]
           (is (seq (attacked day)) "a zombie next to the body is attacked by day")
           (is (empty? (attacked night)))
           (is (= [:exposed] (distinct (map :reason (events-of night :waiting))))))))))

@@ -61,7 +61,7 @@
 (def target [:area])
 (def ways need/fetch-ways)
 (def defaults {:spend {:job-time ::job-time-s}})
-(def safe? (price/staying :work (ready/when-fed (ready/safe-at-by-night (ready/near-unseen-here work-place/spot ##Inf)))))
+(def safe? (price/staying :work (ready/when-fed (ready/safe-at-by-night work-place/spot))))
 
 (def steps [:tidy :tend :compost :deposit])
 

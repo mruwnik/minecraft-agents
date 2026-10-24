@@ -473,7 +473,7 @@
 (defn ^:async far-run
   "Ripe wheat 200 blocks off; a job that always continues (listed, runnable) first when listed?."
   [listed?]
-  (let [s (update (setup (assoc far-ripe :time 15000)) :eng #(assoc-in % [:jobs 'busy-other] {:round (fn ^:async busy [_c] :continue)}))]
+  (let [s (update (setup (assoc far-ripe :time 1000)) :eng #(assoc-in % [:jobs 'busy-other] {:round (fn ^:async busy [_c] :continue)}))]
     (when listed? (core/submit! (:eng s) '(busy-other) {}))
     (core/submit! (:eng s) (list 'jobs.farm.tend {:area far-box}) {})
     (await (tu/run-ticks (:eng s) (:clock s) 3 700))

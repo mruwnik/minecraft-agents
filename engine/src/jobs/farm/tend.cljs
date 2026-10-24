@@ -82,7 +82,7 @@
 (def target [:area])
 (def ways need/fetch-ways)
 (def defaults {:least 1 :spend {:job-time ::job-time-s}})
-(def safe? (price/staying :work (ready/safe-at-by-night (ready/near-unseen-here work-place/spot ##Inf))))
+(def safe? (price/staying :work (ready/safe-at-by-night work-place/spot)))
 
 (a/defargs settings
   {::min-health {:default 0 :spec (a/num-in 0 20)

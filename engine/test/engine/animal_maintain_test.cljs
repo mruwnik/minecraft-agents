@@ -446,7 +446,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [world {:inventory [(wheat 4)] :entities [(cow 1 202) (cow 2 203)] :time 15000}
+        (let [world {:inventory [(wheat 4)] :entities [(cow 1 202) (cow 2 203)] :time 1000}
               listed (update (h/setup world 50) :eng #(assoc-in % [:jobs 'busy-other] {:round (fn ^:async busy [_c] :continue)}))
               alone (h/setup world 50)]
           (core/submit! (:eng listed) '(busy-other) {})
@@ -462,7 +462,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (h/setup {:inventory [(wheat 4)] :entities [(cow 1 42) (cow 2 43)] :time 15000 :light {} :light-default [0 15] :floor [-5 -8 60 8]} 50)]
+        (let [s (h/setup {:inventory [(wheat 4)] :entities [(cow 1 42) (cow 2 43)] :time 1000 :light {} :light-default [0 15] :floor [-5 -8 60 8]} 50)]
           (tu/seeing-within (:p s) 24)
           (let [p (:p s) entities (.-entities p)]
             (aset p "entities" (fn [q] (let [me (.-pos (.self p))]

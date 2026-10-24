@@ -25,6 +25,7 @@
             [jobs.blocks.dig :as dig]
             [jobs.blocks.fill-cells :as fill-cells]
             [jobs.blocks.place :as place]
+            [jobs.lib.look :as lib-look]
             [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [jobs.lib.shelter.inside :as sh-inside]
@@ -88,6 +89,11 @@
 (defn kind [check world] (first (check (ctx-of world))))
 (defn reason [check world] (:reason (nth (check (ctx-of world)) 2)))
 
+(defn showing
+  "(f) with a look from here showing every cell (the fake world has no perception, whose sight says it)."
+  [f]
+  (with-redefs [lib-look/look-shows? (constantly true)] (f)))
+
 (deftest safe-at-open-ground-at-night-waits-for-dawn
   (let [check (ready/safe-at (constantly outside))
         s (lit 0 15 #(check (ctx-of open-night)))]
@@ -130,7 +136,7 @@
     (is (re-find #"s away" (second (status 10))))))
 
 (deftest safe-at-a-sheltered-place-is-ok-and-a-walk-out-of-the-hut-is-not
-  (are [world to expected] (= expected (kind (ready/safe-at (constantly to)) world))
+  (are [world to expected] (= expected (showing #(kind (ready/safe-at (constantly to)) world)))
     night-hut {:x 6 :y 64 :z 0} :ok
     night-hut outside :later
     (assoc night-hut :blocks (merge (:blocks night-hut) barn-roof)) outside :later
@@ -405,21 +411,23 @@
       ready/safe-at-from-out :ok
       ready/safe-at-from :never)))
 
-(deftest an-unseen-cell-asks-for-a-look-at-it
-  (let [s ((ready/safe-at (constantly outside)) (ctx-of open-night))]
+(deftest an-unseen-cell-a-look-would-show-asks-for-a-look-at-it
+  (let [s (showing #((ready/safe-at (constantly outside)) (ctx-of open-night)))]
     (is (= :look (first s)))
     (is (= [[15 64 0]] (:look-at (nth s 2))))))
 
 (deftest an-unseen-cell-a-look-round-could-not-show-is-judged-where-a-buried-body-stands
   (are [looked expected] (= expected (with-redefs [sh-sense/seen-cell? (fn [_ c] (not= outside (select-keys c [:x :y :z])))
-                                                   sense/round-looked (constantly looked)]
+                                                   sense/round-looked (constantly looked)
+                                                   lib-look/look-shows? (constantly true)]
                                        (kind (ready/safe-at (constantly outside)) (assoc tunnel :time st/noon))))
     #{} :look
     #{[15 64 0]} :ok))
 
 (deftest an-unseen-cell-well-below-the-feet-under-a-seen-roof-is-underground-and-asks-no-look-or-dawn
   (are [to expected] (= expected (with-redefs [sh-sense/seen-cell? (constantly false)
-                                               sh-sense/solid-at? (fn [_ c] (= 66 (:y c)))]
+                                               sh-sense/solid-at? (fn [_ c] (= 66 (:y c)))
+                                               lib-look/look-shows? (constantly true)]
                                    (kind (ready/safe-at (constantly to)) (assoc open-night :floor [-70 -70 70 70]))))
     {:x 15 :y 40 :z 0} :ok
     {:x 15 :y 62 :z 0} :ok
@@ -428,9 +436,19 @@
 
 (deftest an-unseen-cell-below-the-feet-with-no-seen-roof-is-a-valley-and-asks-a-look
   (are [y] (= :look (with-redefs [sh-sense/seen-cell? (constantly false)
-                                  sh-sense/solid-at? (constantly false)]
+                                  sh-sense/solid-at? (constantly false)
+                                  lib-look/look-shows? (constantly true)]
                       (kind (ready/safe-at (constantly {:x 15 :y y :z 0})) open-night)))
     62 40))
+
+(deftest an-unseen-cell-no-look-from-here-shows-is-priced-as-unseen
+  (let [s ((ready/safe-at (constantly outside)) (ctx-of open-night))]
+    (is (= :later (first s)) "open ground under the night sky")
+    (is (= #{:light} (:lowered-by (nth s 2))) "dawn lifts it")
+    (is (re-find #"no look from here shows" (second s))))
+  (is (= :ok (kind (ready/safe-at (constantly outside)) (assoc open-night :time st/noon))) "lit by day")
+  (is (= :never (with-redefs [sh-sense/seen-cell? (constantly false) sh-sense/solid-at? (constantly false)]
+                  (kind (ready/safe-at (constantly {:x 15 :y 40 :z 0})) open-night))) "a cave guess deep below: a torch lowers it"))
 
 (def escapes
   '[respond-to-hostile block-arrow-gap unwedge breathe extinguish night dig-pocket shut-in])
@@ -735,6 +753,20 @@
   (is (= :later (with-redefs [sh-sense/seen-cell? (constantly false)]
                   (settings/with-settings {:jobs.lib.ready/unseen-judged-here-within 2}
                     #(kind (ready/safe-at-by-night (ready/near-unseen-here (constantly {:x 4 :y 68 :z 0}))) tunnel))))))
+
+(defn bound-seeing-within
+  "The kind of a job's checker over world with args, the body seeing only blocks within r (farther ones never seen)."
+  [checker world args r]
+  (let [c (assoc (ctx-of world) :args args)]
+    (tu/seeing-within (:primitives c) r)
+    (first (checker c))))
+
+(deftest a-site-job-prices-its-unseen-far-site-as-unseen-not-where-the-body-stands
+  (are [job world args expected] (= expected (lit 0 15 #(bound-seeing-within (safe-of job) world args 12)))
+    'jobs.farm.tend night-hut {:area (box-at 40)} :later
+    'jobs.farm.maintain night-hut {:area (box-at 40)} :later
+    'jobs.animals.maintain night-hut {:mob "cow" :box (box-at 40)} :later
+    'jobs.farm.tend (assoc night-hut :time st/noon) {:area (box-at 40)} :ok))
 
 (deftest an-attack-walk-to-an-animal-spends-hp-only-while-the-body-cannot-heal
   (let [hurt {:pos {:x 0 :y 64 :z 0} :health 5}]
