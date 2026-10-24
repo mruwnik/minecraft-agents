@@ -3,7 +3,8 @@
   (:require [jobs.items.obtain.base :refer [gathers? names-of shortfall]]
             [jobs.items.obtain.need :refer [explorable? gather-viable?]]
             [jobs.items.obtain.plan :refer [chest-s craft-s gather-plan gathered-s loose-s]]
-            [jobs.lib.cost :as cost]))
+            [jobs.lib.cost :as cost]
+            [jobs.lib.surface-up :as surface]))
 
 (defn gather-s
   "A gather of seen raw needs: obtain.plan/gathered-s."
@@ -12,10 +13,10 @@
     (gathered-s c (gather-plan c names n))))
 
 (defn search-s
-  "A search for an unseen raw need: a trip (each walk of it is priced against the need's worth as it goes, go-to's quote with its risk)."
+  "A search for an unseen raw need: a trip (each walk of it is priced against the need's worth as it goes, go-to's quote with its risk), and the stair up first for a body under rock (surface-up/climb-s)."
   [c names n]
   (when (and (gathers? c) (explorable? c names n))
-    (cost/trip)))
+    (+ (cost/trip) (surface/climb-s c))))
 
 (defn price-of
   "Seconds getting the call's shortfall of its :item or :any-of costs the body: 0 when carried, else the cheapest way that would

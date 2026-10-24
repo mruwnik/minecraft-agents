@@ -3,12 +3,16 @@
   that ends under the open sky (go-to weighs it against a new one), else walks to the nearest wall and cuts a stair up (by hand if it must) until sky shows."
   (:require [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.cost.ways :as cw]
             [jobs.lib.dig-in-leave :as dig-leave]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.lib.breath :as breath]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.ready :as ready]
             [jobs.lib.shore :as shore]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.places :as places]
             [jobs.lib.util :as u]
             [jobs.lib.column-kinds :as kinds]))
 
@@ -74,6 +78,36 @@
          (map (fn [[x y z]] {:x x :y y :z z}))
          (sort-by #(u/dist feet %))
          first)))
+
+(defn rise
+  "Blocks from the feet up to the sky of the feet column: to the first seen open cell the sky reaches, else past the last
+  rock seen in it by the rock guess (dig-look/rock-depth: further than that the body has no reason to take for rock)."
+  [p]
+  (let [{:keys [y] :as feet} (sh-sense/feet p)]
+    (loop [dy 1 last-rock 0]
+      (let [cell (assoc feet :y (+ y dy))
+            seen? (sh-sense/seen-cell? p cell)]
+        (cond
+          (>= (+ y dy) places/max-y) dy
+          (and seen? (not (sh-sense/solid-at? p cell)) (pos? (or (sh-sense/sky-light-at p cell) 0))) dy
+          (and seen? (sh-sense/solid-at? p cell)) (recur (inc dy) dy)
+          (> (- dy last-rock) (dig-look/rock-depth)) (+ last-rock (dig-look/rock-depth) 1)
+          :else (recur (inc dy) last-rock))))))
+
+(defn climb-s
+  "Seconds the stair up from a buried body's feet to the sky takes: rise blocks, each a walk step with the cuts of its
+  three cells (a seen open cell costs none, the rest stone), at least cw/stair-cost of one step; 0 for a body that is not
+  buried, has climbed out already (climbed?) or has a stair of its own to walk up (own-top)."
+  [c]
+  (let [p (:primitives c)]
+    (if (or (not (sh-sense/buried? p)) (climbed? c) (own-top c))
+      0
+      (let [step-s (:cost (cost/walk-cost {:distance 1}))
+            feet (sh-sense/feet p)
+            cut-s (fn [n] (if (and (sh-sense/seen-cell? p n) (not (sh-sense/solid-at? p n))) 0 (or (cost/dig-cost (or (u/seen-name p n) "stone")) 0)))
+            leg (fn [dy] (cw/stair-leg-cost (+ step-s (transduce (map #(cut-s (assoc feet :y (+ (:y feet) dy %)))) + 0 (range 3)))
+                                            step-s (cw/stair-cost 1)))]
+        (transduce (map leg) + 0 (range 1 (inc (rise p))))))))
 
 (defn ^:async climb!
   "One stair step up from a wall (jobs.lib.dig-in-leave/climb!): :continue while it goes on, :stopped when no stair goes up."

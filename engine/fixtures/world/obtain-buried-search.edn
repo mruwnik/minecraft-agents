@@ -1,0 +1,22 @@
+;; A body under rock needing a log it does not see: the search is priced with the stair up to the sky.
+;; Should-succeed: worth 500 pays the stair, the body climbs out and fells the tree.
+;; Should-fail: worth 15 does not pay a trip and the stair (no stair step is cut).
+{:defaults
+ {:tags [:obtain :explore] :time :any
+  :plot {:height 12 :length 40 :width 40 :light :sky}
+  :blocks [[:fill [0 0 0] [39 7 39] "stone"] [:fill [18 0 18] [22 1 22] "air"]
+           [:fill [30 8 20] [30 11 20] "oak_log"] [:set [30 12 20] "oak_leaves[persistent=true]"]]
+  :body {:at [20.5 0 20.5] :settle-s 3 :effects [["resistance" 600 4]]}
+  :limit-s 200}
+ :cases
+ [{:name "a-buried-body-with-a-worth-that-pays-the-stair-climbs-and-fells"
+   :body {:inventory [["iron_pickaxe" 1]]}
+   :act [[:job (jobs.items.obtain {:item "oak_log" :count 1 :worth 500 :explore true})]]
+   :expect [{:event {:source :job :kind :stair.step} :within-s 120 :of-job true}]
+   :after [[:item "oak_log" 1]]}
+  {:name "a-buried-body-with-a-worth-below-the-stair-does-not-climb"
+   :body {:inventory [["iron_pickaxe" 1]]}
+   :act [[:job (jobs.items.obtain {:item "oak_log" :count 1 :worth 15 :explore true})]]
+   :expect [{:no-event {:source :job :kind :stair.step} :for-s 60}]
+   :after [[:item "oak_log" 0] [:body-near [20.5 0 20.5] 3]]
+   :limit-s 80}]}

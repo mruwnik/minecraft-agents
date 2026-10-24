@@ -30,3 +30,22 @@
         feet {:x 0 :y 64 :z 0}]
     (is (= {:x 1 :y 64 :z 0} (surface/wall-of p feet)))
     (is (= {:x -1 :y 64 :z 0} (surface/wall-of p feet #{[1 64 0] [2 64 0]})) "a tunnel east from here would undercut a stair up east")))
+
+(defn buried-body
+  "A body in a 2-high pocket of a stone block 7 wide, rock to y roof; sky light is seen from sky-y up (nil: no light read)."
+  [roof sky-y]
+  (let [p (tu/with-sky-only (tu/seeing-all (tu/fake {:self {:pos {:x 0.5 :y 64 :z 0.5}}
+                                                      :blocks (dissoc (box -3 63 -3 3 roof 3 "stone") "0,64,0" "0,65,0")})))]
+    (when sky-y (aset (.-rawWorld p) "lightAt" (fn [_ y _] (if (>= y sky-y) 240 0))))
+    {:primitives p}))
+
+(deftest the-stair-up-is-priced-by-the-rock-to-the-seen-sky-else-by-the-worse-case-and-not-at-all-in-the-open
+  (with-redefs [ctx/mem (constantly {}) jobs.lib.surface-up/own-top (constantly nil)]
+   (let [near (surface/climb-s (buried-body 67 69))
+        far (surface/climb-s (buried-body 71 73))
+        unseen (surface/climb-s (buried-body 67 nil))
+        open (surface/climb-s {:primitives (tu/seeing-all (tu/fake {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (box -3 63 -3 3 63 3 "stone")}))})]
+    (is (pos? near))
+    (is (< near far) "a taller rise to the seen sky costs more")
+    (is (< near unseen) "a surface not seen is the seen rock and the rock guess past it: dearer than the sky 2 blocks nearer")
+    (is (zero? open) "a body on open ground climbs nothing"))))
