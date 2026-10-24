@@ -10,6 +10,7 @@
             [jobs.lib.danger :as danger]
             [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
+            [jobs.lib.util :as u]
             [jobs.lib.walk-risk :as risk]))
 
 (defn status
@@ -27,10 +28,23 @@
   [plan]
   (= "searching" (some-> ^js (:r plan) .-reason)))
 
+(defn safe-prefix?
+  "Whether plan stops short of pos, the walk to pos is within price/allowed with its unseen cells
+  guessed open sky (risk/estimate's unseen-open?), and the walk on the plan's own steps to their end passes status: walking that
+  and looking turns unseen into seen, so the walk is priced again from there rather than held on a guess."
+  [c pos plan]
+  (let [end (peek (:steps plan))
+        feet (mapv js/Math.floor ((juxt :x :y :z) (u/self-pos c)))]
+    (and (not= "found" (:status plan)) end
+         (not= feet (mapv js/Math.floor ((juxt :x :y :z) end)))
+         (<= (:hp (risk/estimate c pos {:plan plan :stake (:stake (:args c)) :unseen-open? true})) (price/allowed c))
+         (= :ok (first (status c end (assoc plan :status "found")))))))
+
 (defn check
   "near/walk-round!'s :stair-check: check's why, else status of the round's first plan, and of a re-plan that knows of a
   hostile near the way to pos not known before (at the first plan or a re-plan that passed), read anew (check-cache/fresh):
-  {:risk s} when s is :later or :never, the plan kept (risk/note-plan!) for the start check to hold the call on, or
+  {:risk s} when s is :later or :never, the plan kept (risk/note-plan!) for the start check to hold the call on, unless
+  the plan stops short of pos with a safe-prefix? (walked, then priced again), or
   {:searching true} for a plan to where a search that has not ended has got to, whose rest is priced unseen: the search
   goes on rather than hold (a :refresh re-plan keeps its old plan whatever the check says, so a failed hostile is asked
   again). Other re-plans read only the hostile list. None under a caller's :checks :safe?, which replaces go-to's."
@@ -44,10 +58,12 @@
           (when own?
             (let [now (ids)]
               (when (or first? (seq (remove @known now)))
-                (let [s (status (cond-> c (not first?) check-cache/fresh) pos plan)]
+                (let [c' (cond-> c (not first?) check-cache/fresh)
+                      s (status c' pos plan)]
                   (cond
                     (not (#{:later :never} (first s))) (do (swap! known into now) nil)
                     (unfinished? plan) (do (some-> (:search-on plan) (apply [])) {:searching true})
+                    (safe-prefix? c' pos plan) nil
                     :else (do (risk/note-plan! c pos plan) {:risk s}))))))))))
 
 (defn end

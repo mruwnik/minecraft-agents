@@ -52,9 +52,9 @@
 
 (defn- chance-at
   "The spawn chance per second at `cell` for a body at feet: a seen cell by its light (sky reaching it down its column; a roofed cell is dark only in a dark hall), an unseen one
-  at the worse case (Q16): by the open-sky guess when it lies within the surface band below the feet and the body is not
+  by the open-sky guess under unseen-open?, else at the worse case (Q16): by the open-sky guess when it lies within the surface band below the feet and the body is not
   underground, else as a dark cave (a goal above the body is no sign that the ground at its own level is a cave)."
-  [p cell feet-y underground?]
+  [p cell feet-y underground? unseen-open?]
   (let [night (not (look/lit-light? 0 15 (sh-sense/sky-subtract-now p)))
         sky (if night 0 15)
         cell (if (sh-sense/solid-at? p cell) (update cell :y inc) cell)
@@ -62,7 +62,7 @@
     (cond
       block (cost/spawn-chance [(:x cell) (:y cell) (:z cell)]
                                {:light (constantly {:block block :sky (cond (sh-sense/sky-reaches-from-above? p cell) sky (and (< block (look/dark-light)) (ready/hall-at? p cell)) 0 :else 15)})})
-      (or underground? (< (:y cell) (- feet-y (settings/get settings ::surface-band)))) (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block 0 :sky 0})})
+      (and (not unseen-open?) (or underground? (< (:y cell) (- feet-y (settings/get settings ::surface-band))))) (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block 0 :sky 0})})
       :else (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block 0 :sky sky})}))))
 
 (def lava-scan-radius 128)
@@ -114,13 +114,13 @@
 (defn- dark-seconds
   "Seconds of the walk over cells where a mob could spawn (chance-at): every k-th cell and the last stand for the stretch
   walked since the one before, k the larger of ::step and the cells over ::max-cells."
-  [p cells feet-y underground?]
+  [p cells feet-y underground? unseen-open?]
   (let [n (count cells)
         k (js/Math.ceil (max (settings/get settings ::step) (/ n (settings/get settings ::max-cells))))
         blocks (along cells)
         ends (distinct (concat (range k n k) [(dec n)]))]
     (/ (reduce + (for [[a b] (map vector (cons 0 ends) ends)
-                       :when (pos? (chance-at p (nth cells b) feet-y underground?))]
+                       :when (pos? (chance-at p (nth cells b) feet-y underground? unseen-open?))]
                    (- (blocks b) (blocks a))))
        (cost/walk-blocks-per-s))))
 
@@ -138,8 +138,8 @@
   the death the spawns and known threats risk (cost/spawns-chance, cost/threats-chance) in hp (cost/lethal-hp), a death losing
   :stake seconds of worth besides what is carried (go-to's :stake); walk-hp the
   same leaving out the sensed mobs that catch the walk, their hurt and their death share both (a fight with them prices
-  them); dark-s the seconds walked where a mob could spawn; threats [{:mob :pos}] the known threats priced."
-  [c goal & [{:keys [plan stake]}]]
+  them); dark-s the seconds walked where a mob could spawn (unseen-open?: an unseen cell by the open-sky guess); threats [{:mob :pos}] the known threats priced."
+  [c goal & [{:keys [plan stake unseen-open?]}]]
   (let [p (:primitives c)
         feet (sh-sense/feet p)
         goal (update goal :y #(or % (:y feet)))
@@ -147,7 +147,7 @@
         leaves? (sh-inside/walk-leaves-shelter? p (:data (ctx/latest c :shelter)) goal 1)
         cells (way feet goal plan)
         exit (if leaves? (settings/get settings ::exit-blocks) 0)
-        exposed-s (+ (/ exit (cost/walk-blocks-per-s)) (dark-seconds p cells (:y feet) underground?))
+        exposed-s (+ (/ exit (cost/walk-blocks-per-s)) (dark-seconds p cells (:y feet) underground? unseen-open?))
         spawns (* exposed-s (cost/spawn-chance [0 0 0]))
         body (update (threats/death-body c) :carried + (or stake 0))
         threat-hp (fn [ts] (if (seq ts) (cost/route-hurt body {:cells cells :threats (threats/with-reach c ts)}) 0))
@@ -202,7 +202,7 @@
         here [(assoc feet :s secs)]
         live (mapv (fn [{:keys [reach] :as t}] (assoc t :reach (fn [x y z] (when (reach x y z) 1))))
                    (threats/with-reach c (remove #(or (:fled %) (:remembered %)) (threats/known-threats c))))
-        chance (chance-at p (update-vals feet js/Math.floor) (:y feet) false)
+        chance (chance-at p (update-vals feet js/Math.floor) (:y feet) false false)
         body (threats/death-body c)]
     {:hp (let [{:keys [hurt dies]} (price/stay-parts c chance secs)
                met (if (seq live) (cost/threats-chance body {:cells here :threats live}) 0)]
