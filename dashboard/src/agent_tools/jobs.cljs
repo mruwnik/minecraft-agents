@@ -357,8 +357,11 @@
 (defn failure-for [r error]
   (let [request-id (get-in r [:request :request-id])]
     (cond-> {:ok false :reason (http/transport-reason error)}
-      (:resolve r) (assoc :request-id request-id :confirmation :unknown
-                          :message "Resolve confirmation is unknown; inspect outstanding attention before another request.")
+      (and (:resolve r) (= :no-running-body (http/transport-reason error)))
+      (assoc :confirmation :not-sent :message "The body is not running (restarting?), so nothing was resolved. Wait a little, then send the command again.")
+      (and (:resolve r) (not= :no-running-body (http/transport-reason error)))
+      (assoc :request-id request-id :confirmation :unknown
+             :message "Resolve confirmation is unknown; inspect outstanding attention before another request.")
       (and (:mutating r) (not (:resolve r)))
       (merge (if (= :no-running-body (http/transport-reason error))
                {:confirmation :not-sent

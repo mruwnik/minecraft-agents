@@ -179,7 +179,7 @@
       ;; watched jobs are looked up in the history on the next call.
       (reset! summary {:counts {} :items [] :more false})
       (swap! deaths dissoc :cancelled)
-      (swap! st assoc :snap snap :cursor (:cursor snap) :seen {} :noticed [] :pending [] :lookup true)
+      (swap! st assoc :snap snap :cursor (:cursor snap) :noticed [] :pending [] :lookup true)
       (finish! w (array-map :wake :reset :reason :engine-restarted)))
     (let [failed? (= :reconnect-failed (:kind event))
           _ (swap! deaths track-deaths event)
@@ -315,7 +315,7 @@
           (save! (assoc w :st (atom (select-keys @st [:cursor :generation :seen :lookup :noticed])))))
         (vreset! timeout-finish #(timeout! w))
         (if (and saved (not= (:generation saved) generation))
-          (do (swap! st assoc :cursor (:cursor snap) :seen {} :noticed [] :pending [] :lookup true)
+          (do (swap! st assoc :cursor (:cursor snap) :noticed [] :pending [] :lookup true)
               (swap! deaths dissoc :cancelled)
               (reset-with-status! w :engine-restarted))
           (step w))))))

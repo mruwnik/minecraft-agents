@@ -768,6 +768,23 @@
                    ((:wait! f))))
           (.then (fn [result] (is (= :timeout (:wake result)))))))))
 
+(deftest an-engine-restart-does-not-re-wake-on-attention-already-told
+  (with-fixture []
+    (fn [f]
+      (swap! (:world f) assoc-in [:outstanding :r] blocked)
+      (push! f (assoc (event :attention :raised) :seq 1 :attention :required))
+      (-> ((:wait! f))
+          (.then (fn [first-wake]
+                   (is (= ["r"] (mapv :id (:requests first-wake))))
+                   (push! f (assoc (event :system :restored) :seq 2))
+                   ((:wait! f))))
+          (.then (fn [restarted]
+                   (is (= :engine-restarted (:reason restarted)))
+                   (swap! (:world f) assoc-in [:outstanding :r2] blocked)
+                   (push! f (assoc (event :attention :raised) :seq 3 :attention :required))
+                   ((:wait! f))))
+          (.then (fn [wake] (is (= ["r2"] (mapv :id (:requests wake))))))))))
+
 (deftest a-second-observer-name-keeps-its-own-checkpoint
   (with-fixture []
     (fn [f]

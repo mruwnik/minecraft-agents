@@ -411,6 +411,13 @@
     (is (not (re-find #"request-id" (:message v))))
     (is (re-find #"nothing was queued" (:message v)))))
 
+(deftest a-resolve-to-a-body-that-is-not-running-says-nothing-was-resolved-and-other-failures-stay-unknown
+  (let [failure (fn [code] (jobs/failure-for {:mutating true :resolve true :request {:request-id "r-1"}}
+                                             (let [e (js/Error. "x")] (aset e "code" code) e)))]
+    (is (= :not-sent (:confirmation (failure "ECONNREFUSED"))))
+    (is (re-find #"nothing was resolved" (:message (failure "ECONNREFUSED"))))
+    (is (= :unknown (:confirmation (failure "ECONNRESET"))))))
+
 (deftest an-uncertain-mutation-names-the-command-to-repeat
   (let [e (let [e (js/Error. "x")] (aset e "code" "ECONNRESET") e)
         m (:message (jobs/failure-for {:mutating true :request {:request-id "abc-1"}} e))]
