@@ -560,6 +560,12 @@
   (is (= :later (lit 15 0 #(kind-in-shelter (ready/safe-at-by-night (constantly {:x 20 :y 64 :z 0})) tunnel dug-in-entry)))
       "a lit place too: the night keeps the seal"))
 
+(deftest a-night-above-holds-a-walk-from-the-night-shelter-but-not-from-a-mine
+  (are [depth expected] (= expected (settings/with-settings {:jobs.lib.shelter.sense/mine-depth-y depth}
+                                      #(kind-in-shelter ready/sheltered-dark tunnel dug-in-entry)))
+    40 :later
+    100 :ok))
+
 (deftest felling-a-tree-outside-the-night-shelter-waits-for-day-instead-of-walking-out
   (let [check (fn [at] (let [c (assoc (ctx-of tunnel) :args {:at at} :view (fn [] {:now 0 :data {:entries {:shelter [{:t 0 :data dug-in-entry}]}}}))]
                          (first (fell-tree/safe? c))))]

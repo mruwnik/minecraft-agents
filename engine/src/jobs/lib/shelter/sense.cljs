@@ -13,7 +13,9 @@
   {::roof-height {:default 4 :spec (a/int-in 0 nil)
                   :doc "A solid block within this many blocks above counts as a roof (the shelter ways, the night's roofed places, enter-room, bed-down and the enclosed test; a call overrides it with :settings)."}
    ::room-roof-height {:default 16 :spec (a/int-in 1 nil)
-                       :doc "How high above the feet a roof may be and still make the closed room around the body a shelter."}})
+                       :doc "How high above the feet a roof may be and still make the closed room around the body a shelter."}
+   ::mine-depth-y {:default 40 :spec (a/int-in nil nil)
+                   :doc "Feet height under which an underground body is in a mine: the open sky is no walk away, so a night above holds no walk from a closed room."}})
 
 (defn feet [p] (solid/cell (u/self-pos {:primitives p})))
 
@@ -93,6 +95,11 @@
   "The body is underground (buried-at? its feet)."
   [p]
   (buried-at? p (feet p)))
+
+(defn in-mine?
+  "The body is underground (buried?) below ::mine-depth-y: rock between it and the sky, as a tunnel dug for ore."
+  [p]
+  (and (buried? p) (< (:y (feet p)) (settings/get settings ::mine-depth-y))))
 
 (defn night? [p] (not (.-isDay (.self p))))
 
