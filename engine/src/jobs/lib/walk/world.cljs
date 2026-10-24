@@ -176,9 +176,11 @@
 (defonce ^:private shares (js/WeakMap.))
 
 (defn solid-share
-  "The share of solid blocks the body expects round its feet: base-rates/solid-share at the feet's height of the blocks it
-  remembers, aged ones too, in the feet's section and the 26 round it (the window the prior is fitted to); nil without a
-  perception (no memory, no guessed rock). Kept while the body stands in one section and no block it remembers changed or aged."
+  "The chance that a block sight meets round the feet is solid: base-rates/solid-share at the feet's height of the blocks
+  the body remembers, aged ones too, in the feet's section and the 26 round it (the window the prior is fitted to). Sight
+  meets every open block along a ray and the solid one that ends it, as the prior counts open blocks and the walls beside
+  them. Nil without a perception (no memory, no guessed rock). Kept while the body stands in one section and no block it
+  remembers changed or aged."
   [p]
   (when-let [known (raw-sections p)]
     (let [{:keys [x y z]} (sh-sense/feet p)
@@ -205,13 +207,20 @@
           (.set shares st {:k k :v v})
           v)))))
 
+(defn rock-likely?
+  "Whether a cell k + 1 blocks past a seen open one, the nearest the rock guess reads as stone, is more likely solid than
+  open when each block sight meets there is solid at chance share (solid-share): k + 1 open blocks in a row are under even."
+  [share k]
+  (< (js/Math.pow (- 1 share) (inc k)) 0.5))
+
 (defn rock-guess?
-  "Whether a walk over mask spec unknown (nil: none) reads far unseen cells as rock (path-world): ::rock-beyond is on, the
-  blocks round the body are more likely solid than open (solid-share), its head is out of water, and the mask is neither
-  :edge nor without-rock. Light plays no part: it says how dangerous a place is, not what an unseen cell holds."
+  "Whether a walk over mask spec unknown (nil: none) reads far unseen cells as rock (path-world): ::rock-beyond is on, a
+  cell past it is more likely solid than open (rock-likely? of solid-share), the body's head is out of water, and the mask
+  is neither :edge nor without-rock. Light counts only through what sight made out (a dark cell beyond perception's
+  :near is not met): it says how dangerous a place is, not what an unseen cell holds."
   [p ^js unknown]
-  (boolean (and unknown (not (.-edge unknown)) (not (.-noRock unknown)) (rock-beyond) (not (breath/head-under? p))
-                (some-> (solid-share p) (> 0.5)))))
+  (boolean (and unknown (not (.-edge unknown)) (not (.-noRock unknown)) (not (breath/head-under? p))
+                (when-let [k (rock-beyond)] (some-> (solid-share p) (rock-likely? k))))))
 
 (defn- rock-seeds
   "The cells path-world's rock guess spares for a walk over mask spec unknown: the feet and the spec's seeds (with-seeds)."

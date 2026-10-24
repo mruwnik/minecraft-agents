@@ -545,9 +545,9 @@
           (is (true? (:arrived @out)) (pr-str @out))
           (is (empty? (gt/events-of s :go-to.escalated)) "nothing dug"))))))
 
-;; A sealed pocket (x 0..2, feet 60, z 0) in a stone mass (wide enough that the stair never breaks out of its side into the void round it) whose top (feet 78) holds the goal straight above; the body has
+;; A sealed pocket (x 0..2, feet 60, z 0) in a stone mass whose top (feet 78) holds the goal straight above; the body has
 ;; seen only the pocket. A goal higher than it is across is climbed toward by a stair, not dug toward leg by leg.
-(def pocket (apply dissoc (box -16 50 -16 16 77 16 "stone") (for [x (range 3) y [60 61]] (str x "," y ",0"))))
+(def pocket (apply dissoc (box -10 50 -6 10 77 6 "stone") (for [x (range 3) y [60 61]] (str x "," y ",0"))))
 
 (deftest a-buried-body-cuts-a-stair-to-a-goal-steeply-above-not-dig-legs
   (async done

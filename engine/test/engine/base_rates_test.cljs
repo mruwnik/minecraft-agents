@@ -48,8 +48,9 @@
       "the placements' peaks; redstone and diamond grow denser down to the lava; coal and emerald are densest above 64"))
 
 (deftest the-solid-share-is-the-depth-prior-until-the-seen-blocks-outweigh-it
-  (is (> (rates/solid-share -40 0 0) 0.5) "nothing seen deep down: mostly rock")
-  (is (< (rates/solid-share 120 0 0) 0.5) "nothing seen high up: mostly air")
-  (is (< (rates/solid-share 0 400 2000) 0.5) "a hall seen open deep down")
+  (is (> (rates/solid-share -40 0 0) 0.3) "nothing seen deep down: walls close all round")
+  (is (< (rates/solid-share 120 0 0) 0.05) "nothing seen high up: open air")
+  (is (< (rates/solid-share 0 400 2000) 0.2) "a hall seen open deep down")
   (is (> (rates/solid-share 120 300 100) 0.5) "a tunnel seen in rock high up")
-  (is (= (rates/solid-prior -500) (rates/solid-prior -64)) "past the table's ends, its end section"))
+  (is (< (js/Math.abs (- (rates/solid-share 63 0 0) (rates/solid-share 64 0 0))) 0.01) "no step at a section border")
+  (is (= (rates/solid-prior -500) (rates/solid-prior -56)) "past the table's ends, its end window"))

@@ -205,20 +205,6 @@
   {:self {:pos {:x 0.5 :y 64 :z 0.5}}
    :blocks (merge (box -12 63 -12 12 63 12 "stone") (box -12 74 -12 12 74 12 "stone"))})
 
-(defn rock-guess-in
-  "rock-guess? of a body in world sealed from the sky, at block light block."
-  [world block]
-  (let [{:keys [p w]} (sensed world)]
-    (swap! (fake/state p) assoc :light-default [0 block])
-    (wworld/rock-guess? w (wworld/unknown-spec))))
-
-(deftest the-rock-guess-follows-the-blocks-the-body-has-seen-not-the-light-or-the-gaze
-  (is (false? (rock-guess-in (assoc hall-world :pitch -80) 14)) "a block-lit hall, its roof seen high over the head: open (Q31)")
-  (is (false? (rock-guess-in hall-world 14)) "the same hall before it looked up: still open")
-  (is (false? (rock-guess-in (assoc hall-world :pitch -80) 0)) "the same hall dark: dark, not rock")
-  (is (true? (rock-guess-in (assoc pocket-world :pitch -80) 14)) "a lit pocket in rock")
-  (is (true? (rock-guess-in pocket-world 0)) "the same pocket dark"))
-
 (def ^:private tunnel
   (apply dissoc (box -8 62 -8 30 67 8 "stone") (for [x (range 0 21) y [64 65]] (str x "," y ",0"))))
 
@@ -276,3 +262,33 @@
         (perception/pass! (aget w "perception"))
         (wworld/way-counts w)
         (is (= 2 @n) "a block seen to change counts again")))))
+
+(defn- looked-round
+  "rock-guess? of a body in world at light [sky block] after sight passes facing each of yaws."
+  [world light yaws]
+  (let [p (tu/fake (dissoc world :now))
+        _ (swap! (fake/state p) assoc :light-default light)
+        raw (fake-raw/create p)
+        per (perception/create raw {:now (constantly 1000000)})
+        w (perception/wrap p per)]
+    (aset w "rawWorld" raw)
+    (doseq [yaw yaws] (swap! (fake/state p) assoc :yaw yaw) (perception/pass! per))
+    (wworld/rock-guess? w (wworld/unknown-spec))))
+
+(defn- room
+  "A body on the floor of an open room x 0..(sx-1), y 0..(sy-1) over its feet, z 0..(sz-1), in a stone mass, feet at y."
+  [sx sy sz y]
+  {:self {:pos {:x (+ 0.5 (quot sx 2)) :y y :z (+ 0.5 (quot sz 2))}}
+   :blocks (apply dissoc (box -1 (dec y) -1 sx (+ y sy) sz "stone") (for [x (range sx) dy (range sy) z (range sz)] (str x "," (+ y dy) "," z)))})
+
+(deftest the-rock-guess-follows-the-blocks-sight-meets-round-the-body
+  (are [world light yaws guess] (= guess (looked-round world light yaws))
+    hall-world [0 14] [270] false
+    hall-world [0 14] [0 90 180 270] false
+    (room 96 16 32 -40) [0 14] [0 90 180 270] false
+    (room 24 10 24 -20) [0 0] [0 90 180 270] true
+    (room 24 10 24 -20) [0 14] [0 90 180 270] true
+    pocket-world [0 0] [270] true
+    pocket-world [0 14] [270] true
+    {:self {:pos {:x 10.5 :y 64 :z 0.5}} :blocks tunnel} [0 14] [270] true)
+  (is (= [false true] (map #(wworld/rock-likely? % 3) [0.15 0.16])) "4 open blocks in a row under even from 0.159"))

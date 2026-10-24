@@ -120,16 +120,20 @@
   (vec (:sections (js->clj (js/JSON.parse (rc/inline "jobs/lib/cost/solid_shares.json")) :keywordize-keys true))))
 
 (defn solid-prior
-  "{:a :b} the Beta prior on the share of solid blocks round height y before a body has looked: fitted to the 3x3x3-section
-  windows of the recorded terrain (solid_shares.json, tools/solid-shares.mjs) at the section holding y, the table's end
-  section past its ends."
+  "{:a :b} the Beta prior on the share of solid among the blocks sight meets round height y (the open blocks and the
+  solid ones beside them) before a body has looked: fitted to the 3x3x3-section windows of the recorded terrain
+  (solid_shares.json, tools/solid-shares.mjs), linear in y between the windows' centres, the end ones past the table's ends."
   [y]
-  (let [i (js/Math.floor (/ (- y (:y (first solid-shares))) 16))]
-    (nth solid-shares (-> i (max 0) (min (dec (count solid-shares)))))))
+  (let [t (-> (/ (- y (:y (first solid-shares)) 8) 16) (max 0) (min (dec (count solid-shares))))
+        i (min (js/Math.floor t) (- (count solid-shares) 2))
+        f (- t i)
+        [lo hi] (subvec solid-shares i (+ i 2))
+        mix #(+ (* (- 1 f) (% lo)) (* f (% hi)))]
+    {:a (mix :a) :b (mix :b)}))
 
 (defn solid-share
-  "The share of solid blocks expected round height y with solid and open the blocks seen there: the posterior mean over
-  solid-prior."
+  "The share of solid expected among the blocks sight meets round height y, with solid and open those it has met there:
+  the posterior mean over solid-prior."
   [y solid open]
   (let [{:keys [a b]} (solid-prior y)]
     (/ (+ a solid) (+ a b solid open))))
