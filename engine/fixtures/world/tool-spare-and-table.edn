@@ -30,11 +30,12 @@
    :expect [{:event {:source :job :kind :tool.spare :data {:tool "stone_pickaxe"}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :tool.spare :data {:tool "iron_pickaxe"}} :for-s 60 :until {:source :job :kind :tool.spare :data {:tool "stone_pickaxe"}}}]}
   ;; card 040fa149: a whole iron pickaxe is kept for iron and diamond: with cobblestone carried a stone one is made for the stair
+  ;; (card 7c19ca54: 8 steps, so the iron wear its 24 digs save pays for the 4 crafts)
   {:name "whole-iron-pick-gets-a-stone-spare-when-cobble-is-carried"
    :body {:inventory [["iron_pickaxe" 1] ["oak_log" 4] ["torch" 8] ["cobblestone" 8]]}
-   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 4})]]
+   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 8})]]
    :expect [{:event {:source :job :kind :tool.spare :data {:tool "stone_pickaxe"}} :within-s 120 :of-job true}
-            {:event {:source :job :kind :completed :data {:steps 4}} :within-s 200 :of-job true}]}
+            {:event {:source :job :kind :completed :data {:steps 8}} :within-s 200 :of-job true}]}
   ;; card 36941f70: with fetching off the stone pickaxe is still made, from what is carried (cobblestone, sticks, a table)
   {:name "whole-iron-pick-with-fetch-off-crafts-the-stone-spare-from-carried-cobble"
    :body {:inventory [["iron_pickaxe" 1] ["stick" 4] ["crafting_table" 1] ["torch" 8] ["cobblestone" 8]]}

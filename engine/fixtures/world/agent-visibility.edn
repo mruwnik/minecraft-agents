@@ -8,7 +8,7 @@
  [{:name "mine-tunnel-end"
    :plot {:height 6}
    :blocks [[:fill [8 0 8] [30 3 24] "stone"] [:fill [16 0 16] [16 1 16] "air"]]
-   :body {:inventory [["iron_pickaxe" 1] ["stone_pickaxe" 1] ["cobblestone" 8]]}
+   :body {:inventory [["iron_pickaxe" 1] ["cobblestone" 8]]}
    :act [[:job (jobs.gather.mine {:torches false :block "coal_ore" :count 1 :direction "east" :tunnel-length 4 :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:tunnel {:steps 4 :heading [:any] :end [:any]}}}
              :within-s 150 :of-job true}]

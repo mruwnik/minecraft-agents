@@ -221,3 +221,10 @@
   (let [kit (map #(hash-map :name (str "iron_" %))
                  ["pickaxe" "sword" "axe" "shovel" "helmet" "chestplate" "leggings" "boots"])]
     (is (< 3600 (value kit) (* 4 3600)))))
+
+(deftest wear-saved-is-the-dear-tools-worth-per-use-for-each-dig-the-spare-takes
+  (let [per-use (/ (each "iron_pickaxe") 250)]
+    (is (< (js/Math.abs (- (* 10 per-use) (v/wear-saved "iron_pickaxe" "stone_pickaxe" 10))) 1e-9))
+    (is (< (js/Math.abs (- (* 131 per-use) (v/wear-saved "iron_pickaxe" "stone_pickaxe" nil))) 1e-9) "nil digs: the spare's whole life")
+    (is (< (js/Math.abs (- (* 131 per-use) (v/wear-saved "iron_pickaxe" "stone_pickaxe" 500))) 1e-9) "no more than the spare lasts")
+    (is (zero? (v/wear-saved "iron_pickaxe" "cobblestone" 10)))))

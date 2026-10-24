@@ -1,6 +1,7 @@
 (ns jobs.lib.trip
   "Trips start with room: a gathering job that leaves home calls ready! first. See ready!."
   (:require [engine.args :as a]
+            [engine.composite :as composite]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [engine.settings :as settings]
@@ -210,7 +211,8 @@
   get waits on the world. Told per tool name in the job's memory: info tool.spare when one came (the next worn one gets another), warn
   tool.no-spare with the get's reason when not, told once per tool in body memory (:tool.no-spare-told) and tried once per job (:spare-tried; the job goes on with the worn tool). amount (the digs the job will make,
   optional) is spare-need's. The job's fetch off (ways #{:carried}) crafts the stone spare from what is carried (:how #{:craft}: cobblestone, sticks, a table or its planks) and tells tool.no-spare (reason :fetch-off) when it cannot, silently for a dear first tool; a job under a spare
-  fetch skips it (no spare of a spare)."
+  fetch skips it (no spare of a spare). A dear first tool's spare is got only within the wear its digs save (cost/wear-saved: the
+  obtain's :worth, its start check pricing the cheapest way), else not tried and nothing said."
   ([c block-name] (tool-ready! c block-name nil))
   ([c block-name amount]
    (let [p (:primitives c)
@@ -228,13 +230,17 @@
        (contains? (:spare-tried (ctx/mem c)) tool-name) nil
        :else
        (let [off? (nil? (need/fetch-opts c))
-             e (await (need/fetch! c 'jobs.items.obtain {:item tool-name :count 1 :avoid (line-ahead c)} :need {:item tool-name :count 1}
-                                   (if off? {:slot :spare :how #{:craft}} {:slot :spare :explore true})))]
-         (if (= :continue e)
-           :continue
-           (do (if (= :done (:kind e))
-                 (do (ctx/forget-where! c tools/no-spare-told-kind #(= tool-name (:name %)))
-                     (ctx/emit! c :tool.spare :info {:tool tool-name :text (str "carrying a spare " tool-name)}))
-                 (do (when-not (or (:dear worn) (told?)) (tell! (if off? :fetch-off (need/cause-why e)) (get-in e [:data :tried])))
-                     (ctx/update-mem! c update :spare-tried (fnil conj #{}) tool-name)))
-               nil)))))))
+             o (if off? {:slot :spare :how #{:craft}} {:slot :spare :explore true})
+             worth (when (:dear worn) (cost/wear-saved (:item worn) tool-name amount))]
+         (if (and worth (nil? (get-in (ctx/mem c) [:children :spare])) (not (composite/ok? (need/item-status c tool-name 1 o worth))))
+           (do (ctx/update-mem! c update :spare-tried (fnil conj #{}) tool-name) nil)
+           (let [e (await (need/fetch! c 'jobs.items.obtain (cond-> {:item tool-name :count 1 :avoid (line-ahead c)} worth (assoc :worth worth))
+                                       :need {:item tool-name :count 1} o))]
+             (if (= :continue e)
+               :continue
+               (do (if (= :done (:kind e))
+                     (do (ctx/forget-where! c tools/no-spare-told-kind #(= tool-name (:name %)))
+                         (ctx/emit! c :tool.spare :info {:tool tool-name :text (str "carrying a spare " tool-name)}))
+                     (do (when-not (or (:dear worn) (told?)) (tell! (if off? :fetch-off (need/cause-why e)) (get-in e [:data :tried])))
+                         (ctx/update-mem! c update :spare-tried (fnil conj #{}) tool-name)))
+                   nil)))))))))

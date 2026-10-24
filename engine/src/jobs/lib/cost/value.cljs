@@ -145,6 +145,18 @@
                   vec)]
     {:value (reduce + 0 (map :value rows)) :items rows}))
 
+(defn wear-saved
+  "Seconds of wear on tool `dear` that digging n blocks with tool `spare` instead saves: dear's whole item-value over
+  its maxDurability for each use, at most spare's maxDurability uses (n nil: all of them). 0 when either has none."
+  [dear spare n & {:keys [version]}]
+  (let [md (minecraft-data (or version @game/version))
+        uses #(some-> (aget (.-itemsByName md) %) .-maxDurability)
+        dear-uses (uses dear)
+        spare-uses (uses spare)]
+    (if (and (pos? dear-uses) (pos? spare-uses))
+      (* (/ (:value (item-value [{:name dear :count 1}] :version version)) dear-uses) (min spare-uses (or n spare-uses)))
+      0)))
+
 ;; ---------------------------------------------------------------- the cost
 
 (defn reserve-cost

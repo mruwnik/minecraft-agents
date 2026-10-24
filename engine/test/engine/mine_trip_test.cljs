@@ -94,3 +94,14 @@
                                                "stone_pickaxe" 400))]
           (is (= [:done :count] [(:kind out) (:reason (:data out))]) (pr-str out))
           (is (<= (get (inv s) "cobblestone" 0) 128) "128 carried at the start, the digs' cobblestone over the cap went"))))))
+
+(deftest a-whole-iron-pickaxe-with-no-wood-for-a-stone-spare-digs-its-tunnel-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (m/scenario {:block "coal_ore" :count 1 :direction "east" :tunnel-length 4 :radius 8 :torches false :trip true}
+                                   (assoc (rock-world {}) :inventory [{:name "iron_pickaxe" :count 1 :durability 250 :max-durability 250} {:name "cobblestone" :count 8}])
+                                   300))
+              e (m/done-event s)]
+          (is (= [] (into [] (comp (map (comp str :job)) (filter #(re-find #"/spare(/|$)" %)) (distinct)) @(:seen s))) "a spare dearer than the wear it saves is not looked for")
+          (is (= [:tunnel-length 4] [(:stop e) (:length e)]) (pr-str (dissoc e :report))))))))

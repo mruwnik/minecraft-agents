@@ -15,14 +15,15 @@
 (def wall-reach "Blocks out from the feet the nearest wall is looked for." 8)
 
 (defn wall-of
-  "The wall block (a feet-height cell) next to the cell, or nil: a solid block on one of its four sides."
-  [p {:keys [x y z]}]
-  (first (filter #(sh-sense/solid-at? p %)
+  "The wall block (a feet-height cell) next to the cell, or nil: a solid block on one of its four sides, none of the cells
+  [x y z] in avoid (a caller's dig line: the stair's first floor would lie in it)."
+  [p {:keys [x y z]} & [avoid]]
+  (first (filter #(and (sh-sense/solid-at? p %) (not (contains? avoid [(:x %) (:y %) (:z %)])))
                  [{:x (inc x) :y y :z z} {:x (dec x) :y y :z z} {:x x :y y :z (inc z)} {:x x :y y :z (dec z)}])))
 
 (defn stand-by-wall
-  "[stand wall] of the nearest cell at the feet's height with a floor, room for the body and a wall on a side, else nil."
-  [p]
+  "[stand wall] of the nearest cell at the feet's height with a floor, room for the body and a wall (wall-of, avoid) on a side, else nil."
+  [p & [avoid]]
   (let [{:keys [x y z] :as feet} (sh-sense/feet p)
         r wall-reach]
     (->> (for [dx (range (- r) (inc r)) dz (range (- r) (inc r))] {:x (+ x dx) :y y :z (+ z dz)})
@@ -31,7 +32,7 @@
                  (when (and (not (sh-sense/solid-at? p cell))
                             (not (sh-sense/solid-at? p (update cell :y inc)))
                             (sh-sense/solid-at? p (update cell :y dec)))
-                   (when-let [wall (wall-of p cell)] [cell wall])))))))
+                   (when-let [wall (wall-of p cell avoid)] [cell wall])))))))
 
 (def extra-steps "Stair steps cut after the sky shows, to climb out of the pit the stair ends in." 2)
 
@@ -81,8 +82,8 @@
 
 (defn ^:async step!
   "One round of the way up: :continue while it walks to a wall or climbs a step, :out once the body stands on open ground,
-  :stopped when there is no wall in reach or no stair goes up."
-  [c]
+  :stopped when there is no wall in reach or no stair goes up. avoid: cells [x y z] no climb starts through (wall-of)."
+  [c & [avoid]]
   (let [p (:primitives c)
         feet (sh-sense/feet p)
         buried (sh-sense/buried? p)
@@ -90,8 +91,9 @@
         own-tried (:own-tried (:surface (ctx/mem c)))
         _ (ctx/update-mem! c assoc :surface {:on true :extra (if buried 0 extra) :own-tried own-tried})
         own (when (and buried (not own-tried)) (own-top c))
-        wall (wall-of p feet)
-        [stand wall-cell] (when-not (or own wall) (stand-by-wall p))]
+        avoid (set avoid)
+        wall (wall-of p feet avoid)
+        [stand wall-cell] (when-not (or own wall) (stand-by-wall p avoid))]
     (cond
       own (let [r (await (child/call-walk* c :own-way-walk (ready/forage-walk c {:pos own :range 1 :ways #{:walk} :spend {:tries 1}})))]
             (when-not (= :continue r) (ctx/update-mem! c assoc-in [:surface :own-tried] true))

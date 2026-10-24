@@ -121,9 +121,9 @@
            (and (tree? need) (not (seen-of c need)) (not (surface/climbed? c)) (sh-sense/buried? (:primitives c))))))
 
 (defn ^:async surface-step!
-  "One round of the way up (jobs.lib.surface-up): :continue while it goes on, else the gather source fails (:no-way-up)."
+  "One round of the way up (jobs.lib.surface-up), never through the :avoid cells: :continue while it goes on, else the gather source fails (:no-way-up)."
   [c]
-  (case (await (surface/step! c))
+  (case (await (surface/step! c (:avoid (:args c))))
     :continue :continue
     :out :again
     (do (ctx/update-mem! c dissoc :surface) (tried! c :gather :no-way-up))))

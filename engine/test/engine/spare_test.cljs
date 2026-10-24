@@ -177,10 +177,12 @@
       (fn ^:async t []
         (let [iron {:name "iron_pickaxe" :count 1 :durability 240 :max-durability 250}
               cobble {:name "cobblestone" :count 20}
-              run (fn [inv] (st/stair! (assoc spare-chest :inventory inv) east tu/seeing-all))
+              run (fn [inv] (st/stair! (assoc spare-chest :inventory inv) (assoc east :steps 10) tu/seeing-all))
               with (await (run [iron cobble]))
               without (await (run [iron]))]
-          (is (= ["stone_pickaxe"] (map :tool (st/events-of with :tool.spare))))
+          (is (= ["stone_pickaxe"] (map :tool (st/events-of with :tool.spare))) "30 digs' iron wear pays for the walk to the chest")
+          (is (= ["stone_pickaxe"] (map :tool (st/events-of (await (st/stair! {:blocks st/ground :inventory [iron cobble {:name "oak_log" :count 4}]} (assoc east :steps 8) tu/seeing-all)) :tool.spare)))
+              "made from carried logs, 24 digs' wear pays for its 4 crafts (tool-spare-and-table/whole-iron-pick-gets-a-stone-spare-when-cobble-is-carried)")
           (is (not-any? #{:tool.spare :tool.no-spare} (kinds without)) "no cobblestone to make one: the iron pickaxe digs"))))))
 
 (deftest a-fetch-off-stair-crafts-the-stone-spare-from-what-is-carried-instead-of-wearing-the-iron-pickaxe

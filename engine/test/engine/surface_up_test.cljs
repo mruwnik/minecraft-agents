@@ -24,3 +24,9 @@
                        [a b d e f]))]
           (is (= [:again :again :again :out :out] ends))
           (is (= 3 (count (distinct @walked))) (str "each failed stand is not walked to again: " @walked)))))))
+
+(deftest the-wall-a-climb-starts-from-is-never-in-the-callers-dig-line
+  (let [p (tu/seeing-all (tu/fake {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (dissoc (box -2 63 -2 2 66 2 "stone") "0,64,0" "0,65,0")}))
+        feet {:x 0 :y 64 :z 0}]
+    (is (= {:x 1 :y 64 :z 0} (surface/wall-of p feet)))
+    (is (= {:x -1 :y 64 :z 0} (surface/wall-of p feet #{[1 64 0] [2 64 0]})) "a tunnel east from here would undercut a stair up east")))
