@@ -12,6 +12,7 @@
             [jobs.items.obtain.base :as base]
             [jobs.items.obtain.plan :as plan]
             [jobs.items.obtain.seen :as seen]
+            [jobs.items.obtain.table :as table]
             [jobs.lib.access :as access]
             [jobs.lib.look :as look]))
 
@@ -132,18 +133,17 @@
           (is (every? #(<= 71 (get-in % [:from 1])) (f/events-of s :obtain.exploring)) "no walk to look for trees starts under the roof")
           (is (<= 1 (get (f/inv s) "oak_log" 0)) "and the tree outside was felled"))))))
 
-(deftest an-ore-whose-tunnel-is-priced-above-the-feet-is-climbed-to-before-the-mine
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [rock (into {} (for [x (range -6 7) z (range -6 7) y (range 63 71)
-                                  :when (not (and (<= -2 x 2) (<= -2 z 2) (<= 64 y 65)))]
-                              [(str x "," y "," z) "stone"]))
-              s (f/start (ore-world rock [{:name "stone_pickaxe" :count 1} {:name "torch" :count 16}]) [f/own-zone])]
-          (with-redefs [plan/search-way (fn [_ _] {:way :tunnel :y 68 :cost 1})]
-            (await (obtain! s {:item "raw_iron" :count 1 :ways #{:gather}} 100)))
-          (is (seq (f/events-of s :stair.step)) "a stair was cut up")
-          (is (= [68] (map :y (f/events-of s :obtain.climbed))) "once, to the priced height"))))))
+(deftest an-ore-whose-tunnel-is-priced-above-the-feet-is-climbed-to-once
+  (let [p (tu/seeing-all (tu/fake-on-floor {:inventory [{:name "stone_pickaxe" :count 1}]}))
+        view (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)}))
+        c {:primitives p :view (constantly view) :args {:item "raw_iron" :count 1 :ways #{:gather} :ignore-zones? true}}
+        need (first (table/gather-needs {"raw_iron" 1}))
+        climb (fn [mem way] (with-redefs [ctx/mem (constantly mem) plan/search-way (constantly way)] (gather/climb-y c need)))]
+    (is (= 68 (climb {} {:way :tunnel :y 68})) "the tunnel priced above the feet")
+    (is (nil? (climb {} {:way :tunnel :y 60})) "a tunnel below the feet is the mine's own stair down")
+    (is (nil? (climb {} {:way :look :y 68})))
+    (is (nil? (climb {:gather {:climbed {"raw_iron" true}}} {:way :tunnel :y 68})) "climbed once already")
+    (is (= 70 (climb {:gather {:climb 70}} {:way :look})) "a climb under way goes on whatever the price says now")))
 
 (deftest a-search-held-on-the-body-says-it-is-looking-once-not-every-round
   (async done
