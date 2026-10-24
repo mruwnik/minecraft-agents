@@ -182,6 +182,7 @@
 (deftest night-without-light-data-falls-back-to-the-seen-roof
   (is (sh-sense/buried-by-column? (seen-fake {:time night :blocks (stone-above 2 1)})) "one seen block over the head, air above it")
   (is (not (sh-sense/buried-by-column? (seen-fake {:time night :blocks (stone-above 5 3)}))) "air over the head")
+  (is (not (sh-sense/buried-by-column? (seen-fake {:time night :blocks {"0,66,0" "sugar_cane"}}))) "sugar cane over the head is no roof")
   (is (not (sh-sense/buried-by-column? (tu/fake {:time night :blocks (stone-above 2 1)}))) "nothing seen without a perception"))
 
 (defn buried-cells
