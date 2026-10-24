@@ -64,16 +64,15 @@
   "Learned replans a follow! does not count: a void edge teaches a column per replan, each a search."
   6)
 
-(defn stretch-learned
-  "How many of learned ([cells why at] each) the body at [x y z] has not left: it stands no farther from where one was
-  learned than that one's nearest cell lay from there. A walk that went on past what it learned (a walkway's wall seen a
-  sight's reach on) is on a new stretch."
-  [learned here]
-  (let [d (fn [a b] (js/Math.hypot (- (a 0) (b 0)) (- (a 1) (b 1)) (- (a 2) (b 2))))
-        mid (fn [cell] (mapv #(+ % 0.5) cell))]
-    (count (filter (fn [[cells _ at]]
-                     (or (nil? at) (nil? here) (<= (d here at) (apply min (map #(d at (mid %)) cells)))))
-                   learned))))
+(defn learned-progress
+  "The learned-replan tally {:best :stale} after a learned replan with the body at [x y z] bound for to: stale counts the
+  learned replans since the body's best distance to the goal last improved by a block (go-to's idiom), this one included.
+  A walk that keeps getting nearer never runs out; backing off or going back and forth never resets it."
+  [{:keys [best stale] :or {stale 0}} at to]
+  (let [left (when (and at to) (js/Math.hypot (- (at 0) (to 0)) (- (at 1) (to 1)) (- (at 2) (to 2))))
+        improved? (and left best (< left (dec best)))]
+    {:best (if (or improved? (nil? best)) (or left best) best)
+     :stale (inc (if improved? 0 stale))}))
 
 (defn edge-points
   "The points a look over an edge aims at: the ground round self ({:x :z}) at 3 and 7 blocks in eight directions at height y,
@@ -152,7 +151,7 @@
   plan is walked only when take-refresh? says it is clearly better, else the rest of the old one), or the body is stuck with
   a mob in its way (:mob: wait, plan round it). A replan that proves the goal cut off or enclosed ends the call with that
   no-walk; so does one the caller refused (plan-fn's {:refused true}, with its :stop) for any why but :refresh, whose old
-  plan nothing speaks against. At most max-watch-replans; past that the plan is walked unwatched (a kept plan counts as a replan, and is watched). A replan with :learned (a gate or the look-ahead gave an unseen cell up or found it solid) is not counted against it, up to free-learned of them: a void edge teaches one column per replan. The max-learned-th learned replan of one stretch (stretch-learned), or one past the replan cap, ends the call instead: the done map with :learn-spent and the cells learned.
+  plan nothing speaks against. At most max-watch-replans; past that the plan is walked unwatched (a kept plan counts as a replan, and is watched). A replan with :learned (a gate or the look-ahead gave an unseen cell up or found it solid) is not counted against it, up to free-learned of them: a void edge teaches one column per replan. The max-learned-th learned replan since the body last got a block nearer :to (learned-progress), or one past the replan cap, ends the call instead: the done map with :learn-spent and the cells learned.
   opts: :plan-fn (fn [walls]) -> a plan-walk! result (or a promise of one: plan-walk!) from where the body stands now, the
   cells {:x :y :z} read as walls;
   :walk-fn (fn [steps watch]) -> [done ms] (walk! or jobs.lib.pass/walk!); :to the goal cell; :policy for no-walk;
@@ -166,6 +165,7 @@
   [c plan {:keys [plan-fn walk-fn to policy announce! dangers] :or {policy (wworld/body-policy c) announce! (fn [_ _])}}]
   (let [known (when dangers (atom #{}))
         learned (atom #{})
+        track (atom {})
         walkable? (fn [pl] (nil? (wplan/no-walk pl 0 policy)))
         proved-none? (fn [pl] (let [nw (wplan/no-walk pl 0 policy)]
                                 (or (contains? #{:goal-cut-off :goal-enclosed} (:reason nw)) (:stopped-short nw))))
@@ -223,12 +223,12 @@
               (or (proved-none? fresh) (searching? fresh) (:refused fresh)) (finish (wplan/no-walk fresh 0 policy) fresh walked')
               :else (recur (assoc plan :ms plan-ms) (subvec steps (max 0 (dec k))) (inc n) ms walked' kept-damage)))
 
-          (and (= :replan (:status done)) (:learned done) (or (>= (inc (stretch-learned @learned (:at done))) (wwatch/max-learned)) (>= spent wwatch/max-watch-replans)))
+          (and (= :replan (:status done)) (:learned done) (or (>= (:stale (learned-progress @track (:at done) to)) (wwatch/max-learned)) (>= spent wwatch/max-watch-replans)))
           (finish (assoc done :learn-spent true :cells (vec (take 6 (concat (:cells done) (mapcat first @learned))))) plan walked')
 
           (and (= :replan (:status done)) (< spent wwatch/max-watch-replans))
           (let [_ (wsight/note-missed! (:pw plan) done)
-                _ (when (:learned done) (swap! learned conj [(:cells done) (:why done) (:at done)]))
+                _ (when (:learned done) (do (swap! learned conj [(:cells done) (:why done)]) (swap! track learned-progress (:at done) to)))
                 _ (when (and (:learned done) (= :changed (:why done)) (not (:felt done)) (settings/get settings ::look-over-edge))
                     (await (look-over-edge! c (first (:cells done)))))
                 t (js/performance.now)
