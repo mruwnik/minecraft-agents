@@ -25,8 +25,8 @@
   "Make room in a nearly full inventory (the inventory-nearly-full reflex) until :free slots are free. One round is
   the whole attempt: it re-reads the inventory before every step and puts away, swaps or tosses until enough is free
   or nothing more may go. It never yields. Done as soon as :free slots are free (done? carries the summary); the cleanup walks away.
-  What is thrown, like a player: names with no keep first (plain junk blocks such as granite, tuff and gravel first, whole
-  big stacks before partial, then the rest by worth: flowers, saplings, leaf litter), then the surplus above the
+  What is thrown, like a player: names with no keep first, cheapest worth first (granite, tuff and gravel before flowers,
+  saplings and leaf litter; worth is jobs.lib.cost item-value), then the surplus above the
   keep of cobblestone, dirt and planks; ores, fuel and the like are not thrown (below the toss-below setting only). Never put away or thrown: tools, weapons, armour and buckets. Food is never thrown and is put away only above
   :carry-food (best food-points first; the body's 3-day food reserve when nil). Golden apples are never put away.
   Cobblestone, dirt and each kind of planks (what shelter, mend, furnace and tool jobs spend) are each kept up to
