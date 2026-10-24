@@ -46,11 +46,6 @@
     (is (< (get armed [6 64 0]) (get bare [6 64 0])) "with a diamond sword: a fight, cheap")
     (is (= {} (tolls {:blocks wall :entities [(zombie 1 6 0)]})) "behind a wall the body never saw it through: not known (no x-ray)")))
 
-(deftest a-walk-past-a-known-zombie-risks-more-death-than-the-same-walk-without
-  (let [cost #(threats/route-death-cost (ready-test/ctx-of %) {:night? true} {:x 30 :y 64 :z 0})]
-    (is (> (cost {:entities [(zombie 1 15 3)]}) (cost {})))
-    (is (> (cost {}) 0) "the night's own chance")))
-
 (deftest the-sensed-place-wins-over-a-flight-from-the-same-mob-and-at-most-max-threats
   (let [c (assoc (ready-test/ctx-of {:entities [(assoc (zombie 1 6 0) :uuid "a")]}) :view
                  (fn [] {:now 0 :data {:entries {:threat [{:t 0 :data {:mob "zombie" :id 1 :uuid "a" :key "a" :pos {:x 30 :y 64 :z 0}}}]}}}))]

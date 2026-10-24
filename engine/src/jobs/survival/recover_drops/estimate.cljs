@@ -2,20 +2,13 @@
   "What a pile is worth against the trip to it: value, cost with its parts, the texts that say so, deep piles."
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
-            [engine.game :as game]
             [engine.memory :as mem]
-            [engine.settings :as settings]
-            [jobs.lib.aim :as aim]
             [jobs.lib.breath :as breath]
             [jobs.lib.escape :as escape]
-            [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
-            [jobs.lib.danger :as danger-q]
             [jobs.lib.reach :as reach]
-            [jobs.lib.threat-field :as field]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
-            [jobs.lib.walk.world :as wworld]
             [jobs.survival.recover-drops.config :as cfg]))
 
 (defn finite [n] (if (js/isFinite n) n :infinite))
@@ -34,7 +27,7 @@
        ", cost " (if (= :infinite cost) (str "infinite (" (name (or reason :unknown)) ")") (round1 cost))
        (when (seq parts)
          (str " (" (str/join ", " (map (fn [[k n]] (str (name k) " " (round1 n))) parts))
-              (when (seq top-mobs) (str ": " (str/join ", " (map (fn [{:keys [name danger]}] (str name " " (round1 (* danger cost/per-danger)))) top-mobs))))
+              (when (seq top-mobs) (str ": " (str/join ", " (map (fn [{:keys [name danger]}] (cond-> name danger (str " " (round1 (* danger cost/per-danger))))) top-mobs))))
               ")"))
        (when (and (number? margin) (not (zero? margin))) (str " + margin " margin))))
 
@@ -91,32 +84,6 @@
         (pos? drown-hp) (str "the way there drowns the body (" drown-hp " hp) and it carries no block to make air with")
         (> dive air) (str "a dive of " (js/Math.round dive) " s there and back, " (js/Math.round air) " s of air and no block to make air with")))))
 
-(defn later-killers
-  "[{:name :pos :left-ms}] (:left-ms of its guard) of the killers of the body's other deaths inside ::killer-guard-ms, each assumed where it killed: a
-  mob that killed the body again near an older pile guards that pile too. Not the death at pos itself."
-  [c pos]
-  (let [view (ctx/view c)]
-    (for [d (mem/entries view :died)
-          :let [{:keys [cause] at :pos} (:data d)
-                left (- (cfg/killer-guard-ms) (settings/ticks->ms (game/ticks-since d view)))]
-          :when (and at (not= at pos) (string? cause) (pos? left))]
-      {:name cause :pos at :left-ms left})))
-
-(defn remembered-mobs
-  "[{:name :pos}] of the hostiles an earlier decline of this death (the :recover-danger entry) saw, still priced where they
-  stood: until the body is within ::see-range of the place with a clear line to it and no such mob is known near it, as a
-  player forgets a mob only on seeing the place empty. known is [{:name :pos}] of the hostiles known now."
-  [c known]
-  (let [here (u/self-pos c)
-        entry (last (filter #(= (:death-t (ctx/mem c)) (:death-t (:data %))) (mem/entries (ctx/view c) :recover-danger)))
-        sees? (fn [{:keys [pos]}]
-                (let [[x y z] (map #(js/Math.floor %) [(:x pos) (:y pos) (:z pos)])]
-                  (and (<= (u/dist here pos) (cfg/see-range)) (or (aim/body-sees? c [x y z]) (aim/body-sees? c [x (inc y) z])))))
-        still-there? (fn [{:keys [name pos]}] (some #(and (= name (:name %)) (<= (u/dist pos (:pos %)) (cfg/mob-spot-radius))) known))]
-    (vec (for [m (:mobs (:data entry))
-               :when (and (not (sees? m)) (not (still-there? m)))]
-           m))))
-
 (defn unchanged-after-hold?
   "True when a hold for this death (its :recover-danger entry) has run out and the mobs decided saw ({:seen-mobs}) all stand
   where that hold left them: waiting longer would change nothing."
@@ -133,52 +100,46 @@
   (/ (apply max 0 (for [{:keys [name pos]} mobs :when pos] (- (threats/follow-range name) (u/dist here pos))))
      (cost/walk-blocks-per-s)))
 
+(defn ^:async quote-trip
+  "go-to's quote of the walk to pos (its planned seconds, its walk risk, and the hp the route drowns), nil without a pos."
+  [c pos]
+  (when pos (await (ctx/quote c 'jobs.movement.go-to {:pos pos :range (cfg/arrive-range)}))))
+
 (defn estimate
   "{:value :cost :parts :reason :top-items :top-mobs :hold-ms :flight-s} (:hold-ms: how long a skip for this danger is remembered,
-  ::danger-memory-ms, or what is left of the killer guards when only assumed killers add danger; :flight-s: flight-s) of recovering the drops of the :died data (cost js/Infinity when they cannot be fetched). quoted, go-to's quote of the walk when given, lengthens the walk to its planned seconds and prices the hp its route drowns as danger."
+  ::danger-memory-ms; :flight-s: flight-s) of recovering the drops of the :died data (cost js/Infinity when they cannot be
+  fetched). quoted is go-to's quote of the walk (nil: none yet): its planned seconds lengthen the walk, its walk risk
+  (:risk, jobs.lib.walk-risk on its plan) is the danger, naming the mobs priced, and the hp its route drowns is danger too."
   ([c data elapsed] (estimate c data elapsed nil))
   ([c {:keys [pos inventory cause experience]} elapsed quoted]
   (let [p (:primitives c)
-        seen (danger-q/seen-hostiles p)
-        known-spots (mapv (fn [m] {:name (.-name m) :pos (danger-q/mob-pos p m)}) seen)
-        known (concat seen (remembered-mobs c known-spots))
         here (u/self-pos c)
-        kind-at (reach/seen-lookup p reach/kind-of :ground)
         wet-at (reach/seen-lookup p reach/kind-of :unseen)
         worth (cost/item-value inventory :overrides (:value-overrides (:args c)))
-        route (when pos (conj (cost/straight-route kind-at here pos) pos)) ; the straight route keeps to the surface: a pile far below is its end all the same
-        version (game/version-of p)
-        guard (concat (when (and pos (string? cause) (< elapsed (cfg/killer-guard-ms))) [{:name cause :pos pos :left-ms (- (cfg/killer-guard-ms) elapsed)}]) ; route-danger drops a cause that is no hostile mob
-                      (later-killers c pos))
-        guard-spots (set (map :pos guard))
-        threat (if route
-                 (cost/route-danger version #(field/reach-fn (field/field-of c {:mob (:name %) :pos (:pos %)})) route (concat known guard) (.-equipment (.self p))
-                                    :overrides (:danger-overrides (:args c)) :weapon (combat/best-weapon p combat/default-weapons) :health (.-health (.self p))
-                                    :death-s (cost/death-cost (update (cost/death-body p (ctx/view c)) :carried + (:value worth)) pos)) ; with no bed to wake at, a death on the way loses the pile too
-                 {:danger 0 :mobs []})
+        mobs (mapv (fn [{:keys [mob pos]}] {:name mob :pos pos}) (get-in quoted [:risk :threats]))
+        risk-hp (get-in quoted [:risk :hp] 0)
         drown-hp (get-in quoted [:route :drown] 0)
         wet (when (or (= "drowning" cause) (wet-pile? wet-at pos) (pos? drown-hp))
               {:name (if (= "drowning" cause) "drowning" "water")
                :danger (max drown-hp (if (or (= "drowning" cause) (wet-pile? wet-at pos)) (cfg/wet-danger) 0))})
         quoted-s (let [mean (second (get-in quoted [:uses :job-time]))] (when (and (number? mean) (js/isFinite mean)) mean))
-        threat (cond-> threat wet (-> (update :danger + (:danger wet)) (update :mobs #(vec (cons wet %)))))
-        straight-s (when route (+ (/ (u/dist here pos) (cost/walk-blocks-per-s)) (cost/unseen-route-s (wworld/unseen-share p) kind-at route)))
-        fetch (cost/fetch-cost {:distance (when pos (* (max straight-s (or quoted-s 0)) (cost/walk-blocks-per-s))) :danger (:danger threat) :elapsed-ms elapsed :cause cause})
-        drowns (when-not (:reason fetch) (no-air-way p wet-at pos drown-hp))]
+        danger (+ risk-hp (:danger wet 0))
+        straight-s (when pos (/ (u/dist here pos) (cost/walk-blocks-per-s)))
+        fetch (cost/fetch-cost {:distance (when pos (* (max straight-s (or quoted-s 0)) (cost/walk-blocks-per-s))) :danger danger :elapsed-ms elapsed :cause cause})
+        drowns (when-not (:reason fetch) (no-air-way p wet-at pos drown-hp))
+        named (cond-> (mapv #(select-keys % [:name]) mobs) wet (conj (select-keys wet [:name :danger])))]
     (cond-> {:value (+ (:value worth) (cost/experience-cost experience))
              :cost (if drowns js/Infinity (:cost fetch))
-             :hold-ms (if (and (seq (:mobs threat)) (every? guard-spots (map :pos (:mobs threat))))
-                        (min (cfg/danger-memory-ms) (apply max 0 (map :left-ms guard)))
-                        (cfg/danger-memory-ms))
-             :flight-s (flight-s here (:mobs threat))
+             :hold-ms (cfg/danger-memory-ms)
+             :flight-s (flight-s here mobs)
              :top-items (mapv #(select-keys % [:name :count :value]) (take (cfg/top-n) (:items worth)))}
       (seq (drop (cfg/top-n) (:items worth))) (assoc :other-items (let [rest-items (drop (cfg/top-n) (:items worth))]
                                                                     {:kinds (count rest-items) :value (reduce + 0 (map :value rest-items))}))
       drowns (assoc :reason :no-air-way :detail drowns)
       (and (not drowns) (:parts fetch)) (assoc :parts (:parts fetch))
       (and (not drowns) (:reason fetch)) (assoc :reason (:reason fetch))
-      (seq (:mobs threat)) (assoc :seen-mobs (vec (for [m (:mobs threat) :when (and (:pos m) (not (guard-spots (:pos m))))] (select-keys m [:name :pos])))
-                                  :top-mobs (mapv #(select-keys % [:name :danger]) (take (cfg/top-n) (:mobs threat))))))))
+      (seq mobs) (assoc :seen-mobs mobs)
+      (seq named) (assoc :top-mobs (vec (take (cfg/top-n) named)))))))
 
 (defn danger-only?
   "Whether the estimate e is a skip for danger alone: the pile would be fetched were the route safe."

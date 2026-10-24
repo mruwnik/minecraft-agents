@@ -60,13 +60,16 @@
   (ctx/update-mem! c update :full (fnil conj #{}) (storage/cell-of chest))
   :again)
 
+(defn walk-args "The go-to args of the walk into reach of the chest at pos." [c pos]
+  {:pos pos :range 3 :ways #{:walk :clear-seal} :ignore-zones? (boolean (:ignore-zones? (:args c)))})
+
 (defn ^:async walk!
-  "Within 3 of the chest: nil. Else one go-to call: :continue while it waits on the world, :again once there,
+  "Within 3 of the chest: nil. Else one go-to call (walk-args): :continue while it waits on the world, :again once there,
   :unreachable when it gave up."
   [c chest]
   (if (u/within? (u/self-pos c) chest 3)
     nil
-    (let [e (await (child/call-walk* c :walk {:pos chest :range 3 :ways #{:walk :clear-seal} :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+    (let [e (await (child/call-walk* c :walk (walk-args c chest)))]
       (cond
         (= :continue e) :continue
         (:arrived (:data e)) :again

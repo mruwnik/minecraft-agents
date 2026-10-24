@@ -563,7 +563,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [note [{:kind :seen :what "cow" :id "u1" :pos [150 64 0] :by "Other" :t 999900 :until 9e15}]
+        (let [note [{:kind :seen :what "cow" :id "u1" :pos [100 64 0] :by "Other" :t 999900 :until 9e15}]
               {:keys [eng seen]} (setup {:time 6000 :self {:food 8 :health 10}} :step-ms 5 :other-notes note)]
           (await (one-round! eng {}))
           (loop [n 0] (when (and (< n 80) (not-any? #(= :noted-walk (:slot %)) (events-of seen :child_started)))

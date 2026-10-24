@@ -9,6 +9,7 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
+            [engine.library-test :as lib]
             [jobs.lib.crafting-table :as crafting-table]
             [jobs.items.obtain :as obtain]
             [jobs.items.obtain.base :as base]
@@ -222,6 +223,25 @@
 (def walled-chest
   "The chest west of the body shut in stone on every side: there, but never seen."
   {"-3,64,3" "stone" "-1,64,3" "stone" "-2,64,4" "stone" "-2,64,2" "stone" "-2,65,3" "stone" "-2,63,3" "stone"})
+
+(defn bread-taken-from
+  "The chests an obtain of one bread took from, one 6 blocks east and one 12 west, the body knowing of a zombie that
+  killed it at killed-at 5 s ago."
+  [killed-at]
+  (fn ^:async t []
+    (let [chests {"6,64,0" [{:name "bread" :count 4}] "-12,64,0" [{:name "bread" :count 4}]}
+          {:keys [eng p clock]} (lib/setup {:floor tu/walk-floor :blocks (update-vals chests (constantly "chest")) :containers chests})]
+      (core/record-death! eng {:t (- @clock 5000) :data {:pos killed-at :cause "zombie"}})
+      (core/submit! eng '(jobs.items.obtain {:item "bread" :count 1 :ways #{:chest}}) {})
+      (await (tu/run-until-empty eng 20))
+      (filterv #(not= [{:name "bread" :count 4}] (get-in @(fake/state p) [:containers %])) [[6 64 0] [-12 64 0]]))))
+
+(deftest an-obtain-whose-nearer-source-has-a-mob-on-its-only-way-picks-the-farther-safer-source
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= [[6 64 0]] (await ((bread-taken-from {:x 0 :y 64 :z -200})))) "the zombie far off both ways: the nearer chest")
+        (is (= [[-12 64 0]] (await ((bread-taken-from {:x 5 :y 64 :z 1})))) "a zombie remembered by the nearer chest: its walk risk makes the farther one cheaper")))))
 
 (deftest a-chest-never-seen-is-not-used
   (async done
@@ -458,7 +478,7 @@
         (let [s (start (-> (world {chest-at [{:name "oak_log" :count 2}]}) (assoc-in [:blocks "-2,65,3"] "dirt")) [own-zone])]
           (shut-under-a-block s)
           (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_log" :count 2 :ways #{:chest}}) {})
-          (await (run-ticks s 12))
+          (await (run-ticks s 30))
           (is (not= "dirt" (block-at s -2 65 3)) "the block above was dug")
           (is (= 2 (get (inv s) "oak_log")))
           (is (empty? (listed s))))))))

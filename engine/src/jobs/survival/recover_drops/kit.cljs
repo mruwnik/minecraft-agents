@@ -50,16 +50,16 @@
     (or (when-not (combat/best-weapon p combat/default-weapons) (need weapons))
         (some #(need (pieces %)) armour/slots))))
 
-(defn kit-called-for?
+(defn ^:async kit-called-for?
   "Whether the pile is worth the trip were the route safe (its value against the fetch cost without danger and the margin)
-  and the killer or the hostiles the body knows make the route dangerous (the estimate names mobs)."
+  and the walk to it is dangerous: go-to's quote of it names the mobs it risks (est/estimate)."
   [c entry]
   (let [{:keys [pos cause]} (:data entry)
         elapsed (settings/ticks->ms (game/ticks-since entry (ctx/view c)))
-        e (est/estimate c (:data entry) elapsed)
+        e (est/estimate c (:data entry) elapsed (await (est/quote-trip c pos)))
         safe (cost/fetch-cost {:distance (when pos (u/dist (u/self-pos c) pos)) :danger 0 :elapsed-ms elapsed :cause cause})
         safe-cost (if (js/isFinite (:cost safe)) (:cost safe) js/Infinity)]
-    (boolean (and (seq (:top-mobs e)) (> (:value e) (+ safe-cost (cfg/margin)))))))
+    (boolean (and (seq (:seen-mobs e)) (> (:value e) (+ safe-cost (cfg/margin)))))))
 
 (defn ^:async wear-kit!
   "Put on what the kit fetch brought (jobs.items.equip), once its child has ended."
@@ -81,7 +81,7 @@
   nothing to do, else :continue for a cut."
   [c entry]
   (let [limits (need/fetch-opts c)]
-    (if (or (:kit-done (ctx/mem c)) (not limits) (nil? (kit-problem c (:pos (:data entry)))) (not (kit-called-for? c entry)))
+    (if (or (:kit-done (ctx/mem c)) (not limits) (nil? (kit-problem c (:pos (:data entry)))) (not (await (kit-called-for? c entry))))
       (do (ctx/update-mem! c assoc :kit-done true) nil)
       (loop []
         (let [wanted (kit-problem c (:pos (:data entry)))

@@ -18,7 +18,6 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.death-spot :as death-spot]
             [jobs.lib.hide-spot :as hide-spot]
-            [jobs.lib.reach :as reach]
             [jobs.lib.threat-field :as field]
             [jobs.lib.util :as u]))
 
@@ -190,15 +189,6 @@
   "The body of c as death-chance and death-cost read it: cost/death-body and body-of."
   [c]
   (let [p (:primitives c)] (merge (cost/death-body p (ctx/view c)) (body-of p))))
-
-(defn route-death-cost
-  "cost/route-death-cost of a walk from the body to `at` of class route ({:underground? :night?}) for c's death-body:
-  the straight way's cells (cost/straight-route) past the known threats (threats-of)."
-  [c route at]
-  (let [p (:primitives c)]
-    (cost/route-death-cost (death-body c)
-                           (assoc route :cells (cost/straight-route (reach/mob-lookup p) (u/self-pos c) at) :threats (threats-of c))
-                           at)))
 
 (defn danger-near-fn
   "A fn of a cell pos: the nearest known threat (threats-of c) the body would flee whose field weighs the cell in full

@@ -124,13 +124,21 @@
                    (- (blocks b) (blocks a))))
        (cost/walk-blocks-per-s))))
 
+(defn timed-way
+  "The cells of the walk of c's body to goal on plan (way), each with :t the seconds from the start the body is there at its pace by its food."
+  [c goal plan]
+  (let [p (:primitives c)
+        cells (way (sh-sense/feet p) (update goal :y #(or % (:y (sh-sense/feet p)))) plan)
+        speed (cost/body-speed (or (.-food (.self p)) 20))]
+    (mapv #(assoc %1 :t (/ %2 speed)) cells (along cells))))
+
 (defn estimate
-  "{:hp :spawn-hp :hostile-hp :death-hp :lethal-hp :lava-hp :dark-s :hostiles} of the walk of c's body to `goal` ({:x :y :z})
+  "{:hp :walk-hp :spawn-hp :hostile-hp :death-hp :lethal-hp :lava-hp :dark-s :hostiles :threats} of the walk of c's body to `goal` ({:x :y :z})
   on the way of :plan (go-to's plan of it, {:status :steps}; none: all of it unplanned): hp the expected damage and lethal-hp,
-  the death the spawns and known threats risk (cost/spawns-chance, cost/threats-chance) in hp (cost/lethal-hp); dark-s the
-  seconds walked where a mob could spawn. `:catchers? false` leaves out the sensed mobs that catch the walk, their hurt and
-  their death share both (a fight with them prices them)."
-  [c goal & [{:keys [catchers? plan] :or {catchers? true}}]]
+  the death the spawns and known threats risk (cost/spawns-chance, cost/threats-chance) in hp (cost/lethal-hp); walk-hp the
+  same leaving out the sensed mobs that catch the walk, their hurt and their death share both (a fight with them prices
+  them); dark-s the seconds walked where a mob could spawn; threats [{:mob :pos}] the known threats priced."
+  [c goal & [{:keys [plan]}]]
   (let [p (:primitives c)
         feet (sh-sense/feet p)
         goal (update goal :y #(or % (:y feet)))
@@ -143,19 +151,20 @@
         body (threats/death-body c)
         threat-hp (fn [ts] (if (seq ts) (cost/route-hurt body {:cells cells :threats (threats/with-reach c ts)}) 0))
         known (threats/known-threats c)
-        speed (cost/body-speed (or (.-food (.self p)) 20))
-        catchers (if catchers? (live-catchers known (map #(assoc %1 :t (/ %2 speed)) cells (along cells))) [])
+        catchers (live-catchers known (timed-way c goal plan))
         remembered (remembered-near-way c known feet goal)
         death-hp (threat-hp remembered)
-        met (concat catchers remembered)
-        dies (- 1 (* (- 1 (if (seq met) (cost/threats-chance body {:cells cells :threats (threats/with-reach c met)}) 0))
-                     (- 1 (cost/spawns-chance body spawns feet))))
-        lethal (cost/lethal-hp body dies goal)
+        spawn-dies (cost/spawns-chance body spawns feet)
+        dies (fn [met] (- 1 (* (- 1 (if (seq met) (cost/threats-chance body {:cells cells :threats (threats/with-reach c met)}) 0))
+                               (- 1 spawn-dies))))
+        lethal (cost/lethal-hp body (dies (concat catchers remembered)) goal)
         lava (route-lava-hp p cells)
         spawn-hp (cost/spawns-hurt body spawns feet)
-        hostile-hp (threat-hp catchers)]
-    {:hp (+ spawn-hp hostile-hp death-hp lethal lava) :lava-hp lava :spawn-hp spawn-hp :hostile-hp hostile-hp :death-hp death-hp :lethal-hp lethal
-     :dark-s exposed-s :hostiles (count catchers)}))
+        hostile-hp (threat-hp catchers)
+        unfought (if (seq catchers) (cost/lethal-hp body (dies remembered) goal) lethal)]
+    {:hp (+ spawn-hp hostile-hp death-hp lethal lava)
+     :walk-hp (+ spawn-hp death-hp unfought lava) :lava-hp lava :spawn-hp spawn-hp :hostile-hp hostile-hp :death-hp death-hp :lethal-hp lethal
+     :dark-s exposed-s :hostiles (count catchers) :threats (mapv #(select-keys % [:mob :pos]) (concat catchers remembered))}))
 
 (def recheck-ms "How long a walk held :risky waits before status prices it again." 10000)
 

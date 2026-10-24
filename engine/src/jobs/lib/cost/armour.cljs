@@ -79,11 +79,6 @@
   (* (max 0 (js/Math.ceil (- blocks 3)))
      (- 1 (/ (epf (:enchants (armour-stats equipment)) :fall) 25))))
 
-(defn route-fall-damage
-  "hp the drops of route ([{:x :y :z}] cells, in order) cost a body with equipment (fall-damage of each step down)."
-  [equipment route]
-  (reduce + 0 (map (fn [a b] (fall-damage equipment (- (:y a) (:y b)))) route (rest route))))
-
 (defn max-fall [] (settings/get settings ::max-fall))
 
 (defn fall-profile

@@ -116,13 +116,6 @@
 (deftest an-empty-route-is-no-danger
   (is (= 0 (:danger (route-danger (world) [] [(mob 1 "zombie" 1 1)] naked)))))
 
-(deftest straight-route-stands-on-the-ground
-  (let [blocks {"5,64,0" "stone"}
-        r (d/straight-route (reach/lookup (world :blocks blocks)) {:x 0.5 :y 64 :z 0.5} {:x 10.5 :y 64 :z 0.5})]
-    (is (= {:x 0 :y 64 :z 0} (first r)))
-    (is (= {:x 10 :y 64 :z 0} (last r)))
-    (is (= 65 (:y (first (filter #(= 5 (:x %)) r)))) "a step up onto the block")))
-
 ;; ---------------------------------------------------------------- a body with no answer
 
 (defn armed-danger

@@ -3,14 +3,14 @@
   never read the world themselves. They compose: armour under mob threat, mob threat under fight cost, route danger and
   the planner's rate; route danger under fetch cost.
 
-    armour   armour-stats, after-armour, equipment-of: vanilla's per-hit formula, the only one; fall-damage, route-fall-damage, fall-profile: a fall's (a route's drops') hp and the drops a body takes
+    armour   armour-stats, after-armour, equipment-of: vanilla's per-hit formula, the only one; fall-damage, fall-profile: a fall's hp and the drops a body takes
              (jobs.lib.cost.armour).
     threat   hostile?, mob-hurt: what one mob does over some seconds, after armour (jobs.lib.cost.threat).
     weapon   attack-gap-ms, weapon-damage, remaining-health, mob-max-health, ranged-mobs: the fight inputs; the one tool-material table
              (tool-tier, weapon-rank, cheapness) (jobs.lib.cost.weapon).
     fight    fight-damage, fight-seconds: the damage (and length) of a fight with the current kit (jobs.lib.cost.fight).
     answer   fight-answer, followed, flee-answer, build-answer, cover-answer, answer-price, decide: what each answer to hostiles costs and the cheapest; kill-price: a kill of one mob; death-chance, route-death-cost, route-hurt, threat-hurt, threats-chance, spawns-chance, spawns-hurt, lethal-hp: the one chance of dying (route-hurt the same in hp, at most the life; threat-hurt one mob met; water-factors the planner's price of a second in water, a drowned met there, unseen-water-factors a phantom floor's by the seen water near it; threats-chance its known threats, spawns-chance that of mobs spawned beside the body, spawns-hurt their hurt, lethal-hp a death chance in hp) (a known threat priced by the answer the body would take) and a route's death price; blast-hurt: a creeper's blast (jobs.lib.cost.answer).
-    danger   route-danger, straight-route: the danger of a walk past mobs; hurt-rate, exposure-price: what standing exposed to them costs; stance, danger-rate, threat-factor: go-to's
+    danger   route-danger: the danger of a walk past mobs; hurt-rate, exposure-price: what standing exposed to them costs; stance, danger-rate, threat-factor: go-to's
              planner dangers; reach-first?, wins-race?: a body's race to a refuge against its chasers; catches?, caught-on?: whether a chaser hits a walk (straight, or a timed route) before it is past; reach-s: the seconds it is within its blow of a timed route; arrival-s: a chaser's seconds to a point (over its way when given); body-speed; flee-walk-speed, flee-stop-s: a flight's measured pace, its steps and the stops between them (jobs.lib.cost.danger).
     health   hp-seconds, health-scale, hp-price, commute-s (a walk there and back against sheltering here), drown-prices, damage-budget, survivable-budget: what an hp costs and how many a walk may spend (jobs.lib.cost.health).
     food     food-reserve: the food a body keeps carried, 3 days of it; cook-worth?, cook-gain: whether cooking raw food beats eating it now; meat-factor, meat-animal: raw meat's replacement cost, dear for hunted, 1 with a working pen (jobs.lib.cost.food).
@@ -19,10 +19,10 @@
              per-dark, dark-factor: the one price of a dark block, which go-to's planner costs; lit-way-s, torch-gap: a way lit as it goes; dark-way-s: one walked or dug dark; spawn-chance: the chance a mob spawns at a cell or
              over an area (a set or {:min :max} box of cells) per second, from the light the body knows (unseen counts as dark), spawn-share its share of cells that spawn; exposure: the chance a walk meets and
              what lowers it ({:chance :lowered-by #{:light}}).
-    planner  planner-costs-problem, planner-costs, planner-names: go-to's :costs, the per-move prices it may override; landing-problem, planner-landing: go-to's :landing, fall damage by landing block; air-profile, water-breathing-s, air-used, air-costs: the planner's air drain and grace from the body's helmet, the air a dive has used; air-left-s, wet-move-s, wet-way-s, wet-spare-s, wet-ok?: the air a walk over unseen water keeps back at its last breath, each move at its measured pace; swim-profile: its swimH from Depth Strider on the boots; gait-problem, gait-costs: go-to's :gait; unknown-prices: the planner's peek and aim prices of unseen cells (jobs.lib.cost.planner); way-on-chance, unseen-share: the one price of walking over unseen cells, a dead end and a mob in the dark at the worse case, from how often the seen ways near the body go on (the planner's :cell); unseen-route-s, unseen-route-hp: that price of a route's unseen steps, in seconds or hp; dead-end-cost: the chasers met on the way back from an unseen dead end; flight-caught-chance: the chance a flight is caught, from its search's ways.
+    planner  planner-costs-problem, planner-costs, planner-names: go-to's :costs, the per-move prices it may override; landing-problem, planner-landing: go-to's :landing, fall damage by landing block; air-profile, water-breathing-s, air-used, air-costs: the planner's air drain and grace from the body's helmet, the air a dive has used; air-left-s, wet-move-s, wet-way-s, wet-spare-s, wet-ok?: the air a walk over unseen water keeps back at its last breath, each move at its measured pace; swim-profile: its swimH from Depth Strider on the boots; gait-problem, gait-costs: go-to's :gait; unknown-prices: the planner's peek and aim prices of unseen cells (jobs.lib.cost.planner); way-on-chance, unseen-share: the one price of walking over unseen cells, a dead end and a mob in the dark at the worse case, from how often the seen ways near the body go on (the planner's :cell); unseen-route-s: that price of a route's unseen steps; dead-end-cost: the chasers met on the way back from an unseen dead end; flight-caught-chance: the chance a flight is caught, from its search's ways.
     tolls    farm-tolls, zone-tolls: go-to's :tolls for planted cells and zone cells to cross only as a last resort; fail-chance,
              failing-step-s: a step the walker failed at, priced by its failures (jobs.lib.cost.tolls).
-    death    experience-cost, death-cost: death as an ordinary cost, the walk back for the items plus the experience; spawn-worth: a respawn point's worth; worth-to, find-worth, items-find-worth, leg-price, search-radius, wait-price: what a find is worth, a search leg's price, how far its legs may go, what waiting for a listed maker costs; opening-price, hold-price: opening a shelter to mobs against holding on in it; death-weight, terrain-danger: a remembered death's fade and the plan cost near a death by terrain (jobs.lib.cost.death).
+    death    experience-cost, death-cost: death as an ordinary cost, the walk back for the items plus the experience; spawn-worth: a respawn point's worth; worth-to, find-worth, items-find-worth, search-radius, wait-price: what a find is worth, how far its legs may go, what waiting for a listed maker costs; opening-price, hold-price: opening a shelter to mobs against holding on in it; death-weight, terrain-danger: a remembered death's fade and the plan cost near a death by terrain (jobs.lib.cost.death).
     base-rates  density, biome-chance, expected-density, peak-density: the ore a block of ground is expected to hold, from the game's
              own placements, host-blocks: the rock its veins replace, and the chance of a biome on ground the body has not seen (jobs.lib.cost.base-rates).
     look     look-answer, look-value, closed-chance, look-s: the value of a look before deciding, a boundary's unseen part closed (jobs.lib.cost.look).
@@ -57,7 +57,6 @@
 (def after-armour armour/after-armour)
 (def fall-damage armour/fall-damage)
 (def fall-profile armour/fall-profile)
-(def route-fall-damage armour/route-fall-damage)
 
 (def hostile? threat/hostile?)
 (def mob-hurt threat/mob-hurt)
@@ -92,7 +91,6 @@
 (def leaves-reserve? fight/leaves-reserve?)
 
 (def route-danger danger/route-danger)
-(def straight-route danger/straight-route)
 (def stance danger/stance)
 (def danger-rate danger/danger-rate)
 (def hurt-rate danger/hurt-rate)
@@ -191,11 +189,6 @@
     (let [prior (settings/get answer/settings ::answer/caught-chance)
           dead (if unseen? (- 1 (way-on-chance counts)) 0)]
       (- 1 (* (- 1 prior) (- 1 dead))))))
-
-(defn unseen-route-hp
-  "unseen-route-s in hp, at walk-hp-seconds an hp."
-  [share kind-at route]
-  (/ (unseen-route-s share kind-at route) (health/walk-hp-seconds)))
 
 (def item-value value/item-value)
 (def fetch-cost value/fetch-cost)
@@ -365,14 +358,6 @@
                     names))
     0))
 
-(defn leg-price
-  "Seconds a search leg costs: go-to's quote q of the walk (a found route its planner's price: seconds, darkness by the
-  kit, dangers and damage at the body's health; else the quote's mean time) and death-s, the death the leg risks
-  (route-death-cost; jobs.lib.threats/route-death-cost for a body's way past its known threats)."
-  [q death-s]
-  (let [r (:route q)]
-    (+ (if (:found r) (or (:priced r) (:seconds r)) (second (get-in q [:uses :job-time]))) death-s)))
-
 (defn opening-price
   "Seconds a way out costs body (death-body keys and :health): the hurt hp it expects (route-danger's :danger of the way),
   at most its health (the rest is the death), at hp-price of its health, and the death it risks (route-death-cost of
@@ -391,7 +376,7 @@
   (- wait-s (* n (:place (:parts (light-cost {:carried 1}))))))
 
 (defn find-worth
-  "Seconds getting `n` of names is worth to body at `at` less a trip: a search's :worth for it (leg-price weighs each
+  "Seconds getting `n` of names is worth to body at `at` less a trip: a search's :worth for it (each walk of it is weighed
   walk against it). Not positive: the trip takes it all."
   [body names at n]
   (- (* n (worth-to body names at)) (trip)))

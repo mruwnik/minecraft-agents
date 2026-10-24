@@ -533,7 +533,7 @@
               {:keys [eng p seen clock]} (setup {:floor tu/walk-floor :inventory sword :entities drops})]
           (die! eng {:pos death-pos :inventory diamonds})
           (appear-after-first-leg! p clock zombie)
-          (core/submit! eng (list (first job) {:settings {:jobs.survival.recover-drops.config/leg-s 1} :danger-overrides {"zombie" 1000}}) {})
+          (core/submit! eng (list (first job) {:settings {:jobs.survival.recover-drops.config/leg-s 1} :value-overrides {"raw_iron" 0.5 "cobblestone" 0.05 "oak_planks" 0.05 "stone_pickaxe" 1 "diamond_pickaxe" 12 "diamond_sword" 10}}) {})
           (await (run-until-empty eng 3))
           (is (re-find #"zombie" (:text (danger-remembered eng))) "a mob that turned up on the way makes the trip dear: it backs off")
           (is (nil? (recovered eng)) "the death stays open")
@@ -801,7 +801,6 @@
             (is (= [death-pos] (tu/walked-to eng)) "one walk to the pile: its steer does not run out")
             (is (= "arrived" (:status (:data (mem/latest (mem/view (:store eng)) :moved)))))
             (is (re-find #"raw_iron" text) "the main item is named")
-            (is (re-find #"zombie" text) "the danger on the way is named")
             (is (re-find #"walk" text))))))))
 
 (deftest recover-drops-value-overrides-can-make-a-pile-worthless
@@ -815,18 +814,6 @@
           (is (= [] (tu/walk-calls p)))
           (is (= :skip (:decision (recovered eng))))
           (is (= 0 (:value (recovered eng)))))))))
-
-(deftest recover-drops-danger-overrides-can-make-a-zombie-too-dangerous
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:floor tu/walk-floor :entities (conj drops zombie-by-the-way)})]
-          (die! eng {:pos death-pos :inventory diamonds})
-          (core/submit! eng (list 'jobs.survival.recover-drops {:danger-overrides {"zombie" 1000}}) {})
-          (await (run-until-empty eng 5))
-          (is (= [] (tu/walk-calls p)))
-          (is (nil? (recovered eng)) "a danger skip stays open")
-          (is (re-find #"zombie" (:text (danger-remembered eng)))))))))
 
 (deftest recover-drops-refuses-overrides-that-are-not-maps-at-submit
   (is (re-find #"jobs.survival.recover-drops :value-overrides must be a map of a string to a number or a map, got \"lots\""

@@ -27,8 +27,8 @@
 (def doc
   "After a death, go back for the drops when they are worth it. Serves the :died entry no :recovered covers (the keyed one, else the open pile best net of the walk); one run is the whole trip and writes :recovered {:decision :skip|:collected|:partial|:abandoned}. A run cut by a reflex or a restart goes on with the same trip (:recover-trip).
   Ready: never waits for light or dawn; the drops despawn 5 min after the death (game/despawn-ticks). The children run under :checks {:safe? (always)}: the trip prices its own danger.
-  Decision: the carried items' value (jobs.lib.cost/item-value, args :value-overrides) against the walk's cost (jobs.lib.cost/fetch-cost, route-danger, args :danger-overrides, ::margin); infinite for lava, fire, the void or a walk ending after the despawn.
-  Danger: a real danger (jobs.lib.danger/nearest-danger) is weighed once per mob; a skip for danger alone is remembered (:recover-danger, ::danger-memory-ms, the mobs priced where they stood until their place is seen empty (in range, clear line)), after which can-run? is :later :danger and the died trigger rests; :retry weighs now and ends at once. The walk is priced from go-to's quote (its seconds, the air the route spends); a hold that would leave under ::hold-slack times the walk of the despawn window, or under ::min-hold-s, is no wait: the pile is fetched under the danger.
+  Decision: the carried items' value (jobs.lib.cost/item-value, args :value-overrides) against the walk's cost (jobs.lib.cost/fetch-cost, its danger the walk risk of go-to's quote, ::margin); infinite for lava, fire, the void or a walk ending after the despawn.
+  Danger: a real danger (jobs.lib.danger/nearest-danger) is weighed once per mob; a skip for danger alone is remembered (:recover-danger, ::danger-memory-ms), after which can-run? is :later :danger and the died trigger rests; :retry weighs now and ends at once. The walk is priced from go-to's quote (its seconds, its walk risk naming the mobs priced, the air the route spends); a hold that would leave under ::hold-slack times the walk of the despawn window, or under ::min-hold-s, is no wait: the pile is fetched under the danger.
   Kit: a pile worth it were the route safe, and no weapon or armour: fetch the best piece a known chest holds (the call's ways, jobs.lib.need) and wear it.
   Fetch: legs of ::leg-s (weighed again after each), then up to 3 collect passes (jobs.items.collect-drops; armour picked up is put on at the end, jobs.items.equip), a look and a walk round the pile; own seal blocks near it are taken back (jobs.access.cleanup), a deep pile is reached by a stair (jobs.access.tunnel).
   Ends: :collected done; :skip condition-failed :not-worth; :partial nothing-possible :unreachable or :not-visible; :abandoned by reason (:window-closed condition-failed :gone, :danger, :nothing-found condition-failed, :unreachable nothing-possible). Data :decision :text :pos :value :items :left; endings carry :next (jobs.lib.next-call): :danger the call with :retry true then the call again, :unreachable only what unblocks the walk, :gone and :not-worth none, others the call again. A walk that did not arrive leaves the death open.
@@ -37,7 +37,6 @@
 
 (a/defargs args
   {:value-overrides {:doc "jobs.lib.cost/item-value overrides, a map: item name or group (ore tool armor food block unknown) -> worth of one item, or {:times n}; e.g. {\"raw_iron\" 500}" :spec (a/map-of string? (a/or-of number? map?)) :default {}}
-   :danger-overrides {:doc "jobs.lib.cost/route-danger overrides, a map: mob name -> threat in points of damage before armour, or {:times n}; e.g. {\"creeper\" 100 \"zombie\" 0}" :spec (a/map-of string? (a/or-of number? map?)) :default {}}
    :retry {:doc "try a pile again that an earlier run ended :abandoned or declined for a danger still remembered, while its despawn window is open (a reflex run keeps the decision; an agent asks for another try)" :spec boolean? :default false}})
 
 (a/defargs settings
@@ -77,15 +76,10 @@
             n (if (:baseline (ctx/mem c)) (pl/recovered-items c pile) 0)]
         (contract/later :recovering (str n " of " total " items back") :units :items :done n :left (- total n))))))
 
-(defn ^:async quote-trip
-  "go-to's quote of the walk to pos (its planned seconds, and the hp the route drowns), nil without a pos."
-  [c pos]
-  (when pos (await (ctx/quote c 'jobs.movement.go-to {:pos pos :range (cfg/arrive-range)}))))
-
 (defn ^:async trip-s
   "[least mean] seconds of the walk to pos as go-to quotes it, the mean with ::collect-s at the pile."
   [c pos]
-  (let [[least mean] (or (get-in (await (quote-trip c pos)) [:uses :job-time]) [0 0])]
+  (let [[least mean] (or (get-in (await (est/quote-trip c pos)) [:uses :job-time]) [0 0])]
     [least (+ mean (settings/get settings ::collect-s))]))
 
 (defn window-ms
@@ -117,7 +111,7 @@
   [c entry]
   (if (and (:decided (ctx/mem c)) (not (:recheck (ctx/mem c))) (or (zero? (:cuts (ctx/mem c) 0)) (:reestimated (ctx/mem c))))
     (:decided (ctx/mem c))
-    (let [quoted (await (quote-trip c (:pos (:data entry))))
+    (let [quoted (await (est/quote-trip c (:pos (:data entry))))
           e (-> (est/estimate c (:data entry) (settings/ticks->ms (game/ticks-since entry (ctx/view c))) quoted)
                 (update :cost est/finite)
                 (assoc :at (ctx/now c)))]
@@ -139,7 +133,7 @@
 
 (defn ^:async retry-later!
   "A skip for danger backs off while the trip can still come back: report it, forget the estimate, remember the danger
-  (:recover-danger, for ::danger-memory-ms; an assumed killer alone only while its guard lasts; at most until ::hold-slack
+  (:recover-danger, for ::danger-memory-ms; at most until ::hold-slack
   times the walk back from the flight's end (est/flight-s) and the collect, as trip-s quotes them, would end at the despawn)
   and end condition-failed :danger: the hostile reflex takes the body away. The died trigger and the check rest for this
   death meanwhile, then the danger is weighed anew. A hold under ::min-hold-s is no wait, and neither is a second hold

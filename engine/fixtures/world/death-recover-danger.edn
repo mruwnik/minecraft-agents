@@ -1,8 +1,9 @@
-;; Cards f9d9aaba (8fca53030): a body killed by a skeleton it no longer sees is unarmed and weighs its pile with the killer assumed
-;; there (the 60 s killer guard): the reflex stops condition-failed :danger, no walk; the died reflex rests meanwhile (no refire on its 30 s cooldown) and
-;; fetches the pile once the guard is over. The pile (24 raw_iron) lies at [26 0 26], where an arrow-damage kill by a NoAI skeleton
+;; Cards f9d9aaba (8fca53030), 7e4c33b0: a body killed by a skeleton it no longer sees is unarmed and weighs its pile with the killer
+;; remembered there (walk-risk on go-to's quote: a death spot not seen clear): the reflex stops condition-failed :danger, no walk; the died
+;; reflex rests meanwhile (no refire on its 30 s cooldown). The pile (24 raw_iron) lies at [26 0 26], where an arrow-damage kill by a NoAI skeleton
 ;; (removed at once) takes the body (no resistance: the damage must kill); it respawns at [4 0 4]. An empty-handed death has no pile:
-;; a skip, no walk. A whole iron kit with six skeletons on the way back: a danger skip, no walk.
+;; a skip, no walk. A pile cheapened by :value-overrides with a zombie by it: a danger skip, no walk. A whole iron kit
+;; with six skeletons on the way back: a danger skip, no walk.
 {:defaults
  {:tags [:survival :death :jobs]
   :time :any
@@ -11,7 +12,7 @@
   :body {:at [26.5 0 26.5] :spawnpoint [4 0 4] :inventory [["raw_iron" 24] ["cobblestone" 64]]}
   :limit-s 200}
  :cases
- [{:name "unseen-killer-guard-skips-rests-then-fetches"
+ [{:name "unseen-killer-at-the-pile-skips-and-rests"
    :act [[:summon "skeleton" [27.5 0 26.5] "{NoAI:1b,Silent:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}]}"]
          [:until-seen {:entity "skeleton"} 10]
          [:rcon "damage $BODY 100 minecraft:arrow by @e[type=skeleton,tag=wt,$BOX,limit=1]"]
@@ -19,9 +20,8 @@
          [:await {:source :body :kind :respawned} 30]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :danger}} :within-s 60}
             {:no-event {:source :job :kind :child_started :data {:slot :go}} :for-s 40 :until {:source :job :kind :stopped :data {:reason :danger}}}
-            {:count-event {:source :reflex :kind :fired :context {:reflex-id :died}} :for-s 50 :at-least 1 :at-most 1}
-            {:event {:source :reflex :kind :ended :data {:decision :collected}} :within-s 180}]
-   :after [[:item "raw_iron" 24]]}
+            {:count-event {:source :reflex :kind :fired :context {:reflex-id :died}} :for-s 50 :at-least 1 :at-most 1}]
+   :limit-s 80}
   {:name "empty-handed-death-is-a-skip-with-no-walk"
    :body {:inventory []}
    :act [[:kill-body]
@@ -31,7 +31,7 @@
    :after [[:body-near [4.5 0 4.5] 4]]
    :limit-s 80}
   {:name "guarded-pile-is-left-when-its-danger-costs-more-than-it-is-worth"
-   :register [{:trigger :died :why "danger-overrides price the zombies for the recovery walk under test" :job (jobs.survival.recover-drops {:danger-overrides {"zombie" 100000}})}]
+   :register [{:trigger :died :why "value-overrides cheapen the pile below the walk past the zombie" :job (jobs.survival.recover-drops {:value-overrides {"raw_iron" 1 "cobblestone" 0.05}})}]
    :act [[:summon "zombie" [31.5 0 26.5] "{NoAI:1b,Silent:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}]}"]
          [:until-seen {:entity "zombie"} 10]
          [:kill-body]
@@ -42,7 +42,7 @@
    :after [[:body-near [4.5 0 4.5] 4]]
    :limit-s 320}
   {:name "pile-with-an-adjacent-zombie-is-left-when-the-danger-costs-more"
-   :register [{:trigger :died :why "danger-overrides price the zombies for the recovery walk under test" :job (jobs.survival.recover-drops {:danger-overrides {"zombie" 100000}})}]
+   :register [{:trigger :died :why "value-overrides cheapen the pile below the walk past the zombie" :job (jobs.survival.recover-drops {:value-overrides {"raw_iron" 1 "cobblestone" 0.05}})}]
    :act [[:summon "zombie" [27.5 0 26.5] "{NoAI:1b,Silent:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}]}"]
          [:until-seen {:entity "zombie"} 10]
          [:kill-body]

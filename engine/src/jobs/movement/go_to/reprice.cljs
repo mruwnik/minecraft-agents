@@ -14,12 +14,12 @@
 
 (defn status
   "go-to's own safe? for the walk to pos on plan (risk/status; none: the plan its round held on, to its goal): not threatened
-  (ready/threatened-walking) and the risk acceptable; ok with the head under water (air first)."
+  (ready/threatened-walking, on the plan's way when there is one) and the risk acceptable; ok with the head under water (air first)."
   ([c pos] (let [kept (risk/planned c)] (status c (or (:goal kept) pos) kept)))
   ([c pos plan]
    (if (breath/head-under? (:primitives c))
      (contract/ok :submerged "head under water: air first")
-     (contract/all [(ready/threatened-walking c pos) (risk/status c pos plan)]))))
+     (contract/all [(ready/threatened-walking c pos (when plan (risk/timed-way c pos plan))) (risk/status c pos plan)]))))
 
 (defn unfinished?
   "Whether plan walks to where a search that has not ended has got to (wsearch/unfinished-plan, which drops the search

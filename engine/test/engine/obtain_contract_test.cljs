@@ -369,7 +369,7 @@
     (mem/write! (:store (:eng s)) stock/stock-kind {:pos [20 64 0] :items {"torch" 8}} stock/stock-policy)
     (:price (nth (await (torch-status s 0)) 2))))
 
-(deftest a-worth-is-weighed-against-the-cheapest-ways-price-with-the-death-its-walk-risks
+(deftest a-worth-is-weighed-against-the-cheapest-ways-price-at-least
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -379,5 +379,5 @@
             "a craft from carried coal costs its steps")
         (let [day (await (torch-chest-price 6000))
               night (await (torch-chest-price 18000))]
-          (is (> day (+ (cost/trip) (:cost (cost/walk-cost {:distance 40})))) "the walk there and back and the death it risks")
-          (is (> night day) "the night is the likelier death"))))))
+          (is (= day (+ (cost/trip) (:cost (cost/walk-cost {:distance 40})))) "the straight walk there and back: a lower bound, the walk's danger is go-to's quote's")
+          (is (= night day) "no danger of its own by the hour"))))))

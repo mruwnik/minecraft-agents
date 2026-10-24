@@ -431,11 +431,6 @@
     (is (> lost (cost/spawn-worth {:respawn far} here) 0) "a far respawn bed is worth less to replace")
     (is (zero? (cost/spawn-worth {:respawn here} here)))))
 
-(deftest a-search-leg-costs-go-tos-price-and-the-death-it-risks
-  (let [found {:uses {:job-time [4 4 6]} :route {:found true :seconds 4 :priced 9}}]
-    (is (= 12 (cost/leg-price found 3)) "a found route: the planner's price, darkness and dangers in it")
-    (is (= 10 (cost/leg-price {:uses {:job-time [4 7 ##Inf]} :route {:found false :reason :partial}} 3)) "else the quote's mean")))
-
 (deftest a-find-is-worth-its-value-a-bed-its-respawn-too-and-no-names-nothing
   (let [here {:x 0 :y 64 :z 0}]
     (is (> (cost/worth-to {} ["bed"] here) (cost/worth-to {} ["oak_planks"] here)) "a plan's bed block counts as a bed")

@@ -5,7 +5,6 @@
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.food :as food-cost]
-            [jobs.lib.shelter.sense :as sh-sense]
             [engine.notes :as notes]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
@@ -13,7 +12,6 @@
             [jobs.lib.foods :as foods]
             [jobs.lib.look :as look]
             [jobs.lib.pen-read :as pen-read]
-            [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -62,15 +60,13 @@
   (apply min (map #(meat-benefit c %) (vals meat))))
 
 (defn noted-cost
-  "Seconds walking to the noted animal n costs: the walk plus the death the route risks past the known threats (threats/route-death-cost)."
+  "Seconds of the straight walk to the noted animal n: a lower bound of the walk (its danger is go-to's to price)."
   [c n]
-  (let [p (:primitives c)
-        at (zipmap [:x :y :z] (:pos n))]
-    (+ (:cost (cost/walk-cost {:distance (u/flat-dist (u/self-pos c) at)}))
-       (threats/route-death-cost c {:underground? (sh-sense/buried? p) :night? false} at))))
+  (:cost (cost/walk-cost {:distance (u/flat-dist (u/self-pos c) (zipmap [:x :y :z] (:pos n)))})))
 
-(defn noted-target
-  "The cheapest food animal a :seen note (any body's) places anywhere whose meat is worth more than the walk (noted-benefit over noted-cost), as the note, skipping the ids in `done`, babies and the animals tried; priced by noted-price, not cut at a radius."
+(defn noted-targets
+  "The food animals a :seen note (any body's) places anywhere whose meat may be worth the walk (noted-benefit over
+  noted-cost), as the notes, cheapest first by noted-price, skipping the ids in `done`, babies and the animals tried; not cut at a radius."
   [c done]
   (let [me (u/self-pos c)
         skipped (set (:skipped-animals (ctx/mem c)))]
@@ -78,8 +74,9 @@
          (filter #(and (= :seen (:kind %)) (contains? food-animals (:what %)) (:id %) (:pos %) (not (:baby %))
                        (not (done (:id %))) (not (skipped (:id %)))
                        (> (noted-benefit c %) (noted-cost c %))))
-         (sort-by #(noted-price me %))
-         first)))
+         (sort-by #(noted-price me %)))))
+
+(defn noted-target "The first of noted-targets, nil when none." [c done] (first (noted-targets c done)))
 
 (defn note-seen!
   "Write the adults and babies of food animals in sight as :seen notes, so a later look at one of a pair counts the other."

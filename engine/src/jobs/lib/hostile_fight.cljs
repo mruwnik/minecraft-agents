@@ -19,8 +19,6 @@
             [jobs.lib.price :as price]
             [jobs.lib.reach :as reach]
             [jobs.lib.threats :as threats]
-            [jobs.lib.walk-risk :as risk]
-            [jobs.lib.walk.world :as wworld]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -171,21 +169,22 @@
     (let [ids (set (map #(.-id %) near))]
       (remove #(ids (.-id %)) (danger-q/hostiles-near-way p (danger-q/mob-pos p t) (settings/get price/settings ::price/way-radius) {})))))
 
+(defn fight-walk-args
+  "The go-to args of the walk to fight hostile e: within a swing's reach of where the body takes it to be."
+  [p e]
+  {:pos (update-vals (danger-q/mob-pos p e) js/Math.floor) :range 2 :ways #{:walk :clear-seal}})
+
 (defn walk-hp
-  "hp the walk to the nearest of near costs: go-to's own route price (risk/estimate of a walk not planned: the straight
-  way priced unseen; its hostiles left out: they are in the fight) plus the drops of the straight way there over the ground the body has seen, its unseen steps at the
-  unseen price (cost/unseen-route-hp, wworld/unseen-share)."
-  [c near]
-  (if-let [t (first near)]
-    (let [p (:primitives c)
-          goal (danger-q/mob-pos p t)
-          {:keys [hp]} (risk/estimate c goal {:catchers? false})
-          kind-at (reach/seen-lookup p reach/kind-of :ground)
-          route (cost/straight-route kind-at (u/pos-of (.-pos (.self p))) goal)]
-      (+ hp
-         (cost/route-fall-damage (cost/equipment-of (.-equipment (.self p))) route)
-         (cost/unseen-route-hp (wworld/unseen-share p) kind-at route)))
-    0))
+  "hp the walk to the fight costs, from q, go-to's quote of it (fight-walk-args to the first mob fought): the hp its
+  plan takes and risks, the mobs that catch it left out (:walk-hp of its walk risk: they are in the fight); 0 without
+  one, a lower bound."
+  [q]
+  (+ (get-in q [:risk :walk-hp] 0) (second (get-in q [:uses :health] [0 0 0]))))
+
+(defn fought
+  "The mobs of near (nearest first) a fight goes for: a lone creeper, else all but the creepers."
+  [near]
+  (if (and (= 1 (count near)) (combat/creeper? (first near))) near (remove combat/creeper? near)))
 
 (defn body-of
   "What the answers' prices read of the body of c: health, absorption, food and what a death costs it (cost/death-body)."
@@ -246,17 +245,18 @@
 (declare hit-and-back-ok? flee-answer)
 
 (defn fight-answer
-  "The answer of fighting near (nearest first) for cost/decide: the walk there (walk-hp) and the fight with near and the
+  "The answer of fighting near (nearest first) for cost/decide: the walk there (walk-hp of walk-q, go-to's quote of it;
+  none: its lower bound) and the fight with near and the
   mobs by its way (way-mobs), at least the mob blows felt lately (incoming :rate) over its length, :hit the hardest blow
   felt lately or of its mobs. A mob the body cannot get within a swing of (reaches?) is not killed (cost/fight-answer):
   the fight is followed at once by the walk away from those it leaves (flee-answer, cost/followed). A lone creeper is
   fought hit-and-back (nil when hit-and-back-ok? fails); any other creeper near, or by the way in time (blasting), is
   not fought: it blows where the fight is, beside its first mob, so its blast at its distance from that mob (at most its
   swell start) is added, in :blasts."
-  [c near struck-of]
+  [c near struck-of & [walk-q]]
   (let [p (:primitives c)
         lone-creeper? (and (= 1 (count near)) (combat/creeper? (first near)))
-        fought (if lone-creeper? near (remove combat/creeper? near))
+        fought (fought near)
         others (remove combat/creeper? (way-mobs p fought))]
     (when (and (seq fought) (or (not lone-creeper?) (hit-and-back-ok? c near)))
       (let [es (vec (concat fought others))
@@ -269,7 +269,7 @@
             creepers (if lone-creeper? [] (concat (filter combat/creeper? near) (blasting p near seconds)))
             spot (danger-q/mob-pos p (first fought))
             blasts (map #(cost/blast-hurt stats (min cost/swell-start (u/dist (danger-q/mob-pos p %) spot))) creepers)]
-        (cond-> {:damage (+ (walk-hp c fought) (max (:damage a) (* rate (:seconds a))) (reduce + 0 blasts))
+        (cond-> {:damage (+ (walk-hp walk-q) (max (:damage a) (* rate (:seconds a))) (reduce + 0 blasts))
                  :hit (max (:hit a) hardest)
                  :blasts (vec (filter pos? blasts))
                  :seconds seconds

@@ -343,6 +343,19 @@
         "a sprinting body outwalks a zombie across its way, not a baby, whose speed attribute is half again the zombie's")
     (is (= :later (first (walk (ctx-of (merge at-origin {:time st/noon :entities [zombie]}))))) "no goal: the plain threat")))
 
+(defn timed
+  "Route cells [x z] at y 64, a quarter second a block."
+  [cells]
+  (mapv (fn [[x z] i] {:x x :y 64 :z z :t (/ i 4)}) cells (range)))
+
+(deftest a-walk-on-a-plan-leads-away-by-the-plan-not-the-straight-line
+  (let [c (ctx-of (merge at-origin {:entities [zombie]}))
+        goal {:x 0 :y 64 :z 6}]
+    (is (= :ok (first (ready/threatened-walking c goal))) "the straight line runs off sideways")
+    (is (= :ok (first (ready/threatened-walking c goal (timed [[0 0] [-1 1] [-1 2] [-1 3] [-1 4] [0 5] [0 6]])))) "so does a plan that keeps to it")
+    (is (= :later (first (ready/threatened-walking c goal (timed [[0 0] [1 1] [2 2] [2 3] [1 4] [0 5] [0 6]]))))
+        "a plan that swings past the zombie leads to it")))
+
 (deftest a-hostile-at-the-heels-is-no-walk-away
   (let [close (assoc zombie :pos {:x 2 :y 64 :z 0})
         [kind-of text] (ready/threatened-walking (ctx-of (merge at-origin {:entities [close]})) {:x -8 :y 64 :z 0})]

@@ -25,7 +25,8 @@
             [jobs.lib.threats :as threats]
             [jobs.lib.look :as look]
             [jobs.lib.tools :as tools]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.lib.walk-pick :as pick]))
 
 (def doc
   "A hostile is near: fight it (jobs.combat.attack) when the odds are fair, else flee; one whole attempt per round, deciding
@@ -317,7 +318,8 @@
         hits (note-hits (when (= :flee (:decision m)) (:hits m)) (ctx/now c) before after (hit-window-ms))
         _ (ctx/update-mem! c assoc :hits hits :last-health (.-health self) :last-at (ctx/now c))
         felt (walk-felt c)
-        fight (when-not (some combat/enderman? near) (hostile/fight-answer c near #(struck-of c %)))
+        target (when-not (some combat/enderman? near) (first (hostile/fought near)))
+        fight (when-not (some combat/enderman? near) (hostile/fight-answer c near #(struck-of c %) (when target (await (pick/quote! c (hostile/fight-walk-args p target))))))
         caught (when-not (some combat/enderman? near) (await (respond.goal/caught-chance! c)))
         walk (when-not (some combat/enderman? near) (hostile/flee-answer c near fight felt caught))
         then (or (:then walk) (when fight [fight]))

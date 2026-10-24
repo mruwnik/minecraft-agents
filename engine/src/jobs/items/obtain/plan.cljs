@@ -119,15 +119,10 @@
   (let [{smelts true crafts false} (group-by #(= :smelt (:op %)) (:steps pl))]
     (+ (* (craft-step-s) (count crafts)) (* (smelt-item-s) (reduce + 0 (map :count smelts))))))
 
-(defn death-s
-  "The death a walk to `at` risks past the known threats (jobs.lib.threats/route-death-cost), of the class route-class says."
-  [c at]
-  (threats/route-death-cost c (route-class (:primitives c)) at))
-
 (defn walk-s
-  "A trip, the walk to `at` and back, and the death it risks."
+  "A trip and the straight walk to `at` and back: a lower bound (the walk's danger is go-to's to price)."
   [c at]
-  (+ (cost/trip) (:cost (cost/walk-cost {:distance (* 2 (u/dist (u/self-pos c) at))})) (death-s c at)))
+  (+ (cost/trip) (:cost (cost/walk-cost {:distance (* 2 (u/dist (u/self-pos c) at))}))))
 
 (defn chest-s
   "The walk to the nearest chest the chest way would try: one booked as holding a name, or a seen one not looked into yet."
@@ -169,8 +164,8 @@
     (if (and (infinite? s) (pos? held)) 0 s)))
 
 (defn need-cost
-  "Seconds to gather a need whose nearest block is seen: the walk there with the death it risks (threats/route-death-cost),
-  the digs, a hostile mob's kills (cost/kill-price, as many as cost/kill-drops says the count takes; Infinity when its
+  "Seconds to gather a need whose nearest block is seen, a lower bound (the walk's danger is go-to's to price): the
+  straight walk there, the digs, a hostile mob's kills (cost/kill-price, as many as cost/kill-drops says the count takes; Infinity when its
   loot holds none), and for an ore seen below the feet whose cell is unlit, go-to's walk there dark (cost/dark-way-s of
   the body's kit)."
   [c need]
@@ -180,7 +175,6 @@
         self (u/self-pos c)
         d (u/dist self pos)
         walk (:cost (cost/walk-cost {:distance d}))
-        risk (threats/route-death-cost c (route-class p) pos)
         mob (:mob need)
         kills (when (and mob (cost/hostile? (game/version-of p) {:name mob}))
                 (if-let [drops (cost/kill-drops mob (:key need) :version (game/version-of p))]
@@ -188,8 +182,8 @@
                   js/Infinity))
         dig (+ (or kills 0) (* (:count need) (or (cost/dig-cost name) 0)))]
     (if (and (:ore? need) (below? c need) (unlit? p pos))
-      (+ dig risk (cost/dark-way-s walk d (threats/body-of p)))
-      (+ walk risk dig))))
+      (+ dig (cost/dark-way-s walk d (threats/body-of p)))
+      (+ walk dig))))
 
 (defn look-cost
   "Seconds per find of a search for an unseen need (cost/search-s): legs of the search's spacing, each the walk and the
@@ -236,7 +230,7 @@
             n cost/torch-gap
             stock (stock-s c)
             at-y (fn [y]
-                   (let [risk (threats/route-death-cost c {:underground? true :night? false} (assoc self :y y))
+                   (let [risk (cost/route-death-cost (threats/death-body c) {:underground? true :night? false} (assoc self :y y))
                          dy (- feet y)
                          stair (if (neg? dy)
                                  (cost/dark-way-s (stair-time/steps-s :up (- dy)) (- dy) kit)

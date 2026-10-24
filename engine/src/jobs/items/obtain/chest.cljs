@@ -9,7 +9,8 @@
             [jobs.lib.chests :as chests]
             [jobs.lib.stock :as stock]
             [jobs.lib.storage :as storage]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.lib.walk-pick :as pick]))
 
 (defn remembered-chests
   "Cells of chests booked in stock as holding one of names, however far, whose zone or claim allows :take: a player walks
@@ -47,6 +48,14 @@
                    (when-not (or (done cell) (and items (not (holds items names))))
                      {:pos pos :stock items}))))
          (sort-by #(u/dist me (:pos %))))))
+
+(defn ^:async cheapest!
+  "The candidate of cs whose walk costs least (jobs.lib.walk-pick/pick!: go-to's quote with its walk risk, best-first by the
+  straight walk), nil when cs is empty."
+  [c cs]
+  (await (pick/pick! c cs {:bound #(pick/walk-s c (:pos %))
+                           :args #(chests/walk-args c (:pos %))
+                           :price (fn [_ q] (pick/quoted-s c q))})))
 
 (defn say-chest!
   "One info event per chest the walk goes to, naming the item wanted there and, when given, why this way (why)."

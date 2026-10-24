@@ -17,6 +17,12 @@
             [engine.test-util :as tu :refer [run-until-empty]]
             [triggers.survival.died :as died]))
 
+(defn die-noted!
+  "die!, the death on the :deaths list too (where walk-risk remembers a killer), as the engine records it."
+  [eng data ago-ms]
+  (die! eng data ago-ms)
+  (core/record-death! eng (mem/latest (mem/view (:store eng)) :died)))
+
 (defn fetch-run
   "Die with the field-report pile and cause, run the job to its decision."
   ([cause] (fetch-run cause {}))
@@ -24,7 +30,7 @@
   (let [pile dt/death-pile-of-the-field-report]
     (fn ^:async t []
       (let [{:keys [eng seen]} (setup (merge {:floor tu/walk-floor :entities (vec (pile-drops pile))} body))]
-        (die! eng (cond-> {:pos dt/death-pos :inventory pile} cause (assoc :cause cause)))
+        (die-noted! eng (cond-> {:pos dt/death-pos :inventory pile} cause (assoc :cause cause)) 5000)
         (core/submit! eng job {})
         (await (run-until-empty eng 20))
         {:eng eng :seen seen})))))
@@ -179,19 +185,25 @@
         (let [pile dt/death-pile-of-the-field-report
               {:keys [eng p]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops pile)) dt/zombie-by-the-way)})]
           (die! eng {:pos dt/death-pos :inventory pile})
-          (core/submit! eng '(jobs.survival.recover-drops {:danger-overrides {"zombie" 1000}}) {})
+          (core/submit! eng '(jobs.survival.recover-drops {:value-overrides {"raw_iron" 0.5 "cobblestone" 0.05 "oak_planks" 0.05 "stone_pickaxe" 1 "diamond_pickaxe" 12 "diamond_sword" 10}}) {})
           (await (run-until-empty eng 5))
           (swap! (fake/state p) update :entities #(filterv (fn [e] (not= "hostile" (:kind e))) %))
           (core/submit! eng '(jobs.survival.recover-drops {:retry true}) {})
           (await (run-until-empty eng 20))
           (is (= :collected (:decision (recovered eng)))))))))
 
-(deftest a-killer-is-priced-at-a-pile-far-below-the-surface
-  (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities []})
-        death {:pos {:x 20 :y 24 :z 0} :inventory dt/death-pile-of-the-field-report :cause "skeleton"}]
-    (die! eng death)
-    (is (= ["skeleton"]
-           (mapv :name (:top-mobs (estimate/estimate {:primitives p :args {} :view #(mem/view (:store eng))} death 5000)))))))
+(deftest recover-drops-prices-the-pile-by-the-route-it-will-walk
+  (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities [dt/zombie-by-the-way]})
+        death {:pos dt/death-pos :inventory dt/death-pile-of-the-field-report}
+        c {:primitives p :args {} :view #(mem/view (:store eng))}
+        priced (fn [risk] (estimate/estimate c death 5000 {:uses {:job-time [5 5 15]} :risk risk}))
+        clear (priced {:hp 0 :threats []})
+        risky (priced {:hp 3 :threats [{:mob "zombie" :pos {:x 15.5 :y 64 :z 3.5}}]})]
+    (is (zero? (get-in clear [:parts :danger])) "a zombie in sight that the planned way leaves behind is no danger")
+    (is (nil? (:top-mobs clear)))
+    (is (= 30 (get-in risky [:parts :danger])) "the quote's walk risk, at an hp's price, is the danger")
+    (is (= [{:name "zombie"}] (:top-mobs risky)))
+    (is (= [{:name "zombie" :pos {:x 15.5 :y 64 :z 3.5}}] (:seen-mobs risky)))))
 
 (deftest a-route-that-drowns-and-takes-long-is-priced-for-the-air-and-the-time
   (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities [] :inventory [{:name "cobblestone" :count 8}]})
@@ -202,15 +214,6 @@
     (is (= ["water"] (mapv :name (:top-mobs wet))))
     (is (< (get-in dry [:parts :walk] 0) (get-in wet [:parts :walk])) "the quoted seconds, not the straight line, price the walk")
     (is (< (:cost dry) (:cost wet)))))
-
-(deftest a-way-to-the-pile-the-body-has-not-seen-costs-the-unknown-prices
-  (let [death {:pos {:x 20 :y 64 :z 0} :inventory dt/death-pile-of-the-field-report}
-        walk (fn [hide?]
-               (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities []})
-                     sensed (.-sensedAt p)]
-                 (tu/set-sensed! p (fn [q] (if (and hide? (<= 5 (.-x q))) #js {:unknown true :pos q} (sensed q))))
-                 (get-in (estimate/estimate {:primitives p :args {} :view #(mem/view (:store eng))} death 5000) [:parts :walk])))]
-    (is (< (walk false) (walk true)) "the unseen half of the way is no free walk")))
 
 (deftest a-pile-in-cells-the-body-has-not-seen-may-be-under-water
   (let [death {:pos dt/death-pos :inventory dt/death-pile-of-the-field-report}
@@ -241,8 +244,8 @@
       (fn ^:async t []
         (let [pile dt/death-pile-of-the-field-report
               {:keys [eng p seen]} (setup {:floor tu/walk-floor :entities (vec (pile-drops pile))})]
-          (die! eng {:pos dt/death-pos :inventory pile :cause "skeleton"} 120000)
-          (die! eng {:pos (update dt/death-pos :x - 6) :inventory [] :cause "skeleton"})
+          (die-noted! eng {:pos dt/death-pos :inventory pile :cause "skeleton"} 120000)
+          (die-noted! eng {:pos (update dt/death-pos :x - 6) :inventory [] :cause "skeleton"} 5000)
           (core/submit! eng job {})
           (await (run-until-empty eng 5))
           (is (re-find #"skip: value [1-9].*: skeleton" (decided-text eng)) (decided-text eng))
@@ -275,18 +278,6 @@
           (await (run-until-empty eng 20))
           (is (= [:collected :skip] (mapv (comp :decision :data) (mem/entries (mem/view (:store eng)) :recovered))))
           (is (false? (died/died nil (mem/view (:store eng)) {}))))))))
-
-(deftest a-killer-guard-ends-with-the-minute-after-the-death
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [pile dt/death-pile-of-the-field-report
-              {:keys [eng seen]} (setup {:floor tu/walk-floor :entities (vec (pile-drops pile))})]
-          (die! eng {:pos dt/death-pos :inventory pile :cause "skeleton"} 120000)
-          (core/submit! eng job {})
-          (await (run-until-empty eng 20))
-          (is (re-find #"^fetch: " (decided-text eng)))
-          (is (= :collected (:decision (recovered eng)))))))))
 
 (deftest a-second-run-after-a-skip-says-the-death-was-decided
   (async done
@@ -436,7 +427,7 @@
       (fn ^:async t []
         (let [pile dt/death-pile-of-the-field-report
               {:keys [eng p clock]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops pile)) dt/zombie-by-the-way)})
-              dear '(jobs.survival.recover-drops {:danger-overrides {"zombie" 1000}})]
+              dear '(jobs.survival.recover-drops {:value-overrides {"raw_iron" 0.5 "cobblestone" 0.05 "oak_planks" 0.05 "stone_pickaxe" 1 "diamond_pickaxe" 12 "diamond_sword" 10}})]
           (die! eng {:pos dt/death-pos :inventory pile})
           (core/submit! eng dear {})
           (await (run-until-empty eng 5))
@@ -455,7 +446,7 @@
         (let [pile dt/death-pile-of-the-field-report
               zombie (assoc dt/zombie-by-the-way :pos {:x 22.5 :y 64 :z 3.5})
               {:keys [eng p clock]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops pile)) zombie)})
-              dear '(jobs.survival.recover-drops {:danger-overrides {"zombie" 1000}})]
+              dear '(jobs.survival.recover-drops {:value-overrides {"raw_iron" 0.5 "cobblestone" 0.05 "oak_planks" 0.05 "stone_pickaxe" 1 "diamond_pickaxe" 12 "diamond_sword" 10}})]
           (die! eng {:pos dt/death-pos :inventory pile})
           (core/submit! eng dear {})
           (await (run-until-empty eng 5))
@@ -472,7 +463,7 @@
       (fn ^:async t []
         (let [pile dt/death-pile-of-the-field-report
               {:keys [eng p seen clock]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops pile)) dt/zombie-by-the-way)})
-              dear '(jobs.survival.recover-drops {:danger-overrides {"zombie" 1000}})]
+              dear '(jobs.survival.recover-drops {:value-overrides {"raw_iron" 0.5 "cobblestone" 0.05 "oak_planks" 0.05 "stone_pickaxe" 1 "diamond_pickaxe" 12 "diamond_sword" 10}})]
           (die! eng {:pos dt/death-pos :inventory pile})
           (core/submit! eng dear {})
           (await (run-until-empty eng 5))
@@ -496,7 +487,7 @@
       (fn ^:async t []
         (let [pile dt/death-pile-of-the-field-report
               {:keys [eng clock]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops pile)) dt/zombie-by-the-way)})
-              dear '(jobs.survival.recover-drops {:danger-overrides {"zombie" 1000}})]
+              dear '(jobs.survival.recover-drops {:value-overrides {"raw_iron" 0.5 "cobblestone" 0.05 "oak_planks" 0.05 "stone_pickaxe" 1 "diamond_pickaxe" 12 "diamond_sword" 10}})]
           (die! eng {:pos dt/death-pos :inventory pile})
           (core/submit! eng dear {})
           (await (run-until-empty eng 5))
@@ -517,7 +508,7 @@
           (swap! clock + 270000)
           (mem/write! (:store eng) :recover-trip {:death-t (:t (mem/latest (mem/view (:store eng)) :died)) :cuts 2 :hostile-cut true :phase :go}
                       {:cap 1 :ttl 1000000})
-          (core/submit! eng '(jobs.survival.recover-drops {:danger-overrides {"zombie" 1000}}) {})
+          (core/submit! eng '(jobs.survival.recover-drops {:value-overrides {"raw_iron" 0.5 "cobblestone" 0.05 "oak_planks" 0.05 "stone_pickaxe" 1 "diamond_pickaxe" 12 "diamond_sword" 10}}) {})
           (await (run-until-empty eng 20))
           (is (empty? (mem/entries (mem/view (:store eng)) :recover-danger)) "no wait for the danger to pass was set")
           (is (= :skip (:decision (recovered eng))))

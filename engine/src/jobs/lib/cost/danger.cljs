@@ -21,12 +21,10 @@
             [jobs.lib.cost.fight :as fight]
             [jobs.lib.cost.health :as health]
             [jobs.lib.cost.threat :as threat]
-            [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
   {::exposure-s {:default 3 :doc "Seconds a body is exposed to a mob on a route." :spec (a/int-in 0 nil)}
-   ::snap-span {:default 4 :doc "How far up or down a straight route looks for ground in each column." :spec (a/int-in 0 nil)}
    ::sprint-speed {:default 5.6 :doc "Blocks a second a sprinting body covers (reach-first?)." :spec (a/num-in 0.1 nil)}
    ::walk-speed {:default 4.3 :doc "Blocks a second a walking body covers, one too hungry to sprint (reach-first?)." :spec (a/num-in 0.1 nil)}
    ::flee-factor {:default 4 :doc "Danger price: a known mob the body would flee costs this times its hp a second." :spec (a/num-in 0 nil)}
@@ -105,29 +103,6 @@
         rows (vec (sort-by :danger > rows))]
     {:danger (reduce + 0 (map :danger rows)) :mobs rows}))
 
-(defn snap-span [] (settings/get settings ::snap-span))
-
-(defn straight-route
-  "The cells [{:x :y :z}] one a block from the cell of from to the cell of to on a straight line, each put on the
-  ground of kind-at nearest the cell before it (within 4 up or down: feet and head free, something under), else at
-  that cell's height. A cheap stand-in for a planned route when only the danger along the way is wanted."
-  [kind-at from to]
-  (let [[fx fy fz] (map js/Math.floor [(:x from) (:y from) (:z from)])
-        [tx _ tz] (map js/Math.floor [(:x to) (:y to) (:z to)])
-        n (max (js/Math.abs (- tx fx)) (js/Math.abs (- tz fz)))
-        ground (fn [x prev z]
-                 (or (some #(when (reach/standable? kind-at x % z) %)
-                           (cons prev (mapcat (fn [k] [(+ prev k) (- prev k)]) (range 1 (inc (snap-span))))))
-                     prev))]
-    (if (zero? n)
-      [{:x fx :y fy :z fz}]
-      (loop [i 0 prev fy out []]
-        (if (> i n)
-          out
-          (let [x (+ fx (js/Math.round (/ (* i (- tx fx)) n)))
-                z (+ fz (js/Math.round (/ (* i (- tz fz)) n)))
-                y (ground x prev z)]
-            (recur (inc i) y (conj out {:x x :y y :z z}))))))))
 
 ;; ---------------------------------------------------------------- the planner's danger rate
 

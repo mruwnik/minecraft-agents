@@ -181,37 +181,52 @@
   (with-meta (fn [c] (contract/all [(safe c) (outmatched c)])) (meta safe)))
 
 (defn melee-catches?
-  "Whether known melee hostile e hits the body on its straight walk to goal before the walk is past it (cost/catches?: the
-  body's pace by its food, the mob where the body takes it to be). False for a ranged one: it shoots, it does not chase."
-  [p e goal]
-  (and (not (combat/ranged? e))
-       (cost/catches? {:chaser (cost/mob-kind e) :pos (danger/mob-pos p e) :from (u/pos-of (.-pos (.self p))) :to goal
-                       :food (or (.-food (.self p)) 20) :step 1})))
+  "Whether known melee hostile e hits the body on its walk to goal before the walk is past it, the mob where the body takes
+  it to be: on route ([{:x :y :z :t}], go-to's plan timed, cost/caught-on?) when given, else on the straight walk at the
+  body's pace by its food (cost/catches?). False for a ranged one: it shoots, it does not chase."
+  ([p e goal] (melee-catches? p e goal nil))
+  ([p e goal route]
+   (and (not (combat/ranged? e))
+        (if route
+          (cost/caught-on? {:chaser (cost/mob-kind e) :pos (danger/mob-pos p e) :route route})
+          (cost/catches? {:chaser (cost/mob-kind e) :pos (danger/mob-pos p e) :from (u/pos-of (.-pos (.self p))) :to goal
+                          :food (or (.-food (.self p)) 20) :step 1})))))
+
+(defn way-nearest
+  "Blocks from q to the nearest point of the walk from body to goal: body and the cells after it on route (their centres) when given, else the straight segment."
+  [body goal route q]
+  (if route
+    (reduce min (u/dist q body) (map #(u/dist q {:x (+ 0.5 (:x %)) :y (:y %) :z (+ 0.5 (:z %))}) (rest route)))
+    (danger/way-distance body goal q)))
 
 (defn leads-away?
-  "Whether the straight walk from the body to `goal` ({:x :y :z}) never takes it nearer to any hostile it knows within the
-  hostile-near radii, and there is one, and none catches the walk (melee-catches?) or has hurt the body lately: a player
-  walks away from a danger, and fights one at their heels."
-  [c goal]
-  (let [p (:primitives c)
-        args (trigger-args c)
-        hit (danger/hit-ids (ctx/view c))
-        body (u/pos-of (.-pos (.self p)))
-        goal (update goal :y #(or % (:y body)))
-        near (danger/known-hostiles p (danger/radius-in args) {:ranged-radius (danger/ranged-radius-in args)})]
-    (and (seq near)
-         (every? (fn [e] (and (>= (danger/way-distance body goal (danger/mob-pos p e)) (- (danger/mob-distance p e) 0.5))
-                              (not (melee-catches? p e goal))
-                              (not (contains? hit (.-id e)))))
-                 near))))
+  "Whether the walk from the body to `goal` ({:x :y :z}), on route (go-to's plan timed, [{:x :y :z :t}]) when given, else
+  the straight line, never takes it nearer to any hostile it knows within the hostile-near radii, and there is one, and
+  none catches the walk (melee-catches?) or has hurt the body lately: a player walks away from a danger, and fights one at
+  their heels."
+  ([c goal] (leads-away? c goal nil))
+  ([c goal route]
+   (let [p (:primitives c)
+         args (trigger-args c)
+         hit (danger/hit-ids (ctx/view c))
+         body (u/pos-of (.-pos (.self p)))
+         goal (update goal :y #(or % (:y body)))
+         near (danger/known-hostiles p (danger/radius-in args) {:ranged-radius (danger/ranged-radius-in args)})]
+     (and (seq near)
+          (every? (fn [e] (and (>= (way-nearest body goal route (danger/mob-pos p e)) (- (danger/mob-distance p e) 0.5))
+                               (not (melee-catches? p e goal route))
+                               (not (contains? hit (.-id e)))))
+                  near)))))
 
 (defn threatened-walking
-  "threatened, but ok while the walk to `goal` (nil: no walk) leads away from every hostile near (leads-away?)."
-  [c goal]
-  (let [t (threatened c)]
-    (if (and goal (= :later (first t)) (leads-away? c goal))
-      (contract/ok :walking-away "a hostile is near, the walk leads away from it")
-      t)))
+  "threatened, but ok while the walk to `goal` (nil: no walk) leads away from every hostile near (leads-away?, on route
+  when given)."
+  ([c goal] (threatened-walking c goal nil))
+  ([c goal route]
+   (let [t (threatened c)]
+     (if (and goal (= :later (first t)) (leads-away? c goal route))
+       (contract/ok :walking-away "a hostile is near, the walk leads away from it")
+       t))))
 
 (defn safe-at
   "The checker of a job that goes to the place (f c) ({:x :y :z}, nil: here): not threatened and not exposed there.

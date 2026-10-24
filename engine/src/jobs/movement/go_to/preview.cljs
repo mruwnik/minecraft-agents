@@ -4,7 +4,7 @@
 
   Rules of go-to:
   - Its quote (./bin/quote) is a dry run: one plan from where the body stands with the call's args, nothing walked,
-    opened or dug. :uses :job-time [s s 3s] from the planner's seconds (partial or no route: no most; none and no way that
+    opened or dug, and :risk its walk risk (jobs.lib.walk-risk/estimate of the plan, the one danger figure a caller weighs). :uses :job-time [s s 3s] from the planner's seconds (partial or no route: no most; none and no way that
     changes the world: ##Inf), :health the planned damage, :moves-to the goal cell, and :route {:found :length :seconds
     :summary :steps :moves :doors :waypoints :damage :drown :nodes :dark :dark-seconds} (:dark: feet cells seen dark, or unseen at night; :dark-seconds the planner's extra seconds for them), or {:found false :reason :near :partial} (:reason
     as :why, :bad-pos and other refusals, :searching while the quote's budgeted search has not ended); with :unknown :unseen-floors and :dark-best."
@@ -18,6 +18,7 @@
             [jobs.lib.walk.search :as wsearch]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.world :as wworld]
+            [jobs.lib.walk-risk :as risk]
             [jobs.movement.go-to.aim :as gaim]
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.tuning :refer [quote-most-factor quote-unseen-factor]]))
@@ -89,7 +90,8 @@
 
 (defn ^:async route!
   "The dry run of go-to call c (args with the body's food and the walk limits): its route, {:found true ...} or {:found
-  false :reason ...} (report), with :goal the cell planned to and :nodes the search's expansions; a refusal {:found
+  false :reason ...} (report), with :goal the cell planned to, :nodes the search's expansions and :risk the walk risk of
+  its plan (jobs.lib.walk-risk/estimate: past a plan not found, the rest priced as walk-risk prices it); a refusal {:found
   false :reason :text}; :searching (with :near, the blocks to the goal) when the search spent its round budget: it goes on at the next quote of the same walk (walk.search/searches)."
   [c]
   (let [{:keys [doors range tolls one-way unknown]} (:args c)
@@ -108,14 +110,15 @@
                                     (wworld/dangers?) (set (:fault-cells (ctx/mem c))) (wworld/dark?)
                                     (cond-> tolls (wworld/zone-tolls?) (-> vec (into (tc/zone-walk-tolls c pos)))) spec true))
             goal [(:x pos) (:y pos) (:z pos)]]
-        (if (= "searching" (:status plan))
-          {:found false :reason :searching :near (u-dist c pos) :goal goal :text "the quote's search goes on at the next quote"}
-          (assoc (report c plan pos policy spec) :goal goal :nodes (some-> plan :r .-expanded)))))))
+        (assoc (if (= "searching" (:status plan))
+                 {:found false :reason :searching :near (u-dist c pos) :goal goal :text "the quote's search goes on at the next quote"}
+                 (assoc (report c plan pos policy spec) :goal goal :nodes (some-> plan :r .-expanded)))
+               :risk (risk/estimate c pos {:plan (select-keys plan [:status :steps])}))))))
 
 (defn quote-of-route
   "The quote of route r: time from the planner's seconds (most quote-most-factor times them); a partial route or none
   adds quote-unseen-factor walk blocks (cost.planner/walk-floor) for each block still to go, from the route's end to the goal, and has no most; a search still going on (:searching) is priced so too, from its :near blocks, marked :estimate true; none at all, or a refusal, is ##Inf unless escalating? (a way
-  that changes the world may still get there). Health: the planned damage. :moves-to the goal."
+  that changes the world may still get there). Health: the planned damage. :moves-to the goal. :risk the route's walk risk."
   [{:keys [found seconds partial near reason damage goal] :as r} escalating?]
   (let [searching? (= :searching reason)
         s (or seconds (:seconds partial) 0)
@@ -127,7 +130,8 @@
                (refusals reason) (get-in contract/too-expensive [:uses :job-time])
                (or partial searching? escalating?) [s (+ s rest-s) ##Inf]
                :else (get-in contract/too-expensive [:uses :job-time]))]
-    (cond-> {:uses {:job-time time} :route (dissoc r :goal)}
+    (cond-> {:uses {:job-time time} :route (dissoc r :goal :risk)}
+      (:risk r) (assoc :risk (:risk r))
       (and found damage) (assoc-in [:uses :health] [0 damage damage])
       searching? (assoc :estimate true)
       goal (assoc :moves-to goal))))

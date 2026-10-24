@@ -34,8 +34,10 @@
 
 (defn plan-of "A found plan of go-to over cells." [cells] {:status "found" :steps (vec cells)})
 
-(defn straight-plan "A found plan of the body of c on the straight way to goal." [c goal]
-  (plan-of (rest (cost/straight-route (reach/mob-lookup (:primitives c)) (sh-sense/feet (:primitives c)) goal))))
+(defn straight-plan "A found plan of the body of c on the straight way to goal, at the feet's height." [c goal]
+  (let [{:keys [x y z]} (sh-sense/feet (:primitives c))
+        n (max 1 (js/Math.abs (- (:x goal) x)) (js/Math.abs (- (:z goal) z)))]
+    (plan-of (for [i (range 1 (inc n))] {:x (js/Math.round (+ x (* i (/ (- (:x goal) x) n)))) :y y :z (js/Math.round (+ z (* i (/ (- (:z goal) z) n))))}))))
 
 (defn planned-status "risk/status of the walk to goal planned straight." [c goal] (risk/status c goal (straight-plan c goal)))
 

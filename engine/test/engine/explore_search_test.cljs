@@ -361,7 +361,7 @@
         (let [s (await (search! {:target "diamond_block" :worth 12 :settings {:jobs.explore.search/max-legs 1}} {}))
               e (not-found-of s)]
           (is (= :price (:why e)) "the price ends it, not the legs setting")
-          (is (= 2 (get-in e [:coverage :legs])) "two 16-block walks fit in 12 s, a third does not")
+          (is (= 3 (get-in e [:coverage :legs])) "three 16-block walks (their quoted seconds, under 4 s each) fit in 12 s, a fourth does not")
           (is (re-find #"the next walk costs \d+ s, more than the \d+ s left" (:text e))))))))
 
 (deftest a-priced-animal-search-over-ground-searched-in-vain-stops-at-once

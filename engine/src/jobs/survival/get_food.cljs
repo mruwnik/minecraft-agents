@@ -13,6 +13,7 @@
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
+            [jobs.lib.walk-pick :as pick]
             [jobs.lib.surface-up :as surface]
             [jobs.lib.foods :as foods]
             [jobs.lib.animal-spare :as spare]
@@ -343,11 +344,40 @@
 (def noted-range "Blocks from an animal another body noted that the walk toward it ends; its place is then looked at." 12)
 (def noted-near-range "The range of the second walk, when the first ended in range with the animal still not in sight (behind rock or a ledge)." 3)
 
+(defn noted-walk-args
+  "The go-to args of the walk toward pos [x y z] of a noted animal worth `worth` seconds (near?: the second, nearer walk)."
+  [c pos worth near?]
+  (ready/forage-walk c {:pos (zipmap [:x :y :z] pos) :range (if near? noted-near-range noted-range) :ways #{:walk} :torches :fetch :worth worth}))
+
+(defn quote-why
+  "Why go-to's quote q of a walk prices it out: its refusal's text or reason, else its price."
+  [q]
+  (or (get-in q [:data :text]) (get-in q [:route :text]) (some-> (get-in q [:route :reason]) name) "it costs more than the meat is worth"))
+
+(defn ^:async cheapest-noted!
+  "The noted animal (animals/noted-targets) whose walk costs least per hunger point of its meat and less than the meat is
+  worth, the walk priced from go-to's quote (jobs.lib.walk-pick); nil when none, the first priced out kept as :noted-lost."
+  [c done]
+  (let [me (u/self-pos c)
+        points #(max 1 (or (foods/points (animals/meat (:what %))) 1))
+        out (volatile! nil)
+        price (fn [n q]
+                (let [s (pick/quoted-s c q)]
+                  (if (< s (animals/noted-benefit c n))
+                    (/ s (points n))
+                    (do (when-not @out (vreset! out {:pos (:pos n) :why (quote-why q)})) ##Inf))))
+        pick (:pick (await (pick/best! c (animals/noted-targets c done)
+                                       {:bound #(animals/noted-price me %)
+                                        :args #(noted-walk-args c (:pos %) (animals/noted-benefit c %) false)
+                                        :price price})))]
+    (when (and (nil? pick) @out) (ctx/update-mem! c assoc :noted-lost @out))
+    pick))
+
 (defn ^:async walk-to-noted!
   "The walk toward an animal the search found only in a note (nothing is in sight to hunt): :continue while it goes, :again once it ends."
   [c]
   (let [pos (:walk-to (ctx/mem c))
-        e (await (child/run!* c :noted-walk 'jobs.movement.go-to (ready/forage-walk c {:pos (zipmap [:x :y :z] pos) :range (if (:noted-near (ctx/mem c)) noted-near-range noted-range) :ways #{:walk} :torches :fetch :worth (:walk-worth (ctx/mem c))})))]
+        e (await (child/run!* c :noted-walk 'jobs.movement.go-to (noted-walk-args c pos (:walk-worth (ctx/mem c)) (:noted-near (ctx/mem c)))))]
     (cond
       (= :continue e) :continue
       (and (not (:noted-near (ctx/mem c))) (nil? (animals/nearest c (animal-opts c false))))
@@ -383,7 +413,7 @@
   (let [e (:explore (:args c))
         done? (explore-done? (ctx/mem c) (starving? c) (ctx/now c) (foods/starving-rest-ms))
         noted (when (and e done? (:searched (ctx/mem c)) (nil? (:walk-to (ctx/mem c))) (nil? (animals/nearest c (animal-opts c false))))
-                (animals/noted-target c (set (:noted-walked (ctx/mem c)))))]
+                (await (cheapest-noted! c (set (:noted-walked (ctx/mem c))))))]
     (cond
       (not e) nil
       (and done? (not noted) (nil? (:walk-to (ctx/mem c)))) nil

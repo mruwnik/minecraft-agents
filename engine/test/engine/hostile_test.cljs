@@ -1719,18 +1719,9 @@
     (is (<= (:x cell) -2) "three blocks straight away from the creeper")
     (is (nil? (hostile-fight/back-cell (constantly "stone") {:x 0.5 :y 64 :z 0.5} {:x 2.5 :y 64 :z 0.5} 3)) "walled in: no cell")))
 
-(deftest a-fight-walk-prices-the-drop-it-sees-and-an-unseen-way-at-the-unseen-price
-  (let [ledge (merge (tu/box 0 63 -2 2 63 2 "stone") (tu/box 3 59 -2 9 59 2 "stone"))
-        zed (clj->js {:id 7 :name "zombie" :kind "hostile" :visible true :pos {:x 8.5 :y 60 :z 0.5}})
-        hp (fn [p] (hostile-fight/walk-hp {:primitives p :args {} :root "j1" :slots [] :view (fn [] {:now 0 :data {:entries {}}})} [zed]))
-        seen (tu/fake {:blocks ledge :self {:pos [0.5 64 0.5]}})
-        dark (tu/fake {:blocks ledge :self {:pos [0.5 64 0.5]}})
-        sensed (.-sensedAt dark)]
-    (tu/set-sensed! dark (fn [q] (if (<= 3 (.-x q)) #js {:unknown true :pos q} (sensed q))))
-    (is (<= 1 (hp seen)) "the 4-block drop to the zombie, seen, costs its fall")
-    (is (< (hp dark) (hp seen)) "the ground beyond the ledge never seen: no drop known, its steps at the unseen price")
-    (is (pos? (cost/unseen-route-hp 1 (constantly :ground) [{:x 0 :y 64 :z 0}])) "an unseen step is not free")
-    (is (zero? (cost/unseen-route-hp 1 (constantly :open) [{:x 0 :y 64 :z 0}])))))
+(deftest a-fight-walk-costs-what-go-to-s-quote-of-it-takes-and-risks-past-the-mobs-fought
+  (is (= 3.5 (hostile-fight/walk-hp {:uses {:job-time [2 2 6] :health [0 1.5 1.5]} :risk {:hp 9 :walk-hp 2}})) "its planned drops and its walk risk, the catchers left to the fight")
+  (is (zero? (hostile-fight/walk-hp nil)) "no quote: the lower bound"))
 
 (def pond
   "A pond east of the body: water at x 2..4, y 62 and 63 (the shore floor's level is 63), z -2..2, stone under it."

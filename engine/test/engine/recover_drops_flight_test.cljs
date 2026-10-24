@@ -14,9 +14,10 @@
   "A skeleton 5.7 blocks from the pile: inside the hostile-near radius of the body once it stands there."
   {:id 9 :name "skeleton" :kind "hostile" :pos {:x 24 :y 64 :z 4}})
 
-(def zombie-near-the-body {:id 8 :name "zombie" :kind "hostile" :pos {:x 4.5 :y 64 :z 3.5}})
+(def zombie-near-the-body "Near the body and beside the way ahead: it catches the walk." {:id 8 :name "zombie" :kind "hostile" :pos {:x 6.5 :y 64 :z 1.5}})
 
-(def dear-zombie '(jobs.survival.recover-drops {:danger-overrides {"zombie" 1000}}))
+(def dear-zombie "A pile worth less than the trip with an armed body's fight past a zombie, more than without it."
+  '(jobs.survival.recover-drops {:value-overrides {"raw_iron" 0.5 "cobblestone" 0.05 "oak_planks" 0.05 "stone_pickaxe" 1 "diamond_pickaxe" 12 "diamond_sword" 10}}))
 
 (defn danger-declines [seen] (filterv #(and (= :danger (:reason %)) (:mob %)) (emitted seen :stopped)))
 
@@ -36,20 +37,20 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops dt/diamonds)) zombie-near-the-body)})]
+        (let [{:keys [eng seen]} (setup {:floor tu/walk-floor :inventory dt/sword :entities (conj (vec (pile-drops dt/diamonds)) zombie-near-the-body)})]
           (die! eng {:pos dt/death-pos :inventory dt/diamonds})
           (mem/write! (:store eng) :recover-trip {:death-t (death-t eng) :decided {:value 1400 :cost 50} :baseline {} :phase :go}
                       {:cap 1 :ttl 1000000})
-          (core/submit! eng job {})
+          (core/submit! eng dear-zombie {})
           (await (run-until-empty eng 20))
           (is (= [] (danger-declines seen)))
           (is (re-find #"zombie" (:text (dt/danger-remembered eng)))))))))
 
 (defn dear-run
-  "A death ago-ms back with a zombie priced far dearer than the pile, run to its decision."
+  "A death ago-ms back past a zombie that makes the pile dear (dear-zombie), run to its decision."
   [ago-ms]
   (fn ^:async t []
-    (let [{:keys [eng]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops dt/diamonds)) dt/zombie-by-the-way)})]
+    (let [{:keys [eng]} (setup {:floor tu/walk-floor :inventory dt/sword :entities (conj (vec (pile-drops dt/diamonds)) dt/zombie-by-the-way)})]
       (die! eng {:pos dt/death-pos :inventory dt/diamonds} ago-ms)
       (core/submit! eng dear-zombie {})
       (await (run-until-empty eng 5))
@@ -91,7 +92,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [zombie {:id 8 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}
-              {:keys [eng p seen clock]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops dt/diamonds)) zombie)})]
+              {:keys [eng p seen clock]} (setup {:floor tu/walk-floor :inventory dt/sword :entities (conj (vec (pile-drops dt/diamonds)) zombie)})]
           (die! eng {:pos dt/death-pos :inventory dt/diamonds})
           (core/submit! eng dear-zombie {})
           (await (run-until-empty eng 5))
@@ -103,7 +104,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [zombie {:id 8 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}
-              {:keys [eng seen clock]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops dt/diamonds)) zombie)})]
+              {:keys [eng seen clock]} (setup {:floor tu/walk-floor :inventory dt/sword :entities (conj (vec (pile-drops dt/diamonds)) zombie)})]
           (die! eng {:pos dt/death-pos :inventory dt/diamonds} 2500)
           (core/submit! eng dear-zombie {})
           (let [timer (js/setInterval #(swap! clock + 500) 5)]
@@ -117,10 +118,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [zombie {:id 8 :name "zombie" :kind "hostile" :pos {:x 20 :y 64 :z -40}}
-              {:keys [eng p seen clock]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops dt/diamonds)) zombie)})]
+              {:keys [eng p seen clock]} (setup {:floor tu/walk-floor :inventory dt/sword :entities (conj (vec (pile-drops dt/diamonds)) zombie)})]
           (die! eng {:pos dt/death-pos :inventory dt/diamonds})
-          (on-first-leg! p clock #(place-entity! p 8 (update (fake/body-pos @(fake/state p)) 0 + 3)))
-          (core/submit! eng (list 'jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/leg-s 1} :danger-overrides {"zombie" 1000}}) {})
+          (on-first-leg! p clock #(place-entity! p 8 [19.5 64 2.5]))
+          (core/submit! eng (list 'jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/leg-s 1} :value-overrides {"raw_iron" 0.5 "cobblestone" 0.05 "oak_planks" 0.05 "stone_pickaxe" 1 "diamond_pickaxe" 12 "diamond_sword" 10}}) {})
           (await (run-until-empty eng 30))
           (is (some? (dt/danger-remembered eng)) "the trip turned dear: it backs off")
           (is (nil? (recovered eng)) "the death stays open"))))))
@@ -129,7 +130,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [zombie {:id 8 :name "zombie" :kind "hostile" :pos {:x 20 :y 64 :z 9}}
+        (let [zombie {:id 8 :name "zombie" :kind "hostile" :pos {:x 20 :y 64 :z 3}}
               {:keys [eng p seen clock]} (setup {:floor tu/walk-floor :inventory dt/sword :entities (conj (vec (pile-drops dt/diamonds)) zombie)})]
           (die! eng {:pos dt/death-pos :inventory dt/diamonds})
           (on-first-leg! p clock (fn []

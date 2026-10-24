@@ -8,7 +8,7 @@
             [jobs.items.obtain.base :refer [args-error carried-of craft-step-s gather-need-s gathers? holds makes? max-inspections names-of near-chest smelt-item-s shortfall tried! wanted-fields way?]]
             [jobs.items.obtain.bill :as bill]
             [jobs.items.obtain.loose :as loose-way]
-            [jobs.items.obtain.chest :refer [blocked-text candidates inspect! withdraw!]]
+            [jobs.items.obtain.chest :refer [blocked-text candidates cheapest! inspect! withdraw!]]
             [jobs.items.obtain.craft :refer [craft-step!]]
             [jobs.items.obtain.gather :refer [finish-tree! gather-step!]]
             [jobs.items.obtain.need :refer [explorable? gather-held gather-viable?]]
@@ -237,8 +237,8 @@
           (and (way? c :chest) (not (get-in m [:tried :chest]))
                (or (seq (chests-to-try c m names (- target have))) (not (seq (candidates c names)))))
           (let [cs (chests-to-try c m names (- target have))
-                known (first (filter :stock cs))
-                unknown (first (remove :stock cs))]
+                known (await (cheapest! c (filter :stock cs)))
+                unknown (when-not known (await (cheapest! c (remove :stock cs))))]
             (cond
               known (await (withdraw! c (:pos known) (:stock known) names have (boolean (and (makes? c) (craft-plan c names (- target have))))))
               (and unknown (< (:inspected m 0) (max-inspections))) (await (inspect! c (:pos unknown)))

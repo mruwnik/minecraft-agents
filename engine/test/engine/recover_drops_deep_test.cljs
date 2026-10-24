@@ -60,7 +60,7 @@
                                            :entities [{:id 1 :name "item" :kind "item" :pos pile-pos :item {:name "diamond" :count 5}}
                                                       {:id 9 :name "skeleton" :kind "hostile" :pos {:x 12.5 :y 64 :z 0.5}}]})]
           (die! eng {:pos pile-pos :inventory pile} 5000)
-          (core/submit! eng (list (first job) {:danger-overrides {"skeleton" 1000}}) {})
+          (core/submit! eng (list (first job) {:value-overrides {"diamond" 6}}) {})
           (await (run-until-empty eng 200))
           (is (not= :unreachable (:reason (recovered eng))) (pr-str (recovered eng)))
           (is (some? (dt/danger-remembered eng)) "the skeleton is weighed and the trip backs off"))))))

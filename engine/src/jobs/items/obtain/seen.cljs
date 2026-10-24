@@ -11,28 +11,19 @@
             [jobs.lib.crops :as crops]
             [jobs.lib.foods :as foods]
             [jobs.lib.look :as look]
-            [jobs.lib.reach :as reach]
             [jobs.lib.storage :as storage]
-            [jobs.lib.threats :as threats]
             [jobs.lib.trees :as trees]
             [jobs.lib.util :as u]))
 
 (defn animals-worth-hunting
-  "The adult animals of the need's mob in sight (colour-matching when given), nearest first, whose trip pays: the call's
-  given-worth, else the larger of the animal's meat and the call's search-worth, against fetch-cost of the walk to the
-  animal with the route-hurt of the threats other than the prey's own kind along the straight way."
+  "The adult animals of the need's mob in sight (colour-matching when given), nearest first, whose trip may pay: the call's
+  given-worth, else the larger of the animal's meat and the call's search-worth, against fetch-cost of the straight walk to the
+  animal, a lower bound (its danger is priced from go-to's quote when one is walked to: jobs.lib.walk-pick)."
   [c mob pred]
   (let [p (:primitives c)
         self (u/self-pos c)
-        kind-at (reach/mob-lookup p)
-        body (threats/death-body c)
-        others (delay (threats/threats-of c))
         worth (or (given-worth c) (max (cost/animal-worth mob) (search-worth c)))]
-    (filter (fn [e]
-              (let [at (u/pos-of (.-pos e))
-                    hurt (cost/route-hurt body {:cells (cost/straight-route kind-at self at)
-                                                :threats (remove #(= mob (:mob %)) @others)})]
-                (< (:cost (cost/fetch-cost {:distance (u/dist self at) :danger hurt})) worth)))
+    (filter #(< (:cost (cost/fetch-cost {:distance (u/dist self (u/pos-of (.-pos %))) :danger 0})) worth)
             (filter pred (animals/herd p mob (seen-radius))))))
 
 (defn sheep-in-range
@@ -89,13 +80,19 @@
                          (not (cut-off? c %)))
                    (crops/seen-crops (:primitives c) [(:crop need)] (seen-radius) 256)))))
 
+(defn animals-of
+  "The animals in sight a hunt or shear of an animal need may go for, nearest first: sheep of its colour in range, or adults of its mob worth the trip."
+  [c need]
+  (if (:sheep need)
+    (filter #(= (:sheep need) (.-color %)) (sheep-in-range c))
+    (animals-worth-hunting c (:mob need) #(not (true? (.-baby %))))))
+
 (defn seen-of
   "The nearest seen block of a need that may be taken, or for a wool need a sheep of its colour in range, for a drop of an animal one adult in range; a growable crop need with none seen is sourced by growing it ({:grow true}); else nil."
   [c need]
   (cond
     (growable? need) (or (first (seen-blocks-of c need false)) {:grow true})
-    (:sheep need) (first (filter #(= (:sheep need) (.-color %)) (sheep-in-range c)))
-    (:mob need) (first (animals-worth-hunting c (:mob need) #(not (true? (.-baby %)))))
+    (or (:sheep need) (:mob need)) (first (animals-of c need))
     :else (first (seen-blocks-of c need false))))
 
 (defn with-block

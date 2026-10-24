@@ -22,7 +22,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.patch :as patch]
             [jobs.lib.pace :as pace]
-            [jobs.lib.threats :as threats]
+            [jobs.lib.walk-pick :as pick]
             [jobs.lib.util :as u]
             [jobs.lib.vantage :as vantage]
             [engine.notes :as notes]))
@@ -99,7 +99,7 @@
    :forage {:doc "whether the search is for food (the body hunts or picks it to eat); nil: every target is a food animal or food block. A search for wool or leather from a food animal says false" :spec boolean? :default nil}
    :use-notes {:doc "targets noted (by any body) within the max-distance setting count as found" :spec boolean? :default true}
    :within {:doc "blocks (XZ) from the origin a leg may go at most, a caller's own scope (a site, a pen's radius); nil: only what :worth pays for" :spec (a/num-in 1 nil) :default nil}
-   :worth {:doc "seconds the find is worth: before each walk its price (jobs.lib.cost/leg-price of go-to's quote, the body as it is now) is weighed against what is left of it after the walks so far; the search ends :price at the first that costs more, and ::max-legs does not bind. nil: unpriced" :spec (a/num-in 0 nil) :default nil}})
+   :worth {:doc "seconds the find is worth: before each walk its price (jobs.lib.walk-pick/quoted-s of go-to's quote, the body as it is now) is weighed against what is left of it after the walks so far; the search ends :price at the first that costs more, and ::max-legs does not bind. nil: unpriced" :spec (a/num-in 0 nil) :default nil}})
 
 (a/defargs settings
   {::max-distance {:default 96 :doc "How far (XZ) from the origin a leg may go and a noted or remembered target still counts." :spec (a/int-in 1 nil)}
@@ -559,8 +559,8 @@
     (< (:failed-in-row (ctx/mem c) 0) (dec (max-failed-in-row))) (assoc :ways #{:walk :clear-seal})))
 
 (defn ^:async price-leg!
-  "With :worth, the price of a walk toward leg before it starts (jobs.lib.cost/leg-price of go-to's quote, the death it
-  risks under rock or in the dark where the body stands and past the known threats along the straight way, jobs.lib.threats/threats-of), booked as :leg-price: nil when it is affordable (or unpriced,
+  "With :worth, the price of a walk toward leg before it starts (jobs.lib.walk-pick/quoted-s of go-to's quote: its time
+  and the hp its plan risks, its walk risk), booked as :leg-price: nil when it is affordable (or unpriced,
   or no route is known: the walk fails that leg alone), :continue while go-to's quote search goes on (it resumes at the
   next call), else the :price ending: the price is more than what is left of the worth times the chance a look round
   there finds one (cost/look-leg-chance: over every live searched note, :use-notes false too, or for ore the rock seen
@@ -570,8 +570,7 @@
     (let [p (:primitives c)
           [x y z] leg
           q (await (ctx/quote c 'jobs.movement.go-to (leg-args c leg)))
-          at {:x x :y y :z z}
-          price (cost/leg-price q (threats/route-death-cost c {:underground? (sh-sense/buried? p) :night? (look/dark-here? p)} at))
+          price (pick/quoted-s c q)
           chance (if sure? 1 ((or (cost/look-leg-chance p (notes/notes c) (targets c) [x z] (:scan-radius (:args c))) (constantly 1)) 0))]
       (cond
         (:estimate q) :continue

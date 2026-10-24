@@ -7,7 +7,7 @@
             [jobs.items.obtain.base :refer [barren-ore explore-opts own-worth search-names search-scan-radius search-worth site-radius tried! ways-of]]
             [jobs.items.obtain.need :refer [gather-viable? pickaxe-first? light-settling? tools-wanted torch-due trees-unreachable?]]
             [jobs.items.obtain.plan :refer [gather-plan search-way]]
-            [jobs.items.obtain.seen :refer [gather-carried gather-slot seen-of shears-source with-avoid with-block with-count]]
+            [jobs.items.obtain.seen :refer [animals-of gather-carried gather-slot seen-of shears-source with-avoid with-block with-count]]
             [jobs.lib.breath :as breath]
             [jobs.lib.cost :as cost]
             [jobs.lib.foods :as foods]
@@ -20,7 +20,8 @@
             [jobs.lib.need :as fetch-need]
             [jobs.lib.torch-stock :as torch-stock]
             [jobs.lib.reserve :as reserve]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.lib.walk-pick :as pick]))
 
 (defn keep-crafting-items!
   "Reserve the carried units the craft chain will take, against every chooser but the crafts, while a gather child runs:
@@ -137,12 +138,18 @@
        (let [s (ctx/child-status c (gather-slot need) (:job need) (:args need))]
          (and (= :later (first s)) (= :too-few (:reason (contract/status-cause s)))))))
 
-(defn approach!
-  "Set the lead to the animal in sight; :again."
+(defn lead-args "The go-to args of the walk to within 6 blocks of cell [x y z]." [cell]
+  {:pos (zipmap [:x :y :z] cell) :range 6 :ways #{:walk} :spend {:tries 1}})
+
+(defn ^:async approach!
+  "Set the lead to the animal in sight of the need whose walk costs least (jobs.lib.walk-pick); :again."
   [c need]
-  (let [{:keys [x y z]} (u/pos-of (.-pos (seen-of c need)))]
+  (let [cell #(mapv js/Math.floor ((juxt :x :y :z) (u/pos-of (.-pos %))))
+        best (await (pick/pick! c (animals-of c need) {:bound #(pick/walk-s c (u/pos-of (.-pos %)))
+                                                        :args (comp lead-args cell)
+                                                        :price (fn [_ q] (pick/quoted-s c q))}))]
     (ctx/update-mem! c update-in [:gather :approaches (:key need)] (fnil inc 0))
-    (ctx/update-mem! c assoc-in [:gather :lead] {:key (:key need) :pos [x y z]})
+    (when best (ctx/update-mem! c assoc-in [:gather :lead] {:key (:key need) :pos (cell best)}))
     :again))
 
 (defn ^:async lead-step!
@@ -150,7 +157,7 @@
   of where it was found. :continue while it walks, else :again."
   [c]
   (let [{:keys [pos]} (get-in (ctx/mem c) [:gather :lead])
-        r (await (child/call-walk* c :lead-walk {:pos (zipmap [:x :y :z] pos) :range 6 :ways #{:walk} :spend {:tries 1}}))]
+        r (await (child/call-walk* c :lead-walk (lead-args pos)))]
     (if (= :continue r)
       :continue
       (do (ctx/update-mem! c update :gather dissoc :lead) :again))))
@@ -353,7 +360,7 @@
       (and (animal? need) (not (get-in (ctx/mem c) [:gather :before])) (not (look/surveyed? c :near)) (not (seen-of c need)))
       (do (await (look/survey-until! c :near #(seen-of c need) (look/glance-effort) look/hazards-only)) :again)
       (and (not (get-in (ctx/mem c) [:gather :before])) (approach-due? c need))
-      (approach! c need)
+      (await (approach! c need))
       (and (not (get-in (ctx/mem c) [:gather :before])) (pickaxe-first? c names need) (or (explore-opts c) (seen-of c need)))
       (await (pickaxe-step! c names need))
       (and (not (get-in (ctx/mem c) [:gather :before])) (explore-opts c) (searchable? need) (not (:tunnel? need))
