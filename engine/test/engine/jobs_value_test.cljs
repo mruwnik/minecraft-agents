@@ -228,3 +228,7 @@
     (is (< (js/Math.abs (- (* 131 per-use) (v/wear-saved "iron_pickaxe" "stone_pickaxe" nil))) 1e-9) "nil digs: the spare's whole life")
     (is (< (js/Math.abs (- (* 131 per-use) (v/wear-saved "iron_pickaxe" "stone_pickaxe" 500))) 1e-9) "no more than the spare lasts")
     (is (zero? (v/wear-saved "iron_pickaxe" "cobblestone" 10)))))
+
+(deftest a-find-is-worth-its-value-times-the-chance-the-trip-does-not-kill
+  (are [chance worth] (= worth (v/survived-worth 1000 chance))
+    0 1000, nil 1000, 0.25 750, 0.5 500, 1 0, 1.5 0))

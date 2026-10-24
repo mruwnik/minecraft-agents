@@ -106,17 +106,17 @@
   "What estimate reads of c's body and world for the walk to `goal` (estimate's opts), as values: the body's feet, whether
   it is buried, its shelter, death-body and food, the known threats and hides, the writes of what it knows (the blocks,
   light and lava the way is priced by), the sky's darkening now and the cells its look round has looked at."
-  [c goal & [{:keys [plan stake stake-age-ms caves-free?]}]]
+  [c goal & [{:keys [plan caves-free?]}]]
   (let [p (:primitives c)
         feet (sh-sense/feet p)]
-    {:goal (update goal :y #(or % (:y feet))) :plan (select-keys plan [:status :steps]) :stake stake :stake-age-ms stake-age-ms
+    {:goal (update goal :y #(or % (:y feet))) :plan (select-keys plan [:status :steps])
      :caves-free? caves-free? :feet feet :underground? (sh-sense/buried? p) :shelter (:data (ctx/latest c :shelter))
      :body (threats/death-body c) :food (or (.-food (.self p)) 20) :known (threats/known-threats c) :hides (threats/hide-threats c)
      :writes (sense/known-writes p) :sky (sh-sense/sky-subtract-now p) :looked (sense/round-looked c)}))
 
 (defn estimate-of
   "estimate of its inputs (estimate-inputs)."
-  [c {:keys [goal plan stake stake-age-ms caves-free? feet underground? shelter body food known hides]}]
+  [c {:keys [goal plan caves-free? feet underground? shelter body food known hides]}]
   (let [p (:primitives c)
         leaves? (sh-inside/walk-leaves-shelter? p shelter goal 1)
         cells (way feet goal plan)
@@ -124,7 +124,6 @@
         exposed-s (+ (/ exit (cost/walk-blocks-per-s))
                      (spawn-light/dark-seconds p cells (mapv #(/ % (cost/walk-blocks-per-s)) (along cells)) (:y feet) underground? caves-free?))
         spawns (* exposed-s (cost/spawn-chance [0 0 0]))
-        body (assoc body :stake stake :stake-age-ms (when stake-age-ms (+ stake-age-ms (* 1000 (/ (u/dist feet goal) (cost/walk-blocks-per-s))))))
         parts (fn [ts] (if (seq ts) (cost/route-parts body {:cells cells :threats ts :at feet}) {:chance 0 :hurt 0}))
         speed (cost/body-speed food)
         catchers (threats/with-reach c (live-catchers known (mapv #(assoc %1 :t (/ %2 speed)) cells (along cells))))
@@ -141,13 +140,12 @@
         unfought (if (seq catchers) (cost/lethal-hp body (dies met-remembered) goal) lethal)]
     {:hp (+ spawn-hp hostile-hp death-hp lethal lava)
      :walk-hp (+ spawn-hp death-hp unfought lava) :lava-hp lava :spawn-hp spawn-hp :hostile-hp hostile-hp :death-hp death-hp :lethal-hp lethal
-     :dark-s exposed-s :hostiles (count catchers) :threats (mapv #(select-keys % [:mob :pos]) (concat catchers remembered))}))
+     :death-chance (dies met-all) :dark-s exposed-s :hostiles (count catchers) :threats (mapv #(select-keys % [:mob :pos]) (concat catchers remembered))}))
 
 (defn estimate
-  "{:hp :walk-hp :spawn-hp :hostile-hp :death-hp :lethal-hp :lava-hp :dark-s :hostiles :threats} of the walk of c's body to `goal` ({:x :y :z})
+  "{:hp :walk-hp :spawn-hp :hostile-hp :death-hp :lethal-hp :death-chance :lava-hp :dark-s :hostiles :threats} of the walk of c's body to `goal` ({:x :y :z})
   on the way of :plan (go-to's plan of it, {:status :steps}; none: all of it unplanned): hp the expected damage and lethal-hp,
-  the death the spawns and known threats risk (cost/death-chance) in hp (cost/lethal-hp), a death losing
-  :stake seconds of worth besides (go-to's :stake, as death-cost prices it, lain :stake-age-ms); walk-hp the
+  the death the spawns and known threats risk (cost/death-chance) in hp (cost/lethal-hp), walk-hp the
   same leaving out the sensed mobs that catch the walk, their hurt and their death share both (a fight with them prices
   them); death-hp the remembered threats' hurt, hostile-hp what the catchers add to it, all met in one route-parts; dark-s the seconds walked where a mob could spawn (caves-free?: no unseen cell guessed a dark cave); threats [{:mob :pos}] the known threats priced."
   [c goal & [opts]]
@@ -210,7 +208,7 @@
   ([c goal plan]
    (if-not plan
      (contract/ok :unplanned "the walk is priced on go-to's plan before a step of it")
-     (let [{:keys [hp spawn-hp hostile-hp death-hp lethal-hp lava-hp dark-s hostiles]} (let [in (estimate-inputs c goal (assoc (select-keys (:args c) [:stake :stake-age-ms]) :plan plan))] (check-cache/keyed c [::risk in] #(estimate-of c in)))
+     (let [{:keys [hp spawn-hp hostile-hp death-hp lethal-hp lava-hp dark-s hostiles]} (let [in (estimate-inputs c goal {:plan plan})] (check-cache/keyed c [::risk in] #(estimate-of c in)))
            allowed (price/allowed c)]
        (if (<= hp allowed)
          (contract/ok :acceptable (str "route risk " (price/round1 hp) " hp, within " (price/round1 allowed)))

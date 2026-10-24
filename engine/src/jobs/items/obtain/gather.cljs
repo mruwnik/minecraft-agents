@@ -150,7 +150,7 @@
                                                   :args (comp lead-args cell)
                                                   :price (fn [x q]
                                                            (let [s (+ (cost/trip) (pick/quoted-s c q))]
-                                                             (if (< s worth)
+                                                             (if (< s (pick/ev-worth worth q))
                                                                s
                                                                (do (when-not @out (vreset! out (str "the walk to the " (.-name x) " at " (pr-str (cell x)) " costs "
                                                                                                      (js/Math.round s) " s, over the " (js/Math.round worth) " s it is worth")))

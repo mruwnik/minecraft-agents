@@ -212,6 +212,12 @@
   (let [parts {:walk (* (per-block) distance) :danger (or danger-s 0)}]
     {:cost (reduce + (vals parts)) :parts parts}))
 
+(defn survived-worth
+  "Seconds a find worth `worth` is worth to a body whose trip to it ends in death with `chance`: a dead body does not bring it
+  back. The trip's death cost (carried kit, walk back) is priced beside it, in the walk's danger."
+  [worth chance]
+  (* worth (- 1 (min 1 (max 0 (or chance 0))))))
+
 (defn walk-beats-making
   "Whether walking `distance` blocks to something that exists costs no more than making one's own (cost `make`, in seconds)
   and walking the own-place-blocks setting to put it down."

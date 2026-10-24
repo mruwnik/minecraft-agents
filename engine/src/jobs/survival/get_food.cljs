@@ -362,7 +362,7 @@
         out (volatile! nil)
         price (fn [n q]
                 (let [s (pick/quoted-s c q)]
-                  (if (< s (animals/noted-benefit c n))
+                  (if (< s (pick/ev-worth (animals/noted-benefit c n) q))
                     (/ s (points n))
                     (do (when-not @out (vreset! out {:pos (:pos n) :why (quote-why q)})) ##Inf))))
         pick (:pick (await (pick/best! c (animals/noted-targets c done)

@@ -196,7 +196,7 @@
     (cond
       kit kit
 
-      (<= (:value decided) (+ (if (= :infinite (:cost decided)) js/Infinity (:cost decided)) margin))
+      (<= (est/ev-worth decided) (+ (if (= :infinite (:cost decided)) js/Infinity (:cost decided)) margin))
       (if (est/danger-only? decided margin)
         (await (retry-later! c entry decided))
         (if (and (= :too-far (:reason decided)) (pos? (child/fruitless c :go)))

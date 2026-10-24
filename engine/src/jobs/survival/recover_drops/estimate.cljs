@@ -21,12 +21,13 @@
 (defn why-text
   "The value and the cost with their main parts: \"value 3058.5 (24 raw_iron 2880, ...), cost 31 (trip 10, walk 6,
   danger 15: zombie, skeleton)\"."
-  [{:keys [value cost top-items other-items parts reason top-mobs]} margin]
+  [{:keys [value cost top-items other-items parts reason top-mobs chance]} margin]
   (str "value " (round1 value)
        (when (seq top-items)
          (str " (" (str/join ", " (map (fn [{:keys [name count value]}] (str count " " name " " (round1 value))) top-items))
               (when other-items (str ", " (:kinds other-items) " other kinds " (round1 (:value other-items))))
               ")"))
+       (when (pos? (or chance 0)) (str " x " (round1 (* 100 (- 1 chance))) "% survive"))
        ", cost " (if (= :infinite cost) (str "infinite (" (name (or reason :unknown)) ")") (round1 cost))
        (when (seq parts)
          (str " (" (str/join ", " (map (fn [[k n]] (str (name k) " " (round1 n))) parts))
@@ -116,10 +117,10 @@
 (defn ^:async quote-trip
   "go-to's quote of the walk to the pile of death `entry` (its planned seconds, its walk risk, and the hp the route drowns),
   nil without a pos: onto the pile itself, where the collect picks it up (the walk's ::arrive-range may end outside a
-  mob's reach the pile lies in); its risk prices a death on the way as losing the pile too (:stake, pile-worth, lain :stake-age-ms)."
+  mob's reach the pile lies in)."
   [c entry]
   (let [{:keys [pos] :as data} (:data entry)]
-    (when pos (await (ctx/quote c 'jobs.movement.go-to {:pos pos :range 0 :stake (pile-worth c data) :stake-age-ms (pile-age-ms c entry)})))))
+    (when pos (await (ctx/quote c 'jobs.movement.go-to {:pos pos :range 0})))))
 
 (defn estimate
   "{:value :cost :parts :reason :top-items :top-mobs :hold-ms :flight-s} (:hold-ms: how long a skip for this danger is remembered,
@@ -144,6 +145,7 @@
         drowns (when-not (:reason fetch) (no-air-way p wet-at pos drown-hp))
         named (cond-> (mapv #(select-keys % [:name]) mobs) wet (conj (select-keys wet [:name :danger])))]
     (cond-> {:value (pile-worth c data)
+             :chance (get-in quoted [:risk :death-chance] 0)
              :cost (if drowns js/Infinity (:cost fetch))
              :hold-ms (cfg/danger-memory-ms)
              :flight-s (flight-s here mobs)
@@ -155,6 +157,12 @@
       (and (not drowns) (:reason fetch)) (assoc :reason (:reason fetch))
       (seq mobs) (assoc :seen-mobs mobs)
       (seq named) (assoc :top-mobs (vec (take (cfg/top-n) named)))))))
+
+(defn ev-worth
+  "Seconds the pile of estimate e is worth the body that fetches it: its value times the chance of surviving the trip
+  (jobs.lib.cost/survived-worth), to be set against the cost, whose danger prices the death."
+  [e]
+  (cost/survived-worth (:value e) (:chance e)))
 
 (defn danger-only?
   "Whether the estimate e is a skip for danger alone: the pile would be fetched were the route safe."

@@ -25,6 +25,12 @@
                   (+ (- hp lethal-hp) (second (get-in q [:uses :health] [0 0 0])) extra-hurt)
                   lethal-hp))))
 
+(defn ev-worth
+  "Seconds a find worth `worth` is worth to the body that walks go-to's quote q to it: worth times the chance the walk
+  does not end in death (cost/survived-worth); the walk's price (quoted-s) carries the death's own cost."
+  [worth q]
+  (cost/survived-worth worth (get-in q [:risk :death-chance])))
+
 (defn quoted-s
   "Seconds go-to's quote q of a walk costs the body: its mean time and its risk-s; 0 for a body already there (a :done
   ending), ##Inf for another ending or a walk with no finite time."
