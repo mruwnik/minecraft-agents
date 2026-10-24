@@ -1,0 +1,26 @@
+;; Card 99a1bc9f: a body inside a big dark cave (x 2..25, y 0..9, z 4..27, 24x10x24) whose goal lies past its east wall, in a
+;; pocket (x 34..35, feet 0, z 15) behind 8 blocks of rock. In the dark the body sees about 4 blocks round it; the rock guess
+;; must still hold (wworld/rock-likely?), so the cells past what it saw read stone and no plan runs through the unseen rock.
+;; Should-succeed: go-to digs toward the goal (:dig-route) and arrives, with no search spending its node budget. Should-fail:
+;; with :ways #{:walk} it gives up unarrived, again with no budget flood.
+{:defaults
+ {:tags [:movement :go-to :dark]
+  :time :any
+  :plot {:height 12 :length 48 :light :dark}
+  :blocks [[:fill [0 0 0] [47 11 31] "stone"]
+           [:fill [2 0 4] [25 9 27] "air"]
+           [:fill [34 0 15] [35 1 15] "air"]]
+  :body {:at [13.5 0 15.5] :yaw 270 :settle-s 3 :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1]]}
+  :limit-s 300}
+ :cases
+ [{:name "dark-cave-digs-to-a-goal-past-its-wall"
+   :act [[:job (jobs.movement.go-to {:pos #at [34 0 15] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :within-s 150 :of-job true}
+            {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 280 :of-job true}
+            {:no-event {:source :job :kind :go-to.retrying :data {:reason :budget}} :for-s 280 :until {:source :job :kind :completed :data {:arrived true}}}]
+   :after [[:body-near [34.5 0 15.5] 2]]}
+  {:name "dark-cave-walk-only-gives-up-without-a-budget-flood"
+   :act [[:job (jobs.movement.go-to {:pos #at [34 0 15] :range 1 :ways #{:walk}})]]
+   :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false}} :within-s 150 :of-job true}
+            {:no-event {:source :job :kind :go-to.retrying :data {:reason :budget}} :for-s 150 :until {:source :job :kind :stopped :data {:arrived false}}}]
+   :limit-s 160}]}
