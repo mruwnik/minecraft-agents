@@ -123,3 +123,11 @@
   (let [pooled (recipes/pooled game/default-version "campfire" {"oak_log" 1 "birch_log" 2})]
     (is (= 3 (get pooled "oak_log") (get pooled "birch_log")))
     (is (= 3 (get pooled "stripped_cherry_log")) "any log stands in")))
+
+(deftest a-repeated-plan-is-kept-but-a-changed-input-gives-its-own-answer
+  (let [logs {"oak_log" 12}
+        first-shape (shape (plan logs "wooden_pickaxe" 1))]
+    (is (= first-shape (shape (plan logs "wooden_pickaxe" 1))))
+    (is (not= first-shape (shape (plan logs "wooden_pickaxe" 1 {:table? true}))) "the table option")
+    (is (not= first-shape (shape (plan (assoc logs "stick" 4 "oak_planks" 8) "wooden_pickaxe" 1))) "what is carried")
+    (is (= [[:craft "stick" 4]] (shape (plan {"oak_planks" 8} "stick" 4))) "a different item and have")))

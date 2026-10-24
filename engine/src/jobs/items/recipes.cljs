@@ -205,8 +205,7 @@
                table? (str "needs a crafting_table, none carried; " (lacking version have table-item 1))
                :else "has no ingredient short, but no chain works"))))))
 
-(defn plan
-  "See the ns doc. n is the amount still lacking: a gatherable item is planned as {:gather {item n}} whatever is carried."
+(defn- plan*
   [version have item n {:keys [table? max-depth gather? materials raw smelts ungathered] :or {max-depth 6}}]
   (let [rs (recipes-for version)
         st0 {:have have :steps [] :gather? gather? :materials (or materials (stone-materials version)) :ranks (material-ranks version)
@@ -221,3 +220,17 @@
       :else (when-let [t (acquire rs st0 table-item 1 #{} max-depth)]
               (when-let [m (make rs t item n #{} max-depth)]
                 (with-gather {:steps (vec (concat (:steps t) (subvec (:steps m) (count (:steps t)))))} m))))))
+
+(def ^:private plans-cap 256)
+(def ^:private plans (atom {}))
+
+(defn plan
+  "See the ns doc. n is the amount still lacking: a gatherable item is planned as {:gather {item n}} whatever is carried.
+  Pure, so the answer is kept per argument set (a start check asks again each dig step); the keep is emptied when full."
+  [version have item n opts]
+  (let [k [version have item n opts]]
+    (if-let [hit (find @plans k)]
+      (val hit)
+      (let [pl (plan* version have item n opts)]
+        (swap! plans #(assoc (if (>= (count %) plans-cap) {} %) k pl))
+        pl))))
