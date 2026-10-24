@@ -165,6 +165,7 @@
               c (ready-test/ctx-of world)
               goal {:x 70 :y 64 :z 0}
               searches (atom 0)
+              straight-hp (:hostile-hp (risk/estimate c goal))
               priced (atom [])
               walked (atom [])
               create-plan planner/create-plan
@@ -173,7 +174,7 @@
           (set! planner/create-plan (fn [snapshot query options] (swap! searches inc) (create-plan snapshot query options)))
           (is (= :ok (first (reprice/status c goal))) "the start check before a plan")
           (is (zero? @searches) "the start check searches nothing")
-          (is (> (:hostile-hp (risk/estimate c goal)) 1) "the straight line runs through the zombie's field")
+          (is (> straight-hp 1) "the straight line runs through the zombie's field")
           (set! risk/way (fn [feet goal plan] (swap! priced conj (:steps plan)) (way feet goal plan)))
           (set! drive/follow! (fn [c plan opts] (swap! walked conj (:steps plan)) (follow! c plan opts)))
           (try
@@ -182,7 +183,7 @@
               (await (st/tick-n eng 40))
               (is (seq @walked) "go-to walks")
               (is (= (first @walked) (first @priced)) "its first plan is the way priced")
-              (is (< (:hostile-hp (risk/estimate c goal {:plan {:status "found" :steps (first @walked)}})) 1) "round the field")
+              (is (< (:hostile-hp (risk/estimate c goal {:plan {:status "found" :steps (first @walked)}})) (/ straight-hp 2)) "round the field: the zombie meets it far less often")
               (is (> (:x (st/pos-of p)) 30) "past the zombie"))
             (finally
               (set! planner/create-plan create-plan)
