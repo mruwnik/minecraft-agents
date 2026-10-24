@@ -2,6 +2,7 @@
   "go-to's :y-margin: blocks past the lowest and highest of body and goal that a walk's search may reach, so a route that
   dips far below both ends (through deep caves) is refused instead of walked; absent: the walks' wide box."
   (:require [cljs.test :refer [deftest is are async]]
+            [jobs.movement.go-to.search-bound :as search-bound]
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.go-to-test :as gt]
@@ -474,14 +475,14 @@
       (fn ^:async t []
         (let [world (assoc in-loop :blocks bedrock-loop :inventory [{:name "stone_pickaxe" :count 1}])
               {:keys [out p] :as s} (await (climb! world {:pos across :range 0 :unknown false}))
-              capped (await (settings/with-settings {:jobs.movement.go-to.tuning/max-route-replans 0}
-                              #(climb! world {:pos across :range 0 :unknown false})))]
+              capped (with-redefs [search-bound/fallback-s (constantly 0)]
+                       (await (climb! world {:pos across :range 0 :unknown false})))]
           (is (true? (:arrived @out)) (pr-str @out))
           (is (= [0 64 6] (mapv js/Math.floor (gt/at p))))
           (is (= ["bedrock" "bedrock"] (map #(.-name (.blockAt p (clj->js %))) [{:x 0 :y 64 :z 3} {:x 0 :y 65 :z 3}])))
           (is (= [:dig-route] (map :step (gt/events-of s :go-to.escalated))))
-          (is (some #(= [:dig-route :no-route] ((juxt :step :reason) %)) (gt/events-of capped :go-to.escalation-stopped))
-              "no replan left: the route ends :no-route"))))))
+          (is (some #(= [:dig-route :replans-spent] ((juxt :step :reason) %)) (gt/events-of capped :go-to.escalation-stopped))
+              "replans that cost what the other way does: the route ends :replans-spent"))))))
 
 (deftest the-long-way-is-walked-on-request-under-the-sky-or-within-the-bound
   (async done

@@ -518,29 +518,42 @@
             (note-holes! c [dug]))
           o)))))
 
+(defn replans-spent?
+  "Whether the dig route's replans (memory :replan-budget {:since :fallback-s}, begun at the first) have taken the body as long
+  as the way without a dig route costs (search-bound/fallback-s): the most they can save."
+  [c m]
+  (when-let [{:keys [since fallback-s]} (:replan-budget m)]
+    (>= (/ (- (ctx/now c) since) 1000) fallback-s)))
+
 (defn ^:async replan-route!
   "Plan the :dig-route escalation again from the feet into goal pos with what the body sees now (route-cells): :again,
   the walk on (escalated!) when nothing is left to dig or the only thing missing is a pocket's floor (it shows once the
   body walks in, and the walk keeps off a floor it then sees to be a void), the ways chosen again when no route is
-  left, or the escalation fails :no-route once it planned tuning/max-route-replans times. The walk on counts as a replan, so a walk that keeps
-  failing ends :no-route. A search that spends its slice (route-slice) goes on next round: :continue. A loosened route's cells are dropped: the cells it still guesses stay unseen from here and
+  left, or the escalation fails :replans-spent once the replans have taken the body as long as the way without a dig route
+  costs (replans-spent?; the walk on is a replan too, so a walk that keeps failing ends it). A search that spends its slice (route-slice) goes on next round: :continue. A loosened route's cells are dropped: the cells it still guesses stay unseen from here and
   digging one that is open fails :cannot, and the walk meets any real rock and escalates again. A climb's dig route
   (climb-route) walks again instead, counted as a replan too: the climb is searched again, and past the count it fails
-  :no-route, which skips dig routes for the rest of the call."
+  :replans-spent, which skips dig routes for the rest of the call."
   [c pos cell]
-  (let [m (ctx/mem c)
-        n (inc (:route-replans m 0))
-        in-range? (<= n (tuning/max-route-replans))]
+  (let [feet (end/feet-cell c)
+        _ (when-not (:replan-budget (ctx/mem c))
+            (ctx/update-mem! c assoc :replan-budget
+                             {:since (ctx/now c)
+                              :fallback-s (search-bound/fallback-s c feet (stand-goal c (mapv #(js/Math.floor (% pos)) [:x :y :z]))
+                                                                   (may-dig-fn c) (way-opts c feet (fetch-tool? c) nil))}))
+        m (ctx/mem c)
+        spent? (replans-spent? c m)
+        in-range? (not spent?)]
     (cond
       ;; a climb's dig over rock it guessed: the climb is searched again from here
       (and (contains? (:escalation m) :then) in-range?)
-      (do (ctx/update-mem! c assoc :route-replans n) (escalated! c pos (:escalation m) false))
-      ;; escalation-failed! would walk again after a part made and choose the climb anew: the count is spent
+      (escalated! c pos (:escalation m) false)
+      ;; escalation-failed! would walk again after a part made and choose the climb anew: the replans are spent
       (contains? (:escalation m) :then)
-      (await (escalation-next! c pos {:step :dig-route :reason :no-route :cell cell :replans (dec n)}))
+      (await (escalation-next! c pos {:step :dig-route :reason :replans-spent :cell cell :fallback-s (:fallback-s (:replan-budget m))}))
       ;; the replan's searches stood the body still as long as the way without the route costs: the ways are chosen again
       (search-bound/spent? c m)
-      (do (search-spent! c (end/feet-cell c)) (ctx/update-mem! c assoc :route-replans n) (escalated! c pos (:escalation m) false))
+      (do (search-spent! c (end/feet-cell c)) (escalated! c pos (:escalation m) false))
       :else
       (let [slice (route-slice (route-owner c))
             feet (end/feet-cell c)
@@ -550,7 +563,7 @@
                                 (search-opts {:stands (ledger/stair-stands c) :slice slice :spent (:spent-routes m)})))
             cells (when in-range? (plan false))
             loosened (when (and in-range? (nil? cells)) (plan true))
-            walk-on! (fn [] (ctx/update-mem! c assoc :route-replans n) (escalated! c pos (:escalation m) true))]
+            walk-on! (fn [] (escalated! c pos (:escalation m) true))]
         ;; an answered replan must not be answered again from the kept search when the world has changed since
         (cond
           (searching? slice)
@@ -563,10 +576,10 @@
               (cond
                 (some? loosened) (walk-on!)
                 ;; the guess the route rested on is gone: the ways are chosen again from what the body sees now
-                (and in-range? (nil? cells)) (do (ctx/update-mem! c assoc :route-replans n) (escalated! c pos (:escalation m) false))
-                (nil? cells) (await (escalation-failed! c pos {:step :dig-route :reason :no-route :cell cell}))
+                (and in-range? (nil? cells)) (escalated! c pos (:escalation m) false)
+                (nil? cells) (await (escalation-failed! c pos {:step :dig-route :reason :replans-spent :cell cell}))
                 (empty? cells) (walk-on!)
-                :else (do (ctx/update-mem! c #(-> % (assoc-in [:escalation :cells] cells) (assoc :route-replans n))) :again))))))))
+                :else (do (ctx/update-mem! c assoc-in [:escalation :cells] cells) :again))))))))
 
 (defn ^:async dig-route-round!
   "One round of digging a :dig-route escalation's cells in walking order (route-cell!); a cell already open is passed,

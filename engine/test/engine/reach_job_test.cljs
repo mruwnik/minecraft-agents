@@ -105,8 +105,8 @@
 
 (deftest a-climb-whose-guessed-rock-keeps-showing-open-ends-once-its-replans-are-spent
   ;; a body shut in a pocket in stone under a goal 12 across and 3 up; shafts of air along the way read as rock till the
-  ;; body is near: each one seen sends the climb to be searched again, a replan counted, and past max-route-replans its
-  ;; dig routes fail :no-route instead of the climb being chosen again for every guess the looks undo
+  ;; body is near: each one seen sends the climb to be searched again, a replan, and once the replans have taken as long as the way
+  ;; without a dig route costs its dig routes fail :replans-spent instead of the climb being chosen again for every guess the looks undo
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -118,13 +118,14 @@
               replans (atom 0) replan esc/replan-route!
               eng (assoc-in eng [:jobs 'recording-parent] (recording-parent out 'jobs.movement.go-to {:pos [12 67 0] :range 0}))]
           (dark-but-near p (set shafts))
-          (with-redefs [esc/replan-route! (fn [& args] (swap! replans inc) (apply replan args))]
+          (with-redefs [esc/replan-route! (fn [& args] (swap! replans inc) (apply replan args))
+                        esc/replans-spent? (constantly true)]
             (core/submit! eng '(recording-parent) {})
-            (await (settings/with-settings {:jobs.movement.go-to.tuning/max-route-replans 1} #(tick-out! eng 2000))))
+            (await (tick-out! eng 2000)))
           (is (not= :not-done @out) "the call ended")
-          (is (some #(= [:dig-route :no-route] ((juxt :step :reason) %)) (events-of seen :go-to.escalation-stopped))
+          (is (some #(= [:dig-route :replans-spent] ((juxt :step :reason) %)) (events-of seen :go-to.escalation-stopped))
               (pr-str @replans (keep #(when (re-find #"^go-to\.esc" (name (:kind %))) [(:kind %) (:step %) (:reason %) (:why %) (:at %)]) @seen)))
-          (is (<= @replans 2) "one replan counted, the next spends the count"))))))
+          (is (<= @replans 2) "the first replan spends the replans"))))))
 
 (deftest a-climb-search-with-no-route-ends-once-standing-for-it-costs-what-the-stair-does
   ;; the goal sealed in bedrock 20 above a body shut in stone: no climb reaches it, and its search floods the rock round

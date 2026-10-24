@@ -2,6 +2,7 @@
   "jobs.movement.go-to escalation (pillar, stair, clear-path, a walk to a wall) and jobs.lib.escape, against the fake
   world."
   (:require [clojure.string :as str]
+            [jobs.movement.go-to.search-bound :as search-bound]
             [engine.contract :as contract]
             [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
@@ -761,14 +762,12 @@
               pick [{:name "stone_pickaxe" :count 1}]
               run #(dig-route-run! below-pocket pick sense)
               walked (await (run))
-              capped (await (settings/with-settings {:jobs.movement.go-to.tuning/max-route-replans 0} run))
-              one (await (settings/with-settings {:jobs.movement.go-to.tuning/max-route-replans 1} run))]
+              capped (with-redefs [search-bound/fallback-s (constantly 0)] (await (run)))]
           (is (true? (:arrived @(:out walked))) (pr-str @(:out walked)))
           (is (= [3 60 0] (feet (:p walked))))
           (is (empty? (events-of (:seen walked) :go-to.escalation-stopped)))
-          (is (some #(= [:dig-route :no-route] ((juxt :step :reason) %)) (events-of (:seen capped) :go-to.escalation-stopped))
-              "the walk on is a replan, so no replan left ends it")
-          (is (true? (:arrived @(:out one))) "one replan is enough for the one walk on"))))))
+          (is (some #(= [:dig-route :replans-spent] ((juxt :step :reason) %)) (events-of (:seen capped) :go-to.escalation-stopped))
+              "the walk on is a replan, so replans that cost what the other way does end it"))))))
 
 (deftest a-dig-route-walk-on-never-stands-in-a-pocket-whose-unseen-floor-is-void-or-lava
   ;; as the test above, but the floor [3 59 0] is a void (air over lava, or lava): the body never ends in the pocket

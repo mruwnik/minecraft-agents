@@ -5,6 +5,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.escape :as escape]
             [jobs.lib.walk-risk :as risk]
+            [jobs.movement.go-to.escalation :as esc]
             [jobs.movement.go-to.preview :as preview]
             [jobs.movement.go-to.search-bound :as sb]))
 
@@ -30,3 +31,9 @@
   (with-redefs [escape/choose (fn ([_ _ _ _] nil) ([_ _ _ _ _] {:step :none}))]
     (is (close? (cost/tour-worth 20) (sb/fallback-s (ctx-at 0) [0 64 0] [20 64 0] (constantly true) {}))
         "no :worth said: a tour's worth of the goal, never unbounded")))
+
+(deftest dig-route-replans-are-spent-once-they-have-taken-as-long-as-the-way-without-one-costs
+  (let [m {:replan-budget {:since 1000 :fallback-s 10}}]
+    (is (not (esc/replans-spent? (ctx-at 10999) m)))
+    (is (esc/replans-spent? (ctx-at 11000) m))
+    (is (not (esc/replans-spent? (ctx-at 99999) {})) "none begun")))
