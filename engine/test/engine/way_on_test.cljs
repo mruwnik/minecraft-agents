@@ -69,3 +69,13 @@
                     a)))]
     (is (pos? (:n (way-on/way-counts known [0 64 0]))) "a body that has not seen its own footing still counts the ground ahead")
     (is (< (dead-end known) 0.05))))
+
+(deftest seen-ground-past-a-wide-unseen-gap-is-not-counted
+  (let [gap (set (for [x (range -8 9) z (range -8 9) y [63 64 65] :when (and (<= (max (js/Math.abs x) (js/Math.abs z)) 5) (not= [x z] [0 0]))] [x y z]))
+        known (fn [cx sy cz]
+                (when-let [^js ids (open-ground cx sy cz)]
+                  (let [a (js/Uint16Array.from ids)]
+                    (doseq [[x y z] gap :when (= [cx sy cz] (mapv #(bit-shift-right % 4) [x y z]))]
+                      (aset a (store/cell-index x y z) 0))
+                    a)))]
+    (is (= {:k 0 :n 0} (way-on/way-counts known [0 64 0])) "seen cells only past an unseen gap: nothing counted, the prior stands")))

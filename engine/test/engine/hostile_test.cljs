@@ -419,6 +419,7 @@
             (let [{:keys [eng p seen]} (setup-seeing (assoc world :self {:health 5} :inventory sword :pitch -80) nil 1000)]
               (perception/pass! (aget p "perception"))
               (swap! (fake/state p) assoc :pitch 0)
+              (perception/pass! (aget p "perception"))
               (core/submit! eng spec {})
               (await (core/tick! eng))
               (is (= decision (:decision (first (hostile-entries eng)))) why)

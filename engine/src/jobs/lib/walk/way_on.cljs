@@ -49,6 +49,10 @@
   ([a b c] (all-of a b c 1))
   ([a b c d] (if (or (zero? a) (zero? b) (zero? c) (zero? d)) 0 (if (and (== a 1) (== b 1) (== c 1) (== d 1)) 1 -1))))
 
+(def ^:private blind
+  "Cells round the feet a body looking ahead has not seen (the ground under and beside it): the only unseen cells a count passes through."
+  2)
+
 (def ^:private dxs #js [1 -1 0 0])
 (def ^:private dzs #js [0 0 1 -1])
 
@@ -56,8 +60,8 @@
   "{:k :n} over the seen stands a body could walk to, nearest start ([x y z] feet cell) first (at most ::sample of them,
   breadth first over the ways between them): n the stands whose every side is seen, k those with a way onward other
   than the one they were entered by (a wall beside a way is no way). A stand with a side not seen is left uncounted
-  (it may go on), as is a level way with a cell not seen, gone through (the cells by the feet a body looking ahead has
-  not seen), at most ::sample times 8 cells in all. known: (fn [cx sy cz]) the memory's ids + 1 of a section."
+  (it may go on), as is a level way with a cell not seen within 2 cells of start, gone through (the cells by the feet a body
+  looking ahead has not seen); farther unseen cells are the worse case, not passed. known: (fn [cx sy cz]) the memory's ids + 1 of a section."
   [known [sx sy sz]]
   (let [at (cell-fn known)
         cap (settings/get settings ::sample)
@@ -68,7 +72,7 @@
                                   (when-not (.has seen key)
                                     (.add seen key) (.push qx x) (.push qy y) (.push qz z) (.push qp from))))]
     (loop [i 0 stands 0 k 0 n 0]
-      (if (or (>= i (.-length qx)) (>= stands cap) (>= i (* 8 cap)))
+      (if (or (>= i (.-length qx)) (>= stands cap))
         {:k k :n n}
         (let [x (aget qx i) y (aget qy i) z (aget qz i)
               p (aget qp i)
@@ -88,7 +92,8 @@
                                     (if (and (>= p 0) (== nx (aget qx p)) (== ny (aget qy p)) (== nz (aget qz p))) onward (inc onward))
                                     unseen?))
                       (and (zero? level) (zero? up) (zero? down)) (recur (inc d) onward unseen?)
-                      (neg? level) (do (visit! nx y nz i) (recur (inc d) onward true))
+                      (neg? level) (do (when (<= (max (js/Math.abs (- nx sx)) (js/Math.abs (- nz sz))) blind) (visit! nx y nz i))
+                                       (recur (inc d) onward true))
                       :else (recur (inc d) onward (or unseen? (neg? up) (neg? down)))))))
               counted? (and (pos? i) (not unseen?))]
           (recur (inc i) (if counted? (inc stands) stands) (if (and counted? (pos? onward)) (inc k) k) (if counted? (inc n) n)))))))
