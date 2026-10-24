@@ -537,6 +537,10 @@
     (await (tu/run-ticks eng (:clock s) n 700))
     @out))
 
+(deftest blocked-cells-at-ground-level-leave-the-field-in-order
+  (with-redefs [tend/part-status (constantly [:later :x {:reason :nothing-to-do :blocked 2 :ground-level 2 :text "t"}])]
+    (is (tend/in-order? nil))))
+
 (deftest tend-exports-the-contract-and-quotes-validly
   (let [job (get registry/jobs 'jobs.farm.tend)]
     (is (fn? (:can-start? job)))
