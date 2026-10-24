@@ -116,6 +116,12 @@
 
 (def kit-worth (cost/items-find-worth (zipmap makers/iron-kit (repeat 1))))
 
+(deftest the-iron-kits-worth-pays-the-stair-up-from-deep-levels
+  (is (<= 1000 kit-worth) "the climb fixture's :search-worth 1000 is no more than the kit bill's own worth")
+  (doseq [y [-39 -20]]
+    (is (= [:tunnel 16] ((juxt :way :y) (iron-way "dirt" y :worth kit-worth)))
+        "the 36 to 55 dark levels up cost less than the finds a strip tunnel at the feet would wait for")))
+
 (deftest unseen-iron-is-tunnelled-for-at-its-level-unless-a-cave-of-rock-in-sight-is-cheaper-to-look-over
   (let [grass (iron-way "grass_block" 69)
         cave (iron-way "stone" 39)]
