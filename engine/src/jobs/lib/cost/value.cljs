@@ -13,7 +13,7 @@
                  except :natural ones (granite, clay ...); a block that is no item (redstone_wire) is none.
     crop         A block with an age state: :farm-s / the age-7 yield.
     mob          entityLoot of the mobs in weapon/mob-max-health and passive-max-health: (kill + hurt + find) / expected
-                 drops; kill = the stone sword's hits, hurt = :hurt-hp-per-hp x health x :danger hp, each at health/hp-seconds, find by hostile or passive.
+                 drops; kill = the stone sword's hits, hurt = :hurt-hp-per-hp x health x :danger hp, each at health/walk-hp-seconds, find by hostile or passive.
     made         The cheapest recipe: the ingredients plus :craft-step, divided by the result count; or smelting by
                  name rule (raw_X -> X_ingot, X -> cooked_X, ancient_debris -> netherite_scrap, cobblestone -> stone,
                  sand -> glass, clay_ball -> brick): the input plus :smelt-step. The table is a fixpoint, then each tool
