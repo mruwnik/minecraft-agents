@@ -18,6 +18,14 @@
     (try [(await (pick/best! nil candidates {:bound :bound :args identity :price (fn [_ q] (:s q))})) @asked]
          (finally (set! pick/quote! quote!)))))
 
+(defn ^:async with-death-chance
+  "(f)'s value with every go-to quote walk-pick asks for (pick/quote!) saying its walk ends in death with chance p."
+  [p f]
+  (let [quote! pick/quote!]
+    (set! pick/quote! (fn ^:async q [c args] (assoc-in (await (quote! c args)) [:risk :death-chance] p)))
+    (try (await (f))
+         (finally (set! pick/quote! quote!)))))
+
 (deftest the-quoted-best-stops-the-quotes-once-no-bound-left-can-beat-it
   (async done
     (tu/run-async done

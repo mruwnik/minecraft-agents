@@ -149,11 +149,12 @@
         best (:pick (await (pick/best! c animals {:bound #(approach-bound c %)
                                                   :args (comp lead-args cell)
                                                   :price (fn [x q]
-                                                           (let [s (+ (cost/trip) (pick/quoted-s c q))]
-                                                             (if (< s (pick/ev-worth worth q))
+                                                           (let [s (+ (cost/trip) (pick/quoted-s c q))
+                                                                 ev (pick/ev-worth worth q)]
+                                                             (if (< s ev)
                                                                s
                                                                (do (when-not @out (vreset! out (str "the walk to the " (.-name x) " at " (pr-str (cell x)) " costs "
-                                                                                                     (js/Math.round s) " s, over the " (js/Math.round worth) " s it is worth")))
+                                                                                                     (js/Math.round s) " s, over the " (js/Math.round ev) " s it is worth")))
                                                                    ##Inf))))})))]
     (ctx/update-mem! c update-in [:gather :approaches (:key need)] (fnil inc 0))
     (cond

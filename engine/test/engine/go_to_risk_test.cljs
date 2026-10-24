@@ -113,6 +113,15 @@
   "A way from [0 64 0] to [30 64 0] out to z 10 and back."
   (concat (for [z (range 1 11)] {:x 0 :y 64 :z z}) (for [x (range 1 31)] {:x x :y 64 :z 10}) (for [z (range 9 -1 -1)] {:x 30 :y 64 :z z})))
 
+(deftest a-walk-there-and-back-is-priced-as-one-walk-past-the-same-skeleton
+  (let [c (ready-test/ctx-of {:time st/noon :self {:pos {:x 0.5 :y 64 :z 0.5}}
+                              :entities [{:id 7 :name "skeleton" :kind "hostile" :pos {:x 42 :y 64 :z 0}}]})
+        goal {:x 30 :y 64 :z 0}
+        there (:death-chance (risk/estimate c goal {:plan (plan-of straight-cells)}))
+        both (:death-chance (risk/estimate c goal {:plan (plan-of straight-cells) :back? true}))]
+    (is (< 0 there both) "the way back is in its fire range too")
+    (is (< both (- 1 (js/Math.pow (- 1 there) 2))) "a skeleton that noticed the body going has it coming back: no second draw of its notice")))
+
 (deftest a-longer-detour-pays-its-spawn-and-lava-parts-on-its-own-cells
   (let [c (ready-test/ctx-of {:time st/night :self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks {"15,64,12" "lava"}})
         goal {:x 30 :y 64 :z 0}

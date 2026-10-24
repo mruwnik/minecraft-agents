@@ -408,6 +408,16 @@
                      (finally (aset ctx/quote arity real)))]
       {:state state :asked @asked})))
 
+(deftest a-leg-whose-walk-likely-ends-in-death-is-priced-against-the-survived-share-of-the-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [legs (fn ^:async l [chance]
+                     (let [{:keys [state]} (await (search-quoted! (fn [_ _] {:uses {:job-time [3 3 9]} :risk {:death-chance chance}})))]
+                       ((juxt :why #(get-in % [:coverage :legs])) (not-found-of state))))]
+          (is (not= [:price 0] (await (legs 0))) "a 3 s walk is under the 12 s worth")
+          (is (= [:price 0] (await (legs 0.9))) "a body that comes back one time in ten gets 1.2 s of it"))))))
+
 (deftest a-leg-with-no-route-fails-alone-and-the-next-is-tried
   (async done
     (tu/run-async done

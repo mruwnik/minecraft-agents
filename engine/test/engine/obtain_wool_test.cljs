@@ -7,6 +7,7 @@
             [engine.hostile-test :as h]
             [engine.settings :as settings]
             [engine.test-util :as tu]
+            [engine.walk-pick-test :as pick-test]
             [jobs.items.obtain :as obtain]
             [jobs.items.obtain.gather :as gather]
             [jobs.items.obtain.seen :as seen]
@@ -309,7 +310,16 @@
           (is (= {:key "leather" :pos [10 64 0]} (get-in safe [:gather :lead])) "a safe walk to the herd is under its worth: the body walks closer")
           (is (nil? (get-in guarded [:gather :lead])) "past the remembered killer the walk costs more than the cow is worth")
           (is (= :priced-out (get-in guarded [:tried :gather])))
-          (is (re-find #"^the walk to the cow at \[10 64 0\] costs \d+ s, over the 20 s it is worth" (str (get-in guarded [:gather :why])))))))))
+          (is (re-find #"^the walk to the cow at \[10 64 0\] costs \d+ s, over the \d+ s it is worth" (str (get-in guarded [:gather :why])))))))))
+
+(deftest an-animal-whose-walk-likely-ends-in-death-is-worth-only-its-survived-share
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [m (await (pick-test/with-death-chance 0.95 #(approached (fn [_ _]))))]
+          (is (nil? (get-in m [:gather :lead])) "the safe walk's price is under the 20 s, not under the 1 s a body that comes back gets")
+          (is (= :priced-out (get-in m [:tried :gather])))
+          (is (re-find #"over the 1 s it is worth" (str (get-in m [:gather :why])))))))))
 
 (deftest the-animal-pre-filter-keeps-every-animal-approach-could-price-under-its-worth
   (async done

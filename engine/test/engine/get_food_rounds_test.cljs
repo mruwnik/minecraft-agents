@@ -16,6 +16,7 @@
             [engine.scenario :as scenario]
             [jobs.lib.world-files :as ew]
             [engine.test-util :as tu]
+            [engine.walk-pick-test :as pick-test]
             [engine.triggers :as triggers]
             [jobs.survival.get-food.report :as report]
             [jobs.lib.child :as child]
@@ -575,15 +576,17 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[x walked?] [[150 true] [20000 false]]]
+        (doseq [[x death-chance walked?] [[150 0 true] [20000 0 false] [150 0.99 false]]]
           (let [note [{:kind :seen :what "cow" :id "u1" :pos [x 64 0] :by "Other" :t 999900 :until 9e15}]
                 {:keys [eng seen]} (setup {:time 6000 :self {:food 17 :health 20}} :step-ms 5 :other-notes note)]
-            (await (one-round! eng {:carry 60}))
-            (loop [n 0] (when (and (< n 80) (not-any? #(= :noted-walk (:slot %)) (events-of seen :child_started)))
-              (await (core/tick! eng))
-              (recur (inc n))))
+            (await (pick-test/with-death-chance death-chance
+                     (fn ^:async r []
+                       (await (one-round! eng {:carry 60}))
+                       (loop [n 0] (when (and (< n 80) (not-any? #(= :noted-walk (:slot %)) (events-of seen :child_started)))
+                         (await (core/tick! eng))
+                         (recur (inc n)))))))
             (is (= walked? (boolean (some #(= :noted-walk (:slot %)) (events-of seen :child_started))))
-                "a fed body carrying no food gains the food reserve from the meat; a walk that costs more is not made")))))))
+                "a fed body carrying no food gains the food reserve from the meat; a walk that costs more, or likely ends in death, is not made")))))))
 
 (deftest a-noted-animal-is-not-walked-toward-in-the-dark-or-from-under-rock
   (async done

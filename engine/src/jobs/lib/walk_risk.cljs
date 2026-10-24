@@ -107,15 +107,15 @@
   it is buried, its shelter, death-body and food, the known threats and hides, the writes of what it knows, the sky's
   darkening now, the cells its look round has looked at, and what the way is priced by as perceived now: its cells, the
   seconds of it spent where a mob could spawn and the hp of the lava seen near it. :cells is derived, left out of a key."
-  [c goal & [{:keys [plan caves-free?]}]]
+  [c goal & [{:keys [plan caves-free? back?]}]]
   (let [p (:primitives c)
         feet (sh-sense/feet p)
         goal (update goal :y #(or % (:y feet)))
         underground? (sh-sense/buried? p)
         shelter (:data (ctx/latest c :shelter))
-        cells (way feet goal plan)
+        cells (cond-> (way feet goal plan) back? (#(into % (rest (rseq %)))))
         exit (if (sh-inside/walk-leaves-shelter? p shelter goal 1) (settings/get settings ::exit-blocks) 0)]
-    {:goal goal :plan (select-keys plan [:status :steps])
+    {:goal goal :plan (select-keys plan [:status :steps]) :back? back?
      :feet feet :cells cells :body (threats/death-body c) :food (or (.-food (.self p)) 20)
      :known (threats/known-threats c) :hides (threats/hide-threats c)
      :writes (sense/known-writes p) :sky (sh-sense/sky-subtract-now p) :looked (sense/round-looked c)
@@ -146,7 +146,8 @@
 
 (defn estimate
   "{:hp :walk-hp :spawn-hp :hostile-hp :death-hp :lethal-hp :death-chance :lava-hp :dark-s :hostiles :threats} of the walk of c's body to `goal` ({:x :y :z})
-  on the way of :plan (go-to's plan of it, {:status :steps}; none: all of it unplanned): hp the expected damage and lethal-hp,
+  on the way of :plan (go-to's plan of it, {:status :steps}; none: all of it unplanned), and with :back? back on the same way
+  as one walk (a mob that noticed the body going still has it coming back): hp the expected damage and lethal-hp,
   the death the spawns and known threats risk (cost/death-chance) in hp (cost/lethal-hp), walk-hp the
   same leaving out the sensed mobs that catch the walk, their hurt and their death share both (a fight with them prices
   them); death-hp the remembered threats' hurt, hostile-hp what the catchers add to it, all met in one route-parts; dark-s the seconds walked where a mob could spawn (caves-free?: no unseen cell guessed a dark cave); threats [{:mob :pos}] the known threats priced."

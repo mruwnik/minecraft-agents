@@ -36,8 +36,8 @@
       (await (run-until-empty eng 60))
       {:eng eng :seen seen :p p}))))
 
-(def short-pile "The field-report pile less its raw iron: its worth, times the chance of living through the walk past a skeleton, under what that walk costs an unarmed body."
-  (vec (remove #(= "raw_iron" (:name %)) dt/death-pile-of-the-field-report)))
+(def short-pile "The field-report pile less its 4 raw iron: its worth, times the chance of living through the walk past a skeleton and back, under what that walk costs an unarmed body."
+  (vec (remove #(= 17 (:slot %)) dt/death-pile-of-the-field-report)))
 
 (deftest an-unarmed-body-fetches-a-sword-and-a-helmet-before-the-skeleton-trip
   (async done
