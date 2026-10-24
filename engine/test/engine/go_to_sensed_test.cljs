@@ -752,7 +752,7 @@
                                                      {:pos [2 64 0] :range 0 :unknown true} walled-behind))]
           (is (= {:arrived true} out) (pr-str (last seen)))
           (is (= [2 64 0] (get-in @(fake/state p) [:self :pos])))
-          (is (= [:clear-path] (steps seen))))))))
+          (is (= [:dig-route] (steps seen)) "a corridor in rock: the rock guess holds, so the dig leg goes first"))))))
 
 (def long-gap-tunnel
   "A 2-high tunnel (x 0..20, y 64..65, z 0) in stone, its floor at y 63 broken at x 14 down to y 62: a gap too far off to see in the dark."

@@ -46,3 +46,10 @@
   (is (= {"iron" 16 "copper" 48 "gold" -16 "lapis" 0 "redstone" -54 "diamond" -54 "coal" nil "emerald" nil "cheese" nil}
          (into {} (map (juxt identity rates/best-level)) ["iron" "copper" "gold" "lapis" "redstone" "diamond" "coal" "emerald" "cheese"]))
       "the placements' peaks; redstone and diamond grow denser down to the lava; coal and emerald are densest above 64"))
+
+(deftest the-solid-share-is-the-depth-prior-until-the-seen-blocks-outweigh-it
+  (is (> (rates/solid-share -40 0 0) 0.5) "nothing seen deep down: mostly rock")
+  (is (< (rates/solid-share 120 0 0) 0.5) "nothing seen high up: mostly air")
+  (is (< (rates/solid-share 0 400 2000) 0.5) "a hall seen open deep down")
+  (is (> (rates/solid-share 120 300 100) 0.5) "a tunnel seen in rock high up")
+  (is (= (rates/solid-prior -500) (rates/solid-prior -64)) "past the table's ends, its end section"))

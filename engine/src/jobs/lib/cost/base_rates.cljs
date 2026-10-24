@@ -115,3 +115,21 @@
   "The share of the land a body walks whose biome spawns farm animals (plains, forests, taiga, hills, swamp, savanna,
   jungle) against the land that spawns none (desert, badlands, snowy plains, mushroom fields, beaches): a rough prior."
   0.6)
+
+(def ^:private solid-shares
+  (vec (:sections (js->clj (js/JSON.parse (rc/inline "jobs/lib/cost/solid_shares.json")) :keywordize-keys true))))
+
+(defn solid-prior
+  "{:a :b} the Beta prior on the share of solid blocks round height y before a body has looked: fitted to the 3x3x3-section
+  windows of the recorded terrain (solid_shares.json, tools/solid-shares.mjs) at the section holding y, the table's end
+  section past its ends."
+  [y]
+  (let [i (js/Math.floor (/ (- y (:y (first solid-shares))) 16))]
+    (nth solid-shares (-> i (max 0) (min (dec (count solid-shares)))))))
+
+(defn solid-share
+  "The share of solid blocks expected round height y with solid and open the blocks seen there: the posterior mean over
+  solid-prior."
+  [y solid open]
+  (let [{:keys [a b]} (solid-prior y)]
+    (/ (+ a solid) (+ a b solid open))))

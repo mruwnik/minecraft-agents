@@ -170,7 +170,7 @@
     (swap! (fake/state p) assoc :light-default [sky 0])
     (wworld/path-world w spec)))
 
-(deftest under-ground-the-unseen-cells-far-from-all-seen-open-read-stone
+(deftest in-rock-the-unseen-cells-far-from-all-seen-open-read-stone
   (let [buried (pocket 0 (wworld/unknown-spec))
         sky (pocket 15 (wworld/unknown-spec))
         off (settings/with-settings {:jobs.lib.walk.world/rock-beyond false} #(pocket 0 (wworld/unknown-spec)))
@@ -180,10 +180,10 @@
     (is (= [@void @stone @void] (map #(state buried % 64 0) [3 4 -3])) "3 from the feet unseen, 4 rock")
     (is (= [@void 0xFFFF true] [(state rim 3 64 0) (state rim 4 64 0) (.-edge (.-snapshot rim))]) "with :rockEdge the guessed rock is the loaded edge")
     (is (not= (wworld/unknown-key buried) (wworld/unknown-key rim)))
-    (is (= [@void @void] (map #(state % 4 64 0) [sky off])) "under the sky, or the setting off: unseen")
+    (is (= [@stone @void] (map #(state % 4 64 0) [sky off])) "sky light changes nothing; the setting off: unseen")
     (is (= @void (state goal 4 64 0)) "3 from the goal")
     (is (= [@void @stone] [(state own -4 64 0) (state own 4 64 0)]) "3 from a cell of its own ways")
-    (is (not= (wworld/unknown-key buried) (wworld/unknown-key sky)) "the guess is in a kept search's key")))
+    (is (not= (wworld/unknown-key buried) (wworld/unknown-key off)) "the guess is in a kept search's key")))
 
 (deftest under-ground-a-seen-fluid-that-aged-to-unseen-still-keeps-the-rock-guess-off-its-surroundings
   (let [clock (atom 1000000)
@@ -211,11 +211,12 @@
     (swap! (fake/state p) assoc :light-default [0 block])
     (wworld/rock-guess? w (wworld/unknown-spec))))
 
-(deftest the-rock-guess-follows-the-light-and-the-rock-the-body-sees-not-the-sky
-  (is (false? (rock-guess-in (assoc hall-world :pitch -80) 14)) "a block-lit hall, its roof seen high over the head: lit open land (Q31)")
-  (is (true? (rock-guess-in hall-world 14)) "the same hall before it looked up: the roof may be close")
-  (is (true? (rock-guess-in (assoc hall-world :pitch -80) 0)) "the same hall dark: a cave")
-  (is (true? (rock-guess-in (assoc pocket-world :pitch -80) 14)) "a lit pocket in rock: its roof is seen close over the head"))
+(deftest the-rock-guess-follows-the-blocks-the-body-has-seen-not-the-light-or-the-gaze
+  (is (false? (rock-guess-in (assoc hall-world :pitch -80) 14)) "a block-lit hall, its roof seen high over the head: open (Q31)")
+  (is (false? (rock-guess-in hall-world 14)) "the same hall before it looked up: still open")
+  (is (false? (rock-guess-in (assoc hall-world :pitch -80) 0)) "the same hall dark: dark, not rock")
+  (is (true? (rock-guess-in (assoc pocket-world :pitch -80) 14)) "a lit pocket in rock")
+  (is (true? (rock-guess-in pocket-world 0)) "the same pocket dark"))
 
 (def ^:private tunnel
   (apply dissoc (box -8 62 -8 30 67 8 "stone") (for [x (range 0 21) y [64 65]] (str x "," y ",0"))))

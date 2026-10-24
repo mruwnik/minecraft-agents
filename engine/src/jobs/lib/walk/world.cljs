@@ -12,6 +12,7 @@
             [jobs.lib.breath :as breath]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.base-rates :as base-rates]
             [jobs.lib.look :as look]
             [jobs.lib.placement :as placement]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -215,11 +216,45 @@
 
 (defn rock-beyond "The setting ::rock-beyond, nil when off." [] (or (settings/get settings ::rock-beyond) nil))
 
+(defonce ^:private shares (js/WeakMap.))
+
+(defn solid-share
+  "The share of solid blocks the body expects round its feet: base-rates/solid-share at the feet's height of the blocks it
+  remembers, aged ones too, in the feet's section and the 26 round it (the window the prior is fitted to); nil without a
+  perception (no memory, no guessed rock). Kept while the body stands in one section and no block it remembers changed or aged."
+  [p]
+  (when-let [known (raw-sections p)]
+    (let [{:keys [x y z]} (sh-sense/feet p)
+          ^js st (:st (aget p "perception"))
+          [cx sy cz :as at] (mapv #(bit-shift-right % 4) [x y z])
+          k [(.-dim st) (perception/memory-epoch st) at]
+          hit (.get shares st)]
+      (if (= k (:k hit))
+        (:v hit)
+        (let [^js open (rock/open-ids)
+              [solid seen] (reduce (fn [[solid seen :as acc] ^js ids]
+                                     (if-not ids
+                                       acc
+                                       (loop [i 0 solid solid seen seen]
+                                         (if (== i 4096)
+                                           [solid seen]
+                                           (let [v (aget ids i)]
+                                             (cond (zero? v) (recur (inc i) solid seen)
+                                                   (== 1 (aget open (dec v))) (recur (inc i) solid (inc seen))
+                                                   :else (recur (inc i) (inc solid) (inc seen))))))))
+                                   [0 0]
+                                   (for [dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]] (known (+ cx dx) (+ sy dy) (+ cz dz))))
+              v (base-rates/solid-share y solid (- seen solid))]
+          (.set shares st {:k k :v v})
+          v)))))
+
 (defn rock-guess?
   "Whether a walk over mask spec unknown (nil: none) reads far unseen cells as rock (path-world): ::rock-beyond is on, the
-  body is under ground (sh-sense/buried?) with its head out of water, and the mask is neither :edge nor without-rock."
+  blocks round the body are more likely solid than open (solid-share), its head is out of water, and the mask is neither
+  :edge nor without-rock. Light plays no part: it says how dangerous a place is, not what an unseen cell holds."
   [p ^js unknown]
-  (boolean (and unknown (not (.-edge unknown)) (not (.-noRock unknown)) (rock-beyond) (not (breath/head-under? p)) (sh-sense/buried? p))))
+  (boolean (and unknown (not (.-edge unknown)) (not (.-noRock unknown)) (rock-beyond) (not (breath/head-under? p))
+                (some-> (solid-share p) (> 0.5)))))
 
 (defn- rock-seeds
   "The cells path-world's rock guess spares for a walk over mask spec unknown: the feet and the spec's seeds (with-seeds)."
@@ -257,8 +292,8 @@
   "The primitives' pathWorld sensing (a snapshot over the world) with the planner's block table and free-space module, nil when
   they have none or cannot sense now. With unknown (unknown-spec), over a body with a perception: cells the body never saw
   or felt read void_air (its known cells as remembered), and the snapshot carries the planner's options.unknown:
-  the spec with the mask's id, cell (unseen-share), seeDepth (from what the body holds now) and seeLit (look/see-lit-fn). Under ground
-  (sh-sense/buried?, head not under water, not :edge), an unseen cell past ::rock-beyond of every seen open cell, the
+  the spec with the mask's id, cell (unseen-share), seeDepth (from what the body holds now) and seeLit (look/see-lit-fn). Where
+  the rock guess holds (rock-guess?), an unseen cell past ::rock-beyond of every seen open cell, the
   feet and the spec's seeds (with-seeds) reads stone (jobs.lib.walk.rock), or with the spec's rockEdge the loaded edge (a
   frontier, the snapshot's edge); the mask's rockBeyond says so (0: none)."
   ([p] (path-world p nil))

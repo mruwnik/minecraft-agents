@@ -119,3 +119,10 @@ and where, per-cell speeds, and the path distance from `--cell` until the speed 
 Writes `engine/src/jobs/lib/cost/base_rates.json` (ore placements per biome, read by `jobs.lib.cost.base-rates`) from the
 worldgen JSON in Mojang's server jar. Run it when the game version changes; nothing else needs the jar. A placement
 step it cannot price stops it.
+
+### solid-shares.mjs
+
+    node tools/solid-shares.mjs [chunks-dir]
+
+Writes `engine/src/jobs/lib/cost/solid_shares.json` (a Beta prior by section height on the share of solid blocks, read by
+`base-rates/solid-prior`) from the recorded columns in `worlds/test/chunks`. Rerun when the world or the game version changes.
