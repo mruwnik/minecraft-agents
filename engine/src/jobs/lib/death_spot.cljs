@@ -113,7 +113,7 @@
   [p pos]
   (let [me (.-username (.self p))
         radius (+ threat/despawn-blocks (u/dist pos (sh-sense/feet p)))]
-    (->> (array-seq (.entities p #js {:radius radius :kind "player" :max 32}))
+    (->> (look/seen-objs p {:radius radius :kind "player"})
          (keep #(when (not= me (.-username %)) (u/pos-of (.-pos %))))
          (filter #(<= (u/dist pos %) threat/despawn-blocks)))))
 
