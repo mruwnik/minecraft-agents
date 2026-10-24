@@ -549,6 +549,29 @@
           (is (= 2 (:walks r)) "nothing new on the old way: it is walked on")
           (is (= :arrived (:status (:done r)))))))))
 
+;; every plan but the last is cut short ({:cut-rest}); the walk of each arrives at the cut
+(deftest re-plans-at-a-cut-do-not-spend-the-watch-cap-so-the-whole-plan-after-them-is-watched
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cuts (+ 3 wwatch/max-watch-replans)
+              watches (atom [])
+              plans (atom 0)
+              cut-plan {:status "partial" :r #js {} :steps (line 3) :cut-rest [(step 3 64 0 :walk)] :ms 5}
+              walk-fn (fn [steps watch]
+                        (swap! watches conj (some? watch))
+                        (js/Promise.resolve [{:status :arrived :at [(:x (peek steps)) 64 0]} 1]))
+              c {:primitives (tu/fake-on-floor {:floor [-5 -5 20 5]})}
+              r (await (drive/follow! c cut-plan
+                                      {:plan-fn (fn [_] (js/Promise.resolve
+                                                         (if (< (swap! plans inc) cuts)
+                                                           cut-plan
+                                                           {:status "found" :r #js {} :steps (line 5) :ms 5})))
+                                       :walk-fn walk-fn :to [9 64 0] :policy executor/policy}))]
+          (is (= (inc cuts) (count @watches)))
+          (is (true? (peek @watches)) "the last, whole plan is walked with its watch")
+          (is (= :arrived (:status (:done r)))))))))
+
 ;; ---------------------------------------------------------------- the health stop
 
 (def drop-ahead

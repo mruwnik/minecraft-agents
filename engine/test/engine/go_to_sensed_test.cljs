@@ -1013,35 +1013,59 @@
                           (for [x (range 14 27) y (range 64 69) z (range 3 35)] (str x "," y "," z))))
    :light (into {} (for [[x z] (concat (for [x (range -2 21)] [x 0]) [[20 1] [20 2]]) y [64 65]] [[x y z] [0 15]]))})
 
+(def tunnel-with-locked-gate
+  "tunnel-into-cave with a locked fence gate across the tunnel at x 17 and a lit way round it, 6 blocks longer, along z -3."
+  (let [round (for [[x z] (concat (for [z (range -3 0)] [16 z]) (for [z (range -3 0)] [18 z]) [[17 -3]]) y [64 65]] (str x "," y "," z))]
+    (-> tunnel-into-cave
+        (update :blocks #(-> (apply dissoc (merge (box -3 63 -8 27 69 -2 "stone") %) (concat round ["17,64,0"])) (assoc "17,64,0" "oak_fence_gate")))
+        (update :light into (for [k round] [(mapv js/parseInt (.split k ",")) [0 15]]))
+        (assoc :states {"17,64,0" {:open false :facing "east" :locked true}}))))
+
 ;; the plan runs on from the lit tunnel into the cave, unseen when planned: its walk stops at the cut before the first step
 ;; guessed a dark cave, looks, and is priced by the dark it then sees, on every way the walk could go on past the cut
 ;; unpriced: the look-ahead finding the cells open, a refresh refused (the old plan kept), the plan walked unwatched
 (defn ^:async walk-into-cave
-  "go-to from the tunnel's west end to the cave, the risk the body may take cut to 1 hp: {:out :cave} (cave the cells of the cave it stood in)."
-  []
-  (let [cells (atom #{})
-        look! (looking {:light-default [0 0] :light (:light tunnel-into-cave)})
+  "go-to from the tunnel's west end to the cave, the risk the body may take cut to 1 hp: {:out :cave :turn} (cave the cells of the cave it stood in, turn those at the tunnel's turn, x 20 z 1..2)."
+  [& [tunnel]]
+  (let [tunnel (or tunnel tunnel-into-cave)
+        cells (atom #{})
+        look! (looking {:light-default [0 0] :light (:light tunnel)})
         track! (fn [{:keys [p] :as s}]
                  (look! s)
                  (add-watch (fake/state p) :track (fn [_ _ _ b] (swap! cells conj (mapv js/Math.floor (:pos (:self b)))))))
         {:keys [out]} (await (settings/with-settings {:jobs.lib.price/risk-share 0.05}
-                               #(run-go-to {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (:blocks tunnel-into-cave) :radius 16 :exact-eye true :bodyHitbox true}
+                               #(run-go-to (cond-> {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (:blocks tunnel) :radius 16 :exact-eye true :bodyHitbox true}
+                                             (:states tunnel) (assoc :states (:states tunnel)))
                                            {:pos [20 64 32] :range 1 :ways #{:walk} :unknown true} track!)))]
-    {:out out :cave (sort (filter #(>= (nth % 2) 3) @cells))}))
+    {:out out
+     :cave (sort (filter #(>= (nth % 2) 3) @cells))
+     :turn (sort (filter #(and (= 20 (first %)) (<= 1 (nth % 2) 2)) @cells))}))
 
 (deftest go-to-from-a-lit-tunnel-into-a-dark-cave-prices-the-cave-before-it-walks-in
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out cave]} (await (walk-into-cave))]
+        (let [{:keys [out cave turn]} (await (walk-into-cave))]
           (is (= :risky (:reason out)) (pr-str out))
+          (is (seq turn) "the walk goes on up to the turn")
           (is (empty? cave) "the look-ahead finds the cells open"))
-        (let [{:keys [out cave]} (with-redefs [wwatch/take-refresh? (constantly false)] (await (walk-into-cave)))]
+        (let [{:keys [out cave turn]} (with-redefs [wwatch/take-refresh? (constantly false)] (await (walk-into-cave)))]
           (is (= :risky (:reason out)) (pr-str out))
+          (is (seq turn))
           (is (empty? cave) "a refresh refused keeps the old plan"))
-        (let [{:keys [out cave]} (with-redefs [wwatch/max-watch-replans 0] (await (walk-into-cave)))]
+        (let [{:keys [out cave turn]} (with-redefs [wwatch/max-watch-replans 0] (await (walk-into-cave)))]
           (is (= :risky (:reason out)) (pr-str out))
+          (is (seq turn))
           (is (empty? cave) "the plan walked unwatched"))))))
+
+(deftest go-to-from-a-lit-tunnel-past-a-locked-gate-prices-the-cave-before-it-walks-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out cave turn]} (with-redefs [wwatch/max-watch-replans 0] (await (walk-into-cave tunnel-with-locked-gate)))]
+          (is (= :risky (:reason out)) (pr-str out))
+          (is (seq turn) "the way round the gate is walked up to the turn")
+          (is (empty? cave) "the re-plan after the gate is cut and priced like the first"))))))
 
 (def stair-body {:self {:pos {:x 15.5 :y 85 :z 0.5}} :blocks walkway-room :radius 16 :exact-eye true :bodyHitbox true})
 (def stair-job {:pos [5 64 8] :range 1 :ways #{:walk :clear-seal} :unknown true})

@@ -153,7 +153,7 @@
   a mob in its way (:mob: wait, plan round it), or a plan cut short of what it does not know yet (:cut-rest, the steps
   after the cut: walked to its end, look at them, then plan again). A replan that proves the goal cut off or enclosed ends the call with that
   no-walk; so does one the caller refused (plan-fn's {:refused true}, with its :stop) for any why but :refresh, whose old
-  plan nothing speaks against. At most max-watch-replans; past that the plan is walked unwatched (a kept plan counts as a replan, and is watched). A replan with :learned (a gate or the look-ahead gave an unseen cell up or found it solid) is not counted against it, up to free-learned of them: a void edge teaches one column per replan. The max-learned-th learned replan since the body last got a block nearer :to (learned-progress), or one past the replan cap, ends the call instead: the done map with :learn-spent and the cells learned.
+  plan nothing speaks against. At most max-watch-replans; past that the plan is walked unwatched (a kept plan counts as a replan, and is watched; a re-plan at a cut does not, each walks on to a new cut). A replan with :learned (a gate or the look-ahead gave an unseen cell up or found it solid) is not counted against it, up to free-learned of them: a void edge teaches one column per replan. The max-learned-th learned replan since the body last got a block nearer :to (learned-progress), or one past the replan cap, ends the call instead: the done map with :learn-spent and the cells learned.
   opts: :plan-fn (fn [walls]) -> a plan-walk! result (or a promise of one: plan-walk!) from where the body stands now, the
   cells {:x :y :z} read as walls;
   :walk-fn (fn [steps watch]) -> [done ms] (walk! or jobs.lib.pass/walk!); :to the goal cell; :policy for no-walk;
@@ -167,6 +167,7 @@
   [c plan {:keys [plan-fn walk-fn to policy announce! dangers] :or {policy (wworld/body-policy c) announce! (fn [_ _])}}]
   (let [known (when dangers (atom #{}))
         learned (atom #{})
+        cuts (atom 0)
         track (atom {})
         walkable? (fn [pl] (nil? (wplan/no-walk pl 0 policy)))
         proved-none? (fn [pl] (let [nw (wplan/no-walk pl 0 policy)]
@@ -174,7 +175,7 @@
         searching? (fn [pl] (= :searching (:status (wplan/no-walk pl 0 policy))))
         cut-length (fn [steps k] (walk/path-length (subvec steps 0 (min (count steps) (max 1 k)))))]
     (loop [plan plan steps (:steps plan) n 0 ms 0 walked 0 damage 0]
-      (let [spent (- n (min free-learned (count @learned)))
+      (let [spent (- n (min free-learned (count @learned)) @cuts)
             watch (when (< spent wwatch/max-watch-replans) (wwatch/watch-of c plan known))
             [done wms] (await (walk-fn steps watch))
 
@@ -264,6 +265,7 @@
                       fresh (await (plan-fn []))
                       plan-ms (- (clock/now) t)]
                   (tell! :cut plan-ms false)
+                  (swap! cuts inc)
                   (if (walkable? fresh)
                     (recur (assoc fresh :ms plan-ms) (:steps fresh) (inc n) ms walked' damage')
                     (finish (wplan/no-walk fresh 0 policy) fresh walked')))
