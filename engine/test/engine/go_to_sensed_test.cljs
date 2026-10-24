@@ -1024,7 +1024,7 @@
                                                    (fn [{:keys [p]}] (swap! (fake/state p) assoc :light-default [0 0] :pitch 30))))
               replans (filter #(= :replan (:kind %)) seen)]
           (is (or (:arrived out) (:why out) (:ended out) (:status out)) (pr-str out))
-          (is (<= (count replans) (inc (wwatch/max-learned))) (str (count replans) " replans")))))))
+          (is (<= (count replans) (+ wwatch/max-watch-replans drive/free-learned)) (str (count replans) " replans")))))))
 
 ;; the walls hide the room: past what sight has reached the planner reads the next wall cell as open, so the walk learns
 ;; a wall cell a sight's reach on, again and again, while it walks on; none of that is a stretch to give up
