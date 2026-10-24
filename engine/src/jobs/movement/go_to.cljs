@@ -156,7 +156,7 @@
   :route what the planner found."
   [c]
   (let [c (with-limits (health/with-body-food c))]
-    (preview/quote-of-route (await (preview/route! c)) (ways/escalating? c))))
+    (preview/quote-of-route (await (preview/route! c)) (ways/escalating? c) (:back (:args c)))))
 
 (defn limits-fit
   "Never :bad-args for a floor or leg out of range, before the engine's floor check could hold the call."

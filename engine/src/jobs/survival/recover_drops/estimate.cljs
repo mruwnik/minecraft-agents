@@ -139,10 +139,12 @@
         wet (when (or (= "drowning" cause) (wet-pile? wet-at pos) (pos? drown-hp))
               {:name (if (= "drowning" cause) "drowning" "water")
                :danger (max drown-hp (if (or (= "drowning" cause) (wet-pile? wet-at pos)) (cfg/wet-danger) 0))})
-        quoted-s (let [mean (second (get-in quoted [:uses :job-time]))] (when (and (number? mean) (js/isFinite mean)) mean))
+        ;; the quote (go-to :back) is the round trip; fetch-cost walks the distance back itself
+        quoted-s (let [mean (second (get-in quoted [:uses :job-time]))] (when (and (number? mean) (js/isFinite mean)) (/ mean 2)))
         danger-s (pick/risk-s c quoted (:danger wet 0))
         straight-s (when pos (/ (u/dist here pos) (cost/walk-blocks-per-s)))
-        fetch (cost/fetch-cost {:distance (when pos (* (max straight-s (or quoted-s 0)) (cost/walk-blocks-per-s))) :danger-s danger-s :elapsed-ms elapsed :cause cause})
+        fetch (cost/fetch-cost {:distance (when pos (* (max straight-s (or quoted-s 0)) (cost/walk-blocks-per-s))) :danger-s danger-s :elapsed-ms elapsed :cause cause
+                               :back? true :stay-s (pl/collect-s c data)})
         drowns (when-not (:reason fetch) (no-air-way p wet-at pos drown-hp))
         named (cond-> (mapv #(select-keys % [:name]) mobs) wet (conj (select-keys wet [:name :danger])))]
     (cond-> {:value (pile-worth c data)

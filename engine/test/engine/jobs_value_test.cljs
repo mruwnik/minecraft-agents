@@ -173,6 +173,13 @@
 
 ;; ---------------------------------------------------------------- fetch-cost
 
+(deftest a-fetch-that-walks-back-and-stands-at-the-pile-pays-both
+  (let [there (v/fetch-cost {:distance 40 :elapsed-ms 0})
+        both (v/fetch-cost {:distance 40 :elapsed-ms 0 :back? true :stay-s 7})]
+    (is (= (+ (:cost there) (get-in there [:parts :walk]) 7) (:cost both)) "the walk twice, the stay once")
+    (is (= 7 (get-in both [:parts :collect])))
+    (is (not= :too-far (:reason (v/fetch-cost {:distance 600 :elapsed-ms 0 :back? true}))) "the despawn window is for the way there only")))
+
 (deftest fetch-cost-grows-with-distance-and-danger
   (is (< (:cost (v/fetch-cost {:distance 10 :elapsed-ms 0}))
          (:cost (v/fetch-cost {:distance 100 :elapsed-ms 0}))

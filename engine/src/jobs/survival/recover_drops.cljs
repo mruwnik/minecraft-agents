@@ -76,10 +76,16 @@
         (contract/later :recovering (str n " of " total " items back") :units :items :done n :left (- total n))))))
 
 (defn ^:async trip-s
-  "[least mean] seconds of the walk to the pile of death `entry` as go-to quotes it, the mean with the collect at the pile (pl/collect-s)."
+  "[least mean] seconds of the walk to the pile of death `entry` and back as go-to quotes it, the mean with the collect at the pile (pl/collect-s)."
   [c entry]
   (let [[least mean] (or (get-in (await (est/quote-trip c entry)) [:uses :job-time]) [0 0])]
     [least (+ mean (pl/collect-s c (:data entry)))]))
+
+(defn ^:async arrive-s
+  "Seconds until the body has the pile of death `entry` collected: trip-s without the walk back (the despawn is the way there and the collect)."
+  [c entry]
+  (let [mean (second (or (get-in (await (est/quote-trip c entry)) [:uses :job-time]) [0 0]))]
+    (+ (/ mean 2) (pl/collect-s c (:data entry)))))
 
 (defn window-ms
   "Milliseconds left before the drops of death entry despawn."
@@ -143,13 +149,13 @@
 (defn ^:async retry-later!
   "A skip for danger backs off while the trip can still come back: report it, forget the estimate, remember the danger
   (:recover-danger, for ::danger-memory-ms; at most until ::hold-slack
-  times the walk back from the flight's end (est/flight-s) and the collect, as trip-s quotes them, would end at the despawn)
+  times the walk back from the flight's end (est/flight-s) and the collect (arrive-s), would end at the despawn)
   and end condition-failed :danger: the hostile reflex takes the body away. The died trigger and the check rest for this
   death meanwhile, then the danger is weighed anew. A hold under ::min-hold-s is no wait, and neither is a second hold
   for the same mobs where a finished hold saw them: the pile is left (its worth is under the full cost, danger in; Q367 rules out
   waiting, not leaving)."
   [c entry decided]
-  (let [need-ms (* 1000 (cfg/hold-slack) (+ (second (await (trip-s c entry))) (:flight-s decided 0)))
+  (let [need-ms (* 1000 (cfg/hold-slack) (+ (await (arrive-s c entry)) (:flight-s decided 0)))
         room (- (window-ms c entry) need-ms)
         hold-ms (min room (:hold-ms decided (cfg/danger-memory-ms)))]
     (if (and (>= hold-ms (cfg/min-hold-ms)) (not (est/unchanged-after-hold? c decided)))

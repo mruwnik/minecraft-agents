@@ -12,7 +12,7 @@
             {:trigger :burning :persistence :cooldown :cooldown-s 2
              :job (jobs.survival.extinguish {:water-radius 6})}
             {:trigger :died :persistence :cooldown :cooldown-s 30
-             :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops/collect-radius 6}})}
+             :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/collect-radius 6}})}
             {:trigger :hostile-near :persistence :cooldown :cooldown-s 5 :args {:radius 8 :ranged-radius 16}
              :job (jobs.survival.respond-to-hostile)}
             {:trigger :hungry :persistence :cooldown :cooldown-s 90 :args {:food 6}

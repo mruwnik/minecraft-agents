@@ -116,14 +116,20 @@
 (deftest a-partial-routes-rest-counts-the-blocks-past-its-end-once
   (let [r {:found false :reason :partial :near 30 :goal [14 64 0]
            :partial {:seconds 5 :waypoints [[0 64 0] [10 64 0]]}}
-        [least mean] (get-in (pv/quote-of-route r false) [:uses :job-time])]
+        [least mean] (get-in (pv/quote-of-route r false false) [:uses :job-time])]
     (is (= 5 least))
     (is (< (js/Math.abs (- mean (+ 5 (* 4 cost-planner/walk-floor (quote-unseen-factor))))) 1e-9)
         "four blocks are left past the route's end, not the 30 of the body")))
 
+(deftest a-quote-with-back-is-the-walk-there-and-back
+  (let [r {:found true :seconds 5 :goal [14 64 0]}
+        there (get-in (pv/quote-of-route r false false) [:uses :job-time])
+        both (get-in (pv/quote-of-route r false true) [:uses :job-time])]
+    (is (= (mapv #(* 2 %) there) both))))
+
 (deftest a-search-still-going-on-is-a-straight-line-estimate
   (let [r {:found false :reason :searching :near 30 :goal [30 64 0]}
-        q (pv/quote-of-route r false)
+        q (pv/quote-of-route r false false)
         [least mean most] (get-in q [:uses :job-time])]
     (is (= 0 least))
     (is (< (js/Math.abs (- mean (* 30 cost-planner/walk-floor (quote-unseen-factor)))) 1e-9))

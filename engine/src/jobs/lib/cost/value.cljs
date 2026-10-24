@@ -297,11 +297,12 @@
     {:cost (reduce + (vals parts)) :parts parts}))
 
 (defn fetch-cost
-  "{:cost :parts {:trip :walk :danger}} of fetching a pile `distance` blocks off, with `danger-s` seconds of danger
-  on the way, `elapsed-ms` after it dropped.
+  "{:cost :parts {:trip :walk :danger :collect}} of fetching a pile `distance` blocks off, with `danger-s` seconds of danger
+  on the way, `elapsed-ms` after it dropped; `back?` walks the distance twice (the window check is for the way there), `stay-s`
+  seconds are spent standing at the pile.
   Or {:cost js/Infinity :reason}: :no-position (distance nil), :window-closed (the 5 min despawn passed), :too-far
   (the walk would end after the despawn), :lethal-cause (lava, fire or the void took the items)."
-  [{:keys [distance danger-s elapsed-ms cause]}]
+  [{:keys [distance danger-s elapsed-ms cause back? stay-s]}]
   (let [elapsed (or elapsed-ms 0)
         despawn-ms (game/despawn-ms)
         walk-ms (when (number? distance) (* 1000 (/ distance (walk-blocks-per-s))))
@@ -312,5 +313,6 @@
                  (>= (+ elapsed walk-ms) despawn-ms) :too-far)]
     (if reason
       {:cost js/Infinity :reason reason}
-      (let [w (walk-cost {:distance distance :danger-s danger-s})]
-        {:cost (+ (trip) (:cost w)) :parts (assoc (:parts w) :trip (trip))}))))
+      (let [w (walk-cost {:distance (* distance (if back? 2 1)) :danger-s danger-s})
+            stay (or stay-s 0)]
+        {:cost (+ (trip) stay (:cost w)) :parts (cond-> (assoc (:parts w) :trip (trip)) (pos? stay) (assoc :collect stay))}))))

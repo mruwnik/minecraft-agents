@@ -4,7 +4,7 @@
             {:trigger :burning :persistence :cooldown :cooldown-s 2
              :job (jobs.survival.extinguish {:water-radius 6})}
             {:trigger :died :persistence :cooldown :cooldown-s 30
-             :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops/collect-radius 6}})}
+             :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/collect-radius 6}})}
             {:trigger :hostile-near :persistence :cooldown :cooldown-s 5 :args {:radius 8 :ranged-radius 16}
              :job (jobs.survival.respond-to-hostile)}
             {:trigger :hungry :persistence :cooldown :cooldown-s 90 :args {:food 6}
@@ -29,7 +29,7 @@
 ;;             {:trigger :night :persistence :cooldown :cooldown-s 10
 ;;              :job (jobs.survival.night)}
 ;;             {:trigger :died :persistence :cooldown :cooldown-s 30
-;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops/collect-radius 6}})}
+;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/collect-radius 6}})}
 ;;             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
 ;;              :job (jobs.storage.make-room {:free 4})}]
 ;;  :queue [(jobs.gather.get-seeds {:count 2 :radius 12})
@@ -47,7 +47,7 @@
 ;;             {:trigger :night :persistence :cooldown :cooldown-s 10
 ;;              :job (jobs.survival.night)}
 ;;             {:trigger :died :persistence :cooldown :cooldown-s 30
-;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops/collect-radius 6}})}
+;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/collect-radius 6}})}
 ;;             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
 ;;              :job (jobs.storage.make-room {:free 4})}]
 ;;  :queue [(jobs.gather.get-seeds {:count 2 :radius 12 :chest {:x 5003 :y 87 :z -5000}})
@@ -65,7 +65,7 @@
 ;;             {:trigger :night :persistence :cooldown :cooldown-s 10
 ;;              :job (jobs.survival.night)}
 ;;             {:trigger :died :persistence :cooldown :cooldown-s 30
-;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops/collect-radius 6}})}
+;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/collect-radius 6}})}
 ;;             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
 ;;              :job (jobs.storage.make-room {:free 4})}]
 ;;  :queue [(jobs.gather.get-seeds {:count 64 :radius 12})
@@ -83,7 +83,7 @@
 ;;             {:trigger :night :persistence :cooldown :cooldown-s 10
 ;;              :job (jobs.survival.night)}
 ;;             {:trigger :died :persistence :cooldown :cooldown-s 30
-;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops/collect-radius 6}})}
+;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/collect-radius 6}})}
 ;;             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
 ;;              :job (jobs.storage.make-room {:free 4})}]
 ;;  :queue [(repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
@@ -100,7 +100,7 @@
 ;;             {:trigger :night :persistence :cooldown :cooldown-s 10
 ;;              :job (jobs.survival.night)}
 ;;             {:trigger :died :persistence :cooldown :cooldown-s 30
-;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops/collect-radius 6}})}
+;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/collect-radius 6}})}
 ;;             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
 ;;              :job (jobs.storage.make-room {:free 4})}]
 ;;  :queue [(jobs.combat.hunt {:item "beef" :count 1 :keep 0 :radius 16})
@@ -118,7 +118,7 @@
 ;;             {:trigger :night :persistence :cooldown :cooldown-s 10
 ;;              :job (jobs.survival.night)}
 ;;             {:trigger :died :persistence :cooldown :cooldown-s 30
-;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops/collect-radius 6}})}
+;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/collect-radius 6}})}
 ;;             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
 ;;              :job (jobs.storage.make-room {:free 4})}]
 ;;  :queue [(jobs.combat.hunt {:item "porkchop" :count 3 :keep 2 :radius 16})
@@ -136,7 +136,7 @@
 ;;             {:trigger :night :persistence :cooldown :cooldown-s 10
 ;;              :job (jobs.survival.night)}
 ;;             {:trigger :died :persistence :cooldown :cooldown-s 30
-;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops/collect-radius 6}})}
+;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/collect-radius 6}})}
 ;;             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
 ;;              :job (jobs.storage.make-room {:free 4})}]
 ;;  :queue [(jobs.combat.hunt {:item "beef" :count 5 :keep 1 :radius 16})
@@ -154,7 +154,7 @@
 ;;             {:trigger :night :persistence :cooldown :cooldown-s 10
 ;;              :job (jobs.survival.night)}
 ;;             {:trigger :died :persistence :cooldown :cooldown-s 30
-;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops/collect-radius 6}})}
+;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/collect-radius 6}})}
 ;;             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
 ;;              :job (jobs.storage.make-room {:free 4})}]
 ;;  :queue [(jobs.gather.mine {:block "sand" :count 6 :radius 10})
@@ -172,7 +172,7 @@
 ;;             {:trigger :night :persistence :cooldown :cooldown-s 10
 ;;              :job (jobs.survival.night)}
 ;;             {:trigger :died :persistence :cooldown :cooldown-s 30
-;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops/collect-radius 6}})}
+;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/collect-radius 6}})}
 ;;             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
 ;;              :job (jobs.storage.make-room {:free 4})}]
 ;;  :queue [(jobs.gather.mine {:block "bedrock" :count 2 :radius 10})
@@ -190,7 +190,7 @@
 ;;             {:trigger :night :persistence :cooldown :cooldown-s 10
 ;;              :job (jobs.survival.night)}
 ;;             {:trigger :died :persistence :cooldown :cooldown-s 30
-;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops/collect-radius 6}})}
+;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/collect-radius 6}})}
 ;;             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
 ;;              :job (jobs.storage.make-room {:free 4})}]
 ;;  :queue [(jobs.gather.mine {:block "stone" :count 6 :radius 4})
@@ -208,7 +208,7 @@
 ;;             {:trigger :night :persistence :cooldown :cooldown-s 10
 ;;              :job (jobs.survival.night)}
 ;;             {:trigger :died :persistence :cooldown :cooldown-s 30
-;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops/collect-radius 6}})}
+;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/collect-radius 6}})}
 ;;             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
 ;;              :job (jobs.storage.make-room {:free 4})}]
 ;;  :queue [(jobs.gather.mine {:block "stone" :count 2 :radius 10})
@@ -226,7 +226,7 @@
 ;;             {:trigger :night :persistence :cooldown :cooldown-s 10
 ;;              :job (jobs.survival.night)}
 ;;             {:trigger :died :persistence :cooldown :cooldown-s 30
-;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops/collect-radius 6}})}
+;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/collect-radius 6}})}
 ;;             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
 ;;              :job (jobs.storage.make-room {:free 4})}]
 ;;  :queue [(jobs.gather.mine {:block "stone" :count 6 :radius 10})

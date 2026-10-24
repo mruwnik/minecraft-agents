@@ -14,7 +14,8 @@
             [jobs.lib.util :as u]
             [jobs.survival.recover-drops.config :as cfg]
                         [jobs.survival.recover-drops.deaths :as dth]
-            [jobs.survival.recover-drops.estimate :as est]))
+            [jobs.survival.recover-drops.estimate :as est]
+            [jobs.survival.recover-drops.pile :as pl]))
 
 (defn on-the-way?
   "Whether a chest at cell costs at most ::kit-detour blocks more than the walk from the body to the pile: the pile
@@ -57,7 +58,7 @@
   (let [{:keys [pos cause]} (:data entry)
         elapsed (est/pile-age-ms c entry)
         e (est/estimate c (:data entry) elapsed (await (est/quote-trip c entry)))
-        safe (cost/fetch-cost {:distance (when pos (u/dist (u/self-pos c) pos)) :elapsed-ms elapsed :cause cause})
+        safe (cost/fetch-cost {:distance (when pos (u/dist (u/self-pos c) pos)) :elapsed-ms elapsed :cause cause :back? true :stay-s (pl/collect-s c (:data entry))})
         safe-cost (if (js/isFinite (:cost safe)) (:cost safe) js/Infinity)]
     (boolean (and (seq (:seen-mobs e)) (> (:value e) (+ safe-cost (cfg/margin)))))))
 

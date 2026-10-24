@@ -17,7 +17,7 @@
 (def zombie-near-the-body "Near the body and beside the way ahead: it catches the walk." {:id 8 :name "zombie" :kind "hostile" :pos {:x 6.5 :y 64 :z 1.5}})
 
 (def dear-zombie "A pile worth less than the trip with an armed body's fight past a zombie, more than without it."
-  '(jobs.survival.recover-drops {:value-overrides {"raw_iron" 0.5 "cobblestone" 0.05 "oak_planks" 0.05 "stone_pickaxe" 1 "diamond_pickaxe" 12 "diamond_sword" 10}}))
+  '(jobs.survival.recover-drops {:value-overrides {"raw_iron" 3 "cobblestone" 0.05 "oak_planks" 0.05 "stone_pickaxe" 1 "diamond_pickaxe" 20 "diamond_sword" 10}}))
 
 (defn danger-declines [seen] (filterv #(and (= :danger (:reason %)) (:mob %)) (emitted seen :stopped)))
 
@@ -121,7 +121,7 @@
               {:keys [eng p seen clock]} (setup {:floor tu/walk-floor :inventory dt/sword :entities (conj (vec (pile-drops dt/diamonds)) zombie)})]
           (die! eng {:pos dt/death-pos :inventory dt/diamonds})
           (on-first-leg! p clock #(place-entity! p 8 [19.5 64 2.5]))
-          (core/submit! eng (list 'jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/leg-s 1} :value-overrides {"raw_iron" 0.5 "cobblestone" 0.05 "oak_planks" 0.05 "stone_pickaxe" 1 "diamond_pickaxe" 12 "diamond_sword" 10}}) {})
+          (core/submit! eng (list 'jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/leg-s 1} :value-overrides {"raw_iron" 3 "cobblestone" 0.05 "oak_planks" 0.05 "stone_pickaxe" 1 "diamond_pickaxe" 20 "diamond_sword" 10}}) {})
           (await (run-until-empty eng 30))
           (is (some? (dt/danger-remembered eng)) "the trip turned dear: it backs off")
           (is (nil? (recovered eng)) "the death stays open"))))))

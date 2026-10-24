@@ -50,7 +50,8 @@
 (defn collect-s
   "Seconds the body stands collecting the pile of :died data: items are picked up by walking over them, so the walk from
   the pile's cell to each stack in turn, the nearest first. A stack in sight lies where it is seen; the others are scattered
-  over the ::collect-radius round the pile, whose shortest tour is 0.7124 sqrt(n area) (Beardwood-Halton-Hammersley)."
+  over the ::collect-radius round the pile, whose shortest tour is 0.7124 sqrt(n area) (Beardwood-Halton-Hammersley).
+  ::collect-radius is the pickup cut-off, not the drops' real scatter, so a small pile is over-priced (conservative)."
   [c {:keys [pos inventory]}]
   (let [radius (cfg/collect-radius)
         wanted (set (map :name inventory))

@@ -56,7 +56,7 @@
         {:keys [eng seen clock]} (setup {:floor tu/walk-floor :inventory dt/sword :entities (conj dt/drops zombie)})]
     (die! eng {:pos dt/death-pos :inventory dt/diamonds} 3000)
     {:eng eng :seen seen :clock clock
-     :id (core/submit! eng (list 'jobs.survival.recover-drops (merge {:value-overrides {"raw_iron" 0.5 "cobblestone" 0.05 "oak_planks" 0.05 "stone_pickaxe" 1 "diamond_pickaxe" 12 "diamond_sword" 10}} extra)) {})}))
+     :id (core/submit! eng (list 'jobs.survival.recover-drops (merge {:value-overrides {"raw_iron" 3 "cobblestone" 0.05 "oak_planks" 0.05 "stone_pickaxe" 1 "diamond_pickaxe" 20 "diamond_sword" 10}} extra)) {})}))
 
 (deftest a-danger-that-makes-the-pile-dear-waits-the-listed-job
   (async done
@@ -97,7 +97,7 @@
               timer (js/setInterval #(swap! clock + 500) 5)]
           (await (run-until-empty eng 12))
           (js/clearInterval timer)
-          (is (= [{:job "jobs.survival.recover-drops" :args {:value-overrides {"raw_iron" 0.5 "cobblestone" 0.05 "oak_planks" 0.05 "stone_pickaxe" 1 "diamond_pickaxe" 12 "diamond_sword" 10} :retry true}}] (next-of seen))
+          (is (= [{:job "jobs.survival.recover-drops" :args {:value-overrides {"raw_iron" 3 "cobblestone" 0.05 "oak_planks" 0.05 "stone_pickaxe" 1 "diamond_pickaxe" 20 "diamond_sword" 10} :retry true}}] (next-of seen))
               "retry is given already: the call again is the retry"))
         (let [{:keys [eng seen]} (setup {:floor tu/walk-floor :entities dt/drops})]
           (die! eng {:pos dt/death-pos :inventory dt/junk})

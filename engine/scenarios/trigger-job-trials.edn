@@ -185,5 +185,5 @@
 ;;  :queue [(repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-probestuck-4
 ;; ;; ProbeStuck: the real recover-drops job under the died trigger, idling.
-;; {:register [{:trigger :died :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops/collect-radius 6}})}]
+;; {:register [{:trigger :died :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/collect-radius 6}})}]
 ;;  :queue [(repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
