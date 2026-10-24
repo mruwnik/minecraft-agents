@@ -252,7 +252,8 @@
   covered cells, no look owed)."
   [c]
   (let [[kind _ data] (part-status c)]
-    (and (= :later kind) (= {:reason :nothing-to-do} (dissoc data :text :blocked :ground-level)))))
+    (and (= :later kind) (= :nothing-to-do (:reason data))
+         (not-any? data [:covered :refused :refusers :food-reserve]))))
 
 (defn done?
   "Ok once a pass changed something and every part is in order (no step would run); else later with the steps that

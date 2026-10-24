@@ -91,7 +91,9 @@
         (let [{:keys [eng out]} (await (fell {:blocks (merge (fm/ground [[6 0]]) (apply dissoc (lt/tree 6 0 "oak" 9) (map #(fm/k 6 % 0) [64 65 66 67 68])))} [] {:ways #{:carried :pillar}}))
               entries (mem/entries (mem/view (:store eng)) trees/need-kind)]
           (is (= :need (:reason out)))
-          (is (= [{:column [6 0] :any-of ["dirt"] :count 3}] (map :data entries))))))))
+          (is (= [{:column [6 0] :any-of ["dirt"] :count 3}] (map :data entries)))
+          (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:part-cut? true :radius 12 :ways #{:carried :pillar}} 150))
+          (is (= 1 (count (mem/entries (mem/view (:store eng)) trees/need-kind))) "a later need on the column replaces the first"))))))
 
 (defn view [entries]
   (let [s (mem/open (tu/tmp-dir) {:now (constantly 1000000)})]
@@ -131,7 +133,8 @@
     (is (false? (holds pct/part-cut-tree blocks need)) "dirt still lacking")
     (is (false? (holds pct/part-cut-tree blocks need [{:name "dirt" :count 4}])) "too few")
     (is (true? (holds pct/part-cut-tree blocks need [{:name "dirt" :count 5}])) "carried now")
-    (is (true? (holds pct/part-cut-tree blocks [[trees/need-kind {:column [9 9] :any-of ["dirt"] :count 5}]])) "another column")))
+    (is (true? (holds pct/part-cut-tree blocks [[trees/need-kind {:column [9 9] :any-of ["dirt"] :count 5}]])) "another column")
+    (is (false? (holds pct/part-cut-tree blocks [[trees/need-kind {:column :any :any-of ["dirt"] :count 5}]])) "a need before any column was chosen holds all")))
 
 (deftest the-part-cut-tree-trigger-is-a-bounded-chore
   (let [blocks (merge (fm/ground [[6 0]]) (part-cut 6))
