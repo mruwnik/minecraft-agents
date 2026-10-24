@@ -94,3 +94,25 @@
                       (aset a (store/cell-index x y z) 0))
                     a)))]
     (is (= {:k 0 :n 0} (way-on/way-counts known [0 64 0])) "seen cells only past an unseen gap: nothing counted, the prior stands")))
+
+(deftest a-long-seen-strip-with-an-unseen-side-is-read-only-so-far
+  (let [t (blocks/default-state-table)
+        stone (inc (first (blocks/state-ids t "stone")))
+        air (inc (first (blocks/state-ids t "air")))
+        sections (js/Map.)
+        id-at (fn [x y z] (cond (< y 64) stone
+                                (zero? z) air
+                                (== y 64) stone
+                                :else 0))
+        known (fn [cx sy cz]
+                (let [k (str cx "," sy "," cz)]
+                  (or (.get sections k)
+                      (when (and (<= -1 cz 0) (<= 3 sy 4) (<= -1 cx 20000))
+                        (let [a (js/Uint16Array. 4096)]
+                          (dotimes [i 16] (dotimes [j 16] (dotimes [l 16]
+                            (let [z (+ (* cz 16) l)]
+                              (when (<= -1 z 1) (aset a (store/cell-index (+ (* cx 16) i) (+ (* sy 16) j) z) (id-at 0 (+ (* sy 16) j) z)))))))
+                          (.set sections k a)
+                          a)))))]
+    (is (= {:k 0 :n 0} (way-on/way-counts known [0 64 0])) "every stand of the strip has an unseen side above its wall: none counted")
+    (is (< (.-size sections) 1000) "and the strip is not walked to its far end")))

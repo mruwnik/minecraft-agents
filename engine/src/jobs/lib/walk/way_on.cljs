@@ -58,7 +58,7 @@
 
 (defn way-counts
   "{:k :n} over the seen stands a body could walk to, nearest start ([x y z] feet cell) first (at most ::sample of them,
-  breadth first over the ways between them): n the stands whose every side is seen, k those from which a way onward,
+  breadth first over the ways between them, and at most 8 times that many expanded): n the stands whose every side is seen, k those from which a way onward,
   not back through the stand they were entered by, leads out to cells not seen (or to stands past the sample); the
   rest are dead ends: a shut corridor, a closed room (a wall beside a way is no way). A stand with a side not seen is
   left uncounted, as is a level way with a cell not seen within 2 cells of start, gone through (the cells by the feet a
@@ -92,7 +92,7 @@
                                (when-not (.has done w) (.add done w) (.push stack w)))
                              (recur stack))))))))
         counted (loop [i 0 stands 0 found #js []]
-                  (if (or (>= i (.-length qx)) (>= stands cap))
+                  (if (or (>= i (.-length qx)) (>= i (* 8 cap)) (>= stands cap))
                     (do (loop [j i] (when (< j (.-length qx)) (aset open j true) (recur (inc j)))) found)
                     (let [x (aget qx i) y (aget qy i) z (aget qz i)
                           unseen?
