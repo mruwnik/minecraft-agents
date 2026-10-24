@@ -149,7 +149,7 @@
     (->> (concat (for [{:keys [key name chaser pos]} sensed] {:mob name :pos pos :weight 1 :key key :chaser chaser})
                  (for [{:keys [mob pos key]} (remembered-spots c) :when (not (contains? now-keys key))] {:mob mob :pos pos :weight 1 :key key :fled true})
                  (for [{:keys [cause pos weight mob?] :as d} (death-spot/recent c)
-                       :when (and mob? (or (field/water-mobs cause) (not (death-spot/seen-clear? p d))))]
+                       :when (and mob? (or (field/water-mobs cause) (not (death-spot/seen-clear? c d))))]
                    {:mob cause :pos pos :weight (death-spot/present-share c (assoc d :mob cause)) :remembered true})
                  (for [{:keys [t data]} (ctx/entries c :hurt)
                        :let [cause (death-spot/hurt-cause data) w (fade (- now t))]

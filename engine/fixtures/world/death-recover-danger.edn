@@ -1,9 +1,11 @@
-;; Cards f9d9aaba (8fca53030), 7e4c33b0: a body killed by a skeleton it no longer sees is unarmed and weighs its pile with the killer
-;; remembered there (walk-risk on go-to's quote: a death spot not seen clear): the reflex stops condition-failed :danger, no walk; the died
-;; reflex rests meanwhile (no refire on its 30 s cooldown). The pile (24 raw_iron) lies at [26 0 26], where an arrow-damage kill by a NoAI skeleton
-;; (removed at once) takes the body (no resistance: the damage must kill); it respawns at [4 0 4]. An empty-handed death has no pile:
-;; a skip, no walk. A pile cheapened by :value-overrides with a zombie by it: a danger skip, no walk. A whole iron kit
-;; with six skeletons on the way back: a danger skip, no walk.
+;; Cards f9d9aaba (8fca53030), 7e4c33b0, a80e956e: a body killed by a skeleton it no longer sees is unarmed and weighs its pile with
+;; the killer remembered there (walk-risk on go-to's quote) unless it sees the spot clear: before weighing it looks at the pile, and a
+;; lit spot seen empty since the death is clear (death-spot/seen-clear?). The pile (24 raw_iron) lies at [26 0 26], where an
+;; arrow-damage kill by a NoAI skeleton (removed at once) takes the body (no resistance: the damage must kill); it respawns at [4 0 4].
+;; Should-succeed: in a lit cell the pile is looked at, seen clear and fetched. Should-fail: in a dark cell the killer may still be there:
+;; the reflex stops condition-failed :danger, no walk, and the died reflex rests (no refire on its 30 s cooldown). An empty-handed
+;; death has no pile: a skip, no walk. A pile cheapened by :value-overrides with a zombie by it: a danger skip, no walk. A whole iron
+;; kit with six skeletons on the way back: a danger skip, no walk.
 {:defaults
  {:tags [:survival :death :jobs]
   :time :any
@@ -12,9 +14,19 @@
   :body {:at [26.5 0 26.5] :spawnpoint [4 0 4] :inventory [["raw_iron" 24] ["cobblestone" 64]]}
   :limit-s 200}
  :cases
- [{:name "unseen-killer-at-the-pile-skips-and-rests"
+ [{:name "unseen-killer-gone-from-a-lit-pile-is-seen-clear-and-fetched"
+   :plot {:light :lit}
    :act [[:summon "skeleton" [27.5 0 26.5] "{NoAI:1b,Silent:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}]}"]
          [:until-seen {:entity "skeleton"} 10]
+         [:rcon "damage $BODY 100 minecraft:arrow by @e[type=skeleton,tag=wt,$BOX,limit=1]"]
+         [:rcon "kill @e[type=skeleton,tag=wt,$BOX]"]
+         [:await {:source :body :kind :respawned} 30]]
+   :expect [{:event {:source :reflex :kind :ended :data {:decision :collected}} :within-s 150}]
+   :after [[:item "raw_iron" 24]]
+   :limit-s 200}
+  {:name "unseen-killer-at-a-dark-pile-skips-and-rests"
+   :plot {:light :dark}
+   :act [[:summon "skeleton" [27.5 0 26.5] "{NoAI:1b,Silent:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}]}"]
          [:rcon "damage $BODY 100 minecraft:arrow by @e[type=skeleton,tag=wt,$BOX,limit=1]"]
          [:rcon "kill @e[type=skeleton,tag=wt,$BOX]"]
          [:await {:source :body :kind :respawned} 30]]

@@ -9,6 +9,7 @@
             [jobs.lib.body :as body]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
+            [jobs.lib.death-spot :as death-spot]
             [jobs.lib.need :as need]
             [jobs.lib.next-call :as next-call]
             [jobs.lib.pace :as pace]
@@ -105,13 +106,23 @@
       (dth/window-closed? c entry) (do (ctx/hold-still! c nil) :closed)
       :else (do (await (child/pause! c (cfg/pause-s) reason)) (await (pace/pace! c)) (recur)))))
 
+(defn ^:async look-at-pile!
+  "Look at the pile at pos (death-spot/look-at!) when a mob death the body has not seen clear since covers it
+  (death-spot/uncleared): a lit spot seen empty is clear, so the walk is priced without that killer, as a player looks
+  before walking back. A dark spot stays priced: the killer, or one spawned since, may be there."
+  [c pos]
+  (when (some #(and (:mob? %) (death-spot/covers? c % pos)) (death-spot/uncleared c))
+    (await (death-spot/look-at! c pos))))
+
 (defn ^:async decide!
-  "The decision of this trip: the saved one, else the estimate, save it. A resumed trip estimates again once (from
-  where the body stands, with the hostiles it knows now), and so does a walk after each leg; its baseline stays."
+  "The decision of this trip: the saved one, else the estimate (after look-at-pile!), save it. A resumed trip estimates
+  again once (from where the body stands, with the hostiles it knows now), and so does a walk after each leg; its
+  baseline stays."
   [c entry]
   (if (and (:decided (ctx/mem c)) (not (:recheck (ctx/mem c))) (or (zero? (:cuts (ctx/mem c) 0)) (:reestimated (ctx/mem c))))
     (:decided (ctx/mem c))
-    (let [quoted (await (est/quote-trip c (:data entry)))
+    (let [_ (await (look-at-pile! c (:pos (:data entry))))
+          quoted (await (est/quote-trip c (:data entry)))
           e (-> (est/estimate c (:data entry) (settings/ticks->ms (game/ticks-since entry (ctx/view c))) quoted)
                 (update :cost est/finite)
                 (assoc :at (ctx/now c)))]

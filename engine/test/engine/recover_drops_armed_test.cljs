@@ -2,7 +2,8 @@
   "recover-drops against a killer mob with an unarmed body: a weapon and armour a known chest holds are fetched first."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
-            [engine.death-test :as dt :refer [die! job recovered pile-drops]]
+            [engine.death-test :as dt :refer [job recovered pile-drops]]
+            [engine.recover-drops-danger-test :refer [die-noted!]]
             [engine.library-test :refer [setup inv]]
             [engine.recover-drops-danger-test :refer [decided-text]]
             [engine.test-util :as tu :refer [run-until-empty]]
@@ -30,7 +31,7 @@
                   items (assoc :blocks {"-2,64,3" "chest"} :containers {"-2,64,3" items}))
           {:keys [eng seen p]} (setup world)]
       (when known? (mem/write! (:store eng) stock/stock-kind {:pos chest-cell :items (stock/stacks->items items)} stock/stock-policy))
-      (die! eng {:pos dt/death-pos :inventory pile :cause cause})
+      (die-noted! eng {:pos dt/death-pos :inventory pile :cause cause} 5000)
       (core/submit! eng job {})
       (await (run-until-empty eng 60))
       {:eng eng :seen seen :p p}))))
@@ -77,7 +78,7 @@
           {:keys [eng seen p]} (setup world)
           real (aget need/blocks! arity4)]
       (mem/write! (:store eng) stock/stock-kind {:pos chest-cell :items (stock/stacks->items kit-in-chest)} stock/stock-policy)
-      (die! eng {:pos dt/death-pos :inventory pile :cause "skeleton"})
+      (die-noted! eng {:pos dt/death-pos :inventory pile :cause "skeleton"} 5000)
       (core/submit! eng job {})
       (aset need/blocks! arity4 (or fetch-stub real))
       (try (await (run-until-empty eng 60))
@@ -137,7 +138,7 @@
         (let [pile dt/death-pile-of-the-field-report
               {:keys [eng seen p]} (setup {:floor tu/walk-floor :entities (vec (pile-drops pile))})]
           (mem/write! (:store eng) stock/stock-kind {:pos [-300 64 3] :items {"iron_sword" 1}} stock/stock-policy)
-          (die! eng {:pos dt/death-pos :inventory pile :cause "skeleton"})
+          (die-noted! eng {:pos dt/death-pos :inventory pile :cause "skeleton"} 5000)
           (core/submit! eng job {})
           (await (run-until-empty eng 60))
           (is (empty? (filter #(= :obtain.chest (:kind %)) @seen)))

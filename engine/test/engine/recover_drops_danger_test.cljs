@@ -35,11 +35,11 @@
   ([cause body job]
   (let [pile dt/death-pile-of-the-field-report]
     (fn ^:async t []
-      (let [{:keys [eng seen]} (setup (merge {:floor tu/walk-floor :entities (vec (pile-drops pile))} body))]
+      (let [{:keys [eng seen p]} (setup (merge {:floor tu/walk-floor :entities (vec (pile-drops pile))} body))]
         (die-noted! eng (cond-> {:pos dt/death-pos :inventory pile} cause (assoc :cause cause)) 5000)
         (core/submit! eng job {})
         (await (run-until-empty eng 20))
-        {:eng eng :seen seen})))))
+        {:eng eng :seen seen :p p})))))
 
 (defn decided-text
   "The priced decision of the run: what the remembered danger says, else the decision of the :recovered entry."
@@ -56,6 +56,20 @@
               without (await ((fetch-run nil)))]
           (is (re-find #"danger [1-9][0-9.]*,.*: skeleton" (decided-text (:eng with-cause))))
           (is (re-find #"danger 0," (decided-text (:eng without)))))))))
+
+(defn looked-at-pile?
+  "Whether the body turned to look at the death pos's cell."
+  [p]
+  (boolean (some #(and (= "look" (.-name %))
+                       (let [at (.-pos (.-args %))] (= [(:x dt/death-pos) (:z dt/death-pos)] (mapv js/Math.floor [(.-x at) (.-z at)]))))
+                 (.-calls (.-world p)))))
+
+(deftest the-body-looks-at-the-pile-of-a-killer-it-has-not-seen-gone-before-weighing-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (looked-at-pile? (:p (await ((fetch-run "skeleton" {} cheap-pile))))) "a lit spot seen empty would clear it")
+        (is (not (looked-at-pile? (:p (await ((fetch-run "fall")))))) "a death by terrain: the place itself killed")))))
 
 (deftest a-damage-type-cause-adds-no-danger
   (async done
