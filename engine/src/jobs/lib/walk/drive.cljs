@@ -120,20 +120,20 @@
   body's cell (from the middle of a step, the step itself hides what lies beside and under it), look down the column it is
   missing from, to the deepest lit drop the planner takes as seen (see-lit-depth), then at the unseen ground round the
   body at several distances, as a player looks over an edge once, so the next plan drops neither one cell deeper nor at
-  the next unseen column. Not while a hostile is near or lava is seen at the edge (lip-unsafe?)."
+  the next unseen column. The lean is held back while a hostile is near or lava is seen at the edge (lip-unsafe?); the looks are not."
   [c [x y z :as cell]]
   (let [p (:primitives c)
         pos (u/self-pos c)
         [ax _ az :as at] (mapv #(js/Math.floor (% pos)) [:x :y :z])]
-    (when-not (lip-unsafe? c {:from at :floor cell})
-      (when (and (<= (js/Math.abs (- x ax)) 1) (<= (js/Math.abs (- z az)) 1) (not= [x z] [ax az]))
-        (await (lean-to! c (lip at cell))))
-      (loop [points (keep identity (cons (column-point cell (:see-lit-depth (cost/walk-unknown-prices)) #(dig-look/unknown? p %))
-                                         (edge-points pos y #(unseen-round? p %))))]
-        (when-let [pt (first points)]
-          (await (ctx/act c :look (clj->js {:pos pt})))
-          (look/see! c)
-          (recur (rest points)))))))
+    (when (and (<= (js/Math.abs (- x ax)) 1) (<= (js/Math.abs (- z az)) 1) (not= [x z] [ax az])
+               (not (lip-unsafe? c {:from at :floor cell})))
+      (await (lean-to! c (lip at cell))))
+    (loop [points (keep identity (cons (column-point cell (:see-lit-depth (cost/walk-unknown-prices)) #(dig-look/unknown? p %))
+                                       (edge-points pos y #(unseen-round? p %))))]
+      (when-let [pt (first points)]
+        (await (ctx/act c :look (clj->js {:pos pt})))
+        (look/see! c)
+        (recur (rest points))))))
 
 (defn ^:async follow!
   "Walk plan (a plan-walk! result) and plan again from the body's cell, in the same call, whenever the walk stops for it:

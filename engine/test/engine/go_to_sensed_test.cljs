@@ -994,20 +994,24 @@
             (await (drive/look-over-edge! c [21 83 0]))
             (ctx/end c :done {}))})
 
-(defn walkway-end-sneaks
-  "The sneaking steer ticks of look-over-edge! at the walkway end, with the extra spec."
+(defn walkway-end-acts
+  "{:sneaks the sneaking steer ticks, :looks the look acts} of look-over-edge! at the walkway end, with the extra spec."
   [extra]
-  (let [acts (atom [])]
+  (let [acts (atom [])
+        looks (atom 0)]
     (-> (run-job look-over-walkway-end (merge {:self {:pos {:x 20.5 :y 85 :z 0.5}} :blocks walkway-room :radius 16 :exact-eye true :bodyHitbox true} extra)
-                 {} (record-moves! acts))
-        (.then (fn [_] (filter #(get-in % [1 "sneak"]) @acts))))))
+                 {} (fn [s] ((record-moves! acts) s)
+                      (.override (.-world (:p s)) "look" (fn [token a impl] (swap! looks inc) (impl token a)))))
+        (.then (fn [_] {:sneaks (filter #(get-in % [1 "sneak"]) @acts) :looks @looks})))))
 
 (deftest a-hostile-near-holds-back-the-lean-to-a-lip-the-walk-learned-is-missing
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (seq (await (walkway-end-sneaks {}))) "control: with no hostile the body leans")
-        (is (empty? (await (walkway-end-sneaks {:entities [{:id 1 :name "zombie" :kind "hostile" :pos {:x 24 :y 80 :z 0}}]}))))))))
+        (is (seq (:sneaks (await (walkway-end-acts {})))) "control: with no hostile the body leans")
+        (let [{:keys [sneaks looks]} (await (walkway-end-acts {:entities [{:id 1 :name "zombie" :kind "hostile" :pos {:x 24 :y 80 :z 0}}]}))]
+          (is (empty? sneaks))
+          (is (pos? looks) "a look moves nothing, so it still happens"))))))
 
 (deftest go-to-down-a-stair-in-a-dark-room-ends-with-bounded-replans
   (async done
