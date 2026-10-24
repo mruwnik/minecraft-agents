@@ -808,20 +808,40 @@
           (is (not (contains? names "attack")) "a chased body in the open never fights")
           (is (empty? (filter #(= :retreat_blocked (:kind %)) @seen)) "never cornered"))))))
 
+(defn price-after-flight
+  "The flight's target (cover/flight-target!), asked step after step until it looks at no more cells (at most 6), and
+  then the flee price (cover/caught-chance!) in world: the price the next step asks, the flight's looks taken."
+  [world]
+  (let [out (atom nil)
+        threats #(danger-q/known-hostiles (:primitives %) 30 {:ranged-radius 30})
+        s (assoc-in (setup-sensed world) [:eng :jobs 'targeter]
+                    {:round (fn ^:async r [c]
+                              (loop [n 6]
+                                (let [glanced (:glanced (ctx/mem c))
+                                      target (await (cover/flight-target! c (threats c)))]
+                                  (if (and (pos? n) (not= glanced (:glanced (ctx/mem c))))
+                                    (recur (dec n))
+                                    (reset! out {:target target :price (await (cover/caught-chance! c))}))))
+                              (ctx/end c :done nil))})]
+    (.then (run-job! s 'targeter {:step 6}) (fn [_] @out))))
+
+(def tunnel-cells (set (for [x (range 0 9) y [64 65]] [x y 0])))
+
+(def tunnel-rock
+  "Stone round tunnel-cells and a cave west of it behind a rock wall, the tunnel's sides left unseen by the looks."
+  (into {} (for [x (range -6 10) y (range 63 68) z [-1 0 1]
+                 :when (not (or (tunnel-cells [x y z]) (and (<= -4 x -2) (#{64 65} y) (zero? z))))]
+             [(key-of x y z) "stone"])))
+
 (deftest the-flee-price-and-the-flight-agree-on-whether-the-body-is-cornered
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [out (atom nil)
-              s (assoc-in (setup-sensed {:entities [(zombie 7 5 {})]}) [:eng :jobs 'targeter]
-                          {:round (fn ^:async r [c]
-                                    (let [threats (danger-q/known-hostiles (:primitives c) 30 {:ranged-radius 30})
-                                          price (await (respond.goal/caught-chance! c))]
-                                      (reset! out {:price price :target (await (cover/flight-target! c threats))})
-                                      (ctx/end c :done nil)))})]
-          (await (run-job! s 'targeter {:step 6}))
-          (is (some? (:target @out)) "an open field: the flight has a way")
-          (is (not (:cornered? (:price @out))) (pr-str @out)))))))
+        (let [field (await (price-after-flight {:entities [(zombie 7 5 {})]}))
+              tunnel (await (price-after-flight {:floor strip :blocks tunnel-rock :entities [(zombie 7 5 {})]}))]
+          (is (= [true false] [(some? (:target field)) (boolean (:cornered? (:price field)))]) (str "an open field: a way " (pr-str field)))
+          (is (= [nil true] [(:target tunnel) (:cornered? (:price tunnel))])
+              (str "a tunnel whose unseen sides the flight has looked at: cornered, the price too " (pr-str tunnel))))))))
 
 (deftest a-flight-target-behind-the-body-is-looked-at-first
   (async done
@@ -1144,18 +1164,13 @@
               {:keys [seen]} (await (run-job! s 'jobs.survival.respond-to-hostile {}))]
           (is (= [-10 64 10] (first-target seen))))))))
 
-(def tunnel-cells (set (for [x (range 0 9) y [64 65]] [x y 0])))
-
 (deftest a-flight-target-never-crosses-seen-rock-to-the-cave-behind-it
   ;; the tunnel's sides stay unseen after the looks: priced, not read as rock; its one way on runs past the zombie
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [out (atom nil)
-              rock (into {} (for [x (range -6 10) y (range 63 68) z [-1 0 1]
-                                  :when (not (or (tunnel-cells [x y z]) (and (<= -4 x -2) (#{64 65} y) (zero? z))))]
-                              [(key-of x y z) "stone"]))
-              s (setup-sensed {:floor strip :blocks rock :entities [(zombie 7 5 {})]})
+              s (setup-sensed {:floor strip :blocks tunnel-rock :entities [(zombie 7 5 {})]})
               s (assoc-in s [:eng :jobs 'targeter] (targeter out))]
           (await (run-job! s 'targeter {:step 6}))
           (is (nil? @out) (str "the cave behind its rock wall is no way, nor the tunnel past the zombie: " (pr-str @out))))))))

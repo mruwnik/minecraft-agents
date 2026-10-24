@@ -417,10 +417,10 @@
     (with-meta (cond-> ends covered? (into (covers chasers from covered? ends))) (meta priced))))
 
 (defn unseen-ahead
-  "The first unseen cells ([x y z], nearest first) of ends' routes: where to look before the flight counts itself
-  cornered."
-  [ends]
-  (->> ends (sort-by :s) (keep :unseen) distinct seq))
+  "The first unseen cells ([x y z], nearest first) of ends' routes but those in glanced (looked at this flight already:
+  each once a flight): where the flight looks before it counts itself cornered; nil when none is left."
+  [ends glanced]
+  (->> ends (sort-by :s) (keep :unseen) distinct (remove (set glanced)) seq))
 
 (defn caught-chance
   "{:chance :seconds} of a flight from where search ends (search!) ran: the chance it is caught
@@ -431,10 +431,11 @@
   when it runs unseen); a catch lasts the least seconds the race keeps a chaser in reach over the caught headings (nil
   with none caught). The other headings only choose the way. With every way caught: chance 1, over the seconds of the way
   it gets away on least so (else of a ring route into the unseen; a closed pocket's: the whole flight), :cornered? when
-  choose (with opts, the flight's own) takes none of the ends and no unseen cell is left to look at (the flight would be
-  the cornered step, no walk away); with one, the flight looks first, and a way may be there at way-on-chance: the
-  chance is that of an unseen way (flight-caught-chance). Nothing routed: the prior with the unseen worse case."
-  [ends counts opts]
+  choose (with opts, the flight's own) takes none of the ends and no unseen cell is left to look at (unseen-ahead, glanced
+  the cells the flight looked at: the flight would be the cornered step, no walk away); with one, the flight looks first,
+  and a way may be there at way-on-chance: the chance is that of an unseen way (flight-caught-chance). Nothing routed:
+  the prior with the unseen worse case."
+  [ends counts opts glanced]
   (let [ring (filter #(and (nil? (:pos (:target %))) (not (:cover? %))) ends)
         left (filter #(and (or (:open? %) (:unseen %)) (not (:caught? %)) (pos? (:gain %)) (> (:arrive %) (:s %))) ring)
         ways (filter gets-away? ends)
@@ -446,7 +447,7 @@
       (empty? ring) {:chance (cost/flight-caught-chance {:way? true :unseen? true :counts counts})}
       :else (let [timed (or (seq ways) (seq (filter :unseen ring)))
                   free? (some? (choose ends opts))
-                  look? (and (not free?) (seq (unseen-ahead ends)))]
+                  look? (and (not free?) (unseen-ahead ends glanced))]
               (cond-> {:chance (if look? (cost/flight-caught-chance {:way? true :unseen? true :counts counts}) 1)
                        :cornered? (not (or free? look?))}
                 timed (assoc :seconds (reduce min (map :caught-s timed))))))))

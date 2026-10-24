@@ -14,8 +14,7 @@
             [jobs.lib.util :as u]
             [jobs.survival.respond.state :as flight]
             [jobs.lib.flee-search :as search]
-            [jobs.lib.flee-walk :as walk]
-            [jobs.lib.walk.world :as wworld]))
+            [jobs.lib.flee-walk :as walk]))
 
 (a/defargs settings
   {::drift {:default 3 :doc "Blocks a walk to the goal may take the body farther from the goal's height than where that walk began: a leg that does ends the walk to the goal (a plan that ends under or over the goal, nearer only in x and z, is no way to it)." :spec (a/num-in 0 nil)}
@@ -138,7 +137,7 @@
 
 (defn choose-opts
   "The options flee-search/choose takes for the flight's step from threats (mobs), the one place they are built: the
-  price of a flight (caught-chance!) and the flight itself (respond.cover/flight-target!) ask it with the same situation,
+  price of a flight (respond.cover/caught-chance!) and the flight itself (respond.cover/flight-target!) ask it with the same situation,
   so their cornered verdicts agree. covered? (cell -> bool, a ranged threat's cover) and home (a safe home's pos) when given."
   [c threats covered? home]
   (let [p (:primitives c)
@@ -156,21 +155,6 @@
      :dry-only? (boolean (some #(= "drowned" (.-name %)) threats))
      :avoid (cons (fn [end] (some #(< (u/dist end %) (u/dist from %)) bystanders)) (flight/avoid-ends c))
      :prefer? (when home #(= home (:pos (:target %))))}))
-
-(defn ^:async caught-chance!
-  "{:chance :seconds} of a flight from where the body stands being caught (flee-search/caught-chance of a search from
-  its chasers), for the fight-or-flee weighing; kept (memory :caught-chance) while the body stays in its cell for a flee step's
-  seconds (flee-search ::step-s)."
-  [c]
-  (let [here (cell (u/self-pos c))
-        now (ctx/now c)
-        kept (:caught-chance (ctx/mem c))]
-    (if (and (= here (:cell kept)) (< (- now (:t kept)) (* 1000 (settings/get search/settings ::search/step-s))))
-      (:chance kept)
-      (let [ends (await (search/search! c (chasers c) [] {:y-margin (margin c)}))
-            chance (search/caught-chance ends (wworld/way-counts (:primitives c)) (choose-opts c (live-chasers c) nil nil))]
-        (ctx/update-mem! c assoc :caught-chance {:cell here :t now :chance chance})
-        chance))))
 
 (defn usable
   "The goal of judged (judge!) when nothing speaks against it, else nil."

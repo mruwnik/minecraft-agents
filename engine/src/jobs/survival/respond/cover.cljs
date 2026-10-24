@@ -18,6 +18,7 @@
             [jobs.survival.respond.refuge :as refuge]
             [jobs.lib.flee-search :as search]
             [jobs.lib.flee-walk :as walk]
+            [jobs.lib.walk.world :as wworld]
             [jobs.survival.respond.options :as cornered]
             [jobs.survival.respond.cornered :as pick]))
 
@@ -123,19 +124,45 @@
       (walk/way-target (u/self-pos c) (mapv #(danger-q/mob-pos p %) threats)
                        (filter #(seen-stand? p %) floors) (way-reach)))))
 
+(defn homes
+  "The homes a flight runs to: the first of rooms (refuges) and home-pos, none with a creeper within blast reach (blast?)."
+  [c rooms blast?]
+  (if blast? [] (remove nil? [(:start (first rooms)) (home-pos c)])))
+
 (defn ^:async judge!
-  "The flight's goal, homes and flee search (respond.goal/judge!) after a glance along the way away (glance-away!):
-  homes the first of rooms (refuges) and home-pos, none with a creeper within blast reach (blast?), kept as :homes."
+  "The flight's goal, homes (homes) and flee search (respond.goal/judge!) after a glance along the way away
+  (glance-away!), the homes kept as :homes."
   [c covered? rooms blast?]
   (await (glance-away! c (search/away (u/self-pos c) (respond.goal/chasers c))))
-  (let [homes (if blast? [] (remove nil? [(:start (first rooms)) (home-pos c)]))]
-    (assoc (await (respond.goal/judge! c homes covered?)) :homes homes)))
+  (let [hs (homes c rooms blast?)]
+    (assoc (await (respond.goal/judge! c hs covered?)) :homes hs)))
+
+(defn ^:async caught-chance!
+  "{:chance :seconds :cornered?} of a flight from where the body stands (flee-search/caught-chance), for the
+  fight-or-flee weighing: the flight's own search (respond.goal/judge! over homes, covered? as cover-fn), choose options
+  (respond.goal/choose-opts) and cells looked at (memory :glanced), no glance taken. Kept (memory :caught-chance) while
+  the body stays in its cell for a flee step's seconds (flee-search ::step-s) and has looked at nothing more."
+  [c]
+  (let [p (:primitives c)
+        here (respond.goal/cell (u/self-pos c))
+        now (ctx/now c)
+        {:keys [glanced] kept :caught-chance} (ctx/mem c)]
+    (if (and (= here (:cell kept)) (= glanced (:glanced kept))
+             (< (- now (:t kept)) (* 1000 (settings/get search/settings ::search/step-s))))
+      (:chance kept)
+      (let [threats (respond.goal/live-chasers c)
+            covered? (cover-fn p threats (flight/fire-spots c))
+            judged (await (respond.goal/judge! c (homes c (refuges c) (some #(flight/blaster? p %) threats)) covered?))
+            chance (search/caught-chance (:ends judged) (wworld/way-counts p)
+                                         (respond.goal/choose-opts c threats covered? (:home judged)) glanced)]
+        (ctx/update-mem! c assoc :caught-chance {:cell here :t now :glanced glanced :chance chance})
+        chance))))
 
 (defn ^:async look-ahead!
-  "judged again (respond.goal/judge! over its :homes) after a look at the first unseen cells of its routes
-  (flee-search/unseen-ahead; each once a flight, as glances are); nil when there is none to look at."
+  "judged again (respond.goal/judge! over its :homes) after a look at the first unseen cells of its routes not looked at
+  this flight (flee-search/unseen-ahead); nil when there is none to look at."
   [c covered? judged]
-  (when-let [cells (seq (remove (set (:glanced (ctx/mem c))) (search/unseen-ahead (:ends judged))))]
+  (when-let [cells (search/unseen-ahead (:ends judged) (:glanced (ctx/mem c)))]
     (ctx/update-mem! c update :glanced #(vec (take-last (cornered/glance-memory) (into (vec %) cells))))
     (await (dig-look/look-unknown! c cells))
     (assoc (await (respond.goal/judge! c (:homes judged) covered?)) :homes (:homes judged))))

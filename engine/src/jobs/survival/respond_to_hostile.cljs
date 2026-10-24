@@ -3,7 +3,7 @@
             [jobs.lib.ready :as ready]
             [jobs.survival.block-arrow-gap :as gap]
             [jobs.survival.respond-flight :as flight]
-            [jobs.survival.respond.goal :as respond.goal]
+            [jobs.survival.respond.cover :as cover]
             [engine.args :as a]
             [jobs.lib.checks :as checks]
             [jobs.lib.body :as body]
@@ -320,7 +320,7 @@
         felt (walk-felt c)
         target (when-not (some combat/enderman? near) (first (hostile/fought near)))
         fight (when-not (some combat/enderman? near) (hostile/fight-answer c near #(struck-of c %) (when target (await (pick/quote! c (hostile/fight-walk-args p target))))))
-        caught (when-not (some combat/enderman? near) (await (respond.goal/caught-chance! c)))
+        caught (when-not (some combat/enderman? near) (await (cover/caught-chance! c)))
         walk (when-not (some combat/enderman? near) (hostile/flee-answer c near fight felt caught))
         then (or (:then walk) (when fight [fight]))
         sealing (when-not (some #(or (combat/creeper? %) (combat/enderman? %)) near) (doors/sealing-doors c near))
