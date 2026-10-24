@@ -10,6 +10,7 @@
             [engine.event-api :as event-api]
             [engine.events :as events]
             [engine.fake :as fake]
+            [engine.go-to-column-test :as gcol]
             [engine.go-to-doors-test :as gd]
             [engine.memory :as mem]
             [jobs.lib.util :as u]
@@ -32,6 +33,7 @@
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.watch :as wwatch]
             [jobs.lib.walk.world :as wworld]
+            [jobs.movement.go-to.cut :as gcut]
             [jobs.movement.go-to.escalation :as esc]
             [jobs.movement.go-to.health :as gth]
             [jobs.movement.go-to.restore :as restore]
@@ -449,6 +451,23 @@
     (is (true? (second (rounds [20 20 20 20]))))
     (is (true? (second (rounds [20 19.5 20 19.5]))) "under a block of gain")
     (is (false? (second (rounds [20 20 18 18]))) "a block nearer is progress")))
+
+;; live twin: walkway-stair-out-of-view/stair-100-east-arrives (b3c99e64). Down the stair and west on the ground, a search
+;; cut by its budget got nearest at the walkway's dead end over the goal, where the body had stood 13 off: the walk swung
+;; back up the stair to it, and off it again
+(deftest a-budget-cut-search-that-gets-no-nearer-than-the-body-has-been-tours-the-edge-instead
+  (let [mem* (atom {})
+        c (gcol/stub-ctx (tu/fake {}) mem* {:unknown true})
+        check (gwalk/known-end-check c {:x 60 :y 0 :z 16} nil)
+        plan (fn [reason end] {:status "partial" :r #js {:reason reason} :steps [{:x 179 :y 0 :z 16} end]})
+        dead-end {:x 61 :y 11 :z 8}]
+    (swap! gcut/approaches assoc (:id c) {:closest 13.2})
+    (is (= {:known-end true} (check (plan "budget" dead-end) false)))
+    (is (nil? (check (plan "budget" {:x 64 :y 0 :z 16}) false)) "an end nearer than the body has been")
+    (is (nil? (check (plan "exhausted" dead-end) false)) "an ended search")
+    (swap! mem* assoc :edge-mode true)
+    (is (nil? (check (plan "budget" dead-end) true)) "already touring the edge")
+    (swap! gcut/approaches dissoc (:id c))))
 
 (deftest go-to-with-unknown-holds-a-carried-torch-in-the-dark
   (async done

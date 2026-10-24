@@ -17,9 +17,10 @@
     that walk fits the time left; info go-to.wall-walk).
   - A search that runs out of loaded land walks to its frontier (the loaded edge), and a walk that gets nearer that edge
     is progress too: a tour of frontiers ends when every frontier within 1000 blocks of the goal is spent, or at the end of
-    a frontier walk once the tour's price (jobs.lib.cost/tour-cost of the blocks and walks since the body last came nearer its goal than
+    a frontier walk, or at a re-plan or cut of a walk short of the goal (drive/follow!'s :walk-spent?), once the tour's price (jobs.lib.cost/tour-cost of the blocks and walks since the body last came nearer its goal than
     ever in the call) passes what the goal is worth (the setting jobs.lib.cost.value/tour-worth, else jobs.lib.cost/tour-worth of the goal's straight
     blocks at the call's start and the call's :worth): it gives up :why :explore-spent (:explored the blocks, :walks the walks).
+    A search cut by its budget whose nearest node is no nearer than the body has been tours the edge of what it has seen instead (known-end-check).
   - A walk stuck or off its plan at a cell is a :walker-fault warn; the next plans of the call cost that cell
     (up to 16; after a fall also the cells above it) far more (wworld/with-avoid), so a way round is taken when there is one.
     A body such a walk left stuck in water first swims at a bank beside it (go-to.unstick, info go-to.unstuck)."
@@ -43,7 +44,7 @@
             [jobs.lib.watch :as watch]
             [jobs.movement.go-to.air :as air]
             [jobs.movement.go-to.aim :as aim :refer [aimed here? in-seen-ground? look-along! guess-waypoint look-at-column! look-at-goal-air! hidden-in-ground? lookout pre-aim! sight-end see-cell]]
-            [jobs.movement.go-to.cut :refer [approach-recorder tour tour-spent?]]
+            [jobs.movement.go-to.cut :refer [approaches approach-recorder tour tour-spent?]]
             [jobs.movement.go-to.detour :as detour]
             [jobs.movement.go-to.escalate-choose :as choose]
             [jobs.movement.go-to.escalation :as esc]
@@ -146,6 +147,20 @@
                    (> (detour/length steps) (+ 4 (* lookout-detour (u/dist (first steps) pos))))
                    (lookout c pos))
           {:lookout true}))))
+
+(defn known-end-check
+  "near/walk-round!'s :stair-check: check's why, else {:known-end true} for a plan over a mask (c's :unknown) to where a
+  search cut by its budget got nearest (not a frontier) that ends no block nearer pos than the body has been in the call
+  (approaches :closest): the budget left the search short of anywhere new, and walking there swings between ends it
+  knows. Not while the round tours the edge of what the body has seen (mem :edge-mode), which it turns to instead."
+  [c pos check]
+  (fn [{:keys [status steps r] :as plan} first?]
+    (or (when check (check plan first?))
+        (let [closest (:closest (get @approaches (:id c)))]
+          (when (and (:unknown c) closest (not (:edge-mode (ctx/mem c))) (= "partial" status) (seq steps)
+                     (= "budget" (some-> ^js r .-reason)) (not (:frontier-taken plan))
+                     (>= (u/dist (peek steps) pos) (dec closest)))
+            {:known-end true})))))
 
 (defn walk-opts
   "The near/walk-round! options of a go-to walk round with doors (the :doors arg as a keyword)."
@@ -412,8 +427,8 @@
             seen-goal? (and (see-cell c) (not (:edge-mode (ctx/mem c))) (not (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))))
             opts (cond-> (assoc (walk-opts c doors) :progress (empty? (:frontier-best (ctx/mem c))))
                    seen-goal? (assoc :explore false))
-            stair-check (reprice/check c pos (lookout-check c pos (plan-check c pos (choose/stair-check c pos) (straight-from! c d))))
-            {walked :result status :status to :to} (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) pos range (assoc opts :see-cell (see-cell c) :stair-check stair-check)))
+            stair-check (reprice/check c pos (known-end-check c pos (lookout-check c pos (plan-check c pos (choose/stair-check c pos) (straight-from! c d)))))
+            {walked :result status :status to :to} (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos) :walk-spent? #(tour-spent? c)) pos range (assoc opts :see-cell (see-cell c) :stair-check stair-check)))
             status (if (and (= "stair" status) (:searching (:why walked))) "searching" status)
             _ (ctx/hold-still! c (when (= "searching" status) :searching))
             fetched (when (= :no-torch (:status walked)) (await (fetch-torches! c)))
@@ -462,6 +477,11 @@
           (and (= "stair" status) (:lookout (:why walked)))
           (do (ctx/update-mem! c assoc :lookout-due true) :again)
 
+          (and (= "stair" status) (:known-end (:why walked)))
+          (do (ctx/update-mem! c assoc :edge-mode true)
+              (ctx/emit! c :go-to.edge-tour :info {:text "the search ran out of nodes short of anywhere nearer than the body has been: touring to the edge of what it has seen" :at (mapv #(js/Math.floor (% from)) [:x :y :z])})
+              :again)
+
           (and (= "stair" status) (:detour (:why walked)))
           (let [why (dissoc (:why walked) :detour)]
             (let [e (choose/detour-way c pos)]
@@ -477,7 +497,7 @@
           (= "stair" status)
           (do (ctx/update-mem! c #(cond-> (assoc % :escalate-now true) (not= :retreats (:why walked)) (assoc :stair-tried true))) :again)
 
-          (and frontier (tour-spent? c))
+          (and (or frontier (= :tour-spent (:status walked))) (tour-spent? c))
           (end/give-up! c pos {:status :no-path :reason :explore-spent}
                         (update (tour c) :explored js/Math.round))
 

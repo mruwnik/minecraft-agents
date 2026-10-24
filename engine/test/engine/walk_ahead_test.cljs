@@ -12,6 +12,7 @@
             [engine.memory :as mem]
             [engine.path.executor :as executor]
             [engine.path.fixture :as fx]
+            [jobs.lib.cost :as cost]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.drive :as drive]
             [jobs.lib.walk.search :as wsearch]
@@ -571,6 +572,34 @@
           (is (= (inc cuts) (count @watches)))
           (is (true? (peek @watches)) "the last, whole plan is walked with its watch")
           (is (= :arrived (:status (:done r)))))))))
+
+;; two ways cut at their first guessed-dark cell, each cut's look showing nothing that helps: from x 0 the plan cuts at x 3,
+;; from x 3 at x 0. Nothing in follow! ends that; the caller's tour price (here go-to's: blocks walked away from the goal
+;; against what a goal 9 off is worth) does. The 1000th plan is whole, so the old code ends too, arrived.
+(deftest cuts-that-send-the-body-back-and-forth-end-once-the-callers-tour-price-is-spent
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [x (atom 0)
+              away (atom 0)
+              plans (atom 0)
+              east {:status "partial" :r #js {} :steps (line 4) :cut-rest [(step 4 64 0 :walk)] :ms 5}
+              west (assoc east :steps (mapv #(step (- 3 %) 64 0 (if (zero? %) :start :walk)) (range 4)) :cut-rest [(step -1 64 0 :walk)])
+              walk-fn (fn [steps _]
+                        (let [to (:x (peek steps))]
+                          (when (< to @x) (swap! away + (- @x to)))
+                          (reset! x to)
+                          (js/Promise.resolve [{:status :arrived :at [to 64 0]} 1])))
+              c {:primitives (tu/fake-on-floor {:floor [-5 -5 20 5]})
+                 :walk-spent? #(> (:cost (cost/tour-cost {:explored @away :walks 0})) (cost/tour-worth 9))}
+              r (await (drive/follow! c east
+                                      {:plan-fn (fn [_] (js/Promise.resolve
+                                                         (cond (>= (swap! plans inc) 1000) {:status "found" :r #js {} :steps (line 10) :ms 5}
+                                                               (zero? @x) east
+                                                               :else west)))
+                                       :walk-fn walk-fn :to [9 64 0] :policy executor/policy}))]
+          (is (= :tour-spent (:status (:done r))) (pr-str (:done r)))
+          (is (< @plans 1000)))))))
 
 ;; ---------------------------------------------------------------- the health stop
 
