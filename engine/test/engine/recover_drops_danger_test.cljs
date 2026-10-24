@@ -278,6 +278,15 @@
     (is (= [{:name "zombie"}] (:top-mobs risky)))
     (is (= [{:name "zombie" :pos {:x 15.5 :y 64 :z 3.5}}] (:seen-mobs risky)))))
 
+(deftest a-danger-of-spawns-on-dark-or-unseen-ground-is-named-in-the-text
+  (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities []})
+        death {:pos dt/death-pos :inventory dt/death-pile-of-the-field-report}
+        c {:primitives p :args {} :view #(mem/view (:store eng))}
+        priced (estimate/estimate c death 5000 {:uses {:job-time [5 5 15]} :risk {:hp 1.6 :spawn-hp 1.6 :dark-s 17 :threats []}})]
+    (is (pos? (get-in priced [:parts :danger])))
+    (is (nil? (:top-mobs priced)))
+    (is (re-find #"danger [0-9.]+, trip 10, collect [0-9.]+; spawns on 17 s of dark or unseen ground" (estimate/why-text priced 0)))))
+
 (deftest a-route-that-drowns-and-takes-long-is-priced-for-the-air-and-the-time
   (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities [] :inventory [{:name "cobblestone" :count 8}]})
         death {:pos {:x 20 :y 64 :z 0} :inventory dt/death-pile-of-the-field-report}

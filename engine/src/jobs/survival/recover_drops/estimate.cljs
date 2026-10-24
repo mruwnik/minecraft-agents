@@ -22,7 +22,7 @@
 (defn why-text
   "The value and the cost with their main parts: \"value 3058.5 (24 raw_iron 2880, ...), cost 31 (trip 10, walk 6,
   danger 15: zombie, skeleton)\"."
-  [{:keys [value cost top-items other-items parts reason top-mobs chance]} margin]
+  [{:keys [value cost top-items other-items parts reason top-mobs chance dark-s]} margin]
   (str "value " (round1 value)
        (when (seq top-items)
          (str " (" (str/join ", " (map (fn [{:keys [name count value]}] (str count " " name " " (round1 value))) top-items))
@@ -33,6 +33,7 @@
        (when (seq parts)
          (str " (" (str/join ", " (map (fn [[k n]] (str (name k) " " (round1 n))) parts))
               (when (seq top-mobs) (str ": " (str/join ", " (map :name top-mobs))))
+              (when (pos? (or dark-s 0)) (str "; spawns on " (round1 dark-s) " s of dark or unseen ground"))
               ")"))
        (when (and (number? margin) (not (zero? margin))) (str " + margin " margin))))
 
@@ -158,6 +159,7 @@
       drowns (assoc :reason :no-air-way :detail drowns)
       (and (not drowns) (:parts fetch)) (assoc :parts (:parts fetch))
       (and (not drowns) (:reason fetch)) (assoc :reason (:reason fetch))
+      (pos? (get-in quoted [:risk :dark-s] 0)) (assoc :dark-s (get-in quoted [:risk :dark-s]))
       (seq mobs) (assoc :seen-mobs mobs)
       (seq named) (assoc :top-mobs (vec (take (cfg/top-n) named)))))))
 
