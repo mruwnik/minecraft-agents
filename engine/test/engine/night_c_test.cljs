@@ -72,6 +72,33 @@
           (is (nothing-placed-at-the-start? p) "no pit dug")
           (is (= 10 (js/Math.floor (:x (st/pos-of p)))) "walked home"))))))
 
+(defn ^:async night-at-seen-hut
+  "The night with no home set, the body outside the hut of hut-shelter-test (door at z 2) at dusk with extra items; {:eng :p}."
+  [inventory]
+  (let [world (-> (hut/hut-world {:x 5 :y 64 :z 6} {}) (assoc :time night :inventory inventory :light-default [15 4])
+                  (update :light assoc [5 64 6] [15 0]))
+        {:keys [eng p] :as r} (await (night-at-home world {:x 5 :y 64 :z 0} {} {:home? false}))]
+    (aset p "seenBlockAt" (fn [pos] (let [b (.blockAt p pos)] #js {:name (.-name b) :pos pos :age-ms 0 :properties (.-properties b)})))
+    (await (tu/run-until-empty eng 80))
+    r))
+
+(deftest a-finished-hut-seen-is-walked-into-before-any-home-is-set
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (night-at-seen-hut st/dirt-stack))]
+          (is (empty? (filter #(< 3 (:z (st/arg-pos %))) (st/calls p "place"))) "no pit dug beside the hut")
+          (is (< (:z (st/pos-of p)) 2) "inside the hut")
+          (is (false? (hut/door-open? p)) "the door is shut"))))))
+
+(deftest a-carried-bed-goes-down-inside-the-hut-seen-not-outside-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (night-at-seen-hut (conj st/dirt-stack {:name "red_bed" :count 1})))]
+          (is (= 1 (count (bed-places p))))
+          (is (every? #(< (:z (st/arg-pos %)) 2) (bed-places p)) "the bed is put down in the hut"))))))
+
 (deftest a-lit-route-the-body-has-not-looked-at-yet-is-looked-at-before-digging-in
   (async done
     (tu/run-async done

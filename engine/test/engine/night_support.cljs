@@ -141,10 +141,10 @@
 (defn know-home! [eng pos] (mem/write! (:store eng) :home {:pos pos} mem/place-policy))
 
 (defn night-at-home
-  "Run the night job (with args) in world with :home at pos, the body seeing through its perception: {:eng :p}."
+  "Run the night job (with args) in world with :home at pos (none with :home? false; pos is still what the body has seen around), the body seeing through its perception: {:eng :p}."
   ([world pos] (night-at-home world pos {}))
   ([world pos args] (night-at-home world pos args {}))
-  ([world pos args {:keys [unseen rand ray-deg radius] :or {ray-deg 2 radius 24}}]
+  ([world pos args {:keys [unseen rand ray-deg radius home?] :or {ray-deg 2 radius 24 home? true}}]
   (let [[seen sink] (tu/legacy-capture-sink)
         raw-p (tu/fake (merge {:offlineScale 0.0001 :floor tu/walk-floor} (dissoc world :light-default :light)))
         _ (swap! (fake/state raw-p) merge (select-keys world [:light-default :light]))
@@ -162,7 +162,7 @@
         (rays/touch! per [x y z])))
     (swap! (fake/state raw-p) assoc :yaw 0)
     (st/dawn-after! p st/default-dawn)
-    (know-home! eng pos)
+    (when home? (know-home! eng pos))
     (core/submit! eng (list 'jobs.survival.night args) {})
     (js/Promise.resolve {:eng eng :p p :seen seen :look-round! #(doseq [yaw [0 90 180 270]]
                                                                 (swap! (fake/state raw-p) assoc :yaw yaw)
