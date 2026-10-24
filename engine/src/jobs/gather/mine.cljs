@@ -141,7 +141,7 @@
   :continue while it walks, :again once out; a walk that fails is tried toward the next exit cell (cheapest walk first), and the trip ends :zone-exit when every one failed."
   [c zn]
   (let [m (zone-margin)
-        goals (or (:leave-goals (ctx/mem c)) (let [g (await (exit-order c zn))] (ctx/update-mem! c assoc :leave-goals g) g))
+        goals (or (:leave-goals (ctx/mem c)) (let [g (await (exit-order c zn))] (ctx/update-mem! c assoc :leave-goals g :leave-zone zn) g))
         side (:leave-side (ctx/mem c) 0)
         from (:start (ctx/mem c))
         r (await (child/call-walk* c :leave (goals side)))
@@ -151,7 +151,7 @@
       (not (within-keep-clear c (dec m) (access/cell here) (stair-start? c)))
       (do (ctx/emit! c :mine.left-zone :info {:zone (:name zn) :from (access/cell from) :to (access/cell here)
                                               :text (str "mine walked out of zone " (:name zn) " to " (str/join "," (access/cell here)) " before it digs")})
-          (ctx/update-mem! c #(-> % (assoc :start here :resume-at here :leave-side 0) (dissoc :leave-goals)))
+          (ctx/update-mem! c #(-> % (assoc :start here :resume-at here :leave-side 0) (dissoc :leave-goals :leave-zone)))
           :again)
       (< (inc side) (count goals)) (do (ctx/update-mem! c assoc :leave-side (inc side)) :again)
       :else (let [text (str "mine could not get out of zone " (:name zn) " at " (str/join "," (access/cell here)) " before it digs")]
@@ -327,6 +327,8 @@
       (= :continue e) :continue
       (not (:equipped? m)) (do (ctx/update-mem! c #(cond-> (assoc % :equipped? true) (pos? (torch/torches-held (:primitives c))) (assoc :stocked? true))) :again)
       stop (to-end! c (:reason stop) (select-keys stop [:tool :why :text]))
+      ;; a leave under way moves the body off the resume cell: walking it back there would undo each step
+      (:leave-goals m) (await (leave-zone! c (:leave-zone m)))
       (not at-resume?) (await (back-to-resume! c))
       (and own (not (shaft-top-here? c))) (await (leave-zone! c own))
       :else (do (ctx/update-mem! c #(cond-> (assoc % :zoned? true :phase :dig) (not (:goal %)) (assoc :goal (:count (:args c)) :had (carried c))))

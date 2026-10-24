@@ -27,6 +27,15 @@
    :expect [{:event {:source :job :kind :mine.left-zone} :within-s 60 :of-job true}]
    :after [[:block [16 -1 16] "birch_planks"] [:block [13 -1 13] "birch_planks"] [:block [10 0 16] "bedrock"]]
    :limit-s 90}
+  {:name "digs-out-of-its-own-zone-without-walking-back-between-steps"
+   ;; shut in a pocket of the stone mass inside its zone: go-to digs the way out over several rounds, and the mine never
+   ;; walks the body back to its start in between (card 50a1a534: a stair out was undone step by step)
+   :blocks [[:fill [15 0 15] [17 1 17] "air"]]
+   :zones [{:name "home" :min [13 -1 13] :max [19 3 19] :owner "$body"}]
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 3 :radius 8})]]
+   :expect [{:event {:source :job :kind :mine.left-zone} :within-s 150 :of-job true}
+            {:no-event {:source :job :kind :child_started :data {:slot :back}} :for-s 150 :until {:source :job :kind :mine.left-zone}}]
+   :limit-s 180}
   {:name "ignore-zones-digs-in-place"
    :blocks [[:fill [16 0 16] [16 1 16] "air"] [:set [20 0 16] "iron_ore"]]
    :zones [{:name "home" :min [14 -1 14] :max [18 3 18] :owner "$body"}]
