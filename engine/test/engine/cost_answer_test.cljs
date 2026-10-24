@@ -94,6 +94,16 @@
         "a mob walked from is met again on the way back: that walk is priced as the next decision would price it, a return")
     (is (nil? (:then again)) "and nothing after it")))
 
+(deftest a-body-that-fled-a-skeleton-twice-fights-it-only-while-the-walk-to-it-costs-nothing
+  (let [skeleton (mob "skeleton" 12)
+        fight (cost/fight-answer (assoc (fight sword skeleton) :mobs [skeleton]))
+        choose (fn [returns walk-hp]
+                 (let [f (update fight :damage + walk-hp)]
+                   (:answer (cost/decide (body 20) {:fight f :flee (cost/flee-answer {:food 20 :mobs [skeleton] :returns returns :later f})} here))))]
+    (is (= :flee (choose 0 0)) "no flight lately: a step out of its range is cheaper than closing 12 blocks")
+    (is (= :fight (choose 2 0)) "fled twice, the walks again dearer than the fight, if the walk to it is free (go-to's lower bound)")
+    (is (= :flee (choose 2 4)) "4 hp of go-to's quote of the walk to it: the walks away are the cheaper")))
+
 (deftest a-mob-between-the-body-and-its-goal-is-walked-from-again-from-where-the-way-back-passes-it
   (let [fight (cost/fight-answer (fight sword (mob "skeleton" 12)))
         choose #(:answer (cost/decide (body 20) {:fight fight :flee (cost/flee-answer {:food 20 :mobs [%] :later fight})} here))]

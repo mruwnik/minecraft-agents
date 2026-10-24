@@ -16,6 +16,7 @@
             [jobs.lib.breath :as breath]
             [jobs.combat.attack :as attack]
             [jobs.lib.util :as u]
+            [jobs.lib.walk-pick :as pick]
             [jobs.survival.recover-drops :as recover-drops]
             [jobs.survival.recover-drops.danger :as recover-drops-danger]
             [jobs.survival.respond-to-hostile :as respond-to-hostile]
@@ -1099,7 +1100,10 @@
               one {:inventory sword :entities [(assoc (skeleton 1 12 0) :visible true)]}
               two {:self {:health 14} :inventory sword :entities [(skeleton 1 10 0) (skeleton 2 11 1)]}]
           (is (= [:flee] (map :decision (decided (:seen (await (round one 0)))))) "no flight so far: a step out of its range is cheaper than closing 12 blocks under its arrows")
-          (is (= [:fight] (map :decision (decided (:seen (await (round one 2)))))) "the second return: the walk only comes again, fight (the walk to it priced at go-to's lower bound: the fake has no quote; live the quote of closing 12 blocks is dearer and it flees, fixture armed-body-steps-out-of-range-of-a-lone-skeleton-it-fled-twice)")
+          (is (= [:flee] (map :decision (decided (:seen (let [quote! pick/quote!]
+                                                         (set! pick/quote! (fn [_ _] (js/Promise.resolve {:risk {:walk-hp 4}})))
+                                                         (try (await (round one 2)) (finally (set! pick/quote! quote!))))))))
+              "the second return: the walk to it under its arrows (go-to's quote, 4 hp) is dearer than the walks away")
           (is (= [:flee] (map :decision (decided (:seen (await (round two 2)))))) "two shooting an unarmoured body: the fight is likelier death than three walks"))))))
 
 (deftest hostile-attack-walks-to-far-ranged-mobs-only-when-the-fight-is-the-cheaper-answer
