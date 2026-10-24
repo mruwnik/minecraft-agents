@@ -451,14 +451,14 @@
 (defn ^:async bed-walk-safe?
   "Whether the night may walk to bed: within 2 blocks, or go-to's quote finds a whole route there whose price
   (bed-walk-price) is no more than staying put costs: a body on dark open ground walks, one underground stays unless the way
-  is lit and short (its price kept in job memory :bed-walk {:bed :walk-s}, for night-answer). Else :bed-walk-unsafe {:pos bed} is remembered (sh-beds/bed-to-use skips the bed meanwhile) with a
+  is lit and short (its price kept in job memory :bed-walk {:bed :walk-s}, for night-answer). Else :bed-walk-unsafe {:pos bed :state} is remembered (sh-beds/bed-to-use skips the bed while the body's cell and the hostiles near the way are as priced) with a
   night.bed-walk-unsafe info, and false."
   [c bed]
   (or (<= (u/dist (u/self-pos c) bed) 2)
       (let [r (:route (await (ctx/quote c 'jobs.movement.go-to {:pos bed :range 2})))
             {:keys [walk stay]} (when (:found r) (bed-walk-price c bed r))]
         (or (and (:found r) (<= walk stay) (do (ctx/update-mem! c assoc :bed-walk {:bed bed :walk-s walk}) true))
-            (do (ctx/remember! c :bed-walk-unsafe {:pos bed} sh-beds/walk-unsafe-policy)
+            (do (ctx/remember! c :bed-walk-unsafe {:pos bed :state (sh-beds/walk-state (:primitives c) bed)} sh-beds/walk-unsafe-policy)
                 (ctx/emit! c :night.bed-walk-unsafe :info
                            {:bed bed :found (boolean (:found r)) :walk-s walk :stay-s stay
                             :text (str "not walking to the bed at " (pr-str bed) ": "

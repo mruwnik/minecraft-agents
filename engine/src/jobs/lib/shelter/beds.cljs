@@ -9,7 +9,9 @@
             [engine.settings :as settings]
             [jobs.lib.access.zones :as zones]
             [jobs.lib.build.wood :as wood]
+            [jobs.lib.danger :as danger]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.price :as price]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.world-files :as world]
@@ -169,9 +171,23 @@
   [p radius]
   (map :pos (look/seen-blocks p {:names wood/bed-names :radius (min 16 radius) :live? true :max 8})))
 
+(defn walk-state
+  "What the price of the walk to the bed at pos reads of the world besides the bed: the cell the body stands in and the
+  ids of the hostiles known near the way. A :bed-walk-unsafe verdict holds while this is unchanged."
+  [p pos]
+  {:from (mapv #(js/Math.floor %) ((juxt :x :y :z) (u/self-pos {:primitives p})))
+   :mobs (into #{} (map #(.-id %)) (danger/hostiles-near-way p pos (settings/get price/settings ::price/way-radius) {}))})
+
+(defn walk-unsafe?
+  "Whether a :bed-walk-unsafe entry of this night names the bed at pos and the world is as it priced the walk (walk-state)."
+  [p view pos]
+  (let [since (sh-clock/tonight p view)
+        now (delay (walk-state p pos))]
+    (boolean (some #(and (>= (:t %) since) (= pos (:pos (:data %))) (= @now (:state (:data %)))) (mem/entries view :bed-walk-unsafe)))))
+
 (defn bed-to-use
   "The bed a body awake at night sleeps in: one it sees (seen-bed), else the remembered :bed within radius or the live
-  :spawn-bed at any distance (go-to prices the walk), under any roof or none. Never one permit? refuses (occupied), one in an unexpired :bed-unreachable or :bed-walk-unsafe entry, or one whose walk
+  :spawn-bed at any distance (go-to prices the walk), under any roof or none. Never one permit? refuses (occupied), one in an unexpired :bed-unreachable entry, or whose :bed-walk-unsafe verdict still holds (walk-unsafe?), or one whose walk
   would take the body out of a kept-shelters shelter (unless overdue: max-days-awake days since :slept, phantoms, or a
   courtesy-walk?: another player sleeps and the bed is near);
   none after a sleep tonight (:slept within half an in-game day) while the body is safe from the night (a body woken
@@ -185,7 +201,7 @@
           overdue? (>= (or (days-awake-in view) 0) (max-days-awake))
           ok? (fn [pos] (and (permit? pos) (not-any? #(= pos (:pos (:data %))) (mem/entries view :bed-unreachable))
                              (not-any? #(= pos (:pos (:data %))) (mem/entries view :bed-open))
-                             (not-any? #(= pos (:pos (:data %))) (mem/entries view :bed-walk-unsafe))
+                             (not (walk-unsafe? p view pos))
                              (or overdue? (not (kept-shelters (sh-inside/walk-leaves-shelter? p shelter pos 1))) (courtesy-walk? p view pos))))]
       (or (seen-bed p ok?)
           (->> (concat (sh-spawn/standing-beds p view radius) (seen-bed-places p radius) (some-> (sh-spawn/spawn-bed-pos p view) vector))
@@ -195,9 +211,9 @@
                first)))))
 
 (def walk-unsafe-policy
-  "Policy of the :bed-walk-unsafe entries the night job writes for a bed whose walk it priced unsafe: five minutes, so
-  the night trigger does not hold for it meanwhile."
-  {:cap 5 :ttl 300000})
+  "Policy of the :bed-walk-unsafe entries {:pos :state} the night job writes for a bed whose walk it priced unsafe: kept
+  past the night (walk-unsafe? reads tonight's only, and whether the state it was priced on still holds)."
+  {:cap 5 :ttl :forever})
 
 (def bed-place-failed-policy
   "Policy of the :bed-place-failed entry the night job writes when it could not set up a carried bed: one, ten

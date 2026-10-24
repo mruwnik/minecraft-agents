@@ -436,8 +436,24 @@
     (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :state :built} sh/shelter-policy)
     (is (false? (sh/night-holds? p (view) {:ways #{:shelter :flee}} (constantly true))) "dug in: the night job would end :dug-in at once")
     (is (true? (sh/night-holds? p (view) {} (constantly true))) "a bed in sight: the roof is no safe shelter to keep, the job prices the walk")
-    (mem/write! (:store eng) :bed-walk-unsafe {:pos far-bed} sh-beds/walk-unsafe-policy)
+    (mem/write! (:store eng) :bed-walk-unsafe {:pos far-bed :state (sh-beds/walk-state p far-bed)} sh-beds/walk-unsafe-policy)
     (is (false? (sh/night-holds? p (view) {} (constantly true))) "the walk priced unsafe: not called again")))
+
+(deftest an-unsafe-bed-walk-holds-while-the-world-is-as-priced-and-not-by-the-clock
+  (let [{:keys [eng p clock]} (setup {:floor [0 0 60 20] :self {:pos {:x 5 :y 64 :z 0}} :time st/night :sees-all true
+                                      :blocks {"40,64,0" "red_bed"} :entities [{:id 9 :name "zombie" :kind "hostile" :pos {:x 20 :y 64 :z 0} :health 20}]})
+        view #(mem/view (:store eng))
+        use-bed #(sh-beds/bed-to-use p (view) 128 (constantly true))]
+    (mem/write! (:store eng) :bed-walk-unsafe {:pos far-bed :state (sh-beds/walk-state p far-bed)} sh-beds/walk-unsafe-policy)
+    (swap! clock + 1000)
+    (is (nil? (use-bed)) "a moment later, nothing changed: still unsafe")
+    (mem/forget-where! (:store eng) :bed-walk-unsafe (constantly true))
+    (mem/write! (:store eng) :bed-walk-unsafe {:pos far-bed :state (update (sh-beds/walk-state p far-bed) :mobs conj 77)} sh-beds/walk-unsafe-policy)
+    (is (= far-bed (use-bed)) "priced with another hostile near the way than now: asked again at once")
+    (mem/forget-where! (:store eng) :bed-walk-unsafe (constantly true))
+    (mem/write! (:store eng) :bed-walk-unsafe {:pos far-bed :state (sh-beds/walk-state p far-bed)} sh-beds/walk-unsafe-policy)
+    (swap! clock + (* 3 sh-clock/ms-per-day))
+    (is (= far-bed (use-bed)) "a verdict of an earlier night is not tonight's")))
 
 (deftest a-body-under-its-own-roof-that-is-no-safe-room-walks-to-a-bed-it-can-reach
   (async done
