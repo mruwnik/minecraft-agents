@@ -121,11 +121,13 @@
           (is (re-find #"^skip: .*danger [1-9][0-9.]*,.*: skeleton, skeleton, skeleton" (decided-text eng)))
           (is (< 3600 (js/parseFloat (second (re-find #"value ([0-9.]+)" (decided-text eng))))) "the kit is priced at hours"))))))
 
-(deftest a-pile-inside-a-skeleton-packs-range-is-left-though-the-walk-skirts-it
+(deftest a-kit-pile-inside-a-skeleton-packs-range-is-left-though-the-walk-skirts-it
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [pile (remove #(= "raw_iron" (:name %)) dt/death-pile-of-the-field-report)
+        (let [pile (into dt/death-pile-of-the-field-report
+                         (map #(hash-map :name (str "iron_" %) :count 1)
+                              ["pickaxe" "sword" "axe" "shovel" "helmet" "chestplate" "leggings" "boots"]))
               at {:x 22 :y 64 :z 22}
               pack (for [i (range 6)] {:id (+ 20 i) :name "skeleton" :kind "hostile" :pos {:x (+ 10.5 i) :y 64 :z 12.5}})
               {:keys [eng]} (setup {:floor [-10 -10 40 40] :entities (vec (concat (pile-drops pile) pack))})]
