@@ -43,7 +43,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (await ((deep-run 290000)))
+        (let [{:keys [eng p seen]} (await ((deep-run 250000)))
               digs (filter #(= "dig" (.-name %)) (.-calls (.-world p)))
               decided (dt/ending-event seen)]
           (is (= :warn (:level decided)) "an abandoned pile is said to the owner, not logged quietly")
@@ -51,6 +51,15 @@
           (is (re-find #"window-closed" (:text decided)) (:text decided))
           (is (= {:decision :abandoned :reason :window-closed} (select-keys (recovered eng) [:decision :reason])) (pr-str (recovered eng)))
           (is (empty? digs) "nothing is dug for a stair that ends after the pile is gone"))))))
+
+(deftest a-pile-whose-walk-and-collect-cannot-end-before-the-despawn-is-skipped-up-front
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (await ((deep-run 290000)))
+              digs (filter #(= "dig" (.-name %)) (.-calls (.-world p)))]
+          (is (= {:decision :skip :reason :too-far} (select-keys (recovered eng) [:decision :reason])) (pr-str (recovered eng)))
+          (is (empty? digs) "no stair is started for a trip the window cannot hold"))))))
 
 (deftest a-skeleton-beyond-eight-blocks-with-a-line-of-fire-is-weighed-not-an-unreachable-stair
   (async done
