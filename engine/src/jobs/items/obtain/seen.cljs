@@ -15,14 +15,19 @@
             [jobs.lib.trees :as trees]
             [jobs.lib.util :as u]))
 
+(defn hunt-worth
+  "Seconds an animal of mob is worth the call: its given-worth, else the larger of the animal's meat and the call's search-worth."
+  [c mob]
+  (or (given-worth c) (max (cost/animal-worth mob) (search-worth c))))
+
 (defn animals-worth-hunting
-  "The adult animals of the need's mob in sight (colour-matching when given), nearest first, whose trip may pay: the call's
-  given-worth, else the larger of the animal's meat and the call's search-worth, against fetch-cost of the straight walk to the
-  animal, a lower bound (its danger is priced from go-to's quote when one is walked to: jobs.lib.walk-pick)."
+  "The adult animals of the need's mob in sight (colour-matching when given), nearest first, whose trip may pay: hunt-worth
+  against fetch-cost of the straight walk to the animal, a lower bound (its danger is priced from go-to's quote when one
+  is walked to: jobs.lib.walk-pick)."
   [c mob pred]
   (let [p (:primitives c)
         self (u/self-pos c)
-        worth (or (given-worth c) (max (cost/animal-worth mob) (search-worth c)))]
+        worth (hunt-worth c mob)]
     (filter #(< (:cost (cost/fetch-cost {:distance (u/dist self (u/pos-of (.-pos %)))})) worth)
             (filter pred (animals/herd p mob (seen-radius))))))
 

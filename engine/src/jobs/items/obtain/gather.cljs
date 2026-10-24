@@ -7,7 +7,7 @@
             [jobs.items.obtain.base :refer [barren-ore explore-opts own-worth search-names search-scan-radius search-worth site-radius tried! ways-of]]
             [jobs.items.obtain.need :refer [gather-viable? pickaxe-first? light-settling? tools-wanted torch-due trees-unreachable?]]
             [jobs.items.obtain.plan :refer [gather-plan search-way]]
-            [jobs.items.obtain.seen :refer [animals-of gather-carried gather-slot seen-of shears-source with-avoid with-block with-count]]
+            [jobs.items.obtain.seen :refer [animals-of gather-carried gather-slot hunt-worth seen-of shears-source with-avoid with-block with-count]]
             [jobs.lib.breath :as breath]
             [jobs.lib.cost :as cost]
             [jobs.lib.foods :as foods]
@@ -142,15 +142,27 @@
   {:pos (zipmap [:x :y :z] cell) :range 6 :ways #{:walk} :spend {:tries 1}})
 
 (defn ^:async approach!
-  "Set the lead to the animal in sight of the need whose walk costs least (jobs.lib.walk-pick); :again."
+  "Set the lead to the animal in sight of the need whose walk costs least (jobs.lib.walk-pick), a trip and go-to's quote,
+  under its hunt-worth; :again. With every one in sight priced out the gather source fails :priced-out, naming the first."
   [c need]
   (let [cell #(mapv js/Math.floor ((juxt :x :y :z) (u/pos-of (.-pos %))))
-        best (await (pick/pick! c (animals-of c need) {:bound #(pick/walk-s (u/self-pos c) (lead-args (cell %)))
-                                                        :args (comp lead-args cell)
-                                                        :price (fn [_ q] (pick/quoted-s c q))}))]
+        worth (hunt-worth c (if (:sheep need) "sheep" (:mob need)))
+        out (volatile! nil)
+        animals (animals-of c need)
+        best (:pick (await (pick/best! c animals {:bound #(+ (cost/trip) (pick/walk-s (u/self-pos c) (lead-args (cell %))))
+                                                  :args (comp lead-args cell)
+                                                  :price (fn [x q]
+                                                           (let [s (+ (cost/trip) (pick/quoted-s c q))]
+                                                             (if (< s worth)
+                                                               s
+                                                               (do (when-not @out (vreset! out (str "the walk to the " (.-name x) " at " (pr-str (cell x)) " costs "
+                                                                                                     (js/Math.round s) " s, over the " (js/Math.round worth) " s it is worth")))
+                                                                   ##Inf))))})))]
     (ctx/update-mem! c update-in [:gather :approaches (:key need)] (fnil inc 0))
-    (when best (ctx/update-mem! c assoc-in [:gather :lead] {:key (:key need) :pos (cell best)}))
-    :again))
+    (cond
+      best (do (ctx/update-mem! c assoc-in [:gather :lead] {:key (:key need) :pos (cell best)}) :again)
+      @out (do (ctx/update-mem! c assoc-in [:gather :why] @out) (tried! c :gather :priced-out))
+      :else :again)))
 
 (defn ^:async lead-step!
   "An animal the search found but the body does not see now (the look that found it faced elsewhere): walk to within 6 blocks
