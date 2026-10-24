@@ -57,6 +57,34 @@
         (.set dark-cells-of room cells)
         cells)))
 
+(def way-out-of
+  "room -> its way-out-cells, read once per room object."
+  (js/WeakMap.))
+
+(defn way-out-cells
+  "The cells {:x :y :z} just past the shell of the room (reach-room/room's answer) as the body has seen it: from each feet
+  and head cell of the room straight out (up, down, the four sides), past the room's own air and then its seen walls (a
+  shut door is one), the first seen open cell, within the 32 cells sh-sense/sky-reaches-from-above? reads. None where
+  the cells behind a wall were never seen (the rock round a mine)."
+  [p room]
+  (or (.get way-out-of room)
+      (let [inside (into #{} (mapcat (fn [[x y z]] [[x y z] [x (inc y) z]])) (:cells room))
+            kind-at (reach-room/shut-kind-at p)
+            out (fn [[x y z] [dx dy dz]]
+                  (reduce (fn [wall? k]
+                            (let [cx (+ x (* k dx)) cy (+ y (* k dy)) cz (+ z (* k dz))
+                                  cell {:x cx :y cy :z cz}]
+                              (cond (inside [cx cy cz]) (reduced nil)
+                                    (not (sh-sense/seen-cell? p cell)) (reduced nil)
+                                    (not (reach/passable? kind-at cx cy cz)) true
+                                    wall? (reduced cell)
+                                    :else false)))
+                          false (range 1 33)))
+            cells (into #{} (keep (fn [[cell d]] (let [o (out cell d)] (when (map? o) o))))
+                        (for [cell inside d [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]] [cell d]))]
+        (.set way-out-of room cells)
+        cells)))
+
 (def yard-cells
   "Cells the flood may hold for a place with no roof over it (a walled yard); a roofed one may hold reach-room/wall-cells,
   since open sky ground floods without end and the cost is the flood."

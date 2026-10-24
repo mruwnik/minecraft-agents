@@ -560,11 +560,29 @@
   (is (= :later (lit 15 0 #(kind-in-shelter (ready/safe-at-by-night (constantly {:x 20 :y 64 :z 0})) tunnel dug-in-entry)))
       "a lit place too: the night keeps the seal"))
 
-(deftest a-night-above-holds-a-walk-from-the-night-shelter-but-not-from-a-mine
-  (are [depth expected] (= expected (settings/with-settings {:jobs.lib.shelter.sense/mine-depth-y depth}
-                                      #(kind-in-shelter ready/sheltered-dark tunnel dug-in-entry)))
-    40 :later
-    100 :ok))
+(defn hollow
+  "Air x0..x1 at y y..y+1 and z z0..z1 in stone two thick round it, the body at its x0 z0 corner; no sky light anywhere (underground)."
+  [x0 x1 y z0 z1]
+  (let [air (for [x (range x0 (inc x1)) dy [0 1] z (range z0 (inc z1))] [x (+ y dy) z])]
+    {:time st/night :self {:pos {:x x0 :y y :z z0}}
+     :blocks (apply dissoc (tu/box (- x0 2) (- y 2) (- z0 2) (+ x1 2) (+ y 3) (+ z1 2) "stone") (map #(apply str (interpose "," %)) air))
+     :light {} :light-default [0 0]}))
+
+(def mine-room "A sealed 7x3 hollow in rock at the surface's height (y 64): its walls show rock, never the sky." (hollow 0 6 64 -1 1))
+
+(def ravine-niche
+  "A 1x1 niche dug in at y 30, sealed by a dirt block at z 1 with the open air of a ravine past it: deep, but its way out is under the sky."
+  (-> (hollow 0 0 30 0 0)
+      (update :blocks merge {"0,30,1" "dirt" "0,31,1" "dirt" "0,30,2" "air" "0,31,2" "air"})
+      (assoc :light {[0 30 2] [15 0] [0 31 2] [15 0]})))
+
+(deftest a-night-above-holds-a-walk-out-of-a-room-only-when-its-way-out-is-dark-till-dawn
+  (are [world shelter expected] (= expected (kind-in-shelter ready/sheltered-dark world shelter))
+    night-hut nil :later
+    mine-room nil :ok
+    mine-room dug-in-entry :ok
+    ravine-niche {:pos {:x 0 :y 30 :z 0}} :later
+    (assoc night-hut :time st/noon) nil :ok))
 
 (deftest felling-a-tree-outside-the-night-shelter-waits-for-day-instead-of-walking-out
   (let [check (fn [at] (let [c (assoc (ctx-of tunnel) :args {:at at} :view (fn [] {:now 0 :data {:entries {:shelter [{:t 0 :data dug-in-entry}]}}}))]
@@ -752,3 +770,4 @@
       (is (= :later (kind plant-sapling/safe? night-hut)) "sealed in at night, the debt outside in the dark waits"))
     (with-redefs [plant-sapling/current-target (constantly {:pos {:x 6 :y 64 :z 0} :species "oak"})]
       (is (= :ok (kind plant-sapling/safe? night-hut)) "a debt inside the hut is planted"))))
+

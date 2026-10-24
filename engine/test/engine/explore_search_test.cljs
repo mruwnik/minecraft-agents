@@ -699,7 +699,7 @@
               calls (atom 0)
               s (with-redefs [child/call-walk* (fn [_ _ _] (swap! calls inc) (js/Promise.resolve kept))]
                   (await (search! {:target "diamond_block" :max-distance 23}
-                                  {:time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks night-pit}
+                                  {:time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks night-pit :light {[0 64 0] [0 0] [0 65 0] [0 0]}}
                                   40
                                   #(mem/write! (:store (:eng %)) :shelter {:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built} {:cap 10 :ttl st/day-ms}))))]
           (is (not (finished? s)) "a kept seal is no failed leg")

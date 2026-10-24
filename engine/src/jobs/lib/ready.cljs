@@ -20,6 +20,7 @@
             [jobs.lib.dawn :as dawn]
             [jobs.lib.foods :as foods]
             [jobs.lib.look-edge :as look-edge]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.reserve :as reserve]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter.inside :as sh-inside]
@@ -363,14 +364,19 @@
   (with-meta (fn [c] (contract/all [(threatened c) (dark-sky c)])) {::exposure dark-sky}))
 
 (defn sheltered-dark
-  "Later :dark while the body is shut in a hut (a wide closed room, not a dug tunnel) or in its own night shelter and the open sky is dark: a walk that has no
-  place (a search, a roam) leaves the room into the dark. Not in a mine (sh-sense/in-mine?): the sky is not where its walk goes."
+  "Later :dark while the body is shut in a hut (a wide closed room, not a dug tunnel) or in its own night shelter and a way
+  out of its room (sh-inside/way-out-cells) is dark till dawn lights it (sh-sense/light-in): a walk that has no place (a
+  search, a roam) leaves the room that way. A room in rock has no way out the day lights, so it holds nothing."
   [c]
-  (let [p (:primitives c)]
-    (if (and (sh-sense/dark-outside? p) (not (sh-sense/sleeping? p)) (not (sh-sense/in-mine? p)) (or (and (sh-sense/shut-in-hut? p) (sh-inside/safe-from-night? p)) (sh-inside/sheltered-in c)))
-      (contract/later :dark "sheltered for the night, a walk with no place leaves the room under a dark sky"
-                      :recheck-after-ms (* 1000 (sh-sense/sky-in p)))
-      (contract/ok :lit "no room to leave under a dark sky"))))
+  (let [p (:primitives c)
+        feet (sh-sense/feet p)
+        room (when (and (not (sh-sense/sleeping? p)) (or (and (sh-sense/shut-in-hut? p) (sh-inside/safe-from-night? p)) (sh-inside/sheltered-in c)))
+               (or (reach-room/room p feet) {:cells #{[(:x feet) (:y feet) (:z feet)]}}))
+        waits (keep #(let [s (sh-sense/light-in p %)] (when (and s (pos? s)) s)) (some->> room (sh-inside/way-out-cells p)))]
+    (if (seq waits)
+      (contract/later :dark "sheltered for the night, a walk with no place leaves the room into ground dark till dawn"
+                      :recheck-after-ms (* 1000 (apply min waits)))
+      (contract/ok :lit "no way out of the room that dawn lights"))))
 
 (def safe-roaming
   "The checker of a job that roams and may leave a room: safe-if-lit, and not sheltered under a dark sky (sheltered-dark)."
