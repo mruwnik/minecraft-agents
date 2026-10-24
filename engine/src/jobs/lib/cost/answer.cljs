@@ -214,10 +214,11 @@
     (+ stood (/ (max 0 (- r gap)) gain))))
 
 (defn flee-mob
-  "{:damage :hit :spread :shape :seconds} of a walk away from mob {:name :held :distance :follow (blocks it keeps chasing out to) :speed
+  "{:damage :hit :spread :shape :rate-shape :seconds} of a walk away from mob {:name :held :distance :follow (blocks it keeps chasing out to) :speed
   (its chase speed, default danger/chase-speed of the name)} at speed v through the armour stats, nil when it keeps up.
   It hits while within its hit-range (reach-rate), a melee mob on land from the decision: start-reach over each of
-  danger/flight-starts, :shape the width of its blow count over them (fight/sum-shape's). A flight that starts in water first swims swim blocks to dry land (##Inf: no land
+  danger/flight-starts, :shape the width of its blow count over them (fight/sum-shape's); a ranged mob at its uncertain
+  rate, :rate-shape (threat/hit-rate-shape), the one rate of its kind (flee-answer-on adds a kind's blows before its shape). A flight that starts in water first swims swim blocks to dry land (##Inf: no land
   known) at speed sv, the mob chasing at danger/swim-chase-speed, then walks from the gap the swim left, over the land blocks
   there is to walk on (a ledge with none: the mob keeps up). A creeper that
   reaches its swell start before the body gets going blows at the distance the body reached when its fuse ends, :spread
@@ -256,7 +257,8 @@
              damage (mean damages)
              spread (- (mean (map #(* % %) damages)) (* damage damage))]
          (cond-> {:damage damage :hit (blow stats m) :seconds (+ (:seconds wet 0) escape)}
-           (> spread 1e-9) (assoc :shape (/ (* damage damage) spread))))))))
+           (> spread 1e-9) (assoc :shape (/ (* damage damage) spread))
+           (and (not= r (danger/melee-reach)) (threat/hit-rate-shape (threat/kind m))) (assoc :rate-shape (threat/hit-rate-shape (threat/kind m)))))))))
 
 (declare flee-answer-on)
 
@@ -313,9 +315,12 @@
                                                     mobs per))
                            :hit hit
                            :blasts (vec (for [m mobs :when (= "creeper" (:name m))] (blow stats m)))}}
-            melee (keep (fn [[m f]] (when-not (= "creeper" (:name m)) f)) (map vector mobs per))
-            shape (fight/sum-shape (map (fn [f] [(* times (:damage f)) (some-> (:shape f) (* times))]) melee))
-            extra (reduce + 0 (keep (fn [{:keys [damage shape]}] (when shape (/ (* damage damage) shape))) melee))
+            melee (keep (fn [[m f]] (when-not (= "creeper" (:name m)) (assoc f :kind (threat/kind m)))) (map vector mobs per))
+            shared (vals (group-by :kind (filter :rate-shape melee)))
+            shape (fight/sum-shape (concat (map (fn [f] [(* times (:damage f)) (some-> (:shape f) (* times))]) (remove :rate-shape melee))
+                                           (map (fn [fs] [(* times (reduce + (map :damage fs))) (:rate-shape (first fs))]) shared)))
+            extra (+ (reduce + 0 (keep (fn [{:keys [damage shape]}] (when shape (/ (* damage damage) shape))) (remove :rate-shape melee)))
+                     (reduce + 0 (map (fn [fs] (/ (js/Math.pow (reduce + (map :damage fs)) 2) (:rate-shape (first fs)))) shared)))
             caught-d (- (get-in walk [:caught :damage]) (reduce + 0 (get-in walk [:caught :blasts])))
             walk (cond-> walk
                    shape (assoc :shape shape)
@@ -408,22 +413,40 @@
     (* (if (contains? threat/provoked-only mob-name) (threat/provoked-share) 1)
        (min (life body) (expected-damage (get answers (:answer (decide body answers at))))))))
 
-(defn met-counts
-  "P(K = k) for k from 0, K the count of independent events of chances ps (Poisson-binomial)."
+(defn poisson-binomial
+  "P(K = k) for k from 0, K the count of independent events of chances ps."
   [ps]
   (reduce (fn [dist q] (mapv + (conj (mapv #(* (- 1 q) %) dist) 0) (into [0] (map #(* q %) dist)))) [1] ps))
 
+(defn convolve [a b]
+  (mapv (fn [k] (reduce + (for [i (range (count a)) :let [j (- k i)] :when (< -1 j (count b))] (* (a i) (b j)))))
+        (range (+ (count a) (count b) -1))))
+
+(defn met-counts
+  "P(K = k) for k from 0, K the count of threats [{:c :exposure :prior}] that get to the body, each at c (1 - e^(-r
+  exposure)): r the notice rate of its prior (death/notice-prior), one rate shared by the threats of a prior, so a pack
+  is missed together (poisson-binomial at each of death/rate-nodes); the priors' counts independent."
+  [ts]
+  (->> (vals (group-by :prior ts))
+       (map (fn [group]
+              (reduce (fn [acc [r w]]
+                        (mapv + acc (map #(* w %) (poisson-binomial (map (fn [{:keys [c exposure]}] (* c (- 1 (js/Math.exp (- (* r exposure)))))) group)))))
+                      (vec (repeat (inc (count group)) 0))
+                      (death/rate-nodes (:prior (first group))))))
+       (reduce convolve [1])))
+
 (defn meetings
   "The meetings of the known threats of route {:cells :threats} (death-chance's) with the body: each threat gets to it at
-  its weight times the chance it does on the :cells (death/met-stretch), a provoked-only one at threat/provoked-share of
-  it; threats whose stretches of the cells overlap meet the body at once, one meeting, others apart. [[{:mob :caught :q}]],
-  each meeting its threats likeliest first."
+  c (its weight, a provoked-only one's times threat/provoked-share) times the chance it does on the :cells
+  (death/met-stretch, q that chance); threats whose stretches of the cells overlap meet the body at once, one meeting,
+  others apart. [[{:mob :caught :q :c :exposure :prior}]], each meeting its threats likeliest first."
   [{:keys [cells threats]}]
   (let [met (->> (when (seq cells) threats)
                  (keep (fn [{:keys [mob weight reach caught]}]
-                         (let [{:keys [met from to]} (death/met-stretch mob reach cells)
-                               q (* (or weight 1) met (if (contains? threat/provoked-only mob) (threat/provoked-share) 1))]
-                           (when (pos? q) {:mob mob :caught caught :q (min 1 q) :from from :to to}))))
+                         (let [{:keys [met exposure prior from to]} (death/met-stretch mob reach cells)
+                               c (min 1 (* (or weight 1) (if (contains? threat/provoked-only mob) (threat/provoked-share) 1)))
+                               q (* c met)]
+                           (when (pos? q) {:mob mob :caught caught :q q :c c :exposure exposure :prior prior :from from :to to}))))
                  (sort-by :from))]
     (->> (reduce (fn [groups {:keys [from to] :as t}]
                    (let [g (peek groups)]
@@ -455,7 +478,7 @@
                   (-> acc (update :chance + (* pk chance)) (update :hurt + (* pk hurt))))
                 acc))
             {:chance 0 :hurt 0}
-            (map-indexed vector (met-counts (map :q meeting))))))
+            (map-indexed vector (met-counts meeting)))))
 
 (defn route-parts
   "{:chance :hurt} of the known threats of route {:cells :threats :at} for body: each meeting's meeting-parts at :at

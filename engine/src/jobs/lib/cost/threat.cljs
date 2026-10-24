@@ -18,6 +18,7 @@
    ::spot-occupied {:default {:k 0 :n 4} :spec (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)})
                     :doc "Of the death and near-death spots the trial bodies came back within 16 blocks of after 300 s or more 32 to 128 blocks off (vanilla: its killer had despawned), those where within 60 s a hostile was within 16 blocks of the spot or hurt the body there (k) of all (n), whatever the spot's light (the logs carry none): node tools/event-counts.mjs spot-returns, 2026-10-23."}
    ::hit-rate {:default 0.6 :doc "Hits a zombie or skeleton lands per second of exposure (measured over trial fights; the body is out of reach part of the time). Mobs not measured count one a second." :spec (a/num-in 0 nil)}
+   ::hit-rate-hits {:default 127 :doc "Hits counted behind ::hit-rate, the fewer of its two families (card 162067ad, 2026-10-21: skeleton 127 hits over 72 fights, zombie 195 over 121): the shape, + 0.5, of its Gamma posterior (hit-rate-shape). No tools/ recount yet (card 76d72c81)." :spec (a/num-in 0 nil)}
    ::spider-hit-rate {:default 0.35 :doc "Hits a spider or cave spider lands per second of exposure." :spec (a/num-in 0 nil)}
    ::trident-rate {:default 0.5 :doc "Throws a second of a drowned holding a trident (vanilla: one every 40 ticks)." :spec (a/num-in 0 nil)}
    ::provoked-share {:default 0.1 :doc "What a provoked-only mob's threat counts for when it is met, not fought." :spec (a/num-in 0 nil)}
@@ -272,6 +273,15 @@
   (cond (= trident-kind mob-name) (settings/get settings ::trident-rate)
         (contains? measured-hit-rate mob-name) (settings/get settings ::hit-rate)
         (contains? #{"spider" "cave_spider"} mob-name) (settings/get settings ::spider-hit-rate)
+        :else 1))
+
+(defn hit-rate-shape
+  "The shape of the Gamma over lone-hit-rate of ranged mob-name, the mobs of a kind sharing the one rate: ::hit-rate-hits + 0.5
+  for the measured families; nil for a vanilla cadence (a trident drowned's throws); 1 for a rate with no hits counted,
+  an exponential (the maximum-entropy prior of a positive rate of known mean)."
+  [mob-name]
+  (cond (= trident-kind mob-name) nil
+        (contains? measured-hit-rate mob-name) (+ 0.5 (settings/get settings ::hit-rate-hits))
         :else 1))
 
 (defn base-threat

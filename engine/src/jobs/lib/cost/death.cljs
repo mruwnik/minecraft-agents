@@ -21,9 +21,9 @@
                         :doc "Worth of one experience level lost at a death, in seconds (the game drops a few levels' worth)."}
    ::notice-rate {:default {:other {:k 8 :n-s 42.4} :ranged {:k 0 :n-s 0}}
                   :spec (let [counts (a/map-with {:k (a/int-in 0 nil) :n-s (a/num-in 0 nil)})] (a/map-with {:other counts :ranged counts}))
-                  :doc "Per class of mob (:ranged: threat/ranged?, caught by a line of fire within the ranged radius; :other: caught within melee reach) of the weighted seconds n-s that watch sightings of hostiles within follow range spent in the body's field (weight 1 within a few steps of the mob's way, or a ranged mob's range, less beyond), the catches k: a hurt from that kind, or a respond decision with the mob in reach; one catch ends the one sighting of the kind nearest the event (the events carry no entity id). Priced by the Gamma posterior mean (k + 0.5) / n-s, the chance a second a hostile at weight 1 gets to the body (met-stretch). :other counts 24 sightings (8 ended in a position gap, censored: seconds up to it, no catch; zombie 6 of 13 s, creeper 2 of 29.4 s, too few to split by mob). :ranged has no seconds counted: every skeleton seen was first seen beyond its 15 blocks (threat/fire-range), so ::ranged-notice-rate prices it, not the melee counts. Recount: node tools/event-counts.mjs notice-rate, 2026-10-23; per-case evidence replaces it."}
+                  :doc "Per class of mob (:ranged: threat/ranged?, caught by a line of fire within the ranged radius; :other: caught within melee reach) of the weighted seconds n-s that watch sightings of hostiles within follow range spent in the body's field (weight 1 within a few steps of the mob's way, or a ranged mob's range, less beyond), the catches k: a hurt from that kind, or a respond decision with the mob in reach; one catch ends the one sighting of the kind nearest the event (the events carry no entity id). Priced by the Gamma posterior (k + 0.5, n-s) of the rate a hostile at weight 1 gets to the body (notice-prior, met-stretch). :other counts 24 sightings (8 ended in a position gap, censored: seconds up to it, no catch; zombie 6 of 13 s, creeper 2 of 29.4 s, too few to split by mob). :ranged has no seconds counted: every skeleton seen was first seen beyond its 15 blocks (threat/fire-range), so ::ranged-notice-rate prices it, not the melee counts. Recount: node tools/event-counts.mjs notice-rate, 2026-10-23; per-case evidence replaces it."}
    ::ranged-notice-rate {:default 2 :spec (a/num-in 0 nil)
-                         :doc "Per weighted second, the notice rate of a ranged mob while its class has no seconds counted: vanilla's target goal looks for a target every 10 ticks on average (NearestAttackableTargetGoal, interval 10), so a ranged mob with a line of fire has noticed within half a second and shoots, with no approach to walk."}
+                         :doc "Per weighted second, the mean notice rate of a ranged mob while its class has no seconds counted (notice-prior): vanilla's target goal looks for a target every 10 ticks on average (NearestAttackableTargetGoal, interval 10), so a ranged mob with a line of fire has noticed within half a second and shoots, with no approach to walk."}
    ::deaths-per-hour {:default 1.3 :spec (a/num-in 0 nil)
                       :doc "Deaths an hour of play, every cause: the fresh-start trials of 2026-10-21/22 (Wicken r5, 8 deaths in 6h15; docs/fresh-start-design.md section 1)."}
    ::spawn-walk-blocks {:default 5000 :spec (a/num-in 0 nil)
@@ -93,32 +93,54 @@
          below (reduce + (take k (reductions step p0 (iterate inc 1))))]
      (if (pos? life) (max 0 (- 1 below)) 1))))
 
-(defn notice-rate
-  "The mean (k + 0.5) / n-s of the Gamma posterior of ::notice-rate for mob, per weighted second: its class's counts; a ranged mob's class with no seconds counted gives ::ranged-notice-rate instead (it notices fast and needs no approach, so the melee counts would understate it)."
+(defn notice-prior
+  "{:shape :rate} of the Gamma over the notice rate of mob, per weighted second: its class's ::notice-rate counts, the
+  posterior (k + 0.5, n-s); a ranged mob's class with no seconds counted an exponential (shape 1, the maximum-entropy
+  prior of a positive rate of known mean) of mean ::ranged-notice-rate (it notices fast and needs no approach, so the melee
+  counts would understate it). The mobs of a class share the one rate."
   [mob]
-  (let [counts (settings/get settings ::notice-rate)
-        ranged? (threat/ranged? {:name mob})
-        {:keys [k n-s]} (get counts (if ranged? :ranged :other))]
+  (let [ranged? (threat/ranged? {:name mob})
+        {:keys [k n-s]} (get (settings/get settings ::notice-rate) (if ranged? :ranged :other))]
     (if (and ranged? (not (pos? n-s)))
-      (settings/get settings ::ranged-notice-rate)
-      (/ (+ k 0.5) (max 1e-9 n-s)))))
+      {:shape 1 :rate (/ 1 (settings/get settings ::ranged-notice-rate))}
+      {:shape (+ k 0.5) :rate (max 1e-9 n-s)})))
+
+(defn missed
+  "The chance a mob of notice prior {:shape :rate} gets no notice in x weighted seconds: e^(-r x) over the Gamma of r."
+  [{:keys [shape rate]} x]
+  (js/Math.pow (+ 1 (/ x rate)) (- shape)))
+
+(def rate-nodes
+  "[[r w]] of the Gamma notice prior {:shape :rate}: a trapezoid rule in log r, where the chances of the rate are smooth,
+  64 nodes from 14/shape + 3 below the log mean to 3 above it, the weights summing to 1. Memoized: a few priors."
+  (memoize
+    (fn [{:keys [shape rate]}]
+      (let [mid (js/Math.log (/ shape rate))
+            lo (- mid 3 (/ 14 shape))
+            h (/ (- (+ mid 3) lo) 63)
+            us (map #(+ lo (* h %)) (range 64))
+            logs (map #(- (* shape %) (* rate (js/Math.exp %))) us)
+            top (apply max logs)
+            ws (map #(js/Math.exp (- % top)) logs)
+            total (reduce + ws)]
+        (mapv (fn [u w] [(js/Math.exp u) (/ w total)]) us ws)))))
 
 (defn met-stretch
-  "{:met :from :to} of a threat mob whose reach (a fn of a cell x y z, its weight 0-1, nil outside) holds route cells
-  [{:x :y :z :s}]: met the chance it gets to the body on them, 1 - prod(1 - w r dt), r (notice-rate of mob), dt the cell's
-  :s, else the walk to it from the cell before (a block for the first); from and to the first and last index of the cells
-  its reach holds (nil: none)."
+  "{:met :exposure :prior :from :to} of a threat mob whose reach (a fn of a cell x y z, its weight 0-1, nil outside) holds
+  route cells [{:x :y :z :s}]: exposure the weighted seconds sum(w dt) on them, dt the cell's :s, else the walk to it from
+  the cell before (a block for the first); prior its notice-prior and met the chance it gets to the body, 1 - missed;
+  from and to the first and last index of the cells its reach holds (nil: none)."
   [mob reach cells]
-  (let [r (notice-rate mob)
-        speed (value/walk-blocks-per-s)]
-    (loop [i 0 prev nil cells (seq cells) miss 1 from nil to nil]
+  (let [speed (value/walk-blocks-per-s)
+        prior (notice-prior mob)]
+    (loop [i 0 prev nil cells (seq cells) e 0 from nil to nil]
       (if-let [{:keys [x y z s] :as cell} (first cells)]
         (if-let [w (reach (js/Math.floor x) (js/Math.floor y) (js/Math.floor z))]
           (recur (inc i) cell (next cells)
-                 (* miss (- 1 (min 1 (* w r (or s (/ (if prev (js/Math.hypot (- x (:x prev)) (- y (:y prev)) (- z (:z prev))) 1) speed))))))
+                 (+ e (* w (or s (/ (if prev (js/Math.hypot (- x (:x prev)) (- y (:y prev)) (- z (:z prev))) 1) speed))))
                  (or from i) i)
-          (recur (inc i) cell (next cells) miss from to))
-        {:met (- 1 miss) :from from :to to}))))
+          (recur (inc i) cell (next cells) e from to))
+        {:met (- 1 (missed prior e)) :exposure e :prior prior :from from :to to}))))
 
 (defn spawn-horizon-s [] (settings/get settings ::spawn-horizon-s))
 

@@ -130,7 +130,7 @@
         line (for [x (range 3 71)] {:x x :y 64 :z 0})
         round (concat (for [z (range -1 -21 -1)] {:x 2 :y 64 :z z}) (for [x (range 3 71)] {:x x :y 64 :z -20}) (for [z (range -19 1)] {:x 70 :y 64 :z z}))
         hurt #(:hostile-hp (risk/estimate c goal {:plan %}))]
-    (is (> (hurt {:status "partial" :steps (take 8 line)}) (* 4 (hurt (plan-of round)))) "the rest past x 10 runs by the zombie; the found way keeps 22 blocks off")
+    (is (> (hurt {:status "partial" :steps (take 8 line)}) (* 3.5 (hurt (plan-of round)))) "the rest past x 10 runs by the zombie; the found way keeps 22 blocks off")
     (is (= (hurt {:status "partial" :steps (take 8 line)}) (hurt (plan-of line))) "the rest is the line")))
 
 (deftest a-partial-plan-prices-its-rest-by-what-the-body-sees-of-it

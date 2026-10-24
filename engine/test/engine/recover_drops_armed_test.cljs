@@ -36,11 +36,14 @@
       (await (run-until-empty eng 60))
       {:eng eng :seen seen :p p}))))
 
+(def short-pile "The field-report pile less its 4 raw iron: its worth clearly under the walk past a skeleton for an unarmed body."
+  (vec (remove #(= 17 (:slot %)) dt/death-pile-of-the-field-report)))
+
 (deftest an-unarmed-body-fetches-a-sword-and-a-helmet-before-the-skeleton-trip
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen p]} (await ((run-with-chest kit-in-chest true "skeleton")))]
+        (let [{:keys [eng seen p]} (await ((run-with-chest kit-in-chest true "skeleton" short-pile)))]
           (is (= 1 (get (inv p) "iron_sword")))
           (is (= "iron_helmet" (get (worn p) "head")))
           (is (re-find #"^fetch: " (decided-text eng)))
@@ -50,7 +53,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (await ((run-with-chest nil false "skeleton")))]
+        (let [{:keys [eng p]} (await ((run-with-chest nil false "skeleton" short-pile)))]
           (is (nil? (recovered eng)) "a danger skip stays open")
           (is (nil? (get (inv p) "iron_sword"))))))))
 
@@ -58,7 +61,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (await ((run-with-chest kit-in-chest false "skeleton")))]
+        (let [{:keys [eng p]} (await ((run-with-chest kit-in-chest false "skeleton" short-pile)))]
           (is (nil? (recovered eng)) "a danger skip stays open")
           (is (nil? (get (inv p) "iron_sword"))))))))
 

@@ -10,6 +10,7 @@
             [engine.test-util :as tu]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger]
+            [jobs.lib.cost.death :as death]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.look :as look]
             [jobs.lib.shelter.inside :as sh-inside]
@@ -515,6 +516,19 @@
         "three zombies fought at once: each hits while the others are fought")
     (is (< (js/Math.abs (- (hurt armed (apart "zombie")) (* 3 (hurt armed [(on "zombie" 0 10)])))) 1e-9)
         "three fought one by one: three fights' hurt")))
+
+(deftest a-pack-is-priced-no-surer-than-its-uncounted-notice-rate-allows
+  (let [fist {:health 20}
+        cells (for [x (range 40)] {:x x :y 64 :z 0})
+        on (fn [mob] {:mob mob :weight 1 :reach (fn [x _ _] (when (<= 0 x 10) 1))})
+        chance #(:chance (cost/route-parts fist {:cells cells :threats %}))
+        exposure (:exposure (death/met-stretch "skeleton" (:reach (on "skeleton")) cells))
+        none-notices (death/missed (death/notice-prior "skeleton") (* 6 exposure))
+        counted-often {:jobs.lib.cost.death/notice-rate {:other {:k 849 :n-s 4237.5} :ranged {:k 0 :n-s 0}}}]
+    (is (< 0.02 none-notices) "six skeletons share one rate no notice was counted for: they may all miss the body together")
+    (is (< 0.9 (chance (repeat 6 (on "skeleton"))) (- 1 none-notices)) "the pack kills only when one of them gets to the body")
+    (is (< (js/Math.abs (- 1 (/ (chance [(on "zombie")]) (settings/with-settings counted-often #(chance [(on "zombie")]))))) 0.05)
+        "a zombie, its class counted 8 times, prices within 5% of a class counted a hundred times as often at the same mean")))
 
 (deftest a-find-is-worth-its-count-less-a-trip-and-an-animal-its-meat
   (let [body {:level 0 :carried 0}]
