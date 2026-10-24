@@ -119,3 +119,15 @@
   (let [v (fled-view 0 {:mob "zombie" :id 9 :direction :north :band :near :from {:x 0 :y 64 :z 0}})
         p (tu/fake-on-floor {:entities [(assoc skeleton-9 :name "zombie")]})]
     (is (true? (threats/fled-near? (ctx-on p v) {:x 0 :y 64 :z -5})))))
+
+(defn skeleton [id x z] {:id id :uuid (str "s" id) :name "skeleton" :kind "hostile" :pos {:x x :y 64 :z z}})
+
+(deftest two-skeletons-a-block-apart-are-two-threats-and-price-above-one
+  (let [one (ready-test/ctx-of {:entities [(skeleton 1 10 0)] :inventory [{:name "diamond_sword" :count 1}]})
+        two (ready-test/ctx-of {:entities [(skeleton 1 10 0) (skeleton 2 11 0)] :inventory [{:name "diamond_sword" :count 1}]})
+        route {:cells (for [x (range -3 3)] {:x x :y 64 :z 0 :s 1})}
+        chance #(cost/death-chance unarmed (assoc route :threats (threats/threats-of %)))
+        toll #(get (into {} (map (juxt (juxt :x :y :z) :factor)) (threats/threat-tolls %)) [0 64 0])]
+    (is (= 2 (count (threats/known-threats two))))
+    (is (> (chance two) (chance one) 0) "the second skeleton adds its own shots")
+    (is (> (toll two) (toll one) 0) "and its own toll")))

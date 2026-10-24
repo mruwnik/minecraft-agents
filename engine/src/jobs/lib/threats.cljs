@@ -206,20 +206,20 @@
 
 (defn tolls-of
   "go-to's tolls ([{:x :y :z :factor}]) for threats ({:mob :pos :weight}) of c: every cell of each one's field costs
-  cost/threat-factor (the mob, its weight x the cell's) more a second; the dearest of one kind of mob where it is known
-  twice, the kinds summed, at most cost/threat-factor-cap."
+  cost/threat-factor (the mob, its weight x the cell's) more a second; the dearest of one mob where it is known twice (a
+  kind with no :key counts as one mob), mobs of one :key each summed, at most cost/threat-factor-cap."
   [c threats]
   (let [body (body-of (:primitives c))
         cap (cost/threat-factor-cap body)
         by-cell (js/Map.)]
-    (doseq [{:keys [mob weight] :as t} threats
+    (doseq [{:keys [mob weight key] :as t} threats
             :let [f (cost/threat-factor body mob weight)]
             :when (pos? f)
             ^js cell (:cells (field/field-of c t))]
       (let [x (aget cell 0) y (aget cell 1) z (aget cell 2)
             k (str x "," y "," z)
             ^js row (or (.get by-cell k) (let [r #js {:x x :y y :z z :mobs {}}] (.set by-cell k r) r))]
-        (set! (.-mobs row) (update (.-mobs row) mob (fnil max 0) (* f (aget cell 3))))))
+        (set! (.-mobs row) (update (.-mobs row) (or key mob) (fnil max 0) (* f (aget cell 3))))))
     (mapv (fn [^js r] {:x (.-x r) :y (.-y r) :z (.-z r) :factor (min cap (reduce + 0 (vals (.-mobs r))))})
           (es6-iterator-seq (.values by-cell)))))
 
