@@ -111,14 +111,35 @@ export const isHeavy = (cwd = process.cwd()) => !!process.env.RES_SLOT_HEAVY || 
 // Pure: the free slots a light run may take. waits: one entry per live heavy waiter, the slots it tries, or null (any slot).
 export const freeForLight = (free, waits) => waits.includes(null) ? [] : free.filter((i) => !waits.some((w) => w.includes(i)))
 export const heavyWaitFile = (kind, pid = process.pid, n = '') => path.join(dir(), 'heavy-wait', `${kind}.${pid}${n && `.${n}`}`)
-const readWait = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')) } catch { return null } }
+// Marker body: {start, slots} (slots null: any). Older markers hold just the slot list, or nothing (any slot), and have no start time.
+export const heavyWaitBody = (slots = null) => JSON.stringify({ start: procStart(process.pid), slots })
+const readWait = (f) => {
+  let v = null
+  try { v = JSON.parse(fs.readFileSync(f, 'utf8')) } catch { /* empty or half-written: any slot */ }
+  return Array.isArray(v) || v === null ? { slots: v } : v
+}
+// The slot lists of the live heavy waiters of a kind; markers whose owner is gone are deleted.
 export const heavyWaits = (kind, self = process.pid) => {
   const d = path.join(dir(), 'heavy-wait')
   if (!fs.existsSync(d)) return []
-  return fs.readdirSync(d).filter((f) => f.startsWith(`${kind}.`) && Number(f.split('.')[1]) !== self && pidAlive(Number(f.split('.')[1]))).map((f) => readWait(path.join(d, f)))
+  return fs.readdirSync(d).filter((f) => f.startsWith(`${kind}.`) && Number(f.split('.')[1]) !== self).flatMap((f) => {
+    const w = readWait(path.join(d, f))
+    if (pidAlive(Number(f.split('.')[1]), w.start ?? undefined)) return [w.slots ?? null]
+    fs.rmSync(path.join(d, f), { force: true })
+    return []
+  })
 }
 const grantDir = () => path.join(dir(), 'grants')
-const pidAlive = (pid) => { try { process.kill(pid, 0); return true } catch (e) { return e.code === 'EPERM' } }
+// Start time (clock ticks since boot) of a process, null if /proc has no such pid.
+export const procStart = (pid) => {
+  try { const st = fs.readFileSync(`/proc/${pid}/stat`, 'utf8'); return Number(st.slice(st.lastIndexOf(')') + 2).split(' ')[19]) } catch { return null }
+}
+// The one liveness test: kill -0 also succeeds for thread ids and for a pid reused by another process, so /proc must show a process (Tgid == pid) and, when the owner recorded its start time, the same one.
+export const pidAlive = (pid, start) => {
+  const s = procStart(pid)
+  if (s === null || (start !== undefined && s !== start)) return false
+  try { return Number(fs.readFileSync(`/proc/${pid}/status`, 'utf8').match(/^Tgid:\s*(\d+)/m)?.[1]) === pid } catch { return false }
+}
 const readGrants = () => {
   if (!fs.existsSync(grantDir())) return []
   return fs.readdirSync(grantDir()).flatMap((f) => {
@@ -147,11 +168,11 @@ export const treeRssMb = ({ kids, rss }, root) => {
 const rampMs = () => Number(process.env.RES_SLOT_RAMP_MS ?? 60000)
 const currentReserved = () => {
   const grants = readGrants()
-  const live = grants.filter((g) => Date.now() - g.t < rampMs() && pidAlive(g.pid))
+  const live = grants.filter((g) => Date.now() - g.t < rampMs() && pidAlive(g.pid, g.start))
   for (const g of grants) if (!live.includes(g)) fs.rmSync(path.join(grantDir(), g.file), { force: true })
   if (!live.length) return 0
   const table = procTable()
-  return reservedMb(live, Date.now(), rampMs(), pidAlive, (pid) => treeRssMb(table, pid))
+  return reservedMb(live, Date.now(), rampMs(), undefined, (pid) => treeRssMb(table, pid))
 }
 // Short mkdir lock so check and grant are one step across waiters; a lock older than 10 s is stale.
 const withGate = async (f) => {
@@ -201,8 +222,12 @@ const main = async () => {
   fs.mkdirSync(dir(), { recursive: true })
   const t0 = Date.now()
   let lastLine = t0, lastReason = ''
+  if (heavy) {
+    process.on('exit', () => fs.rmSync(heavyWaitFile(kind), { force: true }))
+    for (const [sig, code] of [['SIGTERM', 143], ['SIGINT', 130]]) process.on(sig, () => process.exit(code))
+  }
   for (;;) {
-    if (heavy) fs.mkdirSync(path.dirname(heavyWaitFile(kind)), { recursive: true }), fs.writeFileSync(heavyWaitFile(kind), '')
+    if (heavy) fs.mkdirSync(path.dirname(heavyWaitFile(kind)), { recursive: true }), fs.writeFileSync(heavyWaitFile(kind), heavyWaitBody())
     const heldNow = heldSlots(kind, k.max)
     const open = usableSlots([...Array(k.max).keys()].filter((i) => !heldNow.includes(i)), k.max, k.reserve ?? 0, heavy)
     let free = open
@@ -211,9 +236,9 @@ const main = async () => {
     const gated = await withGate(() => {
       const reserved = currentReserved()
       free = heavy ? open : capDuringSweep(freeForLight(open, heavyWaits(kind)), lightHeldCount(kind, k.max), k.sweepCap, sweeping)
-      const rampLoad = rampingLoad(readGrants(), kind, Date.now(), rampMs(), pidAlive)
+      const rampLoad = rampingLoad(readGrants().filter((g) => pidAlive(g.pid, g.start)), kind, Date.now(), rampMs())
       const d = decide({ freeSlots: free.length, availableMb: availableMb(), needMb, floorMb: cfg.floorMb, waitedMs: Date.now() - t0, maxWaitMs, reservedMb: reserved, loadAvg: os.loadavg()[0], maxLoad: heavy ? undefined : maxLoadOf(k, os.cpus().length), rampLoad })
-      if (d.action === 'run') fs.mkdirSync(grantDir(), { recursive: true }), fs.writeFileSync(path.join(grantDir(), `${process.pid}.json`), JSON.stringify({ needMb, t: Date.now(), kind, cores: k.loadCores ?? 0 }))
+      if (d.action === 'run') fs.mkdirSync(grantDir(), { recursive: true }), fs.writeFileSync(path.join(grantDir(), `${process.pid}.json`), JSON.stringify({ needMb, t: Date.now(), start: procStart(process.pid), kind, cores: k.loadCores ?? 0 }))
       return d
     })
     const d = gated

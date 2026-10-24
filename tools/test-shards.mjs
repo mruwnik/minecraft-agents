@@ -12,7 +12,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { slotArgs, logRun, slotDir, candidateSlots, isHeavy, heavyWaitFile } from './res-slot.mjs'
+import { slotArgs, logRun, slotDir, candidateSlots, isHeavy, heavyWaitFile, heavyWaitBody } from './res-slot.mjs'
 import { WHOLE_RUN_CAP_S, lastFinished, isolate, sweepStale, cleanupOnExit, killTree, slowestPriorMs, stallLimitS, watchStall, killStalled, stallMessage } from './test-run.mjs'
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -116,7 +116,7 @@ export const runInSlot = async (slotsNow, cmd, opts, onOut = () => {}, onWait = 
   try {
     for (let first = true; ; first = false) {
       const order = orderNow()
-      if (heavy) fs.writeFileSync(wait, JSON.stringify(order))
+      if (heavy) fs.writeFileSync(wait, heavyWaitBody(order))
       for (const [n, i] of order.entries()) {
         const t1 = Date.now()
         const r = await new Promise((res) => {

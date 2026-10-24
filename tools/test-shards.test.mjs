@@ -61,10 +61,10 @@ test('runInSlot: a waiting heavy shard widens its slot list as memory frees, and
     await new Promise((r) => setTimeout(r, 300))
     let slots = 1
     setTimeout(() => { slots = 3 }, 1500)
-    const markerAt = () => fs.readdirSync(path.join(dir, 'heavy-wait')).map((f) => fs.readFileSync(path.join(dir, 'heavy-wait', f), 'utf8'))
+    const markerAt = () => fs.readdirSync(path.join(dir, 'heavy-wait')).map((f) => JSON.parse(fs.readFileSync(path.join(dir, 'heavy-wait', f), 'utf8')).slots)
     const run = runInSlot(() => slots, ['true'], {})
     await new Promise((r) => setTimeout(r, 700))
-    assert.deepEqual(markerAt(), [`[${reserve}]`])
+    assert.deepEqual(markerAt(), [[reserve]])
     assert.equal((await run).code, 0)
     assert.equal(holder.exitCode, null, 'ran while the reserve slot was still held')
     assert.deepEqual(fs.readdirSync(path.join(dir, 'heavy-wait')), [])

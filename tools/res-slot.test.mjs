@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { spawnSync, spawn } from 'node:child_process'
-import { candidateSlots, capDuringSweep, decide, freeForLight, hasHeavyMarker, heldSlots, loadConfig, lockedKeys, maxLoadOf, rampingLoad, reservedMb, treeRssMb, usableSlots } from './res-slot.mjs'
+import { candidateSlots, capDuringSweep, decide, freeForLight, hasHeavyMarker, heldSlots, loadConfig, lockedKeys, heavyWaits, heavyWaitBody, maxLoadOf, pidAlive, procStart, rampingLoad, reservedMb, treeRssMb, usableSlots } from './res-slot.mjs'
 
 const base = { freeSlots: 1, availableMb: 10000, needMb: 700, floorMb: 6144, waitedMs: 0, maxWaitMs: 540000 }
 
@@ -408,4 +408,34 @@ test('heldSlots: lists exactly the slots whose lock a live flock holds', async (
   fs.writeFileSync(path.join(d, 'body.1'), '')
   await new Promise((r) => setTimeout(r, 300))
   assert.deepEqual(heldSlots('body', 4), [2])
+})
+
+const withWaitDir = (files, f) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'res-slot-test-'))
+  const prev = process.env.RES_SLOT_DIR
+  process.env.RES_SLOT_DIR = dir
+  fs.mkdirSync(path.join(dir, 'heavy-wait'))
+  for (const [name, body] of Object.entries(files)) fs.writeFileSync(path.join(dir, 'heavy-wait', name), body)
+  try { return f(dir) } finally { process.env.RES_SLOT_DIR = prev; fs.rmSync(dir, { recursive: true, force: true }) }
+}
+const tidOf = () => fs.readdirSync(`/proc/${process.pid}/task`).map(Number).find((t) => t !== process.pid)
+
+test('pidAlive: a process with the recorded start time lives; another start time (pid reused), a missing pid and a bare thread id do not', () => {
+  const start = procStart(process.pid)
+  assert.equal(pidAlive(process.pid, start), true)
+  assert.equal(pidAlive(process.pid), true)
+  assert.equal(pidAlive(process.pid, start + 1), false)
+  assert.equal(pidAlive(2 ** 22 + 5), false)
+  const tid = tidOf()
+  assert.notEqual(tid, undefined, 'node runs worker threads')
+  assert.equal(pidAlive(tid), false)
+})
+
+test('heavyWaits: markers of a reused pid, a thread id or a dead pid are ignored and deleted; live new-format and old bare markers count', () => {
+  const live = { [`t.${process.pid}.0`]: heavyWaitBody([2]), [`t.${process.pid}.1`]: '[3]', [`t.${process.pid}.2`]: '' }
+  const files = { ...live, [`t.${process.ppid}.3`]: JSON.stringify({ start: procStart(process.ppid) + 1, slots: null }), [`t.${tidOf()}.0`]: '', ['t.4194999.0']: heavyWaitBody([1]) }
+  withWaitDir(files, (dir) => {
+    assert.deepEqual(heavyWaits('t', -1).sort(), [[2], [3], null].sort())
+    assert.deepEqual(fs.readdirSync(path.join(dir, 'heavy-wait')).sort(), Object.keys(live).sort())
+  })
 })
