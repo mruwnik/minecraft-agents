@@ -135,10 +135,11 @@
 (defn estimate
   "{:hp :walk-hp :spawn-hp :hostile-hp :death-hp :lethal-hp :lava-hp :dark-s :hostiles :threats} of the walk of c's body to `goal` ({:x :y :z})
   on the way of :plan (go-to's plan of it, {:status :steps}; none: all of it unplanned): hp the expected damage and lethal-hp,
-  the death the spawns and known threats risk (cost/spawns-chance, cost/threats-chance) in hp (cost/lethal-hp); walk-hp the
+  the death the spawns and known threats risk (cost/spawns-chance, cost/threats-chance) in hp (cost/lethal-hp), a death losing
+  :stake seconds of worth besides what is carried (go-to's :stake); walk-hp the
   same leaving out the sensed mobs that catch the walk, their hurt and their death share both (a fight with them prices
   them); dark-s the seconds walked where a mob could spawn; threats [{:mob :pos}] the known threats priced."
-  [c goal & [{:keys [plan]}]]
+  [c goal & [{:keys [plan stake]}]]
   (let [p (:primitives c)
         feet (sh-sense/feet p)
         goal (update goal :y #(or % (:y feet)))
@@ -148,7 +149,7 @@
         exit (if leaves? (settings/get settings ::exit-blocks) 0)
         exposed-s (+ (/ exit (cost/walk-blocks-per-s)) (dark-seconds p cells (:y feet) underground?))
         spawns (* exposed-s (cost/spawn-chance [0 0 0]))
-        body (threats/death-body c)
+        body (update (threats/death-body c) :carried + (or stake 0))
         threat-hp (fn [ts] (if (seq ts) (cost/route-hurt body {:cells cells :threats (threats/with-reach c ts)}) 0))
         known (threats/known-threats c)
         catchers (live-catchers known (timed-way c goal plan))
@@ -219,7 +220,7 @@
   ([c goal plan]
    (if-not plan
      (contract/ok :unplanned "the walk is priced on go-to's plan before a step of it")
-     (let [{:keys [hp spawn-hp hostile-hp death-hp lethal-hp lava-hp dark-s hostiles]} (check-cache/cached c [::risk goal (hash (select-keys plan [:status :steps])) (sense/round-looked c)] #(estimate c goal {:plan plan}))
+     (let [{:keys [hp spawn-hp hostile-hp death-hp lethal-hp lava-hp dark-s hostiles]} (check-cache/cached c [::risk goal (hash (select-keys plan [:status :steps])) (:stake (:args c)) (sense/round-looked c)] #(estimate c goal {:plan plan :stake (:stake (:args c))}))
            allowed (price/allowed c)]
        (if (<= hp allowed)
          (contract/ok :acceptable (str "route risk " (price/round1 hp) " hp, within " (price/round1 allowed)))

@@ -101,9 +101,11 @@
      (cost/walk-blocks-per-s)))
 
 (defn ^:async quote-trip
-  "go-to's quote of the walk to pos (its planned seconds, its walk risk, and the hp the route drowns), nil without a pos."
-  [c pos]
-  (when pos (await (ctx/quote c 'jobs.movement.go-to {:pos pos :range (cfg/arrive-range)}))))
+  "go-to's quote of the walk to the pile of :died data (its planned seconds, its walk risk, and the hp the route drowns),
+  nil without a pos; its risk prices a death on the way as losing the pile too (:stake, the pile's item-value)."
+  [c {:keys [pos inventory]}]
+  (when pos (await (ctx/quote c 'jobs.movement.go-to {:pos pos :range (cfg/arrive-range)
+                                                      :stake (:value (cost/item-value inventory :overrides (:value-overrides (:args c))))}))))
 
 (defn estimate
   "{:value :cost :parts :reason :top-items :top-mobs :hold-ms :flight-s} (:hold-ms: how long a skip for this danger is remembered,

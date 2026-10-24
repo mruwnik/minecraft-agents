@@ -113,7 +113,7 @@
         (assoc (if (= "searching" (:status plan))
                  {:found false :reason :searching :near (u-dist c pos) :goal goal :text "the quote's search goes on at the next quote"}
                  (assoc (report c plan pos policy spec) :goal goal :nodes (some-> plan :r .-expanded)))
-               :risk (risk/estimate c pos {:plan (select-keys plan [:status :steps])}))))))
+               :risk (risk/estimate c pos {:plan (select-keys plan [:status :steps]) :stake (:stake (:args c))}))))))
 
 (defn quote-of-route
   "The quote of route r: time from the planner's seconds (most quote-most-factor times them); a partial route or none

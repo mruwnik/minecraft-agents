@@ -51,7 +51,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [with-cause (await ((fetch-run "skeleton")))
+        (let [with-cause (await ((fetch-run "skeleton" {} cheap-pile)))
               without (await ((fetch-run nil)))]
           (is (re-find #"danger [1-9][0-9.]*,.*: skeleton" (decided-text (:eng with-cause))))
           (is (re-find #"danger 0," (decided-text (:eng without)))))))))
@@ -87,7 +87,7 @@
           (await (run-until-empty eng 20))
           (is (= :collected (:decision (recovered eng))) "a death on the way costs a short walk back, not the pile"))))))
 
-(deftest a-pack-of-skeletons-at-a-whole-iron-kit-is-priced-against-it
+(deftest a-whole-iron-kit-is-left-to-a-pack-of-skeletons-that-would-kill-an-unarmed-body
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -99,7 +99,8 @@
           (die! eng {:pos dt/death-pos :inventory pile :cause "skeleton"})
           (core/submit! eng job {})
           (await (run-until-empty eng 20))
-          (is (re-find #"danger [1-9][0-9.]*,.*: skeleton, skeleton, skeleton" (decided-text eng)) "the pack at the pile is the walk's danger")
+          (is (nil? (recovered eng)) "a death on the way loses the kit too")
+          (is (re-find #"^skip: .*danger [1-9][0-9.]*,.*: skeleton, skeleton, skeleton" (decided-text eng)))
           (is (< 3600 (js/parseFloat (second (re-find #"value ([0-9.]+)" (decided-text eng))))) "the kit is priced at hours"))))))
 
 (deftest a-body-with-an-iron-sword-and-armour-goes-for-the-guarded-pile
