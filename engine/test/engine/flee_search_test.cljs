@@ -116,6 +116,74 @@
           (is (some? e) "a step, not cornered")
           (is (<= (:x (:step e)) 2) (str "the step stays in what the body has seen, a cell into the dark at most: " (pr-str (:step e)))))))))
 
+;; card 6699a4ea: the old search priced a dead end the same wherever it lay, so the straight way on through the dark
+;; beat the branch behind, and the body learnt of the dead end only once the zombie held the branch
+(def long-dead-end
+  "junction's corridor run on east to a dead end at x 30: past the branch at x 2 the way on east may be shut."
+  (carve rock [[-30 -10 -9 10] [-8 0 30 0] [2 -13 2 -1] [-10 -30 14 -14]]))
+
+(defn seeing-only
+  "p sensing only the cells known? ([x z] -> bool) holds of: a cell elsewhere is {:unknown true}, never seen."
+  [p known?]
+  (let [seen? #(known? [(js/Math.floor (.-x %)) (js/Math.floor (.-z %))])]
+    (tu/set-sensed! p (fn [pos] (if (seen? pos) (.blockAt (tu/oracle p) pos) #js {:unknown true :pos pos})))
+    (aset p "seenBlockAt" (fn [pos] (if (seen? pos)
+                                      (let [b (.blockAt (tu/oracle p) pos)] #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0})
+                                      #js {:unknown true :pos pos})))
+    p))
+
+(deftest a-flight-past-a-dark-branch-turns-back-to-it-before-a-dead-end-ahead-would-cut-its-way-back
+  ;; as in the dark corridor of flee-dead-end-pocket: the body has walked 9 blocks past the branch, seeing 3 cells ahead
+  ;; and 3 into it; at 6 past it, on its way back, it keeps going back (no pacing)
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zombie {:x -8.5 :y 64 :z 0.5}]
+          (doseq [x [8.5 5.5]]
+            (let [p (seeing-only (tu/fake {:blocks long-dead-end :self {:pos {:x x :y 64 :z 0.5}}
+                                           :entities [{:id 7 :uuid "u7" :name "zombie" :kind "hostile" :pos zombie}]})
+                                 (fn [[x z]] (and (<= -12 x 11) (<= -3 z 1))))
+                  ends (await (search/search! (ctx-of p) [{:name "zombie" :mob "zombie" :pos zombie}] [] {}))
+                  e (search/choose ends {})]
+              (is (some #(and (:unseen %) (> (:x (:end %)) 11)) ends) "the way on east runs into the dark")
+              (is (< (:x (:step e)) x) (str "at " x " the step turns back toward the branch: " (pr-str (select-keys e [:end :step :score :unseen]))))
+              (is (neg? (:z (:end e))) (pr-str (:end e))))))))))
+
+(defn way
+  "A priced end along cells [[x z] ...] from the body at [0 0], a second a cell, its first seen-n seen: the rest unseen,
+  trapped 100 at a dead end there (nothing seen near: way-on-chance 1/2)."
+  [cells seen-n price]
+  (let [cs (vec (map-indexed (fn [i [x z]] {:x x :y 64 :z z :t i}) cells))]
+    (cond-> {:target {:x 9 :z 9} :found? true :open? true :end (select-keys (peek cs) [:x :y :z]) :s (:t (peek cs))
+             :price price :priced price :cells cs :seen-n seen-n :counts {:k 0 :n 0}}
+      (< seen-n (count cs)) (assoc :unseen [(:x (nth cs seen-n)) 64 (:z (nth cs seen-n))] :trapped 100))))
+
+(def east (way [[0 0] [1 0] [2 0] [3 0] [4 0]] 3 4))
+(def north (way [[0 0] [0 1] [0 2] [0 3] [0 4]] 3 4))
+(def home (way [[0 0] [-1 0] [-2 0]] 3 5))
+
+(defn dead-ends [ends] (into {} (map (juxt :end :dead-end)) (search/scored [] {:x 0.5 :y 64 :z 0.5} ends)))
+
+(deftest a-dark-way-pays-its-dead-end-at-the-cost-of-the-way-back-out-and-no-other-dark-way-vouches-for-it
+  ;; card 19df5758: the reverted pricing counted any other unseen way as a sure way out, so two dark ways each paid no
+  ;; dead end; one alone paid it whole whatever else lay behind
+  (let [alone (get (dead-ends [east]) (:end east))
+        twins (dead-ends [east north])
+        homed (dead-ends [east home])]
+    (is (= 50 alone) "no other way out: trapped at the dead end's chance")
+    (is (< 0 (get twins (:end east)) alone) "another dark way: its own dead end at the same chance, not a sure way out")
+    (is (= (get twins (:end east)) (get twins (:end north))))
+    (is (= (* 0.5 (+ 2 5)) (get homed (:end east))) "a seen way home: the walk back to the fork and the way home")
+    (is (zero? (get homed (:end home))) "a seen way pays none")))
+
+(deftest a-cover-past-the-seen-part-of-a-way-pays-its-dead-end
+  ;; card 645e6abc: the reverted pricing dropped the dead end of every cover end
+  (let [from {:x 0.5 :y 64 :z 0.5}
+        ends (search/scored [] from [east home])
+        cover-at #(into {} (map (juxt :end :dead-end)) (search/covers [] from (fn [c] (= c %)) ends))]
+    (is (pos? (get (cover-at {:x 4 :y 64 :z 0}) {:x 4 :y 64 :z 0})) "the cover lies past the unseen cell")
+    (is (zero? (get (cover-at {:x 1 :y 64 :z 0}) {:x 1 :y 64 :z 0})) "the cover lies in what the body has seen")))
+
 (def field (box -32 63 -32 32 63 32 "stone"))
 
 (deftest a-chaser-faster-than-the-flight-catches-every-way-away

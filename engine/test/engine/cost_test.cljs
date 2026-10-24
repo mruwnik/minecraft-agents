@@ -321,6 +321,16 @@
     (is (< (cost/unseen-share open {:weapon "iron_sword" :equipment iron-set}) (cost/unseen-share open kit)) "an armed, armoured body fears the dark less")
     (is (< 0 (cost/dead-end-cost open 30) (cost/dead-end-cost closed 30) 30) "the chasers met on the way back, at the dead end's chance")))
 
+(deftest a-dead-end-costs-the-walk-back-out-priced-smoothly-by-the-race-on-it
+  ;; card 1ecaa07d: the reverted pricing paid nothing for the walk back to the fork, and the whole trap once a chaser
+  ;; was within its blow at all
+  (let [none {:k 0 :n 0}
+        back #(cost/dead-end-cost none 30 [{:s 4 :caught-s % :unseen? false}])]
+    (is (= 2 (back 0)) "a free way back: its seconds, at the dead end's chance")
+    (is (< (back 0) (back 0.01) (+ (back 0) 0.5)) "a blow barely in reach adds a little")
+    (is (< (back 0.5) (back 2) 15) "the longer in reach, the nearer the trap")
+    (is (= 15 (cost/dead-end-cost none 30 [{:s 40 :caught-s 0}])) "never more than the trap")))
+
 (deftest a-flight-is-caught-by-the-way-it-takes
   (let [prior 0.15
         open {:k 98 :n 100}
