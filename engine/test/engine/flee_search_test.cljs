@@ -245,6 +245,7 @@
               zombie (fn [x] {:name "zombie" :mob "zombie" :pos {:x x :y 64 :z 0.5}})
               ring (fn [chasers] (search/ring {:x 0.5 :z 0.5} chasers 10 4))
               price (fn ^:async price [chasers] (await (search/price! c (ring chasers) {:chasers chasers})))
+              _ (await (price [(zombie -4.5)]))
               a (await (price [(zombie -4.5)]))
               again (await (price [(zombie -4.5)]))
               moved (await (price [(zombie -2.5)]))]
