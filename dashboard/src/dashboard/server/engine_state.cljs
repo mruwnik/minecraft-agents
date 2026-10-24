@@ -294,14 +294,15 @@
 
 ;; every body folder of every world: {:world :name :text raw config.json}
 (defn agent-entries []
-  (mapv (fn [{:keys [world name dir]}] {:world world :name name :text (read-text (.join path dir "config.json"))})
-        (bodies/list-bodies state-dir)))
+  (let [entries (mapv (fn [{:keys [world name dir]}] {:world world :name name :text (read-text (.join path dir "config.json"))})
+                      (bodies/list-bodies state-dir))]
+    (doseq [cache [body-cache goal-cache edn-cache view-cache tails live-engines live-errors]]
+      (swap! cache prune-cache entries))
+    entries))
 
 (defn bodies-in [now entries]
   (let [engine? (filter engine-folder? entries)
          other (remove engine-folder? entries)]
-     (swap! body-cache #(prune-cache % entries))
-     (swap! goal-cache #(prune-cache % entries))
      (vec (concat (map #(engine-body % now) (ee/parse-engine-agents engine?))
                   (map ee/unsupported-body (ee/parse-engine-agents other))))))
 

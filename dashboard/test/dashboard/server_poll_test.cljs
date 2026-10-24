@@ -56,6 +56,21 @@
             (is (= after-first @parses) "second poll parses nothing")
             (is (= first-poll second-poll))))))))
 
+(deftest a-removed-body-leaves-no-cache-entries
+  (with-root 2
+    (fn [root _]
+      (with-redefs [srv-engine-state/tails (atom {})]
+        (let [gone (srv-engine-state/body-key {:world "w" :name "B1"})
+              kept (srv-engine-state/body-key {:world "w" :name "B0"})]
+          (doseq [cache [srv-engine-state/body-cache srv-engine-state/goal-cache srv-engine-state/edn-cache srv-engine-state/view-cache
+                         srv-engine-state/tails srv-engine-state/live-engines srv-engine-state/live-errors]]
+            (reset! cache {gone 1 kept 2}))
+          (.rmSync fs (.join path root "worlds" "w" "agents" "B1") #js {:recursive true :force true})
+          (srv-engine-state/agent-entries)
+          (doseq [cache [srv-engine-state/body-cache srv-engine-state/goal-cache srv-engine-state/edn-cache srv-engine-state/view-cache
+                         srv-engine-state/tails srv-engine-state/live-engines srv-engine-state/live-errors]]
+            (is (= {kept 2} @cache))))))))
+
 (deftest changed-engine-edn-is-picked-up-for-that-body-only
   (with-root 3
     (fn [_ engines]
