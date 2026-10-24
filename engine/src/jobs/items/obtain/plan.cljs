@@ -108,12 +108,6 @@
          (filter open?)
          (every? #(torch/perceived-dark? p %)))))
 
-(defn route-class
-  "The class of the body's walks as death-chance reads it: underground while it is under rock (an ore dug down to from
-  the surface is priced by its dark way), else over the surface at night while the open sky is dark."
-  [p]
-  {:underground? (sh-sense/buried? p) :night? (sh-sense/dark-outside? p)})
-
 (defn steps-s
   "Seconds the craft and smelt steps of a plan take."
   [pl]
@@ -187,8 +181,8 @@
       (+ walk dig))))
 
 (defn look-cost
-  "Seconds per find of a search for an unseen need (cost/search-s): legs of the search's spacing, each the walk and the
-  death it risks now, a look of the gather's scan radius (cost/look-leg-chance), within the call's search-worth, then
+  "Seconds per find of a search for an unseen need (cost/search-s): legs of the search's spacing, each its walk (its
+  danger is go-to's quote's, priced as the search walks it), a look of the gather's scan radius (cost/look-leg-chance), within the call's search-worth, then
   the walk to what it saw. Infinity when the call may not search, its search for the need ran already (it found none:
   the seen way or the tunnel is next) or no chance is priced (logs and other blocks)."
   [c need]
@@ -197,8 +191,7 @@
     (let [p (:primitives c)
           self (u/self-pos c)
           r (search-scan-radius)
-          leg (+ (:cost (cost/walk-cost {:distance (cost/leg-spacing)}))
-                 (cost/route-death-cost (threats/death-body c) (route-class p) self))]
+          leg (:cost (cost/walk-cost {:distance (cost/leg-spacing)}))]
       (+ (cost/search-s (cost/look-leg-chance p (notes/notes c) (search-names need) [(:x self) (:z self)] r) leg (search-worth c))
          (:cost (cost/walk-cost {:distance r}))))))
 
@@ -218,7 +211,7 @@
   feet (a stair down to cost/ore-level when that is lower) and, with the ore's level above the feet, that level by a
   stair up (obtain.gather climbs it: not once climbed, nor through a climb-sealed? rock). The stair down and the legs
   are lit as they go (cost/lit-way-s), the stair up is dug dark (cost/dark-way-s of the kit), each over stair-time's
-  seconds a step and risking a death under rock. :cost Infinity for a need not tunnelled for or not an ore."
+  seconds a step. :cost Infinity for a need not tunnelled for or not an ore."
   [c need]
   (let [block (:block (:args need))
         ore (cost/ore-of [block])
@@ -232,14 +225,13 @@
             n cost/torch-gap
             stock (stock-s c)
             at-y (fn [y]
-                   (let [risk (cost/route-death-cost (threats/death-body c) {:underground? true :night? false} (assoc self :y y))
-                         dy (- feet y)
+                   (let [dy (- feet y)
                          stair (if (neg? dy)
                                  (cost/dark-way-s (stair-time/steps-s :up (- dy)) (- dy) kit)
                                  (cost/lit-way-s (stair-time/steps-s :down dy) dy))
-                         leg (+ risk (cost/lit-way-s (stair-time/steps-s :level n) n))]
+                         leg (cost/lit-way-s (stair-time/steps-s :level n) n)]
                      {:way :tunnel :y y
-                      :cost (+ stock risk stair (cost/search-s (cost/tunnel-chance ore y n) leg (search-worth c)))}))
+                      :cost (+ stock stair (cost/search-s (cost/tunnel-chance ore y n) leg (search-worth c)))}))
             here (at-y (min feet (or level feet)))
             up (when (and level (> level feet) (not (get-in (ctx/mem c) [:gather :climbed (:key need)]))
                           (not (climb-sealed? p self (- level feet))))

@@ -23,7 +23,7 @@
   (let [p (:primitives c)
         self (u/self-pos c)
         worth (or (given-worth c) (max (cost/animal-worth mob) (search-worth c)))]
-    (filter #(< (:cost (cost/fetch-cost {:distance (u/dist self (u/pos-of (.-pos %))) :danger 0})) worth)
+    (filter #(< (:cost (cost/fetch-cost {:distance (u/dist self (u/pos-of (.-pos %)))})) worth)
             (filter pred (animals/herd p mob (seen-radius))))))
 
 (defn sheep-in-range

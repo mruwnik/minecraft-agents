@@ -57,7 +57,7 @@
   (let [{:keys [pos cause]} (:data entry)
         elapsed (settings/ticks->ms (game/ticks-since entry (ctx/view c)))
         e (est/estimate c (:data entry) elapsed (await (est/quote-trip c (:data entry))))
-        safe (cost/fetch-cost {:distance (when pos (u/dist (u/self-pos c) pos)) :danger 0 :elapsed-ms elapsed :cause cause})
+        safe (cost/fetch-cost {:distance (when pos (u/dist (u/self-pos c) pos)) :elapsed-ms elapsed :cause cause})
         safe-cost (if (js/isFinite (:cost safe)) (:cost safe) js/Infinity)]
     (boolean (and (seq (:seen-mobs e)) (> (:value e) (+ safe-cost (cfg/margin)))))))
 

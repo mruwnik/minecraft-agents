@@ -13,19 +13,25 @@
   [c pos]
   (/ (u/dist (u/self-pos c) pos) (cost/walk-blocks-per-s)))
 
+(defn risk-s
+  "Seconds the risk of go-to's quote q costs the body (cost/risk-s): the hp its plan takes (its :uses :health) and
+  extra-hurt hp besides, with its :risk's hurt and death chance."
+  ([c q] (risk-s c q 0))
+  ([c q extra-hurt]
+   (let [{:keys [hp lethal-hp] :or {hp 0 lethal-hp 0}} (:risk q)]
+     (cost/risk-s (.-health (.self (:primitives c)))
+                  (+ (- hp lethal-hp) (second (get-in q [:uses :health] [0 0 0])) extra-hurt)
+                  lethal-hp))))
+
 (defn quoted-s
-  "Seconds go-to's quote q of a walk costs the body: its mean time, and the hp its plan takes (its :health) and risks
-  (its :risk, hp-key of it: :hp, or :walk-hp leaving out the mobs that catch the walk) at cost/hp-cost of the body's
-  health; 0 for a body already there (a :done ending), ##Inf for another ending or a walk with no finite time."
-  ([c q] (quoted-s c q :hp))
-  ([c q hp-key]
-   (let [mean (second (get-in q [:uses :job-time]))
-         health (.-health (.self (:primitives c)))
-         hp (+ (get-in q [:risk hp-key] 0) (second (get-in q [:uses :health] [0 0 0])))]
-     (cond
-       (= :done (:kind q)) 0
-       (or (contract/ending? q) (not (number? mean)) (not (js/isFinite mean))) ##Inf
-       :else (+ mean (cost/hp-cost health (min hp health)))))))
+  "Seconds go-to's quote q of a walk costs the body: its mean time and its risk-s; 0 for a body already there (a :done
+  ending), ##Inf for another ending or a walk with no finite time."
+  [c q]
+  (let [mean (second (get-in q [:uses :job-time]))]
+    (cond
+      (= :done (:kind q)) 0
+      (or (contract/ending? q) (not (number? mean)) (not (js/isFinite mean))) ##Inf
+      :else (+ mean (risk-s c q)))))
 
 (defn ^:async quote!
   "go-to's quote of the walk args (a go-to call's args)."

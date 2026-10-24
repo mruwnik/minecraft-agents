@@ -15,6 +15,7 @@
             [jobs.survival.recover-drops.estimate :as estimate]
             [jobs.survival.recover-drops.fetch :as fetch]
             [engine.test-util :as tu :refer [run-until-empty]]
+            [jobs.lib.walk-pick :as pick]
             [triggers.survival.died :as died]))
 
 (defn die-noted!
@@ -201,12 +202,15 @@
   (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities [dt/zombie-by-the-way]})
         death {:pos dt/death-pos :inventory dt/death-pile-of-the-field-report}
         c {:primitives p :args {} :view #(mem/view (:store eng))}
-        priced (fn [risk] (estimate/estimate c death 5000 {:uses {:job-time [5 5 15]} :risk risk}))
+        quote-of (fn [risk] {:uses {:job-time [5 5 15]} :risk risk})
+        priced (fn [risk] (estimate/estimate c death 5000 (quote-of risk)))
         clear (priced {:hp 0 :threats []})
-        risky (priced {:hp 3 :threats [{:mob "zombie" :pos {:x 15.5 :y 64 :z 3.5}}]})]
+        risk {:hp 3 :lethal-hp 1 :threats [{:mob "zombie" :pos {:x 15.5 :y 64 :z 3.5}}]}
+        risky (priced risk)]
     (is (zero? (get-in clear [:parts :danger])) "a zombie in sight that the planned way leaves behind is no danger")
     (is (nil? (:top-mobs clear)))
-    (is (= 30 (get-in risky [:parts :danger])) "the quote's walk risk, at an hp's price, is the danger")
+    (is (= (- (pick/quoted-s c (quote-of risk)) 5) (get-in risky [:parts :danger]))
+        "the quote's walk risk is the danger, priced as every walk choice prices it")
     (is (= [{:name "zombie"}] (:top-mobs risky)))
     (is (= [{:name "zombie" :pos {:x 15.5 :y 64 :z 3.5}}] (:seen-mobs risky)))))
 

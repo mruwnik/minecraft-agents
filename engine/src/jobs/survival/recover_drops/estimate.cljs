@@ -9,6 +9,7 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
+            [jobs.lib.walk-pick :as pick]
             [jobs.survival.recover-drops.config :as cfg]))
 
 (defn finite [n] (if (js/isFinite n) n :infinite))
@@ -110,8 +111,8 @@
 (defn estimate
   "{:value :cost :parts :reason :top-items :top-mobs :hold-ms :flight-s} (:hold-ms: how long a skip for this danger is remembered,
   ::danger-memory-ms; :flight-s: flight-s) of recovering the drops of the :died data (cost js/Infinity when they cannot be
-  fetched). quoted is go-to's quote of the walk (nil: none yet): its planned seconds lengthen the walk, its walk risk
-  (:risk, jobs.lib.walk-risk on its plan) is the danger, naming the mobs priced, and the hp its route drowns is danger too."
+  fetched). quoted is go-to's quote of the walk (nil: none yet): its planned seconds lengthen the walk, its risk
+  (walk-pick/risk-s: its walk risk and planned hp, naming the mobs priced, with the hp its route drowns) is the danger."
   ([c data elapsed] (estimate c data elapsed nil))
   ([c {:keys [pos inventory cause experience]} elapsed quoted]
   (let [p (:primitives c)
@@ -119,15 +120,14 @@
         wet-at (reach/seen-lookup p reach/kind-of :unseen)
         worth (cost/item-value inventory :overrides (:value-overrides (:args c)))
         mobs (mapv (fn [{:keys [mob pos]}] {:name mob :pos pos}) (get-in quoted [:risk :threats]))
-        risk-hp (get-in quoted [:risk :hp] 0)
         drown-hp (get-in quoted [:route :drown] 0)
         wet (when (or (= "drowning" cause) (wet-pile? wet-at pos) (pos? drown-hp))
               {:name (if (= "drowning" cause) "drowning" "water")
                :danger (max drown-hp (if (or (= "drowning" cause) (wet-pile? wet-at pos)) (cfg/wet-danger) 0))})
         quoted-s (let [mean (second (get-in quoted [:uses :job-time]))] (when (and (number? mean) (js/isFinite mean)) mean))
-        danger (+ risk-hp (:danger wet 0))
+        danger-s (pick/risk-s c quoted (:danger wet 0))
         straight-s (when pos (/ (u/dist here pos) (cost/walk-blocks-per-s)))
-        fetch (cost/fetch-cost {:distance (when pos (* (max straight-s (or quoted-s 0)) (cost/walk-blocks-per-s))) :danger danger :elapsed-ms elapsed :cause cause})
+        fetch (cost/fetch-cost {:distance (when pos (* (max straight-s (or quoted-s 0)) (cost/walk-blocks-per-s))) :danger-s danger-s :elapsed-ms elapsed :cause cause})
         drowns (when-not (:reason fetch) (no-air-way p wet-at pos drown-hp))
         named (cond-> (mapv #(select-keys % [:name]) mobs) wet (conj (select-keys wet [:name :danger])))]
     (cond-> {:value (+ (:value worth) (cost/experience-cost experience))

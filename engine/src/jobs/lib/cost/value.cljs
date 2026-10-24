@@ -194,10 +194,10 @@
     (boolean (some #(str/includes? c %) lethal-causes))))
 
 (defn walk-cost
-  "{:cost :parts {:walk :danger}} of walking `distance` blocks with `danger` (route-danger's number) on the way: the
-  per-block and per-danger prices every trip is costed with."
-  [{:keys [distance danger]}]
-  (let [parts {:walk (* (per-block) distance) :danger (* per-danger (or danger 0))}]
+  "{:cost :parts {:walk :danger}} of walking `distance` blocks at the per-block price every trip is costed with, and
+  `danger-s` seconds of danger on the way (jobs.lib.cost/risk-s)."
+  [{:keys [distance danger-s]}]
+  (let [parts {:walk (* (per-block) distance) :danger (or danger-s 0)}]
     {:cost (reduce + (vals parts)) :parts parts}))
 
 (defn walk-beats-making
@@ -279,11 +279,11 @@
     {:cost (reduce + (vals parts)) :parts parts}))
 
 (defn fetch-cost
-  "{:cost :parts {:trip :walk :danger}} of fetching a pile `distance` blocks off, with `danger` (route-danger's number)
+  "{:cost :parts {:trip :walk :danger}} of fetching a pile `distance` blocks off, with `danger-s` seconds of danger
   on the way, `elapsed-ms` after it dropped.
   Or {:cost js/Infinity :reason}: :no-position (distance nil), :window-closed (the 5 min despawn passed), :too-far
   (the walk would end after the despawn), :lethal-cause (lava, fire or the void took the items)."
-  [{:keys [distance danger elapsed-ms cause]}]
+  [{:keys [distance danger-s elapsed-ms cause]}]
   (let [elapsed (or elapsed-ms 0)
         despawn-ms (game/despawn-ms)
         walk-ms (when (number? distance) (* 1000 (/ distance (walk-blocks-per-s))))
@@ -294,5 +294,5 @@
                  (>= (+ elapsed walk-ms) despawn-ms) :too-far)]
     (if reason
       {:cost js/Infinity :reason reason}
-      (let [w (walk-cost {:distance distance :danger danger})]
+      (let [w (walk-cost {:distance distance :danger-s danger-s})]
         {:cost (+ (trip) (:cost w)) :parts (assoc (:parts w) :trip (trip))}))))

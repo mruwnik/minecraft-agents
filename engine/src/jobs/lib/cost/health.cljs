@@ -2,7 +2,7 @@
   "What an hp costs and how many a walk may spend, the one place. Pure.
 
   hp-seconds: an hp is about 10 s: healing it takes 6 exhaustion, 60 blocks sprinted (0.1 each), 10 s at 5.6 blocks/s.
-  health-scale: the price rises x20/health (at most 4) near zero health (the danger rate's scale too); hp-price: the two together; hp-cost: the price of losing some hp.
+  health-scale: the price rises x20/health (at most 4) near zero health (the danger rate's scale too); hp-price: the two together; hp-cost: the price of losing some hp; risk-s: a walk's risk in seconds.
   drown-prices: the planner's drownPrices, the cumulative price of each hp of drowning at the health it leaves.
   damage-budget: the hp a walk may spend on certain damage (drops over 3 blocks, plants that hurt on touch): the health
   and absorption over the floor (:min-health, default 12) less a margin of 1, at most :max-damage; less when the food
@@ -51,6 +51,12 @@
   (let [whole (js/Math.floor (max 0 damage))]
     (+ (reduce + 0 (map #(hp-price (- health %)) (range whole)))
        (* (- damage whole) (hp-price (- health whole))))))
+
+(defn risk-s
+  "Seconds a walk's risk costs a body at health: the hurt hp it expects at hp-cost (at most the health: past it is the
+  death) and its death chance in hp (lethal hp, jobs.lib.cost/lethal-hp) at hp-seconds, the rate lethal-hp divided by."
+  [health hurt lethal]
+  (+ (hp-cost health (min (max 0 hurt) health)) (* hp-seconds lethal)))
 
 (defn commute-s
   "Seconds a walk of secs away costs over sheltering where the body stands, which takes shelter-s: for a body in the ground

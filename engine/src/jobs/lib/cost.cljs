@@ -12,7 +12,7 @@
     answer   fight-answer, followed, flee-answer, build-answer, cover-answer, answer-price, decide: what each answer to hostiles costs and the cheapest; kill-price: a kill of one mob; death-chance, route-death-cost, route-hurt, threat-hurt, threats-chance, spawns-chance, spawns-hurt, lethal-hp: the one chance of dying (route-hurt the same in hp, at most the life; threat-hurt one mob met; water-factors the planner's price of a second in water, a drowned met there, unseen-water-factors a phantom floor's by the seen water near it; threats-chance its known threats, spawns-chance that of mobs spawned beside the body, spawns-hurt their hurt, lethal-hp a death chance in hp) (a known threat priced by the answer the body would take) and a route's death price; blast-hurt: a creeper's blast (jobs.lib.cost.answer).
     danger   route-danger: the danger of a walk past mobs; hurt-rate, exposure-price: what standing exposed to them costs; stance, danger-rate, threat-factor: go-to's
              planner dangers; reach-first?, wins-race?: a body's race to a refuge against its chasers; catches?, caught-on?: whether a chaser hits a walk (straight, or a timed route) before it is past; reach-s: the seconds it is within its blow of a timed route; arrival-s: a chaser's seconds to a point (over its way when given); body-speed; flee-walk-speed, flee-stop-s: a flight's measured pace, its steps and the stops between them (jobs.lib.cost.danger).
-    health   hp-seconds, health-scale, hp-price, commute-s (a walk there and back against sheltering here), drown-prices, damage-budget, survivable-budget: what an hp costs and how many a walk may spend (jobs.lib.cost.health).
+    health   hp-seconds, health-scale, hp-price, risk-s (a walk's hurt and death chance in seconds), commute-s (a walk there and back against sheltering here), drown-prices, damage-budget, survivable-budget: what an hp costs and how many a walk may spend (jobs.lib.cost.health).
     food     food-reserve: the food a body keeps carried, 3 days of it; cook-worth?, cook-gain: whether cooking raw food beats eating it now; meat-factor, meat-animal: raw meat's replacement cost, dear for hunted, 1 with a working pen (jobs.lib.cost.food).
     value    item-value, reserve-cost (using a reserved unit: value x s/(1-s)), fetch-cost, walk-cost, walk-beats-making (walk to what exists vs make one and place it), detour-cost: what items are worth, what fetching them, walking or a pick-up detour costs; tour-cost, tour-worth, food-worth: a tour of
              frontiers against what its goal is worth; cover-tour-s: the walk that brings a set of points within reach; light-cost: a torch go-to places; light-wait-worth: what n torches fetched save over a wait for light; dig-cost: the seconds a block takes to dig, kill-drops: the items a kill drops (jobs.lib.cost.value);
@@ -121,6 +121,7 @@
 (def health-scale health/health-scale)
 (def hp-price health/hp-price)
 (def hp-cost health/hp-cost)
+(def risk-s health/risk-s)
 (def commute-s health/commute-s)
 (def drown-prices health/drown-prices)
 (def damage-budget health/damage-budget)

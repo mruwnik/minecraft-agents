@@ -13,7 +13,7 @@
    {:name "cobblestone" :count 64} {:name "cobblestone" :count 36}
    {:name "stone_pickaxe" :count 1} {:name "oak_planks" :count 29}])
 
-(def short-fetch (v/fetch-cost {:distance 40 :danger 0 :elapsed-ms 5000}))
+(def short-fetch (v/fetch-cost {:distance 40 :elapsed-ms 5000}))
 
 (deftest the-card-pile-is-worth-far-more-than-a-short-fetch
   (is (> (value card-pile) (* 10 (:cost short-fetch)))))
@@ -34,7 +34,7 @@
 
 (deftest a-stack-of-dirt-is-cheap
   (is (< (value [{:name "dirt" :count 64}]) (each "raw_iron")))
-  (is (< (value [{:name "dirt" :count 64}]) (:cost (v/fetch-cost {:distance 100 :danger 0 :elapsed-ms 0}))))
+  (is (< (value [{:name "dirt" :count 64}]) (:cost (v/fetch-cost {:distance 100 :elapsed-ms 0}))))
   (is (< (value [{:name "dirt" :count 64}]) (each "iron_pickaxe"))))
 
 (deftest a-rare-unstackable-is-dearer-than-a-common-stackable-from-no-known-source
@@ -174,9 +174,9 @@
 ;; ---------------------------------------------------------------- fetch-cost
 
 (deftest fetch-cost-grows-with-distance-and-danger
-  (is (< (:cost (v/fetch-cost {:distance 10 :danger 0 :elapsed-ms 0}))
-         (:cost (v/fetch-cost {:distance 100 :danger 0 :elapsed-ms 0}))
-         (:cost (v/fetch-cost {:distance 100 :danger 9 :elapsed-ms 0})))))
+  (is (< (:cost (v/fetch-cost {:distance 10 :elapsed-ms 0}))
+         (:cost (v/fetch-cost {:distance 100 :elapsed-ms 0}))
+         (:cost (v/fetch-cost {:distance 100 :danger-s 90 :elapsed-ms 0})))))
 
 (deftest fetch-cost-is-infinite-when-the-pile-is-gone-or-unreachable
   (are [args reason] (= [js/Infinity reason] ((juxt :cost :reason) (v/fetch-cost args)))
@@ -188,13 +188,13 @@
     {:distance nil :elapsed-ms 0} :no-position))
 
 (deftest fetch-cost-lists-its-parts
-  (let [c (v/fetch-cost {:distance 100 :danger 9 :elapsed-ms 0})]
+  (let [c (v/fetch-cost {:distance 100 :danger-s 90 :elapsed-ms 0})]
     (is (= (:cost c) (reduce + (vals (:parts c)))))
     (is (= #{:trip :walk :danger} (set (keys (:parts c)))))))
 
 (deftest walk-cost-is-the-walk-and-danger-parts-of-a-fetch
-  (let [w (v/walk-cost {:distance 20 :danger 2})
-        f (v/fetch-cost {:distance 20 :danger 2 :elapsed-ms 0})]
+  (let [w (v/walk-cost {:distance 20 :danger-s 20})
+        f (v/fetch-cost {:distance 20 :danger-s 20 :elapsed-ms 0})]
     (is (= {:walk 6 :danger 20} (:parts w)))
     (is (= 26 (:cost w)))
     (is (= (+ (v/trip) (:cost w)) (:cost f)) "a fetch is a trip plus the walk")
