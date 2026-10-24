@@ -92,7 +92,7 @@
         (and (str/includes? line ":kind :hostile.decided") (str/includes? line ":hostile-near"))
         (let [e (whole)]
           {:k :decided :t t :gen gen :job (root-job (get-in e [:context :job-id]))
-           :mob (get-in e [:data :mob]) :decision (get-in e [:data :decision]) :health (get-in e [:data :health])
+           :mob (get-in e [:data :mob]) :decision (get-in e [:data :decision]) :health (get-in e [:data :health]) :near (get-in e [:data :near])
            :at (when-not (get-in e [:data :band]) (get-in e [:data :pos]))})
 
         (str/includes? line ":kind :retreat.step-speed")

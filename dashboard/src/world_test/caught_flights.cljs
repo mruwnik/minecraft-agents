@@ -1,11 +1,13 @@
 (ns world-test.caught-flights
   "tools/event-counts.mjs caught-flights: counts the measured prior jobs.lib.cost.answer ::caught from the trial bodies' event logs.
   An episode is a run of flee decisions about one group of kinds (groups: the zombie family, creepers, bow mobs, spiders),
-  each within gap-ms of the one before; its health the first's. Within gap-ms after its last decision it is caught when the
+  each within gap-ms of the one before; its health the first's, its :chasers the most of the group's mobs a decision names
+  near (nil before the decisions named them). Within gap-ms after its last decision it is caught when the
   group killed the body or hurt it caught-hits times (a melee mob's first blow is the flight's own start, answer/start-reach;
   a creeper's one blast is the catch). Per group and health band (answer ::caught's :from), k caught of n, the deaths, and
   :blows, the zombie family's Poisson mean of a caught flight's blows: the grid posterior mean (prior 1/lambda) of the deaths
-  of its caught episodes, each dying when at least ceil(health / hit) blows land, hit a zombie's blow on easy.
+  of its caught episodes, each dying when at least ceil(health / hit) blows land, hit a zombie's blow on easy; :by-chasers,
+  the zombie family's k caught of n by its :chasers.
   Pure part: episodes, report."
   (:require [jobs.lib.cost.threat :as threat]))
 
@@ -14,18 +16,20 @@
 (def caught-hits {:zombie 2 :creeper 1 :bow 2 :spider 2})
 
 (defn episodes
-  "Rows [{:group :t :health :died? :hits}] of the episodes in records (world-test.event-counts/scan-line's, sorted by :t)."
+  "Rows [{:group :t :health :chasers :died? :hits}] of the episodes in records (world-test.event-counts/scan-line's, sorted by :t)."
   [records]
   (mapcat (fn [[group family]]
-    (let [eps (reduce (fn [eps {:keys [k t mob decision health]}]
+    (let [eps (reduce (fn [eps {:keys [k t mob decision health near]}]
                         (if (and (= :decided k) (family mob) (= :flee decision))
-                          (let [e (peek eps)]
-                            (if (and e (<= (- t (:end e)) gap-ms)) (conj (pop eps) (assoc e :end t)) (conj eps {:t t :end t :health health})))
+                          (let [e (peek eps)
+                                n (some->> near (filter family) count)
+                                more (fn [e] (cond-> e n (update :chasers (fnil max 0) n)))]
+                            (if (and e (<= (- t (:end e)) gap-ms)) (conj (pop eps) (more (assoc e :end t))) (conj eps (more {:t t :end t :health health}))))
                           eps))
                       [] records)
           within (fn [{:keys [t end]} r] (<= t (:t r) (+ end gap-ms)))]
       (for [e eps :when (:health e)]
-        {:group group :t (:t e) :health (:health e)
+        {:group group :t (:t e) :health (:health e) :chasers (:chasers e)
          :died? (boolean (some #(and (= :died (:k %)) (family (:cause %)) (within e %)) records))
          :hits (reduce + 0 (keep #(when (and (= :hurt (:k %)) (some family (:causes %)) (within e %)) (or (:hits %) 1)) records))})))
           groups))
@@ -51,11 +55,13 @@
 (defn r3 [x] (/ (js/Math.round (* 1000 x)) 1000))
 
 (defn report
-  "{:bands {group [{:from :k :n :deaths}]} :blows} of rows, banded at froms (health at least each, below the next)."
+  "{:bands {group [{:from :k :n :deaths}]} :blows :by-chasers} of rows, banded at froms (health at least each, below the next)."
   [rows froms]
   (let [band (fn [rows [lo hi]] (filter #(and (<= lo (:health %)) (< (:health %) hi)) rows))
         bounds (map vector froms (concat (rest froms) [##Inf]))]
     {:bands (into {} (for [[group rs] (group-by :group rows)]
                        [group (mapv (fn [[lo :as b]] (let [rs (band rs b)] {:from lo :k (count (filter caught? rs)) :n (count rs) :deaths (count (filter :died? rs))}))
                                     bounds)]))
+     :by-chasers (into (sorted-map) (for [[c rs] (group-by :chasers (filter #(and (= :zombie (:group %)) (:chasers %)) rows))]
+                                      [c {:k (count (filter caught? rs)) :n (count rs)}]))
      :blows (r3 (blows (filter #(and (= :zombie (:group %)) (caught? %)) rows) (threat/difficulty-scale (get threat/mob-hit "zombie"))))}))
