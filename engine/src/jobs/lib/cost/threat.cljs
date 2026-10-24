@@ -17,8 +17,8 @@
    ::difficulty {:default -1 :doc "Override of the server difficulty mob hits and door breaking are costed at: 0 peaceful, 1 easy, 2 normal, 3 hard. -1 (unset), the body's sensed difficulty counts (hard while it is unknown)." :spec (a/int-in -1 3)}
    ::spot-occupied {:default {:k 0 :n 4} :spec (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)})
                     :doc "Of the death and near-death spots the trial bodies came back within 16 blocks of after 300 s or more 32 to 128 blocks off (vanilla: its killer had despawned), those where within 60 s a hostile was within 16 blocks of the spot or hurt the body there (k) of all (n), whatever the spot's light (the logs carry none): node tools/event-counts.mjs spot-returns, 2026-10-23."}
-   ::hit-rate {:default 0.6 :doc "Hits a zombie or skeleton lands per second of exposure (measured over trial fights; the body is out of reach part of the time). Mobs not measured count one a second." :spec (a/num-in 0 nil)}
-   ::hit-rate-hits {:default 127 :doc "Hits counted behind ::hit-rate, the fewer of its two families (card 162067ad, 2026-10-21: skeleton 127 hits over 72 fights, zombie 195 over 121): the shape, + 0.5, of its Gamma posterior (hit-rate-shape). No tools/ recount yet (card 76d72c81)." :spec (a/num-in 0 nil)}
+   ::hit-rate {:default 0.6 :doc "Hits a zombie lands per second of exposure (measured over trial fights; the body is out of reach part of the time). Mobs not measured count one a second." :spec (a/num-in 0 nil)}
+   ::hit-rate-hits {:default 195 :doc "Hits counted behind ::hit-rate, (card 162067ad, 2026-10-21: zombie 195 hits over 121 fights): the shape, + 0.5, of its Gamma posterior (hit-rate-shape). No tools/ recount yet (card 76d72c81)." :spec (a/num-in 0 nil)}
    ::spider-hit-rate {:default 0.35 :doc "Hits a spider or cave spider lands per second of exposure." :spec (a/num-in 0 nil)}
    ::trident-rate {:default 0.5 :doc "Throws a second of a drowned holding a trident (vanilla: one every 40 ticks)." :spec (a/num-in 0 nil)}
    ::provoked-share {:default 0.1 :doc "What a provoked-only mob's threat counts for when it is met, not fought." :spec (a/num-in 0 nil)}
@@ -65,9 +65,14 @@
 
 (def max-follow-range (apply max (vals follow-ranges)))
 
+(def arrow-blow
+  "Damage one skeleton arrow deals at normal difficulty: 3.8, the mean of the 197 unarmoured one-arrow hurts in the trial logs
+  (136 of 3.0, 49 of 2.5, 12 of 3.5 on the trial server's easy, vanilla's min(d/2 + 1, d) of 4, 3 and 5; node tools/event-counts.mjs, card b858ed2e)."
+  3.8)
+
 (def mob-hit
   "Damage one hit of a mob deals at normal difficulty. Unknown mobs count as 3."
-  {"zombie" 3 "husk" 3 "drowned" 3 "zombie_villager" 3 "skeleton" 2 "stray" 2 "parched" 2 "bogged" 2 "spider" 2 "cave_spider" 3
+  {"skeleton" arrow-blow "stray" arrow-blow "parched" arrow-blow "bogged" arrow-blow "zombie" 3 "husk" 3 "drowned" 3 "zombie_villager" 3 "spider" 2 "cave_spider" 3
    "witch" 3 "drowned_trident" 8 "pillager" 2 "vindicator" 8 "slime" 2 "silverfish" 1 "endermite" 2 "phantom" 2 "enderman" 5})
 
 (def door-breakers
@@ -265,38 +270,47 @@
     3 (* 1.5 d)
     d))
 
-(def measured-hit-rate #{"zombie" "husk" "drowned" "zombie_villager" "skeleton" "stray" "parched" "bogged"})
+(def measured-hit-rate #{"zombie" "husk" "drowned" "zombie_villager"})
+
+(def bow-mobs #{"skeleton" "stray" "parched" "bogged"})
+
+(defn shot-rate
+  "Arrows a second of a skeleton kind (vanilla AbstractSkeleton: a 20-tick draw plus an attack interval of 20 ticks on hard, 40 otherwise),
+  every one counted a hit (how many miss is not measured)."
+  []
+  (if (= 3 (difficulty)) 0.5 (/ 1 3)))
 
 (defn lone-hit-rate
-  "Hits a second of a lone sword fight: the measured rates of the zombie and skeleton families and spiders, else one a second."
+  "Hits a second of a lone sword fight: the measured rates of the zombie family and spiders, a skeleton's shot-rate, else one a second."
   [mob-name]
   (cond (= trident-kind mob-name) (settings/get settings ::trident-rate)
+        (contains? bow-mobs mob-name) (shot-rate)
         (contains? measured-hit-rate mob-name) (settings/get settings ::hit-rate)
         (contains? #{"spider" "cave_spider"} mob-name) (settings/get settings ::spider-hit-rate)
         :else 1))
 
 (defn hit-rate-shape
   "The shape of the Gamma over lone-hit-rate of ranged mob-name, the mobs of a kind sharing the one rate: ::hit-rate-hits + 0.5
-  for the measured families; nil for a vanilla cadence (a trident drowned's throws); 1 for a rate with no hits counted,
+  for the measured families; nil for a vanilla cadence (a trident drowned's throws, a skeleton's shots); 1 for a rate with no hits counted,
   an exponential (the maximum-entropy prior of a positive rate of known mean)."
   [mob-name]
-  (cond (= trident-kind mob-name) nil
+  (cond (or (= trident-kind mob-name) (contains? bow-mobs mob-name)) nil
         (contains? measured-hit-rate mob-name) (+ 0.5 (settings/get settings ::hit-rate-hits))
         :else 1))
 
 (defn base-threat
   "{:threat :hits} of mob-name over seconds of exposure, before armour; hits is the expected count (rate x seconds, rate
-  default one a second)."
+  default a skeleton's shot-rate, else one a second)."
   ([mob-name seconds] (base-threat mob-name seconds nil))
   ([mob-name seconds rate]
    (if (= "creeper" mob-name)
      {:threat (difficulty-scale (creeper-blast)) :hits 1}
-     (let [hits (* seconds (or rate 1))]
+     (let [hits (* seconds (or rate (if (contains? bow-mobs mob-name) (shot-rate) 1)))]
        {:threat (* hits (difficulty-scale (get mob-hit mob-name 3))) :hits hits}))))
 
 (defn mob-hurt
   "The damage mob-name deals over seconds of exposure to a body with armour stats (jobs.lib.cost.armour/armour-stats),
-  threat-fn applied to the threat before armour (default identity); rate is the hits a second (default 1: the measured lone-fight rates, lone-hit-rate, are for fight-damage)."
+  threat-fn applied to the threat before armour (default identity); rate is the hits a second (default base-threat's: the measured lone-fight rates, lone-hit-rate, are for fight-damage)."
   ([stats mob-name seconds] (mob-hurt stats mob-name seconds identity nil))
   ([stats mob-name seconds threat-fn] (mob-hurt stats mob-name seconds threat-fn nil))
   ([stats mob-name seconds threat-fn rate]

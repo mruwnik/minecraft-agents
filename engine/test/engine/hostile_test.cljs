@@ -1393,8 +1393,8 @@
     (is (= 1.875 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [(assoc z :hits 2)]})) "a struck mob has less left")
     (is (= (* 4 (threat/creeper-exchange)) (cost/fight-damage {:weapon "stone_sword" :equipment nil :mobs [{:name "creeper" :distance 3}]}))
         "a creeper: 4 swings at the measured exchange each (hit-and-back), not the blast")
-    (is (= 6 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [{:name "skeleton" :distance 13}]}))
-        "a skeleton shoots while the body closes 10 blocks")))
+    (is (< (js/Math.abs (- (* 5 (/ 1 3) 2.9) (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [{:name "skeleton" :distance 13}]}))) 1e-9)
+        "a skeleton shoots while the body closes 10 blocks and fights it: 5 s of a shot every 3 s, an arrow 2.9 on easy")))
 
 (defn walked? [{:keys [eng]}] (pos? (count (tu/walked-to eng))))
 (defn fled-by-walker? [{:keys [p] :as s}]
@@ -1700,7 +1700,7 @@
   (let [near {:name "skeleton" :distance 4}
         cost-of #(cost/fight-damage {:weapon "iron_sword" :equipment iron-armour :mobs %})
         round2 #(/ (js/Math.round (* 100 %)) 100)]
-    (is (= [1.45 7.26] (mapv (comp round2 cost-of) [[near] [near near]])) "of the 16 a body at 20 may spend")
+    (is (= [1.22 3.65] (mapv (comp round2 cost-of) [[near] [near near]])) "of the 16 a body at 20 may spend")
     (is (= :fight (:answer (cost/decide {:health 20 :food 20 :level 0 :carried 0 :respawn {:x 40 :y 64 :z 0}}
                                         {:fight (cost/fight-answer {:weapon "iron_sword" :equipment iron-armour :mobs [near near]})
                                          :flee (cost/flee-answer {:food 20 :equipment iron-armour :mobs [(assoc near :follow 16) (assoc near :follow 16)]})}

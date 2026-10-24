@@ -1,6 +1,7 @@
 (ns engine.cost-weapon-test
   "jobs.lib.cost.weapon: the fight inputs (weapon damage, attack gap, mob health) and the one tool-material table."
   (:require [cljs.test :refer [deftest is]]
+            [engine.settings :as settings]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.cost.weapon :as weapon]))
@@ -15,7 +16,14 @@
 (deftest every-skeleton-variant-is-ranged-and-priced
   (doseq [mob ["skeleton" "stray" "parched" "bogged"]]
     (is (contains? weapon/ranged-mobs mob) mob)
-    (is (= 2 (get threat/mob-hit mob)) mob)))
+    (is (= threat/arrow-blow (get threat/mob-hit mob)) mob)))
+
+(deftest a-skeleton-shoots-vanillas-cadence-for-the-difficulty-and-each-arrow-blows-the-measured-mean
+  (doseq [[d rate blow] [[1 (/ 1 3) 2.9] [2 (/ 1 3) 3.8] [3 0.5 5.7]]]
+    (settings/with-settings {::threat/difficulty d}
+      (fn []
+        (is (= rate (threat/lone-hit-rate "skeleton")) (str "shots a second at difficulty " d))
+        (is (< (js/Math.abs (- (* 10 rate blow) (:threat (threat/base-threat "skeleton" 10 rate)))) 1e-9) (str "10 s of arrows at difficulty " d))))))
 
 (deftest remaining-health-estimates-what-is-left-of-a-mob
   (is (= 8 (weapon/remaining-health {:name "zombie" :hits 2 :damage 6})) "20 less two iron sword hits")

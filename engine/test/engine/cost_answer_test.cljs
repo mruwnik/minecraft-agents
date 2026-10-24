@@ -372,7 +372,7 @@
   (settings/with-settings {::threat/difficulty 3}
     #(let [as (answer/threat-answers (body 20) "skeleton" nil)]
        (is (= :flee (:answer (cost/decide (body 20) as here))) "a fist fight is certain death")
-       (is (< (:chance (answer/group-parts (body 20) ["skeleton"] nil here)) 0.5)
+       (is (< (answer/blows-chance (body 20) (:flee as)) 0.5)
            "the walk out of a 15-block bow range takes 4 s: two hard shots at most (2 s cycle), under 8 hp each, against 20 hp"))))
 
 (defn partitions
