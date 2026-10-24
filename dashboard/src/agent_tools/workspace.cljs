@@ -119,7 +119,15 @@
 (def agents-md
   "# Agent workspace
 
-Read WORKSPACE.md for your body/world bindings and tool instructions, then briefing.md and relevant notes/ before acting. The repository AGENTS.md governs code changes.
+Read WORKSPACE.md for your body/world bindings and tool instructions, PLAYING.md for how to play (goal jobs, the start recipe, reflexes), then briefing.md and relevant notes/ before acting. The repository AGENTS.md governs code changes.
+
+This file is yours: add your own notes here; the tools never overwrite it.
+")
+
+(def playing-md
+  "# Playing
+
+Rewritten by the tools on every workspace build: do not edit it.
 
 ## Play: goal jobs first
 
@@ -202,7 +210,7 @@ The first suits a body with no bed yet: it waits the night out offline. `./bin/t
         (fail! "workspace bindings differ; choose a new directory"))
       ;; Preflight every destination; never follow symlinks or replace unknown files.
       (doseq [directory [bin (.join path dir "notes")]] (regular! directory true))
-      (doseq [file [(.join path dir "AGENTS.md") (.join path dir "WORKSPACE.md") (.join path dir "briefing.md") (.join path dir "BRIEFING.md")]] (regular! file false))
+      (doseq [file [(.join path dir "AGENTS.md") (.join path dir "PLAYING.md") (.join path dir "WORKSPACE.md") (.join path dir "briefing.md") (.join path dir "BRIEFING.md")]] (regular! file false))
       (doseq [[file content] contents]
         (regular! file false)
         (when (file-exists? file)
@@ -221,6 +229,7 @@ The first suits a body with no bed yet: it waits the night out offline. `./bin/t
                             "# Briefing\n\nRead [the existing mission briefing](BRIEFING.md) and any journal.md before acting. Record new observations and handoffs in notes/. Workspace tool instructions are in WORKSPACE.md.\n"
                             "# Briefing\n\nRecord the mission, constraints, current priorities, and handoff here.\n")]]]
         (when-not (file-exists? file) (.writeFileSync fs file text #js {:flag "wx"})))
+      (.writeFileSync fs (.join path dir "PLAYING.md") playing-md)
       (doseq [[file content] contents]
         (when (or (not (file-exists? file)) update-tools) (.writeFileSync fs file content #js {:mode 493}))
         (.chmodSync fs file 493))

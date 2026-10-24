@@ -47,7 +47,9 @@ test('generator writes EDN bindings and executable tools; reruns preserve agent 
   assert.equal(context.repo, path.resolve(repo))
   for (const command of commands) assert.ok(fs.statSync(path.join(f.workspace, 'bin', command)).mode & 0o111)
   for (const file of ['AGENTS.md', 'briefing.md', 'notes/handoff.md']) fs.writeFileSync(path.join(f.workspace, file), `custom ${file}`)
+  fs.writeFileSync(path.join(f.workspace, 'PLAYING.md'), 'stale recipe')
   assert.equal(f.generate().status, 0)
+  assert.match(fs.readFileSync(path.join(f.workspace, 'PLAYING.md'), 'utf8'), /Play: goal jobs first/, 'the tool-owned guide is rewritten on every run')
   fs.appendFileSync(path.join(f.workspace, 'bin/observe'), '// old generated content\n')
   assert.equal(f.generate().status, 2)
   const stale = path.join(f.workspace, 'bin/drive')
@@ -321,8 +323,8 @@ test('the workspace guide points at the seen-blocks listing for workstations, ch
   assert.match(fs.readFileSync(path.join(f.workspace, 'WORKSPACE.md'), 'utf8'), /`\.\/bin\/observe seen`/)
 })
 
-test('the generated AGENTS.md play recipe names only real jobs and default triggers, in at most 40 lines', t => {
-  const text = fs.readFileSync(path.join(fixture(t).workspace, 'AGENTS.md'), 'utf8')
+test('the generated PLAYING.md play recipe names only real jobs and default triggers, in at most 40 lines', t => {
+  const text = fs.readFileSync(path.join(fixture(t).workspace, 'PLAYING.md'), 'utf8')
   const jobs = [...text.matchAll(/\(jobs\.([a-z-]+)\.([a-z-]+)/g)]
   const triggers = new Set([...fs.readFileSync(path.join(repo, 'engine/src/triggers/defaults.edn'), 'utf8').matchAll(/\{:id :([a-z-]+)/g)].map(m => m[1]))
   assert.ok(jobs.length > 5)
