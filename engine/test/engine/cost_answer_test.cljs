@@ -304,3 +304,10 @@
                   (get (:prices (cost/decide (body 3) {:fight f :flee (cost/flee-answer {:food 20 :mobs [m] :later f})} here)) k)))]
     (is (> (price 1 :flee) (price 1 :fight)) "at 3 hp a zombie beside the body lands its blows while the flight starts")
     (is (< (price 6 :flee) (price 6 :fight)) "one 6 off is left behind before it reaches the body")))
+
+(deftest a-kinds-flight-starts-are-its-own-counts-and-the-pooled-ones-together
+  (settings/with-settings {:jobs.lib.cost.danger/flight-starts {"pooled" {:n 10 :deciles (vec (repeat 10 1))}
+                                                                 "fast" {:n 30 :deciles (vec (repeat 10 0))}}}
+    #(do
+       (is (= (vec (repeat 10 1)) (danger/flight-starts "unseen kind")) "a kind with no row is the pool")
+       (is (= [0 0 0 0 0 0 0 0 1 1] (danger/flight-starts "fast")) "30 starts at 0 and the pool's 10 at 1: the top quarter is the pool's, the 75th percentile still 0"))))

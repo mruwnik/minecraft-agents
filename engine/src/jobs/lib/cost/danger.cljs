@@ -32,7 +32,12 @@
    ::max-rate {:default 4 :doc "Danger price: hp a second one known danger costs at most; above 4 it also raises the total of all dangers a second (the planner's dangerCap)." :spec a/pos-num?}
    ::sprint-food {:default 6 :doc "Food at or under which a body cannot sprint (reach-first?)." :spec (a/int-in 0 20)}
    ::chase-speed {:default 3 :doc "Blocks a second a chasing melee mob covers, a little over a zombie's (reach-first?)." :spec (a/num-in 0.1 nil)}
-   ::flight-starts {:default [0 0 0 0.05 0.37 0.5 0.75 1.08 1.91 4.14] :doc "Seconds from a flight's decision until it gets going, its deciles (flight-starts): the first flee decision from a creeper of each trial run, as the time to 1 block off less that block at sprint speed; n=80 (mean 0.87), 45 of them seen only across a position gap over 1 s and told at the middle of the gap; 71 decisions with no position in the 2 s before and 2 that never moved are left out (where the body stood is unknown). Recount: node tools/event-counts.mjs flight-starts. A blast on the walk is priced over each (cost.answer/flee-mob)." :spec (a/coll-of number?)}
+   ::flight-starts {:default {"pooled" {:n 135 :deciles [0 0 0 0.36 0.47 0.64 0.87 1.2 2.14 4.32]}
+                              "creeper" {:n 80 :deciles [0 0 0 0.05 0.37 0.5 0.75 1.08 1.91 4.14]}
+                              "zombie" {:n 42 :deciles [0 0.15 0.41 0.45 0.5 0.81 0.96 1.09 1.84 2.51]}
+                              "drowned" {:n 5 :deciles [0.68 0.68 1.63 1.63 4.82 4.82 6.95 6.95 9.77 9.77]}
+                              "enderman" {:n 5 :deciles [0.31 0.31 1.15 1.15 1.56 1.56 3.27 3.27 7.52 7.52]}}
+                    :doc "Seconds from a flight's decision until it gets going (flight-starts): for each melee kind that fled, the n and deciles of the first flee decision of each trial run, as the time to 1 block off less that block at sprint speed, and \"pooled\" over all melee kinds (n=135, mean 1.13); a start told across a position gap is told at its middle, and one whose middle is over 10 s after the decision, one with no position in the 2 s before it and one that never moved are left out (where the body stood is unknown). A kind's deciles are its own counts and the pooled counts together (flight-starts), so a kind with few runs is its pool. Recount: node tools/event-counts.mjs flight-starts. A blast on the walk is priced over each (cost.answer/flee-mob)." :spec map?}
    ::flee-walk-speed {:default 3.72 :doc "Blocks a second a flight's steps cover (flee-walk-speed), at food over ::sprint-food; one too hungry to sprint covers body-speed's share of it: 1444 blocks in 389 s of 382 steps (retreat.step-speed, slot :step) of 64 flights of two steps or more, trial logs to 2026-10-23. Recount: tools/event-counts.mjs flee-pace (:bps)." :spec (a/num-in 0.1 nil)}
    ::flee-stop-s {:default 0.23 :doc "Seconds a flight stands between two of its steps while still in flight (a look, a re-decide, a replan, a respond delay), the mean: 46.8 s over 203 such gaps of the same flights; 115 gaps in which the flight had ended (another answer, action or child ran) are left out. Recount: flee-pace (:stop-s, :gaps, :off-gaps)." :spec (a/num-in 0 nil)}
    ::outrun-factor {:default 1.5 :doc "Times a mob's chase speed the body must run to get away from it on foot (outruns?): a flight goes in steps and round obstacles, the mob comes straight on." :spec (a/num-in 0 nil)}
@@ -220,7 +225,17 @@
 
 (defn melee-reach [] (settings/get settings ::melee-reach))
 (defn outrun-factor [] (settings/get settings ::outrun-factor))
-(defn flight-starts [] (settings/get settings ::flight-starts))
+(defn flight-starts
+  "Ten seconds a mob kind's flight stands before it gets going: the deciles of its measured starts and the pooled melee ones counted together
+  (the pool is the prior, as pseudo-counts), each ::flight-starts row's deciles weighing n/10 a value; a kind with no row is the pool."
+  [mob-name]
+  (let [rows (settings/get settings ::flight-starts)
+        weighted (fn [{:keys [n deciles]}] (map #(vector % (/ n 10)) deciles))
+        sample (sort-by first (concat (weighted (get rows "pooled")) (weighted (get rows mob-name))))
+        total (reduce + (map second sample))
+        value-at (fn [q] (loop [[[v w] & more] sample acc 0]
+                           (if (or (nil? more) (>= (+ acc w) (* q total))) v (recur more (+ acc w)))))]
+    (mapv #(value-at (/ (+ % 0.5) 10)) (range 10))))
 
 (defn outruns?
   "Whether a body with food food gets away from every one of mob-names on foot: its flight-speed is at least each one's

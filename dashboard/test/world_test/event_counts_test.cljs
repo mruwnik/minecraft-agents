@@ -41,7 +41,7 @@
   (is (= [(- 1.4 0.2)] (map :s (c/starts [(pos 0 0) (flee 100 "j1") (pos 600 0.5) (pos 1500 2)] 5)))))
 
 (deftest only-the-first-flee-of-a-run-counts-and-a-decision-with-no-recent-position-is-dropped
-  (is (= [{:id ["g" "j1"] :t 5000 :drop :no-pos}] (c/starts [(flee 5000 "j1")] 5)))
+  (is (= [{:id ["g" "j1"] :mob "creeper" :t 5000 :drop :no-pos}] (c/starts [(flee 5000 "j1")] 5)))
   (is (= 1 (count (c/starts [(pos 0 0) (flee 10 "j1") (flee 20 "j1") (pos 500 3)] 5)))))
 
 (deftest a-move-seen-only-across-a-long-gap-is-kept-at-the-middle-of-the-gap
@@ -50,6 +50,19 @@
     (is (true? (:sparse? row)))
     (is (< (js/Math.abs (- 1.25 (:s row))) 1e-9)) ; the middle of (100, 3000] is 1.45 s after the decision, less the block at sprint speed
     (is (= {:n 1 :sparse 1 :no-pos 0 :never 0} (select-keys (c/starts-report rows) [:n :sparse :no-pos :never])))))
+
+(deftest a-start-told-across-a-gap-whose-middle-is-over-give-up-is-no-start
+  (let [rows (c/starts [(pos 0 0) (flee 100 "j1") (pos 60000 2)] 5)]
+    (is (= [:never] (map :drop rows)))
+    (is (= {:n 0 :never 1} (select-keys (c/starts-report [{:id ["g" "j1"] :t 100 :sparse? true :s 30}]) [:n :never])))))
+
+(deftest each-mob-kind-has-its-own-first-flee-and-the-report-splits-them
+  (let [zombie (fn [t job] (rec t :decided :mob "zombie" :decision :flee :job job))
+        rows (c/starts [(pos 0 0) (flee 100 "j1") (zombie 150 "j1") (pos 600 3)] 5)
+        r (c/starts-by-mob rows)]
+    (is (= #{["g" "j1"] ["g" "j1" "zombie"]} (set (map :id rows))))
+    (is (= [1 1] [(get-in r [:by-mob "creeper" :n]) (get-in r [:by-mob "zombie" :n])]))
+    (is (= 2 (get-in r [:melee :n])))))
 
 (deftest deciles-are-the-sorted-values-at-the-tenths-midpoints
   (is (= [0 1 2 3 4 5 6 7 8 9] (c/deciles (range 10)))))

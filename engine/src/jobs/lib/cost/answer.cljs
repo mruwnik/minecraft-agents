@@ -240,7 +240,7 @@
      (cond
        (nil? escape) nil
        (= "creeper" name)
-       (let [starts (danger/flight-starts)
+       (let [starts (danger/flight-starts name)
              swell (/ (max 0 (- d swell-start)) chase)
              spread (mapv #(if (< swell %)
                              (blast-hurt stats (+ (min d swell-start) (* v (max 0 (- fuse-s (- % swell))))))
@@ -250,7 +250,7 @@
        :else
        (let [hurt #(threat/mob-hurt stats (threat/kind m) % identity (reach-rate m))
              in-reach (cond wet [(+ (:in-reach wet) (if (:away? wet) 0 (/ (max 0 (- r d)) gain)))]
-                            (= r (danger/melee-reach)) (map #(start-reach d r chase gain %) (danger/flight-starts))
+                            (= r (danger/melee-reach)) (map #(start-reach d r chase gain %) (danger/flight-starts name))
                             :else [(/ (max 0 (- r d)) gain)])
              damages (map hurt in-reach)
              damage (mean damages)

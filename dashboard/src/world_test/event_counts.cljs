@@ -7,7 +7,7 @@
   look tool's :look.observed lists; :capped counts the lists the tool cut short (nearest first, so a far group may be cut).
   creeper-exchange: respond runs that only decided about creepers and fought (a :fight decision) with at least one swing: hp the creepers
   dealt (hurt events inside the run) per swing (attack that hit or killed), overall and per weapon equipped in the run, and the runs with a blast over 2 hp.
-  flight-starts: the first flee decision of each respond run from a creeper: seconds until the body is 1 block from where it stood,
+  flight-starts: the first flee decision of each respond run from each mob kind, reported pooled and per kind: seconds until the body is 1 block from where it stood,
   less that block at sprint speed (action done and planned events carry the body's position, so the stream is sparse); the deciles are the values at
   (i + 0.5) / 10 of the sorted starts.
   notice-rate: the hostiles a watch first saw within their follow range (watch.saw, one per mob that became known; provoked-only mobs left out), each followed until it
@@ -176,15 +176,21 @@
 
 (defn dist [a b] (js/Math.sqrt (+ (js/Math.pow (- (:x a) (:x b)) 2) (js/Math.pow (- (:y a) (:y b)) 2) (js/Math.pow (- (:z a) (:z b)) 2))))
 
+(defn ranged-mob? [mob] (threat/ranged? {:name mob}))
+
+(defn start-id [{:keys [gen job mob]}] (if (= "creeper" mob) [gen job] [gen job mob]))
+
 (defn starts
-  "The first flee decision from a creeper of each respond run (records sorted by :t), as {:id [gen job] :t decision-ms :s seconds :sparse? bool} until the
+  "The first flee decision from each mob kind of each respond run (records sorted by :t), as {:id :mob :t decision-ms :s seconds :sparse? bool}, :id [gen job] for a
+  creeper and [gen job mob] for any other kind, until the
   body is stay-m from where it stood, less that block at sprint speed; or {:id :t :drop :no-pos|:never}: no position within pos-age-ms before
   the decision (where it stood is unknown), or none moved in give-up-ms. A move first seen across a gap over sparse-ms is kept, told at
-  the middle of the gap (the true moment lies in it), flagged :sparse?."
+  the middle of the gap (the true moment lies in it), flagged :sparse?; one whose middle of the gap is over give-up-ms after the
+  decision is :never."
   [records sprint]
   (let [first-flee (->> records
-                        (filter #(and (= :decided (:k %)) (= "creeper" (:mob %)) (= :flee (:decision %))))
-                        (reduce (fn [acc r] (let [id [(:gen r) (:job r)]] (if (acc id) acc (assoc acc id r)))) {})
+                        (filter #(and (= :decided (:k %)) (:mob %) (= :flee (:decision %))))
+                        (reduce (fn [acc r] (let [id (start-id r)] (if (acc id) acc (assoc acc id r)))) {})
                         vals set)
         secs (fn [t0 t] (max 0 (- (/ (- t t0) 1000) (/ stay-m sprint))))]
     (->> records
@@ -194,20 +200,22 @@
                                 st
                                 (let [p (get last-pos gen)]
                                   (if (and p (<= (- t (:t p)) pos-age-ms))
-                                    (update st :pending conj {:gen gen :id [gen job] :t t :from p})
-                                    (update st :out conj {:id [gen job] :t t :drop :no-pos}))))
+                                    (update st :pending conj {:gen gen :id (start-id r) :mob (:mob r) :t t :from p})
+                                    (update st :out conj {:id (start-id r) :mob (:mob r) :t t :drop :no-pos}))))
                      :pos (let [{here true waiting false} (group-by #(= gen (:gen %)) pending)
                                 {moved true still false} (group-by #(>= (dist r (:from %)) stay-m) here)
-                                {late true wait false} (group-by #(> (- t (:t %)) give-up-ms) still)
                                 tl (get-in last-pos [gen :t])
-                                sparse? (> (- t tl) sparse-ms)]
+                                {late true wait false} (group-by #(> (- t (:t %)) give-up-ms) still)
+                                sparse? (> (- t tl) sparse-ms)
+                                told (fn [m] (/ (+ (max tl (:t m)) t) 2))
+                                {unseen true seen false} (group-by #(and sparse? (> (- (told %) (:t %)) give-up-ms)) moved)]
                             (-> st
                                 (assoc-in [:last-pos gen] r)
                                 (assoc :pending (vec (concat waiting wait)))
-                                (update :out into (map (fn [m] {:id (:id m) :t (:t m) :drop :never})) late)
-                                (update :out into (map (fn [m] {:id (:id m) :t (:t m) :sparse? sparse?
-                                                                :s (secs (:t m) (if sparse? (/ (+ (max tl (:t m)) t) 2) t))}))
-                                        moved)))
+                                (update :out into (map (fn [m] {:id (:id m) :mob (:mob m) :t (:t m) :drop :never})) (concat late unseen))
+                                (update :out into (map (fn [m] {:id (:id m) :mob (:mob m) :t (:t m) :sparse? sparse?
+                                                                :s (secs (:t m) (if sparse? (told m) t))}))
+                                        seen)))
                      st))
                  {:last-pos {} :pending [] :out []})
          :out)))
@@ -254,12 +262,22 @@
       (mapv #(/ (js/Math.round (* 100 (nth v (min (dec n) (js/Math.floor (* (/ (+ % 0.5) 10) n)))))) 100) (range 10)))))
 
 (defn starts-report
-  "n, mean and deciles of the kept starts (rows of starts), how many were told across a gap, and the dropped decisions by reason."
+  "n, mean and deciles of the kept starts (rows of starts), how many were told across a gap, and the dropped decisions by reason. A row
+  counted before a gap's middle was limited to give-up-ms (sparse, over give-up-ms of seconds) is a :never."
   [rows]
-  (let [xs (keep :s rows)
+  (let [rows (map #(if (and (:sparse? %) (> (:s %) (/ give-up-ms 1000))) {:id (:id %) :mob (:mob %) :t (:t %) :drop :never} %) rows)
+        xs (keep :s rows)
         n (count xs)]
     {:n n :mean (when (pos? n) (/ (js/Math.round (* 100 (/ (reduce + 0 xs) n))) 100)) :deciles (deciles xs)
      :sparse (count (filter :sparse? rows)) :no-pos (count (filter #(= :no-pos (:drop %)) rows)) :never (count (filter #(= :never (:drop %)) rows))}))
+
+(defn starts-by-mob
+  "starts-report of all rows (:all), of those of melee kinds (:melee: not threat/ranged?, the kinds danger/flight-starts prices) and of each
+  mob kind's (:by-mob; a row counted before kinds were kept is a creeper's)."
+  [rows]
+  {:all (starts-report rows)
+   :melee (starts-report (remove #(ranged-mob? (or (:mob %) "creeper")) rows))
+   :by-mob (into (sorted-map) (map (fn [[mob rs]] [mob (starts-report rs)])) (group-by #(or (:mob %) "creeper") rows))})
 
 ;; The durable counts: the rows of each prior by run id, so the counts only grow while the raw logs rotate away.
 (def empty-counts {:exchange {} :starts {} :notices {} :drowned-exposure {} :drowned-meets {} :flight-steps {}})
@@ -289,8 +307,6 @@
     (fs/mkdirSync (path/dirname file) #js {:recursive true})
     (fs/writeFileSync tmp (str (pr-str counts) "\n"))
     (fs/renameSync tmp file)))
-
-(defn ranged-mob? [mob] (threat/ranged? {:name mob}))
 
 (defn reach-of
   "Blocks from the body within which mob can catch it: a ranged one by its line of fire out to its kind's threat/fire-range, any other by melee reach."
@@ -457,7 +473,7 @@
      (case cmd
        "fold" (do (println (pr-str (update-vals folded count))) 0)
        "creeper-exchange" (do (println (pr-str (assoc (exchange-report (since (:exchange folded))) :since-ms since-ms))) 0)
-       "flight-starts" (do (println (pr-str (assoc (starts-report (since (:starts folded))) :since-ms since-ms :sprint sprint))) 0)
+       "flight-starts" (do (println (pr-str (assoc (starts-by-mob (since (:starts folded))) :since-ms since-ms :sprint sprint))) 0)
        "water-lags" (let [dir (path/join agents ".." "chunks")]
                       (println (pr-str (water-lags/count-in dir (cell-reader open-chunks dir) stride)))
                       0)
