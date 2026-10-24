@@ -57,6 +57,7 @@
 (def told-kind "Body memory kind of the tools told low (:name, :durability), so a later job does not tell it again." :tool.low-told)
 
 (def no-spare-told-kind "Body memory kind of the tools whose missing spare was told (:name), so no later job tells it again." :tool.no-spare-told)
+(def spare-skip-told-kind "Body memory kind of the tools whose dear spare was skipped as not worth it (:name), so the dig steps of one trip tell it once." :tool.spare-skip-told)
 
 (defn low-told?
   "Whether this tool (snapshot) was told low already and has not been replaced: an entry of its name at or above its durability."

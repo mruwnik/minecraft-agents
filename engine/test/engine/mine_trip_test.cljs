@@ -4,6 +4,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.fake :as fake]
+            [jobs.lib.need :as need]
             [engine.mine-support :as m :refer [as-child rock-world inv cells]]
             [engine.test-util :as tu]))
 
@@ -103,5 +104,24 @@
                                    (assoc (rock-world {}) :inventory [{:name "iron_pickaxe" :count 1 :durability 250 :max-durability 250} {:name "cobblestone" :count 8}])
                                    300))
               e (m/done-event s)]
+          (let [ev (first (m/events-of s :tool.spare-skipped))]
+            (is (= ["stone_pickaxe" "iron_pickaxe" :not-worth] ((juxt :tool :item :reason) ev)) (pr-str ev))
+            (is (< (:worth ev) (:price ev)) "the start price passed the wear saved")
+            (is (= 1 (count (m/events-of s :tool.spare-skipped))) (pr-str (map #(select-keys % [:job :slot :t :id]) (m/events-of s :tool.spare-skipped)))))
           (is (= [] (into [] (comp (map (comp str :job)) (filter #(re-find #"/spare(/|$)" %)) (distinct)) @(:seen s))) "a spare dearer than the wear it saves is not looked for")
           (is (= [:tunnel-length 4] [(:stop e) (:length e)]) (pr-str (dissoc e :report))))))))
+
+(deftest a-dear-spare-whose-start-check-only-waits-is-asked-again-not-given-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [orig need/item-status
+              asked (atom 0)]
+          (set! need/item-status (fn [& _] (swap! asked inc) [:later "waiting" {:reason :no-source}]))
+          (let [s (try (await (m/scenario {:block "coal_ore" :count 1 :direction "east" :tunnel-length 4 :radius 8 :torches false :trip true}
+                                          (assoc (rock-world {}) :inventory [{:name "iron_pickaxe" :count 1 :durability 250 :max-durability 250} {:name "cobblestone" :count 8}])
+                                          300))
+                       (finally (set! need/item-status orig)))]
+            (is (pos? @asked) "the start check was asked")
+            (is (nil? (:spare-tried (m/job-mem s))) "a wait that is not :not-worth does not give the spare up for the job")
+            (is (empty? (m/events-of s :tool.spare-skipped)))))))))
