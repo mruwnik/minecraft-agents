@@ -8,7 +8,7 @@
   chasers have given the body up there. Ring
   routes plan through unseen cells as through seen ones (no rock guess), a flee step walks only the seen part.
   Each end is priced (the planner's price plus the death the route risks from the known threats not chasing and the mobs
-  met spawning on it (spawn-light/spawns-over), a death about where the body stands: cost/route-death-cost, plus, when a dead end where it runs unseen would cut the way back, the chasers met on that way: unseen-price, scored) and scored against
+  met spawning on it (spawn-light/spawns-over), a death about where the body stands: cost/route-death-cost, plus the chasers met on the way back from an unseen dead end: unseen-price) and scored against
   the chasers: :arrive, the seconds the first of them takes to reach it (cost/arrival-s over its way, its threat
   field's; the body timed at cost/flee-walk-speed, cost/flee-stop-s between steps); :caught-s, the seconds one is within its blow on the route
   (cost/reach-s), :caught? whether that is any; :score, arrive less price. pick chooses a flee step's end."
@@ -141,9 +141,8 @@
 
 (defn unseen-price
   "Seconds the unseen part of r (seen-split) adds to its planner price (whose mask prices the unseen cells themselves,
-  cost/unseen-share) when a dead end at its first unseen cell traps the body (way-back-cut?): cost/dead-end-cost of
-  counts (wworld/way-counts) and trapped-at its last seen cell, what the chasers met there on the way back cost; 0 when
-  it saw it all."
+  cost/unseen-share): cost/dead-end-cost of counts (wworld/way-counts) and trapped-at its last seen cell, what the
+  chasers met there on the way back cost; 0 when it saw it all."
   [{:keys [cells seen-n unseen]} counts trapped-at]
   (if-not unseen
     0
@@ -225,7 +224,7 @@
 
 (defn ^:async price!
   "Each of targets (named ones {:pos :range :kind}, then ring ends {:x :z}) planned from where the body stands (see the ns
-  doc): [{:target :found? :open? :end :s :priced :price :dead-end :cells :seen-n :unseen}] (:open? found, or a ring end whose
+  doc): [{:target :found? :open? :end :s :priced :price :cells :seen-n :unseen}] (:open? found, or a ring end whose
   partial route ends where the chasers have given the body up: given-up?), the ones the planner found no way nearer to, and the ring ends
   left when ::ring-nodes ran out (named ones have their own node cap), left out; its meta {:nodes :planned :unrouted} the nodes
   expanded, the targets planned and why the ones with no route had none (the planner's reason: count). opts {:y-margin :chasers}: blocks past body and end the routes may plan, the chasers (their danger is the race, so death-chance weighs only the other known threats; met on the
@@ -270,8 +269,8 @@
                                              :open? (or (:found? r) (and (nil? (:pos t)) (given-up? chasers (:end r))))
                                              :price (+ (:priced r)
                                                        (let [spawns (spawn-light/spawns-over p (:cells r))]
-                                                         (cost/route-death-cost body {:cells (dwelt (:cells r)) :threats others :spawns spawns :spawn-kill (when (pos? spawns) @spawn-kill)} pos)))
-                                             :dead-end (unseen-price r counts trapped-at)))
+                                                         (cost/route-death-cost body {:cells (dwelt (:cells r)) :threats others :spawns spawns :spawn-kill (when (pos? spawns) @spawn-kill)} pos))
+                                                       (unseen-price r counts trapped-at))))
                           out)
                    (+ nodes spent)
                    (cond-> ring-left (nil? (:pos t)) (- spent))
@@ -304,57 +303,25 @@
   themselves by price."
   1e6)
 
-(defn caught-s
-  "The most seconds a chaser not :calm? is within its blow on timed cells, past the cells it reaches without moving
-  (those the flight's start pays, cost.answer/flee-mob): cost/reach-s, no race margin (a margin is for a race to one place)."
-  [chasers cells]
-  (reduce max 0 (map (fn [ch]
-                       (let [way #(way-at ch %)
-                             past (drop-while #(zero? (cost/arrival-s (:name ch) (:pos ch) % (way %))) cells)]
-                         (cost/reach-s {:chaser (:name ch) :pos (:pos ch) :route (vec past) :way way})))
-                     (remove :calm? chasers))))
-
-(defn escape
-  "The timed cells of a flight on route r (seen-split's) that finds its way shut at its first unseen cell: on to its
-  last seen cell, back to where e's route leaves r's, then on along e."
-  [r e]
-  (let [seen (subvec (:cells r) 0 (:seen-n r))
-        f (dec (count (take-while true? (map #(= (cell-of %1) (cell-of %2)) seen (:cells e)))))
-        turn (* 2 (:t (peek seen)))
-        at-fork (- turn (:t (nth seen f)))
-        e-fork (:t (nth (:cells e) f))]
-    (-> seen
-        (into (map #(assoc % :t (- turn (:t %)))) (rseq (subvec seen f (dec (count seen)))))
-        (into (map #(update % :t + (- at-fork e-fork))) (subvec (:cells e) (inc f))))))
-
-(defn way-back-cut?
-  "Whether a dead end at r's first unseen cell traps the body: every other way out (ends, open or running on unseen,
-  not caught, not through that cell) is caught walked after the way in and back (escape), or there is none."
-  [chasers r ends]
-  (let [shut (cell-of (nth (:cells r) (:seen-n r)))
-        others (filter #(and (not (identical? % r)) (or (:open? %) (:unseen %)) (not (:caught? %)) (not (:cover? %))
-                             (not-any? (fn [c] (= shut (cell-of c))) (:cells %)))
-                       ends)]
-    (not-any? #(zero? (caught-s chasers (escape r %))) others)))
-
 (defn scored
   "priced (price!) scored against chasers [{:name (mob-kind) :pos}] from where the body stands (from): :arrive (the
   seconds the first chaser takes to the end, ##Inf with none), :gain (arrive less the chasers' arrival at from: what
-  the walk buys over standing still; 0 where no chaser can get to the body already), :caught-s (caught-s of its
-  route), :caught? (one lands a blow: caught-s over 0) and :score (see the ns doc); :price takes :dead-end on when the
-  route reaches its first unseen cell and a dead end there cuts the way back (way-back-cut?)."
+  the walk buys over standing still; 0 where no chaser can get to the body already), :caught-s (the most seconds a
+  chaser not :calm? is within its blow on the route past the cells it reaches without moving (those the flight's start
+  pays, cost.answer/flee-mob), cost/reach-s: no race margin, a margin is for a race to one place), :caught? (one lands a blow: caught-s over 0) and :score (see the ns doc)."
   [chasers from priced]
-  (let [here (arrive-at chasers from)
-        raced (mapv (fn [{:keys [end cells] :as e}]
-                      (let [arrive (arrive-at chasers end)
-                            c-s (caught-s chasers cells)]
-                        (assoc e :arrive arrive :gain (if (js/isFinite here) (- arrive here) 0) :caught-s c-s :caught? (pos? c-s))))
-                    priced)]
-    (mapv (fn [{:keys [arrive price dead-end cells seen-n] :as e}]
-            (let [price (cond-> price
-                          (and (pos? (or dead-end 0)) (< seen-n (count cells)) (way-back-cut? chasers e raced)) (+ dead-end))]
-              (assoc e :price price :score (- (min arrive unreached-s) price))))
-          raced)))
+  (let [here (arrive-at chasers from)]
+    (mapv (fn [{:keys [end cells price] :as e}]
+          (let [arrive (arrive-at chasers end)
+                caught-s (reduce max 0 (map (fn [ch]
+                                              (let [way #(way-at ch %)
+                                                    past (drop-while #(zero? (cost/arrival-s (:name ch) (:pos ch) % (way %))) cells)]
+                                                (cost/reach-s {:chaser (:name ch) :pos (:pos ch) :route (vec past) :way way})))
+                                            (remove :calm? chasers)))]
+            (assoc e :arrive arrive :gain (if (js/isFinite here) (- arrive here) 0)
+                     :caught-s caught-s :caught? (pos? caught-s)
+                     :score (- (min arrive unreached-s) price))))
+        priced)))
 
 (defn covers
   "Ends on the routes of scored where cover first holds (covered?: a cell -> whether it is out of every ranged mob's line
@@ -365,9 +332,8 @@
                   (when-let [i (first (keep-indexed #(when (and (pos? %1) (covered? (select-keys %2 [:x :y :z]))) %1) cells))]
                     (let [part (subvec cells 0 (inc i))
                           share (if (pos? s) (/ (:t (peek part)) s) 1)]
-                      (-> (assoc e :end (select-keys (peek part) [:x :y :z]) :cells part :cover? true :found? true :open? true
-                                   :s (:t (peek part)) :price (* share price) :priced (* share priced))
-                          (dissoc :dead-end)))))
+                      (assoc e :end (select-keys (peek part) [:x :y :z]) :cells part :cover? true :found? true :open? true
+                               :s (:t (peek part)) :price (* share price) :priced (* share priced)))))
                 ends)))
 
 (defn hazard-near?
