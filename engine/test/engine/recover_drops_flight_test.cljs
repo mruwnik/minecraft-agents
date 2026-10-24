@@ -130,13 +130,13 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [zombie {:id 8 :name "zombie" :kind "hostile" :pos {:x 20 :y 64 :z 3}}
+        (let [zombie {:id 8 :name "zombie" :kind "hostile" :pos {:x 19.5 :y 64 :z 1.5}}
               {:keys [eng p seen clock]} (setup {:floor tu/walk-floor :inventory dt/sword :entities (conj (vec (pile-drops dt/diamonds)) zombie)})]
           (die! eng {:pos dt/death-pos :inventory dt/diamonds})
           (on-first-leg! p clock (fn []
                              (swap! (fake/state p) assoc-in [:self :health] 2)
                              (mem/write! (:store eng) :hurt {:amount 18 :health 2 :attacker {:id 8 :name "zombie"}} {:cap 50 :ttl 60000})))
-          (core/submit! eng (list 'jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/leg-s 1}}) {})
+          (core/submit! eng (list 'jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/leg-s 1} :value-overrides (:value-overrides (second dear-zombie))}) {})
           (await (run-until-empty eng 30))
           (is (some? (dt/danger-remembered eng)) "hit and low, the trip backs off")
           (is (nil? (recovered eng)) "the death stays open"))))))

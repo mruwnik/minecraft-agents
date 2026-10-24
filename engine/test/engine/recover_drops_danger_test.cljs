@@ -23,10 +23,15 @@
   (die! eng data ago-ms)
   (core/record-death! eng (mem/latest (mem/view (:store eng)) :died)))
 
+(def cheap-pile
+  "recover-drops with the field-report pile worth about 600 s: less than the walk past its skeleton killer costs an unarmed body."
+  '(jobs.survival.recover-drops {:value-overrides {"raw_iron" 20 "cobblestone" 0.5 "oak_planks" 0.5}}))
+
 (defn fetch-run
-  "Die with the field-report pile and cause, run the job to its decision."
+  "Die with the field-report pile and cause, run the job (job by default) to its decision."
   ([cause] (fetch-run cause {}))
-  ([cause body]
+  ([cause body] (fetch-run cause body job))
+  ([cause body job]
   (let [pile dt/death-pile-of-the-field-report]
     (fn ^:async t []
       (let [{:keys [eng seen]} (setup (merge {:floor tu/walk-floor :entities (vec (pile-drops pile))} body))]
@@ -66,7 +71,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (await ((fetch-run "skeleton")))]
+        (let [{:keys [eng seen]} (await ((fetch-run "skeleton" {} cheap-pile)))]
           (is (nil? (recovered eng)) "a danger skip stays open")
           (is (re-find #"skip: .*danger [1-9][0-9.]*,.*: skeleton" (decided-text eng))))))))
 
@@ -82,7 +87,7 @@
           (await (run-until-empty eng 20))
           (is (= :collected (:decision (recovered eng))) "a death on the way costs a short walk back, not the pile"))))))
 
-(deftest a-whole-iron-kit-is-left-to-a-pack-of-skeletons-that-would-kill-an-unarmed-body
+(deftest a-pack-of-skeletons-at-a-whole-iron-kit-is-priced-against-it
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -94,8 +99,7 @@
           (die! eng {:pos dt/death-pos :inventory pile :cause "skeleton"})
           (core/submit! eng job {})
           (await (run-until-empty eng 20))
-          (is (nil? (recovered eng)))
-          (is (re-find #"^skip: .*danger [1-9][0-9.]*,.*: skeleton" (decided-text eng)))
+          (is (re-find #"danger [1-9][0-9.]*,.*: skeleton, skeleton, skeleton" (decided-text eng)) "the pack at the pile is the walk's danger")
           (is (< 3600 (js/parseFloat (second (re-find #"value ([0-9.]+)" (decided-text eng))))) "the kit is priced at hours"))))))
 
 (deftest a-body-with-an-iron-sword-and-armour-goes-for-the-guarded-pile
@@ -246,7 +250,7 @@
               {:keys [eng p seen]} (setup {:floor tu/walk-floor :entities (vec (pile-drops pile))})]
           (die-noted! eng {:pos dt/death-pos :inventory pile :cause "skeleton"} 120000)
           (die-noted! eng {:pos (update dt/death-pos :x - 6) :inventory [] :cause "skeleton"} 5000)
-          (core/submit! eng job {})
+          (core/submit! eng cheap-pile {})
           (await (run-until-empty eng 5))
           (is (re-find #"skip: value [1-9].*: skeleton" (decided-text eng)) (decided-text eng))
           (is (= [] (tu/walk-calls p))))))))
