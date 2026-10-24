@@ -23,6 +23,8 @@
                             :else 2))))
            a)))
 
+(def ^:private way-cap "Most unseen ways scan lists." 6)
+
 (defn cell-fn
   "(fn [x y z]) the class of a remembered cell: -1 not seen, 0 neither passed nor stood on (lava), 1 passed (no
   collision), 2 stood on (collision), 3 both (water); known: (fn [cx sy cz]) the memory's ids + 1 of a section."
@@ -56,20 +58,39 @@
 (def ^:private dxs #js [1 -1 0 0])
 (def ^:private dzs #js [0 0 1 -1])
 
-(defn way-counts
-  "{:k :n} over the seen stands a body could walk to, nearest start ([x y z] feet cell) first (at most ::sample of them,
+(defn side-read
+  "What lies one step from stand [x y z] toward d (0-3, dxs/dzs): {:ny the stand's y when the way goes on level, up or down, else nil; :level :up :down 1 passable, 0 not, -1 not seen}. at: cell-fn."
+  [at x y z d]
+  (let [nx (+ x (aget dxs d)) nz (+ z (aget dzs d))
+        col #(at nx (+ y %) nz)
+        level (all-of (holds (col -1)) (pass (col 0)) (pass (col 1)))
+        up (all-of (holds (col 0)) (pass (col 1)) (pass (col 2)) (pass (at x (+ y 2) z)))
+        down (all-of (holds (col -2)) (pass (col -1)) (pass (col 0)) (pass (col 1)))]
+    {:nx nx :nz nz :level level :up up :down down
+     :ny (cond (== level 1) y (== up 1) (inc y) (== down 1) (dec y))}))
+
+(defn way-outcome
+  "Whether the first step of a logged way [x y z d] (a stand and a side, ways in scan) goes on now that the body's memory (known) may hold its cells: true a passable step, false a wall (none of level, up, down passable), nil a cell still unseen."
+  [known [x y z d]]
+  (let [{:keys [ny level up down]} (side-read (cell-fn known) x y z d)]
+    (cond ny true
+          (and (zero? level) (zero? up) (zero? down)) false)))
+
+(defn scan
+  "{:k :n :ways} over the seen stands a body could walk to, nearest start ([x y z] feet cell) first (at most ::sample of them,
   breadth first over the ways between them, and at most 8 times that many expanded): n the stands whose every side is seen
   (but one entered from a seen stand with no other way on: the corridor it is in counts once), k those from which a way onward,
   not back through the stand they were entered by, leads out to cells not seen (or to stands past the sample); the
   rest are dead ends: a shut corridor, a closed room (a wall beside a way is no way). A stand with a side not seen is
   left uncounted, as is a level way with a cell not seen within 2 cells of start, gone through (the cells by the feet a
   body looking ahead has not seen); farther unseen cells are the worse case, not passed. known: (fn [cx sy cz]) the
-  memory's ids + 1 of a section."
+  memory's ids + 1 of a section. :ways: the first way into cells not seen (a stand and a side [x y z d], not the cells by the feet), nearest the start first, at most way-cap of them."
   [known [sx sy sz]]
   (let [at (cell-fn known)
         cap (settings/get settings ::sample)
         qx #js [sx] qy #js [sy] qz #js [sz]
         qp #js [-1]
+        ways #js []
         adj #js [#js []]
         open #js [false]
         seen-all #js [false]
@@ -101,16 +122,13 @@
                           (loop [d 0 unseen? false]
                             (if (== d 4)
                               unseen?
-                              (let [nx (+ x (aget dxs d)) nz (+ z (aget dzs d))
-                                    col #(at nx (+ y %) nz)
-                                    level (all-of (holds (col -1)) (pass (col 0)) (pass (col 1)))
-                                    up (all-of (holds (col 0)) (pass (col 1)) (pass (col 2)) (pass (at x (+ y 2) z)))
-                                    down (all-of (holds (col -2)) (pass (col -1)) (pass (col 0)) (pass (col 1)))
-                                    ny (cond (== level 1) y (== up 1) (inc y) (== down 1) (dec y))]
+                              (let [{:keys [nx nz level up down ny]} (side-read at x y z d)]
                                 (cond
                                   ny (do (visit! nx ny nz i) (recur (inc d) unseen?))
                                   (and (zero? level) (zero? up) (zero? down)) (recur (inc d) unseen?)
-                                  (neg? level) (do (when (<= (max (js/Math.abs (- nx sx)) (js/Math.abs (- nz sz))) blind) (visit! nx y nz i))
+                                  (neg? level) (do (if (<= (max (js/Math.abs (- nx sx)) (js/Math.abs (- nz sz))) blind)
+                                                     (visit! nx y nz i)
+                                                     (when (< (.-length ways) way-cap) (.push ways #js [x y z d])))
                                                    (recur (inc d) true))
                                   :else (recur (inc d) (or unseen? (neg? up) (neg? down)))))))
                           seen? (and (pos? i) (not unseen?))
@@ -121,4 +139,9 @@
                       (when counted? (.push found i))
                       (recur (inc i) (if counted? (inc stands) stands) found))))]
     (let [n (.-length counted)]
-      {:k (count (filter out? counted)) :n n})))
+      {:k (count (filter out? counted)) :n n :ways (mapv vec ways)})))
+
+(defn way-counts
+  "{:k :n} of scan."
+  [known start]
+  (select-keys (scan known start) [:k :n]))

@@ -66,7 +66,7 @@
   [^js unknown light-cost light-ok]
   (js/Object.assign #js {} unknown #js {:lightCost light-cost :torchBase (torch-base) :lightOk light-ok}))
 
-(defn- memory-sections
+(defn memory-sections
   "(fn [cx sy cz]) the ids of the body's memory of that section (sy the world's section y; ids + 1, 0 never seen), or nil;
   nil without a perception."
   [p]

@@ -26,7 +26,8 @@
             [jobs.lib.look :as look]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
-            [jobs.lib.walk-pick :as pick]))
+            [jobs.lib.walk-pick :as pick]
+            [jobs.lib.walk.way-log :as way-log]))
 
 (def doc
   "A hostile is near: fight it (jobs.combat.attack) when the odds are fair, else flee; one whole attempt per round, deciding
@@ -151,6 +152,7 @@
       (ctx/emit! c :hostile.decided :info (cond-> (assoc (dissoc entry :from :run) :text (encounter-text entry prev))
                                             prices (assoc :prices (update-vals prices js/Math.round))
                                             cover (assoc :cover cover)))
+      (way-log/log-priced! c)
       (ctx/update-mem! c assoc :logged decision :run-at run))))
 
 (defn fight-struck
@@ -431,6 +433,7 @@
   (when-not (contains? (ctx/mem c) :goal)
     (ctx/update-mem! c assoc :goal (goal/interrupted-goal (ctx/view c) (:root c))))
   (loop [unchanged 0 looks 0]
+    (way-log/resolve! c)
     (let [hs (near c)
           before (signature c hs)
           outcome (cond

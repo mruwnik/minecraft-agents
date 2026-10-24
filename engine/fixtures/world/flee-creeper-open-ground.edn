@@ -20,4 +20,14 @@
    :expect [{:event {:source :job :kind :retreat.step-speed :data {:bps [:>= 3]}} :within-s 10}
             {:no-event {:source :job :kind :retreat.step-speed :data {:bps [:< 2] :seconds [:>= 0.8]}} :for-s 10}
             {:no-event {:source :body :kind :died} :for-s 15}]
-   :limit-s 40}]}
+   :limit-s 40}
+  {:name "flee-decision-logs-the-way-on-inputs-it-priced"
+   :body {:at [60.5 3 16.5] :yaw -90}
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 16 minecraft:generic"]
+         [:summon "creeper" [68.5 3 16.5]]
+         [:wait-s 3]]
+   ;; the counts and the light the flee decision priced with, for node tools/event-counts.mjs way-on
+   :expect [{:event {:source :job :kind :way-on.priced :data {:set :lit :k [:>= 0] :n [:>= 0]}} :within-s 10}
+            {:no-event {:source :body :kind :died} :for-s 10}]
+   :limit-s 30}]}

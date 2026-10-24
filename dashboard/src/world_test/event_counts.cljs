@@ -1,6 +1,6 @@
 (ns world-test.event-counts
   "tools/event-counts.mjs: recounts the measured combat priors from the trial bodies' event logs, so a setting can cite its k and n.
-  Commands: fold | creeper-exchange | flight-starts | notice-rate | drowned-meets (world-test.drowned-meets; trial bodies only) | flee-pace (trial bodies only), each [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S]; each folds the logs into the durable counts file first (rows by run id, so counts only grow as logs rotate).
+  Commands: fold | creeper-exchange | flight-starts | notice-rate | way-on (world-test.way-prior; counts the logs alone, no fold) | drowned-meets (world-test.drowned-meets; trial bodies only) | flee-pace (trial bodies only), each [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S]; each folds the logs into the durable counts file first (rows by run id, so counts only grow as logs rotate).
   spot-returns [--agents DIR] (world-test.spot-returns) and vein-seen [--agents DIR] count from the logs alone, no fold;
   water-lags [--agents DIR] [--stride N] (world-test.water-lags) from the recorded chunks beside DIR.
   vein-seen: the ore blocks one look saw together (26-connected, a vein's plain and deepslate blocks as one ore) per group, from the
@@ -36,7 +36,8 @@
             [world-test.drowned-meets :as drowned]
             [world-test.fresh-drop :as fresh-drop]
             [world-test.spot-returns :as spot-returns]
-            [world-test.water-lags :as water-lags]))
+            [world-test.water-lags :as water-lags]
+            [world-test.way-prior :as way-prior]))
 
 (def blast-hp "hp over which one hurt event from a creeper is its blast." 2)
 (def tail-ms "Time after a run ends within which a hurt still counts as its own." 1500)
@@ -461,19 +462,33 @@
         have (set logs)]
     (remove #(and (str/ends-with? % ".gz") (have (str/replace % #"\.gz$" ""))) logs)))
 
-(defn read-agent
-  "The records of one body's event files since since-ms, sorted by time."
-  [dir since-ms]
+(defn event-lines
+  "The lines of one body's event files (dir)."
+  [dir]
   (->> (event-files (array-seq (fs/readdirSync dir)))
        (mapcat (fn [f]
                  (let [p (path/join dir f)
                        text (if (str/ends-with? f ".gz") (.toString (zlib/gunzipSync (fs/readFileSync p)) "utf8") (fs/readFileSync p "utf8"))]
-                   (keep scan-line (str/split-lines text)))))
+                   (str/split-lines text))))))
+
+(defn way-events
+  "The :way-on.* events of one body's files since since-ms, as maps."
+  [dir since-ms]
+  (->> (event-lines dir)
+       (filter #(str/includes? % ":kind :way-on."))
+       (map reader/read-string)
+       (filter #(>= (:time-ms %) since-ms))))
+
+(defn read-agent
+  "The records of one body's event files since since-ms, sorted by time."
+  [dir since-ms]
+  (->> (event-lines dir)
+       (keep scan-line)
        (filter #(>= (:t %) since-ms))
        (sort-by :t)
        vec))
 
-(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | spot-returns | vein-seen | water-lags [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N]
+(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | way-on | spot-returns | vein-seen | water-lags [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N]
   every command first folds the logs into the counts file (default worlds/test/priors-counts.edn), then reports from the file; --since-ms keeps the rows of fights started after it.")
 
 (defn- parse-args [argv]
@@ -535,6 +550,10 @@
        "vein-seen" (do (println (pr-str (vein-seen (mapcat #(read-agent (path/join agents % "engine") since-ms)
                                                        (filter #(fs/existsSync (path/join agents % "engine")) (array-seq (fs/readdirSync agents)))))))
                        0)
+       "way-on" (let [per (for [b (array-seq (fs/readdirSync agents)) :when (fs/existsSync (path/join agents b "engine"))]
+                            (way-prior/places (way-events (path/join agents b "engine") since-ms)))]
+                  (println (pr-str (assoc (way-prior/report (mapcat :places per) (reduce + (map :unread per))) :since-ms since-ms)))
+                  0)
        "flee-pace" (do (println (pr-str (assoc (pace-report (since (:flight-steps folded))) :since-ms since-ms))) 0)
        "notice-rate" (do (println (pr-str (assoc (notice-report (since (:notices folded))) :since-ms since-ms))) 0)
        (do (js/console.error usage) 2)))))

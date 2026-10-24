@@ -145,3 +145,12 @@
         known (known-of (fn [cell] (not (or (o cell) (contains? ladder cell)))) ladder seen-box)]
     (is (= {:k 2 :n 3} (way-on/way-counts known [0 64 0]))
         "the start is a ladder cell nobody stands on: the step off it has no way back, so its shut stub and open corridor both count")))
+
+(deftest the-first-unseen-ways-are-listed-and-read-once-their-cells-are-seen
+  (let [wide [-12 60 -8 12 68 8]
+        corridor (fn [open-x?] (known-of (fn [[x y z]] (not (and (= z 0) (#{64 65} y) (open-x? x)))) {} wide))]
+    (is (= [[8 64 0 0] [-8 64 0 1]] (:ways (way-on/scan open-corridor [0 64 0]))) "a corridor running out of the seen box: a way at each end, toward the unseen side")
+    (is (= [] (:ways (way-on/scan shut-corridor [0 64 0]))) "a shut corridor: nothing unseen to go on into")
+    (is (nil? (way-on/way-outcome open-corridor [8 64 0 0])) "the cell is not seen yet")
+    (is (true? (way-on/way-outcome (corridor #(<= -12 % 12)) [8 64 0 0])) "seen to go on")
+    (is (false? (way-on/way-outcome (corridor #(<= -12 % 8)) [8 64 0 0])) "seen to be rock")))
