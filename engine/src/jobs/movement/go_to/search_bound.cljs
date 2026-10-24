@@ -19,19 +19,20 @@
 (defn fallback-s
   "Seconds the way escape/choose finds from feet with no dig route costs to the goal: its step (choose/price, an
   approach its walk), the blocks on from where the step leaves the body as a quote prices them (preview/rest-s), and
-  the walk's risk to the goal (walk-risk/estimate); with none, what the goal is worth (one-way/worth: the caller's
+  the walk's risk to the goal (walk-risk/estimate); with none, or an unpassable one, what the goal is worth (one-way/worth: the caller's
   :worth, else a tour's), all a search can save."
   [c feet goal may-dig? opts]
   (let [e (escape/choose (:primitives c) feet goal may-dig? (update opts :skip (fnil conj #{}) :dig-route))
         cell #(zipmap [:x :y :z] %)
         end (or (:pos e) feet)]
-    (if (= :none (:step e))
-      (one-way/worth (u/dist (cell feet) (cell goal)) (:worth (:args c)))
-      (+ (if (= :approach (:step e))
-           (:cost (cost/walk-cost {:distance (u/dist (cell feet) (cell end))}))
-           (choose/price (:primitives c) feet e))
-         (preview/rest-s (js/Math.round (js/Math.hypot (- (goal 0) (end 0)) (- (goal 2) (end 2)))))
-         (risk-s c (risk/estimate c (cell goal)))))))
+    (let [worth #(one-way/worth (u/dist (cell feet) (cell goal)) (:worth (:args c)))
+          total (when-not (= :none (:step e))
+                  (+ (if (= :approach (:step e))
+                       (:cost (cost/walk-cost {:distance (u/dist (cell feet) (cell end))}))
+                       (choose/price (:primitives c) feet e))
+                     (preview/rest-s (js/Math.round (js/Math.hypot (- (goal 0) (end 0)) (- (goal 2) (end 2)))))
+                     (risk-s c (risk/estimate c (cell goal)))))]
+      (if (and total (js/isFinite total)) total (worth)))))
 
 (defn stood-s
   "Seconds standing still since `since` (ctx/now ms) has cost the body: the time and what staying at its cell risks over

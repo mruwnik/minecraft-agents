@@ -4,6 +4,7 @@
             [engine.ready-test :as ready-test]
             [jobs.lib.cost :as cost]
             [jobs.lib.escape :as escape]
+            [jobs.movement.go-to.escalate-choose :as choose]
             [jobs.lib.walk-risk :as risk]
             [jobs.movement.go-to.escalation :as esc]
             [jobs.movement.go-to.preview :as preview]
@@ -37,3 +38,21 @@
     (is (not (esc/replans-spent? (ctx-at 10999) m)))
     (is (esc/replans-spent? (ctx-at 11000) m))
     (is (not (esc/replans-spent? (ctx-at 99999) {})) "none begun")))
+
+(deftest a-stair-over-an-open-floor-with-no-filler-is-priced-as-a-fetch-and-the-fallback-is-finite
+  (let [c (ctx-at 0)
+        p (:primitives c)
+        stair {:step :stair :heading "north" :steps 2}]
+    (with-redefs [escape/block-at-of (constantly (constantly "air"))
+                  escape/unseen-of (constantly (constantly false))
+                  escape/choose (fn ([_ _ _ _] nil) ([_ _ _ _ _] stair))
+                  risk/estimate (fn [& _] {:hp 0 :lethal-hp 0})]
+      (is (js/isFinite (choose/stair-route-s p [0 64 0] stair)) "no filler carried: the fill is a fetch, not impossible")
+      (is (js/isFinite (sb/fallback-s c [0 64 0] [0 70 0] (constantly true) {}))))))
+
+(deftest a-step-priced-unpassable-leaves-the-fallback-at-the-goals-worth
+  (with-redefs [escape/choose (fn ([_ _ _ _] nil) ([_ _ _ _ _] {:step :stair}))
+                choose/price (constantly ##Inf)
+                risk/estimate (fn [& _] {:hp 0 :lethal-hp 0})]
+    (is (close? (cost/tour-worth 20) (sb/fallback-s (ctx-at 0) [0 64 0] [20 64 0] (constantly true) {})))
+    (is (esc/replans-spent? (ctx-at 1e9) {:replan-budget {:since 0 :fallback-s (sb/fallback-s (ctx-at 0) [0 64 0] [20 64 0] (constantly true) {})}}))))
