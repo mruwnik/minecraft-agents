@@ -19,6 +19,20 @@
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:kind :nothing-possible}} :for-s 80 :until {:source :job :kind :completed}}]
    :after [[:block [10 0 12] "oak_fence"]]}
+;; A plan with a house part owing a bed the body lacks: the pen builds only the parts holding fence and the gate, fetching nothing for the house.
+  {:name "ring-beside-a-house-part-closes-without-it"
+   :plans [{:id "ring" :metadata {:by "$body"}
+            :parts [{:id "n" :box [#at [10 0 10] #at [14 0 10]] :want "oak_fence"}
+                    {:id "s" :box [#at [10 0 14] #at [14 0 14]] :want "oak_fence"}
+                    {:id "w" :box [#at [10 0 11] #at [10 0 13]] :want "oak_fence"}
+                    {:id "e1" :box [#at [14 0 11] #at [14 0 11]] :want "oak_fence"}
+                    {:id "g" :box [#at [14 0 12] #at [14 0 12]] :want "oak_fence_gate"}
+                    {:id "e2" :box [#at [14 0 13] #at [14 0 13]] :want "oak_fence"}
+                    {:id "house" :cells [#at [20 0 12]] :want "white_bed"}]}]
+   :act [[:job (jobs.build.pen {:plan "$plan:ring" :ways #{:carried :patch}})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 80 :until {:source :job :kind :completed}}]
+   :after [[:block [10 0 12] "oak_fence"] [:not-block [20 0 12] "white_bed"]]}
   {:name "ring-with-a-gap-is-leaky"
    :plans [{:id "ring" :metadata {:by "$body"}
             :parts [{:id "n" :box [#at [10 0 10] #at [14 0 10]] :want "oak_fence"}

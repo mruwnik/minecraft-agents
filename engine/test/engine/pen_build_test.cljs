@@ -76,6 +76,21 @@
 
 ;; ---------------------------------------------------------------- the contract
 
+(deftest the-cells-of-a-pen-without-a-part-are-those-of-the-parts-holding-a-barrier
+  (is (= [:fence :gate] (mapv :part (pen/barrier-parts-only [{:part :house :want "white_bed"} {:part :fence :want "oak_fence"}
+                                                              {:part :gate :want {:block "oak_fence_gate"}} {:part :field :want {:crop "wheat"}}])))))
+
+(deftest a-pen-built-without-a-part-leaves-the-rest-of-the-plan-alone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan (update (ring-plan) :parts conj {:id "house" :cells [[7 64 7]] :want "white_bed"})
+              [result seen p] (await (build! (spec kit) {"pen" plan} {:explore false}))]
+          (is (true? (:closed? result)) "a house part owing a bed is no business of the pen")
+          (is (= 8 (get-in result [:built :placed])) "fence and gate, each part by its own builder call")
+          (is (not= "white_bed" (h/block-at p 7 64 7)))
+          (is (empty? (filter #(re-find #"obtain" (str (:kind %))) @seen)) "nothing is fetched for the house"))))))
+
 (deftest a-closed-pen-is-done-and-a-leaky-one-is-nothing-possible
   (async done
     (tu/run-async done

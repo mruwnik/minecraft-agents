@@ -36,7 +36,7 @@
   the logs and leaves left, up to the fence tops, with a jobs.blocks.clear-cells child (:only), so no leaf staircase
   leads over the fence; trees not seen yet are left to the check.
   Then a jobs.access.cleanup child takes up the body's own scaffold-ledger blocks in and around the box (a night shelter's cheap blocks stay after dawn; an animal steps from one onto a fence).
-  Phase 1 runs jobs.build.from-plan on the plan. Its arg :accept passes through, and its rules
+  Phase 1 runs jobs.build.from-plan on the :part, or with none on each part holding fence, wall or gate cells in turn (a house or field of the same plan is not built or fetched for; the pen's cells are those parts' only). Its arg :accept passes through, and its rules
   (zones, other plans' footprints, materials, cuts) apply. Phase 2: a fence stacked on a gate is dug off, then a body still inside the box walks out through the
   gate (a jobs.movement.go-to child to the cell outside it) and jobs.maintenance.shut shuts it. Phase 3 checks the pen
   over that box with jobs.lib.pen (see jobs.animals.pen-check): a step out of the box is a leak.
@@ -130,6 +130,12 @@
     (str "the plan has no fence, wall or gate cells"
          (when part (str " in part " part (if (seq holders) (str "; parts with some: " (str/join ", " holders) ", or build the pen without :part") ""))))))
 
+(defn barrier-parts-only
+  "The cells of the parts that hold a fence, wall or gate cell: with no :part the pen is built from those, not from a house or field of the same plan."
+  [cells]
+  (let [parts (into #{} (comp (filter #(pen-read/barrier? (:want %))) (map :part)) cells)]
+    (filterv #(contains? parts (:part %)) cells)))
+
 (defn planned
   "{:cells judged} for the plan in the args, or {:trouble text}."
   [c]
@@ -137,7 +143,8 @@
         p (:primitives c)
         answer (plan/surfaced c (known/plan c plan))
         cells (when (and answer (not (:broken answer)))
-                (plan/judged p answer part (set (keys (storage/carried-totals (u/inventory p)))) nil))
+                (cond-> (plan/judged p answer part (set (keys (storage/carried-totals (u/inventory p)))) nil)
+                  (nil? part) barrier-parts-only))
         trouble (or (plan/plan-trouble answer cells)
                     (when-not (pen-read/barrier-box cells) (no-barrier-text answer part))
                     (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) plan/no-zones))]
@@ -153,17 +160,29 @@
   [c cells]
   (pen-read/read (:primitives c) (pen-opts c cells)))
 
-(defn build-args [c]
-  (assoc (select-keys (:args c) [:plan :part :accept :explore :ignore-zones?]) :ways (need/pass-ways c)))
-
-;; ------------------------------------------------------------------ conditions
-
-(def target [:plan :part])
-
 (defn judged-plan
   "planned, once per check-cache window."
   [c]
   (check-cache/cached c :planned #(planned c)))
+
+(defn next-part
+  "With no :part, the first part holding fence, wall or gate cells that still owes cells and was not built this job (a pen is built part by part, not as the whole plan), else nil."
+  [c]
+  (when-not (:part (:args c))
+    (let [done (set (:parts-built (ctx/mem c)))]
+      (->> (plan/owed (:cells (judged-plan c))) (map :part) (remove done) first))))
+
+(defn build-part
+  "The part the builder is asked for: the call's :part, else next-part, else the first part of the pen's cells."
+  [c]
+  (or (:part (:args c)) (next-part c) (:part (first (:cells (judged-plan c))))))
+
+(defn build-args [c]
+  (assoc (select-keys (:args c) [:plan :accept :explore :ignore-zones?]) :part (build-part c) :ways (need/pass-ways c)))
+
+;; ------------------------------------------------------------------ conditions
+
+(def target [:plan :part])
 
 (defn plan-problem
   "Later for a plan that is missing or unreadable, or no zone list read (the plan may be saved or fixed later); never
@@ -193,7 +212,19 @@
 (def safe? (ready/safe-at-build work-place/spot))
 (def fit? ready/fit?)
 
-(def can-start? (cond/and plan-problem uneven-problem from-plan/no-items))
+(defn builder-items
+  "from-plan's :no-items over the parts the builder is called for: it holds when any part has something to build, dig, fetch or look at, else it names the needs of all of them."
+  [c]
+  (let [parts (if-let [part (:part (:args c))]
+                [part]
+                (distinct (map :part (plan/owed (:cells (judged-plan c))))))
+        causes (mapv #(from-plan/no-items-cause (assoc-in c [:args :part] %)) parts)]
+    (if (or (empty? causes) (some nil? causes))
+      (contract/ok :items "there is something to build")
+      (let [cause (assoc (first causes) :needs (apply merge-with + (map :needs causes)))]
+        (checks/cause-status (if (:look-at cause) :look :later) cause)))))
+
+(def can-start? (cond/and plan-problem uneven-problem builder-items))
 (def can-run? plan-problem)
 
 (defn inside?
@@ -371,18 +402,26 @@
         (do (ctx/update-mem! c #(-> % (update :patch-queue rest) (update :pass-ok (fnil + 0) (if (= :done (:kind r)) 1 0)))) :again)))
     (do (ctx/update-mem! c assoc :phase :check) :again))))
 
+(defn merge-built
+  "The builder's data of two parts' calls, counts added and lists joined."
+  [a b]
+  (merge-with (fn [x y] (cond (and (number? x) (number? y)) (+ x y) (and (coll? x) (coll? y)) (into x y) :else y)) a b))
+
 (defn ^:async build-step!
-  "One round of the builder as the child; the phase moves to the exit when its round ended with its data (done, or it
-  left cells refused, given up or short: the check reports them as leaks); an ending of its conditions, or of a limit, is
+  "One round of the builder as the child, for the part build-part names; the phase moves to the exit when its round ended with its data (done, or it
+  left cells refused, given up or short: the check reports them as leaks) and no further part owes cells; an ending of its conditions, or of a limit, is
   this job's, and so is a :no-items with nothing placed (the look round found the fences short)."
   [c]
-  (let [r (await (ctx/call c :build 'jobs.build.from-plan (build-args c)))]
+  (let [part (build-part c)
+        r (await (ctx/call c :build 'jobs.build.from-plan (build-args c)))]
     (cond
       (or (= :continue r) (= :cut-off (:kind r))) :continue
       (and (= :condition-failed (:kind r)) (= :no-items (get-in r [:cause :reason])) (zero? (get-in r [:data :placed] 0)))
       (composite/stop c r)
-      (or (= :done (:kind r)) (and (:data r) (#{:nothing-possible :condition-failed} (:kind r)))) (do (ctx/update-mem! c assoc :phase :exit :built (:data r))
-                                                 :again)
+      (or (= :done (:kind r)) (and (:data r) (#{:nothing-possible :condition-failed} (:kind r))))
+      (do (ctx/update-mem! c #(-> % (update :parts-built (fnil conj []) part) (update :built merge-built (:data r))))
+          (ctx/update-mem! c assoc :phase (if (next-part c) :build :exit))
+          :again)
       :else (composite/stop c r))))
 
 (defn exit-cell
