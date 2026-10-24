@@ -28,6 +28,7 @@
             [jobs.lib.step-off :as step-off]
             [jobs.lib.vehicle :as vehicle]
             [jobs.lib.walk.plan :as wplan]
+            [jobs.lib.walk.watch :as wwatch]
             [jobs.lib.walk.world :as wworld]
             [jobs.movement.go-to.escalation :as esc]
             [jobs.movement.go-to.health :as gth]
@@ -959,3 +960,25 @@
     (with-redefs [escape/walk-spec (fn [c goal] (swap! goals conj goal) (walk-spec c goal))]
       (reach-job/fetch-tool? c))
     (is (= [[6 55 0]] @goals))))
+
+;; ---- go-to :unknown in a lit room: a walled walkway whose way down is a stair at its east end
+
+(def walkway-room
+  "A lit stone room (inside x -2..44, y 64..87, z -4..10; floor y 63): a walkway (floor y 84, z 0, x 0..20) walled at
+  z -1 and 1 (y 85..86) and shut at x -1, and a 3-wide stair (z -1..1) down east of it, x 21 (top y 83) to x 41 (y 63).
+  The walls hide the air beside the walkway, each step the air under the step beside it."
+  (merge (apply dissoc (box -3 63 -5 45 88 11 "stone")
+                (for [x (range -2 45) y (range 64 88) z (range -4 11)] (str x "," y "," z)))
+         (box 0 84 0 20 84 0 "stone") (box -1 85 -1 20 86 -1 "stone") (box -1 85 1 20 86 1 "stone") (box -1 85 0 -1 86 0 "stone")
+         (into {} (for [i (range 21) z [-1 0 1]] [(str (+ 21 i) "," (- 83 i) "," z) "stone"]))))
+
+;; live twin: walkway-stair-out-of-view/stair-100-east-arrives
+(deftest go-to-down-a-stair-past-unseen-air-beside-it-in-a-lit-room
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen p]} (await (run-go-to {:self {:pos {:x 15.5 :y 85 :z 0.5}} :blocks walkway-room :radius 16 :exact-eye true :bodyHitbox true}
+                                                     {:pos [5 64 8] :range 1 :ways #{:walk :clear-seal} :unknown true} lit-and-looking))
+              replans (filter #(= :replan (:kind %)) seen)]
+          (is (= {:arrived true} (select-keys out [:arrived])) (str (pr-str out) " at " (:pos (fake/self p))))
+          (is (< (count replans) (wwatch/max-learned)) "each floor found missing shows the stair's side, not one cell of it"))))))

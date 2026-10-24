@@ -21,6 +21,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.walk :as walk]
+            [jobs.lib.walk.drive :as drive]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.world :as wworld]))
 
@@ -57,21 +58,6 @@
   (boolean (and (:damage-refused result) (nil? (:max-damage (wworld/walk-settings c))))))
 
 (def look-drop-min "Blocks of a drop from which its landing is looked at before the way is judged too dear." 4)
-
-(def lip-reach "How far from the middle of its cell toward a drop the body leans to look over the edge: sneaking stops the box at the edge, so only the centre overhangs." 0.44)
-
-(def lean-ticks "Ticks a lean to the lip may take." 60)
-
-(defn lean-to!
-  "Sneaks to the point x z (the game's sneak keeps the body from going off the edge), within a tenth of a block."
-  [c x z]
-  (let [ticks (volatile! 0)]
-    (ctx/act c :steer (walk/steer-args (walk/steer-s c 3)
-                                       (fn [pose]
-                                         (let [dx (- x (.-x pose)) dz (- z (.-z pose))]
-                                           (if (or (and (< (js/Math.abs dx) 0.1) (< (js/Math.abs dz) 0.1)) (> (vswap! ticks inc) lean-ticks))
-                                             #js {:done true}
-                                             #js {:controls #js {:forward true :sneak true} :yaw (js/Math.atan2 (- dx) (- dz))})))))))
 
 (defn settled?
   "Whether looking at drop would change nothing about its price: its landing is water in view, or its floor is in fresh view and no bouncing block (a plain fall; a pad is judged by what the body sees)."
@@ -120,14 +106,11 @@
   (let [m (ctx/mem c)
         {:keys [from floor] :as drop} (first (remove (set (:drops-looked m)) (:probe-drops m)))]
     (when (and drop (not (lip-unsafe? c drop)))
-      (let [arrived? (await (at-lip-cell! c from))
-            [fx _ fz] from
-            [tx _ tz] floor
-            lip (fn [f t] (+ f 0.5 (* lip-reach (compare t f))))]
+      (let [arrived? (await (at-lip-cell! c from))]
         (when-not (and arrived? (lip-unsafe? c drop))
           (ctx/update-mem! c update :drops-looked (fnil conj []) drop))
         (when (and arrived? (not (lip-unsafe? c drop)))
-          (await (lean-to! c (lip fx tx) (lip fz tz)))
+          (await (drive/lean-to! c (drive/lip from floor)))
           (await (dig-look/look-at! c floor))
           (look/see! c)
           true)))))
