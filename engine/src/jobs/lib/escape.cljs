@@ -301,7 +301,7 @@
   (let [kind-at (reach/seen-lookup p reach/kind-of :ground)
         walk-s (fn [a b] (:cost (cost/walk-cost {:distance (apply js/Math.hypot (map - b a))})))
         share (wworld/unseen-share p)
-        rest-s (fn [cell] (+ (walk-s cell goal) (cost/unseen-route-s share kind-at (map #(zipmap [:x :y :z] %) (line-cells cell goal)))))]
+        rest-s (memoize (fn [cell] (+ (walk-s cell goal) (cost/unseen-route-s share kind-at (map #(zipmap [:x :y :z] %) (line-cells cell goal))))))]
     (loop [open (sorted-set [(rest-s feet) 0 0 feet]) best {feet 0} n 1 tried 0]
       (when-let [[_ _ g cell :as top] (first open)]
         (let [open (disj open top)
@@ -324,12 +324,6 @@
          toward? (fn [cell _ _] (when-let [d (heading cell goal)] (solid? (block-at (ahead cell d 1)))))]
      (or (priced-spot p feet goal steps toward? visited nil)
          (priced-spot p feet goal steps (fn [cell _ _] (walled-side? block-at cell)) visited nil)))))
-
-(defn nearer?
-  "Whether cell is more than a block nearer goal than feet."
-  [feet goal cell]
-  (let [to-goal #(apply js/Math.hypot (map - goal %))]
-    (< (to-goal cell) (dec (to-goal feet)))))
 
 (defn pillar-item
   "{:item :count}: the carried climb block (choose/fillers-for, so reserves and an :avoid apply) with the largest count, or nil."
@@ -359,15 +353,16 @@
 
 (defn door-spot
   "The cheapest cell (priced-spot through standable cells) from which a wall straight toward goal is a door (door)
-  whose every cell is diggable? and whose far side is nearer? goal than feet: where to walk when the wall at feet
+  whose every cell is diggable? and whose far side is cheaper to goal from there than from feet, the walk there
+  counted: where to walk when the wall at feet
   cannot be dug (an iron door or another's build in line). nil when none. Cells in visited (already walked to) do not
   count."
   [p feet goal diggable visited]
   (let [block-at (block-at-of p)
         unseen? (unseen-of p)
-        take? (fn [cell _ _] (when-let [d (heading cell goal)]
-                               (when-let [gap (door block-at unseen? cell d (max-door))]
-                                 (and (every? diggable (:cells gap)) (nearer? feet goal (:through gap))))))]
+        take? (fn [cell g rest-s] (when-let [d (heading cell goal)]
+                                    (when-let [gap (door block-at unseen? cell d (max-door))]
+                                      (and (every? diggable (:cells gap)) (< (+ g (rest-s (:through gap))) (rest-s feet))))))]
     (priced-spot p feet goal (level-steps p feet false) take? visited nil)))
 
 (defn door-back
@@ -404,16 +399,15 @@
 (defn way-spot
   "The cheapest cell (priced-spot through standable cells a step up or down included, at most way-spot-cap tried) from
   which choose makes a way (a pillar, stair or clear-path) toward goal: where to walk when no way can be made from feet
-  itself, e.g. a body inside its hut beside the doorway it cannot cut through the wall to. A clear-path's far side must
-  be nearer? goal than feet; a stair or pillar up toward a higher goal must leave the walk there and on from its end
-  (way-end) cheaper than the walk from feet; one out of a pit or room counts as it is. nil when none."
+  itself, e.g. a body inside its hut beside the doorway it cannot cut through the wall to. A clear-path, stair or pillar must
+  leave the walk there and on from its end (way-end) cheaper than the walk from feet (a stair or pillar up toward a higher goal); one out of a pit or room counts as it is. nil when none."
   [p feet goal may-dig? opts visited]
   (let [opts (update opts :skip (fnil conj #{}) :approach)
         take? (fn [cell g rest-s]
                 (let [e (choose p cell goal may-dig? opts)
                       end (way-end p cell goal e)]
                   (case (:step e)
-                    :clear-path (boolean (and end (nearer? feet goal end)))
+                    :clear-path (boolean (and end (< (+ g (rest-s end)) (rest-s feet))))
                     (:stair :pillar) (or (<= (goal 1) (cell 1)) (< (+ g (rest-s end)) (rest-s feet)))
                     false)))]
     (priced-spot p feet goal (level-steps p feet true) take? visited way-spot-cap)))
