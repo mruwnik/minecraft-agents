@@ -25,7 +25,9 @@
             [jobs.lib.threat-field :as field]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
+            [jobs.lib.look :as look]
             [jobs.lib.walk :as walk]
+            [jobs.lib.walk.edges :as edges]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.world :as wworld]))
 
@@ -178,23 +180,57 @@
 
 (defn floor-cell [pos] (mapv #(js/Math.floor (% pos)) [:x :y :z]))
 
+(defn cell-key-of
+  "A threat as the key of a kept search: its mob, its cell and weight to 1/20 (the fields and tolls it prices are cell-wide)."
+  [{:keys [mob pos weight]}]
+  [mob (floor-cell pos) (/ (js/Math.round (* 20 (or weight 1))) 20)])
+
+(defonce ^:private kept-prices (js/WeakMap.))
+
+(defn priced-key
+  "Everything price!'s result reads: the body's place and kit, the world it remembers (store writes), the targets, the
+  threats priced and the chasers' cells, the sensed mobs' cells and uncleared deaths (planner dangers), the steps the walker failed at, the
+  light it sees by, the sky and the settings."
+  [c st targets {:keys [y-margin chasers]} chased other-threats caught-by body class]
+  (let [p (:primitives c)]
+    [(.-dim ^js st) (.-writes ^js st) (u/self-pos c) (wworld/kit-of c) body (select-keys class [:underground? :night?])
+     targets y-margin (mapv (juxt :name :mob :calm? :pos) chasers) (mapv cell-key-of other-threats) (mapv cell-key-of caught-by)
+     (some->> (threats/planner-dangers c) (mapv (fn [^js d] [(js/Math.floor (.-x d)) (js/Math.floor (.-y d)) (js/Math.floor (.-z d)) (.-mob d) (.-close d)])))
+     (second (edges/tolls p)) (look/near-of p) (:values @settings/state) (js->clj (.getStore settings/call-scope))]))
+
+(declare price-all!)
+
 (defn ^:async price!
   "Each of targets (named ones {:pos :range :kind}, then ring ends {:x :z}) planned from where the body stands (see the ns
   doc): [{:target :found? :open? :end :s :priced :price :cells :seen-n :unseen}] (:open? found, or a ring end whose
   partial route ends where the chasers have given the body up: given-up?), the ones the planner found no way nearer to, and the ring ends
   left when ::ring-nodes ran out (named ones have their own node cap), left out; its meta {:nodes :planned} the nodes
   expanded and the targets planned. opts {:y-margin :chasers}: blocks past body and end the routes may plan, the chasers (their danger is the race, so death-chance weighs only the other known threats; met on the
-  way back from an unseen dead end, they catch the body: unseen-price)."
-  [c targets {:keys [y-margin chasers]}]
+  way back from an unseen dead end, they catch the body: unseen-price). Kept for the body while it asks the same of the
+  same remembered world (priced-key)."
+  [c targets {:keys [chasers] :as opts}]
   (let [p (:primitives c)
-        from (u/self-pos c)
         chased (set (map #(floor-cell (:pos %)) chasers))
         other? #(not (chased (floor-cell (:pos %))))
-        ring-world (costed c nil other? true)
-        policy (cond-> (wworld/body-policy c) y-margin (assoc :y-margin y-margin))
         body (threats/death-body c)
         class {:underground? (sh-sense/buried? p) :night? (sh-sense/dark-outside? p) :threats (threats/threats-of c other?)}
         caught-by (mapv #(assoc % :caught 1) (threats/threats-of c (complement other?)))
+        st (some-> (aget p "perception") :st)
+        k (when st (priced-key c st targets opts chased (:threats class) caught-by body class))
+        hit (when st (.get kept-prices st))]
+    (if (and k (= k (:k hit)))
+      (:v hit)
+      (let [v (await (price-all! c targets opts chased other? body class caught-by))]
+        (when st (.set kept-prices st {:k k :v v}))
+        v))))
+
+(defn ^:async price-all!
+  "price! without the kept result."
+  [c targets {:keys [y-margin chasers]} chased other? body class caught-by]
+  (let [p (:primitives c)
+        from (u/self-pos c)
+        ring-world (costed c nil other? true)
+        policy (cond-> (wworld/body-policy c) y-margin (assoc :y-margin y-margin))
         trapped-at (fn [cell] (cost/route-death-cost body (assoc class :cells [cell] :threats caught-by) cell))
         counts (wworld/way-counts p)
         slow (pace (.-food (.self p)))]

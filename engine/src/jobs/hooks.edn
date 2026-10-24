@@ -4,4 +4,5 @@
  :use/default jobs.lib.choose/default-use
  :ready/vocabulary jobs.lib.ready/vocabulary
  :look/around jobs.lib.sense/look-round!
- :light/view jobs.lib.shelter.sense/light-view}
+ :light/view jobs.lib.shelter.sense/light-view
+ :body/warm jobs.lib.warm/warm!}

@@ -233,3 +233,21 @@
           (is (= 1 chance))
           (is (< 0 seconds 1) (str "only while the flight pulls away from it: " seconds))
           (is (> 1 (:seconds (search/caught-chance afloat {:k 0 :n 0}) 0)) "a drowned two blocks off an afloat body reaches it at most a moment on the way to the shore"))))))
+
+(deftest a-flee-search-is-planned-again-only-when-what-it-reads-changed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [raw (tu/fake {:blocks junction :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+              p (perception/wrap raw (perception/create (fake-raw/create raw) {:now (constantly 1000000)}))
+              _ (perception/pass! (aget p "perception") {:effort 1 :reuse? true})
+              c (ctx-of p)
+              zombie (fn [x] {:name "zombie" :mob "zombie" :pos {:x x :y 64 :z 0.5}})
+              ring (fn [chasers] (search/ring {:x 0.5 :z 0.5} chasers 10 4))
+              price (fn ^:async price [chasers] (await (search/price! c (ring chasers) {:chasers chasers})))
+              a (await (price [(zombie -4.5)]))
+              again (await (price [(zombie -4.5)]))
+              moved (await (price [(zombie -2.5)]))]
+          (is (identical? a again) "the same chasers ask the same")
+          (is (not (identical? a moved)) "a chaser elsewhere is priced afresh")
+          (is (not (identical? a (await (settings/with-settings {::search/max-nodes 100} #(price [(zombie -4.5)]))))) "other settings are priced afresh"))))))
