@@ -41,6 +41,28 @@
          [:summon "zombie" [13.5 0 15.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 20}
             {:no-event {:source :job :kind :retreat.target :data {:target [:near #at [22 8 16] 3]}} :for-s 30}]}
+  ;; a0a0bb2a: a lit cave with two skeletons west and a tunnel mouth 8 blocks east that turns north at its end: the flight breaks their line of sight round the corner instead of staying in the cave in bow range. Resistance 5 keeps the body alive to be judged by where it goes.
+  {:name "skeleton-cave-flight-breaks-line-of-sight-round-the-tunnel-corner"
+   :blocks [[:fill [0 0 0] [31 11 31] "stone"] [:fill [3 0 12] [20 2 20] "air"]
+            [:fill [21 0 16] [28 1 16] "air"] [:fill [28 0 10] [28 1 16] "air"]
+            [:set [3 0 12] "torch"] [:set [3 0 20] "torch"] [:set [20 0 12] "torch"] [:set [20 0 20] "torch"] [:set [11 0 12] "torch"] [:set [11 0 20] "torch"]
+            [:set [24 0 16] "torch"] [:set [28 0 12] "torch"]]
+   :body {:at [13.5 0 16.5] :inventory [["stone_sword" 1]]}
+   :act [[:summon "skeleton" [4.5 0 14.5] "{equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "skeleton" [4.5 0 18.5] "{equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 20}
+            {:no-event {:source :body :kind :died} :for-s 40}]
+   :after [[:body-near [28.5 0 12.5] 4]]}
+  ;; a0a0bb2a: 3 hp, a zombie beside the body: whatever it does (fight or pillar), the zombie lands no second blow.
+  {:name "three-hp-body-beside-a-zombie-takes-no-second-hit"
+   :blocks [[:fill [0 0 0] [31 11 31] "stone"] [:fill [3 0 13] [14 2 19] "air"]
+            [:set [3 0 13] "torch"] [:set [14 0 19] "torch"] [:set [3 0 19] "torch"] [:set [14 0 13] "torch"]]
+   :body {:at [8.5 0 16.5] :effects [] :inventory [["stone_sword" 1] ["cobblestone" 12]]}
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 60 true"] [:until-effect-gone "hunger" 30] [:rcon "damage $BODY 17 minecraft:generic"]
+         [:summon "zombie" [9.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 20}
+            {:no-event {:source :body :kind :died} :for-s 40}
+            {:count-event {:source :body :kind :hurt :data {:causes ["zombie"]}} :for-s 40 :at-most 1}]}
   {:name "buried-body-with-a-pickaxe-and-no-stair-digs-a-pocket-first"
    :blocks [[:fill [0 0 0] [31 11 31] "stone"] [:fill [3 0 13] [14 2 19] "air"]
             [:set [3 0 13] "torch"] [:set [14 0 19] "torch"] [:set [3 0 19] "torch"] [:set [14 0 13] "torch"]]
