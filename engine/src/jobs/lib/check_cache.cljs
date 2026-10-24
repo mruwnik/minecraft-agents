@@ -23,15 +23,26 @@
   [c]
   (assoc c ::fresh true))
 
-(defn cached
-  "The value of (thunk) for key k of this job, reused while it is younger than ttl-ms (never under fresh)."
-  [c k thunk]
+(defn reuse
+  "(thunk) for key k of this job, its kept value while (fresh? now entry) and not under fresh."
+  [c k thunk fresh?]
   (let [entries (entries-of c)
         id [(:id c) (:slots c) k]
         now (ctx/now c)
         hit (get @entries id)]
-    (if (and hit (not (::fresh c)) (<= 0 (- now (:t hit)) (ttl-ms)))
+    (if (and hit (not (::fresh c)) (fresh? now hit))
       (:v hit)
       (let [v (thunk)]
         (swap! entries (fn [m] (assoc (into {} (remove (fn [[_ e]] (> (- now (:t e)) (* 10 (ttl-ms))))) m) id {:t now :v v})))
         v))))
+
+(defn cached
+  "The value of (thunk) for key k of this job, reused while it is younger than ttl-ms (never under fresh)."
+  [c k thunk]
+  (reuse c k thunk (fn [now hit] (<= 0 (- now (:t hit)) (ttl-ms)))))
+
+(defn keyed
+  "The value of (thunk) for key k of this job, reused whatever its age (never under fresh): for a thunk whose key holds
+  every input it reads. Entries older than ten ttl-ms are dropped as others are written."
+  [c k thunk]
+  (reuse c k thunk (constantly true)))

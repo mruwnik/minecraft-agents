@@ -225,12 +225,14 @@
     {:hp (if (or caves-free? (<= (:x end) 10)) 0 100)
      :spawn-hp 0 :hostile-hp 0 :death-hp 0 :lethal-hp 0 :lava-hp 0 :dark-s 0 :hostiles 0}))
 
+(defn prefix-estimate-of [c in] (prefix-estimate c (:goal in) in))
+
 (deftest a-plan-let-through-as-a-safe-prefix-has-every-re-plan-after-it-priced
   (let [m (atom {})
         c (assoc (ready-test/ctx-of {:time st/noon :self {:pos {:x 0 :y 64 :z 0}}}) :update-mem (fn [f args] (apply swap! m f args)))
         goal {:x 30 :y 64 :z 0}
         prefix {:status "partial" :steps (vec (take 10 straight-cells))}]
-    (with-redefs [risk/estimate prefix-estimate]
+    (with-redefs [risk/estimate prefix-estimate risk/estimate-of prefix-estimate-of]
       (is (= :later (first (reprice/status c goal prefix))) "the whole walk is over the affordable")
       (is (true? (reprice/safe-prefix? c goal prefix)))
       (let [check (reprice/check c goal nil)]
@@ -242,19 +244,26 @@
         (is (nil? (check (plan-of (take 10 straight-cells)) true)) "a found plan within the affordable")
         (is (nil? (check (plan-of straight-cells) false)) "is not priced again without a hostile new")))))
 
-(deftest the-stay-a-risky-walk-is-weighed-against-is-priced-where-the-body-stands-at-its-health
+(deftest the-stay-a-risky-walk-is-weighed-against-is-priced-anew-when-what-it-reads-changes
   (let [c (ready-test/ctx-of {:time st/noon :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+        state (fake/state (:primitives c))
         goal {:x 30 :y 64 :z 0}
         plan {:status "partial" :steps (vec (take 10 straight-cells))}
         stays (atom [])]
-    (with-redefs [risk/estimate prefix-estimate
-                  risk/stay-estimate (fn [c _ _] (swap! stays conj (mapv js/Math.floor ((juxt :x :y :z) (sh-sense/feet (:primitives c))))) {:hp 0 :hostiles 0})]
+    (with-redefs [risk/estimate-of prefix-estimate-of
+                  risk/stay-estimate (fn [_ {:keys [feet live]}] (swap! stays conj [(mapv js/Math.floor ((juxt :x :y :z) feet)) (mapv (comp :x :pos) live)]) {:hp 0 :hostiles 0})]
       (risk/status c goal plan)
-      (swap! (fake/state (:primitives c)) assoc-in [:self :pos] [10.5 64 0.5])
+      (swap! state assoc-in [:self :pos] [10.5 64 0.5])
       (risk/status c goal plan)
-      (swap! (fake/state (:primitives c)) assoc-in [:self :health] 6)
+      (swap! state assoc-in [:self :health] 6)
       (risk/status c goal plan)
-      (is (= [[0 64 0] [10 64 0] [10 64 0]] @stays) "at the prefix end the stay is priced there, not at the start, and again once the body is hurt"))))
+      (risk/status c goal plan)
+      (swap! state assoc :entities [{:id 7 :name "zombie" :kind "hostile" :pos [20.5 64 0.5]}])
+      (risk/status c goal plan)
+      (swap! state assoc-in [:entities 0 :pos 0] 15.5)
+      (risk/status c goal plan)
+      (is (= [[[0 64 0] []] [[10 64 0] []] [[10 64 0] []] [[10 64 0] [20.5]] [[10 64 0] [15.5]]] @stays)
+          "the stay is priced where the body stands, again once it is hurt, not again while nothing it reads changed, and again as a zombie comes closer"))))
 
 (def far-goal {:x 95 :y 64 :z 0})
 
