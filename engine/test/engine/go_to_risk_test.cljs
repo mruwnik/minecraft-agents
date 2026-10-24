@@ -183,7 +183,7 @@
         clock (atom 0)
         c (assoc (ready-test/ctx-of {:time st/noon :self {:pos {:x 0 :y 64 :z 0}}}) :update-mem (fn [f args] (apply swap! m f args)))
         goal {:x 30 :y 64 :z 0}]
-    (with-redefs [ctx/mem (fn [_] @m) ctx/now (fn [_] @clock) sense/known-writes (fn [_] @writes)]
+    (with-redefs [ctx/mem (fn [_] @m) ctx/now (fn [_] @clock) sense/known-memory (fn [_] @writes)]
       (risk/note-plan! c goal (plan-of straight-cells))
       (reset! clock 600000)
       (is (= goal (:goal (risk/planned c))) "kept while nothing changed, however long")

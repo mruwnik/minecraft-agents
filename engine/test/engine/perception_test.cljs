@@ -6,6 +6,7 @@
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
             [engine.perception.mobs :as mobs]
+            [engine.perception.rays :as rays]
             [engine.perception.store :as store]
             [jobs.lib.cost.danger :as danger]
             [jobs.lib.reach.room :as reach-room]
@@ -156,15 +157,6 @@
     (perception/touch! per [40 64 0])
     (is (= [nil "dirt" "sand"] (mapv #(seen-name per %) [[0 64 0] [20 64 0] [40 64 0]])))
     (is (= 2 (:sections (perception/stats per))))))
-
-(deftest the-memory-epoch-moves-with-the-clock-second-however-many-writes
-  (let [clock (atom 1000)
-        {:keys [per]} (rig {} {:now #(deref clock)})
-        st (:st per)]
-    (set! (.-writes st) (js/Math.pow 2 30))
-    (let [k (perception/memory-epoch st)]
-      (swap! clock + 1000)
-      (is (not= k (perception/memory-epoch st))))))
 
 (deftest one-pass-is-spread-over-the-steps-of-pass-ms
   (let [{:keys [per]} (rig {} {:pass-ms 1000 :step-ms 50})
@@ -586,6 +578,37 @@
   (let [clock (atom 0)]
     (assoc (rig blocks {:now #(deref clock) :pass-ms 50 :still-ms 30000}) :clock clock)))
 
+(deftest the-memory-epoch-holds-still-with-nothing-to-age
+  (let [{:keys [per clock]} (clocked-rig {"0,65,4" "gold_block"})
+        st (:st per)]
+    (perception/pass! per)
+    (let [k (perception/memory-epoch st)]
+      (swap! clock + 60000)
+      (is (= k (perception/memory-epoch st)) "a minute on, no cell that can age: the same key"))))
+
+(deftest the-memory-epoch-moves-each-second-until-the-last-door-seen-has-aged
+  (let [{:keys [per clock]} (clocked-rig {"0,65,4" "oak_door"})
+        st (:st per)
+        mutable-max (:mutable-max-ms (:opts per))]
+    (perception/pass! per)
+    (let [k (perception/memory-epoch st)]
+      (swap! clock + 1000)
+      (is (not= k (perception/memory-epoch st)) "a door seen a second ago may still age"))
+    (swap! clock + (+ mutable-max 1000))
+    (let [k (perception/memory-epoch st)]
+      (swap! clock + 5000)
+      (is (= k (perception/memory-epoch st)) "aged out: nothing left to age, the key holds"))))
+
+(deftest a-sight-table-arriving-moves-the-memory-epoch
+  (let [{:keys [per]} (clocked-rig {})
+        ^js st (:st per)
+        k (perception/memory-epoch st)]
+    (is (some? (rays/sight-of per st)))
+    (is (not= k (perception/memory-epoch st)) "memory read before the table (mutable ids unknown) must be read again")
+    (let [k (perception/memory-epoch st)]
+      (rays/sight-of per st)
+      (is (= k (perception/memory-epoch st)) "asking again changes nothing"))))
+
 (deftest an-unchanged-still-body-skips-idle-passes-until-still-ms
   (let [r (clocked-rig {"0,65,4" "gold_block"})]
     (is (= [1 1 2] (passes-after r [3001 29999 30001])))))
@@ -745,6 +768,18 @@
     (is (= "gold_block" (seen-name per [1 65 3])))
     (is (= "air" (seen-name per [0 65 3])) "an asked-for cell of air is seen too")
     (is (nil? (seen-name per [0 65 8])) "behind the stone")))
+
+(deftest a-room-answer-is-judged-again-when-a-door-ages-out-then-kept-while-nothing-can-age
+  (let [{:keys [p per clock]} (clocked-rig {"0,65,4" "oak_door"})
+        w (perception/wrap p per)
+        kept #(reach-room/kept w "k" (fn [_] #js {}))]
+    (perception/pass! per)
+    (let [a (kept)]
+      (reset! clock 11500)
+      (is (not (identical? a (kept))) "the remembered door aged out to unknown: judged again")
+      (let [b (kept)]
+        (reset! clock 71500)
+        (is (identical? b (kept)) "a minute on, nothing left to age: no new flood")))))
 
 (deftest a-room-answer-is-kept-until-memory-or-the-world-changes
   (let [{:keys [p per clock]} (clocked-rig {"0,65,4" "gold_block"})

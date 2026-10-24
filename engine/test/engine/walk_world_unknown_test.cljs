@@ -8,6 +8,7 @@
             [engine.fake.raw-world :as fake-raw]
             [engine.path.blocks :as blocks]
             [engine.perception :as perception]
+            [engine.perception.rays :as rays]
             [engine.settings :as settings]
             [engine.test-util :as tu :refer [box]]
             [jobs.lib.cost :as cost]
@@ -242,7 +243,6 @@
 (deftest an-index-built-before-the-sight-table-is-known-is-built-again-once-it-is
   (let [{:keys [clock p w ids]} (aging-world)
         ^js st (:st (aget w "perception"))
-        sight (.-sight st)
         kinds (.-kinds st)]
     (fake/set-block! p [15 64 0] "water")
     (perception/pass! (aget w "perception"))
@@ -250,9 +250,8 @@
     (set! (.-sight st) nil)
     (set! (.-kinds st) nil)
     (ids)
-    (set! (.-sight st) sight)
     (set! (.-kinds st) kinds)
-    (swap! clock + 1000)
+    (rays/sight-of (aget w "perception") st)
     (is (zero? (ids)) "the water aged out of a section whose first index was empty")))
 
 (deftest the-ways-on-are-counted-once-a-memory

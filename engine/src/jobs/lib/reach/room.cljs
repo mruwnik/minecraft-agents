@@ -3,6 +3,7 @@
   door shut, kept per body), the floods under them and the unseen-edge reads that say 'look first'.
   See jobs.lib.reach for the block reads and walk searches."
   (:require [clojure.string :as str]
+            [engine.perception :as perception]
             [engine.perception.rays :as rays]
             [jobs.lib.reach :refer [openable? open-prop? kind-of keyer passable? seen-standable? standing-cell
                                     forward backward search-steps world-kinds]]
@@ -335,12 +336,11 @@
     (when-not closed? cell)))
 
 (defn steady-key
-  "What a room answer depends on: the raw world's epoch, how often memory changed a cell (a newly seen cell or a changed
-  block), and the clock in half :mutable-max-ms steps (a remembered door ages out to unknown); nil offline."
-  [{:keys [raw opts st]}]
+  "What a room answer depends on: the raw world's epoch, the dimension and the memory's epoch (a block it remembers changed,
+  or a door aged out to unknown); nil offline."
+  [{:keys [raw st]}]
   (when-let [^js eye (.eye ^js raw)]
-    (str (js/Math.floor (/ ((:now opts)) (quot (:mutable-max-ms opts) 2))) "|" (rays/epoch-of raw) "|" (.-dimension eye) "|"
-         (.-writes ^js st))))
+    (str (rays/epoch-of raw) "|" (.-dimension eye) "|" (pr-str (perception/memory-epoch st)))))
 
 (defn kept-with
   "(f kind-at put!) for the key `ck`, kept in the body's perception store while the world and its memory stay the same (the same shared kind-at serves every cell); put! (key value) keeps a further answer for another key of the

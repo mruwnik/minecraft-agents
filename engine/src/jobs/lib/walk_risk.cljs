@@ -107,7 +107,7 @@
 
 (defn estimate-inputs
   "What estimate reads of c's body and world for the walk to `goal` (estimate's opts), as values: the body's feet, whether
-  it is buried, its shelter, death-body and food, the known threats and hides, the writes of what it knows, the sky's
+  it is buried, its shelter, death-body and food, the known threats and hides, the memory epoch of what it knows, the sky's
   darkening now, the cells its look round has looked at, and what the way is priced by as perceived now: its cells, the
   seconds of it spent where a mob could spawn and the hp of the lava seen near it, and the reach of the threats it prices
   (:weights, their fields' cells, which change as cells they read are seen anew). :cells, :catchers and :remembered are derived, left out of a key."
@@ -134,7 +134,7 @@
      :feet feet :cells cells :body (threats/death-body c) :food food
      :known known :hides hides :catchers catchers :remembered remembered
      :weights (mapv #(:weights (field/field-of c %)) (concat catchers remembered))
-     :writes (sense/known-writes p) :sky (sh-sense/sky-subtract-now p) :looked (sense/round-looked c)
+     :memory (sense/known-memory p) :sky (sh-sense/sky-subtract-now p) :looked (sense/round-looked c)
      :exposed-s (+ (/ exit (cost/walk-blocks-per-s))
                    (spawn-light/dark-seconds p cells (mapv #(/ % (cost/walk-blocks-per-s)) (along cells)) (:y feet) underground? caves-free?)
                    (if (and (pos? stay-s) (pos? (spawn-light/chance-at p (nth cells stay-at) (:y feet) underground? caves-free?))) stay-s 0))
@@ -177,10 +177,10 @@
 
 (defn note-plan!
   "Keep plan ({:status :steps}), the one go-to's round held its walk to goal on, for status to price while the body
-  stands where it planned from and the world is as it was (sense/known-writes, the raw world's epoch)."
+  stands where it planned from and the world is as it was (sense/known-memory, the raw world's epoch)."
   [c goal plan]
   (let [p (:primitives c)]
-    (ctx/update-mem! c assoc ::plan {:from (floor-cell (sh-sense/feet p)) :goal goal :writes (sense/known-writes p) :epoch (raw-epoch p)
+    (ctx/update-mem! c assoc ::plan {:from (floor-cell (sh-sense/feet p)) :goal goal :memory (sense/known-memory p) :epoch (raw-epoch p)
                                      :status (:status plan) :steps (mapv floor-cell (:steps plan))})))
 
 (defn planned
@@ -188,20 +188,20 @@
   changed or the raw world did (a plan made now might differ)."
   [c]
   (let [p (:primitives c)
-        {:keys [from writes epoch] :as kept} (::plan (ctx/mem c))]
-    (when (and kept (= from (floor-cell (sh-sense/feet p))) (= writes (sense/known-writes p)) (= epoch (raw-epoch p)))
+        {:keys [from memory epoch] :as kept} (::plan (ctx/mem c))]
+    (when (and kept (= from (floor-cell (sh-sense/feet p))) (= memory (sense/known-memory p)) (= epoch (raw-epoch p)))
       kept)))
 
 (defn stay-inputs
   "What stay-estimate reads of c's body and world for a stay instead of walking `route-hp` to `goal`, as values: its
   feet, health, whether it can heal, its death-body, the known threats sensed now, the spawn chance at its cell and the
-  writes of what it knows and the reach of the threats (:weights, their fields' cells)."
+  memory epoch of what it knows and the reach of the threats (:weights, their fields' cells)."
   [c goal route-hp]
   (let [p (:primitives c)
         feet (sh-sense/feet p)
         live (vec (remove #(or (:fled %) (:remembered %)) (threats/known-threats c)))]
     {:goal goal :route-hp route-hp :feet feet :health (.-health (.self p)) :cannot-heal? (price/cannot-heal? c)
-     :body (threats/death-body c) :writes (sense/known-writes p)
+     :body (threats/death-body c) :memory (sense/known-memory p)
      :live live :weights (mapv #(:weights (field/field-of c %)) live)
      :chance (spawn-light/chance-at p (update-vals feet js/Math.floor) (:y feet) false false)}))
 

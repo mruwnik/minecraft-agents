@@ -302,7 +302,7 @@
   remembered id; unloaded stays unloaded. A known cell w (the fake's world) still holds as remembered reads the
   snapshot's id: the fixture joins fences to their neighbours, which the body's memory of the fake does not. It
   carries unknown, as the live snapshot does. Like the live one a section is masked once, on its first read, into a copy
-  (a per-cell masked read was 11% of the planner tests' CPU); the copies are dropped when (.writes unknown), the memory's
+  (a per-cell masked read was 11% of the planner tests' CPU); the copies are dropped when (.memoryEpoch unknown), the memory's
   write count, moves, as a view kept across rounds read memory live. sectionHas stays unmasked (live masks it): it is the planner's
   pre-check that lets it skip reading cells, so a true where live says false only makes it read the masked cells, same plan.
   pinned (a set of [x y z], the buried cells of :unreachable and :no-path) stay as they are: they stand for the old
@@ -311,7 +311,7 @@
   (let [view (js/Object.create snapshot)
         id (.-id unknown)
         pinned-by-section (delay (group-by (fn [[x y z]] [(bit-shift-right x 4) (bit-shift-right y 4) (bit-shift-right z 4)]) pinned))
-        writes (or (.-writes unknown) (constantly 0))
+        writes (or (.-memoryEpoch unknown) (constantly 0))
         sections (js/Map.)
         last #js {:cx nil :sy nil :cz nil :ids nil :writes -1}
         section-of (fn [cx sy cz]

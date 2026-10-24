@@ -30,4 +30,6 @@
               (when-not (.has store key) (set! (.-count st) (inc (.-count st))))
               (.set store key #js {:ids (.-ids s) :times (.-times s) :base (.-base s) :seen (.-seen s) :stamp -1 :cx (.-cx s) :sy (.-sy s) :cz (.-cz s)})))
           (set! (.-lastKey st) -1)
+          (set! (.-anyFluid st) true)
+          (set! (.-agingSec st) (js/Math.floor (/ (+ ((.-nowFn st)) (.-mutableMaxMs st)) 1000)))
           (count (.-sections data))))))

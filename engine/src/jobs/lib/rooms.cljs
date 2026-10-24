@@ -111,8 +111,8 @@
                            v)))))))
 
 (defn world-key
-  "What the body's picture of the world stands on (reach-room/steady-key: a block changed or newly seen, the clock in coarse
-  steps); a constant offline, where nothing changes."
+  "What the body's picture of the world stands on (reach-room/steady-key: a block changed or newly seen, a door aged out;
+  perception/memory-epoch); a constant offline, where nothing changes."
   [p]
   (or (some-> (aget p "perception") reach-room/steady-key) ""))
 

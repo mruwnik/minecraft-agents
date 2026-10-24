@@ -103,7 +103,7 @@
   (let [m (::round-looked (ctx/mem c))]
     (if (= (:at m) (look/cell-of (u/self-pos c))) (:cells m) #{})))
 
-(defn known-writes
+(defn known-memory
   "perception/memory-epoch of the body's perception: the same while all it knows of the world is (changed, or aged
   into unknown); nil without a perception."
   [p]

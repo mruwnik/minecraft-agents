@@ -171,8 +171,8 @@
   [p]
   (sections-reader p (fn [_ ^js sec _ _ _] (.-ids sec))))
 
-(defn- memory-writes
-  "(fn []) perception/memory-epoch, which moves whenever a cell is seen or changed or the clock passes a second (a masked view kept for a while re-reads memory only then)."
+(defn- memory-epoch-fn
+  "(fn []) perception/memory-epoch, which moves whenever a cell is seen or changed or, while a cell can still age, the clock passes a second (a masked view kept for a while re-reads memory only then)."
   [p]
   (when-let [per (aget p "perception")]
     (let [^js st (:st per)] (fn [] (perception/memory-epoch st)))))
@@ -306,7 +306,7 @@
            k (when (and known (rock-guess? p unknown)) (rock-beyond))
            mask (when known
                   (js/Object.assign #js {} unknown
-                                    #js {:id (if (.-edge unknown) unloaded-id (first (blocks/state-ids table (if under? "seagrass" "void_air")))) :blockedId stone :known known :writes (memory-writes p)
+                                    #js {:id (if (.-edge unknown) unloaded-id (first (blocks/state-ids table (if under? "seagrass" "void_air")))) :blockedId stone :known known :memoryEpoch (memory-epoch-fn p)
                                          :cell (unseen-share p) :seeDepth (see-depth-now p) :seeLit (look/see-lit-fn p) :rockBeyond (or k 0)}))]
        (when-let [pw (if mask (.pathWorld p mask) (.pathWorld p))]
          (let [pw (js/Object.assign #js {:table table :space space/space} pw)]

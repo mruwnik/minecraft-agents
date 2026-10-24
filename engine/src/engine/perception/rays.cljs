@@ -79,6 +79,7 @@
   (or (.-sight st)
       (let [^js table (.sightTable ^js raw)]
         (when (and table (pos? (.-length table)))
+          (set! (.-writes st) (inc (.-writes st)))
           (set! (.-sight st) table)))))
 
 ;; ---- thin blocks

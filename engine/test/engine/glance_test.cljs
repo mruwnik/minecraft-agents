@@ -217,10 +217,23 @@
         store (store/store-of st "overworld")
         writes #(.-writes st)
         again! #(let [w (writes)] (store/record! st store 0 65 4 id @clock) (- (writes) w))]
-    (swap! clock + 1000)
-    (is (zero? (again!)) "seen again soon: the answer was known all along")
+    (swap! clock + 5500)
+    (is (zero? (again!)) "seen again before it could read unknown: the answer was known all along")
     (swap! clock + 20000)
     (is (= 1 (again!)) "seen again after it read unknown: kept room answers are judged again")))
+
+(deftest seeing-air-beside-water-again-after-it-aged-counts-as-a-memory-write
+  (let [{:keys [per clock]} (rig {"0,65,4" "water"})
+        ^js st (:st per)
+        air (:state-id (perception/glance! per [0 65 3]))
+        _ (perception/glance! per [0 65 4])
+        store (store/store-of st "overworld")
+        writes #(.-writes st)
+        again! #(let [w (writes)] (store/record! st store 0 65 3 air @clock) (- (writes) w))]
+    (swap! clock + 5500)
+    (is (zero? (again!)) "seen again soon")
+    (swap! clock + 20000)
+    (is (= 1 (again!)) "air beside a remembered fluid read unknown meanwhile: a write")))
 
 (deftest a-stone-cell-seen-seconds-after-a-mark-reads-newer-than-it
   (let [{:keys [per clock]} (rig {"1,65,3" "stone"})

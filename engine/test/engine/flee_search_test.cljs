@@ -6,6 +6,7 @@
             [engine.fake.raw-world :as fake-raw]
             [engine.memory :as mem]
             [engine.perception :as perception]
+            [engine.perception.store :as store]
             [engine.settings :as settings]
             [engine.shelter-support :as st]
             [engine.sky-perception :as sky]
@@ -458,9 +459,13 @@
     (tu/run-async done
       (fn ^:async t []
         (let [clock (atom 1000000)
-              raw (tu/fake {:blocks junction :self {:pos {:x 0.5 :y 64 :z 0.5}}})
-              p (perception/wrap raw (perception/create (fake-raw/create raw) {:now #(deref clock)}))
-              _ (perception/pass! (aget p "perception") {:effort 1 :reuse? true})
+              raw (tu/fake {:blocks (assoc junction "3,64,0" "water") :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+              rw (fake-raw/create raw)
+              per (perception/create rw {:now #(deref clock)})
+              p (perception/wrap raw per)
+              _ (perception/pass! per {:effort 1 :reuse? true})
+              ^js st (:st per)
+              _ (store/record! st (store/store-of st "overworld") 3 64 0 (.stateAt ^js rw 3 64 0) @clock)
               c (ctx-of p)
               chasers [{:name "zombie" :mob "zombie" :pos {:x -4.5 :y 64 :z 0.5}}]
               ends (search/ring {:x 0.5 :z 0.5} chasers 10 4)
