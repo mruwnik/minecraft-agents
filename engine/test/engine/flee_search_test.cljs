@@ -349,6 +349,23 @@
               (swap! (fake-world/state raw) assoc-in [:self :onFire] true)
               (is (changed? dark (await (price (ctx nil)))) "the body on fire"))))))))
 
+(deftest a-kept-flee-price-is-planned-again-when-the-raw-world-changed-out-of-sight
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [raw (tu/fake {:blocks junction :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+              p (perception/wrap raw (perception/create (fake-raw/create raw) {:now (constantly 1000000)}))
+              _ (perception/pass! (aget p "perception") {:effort 1 :reuse? true})
+              c (ctx-of p)
+              chasers [{:name "zombie" :mob "zombie" :pos {:x -4.5 :y 64 :z 0.5}}]
+              ends (search/ring {:x 0.5 :z 0.5} chasers 10 4)
+              price (fn ^:async price [] (await (search/price! c ends {:chasers chasers})))
+              _ (await (price))
+              base (await (price))]
+          (is (identical? base (await (price))))
+          (swap! (fake-world/state raw) assoc-in [:blocks "-3,64,0"] "stone")
+          (is (not (identical? base (await (price)))) "a cell changed with no write the body sensed: the planner reads it live"))))))
+
 (deftest a-death-by-terrain-fades-in-the-kept-price-as-the-clock-moves
   (async done
     (tu/run-async done

@@ -16,6 +16,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [engine.perception.rays :as rays]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.death :as death]
@@ -172,21 +173,23 @@
 
 (def recheck-ms "How long a walk held :risky waits before status prices it again." 10000)
 
+(defn- raw-epoch [p] (some-> (look/raw-of p) rays/epoch-of))
+
 (defn note-plan!
   "Keep plan ({:status :steps}), the one go-to's round held its walk to goal on, for status to price while the body
-  stands where it planned from and knows the world as it did (sense/known-writes)."
+  stands where it planned from and the world is as it was (sense/known-writes, the raw world's epoch)."
   [c goal plan]
   (let [p (:primitives c)]
-    (ctx/update-mem! c assoc ::plan {:from (floor-cell (sh-sense/feet p)) :goal goal :writes (sense/known-writes p)
+    (ctx/update-mem! c assoc ::plan {:from (floor-cell (sh-sense/feet p)) :goal goal :writes (sense/known-writes p) :epoch (raw-epoch p)
                                      :status (:status plan) :steps (mapv floor-cell (:steps plan))})))
 
 (defn planned
   "The plan note-plan! kept, with its :goal, nil once the body moved from where it planned from or a block it knows
-  changed (a plan made now might differ)."
+  changed or the raw world did (a plan made now might differ)."
   [c]
   (let [p (:primitives c)
-        {:keys [from writes] :as kept} (::plan (ctx/mem c))]
-    (when (and kept (= from (floor-cell (sh-sense/feet p))) (= writes (sense/known-writes p)))
+        {:keys [from writes epoch] :as kept} (::plan (ctx/mem c))]
+    (when (and kept (= from (floor-cell (sh-sense/feet p))) (= writes (sense/known-writes p)) (= epoch (raw-epoch p)))
       kept)))
 
 (defn stay-inputs

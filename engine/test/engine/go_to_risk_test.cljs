@@ -182,6 +182,10 @@
       (swap! writes inc)
       (is (nil? (risk/planned c)) "a block the body knows changed: a plan made now might differ")
       (risk/note-plan! c goal (plan-of straight-cells))
+      (is (some? (risk/planned c)))
+      (swap! (fake/state (:primitives c)) assoc-in [:blocks "6,64,0"] "stone")
+      (is (nil? (risk/planned c)) "the raw world changed with no write the body sensed")
+      (risk/note-plan! c goal (plan-of straight-cells))
       (swap! (fake/state (:primitives c)) assoc-in [:self :pos] [3.5 64 0.5])
       (is (nil? (risk/planned c)) "the body moved from where it planned"))))
 

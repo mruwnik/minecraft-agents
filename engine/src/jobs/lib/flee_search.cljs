@@ -15,6 +15,7 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.path.executor :as executor]
+            [engine.perception.rays :as rays]
             [engine.path.planner.base :as base]
             [engine.path.planner-tuned :as planner]
             [engine.settings :as settings]
@@ -189,7 +190,7 @@
 (defonce ^:private kept-prices (js/WeakMap.))
 
 (defn gather
-  "Every input of price-all!'s result, read once: {:dim :writes (the remembered world) :pos :kit :food :body :others (the
+  "Every input of price-all!'s result, read once: {:dim :writes (the remembered world) :epoch (the raw world's change counter: the planner reads known cells live) :pos :kit :food :body :others (the
   known threats not chasing, with their reach fns) :caught-by
   (the threats priced, with their reach fns) :policy (wworld/body-policy: the job's args, effects, oxygen and fire
   through it) :targets :y-margin :chasers (their cells) :dangers (the planner's: cells, fades and radii as they come to) :tolls
@@ -199,7 +200,7 @@
   [c st targets {:keys [y-margin chasers]} chased other?]
   (let [p (:primitives c)
         raw (look/raw-of p)]
-    {:dim (some-> ^js st .-dim) :writes (some-> ^js st .-writes) :pos (u/self-pos c) :kit (wworld/kit-of c) :food (.-food (.self p))
+    {:dim (some-> ^js st .-dim) :writes (some-> ^js st .-writes) :epoch (some-> raw rays/epoch-of) :pos (u/self-pos c) :kit (wworld/kit-of c) :food (.-food (.self p))
      :body (threats/death-body c)
      :others (threats/threats-of c other?)
      :caught-by (mapv #(assoc % :caught 1) (threats/threats-of c (complement other?)))
