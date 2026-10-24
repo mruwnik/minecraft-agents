@@ -188,9 +188,9 @@
   (let [fit (case-fit mob)]
     (when (and fit (some :blocks (class-cases mob)))
       (let [far (if (threat/ranged? {:name mob}) (threat/fire-range mob) threat/max-follow-range)
-            f (:factors fit)
-            at (fn [d] (let [d (min d far) i (js/Math.floor d)] (+ (f i) (* (- d i) (- (f (inc i)) (f i))))))
-            most (apply max (map f (range (inc (js/Math.ceil far)))))]
+            ^js f (into-array (map (:factors fit) (range (+ 2 (js/Math.ceil far)))))
+            at (fn [d] (let [d (min d far) i (js/Math.floor d)] (+ (aget f i) (* (- d i) (- (aget f (inc i)) (aget f i))))))
+            most (apply max f)]
         (if pos
           (fn [x y z] (at (js/Math.hypot (- (+ x 0.5) (:x pos)) (- y (:y pos)) (- (+ z 0.5) (:z pos)))))
           (constantly most))))))
