@@ -16,6 +16,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.stair-time :as stair-time]
+            [jobs.lib.stair-cells :as geo]
             [jobs.lib.storage :as storage]
             [jobs.lib.threats :as threats]
             [jobs.lib.torch :as torch]
@@ -202,12 +203,13 @@
          (:cost (cost/walk-cost {:distance r}))))))
 
 (defn climb-sealed?
-  "Whether the body has seen an unbreakable block (jobs.lib.access.rules) over its head within climb blocks: a stair up
-  that far runs into it (a world-test shell, the nether's roof)."
+  "Whether the body has seen an unbreakable block (jobs.lib.access.rules) in a cell a stair up of climb steps along the
+  way it faces would cut (a world-test shell, the nether's roof)."
   [p self climb]
-  (let [head (inc (js/Math.floor (:y self)))]
-    (boolean (some #(> (:y (:pos %)) head)
-                   (look/seen-blocks p {:names (vec rules/unbreakable) :radius (inc climb) :max js/Infinity})))))
+  (let [feet (u/cell-vec self)
+        heading (keyword (look/facing p))
+        cuts (mapcat :cut (take climb (rest (iterate #(geo/step-cells (:next %) :up heading) {:next feet}))))]
+    (boolean (some #(contains? rules/unbreakable (:name (look/seen-block p (zipmap [:x :y :z] %)))) cuts))))
 
 (defn tunnel-way
   "{:way :tunnel :cost :y} of a tunnelled ore need as jobs.gather.mine gets it unseen: the torches it stocks first
@@ -255,10 +257,16 @@
 (defn search-cost "Seconds per find of the cheaper search-way for an unseen need." [c need] (:cost (search-way c need)))
 
 (defn plan-cost
-  "Seconds to gather a plan's raw needs (need-cost, search-cost when a need has no block seen) and smelt what it smelts."
+  "Seconds to gather a plan's raw needs (need-cost, search-cost when a need has no block seen) and smelt what it smelts.
+  The torches the tunnelled needs stock first (stock-s) are got once for them all."
   [c version pl]
-  (+ (reduce + 0 (map #(if (seen-of c %) (need-cost c %) (search-cost c %)) (some-> pl :gather (gather-needs version))))
-     (* cost/smelt-step (count (filter #(= :smelt (:op %)) (:steps pl))))))
+  (let [needs (some-> pl :gather (gather-needs version))
+        ways (map #(when-not (seen-of c %) (search-way c %)) needs)
+        tunnels (count (filter #(= :tunnel (:way %)) ways))
+        stock (if (< 1 tunnels) (stock-s c) 0)]
+    (+ (reduce + 0 (map #(if-let [w %2] (:cost w) (need-cost c %)) needs ways))
+       (if (infinite? stock) 0 (- (* (dec tunnels) stock)))
+       (* cost/smelt-step (count (filter #(= :smelt (:op %)) (:steps pl)))))))
 
 (defn gathered-s
   "Seconds a gather plan takes: its plan-cost (the death each walk risks with it) and its craft steps."

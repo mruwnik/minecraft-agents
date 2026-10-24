@@ -133,6 +133,21 @@
           (is (every? #(<= 71 (get-in % [:from 1])) (f/events-of s :obtain.exploring)) "no walk to look for trees starts under the roof")
           (is (<= 1 (get (f/inv s) "oak_log" 0)) "and the tree outside was felled"))))))
 
+(deftest an-ore-whose-tunnel-is-priced-above-the-feet-is-climbed-to-before-the-mine
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [rock (into {} (for [x (range -6 7) z (range -6 7) y (range 63 71)
+                                  :when (not (and (<= -2 x 2) (<= -2 z 2) (<= 64 y 65)))]
+                              [(str x "," y "," z) "stone"]))
+              rock (assoc rock "0,68,6" "iron_ore") ; hidden in rock, so the mine after the climb ends soon
+              s (f/start (ore-world rock [{:name "stone_pickaxe" :count 1} {:name "torch" :count 16}]) [f/own-zone])]
+          (with-redefs [plan/search-way (fn [_ _] {:way :tunnel :y 68 :cost 1})]
+            (await (obtain! s {:item "raw_iron" :count 1 :ways #{:gather}} 100)))
+          (is (seq (f/events-of s :stair.step)) "a stair was cut up")
+          (is (= [68] (map :y (f/events-of s :obtain.climbed))) "once, to the priced height")
+          (is (= [:done] (map :reason (f/events-of s :obtain.climbed))) "with the stair's ending"))))))
+
 (deftest an-ore-whose-tunnel-is-priced-above-the-feet-is-climbed-to-once
   (let [p (tu/seeing-all (tu/fake-on-floor {:inventory [{:name "stone_pickaxe" :count 1}]}))
         view (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)}))

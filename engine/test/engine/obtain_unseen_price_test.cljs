@@ -123,8 +123,10 @@
     (is (< (:cost cave) (:tunnel cave) js/Infinity))
     (is (= [:tunnel 16] ((juxt :way :y) (iron-way "dirt" -42 :worth kit-worth)))
         "deep below iron's level, where only its small placement reaches, a stair up to iron's level and a tunnel there")
-    (is (= [:tunnel -41] ((juxt :way :y) (iron-way "dirt" -42 :worth kit-worth :blocks {"3,-36,3" "bedrock"})))
-        "under a seen bedrock roof no stair goes up: the kit's bill still pays a tunnel at the feet")
+    (is (= [:tunnel -41] ((juxt :way :y) (iron-way "dirt" -42 :worth kit-worth :blocks {"0,-36,-5" "bedrock" "0,-36,5" "bedrock" "5,-36,0" "bedrock" "-5,-36,0" "bedrock"})))
+        "a seen bedrock block in the cells the stair would cut: no stair goes up, the kit's bill still pays a tunnel at the feet")
+    (is (= [:tunnel 16] ((juxt :way :y) (iron-way "dirt" -42 :worth kit-worth :blocks {"3,-36,3" "bedrock"})))
+        "bedrock seen beside the stair's line is no bar")
     (is (= :look (:way (iron-way "stone" -41 :worth kit-worth)))
         "a hall floored with stone at y -41 (obtain-iron-look) is looked over at the kit's worth, not tunnelled")))
 
@@ -149,3 +151,17 @@
 (deftest a-dark-ore-seen-below-with-no-torch-is-priced-by-its-dark-way-not-refused
   (let [dark (coal-below-cost [0 0])]
     (is (< (coal-below-cost [0 15]) dark js/Infinity) "the dark walk there costs more than a lit one, but is a way")))
+
+(deftest the-torches-a-tunnel-stocks-are-priced-once-for-all-the-tunnelled-needs-of-a-plan
+  (let [p (tu/seeing-all (tu/fake-on-floor {:floor [69 -50 -45 50 45] :floor-block "grass_block" :time 6000
+                                            :self {:pos [0.5 70 0.5]}
+                                            :inventory [{:name "stone_pickaxe" :count 1}]}))
+        view (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)}))
+        c {:primitives p :view (constantly view)
+           :args {:item "iron_ingot" :count 3 :ways #{:craft :smelt :gather :search} :explore true :ignore-zones? true}}
+        v (game/version-of p)
+        pl {:steps [] :gather {"raw_iron" 3 "raw_copper" 3}}
+        needs (table/gather-needs (:gather pl) v)]
+    (with-redefs [plan/stock-s (constantly 100)]
+      (is (= [:tunnel :tunnel] (map (comp :way #(plan/search-way c %)) needs)))
+      (is (= (- (reduce + (map #(plan/search-cost c %) needs)) 100) (plan/plan-cost c v pl))))))

@@ -274,8 +274,8 @@
       :continue
       (let [at (js/Math.floor (:y (u/self-pos c)))]
         (ctx/update-mem! c #(-> % (update :gather dissoc :climb) (assoc-in [:gather :climbed (:key need)] true)))
-        (ctx/emit! c :obtain.climbed :info {:item (:key need) :y at :to y
-                                            :message (str "stair up for " (:key need) " ended at y " at (when (< at y) (str ", short of y " y)))})
+        (ctx/emit! c :obtain.climbed :info {:item (:key need) :y at :to y :reason (contract/cause-key r)
+                                            :message (str "stair up for " (:key need) " ended " (name (contract/cause-key r)) " at y " at (when (< at y) (str ", short of y " y)))})
         :again))))
 
 (defn start-cause
@@ -345,6 +345,7 @@
   (let [p (:primitives c)
         pl (gather-plan c names (- target have))
         need (some->> (some-> pl :gather (gather-need (game/version-of p))) (with-block c) (with-count p) (with-avoid c))
+        climb (delay (climb-y c need))
         stocking (await (torch-step! c need))
         wet (when (and need (not stocking) (not (get-in (ctx/mem c) [:gather :before])) (not= "water_bucket" (:key need)) (not (animal? need)) (breath/in-water? p))
               (#{:continue :again} (await (surface/leave-water! c))))]
@@ -375,8 +376,8 @@
       (book-light! c (torch-due c (start-cause c need)))
       (and (not (get-in (ctx/mem c) [:gather :before])) (light-settling? c (start-cause c need)))
       :continue
-      (and (not (get-in (ctx/mem c) [:gather :before])) (climb-y c need))
-      (await (climb-step! c need (climb-y c need)))
+      (and (not (get-in (ctx/mem c) [:gather :before])) @climb)
+      (await (climb-step! c need @climb))
       (and (not (get-in (ctx/mem c) [:gather :before]))
            (not (if (explore-opts c)
                   ;; :later (dark, night) is the child's to wait out and :look its to look up at, not a sign that nothing is there
