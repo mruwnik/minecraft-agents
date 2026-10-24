@@ -452,7 +452,7 @@
           (await (run-until-empty eng 3))
           (is (= [30000] (mapv #(.-ms (.-args %)) (calls p "offline"))))
           (is (= ["logged-out-for-sleeping-player"] (mapv #(.-why (.-args %)) (calls p "offline"))))
-          (is (= [{:ms 30000 :status "ok"}] (entries eng :log-out)))
+          (is (= [{:ms 30000 :status "ok" :assumed true}] (entries eng :log-out)))
           (is (= {:cap 10 :ttl day-ms} (mem/policy (mem/view (:store eng)) :log-out))))))))
 
 (deftest log-out-declines-by-day

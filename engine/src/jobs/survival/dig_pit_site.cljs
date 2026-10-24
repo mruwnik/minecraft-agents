@@ -33,6 +33,16 @@
   (let [here (sh-sense/feet (:primitives c))]
     (boolean (some #(and (or (nil? way) (= way (:way %))) (<= (u/dist here (:pos %)) (site-radius %))) (failed c)))))
 
+(def exposed-policy
+  "The :night-exposed entries {:pos}: where a night ended with no shelter; forgotten with the failed sites when the night ends."
+  {:cap 3 :ttl :forever})
+
+(defn exposed-here?
+  "Whether the night ended exposed within shut-in's futile radius of the feet: every way failed there, so it is not tried again."
+  [c]
+  (let [here (sh-sense/feet (:primitives c))]
+    (boolean (some #(<= (u/dist here (:pos (:data %))) (shut-night/futile-radius)) (ctx/entries c :night-exposed)))))
+
 (defn clear-of-failed?
   "Whether feet cell f is at least site-radius+1 from every failed site."
   [c f]

@@ -43,10 +43,11 @@
 (defn max-sites [] (settings/get settings :jobs.survival.night.sites/max-sites))
 
 (defn forget-failed!
-  "The night is over: forget shut-in's failed sites (:shut-in-failed) and the doorways it gave up, so the next night tries them again."
+  "The night is over: forget shut-in's failed sites (:shut-in-failed), where the night ended exposed and the doorways it gave up, so the next night tries them again."
   [c]
   (ctx/forget-where! c :doorway-tried (constantly true))
-  (ctx/forget-where! c :shut-in-failed (constantly true)))
+  (ctx/forget-where! c :shut-in-failed (constantly true))
+  (ctx/forget-where! c :night-exposed (constantly true)))
 
 (defn exposed-why
   "A short why for a night with no shelter, from the failed sites' reasons: counts per reason, and a hint to move when

@@ -65,7 +65,7 @@
   Fleeing (the night.sites ::flee-radius setting, 0 never; at most max-flees walks): to the not-yet-tried candidate go-to reaches soonest (jobs.lib.targets/nearest!): a known bed, a :roofed-places place, a seen cave or overhang cell (walled in on arrival), or seen natural ground the carried tools dig. shelter.fled on arrival, shelter.flee_failed otherwise.
   Only sleep holds (declared, ctx/hold-still!, hold-ms per wait; night.hold cooks, eats or runs get-food first).
   An overdue body warns needs_bed once a day; a respawn bed seen gone is written :spawn-lost (warn spawn_lost once).
-  Memory: job memory :edge-looked, :edge-phase, :edge-steps, :enclose, :enclose-failed (feet cells where walling in failed), :sheltered, :log-out-failed, :no-site, :shut-ins, :digging, :bed-down, :pit-trapped, :roof-walk-failed, :left; body memory :doorway-tried and shut-in's :shut-in-failed (forgotten when the night ends, at most ten minutes).
+  Memory: body memory :night-exposed (where the night ended with no shelter: later firings there go straight to the exposed log-out); job memory :edge-looked, :edge-phase, :edge-steps, :enclose, :enclose-failed (feet cells where walling in failed), :sheltered, :log-out-failed, :no-site, :shut-ins, :digging, :bed-down, :pit-trapped, :roof-walk-failed, :left; body memory :doorway-tried and shut-in's :shut-in-failed (forgotten when the night ends, at most ten minutes).
   Muting :night does not end a running night job: cancel it too.")
 
 (a/defargs args
@@ -253,9 +253,11 @@
   (let [p (:primitives c)]
     (when-not (= :exposed (:sheltered (ctx/mem c)))
       (hold/sheltered! c :exposed)
-      (ctx/emit! c :shelter.exposed :warn {:pos (sh-sense/feet p) :sites (pit-site/failed c)
-                                           :text (str "cannot shelter here (no bed, nobody asleep, no site to dig in, nowhere safer known: "
-                                                      (sites/exposed-why (pit-site/failed c) (:no-way-text (ctx/mem c))) "); logging out until it is safe")}))
+      (when-not (pit-site/exposed-here? c)
+        (ctx/remember! c :night-exposed {:pos (sh-sense/feet p)} pit-site/exposed-policy)
+        (ctx/emit! c :shelter.exposed :warn {:pos (sh-sense/feet p) :sites (pit-site/failed c)
+                                             :text (str "cannot shelter here (no bed, nobody asleep, no site to dig in, nowhere safer known: "
+                                                        (sites/exposed-why (pit-site/failed c) (:no-way-text (ctx/mem c))) "); logging out until it is safe")})))
     (hold/busy! c)
     (let [l (if (:log-out-failed (ctx/mem c)) {:kind :nothing-possible} (await (ctx/call c :log-out 'jobs.survival.log-out {})))]
       (cond
@@ -488,7 +490,7 @@
           (do (ctx/end c :done nil (ending/done-data c (if (= :logged-out sheltered) :logged-out :roofed))))
           (and (ctx/way? c :shelter) (await (light/wanted? c))) (await (light/light! c))
           (:fleeing (ctx/mem c)) (await (flee/flee! c (:fleeing (ctx/mem c))))
-          (= :exposed sheltered) (await (exposed! c))
+          (or (= :exposed sheltered) (pit-site/exposed-here? c)) (await (exposed! c))
           (not (ctx/way? c :shelter)) (await (flee-or-hold! c))
           (:no-site (ctx/mem c)) (await (no-site! c))
           :else (await (shelter! c)))))
