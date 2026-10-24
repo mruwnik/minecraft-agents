@@ -154,24 +154,24 @@
   the fight-or-flee weighing, from what that step judges by: its chasers (flight/look over the memory flee! resumes,
   flight/resume-flight), their cover-fn and blast, its rooms (survey, kept nowhere), its stair up (way-up: a seen way,
   flee-search/way-up-chance, no search), else its search (respond.goal/judge! over homes), choose options
-  (respond.goal/choose-opts) and cells looked at (memory :glanced), no glance taken. Kept (memory :caught-chance) while
-  the body stays in its cell for a flee step's seconds (flee-search ::step-s) and has looked at nothing more."
+  (respond.goal/choose-opts) and cells looked at (memory :glanced), no glance taken. Kept (memory :caught-chance) for a
+  flee step's seconds (flee-search ::step-s) while its cell, its looks, its chasers and its stair up stay the same."
   [c]
   (let [p (:primitives c)
-        here (respond.goal/cell (u/self-pos c))
         now (ctx/now c)
-        {:keys [glanced] kept :caught-chance :as mem} (ctx/mem c)]
-    (if (and (= here (:cell kept)) (= glanced (:glanced kept))
-             (< (- now (:t kept)) (* 1000 (settings/get search/settings ::search/step-s))))
+        {:keys [glanced] kept :caught-chance :as mem} (ctx/mem c)
+        threats (:on (flight/look c (flight/resume-flight mem now)))
+        up (way-up c threats)
+        in {:cell (respond.goal/cell (u/self-pos c)) :glanced glanced :chasers (mapv #(.-id %) threats) :up up}]
+    (if (and (= in (:in kept)) (< (- now (:t kept)) (* 1000 (settings/get search/settings ::search/step-s))))
       (:chance kept)
-      (let [threats (:on (flight/look c (flight/resume-flight mem now)))
-            counts (wworld/way-counts p)
-            chance (if (way-up c threats)
+      (let [counts (wworld/way-counts p)
+            chance (if up
                      (search/way-up-chance counts)
                      (let [covered? (cover-fn p threats (flight/fire-spots c))
                            judged (await (respond.goal/judge! c (homes c (:rooms (survey c threats false)) (seq (blast p threats))) covered?))]
                        (search/caught-chance (:ends judged) counts (respond.goal/choose-opts c threats covered? (:home judged)) glanced)))]
-        (ctx/update-mem! c assoc :caught-chance {:cell here :t now :glanced glanced :chance chance})
+        (ctx/update-mem! c assoc :caught-chance {:in in :t now :chance chance})
         chance))))
 
 (defn ^:async look-ahead!

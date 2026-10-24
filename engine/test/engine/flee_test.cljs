@@ -878,6 +878,26 @@
           (await (run-job! s 'pricer {}))
           (is (= [#{7 8} #{7} #{7}] @priced) "both known; the price and the flight's step both run from the chasing zombie alone"))))))
 
+(deftest a-kept-flee-price-is-asked-again-once-its-chaser-is-dead
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [prices (atom [])
+              s (setup-sensed {:entities [(zombie 7 2 {})]})
+              s (assoc-in s [:eng :jobs 'pricer]
+                          {:round (fn ^:async r [c]
+                                    (look/see! c)
+                                    (swap! prices conj (await (cover/caught-chance! c)))
+                                    (ctx/update-mem! c assoc :dead [7])
+                                    (swap! prices conj (await (cover/caught-chance! c)))
+                                    (ctx/update-mem! c dissoc :caught-chance)
+                                    (swap! prices conj (await (cover/caught-chance! c)))
+                                    (ctx/end c :done nil))})]
+          (await (run-job! s 'pricer {}))
+          (let [[chased dead fresh] @prices]
+            (is (not= chased dead) (str "the zombie at 2 blocks catches the flight; dead, it chases nothing " (pr-str @prices)))
+            (is (= fresh dead) "the price asked again is the one asked afresh")))))))
+
 (deftest a-flight-target-behind-the-body-is-looked-at-first
   (async done
     (tu/run-async done
