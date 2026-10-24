@@ -25,6 +25,7 @@
             [jobs.lib.ready :as ready]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.block-sets :as bs]
+            [jobs.lib.dig-route :as dig-route]
             [jobs.lib.escape :as escape]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.shelter.inside :as sh-inside]
@@ -187,6 +188,17 @@
     (forget-routes! (route-owner c))
     (ctx/update-mem! c #(-> % (dissoc :route-search) (update :spent-routes (fnil into #{}) ends)))))
 
+(defn stand-goal
+  "The cell a way is made to for goal: a solid goal cell with an open cell above it, with :range of one block or more, is
+  worked from on top of it, not dug away."
+  [c [x y z :as goal]]
+  (let [block-at (escape/block-at-of (:primitives c))]
+    (if (and (>= (:range (:args c) 1) 1)
+             (not (dig-route/open? (block-at goal)))
+             (dig-route/open? (block-at [x (inc y) z])))
+      [x (inc y) z]
+      goal)))
+
 (defn ^:async choose-escalation!
   "escalate!'s choice and start of the next way, or its give-up."
   [c pos failed]
@@ -197,7 +209,7 @@
                                                 (u/dist (zipmap [:x :y :z] feet) pos)))
         n (:fruitless counted)
         _ (when (<= n (tuning/max-escalations)) (await (look-round! c feet)))
-        goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
+        goal (stand-goal c (mapv #(js/Math.floor (% pos)) [:x :y :z]))
         slice (route-slice (route-owner c))
         shut? (delay (escape/walk-enclosed? c))
         opts (way-opts c feet (fetch-tool? (:primitives c) (:doors (:args c)) shut?) slice)
@@ -424,7 +436,7 @@
   [c pos {:keys [step own] :as e}]
   (and (= :stair step) (not own)
        (let [p (:primitives c)
-             goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
+             goal (stand-goal c (mapv #(js/Math.floor (% pos)) [:x :y :z]))
              block-at (escape/block-at-of p)
              may-dig? (may-dig-fn c)]
          (not= :none (:step (escape/choose p (end/feet-cell c) goal #(and (may-dig? %) (not (tools/needs-tool-to-clear? p (block-at %))))
@@ -532,7 +544,7 @@
       :else
       (let [slice (route-slice (route-owner c))
             feet (end/feet-cell c)
-            goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
+            goal (stand-goal c (mapv #(js/Math.floor (% pos)) [:x :y :z]))
             plan (fn [floors-unseen-ok?]
                    (route-cells (:primitives c) feet goal (may-dig-fn c) (own-placed-fn c) floors-unseen-ok? (fetch-tool? c)
                                 (search-opts {:stands (ledger/stair-stands c) :slice slice :spent (:spent-routes m)})))
