@@ -161,7 +161,7 @@
 (defn path-world
   "The primitives' pathWorld sensing (a snapshot over the world) with the planner's block table and free-space module, nil when
   they have none or cannot sense now. With unknown (unknown-spec), over a body with a perception: cells the body never saw
-  or felt read void_air (its known cells read as they are now), and the snapshot carries the planner's options.unknown:
+  or felt read void_air (its known cells as remembered), and the snapshot carries the planner's options.unknown:
   the spec with the mask's id, cell (unseen-share), seeDepth (from what the body holds now) and seeLit (look/see-lit-fn). Under ground
   (sh-sense/buried?, head not under water, not :edge), an unseen cell past ::rock-beyond of every seen open cell, the
   feet and the spec's seeds (with-seeds) reads stone (jobs.lib.walk.rock), or with the spec's rockEdge the loaded edge (a

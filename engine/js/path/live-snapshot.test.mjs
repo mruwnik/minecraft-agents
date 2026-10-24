@@ -104,17 +104,17 @@ const memoryRig = () => {
   const memory = new Uint16Array(4096)
   const at = (x, y, z) => ((y & 15) << 8) | ((z & 15) << 4) | (x & 15)
   memory[at(3, 70, 4)] = id('stone') + 1
-  memory[at(4, 70, 4)] = id('stone') + 1 // remembered as stone, dirt now: the live id wins
+  memory[at(4, 70, 4)] = id('stone') + 1 // remembered as stone, dirt now: changed out of sight
   const asked = []
   const known = (cx, sy, cz) => { asked.push([cx, sy, cz]); return cx === 0 && sy === 4 && cz === 0 ? memory : null }
   const unknown = { id: id('void_air'), known }
   return { snapshot: liveSnapshot(world, { ...SIZE, unknown }), asked, unknown, world }
 }
 
-test('with unknown, a cell the body knows reads its live id', () => {
+test('with unknown, a cell the body knows reads its remembered id', () => {
   const { snapshot } = memoryRig()
   assert.equal(snapshot.stateAt(3, 70, 4), id('stone'))
-  assert.equal(snapshot.stateAt(4, 70, 4), id('dirt'))
+  assert.equal(snapshot.stateAt(4, 70, 4), id('stone'))
 })
 
 test('with unknown, a cell the body never saw in a known section reads the mask id', () => {
@@ -135,7 +135,7 @@ test('with unknown, a blocked cell the body has seen since reads as it is', () =
   unknown.blockedId = id('stone')
   unknown.blocked = new Set(['4,70,4', '5,70,4'])
   const masked = liveSnapshot(world, { ...SIZE, unknown })
-  assert.equal(masked.stateAt(4, 70, 4), id('dirt'))
+  assert.equal(masked.stateAt(4, 70, 4), id('stone'))
   assert.equal(masked.stateAt(5, 70, 4), id('stone'))
 })
 

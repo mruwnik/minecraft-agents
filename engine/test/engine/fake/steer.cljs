@@ -18,6 +18,7 @@
   Test-only; ported from the deleted js/fake-steer.mjs."
   (:require [engine.constants :as k]
             [engine.fake.doors :as doors]
+            [engine.fake.raw-world :as raw]
             [engine.path.blocks :as blocks]
             [engine.path.fixture :as fx]
             [engine.path.space :as space]
@@ -297,14 +298,16 @@
 
 (defn masked
   "snapshot read through unknown, live-snapshot.mjs's mask option: a cell the body's memory ((.known unknown cx sy cz), sy the
-  world section y: ids + 1, 0 never seen; nil: none of it seen) has not got reads (.-id unknown); unloaded stays unloaded. It
+  world section y: ids + 1, 0 never seen; nil: none of it seen) has not got reads (.-id unknown), a known cell its
+  remembered id; unloaded stays unloaded. A known cell w (the fake's world) still holds as remembered reads the
+  snapshot's id: the fixture joins fences to their neighbours, which the body's memory of the fake does not. It
   carries unknown, as the live snapshot does. Like the live one a section is masked once, on its first read, into a copy
   (a per-cell masked read was 11% of the planner tests' CPU); the copies are dropped when (.writes unknown), the memory's
   write count, moves, as a view kept across rounds read memory live. sectionHas stays unmasked (live masks it): it is the planner's
   pre-check that lets it skip reading cells, so a true where live says false only makes it read the masked cells, same plan.
   pinned (a set of [x y z], the buried cells of :unreachable and :no-path) stay as they are: they stand for the old
   walker's refusal, which no unseen cell can hide."
-  [^js snapshot ^js unknown pinned]
+  [^js snapshot ^js unknown pinned w]
   (let [view (js/Object.create snapshot)
         id (.-id unknown)
         pinned-by-section (delay (group-by (fn [[x y z]] [(bit-shift-right x 4) (bit-shift-right y 4) (bit-shift-right z 4)]) pinned))
@@ -318,8 +321,13 @@
                                  mem (.known unknown cx sy cz)
                                  x0 (bit-shift-left cx 4) y0 (bit-shift-left sy 4) z0 (bit-shift-left cz 4)]
                              (dotimes [i 4096]
-                               (let [s (.stateAt snapshot (+ x0 (bit-and i 15)) (+ y0 (bit-shift-right i 8)) (+ z0 (bit-and (bit-shift-right i 4) 15)))]
-                                 (aset ids i (if (or (== s 0xFFFF) (and mem (pos? (aget mem i)))) s id))))
+                               (let [x (+ x0 (bit-and i 15)) y (+ y0 (bit-shift-right i 8)) z (+ z0 (bit-and (bit-shift-right i 4) 15))
+                                     s (.stateAt snapshot x y z)
+                                     m (if mem (dec (aget mem i)) -1)]
+                                 (aset ids i (cond (== s 0xFFFF) s
+                                                   (neg? m) id
+                                                   (or (== m s) (== m (raw/state-at-pos w [x y z]))) s
+                                                   :else m))))
                              (doseq [[x y z] (get @pinned-by-section [cx sy cz])]
                                (aset ids (bit-or (bit-shift-left (bit-and y 15) 8) (bit-shift-left (bit-and z 15) 4) (bit-and x 15))
                                      (.stateAt snapshot x y z)))

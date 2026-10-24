@@ -50,7 +50,7 @@
             [jobs.movement.go-to.escalation :as esc]
             [jobs.movement.go-to.reprice :as reprice]
             [jobs.movement.go-to.restore :as restore]
-            [jobs.movement.go-to.faults :refer [note-fault! refused-hang shut-foreign]]
+            [jobs.movement.go-to.faults :refer [look-at-stuck! note-fault! refused-hang shut-foreign]]
             [jobs.movement.go-to.health :as health]
             [jobs.movement.go-to.own-way :refer [dive-end dive-floor! own-way own-way-left! plan-check straight-from! walk-own-way!]]
             [jobs.movement.go-to.result :as end :refer [known-frontier-result unloaded-end]]
@@ -547,6 +547,7 @@
            (or (when (= :again handled) :again)
           (let [result (cond-> result (:needs-health handled) (-> (assoc :status :no-path :reason :needs-health) (merge (select-keys handled [:heal :health :hp-cost :hp-budget :hungry-food]))))
                 _ (note-fault! c walked)
+                _ (await (look-at-stuck! c walked))
                 unstuck? (await (unstick/swim-out! c pos walked))
                 [starts looped?] (note-start (:starts (ctx/mem c)) (mapv #(js/Math.floor (% from)) [:x :y :z]) best)
                 result (cond-> result

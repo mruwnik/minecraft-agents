@@ -1,0 +1,23 @@
+;; Card fca09d71: plans read the cells the body knows as it remembers them. A roofed corridor (x 2..22, z 16), lit by its
+;; glowstone floor while the body at x 14 looks west down it; the body turns east, the floor goes dark and stone walls the
+;; corridor at x 8, all out of its sight. A go-to west plans through the remembered air, walks until it sees the wall (within
+;; perception's near of 4 blocks in the dark), and then digs through it, or with :ways #{:walk} gives up there, not at the start.
+{:defaults
+ {:tags [:movement :go-to]
+  :time :any
+  :plot {:height 6}
+  :blocks [[:fill [0 -1 14] [24 2 18] "stone"] [:fill [2 0 16] [22 1 16] "air"] [:fill [2 -1 16] [22 -1 16] "glowstone"]]
+  :body {:at [14.5 0 16.5] :yaw 90 :pitch 0 :settle-s 3 :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1]]}
+  :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:until-facing {:yaw 270 :pitch 0} 10]
+        [:rcon "execute positioned $X $Y $Z run fill ~2 ~-1 ~16 ~22 ~-1 ~16 stone"]
+        [:rcon "execute positioned $X $Y $Z run fill ~8 ~ ~16 ~8 ~1 ~16 stone"]]
+  :limit-s 90}
+ :cases
+ [{:name "walk-only-walks-to-the-wall-it-did-not-see-built-and-gives-up-there"
+   :act [[:job (jobs.movement.go-to {:pos #at [4 0 16] :range 0 :unknown true :ways #{:walk}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 60 :of-job true}]
+   :after [[:block [8 0 16] "stone"] [:body-near [11 0 16.5] 1.6]]}
+  {:name "walks-to-the-wall-it-did-not-see-built-and-digs-through"
+   :act [[:job (jobs.movement.go-to {:pos #at [4 0 16] :range 0 :unknown true})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 80 :of-job true}]
+   :after [[:body-near [4.5 0 16.5] 1.5]]}]}

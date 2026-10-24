@@ -41,16 +41,18 @@
             [jobs.movement.go-to.tuning :refer [climb-rise climb-dip max-searching]]))
 
 (defn dive-floor!
-  "The lowest y this call's searches may reach, or nil: the body is under ground, pos lies ::climb-rise or more above it
-  and the y-margin setting is unset. It is ::climb-dip below where the call first found the body so (mem :dive-floor), so the
-  legs of one call do not step down floor by floor."
+  "The lowest y this call's searches may reach, or nil: the body is under ground, the y-margin setting is unset and pos
+  lies ::climb-rise or more above it, now or when the call first found it so. It is ::climb-dip below where the call first
+  found the body so (mem :dive-floor), so the legs of one call do not step down floor by floor, nor dip again once part of
+  the climb is done."
   [c pos]
   (let [y (js/Math.floor (:y (u/self-pos c)))]
-    (when (and (nil? (wworld/y-margin)) (:y pos) (>= (- (:y pos) y) (climb-rise)) (sh-sense/buried? (:primitives c)))
+    (when (and (nil? (wworld/y-margin)) (:y pos) (sh-sense/buried? (:primitives c)))
       (or (:dive-floor (ctx/mem c))
-          (let [floor (- y (climb-dip))]
-            (ctx/update-mem! c assoc :dive-floor floor)
-            floor)))))
+          (when (>= (- (:y pos) y) (climb-rise))
+            (let [floor (- y (climb-dip))]
+              (ctx/update-mem! c assoc :dive-floor floor)
+              floor))))))
 
 (defn dive-end
   "A fruitless round's result as go-to gives it up under a dive floor: a search the floor cut short (:box), or a masked one that spent its node budget flooding unseen cells under it (:budget), is :way-dives."

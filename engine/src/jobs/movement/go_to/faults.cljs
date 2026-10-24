@@ -1,6 +1,7 @@
 (ns jobs.movement.go-to.faults
   "Cells a go-to walk keeps out of: the walker's faults (stuck or off-plan cells), a climbable it hangs in, and the zones of other owners."
   (:require [engine.ctx :as ctx]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]
             [jobs.lib.world :as known]))
@@ -71,3 +72,9 @@
                                        (:move result) (assoc :kind (:move result))
                                        (:why result) (assoc :detail (:why result))))
     (ctx/update-mem! c update :fault-cells #(vec (take-last max-fault-cells (distinct (into (vec %) cells)))))))
+
+(defn ^:async look-at-stuck!
+  "Turn the head to the cell a walk got :stuck at: plans read the cells the body knows as it remembers them, so a block
+  put there out of sight stays planned through until it is seen."
+  [c {:keys [status target]}]
+  (when (and (= :stuck status) target) (await (dig-look/look-at! c target))))

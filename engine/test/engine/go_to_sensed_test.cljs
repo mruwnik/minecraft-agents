@@ -699,6 +699,41 @@
       (fn ^:async t []
         (is (= {:result :was-open} (await (await-open-from 90))) "facing away (west): turned to the door, then read open")))))
 
+(def corridor
+  "A lit 2-high corridor (x 0..20, y 64..65, z 0) in stone, the body at x 10."
+  {:self {:pos {:x 10.5 :y 64 :z 0.5}} :pitch 0
+   :blocks (apply dissoc (box -2 63 -1 22 66 1 "stone") (for [x (range 0 21) y [64 65]] (str x "," y ",0")))})
+
+(defn walled-behind
+  "The body looks west down the corridor, turns east, and the corridor is walled at x 5 out of its sight."
+  [{:keys [p w]}]
+  (swap! (fake/state p) assoc :yaw 90)
+  (perception/pass! (aget w "perception"))
+  (swap! (fake/state p) assoc :yaw 270)
+  (swap! (fake/state p) update :blocks assoc [5 64 0] "stone" [5 65 0] "stone"))
+
+(deftest a-wall-built-out-of-sight-is-planned-through-as-remembered
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [w] :as world} (sensed-only corridor)
+              _ (walled-behind world)
+              snapshot (.-snapshot (wworld/path-world w (wworld/unknown-spec)))
+              route (await (quote-route corridor {:pos [2 64 0] :range 0 :unknown true} walled-behind))]
+          (is (= (.stateAt snapshot 6 64 0) (.stateAt snapshot 5 64 0) (.stateAt snapshot 5 65 0)) "remembered air")
+          (is (true? (:found route)) (pr-str route))
+          (is (= 8 (:length route)) (pr-str route)))))))
+
+(deftest go-to-walks-into-a-wall-built-out-of-sight-sees-it-and-digs-through
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen p]} (await (run-go-to (assoc corridor :inventory [{:name "stone_pickaxe" :count 1}])
+                                                     {:pos [2 64 0] :range 0 :unknown true} walled-behind))]
+          (is (= {:arrived true} out) (pr-str (last seen)))
+          (is (= [2 64 0] (get-in @(fake/state p) [:self :pos])))
+          (is (= [:clear-path] (steps seen))))))))
+
 (def long-gap-tunnel
   "A 2-high tunnel (x 0..20, y 64..65, z 0) in stone, its floor at y 63 broken at x 14 down to y 62: a gap too far off to see in the dark."
   (apply dissoc (box -2 60 -2 22 67 2 "stone")
