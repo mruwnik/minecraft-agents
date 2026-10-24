@@ -37,7 +37,9 @@
 
 (a/defargs settings
   {::caught-chance {:default 0.15 :spec (a/num-in 0 1)
-                    :doc "Chance a walk away is caught, its mobs landing their blows over the whole flight: the prior for a flight whose route is unknown, measured from the trial logs on 2026-10-23 (n=63)."}
+                    :doc "Chance a walk away is caught, its mobs landing their blows over the whole flight: the prior for a flight whose route is unknown, measured from the trial logs on 2026-10-23 (n=63; ::caught-n)."}
+   ::caught-n {:default 63 :spec (a/int-in 1 nil)
+               :doc "Flights ::caught-chance was measured over: the weight of that prior against the headings a flee search timed (cost/flight-caught-chance)."}
    ::drowned-meet-per-s {:default 0.0021 :spec (a/num-in 0 nil)
                          :doc "Chance a second a drowned meets a body in water a drowned can spawn in (its column holds water over water at block light 0, look/water-fn), by day or night: (k+1)/n over the trial bodies' logs on 2026-10-23, k=11 meets in n=5767 s, each meet once (a respond run soon after another is the same meet) and classed by the body's cell (tools/event-counts.mjs drowned-meets :prior :deep; river or ocean and other biomes, sky light high or low, met it alike)."}
    ::drowned-meet-other-per-s {:default 0.00043 :spec (a/num-in 0 nil)

@@ -242,16 +242,6 @@
   ([chaser pos at way]
    (/ (way-blocks pos at way) (chase-speed chaser))))
 
-(defn caught-on?
-  "Whether a melee chaser (mob-kind name) at pos lands a blow on a body walking route ([{:x :y :z :t}], :t the seconds
-  from the start the body is there): at some point of it the chaser arrives (arrival-s) before the body wins the race
-  there (wins-race?, by margin-s: default ::race-margin-s); way, a fn of a route point to the chaser's blocks there
-  (nil: the straight line)."
-  [{:keys [chaser pos route margin-s way]}]
-  (let [margin (or margin-s (settings/get settings ::race-margin-s))
-        way (or way (constantly nil))]
-    (boolean (some #(not (wins-race? (:t %) (arrival-s chaser pos % (way %)) margin)) route))))
-
 (defn swim-arrivals
   "Seconds a melee chaser (mob-kind name) at pos takes to within its blow of each point of route ([{:x :y :z :wet?}],
   :wet? where the body swims), way as caught-on?'s: as the body swims, at its swim-chase-speed; on land at its
@@ -266,6 +256,16 @@
                          shore (let [[b0 a0] shore] [(conj out (+ a0 (/ (max 0 (- blocks b0)) walk))) shore])
                          :else [(conj out (/ blocks walk)) shore])))
                    [[] nil] route))))
+
+(defn caught-on?
+  "Whether a melee chaser (mob-kind name) at pos lands a blow on a body walking route ([{:x :y :z :t :wet?}], :t the seconds
+  from the start the body is there, :wet? where it swims): at some point of it the chaser arrives (swim-arrivals: at its
+  swim speed over water) before the body wins the race there (wins-race?, by margin-s: default ::race-margin-s); way, a
+  fn of a route point to the chaser's blocks there (nil: the straight line)."
+  [{:keys [chaser pos route margin-s way]}]
+  (let [margin (or margin-s (settings/get settings ::race-margin-s))]
+    (boolean (some true? (map (fn [p a] (not (wins-race? (:t p) a margin)))
+                              route (swim-arrivals chaser pos route (or way (constantly nil))))))))
 
 (defn reach-s
   "Seconds a melee chaser (caught-on?'s) is within its blow of a body walking route ([{:x :y :z :t :wet?}] from where

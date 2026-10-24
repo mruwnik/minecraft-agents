@@ -204,8 +204,8 @@
   "Each of targets (named ones {:pos :range :kind}, then ring ends {:x :z}) planned from where the body stands (see the ns
   doc): [{:target :found? :open? :end :s :priced :price :cells :seen-n :unseen}] (:open? found, or a ring end whose
   partial route ends where the chasers have given the body up: given-up?), the ones the planner found no way nearer to, and the ring ends
-  left when ::ring-nodes ran out (named ones have their own node cap), left out; its meta {:nodes :planned} the nodes
-  expanded and the targets planned. opts {:y-margin :chasers}: blocks past body and end the routes may plan, the chasers (their danger is the race, so death-chance weighs only the other known threats; met on the
+  left when ::ring-nodes ran out (named ones have their own node cap), left out; its meta {:nodes :planned :unrouted} the nodes
+  expanded, the targets planned and why the ones with no route had none (the planner's reason: count). opts {:y-margin :chasers}: blocks past body and end the routes may plan, the chasers (their danger is the race, so death-chance weighs only the other known threats; met on the
   way back from an unseen dead end, they catch the body: unseen-price). Kept for the body while it asks the same of the
   same remembered world (priced-key)."
   [c targets {:keys [chasers] :as opts}]
@@ -236,9 +236,9 @@
         slow (pace (.-food (.self p)))]
     (if (nil? ring-world)
       []
-      (loop [[t & more] targets out [] nodes 0 ring-left (settings/get settings ::ring-nodes) planned 0]
+      (loop [[t & more] targets out [] nodes 0 ring-left (settings/get settings ::ring-nodes) planned 0 unrouted {}]
         (if (or (nil? t) (and (nil? (:pos t)) (<= ring-left 0)))
-          (with-meta out {:nodes nodes :planned planned})
+          (with-meta out {:nodes nodes :planned planned :unrouted unrouted})
           (let [pw (if-let [pos (:pos t)] (costed c (floor-cell pos) other? false) ring-world)
                 ^js res (await (plan-to! c pw policy (query c t)
                                          (if (:pos t) (settings/get settings ::target-max-nodes) (min ring-left (settings/get settings ::max-nodes)))))
@@ -253,7 +253,8 @@
                           out)
                    (+ nodes spent)
                    (cond-> ring-left (nil? (:pos t)) (- spent))
-                   (inc planned))))))))
+                   (inc planned)
+                   (cond-> unrouted (nil? r) (update (.-reason res) (fnil inc 0))))))))))
 
 (defn way-at
   "The blocks of chaser's way ({:way}: field/way-fn) to pos, nil when not known."
@@ -391,7 +392,7 @@
         priced (await (price! c (into (vec targets) (ring from chasers r (settings/get settings ::bearings))) (assoc opts :reach r :chasers chasers)))
         ends (scored chasers from priced)]
     (ctx/emit! c :retreat.search-work :debug (assoc (meta priced) :ms (js/Math.round (- (js/performance.now) t0)) :targets (count targets)))
-    (cond-> ends covered? (into (covers chasers from covered? ends)))))
+    (with-meta (cond-> ends covered? (into (covers chasers from covered? ends))) (meta priced))))
 
 (defn unseen-ahead
   "The first unseen cells ([x y z], nearest first) of ends' routes: where to look before the flight counts itself
@@ -401,16 +402,24 @@
 
 (defn caught-chance
   "{:chance :seconds} of a flight from where search ends (search!) ran: the chance it is caught
-  (cost/flight-caught-chance) and, when every way is caught, the seconds its chasers are within their blow on the way
-  it gets away on (gets-away?) least so (:caught-s; nil, none: the whole flight). A way is a ring
-  route that is open (a pocket is none: the chaser follows it in) and gains on the chasers; of those not caught the
-  flight takes the best :score, and whether it runs unseen weighs its dead end at counts (wworld/way-counts)."
+  (cost/flight-caught-chance) and the seconds its chasers are within their blow when it is (:caught-s; nil, none timed:
+  the whole flight). A way is a ring route that is open or runs on into cells not seen (a pocket is none: the chaser follows it in) and
+  gains on the chasers, none of which gets to its end before the body. Every way caught: chance 1, over the seconds of the way it gets away on least so (else of the ring route into the unseen least so; a closed pocket's: the whole flight). Else the prior, updated by
+  the ring headings timed (how many are caught), over the mean seconds they keep a chaser in reach, and
+  whether the best way runs unseen weighs its dead end at counts (wworld/way-counts). Nothing timed: the prior with
+  the unseen worse case, the dead end priced by counts (boxed in by seen walls they say so)."
   [ends counts]
-  (let [left (filter #(and (:open? %) (not (:cover? %)) (nil? (:pos (:target %))) (not (:caught? %)) (pos? (:gain %))) ends)
+  (let [ring (filter #(and (nil? (:pos (:target %))) (not (:cover? %))) ends)
+        left (filter #(and (or (:open? %) (:unseen %)) (not (:caught? %)) (pos? (:gain %)) (> (:arrive %) (:s %))) ring)
         ways (filter gets-away? ends)
         best (when (seq left) (apply max-key :score left))]
-    (cond-> {:chance (cost/flight-caught-chance {:way? (some? best) :unseen? (some? (:unseen best)) :counts counts})}
-      (and (nil? best) (seq ways)) (assoc :seconds (reduce min (map :caught-s ways))))))
+    (cond
+      best {:chance (cost/flight-caught-chance {:way? true :unseen? (some? (:unseen best)) :counts counts
+                                                :timed {:n (count ring) :caught (count (filter :caught? ring))}})
+            :seconds (/ (reduce + (map :caught-s ring)) (count ring))}
+      (empty? ring) {:chance (cost/flight-caught-chance {:way? true :unseen? true :counts counts})}
+      :else (let [timed (or (seq ways) (seq (filter :unseen ring)))]
+            (cond-> {:chance 1} timed (assoc :seconds (reduce min (map :caught-s timed))))))))
 
 (defn named
   "The scored end of search ends planned to the named target at pos, nil when none."

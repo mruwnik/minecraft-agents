@@ -217,7 +217,11 @@
     (is (> (reach 11) 1) "ahead on the way: the body walks into it")
     (let [swum (mapv #(assoc % :t (* 2 (:t %)) :wet? true) route)
           drowned #(cost/reach-s {:chaser "drowned" :pos {:x -0.5 :y 64 :z 0} :route %})]
-      (is (< (drowned swum) (drowned (mapv #(dissoc % :wet?) swum))) "a drowned swims after a swimmer at its swim speed, not its walk"))))
+      (is (< (drowned swum) (drowned (mapv #(dissoc % :wet?) swum))) "a drowned swims after a swimmer at its swim speed, not its walk")
+      (let [catches (fn [route x] (cost/caught-on? {:chaser "drowned" :pos {:x x :y 64 :z 0} :route route}))
+            dry (mapv #(dissoc % :wet?) swum)
+            offsets (range -8 0 0.25)]
+        (is (seq (filter #(not= (catches swum %) (catches dry %)) offsets)) "whether a drowned catches a swimmer is raced at its swim speed")))))
 
 (deftest a-baby-zombie-is-priced-as-a-baby-not-as-an-adult
   (are [e kind] (= kind (cost/mob-kind e))
@@ -316,6 +320,9 @@
         unseen #(cost/flight-caught-chance {:way? true :unseen? true :counts %})]
     (is (= 1 (cost/flight-caught-chance {:way? false})) "no way left: caught")
     (is (< (js/Math.abs (- prior (cost/flight-caught-chance {:way? true :counts closed}))) 1e-9) "a way in sight: the measured prior")
+    (is (< (cost/flight-caught-chance {:way? true :counts closed :timed {:n 12 :caught 0}}) prior
+           (cost/flight-caught-chance {:way? true :counts closed :timed {:n 12 :caught 12}}) 1)
+        "the headings a search timed update the prior: none caught lowers it, all caught raises it, neither to 0 or 1")
     (is (< prior (unseen open) (unseen closed) 1) "a way into unseen cells may end there, the likelier where the seen ways end")))
 
 (deftest spawn-chance-is-zero-where-a-mob-cannot-spawn

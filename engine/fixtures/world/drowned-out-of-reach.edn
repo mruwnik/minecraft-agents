@@ -22,7 +22,8 @@
  [{:name "hurt-body-afloat-over-a-deep-drowned-swims-out"
    :body {:inventory [["stone_sword" 1]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 5 60 true"] [:until-effect-gone "hunger" 30] [:rcon "damage $BODY 7 minecraft:generic"]
-         [:summon "drowned" [10.5 1 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+         [:summon "drowned" [10.5 1 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:wait-s 12]] ; hold: the body takes this long to leave the water
    :expect [{:event {:source :job :kind :hostile.decided :data {:mob "drowned" :decision :flee}} :within-s 10}
             {:event {:source :job :kind :retreat.step-speed :data {:slot :dry}} :within-s 20}]
    :after [[:body-far [7.5 8 16.5] 3] [:entities "type=drowned,tag=wt" [[3 0 9] [30 12 23]] 1]]

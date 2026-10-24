@@ -2,6 +2,7 @@
   "jobs.lib.flee-search: flee ends planned by the go-to planner and scored by when the chasers get there (against the
   fake world), and pick's choice among scored ends (pure)."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.fake :as fake-world]
             [engine.fake.raw-world :as fake-raw]
             [engine.memory :as mem]
             [engine.perception :as perception]
@@ -231,7 +232,7 @@
           (is (every? :caught? beside) "a zombie beside lands a blow on every way")
           (is (= 1 chance))
           (is (< 0 seconds 1) (str "only while the flight pulls away from it: " seconds))
-          (is (> 1 (:seconds (search/caught-chance afloat {:k 0 :n 0}) 0)) "a drowned two blocks off an afloat body reaches it at most a moment on the way to the shore"))))))
+          (is (< (:seconds (search/caught-chance afloat {:k 0 :n 0}) ##Inf) (reduce min (map :s afloat))) "a drowned two blocks off an afloat body is in reach only part of the swim to the shore"))))))
 
 (deftest a-flee-search-is-planned-again-only-when-what-it-reads-changed
   (async done
@@ -251,3 +252,32 @@
           (is (identical? a again) "the same chasers ask the same")
           (is (not (identical? a moved)) "a chaser elsewhere is priced afresh")
           (is (not (identical? a (await (settings/with-settings {::search/max-nodes 100} #(price [(zombie -4.5)]))))) "other settings are priced afresh"))))))
+
+(deftest a-search-that-routed-nothing-is-no-certain-catch
+  (let [open (search/caught-chance [] {:k 0 :n 0})
+        boxed (search/caught-chance [] {:k 0 :n 40})]
+    (is (< 0.15 (:chance open) 1) "unseen is the worse case, priced by the ways seen round the body")
+    (is (< (:chance open) (:chance boxed) 1) "seen walls on every side make it likelier")
+    (is (nil? (:seconds open)) "no way timed: the blows run over the whole flight")))
+
+(deftest a-way-the-chasers-never-reach-is-timed-not-flat-prior
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/fake-on-floor {:floor [-50 -45 50 45] :blocks lake :self {:pos {:x 3.5 :y 63 :z 0.5}}})
+              ends (await (search/search! (ctx-of p) [{:name "drowned" :mob "drowned" :pos {:x 1.5 :y 63 :z 0.5}}] [] {}))
+              {:keys [chance seconds]} (search/caught-chance ends {:k 98 :n 100})]
+          (is (< 0 seconds ##Inf) "a catch lasts the seconds the timed ways keep the chaser in reach")
+          (is (not= 0.15 chance) "the prior is updated by the headings timed"))))))
+
+(deftest ways-that-stop-at-unseen-cells-are-priced-by-the-ways-seen-not-caught
+  (let [stops (fn [& more] (apply end-of 4 0 1 :found? false :unseen [5 64 0] :caught-s 0 :caught? false :arrive 5 more))
+        chance #(:chance (search/caught-chance % {:k 10 :n 10}))]
+    (is (< 0.1 (chance [(stops) (stops)]) 0.5) "partial routes into the unseen are the worse case, priced, not a catch")
+    (is (= 1 (chance [(end-of 4 0 1 :found? false :caught-s 0 :caught? false)])) "a pocket with nothing unseen in it is a trap")))
+
+(deftest ways-all-caught-keep-the-seconds-they-are-in-reach-when-they-run-into-the-unseen
+  (let [caught (fn [s & more] (apply end-of 4 0 1 :found? false :caught? true :caught-s s more))
+        seconds #(:seconds (search/caught-chance % {:k 10 :n 10}))]
+    (is (= 0.6 (seconds [(caught 0.6 :unseen [5 64 0]) (caught 1.5 :unseen [5 64 0])])) "the blows run over the least seconds a way keeps the chaser in reach")
+    (is (nil? (seconds [(caught 0.6)])) "a closed pocket is no flight: the whole of it")))
