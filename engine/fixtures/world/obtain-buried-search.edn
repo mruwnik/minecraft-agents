@@ -1,7 +1,7 @@
 ;; A body under rock needing a log it does not see: the search is priced with the stair up to the sky.
 ;; Should-succeed: worth 500 pays the stair, the body climbs out and fells the tree.
 ;; Should-fail: worth 15 does not pay a trip and the stair (no stair step is cut).
-;; An unseen ore is tunnelled to, not climbed to: its price has no stair, so worth 15 starts and mines it with no stair step.
+;; An unseen ore is tunnelled to, not climbed to: its price has no climb, so worth 15 starts (the mine cuts its own stair to the ore).
 {:defaults
  {:tags [:obtain :explore]
   :plot {:height 12 :length 40 :width 40 :light :sky}
@@ -22,11 +22,9 @@
    :expect [{:no-event {:source :job :kind :stair.step} :for-s 60}]
    :after [[:item "oak_log" 0] [:body-near [20.5 0 20.5] 3]]
    :limit-s 80}
-  {:name "a-buried-body-searching-for-ore-pays-no-stair"
+  {:name "a-buried-body-searching-for-ore-is-not-refused-for-a-stair-it-never-climbs"
    :blocks [[:set [26 0 20] "iron_ore"]]
    :body {:inventory [["stone_pickaxe" 1] ["torch" 8]]}
    :act [[:job (jobs.items.obtain {:item "raw_iron" :count 1 :worth 15 :explore true})]]
-   :expect [{:no-event {:source :job :kind :stair.step} :for-s 60}
-            {:event {:source :job :kind :completed} :within-s 150 :of-job true}]
-   :after [[:item "raw_iron" 1]]
-   :limit-s 160}]}
+   :expect [{:event {:source :job :kind :obtain.gathering} :within-s 20 :of-job true}]
+   :limit-s 30}]}
