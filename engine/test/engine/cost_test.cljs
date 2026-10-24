@@ -289,8 +289,14 @@
         sword (cost/dark-factor {:weapon "iron_sword" :equipment nil})
         armed-armoured (cost/dark-factor {:weapon "iron_sword" :equipment iron-set})]
     (is (zero? floor) "the bare factor is the flat floor")
-    (is (< (js/Math.abs (- 1 unarmed)) 1e-9) "an unarmed body pays a dark cell 2x a lit one")
+    (is (= unarmed (* (cost/spawns-hurt {:weapon nil :equipment nil} 1 nil) (cost/spawn-chance [0 0 0]) cost/hp-seconds))
+        "an unarmed body pays the hurt of the spawn mix, the one spawn price walk-risk uses")
     (is (> unarmed sword armed-armoured floor) "a bare body pays most, armour and a sword less, never below the floor")))
+
+(deftest spawns-hurt-is-at-most-the-life
+  (let [body {:weapon nil :equipment nil :health 6}]
+    (is (< (cost/spawns-hurt body 0.1 nil) 6))
+    (is (= 6 (cost/spawns-hurt body 50 nil)) "fifty spawns take the life, no more")))
 
 (deftest a-lit-way-pays-its-seconds-once-and-its-torches-and-a-dark-one-its-spawns-over-its-seconds
   (let [bare {:weapon nil :equipment nil}

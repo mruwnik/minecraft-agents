@@ -42,7 +42,6 @@
             [clojure.set :as set]
             [clojure.string :as str]
             [jobs.lib.cost.table :as tbl]
-            [jobs.lib.cost.fight :as fight]
             [jobs.lib.cost.health :as health]
             [engine.game :as game]
             [engine.settings :as settings]))
@@ -57,11 +56,9 @@
    ::per-climb {:default 2 :spec (a/num-in 0 nil)
                 :doc "One block climbed past the first on a detour (stairs or a pillar back out of a drop, or up to a ledge), in seconds."}
    ::per-dark {:default 0 :spec (a/num-in 0 nil)
-               :doc "Floor of one block walked in the dark, on top of per-block; the hp a zombie would cost the kit (dark-factor) comes on top, so a bare body pays a dark block twice a lit one and an armed one less."}
+               :doc "Floor of one block walked in the dark, on top of per-block; the hp the spawned mobs would cost the kit (jobs.lib.cost/dark-factor) comes on top, so a bare body pays a dark block most and an armed one less."}
    ::spawn-chance-per-s {:default 0.005 :spec (a/num-in 0 nil)
                          :doc "Chance a mob spawns and reaches the body each second it stands on a cell where one can spawn (jobs.lib.cost/spawn-chance)."}
-   ::dark-hurt-cap {:default 20 :spec (a/num-in 0 nil)
-                    :doc "Most hp a zombie is counted to cost the kit in the dark price: a body that loses more is no worse off priced."}
    ::walk-blocks-per-s {:default 2.9 :spec (a/num-in 0.1 nil)
                         :doc "Walking speed with slack for detours (4.3 flat out, 1.5x the way), blocks a second."}
    ::per-frontier-walk {:default 1 :spec (a/num-in 0 nil)
@@ -184,14 +181,9 @@
   ([place opts] (* (settings/get settings ::spawn-chance-per-s) (spawn-share place opts))))
 
 (defn dark-factor
-  "The planner's extra cost of a dark cell as a share of its own seconds (options.dark.factor): per-dark over per-block
-  (the floor). With a kit {:weapon :equipment} the hp a zombie would cost it (fight/fight-damage, at most
-  ::dark-hurt-cap) times spawn-chance of a dark cell and hp-seconds is added: a bare body pays more than an armed,
-  armoured one."
-  ([] (/ (per-dark) (per-block)))
-  ([kit]
-   (let [hurt (min (settings/get settings ::dark-hurt-cap) (fight/fight-damage (assoc kit :mobs [{:name "zombie" :distance 0 :hits 0}])))]
-     (+ (dark-factor) (* hurt (spawn-chance [0 0 0]) health/hp-seconds)))))
+  "The floor of the planner's extra cost of a dark cell as a share of its own seconds: per-dark over per-block
+  (jobs.lib.cost/dark-factor adds a kit's spawn hurt)."
+  [] (/ (per-dark) (per-block)))
 (def per-danger "One expected point of damage (jobs.lib.cost/route-danger): what an hp costs (jobs.lib.cost.health)." health/hp-seconds)
 (defn own-place-blocks [] (settings/get settings ::own-place-blocks))
 (defn walk-blocks-per-s [] (settings/get settings ::walk-blocks-per-s))

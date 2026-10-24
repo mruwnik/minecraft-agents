@@ -157,12 +157,19 @@
   [{:keys [k n]}]
   (/ (inc (or k 0)) (+ (or n 0) 2)))
 
+(defn dark-factor
+  "The planner's extra cost of a dark cell as a share of its own seconds (options.dark.factor): value/dark-factor, the
+  floor; with a kit {:weapon :equipment :health :food} the hurt of a mob spawned beside it (spawns-hurt) times
+  spawn-chance of a dark cell and hp-seconds on top: a bare body pays more than an armed, armoured one."
+  ([] (value/dark-factor))
+  ([kit] (+ (value/dark-factor) (* (answer/spawns-hurt kit 1 nil) (value/spawn-chance [0 0 0]) health/hp-seconds))))
+
 (defn unseen-share
   "Seconds a second of walk over cells the body has not seen adds, at the worse case but finite: the chance the way does
   not go on (1 less way-on-chance of counts) times the walk back out, and a mob that spawns or waits there (an unseen
   cell counts as dark): dark-factor of kit. The replan at the dead end is not in it (unmeasured)."
   [counts kit]
-  (+ (* 2 (- 1 (way-on-chance counts))) (value/dark-factor kit)))
+  (+ (* 2 (- 1 (way-on-chance counts))) (dark-factor kit)))
 
 (defn dead-end-cost
   "Seconds a route that runs on into cells the body has not seen adds past their unseen-share (its planner price):
@@ -259,7 +266,6 @@
            {:chance chance :lowered-by #{:light} :light-in wait}
            {:chance chance :lowered-by #{}}))))))
 (defn per-dark [] (value/per-dark))
-(defn dark-factor ([] (value/dark-factor)) ([kit] (value/dark-factor kit)))
 
 (def farm-tolls tolls/farm-tolls)
 (def zone-tolls tolls/zone-tolls)

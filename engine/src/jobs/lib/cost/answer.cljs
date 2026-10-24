@@ -424,11 +424,12 @@
     (- 1 (js/Math.exp (- (* spawns per))))))
 
 (defn spawns-hurt
-  "hp spawns mobs (an expected count) spawned beside body take off it at `at`: each its threat-hurt (at most the life:
-  the death past it is spawns-chance's), caught at the prior, over threat/spawn-weights."
+  "hp spawns mobs (an expected count) spawned beside body take off it at `at`, at most its life (the death past it is
+  spawns-chance's): each its threat-hurt, caught at the prior, over threat/spawn-weights."
   [body spawns at]
-  (* spawns (/ (reduce + (map (fn [[mob w]] (* w (threat-hurt body mob nil at))) threat/spawn-weights))
-               (reduce + (vals threat/spawn-weights)))))
+  (min (life body)
+       (* spawns (/ (reduce + (map (fn [[mob w]] (* w (threat-hurt body mob nil at))) threat/spawn-weights))
+                    (reduce + (vals threat/spawn-weights))))))
 
 (defn lethal-hp
   "The hp a death chance of body at `at` weighs beside the hp it risks: chance x death/death-cost, at health/hp-seconds an hp."
