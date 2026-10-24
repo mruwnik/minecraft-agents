@@ -29,15 +29,15 @@
   (= "searching" (some-> ^js (:r plan) .-reason)))
 
 (defn safe-prefix?
-  "Whether plan stops short of pos, the walk to pos is within price/allowed with its unseen cells
-  guessed open sky (risk/estimate's unseen-open?), and the walk on the plan's own steps to their end passes status: walking that
-  and looking turns unseen into seen, so the walk is priced again from there rather than held on a guess."
+  "Whether plan stops short of pos, the walk to pos is within price/allowed but for the unseen cells guessed dark caves
+  (risk/estimate's caves-free?), and the walk on the plan's own steps to their end passes status: walking that and
+  looking turns unseen into seen, so the walk is priced again from there rather than held on a guess."
   [c pos plan]
   (let [end (peek (:steps plan))
         feet (mapv js/Math.floor ((juxt :x :y :z) (u/self-pos c)))]
     (and (not= "found" (:status plan)) end
          (not= feet (mapv js/Math.floor ((juxt :x :y :z) end)))
-         (<= (:hp (risk/estimate c pos {:plan plan :stake (:stake (:args c)) :unseen-open? true})) (price/allowed c))
+         (<= (:hp (risk/estimate c pos {:plan plan :stake (:stake (:args c)) :caves-free? true})) (price/allowed c))
          (= :ok (first (status c end (assoc plan :status "found")))))))
 
 (defn check
