@@ -194,6 +194,17 @@
               prices (:prices (first (filter #(= :hostile.decided (:kind %)) @seen)))]
           (is (= :fight (:decision (first (filter #(= :hostile.decided (:kind %)) @seen)))) (pr-str prices)))))))
 
+(deftest a-body-whose-only-way-out-passes-its-chaser-prices-no-walk-away
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walls (into {} (for [x (range -1 9) z [-2 2] y [64 65]] [(str x "," y "," z) "stone"]))
+              walls (into walls (for [z [-1 0 1] y [64 65]] [(str "-1," y "," z) "stone"]))
+              {:keys [seen]} (await (flight-round respond {:self {:health 20 :food 20} :blocks walls :entities [(zombie 2 0)]}))
+              prices (:prices (first (filter #(= :hostile.decided (:kind %)) @seen)))]
+          (is (seq prices))
+          (is (not (contains? prices :flee)) (str "what would run is the cornered step, not a walk away: " (pr-str prices))))))))
+
 (defn spider [x] {:id 5 :name "spider" :kind "hostile" :pos {:x x :y 64 :z 0}})
 
 (deftest respond-with-bare-hands-and-nowhere-to-hide-fights-a-spider-and-never-runs-in-the-open

@@ -430,7 +430,8 @@
   caught: the chance is that of a way the race calls free, the prior (plus its dead end at counts, wworld/way-counts,
   when it runs unseen); a catch lasts the least seconds the race keeps a chaser in reach over the caught headings (nil
   with none caught). The other headings only choose the way. With every way caught: chance 1, over the seconds of the way
-  it gets away on least so (else of a ring route into the unseen; a closed pocket's: the whole flight). Nothing routed:
+  it gets away on least so (else of a ring route into the unseen; a closed pocket's: the whole flight), :cornered? when
+  choose takes none of the ends (the flight would be the cornered step, no walk away). Nothing routed:
   the prior with the unseen worse case."
   [ends counts]
   (let [ring (filter #(and (nil? (:pos (:target %))) (not (:cover? %))) ends)
@@ -443,7 +444,7 @@
              (seq caught) (assoc :seconds (reduce min (map :caught-s caught))))
       (empty? ring) {:chance (cost/flight-caught-chance {:way? true :unseen? true :counts counts})}
       :else (let [timed (or (seq ways) (seq (filter :unseen ring)))]
-              (cond-> {:chance 1} timed (assoc :seconds (reduce min (map :caught-s timed))))))))
+              (cond-> {:chance 1 :cornered? (nil? (choose ends {}))} timed (assoc :seconds (reduce min (map :caught-s timed))))))))
 
 (defn named
   "The scored end of search ends planned to the named target at pos, nil when none."

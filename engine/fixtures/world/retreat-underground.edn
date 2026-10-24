@@ -53,16 +53,18 @@
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 20}
             {:no-event {:source :body :kind :died} :for-s 40}]
    :after [[:body-near [28.5 0 12.5] 4]]}
-  ;; a0a0bb2a: 3 hp, a zombie beside the body: whatever it does (fight or pillar), the zombie lands no second blow.
-  {:name "three-hp-body-beside-a-zombie-takes-no-second-hit"
+  ;; a0a0bb2a, 76b95cac: 3 hp, a zombie beside the body in a closed room. Every answer leaves it in reach over a second
+  ;; (it hits every 20 ticks; a flight first stands its measured start, a fight or a wall takes longer), so a second blow
+  ;; may land whatever the body does: the case asks only that it answers and lives.
+  {:name "three-hp-body-beside-a-zombie-answers-and-lives"
    :blocks [[:fill [0 0 0] [31 11 31] "stone"] [:fill [3 0 13] [14 2 19] "air"]
             [:set [3 0 13] "torch"] [:set [14 0 19] "torch"] [:set [3 0 19] "torch"] [:set [14 0 13] "torch"]]
    :body {:at [8.5 0 16.5] :effects [] :inventory [["stone_sword" 1] ["cobblestone" 12]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 5 60 true"] [:until-effect-gone "hunger" 30] [:rcon "damage $BODY 17 minecraft:generic"]
          [:summon "zombie" [9.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 20}
-            {:no-event {:source :body :kind :died} :for-s 40}
-            {:count-event {:source :body :kind :hurt :data {:causes ["zombie"]}} :for-s 40 :at-most 1}]}
+            {:event {:source :job :kind :hostile.decided} :within-s 20}
+            {:no-event {:source :body :kind :died} :for-s 40}]}
   {:name "buried-body-with-a-pickaxe-and-no-stair-digs-a-pocket-first"
    :blocks [[:fill [0 0 0] [31 11 31] "stone"] [:fill [3 0 13] [14 2 19] "air"]
             [:set [3 0 13] "torch"] [:set [14 0 19] "torch"] [:set [3 0 19] "torch"] [:set [14 0 13] "torch"]]

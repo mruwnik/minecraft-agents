@@ -267,7 +267,9 @@
         c (fn [ends] (update (search/caught-chance ends {:k 10 :n 10}) :chance #(/ (js/Math.round (* 1e6 %)) 1e6)))]
     (is (= {:chance 0.15 :seconds 0.5} (c [free (caught 2) (caught 0.5) (caught 1)])) "the other headings only choose the way: the prior, the least seconds of a caught one")
     (is (= {:chance 0.15} (c [free])) "no heading caught: nothing bounds the blows")
-    (is (= {:chance 1 :seconds 0.5} (c [(caught 2) (caught 0.5)])) "every way caught")))
+    (is (= {:chance 1 :seconds 0.5 :cornered? true} (c [(caught 2) (caught 0.5)])) "every way caught: the flight is the cornered step")
+    (is (= {:chance 1 :cornered? false} (c [(end-of 4 0 1 :found? false :caught? false :caught-s 0 :gain 2)]))
+        "a pocket the flight still runs to, with no way out to call free: a walk caught for certain")))
 
 (deftest ways-that-stop-at-unseen-cells-are-priced-by-the-ways-seen-not-caught
   (let [stops (fn [& more] (apply end-of 4 0 1 :found? false :unseen [5 64 0] :caught-s 0 :caught? false :arrive 5 more))
