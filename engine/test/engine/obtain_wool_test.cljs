@@ -9,6 +9,8 @@
             [engine.test-util :as tu]
             [jobs.items.obtain :as obtain]
             [jobs.items.obtain.gather :as gather]
+            [jobs.items.obtain.seen :as seen]
+            [jobs.lib.cost :as cost]
             [jobs.lib.build.wood :as wood]
             [jobs.lib.stock :as stock]
             [jobs.lib.world-files :as ew]
@@ -305,3 +307,18 @@
           (is (nil? (get-in guarded [:gather :lead])) "past the remembered killer the walk costs more than the cow is worth")
           (is (= :priced-out (get-in guarded [:tried :gather])))
           (is (re-find #"^the walk to the cow at \[10 64 0\] costs \d+ s, over the 20 s it is worth" (str (get-in guarded [:gather :why])))))))))
+
+(deftest the-animal-pre-filter-keeps-every-animal-approach-could-price-under-its-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup {:entities [(cow 1 40)]} 50)
+              out (atom nil)
+              worth (+ (cost/trip) (* 34 cost/least-block-s) 0.5)
+              parent {:round (fn ^:async r [c]
+                               (reset! out (count (seen/animals-worth-hunting c "cow" (constantly true))))
+                               (ctx/end c :done nil))}
+              eng (assoc-in (:eng s) [:jobs 'filtering-parent] parent)]
+          (core/submit! eng (list 'filtering-parent {:worth worth}) {})
+          (await (tu/run-until-empty eng 10))
+          (is (= 1 @out) "40 blocks off, 6 of range: the bound is a trip and 34 least-blocks, under the worth (a straight 0.3 s/block walk would be over it)"))))))

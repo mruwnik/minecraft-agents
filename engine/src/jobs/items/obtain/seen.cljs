@@ -13,22 +13,32 @@
             [jobs.lib.look :as look]
             [jobs.lib.storage :as storage]
             [jobs.lib.trees :as trees]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.lib.walk-pick :as pick]))
 
 (defn hunt-worth
   "Seconds an animal of mob is worth the call: its given-worth, else the larger of the animal's meat and the call's search-worth."
   [c mob]
   (or (given-worth c) (max (cost/animal-worth mob) (search-worth c))))
 
+(defn lead-args "The go-to args of the walk to within 6 blocks of cell [x y z]." [cell]
+  {:pos (zipmap [:x :y :z] cell) :range 6 :ways #{:walk} :spend {:tries 1}})
+
+(defn animal-cell [animal] (mapv js/Math.floor ((juxt :x :y :z) (u/pos-of (.-pos animal)))))
+
+(defn approach-bound
+  "Seconds no more than the walk to within reach of animal costs: a trip and walk-pick's bound of its lead walk."
+  [c animal]
+  (+ (cost/trip) (pick/walk-s (u/self-pos c) (lead-args (animal-cell animal)))))
+
 (defn animals-worth-hunting
   "The adult animals of the need's mob in sight (colour-matching when given), nearest first, whose trip may pay: hunt-worth
-  against fetch-cost of the straight walk to the animal, a lower bound (its danger is priced from go-to's quote when one
-  is walked to: jobs.lib.walk-pick)."
+  against approach-bound, the lower bound of what approach! prices (its danger comes from go-to's quote when one is
+  walked to: jobs.lib.walk-pick)."
   [c mob pred]
   (let [p (:primitives c)
-        self (u/self-pos c)
         worth (hunt-worth c mob)]
-    (filter #(< (:cost (cost/fetch-cost {:distance (u/dist self (u/pos-of (.-pos %)))})) worth)
+    (filter #(< (approach-bound c %) worth)
             (filter pred (animals/herd p mob (seen-radius))))))
 
 (defn sheep-in-range

@@ -7,7 +7,7 @@
             [jobs.items.obtain.base :refer [barren-ore explore-opts own-worth search-names search-scan-radius search-worth site-radius tried! ways-of]]
             [jobs.items.obtain.need :refer [gather-viable? pickaxe-first? light-settling? tools-wanted torch-due trees-unreachable?]]
             [jobs.items.obtain.plan :refer [gather-plan search-way]]
-            [jobs.items.obtain.seen :refer [animals-of gather-carried gather-slot hunt-worth seen-of shears-source with-avoid with-block with-count]]
+            [jobs.items.obtain.seen :refer [animal-cell animals-of approach-bound gather-carried gather-slot hunt-worth lead-args seen-of shears-source with-avoid with-block with-count]]
             [jobs.lib.breath :as breath]
             [jobs.lib.cost :as cost]
             [jobs.lib.foods :as foods]
@@ -138,18 +138,15 @@
        (let [s (ctx/child-status c (gather-slot need) (:job need) (:args need))]
          (and (= :later (first s)) (= :too-few (:reason (contract/status-cause s)))))))
 
-(defn lead-args "The go-to args of the walk to within 6 blocks of cell [x y z]." [cell]
-  {:pos (zipmap [:x :y :z] cell) :range 6 :ways #{:walk} :spend {:tries 1}})
-
 (defn ^:async approach!
   "Set the lead to the animal in sight of the need whose walk costs least (jobs.lib.walk-pick), a trip and go-to's quote,
   under its hunt-worth; :again. With every one in sight priced out the gather source fails :priced-out, naming the first."
   [c need]
-  (let [cell #(mapv js/Math.floor ((juxt :x :y :z) (u/pos-of (.-pos %))))
+  (let [cell animal-cell
         worth (hunt-worth c (if (:sheep need) "sheep" (:mob need)))
         out (volatile! nil)
         animals (animals-of c need)
-        best (:pick (await (pick/best! c animals {:bound #(+ (cost/trip) (pick/walk-s (u/self-pos c) (lead-args (cell %))))
+        best (:pick (await (pick/best! c animals {:bound #(approach-bound c %)
                                                   :args (comp lead-args cell)
                                                   :price (fn [x q]
                                                            (let [s (+ (cost/trip) (pick/quoted-s c q))]
