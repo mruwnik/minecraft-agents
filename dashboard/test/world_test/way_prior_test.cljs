@@ -14,8 +14,8 @@
                    (seen 10 [5 64 0 1] false)
                    (seen 11 [0 64 0 0] false)
                    (evicted 12 [9 64 0 2])])]
-    (is (= [{:set :dark :k 1 :n 3 :ways 2 :seen 2 :on 1 :unread 0}
-            {:set :lit :k 4 :n 4 :ways 2 :seen 0 :on 0 :unread 2}]
+    (is (= [{:set :dark :k 1 :n 3 :ways 2 :seen 2 :on 1 :unread 0 :waits [8 10] :unread-ages []}
+            {:set :lit :k 4 :n 4 :ways 2 :seen 0 :on 0 :unread 2 :waits [] :unread-ages [7 7]}]
            places))
     (is (= 1 evicted) "one of the two unread ways was dropped by way-log, the other still waits")))
 
@@ -37,10 +37,15 @@
     (is (> (get-in f [:censored :r-on :mean]) (get-in f [:censored :r-shut :mean])) "ways that go on are read more often")))
 
 (deftest the-report-splits-by-setting
-  (let [r (w/report (concat (repeat 5 {:set :lit :k 2 :n 3 :ways 2 :seen 1 :on 1 :unread 1})
+  (let [r (w/report (concat (repeat 5 {:set :lit :k 2 :n 3 :ways 2 :seen 1 :on 1 :unread 1 :waits [] :unread-ages [100]})
                             (repeat 5 {:set :dark :k 0 :n 3 :ways 1 :seen 1 :on 0 :unread 0}))
                     2)]
     (is (= [:dark :lit] (keys (:by-setting r))))
     (is (= 10 (get-in r [:all :places])))
     (is (= 5 (:unread r)))
     (is (= 2 (:evicted r)))))
+
+(deftest ways-younger-than-the-median-wait-of-the-read-ones-are-not-counted-unread
+  (let [p {:set :lit :k 1 :n 2 :ways 4 :seen 2 :on 1 :unread 2 :waits [100 300] :unread-ages [50 400]}]
+    (is (= [1] (map :unread (w/mature [p]))) "the median wait is 200 ms: the way waiting 50 is left out, the one waiting 400 stays")
+    (is (= [2] (map :unread (w/mature [(assoc p :waits [])]))) "no way read: every unread way counts")))

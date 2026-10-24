@@ -283,21 +283,23 @@
           (is (= [{:mob "zombie" :decision :fight :direction :north :band :near}] (decided seen))
               "a heard-only mob: what the sound tells, never its place"))))))
 
-(defn ^:async with-way-scan
-  "Run the async f with wworld/way-scan answering scan, restored after."
-  [scan f]
-  (let [orig wworld/way-scan]
-    (set! wworld/way-scan (constantly scan))
+(defn ^:async with-way-scans
+  "Run the async f with wworld/way-scan answering each call the next of scans (the last one on), restored after."
+  [scans f]
+  (let [orig wworld/way-scan
+        left (atom scans)]
+    (set! wworld/way-scan (fn [& _] (let [s (first @left)] (when (next @left) (swap! left rest)) s)))
     (try (await (f))
          (finally (set! wworld/way-scan orig)))))
 
 (deftest the-decision-logs-the-way-counts-its-flee-price-was-asked-with
-  ;; way-log scanned the memory again when it logged, so what memory gained during the pricing went into the event
+  ;; the scan priced with is the first; a scan again at log time would answer the second
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [scan {:k 7 :n 9 :ways [[1 64 0 0]]}
-              {:keys [seen eng]} (await (with-way-scan scan #(flight-round respond {:self {:health 5} :entities [(zombie 3 0)]})))]
+              later {:k 8 :n 9 :ways [[2 64 0 0]]}
+              {:keys [seen eng]} (await (with-way-scans [scan later] #(flight-round respond {:self {:health 5} :entities [(zombie 3 0)]})))]
           (is (= [scan] (map #(select-keys % [:k :n :ways]) (filter #(= :way-on.priced (:kind %)) @seen))))
           (is (= [[1 64 0 0]] (map (comp :way :data) (mem/entries (mem/view (:store eng)) :way-pending)))
               "its way waits for its cells"))))))

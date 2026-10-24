@@ -26,6 +26,7 @@
             [jobs.lib.world-files :as world-files]
             [engine.test-util :as tu :refer [box floor]]
             [engine.triggers :as triggers]
+            [engine.way-on-test :as wt]
             [jobs.movement.go-to :as go-to]
             [jobs.movement.go-to.cut :as gcut]
             [jobs.movement.go-to.faults :as gfaults]
@@ -1179,6 +1180,25 @@
             (with-redefs [threats/planner-dangers (fn [_] (swap! planned inc) nil)]
               (await (go! {:blocks flat} (assoc args :pos [10 64 0]))))
             (is (= want (pos? @planned)) (str "args " args))))))))
+
+;; a go-to walk reads the flee ways waiting for their cells, whatever job asked for the walk
+(deftest go-to-reads-a-waiting-flee-way-once-its-cells-are-in-memory
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng] :as s} (setup {:blocks flat :light [15 0] :seen :all})
+              walk-to! (fn ^:async walk-to! [x known]
+                         (let [e (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent (atom nil) {:pos [x 64 0]})))]
+                           (with-redefs [wworld/memory-sections (constantly known)]
+                             (core/submit! e '(recording-parent) {})
+                             (await (tick-out! e 30 nil)))))
+              rock-east (wt/known-of (fn [[x y z]] (not (and (= z 0) (#{64 65} y) (<= -12 x 8)))) {} [-12 60 -8 12 68 8])]
+          (mem/write! (:store eng) :way-pending {:way [8 64 0 0]} {:cap 64 :ttl :forever})
+          (await (walk-to! 3 wt/open-corridor))
+          (is (= [] (events-of s :way-on.seen)) "the way's cells are not seen yet")
+          (await (walk-to! 6 rock-east))
+          (is (= [{:way [8 64 0 0] :on false}] (mapv #(select-keys % [:way :on]) (events-of s :way-on.seen)))
+              "seen as rock: read by the walk"))))))
 
 (deftest go-to-walks-the-whole-way-whatever-the-callers-legs
   (async done

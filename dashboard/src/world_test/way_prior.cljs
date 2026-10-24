@@ -12,16 +12,22 @@
   unread way rock, :on every unread way going on (the bounds), and :censored, where a way that goes on is read with chance
   r-on and one that is rock with chance r-shut (each Uniform(0, 1), the same for every place of a setting, ways read or not
   independently of each other and of k and n), the unread ways summed over.
+  A way priced a moment before the logs were counted is unread by time, not by outcome, so the three fits that count unread
+  ways count only those that waited at least the median wait of the read ways (a way waiting less had under even odds of being
+  read by then); the :read fit does not use them.
   Settings are the light the body perceived at the feet (:lit, :dark, :unknown), each fitted alone.")
 
 (def hyper "The hyperpriors, as reported." {:mean "Uniform(0,1)" :strength "LogNormal(ln 2, 1.5)" :r-on "Uniform(0,1)" :r-shut "Uniform(0,1)"})
 
 (defn places
-  "The places of one body's events (maps {:kind :time-ms :seq :data}): {:places [{:set :k :n :ways :seen :on :unread}] :evicted
-  the unread ways way-log dropped}. A way listed again later stays in the place that first listed it."
+  "The places of one body's events (maps {:kind :time-ms :seq :data}): {:places [{:set :k :n :ways :seen :on :unread :waits
+  :unread-ages}] :evicted the unread ways way-log dropped}; :waits the ms each read way waited, :unread-ages the ms each unread
+  one waited (to its drop, else to the last event). A way listed again later stays in the place that first listed it."
   [events]
-  (let [{:keys [placed ps read evicted]}
-        (reduce (fn [{:keys [placed] :as st} {:keys [kind data]}]
+  (let [events (sort-by (juxt :time-ms :seq) events)
+        end (reduce max 0 (map :time-ms events))
+        {:keys [placed born ps read left evicted]}
+        (reduce (fn [{:keys [placed] :as st} {:keys [kind data time-ms]}]
                   (case kind
                     :way-on.priced
                     (let [fresh (vec (distinct (remove placed (:ways data))))]
@@ -29,23 +35,38 @@
                         st
                         (let [i (count (:ps st))]
                           (-> st
-                              (update :ps conj {:set (or (:set data) :unknown) :k (:k data) :n (:n data) :ways (count fresh) :seen 0 :on 0})
-                              (update :placed into (map #(vector % i)) fresh)))))
+                              (update :ps conj {:set (or (:set data) :unknown) :k (:k data) :n (:n data) :ways (count fresh) :seen 0 :on 0 :waits []})
+                              (update :placed into (map #(vector % i)) fresh)
+                              (update :born into (map #(vector % time-ms)) fresh)))))
                     :way-on.seen
                     (let [w (:way data) i (placed w)]
                       (if (and i (not (contains? (:read st) w)))
                         (-> st
                             (update :read conj w)
                             (update-in [:ps i :seen] inc)
-                            (update-in [:ps i :on] + (if (:on data) 1 0)))
+                            (update-in [:ps i :on] + (if (:on data) 1 0))
+                            (update-in [:ps i :waits] conj (- time-ms (get-in st [:born w]))))
                         st))
                     :way-on.censored
-                    (cond-> st (placed (:way data)) (update :evicted conj (:way data)))
+                    (cond-> st (placed (:way data)) (-> (update :evicted conj (:way data)) (update :left assoc (:way data) time-ms)))
                     st))
-                {:placed {} :ps [] :read #{} :evicted #{}}
-                (sort-by (juxt :time-ms :seq) events))]
-    {:places (mapv #(assoc % :unread (- (:ways %) (:seen %))) ps)
+                {:placed {} :born {} :ps [] :read #{} :left {} :evicted #{}}
+                events)
+        ages (reduce (fn [m [w i]] (cond-> m (not (read w)) (update i (fnil conj []) (- (get left w end) (born w)))))
+                     {} placed)]
+    {:places (vec (map-indexed (fn [i p] (assoc p :unread (- (:ways p) (:seen p)) :unread-ages (vec (get ages i)))) ps))
      :evicted (count (remove read evicted))}))
+
+(defn median [xs]
+  (when (seq xs)
+    (let [v (vec (sort xs)) n (count v)]
+      (/ (+ (v (quot (dec n) 2)) (v (quot n 2))) 2))))
+
+(defn mature
+  "Places with :unread the unread ways that waited at least the median wait of the read ways (all, with none read)."
+  [places]
+  (let [window (or (median (mapcat :waits places)) 0)]
+    (mapv #(assoc % :unread (count (filter (fn [age] (>= age window)) (:unread-ages %)))) places)))
 
 ;; ln Γ (Lanczos, g 7)
 (def ^:private lanczos #js [0.99999999999980993 676.5203681218851 -1259.1392167224028 771.32342877765313 -176.61502916214059
@@ -152,10 +173,12 @@
        :censored (fit-of ps true)})))
 
 (defn report
-  "{:hyper :unread :evicted :all :by-setting} over places; :unread the ways never seen, :evicted those of them way-log dropped."
+  "{:hyper :unread :evicted :all :by-setting} over places; :unread the ways never seen that waited long enough to count
+  (mature), :evicted the unread ways way-log dropped."
   [places evicted]
-  {:hyper hyper
-   :unread (reduce + (map :unread places))
-   :evicted evicted
-   :all (fit places)
-   :by-setting (into (sorted-map) (keep (fn [[s ps]] (when-let [f (fit ps)] [s f]))) (group-by :set places))})
+  (let [places (mature places)]
+    {:hyper hyper
+     :unread (reduce + (map :unread places))
+     :evicted evicted
+     :all (fit places)
+     :by-setting (into (sorted-map) (keep (fn [[s ps]] (when-let [f (fit ps)] [s f]))) (group-by :set places))}))
