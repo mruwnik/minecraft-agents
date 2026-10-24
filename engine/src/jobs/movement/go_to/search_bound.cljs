@@ -6,27 +6,39 @@
             [jobs.lib.escape :as escape]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
+            [jobs.lib.walk.one-way :as one-way]
             [jobs.lib.walk-risk :as risk]
-            [jobs.movement.go-to.escalate-choose :as choose]))
+            [jobs.movement.go-to.escalate-choose :as choose]
+            [jobs.movement.go-to.preview :as preview]))
+
+(defn risk-s
+  "Seconds a walk-risk estimate's hp cost the body (cost/risk-s of its hurt and its death's :lethal-hp)."
+  [c {:keys [hp lethal-hp]}]
+  (cost/risk-s (.-health (.self (:primitives c))) (- hp lethal-hp) lethal-hp))
 
 (defn fallback-s
-  "Seconds the way escape/choose finds from feet with no dig route takes (choose/price, an approach its walk); with none,
-  the call's budget (choose/call-budget-s)."
+  "Seconds the way escape/choose finds from feet with no dig route costs to the goal: its step (choose/price, an
+  approach its walk), the blocks on from where the step leaves the body as a quote prices them (preview/rest-s), and
+  the walk's risk to the goal (walk-risk/estimate); with none, what the goal is worth (one-way/worth: the caller's
+  :worth, else a tour's), all a search can save."
   [c feet goal may-dig? opts]
-  (let [e (escape/choose (:primitives c) feet goal may-dig? (update opts :skip (fnil conj #{}) :dig-route))]
-    (case (:step e)
-      :none (choose/call-budget-s c)
-      :approach (:cost (cost/walk-cost {:distance (u/dist (zipmap [:x :y :z] feet) (zipmap [:x :y :z] (:pos e)))}))
-      (choose/price (:primitives c) feet e))))
+  (let [e (escape/choose (:primitives c) feet goal may-dig? (update opts :skip (fnil conj #{}) :dig-route))
+        cell #(zipmap [:x :y :z] %)
+        end (or (:pos e) feet)]
+    (if (= :none (:step e))
+      (one-way/worth (u/dist (cell feet) (cell goal)) (:worth (:args c)))
+      (+ (if (= :approach (:step e))
+           (:cost (cost/walk-cost {:distance (u/dist (cell feet) (cell end))}))
+           (choose/price (:primitives c) feet e))
+         (preview/rest-s (js/Math.round (js/Math.hypot (- (goal 0) (end 0)) (- (goal 2) (end 2)))))
+         (risk-s c (risk/estimate c (cell goal)))))))
 
 (defn stood-s
   "Seconds standing still since `since` (ctx/now ms) has cost the body: the time and what staying at its cell risks over
-  it (walk-risk/stay-estimate) at its hp-price."
+  it (walk-risk/stay-estimate, risk-s)."
   [c since]
-  (let [p (:primitives c)
-        secs (/ (- (ctx/now c) since) 1000)]
-    (+ secs (* (cost/hp-price (.-health (.self p)))
-               (:hp (risk/stay-estimate c (assoc (risk/stay-inputs c (sh-sense/feet p) 0) :secs secs)))))))
+  (let [secs (/ (- (ctx/now c) since) 1000)]
+    (+ secs (risk-s c (risk/stay-estimate c (assoc (risk/stay-inputs c (sh-sense/feet (:primitives c)) 0) :secs secs))))))
 
 (defn spent?
   "Whether the searches begun as memory m's :route-search {:since :fallback-s} have stood the body longer than their fallback is worth."

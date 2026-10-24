@@ -324,6 +324,11 @@
     (doseq [[k _] (get @kept-routes id)] (sliced-answer slice k nil))
     (searching? slice)))
 
+(defn searching-ends
+  "The [from goal] of the call id's kept searches that have not ended."
+  [id]
+  (into #{} (keep (fn [[k run]] (when-not (first (run 0)) (vec (take 2 k))))) (get @kept-routes id)))
+
 (defn forget-routes!
   "Drop the kept searches of go-to call id: it has ended."
   [id]
@@ -333,15 +338,16 @@
   "The dig-route answer {:dig :steps} of the cheapest way from feet cell from into goal (jobs.lib.dig-route priced by
   jobs.lib.cost: a step's walk-cost, a fall's hp (fall-damage at hp-cost, the falls the body survives), a block's dig-cost, a stair's step at least its stair-cost, a step's unseen cells at the unseen walk's price
   (wworld/unseen-share), never a floor of the body's own stairs (route-opts :ways)), every cell to dig escape/diggable?
-  and may-dig?; :searching while route-opts :slice's search goes on; nil when there is none, or when its digging takes the
+  and may-dig?; :searching while route-opts :slice's search goes on; nil when there is none, when route-opts :spent
+  holds [from goal] (a search search-bound dropped), or when its digging takes the
   body longer than max-route-s (blocks of the body's own, a scaffold it left, not counted) with what it carries, or with
   a wooden pickaxe when fetch? (the dig fetches one, fetch-tool?), else bare-handed (a player does not punch a tunnel
   through rock). A floor never seen under a cell seen open may be a void: dig-route reads it as no floor, unless
   floors-unseen-ok? (a pocket's floor shows only from inside it). Other route-opts go to the search (:place-s,
   :pillar-s, :margin). With :slice (route-slice) a search that spends it goes on at the next call; without, it ends
   at the node budget as no route."
-  [p from goal may-dig? own? floors-unseen-ok? fetch? {:keys [slice] :as route-opts}]
-  (let [route-opts (dissoc route-opts :slice)
+  [p from goal may-dig? own? floors-unseen-ok? fetch? {:keys [slice spent] :as route-opts}]
+  (let [route-opts (dissoc route-opts :slice :spent)
         [fx _ fz] from
         ;; each cell is read for its floor, its name to dig and whether it is unseen: sensed once
         known (js/Map.)
@@ -375,13 +381,14 @@
                    (dig-route/route seen-floor from goal (opts refused))))
         ;; may-dig? (zones, claims, plans) is asked of a found route's cells only, not of every cell the search weighs: it was
         ;; about half a search's time; a refused cell is searched round, at most route-searches times
-        a (loop [refused #{} n 1]
+        a (when-not (contains? spent [from goal])
+            (loop [refused #{} n 1]
             (let [a (search refused)
                   bad (when (map? a) (remove #(escape/diggable? block-at may-dig? own? %) (:dig a)))]
               (cond (= :searching a) a
                     (nil? (:dig a)) nil
                     (empty? bad) a
-                    (< n route-searches) (recur (into refused bad) (inc n)))))]
+                    (< n route-searches) (recur (into refused bad) (inc n))))))]
     (when (or (= :searching a) (and a (<= (route-s p (:dig a) own? fetch?) (max-route-s))))
       a)))
 
@@ -398,17 +405,11 @@
        (= :searching a) a
        a (mapv (fn [cell] {:cell cell :block (block-at cell) :guess (dig-look/unknown? p cell)}) (:dig a))))))
 
-(def dig-margin
-  "Blocks round its two ends a dig route (dig-way, frontier-way) may stray. Not a price of guessed cells (unseen-step-s
-  prices those): it bounds the flood, which with no route spreads over about 270k cells of rock within max-route-s.
-  A climb (climb-route) has none: search-bound ends its long search by the standing still it costs."
-  3)
-
 (defn search-opts
-  "route-answer's route-opts for a choice's opts: its :slice, dig-margin, and the floors under its :stands (the body's
-  own stairs) as :ways."
-  [{:keys [stands slice]}]
-  (cond-> {:ways (into #{} (map (fn [[x y z]] [x (dec y) z])) stands) :margin dig-margin} slice (assoc :slice slice)))
+  "route-answer's route-opts for a choice's opts: its :slice, its :spent searches and the floors under its :stands (the
+  body's own stairs) as :ways. No margin: search-bound ends a search by the standing still it costs."
+  [{:keys [stands slice spent]}]
+  (cond-> {:ways (into #{} (map (fn [[x y z]] [x (dec y) z])) stands)} slice (assoc :slice slice) (seq spent) (assoc :spent spent)))
 
 (defn dig-way
   "{:step :dig-route :cells (route-cells)} when there are cells to dig, {:step :searching} while opts :slice's search

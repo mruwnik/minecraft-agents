@@ -20,6 +20,7 @@
             [engine.test-util :as tu :refer [box]]
             [engine.triggers :as triggers]
             [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.dig-route :as dig-route]
             [jobs.lib.escape :as escape]
             [jobs.lib.world-files :as world-files]
             [jobs.lib.pass :as pass]
@@ -203,6 +204,15 @@
   "A 3-deep 1x1 pit (feet at y 61) in dirt x -2..2, y 60..63; stone ground east of it (x 3..14) topped at the rim."
   (apply dissoc (merge (box 3 60 -3 14 63 3 "stone") (box -2 60 -2 2 63 2 "dirt")) #{"0,61,0" "0,62,0" "0,63,0"}))
 
+(defn search-clock
+  "dig-route/search whose runs move clock on by the time their nodes take a body (about 0.2 ms a node): a search the
+  engine goes on with in one tick stands the body still as long as it would in the world."
+  [clock]
+  (let [search dig-route/search]
+    (fn [& args]
+      (let [run (apply search args)]
+        (fn [n] (let [[_ used :as r] (run n)] (swap! clock + (* 0.2 used)) r))))))
+
 (defn ^:async run-job-unpinned
   "run-job with the sight jitter left random unless the spec has :jitter. A spec's :zones (a zone list) is the body's world's."
   [job spec args & [setup before]]
@@ -220,11 +230,12 @@
                            (contains? spec :zones) (assoc :world (world-files/of-data {} {} (:zones spec)))))]
     (when before (before eng))
     (core/submit! eng '(recording-parent) {})
-    (loop [i 0]
-      (when (and (< i 1000) (seq (:list (core/state eng))))
-        (swap! clock + 100)
-        (await (core/tick! eng))
-        (recur (inc i))))
+    (with-redefs [dig-route/search (search-clock clock)]
+      (loop [i 0]
+        (when (and (< i 1000) (seq (:list (core/state eng))))
+          (swap! clock + 100)
+          (await (core/tick! eng))
+          (recur (inc i)))))
     {:out @out :seen @seen :p p}))
 
 (defn ^:async run-job
