@@ -48,9 +48,9 @@
          :round (fn ^:async stub-round [c] (ending-of c (round-fn c)))))
 
 (defn ending-job
-  "The real job of sym with its round replaced by one that ends with kind and cause."
+  "The real job of sym with its round replaced by one that ends with kind and cause (its done? is dropped: reading the world for a goal the stub never works on)."
   [sym kind cause]
-  (assoc (dissoc (get registry/jobs sym) :can-run? :safe? :fit?) :can-start? holds :round (fn ^:async ending-round [c] (ctx/end c kind cause nil))))
+  (assoc (dissoc (get registry/jobs sym) :can-run? :safe? :fit? :done?) :can-start? holds :round (fn ^:async ending-round [c] (ctx/end c kind cause nil))))
 
 (defn done [result] (fn [_] result))
 

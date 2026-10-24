@@ -5,7 +5,7 @@ import { EventEmitter } from 'node:events'
 import { spawn } from 'node:child_process'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { UNKNOWN_NS_MS, parseNss, nsOf, expectedMs, stallLimitS, slowestPriorMs, watchStall, stallMessage, needMb, lastFinished, isolate, narrowBundle, missingNss, sweepStale, cleanupOnExit, killTree } from './test-run.mjs'
+import { UNKNOWN_NS_MS, parseNss, nsOf, expectedMs, stallLimitS, slowestPriorMs, slowestLines, watchStall, stallMessage, needMb, lastFinished, isolate, narrowBundle, missingNss, sweepStale, cleanupOnExit, killTree } from './test-run.mjs'
 
 test('parseNss: space- and comma-separated namespaces, blanks dropped', () => {
   assert.deepEqual(parseNss(['engine.a-test,engine.b-test', 'engine.c-test', '']), ['engine.a-test', 'engine.b-test', 'engine.c-test'])
@@ -21,6 +21,12 @@ test('stallLimitS: the floor, or 10x the slowest prior test', () => {
   assert.equal(stallLimitS(0), 90)
   assert.equal(stallLimitS(2000), 90)
   assert.equal(stallLimitS(30000), 300)
+})
+
+test('slowestLines: the k slowest vars, slowest first, skipping non-var and half-written lines', () => {
+  const lines = ['{"started":1}', '{"var":"#\'a-test/x","ms":5}', '{"var":"#\'a-test/y","ms":900}', '{"var":"#\'a-te', '', '{"peak-rss-kb":3}']
+  assert.deepEqual(slowestLines(lines, 1), ["     900 ms  #'a-test/y"])
+  assert.equal(slowestLines(lines).length, 2)
 })
 
 test('slowestPriorMs: slowest var of the requested namespaces only', () => {

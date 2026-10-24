@@ -48,6 +48,10 @@ export const STALL_FLOOR_S = 90, STALL_K = 10
 export const FIRST_RESULT_S = 300
 // A namespace with no prior timing (fresh worktree) counts as this slow, so one long test (a fuzz run) is not killed by the floor.
 export const UNKNOWN_NS_MS = 30000
+// The k slowest test vars of a timings file as printable lines (a targeted run keeps no timings file, so this is its only per-test ms).
+export const slowestLines = (lines, k = 8) => lines.filter(Boolean).map((l) => { try { return JSON.parse(l) } catch { return {} } }).filter((r) => r.var)
+  .sort((a, b) => b.ms - a.ms).slice(0, k).map((r) => `  ${String(r.ms).padStart(6)} ms  ${r.var}`)
+
 export const slowestPriorMs = (nss, lines) => {
   const rows = lines.filter(Boolean).map((l) => { try { return JSON.parse(l) } catch { return {} } })
     .filter((r) => r.var).map((r) => ({ ns: r.var.replace(/^#'/, '').split('/')[0], ms: r.ms }))
@@ -269,6 +273,7 @@ const main = async () => {
   const exited = await new Promise((resolve) => child.on('exit', (status) => resolve(status ?? 1)))
   stop()
   const code = stalled ? 124 : exited
+  slowestLines(readText(timings).split('\n')).forEach((l) => console.log(l))
   if (stalled) console.error(stallMessage('test-engine', stallS, fs.readFileSync(timings, 'utf8').split('\n'), nss))
   if (!stalled && (code === 124 || code === 137))
     console.error(`test-engine: TIMEOUT, killed after ${limit} s (prior timing ~${Math.round(expected / 1000)} s); last finished test: ${lastFinished(fs.readFileSync(timings, 'utf8').split('\n')) ?? 'none'}`)
