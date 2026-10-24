@@ -187,16 +187,36 @@
 
 (defonce ^:private kept-prices (js/WeakMap.))
 
+(defn gather
+  "Every input of price-all!'s result, read once: {:dim :writes (the remembered world) :pos :kit :food :body :class :caught-by
+  (the threats priced, with their reach fns) :policy (wworld/body-policy: the job's args, effects, oxygen and fire
+  through it) :targets :y-margin :chasers (their cells) :dangers (the planner's: cells, fades and radii as they come to) :tolls
+  (the steps the walker failed at) :near :sky (the sky's light darkening) :difficulty :landing-epoch :values :scope}.
+  What a price reads that is time-dependent enters as the value it computes to: the death fade through :dangers, the
+  landing memory's age cut-off (wworld/landing-memory-ms) as the ::step-s window of the clock it is read in."
+  [c st targets {:keys [y-margin chasers]} chased other?]
+  (let [p (:primitives c)
+        raw (look/raw-of p)]
+    {:dim (some-> ^js st .-dim) :writes (some-> ^js st .-writes) :pos (u/self-pos c) :kit (wworld/kit-of c) :food (.-food (.self p))
+     :body (threats/death-body c)
+     :class {:underground? (sh-sense/buried? p) :night? (sh-sense/dark-outside? p) :threats (threats/threats-of c other?)}
+     :caught-by (mapv #(assoc % :caught 1) (threats/threats-of c (complement other?)))
+     :policy (cond-> (wworld/body-policy c) y-margin (assoc :y-margin y-margin))
+     :targets targets :y-margin y-margin :chasers chasers :chased chased
+     :dangers (some-> (threats/planner-dangers c) js->clj)
+     :tolls (second (edges/tolls p)) :near (look/near-of p) :sky (some-> raw look/sky-subtract) :difficulty (threat/difficulty)
+     :landing-epoch (js/Math.floor (/ (ctx/now c) (* 1000 (settings/get settings ::step-s))))
+     :values (:values @settings/state) :scope (js->clj (.getStore settings/call-scope))}))
+
 (defn priced-key
-  "Everything price!'s result reads: the body's place and kit, the world it remembers (store writes), the targets, the
-  threats priced and the chasers' cells, the sensed mobs' cells and uncleared deaths (planner dangers), the steps the walker failed at, the
-  light it sees by, the sky and the settings."
-  [c st targets {:keys [y-margin chasers]} chased other-threats caught-by body class]
-  (let [p (:primitives c)]
-    [(.-dim ^js st) (.-writes ^js st) (u/self-pos c) (wworld/kit-of c) body (select-keys class [:underground? :night?])
-     targets y-margin (mapv (juxt :name :mob :calm? :pos) chasers) (mapv cell-key-of other-threats) (mapv cell-key-of caught-by)
-     (some->> (threats/planner-dangers c) (mapv (fn [^js d] [(js/Math.floor (.-x d)) (js/Math.floor (.-y d)) (js/Math.floor (.-z d)) (.-mob d) (.-close d)])))
-     (second (edges/tolls p)) (look/near-of p) (:values @settings/state) (js->clj (.getStore settings/call-scope))]))
+  "The inputs of a search (gather) as the key of its kept result: its threats by cell and weight (cell-key-of), its chasers
+  by name, mob, calm and cell, its policy without the fns it carries (the air it counts is the remembered world's)."
+  [in]
+  (-> in
+      (update-in [:class :threats] #(mapv cell-key-of %))
+      (update :caught-by #(mapv cell-key-of %))
+      (update :chasers #(mapv (juxt :name :mob :calm? :pos) %))
+      (update :policy #(into {} (remove (comp fn? val)) %))))
 
 (declare price-all!)
 
@@ -207,39 +227,34 @@
   left when ::ring-nodes ran out (named ones have their own node cap), left out; its meta {:nodes :planned :unrouted} the nodes
   expanded, the targets planned and why the ones with no route had none (the planner's reason: count). opts {:y-margin :chasers}: blocks past body and end the routes may plan, the chasers (their danger is the race, so death-chance weighs only the other known threats; met on the
   way back from an unseen dead end, they catch the body: unseen-price). Kept for the body while it asks the same of the
-  same remembered world (priced-key)."
+  same inputs (gather, priced-key)."
   [c targets {:keys [chasers] :as opts}]
-  (let [p (:primitives c)
-        chased (set (map #(floor-cell (:pos %)) chasers))
+  (let [chased (set (map #(floor-cell (:pos %)) chasers))
         other? #(not (chased (floor-cell (:pos %))))
-        body (threats/death-body c)
-        class {:underground? (sh-sense/buried? p) :night? (sh-sense/dark-outside? p) :threats (threats/threats-of c other?)}
-        caught-by (mapv #(assoc % :caught 1) (threats/threats-of c (complement other?)))
-        st (some-> (aget p "perception") :st)
-        k (when st (priced-key c st targets opts chased (:threats class) caught-by body class))
+        st (some-> (aget (:primitives c) "perception") :st)
+        in (gather c st targets opts chased other?)
+        k (when st (priced-key in))
         hit (when st (.get kept-prices st))]
     (if (and k (= k (:k hit)))
       (:v hit)
-      (let [v (await (price-all! c targets opts chased other? body class caught-by))]
+      (let [v (await (price-all! c in other?))]
         (when st (.set kept-prices st {:k k :v v}))
         v))))
 
 (defn ^:async price-all!
-  "price! without the kept result."
-  [c targets {:keys [y-margin chasers]} chased other? body class caught-by]
+  "price! without the kept result, over the inputs gathered (gather)."
+  [c {:keys [targets chasers pos body class caught-by policy food]} other?]
   (let [p (:primitives c)
-        from (u/self-pos c)
         ring-world (costed c nil other? true)
-        policy (cond-> (wworld/body-policy c) y-margin (assoc :y-margin y-margin))
         trapped-at (fn [cell] (cost/route-death-cost body (assoc class :cells [cell] :threats caught-by) cell))
         counts (wworld/way-counts p)
-        slow (pace (.-food (.self p)))]
+        slow (pace food)]
     (if (nil? ring-world)
       []
       (loop [[t & more] targets out [] nodes 0 ring-left (settings/get settings ::ring-nodes) planned 0 unrouted {}]
         (if (or (nil? t) (and (nil? (:pos t)) (<= ring-left 0)))
           (with-meta out {:nodes nodes :planned planned :unrouted unrouted})
-          (let [pw (if-let [pos (:pos t)] (costed c (floor-cell pos) other? false) ring-world)
+          (let [pw (if-let [target (:pos t)] (costed c (floor-cell target) other? false) ring-world)
                 ^js res (await (plan-to! c pw policy (query c t)
                                          (if (:pos t) (settings/get settings ::target-max-nodes) (min ring-left (settings/get settings ::max-nodes)))))
                 spent (or (.-expanded res) 0)
@@ -248,7 +263,7 @@
                           (conj out (assoc r :target t
                                              :open? (or (:found? r) (and (nil? (:pos t)) (given-up? chasers (:end r))))
                                              :price (+ (:priced r)
-                                                       (cost/route-death-cost body (assoc class :cells (dwelt (:cells r))) from)
+                                                       (cost/route-death-cost body (assoc class :cells (dwelt (:cells r))) pos)
                                                        (unseen-price r counts trapped-at))))
                           out)
                    (+ nodes spent)

@@ -281,3 +281,27 @@
         seconds #(:seconds (search/caught-chance % {:k 10 :n 10}))]
     (is (= 0.6 (seconds [(caught 0.6 :unseen [5 64 0]) (caught 1.5 :unseen [5 64 0])])) "the blows run over the least seconds a way keeps the chaser in reach")
     (is (nil? (seconds [(caught 0.6)])) "a closed pocket is no flight: the whole of it")))
+
+(deftest a-kept-flee-price-is-planned-again-when-any-input-of-the-price-changed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [raw (tu/fake {:blocks junction :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+              p (perception/wrap raw (perception/create (fake-raw/create raw) {:now (constantly 1000000)}))
+              _ (perception/pass! (aget p "perception") {:effort 1 :reuse? true})
+              now (atom 0)
+              ctx (fn [args] (assoc (ctx-of p) :args args :view (fn [] {:data mem/empty-data :now @now})))
+              chasers [{:name "zombie" :mob "zombie" :pos {:x -4.5 :y 64 :z 0.5}}]
+              ends (search/ring {:x 0.5 :z 0.5} chasers 10 4)
+              price (fn ^:async price [c] (await (search/price! c ends {:chasers chasers})))
+              _ (await (price (ctx nil)))
+              base (await (price (ctx nil)))
+              changed? (fn [a b] (not (identical? a b)))]
+          (is (identical? base (await (price (ctx nil)))) "the same asks the same")
+          (is (changed? base (await (price (ctx {:gait :sneak})))) "a job arg the walk reads")
+          (is (changed? base (await (price (ctx {:max-damage 3})))) "the damage the walk keeps")
+          (is (changed? base (await (settings/with-settings {:jobs.lib.cost.threat/difficulty 1} #(price (ctx nil))))) "the server difficulty")
+          (reset! now 61000)
+          (is (changed? base (await (price (ctx nil)))) "the clock, once the landing memory's window moved on")
+          (swap! (fake-world/state raw) assoc-in [:self :onFire] true)
+          (is (changed? base (await (price (ctx nil)))) "the body on fire"))))))
