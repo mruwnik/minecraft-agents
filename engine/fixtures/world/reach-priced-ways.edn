@@ -4,7 +4,7 @@
 ;; Cave: stone mass x 2..30, y 0..16, z 2..30, the body on top; a pocket 15 below and 6 across (the stair runs 15 on, the rest is dug back) is too far for a dug route (16 cells at
 ;; most), so a stair down is cut (:stair). Should-fail: :ways without :stair cut no stair down.
 ;; Mine: the same mass hollowed into a dark room 25 x 25, 3 high, wider than a room; the body on its floor, the goal on top 16 up: a stair up is cut and the top reached.
-;; Sealed: a 1x2 pocket in the same mass under a goal 12 up sealed in bedrock: no climb reaches it, and go-to stops (should-fail) instead of searching or digging on.
+;; Sealed: a 1x2 pocket in the same mass under a goal pocket 12 up on a bedrock lid over the whole plot: no climb reaches it, and go-to stops (should-fail) instead of searching or digging on.
 {:defaults
  {:tags [:movement :go-to :access]
   :time :any
@@ -96,7 +96,7 @@
    :after [[:body-far [10.5 2 16.5] 8]]
    :limit-s 250}
   {:name "climb-to-a-goal-sealed-in-bedrock-ends"
-   :blocks [[:fill [2 0 2] [30 16 30] "stone"] [:fill [16 1 16] [16 2 16] "air"] [:fill [15 12 15] [17 15 17] "bedrock"] [:fill [16 13 16] [16 14 16] "air"] [:fill [2 19 2] [30 19 30] "light"]]
+   :blocks [[:fill [2 0 2] [30 16 30] "stone"] [:fill [16 1 16] [16 2 16] "air"] [:fill [1 12 1] [31 12 31] "bedrock"] [:fill [16 13 16] [16 14 16] "air"] [:fill [2 19 2] [30 19 30] "light"]]
    :plot {:height 22}
    :body {:at [16.5 1 16.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.movement.go-to {:pos #at [16 13 16] :range 0})]]
