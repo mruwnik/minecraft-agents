@@ -121,3 +121,28 @@
                           a)))))]
     (is (= {:k 0 :n 0} (way-on/way-counts known [0 64 0])) "every stand of the strip has an unseen side above its wall: none counted")
     (is (< (.-size sections) 1000) "and the strip is not walked to its far end")))
+
+(defn zeroed
+  "known with the cells unseen."
+  [known cells]
+  (fn [cx sy cz]
+    (when-let [^js ids (known cx sy cz)]
+      (let [a (js/Uint16Array.from ids)]
+        (doseq [[x y z] cells :when (= [cx sy cz] (mapv #(bit-shift-right % 4) [x y z]))]
+          (aset a (store/cell-index x y z) 0))
+        a))))
+
+(defn cells [& boxes]
+  (set (for [[x0 y0 z0 x1 y1 z1] boxes x (range x0 (inc x1)) y (range y0 (inc y1)) z (range z0 (inc z1))] [x y z])))
+
+(def forks
+  "[name known start counts]: a way splits into a shut branch and one running out of the seen box; the split reached
+  level, by a step down from a ledge, and a shut corridor with a side not seen."
+  [["plain fork" (carved (let [o (cells [0 64 0 8 65 0] [3 64 1 3 65 3])] #(contains? o %))) [0 64 0] {:k 2 :n 3}]
+   ["fork after a drop" (carved (let [o (cells [0 65 0 0 66 0] [1 64 -3 1 65 0] [1 66 0 1 66 0] [2 64 0 8 65 0])] #(contains? o %))) [0 65 0] {:k 2 :n 3}]
+   ["shut corridor with a side not seen"
+    (zeroed shut-corridor (cells [4 64 1 4 65 1])) [0 64 0] {:k 1 :n 1}]])
+
+(deftest a-fork-keeps-its-dead-and-open-ways-apart
+  (doseq [[nm known start expected] forks]
+    (is (= expected (way-on/way-counts known start)) nm)))

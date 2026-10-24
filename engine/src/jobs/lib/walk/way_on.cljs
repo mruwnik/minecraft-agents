@@ -115,7 +115,7 @@
                                   :else (recur (inc d) (or unseen? (neg? up) (neg? down)))))))
                           seen? (and (pos? i) (not unseen?))
                           p (aget qp i)
-                          counted? (and seen? (not (and (pos? p) (aget seen-all p) (== 2 (.-length (aget adj p))))))]
+                          counted? (and seen? (not (and (pos? p) (aget seen-all p) (== 2 (.-length (aget adj p))) (.includes (aget adj p) (aget qp p)))))]
                       (aset open i unseen?)
                       (aset seen-all i seen?)
                       (when counted? (.push found i))
