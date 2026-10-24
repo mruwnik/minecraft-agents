@@ -475,7 +475,7 @@
     (is (> (chance {:health 6} (route 40) (zombie)) (chance fist (route 40) (zombie))) "the same walk away is likelier death at low health")
     (is (< 0.2 (- (chance fist (route 40) (zombie)) base) 0.35) "a fist walks away now and again when it meets the mob later, each caught at the prior")
     (is (< (- (chance {:health 20 :weapon "diamond_sword"} (route 40) (zombie)) base) 0.01) "a body that would fight it takes only the fight")
-    (is (< (- (chance fist (route 40) (zombie :caught 0)) base) 0.01) "a flight with an open way out hardly kills")
+    (is (< 0.01 (- (chance fist (route 40) (zombie :caught 0)) base) 0.05) "a flight with an open way out kills only when it starts late: the slowest tenth stands 4 s beside the mob")
     (is (< 0.9 (chance fist (route 40) (zombie :caught 1))) "no way out, no blocks: the fist fight")
     (is (< (- (chance (assoc fist :covers {:walls {:open-s 1 :seconds 5}}) (route 40) (zombie :caught 1)) base) 0.01) "no way out, blocks carried: the body walls in")))
 

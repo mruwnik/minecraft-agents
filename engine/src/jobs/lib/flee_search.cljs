@@ -303,13 +303,17 @@
   "priced (price!) scored against chasers [{:name (mob-kind) :pos}] from where the body stands (from): :arrive (the
   seconds the first chaser takes to the end, ##Inf with none), :gain (arrive less the chasers' arrival at from: what
   the walk buys over standing still; 0 where no chaser can get to the body already), :caught-s (the most seconds a
-  chaser not :calm? is within its blow on the route, cost/reach-s: no race margin, a margin is for a race to one
-  place), :caught? (one lands a blow: caught-s over 0) and :score (see the ns doc)."
+  chaser not :calm? is within its blow on the route past the cells it reaches without moving (those the flight's start
+  pays, cost.answer/flee-mob), cost/reach-s: no race margin, a margin is for a race to one place), :caught? (one lands a blow: caught-s over 0) and :score (see the ns doc)."
   [chasers from priced]
   (let [here (arrive-at chasers from)]
     (mapv (fn [{:keys [end cells price] :as e}]
           (let [arrive (arrive-at chasers end)
-                caught-s (reduce max 0 (map (fn [ch] (cost/reach-s {:chaser (:name ch) :pos (:pos ch) :route cells :way #(way-at ch %)})) (remove :calm? chasers)))]
+                caught-s (reduce max 0 (map (fn [ch]
+                                              (let [way #(way-at ch %)
+                                                    past (drop-while #(zero? (cost/arrival-s (:name ch) (:pos ch) % (way %))) cells)]
+                                                (cost/reach-s {:chaser (:name ch) :pos (:pos ch) :route (vec past) :way way})))
+                                            (remove :calm? chasers)))]
             (assoc e :arrive arrive :gain (if (js/isFinite here) (- arrive here) 0)
                      :caught-s caught-s :caught? (pos? caught-s)
                      :score (- (min arrive unreached-s) price))))

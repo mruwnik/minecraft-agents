@@ -227,12 +227,12 @@
     (tu/run-async done
       (fn ^:async t []
         (let [beside (await (ends-of field {:x 0.5 :y 64 :z 0.5} [{:name "zombie" :mob "zombie" :pos {:x -0.5 :y 64 :z 0.5}}] [] nil))
-              {:keys [chance seconds]} (search/caught-chance beside {:k 0 :n 0})
+              {:keys [chance]} (search/caught-chance beside {:k 0 :n 0})
               p (tu/fake-on-floor {:floor [-50 -45 50 45] :blocks lake :self {:pos {:x 3.5 :y 63 :z 0.5}}})
               afloat (await (search/search! (ctx-of p) [{:name "drowned" :mob "drowned" :pos {:x 1.5 :y 63 :z 0.5}}] [] {}))]
-          (is (every? :caught? beside) "a zombie beside lands a blow on every way")
-          (is (= 1 chance))
-          (is (< 0 seconds 1) (str "only while the flight pulls away from it: " seconds))
+          (is (some :caught? beside) "the ways past a zombie beside are caught")
+          (is (not-every? :caught? beside) "the way away is not: its blows while the flight starts are cost.answer/flee-mob's")
+          (is (< chance 1))
           (is (< (:seconds (search/caught-chance afloat {:k 0 :n 0}) ##Inf) (reduce min (map :s afloat))) "a drowned two blocks off an afloat body is in reach only part of the swim to the shore"))))))
 
 (deftest a-flee-search-is-planned-again-only-when-what-it-reads-changed

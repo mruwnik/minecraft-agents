@@ -86,10 +86,10 @@
     20 sword [(mob "skeleton" 10)] :fight))
 
 (deftest a-walk-away-is-caught-at-the-prior-and-so-loses-to-a-fight-or-a-wall-it-would-beat-on-an-open-way
-  (let [zombie (mob "zombie" 3 35)
+  (let [zombie (mob "zombie" 4 35)
         f (cost/fight-answer (fight sword zombie))
         flee #(cost/flee-answer {:food 20 :mobs [zombie] :later f :caught %})
-        wall (assoc (cost/build-answer {:mobs [zombie] :seconds 2}) :seconds 120)
+        wall (assoc (cost/build-answer {:mobs [zombie] :seconds 2}) :seconds 240)
         pick #(:answer (cost/decide (body 8) %1 here))]
     (is (= :flee (pick {:fight f :flee (flee 0)})) "at 8 hp an open way beats the fight")
     (is (= :fight (pick {:fight f :flee (flee nil)})))
@@ -296,3 +296,11 @@
         flee (cost/flee-answer {:food 20 :mobs [m] :swim 14 :land 0 :open 0 :later fought :caught 0.15 :caught-s 0.4})]
     (is (<= (:damage fought) (-> flee :caught :damage)) "caught on the way, the blows are the end's too")
     (is (= :fight (:answer (cost/decide (body 13) {:fight fought :flee flee} here))))))
+
+(deftest a-walk-from-a-zombie-in-reach-takes-its-blows-until-the-gap-opens
+  (let [price (fn [distance k]
+                (let [m (mob "zombie" distance 35)
+                      f (cost/fight-answer (fight "stone_sword" m))]
+                  (get (:prices (cost/decide (body 3) {:fight f :flee (cost/flee-answer {:food 20 :mobs [m] :later f})} here)) k)))]
+    (is (> (price 1 :flee) (price 1 :fight)) "at 3 hp a zombie beside the body lands its blows while the flight starts")
+    (is (< (price 6 :flee) (price 6 :fight)) "one 6 off is left behind before it reaches the body")))

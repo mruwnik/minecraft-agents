@@ -54,6 +54,7 @@
 (def blast-power "A creeper's explosion power (vanilla)." 3)
 (def swell-start "Blocks within which a creeper starts to swell (vanilla)." 3)
 (def fuse-s "Seconds from a creeper's first swell to its blast (vanilla: 30 ticks)." 1.5)
+(def melee-gap-s "Seconds between a melee mob's blows while the body is within its reach (vanilla MeleeAttackGoal: 20 ticks)." 1)
 (def bow-range "Blocks within which a skeleton shoots (vanilla)." 15)
 (def trident-range "Blocks within which a drowned holding a trident throws it (vanilla)." 10)
 
@@ -197,10 +198,26 @@
                        :else (max 0 (- t (/ (- gap r) (- gain)))))]
     {:in-reach in-reach :gap (max 0 (+ gap (* gain t))) :seconds t :away? (boolean (and out (= t out)))}))
 
+(defn reach-rate
+  "Blows a second mob m lands while the body is within its hit-range: a melee mob's every melee-gap-s, else its
+  measured lone-fight rate (threat/lone-hit-rate)."
+  [m]
+  (if (= (hit-range m) (danger/melee-reach)) (/ 1 melee-gap-s) (threat/lone-hit-rate (threat/kind m))))
+
+(defn start-reach
+  "Seconds a mob d blocks off, chasing at chase and hitting within r, is within r of a body that stands start seconds
+  (a flight's start, danger/flight-starts) and then gains gain blocks a second on it: the seconds it stands within r,
+  then those it takes to open the gap left to r."
+  [d r chase gain start]
+  (let [stood (max 0 (- start (/ (max 0 (- d r)) chase)))
+        gap (max 0 (- d (* chase start)))]
+    (+ stood (/ (max 0 (- r gap)) gain))))
+
 (defn flee-mob
-  "{:damage :hit :spread :seconds} of a walk away from mob {:name :held :distance :follow (blocks it keeps chasing out to) :speed
+  "{:damage :hit :spread :shape :seconds} of a walk away from mob {:name :held :distance :follow (blocks it keeps chasing out to) :speed
   (its chase speed, default danger/chase-speed of the name)} at speed v through the armour stats, nil when it keeps up.
-  It hits while within its hit-range. A flight that starts in water first swims swim blocks to dry land (##Inf: no land
+  It hits while within its hit-range (reach-rate), a melee mob on land from the decision: start-reach over each of
+  danger/flight-starts, :shape the width of its blow count over them (fight/sum-shape's). A flight that starts in water first swims swim blocks to dry land (##Inf: no land
   known) at speed sv, the mob chasing at danger/swim-chase-speed, then walks from the gap the swim left, over the land blocks
   there is to walk on (a ledge with none: the mob keeps up). A creeper that
   reaches its swell start before the body gets going blows at the distance the body reached when its fuse ends, :spread
@@ -231,8 +248,15 @@
                           starts)]
          {:damage (mean spread) :hit 0 :spread spread :seconds (+ (mean starts) escape)})
        :else
-       {:damage (threat/mob-hurt stats (threat/kind m) (+ (:in-reach wet 0) (if (:away? wet) 0 (/ (max 0 (- r d)) gain))) identity (threat/lone-hit-rate (threat/kind m)))
-        :hit (blow stats m) :seconds (+ (:seconds wet 0) escape)}))))
+       (let [hurt #(threat/mob-hurt stats (threat/kind m) % identity (reach-rate m))
+             in-reach (cond wet [(+ (:in-reach wet) (if (:away? wet) 0 (/ (max 0 (- r d)) gain)))]
+                            (= r (danger/melee-reach)) (map #(start-reach d r chase gain %) (danger/flight-starts))
+                            :else [(/ (max 0 (- r d)) gain)])
+             damages (map hurt in-reach)
+             damage (mean damages)
+             spread (- (mean (map #(* % %) damages)) (* damage damage))]
+         (cond-> {:damage damage :hit (blow stats m) :seconds (+ (:seconds wet 0) escape)}
+           (> spread 1e-9) (assoc :shape (/ (* damage damage) spread))))))))
 
 (declare flee-answer-on)
 
@@ -263,7 +287,7 @@
   goes back to its work), times 1 + returns (the flights from such mobs lately: each predicts another); :then the answer
   later (the fight with them, nil none) or the walk again. :caught: each flight is caught at chance caught (default
   ::caught-chance), its mobs then landing their blows (a creeper its blast) over the flight, a melee mob over caught-s
-  seconds of it when given (the flee search's race). A creeper that blows on the
+  seconds of it when given (the flee search's race, at reach-rate), and never fewer than the walk's own, as widely spread. A creeper that blows on the
   walk (at the median of its :spread) is spent: what follows is the walk from the rest or later (none left: nothing).
   swim: the blocks a body in water swims to dry land first (flee-mob's; ##Inf none known) and land the blocks to walk on there, at its planner/swim-speed over danger's outrun factor as on foot.
   nil when a mob keeps up or none is given."
@@ -282,10 +306,20 @@
                   :caught {:chance (- 1 (js/Math.pow (- 1 (or caught (settings/get settings ::caught-chance))) times))
                            :damage (reduce + 0 (map (fn [m f] (if (= "creeper" (:name m))
                                                                   (blow stats {:name "creeper"})
-                                                                  (threat/mob-hurt stats (threat/kind m) (cond-> (:seconds f) (and caught-s (= (hit-range m) (danger/melee-reach))) (min caught-s)) identity (threat/lone-hit-rate (threat/kind m)))))
+                                                                  (max (:damage f)
+                                                                       (if (and caught-s (= (hit-range m) (danger/melee-reach)))
+                                                                         (threat/mob-hurt stats (threat/kind m) (min (:seconds f) caught-s) identity (reach-rate m))
+                                                                         (threat/mob-hurt stats (threat/kind m) (:seconds f) identity (threat/lone-hit-rate (threat/kind m)))))))
                                                     mobs per))
                            :hit hit
-                           :blasts (vec (for [m mobs :when (= "creeper" (:name m))] (blow stats m)))}}]
+                           :blasts (vec (for [m mobs :when (= "creeper" (:name m))] (blow stats m)))}}
+            melee (keep (fn [[m f]] (when-not (= "creeper" (:name m)) f)) (map vector mobs per))
+            shape (fight/sum-shape (map (fn [f] [(* times (:damage f)) (some-> (:shape f) (* times))]) melee))
+            extra (reduce + 0 (keep (fn [{:keys [damage shape]}] (when shape (/ (* damage damage) shape))) melee))
+            caught-d (- (get-in walk [:caught :damage]) (reduce + 0 (get-in walk [:caught :blasts])))
+            walk (cond-> walk
+                   shape (assoc :shape shape)
+                   (and (pos? extra) (pos? caught-d)) (assoc-in [:caught :shape] (/ (* caught-d caught-d) extra)))]
         (let [blows? (fn [{:keys [spread]}] (pos? (nth (sort spread) (quot (count spread) 2))))
               spent (set (keep (fn [[m f]] (when (and (= "creeper" (:name m)) (blows? f)) m)) (map vector mobs per)))
               left (remove spent mobs)]
