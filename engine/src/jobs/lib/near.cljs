@@ -159,6 +159,7 @@
                        (let [began (ctx/now c)
                              {done :done last-plan :plan planned :damage}
                              (await (drive/follow! c plan {:plan-fn (fn ^:async replan [cells]
+                                                                (await (walk/settle! c))
                                                                 (let [fresh (await (plan! c to range doors (policy-of) (into walls cells) explore one-way (wsearch/replan-budget budget) progress dangers avoid dark tolls unknown))]
                                                                   (if-let [why (and stair-check (nil? (wplan/no-walk fresh 0 (policy-of))) (stair-check fresh false))]
                                                                     (assoc fresh :steps [] :refused true :stop {:status :stair-cheaper :why why})

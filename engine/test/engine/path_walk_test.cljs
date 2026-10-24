@@ -66,6 +66,26 @@
           (is (= [:plan] announced))
           (is (> (first at) 9)))))))
 
+(defn falling-from
+  "on-p for walk-to: the body is mid-fall (not on the ground), losing a tenth of a block with every change of the world
+  (a wait is one) until it lands at y 64."
+  [p]
+  (swap! (fake/state p) update :self assoc :onGround false)
+  (add-watch (fake/state p) ::fall
+             (fn [_ _ old new]
+               (let [[x y z] (get-in new [:self :pos])]
+                 (when (and (not (get-in new [:self :onGround])) (= (get-in old [:self :pos]) (get-in new [:self :pos])))
+                   (let [y' (max 64 (- y 0.1))]
+                     (swap! (fake/state p) update :self #(cond-> (assoc % :pos [x y' z]) (= 64 y') (assoc :onGround true)))))))))
+
+(deftest a-body-in-a-long-fall-lands-before-it-plans
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[{:keys [result]} _ at] (await (walk-to (floor (range 12)) [10 64 1] {:x 0 :y 70 :z 1} falling-from))]
+          (is (= :arrived (:status result)) (pr-str result))
+          (is (> (first at) 9)))))))
+
 (deftest a-walk-turns-its-head-for-a-tick-and-samples-mobs-with-it-turned
   (async done
     (tu/run-async done

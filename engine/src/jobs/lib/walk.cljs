@@ -23,7 +23,6 @@
 
 (a/defargs settings
   {::max-timeout-s {:default 120 :doc "The longest a walk call may run, in seconds." :spec (a/int-in 1 nil)}
-   ::max-settle-waits {:default 20 :doc "Waits for the body to settle after a step before the walk goes on." :spec (a/int-in 0 nil)}
    ::centre-tolerance {:default 0.2 :doc "How near (blocks, each axis) a centring nudge ends to its target." :spec (a/num-in 0 nil)}
    ::centre-max-ticks {:default 30 :doc "Ticks a centring nudge walks before it gives up." :spec (a/int-in 1 nil)}
    ::default-weight {:default 1.2 :doc "Cost weight of the search heuristic a walk plans with (above 1: faster, less exact)." :spec (a/num-in 1 nil)}
@@ -46,7 +45,6 @@
 
 (defn glance-ticks [] (settings/get settings ::glance-ticks))
 (defn max-timeout-s [] (settings/get settings ::max-timeout-s))
-(defn max-settle-waits [] (settings/get settings ::max-settle-waits))
 (defn default-weight [] (settings/get settings ::default-weight))
 (def held-in
   "Blocks at the feet that hold a body still enough to plan from: climbables, and water (it swims from there)."
@@ -61,13 +59,16 @@
     (or (.-onGround s) (contains? held-in (some-> b .-name)))))
 
 (defn ^:async settle!
-  "Wait (100 ms at a time, at most 20 waits) until the body stands on the ground, in a climbable or in water."
+  "Wait (100 ms at a time) until the body stands on the ground, in a climbable or in water; a body not on the ground
+  whose height no longer changes (a cobweb holds it) is as settled as it will get."
   [c]
-  (let [p (:primitives c)]
-    (loop [n 0]
-      (when (and (< n (max-settle-waits)) (not (grounded? p)))
+  (let [p (:primitives c)
+        y-of #(.-y (.-pos (.self p)))]
+    (loop [y (y-of)]
+      (when-not (grounded? p)
         (await (ctx/act c :wait #js {:ms 100}))
-        (recur (inc n))))))
+        (when (> (js/Math.abs (- (y-of) y)) 1e-3)
+          (recur (y-of)))))))
 
 (defn path-length
   "Horizontal length of the steps' stand points, in blocks, to 1 decimal."
