@@ -125,6 +125,14 @@
     (is (false? (holds? world (fn [eng] (out-and-back eng) (write! eng :online {}) ((status! 0 1) eng))))
         "a count of none since the return")))
 
+(deftest a-stint-taken-on-the-assumption-alone_does-not-call-for-another
+  (let [world {:time night :blocks roof}
+        back-after (fn [assumed] (fn [eng]
+                                   (mem/write! (:store eng) :log-out {:ms 30000 :status "ok" :assumed assumed} nil)
+                                   (write! eng :online {})))]
+    (is (true? (holds? world (back-after false))) "the stint a sleeper in sight called for: no count since the return is taken as asleep once")
+    (is (false? (holds? world (back-after true))) "the stint that assumption called for: no news twice, nobody sleeps")))
+
 (deftest night-holds-for-a-sleeper-in-sight-not-one-behind-a-wall
   (let [world {:time night :blocks roof :entities [sleeper]}]
     (is (true? (holds? world (fn [_]))))

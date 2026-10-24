@@ -32,22 +32,29 @@
         slept (:t (sh-clock/latest-since view :slept (sh-clock/tonight p view)))]
     (boolean (and status (or (sh-sense/sleeping? p) (and woke slept (<= slept woke) (<= (:t status) woke)))))))
 
+(defn asleep-known?
+  "Whether someone on the server is known to sleep tonight: the latest :sleep-status entry tonight (the action bar's
+  count, sent when it changes) counts a sleeper or says the night is skipped (a count that counts-self? needs another
+  sleeper), or a sleeping player is in sight."
+  [p view]
+  (let [status (sh-clock/latest-since view :sleep-status (sh-clock/tonight p view))]
+    (boolean (or (and status (if (counts-self? p view status)
+                               (> (:sleeping (:data status) 0) 1)
+                               (or (:skipping (:data status)) (pos? (:sleeping (:data status) 0)))))
+                 (seq (sleeping-players p (default-player-radius)))))))
+
 (defn others-asleep?
-  "Whether someone on the server sleeps tonight, as a player can tell: the latest :sleep-status entry tonight (the
-  action bar's count, sent when it changes) counts a sleeper or says the night is skipped; or a sleeping player is
-  in sight; or the body is back from a log-out tonight and no count has come since its return (:online): unknown is
-  taken as still asleep. A count that counts-self? needs another sleeper, and a skipped night tells nothing."
+  "Whether someone on the server sleeps tonight, as a player can tell: asleep-known?; or the body is back from a log-out
+  tonight that a known sleeper called for (not :assumed) and no count has come since its return (:online): unknown is
+  taken as still asleep for that one more stint, a stint taken on that assumption alone does not call for another."
   [p view]
   (let [since (sh-clock/tonight p view)
         status (sh-clock/latest-since view :sleep-status since)
         out (sh-clock/latest-since view :log-out since)
-        back (:t (mem/latest view :online))
-        own? (counts-self? p view status)]
-    (boolean (or (and out back (#{"ok" "cut"} (:status (:data out))) (or (nil? status) (< (:t status) back)))
-                 (and status (if own?
-                               (> (:sleeping (:data status) 0) 1)
-                               (or (:skipping (:data status)) (pos? (:sleeping (:data status) 0)))))
-                 (seq (sleeping-players p (default-player-radius)))))))
+        back (:t (mem/latest view :online))]
+    (boolean (or (and out back (#{"ok" "cut"} (:status (:data out))) (not (:assumed (:data out)))
+                      (or (nil? status) (< (:t status) back)))
+                 (asleep-known? p view)))))
 
 (defn log-out-open?
   "Night, someone else asleep (others-asleep?), and no log-out tonight that failed (unsupported, closed)."

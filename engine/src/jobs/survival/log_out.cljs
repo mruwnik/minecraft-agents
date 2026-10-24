@@ -27,7 +27,7 @@
   count (sent on a join while anyone sleeps) before it ends.
   A listed job that finds another job logged the body out since it was queued is done at once without acting.
   Ends with the result {:ms :how}. How is ok, cut, unsupported or closed.
-  Memory: writes :log-out {:ms :status} (cap 10, one in-game day).")
+  Memory: writes :log-out {:ms :status :assumed} (cap 10, one in-game day); :assumed when no sleeper was known at the start (the night does not stay out again on the news not coming).")
 
 (a/defargs args
   {:offline-ms {:doc "how long to stay away at most; the stint ends at morning" :spec (a/num-in 0 nil) :default 30000}
@@ -116,12 +116,13 @@
 (defn ^:async log-out! [c]
   (when-let [why (let [until (sh-clock/ms-until-morning (.-timeOfDay (.self (:primitives c))))] (and (pos? until) (back-unsafe c until)))]
     (ctx/emit! c :log-out.till-morning :info {:text (str "staying logged out until morning: " why)}))
-  (let [r (await (ctx/act c :offline #js {:ms (away-ms c) :why "logged-out-for-sleeping-player"}))
+  (let [assumed (not (sh-sleepers/asleep-known? (:primitives c) (ctx/view c)))
+        r (await (ctx/act c :offline #js {:ms (away-ms c) :why "logged-out-for-sleeping-player"}))
         how (.-status r)
         out {:ms (.-ms r) :how how}]
     (when (and (= "ok" how) (sh-sense/night? (:primitives c)))
       (await (child/pause! c (/ (:news-ms (:args c)) 1000) :sleep-news)))
-    (ctx/remember! c :log-out {:ms (.-ms r) :status how} log-out-policy)
+    (ctx/remember! c :log-out {:ms (.-ms r) :status how :assumed assumed} log-out-policy)
     (case how
       ("ok" "cut") (ctx/end c :done nil out)
       "unsupported" (ctx/end c :impossible :unsupported out)
