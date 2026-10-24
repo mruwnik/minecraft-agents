@@ -57,11 +57,16 @@
 
 (deftest the-ways-out-of-open-ground-and-a-corridor-go-on-and-a-pocket-ends
   (is (< (dead-end open-ground) 0.01) "open ground: a way on seldom ends")
-  (is (< (dead-end open-corridor) 0.15) "a 1-wide corridor open at its end: the walls beside it are no ways, it goes on")
-  (is (< (dead-end open-corridor) (dead-end corridors) 0.4) "a corridor with three stubs and shut ends: some ways end")
+  (is (= {:k 2 :n 2} (way-on/way-counts open-corridor [0 64 0])) "a 1-wide corridor open at both ends: two ways, both go on (the walls beside it are no ways)")
+  (is (< (dead-end open-corridor) (dead-end corridors) (dead-end pocket)) "a corridor with three stubs and shut ends: some ways end")
   (is (> (dead-end pocket) 0.5) "a shut pocket: the way ends")
   (is (> (dead-end shut-corridor) 0.5) "a shut corridor of five: no cell of it leads out")
   (is (> (dead-end closed-room) 0.5) "a closed room: no cell of it leads out"))
+
+(deftest a-shut-corridor-is-one-dead-end-however-long
+  (let [shut (fn [n] (carved (fn [[x y z]] (and (= z 0) (<= 0 x n) (#{64 65} y)))))]
+    (is (= {:k 0 :n 1} (way-on/way-counts (shut 2) [0 64 0]) (way-on/way-counts (shut 6) [0 64 0]))
+        "its cells share one fate: seeing more of it is not more dead ends")))
 
 (deftest a-cell-not-seen-counts-neither-way
   (is (= {:k 0 :n 0} (way-on/way-counts (constantly nil) [0 64 0])) "nothing seen: no count, the prior stands")
