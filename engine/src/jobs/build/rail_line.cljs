@@ -220,6 +220,15 @@
 (def can-start? (cond/and plan-problem ready-problem))
 (def can-run? plan-problem)
 
+(defn still-wrong
+  "The builder's result with only the :wrong cells that are wrong now (cells judged this round; a powered rail lit by
+  a lever switched on after the build is right now) and are not ground (rail/ground) holding a sturdy block."
+  [built cells block-at]
+  (let [ground (rail/ground cells)
+        wrong-now (set (keep #(when (#{:wrong :extra} (:answer %)) (:pos %)) cells))
+        kept? #(and (wrong-now %) (not (and (ground %) (rail/sturdy? (block-at %)))))]
+    (update built :wrong (fn [wrong] (filterv #(kept? (:pos %)) wrong)))))
+
 (defn done?
   "Ok when the line is sound; else later, with the cells placed and the cells still owed."
   [c]
@@ -231,7 +240,7 @@
                  [:sound (str "rail line " plan " is sound, " (count (filter rail/rail-cell? cells)) " rails, placed " placed)]
                  [:owed (str "rail line " plan " is not sound")]
                  {:units :cells :done placed :left (if trouble 0 (count (plan/owed cells)))
-                  :result (when proof (assoc proof :built (:built (ctx/mem c))))})))
+                  :result (when proof (assoc proof :built (some-> (:built (ctx/mem c)) (still-wrong cells (block-at c)))))})))
 
 (defn ^:async quote-of [c]
   (select-keys (await (ctx/quote c 'jobs.build.from-plan (select-keys (:args c) [:plan :part :accept :ignore-zones?]))) [:uses :yields]))
@@ -291,15 +300,6 @@
         :else (do (ctx/update-mem! c update :tried (fnil conj []) pos) :again)))
     (do (ctx/update-mem! c assoc :phase :check)
         :again)))
-
-(defn still-wrong
-  "The builder's result with only the :wrong cells that are wrong now (cells judged this round; a powered rail lit by
-  a lever switched on after the build is right now) and are not ground (rail/ground) holding a sturdy block."
-  [built cells block-at]
-  (let [ground (rail/ground cells)
-        wrong-now (set (keep #(when (#{:wrong :extra} (:answer %)) (:pos %)) cells))
-        kept? #(and (wrong-now %) (not (and (ground %) (rail/sturdy? (block-at %)))))]
-    (update built :wrong (fn [wrong] (filterv #(kept? (:pos %)) wrong)))))
 
 (defn stale-power
   "The first powered-rail cell the proof finds on the wrong side of its power whose state the body only remembers (not
