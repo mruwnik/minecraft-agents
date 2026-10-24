@@ -1,7 +1,8 @@
 (ns world-test.event-counts
   "tools/event-counts.mjs: recounts the measured combat priors from the trial bodies' event logs, so a setting can cite its k and n.
   Commands: fold | creeper-exchange | flight-starts | notice-rate | way-on (world-test.way-prior; counts the logs alone, no fold) | drowned-meets (world-test.drowned-meets; trial bodies only) | flee-pace (trial bodies only), each [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S]; each folds the logs into the durable counts file first (rows by run id, so counts only grow as logs rotate).
-  spot-returns [--agents DIR] (world-test.spot-returns) and vein-seen [--agents DIR] count from the logs alone, no fold;
+  spot-returns [--agents DIR] (world-test.spot-returns), arrow-shots [--agents DIR] [--difficulty D] (world-test.arrow-shots; D the
+  server's, default 1, easy, the trial server's), caught-flights [--agents DIR] (world-test.caught-flights; trial bodies only) and vein-seen [--agents DIR] count from the logs alone, no fold;
   water-lags [--agents DIR] [--stride N] (world-test.water-lags) and surface-heights (world-test.surface-heights) from the recorded chunks beside DIR.
   vein-seen: the ore blocks one look saw together (26-connected, a vein's plain and deepslate blocks as one ore) per group, from the
   look tool's :look.observed lists; :capped counts the lists the tool cut short (nearest first, so a far group may be cut).
@@ -31,7 +32,10 @@
             [cljs.reader :as reader]
             [clojure.string :as str]
             [jobs.lib.cost.danger :as danger]
+            [engine.settings :as settings]
             [jobs.lib.cost.threat :as threat]
+            [world-test.arrow-shots :as arrow-shots]
+            [world-test.caught-flights :as caught-flights]
             [world-test.censored :as censored]
             [world-test.drowned-meets :as drowned]
             [world-test.fresh-drop :as fresh-drop]
@@ -489,7 +493,7 @@
        (sort-by :t)
        vec))
 
-(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | way-on | spot-returns | vein-seen | water-lags | surface-heights [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N]
+(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | way-on | spot-returns | arrow-shots | caught-flights | vein-seen | water-lags | surface-heights [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N] [--difficulty D]
   every command first folds the logs into the counts file (default worlds/test/priors-counts.edn), then reports from the file; --since-ms keeps the rows of fights started after it.")
 
 (defn- parse-args [argv]
@@ -501,6 +505,7 @@
       "--since-ms" (recur (rest more) (assoc o :since-ms (js/parseFloat (first more))))
       "--sprint" (recur (rest more) (assoc o :sprint (js/parseFloat (first more))))
       "--stride" (recur (rest more) (assoc o :stride (js/parseInt (first more))))
+      "--difficulty" (recur (rest more) (assoc o :difficulty (js/parseInt (first more))))
       (recur more (update o :pos (fnil conj []) a)))))
 
 (def probe? "Bodies whose logs the drowned counts leave out: world-test probes, not trial play." #(re-find #"^(Claude)?Probe" %))
@@ -531,7 +536,7 @@
 (defn main
   "argv (array) -> promise of the exit code. open-chunks: tools/event-counts.mjs's reader of the recorded chunks."
   [argv open-chunks]
-  (let [{[cmd] :pos :keys [agents counts since-ms sprint stride] :or {since-ms 0 sprint 5.6 stride 1}} (parse-args (vec (array-seq argv)))
+  (let [{[cmd] :pos :keys [agents counts since-ms sprint stride difficulty] :or {since-ms 0 sprint 5.6 stride 1 difficulty 1}} (parse-args (vec (array-seq argv)))
         repo (or js/process.env.WORLD_TEST_REPO ".")
         agents (or agents (path/join repo "worlds" "test" "agents"))
         folded (when (#{"fold" "creeper-exchange" "flight-starts" "notice-rate" "drowned-meets" "flee-pace"} cmd)
@@ -550,7 +555,17 @@
                            (println (pr-str (surface-heights/count-in dir (cell-reader open-chunks dir) stride)))
                            0)
        "spot-returns" (do (println (pr-str (spot-returns/count-in agents))) 0)
+       "arrow-shots" (let [rows (mapcat #(arrow-shots/meets (read-agent (path/join agents % "engine") since-ms))
+                                        (filter #(fs/existsSync (path/join agents % "engine")) (array-seq (fs/readdirSync agents))))]
+                       (println (pr-str (assoc (settings/with-settings {::threat/difficulty difficulty} #(arrow-shots/report rows))
+                                               :difficulty difficulty :since-ms since-ms)))
+                       0)
        "drowned-meets" (do (println (pr-str (assoc (drowned/report (since (:drowned-exposure folded)) (since (:drowned-meets folded))) :since-ms since-ms))) 0)
+       "caught-flights" (let [rows (mapcat #(caught-flights/episodes (read-agent (path/join agents % "engine") since-ms))
+                                           (filter #(and (not (probe? %)) (fs/existsSync (path/join agents % "engine"))) (array-seq (fs/readdirSync agents))))]
+                          (println (pr-str (assoc (settings/with-settings {::threat/difficulty difficulty} #(caught-flights/report rows [0 10]))
+                                                  :difficulty difficulty :since-ms since-ms)))
+                          0)
        "vein-seen" (do (println (pr-str (vein-seen (mapcat #(read-agent (path/join agents % "engine") since-ms)
                                                        (filter #(fs/existsSync (path/join agents % "engine")) (array-seq (fs/readdirSync agents)))))))
                        0)
