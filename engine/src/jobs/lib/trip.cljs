@@ -15,7 +15,9 @@
             [jobs.lib.reserve :as reserve]
             [jobs.lib.tool-kind :as kind]
             [jobs.lib.tools :as tools]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.storage.make-room :as room]
+            [jobs.storage.make-room.order :as ord]))
 
 (a/defargs settings
   {::want-free {:default 12 :doc "Free slots a trip wants at its start: with fewer free and a known chest near, the body deposits first." :spec (a/int-in 0 36)}
@@ -58,21 +60,15 @@
   (ctx/update-mem! c assoc :trip outcome)
   (ctx/emit! c (keyword (str "trip." (name outcome))) :info fields))
 
-(def junk-blocks
-  "Dug stone a dig keeps only a stack or so of."
-  #{"cobblestone" "cobbled_deepslate"})
-
 (a/defargs junk-settings
-  {::junk-cap {:default 128 :doc "Carried cobblestone (or cobbled deepslate) over this makes a mine throw the surplus away, down to jobs.storage.make-room's keep of a stack." :spec (a/int-in 0 nil)}})
+  {::junk-cap {:default 128 :doc "Carried junk (a name jobs.storage.make-room would throw, such as cobblestone) over this makes a mine throw the surplus away, down to make-room's keep." :spec (a/int-in 0 nil)}})
 
 (defn surplus-slots
-  "The slots to free to throw the junk stone carried over ::junk-cap down to a stack each (make-room's keep), 0 when none is over."
-  [p]
-  (let [inv (u/inventory p)
-        totals (reduce (fn [m {:keys [name count]}] (cond-> m (junk-blocks name) (update name (fnil + 0) count))) {} inv)
-        cap (settings/get junk-settings ::junk-cap)
-        slots #(js/Math.ceil (/ % 64))]
-    (transduce (comp (filter #(> (val %) cap)) (map #(- (slots (val %)) 1))) + 0 totals)))
+  "The slots to free to throw the junk carried over ::junk-cap: the stacks jobs.storage.make-room would throw of such names, 0 when none is over."
+  [c]
+  (let [inv (u/inventory (:primitives c))
+        keep (ord/keep-counts inv (settings/job-defaults 'jobs.storage.make-room room/args) (reserve/held c :make-room))]
+    (ord/surplus-slots inv keep (settings/get room/settings ::room/toss-below) (settings/get junk-settings ::junk-cap))))
 
 (declare heading-steps)
 
@@ -90,12 +86,12 @@
   runs, else nil; a make-room that frees nothing is kept in the job's memory as :shed-failed."
   [c]
   (let [p (:primitives c)
-        n (surplus-slots p)]
+        n (surplus-slots c)]
     (when (and (pos? n) (not (:shed-failed (ctx/mem c))))
       (let [e (await (ctx/call c :shed 'jobs.storage.make-room {:free (min 36 (+ (u/free-slots p) n)) :toss-from (ahead c)}))]
         (cond
           (= :continue e) :continue
-          (pos? (surplus-slots p)) (do (ctx/update-mem! c assoc :shed-failed true) nil)
+          (pos? (surplus-slots c)) (do (ctx/update-mem! c assoc :shed-failed true) nil)
           :else nil)))))
 
 (defn plan

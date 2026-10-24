@@ -91,7 +91,7 @@
    :shaft :shared
    :descend-limit :shared
    :torches :shared
-   :shed {:doc "stop :surplus between digs while the pack holds cobblestone over jobs.lib.trip/::junk-cap, for a caller (jobs.gather.mine) that throws it away and goes on" :spec boolean? :default false}
+   :shed {:doc "stop :surplus between digs while the pack holds junk (what make-room would throw) over jobs.lib.trip/::junk-cap, for a caller (jobs.gather.mine) that throws it away and goes on" :spec boolean? :default false}
    :accept :shared})
 
 (a/defargs settings

@@ -109,3 +109,9 @@
          (group-by :name)
          (sort-by order-key)
          (mapv first))))
+
+(defn surplus-slots
+  "How many slots toss-order would free of the names carried more than cap of: the stacks of those names it throws."
+  [inventory keep max-worth cap]
+  (let [totals (storage/carried-totals inventory)]
+    (count (filter #(> (totals (:name %)) cap) (toss-order inventory keep {} max-worth)))))

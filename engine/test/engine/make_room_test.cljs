@@ -234,6 +234,15 @@
         keep (ord/keep-counts inventory {:carry-food 16 :carry-blocks 64 :carry-seeds 16} nil)]
     (is (= ["poppy" "granite" "cobblestone"] (names-of (ord/toss-order inventory keep {} 3.2))))))
 
+(deftest surplus-slots-counts-the-stacks-thrown-of-junk-over-the-cap-and-keeps-what-is-held
+  (let [stacks (fn [n k] (mapv (fn [i] {:name n :count 64 :slot i}) (range k)))
+        cobble3 (stacks "cobblestone" 3)
+        slots (fn [inv held cap] (ord/surplus-slots inv (ord/keep-counts inv {:carry-blocks 64} held) 3.2 cap))]
+    (is (= 2 (slots cobble3 nil 128)) "192 cobblestone over 128: two stacks go, a stack stays")
+    (is (= 0 (slots cobble3 nil 192)) "not over the cap")
+    (is (= 3 (slots (stacks "granite" 3) nil 128)) "any cheap name without a keep, not only cobblestone")
+    (is (= 0 (slots cobble3 {"cobblestone" 192} 128)) "a blueprint's stone held in the reserve stays")))
+
 (deftest toss-order-orders-by-recency-before-count
   (let [inventory [{:name "item_b" :count 9 :slot 0} {:name "item_a" :count 3 :slot 1}]]
     (is (= ["item_b" "item_a"] (names-of (ord/toss-order inventory {} {"item_b" 1 "item_a" 2} 5))))
