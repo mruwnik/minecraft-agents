@@ -431,9 +431,10 @@
   when it runs unseen); a catch lasts the least seconds the race keeps a chaser in reach over the caught headings (nil
   with none caught). The other headings only choose the way. With every way caught: chance 1, over the seconds of the way
   it gets away on least so (else of a ring route into the unseen; a closed pocket's: the whole flight), :cornered? when
-  choose takes none of the ends (the flight would be the cornered step, no walk away). Nothing routed:
-  the prior with the unseen worse case."
-  [ends counts]
+  choose (with opts, the flight's own) takes none of the ends and no unseen cell is left to look at (the flight would be
+  the cornered step, no walk away); with one, the flight looks first, and a way may be there at way-on-chance: the
+  chance is that of an unseen way (flight-caught-chance). Nothing routed: the prior with the unseen worse case."
+  [ends counts opts]
   (let [ring (filter #(and (nil? (:pos (:target %))) (not (:cover? %))) ends)
         left (filter #(and (or (:open? %) (:unseen %)) (not (:caught? %)) (pos? (:gain %)) (> (:arrive %) (:s %))) ring)
         ways (filter gets-away? ends)
@@ -443,8 +444,12 @@
       best (cond-> {:chance (cost/flight-caught-chance {:way? true :unseen? (some? (:unseen best)) :counts counts})}
              (seq caught) (assoc :seconds (reduce min (map :caught-s caught))))
       (empty? ring) {:chance (cost/flight-caught-chance {:way? true :unseen? true :counts counts})}
-      :else (let [timed (or (seq ways) (seq (filter :unseen ring)))]
-              (cond-> {:chance 1 :cornered? (nil? (choose ends {}))} timed (assoc :seconds (reduce min (map :caught-s timed))))))))
+      :else (let [timed (or (seq ways) (seq (filter :unseen ring)))
+                  free? (some? (choose ends opts))
+                  look? (and (not free?) (seq (unseen-ahead ends)))]
+              (cond-> {:chance (if look? (cost/flight-caught-chance {:way? true :unseen? true :counts counts}) 1)
+                       :cornered? (not (or free? look?))}
+                timed (assoc :seconds (reduce min (map :caught-s timed))))))))
 
 (defn named
   "The scored end of search ends planned to the named target at pos, nil when none."

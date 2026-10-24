@@ -808,6 +808,21 @@
           (is (not (contains? names "attack")) "a chased body in the open never fights")
           (is (empty? (filter #(= :retreat_blocked (:kind %)) @seen)) "never cornered"))))))
 
+(deftest the-flee-price-and-the-flight-agree-on-whether-the-body-is-cornered
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [out (atom nil)
+              s (assoc-in (setup-sensed {:entities [(zombie 7 5 {})]}) [:eng :jobs 'targeter]
+                          {:round (fn ^:async r [c]
+                                    (let [threats (danger-q/known-hostiles (:primitives c) 30 {:ranged-radius 30})
+                                          price (await (respond.goal/caught-chance! c))]
+                                      (reset! out {:price price :target (await (cover/flight-target! c threats))})
+                                      (ctx/end c :done nil)))})]
+          (await (run-job! s 'targeter {:step 6}))
+          (is (some? (:target @out)) "an open field: the flight has a way")
+          (is (not (:cornered? (:price @out))) (pr-str @out)))))))
+
 (deftest a-flight-target-behind-the-body-is-looked-at-first
   (async done
     (tu/run-async done

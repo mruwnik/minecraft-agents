@@ -12,6 +12,7 @@
             [jobs.lib.ready :as ready]
             [jobs.lib.shore :as shore]
             [jobs.lib.util :as u]
+            [jobs.survival.respond.goal :as respond.goal]
             [jobs.survival.respond.options :as options]))
 
 (def doc
@@ -117,7 +118,7 @@
 (defn here?
   "Whether the body stands in a place of its kind."
   [c]
-  (let [block-at (options/block-at-fn (:primitives c))
+  (let [block-at (respond.goal/block-at-fn (:primitives c))
         here (feet-cell c)
         up (fn [n] (block-at (update here :y + n)))]
     (case (:where (:args c))
@@ -132,7 +133,7 @@
 
 (defn quote-of [c]
   (let [leg (or (:leg-s (:args c)) (options/flight-timeout-s))
-        found? (or (here? c) (some? (place-of c (options/block-at-fn (:primitives c)))))]
+        found? (or (here? c) (some? (place-of c (respond.goal/block-at-fn (:primitives c)))))]
     {:uses {:job-time [0 leg (if found? (* 3 leg) ##Inf)]}}))
 
 (defn ^:async find-once!
@@ -146,7 +147,7 @@
 (defn ^:async round
   [c]
   (let [p (:primitives c)
-        block-at (options/block-at-fn p)
+        block-at (respond.goal/block-at-fn p)
         here (feet-cell c)]
     (when (and (= :roof (:where (:args c))) (true? (some-> (u/sensed p (update here :y + 2)) .-unknown)))
       (await (ctx/act c :look (clj->js {:pos {:x (+ 0.6 (:x here)) :y (+ 2.5 (:y here)) :z (+ 0.5 (:z here))}})))

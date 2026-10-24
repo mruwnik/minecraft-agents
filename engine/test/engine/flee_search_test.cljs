@@ -107,10 +107,10 @@
           (is (seq baby) "the ways are planned")
           (is (every? :caught? baby) "a baby zombie runs faster than a body too hungry to sprint")
           (is (nil? (search/pick baby {})) "no flee step: the body is cornered")
-          (is (= 1 (:chance (search/caught-chance baby {:k 0 :n 0}))) "the fight-or-flee weighing prices the flight caught")
+          (is (= 1 (:chance (search/caught-chance baby {:k 0 :n 0} {}))) "the fight-or-flee weighing prices the flight caught")
           (is (every? :caught? spider) "a spider 4 behind catches a flight")
           (is (some? (search/pick far {})) "one 7 behind is left behind over the ring")
-          (is (< (:chance (search/caught-chance far {:k 0 :n 0})) 1) "a way left: not caught for sure"))))))
+          (is (< (:chance (search/caught-chance far {:k 0 :n 0} {})) 1) "a way left: not caught for sure"))))))
 
 (deftest a-chaser-behind-a-wall-is-timed-along-its-way-round-it
   ;; the old arrival ran a straight line through the wall: every way was caught
@@ -227,13 +227,13 @@
     (tu/run-async done
       (fn ^:async t []
         (let [beside (await (ends-of field {:x 0.5 :y 64 :z 0.5} [{:name "zombie" :mob "zombie" :pos {:x -0.5 :y 64 :z 0.5}}] [] nil))
-              {:keys [chance]} (search/caught-chance beside {:k 0 :n 0})
+              {:keys [chance]} (search/caught-chance beside {:k 0 :n 0} {})
               p (tu/fake-on-floor {:floor [-50 -45 50 45] :blocks lake :self {:pos {:x 3.5 :y 63 :z 0.5}}})
               afloat (await (search/search! (ctx-of p) [{:name "drowned" :mob "drowned" :pos {:x 1.5 :y 63 :z 0.5}}] [] {}))]
           (is (some :caught? beside) "the ways past a zombie beside are caught")
           (is (not-every? :caught? beside) "the way away is not: its blows while the flight starts are cost.answer/flee-mob's")
           (is (< chance 1))
-          (is (< (:seconds (search/caught-chance afloat {:k 0 :n 0}) ##Inf) (reduce min (map :s afloat))) "a drowned two blocks off an afloat body is in reach only part of the swim to the shore"))))))
+          (is (< (:seconds (search/caught-chance afloat {:k 0 :n 0} {}) ##Inf) (reduce min (map :s afloat))) "a drowned two blocks off an afloat body is in reach only part of the swim to the shore"))))))
 
 (deftest a-flee-search-is-planned-again-only-when-what-it-reads-changed
   (async done
@@ -255,8 +255,8 @@
           (is (not (identical? a (await (settings/with-settings {::search/max-nodes 100} #(price [(zombie -4.5)]))))) "other settings are priced afresh"))))))
 
 (deftest a-search-that-routed-nothing-is-no-certain-catch
-  (let [open (search/caught-chance [] {:k 0 :n 0})
-        boxed (search/caught-chance [] {:k 0 :n 40})]
+  (let [open (search/caught-chance [] {:k 0 :n 0} {})
+        boxed (search/caught-chance [] {:k 0 :n 40} {})]
     (is (< 0.15 (:chance open) 1) "unseen is the worse case, priced by the ways seen round the body")
     (is (< (:chance open) (:chance boxed) 1) "seen walls on every side make it likelier")
     (is (nil? (:seconds open)) "no way timed: the blows run over the whole flight")))
@@ -264,7 +264,7 @@
 (deftest the-flight-is-caught-at-the-prior-on-the-best-way-and-its-blows-run-over-the-caught-headings
   (let [free (end-of 4 0 5 :caught? false :caught-s 0 :arrive 5)
         caught (fn [s] (end-of 0 4 9 :caught? true :caught-s s :arrive 5))
-        c (fn [ends] (update (search/caught-chance ends {:k 10 :n 10}) :chance #(/ (js/Math.round (* 1e6 %)) 1e6)))]
+        c (fn [ends] (update (search/caught-chance ends {:k 10 :n 10} {}) :chance #(/ (js/Math.round (* 1e6 %)) 1e6)))]
     (is (= {:chance 0.15 :seconds 0.5} (c [free (caught 2) (caught 0.5) (caught 1)])) "the other headings only choose the way: the prior, the least seconds of a caught one")
     (is (= {:chance 0.15} (c [free])) "no heading caught: nothing bounds the blows")
     (is (= {:chance 1 :seconds 0.5 :cornered? true} (c [(caught 2) (caught 0.5)])) "every way caught: the flight is the cornered step")
@@ -273,15 +273,23 @@
 
 (deftest ways-that-stop-at-unseen-cells-are-priced-by-the-ways-seen-not-caught
   (let [stops (fn [& more] (apply end-of 4 0 1 :found? false :unseen [5 64 0] :caught-s 0 :caught? false :arrive 5 more))
-        chance #(:chance (search/caught-chance % {:k 10 :n 10}))]
+        chance #(:chance (search/caught-chance % {:k 10 :n 10} {}))]
     (is (< (js/Math.abs (- (- 1 (* 0.85 (/ 11 12))) (chance [(stops) (stops)]))) 1e-9) "a way into the unseen: the prior and its dead end, (k+1)/(n+2) of the seen ways on, not a catch")
     (is (= 1 (chance [(end-of 4 0 1 :found? false :caught-s 0 :caught? false)])) "a pocket with nothing unseen in it is a trap")))
 
 (deftest ways-all-caught-keep-the-seconds-they-are-in-reach-when-they-run-into-the-unseen
   (let [caught (fn [s & more] (apply end-of 4 0 1 :found? false :caught? true :caught-s s more))
-        seconds #(:seconds (search/caught-chance % {:k 10 :n 10}))]
+        seconds #(:seconds (search/caught-chance % {:k 10 :n 10} {}))]
     (is (= 0.6 (seconds [(caught 0.6 :unseen [5 64 0]) (caught 1.5 :unseen [5 64 0])])) "the blows run over the least seconds a way keeps the chaser in reach")
     (is (nil? (seconds [(caught 0.6)])) "a closed pocket is no flight: the whole of it")))
+
+(deftest every-way-caught-but-an-unseen-cell-to-look-at-is-priced-by-the-look-not-cornered
+  (let [caught (fn [& more] (apply end-of 4 0 1 :found? false :caught? true :caught-s 0.6 more))
+        looked (search/caught-chance [(caught :unseen [5 64 0])] {:k 10 :n 10} {})]
+    (is (not (:cornered? looked)) "the flight looks first: it is not yet cornered")
+    (is (< (js/Math.abs (- (- 1 (* 0.85 (/ 11 12))) (:chance looked))) 1e-9) "the look finds a way at (k+1)/(n+2): priced as an unseen way")
+    (is (:cornered? (search/caught-chance [(caught)] {:k 10 :n 10} {})) "nothing left to look at: cornered, caught for sure")
+    (is (= 1 (:chance (search/caught-chance [(caught)] {:k 10 :n 10} {}))))))
 
 (deftest a-kept-flee-price-is-planned-again-when-any-input-of-the-price-changed
   (async done

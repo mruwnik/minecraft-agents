@@ -4,9 +4,11 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.access :as access]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
@@ -111,6 +113,50 @@
                              {:home home :died (flight/died-spots c)
                               :beaten? (search/beaten-to? (search/with-ways c chs) (u/self-pos c) (.-food (.self (:primitives c))) goal)})))}))
 
+(defn block-at-fn
+  "pos -> the block name the body sees or remembers there. A cell it has not seen reads as rock (behind the body or a
+  wall is no free way until it looks: glance-away!); nil (open: the walk finds out) when the cell is not loaded."
+  [p]
+  (let [at (access/sensed-at p access/hidden-guess)]
+    (fn [{:keys [x y z]}] (at [x y z]))))
+
+(defn live-chasers
+  "The hostile mobs the body knows of within the longest follow range, this flight's dead skipped."
+  [c]
+  (let [dead (set (flight/dead-ids c))]
+    (remove #(dead (.-id %)) (flight/known-chasers (:primitives c)))))
+
+(defn bystander-spots
+  "The places of the hostiles the body knows within their follow range of it (threats/follow-range: they would notice it) that are not chasing it (not in chasing, not killed): a flight step does not end nearer to one of them, so the body does not run from one mob into another."
+  [c chasing]
+  (let [p (:primitives c)
+        skip (into (set (map #(.-id %) chasing)) (flight/dead-ids c))]
+    (->> (flight/known-chasers p)
+         (remove #(skip (.-id %)))
+         (filter #(<= (danger-q/mob-distance p %) (threats/follow-range (.-name %))))
+         (map #(danger-q/mob-pos p %)))))
+
+(defn choose-opts
+  "The options flee-search/choose takes for the flight's step from threats (mobs), the one place they are built: the
+  price of a flight (caught-chance!) and the flight itself (respond.cover/flight-target!) ask it with the same situation,
+  so their cornered verdicts agree. covered? (cell -> bool, a ranged threat's cover) and home (a safe home's pos) when given."
+  [c threats covered? home]
+  (let [p (:primitives c)
+        from (u/self-pos c)
+        block-at (block-at-fn p)
+        bystanders (bystander-spots c threats)
+        floor (flight/floor c)
+        known (ledger/ways-of c)]
+    {:refused (:refused (ctx/mem c))
+     :never? (fn [end] (and (< (:y end) floor) (walk/roofed? block-at end)
+                            (not (and covered? (covered? end)))
+                            (not (contains? known [(:x end) (dec (:y end)) (:z end)]))))
+     :hazards (keep (comp :pos :data) (ctx/entries c :hazard))
+     :wet? #(walk/wet? block-at (fn [cell] (:waterlogged? (u/seen-facts p cell))) %)
+     :dry-only? (boolean (some #(= "drowned" (.-name %)) threats))
+     :avoid (cons (fn [end] (some #(< (u/dist end %) (u/dist from %)) bystanders)) (flight/avoid-ends c))
+     :prefer? (when home #(= home (:pos (:target %))))}))
+
 (defn ^:async caught-chance!
   "{:chance :seconds} of a flight from where the body stands being caught (flee-search/caught-chance of a search from
   its chasers), for the fight-or-flee weighing; kept (memory :caught-chance) while the body stays in its cell for a flee step's
@@ -121,7 +167,8 @@
         kept (:caught-chance (ctx/mem c))]
     (if (and (= here (:cell kept)) (< (- now (:t kept)) (* 1000 (settings/get search/settings ::search/step-s))))
       (:chance kept)
-      (let [chance (search/caught-chance (await (search/search! c (chasers c) [] {:y-margin (margin c)})) (wworld/way-counts (:primitives c)))]
+      (let [ends (await (search/search! c (chasers c) [] {:y-margin (margin c)}))
+            chance (search/caught-chance ends (wworld/way-counts (:primitives c)) (choose-opts c (live-chasers c) nil nil))]
         (ctx/update-mem! c assoc :caught-chance {:cell here :t now :chance chance})
         chance))))
 

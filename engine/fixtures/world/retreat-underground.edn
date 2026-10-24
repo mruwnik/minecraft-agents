@@ -65,6 +65,18 @@
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 20}
             {:event {:source :job :kind :hostile.decided} :within-s 20}
             {:no-event {:source :body :kind :died} :for-s 40}]}
+  ;; 7010287d: a lit 1-wide dead-end tunnel the body has looked round, a zombie between the body and the way out: every way the flee search finds is
+  ;; caught and nothing unseen is left to look at, so the flight is no walk away: the decision prices the fight, walls and
+  ;; pocket, never :flee.
+  {:name "dead-end-tunnel-with-every-way-caught-prices-no-flee"
+   :blocks [[:fill [0 0 0] [31 11 31] "stone"] [:fill [3 0 16] [14 2 16] "air"]
+            [:set [3 2 16] "glowstone"] [:set [8 2 16] "glowstone"] [:set [14 2 16] "glowstone"]]
+   :body {:at [4.5 0 16.5] :effects [] :inventory [["stone_sword" 1] ["cobblestone" 12]]}
+   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
+         [:summon "zombie" [7.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :hostile.decided} :within-s 20}
+            {:no-event {:source :job :kind :hostile.decided :data {:prices {:flee [:any]}}} :for-s 10}
+            {:no-event {:source :body :kind :died} :for-s 40}]}
   {:name "buried-body-with-a-pickaxe-and-no-stair-digs-a-pocket-first"
    :blocks [[:fill [0 0 0] [31 11 31] "stone"] [:fill [3 0 13] [14 2 19] "air"]
             [:set [3 0 13] "torch"] [:set [14 0 19] "torch"] [:set [3 0 19] "torch"] [:set [14 0 13] "torch"]]

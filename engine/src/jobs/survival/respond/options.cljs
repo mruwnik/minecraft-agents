@@ -2,7 +2,6 @@
   "The cornered options of a flight (jobs.survival.respond-flight): the fight, the back-off and the stand (jobs.survival.stand-in), and the settings of the retreat jobs."
   (:require [engine.settings :as settings]
             [engine.args :as a]
-            [jobs.lib.access :as access]
             [jobs.lib.blocks :as lb]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -36,14 +35,6 @@
   "Item name substrings a cornered body with no weapon and no seal swings: any of them beats the fist."
   ["_pickaxe" "_shovel" "_hoe"])
 
-
-
-(defn block-at-fn
-  "pos -> the block name the body sees or remembers there. A cell it has not seen reads as rock (behind the body or a
-  wall is no free way until it looks: glance-away!); nil (open: the walk finds out) when the cell is not loaded."
-  [p]
-  (let [at (access/sensed-at p access/hidden-guess)]
-    (fn [{:keys [x y z]}] (at [x y z]))))
 
 
 (a/defargs settings

@@ -123,16 +123,6 @@
       (walk/way-target (u/self-pos c) (mapv #(danger-q/mob-pos p %) threats)
                        (filter #(seen-stand? p %) floors) (way-reach)))))
 
-(defn bystander-spots
-  "The places of the hostiles the body knows within their follow range of it (threats/follow-range: they would notice it) that are not chasing it (not in chasing, not killed): a flight step does not end nearer to one of them, so the body does not run from one mob into another."
-  [c chasing]
-  (let [p (:primitives c)
-        skip (into (set (map #(.-id %) chasing)) (flight/dead-ids c))]
-    (->> (flight/known-chasers p)
-         (remove #(skip (.-id %)))
-         (filter #(<= (danger-q/mob-distance p %) (threats/follow-range (.-name %))))
-         (map #(danger-q/mob-pos p %)))))
-
 (defn ^:async judge!
   "The flight's goal, homes and flee search (respond.goal/judge!) after a glance along the way away (glance-away!):
   homes the first of rooms (refuges) and home-pos, none with a creeper within blast reach (blast?), kept as :homes."
@@ -167,23 +157,11 @@
      way
      (let [p (:primitives c)
            from (u/self-pos c)
-           block-at (cornered/block-at-fn p)
-           bystanders (bystander-spots c threats)
-           floor (flight/floor c)
-           known (ledger/ways-of c)
-           opts {:refused (:refused (ctx/mem c))
-                 :never? (fn [end] (and (< (:y end) floor) (walk/roofed? block-at end)
-                                        (not (and covered? (covered? end)))
-                                        (not (contains? known [(:x end) (dec (:y end)) (:z end)]))))
-                 :hazards (keep (comp :pos :data) (ctx/entries c :hazard))
-                 :wet? #(walk/wet? block-at (fn [cell] (:waterlogged? (u/seen-facts p cell))) %)
-                 :dry-only? (boolean (some #(= "drowned" (.-name %)) threats))
-                 :avoid (cons (fn [end] (some #(< (u/dist end %) (u/dist from %)) bystanders)) (flight/avoid-ends c))
-                 :prefer? (when-let [home (:home judged)] #(= home (:pos (:target %))))}
-           first-pick (search/choose (:ends judged) opts)
+           opts-for #(respond.goal/choose-opts c threats covered? (:home %))
+           first-pick (search/choose (:ends judged) (opts-for judged))
            again (when (or (nil? first-pick) (search/into-unseen? first-pick)) (await (look-ahead! c covered? judged)))
            e (if again
-               (search/choose (:ends again) (assoc opts :prefer? (when-let [home (:home again)] #(= home (:pos (:target %))))))
+               (search/choose (:ends again) (opts-for again))
                first-pick)
            round1 #(/ (js/Math.round (* 10 %)) 10)]
        (ctx/emit! c :retreat.search :debug

@@ -35,7 +35,7 @@
             [jobs.movement.go-to.torch :as torch]
             [jobs.movement.go-to.walk :as gwalk]
             [jobs.movement.reach :as reach-job]
-            [jobs.survival.respond.options :as cornered]
+            [jobs.survival.respond.goal :as respond.goal]
             [jobs.lib.flee-walk :as walk]))
 
 (defn sensed-only
@@ -165,7 +165,7 @@
 
 (deftest retreat-reads-an-unseen-cell-as-rock
   (let [{:keys [w]} (sensed-only (wall-east 1 {"2,64,0" "stone"}))
-        block-at (cornered/block-at-fn w)]
+        block-at (respond.goal/block-at-fn w)]
     (is (= "stone" (block-at {:x 1 :y 65 :z 0})))
     (is (= "stone" (block-at {:x 2 :y 64 :z 0})) "behind the wall: unseen is taken for rock, never a free way")
     (is (zero? (walk/open-cells block-at {:x 0 :y 64 :z 0} [-1 0] 3)) "behind the body: open ground it never saw is no way")))
@@ -173,7 +173,7 @@
 (deftest retreat-reads-an-unseen-head-cell-as-rock-over-a-seen-open-feet-cell
   (let [{:keys [w]} (sensed-only {:self {:pos {:x 0.5 :y 64 :z 0.5}} :yaw 270 :pitch 60
                                   :blocks (merge ground {"2,65,0" "stone"})})
-        block-at (cornered/block-at-fn w)]
+        block-at (respond.goal/block-at-fn w)]
     (is (= "air" (block-at {:x 2 :y 64 :z 0})) "the feet cell is in view")
     (is (= "stone" (block-at {:x 2 :y 65 :z 0})) "the head cell over it is not: a 1-high gap is no way")))
 
