@@ -207,6 +207,42 @@
       (is @kept "its search kept to go on with"))
     (is (nil? (replaced plan false)) "a caller's :checks :safe? replaces go-to's")))
 
+;; a walk is priced over the affordable when it ends past x 10 (a found plan's end, else the goal), but within it when
+;; unseen cells are not guessed caves
+(defn prefix-estimate [_ goal & [{:keys [plan caves-free?]}]]
+  (let [end (if (= "found" (:status plan)) (peek (:steps plan)) goal)]
+    {:hp (if (or caves-free? (<= (:x end) 10)) 0 100)
+     :spawn-hp 0 :hostile-hp 0 :death-hp 0 :lethal-hp 0 :lava-hp 0 :dark-s 0 :hostiles 0}))
+
+(deftest a-plan-let-through-as-a-safe-prefix-has-every-re-plan-after-it-priced
+  (let [m (atom {})
+        c (assoc (ready-test/ctx-of {:time st/noon :self {:pos {:x 0 :y 64 :z 0}}}) :update-mem (fn [f args] (apply swap! m f args)))
+        goal {:x 30 :y 64 :z 0}
+        prefix {:status "partial" :steps (vec (take 10 straight-cells))}]
+    (with-redefs [risk/estimate prefix-estimate]
+      (is (= :later (first (reprice/status c goal prefix))) "the whole walk is over the affordable")
+      (is (true? (reprice/safe-prefix? c goal prefix)))
+      (let [check (reprice/check c goal nil)]
+        (is (nil? (check prefix true)) "the prefix is walked")
+        (is (= :later (first (:risk (check (plan-of straight-cells) false)))) "a refresh past the prefix, no hostile new, holds"))
+      (is (= :later (first (:risk ((reprice/check c goal nil) {:status "partial" :steps (vec (take 12 straight-cells))} true))))
+          "a prefix itself over the affordable holds")
+      (let [check (reprice/check c goal nil)]
+        (is (nil? (check (plan-of (take 10 straight-cells)) true)) "a found plan within the affordable")
+        (is (nil? (check (plan-of straight-cells) false)) "is not priced again without a hostile new")))))
+
+(deftest the-stay-a-risky-walk-is-weighed-against-is-priced-where-the-body-stands
+  (let [c (ready-test/ctx-of {:time st/noon :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+        goal {:x 30 :y 64 :z 0}
+        plan {:status "partial" :steps (vec (take 10 straight-cells))}
+        stays (atom [])]
+    (with-redefs [risk/estimate prefix-estimate
+                  risk/stay-estimate (fn [c _ _] (swap! stays conj (mapv js/Math.floor ((juxt :x :y :z) (sh-sense/feet (:primitives c))))) {:hp 0 :hostiles 0})]
+      (risk/status c goal plan)
+      (swap! (fake/state (:primitives c)) assoc-in [:self :pos] [10.5 64 0.5])
+      (risk/status c goal plan)
+      (is (= [[0 64 0] [10 64 0]] @stays) "at the prefix end the stay is priced there, not at the start"))))
+
 (def far-goal {:x 95 :y 64 :z 0})
 
 (defn with-death

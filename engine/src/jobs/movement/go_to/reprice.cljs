@@ -41,7 +41,8 @@
          (= :ok (first (status c end (assoc plan :status "found")))))))
 
 (defn check
-  "near/walk-round!'s :stair-check: check's why, else status of the round's first plan, and of a re-plan that knows of a
+  "near/walk-round!'s :stair-check: check's why, else status of the round's first plan, of every re-plan once a plan
+  passed by safe-prefix? (a re-plan would walk on past the prefix unpriced), and of a re-plan that knows of a
   hostile near the way to pos not known before (at the first plan or a re-plan that passed), read anew (check-cache/fresh):
   {:risk s} when s is :later or :never, the plan kept (risk/note-plan!) for the start check to hold the call on, unless
   the plan stops short of pos with a safe-prefix? (walked, then priced again), or
@@ -52,18 +53,19 @@
   (let [p (:primitives c)
         ids #(into #{} (map (fn [e] (.-id e))) (danger/hostiles-near-way p pos (settings/get price/settings ::price/way-radius) {}))
         known (atom (ids))
+        prefixed (atom false)
         own? (nil? (get-in (ctx/frozen-call c) [:checks :safe?]))]
     (fn [plan first?]
       (or (when check (check plan first?))
           (when own?
             (let [now (ids)]
-              (when (or first? (seq (remove @known now)))
+              (when (or first? @prefixed (seq (remove @known now)))
                 (let [c' (cond-> c (not first?) check-cache/fresh)
                       s (status c' pos plan)]
                   (cond
                     (not (#{:later :never} (first s))) (do (swap! known into now) nil)
                     (unfinished? plan) (do (some-> (:search-on plan) (apply [])) {:searching true})
-                    (safe-prefix? c' pos plan) nil
+                    (safe-prefix? c' pos plan) (do (reset! prefixed true) nil)
                     :else (do (risk/note-plan! c pos plan) {:risk s}))))))))))
 
 (defn end

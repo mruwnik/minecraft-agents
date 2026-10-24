@@ -221,11 +221,11 @@
   ([c goal plan]
    (if-not plan
      (contract/ok :unplanned "the walk is priced on go-to's plan before a step of it")
-     (let [{:keys [hp spawn-hp hostile-hp death-hp lethal-hp lava-hp dark-s hostiles]} (check-cache/cached c [::risk goal (hash (select-keys plan [:status :steps])) (select-keys (:args c) [:stake :stake-age-ms]) (sense/round-looked c)] #(estimate c goal (assoc (select-keys (:args c) [:stake :stake-age-ms]) :plan plan)))
+     (let [{:keys [hp spawn-hp hostile-hp death-hp lethal-hp lava-hp dark-s hostiles]} (check-cache/cached c [::risk goal (floor-cell (sh-sense/feet (:primitives c))) (hash (select-keys plan [:status :steps])) (select-keys (:args c) [:stake :stake-age-ms]) (sense/round-looked c)] #(estimate c goal (assoc (select-keys (:args c) [:stake :stake-age-ms]) :plan plan)))
            allowed (price/allowed c)]
        (if (<= hp allowed)
          (contract/ok :acceptable (str "route risk " (price/round1 hp) " hp, within " (price/round1 allowed)))
-         (let [stay (check-cache/cached c [::stay goal (sense/round-looked c)] #(stay-estimate c goal hp))
+         (let [stay (check-cache/cached c [::stay goal (floor-cell (sh-sense/feet (:primitives c))) hp (sense/round-looked c)] #(stay-estimate c goal hp))
                over (str "route risk " (price/round1 hp) " hp over the " (price/round1 allowed) " the body can afford: "
                          (price/round1 dark-s) " s on dark open ground costs " (price/round1 spawn-hp) " hp, "
                          hostiles " hostile(s) by the way that catch it " (price/round1 hostile-hp) " hp, " (price/round1 death-hp) " hp for recent deaths or hides near it, " (price/round1 lethal-hp) " hp for the death they risk, " (price/round1 lava-hp) " hp for seen lava near the way")]
