@@ -537,6 +537,21 @@
               _ (await (child-outcome eng job {:plan "roof"} 300))]
           (is (some #(= :swalk (:slot %)) (h/events-of seen :child_started))))))))
 
+(deftest a-cell-walled-in-on-every-side-gets-a-stand-in-reach-when-nothing-sees-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [budget-walk {:ways [:walk :clear-seal]
+                           :round (fn ^:async w [c] (ctx/end c :nothing-possible :unreachable {:why :budget :arrived false}))}
+              rock (merge (into {} (for [x (range 2 7) y (range 64 69) z (range 4 9)] [(h/cell-key x y z) "stone"]))
+                          {(h/cell-key 4 66 6) "air"})
+              plan {:id "cell" :parts [{:id "r" :cells [[4 66 6]] :want "stone"}]}
+              {:keys [eng seen]} (start {:inventory [{:name "stone" :count 4} {:name "dirt" :count 10}] :blocks rock :self {:pos {:x 4.5 :y 64 :z 1.5}}}
+                                        {"cell" plan} [] {'jobs.movement.go-to budget-walk})
+              result (await (child-outcome eng job {:plan "cell"} 300))]
+          (is (some #(= :swalk (:slot %)) (h/events-of seen :child_started)) "a stand in reach is chosen though none sees the cell")
+          (is (not= :not-done result) "the build ends instead of looping"))))))
+
 (deftest a-hole-in-the-middle-of-a-flat-roof-gets-a-pillar-base-walk-after-a-failed-walk-to-a-roof-stand
   (async done
     (tu/run-async done

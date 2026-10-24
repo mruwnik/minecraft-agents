@@ -62,9 +62,9 @@
     (if up {:pillar up} r)))
 
 (defn starts-at
-  "The bridge starts level with from: where a walk to one has failed, the others are as high."
-  [c cells pos from]
-  (filterv #(= (second from) (second %)) (approach/starts (approach-input c cells pos))))
+  "The bridge starts level with from: where a walk to one has failed, the others are as high. sight? as the row was found."
+  [c cells pos from sight?]
+  (filterv #(= (second from) (second %)) (approach/starts (approach-input c cells pos sight?))))
 
 (defn bridge-block
   "The carried kind a bridge row is laid with (the one carried most), nil when none."
@@ -104,7 +104,7 @@
                 [r (when (and (not (:pillar r)) (not (:stand r)) (not= :zone (:reason r)))
                      (let [in (approach-input c cells pos sight?)] (approach/bridge in (approach/starts in))))]))
         ;; a cell walled in on every side is seen from nowhere: a stand in reach is where the build tunnels to it or finds it has no tool
-        [r row] (let [[r row :as seen] (way true)] (if (or (:pillar r) (:stand r) row (= :zone (:reason r))) seen (way false)))
+        [r row sight?] (let [[r row :as seen] (way true)] (if (or (:pillar r) (:stand r) row (= :zone (:reason r))) (conj seen true) (conj (way false) false)))
         height (get-in r [:pillar :height])
         lack (cond height (- height (carried-count c))
                    row (bridge-lack c (:length row)))]
@@ -113,7 +113,7 @@
       (not (or (:pillar r) (:stand r) row)) nil
       (pos? (or lack 0)) (await (fetch-blocks! c lack result))
       :else (do (ctx/update-mem! c assoc :scaffold {:phase :walk :cell pos
-                                                    :plan (or (:pillar r) (when row {:stand (:from row) :stands (starts-at c cells pos (:from row)) :bridge row})
+                                                    :plan (or (:pillar r) (when row {:stand (:from row) :stands (starts-at c cells pos (:from row) sight?) :bridge row})
                                                               {:stand (first (:stand r)) :stands (:stand r)})})
                 :again))))
 
@@ -214,8 +214,8 @@
   (ctx/update-mem! c #(-> (assoc % :scaffold {:phase :clean}) (cond-> (not (:scaffold %)) (assoc :stale-cleaned true)))))
 
 (defn bridge-on
-  "A bridge row from the body's stand to the target cell when one is short enough and its blocks are carried, nil when not;
-  each target is tried once."
+  "A bridge row from the body's stand to a stand that sees the target cell when one is short enough and its blocks are carried, nil when not
+  (a row to a stand that cannot see the cell places nothing); each target is tried once."
   [c cells target]
   (let [pos (:pos target)
         row (when (and pos (not (contains? (:scaffold-bridged (ctx/mem c)) pos)))
