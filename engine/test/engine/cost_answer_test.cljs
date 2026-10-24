@@ -6,7 +6,9 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.answer :as answer]
             [jobs.lib.cost.death :as death]
+            [jobs.lib.cost.danger :as danger]
             [jobs.lib.cost.fight :as fight]
+            [jobs.lib.cost.look :as glance]
             [jobs.lib.cost.threat :as threat]
             [engine.settings :as settings]))
 
@@ -234,13 +236,21 @@
             swim (dec (/ (* (/ 0.2 0.392) (inc deep)) 0.23164234422052352))]
         (is (every? #(< (js/Math.abs %) 1e-9) (map - [(* 0.9 swim) (* 0.3 swim)] (cost/unseen-water-factors kit))) "Beta(1,1) of each lag's count times the swim over the walk")))))
 
+(deftest a-look-s-outcomes-meet-the-mobs-where-the-look-leaves-them
+  (let [zombie (mob "zombie" 4)
+        door #(hash-map :door (cost/cover-answer {:mobs % :then []} {:open-s 1 :seconds 5}))
+        outcome-hp (fn [looks] (:damage (second (first (:outcomes (cost/look-answer (body 20) {:mobs [zombie] :looks looks :outcomes [[1 door]]} here))))))]
+    (is (< (outcome-hp 1) (outcome-hp 10)) "the longer the look, the nearer the zombie when the door is shut")
+    (is (= [(danger/melee-reach)] (map :distance (glance/approached [zombie] 60))) "it comes no nearer than its reach")
+    (is (= [(mob "skeleton" 8)] (glance/approached [(mob "skeleton" 8)] 1)) "a shooter keeps its range")))
+
 (deftest a-look-is-worth-what-it-may-change-less-what-it-costs
   (let [walls (cost/cover-answer {:mobs [(mob "skeleton" 8)]} {:open-s 9 :seconds 39})
         door (cost/cover-answer {:mobs [(mob "skeleton" 8)]} {:open-s 3 :seconds 33})
         now {:walls walls}
-        look (fn [mobs chance] (cost/look-answer (body 5) {:mobs mobs :looks 4 :outcomes [[chance {:walls walls :door door}] [(- 1 chance) now]]} here))
+        look (fn [mobs chance] (cost/look-answer (body 5) {:mobs mobs :looks 4 :outcomes [[chance (constantly {:walls walls :door door})] [(- 1 chance) (constantly now)]]} here))
         value (fn [mobs chance] (cost/look-value (body 5) now (look mobs chance) here))]
-    (is (zero? (:value (cost/look-value (body 5) now (cost/look-answer (body 5) {:mobs [] :looks 4 :outcomes [[1 now]]} here) here)))
+    (is (zero? (:value (cost/look-value (body 5) now (cost/look-answer (body 5) {:mobs [] :looks 4 :outcomes [[1 (constantly now)]]} here) here)))
         "a look that can show nothing new changes nothing")
     (is (< (:cost (value [] 0.9)) (:value (value [] 0.9))) "likely closed: the cheaper door is worth the look")
     (is (= :look (:answer (cost/decide (body 5) (assoc now :look (look [] 0.9)) here))) "decide takes it")

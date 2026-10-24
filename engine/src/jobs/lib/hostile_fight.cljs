@@ -274,7 +274,7 @@
                  :blasts (vec (filter pos? blasts))
                  :seconds seconds
                  :creepers (vec creepers)}
-          (seq left) (cost/followed (flee-answer c left nil nil)))))))
+          (seq left) (cost/followed (flee-answer c left nil nil nil)))))))
 
 (defn mob-near
   "Hostile e as the answers take a mob: {:name :held :distance :speed (its chase speed) :follow (its follow range)}."
@@ -316,11 +316,13 @@
   "The answer of a walk away from near (cost/flee-answer: each at its chase speed and follow range, the flights from
   such mobs lately its returns, later the answer after it, in water first the swim-out, caught {:chance :seconds} of
   its being caught: the flee search's, flee-search/caught-chance; nil the prior), its damage at least felt (hp a second felt
-  since the flight began, nil none) over the walk; nil when a mob keeps up."
-  [c near later felt caught]
+  since the flight began, nil none) over the walk; nil when a mob keeps up. mobs: near as mob-near reads them (default
+  where they stand now)."
+  ([c near later felt caught] (flee-answer c near later felt caught nil))
+  ([c near later felt caught mobs]
   (let [p (:primitives c)
         self (.self p)
-        mobs (mapv #(mob-near p %) near)
+        mobs (or mobs (mapv #(mob-near p %) near))
         swim (swim-out c mobs)
         a (cost/flee-answer {:food (or (.-food self) 20) :equipment (cost/equipment-of (.-equipment self))
                              :mobs mobs
@@ -329,7 +331,7 @@
                              :returns (returns c (map #(.-name %) near))
                              :later later :caught (:chance caught) :caught-s (:seconds caught)})]
     (cond-> a
-      (and a felt) (update :damage max (* felt (/ (:seconds a) 2))))))
+      (and a felt) (update :damage max (* felt (/ (:seconds a) 2)))))))
 
 (defn weigh
   "cost/decide over answers ({key answer-or-nil}) for the body of c where it stands, with :answers; nil when none is open."

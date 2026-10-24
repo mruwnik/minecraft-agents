@@ -246,35 +246,38 @@
   "The covers respond prices, each a way of jobs.survival.shut-in where the body stands (and :door, below)."
   [:walls :pit :pocket])
 
-(defn cover-answers
-  "{way answer} of shutting the body in against near by each way shut-in/covers finds possible here (cost/cover-answer:
-  the blows while a side is open, the quote, the hide-out's quiet; then: what follows it, or the same cover once more).
-  The open doors of the closed (or not yet all seen) room the body stands in, when the flight would shut one (sealing, respond.doors/sealing-doors), are the cover :door (shut-in/door-cover), done by the flight's own door step.
+(defn cover-specs
+  "{way cover} of shutting the body in against near by each way shut-in/covers finds possible here (the seconds a side
+  stays open, the quote, the hide-out's quiet). The open doors of the closed (or not yet all seen) room the body stands in, when the flight would shut one (sealing, respond.doors/sealing-doors), are the cover :door (shut-in/door-cover), done by the flight's own door step.
   None with a creeper near (cost/cover-answer: its blast takes the walls), so its quotes are not asked for: they take
   seconds the fuse does not leave."
-  [c near then sealing]
+  [c near sealing]
   (when-not (some combat/creeper? near)
-    (let [p (:primitives c)
-          mobs {:equipment (cost/equipment-of (.-equipment (.self p))) :mobs (mapv #(hostile/mob-near p %) near) :then then}]
-      (into {} (keep (fn [[w cover]] (some->> (cost/cover-answer mobs cover) (vector w))))
-            (cond-> (shut-in/covers c cover-ways)
-              sealing (assoc :door (shut-in/door-cover c (:n sealing) (map #(.-name %) near) (:unseen? sealing))))))))
+    (cond-> (shut-in/covers c cover-ways)
+      sealing (assoc :door (shut-in/door-cover c (:n sealing) (map #(.-name %) near) (:unseen? sealing))))))
+
+(defn cover-answers
+  "{way answer} of the covers specs (cover-specs) against mobs [hostile/mob-near's] wearing equipment (cost/cover-answer:
+  the blows while a side is open; then: what follows it, or the same cover once more)."
+  [equipment mobs then specs]
+  (into {} (keep (fn [[w cover]] (some->> (cost/cover-answer {:equipment equipment :mobs mobs :then then} cover) (vector w)))) specs))
 
 (defn look-answer
   "{:answer :room :value :cost}: looking into the room first (respond.doors/room-look) when a cell of it is unseen: the
   room is closed by cost/closed-chance of its seen and unseen boundary cells, then the door shut as in a seen room, else
-  the answers now without the door (cost/look-answer, cost/look-value). nil when there is nothing to look at."
-  [c near now sealing then]
+  the answers now without the door (cost/look-answer, cost/look-value); now-of: the same of mobs [hostile/mob-near's]
+  come nearer during the look. nil when there is nothing to look at."
+  [c near now now-of sealing then]
   (when-let [{:keys [seen unseen headings] :as room} (doors/room-look c sealing)]
     (let [p (:primitives c)
           body (hostile/body-of c)
           equipment (cost/equipment-of (.-equipment (.self p)))
           mobs (mapv #(hostile/mob-near p %) near)
-          door (cost/cover-answer {:equipment equipment :mobs mobs :then then}
-                                  (shut-in/door-cover c (:n sealing) (map #(.-name %) near) false))
+          door-cover (shut-in/door-cover c (:n sealing) (map #(.-name %) near) false)
           closed (cost/closed-chance seen unseen)
           answer (cost/look-answer body {:equipment equipment :mobs mobs :looks (* 2 (count headings))
-                                         :outcomes [[closed (assoc now :door door)] [(- 1 closed) (dissoc now :door)]]}
+                                         :outcomes [[closed #(assoc (now-of %) :door (cost/cover-answer {:equipment equipment :mobs % :then then} door-cover))]
+                                                    [(- 1 closed) #(dissoc (now-of %) :door)]]}
                                    (u/self-pos c))]
       (when answer
         (assoc (cost/look-value body now answer (u/self-pos c)) :answer answer :room room :closed closed)))))
@@ -315,12 +318,16 @@
         _ (ctx/update-mem! c assoc :hits hits :last-health (.-health self) :last-at (ctx/now c))
         felt (walk-felt c)
         fight (when-not (some combat/enderman? near) (hostile/fight-answer c near #(struck-of c %)))
-        walk (when-not (some combat/enderman? near) (hostile/flee-answer c near fight felt (await (respond.goal/caught-chance! c))))
+        caught (when-not (some combat/enderman? near) (await (respond.goal/caught-chance! c)))
+        walk (when-not (some combat/enderman? near) (hostile/flee-answer c near fight felt caught))
         then (or (:then walk) (when fight [fight]))
         sealing (when-not (some #(or (combat/creeper? %) (combat/enderman? %)) near) (doors/sealing-doors c near))
-        covers (when-not (some combat/enderman? near) (cover-answers c near then sealing))
+        specs (when-not (some combat/enderman? near) (cover-specs c near sealing))
+        equipment (cost/equipment-of (.-equipment self))
+        covers (cover-answers equipment (mapv #(hostile/mob-near p %) near) then specs)
         now (merge covers {:fight fight :flee walk})
-        look (when (seq covers) (look-answer c near now sealing then))
+        now-of (fn [mobs] (merge (cover-answers equipment mobs then specs) {:fight fight :flee (when walk (hostile/flee-answer c near fight felt caught mobs))}))
+        look (when (seq covers) (look-answer c near now now-of sealing then))
         weighed (hostile/weigh c (cond-> now look (assoc :look (:answer look))))
         stay? (and (not (hurt-lately? c)) (stay-under-roof? c near))
         decision (if (or stay? (= :fight (:answer weighed))) :fight :flee)

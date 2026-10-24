@@ -2,8 +2,8 @@
   "The value of a look: look first when what the look could change is worth more than the look costs. Pure.
 
   look-answer: a look of some looks under the mobs near (answer/build-answer over look-s, the blows of the seconds it
-  takes), then, by the chance of each thing it may show, the cheapest answer the body has once it has seen that
-  (answer/decide): an answer with :outcomes, priced by answer/answer-price beside the answers open now, so decide takes
+  takes), then, by the chance of each thing it may show, the cheapest answer the body has once it has seen that, with
+  the mobs come nearer meanwhile (approached; answer/decide): an answer with :outcomes, priced by answer/answer-price beside the answers open now, so decide takes
   the look exactly when look-value's :value is over its :cost.
   closed-chance: the chance the unseen part of a boundary is closed, given its seen part is (a room's walls).
 
@@ -12,7 +12,9 @@
   (plug-way ::unsensed-s), a seen-but-dark route cell in go-to."
   (:require [engine.args :as a]
             [engine.settings :as settings]
-            [jobs.lib.cost.answer :as answer]))
+            [jobs.lib.cost.answer :as answer]
+            [jobs.lib.cost.danger :as danger]
+            [jobs.lib.cost.threat :as threat]))
 
 (a/defargs settings
   {::wall-prior {:default {:k 1 :n 2} :spec (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 1 nil)})
@@ -32,15 +34,28 @@
   (let [{:keys [k n]} (settings/get settings ::wall-prior)]
     (reduce * 1 (map #(/ (+ k seen %) (+ n seen %)) (range unseen)))))
 
+(defn approached
+  "mobs [answer/flee-mob's] seconds later: each melee one (not threat/ranged?) nearer by seconds of its chase speed, not
+  inside danger/melee-reach."
+  [mobs seconds]
+  (mapv (fn [{:keys [name distance speed] :as m}]
+          (if (or (threat/ranged? m) (nil? distance))
+            m
+            (assoc m :distance (max (min distance (danger/melee-reach)) (- distance (* seconds (or speed (danger/chase-speed name))))))))
+        mobs))
+
 (defn look-answer
   "The answer of looks looks against mobs [answer/flee-mob's] wearing equipment, then the cheapest of each outcome's
-  answers for body at `at`: outcomes [[chance {key answer-or-nil}]], the chances summing to 1. nil when an outcome has
-  no answer open."
+  answers for body at `at`: outcomes [[chance answers-of]], the chances summing to 1, answers-of a fn of the mobs
+  (approached by the look's seconds) to {key answer-or-nil}. nil when an outcome has no answer open."
   [body {:keys [equipment mobs looks outcomes]} at]
-  (let [look (answer/build-answer {:equipment equipment :mobs mobs :seconds (look-s looks)})
-        then (map (fn [[chance answers]]
-                    (when-let [{k :answer} (answer/decide (answer/after body look) answers at)]
-                      [chance (get answers k)]))
+  (let [seconds (look-s looks)
+        look (answer/build-answer {:equipment equipment :mobs mobs :seconds seconds})
+        moved (approached mobs seconds)
+        then (map (fn [[chance answers-of]]
+                    (let [answers (answers-of moved)]
+                      (when-let [{k :answer} (answer/decide (answer/after body look) answers at)]
+                        [chance (get answers k)])))
                   outcomes)]
     (when (every? some? then)
       (assoc look :outcomes (vec then)))))
