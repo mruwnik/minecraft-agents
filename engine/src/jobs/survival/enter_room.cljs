@@ -53,7 +53,6 @@
    ::fill-s {:default 3 :doc "Seconds filling a doorway or a roof hole is guessed to take, for the quote." :spec (a/num-in 0 nil)}
    ::race-radius {:default 16 :doc "Blocks within which a hostile may reach a door of the room before the body does." :spec (a/num-in 0 nil)}
    ::max-steps {:default 40 :doc "Steps (a walk, a door, a fill) a call takes before it gives up." :spec (a/int-in 1 nil)}
-   ::max-judged {:default 3 :doc "Doors seen whose room is judged (flooded) to find the nearest closed room when no place is remembered." :spec (a/int-in 0 nil)}
    ::max-mends {:default 3 :doc "Fills of the roof hole a call tries before it gives up." :spec (a/int-in 1 nil)}})
 
 (def target [])
@@ -73,16 +72,21 @@
   [c pos]
   (boolean (access/trespass-refusal (assoc (access/rules-input c) :feet nil) :place pos)))
 
+(defn seen-poses
+  "Cells of the rooms behind the doors the body has seen, nearest door first, none that a zone refuses at either side of a
+  door (starts reads at most the jobs.lib.rooms max-doors doors)."
+  [c]
+  (let [starts (room-lib/starts (:primitives c) nil)
+        refused-door? (fn [door] (some #(refused? c (:pos %)) (filter #(= door (:door %)) starts)))]
+    (->> starts (remove #(refused-door? (:door %))) (map :pos))))
+
 (defn nearest-seen
-  "{:pos} of the nearest closed room behind one of the first ::max-judged doors the body has seen, nil when none. A door
-  either side of which a zone refuses is skipped; a room whose inside is not seen yet counts (the walk shows it), but only
-  when no door side is a known closed room (the open ground outside a door reads unseen too).
-  Read-only (a quote runs this), so nothing is cached."
+  "{:pos} of the first closed room behind a door the body has seen, nil when none; a room whose inside is not seen yet counts
+  (the walk shows it), but only when no door side is a known closed room (the open ground outside a door reads unseen too).
+  Door order, not price: the night picks by go-to's quotes (night/walkable-far-home). Read-only (a quote runs this), so nothing is cached."
   [c]
   (let [p (:primitives c)
-        starts (take (settings/get settings ::max-judged) (room-lib/starts p nil))
-        refused-door? (fn [door] (some #(refused? c (:pos %)) (filter #(= door (:door %)) starts)))
-        poses (->> starts (remove #(refused-door? (:door %))) (map :pos))]
+        poses (seen-poses c)]
     (some->> (or (first (filter #(room-lib/refuge-room? p %) poses))
                  (first (filter #(reach-room/unseen-room? p %) poses)))
              (hash-map :pos))))

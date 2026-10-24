@@ -29,6 +29,7 @@
             [jobs.lib.threats :as threats]
             [jobs.lib.spent :as spent]
             [jobs.lib.util :as u]
+            [jobs.lib.walk-pick :as pick]
             [jobs.lib.walk.world :as wworld]
             [jobs.survival.bed-down :as bed-down]
             [jobs.survival.dig-in-cells :as dig-cells]
@@ -216,10 +217,12 @@
   walk (a place given, or walk? for the room seen) is made once a night: once its call ends, :roof-walk-failed is set whatever came of it (a body that got in is roofed, and
   no walk is wanted)."
   ([c place] (enter-room! c place (some? place)))
-  ([c place walk?]
+  ([c place walk?] (enter-room! c place walk? nil))
+  ([c place walk? at]
    (hold/busy! c)
    (let [w (await (ctx/call c :enter-room 'jobs.survival.enter-room (cond-> {}
-                                                                      place (assoc :place place))))]
+                                                                      place (assoc :place place)
+                                                                      at (assoc :at at))))]
      (when (and walk? (not= :continue w))
        (ctx/update-mem! c assoc :roof-walk-failed true))
      (when (and (map? w) (= :no-blocks (contract/cause-key w)))
@@ -232,25 +235,59 @@
   (let [[_ mean] (get-in (await (ctx/quote c 'jobs.survival.enter-room args)) [:uses :job-time])]
     (when (and mean (not (infinite? mean))) mean)))
 
+(defn ^:async cheapest-walk!
+  "The one of xs whose walk go-to quotes cheapest, within limit-s seconds (jobs.lib.walk-pick: those whose straight walk
+  alone is over the limit are left out, the rest quoted best-first by it, ok? asked of an x only when its turn comes). target
+  (fn [x]) {:pos :range} bounds the straight walk, walk (fn [x]) are the go-to args. A quote whose search still goes on prices
+  nothing (its estimate is no price): x is left out this pass; with none priced and one searching, :searching (asked again at
+  the next pass). Nil when no walk is priced."
+  [c xs {:keys [target walk limit-s ok?]}]
+  (let [feet (sh-sense/feet (:primitives c))
+        bound #(pick/walk-s feet (target %))
+        searching (atom false)
+        best (:pick (await (pick/best! c (filter #(<= (bound %) limit-s) xs)
+                                       {:bound bound :args walk :ok? ok?
+                                        :price (fn [_ q] (if (:estimate q)
+                                                           (do (reset! searching true) ##Inf)
+                                                           (pick/quoted-s c q)))})))]
+    (or best (when @searching :searching))))
+
+(defn ^:async seen-room!
+  "The cell of the closed room behind a door the body has seen whose walk is the cheapest (cheapest-walk!, a room judged
+  only when its turn comes) within limit-s seconds; else, with none closed, the cheapest of the rooms not seen inside yet
+  (the walk shows them). :searching or nil as cheapest-walk!."
+  [c limit-s]
+  (let [p (:primitives c)
+        poses (enter-room/seen-poses c)
+        least! (fn ^:async least [ok?]
+                 (await (cheapest-walk! c poses {:target #(enter-room/walk-args {:pos %}) :walk #(enter-room/walk-args {:pos %})
+                                                 :limit-s limit-s :ok? ok?})))
+        closed (await (least! #(room-lib/refuge-room? p %)))]
+    (if (nil? closed)
+      (await (least! #(reach-room/unseen-room? p %)))
+      closed)))
+
 (defn ^:async walkable-far-home
   "The remembered roofed place (:roofed-places) beyond the walk radius (nearer ones shut-in prices against digging in) whose
-  enter-room quote is the least, when that walk fits the time left before the dark plus a margin; with none remembered, the
-  closed room the body has seen (enter-room/nearest-seen, an unfinished house with no home set yet) on the same terms:
-  {:seen true}. Else nil."
+  walk go-to quotes cheapest (cheapest-walk!: only those whose straight walk fits the time left before the dark plus a margin
+  are quoted), when enter-room's quote of that walk fits the same time; with none remembered, the closed room the body has seen
+  (seen-room!, an unfinished house with no home set yet) on the same terms: {:seen true :at cell}. :searching while a quote's
+  search goes on. Else nil."
   [c]
   (let [p (:primitives c)
         places (room-lib/roofed-places-in c (:args c) ##Inf)
-        beyond (filter #(< (sites/walk-radius) (u/dist (sh-sense/feet p) (:pos %))) places)
         budget (sites/home-walk-budget-s p)
-        priced (loop [[place & more] beyond out []]
-                 (if-not place
-                   out
-                   (let [s (await (walk-seconds c {:place (:name place)}))]
-                     (recur more (cond-> out s (conj [s place]))))))
-        [s place] (first (sort-by first priced))]
-    (cond
-      (seq places) (when (and place (<= s budget)) place)
-      (enter-room/nearest-seen c) (when-let [s (await (walk-seconds c {}))] (when (<= s budget) {:seen true})))))
+        fits (fn ^:async fits [args] (when-let [s (await (walk-seconds c args))] (<= s budget)))]
+    (if (seq places)
+      (let [beyond (filter #(< (sites/walk-radius) (u/dist (sh-sense/feet p) (:pos %))) places)
+            place (await (cheapest-walk! c beyond {:target #(hash-map :pos (:pos %) :range 0) :walk enter-room/walk-args :limit-s budget}))]
+        (cond
+          (= :searching place) :searching
+          (and place (await (fits {:place (:name place)}))) place))
+      (let [at (await (seen-room! c budget))]
+        (cond
+          (= :searching at) :searching
+          (and at (await (fits {:at at}))) {:seen true :at at})))))
 
 (defn ^:async exposed!
   "Nothing shelters the body tonight (the first time one shelter.exposed warn): a log-out stint (jobs.survival.log-out) while
@@ -622,7 +659,8 @@
           (:bed-down (ctx/mem c)) (let [{:keys [bed answer]} (:bed-down (ctx/mem c))] (await (bed-down-step c bed answer)))
           (and roofed bed-wanted (not bed) (sh-beds/bed-layout c true) (room-lib/gap c)) (await (enter-room! c nil))
           (and home-near (walk-home-wanted? c) (or bed bed-wanted)) (await (enter-room! c (:name home-near)))
-          far-home (await (enter-room! c (:name far-home) true))
+          (= :searching far-home) :again
+          far-home (await (enter-room! c (:name far-home) true (:at far-home)))
           :else (await (answer-pass c sheltered bed (when bed-way (await (night-answer c bed (and bed-wanted (not home-near))))))))))))
 
 (defn ^:async round

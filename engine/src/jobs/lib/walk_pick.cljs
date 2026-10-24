@@ -49,14 +49,16 @@
 (defn ^:async best!
   "{:pick :price :quote} the cheapest of candidates, nil when none has a finite price. bound (fn [x]) seconds no more
   than x's price; args (fn [x]) the go-to args of the walk to x; price (fn [x q]) x's seconds with q, go-to's quote of
-  that walk. Quoted best-first by bound, until the best quoted is no dearer than the next bound."
-  [c candidates {:keys [bound args price]}]
+  that walk; ok? (fn [x], default all) is asked of a candidate only when its turn comes, so a costly test is paid for just the
+  candidates reached. Quoted best-first by bound, until the best quoted is no dearer than the next bound."
+  [c candidates {:keys [bound args price ok?]}]
   (loop [[x & more :as left] (sort-by bound candidates) best nil]
-    (if (or (empty? left) (and best (<= (:price best) (bound x))))
-      best
-      (let [q (await (quote! c (args x)))
-            s (price x q)]
-        (recur more (if (and (js/isFinite s) (or (nil? best) (< s (:price best)))) {:pick x :price s :quote q} best))))))
+    (cond
+      (or (empty? left) (and best (<= (:price best) (bound x)))) best
+      (and ok? (not (ok? x))) (recur more best)
+      :else (let [q (await (quote! c (args x)))
+                  s (price x q)]
+              (recur more (if (and (js/isFinite s) (or (nil? best) (< s (:price best)))) {:pick x :price s :quote q} best))))))
 
 (defn ^:async pick!
   "The candidate best! picks, else the one of least bound: a quote that cannot price the walk (its plan cannot start where

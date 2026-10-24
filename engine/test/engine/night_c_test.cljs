@@ -22,6 +22,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.shelter.beds :as sh-beds]
+            [jobs.lib.walk-pick :as pick]
             [jobs.lib.targets :as targets]
             [jobs.survival.night :as night]
             [jobs.survival.night.sites :as sites]
@@ -90,6 +91,29 @@
           (is (empty? (filter #(< 3 (:z (st/arg-pos %))) (st/calls p "place"))) "no pit dug beside the hut")
           (is (< (:z (st/pos-of p)) 2) "inside the hut")
           (is (false? (hut/door-open? p)) "the door is shut"))))))
+
+(deftest of-two-huts-seen-the-one-go-to-reaches-is-walked-into-not-the-one-whose-door-is-nearer
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [shift (fn [m dx] (into {} (map (fn [[k v]] [(let [[x y z] (map #(js/parseInt %) (.split (name k) ","))] (str (+ x dx) "," y "," z)) v])) m))
+              base (hut/hut-world {:x 5 :y 64 :z 6} {})
+              ring (into {} (for [x (range 2 9) y [64 65] z (range -3 5)
+                                  :when (or (#{2 8} x) (#{-3 4} z))] [(str x "," y "," z) "bedrock"]))
+              world (-> base
+                        (update :blocks #(merge % ring (shift % 20)))
+                        (update :states #(merge % (shift % 20)))
+                        (assoc :time night :light-default [15 4]))
+              {:keys [eng p]} (await (night-at-home world {:x 5 :y 64 :z 0} {} {:home? false}))]
+          (aset p "seenBlockAt" (fn [pos] (let [b (.blockAt p pos)] #js {:name (.-name b) :pos pos :age-ms 0 :properties (.-properties b)})))
+          (let [at (.-sensedAt p)]
+            ;; the inside of the far hut, as of a look through its door
+            (aset p "sensedAt" (fn [pos] (let [k (str (.-x pos) "," (.-y pos) "," (.-z pos))]
+                                           (if (and (<= 23 (.-x pos) 27) (<= -1 (.-z pos) 1))
+                                             #js {:name (get (:blocks world) k "air") :pos pos :properties (clj->js (get (:states world) k))}
+                                             (.call at p pos))))))
+          (await (tu/run-until-empty eng 120))
+          (is (< 20 (:x (st/pos-of p))) "in the far hut, the near one is walled off from the body"))))))
 
 (deftest a-carried-bed-goes-down-inside-the-hut-seen-not-outside-it
   (async done
@@ -167,6 +191,21 @@
           (mem/write! (:store eng) :cabin {:pos {:x 22 :y 64 :z 0}} mem/place-policy)
           (await (tu/run-until-empty eng 80))
           (is (= 22 (js/Math.floor (:x (st/pos-of p)))) "walked to the cabin go-to can reach, past the nearer home it cannot"))))))
+
+(deftest a-remembered-place-too-far-to-walk-in-the-time-left-is-not-quoted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [quoted (atom [])
+              quote! pick/quote!
+              {:keys [eng p]} (await (night-at-home far-home-world {:x 40 :y 64 :z 0} {:roofed-places [:home :far]}))]
+          (mem/write! (:store eng) :far {:pos {:x 4000 :y 64 :z 0}} mem/place-policy)
+          (set! pick/quote! (fn [c args] (swap! quoted conj args) (quote! c args)))
+          (try (await (tu/run-until-empty eng 60))
+               (finally (set! pick/quote! quote!)))
+          (is (= 40 (js/Math.floor (:x (st/pos-of p)))) "walked to the home that fits")
+          (is (seq @quoted))
+          (is (not-any? #(= :far (:place %)) @quoted) "the place no walk could cover in the time left costs no search"))))))
 
 (deftest a-home-with-no-seen-roof-is-not-walked-to
   (async done
