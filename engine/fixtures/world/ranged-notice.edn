@@ -1,0 +1,48 @@
+;; Card 0bb4040b: counts for death/::notice-rate :ranged (node tools/event-counts.mjs notice-rate): a skeleton with a bow and a clear
+;; line of fire to a body that stands still. A notify job stands in for the hostile-near job, so the first firing is the sighting
+;; and the body does not move; the seconds from there to the first hurt from the skeleton (the window if none) are one row.
+;; The notify text is `ranged-notice <mob> <light> <blocks> <window-s>`, which the counting reads. Run with --keep-body: the
+;; counts read the probe body's event log, which the runner otherwise removes after a pass.
+;; An arrow that misses is no catch: a row is the time to the first hit, the notice death/::notice-rate :ranged counts.
+{:defaults
+ {:tags [:hostile :measure]
+  :time :any
+  :mobs :keep
+  :register [{:trigger :hostile-near :why "a notify job stands in so the body holds still while a skeleton shoots at it"
+              :job (jobs.debug.notify {:text "ranged-notice skeleton lit 9 20"})}]
+  :body {:at [16.5 0 16.5]}
+  :limit-s 40}
+ :cases
+ [{:name "skeleton-lit-2"
+   :register [{:trigger :hostile-near :why "a notify job stands in so the body holds still while a skeleton shoots at it"
+               :job (jobs.debug.notify {:text "ranged-notice skeleton lit 2 20"})}]
+   :act [[:summon "skeleton" [18.5 0 16.5] "{equipment:{mainhand:{id:\"minecraft:bow\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}
+            {:no-event {:source :body :kind :died} :for-s 20 :until {:source :body :kind :hurt}}]
+   :after [[:body-near [16.5 0 16.5] 3]]}
+  {:name "skeleton-lit-5"
+   :register [{:trigger :hostile-near :why "a notify job stands in so the body holds still while a skeleton shoots at it"
+               :job (jobs.debug.notify {:text "ranged-notice skeleton lit 5 20"})}]
+   :act [[:summon "skeleton" [21.5 0 16.5] "{equipment:{mainhand:{id:\"minecraft:bow\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}
+            {:no-event {:source :body :kind :died} :for-s 20 :until {:source :body :kind :hurt}}]
+   :after [[:body-near [16.5 0 16.5] 3]]}
+  {:name "skeleton-lit-9"
+   :act [[:summon "skeleton" [25.5 0 16.5] "{equipment:{mainhand:{id:\"minecraft:bow\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}
+            {:no-event {:source :body :kind :died} :for-s 20 :until {:source :body :kind :hurt}}]
+   :after [[:body-near [16.5 0 16.5] 3]]}
+  {:name "skeleton-lit-13"
+   :register [{:trigger :hostile-near :why "a notify job stands in so the body holds still while a skeleton shoots at it"
+               :job (jobs.debug.notify {:text "ranged-notice skeleton lit 13 20"})}]
+   :act [[:summon "skeleton" [29.5 0 16.5] "{equipment:{mainhand:{id:\"minecraft:bow\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}
+            {:no-event {:source :body :kind :died} :for-s 20 :until {:source :body :kind :hurt}}]
+   :after [[:body-near [16.5 0 16.5] 3]]}
+  {:name "skeleton-dark-9"
+   :plot {:light :dark}
+   :register [{:trigger :hostile-near :why "a notify job stands in so the body holds still while a skeleton shoots at it"
+               :job (jobs.debug.notify {:text "ranged-notice skeleton dark 9 20"})}]
+   :act [[:summon "skeleton" [25.5 0 16.5] "{equipment:{mainhand:{id:\"minecraft:bow\",count:1}}}"]]
+   :expect [{:no-event {:source :body :kind :died} :for-s 20 :until {:source :body :kind :hurt}}]
+   :after [[:body-near [16.5 0 16.5] 3]]}]}

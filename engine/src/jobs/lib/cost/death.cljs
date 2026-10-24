@@ -19,11 +19,13 @@
 (a/defargs settings
   {::seconds-per-level {:default 5 :spec (a/num-in 0 nil)
                         :doc "Worth of one experience level lost at a death, in seconds (the game drops a few levels' worth)."}
-   ::notice-rate {:default {:other {:k 8 :n-s 42.4} :ranged {:k 0 :n-s 0}}
-                  :spec (let [counts (a/map-with {:k (a/int-in 0 nil) :n-s (a/num-in 0 nil)})] (a/map-with {:other counts :ranged counts}))
-                  :doc "Per class of mob (:ranged: threat/ranged?, caught by a line of fire within the ranged radius; :other: caught within melee reach) of the weighted seconds n-s that watch sightings of hostiles within follow range spent in the body's field (weight 1 within a few steps of the mob's way, or a ranged mob's range, less beyond), the catches k: a hurt from that kind, or a respond decision with the mob in reach; one catch ends the one sighting of the kind nearest the event (the events carry no entity id). Priced by the Gamma posterior (k + 0.5, n-s) of the rate a hostile at weight 1 gets to the body (notice-prior, met-stretch). :other counts 24 sightings (8 ended in a position gap, censored: seconds up to it, no catch; zombie 6 of 13 s, creeper 2 of 29.4 s, too few to split by mob). :ranged has no seconds counted: every skeleton seen was first seen beyond its 15 blocks (threat/fire-range), so ::ranged-notice-rate prices it, not the melee counts. Recount: node tools/event-counts.mjs notice-rate, 2026-10-23; per-case evidence replaces it."}
-   ::ranged-notice-rate {:default 2 :spec (a/num-in 0 nil)
-                         :doc "Per weighted second, the mean notice rate of a ranged mob while its class has no seconds counted (notice-prior): vanilla's target goal looks for a target every 10 ticks on average (NearestAttackableTargetGoal, interval 10), so a ranged mob with a line of fire has noticed within half a second and shoots, with no approach to walk."}
+   ::notice-rate {:default {:other {:k 8 :n-s 42.4}
+                            :ranged [{:case "lit 2" :k 8 :n-s 15.2} {:case "lit 5" :k 8 :n-s 22.7} {:case "lit 9" :k 9 :n-s 51.4}
+                                     {:case "lit 13" :k 8 :n-s 25.2} {:case "dark 9" :k 4 :n-s 29.7}]}
+                  :spec (let [counts (a/map-with {:k (a/int-in 0 nil) :n-s (a/num-in 0 nil)})
+                              class (a/or-of counts (a/coll-of counts))]
+                          (a/map-with {:other class :ranged class}))
+                  :doc "Per class of mob (:ranged: threat/ranged?; :other: caught within melee reach), the counts {:k :n-s} of one case or of each case counted apart: n-s the weighted seconds sightings spent in the body's field (weight 1 within a few steps of the mob's way, or a ranged mob's range, less beyond), k the catches (a melee mob: a hurt from it, or a respond decision with it in reach; a ranged mob: its first hit, at the middle of the health sample it was seen in). notice-prior pools the cases. :other: 24 trial sightings (8 censored by a position gap; zombie 6 of 13 s, creeper 2 of 29.4 s). :ranged: the world fixture ranged-notice (a bow skeleton, a clear line of fire, a body standing still), by distance in blocks and light; trial play first saw every skeleton beyond its range. Recount: node tools/event-counts.mjs notice-rate (:by-case), 2026-10-24."}
    ::deaths-per-hour {:default 1.3 :spec (a/num-in 0 nil)
                       :doc "Deaths an hour of play, every cause: the fresh-start trials of 2026-10-21/22 (Wicken r5, 8 deaths in 6h15; docs/fresh-start-design.md section 1)."}
    ::spawn-walk-blocks {:default 5000 :spec (a/num-in 0 nil)
@@ -91,16 +93,26 @@
      (if (pos? life) (max 0 (- 1 below)) 1))))
 
 (defn notice-prior
-  "{:shape :rate} of the Gamma over the notice rate of mob, per weighted second: its class's ::notice-rate counts, the
-  posterior (k + 0.5, n-s); a ranged mob's class with no seconds counted an exponential (shape 1, the maximum-entropy
-  prior of a positive rate of known mean) of mean ::ranged-notice-rate (it notices fast and needs no approach, so the melee
-  counts would understate it). The mobs of a class share the one rate."
+  "{:shape :rate} of the Gamma over the notice rate of mob, per weighted second, its class's ::notice-rate cases pooled
+  partially: the mean (k + 0.5) / n-s of all of them, the variance that mean's own (the posterior Gamma(k + 0.5, n-s) of
+  one case) plus the cases' spread round it (DerSimonian-Laird over the cases' k / n-s, each of Poisson variance mean / n-s).
+  The mobs of a class share the one rate."
   [mob]
-  (let [ranged? (threat/ranged? {:name mob})
-        {:keys [k n-s]} (get (settings/get settings ::notice-rate) (if ranged? :ranged :other))]
-    (if (and ranged? (not (pos? n-s)))
-      {:shape 1 :rate (/ 1 (settings/get settings ::ranged-notice-rate))}
-      {:shape (+ k 0.5) :rate (max 1e-9 n-s)})))
+  (let [counts (get (settings/get settings ::notice-rate) (if (threat/ranged? {:name mob}) :ranged :other))
+        cases (filter #(pos? (:n-s %)) (if (map? counts) [counts] counts))
+        k (reduce + 0 (map :k cases))
+        s (max 1e-9 (reduce + 0 (map :n-s cases)))
+        m (/ k s)
+        ws (map #(/ (:n-s %) (max 1e-9 m)) cases)
+        q (reduce + 0 (map (fn [{:keys [k n-s]} w] (* w (js/Math.pow (- (/ k n-s) m) 2))) cases ws))
+        spread (if (and (pos? m) (< 1 (count cases)))
+                 (max 0 (/ (- q (dec (count cases))) (- (reduce + ws) (/ (reduce + (map * ws ws)) (reduce + ws)))))
+                 0)
+        mean (/ (+ k 0.5) s)
+        v (+ spread (/ mean s))]
+    (if (pos? spread)
+      {:shape (/ (* mean mean) v) :rate (/ mean v)}
+      {:shape (+ k 0.5) :rate s})))
 
 (defn missed
   "The chance a mob of notice prior {:shape :rate} gets no notice in x weighted seconds: e^(-r x) over the Gamma of r."
