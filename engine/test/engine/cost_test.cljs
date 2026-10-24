@@ -234,7 +234,11 @@
     2.28 (cost/chase-speed "zombie")
     3.89 (cost/chase-speed "spider")
     2.7 (cost/chase-speed "skeleton")
-    5.14 (cost/chase-speed "baby")))
+    5.14 (cost/chase-speed "baby")
+    8.74 (cost/chase-speed "enderman")
+    3.38 (cost/chase-speed "zombified_piglin")
+    3.89 (cost/chase-speed "wither_skeleton")
+    3.89 (cost/chase-speed "zoglin")))
 
 (deftest a-frontier-tour-costs-its-blocks-walked-and-more-with-each-walk
   (let [tour #(:cost (cost/tour-cost {:explored %1 :walks %2}))]

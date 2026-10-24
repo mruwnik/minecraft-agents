@@ -27,7 +27,7 @@
   (/ (* 20 input speed) (- 1 (* (unchecked-get values "groundSlipperiness") (unchecked-get values "groundDrag")))))
 
 (defn mob-ground-speed
-  "ground-speed of a mob of movement_speed attribute `speed` at chase speed modifier 1 (the melee and ranged attack goals of the mobs listed)."
+  "ground-speed of a mob whose move control runs at `speed`: its chase goal's speed modifier x its movement_speed attribute."
   [speed]
   (ground-speed (* (unchecked-get values "moveInputScale") speed) speed))
 
@@ -37,10 +37,16 @@
 
 (def mob-speeds
   "Blocks a second each hostile covers chasing a body on open ground: mob-ground-speed of its vanilla movement_speed
-  attribute; mobOtherSpeeds for the mobs that hop, fly or swim (not from game data, not measured). Spiders also leap 2 to 4 blocks.
+  attribute plus the modifier it adds while it attacks (mobAttackSpeedAdd: an enderman with a target, an adult angry
+  zombified piglin), times its chase goal's speed modifier (mobChaseModifier, else 1: a wither skeleton's melee goal is
+  1.2, every other listed mob's attack goal or walk target 1); mobOtherSpeeds for the mobs that hop, fly or swim (not
+  from game data, not measured). Spiders also leap 2 to 4 blocks.
   Read for the time a mob stays remembered (engine.perception.mobs) and for outrunning and racing it (jobs.lib.cost.danger)."
-  (merge (update-vals (js->clj (unchecked-get values "mobMovementSpeed")) mob-ground-speed)
-         (js->clj (unchecked-get values "mobOtherSpeeds"))))
+  (let [add (js->clj (unchecked-get values "mobAttackSpeedAdd"))
+        modifier (js->clj (unchecked-get values "mobChaseModifier"))]
+    (merge (into {} (map (fn [[m attr]] [m (mob-ground-speed (* (get modifier m 1) (+ attr (get add m 0))))]))
+                 (js->clj (unchecked-get values "mobMovementSpeed")))
+           (js->clj (unchecked-get values "mobOtherSpeeds")))))
 
 (def crop-ripe-age
   "The growth stage at which each crop block can be harvested (a sweet berry bush from 2)."

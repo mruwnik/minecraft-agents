@@ -32,11 +32,18 @@
     "cave_spider": 0.3,
     "enderman": 0.3,
     "hoglin": 0.3,
-    "zoglin": 0.25,
+    "zoglin": 0.3,
     "ravager": 0.3,
     "piglin_brute": 0.35,
     "pillager": 0.35,
     "vindicator": 0.35
+  },
+  "mobAttackSpeedAdd": {
+    "enderman": 0.15,
+    "zombified_piglin": 0.05
+  },
+  "mobChaseModifier": {
+    "wither_skeleton": 1.2
   },
   "babySpeedBoost": 0.5,
   "mobOtherSpeeds": {
