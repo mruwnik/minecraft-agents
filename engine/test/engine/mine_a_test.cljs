@@ -560,7 +560,7 @@
         s (start {:world {:blocks (assoc (merge (cells "stone" (range -4 1) (range 64 top) (range -4 5)) (cells "stone" (range 1 13) [62] (range -4 5)) wall)
                                          "6,63,0" "iron_ore")
                           :yaw 90 :pitch 70 :bodyHitbox true :drops {"iron_ore" "raw_iron"} :self {:pos [6.5 (+ top 2) 0.5]} :inventory pickaxe}
-                  :sight {:radius 24}})]
+                  :sight {:radius 24} :rand (constantly 0.5)})]
     (dotimes [_ 20] (perception/pass! (aget (:p s) "perception")))
     (set-pos! s 0.5 top 0.5)
     (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :radius 16 :ways #{:seen}}) {})
