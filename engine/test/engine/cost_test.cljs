@@ -507,8 +507,8 @@
                                      (death/rate-nodes (death/notice-prior "zombie")))))]
     (is (< (js/Math.abs (- (chance fist (apart "zombie")) one-rate)) 1e-9)
         "three zombies a walk passes one by one: three answers, each its own flight and catch, the zombies' one notice rate shared")
-    (is (> (chance fist (at-once "skeleton")) (chance fist (apart "skeleton")))
-        "three skeletons shooting at once: their arrows add up in one answer")
+    (is (> (chance armed (at-once "skeleton")) (chance armed (apart "skeleton")))
+        "three skeletons shooting at once: their arrows add up in one fight")
     (is (> (hurt armed (at-once "zombie")) (* 3.3 (hurt armed [(on "zombie" 0 10)])))
         "three zombies fought at once: each hits while the others are fought")
     (is (< (js/Math.abs (- (hurt armed (apart "zombie")) (* 3 (hurt armed [(on "zombie" 0 10)])))) 1e-9)
@@ -522,18 +522,19 @@
     (is (< (* 2 (hurt [(field 35)])) (hurt [(field 35) (field 55)]) (hurt [(field 35) (field 35)]))
         "the second may come while the first is fought, hitting meanwhile, as one at the same spot comes more surely")))
 
-(deftest a-pack-is-priced-no-surer-than-its-uncounted-notice-rate-allows
+(deftest a-pack-is-priced-no-surer-than-its-shared-notice-rate-allows
   (let [fist {:health 20}
         cells (for [x (range 40)] {:x x :y 64 :z 0})
         on (fn [mob] {:mob mob :weight 1 :reach (fn [x _ _] (when (<= 0 x 10) 1))})
         chance #(:chance (cost/route-parts fist {:cells cells :threats %}))
         exposure (:exposure (death/met-stretch "skeleton" (:reach (on "skeleton")) cells))
         none-notices (death/missed (death/notice-prior "skeleton") (* 6 exposure))
-        counted-often {:jobs.lib.cost.death/notice-rate {:other {:k 849 :n-s 4237.5} :ranged {:k 0 :n-s 0}}}
+        counted-often {:jobs.lib.cost.death/notice-rate {:other {:k 849 :n-s 4237.5} :ranged {:k 37 :n-s 162.8}}}
         dies (:chance (answer/group-parts fist ["skeleton"] nil (first cells)))
         apart (for [x0 (range 0 120 20)] {:mob "skeleton" :weight 1 :reach (fn [x _ _] (when (<= x0 x (+ x0 10)) 1))})
         long-way (for [x (range 130)] {:x x :y 64 :z 0})]
-    (is (< 0.02 none-notices) "six skeletons share one rate no notice was counted for: they may all miss the body together")
+    (is (< (js/Math.pow (death/missed (death/notice-prior "skeleton") exposure) 6) none-notices)
+        "six skeletons share one rate: they may all miss the body together, likelier than six apart")
     (is (< 0.9 (chance (repeat 6 (on "skeleton"))) (- 1 none-notices)) "the pack kills only when one of them gets to the body")
     (is (< (js/Math.abs (- (:chance (cost/route-parts fist {:cells long-way :threats apart}))
                            (- 1 (reduce + (map (fn [[r w]] (* w (js/Math.pow (- 1 (* dies (- 1 (js/Math.exp (- (* r exposure)))))) 6)))

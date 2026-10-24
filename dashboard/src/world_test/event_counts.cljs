@@ -19,7 +19,8 @@
   from that spot (a lower bound on the mob's steps, so an upper bound on the weight: the rate counts low). The setting death/::notice-rate
   stores {:k catches :n-s weighted seconds} for each class: :other (reach: danger/melee-reach) and :ranged (a mob of threat/ranged?, caught within
   its threat/fire-range, whose line of fire the logs do not hold, so its weight is an upper bound too). A catch ends one sighting: the events
-  carry no entity id, so it is the open sighting of the kind nearest the event's spot.
+  carry no entity id, so it is the open sighting of the kind nearest the event's spot. :ranged also counts the fixture sightings
+  (exposures: engine/fixtures/world/ranged-notice.edn), which the logs of trial play lack: every skeleton there was first seen beyond its range.
   flee-pace: the flee steps (retreat.step-speed, slot :step) of flights of two steps or more: blocks over the steps' own seconds, and the
   seconds stood between two steps while still in flight (a look, a re-decide, a replan, a respond delay; a gap in which another
   answer, action or child ran is left out) (cost.danger/::flee-walk-speed, ::flee-stop-s).
@@ -78,6 +79,10 @@
     (when (and t gen)
       (off-flight line t gen
       (cond
+        (str/includes? line ":message \"ranged-notice ")
+        (let [[_ mob light d window] (re-find #":message \"ranged-notice (\S+) (\S+) (\S+) (\S+)" line)]
+          {:k :exposed :t t :gen gen :mob mob :label (str mob " " light " " d) :window-ms (* 1000 (js/parseFloat window))})
+
         (and (str/includes? line ":kind :hostile.decided") (str/includes? line ":hostile-near"))
         (let [e (whole)]
           {:k :decided :t t :gen gen :job (root-job (get-in e [:context :job-id]))
@@ -108,7 +113,7 @@
 
         (and (str/includes? line ":kind :hurt") (str/includes? line ":source :body"))
         (let [e (whole)]
-          {:k :hurt :t t :gen gen :amount (get-in e [:data :amount]) :hits (get-in e [:data :hits]) :causes (set (get-in e [:data :causes])) :at (get-in e [:data :pos])})
+          {:k :hurt :t t :gen gen :amount (get-in e [:data :amount]) :hits (get-in e [:data :hits]) :causes (set (get-in e [:data :causes])) :at (get-in e [:data :pos]) :since (get-in e [:data :since-ms])})
 
         (and (str/includes? line ":kind :died") (str/includes? line ":source :body"))
         {:k :died :t t :gen gen :cause (second (re-find #":cause \"([^\"]*)\"" line))}
@@ -344,6 +349,22 @@
   [mob]
   (if (ranged-mob? mob) (threat/fire-range mob) (danger/melee-reach)))
 
+(defn exposures
+  "Rows of the fixture sightings in records (sorted by :t): world fixtures that stand a body still (a notify job in place of the
+  hostile-near job, text `ranged-notice <mob> <light> <blocks> <window-s>`) with a mob of that kind shooting at it from a clear line
+  of fire. The first firing of a run is the sighting (weight 1: in range with a line of fire); :s the seconds until the first hurt
+  from the kind (the middle of the health sample it was seen in), :caught, or the window, :window (censored). A hurt before the firing was a shot from an unseen shooter and leaves
+  the run out: the counts price a danger the body has seen."
+  [records]
+  (for [[_ rs] (group-by :gen records)
+        :let [{:keys [t mob gen label window-ms] :as start} (first (filter #(= :exposed (:k %)) rs))]
+        :when (and start (not-any? #(and (= :hurt (:k %)) (contains? (:causes %) mob) (<= (:t %) t)) rs))
+        :let [hit (first (filter #(and (= :hurt (:k %)) (contains? (:causes %) mob) (< t (:t %))) rs))
+              hit-t (when hit (max t (/ (+ (:t hit) (or (:since hit) (:t hit))) 2)))
+              caught? (and hit (<= (- hit-t t) window-ms))]]
+    {:id [gen t mob] :t t :mob mob :label label :end (if caught? :caught :window)
+     :s (/ (if caught? (- hit-t t) window-ms) 1000)}))
+
 (defn notices
   "Rows [{:id [gen t mob] :t :mob :s :end}] of the sightings in records (sorted by :t): :s the seconds followed, each times the weight
   of the body's distance from the mob's spot over it (a ranged mob within its threat/fire-range weighs 1: whether it has a line of fire is
@@ -387,7 +408,7 @@
                    st)))
              {:open {} :rows [] :last {}}
              records)]
-    (into (:rows out) (map #(row % :open)) (mapcat val (:open out)))))
+    (-> (:rows out) (into (map #(row % :open)) (mapcat val (:open out))) (into (exposures records)))))
 
 (defn notice-tally [rows]
   (let [ends (frequencies (map :end rows))
@@ -399,7 +420,8 @@
 (defn notice-report [rows]
   {:all (notice-tally rows)
    :by-class (into (sorted-map) (map (fn [[ranged? rs]] [(if ranged? :ranged :other) (notice-tally rs)])) (group-by (comp ranged-mob? :mob) rows))
-   :by-mob (into (sorted-map) (map (fn [[m rs]] [m (notice-tally rs)])) (group-by :mob rows))})
+   :by-mob (into (sorted-map) (map (fn [[m rs]] [m (notice-tally rs)])) (group-by :mob rows))
+   :by-case (into (sorted-map) (map (fn [[l rs]] [l (notice-tally rs)])) (group-by :label (filter :label rows)))})
 
 (defn ore-of [block] (-> block (str/replace #"^deepslate_" "") (str/replace #"_ore$" "")))
 
