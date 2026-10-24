@@ -26,7 +26,7 @@
   Block memory. Per dimension and 16^3 section: a Uint16Array of stateId + 1 (0 = unknown), a Uint16Array of each
   cell's seen time (whole seconds after the section's :base) and the section's last-seen time.
     A cell more than 255 minutes (15300 s) older than the newest write reads as 255 minutes older.
-    Capped at `:cap-bytes` (32 MB, 2048 sections of 16 KB) by forgetting the least recently seen section.
+    Capped at `:cap-bytes` (44 MB, 2816 sections of 16 KB) by forgetting the least recently seen section.
     Saved to and loaded from a file (engine/js/seen-file.mjs).
     A block change in view (cone, line of sight, light) updates memory at once.
     A change out of view leaves the old state, a true memory error.
@@ -108,7 +108,7 @@
    :engine.perception/seeing-min {:default 0.2 :spec (a/num-in 0 nil) :doc "The light level below which a block cannot be made out."}
    :engine.perception/near {:default 4 :spec (a/num-in 0 nil) :doc "Blocks within which light is not needed to see."}
    :engine.perception/near-torch {:default 7 :spec (a/num-in 0 nil) :doc "The same, while a torch (or soul torch) is held in either hand."}
-   :engine.perception/cap-bytes {:default (* 32 1024 1024) :spec (a/int-in 12288 nil) :doc "Memory the seen-world sections may use, bytes."}
+   :engine.perception/cap-bytes {:default (* 44 1024 1024) :spec (a/int-in 12288 nil) :doc "Memory the seen-world sections may use, bytes."}
    :engine.perception/stats-ms {:default 60000 :spec (a/int-in 1 nil) :doc "How often perception statistics are logged, ms."}
    :engine.perception/error-every-ms {:default 60000 :spec (a/int-in 1 nil) :doc "How often one repeated perception error is logged, ms."}
    :engine.perception/mob-ms {:default 250 :spec (a/int-in 1 nil) :doc "A mob sample is taken this often, ms."}
