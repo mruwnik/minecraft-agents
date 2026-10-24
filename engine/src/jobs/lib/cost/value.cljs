@@ -298,7 +298,7 @@
 
 (defn fetch-cost
   "{:cost :parts {:trip :walk :danger :collect}} of fetching a pile `distance` blocks off, with `danger-s` seconds of danger
-  on the way, `elapsed-ms` after it dropped; `back?` walks the distance twice (the window check is for the way there), `stay-s`
+  on the way, `elapsed-ms` after it dropped; `back?` walks the distance twice (the despawn check is for the way there and the stay), `stay-s`
   seconds are spent standing at the pile.
   Or {:cost js/Infinity :reason}: :no-position (distance nil), :window-closed (the 5 min despawn passed), :too-far
   (the walk would end after the despawn), :lethal-cause (lava, fire or the void took the items)."
@@ -310,7 +310,7 @@
                  (nil? walk-ms) :no-position
                  (>= elapsed despawn-ms) :window-closed
                  (and (some? cause) (lethal-cause? cause)) :lethal-cause
-                 (>= (+ elapsed walk-ms) despawn-ms) :too-far)]
+                 (>= (+ elapsed walk-ms (* 1000 (or stay-s 0))) despawn-ms) :too-far)]
     (if reason
       {:cost js/Infinity :reason reason}
       (let [w (walk-cost {:distance (* distance (if back? 2 1)) :danger-s danger-s})

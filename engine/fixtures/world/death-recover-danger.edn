@@ -4,7 +4,7 @@
 ;; arrow-damage kill by a NoAI skeleton (removed at once) takes the body (no resistance: the damage must kill); it respawns at [4 0 4].
 ;; Should-succeed: in a lit cell the pile is looked at, seen clear and fetched. Should-fail: in a dark cell the killer may still be there:
 ;; the reflex stops condition-failed :danger, no walk, and the died reflex rests (no refire on its 30 s cooldown). An empty-handed
-;; death has no pile: a skip, no walk. A pile cheapened by :value-overrides with a zombie by it: a danger skip, no walk. A whole iron
+;; death has no pile: a skip, no walk. A pile worth the walk but not the walk past a zombie that guards it (:value-overrides): the job stops condition-failed :danger and skips, no walk. A whole iron
 ;; kit with six skeletons on the way back: a danger skip, no walk.
 {:defaults
  {:tags [:survival :death :jobs]
@@ -43,7 +43,7 @@
    :after [[:body-near [4.5 0 4.5] 4]]
    :limit-s 80}
   {:name "guarded-pile-is-left-when-its-danger-costs-more-than-it-is-worth"
-   :register [{:trigger :died :why "value-overrides cheapen the pile below the walk past the zombie" :job (jobs.survival.recover-drops {:value-overrides {"raw_iron" 1 "cobblestone" 0.05}})}]
+   :register [{:trigger :died :why "value-overrides price the pile (about 120 s) above the trip and walk without the zombie (about 35 s) and far below its cost with the zombie's death chance (about 650 s)" :job (jobs.survival.recover-drops {:value-overrides {"raw_iron" 5 "cobblestone" 0.05}})}]
    :act [[:summon "zombie" [31.5 0 26.5] "{NoAI:1b,Silent:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}]}"]
          [:until-seen {:entity "zombie"} 10]
          [:kill-body]
@@ -54,7 +54,7 @@
    :after [[:body-near [4.5 0 4.5] 4]]
    :limit-s 320}
   {:name "pile-with-an-adjacent-zombie-is-left-when-the-danger-costs-more"
-   :register [{:trigger :died :why "value-overrides cheapen the pile below the walk past the zombie" :job (jobs.survival.recover-drops {:value-overrides {"raw_iron" 1 "cobblestone" 0.05}})}]
+   :register [{:trigger :died :why "value-overrides price the pile (about 120 s) above the trip and walk without the zombie (about 35 s) and far below its cost with the zombie's death chance (about 650 s)" :job (jobs.survival.recover-drops {:value-overrides {"raw_iron" 5 "cobblestone" 0.05}})}]
    :act [[:summon "zombie" [27.5 0 26.5] "{NoAI:1b,Silent:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}]}"]
          [:until-seen {:entity "zombie"} 10]
          [:kill-body]

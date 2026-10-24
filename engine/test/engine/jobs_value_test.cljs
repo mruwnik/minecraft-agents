@@ -178,7 +178,9 @@
         both (v/fetch-cost {:distance 40 :elapsed-ms 0 :back? true :stay-s 7})]
     (is (= (+ (:cost there) (get-in there [:parts :walk]) 7) (:cost both)) "the walk twice, the stay once")
     (is (= 7 (get-in both [:parts :collect])))
-    (is (not= :too-far (:reason (v/fetch-cost {:distance 600 :elapsed-ms 0 :back? true}))) "the despawn window is for the way there only")))
+    (is (not= :too-far (:reason (v/fetch-cost {:distance 600 :elapsed-ms 0 :back? true}))) "the despawn window is for the way there only")
+    (is (= :too-far (:reason (v/fetch-cost {:distance 40 :elapsed-ms 270000 :stay-s 40}))) "the collect must end before the despawn too")
+    (is (not= :too-far (:reason (v/fetch-cost {:distance 40 :elapsed-ms 270000}))) "the same walk with no stay beats it")))
 
 (deftest fetch-cost-grows-with-distance-and-danger
   (is (< (:cost (v/fetch-cost {:distance 10 :elapsed-ms 0}))

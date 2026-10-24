@@ -30,6 +30,10 @@
   "A pile too small to walk 20 blocks for: a few dirt and seeds."
   [{:name "wheat_seeds" :count 5} {:name "dirt" :count 3}])
 
+(def pile-values
+  "recover-drops :value-overrides that price the field-report pile at a few hundred seconds, so the trip's danger and cost decide it."
+  {"raw_iron" 3 "cobblestone" 0.05 "oak_planks" 0.05 "stone_pickaxe" 1 "diamond_pickaxe" 20 "diamond_sword" 10})
+
 (def death-pile-of-the-field-report
   [{:name "raw_iron" :count 4 :slot 17} {:name "raw_iron" :count 20 :slot 18}
    {:name "cobblestone" :count 64} {:name "cobblestone" :count 36}
@@ -533,7 +537,7 @@
               {:keys [eng p seen clock]} (setup {:floor tu/walk-floor :inventory sword :entities drops})]
           (die! eng {:pos death-pos :inventory diamonds})
           (appear-after-first-leg! p clock zombie)
-          (core/submit! eng (list (first job) {:settings {:jobs.survival.recover-drops.config/leg-s 1} :value-overrides {"raw_iron" 3 "cobblestone" 0.05 "oak_planks" 0.05 "stone_pickaxe" 1 "diamond_pickaxe" 20 "diamond_sword" 10}}) {})
+          (core/submit! eng (list (first job) {:settings {:jobs.survival.recover-drops.config/leg-s 1} :value-overrides pile-values}) {})
           (await (run-until-empty eng 3))
           (is (re-find #"zombie" (:text (danger-remembered eng))) "a mob that turned up on the way makes the trip dear: it backs off")
           (is (nil? (recovered eng)) "the death stays open")

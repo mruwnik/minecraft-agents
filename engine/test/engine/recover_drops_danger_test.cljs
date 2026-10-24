@@ -255,10 +255,10 @@
         (let [pile dt/death-pile-of-the-field-report
               {:keys [eng p]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops pile)) dt/zombie-by-the-way)})]
           (die! eng {:pos dt/death-pos :inventory pile})
-          (core/submit! eng '(jobs.survival.recover-drops {:value-overrides {"raw_iron" 3 "cobblestone" 0.05 "oak_planks" 0.05 "stone_pickaxe" 1 "diamond_pickaxe" 20 "diamond_sword" 10}}) {})
+          (core/submit! eng (list 'jobs.survival.recover-drops {:value-overrides dt/pile-values}) {})
           (await (run-until-empty eng 5))
           (swap! (fake/state p) update :entities #(filterv (fn [e] (not= "hostile" (:kind e))) %))
-          (core/submit! eng '(jobs.survival.recover-drops {:retry true :value-overrides {"raw_iron" 3 "cobblestone" 0.05 "oak_planks" 0.05 "stone_pickaxe" 1 "diamond_pickaxe" 20 "diamond_sword" 10}}) {})
+          (core/submit! eng (list 'jobs.survival.recover-drops {:retry true :value-overrides dt/pile-values}) {})
           (await (run-until-empty eng 20))
           (is (= :collected (:decision (recovered eng)))))))))
 
@@ -500,7 +500,7 @@
       (fn ^:async t []
         (let [pile dt/death-pile-of-the-field-report
               {:keys [eng p clock]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops pile)) dt/zombie-by-the-way)})
-              dear '(jobs.survival.recover-drops {:value-overrides {"raw_iron" 3 "cobblestone" 0.05 "oak_planks" 0.05 "stone_pickaxe" 1 "diamond_pickaxe" 20 "diamond_sword" 10}})]
+              dear (list 'jobs.survival.recover-drops {:value-overrides dt/pile-values})]
           (die! eng {:pos dt/death-pos :inventory pile})
           (core/submit! eng dear {})
           (await (run-until-empty eng 5))
@@ -519,7 +519,7 @@
         (let [pile dt/death-pile-of-the-field-report
               zombie (assoc dt/zombie-by-the-way :pos {:x 22.5 :y 64 :z 3.5})
               {:keys [eng p clock]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops pile)) zombie)})
-              dear '(jobs.survival.recover-drops {:value-overrides {"raw_iron" 3 "cobblestone" 0.05 "oak_planks" 0.05 "stone_pickaxe" 1 "diamond_pickaxe" 20 "diamond_sword" 10}})]
+              dear (list 'jobs.survival.recover-drops {:value-overrides dt/pile-values})]
           (die! eng {:pos dt/death-pos :inventory pile})
           (core/submit! eng dear {})
           (await (run-until-empty eng 5))
@@ -536,7 +536,7 @@
       (fn ^:async t []
         (let [pile dt/death-pile-of-the-field-report
               {:keys [eng p seen clock]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops pile)) dt/zombie-by-the-way)})
-              dear '(jobs.survival.recover-drops {:value-overrides {"raw_iron" 3 "cobblestone" 0.05 "oak_planks" 0.05 "stone_pickaxe" 1 "diamond_pickaxe" 20 "diamond_sword" 10}})]
+              dear (list 'jobs.survival.recover-drops {:value-overrides dt/pile-values})]
           (die! eng {:pos dt/death-pos :inventory pile})
           (core/submit! eng dear {})
           (await (run-until-empty eng 5))
@@ -560,7 +560,7 @@
       (fn ^:async t []
         (let [pile dt/death-pile-of-the-field-report
               {:keys [eng clock]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops pile)) dt/zombie-by-the-way)})
-              dear '(jobs.survival.recover-drops {:value-overrides {"raw_iron" 3 "cobblestone" 0.05 "oak_planks" 0.05 "stone_pickaxe" 1 "diamond_pickaxe" 20 "diamond_sword" 10}})]
+              dear (list 'jobs.survival.recover-drops {:value-overrides dt/pile-values})]
           (die! eng {:pos dt/death-pos :inventory pile})
           (core/submit! eng dear {})
           (await (run-until-empty eng 5))
@@ -581,7 +581,7 @@
           (swap! clock + 270000)
           (mem/write! (:store eng) :recover-trip {:death-t (:t (mem/latest (mem/view (:store eng)) :died)) :cuts 2 :hostile-cut true :phase :go}
                       {:cap 1 :ttl 1000000})
-          (core/submit! eng '(jobs.survival.recover-drops {:value-overrides {"raw_iron" 3 "cobblestone" 0.05 "oak_planks" 0.05 "stone_pickaxe" 1 "diamond_pickaxe" 20 "diamond_sword" 10}}) {})
+          (core/submit! eng (list 'jobs.survival.recover-drops {:value-overrides dt/pile-values}) {})
           (await (run-until-empty eng 20))
           (is (empty? (mem/entries (mem/view (:store eng)) :recover-danger)) "no wait for the danger to pass was set")
           (is (= :skip (:decision (recovered eng))))
