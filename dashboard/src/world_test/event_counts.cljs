@@ -196,8 +196,9 @@
   seconds until the body is stay-m from where it stood, less that block at sprint speed (at least 0), lie in [:lo, :hi]: from the last
   position that still stood there to the first that did not. :hi nil (right-censored) when the flight was no longer watched
   before the body moved: its run ended, decided other than to flee, the body died, or the logs end. :end says which (:moved when it
-  did). {:id :mob :t :drop :no-pos}: no position within pos-age-ms before the decision (where it stood is unknown); :drop :held: the
-  run held still (held-re) first, another answer than a flight, so no start.
+  did). A switch to fight is censored: the flight was meant and had not got going by then. {:id :mob :t :drop :no-pos}: no position
+  within pos-age-ms before the decision (where it stood is unknown); :drop :held: the run held still (held-re) first, an answer that
+  never meant to move, so no start.
   :id [gen job] for a creeper and [gen job mob] for any other kind."
   [records sprint]
   (let [first-flee (->> records
@@ -267,10 +268,11 @@
 (def tenths "The levels of the deciles a start prior holds." (mapv #(/ (+ % 0.5) 10) (range 10)))
 
 (defn bounds
-  "[lo hi] of a start row (starts; nil: dropped). A row folded before the bounds were kept: its :s seen exactly; a :never, which did
-  not move in its first give-up-ms, right-censored there."
+  "[lo hi] of a start row (starts; nil: dropped), censored/fit's. lo 0 is starts' floor, so it may be the start itself: no lower
+  bound (lo nil). A row folded before the bounds were kept: its :s seen exactly; a :never, which did not move in its first
+  give-up-ms, right-censored there."
   [{:keys [lo hi s drop] :as r}]
-  (cond (contains? r :lo) [lo hi]
+  (cond (contains? r :lo) [(when (or (pos? lo) (= lo hi)) lo) hi]
         s [s s]
         (= :never drop) [(/ give-up-ms 1000) nil]))
 
@@ -280,7 +282,7 @@
   [rows]
   (let [xs (keep bounds rows)
         f (when (seq xs) (censored/fit xs))]
-    {:n (count xs) :exact (count (filter #(= (first %) (second %)) xs)) :interval (count (filter #(and (second %) (< (first %) (second %))) xs))
+    {:n (count xs) :exact (count (filter (fn [[lo hi]] (and hi (= lo hi))) xs)) :interval (count (filter (fn [[lo hi]] (and hi (not= lo hi))) xs))
      :censored (count (remove second xs)) :no-pos (count (filter #(= :no-pos (:drop %)) rows))
      :mean (some-> f censored/mean r2) :deciles (when f (mapv #(r2 (censored/quantile f %)) tenths))}))
 
@@ -310,18 +312,18 @@
   (if (> (:swings b) (:swings a)) b a))
 
 (defn start-rank
-  "A start row that says how it ended (a held run its drop) over one with bounds folded before, over one folded before bounds were
-  kept, over a dropped one." [r]
-  (cond (or (:end r) (= :held (:drop r))) 3 (contains? r :lo) 2 (:s r) 1 :else 0))
+  "A start row that says how it ended (a held run its drop) over one whose logs ended first, over one with bounds folded before, over
+  one folded before bounds were kept, over a dropped one." [r]
+  (cond (= :logs-end (:end r)) 3 (or (:end r) (= :held (:drop r))) 4 (contains? r :lo) 2 (:s r) 1 :else 0))
 
 (defn fold
   "counts with the rows of exchange-rows, start-rows and notice-rows merged in by id; a row already there stays unless a fight row saw
-  more swings, a start is now told with bounds or was dropped, or a sighting was still open when its log ended."
+  more swings, a later read of a start ranks as high (start-rank), or a sighting was still open when its log ended."
   ([counts exchange-rows start-rows] (fold counts exchange-rows start-rows []))
   ([counts exchange-rows start-rows notice-rows]
    (-> counts
        (update :exchange #(reduce (fn [m r] (update m (:id r) (fn [old] (if old (better-exchange old r) r)))) % exchange-rows))
-       (update :starts #(reduce (fn [m r] (update m (:id r) (fn [old] (if (and old (>= (start-rank old) (start-rank r))) old r)))) % start-rows))
+       (update :starts #(reduce (fn [m r] (update m (:id r) (fn [old] (if (and old (> (start-rank old) (start-rank r))) old r)))) % start-rows))
        (update :notices #(reduce (fn [m r] (update m (:id r) (fn [old] (if (and old (not= :open (:end old))) old r)))) % notice-rows)))))
 
 (defn load-counts

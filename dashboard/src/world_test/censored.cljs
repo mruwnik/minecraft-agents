@@ -4,13 +4,13 @@
   fit of the other groups, by the between-group spread of the means the data show (DerSimonian-Laird).")
 
 (defn fit
-  "The Turnbull estimate of xs, each [lo hi]: a time in (lo, hi], hi nil when it is only known to be past lo (lo = hi: seen exactly).
-  {:at sorted support points :p their masses}; ##Inf holds the mass past every finite end."
+  "The Turnbull estimate of xs, each [lo hi]: a time in (lo, hi], hi nil when it is only known to be past lo, lo nil when it has no
+  lower bound (lo = hi: seen exactly). {:at sorted support points :p their masses}; ##Inf holds the mass past every finite end."
   [xs]
-  (let [at (vec (concat (sort (distinct (concat (map first xs) (keep second xs)))) [##Inf]))
+  (let [at (vec (concat (sort (distinct (concat (keep first xs) (keep second xs)))) [##Inf]))
         m (count at)
         index (into {} (map-indexed (fn [i v] [v i])) at)
-        spans (mapv (fn [[lo hi]] [(if (= lo hi) (index lo) (inc (index lo))) (if hi (index hi) (dec m))]) xs)
+        spans (mapv (fn [[lo hi]] [(cond (nil? lo) 0 (= lo hi) (index lo) :else (inc (index lo))) (if hi (index hi) (dec m))]) xs)
         n (count xs)
         step (fn [p]
                (let [cum (vec (reductions + 0 p))
@@ -53,14 +53,27 @@
   [xs ref]
   (let [{:keys [at p]} (finite ref)
         whole (spread-of at p)
-        open (fn [[lo hi]] (let [in (keep-indexed (fn [i x] (when (and (< lo x) (or (nil? hi) (<= x hi))) i)) at)]
+        open (fn [[lo hi]] (let [in (keep-indexed (fn [i x] (when (and (or (nil? lo) (< lo x)) (or (nil? hi) (<= x hi))) i)) at)]
                              (spread-of (map at in) (map p in))))]
-    (reduce + 0 (map (fn [[lo hi :as x]] (if (or (= lo hi) (not (pos? whole))) 1 (max 0 (- 1 (/ (open x) whole))))) xs))))
+    (reduce + 0 (map (fn [[lo hi :as x]] (if (or (and lo (= lo hi)) (not (pos? whole))) 1 (max 0 (- 1 (/ (open x) whole))))) xs))))
+
+(defn- complete
+  "f with its mass past every finite end spread over ref's times past f's last finite end (all of ref's when f has none) as ref
+  spreads them: the kinds' times stand for what f's data leave open. Where ref has none, f: nothing in the data goes further."
+  [{:keys [at p] :as f} ref]
+  (let [end (when (> (count at) 1) (at (- (count at) 2)))
+        {ref-at :at ref-p :p} (finite ref)
+        tail (filter (fn [[x q]] (and (pos? q) (or (nil? end) (< end x)))) (map vector ref-at ref-p))
+        total (reduce + 0 (map second tail))]
+    (if (pos? total)
+      {:at (conj (into (pop at) (map first tail)) ##Inf) :p (conj (into (pop p) (map #(* (peek p) (/ (second %) total)) tail)) 0)}
+      f)))
 
 (defn- kinds
-  "Groups {g xs} -> {g {:own fit :rest the other groups' fit :n information against :rest :mean :var of :own}}."
+  "Groups {g xs} -> {g {:own fit completed by :rest :rest the other groups' fit :n information against :rest :mean :var of :own}}:
+  the mean, spread and weight read the times own's data leave open as :rest has them."
   [groups]
-  (into {} (map (fn [[g xs]] (let [own (fit xs) rest-fit (fit (mapcat val (dissoc groups g)))]
+  (into {} (map (fn [[g xs]] (let [rest-fit (fit (mapcat val (dissoc groups g))) own (complete (fit xs) rest-fit)]
                                [g {:own own :rest rest-fit :n (information xs rest-fit) :mean (mean own) :var (variance own)}])))
         groups))
 

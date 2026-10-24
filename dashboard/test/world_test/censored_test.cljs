@@ -19,8 +19,10 @@
       3 0.375
       4 0.375)))
 
-(deftest a-time-censored-at-a-tie-is-past-it-as-kaplan-meier-has-it
-  (is (near? (/ 1 3) (mass-at (c/fit [[0 0] [0 nil] [5 5]]) 0))))
+(deftest a-time-censored-at-a-tie-is-past-it-as-kaplan-meier-has-it-and-one-with-no-lower-bound-may-be-there
+  (are [censored share] (near? share (mass-at (c/fit [[0 0] censored [5 5]]) 0))
+    [0 nil] (/ 1 3)
+    [nil nil] 0.5))
 
 (deftest a-time-seen-within-a-gap-goes-where-the-exact-times-say
   (is (near? 0.75 (mass-at (c/fit [[0 2] [1 1] [1 1] [3 3]]) 1))))
@@ -49,6 +51,10 @@
 
 (deftest a-censored-time-tells-of-the-mean-as-much-as-the-others-spread-it-closes
   (is (near? 2 (c/information [[1 1] [0 nil] [9 nil]] (c/fit (ramp 20 0 2)))) "seen 1, censored before all others 0, past all 1"))
+
+(deftest a-kind-s-times-past-its-last-seen-end-are-the-others-times-past-it
+  (let [{:strs [a]} (c/shrink {"a" [[1 1] [2 nil]] "b" [[1 1] [3 3] [4 4]]} [0.5 0.7 0.95])]
+    (is (= [1 3 4] (:own a)))))
 
 (deftest a-kind-censored-past-every-other-start-weighs-as-one-seen
   (let [late (assoc kinds "late" [[5 nil]])]

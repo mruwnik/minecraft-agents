@@ -93,10 +93,17 @@
            (get-in (-> folded (c/fold [] [(start {:lo 0.3 :hi 0.5})]) (c/fold [] [(start {:s 9})])) [:starts ["g" "j1"]]))
         "bounds replace a start told before they were kept, and stay")
     (is (= {:id ["g" "j1"] :t 0 :drop :held} (get-in (-> folded (c/fold [] [(start {:lo 2.8 :hi nil})]) (c/fold [] [(start {:drop :held})])) [:starts ["g" "j1"]]))
-        "a run read again as held replaces the start it was folded as before held runs were left out"))
+        "a run read again as held replaces the start it was folded as before held runs were left out")
+    (are [later] (= later (get-in (-> folded (c/fold [] [(start {:lo 0.3 :hi nil :end :logs-end})]) (c/fold [] [later])) [:starts ["g" "j1"]]))
+      (start {:lo 0.3 :hi 1.1 :end :moved})
+      (start {:lo 0.9 :hi nil :end :logs-end})
+      (start {:drop :held})))
   (let [sighting (fn [end] {:id ["g" 0 "zombie"] :t 0 :mob "zombie" :s 1 :end end})
         folded (-> c/empty-counts (c/fold [] [] [(sighting :open)]) (c/fold [] [] [(sighting :caught)]) (c/fold [] [] [(sighting :gap)]))]
     (is (= :caught (get-in folded [:notices ["g" 0 "zombie"] :end])) "a sighting open when its log ended is replaced, a closed one stays")))
+
+(deftest a-start-whose-last-still-time-is-within-the-sprint-block-may-be-at-0
+  (is (= [0 0 0 0 0 5 5 5 5 5] (:deciles (c/starts-report [{:lo 0 :hi 0} {:lo 0 :hi nil} {:lo 5 :hi 5}])))))
 
 (deftest a-start-folded-before-bounds-were-kept-is-exact-or-censored-at-give-up
   (is (= [[0.4 0.4] [10 nil] nil] (map c/bounds [{:s 0.4} {:drop :never} {:drop :no-pos}]))))
