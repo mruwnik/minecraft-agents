@@ -180,16 +180,13 @@
 
 (defn flight-caught-chance
   "The chance a flight is caught (flee-answer :caught) by what its search found: 1 with no way left (way? false: every
-  way it planned is cut); else the measured prior (answer ::caught-chance, of ::caught-n flights) updated by the ways
-  the search timed (timed {:n :caught}: n headings, caught of them with a chaser within its blow): (prior * n0 + caught) / (n0 + n),
-  and, when the way it takes runs on into cells the body has not seen (unseen?), that way's dead end (1 less
-  way-on-chance of counts): met on the way back, the chasers catch it."
-  [{:keys [way? unseen? counts timed]}]
+  way it planned is cut); else the measured prior (answer ::caught-chance: the race said the way is free, a chaser
+  caught the body anyway) and, when the way it takes runs on into cells the body has not seen (unseen?), that way's dead
+  end (1 less way-on-chance of counts): met on the way back, the chasers catch it."
+  [{:keys [way? unseen? counts]}]
   (if-not way?
     1
     (let [prior (settings/get answer/settings ::answer/caught-chance)
-          n0 (settings/get answer/settings ::answer/caught-n)
-          prior (/ (+ (* prior n0) (:caught timed 0)) (+ n0 (:n timed 0)))
           dead (if unseen? (- 1 (way-on-chance counts)) 0)]
       (- 1 (* (- 1 prior) (- 1 dead))))))
 

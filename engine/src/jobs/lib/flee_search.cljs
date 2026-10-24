@@ -418,24 +418,26 @@
 
 (defn caught-chance
   "{:chance :seconds} of a flight from where search ends (search!) ran: the chance it is caught
-  (cost/flight-caught-chance) and the seconds its chasers are within their blow when it is (:caught-s; nil, none timed:
-  the whole flight). A way is a ring route that is open or runs on into cells not seen (a pocket is none: the chaser follows it in) and
-  gains on the chasers, none of which gets to its end before the body. Every way caught: chance 1, over the seconds of the way it gets away on least so (else of the ring route into the unseen least so; a closed pocket's: the whole flight). Else the prior, updated by
-  the ring headings timed (how many are caught), over the mean seconds they keep a chaser in reach, and
-  whether the best way runs unseen weighs its dead end at counts (wworld/way-counts). Nothing timed: the prior with
-  the unseen worse case, the dead end priced by counts (boxed in by seen walls they say so)."
+  (cost/flight-caught-chance) and the seconds its chasers are within their blow when it is (:caught-s; nil: the whole
+  flight). A way is a ring route that is open or runs on into cells not seen (a pocket is none: the chaser follows it in)
+  and gains on the chasers, none of which gets to its end before the body. The flight takes the best-scored way not
+  caught: the chance is that of a way the race calls free, the prior (plus its dead end at counts, wworld/way-counts,
+  when it runs unseen); a catch lasts the least seconds the race keeps a chaser in reach over the caught headings (nil
+  with none caught). The other headings only choose the way. With every way caught: chance 1, over the seconds of the way
+  it gets away on least so (else of a ring route into the unseen; a closed pocket's: the whole flight). Nothing routed:
+  the prior with the unseen worse case."
   [ends counts]
   (let [ring (filter #(and (nil? (:pos (:target %))) (not (:cover? %))) ends)
         left (filter #(and (or (:open? %) (:unseen %)) (not (:caught? %)) (pos? (:gain %)) (> (:arrive %) (:s %))) ring)
         ways (filter gets-away? ends)
-        best (when (seq left) (apply max-key :score left))]
+        best (when (seq left) (apply max-key :score left))
+        caught (filter :caught? ring)]
     (cond
-      best {:chance (cost/flight-caught-chance {:way? true :unseen? (some? (:unseen best)) :counts counts
-                                                :timed {:n (count ring) :caught (count (filter :caught? ring))}})
-            :seconds (/ (reduce + (map :caught-s ring)) (count ring))}
+      best (cond-> {:chance (cost/flight-caught-chance {:way? true :unseen? (some? (:unseen best)) :counts counts})}
+             (seq caught) (assoc :seconds (reduce min (map :caught-s caught))))
       (empty? ring) {:chance (cost/flight-caught-chance {:way? true :unseen? true :counts counts})}
       :else (let [timed (or (seq ways) (seq (filter :unseen ring)))]
-            (cond-> {:chance 1} timed (assoc :seconds (reduce min (map :caught-s timed))))))))
+              (cond-> {:chance 1} timed (assoc :seconds (reduce min (map :caught-s timed))))))))
 
 (defn named
   "The scored end of search ends planned to the named target at pos, nil when none."

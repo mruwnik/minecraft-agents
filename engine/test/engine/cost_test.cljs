@@ -320,9 +320,6 @@
         unseen #(cost/flight-caught-chance {:way? true :unseen? true :counts %})]
     (is (= 1 (cost/flight-caught-chance {:way? false})) "no way left: caught")
     (is (< (js/Math.abs (- prior (cost/flight-caught-chance {:way? true :counts closed}))) 1e-9) "a way in sight: the measured prior")
-    (is (< (cost/flight-caught-chance {:way? true :counts closed :timed {:n 12 :caught 0}}) prior
-           (cost/flight-caught-chance {:way? true :counts closed :timed {:n 12 :caught 12}}) 1)
-        "the headings a search timed update the prior: none caught lowers it, all caught raises it, neither to 0 or 1")
     (is (< prior (unseen open) (unseen closed) 1) "a way into unseen cells may end there, the likelier where the seen ways end")))
 
 (deftest spawn-chance-is-zero-where-a-mob-cannot-spawn

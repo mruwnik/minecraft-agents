@@ -260,20 +260,18 @@
     (is (< (:chance open) (:chance boxed) 1) "seen walls on every side make it likelier")
     (is (nil? (:seconds open)) "no way timed: the blows run over the whole flight")))
 
-(deftest a-way-the-chasers-never-reach-is-timed-not-flat-prior
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [p (tu/fake-on-floor {:floor [-50 -45 50 45] :blocks lake :self {:pos {:x 3.5 :y 63 :z 0.5}}})
-              ends (await (search/search! (ctx-of p) [{:name "drowned" :mob "drowned" :pos {:x 1.5 :y 63 :z 0.5}}] [] {}))
-              {:keys [chance seconds]} (search/caught-chance ends {:k 98 :n 100})]
-          (is (< 0 seconds ##Inf) "a catch lasts the seconds the timed ways keep the chaser in reach")
-          (is (not= 0.15 chance) "the prior is updated by the headings timed"))))))
+(deftest the-flight-is-caught-at-the-prior-on-the-best-way-and-its-blows-run-over-the-caught-headings
+  (let [free (end-of 4 0 5 :caught? false :caught-s 0 :arrive 5)
+        caught (fn [s] (end-of 0 4 9 :caught? true :caught-s s :arrive 5))
+        c (fn [ends] (update (search/caught-chance ends {:k 10 :n 10}) :chance #(/ (js/Math.round (* 1e6 %)) 1e6)))]
+    (is (= {:chance 0.15 :seconds 0.5} (c [free (caught 2) (caught 0.5) (caught 1)])) "the other headings only choose the way: the prior, the least seconds of a caught one")
+    (is (= {:chance 0.15} (c [free])) "no heading caught: nothing bounds the blows")
+    (is (= {:chance 1 :seconds 0.5} (c [(caught 2) (caught 0.5)])) "every way caught")))
 
 (deftest ways-that-stop-at-unseen-cells-are-priced-by-the-ways-seen-not-caught
   (let [stops (fn [& more] (apply end-of 4 0 1 :found? false :unseen [5 64 0] :caught-s 0 :caught? false :arrive 5 more))
         chance #(:chance (search/caught-chance % {:k 10 :n 10}))]
-    (is (< 0.1 (chance [(stops) (stops)]) 0.5) "partial routes into the unseen are the worse case, priced, not a catch")
+    (is (< (js/Math.abs (- (- 1 (* 0.85 (/ 11 12))) (chance [(stops) (stops)]))) 1e-9) "a way into the unseen: the prior and its dead end, (k+1)/(n+2) of the seen ways on, not a catch")
     (is (= 1 (chance [(end-of 4 0 1 :found? false :caught-s 0 :caught? false)])) "a pocket with nothing unseen in it is a trap")))
 
 (deftest ways-all-caught-keep-the-seconds-they-are-in-reach-when-they-run-into-the-unseen
