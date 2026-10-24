@@ -4,6 +4,7 @@
 ;; The :swim-out step itself is pinned by cornered-test (a-bare-body-in-water-with-a-drowned-beside-it-swims-to-dry-land...); live the body leaves by an ordinary flee step.
 ;; Should-succeed: the bare body leaves the water (by a flee step or the cornered swim-out) and never fights the drowned (still alive).
 ;; Should-fail (control): with an iron sword the fight wins, so the body kills it and does not take the swim-out step.
+;; Should-fail (wade): in water one deep the body stands on the floor (breath/swimming? false), so it takes no swim-out step.
 {:defaults
  {:tags [:hostile :survival :cornered :water]
   :time :any
@@ -23,4 +24,11 @@
    :act [[:summon "drowned" [9.5 1 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:no-event {:source :job :kind :retreat.step-speed :data {:slot :dry}} :for-s 40}]
    :after [[:entities "type=drowned,tag=wt" [[3 0 9] [30 6 23]] 0]]
+   :limit-s 60}
+  {:name "bare-body-wading-takes-no-swim-out-step"
+   :blocks [[:fill [4 0 10] [14 1 22] "stone"]]
+   :body {:at [8.5 2 16.5]}
+   :act [[:summon "drowned" [9.5 2 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :hostile.decided} :within-s 20}
+            {:no-event {:source :job :kind :retreat.step-speed :data {:slot :dry}} :for-s 30}]
    :limit-s 60}]}

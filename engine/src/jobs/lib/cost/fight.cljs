@@ -46,7 +46,11 @@
   [fight]
   (or (last (mob-ends fight)) 0))
 
-(defn wet-drowned? [{:keys [wet?]} m] (and wet? (= "drowned" (threat/kind m))))
+(defn wet-drowned?
+  "Whether the fight swims against drowned m with a sword or axe: the fights wet-rate was fitted to (a fist's twenty-odd
+  swings are hit as on land, once a second)."
+  [{:keys [wet? weapon]} m]
+  (and wet? (contains? weapon/weapon-damage-by-name weapon) (= "drowned" (threat/kind m))))
 
 (defn mob-damages
   "The damage each of the fight's mobs is expected to deal (see fight-damage)."
@@ -65,8 +69,8 @@
 
 (defn fight-damage
   "The damage a body expects to take fighting mobs [{:name :distance :hits :health}] (nearest first) with weapon (item
-  name, nil a fist) wearing equipment (jobs.lib.cost.armour), swimming when wet?: a drowned there lands wet-rate's mean
-  blows per swing its kill needs.
+  name, nil a fist) wearing equipment (jobs.lib.cost.armour), swimming when wet?: a drowned fought there with a sword or
+  axe lands wet-rate's mean blows per swing its kill needs.
   The mobs die one at a time, each after ceil(health left / weapon damage) hits swing-gap-ms apart. Every
   mob hurts the body (jobs.lib.cost.threat/mob-hurt, after armour) until it dies. A ranged mob also shoots while the
   body walks up to it (distance less 3, at walk-speed). The measured hit rates come from lone sword fights: a group, or a body with no sword or axe, is hit once a second per mob. A creeper costs threat/creeper-exchange per swing of a sword or axe (hit-and-back), not

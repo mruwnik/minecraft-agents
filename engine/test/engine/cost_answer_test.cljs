@@ -50,7 +50,8 @@
         [thin-hp thin] (chance 1.5 2)
         [wide-hp wide] (chance 19.5 20)]
     (is (< (js/Math.abs (- thin-hp wide-hp)) 1e-9) "the same mean: the same expected hp")
-    (is (> thin wide) "fewer meets behind the same mean: a likelier death")))
+    (is (> thin wide) "fewer meets behind the same mean: a likelier death")
+    (is (nil? (:shape (cost/fight-answer {:weapon nil :mobs [(mob "drowned" 0)] :wet? true}))) "a fist fight is out of the fit: hit as on land")))
 
 (deftest blows-that-may-take-the-health-are-the-death-risk
   (is (zero? (death/blow-chance {:health 20} 0 3)))
