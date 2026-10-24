@@ -351,6 +351,19 @@
     (is (pos? (hp-at 3600000)))
     (is (zero? (hp-at 8000000)))))
 
+(deftest a-live-zombie-beside-a-remembered-one-is-met-with-it-for-the-hurt-as-for-the-death
+  (let [world {:time st/noon :self {:pos {:x 0 :y 64 :z 0} :health 20 :food 20} :inventory [{:name "iron_sword" :count 1}]}
+        live (assoc world :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 30.5 :y 64 :z 1.5}}])
+        goal {:x 40 :y 64 :z 0}
+        estimate #(with-redefs [look/seen-block (constantly {:name "air" :age-ms 1e8})] (risk/estimate % goal))
+        alone (estimate (ready-test/ctx-of live))
+        remembered (estimate (with-death (ready-test/ctx-of world) {:x 31 :y 64 :z 2} "zombie" 60000))
+        both (estimate (with-death (ready-test/ctx-of live) {:x 31 :y 64 :z 2} "zombie" 60000))]
+    (is (pos? (:hostile-hp alone)))
+    (is (pos? (:death-hp remembered)))
+    (is (> (+ (:hostile-hp both) (:death-hp both)) (* 1.05 (+ (:hostile-hp alone) (:death-hp remembered))))
+        "fought at once, each zombie hits while the other is fought")))
+
 (def bed-world "day-world with a bed beside the body's place, which with-bed sets its respawn at: a death costs a short walk back." (update day-world :blocks assoc "5,64,1" "red_bed"))
 
 (def with-bed "with-death's more for bed-world." {:spawn-bed [{:t 35000000 :data {:pos {:x 5 :y 64 :z 1}}}]})

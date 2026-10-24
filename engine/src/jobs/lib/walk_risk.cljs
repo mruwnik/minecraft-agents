@@ -104,7 +104,7 @@
   the death the spawns and known threats risk (cost/death-chance) in hp (cost/lethal-hp), a death losing
   :stake seconds of worth besides (go-to's :stake, as death-cost prices it, lain :stake-age-ms); walk-hp the
   same leaving out the sensed mobs that catch the walk, their hurt and their death share both (a fight with them prices
-  them); dark-s the seconds walked where a mob could spawn (caves-free?: no unseen cell guessed a dark cave); threats [{:mob :pos}] the known threats priced."
+  them); death-hp the remembered threats' hurt, hostile-hp what the catchers add to it, all met in one route-parts; dark-s the seconds walked where a mob could spawn (caves-free?: no unseen cell guessed a dark cave); threats [{:mob :pos}] the known threats priced."
   [c goal & [{:keys [plan stake stake-age-ms caves-free?]}]]
   (let [p (:primitives c)
         feet (sh-sense/feet p)
@@ -122,13 +122,14 @@
         catchers (threats/with-reach c (live-catchers known (timed-way c goal plan)))
         remembered (threats/with-reach c (remembered-near-way c known feet goal))
         met-remembered (parts remembered)
+        met-all (if (seq catchers) (parts (concat catchers remembered)) met-remembered)
         death-hp (:hurt met-remembered)
         spawn-dies (cost/death-chance body {:spawns spawns :at feet})
         dies (fn [{:keys [chance]}] (- 1 (* (- 1 chance) (- 1 spawn-dies))))
-        lethal (cost/lethal-hp body (dies (parts (concat catchers remembered))) goal)
+        lethal (cost/lethal-hp body (dies met-all) goal)
         lava (route-lava-hp p cells)
         spawn-hp (cost/spawns-hurt body spawns feet)
-        hostile-hp (:hurt (parts catchers))
+        hostile-hp (max 0 (- (:hurt met-all) death-hp))
         unfought (if (seq catchers) (cost/lethal-hp body (dies met-remembered) goal) lethal)]
     {:hp (+ spawn-hp hostile-hp death-hp lethal lava)
      :walk-hp (+ spawn-hp death-hp unfought lava) :lava-hp lava :spawn-hp spawn-hp :hostile-hp hostile-hp :death-hp death-hp :lethal-hp lethal

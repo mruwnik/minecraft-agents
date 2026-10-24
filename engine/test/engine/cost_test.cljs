@@ -517,6 +517,17 @@
     (is (< (js/Math.abs (- (hurt armed (apart "zombie")) (* 3 (hurt armed [(on "zombie" 0 10)])))) 1e-9)
         "three fought one by one: three fights' hurt")))
 
+(deftest zombies-whose-fields-only-touch-in-their-faint-tails-are-met-apart
+  (let [fist {:health 20}
+        cells (for [x (range 140)] {:x x :y 64 :z 0})
+        field (fn [x0] {:mob "zombie" :weight 1 :reach (fn [x _ _] (let [d (js/Math.abs (- x x0))] (when (<= d (threat/follow-range "zombie")) (threat/way-weight d))))})
+        chance #(:chance (cost/route-parts fist {:cells cells :threats %}))
+        alone (fn [x0] (chance [(field x0)]))]
+    (is (< (js/Math.abs (- (chance [(field 35) (field 95)]) (- 1 (* (- 1 (alone 35)) (- 1 (alone 95)))))) 1e-9)
+        "60 blocks apart, their 35-step fields overlap only where each weighs under a tenth: two meetings")
+    (is (not= (chance [(field 35) (field 38)]) (- 1 (* (- 1 (alone 35)) (- 1 (alone 38)))))
+        "3 blocks apart: one meeting")))
+
 (deftest a-pack-is-priced-no-surer-than-its-uncounted-notice-rate-allows
   (let [fist {:health 20}
         cells (for [x (range 40)] {:x x :y 64 :z 0})
