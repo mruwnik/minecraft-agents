@@ -3,7 +3,7 @@
   (jobs.lib.part-cut). Its job, jobs.forestry.fell-tree with :part-cut? true, fells the nearest such trunk with the
   logs the body carries (no fetch trip), collects the logs and writes the replant debt on the ground under it.
   A trunk whose base cell a zone or claim of another player refuses is not a part-cut tree to finish: it does not hold
-  the trigger, nor one whose column fell-tree lately gave up on (:tree-unreachable, 10 min). A finished chore, not a
+  the trigger, nor one whose column fell-tree lately gave up on (:tree-unreachable, 10 min), nor one it ended needing items the body still lacks. A finished chore, not a
   forest to clear: it does not hold while the body carries ::max-logs logs or more, nor for a trunk farther than
   ::home-radius from the remembered home (else bed; with none known the distance is not judged). It does not hold in the dark (look/dark-here?): the
   night job walks the body in and a felling walk out again would undo it. The sight is read at most every ::recheck-s seconds: a scan of every seen log is too much for each tick."
@@ -14,7 +14,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.part-cut :as part-cut]
             [jobs.lib.shelter :as sh]
-            [jobs.lib.trees :as trees :refer [default-radius recently-unreachable]]
+            [jobs.lib.trees :as trees :refer [default-radius recently-unreachable needing]]
             [jobs.lib.util :as u]
             [jobs.lib.world-files :as world]))
 
@@ -54,7 +54,7 @@
         {:keys [body at seen]} @last-read]
     (if (and (identical? body p) (< (- now at) (* 1000 (settings/get settings ::recheck-s))))
       seen
-      (let [seen (let [given-up (recently-unreachable view) home (sh/home-target view)]
+      (let [seen (let [given-up (into (recently-unreachable view) (needing view (u/inventory p))) home (sh/home-target view)]
                    (boolean (seq (remove #(or (refused? p kn %) (too-far? home %) (given-up [(:x (:column %)) (:z (:column %))]))
                                          (part-cut/part-cut-trees p default-radius nil)))))]
         (reset! last-read {:body p :at now :seen seen})

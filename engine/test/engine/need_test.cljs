@@ -148,7 +148,7 @@
       (fn ^:async t []
         (let [r (await (run! #(need/item! % "coal" 1) nil 2))]
           (is (= :done (:kind (first @got))))
-          (is (= {:kind :condition-failed :cause {:reason :need :why :not-solved :item "coal" :count 1}}
+          (is (= {:kind :condition-failed :cause {:reason :need :why :not-solved :item "coal" :count 1 :text "needs 1 coal: not-solved"}}
                  (select-keys (second @got) [:kind :cause]))
               "the same need straight after a done fetch, nothing used up meanwhile")
           (is (= 1 (count @(:obtain r))) "the child is not called again"))))))

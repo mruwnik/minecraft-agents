@@ -395,8 +395,13 @@
 ;; ------------------------------------------------------------------ the contract
 
 (defn ^:async cleanup
-  "However the call ends: take the pillar back."
+  "However the call ends: take the pillar back; a need ending keeps the column and what it lacked for the part-cut-tree trigger."
   [c e]
+  (let [cause (:cause e)
+        col (some-> (:column (ctx/mem c)) ((juxt :x :z)))
+        items (or (seq (:any-of cause)) (some-> (:item cause) vector))]
+    (when (and col items (= :need (contract/cause-key e)))
+      (ctx/remember! c trees/need-kind {:column col :any-of (vec items) :count (:count cause 1)} trees/need-policy)))
   (await (pillar/cleanup c e)))
 
 (def target [:at])

@@ -84,6 +84,15 @@
           (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:part-cut? true :radius 12 :ways #{:carried}} 150))
           (is (= [] (fm/digs p))))))))
 
+(deftest fell-tree-part-cut-ending-a-need-keeps-the-column-and-what-it-lacked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng out]} (await (fell {:blocks (merge (fm/ground [[6 0]]) (apply dissoc (lt/tree 6 0 "oak" 9) (map #(fm/k 6 % 0) [64 65 66 67 68])))} [] {:ways #{:carried :pillar}}))
+              entries (mem/entries (mem/view (:store eng)) trees/need-kind)]
+          (is (= :need (:reason out)))
+          (is (= [{:column [6 0] :any-of ["dirt"] :count 3}] (map :data entries))))))))
+
 (defn view [entries]
   (let [s (mem/open (tu/tmp-dir) {:now (constantly 1000000)})]
     (doseq [[kind data] entries] (mem/write! s kind data {:cap 8 :ttl :forever}))
@@ -115,6 +124,14 @@
   (let [blocks (merge (fm/ground [[6 0]]) (part-cut 6))]
     (is (false? (holds pct/part-cut-tree blocks [[trees/unreachable-kind {:column [6 0]}]])) "no refire on the failed column")
     (is (true? (holds pct/part-cut-tree blocks [[trees/unreachable-kind {:column [9 9]}]])) "another column")))
+
+(deftest the-part-cut-tree-trigger-waits-for-the-items-a-need-ending-named
+  (let [blocks (merge (fm/ground [[6 0]]) (part-cut 6))
+        need [[trees/need-kind {:column [6 0] :any-of ["dirt"] :count 5}]]]
+    (is (false? (holds pct/part-cut-tree blocks need)) "dirt still lacking")
+    (is (false? (holds pct/part-cut-tree blocks need [{:name "dirt" :count 4}])) "too few")
+    (is (true? (holds pct/part-cut-tree blocks need [{:name "dirt" :count 5}])) "carried now")
+    (is (true? (holds pct/part-cut-tree blocks [[trees/need-kind {:column [9 9] :any-of ["dirt"] :count 5}]])) "another column")))
 
 (deftest the-part-cut-tree-trigger-is-a-bounded-chore
   (let [blocks (merge (fm/ground [[6 0]]) (part-cut 6))

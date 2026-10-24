@@ -214,7 +214,7 @@
             (ctx/update-mem! c #(-> (update % :children dissoc slot) (assoc-in [:need/slot-want slot] identity-of))))
         fresh? (nil? (get-in (ctx/mem c) [:children slot]))]
     (if (and fresh? (repeat-done? c want))
-      (contract/ending :condition-failed (assoc wanted :reason cause-reason :why :not-solved) nil)
+      (contract/ending :condition-failed (assoc wanted :reason cause-reason :why :not-solved :text (ending-text cause-reason wanted :not-solved nil)) nil)
       (do
         (when (and fresh? return? (not (:need/return (ctx/mem c))))
           (ctx/update-mem! c assoc :need/return {:cell (feet c)}))
