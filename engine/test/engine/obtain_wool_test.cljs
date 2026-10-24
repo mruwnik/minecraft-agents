@@ -282,9 +282,9 @@
           (is (re-find #"left alone: 3 pen" (:why (first (filter #(= :stopped (:kind %)) @(:seen s))))) "the ending says the cows were spared"))))))
 
 (defn ^:async approached
-  "The gather memory after obtain's approach! to two cows 10 blocks off for leather worth 20 s, by an unarmed body, a
-  zombie that killed the body by them remembered when killed-by? is true."
-  [killed-by?]
+  "The gather memory after obtain's approach! to two cows 10 blocks off for leather worth 20 s, by an unarmed body, in a
+  world set up by prepare! (eng, the clock atom)."
+  [prepare!]
   (let [s (h/setup {:entities [(cow 1 10) (cow 2 11)]} 50)
         out (atom nil)
         parent {:round (fn ^:async r [c]
@@ -292,17 +292,20 @@
                          (reset! out (ctx/mem c))
                          (ctx/end c :done nil))}
         eng (assoc-in (:eng s) [:jobs 'approaching-parent] parent)]
-    (when killed-by? (core/record-death! eng {:t (- @(:clock s) 5000) :data {:pos {:x 10 :y 64 :z 0} :cause "zombie"}}))
+    (prepare! eng (:clock s))
     (core/submit! eng '(approaching-parent {:worth 20}) {})
     (await (tu/run-until-empty eng 10))
     @out))
+
+(defn killed-by-a-zombie! [eng clock]
+  (core/record-death! eng {:t (- @clock 5000) :data {:pos {:x 10 :y 64 :z 0} :cause "zombie"}}))
 
 (deftest an-animal-whose-walk-costs-more-than-it-is-worth-is-not-walked-to
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [safe (await (approached false))
-              guarded (await (approached true))]
+        (let [safe (await (approached (fn [_ _])))
+              guarded (await (approached killed-by-a-zombie!))]
           (is (= {:key "leather" :pos [10 64 0]} (get-in safe [:gather :lead])) "a safe walk to the herd is under its worth: the body walks closer")
           (is (nil? (get-in guarded [:gather :lead])) "past the remembered killer the walk costs more than the cow is worth")
           (is (= :priced-out (get-in guarded [:tried :gather])))

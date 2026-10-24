@@ -48,9 +48,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (lib/setup {:floor tu/walk-floor})
+        (let [stair (into {} (for [x (range 4 14) y (range 64 (+ 64 (- x 3)))] [(str x "," y ",0") "stone"]))
+              {:keys [eng]} (lib/setup {:floor tu/walk-floor :blocks stair})
               out (atom [])
-              walks [{:pos {:x 14 :y 64 :z 0} :range 3} {:pos {:x -20 :y 64 :z 5} :range 6} {:pos {:x 30 :y 64 :z 0} :range 0}]
+              walks [{:pos {:x 14 :y 64 :z 0} :range 3} {:pos {:x -20 :y 64 :z 5} :range 6} {:pos {:x 30 :y 64 :z 0} :range 0}
+                     {:pos {:x 13 :y 74 :z 0} :range 0}]
               parent {:round (fn ^:async r [c]
                                (doseq [args walks]
                                  (swap! out conj [(pick/walk-s (u/self-pos c) args) (second (get-in (await (pick/quote! c args)) [:uses :job-time]))]))
@@ -58,6 +60,6 @@
           (let [eng (assoc-in eng [:jobs 'quoting-parent] parent)]
             (core/submit! eng '(quoting-parent) {})
             (await (tu/run-until-empty eng 10)))
-          (is (= 3 (count @out)))
+          (is (= 4 (count @out)) "the last walk climbs a ten-block stair: its height is free in the bound")
           (doseq [[bound mean] @out]
             (is (< 0 bound mean) "a sprint over the flat blocks less the range: under the planner's seconds")))))))

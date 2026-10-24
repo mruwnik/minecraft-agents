@@ -20,7 +20,7 @@
 
 (defn why-text
   "The value and the cost with their main parts: \"value 3058.5 (24 raw_iron 2880, ...), cost 31 (trip 10, walk 6,
-  danger 15: zombie 1.5)\"."
+  danger 15: zombie, skeleton)\"."
   [{:keys [value cost top-items other-items parts reason top-mobs]} margin]
   (str "value " (round1 value)
        (when (seq top-items)
@@ -30,7 +30,7 @@
        ", cost " (if (= :infinite cost) (str "infinite (" (name (or reason :unknown)) ")") (round1 cost))
        (when (seq parts)
          (str " (" (str/join ", " (map (fn [[k n]] (str (name k) " " (round1 n))) parts))
-              (when (seq top-mobs) (str ": " (str/join ", " (map (fn [{:keys [name danger]}] (cond-> name danger (str " " (round1 (* danger cost/per-danger))))) top-mobs))))
+              (when (seq top-mobs) (str ": " (str/join ", " (map :name top-mobs))))
               ")"))
        (when (and (number? margin) (not (zero? margin))) (str " + margin " margin))))
 
