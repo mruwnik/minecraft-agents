@@ -266,6 +266,11 @@
   [food]
   (* (settings/get settings ::food-worth-per-point) (max 0 (- (settings/get settings ::food-worth-from) food))))
 
+(defn crop-worth
+  "Seconds a ripe crop of block name is worth when cut: the item-value of what it drops (table/crop-yields)."
+  [crop]
+  (:value (item-value (or (tbl/crop-yields crop) []))))
+
 (def expected-drops "Meat items a kill is counted to give when the game data lists none." 2)
 
 (defn animal-worth

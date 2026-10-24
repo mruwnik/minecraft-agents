@@ -1,5 +1,5 @@
 ;; Card 43f765ae: animals.maintain with no other job listed walks to its pen from far below it when alone; it waits :away only while another job can run. Pen on a stone platform x 6..20, z 12..22, top block y 10, fence ring x 9..15, z 13..19 at y 11, two cows inside.
-;; Should-succeed: a lone maintain with the body far below walks up a one-wide ramp and counts the cows; body on the platform, maintain runs; a maintain kept under repeat with the body far below never waits :away and walks up, counts the cows, then rests (:already). Should-fail: none.
+;; Should-succeed: a lone maintain with the body below the platform, out of sight of the pen, walks up a one-wide ramp and counts the cows; body on the platform, maintain runs; a maintain kept under repeat with the body below, out of sight, never waits :away and walks up the ramp, counts the cows, then rests (:already). Walk cases by day: at night the unseen pen is open ground in the dark. Should-fail: none.
 {:defaults
  {:tags [:animals :maintain :jobs]
   :plot {:height 18}
@@ -9,8 +9,9 @@
   :limit-s 100}
  :cases
  [{:name "repeat-maintain-far-below-the-pen-does-not-wait-away"
-   :time :any
-   :body {:at [3.5 0 16.5]}
+   :time :day :time-why :dawn-decision
+   :blocks [[:fill [8 0 1] [8 0 1] "stone"] [:fill [8 0 2] [8 1 2] "stone"] [:fill [8 0 3] [8 2 3] "stone"] [:fill [8 0 4] [8 3 4] "stone"] [:fill [8 0 5] [8 4 5] "stone"] [:fill [8 0 6] [8 5 6] "stone"] [:fill [8 0 7] [8 6 7] "stone"] [:fill [8 0 8] [8 7 8] "stone"] [:fill [8 0 9] [8 8 9] "stone"] [:fill [8 0 10] [8 9 10] "stone"] [:fill [8 0 11] [8 10 11] "stone"]]
+   :body {:at [8.5 0 0.5]}
    :act [[:summon "cow" [11.5 11 15.5]]
          [:summon "cow" [13.5 11 17.5]]
          [:http :submit (repeat (jobs.animals.maintain {:mob "cow" :target 2 :box {:min #xyz [10 11 14] :max #xyz [14 11 18]}})) [] {:ok true}]]
@@ -18,7 +19,7 @@
             {:no-event {:source :job :kind :waiting :data {:reason :away}} :for-s 20}]
    :limit-s 110}
   {:name "lone-one-shot-maintain-far-below-the-pen-walks-up"
-   :time :any
+   :time :day :time-why :dawn-decision
    :blocks [[:fill [8 0 1] [8 0 1] "stone"] [:fill [8 0 2] [8 1 2] "stone"] [:fill [8 0 3] [8 2 3] "stone"] [:fill [8 0 4] [8 3 4] "stone"] [:fill [8 0 5] [8 4 5] "stone"] [:fill [8 0 6] [8 5 6] "stone"] [:fill [8 0 7] [8 6 7] "stone"] [:fill [8 0 8] [8 7 8] "stone"] [:fill [8 0 9] [8 8 9] "stone"] [:fill [8 0 10] [8 9 10] "stone"] [:fill [8 0 11] [8 10 11] "stone"]]
    :body {:at [8.5 0 0.5]}
    :act [[:summon "cow" [11.5 11 15.5]]

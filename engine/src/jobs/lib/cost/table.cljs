@@ -133,6 +133,16 @@
           :when (and item (>= chance (:min-drop-chance basis)))]
       [item (if (and ore (ore-block? (.-name b))) (second ore) (* chance mean))])))
 
+(defn crop-yields
+  "[{:name :count}] a ripe crop block of name drops when cut (block-yields of its age-7 loot), nil for a block minecraft-data
+  does not know. Options :version and :basis as item-value's."
+  [name & {:keys [version basis]}]
+  (let [md (minecraft-data (or version @game/version))
+        b (aget (.-blocksByName md) name)
+        loot (when b (aget (.-blockLoot md) name))]
+    (when b
+      (mapv (fn [[item n]] {:name item :count n}) (block-yields md (deep-merge default-basis basis) b loot (crop? b loot))))))
+
 (defn block-sources
   "{item name worth} of what blocks drop: the cheapest way, per item."
   [md basis crafted]

@@ -15,6 +15,23 @@
   "The field crops: farm jobs plant, tend and cut these; nether wart, berries and cocoa need other handling."
   (select-keys constants/crop-ripe-age ["wheat" "carrots" "potatoes" "beetroots"]))
 
+(def stages-per-s
+  "Mean growth stages a second of a crop in a field of its own kind on wet farmland, as the game draws them: 3 random
+  ticks a game tick among the 4096 blocks of a section, 20 game ticks a second, and a tick grows the crop a stage with
+  chance 1/(floor(25/5)+1) (growth speed 5: wet farmland round it, halved by neighbours of its kind). Under light 9 it
+  does not grow; that is not counted."
+  (/ (* 3 20) 4096 6))
+
+(defn ripe-chance
+  "The chance a crop seen at stage `age` `secs` seconds ago is ripe now: at least the stages left to its ripe-age grew
+  in that time (Poisson at stages-per-s)."
+  [crop age secs]
+  (let [left (- (get ripe-age crop 7) age)
+        mu (* stages-per-s (max 0 secs))]
+    (if (<= left 0)
+      1
+      (- 1 (reduce + (map (fn [k] (* (js/Math.exp (- mu)) (/ (js/Math.pow mu k) (reduce * 1 (range 1 (inc k)))))) (range left)))))))
+
 (def food-ripe-age
   "The growth stage at which each crop block can be harvested for food. Wheat is left out: only the :field way cuts it, in a field of its own."
   (dissoc ripe-age "wheat"))

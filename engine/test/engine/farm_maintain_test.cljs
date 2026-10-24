@@ -161,7 +161,7 @@
 
 (def field-60 {:min {:x 62 :y 63 :z 2} :max {:x 64 :y 64 :z 4}})
 
-(deftest a-maintain-far-from-its-field-walks-there-and-tends-it
+(deftest a-maintain-far-from-its-seen-field-tends-it
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -173,5 +173,4 @@
               _ (core/submit! (:eng s) (list 'jobs.farm.maintain {:area field-60}) {})
               _ (await (tu/run-ticks (:eng s) (:clock s) 60 700))]
           (is (pos? (get (ft/inv s) "wheat" 0)) "the ripe wheat 60 blocks off was cut")
-          (is (some #(re-find #"^[^/]+/walk$" (str (:job %))) @(:seen s)) "maintain's own go-to child walked first")
           (is (true? (ft/finished? s))))))))

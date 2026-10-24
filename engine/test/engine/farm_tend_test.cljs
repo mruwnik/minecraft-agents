@@ -13,6 +13,8 @@
             [jobs.farm.tend :as tend]
             [jobs.farm.tend-box :as tend-box]
             [jobs.farm.tend-decide :as decide]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.crops :as crops]
             [jobs.lib.field-area :as fa]
             [jobs.lib.look :as look]
             [jobs.lib.steps :as steps]
@@ -425,6 +427,13 @@
           (is (= #{[2 2] [3 2]} (dug s)))
           (is (true? (finished? s))))))))
 
+(defn ^:async with-looks-showing
+  "(f)'s result with a look from here showing every cell, as next to the field (the fake has no perception, whose sight says it)."
+  [f]
+  (let [shows look/look-shows?]
+    (set! look/look-shows? (constantly true))
+    (try (await (f)) (finally (set! look/look-shows? shows)))))
+
 (deftest a-seen-field-with-nothing-to-do-still-waits-after-the-look
   (async done
     (tu/run-async done
@@ -432,7 +441,7 @@
         (let [s (setup (world (farm "wheat" 3 all-cells all-cells)))
               _ (tu/seeing-after-look (:p s))]
           (core/submit! (:eng s) (list 'jobs.farm.tend {:area box}) {})
-          (await (tu/run-ticks (:eng s) (:clock s) 6 700))
+          (await (with-looks-showing #(tu/run-ticks (:eng s) (:clock s) 6 700)))
           (is (seq (calls s "look")))
           (is (= [:nothing-to-do] (distinct (map :reason (events-of s :waiting)))))
           (is (empty? (dug s))))))))
@@ -446,7 +455,7 @@
               s (setup terrain)
               _ (tu/seeing-after-look (:p s))]
           (core/submit! (:eng s) (list 'jobs.farm.tend {:area box :till true}) {})
-          (await (tu/run-ticks (:eng s) (:clock s) 6 700))
+          (await (with-looks-showing #(tu/run-ticks (:eng s) (:clock s) 6 700)))
           (let [w (last (events-of s :waiting))]
             (is (= :nothing-to-do (:reason w)))
             (is (= 9 (:covered w)) "9 tillable cells have a block over them: the box sits too low")))))))
@@ -458,7 +467,7 @@
         (let [s (setup (world (ground "dirt" all-cells) {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 4)]}) [foreign-zone])
               _ (tu/seeing-after-look (:p s))]
           (core/submit! (:eng s) (list 'jobs.farm.tend {:area box :till true}) {})
-          (await (tu/run-ticks (:eng s) (:clock s) 6 700))
+          (await (with-looks-showing #(tu/run-ticks (:eng s) (:clock s) 6 700)))
           (let [w (last (events-of s :waiting))]
             (is (= :nothing-to-do (:reason w)))
             (is (= 9 (:refused w)))
@@ -529,6 +538,45 @@
           (await (tu/run-ticks (:eng s) (:clock s) 60 700))
           (is (seq (tu/walk-calls (:p s))) "the body goes to the field")
           (is (= (set (map (fn [[x z]] [x z]) unseen-cells)) (dug s)) "and cuts the wheat there"))))))
+
+(def hidden-cells (for [x (range 12 15) z (range 2 5)] [x z]))
+
+(deftest a-tend-under-repeat-walks-to-a-near-field-no-look-from-here-shows
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup (assoc (world (farm "wheat" 7 hidden-cells hidden-cells) wheat-drops) :floor [-5 -5 60 15]))]
+          (tu/seeing-within (:p s) 10)
+          (core/submit! (:eng s) (list 'repeat (list 'jobs.farm.tend {:area {:min {:x 12 :y 63 :z 2} :max {:x 14 :y 64 :z 4}} :irrigate false})) {})
+          (await (tu/run-ticks (:eng s) (:clock s) 60 700))
+          (is (seq (tu/walk-calls (:p s))) "13 blocks off and unseen: the body goes to the field")
+          (is (= (set hidden-cells) (dug s)) "and cuts the wheat there"))))))
+
+(deftest a-tend-waits-not-worth-while-the-least-walk-to-its-unseen-field-costs-more-than-the-pass
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup (world (farm "wheat" 7 [[300 2]] [[300 2]]) wheat-drops))]
+          (tu/seeing-within (:p s) 24)
+          (core/submit! (:eng s) (list 'repeat (list 'jobs.farm.tend {:area {:min {:x 300 :y 63 :z 2} :max {:x 300 :y 64 :z 2}} :irrigate false})) {})
+          (await (tu/run-ticks (:eng s) (:clock s) 5 700))
+          (is (empty? (tu/walk-calls (:p s))) "one crop 300 blocks off is not worth the walk")
+          (is (some #(= :not-worth (:reason %)) (events-of s :waiting))))))))
+
+(deftest a-pass-is-worth-the-crops-it-expects-ripe
+  (let [s (setup (world (farm "wheat" 7 [[2 2]] [[2 2]]) (farm "wheat" 3 [[3 2]] [[3 2]])))
+        c {:args {:area {:min {:x 2 :y 63 :z 2} :max {:x 3 :y 64 :z 2}}} :primitives (:p s)}
+        wheat (cost/crop-worth "wheat")]
+    (is (pos? wheat))
+    (is (= wheat (tend/pass-worth c)) "a ripe crop in view counts whole, an unripe one in view not at all")
+    (tu/seeing-within (:p s) 0)
+    (is (= (* 2 (apply min (map cost/crop-worth (keys crops/ripe-age)))) (tend/pass-worth c)) "a cell never seen counts as the least worth crop, ripe")))
+
+(deftest a-crop-seen-unripe-ripens-by-the-games-growth-rate
+  (is (= 1 (crops/ripe-chance "wheat" 7 0)))
+  (is (= 0 (crops/ripe-chance "wheat" 0 0)))
+  (is (< 0.4 (crops/ripe-chance "wheat" 0 (/ 7 crops/stages-per-s)) 0.6) "about even odds after the mean time of the stages left")
+  (is (> (crops/ripe-chance "wheat" 6 600) (crops/ripe-chance "wheat" 0 600)) "fewer stages left ripen sooner"))
 
 (deftest a-lone-tend-far-below-its-field-walks-up
   (async done

@@ -1,27 +1,30 @@
-;; A standing (repeat) farm.tend with no other job listed never waits :away; far below its field, it walks up to the unseen field and cuts the wheat.
-;; Field on a stone platform x 6..20, z 12..22, y 0..11: farmland y 11, wheat y 12, water beside.
-;; Should-succeed: body 12 below the field (walks up, wheat cut, no :away wait); body on the field (wheat cut). Should-fail: none.
+;; A standing (repeat) farm.tend with no other job listed never waits :away; from below its field, out of sight of it, it walks up a ramp to the unseen field when the walk costs less than the pass's expected harvest, and cuts the wheat.
+;; Field on a stone platform x 6..20, z 12..22, y 0..11: farmland x 10..17 at z 16 and z 18, y 11, ripe wheat on all of it, water z 17 between; a one-wide ramp x 8, z 1..11 from the ground up to the platform. :irrigate false, so only the walk to the unseen field brings the body up.
+;; Should-succeed: body below the platform, out of sight of the field (walks up, a far cell's wheat cut, no :away wait); body on the field (wheat cut). Should-fail: a one-cell field it cannot see is worth less than the walk (ends condition-failed :not-worth, its wheat stands).
 {:defaults
  {:tags [:farm :tend :jobs]
-  :time :any
+  :time :day :time-why :dawn-decision
   :plot {:height 18}
   :blocks [[:fill [6 0 12] [20 10 22] "stone"]
-           [:fill [10 11 16] [13 11 16] "farmland[moisture=7]"] [:fill [10 11 17] [13 11 17] "water"]
-           [:fill [6 11 12] [20 11 15] "stone"] [:fill [6 11 18] [20 11 22] "stone"]
-           [:fill [6 11 16] [9 11 17] "stone"] [:fill [14 11 16] [20 11 17] "stone"]
-           [:set [10 12 16] "wheat[age=7]"] [:set [13 12 16] "wheat[age=7]"]]
+           [:fill [6 11 12] [20 11 22] "stone"]
+           [:fill [10 11 16] [17 11 16] "farmland[moisture=7]"] [:fill [10 11 17] [17 11 17] "water"] [:fill [10 11 18] [17 11 18] "farmland[moisture=7]"]
+           [:fill [10 12 16] [17 12 16] "wheat[age=7]"] [:fill [10 12 18] [17 12 18] "wheat[age=7]"]
+           [:fill [8 0 1] [8 0 1] "stone"] [:fill [8 0 2] [8 1 2] "stone"] [:fill [8 0 3] [8 2 3] "stone"] [:fill [8 0 4] [8 3 4] "stone"] [:fill [8 0 5] [8 4 5] "stone"] [:fill [8 0 6] [8 5 6] "stone"] [:fill [8 0 7] [8 6 7] "stone"] [:fill [8 0 8] [8 7 8] "stone"] [:fill [8 0 9] [8 8 9] "stone"] [:fill [8 0 10] [8 9 10] "stone"] [:fill [8 0 11] [8 10 11] "stone"]]
   :body {:effects [["resistance" 600 4]] :settle-s 2}
   :limit-s 100}
  :cases
- [{:name "body-far-below-the-field-does-not-wait-away"
-   :body {:at [3.5 0 16.5]}
-   :act [[:http :submit (repeat (jobs.farm.tend {:area {:min #xyz [10 11 16] :max #xyz [13 12 16]}})) [] {:ok true}]]
+ [{:name "body-below-out-of-sight-walks-up-to-the-unseen-field"
+   :body {:at [8.5 0 0.5]}
+   :act [[:http :submit (repeat (jobs.farm.tend {:area {:min #xyz [10 11 16] :max #xyz [17 12 18]} :irrigate false})) [] {:ok true}]]
    :expect [{:no-event {:source :job :kind :waiting :data {:reason :away}} :for-s 30}]
-   :after [[:not-block [10 12 16] "wheat[age=7]"]]
-   :limit-s 120}
+   :after [[:not-block [17 12 18] "wheat[age=7]"]]}
   {:name "body-on-the-field-cuts-the-wheat"
    :body {:at [11.5 12 15.5]}
-   :act [[:http :submit (repeat (jobs.farm.tend {:area {:min #xyz [10 11 16] :max #xyz [13 12 16]}})) [] {:ok true}]]
+   :act [[:http :submit (repeat (jobs.farm.tend {:area {:min #xyz [10 11 16] :max #xyz [17 12 18]} :irrigate false})) [] {:ok true}]]
    :expect [{:no-event {:source :job :kind :waiting :data {:reason :away}} :for-s 30}]
-   :after [[:not-block [10 12 16] "wheat[age=7]"]]
-   :limit-s 90}]}
+   :after [[:not-block [10 12 16] "wheat[age=7]"]]}
+  {:name "one-unseen-crop-is-not-worth-the-walk-up"
+   :body {:at [8.5 0 0.5]}
+   :act [[:http :submit (jobs.farm.tend {:area {:min #xyz [17 11 18] :max #xyz [17 12 18]} :irrigate false}) [] {:ok true}]]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :not-worth}} :within-s 60 :of-job true}]
+   :after [[:block [17 12 18] "wheat[age=7]"]]}]}

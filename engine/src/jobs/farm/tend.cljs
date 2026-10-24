@@ -7,6 +7,8 @@
             [engine.ctx :as ctx]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.checks :as checks]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.crops :as crops]
             [jobs.lib.field-area :as fa]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
@@ -16,6 +18,7 @@
             [jobs.lib.ready :as ready]
             [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]
+            [jobs.lib.walk-pick :as pick]
             [jobs.farm.field :as fld]
             [jobs.lib.farm :as lib-farm]
             [jobs.farm.irrigate :as irrigate]
@@ -44,7 +47,10 @@
   Start facts, failed conditions: impossible {:reason :no-box} unless the area is a box with a crop layer and at most 2048 cells, or a plan;
   {:reason :away :site :others} while another job that is not standing and not waiting is listed;
   {:reason :nothing-to-do} (with :covered, :refused, :blocked (plan crop cells another block fills), :food-reserve) or {:reason :short-seed :seeds} when no
-  step would run, after one look round from here when a cell was never seen (a field never seen and farther than 16 blocks is walked to first). A started run always continues. A step under
+  step would run, after one look round from here when a cell was never seen; a field cell never seen that no look from here
+  shows (look/look-shows?) or one look round did not show is walked to first (go-to, :range 8, once a run) when go-to's quote of the walk
+  (walk-pick/quoted-s) costs less than the pass is worth (pass-worth, as the walk survives); else {:reason :not-worth :worth :walk-s}
+  while even the least walk there (walk-pick/walk-s) costs more, and a run whose quote costs more ends condition-failed :not-worth. A started run always continues. A step under
   way is not re-decided.
   Ends :done with data {:steps {step summary} :field {:crops :bare :untilled}} (a plan adds :wrong and, when crop cells hold a tree or other block, :blocked [{:pos :found}] with one farm-tend.blocked warn) when some step
   changed something (units steps); nothing-possible :gave-up with the same data when children ran and none did;
@@ -155,15 +161,63 @@
     (when lo {:x (/ (+ (:x lo) (:x hi)) 2) :y (:y lo) :z (/ (+ (:z lo) (:z hi)) 2)})
     (when (fa/plan c) (first (keys (:crops (tend-plan/planned c)))))))
 
-(def near
-  "Blocks from the field within which its cells are in sight, as far as a look from here goes."
-  16)
+(defn crop-cells
+  "{pos crop} of the field's crop cells: the plan's with the crop it wants, the box's crop layer with nil."
+  [c]
+  (if (fa/plan c)
+    (:crops (tend-plan/planned c))
+    (let [{lo :min hi :max} (fa/arg-box c)]
+      (into {} (for [x (range (:x lo) (inc (:x hi))) z (range (:z lo) (inc (:z hi)))] [{:x x :y (inc (:y lo)) :z z} nil])))))
+
+(defn cell-worth
+  "Seconds the crop cell at pos (crop: the one wanted there, nil for any) is worth to a pass: its ripe crop's cost/crop-worth times the
+  chance it is ripe now: seen in view, 1 or 0; remembered out of view, its chance to have ripened since (crops/ripe-chance); never seen,
+  1, its last look unboundedly long ago, at the least worth of the crops it may hold (the worse case). Another block is 0."
+  [p pos crop]
+  (let [b (u/sensed p pos)]
+    (if (or (nil? b) (true? (.-unknown b)))
+      (apply min (map cost/crop-worth (if crop [crop] (keys crops/ripe-age))))
+      (let [name (.-name b)
+            age (or (.-age b) 0)]
+        (cond
+          (not (and (crops/ripe-age name) (or (nil? crop) (= crop name)))) 0
+          (false? (.-visible b)) (* (cost/crop-worth name) (crops/ripe-chance name age (/ (or (.-ageMs b) 0) 1000)))
+          (>= age (crops/ripe-age name)) (cost/crop-worth name)
+          :else 0)))))
+
+(defn pass-worth
+  "Seconds a pass over the field c works is worth: the cell-worth of its crop cells, the harvest it expects."
+  [c]
+  (let [p (:primitives c)]
+    (reduce + 0 (map (fn [[pos crop]] (cell-worth p pos crop)) (crop-cells c)))))
+
+(defn unseen-field-cells
+  "The field cells never seen."
+  [c]
+  (let [p (:primitives c)]
+    (filter #(true? (some-> (u/sensed p %) .-unknown)) (field-cells c))))
 
 (defn walk-due?
-  "The field's site when the field is unseen and the body is farther than near from it: a look from here shows nothing, so the run walks there first."
+  "The field's site when the run has not walked there, a field cell was never seen and no look from here would show one
+  (look/look-shows?), or the body looked round near here already: the run walks there first."
   [c]
-  (let [site (site c)]
-    (when (and site (needs-look? c) (> (u/dist (u/self-pos c) site) near)) site)))
+  (let [site (site c)
+        p (:primitives c)
+        unseen (when (and site (not (:site-walked (ctx/mem c)))) (seq (unseen-field-cells c)))]
+    (when (and unseen (or (look/surveyed? c :near) (not-any? #(look/look-shows? p %) unseen)))
+      site)))
+
+(def site-range "Blocks from the site within which the walk to an unseen field ends." 8)
+
+(defn walk-args [c site] {:pos (update site :y inc) :range site-range})
+
+(defn not-worth
+  "{:reason :not-worth :worth :walk-s} when even the least walk to the unseen site (walk-pick/walk-s) costs more than the pass is worth, else nil."
+  [c site]
+  (let [worth (pass-worth c)
+        walk (pick/walk-s (u/self-pos c) (walk-args c site))]
+    (when (> walk worth)
+      {:reason :not-worth :worth worth :walk-s walk})))
 
 (defn check-facts
   "The facts the check decides from: read once per check-cache window, and fresh while a cell was never seen."
@@ -195,9 +249,11 @@
     (if trouble
       (checks/cause-status :later {:reason :plan-trouble :why trouble})
       (let [f (check-facts c)]
-        (when-not (or (would-run? c f) (walk-due? c))
-          (checks/cause-status (if (and (needs-look? c) (not (look/surveyed? c :near))) :look :later)
-                               (if (seq (:short f)) {:reason :short-seed :seeds (vec (sort (:short f)))} (nothing-to-do-reason f))))))))
+        (when-not (would-run? c f)
+          (if-let [site (walk-due? c)]
+            (some->> (not-worth c site) (checks/cause-status :later))
+            (checks/cause-status (if (and (needs-look? c) (not (look/surveyed? c :near))) :look :later)
+                                 (if (seq (:short f)) {:reason :short-seed :seeds (vec (sort (:short f)))} (nothing-to-do-reason f)))))))))
 
 (def job-sym 'jobs.farm.tend)
 (defn key-of [part] (or part "*"))
@@ -325,7 +381,7 @@
   [c report]
   (let [part (fa/part c)
         out (part-report c report)]
-    (ctx/update-mem! c #(-> % (dissoc :todo :report :call-args :cur :till-tried :tilled :irrigate-tried :irrigated :reach-tried)
+    (ctx/update-mem! c #(-> % (dissoc :todo :report :call-args :cur :till-tried :tilled :irrigate-tried :irrigated :reach-tried :site-walked)
                             (assoc-in [:results (key-of part)] out)))
     :again))
 
@@ -455,17 +511,30 @@
           (await (look/look-around! c (look/search-effort)))))))
 
 (defn ^:async walk-to-site!
-  "Walk to the unseen field before the pass, as a player does: :again once there, :continue while the walk waits, or the walk's own ending."
+  "Walk to the unseen field before the pass, as a player does, when go-to's quote of the walk costs less than the pass is
+  worth as the walk survives (walk-pick/quoted-s, ev-worth; a quote that cannot price it leaves the walk to say): :again
+  once there, :continue while the quote or the walk waits, the walk's own ending, or condition-failed :not-worth."
   [c site]
-  (let [e (await (ctx/call c :walk 'jobs.movement.go-to {:pos (update site :y inc) :range 8}))]
+  (let [args (walk-args c site)
+        worth (pass-worth c)
+        q (await (ctx/quote c 'jobs.movement.go-to args))
+        price (pick/quoted-s c q)]
     (cond
-      (= :continue e) :continue
-      (= :done (:kind e)) :again
-      :else (ctx/end c (:kind e) (contract/cause-key e)
-                     {:steps {} :text (str "farm tend: could not walk to the field, go there first: " (contract/cause-key e))}))))
+      (:estimate q) :continue
+      (and (js/isFinite price) (> price (pick/ev-worth worth q)))
+      (ctx/end c :condition-failed :not-worth
+               {:steps {} :worth worth :walk-s price
+                :text (str "farm tend: the walk to the unseen field costs " (js/Math.round price) " s, more than the pass is worth (" (js/Math.round worth) " s)")})
+      :else
+      (let [e (await (ctx/call c :walk 'jobs.movement.go-to (assoc args :worth worth)))]
+        (cond
+          (= :continue e) :continue
+          (= :done (:kind e)) (do (ctx/update-mem! c assoc :site-walked true) :again)
+          :else (ctx/end c (:kind e) (contract/cause-key e)
+                         {:steps {} :text (str "farm tend: could not walk to the field, go there first: " (contract/cause-key e))}))))))
 
 (defn ^:async step
-  "A run over a field partly never seen walks to it when far, looks around and yields (the check decides on what is seen then)."
+  "A run over a field partly never seen walks to it when no look from here shows it, looks around and yields (the check decides on what is seen then)."
   [c]
   (cond
     (and (fa/plan c) (:trouble (tend-plan/planned c)))

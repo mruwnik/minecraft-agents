@@ -21,8 +21,7 @@
 (def meta {:tags [:goal]})
 
 (def doc
-  "Keep a farm: its field in order, its stock in its place. A body farther than 16 blocks from the field first walks there
-  (one jobs.movement.go-to child; one that cannot arrive ends with the go-to's own kind and cause). One run is one pass over four steps in this order, each a
+  "Keep a farm: its field in order, its stock in its place. One run is one pass over four steps in this order, each a
   child job called once (a child that yields is called again on the next call; a step under way is not re-decided):
   - :tidy (jobs.farm.tidy over the plan and its :part): the area is a plan with no :parts and a tree, dirt or other block
     fills some of its crop cells; a body clears its own field.
@@ -116,21 +115,12 @@
 
 (defn tidy-work? [c] (boolean (:call (decide :tidy (:args c) (facts c)))))
 
-(def near tend/near)
-
-(defn far-from-field?
-  "The field's site when the body is farther than near from it, else nil."
-  [c]
-  (let [site (tend/site c)]
-    (when (and site (> (u/dist (u/self-pos c) site) near)) site)))
-
 (defn can-start?
-  "Tend's start check, or ok while a tidy or stock step has work or the field is far (the run walks there, then reads it)."
+  "Tend's start check, or ok while a tidy or stock step has work."
   [c]
   (let [t (tend/can-start? c)]
     (cond
       (#{:ok :never} (first t)) t
-      (and (not= :away (:reason (nth t 2 nil))) (far-from-field? c)) (contract/ok :walk "the field is far: walk there first")
       (tidy-work? c) (contract/ok :work "crop cells to clear")
       (stock-work? c) (contract/ok :work "stock to store or compost")
       :else t)))
@@ -181,16 +171,6 @@
       (some :stopped entries) (ctx/end c :nothing-possible :failed-steps out)
       :else (ctx/end c :condition-failed {:reason :nothing-to-do} out))))
 
-(defn ^:async walk-to-field!
-  "Walk to the field before the pass, as a player does: :again once there, :continue while the walk waits, or the walk's own ending."
-  [c site]
-  (let [e (await (ctx/call c :walk 'jobs.movement.go-to {:pos (update site :y inc) :range 8}))]
-    (cond
-      (= :continue e) :continue
-      (= :done (:kind e)) :again
-      :else (ctx/end c (:kind e) (contract/cause-key e)
-                     {:steps {} :text (str "farm maintain: could not walk to the field, go there first: " (contract/cause-key e))}))))
-
 (defn ^:async steps-pass!
   "One piece of the pass over the steps: :again after a step ended, :continue while its child waits on the world, or the ending."
   [c]
@@ -207,12 +187,5 @@
           :continue
           (do (ctx/update-mem! c booked slot (entry-of slot e)) :again))))))
 
-(defn ^:async step
-  "One piece of the pass: :again after a step ended, :continue while its child waits on the world, or the ending."
-  [c]
-  (if-let [site (and (not (:todo (ctx/mem c))) (far-from-field? c))]
-    (await (walk-to-field! c site))
-    (await (steps-pass! c))))
-
 (defn ^:async round [c]
-  (await (pace/steps! c #(step c))))
+  (await (pace/steps! c #(steps-pass! c))))
