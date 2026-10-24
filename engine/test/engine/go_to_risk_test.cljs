@@ -416,7 +416,8 @@
                                                  (if (fn? v) (fn [& args] (swap! reads inc) (.apply v t (to-array args))) v)))})
         est (risk/estimate (assoc c :primitives counted) {:x 1000000 :y 64 :z 3})]
     (is (< @reads 20000))
-    (is (pos? (:dark-s est)))))
+    (is (pos? (:dark-s est)))
+    (is (< (count (risk/way {:x 0.5 :y 64 :z 3.5} {:x 1000000 :y 64 :z 3} nil)) 1000) "nor on a cell a block: a million cells filled the test heap")))
 
 (deftest a-death-or-hide-near-the-goal-is-priced-like-one-further-off
   (let [c (ready-test/ctx-of day-world)

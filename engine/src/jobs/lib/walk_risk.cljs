@@ -35,16 +35,18 @@
    ::heal-s-per-hp {:default 4 :spec (a/num-in 0 nil)
                     :doc "Seconds a body that can heal takes to regain an hp, for the wait that would make a risky walk affordable (stay-estimate)."}})
 
-(defn- cells-along
-  "The cells {:x :y :z} every step blocks along the straight way from `from` to `to`, floored, the goal last."
-  [from to step]
-  (let [len (u/dist from to)
-        n (max 1 (js/Math.ceil (/ len step)))]
-    (for [i (range 1 (inc n))
-          :let [t (/ i n)]]
-      (update-vals (merge-with #(+ %1 (* t (- %2 %1))) from to) js/Math.floor))))
-
 (def lava-scan-radius 128)
+
+(defn- cells-along
+  "The cells {:x :y :z} along the straight way from `from` to `to`, floored, the goal last: a block apart for the first
+  `near` blocks, then at most spawn-light's ::max-cells more, spaced evenly (a goal a million blocks off is no million cells)."
+  [from to near]
+  (let [len (u/dist from to)
+        a (js/Math.floor (min len near))
+        m (max 1 (js/Math.ceil (min (- len a) (settings/get spawn-light/settings ::spawn-light/max-cells))))]
+    (for [d (concat (range 1 a) (map #(+ a (* (- len a) (/ % m))) (range 1 (inc m))))
+          :let [t (if (zero? len) 1 (/ d len))]]
+      (update-vals (merge-with #(+ %1 (* t (- %2 %1))) from to) js/Math.floor))))
 
 (defn route-lava-hp
   "The most lava-hp of any cell the way's cells step into (the first, the cell the body stands in, is no step): lava the walk keeps clear of, or a body already at its goal, costs nothing. Reads the seen lava once, within the way's reach (at most lava-scan-radius) of the body."
@@ -77,13 +79,15 @@
 
 (defn way
   "The cells {:x :y :z} a walk from feet to goal is priced on: from the body's cell along the steps of plan (go-to's,
-  {:status :steps}), then, unless the plan is \"found\" (a partial one, or none), the rest to the goal a block apart on
-  the straight line, which the planner has not said it avoids: each priced by what the body knows of it (an unseen cell
-  as unseen)."
+  {:status :steps}), then, unless the plan is \"found\" (a partial one, or none), the rest to the goal on the straight
+  line, which the planner has not said it avoids (cells-along: a block apart while seen lava could be near): each priced
+  by what the body knows of it (an unseen cell as unseen)."
   [feet goal {:keys [status steps]}]
-  (let [planned (into [] (dedupe) (cons (floor-cell feet) (map floor-cell steps)))
-        end (peek planned)]
-    (into planned (when-not (= "found" status) (remove #{end} (cells-along end goal 1))))))
+  (let [start (floor-cell feet)
+        planned (into [] (dedupe) (cons start (map floor-cell steps)))
+        end (peek planned)
+        near (+ lava-scan-radius (lava-risk/radius) (u/dist start end))]
+    (into planned (when-not (= "found" status) (remove #{end} (cells-along end goal near))))))
 
 (defn- along
   "The blocks walked from the first of cells to each of them."
