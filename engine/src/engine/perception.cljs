@@ -225,10 +225,10 @@
             age))))))
 
 (defn memory-epoch
-  "A number that moves whenever what remembered-age answers can: a store write or the next second of the clock (cells age
-  into unknown with no write). The key of anything kept from a read of the remembered world."
+  "A key (compare with =) that changes whenever what remembered-age answers can: a store write or the next second of the
+  clock (cells age into unknown with no write). The key of anything kept from a read of the remembered world."
   [^js st]
-  (+ (* (.-writes st) 4294967296) (mod (js/Math.floor (/ ((.-nowFn st)) 1000)) 4294967296)))
+  [(.-writes st) (js/Math.floor (/ ((.-nowFn st)) 1000))])
 
 (defn remembered
   "The remembered answer for pos with :age-ms and :visible false; unknown when it reads unknown (remembered-age)."

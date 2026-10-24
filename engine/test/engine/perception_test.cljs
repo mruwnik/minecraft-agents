@@ -157,6 +157,15 @@
     (is (= [nil "dirt" "sand"] (mapv #(seen-name per %) [[0 64 0] [20 64 0] [40 64 0]])))
     (is (= 2 (:sections (perception/stats per))))))
 
+(deftest the-memory-epoch-moves-with-the-clock-second-however-many-writes
+  (let [clock (atom 1000)
+        {:keys [per]} (rig {} {:now #(deref clock)})
+        st (:st per)]
+    (set! (.-writes st) (js/Math.pow 2 30))
+    (let [k (perception/memory-epoch st)]
+      (swap! clock + 1000)
+      (is (not= k (perception/memory-epoch st))))))
+
 (deftest one-pass-is-spread-over-the-steps-of-pass-ms
   (let [{:keys [per]} (rig {} {:pass-ms 1000 :step-ms 50})
         _ (perception/step! per)

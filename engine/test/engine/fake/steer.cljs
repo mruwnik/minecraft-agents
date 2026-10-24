@@ -336,7 +336,7 @@
     (set! (.-stateAt view) (fn [x y z]
                              (let [cx (bit-shift-right x 4) sy (bit-shift-right y 4) cz (bit-shift-right z 4)
                                    w (writes)]
-                               (when-not (== w (.-writes last))
+                               (when-not (= w (.-writes last))
                                  (.clear sections)
                                  (set! (.-writes last) w)
                                  (set! (.-cx last) nil))
