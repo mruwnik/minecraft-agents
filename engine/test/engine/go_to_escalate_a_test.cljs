@@ -187,8 +187,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
+        ;; no blocks: the climb is one stair from the bottom (with blocks it pillars up and cuts nothing deep)
         (let [{:keys [out p seen]} (await (run-job! {:self {:pos {:x 0 :y 59 :z 0}} :blocks deep-pit
-                                                     :inventory [{:name "dirt" :count 2}]}
+                                                     :inventory [{:name "stone_pickaxe" :count 1}]}
                                                 'jobs.movement.go-to (merge {:pos [10 64 0] :range 1} trespass) foreign))
               skipped (:cells (first (events-of seen :go-to.restore-skipped)))
               low (set (mapv :cell skipped))]
@@ -236,12 +237,13 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[what world pos] [[:pillar (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 5}]}) [10 64 0]]
-                                  [:stair (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 1}]}) [10 64 0]]
-                                  [:clear-path (merge in-room {:blocks room}) [8 64 0]]]]
+        ;; one dirt: a block's pillar and a two-step stair cost less than a three-step stair (cost.ways)
+        (doseq [[what world pos] [[[:pillar] (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 5}]}) [10 64 0]]
+                                  [[:pillar :stair] (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 1}]}) [10 64 0]]
+                                  [[:clear-path] (merge in-room {:blocks room}) [8 64 0]]]]
           (let [{:keys [out seen ticks]} (await (run-job! world {:pos pos :range 1}))]
             (is (= {:arrived true} @out) what)
-            (is (= [what] (mapv :step (events-of seen :go-to.escalated))) what)
+            (is (= what (mapv :step (events-of seen :go-to.escalated))) what)
             (is (= 1 ticks) (str what ": one go-to call, the escalation and put-back inside it"))))))))
 
 (deftest go-to-with-escalate-false-gives-up-as-before
@@ -281,11 +283,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        ;; gravel over the stair's next column falls into the cut, not onto the body: the stair digs on
+        ;; the climb's route digs no cell under gravel: a step south, then east
         (let [{:keys [out p seen]} (await (run-job! (merge in-pit {:blocks (assoc pit "1,64,0" "gravel")}) 'jobs.movement.go-to {:pos [10 64 0] :range 1} nil true))]
           (is (= {:arrived true} @out))
-          (is (= [:stair] (mapv :step (events-of seen :go-to.escalated))))
-          (is (contains? (dug-cells p) [1 63 0])))))))
+          (is (= [:stair :stair] (mapv :step (events-of seen :go-to.escalated))))
+          (is (not (contains? (dug-cells p) [1 63 0])) "the cell under the gravel stays"))))))
 
 (deftest go-to-with-no-pickaxe-clears-a-door-by-hand
   (async done
@@ -417,8 +419,9 @@
                                                     'jobs.movement.go-to (merge {:pos [30 64 0] :range 1} trespass) foreign))
               escalated (events-of seen :go-to.escalated)]
           (is (= {:arrived true} @out))
-          (is (= [:stair :stair :stair] (map :step escalated)) "18 up is 3 stairs of at most 8, one after another")
-          (is (= [1 1 1] (map :n escalated)) "each began nearer than any before")
+          ;; a climb route of the 18 digs longer than max-route-s by hand: an escape stair of 8 first, then the climb of the rest
+          (is (= [:stair :stair] (map :step escalated)))
+          (is (= [1 1] (map :n escalated)) "each began nearer than any before")
           (is (restores-after-the-last-stair? seen))
           (is (= (dug-cells p) (holes eng)) "every dug cell is in the ledger"))))))
 
@@ -430,12 +433,13 @@
         (let [{:keys [eng out p seen]} (await (run-job! {:self {:pos {:x 0 :y 46 :z 0}} :blocks deep-shaft}
                                                     'jobs.movement.go-to (merge {:pos [10 64 0] :range 1} trespass) foreign))]
           (is (= {:arrived true} @out))
-          (is (= [:stair :stair :stair] (map :step (events-of seen :go-to.escalated))))
+          ;; an escape stair of 8, then the climb's turns back west, each a stair run straight on from the last
+          (is (= [:stair :stair :stair :stair] (map :step (events-of seen :go-to.escalated))))
           (is (seq (events-of seen :go-to.restore-skipped)) "the put-back ran once the walk got on")
           (is (restores-after-the-last-stair? seen))
           (is (= (dug-cells p) (holes eng)) "every dug cell is in the ledger"))))))
 
-(deftest go-to-pillars-up-a-deep-shaft-while-each-pillar-gets-nearer
+(deftest go-to-pillars-up-a-deep-shaft-in-one-pillar
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -444,8 +448,8 @@
                                               {:pos [10 64 0] :range 1}))
               escalated (events-of seen :go-to.escalated)]
           (is (= {:arrived true} @out))
-          (is (= [:pillar :pillar :pillar] (map :step escalated)) "18 up is 3 pillars of at most 8")
-          (is (= [1 1 1] (map :n escalated))))))))
+          (is (= [:pillar] (map :step escalated)) "the climb is one pillar of 18")
+          (is (= [1] (map :n escalated))))))))
 
 (deftest escalations-count-only-while-none-gets-nearer
   (are [m d n] (= n (:fruitless (esc/count-escalation m d)))

@@ -53,14 +53,22 @@
   "Walk-through blocks a body avoids: cobweb slows it to a crawl, tripwire sets off traps."
   #{"cobweb" "tripwire"})
 
-(defn passable?
-  "Whether a block name is one a body walks through (no collision, not a fluid, not cobweb or tripwire): open cells, replaceable plants,
-  flowers, rails, signs, carpets, torches, saplings, berry bushes. nil (an unloaded cell) is not passable."
-  [name]
-  (boolean
-   (and name (not (fluids name)) (not (slows-or-triggers name))
-        (or (replaceable name) (flowers name) (= "grass" name) (= "sweet_berry_bush" name)
-            (re-find passable-pattern name) (re-find walk-through name)))))
+(def ^{:doc "Whether a block name is one a body walks through (no collision, not a fluid, not cobweb or tripwire): open cells, replaceable plants,
+  flowers, rails, signs, carpets, torches, saplings, berry bushes. nil (an unloaded cell) is not passable. Once a name:
+  a dig route's search asks it of every cell it weighs."
+       :arglists '([name])}
+  passable?
+  (let [known (js/Map.)]
+    (fn [name]
+      (let [v (.get known name)]
+        (if (some? v)
+          v
+          (let [v (boolean
+                   (and name (not (fluids name)) (not (slows-or-triggers name))
+                        (or (replaceable name) (flowers name) (= "grass" name) (= "sweet_berry_bush" name)
+                            (re-find passable-pattern name) (re-find walk-through name))))]
+            (.set known name v)
+            v))))))
 
 (defn passable-or-water?
   "passable?, or water a walker swims through."

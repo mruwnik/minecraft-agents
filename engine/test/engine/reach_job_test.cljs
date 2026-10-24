@@ -7,7 +7,9 @@
             [jobs.lib.escape.span :as span]
             [jobs.movement.reach :as reach]
             [engine.test-util :as tu :refer [box]]
-            [engine.go-to-escalate-support :refer [run-job! feet events-of]]))
+            [engine.core :as core]
+            [engine.fake :as fake]
+            [engine.go-to-escalate-support :refer [setup recording-parent tick-out! run-job! feet events-of]]))
 
 (defn block-at-of-map [blocks] (fn [[x y z]] (get blocks (str x "," y "," z) "air")))
 
@@ -52,6 +54,50 @@
     (is (nil? (span/down-stair at [0 63 0] [8 62 0] (constantly true) none #{})) "one below is a drop or a dig-route")
     (is (nil? (span/down-stair at [0 63 0] [8 53 0] (constantly true) none #{[:stair :east] [:stair :south] [:stair :north]})) "west ends 18 blocks off the goal's column")
     (is (nil? (span/down-stair at [0 63 0] [8 53 0] (constantly false) none #{})) "no cell may be dug")))
+
+(def thin-mine
+  "The live mine room: a 25x25x3 room (x 4..28, y 1..3) in a stone mass two blocks thick (x 2..30, y 0..16), a 1-wide air
+  gap round the mass and a bedrock shell beyond it (x/z 0 and 32, floor y -1, up to y 21)."
+  (let [mass (reduce dissoc (box 2 0 2 30 16 30 "stone") (for [x (range 4 29) y (range 1 4) z (range 4 29)] (str x "," y "," z)))
+        shell (merge (box 0 -1 0 32 -1 32 "bedrock") (box 0 0 0 0 21 32 "bedrock") (box 32 0 0 32 21 32 "bedrock")
+                     (box 0 0 0 32 21 0 "bedrock") (box 0 0 32 32 21 32 "bedrock"))]
+    (merge shell mass)))
+
+(def thin-mine-dark
+  "The cells a body in thin-mine's room cannot see: the gap and the shell."
+  (for [x (range 0 33) y (range -1 22) z (range 0 33)
+        :when (or (#{0 1 31 32} x) (#{0 1 31 32} z))]
+    [x y z]))
+
+(defn dark-but-near
+  "p that sees the cells of dark only as a player in the dark does: within 4 blocks of its eye, along a line of open cells."
+  [p dark]
+  (let [sensed (.-sensedAt p)
+        open? (fn [[x y z]] (= "air" (get-in @(fake/state p) [:blocks (str x "," y "," z)] "air")))
+        near? (fn [cell]
+                (let [pos (.-pos (.self p))
+                      eye [(.-x pos) (+ 1.62 (.-y pos)) (.-z pos)]
+                      to (mapv #(+ % 0.5) cell)
+                      cell-of (fn [t] (mapv #(js/Math.floor (+ %1 (* t (- %2 %1)))) eye to))]
+                  (and (<= (js/Math.hypot (- (to 0) (eye 0)) (- (to 1) (eye 1)) (- (to 2) (eye 2))) 4)
+                       (every? open? (remove #{cell (cell-of 0)} (map cell-of (range 0.1 1 0.1)))))))]
+    (aset p "sensedAt" (fn [q] (let [cell [(.-x q) (.-y q) (.-z q)]]
+                                 (if (and (dark cell) (not (near? cell))) #js {:unknown true} (sensed q)))))))
+
+(deftest a-body-in-a-thin-walled-mine-room-climbs-to-a-goal-on-top
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:pos {:x 5.5 :y 1 :z 16.5}} :blocks thin-mine
+                                           :inventory [{:name "stone_pickaxe" :count 1} {:name "cobblestone" :count 24}]})
+              out (atom :not-done)
+              eng (assoc-in eng [:jobs 'recording-parent] (recording-parent out 'jobs.movement.reach {:pos [26 17 16] :range 1}))]
+          (dark-but-near p (set thin-mine-dark))
+          (core/submit! eng '(recording-parent) {})
+          (await (tick-out! eng 2000))
+          (is (true? (:arrived @out)) (pr-str @out (feet p) (keep #(when (re-find #"^(go-to|reach)\." (name (:kind %))) [(:kind %) (:at %) (:text %)]) @seen)))
+          (is (not-any? #(#{:undercuts-way :unbreakable} (:reason %)) (events-of seen :go-to.escalation-stopped)))
+          (is (some #(= :climb-on (:why %)) (events-of seen :go-to.escalated)) "one route, its ways run back to back"))))))
 
 (deftest the-ways-are-priced-in-seconds-by-their-blocks
   (is (< (cost/pillar-cost 3) (cost/stair-cost 3)))

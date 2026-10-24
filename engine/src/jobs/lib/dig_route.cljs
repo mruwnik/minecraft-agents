@@ -5,14 +5,14 @@
             [engine.settings :as settings]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.block-sets :as bs]
+            [jobs.lib.cost.armour :as armour]
             [jobs.lib.per-body :as per-body]
             [jobs.lib.reach :as reach]))
 
 (a/defargs settings
-  {::max-digs {:default 16 :doc "The most cells a route digs." :spec (a/int-in 0 nil)}
-   ::margin {:default 3 :doc "How far (blocks) round the two ends a route may stray." :spec (a/int-in 0 nil)}
-   ::max-nodes {:default 500 :doc "The most cells a route search expands before it gives up (:budget)." :spec (a/int-in 1 nil)}
-   ::max-fall {:default 3 :doc "The longest fall (blocks) a route's step may drop." :spec (a/int-in 0 nil)}})
+  {::max-nodes {:default 500 :doc "The most cells a route search expands before it gives up (:budget)." :spec (a/int-in 1 nil)}
+   ::max-fall {:default (last (take-while #(zero? (armour/fall-damage nil %)) (range 1 17)))
+               :doc "The longest fall (blocks) a route's step may drop: the longest that costs no hp." :spec (a/int-in 0 nil)}})
 
 (def falling #{"sand" "red_sand" "gravel"})
 
@@ -36,13 +36,12 @@
   [n]
   (boolean (and n (not (open? n)) (not (re-find reach/tall-block n)) (not (bs/fluids n)) (not (bs/harms-in-cell n)))))
 
-(defn neighbours [[x y z] max-fall]
-  (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]] dy (cons 1 (map - (range max-fall -1 -1)))] [(+ x dx) (+ y dy) (+ z dz)]))
-
 (defn step-cells
-  "The cells that must be open to walk from feet cell m to the adjacent feet cell n (a fall included)."
-  [[_ my _ :as m] [nx ny nz :as n]]
+  "The cells that must be open to walk from feet cell m to the adjacent feet cell n (a fall included), or to jump-place
+  up to the cell over m (a pillar's block)."
+  [[mx my mz :as m] [nx ny nz :as n]]
   (cond
+    (and (== mx nx) (== mz nz)) [[mx (+ my 2) mz]]
     (> ny my) [[(m 0) (+ my 2) (m 2)] n [nx (inc ny) nz]]
     (< ny my) (mapv (fn [y] [nx y nz]) (range (inc my) (dec ny) -1))
     :else [n [nx (inc ny) nz]]))
@@ -54,7 +53,7 @@
   (let [t (aget h i)] (aset h i (aget h j)) (aset h j t)))
 
 (defn- heap-push!
-  "Push entry #js [price tick cell] onto binary heap h, cheapest (then earliest) on top."
+  "Push entry #js [price tick cell-key] onto binary heap h, cheapest (then earliest) on top."
   [^js h e]
   (.push h e)
   (loop [i (dec (.-length h))]
@@ -71,85 +70,169 @@
         (let [l (inc (* 2 i)) r (inc l)
               m (if (and (< l n) (before? (aget h l) (aget h i))) l i)
               m (if (and (< r n) (before? (aget h r) (aget h m))) r m)]
-          (when (not= m i)
+          (when-not (== m i)
             (swap-at! h i m)
             (recur m)))))
     top))
 
+(def dirs #js [1 0 -1 0 0 1 0 -1])
+
 (defn search
   "route's search begun: a fn of n that runs it on for at most n more cells expanded, [answer expanded]: answer route's
-  once the search has ended (the same each run after), nil while it goes on; expanded the cells this run expanded."
-  [block-at from goal {:keys [dig-s step-s] :or {dig-s (constantly 1) step-s 0} :as opts}]
+  once the search has ended (the same each run after), nil while it goes on; expanded the cells this run expanded.
+  Plain numbers throughout (a cell is a key, its reads are cached by key): a climb expands about 10k cells."
+  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s max-places unseen? unseen-step-s ways max-dig-s margin] :or {dig-s (constantly 1) step-s 0 ways #{}} :as opts}]
   (let [[fx _ fz] from
+        [gx gy gz] goal
         ;; one number a cell, for js Maps and Sets (a vector key is compared by identity there)
-        key (fn [[x y z]] (+ (* (+ (- x fx) 1048576) 2147483648) (* (+ (- z fz) 1048576) 1024) y 512))
+        key (fn [x y z] (+ (* (+ (- x fx) 1048576) 2147483648) (* (+ (- z fz) 1048576) 1024) y 512))
+        cell-of (fn [k] (let [y (- (mod k 1024) 512)
+                              r (/ (- k y 512) 1024)
+                              z (+ (- (mod r 2097152) 1048576) fz)
+                              x (+ (- (js/Math.floor (/ r 2097152)) 1048576) fx)]
+                          [x y z]))
+        ;; what a name is to the search, once a name (open? and floor-ok? each run regexes), and so once a cell
+        kinds (js/Map.)
+        kind-of (fn [n] (or (.get kinds n)
+                            (let [k #js {:name n :cost (cell-cost n) :open (open? n) :floor (floor-ok? n)
+                                         :fluid (boolean (bs/fluids n)) :falling (boolean (falling n))}]
+                              (.set kinds n k) k)))
         read (js/Map.)
-        block-at (fn [c] (let [i (key c)] (if (.has read i) (.get read i) (let [n (block-at c)] (.set read i n) n))))
+        at (fn [x y z] (let [i (key x y z)] (or (.get read i) (let [k (kind-of (block-at [x y z]))] (.set read i k) k))))
         priced (js/Map.)
-        dig-s (fn [n c] (let [i (key c)] (if (.has priced i) (.get priced i) (let [s (dig-s n c)] (.set priced i s) s))))
-        by-name (fn [f] (let [m (js/Map.)] (fn [n] (if (.has m n) (.get m n) (let [v (f n)] (.set m n v) v)))))
-        ;; per name, not per cell: open? and floor-ok? each run regexes
-        cell-cost (by-name cell-cost)
-        floor-ok? (by-name floor-ok?)
-        max-digs (get opts :max-digs (settings/get settings ::max-digs))
-        margin (get opts :margin (settings/get settings ::margin))
+        dig-at (fn [n x y z] (let [i (key x y z)] (if (.has priced i) (.get priced i) (let [s (dig-s n [x y z])] (.set priced i s) s))))
+        unseen-cell? (let [m (js/Map.)] (fn [x y z] (let [i (key x y z) u (.get m i)] (if (some? u) u (let [u (boolean (unseen? [x y z]))] (.set m i u) u)))))
+        ;; a step whose feet, head or floor is unseen, as cost/unseen-route-s prices one
+        unseen-at (fn [x y z] (if (and unseen? (or (unseen-cell? x y z) (unseen-cell? x (inc y) z) (unseen-cell? x (dec y) z))) unseen-step-s 0))
+        way-keys (let [s (js/Set.)] (doseq [[x y z] ways] (.add s (key x y z))) s)
+        max-digs (:max-digs opts)
         max-fall (get opts :max-fall (settings/get settings ::max-fall))
-        lo (mapv #(- (min %1 %2) margin) from goal)
-        hi (mapv #(+ (max %1 %2) margin) from goal)
-        heuristic (fn [[x _ z]] (* step-s (+ (js/Math.abs (- x (goal 0))) (js/Math.abs (- z (goal 2))))))
-        inside? (fn [[x y z]] (and (<= (lo 0) x (hi 0)) (<= (lo 1) y (hi 1)) (<= (lo 2) z (hi 2))))
-        step (fn [m n]
-               (when (floor-ok? (block-at [(n 0) (dec (n 1)) (n 2)]))
-                 (reduce (fn [[s k] cell]
-                           (let [name (block-at cell)
-                                 d (when-not (and (pos? (or (cell-cost name) 1)) (falling (block-at (update cell 1 inc)))) (cell-cost name))
-                                 price (when d (if (pos? d) (dig-s name cell) 0))]
-                             (if price [(+ s price) (+ k d)] (reduced nil))))
-                         [step-s 0] (step-cells m n))))
-        dist (js/Map.) digs (js/Map.) prev (js/Map.) done (js/Set.) queue #js []
+        [lx ly lz] (when margin (mapv #(- (min %1 %2) margin) from goal))
+        [hx hy hz] (when margin (mapv #(+ (max %1 %2) margin) from goal))
+        inside? (fn [x y z] (or (nil? margin) (and (<= lx x hx) (<= ly y hy) (<= lz z hz))))
+        heuristic (fn [x y z] (* step-s (max (+ (js/Math.abs (- x gx)) (js/Math.abs (- z gz))) (- gy y))))
+        solid-at? (fn [x y z] (let [^js k (at x y z)] (and (some? (.-name k)) (not (.-open k)))))
+        ;; a block is placed only against a face (a solid neighbour), never on a step of the body's own stair (it would shut it)
+        placeable? (fn [x y z] (and (not (.has way-keys (key x (dec y) z)))
+                                    (or (solid-at? x (dec y) z) (solid-at? (inc x) y z) (solid-at? (dec x) y z)
+                                        (solid-at? x y (inc z)) (solid-at? x y (dec z)))))
+        ;; the cost of opening cell x y z for a step, accumulated in acc #js [seconds digs dig-seconds]; false when it may not be
+        open-cell! (fn [^js acc x y z]
+                     (let [^js k (at x y z)
+                           d (.-cost k)]
+                       (cond
+                         (nil? d) false
+                         (zero? d) true
+                         (.-falling ^js (at x (inc y) z)) false
+                         (.has way-keys (key x y z)) false
+                         :else (let [s (dig-at (.-name k) x y z)]
+                                 (if (nil? s)
+                                   false
+                                   (do (aset acc 0 (+ (aget acc 0) s)) (aset acc 1 (+ (aget acc 1) d)) (aset acc 2 (+ (aget acc 2) s)) true))))))
+        ;; key -> #js [seconds digs dig-seconds prev-key move blocks-placed] of the cheapest way found to the cell
+        best (js/Map.) done (js/Set.) queue #js []
         tick (volatile! 1)
-        answer (volatile! nil)]
-    (.set dist (key from) 0) (.set digs (key from) 0)
-    (heap-push! queue #js [(heuristic from) 0 from])
+        answer (volatile! nil)
+        relax! (fn [ck ^js from-node ^js acc nx ny nz move]
+                 (let [nk (key nx ny nz)
+                       k (+ (aget from-node 1) (aget acc 1)) ds (+ (aget from-node 2) (aget acc 2))
+                       placed (cond-> (aget from-node 5) (not (keyword-identical? :walk move)) inc)]
+                   (when (and (or (nil? max-digs) (<= k max-digs)) (or (nil? max-dig-s) (<= ds max-dig-s))
+                              (or (nil? max-places) (<= placed max-places)))
+                     (let [nd (+ (aget from-node 0) (aget acc 0) (unseen-at nx ny nz))
+                           ^js old (.get best nk)]
+                       (when (or (nil? old) (< nd (aget old 0)))
+                         (.set best nk #js [nd k ds ck move placed])
+                         (heap-push! queue #js [(+ nd (heuristic nx ny nz)) @tick nk])
+                         (vswap! tick inc))))))
+        ;; whether one of the last steps to the cell of key k opened cell x y z: a floor the route itself digs away is
+        ;; none (a stair that turns back over its own cut)
+        dug-behind? (fn [k x y z]
+                      (loop [k k i 0]
+                        (let [pk (aget (.get best k) 3)]
+                          (if (or (nil? pk) (>= i 4))
+                            false
+                            (let [[px py pz] (cell-of pk) [mx my mz] (cell-of k)]
+                              (if (or (and (== x px) (== z pz) (== y (+ py 2)) (> my py))
+                                      (and (== x mx) (== z mz) (<= my y (if (< my py) (inc py) (inc my)))))
+                                true
+                                (recur pk (inc i))))))))
+        expand! (fn [ck]
+                  (let [[mx my mz] (cell-of ck)
+                        node (.get best ck)
+                        ;; a step to n opening the cell over m's head when head?, and n's column from top down to bot
+                        try! (fn [nx ny nz move s0 head? top bot]
+                               (when (and (inside? nx ny nz) (not (.has done (key nx ny nz))))
+                                 (let [acc #js [s0 0 0]]
+                                   (when (and (or (not head?) (open-cell! acc mx (+ my 2) mz))
+                                              (loop [y top] (or (< y bot) (and (open-cell! acc nx y nz) (recur (dec y))))))
+                                     ;; a step up that cuts or lays its floor is a stair's step: no less than :stair-s
+                                     (when (and stair-s (> ny my) (not= :pillar move) (or (= :laid move) (pos? (aget acc 1))))
+                                       (aset acc 0 (max (aget acc 0) (+ stair-s (- s0 step-s)))))
+                                     (relax! ck node acc nx ny nz move)))))]
+                    (when (and pillar-s (placeable? mx my mz))
+                      (try! mx (inc my) mz :pillar pillar-s true 0 1))
+                    (loop [i 0]
+                      (when (< i 8)
+                        (let [nx (+ mx (aget dirs i)) nz (+ mz (aget dirs (inc i)))
+                              ny (inc my) ^js f (at nx my nz)
+                              dug? (and (.-floor f) (dug-behind? ck nx my nz))]
+                          ;; up: the head cell over m, n and its head
+                          (cond
+                            (and (.-floor f) (not dug?)) (try! nx ny nz :walk step-s true (inc ny) ny)
+                            (and place-s (or dug? (and (.-open f) (not (.-fluid f)))) (placeable? nx my nz))
+                            (try! nx ny nz :laid (+ step-s place-s) true (inc ny) ny))
+                          ;; down by up to max-fall, through the cells it falls by, and level: n and its head
+                          (loop [dy max-fall]
+                            (when (>= dy 0)
+                              (let [ny (- my dy)]
+                                (when (and (.-floor ^js (at nx (dec ny) nz)) (not (dug-behind? ck nx (dec ny) nz)))
+                                  (try! nx ny nz :walk step-s false (if (zero? dy) (inc ny) (inc my)) ny)))
+                              (recur (dec dy))))
+                          (recur (+ i 2)))))))
+        start-key (key fx (from 1) fz)]
+    (.set best start-key #js [0 0 0 nil nil 0])
+    (heap-push! queue #js [(heuristic fx (from 1) fz) 0 start-key])
     (fn [n]
       (let [start (.-size done)
             limit (+ start n)
+            goal-key (key gx gy gz)
             a (or @answer
                   (loop []
                     (let [top (heap-pop! queue)
-                          cur (some-> top (aget 2))
-                          ck (some-> cur key)]
+                          ck (some-> top (aget 2))]
                       (cond
                         (nil? top) {:problem :no-route}
                         (.has done ck) (recur)
-                        (= cur goal)
-                        (let [path (reverse (take-while some? (iterate #(.get prev (key %)) goal)))]
-                          {:dig (vec (distinct (for [[m n] (map vector path (rest path))
-                                                     c (sort-by #(- (% 1)) (step-cells m n))
-                                                     :when (pos? (cell-cost (block-at c)))]
-                                                 c)))})
+                        (== ck goal-key)
+                        (let [path (mapv cell-of (reverse (take-while some? (iterate #(aget (.get best %) 3) ck))))
+                              steps (mapv (fn [m n]
+                                            (let [move (aget (.get best (apply key n)) 4)]
+                                              (cond-> {:to n :move move
+                                                       :dig (vec (filter #(pos? (.-cost ^js (apply at %))) (sort-by #(- (% 1)) (step-cells m n))))}
+                                                (= :laid move) (assoc :place (update n 1 dec))
+                                                (= :pillar move) (assoc :place m))))
+                                          path (rest path))]
+                          {:dig (vec (distinct (mapcat :dig steps))) :steps steps})
                         ;; the popped cell goes back: the next run expands it first
                         (>= (.-size done) limit) (do (heap-push! queue top) nil)
-                        :else
-                        (let [d (.get dist ck) k0 (.get digs ck)]
-                          (.add done ck)
-                          (doseq [n (neighbours cur max-fall)]
-                            (let [nk (key n)
-                                  [s k] (when (and (inside? n) (not (.has done nk))) (step cur n))
-                                  nd (when (and s (<= (+ k0 k) max-digs)) (+ d s))]
-                              (when (and nd (< nd (if (.has dist nk) (.get dist nk) js/Infinity)))
-                                (.set dist nk nd) (.set digs nk (+ k0 k)) (.set prev nk cur)
-                                (heap-push! queue #js [(+ nd (heuristic n)) @tick n])
-                                (vswap! tick inc))))
-                          (recur))))))]
+                        :else (do (.add done ck) (expand! ck) (recur))))))]
         (vreset! answer a)
         [a (- (.-size done) start)]))))
 
 (defn route
   "The cells to dig (head cell first within a step, in walking order) of the cheapest route from feet cell from to feet
-  cell goal, at most :max-digs of them, within :margin cells of both ends, falls of at most :max-fall; each step's floor must be a seen solid block.
-  A* with the walked steps' price as the lower bound. Priced :step-s a step and (:dig-s name cell) a cell dug (default 0 and 1: the fewest digs); a block :dig-s prices nil is
-  not dug; nor is a cell under sand or gravel (it would fall on the body walking in). {:dig [cell ..]}, {:problem :no-route},
+  cell goal, falls of at most :max-fall; each step's floor must be a seen solid block, unless the step is up and
+  :place-s prices laying one (against a face, the stair job's floor). A* with the walked steps' price as the lower bound.
+  Priced :step-s a step, (:dig-s name cell) a cell dug (default 0 and 1: the fewest digs), a step up that digs or
+  lays its floor at least :stair-s (a stair's step) and :place-s a floor laid,
+  :pillar-s a jump-placed block (a step straight up; none without it) and :unseen-step-s a step whose feet, head or
+  floor is (:unseen? cell); a
+  block :dig-s prices nil is not dug, nor a cell under sand or gravel (it would fall on the body walking in), nor a
+  floor of :ways (the floors of the body's own stairs), on which nothing is placed either. Bounds, each only when
+  given: :max-dig-s seconds of digging, :max-digs cells, :max-places blocks laid or jump-placed (the blocks carried),
+  :margin cells round the two ends.
+  {:dig [cell ..] :steps [{:to feet :move :walk|:laid|:pillar :dig [cell ..] :place cell} ..]}, {:problem :no-route},
   or {:problem :budget} when :max-nodes cells were expanded first (search goes on past it)."
   [block-at from goal opts]
   (or (first ((search block-at from goal opts) (get opts :max-nodes (settings/get settings ::max-nodes)))) {:problem :budget}))

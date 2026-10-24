@@ -6,6 +6,7 @@
             [engine.settings :as settings]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.ways :as cw]
+            [jobs.lib.access :as access]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.dig-route :as dig-route]
             [jobs.lib.escape :as escape]
@@ -318,54 +319,89 @@
   [id]
   (swap! kept-routes dissoc id))
 
-(defn route-cells
-  "[{:cell :block :guess}]: the cheapest cells to dig for a walk from feet cell from down or across into goal
-  (jobs.lib.dig-route priced by jobs.lib.cost: a block's walk and dig-cost; at most the dig-route settings' digs and fall),
-  in walking order, every one escape/diggable?, :guess on a cell not seen (read as rock); [] when nothing is left to
-  dig, nil when no such route or when its digging takes the body longer than max-route-s (blocks of the body's own, a scaffold it left, not counted), with what it carries, or with
-  a wooden pickaxe when fetch? (the dig fetches one, fetch-tool?), else bare-handed (a player does not punch a tunnel through rock). A floor never seen under a cell seen open may be a void: dig-route reads it as no floor,
-  unless floors-unseen-ok? (a pocket's floor shows only from inside it). With route-opts :slice (route-slice) a search
-  that spends it goes on at the next call, :searching till then; without, it ends at the node budget as no route."
-  ([p from goal may-dig? own?] (route-cells p from goal may-dig? own? false false))
-  ([p from goal may-dig? own? floors-unseen-ok?] (route-cells p from goal may-dig? own? floors-unseen-ok? false))
-  ([p from goal may-dig? own? floors-unseen-ok? fetch?] (route-cells p from goal may-dig? own? floors-unseen-ok? fetch? nil))
-  ([p from goal may-dig? own? floors-unseen-ok? fetch? {:keys [slice] :as route-opts}]
+(defn route-answer
+  "The dig-route answer {:dig :steps} of the cheapest way from feet cell from into goal (jobs.lib.dig-route priced by
+  jobs.lib.cost: a step's walk-cost, a block's dig-cost, a stair's step at least its stair-cost, a step's unseen cells at the unseen walk's price
+  (wworld/unseen-share), never a floor of the body's own stairs (route-opts :ways)), every cell to dig escape/diggable?
+  and may-dig?; :searching while route-opts :slice's search goes on; nil when there is none, or when its digging takes the
+  body longer than max-route-s (blocks of the body's own, a scaffold it left, not counted) with what it carries, or with
+  a wooden pickaxe when fetch? (the dig fetches one, fetch-tool?), else bare-handed (a player does not punch a tunnel
+  through rock). A floor never seen under a cell seen open may be a void: dig-route reads it as no floor, unless
+  floors-unseen-ok? (a pocket's floor shows only from inside it). Other route-opts go to the search (:place-s,
+  :pillar-s, :margin). With :slice (route-slice) a search that spends it goes on at the next call; without, it ends
+  at the node budget as no route."
+  [p from goal may-dig? own? floors-unseen-ok? fetch? {:keys [slice] :as route-opts}]
   (let [route-opts (dissoc route-opts :slice)
-        block-at (memoize (escape/block-at-of p))
-        unknown? (memoize #(dig-look/unknown? p %))
-        seen-floor (fn [[x y z :as cell]]
-                     (when-not (and (not floors-unseen-ok?) (unknown? cell) (dig-route/open? (block-at [x (inc y) z]))
-                                    (not (unknown? [x (inc y) z])))
-                       (block-at cell)))
+        [fx _ fz] from
+        ;; each cell is read for its floor, its name to dig and whether it is unseen: sensed once
+        known (js/Map.)
+        sensed (fn [x y z] (let [k (+ (* (+ (- x fx) 1048576) 2147483648) (* (+ (- z fz) 1048576) 1024) y 512)]
+                             (if (.has known k) (.get known k) (let [b (u/sensed p {:x x :y y :z z})] (.set known k b) b))))
+        block-at (fn [[x y z]] (when-let [b (sensed x y z)] (if (true? (.-unknown b)) access/hidden-guess (.-name b))))
+        seen-floor (fn [[x y z]]
+                     (when-let [b (sensed x y z)]
+                       (if-not (true? (.-unknown b))
+                         (.-name b)
+                         (let [a (when-not floors-unseen-ok? (sensed x (inc y) z))]
+                           (when-not (and a (not (true? (.-unknown a))) (dig-route/open? (.-name a)))
+                             access/hidden-guess)))))
         ;; dig-cost merges the whole cost basis a call, and a search asks it of every cell
         dig-cost (memoize cost/dig-cost)
         opts (fn [refused] (merge {:dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) own? cell)) (dig-cost name)))
-                                   :step-s (:cost (cost/walk-cost {:distance 1}))}
+                                   :step-s (:cost (cost/walk-cost {:distance 1}))
+                                   :stair-s (cw/stair-cost 1)
+                                   :unseen? (fn [[x y z]] (true? (some-> (sensed x y z) .-unknown)))
+                                   :unseen-step-s (cost/unseen-route-s (wworld/unseen-share p) (constantly :ground) [{:x 0 :y 0 :z 0}])
+                                   :max-dig-s (max-route-s)}
                                   route-opts))
         ;; the search itself reads no may-dig?: escalate!'s choices with other zone rules share it
         search (fn [refused]
-                 (let [a (if slice
-                           (sliced-answer slice [from goal floors-unseen-ok? route-opts refused] #(dig-route/search seen-floor from goal (opts refused)))
-                           (dig-route/route seen-floor from goal (opts refused)))]
-                   (if (= :searching a) a (:dig a))))
+                 (if slice
+                   (sliced-answer slice [from goal floors-unseen-ok? route-opts refused] #(dig-route/search seen-floor from goal (opts refused)))
+                   (dig-route/route seen-floor from goal (opts refused))))
         ;; may-dig? (zones, claims, plans) is asked of a found route's cells only, not of every cell the search weighs: it was
         ;; about half a search's time; a refused cell is searched round, at most route-searches times
-        cells (loop [refused #{} n 1]
-                (let [cells (search refused)
-                      bad (when-not (= :searching cells) (remove #(escape/diggable? block-at may-dig? own? %) cells))]
-                  (cond (empty? bad) cells
-                        (< n route-searches) (recur (into refused bad) (inc n)))))]
-    (cond
-      (= :searching cells) cells
-      (and cells (<= (route-s p cells own? fetch?) (max-route-s)))
-      (mapv (fn [cell] {:cell cell :block (block-at cell) :guess (dig-look/unknown? p cell)}) cells)))))
+        a (loop [refused #{} n 1]
+            (let [a (search refused)
+                  bad (when (map? a) (remove #(escape/diggable? block-at may-dig? own? %) (:dig a)))]
+              (cond (= :searching a) a
+                    (nil? (:dig a)) nil
+                    (empty? bad) a
+                    (< n route-searches) (recur (into refused bad) (inc n)))))]
+    (when (or (= :searching a) (and a (<= (route-s p (:dig a) own? fetch?) (max-route-s))))
+      a)))
+
+(defn route-cells
+  "[{:cell :block :guess}]: the cells to dig of route-answer's way, in walking order, :guess on a cell not seen (read as
+  rock); [] when nothing is left to dig; :searching or nil as route-answer."
+  ([p from goal may-dig? own?] (route-cells p from goal may-dig? own? false false))
+  ([p from goal may-dig? own? floors-unseen-ok?] (route-cells p from goal may-dig? own? floors-unseen-ok? false))
+  ([p from goal may-dig? own? floors-unseen-ok? fetch?] (route-cells p from goal may-dig? own? floors-unseen-ok? fetch? nil))
+  ([p from goal may-dig? own? floors-unseen-ok? fetch? route-opts]
+   (let [a (route-answer p from goal may-dig? own? floors-unseen-ok? fetch? route-opts)
+         block-at (escape/block-at-of p)]
+     (cond
+       (= :searching a) a
+       a (mapv (fn [cell] {:cell cell :block (block-at cell) :guess (dig-look/unknown? p cell)}) (:dig a))))))
+
+(def dig-margin
+  "Blocks round its two ends a dig route (dig-way, frontier-way) may stray: it is dug before it is walked, and cells
+  farther off than what the body sees round its ends are guesses; past them frontier-way walks to the edge to look. A
+  climb (climb-route) has none: each of its ways looks as it goes and the climb is searched again when one stops."
+  3)
+
+(defn search-opts
+  "route-answer's route-opts for a choice's opts: its :slice, dig-margin, and the floors under its :stands (the body's
+  own stairs) as :ways."
+  [{:keys [stands slice]}]
+  (cond-> {:ways (into #{} (map (fn [[x y z]] [x (dec y) z])) stands) :margin dig-margin} slice (assoc :slice slice)))
 
 (defn dig-way
   "{:step :dig-route :cells (route-cells)} when there are cells to dig, {:step :searching} while opts :slice's search
   goes on (route-cells), else nil."
-  [p from goal may-dig? {:keys [own? skip fetch? slice]}]
+  [p from goal may-dig? {:keys [own? skip fetch? slice] :as opts}]
   (when-not (skip :dig-route)
-    (let [cells (route-cells p from goal may-dig? own? false fetch? (when slice {:slice slice}))]
+    (let [cells (route-cells p from goal may-dig? own? false fetch? (search-opts opts))]
       (cond (= :searching cells) {:step :searching}
             (seq cells) {:step :dig-route :cells (vec cells)}))))
 
@@ -394,13 +430,13 @@
   :dig-route :cells :leg-s} to the farthest of leg-ends that route-cells reaches, :leg-s its dig seconds; nil when none
   does; {:step :searching} while opts :slice's search goes on; {:step :none :why :dig-budget} when the call's legs so far
   (memory :leg-dig-s) and this one would dig longer than the caller's :worth, else the call's job time left."
-  [c from goal may-dig? {:keys [own? skip fetch? slice]}]
+  [c from goal may-dig? {:keys [own? skip fetch? slice] :as opts}]
   (when-not (skip :dig-route)
     (let [p (:primitives c)
           budget (or (:worth (:args c)) (get-in (ctx/left c) [:spend :job-time] ##Inf))
           found (loop [ends (leg-ends from goal)]
                   (when-let [end (first ends)]
-                    (let [cells (route-cells p from end may-dig? own? false fetch? (cond-> {:margin leg-margin} slice (assoc :slice slice)))]
+                    (let [cells (route-cells p from end may-dig? own? false fetch? (assoc (search-opts opts) :margin leg-margin))]
                       (cond (= :searching cells) :searching
                             (seq cells) [(vec cells) (route-s p (map :cell cells) own? fetch?)]
                             :else (recur (rest ends))))))]
@@ -430,20 +466,13 @@
      (some-> slice (charge! (.-length cells) flood-cells-per-node))
      (vec (.find cells #(and (<= (to-goal %) near) (<= (across %) flat)))))))
 
-(defn frontier-drop
-  "How far below the edge of the land the stands beyond it (frontier-way) are looked for: the most cells a dig route
-  digs and then falls (jobs.lib.dig-route settings); its time is bounded by max-route-s."
-  []
-  (+ (settings/get dig-route/settings :jobs.lib.dig-route/max-digs)
-     (settings/get dig-route/settings :jobs.lib.dig-route/max-fall)))
-
 (defn frontier-way
   "A shut-in body's way off its land (a plateau top) toward a goal too far for one dig route: {:step :dig-route :cells}
-  to the seen stand a step beyond the land's edge, at most (frontier-drop) below it, nearest goal (and more than a block
+  to the first seen stand below a step beyond the land's edge, nearest goal (and more than a block
   nearer than feet), the next when no route reaches it (route-cells, opts as dig-way's); {:step :searching} while that
   search goes on; else, while the land beyond is not seen, {:step :approach :pos cell} to the edge cell nearest goal (not
   one approached, more than a block nearer than feet) to look over it; nil when none."
-  [p feet goal may-dig? {:keys [own? skip fetch? slice approached]}]
+  [p feet goal may-dig? {:keys [own? skip fetch? slice approached] :as opts}]
   (when-not (skip :dig-route)
     (let [kind-at (reach/seen-lookup p reach-room/body-kind-of)
           ^js cells (:cells (reach-room/flood-visit #(reach/forward kind-at %1 %2 %3) (reach/standing-vec p) reach-room/room-cells))
@@ -455,12 +484,12 @@
           off (fn [[x y z]] (for [[dx dz] escape/cardinals
                                   :when (not-any? #(land [(+ x dx) % (+ z dz)]) [(dec y) y (inc y)])]
                               [(+ x dx) y (+ z dz)]))
-          below (fn [[x y z]] (some #(let [c [x % z]] (when (stand? c) c)) (range (inc y) (- y (frontier-drop)) -1)))
+          below (fn [[x y z]] (some #(let [c [x % z]] (when (stand? c) c)) (range (inc y) (dec places/min-y) -1)))
           stands (->> land (mapcat off) (keep below) (remove land) distinct (filter nearer?) (sort-by to-goal))
           edge (delay (->> land (filter #(seq (off %))) (remove #(contains? approached %)) (filter nearer?) (sort-by to-goal) first))]
       (or (->> stands
                (take route-searches)
-               (some #(let [cells (route-cells p feet % may-dig? own? false fetch? (when slice {:slice slice}))]
+               (some #(let [cells (route-cells p feet % may-dig? own? false fetch? (search-opts opts))]
                         (cond (= :searching cells) {:step :searching}
                               (seq cells) {:step :dig-route :cells (vec cells)}))))
           (some->> @edge (hash-map :step :approach :pos))))))

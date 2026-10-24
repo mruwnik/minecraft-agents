@@ -8,7 +8,7 @@
   - :dig-out: a body sealed in its own shelter (a :shelter entry) when the walk finds no way, leaves it first at any hour (dig-in-leave/leave!, a go-to.escalated {:step :leave-shelter}); the start check priced the way out. Not at a dark sky while the body is :dug-in (sh-inside/night-sheltered): it waits for light, as the readiness checks do.
   - With an escalating way: a body not in its own shelter whose search ran out of land (:exhausted, in any size of cave or mine), or that is shut in (jobs.lib.reach.room/enclosed?) and whose
     search ran out of land (:goal-enclosed or :goal-cut-off) or of nodes (:budget) within the budget-near setting of the goal, any body whose only way needs a sprint it lacks the food for (:abilities :corner-jump or :gap-sprint), or any body whose last 3 walks failed at the walker (stuck, off-plan, steer failed, no nearer; escalation/walker-fault?) with no door it can open beside its room (one with room for the body behind it; a trunk over that cell makes it no way out, and the dig route cuts the tree's logs: escape/tree-log?), makes a way instead of giving up, one child job
-    each (jobs.lib.escape/choose, over the ways the call allows), at most 3 in a row that start no nearer the goal than one before (escalation/count-escalation; a dig route is taken past them): standing on a stair of its own under the goal, that stair cut again when something shuts it (escalation/own-stair: a cap it put in the stair is dug, :why :own-way-blocked); else jobs.access.pillar up out of a pit when it carries enough blocks; else
+    each (jobs.lib.escape/choose, over the ways the call allows), at most 3 in a row that start no nearer the goal than one before (escalation/count-escalation; a dig route is taken past them): standing on a stair of its own under the goal, that stair cut again when something shuts it (escalation/own-stair: a cap it put in the stair is dug, :why :own-way-blocked); else, shut in under a higher goal, the cheapest climb there (climb-route: one dig route of digs, laid stair floors and pillar blocks, never through a floor of its own stairs), its stairs, pillars and dig routes run back to back with no walk between; else jobs.access.pillar up out of a pit when it carries enough blocks; else
     jobs.access.clear-path through a wall up to 3 thick toward the goal (into a walled-in goal no door or stair reaches:
     the fewest cells dug down or across to it, escalation/dig-way, tried first for a shut-in body, none that takes over max-route-s seconds to dig with the pickaxe it carries or would fetch; for a shut-in body with no stair, pillar or door out, a dig down to the seen stand beyond its land's edge nearest the goal, else a walk to that edge to look over it (escalate-choose/frontier-way); a gap jump the walker refuses with no block to fill it counts as a walled-in goal (escalate-choose/gap-walled?): a step up over a one-cell gap cuts the riser beyond it (gap-dig), else the body digs toward the goal; a leg of it (escalate-choose/dig-leg) is tried first when the search of a body under ground ran out of land over rock it guessed (jobs.lib.walk.world/rock-guess?) and the goal is no higher than it is across); else jobs.access.stair up out of a pit or
     toward a higher goal (as far as the goal is above, at most 8; a stair that leaves the body shut in under the goal is
@@ -36,9 +36,11 @@
             [jobs.lib.access :as access]
             [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.movement.go-to.climb :as climb]
+            [jobs.movement.go-to.climb-route :as climb-route]
+            [jobs.movement.go-to.route-ways :as route-ways]
             [jobs.movement.go-to.escalate-choose :refer [cheaper-fill climb-on? dive-climb-on? dive? escalate-reason? escalate? fetch-tool? gap-fill
                                                          goal-way dig-leg dig-way drop-fill frontier-way gap-dig gap-walled? goal-lava? leg-ends goal-walled? own-stair route-cells shelter-exit? skips sprint-only?
-                                                         route-owner route-slice routes-searching! searching? keep-routes! forget-routes!]]
+                                                         route-owner route-slice routes-searching! searching? keep-routes! forget-routes! search-opts]]
             [jobs.movement.go-to.holes :refer [forget-dug-own! hole-tag may-dig-fn note-holes! own-holes own-placed-fn planned-cells]]
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.torch :as torch]
@@ -55,7 +57,10 @@
   stays open."
   [{:keys [step] :as e} tag ignore-zones? by-hand? fetch?]
   (case step
-    :pillar ['jobs.access.pillar (cond-> {:height (:height e) :ways #{:carried} :ignore-zones? ignore-zones? :checks {:safe? '(always) :fit? '(always)}} (:item e) (assoc :use {:blocks [(:item e)]}))]
+    :pillar ['jobs.access.pillar (cond-> {:height (:height e) :ways #{:carried} :ignore-zones? ignore-zones? :checks {:safe? '(always) :fit? '(always)}}
+                                   (:item e) (assoc :use {:blocks [(:item e)]})
+                                   ;; a climb's pillar digs the roof its route priced
+                                   (:roof e) (assoc :settings {:jobs.access.pillar/max-ceiling-digs (:roof e)}))]
     :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :checks {:fit? '(always)} :accept #{:falling-block} :ways (ways-for fetch?) :settings {:jobs.lib.trip/spent-uses 0} :ignore-zones? ignore-zones? :need-drop (not by-hand?) :leave-drops true}]
     :clear-path ['jobs.access.clear-path {:checks {:fit? '(always)} :heading (:heading e) :ignore-zones? ignore-zones? :need-drop (not by-hand?) :ways #{:carried :craft}}]
     :approach ['jobs.movement.go-to {:checks {:fit? '(always)} :pos (zipmap [:x :y :z] (:pos e)) :range 0 :ways #{:walk :clear-seal}}]
@@ -194,6 +199,7 @@
                                  #(or @leg (escape/choose (:primitives c) feet goal % opts)))
                      (and (not= :never (some-> (:doors (:args c)) keyword)) (escape/blocked-door-beside? (:primitives c) feet))
                      #(or (dig-way (:primitives c) feet goal % opts) (escape/choose (:primitives c) feet goal % opts))
+                     @shut? #(or (climb-route/climb-way (:primitives c) feet goal % opts) (escape/choose (:primitives c) feet goal % opts))
                      :else #(escape/choose (:primitives c) feet goal % opts))
         ;; a step up over a gap with nothing to fill it: cutting the riser on the far side makes the jump level
         choose (if gap? #(or (gap-dig c result % opts) (choose-by %)) choose-by)
@@ -300,15 +306,20 @@
       (end/give-up! c pos result (when (and shut-reason? (escape/walk-enclosed? c)) {:shut-in true})))))
 
 (defn escalated!
-  "The child made a way (or part of one, done false): walk again from a fresh count, or escalate again at once after an
+  "The child made a way (or part of one, done false): start a climb's next way at once when it made all of it
+  (route-ways/next-way), walk on after its last, else walk again from a fresh count, or escalate again at once after an
   approach, after a whole stair that left the body shut in under the goal (climb-on?), or after any stair that left it
   under ground on its climb away from a dive (dive-climb-on?). Its holes are put back once a walk round gets on past
   it (restore-next!). An approach to a cell more than a block nearer the goal than it set out from does not count toward
   max-escalations (its look may show a wall to dig or not); one no nearer does, so a chain of them ends; nor is a cell
   walked to twice (memory :approached)."
   [c pos {:keys [step]} done?]
-  (let [again? (or (= :approach step) (and (= :stair step) (or (and done? (climb-on? c pos)) (dive-climb-on? c pos))))
-        target (some-> (:escalation (ctx/mem c)) :pos vec)
+  (let [feet (end/feet-cell c)
+        e (:escalation (ctx/mem c))
+        nxt (when done? (route-ways/next-way e feet))
+        ;; a climb's last way ends where its walk to the goal begins
+        again? (and (not nxt) (not (and done? (contains? e :then))) (or (= :approach step) (and (= :stair step) (or (and done? (climb-on? c pos)) (dive-climb-on? c pos)))))
+        target (some-> e :pos vec)
         to-goal #(u/dist (zipmap [:x :y :z] %) pos)
         nearer? (and (= :approach step) target (some-> (:escalation-from (ctx/mem c)) to-goal dec (> (to-goal target))))]
     (ctx/update-mem! c #(cond-> (-> % (dissoc :escalation :escalation-from :planned :holes-before :best)
@@ -316,7 +327,10 @@
                                             nearer? (update :fruitless (fn [n] (max 0 (dec (or n 0))))))
                                     (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
                           again? (assoc :escalate-now true)
-                          (not (#{:approach :fill-gap} step)) (assoc :restore-pending true))))
+                          nxt (assoc :escalation nxt :escalation-from feet :planned (planned-cells (:primitives c) nxt feet) :holes-before (count (own-holes c)))
+                          (not (#{:approach :fill-gap} step)) (assoc :restore-pending true)))
+    (when nxt
+      (ctx/emit! c :go-to.escalated :info {:step (:step nxt) :why :climb-on :at feet :text (str "climbing on: " (name (:step nxt)))})))
   :again)
 
 (defn partly-made?
@@ -461,16 +475,21 @@
 (defn ^:async replan-route!
   "Plan the :dig-route escalation again from the feet into goal pos with what the body sees now (route-cells): :again,
   the walk on (escalated!) when nothing is left to dig or the only thing missing is a pocket's floor (it shows once the
-  body walks in, and the walk keeps off a floor it then sees to be a void), or the escalation fails :no-route when no
-  route is left or it planned tuning/max-route-replans times. The walk on counts as a replan, so a walk that keeps
+  body walks in, and the walk keeps off a floor it then sees to be a void), the ways chosen again when no route is
+  left, or the escalation fails :no-route once it planned tuning/max-route-replans times. The walk on counts as a replan, so a walk that keeps
   failing ends :no-route. A search that spends its slice (route-slice) goes on next round: :continue. A loosened route's cells are dropped: the cells it still guesses stay unseen from here and
-  digging one that is open fails :cannot, and the walk meets any real rock and escalates again."
+  digging one that is open fails :cannot, and the walk meets any real rock and escalates again. A climb's dig route
+  (climb-route) walks again instead: the climb is searched again."
   [c pos cell]
+  (if (contains? (:escalation (ctx/mem c)) :then)
+    ;; a climb's dig over rock it guessed: the climb is searched again from here
+    (escalated! c pos (:escalation (ctx/mem c)) false)
   (let [m (ctx/mem c)
         n (inc (:route-replans m 0))
         slice (route-slice (route-owner c))
         plan (fn [floors-unseen-ok?]
-               (route-cells (:primitives c) (end/feet-cell c) (mapv #(js/Math.floor (% pos)) [:x :y :z]) (may-dig-fn c) (own-placed-fn c) floors-unseen-ok? (fetch-tool? c) {:slice slice}))
+               (route-cells (:primitives c) (end/feet-cell c) (mapv #(js/Math.floor (% pos)) [:x :y :z]) (may-dig-fn c) (own-placed-fn c) floors-unseen-ok? (fetch-tool? c)
+                            (search-opts {:stands (ledger/stair-stands c) :slice slice})))
         in-range? (<= n (tuning/max-route-replans))
         cells (when in-range? (plan false))
         loosened (when (and in-range? (nil? cells)) (plan true))
@@ -481,9 +500,11 @@
       (do (forget-routes! (route-owner c))
           (cond
             (some? loosened) (walk-on!)
+            ;; the guess the route rested on is gone: the ways are chosen again from what the body sees now
+            (and in-range? (nil? cells)) (do (ctx/update-mem! c assoc :route-replans n) (escalated! c pos (:escalation m) false))
             (nil? cells) (await (escalation-failed! c pos {:step :dig-route :reason :no-route :cell cell}))
             (empty? cells) (walk-on!)
-            :else (do (ctx/update-mem! c #(-> % (assoc-in [:escalation :cells] cells) (assoc :route-replans n))) :again))))))
+            :else (do (ctx/update-mem! c #(-> % (assoc-in [:escalation :cells] cells) (assoc :route-replans n))) :again)))))))
 
 (defn ^:async dig-route-round!
   "One round of digging a :dig-route escalation's cells in walking order (route-cell!); a cell already open is passed,

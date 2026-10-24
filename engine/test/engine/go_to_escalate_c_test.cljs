@@ -847,16 +847,13 @@
            (is (= {:step :searching} first-leg))
            (is (= :dig-route (:step legs)) (pr-str (:step legs))))))))
 
-(deftest frontier-way-charges-its-flood-to-the-slice-and-looks-as-deep-as-a-route-digs
+(deftest frontier-way-charges-its-flood-to-the-slice
   (let [p (tu/fake {:blocks (merge (box -3 63 -3 3 63 3 "stone") (box 5 40 -3 9 40 3 "stone"))})
         slice (choose/route-slice "frontier-flood")
         before @(:left slice)
         opts {:own? (constantly false) :skip (constantly false) :slice slice}]
     (choose/frontier-way p [0 64 0] [40 40 0] (constantly true) opts)
-    (is (< @(:left slice) before) "the flood of the land's cells came off the slice")
-    (is (= (+ (settings/get dig-route/settings :jobs.lib.dig-route/max-digs) (settings/get dig-route/settings :jobs.lib.dig-route/max-fall))
-           (choose/frontier-drop)))
-    (is (= 7 (settings/with-settings {::dig-route/max-digs 4} choose/frontier-drop)))))
+    (is (< @(:left slice) before) "the flood of the land's cells came off the slice")))
 
 (deftest a-dig-route-past-the-count-needs-an-end-more-than-a-block-nearer-than-any-way-before
   (are [end best dive? ok?] (= ok? (esc/dig-progress? {:cells [{:cell [0 60 0]} {:cell end}]} [10 60 0] best dive?))

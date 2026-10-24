@@ -251,7 +251,7 @@
           (is (= 2 (count (calls p "jumpPlace"))))
           (is (empty? (calls p "dig"))))))))
 
-(deftest go-to-roofed-pit-stairs-through-the-roof-rather-than-pillar
+(deftest go-to-roofed-pit-pillars-digging-its-roof
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -259,16 +259,16 @@
                                                                    :inventory [{:name "dirt" :count 5}]})
                                                 {:pos [10 64 0] :range 1}))]
           (is (= {:arrived true} @out))
-          (is (empty? (calls p "jumpPlace")) "the roof leaves no headroom to pillar")
-          (is (= [:stair] (mapv :step (events-of seen :go-to.escalated))))
-          (is (contains? (dug-cells p) [0 63 0]) "the stair's first cut is the roof"))))))
+          (is (= 2 (count (calls p "jumpPlace"))) "two blocks, cheaper than a 3-step stair (cost.ways)")
+          (is (= [:pillar] (mapv :step (events-of seen :go-to.escalated))))
+          (is (contains? (dug-cells p) [0 63 0]) "the pillar digs the roof over its head"))))))
 
 (deftest go-to-roofed-pit-with-no-way-to-dig-says-no-headroom
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [walls (merge (box 3 60 -3 14 63 3 "stone") (box -2 60 -2 2 63 2 "bricks"))
-              roofed (assoc (apply dissoc walls pit-cells) "0,63,0" "dirt")
+              roofed (assoc (apply dissoc walls pit-cells) "0,63,0" "bricks")
               {:keys [out p seen]} (await (run-job! (merge in-pit {:blocks roofed :inventory [{:name "dirt" :count 5}]})
                                                 {:pos [10 64 0] :range 1}))]
           (is (= false (:arrived @out)))

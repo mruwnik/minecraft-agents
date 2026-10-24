@@ -193,4 +193,7 @@
   doors ...) may be someone's build and is never dug."
   #"^(?:stone|deepslate|andesite|diorite|granite|tuff|calcite|dirt|coarse_dirt|rooted_dirt|grass_block|podzol|mycelium|mud|clay|sand|red_sand|gravel|sandstone|red_sandstone|terracotta|(?:white|orange|magenta|light_blue|yellow|lime|pink|gray|light_gray|cyan|purple|blue|brown|green|red|black)_terracotta|netherrack|soul_sand|soul_soil|basalt|smooth_basalt|blackstone|end_stone|dripstone_block|snow_block|snow|[a-z_]+_ore|[a-z_]+_leaves|mangrove_roots|ice|packed_ice|blue_ice|powder_snow|magma_block|pointed_dripstone|amethyst_block|budding_amethyst|suspicious_sand|suspicious_gravel|crimson_nylium|warped_nylium|nether_wart_block|warped_wart_block|ancient_debris|bone_block|sculk|sculk_vein|infested_[a-z_]+|(?:pale_)?moss_block|(?:pale_)?moss_carpet|(?:flowering_)?azalea|cave_vines(?:_plant)?|big_dripleaf(?:_stem)?|small_dripleaf|spore_blossom|cobweb|(?:brown_|red_)?mushroom(?:_block)?|mushroom_stem|seagrass|tall_seagrass|kelp(?:_plant)?|sweet_berry_bush|sugar_cane|bamboo|cactus|pumpkin|melon|poppy|dandelion|blue_orchid|allium|azure_bluet|oxeye_daisy|cornflower|lily_of_the_valley|[a-z_]+_tulip|sunflower|lilac|rose_bush|peony|lily_pad|[a-z_]+_coral(?:_fan|_block)?)$")
 
-(defn natural? [n] (boolean (and n (re-find natural-blocks n))))
+(def natural?
+  ;; once a name: a dig route's search asks it of every cell it weighs
+  (let [known (js/Map.)]
+    (fn [n] (let [v (.get known n)] (if (some? v) v (let [v (boolean (and n (re-find natural-blocks n)))] (.set known n v) v))))))

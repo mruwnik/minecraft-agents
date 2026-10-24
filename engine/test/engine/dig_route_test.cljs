@@ -9,30 +9,31 @@
   (fn [[x y z :as c]] (or (overrides c) (if (< y 10) "stone" "air"))))
 
 (deftest a-pit-beside-the-body-needs-no-dig-when-open
-  (is (= {:dig []} (dr/route (world {[1 9 0] "air" [1 8 0] "air"}) [0 10 0] [1 8 0] {}))))
+  (is (= [] (:dig (dr/route (world {[1 9 0] "air" [1 8 0] "air"}) [0 10 0] [1 8 0] {})))))
 
 (deftest a-sealed-pocket-is-dug-down-in-walking-order
-  (let [r (dr/route (world {[3 8 0] "air"}) [0 10 0] [3 8 0] {})]
+  (let [r (dr/route (world {[3 8 0] "air"}) [0 10 0] [3 8 0] {:margin 3})]
     (is (seq (:dig r)))
     (is (not (some #{[3 8 0]} (:dig r))) "the drop's own cell is open already")
     (is (<= (count (:dig r)) 12))))
 
 (deftest lava-on-the-way-is-not-dug-through
   (let [lava (into {} (for [x (range -5 10) z (range -5 5) y [8 9]] [[x y z] "lava"]))]
-    (is (= {:problem :no-route} (dr/route (world (assoc lava [3 8 0] "air")) [0 10 0] [3 8 0] {})))))
+    (is (= {:problem :no-route} (dr/route (world (assoc lava [3 8 0] "air")) [0 10 0] [3 8 0] {:margin 3})))))
 
 (deftest too-many-digs-is-no-route
   (let [deep (fn [c] (or ({[30 8 0] "air" [0 20 0] "air" [0 21 0] "air"} c) (if (< (c 1) 20) "stone" "air")))]
-    (is (= {:problem :no-route} (dr/route deep [0 20 0] [30 8 0] {:max-digs 5 :max-nodes 100000})))))
+    (is (= {:problem :no-route} (dr/route deep [0 20 0] [30 8 0] {:max-digs 5 :margin 3 :max-nodes 100000})))
+    (is (= {:problem :no-route} (dr/route deep [0 20 0] [30 8 0] {:max-dig-s 5 :margin 3 :max-nodes 100000})) "a bound in seconds of digging")))
 
 (deftest a-step-down-does-not-dig-above-the-head
   (let [low (fn [c] (or ({[1 9 0] "air" [1 8 0] "air"} c) (if (or (< (c 1) 10) (>= (c 1) 12)) "stone" "air")))]
-    (is (= {:dig []} (dr/route low [0 10 0] [1 8 0] {})))))
+    (is (= [] (:dig (dr/route low [0 10 0] [1 8 0] {}))))))
 
 (deftest the-fall-limit-is-an-option
   (let [w (world {[1 9 0] "air" [1 8 0] "air" [1 7 0] "air" [1 6 0] "air"})]
-    (is (= {:dig []} (dr/route w [0 10 0] [1 6 0] {:max-fall 4})))
-    (is (seq (:dig (dr/route w [0 10 0] [1 6 0] {:max-fall 1}))))))
+    (is (= [] (:dig (dr/route w [0 10 0] [1 6 0] {:max-fall 4}))))
+    (is (seq (:dig (dr/route w [0 10 0] [1 6 0] {:max-fall 1 :margin 3}))))))
 
 (deftest digs-are-priced-by-the-callers-seconds-per-block
   (let [hard (into {} (for [y (range 10 14) z (range -3 4)] [[1 y z] "obsidian"]))
@@ -44,11 +45,29 @@
     (is (not-any? (comp #{"obsidian"} w) (:dig (dr/route w [-1 10 0] [3 10 0] {:dig-s #(if (= "obsidian" %) 50 1) :step-s 0.2})))
         "priced, it digs under the wall")))
 
-(deftest the-default-limits-are-settings
-  (let [w (world {[3 8 0] "air"})]
-    (is (seq (:dig (dr/route w [0 10 0] [3 8 0] {}))))
-    (settings/with-settings {:jobs.lib.dig-route/max-digs 0}
-      (fn [] (is (= {:problem :no-route} (dr/route w [0 10 0] [3 8 0] {})))))))
+(deftest the-default-fall-is-the-longest-that-costs-no-hp
+  (is (= 3 (settings/get dr/settings ::dr/max-fall))))
+
+(deftest a-pillar-climbs-out-of-a-pit-without-digging-when-blocks-are-carried
+  (let [w (world {[0 8 0] "air" [0 9 0] "air"})
+        moves #(map :move (:steps %))]
+    (is (= [:pillar :walk] (moves (dr/route w [0 8 0] [1 10 0] {:pillar-s 0.5 :step-s 0.2 :margin 2}))))
+    (is (= [] (:dig (dr/route w [0 8 0] [1 10 0] {:pillar-s 0.5 :step-s 0.2 :margin 2}))))
+    (is (not-any? #{:pillar} (moves (dr/route w [0 8 0] [1 10 0] {:step-s 0.2 :margin 2}))) "no block, no pillar")))
+
+(deftest a-step-up-lays-its-floor-against-a-face
+  (let [w (fn [[_ y _ :as c]] (or ({[2 11 0] "stone"} c) (if (< y 10) "stone" "air")))
+        r (dr/route w [0 10 0] [2 12 0] {:place-s 1 :step-s 0.2 :margin 2})]
+    (is (= [[:laid [1 10 0]] [:walk nil]] (map (juxt :move :place) (:steps r))))
+    (is (= {:problem :no-route} (dr/route w [0 10 0] [2 12 0] {:step-s 0.2 :margin 2})) "without a block the step has no floor")))
+
+(deftest a-floor-of-the-bodys-own-stair-is-neither-dug-nor-built-on
+  (let [w (world {[3 8 0] "air"})
+        straight (dr/route w [0 10 0] [3 8 0] {:margin 3})
+        way (set (take 1 (:dig straight)))]
+    (is (not-any? way (:dig (dr/route w [0 10 0] [3 8 0] {:margin 3 :ways way}))))
+    (is (not-any? #{[0 8 0]} (map :place (:steps (dr/route (world {[0 8 0] "air" [0 9 0] "air"}) [0 8 0] [1 10 0] {:pillar-s 0.5 :step-s 0.2 :margin 2 :ways #{[0 7 0]}}))))
+        "the pit's floor is a step of its own stair: no block is put on it")))
 
 (deftest a-cell-under-sand-or-gravel-is-not-dug-and-the-route-goes-round
   (let [at (fn [roof] (fn [[x y z :as c]] (or (get roof c) (if (< y 12) "stone" "air"))))

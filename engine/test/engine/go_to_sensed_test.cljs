@@ -919,7 +919,8 @@
 (deftest a-body-shut-in-on-a-plateau-far-from-a-sealed-pocket-gets-off-at-the-edge-nearest-it
   ;; world case go-to-far-enclosed-goal: a plateau 6 high on a stone mass, the pocket 70 across and 9 down too far for one
   ;; dig route; no stair, pillar or wall leads off the top, so it walks to the edge nearest the pocket, looks over it and
-  ;; gets down to the plain (the old approaches round the top, each no nearer, gave up after 3)
+  ;; gets down to the plain (the old approaches round the top, each no nearer, gave up after 3); a dig route over cells it
+  ;; guessed is tried first, and chosen again once the first guess shows open
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -927,7 +928,7 @@
               {:keys [out seen p]} (await (run-go-to {:self {:pos {:x 10.5 :y 61 :z 10.5}} :blocks blocks :inventory [{:name "stone_pickaxe" :count 1}]}
                                                      {:pos [80 51 56] :range 0}))]
           (is (true? (:arrived out)) (pr-str (select-keys out [:why :text :escalation]) (map (juxt :step :at) (filter #(= :go-to.escalated (:kind %)) seen))))
-          (is (<= (count (filter #(= 61 (second (:at %))) (filter #(= :go-to.escalated (:kind %)) seen))) 2) "no tour round the top")
+          (is (<= (count (filter #(and (= :approach (:step %)) (= 61 (second (:at %)))) (filter #(= :go-to.escalated (:kind %)) seen))) 2) "no tour round the top")
           (is (= [80 51 56] (mapv js/Math.floor ((juxt :x :y :z) (u/pos-of (.-pos (.self p))))))))))))
 
 (deftest a-buried-bodys-shut-in-verdict-reads-the-unseen-rock-as-its-plans-do

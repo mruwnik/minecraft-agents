@@ -532,7 +532,7 @@
 
 (deftest a-drop-routes-over-the-floor-under-it-though-that-floor-is-out-of-sight
   (let [pit-top {[1 65 0] "air" [1 64 0] "air" [1 63 0] "air" [1 62 0] "air" [1 61 0] "air" [0 63 0] "stone"}]
-    (is (= {:dig []} (job-ns/drop-route #(get pit-top %) [0 64 0] [1 61 0])))))
+    (is (= [] (:dig (job-ns/drop-route #(get pit-top %) [0 64 0] [1 61 0]))))))
 
 (deftest a-drop-routes-down-a-column-whose-floors-were-never-seen
   (let [seen {[1 10 0] "stone" [0 10 0] "stone" [1 7 0] "air" [1 6 0] "air" [0 6 0] "air"}
@@ -637,8 +637,8 @@
         ask #(job-ns/drop-route "resume" seen [16 0 16] [22 0 16])
         first-ask (settings/with-settings {:jobs.lib.dig-route/max-nodes 3} ask)]
     (is (= {:problem :searching} first-ask))
-    (is (= {:dig []} (settings/with-settings {:jobs.lib.dig-route/max-nodes 3}
-                       #(loop [n 0] (let [r (ask)] (if (and (:problem r) (< n 3000)) (recur (inc n)) r))))))))
+    (is (= [] (:dig (settings/with-settings {:jobs.lib.dig-route/max-nodes 3}
+                       #(loop [n 0] (let [r (ask)] (if (and (:problem r) (< n 3000)) (recur (inc n)) r)))))))))
 
 (def pillar "A 3-high column under the body: every way off it is a 3-block drop."
   {"0,64,0" "cobblestone" "0,65,0" "cobblestone" "0,66,0" "cobblestone"})
