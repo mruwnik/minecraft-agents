@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.fake :as fake]
+            [engine.memory :as mem]
             [jobs.gather.mine.cause :as cause]
             [jobs.lib.need :as need]
             [engine.mine-support :as m :refer [as-child rock-world inv cells]]
@@ -178,7 +179,7 @@
 (deftest junk-over-the-cap-stops-a-shedding-dig-only-between-digs-not-while-it-collects-a-drop
   ;; a dig whose drops are still to collect goes on: a new call after the shed would not know the drop
   (let [p (tu/fake-on-floor {:inventory (into [{:name "stone_pickaxe" :count 1}] (repeat 4 {:name "cobblestone" :count 64}))})
-        c {:primitives p :args {:block "iron_ore" :shed true}}
+        c {:primitives p :args {:block "iron_ore" :shed true} :view (fn [] {:data mem/empty-data :now 1000})}
         cause-with #(with-redefs [ctx/mem (constantly %)] (:reason (cause/stop-cause c)))]
     (is (= :surplus (cause-with {})))
     (is (nil? (cause-with {:collecting true})))))
