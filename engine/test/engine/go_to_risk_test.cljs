@@ -250,11 +250,11 @@
     (is (nil? (replaced plan false)) "a caller's :checks :safe? replaces go-to's")))
 
 ;; a walk is priced over the affordable when it ends past x 10 (a found plan's end, else the goal), but within it when
-;; unseen cells are not guessed caves
+;; unseen cells are not guessed caves; a remembered threat by the way, which a wait may see gone
 (defn prefix-estimate [_ goal & [{:keys [plan caves-free?]}]]
   (let [end (if (= "found" (:status plan)) (peek (:steps plan)) goal)]
     {:hp (if (or caves-free? (<= (:x end) 10)) 0 100)
-     :spawn-hp 0 :hostile-hp 0 :death-hp 0 :lethal-hp 0 :lava-hp 0 :dark-s 0 :hostiles 0}))
+     :spawn-hp 0 :hostile-hp 0 :death-hp 0 :lethal-hp 0 :lava-hp 0 :dark-s 0 :hostiles 0 :threats [{:mob "zombie" :pos {:x 20 :y 64 :z 0}}]}))
 
 (defn prefix-estimate-of [c in] (prefix-estimate c (:goal in) in))
 
@@ -654,12 +654,25 @@
     (is (> (:hp (risk/estimate c goal)) (price/allowed c)) "over the half-of-health allowance")
     (is (= :ok (first (planned-status c goal))))))
 
+(deftest a-body-in-a-sealed-dark-hall-whose-wait-lowers-nothing-walks-if-staying-costs-and-gives-up-if-not
+  ;; full health, fed: no healing, no sky over the way for dawn to light, no threat to move off; only the dark hall's
+  ;; spawns, over the 2 hp the body affords
+  (let [c (ready-test/ctx-of (assoc day-world :self {:pos {:x 0 :y 64 :z 0} :health 20 :food 20}))
+        status-with (fn [feet-light]
+                      (with-redefs [sh-sense/sky-reaches-from-above? (constantly false)
+                                    sh-sense/block-light-at (fn [_ {:keys [x]}] (if (zero? x) feet-light 0))
+                                    spawn-light/hall-at? (constantly true)]
+                        (settings/with-settings {::price/risk-share 0.1}
+                          #(do (is (> (:hp (risk/estimate c far-goal {:plan (straight-plan c far-goal)})) (price/allowed c)))
+                               (planned-status c far-goal)))))]
+    (is (= [:ok :cheaper-than-staying] (let [[k _ {:keys [reason]}] (status-with 0)] [k reason])) "staying in the dark hall costs its spawns for ever")
+    (is (= [:never :risky] (let [[k _ {:keys [reason]}] (status-with 15)] [k reason])) "a lit spot is free to stay at, and waiting there never makes the walk affordable")))
+
 (deftest a-hostile-near-the-far-end-of-a-way-does-not-make-staying-dear-enough-to-walk-past-lava
   (let [zombie {:id 9 :name "zombie" :kind "hostile" :pos {:x 20 :y 64 :z 40}}
         c (ready-test/ctx-of (assoc day-world :self {:pos inside :health 3 :food 5} :entities [zombie] :blocks {"22,64,20" "lava"}))]
     (is (> (:lava-hp (risk/estimate c {:x 20 :y 64 :z 20})) (price/allowed c)))
-    (is (= :later (first (planned-status c {:x 20 :y 64 :z 20}))))))
-
+    (is (= :never (first (planned-status c {:x 20 :y 64 :z 20}))) "not walked, nor waited for: the body cannot heal and the lava stays")))
 
 (deftest a-walk-round-a-never-seen-stone-cell-holding-a-fresh-zombie-spot-holds
   ;; the cell's inside and its far faces unseen: a way out for the skeleton (Q16); the goal a table 6.5 blocks past its spot, the way a corridor along the cell
@@ -698,4 +711,5 @@
           (await (drops-est/quote-trip c {:data {:pos {:x 30 :y 64 :z 0} :inventory {}}}))
           (is (true? (:back @asked)))
           (is (some? (:stay-s @asked))))))))
+
 

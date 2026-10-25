@@ -41,14 +41,12 @@
   [p cell]
   (when (or (sh-sense/seen-cell? p cell) (look/glimpse? p cell)) (sh-sense/block-light-at p cell)))
 
-(defn chance-at
-  "The spawn chance per second at `cell` for a body at feet: a seen cell by its light (sky reaching it down its column; a roofed cell is dark only in a dark hall), an unseen one
-  at the worse case (Q16): by the open-sky guess when it lies within the surface band below the feet and the body is not
-  underground, else as a dark cave (a goal above the body is no sign that the ground at its own level is a cave), none
-  under caves-free?."
-  [p cell feet-y underground? caves-free?]
-  (let [night (not (look/lit-light? 0 15 (sh-sense/sky-subtract-now p)))
-        sky (if night 0 15)
+(defn- night? [p] (not (look/lit-light? 0 15 (sh-sense/sky-subtract-now p))))
+
+(defn- chance-by
+  "chance-at with the sky dark (night) or lit."
+  [p cell feet-y underground? caves-free? night]
+  (let [sky (if night 0 15)
         cell (if (sh-sense/solid-at? p cell) (update cell :y inc) cell)
         block (seen-light p cell)]
     (cond
@@ -56,6 +54,19 @@
                                {:light (constantly {:block block :sky (cond (sh-sense/sky-reaches-from-above? p cell) sky (and (< block (look/dark-light)) (hall-at? p cell)) 0 :else 15)})})
       (deep? cell feet-y underground?) (if caves-free? 0 (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block 0 :sky 0})}))
       :else (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block 0 :sky sky})}))))
+
+(defn chance-at
+  "The spawn chance per second at `cell` for a body at feet: a seen cell by its light (sky reaching it down its column; a roofed cell is dark only in a dark hall), an unseen one
+  at the worse case (Q16): by the open-sky guess when it lies within the surface band below the feet and the body is not
+  underground, else as a dark cave (a goal above the body is no sign that the ground at its own level is a cave), none
+  under caves-free?."
+  [p cell feet-y underground? caves-free?]
+  (chance-by p cell feet-y underground? caves-free? (night? p)))
+
+(defn dawn-lowers?
+  "Whether day would lower chance-at at cell: it is night and the cell's light comes from the sky."
+  [p cell feet-y underground?]
+  (and (night? p) (< (chance-by p cell feet-y underground? false false) (chance-at p cell feet-y underground? false))))
 
 (defn cave-guess?
   "Whether chance-at prices cell only by the unseen worst case of a dark cave (caves-free? undoes it) that a look may yet

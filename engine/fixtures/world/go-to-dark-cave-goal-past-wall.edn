@@ -2,13 +2,13 @@
 ;; pocket (x 34..35, feet 0, z 15) behind 8 blocks of rock. In the dark the body sees about 4 blocks round it; the rock guess
 ;; must still hold (wworld/rock-likely?), so the cells past what it saw read stone and no plan runs through the unseen rock.
 ;; Should-succeed: go-to digs toward the goal (:dig-route) and arrives, with no search spending its node budget. Should-fail:
-;; with :ways #{:walk} it gives up unarrived, again with no budget flood. The risk share is raised to 2 so the dark ground's price
-;; (about 10 hp of the 10 a default body affords) does not hold the walk :risky: these cases test the rock guess, not the risk.
+;; with :ways #{:walk} it gives up unarrived, again with no budget flood.
+;; The dark cave's spawns may price the walk over what the body affords, but staying in the sealed cave costs them too and
+;; waiting lowers nothing, so it walks (walk-risk :cheaper-than-staying), never held :risky.
 {:defaults
  {:tags [:movement :go-to :dark]
   :time :any
   :plot {:height 12 :length 48 :light :dark}
-  :settings {:jobs.lib.price/risk-share 2}
   :blocks [[:fill [0 0 0] [47 11 31] "stone"]
            [:fill [2 0 4] [25 9 27] "air"]
            [:fill [34 0 15] [35 1 15] "air"]]

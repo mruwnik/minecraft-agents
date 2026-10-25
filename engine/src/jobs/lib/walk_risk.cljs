@@ -211,7 +211,7 @@
   sensed mob within its field gets to a body that stays; one near the far end of the way does not reach it) plus the spawns met at
   its cell by the light seen there (price/stay-parts), and the death both risk in hp (cost/death-chance,
   cost/lethal-hp), for the time the walk takes, or, for a body that can heal, for the wait until its health would afford
-  the route (::heal-s-per-hp an hp); for :secs when given. :lethal-hp the death's part of :hp."
+  the route (::heal-s-per-hp an hp); for :secs when given. :lethal-hp the death's part of :hp; :heal-s and :secs the wait."
   [c {:keys [goal route-hp feet health cannot-heal? body live chance secs]}]
   (let [heal-s (if cannot-heal? 0 (* (settings/get settings ::heal-s-per-hp) (max 0 (- (min 20 (/ route-hp (settings/get price/settings ::price/risk-share))) health))))
         secs (or secs (max heal-s (/ (u/dist feet goal) (cost/walk-blocks-per-s))))
@@ -219,20 +219,32 @@
         live (mapv (fn [{:keys [reach] :as t}] (assoc t :reach (fn [x y z] (when (reach x y z) 1)))) (threats/with-reach c live))
         hurt (+ (if (seq live) (:hurt (cost/route-parts body {:cells here :threats live :at feet})) 0) (:hurt (price/stay-parts c chance secs)))
         lethal (cost/lethal-hp body (cost/death-chance body {:cells here :threats live :spawns (* chance secs) :at feet}) feet)]
-    {:hp (+ hurt lethal) :lethal-hp lethal
+    {:hp (+ hurt lethal) :lethal-hp lethal :heal-s heal-s :secs secs
      :hostiles (count (filter #((:reach %) (:x feet) (:y feet) (:z feet)) live))}))
+
+(defn- wait-lowers?
+  "Whether waiting may lower the price of the walk over cells (estimate-inputs' :cells) whose estimate is est: the body
+  heals toward affording it (heal-s), dawn lights a cell of it, or a threat it prices moves or fades."
+  [c cells {:keys [threats]} heal-s]
+  (let [p (:primitives c)
+        feet-y (:y (sh-sense/feet p))
+        underground? (sh-sense/buried? p)]
+    (or (pos? heal-s) (seq threats)
+        (boolean (some #(spawn-light/dawn-lowers? p % feet-y underground?) cells)))))
 
 (defn status
   "Ok while the estimated damage of the walk to `goal` on plan (go-to's, else the one its round held on, planned) is within
   (price/allowed c) or within what staying put would cost (a risk staying does not avoid is no reason to wait). Over both:
   later :risky with the risk and its parts, or never :stranded when the body cannot heal, so waiting only repeats the same
-  exposure and the caller must seal in or go to a nearer refuge. Ok :unplanned with no plan: go-to's round prices its plan
-  before it walks a step of it (jobs.movement.go-to.reprice)."
+  exposure and the caller must seal in or go to a nearer refuge. A wait that lowers nothing the walk is priced by
+  (wait-lowers?) never ends: ok :cheaper-than-staying when staying costs anything, else never :risky. Ok :unplanned with
+  no plan: go-to's round prices its plan before it walks a step of it (jobs.movement.go-to.reprice)."
   ([c goal] (let [kept (planned c)] (status c (or (:goal kept) goal) kept)))
   ([c goal plan]
    (if-not plan
      (contract/ok :unplanned "the walk is priced on go-to's plan before a step of it")
-     (let [{:keys [hp spawn-hp hostile-hp death-hp lethal-hp lava-hp dark-s hostiles]} (let [in (estimate-inputs c goal {:plan plan})] (check-cache/keyed c ::risk (dissoc in :cells :catchers :remembered) #(estimate-of c in)))
+     (let [in (estimate-inputs c goal {:plan plan})
+           {:keys [hp spawn-hp hostile-hp death-hp lethal-hp lava-hp dark-s hostiles] :as est} (check-cache/keyed c ::risk (dissoc in :cells :catchers :remembered) #(estimate-of c in))
            allowed (price/allowed c)]
        (if (<= hp allowed)
          (contract/ok :acceptable (str "route risk " (price/round1 hp) " hp, within " (price/round1 allowed)))
@@ -243,4 +255,6 @@
            (cond
              (<= hp (:hp stay)) (contract/ok :cheaper-than-staying (str "route risk " (price/round1 hp) " hp, over the " (price/round1 allowed) " affordable but staying here costs " (price/round1 (:hp stay)) " hp (" (:hostiles stay) " hostile(s) near the body)"))
              (and (pos? (:hp stay)) (price/cannot-heal? c)) (contract/never :stranded (str over "; staying here costs " (price/round1 (:hp stay)) " hp and the body cannot heal, so waiting does not help: seal in or go to a nearer refuge") :risk hp :allowed allowed :stay-hp (:hp stay))
-             :else (contract/later :risky over :risk hp :allowed allowed :recheck-after-ms recheck-ms))))))))
+             (wait-lowers? c (:cells in) est (:heal-s stay)) (contract/later :risky over :risk hp :allowed allowed :recheck-after-ms recheck-ms)
+             (pos? (:hp stay)) (contract/ok :cheaper-than-staying (str "route risk " (price/round1 hp) " hp, over the " (price/round1 allowed) " affordable, but waiting here lowers none of it and costs " (price/round1 (:hp stay)) " hp every " (price/round1 (:secs stay)) " s"))
+             :else (contract/never :risky (str over "; waiting here lowers none of it") :risk hp :allowed allowed))))))))
