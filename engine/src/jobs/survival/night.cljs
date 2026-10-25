@@ -55,7 +55,7 @@
   - afloat: swim to the nearest dry land first (surface-up/leave-water!); none seen: nothing-possible :in-water. A swimmer is never roofed or sheltered.
   - roofed or buried in a closed region with sides never seen: a look at the nearest, else a walk to it, 15 failed cells and 200 steps a night at most (an unseen side is open until seen: a lit tunnel with its walls seen is shelter, one with an unseen branch is not).
   - sheltered (slept, dug in, shut in): log out for a stint while someone else sleeps, else end so the queue runs (no all-night hold: listed jobs run when their own start checks pass).
-  - a remembered roofed :roofed-places place whose walk go-to quotes cheapest (walkable-home: only those whose straight walk fits the time left before the dark plus a margin, night.sites home-walk-*, and with no bed, no more than digging in costs, are quoted best-first; a quote is asked once a pass): with a bed to use or carry, when its price is no more than the bed walk's; with none, when a whole route is found, the walk fits that time and costs no more than digging in (shut-in's quote); with no place remembered, a closed room the body has seen (the cheapest quoted, like a finished hut whose home is not set yet: its walk plus the chance it is open times the dig-in's quote, against that quote; a room not seen inside yet has the chance cost/room-closed-chance, a closed one 1); and the body not roofed: jobs.survival.enter-room walks in (one try tonight). Farther or dearer places are left to shut-in's :room way, priced against digging in. A carried bed is not put down in the open while a place is quoted (night.bed-kept).
+  - a remembered roofed :roofed-places place whose walk go-to quotes cheapest (walkable-home: only those whose straight walk fits the time left before the dark plus a margin, night.sites home-walk-*, and with no bed, no more than digging in costs, are quoted best-first; a quote is asked once a pass): with a bed to use or carry, when its price is no more than the bed walk's; with none, when a whole route is found, the walk fits that time and costs no more than digging in (shut-in's quote); with no place remembered, a closed room the body has seen (the cheapest quoted, like a finished hut whose home is not set yet: its walk plus the chance it is open times the dig-in's quote, against that quote; a room not seen inside yet has the chance cost/closed-chance of its seen and unseen sides, a closed one 1); and the body not roofed: jobs.survival.enter-room walks in (one try tonight). Farther or dearer places are left to shut-in's :room way, priced against digging in. A carried bed is not put down in the open while a place is quoted (night.bed-kept).
   - an open door of the closed room the body stands in is shut; the room's doorway is filled before a carried bed goes down (ledger :doorway; one that cannot be filled for want of blocks, or was filled, is :doorway-tried, not tried again tonight).
   - a bed to use (sh-beds/beds-to-use, the one whose walk go-to quotes cheapest) whose walk is safe (bed-walk-safe?: a whole route priced no dearer than staying put), a carried bed, or someone else asleep: the cheapest of bed-down/answers (night-answer, debug night.answers): lie in the bed (its walk priced in) or the carried one put down here, put the carried bed down and shut its row in first (:sealed), jobs.survival.log-out (a 30 s stint, till morning when coming back costs more, log-out/back-unsafe; not retried tonight when not ok), or shelter (on below). A bed is jobs.survival.bed-down, called again until it ends; one that stops hostile-near ends the round nothing-possible :monsters-near (the trigger fires again after its cooldown).
   - the sky not dark yet (dusk, a bed term started it): done; the shelter ways below wait for the dark.
@@ -257,7 +257,7 @@
 
 (defn open-room-cost
   "Seconds a room closed with chance closed-chance adds to a walk in: the chance it is open times dig-in-s, the dig-in the body then
-  makes after all (jobs.lib.cost/room-closed-chance); 0 for a closed room, or when no dig-in is quoted (##Inf: nothing to weigh the walk against)."
+  makes after all (jobs.lib.cost/closed-chance); 0 for a closed room, or when no dig-in is quoted (##Inf: nothing to weigh the walk against)."
   [closed-chance dig-in-s]
   (if (or (>= closed-chance 1) (infinite? dig-in-s)) 0 (* (- 1 closed-chance) dig-in-s)))
 
@@ -270,18 +270,23 @@
                         mean (second (get-in q [:uses :job-time]))]
                     (if (number? mean) mean ##Inf))))))
 
+(defn room-chance
+  "The chance the room at pose is closed: 1 for a closed room, cost/closed-chance of its sides seen and unseen for a room
+  not seen inside yet (an opening can only be in a side), nil for any other."
+  [p pose]
+  (cond
+    (room-lib/refuge-room? p pose) 1
+    (reach-room/unseen-room? p pose) (let [{:keys [seen unseen]} (reach-room/boundary p pose)] (cost/closed-chance seen (count unseen)))))
+
 (defn ^:async seen-room!
   "{:at cell :price seconds} of the room behind a door the body has seen whose walk plus open-room-cost is the least (cheapest-walk!, a room
   judged only when its turn comes) within limit-s seconds: a closed room (chance 1), or a room not seen inside yet (the chance none of its unseen
-  cells hides an opening, cost/room-closed-chance; the walk shows it). :searching or nil as cheapest-walk!."
+  sides hides an opening, cost/closed-chance of the sides seen closed; the walk shows it). :searching or nil as cheapest-walk!."
   [c limit-s]
   (let [p (:primitives c)
         poses (enter-room/seen-poses c)
         chances (atom {})
-        chance (fn [pose] (get (swap! chances #(if (contains? % pose) %
-                                                   (assoc % pose (cond
-                                                                   (room-lib/refuge-room? p pose) 1
-                                                                   (reach-room/unseen-room? p pose) (cost/room-closed-chance (:seen (reach-room/boundary p pose)) (reach-room/unseen-cell-count p pose)))))) pose))]
+        chance (fn [pose] (get (swap! chances #(if (contains? % pose) % (assoc % pose (room-chance p pose)))) pose))]
     (when (seq poses)
       (let [dig-s (await (dig-in-seconds c))
             walk #(enter-room/walk-args {:pos %})

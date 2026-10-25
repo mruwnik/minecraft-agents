@@ -20,7 +20,9 @@
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [jobs.lib.cost :as cost]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.walk-pick :as pick]
             [jobs.lib.targets :as targets]
@@ -133,8 +135,22 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (await (night-at-hut-seen-outside st/dirt-stack 6))]
-          (is (>= 2 (:z (st/pos-of p))) "the walk to the hut and its chance of being open cost less than the dig-in quoted at 12 s: walked in to look"))))))
+        (let [{:keys [p seen]} (await (night-at-hut-seen-outside st/dirt-stack 6))]
+          (is (>= 2 (:z (st/pos-of p))) "the walk to the hut and its chance of being open cost less than the dig-in quoted at 12 s: walked in to look")
+          (is (= [{:seen 12 :unseen 0 :closed true}] (mapv #(select-keys % [:seen :unseen :closed]) (st/emitted seen :enter-room.arrived)))
+              "the arrival reports the room's sides as it set out and that it is closed: a count for the prior"))))))
+
+(deftest a-room-seen-inside-whose-sides-are-not-all-seen-is-priced-maybe-open
+  (let [p (tu/fake (hut/hut-world {:x 5 :y 64 :z 6} {}))
+        at (.-sensedAt p)
+        room {:x 5 :y 64 :z 0}]
+    (aset p "sensedAt" (fn [pos] (if (and (= 3 (.-x pos)) (= 64 (.-y pos)) (<= -1 (.-z pos) 1))
+                                   #js {:unknown true :pos pos}
+                                   (.call at p pos))))
+    (let [{:keys [seen unseen]} (reach-room/boundary p room)]
+      (is (seq unseen) "west wall feet cells unseen, every cell inside seen")
+      (is (= (cost/closed-chance seen (count unseen)) (night/room-chance p room)))
+      (is (< (night/room-chance p room) 1) "an opening may hide in a side not seen"))))
 
 (deftest a-hut-not-seen-inside-is-dug-in-against-when-the-walk-and-its-chance-of-being-open-cost-more-than-digging-in
   (async done

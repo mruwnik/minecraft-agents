@@ -18,7 +18,7 @@
 
 (a/defargs settings
   {::wall-prior {:default {:k 1 :n 2} :spec (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 1 nil)})
-                 :doc "Pseudo-counts of the boundary cells closed (k) of all (n) before any is seen: the uniform prior (Laplace's rule of succession). No trial log records room boundaries to count; the room's own seen cells are the evidence that replaces it."}})
+                 :doc "Pseudo-counts of the boundary cells closed (k) of all (n) before any is seen: the uniform prior (Laplace's rule of succession). Uncounted: enter-room.arrived logs each room walked into unseen (its sides seen, unseen, closed or not), not yet folded into priors-counts; the room's own seen cells are the evidence that replaces it."}})
 
 (def look-tick-s
   "Seconds one look takes: the look primitive turns at once and waits for the physics tick that sends the rotation, and

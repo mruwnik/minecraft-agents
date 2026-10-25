@@ -34,6 +34,7 @@
   which survival.leave-shelter takes back by day (jobs.access.cleanup); a doorway tried once, or left open for want of blocks, is not tried again tonight, :doorway-tried) and a hole in
   the roof over the body is filled with one block (the cell is in :placed and the scaffold ledger as :shelter). Needs the
   blocks for a gap or a hole carried (none fetched; in the room already it waits :no-blocks at the start), nothing for a walk or a door.
+  A room walked to by :at whose inside was not seen emits enter-room.arrived {:seen :unseen :closed} once its sides are all seen.
   Done {:pos :placed :roof} when the body is in a closed room (sh-sense/shut-in-room?) with no open door and no doorway gap, at once when it is.
   Nothing-possible: :no-room (no place known and the body not roofed), :no-walk (go-to did not arrive), :door-open, :no-blocks (a gap or hole
   and none carried), :roof-not-held (a mend that did not stay), :roof-not-placed (the block was not placed; or the fill's own reason), :open (the room cannot be closed).
@@ -211,6 +212,30 @@
                      door (settings/get settings ::door-s)
                      :else (* (count (or gap [plug])) (settings/get settings ::fill-s))))))))
 
+(defn note-sides!
+  "With :at, once a call: the sides of the room there seen and unseen as the walk starts (reach-room/boundary), when it is
+  not seen inside yet; what enter-room.arrived reports beside how the room turned out."
+  [c]
+  (let [p (:primitives c)
+        at (:at (:args c))]
+    (when (and at (not (contains? (ctx/mem c) :sides)))
+      (ctx/update-mem! c assoc :sides (when (reach-room/unseen-room? p at)
+                                        (let [{:keys [seen unseen]} (reach-room/boundary p at)] {:seen seen :unseen (count unseen)}))))))
+
+(defn arrived!
+  "Once a call, in a room walked to not seen inside (note-sides!), once every side of it is seen (at the walk's arrival or
+  after the look round): enter-room.arrived {:seen :unseen :closed}, the sides as the walk started and whether the room is
+  closed; the counts that measure cost/closed-chance's prior."
+  [c]
+  (let [p (:primitives c)
+        feet (sh-sense/feet p)
+        {:keys [sides arrived]} (ctx/mem c)]
+    (when (and sides (not arrived) (here? c (target-of c)) (not (reach-room/unseen-room? p feet)))
+      (ctx/update-mem! c assoc :arrived true)
+      (let [closed (room-lib/refuge-room? p feet)]
+        (ctx/emit! c :enter-room.arrived :info (assoc sides :closed closed :at (u/cell-vec (:at (:args c)))
+                                                      :text (str "arrived in the room seen from outside: " (if closed "closed" "open"))))))))
+
 (defn ^:async flee-leg!
   "One jobs.movement.run-away leg (key :roof-walk) toward the room's middle: :again once arrived, :continue after a leg that
   got nearer, nil otherwise."
@@ -231,7 +256,7 @@
     (cond
       (= :continue w) :continue
       (= :again w) :again
-      (:arrived (:data w)) :again
+      (:arrived (:data w)) (do (arrived! c) :again)
       :else (ctx/end c :nothing-possible :no-walk {:text (str "could not walk into the room" (when (:name t) (str " at " (name (:name t)))))
                                                    :cause (:cause w)}))))
 
@@ -282,6 +307,7 @@
 (defn ^:async step-judged!
   "The step after the looks: judge, then act on it."
   [c]
+  (arrived! c)
   (let [j (judge c)
         n (:steps (ctx/mem c) 0)]
     (ctx/update-mem! c assoc :steps (inc n))
@@ -298,6 +324,7 @@
 (defn ^:async step!
   "One step of the entering (judge): the walk, a door, the doorway or the roof, the end."
   [c]
+  (note-sides! c)
   (when (here? c (target-of c))
     (when-let [roof (sh/unseen-roof-cell (:primitives c))]
       (when-not (= roof (:roof-looked (ctx/mem c)))

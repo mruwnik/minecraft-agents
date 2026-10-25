@@ -304,11 +304,6 @@
         {unseen true seen false} (group-by (fn [[cx cy cz]] (nil? (u/seen-block p {:x cx :y cy :z cz}))) sides)]
     {:seen (count seen) :unseen (vec unseen)}))
 
-(defn unseen-cell-count
-  "How many feet cells of the closed-over room around pos {:x :y :z} (as unseen-room?) the body has not seen; 0 for any other pos."
-  [p pos]
-  (count (remove (fn [[x y z]] (u/seen-block p {:x x :y y :z z})) (:cells (unseen-room p pos)))))
-
 (defn unseen-sides
   "The feet cells [x y z] beside the room cells of the room around pos {:x :y :z} (as unseen-room?) that the body has not
   seen (boundary's :unseen)."
