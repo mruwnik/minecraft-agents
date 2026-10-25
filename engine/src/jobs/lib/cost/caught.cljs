@@ -18,9 +18,12 @@
   {::flights {:default {:zombie {:lived [[1 0 1] [3 0 2] [4 0 2] [4 1 1] [5 1 1] [6 0 1] [7 0 1] [8 1 1] [9 2 1] [10 0 1] [10 3 1] [11 0 2] [11 4 1]
                                          [12 0 1] [12 6 1] [13 1 1] [14 7 1] [19 0 1] [20 0 18] [20 1 2] [20 2 2] [20 3 1] [20 4 1]]
                                  :died [[1 1 2] [2 1 2] [3 2 3] [4 2 2] [5 2 1] [6 3 3] [7 3 1] [8 4 3] [9 4 1] [11 5 1] [15 6 1] [17 7 1]
-                                        [19 8 1] [20 8 3]]}}
+                                        [19 8 1] [20 8 3]]}
+                        :bow {:lived [[1 0 2] [2 0 3] [4 0 1] [5 2 1] [6 1 1] [6 3 1] [7 0 2] [8 0 2] [8 1 3] [9 0 1] [11 0 1] [11 1 1] [12 2 1]
+                                      [13 0 2] [16 1 1] [17 2 1] [17 4 1] [17 7 1] [18 1 1] [19 0 2] [19 1 1] [20 0 11] [20 1 2]]
+                              :died [[1 1 1] [6 3 1]]}}
               :spec (a/map-of keyword? (a/map-with {:lived counts? :died counts?}))
-              :doc "Per group of mob kinds (group-of), the trial flights from it: :lived [health blows n], n flights begun at health that lived through it hurt by blows of it; :died [health blows n], n that died of it, blows the least that kill at health. A flight is the run of flee decisions about the group, each within 30 s of the one before, and the 30 s after it. Recount: node tools/event-counts.mjs caught-flights (trial bodies, easy), 2026-10-25."}})
+              :doc "Per group of mob kinds (group-of), the trial flights from it: :lived [health blows n], n flights begun at health that lived through it hurt by blows (a shooter's arrows) of it; :died [health blows n], n that died of it, blows the least that kill at health. A flight is the run of flee decisions about the group, each within 30 s of the one before, and the 30 s after it. Recount: node tools/event-counts.mjs caught-flights (trial bodies, easy), 2026-10-25."}})
 
 (def groups
   "The mob kinds a flight counts as from one group: what group-of reads."

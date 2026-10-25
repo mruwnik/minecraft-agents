@@ -10,6 +10,7 @@
             [engine.test-util :as tu]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.answer :as answer]
+            [jobs.lib.cost.caught :as caught]
             [jobs.lib.danger :as danger]
             [jobs.lib.cost.death :as death]
             [jobs.lib.cost.threat :as threat]
@@ -350,6 +351,14 @@
         (is (< (chance 20) (chance 10) (chance 5)) "caught more often from low health")
         (is (< 0.45 (dies 5) 0.8) "its own blows kill about the measured 18 of 29 under 10 hp")
         (is (< 0.05 (dies 20) 0.2) "and 3 of 27 at 20 hp: a caught flight takes some blows, not the whole flight's")))))
+
+(deftest a-flight-from-a-shooter-is-caught-at-the-bow-mobs-own-prior
+  ;; the trial flights from bow mobs: 2 deaths in 45, most of the arrows on the walk out of range
+  (let [bow (caught/prior "stray" 20) zombie (caught/prior "zombie" 20)]
+    (is (= bow (caught/prior "skeleton" 20)) "one group")
+    (is (< (:chance bow) (:chance zombie)) "caught less often than by a zombie")
+    (is (< (:blows bow) (:blows zombie)) "and hit fewer times when it is")
+    (is (= zombie (caught/prior "spider" 20)) "a group not counted is priced as the zombie family")))
 
 (deftest spawn-chance-is-zero-where-a-mob-cannot-spawn
   (let [lit (fn [block sky] (fn [_] {:block block :sky sky}))
