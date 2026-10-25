@@ -44,8 +44,8 @@
   While it runs it holds its work area (jobs.lib.loose :collecting), so the :loose-items reflex leaves those drops to it.
   With :ids, ids not in sight when none is left to try are booked as one :left {:reason :unseen :ids [...] :last {id [x y z]}}, the cell each was last seen in.
   A drop more than a block above the feet that the act cannot reach (a column top) is walked up to with go-to's :pillar and :stair ways, then collected; one go-to cannot stand beside (a wall niche) is pillared to from the feet when it lies 2 to 6 above and within 1 cell sideways (carried blocks).
-  With :dig, a drop go-to cannot reach, or one too deep in the dug hole, is dug to once: the fewest cells (jobs.lib.dig-route,
-  over the blocks the body has seen, an unseen one taken for stone) that open a way to it, each a jobs.blocks.dig child (zones, claims, hazards
+  With :dig, a drop go-to cannot reach, or one too deep in the dug hole, is dug to once: the cheapest dig route (jobs.lib.dig-route
+  priced as go-to's, over the blocks the body has seen, an unseen one taken for stone) that opens a way to it, each a jobs.blocks.dig child (zones, claims, hazards
   are its rules), then the walk is tried again. A dig that ends :unseen (the dark hides the cell) sets a carried torch in the body's cell once per call, looks again and digs on. No such way leaves the drop :no-route, a dig that fails with that dig's outcome (:refused, :cannot, :unreachable ...).
   With :near, a sweep that sees no drop first looks at that spot, and climbs to it (go-to :pillar/:stair) when it lies over a block above the feet. A sweep without :ids that sees no drop turns round once from each cell it ends in (entities are sensed only in the view cone) before it ends; a dig's :ids sweep does not (the dig looked already, and a danger's time is short).
   With :expect n, a sweep that took fewer than n waits ::expect-wait-ms and sweeps again, at most ::expect-rounds times (a drop still falling or not yet seen); the call is not done while it waits.
@@ -96,7 +96,6 @@
    ::dig-max-cells {:default 16 :doc "The most cells :dig digs to reach one drop; a dearer route leaves it." :spec (a/int-in 0 nil)}
    ::dig-margin {:default 3 :doc "How far outside the box round the body and the drop the dig route may wander, in blocks." :spec (a/int-in 0 nil)}
    ::replans {:default 4 :doc "How often a dig route is planned again after a dig of it failed, the cells before it dug." :spec (a/int-in 0 nil)}
-   ::dig-max-fall {:default 3 :doc "The longest fall, in blocks, the dig route plans." :spec (a/int-in 0 nil)}
    ::pile-reach {:default 10 :doc "How far from the place of an open death a :near spot still counts as its pile, in blocks." :spec (a/num-in 0 nil)}
    ::radius {:default 16 :doc "How far from the work area a drop is looked for when the call gives no :radius, in blocks." :spec (a/num-in 0 nil)}
    ::expect-rounds {:default 3 :doc "How often a sweep that took fewer items than the call's :expect is made again." :spec (a/int-in 0 nil)}
@@ -304,19 +303,20 @@
   (boolean (some-> (first (keep #(block-at [x % z]) (range (inc y) (+ y 9)))) dig-route/open?)))
 
 (defn drop-route
-  "dig-route/route from a feet cell to the cell of a drop lying at goal; block-at answers a cell's name or nil when never
-  seen; a cell never seen is taken for stone (a rim sees no floor down a dug column), except under a seen open cell: it may
-  be air of any depth (a trench), so no step lands on it. A drop at rest has a solid floor, seen or not. With an owner (a job
-  id) a search that spends its nodes is kept and gone on at the next call: {:problem :searching} till it ends."
-  ([block-at from goal] (drop-route nil block-at from goal))
-  ([owner block-at from [gx gy gz :as goal]]
-   ((if owner (partial dig-route/route-resumed [owner :drop-route from goal]) dig-route/route)
-    (fn [cell]
-      (or (block-at cell)
-          (when (or (= cell [gx (dec gy) gz]) (not (open-above? block-at cell))) "stone")))
-    from goal
-    {:max-digs (settings/get settings ::dig-max-cells) :margin (settings/get settings ::dig-margin)
-     :max-fall (settings/get settings ::dig-max-fall)})))
+  "dig-route/route, priced by prices (dig-route/body-prices), from a feet cell to the cell of a drop lying at goal; block-at
+  answers a cell's name or nil when never seen; a cell never seen is taken for stone (a rim sees no floor down a dug column),
+  except under a seen open cell: it may be air of any depth (a trench), so no step lands on it. A drop at rest has a solid
+  floor, seen or not. With an owner (a job id) a search that spends its nodes is kept and gone on at the next call:
+  {:problem :searching} till it ends."
+  [prices owner block-at from [gx gy gz :as goal]]
+  ((if owner (partial dig-route/route-resumed [owner :drop-route from goal]) dig-route/route)
+   (fn [cell]
+     (or (block-at cell)
+         (when (or (= cell [gx (dec gy) gz]) (not (open-above? block-at cell))) "stone")))
+   from goal
+   (merge prices {:max-digs (settings/get settings ::dig-max-cells) :margin (settings/get settings ::dig-margin)}
+          ;; a nameless cell is dug to see it, at the price of the rock it is guessed for
+          (when-let [dig-s (:dig-s prices)] {:dig-s (fn [name cell] (dig-s (or name blocks/hidden-guess) cell))}))))
 
 (defn ^:async look-pit!
   "A route over cells never seen takes them for stone, so a drop in a pit is dug to round the pit: first a look at the unsensed
@@ -362,7 +362,8 @@
     (loop [pass 0]
       (let [from (u/cell-vec (u/self-pos c))
             _ (await (look-pit! c from (item-cell item)))
-            r (drop-route (:id c) (fn [[x y z]] (u/seen-name p {:x x :y y :z z})) from (item-cell item))]
+            seen-name (fn [[x y z]] (u/seen-name p {:x x :y y :z z}))
+            r (drop-route (dig-route/body-prices p #(nil? (seen-name %))) (:id c) seen-name from (item-cell item))]
         (case (:problem r)
           :searching :continue
           :no-route :no-route

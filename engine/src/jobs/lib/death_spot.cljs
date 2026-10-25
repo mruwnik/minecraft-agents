@@ -72,11 +72,6 @@
     (vec (concat (keep #(spot (:death-t (:data %)) (:data %) nil) (ctx/entries c :deaths))
                  (keep #(spot (:t %) (:data %) hurt-ms) (near-deaths c))))))
 
-(defn near
-  "The remembered deaths of `deaths` (from recent) that count for cell `pos` (covers?)."
-  [c deaths pos]
-  (filterv #(covers? c % pos) deaths))
-
 (defn lit?
   "Whether the body has seen the cell at pos and senses it lit enough that no mob spawns there (shelter.sense/lit-here?)."
   [p pos]

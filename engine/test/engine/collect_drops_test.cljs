@@ -9,6 +9,7 @@
             [engine.event-api :as event-api]
             [engine.fake :as fake]
             [engine.test-util :as tu]
+            [jobs.lib.dig-route :as dig-route]
             [jobs.items.collect-drops :as job-ns]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
@@ -542,11 +543,19 @@
 
 (deftest a-drop-routes-over-the-floor-under-it-though-that-floor-is-out-of-sight
   (let [pit-top {[1 65 0] "air" [1 64 0] "air" [1 63 0] "air" [1 62 0] "air" [1 61 0] "air" [0 63 0] "stone"}]
-    (is (= [] (:dig (job-ns/drop-route #(get pit-top %) [0 64 0] [1 61 0]))))))
+    (is (= [] (:dig (job-ns/drop-route {} nil #(get pit-top %) [0 64 0] [1 61 0]))))))
+
+(deftest a-drop-route-digs-round-obsidian-through-dirt-that-is-quicker-to-cut
+  ;; the straight way digs 4 cells of obsidian, the way round 8 of dirt: the fewest cells is the slow way
+  (let [lane (fn [x z] (cond (#{0 3} x) (when (zero? z) "air") (zero? z) "obsidian" :else "dirt"))
+        seen (fn [[x y z]] (if (#{64 65} y) (or (lane x z) "dirt") "stone"))
+        r (job-ns/drop-route (dig-route/body-prices (tu/fake-on-floor {}) (constantly false)) nil seen [0 64 0] [3 64 0])]
+    (is (seq (:dig r)))
+    (is (not-any? #(= "obsidian" (seen %)) (:dig r)))))
 
 (deftest a-drop-routes-down-a-column-whose-floors-were-never-seen
   (let [seen {[1 10 0] "stone" [0 10 0] "stone" [1 7 0] "air" [1 6 0] "air" [0 6 0] "air"}
-        r (job-ns/drop-route #(get seen %) [0 11 0] [1 6 0])]
+        r (job-ns/drop-route {} nil #(get seen %) [0 11 0] [1 6 0])]
     (is (nil? (:problem r)))
     (is (seq (:dig r)))))
 
@@ -590,7 +599,7 @@
 (deftest a-drop-across-a-trench-is-not-routed-onto-a-floor-that-was-never-seen
   (let [seen (fn [[x y z]] (cond (and (<= 16 x 19) (<= 0 y 1) (= z 16)) "air"
                                  (and (<= 20 x 21) (<= -2 y 1) (= z 16)) "air"))
-        r (job-ns/drop-route seen [19 0 16] [22 0 16])]
+        r (job-ns/drop-route {:max-fall 3} nil seen [19 0 16] [22 0 16])]
     (is (nil? (:problem r)))
     (is (not-any? (fn [[x y z]] (and (<= 20 x 22) (neg? y) (= z 16))) (:dig r))
         "the trench floor is deeper than the fall the route planned, so the route goes round it")))
@@ -644,7 +653,7 @@
 (deftest a-drop-route-that-spends-its-nodes-goes-on-at-the-next-call
   (let [seen (fn [[x y z]] (cond (and (<= 16 x 22) (<= 0 y 1) (= z 16)) "air"
                                  (and (<= 16 x 22) (= y -1) (= z 16)) "stone"))
-        ask #(job-ns/drop-route "resume" seen [16 0 16] [22 0 16])
+        ask #(job-ns/drop-route {} "resume" seen [16 0 16] [22 0 16])
         first-ask (settings/with-settings {:jobs.lib.dig-route/max-nodes 3} ask)]
     (is (= {:problem :searching} first-ask))
     (is (= [] (:dig (settings/with-settings {:jobs.lib.dig-route/max-nodes 3}

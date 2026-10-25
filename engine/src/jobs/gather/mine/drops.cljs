@@ -82,17 +82,18 @@
 (defn target-cut-max [] (settings/get settings ::target-cut-max))
 
 (defn drop-cut
-  "The cells to dig, in walking order, for the cheapest way (jobs.lib.dig-route, falls of 1 at most, a cell never seen
-  taken for stone) from the body's cell to a stand within 1 of the dug cell, at most max-digs of them; nil with no such way,
-  :searching while a search that spent its nodes goes on (kept: ask again)."
+  "The cells to dig, in walking order, for the cheapest way (jobs.lib.dig-route priced as go-to's, falls of 1 at most, a cell
+  never seen taken for stone) from the body's cell to a stand within 1 of the dug cell, at most max-digs of them; nil with
+  no such way, :searching while a search that spent its nodes goes on (kept: ask again)."
   [c dug max-digs]
   (let [p (:primitives c)
         at (fn [[x y z]] (or (u/seen-name p {:x x :y y :z z}) "stone"))
+        prices (assoc (dig-route/body-prices p (fn [[x y z]] (nil? (u/seen-name p {:x x :y y :z z})))) :max-digs max-digs :max-fall 1)
         from (u/cell-vec (u/self-pos c))
         routes (mapv #(let [goal (mapv + dug %)]
-                        (dig-route/route-resumed [(:id c) :drop-cut from goal max-digs] at from goal {:max-digs max-digs :max-fall 1}))
+                        (dig-route/route-resumed [(:id c) :drop-cut from goal max-digs] at from goal prices))
                      [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 -1 0] [0 1 0]])]
-    (or (->> routes (keep :dig) (filter #(<= (count %) max-digs)) (sort-by count) first)
+    (or (->> routes (filter :dig) (sort-by :seconds) (map :dig) first)
         (when (some #{:searching} (map :problem routes)) :searching))))
 
 (defn ^:async cut-to-drop!

@@ -74,26 +74,43 @@
           (is (not-any? #(= {:x 5 :y 68 :z 0} (:target %)) (moved s)) "no walk toward the pillar")
           (is (finished? s)))))))
 
-;; the sand east is nearer, but the body died beside it a minute ago
+(def dark-by-the-near-sand (into {} (for [x [5 6 7] y [64 65] z [-1 0 1]] [[x y z] [0 0]])))
+
+;; the sand east is half as far, but a creeper killed the body beside it a minute ago in the dark: the walk there is priced with it
 (deftest a-target-by-a-recent-death-is-dug-last
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start {:world {:blocks (merge floor {"14,64,4" "sand" "-12,64,0" "sand"})}})
+        (let [s (start {:world {:blocks (merge floor {"6,64,0" "sand" "-12,64,0" "sand"})}})
+              _ (swap! (fake/state (:p s)) assoc :light dark-by-the-near-sand)
               now @(:clock s)]
-          (mem/write! (:store (:eng s)) :deaths {:pos {:x 14 :y 64 :z 4} :cause "zombie" :death-t (- now 60000)} core/deaths-policy)
+          (mem/write! (:store (:eng s)) :deaths {:pos {:x 6 :y 64 :z 0} :cause "creeper" :death-t (- now 60000)} core/deaths-policy)
           (core/submit! (:eng s) (spec {:block "sand" :count 1 :ways #{:seen}}) {})
           (await (run-ticks s 30))
           (is (= [-12 64 0] (first (dug-cells s))))
           (is (finished? s)))))))
 
-;; the sand east is nearer, but the body was hurt down to 4 hp beside it a minute ago
+;; a creeper killed the body by the nearer sand a minute ago, but the body has seen that spot lit since: the death is cleared
+(deftest a-target-by-a-death-spot-seen-lit-since-is-not-shunned
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks (merge floor {"6,64,0" "sand" "-12,64,0" "sand"})}})
+              now @(:clock s)]
+          (mem/write! (:store (:eng s)) :deaths {:pos {:x 6 :y 64 :z 0} :cause "creeper" :death-t (- now 60000)} core/deaths-policy)
+          (core/submit! (:eng s) (spec {:block "sand" :count 1 :ways #{:seen}}) {})
+          (await (run-ticks s 30))
+          (is (= [6 64 0] (first (dug-cells s))))
+          (is (finished? s)))))))
+
+;; the sand east is half as far, but a spider hurt the body down to 4 hp beside it a minute ago in the dark
 (deftest a-target-by-a-near-death-is-dug-last
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start {:world {:blocks (merge floor {"14,64,4" "sand" "-12,64,0" "sand"})}})]
-          (mem/write! (:store (:eng s)) :hurt {:health 4 :amount 3 :attacker {:name "skeleton"} :pos {:x 14 :y 64 :z 4}})
+        (let [s (start {:world {:blocks (merge floor {"6,64,0" "sand" "-12,64,0" "sand"})}})
+              _ (swap! (fake/state (:p s)) assoc :light dark-by-the-near-sand)]
+          (mem/write! (:store (:eng s)) :hurt {:health 4 :amount 3 :attacker {:name "spider"} :pos {:x 6 :y 64 :z 0}})
           (core/submit! (:eng s) (spec {:block "sand" :count 1 :ways #{:seen}}) {})
           (await (run-ticks s 30))
           (is (= [-12 64 0] (first (dug-cells s))))

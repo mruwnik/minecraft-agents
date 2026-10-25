@@ -393,17 +393,9 @@
                          (let [a (when-not floors-unseen-ok? (sensed x (inc y) z))]
                            (when-not (and a (not (true? (.-unknown a))) (dig-route/open? (.-name a)))
                              access/hidden-guess)))))
-        ;; dig-cost merges the whole cost basis a call, and a search asks it of every cell
-        dig-cost (memoize cost/dig-cost)
-        self (.self p)
-        equipment (cost/equipment-of (.-equipment self))
-        opts (fn [refused] (merge {:max-fall (:max-drop (cost/fall-profile {:equipment equipment :damage-budget (cost/survivable-budget (wworld/self-body p) {})}))
-                                   :fall-s (fn [blocks] (cost/hp-cost (.-health self) (cost/fall-damage equipment blocks)))
-                                   :dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) own? cell)) (dig-cost name)))
-                                   :step-s (:cost (cost/walk-cost {:distance 1}))
-                                   :stair-s (cw/stair-cost 1)
-                                   :unseen? (fn [[x y z]] (true? (some-> (sensed x y z) .-unknown)))
-                                   :unseen-step-s (cost/unseen-route-s (wworld/unseen-share p) (constantly :ground) [{:x 0 :y 0 :z 0}])
+        prices (dig-route/body-prices p (fn [[x y z]] (true? (some-> (sensed x y z) .-unknown))))
+        opts (fn [refused] (merge prices
+                                  {:dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) own? cell)) ((:dig-s prices) name cell)))
                                    :max-dig-s (max-route-s)}
                                   route-opts))
         ;; the search itself reads no may-dig?: escalate!'s choices with other zone rules share it
