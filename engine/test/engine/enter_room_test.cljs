@@ -11,6 +11,7 @@
             [jobs.lib.ledger :as ledger]
             [engine.registry :as registry]
             [engine.shelter-support :as st]
+            [jobs.survival.enter-room :as enter-room]
             [engine.test-util :as tu]))
 
 (def open-door-states (update-vals door-states #(assoc % :open true)))
@@ -132,6 +133,18 @@
           (is (= 0 (await (mean (hut-world {:x 5 :y 64 :z 0} {}) []))))
           (is (= ##Inf (await (mean doorway-hut []))))
           (is (= 6 (await (mean doorway-hut stones)))))))))
+
+(deftest a-zombie-farther-than-the-old-race-radius-that-gets-to-the-door-first-loses-the-race
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [lost? (fn [zombie-z]
+                      (let [{:keys [p]} (st/setup (assoc (hut-world {:x 5.5 :y 64 :z 30.5} {})
+                                                         :floor [-40 -40 40 40]
+                                                         :entities [{:id 7 :uuid "u7" :name "zombie" :kind "hostile" :pos {:x 5.5 :y 64 :z zombie-z} :visible true :chase {:speed 0.4}}]))]
+                        (enter-room/race-lost? {:primitives p} {:pos {:x 5 :y 64 :z 0}})))]
+          (is (true? (lost? 5.5)) "a zombie 25 blocks off, 3 from the door, is there first")
+          (is (false? (lost? 80.5)) "one far behind the body is not"))))))
 
 (deftest a-walk-to-a-seen-roof-with-open-sides-is-not-quoted
   (async done

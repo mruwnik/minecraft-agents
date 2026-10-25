@@ -51,7 +51,6 @@
   {::job-time-s {:default 120 :doc "Seconds an entering may take." :spec (a/num-in 0 nil)}
    ::door-s {:default 2 :doc "Seconds shutting a door is guessed to take, for the quote." :spec (a/num-in 0 nil)}
    ::fill-s {:default 3 :doc "Seconds filling a doorway or a roof hole is guessed to take, for the quote." :spec (a/num-in 0 nil)}
-   ::race-radius {:default 16 :doc "Blocks within which a hostile may reach a door of the room before the body does." :spec (a/num-in 0 nil)}
    ::max-steps {:default 40 :doc "Steps (a walk, a door, a fill) a call takes before it gives up." :spec (a/int-in 1 nil)}
    ::max-mends {:default 3 :doc "Fills of the roof hole a call tries before it gives up." :spec (a/int-in 1 nil)}})
 
@@ -172,10 +171,10 @@
   (if name {:place name :range 0} {:pos (room-lib/mid pos) :range 0.7}))
 
 (defn race-lost?
-  "Whether a creeper is near, or a melee hostile gets to a door of the room t before the body does."
+  "Whether a creeper is known, or a melee hostile the body knows of (seen or heard, whatever its distance: race-won? prices the race) gets to a door of the room t before the body does."
   [c t]
   (let [p (:primitives c)
-        threats (combat/hostiles p (settings/get settings ::race-radius))
+        threats (combat/hostiles p ##Inf)
         room (reach-room/room p (:pos t))
         way (when room (room-lib/way-in p room))]
     (boolean (and (seq threats)
