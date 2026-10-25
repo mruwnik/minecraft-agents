@@ -244,11 +244,11 @@
 (def dark-world (assoc lit-world :light-default [15 0]))
 
 (defn flee-home-night
-  "night-at-home in the dark with a home at x 10 beyond the walk-radius setting 5, no placing or digging, nothing but the home to see: the
+  "night-at-home in the dark with a home at x 10 the time left does not cover (home-walk-margin-s 0), no placing or digging, nothing but the home to see: the
   shut-in fails everywhere, so the night has to flee to the roof. {:eng :p}."
   [world args]
   (js/Promise.resolve
-   (.then (night-at-home world {:x 10 :y 64 :z 0} (update args :settings #(merge {:jobs.survival.night.sites/walk-radius 5} %)))
+   (.then (night-at-home world {:x 10 :y 64 :z 0} (update args :settings #(merge {:jobs.survival.night.sites/home-walk-margin-s 0} %)))
           (fn [{:keys [p] :as r}]
             (st/refuse-placing! p)
             (.override (.-world p) "dig" (fn ^:async f [_ _ _] #js {:status "failed"}))
@@ -259,7 +259,7 @@
   (merge (into {} (for [x (range 28 33) z (range -2 3)] [(str x ",63," z) "dirt"]))))
 
 (defn ^:async flee-with
-  "The home flee night (a roofed home beyond the walk radius) with targets/nearest! answering by answer-of (a fn of the
+  "The home flee night (a roofed home the time left does not cover) with targets/nearest! answering by answer-of (a fn of the
   targets it is given); [log seen calls]: the child log, the events and the targets each call was given."
   [answer-of]
   (let [calls (atom [])

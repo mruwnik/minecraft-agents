@@ -83,7 +83,7 @@
 (defn nearest-seen
   "{:pos} of the first closed room behind a door the body has seen, nil when none; a room whose inside is not seen yet counts
   (the walk shows it), but only when no door side is a known closed room (the open ground outside a door reads unseen too).
-  Door order, not price: the night picks by go-to's quotes (night/walkable-far-home). Read-only (a quote runs this), so nothing is cached."
+  Door order, not price: the night picks by go-to's quotes (night/walkable-home). Read-only (a quote runs this), so nothing is cached."
   [c]
   (let [p (:primitives c)
         poses (seen-poses c)]

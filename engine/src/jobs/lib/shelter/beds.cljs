@@ -185,8 +185,8 @@
         now (delay (walk-state p pos))]
     (boolean (some #(and (>= (:t %) since) (= pos (:pos (:data %))) (= @now (:state (:data %)))) (mem/entries view :bed-walk-unsafe)))))
 
-(defn bed-to-use
-  "The bed a body awake at night sleeps in: one it sees (seen-bed), else the remembered :bed within radius or the live
+(defn beds-to-use
+  "The beds a body awake at night sleeps in: one it sees (seen-bed), else the remembered :bed within radius or the live
   :spawn-bed at any distance (go-to prices the walk), under any roof or none. Never one permit? refuses (occupied), one in an unexpired :bed-unreachable entry, or whose :bed-walk-unsafe verdict still holds (walk-unsafe?), or one whose walk
   would take the body out of a kept-shelters shelter (unless overdue: max-days-awake days since :slept, phantoms, or a
   courtesy-walk?: another player sleeps and the bed is near);
@@ -203,12 +203,16 @@
                              (not-any? #(= pos (:pos (:data %))) (mem/entries view :bed-open))
                              (not (walk-unsafe? p view pos))
                              (or overdue? (not (kept-shelters (sh-inside/walk-leaves-shelter? p shelter pos 1))) (courtesy-walk? p view pos))))]
-      (or (seen-bed p ok?)
-          (->> (concat (sh-spawn/standing-beds p view radius) (seen-bed-places p radius) (some-> (sh-spawn/spawn-bed-pos p view) vector))
-               distinct
-               (sort-by #(u/dist (u/self-pos {:primitives p}) %))
-               (filter ok?)
-               first)))))
+      (distinct (concat (some-> (seen-bed p ok?) vector)
+                        (->> (concat (sh-spawn/standing-beds p view radius) (seen-bed-places p radius) (some-> (sh-spawn/spawn-bed-pos p view) vector))
+                             distinct
+                             (sort-by #(u/dist (u/self-pos {:primitives p}) %))
+                             (filter ok?)))))))
+
+(defn bed-to-use
+  "The first of beds-to-use: the bed seen, else the nearest by straight line (a caller that walks prices them with go-to: the night)."
+  [p view radius permit?]
+  (first (beds-to-use p view radius permit?)))
 
 (def walk-unsafe-policy
   "Policy of the :bed-walk-unsafe entries {:pos :state} the night job writes for a bed whose walk it priced unsafe: kept

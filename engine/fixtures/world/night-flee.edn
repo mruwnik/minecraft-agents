@@ -15,7 +15,7 @@
  [{:name "flees-to-a-roofed-home"
    :blocks [[:fill [29 2 15] [31 2 17] "stone"]]
    :act [[:job (jobs.memory.set-place {:name :home :pos #at [29 0 16]})]
-         [:job (jobs.survival.night {:settings {:jobs.survival.night.sites/walk-radius 5}})]]
+         [:job (jobs.survival.night {:settings {:jobs.survival.night.sites/home-walk-margin-s 0}})]]
    :expect [{:event {:source :job :kind :shelter.fled :data {:target :roofed-place}} :within-s 120}
             {:no-event {:source :job :kind :shelter.exposed} :for-s 60 :until {:source :job :kind :shelter.fled :data {:target :roofed-place}}}]
    :after [[:body-near [30.5 0 16.5] 3]]
@@ -45,7 +45,7 @@
   {:name "walled-home-flee-fails-honestly"
    :blocks [[:fill [0 -6 0] [31 -1 31] "bedrock"] [:fill [28 0 14] [31 4 18] "bedrock" :hollow] [:set [28 4 16] "air"] [:set [27 0 16] "torch"]]
    :act [[:job (jobs.memory.set-place {:name :home :pos #at [29 1 16]})]
-         [:job (jobs.survival.night {:settings {:jobs.survival.night.sites/walk-radius 5 :jobs.survival.night.sites/flee-radius 26}})]]
+         [:job (jobs.survival.night {:settings {:jobs.survival.night.sites/home-walk-margin-s 0 :jobs.survival.night.sites/flee-radius 26}})]]
    :expect [{:event {:source :job :kind :shelter.flee_failed} :within-s 150}
             {:event {:source :job :kind :shelter.exposed} :within-s 200}]
    :limit-s 230}

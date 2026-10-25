@@ -172,7 +172,7 @@
           (is (seq (st/calls p "place")))
           (is (< (:x (st/pos-of p)) 5)))))))
 
-(deftest a-home-the-walk-to-fits-the-time-before-dark-is-walked-to-though-farther-than-the-home-radius
+(deftest a-home-the-walk-to-fits-the-time-before-dark-is-walked-to-however-far-when-it-costs-less-than-digging-in
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -187,7 +187,7 @@
         (let [walled-near (into {"-18,66,0" "stone"}
                                 (for [x [-19 -18 -17] y [64 65] z [-1 0 1] :when (not= [x z] [-18 0])] [(str x "," y "," z) "stone_bricks"]))
               world (assoc lit-world :blocks (merge wide-ground walled-near (into {} (map (fn [[k v]] [(let [[x y z] (map #(js/parseInt %) (.split k ","))] (str (+ x 12) "," y "," z)) v])) home-roof)))
-              {:keys [eng p]} (await (night-at-home world {:x -18 :y 64 :z 0} {:roofed-places [:home :cabin] :settings {:jobs.survival.night.sites/walk-radius 5}}))]
+              {:keys [eng p]} (await (night-at-home world {:x -18 :y 64 :z 0} {:roofed-places [:home :cabin]}))]
           (mem/write! (:store eng) :cabin {:pos {:x 22 :y 64 :z 0}} mem/place-policy)
           (await (tu/run-until-empty eng 80))
           (is (= 22 (js/Math.floor (:x (st/pos-of p)))) "walked to the cabin go-to can reach, past the nearer home it cannot"))))))
@@ -206,6 +206,15 @@
           (is (= 40 (js/Math.floor (:x (st/pos-of p)))) "walked to the home that fits")
           (is (seq @quoted))
           (is (not-any? #(= :far (:place %)) @quoted) "the place no walk could cover in the time left costs no search"))))))
+
+(deftest a-carried-bed-waits-for-a-home-far-off-whose-walk-go-to-quotes-no-dearer-than-digging-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (await (night-at-home (update far-home-world :inventory conj {:name "red_bed" :count 1}) {:x 40 :y 64 :z 0}))]
+          (await (tu/run-until-empty eng 80))
+          (is (= [] (filterv #(< (:x (st/arg-pos %)) 38) (bed-places p))) "no bed was set down on the open ground on the way")
+          (is (<= 39 (:x (st/pos-of p))) "walked to the far home"))))))
 
 (deftest a-home-with-no-seen-roof-is-not-walked-to
   (async done
@@ -435,7 +444,7 @@
               log (await (with-child-log #(core/tick! eng)))]
           (is (empty? (filter #(= 'jobs.items.get-tool (second %)) log)) "no tool fetched in the dark"))))))
 
-(deftest with-nothing-to-dig-the-night-flees-to-a-roofed-home-beyond-the-walk-radius-by-an-unlit-route
+(deftest with-nothing-to-dig-the-night-flees-to-a-roofed-home-the-time-left-does-not-cover-by-an-unlit-route
   (async done
     (tu/run-async done
       (fn ^:async t []
