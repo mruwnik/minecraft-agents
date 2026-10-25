@@ -436,22 +436,24 @@
         names (ord/deposit-names inventory keep recency)
         dir (await (direction! c run))
         swap (when (and dir (zero? free-now)) (or (swap-target c st) (await (seek-swap! c run st))))
-        order (when dir (if (:stuck? (:args c))
-                          (ord/toss-order inventory keep recency (chest-cost) true)
-                          (ord/toss-order inventory keep recency toss-below)))
-        chest (when-not (:chest-done @run)
-                (when-not (contains? @run :chest)
-                  (swap! run assoc :chest (await (usable-chest! c (toss-cost order (slots-short c))))))
-                (:chest @run))]
+        order (if (:stuck? (:args c))
+                (ord/toss-order inventory keep recency (chest-cost) true)
+                (ord/toss-order inventory keep recency toss-below))]
     (cond
       (>= free-now free) (await (finish-end! c nil))
       (>= (:toss-fails m 0) (settings/get settings ::toss-fails)) (await (finish-end! c :toss-failed))
-      (and chest (seq names)) (do (await (put-away! c run chest names keep)) :again)
-      (and (:stuck? (:args c)) (not (:chest-done @run)) (seq names) (empty? order))
-      (do (await (put-away! c run nil names keep)) :again)
-      swap (do (await (swap-in! c swap)) :again)
-      (seq order) (do (await (toss! c (first order) dir {})) :again)
-      :else (await (finish-end! c (if (:acted m) :short :nothing-to-go))))))
+      :else
+      (let [chest (when-not (:chest-done @run)
+                    (when-not (contains? @run :chest)
+                      (swap! run assoc :chest (await (usable-chest! c (toss-cost order (slots-short c))))))
+                    (:chest @run))]
+        (cond
+          (and chest (seq names)) (do (await (put-away! c run chest names keep)) :again)
+          (and (:stuck? (:args c)) (not (:chest-done @run)) (seq names) (or (nil? dir) (empty? order)))
+          (do (await (put-away! c run nil names keep)) :again)
+          swap (do (await (swap-in! c swap)) :again)
+          (and dir (seq order)) (do (await (toss! c (first order) dir {})) :again)
+          :else (await (finish-end! c (if (:acted m) :short :nothing-to-go))))))))
 
 (defn ^:async round
   "One whole attempt: settle intents left by a cut, then step! until it ends."
