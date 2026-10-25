@@ -15,7 +15,7 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.path.executor :as executor]
-            [engine.perception :as perception]
+            [jobs.lib.memory-age :as memory-age]
             [engine.perception.rays :as rays]
             [engine.path.planner.base :as base]
             [engine.path.planner-tuned :as planner]
@@ -169,7 +169,7 @@
   there, dead-end), costed as go-to's walks but for the threats keep? leaves out (the chasers: their danger is the
   race); nil when the body cannot sense the world."
   [c goal keep? priced?]
-  (some-> (wworld/path-world (:primitives c) (wworld/with-seeds (cond-> (wworld/unknown-spec) priced? wworld/without-rock) goal nil))
+  (some-> (wworld/path-world (:primitives c) (wworld/with-seeds (cond-> (wworld/unknown-spec c) priced? wworld/without-rock) goal nil))
           (#(wworld/costed-world c % {:dangers? (wworld/dangers?) :dark? (wworld/dark?) :keep? keep?}))))
 
 (defn floor-cell [pos] (mapv #(js/Math.floor (% pos)) [:x :y :z]))
@@ -192,7 +192,7 @@
   [c st targets {:keys [y-margin chasers]} chased other?]
   (let [p (:primitives c)
         raw (look/raw-of p)]
-    {:dim (some-> ^js st .-dim) :memory (some-> ^js st perception/memory-epoch) :epoch (some-> raw rays/epoch-of) :pos (u/self-pos c) :kit (wworld/kit-of c) :food (.-food (.self p))
+    {:dim (some-> ^js st .-dim) :memory (some-> ^js st memory-age/epoch) :epoch (some-> raw rays/epoch-of) :pos (u/self-pos c) :kit (wworld/kit-of c) :food (.-food (.self p))
      :body (threats/death-body c)
      :others (threats/threats-of c other?)
      :caught-by (mapv #(assoc % :caught 1) (threats/threats-of c (complement other?)))

@@ -1,0 +1,42 @@
+;; Cards 58ee1f84, 5048d4dd: remembered water may have drained since it was seen; the planner prices a drop into it at the
+;; chance it is gone (jobs.lib.memory-age) times the dry fall, a death here. Raised ground y 0..1, a pool x 9..15 z 3..9
+;; (water y 0..1 on the floor), a tower x 4..6 z 4..6 to y 25 (the body on top, feet y 26): the drop into the pool is
+;; 25 blocks, dry 26. The body looks at the pool, turns west, and the pool is emptied out of its sight.
+;; :settings make water's prior 20 times quicker (fluid-seconds 5: likelier gone than not after 15 s) so a case waits 20 s, not 3 h.
+;; Should-succeed: just seen, the drop into the pool; drained and old, the stair down the tower's south side (x 5, z 7..29).
+;; Should-fail: drained and old with no stair: go-to stops without arriving, and the body never falls.
+{:defaults
+ {:tags [:movement :planner :water]
+  :time :any
+  :plot {:height 30}
+  :blocks [[:fill [0 0 0] [31 1 31] "stone"] [:fill [9 0 3] [15 1 9] "water"] [:fill [4 2 4] [6 25 6] "stone"]]
+  :body {:at [5.5 26 5.5] :yaw 270 :pitch 40 :settle-s 3}
+  :limit-s 150}
+ :cases
+ [{:name "just-seen-water-is-dropped-into"
+   :blocks [[:fill [5 2 7] [5 24 7] "stone"] [:fill [5 2 8] [5 23 8] "stone"] [:fill [5 2 9] [5 22 9] "stone"] [:fill [5 2 10] [5 21 10] "stone"] [:fill [5 2 11] [5 20 11] "stone"] [:fill [5 2 12] [5 19 12] "stone"] [:fill [5 2 13] [5 18 13] "stone"] [:fill [5 2 14] [5 17 14] "stone"] [:fill [5 2 15] [5 16 15] "stone"] [:fill [5 2 16] [5 15 16] "stone"] [:fill [5 2 17] [5 14 17] "stone"] [:fill [5 2 18] [5 13 18] "stone"] [:fill [5 2 19] [5 12 19] "stone"] [:fill [5 2 20] [5 11 20] "stone"] [:fill [5 2 21] [5 10 21] "stone"] [:fill [5 2 22] [5 9 22] "stone"] [:fill [5 2 23] [5 8 23] "stone"] [:fill [5 2 24] [5 7 24] "stone"] [:fill [5 2 25] [5 6 25] "stone"] [:fill [5 2 26] [5 5 26] "stone"] [:fill [5 2 27] [5 4 27] "stone"] [:fill [5 2 28] [5 3 28] "stone"] [:fill [5 2 29] [5 2 29] "stone"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [12 0 6] :range 1 :ways #{:walk}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes [:not ["suffocation"]]}} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:body-near [12.5 0 6.5] 3]]}
+  {:name "water-likely-drained-is-not-dropped-into-the-stair-is-taken"
+   :settings {:jobs.lib.memory-age/fluid-seconds 5}
+   :blocks [[:fill [5 2 7] [5 24 7] "stone"] [:fill [5 2 8] [5 23 8] "stone"] [:fill [5 2 9] [5 22 9] "stone"] [:fill [5 2 10] [5 21 10] "stone"] [:fill [5 2 11] [5 20 11] "stone"] [:fill [5 2 12] [5 19 12] "stone"] [:fill [5 2 13] [5 18 13] "stone"] [:fill [5 2 14] [5 17 14] "stone"] [:fill [5 2 15] [5 16 15] "stone"] [:fill [5 2 16] [5 15 16] "stone"] [:fill [5 2 17] [5 14 17] "stone"] [:fill [5 2 18] [5 13 18] "stone"] [:fill [5 2 19] [5 12 19] "stone"] [:fill [5 2 20] [5 11 20] "stone"] [:fill [5 2 21] [5 10 21] "stone"] [:fill [5 2 22] [5 9 22] "stone"] [:fill [5 2 23] [5 8 23] "stone"] [:fill [5 2 24] [5 7 24] "stone"] [:fill [5 2 25] [5 6 25] "stone"] [:fill [5 2 26] [5 5 26] "stone"] [:fill [5 2 27] [5 4 27] "stone"] [:fill [5 2 28] [5 3 28] "stone"] [:fill [5 2 29] [5 2 29] "stone"]]
+   :act [[:rcon "tp $BODY ~ ~ ~ 90 0"]
+         [:until-facing {:yaw 90 :pitch 0} 10]
+         [:rcon "execute positioned $X $Y $Z run fill ~9 ~ ~3 ~15 ~1 ~9 air"]
+         [:wait-s 20]
+         [:job (jobs.movement.go-to {:pos #at [12 0 6] :range 1 :ways #{:walk}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 120 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes [:not ["suffocation"]]}} :for-s 120 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:body-near [12.5 0 6.5] 3]]}
+  {:name "water-likely-drained-with-no-other-way-down-is-not-dropped-into"
+   :settings {:jobs.lib.memory-age/fluid-seconds 5}
+   :act [[:rcon "tp $BODY ~ ~ ~ 90 0"]
+         [:until-facing {:yaw 90 :pitch 0} 10]
+         [:rcon "execute positioned $X $Y $Z run fill ~9 ~ ~3 ~15 ~1 ~9 air"]
+         [:wait-s 20]
+         [:job (jobs.movement.go-to {:pos #at [12 0 6] :range 1 :ways #{:walk}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 90 :of-job true}
+            {:no-event {:source :body :kind :died} :for-s 90 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:body-far [12.5 0 6.5] 4]]}]}

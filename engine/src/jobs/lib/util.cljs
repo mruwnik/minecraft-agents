@@ -5,7 +5,8 @@
             [engine.settings :as settings]
             [engine.game :as game]
             [engine.ctx :as ctx]
-            [engine.perception.rays :as rays]))
+            [engine.perception.rays :as rays]
+            [jobs.lib.memory-age :as memory-age]))
 
 (a/defargs settings
   {::max-failures {:default 3 :doc "Failures in a row a retrying helper takes before it gives up." :spec (a/int-in 1 nil)}
@@ -35,9 +36,11 @@
 
 (defn block-at
   "The block at cell pos (a cljs or JS {x y z}) as the body senses it (felt, in view or remembered; an unknown cell has no
-  :name), or nil when the chunk is not loaded. With perception p.blockAt is p.sensedAt: no job reads the world raw."
+  :name), or nil when the chunk is not loaded. With perception p.blockAt is p.sensedAt: no job reads the world raw; a
+  remembered cell likelier changed than not reads unknown (as sensed)."
   [p pos]
-  (.blockAt p (clj->js pos)))
+  (let [b (.blockAt p (clj->js pos))]
+    (if (memory-age/reads-changed? (aget p "perception") b) #js {:unknown true :pos (.-pos b)} b)))
 
 (defn block-name
   "The block name at cell pos, or nil when the chunk is not loaded."
@@ -69,10 +72,12 @@
 
 (defn sensed
   "What the body knows of a cell as the JS answer (blockAt's keys plus ageMs, felt, visible, unknown), or nil when the chunk
-  is not loaded. Primitives that are not wrapped by perception (no sensedAt) know nothing: nil, never a blockAt read."
+  is not loaded. A remembered cell likelier changed than not (jobs.lib.memory-age/reads-changed?) reads unknown.
+  Primitives that are not wrapped by perception (no sensedAt) know nothing: nil, never a blockAt read."
   [p pos]
   (when (some? (.-sensedAt p))
-    (let [b (.sensedAt p (if (map? pos) #js {:x (:x pos) :y (:y pos) :z (:z pos)} (clj->js pos)))]
+    (let [b (.sensedAt p (if (map? pos) #js {:x (:x pos) :y (:y pos) :z (:z pos)} (clj->js pos)))
+          b (if (memory-age/reads-changed? (aget p "perception") b) #js {:unknown true :pos (.-pos b)} b)]
       (when (and *reads* b (true? (.-unknown b))) (note-read! :cells (cell-vec pos)))
       b)))
 

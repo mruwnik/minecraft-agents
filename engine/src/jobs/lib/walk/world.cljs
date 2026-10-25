@@ -22,8 +22,8 @@
             [jobs.lib.walk.rock :as rock]
             [jobs.lib.walk.sight :as wsight]
             [jobs.lib.walk.way-on :as way-on]
-            [engine.perception :as perception]
-            [engine.perception.store :as store]))
+            [engine.perception.store :as store]
+            [jobs.lib.memory-age :as memory-age]))
 
 (a/defargs settings
   {::default-food {:default 20 :doc "The food a walk counts on when it has neither a :food arg nor a body food: fed (nothing caps the damage)." :spec (a/int-in 0 nil)}
@@ -43,11 +43,16 @@
 (defn unknown-spec
   "go-to's :unknown as the mask spec of one go-to call (the planner's options.unknown less what path-world adds): the prices
   (jobs.lib.cost/walk-unknown-prices) and one missed Set, shared by every pathWorld made with this spec (the floors the
-  walk looked for and could not see), and one blocked Set of cells it looked at and could not see (they read as stone)."
-  []
-  (let [{:keys [peek-s aim-s see-lit-depth light-depth]} (cost/walk-unknown-prices)]
-    #js {:peekS peek-s :aimS aim-s :seeLitDepth see-lit-depth :lightDepth light-depth :missed (js/Set.)
-         :noLight (js/Set.) :blocked (js/Set.)}))
+  walk looked for and could not see), and one blocked Set of cells it looked at and could not see (they read as stone).
+  With ctx c, deathHp: the hp a death of its body here weighs (jobs.lib.cost/lethal-hp of a certain one)."
+  ([]
+   (let [{:keys [peek-s aim-s see-lit-depth light-depth]} (cost/walk-unknown-prices)]
+     #js {:peekS peek-s :aimS aim-s :seeLitDepth see-lit-depth :lightDepth light-depth :missed (js/Set.)
+          :noLight (js/Set.) :blocked (js/Set.)}))
+  ([c]
+   (let [p (:primitives c)]
+     (doto (unknown-spec)
+       (unchecked-set "deathHp" (cost/lethal-hp (cost/death-body p (ctx/view c)) 1 (u/self-pos c)))))))
 
 (def torch-base*
   (delay (let [^js t (blocks/default-state-table)
@@ -68,84 +73,36 @@
   [^js unknown light-cost light-ok]
   (js/Object.assign #js {} unknown #js {:lightCost light-cost :torchBase (torch-base) :lightOk light-ok}))
 
-(defonce ^:private candidate-cache (js/WeakMap.))
-
-(defn- changing-cells
-  "The cell indices of the section holding a state that changes without the body's doing (a door, gate, trapdoor, fire;
-  a fluid does not: only a builder moves it), kept per write of the section and once the sight table is known (mutable-id? is false before it)."
-  [^js st ^js sec]
-  (let [hit (.get candidate-cache sec)
-        k [(.-wrote sec) (some? (.-sight st))]]
-    (if (and hit (= k (:k hit)))
-      (:v hit)
-      (let [^js ids (.-ids sec)
-            v (into [] (filter (fn [i] (let [id (aget ids i)] (and (pos? id) (store/mutable-id? st (dec id)) (not (store/fluid-id? st (dec id)))))))
-                    (range 4096))]
-        (.set candidate-cache sec {:k k :v v})
-        v))))
-
-(defonce ^:private unaged-cache (js/WeakMap.))
-
-(defn- unaged-ids
-  "The section's memory ids with the cells of a state that changes by itself (changing-cells: a door, gate, trapdoor or
-  fire) older than :mutable-max-ms zeroed: they read unseen, as perception reads them. A fluid, and a cell beside one,
-  stays as remembered however old: nothing but a builder changes water, so the chance it changed is far below one half
-  and the planner prices it as the water it saw (perception/remembered-age reads it unknown, and breath keeps its own
-  water memory). The section's own array when none aged; kept per perception/memory-epoch."
-  [^js st ^js sec cx sy cz]
-  (let [k (perception/memory-epoch st)
-        hit (.get unaged-cache sec)]
-    (if (= k (:k hit))
-      (:v hit)
-      (let [now ((.-nowFn st))
-            limit (.-mutableMaxMs st)
-            ^js ids (.-ids sec)
-            out (volatile! nil)]
-        (doseq [i (changing-cells st sec)]
-          (when (and (pos? (aget ids i)) (> (- now (store/cell-seen sec i)) limit))
-            (when-not @out (vreset! out (.slice ids)))
-            (aset ^js @out i 0)))
-        (let [v (or @out ids)] (.set unaged-cache sec {:k k :v v}) v)))))
-
-(defn- sections-reader
-  "(fn [cx sy cz]) over the body's memory sections, nil without a perception; read-ids gets the store, the section and its cx sy cz."
-  [p read-ids]
+(defn memory-sections
+  "(fn [cx sy cz]) the ids of the body's memory of that section (sy the world's section y; ids + 1, 0 never seen; however
+  old: the planner prices an aging cell by options.unknown.changed), or nil; nil without a perception. The section's own
+  array: copy it to keep it."
+  [p]
   (when-let [per (aget p "perception")]
     (let [^js st (:st per)
           ^js sections (store/store-of st (.-dim st))]
       (fn [cx sy cz]
-        (when-let [^js sec (.get sections (store/section-key cx sy cz))]
-          (read-ids st sec cx sy cz))))))
-
-(defn memory-sections
-  "(fn [cx sy cz]) the ids of the body's memory of that section (sy the world's section y; ids + 1, 0 never seen or read
-  unknown by perception's rule), or nil; nil without a perception."
-  [p]
-  (sections-reader p unaged-ids))
-
-(defn- raw-sections
-  "memory-sections with the ids as stored: a cell that aged to unknown still counts as seen (the rock guess spares what lies round it)."
-  [p]
-  (sections-reader p (fn [_ ^js sec _ _ _] (.-ids sec))))
+        (some-> ^js (.get sections (store/section-key cx sy cz)) .-ids)))))
 
 (defn- memory-epoch-fn
-  "(fn []) perception/memory-epoch, which moves whenever a cell is seen or changed or, while a cell can still age, the clock passes a second (a masked view kept for a while re-reads memory only then)."
+  "(fn []) memory-age/epoch of the body's memory, which moves whenever a cell is seen or changed or a remembered cell's
+  change chance moves a level (a masked view kept for a while re-reads memory only then)."
   [p]
   (when-let [per (aget p "perception")]
-    (let [^js st (:st per)] (fn [] (perception/memory-epoch st)))))
+    (let [^js st (:st per)] (fn [] (memory-age/epoch st)))))
 
 (defonce ^:private counted (js/WeakMap.))
 
 (defn way-scan
   "way-on/scan from the body's feet ({:k :n :ways}: the seen stands nearest the body of primitives p, how many lead out, its
   first unseen ways), nil without a perception. Kept while the body stands in one cell and no block it remembers changed
-  or aged (perception/memory-epoch): every costed world of a flight step asks it."
+  or moved a change-chance level (memory-age/epoch): every costed world of a flight step asks it."
   [p]
   (when-let [known (memory-sections p)]
     (let [^js pos (.-pos (.self p))
           ^js st (:st (aget p "perception"))
           start (mapv js/Math.floor [(.-x pos) (.-y pos) (.-z pos)])
-          k [(.-dim st) (perception/memory-epoch st) start (settings/get way-on/settings ::way-on/sample)]
+          k [(.-dim st) (memory-age/epoch st) start (settings/get way-on/settings ::way-on/sample)]
           hit (.get counted st)]
       (if (= k (:k hit))
         (:v hit)
@@ -182,11 +139,11 @@
   them. Nil without a perception (no memory, no guessed rock). Kept while the body stands in one section and no block it
   remembers changed or aged."
   [p]
-  (when-let [known (raw-sections p)]
+  (when-let [known (memory-sections p)]
     (let [{:keys [x y z]} (sh-sense/feet p)
           ^js st (:st (aget p "perception"))
           [cx sy cz :as at] (mapv #(bit-shift-right % 4) [x y z])
-          k [(.-dim st) (perception/memory-epoch st) at]
+          k [(.-dim st) (memory-age/epoch st) at]
           hit (.get shares st)]
       (if (= k (:k hit))
         (:v hit)
@@ -236,7 +193,7 @@
   (if-not unknown
     :raw
     (let [rock (when-let [known (and (rock-guess? p unknown) (memory-sections p))]
-                 (rock/rock-at {:k (rock-beyond) :known (raw-sections p) :seeds (rock-seeds p unknown)}))
+                 (rock/rock-at {:k (rock-beyond) :known (memory-sections p) :seeds (rock-seeds p unknown)}))
           ^js blocked (.-blocked unknown)
           blocked (when (and blocked (pos? (.-size blocked))) blocked)]
       (if (or rock blocked)
@@ -257,8 +214,8 @@
 (defn path-world
   "The primitives' pathWorld sensing (a snapshot over the world) with the planner's block table and free-space module, nil when
   they have none or cannot sense now. With unknown (unknown-spec), over a body with a perception: cells the body never saw
-  or felt read void_air (its known cells as remembered), and the snapshot carries the planner's options.unknown:
-  the spec with the mask's id, cell (unseen-share), seeDepth (from what the body holds now) and seeLit (look/see-lit-fn). Where
+  or felt read void_air (its known cells as remembered, however old), and the snapshot carries the planner's options.unknown:
+  the spec with the mask's id, changed (memory-age/changed-fn: the chance a remembered cell changed), cell (unseen-share), seeDepth (from what the body holds now) and seeLit (look/see-lit-fn). Where
   the rock guess holds (rock-guess?), an unseen cell past ::rock-beyond of every seen open cell, the
   feet and the spec's seeds (with-seeds) reads stone (jobs.lib.walk.rock), or with the spec's rockEdge the loaded edge (a
   frontier, the snapshot's edge); the mask's rockBeyond says so (0: none)."
@@ -273,12 +230,13 @@
            mask (when known
                   (js/Object.assign #js {} unknown
                                     #js {:id (if (.-edge unknown) unloaded-id (first (blocks/state-ids table (if under? "seagrass" "void_air")))) :blockedId stone :known known :memoryEpoch (memory-epoch-fn p)
+                                         :changed (memory-age/changed-fn (:st (aget p "perception")))
                                          :cell (unseen-share p) :seeDepth (see-depth-now p) :seeLit (look/see-lit-fn p) :rockBeyond (or k 0)}))]
        (when-let [pw (if mask (.pathWorld p mask) (.pathWorld p))]
          (let [pw (js/Object.assign #js {:table table :space space/space} pw)]
            (when k
              (set! (.-snapshot pw) (rock/with-rock (.-snapshot pw) {:mask (.-id mask) :stone (if (.-rockEdge unknown) unloaded-id stone) :edge (true? (.-rockEdge unknown))
-                                                                    :k k :known (raw-sections p) :seeds (rock-seeds p unknown)})))
+                                                                    :k k :known (memory-sections p) :seeds (rock-seeds p unknown)})))
            pw))))))
 
 (defn unknown-of
@@ -553,8 +511,8 @@
   ((if (:over-budget c) cost/survivable-budget cost/damage-budget) (damage-body c) (walk-settings c)))
 
 (defn known-fn
-  "(fn [x y z]) true when the body of primitives p has seen or felt the block there (now or remembered, not unknown, or
-  water and air breath/remembered-water-name still counts); nil without a perception."
+  "(fn [x y z]) true when the body of primitives p has seen or felt the block there (now or remembered, not unknown: see
+  u/sensed); nil without a perception."
   [p]
   (when (some? (.-sensedAt p))
     (let [memo (js/Map.)]
@@ -564,7 +522,7 @@
             (.get memo k)
             (let [cell {:x x :y y :z z}
                   ^js b (u/sensed p cell)
-                  known (boolean (and b (or (not (true? (.-unknown b))) (breath/remembered-water-name p cell))))]
+                  known (boolean (and b (not (true? (.-unknown b)))))]
               (.set memo k known)
               known)))))))
 

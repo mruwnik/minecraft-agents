@@ -71,7 +71,7 @@
      with the plan's certain damage to options.health (20) is lethal, each air-out (under since the last breath) counting its 2 hp hits as ceil(seconds + costs.drownSlack (1)): refused (reason air-lethal) unless options.costs.lethalAir is 1 (go-to :costs :lethal-air, breathe's), then it costs LETHAL-S (times the dearest second the caller's prices allow) more, so a lethal plan comes back only when no other does. Any
      other plan swims no further than airLimit from airUsed.
    - options.unknown (nil: off, every loaded cell as it is) {id floorId cell seeDepth seeLit seeLitDepth lightDepth peekS aimS lightCost lightOk
-     torchBase missed noLight}: a cell of state id (void_air) is one the body has not seen, air to the body (but never breath: a swim in water under an unseen head cell drains the air like a dive). A stand on such a
+     torchBase missed noLight changed deathHp}: a cell of state id (void_air) is one the body has not seen, air to the body (but never breath: a swim in water under an unseen head cell drains the air like a dive). A stand on such a
      floor is a phantom floor (read as floorId, stone; not under water): allowed only after a move the walk can stop before
      (walk, diagonal, corner, jump, drop; not after a gap, climb, trapdoor open, swim, exit or bounce: else result unseenRefused; a
      gap may jump over it, not through an unseen feet or head cell) and only where it can be seen: a drop of d (level and
@@ -82,6 +82,10 @@
      unseen feet, head or floor cell costs cell times its seconds, and peekS a drop onto a phantom floor, aimS a level or up step
      (in cost.darkSeconds; jobs.lib.cost/unknown-prices). No fall goes into an unseen cell, risk looks stop there, and no
      goal-enclosed, goal-not-standable or start-enclosed proof rests on one. missed and noLight are Sets of cell-key.
+     changed(x, y, z) (nil: 0 everywhere) is the chance a remembered cell changed since it was seen (unseen at that chance):
+     a move costs cell times its seconds times the most of its feet, head and floor cells', and a drop into remembered water
+     adds that chance of the dry fall to the pool's floor as risk (its damage, or deathHp when it kills; default lethal-s
+     over riskWeight) in place of landingSeen's cut.
    - options.stopAtEdge: with the goal unloaded, the search names the first node it expands at the loaded edge (edgeStop)
      as its frontier and ends once it has expanded as many nodes again (or run out, or the caller ends it: endSweep), not
      after searching all loaded land; what only those nodes refused is not in the result. go-to's budgeted searches set it
@@ -425,7 +429,10 @@
      ;; goal-seen
      (.-goalSeen options)
      (unchecked-get costs "descentS")
-     (if (pos? rw) (/ (* (unchecked-get costs "gapMiss") lethal-s) rw) 0))))
+     (if (pos? rw) (/ (* (unchecked-get costs "gapMiss") lethal-s) rw) 0)
+     ;; unk-changed unk-death
+     (when unk (.-changed unknown))
+     (if (and unk (some? (.-deathHp unknown))) (.-deathHp unknown) (if (pos? rw) (/ lethal-s rw) 0)))))
 
 ;; the body's box reaches this far from its centre in x and z: the client physics' width, which decides what holds it up
 (def HITBOX-HALF constants/body-half-width)

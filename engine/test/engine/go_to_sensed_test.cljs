@@ -23,6 +23,7 @@
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.dig-route :as dig-route]
             [jobs.lib.escape :as escape]
+            [jobs.lib.memory-age :as memory-age]
             [jobs.lib.world-files :as world-files]
             [jobs.lib.pass :as pass]
             [jobs.lib.reach :as reach]
@@ -724,32 +725,32 @@
           (is (true? (:found route)) (pr-str route))
           (is (= 8 (:length route)) (pr-str route)))))))
 
-(deftest the-masked-planner-reads-a-remembered-door-gate-trapdoor-or-fire-older-than-the-memory-limit-as-unseen
-  (doseq [block ["oak_door" "oak_fence_gate" "oak_trapdoor" "fire"]]
+(deftest the-masked-planner-keeps-a-remembered-door-gate-trapdoor-fire-or-water-and-prices-the-chance-it-changed
+  (doseq [[block kind] [["oak_door" memory-age/DOOR] ["oak_fence_gate" memory-age/DOOR] ["oak_trapdoor" memory-age/DOOR]
+                        ["fire" memory-age/FIRE] ["water" memory-age/FLUID]]]
     (let [clock (atom 1000000)
           {:keys [w]} (sensed-only (assoc-in (assoc corridor :yaw 90 :now #(deref clock)) [:blocks "5,64,0"] block))
           _ (perception/pass! (aget w "perception"))
           read (fn [] (let [pw (wworld/path-world w (wworld/unknown-spec))
-                            ^js s (.-snapshot pw)]
-                        {:cell (.stateAt s 5 64 0) :stone (.stateAt s 5 63 0) :unseen (.-id (wworld/unknown-of pw))}))
+                            changed (or (.-changed (wworld/unknown-of pw)) (constantly 0))]
+                        {:cell (.stateAt (.-snapshot pw) 5 64 0) :changed (changed 5 64 0) :stone (changed 5 63 0)}))
           fresh (read)
           scan (wworld/way-scan w)
-          _ (swap! clock + 11000)
+          _ (swap! clock + 1000 (memory-age/half-age-ms kind))
           aged (read)]
-      (is (not= (:unseen fresh) (:cell fresh)) (str block " fresh: remembered"))
-      (is (= (:unseen aged) (:cell aged)) (str block " aged: unknown, as perception reads it"))
-      (is (= (:stone fresh) (:stone aged)) "stone keeps its memory")
-      (is (not (identical? scan (wworld/way-scan w))) (str block ": way-scan reads again once the memory aged")))))
+      (is (= (:cell fresh) (:cell aged)) (str block ": the remembered state however old"))
+      (is (zero? (:changed fresh)) (str block " just seen: no chance worth pricing"))
+      (is (= 0.5 (:changed aged)) (str block " past its half age: priced at one half"))
+      (is (zero? (:stone aged)) "stone does not age")
+      (is (not (identical? scan (wworld/way-scan w))) (str block ": way-scan reads again once the chance moved")))))
 
-(deftest the-masked-planner-keeps-a-remembered-fluid-and-the-air-beside-it-however-old
+(deftest the-air-beside-remembered-water-ages-as-the-water-does
   (let [clock (atom 1000000)
-        {:keys [w]} (sensed-only (assoc-in (assoc corridor :yaw 90 :now #(deref clock)) [:blocks "5,64,0"] "water"))
-        _ (perception/pass! (aget w "perception"))
-        read (fn [] (let [^js s (.-snapshot (wworld/path-world w (wworld/unknown-spec)))]
-                      (mapv #(.stateAt s % 64 0) [4 5 6])))
-        fresh (read)]
-    (swap! clock + 600000)
-    (is (= fresh (read)) "the water at 5 and the air at 4 and 6: no chance worth pricing that a builder changed them")))
+        {:keys [w]} (sensed-only (assoc-in (assoc corridor :yaw 90 :now #(deref clock)) [:blocks "5,64,0"] "water"))]
+    (perception/pass! (aget w "perception"))
+    (swap! clock + 1000 (memory-age/half-age-ms memory-age/FLUID))
+    (let [changed (.-changed (wworld/unknown-of (wworld/path-world w (wworld/unknown-spec))))]
+      (is (= [0.5 0.5 0.5 0] (mapv #(changed % 64 0) [4 5 6 8])) "the water at 5 and the air at 4 and 6; 8 is not beside it"))))
 
 (deftest go-to-walks-into-a-wall-built-out-of-sight-sees-it-and-digs-through
   (async done

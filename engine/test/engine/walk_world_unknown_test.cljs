@@ -216,39 +216,18 @@
     {:clock clock :p p :w w
      :ids (fn [] (let [ids ((wworld/memory-sections w) 0 4 0)] (aget ids (+ 15 (* 256 0) (* 16 0)))))}))
 
-(deftest a-door-seen-after-the-index-was-built-ages-to-unseen
-  (let [{:keys [clock p w ids]} (aging-world)
-        _ (swap! (fake/state p) assoc :light-default [0 15])
-        before (ids)]
-    (fake/set-block! p [15 64 0] "oak_door")
-    (perception/pass! (aget w "perception"))
-    (swap! clock + 11000)
-    (is (pos? before) "seen")
-    (is (zero? (ids)) "a door older than the limit: unknown")))
-
-(deftest water-and-the-air-beside-it-keep-their-memory-however-old
-  (let [{:keys [clock p w ids]} (aging-world)
-        _ (swap! (fake/state p) assoc :light-default [0 15])
-        air (ids)]
-    (fake/set-block! p [16 64 0] "water")
-    (perception/pass! (aget w "perception"))
-    (swap! clock + 600000)
-    (is (pos? air) "seen")
-    (is (= air (ids)) "air beside water read as remembered an age later")))
-
-(deftest an-index-built-before-the-sight-table-is-known-is-built-again-once-it-is
-  (let [{:keys [clock p w ids]} (aging-world)
-        ^js st (:st (aget w "perception"))
-        kinds (.-kinds st)]
-    (fake/set-block! p [15 64 0] "oak_door")
-    (perception/pass! (aget w "perception"))
-    (swap! clock + 11000)
-    (set! (.-sight st) nil)
-    (set! (.-kinds st) nil)
-    (ids)
-    (set! (.-kinds st) kinds)
-    (rays/sight-of (aget w "perception") st)
-    (is (zero? (ids)) "the door aged out of a section whose first index was empty")))
+(deftest the-mask-keeps-a-remembered-door-water-and-the-air-beside-it-however-old
+  (doseq [[block at] [["oak_door" [15 64 0]] ["water" [16 64 0]]]]
+    (let [{:keys [clock p w ids]} (aging-world)
+          _ (swap! (fake/state p) assoc :light-default [0 15])
+          air (ids)]
+      (fake/set-block! p at block)
+      (perception/pass! (aget w "perception"))
+      (let [seen (ids)]
+        (swap! clock + (* 24 3600 1000))
+        (is (pos? seen) (str block ": seen"))
+        (is (= seen (ids)) (str block ": the cell at 15 read as remembered a day later (the chance it changed is options.unknown.changed's)"))
+        (is (or (= "oak_door" block) (= air seen)) "the air beside the water kept")))))
 
 (deftest the-ways-on-are-counted-once-a-memory
   (let [{:keys [p w]} (sensed wall-world)

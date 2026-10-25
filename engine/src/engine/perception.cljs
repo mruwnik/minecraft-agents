@@ -49,7 +49,7 @@
     felt         the cell touches the body (hitbox grown by 0.1, and the cell under the feet), any light;
     visible      a glance: one ray, by the pass's rules (cone, line, light or near); memory takes it;
     remembered   the state last seen, :age-ms old (to the ms for fluids, doors, gates, trapdoors and fire; else
-                 to the second); one of those mutable states older than `:mutable-max-ms` (10 s) reads unknown;
+                 to the second), however old: what the age makes of it is the reader's (jobs.lib.memory-age);
     unknown      {:unknown true :pos}.
   Answers are cached for one tick (`:step-ms`) while the eye and the raw world's epoch stay the same.
   A cell outside the cone needs a turn first: the wrapped look glances its cell and the 6 neighbours once it settles.
@@ -114,8 +114,7 @@
    :engine.perception/mob-ms {:default 250 :spec (a/int-in 1 nil) :doc "A mob sample is taken this often, ms."}
    :engine.perception/mob-scan {:default 64 :spec (a/num-in 0 nil) :doc "Hostiles within this many blocks of the body are sampled."}
    :engine.perception/hearing {:default 16 :spec (a/num-in 0 nil) :doc "A mob within this many blocks of the eye is heard."}
-   :engine.perception/mob-drift {:default 16 :spec (a/num-in 0 nil) :doc "A mob not sensed is forgotten once it could have walked this many blocks."}
-   :engine.perception/mutable-max-ms {:default 10000 :spec (a/int-in 1 nil) :doc "A remembered fluid, door, gate, trapdoor or fire older than this reads unknown, ms."}})
+   :engine.perception/mob-drift {:default 16 :spec (a/num-in 0 nil) :doc "A mob not sensed is forgotten once it could have walked this many blocks."}})
 
 (defn defaults
   "The perception options as set (:save-ms from engine.settings)."
@@ -136,11 +135,11 @@
      :opts o
      :grid g
      :st #js {:stores (js/Map.) :count 0 :cap (max 1 (js/Math.floor (/ (:cap-bytes o) store/section-bytes)))
-              :writes 0 :agingSec -1 :anyFluid false :stamp 0 :lastKey -1 :lastSec nil :minSec nil :minNow nil :minVal 0 :dim "overworld" :sight nil :visible nil
+              :writes 0 :stamp 0 :lastKey -1 :lastSec nil :minSec nil :minNow nil :minVal 0 :dim "overworld" :sight nil :visible nil
               :pass nil :passRays nil :lastStart nil :unsubscribe nil
               :mobs (js/Map.) :mobSource nil
               :infoOf (fn [id] (.stateInfo ^js raw id)) :kinds nil :sensedKey nil :sensed (js/Map.) :blockBases (js/Map.) :jsBases (js/Map.)
-              :nowFn (:now o) :tickMs (:step-ms o) :mutableMaxMs (:mutable-max-ms o) :radius (:radius o) :hx (:hx g) :hy (:hy g)
+              :nowFn (:now o) :tickMs (:step-ms o) :radius (:radius o) :hx (:hx g) :hy (:hy g)
               :passes 0 :rays 0 :cells 0 :steps 0 :stepMs 0 :stepMsMax 0}}))
 
 (defn stats [{:keys [st] :as per}]
@@ -212,24 +211,12 @@
     (assoc (block-of per id pos) :age-ms 0 :felt true)))
 
 (defn remembered-age
-  "The age in ms of the remembered state id of cell (x y z), nil when it reads unknown: never seen, or a mutable state,
-  or a non-solid cell beside a remembered fluid, older than :mutable-max-ms."
+  "The age in ms of the remembered state of cell (x y z), nil when it was never seen."
   [^js st x y z]
   (when-let [^js sec (store/section-at st x y z)]
-    (let [i (store/cell-index x y z)
-          v (aget (.-ids sec) i)]
-      (when (pos? v)
-        (let [id (dec v)
-              age (- ((.-nowFn st)) (store/cell-seen sec i))]
-          (when-not (and (> age (.-mutableMaxMs st)) (or (store/mutable-id? st id) (store/beside-fluid? st x y z id)))
-            age))))))
-
-(defn memory-epoch
-  "A key (compare with =) that changes whenever what remembered-age answers can: a store write, or (while a cell that can
-  age was seen within :mutable-max-ms) the next second of the clock. The key of anything kept from a read of the
-  remembered world: it holds still while nothing can age."
-  [^js st]
-  [(.-writes st) (js/Math.min (js/Math.floor (/ ((.-nowFn st)) 1000)) (inc (.-agingSec st)))])
+    (let [i (store/cell-index x y z)]
+      (when (pos? (aget (.-ids sec) i))
+        (- ((.-nowFn st)) (store/cell-seen sec i))))))
 
 (defn sense-fresh!
   "Clears the sensed cache when what it depends on (the tick, the raw world's epoch and the eye) changed since the last

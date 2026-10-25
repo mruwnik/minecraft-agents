@@ -92,7 +92,7 @@
 (def mutable-names #{"water" "lava" "bubble_column" "fire" "soul_fire"})
 
 (defn mutable-name?
-  "Fluids, doors, fence gates, trapdoors and fire: cells that change out of sight, so an old memory of them is unsafe."
+  "Fluids, doors, fence gates, trapdoors and fire: cells that change out of sight, kept to the ms."
   [name]
   (or (contains? mutable-names name)
       (.endsWith name "_door") (.endsWith name "_fence_gate") (.endsWith name "_trapdoor")))
@@ -115,10 +115,6 @@
   [^js st id]
   (and (some? (.-sight st)) (id-flag? st "kinds" id #(mutable-name? (.-name ^js %)))))
 
-(def fluid-names #{"water" "lava" "bubble_column"})
-
-(declare fluid-id? beside-fluid-at?)
-
 (defn record! [^js st store x y z id now]
   (let [cx (bit-shift-right x 4) sy (bit-shift-right y 4) cz (bit-shift-right z 4)
         key (section-key cx sy cz)
@@ -127,15 +123,8 @@
         ^js ids (.-ids sec)
         v (inc id)
         mutable? (let [k (if-let [^js ks (.-kinds st)] (if (< id (.-length ks)) (aget ks id) 0) 0)]
-                   (if (zero? k) (mutable-id? st id) (== k 1)))
-        _ (when (and mutable? (not (.-anyFluid st)) (fluid-id? st id)) (set! (.-anyFluid st) true))
-        ;; a remembered cell that aged out reads unknown; seeing it again answers differently with the same id
-        stale? (and (== (aget ids i) v) (> (- now (cell-seen sec i)) (.-mutableMaxMs st)))
-        due-sec (js/Math.floor (/ (+ now (.-mutableMaxMs st)) second-ms))
-        bump? (> due-sec (.-agingSec st))
-        ages? (or mutable? (and (or stale? bump?) (.-anyFluid st) (beside-fluid-at? st sec i x y z id)))]
-    (when (and ages? bump?) (set! (.-agingSec st) due-sec))
-    (when (or (and stale? ages?) (not (== (aget ids i) v)))
+                   (if (zero? k) (mutable-id? st id) (== k 1)))]
+    (when-not (== (aget ids i) v)
       (set! (.-writes st) (inc (.-writes st)))
       (set! (.-wrote sec) (.-writes st)))
     (aset ids i v)
@@ -154,9 +143,8 @@
 
 (defn section-stamp
   "The section cx sy cz of dimension dim as one number: twice st's writes count at its last write (0: none since it was
-  loaded), plus 1 when it keeps a mutable state's time (fine-times: it, or a cell beside it, may age to unknown, see
-  remembered); -1 when it is not in memory. Its cells answer the same while the number stays, and while the clock does
-  where it is odd."
+  loaded), plus 1 when it keeps a mutable state's time (fine-times); -1 when it is not in memory. Its cells' states stay
+  the same while the number does."
   [^js st dim cx sy cz]
   (if-let [^js sec (.get (store-of st dim) (section-key cx sy cz))]
     (+ (* 2 (or (.-wrote sec) 0)) (if (.-fine sec) 1 0))
@@ -238,31 +226,3 @@
                                     (when (>= (.-length found) (* 4 (clojure.core/max max 64))) (keep-nearest!))))))))))))
         (.sort found by-distance)
         (into [] (comp (take max) (map (fn [^js r] {:name (.-name r) :pos (.-pos r) :distance (.-distance r) :age-ms (.-ageMs r)}))) found)))))
-
-(defn fluid-id?
-  "Whether state id holds a remembered-fluid block (kept per id like mutable-id?)."
-  [^js st id]
-  (id-flag? st "fluidIds" id #(contains? fluid-names (.-name ^js %))))
-
-(defn- fluid-neighbour?
-  "Whether the cell beside a cell of sec reads a fluid: its index j of sec when in? (it is in the section), else (nx ny nz)."
-  [^js st ^js sec in? j nx ny nz]
-  (let [v (if in? (aget (.-ids sec) j) (inc (remembered-id st nx ny nz)))]
-    (and (pos? v) (fluid-id? st (dec v)))))
-
-(defn beside-fluid-at?
-  "Whether the remembered cell (x y z), index i of its section sec, with state id holds a non-solid block next to a
-  remembered fluid: fluids flow, so its memory goes stale like a fluid's. Reads the section's own array where it can."
-  [^js st ^js sec i x y z id]
-  (and (id-flag? st "emptyIds" id #(= "empty" (.-boundingBox ^js %)))
-       (let [lx (bit-and x 15) ly (bit-and y 15) lz (bit-and z 15)]
-         (or (fluid-neighbour? st sec (< lx 15) (inc i) (inc x) y z) (fluid-neighbour? st sec (pos? lx) (dec i) (dec x) y z)
-             (fluid-neighbour? st sec (< lz 15) (+ i 16) x y (inc z)) (fluid-neighbour? st sec (pos? lz) (- i 16) x y (dec z))
-             (fluid-neighbour? st sec (< ly 15) (+ i 256) x (inc y) z) (fluid-neighbour? st sec (pos? ly) (- i 256) x (dec y) z)))))
-
-(defn beside-fluid?
-  "beside-fluid-at? of the remembered cell (x y z) in the current dimension; false when it was never seen."
-  [^js st x y z id]
-  (if-let [^js sec (section-at st x y z)]
-    (beside-fluid-at? st sec (cell-index x y z) x y z id)
-    false))

@@ -162,4 +162,7 @@
    ;; costs.descentS: seconds a block of descent adds to a move's cost
    c-descent
    ;; hp of risk a gap jump that falls short to its death adds: costs.gapMiss (the chance) times lethal-s, over riskWeight
-   gap-death])
+   gap-death
+   ;; options.unknown.changed (fn x y z: the chance a remembered cell changed since it was seen; nil: none did) and the hp
+   ;; of risk a death weighs (options.unknown.deathHp, else lethal-s over riskWeight)
+   ^js unk-changed unk-death])

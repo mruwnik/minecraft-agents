@@ -40,6 +40,13 @@
     (+ (if ^boolean (.isUnknown s (.stateAt ^js (.-snapshot s) x y z)) 1 0)
        (if ^boolean (.isUnknown s (.stateAt ^js (.-snapshot s) x (inc y) z)) 1 0)))
 
+  ;; the most chance (options.unknown.changed) that the remembered feet, head or floor cell at x y z changed since seen
+  (changedNear [s x y z]
+    (let [^js f (.-unk-changed s)]
+      (if (nil? f)
+        0
+        (js/Math.max (.call f nil x y z) (.call f nil x (inc y) z) (.call f nil x (dec y) z)))))
+
   ;; is the cell, its floor or its head cell unseen, or its floor missed? A proof (the goal flood) must not rest on it.
   (unknownNear [s x y z]
     (and (>= (.-unk-id s) 0)
@@ -113,12 +120,12 @@
 
   ;; True when the move from node p into x y z is refused for options.unknown: its stand is on a phantom floor that the walk
   ;; cannot stop to check first (unseen-refused), or was missed or cannot be seen, and is not lit (dark-refused). Else sets what it
-  ;; costs (move-unk, seconds: cell times dsec when its feet, head or floor is unseen, and a peek over a drop or an aim at a
+  ;; costs (move-unk, seconds: cell times dsec when its feet, head or floor is unseen, else times their changedNear, and a peek over a drop or an aim at a
   ;; level or up one onto a phantom floor, and light-cost when a torch must light it) and move-light.
   (unseenRefuses [s x y z move p dsec]
     (set! (.-move-light s) 0)
     (if-not ^boolean (.phantomAt s x y z)
-      (do (set! (.-move-unk s) (if (pos? (.unknownCells s x y z)) (* dsec (.-unk-cell s)) 0))
+      (do (set! (.-move-unk s) (if (pos? (.unknownCells s x y z)) (* dsec (.-unk-cell s)) (* dsec (.-unk-cell s) (.changedNear s x y z))))
           false)
       (let [d (js/Math.max 0 (- (aget (.-ys s) p) y))
             priced (+ (* dsec (.-unk-cell s)) (if (pos? d) (.-peek-s s) (.-aim-s s)))]

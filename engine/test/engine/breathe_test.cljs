@@ -9,6 +9,7 @@
             [engine.settings :as settings]
             [engine.seek-contract-test :as sc]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.memory-age :as memory-age]
             [jobs.lib.world-files :as world-files]
             [jobs.lib.breath :as breath]
             [jobs.lib.cost.planner :as planner]
@@ -1191,7 +1192,8 @@
      :digs (count (filter #{"dig"} (call-names p)))
      :block (fn [cell] (.-name (.blockAt p (apply tu/pos cell))))}))
 
-;; Hollin #72: a dive under an overhang took longer than perception keeps fluids (10 s), so the way back read unknown.
+;; Hollin #72: a dive under an overhang outlasted perception's old 10 s fluid memory, so the way back read unknown. Water
+;; reads as remembered until it is likelier gone than not (jobs.lib.memory-age).
 (def dived-tunnel
   "Stone round a water tunnel at y 64..65 from z 0 to 8, open to air at z 8 (y 66 water, air from y 67)."
   (merge (tu/box -1 63 -1 1 67 9 "stone")
@@ -1215,7 +1217,7 @@
 (deftest water-swum-through-out-of-sight-still-leads-to-air
   (are [age-ms air] (= air (breath/flood-air (dived-body age-ms) {:x 0.5 :y 64 :z 0.5} 24 10 nil))
     30000 {:x 0 :y 66 :z 8}
-    (* 1000 (inc (settings/get breath/settings :jobs.lib.breath/water-memory-s))) nil))
+    (+ 1000 (memory-age/half-age-ms memory-age/FLUID)) nil))
 
 (deftest a-body-that-dived-out-of-sight-swims-back-the-way-it-came
   (async done

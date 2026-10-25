@@ -34,15 +34,29 @@
                     (or ^boolean (.tightAt s x2 (dec y) z2) ^boolean (.clear s x2 z2 lo (+ h0 BODY))) down
                     :else -1)))))))))
 
+  ;; Remembered water may be gone since: masked (options.unknown), the drop adds the chance it changed of the dry fall to
+  ;; the pool's floor (gone); else water the body has not seen lately is landed in only as far as ground would be.
   (dropIntoWater [s i x y z h region c x2 y2 z2 h0 slow-from ^boolean tight-src]
     (let [fall (- h0 (* y2 16))
-          ;; water the body has not seen lately may be gone: it is landed in only as far as ground would be
-          reach (if ^boolean (.landSeen s x2 y2 z2 false) (.-c-max-water-drop s) (js/Math.min (.-c-max-water-drop s) (.-max-drop s)))]
+          masked (>= (.-unk-id s) 0)
+          reach (if (or masked ^boolean (.landSeen s x2 y2 z2 false)) (.-c-max-water-drop s) (js/Math.min (.-c-max-water-drop s) (.-max-drop s)))]
       (when-not (or (< (.swimAt s x2 y2 z2) 0) (> fall (* reach 16)) (not ^boolean (.fallStops s x2 y2 z2)))
-        (let [sec (+ (* (.-c-walk-s s) (+ 1 (* SLOW-EXTRA slow-from))) (* 0.25 (js/Math.sqrt (/ fall 16))))]
+        (let [sec (+ (* (.-c-walk-s s) (+ 1 (* SLOW-EXTRA slow-from))) (* 0.25 (js/Math.sqrt (/ fall 16))))
+              risk (+ (.swimRisk s x2 y2 z2) (if masked (.drainedRisk s x2 y2 z2 h0) 0))]
           (if (or tight-src ^boolean (.isTight s x2 y2 z2))
-            (.tightMove s i x y z h region c x2 y2 z2 0 MOVE-DROP sec (.swimRisk s x2 y2 z2) 0 SNAP 0)
-            (.edge s x2 y2 z2 0 MOVE-DROP i sec (.swimRisk s x2 y2 z2) 0 0 0))))))
+            (.tightMove s i x y z h region c x2 y2 z2 0 MOVE-DROP sec risk 0 SNAP 0)
+            (.edge s x2 y2 z2 0 MOVE-DROP i sec risk 0 0 0))))))
+
+  ;; hp of risk a fall from h0 into the remembered water at x y z takes should it be gone (options.unknown.changed): its
+  ;; chance times the dry fall's damage onto the floor under the water's column, or unk-death when that fall kills
+  (drainedRisk [s x y z h0]
+    (let [^js f (.-unk-changed s)
+          q (if (nil? f) 0 (.call f nil x y z))]
+      (if-not (pos? q)
+        0
+        (let [bottom (loop [yb y] (if (and (> yb (- y 64)) (== (aget (.-tbl-kind s) (.stateAt s x (dec yb) z)) WATER)) (recur (dec yb)) yb))
+              dmg (.dropDamage s 1 (- h0 (* bottom 16)))]
+          (* q (if (>= dmg (.-lethal-hp s)) (.-unk-death s) dmg))))))
 
   ;; the water at x y z holds a body that falls into it: not falling water (a waterfall, which the body drops out of), and
   ;; held up by a floor or by water that is not falling (unseen or unloaded below: a pool's bottom, taken as held)

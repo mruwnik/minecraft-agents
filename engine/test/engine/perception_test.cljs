@@ -9,6 +9,7 @@
             [engine.perception.rays :as rays]
             [engine.perception.store :as store]
             [jobs.lib.cost.danger :as danger]
+            [jobs.lib.memory-age :as memory-age]
             [jobs.lib.reach.room :as reach-room]
             [engine.test-util :as tu]))
 
@@ -489,22 +490,14 @@
 
 (defn first-match-answer
   "sensed's rule spelt out on the public readers: nil unloaded, else feel!, else glance!, else memory (unknown when never
-  seen, or a mutable state, or a non-solid cell beside a remembered fluid, older than :mutable-max-ms)."
+  seen; remembered however old)."
   [{:keys [raw opts st] :as per} [x y z :as pos]]
   (when (>= (.stateAt raw x y z) 0)
     (or (perception/feel! per pos)
         (perception/glance! per pos)
-        (let [info #((.-infoOf st) %)
-              [id seen-at] (store/remembered st x y z)
-              age (when id (- ((:now opts)) seen-at))
-              beside-fluid? (and id (= "empty" (.-boundingBox (info id)))
-                                 (some (fn [[dx dy dz]]
-                                         (when-let [[n] (store/remembered st (+ x dx) (+ y dy) (+ z dz))]
-                                           (#{"water" "lava" "bubble_column"} (.-name (info n)))))
-                                       [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]))]
-          (if (or (nil? id) (and (> age (:mutable-max-ms opts)) (or (store/mutable-id? st id) beside-fluid?)))
-            {:unknown true :pos pos}
-            (assoc (perception/block-of per id pos) :age-ms age :visible false))))))
+        (if-let [[id seen-at] (store/remembered st x y z)]
+          (assoc (perception/block-of per id pos) :age-ms (- ((:now opts)) seen-at) :visible false)
+          {:unknown true :pos pos}))))
 
 (defn answer-kind [m] (cond (nil? m) :none (:unknown m) :unknown (:felt m) :felt (:visible m) :visible :else :remembered))
 
@@ -513,7 +506,7 @@
                       {"0,63,0" "stone" "2,64,1" "oak_door" "-2,64,2" "wheat" "3,64,4" "water" "4,64,4" "water"})
         states {[2 64 1] {:facing "north" :open true :hinge "left" :half "lower"} [-2 64 2] {:age 3}}
         cells (for [x (range -6 7) y (range 62 68) z (range -6 11)] [x y z])
-        ;; a pass, 20 s (past :mutable-max-ms), a turn, then every cell read twice (the second from the tick's cache)
+        ;; a pass, 20 s, a turn, then every cell read twice (the second from the tick's cache)
         reads (fn [answer]
                 (let [clock (atom 0)
                       {:keys [p per]} (rig blocks {:now (fn [] @clock) :rand (constantly 0.5)})
@@ -577,37 +570,6 @@
 (defn clocked-rig [blocks]
   (let [clock (atom 0)]
     (assoc (rig blocks {:now #(deref clock) :pass-ms 50 :still-ms 30000}) :clock clock)))
-
-(deftest the-memory-epoch-holds-still-with-nothing-to-age
-  (let [{:keys [per clock]} (clocked-rig {"0,65,4" "gold_block"})
-        st (:st per)]
-    (perception/pass! per)
-    (let [k (perception/memory-epoch st)]
-      (swap! clock + 60000)
-      (is (= k (perception/memory-epoch st)) "a minute on, no cell that can age: the same key"))))
-
-(deftest the-memory-epoch-moves-each-second-until-the-last-door-seen-has-aged
-  (let [{:keys [per clock]} (clocked-rig {"0,65,4" "oak_door"})
-        st (:st per)
-        mutable-max (:mutable-max-ms (:opts per))]
-    (perception/pass! per)
-    (let [k (perception/memory-epoch st)]
-      (swap! clock + 1000)
-      (is (not= k (perception/memory-epoch st)) "a door seen a second ago may still age"))
-    (swap! clock + (+ mutable-max 1000))
-    (let [k (perception/memory-epoch st)]
-      (swap! clock + 5000)
-      (is (= k (perception/memory-epoch st)) "aged out: nothing left to age, the key holds"))))
-
-(deftest a-sight-table-arriving-moves-the-memory-epoch
-  (let [{:keys [per]} (clocked-rig {})
-        ^js st (:st per)
-        k (perception/memory-epoch st)]
-    (is (some? (rays/sight-of per st)))
-    (is (not= k (perception/memory-epoch st)) "memory read before the table (mutable ids unknown) must be read again")
-    (let [k (perception/memory-epoch st)]
-      (rays/sight-of per st)
-      (is (= k (perception/memory-epoch st)) "asking again changes nothing"))))
 
 (deftest an-unchanged-still-body-skips-idle-passes-until-still-ms
   (let [r (clocked-rig {"0,65,4" "gold_block"})]
@@ -769,17 +731,17 @@
     (is (= "air" (seen-name per [0 65 3])) "an asked-for cell of air is seen too")
     (is (nil? (seen-name per [0 65 8])) "behind the stone")))
 
-(deftest a-room-answer-is-judged-again-when-a-door-ages-out-then-kept-while-nothing-can-age
+(deftest a-room-answer-is-judged-again-only-when-a-remembered-doors-change-chance-moves-a-level
   (let [{:keys [p per clock]} (clocked-rig {"0,65,4" "oak_door"})
         w (perception/wrap p per)
-        kept #(reach-room/kept w "k" (fn [_] #js {}))]
+        kept #(reach-room/kept w "k" (fn [_] #js {}))
+        due (memory-age/due-age-ms memory-age/DOOR 0)]
     (perception/pass! per)
     (let [a (kept)]
-      (reset! clock 11500)
-      (is (not (identical? a (kept))) "the remembered door aged out to unknown: judged again")
-      (let [b (kept)]
-        (reset! clock 71500)
-        (is (identical? b (kept)) "a minute on, nothing left to age: no new flood")))))
+      (reset! clock (dec due))
+      (is (identical? a (kept)) "the door's chance has not moved a level: kept")
+      (reset! clock due)
+      (is (not (identical? a (kept))) "its first level: judged again"))))
 
 (deftest a-room-answer-is-kept-until-memory-or-the-world-changes
   (let [{:keys [p per clock]} (clocked-rig {"0,65,4" "gold_block"})

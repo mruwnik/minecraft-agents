@@ -14,6 +14,7 @@
             [engine.settings :as settings]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.cost.threat :as threat]
+            [jobs.lib.memory-age :as memory-age]
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]))
 
@@ -263,13 +264,12 @@
 (def max-fields "Fields one body keeps (a mob roaming leaves one per place)." 64)
 
 (defn ageing-step
-  "The clock in half :mutable-max-ms steps when section cx sy cz or one beside it holds a mutable state's time
-  (store/section-stamp odd: a remembered fluid or door, and a cell beside a fluid, age to unknown), else nil."
-  [{:keys [opts st]} cx sy cz]
-  (let [dim (.-dim ^js st)]
-    (when (some (fn [[dx dy dz]] (let [s (store/section-stamp st dim (+ cx dx) (+ sy dy) (+ cz dz))] (and (pos? s) (odd? s))))
-                [[0 0 0] [1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
-      (js/Math.floor (/ ((:now opts)) (quot (:mutable-max-ms opts) 2))))))
+  "memory-age/section-flips of section cx sy cz and the 6 beside it (a cell's reading flips when it becomes likelier
+  changed than not, jobs.lib.util/sensed), nil when none holds an aging cell."
+  [{:keys [st]} cx sy cz]
+  (let [v (mapv (fn [[dx dy dz]] (memory-age/section-flips st (+ cx dx) (+ sy dy) (+ cz dz)))
+                [[0 0 0] [1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])]
+    (when (some some? v) v)))
 
 (defn forget-cell!
   "Drops the kept kinds of cell x y z from its section's reads in secs; bumps the section's version when one was kept."
@@ -283,8 +283,8 @@
 
 (defn refresh!
   "Brings the kept reads e of a section in secs up to date with the body's memory (perception per): when its stamp moved,
-  the kinds of every cell whose remembered state changed, and of the cells beside it (a fluid beside a cell ages it), are
-  dropped; all of them when the section came or went, or its ageing step moved. Returns e."
+  the kinds of every cell whose remembered state changed, and of the cells beside it, are dropped; all of them when the
+  section came or went, or its ageing step moved. Returns e."
   [per ^js secs ^js e]
   (let [^js st (:st per)
         dim (.-dim st)

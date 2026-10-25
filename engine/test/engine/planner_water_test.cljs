@@ -195,6 +195,28 @@
   (let [plan (fn [seen] (found? (run (drop-world 20 2) {:x 2 :y 84 :z 2} (near 12 63 2 1) {:landingSeen (fn [_ _ _ _] seen)})))]
     (is (= [true false] [(plan true) (plan false)]))))
 
+(defn masked
+  "Masked planner options whose every remembered cell changed since it was seen with chance q; a death weighs 100 hp."
+  [q]
+  {:unknown {:changed (fn [_ _ _] q) :deathHp 100}})
+
+(deftest a-drop-into-remembered-water-adds-the-chance-it-is-gone-of-the-dry-fall
+  (let [risk (fn [high q] (cost (run (drop-world high 2) {:x 2 :y (+ 64 high) :z 2} (near 12 63 2 1) (masked q)) :risk))]
+    (is (= [0 25 50] (map #(risk 24 %) [0 0.25 0.5])) "a dry fall of 26 to the pool's floor kills: the chance of a death")
+    (is (= [0 4.5] (map #(risk 10 %) [0 0.5])) "a dry fall of 12 hurts 9 hp: the chance of that")))
+
+(defn stair-world
+  "drop-world high 2 with a stair down the tower's south side (x 2, z 5 and on) to the ground."
+  [high]
+  (world (into [[0 64 0 4 (+ 63 high) 4 "stone"] [5 62 -2 20 63 40 "water"]]
+               (for [k (range 1 high)] [2 64 (+ 4 k) 2 (- (+ 63 high) k) (+ 4 k) "stone"]))))
+
+(deftest water-likely-gone-is-not-dropped-into-where-a-stair-leads-down-water-just-seen-is
+  (let [plan (fn [q] (run (stair-world 24) {:x 2 :y 88 :z 2} (near 12 63 2 1) (masked q)))]
+    (is (= 25 (cost (plan 0) :waterDrop)) "just seen: the drop")
+    (is (found? (plan 0.5)))
+    (is (= [1 0] [(cost (plan 0.5) :waterDrop) (cost (plan 0.5) :risk)]) "an even chance it drained: the stair, then a step in from the shore")))
+
 (deftest drop-onto-land-of-same-height-is-limited-by-max-drop
   (let [r (run (world [[0 64 0 4 71 4 "stone"]]) {:x 2 :y 72 :z 2} (near 8 64 2 0) {:goalFlood 0})]
     (is (not (found? r)))))

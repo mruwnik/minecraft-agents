@@ -8,6 +8,7 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.perception :as perception]
+            [jobs.lib.memory-age :as memory-age]
             [engine.settings :as settings]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]))
@@ -104,10 +105,10 @@
     (if (= (:at m) (look/cell-of (u/self-pos c))) (:cells m) #{})))
 
 (defn known-memory
-  "perception/memory-epoch of the body's perception: the same while all it knows of the world is (changed, or aged
-  into unknown); nil without a perception."
+  "memory-age/epoch of the body's memory: the same while all it knows of the world is (no cell written, no remembered
+  cell's change chance moved a level); nil without a perception."
   [p]
-  (some-> ^js (:st (aget p "perception")) perception/memory-epoch))
+  (some-> ^js (:st (aget p "perception")) memory-age/epoch))
 
 (defn step-ms
   "[total max] ms perception's sight steps have taken so far, nil without a perception."

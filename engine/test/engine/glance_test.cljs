@@ -118,14 +118,6 @@
     (store/record! st store 1 65 4 stone @clock)
     (is (= 0 (mod (- (store/cell-seen sec (store/cell-index 1 65 4)) (.-base sec)) 1000)) "stone is timed to the second")))
 
-(deftest a-remembered-air-cell-next-to-remembered-fluid-reads-unknown-after-the-max-age
-  (let [{:keys [p per clock]} (rig {"0,65,4" "lava" "1,65,4" "air" "3,65,4" "air" "4,65,4" "stone"})]
-    (perception/pass! per)
-    (turn! p 180)
-    (swap! clock + 30000)
-    (is (= [{:unknown true :pos [1 65 4]} "air"]
-           [(perception/sensed per [1 65 4]) (:name (perception/sensed per [3 65 4]))]))))
-
 (deftest a-cell-diagonal-behind-a-wall-corner-inside-rock-is-unknown
   (let [{:keys [per]} (rig (merge (tu/box -1 63 -1 1 66 1 "stone") {"0,64,0" "air" "0,65,0" "air" "1,65,1" "lava"}))]
     (is (= "stone" (:name (perception/sensed per [0 65 1]))))
@@ -139,16 +131,14 @@
     (is (= {:name "gold_block" :pos [0 65 4] :full-cube true :age-ms 30000 :visible false}
            (dissoc (perception/sensed per [0 65 4]) :state-id)))))
 
-(deftest a-remembered-fluid-door-or-fire-past-the-max-age-reads-unknown-terrain-does-not
+(deftest a-remembered-fluid-door-or-fire-reads-as-remembered-however-old
   (let [{:keys [p per clock]} (rig {"0,65,4" "water" "1,65,4" "oak_door" "-1,65,4" "fire" "2,65,4" "stone"})
         cells [[0 65 4] [1 65 4] [-1 65 4] [2 65 4]]]
     (perception/pass! per)
     (turn! p 180)
-    (swap! clock + 5000)
-    (is (= ["water" "oak_door" "fire" "stone"] (mapv #(:name (perception/sensed per %)) cells)))
-    (swap! clock + 6000)
-    (is (= [true true true nil] (mapv #(:unknown (perception/sensed per %)) cells)))
-    (is (= "water" (seen-name per [0 65 4])) "memory itself keeps it")))
+    (swap! clock + 86400000)
+    (is (= ["water" "oak_door" "fire" "stone"] (mapv #(:name (perception/sensed per %)) cells)) "what the age makes of it is the reader's")
+    (is (every? #(= 86400000 (:age-ms (perception/sensed per %))) cells))))
 
 (deftest an-unloaded-cell-is-nil-and-the-block-shape-follows-the-state
   (let [p (tu/fake {:blocks {"0,65,3" "oak_slab"} :unloaded ["0,65,5"]})
@@ -210,30 +200,16 @@
   (is (false? (rays/touches? 0.5 64 0.5 [1 64 0] 1)) "beside the hitbox margin")
   (is (true? (rays/touches? 0.5 64 0.5 [0 65 0] 0)) "the head cell"))
 
-(deftest seeing-an-aged-out-door-again-counts-as-a-memory-write-but-a-fresh-one-does-not
+(deftest seeing-a-remembered-door-again-however-old-is-no-memory-write
   (let [{:keys [per clock]} (rig {"0,65,4" "oak_door"})
         ^js st (:st per)
         id (:state-id (perception/glance! per [0 65 4]))
         store (store/store-of st "overworld")
-        writes #(.-writes st)
-        again! #(let [w (writes)] (store/record! st store 0 65 4 id @clock) (- (writes) w))]
+        again! #(let [w (.-writes st)] (store/record! st store 0 65 4 id @clock) (- (.-writes st) w))]
     (swap! clock + 5500)
-    (is (zero? (again!)) "seen again before it could read unknown: the answer was known all along")
-    (swap! clock + 20000)
-    (is (= 1 (again!)) "seen again after it read unknown: kept room answers are judged again")))
-
-(deftest seeing-air-beside-water-again-after-it-aged-counts-as-a-memory-write
-  (let [{:keys [per clock]} (rig {"0,65,4" "water"})
-        ^js st (:st per)
-        air (:state-id (perception/glance! per [0 65 3]))
-        _ (perception/glance! per [0 65 4])
-        store (store/store-of st "overworld")
-        writes #(.-writes st)
-        again! #(let [w (writes)] (store/record! st store 0 65 3 air @clock) (- (writes) w))]
-    (swap! clock + 5500)
-    (is (zero? (again!)) "seen again soon")
-    (swap! clock + 20000)
-    (is (= 1 (again!)) "air beside a remembered fluid read unknown meanwhile: a write")))
+    (is (zero? (again!)))
+    (swap! clock + 3600000)
+    (is (zero? (again!)) "the same state: its new age is jobs.lib.memory-age's business")))
 
 (deftest a-stone-cell-seen-seconds-after-a-mark-reads-newer-than-it
   (let [{:keys [per clock]} (rig {"1,65,3" "stone"})

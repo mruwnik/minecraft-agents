@@ -191,7 +191,7 @@
         {:keys [pos reason]} (when (:quote-call c) (aim/target c))]
     (if (or reason (nil? (:y pos)))
       later
-      (let [c (cond-> c (:unknown (:args c)) (assoc :unknown (wworld/unknown-spec)))
+      (let [c (cond-> c (:unknown (:args c)) (assoc :unknown (wworld/unknown-spec c)))
             stand (wworld/stand-goal (wworld/path-world (:primitives c) (:unknown c)) pos)]
         (if (and (aim/here? c stand (:range (:args c)))
                  (not (breath/in-water? (:primitives c)))
@@ -214,7 +214,7 @@
   (wworld/unknown-spec: one missed Set for all its plans) rides on c as :unknown."
   [c0]
   (let [u (:unknown (:args c0))
-        c (cond-> c0 u (assoc :unknown (wworld/unknown-spec)))
+        c (cond-> c0 u (assoc :unknown (wworld/unknown-spec c0)))
         refusal (args-refusal c)
         goal (when-not refusal (:pos (aim/target c)))
         pos (goal-pos c goal)]
