@@ -186,7 +186,7 @@
     (is (= [@void @stone] [(state own -4 64 0) (state own 4 64 0)]) "3 from a cell of its own ways")
     (is (not= (wworld/unknown-key buried) (wworld/unknown-key off)) "the guess is in a kept search's key")))
 
-(deftest under-ground-a-seen-fluid-that-aged-to-unseen-still-keeps-the-rock-guess-off-its-surroundings
+(deftest under-ground-a-seen-fluid-that-aged-still-keeps-the-rock-guess-off-its-surroundings
   (let [clock (atom 1000000)
         tunnel (-> (apply dissoc (box -8 62 -8 12 67 8 "stone") (for [x (range 0 7) y [64 65]] (str x "," y ",0")))
                    (assoc "6,64,0" "water"))
@@ -197,7 +197,7 @@
         fresh (read 8)
         _ (swap! clock + 11000)]
     (is (= @void fresh) "water at 6 seen: 8 is within 3 of it, unseen")
-    (is (= @void (read 8)) "the water aged to unseen: 8 stays unseen, not rock")
+    (is (= @void (read 8)) "the water aged: 8 stays unseen, not rock")
     (is (= @stone (read 10)) "4 from the water's cell: rock")))
 
 (def hall-world
@@ -230,21 +230,31 @@
     {:clock clock :p p :w w
      :ids (fn [] (let [ids ((wworld/memory-sections w) 0 4 0)] (aget ids (+ 15 (* 256 0) (* 16 0)))))}))
 
-(deftest a-fluid-seen-in-a-neighbour-section-after-the-index-was-built-ages-the-cell-beside-it-to-unseen
+(deftest a-door-seen-after-the-index-was-built-ages-to-unseen
   (let [{:keys [clock p w ids]} (aging-world)
         _ (swap! (fake/state p) assoc :light-default [0 15])
         before (ids)]
-    (fake/set-block! p [16 64 0] "water")
+    (fake/set-block! p [15 64 0] "oak_door")
     (perception/pass! (aget w "perception"))
     (swap! clock + 11000)
     (is (pos? before) "seen")
-    (is (zero? (ids)) "beside water older than the limit: unknown")))
+    (is (zero? (ids)) "a door older than the limit: unknown")))
+
+(deftest water-and-the-air-beside-it-keep-their-memory-however-old
+  (let [{:keys [clock p w ids]} (aging-world)
+        _ (swap! (fake/state p) assoc :light-default [0 15])
+        air (ids)]
+    (fake/set-block! p [16 64 0] "water")
+    (perception/pass! (aget w "perception"))
+    (swap! clock + 600000)
+    (is (pos? air) "seen")
+    (is (= air (ids)) "air beside water read as remembered an age later")))
 
 (deftest an-index-built-before-the-sight-table-is-known-is-built-again-once-it-is
   (let [{:keys [clock p w ids]} (aging-world)
         ^js st (:st (aget w "perception"))
         kinds (.-kinds st)]
-    (fake/set-block! p [15 64 0] "water")
+    (fake/set-block! p [15 64 0] "oak_door")
     (perception/pass! (aget w "perception"))
     (swap! clock + 11000)
     (set! (.-sight st) nil)
@@ -252,7 +262,7 @@
     (ids)
     (set! (.-kinds st) kinds)
     (rays/sight-of (aget w "perception") st)
-    (is (zero? (ids)) "the water aged out of a section whose first index was empty")))
+    (is (zero? (ids)) "the door aged out of a section whose first index was empty")))
 
 (deftest the-ways-on-are-counted-once-a-memory
   (let [{:keys [p w]} (sensed wall-world)
