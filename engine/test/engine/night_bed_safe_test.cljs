@@ -436,7 +436,7 @@
     (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :state :built} sh/shelter-policy)
     (is (false? (sh/night-holds? p (view) {:ways #{:shelter :flee}} (constantly true))) "dug in: the night job would end :dug-in at once")
     (is (true? (sh/night-holds? p (view) {} (constantly true))) "a bed in sight: the roof is no safe shelter to keep, the job prices the walk")
-    (mem/write! (:store eng) :bed-walk-unsafe {:pos far-bed :state (sh-beds/walk-state p far-bed)} sh-beds/walk-unsafe-policy)
+    (mem/write! (:store eng) :bed-walk-unsafe {:pos far-bed :state (sh-beds/walk-state p (mem/view (:store eng)) far-bed)} sh-beds/walk-unsafe-policy)
     (is (false? (sh/night-holds? p (view) {} (constantly true))) "the walk priced unsafe: not called again")))
 
 (deftest an-unsafe-bed-walk-holds-while-the-world-is-as-priced-and-not-by-the-clock
@@ -444,14 +444,14 @@
                                       :blocks {"40,64,0" "red_bed"} :entities [{:id 9 :name "zombie" :kind "hostile" :pos {:x 20 :y 64 :z 0} :health 20}]})
         view #(mem/view (:store eng))
         use-bed #(sh-beds/bed-to-use p (view) 128 (constantly true))]
-    (mem/write! (:store eng) :bed-walk-unsafe {:pos far-bed :state (sh-beds/walk-state p far-bed)} sh-beds/walk-unsafe-policy)
+    (mem/write! (:store eng) :bed-walk-unsafe {:pos far-bed :state (sh-beds/walk-state p (mem/view (:store eng)) far-bed)} sh-beds/walk-unsafe-policy)
     (swap! clock + 1000)
     (is (nil? (use-bed)) "a moment later, nothing changed: still unsafe")
     (mem/forget-where! (:store eng) :bed-walk-unsafe (constantly true))
-    (mem/write! (:store eng) :bed-walk-unsafe {:pos far-bed :state (update (sh-beds/walk-state p far-bed) :mobs conj 77)} sh-beds/walk-unsafe-policy)
+    (mem/write! (:store eng) :bed-walk-unsafe {:pos far-bed :state (update (sh-beds/walk-state p (mem/view (:store eng)) far-bed) :mobs conj 77)} sh-beds/walk-unsafe-policy)
     (is (= far-bed (use-bed)) "priced with another hostile near the way than now: asked again at once")
     (mem/forget-where! (:store eng) :bed-walk-unsafe (constantly true))
-    (mem/write! (:store eng) :bed-walk-unsafe {:pos far-bed :state (sh-beds/walk-state p far-bed)} sh-beds/walk-unsafe-policy)
+    (mem/write! (:store eng) :bed-walk-unsafe {:pos far-bed :state (sh-beds/walk-state p (mem/view (:store eng)) far-bed)} sh-beds/walk-unsafe-policy)
     (swap! clock + (* 3 sh-clock/ms-per-day))
     (is (= far-bed (use-bed)) "a verdict of an earlier night is not tonight's")))
 
@@ -460,7 +460,7 @@
                                 :blocks {"40,64,0" "red_bed"} :entities [{:id 9 :name "zombie" :kind "hostile" :pos {:x 20 :y 64 :z 0} :health 20}]})
         view #(mem/view (:store eng))
         use-bed #(sh-beds/bed-to-use p (view) 128 (constantly true))]
-    (mem/write! (:store eng) :bed-walk-unsafe {:pos far-bed :state (sh-beds/walk-state p far-bed)} sh-beds/walk-unsafe-policy)
+    (mem/write! (:store eng) :bed-walk-unsafe {:pos far-bed :state (sh-beds/walk-state p (mem/view (:store eng)) far-bed)} sh-beds/walk-unsafe-policy)
     (is (nil? (use-bed)) "as priced: unsafe")
     (swap! (fake/state raw) assoc-in [:self :health] 6)
     (is (= far-bed (use-bed)) "hurt since the walk was priced: the price reads health, so it is asked again")))
@@ -476,3 +476,14 @@
           (core/submit! eng '(jobs.survival.night) {})
           (await (st/tick-n eng 10))
           (is (= [{:x 10 :y 64 :z 0}] (mapv st/arg-pos (st/calls raw "sleep"))) "dug in under the roof, it still goes to the bed its sleep ends the night in"))))))
+
+(deftest an-unsafe-bed-walk-is-asked-again-when-the-body-goes-to-ground
+  (let [{:keys [eng p raw]} (setup {:floor [0 0 60 20] :self {:pos {:x 5 :y 64 :z 0}} :time st/night :sees-all true
+                                    :blocks {"40,64,0" "red_bed"} :entities [{:id 9 :name "zombie" :kind "hostile" :pos {:x 20 :y 64 :z 0} :health 20}]})
+        view #(mem/view (:store eng))
+        use-bed #(sh-beds/bed-to-use p (view) 128 (constantly true))]
+    (mem/write! (:store eng) :bed-walk-unsafe {:pos far-bed :state (sh-beds/walk-state p (view) far-bed)} sh-beds/walk-unsafe-policy)
+    (is (nil? (use-bed)) "as priced: unsafe")
+    (swap! (fake/state raw) update :light assoc [5 64 0] [0 0] [5 65 0] [0 0])
+    (is (true? (:in-ground (sh-beds/walk-state p (view) far-bed))))
+    (is (= far-bed (use-bed)) "sealed from the sky since: the walk there and back is now work time lost, which the price reads")))

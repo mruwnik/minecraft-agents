@@ -19,7 +19,7 @@
              per-dark, dark-factor: the one price of a dark block, which go-to's planner costs; lit-way-s, torch-gap: a way lit as it goes; dark-way-s: one walked or dug dark; spawn-chance: the chance a mob spawns at a cell or
              over an area (a set or {:min :max} box of cells) per second, from the light the body knows (unseen counts as dark), spawn-share its share of cells that spawn; exposure: the chance a walk meets and
              what lowers it ({:chance :lowered-by #{:light}}).
-    planner  planner-costs-problem, planner-costs, planner-names: go-to's :costs, the per-move prices it may override; least-block-s: the least a plan prices a block; landing-problem, planner-landing: go-to's :landing, fall damage by landing block; air-profile, water-breathing-s, air-used, air-costs: the planner's air drain and grace from the body's helmet, the air a dive has used; air-left-s, wet-move-s, wet-way-s, wet-spare-s, wet-ok?: the air a walk over unseen water keeps back at its last breath, each move at its measured pace; swim-profile: its swimH from Depth Strider on the boots; gait-problem, gait-costs: go-to's :gait; unknown-prices: the planner's peek and aim prices of unseen cells (jobs.lib.cost.planner); way-on-chance, unseen-share: the one price of walking over unseen cells, a dead end and a mob in the dark at the worse case, from how often the seen ways near the body go on (the planner's :cell); unseen-route-s: that price of a route's unseen steps; dead-end-cost: what an unseen dead end costs a flight; flight-caught-chance: the chance a flight is caught by its way, from its search's ways.
+    planner  planner-costs-problem, planner-costs, planner-names: go-to's :costs, the per-move prices it may override; least-block-s: the least a plan prices a block; landing-problem, planner-landing: go-to's :landing, fall damage by landing block; air-profile, water-breathing-s, air-used, air-costs: the planner's air drain and grace from the body's helmet, the air a dive has used; air-left-s, wet-move-s, wet-way-s, wet-spare-s, wet-ok?: the air a walk over unseen water keeps back at its last breath, each move at its measured pace; swim-profile: its swimH from Depth Strider on the boots; gait-problem, gait-costs: go-to's :gait; unknown-prices: the planner's peek and aim prices of unseen cells (jobs.lib.cost.planner); way-on-chance, unseen-share, room-closed-chance: the one price of walking over unseen cells, a dead end and a mob in the dark at the worse case, from how often the seen ways near the body go on (the planner's :cell); unseen-route-s: that price of a route's unseen steps; dead-end-cost: what an unseen dead end costs a flight; flight-caught-chance: the chance a flight is caught by its way, from its search's ways.
     tolls    farm-tolls, zone-tolls: go-to's :tolls for planted cells and zone cells to cross only as a last resort; fail-chance,
              failing-step-s: a step the walker failed at, priced by its failures (jobs.lib.cost.tolls).
     death    experience-cost, death-cost: death as an ordinary cost, the walk back for the items plus the experience; spawn-worth: a respawn point's worth; worth-to, find-worth, items-find-worth, search-radius, wait-price: what a find is worth, how far its legs may go, what waiting for a listed maker costs; opening-price, hold-price: opening a shelter to mobs against holding on in it; death-weight, terrain-danger: a remembered death's fade and the plan cost near a death by terrain (jobs.lib.cost.death).
@@ -160,6 +160,12 @@
   of the seen stands near it (jobs.lib.walk.way-on/way-counts: n seen, k of them with a way that leads out), (k+1)/(n+2)."
   [{:keys [k n]}]
   (/ (inc (or k 0)) (+ (or n 0) 2)))
+
+(defn room-closed-chance
+  "The chance a room with `unseen` cells the body has not seen is closed: a uniform Beta(1,1) prior on a cell hiding no opening,
+  updated by the `seen` sides of the room all being walls, (seen+1)/(seen+2), for each unseen cell."
+  [seen unseen]
+  (js/Math.pow (/ (inc seen) (+ seen 2)) unseen))
 
 (defn dark-factor
   "The planner's extra cost of a dark cell as a share of its own seconds (options.dark.factor): value/dark-factor, the

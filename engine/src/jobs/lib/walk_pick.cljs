@@ -50,13 +50,13 @@
   "{:pick :price :quote} the cheapest of candidates, nil when none has a finite price. bound (fn [x]) seconds no more
   than x's price; args (fn [x]) the go-to args of the walk to x; price (fn [x q]) x's seconds with q, go-to's quote of
   that walk; ok? (fn [x], default all) is asked of a candidate only when its turn comes, so a costly test is paid for just the
-  candidates reached. Quoted best-first by bound, until the best quoted is no dearer than the next bound."
-  [c candidates {:keys [bound args price ok?]}]
+  candidates reached; quote (fn [c args], default quote!) asks go-to, so a caller can reuse one quote. Quoted best-first by bound, until the best quoted is no dearer than the next bound."
+  [c candidates {:keys [bound args price ok? quote]}]
   (loop [[x & more :as left] (sort-by bound candidates) best nil]
     (cond
       (or (empty? left) (and best (<= (:price best) (bound x)))) best
       (and ok? (not (ok? x))) (recur more best)
-      :else (let [q (await (quote! c (args x)))
+      :else (let [q (await ((or quote quote!) c (args x)))
                   s (price x q)]
               (recur more (if (and (js/isFinite s) (or (nil? best) (< s (:price best)))) {:pick x :price s :quote q} best))))))
 
@@ -65,3 +65,20 @@
   the body stands, say) leaves the walk to say whether it gets there."
   [c candidates opts]
   (or (:pick (await (best! c candidates opts))) (first (sort-by (:bound opts) candidates))))
+
+(defn ^:async cheapest!
+  "{:pick x :price seconds :quote q} of the one of xs whose walk go-to quotes cheapest, within limit-s seconds (those whose
+  straight walk alone is over it are left out, the rest quoted best-first, best!). target (fn [x]) {:pos :range} bounds the
+  straight walk, walk (fn [x]) are the go-to args; ok? and quote as best!. A quote whose search still goes on prices nothing
+  (its estimate is no price): x is left out this call; with none priced and one searching, :searching (ask again later).
+  Nil when no walk is priced. price (fn [x s]), default s, adds to a walk's seconds s what x costs besides."
+  [c xs {:keys [target walk limit-s ok? quote price] :or {price (fn [_ s] s) limit-s ##Inf}}]
+  (let [feet (u/self-pos c)
+        bound #(walk-s feet (target %))
+        searching (atom false)
+        best (await (best! c (filter #(<= (bound %) limit-s) xs)
+                           {:bound bound :args walk :ok? ok? :quote quote
+                            :price (fn [x q] (if (:estimate q)
+                                               (do (reset! searching true) ##Inf)
+                                               (price x (quoted-s c q))))}))]
+    (or best (when @searching :searching))))

@@ -116,10 +116,10 @@
           (is (< 20 (:x (st/pos-of p))) "in the far hut, the near one is walled off from the body"))))))
 
 (defn ^:async night-at-hut-seen-outside
-  "night-at-seen-hut with the inside of the hut never seen from outside (its door shut): a room not seen inside yet."
-  [inventory]
-  (let [world (-> (hut/hut-world {:x 5 :y 64 :z 6} {}) (assoc :time night :inventory inventory :light-default [15 4])
-                  (update :light assoc [5 64 6] [15 0]))
+  "night-at-seen-hut with the inside of the hut never seen from outside (its door shut): a room not seen inside yet. The body starts z blocks south of the hut."
+  [inventory z]
+  (let [world (-> (hut/hut-world {:x 5 :y 64 :z z} {}) (assoc :time night :inventory inventory :light-default [15 4])
+                  (update :light assoc [5 64 z] [15 0]))
         {:keys [eng p] :as r} (await (night-at-home world {:x 5 :y 64 :z 0} {} {:home? false}))
         at (.-sensedAt p)]
     (aset p "seenBlockAt" (fn [pos] (let [b (.blockAt p pos)] #js {:name (.-name b) :pos pos :age-ms 0 :properties (.-properties b)})))
@@ -129,12 +129,19 @@
     (await (tu/run-until-empty eng 80))
     r))
 
-(deftest a-hut-not-seen-inside-is-not-walked-to-while-digging-in-is-quoted
+(deftest a-hut-not-seen-inside-is-walked-to-when-the-walk-and-its-chance-of-being-open-cost-less-than-digging-in
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (await (night-at-hut-seen-outside st/dirt-stack))]
-          (is (< 2 (:z (st/pos-of p))) "the worst case, an open room, is dug in against: the body never walked in"))))))
+        (let [{:keys [p]} (await (night-at-hut-seen-outside st/dirt-stack 6))]
+          (is (>= 2 (:z (st/pos-of p))) "the walk to the hut and its chance of being open cost less than the dig-in quoted at 12 s: walked in to look"))))))
+
+(deftest a-hut-not-seen-inside-is-dug-in-against-when-the-walk-and-its-chance-of-being-open-cost-more-than-digging-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (night-at-hut-seen-outside st/dirt-stack 40))]
+          (is (< 2 (:z (st/pos-of p))) "a walk dearer than digging in, with the room maybe open, is not made: the body digs in where it stands"))))))
 
 (deftest a-carried-bed-goes-down-inside-the-hut-seen-not-outside-it
   (async done
@@ -197,7 +204,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (await (night-at-home far-home-world {:x 40 :y 64 :z 0}))]
+        (let [{:keys [eng p]} (await (night-at-home far-home-world {:x 40 :y 64 :z 0} {:settings {:jobs.survival.night.sites/flee-radius 0}}))]
           (await (tu/run-until-empty eng 60))
           (is (= 40 (js/Math.floor (:x (st/pos-of p)))) "walked home with no bed to use or carry"))))))
 
@@ -219,7 +226,7 @@
       (fn ^:async t []
         (let [quoted (atom [])
               quote! pick/quote!
-              {:keys [eng p]} (await (night-at-home far-home-world {:x 40 :y 64 :z 0} {:roofed-places [:home :far]}))]
+              {:keys [eng p]} (await (night-at-home far-home-world {:x 40 :y 64 :z 0} {:roofed-places [:home :far] :settings {:jobs.survival.night.sites/flee-radius 0}}))]
           (mem/write! (:store eng) :far {:pos {:x 4000 :y 64 :z 0}} mem/place-policy)
           (set! pick/quote! (fn [c args] (swap! quoted conj args) (quote! c args)))
           (try (await (tu/run-until-empty eng 60))
@@ -485,3 +492,39 @@
                       (await (with-child-log #(tu/run-until-empty eng 80))))]
           (is (= 1 (count (st/emitted seen :shelter.exposed))))
           (is (some #(= 'jobs.survival.log-out (second %)) log) "the owner's fallback: no shelter, so log out"))))))
+
+(deftest places-whose-straight-walk-is-over-the-limit-are-not-quoted-and-a-quote-is-asked-once-per-pass
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [quote! pick/quote!
+              asked (atom [])
+              places (mapv #(hash-map :pos {:x (* 10 %) :y 64 :z 0} :range 0) (range 1 101))
+              opts {:target identity :walk identity}
+              c {:primitives (tu/fake {}) ::night/pass (atom {})}
+              reach (fn [n] (pick/walk-s {:x 0 :y 64 :z 0} {:pos {:x (* 10 n) :y 64 :z 0} :range 0}))]
+          (set! pick/quote! (fn [_ args] (swap! asked conj args) (js/Promise.resolve {:uses {:job-time [0 ##Inf ##Inf]}})))
+          (try
+            (is (nil? (await (night/cheapest-walk! c places (assoc opts :limit-s (reach 3))))) "none of them reachable: no pick")
+            (is (= 3 (count @asked)) "the 97 whose straight walk alone is over the limit are never quoted")
+            (is (nil? (await (night/cheapest-walk! c places (assoc opts :limit-s (reach 5))))))
+            (is (= 5 (count @asked)) "a second sweep of the same pass with a wider limit asks only the two new quotes")
+            (finally (set! pick/quote! quote!))))))))
+
+(deftest a-quote-of-the-walk-to-a-place-still-searching-keeps-the-body-from-digging-in-for-a-pass
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [quote! pick/quote!
+              searches (atom 0)
+              placed-when-answered (atom nil)
+              {:keys [eng p]} (await (night-at-home far-home-world {:x 40 :y 64 :z 0} {:settings {:jobs.survival.night.sites/home-walk-margin-s 0}}))]
+          (set! pick/quote! (fn ^:async q [c args]
+                              (cond
+                                (not (:place args)) (await (quote! c args))
+                                (< (swap! searches inc) 4) {:estimate true}
+                                :else (do (when-not @placed-when-answered (reset! placed-when-answered [(count (st/calls p "place"))]))
+                                          (await (quote! c args))))))
+          (try (await (core/tick! eng))
+               (finally (set! pick/quote! quote!)))
+          (is (= [0] @placed-when-answered) "shelter! answered :again while the search went on: nothing dug in beside a place it has no price for"))))))

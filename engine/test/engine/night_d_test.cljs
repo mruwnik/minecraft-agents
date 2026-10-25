@@ -95,17 +95,17 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[log seen calls] (await (flee-with (fn [_] {:status :found :index 0 :cost 7})))]
+        (let [[log seen calls] (await (flee-with (fn [_] {:uses {:job-time [0 7 0]}})))]
           (is (seq (filter #(= :flee (first %)) log)))
-          (is (= [7] (mapv :cost (st/emitted seen :shelter.fled))) "the planner's cost is reported")
-          (is (every? #(and (:x %) (:z %)) (first calls)) "the candidates are given as cells"))))))
+          (is (= [7] (mapv :cost (st/emitted seen :shelter.fled))) "the quote's price is reported")
+          (is (every? #(or (:place %) (:pos %)) calls) "each candidate is quoted as the flight would walk it"))))))
 
 (deftest a-flee-search-still-going-walks-nowhere-until-it-answers
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [n (atom 0)
-              [log seen calls] (await (flee-with (fn [_] (if (< (swap! n inc) 4) {:status :searching} {:status :found :index 0 :cost 3}))))]
+              [log seen calls] (await (flee-with (fn [_] (if (< (swap! n inc) 4) {:estimate true} {:uses {:job-time [0 3 0]}}))))]
           (is (= 4 (count calls)) "asked again after each :searching")
           (is (= 1 (count (filter #(= :flee (first %)) log))) "walks once, after the answer")
           (is (= [3] (mapv :cost (st/emitted seen :shelter.fled)))))))))
@@ -114,7 +114,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[log seen] (await (flee-with (fn [_] {:status :none :reason :exhausted :proved true})))]
+        (let [[log seen] (await (flee-with (fn [_] (contract/ending :nothing-possible {:reason :no-path} nil))))]
           (is (empty? (filter #(= :flee (first %)) log)))
           (is (= 1 (count (st/emitted seen :shelter.exposed)))))))))
 

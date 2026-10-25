@@ -14,7 +14,7 @@
             [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.solid :as solid]
-            [jobs.lib.targets :as targets]
+            [jobs.lib.walk-pick :as pick]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.survival.bed-down :as bed-down]
@@ -67,11 +67,18 @@
          (take (sites/cave-candidates))
          vec)))
 
+(defn flee-args [{:keys [kind name pos]}]
+  (case kind
+    :roofed-place {:place name :range 0}
+    :bed {:pos pos :range 2}
+    {:pos pos :range 0}))
+
 (defn ^:async flee-target
-  "The place not yet tried tonight, somewhere safer than here (see the doc), that go-to reaches soonest (jobs.lib.targets/
-  nearest!: one planner search over the candidates, costed as go-to plans: known dangers and darkness), as the candidate
-  with its :distance and :cost; :searching while that search goes on; nil when there is none (none with the flee-radius setting 0
-  or after sites/max-flees). Candidates: the bed, :roofed-places, caves, ground, the nearest max-targets of them."
+  "The place not yet tried tonight, somewhere safer than here (see the doc), whose walk go-to quotes cheapest (jobs.lib.walk-pick/
+  cheapest!: every candidate is ranked by the least its straight walk takes and quoted best-first, as the flight itself will walk,
+  until the best quoted is no dearer than the next bound), as the candidate with its :distance and :cost (seconds); :searching while a
+  quote's search goes on; nil when there is none (none with the flee-radius setting 0 or after sites/max-flees).
+  Candidates: the bed, :roofed-places, caves, ground."
   [c]
   (let [m (ctx/mem c)
         p (:primitives c)
@@ -84,8 +91,6 @@
             places (map #(assoc % :kind :roofed-place) (room-lib/roofed-places-in c (:args c) flee-radius))
             cands (->> (concat bed places (cave-sites c flee-radius) (ground-sites c flee-radius))
                        (remove #(contains? tried (:pos %)))
-                       (sort-by #(u/dist here (:pos %)))
-                       (take targets/max-targets)
                        vec)]
         (cond
           (and (empty? cands) (not (look/surveyed? c)))
@@ -93,19 +98,11 @@
               :searching)
 
           (seq cands)
-          (let [a (await (targets/nearest! c (mapv (fn [{:keys [kind pos]}] (cond-> pos (= :bed kind) (assoc :range 2))) cands) 0
-                                           {:tag :night-flee}))]
-            (case (:status a)
-              :searching :searching
-              :found (let [cand (nth cands (:index a))]
-                       (cond-> (assoc cand :distance (u/dist here (:pos cand))) (:cost a) (assoc :cost (:cost a))))
-              nil)))))))
-
-(defn flee-args [{:keys [kind name pos]}]
-  (case kind
-    :roofed-place {:place name :range 0}
-    :bed {:pos pos :range 2}
-    {:pos pos :range 0}))
+          (let [walk #(assoc (flee-args %) :floor cost-health/spend-down)
+                best (await (pick/cheapest! c cands {:target (fn [{:keys [kind pos]}] {:pos pos :range (:range (flee-args {:kind kind}))}) :walk walk}))]
+            (if (map? best)
+              (assoc (:pick best) :distance (u/dist here (:pos (:pick best))) :cost (:price best))
+              best)))))))
 
 (defn ^:async flee!
   "Walk (go-to :flee) to target t, a flee-target; :again. Resumes after a cut (:fleeing). A walk that ends writes the

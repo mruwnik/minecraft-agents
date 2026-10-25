@@ -24,7 +24,9 @@
             [jobs.lib.solid :as solid]))
 
 (a/defargs settings
-  {::seen-bed-radius {:default 6 :spec (a/int-in 1 nil)
+  {::ground-depth {:default 6 :spec (a/int-in 0 nil)
+                   :doc "Blocks under its home (else bed) a roofed body counts as in the ground (in-ground?) though some sky light reaches it (a stair, a shaft)."}
+   ::seen-bed-radius {:default 6 :spec (a/int-in 1 nil)
                       :doc "Blocks (square) within which a bed in the body's room counts as seen."}
    ::default-bed-radius {:default 48 :spec (a/num-in 0 nil)
                          :doc "Blocks within which a remembered bed may be used."}
@@ -172,22 +174,38 @@
   [p radius]
   (map :pos (look/seen-blocks p {:names wood/bed-names :radius (min 16 radius) :live? true :max 8})))
 
+(defn home-target
+  "The place to go home to before night: the remembered :home, else :bed (view: an engine.memory view)."
+  [view]
+  (or (mem/place view :home) (mem/place view :bed)))
+
+(defn in-ground?
+  "Whether the body could work on through the night where it stands: sealed from the sky (sh-sense/sealed?), or roofed and ::ground-depth or more
+  under its home-target. Its work does not wait for the light, so a walk home and back is time lost."
+  [p view]
+  (boolean
+   (or (sh-sense/sealed? p)
+       (let [home (home-target view)]
+         (and home (sh-sense/roofed? p (sh-sense/roof-height))
+              (<= (settings/get settings ::ground-depth) (- (:y home) (:y (sh-sense/feet p)))))))))
+
 (defn walk-state
   "What the price of the walk to the bed at pos reads of the world besides the bed (night/bed-walk-price): the cell the body
-  stands in, the ids of the hostiles known near the way, the kit it fights with (health, food, absorption, weapon, armour) and
-  whether its cell is lit or buried (the spawn chance staying costs). A :bed-walk-unsafe verdict holds while this is unchanged."
-  [p pos]
-  (let [feet (sh-sense/feet p)]
-    {:from (mapv #(js/Math.floor %) ((juxt :x :y :z) (u/self-pos {:primitives p})))
-     :mobs (into #{} (map #(.-id %)) (danger/hostiles-near-way p pos (settings/get price/settings ::price/way-radius) {}))
-     :kit (select-keys (wworld/kit-of {:primitives p}) [:weapon :equipment :health :absorption :food])
-     :lit (boolean (or (sh-sense/buried-at? p feet) (pos? (or (sh-sense/block-light-at p feet) 0))))}))
+  stands in, the ids of the hostiles known near the way, the kit it fights with (wworld/kit-of), whether its feet are spawn-free
+  (sh-sense/spawn-free-at?, the spawn chance staying costs) and whether it works on in the ground (in-ground?). A :bed-walk-unsafe verdict holds
+  while this is unchanged."
+  [p view pos]
+  {:from (mapv #(js/Math.floor %) ((juxt :x :y :z) (u/self-pos {:primitives p})))
+   :mobs (into #{} (map #(.-id %)) (danger/hostiles-near-way p pos (settings/get price/settings ::price/way-radius) {}))
+   :kit (wworld/kit-of {:primitives p})
+   :spawn-free (sh-sense/spawn-free-at? p (sh-sense/feet p))
+   :in-ground (in-ground? p view)})
 
 (defn walk-unsafe?
   "Whether a :bed-walk-unsafe entry of this night names the bed at pos and the world is as it priced the walk (walk-state)."
   [p view pos]
   (let [since (sh-clock/tonight p view)
-        now (delay (walk-state p pos))]
+        now (delay (walk-state p view pos))]
     (boolean (some #(and (>= (:t %) since) (= pos (:pos (:data %))) (= @now (:state (:data %)))) (mem/entries view :bed-walk-unsafe)))))
 
 (defn beds-to-use

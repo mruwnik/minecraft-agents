@@ -22,9 +22,8 @@
    ::home-due {:default {:margin-s 60 :speed 4.3 :slack 1.4 :arrive 4} :spec (a/map-of keyword? number?)
                :doc "When to head home before night, read by dusk-home, replant-owed and plant-sapling: seconds of margin, walking speed (blocks a second), slack factor on the straight line, and blocks within which the body counts as home."}
    ::shelter-here-s {:default 12 :spec (a/num-in 0 nil)
-                     :doc "Seconds a body takes to shelter where it stands (dig in, wall in): staying put instead of a walk to bed or home is exposed this long at most, and costs this long. Median of 40 completed shut-in and dig-in jobs on the trial bodies (shut-in 11.9 s of 31, dig-in 12.9 s of 9)."}
-   ::ground-depth {:default 6 :spec (a/int-in 0 nil)
-                   :doc "Blocks under its home (else bed) a roofed body counts as in the ground (in-ground?) though some sky light reaches it (a stair, a shaft)."}})
+                     :doc "Seconds a body takes to shelter where it stands (dig in, wall in): staying put instead of a walk to bed or home is exposed this long at most, and costs this long. Median of 40 completed shut-in and dig-in jobs on the trial bodies (shut-in 11.9 s of 31, dig-in 12.9 s of 9)."}})
+
 
 (defn breach-near [] (settings/get settings ::breach-near))
 
@@ -165,10 +164,7 @@
             (some? (sh-beds/bed-to-collect p view))
             (some? (sh-beds/doorway-to-open p view))))))
 
-(defn home-target
-  "The place to go home to before night: the remembered :home, else :bed (view: an engine.memory view)."
-  [view]
-  (or (mem/place view :home) (mem/place view :bed)))
+(def home-target sh-beds/home-target)
 
 (defn home-walk-s
   "Seconds the walk from pos to the home-target is taken to last (::home-due: :slack times the straight line at :speed); 0 with none."
@@ -191,14 +187,6 @@
 
 (defn shelter-here-s [] (settings/get settings ::shelter-here-s))
 
-(defn in-ground?
-  "Whether the body could work on through the night where it stands: sealed from the sky (sh-sense/sealed?), or roofed and ::ground-depth or more
-  under its home-target. Its work does not wait for the light, so a walk home and back is time lost."
-  [p view]
-  (boolean
-   (or (sh-sense/sealed? p)
-       (let [home (home-target view)]
-         (and home (sh-sense/roofed? p (sh-sense/roof-height))
-              (<= (settings/get settings ::ground-depth) (- (:y home) (:y (sh-sense/feet p)))))))))
+(def in-ground? sh-beds/in-ground?)
 
 (def shelter-policy {:cap 10 :ttl sh-clock/ms-per-day})

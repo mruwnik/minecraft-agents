@@ -19,7 +19,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.shelter.sense :as sh-sense]
-            [jobs.lib.targets :as targets]
+            [jobs.lib.walk-pick :as pick]
             [jobs.survival.night :as night]
             [jobs.survival.night.sites :as sites]))
 
@@ -259,17 +259,19 @@
   (merge (into {} (for [x (range 28 33) z (range -2 3)] [(str x ",63," z) "dirt"]))))
 
 (defn ^:async flee-with
-  "The home flee night (a roofed home the time left does not cover) with targets/nearest! answering by answer-of (a fn of the
-  targets it is given); [log seen calls]: the child log, the events and the targets each call was given."
+  "The home flee night (a roofed home the time left does not cover) with go-to's quote of every walk walk-pick asks for (pick/quote!) answering by answer-of (a fn of the
+  go-to args of the flight's walk, the ones with a :floor); [log seen calls]: the child log, the events and the args each quote was asked."
   [answer-of]
   (let [calls (atom [])
-        real targets/nearest!]
-    (set! targets/nearest! (fn ([c ts r] (targets/nearest! c ts r nil))
-                               ([_ ts _ _] (swap! calls conj ts) (js/Promise.resolve (answer-of ts)))))
+        real pick/quote!]
+    (set! pick/quote! (fn ^:async q [c args]
+                        (if (:floor args)
+                          (do (swap! calls conj args) (answer-of args))
+                          (await (real c args)))))
     (try
       (let [{:keys [eng seen]} (await (flee-home-night (update dark-world :blocks merge {"10,66,0" "stone"}) {}))]
         [(await (with-child-log #(tu/run-until-empty eng 80))) seen @calls])
-      (finally (set! targets/nearest! real)))))
+      (finally (set! pick/quote! real)))))
 
 ;; ------------------------------------------------------------------ caves and overhangs
 (def cave-blocks

@@ -69,7 +69,7 @@
   the night), else a dark cell's (cost/spawn-chance). The cell defaults to the feet."
   ([p] (stay-chance p (sh-sense/feet p)))
   ([p cell]
-   (if (or (sh-sense/buried-at? p cell) (pos? (or (sh-sense/block-light-at p cell) 0))) 0 (cost/spawn-chance [0 0 0]))))
+   (if (sh-sense/spawn-free-at? p cell) 0 (cost/spawn-chance [0 0 0]))))
 
 (defn wake-cells
   "Where a body asleep in a bed may stand when it gets up: every cell round the bed it can stand in (beside the head,
