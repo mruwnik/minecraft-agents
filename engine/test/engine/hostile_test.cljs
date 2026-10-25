@@ -1814,6 +1814,17 @@
           (let [{:keys [seen]} (await (flight-round respond (assoc world :entities [(drowned-at 2.5 57 0.5)])))]
             (is (= [:flee] (mapv :decision (decided seen))) "13 hp, the drowned 3 blocks off and 6 down, the shore 4 blocks off")))))))
 
+(deftest respond-prices-a-wet-drowned-fight-at-the-width-the-cost-answer-gives-it
+  (let [p (tu/seeing-all (tu/fake-on-floor {:floor flight-floor :blocks lake :self {:pos [3.5 63 0.5] :health 20}
+                                            :inventory [{:name "stone_sword" :count 1}] :entities [(drowned-at 2.5 63 0.5)]}))
+        c {:primitives p :engine {:warned (atom nil)} :view (fn [] {:now 1000 :data {}}) :id "j1" :root "j1" :slots []}
+        near (danger-q/dangers p 16 {:ranged-radius 16} {})
+        live (hostile-fight/fight-answer c near (constantly nil))
+        priced (cost/fight-answer (hostile-fight/fight-of c near (constantly nil)))]
+    (is (breath/swimming? p) "afloat: a wet fight")
+    (is (some? (:shape priced)) "the cost answer carries the wet rate's width")
+    (is (= (cost/death-chance {:health 20} priced) (cost/death-chance {:health 20} live)) "respond prices the same fight alike")))
+
 (def wade
   "A wade one deep sunk in the flight floor: water at x -4..4, y 63, z -4..4 over stone."
   (into {} (for [x (range -4 5) z (range -4 5) y [62 63]] [(str x "," y "," z) (if (= y 62) "stone" "water")])))

@@ -61,7 +61,11 @@
     (doseq [[what b] [["a blast" {:damage 9 :hit 0 :blasts [9] :seconds 1}]
                       ["a creeper's spread" {:damage 6 :hit 0 :spread [0 12] :seconds 1}]]]
       (is (< (js/Math.abs (- (:shape (answer/followed wet b)) (:shape wet))) 1e-9)
-          (str what " lands no small blows: the count's width is the fight's alone")))))
+          (str what " lands no small blows: the count's width is the fight's alone")))
+    (let [walk (cost/flee-answer {:food 20 :mobs [(mob "drowned" 2 35)] :caught 1})
+          caught (:caught (answer/followed wet walk))]
+      (is (< (js/Math.abs (- (:shape caught) (fight/sum-shape [[(:damage wet) (:shape wet)] [(answer/small (:caught walk)) (:shape (:caught walk))]]))) 1e-9)
+          "the walk caught after the fight: the width of both parts' blows"))))
 
 (deftest blows-that-may-take-the-health-are-the-death-risk
   (is (zero? (death/blow-chance {:health 20} 0 3)))

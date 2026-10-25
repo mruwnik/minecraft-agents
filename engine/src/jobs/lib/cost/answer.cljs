@@ -190,13 +190,17 @@
 
 (defn followed
   "Answer a, then answer b at once (nil: a once more, later): the blows and seconds of both, b's chance of being caught
-  (a's blows landed either way) and what follows b. a's spread is kept at its mean, a part of the small blows."
+  (a's blows landed either way, the caught width over both) and what follows b. a's spread is kept at its mean, a part
+  of the small blows."
   [a b]
   (if b
     (cond-> (assoc a :damage (+ (:damage a) (:damage b)) :hit (max (:hit a) (:hit b)) :seconds (+ (:seconds a) (:seconds b))
                    :blasts (into (vec (:blasts a)) (:blasts b)) :spread (:spread b)
                    :shape (fight/sum-shape [[(small a) (:shape a)] [(mean (:spread a)) nil] [(small b) (:shape b)]]))
-      (:caught b) (assoc :caught (-> (:caught b) (update :damage + (:damage a)) (update :blasts #(into (vec (:blasts a)) %))))
+      (:caught b) (assoc :caught (let [cb (:caught b)
+                                       shape (fight/sum-shape [[(small a) (:shape a)] [(mean (:spread a)) nil] [(small cb) (:shape cb)]])]
+                                   (cond-> (-> cb (update :damage + (:damage a)) (update :blasts #(into (vec (:blasts a)) %)) (dissoc :shape))
+                                     shape (assoc :shape shape))))
       (:then b) (assoc :then (:then b))
       (not (:then b)) (dissoc :then))
     (assoc a :then [a])))

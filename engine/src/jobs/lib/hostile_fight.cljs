@@ -5,6 +5,7 @@
             [engine.settings :as settings]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.fight :as cost-fight]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.access :as access]
             [jobs.lib.block-sets :as bs]
@@ -250,7 +251,7 @@
   "The answer of fighting near (nearest first) for cost/decide: the walk there (walk-hp of walk-q, go-to's quote of it;
   none: its lower bound) and the fight with near and the
   mobs by its way (way-mobs), at least the mob blows felt lately (incoming :rate) over its length, :hit the hardest blow
-  felt lately or of its mobs. A mob the body cannot get within a swing of (reaches?) is not killed (cost/fight-answer):
+  felt lately or of its mobs, :shape cost/fight-answer's width over the fight's blows. A mob the body cannot get within a swing of (reaches?) is not killed (cost/fight-answer):
   the fight is followed at once by the walk away from those it leaves (flee-answer, cost/followed). A lone creeper is
   fought hit-and-back (nil when hit-and-back-ok? fails); any other creeper near, or by the way in time (blasting), is
   not fought: it blows where the fight is, beside its first mob, so its blast at its distance from that mob (at most its
@@ -276,6 +277,7 @@
                  :blasts (vec (filter pos? blasts))
                  :seconds seconds
                  :creepers (vec creepers)}
+          (:shape a) (assoc :shape (cost-fight/sum-shape [[(walk-hp walk-q) nil] [(max (:damage a) (* rate (:seconds a))) (:shape a)]]))
           (seq left) (cost/followed (flee-answer c left nil nil nil)))))))
 
 (defn mob-near
