@@ -12,6 +12,7 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.walk-pick :as pick]
             [jobs.lib.world-files :as ew]
             [jobs.storage.make-room :as mr]
             [jobs.storage.make-room.order :as ord]))
@@ -371,17 +372,21 @@
           (is (pos? (count (calls p "transfer"))) "nothing may be thrown, so the walk is the only way")
           (is (= 0 (count (calls p "toss")))))))))
 
-(deftest a-chest-walk-is-taken-only-when-it-costs-less-than-the-stacks-the-toss-would-throw
-  (doseq [[item chest? probe] [["gravel" false "cheap stacks: the toss is cheaper than the walk"]
-                               ["string" true "dearer stacks: the walk is cheaper than the toss"]]]
-    (async done
-      (tu/run-async done
-        (fn ^:async t []
-          (let [{:keys [eng p]} (setup {:inventory (same item 35 64) :containers {"40,64,0" []}})]
-            (know-chest! eng {:x 40 :y 64 :z 0})
-            (await (run-reflex eng {} {}))
-            (is (= chest? (pos? (count (calls p "transfer")))) probe)
-            (is (= (not chest?) (pos? (count (calls p "toss")))) probe)))))))
+(deftest a-chest-walk-is-taken-only-when-it-costs-no-more-than-the-stacks-the-toss-would-throw
+  (let [worth (mr/toss-cost [{:worth (ord/item-worth {:name "gravel" :count 64}) :count 64}] 1)]
+    (doseq [[factor chest?] [[0.99 true] [1.01 false]]]
+      (async done
+        (tu/run-async done
+          (fn ^:async t []
+            (let [quote! pick/quote!
+                  mean (* factor worth)
+                  {:keys [eng p]} (setup {:inventory (same "gravel" 35 64) :containers {"10,64,0" []}})]
+              (set! pick/quote! (fn [_ _] (js/Promise.resolve {:uses {:job-time [mean mean mean]}})))
+              (try (know-chest! eng chest-pos)
+                   (await (run-reflex eng {:free 2} {}))
+                   (finally (set! pick/quote! quote!)))
+              (is (= chest? (pos? (count (calls p "transfer")))) (str "walk quoted at " factor " of the toss worth"))
+              (is (= (not chest?) (pos? (count (calls p "toss"))))))))))))
 
 (deftest toss-cost-sums-the-first-short-stacks-and-is-infinite-when-too-few-can-go
   (is (= ##Inf (mr/toss-cost [] 1)))
