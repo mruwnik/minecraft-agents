@@ -14,6 +14,7 @@
             [jobs.lib.price :as price]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
+            [jobs.lib.walk.world :as wworld]
             [jobs.lib.world-files :as world]
             [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.shelter.inside :as sh-inside]
@@ -172,11 +173,15 @@
   (map :pos (look/seen-blocks p {:names wood/bed-names :radius (min 16 radius) :live? true :max 8})))
 
 (defn walk-state
-  "What the price of the walk to the bed at pos reads of the world besides the bed: the cell the body stands in and the
-  ids of the hostiles known near the way. A :bed-walk-unsafe verdict holds while this is unchanged."
+  "What the price of the walk to the bed at pos reads of the world besides the bed (night/bed-walk-price): the cell the body
+  stands in, the ids of the hostiles known near the way, the kit it fights with (health, food, absorption, weapon, armour) and
+  whether its cell is lit or buried (the spawn chance staying costs). A :bed-walk-unsafe verdict holds while this is unchanged."
   [p pos]
-  {:from (mapv #(js/Math.floor %) ((juxt :x :y :z) (u/self-pos {:primitives p})))
-   :mobs (into #{} (map #(.-id %)) (danger/hostiles-near-way p pos (settings/get price/settings ::price/way-radius) {}))})
+  (let [feet (sh-sense/feet p)]
+    {:from (mapv #(js/Math.floor %) ((juxt :x :y :z) (u/self-pos {:primitives p})))
+     :mobs (into #{} (map #(.-id %)) (danger/hostiles-near-way p pos (settings/get price/settings ::price/way-radius) {}))
+     :kit (select-keys (wworld/kit-of {:primitives p}) [:weapon :equipment :health :absorption :food])
+     :lit (boolean (or (sh-sense/buried-at? p feet) (pos? (or (sh-sense/block-light-at p feet) 0))))}))
 
 (defn walk-unsafe?
   "Whether a :bed-walk-unsafe entry of this night names the bed at pos and the world is as it priced the walk (walk-state)."
