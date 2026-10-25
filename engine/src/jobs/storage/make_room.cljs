@@ -445,7 +445,7 @@
       :else
       (let [chest (when-not (:chest-done @run)
                     (when-not (contains? @run :chest)
-                      (swap! run assoc :chest (await (usable-chest! c (toss-cost order (slots-short c))))))
+                      (swap! run assoc :chest (await (usable-chest! c (if dir (toss-cost order (slots-short c)) ##Inf)))))
                     (:chest @run))]
         (cond
           (and chest (seq names)) (do (await (put-away! c run chest names keep)) :again)

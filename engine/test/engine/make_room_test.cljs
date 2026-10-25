@@ -585,13 +585,16 @@
             (is (= [{:x x :y 65.5 :z 0}] (mapv #(js->clj (arg-of "pos" %) :keywordize-keys true) (calls p "look"))))))))))
 
 (deftest a-body-walled-in-on-all-four-sides-tosses-nothing-since-the-items-would-come-straight-back
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:inventory (many "junk" 35)
-                                      :blocks {"1,65,0" "stone" "-1,65,0" "stone" "0,65,1" "stone" "0,65,-1" "stone"}})]
-          (await (run-reflex eng {:free 2} {}))
-          (is (zero? (count (calls p "toss")))))))))
+  (doseq [chest? [false true]]
+    (async done
+      (tu/run-async done
+        (fn ^:async t []
+          (let [{:keys [eng p]} (setup {:inventory (many "junk" 35) :containers {"40,64,0" []}
+                                        :blocks {"1,65,0" "stone" "-1,65,0" "stone" "0,65,1" "stone" "0,65,-1" "stone"}})]
+            (when chest? (know-chest! eng {:x 40 :y 64 :z 0}))
+            (await (run-reflex eng {:free 2} {}))
+            (is (zero? (count (calls p "toss"))))
+            (is (= chest? (pos? (count (calls p "transfer")))) "no toss to compare with: a known chest is used at any walk")))))))
 
 (deftest a-body-that-has-seen-no-cell-yet-looks-around-before-judging-itself-walled-in
   (async done
