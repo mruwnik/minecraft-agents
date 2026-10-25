@@ -170,12 +170,6 @@
 ;; {:register [{:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 15 :args {:free 2}
 ;;              :job (jobs.storage.make-room {:free 4})}]
 ;;  :queue [(repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
-;; -- case from live-inventory-3
-;; ;; Live test of make-room with a short chest range (8), to see the toss path
-;; ;; take over when the known chest is farther away.
-;; {:register [{:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 15 :args {:free 2}
-;;              :job (jobs.storage.make-room {:free 4 :settings {:jobs.storage.make-room/chest-range 8}})}]
-;;  :queue [(repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-probenight-1
 ;; ;; Live test of get-food as the hungry reflex, alone, with a short cooldown so
 ;; ;; each set-up (crops by setblock, a :food-source seeded in memory) is
