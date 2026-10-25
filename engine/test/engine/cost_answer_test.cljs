@@ -106,29 +106,35 @@
     (is (nil? (:then again)) "and nothing after it")))
 
 (deftest a-body-that-fled-a-skeleton-twice-fights-it-only-while-the-walk-to-it-costs-nothing
-  (let [skeleton (mob "skeleton" 12)
-        fight (cost/fight-answer (assoc (fight sword skeleton) :mobs [skeleton]))
-        choose (fn [returns walk-hp]
-                 (let [f (update fight :damage + walk-hp)]
-                   (:answer (cost/decide (body 20) {:fight f :flee (cost/flee-answer {:food 20 :mobs [skeleton] :returns returns :later f})} here))))]
-    (is (= :flee (choose 0 0)) "no flight lately: a step out of its range is cheaper than closing 12 blocks")
-    (is (= :fight (choose 2 0)) "fled twice, the walks again dearer than the fight, if the walk to it is free (go-to's lower bound)")
-    (is (= :flee (choose 2 4)) "4 hp of go-to's quote of the walk to it: the walks away are the cheaper")))
+  (settings/with-settings {:jobs.lib.cost.threat/difficulty 3}
+    (fn []
+      (let [skeleton (mob "skeleton" 12)
+            fight (cost/fight-answer (assoc (fight sword skeleton) :mobs [skeleton]))
+            choose (fn [returns walk-hp]
+                     (let [f (update fight :damage + walk-hp)]
+                       (:answer (cost/decide (body 20) {:fight f :flee (cost/flee-answer {:food 20 :mobs [skeleton] :returns returns :later f})} here))))]
+        (is (= :flee (choose 0 0)) "no flight lately: a step out of its range is cheaper than closing 12 blocks")
+        (is (= :fight (choose 2 0)) "fled twice, the walks again dearer than the fight, if the walk to it is free (go-to's lower bound)")
+        (is (= :flee (choose 2 8)) "8 hp of go-to's quote of the walk to it: the walks away are the cheaper")))))
 
 (deftest a-flight-ending-past-follow-range-is-not-flown-again-when-the-way-back-passes-the-skeleton
-  (let [choose (fn [again returns]
-                 (let [skeleton (cond-> (mob "skeleton" 15) again (assoc :again again))
-                       f (cost/fight-answer (assoc (fight sword skeleton) :mobs [skeleton]))]
-                   (:answer (cost/decide (body 20) {:fight f :flee (cost/flee-answer {:food 20 :mobs [skeleton] :returns returns :later f})} here))))]
-    (is (= [:fight :fight] (mapv #(choose 1 %) [0 1])) "the goal lies past it: the trigger refiring on the walk back is already priced, at the first meet and after a flight, so the body does not pendulum at 16")
-    (is (= [:flee :flee] (mapv #(choose nil %) [0 1])) "no way back past it: the flight is the last")))
+  (settings/with-settings {:jobs.lib.cost.threat/difficulty 3}
+    (fn []
+      (let [choose (fn [again returns]
+                     (let [skeleton (cond-> (mob "skeleton" 15) again (assoc :again again))
+                           f (cost/fight-answer (assoc (fight sword skeleton) :mobs [skeleton]))]
+                       (:answer (cost/decide (body 20) {:fight f :flee (cost/flee-answer {:food 20 :mobs [skeleton] :returns returns :later f})} here))))]
+        (is (= [:fight :fight] (mapv #(choose 1 %) [0 1])) "the goal lies past it: the trigger refiring on the walk back is already priced, at the first meet and after a flight, so the body does not pendulum at 16")
+        (is (= [:flee :flee] (mapv #(choose nil %) [0 1])) "no way back past it: the flight is the last")))))
 
 (deftest a-mob-between-the-body-and-its-goal-is-walked-from-again-from-where-the-way-back-passes-it
-  (let [fight (cost/fight-answer (fight sword (mob "skeleton" 12)))
-        choose #(:answer (cost/decide (body 20) {:fight fight :flee (cost/flee-answer {:food 20 :mobs [%] :later fight})} here))]
-    (is (= :flee (choose (mob "skeleton" 12))) "nothing past it: stepping out of its range now and again is cheaper than closing 12 blocks under its arrows")
-    (is (= :fight (choose (assoc (mob "skeleton" 12) :again 1))) "the way back passes a block from it: the walk again is from its feet, the whole bow range")
-    (is (= (choose (mob "skeleton" 12)) (choose (assoc (mob "skeleton" 12) :again 14))) "a way that passes farther than it stands changes nothing")))
+  (settings/with-settings {:jobs.lib.cost.threat/difficulty 3}
+    (fn []
+      (let [fight (cost/fight-answer (fight sword (mob "skeleton" 12)))
+            choose #(:answer (cost/decide (body 20) {:fight fight :flee (cost/flee-answer {:food 20 :mobs [%] :later fight})} here))]
+        (is (= :flee (choose (mob "skeleton" 12))) "nothing past it: stepping out of its range now and again is cheaper than closing 12 blocks under its arrows")
+        (is (= :fight (choose (assoc (mob "skeleton" 12) :again 1))) "the way back passes a block from it: the walk again is from its feet, the whole bow range")
+        (is (= (choose (mob "skeleton" 12)) (choose (assoc (mob "skeleton" 12) :again 14))) "a way that passes farther than it stands changes nothing")))))
 
 (deftest a-walk-away-is-caught-at-the-prior-of-its-health-and-so-loses-to-a-fight-or-a-wall-at-low-health
   (let [zombie (mob "zombie" 4 35)
@@ -145,6 +151,14 @@
     (is (= (:caught (cost/flee-answer {:food 20 :mobs [(mob "skeleton" 10)] :caught 1 :caught-s 0.5}))
            (:caught (cost/flee-answer {:food 20 :mobs [(mob "skeleton" 10)] :caught 1})))
         "a shooter is no melee race: its arrows land all the flight")))
+
+(deftest the-prior-and-the-ways-catch-are-one-mix-so-a-small-dead-end-chance-moves-the-price-little
+  (let [zombie (mob "zombie" 4 35)
+        price #(cost/answer-price (body 12) (cost/flee-answer {:health 12 :food 20 :mobs [zombie] :caught %}) here)
+        caught #(:caught (cost/flee-answer {:health 12 :food 20 :mobs [zombie] :caught %1 :caught-s %2}))]
+    (is (< (/ (- (price 0.01) (price 0)) (price 0)) 0.02) "a way that goes on 99 times in 100 prices as a seen one, near enough")
+    (is (< (price 0) (price 0.5) (price 1)) "the likelier its dead end, the dearer")
+    (is (= (:damage (caught 0 nil)) (:damage (caught 0 0.5))) "with no way caught, the race's seconds bound nothing: the prior's own blows")))
 
 (deftest a-walk-caught-beside-a-creeper-takes-its-blast-as-a-sure-part-of-the-life
   (let [walk (cost/flee-answer {:food 20 :mobs [(mob "creeper" 1) (mob "zombie" 3 35)] :caught 1})

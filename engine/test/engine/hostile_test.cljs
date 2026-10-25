@@ -153,8 +153,8 @@
       (fn ^:async t []
         (is (fought? (await (flight-round respond {:self {:health 20} :inventory sword :entities [(zombie 3 0)]})))
             "sword and full health: fight")
-        (is (fled? (await (flight-round respond {:self {:health 5} :inventory sword :entities [(zombie 3 0)]})))
-            "hurt: retreat")
+        (is (fought? (await (flight-round respond {:self {:health 5} :inventory sword :entities [(zombie 3 0)]})))
+            "hurt: a flight from 5 hp is caught more often than not and two blows kill, the fight is the cheaper (812 s, flee 1243 s)")
         (is (fled? (await (flight-round respond {:self {:health 20} :inventory [{:name "iron_pickaxe" :count 1}]
                                                 :entities [(zombie 3 0)]})))
             "a pickaxe is not a weapon: retreat")
@@ -446,7 +446,7 @@
         (let [heard (zombie 7 0.5 -5.5)
               stay '(jobs.survival.respond-to-hostile {:settings {:jobs.survival.respond-to-hostile/stay-inside false}})]
           (doseq [[world spec decision held? muted? why]
-                  [[{:time 14000 :entities [heard]} respond :flee false false "no roof: no hold; over open ground a body at 5 health flees it"]
+                  [[{:time 14000 :entities [heard]} respond :fight false true "no roof: no hold; at 5 hp a flight is caught more often than not and two blows kill (fight 880 s, flee 1203 s): it would fight, with nothing in sight to swing at"]
                    [{:time 14000 :blocks roofed-passage :entities [heard]} respond :fight true true "roofed, heard only: it stays"]
                    [{:time 14000 :blocks roofed-passage :entities [heard]} stay :fight false true "stay-inside off: no hold, and at 5 hp a flight is caught more often than not: it would fight, with nothing in sight to swing at"]
                    [{:time 1000 :blocks roofed-passage :entities [heard]} respond :fight true true "day: it stays too (the roof, not the clock)"]]]
@@ -988,7 +988,7 @@
       (fn ^:async t []
         (doseq [[hurts decision why]
                 [[[] :fight "unhurt: a lone zombie costs less than walking away"]
-                 [[{:amount 2.5 :attacker {:name "zombie"}} {:amount 2.5 :attacker {:name "zombie"}}] :flee "5 hp felt within a second: the fight's 3 s would cost 15 hp"]]]
+                 [[{:amount 2.5 :attacker {:name "zombie"}} {:amount 2.5 :attacker {:name "zombie"}}] :fight "5 hp felt within a second: the fight's 3 s would cost 15 hp, 579 s, still under the flight's 653 s, caught at the prior of 20 hp"]]]
           (let [{:keys [eng seen]} (setup-flight {:self {:health 20} :inventory wood-sword :entities [(zombie 1 0.5 2.5)]})]
             (doseq [h hurts] (mem/write! (:store eng) :hurt h))
             (core/submit! eng respond {})
@@ -1091,19 +1091,21 @@
     (tu/run-async done
       (fn ^:async t []
         (let [fled-before (fn [n] (fn [{:keys [eng]}] (dotimes [_ n] (mem/write! (:store eng) :hostile {:mob "skeleton" :decision :flee} respond-to-hostile/hostile-policy))))
-              round (fn ^:async f [world n]
-                      (let [s (setup-flight world)]
-                        ((fled-before n) s)
-                        (core/submit! (:eng s) respond {})
-                        (await (core/tick! (:eng s)))
-                        s))
+              round (fn [world n]
+                      (settings/with-settings {:jobs.lib.cost.threat/difficulty 3}
+                        (fn ^:async f []
+                          (let [s (setup-flight world)]
+                            ((fled-before n) s)
+                            (core/submit! (:eng s) respond {})
+                            (await (core/tick! (:eng s)))
+                            s))))
               one {:inventory sword :entities [(assoc (skeleton 1 12 0) :visible true)]}
               two {:self {:health 14} :inventory sword :entities [(skeleton 1 10 0) (skeleton 2 11 1)]}]
           (is (= [:flee] (map :decision (decided (:seen (await (round one 0)))))) "no flight so far: a step out of its range is cheaper than closing 12 blocks under its arrows")
           (is (= [:flee] (map :decision (decided (:seen (let [quote! pick/quote!]
-                                                         (set! pick/quote! (fn [_ _] (js/Promise.resolve {:risk {:walk-hp 4}})))
+                                                         (set! pick/quote! (fn [_ _] (js/Promise.resolve {:risk {:walk-hp 8}})))
                                                          (try (await (round one 2)) (finally (set! pick/quote! quote!))))))))
-              "the second return: the walk to it under its arrows (go-to's quote, 4 hp) is dearer than the walks away")
+              "the second return: the walk to it under its arrows (go-to's quote, 8 hp) is dearer than the walks away")
           (is (= [:flee] (map :decision (decided (:seen (await (round two 2)))))) "two shooting an unarmoured body: the fight is likelier death than three walks"))))))
 
 (deftest hostile-attack-walks-to-far-ranged-mobs-only-when-the-fight-is-the-cheaper-answer
@@ -1115,7 +1117,8 @@
                         (dotimes [_ fled] (mem/write! (:store eng) :hostile {:mob "skeleton" :decision :flee} respond-to-hostile/hostile-policy))
                         (core/submit! eng '(jobs.combat.attack {:targets :hostiles :ranged-radius 16 :radius 6}) {})
                         (await (core/tick! eng))
-                        (count (tu/walked-to eng))))]
+                        (count (tu/walked-to eng))))
+              walks #(settings/with-settings {:jobs.lib.cost.threat/difficulty 3} (fn [] (walks %)))]
           (is (zero? (await (walks 0))) "two shooting: walking away is cheaper, declined, no walk")
           (is (zero? (await (walks 2))) "fled twice lately: three walks still cost less than closing on two shooters unarmoured"))))))
 
@@ -1413,7 +1416,7 @@
                                  ["no weapon vs three zombies" {:entities [(zombie 7 3 0) (zombie 8 3 1) (zombie 9 3 -1)]} :flee]
                                  ["sword vs a creeper within fuse range: hit-and-back" {:inventory sword :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]} :fight]
                                  ["no weapon vs a creeper" {:entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]} :flee]
-                                 ["sword vs a skeleton at range, nothing past it: a step out of its range" {:inventory sword :entities [(assoc (skeleton 7 12 0) :visible true)]} :flee]
+                                 ["sword vs a skeleton at range: closing 12 blocks (60 s) is cheaper than a flight the bow mobs' prior catches (116 s)" {:inventory sword :entities [(assoc (skeleton 7 12 0) :visible true)]} :fight]
                                  ["no weapon vs a skeleton at range" {:entities [(assoc (skeleton 7 12 0) :visible true)]} :flee]
                                  ["sword vs two zombies, no armour" {:inventory sword :entities [(zombie 7 3 0) (zombie 8 3 1)]} :flee]
                                  ["sword vs two zombies in diamond" {:inventory sword :equipment diamond-armour
@@ -1848,7 +1851,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:health 20} :inventory sword :entities [(zombie 3 0)]})
               eng (assoc-in eng [:jobs 'jobs.combat.attack]
-                            {:round (fn ^:async f [_c] (fake/swap-self! p assoc :health 1) :continue)})]
+                            {:round (fn ^:async f [_c] (fake/swap-self! p assoc :health 1) (swap! (fake/state p) assoc :inventory []) :continue)})]
           (core/submit! eng respond {})
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (= [:fight :flee] (mapv :decision (decided seen))) "each change of decision is one event")
@@ -1868,11 +1871,11 @@
       (hostile-fight/swim-out c [{:name "zombie"}]))
     (is (= 1 @runs) "one stand, one walk of its land, from both cells")))
 
-(deftest a-body-in-full-iron-with-a-sword-fights-a-lone-skeleton-at-10-on-easy-and-normal-and-walks-away-on-hard
+(deftest a-body-in-full-iron-with-a-sword-fights-a-lone-skeleton-at-10-at-every-difficulty
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[d decision prices] [[1 :fight {:fight 26 :flee 32}] [2 :fight {:fight 34 :flee 39}] [3 :flee {:fight 88 :flee 78}]]]
+        (doseq [[d decision prices] [[1 :fight {:fight 26 :flee 43}] [2 :fight {:fight 34 :flee 57}] [3 :fight {:fight 88 :flee 155}]]]
           (let [world {:inventory sword :equipment iron-armour :entities [(assoc (skeleton 1 10 0) :visible true)]}
                 {:keys [seen]} (await (settings/with-settings {:jobs.lib.cost.threat/difficulty d} #(flight-round respond world)))
                 [e] (filter #(= :hostile.decided (:kind %)) @seen)]
