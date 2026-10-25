@@ -1,7 +1,7 @@
 ;; Craft with a full pack: card c3193651 (a job that needs a slot makes room itself: tosses stacks worth less than a chest, else puts the rest in a chest
 ;; deposit puts down beside the body; the recipe's inputs and the chest are never tossed; a pack of tools has nothing to give and stops :full).
-;; Open plot, body at [16.5 0 16.5]. 36 stacks: 35 full stacks of one item (a give of 1 each would merge into one slot) and an oak log to craft planks from.
-;; Should-succeed: nugget pack crafts after tossing; raw-iron pack crafts after a chest is put down and none of it is tossed.
+;; Open plot, body at [16.5 0 16.5]. 36 stacks: 35 stacks (the dear ones full stacks: a give of 1 each of one item would merge into one slot) and an oak log to craft planks from.
+;; Should-succeed: pack of 35 different cheap bits crafts after tossing; raw-iron pack crafts after a chest is put down and none of it is tossed.
 ;; Should-fail: a pack of iron pickaxes stops :full; raw iron and no chest carried ends with the logs and raw iron kept and no chest made.
 {:defaults
  {:tags [:items :storage :craft :jobs]
@@ -11,7 +11,7 @@
   :limit-s 150}
  :cases
  [{:name "full-pack-of-cheap-bits-tosses-for-the-craft"
-   :body {:inventory [["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["iron_nugget" 64] ["oak_log" 1]]}
+   :body {:inventory [["dandelion" 1] ["poppy" 1] ["blue_orchid" 1] ["allium" 1] ["azure_bluet" 1] ["red_tulip" 1] ["orange_tulip" 1] ["white_tulip" 1] ["pink_tulip" 1] ["oxeye_daisy" 1] ["cornflower" 1] ["lily_of_the_valley" 1] ["oak_sapling" 1] ["spruce_sapling" 1] ["birch_sapling" 1] ["jungle_sapling" 1] ["acacia_sapling" 1] ["dark_oak_sapling" 1] ["cherry_sapling" 1] ["mangrove_propagule" 1] ["granite" 1] ["diorite" 1] ["andesite" 1] ["tuff" 1] ["gravel" 1] ["sand" 1] ["red_sand" 1] ["netherrack" 1] ["sandstone" 1] ["calcite" 1] ["dripstone_block" 1] ["cobbled_deepslate" 1] ["deepslate" 1] ["blackstone" 1] ["basalt" 1] ["oak_log" 1]]}
    :act [[:job (jobs.items.craft {:item "oak_planks" :count 4})]]
    :expect [{:event {:source :job :kind :completed} :within-s 120 :of-job true}]
    :after [[:item "oak_planks" [:>= 4]]]}
