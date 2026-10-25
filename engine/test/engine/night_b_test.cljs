@@ -73,10 +73,9 @@
                     (is (= [ms] (st/ms-of-offline p)) why)))))))))
 
 (deftest a-log-out-stint-lasts-till-morning-when-coming-back-costs-more-than-the-longer-stint
-  (settings/with-settings {::log-out/return-s 3} ; a body slow to answer: the mobs' blows land before it does
-   #(doseq [[entities world ms why] [[[zombie] {:self {:health 10}} 175050 "a zombie with a way to a body at 10 hp, no respawn bed: away until morning, not back beside it"]
+  (doseq [[entities world ms why] [[[zombie] {:self {:health 10}} 175050 "a zombie with a way to a body at 10 hp, no respawn bed: away until morning, not back beside it"]
                                    [[zombie] {:self {:health 10} :inventory [{:name "diamond_sword" :count 1}]} 30000 "the same zombie a diamond sword answers: the death it risks is worth less than the longer stint"]
-                                   [[zombie] {:self {:health 20}} 175050 "at full health a fist walks away from it, caught at the prior: away until morning"]
+                                   [[zombie] {:self {:health 20}} 30000 "at full health the 1.4 s before it answers and a fist's flight risk a death worth less than the longer stint: back after :offline-ms"]
                                    [[zombie] {:self {:health 10} :inventory [{:name "cobblestone" :count 32}]} 30000 "a block for every open cell carried: the body walls in beside it, a death worth less than the longer stint"]
                                    [[(assoc zombie :pos {:x 38 :y 64 :z 0})] {} 30000 "a zombie beyond its follow range: back after :offline-ms"]
                                    [[{:id 9 :name "skeleton" :kind "hostile" :pos {:x 14 :y 64 :z 0} :health 20}] {:self {:health 10}} 175050 "a skeleton with a line of fire is a known threat: away until morning"]
@@ -84,7 +83,7 @@
     (is (= ms (log-out/away-ms {:primitives (tu/fake (merge {:floor tu/walk-floor :time 20000 :entities entities} world))
                                 :args {:offline-ms 30000}
                                 :view (fn [] {:data mem/empty-data :now 0})}))
-        why))))
+        why)))
 
 (deftest coming-back-online-to-a-dark-spot-risks-the-stay-prices-death-for-the-same-seconds
   (let [c {:primitives (tu/fake {:floor tu/walk-floor :time 20000}) :args {:offline-ms 30000} :id "j1" :slots []

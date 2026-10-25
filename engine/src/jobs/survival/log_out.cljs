@@ -57,7 +57,7 @@
 
 (a/defargs settings
   {::job-time-s {:default 900 :doc "Seconds a log-out stint and the wait for the sleep count may take (a stint lasts at most until morning)." :spec (a/num-in 0 nil)}
-   ::return-s {:default 0.6 :doc "Seconds a body back online stands at its spot before it can answer a mob there (back-death-cost): the 90th percentile of 1536 log-out stints of the trial bodies' event logs, from the stint's :back-at to the body's next event (median 0.45 s, longest 35 s)." :spec (a/num-in 0 nil)}})
+   ::return-s {:default 1.4 :doc "Seconds a body back online stands at its spot before it can answer a mob there (back-death-cost): the mean of the trial bodies' 12 returns (event logs, 2026-10-25) whose hostile-near fired within 2.5 s, a mob there at the return, from :online to respond's first decision (hostile.decided; median 1.2, 1.1 to 2.4 s)." :spec (a/num-in 0 nil)}})
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
