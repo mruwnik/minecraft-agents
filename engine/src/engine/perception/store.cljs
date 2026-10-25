@@ -97,19 +97,6 @@
   (or (contains? mutable-names name)
       (.endsWith name "_door") (.endsWith name "_fence_gate") (.endsWith name "_trapdoor")))
 
-(defn mutable-id?
-  "Whether state id holds a mutable-name? block. False while the sight table (and so the state count) is not known."
-  [^js st id]
-  (let [^js kinds (or (.-kinds st)
-                      (when-let [^js sight (.-sight st)] (set! (.-kinds st) (js/Int8Array. (.-length sight)))))]
-    (and (some? kinds) (< id (.-length kinds))
-         (let [k (aget kinds id)]
-           (if (zero? k)
-             (let [yes (mutable-name? (.-name ^js ((.-infoOf st) id)))]
-               (aset kinds id (if yes 1 -1))
-               yes)
-             (== k 1))))))
-
 (defn id-flag?
   "(pred (stateInfo id)), kept per state id in st's Int8Array field k once the sight table (and so the state count) is known."
   [^js st k id pred]
@@ -122,6 +109,11 @@
             yes)
           (== f 1)))
       (boolean (pred ((.-infoOf st) id))))))
+
+(defn mutable-id?
+  "Whether state id holds a mutable-name? block. False while the sight table (and so the state count) is not known."
+  [^js st id]
+  (and (some? (.-sight st)) (id-flag? st "kinds" id #(mutable-name? (.-name ^js %)))))
 
 (def fluid-names #{"water" "lava" "bubble_column"})
 

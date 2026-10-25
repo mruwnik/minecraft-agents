@@ -231,13 +231,6 @@
   [^js st]
   [(.-writes st) (js/Math.min (js/Math.floor (/ ((.-nowFn st)) 1000)) (inc (.-agingSec st)))])
 
-(defn remembered
-  "The remembered answer for pos with :age-ms and :visible false; unknown when it reads unknown (remembered-age)."
-  [{:keys [st] :as per} [x y z :as pos]]
-  (if-let [age (remembered-age st x y z)]
-    (assoc (block-of per (store/remembered-id st x y z) pos) :age-ms age :visible false)
-    {:unknown true :pos pos}))
-
 (defn sense-fresh!
   "Clears the sensed cache when what it depends on (the tick, the raw world's epoch and the eye) changed since the last
   call. The eye, nil offline. Compares the parts in place: a key string per call was the cost."
