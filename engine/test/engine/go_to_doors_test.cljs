@@ -17,7 +17,8 @@
             [jobs.lib.world-files :as world]
             [jobs.movement.go-to :as go-to]
             [jobs.movement.go-to.cut :as cut]
-            [jobs.movement.go-to.faults :as gfaults]))
+            [jobs.movement.go-to.faults :as gfaults]
+            [jobs.movement.go-to.own-way :as own-way]))
 
 (defn dark-cells!
   "Perception's dark rule: the cells ([x y z] strings of the world spec) are never made out; sensedAt answers unknown."
@@ -715,6 +716,24 @@
             (await (tick-out! eng clock 5))
             (is (= 1 @checks) "the second attempt of the call checks no pen")
             (is (= 1 (count (filter #(= :go-to.pen-gate-open (:kind %)) @seen))))))))))
+
+(deftest a-call-keeps-the-tour-worth-of-its-first-walk-across-attempts
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock]} (setup (pen-world true 3) [])
+              pos {:x 20 :y 64 :z -3}
+              straights (atom [])
+              twice {:round (fn ^:async twice-round [c]
+                              (await (cut/start-attempt! c pos))
+                              (swap! straights conj (own-way/straight-from! c 170))
+                              (await (cut/start-attempt! c pos))
+                              (swap! straights conj (own-way/straight-from! c 12))
+                              (ctx/end c :done nil))}
+              eng (assoc eng :jobs (assoc (:jobs eng) 'twice twice))]
+          (core/submit! eng '(twice) {:range 0})
+          (await (tick-out! eng clock 5))
+          (is (= [170 170] @straights) "an attempt begun 12 off the goal (after a wait) prices its tour as the call did"))))))
 
 (deftest a-gate-the-call-opened-is-checked-at-its-next-attempt
   (async done
