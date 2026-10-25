@@ -256,7 +256,7 @@
           (core/submit! eng respond {})
           (await (core/tick! eng))
           (is (= 4 (count (calls p "attack")))
-              "health 16, the zombie at 15: 2.8 expected damage costs less than walking away; at health 1 too: a flight under 10 hp is caught more often than not (19 of 29)")
+              "health 16, the zombie at 15: 2.8 expected damage costs less than walking away; at health 1 too: a flight from low health is caught more often than not (cost.caught/prior)")
           (is (zero? (count (tu/walked-to eng))) "no retreat"))))))
 
 (deftest respond-writes-one-hostile-entry-per-encounter
@@ -1442,7 +1442,7 @@
       (fn ^:async t []
         (let [respond-normal '(jobs.survival.respond-to-hostile {:settings {:jobs.lib.cost.threat/difficulty 2}})
               s (await (flight-round respond-normal {:inventory sword :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}} (zombie 9 0 4)]}))]
-          (is (= :fight (:decision (first (hostile-entries (:eng s))))) "fight 988 s, flee 1251 s: caught at 16 of 43 the flight takes the blast and the zombie's blows")
+          (is (= :fight (:decision (first (hostile-entries (:eng s))))) "caught at the zombie's prior, the flight takes the blast and the zombie's blows: dearer than the fight")
           (is (= #{"creeper" "zombie"} (set (:near (first (filter #(= :hostile.decided (:kind %)) @(:seen s))))))
               "the decision names every mob near: what a flight's catch is counted by"))))))
 
@@ -1872,7 +1872,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[d decision prices] [[1 :fight {:fight 26 :flee 32}] [2 :fight {:fight 34 :flee 39}] [3 :flee {:fight 88 :flee 79}]]]
+        (doseq [[d decision prices] [[1 :fight {:fight 26 :flee 32}] [2 :fight {:fight 34 :flee 39}] [3 :flee {:fight 88 :flee 78}]]]
           (let [world {:inventory sword :equipment iron-armour :entities [(assoc (skeleton 1 10 0) :visible true)]}
                 {:keys [seen]} (await (settings/with-settings {:jobs.lib.cost.threat/difficulty d} #(flight-round respond world)))
                 [e] (filter #(= :hostile.decided (:kind %)) @seen)]

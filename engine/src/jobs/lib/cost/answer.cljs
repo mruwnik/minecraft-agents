@@ -27,6 +27,7 @@
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.cost.armour :as armour]
+            [jobs.lib.cost.caught :as caught-prior]
             [jobs.lib.cost.danger :as danger]
             [jobs.lib.cost.death :as death]
             [jobs.lib.cost.fight :as fight]
@@ -36,11 +37,7 @@
             [jobs.lib.cost.weapon :as weapon]))
 
 (a/defargs settings
-  {::caught {:default {:bands [{:from 0 :k 19 :n 29} {:from 10 :k 15 :n 41}] :blows 6.26}
-             :spec (a/map-with {:bands (a/coll-of (a/map-with {:from (a/num-in 0 nil) :k (a/int-in 0 nil) :n (a/int-in 0 nil)}))
-                                :blows (a/num-in 0 nil)})
-             :doc "The prior of a walk away being caught whatever its route (caught-prior): per band of the health it starts at (at least :from), k of n flights from the zombie family caught (killed by it or two blows or more within 30 s), and :blows, the Poisson mean of a caught flight's blows, fitted to the caught flights' deaths. Model deaths: 0.65 x 0.99 at 5 hp (measured 18 of 29 under 10 hp). Recount: node tools/event-counts.mjs caught-flights (trial bodies, easy), 2026-10-25."}
-   ::drowned-meet-per-s {:default 0.0021 :spec (a/num-in 0 nil)
+  {::drowned-meet-per-s {:default 0.0021 :spec (a/num-in 0 nil)
                          :doc "Chance a second a drowned meets a body in water a drowned can spawn in (its column holds water over water at block light 0, look/water-fn), by day or night: (k+1)/n over the trial bodies' logs on 2026-10-23, k=11 meets in n=5767 s, each meet once (a respond run soon after another is the same meet) and classed by the body's cell (tools/event-counts.mjs drowned-meets :prior :deep; river or ocean and other biomes, sky light high or low, met it alike)."}
    ::drowned-meet-other-per-s {:default 0.00043 :spec (a/num-in 0 nil)
                                :doc "As ::drowned-meet-per-s in any other water (one deep, or block-lit to its floor): k=1 in n=4602 s (:prior :other)."}
@@ -86,14 +83,6 @@
   (if (= "creeper" (:name m))
     (blast-hurt stats swell-start)
     (threat/mob-hurt stats (threat/kind m) 1 identity 1)))
-
-(defn caught-prior
-  "{:chance :seconds} of ::caught for a flight begun at health: its band's Beta(k + 1, n - k + 1) posterior mean, and the
-  seconds a melee mob is in reach of a caught flight, its :blows at one each melee-gap-s."
-  [health]
-  (let [{:keys [bands blows]} (settings/get settings ::caught)
-        {:keys [k n]} (last (filter #(<= (:from %) (or health 20)) (sort-by :from bands)))]
-    {:chance (/ (inc k) (+ n 2)) :seconds (* blows melee-gap-s)}))
 
 (defn mean [xs] (if (seq xs) (/ (reduce + xs) (count xs)) 0))
 
@@ -321,8 +310,8 @@
   "The answer of a walk away from mobs [flee-mob's] by a body with food wearing equipment, the walk there and back (it
   goes back to its work), times 1 + returns (the flights from such mobs lately: each predicts another); :then the answer
   later (the fight with them, nil none) or the walk again, one return more, from a mob's :again (the distance it is met at
-  on the way back, default its :distance) when nearer. :caught: each flight is caught at caught-prior of the body's
-  health, or else by its way (caught: the flee search's chance of it, nil 0), its mobs then landing their blows (a creeper
+  on the way back, default its :distance) when nearer. :caught: each flight is caught at the prior of the body's health
+  (jobs.lib.cost.caught/prior of its mobs, the likeliest caught), or else by its way (caught: the flee search's chance of it, nil 0), its mobs then landing their blows (a creeper
   its blast) over the flight, a melee mob over caught-s seconds of it (the flee search's race; nil: the prior's, or with
   its way's chance the whole flight), at reach-rate, and never fewer than the walk's own, as widely spread. A creeper that blows on the
   walk (at the median of its :spread) is spent: what follows is the walk from the rest or later (none left: nothing).
@@ -330,8 +319,8 @@
   nil when a mob keeps up or none is given."
   [{:keys [health food equipment mobs returns later caught caught-s swim land] :as args}]
   (let [stats (armour/armour-stats equipment)
-        prior (caught-prior health)
-        caught-s (or caught-s (when-not (pos? (or caught 0)) (:seconds prior)))
+        prior (if (seq mobs) (apply max-key :chance (map #(caught-prior/prior (:name %) health) mobs)) (caught-prior/prior nil health))
+        caught-s (or caught-s (when-not (pos? (or caught 0)) (* (:blows prior) melee-gap-s)))
         caught (- 1 (* (- 1 (:chance prior)) (- 1 (or caught 0))))
         v (danger/flight-speed (or food 20))
         wet {:swim swim :land land :sv (/ (planner/swim-speed equipment) (danger/outrun-factor))}

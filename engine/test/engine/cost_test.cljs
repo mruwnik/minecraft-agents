@@ -339,14 +339,17 @@
     (is (zero? (cost/flight-caught-chance {:way? true :counts closed})) "a way in sight adds nothing to the prior")
     (is (< 0 (unseen open) (unseen closed) 1) "a way into unseen cells may end there, the likelier where the seen ways end")))
 
-(deftest a-flight-is-caught-at-the-prior-of-the-health-it-starts-at
-  ;; 19 of 29 flights under 10 hp caught, 15 of 41 from 10 up; a caught one lands 6.26 blows
-  (let [flee #(cost/flee-answer {:health % :food 20 :mobs [{:name "zombie" :distance 3 :follow 35}]})
-        dies #(cost/death-chance {:health % :food 20} (flee %))]
-    (is (= (/ 20 31) (get-in (flee 5) [:caught :chance])))
-    (is (= (/ 16 43) (get-in (flee 20) [:caught :chance])))
-    (is (< 0.55 (dies 5) 0.7) "under 10 hp about the measured 18 of 29")
-    (is (< (dies 20) 0.15) "a caught flight takes some blows, not the whole flight's")))
+(deftest a-flight-is-caught-at-a-chance-smooth-in-the-health-it-starts-at
+  ;; the zombie family's trial flights (cost.caught/::flights, easy): under 10 hp 18 of 29 died, at 20 hp 3 of 27
+  (settings/with-settings {::threat/difficulty 1}
+    (fn []
+      (let [flee #(cost/flee-answer {:health % :food 20 :mobs [{:name "zombie" :distance 3 :follow 35}]})
+            chance #(get-in (flee %) [:caught :chance])
+            dies #(answer/blows-chance {:health % :food 20} (flee %))]
+        (is (< (js/Math.abs (- (chance 9.9) (chance 10))) 0.01) "no step at a band edge")
+        (is (< (chance 20) (chance 10) (chance 5)) "caught more often from low health")
+        (is (< 0.45 (dies 5) 0.8) "its own blows kill about the measured 18 of 29 under 10 hp")
+        (is (< 0.05 (dies 20) 0.2) "and 3 of 27 at 20 hp: a caught flight takes some blows, not the whole flight's")))))
 
 (deftest spawn-chance-is-zero-where-a-mob-cannot-spawn
   (let [lit (fn [block sky] (fn [_] {:block block :sky sky}))
@@ -503,7 +506,7 @@
         "spawns and known threats: either kills")
     (is (> (chance fist (route 40) (zombie)) (chance fist (route 40) (zombie :weight 0.2)) 0) "a fading memory weighs less")
     (is (> (chance {:health 6} (route 40) (zombie)) (chance fist (route 40) (zombie))) "the same walk away is likelier death at low health")
-    (is (< 0.25 (chance fist (route 40) (zombie)) 0.35) "a fist walks away now and again when it meets the mob later, that one a return, each caught at the prior: 16 of 43 at full health, 6.26 blows each")
+    (is (< 0.25 (chance fist (route 40) (zombie)) 0.35) "a fist walks away now and again when it meets the mob later, that one a return, each caught at the prior of full health (cost.caught/prior)")
     (is (< (chance {:health 20 :weapon "diamond_sword"} (route 40) (zombie)) 0.01) "a body that would fight it takes only the fight")
     (is (= (chance fist (route 40) (zombie)) (chance fist (route 40) (zombie :caught 0))) "a way the race calls free adds nothing to the prior")
     (is (< 0.9 (chance fist (route 40) (zombie :caught 1))) "no way out, no blocks: the fist fight")

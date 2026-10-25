@@ -7,6 +7,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.answer :as answer]
             [jobs.lib.cost.armour :as armour]
+            [jobs.lib.cost.caught :as caught]
             [jobs.lib.cost.death :as death]
             [jobs.lib.cost.danger :as danger]
             [jobs.lib.cost.fight :as fight]
@@ -130,7 +131,6 @@
     (is (= (choose (mob "skeleton" 12)) (choose (assoc (mob "skeleton" 12) :again 14))) "a way that passes farther than it stands changes nothing")))
 
 (deftest a-walk-away-is-caught-at-the-prior-of-its-health-and-so-loses-to-a-fight-or-a-wall-at-low-health
-  ;; under 10 hp 19 of 29 flights were caught (18 died), from 10 up 15 of 41
   (let [zombie (mob "zombie" 4 35)
         f (cost/fight-answer (fight sword zombie))
         flee #(cost/flee-answer {:health %1 :food 20 :mobs [zombie] :later f :caught %2})
@@ -315,7 +315,7 @@
         open (cost/flee-answer {:food 20 :mobs [m] :swim 4 :land 0 :open 0.25})
         seen-land (cost/flee-answer {:food 20 :mobs [m] :swim 4 :land ##Inf})]
     (is (nil? known) "the land seen ends at once and the mob keeps up")
-    (is (< (js/Math.abs (- (- 1 (* (- 1 (/ 16 43)) 0.25)) (-> open :caught :chance))) 1e-9) "caught at 1 - (1 - the prior at 20 hp) x 0.25")
+    (is (< (js/Math.abs (- (- 1 (* (- 1 (:chance (caught/prior "drowned" 20))) 0.25)) (-> open :caught :chance))) 1e-9) "caught at 1 - (1 - the prior at 20 hp) x 0.25")
     (is (< (-> open :caught :damage) (-> (cost/flee-answer {:food 20 :mobs [m] :swim 4 :land 0 :open 0.25 :later {:damage 100 :hit 3 :seconds 5}}) :caught :damage)) "a later fight is what the ending flight takes")
     (is (> (-> open :caught :chance) (-> seen-land :caught :chance)))
     (is (= (:caught seen-land) (:caught (cost/flee-answer {:food 20 :mobs [m] :swim 4 :land ##Inf :open 0.25}))) "land enough already: the chance is no matter")))

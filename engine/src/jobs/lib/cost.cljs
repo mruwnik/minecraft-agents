@@ -199,7 +199,7 @@
        (count (filter (fn [{:keys [x y z]}] (or (unseen? x y z) (unseen? x (inc y) z) (unseen? x (dec y) z))) route)))))
 
 (defn flight-caught-chance
-  "The chance a flight is caught by the way its search found (flee-answer :caught; answer/caught-prior is added there,
+  "The chance a flight is caught by the way its search found (flee-answer :caught; jobs.lib.cost.caught/prior is added there,
   whatever the way): 1 with no way left (way? false: every way it planned is cut); 0 on a way the race calls free; when
   the way runs on into cells the body has not seen (unseen?), that way's dead end (1 less way-on-chance of counts): met
   on the way back, the chasers catch it."

@@ -561,9 +561,10 @@
                                                :difficulty difficulty :since-ms since-ms)))
                        0)
        "drowned-meets" (do (println (pr-str (assoc (drowned/report (since (:drowned-exposure folded)) (since (:drowned-meets folded))) :since-ms since-ms))) 0)
-       "caught-flights" (let [rows (mapcat #(caught-flights/episodes (read-agent (path/join agents % "engine") since-ms))
-                                           (filter #(and (not (probe? %)) (fs/existsSync (path/join agents % "engine"))) (array-seq (fs/readdirSync agents))))]
-                          (println (pr-str (assoc (settings/with-settings {::threat/difficulty difficulty} #(caught-flights/report rows [0 10]))
+       "caught-flights" (let [recs (map #(read-agent (path/join agents % "engine") since-ms)
+                                        (filter #(and (not (probe? %)) (fs/existsSync (path/join agents % "engine"))) (array-seq (fs/readdirSync agents))))]
+                          (println (pr-str (assoc (settings/with-settings {::threat/difficulty difficulty}
+                                                    #(caught-flights/report (mapcat caught-flights/episodes recs) (mapcat (fn [rs] (caught-flights/episodes rs :fight)) recs)))
                                                   :difficulty difficulty :since-ms since-ms)))
                           0)
        "vein-seen" (do (println (pr-str (vein-seen (mapcat #(read-agent (path/join agents % "engine") since-ms)
