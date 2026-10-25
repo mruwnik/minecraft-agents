@@ -19,7 +19,9 @@
             [jobs.lib.util :as u]
             [engine.memory :as mem]
             [jobs.lib.pace :as pace]
-            [jobs.lib.child :as child]))
+            [jobs.lib.child :as child]
+            [jobs.lib.chests :as chests]
+            [jobs.lib.walk-pick :as pick]))
 
 (def doc
   "Make room in a nearly full inventory (the inventory-nearly-full reflex) until :free slots are free. One round is
@@ -32,7 +34,8 @@
   Cobblestone, dirt and each kind of planks (what shelter, mend, furnace and tool jobs spend) are each kept up to
   :carry-blocks; seeds up to :carry-seeds each; other blocks are not kept. Names in :carry-items are kept whole.
   Steps, in order:
-  1. A chest known within the chest-range setting (32) (and not marked :chest-unusable) takes what jobs.storage.deposit may put
+  1. The storage chest whose walk go-to quotes cheapest (jobs.lib.walk-pick; not marked :chest-unusable), when that walk costs no more than the
+     stacks it saves from the toss are worth (all of them when the toss cannot free enough), takes what jobs.storage.deposit may put
      away, least worth keeping first: names without a floor before food and building blocks, then the cheapest,
      then the one picked up longest ago. A chest that fails (full, gone, unreachable, refused) is remembered as
      :chest-unusable for the unusable-ttl-s setting (600) seconds and the job goes on without it.
@@ -73,7 +76,6 @@
    ::toss-fails {:default 3 :doc "Failed tosses in a row before the call gives up." :spec (a/int-in 1 nil)}
    ::unusable-ttl-s {:default 600 :doc "Seconds a chest that failed is left alone." :spec (a/num-in 0 nil)}
    ::spot-slack {:default 8 :doc "A toss spot the body is farther than :away plus this from is stale, in blocks." :spec (a/num-in 0 nil)}
-   ::chest-range {:default 32 :doc "The known :chest place is used only within this distance." :spec (a/num-in 0 nil)}
    ::swap-radius {:default 8 :doc "When no slot is free, a dropped item worth more than some carried stack within this radius is swapped in." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 120 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
    ::step-s {:default 3 :doc "Seconds a quote counts for one deposit call, swap or toss." :spec (a/num-in 0 nil)}})
@@ -82,7 +84,6 @@
   []
   (+ (:value (cost/item-value [{:name "chest" :count 1}]))
      (:cost (cost/walk-cost {:distance (cost/own-place-blocks)}))))
-(defn chest-range [] (settings/get settings ::chest-range))
 (defn swap-radius [] (settings/get settings ::swap-radius))
 
 (defn unusable-policy [] {:cap 5 :ttl (* 1000 (settings/get settings ::unusable-ttl-s))})
@@ -133,15 +134,26 @@
   [c chest]
   (boolean (some #(= chest (:pos (:data %))) (ctx/entries c :chest-unusable))))
 
-(defn usable-chest
-  "The nearest of the body's storage chests (the :chest place and its group) within range and not marked unusable, else nil."
-  [c]
-  (let [me (u/self-pos c)]
-    (->> (storage/group (ctx/view c))
-         (map #(zipmap [:x :y :z] %))
-         (remove #(or (> (u/dist me %) (chest-range)) (unusable? c %)))
-         (sort-by #(u/dist me %))
-         first)))
+(defn toss-cost
+  "Seconds of worth the toss throws away to free short slots: the whole stacks of the first short of order; ##Inf when
+  order cannot free that many."
+  [order short]
+  (if (< (count order) short)
+    ##Inf
+    (reduce + (map #(* (:worth %) (:count %)) (take short order)))))
+
+(defn ^:async usable-chest!
+  "The body's storage chest (the :chest place and its group, not marked unusable) whose walk go-to quotes cheapest, when
+  that walk costs no more than limit (what the alternative, tossing, throws away); else nil."
+  [c limit]
+  (let [r (await (pick/best! c (->> (storage/group (ctx/view c))
+                                    (map #(zipmap [:x :y :z] %))
+                                    (remove #(unusable? c %)))
+                            {:bound #(pick/walk-s (u/self-pos c) (chests/walk-args c %))
+                             :args #(chests/walk-args c %)
+                             :price (fn [_ q] (pick/quoted-s c q))}))]
+    (when (and r (<= (:price r) limit))
+      (:pick r))))
 
 (defn state
   "What the round decides on: inventory, floors and recency."
@@ -421,13 +433,16 @@
         m (ctx/mem c)
         free-now (u/free-slots p)
         {:keys [inventory keep recency] :as st} (state c)
-        chest (when-not (:chest-done @run) (usable-chest c))
         names (ord/deposit-names inventory keep recency)
         dir (await (direction! c run))
         swap (when (and dir (zero? free-now)) (or (swap-target c st) (await (seek-swap! c run st))))
         order (when dir (if (:stuck? (:args c))
                           (ord/toss-order inventory keep recency (chest-cost) true)
-                          (ord/toss-order inventory keep recency toss-below)))]
+                          (ord/toss-order inventory keep recency toss-below)))
+        chest (when-not (:chest-done @run)
+                (when-not (contains? @run :chest)
+                  (swap! run assoc :chest (await (usable-chest! c (toss-cost order (slots-short c))))))
+                (:chest @run))]
     (cond
       (>= free-now free) (await (finish-end! c nil))
       (>= (:toss-fails m 0) (settings/get settings ::toss-fails)) (await (finish-end! c :toss-failed))

@@ -350,16 +350,26 @@
           (is (seq (calls p "transfer")))
           (is (every? #{"gravel" "sand"} (map #(arg-of "item" %) (calls p "transfer")))))))))
 
-(deftest a-chest-beyond-chest-range-is-not-used
+(deftest a-chest-whose-walk-costs-more-than-the-junk-it-saves-is-not-used
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:inventory (many "junk" 35) :containers {"50,64,0" []}})]
+        (let [{:keys [eng p]} (setup {:inventory (many "junk" 35) :containers {"40,64,0" []}})]
           (know-chest! eng {:x 50 :y 64 :z 0})
           (await (run-reflex eng {} {}))
           (is (= 0 (count (calls p "transfer"))))
           (is (= 3 (count (calls p "toss"))) "35 stacks to 4 free slots: three tosses")
           (is (= [0 0 0] (mapv #(arg-of "slot" %) (calls p "toss"))) "each toss names its slot (the fake closes the gap each time)"))))))
+
+(deftest a-far-chest-is-used-when-the-toss-would-throw-away-dear-stacks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory (same "iron_ingot" 35 64) :containers {"40,64,0" []}})]
+          (know-chest! eng {:x 40 :y 64 :z 0})
+          (await (run-reflex eng {} {}))
+          (is (pos? (count (calls p "transfer"))) "nothing may be thrown, so the walk is the only way")
+          (is (= 0 (count (calls p "toss")))))))))
 
 (deftest a-full-chest-is-remembered-unusable-and-junk-is-tossed
   (async done
