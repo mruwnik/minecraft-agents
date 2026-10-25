@@ -115,6 +115,27 @@
           (await (tu/run-until-empty eng 120))
           (is (< 20 (:x (st/pos-of p))) "in the far hut, the near one is walled off from the body"))))))
 
+(defn ^:async night-at-hut-seen-outside
+  "night-at-seen-hut with the inside of the hut never seen from outside (its door shut): a room not seen inside yet."
+  [inventory]
+  (let [world (-> (hut/hut-world {:x 5 :y 64 :z 6} {}) (assoc :time night :inventory inventory :light-default [15 4])
+                  (update :light assoc [5 64 6] [15 0]))
+        {:keys [eng p] :as r} (await (night-at-home world {:x 5 :y 64 :z 0} {} {:home? false}))
+        at (.-sensedAt p)]
+    (aset p "seenBlockAt" (fn [pos] (let [b (.blockAt p pos)] #js {:name (.-name b) :pos pos :age-ms 0 :properties (.-properties b)})))
+    (aset p "sensedAt" (fn [pos] (if (and (<= 4 (.-x pos) 6) (<= -1 (.-z pos) 1) (<= 64 (.-y pos) 66) (< 2 (:z (st/pos-of p))))
+                                   #js {:unknown true :pos pos}
+                                   (.call at p pos))))
+    (await (tu/run-until-empty eng 80))
+    r))
+
+(deftest a-hut-not-seen-inside-is-not-walked-to-while-digging-in-is-quoted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (night-at-hut-seen-outside st/dirt-stack))]
+          (is (< 2 (:z (st/pos-of p))) "the worst case, an open room, is dug in against: the body never walked in"))))))
+
 (deftest a-carried-bed-goes-down-inside-the-hut-seen-not-outside-it
   (async done
     (tu/run-async done

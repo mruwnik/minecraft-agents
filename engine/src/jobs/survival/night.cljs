@@ -55,7 +55,7 @@
   - afloat: swim to the nearest dry land first (surface-up/leave-water!); none seen: nothing-possible :in-water. A swimmer is never roofed or sheltered.
   - roofed or buried in a closed region with sides never seen: a look at the nearest, else a walk to it, 15 failed cells and 200 steps a night at most (an unseen side is open until seen: a lit tunnel with its walls seen is shelter, one with an unseen branch is not).
   - sheltered (slept, dug in, shut in): log out for a stint while someone else sleeps, else end so the queue runs (no all-night hold: listed jobs run when their own start checks pass).
-  - a remembered roofed :roofed-places place whose walk go-to quotes cheapest (walkable-home: those whose straight walk fits the time left before the dark plus a margin, night.sites home-walk-*, are quoted best-first): with a bed to use or carry, when its price is no more than the bed walk's; with none, when a whole route is found, the walk fits that time and costs no more than digging in (shut-in's quote); with no place remembered, a closed room the body has seen (the cheapest quoted, like a finished hut whose home is not set yet); and the body not roofed: jobs.survival.enter-room walks in (one try tonight). Farther or dearer places are left to shut-in's :room way, priced against digging in. A carried bed is not put down in the open while a place is quoted (night.bed-kept).
+  - a remembered roofed :roofed-places place whose walk go-to quotes cheapest (walkable-home: those whose straight walk fits the time left before the dark plus a margin, night.sites home-walk-*, are quoted best-first): with a bed to use or carry, when its price is no more than the bed walk's; with none, when a whole route is found, the walk fits that time and costs no more than digging in (shut-in's quote); with no place remembered, a closed room the body has seen (the cheapest quoted, like a finished hut whose home is not set yet; one not seen inside yet only when no dig-in is quoted: the worst case is an open room); and the body not roofed: jobs.survival.enter-room walks in (one try tonight). Farther or dearer places are left to shut-in's :room way, priced against digging in. A carried bed is not put down in the open while a place is quoted (night.bed-kept).
   - an open door of the closed room the body stands in is shut; the room's doorway is filled before a carried bed goes down (ledger :doorway; one that cannot be filled for want of blocks, or was filled, is :doorway-tried, not tried again tonight).
   - a bed to use (sh-beds/beds-to-use, the one whose walk go-to quotes cheapest) whose walk is safe (bed-walk-safe?: a whole route priced no dearer than staying put), a carried bed, or someone else asleep: the cheapest of bed-down/answers (night-answer, debug night.answers): lie in the bed (its walk priced in) or the carried one put down here, put the carried bed down and shut its row in first (:sealed), jobs.survival.log-out (a 30 s stint, till morning when coming back costs more, log-out/back-unsafe; not retried tonight when not ok), or shelter (on below). A bed is jobs.survival.bed-down, called again until it ends; one that stops hostile-near ends the round nothing-possible :monsters-near (the trigger fires again after its cooldown).
   - the sky not dark yet (dusk, a bed term started it): done; the shelter ways below wait for the dark.
@@ -253,9 +253,9 @@
     (or best (when @searching :searching))))
 
 (defn ^:async seen-room!
-  "The cell of the closed room behind a door the body has seen whose walk is the cheapest (cheapest-walk!, a room judged
-  only when its turn comes) within limit-s seconds; else, with none closed, the cheapest of the rooms not seen inside yet
-  (the walk shows them). :searching or nil as cheapest-walk!."
+  "{:at cell :unseen? bool} of the room behind a door the body has seen whose walk is the cheapest (cheapest-walk!, a room judged
+  only when its turn comes) within limit-s seconds: a closed room, else, with none closed, a room not seen inside yet (:unseen?; the
+  walk shows it). :searching or nil as cheapest-walk!."
   [c limit-s]
   (let [p (:primitives c)
         poses (enter-room/seen-poses c)
@@ -265,8 +265,9 @@
                    (if (map? b) (:pick b) b)))
         closed (await (least! #(room-lib/refuge-room? p %)))]
     (if (nil? closed)
-      (await (least! #(reach-room/unseen-room? p %)))
-      closed)))
+      (let [unseen (await (least! #(reach-room/unseen-room? p %)))]
+        (if (map? unseen) {:at unseen :unseen? true} unseen))
+      (if (map? closed) {:at closed} closed))))
 
 (defn ^:async dig-in-seconds
   "Seconds shut-in's quote of digging in here (a wall or a pit) takes, ##Inf when it quotes none: what a walk to a roofed place is weighed against."
@@ -282,7 +283,7 @@
   roofed place (:roofed-places) whose walk go-to quotes cheapest (cheapest-walk!: only places whose straight walk fits that time are
   quoted, best-first): {:name :pos :price :found? :fits?} (price: the walk's seconds, its risk in; found?: go-to found a whole route; fits?: its quoted seconds fit that time);
   with no place remembered and seen-room? true, the closed room the body has seen (seen-room!, an unfinished house with no home set
-  yet): {:seen true :at cell}. :searching while a quote's search goes on. Else nil."
+  yet; one not seen inside only when no dig-in is quoted, the worst case being an open room): {:seen true :at cell}. :searching while a quote's search goes on. Else nil."
   [c seen-room?]
   (let [p (:primitives c)
         places (room-lib/roofed-places-in c (:args c) ##Inf)
@@ -296,10 +297,11 @@
                       :found? (boolean (get-in best [:quote :route :found]))
                       :fits? (<= (second (get-in best [:quote :uses :job-time])) budget))))
       (when seen-room?
-        (let [at (await (seen-room! c budget))]
+        (let [{:keys [at unseen?] :as room} (await (seen-room! c budget))]
           (cond
-            (= :searching at) :searching
-            (and at (await (fits {:at at}))) {:seen true :at at}))))))
+            (= :searching room) :searching
+            (and at (await (fits {:at at}))
+                 (or (not unseen?) (infinite? (await (dig-in-seconds c))))) {:seen true :at at}))))))
 
 (defn ^:async exposed!
   "Nothing shelters the body tonight (the first time one shelter.exposed warn): a log-out stint (jobs.survival.log-out) while
