@@ -371,6 +371,22 @@
           (is (pos? (count (calls p "transfer"))) "nothing may be thrown, so the walk is the only way")
           (is (= 0 (count (calls p "toss")))))))))
 
+(deftest a-chest-walk-is-taken-only-when-it-costs-less-than-the-stacks-the-toss-would-throw
+  (doseq [[item chest? probe] [["gravel" false "cheap stacks: the toss is cheaper than the walk"]
+                               ["string" true "dearer stacks: the walk is cheaper than the toss"]]]
+    (async done
+      (tu/run-async done
+        (fn ^:async t []
+          (let [{:keys [eng p]} (setup {:inventory (same item 35 64) :containers {"40,64,0" []}})]
+            (know-chest! eng {:x 40 :y 64 :z 0})
+            (await (run-reflex eng {} {}))
+            (is (= chest? (pos? (count (calls p "transfer")))) probe)
+            (is (= (not chest?) (pos? (count (calls p "toss")))) probe)))))))
+
+(deftest toss-cost-sums-the-first-short-stacks-and-is-infinite-when-too-few-can-go
+  (is (= ##Inf (mr/toss-cost [] 1)))
+  (is (= 30 (mr/toss-cost [{:worth 2 :count 5} {:worth 4 :count 5}] 2))))
+
 (deftest a-full-chest-is-remembered-unusable-and-junk-is-tossed
   (async done
     (tu/run-async done
