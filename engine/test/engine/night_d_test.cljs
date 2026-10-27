@@ -14,6 +14,7 @@
             [engine.fake.raw-world :as fake-raw]
             [engine.memory :as mem]
             [engine.perception :as perception]
+            [engine.perception.store :as store]
             [engine.settings :as settings]
             [engine.registry :as registry]
             [engine.scenario :as scenario]
@@ -24,6 +25,7 @@
             
             [jobs.lib.targets :as targets]
             [jobs.survival.night :as night]
+            [jobs.survival.night.flee :as flee]
             [jobs.survival.night.sites :as sites]
             [engine.night-support :refer [night noon roof holds? write! status! closed-hut holds-after? sleeper offline-why on-return! sleep-count! log-out-child fired wide-ground hillside breached-room run-night-in home-roof lit-world know-home! night-at-home with-child-log walled-home walled-pen bed-world bed-places dug-into-home stone-room block-at room-with-doorway doorway-shut-early dawn-holds-now? dark-world flee-home-night stone-and-dirt-patch flee-with cave-blocks cave-night held-starving zombie]]))
 
@@ -179,6 +181,29 @@
           (aset p "seenBlocks" (fn [q] (.filter (all q) (fn [b] (< (.-y (.-pos b)) 66)))))
           (await (tu/run-until-empty eng 160))
           (is (empty? (st/emitted seen :shelter.fled))))))))
+
+(deftest the-flee-sites-are-every-seen-cave-and-dirt-cell-and-are-kept-while-memory-and-the-body-hold
+  ;; 61 x 61 columns across x 1024 (where a cell key's bits wrap) and z 0 under a stone roof, all remembered
+  (let [p (tu/fake {:self {:pos [1030 64 -10]}
+                    :blocks (merge (tu/box 1000 63 -40 1060 63 20 "dirt") (tu/box 1010 66 -5 1030 66 5 "stone"))})
+        raw (fake-raw/create p)
+        per (perception/create raw {:now (constantly 1000000)})
+        ^js st (:st per)
+        record! (fn [x y z id] (store/record! st (store/store-of st (.-dim st)) x y z id 1000000))
+        _ (doseq [x (range 1000 1061) y (range 63 67) z (range -40 21)] (record! x y z (.stateAt raw x y z)))
+        w (perception/wrap p per)
+        kinds #(set (map (juxt :kind (comp (juxt :x :y :z) :pos)) %))
+        sites (flee/sites w 64)]
+    (is (= (into (set (for [x (range 1010 1031) z (range -5 6)] [:cave [x 64 z]]))
+                 (for [x (range 1000 1061) z (range -40 21)] [:ground [x 64 z]]))
+           (kinds sites))
+        "under the roof a cave; over every dirt block ground; the roof's stone is no ground without a pickaxe")
+    (is (= (+ (* 21 11) (* 61 61)) (count sites)))
+    (is (identical? sites (flee/sites w 64)) "nothing remembered changed: the same list")
+    (record! 1040 66 0 (.stateAt raw 1010 66 0))
+    (is (contains? (kinds (flee/sites w 64)) [:cave [1040 64 0]]) "a roof block seen since: a new cave")
+    (swap! (fake/state p) assoc-in [:self :pos] [1090 64 -10])
+    (is (< (count (flee/sites w 64)) (count sites)) "moved off: the far side is out of the flee radius")))
 
 (deftest with-nothing-seen-the-night-looks-around-and-then-flees-to-the-ground-it-saw
   (async done

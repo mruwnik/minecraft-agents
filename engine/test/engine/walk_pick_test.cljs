@@ -41,6 +41,12 @@
           (is (nil? best) "no candidate with a finite price")
           (is (= [:a :b] asked)))))))
 
+(deftest by-bound-orders-as-sort-by-asking-each-bound-once
+  (let [xs (conj (mapv (fn [i] {:id i :b (mod (* 7 i) 5)}) (range 20)) {:id :far :b ##Inf} {:id :near :b -1})
+        asked (atom 0)]
+    (is (= (sort-by :b xs) (pick/by-bound #(do (swap! asked inc) (:b %)) xs)) "ties keep their order")
+    (is (= (count xs) @asked))))
+
 (deftest a-quoted-walk-costs-its-time-and-the-hp-it-takes-and-risks
   (let [c {:primitives (tu/fake {})}
         q {:uses {:job-time [4 5 15] :health [0 1 1]} :risk {:hp 2}}]

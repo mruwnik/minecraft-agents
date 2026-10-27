@@ -11,6 +11,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.rooms :as room-lib]
             [jobs.lib.seal :as seal]
+            [jobs.lib.sense :as sense]
             [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.solid :as solid]
@@ -27,9 +28,14 @@
   "Natural ground among the seen solids [{:name :pos}] that the carried tools dig and that is no sand or gravel, as the
   feet cells over it ({:kind :ground :pos}); whether a pit can be dug there (ground-ok?) is asked only when its turn comes."
   [p solids]
-  (->> solids
-       (filter (fn [{:keys [name]}] (and (rules/natural? name) (not (rules/falling? name)) (tools/can-harvest? p name))))
-       (map (fn [b] {:kind :ground :pos (update (:pos b) :y inc)}))))
+  (let [^js by-name (js/Map.)
+        ground? (fn [name]
+                  (when-not (.has by-name name)
+                    (.set by-name name (and (rules/natural? name) (not (rules/falling? name)) (tools/can-harvest? p name))))
+                  (.get by-name name))]
+    (->> solids
+         (filter #(ground? (:name %)))
+         (map (fn [b] {:kind :ground :pos (update (:pos b) :y inc)})))))
 
 (defn ground-ok?
   "Whether a pit can be dug at ground site x (pit-site/pit-site?) and it is clear of failed sites."
@@ -42,16 +48,37 @@
   when its turn comes."
   [p solids]
   (let [roof-height (sh-sense/roof-height)
-        key-of (juxt :x :y :z)
-        solid? (into #{} (map (comp key-of :pos)) solids)
-        seen-free? (fn [cell] (and (not (solid? (key-of cell)))
-                                   (not (:unknown (look/seen-block p cell)))))
-        up (fn [{:keys [x y z]} dy] {:x x :y (+ y dy) :z z})]
+        ;; cells less than 1024 apart on each axis (a flee-radius sphere and the roofs over it) key apart
+        key-of (fn [x y z] (bit-or (bit-shift-left (bit-and x 1023) 20) (bit-shift-left (bit-and y 1023) 10) (bit-and z 1023)))
+        ^js solid (js/Set.)
+        _ (doseq [{{:keys [x y z]} :pos} solids] (.add solid (key-of x y z)))
+        seen-free? (fn [{:keys [x y z] :as cell}] (and (not (.has solid (key-of x y z)))
+                                                       (not (:unknown (look/seen-block p cell)))))]
     (->> solids
-         (map #(up (:pos %) 1))
-         (filter (fn [f] (and (some #(solid? (key-of (up f %))) (range 2 (inc roof-height)))
-                              (seen-free? f) (seen-free? (up f 1)))))
-         (map (fn [f] {:kind :cave :pos f})))))
+         (keep (fn [{{:keys [x y z]} :pos}]
+                 (let [f {:x x :y (inc y) :z z}]
+                   (when (and (loop [dy 2] (and (<= dy roof-height) (or (.has solid (key-of x (+ y 1 dy) z)) (recur (inc dy)))))
+                              (seen-free? f) (seen-free? (update f :y inc)))
+                     {:kind :cave :pos f})))))))
+
+(defonce ^:private site-lists (js/WeakMap.))
+
+(defn sites
+  "cave-sites then ground-sites of the seen solids within radius of the body, kept while what it remembers
+  (sense/known-memory), where it stands and what it carries hold: memory changes far less often than flee-target asks."
+  [p radius]
+  (let [^js st (some-> (aget p "perception") :st)
+        memory (sense/known-memory p)
+        ^js pos (.-pos (.self p))
+        k (when memory [(aget p "seenBlocks") (.-dim st) memory [(.-x pos) (.-y pos) (.-z pos)] radius (sh-sense/roof-height)
+                        (into #{} (map :name) (u/inventory p))])
+        hit (when k (.get site-lists st))]
+    (if (and k (= k (:k hit)))
+      (:sites hit)
+      (let [solids (look/seen-blocks p {:match solid/solid? :radius radius :max ##Inf})
+            v (into (vec (cave-sites p solids)) (ground-sites p solids))]
+        (when k (.set site-lists st {:k k :sites v}))
+        v))))
 
 (defn cave-needed
   "The wall cells dig-in's :enclose still has to fill to wall in the cave cell f (an unseen cell counts open), when they
@@ -89,8 +116,7 @@
             bed (when-let [pos (sh-beds/bed-to-use p (ctx/view c) flee-radius (bed-down/bed-permit c))]
                   (when (< (bed-down/radius c) (u/dist here pos) (inc flee-radius)) [{:kind :bed :pos pos}]))
             places (map #(assoc % :kind :roofed-place) (room-lib/roofed-places-in c (:args c) flee-radius))
-            solids (look/seen-blocks p {:match solid/solid? :radius flee-radius :max ##Inf})
-            cands (->> (concat bed places (cave-sites p solids) (ground-sites p solids))
+            cands (->> (concat bed places (sites p flee-radius))
                        (remove #(contains? tried (:pos %))))
             needed (atom {})
             ok? (fn [{:keys [kind pos] :as x}]

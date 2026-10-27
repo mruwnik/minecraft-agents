@@ -385,5 +385,6 @@
     (aset out "glance" (fn [a] (answer-js (glance! per (cell a)))))
     (aset out "seenBlocks" (fn [^js a]
                              (let [q (js->clj (or a #js {}) :keywordize-keys true)]
-                               (clj->js (mapv #(update % :pos pos-js) (store/seen-blocks per q))))))
+                               (to-array (map (fn [{:keys [name pos distance age-ms]}] #js {:name name :pos (pos-js pos) :distance distance "age-ms" age-ms})
+                                              (store/seen-blocks per q))))))
     out))

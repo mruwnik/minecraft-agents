@@ -258,7 +258,11 @@
     (is (nil? (.-name (.blockAt wrapped #js {:x 0 :y 65 :z 8}))) "behind the wall: not sensed")
     (is (= "diamond_ore" (.-name (.blockAt p #js {:x 0 :y 65 :z 8}))))
     (is (.-unknown (.seenBlockAt wrapped #js {:x 0 :y 65 :z 8})))
-    (is (= "stone" (.-name (.seenBlockAt wrapped #js {:x 0 :y 65 :z 5}))))))
+    (is (= "stone" (.-name (.seenBlockAt wrapped #js {:x 0 :y 65 :z 5}))))
+    (let [[b :as bs] (map js->clj (.seenBlocks wrapped #js {:names ["stone"] :max 1}))]
+      (is (= [{"name" "stone" "pos" {"x" 0 "y" 63 "z" 5}}] (map #(select-keys % ["name" "pos"]) bs)))
+      (is (= #{"name" "pos" "distance" "age-ms"} (set (keys b))))
+      (is (every? number? (map b ["distance" "age-ms"]))))))
 
 (deftest sensedAt-answers-as-js-and-is-redone-when-the-eye-turns
   (let [{:keys [p per]} (rig {"0,65,-5" "gold_block"})
