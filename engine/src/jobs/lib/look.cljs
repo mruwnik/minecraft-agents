@@ -375,12 +375,11 @@
 
 (defonce ^:private shares (js/WeakMap.))
 
-(defn solid-share
-  "The chance that a block sight meets round the feet is solid: base-rates/solid-share at the feet's height of the blocks
-  the body remembers, aged ones too, in the feet's section and the 26 round it (the window the prior is fitted to). Sight
-  meets every open block along a ray and the solid one that ends it, as the prior counts open blocks and the walls beside
-  them. Nil without a perception's memory. Kept while the body stands in one section and no block it remembers changed
-  or aged."
+(defn solid-counts
+  "[solid open]: the blocks the body remembers, aged ones too, in the feet's section and the 26 round it (the window the
+  solid prior is fitted to), solid and open. Sight meets every open block along a ray and the solid one that ends it, as
+  the prior counts open blocks and the walls beside them. Nil without a perception's memory. Kept while the body stands
+  in one section and no block it remembers changed or aged."
   [p]
   (when-let [^js st (some-> (aget p "perception") :st)]
     (when-let [[x y z] (feet-cell p)]
@@ -403,9 +402,16 @@
                                          acc))
                                      [0 0]
                                      (for [dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]] [dx dy dz]))
-                v (base-rates/solid-share y solid (- seen solid))]
+                v [solid (- seen solid)]]
             (.set shares st {:k k :v v})
             v))))))
+
+(defn solid-share
+  "The chance that a block sight meets round the feet is solid: base-rates/solid-share at the feet's height of
+  solid-counts. Nil without a perception's memory."
+  [p]
+  (when-let [[solid open] (solid-counts p)]
+    (base-rates/solid-share (nth (feet-cell p) 1) solid open)))
 
 (defn- brightest
   "#js {:block :sky}: the most of each light among the seen cells of the section at cx sy cz (its ids)."
@@ -433,9 +439,9 @@
   light alike, through unseen cells, each open at chance 1 - solid-share (the rock guess's): a seen cell of light L
   lights one d steps off at L - d, at chance (1 - solid-share)^(d - 1), the nearest such cell counted. Sky light 15
   reaches it down its column when the first seen cell over it has it and none lies unseen between, not when that cell
-  has less (a roof); past k unseen cells, or with none seen over it, the open sky's chance is the more of
-  (1 - solid-share)^k and base-rates/sky-share at the sky light it needs, of the open cells seen in the 27 sections round
-  its own (none seen there: round the feet's, at its height). Kept per cell.
+  has less (a roof); past unseen cells, the chance every one is open (base-rates/open-run-chance of solid-counts); with
+  none seen over it, base-rates/sky-share at the sky light it needs, of the open cells seen in the 27 sections round its
+  own (none seen there: round the feet's, at its height). Kept per cell.
   subtract: the sky's darkening to judge it by (default: now; 0: by full day)."
   ([p] (unseen-lit-chance-fn p nil))
   ([p subtract]
@@ -451,7 +457,8 @@
                        v (.lightAt raw ox oy oz)]
                    (when (and (or (nil? ids) (zero? (aget ids (store/cell-index ox oy oz)))) (>= v 0)) v)))
            own? (fn [x y z] (and own (== x ox) (== y oy) (== z oz)))
-           open-chance (- 1 (or (solid-share p) (base-rates/solid-share oy 0 0)))
+           [n-solid n-open] (or (solid-counts p) [0 0])
+           open-chance (- 1 (base-rates/solid-share oy n-solid n-open))
            ^js open (rock/open-ids)
            summaries (js/Map.)
            summary (fn [cx sy cz]
@@ -551,16 +558,16 @@
                           (base-rates/sky-share y sky-need sky n)))
            ;; the chance the open sky reaches x y z down its column
            column (fn [x y z]
-                    (loop [y' (inc y) k 0]
+                    (loop [y' (inc y)]
                       (if (>= y' max-build-y)
                         (sky-chance x y z)
                         (if-let [^js ids (ids-at (bit-shift-right x 4) (bit-shift-right y' 4) (bit-shift-right z 4))]
                           (let [v (when (pos? (aget ids (store/cell-index x y' z))) (.lightAt raw x y' z))]
-                            (cond (or (nil? v) (neg? v)) (recur (inc y') (inc k))
+                            (cond (or (nil? v) (neg? v)) (recur (inc y'))
                                   (not= 15 (bit-shift-right v 4)) 0
-                                  (zero? k) 1
-                                  :else (max (js/Math.pow open-chance k) (sky-chance x y z))))
-                          (let [up (* 16 (inc (bit-shift-right y' 4)))] (recur up (+ k (- up y'))))))))
+                                  (== y' (inc y)) 1
+                                  :else (base-rates/open-run-chance (inc y) y' n-solid n-open)))
+                          (let [up (* 16 (inc (bit-shift-right y' 4)))] (recur up))))))
            memo (js/Map.)]
        (fn [x y z]
          (let [k (str x "," y "," z)]

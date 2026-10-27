@@ -154,3 +154,12 @@
   [y solid open]
   (let [{:keys [a b]} (solid-prior y)]
     (/ (+ a solid) (+ a b solid open))))
+
+(defn open-run-chance
+  "The chance every block of a column from height y0 up to y1 (not counted) is open, each at 1 - solid-share at its own
+  height with solid and open those sight has met; under 1e-6 reads 0."
+  [y0 y1 solid open]
+  (loop [y y0 c 1]
+    (cond (< c 1e-6) 0
+          (>= y y1) c
+          :else (recur (inc y) (* c (- 1 (solid-share y solid open)))))))

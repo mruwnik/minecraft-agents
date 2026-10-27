@@ -6,6 +6,7 @@
             [engine.perception :as perception]
             [engine.test-util :as tu]
             [jobs.explore.look :as explore-look]
+            [jobs.lib.cost.base-rates :as base-rates]
             [jobs.lib.look :as look]
             [jobs.lib.shelter.sense :as sh-sense]))
 
@@ -247,13 +248,16 @@
     (is (zero? (look/unseen-lit-chance p {:x 4 :y 64 :z 0})) "the room's light 14 does not pass its seen walls")))
 
 (deftest an-unseen-gap-under-seen-open-sky-is-priced-not-free
-  ;; a shaft down from a hole in the floor, the sky's light 15 all the way down, in a place the sky does not light else
-  (let [p (seeing {:time day :blocks {"0,63,5" "air" "0,63,6" "air" "0,63,7" "air"}})]
-    (swap! (fake/state p) assoc :light-default [0 0] :light (into {} (for [y (range 58 64)] [[0 y 7] [15 0]])))
-    (let [gap (count (take-while #(not (sh-sense/seen-cell? p {:x 0 :y % :z 7})) (range 59 64)))]
-      (is (< 0 gap 5) "the hole is seen, the shaft under it not")
-      (is (= (js/Math.pow (- 1 (look/solid-share p)) gap) (look/unseen-lit-chance p {:x 0 :y 58 :z 7}))
-          "each unseen cell under it open at the solid share's chance (the old guess: the open sky, lit)"))))
+  ;; a shaft down from a hole in the floor by day, seen open to the sky round the body: under the hole's seen air, past
+  ;; every seen light's reach, the sky gets down only if every unseen cell between is open (the old guess: the open
+  ;; ground's sky share at that height, lit)
+  (let [p (seeing {:time day :blocks {"0,63,5" "air" "0,63,6" "air" "0,63,7" "air"}})
+        [solid open] (look/solid-counts p)
+        top (first (filter #(sh-sense/seen-cell? p {:x 0 :y % :z 7}) (range 49 64)))
+        chance (look/unseen-lit-chance p {:x 0 :y 48 :z 7})]
+    (is (< 52 top) "the hole is seen, the shaft under it not")
+    (is (= (base-rates/open-run-chance 49 top solid open) chance))
+    (is (< chance 0.5))))
 
 (deftest an-unseen-cell-under-open-sky-is-lit-by-day-only
   (is (true? (look/unseen-lit? (seeing {:time day}) {:x 40 :y 64 :z 0})) "far past sight, where the seen ground is under open sky")
