@@ -526,15 +526,15 @@
           (is (seq (events-of s :round_started)))
           (is (empty? (filter #(= :away (:reason %)) (events-of s :waiting)))))))))
 
-(def unseen-cells (for [x (range 42 45) z (range 2 5)] [x z]))
+(def unseen-cells (for [x (range 30 35) z (range 2 7)] [x z]))
 
-(deftest a-tend-under-repeat-walks-to-a-field-it-has-not-seen
+(deftest a-tend-under-repeat-walks-to-a-field-it-has-not-seen-when-its-share-of-ripe-crops-pays
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup (assoc (world (farm "wheat" 7 unseen-cells unseen-cells) wheat-drops) :floor [-5 -5 60 15]))]
           (tu/seeing-within (:p s) 24)
-          (core/submit! (:eng s) (list 'repeat (list 'jobs.farm.tend {:area {:min {:x 42 :y 63 :z 2} :max {:x 44 :y 64 :z 4}}})) {})
+          (core/submit! (:eng s) (list 'repeat (list 'jobs.farm.tend {:area {:min {:x 30 :y 63 :z 2} :max {:x 34 :y 64 :z 6}}})) {})
           (await (tu/run-ticks (:eng s) (:clock s) 60 700))
           (is (seq (tu/walk-calls (:p s))) "the body goes to the field")
           (is (= (set (map (fn [[x z]] [x z]) unseen-cells)) (dug s)) "and cuts the wheat there"))))))
@@ -563,20 +563,52 @@
           (is (empty? (tu/walk-calls (:p s))) "one crop 300 blocks off is not worth the walk")
           (is (some #(= :not-worth (:reason %)) (events-of s :waiting))))))))
 
-(deftest a-pass-is-worth-the-crops-it-expects-ripe
+(defn pass-ctx
+  "A check ctx of tend over the box from x0 to x1 (z 2) in setup s."
+  [s x0 x1]
+  {:args {:area {:min {:x x0 :y 63 :z 2} :max {:x x1 :y 64 :z 2}} :till true :irrigate false} :primitives (:p s)
+   :id "t" :root "t" :slots [] :view (fn [] {:now 0 :data {}}) :engine {:warned (atom #{})}})
+
+(def dry-rate (crops/stages-per-s false nil))
+
+(deftest a-pass-is-worth-the-crops-it-expects-ripe-and-their-replanting
   (let [s (setup (world (farm "wheat" 7 [[2 2]] [[2 2]]) (farm "wheat" 3 [[3 2]] [[3 2]])))
-        c {:args {:area {:min {:x 2 :y 63 :z 2} :max {:x 3 :y 64 :z 2}}} :primitives (:p s)}
-        wheat (cost/crop-worth "wheat")]
-    (is (pos? wheat))
-    (is (= wheat (tend/pass-worth c)) "a ripe crop in view counts whole, an unripe one in view not at all")
+        c (pass-ctx s 2 3)]
+    (is (= (+ (cost/crop-worth "wheat") (cost/sown-worth "wheat" dry-rate)) (tend/pass-worth c))
+        "a ripe crop in view counts whole and is sown again, an unripe one in view not at all")))
+
+(deftest a-cell-never-seen-is-worth-the-measured-share-of-ripe-crops-not-a-ripe-crop
+  (let [s (setup (world (farm "wheat" 7 [[2 2] [3 2]] [[2 2] [3 2]])))
+        c (pass-ctx s 2 3)
+        least (apply min (map cost/crop-worth (keys crops/ripe-age)))]
     (tu/seeing-within (:p s) 0)
-    (is (= (* 2 (apply min (map cost/crop-worth (keys crops/ripe-age)))) (tend/pass-worth c)) "a cell never seen counts as the least worth crop, ripe")))
+    (is (< 0 (cost/field-share :ripe 0 0) 0.5))
+    (is (= (* 2 (cost/field-share :ripe 0 0) least) (tend/pass-worth c)))))
+
+(deftest a-pass-that-sows-bare-farmland-is-worth-the-crops-it-sets-up
+  (let [s (setup (world (farm "wheat" 0 [[2 2] [3 2] [4 2]] []) {:inventory [(item "wheat_seeds" 2)]}))
+        c (pass-ctx s 2 4)]
+    (is (pos? (cost/sown-worth "wheat" dry-rate)))
+    (is (= (* 2 (cost/sown-worth "wheat" dry-rate)) (tend/pass-worth c)) "two seeds sow two of the three bare cells")))
+
+(deftest a-pass-quotes-the-measured-work-of-its-steps
+  (let [s (setup (world (farm "wheat" 7 [[2 2]] [[2 2]]) (farm "wheat" 3 [[3 2]] [[3 2]])))]
+    (is (= [0 (cost/field-step-s :harvest 1) ##Inf] (get-in (tend/quote-of (pass-ctx s 2 3)) [:uses :job-time])))))
 
 (deftest a-crop-seen-unripe-ripens-by-the-games-growth-rate
-  (is (= 1 (crops/ripe-chance "wheat" 7 0)))
-  (is (= 0 (crops/ripe-chance "wheat" 0 0)))
-  (is (< 0.4 (crops/ripe-chance "wheat" 0 (/ 7 crops/stages-per-s)) 0.6) "about even odds after the mean time of the stages left")
-  (is (> (crops/ripe-chance "wheat" 6 600) (crops/ripe-chance "wheat" 0 600)) "fewer stages left ripen sooner"))
+  (let [wet (crops/stages-per-s true nil)]
+    (is (= 1 (crops/ripe-chance "wheat" 7 0 wet)))
+    (is (= 0 (crops/ripe-chance "wheat" 0 0 wet)))
+    (is (< 0.4 (crops/ripe-chance "wheat" 0 (/ 7 wet) wet) 0.6) "about even odds after the mean time of the stages left")
+    (is (> (crops/ripe-chance "wheat" 6 600 wet) (crops/ripe-chance "wheat" 0 600 wet)) "fewer stages left ripen sooner")
+    (is (> (crops/ripe-chance "wheat" 4 600 wet) (crops/ripe-chance "wheat" 4 600 dry-rate)) "dry farmland grows slower")
+    (is (= 0 (crops/ripe-chance "wheat" 4 6000 (crops/stages-per-s true 8))) "under light 9 nothing grows")))
+
+(deftest a-sown-crop-is-worth-its-share-ripe-within-the-food-horizon
+  (let [wet (crops/stages-per-s true nil)]
+    (is (= 1 (cost/grown-share "wheat" 7 wet)))
+    (is (< 0 (cost/grown-share "wheat" 0 dry-rate) (cost/grown-share "wheat" 0 wet) 1))
+    (is (= 0 (cost/sown-worth "wheat" 0)) "a crop that never grows is not worth its seed")))
 
 (deftest a-lone-tend-far-below-its-field-walks-up
   (async done
@@ -607,7 +639,7 @@
     (is (fn? (:can-start? job)))
     (is (vector? (:target job)))
     (is (fn? (:done? job)))
-    (is (nil? (contract/quote-problem ((:quote-of job) {:primitives (tu/fake {}) :args {:area box}}))))))
+    (is (nil? (contract/quote-problem ((:quote-of job) {:primitives (tu/fake {}) :args {:area box} :view (fn [] {:now 0 :data {}}) :engine {:warned (atom #{})}}))))))
 
 (deftest a-run-that-worked-is-done-with-its-steps-and-field
   (async done

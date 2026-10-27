@@ -16,6 +16,7 @@
             [jobs.lib.steps :as steps]
             [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]
             [jobs.lib.walk-pick :as pick]
@@ -169,27 +170,81 @@
     (let [{lo :min hi :max} (fa/arg-box c)]
       (into {} (for [x (range (:x lo) (inc (:x hi))) z (range (:z lo) (inc (:z hi)))] [{:x x :y (inc (:y lo)) :z z} nil])))))
 
-(defn cell-worth
-  "Seconds the crop cell at pos (crop: the one wanted there, nil for any) is worth to a pass: its ripe crop's cost/crop-worth times the
-  chance it is ripe now: seen in view, 1 or 0; remembered out of view, its chance to have ripened since (crops/ripe-chance); never seen,
-  1, its last look unboundedly long ago, at the least worth of the crops it may hold (the worse case). Another block is 0."
-  [p pos crop]
+(defn check-facts
+  "The facts the check decides from: read once per check-cache window, and fresh while a cell was never seen."
+  [c]
+  (if (needs-look? c)
+    (facts c)
+    (check-cache/cached c [:facts (fa/part c)] #(facts c))))
+
+(defn growth-rate
+  "Stages a second the crop at pos grows (crops/stages-per-s): wet while water seen in ws (a set of [x y z]) reaches the
+  ground under it, else dry (the worse case when its reach is not seen), at its light as seen."
+  [p ws {:keys [x y z] :as pos}]
+  (crops/stages-per-s (lib-farm/hydrated? ws x (dec y) z)
+                      (when (sh-sense/seen-cell? p pos)
+                        (some-> (sh-sense/block-light-at p pos) (max (or (sh-sense/sky-light-at p pos) 0))))))
+
+(defn ripe-now
+  "[crop chance] of the crop cell at pos (crop: the one wanted there, nil for any) holding a ripe crop now: in view 1 or 0;
+  remembered out of view, crops/ripe-chance since it was seen at its growth-rate; another block [nil 0]; nil when never seen."
+  [p ws pos crop]
   (let [b (u/sensed p pos)]
-    (if (or (nil? b) (true? (.-unknown b)))
-      (apply min (map cost/crop-worth (if crop [crop] (keys crops/ripe-age))))
+    (when-not (or (nil? b) (true? (.-unknown b)))
       (let [name (.-name b)
             age (or (.-age b) 0)]
         (cond
-          (not (and (crops/ripe-age name) (or (nil? crop) (= crop name)))) 0
-          (false? (.-visible b)) (* (cost/crop-worth name) (crops/ripe-chance name age (/ (or (.-ageMs b) 0) 1000)))
-          (>= age (crops/ripe-age name)) (cost/crop-worth name)
-          :else 0)))))
+          (not (and (crops/ripe-age name) (or (nil? crop) (= crop name)))) [nil 0]
+          (false? (.-visible b)) [name (crops/ripe-chance name age (/ (or (.-ageMs b) 0) 1000) (growth-rate p ws pos))]
+          :else [name (if (>= age (crops/ripe-age name)) 1 0)])))))
 
-(defn pass-worth
-  "Seconds a pass over the field c works is worth: the cell-worth of its crop cells, the harvest it expects."
+(defn sow-crop
+  "The crop a pass sows: the plan's first crop whose seed may be sown, else (a box) the one of the seed it would pick; nil without seed."
   [c]
-  (let [p (:primitives c)]
-    (reduce + 0 (map (fn [[pos crop]] (cell-worth p pos crop)) (crop-cells c)))))
+  (let [sowable (lib-farm/sowable c)
+        seed->crop (into {} (map (fn [[crop seed]] [seed crop])) crops/seed-of)]
+    (if (fa/plan c)
+      (first (filter #(pos? (get sowable (crops/seed-of %) 0)) (distinct (vals (crop-cells c)))))
+      (some-> (lib-farm/pick-seed nil c) seed->crop))))
+
+(defn pass-price
+  "{:worth :work-s} of a pass over the field c works, from its facts f. :worth is the harvest it expects and the crops it sows.
+  - Harvest: each crop cell's ripe-now chance times its crop's worth (cost/crop-worth) and its replanting (cost/sown-worth).
+    A cell never seen has the share cost/field-share :ripe of the field's seen cells over the measured prior, at the least
+    crop worth when the cell may hold any crop.
+  - Sowing: the seed carried, up to the seen bare cells, the untilled ones while till can run, and the unseen cells' share
+    cost/field-share :sowable, each at cost/sown-worth. The rate is wet when :irrigate wets the field or every ground cell is wet.
+  :work-s is each step's measured seconds (cost/field-step-s) over those expected units."
+  [c f]
+  (let [p (:primitives c)
+        args (decide-args c)
+        ws (irrigate/waters c (ground-cells c))
+        cells (crop-cells c)
+        read (map (fn [[pos crop]] [pos crop (ripe-now p ws pos crop)]) cells)
+        seen (keep #(nth % 2) read)
+        unseen (remove #(nth % 2) read)
+        n (count seen)
+        least #(apply min (map cost/crop-worth (if % [%] (keys crops/ripe-age))))
+        replant #(cost/sown-worth % (growth-rate p ws %2))
+        ripe-seen (reduce + 0 (map (fn [[_ _ [name chance]]] (if name chance 0)) read))
+        ripe-share (cost/field-share :ripe ripe-seen n)
+        harvest (+ (reduce + 0 (map (fn [[pos _ [name chance]]] (if name (* chance (+ (cost/crop-worth name) (replant name pos))) 0)) read))
+                   (reduce + 0 (map (fn [[pos crop]] (* ripe-share (+ (least crop) (if crop (replant crop pos) 0)))) unseen)))
+        till? (and (:till args) (or (:hoe f) (need/fetching? (:ways args))))
+        open (+ (:bare f 0) (if till? (count (:untilled f)) 0))
+        sowable (+ open (* (count unseen) (cost/field-share :sowable open n)))
+        crop (sow-crop c)
+        seeds (if crop (get (lib-farm/sowable c) (crops/seed-of crop) 0) 0)
+        sown (min seeds sowable)
+        wet? (or (:irrigate args) (every? (fn [{:keys [x y z]}] (lib-farm/hydrated? ws x y z)) (ground-cells c)))
+        ripe (+ ripe-seen (* ripe-share (count unseen)))]
+    {:worth (+ harvest (if crop (* sown (cost/sown-worth crop (crops/stages-per-s wet? nil))) 0))
+     :work-s (+ (cost/field-step-s :harvest ripe)
+                (cost/field-step-s :till (max 0 (- sown (:bare f 0))))
+                (cost/field-step-s :plant sown)
+                (cost/field-step-s :irrigate (if (pos? (:dry f 0)) 1 0)))}))
+
+(defn pass-worth "Seconds a pass over the field c works is worth (pass-price's :worth)." [c] (:worth (pass-price c (check-facts c))))
 
 (defn unseen-field-cells
   "The field cells never seen."
@@ -218,13 +273,6 @@
         walk (pick/walk-s (u/self-pos c) (walk-args c site))]
     (when (> walk worth)
       {:reason :not-worth :worth worth :walk-s walk})))
-
-(defn check-facts
-  "The facts the check decides from: read once per check-cache window, and fresh while a cell was never seen."
-  [c]
-  (if (needs-look? c)
-    (facts c)
-    (check-cache/cached c [:facts (fa/part c)] #(facts c))))
 
 (defn blocked-text
   "Why crop cells stay unsown: n of them hold the blocks found (tidy digs none of those), ground of them at soil level."
@@ -273,12 +321,10 @@
       (contract/ok :args "a box or plan given")
       (contract/never :no-box "no usable box or plan area"))))
 
-(declare quote-of)
-
 (defn pass
-  "{:worth :work-s} of a pass over the field, as jobs.lib.standing/away-cause weighs it: pass-worth, and the mean job time of quote-of."
+  "{:worth :work-s} of a pass over the field, as jobs.lib.standing/away-cause weighs it (pass-price)."
   [c]
-  {:worth (pass-worth c) :work-s (second (get-in (quote-of c) [:uses :job-time]))})
+  (pass-price c (check-facts c)))
 
 (defn problem
   "Why no run can start (a started run decides through its steps), a status: away while another
@@ -342,9 +388,9 @@
       (apply contract/later :tending "farm tend: the field is being tended" data))))
 
 (defn quote-of
-  "A guess: a second and a half per cell of the field."
+  "The measured seconds of the steps a pass is expected to work (pass-price's :work-s) as the mean; any time from 0 up."
   [c]
-  {:uses {:job-time [0 (* 1.5 (count (field-cells c))) ##Inf]}})
+  {:uses {:job-time [0 (:work-s (pass-price c (facts c))) ##Inf]}})
 
 ;; ------------------------------------------------------------------ rounds
 

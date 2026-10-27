@@ -1,7 +1,7 @@
 (ns world-test.event-counts
   "tools/event-counts.mjs: recounts the measured combat priors from the trial bodies' event logs, so a setting can cite its k and n.
   Commands: fold | creeper-exchange | flight-starts | notice-rate | way-on (world-test.way-prior; counts the logs alone, no fold) | drowned-meets (world-test.drowned-meets; trial bodies only) | flee-pace (trial bodies only), each [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S]; each folds the logs into the durable counts file first (rows by run id, so counts only grow as logs rotate).
-  spot-returns [--agents DIR] (world-test.spot-returns), arrow-shots [--agents DIR] [--difficulty D] (world-test.arrow-shots; D the
+  spot-returns [--agents DIR] (world-test.spot-returns), field-passes [--agents DIR] (world-test.field-passes), arrow-shots [--agents DIR] [--difficulty D] (world-test.arrow-shots; D the
   server's, default 1, easy, the trial server's), caught-flights [--agents DIR] (world-test.caught-flights; trial bodies only) and vein-seen [--agents DIR] count from the logs alone, no fold;
   water-lags [--agents DIR] [--stride N] (world-test.water-lags) and surface-heights (world-test.surface-heights) from the recorded chunks beside DIR.
   vein-seen: the ore blocks one look saw together (26-connected, a vein's plain and deepslate blocks as one ore) per group, from the
@@ -38,6 +38,7 @@
             [world-test.caught-flights :as caught-flights]
             [world-test.censored :as censored]
             [world-test.drowned-meets :as drowned]
+            [world-test.field-passes :as field-passes]
             [world-test.fresh-drop :as fresh-drop]
             [world-test.spot-returns :as spot-returns]
             [world-test.surface-heights :as surface-heights]
@@ -493,7 +494,7 @@
        (sort-by :t)
        vec))
 
-(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | way-on | spot-returns | arrow-shots | caught-flights | vein-seen | water-lags | surface-heights [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N] [--difficulty D]
+(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | way-on | spot-returns | field-passes | arrow-shots | caught-flights | vein-seen | water-lags | surface-heights [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N] [--difficulty D]
   every command first folds the logs into the counts file (default worlds/test/priors-counts.edn), then reports from the file; --since-ms keeps the rows of fights started after it.")
 
 (defn- parse-args [argv]
@@ -555,6 +556,7 @@
                            (println (pr-str (surface-heights/count-in dir (cell-reader open-chunks dir) stride)))
                            0)
        "spot-returns" (do (println (pr-str (spot-returns/count-in agents))) 0)
+       "field-passes" (do (println (pr-str (field-passes/count-in agents probe?))) 0)
        "arrow-shots" (let [rows (mapcat #(arrow-shots/meets (read-agent (path/join agents % "engine") since-ms))
                                         (filter #(fs/existsSync (path/join agents % "engine")) (array-seq (fs/readdirSync agents))))]
                        (println (pr-str (assoc (settings/with-settings {::threat/difficulty difficulty} #(arrow-shots/report rows))

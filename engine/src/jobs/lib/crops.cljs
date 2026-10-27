@@ -15,19 +15,24 @@
   "The field crops: farm jobs plant, tend and cut these; nether wart, berries and cocoa need other handling."
   (select-keys constants/crop-ripe-age ["wheat" "carrots" "potatoes" "beetroots"]))
 
-(def stages-per-s
-  "Mean growth stages a second of a crop in a field of its own kind on wet farmland, as the game draws them: 3 random
-  ticks a game tick among the 4096 blocks of a section, 20 game ticks a second, and a tick grows the crop a stage with
-  chance 1/(floor(25/5)+1) (growth speed 5: wet farmland round it, halved by neighbours of its kind). Under light 9 it
-  does not grow; that is not counted."
-  (/ (* 3 20) 4096 6))
+(def grow-light "Light (the brighter of block and sky light, the sky's before the night's darkening) under which a crop does not grow." 9)
+
+(defn stages-per-s
+  "Mean growth stages a second of a crop in a field of its own kind, as the game draws them: 3 random ticks a game tick
+  among the 4096 blocks of a section, 20 game ticks a second, and a tick grows the crop a stage with chance
+  1/(floor(25/f)+1), f its growth points, halved by neighbours of its kind: wet farmland under it and round it 10, so 5;
+  dry 4, so 2. light: the cell's (nil: unseen, guessed open sky); under grow-light it does not grow."
+  [wet? light]
+  (if (and light (< light grow-light))
+    0
+    (/ (* 3 20) 4096 (inc (js/Math.floor (/ 25 (if wet? 5 2)))))))
 
 (defn ripe-chance
   "The chance a crop seen at stage `age` `secs` seconds ago is ripe now: at least the stages left to its ripe-age grew
-  in that time (Poisson at stages-per-s)."
-  [crop age secs]
+  in that time (Poisson at rate stages a second, stages-per-s)."
+  [crop age secs rate]
   (let [left (- (get ripe-age crop 7) age)
-        mu (* stages-per-s (max 0 secs))]
+        mu (* rate (max 0 secs))]
     (if (<= left 0)
       1
       (- 1 (reduce + (map (fn [k] (* (js/Math.exp (- mu)) (/ (js/Math.pow mu k) (reduce * 1 (range 1 (inc k)))))) (range left)))))))
