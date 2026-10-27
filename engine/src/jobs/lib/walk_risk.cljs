@@ -108,15 +108,15 @@
 
 (defn- exit-dark
   "{:share :dawn?} of the way out of the room round the feet for a walk over cells: the mean spawn-light/dark-share of
-  the room's sh-inside/way-out-cells, else of the walk's first ::exit-blocks cells past the room not seen solid (1 with
+  the walk's first ::exit-blocks cells past the room not seen solid, else of the room's sh-inside/way-out-cells (1 with
   neither), and whether dawn lowers that of one (spawn-light/dawn-lowers?)."
   [p cells caves-free?]
   (let [feet (sh-sense/feet p)
         room (or (reach-room/room p feet) {:cells #{[(:x feet) (:y feet) (:z feet)]}})
         inside (set (:cells room))
-        way (or (seq (sh-inside/way-out-cells p room))
-                (seq (take (js/Math.ceil (settings/get settings ::exit-blocks))
-                           (remove #(or (inside [(:x %) (:y %) (:z %)]) (sh-sense/solid-at? p %)) cells))))]
+        way (or (seq (take (js/Math.ceil (settings/get settings ::exit-blocks))
+                           (remove #(or (inside [(:x %) (:y %) (:z %)]) (sh-sense/solid-at? p %)) cells)))
+                (seq (sh-inside/way-out-cells p room)))]
     (if way
       {:share (/ (transduce (map #(spawn-light/dark-share p % caves-free?)) + 0 way) (count way))
        :dawn? (boolean (some #(spawn-light/dawn-lowers? p %) way))}

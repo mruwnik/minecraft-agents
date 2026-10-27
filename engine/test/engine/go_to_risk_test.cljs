@@ -95,6 +95,17 @@
     (is (zero? (:exit-s (inputs [15 14]))) "round a hut lit by torches nothing is paid, whatever the clock (the old surcharge was the night's)")
     (is (not (:exit-dawn? (inputs [0 0]))) "a way out no sky reaches is dark at dawn too: no reason to wait")))
 
+(deftest a-walk-out-of-a-night-hut-pays-the-exit-at-the-light-of-the-side-it-takes
+  ;; torches light one side of the hut, the night sky the rest: the walk east pays what the east side costs, not the mean
+  ;; of every side of the shell
+  (let [east (into {} (for [x (range 8 24) y (range 62 70) z (range -4 5)] [[x y z] [15 14]]))
+        exit-s (fn [lit dark]
+                 (let [c (ready-test/ctx-of (assoc night-hut :light (merge (:light night-hut) lit) :light-default dark))
+                       goal {:x 95 :y 64 :z 0}]
+                   (:exit-s (risk/estimate-inputs c goal {:plan (straight-plan c goal)}))))]
+    (is (zero? (exit-s east [15 0])) "lit east, dark round the rest")
+    (is (pos? (exit-s (update-vals east (constantly [15 0])) [15 14])) "dark east, lit round the rest")))
+
 (deftest a-walk-over-dark-open-ground-at-night-is-held-with-the-risk-in-the-reason
   (async done
     (tu/run-async done
