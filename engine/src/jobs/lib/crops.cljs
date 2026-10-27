@@ -27,16 +27,6 @@
     0
     (/ (* 3 20) 4096 (inc (js/Math.floor (/ 25 (if wet? 5 2)))))))
 
-(defn ripe-chance
-  "The chance a crop seen at stage `age` `secs` seconds ago is ripe now: at least the stages left to its ripe-age grew
-  in that time (Poisson at rate stages a second, stages-per-s)."
-  [crop age secs rate]
-  (let [left (- (get ripe-age crop 7) age)
-        mu (* rate (max 0 secs))]
-    (if (<= left 0)
-      1
-      (- 1 (reduce + (map (fn [k] (* (js/Math.exp (- mu)) (/ (js/Math.pow mu k) (reduce * 1 (range 1 (inc k)))))) (range left)))))))
-
 (def food-ripe-age
   "The growth stage at which each crop block can be harvested for food. Wheat is left out: only the :field way cuts it, in a field of its own."
   (dissoc ripe-age "wheat"))

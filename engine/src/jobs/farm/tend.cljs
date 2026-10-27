@@ -48,7 +48,8 @@
   Start facts, failed conditions: impossible {:reason :no-box} unless the area is a box with a crop layer and at most 2048 cells, or a plan;
   {:reason :not-worth :worth :walk-s} while a step would run but even the least walk onto the field (walk-pick/walk-s) costs more than the pass is worth (pass-price);
   {:reason :nothing-to-do} (with :covered, :refused, :blocked (plan crop cells another block fills), :food-reserve) or {:reason :short-seed :seeds} when no
-  step would run, after one look round from here when a cell was never seen; a field cell never seen that no look from here
+  step would run, after one look round from here when a cell was never seen; a field cell never seen, or a crop remembered
+  unripe out of view (priced ripe by now at the game's growth rate since it was seen, cost/ripe-chance), that no look from here
   shows (look/look-shows?) or one look round did not show is walked to first (go-to, :range 8, once a run) when go-to's quote of the walk
   (walk-pick/quoted-s) costs less than the pass is worth (pass-worth, as the walk survives); else {:reason :not-worth :worth :walk-s}
   while even the least walk there (walk-pick/walk-s) costs more, and a run whose quote costs more ends condition-failed :not-worth. A started run always continues. A step under
@@ -148,12 +149,29 @@
           dy [0 1]]
       {:x x :y (+ y dy) :z z})))
 
+(declare crop-cells)
+
+(defn growing-out-of-view
+  "The crop cells remembered out of view holding a crop (the one wanted there, when named) not yet ripe: it may have
+  ripened since."
+  [c]
+  (let [p (:primitives c)]
+    (keep (fn [[pos crop]]
+            (let [b (u/sensed p pos)
+                  name (some-> b .-name)]
+              (when (and b (false? (.-visible b)) (crops/ripe-age name) (or (nil? crop) (= crop name))
+                         (< (or (.-age b) 0) (crops/ripe-age name)))
+                pos)))
+          (crop-cells c))))
+
 (defn needs-look?
-  "Whether a field cell (or, with :irrigate, a block of the water reach round the ground) was never seen, or (plan) a crop cell is remembered unripe and out of view."
+  "Whether a field cell (or, with :irrigate, a block of the water reach round the ground) was never seen, or a crop cell is
+  remembered unripe and out of view (growing-out-of-view; a plan's fld/unwatched?)."
   [c]
   (boolean (or (look/unseen? (:primitives c) (field-cells c))
                (and (:irrigate (:args c)) (look/unseen? (:primitives c) (water-reach-cells c)))
-               (and (fa/plan c) (fld/unwatched? (:primitives c) (:crops (tend-plan/planned c)))))))
+               (and (fa/plan c) (fld/unwatched? (:primitives c) (:crops (tend-plan/planned c))))
+               (seq (growing-out-of-view c)))))
 
 (defn site
   "A position of the field: the box's centre, else the plan's first crop cell; nil when there is neither."
@@ -187,7 +205,7 @@
 
 (defn ripe-now
   "[crop chance] of the crop cell at pos (crop: the one wanted there, nil for any) holding a ripe crop now: in view 1 or 0;
-  remembered out of view, crops/ripe-chance since it was seen at its growth-rate; another block [nil 0]; nil when never seen."
+  remembered out of view, cost/ripe-chance since it was seen at its growth-rate; another block [nil 0]; nil when never seen."
   [p ws pos crop]
   (let [b (u/sensed p pos)]
     (when-not (or (nil? b) (true? (.-unknown b)))
@@ -195,7 +213,7 @@
             age (or (.-age b) 0)]
         (cond
           (not (and (crops/ripe-age name) (or (nil? crop) (= crop name)))) [nil 0]
-          (false? (.-visible b)) [name (crops/ripe-chance name age (/ (or (.-ageMs b) 0) 1000) (growth-rate p ws pos))]
+          (false? (.-visible b)) [name (cost/ripe-chance name age (/ (or (.-ageMs b) 0) 1000) (growth-rate p ws pos))]
           :else [name (if (>= age (crops/ripe-age name)) 1 0)])))))
 
 (defn sow-crop
@@ -258,20 +276,21 @@
     (filter #(true? (some-> (u/sensed p %) .-unknown)) (field-cells c))))
 
 (defn walk-due?
-  "The field's site when the run has not walked there, a field cell was never seen and no look from here would show one
-  (look/look-shows?), or the body looked round near here already: the run walks there first."
+  "The field's site when the run has not walked there, a field cell was never seen or a crop grows out of view
+  (growing-out-of-view), and no look from here would show one (look/look-shows?) or the body looked round near here
+  already: the run walks there first."
   [c]
   (let [site (site c)
         p (:primitives c)
-        unseen (when (and site (not (:site-walked (ctx/mem c)))) (seq (unseen-field-cells c)))]
+        unseen (when (and site (not (:site-walked (ctx/mem c)))) (seq (concat (unseen-field-cells c) (growing-out-of-view c))))]
     (when (and unseen (or (look/surveyed? c :near) (not-any? #(look/look-shows? p %) unseen)))
       site)))
 
-(def site-range "Blocks from the site within which the walk to an unseen field ends." 8)
+(def site-range "Blocks from the site within which the walk to a field out of sight ends." 8)
 
 (defn walk-args [c site] {:pos (update site :y inc) :range site-range})
 
-(def quote-kind "Memory of the go-to quotes of walks to unseen fields that cost more than the pass was worth." :farm-tend/walk-quote)
+(def quote-kind "Memory of the go-to quotes of walks to fields out of sight that cost more than the pass was worth." :farm-tend/walk-quote)
 (def quote-policy {:cap 16 :ttl :forever})
 
 (defn cell-of [pos] (mapv #(js/Math.floor (% pos)) [:x :y :z]))
@@ -592,7 +611,7 @@
           (await (look/look-around! c (look/search-effort)))))))
 
 (defn ^:async walk-to-site!
-  "Walk to the unseen field before the pass, as a player does, when go-to's quote of the walk costs less than the pass is
+  "Walk to the field out of sight before the pass, as a player does, when go-to's quote of the walk costs less than the pass is
   worth as the walk survives (walk-pick/quoted-s, ev-worth; a quote that cannot price it leaves the walk to say): :again
   once there, :continue while the quote or the walk waits, the walk's own ending, or condition-failed :not-worth, the quote
   remembered from this cell (not-worth reads it)."
@@ -607,7 +626,7 @@
       (do (ctx/remember! c quote-kind (assoc (quote-key c (:pos args)) :walk-s price :death-chance (get-in q [:risk :death-chance])) quote-policy)
           (ctx/end c :condition-failed :not-worth
                    {:steps {} :worth worth :walk-s price
-                    :text (str "farm tend: the walk to the unseen field costs " (js/Math.round price) " s, more than the pass is worth (" (js/Math.round worth) " s)")}))
+                    :text (str "farm tend: the walk to the field out of sight costs " (js/Math.round price) " s, more than the pass is worth (" (js/Math.round worth) " s)")}))
       :else
       (let [e (await (ctx/call c :walk 'jobs.movement.go-to (assoc args :worth worth)))]
         (cond
@@ -617,7 +636,7 @@
                          {:steps {} :text (str "farm tend: could not walk to the field, go there first: " (contract/cause-key e))}))))))
 
 (defn ^:async step
-  "A run over a field partly never seen walks to it when no look from here shows it, looks around and yields (the check decides on what is seen then)."
+  "A run over a field partly never seen or growing out of view walks to it when no look from here shows it, looks around and yields (the check decides on what is seen then)."
   [c]
   (cond
     (and (fa/plan c) (:trouble (tend-plan/planned c)))

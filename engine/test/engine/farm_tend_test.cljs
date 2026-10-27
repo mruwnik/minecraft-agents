@@ -530,6 +530,44 @@
           (is (seq (tu/walk-calls (:p s))) "the body goes to the field")
           (is (= (set (map (fn [[x z]] [x z]) unseen-cells)) (dug s)) "and cuts the wheat there"))))))
 
+(defn remembering-within
+  "p seeing what lies within r of the body; a farther cell is remembered as seen secs ago, a crop there at stage age."
+  [p r secs age]
+  (let [near? (fn [pos] (let [s (.-pos (.self p))]
+                          (<= (js/Math.hypot (- (.-x pos) (.-x s)) (- (.-y pos) (.-y s)) (- (.-z pos) (.-z s))) r)))
+        known (fn [pos] (let [b (.blockAt (tu/oracle p) pos)]
+                          (if (near? pos)
+                            b
+                            #js {:name (.-name b) :age (when (crops/ripe-age (.-name b)) age) :pos pos :visible false :ageMs (* 1000 secs)})))]
+    (tu/set-sensed! p known)
+    (aset p "seenBlockAt" known)
+    p))
+
+(defn ^:async remembered-run
+  "A tend under repeat of the 25 wheat 30 blocks off, ripe now but remembered at stage 4 on dry farmland, seen secs ago."
+  [secs]
+  (let [s (setup (assoc (world (farm "wheat" 7 unseen-cells unseen-cells) wheat-drops) :floor [-5 -5 60 15]))]
+    (remembering-within (:p s) 24 secs 4)
+    (core/submit! (:eng s) (list 'repeat (list 'jobs.farm.tend {:area {:min {:x 30 :y 63 :z 2} :max {:x 34 :y 64 :z 6}} :irrigate false})) {})
+    (await (tu/run-ticks (:eng s) (:clock s) 60 700))
+    s))
+
+(deftest a-tend-under-repeat-walks-back-to-a-field-seen-unripe-two-days-ago
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (remembered-run 2400))]
+          (is (seq (tu/walk-calls (:p s))) "half its wheat has likely ripened since: the body goes back")
+          (is (= (set unseen-cells) (dug s)) "and cuts the wheat there"))))))
+
+(deftest a-tend-waits-not-worth-for-a-field-seen-unripe-half-a-minute-ago
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (remembered-run 30))]
+          (is (empty? (tu/walk-calls (:p s))))
+          (is (some #(= :not-worth (:reason %)) (events-of s :waiting)) "the walk is priced against crops barely grown"))))))
+
 (def hidden-cells (for [x (range 12 15) z (range 2 5)] [x z]))
 
 (deftest a-tend-under-repeat-walks-to-a-near-field-no-look-from-here-shows
@@ -612,12 +650,12 @@
 
 (deftest a-crop-seen-unripe-ripens-by-the-games-growth-rate
   (let [wet (crops/stages-per-s true nil)]
-    (is (= 1 (crops/ripe-chance "wheat" 7 0 wet)))
-    (is (= 0 (crops/ripe-chance "wheat" 0 0 wet)))
-    (is (< 0.4 (crops/ripe-chance "wheat" 0 (/ 7 wet) wet) 0.6) "about even odds after the mean time of the stages left")
-    (is (> (crops/ripe-chance "wheat" 6 600 wet) (crops/ripe-chance "wheat" 0 600 wet)) "fewer stages left ripen sooner")
-    (is (> (crops/ripe-chance "wheat" 4 600 wet) (crops/ripe-chance "wheat" 4 600 dry-rate)) "dry farmland grows slower")
-    (is (= 0 (crops/ripe-chance "wheat" 4 6000 (crops/stages-per-s true 8))) "under light 9 nothing grows")))
+    (is (= 1 (cost/ripe-chance "wheat" 7 0 wet)))
+    (is (= 0 (cost/ripe-chance "wheat" 0 0 wet)))
+    (is (< 0.4 (cost/ripe-chance "wheat" 0 (/ 7 wet) wet) 0.6) "about even odds after the mean time of the stages left")
+    (is (> (cost/ripe-chance "wheat" 6 600 wet) (cost/ripe-chance "wheat" 0 600 wet)) "fewer stages left ripen sooner")
+    (is (> (cost/ripe-chance "wheat" 4 600 wet) (cost/ripe-chance "wheat" 4 600 dry-rate)) "dry farmland grows slower")
+    (is (= 0 (cost/ripe-chance "wheat" 4 6000 (crops/stages-per-s true 8))) "under light 9 nothing grows")))
 
 (deftest a-sown-crop-is-worth-its-share-ripe-within-the-food-horizon
   (let [wet (crops/stages-per-s true nil)]

@@ -1,6 +1,6 @@
 (ns jobs.lib.cost.farm
   "What a farm field's cells are worth to a pass and what its steps take: the measured share of field cells ripe or
-  sowable at a pass (::field-prior), what a sown cell is worth (sown-worth), and the seconds each step works (step-s)."
+  sowable at a pass (::field-prior), the chance a cell seen growing is ripe by now (ripe-chance), what a sown cell is worth (sown-worth), and the seconds each step works (step-s)."
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.cost.food :as food]
@@ -31,11 +31,21 @@
   (* food/days day-s))
 
 (defn share
-  "The posterior mean share of a field's unseen cells that are k-like (:ripe or :sowable), given its seen cells: k (the
+  "The posterior mean share of a field's never-seen cells (no age to grow from) that are k-like (:ripe or :sowable), given its seen cells: k (the
   expected count of such among them) of n, over the ::field-prior Beta."
   [kind k n]
   (let [[al be] (get (settings/get settings ::field-prior) kind)]
     (/ (+ al k) (+ al be n))))
+
+(defn ripe-chance
+  "The chance a field cell seen holding crop at stage `age` `secs` seconds ago is ripe now: at least the stages left to
+  its ripe-age grew in that time (Poisson at rate stages a second, crops/stages-per-s). A cell never seen has no age: share."
+  [crop age secs rate]
+  (let [left (- (get crops/ripe-age crop 7) age)
+        mu (* rate (max 0 secs))]
+    (if (<= left 0)
+      1
+      (- 1 (reduce + (map (fn [k] (* (js/Math.exp (- mu)) (/ (js/Math.pow mu k) (reduce * 1 (range 1 (inc k)))))) (range left)))))))
 
 (defn grown-share
   "The share of a crop's worth a crop at stage age growing at rate stages a second (crops/stages-per-s) is worth now: the
@@ -43,7 +53,7 @@
   [crop age rate]
   (let [h (horizon-s)
         n 32]
-    (/ (reduce + (map #(crops/ripe-chance crop age (* h (/ (+ % 0.5) n)) rate) (range n))) n)))
+    (/ (reduce + (map #(ripe-chance crop age (* h (/ (+ % 0.5) n)) rate) (range n))) n)))
 
 (defn sown-worth
   "Seconds sowing a cell with crop is worth, at rate (crops/stages-per-s): its ripe crop's worth (value/crop-worth) times
