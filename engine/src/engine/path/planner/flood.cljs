@@ -135,12 +135,13 @@
   ;; the start. A cell the flood cannot see is a way in it does not know, so it marks the flood leaked. That counts
   ;; for a cell beside the current one (jump -1), and for a gap jump's takeoff in direction jump only when the jump
   ;; can come over the column between.
-  ;; a whole block the body has seen fills its cell: nothing stands there whatever lies under it or over it, nor in the
+  ;; a whole block the body has seen (and not likelier changed since) fills its cell: nothing stands there whatever lies under it or over it, nor in the
   ;; cell under it (the head would be in the block), so the cells round it that it has not seen (the underside of a
   ;; floor, the top of a roof, the floor under a wall) do not leak the flood
   (solidSeen [s x y z]
     (let [id (.stateAt ^js (.-snapshot s) x y z)]
-      (and (not (== id UNLOADED)) (not ^boolean (.isUnknown s id)) (>= (aget (.-tbl-top s) id) WHOLE) (zero? (aget (.-tbl-base s) id)))))
+      (and (not (== id UNLOADED)) (not ^boolean (.isUnknown s id)) (>= (aget (.-tbl-top s) id) WHOLE) (zero? (aget (.-tbl-base s) id))
+           (< (.changedAt s x y z) 0.5))))
 
   ;; is the move between the flood's current cell and the diagonal cell x y z shut: both cells beside the corner hold a
   ;; seen whole block at the body's height on the way (the higher of the two levels or one over it)?

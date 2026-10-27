@@ -336,6 +336,14 @@
                 r (run w (pf/near 10 64 0) (unk {}) {:x 0 :y 64 :z 0})]]
     (is (= "goal-enclosed" (:reason r)) (str "unseen cells " cells))))
 
+(deftest a-room-shut-by-a-door-likelier-changed-than-not-is-not-proved-enclosed
+  (let [w (pf/snapshot {:fill stone-room-fill
+                        :blocks [[9 64 0 "iron_door" {:half "lower" :facing "west"}] [9 65 0 "iron_door" {:half "upper" :facing "west"}]]})
+        reason (fn [q] (let [qs {[9 64 0] q [9 65 0] q}]
+                         (:reason (run w (pf/near 10 64 0) (unk {:changed (fn [x y z] (get qs [x y z] 0))}) {:x 0 :y 64 :z 0}))))]
+    (is (= "goal-enclosed" (reason 0.25)) "likely still shut: the proof holds")
+    (is (not= "goal-enclosed" (reason 0.5)) "likelier opened than not: no proof rests on it")))
+
 (deftest a-start-ringed-by-dark-floors-is-not-start-enclosed
   (let [w (pf/snapshot {:blocks [[0 63 2 "stone"] [1 62 2 U] [-1 62 2 U] [0 62 3 U] [0 62 1 U]]})
         goal (pf/near 200 64 2)]

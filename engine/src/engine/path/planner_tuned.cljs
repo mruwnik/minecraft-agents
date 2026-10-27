@@ -85,7 +85,7 @@
      changed(x, y, z) (nil: 0 everywhere) is the chance a remembered cell changed since it was seen (unseen at that chance):
      a move costs cell times its seconds times the most of its feet, head and floor cells', and a drop into remembered water
      adds that chance of the dry fall to the pool's floor as risk (its damage, or deathHp when it kills; default lethal-s
-     over riskWeight) in place of landingSeen's cut.
+     over riskWeight) in place of landingSeen's cut. No proof rests on a cell at 1/2 or more.
    - options.stopAtEdge: with the goal unloaded, the search names the first node it expands at the loaded edge (edgeStop)
      as its frontier and ends once it has expanded as many nodes again (or run out, or the caller ends it: endSweep), not
      after searching all loaded land; what only those nodes refused is not in the result. go-to's budgeted searches set it

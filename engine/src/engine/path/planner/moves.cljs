@@ -50,8 +50,7 @@
   ;; hp of risk a fall from h0 into the remembered water at x y z takes should it be gone (options.unknown.changed): its
   ;; chance times the dry fall's damage onto the floor under the water's column, or unk-death when that fall kills
   (drainedRisk [s x y z h0]
-    (let [^js f (.-unk-changed s)
-          q (if (nil? f) 0 (.call f nil x y z))]
+    (let [q (.changedAt s x y z)]
       (if-not (pos? q)
         0
         (let [bottom (loop [yb y] (if (and (> yb (- y 64)) (== (aget (.-tbl-kind s) (.stateAt s x (dec yb) z)) WATER)) (recur (dec yb)) yb))

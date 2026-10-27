@@ -40,20 +40,26 @@
     (+ (if ^boolean (.isUnknown s (.stateAt ^js (.-snapshot s) x y z)) 1 0)
        (if ^boolean (.isUnknown s (.stateAt ^js (.-snapshot s) x (inc y) z)) 1 0)))
 
-  ;; the most chance (options.unknown.changed) that the remembered feet, head or floor cell at x y z changed since seen
-  (changedNear [s x y z]
+  ;; the chance (options.unknown.changed) that the remembered cell at x y z changed since seen
+  (changedAt [s x y z]
     (let [^js f (.-unk-changed s)]
-      (if (nil? f)
-        0
-        (js/Math.max (.call f nil x y z) (.call f nil x (inc y) z) (.call f nil x (dec y) z)))))
+      (if (nil? f) 0 (.call f nil x y z))))
 
-  ;; is the cell, its floor or its head cell unseen, or its floor missed? A proof (the goal flood) must not rest on it.
+  ;; the most chance that the remembered feet, head or floor cell at x y z changed since seen
+  (changedNear [s x y z]
+    (if (nil? (.-unk-changed s))
+      0
+      (js/Math.max (.changedAt s x y z) (.changedAt s x (inc y) z) (.changedAt s x (dec y) z))))
+
+  ;; is the cell, its floor or its head cell unseen or likelier changed than not, or its floor missed? A proof (the goal
+  ;; flood) must not rest on it.
   (unknownNear [s x y z]
     (and (>= (.-unk-id s) 0)
          (or ^boolean (.isUnknown s (.stateAt ^js (.-snapshot s) x y z))
              ^boolean (.isUnknown s (.stateAt ^js (.-snapshot s) x (dec y) z))
              ^boolean (.isUnknown s (.stateAt ^js (.-snapshot s) x (inc y) z))
-             ^boolean (.missedAt s x (dec y) z))))
+             ^boolean (.missedAt s x (dec y) z)
+             (>= (.changedNear s x y z) 0.5))))
 
   ;; did node p's way in end with the body bouncing on a pad (a drop whose landing factor is a bounce)?
   (bounceArrival [s p]
