@@ -1314,6 +1314,33 @@ test('collect: a drop beside a fence a step up is not leaned toward', async () =
   assert.equal(result.status, 'unreachable')
 })
 
+// A drop one block up, on a slab or on a snow layer is something auto-jump climbs; only a taller collision (fence) or a gap is refused.
+const leanedAt = async (itemAt, blocks, shapes = {}) => {
+  const { bot, p } = dropRig(itemAt, () => {}, blocks)
+  bot.blockAt = (read => v => {
+    const block = read(v)
+    const own = shapes[`${v.x},${v.y},${v.z}`]
+    return own && block ? Object.assign(block, { shapes: own }) : block
+  })(bot.blockAt)
+  bot.pathfinder.goto = () => Promise.reject(Object.assign(new Error('NoPath'), { name: 'NoPath' }))
+  const pressed = []
+  const setControlState = bot.setControlState
+  bot.setControlState = (control, state) => { pressed.push(control); setControlState(control, state) }
+  await p.collect('t1', { id: 7 })
+  return pressed.includes('forward')
+}
+
+test('collect: a drop on a one-block step, a slab or a snow layer is leaned toward', async () => {
+  assert.equal(await leanedAt([1.8, 65, 0.5], { '1,64,0': 'stone', '1,63,0': 'stone' }), true)
+  assert.equal(await leanedAt([1.8, 64.5, 0.5], { '1,63,0': 'oak_slab' }, { '1,63,0': [[0, 0, 0, 1, 0.5, 1]] }), true)
+  assert.equal(await leanedAt([1.8, 64.2, 0.5], { '1,64,0': 'snow', '1,63,0': 'stone' }, { '1,64,0': [[0, 0, 0, 1, 0.25, 1]] }), true)
+})
+
+test('collect: a drop beyond a fence at feet level, or a step with no headroom, is not leaned toward', async () => {
+  assert.equal(await leanedAt([1.8, 64, 0.5], { '1,64,0': 'oak_fence', '1,63,0': 'stone' }, { '1,64,0': [[0.375, 0, 0.375, 0.625, 1.5, 0.625]] }), false)
+  assert.equal(await leanedAt([1.8, 65, 0.5], { '1,64,0': 'stone', '1,65,0': 'stone' }), false)
+})
+
 test('collect: an item that was still settling when the walk to it failed is followed to where it lands', async () => {
   const { bot, p, goals } = dropRig([4.5, 66, 0.5], (b, goal, n) => {
     if (n === 1) b.entities[7].position = new Vec3(4.5, 64, 0.5)
