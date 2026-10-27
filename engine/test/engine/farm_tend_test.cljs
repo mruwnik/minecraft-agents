@@ -577,6 +577,13 @@
   {:args {:area {:min {:x x0 :y 63 :z 2} :max {:x x1 :y 64 :z 2}} :till true :irrigate false} :primitives (:p s)
    :id "t" :root "t" :slots [] :view (fn [] {:now 0 :data {}}) :engine {:warned (atom #{})}})
 
+(deftest a-walk-quote-is-keyed-on-the-site-not-its-cell-above-and-on-the-light
+  (let [pos {:x 12 :y 63 :z 2}
+        key-at (fn [time] (tend/quote-key (pass-ctx (setup (assoc (world (farm "wheat" 7 [[2 2]] [[2 2]])) :time time)) 2 3) pos))]
+    (is (= (key-at 1000) (tend/quote-key (pass-ctx (setup (assoc (world (farm "wheat" 7 [[2 2]] [[2 2]])) :time 1000)) 2 3) (update pos :y inc)))
+        "the check's walk and the run's walk share one key")
+    (is (not= (key-at 1000) (key-at 18000)) "a quote taken at night is not the day's quote")))
+
 (def dry-rate (crops/stages-per-s false nil))
 
 (deftest a-pass-is-worth-the-crops-it-expects-ripe-and-their-replanting

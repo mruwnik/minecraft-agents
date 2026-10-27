@@ -15,6 +15,7 @@
             [jobs.lib.steps :as steps]
             [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
+            [jobs.lib.sense :as sense]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]
@@ -275,16 +276,22 @@
 
 (defn cell-of [pos] (mapv #(js/Math.floor (% pos)) [:x :y :z]))
 
-(defn quoted
-  "The remembered quote {:from :to :walk-s :death-chance} of the walk from the body's cell to pos, or nil."
+(defn quote-key
+  "What a quote of the walk to pos is valid for: the flat target (the check asks for the site, the walk for the cell above it), the body's cell, the memory epoch and day or night (the price reads both)."
   [c pos]
-  (let [from (cell-of (u/self-pos c))]
-    (some #(when (and (= from (:from (:data %))) (= pos (:to (:data %)))) (:data %)) (rseq (ctx/entries c quote-kind)))))
+  {:from (cell-of (u/self-pos c)) :to [(:x pos) (:z pos)]
+   :epoch (sense/known-memory (:primitives c)) :night (boolean (sh-sense/night? (:primitives c)))})
+
+(defn quoted
+  "The remembered quote {:walk-s :death-chance} of the walk to pos under the same quote-key, or nil."
+  [c pos]
+  (let [k (quote-key c pos)]
+    (some #(when (= k (select-keys (:data %) (keys k))) (:data %)) (rseq (ctx/entries c quote-kind)))))
 
 (defn not-worth
   "{:reason :not-worth :worth :walk-s} while the walk (go-to args, nil: none) costs more than the pass is worth (pass-price,
-  as the walk survives): go-to's quote of it remembered from this cell (walk-to-site!), else the least walk
-  (walk-pick/walk-s); nil otherwise, with no walk to make, or while a step whose worth the price leaves out would run. The quote is asked again once the body moves or the worth
+  as the walk survives): go-to's quote of it remembered for this cell, memory epoch and day or night (walk-to-site!), else the least walk
+  (walk-pick/walk-s); nil otherwise, with no walk to make, or while a step whose worth the price leaves out would run. The quote is asked again once the body moves, memory or the light changes, or the worth
   grows past it."
   [c f walk]
   (when walk
@@ -597,7 +604,7 @@
     (cond
       (:estimate q) :continue
       (and (js/isFinite price) (> price (pick/ev-worth worth q)))
-      (do (ctx/remember! c quote-kind {:from (cell-of (u/self-pos c)) :to (:pos args) :walk-s price :death-chance (get-in q [:risk :death-chance])} quote-policy)
+      (do (ctx/remember! c quote-kind (assoc (quote-key c (:pos args)) :walk-s price :death-chance (get-in q [:risk :death-chance])) quote-policy)
           (ctx/end c :condition-failed :not-worth
                    {:steps {} :worth worth :walk-s price
                     :text (str "farm tend: the walk to the unseen field costs " (js/Math.round price) " s, more than the pass is worth (" (js/Math.round worth) " s)")}))
