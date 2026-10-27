@@ -1,5 +1,5 @@
 (ns world-test.kit-trial-test
-  (:require [cljs.test :refer [deftest is]]
+  (:require [cljs.test :refer [deftest is async]]
             [world-test.kit-trial :as k]))
 
 (def t0 1000000)
@@ -89,3 +89,30 @@
     (is (= {:at-ms (- (at 4) t0) :cause :death} (:goal-cancelled rep)))
     (is (= [] (:stalls rep)) "nothing after the goal's end is a stall")
     (is (contains? (set (:failed (k/clean rep))) :goal-cancelled))))
+
+(deftest the-setup-waits-for-the-join-before-any-rcon
+  (let [oak (first (filter #(= :oak (:id %)) k/spots))
+        ss (k/steps {:spot oak :n 2 :build "/b" :now t0})
+        kinds (mapv first ss)]
+    (is (= [:wait-join "KitOak02" t0 k/join-timeout-ms] (nth ss (inc (.indexOf kinds :body-start)))))
+    (is (< (.indexOf kinds :wait-join) (.indexOf kinds :rcon)))))
+
+(deftest a-join-is-a-spawned-or-online-event-since-the-start
+  (is (k/joined? [(ev 1 :spawned)] t0))
+  (is (k/joined? [(ev 1 :online)] t0))
+  (is (not (k/joined? [(ev -5 :spawned) (ev 1 :planned)] t0))))
+
+(deftest wait-until-sees-a-late-join-and-gives-up-on-none
+  (let [calls (atom 0)
+        slept (atom [])
+        sleep (fn [ms] (swap! slept conj ms) (js/Promise.resolve nil))
+        opts {:timeout-ms 10 :interval-ms 2 :sleep sleep}]
+    (async done
+      (.then (k/wait-until #(> (swap! calls inc) 3) opts)
+             (fn [late]
+               (is (true? late))
+               (is (= [2 2 2] @slept) "polled until the fourth probe")
+               (.then (k/wait-until (constantly false) opts)
+                      (fn [never]
+                        (is (false? never))
+                        (done))))))))

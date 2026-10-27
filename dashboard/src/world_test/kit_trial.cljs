@@ -28,10 +28,16 @@
    {:id :hills :label "hills with exposed stone" :x nil :z nil :want "bare stone within 32 blocks, a few trees"}
    {:id :water :label "beside water" :x nil :z nil :want "a lake or river within 32 blocks, trees near"}])
 
+(defn- ms [e] (:time-ms e))
+
 (def goal-spec "(jobs.items.get-kit {})")
 
 (def kit-pieces
   ["iron_pickaxe" "iron_sword" "iron_axe" "iron_helmet" "iron_chestplate" "iron_leggings" "iron_boots"])
+
+(def join-timeout-ms
+  "How long start waits for the body to join before the RCON steps; they miss a player who is not on the server yet."
+  180000)
 
 (def max-days 3)
 (def stall-ms 300000)
@@ -51,7 +57,7 @@
 (defn run-dir [world run] (str "worlds/" world "/kit-trials/" run))
 
 (defn steps
-  "The setup of a run as data, in order: [:whitelist name] [:file path text] [:body-start name] [:rcon text] [:submit name spec] [:record path m].
+  "The setup of a run as data, in order: [:whitelist name] [:file path text] [:body-start name] [:wait-join name since-ms timeout-ms] [:rcon text] [:submit name spec] [:record path m].
   Needs the spot's coordinates; :time? adds `time set 1000` (server-wide, only under --allow-time); :give [[item n] ...] gives
   the items after the clear and is recorded as :given."
   [{:keys [spot n world build time? now give] :or {world "test"}}]
@@ -64,7 +70,8 @@
            [:file (str "worlds/" world "/agents/" body "/config.json")
             (js/JSON.stringify (clj->js {:username body :character {:name body :note "iron-kit trial body"}}) nil 2)]
            [:workspace body world]
-           [:body-start body {:world world :build build}]]
+           [:body-start body {:world world :build build}]
+           [:wait-join body now join-timeout-ms]]
           (when time? [[:rcon "time set 1000"]])
           [[:rcon (str "spreadplayers " x " " z " 0 24 false " body)]
            [:rcon (str "effect give " body " minecraft:slow_falling 60 0 true")]
@@ -75,9 +82,22 @@
            [:record (str dir "/run.edn") {:run body :spot (:id spot) :n n :world world :build build :started-ms now :goal goal-spec :given (vec give)}]
            [:submit body goal-spec]]))))
 
-;; ---- judging
+(defn joined?
+  "Whether events (from since-ms on) show the body on the server: it spawned or came online."
+  [events since-ms]
+  (boolean (some #(and (contains? #{:spawned :online} (:kind %)) (>= (or (ms %) 0) since-ms)) events)))
 
-(defn- ms [e] (:time-ms e))
+(defn wait-until
+  "probe (-> bool), {:timeout-ms :interval-ms :sleep (ms -> promise)} -> promise of true, or false once the timeout has passed."
+  [probe {:keys [timeout-ms interval-ms sleep]}]
+  (let [tries (inc (quot timeout-ms interval-ms))]
+    (letfn [(go [i]
+              (cond (probe) (js/Promise.resolve true)
+                    (>= i tries) (js/Promise.resolve false)
+                    :else (.then (sleep interval-ms) #(go (inc i)))))]
+      (go 1))))
+
+;; ---- judging
 
 (defn- smelted-count [v]
   (cond (map? v) (reduce + (vals v)) (number? v) v :else 0))
@@ -236,10 +256,19 @@
 (defn- run-node! [script args]
   (cp/spawnSync js/process.execPath (clj->js (into [(path/join (repo) script)] args)) #js {:stdio "inherit" :cwd (repo)}))
 
+(defn- sleep [ms] (js/Promise. (fn [res _] (js/setTimeout res ms))))
+
+(defn- wait-join!
+  "Promise of true when the body's event log shows its join; false after timeout-ms."
+  [body since-ms timeout-ms]
+  (wait-until #(joined? (try (read-events "test" body since-ms) (catch :default _ [])) since-ms)
+              {:timeout-ms timeout-ms :interval-ms 2000 :sleep sleep}))
+
 (defn- exec-step!
   "Run one step of `steps`. Not run by the tests: a live server and a built body are needed."
   [[kind & a]]
   (case kind
+    :wait-join (let [[body since timeout] a] (wait-join! body since timeout))
     :whitelist (run-node! "tools/rcon.mjs" [(first a)])
     :file (let [[f text] a, p (path/join (repo) f)]
             (fs/mkdirSync (path/dirname p) #js {:recursive true})
@@ -263,6 +292,21 @@
     :submit (let [[body spec] a]
               (run-node! "engine/tools/jobs.mjs" [body "--world" "test" "submit" spec]))))
 
+(defn- run-steps!
+  "Run the steps in order; promise of the exit code. A body that does not join stops the run before its RCON steps."
+  [ss]
+  (reduce (fn [p [kind :as s]]
+            (.then p (fn [code]
+                       (if (not= 0 code)
+                         code
+                         (.then (js/Promise.resolve (exec-step! s))
+                                (fn [r]
+                                  (if (and (= :wait-join kind) (false? r))
+                                    (do (js/console.error (str "the body " (second s) " did not join within " (quot (nth s 3) 1000) " s; setup stopped before its RCON steps"))
+                                        1)
+                                    0)))))))
+          (js/Promise.resolve 0) ss))
+
 (defn- table [{:keys [milestones]}]
   (str/join "\n" (for [[k {:keys [ms days]}] milestones]
                    (str (name k) "\t" (.toFixed (/ ms 60000) 1) " min\t" (.toFixed days 2) " days"))))
@@ -281,9 +325,9 @@
                             (try
                               (let [ss (steps {:spot spot :n n :world world :build (or build "<build dir>") :time? (:time? o) :give (:give o) :now (js/Date.now)})]
                                 (doseq [s ss] (js/console.log (pr-str s)))
-                                (when (and go (= "start" cmd))
-                                  (doseq [s ss] (exec-step! s)))
-                                0)
+                                (if (and go (= "start" cmd))
+                                  (run-steps! ss)
+                                  0))
                               (catch :default e (js/console.error (.-message e)) 2))))
        "judge" (let [run (first pos)
                      f (path/join (repo) (run-dir world run) "run.edn")
