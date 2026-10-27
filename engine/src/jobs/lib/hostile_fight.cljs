@@ -252,7 +252,7 @@
   "The answer of fighting near (nearest first) for cost/decide: the walk there (walk-hp of walk-q, go-to's quote of it;
   none: its lower bound) and the fight with near and the
   mobs by its way (way-mobs), at least the mob blows felt lately (incoming :rate) over its length, :hit the hardest blow
-  felt lately or of its mobs, :shape cost/fight-answer's width over the fight's blows, :caught its fight gone bad with the
+  felt lately or of its mobs, :shape cost/fight-answer's width over the fight's blows, :caught its fight gone bad (at the prior of the health its blasts leave) with the
   same walk, felt blows and blasts. A mob the body cannot get within a swing of (reaches?) is not killed (cost/fight-answer):
   the fight is followed at once by the walk away from those it leaves (flee-answer, cost/followed). A lone creeper is
   fought hit-and-back (nil when hit-and-back-ok? fails); any other creeper near, or by the way in time (blasting), is
@@ -273,7 +273,8 @@
             seconds (+ (:seconds a) (/ (danger-q/mob-distance p (first fought)) cost/walk-speed))
             creepers (if lone-creeper? [] (concat (filter combat/creeper? near) (blasting p near seconds)))
             spot (danger-q/mob-pos p (first fought))
-            blasts (map #(cost/blast-hurt stats (min cost/swell-start (u/dist (danger-q/mob-pos p %) spot))) creepers)]
+            blasts (map #(cost/blast-hurt stats (min cost/swell-start (u/dist (danger-q/mob-pos p %) spot))) creepers)
+            a (if (seq creepers) (cost/fight-answer (update fight :health #(max 1 (- % (reduce + 0 blasts))))) a)]
         (letfn [(felt [x] (cond-> {:damage (+ (walk-hp walk-q) (max (:damage x) (* rate (:seconds a))) (reduce + 0 blasts))
                                    :hit (max (:hit x) hardest)
                                    :blasts (vec (filter pos? blasts))}

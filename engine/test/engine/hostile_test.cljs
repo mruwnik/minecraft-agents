@@ -24,6 +24,7 @@
             [jobs.lib.shore :as shore]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.answer :as answer]
+            [jobs.lib.cost.caught :as caught-prior]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.pace :as pace]
             [engine.events :as events]
@@ -1031,6 +1032,16 @@
                               (get-in (first (filter #(= :hostile.decided (:kind %)) @seen)) [:prices :fight])))]
           (is (> (await (fight-price 3)) (await (fight-price -3)))
               "both creepers are 3 blocks from the body; the one a block from the zombie blows beside the fight"))))))
+
+(deftest a-fight-beside-a-creeper-goes-bad-at-the-prior-of-the-health-its-blast-leaves
+  (let [p (tu/seeing-all (tu/fake-on-floor {:floor flight-floor :self {:health 20} :inventory sword
+                                            :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}} (zombie 9 4 1)]}))
+        c {:primitives p :engine {:warned (atom nil)} :view (fn [] {:now 1000 :data {}}) :id "j1" :root "j1" :slots []}
+        {:keys [blasts caught]} (hostile-fight/fight-answer c (danger-q/dangers p 16 {:ranged-radius 16} {}) (constantly nil))
+        prior #(:chance (caught-prior/prior ::caught-prior/fights "zombie" %))]
+    (is (pos? (first blasts)) "the creeper blows beside the fight")
+    (is (= (prior (- 20 (first blasts))) (:chance caught)) "the zombie is fought at the health the blast leaves")
+    (is (< (prior 20) (:chance caught)))))
 
 (deftest a-creeper-with-company-is-never-swung-at-and-a-lone-one-backed-off-from-is-still-fought
   (async done
