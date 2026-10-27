@@ -10,6 +10,8 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.fake :as fake]
+            [engine.fake.raw-world :as fake-raw]
+            [engine.perception :as perception]
             [engine.hut-shelter-test :as hs]
             [engine.memory :as mem]
             [engine.notes :as notes]
@@ -27,13 +29,19 @@
 
 (defn setup
   "step-ms: the engine's clock moves on by that much each time it is read (time passing while a round runs); the
-  world's furnaces cook by the same fake time, 50 ms a tick."
-  [world & {:keys [step-ms zones other-notes] :or {step-ms 0}}]
+  world's furnaces cook by the same fake time, 50 ms a tick. perceive?: the body sees through a perception (one sight pass
+  done), so its guess at the light of the cells it never saw rests on the lit ones it saw, as a body's does."
+  [world & {:keys [step-ms zones other-notes perceive?] :or {step-ms 0}}]
   (let [dir (tu/tmp-dir)
         clock (atom 1000000)
         carry (atom 0)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/seeing-all (tu/fake (merge {:floor tu/walk-floor} world)))
+        p (if perceive?
+            (let [p (tu/fake-on-floor world)
+                  wrapped (perception/wrap p (perception/create (fake-raw/create p) {:radius 16 :ray-deg 2}))]
+              (perception/pass! (aget wrapped "perception"))
+              wrapped)
+            (tu/seeing-all (tu/fake (merge {:floor tu/walk-floor} world))))
         now (fn []
               (let [ticks (quot (swap! carry + step-ms) 50)]
                 (swap! carry - (* ticks 50))
@@ -565,7 +573,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [note [{:kind :seen :what "cow" :id "u1" :pos [100 64 0] :by "Other" :t 999900 :until 9e15}]
-              {:keys [eng seen]} (setup {:time 6000 :self {:food 8 :health 10}} :step-ms 5 :other-notes note)]
+              {:keys [eng seen]} (setup {:time 6000 :self {:food 8 :health 10}} :step-ms 5 :other-notes note :perceive? true)]
           (await (one-round! eng {}))
           (loop [n 0] (when (and (< n 80) (not-any? #(= :noted-walk (:slot %)) (events-of seen :child_started)))
             (await (core/tick! eng))
@@ -576,9 +584,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[x death-chance walked?] [[150 0 true] [20000 0 false] [150 0.99 false]]]
+        (doseq [[x death-chance walked?] [[100 0 true] [20000 0 false] [100 0.99 false]]]
           (let [note [{:kind :seen :what "cow" :id "u1" :pos [x 64 0] :by "Other" :t 999900 :until 9e15}]
-                {:keys [eng seen]} (setup {:time 6000 :self {:food 17 :health 20}} :step-ms 5 :other-notes note)]
+                {:keys [eng seen]} (setup {:time 6000 :self {:food 17 :health 20}} :step-ms 5 :other-notes note :perceive? true)]
             (await (pick-test/with-death-chance death-chance
                      (fn ^:async r []
                        (await (one-round! eng {:carry 60}))
