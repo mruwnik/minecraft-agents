@@ -217,7 +217,7 @@
      :ids (fn [] (let [ids ((wworld/memory-sections w) 0 4 0)] (aget ids (+ 15 (* 256 0) (* 16 0)))))}))
 
 (deftest the-mask-keeps-a-remembered-door-water-and-the-air-beside-it-however-old
-  (doseq [[block at] [["oak_door" [15 64 0]] ["water" [16 64 0]]]]
+  (doseq [[block at reads-air] [["oak_door" [15 64 0] false] ["water" [16 64 0] true]]]
     (let [{:keys [clock p w ids]} (aging-world)
           _ (swap! (fake/state p) assoc :light-default [0 15])
           air (ids)]
@@ -227,7 +227,7 @@
         (swap! clock + (* 24 3600 1000))
         (is (pos? seen) (str block ": seen"))
         (is (= seen (ids)) (str block ": the cell at 15 read as remembered a day later (the chance it changed is options.unknown.changed's)"))
-        (is (or (= "oak_door" block) (= air seen)) "the air beside the water kept")))))
+        (is (= reads-air (= air seen)) (str block ": the cell at 15 is the door, or the air beside the water kept"))))))
 
 (deftest the-ways-on-are-counted-once-a-memory
   (let [{:keys [p w]} (sensed wall-world)
