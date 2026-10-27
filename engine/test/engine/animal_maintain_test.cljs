@@ -318,13 +318,15 @@
     {:call {:slot :mend :job 'jobs.build.pen :args {:plan "pen" :ways #{:carried}}}} {:plan "pen" :ways #{:carried}} {:gaps [[1 64 1]]}))
 
 (deftest a-fence-gap-and-carried-produce-add-to-the-pass-worth
-  (let [args {:mob "cow" :target 4}
+  (let [args {:mob "cow" :target 4 :chest {:x 0 :y 64 :z 0}}
         at-target {:adults 4 :babies 0 :drops [] :shearable 0 :gaps [] :stored-items []}
-        worth #(maintain/worth-of args (merge at-target %))]
+        worth #(maintain/worth-of args (merge at-target %))
+        beef {:stored-items [{:name "beef" :count 8}]}]
     (is (zero? (worth {})))
     (is (< 0 (worth {:gaps [[1 64 1]]})) "a gap loses animals")
     (is (< (worth {:gaps [[1 64 1]]}) (worth {:gaps [[1 64 1] [2 64 1]]})))
-    (is (< 0 (worth {:stored-items [{:name "beef" :count 8}]})) "produce to store is worth its items")))
+    (is (< 0 (worth beef)) "produce to store is worth its items")
+    (is (zero? (maintain/worth-of (dissoc args :chest) (merge at-target beef))) "no chest, no deposit: carried produce is worth nothing here")))
 
 (def ring-pen-plan
   (update (pb/ring-plan) :parts conj {:id "cows" :box [[3 64 3] [3 64 3]] :want "air" :herd {:mob "cow" :target 0}}))

@@ -142,16 +142,16 @@
   "What the decisions are made from, read live."
   [c]
   (let [{:keys [adults babies]} (hunting/census c)
-        inventory (u/inventory (:primitives c))]
+        inventory (u/inventory (:primitives c))
+        stored (to-store inventory (produce (:mob (:args c))) (:carry (:args c)))]
     {:gaps (missing-barrier c)
      :adults (count adults)
      :babies (count babies)
      :drops (drops-in-box c)
      :shears (boolean (some #(= "shears" (:name %)) inventory))
      :shearable (count (remove #(true? (.-sheared %)) adults))
-     :stored (to-store inventory (produce (:mob (:args c))) (:carry (:args c)))
-     :stored-items (let [names (set (to-store inventory (produce (:mob (:args c))) (:carry (:args c))))]
-                     (into [] (comp (filter #(names (.-name %))) (map (fn [i] {:name (.-name i) :count (.-count i)}))) inventory))
+     :stored stored
+     :stored-items (into [] (comp (filter #(some #{(.-name %)} stored)) (map (fn [i] {:name (.-name i) :count (.-count i)}))) inventory)
      :food (animals/food-carried (:primitives c) (:mob (:args c)))
      :reach (hunting/reach c)}))
 
@@ -276,13 +276,13 @@
   "Seconds a pass is worth: cost/animal-worth of the animals its herd, breed
   (one pair, one calf) and cull steps would add or kill, the item-value of the wool its shear and of the drops its collect
   would take, the animals lost through the fence gaps its mend would close (animals-lost-per-gap each, at most the
-  herd) and the item-value of the produce its deposit would store."
-  [{:keys [mob target]} {:keys [adults babies drops shearable gaps stored-items]}]
+  herd) and the item-value of the produce its deposit would store (none without a :chest)."
+  [{:keys [mob target chest]} {:keys [adults babies drops shearable gaps stored-items]}]
   (let [animals (+ (min (+ adults babies) (* animals-lost-per-gap (count gaps)))
                    (max 0 (- (min 2 target) adults))
                    (if (and (>= adults 2) (< (+ adults babies) target)) 1 0)
                    (max 0 (- adults (max 2 (- target babies)))))
-        items (cond-> (into (mapv (fn [n] {:name n :count 1}) drops) stored-items)
+        items (cond-> (into (mapv (fn [n] {:name n :count 1}) drops) (when chest stored-items))
                 (= "sheep" mob) (conj {:name "white_wool" :count (* shear-wool shearable)}))]
     (+ (* animals (cost/animal-worth mob)) (:value (cost/item-value items)))))
 
