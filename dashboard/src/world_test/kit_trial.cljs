@@ -219,11 +219,6 @@
   [name]
   (some? (re-matches #"events\.edn(\.debug)?(\.\d+)?" name)))
 
-(defn submit-args
-  "The jobs tool arguments that submit the goal: it is the whole run, so it survives the body's death."
-  [body spec]
-  [body "--world" "test" "submit" spec "--survive-death"])
-
 (defn- read-events
   "The body's event logs (oldest rotation first) from start-ms on."
   [world body start-ms]
@@ -266,7 +261,7 @@
               (fs/mkdirSync (path/dirname p) #js {:recursive true})
               (fs/writeFileSync p (pr-str m)))
     :submit (let [[body spec] a]
-              (run-node! "engine/tools/jobs.mjs" (submit-args body spec)))))
+              (run-node! "engine/tools/jobs.mjs" [body "--world" "test" "submit" spec]))))
 
 (defn- table [{:keys [milestones]}]
   (str/join "\n" (for [[k {:keys [ms days]}] milestones]

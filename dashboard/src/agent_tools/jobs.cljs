@@ -17,15 +17,15 @@
 
 (defn usage-for [prefix]
   "Build the usage string with the given invocation prefix (e.g., 'jobs.mjs' or './bin/jobs')."
-  (str "usage: " prefix " <body> --world <world> list [--limit 8 --offset 0] | show <jID> | submit '(jobs.storage.deposit {:items [\"bread\"]})' [--survive-death] [--next | --now | --exclusive] [--alongside] [--wait [--timeout 60s]] | cancel <jID> | cancel-all | retry <jID> | resolve <request-id> --reason handled|condition-recovered [--worlds DIR --state LEGACY_PARENT]\n"
+  (str "usage: " prefix " <body> --world <world> list [--limit 8 --offset 0] | show <jID> | submit '(jobs.storage.deposit {:items [\"bread\"]})' [--drop-on-death] [--next | --now | --exclusive] [--alongside] [--wait [--timeout 60s]] | cancel <jID> | cancel-all | retry <jID> | resolve <request-id> --reason handled|condition-recovered [--worlds DIR --state LEGACY_PARENT]\n"
        "A job that depends on where the body stands (access.stair, access.bridge, access.pillar, gather.mine) gets :submitted-at (the body's position at submit) added to its args; if the body is then over 6 blocks from it when the job starts, the job waits :moved-since-submit (something moved the body meanwhile) instead of running there; a job queued behind another of this body counts from where the body stands when that one ends. Give :here true in the args (any job takes it) to run wherever the body is.\n"
        "submit appends the job to the end of the list (jobs take turns).\n"
        "A spec is a job name then its args map: submit '(jobs.movement.go-to {:pos {:x 1 :y 64 :z 2}})' or '(jobs.items.get-tool {:item \"stone_pickaxe\"})'. Find a job's args with observe.mjs <body> catalog job <name> (catalog jobs [prefix] lists names).\n"
-       "  --survive-death  the job stays listed through the body's death and runs again once the respawn reflexes (recover-drops, night) are done; other jobs are cancelled; a (repeat ...) spec does this by default\n"
+       "  --drop-on-death  the body's death cancels the job; without it the job stays listed through a death and runs again from the respawn once the respawn reflexes (recover-drops, night) are done\n"
        "  --next  list it directly after the current job: it gets the next round, nothing is cut\n"
        "  --now    cut the current job and run this one at once (a normal job); the cut job keeps its memory and\n"
        "           continues right after this one yields or ends. Reflexes still come first: --now queues behind a running reflex (night, hostile) and the answer's :hint names it. --now and --next cannot be combined (refused).\n"
-       "  --exclusive  run this job alone, at once: the whole engine is paused (no triggers, no other job) until it ends; any ending, a yield (:continue) included, returns to you and normal work resumes after a 5 s pause in which no listed job starts. Cuts what runs now (a listed job continues after). One run at a time; refused offline or settling; takes no --next, --now or --survive-death; a restart or death ends it.\n"
+       "  --exclusive  run this job alone, at once: the whole engine is paused (no triggers, no other job) until it ends; any ending, a yield (:continue) included, returns to you and normal work resumes after a 5 s pause in which no listed job starts. Cuts what runs now (a listed job continues after). One run at a time; refused offline or settling; takes no --next, --now or --drop-on-death; a restart or death ends it.\n"
        "  --alongside  submit even when a job of the same job name (one-cell blocks.dig and blocks.place and the jobs.memory.* jobs never clash), or another digging job (mine, stair, tunnel, strip.*), is running or queued on this body: without it such a submit is held back and the answer names the clashing job; two of one job can undo each other's work. A (repeat ...) submit is never held\n"
        "  --wait   block until the job ends, or until anything that ends observe --wait (addressed chat, attention, an\n"
        "           engine restart, the --timeout), and print {:job {:id ..} :wait <the wake>} (the submit-time status is dropped: it would read :queued after the job ended): the job's last events and a\n"
@@ -50,11 +50,6 @@
     (when-not (and (seq? form) (symbol? (first form)))
       (throw (js/Error. (str "spec must be one native EDN job expression list; " spec-example))))
     form))
-
-(defn standing?
-  "A (repeat ...) spec is housekeeping that does not depend on inventory or position, so a death keeps it."
-  [text]
-  (= 'repeat (first (spec-for text))))
 
 (def single-cell-jobs
   "One cell per call: two of them cannot undo each other's work, so they queue like any job."
@@ -84,7 +79,7 @@
     (let [{:keys [positionals values]} (map-tool/parse-options argv
           {:state {:type "string"} :worlds {:type "string"} :world {:type "string"}
            :request-id {:type "string"} :limit {:type "string"} :offset {:type "string"}
-           :reason {:type "string"} :exclusive {:type "boolean"} :survive-death {:type "boolean"} :next {:type "boolean"} :now {:type "boolean"}
+           :reason {:type "string"} :exclusive {:type "boolean"} :drop-on-death {:type "boolean"} :next {:type "boolean"} :now {:type "boolean"}
            :wait {:type "boolean"} :timeout {:type "string"} :alongside {:type "boolean"}})
           [body op arg & extra] positionals
           op (keyword (or op "list"))
@@ -112,10 +107,10 @@
         (throw (js/Error. "--limit and --offset require list")))
       (when (and (contains? values :exclusive) (not spec-op?))
         (throw (js/Error. "--exclusive requires submit")))
-      (when (and (:exclusive values) (or (:next values) (:now values) (:survive-death values)))
-        (throw (js/Error. "--exclusive runs alone, once, now: it takes no --next, --now or --survive-death")))
-      (when (and (contains? values :survive-death) (not spec-op?))
-        (throw (js/Error. "--survive-death requires submit")))
+      (when (and (:exclusive values) (or (:next values) (:now values) (:drop-on-death values)))
+        (throw (js/Error. "--exclusive runs alone, once, now: it takes no --next, --now or --drop-on-death")))
+      (when (and (contains? values :drop-on-death) (not spec-op?))
+        (throw (js/Error. "--drop-on-death requires submit")))
       (when (and (contains? values :next) (not= op :submit))
         (throw (js/Error. "--next requires submit")))
       (when (and (contains? values :now) (not= op :submit))
@@ -165,7 +160,7 @@
                        :request (cond-> {:op (cond interrupt? :interrupt exclusive? :exclusive :else op) :request-id id}
                                   spec-op? (assoc :spec (spec-for arg))
                                   (#{:cancel :retry} op) (assoc :id arg)
-                                  (or (:survive-death values) (and spec-op? (standing? arg))) (assoc :survive-death? true)
+                                  (and spec-op? (not exclusive?) (not (:drop-on-death values))) (assoc :survive-death? true)
                                   (contains? values :next) (assoc :next? (:next values)))))))))))
     (catch :default error {:error (.-message error)})))
 

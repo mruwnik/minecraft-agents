@@ -1,6 +1,7 @@
-;; Card 608d2956: the jobs tool marks a submitted (repeat ...) job survive-death, so a standing farm/kitchen loop outlives a death;
-;; a one-shot job still goes with the dead body (job.cancelled). The jobs are submitted through jobs.mjs (the agent tool), no flag.
-;; Should-succeed: after the respawn the repeat job is still listed. Should-fail: the one-shot go-to is cancelled by the death.
+;; The jobs tool marks every submitted job survive-death: a player keeps their to-do list through a death; --drop-on-death
+;; lets the dead body take it (job.cancelled). The jobs are submitted through jobs.mjs (the agent tool).
+;; Should-succeed: after the respawn the repeat job is still listed; a plain go-to resumes from the respawn and arrives.
+;; Should-fail: the go-to submitted --drop-on-death is cancelled by the death.
 {:defaults
  {:tags [:scheduler :survival :death :tool] :time :any
   :plot {:height 8}
@@ -13,14 +14,13 @@
          [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 1}]]
    :expect [{:event {:source :body :kind :respawned} :within-s 40}
             {:no-event {:source :job :kind :cancelled} :for-s 10 :of-job true}]}
-  {:name "one-shot-job-is-cancelled-by-a-death"
-   :act [[:http :submit (jobs.movement.go-to {:pos #at [28 0 28] :range 1}) [] {:ok true}]
+  {:name "dropped-job-is-cancelled-by-a-death"
+   :act [[:http :submit (jobs.movement.go-to {:pos #at [28 0 28] :range 1}) [:drop-on-death] {:ok true}]
          [:kill-body]]
    :expect [{:event {:source :job :kind :cancelled} :within-s 40 :of-job true}]}
-  ;; card 2adfe6f8: a plain job submitted with --survive-death stays listed through the death (the died event names it), is run again
-  ;; after the respawn, and arrives
-  {:name "flagged-go-to-survives-the-death-and-arrives"
-   :act [[:http :submit (jobs.movement.go-to {:pos #at [28 0 28] :range 1}) [:survive-death] {:ok true}]
+  ;; a plain job stays listed through the death (the died event names it), is run again after the respawn, and arrives
+  {:name "go-to-survives-the-death-and-arrives"
+   :act [[:http :submit (jobs.movement.go-to {:pos #at [28 0 28] :range 1}) [] {:ok true}]
          [:wait-s 2] [:kill-body]]
    :expect [{:event {:source :body :kind :died :data {:survived [:any]}} :within-s 30}
             {:event {:source :body :kind :respawned} :within-s 40}

@@ -79,9 +79,6 @@
     (is (= give (:given (nth (first (filter #(= :record (first %)) ss)) 2))))
     (is (= give (:given (k/report {:started-ms t0 :given give} [] (at 1)))))))
 
-(deftest the-goal-is-submitted-to-survive-death
-  (is (= "--survive-death" (last (k/submit-args "KitOak02" k/goal-spec)))))
-
 (deftest debug-level-logs-are-read-too
   (is (every? k/log-file? ["events.edn" "events.edn.2" "events.edn.debug" "events.edn.debug.1"]))
   (is (not-any? k/log-file? ["events.edn.meta.edn" "memory.edn"])))

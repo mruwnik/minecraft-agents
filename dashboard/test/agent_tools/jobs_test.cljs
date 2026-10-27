@@ -90,18 +90,16 @@
         (.catch (fn [error] (is (= "ETIMEDOUT" (.-code error)))))
         (.then done))))
 
-(deftest survive-death-is-a-submission-option
-  (let [kept (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light)" "--survive-death")
-        plain (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light)")]
-    (is (true? (get-in kept [:request :survive-death?])))
-    (is (not (contains? (:request plain) :survive-death?)))
-    (is (string? (:error (request "Bob" "--world" "w" "list" "--survive-death"))))))
-
-(deftest a-standing-repeat-job-survives-death-by-default
-  (let [kept (request "Bob" "--world" "w" "submit" "(repeat (jobs.farm.tend {}))")
-        one-shot (request "Bob" "--world" "w" "submit" "(seq (jobs.time.wait-for-light))")]
-    (is (true? (get-in kept [:request :survive-death?])))
-    (is (not (contains? (:request one-shot) :survive-death?)))))
+(deftest a-submitted-job-survives-death-unless-dropped
+  (let [goal (request "Bob" "--world" "w" "submit" "(seq (jobs.time.wait-for-light))")
+        standing (request "Bob" "--world" "w" "submit" "(repeat (jobs.farm.tend {}))")
+        dropped (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light)" "--drop-on-death")
+        exclusive (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light)" "--exclusive")]
+    (is (true? (get-in goal [:request :survive-death?])))
+    (is (true? (get-in standing [:request :survive-death?])))
+    (is (not (contains? (:request dropped) :survive-death?)))
+    (is (not (contains? (:request exclusive) :survive-death?)) "an exclusive run takes no :survive-death?")
+    (is (string? (:error (request "Bob" "--world" "w" "list" "--drop-on-death"))))))
 
 (deftest cancel-all-has-no-job-argument-and-front-and-exclusive-are-submission-options
   (let [cancel (request "Bob" "--world" "w" "cancel-all" "--request-id" "all")
@@ -118,7 +116,7 @@
     (is (re-find #":next\? true" (data/write-edn (:request front))))
     (is (not (contains? (:request plain) :next?))))
   (doseq [args [["cancel-all" "j1"] ["cancel-all" "--exclusive"] ["list" "--exclusive"] ["show" "j1" "--exclusive"] ["retry" "j1" "--exclusive"]
-                ["submit" "(jobs.x {})" "--exclusive" "--next"] ["submit" "(jobs.x {})" "--exclusive" "--now"] ["submit" "(jobs.x {})" "--exclusive" "--survive-death"]]]
+                ["submit" "(jobs.x {})" "--exclusive" "--next"] ["submit" "(jobs.x {})" "--exclusive" "--now"] ["submit" "(jobs.x {})" "--exclusive" "--drop-on-death"]]]
     (is (string? (:error (apply request "Bob" "--world" "w" args))) (pr-str args)))
   (doseq [args [["list" "--next"] ["show" "j1" "--next"]
                 ["cancel-all" "--next"] ["cancel" "j1" "--next"] ["retry" "j1" "--next"]]]
@@ -142,7 +140,7 @@
   (let [state (state-dir)]
     (async done
       (-> (run-main! state ["submit" "(seq (jobs.time.wait-for-light) (jobs.movement.go-to {:pos {:x -1 :y 64 :z 2}}))"
-                            "--survive-death" "--next" "--request-id" "held"] engine)
+                            "--next" "--request-id" "held"] engine)
           (.then (fn [first-run]
                    (is (= 0 (:code first-run)))
                    (is (= {:ok true} (data/read-edn (:out first-run))))
