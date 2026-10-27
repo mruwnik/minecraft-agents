@@ -1,5 +1,6 @@
 ;; A repeat farm.tend walks up a ramp to a field out of sight when the walk costs less than the pass is worth (its remembered ripe wheat), and cuts the wheat; a never-seen field is priced at the measured share of ripe cells.
 ;; Field on a stone platform x 6..20, z 12..22, y 0..11: farmland x 10..17 at z 16 and z 18, y 11, ripe wheat on all of it, water z 17 between; a one-wide ramp x 8, z 1..11 from the ground up to the platform. :irrigate false, so only the walk to the field brings the body up.
+;; In order is a nothing-to-do wait, or a rest after a run that looked round at crops behind the body and found nothing to do.
 ;; Measured live: submit to the field in order 23-24 s from below (walk included); :limit-s 70.
 ;; Should-succeed: body that saw the field from it, then put below the platform out of sight (walks up, a far cell's wheat cut, no :not-worth wait); body on the field (wheat cut); body that saw the field one stage short of ripe, put below while it ripens unseen (waits :not-worth at first, then the chance it ripened since pays the walk: walks up and cuts it). Should-fail: a one-cell field it cannot see is worth less than the walk (ends condition-failed :not-worth, its wheat stands).
 {:defaults
@@ -19,7 +20,7 @@
    :act [[:rcon "execute as $BODY at @s run tp @s ~-3 ~-12 ~-15"]
          [:http :submit (repeat (jobs.farm.tend {:area {:min #xyz [10 11 16] :max #xyz [17 12 18]} :irrigate false})) [] {:ok true}]]
    :expect [{:no-event {:source :job :kind :waiting :data {:reason :not-worth}} :for-s 30}
-            {:event {:source :job :kind :waiting :data {:reason :nothing-to-do}} :within-s 60}]
+            {:event {:source :job :kind :waiting :data #{{:reason :nothing-to-do} {:after :nothing-to-do}}} :within-s 60}]
    :after [[:not-block [17 12 18] "wheat[age=7]"]]}
   {:name "body-away-from-the-field-it-saw-unripe-comes-back-to-harvest"
    :body {:at [11.5 12 15.5]}
@@ -31,14 +32,14 @@
          [:rcon "execute positioned $X $Y $Z run fill ~10 ~12 ~18 ~17 ~12 ~18 wheat[age=7]"]
          [:http :submit (repeat (jobs.farm.tend {:area {:min #xyz [10 11 16] :max #xyz [17 12 18]} :irrigate false})) [] {:ok true}]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :not-worth}} :within-s 40}
-            {:event {:source :job :kind :waiting :data {:reason :nothing-to-do}} :within-s 400}]
+            {:event {:source :job :kind :waiting :data #{{:reason :nothing-to-do} {:after :nothing-to-do}}} :within-s 400}]
    :after [[:not-block [17 12 18] "wheat[age=7]"]]
    :limit-s 420}
   {:name "body-on-the-field-cuts-the-wheat"
    :body {:at [11.5 12 15.5]}
    :act [[:http :submit (repeat (jobs.farm.tend {:area {:min #xyz [10 11 16] :max #xyz [17 12 18]} :irrigate false})) [] {:ok true}]]
    :expect [{:no-event {:source :job :kind :waiting :data {:reason :not-worth}} :for-s 30}
-            {:event {:source :job :kind :waiting :data {:reason :nothing-to-do}} :within-s 60}]
+            {:event {:source :job :kind :waiting :data #{{:reason :nothing-to-do} {:after :nothing-to-do}}} :within-s 60}]
    :after [[:not-block [10 12 16] "wheat[age=7]"]]}
   {:name "one-unseen-crop-is-not-worth-the-walk-up"
    :body {:at [8.5 0 0.5]}
