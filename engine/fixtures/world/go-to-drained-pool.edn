@@ -22,7 +22,7 @@
   {:name "water-likely-drained-is-not-dropped-into-the-stair-is-taken"
    :settings {:jobs.lib.memory-age/fluid-seconds 5}
    :blocks [[:fill [5 2 7] [5 24 7] "stone"] [:fill [5 2 8] [5 23 8] "stone"] [:fill [5 2 9] [5 22 9] "stone"] [:fill [5 2 10] [5 21 10] "stone"] [:fill [5 2 11] [5 20 11] "stone"] [:fill [5 2 12] [5 19 12] "stone"] [:fill [5 2 13] [5 18 13] "stone"] [:fill [5 2 14] [5 17 14] "stone"] [:fill [5 2 15] [5 16 15] "stone"] [:fill [5 2 16] [5 15 16] "stone"] [:fill [5 2 17] [5 14 17] "stone"] [:fill [5 2 18] [5 13 18] "stone"] [:fill [5 2 19] [5 12 19] "stone"] [:fill [5 2 20] [5 11 20] "stone"] [:fill [5 2 21] [5 10 21] "stone"] [:fill [5 2 22] [5 9 22] "stone"] [:fill [5 2 23] [5 8 23] "stone"] [:fill [5 2 24] [5 7 24] "stone"] [:fill [5 2 25] [5 6 25] "stone"] [:fill [5 2 26] [5 5 26] "stone"] [:fill [5 2 27] [5 4 27] "stone"] [:fill [5 2 28] [5 3 28] "stone"] [:fill [5 2 29] [5 2 29] "stone"]]
-   :act [[:rcon "tp $BODY ~ ~ ~ 90 0"]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 0"]
          [:until-facing {:yaw 90 :pitch 0} 10]
          [:rcon "execute positioned $X $Y $Z run fill ~9 ~ ~3 ~15 ~1 ~9 air"]
          [:wait-s 20]
@@ -32,7 +32,7 @@
    :after [[:body-near [12.5 0 6.5] 3]]}
   {:name "water-likely-drained-with-no-other-way-down-is-not-dropped-into"
    :settings {:jobs.lib.memory-age/fluid-seconds 5}
-   :act [[:rcon "tp $BODY ~ ~ ~ 90 0"]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 0"]
          [:until-facing {:yaw 90 :pitch 0} 10]
          [:rcon "execute positioned $X $Y $Z run fill ~9 ~ ~3 ~15 ~1 ~9 air"]
          [:wait-s 20]
