@@ -2,7 +2,7 @@
 ;; Field on a stone platform x 6..20, z 12..22, y 0..11: farmland x 10..17 at z 16 and z 18, y 11, ripe wheat on all of it, water z 17 between; a one-wide ramp x 8, z 1..11 from the ground up to the platform. :irrigate false, so only the walk to the field brings the body up.
 ;; In order is a nothing-to-do wait, or a rest after a run that looked round at crops behind the body and found nothing to do.
 ;; Measured live: submit to the field in order 23-24 s from below (walk included); :limit-s 70.
-;; Should-succeed: body that saw the field from it, then put below the platform out of sight (walks up, a far cell's wheat cut, no :not-worth wait); body on the field (wheat cut); body that saw the field one stage short of ripe, put below while it ripens unseen (waits :not-worth at first, then the chance it ripened since pays the walk: walks up and cuts it). Should-fail: a one-cell field it cannot see is worth less than the walk (ends condition-failed :not-worth, its wheat stands).
+;; Should-succeed: body that saw the field from it, then put below the platform out of sight (walks up, a far cell's wheat cut, no :not-worth wait); body on the field (wheat cut); body that saw the field one stage short of ripe, put below while it ripens unseen (waits :not-worth at first, then the chance it ripened since pays the walk: walks up and cuts it). Should-fail: a one-cell field it cannot see is worth less than even the least walk (waits :not-worth, no run, its wheat stands).
 {:defaults
  {:tags [:farm :tend :jobs]
   :time :day :time-why :dawn-decision
@@ -44,5 +44,5 @@
   {:name "one-unseen-crop-is-not-worth-the-walk-up"
    :body {:at [8.5 0 0.5]}
    :act [[:http :submit (jobs.farm.tend {:area {:min #xyz [17 11 18] :max #xyz [17 12 18]} :irrigate false}) [] {:ok true}]]
-   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :not-worth}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :not-worth}} :within-s 30 :of-job true}]
    :after [[:block [17 12 18] "wheat[age=7]"]]}]}
