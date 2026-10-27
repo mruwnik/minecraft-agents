@@ -110,6 +110,18 @@
           (is (= 1 (count (filter #(= :flee (first %)) log))) "walks once, after the answer")
           (is (= [3] (mapv :cost (st/emitted seen :shelter.fled)))))))))
 
+(deftest the-flee-quotes-ground-sites-past-the-nearest-until-one-is-reachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far {:x -14 :y 64 :z 2}
+              ;; the ground west of the failed sites (x 1 and 10), 35 cells: the old nearest-16 cut never quoted the farthest
+              ground (into-array (for [x (range -8 -15 -1) z (range -2 3)] #js {:name "dirt" :pos #js {:x x :y 63 :z z}}))
+              [log _ calls] (await (flee-with (fn [{:keys [pos]}] (if (= far pos) {:uses {:job-time [0 7 0]}} (contract/ending :nothing-possible {:reason :no-path} nil)))
+                                              ground))]
+          (is (= [far] (map #(:pos (nth % 2)) (filter #(= :flee (first %)) log))) "the farthest ground site, the only one go-to reaches, is walked to")
+          (is (< 16 (count (filter :floor calls))) "quoted past the nearest 16"))))))
+
 (deftest with-no-reachable-target-the-night-holds-exposed
   (async done
     (tu/run-async done

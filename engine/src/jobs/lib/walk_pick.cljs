@@ -46,6 +46,21 @@
   [c args]
   (await (ctx/quote c 'jobs.movement.go-to args)))
 
+(defn ^:async once!
+  "(f)'s value, asked once in this pass (::pass in c, an atom a caller's pass sets, keeps the answers; none: asked each time):
+  the quotes and sweeps one pass's choices share."
+  [c k f]
+  (let [memo (::pass c)]
+    (if-not memo
+      (await (f))
+      (let [pending (or (get @memo k) (let [pr (f)] (swap! memo assoc k pr) pr))]
+        (await pending)))))
+
+(defn ^:async quote-once!
+  "go-to's quote of the walk args, asked once in this pass (once!)."
+  [c args]
+  (await (once! c [:quote args] #(quote! c args))))
+
 (defn ^:async best!
   "{:pick :price :quote} the cheapest of candidates, nil when none has a finite price. bound (fn [x]) seconds no more
   than x's price; args (fn [x]) the go-to args of the walk to x; price (fn [x q]) x's seconds with q, go-to's quote of

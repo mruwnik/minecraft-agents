@@ -517,7 +517,7 @@
               asked (atom [])
               places (mapv #(hash-map :pos {:x (* 10 %) :y 64 :z 0} :range 0) (range 1 101))
               opts {:target identity :walk identity}
-              c {:primitives (tu/fake {}) ::night/pass (atom {})}
+              c {:primitives (tu/fake {}) ::pick/pass (atom {})}
               reach (fn [n] (pick/walk-s {:x 0 :y 64 :z 0} {:pos {:x (* 10 n) :y 64 :z 0} :range 0}))]
           (set! pick/quote! (fn [_ args] (swap! asked conj args) (js/Promise.resolve {:uses {:job-time [0 ##Inf ##Inf]}})))
           (try

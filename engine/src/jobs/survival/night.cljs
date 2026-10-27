@@ -235,25 +235,11 @@
   (let [[_ mean] (get-in (await (ctx/quote c 'jobs.survival.enter-room args)) [:uses :job-time])]
     (when (and mean (not (infinite? mean))) mean)))
 
-(defn ^:async once!
-  "(f)'s value, asked once in this pass (pass keeps the answers in c): the quotes and sweeps the pass's choices share."
-  [c k f]
-  (let [memo (::pass c)]
-    (if-not memo
-      (await (f))
-      (let [pending (or (get @memo k) (let [pr (f)] (swap! memo assoc k pr) pr))]
-        (await pending)))))
-
-(defn ^:async quote-once!
-  "go-to's quote of the walk args, asked once in this pass (once!)."
-  [c args]
-  (await (once! c [:quote args] #(pick/quote! c args))))
-
 (defn ^:async cheapest-walk!
-  "jobs.lib.walk-pick/cheapest! with the pass's shared quotes (quote-once!): {:pick x :price seconds} of the one of xs whose walk go-to
+  "jobs.lib.walk-pick/cheapest! with the pass's shared quotes (pick/quote-once!): {:pick x :price seconds} of the one of xs whose walk go-to
   quotes cheapest, within limit-s seconds; :searching while a quote's search goes on; nil when no walk is priced."
   [c xs opts]
-  (await (pick/cheapest! c xs (assoc opts :quote quote-once!))))
+  (await (pick/cheapest! c xs (assoc opts :quote pick/quote-once!))))
 
 (defn open-room-cost
   "Seconds a room closed with chance closed-chance adds to a walk in: the chance it is open times dig-in-s, the dig-in the body then
@@ -264,7 +250,7 @@
 (defn ^:async dig-in-seconds
   "Seconds shut-in's quote of digging in here (a wall or a pit) takes, ##Inf when it quotes none: what a walk to a roofed place is weighed against."
   [c]
-  (await (once! c :dig-in
+  (await (pick/once! c :dig-in
                 (fn ^:async f []
                   (let [q (await (ctx/quote c 'jobs.survival.shut-in {:ways #{:walls :pit} :for :night :settings {:jobs.survival.wall-in/wall-value (sites/wall-value)}}))
                         mean (second (get-in q [:uses :job-time]))]
@@ -543,7 +529,7 @@
   night.bed-walk-unsafe info, and false."
   [c bed]
   (or (<= (u/dist (u/self-pos c) bed) 2)
-      (let [r (:route (await (quote-once! c {:pos bed :range 2})))
+      (let [r (:route (await (pick/quote-once! c {:pos bed :range 2})))
             {:keys [walk stay]} (when (:found r) (bed-walk-price c bed r))]
         (or (and (:found r) (<= walk stay) (do (ctx/update-mem! c assoc :bed-walk {:bed bed :walk-s walk}) true))
             (do (ctx/remember! c :bed-walk-unsafe {:pos bed :state (sh-beds/walk-state (:primitives c) (ctx/view c) bed)} sh-beds/walk-unsafe-policy)
@@ -657,7 +643,7 @@
 (defn ^:async pass
   "One choice of the night (see doc): :again, or the round's end."
   [c0]
-  (let [c (assoc c0 ::pass (atom {}))
+  (let [c (assoc c0 ::pick/pass (atom {}))
         p (:primitives c)
         breached (sh/breached-home? p (ctx/view c))
         roofed (and (sh-sense/roofed? p (sh-sense/roof-height)) (not breached))

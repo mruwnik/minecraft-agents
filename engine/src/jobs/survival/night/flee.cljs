@@ -24,48 +24,47 @@
             [jobs.survival.night.sites :as sites]))
 
 (defn ground-sites
-  "Natural ground the body has seen within radius that the carried tools dig and that is no sand or gravel, as feet
-  cells ({:kind :ground :pos}) a pit can be dug at (pit-site/pit-site?), clear of failed sites, the nearest sites/ground-candidates."
-  [c radius]
-  (let [p (:primitives c)]
-    (->> (look/seen-blocks p {:match #(and (solid/solid? %) (rules/natural? %) (not (rules/falling? %)) (tools/can-harvest? p %))
-                              :radius (min (sites/scan-radius) radius) :max (sites/scan-radius)})
-         (map #(update (:pos %) :y inc))
-         (filter #(and (pit-site/pit-site? p %) (pit-site/clear-of-failed? c %)))
-         (take (sites/ground-candidates))
-         (mapv (fn [pos] {:kind :ground :pos pos})))))
+  "Natural ground among the seen solids [{:name :pos}] that the carried tools dig and that is no sand or gravel, as the
+  feet cells over it ({:kind :ground :pos}); whether a pit can be dug there (ground-ok?) is asked only when its turn comes."
+  [p solids]
+  (->> solids
+       (filter (fn [{:keys [name]}] (and (rules/natural? name) (not (rules/falling? name)) (tools/can-harvest? p name))))
+       (map (fn [b] {:kind :ground :pos (update (:pos b) :y inc)}))))
+
+(defn ground-ok?
+  "Whether a pit can be dug at ground site x (pit-site/pit-site?) and it is clear of failed sites."
+  [c {:keys [pos]}]
+  (and (pit-site/pit-site? (:primitives c) pos) (pit-site/clear-of-failed? c pos)))
 
 (defn cave-sites
-  "Feet cells the body has seen under a roof (a seen solid block 2..roof-height above), over a seen solid floor, with
-  two seen free dry cells, clear of failed sites, that dig-in's :enclose can wall in with the blocks carried: each as
-  {:kind :cave :pos :needed} (the wall cells not yet sealed; an unseen cell counts open). Nothing needing a block a
-  zone or claim refuses. The nearest sites/cave-candidates. Reads seen blocks only: its reach is the nearest sites/cave-scan solids."
-  [c radius]
-  (let [p (:primitives c)
-        roof-height (sh-sense/roof-height)
-        solids (look/seen-blocks p {:match solid/solid? :radius (min (sites/scan-radius) radius) :max (sites/cave-scan)})
+  "Feet cells over the seen solids [{:name :pos}] under a roof (a seen solid block 2..roof-height above), with two seen
+  free cells, as {:kind :cave :pos}; whether they are dry and dig-in's :enclose walls one in (cave-needed) is asked only
+  when its turn comes."
+  [p solids]
+  (let [roof-height (sh-sense/roof-height)
         key-of (juxt :x :y :z)
         solid? (into #{} (map (comp key-of :pos)) solids)
         seen-free? (fn [cell] (and (not (solid? (key-of cell)))
                                    (not (:unknown (look/seen-block p cell)))))
-        have (reduce + (map :count (lb/carried c (choose/cheap-blocks (choose/filler-names c :shelter) (sites/wall-value)))))
-        up (fn [{:keys [x y z]} dy] {:x x :y (+ y dy) :z z})
-        sealed? (fn [cell] (and (solid? (key-of cell)) (seal/sealed? p cell)))
-        stand-on? #(dig-cells/stand-on? p %)]
+        up (fn [{:keys [x y z]} dy] {:x x :y (+ y dy) :z z})]
     (->> solids
          (map #(up (:pos %) 1))
-         (filter (fn [f]
-                   (and (some #(solid? (key-of (up f %))) (range 2 (inc roof-height)))
-                        (seen-free? f) (seen-free? (up f 1))
-                        (not (dig-cells/wet? p f)) (not (dig-cells/wet? p (up f 1)))
-                        (pit-site/clear-of-failed? c f))))
-         (keep (fn [f]
-                 (let [cells (dig-cells/fill-cells sealed? f nil stand-on?)]
-                   (when (and (<= (count cells) have)
-                              (not-any? #(access/trespass-refusal c :place %) cells))
-                     {:kind :cave :pos f :needed (count cells)}))))
-         (take (sites/cave-candidates))
-         vec)))
+         (filter (fn [f] (and (some #(solid? (key-of (up f %))) (range 2 (inc roof-height)))
+                              (seen-free? f) (seen-free? (up f 1)))))
+         (map (fn [f] {:kind :cave :pos f})))))
+
+(defn cave-needed
+  "The wall cells dig-in's :enclose still has to fill to wall in the cave cell f (an unseen cell counts open), when they
+  are dry, clear of failed sites, no more than the blocks carried, and none a zone or claim refuses; else nil."
+  [c f]
+  (let [p (:primitives c)
+        have (reduce + (map :count (lb/carried c (choose/cheap-blocks (choose/filler-names c :shelter) (sites/wall-value)))))
+        up (fn [{:keys [x y z]} dy] {:x x :y (+ y dy) :z z})
+        sealed? (fn [cell] (and (dig-cells/known-solid? p cell) (seal/sealed? p cell)))]
+    (when (and (not (dig-cells/wet? p f)) (not (dig-cells/wet? p (up f 1))) (pit-site/clear-of-failed? c f))
+      (let [cells (dig-cells/fill-cells sealed? f nil #(dig-cells/stand-on? p %))]
+        (when (and (<= (count cells) have) (not-any? #(access/trespass-refusal c :place %) cells))
+          (count cells))))))
 
 (defn flee-args [{:keys [kind name pos]}]
   (case kind
@@ -75,10 +74,11 @@
 
 (defn ^:async flee-target
   "The place not yet tried tonight, somewhere safer than here (see the doc), whose walk go-to quotes cheapest (jobs.lib.walk-pick/
-  cheapest!: every candidate is ranked by the least its straight walk takes and quoted best-first, as the flight itself will walk,
-  until the best quoted is no dearer than the next bound), as the candidate with its :distance and :cost (seconds); :searching while a
-  quote's search goes on; nil when there is none (none with the flee-radius setting 0 or after sites/max-flees).
-  Candidates: the bed, :roofed-places, caves, ground."
+  cheapest!: every candidate within flee-radius is ranked by the least its straight walk takes and quoted best-first, as the flight itself
+  will walk, until the best quoted is no dearer than the next bound; a site's own tests, ground-ok? and cave-needed, asked only when its
+  turn comes; quotes shared with the pass, pick/quote-once!), as the candidate with its :distance and :cost (seconds); :searching
+  while a quote's search goes on, or while the body looks round first; nil when there is none (none with the flee-radius setting 0 or
+  after sites/max-flees). Candidates: the bed, :roofed-places, caves, ground."
   [c]
   (let [m (ctx/mem c)
         p (:primitives c)
@@ -89,20 +89,25 @@
             bed (when-let [pos (sh-beds/bed-to-use p (ctx/view c) flee-radius (bed-down/bed-permit c))]
                   (when (< (bed-down/radius c) (u/dist here pos) (inc flee-radius)) [{:kind :bed :pos pos}]))
             places (map #(assoc % :kind :roofed-place) (room-lib/roofed-places-in c (:args c) flee-radius))
-            cands (->> (concat bed places (cave-sites c flee-radius) (ground-sites c flee-radius))
-                       (remove #(contains? tried (:pos %)))
-                       vec)]
+            solids (look/seen-blocks p {:match solid/solid? :radius flee-radius :max ##Inf})
+            cands (->> (concat bed places (cave-sites p solids) (ground-sites p solids))
+                       (remove #(contains? tried (:pos %))))
+            needed (atom {})
+            ok? (fn [{:keys [kind pos] :as x}]
+                  (case kind
+                    :ground (ground-ok? c x)
+                    :cave (some? (get (swap! needed #(if (contains? % pos) % (assoc % pos (cave-needed c pos)))) pos))
+                    true))
+            walk #(assoc (flee-args %) :floor cost-health/spend-down)
+            best (await (pick/cheapest! c cands {:target (fn [{:keys [kind pos]}] {:pos pos :range (:range (flee-args {:kind kind}))})
+                                                 :walk walk :ok? ok? :quote pick/quote-once!}))]
         (cond
-          (and (empty? cands) (not (look/surveyed? c)))
-          (do (await (look/survey! c)) ; a cave or roofed place behind the body is not seen until it looks
-              :searching)
-
-          (seq cands)
-          (let [walk #(assoc (flee-args %) :floor cost-health/spend-down)
-                best (await (pick/cheapest! c cands {:target (fn [{:keys [kind pos]}] {:pos pos :range (:range (flee-args {:kind kind}))}) :walk walk}))]
-            (if (map? best)
-              (assoc (:pick best) :distance (u/dist here (:pos (:pick best))) :cost (:price best))
-              best)))))))
+          (map? best) (let [{:keys [kind pos] :as t} (:pick best)]
+                        (cond-> (assoc t :distance (u/dist here pos) :cost (:price best))
+                          (= :cave kind) (assoc :needed (get @needed pos))))
+          best best
+          (not (look/surveyed? c)) (do (await (look/survey! c)) ; a cave or roofed place behind the body is not seen until it looks
+                                       :searching))))))
 
 (defn ^:async flee!
   "Walk (go-to :flee) to target t, a flee-target; :again. Resumes after a cut (:fleeing). A walk that ends writes the
