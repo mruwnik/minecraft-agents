@@ -276,14 +276,17 @@
     (filter #(true? (some-> (u/sensed p %) .-unknown)) (field-cells c))))
 
 (defn walk-due?
-  "The field's site when the run has not walked there, a field cell was never seen or a crop grows out of view
-  (growing-out-of-view), and no look from here would show one (look/look-shows?) or the body looked round near here
-  already: the run walks there first."
+  "The field's site when the run has not walked there and a field cell was never seen, no look from here would show one
+  (look/look-shows?) or the body looked round near here already, or a crop grows out of view (growing-out-of-view) where
+  no look from here would show it: the run walks there first."
   [c]
   (let [site (site c)
         p (:primitives c)
-        unseen (when (and site (not (:site-walked (ctx/mem c)))) (seq (concat (unseen-field-cells c) (growing-out-of-view c))))]
-    (when (and unseen (or (look/surveyed? c :near) (not-any? #(look/look-shows? p %) unseen)))
+        hidden? #(not (look/look-shows? p %))
+        unseen (seq (unseen-field-cells c))]
+    (when (and site (not (:site-walked (ctx/mem c)))
+               (or (and unseen (or (look/surveyed? c :near) (every? hidden? unseen)))
+                   (some hidden? (growing-out-of-view c))))
       site)))
 
 (def site-range "Blocks from the site within which the walk to a field out of sight ends." 8)
