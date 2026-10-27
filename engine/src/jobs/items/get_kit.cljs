@@ -37,7 +37,7 @@
   With :explore, a bill that stops because a gathering ended (a mine that stopped, no way up) runs again (kit.retry, the pieces newly covered made first), up to 3 rounds without new furnace material.
   Get a base first.
   A death since the job began (body memory :died) clears the children and the bill; the next round re-plans from
-  what is carried. A death only keeps the job listed when it was submitted with :survive-death?.
+  what is carried. A death keeps the job listed unless it was submitted with --drop-on-death.
   Needs (condition): :items, else impossible :bad-args. Ends done with {:have [..] :made [..]}. Every other ending has
   :have, :made, the next :item, a :why, a :text and :next (jobs.lib.next-call: the obtain child's, a get-food for :no-food, then the kit again):
   - the obtain child's kind and cause (:no-source, a walk cause such as :zone-exit, :time ..; :item is then the one it stopped at);
