@@ -49,6 +49,14 @@
           (is (= 1 (count-of s "lead")))
           (is (empty? (events-of s :leash.gave-up))))))))
 
+(deftest the-cow-leashed-is-the-one-go-to-reaches-cheapest-not-the-nearest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} {:floor tu/walk-floor :blocks (tu/box 3 64 -8 3 66 8 "stone") :inventory lead
+                                     :entities [(cow 1 7) (cow 2 -8)]} 8))]
+          (is (= "u2" (:animal (done-event s))) "8 blocks in the open beats 7 behind a wall"))))))
+
 (deftest one-call-walks-and-leashes
   (async done
     (tu/run-async done

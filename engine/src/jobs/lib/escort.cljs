@@ -16,6 +16,7 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]
             [jobs.lib.walk :as walk]
+            [jobs.lib.walk-pick :as pick]
             [jobs.lib.walk.search :as wsearch]
             [jobs.lib.walk.world :as wworld]))
 
@@ -62,8 +63,7 @@
    ::back-limit-s {:default 15 :doc "Seconds from the first miss after which the walk back toward the last sighting gives up and the animal is lost." :spec (a/num-in 0 nil)}
    ::back-near {:default 4 :doc "Blocks from the last sighting at which the body counts as back there." :spec (a/num-in 0 nil)}
    ::closing-blocks {:default 0.2 :doc "Blocks nearer the body an animal must come to count as making progress (a cow swimming in covers a block in 20-30 s)." :spec (a/num-in 0 nil)}
-   ::max-search-rounds {:default 40 :doc "Calls in a row a walk may spend on the plan search of its next leg (about 80 ms each) before it counts as failed." :spec (a/int-in 0 nil)}
-   ::blind-leg {:default 12 :doc "Blocks of the straight line to the target a leg covers when the plan search found no path within ::max-search-rounds (a far target over ground not seen yet): the walk goes on toward it a leg at a time." :spec (a/num-in 1 nil)}
+   ::max-search-rounds {:default 40 :doc "Calls in a row a walk may spend on the plan search of its next leg (about 80 ms each) before go-to walks the whole way." :spec (a/int-in 0 nil)}
    ::leg-steps {:default 4 :doc "How many path steps one leg of a walk covers." :spec (a/int-in 1 nil)}
    ::follow-reach {:default 10 :doc "A pull passes this as the gap: an animal trailing the body by more blocks is about to break the lead (past engine.game/leash-break)." :spec (a/num-in 0 nil)}
    ::wait-look-s {:default 0.25 :doc "Seconds of one look's wait while the body holds still for the animal." :spec (a/num-in 0 nil)}
@@ -86,19 +86,20 @@
 (defn back-near [] (settings/get settings ::back-near))
 (defn closing-blocks [] (settings/get settings ::closing-blocks))
 (defn max-search-rounds [] (settings/get settings ::max-search-rounds))
-(defn blind-leg [] (settings/get settings ::blind-leg))
 
-
-(defn straight-leg
-  "The cell blind-leg blocks from the body on the flat line to target, at the body's height; nil when target is that near."
-  [c target]
-  (let [me (u/self-pos c)
-        {:keys [x z]} (:pos (places/parse-pos target))
-        d (u/flat-dist me {:x x :z z})]
-    (when (< (blind-leg) d)
-      (let [k (/ (blind-leg) d)]
-        {:x (js/Math.floor (+ (:x me) (* k (- x (:x me))))) :y (js/Math.floor (:y me)) :z (js/Math.floor (+ (:z me) (* k (- z (:z me)))))}))))
 (defn watch-radius [] (settings/get settings ::watch-radius))
+
+(defn ^:async pick-animal!
+  "The animal of xs whose trip costs least, nil when xs is empty: go-to's quote of the walk within range of it (doors
+  shut, as animals/walk! goes) plus, with dest, the least walk from it on to dest (walk-pick/walk-s: the escorted leg
+  is planned leg by leg once it starts), best-first by the lower bound of both (walk-pick/pick!)."
+  [c xs range dest]
+  (let [me (u/self-pos c)
+        to (fn [a] {:pos (animals/cell-of a) :range range :doors :shut :ways #{:walk :clear-seal}})
+        on (fn [a] (if dest (pick/walk-s (u/pos-of (.-pos a)) {:pos dest :range 0}) 0))]
+    (await (pick/pick! c xs {:bound #(+ (pick/walk-s me (to %)) (on %))
+                             :args to
+                             :price (fn [a q] (+ (pick/quoted-s c q) (on a)))}))))
 (defn stall-ms [] (* 1000 (settings/get settings ::stall-s)))
 (defn back-blocks [] (settings/get settings ::back-blocks))
 (defn max-backs [] (settings/get settings ::max-backs))
@@ -282,7 +283,8 @@
   round before the next leg. Answer :arrived, :failed (a leg did not arrive),
   :waiting (a leg's child is waiting on the world: the job yields), :catching-up (the caller waits for the animal) or
   {:problem :lost|:lead-broke|:animal-stalled}. :searching: the plan search for the next leg is still
-  going on (nothing was walked; the caller calls again), at most max-search-rounds calls in a row, then a straight leg toward a far target (:failed when it is near)."
+  going on (nothing was walked; the caller calls again), at most max-search-rounds calls in a row; then go-to walks the
+  whole way (its own search and prices), and the animal is looked at when it ends."
   [c slot target range gap]
   (let [pre (when (:catching-up (ctx/mem c)) (escort-problem c gap))]
     (cond
@@ -293,17 +295,13 @@
         (ctx/update-mem! c dissoc :catching-up)
         (loop []
           (let [{:keys [leg searching]} (await (leg-plan c target))
-                blind (when (and searching (< (max-search-rounds) (inc (:search-rounds (ctx/mem c) 0)))) (straight-leg c target))
-                leg (or leg blind)
-                searching (and searching (not blind))
+                searching (and searching (<= (inc (:search-rounds (ctx/mem c) 0)) (max-search-rounds)))
                 r (when-not searching
                     (await (child/call-walk* c slot
                                              {:pos (or leg target) :range (if leg 1 range) :doors :leave-open :ways #{:walk :clear-seal} :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
             (when-not searching (ctx/update-mem! c dissoc :search-rounds))
             (cond
-              searching (let [n (inc (:search-rounds (ctx/mem c) 0))]
-                          (ctx/update-mem! c assoc :search-rounds n)
-                          (if (< (max-search-rounds) n) :failed :searching))
+              searching (do (ctx/update-mem! c update :search-rounds (fnil inc 0)) :searching)
               (= :continue r) :waiting
               (not (and (= :done (:kind r)) (:arrived (:data r)))) :failed
               :else (let [problem (escort-problem c gap)]

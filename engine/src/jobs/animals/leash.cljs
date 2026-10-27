@@ -8,6 +8,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
+            [jobs.lib.escort :as escort]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.need :as need]
@@ -17,8 +18,8 @@
   "Put a lead on one animal of type :mob (such as \"cow\") within :radius and end. A one-shot order that starts and
   ends itself; a cut job resumes.
 
-  One call is the whole run. It takes the nearest animal that is not on anyone's lead, not given up on and not in :skip (uuids or
-  ids). The body walks to within 3 blocks (doors :shut) and uses the lead
+  One call is the whole run. It takes the animal that is not on anyone's lead, not given up on and not in :skip (uuids or
+  ids) whose walk go-to quotes cheapest (jobs.lib.escort/pick-animal!; the one a lead is already being used on first). The body walks to within 3 blocks (doors :shut) and uses the lead
   it carries (fetching one first when none is carried and an animal waits, jobs.lib.need, unless the ways are only #{:carried}). The use counts only when the sensing then shows the animal on this body's lead. Animals are
   tracked by uuid, by id when it has none.
 
@@ -119,12 +120,10 @@
       (animals/herd p mob radius)
       (let [around (fn [e] (u/flat-dist (u/pos-of (.-pos e)) center))]
         (->> (animals/herd p mob (+ radius (u/flat-dist (u/self-pos c) center)))
-             (filterv #(<= (around %) radius))
-             (sort-by #(around %))
-             vec)))))
+             (filterv #(<= (around %) radius)))))))
 
 (defn candidates
-  "The animals within radius not on a lead, not given up on and not in :skip, nearest first."
+  "The animals within radius not on a lead, not given up on and not in :skip."
   [c]
   (let [skip (skipped c)]
     (->> (herd c)
@@ -200,7 +199,9 @@
                                                       :continue)
       (not (animals/lead-carried? c)) (await (no-lead! c))
       (empty? cands) (finish! c (none-reason c) nil)
-      :else (await (engage! c (animals/pick c cands))))))
+      :else (let [k (:use-on (ctx/mem c))]
+              (await (engage! c (or (some #(when (= k (animals/key-of %)) %) cands)
+                                    (await (escort/pick-animal! c cands 3 nil)))))))))
 
 (defn ^:async round
   "The whole attempt: steps (a pace between; done? and can-run? are asked between them) until one ends or yields."

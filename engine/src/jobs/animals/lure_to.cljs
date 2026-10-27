@@ -31,16 +31,16 @@
   A one-shot order that starts and ends itself. Each step it keeps a :gate-held entry fresh for every planned gate seen open within 10 blocks of :pos, so the pen-gate trigger does not shut the gate it leads the animal through; at the end (not with :keep-food) it shuts those gates itself. Without :mob or :pos it can never start (impossible :no-mob, :no-destination).
 
   A body that holds none of the food first gets it (a jobs.items.obtain child, unless the ways are only #{:carried}); when none can
-  be got the job ends :no-food with the fetch's ending as its :because. It picks the nearest adult within :radius that is on nobody's lead and not already in :box (the zone rules let
-  it), holds the food, walks within 6 blocks of it and then to :pos in short go-to legs, the same legs as
+  be got the job ends :no-food with the fetch's ending as its :because. It picks the adult within :radius that is on nobody's lead and not already in :box (the zone rules let
+  it) whose trip costs least (go-to's quote of the walk to it plus the least walk from it to :pos, jobs.lib.escort/pick-animal!), holds the food, walks within 6 blocks of it and then to :pos in short go-to legs, the same legs as
   jobs.animals.lead-to (doors left open for the animal and shut afterwards); the go-to child of a leg plans its walk again after the leg was planned here). After each leg the animal is looked at:
   unseen or more than 5 blocks behind (jobs.lib.escort/::lure-gap), the body holds still (:waiting-for-animal) for it and the first look of the wait emits info
   escort.waiting (both positions, the distance); unseen for 3 s the body walks back toward where it was last seen (up to
   20 blocks) then looks round once from there (a small animal hides behind grass or an edge) and only then ends :lost; a third walk back to the same spot (::max-backs of escort) is not made, the animal counts as lost (an allowed adult within 10 blocks takes its place at once); seen beyond the gap and not
   coming nearer for 3 s the body turns back toward it (a cow loses the food past about 10 blocks); after
   ::max-turns such turns, or 10 s without progress (::stall-s), :animal-stalled. An animal that keeps closing in is waited for
-  however far it fell behind. The plan of each leg is searched before the body walks: a search still running never sends
-  the body the whole way in one go. With no animal in sight at the start it walks to where the chosen one was last seen
+  however far it fell behind. The plan of each leg is searched before the body walks: a search still running sends
+  the body the whole way in one go-to walk only after escort's ::max-search-rounds. With no animal in sight at the start it walks to where the chosen one was last seen
   (up to ::sighting-age-s old) or, with none, to the nearest animal of the kind noted within ::note-age-s, looks round once and steps toward a heard animal of the kind (jobs.lib.vantage) before
   ending :no-animal; a sound is a direction, never a place. Each round
   the food is checked in hand and held again if not (a cut, another job's equip); none left ends :no-food.
@@ -277,7 +277,7 @@
                 (if-let [pen (destination-cells c)] (contains? pen (animal-cell a)) true))))))
 
 (defn free-adults
-  "The adults within radius of the start, on nobody's lead, none already in :box, nearest first. The animal sighted at the
+  "The adults within radius of the start, on nobody's lead, none already in :box. The animal sighted at the
   start stays one when it wandered past the radius while the food was fetched."
   [c]
   (let [{:keys [mob radius uuid]} (:args c)
@@ -290,9 +290,7 @@
                            (not (spare/enclosed? c pens e))))]
     (->> (if uuid
            (filterv #(and (animals/named-by? % uuid) (not (animals/leashed? %))) (animals/adults (:primitives c) mob (escort/watch-radius)))
-           (filterv free? (animals/adults (:primitives c) mob (+ radius (if sighting radius 0) (u/flat-dist origin (u/self-pos c))))))
-         (sort-by #(u/flat-dist (u/self-pos c) (u/pos-of (.-pos %))))
-         vec)))
+           (filterv free? (animals/adults (:primitives c) mob (+ radius (if sighting radius 0) (u/flat-dist origin (u/self-pos c)))))))))
 
 (defn candidates
   "free-adults the zone rules allow."
@@ -359,13 +357,16 @@
       :else nil)))
 
 (defn ^:async start!
-  "Hold the food, walk up to the nearest animal and send the walk on its way."
+  "Hold the food, walk up to the animal whose trip costs least (escort/pick-animal!; the one chosen before while it is
+  still a candidate) and send the walk on its way."
   [c]
-  (let [{:keys [mob]} (:args c)
+  (let [{:keys [mob pos]} (:args c)
         p (:primitives c)
         food (animals/food-carried p mob)
         cands (candidates c)
-        target (first cands)]
+        chosen (:key (:sighting (ctx/mem c)))
+        target (or (some #(when (= chosen (animals/key-of %)) %) cands)
+                   (await (escort/pick-animal! c cands 2 pos)))]
     (when target (ctx/update-mem! c assoc :sighting {:key (animals/key-of target) :pos (u/pos-of (.-pos target)) :at (ctx/now c)}))
     (cond
       (nil? food) (await (get-food! c))

@@ -94,6 +94,13 @@
           (is (= 4 (count-of s "wheat")) "no food is used")
           (is (nil? (.-held (.self (:p s)))) "the food is put away at the end"))))))
 
+(deftest the-cow-lured-is-the-one-whose-whole-trip-costs-least-not-the-nearest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} {:inventory wheat :entities [(cow 1 -7) (cow 2 8)]} 16))]
+          (is (= "u2" (:animal (done-event s))) "8 blocks off toward the spot beats 7 off away from it"))))))
+
 (deftest keep-food-leaves-the-food-in-hand-at-the-end
   (async done
     (tu/run-async done
@@ -618,7 +625,7 @@
               (is (< 10 (count (tu/walked-to (:eng s)))) (pr-str (tu/walked-to (:eng s)))))
             (finally (set! wsearch/round-budget budget))))))))
 
-(deftest a-far-target-whose-plan-search-finds-nothing-is-walked-toward-in-straight-legs
+(deftest a-target-whose-leg-search-finds-nothing-is-walked-to-by-go-to-not-a-blind-leg
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -627,8 +634,8 @@
           (let [s (await (scenario {:pos {:x 38 :y 64 :z 0}} {:floor [-30 -30 40 30] :inventory wheat :entities [(cow 1 2)]} 10))
                 legs (tu/walked-to (:eng s))]
             (is (not= :unreachable (:reason (done-event s))) "a search that finds nothing is not unreachable")
-            (is (< 2 (count legs)) (pr-str legs))
-            (is (every? #(< (:x %) 38) (butlast legs)) (pr-str legs))))))))
+            (is (some #(= 38 (:x %)) legs) (pr-str legs))
+            (is (not-any? #(< 2 (:x %) 38) legs) "no walk goes to a point picked on the straight line")))))))
 
 (deftest the-leg-plan-may-open-gates-as-go-to-plans-them
   (async done
