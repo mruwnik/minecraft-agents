@@ -28,14 +28,17 @@
 
 (defn explored-text
   "What the exploring search covered: \"2 found (cow at [1 64 2], wheat at [3 64 4]), 3 legs, time\"; the finds are named so a
-  find the hunt then could not use is visible."
+  find the hunt then could not use is visible. A search cut before its first look or leg says so: it searched nothing."
   [res]
-  (let [found (:found res)]
-    (str (count found) " found"
-         (when (seq found)
-           (str " (" (str/join ", " (map (fn [{:keys [what pos]}] (str (name (or what "?")) (when pos (str " at " (pr-str pos))))) (take 4 found))) ")"))
-         ", " (get-in res [:coverage :legs] 0) " legs"
-         (when (:why res) (str ", " (name (:why res)))))))
+  (let [found (:found res)
+        {:keys [legs scans]} (:coverage res)]
+    (if (and (empty? found) (zero? (or legs 0)) (zero? (or scans 0)))
+      (str "not searched: the search ended" (when (:why res) (str " (" (name (:why res)) ")")) " before its first look")
+      (str (count found) " found"
+           (when (seq found)
+             (str " (" (str/join ", " (map (fn [{:keys [what pos]}] (str (name (or what "?")) (when pos (str " at " (pr-str pos))))) (take 4 found))) ")"))
+           ", " (or legs 0) " legs"
+           (when (:why res) (str ", " (name (:why res))))))))
 
 (defn animals-text
   "The animals passed over (and why), or with none the mobs in range (around), as a text starting \"; \"; nil when neither."

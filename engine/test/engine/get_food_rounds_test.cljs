@@ -1268,7 +1268,8 @@
 (deftest the-explored-text-names-what-the-search-found
   (is (= "2 found (cow at [1 64 2], wheat at [3 64 4]), 0 legs"
          (report/explored-text {:found [{:what "cow" :pos [1 64 2]} {:what :wheat :pos [3 64 4]}] :coverage {:legs 0}})))
-  (is (= "0 found, 3 legs, time" (report/explored-text {:coverage {:legs 3} :why :time}))))
+  (is (= "0 found, 3 legs, time" (report/explored-text {:coverage {:legs 3} :why :time})))
+  (is (= "not searched: the search ended (time) before its first look" (report/explored-text {:coverage {:legs 0 :scans 0} :why :time}))))
 
 (def sealed-pit
   "The body shut in a dark 1x2 cell at night, as the night handler leaves it, a furnace and a tree outside."
