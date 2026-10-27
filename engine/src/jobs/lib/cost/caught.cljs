@@ -9,8 +9,7 @@
   them. posterior: the grid posterior of a, b, lambda and mu over a group's counts (::flights); priors: the chance at
   10 hp uniform, b uniform over [-0.4, 0.4], lambda 1/lambda, mu uniform. A fight is counted alike (::fights): gone bad
   at the chance, its mobs land lambda blows, else mu (the fight's own); one followed by a flight counts what the flight
-  took too, the price of choosing it. A bow group's lambda is arrows at the ::counted-difficulty's shot rate; prior
-  scales it to the cost difficulty's (threat/shot-rate)."
+  took too, the price of choosing it."
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.cost.threat :as threat]))
@@ -36,8 +35,7 @@
                        :spider {:lived [[10 0 2] [11 0 2] [12 0 2] [15 1 1] [16 5 1] [18 0 1] [18 1 2] [18 4 1] [20 0 10] [20 1 4] [20 2 1] [20 3 1]]
                                 :died []}}
              :spec (a/map-of keyword? (a/map-with {:lived counts? :died counts?}))
-             :doc "As ::flights, the trial fights with a sword or axe: a fight the run of fight decisions about the group, each within 30 s of the one before, and the 30 s after it; none against a drowned (its swum fights are priced by cost.fight/wet-rate). Recount: node tools/event-counts.mjs caught-flights :fight-counts, 2026-10-27."}
-   ::counted-difficulty {:default 1 :spec (a/int-in 1 3) :doc "The server difficulty ::flights and ::fights were counted at."}})
+             :doc "As ::flights, the trial fights with a sword or axe: a fight the run of fight decisions about the group, each within 30 s of the one before, and the 30 s after it; none against a drowned (its swum fights are priced by cost.fight/wet-rate). Recount: node tools/event-counts.mjs caught-flights :fight-counts, 2026-10-27."}})
 
 (def groups
   "The mob kinds a flight counts as from one group: what group-of reads."
@@ -115,11 +113,9 @@
 
 (defn prior
   "{:chance :blows :shape} of a flight (which ::flights, the default) or a fight (::fights) with mob-name begun at
-  health (default 20): the posterior mean chance it is caught or goes bad (chance) and of the blows it then takes (a bow group's at the cost difficulty's shot rate), the Gamma shape of their mean's uncertainty (blow-chance's width)."
+  health (default 20): the posterior mean chance it is caught or goes bad (chance) and of the blows it then takes, the Gamma shape of their mean's uncertainty (blow-chance's width)."
   ([mob-name health] (prior ::flights mob-name health))
   ([which mob-name health]
-   (let [group (group-of which mob-name)
-         counts (get (settings/get settings which) group)
-         {:keys [blows shape]} (posterior counts)
-         rate (if (= :bow group) (/ (threat/shot-rate) (threat/shot-rate (settings/get settings ::counted-difficulty))) 1)]
-     {:chance (chance counts (or health 20)) :blows (* rate blows) :shape shape})))
+   (let [counts (get (settings/get settings which) (group-of which mob-name))
+         {:keys [blows shape]} (posterior counts)]
+     {:chance (chance counts (or health 20)) :blows blows :shape shape})))

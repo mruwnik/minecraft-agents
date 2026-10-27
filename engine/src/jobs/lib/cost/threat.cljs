@@ -276,9 +276,9 @@
 
 (defn shot-rate
   "Arrows a second of a skeleton kind (vanilla AbstractSkeleton: a 20-tick draw plus an attack interval of 20 ticks on hard, 40 otherwise),
-  every one counted a hit (how many miss is not measured), at the cost difficulty or difficulty d."
-  ([] (shot-rate (difficulty)))
-  ([d] (if (= 3 d) 0.5 (/ 1 3))))
+  every one counted a hit (how many miss is not measured)."
+  []
+  (if (= 3 (difficulty)) 0.5 (/ 1 3)))
 
 (defn lone-hit-rate
   "Hits a second of a lone sword fight: the measured rates of the zombie family and spiders, a skeleton's shot-rate, else one a second."
