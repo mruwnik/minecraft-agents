@@ -1108,7 +1108,8 @@
                           (for [z [1 2] y [64 65]] (str "20," y "," z))
                           (for [x (range 14 27) y (range 64 69) z (range 3 35)] (str x "," y "," z))))
    :light (into {} (concat (for [[x z] (concat (for [x (range -2 21)] [x 0]) [[20 1] [20 2]]) y [64 65]] [[x y z] [0 3]])
-                           (for [y [64 65] [z l] [[3 2] [4 1]]] [[20 y z] [0 l]])))})
+                           (for [y [64 65] [z l] [[3 2] [4 1]]] [[20 y z] [0 l]])
+                           (for [[x y] [[19 64] [21 64] [19 65] [21 65] [20 66]]] [[x y 3] [0 1]])))})
 
 (def tunnel-with-locked-gate
   "tunnel-into-cave with a locked fence gate across the tunnel at x 17 and a lit way round it, 6 blocks longer, along z -3."
