@@ -14,13 +14,14 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.places :as places]
             [jobs.lib.stock :as stock]
-            [jobs.lib.standing :as standing]
+            [jobs.lib.chests :as chests]
+            [jobs.lib.walk-pick :as pick]
             [jobs.lib.steps :as steps]
             [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]))
 
 (def doc
-  "Keep the store chest stocked with ready food, as one standing job (put it under repeat). done? is true when the
+  "Keep the store chest stocked with ready food, as one job (put it under repeat). done? is true when the
   chest's booked stock (jobs.lib.need, from the last deposit, withdraw or look) holds every :stock entry; unknown
   stock is not done. One run is one pass over four steps, each a child job, each using only what the shortfall needs
   (the shortfall of an item is its :stock entry less the chest's stock and what the pass has made of it):
@@ -37,8 +38,8 @@
   A step with nothing to do is skipped and booked {:skipped reason}: :no-food, :no-wheat, :no-table (none seen or carried, the call's :ways #{:carried}), :no-chest, :stocked,
   :nothing-to-store. A step whose child stops is booked with its summary and the stop as :reason; the pass goes on.
   Needs (can-start?, a listed job waits): a step that would run (raw food carried above the
-  reserve with a cooked shortfall, wheat for a loaf), so a body with nothing to cook is not held, and no other job runnable
-  nor delayed by the trip to the chest by more than the pass is worth (:away, jobs.lib.standing). can-run? (between steps): a chest place lost mid-pass waits :no-chest, a chest cell seen to hold
+  reserve with a cooked shortfall, wheat for a loaf), so a body with nothing to cook is not held, and a pass worth
+  more than even the least walk to the chest (:not-worth, walk-pick/not-worth). can-run? (between steps): a chest place lost mid-pass waits :no-chest, a chest cell seen to hold
   another block is never :chest-gone. There is no rest timer: a pass that cannot cook ends with its stop and repeat decides.
   Every pass ends with data {:steps {step summary} :text}, the text naming what was smelted, baked and stored; smelt summaries are keyed by food, the deposit's has :stored {name n}. It ends done
   when something was cooked, baked or stored; otherwise with the ending of the first step that stopped (its kind and
@@ -184,11 +185,9 @@
 
 (defn would-run? [c f] (boolean (some :call (vals (decisions c f)))))
 
-(declare quote-of)
-
-(defn pass
-  "{:worth :work-s} of a pass, as jobs.lib.standing/away-cause weighs it: the item-value of the cooked food and bread it
-  would stock (the shortfall its carried raw food and wheat cover), and the mean job time of quote-of."
+(defn pass-worth
+  "Seconds a pass is worth: the item-value of the cooked food and bread it would stock (the shortfall its carried raw
+  food and wheat cover)."
   [c]
   (let [{:keys [foods stock] :as a} (:args c)
         f (facts c)
@@ -198,13 +197,12 @@
                          (when (pos? n) {:name (foods/cooked-of food) :count n})))
                      foods)
         bread (loaves a f)]
-    {:worth (:value (cost/item-value (cond-> (vec cooked) (pos? bread) (conj {:name "bread" :count bread}))))
-     :work-s (second (get-in (quote-of c) [:uses :job-time]))}))
+    (:value (cost/item-value (cond-> (vec cooked) (pos? bread) (conj {:name "bread" :count bread}))))))
 
-(defn away
-  "The cause of a kitchen declining while another job can run, or while they all wait and the trip would delay them by more than the pass is worth (jobs.lib.standing/away-cause), or nil."
+(defn not-worth
+  "The cause of a kitchen declining while even the least walk to its chest costs more than the pass is worth, or nil."
   [c]
-  (standing/away-cause c (storage/chest-of (ctx/view c) (:args c)) pass))
+  (pick/not-worth c (some->> (storage/chest-of (ctx/view c) (:args c)) (chests/walk-args c)) #(pass-worth c)))
 
 (defn nothing-to-do
   "The cause of a kitchen with no step to run: each step's skip."
@@ -214,9 +212,9 @@
       {:reason :nothing-to-do :skipped (into {} (map (fn [[s d]] [s (:skip d)])) (decisions c f))})))
 
 (defn can-start?
-  "Later while the kitchen is far from its chest or has no step to run."
+  "Later while the kitchen has no step to run or the pass is not worth the walk to its chest."
   [c]
-  (contract/all [(checks/cause-status :later (away c)) (checks/cause-status :later (nothing-to-do c))]))
+  (contract/all [(checks/cause-status :later (nothing-to-do c)) (checks/cause-status :later (not-worth c))]))
 
 (defn chest-usable
   "Between steps: never :chest-gone when the body has seen the chest cell hold another block, later :no-chest when

@@ -1,4 +1,4 @@
-;; farm.maintain far from its field walks there first (one go-to), then tends it, as a player would; it neither declines :away
+;; farm.maintain far from its field walks there first (one go-to), then tends it, as a player would; it neither declines :not-worth
 ;; nor digs or tills cells from where the body stands. Field x 60..62, z 16 on grass: farmland y -1 with water beside, ripe wheat y 0.
 ;; Should-succeed: a lone maintain with the body 56 blocks off reaches the field and cuts the wheat.
 ;; Should-fail (control): none; the body on the field cuts the same wheat without a walk.
@@ -14,7 +14,7 @@
  [{:name "maintain-far-from-the-field-walks-there-and-cuts-the-wheat"
    :body {:at [4.5 0 14.5]}
    :act [[:job (jobs.farm.maintain {:area {:min #xyz [60 -1 16] :max #xyz [62 0 16]}})]]
-   :expect [{:no-event {:source :job :kind :waiting :data {:reason :away}} :for-s 10}
+   :expect [{:no-event {:source :job :kind :waiting :data {:reason :not-worth}} :for-s 10}
             {:event {:source :job :kind :completed :data {:kind :done}} :within-s 120 :of-job true}]
    :after [[:not-block [60 0 16] "wheat[age=7]"] [:not-block [62 0 16] "wheat[age=7]"]]}
   {:name "maintain-on-the-field-cuts-the-wheat"

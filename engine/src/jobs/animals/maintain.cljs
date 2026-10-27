@@ -14,9 +14,9 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.need :as need]
             [jobs.lib.pen-read :as pen-read]
-            [jobs.lib.standing :as standing]
             [jobs.lib.steps :as steps]
             [jobs.lib.util :as u]
+            [jobs.lib.walk-pick :as pick]
             [jobs.lib.waits :as waits]
             [jobs.lib.hunting :as hunting]
             [jobs.lib.world :as known]))
@@ -264,14 +264,12 @@
       later? (contract/later :plan-trouble trouble :why trouble)
       :else (contract/never :plan-trouble trouble :why trouble))))
 
-(declare quote-of)
-
 (def shear-wool "Wool a shorn sheep drops, the game's 1 to 3: 2 on average." 2)
 
-(defn pass
-  "{:worth :work-s} of a pass, as jobs.lib.standing/away-cause weighs it: cost/animal-worth of the animals its herd, breed
+(defn pass-worth
+  "Seconds a pass is worth: cost/animal-worth of the animals its herd, breed
   (one pair, one calf) and cull steps would add or kill, the item-value of the wool its shear and of the drops its collect
-  would take; and the mean job time of quote-of."
+  would take."
   [c]
   (let [{:keys [mob target]} (:args c)
         {:keys [adults babies drops shearable]} (facts c)
@@ -280,23 +278,24 @@
                    (max 0 (- adults (max 2 (- target babies)))))
         items (cond-> (mapv (fn [n] {:name n :count 1}) drops)
                 (= "sheep" mob) (conj {:name "white_wool" :count (* shear-wool shearable)}))]
-    {:worth (+ (* animals (cost/animal-worth mob)) (:value (cost/item-value items)))
-     :work-s (second (get-in (quote-of c) [:uses :job-time]))}))
+    (+ (* animals (cost/animal-worth mob)) (:value (cost/item-value items)))))
 
 (defn can-start?
-  "Never :no-box without a box or a plan, :no-mob without :mob or a plan; later for :plan-trouble, :away (another job can run, or the trip would delay the waiting ones by more than the pass is worth: jobs.lib.standing) or nothing to do."
+  "Never :no-box without a box or a plan, :no-mob without :mob or a plan; later for :plan-trouble, nothing to do, or :not-worth while even the least walk onto the pen costs more than the pass is worth (walk-pick/not-worth)."
   [c]
   (let [{:keys [plan box mob]} (:args c)
         {:keys [trouble] :as pen} (pen-read/pen-of c)
         c (if pen (with-pen c pen) c)
         {:keys [min max]} (pen-read/arg-box c)
-        away (when min (standing/away-cause c {:x (/ (+ (:x min) (:x max)) 2) :y (:y min) :z (/ (+ (:z min) (:z max)) 2)} pass))]
+        centre (when min {:x (/ (+ (:x min) (:x max)) 2) :y (:y min) :z (/ (+ (:z min) (:z max)) 2)})]
     (cond
       (not (or plan box)) (contract/never :no-box "maintain needs a :box or a :plan")
       (not (or plan mob)) (contract/never :no-mob "maintain needs a :mob or a :plan")
       trouble (can-run? c)
-      away (checks/cause-status :later away)
-      :else (pen-fact c))))
+      :else (let [fact (pen-fact c)
+                  cause (when (= :ok (first fact))
+                          (pick/not-worth c (when centre {:pos centre :range (u/flat-dist centre max)}) #(pass-worth c)))]
+              (if cause (checks/cause-status :later cause) fact)))))
 
 (defn report-with-skips
   "The report so far, plus the skip reason of each step not yet reached (a goal that holds mid-pass ends the run before them)."

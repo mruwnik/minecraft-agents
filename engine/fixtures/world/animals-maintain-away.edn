@@ -1,5 +1,5 @@
-;; Card 43f765ae: animals.maintain with no other job listed walks to its pen from far below it when alone; it waits :away only while another job can run. Pen on a stone platform x 6..20, z 12..22, top block y 10, fence ring x 9..15, z 13..19 at y 11 with a gate at x 9, z 16 (the pen is walked into to count), two cows inside.
-;; Should-succeed: a lone maintain with the body below the platform, out of sight of the pen, walks up a one-wide ramp and counts the cows; body on the platform, maintain runs; a maintain kept under repeat with the body below, out of sight, never waits :away and walks up the ramp, counts the cows, then rests (:already). Walk cases by day: at night the unseen pen is open ground in the dark. Should-fail: none.
+;; Card 43f765ae: animals.maintain with no other job listed walks to its pen from far below it: the pass is worth more than the walk, so it never waits :not-worth. Pen on a stone platform x 6..20, z 12..22, top block y 10, fence ring x 9..15, z 13..19 at y 11 with a gate at x 9, z 16 (the pen is walked into to count), two cows inside.
+;; Should-succeed: a lone maintain with the body below the platform, out of sight of the pen, walks up a one-wide ramp and counts the cows; body on the platform, maintain runs; a maintain kept under repeat with the body below, out of sight, never waits :not-worth and walks up the ramp, counts the cows, then rests (:already). Walk cases by day: at night the unseen pen is open ground in the dark. Should-fail: none.
 {:defaults
  {:tags [:animals :maintain :jobs]
   :plot {:height 18}
@@ -16,7 +16,7 @@
          [:summon "cow" [13.5 11 17.5]]
          [:http :submit (repeat (jobs.animals.maintain {:mob "cow" :target 2 :box {:min #xyz [10 11 14] :max #xyz [14 11 18]}})) [] {:ok true}]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :resting :after :already}} :within-s 100}
-            {:no-event {:source :job :kind :waiting :data {:reason :away}} :for-s 20}]
+            {:no-event {:source :job :kind :waiting :data {:reason :not-worth}} :for-s 20}]
    :limit-s 110}
   {:name "lone-one-shot-maintain-far-below-the-pen-walks-up"
    :time :day :time-why :dawn-decision
@@ -25,7 +25,7 @@
    :act [[:summon "cow" [11.5 11 15.5]]
          [:summon "cow" [13.5 11 17.5]]
          [:http :submit (jobs.animals.maintain {:mob "cow" :target 2 :box {:min #xyz [10 11 14] :max #xyz [14 11 18]}}) [] {:ok true}]]
-   :expect [{:no-event {:source :job :kind :waiting :data {:reason :away}} :for-s 20}
+   :expect [{:no-event {:source :job :kind :waiting :data {:reason :not-worth}} :for-s 20}
             {:event {:source :job :kind :completed :data {:kind :done :adults 2}} :within-s 90}]
    :limit-s 100}
   {:name "body-on-the-platform-maintains-the-pen"
@@ -33,5 +33,5 @@
    :act [[:summon "cow" [11.5 11 15.5]]
          [:summon "cow" [13.5 11 17.5]]
          [:http :submit (jobs.animals.maintain {:mob "cow" :target 2 :box {:min #xyz [10 11 14] :max #xyz [14 11 18]}}) [] {:ok true}]]
-   :expect [{:no-event {:source :job :kind :waiting :data {:reason :away}} :for-s 20}
+   :expect [{:no-event {:source :job :kind :waiting :data {:reason :not-worth}} :for-s 20}
             {:event {:source :job :kind :completed :data {:kind :done :adults 2}} :within-s 60}]}]}

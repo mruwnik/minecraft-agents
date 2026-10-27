@@ -166,10 +166,6 @@
   (if (>= s 1) ##Inf (* value (/ s (- 1 s)))))
 
 (defn trip [] (settings/get settings ::trip))
-(def unknown-wait-s
-  "Seconds a listed job's wait whose reason names no end is expected to last, however long it has lasted (memoryless):
-  the mean span of 3433 job waits in the event logs of 10 trial bodies (2026-10-23)."
-  91)
 (defn per-block [] (settings/get settings ::per-block))
 (defn per-dark [] (settings/get settings ::per-dark))
 (defn cells-of

@@ -20,6 +20,15 @@
   (let [f js/Math.floor]
     (* (max 0 (- (js/Math.hypot (- (f (:x from)) (f (:x pos))) (- (f (:z from)) (f (:z pos)))) (or range 0))) cost/least-block-s)))
 
+(defn not-worth
+  "{:reason :not-worth :worth :walk-s} while even the least walk from the body into walk (go-to args, nil: none) costs
+  more than the pass there is worth (worth: (fn [] seconds), asked only for a walk to make), else nil."
+  [c walk worth]
+  (let [s (if walk (walk-s (u/self-pos c) walk) 0)]
+    (when (pos? s)
+      (let [w (worth)]
+        (when (> s w) {:reason :not-worth :worth w :walk-s s})))))
+
 (defn risk-s
   "Seconds the risk of go-to's quote q costs the body (cost/risk-s): the hp its plan takes (its :uses :health) and
   extra-hurt hp besides, with its :risk's hurt and death chance."

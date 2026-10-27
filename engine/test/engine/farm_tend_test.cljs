@@ -467,34 +467,33 @@
             (is (= 9 (:refused w)))
             (is (= ["Miles"] (:owners w)))))))))
 
-(def far-box {:min {:x 202 :y 63 :z 2} :max {:x 204 :y 64 :z 4}})
-(def far-ripe
-  (world {:blocks (into {} (map (fn [[x z]] [(k (+ x 200) 63 z) "farmland"])) all-cells)}
-         {:blocks (into {} (map (fn [[x z]] [(k (+ x 200) 64 z) "wheat"])) all-cells)
-          :ages (into {} (map (fn [[x z]] [(k (+ x 200) 64 z) 7])) all-cells)}))
+(defn far-box [dx] {:min {:x (+ 2 dx) :y 63 :z 2} :max {:x (+ 4 dx) :y 64 :z 4}})
+(defn far-ripe [dx]
+  (world {:blocks (into {} (map (fn [[x z]] [(k (+ x dx) 63 z) "farmland"])) all-cells)}
+         {:blocks (into {} (map (fn [[x z]] [(k (+ x dx) 64 z) "wheat"])) all-cells)
+          :ages (into {} (map (fn [[x z]] [(k (+ x dx) 64 z) 7])) all-cells)}))
 
 (defn ^:async far-run
-  "Ripe wheat 200 blocks off; a job that always continues (listed, runnable) first when listed?."
-  [listed?]
-  (let [s (update (setup (assoc far-ripe :time 1000)) :eng #(assoc-in % [:jobs 'busy-other] {:round (fn ^:async busy [_c] :continue)}))]
-    (when listed? (core/submit! (:eng s) '(busy-other) {}))
-    (core/submit! (:eng s) (list 'jobs.farm.tend {:area far-box}) {})
+  "Nine ripe wheat seen dx blocks off."
+  [dx]
+  (let [s (setup (assoc (far-ripe dx) :time 1000))]
+    (core/submit! (:eng s) (list 'jobs.farm.tend {:area (far-box dx)}) {})
     (await (tu/run-ticks (:eng s) (:clock s) 3 700))
     s))
 
-(deftest a-tend-far-from-its-field-declines-while-another-job-is-listed
+(deftest a-tend-runs-when-its-ripe-crops-are-worth-the-least-walk-to-the-field
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (far-run true))]
-          (is (empty? (remove #(= "busy-other" (:name %)) (events-of s :round_started))))
-          (is (some #(= :away (:reason %)) (events-of s :waiting))))))))
+        (is (seq (events-of (await (far-run 150)) :round_started)) "nine ripe wheat are worth more than 150 blocks' walk")))))
 
-(deftest a-tend-far-from-its-field-runs-when-nothing-else-is-listed
+(deftest a-tend-waits-not-worth-while-the-least-walk-to-its-seen-field-costs-more-than-its-crops
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (seq (events-of (await (far-run false)) :round_started)))))))
+        (let [s (await (far-run 2000))]
+          (is (empty? (events-of s :round_started)))
+          (is (some #(= :not-worth (:reason %)) (events-of s :waiting))))))))
 
 (def high-box {:min {:x 202 :y 93 :z 2} :max {:x 204 :y 94 :z 4}})
 
@@ -512,13 +511,11 @@
     (await (tu/run-ticks (:eng s) (:clock s) 3 700))
     s))
 
-(deftest a-tend-under-repeat-far-below-its-field-does-not-wait-away
+(deftest a-tend-under-repeat-far-below-its-ripe-field-runs
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (below-run true))]
-          (is (seq (events-of s :round_started)))
-          (is (empty? (filter #(= :away (:reason %)) (events-of s :waiting)))))))))
+        (is (seq (events-of (await (below-run true)) :round_started)))))))
 
 (def unseen-cells (for [x (range 30 35) z (range 2 7)] [x z]))
 

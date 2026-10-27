@@ -12,6 +12,7 @@
             [engine.build-from-plan-test :as b]
             [engine.pen-build-test :as pb]
             [jobs.animals.maintain :as maintain]
+            [jobs.lib.cost :as cost]
             [jobs.lib.world-files :as ew]))
 
 (def box {:min {:x 0 :y 60 :z -5} :max {:x 8 :y 70 :z 5}})
@@ -442,21 +443,21 @@
 
 (def far-box {:min {:x 200 :y 60 :z -5} :max {:x 208 :y 70 :z 5}})
 
-(deftest a-pen-far-away-declines-while-another-job-is-listed-and-runs-when-none-is
+(deftest a-pen-far-away-runs-when-the-pass-is-worth-the-least-walk-and-waits-not-worth-when-not
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [world {:inventory [(wheat 4)] :entities [(cow 1 202) (cow 2 203)] :time 1000}
-              listed (update (h/setup world 50) :eng #(assoc-in % [:jobs 'busy-other] {:round (fn ^:async busy [_c] :continue)}))
-              alone (h/setup world 50)]
-          (core/submit! (:eng listed) '(busy-other) {})
-          (core/submit! (:eng listed) (spec {:box far-box}) {})
-          (core/submit! (:eng alone) (spec {:box far-box}) {})
-          (await (tu/run-ticks (:eng listed) (:clock listed) 3 700))
-          (await (tu/run-ticks (:eng alone) (:clock alone) 3 700))
-          (is (empty? (remove #(= "busy-other" (:name %)) (events-of listed :round_started))))
-          (is (some #(= :away (:reason %)) (events-of listed :waiting)) "the wait says the body is away")
-          (is (seq (events-of alone :round_started)) "alone in the queue it goes"))))))
+        (let [d (js/Math.round (/ (cost/animal-worth "cow") cost/least-block-s))
+              world {:inventory [(wheat 4)] :entities [(cow 1 (+ d 2)) (cow 2 (+ d 3))] :time 1000}
+              far (h/setup world 50)
+              farther (h/setup world 50)]
+          (core/submit! (:eng far) (spec {:box {:min {:x d :y 60 :z -5} :max {:x (+ d 8) :y 70 :z 5}}}) {})
+          (core/submit! (:eng farther) (spec {:box {:min {:x 5000 :y 60 :z -5} :max {:x 5008 :y 70 :z 5}}}) {})
+          (await (tu/run-ticks (:eng far) (:clock far) 3 700))
+          (await (tu/run-ticks (:eng farther) (:clock farther) 3 700))
+          (is (seq (events-of far :round_started)) "a walk of one cow's worth is worth the pair a pass adds")
+          (is (empty? (events-of farther :round_started)))
+          (is (some #(= :not-worth (:reason %)) (events-of farther :waiting))))))))
 
 (deftest a-pen-under-repeat-far-off-and-unseen-is-walked-to
   (async done

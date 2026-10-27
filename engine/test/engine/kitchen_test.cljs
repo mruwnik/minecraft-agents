@@ -230,27 +230,17 @@
     (are [step] (= given (get-in (kitchen/decide step args facts) [:call :args :chest]))
       :take :deposit)))
 
-(defn ^:async run-beside
-  "Submit a job that always continues (listed, runnable), then form, over the world; tick 3 times."
-  [form world]
-  (let [{:keys [eng] :as s} (update (setup (assoc world :time 15000)) :eng #(assoc-in % [:jobs 'busy-other] {:round (fn ^:async busy [_c] :continue)}))
-        eng (:eng s)]
-    (core/submit! eng '(busy-other) {})
-    (core/submit! eng form {})
-    (dotimes [_ 3] (await (core/tick! eng)))
-    s))
-
 (def far-chest {:x 200 :y 64 :z 0})
 
-(deftest a-kitchen-far-from-its-chest-declines-while-another-job-is-listed
+(deftest a-kitchen-waits-not-worth-while-the-least-walk-to-its-chest-costs-more-than-the-pass
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run-beside (list job (assoc args :chest far-chest)) {:inventory [(item "beef" 3)] :containers {"200,64,0" []}}))]
-          (is (empty? (remove #(= "busy-other" (:name %)) (events-of s :round_started))) "no pass starts")
-          (is (some #(= :away (:reason %)) (events-of s :waiting)) "the wait says the body is away"))))))
+        (let [s (await (run (list job (assoc args :chest {:x 5000 :y 64 :z 0})) {:inventory [(item "beef" 3)] :containers {"5000,64,0" []}} 3))]
+          (is (empty? (events-of s :round_started)) "no pass starts")
+          (is (some #(= :not-worth (:reason %)) (events-of s :waiting))))))))
 
-(deftest a-kitchen-far-from-its-chest-runs-when-nothing-else-is-listed
+(deftest a-kitchen-far-from-its-chest-runs-when-the-pass-is-worth-the-walk
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -268,17 +258,10 @@
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (seq (events-of s :round_started))))))))
 
-(deftest a-kitchen-near-its-chest-runs-while-another-job-is-listed
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (await (run-beside (list job args) {:inventory [(item "beef" 3)] :containers {"10,64,0" []}}))]
-          (is (seq (events-of s :round_started))))))))
-
 (def other-far-chest {:x 300 :y 64 :z 0})
 (def far-world {:inventory [(item "beef" 3)] :containers {"200,64,0" [] "300,64,0" []}})
 
-(deftest two-standing-kitchens-far-from-their-chests-do-not-wait-for-each-other
+(deftest two-repeat-kitchens-far-from-their-chests-do-not-wait-for-each-other
   (async done
     (tu/run-async done
       (fn ^:async t []

@@ -233,7 +233,6 @@
 (def expected-drops value/expected-drops)
 (def food-point-worth value/food-point-worth)
 (defn trip [] (value/trip))
-(def unknown-wait-s value/unknown-wait-s)
 (def field-share farm/share)
 (def grown-share farm/grown-share)
 (def sown-worth farm/sown-worth)

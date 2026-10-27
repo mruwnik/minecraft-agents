@@ -1,7 +1,7 @@
 ;; Card 7d401a4b (c31904f0): two one-shot site jobs, farm.tend at field A and animals.maintain at pen B, both far
 ;; from the body and from each other, do not hold each other off or drag the body between the sites: each walks to its own site and finishes.
 ;; Flat grass, 160 long. Body at x 8; wheat field at x 70..73 (ripe wheat on farmland, water beside); fenced pen x 130..138 with two cows inside.
-;; Should-succeed: both jobs complete, the wheat is cut, the body ends at the field it worked last (maintain ran first, then tend walked back), and neither waits :away. Should-fail: none.
+;; Should-succeed: both jobs complete, the wheat is cut, the body ends at the field it worked last (maintain ran first, then tend walked back), and neither waits :not-worth. Should-fail: none.
 {:defaults
  {:tags [:farm :animals :tend :maintain :jobs :scheduler]
   :time :any
@@ -17,7 +17,7 @@
          [:summon "cow" [135.5 0 17.5]]
          [:http :submit (jobs.farm.tend {:area {:min #xyz [70 -1 16] :max #xyz [73 0 16]}}) [] {:ok true}]
          [:http :submit (jobs.animals.maintain {:mob "cow" :target 2 :box {:min #xyz [131 0 14] :max #xyz [137 0 18]}}) [] {:ok true}]]
-   :expect [{:no-event {:source :job :kind :waiting :data {:reason :away}} :for-s 30}
+   :expect [{:no-event {:source :job :kind :waiting :data {:reason :not-worth}} :for-s 30}
             {:event {:source :job :kind :completed :data {:name "jobs.farm.tend"}} :within-s 200}
             {:event {:source :job :kind :completed :data {:name "jobs.animals.maintain" :kind :done :adults 2}} :within-s 280}]
    :after [[:not-block [70 0 16] "wheat[age=7]"] [:body-near [71.5 0 15.5] 10]]}]}
