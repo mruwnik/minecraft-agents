@@ -358,7 +358,10 @@
     (is (= bow (caught/prior "skeleton" 20)) "one group")
     (is (< (:chance bow) (:chance zombie)) "caught less often than by a zombie")
     (is (< (:blows bow) (:blows zombie)) "and hit fewer times when it is")
-    (is (= zombie (caught/prior "spider" 20)) "a group not counted is priced as the zombie family")))
+    (is (= zombie (caught/prior "spider" 20)) "a group not counted is priced as the zombie family")
+    (let [at (fn [d mob] (settings/with-settings {:jobs.lib.cost.threat/difficulty d} #(:blows (caught/prior mob 20))))]
+      (is (< (js/Math.abs (- (* 1.5 (at 1 "skeleton")) (at 3 "skeleton"))) 1e-9) "on hard a skeleton shoots 1.5x as often as on easy, where the arrows were counted")
+      (is (= (at 1 "zombie") (at 3 "zombie")) "a zombie's blow count does not change with difficulty"))))
 
 (deftest spawn-chance-is-zero-where-a-mob-cannot-spawn
   (let [lit (fn [block sky] (fn [_] {:block block :sky sky}))

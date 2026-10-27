@@ -1120,7 +1120,7 @@
                         (count (tu/walked-to eng))))
               walks #(settings/with-settings {:jobs.lib.cost.threat/difficulty 3} (fn [] (walks %)))]
           (is (zero? (await (walks 0))) "two shooting: walking away is cheaper, declined, no walk")
-          (is (zero? (await (walks 2))) "fled twice lately: three walks still cost less than closing on two shooters unarmoured"))))))
+          (is (pos? (await (walks 2))) "fled twice lately: three walks, each caught at the bow prior's arrows at hard's shot rate (cost.caught/prior), cost more than closing on two shooters"))))))
 
 (deftest hostile-near-counts-ranged-mobs-out-to-the-ranged-radius
   (is (holds? {:entities [(skeleton 1 13 0)]} {:radius 8 :ranged-radius 16}) "a skeleton at 13")
@@ -1887,7 +1887,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[d decision prices] [[1 :fight {:fight 36 :flee 50}] [2 :fight {:fight 47 :flee 69}] [3 :fight {:fight 96 :flee 163}]]]
+        (doseq [[d decision prices] [[1 :fight {:fight 36 :flee 50}] [2 :fight {:fight 47 :flee 69}] [3 :fight {:fight 199 :flee 310}]]]
           (let [world {:inventory sword :equipment iron-armour :entities [(assoc (skeleton 1 10 0) :visible true)]}
                 {:keys [seen]} (await (settings/with-settings {:jobs.lib.cost.threat/difficulty d} #(flight-round respond world)))
                 [e] (filter #(= :hostile.decided (:kind %)) @seen)]
