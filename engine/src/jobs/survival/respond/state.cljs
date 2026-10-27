@@ -9,7 +9,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-look :as dig-look]
-            [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
             [jobs.lib.shot :as shot]
             [jobs.lib.threats :as threats]
@@ -84,10 +84,10 @@
   (boolean (some #(<= (u/dist % pos) (settings/get settings ::died-radius)) spots)))
 
 (defn dark-end?
-  "A fn of a feet cell: whether it is dark (sh-sense/dark-fn) when ::prefer-lit? holds, else nil."
+  "A fn of a feet cell: whether it is dark (look/dark-fn) when ::prefer-lit? holds, else nil."
   [p]
   (when (settings/get settings ::prefer-lit?)
-    (when-let [{:keys [at]} (sh-sense/dark-fn p)]
+    (when-let [{:keys [at]} (look/dark-fn p)]
       (fn [{:keys [x y z]}] (= 1 (at x y z))))))
 
 (defn avoid-ends

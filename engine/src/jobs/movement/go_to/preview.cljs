@@ -6,12 +6,12 @@
   - Its quote (./bin/quote) is a dry run: one plan from where the body stands with the call's args, nothing walked,
     opened or dug, and :risk its walk risk (jobs.lib.walk-risk/estimate of the plan, the one danger figure a caller weighs). :uses :job-time [s s 3s] from the planner's seconds (partial or no route: no most; none and no way that
     changes the world: ##Inf), :health the planned damage, :moves-to the goal cell, and :route {:found :length :seconds
-    :summary :steps :moves :doors :waypoints :damage :drown :nodes :dark :dark-seconds} (:dark: feet cells seen dark, or unseen at night; :dark-seconds the planner's extra seconds for them), or {:found false :reason :near :partial} (:reason
+    :summary :steps :moves :doors :waypoints :damage :drown :nodes :dark :dark-seconds} (:dark: feet cells seen dark, or unseen and guessed dark; :dark-seconds the planner's extra seconds for them), or {:found false :reason :near :partial} (:reason
     as :why, :bad-pos and other refusals, :searching while the quote's budgeted search has not ended); with :unknown :unseen-floors and :dark-best."
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.cost.planner :as cost-planner]
-            [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.toll-cells :as tc]
             [jobs.lib.walk :as walk]
@@ -54,10 +54,10 @@
     (pos? (or (.-drown (.-cost path)) 0)) (assoc :drown (/ (js/Math.round (* 10 (.-drown (.-cost path)))) 10))))
 
 (defn dark-cells
-  "How many feet cells of steps sh-sense/dark-fn reads dark (seen dark; unseen at night unless unknown, whose mask prices
+  "How many feet cells of steps look/dark-fn reads dark (seen dark; unseen by its guess unless unknown, whose mask prices
   them), nil without a perception."
   [p steps unknown]
-  (when-let [{:keys [at]} (sh-sense/dark-fn p {:unseen-dark? (nil? unknown)})]
+  (when-let [{:keys [at]} (look/dark-fn p {:unseen-dark? (nil? unknown)})]
     (count (into #{} (comp (map (fn [s] (mapv #(js/Math.floor (% s)) [:x :y :z]))) (filter (fn [[x y z]] (= 1 (at x y z))))) steps))))
 
 (defn u-dist

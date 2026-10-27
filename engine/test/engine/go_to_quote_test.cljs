@@ -280,7 +280,7 @@
               dark (await (dark-of {:time night-ms :light [15 0] :seen? true}))]
           (is (< lit 2) "seen and lit: at most the cell under the body, which its own sight does not show")
           (is (= 11 dark) "seen dark: every cell of the 11-step route"))
-        (is (= 11 (await (dark-of {:time night-ms :light [15 4] :seen? false}))) "unseen at night reads dark")
+        (is (= 11 (await (dark-of {:time night-ms :light [15 0] :seen? false}))) "unseen at night under the open sky reads dark")
         (is (zero? (await (dark-of {:time 1000 :light [15 0] :seen? false}))) "unseen by day costs like a lit one")))))
 
 (def gate-blocks

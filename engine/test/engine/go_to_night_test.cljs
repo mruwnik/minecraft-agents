@@ -200,18 +200,13 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [clock (atom 1000000)
-              [seen sink] (tu/legacy-capture-sink)
-              p (sky/with-sky (tu/seeing-all (tu/fake-on-floor (-> (night-hut {})
-                                                        (update :blocks merge {"10,64,0" "short_grass" "11,64,0" "short_grass"})
-                                                        (assoc :drops {"short_grass" "wheat_seeds"})))))
-              eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all
-                                :dir (tu/tmp-dir) :now #(deref clock)
-                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-          (let [id (core/submit! eng '(jobs.gather.get-seeds {:count 2}) {})]
-            (await (ticks eng 6))
-            (is (= inside (st/pos-of p)))
-            (is (= :dark (:reason (waiting-of eng id))))))))))
+        (let [{:keys [eng p]} (setup (-> (night-hut {})
+                                         (update :blocks merge {"10,64,0" "short_grass" "11,64,0" "short_grass"})
+                                         (assoc :drops {"short_grass" "wheat_seeds"})))
+              id (core/submit! eng '(jobs.gather.get-seeds {:count 2}) {})]
+          (await (ticks eng 6))
+          (is (= inside (st/pos-of p)))
+          (is (= :dark (:reason (waiting-of eng id)))))))))
 
 (def oak-tree
   "A trunk of four logs with leaves on top, outside the hut."

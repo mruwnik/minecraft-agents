@@ -106,8 +106,8 @@
     (mapv #(assoc %1 :t (/ %2 speed)) cells (along cells))))
 
 (defn estimate-inputs
-  "What estimate reads of c's body and world for the walk to `goal` (estimate's opts), as values: the body's feet, whether
-  it is buried, its shelter, death-body and food, the known threats and hides, the memory epoch of what it knows, the sky's
+  "What estimate reads of c's body and world for the walk to `goal` (estimate's opts), as values: the body's feet,
+  its shelter, death-body and food, the known threats and hides, the memory epoch of what it knows, the sky's
   darkening now, the cells its look round has looked at, and what the way is priced by as perceived now: its cells, the
   seconds of it spent where a mob could spawn and the hp of the lava seen near it, and the reach of the threats it prices
   (:weights, their fields' cells, which change as cells they read are seen anew). :cells, :catchers and :remembered are derived, left out of a key."
@@ -115,7 +115,6 @@
   (let [p (:primitives c)
         feet (sh-sense/feet p)
         goal (update goal :y #(or % (:y feet)))
-        underground? (sh-sense/buried? p)
         shelter (:data (ctx/latest c :shelter))
         there (way feet goal plan)
         stay-s (or stay-s 0)
@@ -136,8 +135,8 @@
      :weights (mapv #(:weights (field/field-of c %)) (concat catchers remembered))
      :memory (sense/known-memory p) :sky (sh-sense/sky-subtract-now p) :looked (sense/round-looked c)
      :exposed-s (+ (/ exit (cost/walk-blocks-per-s))
-                   (spawn-light/dark-seconds p cells (mapv #(/ % (cost/walk-blocks-per-s)) (along cells)) (:y feet) underground? caves-free?)
-                   (if (and (pos? stay-s) (pos? (spawn-light/chance-at p (nth cells stay-at) (:y feet) underground? caves-free?))) stay-s 0))
+                   (spawn-light/dark-seconds p cells (mapv #(/ % (cost/walk-blocks-per-s)) (along cells)) caves-free?)
+                   (if (and (pos? stay-s) (pos? (spawn-light/chance-at p (nth cells stay-at) caves-free?))) stay-s 0))
      :lava (route-lava-hp p cells)}))
 
 (defn estimate-of
@@ -167,7 +166,7 @@
   goal first (its cell's seconds in the route, its spawns by the light there): hp the expected damage and lethal-hp,
   the death the spawns and known threats risk (cost/death-chance) in hp (cost/lethal-hp), walk-hp the
   same leaving out the sensed mobs that catch the walk, their hurt and their death share both (a fight with them prices
-  them); death-hp the remembered threats' hurt, hostile-hp what the catchers add to it, all met in one route-parts; dark-s the seconds walked where a mob could spawn (caves-free?: no unseen cell guessed a dark cave); threats [{:mob :pos}] the known threats priced."
+  them); death-hp the remembered threats' hurt, hostile-hp what the catchers add to it, all met in one route-parts; dark-s the seconds walked where a mob could spawn (caves-free?: no unseen cell guessed dark); threats [{:mob :pos}] the known threats priced."
   [c goal & [opts]]
   (estimate-of c (estimate-inputs c goal opts)))
 
@@ -203,7 +202,7 @@
     {:goal goal :route-hp route-hp :feet feet :health (.-health (.self p)) :cannot-heal? (price/cannot-heal? c)
      :body (threats/death-body c) :memory (sense/known-memory p)
      :live live :weights (mapv #(:weights (field/field-of c %)) live)
-     :chance (spawn-light/chance-at p (update-vals feet js/Math.floor) (:y feet) false false)}))
+     :chance (spawn-light/chance-at p (update-vals feet js/Math.floor) false)}))
 
 (defn stay-estimate
   "hp the body expects to lose staying at its cell instead of walking `route-hp` to `goal` (stay-inputs): what the known threats
@@ -226,11 +225,9 @@
   "Whether waiting may lower the price of the walk over cells (estimate-inputs' :cells) whose estimate is est: the body
   heals toward affording it (heal-s), dawn lights a cell of it, or a threat it prices moves or fades."
   [c cells {:keys [threats]} heal-s]
-  (let [p (:primitives c)
-        feet-y (:y (sh-sense/feet p))
-        underground? (sh-sense/buried? p)]
+  (let [p (:primitives c)]
     (or (pos? heal-s) (seq threats)
-        (boolean (some #(spawn-light/dawn-lowers? p % feet-y underground?) cells)))))
+        (boolean (some #(spawn-light/dawn-lowers? p %) cells)))))
 
 (defn status
   "Ok while the estimated damage of the walk to `goal` on plan (go-to's, else the one its round held on, planned) is within

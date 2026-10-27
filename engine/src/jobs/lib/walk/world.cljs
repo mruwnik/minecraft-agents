@@ -31,7 +31,7 @@
    ::max-damage {:default false :doc "The most hp every walk of this body may spend (0 or more), false: no cap but the budget. A job's own :max-damage wins." :spec (a/or-of false? (a/num-in 0 nil))}
    ::dangers {:default true :doc "Whether walks plan to keep away from known dangers; false plans straight past them (a walk up to the hostile being fought)." :spec boolean?}
    ::zone-tolls {:default true :doc "Whether walks also toll the cells of other bodies' zones near each walk (jobs.lib.toll-cells/zone-walk-tolls), so a way round a neighbour's field is taken; none under the call's :ignore-zones?." :spec boolean?}
-   ::dark {:default true :doc "Whether walks cost a dark cell (seen dark, or unseen at night) twice a lit one; false plans dark cells like lit ones." :spec boolean?}
+   ::dark {:default true :doc "Whether walks cost a dark cell (seen dark, or unseen and guessed dark) twice a lit one; false plans dark cells like lit ones." :spec boolean?}
    ::y-margin {:default false :doc "Blocks a walk's search may reach above the higher and below the lower of body and goal (a route dipping deeper, such as through deep caves, is not planned); false: 96, and a buried body's dive floor applies." :spec (a/or-of false? (a/int-in 0 nil))}
    ::rock-beyond {:default 3 :doc "Under ground (no sky light at the feet; head not under water), the blocks beyond every seen open cell, the feet and the goal past which a walk over what the body has seen (go-to :unknown) reads a cell it never saw as rock, not air (jobs.lib.walk.rock); false: every unseen cell reads air." :spec (a/or-of false? (a/int-in 1 15))}
    ::unknown-max-nodes {:default 12000 :doc "The most nodes a walk's search over what the body has seen only (go-to :unknown) holds before it ends :budget: a goal no seen route reaches floods unseen cells otherwise to the planner's limit (200000)." :spec (a/int-in 1000 nil)}
@@ -289,7 +289,7 @@
     #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers dangers :avoid (.-avoid pw) :dark (.-dark pw) :tolls (.-tolls pw)}))
 
 (defn with-dark
-  "pw whose plans cost dark cells more (the planner's options.dark): dark is sh-sense/dark-fn's {:at ..} (nil: pw). A dark
+  "pw whose plans cost dark cells more (the planner's options.dark): dark is look/dark-fn's {:at ..} (nil: pw). A dark
   cell costs cost/dark-factor of kit (kit-of; nil: the floor) times its own seconds more. With a kit, a cell water
   (look/water-fn's class, nil: none) gives costs its class's cost/water-factors too, by day as well: a drowned keeps to the
   water, and a dark one pays the land mobs' dark-factor on top (classes 4 and 5: dark 2 and 3); a phantom floor beside
@@ -322,7 +322,7 @@
 
 (defn costed-world
   "pw (the primitives' pathWorld) costed the way go-to plans: with the mobs the body knows may hurt it, each over its
-  field (dangers?, jobs.lib.threats threat-tolls; planner-dangers keeps plans off sensed mobs' cells and deaths by terrain) and with dark cells (dark?, sh-sense/dark-fn; over a
+  field (dangers?, jobs.lib.threats threat-tolls; planner-dangers keeps plans off sensed mobs' cells and deaths by terrain) and with dark cells (dark?, look/dark-fn; over a
   masked pw an unseen cell is priced by the mask, not as dark) and with the steps the walker failed at (jobs.lib.walk.edges).
   Every search that ranks routes by cost plans over this.
   keep? (a fn of a known threat): only the threats it holds of are tolled (a flight races its chasers instead)."
@@ -333,7 +333,7 @@
     dark? (as-> pw' (let [kit (kit-of c)
                           wet (cost/water-factors kit)
                           phantom (cost/unseen-water-factors kit wet)]
-                      (with-dark pw' (sh-sense/dark-fn (:primitives c) {:unseen-dark? (nil? (unknown-of pw))})
+                      (with-dark pw' (look/dark-fn (:primitives c) {:unseen-dark? (nil? (unknown-of pw))})
                                  (look/water-fn (:primitives c) {:wet? (water-read-fn pw) :phantom? (phantom-read-fn pw) :lags (count phantom)}) kit wet phantom)))
     true (with-edges (edges/tolls (:primitives c)))))
 

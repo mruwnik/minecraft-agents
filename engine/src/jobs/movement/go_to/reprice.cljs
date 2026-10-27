@@ -10,7 +10,6 @@
             [jobs.lib.danger :as danger]
             [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
-            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.util :as u]
             [jobs.lib.walk :as wwalk]
@@ -33,21 +32,19 @@
 
 (defn safe-prefix
   "The plan to walk of a plan that stops short of pos and whose walk to pos is within price/allowed but for the unseen
-  cells guessed dark caves (risk/estimate's caves-free?): its steps before the first where a mob could spawn
-  (spawn-light/chance-at), when that step is such a guess (spawn-light/cave-guess?: a look may show it lit), and they leave
+  cells guessed dark (risk/estimate's caves-free?): its steps before the first where a mob could spawn
+  (spawn-light/chance-at), when that step is such a guess (spawn-light/dark-guess?: a look may show it lit), and they leave
   the body's cell and pass status, with :cut-rest the look-ahead steps from that step on (drive/follow! walks to the cut,
   looks there and plans again, priced by what it then sees: a dark cave stays dark to a look, so it is never walked on a
   cut); the plan itself when no step is one and it passes status to its end. Else nil."
   [c pos plan]
   (let [p (:primitives c)
-        feet-y (:y (sh-sense/feet p))
-        underground? (sh-sense/buried? p)
-        [prefix more] (split-with #(zero? (spawn-light/chance-at p % feet-y underground? false)) (:steps plan))
+        [prefix more] (split-with #(zero? (spawn-light/chance-at p % false)) (:steps plan))
         steps (vec prefix)
         end (peek steps)
         feet (mapv js/Math.floor ((juxt :x :y :z) (u/self-pos c)))]
     (when (and (not= "found" (:status plan)) end
-               (or (empty? more) (spawn-light/cave-guess? p (first more) feet-y underground?))
+               (or (empty? more) (spawn-light/dark-guess? p (first more)))
                (not= feet (mapv js/Math.floor ((juxt :x :y :z) end)))
                (<= (:hp (risk/estimate c pos {:plan plan :caves-free? true})) (price/allowed c))
                (= :ok (first (status c end (assoc plan :status "found" :steps steps)))))

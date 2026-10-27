@@ -13,9 +13,7 @@
             [jobs.lib.util :as u]))
 
 (a/defargs settings
-  {::surface-band {:default 4 :spec (a/num-in 0 nil)
-                   :doc "Blocks below the body's feet that unseen ground still counts as open surface; deeper is underground, where only hostiles count."}
-   ::step {:default 4 :spec (a/num-in 1 nil)
+  {::step {:default 4 :spec (a/num-in 1 nil)
            :doc "Blocks between the cells of the way whose light is judged; a way longer than ::max-cells steps is judged at that many cells, spaced wider."}
    ::max-cells {:default 256 :spec (a/int-in 1 nil)
                 :doc "Most cells of the way whose light is judged, so a far goal costs a bounded number of reads."}})
@@ -31,11 +29,6 @@
   [p to]
   (sh-inside/dark-hall-at? p (hall-cell p to)))
 
-(defn deep?
-  "Whether an unseen cell is guessed a cave, not open surface: the body is underground, or the cell lies below the surface band."
-  [cell feet-y underground?]
-  (or underground? (< (:y cell) (- feet-y (settings/get settings ::surface-band)))))
-
 (defn seen-light
   "The block light of cell, nil when the body has not seen it and cannot see it by turning to it."
   [p cell]
@@ -44,37 +37,38 @@
 (defn- night? [p] (not (look/lit-light? 0 15 (sh-sense/sky-subtract-now p))))
 
 (defn- chance-by
-  "chance-at with the sky dark (night) or lit."
-  [p cell feet-y underground? caves-free? night]
+  "chance-at with the sky dark (night) or lit (an unseen cell guessed by full day)."
+  [p cell caves-free? night]
   (let [sky (if night 0 15)
         cell (if (sh-sense/solid-at? p cell) (update cell :y inc) cell)
         block (seen-light p cell)]
     (cond
       block (cost/spawn-chance [(:x cell) (:y cell) (:z cell)]
                                {:light (constantly {:block block :sky (cond (sh-sense/sky-reaches-from-above? p cell) sky (and (< block (look/dark-light)) (hall-at? p cell)) 0 :else 15)})})
-      (deep? cell feet-y underground?) (if caves-free? 0 (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block 0 :sky 0})}))
-      :else (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block 0 :sky sky})}))))
+      (or (look/unseen-lit? p cell (when-not night 0)) (and caves-free? (not (look/unseen-lit? p cell 0)))) 0
+      :else (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block 0 :sky 0})}))))
 
 (defn chance-at
-  "The spawn chance per second at `cell` for a body at feet: a seen cell by its light (sky reaching it down its column; a roofed cell is dark only in a dark hall), an unseen one
-  at the worse case (Q16): by the open-sky guess when it lies within the surface band below the feet and the body is not
-  underground, else as a dark cave (a goal above the body is no sign that the ground at its own level is a cave), none
-  under caves-free?."
-  [p cell feet-y underground? caves-free?]
-  (chance-by p cell feet-y underground? caves-free? (night? p)))
+  "The spawn chance per second at `cell`: a seen cell by its light (sky reaching it down its column; a roofed cell is dark
+  only in a dark hall), an unseen one by the guess of its light (look/unseen-lit?); none under caves-free? for an unseen
+  one full day would not light either (dark-guess?)."
+  [p cell caves-free?]
+  (chance-by p cell caves-free? (night? p)))
 
 (defn dawn-lowers?
   "Whether day would lower chance-at at cell: it is night and the cell's light comes from the sky."
-  [p cell feet-y underground?]
-  (and (night? p) (< (chance-by p cell feet-y underground? false false) (chance-at p cell feet-y underground? false))))
+  [p cell]
+  (and (night? p) (< (chance-by p cell false false) (chance-at p cell false))))
 
-(defn cave-guess?
-  "Whether chance-at prices cell only by the unseen worst case of a dark cave (caves-free? undoes it) that a look may yet
-  show lit: one a look would show dark (look/dark-in-sight?) is no guess."
-  [p cell feet-y underground?]
+(defn dark-guess?
+  "Whether chance-at prices cell only by the guess that it is dark (caves-free? undoes it) that a look may yet show lit:
+  an unseen cell even full day would not light (look/unseen-lit? by day: guessed out of the sky's reach, where only a
+  light it has not seen would light it). One dark by the night sky alone, or one a look would show dark
+  (look/dark-in-sight?), is no guess."
+  [p cell]
   (let [cell (if (sh-sense/solid-at? p cell) (update cell :y inc) cell)]
-    (and (deep? cell feet-y underground?)
-         (nil? (seen-light p cell))
+    (and (nil? (seen-light p cell))
+         (not (look/unseen-lit? p cell 0))
          (pos? (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block 0 :sky 0})}))
          (not (look/dark-in-sight? p cell)))))
 
@@ -82,12 +76,12 @@
   "Seconds of the walk over cells where a mob could spawn (chance-at), times (seconds from the start at each cell): every
   k-th cell and the last stand for the stretch walked since the one before, k the larger of ::step and the cells over
   ::max-cells."
-  [p cells times feet-y underground? caves-free?]
+  [p cells times caves-free?]
   (let [n (count cells)
         k (js/Math.ceil (max (settings/get settings ::step) (/ n (settings/get settings ::max-cells))))
         ends (distinct (concat (range k n k) [(dec n)]))]
     (reduce + (for [[a b] (map vector (cons 0 ends) ends)
-                    :when (pos? (chance-at p (nth cells b) feet-y underground? caves-free?))]
+                    :when (pos? (chance-at p (nth cells b) caves-free?))]
                 (- (times b) (times a))))))
 
 (defn spawns-over
@@ -95,15 +89,13 @@
   where the body stands) of a walk: cost/spawn-chance a second over its dark-seconds."
   [p cells]
   (if (next cells)
-    (let [feet (sh-sense/feet p)]
-      (* (cost/spawn-chance [0 0 0])
-         (dark-seconds p (vec cells) (mapv :t cells) (:y feet) (sh-sense/buried? p) false)))
+    (* (cost/spawn-chance [0 0 0]) (dark-seconds p (vec cells) (mapv :t cells) false))
     0))
 
 (defn spawns-at
   "The mobs (an expected count) met spawning in secs seconds held at cell (chance-at of the body's place)."
   [p cell secs]
-  (* secs (chance-at p (update-vals (select-keys cell [:x :y :z]) js/Math.floor) (:y (sh-sense/feet p)) false false)))
+  (* secs (chance-at p (update-vals (select-keys cell [:x :y :z]) js/Math.floor) false)))
 
 (defn walked
   "Cells ({:x :y :z} or [x y z]) walked one after another from `from` at cost/walk-blocks-per-s, timed for spawns-over:

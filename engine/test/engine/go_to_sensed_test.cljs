@@ -1100,27 +1100,29 @@
           (is (= {:arrived true} (select-keys out [:arrived])) (str (pr-str out) " at " (:pos (fake/self p)))))))))
 
 (def tunnel-into-cave
-  "A buried stone tunnel (floor y 63, feet and head y 64..65) lit from x -2 to 20 along z 0 and on to z 2 at x 20, where it
-  opens north into a dark cave (x 14..26, y 64..68, z 3..34) the tunnel's rock hides until the turn."
+  "A buried stone tunnel (floor y 63, feet and head y 64..65) lit (block light 3) from x -2 to 20 along z 0 and on to z 2
+  at x 20, where it opens north into a dark cave (x 14..26, y 64..68, z 3..34) the tunnel's rock hides until the turn; the
+  light spills 2 blocks into it at x 20."
   {:blocks (apply dissoc (box -3 63 -1 27 69 35 "stone")
                   (concat (for [x (range -2 21) y [64 65]] (str x "," y ",0"))
                           (for [z [1 2] y [64 65]] (str "20," y "," z))
                           (for [x (range 14 27) y (range 64 69) z (range 3 35)] (str x "," y "," z))))
-   :light (into {} (for [[x z] (concat (for [x (range -2 21)] [x 0]) [[20 1] [20 2]]) y [64 65]] [[x y z] [0 15]]))})
+   :light (into {} (concat (for [[x z] (concat (for [x (range -2 21)] [x 0]) [[20 1] [20 2]]) y [64 65]] [[x y z] [0 3]])
+                           (for [y [64 65] [z l] [[3 2] [4 1]]] [[20 y z] [0 l]])))})
 
 (def tunnel-with-locked-gate
   "tunnel-into-cave with a locked fence gate across the tunnel at x 17 and a lit way round it, 6 blocks longer, along z -3."
   (let [round (for [[x z] (concat (for [z (range -3 0)] [16 z]) (for [z (range -3 0)] [18 z]) [[17 -3]]) y [64 65]] (str x "," y "," z))]
     (-> tunnel-into-cave
         (update :blocks #(-> (apply dissoc (merge (box -3 63 -8 27 69 -2 "stone") %) (concat round ["17,64,0"])) (assoc "17,64,0" "oak_fence_gate")))
-        (update :light into (for [k round] [(mapv js/parseInt (.split k ",")) [0 15]]))
+        (update :light into (for [k round] [(mapv js/parseInt (.split k ",")) [0 3]]))
         (assoc :states {"17,64,0" {:open false :facing "east" :locked true}}))))
 
 ;; the plan runs on from the lit tunnel into the cave, unseen when planned: its walk stops at the cut before the first step
 ;; guessed a dark cave, looks, and is priced by the dark it then sees, on every way the walk could go on past the cut
 ;; unpriced: the look-ahead finding the cells open, a refresh refused (the old plan kept), the plan walked unwatched
 (defn ^:async walk-into-cave
-  "go-to from the tunnel's west end to the cave, a hurt, fed body that may risk 0.2 hp and heals while it waits: {:out :cave :turn} (cave the cells of the cave it stood in, turn those at the tunnel's turn, x 20 z 1..2)."
+  "go-to from the tunnel's west end to the cave, a hurt, fed body that may risk 0.2 hp and heals while it waits: {:out :cave :turn} (cave the cells of the cave past the spilled light it stood in, turn those at the tunnel's turn, x 20 z 1..2)."
   [& [tunnel]]
   (let [tunnel (or tunnel tunnel-into-cave)
         cells (atom #{})
@@ -1133,7 +1135,7 @@
                                              (:states tunnel) (assoc :states (:states tunnel)))
                                            {:pos [20 64 32] :range 1 :ways #{:walk} :unknown true} track!)))]
     {:out out
-     :cave (sort (filter #(>= (nth % 2) 3) @cells))
+     :cave (sort (filter #(>= (nth % 2) 5) @cells))
      :turn (sort (filter #(and (= 20 (first %)) (<= 1 (nth % 2) 2)) @cells))}))
 
 (deftest go-to-from-a-lit-tunnel-into-a-dark-cave-prices-the-cave-before-it-walks-in
@@ -1198,7 +1200,7 @@
                                                    (fn [{:keys [p]}] (swap! (fake/state p) assoc :light-default [0 0] :pitch 30))))
               replans (filter #(= :replan (:kind %)) seen)]
           (is (= :one-way (:why out)) (pr-str out))
-          (is (= 9 (count replans)) "the same count every run: the walk clock is stopped"))))))
+          (is (= 23 (count replans)) "the same count every run: the walk clock is stopped"))))))
 
 ;; the walls hide the room: past what sight has reached the planner reads the next wall cell as open, so the walk learns
 ;; a wall cell a sight's reach on, again and again, while it walks on; none of that is a stretch to give up

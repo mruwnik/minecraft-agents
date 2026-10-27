@@ -90,7 +90,7 @@
            :engine {:warned (atom #{})} :view (fn [] {:data mem/empty-data :now 0})}
         p (:primitives c)
         secs (settings/get log-out/settings ::log-out/return-s)
-        chance (spawn-light/chance-at p (sh-sense/feet p) (:y (sh-sense/feet p)) false false)
+        chance (spawn-light/chance-at p (sh-sense/feet p) false)
         stay-lethal (- (price/stay-hp c chance secs) (:hurt (price/stay-parts c chance secs)))]
     (is (pos? stay-lethal) "a dark open spot at night: mobs may spawn there")
     (is (> 1e-9 (js/Math.abs (- stay-lethal (/ (log-out/back-death-cost c) (health/walk-hp-seconds))))) "no flat night prior: the stay price's death, in seconds")))

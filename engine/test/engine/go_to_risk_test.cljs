@@ -168,14 +168,19 @@
     (is (zero? (dark-s)) "the rest is a seen, torch-lit line at night")
     (is (pos? (with-redefs [sh-sense/seen-cell? (constantly false) look/glimpse? (constantly false)] (dark-s))) "an unseen rest is open ground at night")))
 
-(deftest unseen-ground-below-the-surface-band-or-round-a-body-underground-is-priced-as-a-dark-cave
-  (let [c (ready-test/ctx-of day-world)]
+(deftest unseen-ground-is-priced-by-the-light-the-body-perceives-not-by-its-depth-or-the-clock
+  (let [open {:time st/noon :self {:pos {:x 0.5 :y 64 :z 0.5}}}
+        lit-by (fn [c light] (swap! (fake/state (:primitives c)) assoc :light-default light) c)
+        c (ready-test/ctx-of open)
+        sealed (lit-by (ready-test/ctx-of open) [0 0])
+        lit-hall (lit-by (ready-test/ctx-of (assoc open :time st/night)) [0 14])]
     (with-redefs [sh-sense/seen-cell? (constantly false) look/glimpse? (constantly false)]
       (is (zero? (:dark-s (risk/estimate c {:x 95 :y 64 :z 0}))) "unseen open ground by day is lit by the sky")
       (is (zero? (:dark-s (risk/estimate c {:x 95 :y 84 :z 0}))) "a goal above the body makes no cave of the ground at its level")
-      (is (pos? (:dark-s (risk/estimate c {:x 5 :y 20 :z 90}))) "unseen ground far below may be a cave")
-      (is (pos? (with-redefs [sh-sense/buried? (constantly true)] (:dark-s (risk/estimate c {:x 95 :y 64 :z 0}))))
-          "by day too, unseen ground level with a body underground may be a cave"))))
+      (is (pos? (:dark-s (risk/estimate c {:x 5 :y 20 :z 90}))) "unseen ground far below is under ground more likely than not")
+      (is (pos? (:dark-s (risk/estimate sealed {:x 95 :y 64 :z 0}))) "by day too, round a body no sky light reaches")
+      (is (zero? (:dark-s (risk/estimate lit-hall {:x 10 :y 64 :z 0})))
+          "at night, unseen ground beside a body in block light 14 is lit (the old guess read it dark by the clock)"))))
 
 (deftest a-held-plan-is-kept-until-the-body-moves-or-a-block-it-knows-changes
   (let [m (atom {})

@@ -13,7 +13,9 @@
             [engine.perception :as perception]
             [engine.perception.light :as light]
             [engine.perception.rays :as rays]
-            [engine.perception.store :as store]))
+            [engine.perception.store :as store]
+            [jobs.lib.cost.rise :as rise]
+            [jobs.lib.walk.rock :as rock]))
 
 (a/defargs settings
   {::glance-ahead {:default 4 :spec (a/num-in 0 nil) :doc "How far ahead a level look takes in, in blocks."}
@@ -362,10 +364,162 @@
   [block sky subtract]
   (or (pos? block) (>= (- sky subtract) (dark-light))))
 
-(defn dark-guess?
-  "The guess for a cell the body has not seen: whether open sky, less its darkening, is below dark-light. False without a perception."
-  [p]
-  (boolean (some-> (raw-of p) sky-subtract (->> (- 15)) (< (dark-light)))))
+(def ^:private max-build-y "The overworld's build limit (places/max-y)." 320)
+
+(defn- ground-share
+  "The share of the measured ground heights (cost.rise/surface-prior, the y a body stands at, in 4-block bins named by
+  their middle, spread evenly over each) at or under y: the chance a cell at y nothing is known of is under open sky."
+  [y]
+  (let [prior (rise/surface-prior)]
+    (/ (transduce (map (fn [[m w]] (* w (-> (/ (- y m -3) 4) (max 0) (min 1))))) + 0 prior)
+       (transduce (map second) + 0 prior))))
+
+(defn- index-x [b i] (+ b (bit-and i 15)))
+(defn- index-y [b i] (+ b (bit-shift-right i 8)))
+(defn- index-z [b i] (+ b (bit-and (bit-shift-right i 4) 15)))
+
+(defn- brightest
+  "#js {:block :sky}: the most of each light among the seen cells of the section at cx sy cz (its ids)."
+  [^js raw ^js ids cx sy cz]
+  (let [out #js {:block 0 :sky 0}]
+    (dotimes [i 4096]
+      (when (pos? (aget ids i))
+        (let [v (.lightAt raw (index-x (* 16 cx) i) (index-y (* 16 sy) i) (index-z (* 16 cz) i))]
+          (when (pos? v)
+            (set! (.-block out) (max (.-block out) (bit-and v 15)))
+            (set! (.-sky out) (max (.-sky out) (bit-shift-right v 4)))))))
+    out))
+
+(defn- axis-gap [v base] (cond (< v base) (- base v) (> v (+ base 15)) (- v base 15) :else 0))
+
+(defn unseen-lit-fn
+  "The guess of whether a cell the body has not seen is lit (lit-light?), as (fn [x y z]) over what it has seen now (none
+  without a perception's memory); nil without a raw world. Light falls by one a step from where it is, through cells not
+  seen solid (rock/open-ids), so a seen cell of light L lights a cell d such steps off with L - d at least, block and sky
+  light alike; the body's own cell counts as seen. Sky light 15 reaches the cell when the first seen cell over it has it
+  (the open sky), none when that cell has less (a roof); over a column the body has seen nothing of, the open sky's
+  chance is the share of the open cells it has seen round its feet at the cell's section height that sky light 15
+  reaches, over the measured ground heights (ground-share) worth one cell; the sky is open when that is over a half.
+  subtract: the sky's darkening to judge it by (default: now; 0: by full day)."
+  ([p] (unseen-lit-fn p nil))
+  ([p subtract]
+   (when-let [^js raw (raw-of p)]
+     (let [^js sections (when-let [^js st (some-> (aget p "perception") :st)] (when (.-stores st) (store/store-of st (.-dim st))))
+           subtract (or subtract (sky-subtract raw))
+           sky-need (+ (dark-light) subtract)
+           ids-at (fn [cx sy cz] (some-> sections (.get (store/section-key cx sy cz)) .-ids))
+           ^js pos (.-pos (.self p))
+           [ox oy oz] (if pos (mapv js/Math.floor [(.-x pos) (.-y pos) (.-z pos)]) [0 0 0])
+           ;; the light of the body's own cell when the memory has not got it (else it is seen there); none offline
+           own (when pos
+                 (let [^js ids (ids-at (bit-shift-right ox 4) (bit-shift-right oy 4) (bit-shift-right oz 4))
+                       v (.lightAt raw ox oy oz)]
+                   (when (and (or (nil? ids) (zero? (aget ids (store/cell-index ox oy oz)))) (>= v 0)) v)))
+           ^js open (rock/open-ids)
+           summaries (js/Map.)
+           summary (fn [cx sy cz]
+                     (let [k (store/section-key cx sy cz)]
+                       (if (.has summaries k)
+                         (.get summaries k)
+                         (let [s (some-> (ids-at cx sy cz) (#(brightest raw % cx sy cz)))]
+                           (.set summaries k s)
+                           s))))
+           ;; whether some section within reach has seen light (block: shift 0, sky: 4) that could still have need at x y z
+           reachable? (fn [x y z shift need]
+                        (some (fn [[dx dy dz]]
+                                (let [cx (+ (bit-shift-right x 4) dx) cy (+ (bit-shift-right y 4) dy) cz (+ (bit-shift-right z 4) dz)
+                                      ^js s (summary cx cy cz)]
+                                  (and s (>= (- (if (zero? shift) (.-block s) (.-sky s))
+                                                (axis-gap x (* 16 cx)) (axis-gap y (* 16 cy)) (axis-gap z (* 16 cz)))
+                                             need))))
+                              (for [dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]] [dx dy dz])))
+           ;; a breadth-first walk out from x y z, a step a ring, through cells not seen solid, to a seen cell (or the
+           ;; body's own) whose light less the steps is need or more
+           spreads? (fn [x y z shift need]
+                      (and (or (and own (>= (- (bit-and (bit-shift-right own shift) 15) (js/Math.abs (- x ox)) (js/Math.abs (- y oy)) (js/Math.abs (- z oz))) need))
+                               (reachable? x y z shift need))
+                           (let [reach (- 15 need)
+                                 seen (js/Set.)
+                                 key (fn [cx cy cz] (+ (* (+ (- cx x) 16) 1024) (* (+ (- cy y) 16) 32) (+ (- cz z) 16)))]
+                             (.add seen (key x y z))
+                             (loop [ring [[x y z]] d 0]
+                               (when (and (seq ring) (<= d reach))
+                                 (let [next-ring #js []
+                                       hit (some (fn [[cx cy cz]]
+                                                   (let [^js ids (ids-at (bit-shift-right cx 4) (bit-shift-right cy 4) (bit-shift-right cz 4))
+                                                         v (if ids (aget ids (store/cell-index cx cy cz)) 0)
+                                                         l (cond (and own (== cx ox) (== cy oy) (== cz oz)) own
+                                                                 (pos? v) (.lightAt raw cx cy cz))]
+                                                     (if (and l (>= (- (bit-and (bit-shift-right l shift) 15) d) need))
+                                                       true
+                                                       (do (when (and (< d reach) (or (zero? v) (== 1 (aget open (dec v)))))
+                                                             (doseq [[ax ay az] [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]]
+                                                               (let [nx (+ cx ax) ny (+ cy ay) nz (+ cz az) k (key nx ny nz)]
+                                                                 (when-not (.has seen k) (.add seen k) (.push next-ring [nx ny nz])))))
+                                                           nil))))
+                                                 ring)]
+                                   (or hit (recur (vec next-ring) (inc d)))))))))
+           ;; true: the first seen cell over x y z has sky light 15; false: less; nil: none seen up to the build limit
+           column (fn [x y z]
+                    (loop [y (inc y)]
+                      (when (< y max-build-y)
+                        (if-let [^js ids (ids-at (bit-shift-right x 4) (bit-shift-right y 4) (bit-shift-right z 4))]
+                          (let [v (when (pos? (aget ids (store/cell-index x y z))) (.lightAt raw x y z))]
+                            (if (and v (>= v 0)) (== 15 (bit-shift-right v 4)) (recur (inc y))))
+                          (recur (* 16 (inc (bit-shift-right y 4))))))))
+           ;; [open cells seen, those sky light 15 reaches] in the 3x3 section columns round the feet at section height sy
+           counted (js/Map.)
+           counts (fn [sy]
+                    (or (.get counted sy)
+                        (let [^js open (rock/open-ids)
+                              own-n (if (and own (== sy (bit-shift-right oy 4))) [1 (if (== 15 (bit-shift-right own 4)) 1 0)] [0 0])
+                              n-sky (reduce (fn [[n sky :as acc] [dx dz]]
+                                              (if-let [^js ids (ids-at (+ (bit-shift-right ox 4) dx) sy (+ (bit-shift-right oz 4) dz))]
+                                                (loop [i 0 n n sky sky]
+                                                  (if (== i 4096)
+                                                    [n sky]
+                                                    (let [v (aget ids i)
+                                                          l (when (and (pos? v) (== 1 (aget open (dec v))))
+                                                              (.lightAt raw (index-x (* 16 (+ (bit-shift-right ox 4) dx)) i) (index-y (* 16 sy) i) (index-z (* 16 (+ (bit-shift-right oz 4) dz)) i)))]
+                                                      (cond (or (nil? l) (neg? l)) (recur (inc i) n sky)
+                                                            (== 15 (bit-shift-right l 4)) (recur (inc i) (inc n) (inc sky))
+                                                            :else (recur (inc i) (inc n) sky)))))
+                                                acc))
+                                            own-n (when pos (for [dx [-1 0 1] dz [-1 0 1]] [dx dz])))]
+                          (.set counted sy n-sky)
+                          n-sky)))
+           priors (js/Map.)
+           open-share (fn [y]
+                        (let [[n sky] (counts (bit-shift-right y 4))
+                              g (or (.get priors y) (let [g (ground-share y)] (.set priors y g) g))]
+                          (/ (+ g sky) (+ 1 n))))]
+       (fn [x y z]
+         (boolean
+          (or (spreads? x y z 0 1)
+              (and (<= sky-need 15)
+                   (or (spreads? x y z 4 sky-need)
+                       (let [open (column x y z)]
+                         (if (nil? open) (> (open-share y) 0.5) open)))))))))))
+
+(defonce ^:private guesses (js/WeakMap.))
+
+(defn unseen-lit?
+  "unseen-lit-fn's guess for the cell {:x :y :z}, kept while what the body has seen, the raw world, the sky's darkening and
+  the body's cell hold (made anew each call without a perception's memory). True without a raw world (nothing is known,
+  so nothing is dark). subtract as unseen-lit-fn's."
+  ([p cell] (unseen-lit? p cell nil))
+  ([p {:keys [x y z]} subtract]
+   (let [^js raw (raw-of p)
+         ^js st (some-> (aget p "perception") :st)
+         subtract (when raw (or subtract (sky-subtract raw)))
+         k (when (and st (.-stores st))
+             [(.-dim st) (perception/memory-epoch st) (rays/epoch-of raw) subtract
+              (some-> (.-pos (.self p)) (#(mapv js/Math.floor [(.-x %) (.-y %) (.-z %)])))])
+         hit (when k (.get guesses st))
+         f (cond (nil? raw) (constantly true)
+                 (and k (= k (:k hit))) (:f hit)
+                 :else (let [f (unseen-lit-fn p subtract)] (when k (.set guesses st {:k k :f f})) f))]
+     (f (js/Math.floor x) (js/Math.floor y) (js/Math.floor z)))))
 
 (defn dark-here?
   "Whether the light at the body's feet is not lit-light? (hostiles spawn and walk in from it, at any hour). False without light data."
@@ -376,25 +530,22 @@
     (boolean (and raw (light-known? raw x y z) (not (lit-light? (bit-and (.lightAt raw x y z) 15) (bit-shift-right (.lightAt raw x y z) 4) (sky-subtract raw)))))))
 
 (defn dark-fn
-  "The planner's test of a feet cell (options.dark.at), {:at (fn [x y z] 1 dark, 0 lit) :night? whether the sky is dark},
-  for the body of primitives p; nil without a perception. A cell the body has seen is lit by block light of 1 or more
+  "The planner's test of a feet cell (options.dark.at), {:at (fn [x y z] 1 dark, 0 lit)}, for the body of primitives p; nil without a perception. A cell the body has seen is lit by block light of 1 or more
   (mobs do not spawn there) or by sky light still at dark-light after the sky darkening; a seen cave stays dark by day.
-  A cell never seen is dark when the sky is (night?) or underground? (the caller's shelter.sense/buried?, see its dark-fn): otherwise it costs like a lit one; with :unseen-dark? false never
-  (a masked plan prices unseen cells itself). Light is read only for cells seen, as a player would know them."
+  A cell never seen is guessed (unseen-lit-fn); with :unseen-dark? false it costs like a lit one (a masked plan prices
+  unseen cells itself). Light is read only for cells seen, as a player would know them."
   ([p] (dark-fn p nil))
-  ([p {:keys [unseen-dark? underground?]}]
+  ([p {:keys [unseen-dark?]}]
    (when-let [per (aget p "perception")]
      (when-let [raw (:raw per)]
        (let [^js st (:st per)
              subtract (sky-subtract raw)
-             night? (< (- 15 subtract) (dark-light))
-             unseen (if (and (or night? underground?) (not (false? unseen-dark?))) 1 0)
+             unseen-lit? (if (false? unseen-dark?) (constantly true) (unseen-lit-fn p))
              ^js sections (store/store-of st (.-dim st))]
-         {:night? night?
-          :at (fn [x y z]
+         {:at (fn [x y z]
                 (let [^js sec (.get sections (store/section-key (bit-shift-right x 4) (bit-shift-right y 4) (bit-shift-right z 4)))]
                   (if (or (nil? sec) (zero? (aget (.-ids sec) (store/cell-index x y z))))
-                    unseen
+                    (if (unseen-lit? x y z) 0 1)
                     (let [packed (.lightAt ^js raw x y z)]
                       (if (lit-light? (bit-and packed 15) (bit-shift-right packed 4) subtract) 0 1)))))})))))
 

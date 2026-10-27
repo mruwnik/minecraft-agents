@@ -9,7 +9,7 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.access :as access]
             [jobs.lib.block-sets :as bs]
-            [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.look :as look]
             [jobs.lib.flee-walk :as walk]
             [jobs.lib.goal :as goal]
             [jobs.lib.cost.weapon :as weapon]
@@ -86,7 +86,7 @@
 
 (defn dark-around?
   "Whether mob e stands in or beside unlit space: its cell, the four cells next to it and the one 2 past it from the body,
-  those open or not sensed, include one the body sees as dark (sh-sense/dark-fn: a cell not sensed counts as dark underground).
+  those open or not sensed, include one the body sees as dark (look/dark-fn: a cell not sensed by its guess).
   A mob in the dark is hardly seen, so what shows is the lit edge of the dark it stands at."
   [c e]
   (let [p (:primitives c)
@@ -95,7 +95,7 @@
         [x y z] (mapv #(js/Math.floor %) [(:x pos) (:y pos) (:z pos)])
         away (fn [d] (let [v (- (d pos) (d me))] (cond (> v 0.5) 2 (< v -0.5) -2 :else 0)))
         cells [[x y z] [(inc x) y z] [(dec x) y z] [x y (inc z)] [x y (dec z)] [(+ x (away :x)) y (+ z (away :z))]]]
-    (boolean (when-let [dark (sh-sense/dark-fn p)]
+    (boolean (when-let [dark (look/dark-fn p)]
                (some (fn [[cx cy cz]]
                        (and (let [n (u/seen-name p {:x cx :y cy :z cz})] (or (nil? n) (bs/passable-or-water? n)))
                             (= 1 ((:at dark) cx cy cz))))

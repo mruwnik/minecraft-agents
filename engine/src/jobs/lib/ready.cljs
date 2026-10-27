@@ -70,19 +70,17 @@
 
 (defn unseen-status
   "The exposure of the unseen place `to` no look from here shows, priced as unseen at its chance (Q16): spawn-light/chance-at's
-  worse case, open ground under the sky now within the surface band below the feet, a dark cave deeper. Open ground dark
-  under the night sky waits for dawn (::light-patience-s), a cave guess is :never lowered by a torch; jobs.lib.price/priced
-  prices either for the stay."
+  guess of its light. Dark that full day would light (look/unseen-lit? by day) waits for dawn (::light-patience-s), other
+  dark is :never lowered by a torch; jobs.lib.price/priced prices either for the stay."
   [c to]
   (let [p (:primitives c)
-        feet-y (:y (sh-sense/feet p))
-        chance (spawn-light/chance-at p to feet-y false false)
+        chance (spawn-light/chance-at p to false)
         light-in (or (sh-sense/sky-in p) ##Inf)
         patience (settings/get settings ::light-patience-s)
         where (str "unseen " (place-text to) ", which no look from here shows")]
     (cond
-      (<= chance (settings/get settings ::risk-limit)) (contract/ok :unexposed (str "no spawn risk at " where ": open ground under a lit sky"))
-      (spawn-light/deep? to feet-y false) (contract/never :exposed (str "dark at " where ": guessed a cave, which dawn does not light") :lowered-by #{:torch} :chance chance)
+      (<= chance (settings/get settings ::risk-limit)) (contract/ok :unexposed (str "no spawn risk at " where ": guessed lit"))
+      (not (look/unseen-lit? p to 0)) (contract/never :exposed (str "dark at " where ": guessed out of the sky's reach, which dawn does not light") :lowered-by #{:torch} :chance chance)
       (<= light-in patience) (contract/later :exposed (str "dark at " where ": guessed open ground, dark until light") :lowered-by #{:light} :chance chance
                                              :recheck-after-ms (* 1000 light-in) :wait-ms (* 1000 light-in))
       :else (contract/never :exposed (str "dark at " where ", light is " (js/Math.round light-in) " s away, over the " (js/Math.round patience) " s it waits") :chance chance))))

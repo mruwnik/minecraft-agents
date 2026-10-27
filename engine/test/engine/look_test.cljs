@@ -198,15 +198,33 @@
   (is (= 1 (dark-of midnight [6 64 0] nil)))
   (is (= 0 (dark-of day [6 64 0] nil))))
 
-(deftest an-unseen-cell-is-dark-by-day-when-the-body-is-underground
+(defn sealed
+  "A body that has looked round the walled-off room by day, at time t, every cell at [sky block] light (sky 0: sealed
+  from the sky), the cells of lights at their own."
+  [t light lights]
   (let [p (seeing {:time day :blocks wall})]
-    (swap! (fake/state p) assoc :light {[0 64 0] [0 0] [0 65 0] [0 0]})
-    (is (= 1 ((:at (sh-sense/dark-fn p)) 6 64 0)))))
+    (swap! (fake/state p) assoc :time t :light-default light :light lights)
+    p))
 
-(deftest dark-guess-is-open-sky-less-its-darkening
-  (is (true? (look/dark-guess? (seeing {:time midnight}))))
-  (is (false? (look/dark-guess? (seeing {:time day}))))
-  (is (false? (look/dark-guess? (tu/fake {}))) "no perception, no guess"))
+(deftest an-unseen-cell-in-a-dark-sealed-place-is-dark-by-day
+  (let [p (sealed day [0 0] {})]
+    (is (= 1 ((:at (look/dark-fn p)) 6 64 0)))
+    (is (false? (sh-sense/lit-here? p {:x 6 :y 64 :z 0})) "the old guess read the open sky by day")))
+
+(deftest an-unseen-cell-in-a-block-lit-sealed-hall-is-lit-at-night
+  (let [p (sealed midnight [0 14] {})]
+    (is (= 0 ((:at (look/dark-fn p)) 6 64 0)) "the old guess read every unseen cell dark at night")
+    (is (true? (sh-sense/lit-here? p {:x 6 :y 64 :z 0})))))
+
+(deftest seen-block-light-lights-an-unseen-cell-less-one-a-block
+  (let [p (sealed midnight [0 0] {[0 64 3] [0 5]})]
+    (is (true? (look/unseen-lit? p {:x 0 :y 64 :z -1})) "5 less 4 blocks, behind the body")
+    (is (false? (look/unseen-lit? p {:x 0 :y 64 :z -2})) "5 less 5 blocks")))
+
+(deftest an-unseen-cell-under-open-sky-is-lit-by-day-only
+  (is (true? (look/unseen-lit? (seeing {:time day}) {:x 40 :y 64 :z 0})) "far past sight, where the seen ground is under open sky")
+  (is (false? (look/unseen-lit? (seeing {:time midnight}) {:x 40 :y 64 :z 0})))
+  (is (true? (look/unseen-lit? (tu/fake {}) {:x 40 :y 64 :z 0})) "no perception: the open sky"))
 
 (deftest a-seen-cell-is-lit-by-block-light-or-by-day-sky
   (is (= 0 (dark-of midnight [0 64 5] [0 1])) "a torch's light 1 at night")
@@ -232,10 +250,6 @@
     (is (= 0 (class "water" nil [5 64 0])) "unmasked: the walk reads the floor as it is")
     (is (= 0 (class "stone" (constantly true) [5 64 0])) "a seen dry floor ends each axis")))
 
-(deftest dark-fn-says-whether-the-sky-is-dark
-  (is (true? (:night? (look/dark-fn (seeing {:time midnight})))))
-  (is (false? (:night? (look/dark-fn (seeing {:time day}))))))
-
 (deftest explore-look-lists-a-seen-hostile-and-a-heard-one-only-roughly
   (let [p (seeing {:blocks wall
                    :entities [{:id 7 :name "zombie" :kind "hostile" :pos [0 64 5]}
@@ -255,5 +269,3 @@
                      {:id 4 :name "Bob" :kind "player" :pos [0 64 6] :visible false}] [])]
     (is (= [1 3 4] (map #(.-id %) (look/seen-objs p {:radius 10}))))
     (is (= [1] (map #(.-id %) (look/seen-objs p {:radius 10 :max 1}))) "max counts after the hiding")))
-
-

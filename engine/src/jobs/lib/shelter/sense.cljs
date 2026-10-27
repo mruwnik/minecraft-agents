@@ -134,11 +134,6 @@
   [p]
   (buried-at? p (feet p)))
 
-(defn dark-fn
-  "look/dark-fn for the body, with an unseen cell guessed dark under ground (buried?)."
-  ([p] (dark-fn p nil))
-  ([p opts] (look/dark-fn p (assoc opts :underground? (buried? p)))))
-
 (defn light-at
   "Effective light (0-15) of the cell: the brighter of its block light and its sky light less the sky's darkening now; nil
   without light data there. Not gated on sight (see cell-light)."
@@ -155,11 +150,11 @@
 
 (defn lit-here?
   "Whether the cell is lit enough that monsters cannot spawn (look/lit-light?: any source, dawn or a torch) as the body knows
-  it; a cell it has not seen is guessed by the open sky (look/dark-guess?)."
+  it; a cell it has not seen is guessed (look/unseen-lit?)."
   [p cell]
   (if (cell-light p cell)
     (look/lit-light? (block-light-at p cell) (or (sky-light-at p cell) 0) (sky-subtract-now p))
-    (not (look/dark-guess? p))))
+    (look/unseen-lit? p cell)))
 
 (defn wide-room?
   "Whether the room has a 2x2 floor patch: a hut, not a one-wide tunnel the body dug."

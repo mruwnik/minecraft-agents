@@ -1739,6 +1739,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p raw]} (setup-seeing {:inventory sword :time 14000 :radius 6 :entities [(zombie 4 0)]} [0 4] 1000)]
+          (swap! (fake/state raw) assoc :light (into {} (for [x (range 3 12) y [64 65] z (range -6 7)] [[x y z] [0 0]])))
           (core/submit! eng respond {})
           (await (core/tick! eng))
           (let [view (mem/view (:store eng))]
