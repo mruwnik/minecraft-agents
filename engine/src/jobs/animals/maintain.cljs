@@ -150,6 +150,8 @@
      :shears (boolean (some #(= "shears" (:name %)) inventory))
      :shearable (count (remove #(true? (.-sheared %)) adults))
      :stored (to-store inventory (produce (:mob (:args c))) (:carry (:args c)))
+     :stored-items (let [names (set (to-store inventory (produce (:mob (:args c))) (:carry (:args c))))]
+                     (into [] (comp (filter #(names (.-name %))) (map (fn [i] {:name (.-name i) :count (.-count i)}))) inventory))
      :food (animals/food-carried (:primitives c) (:mob (:args c)))
      :reach (hunting/reach c)}))
 
@@ -266,19 +268,25 @@
 
 (def shear-wool "Wool a shorn sheep drops, the game's 1 to 3: 2 on average." 2)
 
-(defn pass-worth
+(def animals-lost-per-gap
+  "Prior (no escape rate is measured): animals a fence gap lets out before the next visit."
+  1)
+
+(defn worth-of
   "Seconds a pass is worth: cost/animal-worth of the animals its herd, breed
   (one pair, one calf) and cull steps would add or kill, the item-value of the wool its shear and of the drops its collect
-  would take."
-  [c]
-  (let [{:keys [mob target]} (:args c)
-        {:keys [adults babies drops shearable]} (facts c)
-        animals (+ (max 0 (- (min 2 target) adults))
+  would take, the animals lost through the fence gaps its mend would close (animals-lost-per-gap each, at most the
+  herd) and the item-value of the produce its deposit would store."
+  [{:keys [mob target]} {:keys [adults babies drops shearable gaps stored-items]}]
+  (let [animals (+ (min (+ adults babies) (* animals-lost-per-gap (count gaps)))
+                   (max 0 (- (min 2 target) adults))
                    (if (and (>= adults 2) (< (+ adults babies) target)) 1 0)
                    (max 0 (- adults (max 2 (- target babies)))))
-        items (cond-> (mapv (fn [n] {:name n :count 1}) drops)
+        items (cond-> (into (mapv (fn [n] {:name n :count 1}) drops) stored-items)
                 (= "sheep" mob) (conj {:name "white_wool" :count (* shear-wool shearable)}))]
     (+ (* animals (cost/animal-worth mob)) (:value (cost/item-value items)))))
+
+(defn pass-worth [c] (worth-of (:args c) (facts c)))
 
 (defn can-start?
   "Never :no-box without a box or a plan, :no-mob without :mob or a plan; later for :plan-trouble, nothing to do, or :not-worth while even the least walk onto the pen costs more than the pass is worth (walk-pick/not-worth)."

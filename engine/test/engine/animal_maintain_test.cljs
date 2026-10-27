@@ -317,6 +317,15 @@
     {:call {:slot :mend :job 'jobs.build.pen :args {:plan "pen"}}} {:plan "pen"} {:gaps [[1 64 1]]}
     {:call {:slot :mend :job 'jobs.build.pen :args {:plan "pen" :ways #{:carried}}}} {:plan "pen" :ways #{:carried}} {:gaps [[1 64 1]]}))
 
+(deftest a-fence-gap-and-carried-produce-add-to-the-pass-worth
+  (let [args {:mob "cow" :target 4}
+        at-target {:adults 4 :babies 0 :drops [] :shearable 0 :gaps [] :stored-items []}
+        worth #(maintain/worth-of args (merge at-target %))]
+    (is (zero? (worth {})))
+    (is (< 0 (worth {:gaps [[1 64 1]]})) "a gap loses animals")
+    (is (< (worth {:gaps [[1 64 1]]}) (worth {:gaps [[1 64 1] [2 64 1]]})))
+    (is (< 0 (worth {:stored-items [{:name "beef" :count 8}]})) "produce to store is worth its items")))
+
 (def ring-pen-plan
   (update (pb/ring-plan) :parts conj {:id "cows" :box [[3 64 3] [3 64 3]] :want "air" :herd {:mob "cow" :target 0}}))
 
@@ -468,7 +477,7 @@
           (let [p (:p s) entities (.-entities p)]
             (aset p "entities" (fn [q] (let [me (.-pos (.self p))]
                                          (.filter (.call entities p q) (fn [e] (<= (js/Math.hypot (- (.-x (.-pos e)) (.-x me)) (- (.-z (.-pos e)) (.-z me))) 24)))))))
-          (core/submit! (:eng s) (list 'repeat (spec {:box {:min {:x 40 :y 63 :z -3} :max {:x 46 :y 66 :z 3}} :target 2})) {})
+          (core/submit! (:eng s) (list 'repeat (spec {:box {:min {:x 40 :y 63 :z -3} :max {:x 46 :y 66 :z 3}} :target 2 :checks {:safe? (quote (always))}})) {})
           (await (tu/run-ticks (:eng s) (:clock s) 40 700))
           (is (seq (tu/walk-calls (:p s))) "the body goes to the pen"))))))
 
