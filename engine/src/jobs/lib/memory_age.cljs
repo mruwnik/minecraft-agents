@@ -13,6 +13,7 @@
   epoch: a key that moves when memory is written or any remembered cell's level changes (its due time passes, or an
   aged cell is seen again). changed-fn: the planner's options.unknown.changed."
   (:require [engine.args :as a]
+            [engine.perception.rays :as rays]
             [engine.perception.store :as store]
             [engine.settings :as settings]))
 
@@ -356,25 +357,41 @@
       (set! (.-qVersion e) (.-version e))
       q)))
 
+(defn- sees-as-remembered?
+  "Whether the body sees the cell (x y z) now (rays/visible-now?) and it holds what memory has for it: memory is current
+  there, whatever its seen time."
+  [{:keys [raw st] :as per} x y z]
+  (when-let [^js eye (.eye ^js raw)]
+    (let [id (.stateAt ^js raw x y z)]
+      (and (>= id 0) (== id (store/remembered-id st x y z)) (boolean (rays/visible-now? per st eye x y z id))))))
+
 (defn changed-fn
-  "The planner's options.unknown.changed for memory st: (fn [x y z]) the level-chance the remembered cell changed, 0 for
-  one that does not age or was never seen; nil while no cell is past level 0."
-  [^js st]
+  "The planner's options.unknown.changed for perception per: (fn [x y z]) the level-chance the remembered cell changed, 0
+  for one that does not age, was never seen, or that the body sees now as remembered (sees-as-remembered?, asked
+  once a cell per fn); nil while no cell is past level 0."
+  [{:keys [st] :as per}]
   (epoch st)
   (when (pos? (.-aged ^js (state-of st)))
     (let [^js store (store/store-of st (.-dim st))
-          last-key (volatile! nil) last-q (volatile! nil)]
+          last-key (volatile! nil) last-q (volatile! nil)
+          ^js in-view (js/Map.)]
       (fn [x y z]
         (let [k (store/section-key (bit-shift-right x 4) (bit-shift-right y 4) (bit-shift-right z 4))
-              q (if (== k @last-key)
-                  @last-q
-                  (let [^js sec (.get store k)
-                        ^js e (when sec (.get entries sec))
-                        q (when (and e (pos? (.-aged e))) (q-array e))]
-                    (vreset! last-key k)
-                    (vreset! last-q q)
-                    q))]
-          (if q (aget q (store/cell-index x y z)) 0))))))
+              ^js q (if (== k @last-key)
+                      @last-q
+                      (let [^js sec (.get store k)
+                            ^js e (when sec (.get entries sec))
+                            q (when (and e (pos? (.-aged e))) (q-array e))]
+                        (vreset! last-key k)
+                        (vreset! last-q q)
+                        q))
+              i (when q (store/cell-index x y z))
+              c (if q (aget q i) 0)]
+          (if (zero? c)
+            0
+            (let [^js seen (or (.get in-view k) (let [a (js/Int8Array. 4096)] (.set in-view k a) a))]
+              (when (zero? (aget seen i)) (aset seen i (if (sees-as-remembered? per x y z) 1 2)))
+              (if (== 1 (aget seen i)) 0 c))))))))
 
 (defn section-flips
   "A number that moves whenever a cell of section cx sy cz of st's current dimension becomes likelier changed than not

@@ -230,7 +230,7 @@
            mask (when known
                   (js/Object.assign #js {} unknown
                                     #js {:id (if (.-edge unknown) unloaded-id (first (blocks/state-ids table (if under? "seagrass" "void_air")))) :blockedId stone :known known :memoryEpoch (memory-epoch-fn p)
-                                         :changed (memory-age/changed-fn (:st (aget p "perception")))
+                                         :changed (memory-age/changed-fn (aget p "perception"))
                                          :cell (unseen-share p) :seeDepth (see-depth-now p) :seeLit (look/see-lit-fn p) :rockBeyond (or k 0)}))]
        (when-let [pw (if mask (.pathWorld p mask) (.pathWorld p))]
          (let [pw (js/Object.assign #js {:table table :space space/space} pw)]

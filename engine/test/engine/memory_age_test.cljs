@@ -69,8 +69,19 @@
     (perception/pass! per)
     (reset! clock 20000)
     (is (some? (perception/remembered-age st 0 65 4)) "20 s on, between passes: remembered")
-    (is (< 0 ((memory-age/changed-fn st) 0 65 4) 0.05) "priced at a small chance, not read unseen")
+    (is (zero? ((memory-age/changed-fn per) 0 65 4)) "in plain view as remembered: seen now")
     (swap! (fake/state p) assoc :yaw 180)
+    (is (< 0 ((memory-age/changed-fn per) 0 65 4) 0.05) "out of view: priced at a small chance, not read unseen")
     (is (= "oak_door" (some-> (u/sensed w {:x 0 :y 65 :z 4}) .-name)) "out of view: read as the door")
     (reset! clock (inc (memory-age/half-age-ms memory-age/DOOR)))
     (is (true? (.-unknown (u/sensed w {:x 0 :y 65 :z 4}))) "past its half age: unknown")))
+
+(deftest a-fire-in-plain-view-of-a-still-body-is-priced-as-seen-now-between-its-looks
+  (let [{:keys [p per clock]} (rig {"0,64,4" "netherrack" "0,65,4" "fire"})
+        still (:still-ms (:opts per))]
+    (perception/pass! per)
+    (reset! clock (dec still))
+    (is (< (memory-age/half-age-ms memory-age/FIRE) still) "the fire is likelier out than not before the next look")
+    (is (zero? ((memory-age/changed-fn per) 0 65 4)) "in view: seen now")
+    (swap! (fake/state p) assoc :yaw 180)
+    (is (<= 0.5 ((memory-age/changed-fn per) 0 65 4)) "turned away: its age")))

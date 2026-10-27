@@ -729,8 +729,9 @@
   (doseq [[block kind] [["oak_door" memory-age/DOOR] ["oak_fence_gate" memory-age/DOOR] ["oak_trapdoor" memory-age/DOOR]
                         ["fire" memory-age/FIRE] ["water" memory-age/FLUID]]]
     (let [clock (atom 1000000)
-          {:keys [w]} (sensed-only (assoc-in (assoc corridor :yaw 90 :now #(deref clock)) [:blocks "5,64,0"] block))
+          {:keys [p w]} (sensed-only (assoc-in (assoc corridor :yaw 90 :now #(deref clock)) [:blocks "5,64,0"] block))
           _ (perception/pass! (aget w "perception"))
+          _ (swap! (fake/state p) assoc :yaw 270) ; looking away: memory, not sight
           read (fn [] (let [pw (wworld/path-world w (wworld/unknown-spec))
                             changed (or (.-changed (wworld/unknown-of pw)) (constantly 0))]
                         {:cell (.stateAt (.-snapshot pw) 5 64 0) :changed (changed 5 64 0) :stone (changed 5 63 0)}))
@@ -746,8 +747,9 @@
 
 (deftest the-air-beside-remembered-water-ages-as-the-water-does
   (let [clock (atom 1000000)
-        {:keys [w]} (sensed-only (assoc-in (assoc corridor :yaw 90 :now #(deref clock)) [:blocks "5,64,0"] "water"))]
+        {:keys [p w]} (sensed-only (assoc-in (assoc corridor :yaw 90 :now #(deref clock)) [:blocks "5,64,0"] "water"))]
     (perception/pass! (aget w "perception"))
+    (swap! (fake/state p) assoc :yaw 270)
     (swap! clock + 1000 (memory-age/half-age-ms memory-age/FLUID))
     (let [changed (.-changed (wworld/unknown-of (wworld/path-world w (wworld/unknown-spec))))]
       (is (= [0.5 0.5 0.5 0] (mapv #(changed % 64 0) [4 5 6 8])) "the water at 5 and the air at 4 and 6; 8 is not beside it"))))
