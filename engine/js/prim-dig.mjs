@@ -295,14 +295,28 @@ export function createDig (env) {
   // PICKUP_REACH off: lean in by hand, bounded, instead of digging the roof or giving up.
   const NUDGE_MAX_DIST = 2
   const NUDGE_S = 0.6
+  // Held forward is blind, so every column on the line to the item must be level ground at the feet: no floor (a falling
+  // drop, a shaft) walks the body off an edge after it, and a fence or wall a step up (from a half-dug block) walks it
+  // onto the fence top and over into the pen beyond.
+  const levelWayTo = to => {
+    const from = here()
+    const y = Math.floor(from.y)
+    const n = Math.ceil(4 * Math.hypot(to.x - from.x, to.z - from.z))
+    return Array.from({ length: n }, (_, i) => (i + 1) / n).every(t => {
+      const x = Math.floor(from.x + t * (to.x - from.x))
+      const z = Math.floor(from.z + t * (to.z - from.z))
+      if (x === Math.floor(from.x) && z === Math.floor(from.z)) return true // the body stands there
+      const feet = env.bot.blockAt(vec({ x, y, z }))
+      const floor = env.bot.blockAt(vec({ x, y: y - 1, z }))
+      return feet?.boundingBox === 'empty' && floor?.boundingBox === 'block' && floor.shapes.every(s => s[4] <= 1)
+    })
+  }
   const nudgeToItem = async (ctx, id) => {
     const item = liveEntity(env.bot, id)
     if (!item) return false
     if (inPickupReach(item)) return true
     if (Math.hypot(item.position.x - here().x, item.position.z - here().z) > NUDGE_MAX_DIST) return false
-    // Held forward is blind: with no floor under the item's cell (a falling drop, a shaft) the body would walk off the edge after it.
-    const floor = env.bot.blockAt(vec({ x: Math.floor(item.position.x), y: Math.floor(here().y) - 1, z: Math.floor(item.position.z) }))
-    if (item.onGround === false || floor?.boundingBox !== 'block') return false
+    if (item.onGround === false || !levelWayTo(item.position)) return false
     ctx.onAbort(() => env.bot.setControlState('forward', false))
     await lookNow(() => env.bot.lookAt(vec({ x: item.position.x, y: here().y + 1.62, z: item.position.z }), true))
     env.bot.setControlState('forward', true)

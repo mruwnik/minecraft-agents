@@ -1301,6 +1301,19 @@ test('collect: a drop over an open shaft (no floor under its cell) is not leaned
   assert.equal(result.status, 'unreachable')
 })
 
+// Card 1ddd42d1: from a half-dug block a fence is a step up; leaning on blind walked the body over it into a pen.
+test('collect: a drop beside a fence a step up is not leaned toward', async () => {
+  const { bot, p } = dropRig([1.8, 63, 0.5], () => {})
+  bot.blockAt = ((read, fence) => v => (v.x === 1 && v.y === 63 && v.z === 0) ? fence(v) : read(v))(bot.blockAt, v => ({ name: 'oak_fence', position: new Vec3(v.x, v.y, v.z), boundingBox: 'block', shapes: [[0.375, 0, 0.375, 0.625, 1.5, 0.625]], getProperties: () => ({}) }))
+  bot.pathfinder.goto = () => Promise.reject(Object.assign(new Error('NoPath'), { name: 'NoPath' }))
+  const pressed = []
+  const setControlState = bot.setControlState
+  bot.setControlState = (control, state) => { pressed.push(control); setControlState(control, state) }
+  const result = await p.collect('t1', { id: 7 })
+  assert.equal(pressed.includes('forward'), false)
+  assert.equal(result.status, 'unreachable')
+})
+
 test('collect: an item that was still settling when the walk to it failed is followed to where it lands', async () => {
   const { bot, p, goals } = dropRig([4.5, 66, 0.5], (b, goal, n) => {
     if (n === 1) b.entities[7].position = new Vec3(4.5, 64, 0.5)
