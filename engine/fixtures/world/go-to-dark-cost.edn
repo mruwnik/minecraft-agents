@@ -1,7 +1,8 @@
 ;; Card 8517fe2c: go-to (and its quote, a dry run) costs darkness: a seen dark cell costs at least twice a lit one (more for an unarmed body),
 ;; so a lit route up to about 2x longer is taken; :dark false (the walk.world setting) plans dark cells like lit ones. Roofed stone block, rooms at
-;; x 1..3 and x 27..29, two corridors between them: a direct one along z 16 (25 long, never lit, in the body's line of
-;; sight so its cells are seen dark) and a detour along z 24 (about 42 long, torches at x 10..19 only, far enough from
+;; x 1..3 and x 27..29, two corridors between them: a direct one along z 16 (25 long, never lit; each case walks it there and
+;; back first so its cells are seen dark: sight makes out a dark cell only within 4 blocks, and the rock guess reads one never
+;; seen 3 past that as stone) and a detour along z 24 (about 42 long, torches at x 10..19 only, far enough from
 ;; the rooms that no torch light reaches the direct corridor). The body looks east down the direct corridor. The quote's route
 ;; reports the route's :length in blocks and never walks: with :dark true the detour, with :dark false the direct one.
 ;; Cards ea376fb0, c1f4e3be, 53c112a5: the block is roofed, so the body is underground at any hour and a cell never seen counts dark
@@ -21,8 +22,14 @@
  :cases
  [{:name "dark-false-takes-the-direct-corridor"
    :settings {:jobs.lib.walk.world/dark false}
-   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 16] :range 1}] {:ok true :quote {:route {:found true :length [:< 30]}}}] 30]]
-   :expect [{:no-event {:level :error} :for-s 2}]
+   :limit-s 120
+   :act [[:job (jobs.movement.go-to {:pos #at [26 0 16] :range 0})]
+         [:until-pos {:x-min 25} 40]
+         [:job (jobs.movement.go-to {:pos #at [2 0 16] :range 0}) [:alongside]]
+         [:until-pos {:x-max 3} 40]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 16] :range 1}] {:ok true :quote {:route {:found true :length [:< 30]}}}] 30]]
+   :expect [{:count-event {:source :job :kind :completed :data {:arrived true}} :for-s 90 :at-least 2 :at-most 2 :of-job true}
+            {:no-event {:level :error} :for-s 2}]
    :after [[:body-near [2.5 0 16.5] 1]]}
   {:name "walked-lit-detour-beats-the-dark-direct-corridor"
    :limit-s 120
@@ -36,11 +43,23 @@
             {:no-event {:level :error} :for-s 2}]
    :after [[:body-near [2.5 0 16.5] 1]]}
   {:name "unseen-lit-detour-counts-dark-takes-the-direct-corridor"
-   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 16] :range 1}] {:ok true :quote {:route {:found true :length [:< 30]}}}] 30]]
-   :expect [{:no-event {:level :error} :for-s 2}]
+   :limit-s 120
+   :act [[:job (jobs.movement.go-to {:pos #at [26 0 16] :range 0})]
+         [:until-pos {:x-min 25} 40]
+         [:job (jobs.movement.go-to {:pos #at [2 0 16] :range 0}) [:alongside]]
+         [:until-pos {:x-max 3} 40]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 16] :range 1}] {:ok true :quote {:route {:found true :length [:< 30]}}}] 30]]
+   :expect [{:count-event {:source :job :kind :completed :data {:arrived true}} :for-s 90 :at-least 2 :at-most 2 :of-job true}
+            {:no-event {:level :error} :for-s 2}]
    :after [[:body-near [2.5 0 16.5] 1]]}
   {:name "all-dark-route-is-still-found"
    :blocks [[:set [10 0 24] "air"] [:set [13 0 24] "air"] [:set [16 0 24] "air"] [:set [19 0 24] "air"]]
-   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 16] :range 1}] {:ok true :quote {:route {:found true :length [:< 30]}}}] 30]]
-   :expect [{:no-event {:level :error} :for-s 2}]
+   :limit-s 120
+   :act [[:job (jobs.movement.go-to {:pos #at [26 0 16] :range 0})]
+         [:until-pos {:x-min 25} 40]
+         [:job (jobs.movement.go-to {:pos #at [2 0 16] :range 0}) [:alongside]]
+         [:until-pos {:x-max 3} 40]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 16] :range 1}] {:ok true :quote {:route {:found true :length [:< 30]}}}] 30]]
+   :expect [{:count-event {:source :job :kind :completed :data {:arrived true}} :for-s 90 :at-least 2 :at-most 2 :of-job true}
+            {:no-event {:level :error} :for-s 2}]
    :after [[:body-near [2.5 0 16.5] 1]]}]}
