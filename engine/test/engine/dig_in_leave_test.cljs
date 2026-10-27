@@ -141,6 +141,18 @@
             (is (standable-open? p (feet p)) (str label ": stands in an open cell"))
             (is (= 1 (count (emitted seen :dig-in.left))) label)))))))
 
+(deftest by-day-a-pit-dug-in-anothers-zone-is-left-by-a-last-resort-stair
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p out seen] :as s} (setup {:zones [{:name "farm" :min [-20 55 -20] :max [20 70 20] :owner "Miles"}]})]
+          (await (dig-in! s))
+          (is (< (second (feet p)) 64) "in the pit")
+          (await (leave-at-dawn! s))
+          (is (= [:done :out] ((juxt :status :reason) @out)))
+          (is (empty? (emitted seen :dig-in.trapped)))
+          (is (<= 64 (second (feet p))) "out of the pit"))))))
+
 (deftest by-day-a-pit-with-no-pickaxe-is-dug-out-by-hand
   (async done
     (tu/run-async done

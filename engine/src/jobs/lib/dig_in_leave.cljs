@@ -17,7 +17,9 @@
   "Stair steps cut one at a time out of a roofed shaft with no recorded :start before leave! gives up."
   32)
 
-(def access-reasons #{:zone :claim :footprint :no-zones})
+(def access-reasons
+  "Stair stops a zone, claim or plan made; :refused is the stair's start check refusing the first cut for one of them."
+  #{:zone :claim :footprint :no-zones :refused})
 
 (def shut-in? sh-inside/shut-in?)
 
@@ -276,7 +278,7 @@
     A shaft goes one step at a time until nothing solid is within 4 above (at most 32 steps, else :too-deep).
     The headings go in :order (e.g. cheapest first), else the one nearest :toward first. The stair refuses lava, water, falling blocks and a missing floor,
     and then the next heading is tried. With no pickaxe it digs by hand (the drop is lost), as a player would.
-  - Only when a heading stopped for an access reason (:zone :claim :footprint :no-zones),
+  - Only when a heading stopped for an access reason (:zone :claim :footprint :no-zones :refused),
     all four are tried again with :ignore-zones?, the survival last resort.
     The cells dug in another's zone or claim are noted as :tidy entries.
   The pit and the stair are left dug. Out of it, with :take-back? (default true), the valuable blocks the shelter placed

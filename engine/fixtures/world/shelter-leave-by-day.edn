@@ -2,7 +2,7 @@
 ;; dug open) is climbed out of once, by the dawn reflex (jobs.survival.leave-shelter); it does not step out through the door and back in for ever.
 ;; Case 2 (card 521fef99): a go-to to a pocket off the shaft's foot walks back down through the left shelter's cell; the dawn reflex does not fire again on every pass (the left shelter is remembered).
 ;; Dirt pad y -6..-1, the shaft at x 16 z 16 (y -2 and -1 dug out), the dug door cells beside it at x 17.
-;; Should-succeed: the shelter is left (dig-in.left once) and the go-to to a surface goal arrives. Should-fail: the night reflex fires again, or a second dig-in.left.
+;; Should-succeed: the shelter is left (dig-in.left once) and the go-to to a surface goal arrives; a pit in another's zone is left by a stair that ignores the zone (last resort). Should-fail: the night reflex fires again, or a second dig-in.left.
 {:defaults
  {:tags [:night :survival :dig-in]
   :time :day :time-why :dawn-decision
@@ -46,4 +46,14 @@
          [:job (jobs.survival.leave-shelter {})]]
    :expect [{:event {:source :job :kind :holding :data {:reason [:contains "first light: husk seen"]}} :within-s 60}
             {:no-event {:source :job :kind :dig-in.left} :for-s 20}]
-   :after [[:body-near [16.5 -2 16.5] 2]]}]}
+   :after [[:body-near [16.5 -2 16.5] 2]]}
+  {:name "pit-in-anothers-zone-is-left-by-a-last-resort-stair"
+   ;; Card c32f65b4: the whole pad is another's zone, so each stair's start check refuses (:refused); the four headings are tried again ignoring zones.
+   :register []
+   :zones [{:name "farm" :min [8 -6 8] :max [24 4 24] :owner "Other" :allow #{}}]
+   :memory [{:kind :shelter :data {:pos #xyz [16 -2 16] :state :built :start #xyz [16 0 16]} :policy {:cap 10 :ttl 1200000}}]
+   :blocks [[:fill [17 -2 16] [17 -1 16] "dirt"]]
+   :act [[:job (jobs.survival.leave-shelter {})]]
+   :expect [{:event {:source :job :kind :dig-in.left} :within-s 90}
+            {:no-event {:source :job :kind :dig-in.trapped} :for-s 30}]
+   :after [[:body-near [16.5 0 16.5] 3]]}]}
