@@ -10,6 +10,7 @@
   It never holds while the body is airborne (a go-to step may be mid-jump). A cell a run tried is not held for again
   until the body is :move-far blocks from where it was or retry-s passed since the run counted its try (the entry's
   :tried stamp), so a cell no run can reach is tried once per window.
+  A cell the night shelter keeps tonight (jobs.lib.shelter.keep/kept-tonight: the dig there waits for day) is not pending.
   Entries of a job that is still live (running, queued, paused) are ignored: that job may still be digging there.
   Entries in an unloaded cell, or more than :range blocks from the body, wait until the body is near.
   Persistence is :cooldown (10 s), not :stop. A run cut short by a backoff leaves entries pending, so the condition
@@ -18,6 +19,7 @@
             [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.reach.room :as reach-room]
+            [jobs.lib.shelter.keep :as keep]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]
             [engine.memory :as mem]))
@@ -57,6 +59,7 @@
   (->> (map :data (mem/entries view :tidy))
        (filter tidy/tidy-work?)
        (remove #(contains? live (:job %)))
+       (remove #(keep/kept-tonight p view (:cell %)))
        (filter #(near? here (:cell %)))
        (filterv #(some? (u/block-at p (zipmap [:x :y :z] (:cell %)))))))
 

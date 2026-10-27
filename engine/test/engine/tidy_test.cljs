@@ -10,6 +10,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
+            [jobs.lib.shelter.keep :as keep]
             [jobs.lib.tidy :as tidy]
             [jobs.survival.restore-broken :as restore-broken]
             [engine.memory :as mem]
@@ -360,6 +361,13 @@
                                [#{} true "its job has ended"]]]
     (is (= expected (holds? with-stone-world [[:tidy (assoc dug :job "j1")]] live)) why))
   (is (true? (holds? with-stone-world [[:tidy dug]] #{"j1"})) "an entry with no job id is never held back"))
+
+;; restore-broken's put-back of a shelter block waits (dig: later :dark) and writes no try, so only the trigger can stop the refire
+(deftest the-trigger-does-not-hold-for-a-cell-the-night-shelter-keeps
+  (is (true? (holds? with-stone-world [[:tidy dug]])) "by day")
+  (with-redefs [keep/kept-tonight (fn [_ _ cell] (when (= cell [0 65 0]) {:cell cell}))]
+    (is (false? (holds? with-stone-world [[:tidy dug]])) "kept tonight")
+    (is (false? (holds? {} [[:tidy dug]])) "not even for an unreported entry")))
 
 (def reported [:tidy-reported {:cells [[0 65 0]]}])
 
