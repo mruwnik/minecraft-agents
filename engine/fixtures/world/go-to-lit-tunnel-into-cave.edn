@@ -1,8 +1,9 @@
 ;; Cards 1d68d801 / 3910d752: a buried body walks a glowstone-lit tunnel (x 1..30, z 16) that turns north at x 30 into a cave
 ;; (x 22..38, z 19..32) its rock hides until the turn. The plan runs on through the unseen cave, priced a dark cave (Q16): go-to
 ;; walks only up to the first step where a mob could spawn, looks there and prices what it then sees. The risk share is set to
-;; 0.01 so any priced spawn is over it. Should-succeed: the cave is lit too, the body arrives. Should-fail: the cave is dark past
-;; the light the turn spills into it; the body waits :risky at the turn, never inside.
+;; 0.01 so any priced spawn is over it. Should-succeed: the cave is lit too, the body arrives. Should-succeed: the cave is dark,
+;; but a fed body at full health in the sealed tunnel gains nothing by waiting, so it walks in at the price. Should-fail: the
+;; cave is dark and the body hurt (4 hp, bread carried): it waits :risky at the turn to heal, never inside.
 {:defaults
  {:tags [:movement :dark] :time :any
   :plot {:light :dark :height 8 :length 64 :width 34}
@@ -23,7 +24,14 @@
    :act [[:job (jobs.movement.go-to {:pos #at [30 0 31] :range 1})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 150 :of-job true}]
    :after [[:body-near [30.5 0 31.5] 2]]}
-  {:name "dark-cave-past-the-turn-waits-risky-outside"
+  {:name "dark-cave-past-the-turn-is-walked-at-its-price"
    :act [[:job (jobs.movement.go-to {:pos #at [30 0 31] :range 1})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 150 :of-job true}]
+   :after [[:body-near [30.5 0 31.5] 2]]}
+  {:name "dark-cave-past-the-turn-waits-risky-outside"
+   :body {:inventory [["bread" 3]]}
+   :act [[:rcon "effect clear $BODY"] [:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 16 minecraft:generic"] [:rcon "effect give $BODY minecraft:resistance 600 4 true"]
+         [:job (jobs.movement.go-to {:pos #at [30 0 31] :range 1})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :risky}} :within-s 120}]
    :after [[:body-near [30.5 0 16.5] 2.4]]}]}

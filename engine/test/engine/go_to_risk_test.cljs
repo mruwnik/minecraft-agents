@@ -654,19 +654,20 @@
     (is (> (:hp (risk/estimate c goal)) (price/allowed c)) "over the half-of-health allowance")
     (is (= :ok (first (planned-status c goal))))))
 
-(deftest a-body-in-a-sealed-dark-hall-whose-wait-lowers-nothing-walks-if-staying-costs-and-gives-up-if-not
-  ;; full health, fed: no healing, no sky over the way for dawn to light, no threat to move off; only the dark hall's
-  ;; spawns, over the 2 hp the body affords
-  (let [c (ready-test/ctx-of (assoc day-world :self {:pos {:x 0 :y 64 :z 0} :health 20 :food 20}))
+(deftest a-body-in-a-sealed-dark-hall-whose-wait-lowers-nothing-walks-at-its-price
+  ;; night, full health, fed: no healing, no sky over the seen way for dawn to light, no threat to move off; only the dark
+  ;; hall's spawns, over the 2 hp share the body affords and within all but 1 hp of its health
+  (let [c (ready-test/ctx-of (assoc night-hut :self {:pos {:x 0 :y 64 :z 0} :health 20 :food 20}))
         status-with (fn [feet-light]
                       (with-redefs [sh-sense/sky-reaches-from-above? (constantly false)
+                                    look/glimpse? (constantly true)
                                     sh-sense/block-light-at (fn [_ {:keys [x]}] (if (zero? x) feet-light 0))
                                     spawn-light/hall-at? (constantly true)]
                         (settings/with-settings {::price/risk-share 0.1}
-                          #(do (is (> (:hp (risk/estimate c far-goal {:plan (straight-plan c far-goal)})) (price/allowed c)))
+                          #(do (is (< (price/allowed c) (:hp (risk/estimate c far-goal {:plan (straight-plan c far-goal)})) 19))
                                (planned-status c far-goal)))))]
     (is (= [:ok :cheaper-than-staying] (let [[k _ {:keys [reason]}] (status-with 0)] [k reason])) "staying in the dark hall costs its spawns for ever")
-    (is (= [:never :risky] (let [[k _ {:keys [reason]}] (status-with 15)] [k reason])) "a lit spot is free to stay at, and waiting there never makes the walk affordable")))
+    (is (= [:ok :no-wait-helps] (let [[k _ {:keys [reason]}] (status-with 15)] [k reason])) "a lit spot is free to stay at, but waiting there never makes the walk cheaper: go-to must still arrive")))
 
 (deftest a-hostile-near-the-far-end-of-a-way-does-not-make-staying-dear-enough-to-walk-past-lava
   (let [zombie {:id 9 :name "zombie" :kind "hostile" :pos {:x 20 :y 64 :z 40}}

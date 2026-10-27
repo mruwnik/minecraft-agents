@@ -237,7 +237,8 @@
   (price/allowed c) or within what staying put would cost (a risk staying does not avoid is no reason to wait). Over both:
   later :risky with the risk and its parts, or never :stranded when the body cannot heal, so waiting only repeats the same
   exposure and the caller must seal in or go to a nearer refuge. A wait that lowers nothing the walk is priced by
-  (wait-lowers?) never ends: ok :cheaper-than-staying when staying costs anything, else never :risky. Ok :unplanned with
+  (wait-lowers?) never ends: ok :cheaper-than-staying when staying costs anything, else ok :no-wait-helps within the hp
+  allowed when waiting never lowers the price (price/allowed's waits? false), never :risky over it. Ok :unplanned with
   no plan: go-to's round prices its plan before it walks a step of it (jobs.movement.go-to.reprice)."
   ([c goal] (let [kept (planned c)] (status c (or (:goal kept) goal) kept)))
   ([c goal plan]
@@ -257,4 +258,5 @@
              (and (pos? (:hp stay)) (price/cannot-heal? c)) (contract/never :stranded (str over "; staying here costs " (price/round1 (:hp stay)) " hp and the body cannot heal, so waiting does not help: seal in or go to a nearer refuge") :risk hp :allowed allowed :stay-hp (:hp stay))
              (wait-lowers? c (:cells in) est (:heal-s stay)) (contract/later :risky over :risk hp :allowed allowed :recheck-after-ms recheck-ms)
              (pos? (:hp stay)) (contract/ok :cheaper-than-staying (str "route risk " (price/round1 hp) " hp, over the " (price/round1 allowed) " affordable, but waiting here lowers none of it and costs " (price/round1 (:hp stay)) " hp every " (price/round1 (:secs stay)) " s"))
+             (<= hp (price/allowed c (:worth (:args c)) false)) (contract/ok :no-wait-helps (str "route risk " (price/round1 hp) " hp, over the " (price/round1 allowed) " affordable, but waiting here lowers none of it and the body can take it"))
              :else (contract/never :risky (str over "; waiting here lowers none of it") :risk hp :allowed allowed))))))))

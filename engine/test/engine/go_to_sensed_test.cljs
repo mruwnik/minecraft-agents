@@ -1120,7 +1120,7 @@
 ;; guessed a dark cave, looks, and is priced by the dark it then sees, on every way the walk could go on past the cut
 ;; unpriced: the look-ahead finding the cells open, a refresh refused (the old plan kept), the plan walked unwatched
 (defn ^:async walk-into-cave
-  "go-to from the tunnel's west end to the cave, the risk the body may take cut to 1 hp: {:out :cave :turn} (cave the cells of the cave it stood in, turn those at the tunnel's turn, x 20 z 1..2)."
+  "go-to from the tunnel's west end to the cave, a hurt, fed body that may risk 0.2 hp and heals while it waits: {:out :cave :turn} (cave the cells of the cave it stood in, turn those at the tunnel's turn, x 20 z 1..2)."
   [& [tunnel]]
   (let [tunnel (or tunnel tunnel-into-cave)
         cells (atom #{})
@@ -1129,7 +1129,7 @@
                  (look! s)
                  (add-watch (fake/state p) :track (fn [_ _ _ b] (swap! cells conj (mapv js/Math.floor (:pos (:self b)))))))
         {:keys [out]} (await (settings/with-settings {:jobs.lib.price/risk-share 0.05}
-                               #(run-go-to (cond-> {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (:blocks tunnel) :radius 16 :exact-eye true :bodyHitbox true}
+                               #(run-go-to (cond-> {:self {:pos {:x 0.5 :y 64 :z 0.5} :health 4 :food 20} :blocks (:blocks tunnel) :radius 16 :exact-eye true :bodyHitbox true}
                                              (:states tunnel) (assoc :states (:states tunnel)))
                                            {:pos [20 64 32] :range 1 :ways #{:walk} :unknown true} track!)))]
     {:out out
