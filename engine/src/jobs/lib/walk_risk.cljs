@@ -109,7 +109,7 @@
   "What estimate reads of c's body and world for the walk to `goal` (estimate's opts), as values: the body's feet,
   its shelter, death-body and food, the known threats and hides, the memory epoch of what it knows, the sky's
   darkening now, the cells its look round has looked at, and what the way is priced by as perceived now: its cells, the
-  seconds of it spent where a mob could spawn and the hp of the lava seen near it, and the reach of the threats it prices
+  seconds of it spent where a mob could spawn (:exit-s those of leaving a shelter at night) and the hp of the lava seen near it, and the reach of the threats it prices
   (:weights, their fields' cells, which change as cells they read are seen anew). :cells, :catchers and :remembered are derived, left out of a key."
   [c goal & [{:keys [plan caves-free? back? stay-s]}]]
   (let [p (:primitives c)
@@ -121,7 +121,7 @@
         stay-at (dec (count there))
         there (cond-> there (pos? stay-s) (update stay-at assoc :s (+ stay-s (peek (death/cell-seconds there)))))
         cells (cond-> there back? (#(into % (rest (rseq %)))))
-        exit (if (sh-inside/walk-leaves-shelter? p shelter goal 1) (settings/get settings ::exit-blocks) 0)
+        exit-s (if (sh-inside/walk-leaves-shelter? p shelter goal 1) (/ (settings/get settings ::exit-blocks) (cost/walk-blocks-per-s)) 0)
         food (or (.-food (.self p)) 20)
         known (threats/known-threats c)
         hides (threats/hide-threats c)
@@ -134,7 +134,8 @@
      :known known :hides hides :catchers catchers :remembered remembered
      :weights (mapv #(:weights (field/field-of c %)) (concat catchers remembered))
      :memory (sense/known-memory p) :sky (sh-sense/sky-subtract-now p) :looked (sense/round-looked c)
-     :exposed-s (+ (/ exit (cost/walk-blocks-per-s))
+     :exit-s exit-s
+     :exposed-s (+ exit-s
                    (spawn-light/dark-seconds p cells (mapv #(/ % (cost/walk-blocks-per-s)) (along cells)) caves-free?)
                    (if (and (pos? stay-s) (pos? (spawn-light/chance-at p (nth cells stay-at) caves-free?))) stay-s 0))
      :lava (route-lava-hp p cells)}))
@@ -223,10 +224,11 @@
 
 (defn- wait-lowers?
   "Whether waiting may lower the price of the walk over cells (estimate-inputs' :cells) whose estimate is est: the body
-  heals toward affording it (heal-s), dawn lights a cell of it, or a threat it prices moves or fades."
-  [c cells {:keys [threats]} heal-s]
+  heals toward affording it (heal-s), dawn lights a cell of it or ends the night the walk leaves a shelter in (exit-s),
+  or a threat it prices moves or fades."
+  [c cells exit-s {:keys [threats]} heal-s]
   (let [p (:primitives c)]
-    (or (pos? heal-s) (seq threats)
+    (or (pos? heal-s) (seq threats) (pos? exit-s)
         (boolean (some #(spawn-light/dawn-lowers? p %) cells)))))
 
 (defn status
@@ -253,7 +255,7 @@
            (cond
              (<= hp (:hp stay)) (contract/ok :cheaper-than-staying (str "route risk " (price/round1 hp) " hp, over the " (price/round1 allowed) " affordable but staying here costs " (price/round1 (:hp stay)) " hp (" (:hostiles stay) " hostile(s) near the body)"))
              (and (pos? (:hp stay)) (price/cannot-heal? c)) (contract/never :stranded (str over "; staying here costs " (price/round1 (:hp stay)) " hp and the body cannot heal, so waiting does not help: seal in or go to a nearer refuge") :risk hp :allowed allowed :stay-hp (:hp stay))
-             (wait-lowers? c (:cells in) est (:heal-s stay)) (contract/later :risky over :risk hp :allowed allowed :recheck-after-ms recheck-ms)
+             (wait-lowers? c (:cells in) (:exit-s in) est (:heal-s stay)) (contract/later :risky over :risk hp :allowed allowed :recheck-after-ms recheck-ms)
              (pos? (:hp stay)) (contract/ok :cheaper-than-staying (str "route risk " (price/round1 hp) " hp, over the " (price/round1 allowed) " affordable, but waiting here lowers none of it and costs " (price/round1 (:hp stay)) " hp every " (price/round1 (:secs stay)) " s"))
              (<= hp (price/allowed c (:worth (:args c)) false)) (contract/ok :no-wait-helps (str "route risk " (price/round1 hp) " hp, over the " (price/round1 allowed) " affordable, but waiting here lowers none of it and the body can take it"))
              :else (contract/never :risky (str over "; waiting here lowers none of it") :risk hp :allowed allowed))))))))

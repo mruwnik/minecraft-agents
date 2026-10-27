@@ -15,6 +15,7 @@
             [engine.perception.rays :as rays]
             [engine.perception.store :as store]
             [jobs.lib.cost.rise :as rise]
+            [jobs.lib.memory-age :as memory-age]
             [jobs.lib.walk.rock :as rock]))
 
 (a/defargs settings
@@ -513,7 +514,7 @@
          ^js st (some-> (aget p "perception") :st)
          subtract (when raw (or subtract (sky-subtract raw)))
          k (when (and st (.-stores st))
-             [(.-dim st) (perception/memory-epoch st) (rays/epoch-of raw) subtract
+             [(.-dim st) (memory-age/epoch st) (rays/epoch-of raw) subtract
               (some-> (.-pos (.self p)) (#(mapv js/Math.floor [(.-x %) (.-y %) (.-z %)])))])
          hit (when k (.get guesses st))
          f (cond (nil? raw) (constantly true)
