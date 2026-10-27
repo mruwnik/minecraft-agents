@@ -24,6 +24,7 @@
             [jobs.lib.lava-risk :as lava-risk]
             [jobs.lib.look :as look]
             [jobs.lib.price :as price]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.sense :as sense]
             [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.shelter.inside :as sh-inside]
@@ -34,7 +35,7 @@
 
 (a/defargs settings
   {::exit-blocks {:default 8 :spec (a/num-in 0 nil)
-                  :doc "Blocks of open ground a walk out of a night shelter crosses before it can go under, even to a goal underground."}
+                  :doc "Blocks of open ground a walk out of a night shelter crosses before it can go under, even to a goal underground, priced by the light of the way out (exit-dark)."}
    ::heal-s-per-hp {:default 4 :spec (a/num-in 0 nil)
                     :doc "Seconds a body that can heal takes to regain an hp, for the wait that would make a risky walk affordable (stay-estimate)."}})
 
@@ -105,11 +106,27 @@
         speed (cost/body-speed (or (.-food (.self p)) 20))]
     (mapv #(assoc %1 :t (/ %2 speed)) cells (along cells))))
 
+(defn- exit-dark
+  "{:share :dawn?} of the way out of the room round the feet for a walk over cells: the mean spawn-light/dark-share of
+  the room's sh-inside/way-out-cells, else of the walk's first ::exit-blocks cells past the room not seen solid (1 with
+  neither), and whether dawn lowers that of one (spawn-light/dawn-lowers?)."
+  [p cells caves-free?]
+  (let [feet (sh-sense/feet p)
+        room (or (reach-room/room p feet) {:cells #{[(:x feet) (:y feet) (:z feet)]}})
+        inside (set (:cells room))
+        way (or (seq (sh-inside/way-out-cells p room))
+                (seq (take (js/Math.ceil (settings/get settings ::exit-blocks))
+                           (remove #(or (inside [(:x %) (:y %) (:z %)]) (sh-sense/solid-at? p %)) cells))))]
+    (if way
+      {:share (/ (transduce (map #(spawn-light/dark-share p % caves-free?)) + 0 way) (count way))
+       :dawn? (boolean (some #(spawn-light/dawn-lowers? p %) way))}
+      {:share 1 :dawn? false})))
+
 (defn estimate-inputs
   "What estimate reads of c's body and world for the walk to `goal` (estimate's opts), as values: the body's feet,
   its shelter, death-body and food, the known threats and hides, the memory epoch of what it knows, the sky's
   darkening now, the cells its look round has looked at, and what the way is priced by as perceived now: its cells, the
-  seconds of it spent where a mob could spawn (:exit-s those of leaving a shelter at night) and the hp of the lava seen near it, and the reach of the threats it prices
+  seconds of it spent where a mob could spawn (:exit-s those of leaving a shelter at night by the way out's light, :exit-dawn? whether dawn lowers them) and the hp of the lava seen near it, and the reach of the threats it prices
   (:weights, their fields' cells, which change as cells they read are seen anew). :cells, :catchers and :remembered are derived, left out of a key."
   [c goal & [{:keys [plan caves-free? back? stay-s]}]]
   (let [p (:primitives c)
@@ -121,7 +138,8 @@
         stay-at (dec (count there))
         there (cond-> there (pos? stay-s) (update stay-at assoc :s (+ stay-s (peek (death/cell-seconds there)))))
         cells (cond-> there back? (#(into % (rest (rseq %)))))
-        exit-s (if (sh-inside/walk-leaves-shelter? p shelter goal 1) (/ (settings/get settings ::exit-blocks) (cost/walk-blocks-per-s)) 0)
+        exit (if (sh-inside/walk-leaves-shelter? p shelter goal 1) (exit-dark p there caves-free?) {:share 0 :dawn? false})
+        exit-s (* (/ (settings/get settings ::exit-blocks) (cost/walk-blocks-per-s)) (:share exit))
         food (or (.-food (.self p)) 20)
         known (threats/known-threats c)
         hides (threats/hide-threats c)
@@ -134,10 +152,10 @@
      :known known :hides hides :catchers catchers :remembered remembered
      :weights (mapv #(:weights (field/field-of c %)) (concat catchers remembered))
      :memory (sense/known-memory p) :sky (sh-sense/sky-subtract-now p) :looked (sense/round-looked c)
-     :exit-s exit-s
+     :exit-s exit-s :exit-dawn? (and (pos? exit-s) (:dawn? exit))
      :exposed-s (+ exit-s
                    (spawn-light/dark-seconds p cells (mapv #(/ % (cost/walk-blocks-per-s)) (along cells)) caves-free?)
-                   (if (and (pos? stay-s) (pos? (spawn-light/chance-at p (nth cells stay-at) caves-free?))) stay-s 0))
+                   (* stay-s (spawn-light/dark-share p (nth cells stay-at) caves-free?)))
      :lava (route-lava-hp p cells)}))
 
 (defn estimate-of
@@ -224,11 +242,11 @@
 
 (defn- wait-lowers?
   "Whether waiting may lower the price of the walk over cells (estimate-inputs' :cells) whose estimate is est: the body
-  heals toward affording it (heal-s), dawn lights a cell of it or ends the night the walk leaves a shelter in (exit-s),
-  or a threat it prices moves or fades."
-  [c cells exit-s {:keys [threats]} heal-s]
+  heals toward affording it (heal-s), dawn lights a cell of it or the way out of the shelter it leaves (exit-dawn?), or a
+  threat it prices moves or fades."
+  [c cells exit-dawn? {:keys [threats]} heal-s]
   (let [p (:primitives c)]
-    (or (pos? heal-s) (seq threats) (pos? exit-s)
+    (or (pos? heal-s) (seq threats) exit-dawn?
         (boolean (some #(spawn-light/dawn-lowers? p %) cells)))))
 
 (defn status
@@ -255,7 +273,7 @@
            (cond
              (<= hp (:hp stay)) (contract/ok :cheaper-than-staying (str "route risk " (price/round1 hp) " hp, over the " (price/round1 allowed) " affordable but staying here costs " (price/round1 (:hp stay)) " hp (" (:hostiles stay) " hostile(s) near the body)"))
              (and (pos? (:hp stay)) (price/cannot-heal? c)) (contract/never :stranded (str over "; staying here costs " (price/round1 (:hp stay)) " hp and the body cannot heal, so waiting does not help: seal in or go to a nearer refuge") :risk hp :allowed allowed :stay-hp (:hp stay))
-             (wait-lowers? c (:cells in) (:exit-s in) est (:heal-s stay)) (contract/later :risky over :risk hp :allowed allowed :recheck-after-ms recheck-ms)
+             (wait-lowers? c (:cells in) (:exit-dawn? in) est (:heal-s stay)) (contract/later :risky over :risk hp :allowed allowed :recheck-after-ms recheck-ms)
              (pos? (:hp stay)) (contract/ok :cheaper-than-staying (str "route risk " (price/round1 hp) " hp, over the " (price/round1 allowed) " affordable, but waiting here lowers none of it and costs " (price/round1 (:hp stay)) " hp every " (price/round1 (:secs stay)) " s"))
              (<= hp (price/allowed c (:worth (:args c)) false)) (contract/ok :no-wait-helps (str "route risk " (price/round1 hp) " hp, over the " (price/round1 allowed) " affordable, but waiting here lowers none of it and the body can take it"))
              :else (contract/never :risky (str over "; waiting here lowers none of it") :risk hp :allowed allowed))))))))

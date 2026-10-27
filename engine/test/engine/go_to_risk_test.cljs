@@ -88,6 +88,13 @@
       (let [hp #(:hp (with-redefs [spawn-light/hall-at? (constantly %)] (risk/estimate c {:x 95 :y 64 :z 0} {:plan (straight-plan c {:x 95 :y 64 :z 0})})))]
         (is (< (hp false) (hp true)) "a small dark tunnel is free, a dark hall costs spawns")))))
 
+(deftest a-walk-out-of-a-night-hut-pays-the-exit-at-the-light-of-the-way-out
+  (let [inputs (fn [light] (risk/estimate-inputs (ready-test/ctx-of (assoc night-hut :light {} :light-default light)) {:x 95 :y 64 :z 0}))]
+    (is (pos? (:exit-s (inputs [15 0]))) "under the night sky")
+    (is (:exit-dawn? (inputs [15 0])) "dawn lights it")
+    (is (zero? (:exit-s (inputs [15 14]))) "round a hut lit by torches nothing is paid, whatever the clock (the old surcharge was the night's)")
+    (is (not (:exit-dawn? (inputs [0 0]))) "a way out no sky reaches is dark at dawn too: no reason to wait")))
+
 (deftest a-walk-over-dark-open-ground-at-night-is-held-with-the-risk-in-the-reason
   (async done
     (tu/run-async done
