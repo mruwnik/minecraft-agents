@@ -451,8 +451,8 @@
               world {:inventory [(wheat 4)] :entities [(cow 1 (+ d 2)) (cow 2 (+ d 3))] :time 1000}
               far (h/setup world 50)
               farther (h/setup world 50)]
-          (core/submit! (:eng far) (spec {:box {:min {:x d :y 60 :z -5} :max {:x (+ d 8) :y 70 :z 5}}}) {})
-          (core/submit! (:eng farther) (spec {:box {:min {:x 5000 :y 60 :z -5} :max {:x 5008 :y 70 :z 5}}}) {})
+          (core/submit! (:eng far) (spec {:box {:min {:x d :y 60 :z -5} :max {:x (+ d 8) :y 70 :z 5}} :checks {:safe? '(always)}}) {})
+          (core/submit! (:eng farther) (spec {:box {:min {:x (* 4 d) :y 60 :z -5} :max {:x (+ (* 4 d) 8) :y 70 :z 5}} :checks {:safe? '(always)}}) {})
           (await (tu/run-ticks (:eng far) (:clock far) 3 700))
           (await (tu/run-ticks (:eng farther) (:clock farther) 3 700))
           (is (seq (events-of far :round_started)) "a walk of one cow's worth is worth the pair a pass adds")

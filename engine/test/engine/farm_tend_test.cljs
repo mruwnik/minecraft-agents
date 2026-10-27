@@ -474,10 +474,10 @@
           :ages (into {} (map (fn [[x z]] [(k (+ x dx) 64 z) 7])) all-cells)}))
 
 (defn ^:async far-run
-  "Nine ripe wheat seen dx blocks off."
+  "Nine ripe wheat seen dx blocks off; safe? always, so the price alone decides."
   [dx]
   (let [s (setup (assoc (far-ripe dx) :time 1000))]
-    (core/submit! (:eng s) (list 'jobs.farm.tend {:area (far-box dx)}) {})
+    (core/submit! (:eng s) (list 'jobs.farm.tend {:area (far-box dx) :checks {:safe? '(always)}}) {})
     (await (tu/run-ticks (:eng s) (:clock s) 3 700))
     s))
 
@@ -491,7 +491,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (far-run 2000))]
+        (let [s (await (far-run 400))]
           (is (empty? (events-of s :round_started)))
           (is (some #(= :not-worth (:reason %)) (events-of s :waiting))))))))
 

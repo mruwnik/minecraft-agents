@@ -236,7 +236,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run (list job (assoc args :chest {:x 5000 :y 64 :z 0})) {:inventory [(item "beef" 3)] :containers {"5000,64,0" []}} 3))]
+        (let [s (await (run (list job (assoc args :chest {:x 5000 :y 64 :z 0} :checks {:safe? '(always)})) {:inventory [(item "beef" 3)] :containers {"5000,64,0" []}} 3))]
           (is (empty? (events-of s :round_started)) "no pass starts")
           (is (some #(= :not-worth (:reason %)) (events-of s :waiting))))))))
 
