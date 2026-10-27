@@ -68,17 +68,20 @@
 
 (defn unseen-status
   "The exposure of the unseen place `to` no look from here shows, priced as unseen at its chance (Q16): spawn-light/chance-at's
-  guess of its light. Dark that full day would light (look/unseen-lit? by day) waits for dawn (::light-patience-s), other
-  dark is :never lowered by a torch; jobs.lib.price/priced prices either for the stay."
+  guess of its light. Dark that dawn lifts (chance-at with caves-free?: dark only the sky lights) waits for dawn
+  (::light-patience-s) while what is left once it lifts is within ::risk-limit; other dark is :never lowered by a torch;
+  jobs.lib.price/priced prices either for the stay."
   [c to]
   (let [p (:primitives c)
         chance (spawn-light/chance-at p to false)
+        left (- chance (spawn-light/chance-at p to true))
         light-in (or (sh-sense/sky-in p) ##Inf)
         patience (settings/get settings ::light-patience-s)
+        limit (settings/get settings ::risk-limit)
         where (str "unseen " (place-text to) ", which no look from here shows")]
     (cond
-      (<= chance (settings/get settings ::risk-limit)) (contract/ok :unexposed (str "no spawn risk at " where ": guessed lit"))
-      (not (look/unseen-lit? p to 0)) (contract/never :exposed (str "dark at " where ": guessed out of the sky's reach, which dawn does not light") :lowered-by #{:torch} :chance chance)
+      (<= chance limit) (contract/ok :unexposed (str "no spawn risk at " where ": guessed lit"))
+      (> left limit) (contract/never :exposed (str "dark at " where ": guessed out of the sky's reach, which dawn does not light") :lowered-by #{:torch} :chance chance)
       (<= light-in patience) (contract/later :exposed (str "dark at " where ": guessed open ground, dark until light") :lowered-by #{:light} :chance chance
                                              :recheck-after-ms (* 1000 light-in) :wait-ms (* 1000 light-in))
       :else (contract/never :exposed (str "dark at " where ", light is " (js/Math.round light-in) " s away, over the " (js/Math.round patience) " s it waits") :chance chance))))

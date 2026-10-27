@@ -116,20 +116,37 @@
   jungle) against the land that spawns none (desert, badlands, snowy plains, mushroom fields, beaches): a rough prior."
   0.6)
 
-(def ^:private solid-shares
-  (vec (:sections (js->clj (js/JSON.parse (rc/inline "jobs/lib/cost/solid_shares.json")) :keywordize-keys true))))
+(defn- sections-of [json] (vec (:sections (js->clj (js/JSON.parse json) :keywordize-keys true))))
+
+(def ^:private solid-shares (sections-of (rc/inline "jobs/lib/cost/solid_shares.json")))
+
+(def ^:private sky-shares (sections-of (rc/inline "jobs/lib/cost/sky_shares.json")))
+
+(defn- prior-at
+  "{:a :b} of a table of Betas by section height at height y, a-of and b-of reading a section's: linear in y between the
+  sections' centres, the end ones past the table's ends."
+  [table y a-of b-of]
+  (let [t (-> (/ (- y (:y (first table)) 8) 16) (max 0) (min (dec (count table))))
+        i (min (js/Math.floor t) (- (count table) 2))
+        f (- t i)
+        [lo hi] (subvec table i (+ i 2))
+        mix #(+ (* (- 1 f) (% lo)) (* f (% hi)))]
+    {:a (mix a-of) :b (mix b-of)}))
 
 (defn solid-prior
   "{:a :b} the Beta prior on the share of solid among the blocks sight meets round height y (the open blocks and the
   solid ones beside them) before a body has looked: fitted to the 3x3x3-section windows of the recorded terrain
-  (solid_shares.json, tools/solid-shares.mjs), linear in y between the windows' centres, the end ones past the table's ends."
+  (solid_shares.json, tools/solid-shares.mjs)."
   [y]
-  (let [t (-> (/ (- y (:y (first solid-shares)) 8) 16) (max 0) (min (dec (count solid-shares))))
-        i (min (js/Math.floor t) (- (count solid-shares) 2))
-        f (- t i)
-        [lo hi] (subvec solid-shares i (+ i 2))
-        mix #(+ (* (- 1 f) (% lo)) (* f (% hi)))]
-    {:a (mix :a) :b (mix :b)}))
+  (prior-at solid-shares y :a :b))
+
+(defn sky-share
+  "The chance an open block round height y has sky light `level` (1-15) or more, with open blocks seen there and lit of
+  them at that sky light: the posterior mean over a Beta fitted to the 3x3x3-section windows of the recorded terrain
+  (sky_shares.json, tools/sky-shares.mjs)."
+  [y level lit open]
+  (let [{:keys [a b]} (prior-at sky-shares y #(nth (:a %) (dec level)) #(nth (:b %) (dec level)))]
+    (/ (+ a lit) (+ a b open))))
 
 (defn solid-share
   "The share of solid expected among the blocks sight meets round height y, with solid and open those it has met there:

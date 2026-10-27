@@ -26,7 +26,7 @@ const SOLID_KINDS = [1, 6]
 export const solidStates = kind => Uint8Array.from(kind, k => SOLID_KINDS.includes(k) ? 1 : 0)
 
 // The newest planner block table in the compile cache (js/table-cache.mjs), or an error naming what to do
-const engineTable = () => {
+export const engineTable = () => {
   const dir = path.join(process.env.MC_COMPILE_CACHE_DIR || path.join(ROOT, 'state', 'compile-cache'), 'tables')
   const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => /^state-table-\w+\.bin$/.test(f)) : []
   if (!files.length) throw new Error(`no planner block table in ${dir}: run an engine build or test first`)
@@ -44,8 +44,9 @@ export const betaOf = (m, v, cells) => {
 }
 
 // [{y a b n}] by section from columns: Map "cx,cz" -> {wall open} Int32Arrays of counts per section, lowest first, minY the
-// lowest block; a window with no open block (sight meets nothing there) is no sample
-export const fitWindows = (columns, minY) => {
+// lowest block, the share fitted wall / (wall + open); a window empty? says is no sample (default: no open block, sight
+// meets nothing there)
+export const fitWindows = (columns, minY, empty = (w, o) => o === 0) => {
   const acc = new Map()
   for (const [key, { wall, open }] of columns) {
     const [cx, cz] = key.split(',').map(Number)
@@ -59,7 +60,7 @@ export const fitWindows = (columns, minY) => {
         if (sy + d < 0 || sy + d >= wall.length) continue
         around.forEach(c => { w += c.wall[sy + d]; o += c.open[sy + d] })
       }
-      if (o === 0) continue
+      if (empty(w, o)) continue
       const share = w / (w + o)
       const e = acc.get(sy) ?? { n: 0, sum: 0, sq: 0, cells: 0 }
       e.n++; e.sum += share; e.sq += share * share; e.cells += w + o

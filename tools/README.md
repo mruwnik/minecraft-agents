@@ -128,3 +128,10 @@ Writes `engine/src/jobs/lib/cost/solid_shares.json` (a Beta prior by section hei
 `base-rates/solid-prior`) from the recorded columns in `worlds/test/chunks`, less the fixture plot grid and lanes; solid as
 the engine counts it (the planner block table in the compile cache: run an engine build first). Rerun when the world or
 the game version changes.
+
+### sky-shares.mjs
+
+    node tools/sky-shares.mjs [chunks-dir]
+
+Writes `engine/src/jobs/lib/cost/sky_shares.json` (a Beta prior by section height and sky light level on the share of open blocks at that sky light or more,
+read by `base-rates/sky-share`) from the same recorded columns and their light, as `solid-shares.mjs`.

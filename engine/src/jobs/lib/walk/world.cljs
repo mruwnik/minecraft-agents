@@ -12,7 +12,6 @@
             [jobs.lib.breath :as breath]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
-            [jobs.lib.cost.base-rates :as base-rates]
             [jobs.lib.look :as look]
             [jobs.lib.placement :as placement]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -130,54 +129,20 @@
 
 (defn rock-beyond "The setting ::rock-beyond, nil when off." [] (or (settings/get settings ::rock-beyond) nil))
 
-(defonce ^:private shares (js/WeakMap.))
-
-(defn solid-share
-  "The chance that a block sight meets round the feet is solid: base-rates/solid-share at the feet's height of the blocks
-  the body remembers, aged ones too, in the feet's section and the 26 round it (the window the prior is fitted to). Sight
-  meets every open block along a ray and the solid one that ends it, as the prior counts open blocks and the walls beside
-  them. Nil without a perception (no memory, no guessed rock). Kept while the body stands in one section and no block it
-  remembers changed or aged."
-  [p]
-  (when-let [known (memory-sections p)]
-    (let [{:keys [x y z]} (sh-sense/feet p)
-          ^js st (:st (aget p "perception"))
-          [cx sy cz :as at] (mapv #(bit-shift-right % 4) [x y z])
-          k [(.-dim st) (memory-age/epoch st) at]
-          hit (.get shares st)]
-      (if (= k (:k hit))
-        (:v hit)
-        (let [^js open (rock/open-ids)
-              [solid seen] (reduce (fn [[solid seen :as acc] ^js ids]
-                                     (if-not ids
-                                       acc
-                                       (loop [i 0 solid solid seen seen]
-                                         (if (== i 4096)
-                                           [solid seen]
-                                           (let [v (aget ids i)]
-                                             (cond (zero? v) (recur (inc i) solid seen)
-                                                   (== 1 (aget open (dec v))) (recur (inc i) solid (inc seen))
-                                                   :else (recur (inc i) (inc solid) (inc seen))))))))
-                                   [0 0]
-                                   (for [dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]] (known (+ cx dx) (+ sy dy) (+ cz dz))))
-              v (base-rates/solid-share y solid (- seen solid))]
-          (.set shares st {:k k :v v})
-          v)))))
-
 (defn rock-likely?
   "Whether a cell k + 1 blocks past a seen open one, the nearest the rock guess reads as stone, is more likely solid than
-  open when each block sight meets there is solid at chance share (solid-share): k + 1 open blocks in a row are under even."
+  open when each block sight meets there is solid at chance share (look/solid-share): k + 1 open blocks in a row are under even."
   [share k]
   (< (js/Math.pow (- 1 share) (inc k)) 0.5))
 
 (defn rock-guess?
   "Whether a walk over mask spec unknown (nil: none) reads far unseen cells as rock (path-world): ::rock-beyond is on, a
-  cell past it is more likely solid than open (rock-likely? of solid-share), the body's head is out of water, and the mask
+  cell past it is more likely solid than open (rock-likely? of look/solid-share), the body's head is out of water, and the mask
   is neither :edge nor without-rock. Light counts only through what sight made out (a dark cell beyond perception's
   :near is not met): it says how dangerous a place is, not what an unseen cell holds."
   [p ^js unknown]
   (boolean (and unknown (not (.-edge unknown)) (not (.-noRock unknown)) (not (breath/head-under? p))
-                (when-let [k (rock-beyond)] (some-> (solid-share p) (rock-likely? k))))))
+                (when-let [k (rock-beyond)] (some-> (look/solid-share p) (rock-likely? k))))))
 
 (defn- rock-seeds
   "The cells path-world's rock guess spares for a walk over mask spec unknown: the feet and the spec's seeds (with-seeds)."
@@ -288,25 +253,38 @@
     pw
     #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers dangers :avoid (.-avoid pw) :dark (.-dark pw) :tolls (.-tolls pw)}))
 
+(def ^:private dark-steps
+  "The planner's classes of a chance of dark (dark-fn's :chance) between none and certain: the chance rounds to the
+  nearest step of 1/dark-steps."
+  16)
+
 (defn with-dark
-  "pw whose plans cost dark cells more (the planner's options.dark): dark is look/dark-fn's {:at ..} (nil: pw). A dark
-  cell costs cost/dark-factor of kit (kit-of; nil: the floor) times its own seconds more. With a kit, a cell water
-  (look/water-fn's class, nil: none) gives costs its class's cost/water-factors too, by day as well: a drowned keeps to the
-  water, and a dark one pays the land mobs' dark-factor on top (classes 4 and 5: dark 2 and 3); a phantom floor beside
-  seen water its cost/unseen-water-factors (classes from look/lag-class): wet and phantom, those two of kit."
+  "pw whose plans cost dark cells more (the planner's options.dark): dark is look/dark-fn's {:at :chance} (:chance
+  defaults to :at; nil: pw). A cell dark at chance c costs c times cost/dark-factor of kit (kit-of; nil: the floor) times
+  its own seconds more. With a kit, a cell water (look/water-fn's class, nil: none) gives costs its class's
+  cost/water-factors too, by day as well: a drowned keeps to the water, and a dark one (:at) pays the land mobs'
+  dark-factor on top (classes 4 and 5: dark 2 and 3); a phantom floor beside seen water its cost/unseen-water-factors
+  (classes from look/lag-class): wet and phantom, those two of kit."
   [pw dark water kit wet phantom]
   (if (nil? dark)
     pw
-    (let [at (:at dark)]
+    (let [{:keys [at chance]} dark
+          chance (or chance at)
+          factor (if kit (cost/dark-factor kit) (cost/dark-factor))
+          waters (if (and kit water) (vec (concat wet (map #(+ factor %) wet) phantom)) [])
+          first-step (+ 2 (count waters))
+          land (fn [x y z]
+                 (let [r (js/Math.round (* dark-steps (chance x y z)))]
+                   (cond (<= r 0) 0 (>= r dark-steps) 1 :else (+ first-step r -1))))]
       #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :avoid (.-avoid pw) :tolls (.-tolls pw)
-           :dark (if (and kit water)
-                   (let [factor (cost/dark-factor kit)]
-                     #js {:at (fn [x y z] (let [w (water x y z)]
-                                            (cond (>= w look/lag-class) w
-                                                  (pos? w) (if (== 1 (at x y z)) (+ w 2) w)
-                                                  :else (at x y z))))
-                          :factor factor :water (clj->js (concat wet (map #(+ factor %) wet) phantom))})
-                   #js {:at at :factor (if kit (cost/dark-factor kit) (cost/dark-factor))})})))
+           :dark #js {:at (if (and kit water)
+                            (fn [x y z] (let [w (water x y z)]
+                                          (cond (>= w look/lag-class) w
+                                                (pos? w) (if (== 1 (at x y z)) (+ w 2) w)
+                                                :else (land x y z))))
+                            land)
+                      :factor factor
+                      :water (clj->js (into waters (map #(* factor (/ % dark-steps))) (range 1 dark-steps)))}})))
 
 (defn kit-of
   "{:weapon :equipment :health :absorption :food} of the body: its best default weapon (jobs.lib.combat), the armour worn

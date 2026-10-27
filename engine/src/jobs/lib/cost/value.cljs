@@ -179,13 +179,14 @@
 
 (defn spawn-share
   "The share of place's cells (a cell, a set of cells or a {:min :max} box) a mob spawns at. :light (cell -> {:block :sky} as
-  the body saw it, the sky light already less the sky's darkening and 0 where it no longer lights; nil or missing: unseen,
-  dark). A cell spawns only at block light 0 and sky light 0."
+  the body saw it, the sky light already less the sky's darkening and 0 where it no longer lights; {:dark} the chance an
+  unseen cell is dark, jobs.lib.look's guess; nil or missing: unseen, dark). A cell spawns only at block light 0 and sky
+  light 0."
   [place {:keys [light]}]
   (let [cells (cells-of place)
-        spawns? (fn [cell] (let [{:keys [block sky] :or {block 0 sky 0}} (when light (light cell))]
-                             (and (zero? block) (zero? sky))))]
-    (/ (count (filter spawns? cells)) (max 1 (count cells)))))
+        spawns (fn [cell] (let [{:keys [block sky dark] :or {block 0 sky 0}} (when light (light cell))]
+                            (or dark (if (and (zero? block) (zero? sky)) 1 0))))]
+    (/ (transduce (map spawns) + 0 cells) (max 1 (count cells)))))
 
 (defn spawn-chance
   "The chance per second a mob spawns at place and reaches a body standing there: ::spawn-chance-per-s x spawn-share."

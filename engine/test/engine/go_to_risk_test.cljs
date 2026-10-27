@@ -77,15 +77,16 @@
     (is (= walk (spawn-light/spawns-over p (spawn-light/walked (sh-sense/feet p) (:steps plan)))))))
 
 (deftest a-dark-way-by-day-is-not-exposed
-  (let [c (ready-test/ctx-of (assoc night-hut :time st/noon))]
-    (is (zero? (:hp (risk/estimate c {:x 95 :y 64 :z 0}))))))
+  ;; nothing seen: by day only the measured share of open ground the sky does not light at its height is priced
+  (let [hp #(:hp (risk/estimate (ready-test/ctx-of (assoc night-hut :time %)) {:x 95 :y 64 :z 0}))]
+    (is (< (* 4 (hp st/noon)) (hp st/night)))))
 
 (deftest a-roofed-dark-way-prices-spawns-only-through-a-dark-hall
   (let [c (ready-test/ctx-of (assoc night-hut :time st/noon))]
     (with-redefs [sh-sense/sky-reaches-from-above? (constantly false)
                   sh-sense/block-light-at (constantly 0)]
-      (is (zero? (:hp (with-redefs [spawn-light/hall-at? (constantly false)] (risk/estimate c {:x 95 :y 64 :z 0} {:plan (straight-plan c {:x 95 :y 64 :z 0})})))) "a small dark tunnel is free")
-      (is (pos? (:hp (with-redefs [spawn-light/hall-at? (constantly true)] (risk/estimate c {:x 95 :y 64 :z 0} {:plan (straight-plan c {:x 95 :y 64 :z 0})})))) "a dark hall costs spawns"))))
+      (let [hp #(:hp (with-redefs [spawn-light/hall-at? (constantly %)] (risk/estimate c {:x 95 :y 64 :z 0} {:plan (straight-plan c {:x 95 :y 64 :z 0})})))]
+        (is (< (hp false) (hp true)) "a small dark tunnel is free, a dark hall costs spawns")))))
 
 (deftest a-walk-over-dark-open-ground-at-night-is-held-with-the-risk-in-the-reason
   (async done
@@ -131,7 +132,10 @@
         away {:x -30 :y 64 :z 0}
         risk-of (fn [to cells] (risk/estimate c to {:plan (plan-of cells)}))]
     (is (pos? (:death-chance (risk-of goal straight-cells))) "17 blocks off, past the trigger's cut at 16, the way past it is not free")
-    (is (zero? (:death-chance (risk-of away (for [x (range -1 -31 -1)] {:x x :y 64 :z 0})))) "the way off from it is")))
+    (is (= (:death-chance (risk/estimate (ready-test/ctx-of {:time st/noon :self {:pos {:x 0.5 :y 64 :z 0.5}}}) away
+                                         {:plan (plan-of (for [x (range -1 -31 -1)] {:x x :y 64 :z 0}))}))
+           (:death-chance (risk-of away (for [x (range -1 -31 -1)] {:x x :y 64 :z 0}))))
+        "the way off from it is priced as with no skeleton")))
 
 (deftest standing-at-the-goal-is-priced-in-the-skeletons-fire-range-there
   (let [c (ready-test/ctx-of {:time st/noon :self {:pos {:x 0.5 :y 64 :z 0.5}}
@@ -173,14 +177,17 @@
         lit-by (fn [c light] (swap! (fake/state (:primitives c)) assoc :light-default light) c)
         c (ready-test/ctx-of open)
         sealed (lit-by (ready-test/ctx-of open) [0 0])
-        lit-hall (lit-by (ready-test/ctx-of (assoc open :time st/night)) [0 14])]
+        lit-hall (lit-by (ready-test/ctx-of (assoc open :time st/night)) [0 14])
+        dark-night (lit-by (ready-test/ctx-of (assoc open :time st/night)) [0 0])
+        dark-s #(:dark-s (risk/estimate %1 %2))]
+    ;; nothing seen but the body's own cell: priced by the measured shares of open ground the sky lights, by height
     (with-redefs [sh-sense/seen-cell? (constantly false) look/glimpse? (constantly false)]
-      (is (zero? (:dark-s (risk/estimate c {:x 95 :y 64 :z 0}))) "unseen open ground by day is lit by the sky")
-      (is (zero? (:dark-s (risk/estimate c {:x 95 :y 84 :z 0}))) "a goal above the body makes no cave of the ground at its level")
-      (is (pos? (:dark-s (risk/estimate c {:x 5 :y 20 :z 90}))) "unseen ground far below is under ground more likely than not")
-      (is (pos? (:dark-s (risk/estimate sealed {:x 95 :y 64 :z 0}))) "by day too, round a body no sky light reaches")
-      (is (zero? (:dark-s (risk/estimate lit-hall {:x 10 :y 64 :z 0})))
-          "at night, unseen ground beside a body in block light 14 is lit (the old guess read it dark by the clock)"))))
+      (is (< (* 3 (dark-s c {:x 95 :y 64 :z 0})) (dark-s sealed {:x 95 :y 64 :z 0}))
+          "unseen open ground by day is mostly lit by the sky, round a body no sky light reaches mostly dark")
+      (is (< (dark-s c {:x 95 :y 84 :z 0}) (dark-s c {:x 95 :y 64 :z 0})) "a goal above the body makes no cave of the ground at its level")
+      (is (< (* 3 (dark-s c {:x 95 :y 64 :z 0})) (dark-s c {:x 5 :y 20 :z 90})) "unseen ground far below is under ground more likely than not")
+      (is (< (dark-s lit-hall {:x 10 :y 64 :z 0}) (dark-s dark-night {:x 10 :y 64 :z 0}))
+          "at night, unseen ground beside a body in block light 14 is lit nearer it, less so past unseen cells (the old guess read it dark by the clock)"))))
 
 (deftest a-held-plan-is-kept-until-the-body-moves-or-a-block-it-knows-changes
   (let [m (atom {})
@@ -396,7 +403,7 @@
   (let [c (ready-test/ctx-of day-world)
         on-way (with-death c {:x 80 :y 64 :z 5} "husk" 60000)
         off-way (with-death c {:x 50 :y 64 :z 5} "husk" 60000)]
-    (is (zero? (:hp (risk/estimate c far-goal))))
+    (is (zero? (:death-hp (risk/estimate c far-goal))))
     (is (pos? (:death-hp (estimate-unseen on-way far-goal))))
     (is (zero? (:death-hp (estimate-unseen off-way far-goal))))))
 

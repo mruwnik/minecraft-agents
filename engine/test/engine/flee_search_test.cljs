@@ -95,7 +95,8 @@
                                                          (await (open-field-prices st/noon false)) (await (open-field-prices st/noon true))]]
           (is (= 12 (count night)) (pr-str night))
           (is (every? #(> (night %) (night-unspawned %)) (keys night)) (str "each way under the night sky costs its spawns " (pr-str night night-unspawned)))
-          (is (= day day-unspawned) "by day nothing spawns on the ways"))))))
+          (is (every? #(< (* 2 (- (day %) (day-unspawned %))) (- (night %) (night-unspawned %))) (keys night))
+              (str "by day only the unseen ground the sky may not light spawns " (pr-str day day-unspawned))))))))
 
 (deftest a-flight-down-a-dark-corridor-is-a-priced-way-on
   ;; the old search priced an unseen open cell lethal and cut each route before it: in the dark every end was a pocket

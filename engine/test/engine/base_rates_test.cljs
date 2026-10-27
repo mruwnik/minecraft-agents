@@ -54,3 +54,10 @@
   (is (> (rates/solid-share 120 300 100) 0.5) "a tunnel seen in rock high up")
   (is (< (js/Math.abs (- (rates/solid-share 63 0 0) (rates/solid-share 64 0 0))) 0.01) "no step at a section border")
   (is (= (rates/solid-prior -500) (rates/solid-prior -56)) "past the table's ends, its end window"))
+
+(deftest the-sky-share-is-the-height-prior-until-the-seen-open-blocks-outweigh-it
+  (is (< (rates/sky-share -40 8 0 0) 0.01) "nothing seen deep down: caves")
+  (is (> (rates/sky-share 120 15 0 0) 0.9) "nothing seen high up: open air")
+  (is (< (rates/sky-share 70 8 0 50) 0.1) "a hall seen shaded at the surface")
+  (is (> (rates/sky-share 20 8 50 50) 0.9) "a ravine seen sky-lit deep down")
+  (is (> (rates/sky-share 70 8 0 0) (rates/sky-share 70 15 0 0)) "more open blocks have some sky light than the open sky"))

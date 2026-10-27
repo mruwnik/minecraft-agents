@@ -217,9 +217,43 @@
     (is (true? (sh-sense/lit-here? p {:x 6 :y 64 :z 0})))))
 
 (deftest seen-block-light-lights-an-unseen-cell-less-one-a-block
-  (let [p (sealed midnight [0 0] {[0 64 3] [0 5]})]
-    (is (true? (look/unseen-lit? p {:x 0 :y 64 :z -1})) "5 less 4 blocks, behind the body")
-    (is (false? (look/unseen-lit? p {:x 0 :y 64 :z -2})) "5 less 5 blocks")))
+  ;; a light 5 three blocks ahead, falling one a block to the body's cell
+  (let [p (sealed midnight [0 0] (into {} (for [z (range 4)] [[0 64 z] [0 (+ 2 z)]])))]
+    (is (true? (look/unseen-lit? p {:x 0 :y 64 :z -1})) "2 less 1 block, behind the body")
+    (is (false? (look/unseen-lit? p {:x 0 :y 64 :z -2})) "2 less 2 blocks")))
+
+(defn unlooked
+  "Fake primitives over world with a perception that has seen nothing yet."
+  [world]
+  (let [p (tu/fake world)
+        wrapped (perception/wrap p (perception/create (fake-raw/create p) {:radius 16 :ray-deg 2}))]
+    (.setOwner p "t1")
+    wrapped))
+
+(deftest unseen-cells-between-dim-the-chance-the-body-s-light-reaches-past-them
+  ;; nothing seen yet at y 0, where the measured solid share is 0.36: the old guess spread the light 14 through them as air
+  (let [p (unlooked {:self {:pos [0 0 0]} :light {[0 0 0] [0 14]} :light-default [0 0]})]
+    (is (< 0.6 (look/unseen-lit-chance p {:x 2 :y 0 :z 0}) 0.7) "one unseen cell between")
+    (is (false? (look/unseen-lit? p {:x 3 :y 0 :z 0})) "two: more likely rock than not")))
+
+(deftest a-seen-wall-stops-the-spread
+  (let [inside (for [x [-1 0 1] y [64 65 66] z [-1 0 1]] [x y z])
+        p (seeing {:time midnight :blocks (apply dissoc (tu/box -2 63 -2 2 67 2 "stone") (map #(.join (clj->js %) ",") inside))})]
+    (doseq [yaw [0 90 180 270] pitch [-60 0 60]]
+      (swap! (fake/state p) assoc :yaw yaw :pitch pitch)
+      (perception/pass! (aget p "perception")))
+    (swap! (fake/state p) assoc :light-default [0 0] :light (zipmap inside (repeat [0 14])))
+    (is (every? #(sh-sense/seen-cell? p %) [{:x 2 :y 64 :z 0} {:x 0 :y 67 :z 0} {:x 0 :y 64 :z -2}]) "the walls round the room are seen")
+    (is (zero? (look/unseen-lit-chance p {:x 4 :y 64 :z 0})) "the room's light 14 does not pass its seen walls")))
+
+(deftest an-unseen-gap-under-seen-open-sky-is-priced-not-free
+  ;; a shaft down from a hole in the floor, the sky's light 15 all the way down, in a place the sky does not light else
+  (let [p (seeing {:time day :blocks {"0,63,5" "air" "0,63,6" "air" "0,63,7" "air"}})]
+    (swap! (fake/state p) assoc :light-default [0 0] :light (into {} (for [y (range 58 64)] [[0 y 7] [15 0]])))
+    (let [gap (count (take-while #(not (sh-sense/seen-cell? p {:x 0 :y % :z 7})) (range 59 64)))]
+      (is (< 0 gap 5) "the hole is seen, the shaft under it not")
+      (is (= (js/Math.pow (- 1 (look/solid-share p)) gap) (look/unseen-lit-chance p {:x 0 :y 58 :z 7}))
+          "each unseen cell under it open at the solid share's chance (the old guess: the open sky, lit)"))))
 
 (deftest an-unseen-cell-under-open-sky-is-lit-by-day-only
   (is (true? (look/unseen-lit? (seeing {:time day}) {:x 40 :y 64 :z 0})) "far past sight, where the seen ground is under open sky")

@@ -45,13 +45,15 @@
     (cond
       block (cost/spawn-chance [(:x cell) (:y cell) (:z cell)]
                                {:light (constantly {:block block :sky (cond (sh-sense/sky-reaches-from-above? p cell) sky (and (< block (look/dark-light)) (hall-at? p cell)) 0 :else 15)})})
-      (or (look/unseen-lit? p cell (when-not night 0)) (and caves-free? (not (look/unseen-lit? p cell 0)))) 0
-      :else (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block 0 :sky 0})}))))
+      :else (let [now (look/unseen-lit-chance p cell (when-not night 0))
+                  ;; caves-free? frees the dark full day leaves too: the chance left is that of dark only the sky lifts
+                  dark (if caves-free? (max 0 (- (look/unseen-lit-chance p cell 0) now)) (- 1 now))]
+              (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:dark dark})})))))
 
 (defn chance-at
   "The spawn chance per second at `cell`: a seen cell by its light (sky reaching it down its column; a roofed cell is dark
-  only in a dark hall), an unseen one by the guess of its light (look/unseen-lit?); none under caves-free? for an unseen
-  one full day would not light either (dark-guess?)."
+  only in a dark hall), an unseen one at the chance it is dark (look/unseen-lit-chance); under caves-free? an unseen one
+  only at the chance full day would light it and now does not."
   [p cell caves-free?]
   (chance-by p cell caves-free? (night? p)))
 
@@ -72,17 +74,22 @@
          (pos? (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block 0 :sky 0})}))
          (not (look/dark-in-sight? p cell)))))
 
+(defn dark-share
+  "chance-at of cell as a share of that of a cell certainly dark: 1 dark, 0 lit, the chance of dark between."
+  [p cell caves-free?]
+  (let [dark (cost/spawn-chance [0 0 0])]
+    (if (pos? dark) (/ (chance-at p cell caves-free?) dark) 0)))
+
 (defn dark-seconds
-  "Seconds of the walk over cells where a mob could spawn (chance-at), times (seconds from the start at each cell): every
-  k-th cell and the last stand for the stretch walked since the one before, k the larger of ::step and the cells over
+  "Seconds of the walk where a mob could spawn, times (seconds from the start at each cell): every k-th cell and the
+  last stand for the stretch walked since the one before, at its dark-share, k the larger of ::step and the cells over
   ::max-cells."
   [p cells times caves-free?]
   (let [n (count cells)
         k (js/Math.ceil (max (settings/get settings ::step) (/ n (settings/get settings ::max-cells))))
         ends (distinct (concat (range k n k) [(dec n)]))]
-    (reduce + (for [[a b] (map vector (cons 0 ends) ends)
-                    :when (pos? (chance-at p (nth cells b) caves-free?))]
-                (- (times b) (times a))))))
+    (reduce + (for [[a b] (map vector (cons 0 ends) ends)]
+                (* (- (times b) (times a)) (dark-share p (nth cells b) caves-free?))))))
 
 (defn spawns-over
   "The mobs (an expected count) met spawning on the timed cells ([{:x :y :z :t}], :t seconds from the start, the first
