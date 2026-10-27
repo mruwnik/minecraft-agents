@@ -49,13 +49,18 @@
     2 [(settings/get settings ::door-changes) (settings/get settings ::door-seconds)]
     3 [(settings/get settings ::fire-changes) (settings/get settings ::fire-seconds)]))
 
+(defn- chance
+  "q of a cell seen age-ms ago under a prior of a changes over b-ms."
+  [a b-ms age-ms]
+  (- 1 (js/Math.pow (+ 1 (/ (js/Math.max 0 age-ms) b-ms)) (- a))))
+
 (defn changed-chance
   "q: the chance a remembered cell of kind seen age-ms ago has changed since."
   [kind age-ms]
   (if (== kind NONE)
     0
     (let [[a b] (prior kind)]
-      (- 1 (js/Math.pow (+ 1 (/ (js/Math.max 0 age-ms) 1000 b)) (- a))))))
+      (chance a (* 1000 b) age-ms))))
 
 (defn level
   "The level of change chance q: 0 under q-min, 1-9 its doublings up to 1/2, 10-TOP the halvings of 1 - q past it."
@@ -260,7 +265,7 @@
               age (- now seen)
               l (if (< age (aget dues (* k (inc TOP))))
                   0
-                  (level (- 1 (js/Math.pow (+ 1 (/ age (aget dues (+ PRIOR (* 2 k) 1)))) (- (aget dues (+ PRIOR (* 2 k))))))))
+                  (level (chance (aget dues (+ PRIOR (* 2 k))) (aget dues (+ PRIOR (* 2 k) 1)) age)))
               old (aget levels j)]
           (aset levels j l)
           (recur (inc j) (or changed (not (== l old))) (or flipped (not (identical? (>= l LIKELIER) (>= old LIKELIER)))) (js/Math.min due (+ seen (aget dues (+ (* k (inc TOP)) l)))) (if (pos? l) (inc aged) aged)))))))
