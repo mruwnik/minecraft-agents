@@ -266,13 +266,27 @@
 
 (defn walk-args [c site] {:pos (update site :y inc) :range site-range})
 
-(defn not-worth
-  "{:reason :not-worth :worth :walk-s} when even the least walk to the unseen site (walk-pick/walk-s) costs more than the pass is worth, else nil."
+(def quote-kind "Memory of the go-to quotes of walks to unseen fields that cost more than the pass was worth." :farm-tend/walk-quote)
+(def quote-policy {:cap 16 :ttl :forever})
+
+(defn cell-of [pos] (mapv #(js/Math.floor (% pos)) [:x :y :z]))
+
+(defn quoted
+  "The remembered quote {:from :to :walk-s :death-chance} of the walk from the body's cell to site, or nil."
   [c site]
-  (let [worth (pass-worth c)
-        walk (pick/walk-s (u/self-pos c) (walk-args c site))]
-    (when (> walk worth)
-      {:reason :not-worth :worth worth :walk-s walk})))
+  (let [from (cell-of (u/self-pos c))]
+    (some #(when (and (= from (:from (:data %))) (= site (:to (:data %)))) (:data %)) (rseq (ctx/entries c quote-kind)))))
+
+(defn not-worth
+  "{:reason :not-worth :worth :walk-s} while the walk to the unseen site costs more than the pass is worth (pass-price, as
+  the walk survives): go-to's quote of it remembered from this cell (walk-to-site!), else the least walk (walk-pick/walk-s);
+  nil otherwise. The quote is asked again once the body moves or the worth grows past it."
+  [c f site]
+  (let [worth (:worth (pass-price c f))
+        q (quoted c site)
+        walk (or (:walk-s q) (pick/walk-s (u/self-pos c) (walk-args c site)))]
+    (when (> walk (cost/survived-worth worth (:death-chance q)))
+      (cond-> {:reason :not-worth :worth worth :walk-s walk} q (assoc :quoted true)))))
 
 (defn blocked-text
   "Why crop cells stay unsown: n of them hold the blocks found (tidy digs none of those), ground of them at soil level."
@@ -299,7 +313,7 @@
       (let [f (check-facts c)]
         (when-not (would-run? c f)
           (if-let [site (walk-due? c)]
-            (some->> (not-worth c site) (checks/cause-status :later))
+            (some->> (not-worth c f site) (checks/cause-status :later))
             (checks/cause-status (if (and (needs-look? c) (not (look/surveyed? c :near))) :look :later)
                                  (if (seq (:short f)) {:reason :short-seed :seeds (vec (sort (:short f)))} (nothing-to-do-reason f)))))))))
 
@@ -566,7 +580,8 @@
 (defn ^:async walk-to-site!
   "Walk to the unseen field before the pass, as a player does, when go-to's quote of the walk costs less than the pass is
   worth as the walk survives (walk-pick/quoted-s, ev-worth; a quote that cannot price it leaves the walk to say): :again
-  once there, :continue while the quote or the walk waits, the walk's own ending, or condition-failed :not-worth."
+  once there, :continue while the quote or the walk waits, the walk's own ending, or condition-failed :not-worth, the quote
+  remembered from this cell (not-worth reads it)."
   [c site]
   (let [args (walk-args c site)
         worth (pass-worth c)
@@ -575,9 +590,10 @@
     (cond
       (:estimate q) :continue
       (and (js/isFinite price) (> price (pick/ev-worth worth q)))
-      (ctx/end c :condition-failed :not-worth
-               {:steps {} :worth worth :walk-s price
-                :text (str "farm tend: the walk to the unseen field costs " (js/Math.round price) " s, more than the pass is worth (" (js/Math.round worth) " s)")})
+      (do (ctx/remember! c quote-kind {:from (cell-of (u/self-pos c)) :to site :walk-s price :death-chance (get-in q [:risk :death-chance])} quote-policy)
+          (ctx/end c :condition-failed :not-worth
+                   {:steps {} :worth worth :walk-s price
+                    :text (str "farm tend: the walk to the unseen field costs " (js/Math.round price) " s, more than the pass is worth (" (js/Math.round worth) " s)")}))
       :else
       (let [e (await (ctx/call c :walk 'jobs.movement.go-to (assoc args :worth worth)))]
         (cond

@@ -18,6 +18,7 @@
             [jobs.lib.field-area :as fa]
             [jobs.lib.look :as look]
             [jobs.lib.steps :as steps]
+            [jobs.lib.walk-pick :as pick]
             [jobs.lib.world-files :as world]))
 
 (def box {:min {:x 2 :y 63 :z 2} :max {:x 4 :y 64 :z 4}})
@@ -427,13 +428,6 @@
           (is (= #{[2 2] [3 2]} (dug s)))
           (is (true? (finished? s))))))))
 
-(defn ^:async with-looks-showing
-  "(f)'s result with a look from here showing every cell, as next to the field (the fake has no perception, whose sight says it)."
-  [f]
-  (let [shows look/look-shows?]
-    (set! look/look-shows? (constantly true))
-    (try (await (f)) (finally (set! look/look-shows? shows)))))
-
 (deftest a-seen-field-with-nothing-to-do-still-waits-after-the-look
   (async done
     (tu/run-async done
@@ -441,7 +435,7 @@
         (let [s (setup (world (farm "wheat" 3 all-cells all-cells)))
               _ (tu/seeing-after-look (:p s))]
           (core/submit! (:eng s) (list 'jobs.farm.tend {:area box}) {})
-          (await (with-looks-showing #(tu/run-ticks (:eng s) (:clock s) 6 700)))
+          (await (tu/with-looks-showing #(tu/run-ticks (:eng s) (:clock s) 6 700)))
           (is (seq (calls s "look")))
           (is (= [:nothing-to-do] (distinct (map :reason (events-of s :waiting)))))
           (is (empty? (dug s))))))))
@@ -455,7 +449,7 @@
               s (setup terrain)
               _ (tu/seeing-after-look (:p s))]
           (core/submit! (:eng s) (list 'jobs.farm.tend {:area box :till true}) {})
-          (await (with-looks-showing #(tu/run-ticks (:eng s) (:clock s) 6 700)))
+          (await (tu/with-looks-showing #(tu/run-ticks (:eng s) (:clock s) 6 700)))
           (let [w (last (events-of s :waiting))]
             (is (= :nothing-to-do (:reason w)))
             (is (= 9 (:covered w)) "9 tillable cells have a block over them: the box sits too low")))))))
@@ -467,7 +461,7 @@
         (let [s (setup (world (ground "dirt" all-cells) {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 4)]}) [foreign-zone])
               _ (tu/seeing-after-look (:p s))]
           (core/submit! (:eng s) (list 'jobs.farm.tend {:area box :till true}) {})
-          (await (with-looks-showing #(tu/run-ticks (:eng s) (:clock s) 6 700)))
+          (await (tu/with-looks-showing #(tu/run-ticks (:eng s) (:clock s) 6 700)))
           (let [w (last (events-of s :waiting))]
             (is (= :nothing-to-do (:reason w)))
             (is (= 9 (:refused w)))
@@ -562,6 +556,23 @@
           (await (tu/run-ticks (:eng s) (:clock s) 5 700))
           (is (empty? (tu/walk-calls (:p s))) "one crop 300 blocks off is not worth the walk")
           (is (some #(= :not-worth (:reason %)) (events-of s :waiting))))))))
+
+(deftest a-walk-quote-over-the-worth-is-remembered-not-asked-again-each-rest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup (assoc (world (farm "wheat" 7 hidden-cells hidden-cells) wheat-drops) :floor [-5 -5 60 15]))
+              asked (atom 0)
+              quoted pick/quoted-s]
+          (tu/seeing-within (:p s) 10)
+          (set! pick/quoted-s (fn [_c _q] (swap! asked inc) 1000))
+          (try
+            (core/submit! (:eng s) (list 'repeat (list 'jobs.farm.tend {:area {:min {:x 12 :y 63 :z 2} :max {:x 14 :y 64 :z 4}} :irrigate false})) {})
+            (await (tu/run-ticks (:eng s) (:clock s) 400 700))
+            (finally (set! pick/quoted-s quoted)))
+          (is (= 1 @asked) "the walk is quoted once in 280 s, not again after each rest")
+          (is (empty? (tu/walk-calls (:p s))))
+          (is (some #(and (= :not-worth (:reason %)) (:quoted %)) (events-of s :waiting))))))))
 
 (defn pass-ctx
   "A check ctx of tend over the box from x0 to x1 (z 2) in setup s."

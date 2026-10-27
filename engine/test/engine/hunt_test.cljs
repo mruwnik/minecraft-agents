@@ -32,13 +32,6 @@
   [{:keys [eng clock]} n step]
   (tu/run-ticks eng clock n step))
 
-(defn ^:async with-looks-showing
-  "(f)'s result with a look from here showing every cell: the fake's sky-only perception has no loaded cell, so no line from the eye is clear."
-  [f]
-  (let [shows lib-look/look-shows?]
-    (set! lib-look/look-shows? (constantly true))
-    (try (await (f)) (finally (set! lib-look/look-shows? shows)))))
-
 (defn ^:async scenario
   "Submit the job with args in a world; run n ticks 700 ms apart; the setup map."
   [args world n]
@@ -532,7 +525,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (with-looks-showing #(scenario {:item "beef" :count 1 :keep 0} {:inventory h/sword :time st/night :entities [(cow 1 3)]} 10)))]
+        (let [s (await (tu/with-looks-showing #(scenario {:item "beef" :count 1 :keep 0} {:inventory h/sword :time st/night :entities [(cow 1 3)]} 10)))]
           (is (empty? (attacked s)) "nothing attacked at night")
           (is (= [:exposed] (distinct (map :reason (events-of s :waiting))))))))))
 

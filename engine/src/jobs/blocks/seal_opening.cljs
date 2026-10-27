@@ -97,7 +97,7 @@
   (let [looked (:looked (ctx/mem c) #{})]
     (filterv #(and (not (looked %)) (look/unknown? (:primitives c) %)) unseen)))
 
-(def safe? (ready/safe-at-build (ready/near-unseen-here #(a/cell (centre %)))))
+(def safe? (ready/safe-at-build #(a/cell (centre %))))
 
 (defn can-start?
   [c]

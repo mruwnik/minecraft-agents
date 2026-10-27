@@ -15,6 +15,7 @@
             [engine.fsutil :as fsu]
             [engine.memory :as mem]
             [jobs.lib.clock :as clock]
+            [jobs.lib.look :as look]
             [jobs.lib.waits :as waits]
             [jobs.lib.near :as near]
             [jobs.lib.walk.plan :as wplan]))
@@ -173,6 +174,13 @@
                                       #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0}))))
   (set-sensed! p (sensed-by p))
   p)
+
+(defn ^:async with-looks-showing
+  "(f)'s result with a look from here showing every cell: the fake's perception has no loaded cell, so no line from the eye is clear."
+  [f]
+  (let [shows look/look-shows?]
+    (set! look/look-shows? (constantly true))
+    (try (await (f)) (finally (set! look/look-shows? shows)))))
 
 (defn blind
   "p with no seenBlocks: a body that has seen nothing, whatever the world holds."

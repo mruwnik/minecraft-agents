@@ -72,7 +72,7 @@
                                 (and (not error)
                                      (or (b/in-reach? c pos (:see (:args c)))
                                          (and (torch/light-items (:item (:args c))) (cost/near-body? (:primitives c) pos))))))
-                      (ready/safe-at-build (ready/near-unseen-here (fn [c] (a/cell (:pos (:args c))))))))
+                      (ready/safe-at-build (fn [c] (a/cell (:pos (:args c)))))))
 
 (def fit? ready/ok)
 

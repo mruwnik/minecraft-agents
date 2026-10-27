@@ -37,8 +37,6 @@
                        :doc "Seconds readiness waits for light (jobs.lib.shelter.sense/light-in) before it calls the darkness unfixable; 1200 is a whole day, so a full night is waited for."}
    ::hidden-below-depth {:default 2 :spec (a/num-in 0 nil)
                          :doc "Blocks under the feet from which an unseen place with a seen roof over it counts as underground: no look asks for it and waiting for dawn does not light it."}
-   ::unseen-judged-here-within {:default 6 :spec (a/num-in 0 nil)
-                                :doc "Blocks: an unseen place this near the feet is judged where the body stands (no look shows a cell behind a wall)."}
    ::crowd-radius {:default 16 :spec (a/num-in 0 nil)
                    :doc "Blocks within which the real dangers the body knows of all count in the fight a long stay meets (outmatched): beyond the hostile-near radius they still come."}})
 
@@ -248,17 +246,6 @@
   ([f walk?]
    (with-meta (fn [c] (contract/all [(if walk? (threatened-walking c (f c)) (threatened c)) (exposed c (f c))]))
      {::exposure (fn [c] (exposed c (f c))) ::plain true})))
-
-(defn near-unseen-here
-  "f, but an unseen place within ::unseen-judged-here-within blocks of the feet is judged where the body stands: a look cannot show a cell
-  behind a wall (the job walks round to it), so asking for one would wait for ever."
-  [f]
-  (fn [c]
-    (let [p (:primitives c)
-          at (f c)]
-      (when-not (and at (:y at) (not (sh-sense/seen-cell? p (update-vals at js/Math.floor)))
-                     (<= (u/dist (sh-sense/feet p) at) (settings/get settings ::unseen-judged-here-within)))
-        at))))
 
 (defn leaving-sealed-shelter
   "Later :dark while a walk to `to` ({:x :y :z}, floored) leaves the body's own sealed night shelter (sh-inside/walk-leaves-shelter?

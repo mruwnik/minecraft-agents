@@ -743,19 +743,6 @@
                       '[jobs.farm.find-spot jobs.farm.grow])]
     (is (contains? (meta (safe-of job)) ::ready/exposure) (str job))))
 
-(deftest near-unseen-here-judges-a-hidden-cell-within-reach-where-the-body-stands
-  (are [goal expected] (= expected (with-redefs [sh-sense/seen-cell? (constantly false)]
-                                     (kind (ready/safe-at-by-night (ready/near-unseen-here (constantly goal))) tunnel)))
-    {:x 4 :y 68 :z 0} :ok
-    {:x 40 :y 70 :z 0} :later))
-
-(deftest the-near-unseen-reach-is-a-setting
-  (is (= :later (with-redefs [sh-sense/seen-cell? (constantly false)]
-                  (settings/with-settings {:jobs.lib.ready/unseen-judged-here-within 2}
-                    ;; the tunnel lit dimly (block light 1), so no light it holds spreads to the place 3 blocks over it
-                    #(kind (ready/safe-at-by-night (ready/near-unseen-here (constantly {:x 4 :y 68 :z 0})))
-                           (assoc tunnel :light (into {} (for [x (range 0 7) y [64 65]] [[x y 0] [0 1]])))))))))
-
 (defn bound-seeing-within
   "The kind of a job's checker over world with args, the body seeing only blocks within r (farther ones never seen)."
   [checker world args r]

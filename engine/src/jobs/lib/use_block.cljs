@@ -28,7 +28,7 @@
   [c]
   (-> (:args c) (assoc :pos (target (:args c))) (dissoc :on)))
 
-(def safe? (ready/safe-at-by-night (ready/near-unseen-here (fn [c] (a/cell (:on (:args c)))))))
+(def safe? (ready/safe-at-by-night (fn [c] (a/cell (:on (:args c))))))
 
 (def faces #{"up" "down" "north" "south" "east" "west"})
 
