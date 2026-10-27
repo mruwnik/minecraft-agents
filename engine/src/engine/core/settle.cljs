@@ -82,7 +82,7 @@
 
 (defn rebase-queued!
   "Queued calls that have not started stand where the body stands now: a job ahead of them (a stair, a go-to) moved the body on purpose,
-  so their :submitted-at (engine.contract/moved-cause) is this cell, not the submit's."
+  and a respawn moved it without a choice, so their :submitted-at (engine.contract/moved-cause) is this cell, not the submit's."
   [eng]
   (when-let [pos (some-> (:primitives eng) .self .-pos)]
     (let [here {:x (js/Math.floor (.-x pos)) :y (js/Math.floor (.-y pos)) :z (js/Math.floor (.-z pos))}
