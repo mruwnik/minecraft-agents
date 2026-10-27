@@ -207,6 +207,10 @@
 
 (def far-home-world (assoc lit-world :blocks (assoc wide-ground "40,66,0" "stone")))
 
+(def no-flee
+  "The far home is one roof block: no shelter on arrival, so a flight from it would follow; without one the walk's end is seen."
+  {:jobs.survival.night.sites/flee-radius 0})
+
 (deftest a-home-beyond-the-time-left-before-dark-is-not-walked-to
   (async done
     (tu/run-async done
@@ -220,7 +224,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (await (night-at-home far-home-world {:x 40 :y 64 :z 0} {:settings {:jobs.survival.night.sites/flee-radius 0}}))]
+        (let [{:keys [eng p]} (await (night-at-home far-home-world {:x 40 :y 64 :z 0} {:settings no-flee}))]
           (await (tu/run-until-empty eng 60))
           (is (= 40 (js/Math.floor (:x (st/pos-of p)))) "walked home with no bed to use or carry"))))))
 
@@ -242,7 +246,7 @@
       (fn ^:async t []
         (let [quoted (atom [])
               quote! pick/quote!
-              {:keys [eng p]} (await (night-at-home far-home-world {:x 40 :y 64 :z 0} {:roofed-places [:home :far] :settings {:jobs.survival.night.sites/flee-radius 0}}))]
+              {:keys [eng p]} (await (night-at-home far-home-world {:x 40 :y 64 :z 0} {:roofed-places [:home :far] :settings no-flee}))]
           (mem/write! (:store eng) :far {:pos {:x 4000 :y 64 :z 0}} mem/place-policy)
           (set! pick/quote! (fn [c args] (swap! quoted conj args) (quote! c args)))
           (try (await (tu/run-until-empty eng 60))
@@ -509,23 +513,39 @@
           (is (= 1 (count (st/emitted seen :shelter.exposed))))
           (is (some #(= 'jobs.survival.log-out (second %)) log) "the owner's fallback: no shelter, so log out"))))))
 
-(deftest places-whose-straight-walk-is-over-the-limit-are-not-quoted-and-a-quote-is-asked-once-per-pass
+(deftest a-quote-is-asked-once-per-pass-and-again-in-the-next
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [quote! pick/quote!
-              asked (atom [])
-              places (mapv #(hash-map :pos {:x (* 10 %) :y 64 :z 0} :range 0) (range 1 101))
+              asked (atom 0)
+              places (mapv #(hash-map :pos {:x (* 10 %) :y 64 :z 0} :range 0) (range 1 6))
               opts {:target identity :walk identity}
-              c {:primitives (tu/fake {}) ::pick/pass (atom {})}
-              reach (fn [n] (pick/walk-s {:x 0 :y 64 :z 0} {:pos {:x (* 10 n) :y 64 :z 0} :range 0}))]
-          (set! pick/quote! (fn [_ args] (swap! asked conj args) (js/Promise.resolve {:uses {:job-time [0 ##Inf ##Inf]}})))
+              c {:primitives (tu/fake {}) ::pick/pass (atom {})}]
+          (set! pick/quote! (fn [_ _] (swap! asked inc) (js/Promise.resolve {:uses {:job-time [0 ##Inf ##Inf]}})))
           (try
-            (is (nil? (await (night/cheapest-walk! c places (assoc opts :limit-s (reach 3))))) "none of them reachable: no pick")
-            (is (= 3 (count @asked)) "the 97 whose straight walk alone is over the limit are never quoted")
-            (is (nil? (await (night/cheapest-walk! c places (assoc opts :limit-s (reach 5))))))
-            (is (= 5 (count @asked)) "a second sweep of the same pass with a wider limit asks only the two new quotes")
+            (is (nil? (await (night/cheapest-walk! c places opts))) "none of them reachable: no pick")
+            (is (= 5 @asked))
+            (await (night/cheapest-walk! c places opts))
+            (is (= 5 @asked) "a second sweep of the same pass asks no quote again")
+            (await (night/cheapest-walk! (assoc c ::pick/pass (atom {})) places opts))
+            (is (= 10 @asked) "the next pass asks again: the world may have changed")
             (finally (set! pick/quote! quote!))))))))
+
+(deftest a-place-whose-straight-walk-costs-more-than-digging-in-is-not-quoted-and-the-body-digs-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [quoted (atom [])
+              quote! pick/quote!
+              {:keys [eng p]} (await (night-at-home (assoc lit-world :blocks (assoc wide-ground "100,66,0" "stone")) {:x 100 :y 64 :z 0}))]
+          (set! pick/quote! (fn [c args] (swap! quoted conj args) (quote! c args)))
+          (try (await (tu/run-until-empty eng 60))
+               (finally (set! pick/quote! quote!)))
+          (is (< (* 100 cost/least-block-s) 60) "the walk's straight bound fits the time left before the dark plus the margin")
+          (is (not-any? #(= :home (:place %)) @quoted) "its straight walk alone is dearer than the dig-in's quote: no search")
+          (is (seq (st/calls p "place")) "dug in")
+          (is (< (:x (st/pos-of p)) 5)))))))
 
 (deftest a-quote-of-the-walk-to-a-place-still-searching-keeps-the-body-from-digging-in-for-a-pass
   (async done
