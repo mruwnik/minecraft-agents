@@ -86,17 +86,30 @@
                                              :recheck-after-ms (* 1000 light-in) :wait-ms (* 1000 light-in))
       :else (contract/never :exposed (str "dark at " where ", light is " (js/Math.round light-in) " s away, over the " (js/Math.round patience) " s it waits") :chance chance))))
 
+(defn dark-status
+  "The exposure of the dark place `to` no wait lights: go-to's spawn chance (spawn-light/chance-at) of the cell the body would
+  stand in there (hall-cell), dark under a roof only in a dark hall; over ::risk-limit :never, lowered by a torch."
+  [c to]
+  (let [p (:primitives c)
+        at (spawn-light/hall-cell p to)
+        chance (spawn-light/chance-at p at false)]
+    (if (<= chance (settings/get settings ::risk-limit))
+      (contract/ok :sealed (str "dark at " (place-text to) ", no dark floor reaches beyond " sh-inside/spawn-free-radius " blocks: nothing spawns near the body"))
+      (contract/never :exposed (str "dark at " (place-text to) ", and a mob can walk from dark floor farther than " sh-inside/spawn-free-radius " blocks off (a hall, or an open side of this room): mobs spawn there, waiting never lights it, a torch does")
+                      :lowered-by #{:torch} :chance chance :at at))))
+
 (defn at-status
   "The status of the exposure of the walk of c's body to `to`: ok while sheltered or the chance is within ::risk-limit,
-  else by what lowers it; darkness no sky light reaches (a cave: dawn never lifts it) is exposed only in a dark hall (hall-at?), :never, lowered by a torch, else no exposure; light further off than ::light-patience-s is not waited for.
-  Unseen light no look from here would show is unseen-status's."
+  else by what lowers it. Waiting is for dawn only where it lifts the darkness, as go-to's walk-risk/wait-lowers? has it (the sky
+  of a way out of the shelter, cost/exposure's :light, or spawn-light/dawn-lowers?), and the light comes within ::light-patience-s; other darkness is dark-status's. Unseen light no look from here would show is unseen-status's."
   [c to]
   (let [p (:primitives c)
         shelter (:data (ctx/latest c :shelter))
         {:keys [chance lowered-by look-at light-in]} (cost/exposure p to shelter)
         patience (settings/get settings ::light-patience-s)
         where (place-text to)
-        unseen-sides (delay (when (and (sh-sense/dark-outside? p) (not (u/within? (sh-sense/feet p) to 1))) (look-edge/pending c (sense/round-looked c) 0)))]
+        unseen-sides (delay (when (and (sh-sense/dark-outside? p) (not (u/within? (sh-sense/feet p) to 1))) (look-edge/pending c (sense/round-looked c) 0)))
+        wait-s (delay (cond (contains? lowered-by :light) light-in (spawn-light/dawn-lowers? p to) (sh-sense/light-in p to)))]
     (cond
       (and (sh-sense/dark-outside? p) (sh-inside/safe-from-night? p) (not (sh-inside/walk-leaves-shelter? p shelter to 1)))
       (contract/ok :sheltered (str "sheltered at " where))
@@ -110,21 +123,19 @@
       (and (contains? lowered-by :look) (not-any? #(look/look-shows? p %) look-at))
       (unseen-status c to)
       (contains? lowered-by :look) (contract/look :exposed (str "light at " where " not seen") :look-at look-at)
-      (and (contains? lowered-by :light) (<= light-in patience))
-      (contract/later :exposed (str "dark at " where " until light") :lowered-by lowered-by :chance chance :recheck-after-ms (* 1000 light-in) :wait-ms (* 1000 light-in))
-      (contains? lowered-by :light)
-      (contract/never :exposed (str "dark at " where ", light is " (js/Math.round light-in) " s away, over the " (js/Math.round patience) " s it waits") :chance chance)
-      (spawn-light/hall-at? p to) (contract/never :exposed (str "dark at " where ", and a mob can walk from dark floor farther than " sh-inside/spawn-free-radius " blocks off (a hall, or an open side of this room): mobs spawn there, waiting never lights it, a torch does") :lowered-by #{:torch} :chance chance :at (spawn-light/hall-cell p to))
-      :else (contract/ok :sealed (str "dark at " where ", no dark floor reaches beyond " sh-inside/spawn-free-radius " blocks: nothing spawns near the body")))))
+      (and @wait-s (<= @wait-s patience))
+      (contract/later :exposed (str "dark at " where " until light") :lowered-by #{:light} :chance chance :recheck-after-ms (* 1000 @wait-s) :wait-ms (* 1000 @wait-s))
+      @wait-s
+      (contract/never :exposed (str "dark at " where ", light is " (js/Math.round @wait-s) " s away, over the " (js/Math.round patience) " s it waits") :chance chance)
+      :else (dark-status c to))))
 
 (defn hall-status
-  "The exposure of `to` (nil: here) for a place no check waits for light at (underground): ok unless the body is buried and the place lies in a dark hall (hall-at?), then priced like any exposure."
+  "The exposure of `to` (nil: here) for a place no check waits for light at (underground): ok unless the body is buried, then dark-status priced like any exposure."
   [c to]
   (let [p (:primitives c)
         to (update-vals (or to (sh-sense/feet p)) js/Math.floor)]
-    (price/priced c (if (and (sh-sense/buried? p) (spawn-light/hall-at? p to))
-                      (contract/never :exposed (str "dark at " (place-text to) ", and a mob can walk from dark floor farther than " sh-inside/spawn-free-radius " blocks off (a hall, or an open side of this room): a torch lowers it")
-                                      :lowered-by #{:torch} :at (spawn-light/hall-cell p to) :chance (:chance (cost/exposure p to (:data (ctx/latest c :shelter)))))
+    (price/priced c (if (sh-sense/buried? p)
+                      (dark-status c to)
                       (contract/ok :day "an unseen place's light is no reason to wait")))))
 
 (defn exposed

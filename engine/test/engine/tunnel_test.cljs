@@ -314,8 +314,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [corridor (apply dissoc ground (for [x (range -12 -1) y [61 62] z (range -3 4)] (str x "," y "," z)))
-              {:keys [out p]} (await (tunnel! {:blocks corridor :self {:pos {:x -5 :y 61 :z 0}} :time 18000}
-                                              {:target [0 61 0]} (fn [p] (tu/seeing-all p) (swap! (fake/state p) assoc :light-default [0 0]))))]
+              {:keys [out p]} (await (tunnel! {:blocks corridor :self {:pos {:x -5 :y 61 :z 0}} :time 18000 :light {} :light-default [0 0]}
+                                              {:target [0 61 0]} identity))]
           (is (= :reached (:reason @out)))
           (is (= [-1 61 0] (feet p))))))))
 

@@ -29,6 +29,7 @@
             [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [jobs.lib.shelter.inside :as sh-inside]
+            [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.reserve :as reserve]
             [jobs.lib.world :as known]
             [jobs.strip.site :as strip-site]
@@ -396,6 +397,21 @@
                                        (ready/at-status (ctx-of (assoc open-night :time st/noon)) outside))))
     true [:never :exposed]
     false [:ok :sealed]))
+
+(defn dim-status
+  "at-status of outside under the night sky with sky light sky reaching it, no block light and no dark hall, and go-to's spawn chance there."
+  [sky]
+  (with-redefs [sh-sense/block-light-at (constantly 0)
+                sh-sense/sky-light-at (constantly sky)
+                sh-inside/dark-hall-at? (constantly false)]
+    (let [c (ctx-of open-night)]
+      [(ready/at-status c outside) (spawn-light/chance-at (:primitives c) outside false)])))
+
+(deftest darkness-dawn-leaves-is-priced-by-go-tos-spawn-chance-and-only-darkness-dawn-lifts-is-waited-for
+  (let [[[k _ data]] (dim-status 15)]
+    (is (= [:later #{:light}] [k (:lowered-by data)]) "full sky light: dawn lifts it"))
+  (let [[[k _ data] chance] (dim-status 3)]
+    (is (= [:never #{:torch} chance] [k (:lowered-by data) (:chance data)]) "a dim pit dawn leaves dark: priced at go-to's chance, a torch lowers it")))
 
 (deftest the-hall-text-says-a-walker-reaches-far-dark-floor-not-that-the-cell-is-far
   (with-redefs [sh-sense/block-light-at (constantly 0)
