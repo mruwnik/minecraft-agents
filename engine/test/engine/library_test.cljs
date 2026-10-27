@@ -556,10 +556,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (flight-setup {:floor [-40 -10 10 10]
+        (let [{:keys [eng p seen]} (flight-setup {:floor [-40 -10 10 10]
                                              :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 5 :y 64 :z 0}}]})]
           (core/submit! eng (list 'test.flight {:settings {:jobs.lib.danger/hostile-radius 8 :jobs.survival.respond.state/still-s 3600}}) {})
           (await (core/tick! eng))
+          (is (not-any? #(= :stopped (:kind %)) @seen) "every flight step arrives: a 6-block walk on flat floor is never cut")
           (let [pos (.-pos (.self p))]
             (is (> (js/Math.hypot (- (.-x pos) 5) (.-z pos)) (threats/follow-range "zombie")) "moved away from the zombie beyond its follow range"))
           (is (= [] (:list (core/state eng))) "one round"))))))
