@@ -228,6 +228,20 @@
           (await (tu/run-until-empty eng 60))
           (is (= 40 (js/Math.floor (:x (st/pos-of p)))) "walked home with no bed to use or carry"))))))
 
+(deftest walled-in-with-no-site-in-reach-the-flee-quotes-one-site-not-every-seen-site
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [quoted (atom [])
+              quote! pick/quote!
+              {:keys [eng seen]} (await (night-at-home far-home-world {:x 40 :y 64 :z 0}))]
+          (set! pick/quote! (fn [c args] (when (and (:floor args) (:pos args)) (swap! quoted conj args)) (quote! c args)))
+          (try (await (tu/run-until-empty eng 60))
+               (finally (set! pick/quote! quote!)))
+          (is (= [[:roofed-place 40] [:ground 14]] (mapv (juxt :target (comp :x :pos)) (st/emitted seen :shelter.fled)))
+              "shut in at the home it walked to and failing there, flees to the nearest seen ground, a dig away")
+          (is (= 1 (count @quoted)) "one quote's search ran out of land: one search proves the other 140-odd sites out of reach too, none quoted"))))))
+
 (deftest of-two-far-homes-the-one-go-to-quotes-a-walk-to-is-taken-not-the-straight-line-nearer
   (async done
     (tu/run-async done

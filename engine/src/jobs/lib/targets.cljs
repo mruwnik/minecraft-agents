@@ -46,15 +46,15 @@
 
 (defn new-search
   "A search over targets of the world costed as go-to's plans are (wworld/costed-world: known dangers and darkness; opts
-  :dangers and :dark, default true)."
-  [c pw targets range key {:keys [dangers dark] :or {dangers true dark true}}]
+  :dangers and :dark, default true), with the body's policy (opts :policy replaces it) in wplan/wide-box (opts :box)."
+  [c pw targets range key {:keys [dangers dark policy box] :or {dangers true dark true box wplan/wide-box}}]
   {:key key :t (wsearch/now c)
-   :plan (let [policy (wworld/body-policy c)]
+   :plan (let [policy (or policy (wworld/body-policy c))]
            (planner/create-plan (.-snapshot pw) (query c targets range)
                                 (wplan/with-drops
                                   (wplan/plan-options (wworld/costed-world c pw {:dangers? dangers :dark? dark}) (walk/default-weight)
                                                       (executor/planner-limits policy (wworld/solid-fn pw))
-                                                      (assoc wplan/wide-box :maxNodes max-nodes))
+                                                      (assoc box :maxNodes max-nodes))
                                   policy (wworld/landing-seen (:primitives c)))))})
 
 (defn answer
@@ -75,11 +75,13 @@
   the next call), or {:status :none :reason :proved} (answer). One target is not searched ({:status :found :target t
   :index 0}): the walk to it decides. A target may carry its own :range. opts {:tag :budget :dangers :dark}: tag keeps
   searches of different callers of one body apart (default :default), budget the expansions of one call (default
-  wsearch/round-budget), dangers and dark (default true) whether known dangers and darkness are costed (new-search)."
+  wsearch/round-budget), dangers and dark (default true) whether known dangers and darkness are costed, policy and box
+  (new-search); unknown (wworld/unknown-spec) plans over what the body has seen, as go-to's :unknown; all true searches
+  every target, not the first max-targets."
   ([c targets range] (nearest! c targets range nil))
-  ([c targets range {:keys [tag budget] :or {tag :default budget wsearch/round-budget} :as opts}]
-   (let [targets (vec (take max-targets targets))
-         pw (wworld/path-world (:primitives c))]
+  ([c targets range {:keys [tag budget unknown all] :or {tag :default budget wsearch/round-budget} :as opts}]
+   (let [targets (vec (cond->> targets (not all) (take max-targets)))
+         pw (wworld/path-world (:primitives c) unknown)]
      (cond
        (empty? targets) {:status :none :reason :no-targets :proved true}
        (= 1 (count targets)) {:status :found :target (first targets) :index 0}
