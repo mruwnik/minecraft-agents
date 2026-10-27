@@ -1,9 +1,7 @@
 ;; Card 61a0396f item 5: a body sealed in a 3x3 pen at the plot's west edge (the chunk side; the land west of the plot is
-;; unloaded) with a far unloaded goal ends :unreachable :start-enclosed (not :goal-unloaded); an open start with the same
-;; goal walks west as far as the floor goes and never reports :start-enclosed. The goal is 1000 blocks west of the plot (#at is plot-relative).
-;; Plots float at y 150 over open air (floor y 149, grid from x 20000): west of the grid is a fall far past maxDrop 3, so
-;; the open case cannot arrive; with :ways #{:walk :clear-seal} it plans :goal-unloaded and tours the loaded edge of the grid's floors
-;; (each walk loads more), so it passes a small :tour-worth to bound the tour (a goal 1000 blocks off is worth a long one). Far-goal arrival on real terrain is not testable on this grid.
+;; unloaded) with a far unloaded goal ends :unreachable :start-enclosed (not :goal-unloaded); an open start with a far
+;; unloaded goal never reports :start-enclosed. The goal is 1000 blocks west of the plot (#at is plot-relative).
+;; The open case walks a long surface lane east toward a goal in unloaded land. Far-goal arrival on real terrain is not testable on this grid.
 {:defaults
  {:tags [:movement :planner]
   :plot {:height 10}
@@ -24,11 +22,12 @@
    :expect [{:event {:source :job :kind :go-to.escalated} :within-s 30 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:why :start-enclosed}} :for-s 20}]}
   {:name "open-field-unloaded-goal-never-start-enclosed"
-   ;; the plots' floors run on north and south along the grid's west edge: unbounded, go-to tours that loaded edge for
-   ;; many minutes; :tour-worth setting 18 (about 60 blocks) ends it at the end of the first walk that got no nearer
-   :act [[:job (jobs.movement.go-to {:pos #at [-1000 0 17] :range 1 :ways #{:walk :clear-seal} :settings {:jobs.lib.cost.value/tour-worth 18}})]]
-   :expect [{:event {:source :job :kind :planned :data {:why "goal-unloaded"}} :within-s 60 :of-job true}
-            {:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false :reason :unreachable :why :explore-spent}} :within-s 75 :of-job true}
-            {:no-event {:source :job :kind :planned :data {:why "start-enclosed"}} :for-s 60 :until {:source :job :kind #{:completed :stopped} :data {:why :explore-spent}}}
-            {:no-event {:source :job :kind #{:completed :stopped} :data {:why :start-enclosed}} :for-s 60 :until {:source :job :kind #{:completed :stopped} :data {:why :explore-spent}}}]
+   ;; a surface lane 1024 long whose floor runs east into unloaded land: the planner's region reaches the loaded edge, so no
+   ;; search reads the start as shut in while the body walks east toward the goal (a default plot is a sealed cell or an island)
+   :plot {:height 10 :light :sky :length 1024 :width 16}
+   :body {:at [3.5 0 8.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [3000 0 8] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :planned :data {:status "partial"}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :planned :data {:why "start-enclosed"}} :for-s 60}
+            {:no-event {:source :job :kind #{:completed :stopped} :data {:why :start-enclosed}} :for-s 60}]
    :after []}]}
