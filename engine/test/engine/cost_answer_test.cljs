@@ -36,7 +36,7 @@
   "What decide makes of fighting mobs with weapon or walking away from them, for a body at health with returns flights from them lately."
   ([health weapon mobs] (choice health weapon mobs 0))
   ([health weapon mobs returns]
-   (let [f (cost/fight-answer (apply fight weapon mobs))]
+   (let [f (cost/fight-answer (assoc (apply fight weapon mobs) :health health))]
      (:answer (cost/decide (body health)
                            {:fight f :flee (cost/flee-answer {:health health :food 20 :mobs mobs :returns returns :later f})}
                            here)))))
@@ -66,6 +66,16 @@
           caught (:caught (answer/followed wet walk))]
       (is (< (js/Math.abs (- (:shape caught) (fight/sum-shape [[(:damage wet) (:shape wet)] [(answer/small (:caught walk)) (:shape (:caught walk))]]))) 1e-9)
           "the walk caught after the fight: the width of both parts' blows"))))
+
+(deftest a-fight-goes-bad-at-the-trial-fights-prior-and-a-flight-after-it-adds-its-own-catch
+  (let [f #(cost/fight-answer (assoc (fight "stone_sword" (mob "zombie" 0)) :health %))
+        bad (caught/prior ::caught/fights "zombie" 20)]
+    (is (= (:chance bad) (-> (f 20) :caught :chance)) "gone bad at the prior of its health")
+    (is (< (-> (f 20) :caught :chance) (-> (f 5) :caught :chance)) "likelier from low health")
+    (is (< 0.03 (answer/answer-death-chance (body 20) (f 20) here) 0.12) "a sword fight begun at 20 hp dies about as often as the trials' (4 of 51)")
+    (let [walk (cost/flee-answer {:food 20 :mobs [(mob "zombie" 2)] :caught 0.5})]
+      (is (< (js/Math.abs (- (- 1 (* (- 1 (:chance bad)) (- 1 (-> walk :caught :chance)))) (-> (answer/followed (f 20) walk) :caught :chance))) 1e-9)
+          "a fight left to a walk: caught if either goes bad"))))
 
 (deftest blows-that-may-take-the-health-are-the-death-risk
   (is (zero? (death/blow-chance {:health 20} 0 3)))
@@ -115,7 +125,7 @@
       (let [skeleton (mob "skeleton" 12)
             fight (cost/fight-answer (assoc (fight sword skeleton) :mobs [skeleton]))
             choose (fn [returns walk-hp]
-                     (let [f (update fight :damage + walk-hp)]
+                     (let [f (-> fight (update :damage + walk-hp) (update-in [:caught :damage] + walk-hp))]
                        (:answer (cost/decide (body 20) {:fight f :flee (cost/flee-answer {:food 20 :mobs [skeleton] :returns returns :later f})} here))))]
         (is (= :flee (choose 0 0)) "no flight lately: a step out of its range is cheaper than closing 12 blocks")
         (is (= :fight (choose 2 0)) "fled twice, the walks again dearer than the fight, if the walk to it is free (go-to's lower bound)")
@@ -350,7 +360,7 @@
   (let [chance #(answer/threat-chance %1 "drowned" nil here)
         iron (assoc (body 20) :weapon "iron_sword")
         fist (body 20)]
-    (is (< (chance iron) 0.01) "standing, as in a wade, an iron sword wins")
+    (is (< (* 2 (chance iron)) (chance (assoc fist :swim ##Inf))) "standing, as in a wade, an iron sword wins, but for its fight going bad (cost.caught ::fights)")
     (is (> (chance (assoc fist :swim ##Inf)) 0.1) "a bare body far from shore dies often whatever it answers")
     (let [answers (answer/threat-answers (assoc fist :swim 1) "drowned" nil)]
       (is (= :flee (:answer (cost/decide fist answers here))) "a bare body a block from shore swims out")
@@ -485,3 +495,4 @@
             [lo hi] (met-envelope b (answer/met-threats {:cells cells :threats ts} (death/cell-seconds cells)) (rate-grid ms))
             what (str (apply str (interpose " " ms)) " at 10, " (+ 10 g1) ", " (+ 10 g2) ", " kit ": " (vec cs) " in " [lo hi])]
         (is (<= (- (apply max cs) (apply min cs)) (* 0.25 (- hi lo))) what)))))
+

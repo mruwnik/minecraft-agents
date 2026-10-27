@@ -1,6 +1,6 @@
 ;; Cards 0695fc4e, 9e73802f: a body at 5 hp with a sword hears a zombie it cannot see (NoAI, behind a stone wall x 8..24, z 19,
-;; y 0..3). From 5 hp a flight is caught more often than not and two blows kill (cost.caught/prior), so respond prices the
-;; fight the cheaper; with nothing in sight to swing at it mutes the heard mob and ends, neither fleeing nor looping.
+;; y 0..3). From 5 hp a flight is caught more often than a fight goes bad and two blows kill (cost.caught/prior: 0.63
+;; and 0.36), so respond prices the fight the cheaper (fake world 991 s against 1168 s); with nothing in sight to swing at it mutes the heard mob and ends, neither fleeing nor looping.
 ;; A hunger effect first drops food (no regeneration), then `damage` leaves 5 hp; the zombie comes once that hurt is past
 ;; hostile-fight/::felt-s (an unknown cause may be a mob's blow, priced as one felt lately).
 {:defaults

@@ -13,7 +13,8 @@
   Pure part: episodes, report."
   (:require [jobs.lib.cost.answer :as answer]
             [jobs.lib.cost.caught :as caught]
-            [jobs.lib.cost.threat :as threat]))
+            [jobs.lib.cost.threat :as threat]
+            [jobs.lib.cost.weapon :as weapon]))
 
 (def gap-ms 30000)
 (def caught-hits {:zombie 2 :creeper 1 :bow 2 :spider 2})
@@ -47,6 +48,8 @@
 
 (def blow-of "The mob whose blow a group's deaths are counted in." {:zombie "zombie" :bow "skeleton" :spider "spider"})
 
+(defn armed? [{:keys [weapon mob]}] (and (contains? weapon/weapon-damage-by-name weapon) (not= "drowned" mob)))
+
 (defn r3 [x] (/ (js/Math.round (* 1000 x)) 1000))
 
 (defn flights
@@ -67,18 +70,23 @@
           [w {:n (count rs) :deaths (count (filter :died? rs))
               :priced (r3 (reduce + (map (fn [{:keys [health mob weapon]}]
                                            (let [body {:health health :food 20 :level 0 :carried 0}]
-                                             (answer/answer-death-chance body (answer/fight-answer {:weapon weapon :mobs [{:name mob :distance 0}]}) nil)))
+                                             (answer/answer-death-chance body (answer/fight-answer {:weapon weapon :health health :mobs [{:name mob :distance 0}]}) nil)))
                                          rs)))}])))
 
 (defn report
   "{:flights {group counts} :fit {group {:blows :shape :chance {health chance}}} :fights :by-chasers} of flee rows and
   fight rows (episodes'), at the ::threat/difficulty setting."
   [rows fights]
-  (let [counts (into (sorted-map) (for [[g rs] (group-by :group rows) :when (blow-of g)]
-                                    [g (flights rs (threat/difficulty-scale (get threat/mob-hit (blow-of g))))]))]
+  (let [counts-of (fn [rows] (into (sorted-map) (for [[g rs] (group-by :group rows) :when (blow-of g)]
+                                                  [g (flights rs (threat/difficulty-scale (get threat/mob-hit (blow-of g))))])))
+        fit-of (fn [counts] (into (sorted-map) (for [[g c] counts :let [{:keys [blows shape]} (caught/posterior c)]]
+                                                 [g {:blows (r3 blows) :shape (some-> shape r3) :chance (into (sorted-map) (for [h [2 5 10 15 20]] [h (r3 (caught/chance c h))]))}])))
+        counts (counts-of rows)
+        armed (counts-of (filter armed? fights))]
     {:flights counts
-     :fit (into (sorted-map) (for [[g c] counts :let [{:keys [blows shape]} (caught/posterior c)]]
-                               [g {:blows (r3 blows) :shape (some-> shape r3) :chance (into (sorted-map) (for [h [2 5 10 15 20]] [h (r3 (caught/chance c h))]))}]))
+     :fit (fit-of counts)
      :fights (fight-deaths (filter #(= :zombie (:group %)) fights))
+     :fight-counts armed
+     :fight-fit (fit-of armed)
      :by-chasers (into (sorted-map) (for [[c rs] (group-by :chasers (filter #(and (= :zombie (:group %)) (:chasers %)) rows))]
                                       [c {:k (count (filter caught? rs)) :n (count rs)}]))}))

@@ -151,6 +151,7 @@
     {:weapon (combat/best-weapon p (combat/weapons c))
      :equipment (cost/equipment-of (.-equipment (.self p)))
      :mobs (mapv #(mob-of p (struck-of (.-id %)) %) hostiles)
+     :health (.-health (.self p))
      :wet? (breath/swimming? p)}))
 
 (defn incoming
@@ -251,7 +252,8 @@
   "The answer of fighting near (nearest first) for cost/decide: the walk there (walk-hp of walk-q, go-to's quote of it;
   none: its lower bound) and the fight with near and the
   mobs by its way (way-mobs), at least the mob blows felt lately (incoming :rate) over its length, :hit the hardest blow
-  felt lately or of its mobs, :shape cost/fight-answer's width over the fight's blows. A mob the body cannot get within a swing of (reaches?) is not killed (cost/fight-answer):
+  felt lately or of its mobs, :shape cost/fight-answer's width over the fight's blows, :caught its fight gone bad with the
+  same walk, felt blows and blasts. A mob the body cannot get within a swing of (reaches?) is not killed (cost/fight-answer):
   the fight is followed at once by the walk away from those it leaves (flee-answer, cost/followed). A lone creeper is
   fought hit-and-back (nil when hit-and-back-ok? fails); any other creeper near, or by the way in time (blasting), is
   not fought: it blows where the fight is, beside its first mob, so its blast at its distance from that mob (at most its
@@ -272,13 +274,13 @@
             creepers (if lone-creeper? [] (concat (filter combat/creeper? near) (blasting p near seconds)))
             spot (danger-q/mob-pos p (first fought))
             blasts (map #(cost/blast-hurt stats (min cost/swell-start (u/dist (danger-q/mob-pos p %) spot))) creepers)]
-        (cond-> {:damage (+ (walk-hp walk-q) (max (:damage a) (* rate (:seconds a))) (reduce + 0 blasts))
-                 :hit (max (:hit a) hardest)
-                 :blasts (vec (filter pos? blasts))
-                 :seconds seconds
-                 :creepers (vec creepers)}
-          (:shape a) (assoc :shape (cost-fight/sum-shape [[(walk-hp walk-q) nil] [(max (:damage a) (* rate (:seconds a))) (:shape a)]]))
-          (seq left) (cost/followed (flee-answer c left nil nil nil)))))))
+        (letfn [(felt [x] (cond-> {:damage (+ (walk-hp walk-q) (max (:damage x) (* rate (:seconds a))) (reduce + 0 blasts))
+                                   :hit (max (:hit x) hardest)
+                                   :blasts (vec (filter pos? blasts))}
+                            (:shape x) (assoc :shape (cost-fight/sum-shape [[(walk-hp walk-q) nil] [(max (:damage x) (* rate (:seconds a))) (:shape x)]]))))]
+          (cond-> (assoc (felt a) :seconds seconds :creepers (vec creepers))
+            (:caught a) (assoc :caught (assoc (felt (:caught a)) :chance (:chance (:caught a))))
+            (seq left) (cost/followed (flee-answer c left nil nil nil))))))))
 
 (defn mob-near
   "Hostile e as the answers take a mob: {:name :held :distance :speed (its chase speed) :follow (its follow range)}."

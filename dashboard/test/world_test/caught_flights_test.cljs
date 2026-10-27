@@ -33,3 +33,11 @@
                           (assoc (flee 100000 20) :near ["zombie"])])]
     (is (= [2 1] (map :chasers (filter #(= :zombie (:group %)) rows))))
     (is (= {1 {:k 0 :n 1} 2 {:k 1 :n 1}} (:by-chasers (s/report rows []))))))
+
+(deftest fights-are-counted-armed-and-dry
+  (settings/with-settings {::threat/difficulty 1}
+    (fn []
+      (let [f (fn [weapon mob died?] {:group :zombie :health 20 :weapon weapon :mob mob :died? died? :hits (if died? 0 1)})]
+        (is (= {:zombie {:lived [[20 1 1]] :died [[20 8 1]]}}
+               (:fight-counts (s/report [] [(f "iron_sword" "zombie" false) (f "stone_sword" "husk" true) (f nil "zombie" true) (f "iron_sword" "drowned" true)])))
+            "a fist or unknown weapon, and a drowned (cost.fight/wet-rate's), are not counted")))))

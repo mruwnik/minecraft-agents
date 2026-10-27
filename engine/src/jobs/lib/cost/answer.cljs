@@ -165,44 +165,77 @@
       {:answer (key (first (sort-by val prices))) :prices prices})))
 
 (defn fight-answer
-  "The answer of fight (fight/fight-damage's argument): its damage and seconds, :hit the hardest blow of its mobs. A mob
-  with :reach? false (the body cannot get within a swing of it) is not fought: its blows land over the whole fight, the
-  fight's length as if it were fought when no mob is in reach; :left the mobs the fight leaves alive."
-  [{:keys [equipment mobs] :as fight}]
+  "The answer of fight (fight/fight-damage's argument, :health the body's, default 20): its damage and seconds, :hit the
+  hardest blow of its mobs. A mob with :reach? false (the body cannot get within a swing of it) is not fought: its blows
+  land over the whole fight, the fight's length as if it were fought when no mob is in reach; :left the mobs the fight
+  leaves alive. :caught: the fight goes bad at the trial prior of the body's health (jobs.lib.cost.caught/prior
+  ::fights of the fought mobs, the likeliest gone bad; a creeper or a wet drowned has its own price), its mob then
+  landing that prior's blows; none when the fight's own are more."
+  [{:keys [equipment mobs health] :as fight}]
   (let [stats (armour/armour-stats equipment)
         {left false fought true} (group-by #(not (false? (:reach? %))) mobs)
         fought (vec fought)
         seconds (fight/fight-seconds (assoc fight :mobs (if (seq fought) fought mobs)))
         damage (fight/fight-damage (assoc fight :mobs fought))
         left-damage (reduce + 0 (map #(threat/mob-hurt stats (threat/kind %) seconds) left))
-        shape (when-let [s (fight/blow-shape (assoc fight :mobs fought))] (fight/sum-shape [[damage s] [left-damage nil]]))]
+        shape (when-let [s (fight/blow-shape (assoc fight :mobs fought))] (fight/sum-shape [[damage s] [left-damage nil]]))
+        hit (reduce max 0 (map #(blow stats %) mobs))
+        bad (keep #(when-not (or (= "creeper" (:name %)) (fight/wet-drowned? fight %))
+                     [% (caught-prior/prior ::caught-prior/fights (:name %) health)])
+                  fought)
+        [m pr] (when (seq bad) (apply max-key #(:chance (second %)) bad))
+        gone-bad (when m (threat/mob-hurt stats (threat/kind m) (:blows pr) identity 1))]
     (cond-> {:damage (+ damage left-damage)
-             :hit (reduce max 0 (map #(blow stats %) mobs))
+             :hit hit
              :seconds seconds}
       shape (assoc :shape shape)
-      (seq left) (assoc :left (vec left)))))
+      (seq left) (assoc :left (vec left))
+      (and m (< (+ damage left-damage) gone-bad)) (assoc :caught (cond-> {:chance (:chance pr) :hit hit :damage gone-bad}
+                                                                  (:shape pr) (assoc :shape (:shape pr)))))))
 
 (defn kill-price
   "Seconds killing one mob-name met beside body costs at `at`: answer-price of fighting it with the body's :weapon and
   :equipment."
   [{:keys [weapon equipment] :as body} mob-name at]
-  (answer-price body (fight-answer {:weapon weapon :equipment equipment :mobs [{:name mob-name :distance 0}]}) at))
+  (answer-price body (fight-answer {:weapon weapon :equipment equipment :health (:health body) :mobs [{:name mob-name :distance 0}]}) at))
+
+(defn mix
+  "{:damage :shape} of blows that are one of parts [[chance {:damage :shape}]] (chances summing to 1): their mean by
+  chance and the width of the mix, each part its own (shape nil: a Poisson count)."
+  [parts]
+  (let [d (reduce + (map (fn [[w x]] (* w (:damage x))) parts))
+        v (reduce + (map (fn [[w {:keys [damage shape]}]] (* w (+ (if shape (/ (* damage damage) shape) 0) (* damage damage)))) parts))
+        extra (- v (* d d))]
+    (cond-> {:damage d} (and (> extra 1e-9) (pos? d)) (assoc :shape (/ (* d d) extra)))))
 
 (defn followed
-  "Answer a, then answer b at once (nil: a once more, later): the blows and seconds of both, b's chance of being caught
-  (a's blows landed either way, the caught width over both) and what follows b. a's spread is kept at its mean, a part
-  of the small blows."
+  "Answer a, then answer b at once (nil: a once more, later): the blows and seconds of both and what follows b. a's
+  spread is kept at its mean, a part of the small blows. :caught: a's going bad, b's being caught, or both, by their
+  chances: one mix of those outcomes (mix of their small blows; the blasts the likeliest one's)."
   [a b]
   (if b
-    (cond-> (assoc a :damage (+ (:damage a) (:damage b)) :hit (max (:hit a) (:hit b)) :seconds (+ (:seconds a) (:seconds b))
-                   :blasts (into (vec (:blasts a)) (:blasts b)) :spread (:spread b)
-                   :shape (fight/sum-shape [[(small a) (:shape a)] [(mean (:spread a)) nil] [(small b) (:shape b)]]))
-      (:caught b) (assoc :caught (let [cb (:caught b)
-                                       shape (fight/sum-shape [[(small a) (:shape a)] [(mean (:spread a)) nil] [(small cb) (:shape cb)]])]
-                                   (cond-> (-> cb (update :damage + (:damage a)) (update :blasts #(into (vec (:blasts a)) %)) (dissoc :shape))
-                                     shape (assoc :shape shape))))
-      (:then b) (assoc :then (:then b))
-      (not (:then b)) (dissoc :then))
+    (let [both (fn [x y] (let [s (fight/sum-shape [[(small x) (:shape x)] [(mean (:spread x)) nil] [(small y) (:shape y)]])]
+                           (cond-> {:damage (+ (:damage x) (:damage y)) :hit (max (:hit x 0) (:hit y 0)) :blasts (into (vec (:blasts x)) (:blasts y))}
+                             s (assoc :shape s))))
+          clean (both a b)
+          ca (:chance (:caught a) 0)
+          cb (:chance (:caught b) 0)
+          parts (filter #(pos? (first %)) [[(* ca (- 1 cb)) (both (:caught a) b)]
+                                           [(* (- 1 ca) cb) (both a (:caught b))]
+                                           [(* ca cb) (both (:caught a) (:caught b))]])
+          chance (reduce + 0 (map first parts))
+          caught (when (pos? chance)
+                   (let [blasts (:blasts (second (apply max-key first parts)))
+                         sure (reduce + 0 blasts)
+                         {:keys [damage shape]} (mix (map (fn [[w o]] [(/ w chance) (assoc o :damage (- (:damage o) sure))]) parts))]
+                     (cond-> {:chance chance :damage (+ damage sure) :hit (reduce max 0 (map (comp :hit second) parts)) :blasts blasts}
+                       shape (assoc :shape shape))))]
+      (cond-> (-> a
+                  (merge (select-keys clean [:damage :hit :blasts]) {:seconds (+ (:seconds a) (:seconds b)) :spread (:spread b)})
+                  (dissoc :shape :caught :then))
+        (:shape clean) (assoc :shape (:shape clean))
+        caught (assoc :caught caught)
+        (:then b) (assoc :then (:then b))))
     (assoc a :then [a])))
 
 (defn swim-leg
@@ -361,12 +394,11 @@
                             dp (max (reduce + 0 (map #(:damage (second %)) hitting))
                                     (if m (threat/mob-hurt stats (threat/kind m) (:blows pr) identity 1) 0))
                             ww (if (pos? caught) (/ way caught) 0)
-                            wp (- 1 ww)
-                            d (+ (* ww dw) (* wp dp))
-                            mix (- (+ (* ww (+ extra (* dw dw))) (* wp (+ (if (:shape pr) (/ (* dp dp) (:shape pr)) 0) (* dp dp)))) (* d d))]
+                            {d :damage d-shape :shape} (mix [[ww {:damage dw :shape (when (pos? extra) (/ (* dw dw) extra))}]
+                                                             [(- 1 ww) {:damage dp :shape (:shape pr)}]])]
                         (cond-> (assoc-in walk [:caught :damage] (+ d (reduce + 0 (get-in walk [:caught :blasts]))))
                           shape (assoc :shape shape)
-                          (and (> mix 1e-9) (pos? d)) (assoc-in [:caught :shape] (/ (* d d) mix)))))
+                          d-shape (assoc-in [:caught :shape] d-shape))))
             walk (walk-of per times)
             again (let [per (per-of (map #(assoc % :distance (min (:distance %) (:again % ##Inf))) mobs))]
                     (when (every? some? per) (walk-of per (inc times))))]
@@ -411,7 +443,7 @@
   (jobs.survival.shut-in/covers) by cover-answer, as respond prices them."
   [{:keys [health food equipment weapon covers swim distance]} mob-name caught]
   (let [ms (mapv (fn [n] {:name n :distance (or distance 0) :follow (threat/follow-range n)}) (if (string? mob-name) [mob-name] mob-name))
-        fight (fight-answer {:weapon weapon :equipment equipment :mobs ms :wet? (some? swim)})]
+        fight (fight-answer {:weapon weapon :equipment equipment :health health :mobs ms :wet? (some? swim)})]
     (into {:fight fight
            :flee (flee-answer {:health health :food food :equipment equipment :mobs ms :caught caught :later fight :swim swim})}
           (map (fn [[way cover]] [way (cover-answer {:equipment equipment :mobs ms} cover)]))

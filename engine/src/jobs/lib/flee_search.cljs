@@ -243,7 +243,7 @@
   (let [p (:primitives c)
         ring-world (costed c nil other? true)
         fight (delay (if-let [mobs (seq (keep #(some->> (:mob %) (hash-map :distance 0 :name)) chasers))]
-                       (cost/answer-price body (cost/fight-answer {:weapon (:weapon body) :equipment (:equipment body) :mobs mobs}) pos)
+                       (cost/answer-price body (cost/fight-answer {:weapon (:weapon body) :equipment (:equipment body) :health (:health body) :mobs mobs}) pos)
                        0))
         trapped-at (fn [cell] (max @fight (cost/route-death-cost body {:cells [cell] :threats caught-by} cell)))
         counts (wworld/way-counts p)

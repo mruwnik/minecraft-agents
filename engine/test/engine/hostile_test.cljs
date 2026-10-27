@@ -1887,7 +1887,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[d decision prices] [[1 :fight {:fight 26 :flee 43}] [2 :fight {:fight 34 :flee 57}] [3 :fight {:fight 88 :flee 155}]]]
+        (doseq [[d decision prices] [[1 :fight {:fight 36 :flee 50}] [2 :fight {:fight 47 :flee 69}] [3 :fight {:fight 96 :flee 163}]]]
           (let [world {:inventory sword :equipment iron-armour :entities [(assoc (skeleton 1 10 0) :visible true)]}
                 {:keys [seen]} (await (settings/with-settings {:jobs.lib.cost.threat/difficulty d} #(flight-round respond world)))
                 [e] (filter #(= :hostile.decided (:kind %)) @seen)]

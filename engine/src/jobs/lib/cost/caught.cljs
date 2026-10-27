@@ -1,13 +1,15 @@
 (ns jobs.lib.cost.caught
-  "The prior of a walk away being caught whatever its route (jobs.lib.cost.answer/flee-answer-on), from the trial bodies'
-  flights. Pure.
+  "The prior of a walk away being caught whatever its route (jobs.lib.cost.answer/flee-answer-on), and of a fight going
+  bad (jobs.lib.cost.answer/fight-answer), from the trial bodies' flights and fights. Pure.
 
   A flight from mobs of a group (group-of) is caught at a chance logistic(a + b (health - 10)) of the health it starts
   at, smooth in it; caught, its mobs land a Poisson count of blows of mean lambda, else of mean mu (the walk's own). A
   flight counted as lived took the blows it was hurt by; one that died, at least the blows that kill at its health (at the
   trial difficulty): its health weighs on its death through those blows, and the slope b is what the flights add beyond
   them. posterior: the grid posterior of a, b, lambda and mu over a group's counts (::flights); priors: the chance at
-  10 hp uniform, b uniform over [-0.4, 0.4], lambda 1/lambda, mu uniform."
+  10 hp uniform, b uniform over [-0.4, 0.4], lambda 1/lambda, mu uniform. A fight is counted alike (::fights): gone bad
+  at the chance, its mobs land lambda blows, else mu (the fight's own); one followed by a flight counts what the flight
+  took too, the price of choosing it."
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.cost.threat :as threat]))
@@ -23,16 +25,26 @@
                                       [13 0 2] [16 1 1] [17 2 1] [17 4 1] [17 7 1] [18 1 1] [19 0 2] [19 1 1] [20 0 11] [20 1 2]]
                               :died [[1 1 1] [6 3 1]]}}
               :spec (a/map-of keyword? (a/map-with {:lived counts? :died counts?}))
-              :doc "Per group of mob kinds (group-of), the trial flights from it: :lived [health blows n], n flights begun at health that lived through it hurt by blows (a shooter's arrows) of it; :died [health blows n], n that died of it, blows the least that kill at health. A flight is the run of flee decisions about the group, each within 30 s of the one before, and the 30 s after it. Recount: node tools/event-counts.mjs caught-flights (trial bodies, easy), 2026-10-25."}})
+              :doc "Per group of mob kinds (group-of), the trial flights from it: :lived [health blows n], n flights begun at health that lived through it hurt by blows (a shooter's arrows) of it; :died [health blows n], n that died of it, blows the least that kill at health. A flight is the run of flee decisions about the group, each within 30 s of the one before, and the 30 s after it. Recount: node tools/event-counts.mjs caught-flights (trial bodies, easy), 2026-10-25."}
+   ::fights {:default {:zombie {:lived [[11 2 1] [12 2 1] [13 0 2] [13 2 1] [13 3 1] [13 4 1] [14 1 2] [14 3 1] [15 1 1] [15 3 1] [16 0 1] [16 1 1] [17 0 1]
+                                        [17 4 1] [18 0 4] [18 1 1] [18 2 3] [19 0 1] [20 0 17] [20 1 8] [20 2 12] [20 3 5] [20 4 3] [20 7 1] [20 8 1]]
+                                :died [[9 4 1] [20 8 4]]}
+                       :bow {:lived [[10 1 1] [11 0 1] [11 1 2] [11 2 1] [12 2 1] [13 0 2] [13 1 1] [15 0 1] [15 1 2] [15 2 1] [15 3 1] [17 1 2] [17 2 1]
+                                     [17 5 1] [18 0 1] [18 1 2] [19 1 1] [20 0 3] [20 1 5] [20 2 7] [20 3 7] [20 4 1] [20 5 1] [20 6 1]]
+                             :died [[12 5 1]]}
+                       :spider {:lived [[10 0 2] [11 0 2] [12 0 2] [15 1 1] [16 5 1] [18 0 1] [18 1 2] [18 4 1] [20 0 10] [20 1 4] [20 2 1] [20 3 1]]
+                                :died []}}
+             :spec (a/map-of keyword? (a/map-with {:lived counts? :died counts?}))
+             :doc "As ::flights, the trial fights with a sword or axe: a fight the run of fight decisions about the group, each within 30 s of the one before, and the 30 s after it; none against a drowned (its swum fights are priced by cost.fight/wet-rate). Recount: node tools/event-counts.mjs caught-flights :fight-counts, 2026-10-27."}})
 
 (def groups
   "The mob kinds a flight counts as from one group: what group-of reads."
   {:zombie #{"zombie" "husk" "drowned" "zombie_villager"} :creeper #{"creeper"} :bow threat/bow-mobs :spider #{"spider" "cave_spider"}})
 
 (defn group-of
-  "The group whose counts price mob-name's catch: its own when counted, else the zombie family's."
-  [mob-name]
-  (let [counted (settings/get settings ::flights)]
+  "The group whose counts (which: ::flights or ::fights) price mob-name's: its own when counted, else the zombie family's."
+  [which mob-name]
+  (let [counted (settings/get settings which)]
     (or (some (fn [[g kinds]] (when (and (contains? kinds mob-name) (contains? counted g)) g)) groups) :zombie)))
 
 (defn sigmoid [x] (/ 1 (+ 1 (js/Math.exp (- x)))))
@@ -100,9 +112,10 @@
         (areduce points i acc 0 (let [p (aget points i)] (+ acc (* (aget p 3) (sigmoid (+ (aget p 0) (* (aget p 1) x)))))))))))
 
 (defn prior
-  "{:chance :blows :shape} of a flight from mob-name begun at health (default 20): the posterior mean chance it is caught
-  (chance) and of the blows it then takes, the Gamma shape of their mean's uncertainty (blow-chance's width)."
-  [mob-name health]
-  (let [counts (get (settings/get settings ::flights) (group-of mob-name))
-        {:keys [blows shape]} (posterior counts)]
-    {:chance (chance counts (or health 20)) :blows blows :shape shape}))
+  "{:chance :blows :shape} of a flight (which ::flights, the default) or a fight (::fights) with mob-name begun at
+  health (default 20): the posterior mean chance it is caught or goes bad (chance) and of the blows it then takes, the Gamma shape of their mean's uncertainty (blow-chance's width)."
+  ([mob-name health] (prior ::flights mob-name health))
+  ([which mob-name health]
+   (let [counts (get (settings/get settings which) (group-of which mob-name))
+         {:keys [blows shape]} (posterior counts)]
+     {:chance (chance counts (or health 20)) :blows blows :shape shape})))
