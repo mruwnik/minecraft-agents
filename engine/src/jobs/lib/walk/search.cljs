@@ -250,7 +250,7 @@
   past a step the body cannot undo and stands at the loaded edge (progress oneWay.open, the rule open-path applies to a
   search that ended) walks the path to that node instead when it is progress-blocks nearer, with :one-way-taken (live: a
   gap jump down as go-to's first move kept every round of a 300-block search from walking, and it gave up :searching), and
-  priced? (a fn of a landing [x y z] and whether the drop is one block) agrees to the step (wplan/one-way-priced?).
+  priced? (a fn of the rim [x y z], the landing [x y z] and whether the drop is one block) agrees to the step (wplan/one-way-priced?).
   A masked search's swimming steps count as out of water as in a finished partial plan (wet-ok?, masked-wet-ok): a submerged
   body keeps swimming while the search goes on. The search without the limits has no progress to walk, nor has one with
   progress false (go-to after a walk to a frontier: the nearest node of a search that has not ended may be the dead end an ended one walked away from)."
@@ -299,7 +299,7 @@
       (do (keep-search! who k (when (and quoted (not done) (= "found" (.-status ^js (:r within)))) (assoc search :within within)))
           (when known (learn-known! known (:r within)))
           (assoc (wplan/walk-plan c (:walled search) (:walled search) to one-way frontier within) :ms ms))
-      (let [plan (assoc (unfinished-plan search ms one-way progress (if (:unknown c) (wplan/masked-wet-ok c) (constantly false)) #(wplan/one-way-priced? c to %1 %2)) :fresh fresh?)
+      (let [plan (assoc (unfinished-plan search ms one-way progress (if (:unknown c) (wplan/masked-wet-ok c) (constantly false)) #(wplan/one-way-priced? c to %1 %2 %3)) :fresh fresh?)
             partial? (= "partial" (:status plan))]
         (keep-search! who k (when-not partial? search))
         (cond-> plan partial? (assoc :search-on #(keep-search! who k search)))))))

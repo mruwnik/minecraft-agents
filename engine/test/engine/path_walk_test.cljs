@@ -13,6 +13,7 @@
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.drive :as drive]
             [jobs.lib.walk.world :as wworld]
+            [jobs.lib.walk.one-way :as one-way]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.search :as wsearch]
             [engine.test-util :as tu]
@@ -497,7 +498,7 @@
           (is (= {:status :searching :replans 0 :fresh true} (wplan/no-walk shut 0)) "without :one-way :open the step is never taken"))))))
 
 ;; Q385: a landing the body has seen dark is a trap with the chance ::dark-chance and is taken only for a goal worth more than that
-;; chance times ::trap-s; one seen lit is nearly free
+;; chance times the climb back out; one seen lit is nearly free
 (def landing-seen {:time 18000 :light-default [0 0]})
 (def landing-lit (assoc landing-seen :light {[2 61 32] [0 14]}))
 
@@ -506,12 +507,30 @@
     (tu/run-async done
       (fn ^:async t []
         (let [call (fn [world worth] (one-budgeted-call ledge-to-unloaded {:x 1.5 :y 64 :z 32.5} [120 61 32] 600 {:one-way :open :worth worth :world world}))
-              cheap-dark (await (call landing-seen 15))
+              ;; between the lit (0.02) and dark (0.1) chances of the climb back out
+              cheap (* 0.05 (one-way/climb-out-s (tu/fake {:blocks ledge-to-unloaded}) {:x 1 :y 64 :z 32} {:x 2 :y 61 :z 32}))
+              cheap-dark (await (call landing-seen cheap))
               dear-dark (await (call landing-seen 1000))
-              cheap-lit (await (call landing-lit 15))]
+              cheap-lit (await (call landing-lit cheap))]
           (is (nil? (:one-way-taken cheap-dark)))
           (is (= :drop (:kind (:one-way-taken dear-dark))))
           (is (= :drop (:kind (:one-way-taken cheap-lit)))))))))
+
+;; c29cca5d: a landing's price is the climb back out: a 20-deep shaft in stone (Oriel's valley) costs a stair of 20 steps cut by hand,
+;; far more than a 3-deep one; a pickaxe cuts it cheaper, and carried blocks pillar it cheaper still
+(defn shaft [depth] (merge (tu/box -21 (- 64 depth) -21 21 70 21 "stone") (tu/box 0 (- 65 depth) 0 0 70 0 "air")))
+
+(deftest a-landing-is-priced-by-the-climb-back-out
+  (let [climb (fn [depth inventory] (one-way/climb-out-s (tu/fake {:blocks (shaft depth) :inventory inventory :self {:pos {:x 1.5 :y 71 :z 0.5}}})
+                                                         {:x 1 :y 65 :z 0} {:x 0 :y (- 65 depth) :z 0}))
+        deep (climb 20 [])
+        shallow (climb 3 [])
+        picked (climb 20 [{:name "stone_pickaxe" :count 1}])
+        pillared (climb 20 [{:name "dirt" :count 20}])]
+    (is (< (* 5 shallow) deep) "20 steps by hand cost far more than 3")
+    (is (< picked deep) "a pickaxe cuts the stair quicker")
+    (is (< pillared picked) "20 carried blocks pillar out quicker than any stair")
+    (is (> (* 0.1 deep) 30) "the deep shaft costs more than the old flat trap price (0.1 x 300 s)")))
 
 ;; a drop whose landing is walled by what cannot be dug is a certain trap: no goal is worth it (the wall runs the whole floor: a
 ;; short one leaves its top walkable and open ground beside it, a drop onto which is no trap)

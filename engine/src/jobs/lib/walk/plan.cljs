@@ -315,15 +315,15 @@
   (pos? (escape/pit-depth (escape/block-at-of p) (escape/unseen-of p) cell)))
 
 (defn one-way-priced?
-  "Whether the one-way step landing at `at` is worth taking (jobs.lib.walk.one-way/taken?): the EV of its landing against the goal's worth
+  "Whether the one-way step from `rim` landing at `at` is worth taking (jobs.lib.walk.one-way/taken?): the EV of its landing against the goal's worth
   (the call's :worth), and, for a drop of more than a block into a pit, a way out of the landing exists (escape/choose does not say :no-dig: a landing with nothing
   it could dig round it is a certain trap, not a chance of one). True when there is no step (nil at)."
-  [c to at small?]
+  [c to rim at small?]
   (or (nil? at)
       (let [p (:primitives c)
             pos (.-pos (.self p))
             [gx gy gz] to]
-        (and (one-way/taken? p at small? (js/Math.hypot (- gx (.-x pos)) (- gy (.-y pos)) (- gz (.-z pos))) (:worth (:args c)))
+        (and (one-way/taken? p rim at small? (js/Math.hypot (- gx (.-x pos)) (- gy (.-y pos)) (- gz (.-z pos))) (:worth (:args c)))
              (or small? (not (pit? p (vec at))) (not= {:step :none :why :no-dig} (select-keys (escape/choose p (vec at) to) [:step :why])))))))
 
 (defn drop-index
@@ -337,13 +337,14 @@
                        (partition 2 1 steps))))
 
 (defn cut-refused
-  "steps cut short before its first step that cannot be undone when priced? (a fn of the landing [x y z] and whether the drop is
-  one block) refuses it, with that step's landing as :refused; else {:steps steps}."
+  "steps cut short before its first step that cannot be undone when priced? (a fn of the rim [x y z] it leaves, the landing [x y z]
+  and whether the drop is one block) refuses it, with that step's landing as :refused; else {:steps steps}."
   [steps priced?]
   (let [i (drop-index steps)
         {:keys [x y z]} (when i (nth steps i))
-        small? (when i (and (= 1 (- (:y (nth steps (dec i))) y)) (not= :gap (:move (nth steps i)))))]
-    (if (and i (not (priced? [x y z] small?)))
+        rim (when i ((juxt :x :y :z) (nth steps (dec i))))
+        small? (when i (and (= 1 (- (second rim) y)) (not= :gap (:move (nth steps i)))))]
+    (if (and i (not (priced? rim [x y z] small?)))
       {:steps (subvec steps 0 i) :refused [x y z]}
       {:steps steps})))
 
@@ -369,7 +370,7 @@
         out (and frontier (not beyond) (not edge) (true? (.-searchedOut r)))
         past (when (and (not edge) (not out) (= :open one-way)) (open-path r))
         {:keys [steps refused]} (let [all (cond edge (path-steps walled (:path edge)) past (path-steps walled past) :else steps)]
-                                  (if (and (= :open one-way) (or (:unknown c) (not= "found" (.-status r)))) (cut-refused all #(one-way-priced? c to %1 %2)) {:steps all}))
+                                  (if (and (= :open one-way) (or (:unknown c) (not= "found" (.-status r)))) (cut-refused all #(one-way-priced? c to %1 %2 %3)) {:steps all}))
         step (or (one-way-of r) (when refused {:kind :drop :at refused}))
         [steps cut] (if (and (:unknown c) (= "found" (.-status r)) (not (or edge past)) (nil? (:air-used (wworld/body-policy c))))
                       (masked-cut steps (masked-wet-ok c))

@@ -559,6 +559,6 @@
 
 (deftest a-drop-needs-a-way-out-only-where-it-lands-in-a-pit
   (let [priced? (fn [blocks] (wplan/one-way-priced? {:primitives (tu/fake {:self {:pos {:x 0.5 :y 67 :z 0.5}} :floor [-10 -10 10 10] :blocks (merge own-pillar blocks)}) :args {}}
-                                                    [8 64 0] [3 64 0] false))]
+                                                    [8 64 0] [2 67 0] [3 64 0] false))]
     (is (true? (priced? {})) "open ground: escape/choose has no wall to dig, which is no trap")
     (is (false? (priced? bedrock-pit)) "a pit with nothing to dig is a certain trap")))
