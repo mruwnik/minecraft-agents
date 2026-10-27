@@ -1192,15 +1192,23 @@
           (is (empty? sneaks))
           (is (pos? looks) "a look moves nothing, so it still happens"))))))
 
+(defn ^:async dark-stair-replans []
+  (let [{:keys [out seen]} (await (run-go-to stair-body stair-job
+                                             (fn [{:keys [p]}] (swap! (fake/state p) assoc :light-default [0 0] :pitch 30))))]
+    {:out out :replans (filter #(= :replan (:kind %)) seen)}))
+
+;; how many cells the dark walk learns follows the prices of the unseen ways it tries, so the count is not pinned
 (deftest go-to-down-a-stair-in-a-dark-room-ends-with-bounded-replans
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out seen]} (await (run-go-to stair-body stair-job
-                                                   (fn [{:keys [p]}] (swap! (fake/state p) assoc :light-default [0 0] :pitch 30))))
-              replans (filter #(= :replan (:kind %)) seen)]
+        (let [{:keys [out replans]} (await (dark-stair-replans))
+              learned (mapcat :learned replans)]
           (is (= :one-way (:why out)) (pr-str out))
-          (is (= 23 (count replans)) "the same count every run: the walk clock is stopped"))))))
+          (is (<= (second (:at out)) 66) "the walk gets down the stair to its foot")
+          (is (every? :learned replans) "each replan learns an unseen cell, none is a price changing its mind")
+          (is (apply distinct? learned) "no cell is learned twice")
+          (is (= (count replans) (count (:replans (await (dark-stair-replans))))) "the same count every run: the walk clock is stopped"))))))
 
 ;; the walls hide the room: past what sight has reached the planner reads the next wall cell as open, so the walk learns
 ;; a wall cell a sight's reach on, again and again, while it walks on; none of that is a stretch to give up
