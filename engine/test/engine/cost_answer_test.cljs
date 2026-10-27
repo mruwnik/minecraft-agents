@@ -125,7 +125,7 @@
       (let [skeleton (mob "skeleton" 12)
             fight (cost/fight-answer (assoc (fight sword skeleton) :mobs [skeleton]))
             choose (fn [returns walk-hp]
-                     (let [f (-> fight (update :damage + walk-hp) (update-in [:caught :damage] + walk-hp))]
+                     (let [f (-> fight (update :damage + walk-hp) (cond-> (:caught fight) (update-in [:caught :damage] + walk-hp)))]
                        (:answer (cost/decide (body 20) {:fight f :flee (cost/flee-answer {:food 20 :mobs [skeleton] :returns returns :later f})} here))))]
         (is (= :flee (choose 0 0)) "no flight lately: a step out of its range is cheaper than closing 12 blocks")
         (is (= :fight (choose 2 0)) "fled twice, the walks again dearer than the fight, if the walk to it is free (go-to's lower bound)")
@@ -345,6 +345,9 @@
     (is (nil? known) "the land seen ends at once and the mob keeps up")
     (is (< (js/Math.abs (- (- 1 (* (- 1 (:chance (caught/prior "drowned" 20))) 0.25)) (-> open :caught :chance))) 1e-9) "caught at 1 - (1 - the prior at 20 hp) x 0.25")
     (is (< (-> open :caught :damage) (-> (cost/flee-answer {:food 20 :mobs [m] :swim 4 :land 0 :open 0.25 :later {:damage 100 :hit 3 :seconds 5}}) :caught :damage)) "a later fight is what the ending flight takes")
+    (let [ashore #(-> (cost/flee-answer {:food 20 :mobs [m] :swim 4 :land 0 :open 0.25 :later %}) :caught :damage)
+          fight {:damage 1 :hit 3 :seconds 5}]
+      (is (< (ashore fight) (ashore (assoc fight :caught {:chance 0.5 :damage 100 :hit 3}))) "and that fight's going bad"))
     (is (> (-> open :caught :chance) (-> seen-land :caught :chance)))
     (is (= (:caught seen-land) (:caught (cost/flee-answer {:food 20 :mobs [m] :swim 4 :land ##Inf :open 0.25}))) "land enough already: the chance is no matter")))
 

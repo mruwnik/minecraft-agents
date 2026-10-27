@@ -324,7 +324,7 @@
 (defn flee-answer
   "flee-answer-on over the land known; when that is no answer and open (the chance, 0..1, that land goes on past it, cells
   never seen) is given, the answer over land enough, in which a flight whose land ends instead (chance 1 - open) is caught
-  on the shore as well, taking the blows of the fight ashore (ashore, else later; the flight's own when none): one caught
+  on the shore as well, taking the blows of the fight ashore (ashore, else later; its expected-damage, gone bad by its chance; the flight's own when none): one caught
   on the way too meets that end, so a flight to a shore the mob reaches is never cheaper than the fight."
   [{:keys [open later ashore] :as args}]
   (let [args (dissoc args :open :ashore)
@@ -334,7 +334,7 @@
           (when-let [a (flee-answer-on (assoc args :land ##Inf))]
             (let [{c0 :chance d0 :damage} (:caught a)
                   ends (* (- 1 c0) (- 1 open))
-                  end-d (max d0 (:damage later d0))
+                  end-d (max d0 (if later (expected-damage later) d0))
                   chance (+ c0 ends)]
               (if (zero? chance)
                 a
