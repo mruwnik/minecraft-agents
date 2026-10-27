@@ -1,6 +1,7 @@
 ;; The jobs tool marks every submitted job survive-death: a player keeps their to-do list through a death; --drop-on-death
 ;; lets the dead body take it (job.cancelled). The jobs are submitted through jobs.mjs (the agent tool).
-;; Should-succeed: after the respawn the repeat job is still listed; a plain go-to resumes from the respawn and arrives.
+;; Should-succeed: after the respawn the repeat job is still listed; a plain go-to resumes from the respawn and arrives;
+;; a pillar queued unstarted when the body died starts from the respawn point (over 6 blocks from where it was submitted).
 ;; Should-fail: the go-to submitted --drop-on-death is cancelled by the death.
 {:defaults
  {:tags [:scheduler :survival :death :tool] :time :any
@@ -27,4 +28,13 @@
             {:event {:source :job :kind :completed :data {:arrived true}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :cancelled} :for-s 20 :of-job true}]
    :after [[:body-near [28.5 0 28.5] 3]]
-   :limit-s 120}]}
+   :limit-s 120}
+  ;; the job ahead dies with the body; the respawn is no move the queued call waits out (:moved-since-submit)
+  {:name "queued-pillar-starts-from-the-respawn-point"
+   :act [[:http :submit (jobs.time.noop {:seconds 60}) [:drop-on-death] {:ok true}]
+         [:http :submit (jobs.access.pillar {:height 1 :submitted-at #xyz [10 0 10]}) [] {:ok true}]
+         [:wait-s 2] [:kill-body] [:await {:source :body :kind :respawned} 30]
+         [:rcon "give $BODY dirt 4"]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason :moved-since-submit}} :for-s 30 :of-job true}]
+   :limit-s 100}]}
