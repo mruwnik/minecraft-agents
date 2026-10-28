@@ -414,7 +414,7 @@
 
 (defn fit-for
   "The fit? of a job whose work is of category (:click, :work or :long, cost.risk/work-s): later :game-mode off survival,
-  :low-health while that work costs more than the body may risk now (price/fit: lifted while waiting cannot heal it),
+  :low-health while that work costs more than the body may risk now (price/fit: none while waiting cannot heal it),
   :poisoned while poisoned."
   [category]
   (fn [c]

@@ -2,7 +2,7 @@
   "tools/event-counts.mjs: recounts the measured combat priors from the trial bodies' event logs, so a setting can cite its k and n.
   Commands: fold | creeper-exchange | flight-starts | notice-rate | way-on (world-test.way-prior; counts the logs alone, no fold) | drowned-meets (world-test.drowned-meets; trial bodies only) | flee-pace (trial bodies only), each [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S]; each folds the logs into the durable counts file first (rows by run id, so counts only grow as logs rotate).
   spot-returns [--agents DIR] (world-test.spot-returns), field-passes [--agents DIR] (world-test.field-passes), arrow-shots [--agents DIR] [--difficulty D] (world-test.arrow-shots; D the
-  server's, default 1, easy, the trial server's), caught-flights [--agents DIR] (world-test.caught-flights; trial bodies only), hide-ends [--agents DIR] (world-test.hide-ends; trial bodies only) and vein-seen [--agents DIR] count from the logs alone, no fold;
+  server's, default 1, easy, the trial server's), caught-flights [--agents DIR] (world-test.caught-flights; trial bodies only), hide-ends [--agents DIR] (world-test.hide-ends; trial bodies only), work-hurt [--agents DIR] (world-test.work-hurt) and vein-seen [--agents DIR] count from the logs alone, no fold;
   water-lags [--agents DIR] [--stride N] (world-test.water-lags) surface-heights (world-test.surface-heights), floor-neighbours (world-test.floor-neighbours), dark-reach (world-test.dark-reach) and unseen-solid (world-test.unseen-solid, JSON for jobs/lib/cost/unseen_solid.json) from the recorded chunks beside DIR;
   resight [--agents DIR] [--counts FILE] (world-test.resight) folds the bodies' seen memory against those chunks into the counts file; wall-sides likewise folds the trial bodies' enter-room.arrived events (world-test.wall-sides), far-side-rows their clear-path.far-side events (world-test.far-side-rows), wall-places their flights' walls attempts and pillars, the probes' pillars too (world-test.wall-places).
   vein-seen: the ore blocks one look saw together (26-connected, a vein's plain and deepslate blocks as one ore) per group, from the
@@ -64,7 +64,8 @@
             [world-test.wall-places :as wall-places]
             [world-test.wall-sides :as wall-sides]
             [world-test.far-side-rows :as far-side-rows]
-            [world-test.way-prior :as way-prior]))
+            [world-test.way-prior :as way-prior]
+            [world-test.work-hurt :as work-hurt]))
 
 (def blast-hp "hp over which one hurt event from a creeper is its blast." 2)
 (def tail-ms "Time after a run ends within which a hurt still counts as its own." 1500)
@@ -618,7 +619,7 @@
        (sort-by :t)
        vec))
 
-(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | closing-rate | walk-pace | walk-detour | gap-miss | way-on | guess-looks | unseen-floors | spot-returns | field-passes | arrow-shots | caught-flights | vein-seen | water-lags | surface-heights | floor-neighbours | unseen-solid | dark-reach | resight | wall-sides | far-side-rows | pen-escapes | wall-places | hide-ends [--run ID --animals N --secs S --escaped E] [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N] [--difficulty D]
+(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | closing-rate | walk-pace | walk-detour | gap-miss | way-on | guess-looks | unseen-floors | spot-returns | field-passes | arrow-shots | caught-flights | work-hurt | vein-seen | water-lags | surface-heights | floor-neighbours | unseen-solid | dark-reach | resight | wall-sides | far-side-rows | pen-escapes | wall-places | hide-ends [--run ID --animals N --secs S --escaped E] [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N] [--difficulty D]
   every command first folds the logs into the counts file (default worlds/test/priors-counts.edn), then reports from the file; --since-ms keeps the rows of fights started after it.")
 
 (defn- parse-args [argv]
@@ -779,6 +780,12 @@
                                                     #(caught-flights/report (mapcat caught-flights/episodes recs) (mapcat (fn [rs] (caught-flights/episodes rs :fight)) recs)))
                                                   :difficulty difficulty :since-ms since-ms)))
                           0)
+       "work-hurt" (let [per (for [b (array-seq (fs/readdirSync agents))
+                                   :let [d (path/join agents b "engine")]
+                                   :when (fs/existsSync d)]
+                               (->> (event-lines d) (keep work-hurt/scan-line) (filter #(>= (:t %) since-ms)) (sort-by :t) work-hurt/tally))]
+                     (println (pr-str (assoc (work-hurt/report per) :since-ms since-ms)))
+                     0)
        "vein-seen" (do (println (pr-str (vein-seen (mapcat #(read-agent (path/join agents % "engine") since-ms)
                                                        (filter #(fs/existsSync (path/join agents % "engine")) (array-seq (fs/readdirSync agents)))))))
                        0)

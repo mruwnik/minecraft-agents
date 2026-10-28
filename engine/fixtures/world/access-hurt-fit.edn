@@ -1,5 +1,5 @@
 ;; Card ee960f0a (owner Q328): the access jobs bind fit? to ready/fit?, so a hurt body (3 hp, under the risky 6; hunger stops
-;; regeneration) waits :low-health before a queued tunnel or pillar, while go-to's escalation children carry :checks {:fit? (always)}
+;; regeneration) waits :low-health before a queued tunnel or pillar (fed at 3.9 hp too: the death a hit risks; at 5 hp it cuts), while go-to's escalation children carry :checks {:fit? (always)}
 ;; and still pillar a hurt body out of a pit.
 {:defaults
  {:tags [:access :readiness]
@@ -15,6 +15,26 @@
    :expect [{:event {:source :job :kind :waiting :data {:reason :low-health}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped}} :of-job true :for-s 25 :until {:source :job :kind :waiting :data {:reason :low-health}}}]
    :after [[:block [16 9 17] "stone"]]}
+  {:name "fed-body-at-3.9-hp-tunnel-waits-low-health"
+   ;; a bar under 18 and over 6 (not hungry) and bread carried (it can heal): a 600 s tunnel's mean hurt is 0.3 hp, but with
+   ;; the death a hit of 3.9 hp or more risks it is 2.7, over half of 3.9 (the fed :long line is 4.4 hp)
+   :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
+   :body {:at [16.5 10 16.5] :inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 8] ["bread" 1]] :effects [["hunger" 4 255]]}
+   :act [[:wait-s 6]
+         [:rcon "damage $BODY 16.1 minecraft:generic"]
+         [:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :ways #{:carried}})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :low-health}} :within-s 20 :of-job true}]
+   :after [[:block [16 9 17] "stone"]]}
+  {:name "fed-body-at-5-hp-tunnel-cuts"
+   ;; as above at 5 hp: 1.7 hp with the death, within 2.5
+   :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
+   :body {:at [16.5 10 16.5] :inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 8] ["bread" 1]] :effects [["hunger" 4 255]]}
+   :act [[:wait-s 6]
+         [:rcon "damage $BODY 15 minecraft:generic"]
+         [:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :ways #{:carried}})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason :low-health}} :of-job true :for-s 80 :until {:source :job :kind :completed}}]
+   :after [[:block [15 6 20] "air"]]}
   {:name "healthy-body-tunnel-cuts"
    :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
    :body {:at [16.5 10 16.5] :inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 8]] :effects [["resistance" 600 4]]}

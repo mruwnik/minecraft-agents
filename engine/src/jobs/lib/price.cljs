@@ -52,14 +52,16 @@
      (allowed-hp (.-health self) (.-food self) worth waits?))))
 
 (defn fit
-  "The wait reason {:reason :low-health :health :work-hp :allowed :text} while the work of a job of category (cost.risk/work-hp)
-  is more than allowed without a worth (the share of health, the cannot-heal lift) and healing would bring it within, else nil.
+  "The wait reason {:reason :low-health :health :work-hp :allowed :text} while the work of a job of category (cost.risk/work-hp at
+  the body's health and death price) is more than allowed without a worth (the share of health) and healing would bring it within, else nil;
+  none while waiting cannot heal the body (cannot-heal?): the job's own cannot-heal check (ready/hurt-cannot-heal?) stops it instead.
   A call's :worth is its own pricing (a search's legs, a walk), not the body's fitness."
   [c category]
   (let [self (.self (:primitives c))
         allowed (allowed c nil)
-        work (risk/work-hp category)]
-    (when (and (> work allowed) (<= work (allowed-hp 20 (.-food self) nil true)))
+        death (cost/death-cost (threats/death-body c) (u/self-pos c))
+        work (risk/work-hp category (.-health self) death)]
+    (when (and (not (cannot-heal? c)) (> work allowed) (<= (risk/work-hp category 20 death) (allowed-hp 20 (.-food self) nil true)))
       {:reason :low-health :health (.-health self) :work-hp (round1 work) :allowed (round1 allowed)
        :text (str "health " (.toFixed (.-health self) 1) " of 20 may risk " (round1 allowed) " hp, under the " (round1 work)
                   " this job's work may cost: eat or rest to heal first (natural healing needs food 18+)")})))

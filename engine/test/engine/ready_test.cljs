@@ -380,12 +380,15 @@
 (deftest fit-waits-while-the-jobs-own-work-costs-more-than-the-body-may-risk
   (are [category hp food inventory expected]
        (= expected (kind (ready/fit-for category) {:self {:pos {:x 0 :y 64 :z 0} :health hp :food food} :inventory inventory}))
-    :long 3 20 [] :later ; a mine's 600 s cost 1.9 hp, over half of 3
-    :work 3 20 [] :ok    ; a field's 120 s cost 0.4
+    :long 3.9 20 [] :later ; a 600 s dig hurts 0.3 hp on the mean, but a hit of 3.9 hp in it kills: 2.7 hp with the death, over half of 3.9
+    :long 6 20 [] :ok      ; such a hit is rarer: 1.1
     :long 20 20 [] :ok
-    :long 6 5 [{:name "bread" :count 1}] :later ; hungry: half the share, and the bread heals it
-    :work 6 5 [{:name "bread" :count 1}] :ok
-    :long 3 8 [] :ok))   ; waiting cannot heal it: all but 1 hp
+    :work 3 20 [] :later   ; a field's 120 s: 2.3
+    :work 6 20 [] :ok      ; 0.6
+    :long 5 20 [] :ok      ; 1.7 within 2.5
+    :long 5 5 [{:name "bread" :count 1}] :later ; hungry: half the share, and the bread heals it
+    :long 4 20 [] :later   ; 2.6 over 2
+    :long 3 8 [] :ok))     ; waiting cannot heal it: no wait (the job's own cannot-heal check stops it)
 
 (deftest ok-is-always-ok
   (is (= :ok (kind ready/ok open-night))))
@@ -542,7 +545,7 @@
     1.2 5 [] {:target ["oak_log"]} :later
     1.2 5 [] {:target ["sheep"]} :ok
     1.2 5 [{:name "bread" :count 1}] {:target ["oak_log"]} :later ; hungry: it eats the bread first
-    1.2 20 [] {:target ["oak_log"]} :ok
+    5 20 [] {:target ["oak_log"]} :ok
     12 5 [] {:target ["oak_log"]} :ok))
 
 (deftest a-starving-body-works-its-field-in-the-dark-and-a-fed-one-waits
