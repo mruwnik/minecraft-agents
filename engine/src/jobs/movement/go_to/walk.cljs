@@ -458,7 +458,7 @@
             seen-goal? (and (see-cell c) (not (:edge-mode (ctx/mem c))) (not (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))))
             opts (cond-> (assoc (walk-opts c doors) :progress (empty? (:frontier-best (ctx/mem c))))
                    seen-goal? (assoc :explore false))
-            stair-check (void-check c (reprice/check c pos (health/unseen-check c (known-end-check c pos (lookout-check c pos (plan-check c pos (choose/stair-check c pos) (straight-from! c d)))))))
+            stair-check (health/unseen-check c (void-check c (reprice/check c pos (known-end-check c pos (lookout-check c pos (plan-check c pos (choose/stair-check c pos) (straight-from! c d)))))))
             round (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos) :walk-spent? #(tour-spent? c)) pos range (assoc opts :see-cell (see-cell c) :stair-check stair-check)))]
         (if (jumped? c)
           :again
@@ -471,7 +471,7 @@
             surfaced? (when (and (not aided?) (not looked?) (or (= :air (:reason walked)) (air/short-under-water? c status walked pos))) (await (air/surface! c (dissoc opts :progress) pos)))
             way-looked? (when (and (not fetched) (= :goal-not-standable (:reason walked))) (await (look-along! c pos)))
             way (when (and (not fetched) (not way-looked?) (= :goal-not-standable (:reason walked))) (guess-waypoint c pos))
-            col-looked? (when (and (not aided?) (not looked?) (not surfaced?) (not fetched) (not way) (not way-looked?) (not (#{"arrived" "searching"} status)))
+            col-looked? (when (and (not aided?) (not looked?) (not surfaced?) (not fetched) (not way) (not way-looked?) (not (#{"arrived" "searching"} status)) (not (:unseen-weigh (:why walked))))
                           (await (look-at-column! c pos)))
             surveyed? (when (and (:unknown c) (= :exhausted (:reason walked)) (breath/head-under? (:primitives c)) (not (look/surveyed? c :near)))
                         (await (look/survey! c :near))

@@ -1,5 +1,6 @@
 ;; Card 3b801cdb: a stone block y 0..12 fills x 6..13, z 6..13 with no walls round it (feet y 13 on top), the goal on the floor east of it
-;; at x 20. The body first stands on the floor east of the block, so the drop's landing is seen, then is set on top: the only way over
+;; at x 17. The body first stands on the floor east of the goal, looking at the floor and then up the block's face, so the drop's
+;; landing and the air over it are seen, then is set on top looking down at its east half: the only way over
 ;; seen floors is the 13 drop (10 hp), over the 7 hp budget at full health; the block's other sides drop to floors it has not seen.
 ;; Unseen floors take the worse case (not there), so the walk ends :needs-health at once, walking to none of the unseen sides; with
 ;; :spend {:health 0} (a cap healing does not lift) it tries them instead and learns their floors absent.
@@ -7,20 +8,20 @@
  {:tags [:movement]
   :time :any
   :plot {:height 16}
-  :blocks [[:fill [6 0 6] [13 12 13] "stone"]]
-  :body {:at [16.5 0 9.5] :yaw 90 :settle-s 3}
+  :blocks [[:fill [0 0 0] [31 15 31] "air"] [:fill [6 0 6] [13 12 13] "stone"]]
+  :body {:at [22.5 0 9.5] :yaw 90 :pitch 20 :settle-s 3}
   :limit-s 150}
  :cases
  [{:name "over-budget-drop-off-an-open-platform-ends-needs-health-without-trying-the-unseen-sides"
-   :act [[:rcon "execute positioned $X $Y $Z run tp $BODY ~9 ~13 ~9"] [:wait-s 3]
-         [:job (jobs.movement.go-to {:pos #at [20 0 9] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:rcon "execute positioned $X $Y $Z run tp $BODY ~22 ~ ~9 90 -40"] [:wait-s 3] [:rcon "execute positioned $X $Y $Z run tp $BODY ~9 ~13 ~9 270 40"] [:wait-s 3]
+         [:job (jobs.movement.go-to {:pos #at [17 0 9] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false :why :needs-health :heal :full}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :replan} :for-s 40 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [9.5 13 9.5] 3]]}
   {:name "capped-drop-off-an-open-platform-tries-the-unseen-sides"
-   :act [[:rcon "execute positioned $X $Y $Z run tp $BODY ~9 ~13 ~9"] [:wait-s 3]
-         [:job (jobs.movement.go-to {:pos #at [20 0 9] :range 1 :ways #{:walk :clear-seal} :spend {:health 0}})]]
+   :act [[:rcon "execute positioned $X $Y $Z run tp $BODY ~22 ~ ~9 90 -40"] [:wait-s 3] [:rcon "execute positioned $X $Y $Z run tp $BODY ~9 ~13 ~9 270 40"] [:wait-s 3]
+         [:job (jobs.movement.go-to {:pos #at [17 0 9] :range 1 :ways #{:walk :clear-seal} :spend {:health 0}})]]
    :expect [{:event {:source :job :kind :replan} :within-s 60 :of-job true}
             {:event {:source :job :kind :stopped :data {:arrived false}} :within-s 140 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 140 :until {:source :job :kind #{:completed :stopped}}}]
-   :after [[:body-far [20.5 0 9.5] 4]]}]}
+   :after [[:body-far [17.5 0 9.5] 4]]}]}

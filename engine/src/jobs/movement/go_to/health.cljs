@@ -169,14 +169,15 @@
   (await (over-budget! c (await (probe! c pos range)))))
 
 (defn unseen-check
-  "near/walk-round!'s :stair-check: check's why, else {:unseen-weigh true} for the call's first plan that rests on a floor the
-  body has not seen (:unseen-floor) from a search that met the damage budget (damageMet), when the call leaves the budget to go-to."
+  "near/walk-round!'s :stair-check: {:unseen-weigh true} for the call's first plan that rests on a floor the body has not seen
+  (:unseen-floor), when the call leaves the damage budget to go-to; else check's why. Asked before check: a plan priced at
+  the worse case of its unseen floors is not the one check judges."
   [c check]
-  (fn [{:keys [steps r] :as plan} first?]
-    (or (when check (check plan first?))
-        (when (and (:unknown c) (not (:unseen-weighed (ctx/mem c))) (some :unseen-floor steps)
-                   (true? (some-> ^js r .-damageMet)) (nil? (:max-damage (wworld/walk-settings c))))
-          {:unseen-weigh true}))))
+  (fn [{:keys [steps] :as plan} first?]
+    (or (when (and (:unknown c) (not (:unseen-weighed (ctx/mem c))) (some :unseen-floor steps)
+                   (nil? (:max-damage (wworld/walk-settings c))))
+          {:unseen-weigh true})
+        (when check (check plan first?)))))
 
 (defn ^:async weigh-unseen!
   "unseen-check's why: unseen floors take the worse case, not there, so the way left is the one over seen floors: over-budget!
