@@ -10,6 +10,7 @@
             [engine.events :as events]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [jobs.lib.cost :as cost]
             [jobs.movement.stay-near :as stay-near]
             [jobs.movement.go-to :as go-to]
             [engine.event-api :as event-api]))
@@ -360,3 +361,12 @@
               near (await (least {:x 2 :y 64 :z 0}))
               far (await (least {:x 10 :y 64 :z 0}))]
           (is (> far near)))))))
+
+(deftest the-quote-walks-at-the-shared-walk-speed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pos {:x 13 :y 64 :z 0}
+              {:keys [eng]} (setup {} {:pos pos :range 3 :for-s 30})
+              q (:quote (await (event-api/quote-view eng (str job) (pr-str {:pos pos :range 3 :for-s 30}))))]
+          (is (< (js/Math.abs (- (+ 30 (/ 10 cost/walk-speed)) (second (get-in q [:uses :job-time])))) 1e-6)))))))

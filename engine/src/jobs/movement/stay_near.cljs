@@ -6,6 +6,7 @@
             [engine.settings :as settings]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [jobs.lib.places :as places]
             [jobs.lib.ready :as ready]
             [jobs.lib.util :as u]))
@@ -105,14 +106,15 @@
                             :result {:stayed true :reason "waited"}))))
 
 (defn quote-of
-  "The wait, and the walk to the target by straight distance (4 blocks a second, up to 3 times that when pushed out again)
-  when the body is out of range."
+  "The wait, and the walk to the target by straight distance (cost/walk-speed, sprinting at cost/body-speed for the least, up to 3 times the
+  walk when pushed out again) when the body is out of range."
   [c]
   (let [{:keys [for-s range]} (:args c)
         at (target-now c)
         wait (or for-s 0)
         d (if at (max 0 (- (u/dist (u/self-pos c) at) range)) 0)]
-    (cond-> {:uses {:job-time [(+ wait (/ d 6)) (+ wait (/ d 4)) (max (+ wait (* 3 (/ d 4)) 10) (budget-s))]}}
+    (cond-> {:uses {:job-time [(+ wait (/ d (cost/body-speed (.-food (.self (:primitives c)))))) (+ wait (/ d cost/walk-speed))
+                               (max (+ wait (* 3 (/ d cost/walk-speed)) 10) (budget-s))]}}
       at (assoc :moves-to [(:x at) (:y at) (:z at)]))))
 
 (defn finish!

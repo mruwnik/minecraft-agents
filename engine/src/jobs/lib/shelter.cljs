@@ -175,7 +175,7 @@
 
 (defn home-due-at?
   "Whether a body standing at pos would be due home before night: its home-target within sh-clock/home-limit and farther
-  than :arrive, and the day left no longer covering the walk (:slack times the straight line at :speed blocks a second)
+  than :arrive, and the day left no longer covering the walk (:slack times the straight line at cost/walk-speed)
   plus :margin-s. The timing is setting ::home-due."
   [p view pos]
   (let [{:keys [margin-s arrive]} (settings/get settings ::home-due)
