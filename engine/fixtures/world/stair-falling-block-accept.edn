@@ -30,11 +30,13 @@
    :after [[:body-near [14.5 7 16.5] 1.5] [:not-block [10 6 16] "gravel"]]}
   ;; Card a9dae429 (Hollin #85): at 7 hp, with a cell behind to stand in, the body cuts the headroom cell (the gravel over it
   ;; is hidden by it) from there, so the gravel drops into the empty column, not onto the body; it digs what fell and
-  ;; climbs on with no suffocation (no resistance; a short hunger empties the saturation so health stays low)
+  ;; climbs on with no suffocation (no resistance; a hunger first empties the bar so health stays low: a fed body heals to 12+ in 2 s,
+  ;; where the side cut is not worth its 2.5 s, stair/undermine-worth?)
   {:name "stair-up-under-gravel-with-room-behind-cuts-it-from-beside"
    :blocks [[:fill [9 3 16] [10 4 16] "air"] [:fill [10 6 16] [10 7 16] "gravel"]]
-   :body {:at [10.5 3 16.5] :yaw 270 :effects [["hunger" 3 50]]}
-   :act [[:rcon "damage $BODY 13 minecraft:generic"]
+   :body {:at [10.5 3 16.5] :yaw 270 :effects []}
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 13 minecraft:generic"]
          [:job (jobs.access.stair {:dir :up :heading :east :steps 4 :accept #{:falling-block}})]]
    :expect [{:event {:source :job :kind :stair.undermine :data {:cell #at [10 5 16]}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :data {:steps 4}} :within-s 190 :of-job true}
