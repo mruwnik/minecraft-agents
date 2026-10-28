@@ -22,8 +22,10 @@
     A set jobs.lib.walk.world/y-margin switches all of this off.
   - A body under ground (jobs.lib.shelter.sense/buried?) whose goal is under ::climb-rise above it
     walks no found way longer than ::detour/ratio times the distance to its goal at the call's start (at least
-    ::detour/floor blocks) when half or more of its cells were never seen: it gives up :why :detour with :route,
-    :straight and :allowed (blocks) before it sets out. See jobs.movement.go-to.detour."
+    ::detour/floor blocks) when half or more of its cells were never seen before it weighs a dug way (escalate-choose/detour-way);
+    with none it walks the way when its walk past the straight line costs no more than the goal is worth (the call's
+    :worth, else a tour's; mem :detour-ok), else gives up :why :detour with :route, :straight, :allowed (blocks), :extra-s
+    and :worth-s before it sets out. See jobs.movement.go-to.detour."
   (:require [engine.ctx :as ctx]
             [jobs.lib.stair-memory :as stair-mem]
             [jobs.lib.near :as near]
@@ -117,7 +119,7 @@
         bound? (and (some? (.-sensedAt p)) (< (- (:y pos) (:y (u/self-pos c))) (climb-rise)))]
     (fn [{:keys [status steps] :as plan} first?]
       (or (when stair-check (stair-check plan first?))
-          (when (and bound? (= "found" status) (sh-sense/buried? p)) (detour/refusal steps straight unseen?))))))
+          (when (and bound? (= "found" status) (not (:detour-ok (ctx/mem c))) (sh-sense/buried? p)) (detour/refusal steps straight unseen?))))))
 
 (defn straight-from!
   "Blocks from the goal the call's first walk round found the body, d then (memory :detour-from)."

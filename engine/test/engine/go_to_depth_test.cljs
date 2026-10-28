@@ -448,14 +448,14 @@
 
 (def in-loop {:blocks loop-way :self {:pos {:x 0.5 :y 64 :z 0.5}} :light [0 15]})
 
-(deftest a-buried-body-does-not-walk-a-long-unseen-way-to-a-near-goal
+(deftest a-buried-body-does-not-walk-a-long-unseen-way-to-a-near-goal-worth-less-than-the-walk
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p]} (await (gt/go! in-loop {:pos across :unknown false}))]
-          (is (= {:arrived false :why :detour :route 84 :straight 6 :allowed 48}
-                 (select-keys @out [:arrived :why :route :straight :allowed])))
-          (is (re-find #"84 blocks.*6 blocks away.*detour/floor" (str (:text @out))))
+        (let [{:keys [out p]} (await (gt/go! in-loop {:pos across :unknown false :worth 20}))]
+          (is (= {:arrived false :why :detour :route 84 :straight 6 :allowed 48 :extra-s 23.4 :worth-s 8.2}
+                 (select-keys @out [:arrived :why :route :straight :allowed :extra-s :worth-s])))
+          (is (re-find #"84 blocks.*6 blocks away.*costs 23.4 s, more than the 8.2 s the goal is worth.*:worth" (str (:text @out))))
           (is (= [0.5 64 0.5] (gt/at p)) "it did not set out"))))))
 
 ;; The loop with stone between its corridors (x 0..39, z 1..5): 5 blocks of rock part the body from its goal.
@@ -492,10 +492,12 @@
           (is (some #(= [:dig-route :replans-spent] ((juxt :step :reason) %)) (gt/events-of capped :go-to.escalation-stopped))
               "replans that cost what the other way does: the route ends :replans-spent"))))))
 
-(deftest the-long-way-is-walked-on-request-under-the-sky-or-within-the-bound
+(deftest the-long-way-is-walked-when-the-goal-is-worth-it-under-the-sky-or-within-the-bound
   (async done
     (tu/run-async done
       (fn ^:async t []
+        (is (true? (:arrived @(:out (await (gt/go! in-loop {:pos across :unknown false})))))
+            "with no dug way, a goal worth a tour is worth the long way's 23.4 s")
         (is (true? (:arrived @(:out (await (settings/with-settings {:jobs.movement.go-to.detour/floor 1000} #(gt/go! in-loop {:pos across :unknown false})))))))
         (is (true? (:arrived @(:out (await (gt/go! (assoc in-loop :light [15 0]) {:pos across :unknown false}))))) "sky light on the body")
         (is (true? (:arrived @(:out (await (settings/with-settings {:jobs.movement.go-to.detour/floor 100}

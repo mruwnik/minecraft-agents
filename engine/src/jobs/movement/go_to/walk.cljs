@@ -556,7 +556,10 @@
           (let [why (dissoc (:why walked) :detour)]
             (let [e (choose/detour-way c pos)]
               (case (:step e)
-                nil (end/give-up! c pos {:status :no-path :reason :detour} why)
+                nil (let [{:keys [extra-s worth-s] :as priced} (detour/price why (:worth (:args c)))]
+                      (if (<= extra-s worth-s)
+                        (do (ctx/update-mem! c assoc :detour-ok true) :again)
+                        (end/give-up! c pos {:status :no-path :reason :detour} (merge why priced))))
                 :searching :again
                 (esc/detour-escalate! c (:blocked (ctx/mem c) 0) why e))))
 
