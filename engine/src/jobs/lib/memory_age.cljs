@@ -5,7 +5,7 @@
   A cell of kind k seen t s ago is unchanged with chance (1 + t/b)^-a: the Gamma(a, b) prior on its change rate (a
   changes seen over b s of watching), whose long tail keeps a wide prior honest. Kinds: fire; door (doors, fence gates,
   trapdoors); fluid (water, lava, a bubble column, and an empty cell beside a remembered fluid, which a flow fills).
-  Every other cell stays as seen. The priors are the settings below (no re-sighting counts yet).
+  Every other cell stays as seen. The priors are the settings below (fluid: measured, tools/event-counts.mjs resight).
   level: q, the chance it changed, in doublings from q-min up to 1/2, then in halvings of 1 - q; level-chance is the q
   a reader prices a level at, so a price holds while the level does. q-min: below it no price moves by a second (the
   dearest worse case, a death, costs about 1000 s).
@@ -22,8 +22,8 @@
    ::fire-seconds {:default 60 :spec a/pos-num? :doc "Seconds of watching those fire changes were seen over."}
    ::door-changes {:default 0.5 :spec a/pos-num? :doc "Prior changes of a remembered door, fence gate or trapdoor (villagers toggle them, the wild never)."}
    ::door-seconds {:default 600 :spec a/pos-num? :doc "Seconds of watching those door changes were seen over."}
-   ::fluid-changes {:default 0.5 :spec a/pos-num? :doc "Prior changes of a remembered fluid, or an empty cell beside one (a flow after a neighbour changed, ice, sponges, buckets)."}
-   ::fluid-seconds {:default 3600 :spec a/pos-num? :doc "Seconds of watching those fluid changes were seen over."}})
+   ::fluid-changes {:default 1.47 :spec a/pos-num? :doc "Changes of a remembered fluid, or an empty cell beside one (a flow after a neighbour changed, ice, sponges, buckets): the resight posterior, 20 of 1449491 cells re-recorded changed, 1733 sections each one unit, Jeffreys prior."}
+   ::fluid-seconds {:default 470686494 :spec a/pos-num? :doc "Seconds of watching those fluid changes were seen over (the resight posterior's b)."}})
 
 (def ^:const NONE 0)
 (def ^:const FLUID 1)

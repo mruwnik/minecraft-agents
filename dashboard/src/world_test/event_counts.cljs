@@ -3,7 +3,8 @@
   Commands: fold | creeper-exchange | flight-starts | notice-rate | way-on (world-test.way-prior; counts the logs alone, no fold) | drowned-meets (world-test.drowned-meets; trial bodies only) | flee-pace (trial bodies only), each [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S]; each folds the logs into the durable counts file first (rows by run id, so counts only grow as logs rotate).
   spot-returns [--agents DIR] (world-test.spot-returns), field-passes [--agents DIR] (world-test.field-passes), arrow-shots [--agents DIR] [--difficulty D] (world-test.arrow-shots; D the
   server's, default 1, easy, the trial server's), caught-flights [--agents DIR] (world-test.caught-flights; trial bodies only) and vein-seen [--agents DIR] count from the logs alone, no fold;
-  water-lags [--agents DIR] [--stride N] (world-test.water-lags) and surface-heights (world-test.surface-heights) from the recorded chunks beside DIR.
+  water-lags [--agents DIR] [--stride N] (world-test.water-lags) and surface-heights (world-test.surface-heights) from the recorded chunks beside DIR;
+  resight [--agents DIR] [--counts FILE] (world-test.resight) folds the bodies' seen memory against those chunks into the counts file.
   vein-seen: the ore blocks one look saw together (26-connected, a vein's plain and deepslate blocks as one ore) per group, from the
   look tool's :look.observed lists; :capped counts the lists the tool cut short (nearest first, so a far group may be cut).
   creeper-exchange: respond runs that only decided about creepers and fought (a :fight decision) with at least one swing: hp the creepers
@@ -40,6 +41,7 @@
             [world-test.drowned-meets :as drowned]
             [world-test.field-passes :as field-passes]
             [world-test.fresh-drop :as fresh-drop]
+            [world-test.resight :as resight]
             [world-test.spot-returns :as spot-returns]
             [world-test.surface-heights :as surface-heights]
             [world-test.water-lags :as water-lags]
@@ -318,7 +320,7 @@
                     shrunk)}))
 
 ;; The durable counts: the rows of each prior by run id, so the counts only grow while the raw logs rotate away.
-(def empty-counts {:exchange {} :starts {} :notices {} :drowned-exposure {} :drowned-meets {} :flight-steps {}})
+(def empty-counts {:exchange {} :starts {} :notices {} :drowned-exposure {} :drowned-meets {} :flight-steps {} :resight {}})
 
 (defn better-exchange "Of two rows of one fight, the one that saw more swings (a rotation may have cut the older read short), then the older." [a b]
   (if (> (:swings b) (:swings a)) b a))
@@ -494,7 +496,7 @@
        (sort-by :t)
        vec))
 
-(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | way-on | spot-returns | field-passes | arrow-shots | caught-flights | vein-seen | water-lags | surface-heights [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N] [--difficulty D]
+(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | way-on | spot-returns | field-passes | arrow-shots | caught-flights | vein-seen | water-lags | surface-heights | resight [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N] [--difficulty D]
   every command first folds the logs into the counts file (default worlds/test/priors-counts.edn), then reports from the file; --since-ms keeps the rows of fights started after it.")
 
 (defn- parse-args [argv]
@@ -531,12 +533,13 @@
   [open-chunks dir]
   (if (and open-chunks (fs/existsSync dir))
     (let [^js read (open-chunks dir)]
-      (fn [x y z] (when-let [^js c (read x y z)] {:name (.-name c) :block (.-block c) :sky (.-sky c) :biome (.-biome c)})))
+      (fn [x y z] (when-let [^js c (read x y z)] {:name (.-name c) :id (.-id c) :t (.-t c) :block (.-block c) :sky (.-sky c) :biome (.-biome c)})))
     (constantly nil)))
 
 (defn main
-  "argv (array) -> promise of the exit code. open-chunks: tools/event-counts.mjs's reader of the recorded chunks."
-  [argv open-chunks]
+  "argv (array) -> promise of the exit code. open-chunks: tools/event-counts.mjs's reader of the recorded chunks; seen: its
+  reader of the seen memory files (.load file, .stateName id)."
+  [argv open-chunks ^js seen]
   (let [{[cmd] :pos :keys [agents counts since-ms sprint stride difficulty] :or {since-ms 0 sprint 5.6 stride 1 difficulty 1}} (parse-args (vec (array-seq argv)))
         repo (or js/process.env.WORLD_TEST_REPO ".")
         agents (or agents (path/join repo "worlds" "test" "agents"))
@@ -555,6 +558,16 @@
        "surface-heights" (let [dir (path/join agents ".." "chunks")]
                            (println (pr-str (surface-heights/count-in dir (cell-reader open-chunks dir) stride)))
                            0)
+       "resight" (let [file (or counts (path/join repo "worlds" "test" "priors-counts.edn"))
+                       at (cell-reader open-chunks (path/join agents ".." "chunks"))
+                       folded (reduce (fn [c b]
+                                        (let [f (path/join agents b "engine" "seen.bin")
+                                              ^js d (when (fs/existsSync f) (.load seen f))]
+                                          (cond-> c d (resight/fold (resight/rows b (.-sections d) (.-stateName seen) at)))))
+                                      (load-counts file) (array-seq (fs/readdirSync agents)))]
+                   (save-counts! file folded)
+                   (println (pr-str (resight/report (:resight folded))))
+                   0)
        "spot-returns" (do (println (pr-str (spot-returns/count-in agents))) 0)
        "field-passes" (do (println (pr-str (field-passes/count-in agents probe?))) 0)
        "arrow-shots" (let [rows (mapcat #(arrow-shots/meets (read-agent (path/join agents % "engine") since-ms))

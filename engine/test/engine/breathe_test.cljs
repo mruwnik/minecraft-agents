@@ -1193,7 +1193,7 @@
      :block (fn [cell] (.-name (.blockAt p (apply tu/pos cell))))}))
 
 ;; Hollin #72: a dive under an overhang outlasted perception's old 10 s fluid memory, so the way back read unknown. Water
-;; reads as remembered until it is likelier gone than not (jobs.lib.memory-age).
+;; reads as remembered until it is likelier gone than not (jobs.lib.memory-age: measured, years).
 (def dived-tunnel
   "Stone round a water tunnel at y 64..65 from z 0 to 8, open to air at z 8 (y 66 water, air from y 67)."
   (merge (tu/box -1 63 -1 1 67 9 "stone")
@@ -1217,7 +1217,7 @@
 (deftest water-swum-through-out-of-sight-still-leads-to-air
   (are [age-ms air] (= air (breath/flood-air (dived-body age-ms) {:x 0.5 :y 64 :z 0.5} 24 10 nil))
     30000 {:x 0 :y 66 :z 8}
-    (+ 1000 (memory-age/half-age-ms memory-age/FLUID)) nil))
+    (* 24 3600000) {:x 0 :y 66 :z 8}))
 
 (deftest a-body-that-dived-out-of-sight-swims-back-the-way-it-came
   (async done

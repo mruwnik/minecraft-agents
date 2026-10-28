@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Why JavaScript: thin entry point; the counting tool is cljs (dashboard/src/world_test/event_counts.cljs), run from the world-test bundle.
-// openChunks is the one other part: it reads the recorded chunk columns (binary) through engine/js/view-column.mjs and prismarine-chunk.
+// openChunks and seen are the other parts: they read the recorded chunk columns and the seen memory files (binary) through
+// engine/js/view-column.mjs, engine/js/seen-file.mjs and prismarine-chunk.
 // Recounts the measured combat priors from the trial bodies' event logs (`node tools/event-counts.mjs` prints the usage).
 import fs from 'node:fs'
 import path from 'node:path'
@@ -21,7 +22,7 @@ if (fs.statSync(bundle).mtimeMs < sources) {
   process.exit(2)
 }
 
-// dir -> (x, y, z) -> {name, block, sky, biome} of a cell of the chunk columns recorded in dir, null for a column never recorded
+// dir -> (x, y, z) -> {name, id, t, block, sky, biome} of a cell (t: when the column was recorded, ms) of the chunk columns recorded in dir, null for a column never recorded
 async function chunkReader () {
   const require = createRequire(import.meta.url)
   const { decodeColumnFile, restoreColumn } = await import('../engine/js/view-column.mjs')
@@ -36,19 +37,30 @@ async function chunkReader () {
       if (!columns.has(key)) {
         const file = path.join(dir, `${key}.bin`)
         const d = fs.existsSync(file) ? decodeColumnFile(fs.readFileSync(file)) : null
-        columns.set(key, d && restoreColumn(new ChunkColumn({ minY: d.header.minY, worldHeight: d.header.worldHeight }), d))
+        columns.set(key, d && { t: d.header.t, col: restoreColumn(new ChunkColumn({ minY: d.header.minY, worldHeight: d.header.worldHeight }), d) })
       }
       return columns.get(key)
     }
     return (x, y, z) => {
-      const col = column(Math.floor(x / 16), Math.floor(z / 16))
-      if (!col) return null
+      const c = column(Math.floor(x / 16), Math.floor(z / 16))
+      if (!c) return null
+      const { col, t } = c
       const p = { x: ((x % 16) + 16) % 16, y, z: ((z % 16) + 16) % 16 }
-      return { name: registry.blocksByStateId[col.getBlockStateId(p)]?.name, block: col.getBlockLight(p), sky: col.getSkyLight(p), biome: biomes[col.getBiome(p)] }
+      const id = col.getBlockStateId(p)
+      return { name: registry.blocksByStateId[id]?.name, id, t, block: col.getBlockLight(p), sky: col.getSkyLight(p), biome: biomes[col.getBiome(p)] }
     }
   }
 }
 
+async function seenReader () {
+  const require = createRequire(import.meta.url)
+  const { loadSeen } = await import('../engine/js/seen-file.mjs')
+  const { MC_VERSION } = await import('../engine/js/path/snapshot.mjs')
+  const registry = require('prismarine-registry')(MC_VERSION)
+  return { load: loadSeen, stateName: (id) => registry.blocksByStateId[id]?.name }
+}
+
 const openChunks = process.argv[2] === 'spot-returns' ? null : await chunkReader()
+const seen = process.argv[2] === 'resight' ? await seenReader() : null
 process.env.WORLD_TEST_REPO = fs.realpathSync(process.env.WORLD_TEST_REPO ?? path.join(import.meta.dirname, '..'))
-process.exitCode = await createRequire(import.meta.url)(bundle).eventCounts(process.argv.slice(2), openChunks)
+process.exitCode = await createRequire(import.meta.url)(bundle).eventCounts(process.argv.slice(2), openChunks, seen)

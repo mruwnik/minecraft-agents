@@ -23,9 +23,10 @@
   (is (zero? (memory-age/changed-chance memory-age/NONE 1e9)) "stone never changes"))
 
 (deftest each-due-age-starts-the-next-level
-  (doseq [k [memory-age/FLUID memory-age/DOOR memory-age/FIRE] l (range (dec memory-age/TOP))]
-    (let [due (memory-age/due-age-ms k l)
-          at #(memory-age/level (memory-age/changed-chance k %))]
+  ;; past ~300 years (the fluid prior's top levels) one ms moves the chance by less than a double resolves
+  (doseq [k [memory-age/FLUID memory-age/DOOR memory-age/FIRE] l (range (dec memory-age/TOP))
+          :let [due (memory-age/due-age-ms k l)] :when (< due 1e13)]
+    (let [at #(memory-age/level (memory-age/changed-chance k %))]
       (is (= [l (inc l)] [(at (dec due)) (at due)]) (str "kind " k " level " l)))))
 
 (deftest level-chances-double-to-one-half-then-halve-what-is-left
