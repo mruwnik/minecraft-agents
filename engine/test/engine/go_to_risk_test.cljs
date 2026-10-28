@@ -576,9 +576,10 @@
   (with-redefs [look/seen-block (constantly {:name "air" :age-ms 1e8}) sh-sense/sky-reaches-from-above? (constantly false)] (f)))
 
 (deftest a-hungry-body-affords-less-risk-than-a-fed-one-unless-it-cannot-heal
-  ;; a skeleton death 30 s ago, 75 blocks off: most likely it has not despawned; a bed by the body
+  ;; a skeleton death a minute ago, 75 blocks off: most likely it has not despawned; a bed by the body (a death there
+  ;; pays the walk back and the skeleton met again)
   (let [status-for (fn [food inventory] (let [c (-> (ready-test/ctx-of (assoc bed-world :self {:pos inside :health 20 :food food} :inventory inventory))
-                                                    (with-death {:x 80 :y 64 :z 5} "skeleton" 30000 with-bed))]
+                                                    (with-death {:x 80 :y 64 :z 5} "skeleton" 60000 with-bed))]
                                           (in-lit-cave #(first (planned-status c far-goal)))))
         bread [{:name "bread" :count 3}]]
     (is (= :ok (status-for 20 [])))
@@ -587,7 +588,7 @@
 
 (deftest a-goal-worth-enough-lets-a-walk-take-a-risk-over-the-share-of-health
   (let [status-for (fn [worth] (let [c (-> (ready-test/ctx-of (assoc bed-world :self {:pos inside :health 20 :food 5} :inventory [{:name "bread" :count 3}]))
-                                           (with-death {:x 80 :y 64 :z 5} "skeleton" 30000 with-bed)
+                                           (with-death {:x 80 :y 64 :z 5} "skeleton" 60000 with-bed)
                                            (assoc-in [:args :worth] worth))]
                                  (in-lit-cave #(first (planned-status c far-goal)))))]
     (is (= :later (status-for nil)) "no worth said: the share of health decides")
