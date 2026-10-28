@@ -20,7 +20,7 @@ function tree(bundleAge, sourceAge) {
   }
   file(path.join(src, 'event_counts.cljs'), sourceAge)
   file(path.join(root, 'dashboard', 'shadow-cljs.edn'), 1000)
-  file(path.join(root, 'dashboard', 'out', 'world-test.cjs'), bundleAge)
+  file(path.join(root, 'dashboard', 'out', 'event-counts.cjs'), bundleAge)
   return root
 }
 

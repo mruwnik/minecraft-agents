@@ -52,7 +52,7 @@ while [ $# -gt 0 ]; do
     --release) verb=release ;;
     --stop) stop=1 ;;
     -*) usage ;;
-    body-release|agent-tools) builds+=("$a"); verb=release ;;   # release builds: one file, no per-run vm.Script of the dev runtime files
+    body-release|agent-tools|event-counts) builds+=("$a"); verb=release ;;   # release builds: one file, no per-run vm.Script of the dev runtime files
     *) builds+=("$a") ;;
   esac
 done
