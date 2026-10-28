@@ -182,7 +182,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (f/start (update (ore-world {} []) :self assoc :health 8 :food 5) [f/own-zone])]
+        (let [s (f/start (update (ore-world {} []) :self assoc :health 1 :food 0) [f/own-zone])]
           (await (obtain-small! s {:worth 500 :item "oak_log" :count 1 :ways #{:gather} :explore true} 60))
           (is (seq (f/events-of s :waiting)) "the hurt, foodless body's search waits")
           (is (= 1 (count (f/events-of s :obtain.exploring))) "and the notice is said once, not each round"))))))
