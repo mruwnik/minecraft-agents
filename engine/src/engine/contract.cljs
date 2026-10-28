@@ -424,14 +424,18 @@
 
 (defn quote-problem
   "Why q is no quote {:uses {:job-time :health :food fig :items {name fig} :wear {tool fig}} :yields {:items {name fig}}
-  :done fig :moves-to [x y z]}, each fig [least mean most], or nil."
+  :done fig :moves-to [x y z] :death {:chance p :death s}}, each fig [least mean most], or nil. :death is the chance the
+  run kills the body (0-1) and the seconds that death costs (jobs.lib.cost/route-death's shape)."
   [q]
-  (let [{:keys [uses yields]} q
+  (let [{:keys [uses yields death]} q
         figs (concat (keep #(get uses %) [:job-time :health :food]) (vals (:items uses)) (vals (:wear uses))
                      (vals (:items yields)) (keep :done [q]))]
     (cond
       (not (map? q)) "not a map"
-      (seq (remove figure? figs)) "a figure not [least mean most] with least <= mean <= most")))
+      (seq (remove figure? figs)) "a figure not [least mean most] with least <= mean <= most"
+      (and (some? death) (not (and (map? death) (number? (:chance death)) (<= 0 (:chance death) 1)
+                                   (number? (:death death)) (<= 0 (:death death)))))
+      "a :death not {:chance p :death s} with p in 0-1 and s >= 0")))
 
 (defn default-quote
   "The quote of a job with no quote-of: time (0, the mean time of reports, else guess-s, ##Inf)."

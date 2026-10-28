@@ -45,6 +45,12 @@
                {:uses {:job-time [1 2 ##Inf]} :yields {:items {"dirt" [0 1 2]}}})
    :round (fn [_] (swap! world assoc :kid-ran true) :continue)})
 
+(deftest a-quote-may-carry-a-death-chance-and-its-price
+  (is (nil? (contract/quote-problem {:uses {:health [0 2 2]} :death {:chance 0.01 :death 900}})))
+  (is (some? (contract/quote-problem {:death {:chance 1.5 :death 900}})) "a chance past 1")
+  (is (some? (contract/quote-problem {:death {:chance 0.01}})) "no price")
+  (is (some? (contract/quote-problem {:death 0.01})) "a bare chance"))
+
 (deftest a-quote-reads-like-a-round-plus-what-is-left-and-cannot-act
   (async done
     (tu/run-async done
