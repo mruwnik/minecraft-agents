@@ -150,13 +150,16 @@
               cell-s (cost/dig-cells-s [(tools/clear-ms (tu/fake (dissoc thick :sight)) "stone")])
               seen (atom nil)
               r (await (run-door (assoc thick :seen-out seen) nil {:heading :east :max-dig-s (* 26 cell-s)}))
-              cheap (await (run-door thick nil {:heading :east :max-dig-s (* 10 cell-s)}))]
+              cheap-seen (atom nil)
+              cheap (await (run-door (assoc thick :seen-out cheap-seen) nil {:heading :east :max-dig-s (* 10 cell-s)}))]
           (is (= [:stopped :too-dear] [(:status r) (:reason r)]) (pr-str r))
           (is (= 6 (count (:dug r))) "three rows seen and a far side unseen fit 13 rows; six seen make the dead end too likely")
           (is (= [{:seen 3 :rows 6 :open false}] (map #(select-keys % [:seen :rows :open]) (filter #(= :clear-path.far-side (:kind %)) @@seen)))
               "abandoned with six rows of wall: three past what it saw, no far side found")
           (is (= [:stopped :too-dear 0] [(:status cheap) (:reason cheap) (count (:dug cheap))])
               "three seen rows over five of budget: the wall is likely thicker than the budget, so none is dug")
+          (is (= [{:seen 3 :open false}] (map #(select-keys % [:seen :open]) (filter #(= :clear-path.far-side (:kind %)) @@cheap-seen)))
+              "a door abandoned at its first gap still counts")
           (is (= [0 64 0] (:at r)) "it walked back to where it began"))))))
 
 (deftest a-wall-seen-thick-is-priced-by-its-rows-not-refused-by-their-count

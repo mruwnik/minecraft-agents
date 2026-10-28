@@ -21,6 +21,7 @@
   as all it dug again (it bought nothing) plus the walk back, back-s of k (fn)."
   [{:keys [sure-s row-s most q back-s]}]
   (let [k (max 0 (js/Math.floor (/ (- most sure-s) row-s)))
-        dug (reduce + (map #(js/Math.pow q %) (range 1 (inc k))))
-        dead (js/Math.pow q (inc k))]
-    (+ sure-s (* row-s dug) (* dead (+ sure-s (* k row-s) (back-s k))))))
+        qk (if (== q 1) 1 (js/Math.pow q k))
+        dug (if (== q 1) k (/ (* q (- 1 qk)) (- 1 q)))
+        dead (* q qk)]
+    (+ sure-s (* row-s dug) (if (zero? dead) 0 (* dead (+ sure-s (* k row-s) (back-s k)))))))

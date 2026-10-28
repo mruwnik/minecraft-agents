@@ -687,3 +687,9 @@
     (is (= 2 (price 0)) "a far side surely open costs only the rows seen")
     (is (= (+ 2 (* 2 (+ 0.5 0.25)) (* 0.125 (+ 2 4 2))) (price 0.5)) "two rows the budget leaves, then a dead end: its digs again and the walk back")
     (is (< 6 (price 0.9)) "a wall likely thicker than the budget is dearer than it")))
+
+(deftest a-door-with-no-bound-on-its-budget-prices-in-finite-time
+  (let [price #(cost/door-s {:sure-s 2 :row-s 2 :most ##Inf :q % :back-s (fn [k] k)})]
+    (is (= 2 (price 0)))
+    (is (= (+ 2 (* 2 (/ 0.5 0.5))) (price 0.5)) "every row dug while the wall holds: no dead end is ever reached")
+    (is (= ##Inf (price 1)))))

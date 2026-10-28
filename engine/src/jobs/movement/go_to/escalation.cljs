@@ -556,7 +556,7 @@
 
 (defn charge-dug!
   "Charge the go-to call's dig budget (memory :dug-s, escalate-choose/dig-left-s) s seconds of digging, once dug: a door
-  its dug cells as clear-path priced them (cost/dig-cells-s), a dig leg each cell as dig-leg did (its break time)."
+  its dug cells as clear-path priced them (cost/dig-cells-s), a dig leg each cell the same way."
   [c s]
   (ctx/update-mem! c update :dug-s (fnil + 0) s))
 
@@ -612,7 +612,7 @@
           (when (= :dug o)
             (forget-dug-own! c [dug])
             (note-holes! c [dug])
-            (charge-dug! c (/ (tools/clear-ms p n) 1000)))
+            (charge-dug! c (cost/dig-cells-s [(tools/clear-ms p n)])))
           (when guess (note-guess! c beside (not= :not-diggable o)))
           (if (and guess (= :not-diggable o)) :replan o))))))
 

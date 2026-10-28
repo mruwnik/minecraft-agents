@@ -177,7 +177,9 @@
         gap (escape/door (escape/block-at-of p) (escape/unseen-of p) (reach/standing-vec (:primitives c)) dir)]
     (cond
       (nil? gap) (finish! c :no-door {:why (no-door-why (:heading (:args c)) p)})
-      (too-dear c gap) (finish! c :too-dear {:why (too-dear c gap)})
+      (too-dear c gap) (do (when (:unseen gap)
+                             (ctx/update-mem! c assoc :cells (:cells gap) :guessed-rows (wall-rows c (:cells gap))))
+                           (finish! c :too-dear {:why (too-dear c gap)}))
       :else (let [{:keys [cells through unseen]} gap
                   rows (wall-rows c cells)]
               (ctx/update-mem! c #(cond-> (assoc % :cells cells :through through :unseen unseen :from (reach/standing-vec (:primitives c)) :start (reach/standing-vec (:primitives c)) :dug [])
