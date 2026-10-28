@@ -13,7 +13,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.dig-look :as dig-look]
             [jobs.survival.dig-in-cells :as dig-cells]
-            [jobs.survival.dig-pit :as pit-quote]
+            [jobs.survival.dig-pit-site :as pit-site]
             [jobs.survival.plug-way :as way]
             [jobs.survival.pit-cells :as pit]))
 
@@ -126,7 +126,7 @@
     {:feet feet :stand stand :cells cells :sink? sink?
      :open-s (when cells
                (+ (* (u/dist feet stand) (settings/get settings ::walk-s-per-block))
-                  (/ (reduce + (map #(tools/clear-ms p (pit-quote/priced-name p %)) cells)) 1000)
+                  (/ (reduce + (map #(tools/clear-ms p (pit-site/priced-name p %)) cells)) 1000)
                   (if fetch? (settings/get settings ::fetch-s) 0)))}))
 
 (defn quote-of

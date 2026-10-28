@@ -108,7 +108,7 @@
     (is (= [1] (danger-ids p)))
     (is (true? (hostile-near? p)))))
 
-(deftest a-creeper-seen-three-minutes-ago-is-forgotten
+(deftest a-creeper-lost-from-sight-stays-a-sighting-for-hours
   (let [{:keys [p clock]} (rig {:entities [(mob 1 "creeper" 2 4)] :blocks wall})]
     (is (= [1] (danger-ids p)))
     (move! p 1 hidden-spot)

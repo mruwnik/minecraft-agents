@@ -183,11 +183,15 @@
             (is (> (count roofs) 1) "a second pit was roofed")
             (is (pos? (:x (last roofs))) "on the side away from the zombie, though the near side is as close")))))))
 
+(def west-ground
+  "wide-ground west of x 2: the only sites (9+ from a failed one at 0) lie past a zombie at -4.5, so the walk meets it."
+  (into {} (filter (fn [[k _]] (<= (js/parseInt k) 2))) wide-ground))
+
 (deftest a-listed-dig-pit-waits-while-go-to-says-later-on-its-walk-to-a-site
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (st/setup {:time night :blocks wide-ground :inventory st/dirt-stack
+        (let [{:keys [eng seen]} (st/setup {:time night :blocks west-ground :inventory st/dirt-stack
                                             :entities [(assoc zombie :pos {:x -4.5 :y 64 :z 0.5})]})]
           (mem/write! (:store eng) :shut-in-failed {:pos {:x 0 :y 64 :z 0} :way :pit :reason :no-floor} {:cap 5 :ttl 600000})
           (core/submit! eng '(jobs.survival.dig-pit {:for :night}) {})
@@ -200,8 +204,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [far-ground (into {} (for [x (range 95 106) z (range -2 3) y (range 60 64)] [(str x "," y "," z) "dirt"]))
-              {:keys [eng p seen]} (st/setup {:time night :blocks (merge wide-ground far-ground) :inventory st/dirt-stack
-                                              :floor [-30 -10 110 10] :entities [(assoc zombie :pos {:x -4.5 :y 64 :z 0.5})]})]
+              {:keys [eng p seen]} (st/setup {:time night :blocks (merge west-ground far-ground) :inventory st/dirt-stack
+                                              :floor [-30 -10 110 10]
+                                              :entities [(assoc zombie :pos {:x -4.5 :y 64 :z 0.5}) (assoc zombie :id 9 :pos {:x 4.5 :y 64 :z 0.5})]})]
           (mem/write! (:store eng) :shut-in-failed {:pos {:x 0 :y 64 :z 0} :way :pit :reason :no-floor} {:cap 5 :ttl 600000})
           (core/submit! eng '(jobs.survival.dig-pit {:for :night}) {})
           (await (st/tick-n eng 2))
@@ -212,11 +217,23 @@
           (is (seq (st/calls p "place")))
           (is (every? #(< 90 (:x %)) (mapv st/arg-pos (st/calls p "place"))) "the pit is dug where the body was moved to"))))))
 
+(deftest a-pit-site-in-a-known-mobs-field-is-not-walked-to-when-the-toll-over-the-dig-costs-more-than-the-walk-is-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (st/setup {:time night :blocks (into {} (filter (fn [[k _]] (.endsWith k ",0"))) west-ground) :inventory st/dirt-stack})
+              known (fn [x] {:mob "zombie" :pos {:x x :y 64 :z 0.5} :weight 1e6})]
+          (mem/write! (:store eng) :shut-in-failed {:pos {:x 0 :y 64 :z 0} :way :pit :reason :no-floor} {:cap 5 :ttl 600000})
+          (let [r (with-redefs [threats/known-threats (constantly [(known -11.5)])]
+                    (await (tu/child-outcome eng 'jobs.survival.dig-pit {:for :night} 5)))]
+            (is (= :no-site (:reason r)) (pr-str r))
+            (is (empty? (st/calls p "place")) "no pit was dug")))))))
+
 (deftest a-site-walked-to-is-given-up-for-good-ground-the-body-stands-on-whatever-the-distance
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (st/setup {:time night :blocks wide-ground :inventory st/dirt-stack
+        (let [{:keys [eng p seen]} (st/setup {:time night :blocks west-ground :inventory st/dirt-stack
                                               :entities [(assoc zombie :pos {:x -4.5 :y 64 :z 0.5})]})]
           (mem/write! (:store eng) :shut-in-failed {:pos {:x 0 :y 64 :z 0} :way :pit :reason :no-floor} {:cap 5 :ttl 600000})
           (core/submit! eng '(jobs.survival.dig-pit {:for :night}) {})
@@ -379,9 +396,8 @@
     (is (not (pit-site/pit-site? (tu/fake {:blocks stone}) site)) "no pickaxe: stone cannot be dug")
     (is (pit-site/pit-site? (tu/fake {:blocks stone :inventory [{:name "iron_pickaxe" :count 1}]}) site))))
 
-;; a site is priced by its walk and the toll of known mobs over the pit's stay: a zombie by the feet whose toll is under
-;; 1 s a second still costs more over the dig than a few blocks of walk (the old 1 s a second cut dug by it); one as good
-;; as gone costs less than any walk, so the feet stay the site
+;; a site is priced by its walk, the toll along it and the toll of known mobs over the pit's dig: a zombie by the feet
+;; costs more over the dig than a few blocks of walk; one as good as gone costs less than any walk, so the feet stay the site
 (deftest a-relocation-site-weighs-the-walk-against-the-toll-over-the-dig
   (let [dirt (into {} (for [x (range -12 13) z (range -12 13)] [(str x ",63," z) "dirt"]))
         p (tu/seeing-all (tu/fake {:blocks dirt}))
@@ -389,9 +405,9 @@
         per-weight (cost/threat-factor {:health 20 :equipment nil :weapon nil} "zombie" 1)
         site (fn [toll] (with-redefs [threats/known-threats (constantly [{:mob "zombie" :pos {:x 0.5 :y 64 :z 0.5} :weight (/ toll per-weight)}])]
                           [(pit-site/relocation-site c) (threats/danger-near-fn c)]))
-        [light danger] (site 0.5)
+        [light danger] (site 2)
         [gone] (site 1e-6)]
-    (is (not= {:x 0 :y 64 :z 0} light) "a toll of 0.5 s a second over the dig is dearer than the walk off")
+    (is (not= {:x 0 :y 64 :z 0} light) "a toll of 2 s a second over the dig is dearer than the walk off")
     (is (nil? (danger light)) (pr-str light))
     (is (= {:x 0 :y 64 :z 0} gone))))
 
