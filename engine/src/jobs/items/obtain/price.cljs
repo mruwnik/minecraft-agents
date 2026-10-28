@@ -1,9 +1,11 @@
 (ns jobs.items.obtain.price
-  "What the call's shortfall costs the body to get at least: the cheapest way that would start, its walks straight (a lower bound: their danger is go-to's to price)."
-  (:require [jobs.items.obtain.base :refer [gathers? names-of shortfall]]
+  "What the call's shortfall costs the body to get at least: the cheapest way that would start, a chest's or loose item's walk with its risk (obtain.plan/walk-s), a gather's walks straight."
+  (:require [engine.ctx :as ctx]
+            [jobs.items.obtain.base :refer [gathers? names-of shortfall]]
             [jobs.items.obtain.need :refer [climbs-first? explorable-needs gather-viable?]]
             [jobs.items.obtain.plan :refer [chest-s craft-s gather-plan gathered-s loose-s]]
             [jobs.lib.cost :as cost]
+            [jobs.lib.need :as need]
             [jobs.lib.surface-up :as surface]))
 
 (defn gather-s
@@ -28,3 +30,11 @@
     (if (zero? n)
       0
       (apply min ##Inf (keep identity [(chest-s c names) (loose-s c names) (craft-s c names n) (gather-s c names n) (search-s c names n)])))))
+
+(defn item-price
+  "price-of the jobs.items.obtain child need/item-status would ask for n more of item under options o, with the light
+  judged under the sky's darkening sky (nil: now; 0: full day)."
+  [c item n o sky]
+  (let [[_ args] (ctx/child-job c 'jobs.items.obtain (cond-> (need/fetch-args 'jobs.items.obtain {:item item :count (+ n (get (need/counts c [item]) item))} o)
+                                                        sky (assoc :sky sky)))]
+    (price-of (assoc c :slots (conj (:slots c) (or (:slot o) :need)) :args args))))

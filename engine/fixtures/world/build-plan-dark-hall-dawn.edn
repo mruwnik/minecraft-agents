@@ -1,0 +1,26 @@
+;; Card bf7a26db: from-plan in a dark hall (a never-lit cell) at night, no torch carried, a chest of torches booked 40 blocks west
+;; out on open grass. The torches are needed after dawn too, so the fetch is worth the night left plus their price by day.
+;; Should-fail (waits, no fetch before dawn): near-dawn-the-dark-walk-waits-for-day: at 22800 the night left (about 35 s) is
+;; less than the spawn risk of 80 blocks of dark grass there and back. Should-succeed: midnight-the-torches-are-fetched: at 16000
+;; the night left outweighs that risk; the torches are fetched and the site built.
+;; Needs night: run with --allow-time --time-log <the shared time log>.
+{:defaults
+ {:tags [:build :light :night :fetch]
+  :time :night :time-why :dawn-decision
+  :plot {:height 8 :floor "grass_block" :length 64}
+  :blocks [[:fill [40 0 8] [62 3 24] "stone"] [:fill [43 0 12] [60 1 20] "air"] [:fill [40 0 14] [42 1 18] "air"]
+           [:set [6 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:torch\",count:8}]}"]]
+  :memory [{:kind :fetch/stock :data {:pos #at [6 0 16] :items {"torch" 8}}}]
+  :body {:at [46.5 0 16.5] :effects [["resistance" 600 4]] :inventory [["oak_planks" 6]]}
+  :plans [{:id "floor" :metadata {:by "$body"} :parts [{:id "p" :cells [#at [55 0 16] #at [56 0 16]] :want "oak_planks"}]}]
+  :limit-s 300}
+ :cases
+ [{:name "near-dawn-the-dark-walk-waits-for-day"
+   :act [[:time-set 22800] [:job (jobs.build.from-plan {:plan "$plan:floor"})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 15 :of-job true}
+            {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 15 :of-job true}]}
+  {:name "midnight-the-torches-are-fetched"
+   :act [[:time-set 16000] [:job (jobs.build.from-plan {:plan "$plan:floor"})]]
+   :expect [{:event {:source :job :kind :child_started :data {:slot :need}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :completed :data {:missing []}} :within-s 240 :of-job true}]
+   :after [[:block [55 0 16] "oak_planks"] [:block [56 0 16] "oak_planks"]]}]}

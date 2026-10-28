@@ -94,21 +94,23 @@
          (not (look/dark-in-sight? p cell)))))
 
 (defn dark-share
-  "chance-at of cell as a share of that of a cell certainly dark: 1 dark, 0 lit, the chance of dark between."
-  [p cell caves-free?]
+  "chance-at of cell (under the sky's darkening subtract, default now) as a share of that of a cell certainly dark: 1 dark, 0 lit, the chance of dark between."
+  [p cell caves-free? & [subtract]]
   (let [dark (cost/spawn-chance [0 0 0])]
-    (if (pos? dark) (/ (chance-at p cell caves-free?) dark) 0)))
+    (if (pos? dark) (/ (chance-at p cell caves-free? subtract) dark) 0)))
 
 (defn dark-seconds
   "Seconds of the walk where a mob could spawn, times (seconds from the start at each cell): every k-th cell and the
   last stand for the stretch walked since the one before, at its dark-share, k the larger of ::step and the cells over
-  ::max-cells."
-  [p cells times caves-free?]
+  ::max-cells; subtract: the sky's darkening to judge them by (default now)."
+  [p cells times caves-free? & [subtract]]
   (let [n (count cells)
         k (js/Math.ceil (max (settings/get settings ::step) (/ n (settings/get settings ::max-cells))))
-        ends (distinct (concat (range k n k) [(dec n)]))]
+        ends (distinct (concat (range k n k) [(dec n)]))
+        ;; a walk there and back steps on each cell twice
+        share (memoize #(dark-share p % caves-free? subtract))]
     (reduce + (for [[a b] (map vector (cons 0 ends) ends)]
-                (* (- (times b) (times a)) (dark-share p (nth cells b) caves-free?))))))
+                (* (- (times b) (times a)) (share (nth cells b)))))))
 
 (defn spawns-over
   "The mobs (an expected count) met spawning on the timed cells ([{:x :y :z :t}], :t seconds from the start, the first

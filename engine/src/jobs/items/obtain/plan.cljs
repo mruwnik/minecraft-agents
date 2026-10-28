@@ -22,7 +22,8 @@
             [jobs.lib.torch :as torch]
             [jobs.lib.trip :as trip]
             [jobs.lib.trees :as trees]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.lib.walk-risk :as walk-risk]))
 
 (defn furnace-free
   "Of plans in order of preference, the first with no smelt step (a furnace needs fuel and time), else the first."
@@ -115,9 +116,12 @@
     (+ (* (craft-step-s) (count crafts)) (* (smelt-item-s) (reduce + 0 (map :count smelts))))))
 
 (defn walk-s
-  "A trip and the straight walk to `at` and back: a lower bound (the walk's danger is go-to's to price)."
+  "A trip, the straight walk to `at` and back, and its risk there and back (jobs.lib.walk-risk/estimate on the straight way,
+  under the call's :sky, default now) in seconds (cost/risk-s)."
   [c at]
-  (+ (cost/trip) (:cost (cost/walk-cost {:distance (* 2 (u/dist (u/self-pos c) at))}))))
+  (let [{:keys [hp lethal-hp]} (walk-risk/estimate c at {:back? true :sky (:sky (:args c))})]
+    (+ (cost/trip) (:cost (cost/walk-cost {:distance (* 2 (u/dist (u/self-pos c) at))}))
+       (cost/risk-s (.-health (.self (:primitives c))) (- hp lethal-hp) lethal-hp))))
 
 (defn chest-s
   "The walk to the nearest chest the chest way would try: one booked as holding a name, or a seen one not looked into yet."

@@ -50,6 +50,7 @@
    :avoid {:doc "cells [x y z] a crafting table is never put in or dug for and a climb out of the rock never starts through (a caller's dig line); passed to the craft steps" :spec (a/coll-of a/position?) :default nil}
    :center {:doc "a cell [x y z] the searches for an unseen block or animal centre on (a build's site): each starts there and stays within the ::site-radius setting of it; nil: where the body stands" :spec a/position? :default nil}
    :worth {:doc "seconds the count is worth to the caller: the start check waits :not-worth while price-of (the cheapest way that would start, the death its walk risks) is more, and each walk of a search for an unseen need is priced against it (jobs.explore.search :worth); nil: any price (a bill: unpriced), the search worth what the item (:count of it, a bill all of it) is to the body (jobs.lib.cost/find-worth)" :spec (a/num-in nil nil) :default nil}
+   :sky {:doc "the sky's darkening (0-15) the start check's price judges the light of its walks by (jobs.lib.walk-risk/estimate :sky); nil: as now" :spec (a/num-in 0 15) :default nil}
    :search-worth {:doc "seconds a search for an unseen need is worth to the goal it serves (a bill, a build, the need of the obtain that asked for this tool), over :worth; unlike :worth it arms no start check" :spec (a/num-in nil nil) :default nil}
    :explore {:doc "false drops the :search way (the search, priced by what the need is worth, for a raw need not seen): fails :no-source instead" :spec boolean? :default true}})
 

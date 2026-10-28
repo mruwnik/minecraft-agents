@@ -386,9 +386,10 @@
     @out))
 
 (defn ^:async torch-chest-price
-  "The price a torch obtain names when it is worth nothing, with a chest 20 blocks east booked as holding torches, at time of day t."
-  [t]
-  (let [s (f/start (-> (f/bare []) (assoc :time t) (update :blocks assoc "20,64,0" "chest")) [(assoc f/own-zone :max [30 70 6])])]
+  "The price a torch obtain names when it is worth nothing, with a chest 20 blocks east booked as holding torches, at time of day t,
+  the ground's light [sky block] light (default open sky, no torches)."
+  [t & [light]]
+  (let [s (f/start (cond-> (-> (f/bare []) (assoc :time t) (update :blocks assoc "20,64,0" "chest")) light (assoc :light {} :light-default light)) [(assoc f/own-zone :max [30 70 6])])]
     (mem/write! (:store (:eng s)) stock/stock-kind {:pos [20 64 0] :items {"torch" 8}} stock/stock-policy)
     (:price (nth (await (torch-status s 0)) 2))))
 
@@ -401,6 +402,8 @@
         (is (= :ok (first (await (torch-status (f/start (f/bare [{:name "coal" :count 1} {:name "stick" :count 1}]) []) 100))))
             "a craft from carried coal costs its steps")
         (let [day (await (torch-chest-price 6000))
-              night (await (torch-chest-price 18000))]
-          (is (= day (+ (cost/trip) (:cost (cost/walk-cost {:distance 40})))) "the straight walk there and back: a lower bound, the walk's danger is go-to's quote's")
-          (is (= night day) "no danger of its own by the hour"))))))
+              night (await (torch-chest-price 18000))
+              lit-night (await (torch-chest-price 18000 [15 15]))]
+          (is (= day (+ (cost/trip) (:cost (cost/walk-cost {:distance 40})))) "by day the straight walk there and back over sky-lit ground risks nothing")
+          (is (> night day) (str "at night the spawns on the dark ground there and back cost: " night " s against " day " s"))
+          (is (= lit-night day) "ground lit by torches risks nothing by night"))))))

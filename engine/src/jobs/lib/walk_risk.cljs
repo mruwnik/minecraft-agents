@@ -110,8 +110,8 @@
 (defn- exit-dark
   "{:share :dawn?} of the way out of the room round the feet for a walk over cells: the mean spawn-light/dark-share of
   the walk's first ::exit-blocks cells past the room not seen solid, else of the room's sh-inside/way-out-cells (1 with
-  neither), and whether dawn lowers that of one (spawn-light/dawn-lowers?)."
-  [p cells caves-free?]
+  neither), under the sky's darkening sky (nil: now), and whether dawn lowers that of one now (spawn-light/dawn-lowers?)."
+  [p cells caves-free? sky]
   (let [feet (sh-sense/feet p)
         room (or (reach-room/room p feet) {:cells #{[(:x feet) (:y feet) (:z feet)]}})
         inside (set (:cells room))
@@ -119,17 +119,17 @@
                            (remove #(or (inside [(:x %) (:y %) (:z %)]) (sh-sense/solid-at? p %)) cells)))
                 (seq (sh-inside/way-out-cells p room)))]
     (if way
-      {:share (/ (transduce (map #(spawn-light/dark-share p % caves-free?)) + 0 way) (count way))
+      {:share (/ (transduce (map #(spawn-light/dark-share p % caves-free? sky)) + 0 way) (count way))
        :dawn? (boolean (some #(spawn-light/dawn-lowers? p %) way))}
       {:share 1 :dawn? false})))
 
 (defn estimate-inputs
   "What estimate reads of c's body and world for the walk to `goal` (estimate's opts), as values: the body's feet,
   its shelter, death-body and food, the known threats and hides, the memory epoch of what it knows, the sky's
-  darkening now, the cells its look round has looked at, and what the way is priced by as perceived now: its cells, the
+  darkening the light is judged by (:sky, default now; 0 prices the walk by full day's light), the cells its look round has looked at, and what the way is priced by as perceived now: its cells, the
   seconds of it spent where a mob could spawn (:exit-s those of leaving a shelter at night by the way out's light, :exit-dawn? whether dawn lowers them) and the hp of the lava seen near it, and the reach of the threats it prices
   (:weights, their fields' cells, which change as cells they read are seen anew). :cells, :catchers and :remembered are derived, left out of a key."
-  [c goal & [{:keys [plan caves-free? back? stay-s]}]]
+  [c goal & [{:keys [plan caves-free? back? stay-s sky]}]]
   (let [p (:primitives c)
         feet (sh-sense/feet p)
         goal (update goal :y #(or % (:y feet)))
@@ -139,7 +139,7 @@
         stay-at (dec (count there))
         there (cond-> there (pos? stay-s) (update stay-at assoc :s (+ stay-s (peek (death/cell-seconds there)))))
         cells (cond-> there back? (#(into % (rest (rseq %)))))
-        exit (if (sh-inside/walk-leaves-shelter? p shelter goal 1) (exit-dark p there caves-free?) {:share 0 :dawn? false})
+        exit (if (sh-inside/walk-leaves-shelter? p shelter goal 1) (exit-dark p there caves-free? sky) {:share 0 :dawn? false})
         exit-s (* (/ (settings/get settings ::exit-blocks) (cost/walk-blocks-per-s)) (:share exit))
         food (or (.-food (.self p)) 20)
         known (threats/known-threats c)
@@ -152,11 +152,11 @@
      :feet feet :cells cells :body (threats/death-body c) :food food
      :known known :hides hides :catchers catchers :remembered remembered
      :weights (mapv #(:weights (field/field-of c %)) (concat catchers remembered))
-     :memory (sense/known-memory p) :sky (sh-sense/sky-subtract-now p) :looked (sense/round-looked c)
+     :memory (sense/known-memory p) :sky (or sky (sh-sense/sky-subtract-now p)) :looked (sense/round-looked c)
      :exit-s exit-s :exit-dawn? (and (pos? exit-s) (:dawn? exit))
      :exposed-s (+ exit-s
-                   (spawn-light/dark-seconds p cells (mapv #(/ % (cost/walk-blocks-per-s)) (along cells)) caves-free?)
-                   (* stay-s (spawn-light/dark-share p (nth cells stay-at) caves-free?)))
+                   (spawn-light/dark-seconds p cells (mapv #(/ % (cost/walk-blocks-per-s)) (along cells)) caves-free? sky)
+                   (* stay-s (spawn-light/dark-share p (nth cells stay-at) caves-free? sky)))
      :lava (route-lava-hp p cells)}))
 
 (defn estimate-of
@@ -183,7 +183,7 @@
   "{:hp :walk-hp :spawn-hp :hostile-hp :death-hp :lethal-hp :death-chance :lava-hp :dark-s :hostiles :threats} of the walk of c's body to `goal` ({:x :y :z})
   on the way of :plan (go-to's plan of it, {:status :steps}; none: all of it unplanned), and with :back? back on the same way
   as one walk (a mob that noticed the body going still has it coming back), and with :stay-s standing that many seconds at the
-  goal first (its cell's seconds in the route, its spawns by the light there): hp the expected damage and lethal-hp,
+  goal first (its cell's seconds in the route, its spawns by the light there), and with :sky under that darkening of the sky (estimate-inputs): hp the expected damage and lethal-hp,
   the death the spawns and known threats risk (cost/death-chance) in hp (cost/lethal-hp), walk-hp the
   same leaving out the sensed mobs that catch the walk, their hurt and their death share both (a fight with them prices
   them); death-hp the remembered threats' hurt, hostile-hp what the catchers add to it, all met in one route-parts; dark-s the seconds walked where a mob could spawn (caves-free?: no unseen cell guessed dark); threats [{:mob :pos}] the known threats priced."

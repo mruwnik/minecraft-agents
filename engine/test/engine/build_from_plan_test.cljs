@@ -9,6 +9,7 @@
             [engine.events :as events]
             [jobs.lib.ledger :as ledger]
             [engine.blocks-dig-test :as bd]
+            [engine.fetch-test :as f]
             [engine.harvest-test :as h]
             [engine.registry :as registry]
             [engine.test-util :as tu]
@@ -22,7 +23,9 @@
             [jobs.build.from-plan.cells :as fp-cells]
             [jobs.build.from-plan.light :as fp-light]
             [jobs.build.from-plan.walk :as fp-walk]
+            [jobs.items.obtain.price :as obtain-price]
             [jobs.lib.need :as need]
+            [jobs.lib.stock :as stock]
             [jobs.lib.shelter.sense :as sense]
             [jobs.lib.torch :as torch]
             [engine.contract :as contract]
@@ -2196,11 +2199,35 @@
 
 (deftest a-never-lit-cell-at-night-fetches-torches-only-for-what-waiting-for-dawn-would-cost
   (let [worths (atom [])
-        check (fn [night-s obtain] (with-redefs [sense/sky-in (constantly night-s)] (lit-check no-light false true obtain {} worths)))]
+        check (fn [night-s obtain] (with-redefs [sense/sky-in (constantly night-s) obtain-price/item-price (constantly 100)] (lit-check no-light false true obtain {} worths)))]
     (is (= [:later :ok :never] [(check 300 not-worth) (check 300 (contract/ok :ready "ready")) (check 0 not-worth)]))
-    (is (= 300000 (:wait-ms (nth (with-redefs [sense/sky-in (constantly 300)] (lit-check-status no-light false true not-worth {} (atom []))) 2))) "deferred to dawn, not failed")
-    (is (= [["torch" 2 (cost/light-wait-worth 300 2)] ["torch" 2 (cost/light-wait-worth 300 2)] ["torch" 2 nil]] @worths)
-        "at night the night left is the wait, by day any price")))
+    (is (= 300000 (:wait-ms (nth (with-redefs [sense/sky-in (constantly 300) obtain-price/item-price (constantly 100)] (lit-check-status no-light false true not-worth {} (atom []))) 2))) "deferred to dawn, not failed")
+    (is (= [["torch" 2 400] ["torch" 2 400] ["torch" 2 nil]] @worths)
+        "at night the night left and the torches' price by day, by day any price")))
+
+(defn ^:async never-lit-status
+  "The start status lights-itself gives a never-lit build cell for a torchless body whose ways fetch from chests, 2 torches
+  owed, a chest 40 blocks east booked as holding torches, at time of day t, the ground's light [sky block] light."
+  [t light]
+  (let [s (f/start (-> (f/bare []) (assoc :time t :light {} :light-default light) (update :blocks assoc "40,64,0" "chest")) [(assoc f/own-zone :max [50 70 6])])
+        out (atom nil)
+        parent {:round (fn ^:async lit-round [c]
+                         (reset! out (with-redefs [fp-light/torches-owed (constantly 2) need/fetch-opts (constantly {:how #{:chest}})]
+                                       ((fp-light/lights-itself (constantly no-light) (constantly [])) c)))
+                         (ctx/end c :done nil))}
+        eng (assoc-in (:eng s) [:jobs 'lit-parent] parent)]
+    (mem/write! (:store eng) stock/stock-kind {:pos [40 64 0] :items {"torch" 8}} stock/stock-policy)
+    (core/submit! eng '(lit-parent) {})
+    (await (tu/run-until-empty eng 5))
+    (first @out)))
+
+(deftest a-never-lit-cell-near-dawn-waits-when-the-dark-walk-to-the-torches-costs-more-than-the-wait
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= :later (await (never-lit-status 22800 [15 0]))) "near dawn, the spawns on 80 blocks of dark ground cost more than the night left")
+        (is (= :ok (await (never-lit-status 22800 [15 15]))) "the same walk over torch-lit ground risks nothing more by night: fetched now")
+        (is (= :ok (await (never-lit-status 18000 [15 0]))) "at midnight the night left costs more than the dark walk: fetched now")))))
 
 (deftest a-torchless-build-plans-its-torches-only-when-it-could-fetch-them
   (let [planned (atom 0)

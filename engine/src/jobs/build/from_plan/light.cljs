@@ -4,6 +4,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.build.light-area :as light-area]
+            [jobs.items.obtain.price :as obtain-price]
             [jobs.lib.build.plan :as plan]
             [jobs.lib.cost :as cost]
             [jobs.lib.need :as need]
@@ -37,16 +38,18 @@
 
 (defn fetch-due?
   "Whether the torches short over the owed cells (torches-short) are worth getting (crafted from what is carried, or fetched) to light the site instead of waiting wait-s seconds for the
-  sky's light (nil: it never comes, a cell under a canopy or in a cave, and no night is left to fetch through: any price; a never-lit cell at night is given the night left as its wait,
-  since the torches can as well be fetched at dawn, and stays :later until then if they are not worth fetching now): some short, none got yet this call, and the call's ways allow a torch
+  sky's light (nil: it never comes, a cell under a canopy or in a cave, and no night is left to fetch through: any price). A never-lit cell at night
+  (dawn?) needs them after dawn too: worth the night left plus their price by day (obtain.price/item-price at :sky 0), so it stays :later until dawn when the night's
+  walk risk costs more than waiting: some short, none got yet this call, and the call's ways allow a torch
   obtain whose start check takes its price (the cheapest way, the death its walk risks) for no more than the wait saves (jobs.lib.cost/light-wait-worth).
   The torches are counted last: that plans the lighting."
-  [c wait-s owed]
+  [c wait-s owed & [dawn?]]
   (and (not (:torches-tried (ctx/mem c)))
        (some? (need/fetch-opts c))
-       (let [n (torches-short c owed)]
+       (let [n (torches-short c owed)
+             o (need/fetch-opts c)]
          (and (pos? n)
-              (composite/ok? (need/item-status c "torch" n (need/fetch-opts c) (some-> wait-s (cost/light-wait-worth n))))))))
+              (composite/ok? (need/item-status c "torch" n o (when wait-s (if dawn? (+ wait-s (obtain-price/item-price c "torch" n o 0)) (cost/light-wait-worth wait-s n)))))))))
 
 (defn lights-itself
   "safe, but ok where it only waits for light (:exposed, lowered by :light) or no light comes (:exposed, a torch lowers it) and the body can hang torches
@@ -59,7 +62,7 @@
         dawn-s (fn [c] (let [s (sense/sky-in (:primitives c))] (when (pos? (or s 0)) s)))
         lit (fn [f] (fn [c] (let [s (f c)]
                               (if (and (or (wait-for-light? s) (no-light? s))
-                                       (or (can-light? c) (fetch-due? c (if (wait-for-light? s) (wait-s s) (dawn-s c)) (plan/owed (cells-of c)))))
+                                       (or (can-light? c) (if (wait-for-light? s) (fetch-due? c (wait-s s) (plan/owed (cells-of c))) (fetch-due? c (dawn-s c) (plan/owed (cells-of c)) true))))
                                 (contract/ok :torches "dark: the body hangs torches to build by")
                                 (cond
                                   (wait-for-light? s) (assoc-in s [2 :item] "torch")
