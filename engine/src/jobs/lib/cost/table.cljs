@@ -77,7 +77,8 @@
 (defn mean-range [r] (if r (/ (+ (aget r 0) (aget r 1)) 2) 1))
 
 (defn dig-seconds [md basis b]
-  (gear/dig-time (:dig basis) (block-tier md b) (.-hardness b)))
+  (let [dig (:dig basis)]
+    (gear/dig-time dig (gear/tier-speed dig (block-tier md b)) (.-hardness b))))
 
 (defn dig-cost
   "Seconds digging the block name takes, the item base's dig term (dig-seconds); nil for a block never dug (bedrock) or

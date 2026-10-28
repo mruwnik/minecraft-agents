@@ -8,10 +8,17 @@
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.cost.weapon :as weapon]))
 
+(defn tier-speed
+  "Mining speed of the weakest tool of harvest tier (at least the :dig basis's default tier)."
+  [{:keys [default-tier speed]} tier]
+  (get speed (max default-tier tier) (get speed default-tier)))
+
 (defn dig-time
-  "Seconds digging a block of hardness with a tool of tier (at least the :dig basis's default tier)."
-  [{:keys [hardness-s max-hardness min-s default-tier speed]} tier hardness]
-  (max min-s (/ (* hardness-s (min max-hardness hardness)) (get speed (max default-tier tier) (get speed default-tier)))))
+  "Seconds digging a block of hardness with a tool of mining speed, as the game takes it: whole ticks, 30 x hardness / speed
+  (a tool that harvests the block)."
+  [{:keys [hardness-s max-hardness min-s]} speed hardness]
+  (let [ticks (Math/ceil (- (/ (* 20 hardness-s (min max-hardness hardness)) speed) 1e-9))]
+    (max min-s (/ ticks 20))))
 
 (defn hit-saved
   "hp one hit of hit hp costs less to a body wearing the piece than bare."
@@ -27,13 +34,13 @@
   (let [{:keys [ref-mob ref-hardness]} gear
         ref-hit (get threat/mob-hit ref-mob)
         ref-mob-hp (get weapon/mob-max-health ref-mob)
-        stone-tier (weapon/tool-tier "stone_pickaxe")]
+        stone-speed (weapon/tool-speed "stone_pickaxe")]
     (max 0
          (cond
            (= "elytra" item) (* (health/walk-hp-seconds) (armour/fall-damage {} armour/ref-fall))
            (pos? (armour/piece-points item)) (* (health/walk-hp-seconds) (hit-saved item ref-hit))
            (weapon? item) (- (weapon/kill-seconds "stone_sword" ref-mob-hp) (weapon/kill-seconds item ref-mob-hp))
-           :else (- (dig-time dig stone-tier ref-hardness) (dig-time dig (weapon/tool-tier item) ref-hardness))))))
+           :else (- (dig-time dig stone-speed ref-hardness) (dig-time dig (weapon/tool-speed item) ref-hardness))))))
 
 (defn use-worth
   "Seconds item is worth with durability uses: its uses times what each saves."

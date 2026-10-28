@@ -71,16 +71,17 @@
   (let [md (minecraft-data game/default-version)
         basis (tbl/ref-gear-basis md tbl/default-basis)
         hardness (get-in basis [:gear :ref-hardness])
-        stone-tier (weapon/tool-tier "stone_pickaxe")
+        stone-speed (weapon/tool-speed "stone_pickaxe")
         saved #(gear/use-saved basis %)
         hp-s (health/walk-hp-seconds)]
     (is (pos? hardness) "the reference block's hardness is read from the data")
     (is (= (* hp-s (gear/hit-saved "iron_chestplate" 3)) (saved "iron_chestplate")) "a zombie's 3 hp hit")
     (is (= (* hp-s (armour/fall-damage {} armour/ref-fall)) (saved "elytra")) "the fall fall-profile reads")
     (is (= (- (weapon/kill-seconds "stone_sword" 20) (weapon/kill-seconds "iron_sword" 20)) (saved "iron_sword")) "a zombie's 20 hp")
-    (is (= (- (gear/dig-time (:dig basis) stone-tier hardness) (gear/dig-time (:dig basis) (weapon/tool-tier "iron_pickaxe") hardness))
+    (is (= (- (gear/dig-time (:dig basis) stone-speed hardness) (gear/dig-time (:dig basis) (weapon/tool-speed "iron_pickaxe") hardness))
            (saved "iron_pickaxe")) "a tool saves the dig time of the reference block over a stone tool")
-    (is (= (saved "netherite_pickaxe") (saved "diamond_pickaxe")) "one use saves the same (one tier): netherite is worth more by its durability")))
+    (is (> (saved "netherite_pickaxe") (saved "diamond_pickaxe")) "netherite digs at 9, diamond at 8: a use saves more")
+    (is (> (saved "golden_pickaxe") (saved "iron_pickaxe")) "gold digs at 12, though it harvests as wood does")))
 
 (deftest the-item-table-follows-the-settings-the-hp-price-reads
   (let [worth #(ord/item-worth {:name "enchanted_golden_apple" :count 1})
@@ -94,3 +95,10 @@
     (is (true? (meal/precious-worth? (self 20 8) "enchanted_golden_apple")) "below the flip it is eaten")
     (is (true? (meal/precious-worth? (self 20 9) "enchanted_golden_apple")))
     (is (false? (meal/precious-worth? (self 20 10) "enchanted_golden_apple")) "above it it is kept")))
+
+(deftest a-dig-takes-whole-ticks-of-thirty-hardness-over-speed
+  (let [dig (:dig tbl/default-basis)
+        secs #(gear/dig-time dig (weapon/tool-speed %) 3)]
+    (is (= 1.15 (secs "stone_pickaxe")) "90/4 = 22.5 ticks takes 23")
+    (is (= 0.6 (secs "diamond_pickaxe")) "90/8 = 11.25 takes 12 ticks")
+    (is (= 0.5 (secs "netherite_pickaxe")) "90/9 = 10 ticks")))

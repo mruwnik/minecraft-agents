@@ -8,15 +8,15 @@
   #{"skeleton" "stray" "parched" "bogged" "breeze" "blaze" "ghast" "pillager" "witch"})
 
 (def tool-material
-  "Per tool material: :tier harvest tier, :rank weapon strength (higher is better), :cheap order to make the tool in (0 first;
-  gold last: it harvests as wood does)."
-  {"wooden" {:tier 1 :rank 0 :cheap 0}
-   "stone" {:tier 2 :rank 2 :cheap 1}
-   "copper" {:tier 2 :rank 2 :cheap 2}
-   "iron" {:tier 3 :rank 3 :cheap 3}
-   "diamond" {:tier 4 :rank 4 :cheap 4}
-   "netherite" {:tier 4 :rank 5 :cheap 5}
-   "golden" {:tier 1 :rank 1 :cheap 6}})
+  "Per tool material: :tier harvest tier, :speed mining speed (apart from the tier: gold digs fastest and harvests as wood does),
+  :rank weapon strength (higher is better), :cheap order to make the tool in (0 first; gold last)."
+  {"wooden" {:tier 1 :speed 2 :rank 0 :cheap 0}
+   "stone" {:tier 2 :speed 4 :rank 2 :cheap 1}
+   "copper" {:tier 2 :speed 5 :rank 2 :cheap 2}
+   "iron" {:tier 3 :speed 6 :rank 3 :cheap 3}
+   "diamond" {:tier 4 :speed 8 :rank 4 :cheap 4}
+   "netherite" {:tier 4 :speed 9 :rank 5 :cheap 5}
+   "golden" {:tier 1 :speed 12 :rank 1 :cheap 6}})
 
 (def cheapness
   "Tool materials, cheapest to make first."
@@ -31,6 +31,11 @@
   "Harvest tier of a tool by its material (1 for an unknown one)."
   [item-name]
   (get-in tool-material [(material-of item-name) :tier] 1))
+
+(defn tool-speed
+  "Mining speed of a tool by its material (1, the bare hand's, for an unknown one)."
+  [item-name]
+  (get-in tool-material [(material-of item-name) :speed] 1))
 
 (defn weapon-rank
   "Weapon strength of a tool by its material (0 for an unknown one)."

@@ -45,6 +45,7 @@
 
 (deftest one-material-table-gives-tier-rank-and-cheapness
   (is (= [1 2 3 4 4] (mapv weapon/tool-tier ["wooden_pickaxe" "copper_pickaxe" "iron_axe" "diamond_sword" "netherite_axe"])))
+  (is (= [2 4 6 8 9 12] (mapv weapon/tool-speed ["wooden_axe" "stone_pickaxe" "iron_pickaxe" "diamond_pickaxe" "netherite_pickaxe" "golden_pickaxe"])))
   (is (= 1 (weapon/tool-tier "stick")) "an unknown material counts as tier 1")
   (is (= [0 1 2 3 4 5] (mapv weapon/weapon-rank ["wooden_sword" "golden_sword" "copper_sword" "iron_sword" "diamond_sword" "netherite_sword"])))
   (is (= 0 (weapon/weapon-rank "stick")))
