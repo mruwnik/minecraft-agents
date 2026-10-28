@@ -130,6 +130,17 @@
     (is (zero? (chance 1 25 {:x 0 :y 64 :z 12})))
     (is (pos? (chance 1 40 {:x 0 :y 64 :z 39})) "the room reaches a dark spawnable cell beyond 24 blocks of it")))
 
+(deftest the-exposure-of-a-dark-cell-under-the-sky-counts-only-far-dark-cells-a-mob-reaches-on-foot
+  (let [unroofed (fn [w d] (into (into {} (remove (fn [[k _]] (let [[_ y _] (map js/parseInt (.split k ","))] (= y 66)))) (box w d false))
+                                 (for [x (range -1 (inc w)) z (range -1 (inc d)) y [66 67 68 69]
+                                       :when (not (and (<= 0 x (dec w)) (<= 0 z (dec d))))]
+                                   [(str x "," y "," z) "stone"])))
+        chance (fn [blocks at] (:chance (spawn-light/exposure (seen-box blocks [15 0]) at)))]
+    (is (zero? (chance (unroofed 5 5) {:x 2 :y 64 :z 2})) "walled yard open to the night sky: no dark cell beyond 24 blocks")
+    (is (zero? (chance (unroofed 20 20) {:x 10 :y 64 :z 10})) "a yard of 400 cells")
+    (is (pos? (chance (unroofed 1 40) {:x 0 :y 64 :z 39})) "the walled yard reaches a far dark cell")
+    (is (pos? (chance (box 5 5 true) {:x 2 :y 64 :z 2})) "open sides: a flood too big to close is never safe")))
+
 (deftest one-cell-gives-one-spawn-chance-to-readiness-the-bed-and-the-planner
   ;; exposure and the night stay are chance-at; the planner's coarse mask may call dark a cell chance-at frees, never lit one it prices
   (let [field (into {} (for [x (range -30 31) z (range -30 31)] [(str x ",63," z) "stone"]))]
