@@ -1,5 +1,5 @@
 ;; Card 33e525de: clear-path digs on past a wall's first row, which hides the rows behind it, while each dug row shows more wall,
-;; and prices each plan on with its :max-dig-s (go-to passes what its call may spend): one over it walks back and ends :too-dear.
+;; and prices each plan with its :max-dig-s (go-to passes what its call may spend): one over it walks back and ends :too-dear.
 ;; A stone wall z 15..17, y 0..1 east of the body at [4.5 0 16.5], from x 6; a light layer over it.
 {:defaults
  {:tags [:access :movement]
@@ -14,8 +14,9 @@
    :act [[:job (jobs.access.clear-path {:heading :east :max-dig-s 60})]]
    :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
    :after [[:block [9 0 16] "air"] [:body-near [10.5 0 16.5] 1]]}
-  ;; should fail: twenty thick, the door may dig 10 s: it digs some rows, finds the next plan too dear, walks back and stops
-  {:name "a-wall-too-thick-for-its-price-is-left-and-walked-back-from"
-   :act [[:job (jobs.access.clear-path {:heading :east :max-dig-s 10})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :too-dear}} :within-s 100 :of-job true}]
-   :after [[:block [6 0 16] "air"] [:block [20 0 16] "stone"] [:body-near [4.5 0 16.5] 1]]}]}
+  ;; should fail: the door may dig 1 s, under its first plan's price (a row and the far side it cannot see, as rock): nothing is dug.
+  ;; Live, the rows a look shows behind a dug row are seen, so a wall seen thicker than max-thick ends :no-door by geometry; the dig-on's price is a unit test
+  {:name "a-wall-dearer-than-its-price-is-never-dug"
+   :act [[:job (jobs.access.clear-path {:heading :east :max-dig-s 1})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :too-dear}} :within-s 60 :of-job true}]
+   :after [[:block [6 0 16] "stone"] [:block [6 1 16] "stone"] [:body-near [4.5 0 16.5] 1]]}]}
