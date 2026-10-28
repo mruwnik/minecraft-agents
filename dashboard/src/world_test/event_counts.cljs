@@ -580,8 +580,8 @@
       "--sprint" (recur (rest more) (assoc o :sprint (js/parseFloat (first more))))
       "--stride" (recur (rest more) (assoc o :stride (js/parseInt (first more))))
       "--run" (recur (rest more) (assoc o :run (first more)))
-      "--animals" (recur (rest more) (assoc o :animals (js/parseInt (first more))))
-      "--secs" (recur (rest more) (assoc o :secs (js/parseFloat (first more))))
+      "--inside-s" (recur (rest more) (assoc o :inside-s (js/parseFloat (first more))))
+      "--step-s" (recur (rest more) (assoc o :step-s (js/parseFloat (first more))))
       "--escaped" (recur (rest more) (assoc o :escaped (js/parseInt (first more))))
       "--difficulty" (recur (rest more) (assoc o :difficulty (js/parseInt (first more))))
       (recur more (update o :pos (fnil conj []) a)))))
@@ -618,7 +618,7 @@
   "argv (array) -> promise of the exit code. open-chunks: tools/event-counts.mjs's reader of the recorded chunks; seen: its
   reader of the seen memory files (.load file, .stateName id)."
   [argv open-chunks ^js seen]
-  (let [{[cmd] :pos :keys [agents counts since-ms sprint stride difficulty run animals secs escaped] :or {since-ms 0 sprint 5.6 stride 1 difficulty 1}} (parse-args (vec (array-seq argv)))
+  (let [{[cmd] :pos :keys [agents counts since-ms sprint stride difficulty run inside-s step-s escaped] :or {since-ms 0 sprint 5.6 stride 1 difficulty 1}} (parse-args (vec (array-seq argv)))
         repo (or js/process.env.WORLD_TEST_REPO ".")
         agents (or agents (path/join repo "worlds" "test" "agents"))
         folded (when (#{"fold" "creeper-exchange" "flight-starts" "notice-rate" "drowned-meets" "flee-pace" "walk-pace" "walk-detour" "gap-miss"} cmd)
@@ -658,7 +658,7 @@
                       (println (pr-str (wall-sides/report (:walls folded))))
                       0)
        "pen-escapes" (let [file (or counts (path/join repo "worlds" "test" "priors-counts.edn"))
-                           added (if run (pen-escapes/fold (load-counts file) {run (pen-escapes/row animals secs escaped 1)}) (load-counts file))]
+                           added (if run (pen-escapes/fold (load-counts file) {run (pen-escapes/row escaped inside-s step-s 1)}) (load-counts file))]
                        (when run (save-counts! file added))
                        (println (pr-str (pen-escapes/report (:pen-escapes added))))
                        0)

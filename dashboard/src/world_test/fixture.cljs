@@ -143,7 +143,16 @@
   the axis), resolved to the absolute segment map jobs.lib.strip reads, with its :id."
   [m] {::seg m})
 
-(def readers {'at rel 'xyz rel-map 'y rel-y 'seg seg})
+(defn times
+  "The #times tag: [n steps], the act steps written once and run n times (expanded by expand-times)."
+  [[n steps]] {::times [n (vec steps)]})
+
+(defn expand-times
+  "act with every #times marker replaced by its steps repeated."
+  [act]
+  (into [] (mapcat (fn [step] (if-let [[n steps] (::times step)] (apply concat (repeat n steps)) [step]))) act))
+
+(def readers {'at rel 'xyz rel-map 'y rel-y 'seg seg 'times times})
 
 (defn read-edn [text]
   (reader/read-string {:readers readers} text))
@@ -548,7 +557,7 @@
   (let [form (read-edn text)
         [file-defaults cases] (if (contains? form :cases) [(:defaults form {}) (:cases form)] [{} [form]])]
     (mapv (fn [c]
-            (let [m0 (assoc (merge-case file-defaults c) :timed (contains? (merge file-defaults c) :time))
+            (let [m0 (-> (merge-case file-defaults c) (update :act expand-times) (assoc :timed (contains? (merge file-defaults c) :time)))
                   m (cond-> m0 (not (get-in m0 [:plot :light])) (assoc-in [:plot :light] (if (needs-sky? m0) :sky :lit)))
                   ps (cond-> (problems m)
                        (and (some job-step? (:act file-defaults)) (some job-step? (:act c)))

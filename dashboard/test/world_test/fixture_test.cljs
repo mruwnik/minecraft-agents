@@ -1005,3 +1005,7 @@
     (is (not (f/pose-faces? (pose js/Math.PI 0.7) {:pitch 10} now)))
     (is (not (f/pose-faces? (pose js/Math.PI 0) {:yaw 0} (+ now 5000))))
     (is (not (f/pose-faces? "" {:yaw 0} now)))))
+
+(deftest times-repeats-its-steps-in-place-after-the-defaults-act
+  (let [[c] (f/file-cases "{:defaults {:act [[:rcon \"a\"]]} :cases [{:name \"x\" :act [[:summon \"cow\" [1 0 1]] #times [2 [[:wait-s 1] [:rcon \"b\"]]] [:rcon \"c\"]]}]}" "t")]
+    (is (= [[:rcon "a"] [:summon "cow" [1 0 1]] [:wait-s 1] [:rcon "b"] [:wait-s 1] [:rcon "b"] [:rcon "c"]] (:act c)))))
