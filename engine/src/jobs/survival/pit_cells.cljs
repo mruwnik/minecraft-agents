@@ -270,11 +270,12 @@
 
 (defn shell-fails
   "The chance a dig of cells lays itself open through a cell beside, over or under them, outside keep, the body never
-  sensed (unsensed-shell): each is open at 1 - the solid share round the body (look/solid-share; with no memory the
-  prior at the dig's height)."
+  sensed (unsensed-shell): each is open at 1 - the solid share round the body (look/solid-share), never above the
+  prior's at the dig's height: seen rock round the body does not make the unseen cells behind it solid (Q16 worse case)."
   [p cells keep]
   (let [y (:y (first cells))
-        solid (or (sight/solid-share p) (base-rates/solid-share y y 0 0))]
+        prior (base-rates/solid-share y y 0 0)
+        solid (min prior (or (sight/solid-share p) prior))]
     (- 1 (js/Math.pow solid (unsensed-shell p cells keep)))))
 
 (defn ^:async lays-open?

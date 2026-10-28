@@ -11,7 +11,10 @@
             [engine.flight-job :as fj]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [jobs.lib.access.rules :as rules]
+            [jobs.lib.cost.base-rates :as base-rates]
             [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.look :as sight]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.pit-drops :as pit-drops]
             [jobs.survival.wall-in :as wall-in]
@@ -343,3 +346,14 @@
         rock (into {} (for [x (range -2 3) y (range 62 67) z (range -2 3)] [[x y z] "stone"]))]
     (is (zero? (pit/shell-fails (sensing-stub rock) cells #{})) "rock seen all round: it cannot fail")
     (is (< 0 (pit/shell-fails (sensing-stub {}) cells #{}) 1) "unseen round it: each cell open at the share of open rock")))
+
+(deftest unsensed-shell-cells-are-never-priced-better-than-the-prior
+  (let [cells [(cell 1 64 0)]
+        p (sensing-stub {})
+        prior (base-rates/solid-share 64 64 0 0)
+        keep (set (rest (for [[dx dy dz] rules/neighbour-deltas] (cell (+ 1 dx) (+ 64 dy) dz))))
+        n (pit/unsensed-shell p cells keep)
+        fails (fn [local] (with-redefs [sight/solid-share (constantly local)] (pit/shell-fails p cells keep)))]
+    (is (= (- 1 (Math/pow prior n)) (fails 0.999)) "rock seen all round the body says nothing of cells behind it: the prior bounds it")
+    (is (< (- 1 (Math/pow prior n)) (fails 0.01)) "a cave round the body prices them dearer than the prior")))
+
