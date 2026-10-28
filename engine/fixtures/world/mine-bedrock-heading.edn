@@ -1,0 +1,21 @@
+;; jobs.gather.mine started facing a seen bedrock wall (card a053256c: a kit's later mine tunnelled straight into the plot's
+;; bedrock shell one block ahead, length 0, and stopped). Stone x 0..12, y 0..3, z 8..24 against the plot's west shell (x -1);
+;; body in a 1x2 cell at [0 0 16] facing west, iron ore 4 blocks along each of the other three headings.
+{:defaults
+ {:tags [:mine :jobs] :time :any
+  :plot {:height 12}
+  :blocks [[:fill [0 0 8] [12 3 24] "stone"] [:fill [0 0 16] [0 1 16] "air"]
+           [:set [0 0 12] "iron_ore"] [:set [4 0 16] "iron_ore"] [:set [0 0 20] "iron_ore"]]
+  :body {:at [0.5 0 16.5] :yaw 90 :inventory [["stone_pickaxe" 1] ["cobblestone" 16]] :effects [["resistance" 600 4]]}
+  :limit-s 200}
+ :cases
+ [{:name "faced-bedrock-wall-starts-on-an-open-heading"
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :count 1 :level false :tunnel-length 6 :radius 8 :mend false})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1 :reason :count}} :within-s 180 :of-job true}
+            {:no-event {:source :job :kind #{:completed :stopped} :data {:stop :unbreakable}} :for-s 180 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:item "raw_iron" 1]]}
+  {:name "ordered-heading-into-bedrock-stops-unbreakable"
+   ;; should fail to dig: a :heading is an order, so the mine ends on the bedrock instead of turning
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :count 1 :level false :heading :west :tunnel-length 6 :radius 8 :mend false})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 0 :stop :unbreakable :length 0}} :within-s 120 :of-job true}]
+   :after [[:item "raw_iron" 0]]}]}
