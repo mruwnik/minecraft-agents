@@ -236,6 +236,16 @@
 
 (defn spider [x] {:id 5 :name "spider" :kind "hostile" :pos {:x x :y 64 :z 0}})
 
+(deftest on-open-ground-walls-against-a-zombie-five-off-cost-a-hurt-body-more-than-walking-away
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen]} (await (flight-round respond {:self {:health 10 :food 20} :inventory [{:name "cobblestone" :count 20}]
+                                                           :entities [(zombie 5 0)]}))
+              {:keys [walls flee] :as prices} (:prices (first (filter #(= :hostile.decided (:kind %)) @seen)))]
+          (is (and (number? walls) (number? flee)) (pr-str prices))
+          (is (< flee walls) (pr-str prices)))))))
+
 (deftest respond-with-bare-hands-and-nowhere-to-hide-fights-a-spider-and-never-runs-in-the-open
   (async done
     (tu/run-async done

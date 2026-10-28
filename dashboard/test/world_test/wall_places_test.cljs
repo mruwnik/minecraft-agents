@@ -1,5 +1,6 @@
 (ns world-test.wall-places-test
   (:require [cljs.test :refer [deftest is]]
+            [jobs.lib.cost.danger :as danger]
             [world-test.wall-places :as w]))
 
 (defn ev [t kind job data]
@@ -14,11 +15,16 @@
                       (ev 100 :child_started "j1/plug/walls" {:slot :walls})
                       (place 200 "placed") (place 900 "placed")
                       (ev 1000 :child_ended "j1/plug/walls" {:slot :walls :status :done})])]
-    (is (= {["g" "j1/plug/walls"] {:t 100 :way :walls :class :beside :placed [200 900] :mob? false :end :done :done? true}} rows)))
-  (is (= :clear (:class (val (first (w/scan [(choice 0 ["zombie 7 [3 64 0]" "skeleton 8 [1 64 0]"])
+    (is (= {["g" "j1/plug/walls"] {:t 100 :end-t 1000 :way :walls :arrive-s (/ (- (js/Math.hypot 2 1) 1.4) (danger/chase-speed "zombie"))
+                                   :class :reached :placed [200 900] :mob? false :end :done :done? true}} rows)))
+  (is (= :clear (:class (val (first (w/scan [(choice 0 ["zombie 7 [6 64 0]" "skeleton 8 [1 64 0]"])
                                              (ev 100 :child_started "j1/plug/walls" {})
-                                             (ev 200 :child_ended "j1/plug/walls" {:status :done})])))))
-      "a melee mob three cells off, or a shooter beside, stands beside no side cell")
+                                             (ev 600 :child_ended "j1/plug/walls" {:status :done})])))))
+      "a melee mob six cells off comes after half a second of walls; a shooter strikes no blow")
+  (is (= :reached (:class (val (first (w/scan [(choice 0 ["zombie 7 [6 64 0]"])
+                                               (ev 100 :child_started "j1/plug/walls" {})
+                                               (ev 9100 :child_ended "j1/plug/walls" {:status :done})])))))
+      "the same mob comes before nine seconds of walls are up")
   (is (nil? (:class (val (first (w/scan [(choice 0 ["zombie 7 [1 64 0]"])
                                          (ev 5000 :child_started "j1/plug/walls" {})
                                          (ev 5100 :child_ended "j1/plug/walls" {:status :done})])))))
@@ -41,10 +47,17 @@
         "a mob two cells off is beside a side cell, not the body's")))
 
 (deftest the-report-gives-the-gap-and-each-class-failures-for-mobs
-  (is (= {:gap {:mean 0.5 :n 3} :beside {:k 1 :n 2} :clear {:k 0 :n 1} :pillar {:beside {:k 1 :n 1} :clear {:k 0 :n 0}}}
+  (is (= {:gap {:mean 0.5 :n 3} :reached {:k 1 :n 2} :clear {:k 0 :n 1} :pillar {:beside {:k 1 :n 1} :clear {:k 0 :n 0}}}
          (w/report {:p {:way :pillar :class :beside :placed [] :done? false :mob? true}
-                    :a {:class :beside :placed [0 400 1000] :done? true :mob? false}
-                    :b {:class :beside :placed [] :done? false :mob? true}
+                    :a {:class :reached :placed [0 400 1000] :done? true :mob? false}
+                    :b {:class :reached :placed [] :done? false :mob? true}
                     :c {:class :clear :placed [0 500] :done? true :mob? false}
                     :d {:class :clear :placed [] :done? false :mob? false}}))
       "an attempt that failed for want of blocks says nothing of mobs"))
+
+(deftest a-row-classed-before-arrival-gives-way-to-its-rescan
+  (let [old {:t 0 :class :clear :done? true}
+        new {:t 0 :end-t 900 :arrive-s 1 :class :reached :done? true}
+        kept {:t 5 :end-t 900 :arrive-s nil :class :clear :done? true}]
+    (is (= {:wall-places {:a new :b kept}} (w/fold {:wall-places {:a old :b kept}} {:a new :b (assoc kept :class :reached)}))
+        "a row with :end-t stays; one without is rescanned")))

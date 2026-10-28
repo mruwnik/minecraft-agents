@@ -294,12 +294,19 @@
     (is (< 1 with-pick 10) "two stone cells with a pickaxe and one placement")
     (is (> by-hand with-pick) "the hand digs stone slower")))
 
-(deftest the-walls-fail-for-a-mob-by-the-measured-share-of-their-class
-  (let [fails (fn [x for] (shut-in/covers (assoc (ctx-of (tu/seeing-all (tu/fake {:blocks ground :inventory [{:name "cobblestone" :count 20}]
-                                                                                   :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x x :y 64 :z 0} :health 20}]})))
-                                                 :args {:for for})
-                                          [:walls]))
-        chance (fn [cls] (let [{:keys [k n]} (cls (settings/get wall-in/settings ::wall-in/mob-fails))] (/ (inc k) (+ n 2))))]
-    (is (= (chance :beside) (get-in (fails 2.5 :danger) [:walls :fails])) "a zombie beside a side cell")
-    (is (= (chance :clear) (get-in (fails 3.5 :danger) [:walls :fails])) "one three cells off stands beside none")
-    (is (zero? (get-in (fails 2.5 :night) [:walls :fails])) "for the night a mob in a cell is waited out")))
+(deftest the-walls-fail-for-a-mob-and-stay-open-to-it-till-their-last-cell-is-placed
+  (let [c (fn [entities for] (assoc (ctx-of (tu/seeing-all (tu/fake {:blocks ground :inventory [{:name "cobblestone" :count 20}] :entities entities})))
+                                    :args {:for for}))
+        zombie (fn [x] [{:id 7 :name "zombie" :kind "hostile" :pos {:x x :y 64 :z 0} :health 20}])
+        cover (fn [entities for] (:walls (shut-in/covers (c entities for) [:walls])))
+        chance (fn [cls] (let [{:keys [k n]} (cls (settings/get wall-in/settings ::wall-in/mob-fails))] (/ (inc k) (+ n 2))))
+        place-s (* 0.72 (wall-in/open-count (c [] :danger)))]
+    (is (< 4 (wall-in/open-count (c [] :danger))) "open ground: every side is open")
+    (is (= (chance :reached) (:fails (cover (zombie 2.5) :danger))) "a zombie beside a side cell")
+    (is (= (chance :reached) (:fails (cover (zombie 6.5) :danger))) "a zombie six off strikes before the last open cell is placed")
+    (is (= (chance :clear) (:fails (cover [] :danger))) "no melee mob")
+    (is (< (chance :clear) (chance :reached)))
+    (is (zero? (:fails (cover (zombie 2.5) :night))) "for the night a mob in a cell is waited out")
+    (is (< (- place-s 1e-9) (:open-s (cover (zombie 6.5) :danger)) (+ place-s 1e-9)) "a melee mob walks to whichever side is still open")
+    (is (< (- 1.44 1e-9) (:open-s (cover [{:id 9 :name "skeleton" :kind "hostile" :pos {:x 6.5 :y 64 :z 0} :health 20}] :danger)) (+ 1.44 1e-9))
+        "a shooter sees in only by the side facing it, placed first")))
