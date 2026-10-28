@@ -617,6 +617,18 @@
         "a cave wall was open to air when the lower coal was placed: half its vein blocks are left out; a cut lays bare buried rock")
     (is (= (cost/seen-ore "iron" (faces "stone" 16 6)) (cost/tunnel-ore "iron" {:y 16} 1)) "iron drops none beside air")))
 
+(deftest a-tunnel-is-priced-by-the-ore-it-lays-bare-a-second
+  (let [line (fn [y names] (map #(hash-map :name % :y y) names))
+        rate #(cost/tunnel-rate "iron" #{"iron_ore" "deepslate_iron_ore"} %)]
+    (is (< (rate (line 16 (repeat 8 "air"))) (rate (line 16 (repeat 8 "stone")))) "a cut through air lays bare nothing")
+    (is (< (rate (line -8 (repeat 8 "deepslate"))) (rate (line -8 (repeat 8 "stone")))) "harder rock, less a second")
+    (is (< (rate (line 16 (repeat 8 "stone"))) (rate (line 16 (cons "iron_ore" (repeat 7 "stone"))))) "seen ore counts whole")
+    (is (zero? (rate (line 16 (repeat 8 "dirt")))) "dirt holds no ore")
+    (is (< (rate (line 16 (repeat 8 nil))) (rate (line 16 (repeat 8 "stone")))) "unseen rock at the dearest host's dig")
+    (is (nil? (rate (line 16 ["stone" "water" "stone"]))) "a flooded heading is refused")
+    (is (nil? (rate (line -40 ["lava"]))))
+    (is (= (rate (line 16 ["stone"])) (rate (line 16 ["stone" "bedrock" "iron_ore"]))) "the cut ends at a block never dug")))
+
 (deftest a-kill-is-priced-by-the-fight-and-drops-by-the-loot-table
   (let [body {:health 20 :level 0 :carried 0 :weapon "stone_sword" :equipment {}}]
     (is (< (cost/kill-price body "spider" {:x 0 :y 64 :z 0}) (cost/kill-price (assoc body :health 4) "spider" {:x 0 :y 64 :z 0}))

@@ -5,6 +5,7 @@
             [engine.args :as a]
             [engine.game :as game]
             [jobs.lib.blocks :as blocks]
+            [jobs.lib.cost :as cost]
             [jobs.lib.block-sets :as bs]
             [clojure.string :as str]
             [jobs.lib.ledger :as ledger]
@@ -27,7 +28,6 @@
    ::collect-radius {:default 6 :doc "How far around the last dug cell to collect drops after a dig, in blocks." :spec (a/num-in 0 nil)}
    ::stall-rounds {:default 5 :doc "Rounds in a row a walk to one target waits without the body getting nearer before the target is skipped as a failure." :spec (a/int-in 1 nil)}
    ::item-s {:default 6 :doc "Mean seconds one item takes (walk, dig, collect), for the quote and the stay a walk to the dig is priced over." :spec (a/num-in 0 nil)}
-   ::rock-reach {:default 8 :doc "How many blocks along a heading the body counts seen rock cells when it picks the heading of a tunnel it was not given." :spec (a/int-in 1 nil)}
    ::zone-margin {:default 8 :doc "Before it digs, the body walks to a start cell this many blocks outside any zone it owns; its stair and tunnel stop at such a zone." :spec (a/int-in 0 nil)}})
 
 (defn reach [] (settings/get settings ::reach))
@@ -303,26 +303,28 @@
   (let [ahead (step-cell {:origin cell :heading (look/heading-name heading)} 1)]
     (boolean (some #(rules/unbreakable (u/seen-name (:primitives c) %)) [ahead (update ahead :y inc)]))))
 
-(defn rock-cells
-  "Cells of rock the body has seen along heading from cell, feet and head, within ::rock-reach blocks."
-  [c cell heading]
+(defn heading-rate
+  "cost/tunnel-rate of a tunnel of n blocks from cell along heading for the call's kinds, over the cells the body has
+  seen (feet and head): nil when it meets a seen fluid."
+  [c cell heading n]
   (let [p (:primitives c)
-        line (map #(step-cell {:origin cell :heading heading} %) (range 1 (inc (settings/get settings ::rock-reach))))]
-    (count (for [q line, q' [q (update q :y inc)]
-                 :let [n (u/seen-name p q')]
-                 :when (and n (not (bs/air n)) (not (rules/unbreakable n)))]
-             q'))))
+        ks (kinds (:args c))]
+    (cost/tunnel-rate (cost/ore-of (vec ks)) ks
+                      (for [k (range 1 (inc n)), q (let [f (step-cell {:origin cell :heading heading} k)] [f (update f :y inc)])]
+                        {:name (u/seen-name p q) :y (:y q)}))))
 
 (defn open-heading
-  "heading when it is not walled? from cell, else the first of the other headings (clockwise) that is not; heading when all are.
-  Of the headings not walled?, the one with most seen rock ahead (rock-cells; heading first on a tie): a tunnel through air lays bare nothing."
+  "Of the headings from cell not walled? and meeting no seen fluid, the one whose tunnel of :tunnel-length blocks lays
+  bare most ore a second (heading-rate; heading first on a tie); else heading when it is not walled?, else the first
+  other heading (clockwise) that is not; heading when all are."
   [c cell heading]
   (let [cycle ["north" "east" "south" "west"]
         i (.indexOf cycle heading)
-        open (remove #(walled? c cell %) (map #(nth cycle (mod (+ i %) 4)) (range 4)))]
-    (if (empty? open)
-      heading
-      (apply max-key #(rock-cells c cell %) (reverse open)))))
+        open (remove #(walled? c cell %) (map #(nth cycle (mod (+ i %) 4)) (range 4)))
+        rates (keep #(when-let [r (heading-rate c cell % (:tunnel-length (:args c)))] [% r]) open)]
+    (cond (seq rates) (first (apply max-key second (reverse rates)))
+          (seq open) (first open)
+          :else heading)))
 
 (defn zone-margin [] (settings/get settings ::zone-margin))
 

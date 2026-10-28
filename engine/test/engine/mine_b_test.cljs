@@ -448,16 +448,25 @@
           (is (= "air" (block-at s 2 64 0)) "the tunnel cell stays open")
           (is (not-any? #(> (first %) 2) (dug-cells s))))))))
 
-(deftest stay-level-turns-from-water-at-its-first-cell-and-lists-the-legs
+(deftest stay-level-turns-from-water-its-cut-meets-and-lists-the-legs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (facing-west-run {"-3,64,0" "water"} 6 300))
+              legs (:legs (done-event s))]
+          (is (= {:heading "west" :stop :fluid-adjacent} (select-keys (first legs) [:heading :stop])) (pr-str legs))
+          (is (= 2 (count legs)) (pr-str legs))
+          (is (not-any? #(<= (first %) -3) (dug-cells s)) "the water's cell is not cut")
+          (is (some #(< (nth % 2) 0) (dug-cells s)) "it went on north"))))))
+
+(deftest an-unheaded-tunnel-never-heads-into-water-it-sees
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (facing-west-run {"-1,64,0" "water"} 4 250))
               legs (:legs (done-event s))]
-          (is (= {:heading "west" :length 0 :stop :fluid-in-cut} (first legs)))
-          (is (= 2 (count legs)) (pr-str legs))
-          (is (= 4 (:length (second legs))))
-          (is (some #(< (nth % 2) 0) (dug-cells s)) "it went on north"))))))
+          (is (= [{:heading "north" :length 4 :stop :tunnel-length}] legs) (pr-str legs))
+          (is (not-any? #(neg? (first %)) (dug-cells s))))))))
 
 (deftest an-unheaded-tunnel-turns-from-a-facing-with-no-rock-to-the-rock-the-body-sees
   (async done

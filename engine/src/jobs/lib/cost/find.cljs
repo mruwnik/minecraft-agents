@@ -7,6 +7,7 @@
   (:require [clojure.string :as str]
             [engine.args :as a]
             [engine.settings :as settings]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.cost.base-rates :as base-rates]))
 
 (a/defargs settings
@@ -101,6 +102,25 @@
   discard), the ground taken as all rock its veins replace."
   [resource pos n]
   (* n tunnel-faces (base-rates/expected-density resource pos nil)))
+
+(defn tunnel-rate
+  "Blocks of kinds a strip tunnel is expected to lay bare per second, cutting cells ({:name :y}, feet and head of each
+  block in order, :name nil where unseen): a seen block of kinds counts one; host rock of resource (and an unseen cell,
+  taken as host rock) half a block's tunnel-ore; air and other ground none. Each block costs walk-s and each cell
+  (dig-s name), an unseen one that of the dearest host rock. The cut ends at a seen cell never dug (dig-s nil). nil
+  when it meets a seen fluid first: the tunnel stops there and a flood or lava is no ground to mine."
+  [resource kinds cells dig-s walk-s]
+  (let [unseen-s (apply max (or (seq (keep dig-s (base-rates/host-blocks resource))) [(dig-s "stone")]))
+        rock (fn [y] (if resource (* 0.5 (tunnel-ore resource {:y y} 1)) 0))]
+    (loop [[{n :name y :y} & more :as cells] cells ore 0 s 0]
+      (cond
+        (empty? cells) (if (pos? s) (/ ore s) 0)
+        (and n (bs/fluids n)) nil
+        (nil? n) (recur more (+ ore (rock y)) (+ s unseen-s (* 0.5 walk-s)))
+        (bs/air n) (recur more ore (+ s (* 0.5 walk-s)))
+        (nil? (dig-s n)) (if (pos? s) (/ ore s) 0)
+        :else (recur more (+ ore (cond (kinds n) 1 (base-rates/host? resource n) (rock y) :else 0))
+                     (+ s (dig-s n) (* 0.5 walk-s)))))))
 
 (defn ore-level
   "The feet height a strip tunnel for an ore block (\"iron_ore\") runs at, jobs.gather.mine's and the height its tunnel is
