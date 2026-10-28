@@ -505,8 +505,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (far-run 400))]
-          (is (empty? (events-of s :round_started)))
+        (let [s (await (far-run 5000))]
+          (is (empty? (events-of s :round_started)) "nine ripe wheat, 15 hunger points of bread, are not worth 5000 blocks' walk")
           (is (some #(= :not-worth (:reason %)) (events-of s :waiting))))))))
 
 (def high-box {:min {:x 202 :y 93 :z 2} :max {:x 204 :y 94 :z 4}})
@@ -683,10 +683,14 @@
     (game/select! (fake/create {:server {:simulationDistance nil}}))
     (is (= 2400 (cost/growing-s 2400 100)) "unknown: vanilla's 10 chunks")))
 
-(deftest a-sown-crop-is-worth-its-share-ripe-within-the-food-horizon
-  (let [wet (crops/stages-per-s true nil)]
-    (is (= 1 (cost/grown-share "wheat" 7 wet)))
-    (is (< 0 (cost/grown-share "wheat" 0 dry-rate) (cost/grown-share "wheat" 0 wet) 1))
+(deftest a-sown-crop-is-worth-its-food-over-the-harvests-within-the-food-horizon
+  (let [wet (crops/stages-per-s true nil)
+        fast (* 20 wet)]
+    (is (< 1 (cost/harvests "wheat" 7 wet) 2) "a ripe crop is one harvest now, and its replanting may ripen again")
+    (is (< 0 (cost/harvests "wheat" 0 dry-rate) (cost/harvests "wheat" 0 wet) 1))
+    (is (< 5 (cost/harvests "wheat" 0 fast)) "a crop that ripens many times in the horizon counts each harvest")
+    (is (= (* (cost/food-point-worth) (/ 5 3)) (cost/crop-worth "wheat")) "a wheat is a third of a bread's 5 hunger points")
+    (is (= (* (cost/food-point-worth) (cost/harvests "wheat" 0 wet) (/ 5 3)) (cost/sown-worth "wheat" wet)) "wheat seeds are no food")
     (is (= 0 (cost/sown-worth "wheat" 0)) "a crop that never grows is not worth its seed")))
 
 (deftest a-lone-tend-far-below-its-field-walks-up

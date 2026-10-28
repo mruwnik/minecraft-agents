@@ -44,6 +44,7 @@
             [jobs.lib.cost.table :as tbl]
             [jobs.lib.cost.fight :as fight]
             [jobs.lib.cost.health :as health]
+            [jobs.lib.foods :as foods]
             [engine.game :as game]
             [engine.settings :as settings]))
 
@@ -276,10 +277,35 @@
   [food]
   (* (settings/get settings ::food-worth-per-point) (max 0 (- (settings/get settings ::food-worth-from) food))))
 
-(defn crop-worth
-  "Seconds a ripe crop of block name is worth when cut: the item-value of what it drops (table/crop-yields)."
+(def meal-points
+  "{item hunger points} per item of the items a crafting recipe of that item alone makes a food of (3 wheat a bread: 5/3 a wheat), memoised per version."
+  (memoize
+   (fn [version]
+     (let [food (foods/table-for version)]
+       (reduce (fn [m [out n ins]]
+                 (let [pts (get-in food [out :points])]
+                   (if (and pts (apply = ins)) (update m (first ins) (fnil max 0) (/ (* pts n) (count ins))) m)))
+               {} (tbl/recipe-list (minecraft-data version)))))))
+
+(defn food-points
+  "Hunger points one item of name gives at best: eaten (none when harmful), cooked or made into a food alone (meal-points); 0 when none."
+  [name]
+  (let [version @game/version
+        own #(if (contains? foods/harmful %) 0 (get-in (foods/table-for version) [% :points] 0))]
+    (max (own name) (if-let [c (foods/cooked-of name)] (own c) 0) (get (meal-points version) name 0))))
+
+(def crop-points-for
+  (memoize (fn [version crop] (reduce + 0 (map (fn [{:keys [name count]}] (* count (food-points name))) (tbl/crop-yields crop :version version))))))
+
+(defn crop-points
+  "Hunger points a ripe crop of block name gives when cut: food-points of what it drops (table/crop-yields)."
   [crop]
-  (:value (item-value (or (tbl/crop-yields crop) []))))
+  (crop-points-for @game/version crop))
+
+(defn crop-worth
+  "Seconds a ripe crop of block name is worth when cut: its crop-points at food-point-worth."
+  [crop]
+  (* (food-point-worth) (crop-points crop)))
 
 (def expected-drops "Meat items a kill is counted to give when the game data lists none." 2)
 

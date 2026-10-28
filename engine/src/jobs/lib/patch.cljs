@@ -261,7 +261,7 @@
                          vec)
               miss (nearest-miss (cons miss misses))]
           (cond
-            (and (= limit (count found)) (<= (best-possible (* w h) farmland? worth (wet-ring (inc r)) (inc r)) (:score (peek found)))) {:next-ring (inc r) :found found :miss miss :done true :reads @reads}
+            (and (= limit (count found)) (<= (js/Math.round (best-possible (* w h) farmland? worth (wet-ring (inc r)) (inc r))) (:score (peek found)))) {:next-ring (inc r) :found found :miss miss :done true :reads @reads}
             (>= @reads budget) {:next-ring (inc r) :found found :miss miss :done false :reads @reads :cache {:tops @tops :skies @skies :grounds @grounds}}
             :else (recur (rest rs) found miss)))))))
 

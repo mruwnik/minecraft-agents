@@ -1,6 +1,6 @@
 (ns jobs.lib.cost.farm
   "What a farm field's cells are worth to a pass and what its steps take: the measured share of field cells ripe or
-  sowable at a pass (::field-prior), the chance a cell seen growing is ripe by now (ripe-chance), what a sown cell is worth (sown-worth), and the seconds each step works (step-s)."
+  sowable at a pass (::field-prior), the chance a cell seen growing is ripe by now (ripe-chance), the harvests a crop is worth over the horizon (harvests), what a sown cell is worth (sown-worth), and the seconds each step works (step-s)."
   (:require [engine.args :as a]
             [engine.game :as game]
             [engine.settings :as settings]
@@ -47,30 +47,39 @@
   [secs dist]
   (if (<= dist (* 16 (or (game/simulation-distance) default-simulation-distance))) secs 0))
 
+(defn at-least-chance
+  "The chance at least m growth stages grew in secs at rate stages a second (Poisson)."
+  [m secs rate]
+  (let [mu (* rate (max 0 secs))]
+    (if (<= m 0)
+      1
+      (- 1 (reduce + (map (fn [k] (* (js/Math.exp (- mu)) (/ (js/Math.pow mu k) (reduce * 1 (range 1 (inc k)))))) (range m)))))))
+
 (defn ripe-chance
   "The chance a field cell seen holding crop at stage `age` `secs` seconds ago is ripe now: at least the stages left to
   its ripe-age grew in that time (Poisson at rate stages a second, crops/stages-per-s). A cell never seen has no age: share."
   [crop age secs rate]
-  (let [left (- (get crops/ripe-age crop 7) age)
-        mu (* rate (max 0 secs))]
-    (if (<= left 0)
-      1
-      (- 1 (reduce + (map (fn [k] (* (js/Math.exp (- mu)) (/ (js/Math.pow mu k) (reduce * 1 (range 1 (inc k)))))) (range left)))))))
+  (at-least-chance (- (get crops/ripe-age crop 7) age) secs rate))
 
-(defn grown-share
-  "The share of a crop's worth a crop at stage age growing at rate stages a second (crops/stages-per-s) is worth now: the
-  mean over horizon-s of the chance it is ripe by then, 1 less the mean wait-price share of the wait for it."
-  [crop age rate]
-  (let [h (horizon-s)
-        n 32]
-    (/ (reduce + (map #(ripe-chance crop age (* h (/ (+ % 0.5) n)) rate) (range n))) n)))
+(def harvests
+  "The harvests a crop at stage age growing at rate stages a second (crops/stages-per-s) and replanted at each cut is worth now: the mean
+  over horizon-s of the harvests ripe by then (the k-th at its stages left plus k-1 whole growths), so a harvest ripe at once counts 1
+  and one past the horizon nothing, as cost/wait-price prices a wait for a find. Memoised: patch scans price every patch with it."
+  (memoize
+   (fn [crop age rate]
+     (let [h (horizon-s)
+           n 32
+           ripe (get crops/ripe-age crop 7)
+           left (max 0 (- ripe age))
+           by (fn [t] (reduce + (take-while #(> % 1e-6) (map #(at-least-chance (+ left (* % ripe)) t rate) (range)))))]
+       (/ (reduce + (map #(by (* h (/ (+ % 0.5) n))) (range n))) n)))))
 
 (defn sown-worth
-  "Seconds sowing a cell with crop is worth, at rate (crops/stages-per-s): its ripe crop's worth (value/crop-worth) times
-  grown-share from stage 0, less the seed it takes. Never below 0: a cell not worth its seed is left bare."
+  "Seconds sowing a cell with crop is worth, at rate (crops/stages-per-s): the hunger points each harvest gives less the seed
+  replanted (value/crop-points, value/food-points), at value/food-point-worth, times its harvests from stage 0. Never below 0: a cell not worth its seed is left bare."
   [crop rate]
-  (max 0 (- (* (value/crop-worth crop) (grown-share crop 0 rate))
-            (:value (value/item-value [{:name (crops/seed-of crop) :count 1}])))))
+  (* (value/food-point-worth) (harvests crop 0 rate)
+     (max 0 (- (value/crop-points crop) (value/food-points (crops/seed-of crop))))))
 
 (defn step-s
   "Seconds step works over units units: its ::field-work line, 0 for no units."
