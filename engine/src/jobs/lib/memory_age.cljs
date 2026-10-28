@@ -50,10 +50,15 @@
     2 [(settings/get settings ::door-changes) (settings/get settings ::door-seconds)]
     3 [(settings/get settings ::fire-changes) (settings/get settings ::fire-seconds)]))
 
+(def ^:const HORIZON-MS
+  "The longest a memory ages: a cell seen longer ago prices as one seen this long ago. Past it a level's due age is
+  beyond what a double tells apart."
+  (* 10 365 24 3600 1000))
+
 (defn- chance
-  "q of a cell seen age-ms ago under a prior of a changes over b-ms."
+  "q of a cell seen age-ms ago (at most HORIZON-MS) under a prior of a changes over b-ms."
   [a b-ms age-ms]
-  (- 1 (js/Math.pow (+ 1 (/ (js/Math.max 0 age-ms) b-ms)) (- a))))
+  (- 1 (js/Math.pow (+ 1 (/ (js/Math.min HORIZON-MS (js/Math.max 0 age-ms)) b-ms)) (- a))))
 
 (defn changed-chance
   "q: the chance a remembered cell of kind seen age-ms ago has changed since."
@@ -77,10 +82,15 @@
         (< l LIKELIER) (js/Math.pow 2 (- l 11))
         :else (- 1 (js/Math.pow 2 (- (dec LIKELIER) l)))))
 
+(defn top-level
+  "The highest level a cell of kind reaches: its level at HORIZON-MS."
+  [kind]
+  (level (changed-chance kind HORIZON-MS)))
+
 (defn due-age-ms
-  "The age at which a cell of kind at level l reaches the next level (the formula's inverse), Infinity at TOP."
+  "The age at which a cell of kind at level l reaches the next level (the formula's inverse), Infinity at its top-level."
   [kind l]
-  (if (>= l TOP)
+  (if (>= l (top-level kind))
     js/Infinity
     (let [[a b] (prior kind)
           t (js/Math.ceil (* 1000 b (- (js/Math.pow (- 1 (level-chance (inc l))) (/ -1 a)) 1)))]
