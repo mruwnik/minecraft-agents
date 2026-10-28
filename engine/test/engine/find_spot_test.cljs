@@ -110,8 +110,8 @@
     (is (= (js/Math.round (- (* 9 w) (cost/earthwork-s 2) (pt/walk-s 8)))
            (:score (pt/score-patch {:tops (conj (vec (repeat 8 63)) 65) :cells (cells 9 {}) :away 8})))
         "levelling and the walk are seconds off the crops' worth")
-    (is (= -12 (:score (pt/score-patch {:tops [63 63] :away 40})))
-        "a patch for no crops is worth nothing: its score is its costs")
+    (is (= [-12 nil nil] ((juxt :score :worth :why) (pt/score-patch {:tops [63 63] :away 40})))
+        "a patch for no crops and no :worth is an order with no cap: it is scored by its costs and no cost refuses it")
     (is (= 88 (:score (pt/score-patch {:tops [63 63] :worth 100 :away 40}))) "a patch for no crops is worth the caller's :worth")
     (is (nil? (pt/score-patch {:tops [63 nil] :cells (cells 2 {})})))))
 
@@ -127,7 +127,7 @@
     {:tops (vec (concat (repeat 13 60) (repeat 12 64))) :cells (cells 25 {}) :away 0} :steep
     {:tops (vec (repeat 9 63)) :cells (cells 9 {:lit? false}) :away 0} :barren
     {:tops (vec (repeat 9 63)) :cells (cells 9 {:farmable? false}) :away 0} :barren
-    {:tops [63 64] :worth nil :away 4000} :barren
+    {:tops [63 64] :worth nil :away 4000} nil
     {:tops [63 64] :worth 100 :away 0} nil
     {:tops [63 64] :worth 100 :away 4000} :far
     {:tops [52 64] :worth 5 :away 0} :steep))
@@ -490,6 +490,11 @@
     (is (= [{:x 10 :y 63 :z 0} {:x 0 :y 63 :z 0}] (mapv :pos (:found r))) "stone tops are worth replacing with dirt, at the price of doing so")
     (is (= [100 0] (mapv :farmable (:found r))))
     (is (= [0 true] ((juxt (comp :replace :costs first) (comp pos? :replace :costs second)) (:found r))))))
+
+(deftest a-patch-for-no-crops-with-no-worth-is-an-order-ranked-by-its-costs
+  (let [p (tu/seeing-all (tu/fake {:blocks (merge (patch 0 0 3 3 63 "stone") (patch 10 0 3 3 63 "stone"))}))
+        r (pt/scan-rows p {:w 3 :h 3 :range 12 :depth 4 :limit 2 :farmland? false} {:x 1 :y 64 :z 1} {:next-ring 0 :found []} ##Inf)]
+    (is (= [{:x 0 :y 63 :z 0} {:x 10 :y 63 :z 0}] (mapv :pos (:found r))) "no cap refuses a patch; the cheaper walk ranks first")))
 
 (def pond-east
   (merge (tu/box -30 63 -30 30 63 30 "grass_block") (tu/box 18 63 -1 20 63 1 "water")))

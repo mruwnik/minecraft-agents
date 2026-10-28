@@ -34,7 +34,7 @@
   ground level of the :w x :h patch, not its centre; :spot is the first spot's pos. :away is the distance from the patch's centre
   to :center (the body's cell without one), not from the corner.
   Score = :worth less :costs, seconds: worth is the crops of its cells, cost/sown-worth of wheat on wet or dry farmland, or
-  the :worth arg shared over the cells, a dry one at the same share of a wet one (a :plan with no crops or farmland is worth the :worth arg, nothing without it); costs are :earthwork (cost/earthwork-s of :work, the blocks the cells are off the
+  the :worth arg shared over the cells, a dry one at the same share of a wet one (a :plan with no crops or farmland is worth the :worth arg; without it, an order with no cap, its spots rank by their costs alone); costs are :earthwork (cost/earthwork-s of :work, the blocks the cells are off the
   commonest ground height y), the :walk from :center (cost/walk-cost of :away), and, each only where it pays: torches for cells
   under crop light 9 (cost/light-cost, a trip when none is carried; :dark? true, jobs.farm.grow hangs them), water brought to dry
   cells (a trip a source and the irrigate step), a top a hoe cannot till dug out and filled with dirt. A patch scoring 0 or less
@@ -50,7 +50,7 @@
    :h {:doc "patch height (z), 1 to 16; without a :plan" :spec (a/int-in 1 16) :default 5}
    :range {:doc "patches lie within this many blocks of :center in x and z, 1 to 48" :spec (a/int-in 1 48) :default 24}
    :center {:doc "where to search from {:x :y :z}; nil is the body's cell" :spec ::a/pos :default nil}
-   :worth {:doc "seconds the patch is worth to the caller when every cell grows on wet farmland; nil: its crops' own worth" :spec (a/num-in 0 nil) :default nil}
+   :worth {:doc "seconds the patch is worth to the caller when every cell grows on wet farmland; nil: its crops' own worth (no crops: no cap)" :spec (a/num-in 0 nil) :default nil}
    :max-step {:doc "drop patches whose largest step between neighbouring cells is over this; nil: keep all" :spec (a/int-in 0 16) :default nil}})
 
 (a/defargs settings

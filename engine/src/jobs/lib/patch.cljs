@@ -81,9 +81,10 @@
 
 (defn score-patch
   "Price a patch {:tops [y ...] :cells [{:lit? :wet? :farmable?} ...] :away dist :sky bool :torches n :worth s :fetch-s s}, nil when any top is
-  nil: :score is its :worth (field-price, each wet cell :worth over the cells, nil: cell-worth; with no :cells, a patch for no crops, :worth whole or 0) less the earthwork of levelling it
-  (cost/earthwork-s) and the walk to it, in seconds. A patch scoring 0 or less has :why: :far (its worth pays for the levelling,
-  not the walk too), :steep (it pays for no levelling) or :barren (it pays for nothing: dark or untillable, or no crops and no :worth). Open sky is
+  nil: :score is its :worth (field-price, each wet cell :worth over the cells, nil: cell-worth; with no :cells, a patch for no crops, :worth whole) less the earthwork of levelling it
+  (cost/earthwork-s) and the walk to it, in seconds. A patch for no crops and no :worth is an order with no cap: :worth nil, scored by its costs alone, refused only
+  when they are ##Inf. Any other patch scoring 0 or less has :why: :far (its worth pays for the levelling,
+  not the walk too), :steep (it pays for no levelling) or :barren (it pays for nothing: dark or untillable). Open sky is
   reported, not priced: crops need light, which the cells say."
   [{:keys [tops cells sky away torches fetch-s] whole :worth}]
   (when-not (some nil? tops)
@@ -93,15 +94,15 @@
           away (or away 0)
           field (when (seq cells) (field-price cells (or torches 0) (if whole (/ whole (count cells)) (cell-worth true)) fetch-s))
           costs (merge (:costs field) {:earthwork (cost/earthwork-s work) :walk (walk-s away)})
-          worth (if field (:worth field) (or whole 0))
+          worth (if field (:worth field) whole)
           net (if field (:net field) worth)
-          score (- worth (reduce + (vals costs)))
+          score (- (or worth 0) (reduce + (vals costs)))
           n (count tops)]
       (cond-> {:y y :level level :work work :water-share (if field (/ (count (filter :wet? cells)) n) 0) :sky (boolean sky)
-               :away (js/Math.round away) :worth (js/Math.round worth) :costs (update-vals costs js/Math.round)
+               :away (js/Math.round away) :worth (some-> worth js/Math.round) :costs (update-vals costs js/Math.round)
                :score (js/Math.round score) :dark? (boolean (:lit? field))}
         field (assoc :farmable (js/Math.round (/ (* 100 (count (filter :farmable? cells))) n)))
-        (<= score 0) (assoc :why (cond (pos? (- net (:earthwork costs))) :far
+        (if worth (<= score 0) (= ##-Inf score)) (assoc :why (cond (pos? (- net (:earthwork costs))) :far
                                        (pos? net) :steep
                                        :else :barren))))))
 
