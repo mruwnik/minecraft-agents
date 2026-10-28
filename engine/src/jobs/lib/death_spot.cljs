@@ -1,25 +1,21 @@
 (ns jobs.lib.death-spot
-  "Where the body died lately, by any cause, from the :deaths memory (engine.core/record-death!), and where it was hurt down to ::near-death-hp:
-  a place a player avoids or goes back to prepared. A death or near-death weighs 1 when fresh and fades to 0 (jobs.lib.cost/death-weight);
+  "Where the body died lately, by any cause, from the :deaths memory (engine.core/record-death!), and where a hit left the
+  body too hurt for risky work (a near-death: jobs.lib.cost.risk/too-hurt? at the health and food it left): a place a player avoids or goes back to prepared. A death or near-death weighs 1 when fresh and fades to 0 (jobs.lib.cost/death-weight);
   it counts for the cells its killer's field from its spot holds (jobs.lib.threat-field), a death by terrain for those within
   cost.death ::terrain-radius (the cells that killed). A near-death fades over the :hurt memory's own ttl, and counts once with a
   death or newer near-death that counts for its spot (covers?). present-share: the chance its killer, or a like mob spawned since, is there now; sighting-share: the chance a mob seen
   and lost is still near where it was seen."
   (:require [clojure.string :as str]
-            [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.game :as game]
             [engine.memory :as mem]
-            [engine.settings :as settings]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.risk :as risk]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.look :as look]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.threat-field :as field]
             [jobs.lib.util :as u]))
-
-(a/defargs settings
-  {::near-death-hp {:default 6 :doc "Health at or under which a hit makes its spot count like a death." :spec (a/num-in 0 nil)}})
 
 (defn died-after?
   "Whether the :died memory entry `died` (nil: none) is newer than `since`, the time a job booked at its start (nil: not booked)."
@@ -45,11 +41,10 @@
     (<= (u/dist pos (:pos d)) (cost/terrain-radius))))
 
 (defn near-deaths
-  "The :hurt entries of c that left the body at or under ::near-death-hp and carry a :pos, newest first, none a death or
+  "The :hurt entries of c that left the body too hurt for risky work (risk/too-hurt?) and carry a :pos, newest first, none a death or
   newer one kept covers? the spot of."
   [c]
-  (let [limit (settings/get settings ::near-death-hp)
-        deaths (keep #(when (:pos (:data %)) {:pos (:pos (:data %)) :cause (:cause (:data %))}) (ctx/entries c :deaths))
+  (let [deaths (keep #(when (:pos (:data %)) {:pos (:pos (:data %)) :cause (:cause (:data %))}) (ctx/entries c :deaths))
         record (fn [e] {:pos (:pos (:data e)) :cause (hurt-cause (:data e))})]
     (reduce (fn [kept {:keys [data] :as e}]
               (if (or (some #(covers? c % (:pos data)) deaths)
@@ -58,7 +53,7 @@
                 (conj kept e)))
             []
             (->> (ctx/entries c :hurt)
-                 (filter #(let [{:keys [health pos]} (:data %)] (and pos health (<= health limit))))
+                 (filter #(let [{:keys [health food pos]} (:data %)] (and pos health (risk/too-hurt? health food))))
                  reverse))))
 
 (defn recent

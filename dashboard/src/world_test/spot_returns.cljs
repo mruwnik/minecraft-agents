@@ -1,6 +1,6 @@
 (ns world-test.spot-returns
   "tools/event-counts.mjs spot-returns: counts the measured prior jobs.lib.cost.threat ::spot-occupied from the trial bodies' event logs.
-  A spot is a death by a mob, or a hurt by one down to near-death-hp. Its return is the first time the body is within
+  A spot is a death by a mob, or a hurt by one that left the body too hurt for risky work (jobs.lib.death-spot's near-death). Its return is the first time the body is within
   return-blocks of it again after away-s or more with every known position 32 to 128 blocks off (vanilla: the killer has
   despawned, and mobs spawn there again); a later spot elsewhere, a position over 128 blocks off or memory-ms end the spot.
   k: returns where, within met-ms, a hostile was decided about within return-blocks of the spot, or hurt or killed the
@@ -10,11 +10,11 @@
             ["path" :as path]
             ["zlib" :as zlib]
             [clojure.string :as str]
+            [jobs.lib.cost.risk :as risk]
             [world-test.fresh-drop :as fresh-drop]))
 
 (def hostiles #{"zombie" "husk" "drowned" "zombie_villager" "skeleton" "stray" "bogged" "spider" "cave_spider" "creeper" "witch"
                 "enderman" "slime" "phantom" "pillager" "vindicator"})
-(def near-death-hp "jobs.lib.death-spot ::near-death-hp's default." 6)
 (def return-blocks 16)
 (def away-s 300)
 (def met-ms 60000)
@@ -38,7 +38,7 @@
     (when t
       (cond
         (and body? (str/includes? line ":kind :died")) (assoc r :k (if cause :spot :pos))
-        (and body? (str/includes? line ":kind :hurt")) (assoc r :k (cond (and cause (<= (or (num-of #":health (-?[\d.]+)" line) 99) near-death-hp)) :spot
+        (and body? (str/includes? line ":kind :hurt")) (assoc r :k (cond (and cause (risk/too-hurt? (or (num-of #":health (-?[\d.]+)" line) 99) (num-of #":food (-?[\d.]+)" line))) :spot
                                                                          cause :met
                                                                          :else :pos))
         (str/includes? line ":kind :hostile.decided") (assoc r :k :met)
