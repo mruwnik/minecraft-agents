@@ -185,27 +185,27 @@
 (def midnight 18000)
 
 (defn dark-of
-  "1 or 0: dark-fn's call on cell x y z of a body that looks round a walled-off room at time t, with the light
-  [sky block] given for the cell."
-  [t cell light]
-  (let [p (seeing {:time t :blocks wall})]
-    (when light (swap! (fake/state p) assoc :light {cell light}))
-    ((:at (look/dark-fn p)) (first cell) (second cell) (nth cell 2))))
+  "1 or 0: dark-fn's call on cell x y z of a body that looked round a walled-off room at time t (with blocks more)."
+  ([t cell] (dark-of t cell {}))
+  ([t cell blocks]
+   (let [p (seeing {:time t :blocks (merge wall blocks)})]
+     ((:at (look/dark-fn p)) (first cell) (second cell) (nth cell 2)))))
 
 (deftest dark-fn-needs-a-perception
   (is (nil? (look/dark-fn (tu/fake {})))))
 
 (deftest an-unseen-cell-is-dark-at-night-only
-  (is (= 1 (dark-of midnight [6 64 0] nil)))
-  (is (= 0 (dark-of day [6 64 0] nil))))
+  (is (= 1 (dark-of midnight [6 64 0])))
+  (is (= 0 (dark-of day [6 64 0]))))
 
 (defn sealed
-  "A body that has looked round the walled-off room by day, at time t, every cell at [sky block] light (sky 0: sealed
-  from the sky), the cells of lights at their own."
-  [t light lights]
-  (let [p (seeing {:time day :blocks wall})]
-    (swap! (fake/state p) assoc :time t :light-default light :light lights)
-    p))
+  "A body that has looked round the walled-off room by day with every cell at [sky block] light (sky 0: sealed from
+  the sky), the cells of lights at their own, blocks more; at time t."
+  ([t light lights] (sealed t light lights {}))
+  ([t light lights blocks]
+   (let [p (seeing {:time day :blocks (merge wall blocks) :light-default light :light lights})]
+     (swap! (fake/state p) assoc :time t)
+     p)))
 
 (deftest an-unseen-cell-in-a-dark-sealed-place-is-dark-by-day
   (let [p (sealed day [0 0] {})]
@@ -213,13 +213,13 @@
     (is (false? (sh-sense/lit-here? p {:x 6 :y 64 :z 0})) "the old guess read the open sky by day")))
 
 (deftest an-unseen-cell-in-a-block-lit-sealed-hall-is-lit-at-night
-  (let [p (sealed midnight [0 14] {})]
+  (let [p (sealed midnight [0 14] {} (tu/box -12 68 -12 12 68 12 "glowstone"))]
     (is (= 0 ((:at (look/dark-fn p)) 6 64 0)) "the old guess read every unseen cell dark at night")
     (is (true? (sh-sense/lit-here? p {:x 6 :y 64 :z 0})))))
 
 (deftest seen-block-light-lights-an-unseen-cell-less-one-a-block
-  ;; a light 5 three blocks ahead, falling one a block to the body's cell
-  (let [p (sealed midnight [0 0] (into {} (for [z (range 4)] [[0 64 z] [0 (+ 2 z)]])))]
+  ;; a light 5 (a lit candle's 3 and a two-candle's 6 less one) three blocks ahead, falling one a block to the body's cell
+  (let [p (sealed midnight [0 0] (into {} (for [z (range 4)] [[0 64 z] [0 (+ 2 z)]])) {"0,64,4" "candle"})]
     (is (true? (look/unseen-lit? p {:x 0 :y 64 :z -1})) "2 less 1 block, behind the body")
     (is (false? (look/unseen-lit? p {:x 0 :y 64 :z -2})) "2 less 2 blocks")))
 
@@ -265,10 +265,21 @@
   (is (true? (look/unseen-lit? (tu/fake {}) {:x 40 :y 64 :z 0})) "no perception: the open sky"))
 
 (deftest a-seen-cell-is-lit-by-block-light-or-by-day-sky
-  (is (= 0 (dark-of midnight [0 64 5] [0 1])) "a torch's light 1 at night")
-  (is (= 1 (dark-of midnight [0 64 5] [15 0])) "open sky at night")
-  (is (= 0 (dark-of day [0 64 5] [15 0])) "open sky by day")
-  (is (= 1 (dark-of day [0 64 5] [0 0])) "a seen cave cell is dark by day"))
+  (is (= 0 (dark-of midnight [0 64 5] {"0,64,7" "torch"})) "a seen torch's light at night")
+  (is (= 1 (dark-of midnight [0 64 5])) "open sky at night")
+  (is (= 0 (dark-of day [0 64 5])) "open sky by day")
+  (is (= 1 ((:at (look/dark-fn (sealed day [0 0] {}))) 0 64 1)) "a seen cave cell is dark by day"))
+
+(deftest a-seen-cell-keeps-the-light-it-was-seen-in
+  ;; the torch's cell and the one by it at the light it gives them, as the world lights them; the body turned away first
+  (let [lit {[0 64 7] [15 14] [0 64 6] [15 13]}
+        dark-at (fn [p] ((:at (look/dark-fn p)) 0 64 6))
+        broken (seeing {:time midnight :blocks (merge wall {"0,64,7" "torch"}) :light lit})
+        placed (seeing {:time midnight :blocks wall})]
+    (swap! (fake/state broken) #(-> % (assoc :yaw 180) (update :blocks dissoc "0,64,7") (assoc :light {})))
+    (is (= 0 (dark-at broken)) "a torch broken out of sight still lights the cell it lit")
+    (swap! (fake/state placed) #(-> % (assoc :yaw 180) (assoc-in [:blocks "0,64,7"] "torch") (assoc :light lit)))
+    (is (= 1 (dark-at placed)) "a torch placed out of sight does not")))
 
 (deftest an-unseen-cell-the-walk-reads-as-water-is-water-a-drowned-may-spawn-in
   (let [p (seeing {:blocks (merge wall (tu/box 6 63 -1 8 63 1 "water"))})

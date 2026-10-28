@@ -457,7 +457,7 @@
               (swap! (fake-world/state raw) assoc-in [:self :onFire] true)
               (is (changed? dark (await (price (ctx nil)))) "the body on fire"))))))))
 
-(deftest a-kept-flee-price-is-planned-again-when-the-raw-world-changed-out-of-sight
+(deftest a-kept-flee-price-holds-when-the-world-changes-out-of-sight
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -472,7 +472,7 @@
               base (await (price))]
           (is (identical? base (await (price))))
           (swap! (fake-world/state raw) assoc-in [:blocks "-3,64,0"] "stone")
-          (is (not (identical? base (await (price)))) "a cell changed with no write the body sensed: the planner reads it live"))))))
+          (is (identical? base (await (price))) "a cell changed with no write the body sensed: the planner reads memory, light too"))))))
 
 (deftest a-death-by-terrain-fades-in-the-kept-price-as-the-clock-moves
   (async done

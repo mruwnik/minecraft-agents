@@ -8,7 +8,7 @@
   (->> (for [[dim ^js m] (es6-iterator-seq (.entries (.-stores st)))
              ^js sec (es6-iterator-seq (.values m))]
          #js {:dim dim :cx (.-cx sec) :sy (.-sy sec) :cz (.-cz sec) :seen (.-seen sec) :base (.-base sec)
-              :ids (.-ids sec) :times (.-times sec)})
+              :ids (.-ids sec) :times (.-times sec) :sky (.-sky sec)})
        (sort-by #(.-seen ^js %))
        to-array))
 
@@ -28,7 +28,7 @@
             (let [store (store-of st (.-dim s))
                   key (section-key (.-cx s) (.-sy s) (.-cz s))]
               (when-not (.has store key) (set! (.-count st) (inc (.-count st))))
-              (.set store key #js {:ids (.-ids s) :times (.-times s) :base (.-base s) :seen (.-seen s) :stamp -1 :cx (.-cx s) :sy (.-sy s) :cz (.-cz s)})))
+              (.set store key #js {:ids (.-ids s) :times (.-times s) :sky (.-sky s) :base (.-base s) :seen (.-seen s) :stamp -1 :cx (.-cx s) :sy (.-sy s) :cz (.-cz s)})))
           (set! (.-lastKey st) -1)
           (set! (.-writes st) (inc (.-writes st)))
           (count (.-sections data))))))

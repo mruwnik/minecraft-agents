@@ -142,7 +142,8 @@
               :writes 0 :stamp 0 :lastKey -1 :lastSec nil :minSec nil :minNow nil :minVal 0 :dim "overworld" :sight nil :visible nil
               :pass nil :passRays nil :lastStart nil :unsubscribe nil
               :mobs (js/Map.) :faded (js/Map.) :mobSampleAt nil :mobSource nil
-              :infoOf (fn [id] (.stateInfo ^js raw id)) :kinds nil :sensedKey nil :sensed (js/Map.) :blockBases (js/Map.) :jsBases (js/Map.)
+              :infoOf (fn [id] (.stateInfo ^js raw id)) :lightTableOf (fn [] (when (.-lightTable ^js raw) (.lightTable ^js raw)))
+              :lightTable nil :kinds nil :sensedKey nil :sensed (js/Map.) :blockBases (js/Map.) :jsBases (js/Map.)
               :nowFn (:now o) :tickMs (:step-ms o) :radius (:radius o) :hx (:hx g) :hy (:hy g)
               :passes 0 :rays 0 :cells 0 :steps 0 :stepMs 0 :stepMsMax 0}}))
 

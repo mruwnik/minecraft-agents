@@ -44,7 +44,7 @@ function scratch (k, size) {
   return a.fill(undefined, 0, size)
 }
 
-// ctx: {raw (stateAt, lightAt), sections (sectionRange, sectionStates, sectionLight: the raw world's own or lazySections), sight, visible, radius, near, marksOf(cx, cy, cz), record(x, y, z, id), markKind(id), thin(id, x, y, z, ox, oy, oz, ex, ey, ez)}
+// ctx: {raw (stateAt, lightAt), sections (sectionRange, sectionStates, sectionLight: the raw world's own or lazySections), sight, visible, radius, near, marksOf(cx, cy, cz), record(x, y, z, id, light: the cell's packed light, when read), markKind(id), thin(id, x, y, z, ox, oy, oz, ex, ey, ez)}
 // dirs: Float64Array of unit vectors (3 per ray), NaN x = skip the ray. Returns the number of cells entered.
 export function castRays (ctx, ox, oy, oz, dirs, count) {
   const { raw, sections: src, sight, visible, radius, near, marksOf, record } = ctx
@@ -160,7 +160,7 @@ export function castRays (ctx, ox, oy, oz, dirs, count) {
         shown = ((a > b ? a : b) | (c > d ? c : d))
       }
       if (visible[shown] === 1 || t <= near) {
-        record(x, y, z, id)
+        record(x, y, z, id, light)
         marks[i] = k
       } else if (k === 1) marks[i] = DARK
       if (blocks) break

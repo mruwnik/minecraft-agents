@@ -16,6 +16,7 @@
             [engine.perception.store :as store]
             [jobs.lib.cost.base-rates :as base-rates]
             [jobs.lib.memory-age :as memory-age]
+            [jobs.lib.seen-light :as seen-light]
             [jobs.lib.walk.rock :as rock]))
 
 (a/defargs settings
@@ -413,13 +414,20 @@
   (when-let [[solid open] (solid-counts p)]
     (let [y (nth (feet-cell p) 1)] (base-rates/solid-share y y solid open))))
 
+(defn remembered-light-fn
+  "(fn [x y z]) the packed light (sky << 4 | block) of a cell the body has seen, as its memory gives it
+  (seen-light/light-fn); the raw world's own light where the body has no light table. Ask it of seen cells only."
+  [p ^js raw]
+  (or (seen-light/light-fn p) (fn [x y z] (.lightAt raw x y z))))
+
 (defn- brightest
-  "#js {:block :sky}: the most of each light among the seen cells of the section at cx sy cz (its ids)."
-  [^js raw ^js ids cx sy cz]
+  "#js {:block :sky}: the most of each light (by light, remembered-light-fn) among the seen cells of the section at cx
+  sy cz (its ids)."
+  [light ^js ids cx sy cz]
   (let [out #js {:block 0 :sky 0}]
     (dotimes [i 4096]
       (when (pos? (aget ids i))
-        (let [v (.lightAt raw (index-x (* 16 cx) i) (index-y (* 16 sy) i) (index-z (* 16 cz) i))]
+        (let [v (light (index-x (* 16 cx) i) (index-y (* 16 sy) i) (index-z (* 16 cz) i))]
           (when (pos? v)
             (set! (.-block out) (max (.-block out) (bit-and v 15)))
             (set! (.-sky out) (max (.-sky out) (bit-shift-right v 4)))))))
@@ -448,6 +456,7 @@
    (when-let [^js raw (raw-of p)]
      (let [^js sections (when-let [^js st (some-> (aget p "perception") :st)] (when (.-stores st) (store/store-of st (.-dim st))))
            subtract (or subtract (sky-subtract raw))
+           light (remembered-light-fn p raw)
            sky-need (+ (dark-light) subtract)
            ids-at (fn [cx sy cz] (some-> sections (.get (store/section-key cx sy cz)) .-ids))
            [ox oy oz] (or (feet-cell p) [0 0 0])
@@ -465,7 +474,7 @@
                      (let [k (store/section-key cx sy cz)]
                        (if (.has summaries k)
                          (.get summaries k)
-                         (let [s (some-> (ids-at cx sy cz) (#(brightest raw % cx sy cz)))]
+                         (let [s (some-> (ids-at cx sy cz) (#(brightest light % cx sy cz)))]
                            (.set summaries k s)
                            s))))
            ;; the boxes, flat as x0 y0 z0 x1 y1 z1 budget, of seen light (block: shift 0, sky: 4) that could still have need
@@ -509,7 +518,7 @@
                                             (let [cx (aget ring i) cy (aget ring (+ i 1)) cz (aget ring (+ i 2))
                                                   ^js ids (ids-at (bit-shift-right cx 4) (bit-shift-right cy 4) (bit-shift-right cz 4))
                                                   v (if ids (aget ids (store/cell-index cx cy cz)) 0)
-                                                  l (cond (own? cx cy cz) own (pos? v) (.lightAt raw cx cy cz))]
+                                                  l (cond (own? cx cy cz) own (pos? v) (light cx cy cz))]
                                               (cond
                                                 (and l (>= l 0) (>= (- (bit-and (bit-shift-right l shift) 15) d) need)) true
                                                 l (recur (+ i 3))
@@ -538,7 +547,7 @@
                                             [n sky]
                                             (let [v (aget ids i)
                                                   l (when (and (pos? v) (== 1 (aget open (dec v))))
-                                                      (.lightAt raw (index-x (* 16 cx) i) (index-y (* 16 sy) i) (index-z (* 16 cz) i)))]
+                                                      (light (index-x (* 16 cx) i) (index-y (* 16 sy) i) (index-z (* 16 cz) i)))]
                                               (cond (or (nil? l) (neg? l)) (recur (inc i) n sky)
                                                     (>= (bit-shift-right l 4) sky-need) (recur (inc i) (inc n) (inc sky))
                                                     :else (recur (inc i) (inc n) sky)))))
@@ -562,7 +571,7 @@
                       (if (>= y' max-build-y)
                         (sky-chance x y z)
                         (if-let [^js ids (ids-at (bit-shift-right x 4) (bit-shift-right y' 4) (bit-shift-right z 4))]
-                          (let [v (when (pos? (aget ids (store/cell-index x y' z))) (.lightAt raw x y' z))]
+                          (let [v (when (pos? (aget ids (store/cell-index x y' z))) (light x y' z))]
                             (cond (or (nil? v) (neg? v)) (recur (inc y'))
                                   (not= 15 (bit-shift-right v 4)) 0
                                   (== y' (inc y)) 1
@@ -584,15 +593,16 @@
 (defonce ^:private guesses (js/WeakMap.))
 
 (defn- lit-chance-fn
-  "unseen-lit-chance-fn of p by subtract, kept while what the body has seen, the raw world, the sky's darkening and the
-  body's cell hold (made anew each call without a perception's memory); (constantly 1) without a raw world (nothing is
-  known, so nothing is dark)."
+  "unseen-lit-chance-fn of p by subtract, kept while what the body has seen, the sky's darkening, the body's cell and its
+  light hold (made anew each call without a perception's memory); (constantly 1) without a raw world (nothing is known,
+  so nothing is dark)."
   [p subtract]
   (let [^js raw (raw-of p)
         ^js st (some-> (aget p "perception") :st)
         subtract (when raw (or subtract (sky-subtract raw)))
         k (when (and st (.-stores st))
-            [(.-dim st) (memory-age/epoch st) (rays/epoch-of raw) subtract (feet-cell p)])
+            (let [[x y z :as feet] (feet-cell p)]
+              [(.-dim st) (memory-age/epoch st) subtract feet (when feet (.lightAt raw x y z))]))
         hit (when k (.get guesses st))]
     (cond (nil? raw) (constantly 1)
           (and k (= k (:k hit))) (:f hit)
@@ -624,7 +634,7 @@
   nil without a perception. A cell the body has seen is lit by block light of 1 or more (mobs do not spawn there) or by
   sky light still at dark-light after the sky darkening; a seen cave stays dark by day. A cell never seen is guessed
   (unseen-lit-chance); with :unseen-dark? false it costs like a lit one (a masked plan prices unseen cells itself). Light
-  is read only for cells seen, as a player would know them. spawn-light/chance-at's coarse twin, judged per cell for speed:
+  is the remembered light of cells seen (remembered-light-fn), as a player would know them. spawn-light/chance-at's coarse twin, judged per cell for speed:
   it may call a seen cell dark that chance-at frees (a small dark roofed room: no hall flood), never one lit that
   chance-at prices a spawn at."
   ([p] (dark-fn p nil))
@@ -633,13 +643,14 @@
      (when-let [raw (:raw per)]
        (let [^js st (:st per)
              subtract (sky-subtract raw)
+             light (remembered-light-fn p raw)
              lit-chance (if (false? unseen-dark?) (constantly 1) (lit-chance-fn p nil))
              ^js sections (store/store-of st (.-dim st))
              chance (fn [x y z]
                       (let [^js sec (.get sections (store/section-key (bit-shift-right x 4) (bit-shift-right y 4) (bit-shift-right z 4)))]
                         (if (or (nil? sec) (zero? (aget (.-ids sec) (store/cell-index x y z))))
                           (- 1 (lit-chance x y z))
-                          (let [packed (.lightAt ^js raw x y z)]
+                          (let [packed (light x y z)]
                             (if (lit-light? (bit-and packed 15) (bit-shift-right packed 4) subtract) 0 1)))))]
          {:chance chance
           :at (fn [x y z] (if (>= (chance x y z) 0.5) 1 0))})))))
@@ -661,6 +672,7 @@
     (when-let [^js raw (:raw per)]
       (let [^js st (:st per)
             ^js sections (store/store-of st (.-dim st))
+            light (remembered-light-fn p raw)
             kinds (js/Map.)
             id-at (fn [x y z]
                     (let [^js sec (.get sections (store/section-key (bit-shift-right x 4) (bit-shift-right y 4) (bit-shift-right z 4)))]
@@ -700,7 +712,7 @@
               :else
               (loop [y y]
                 (let [below (id-at x (dec y) z)
-                      dark? (zero? (bit-and (.lightAt raw x y z) 15))]
+                      dark? (zero? (bit-and (light x y z) 15))]
                   (cond
                     (zero? below) 2
                     (not (water? below)) 3

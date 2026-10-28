@@ -8,6 +8,7 @@ import { sectionIds } from './path/snapshot.mjs'
 import { blocksSight } from './sight.mjs'
 import { fullCube, shapeTop } from './block-shape.mjs'
 import { columnLightSection, hasSkyLight } from './view.mjs'
+import { lightTableCached } from './light.mjs'
 import { setting } from './settings.mjs'
 import constants from '../src/engine/constants.json' with { type: 'json' }
 
@@ -283,6 +284,13 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
     // null while the bot has no registry yet (the perception waits and asks again)
     sightTable: () => { const bot = follow(); return bot?.registry ? tablesOf(bot).sight : null },
     stateInfo: id => tablesOf(follow()).info(id),
+    // {emit, filter, faces} by state id (light.mjs), null while the bot has no registry yet
+    lightTable: () => {
+      const bot = follow()
+      if (!bot?.registry) return null
+      const t = tablesOf(bot)
+      return t.light ?? (t.light = lightTableCached(bot.registry, bot.version))
+    },
     // fn(x, y, z, stateId) for every changed cell; returns the unsubscribe
     onBlockChange: fn => {
       follow()

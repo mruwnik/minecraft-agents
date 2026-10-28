@@ -254,9 +254,9 @@
 
 (defn ^:async dark-of
   "The quote's :dark for a walk to [10 64 1] over a floor, in a world seen through the body's perception: light is the
-  [sky block] of every cell, `lit` {[x y z] [sky block]} overrides some; seen? false skips the look passes."
-  [{:keys [time light lit seen?]}]
-  (let [raw-p (tu/fake {:blocks (floor 0 0 11 2) :time time :offlineScale 0.0001 :self {:pos {:x 0 :y 64 :z 1}}})
+  [sky block] of every cell, `lit` {[x y z] [sky block]} overrides some, blocks more; seen? false skips the look passes."
+  [{:keys [time light lit seen? blocks]}]
+  (let [raw-p (tu/fake {:blocks (merge (floor 0 0 11 2) blocks) :time time :offlineScale 0.0001 :self {:pos {:x 0 :y 64 :z 1}}})
         _ (swap! (fake/state raw-p) merge {:light-default light :light lit})
         per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000) :rand (constantly 0.5)})
         p (perception/wrap raw-p per)
@@ -275,7 +275,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [lit (await (dark-of {:time night-ms :light [15 4] :seen? true}))
+        (let [lit (await (dark-of {:time night-ms :light [15 4] :seen? true :blocks {"5,64,2" "torch"}}))
               dark (await (dark-of {:time night-ms :light [15 0] :seen? true}))]
           (is (< lit 2) "seen and lit: at most the cell under the body, which its own sight does not show")
           (is (= 11 dark) "seen dark: every cell of the 11-step route"))

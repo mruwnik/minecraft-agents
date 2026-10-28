@@ -37,6 +37,22 @@ test('each cell\'s seen time and the section base round-trip', async () => {
   assert.deepEqual([back.base, back.times.length, back.times[7], back.times[8]], [1234.5, 4096, 5000, 0])
 })
 
+test('a section\'s full-sky bits round-trip, and a section without them loads none', async () => {
+  const dir = tmp()
+  const file = path.join(dir, 'seen.bin')
+  const sky = new Uint8Array(512)
+  sky[3] = 0b101
+  const times = new Uint16Array(4096)
+  await saveSeen(file, {
+    version: '26.1',
+    sections: [{ dim: 'overworld', cx: 0, sy: 0, cz: 0, seen: 5, base: 1, ids: ids(1), times, sky: null },
+      { dim: 'overworld', cx: 1, sy: 0, cz: 0, seen: 6, base: 1, ids: ids(1), times, sky }]
+  })
+  const [a, b] = loadSeen(file).sections
+  fs.rmSync(dir, { recursive: true })
+  assert.deepEqual([a.sky, b.sky.length, b.sky[3], b.sky[4]], [null, 512, 5, 0])
+})
+
 test('a missing file loads as null', () => {
   assert.equal(loadSeen(path.join(os.tmpdir(), 'no-such-dir-seen', 'seen.bin')), null)
 })

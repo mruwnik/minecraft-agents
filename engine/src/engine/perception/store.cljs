@@ -1,6 +1,7 @@
 (ns engine.perception.store
   "Block memory: per dimension and 16^3 section, the state ids and seen times (to the second) of the cells the body has
-  seen, capped by forgetting the least recently seen section; and reading it back (seen-block, seen-blocks).
+  seen, capped by forgetting the least recently seen section, and whether each was last seen at full sky light
+  (note-sky!); and reading it back (seen-block, seen-blocks).
   A cell holding a mutable state (fluid, door, gate, trapdoor, fire: `mutable-id?`) also keeps its seen time to the ms,
   in the section's :fine Float32Array (ms after its base, NaN: none; off the V8 heap; not saved to file)."
   (:require [engine.game :as game]
@@ -138,6 +139,34 @@
   [^js st]
   (set! (.-stamp st) (inc (.-stamp st)))
   (set! (.-lastKey st) -1))
+
+;; ---- full sky: per cell, whether the body last saw it at sky light 15 (the open sky straight over it)
+
+(defn light-table
+  "The light table of st's raw world ({emit filter faces} Uint8Arrays by state id, engine/js/light.mjs), nil while it has none."
+  [^js st]
+  (or (.-lightTable st) (when-let [f (.-lightTableOf st)] (set! (.-lightTable st) (f)))))
+
+(defn full-sky?
+  "Whether the remembered cell i of section sec was last seen at full sky light."
+  [^js sec i]
+  (if-let [^js bits (.-sky sec)]
+    (pos? (bit-and (aget bits (bit-shift-right i 3)) (bit-shift-left 1 (bit-and i 7))))
+    false))
+
+(defn note-sky!
+  "The body saw cell x y z, just recorded (record!), at packed light (sky << 4 | block): its full-sky bit (the section's
+  :sky Uint8Array(512), made when first set) follows it. Counts as a write when it changes."
+  [^js st x y z light]
+  (let [^js sec (.-lastSec st)
+        i (cell-index x y z)
+        full? (== 15 (bit-shift-right light 4))]
+    (when (and sec (not= full? (full-sky? sec i)))
+      (let [^js bits (or (.-sky sec) (set! (.-sky sec) (js/Uint8Array. 512)))
+            j (bit-shift-right i 3)]
+        (aset bits j (bit-xor (aget bits j) (bit-shift-left 1 (bit-and i 7))))
+        (set! (.-writes st) (inc (.-writes st)))
+        (set! (.-wrote sec) (.-writes st))))))
 
 ;; ---- reading memory
 

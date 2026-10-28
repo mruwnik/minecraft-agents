@@ -7,7 +7,9 @@
 ;; reports the route's :length in blocks and its :dark cells, and never walks.
 ;; Cards ea376fb0, c1f4e3be, 53c112a5: the block is roofed, so the body is underground at any hour and a cell never seen counts dark
 ;; (look/dark-fn; a player cannot know a corridor round a corner is lit): a lit lane beside the direct corridor (opened mid-case along
-;; z 18, as long from z 17) wins once the body has walked it, a detour never seen takes the direct corridor, and a route dark all the way (torches removed) is still found, the shorter direct corridor.
+;; z 18, as long from z 17) wins once the body has walked it, and still once its torches are broken while the body is back in
+;; the room, out of sight of them (card b3052e66: the lane keeps the light the body saw), a detour never seen takes the
+;; direct corridor, and a route dark all the way (torches removed) is still found, the shorter direct corridor.
 {:defaults
  {:tags [:movement :planner :dark]
   :time :any
@@ -44,6 +46,24 @@
          [:until-pos {:x-min 25 :z-min 18} 40]
          [:job (jobs.movement.go-to {:pos #at [2 0 17] :range 0}) [:alongside]]
          [:until-pos {:x-max 3} 40]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 17] :range 0}] {:ok true :quote {:route {:found true :length [:< 30] :dark [:< 5]}}}] 30]]
+   :expect [{:count-event {:source :job :kind :completed :data {:arrived true}} :for-s 120 :at-least 4 :at-most 4 :of-job true}
+            {:no-event {:level :error} :for-s 2}]
+   :after [[:body-near [2.5 0 17.5] 1]]}
+  {:name "lane-torches-broken-out-of-sight-still-light-it"
+   :limit-s 150
+   :act [[:job (jobs.movement.go-to {:pos #at [26 0 16] :range 0})]
+         [:until-pos {:x-min 25} 40]
+         [:job (jobs.movement.go-to {:pos #at [2 0 16] :range 0}) [:alongside]]
+         [:until-pos {:x-max 3} 40]
+         [:rcon "execute positioned $X $Y $Z run fill ~3 ~ ~18 ~27 ~1 ~18 air"]
+         [:rcon "execute positioned $X $Y $Z run setblock ~10 ~ ~18 torch"] [:rcon "execute positioned $X $Y $Z run setblock ~13 ~ ~18 torch"]
+         [:rcon "execute positioned $X $Y $Z run setblock ~16 ~ ~18 torch"] [:rcon "execute positioned $X $Y $Z run setblock ~19 ~ ~18 torch"]
+         [:job (jobs.movement.go-to {:pos #at [26 0 18] :range 0}) [:alongside]]
+         [:until-pos {:x-min 25 :z-min 18} 40]
+         [:job (jobs.movement.go-to {:pos #at [2 0 17] :range 0}) [:alongside]]
+         [:until-pos {:x-max 3} 40]
+         [:rcon "execute positioned $X $Y $Z run fill ~10 ~ ~18 ~19 ~ ~18 air"]
          [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 17] :range 0}] {:ok true :quote {:route {:found true :length [:< 30] :dark [:< 5]}}}] 30]]
    :expect [{:count-event {:source :job :kind :completed :data {:arrived true}} :for-s 120 :at-least 4 :at-most 4 :of-job true}
             {:no-event {:level :error} :for-s 2}]

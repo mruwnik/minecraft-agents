@@ -248,6 +248,24 @@
           (is (= "gold_block" (seen-name fresh [0 65 3])))
           (is (zero? (:sections (perception/stats other)))))))))
 
+(deftest a-cell-is-remembered-at-full-sky-as-last-seen-and-saved
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p per]} (rig (tu/box -6 63 -6 6 63 12 "stone"))
+              file (path/join (tu/tmp-dir) "engine" "seen.bin")
+              _ (light! p {:light {[2 64 4] [10 0]}})
+              _ (perception/pass! per)
+              full (fn [{:keys [st]}] (mapv (fn [[x y z]] (some-> (store/section-at st x y z) (store/full-sky? (store/cell-index x y z)))) [[0 64 4] [2 64 4]]))
+              _ (await (perception/save! per @seen-file file))
+              fresh (:per (rig {}))]
+          (perception/load! fresh @seen-file file)
+          (is (= [true false] (full per)) "seen at sky 15, seen at 10")
+          (is (= (full per) (full fresh)) "saved and loaded")
+          (light! p {:light {[0 64 4] [10 0]}})
+          (perception/pass! per {:effort 1})
+          (is (= [false true] (full per)) "the next sight sets it again"))))))
+
 (deftest the-wrapper-keeps-every-primitive-raw-and-adds-the-seen-readers
   (let [{:keys [p per]} (rig (wall 5 8 [] {"0,65,8" "diamond_ore"}))
         wrapped (perception/wrap p per)]

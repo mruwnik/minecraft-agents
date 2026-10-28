@@ -6,7 +6,7 @@
             [engine.path.offsets :as offsets]
             [engine.sight :as sight]
             [engine.perception.light :refer [darken-now max-light table-now]]
-            [engine.perception.store :refer [cell-index new-stamp! record! section-key store-of]]))
+            [engine.perception.store :refer [cell-index new-stamp! note-sky! record! section-key store-of]]))
 
 ;; ---- the view cone
 
@@ -291,6 +291,13 @@
                      :rx (js/Math.cos yaw) :rz (- (js/Math.sin yaw))})
     out))
 
+(defn remember!
+  "Memory takes state id at cell x y z (in store), and whether its light (packed; read from raw when not given) is full sky."
+  ([^js raw ^js st store x y z id now] (remember! raw st store x y z id now (.lightAt raw x y z)))
+  ([^js raw ^js st store x y z id now light]
+   (record! st store x y z id now)
+   (when (>= light 0) (note-sky! st x y z light))))
+
 (defn cast-slice!
   "Casts rays [from, to) of the pass from the eye's current place and look: the aimed rows first (along the
   eye's yaw now, and only those still inside the view cone), then the grid in tiles. Returns the cells entered."
@@ -303,7 +310,7 @@
                #js {:raw raw :sections (sections-of raw st) :sight sight :visible (.-visible st)
                     :radius (:radius opts) :near (.-near st)
                     :marksOf (fn [cx cy cz] (marks-of st (section-key cx cy cz) (.-MARKS_LENGTH ^js (kernel))))
-                    :record (fn [x y z id] (record! st store x y z id now))
+                    :record (fn [x y z id light] (remember! raw st store x y z id now (if (undefined? light) (.lightAt ^js raw x y z) light)))
                     :markKind (fn [id] (mark-kind raw sight id))
                     :thin (fn [id x y z ox oy oz ex ey ez] (blocks-line? raw sight id x y z ox oy oz ex ey ez))}
                (.-x eye) (.-y eye) (.-z eye) (slice-dirs per pass eye from to) (- to from))))
@@ -426,7 +433,7 @@
   (let [^js st st ^js eye (.eye ^js raw)]
     (when (and eye (visible-now? per st eye x y z id))
       (new-stamp! st)
-      (record! st (store-of st (.-dimension eye)) x y z id ((:now opts))))))
+      (remember! raw st (store-of st (.-dimension eye)) x y z id ((:now opts))))))
 
 (defn start-listening!
   "Follow the raw world's block changes (on-change!). Returns the unsubscribe."
@@ -442,14 +449,14 @@
         id (.stateAt ^js raw x y z)]
     (when (>= id 0)
       (new-stamp! st)
-      (record! st (store-of st (.-dim st)) x y z id ((:now opts))))))
+      (remember! raw st (store-of st (.-dim st)) x y z id ((:now opts))))))
 
 (defn glance-cell!
   "glance! of the cell (x y z), holding state id, from eye."
   [per ^js st ^js eye x y z id]
   (when (visible-now? per st eye x y z id)
     (new-stamp! st)
-    (record! st (store-of st (.-dimension eye)) x y z id ((.-nowFn st)))
+    (remember! (:raw per) st (store-of st (.-dimension eye)) x y z id ((.-nowFn st)))
     id))
 
 (defn glance!
@@ -529,7 +536,7 @@
         (dotimes [i n]
           (let [x (aget cands (* 4 i)) y (aget cands (+ 1 (* 4 i))) z (aget cands (+ 2 (* 4 i))) id (aget cands (+ 3 (* 4 i)))]
             (when (visible-now? per st eye x y z id)
-              (record! st (store-of st (.-dimension eye)) x y z id now))))
+              (remember! raw st (store-of st (.-dimension eye)) x y z id now))))
         (count-why! st :look-for :passes 1)
         (count-why! st :look-for :rays n)
         (set! (.-rays st) (+ (.-rays st) n))
@@ -569,7 +576,7 @@
     (let [id (.stateAt raw x y z)]
       (when (and (>= id 0) (felt? eye pos (.-top ^js (.stateInfo raw id))))
         (new-stamp! st)
-        (record! st (store-of st (.-dimension eye)) x y z id ((.-nowFn st)))
+        (remember! raw st (store-of st (.-dimension eye)) x y z id ((.-nowFn st)))
         id))))
 
 (defn feel!
