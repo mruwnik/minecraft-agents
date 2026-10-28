@@ -23,7 +23,6 @@
             [jobs.build.from-plan.cells :as fp-cells]
             [jobs.build.from-plan.light :as fp-light]
             [jobs.build.from-plan.walk :as fp-walk]
-            [jobs.items.obtain.price :as obtain-price]
             [jobs.lib.need :as need]
             [jobs.lib.stock :as stock]
             [jobs.lib.shelter.sense :as sense]
@@ -2244,9 +2243,9 @@
 
 (deftest a-never-lit-cell-at-night-fetches-torches-only-for-what-waiting-for-dawn-would-cost
   (let [worths (atom [])
-        check (fn [night-s obtain] (with-redefs [sense/sky-in (constantly night-s) obtain-price/item-price (constantly 100)] (lit-check no-light false true obtain {} worths)))]
+        check (fn [night-s obtain] (with-redefs [sense/sky-in (constantly night-s) need/item-price (constantly 100)] (lit-check no-light false true obtain {} worths)))]
     (is (= [:later :ok :never] [(check 300 not-worth) (check 300 (contract/ok :ready "ready")) (check 0 not-worth)]))
-    (is (= 300000 (:wait-ms (nth (with-redefs [sense/sky-in (constantly 300) obtain-price/item-price (constantly 100)] (lit-check-status no-light false true not-worth {} (atom []))) 2))) "deferred to dawn, not failed")
+    (is (= 300000 (:wait-ms (nth (with-redefs [sense/sky-in (constantly 300) need/item-price (constantly 100)] (lit-check-status no-light false true not-worth {} (atom []))) 2))) "deferred to dawn, not failed")
     (is (= [["torch" 2 400] ["torch" 2 400] ["torch" 2 nil]] @worths)
         "at night the night left and the torches' price by day, by day any price")))
 

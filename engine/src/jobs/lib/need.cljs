@@ -203,6 +203,17 @@
                     (cond-> (fetch-args 'jobs.items.obtain {:item item :count (+ n (get (counts c [item]) item))} o)
                       worth (assoc :worth worth))))
 
+(defn item-price
+  "Seconds the jobs.items.obtain child item-status would ask for n more of item under options o prices (its :not-worth status carries :price
+  when worth 0 is passed), with the light judged under the sky's darkening sky (nil: now; 0: full day); ##Inf when it has no way."
+  [c item n o sky]
+  (let [[kind _ data] (ctx/child-status c (or (:slot o) :need) 'jobs.items.obtain
+                                        (cond-> (assoc (fetch-args 'jobs.items.obtain {:item item :count (+ n (get (counts c [item]) item))} o) :worth 0)
+                                          sky (assoc :sky sky)))]
+    (cond (= :ok kind) 0
+          (= :never kind) ##Inf
+          :else (or (:price data) ##Inf))))
+
 (defn ^:async fetch!
   "Get :count more of what args name (jobs.items.obtain's :count is the amount to carry, so the carried is added here)."
   [c job args cause-reason wanted {:keys [slot return?] :as o}]

@@ -30,11 +30,3 @@
     (if (zero? n)
       0
       (apply min ##Inf (keep identity [(chest-s c names) (loose-s c names) (craft-s c names n) (gather-s c names n) (search-s c names n)])))))
-
-(defn item-price
-  "price-of the jobs.items.obtain child need/item-status would ask for n more of item under options o, with the light
-  judged under the sky's darkening sky (nil: now; 0: full day)."
-  [c item n o sky]
-  (let [[_ args] (ctx/child-job c 'jobs.items.obtain (cond-> (need/fetch-args 'jobs.items.obtain {:item item :count (+ n (get (need/counts c [item]) item))} o)
-                                                        sky (assoc :sky sky)))]
-    (price-of (assoc c :slots (conj (:slots c) (or (:slot o) :need)) :args args))))
