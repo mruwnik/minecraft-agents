@@ -24,7 +24,8 @@
 (a/defargs settings
   {::chased-flights {:default 3 :doc "Flights from one mob within the ttl that tell the agent." :spec (a/int-in 1 nil)}
    ::fled-memory-ms {:default 180000 :doc "Milliseconds after a flight during which a mob it fled from still counts as near the place it was last known (errands that walk to a spot hold off), and the body is not sent out on a comfort errand." :spec (a/int-in 0 nil)}
-   ::max-threats {:default 8 :doc "The most known threats (known-threats) a price reads, the nearest first." :spec (a/int-in 1 nil)}})
+   ::max-threats {:default 8 :doc "The most known threats (known-threats) a price reads, the nearest first." :spec (a/int-in 1 nil)}
+   ::negligible-toll {:default 0.001 :doc "Seconds more a second near it under which a sighting is dropped (sightings): at its weight it costs no body this much, so a cell's walk time moves by less than this share." :spec (a/num-in 0 nil)}})
 
 (def follow-range threat/follow-range)
 
@@ -116,14 +117,15 @@
 
 (defn sightings
   "The hostiles c's body saw and lost (the perception's fadedMobs; none without one), [{:mob :pos :key :weight
-  :remembered :sighted}], weight death-spot/sighting-share; none whose place the body has seen clear since (death-spot/seen-clear?)."
+  :remembered :sighted}], weight death-spot/sighting-share; none whose place the body has seen clear since (death-spot/seen-clear?),
+  nor any whose weight costs under ::negligible-toll at the dearest a mob can cost any body (cost/threat-factor-cap at no health)."
   [c]
   (when-let [f (.-fadedMobs (:primitives c))]
     (for [^js m (array-seq (.call f (:primitives c)))
           :let [s {:mob (.-name m) :pos (u/pos-of (.-pos m)) :age-ms (.-ageMs m)}]
           :when (not (death-spot/seen-clear? c (assoc s :mob? true)))
           :let [w (death-spot/sighting-share c s)]
-          :when (pos? w)]
+          :when (<= (settings/get settings ::negligible-toll) (* w (cost/threat-factor-cap {:health 0})))]
       {:mob (:mob s) :pos (:pos s) :key (or (.-uuid m) (.-id m)) :weight w :remembered true :sighted true})))
 
 (defn planner-dangers
@@ -208,23 +210,22 @@
 
 (defn danger-near-fn
   "A fn of a cell pos: the nearest known threat (threats-of c) the body would flee whose field weighs the cell in full
-  (within threat-field ::close steps of its way) and whose toll there, cost/threat-factor at its weight, is at least a
-  second for each second spent (a faded sighting or death costs less), as {:mob :mob-pos :mob-distance :weight :toll},
-  else nil. Threats are read once."
+  (within threat-field ::close steps of its way), as {:mob :mob-pos :mob-distance :toll}, else nil. :toll is what each
+  second there costs more: cost/threat-factor of every such threat at its weight, summed, at most
+  cost/threat-factor-cap. A caller prices a stay there by it. Threats are read once."
   [c]
   (let [body (body-of (:primitives c))
+        cap (cost/threat-factor-cap body)
         ts (->> (threats-of c)
                 (filter #(= :flee (cost/stance body (:mob %))))
                 (mapv #(assoc % :toll (cost/threat-factor body (:mob %) (:weight %))))
-                (filterv #(<= 1 (:toll %))))]
+                (filterv #(pos? (:toll %))))]
     (fn [{:keys [x y z] :as pos}]
-      (->> ts
-           (keep (fn [{:keys [mob reach weight toll] :as t}]
-                   (when (= 1 (reach (js/Math.floor x) (js/Math.floor y) (js/Math.floor z)))
-                     {:mob mob :mob-pos (select-keys (:pos t) [:x :y :z]) :mob-distance (js/Math.round (u/dist pos (:pos t)))
-                      :weight weight :toll toll})))
-           (sort-by :mob-distance)
-           first))))
+      (let [in (filterv (fn [{:keys [reach]}] (= 1 (reach (js/Math.floor x) (js/Math.floor y) (js/Math.floor z)))) ts)]
+        (when (seq in)
+          (let [t (first (sort-by #(u/dist pos (:pos %)) in))]
+            {:mob (:mob t) :mob-pos (select-keys (:pos t) [:x :y :z]) :mob-distance (js/Math.round (u/dist pos (:pos t)))
+             :toll (min cap (reduce + (map :toll in)))}))))))
 
 (defn tolls-of
   "go-to's tolls ([{:x :y :z :factor}]) for threats ({:mob :pos :weight}) of c: every cell of each one's field costs

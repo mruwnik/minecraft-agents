@@ -9,6 +9,7 @@
             [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.lib.cost :as cost]
+            [jobs.lib.death-spot :as death-spot]
             [jobs.lib.threats :as threats]))
 
 (use-fixtures :each {:before #(game/select! (fake/create {}))})
@@ -80,6 +81,18 @@
     (mem/view s)))
 
 (defn ctx-on "A job ctx over primitives p and memory view v." [p v] {:primitives p :view (fn [] v) :id "j" :slots [] :engine {:warned (atom #{})}})
+
+;; a sighting goes by the toll its weight could cost, not by its age: a newer one whose mob has as good as despawned
+;; (weight 1e-9) is dropped, an older one still likely near (1e-4) is kept; the old (pos? weight) test kept both
+(deftest a-sighting-is-dropped-by-its-negligible-toll-not-its-age
+  (let [p (tu/fake-on-floor {})
+        faded #js [#js {:id 1 :name "zombie" :pos #js {:x 5 :y 64 :z 0} :ageMs 3600000}
+                   #js {:id 2 :name "zombie" :pos #js {:x -5 :y 64 :z 0} :ageMs 600000}]
+        _ (aset p "fadedMobs" (fn [] faded))
+        weights {3600000 1e-4 600000 1e-9}]
+    (with-redefs [death-spot/seen-clear? (constantly false)
+                  death-spot/sighting-share (fn [_ {:keys [age-ms]}] (weights age-ms))]
+      (is (= [[1 1e-4]] (mapv (juxt :key :weight) (threats/sightings (ctx-on p (fled-view)))))))))
 
 (def pen
   "A stone ring 3 high round x 7..13, z -3..3 (the skeleton's place at its middle)."

@@ -20,11 +20,13 @@
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [jobs.lib.cost :as cost]
             [jobs.lib.cost.health :as health]
             [jobs.lib.price :as price]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.targets :as targets]
+            [jobs.lib.threats :as threats]
             [jobs.survival.dig-pit-site :as pit-site]
             [jobs.survival.log-out :as log-out]
             [jobs.survival.night :as night]
@@ -376,6 +378,22 @@
         site {:x 1 :y 64 :z 1}]
     (is (not (pit-site/pit-site? (tu/fake {:blocks stone}) site)) "no pickaxe: stone cannot be dug")
     (is (pit-site/pit-site? (tu/fake {:blocks stone :inventory [{:name "iron_pickaxe" :count 1}]}) site))))
+
+;; a site is priced by its walk and the toll of known mobs over the pit's stay: a zombie by the feet whose toll is under
+;; 1 s a second still costs more over the dig than a few blocks of walk (the old 1 s a second cut dug by it); one as good
+;; as gone costs less than any walk, so the feet stay the site
+(deftest a-relocation-site-weighs-the-walk-against-the-toll-over-the-dig
+  (let [dirt (into {} (for [x (range -12 13) z (range -12 13)] [(str x ",63," z) "dirt"]))
+        p (tu/seeing-all (tu/fake {:blocks dirt}))
+        c {:primitives p :id "j" :slots [] :engine {:warned (atom #{})} :view (fn [] {:now 0 :data {}})}
+        per-weight (cost/threat-factor {:health 20 :equipment nil :weapon nil} "zombie" 1)
+        site (fn [toll] (with-redefs [threats/known-threats (constantly [{:mob "zombie" :pos {:x 0.5 :y 64 :z 0.5} :weight (/ toll per-weight)}])]
+                          [(pit-site/relocation-site c) (threats/danger-near-fn c)]))
+        [light danger] (site 0.5)
+        [gone] (site 1e-6)]
+    (is (not= {:x 0 :y 64 :z 0} light) "a toll of 0.5 s a second over the dig is dearer than the walk off")
+    (is (nil? (danger light)) (pr-str light))
+    (is (= {:x 0 :y 64 :z 0} gone))))
 
 (deftest with-no-pit-site-left-the-night-digs-a-niche-into-the-hill
   (async done

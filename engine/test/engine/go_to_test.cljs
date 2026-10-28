@@ -20,6 +20,7 @@
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.search :as wsearch]
+            [jobs.lib.cost :as cost]
             [jobs.lib.threats :as threats]
             ["fs" :as fs]
             ["path" :as path]
@@ -1373,6 +1374,19 @@
           (let [s (with-redefs [threats/known-threats (constantly [(assoc goal-zombie :mob "zombie" :weight weight :remembered true :sighted true)])]
                     (await (go! {:blocks flat} {:pos [10 64 0] :range 0 :settings {:jobs.movement.go-to.tuning/goal-danger :end}})))]
             (is (= arrived (:arrived @(:out s))) (str "weight " weight (pr-str @(:out s))))))))))
+
+;; the goal's danger is a price: the toll over the stay against what giving up loses. A goal worth more than a fresh
+;; zombie's toll over the stay is walked to; a toll under 1 s a second over an hour's stay costs more than a tour's worth.
+;; The old 1 s a second cut gave the first up and walked the second.
+(deftest goal-danger-end-weighs-the-toll-over-the-stay-against-the-goal-s-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [light (/ 0.5 (cost/threat-factor {:health 20 :equipment nil :weapon nil} "zombie" 1))]
+          (doseq [[weight args arrived] [[1 {:worth 1e9} true] [light {:stay-s 3600} false] [light {} true]]]
+            (let [s (with-redefs [threats/known-threats (constantly [(assoc goal-zombie :mob "zombie" :weight weight)])]
+                      (await (go! {:blocks flat} (merge {:pos [10 64 0] :range 0 :settings {:jobs.movement.go-to.tuning/goal-danger :end}} args))))]
+              (is (= arrived (:arrived @(:out s))) (str "weight " weight " " (pr-str args) (pr-str @(:out s)))))))))))
 
 (deftest goal-danger-reads-a-remembered-creeper-spot-only-while-the-client-lists-the-creeper
   (async done

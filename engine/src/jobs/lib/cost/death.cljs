@@ -13,6 +13,7 @@
   each would cost more from the respawn the body has."
   (:require [engine.args :as a]
             [engine.settings :as settings]
+            [jobs.lib.cost.survival :as survival]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.cost.value :as value]))
 
@@ -223,7 +224,7 @@
 (defn missed
   "The chance a mob of notice prior {:shape :rate} gets no notice in x weighted seconds: e^(-r x) over the Gamma of r."
   [{:keys [shape rate]} x]
-  (js/Math.pow (+ 1 (/ x rate)) (- shape)))
+  (survival/gamma-survival shape rate x))
 
 (def rate-nodes
   "[[r w]] of the Gamma notice prior {:shape :rate}: a trapezoid rule in log r, where the chances of the rate are smooth,

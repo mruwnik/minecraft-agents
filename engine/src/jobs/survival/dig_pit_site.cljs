@@ -10,12 +10,22 @@
             [jobs.lib.threats :as threats]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
+            [jobs.lib.walk-pick :as walk-pick]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.shut-in-night :as shut-night]))
 
 (a/defargs settings
   {::reach {:default 16 :doc "How far (blocks) a night pit looks for ground to dig in when the feet are no site." :spec (a/int-in 0 nil)}
+   ::pit-s {:default 12 :doc "Seconds a pit is guessed to take while a floor under it is not yet seen: dig-pit's quote, and the stay a site's known mobs are priced over." :spec (a/num-in 0 nil)}
    ::water-radius {:default 3 :doc "Blocks around a pit that failed for fluid beside it that count as the same site: a player steps a little way from the water, not out of the room." :spec (a/int-in 0 nil)}})
+
+(defn pit-s [] (settings/get settings ::pit-s))
+
+(defn stay-toll-s
+  "Seconds the known mobs the body would flee cost a pit dug at feet cell f (danger-near, threats/danger-near-fn of c):
+  their toll there over pit-s."
+  [danger-near f]
+  (* (:toll (danger-near f) 0) (pit-s)))
 
 (defn failed
   "Tonight's failed sites [{:pos :way :reason}]."
@@ -74,8 +84,9 @@
           (failed c))))
 
 (defn relocation-site
-  "The nearest feet cell within ::reach of the top of the pit the body is in, else of the failed site it is at, else of its feet, clear of every failed site, where a pit can be dug (pit-site?), outside the full-cost radius of every known
-  mob the body would flee (threats/danger-near-fn), or nil. With :free?, only cells no zone, claim or plan refuses."
+  "The cheapest feet cell within ::reach of the top of the pit the body is in, else of the failed site it is at, else of
+  its feet, clear of every failed site, where a pit can be dug (pit-site?): the least walk-pick/walk-s from there plus
+  stay-toll-s, the nearer first on a tie; or nil. With :free?, only cells no zone, claim or plan refuses."
   [c & [{:keys [free?]}]]
   (let [p (:primitives c)
         feet (sh-sense/feet p)
@@ -83,29 +94,38 @@
         here (:pos (first (filter #(and (= :pit (:way %)) (<= (u/dist feet (:pos %)) (site-radius %))) (failed c))))
         danger-near (threats/danger-near-fn c)
         start (pit-start c)
-        {:keys [x z]} (or start here feet)
+        {:keys [x z] :as from} (or start here feet)
         y (:y (or start feet))
         offsets (sort-by (fn [[dx dz]] (+ (* dx dx) (* dz dz)))
                          (for [dx (range (- reach) (inc reach))
                                dz (range (- reach) (inc reach))
                                :when (<= (+ (* dx dx) (* dz dz)) (* reach reach))]
-                           [dx dz]))]
-    (some (fn [[dx dz]]
-            (some (fn [dy] (let [f {:x (+ x dx) :y (+ y dy) :z (+ z dz)}]
-                             (when (and (clear-of-failed? c f) (pit-site? p f) (not (danger-near f)) (not (and free? (zone-refused? c f)))) f)))
-                  [0 -1 1 -2 2]))
-          offsets)))
+                           [dx dz]))
+        walk #(walk-pick/walk-s from {:pos %})]
+    (loop [[[dx dz] & more :as left] offsets best nil]
+      (if (or (empty? left) (and best (<= (:price best) (walk {:x (+ x dx) :z (+ z dz)}))))
+        (:cell best)
+        (recur more
+               (reduce (fn [best dy]
+                         (let [f {:x (+ x dx) :y (+ y dy) :z (+ z dz)}]
+                           (if (and (clear-of-failed? c f) (pit-site? p f) (not (and free? (zone-refused? c f))))
+                             (let [s (+ (walk f) (stay-toll-s danger-near f))]
+                               (if (or (nil? best) (< s (:price best))) {:cell f :price s} best))
+                             best)))
+                       best [0 -1 1 -2 2]))))))
 
 (defn ^:async keeps?
   "Whether a site cell m chosen earlier is still the one to walk to, given fresh (site, from the feet now): the same cell; or
-  go-to's quote for m is finite and no dearer than its quote for the fresh cell (none: m stays if it can be walked to), unless
-  the feet are a pit site themselves (a walk that left the failed site behind on good ground digs there, for nothing)."
+  go-to's quote for m is finite and, plus its stay-toll-s, no dearer than the fresh cell's (none: m stays if it can be walked
+  to), unless the feet are a pit site themselves (a walk that left the failed site behind on good ground digs there, for nothing)."
   [c m fresh]
   (cond
     (and (= :here (:at fresh)) (pit-site? (:primitives c) (sh-sense/feet (:primitives c)))) false
     (= m (:cell fresh)) true
-    :else (let [qm (await (rooms/route-cost c {:pos m :range 0}))
-                qf (when (:cell fresh) (await (rooms/route-cost c {:pos (:cell fresh) :range 0})))]
+    :else (let [danger-near (threats/danger-near-fn c)
+                priced (fn ^:async priced [f] (when-let [q (await (rooms/route-cost c {:pos f :range 0}))] (+ q (stay-toll-s danger-near f))))
+                qm (await (priced m))
+                qf (when (:cell fresh) (await (priced (:cell fresh))))]
             (boolean (and qm (or (nil? qf) (<= qm qf)))))))
 
 (defn site

@@ -213,7 +213,7 @@
 (defn ^:async attempt
   "One whole attempt: step! until it arrives, gives up, or waits on a child (:continue), with pace! between steps. A
   cut ends it at once (ctx/alive? per iteration, else at the next memory write or act, which throws). A goal inside a
-  fled mob's radius ends it at once under the goal-danger setting :end, else says so once. With :unknown, the attempt's mask spec
+  fled mob's radius whose toll over the stay costs more than the goal is worth (aim/goal-danger) ends it at once under the goal-danger setting :end, else says so once. With :unknown, the attempt's mask spec
   (wworld/unknown-spec: one missed Set for all its plans) rides on c as :unknown."
   [c0]
   (let [u (:unknown (:args c0))

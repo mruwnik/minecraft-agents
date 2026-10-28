@@ -3,6 +3,8 @@
 ;; may pass nearer. A zombie the body cannot see (behind thick stone) or cannot reach (fenced pad) costs nothing.
 ;; A :threat spot of a creeper the client no longer tracks (it blew up) at the goal is dropped (gone-creeper-at-goal-does-not-block).
 ;; Card f4ac9f0c: a zombie 2 blocks off the straight line (:time :any) costs 2 s in its field at the measured notice rate; the walk still bends round it (hostile-near, radius 8, never fires).
+;; A zombie by the goal under :goal-danger :end: its toll over a click's stay passes a tour's worth, so the call gives up
+;; (zombie-at-goal-gives-up-dangerous); a :worth past that toll walks on (zombie-at-goal-worth-more-arrives).
 ;; Case verdicts that need the path (min distance to the zombie) are read from the body's moved events by hand.
 {:defaults
  {:tags [:movement :hostile :planner]
@@ -54,6 +56,22 @@
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :goal-in-danger} :for-s 5}]
    :after [[:body-near [30.5 0 24.5] 3]]}
+  {:name "zombie-at-goal-gives-up-dangerous"
+   :act [[:summon "zombie" [21.5 0 24.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 0"]
+         [:until-seen {:entity "zombie"} 10]
+         [:job (jobs.movement.go-to {:pos #at [20 0 24] :range 0 :settings {:jobs.movement.go-to.tuning/goal-danger :end} :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :goal-in-danger :data {:mob "zombie"}} :within-s 20 :of-job true}
+            {:event {:source :job :kind :stopped :data {:kind :condition-failed}} :within-s 20 :of-job true}]
+   :after [[:body-near [2.5 0 24.5] 2]]}
+  {:name "zombie-at-goal-worth-more-arrives"
+   :act [[:summon "zombie" [21.5 0 24.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 0"]
+         [:until-seen {:entity "zombie"} 10]
+         [:job (jobs.movement.go-to {:pos #at [20 0 24] :range 0 :worth 1000000000 :settings {:jobs.movement.go-to.tuning/goal-danger :end} :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :goal-in-danger} :for-s 5}]
+   :after [[:body-near [20.5 0 24.5] 2]]}
   {:name "threat-memory-expired-straight"
    :memory [{:kind :threat :policy {:ttl 2000}
              :data {:mob "zombie" :id 99 :uuid "00000000-0000-0000-0000-000000000099" :key "00000000-0000-0000-0000-000000000099"

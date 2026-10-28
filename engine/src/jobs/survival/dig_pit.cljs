@@ -9,7 +9,6 @@
             [jobs.lib.ready :as ready]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.solid :as solid]
-            [jobs.lib.threats :as threats]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.waits :as waits]
@@ -32,7 +31,7 @@
   when the body has left its column. Lava a dig lays open is filled first (:on-lava :seal). Every plug goes to the scaffold ledger
   with :for (default :danger, ledger :retreat-plug, taken back by jobs.access.cleanup once no hostile is near; :night: ledger :shelter, left alone). Quote:
   time, with :for :night plus the walk (##Inf when no pit fits, or with :for :night when the pit would cut into a plan the body made or stand on a plan's doorstep, :spared; a cell another's zone refuses adds plug-way's ::trespass-s). With :for :night, can-start? is :later (:no-site, or :spared at the feet) before any round. Picked by jobs.survival.shut-in, which shuts the body in by the cheapest way.
-  With :for :night, when a pit failed at the feet tonight (shut-in's :shut-in-failed) or another's zone refuses them and a free site is near, it first walks (go-to) to the nearest seen ground within jobs.survival.dig-pit-site's ::reach (16) that looks like a pit fits (clear of every failed site, no known mob it would flee near), climbing out of its own failed pit first; with no such ground it ends :failed :no-site.")
+  With :for :night, when a pit failed at the feet tonight (shut-in's :shut-in-failed) or another's zone refuses them and a free site is near, it first walks (go-to) to the cheapest seen ground within jobs.survival.dig-pit-site's ::reach (16) that looks like a pit fits (clear of every failed site; its walk plus the toll of known mobs it would flee over the pit's stay, relocation-site), climbing out of its own failed pit first; with no such ground it ends :failed :no-site.")
 
 (a/defargs args
   {:ignore-zones? :shared
@@ -42,8 +41,7 @@
 
 (a/defargs settings
   {::job-time-s {:default 90 :doc "Seconds a pit attempt may take." :spec (a/num-in 0 nil)}
-   ::walk-s-per-block {:default 0.3 :doc "Seconds a block of walk to a night pit's site is guessed to take, for the quote." :spec (a/num-in 0 nil)}
-   ::pit-s {:default 12 :doc "Seconds a pit is guessed to take, for the quote, while a floor under it is not yet seen (a pit that fits is priced by its digging)." :spec (a/num-in 0 nil)}})
+   ::walk-s-per-block {:default 0.3 :doc "Seconds a block of walk to a night pit's site is guessed to take, for the quote." :spec (a/num-in 0 nil)}})
 
 (def target [])
 
@@ -128,26 +126,26 @@
         s (when (night/night? c) (site/site c))]
     (if (and (night/night? c) (not= :here (:at s)))
       (way/quote-of c (if s
-                        (+ (* (u/dist (sh-sense/feet (:primitives c)) (:cell s)) (settings/get settings ::walk-s-per-block)) (settings/get settings ::pit-s))
+                        (+ (* (u/dist (sh-sense/feet (:primitives c)) (:cell s)) (settings/get settings ::walk-s-per-block)) (site/pit-s))
                         ##Inf)
                     (settings/get settings ::job-time-s))
     (way/quote-of c (if stop
                       ##Inf
                       (+ (if plan
                            (+ (dig-seconds c plan) (* (way/place-s c) (inc (count (:plugs plan)))))
-                           (settings/get settings ::pit-s))
+                           (site/pit-s))
                          (if plan (way/zone-penalty c {:dig (concat (:prep plan) (mapcat :dig (:steps plan))) :plug (conj (:plugs plan) (:roof plan))}) 0)))
                   (settings/get settings ::job-time-s)))))
 
 (defn exposed-s
   "Seconds the body stays open to a shooter before the pit shuts it in: the dig, and plug-way's ::unsensed-s for each cell
-  round it the body never sensed (a gap there fails the pit); the guessed ::pit-s with no plan yet, ##Inf when it cannot be done."
+  round it the body never sensed (a gap there fails the pit); the guessed dig-pit-site/pit-s with no plan yet, ##Inf when it cannot be done."
   [c]
   (let [{:keys [plan stop]} (assess c)
         feet (sh-sense/feet (:primitives c))]
     (cond
       stop ##Inf
-      (nil? plan) (settings/get settings ::pit-s)
+      (nil? plan) (site/pit-s)
       :else (let [cells (concat (:prep plan) (mapcat :dig (:steps plan)))]
               (+ (dig-seconds c plan)
                  (* (way/unsensed-s) (pit/unsensed-shell (:primitives c) cells (set (into cells [feet (update feet :y inc)])))))))))
@@ -207,7 +205,7 @@
   (when (and (night/night? c) (not (:pit (ctx/mem c))) (not (way/enclosed? c)))
     (let [m (:walk-to (ctx/mem c))
           fresh (site/site c)
-          m (when (and m (not ((threats/danger-near-fn c) m)) (await (site/keeps? c m fresh))) m)
+          m (when (and m (await (site/keeps? c m fresh))) m)
           s (if m {:at :there :cell m} fresh)]
       (cond
         (nil? s) (fail! c :no-site "no ground in sight where a pit fits")

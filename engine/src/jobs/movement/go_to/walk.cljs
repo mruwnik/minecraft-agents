@@ -6,7 +6,7 @@
   - The walk settings (per world, body or call :settings): jobs.lib.walk.world/dark false plans dark cells like lit ones (default: a dark cell costs twice a lit one, so a lit route up to about 2x
     longer is taken: a cell seen dark, or one never seen guessed dark; look/dark-fn).
   - A call that ends other than arrived, or yields (:continue) as a hold or short of air, with the head under water first swims to the air it knows (surface-before-end!).
-  - Setting go-to.tuning/goal-danger :end gives up at once (:why :goal-dangerous, :mob, :mob-pos, :mob-distance) when the goal lies within the full-cost radius of a known mob the body would flee; :wait (default) walks on, an info goal-in-danger says so.
+  - Setting go-to.tuning/goal-danger :end gives up at once (:why :goal-dangerous, :mob, :mob-pos, :mob-distance) when the goal lies within the full-cost radius of a known mob the body would flee and its toll over the stay (:stay-s, else a click's) costs more than the goal's :worth (else a tour's); :wait (default) walks on, an info goal-in-danger says so.
   - Setting jobs.lib.walk.world/dangers false plans straight past known dangers (default: the plans keep away from them, jobs.lib.threats). A
     Each steer is bounded by the call's :spend :job-time left (a caller's short leg), and the engine cuts the call at that limit; a search that goes on past it gives up :search-spent (the engine only notices at an act, and a search makes none).
   - A call starts afresh from the world: its walk counters are per call (the cut count carries over only a cut of this run's call to the same goal), and a saved escalation is dropped when the body

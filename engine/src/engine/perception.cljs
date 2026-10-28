@@ -42,8 +42,8 @@
   An entry not sensed now stays at its last place while the mob could not have drifted `:mob-drift` (16) blocks
   (time x `mob-speed`): about 6 s for a zombie.
   An entry whose id the client no longer tracks (dead, despawned, far off) is dropped at once.
-  A forgotten entry once seen stays a sighting (`fadedMobs`: kind, last seen place and age) while its best weight (the chance it stayed near, jobs.lib.cost.threat/stayed-near) is at least `:sighting-weight`, at
-  most `:max-sightings` (the lightest dropped), unless it vanished while sensed at the last sample (died or despawned in sight) or is sensed
+  A forgotten entry once seen stays a sighting (`fadedMobs`: kind, last seen place and age), the newest
+  `:max-sightings`, unless it vanished while sensed at the last sample (died or despawned in sight) or is sensed
   again; the danger checks never read it, jobs price it by the chance it is still there.
   So an unseen silent creeper behind the body is no danger, but a creeper seen 3 s ago that went round a corner still is.
 
@@ -118,8 +118,7 @@
    :engine.perception/mob-scan {:default 64 :spec (a/num-in 0 nil) :doc "Hostiles within this many blocks of the body are sampled."}
    :engine.perception/hearing {:default 16 :spec (a/num-in 0 nil) :doc "A mob within this many blocks of the eye is heard."}
    :engine.perception/mob-drift {:default 16 :spec (a/num-in 0 nil) :doc "A mob not sensed is forgotten once it could have walked this many blocks."}
-   :engine.perception/sighting-weight {:default 0.01 :spec (a/num-in 0 1) :doc "A forgotten mob stays a sighting while the chance it stayed where it was seen, at best, is this much; under it no choice is moved by it."}
-   :engine.perception/max-sightings {:default 32 :spec (a/int-in 0 nil) :doc "The most sightings kept, the heaviest."}})
+   :engine.perception/max-sightings {:default 32 :spec (a/int-in 0 nil) :doc "The most sightings kept, the newest."}})
 
 (defn defaults
   "The perception options as set (:save-ms from engine.settings)."
