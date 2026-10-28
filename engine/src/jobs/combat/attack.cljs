@@ -66,7 +66,6 @@
   {::max-hits {:default 40 :doc "Hits without a kill before a target is given up on." :spec (a/int-in 1 nil)}
    ::vehicle-gap-ms {:default 150 :doc "Least time between swings at a minecart or boat: its damage drains 1 a tick and each hit adds only 10, so slower hits never break it." :spec (a/int-in 0 nil)}
    ::reach {:default 3 :doc "How near the target the body stands to swing, in blocks." :spec (a/int-in 0 nil)}
-   ::walk-speed {:default 4 :doc "Blocks a second the body closes on a hostile when it sets the seconds of one chase leg (a land walk; a mob coming at it only shortens the gap)." :spec (a/num-in 0.1 nil)}
    ::no-damage-hits {:default 16 :doc "Swings in a row that do no damage before a target is given up on (a lagging server drops many swings at the cooldown, so it is many)." :spec (a/int-in 1 nil)}
    ::seen-memory-s {:default 5 :doc "Seconds a hostile seen and then out of sight (round a corner) still counts as a target, walked to at its last place; one only ever heard never does." :spec (a/num-in 0 nil)}
    ::walk-timeout-s {:default 5 :doc "Seconds one walk towards a target may take." :spec (a/num-in 0 nil)}
@@ -279,10 +278,10 @@
     (max 0 (- (wworld/damage-budget c) (cost/fight-damage (hostile/fight-of c [target] {id struck}))))))
 
 (defn chase-leg-s
-  "Seconds one walk toward a hostile may take: the time to close dist at ::walk-speed, at least 1 and at most
+  "Seconds one walk toward a hostile may take: the time to close dist at cost/walk-speed, at least 1 and at most
   ::chase-timeout-s, so the fight looks again before a mob that came to the body is steered past."
   [dist]
-  (max 1 (min (hostile/chase-timeout-s) (+ 1 (/ (- dist (reach)) (settings/get settings ::walk-speed))))))
+  (max 1 (min (hostile/chase-timeout-s) (+ 1 (/ (- dist (reach)) cost/walk-speed)))))
 
 (defn walk-opts
   "The options of one walk towards target: a :hostiles fight leaves doors as they are, prices known dangers, falls only within fall-room and aims again after chase-leg-s, the mob moves.
