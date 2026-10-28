@@ -203,12 +203,13 @@
 (defn check-gap-jumped [gap risk]
   (let [r (run (world {:fill [[5 60 -2 (+ 4 gap) 63 40 "air"] [5 55 -2 (+ 4 gap) 55 40 "stone"]]}) (near (+ 5 gap 3) 64 2))]
     (is (= "found" (:status r)))
-    (is (= [1 risk] [(cost r :jumps) (cost r :risk)]))
+    (is (= 1 (cost r :jumps)))
+    (is (< (Math/abs (- risk (cost r :risk))) 1e-9))
     (is (some #{(:gap MOVE)} (moves r)))))
 
-;; risk 1 plus the priced miss: gapMiss 0.02 x GAP-MISS-SCALE (0, 0.5, 1) x the fall's damage 5
+;; risk 1 plus the priced miss: the share for a run-up of 2 (1 of 116, base/GAP-MISS-SHARE) x the fall's damage 5
 (deftest gap-of-1-2-or-3-cells-is-jumped
-  (are [gap risk] (check-gap-jumped gap risk) 1 1 2 1.05 3 1.1))
+  (are [gap risk] (check-gap-jumped gap risk) 1 (+ 1 (/ 5 116)) 2 (+ 1 (/ 5 116)) 3 (+ 1 (/ 5 116))))
 
 ;; a trench x 5..6 through the floor over nothing, so a jump that falls short is a death: walked round where the trench
 ;; ends short of z 40, jumped (at the price of the miss) only where it runs the floor's whole width

@@ -65,7 +65,7 @@
   #js {:climbUp 0.43 :climbDown 0.33 :jumpClimb 0.5 :open 1.0 :openRedstone 1.5 :openLever 6 :openPlate 0 :besideMagmaColumn 1
        :swimH 0.5 :swimSubH 0.26 :swimUp 0.3 :swimDown 0.35 :exit 0.6 :current 0.3 :bubbleUp 0.08 :bubbleDown 0.12
        :airSupply 15 :airLimit 12 :airDrain 1 :airGrace 0 :airUsed 0 :maxWaterDrop 64 :dripleaf 0.2 :dripleafRisk 0.5
-       :dropFactor 1 :descentS 0 :lethalAir 0 :drownSlack 1 :gapMiss 0.02
+       :dropFactor 1 :descentS 0 :lethalAir 0 :drownSlack 1 :gapMiss 1
        :walkS WALK-S :sprintS SPRINT-S})
 
 (def BODY (js/Math.ceil (* 16 constants/body-height))) ; in 1/16, rounded up
@@ -76,7 +76,16 @@
 (def ^:const JUMP-S 0.35) ; a jump up costs this much more than the walk it replaces
 (def ^:const GAP-S 0.5) ; a gap jump's run-up and landing, on top of the sprint over its length
 (def ^:const GAP-UP-S 0.3) ; a gap jump landing one block higher costs this much more than a level one
-(def GAP-MISS-SCALE "the chance a gap jump over n cells falls short, as a share of costs.gapMiss (guesses: a 1-wide hop is not missed)" #js [0 0 0.5 1])
+(def GAP-MISS-JUMPS
+  "gap jumps that fell short of n tried in prismarine-physics (engine.gap-miss-physics-test), by width in cells (index 1-3), then
+  run-up: [1 cell, the takeoff cell only; 2 or more]"
+  #js [nil
+       #js [#js [0 38] #js [0 114]]
+       #js [#js [0 38] #js [0 114]]
+       #js [#js [4 38] #js [0 114]]])
+(def GAP-MISS-SHARE
+  "the chance a level gap jump falls short by width then run-up (GAP-MISS-JUMPS under a Beta(1,1) prior), times costs.gapMiss"
+  (.map GAP-MISS-JUMPS (fn [w] (when (some? w) (.map w (fn [[fell n]] (/ (inc fell) (+ n 2))))))))
 (def ^:const GAP-UP-MISS 2) ; a jump up misses this many times as often as a level or down one
 (def ^:const GAP-PIT-RISK 0.5) ; hp of risk for a jump over 3 above a pit it cannot jump out of: a short jump traps the body
 (def ^:const TIGHT-S 0.1) ; careful walking: each tight cell entered costs this much more than a plain step

@@ -1,16 +1,16 @@
 (ns world-test.gap-miss
-  "tools/event-counts.mjs gap-miss: the miss rate of gap jumps (jobs.lib.walk.gaps' :gap-jump events) per [width dy sprint], to replace
-  the guessed gapMiss scale. A miss is a jump that ended :fell; the rate is the Beta(prior-a + fell, prior-b + n - fell) posterior,
+  "tools/event-counts.mjs gap-miss: the miss rate of gap jumps (jobs.lib.walk.gaps' :gap-jump events) per [width run-up dy sprint], to add to
+  the planner's physics prior (base/GAP-MISS-JUMPS, run-up 1 or 2). A miss is a jump that ended :fell; the rate is the Beta(prior-a + fell, prior-b + n - fell) posterior,
   reported with its mean and 90% interval (5% and 95% quantiles). :stuck jumps are counted apart: no miss, no landing.
   Pure part: rows, report, beta-quantile.")
 
-(def prior "Weak prior on a miss: about 2%, worth ten jumps." [0.2 9.8])
+(def prior "Beta(1,1), as the planner's physics counts." [1 1])
 
 (defn rows
   "Rows [{:id :width :dy :sprint :out}] of the :gap records in records (event-counts/scan-line's)."
   [records]
   (for [{:keys [gen t] :as r} records :when (= :gap (:k r))]
-    (assoc (select-keys r [:width :dy :sprint :out]) :id [gen t (:from r)])))
+    (assoc (select-keys r [:width :run :dy :sprint :out]) :id [gen t (:from r)])))
 
 (defn ln-gamma [x]
   (let [cs [76.18009172947146 -86.50532032941677 24.01409824083091 -1.231739572450155 0.1208650973866179e-2 -0.5395239384953e-5]
@@ -57,12 +57,12 @@
 (defn r4 [x] (/ (js/Math.round (* 10000 x)) 10000))
 
 (defn report
-  "{[width dy sprint] {:n :fell :stuck :mean :lo :hi}} of rows (rows): n the jumps that landed or fell, mean the posterior mean of the
+  "{[width run dy sprint] {:n :fell :stuck :mean :lo :hi}} of rows (rows): n the jumps that landed or fell, mean the posterior mean of the
   miss chance, [:lo :hi] its 90% interval."
   [rs]
   (let [[a0 b0] prior]
     (into (sorted-map)
-          (for [[k g] (group-by (juxt :width :dy :sprint) rs)
+          (for [[k g] (group-by (juxt :width :run :dy :sprint) rs)
                 :let [fell (count (filter (comp #{:fell} :out) g))
                       n (+ fell (count (filter (comp #{:landed} :out) g)))
                       a (+ a0 fell) b (+ b0 (- n fell))]]

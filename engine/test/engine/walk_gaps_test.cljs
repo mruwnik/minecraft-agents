@@ -16,7 +16,7 @@
                        {:tracked tracked' :events (cond-> events data (conj data))}))
                    {} ticks)))
 
-(def landed {:width 2 :dy 0 :sprint true :from [0 64 1] :to [0 64 4] :out :landed})
+(def landed {:width 2 :run 2 :dy 0 :sprint true :from [0 64 1] :to [0 64 4] :out :landed})
 
 (deftest a-gap-step-that-the-body-passes-is-landed-with-the-sprint-it-ran
   (is (= [landed] (run [[1 {:sprint false} nil] [2 {:sprint true} nil] [2 {:sprint false} nil] [3 {} nil]]))))
@@ -37,3 +37,11 @@
   (is (empty? (run [[2 {:sprint true} nil] [2 nil {:status :off-plan :step 2}]])) "knocked off the line in the run-up, still level")
   (is (empty? (run [[2 {:sprint true} nil] [2 nil {:status :replan :why :changed}]])))
   (is (empty? (run [[1 {} nil] [1 nil {:status :off-plan :step 1}]]))))
+
+(deftest a-takeoff-entered-by-a-straight-walk-has-a-run-up-of-2-else-1
+  (is (= [2 1 1 1]
+         [(gaps/run-up steps 2)
+          (gaps/run-up (assoc-in steps [1 :move] :jump) 2)
+          (gaps/run-up [(first steps) {:x 0 :y 64 :z 3 :move :gap}] 1)
+          (gaps/run-up [{:x 3 :y 64 :z 0 :move :start} {:x 3 :y 64 :z 1 :move :walk} {:x 0 :y 64 :z 1 :move :gap}] 2)])
+      "a jump up into the takeoff, the start cell as takeoff, a walk not in the jump's direction"))

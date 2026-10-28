@@ -30,7 +30,7 @@
   closing-rate: of the same flights, the gap to each chaser seen as two steps in a row start (retreat.step-speed :chasers), its growth
   over the seconds between the starts, per mob kind and sprint state (cost.danger/::closing-rates).
   walk-pace: the steers of go-to's walks (a job id ending /walk) outside a flight: blocks over the steers' own seconds (cost/walk-speed).
-  gap-miss: the miss rate of gap jumps per [width dy sprint] from go-to's :gap-jump events (world-test.gap-miss; trial bodies only).
+  gap-miss: the miss rate of gap jumps per [width run-up dy sprint] from go-to's :gap-jump events (world-test.gap-miss; trial bodies only).
   Pure parts: scan-line, exchange, starts, starts-by-mob, notices, groups, vein-seen, flee-steps, pace-report, closing-pieces, closing-report, walk-steers, walk-report, walk-detour."
   (:require ["fs" :as fs]
             ["path" :as path]
@@ -117,8 +117,8 @@
 
 
         (str/includes? line ":kind :gap-jump")
-        (let [{{:keys [width dy sprint out from]} :data} (whole)]
-          {:k :gap :t t :gen gen :width width :dy dy :sprint sprint :out out :from from})
+        (let [{{:keys [width run dy sprint out from]} :data} (whole)]
+          {:k :gap :t t :gen gen :width width :run run :dy dy :sprint sprint :out out :from from})
 
         (and (str/includes? line ":kind :watch.saw") (str/includes? line ":how :seen"))
         (let [{{:keys [name distance pos id]} :data} (whole)]

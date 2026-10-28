@@ -1,0 +1,51 @@
+;; Card 5e2fd5ad: level gap jumps of 1-3 cells from a run-up of one cell (the body stands on the takeoff, "short") and of several ("long"): each
+;; lands, and logs a :gap-jump with its width and run-up, so event-counts gap-miss accrues the live counts against the planner's physics prior
+;; (base/GAP-MISS-JUMPS). One-wide stone strip along x at z 10, pit floor at y -10 (the air is dug explicitly).
+{:defaults
+ {:tags [:movement]
+  :time :any
+  :plot {:height 12 :floor "air"}
+  :limit-s 90}
+ :cases
+ [{:name "gap1-short-run-up"
+   :body {:at [8.5 0 10.5]}
+   :blocks [[:fill [3 -9 3] [26 -2 17] "air"] [:fill [3 -10 3] [26 -10 17] "stone"] [:fill [8 -1 10] [8 -1 10] "stone"] [:fill [10 -1 10] [14 -1 10] "stone"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [12 0 10] :range 0 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :gap-jump :data {:width 1 :run 1 :dy 0 :out :landed}} :within-s 60 :of-job true}]
+   :after [[:body-near [12.5 0 10.5] 1.5]]}
+  {:name "gap1-long-run-up"
+   :body {:at [4.5 0 10.5]}
+   :blocks [[:fill [3 -9 3] [26 -2 17] "air"] [:fill [3 -10 3] [26 -10 17] "stone"] [:fill [4 -1 10] [8 -1 10] "stone"] [:fill [10 -1 10] [14 -1 10] "stone"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [12 0 10] :range 0 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :gap-jump :data {:width 1 :run 2 :dy 0 :out :landed}} :within-s 60 :of-job true}]
+   :after [[:body-near [12.5 0 10.5] 1.5]]}
+  {:name "gap2-short-run-up"
+   :body {:at [8.5 0 10.5]}
+   :blocks [[:fill [3 -9 3] [26 -2 17] "air"] [:fill [3 -10 3] [26 -10 17] "stone"] [:fill [8 -1 10] [8 -1 10] "stone"] [:fill [11 -1 10] [15 -1 10] "stone"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [13 0 10] :range 0 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :gap-jump :data {:width 2 :run 1 :dy 0 :out :landed}} :within-s 60 :of-job true}]
+   :after [[:body-near [13.5 0 10.5] 1.5]]}
+  {:name "gap2-long-run-up"
+   :body {:at [4.5 0 10.5]}
+   :blocks [[:fill [3 -9 3] [26 -2 17] "air"] [:fill [3 -10 3] [26 -10 17] "stone"] [:fill [4 -1 10] [8 -1 10] "stone"] [:fill [11 -1 10] [15 -1 10] "stone"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [13 0 10] :range 0 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :gap-jump :data {:width 2 :run 2 :dy 0 :out :landed}} :within-s 60 :of-job true}]
+   :after [[:body-near [13.5 0 10.5] 1.5]]}
+  {:name "gap3-short-run-up"
+   :body {:at [8.5 0 10.5]}
+   :blocks [[:fill [3 -9 3] [26 -2 17] "air"] [:fill [3 -10 3] [26 -10 17] "stone"] [:fill [8 -1 10] [8 -1 10] "stone"] [:fill [12 -1 10] [16 -1 10] "stone"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [14 0 10] :range 0 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :gap-jump :data {:width 3 :run 1 :dy 0 :out :landed}} :within-s 60 :of-job true}]
+   :after [[:body-near [14.5 0 10.5] 1.5]]}
+  {:name "gap3-long-run-up"
+   :body {:at [4.5 0 10.5]}
+   :blocks [[:fill [3 -9 3] [26 -2 17] "air"] [:fill [3 -10 3] [26 -10 17] "stone"] [:fill [4 -1 10] [8 -1 10] "stone"] [:fill [12 -1 10] [16 -1 10] "stone"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [14 0 10] :range 0 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :gap-jump :data {:width 3 :run 2 :dy 0 :out :landed}} :within-s 60 :of-job true}]
+   :after [[:body-near [14.5 0 10.5] 1.5]]}]}

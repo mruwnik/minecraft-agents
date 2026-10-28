@@ -252,17 +252,17 @@
 
 (defn gap-line [t out & {:keys [width dy sprint] :or {width 2 dy 0 sprint true}}]
   (pr-str {:generation-id "g" :time-ms t :source :job :kind :gap-jump :level :info
-           :data {:width width :dy dy :sprint sprint :from [0 64 1] :to [0 64 4] :out out}}))
+           :data {:width width :run 2 :dy dy :sprint sprint :from [0 64 1] :to [0 64 4] :out out}}))
 
-(deftest gap-miss-is-the-beta-posterior-of-falls-per-width-dy-and-sprint
+(deftest gap-miss-is-the-beta-posterior-of-falls-per-width-run-up-dy-and-sprint
   (let [lines (concat (map #(gap-line % :landed) (range 1000 1009))
                       [(gap-line 2000 :fell) (gap-line 2001 :stuck)
                        (gap-line 3000 :landed :width 1 :sprint false)])
         report (gm/report (gm/rows (keep c/scan-line lines)))]
-    (is (= {:n 10 :fell 1 :stuck 1 :mean 0.06} (select-keys (report [2 0 true]) [:n :fell :stuck :mean]))
-        "(0.2 + 1) / (0.2 + 9.8 + 10): stuck jumps are no miss and no landing")
-    (is (= {:n 1 :fell 0} (select-keys (report [1 0 false]) [:n :fell])))
-    (let [{:keys [lo hi mean]} (report [2 0 true])]
+    (is (= {:n 10 :fell 1 :stuck 1 :mean 0.1667} (select-keys (report [2 2 0 true]) [:n :fell :stuck :mean]))
+        "(1 + 1) / (1 + 1 + 10): stuck jumps are no miss and no landing")
+    (is (= {:n 1 :fell 0} (select-keys (report [1 2 0 false]) [:n :fell])))
+    (let [{:keys [lo hi mean]} (report [2 2 0 true])]
       (is (< 0 lo mean hi 1) "a 90% interval round the mean"))))
 
 (deftest gap-jumps-are-folded-from-trial-bodies-only

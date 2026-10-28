@@ -266,7 +266,7 @@
     (is (= 7 (cost whole :damage)) "5 stands, one fall")))
 
 ;; two ledges over a hole 8 deep (a miss falls 8 blocks, 5 hp) joined only by a bridge at z 20: the jump over the hole is the
-;; short way. A 1-wide hole is never missed; a 2-wide one is missed at half of gapMiss.
+;; short way. The miss share comes from width and run-up (base/GAP-MISS-SHARE): the plan's start is one cell before the takeoff, a run-up of 2.
 (defn hole
   ([width] (hole width 0))
   ([width rise]
@@ -280,31 +280,36 @@
   (let [r (over-hole 2 {:damageBudget 1 :damageWeight 1})
         round (over-hole 2 {:damageBudget 0.01})]
     (is (some #{(:gap MOVE)} (moves r)))
-    (is (< 0.04 (cost r :damage) 0.06) "gapMiss 0.02 x 0.5 for 2 cells x the 5 hp fall")
+    (is (< 0.04 (cost r :damage) 0.06) "1/116 for a run-up of 2 x the 5 hp fall")
     (is (not-any? #{(:gap MOVE)} (moves round)) "a budget under the priced miss walks round")
     (is (= "found" (:status round)))))
 
-(deftest a-one-wide-gap-jump-is-no-damage
-  (let [r (over-hole 1 {:damageBudget 0})]
+(deftest a-one-wide-gap-jump-costs-the-run-ups-share-of-the-fall
+  (let [r (over-hole 1 {:damageBudget 1 :damageWeight 1})]
     (is (some #{(:gap MOVE)} (moves r)))
-    (is (zero? (cost r :damage)))))
+    (is (< 0.04 (cost r :damage) 0.05) "1/116 x the 5 hp fall")))
 
-(deftest a-wider-gap-is-missed-more-often
-  (let [two (cost (over-hole 2 {:damageBudget 1 :damageWeight 1}) :damage)
-        three (cost (over-hole 3 {:damageBudget 1 :damageWeight 1}) :damage)]
-    (is (< 0.09 three 0.11) "gapMiss 0.02 x 1 for 3 cells x the 5 hp fall")
-    (is (< (* 1.9 two) three))))
+(defn from-takeoff [width options]
+  (run (hole width) (near (+ 4 width) 64 2) options {:x 2 :y 64 :z 2}))
+
+(deftest a-3-wide-jump-from-the-takeoff-cell-is-missed-far-more-often-than-after-a-run-up
+  (let [opts {:damageBudget 1 :damageWeight 1}
+        short-run (cost (from-takeoff 3 opts) :damage)
+        run-up (cost (over-hole 3 opts) :damage)]
+    (is (< 0.6 short-run 0.65) "5/40 x the 5 hp fall")
+    (is (< 0.04 run-up 0.05) "1/116 x the 5 hp fall")
+    (is (< 0.12 (cost (from-takeoff 2 opts) :damage) 0.13) "1/40 x the 5 hp fall")))
 
 (deftest a-jump-up-is-missed-twice-as-often
   (let [level (over-hole 2 0 {:damageBudget 1 :damageWeight 1})
         up (over-hole 2 1 {:damageBudget 1 :damageWeight 1})]
     (is (some #{(:gap MOVE)} (moves up)))
-    (is (< 0.09 (cost up :damage) 0.11) "twice the level jump's 0.05")
-    (is (< 0.04 (cost level :damage) 0.06))))
+    (is (< 0.08 (cost up :damage) 0.09) "twice the level jump's 0.043")
+    (is (< 0.04 (cost level :damage) 0.05))))
 
-(deftest a-lethal-hole-is-priced-by-width-as-the-damaging-miss-is
-  (let [risk (fn [w] (let [r (run (pf/world {:fill [[5 60 -2 (+ 4 w) 63 40 "air"] [5 55 -2 (+ 4 w) 55 40 "stone"]]}) (near (+ 5 w 3) 64 2) {:health 4})]
-                       (is (= 1 (cost r :jumps)))
-                       (cost r :risk)))]
-    (is (< (risk 1) 100 (risk 2)))
-    (is (< (* 1.9 (risk 2)) (risk 3)))))
+(deftest a-lethal-hole-is-priced-by-the-run-up-as-the-damaging-miss-is
+  (let [risk (fn [w x] (let [r (run (pf/world {:fill [[5 60 -2 (+ 4 w) 63 40 "air"] [5 55 -2 (+ 4 w) 55 40 "stone"]]}) (near (+ 5 w 3) 64 2) {:health 4} {:x x :y 64 :z 2})]
+                         (is (= 1 (cost r :jumps)))
+                         (cost r :risk)))]
+    (is (< 14 (/ (risk 3 4) (risk 3 3)) 15) "5/40 against 1/116")
+    (is (= (risk 1 3) (risk 3 3)))))
