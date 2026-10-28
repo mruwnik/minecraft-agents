@@ -206,7 +206,8 @@
 
 (deftest a-chaser-faster-than-the-flight-catches-every-way-away
   ;; the old search timed the body at a sprint (5.6 blocks a second): a spider 4 blocks behind was left behind on open
-  ;; ground; a flight goes at the measured flee pace (steps at 3.62 with a 0.29 s stop between)
+  ;; ground; a flight goes at the measured flee pace (steps at 3.72 with a 0.23 s stop between). Too hungry to sprint
+  ;; (food 6) it steps at 3.72 x 3.2/5.6 = 2.13, under a zombie's 2.28: the zombie left behind is fled by a sprinter
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -214,7 +215,7 @@
               behind (fn [d] {:x (- 0.5 d) :y 64 :z 0.5})
               baby (await (ends-of field from [{:name "baby" :pos (behind 3)}] [] {:food 6}))
               spider (await (ends-of field from [{:name "spider" :mob "spider" :pos (behind 4)}] [] {:food 20}))
-              far (await (ends-of field from [{:name "zombie" :mob "zombie" :pos (behind 7)}] [] {:food 6}))]
+              far (await (ends-of field from [{:name "zombie" :mob "zombie" :pos (behind 7)}] [] {:food 20}))]
           (is (seq baby) "the ways are planned")
           (is (every? :caught? baby) "a baby zombie runs faster than a body too hungry to sprint")
           (is (nil? (search/pick baby {})) "no flee step: the body is cornered")
