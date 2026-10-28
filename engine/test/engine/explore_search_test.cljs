@@ -136,7 +136,12 @@
 (deftest a-step-past-a-drop-stands-on-the-seen-ground-below-never-in-the-air
   (let [edge (fn [floor] (fn [[x y _]] (cond (> x 8) :unseen (and (<= x 0) (= y 63)) "grass_block" (< y 60) floor :else "air")))]
     (is (= [6 60 0] (search/step-toward (edge "stone") [0 64 0] 20 0)) "the drop's floor is in view: the step stands on it")
-    (is (nil? (search/step-toward (edge :unseen) [0 64 0] 20 0)) "the floor is out of view: no step into the air")))
+    (is (nil? (search/step-toward (edge :unseen) [0 64 0] 20 0)) "the floor is out of view: no step into the air")
+    (is (nil? (search/step-toward (edge "lava") [0 64 0] 20 0)) "lava below the drop is no floor to aim at")
+    (is (nil? (search/step-toward (edge "water") [0 64 0] 20 0)) "nor is water")
+    (is (nil? (search/step-toward (fn [[x y _]] (cond (> x 8) :unseen (and (<= x 0) (= y 63)) "grass_block" (= y 63) "lava" :else "air"))
+                                  [0 64 0] 20 0))
+        "lava right under the step's feet height is no floor either")))
 
 (deftest ore-beyond-the-view-is-walked-toward-and-found-after-looking
   (async done

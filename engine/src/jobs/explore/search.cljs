@@ -479,7 +479,7 @@
 (defn step-toward
   "Where to walk toward the unseen column [x z] from the body at [bx y bz]: the seen stand cell on the line 12, 6 or 3
   blocks out, else the 6 or 3 block point at feet height (far ground is seldom in view; past a drop, the seen ground
-  under it, none when that is out of view), nil when within 3. A player walks toward ground out of view and looks again."
+  under it, none when that is out of view or no floor: lava, water, leaves), nil when within 3. A player walks toward ground out of view and looks again."
   [block-at [bx y bz] x z]
   (let [d (xz-dist [bx bz] [x z])
         at (fn [k] (let [f (/ k d)] [(js/Math.round (+ bx (* f (- x bx)))) (js/Math.round (+ bz (* f (- z bz))))]))
@@ -487,8 +487,10 @@
     (or (some (fn [k] (let [[sx sz] (at k) {sy :y} (stand-cell block-at sx sz y)] (when sy [sx sy sz]))) near)
         (when-let [k (first (filter #(<= % 6) near))]
           (let [[sx sz] (at k)
-                floor (fn [h] (let [n (block-at [sx h sz])] (cond (open? n) (when (> h (- y (descent))) (recur (dec h))) (string? n) (inc h))))
-                sy (if (open? (block-at [sx (dec y) sz])) (floor (dec y)) y)]
+                floor (fn [h] (let [n (block-at [sx h sz])] (cond (open? n) (when (> h (- y (descent))) (recur (dec h))) (and (string? n) (not (wet-names n)) (not (bs/bad-floor n)) (not (leaves? n)) (= :solid (reach/kind-of #js {:name n}))) (inc h))))
+                below (block-at [sx (dec y) sz])
+                ;; an unseen floor under the point is walked toward and looked at again
+                sy (if (or (open? below) (string? below)) (floor (dec y)) y)]
             (when sy [sx sy sz]))))))
 
 (defn held?
