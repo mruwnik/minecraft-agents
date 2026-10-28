@@ -153,10 +153,20 @@
          (not (and (= id (:id a)) (:hold a)))
          (nil? (get @(:waiting eng) id)))))
 
+(defn end-silent-spell!
+  "Forget listed job id's run of silent rounds and resolve its job.silent request, if raised."
+  [eng id]
+  (when-let [spell (get @(:silent eng) id)]
+    (swap! (:silent eng) dissoc id)
+    (when (:raised? spell)
+      (doseq [[request-id request] (:attention (state eng))
+              :when (same-request? request id :silent)]
+        (resolve-attention! eng request-id :progress)))))
+
 (defn note-silent!
   "After the settled round of listed job id: count rounds in a row that were silent (silent-round?). A spell of
   silent-rounds rounds and silent-spell-ms raises job.silent, a required attention request, once per spell; any other round
-  ends the spell and resolves it. It only flags: the job keeps its turns."
+  or a wait reason told between rounds (schedule/note-waiting!) ends the spell and resolves it. It only flags: the job keeps its turns."
   [eng id status round]
   (let [t (now eng)]
     (if (silent-round? eng id status round)
@@ -168,9 +178,4 @@
                                    :data {:rounds rounds :since-ms (- t since)}
                                    :message (str "Job " id " got " rounds " rounds in " (js/Math.round (/ (- t since) 1000))
                                                  " s that did no act, held no pose and gave no wait reason; it is runnable but idle")})))
-      (when-let [spell (get @(:silent eng) id)]
-        (swap! (:silent eng) dissoc id)
-        (when (:raised? spell)
-          (doseq [[request-id request] (:attention (state eng))
-                  :when (same-request? request id :silent)]
-            (resolve-attention! eng request-id :progress)))))))
+      (end-silent-spell! eng id))))

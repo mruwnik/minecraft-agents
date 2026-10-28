@@ -4,7 +4,7 @@
   (:require [engine.args :as a]
             [engine.core.base :refer [add-instance dead? drop-reflex-job! emit! flush-save-stats! free-owner! hold-trigger! job-fields job-of exclusive-job memory-flush-due? new-id! now paused? reflex-text running save-memory! state told-wait ttl-now wait-inputs waiting waiting-text]]
             [engine.core.attention :refer [request-attention!]]
-            [engine.core.fruitless :refer [reset-backoff!]]
+            [engine.core.fruitless :refer [end-silent-spell! reset-backoff!]]
             [engine.core.register :refer [effective-register evaluate-register! expire-changes! levels preempts?]]
             [engine.core.ending :refer [clear-asked! run-status]]
             [engine.core.cleanup :as cleanup]
@@ -36,6 +36,7 @@
     (if (= ::passed reason)
       (when (and before (not (:child (meta before)))) (swap! (:waiting eng) dissoc id))
       (let [r (told-wait eng reason {})]
+        (end-silent-spell! eng id)
         (swap! (:waiting eng) #(assoc (select-keys % (:list (state eng))) id r))
         (when (not= before r)
           (emit! eng (merge (job-fields eng id)
