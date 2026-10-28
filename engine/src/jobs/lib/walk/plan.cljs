@@ -9,6 +9,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.escape :as escape]
+            [jobs.lib.util :as u]
             [jobs.lib.walk.one-way :as one-way]
             [jobs.lib.walk.sight :as wsight]
             [jobs.lib.walk.world :as wworld]))
@@ -178,17 +179,47 @@
 
 (defn within-of [pw r] {:r r :steps (when (.-path r) (plan-steps pw r))})
 
+(defn steps-blocks [steps] (reduce + 0 (map u/dist steps (rest steps))))
+
+(defn unseen-gap
+  "The floor cells [x y z] of the gap the refused step at [x y z] of steps jumps from from, when it is a gap jump over
+  floors the body has never seen (every one; unknown-floor-fn of pw), else nil."
+  [pw steps from at]
+  (let [step (some #(when (= at [(:x %) (:y %) (:z %)]) %) steps)
+        [n dx dz] (when (and from (= :gap (:move step))) (executor/gap-cells (zipmap [:x :y :z] from) step))
+        unseen? (unknown-floor-fn pw)
+        [fx fy fz] from
+        cells (when (and n (pos? n) unseen?)
+                (for [k (range 1 (inc n))] [(+ fx (* k (js/Math.sign dx))) (dec fy) (+ fz (* k (js/Math.sign dz)))]))]
+    (when (and (seq cells) (every? #(apply unseen? %) cells)) (vec cells))))
+
+(defn look-first?
+  "Whether walking within's partial plan and looking at the unseen floors of the gap wide's steps jump (unseen-gap) costs
+  less than filling the gap now (cost/gap-look-cost): the walk's detour is its blocks and those from its end to the
+  takeoff, less wide's blocks to the takeoff; each floor not there at cost/floor-absent-chance."
+  [c pw within wide-steps {:keys [at from]}]
+  (let [walk (:steps within)
+        gap (when (and (= "partial" (some-> (:r within) .-status)) (>= (count walk) 2)) (unseen-gap pw wide-steps from at))]
+    (when gap
+      (let [to-from (take-while #(not= from [(:x %) (:y %) (:z %)]) wide-steps)
+            detour (- (+ (steps-blocks walk) (u/dist (peek walk) (zipmap [:x :y :z] from)))
+                      (steps-blocks (concat to-from [(zipmap [:x :y :z] from)])))
+            {:keys [fill look]} (cost/gap-look-cost (count gap) (:count (escape/carried-pillar-item (:primitives c)) 0) detour (cost/floor-absent-chance {}))]
+        (< look fill)))))
+
 (defn with-beyond
   "within with :beyond, the policy's refusal of the path a search without the limits found (wide), when it found one. A search
   that ran out of land short of the goal (unseen floors on, a drop it did not take) counts by the partial path to its
-  nearest node: the refused step lies on the way there."
-  [within pw policy wide]
+  nearest node: the refused step lies on the way there. A refused gap jump over unseen floors gives no :beyond when walking
+  within's partial plan to look at them is cheaper (look-first?): its end, with no walk left, refuses it again."
+  [c within pw policy wide]
   (let [steps (when (or (= "found" (.-status wide)) (and (= "partial" (.-status wide)) (= "exhausted" (.-reason wide))))
                 (plan-steps pw wide))
         refusal (some->> steps (executor/refusal policy))
-        from (when refusal (some (fn [[prev s]] (when (= (:at refusal) [(:x s) (:y s) (:z s)]) prev)) (map vector steps (rest steps))))]
+        from (when refusal (some (fn [[prev s]] (when (= (:at refusal) [(:x s) (:y s) (:z s)]) prev)) (map vector steps (rest steps))))
+        refusal (cond-> refusal from (assoc :from [(:x from) (:y from) (:z from)]))]
     (cond-> within
-      refusal (assoc :beyond (cond-> refusal from (assoc :from [(:x from) (:y from) (:z from)]))))))
+      (and refusal (not (look-first? c pw within steps refusal))) (assoc :beyond refusal))))
 
 (defn beyond-needed?
   "Whether a search within the walker's limits that found no whole path leaves a search without them to run: only when
@@ -207,7 +238,7 @@
   (let [r (await (plan-from! c pw to range weight (executor/planner-limits policy (wworld/solid-fn pw)) policy))
         within (within-of pw r)]
     (if (beyond-needed? r pw)
-      (with-beyond within pw policy (await (plan-from! c pw to range weight nil policy)))
+      (with-beyond c within pw policy (await (plan-from! c pw to range weight nil policy)))
       within)))
 
 (defn head-wet-fn

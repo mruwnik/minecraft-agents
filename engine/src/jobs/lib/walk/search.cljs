@@ -226,7 +226,7 @@
             used (+ used wplan/chunk-expansions)]
         (cond
           (and over (:unlimited search))
-          [search (wplan/with-beyond (wplan/within-of walled (:r search)) walled policy (.result phase))]
+          [search (wplan/with-beyond c (wplan/within-of walled (:r search)) walled policy (.result phase))]
 
           over
           (let [r (.result phase)]

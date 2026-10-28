@@ -2,7 +2,11 @@
   "jobs.lib.walk (the shared walk driver) against the fake world: one call plans, walks and re-plans to a goal."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
+            [engine.path.blocks :as blocks]
             [engine.path.executor :as executor]
+            [engine.path.fixture :as fx]
+            [engine.path.planner.base :as base]
+            [engine.path.space :as space]
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.ctx :as ctx]
@@ -407,10 +411,39 @@
               policy (wworld/body-policy c)
               wide (await (wplan/plan-from! c pw [10 65 1] 0 (walk/default-weight) nil policy))
               ended (fn [reason] (doto (js/Object.assign #js {} wide) (aset "status" "partial") (aset "reason" reason)))
-              kind (fn [w] (:kind (:beyond (wplan/with-beyond {} pw policy w))))]
+              kind (fn [w] (:kind (:beyond (wplan/with-beyond c {} pw policy w))))]
           (is (= :gap-up (kind wide)))
           (is (= :gap-up (kind (ended "exhausted"))) "the search ran out of land past the gap: its path to there holds it")
           (is (nil? (kind (ended "budget"))) "a search cut by its budget proves nothing"))))))
+
+;; a corridor 2 high (ceiling y 66) whose floor x 8..9 the body looked at in the dark and missed: the limits refuse the
+;; jump over it under the ceiling, the search without them finds that jump. Walking the 7 blocks to look costs less than
+;; filling the gap now (cost/gap-look-cost), so that refusal is no :beyond; a free fill, or a gap seen to be a hole, is.
+(defn ^:async dark-gap-within
+  [unseen?]
+  (let [table (blocks/default-state-table)
+        void (first (blocks/state-ids table "void_air"))
+        gap [[8 63 0] [9 63 0]]
+        snapshot (fx/fixture-snapshot {:fill [[0 63 0 20 63 0 "stone" {}] [0 64 -1 20 65 -1 "stone" {}] [0 64 1 20 65 1 "stone" {}]
+                                              [0 66 -1 20 66 1 "stone" {}]]})
+        p (tu/fake {:blocks {} :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+        c {:primitives p}]
+    (doseq [[x y z] gap] (.setState snapshot x y z (if unseen? void (first (blocks/state-ids table "air")))))
+    (set! (.-unknown snapshot) #js {:id void :missed (js/Set. (clj->js (map #(apply base/cell-key %) (when unseen? gap))))})
+    (await (wplan/plan-within! c #js {:snapshot snapshot :table table :space space/space} [15 64 0] 0 (walk/default-weight) (wworld/body-policy c)))))
+
+(deftest a-refused-jump-over-floors-missed-in-the-dark-gives-way-to-the-walk-that-looks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [dark (await (dark-gap-within true))
+              free-fill (await (settings/with-settings {::cw/fill-place-s 0 ::cw/fill-spent-s 0 ::cw/fetch-block-s 0} #(dark-gap-within true)))
+              hole (await (dark-gap-within false))]
+          (is (= "partial" (.-status (:r dark))))
+          (is (= 7 (:x (peek (:steps dark)))) "the walk ends at the takeoff")
+          (is (nil? (:beyond dark)) "looking at the missed floors is cheaper than filling them now")
+          (is (= :gap-low-ceiling (:kind (:beyond free-fill))) "a fill that costs nothing is cheaper than the look")
+          (is (= :gap-low-ceiling (:kind (:beyond hole))) "a hole seen is filled: no look tells more"))))))
 
 (defn ^:async budgeted-calls
   "plan-walk! with budget (chunk-expansions 16) called from pos toward goal until a call answers with more than
