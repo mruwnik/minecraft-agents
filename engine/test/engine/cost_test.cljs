@@ -674,3 +674,16 @@
       (is (near? c20 (caught/chance counts 20)))
       (is (near? c5 (caught/chance counts 5))))))
 
+
+(deftest a-walls-unseen-row-is-wall-by-the-worse-of-the-counted-rows-and-its-own
+  (are [counts rows q] (= q (settings/with-settings {:jobs.lib.cost.door/wall-rows counts} #(cost/wall-on-chance rows)))
+    {:k 0 :n 0} 0 (/ 1 2)
+    {:k 0 :n 0} 3 (/ 4 5)
+    {:k 0 :n 98} 3 (/ 4 5)
+    {:k 98 :n 98} 3 (/ 99 100)))
+
+(deftest a-door-past-an-unseen-far-side-prices-the-chance-it-is-a-dead-end
+  (let [price #(cost/door-s {:sure-s 2 :row-s 2 :most 6 :q % :back-s (fn [k] k)})]
+    (is (= 2 (price 0)) "a far side surely open costs only the rows seen")
+    (is (= (+ 2 (* 2 (+ 0.5 0.25)) (* 0.125 (+ 2 4 2))) (price 0.5)) "two rows the budget leaves, then a dead end: its digs again and the walk back")
+    (is (< 6 (price 0.9)) "a wall likely thicker than the budget is dearer than it")))

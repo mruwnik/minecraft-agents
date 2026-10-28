@@ -23,15 +23,16 @@
 
 (defn ^:async run-door
   "Run clear-path over world (stub: a replacement round for jobs.blocks.dig, or nil) as a child, :east
-  unless args says otherwise; its result."
+  unless args says otherwise; its result. World keys :p-out and :seen-out (atoms) get the primitives and the events."
   ([world stub] (run-door world stub {:heading :east}))
   ([world stub args] (run-door world stub args nil))
   ([world stub args rounds] (run-door world stub args rounds tu/outcome))
   ([world stub args rounds f]
    (let [clock (atom 1000000)
-         [_ sink] (tu/legacy-capture-sink)
-         p (cond-> (tu/fake (dissoc world :plans :sight :p-out)) (:sight world) (tu/seeing-within (:sight world)))
+         [seen sink] (tu/legacy-capture-sink)
+         p (cond-> (tu/fake (dissoc world :plans :sight :p-out :seen-out)) (:sight world) (tu/seeing-within (:sight world)))
          _ (some-> (:p-out world) (reset! p))
+         _ (some-> (:seen-out world) (reset! seen))
          out (atom :not-done)
          parent (tu/recording-parent job args out f)
          jobs (cond-> (assoc registry/jobs 'recording-parent parent)
@@ -131,11 +132,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [thick (assoc wall :sight 3 :inventory [{:name "wooden_pickaxe" :count 1}]
+        (let [seen (atom nil)
+              thick (assoc wall :sight 3 :inventory [{:name "wooden_pickaxe" :count 1}] :seen-out seen
                            :blocks (merge (box -2 63 -2 8 63 2 "stone") (box 1 64 -1 4 65 1 "stone")))
               r (await (run-door thick nil))]
           (is (= [:done [5 64 0]] [(:status r) (:through r)]) (pr-str r))
-          (is (= 8 (count (:dug r))) "four thick, more than it could see"))))))
+          (is (= 8 (count (:dug r))) "four thick, more than it could see")
+          (is (= [{:seen 3 :rows 4 :open true}] (map #(select-keys % [:seen :rows :open]) (filter #(= :clear-path.far-side (:kind %)) @@seen)))
+              "the count of the far side: three rows seen, four wall, then open"))))))
 
 (deftest digging-on-past-what-it-saw-stops-when-the-next-plan-costs-over-max-dig-s
   (async done
@@ -144,9 +148,15 @@
         (let [thick (assoc wall :sight 3 :inventory [{:name "wooden_pickaxe" :count 1}]
                            :blocks (merge (box -2 63 -2 40 63 2 "stone") (box 1 64 -1 30 65 1 "stone")))
               cell-s (cost/dig-cells-s [(tools/clear-ms (tu/fake (dissoc thick :sight)) "stone")])
-              r (await (run-door thick nil {:heading :east :max-dig-s (* 10 cell-s)}))]
+              seen (atom nil)
+              r (await (run-door (assoc thick :seen-out seen) nil {:heading :east :max-dig-s (* 26 cell-s)}))
+              cheap (await (run-door thick nil {:heading :east :max-dig-s (* 10 cell-s)}))]
           (is (= [:stopped :too-dear] [(:status r) (:reason r)]) (pr-str r))
-          (is (= 6 (count (:dug r))) "three rows priced 8 cells (the far side it could not see as rock); the next plan, 14, is over")
+          (is (= 6 (count (:dug r))) "three rows seen and a far side unseen fit 13 rows; six seen make the dead end too likely")
+          (is (= [{:seen 3 :rows 6 :open false}] (map #(select-keys % [:seen :rows :open]) (filter #(= :clear-path.far-side (:kind %)) @@seen)))
+              "abandoned with six rows of wall: three past what it saw, no far side found")
+          (is (= [:stopped :too-dear 0] [(:status cheap) (:reason cheap) (count (:dug cheap))])
+              "three seen rows over five of budget: the wall is likely thicker than the budget, so none is dug")
           (is (= [0 64 0] (:at r)) "it walked back to where it began"))))))
 
 (deftest a-wall-seen-thick-is-priced-by-its-rows-not-refused-by-their-count
@@ -172,7 +182,7 @@
               no-way-back (fn ^:async no-way-back-walk [c] (if (= [0 64 0] (:pos (:args c)))
                                             (ctx/end c :nothing-possible {:reason :unreachable} {:arrived false})
                                             (await (walk c))))
-              r (await (run-door thick nil {:heading :east :max-dig-s (* 10 cell-s)} {'jobs.movement.go-to no-way-back}))]
+              r (await (run-door thick nil {:heading :east :max-dig-s (* 26 cell-s)} {'jobs.movement.go-to no-way-back}))]
           (is (= [:stopped :too-dear [3 64 0]] [(:status r) (:reason r) (:at r)]) (pr-str r)))))))
 
 (deftest the-step-through-is-a-go-to-child
@@ -280,7 +290,7 @@
               thick (assoc wall :sight 3 :inventory [{:name "wooden_pickaxe" :count 1}] :drops {"stone" "cobblestone"} :p-out p
                            :blocks (merge (box -2 63 -2 40 63 2 "stone") (box 1 64 -1 30 65 1 "stone")))
               cell-s (cost/dig-cells-s [(tools/clear-ms (tu/fake (dissoc thick :sight :p-out)) "stone")])
-              r (await (run-door thick nil {:heading :east :close-behind true :max-dig-s (* 10 cell-s)} nil identity))
+              r (await (run-door thick nil {:heading :east :close-behind true :max-dig-s (* 26 cell-s)} nil identity))
               block (fn [cell] (get-in @(fake/state @p) [:blocks cell] "air"))
               placed (keep #(when (= "place" (.-name %)) (let [{:keys [x y z]} (js->clj (.-pos (.-args %)) :keywordize-keys true)] [x y z]))
                            (.-calls (.-world @p)))]
