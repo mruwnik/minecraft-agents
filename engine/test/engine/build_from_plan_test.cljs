@@ -2130,14 +2130,16 @@
 (defn dark-wait [s] (contract/later :exposed "dark at 1 65 1 until light" :lowered-by #{:light} :chance 0.005 :recheck-after-ms (* 1000 s) :wait-ms (* 1000 s)))
 (def no-light (contract/never :exposed "dark at 1 65 1, a hall of dark floor" :lowered-by #{:torch} :chance 0.005))
 
-(defn lit-check
-  "The start check lights-itself makes of status for a body with torches? and a fetch allowed when fetch?, whose torch obtain for
+(defn lit-check-status
+  "The start status lights-itself makes of status for a body with torches? and a fetch allowed when fetch?, whose torch obtain for
   the 2 torches owed starts with `obtain` (its worth booked in worths)."
   [status torches? fetch? obtain mem worths]
   (with-redefs [torch/torches-held (constantly (if torches? 4 0)) need/fetch-opts (constantly (when fetch? {:how #{:gather}})) ctx/mem (constantly mem)
                 fp-light/torches-owed (constantly 2)
                 need/item-status (fn [_ item n _ worth] (swap! worths conj [item n worth]) obtain)]
-    (first ((fp-light/lights-itself (constantly status) (constantly [])) {:primitives nil}))))
+    ((fp-light/lights-itself (constantly status) (constantly [])) {:primitives nil})))
+
+(defn lit-check [& args] (first (apply lit-check-status args)))
 
 (def not-worth (contract/later :not-worth "obtain: costs 400 s, worth 297 s"))
 
@@ -2160,7 +2162,8 @@
 (deftest a-never-lit-cell-at-night-fetches-torches-only-for-what-waiting-for-dawn-would-cost
   (let [worths (atom [])
         check (fn [night-s obtain] (with-redefs [sense/sky-in (constantly night-s)] (lit-check no-light false true obtain {} worths)))]
-    (is (= [:never :ok :ok] [(check 300 not-worth) (check 300 (contract/ok :ready "ready")) (check 0 (contract/ok :ready "ready"))]))
+    (is (= [:later :ok :never] [(check 300 not-worth) (check 300 (contract/ok :ready "ready")) (check 0 not-worth)]))
+    (is (= 300000 (:wait-ms (nth (with-redefs [sense/sky-in (constantly 300)] (lit-check-status no-light false true not-worth {} (atom []))) 2))) "deferred to dawn, not failed")
     (is (= [["torch" 2 (cost/light-wait-worth 300 2)] ["torch" 2 (cost/light-wait-worth 300 2)] ["torch" 2 nil]] @worths)
         "at night the night left is the wait, by day any price")))
 
