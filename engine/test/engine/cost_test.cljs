@@ -619,3 +619,20 @@
     (is (= 2 (rise {:jobs.lib.cost.rise/surface-prior [[62 1000]] :jobs.lib.cost.rise/surface-floor 0})))
     (is (< 2 (rise {:jobs.lib.cost.rise/surface-prior [[62 1000]] :jobs.lib.cost.rise/surface-floor 1}))
         "the unseen bins above weigh in")))
+
+(deftest the-caught-posterior-of-a-count-is-its-grid-posterior
+  ;; values of the per-row-log grid sum (a 25 x 17 x 30 x 9 grid), kept to 1e-9 of them
+  (let [zombie {:lived [[1 0 1] [3 0 2] [4 0 2] [4 1 1] [5 1 1] [6 0 1] [7 0 1] [8 1 1] [9 2 1] [10 0 1] [10 3 1] [11 0 2] [11 4 1]
+                        [12 0 1] [12 6 1] [13 1 1] [14 7 1] [19 0 1] [20 0 18] [20 1 2] [20 2 2] [20 3 1] [20 4 1]]
+                :died [[1 1 2] [2 1 2] [3 2 3] [4 2 2] [5 2 1] [6 3 3] [7 3 1] [8 4 3] [9 4 1] [11 5 1] [15 6 1] [17 7 1] [19 8 1] [20 8 3]]}
+        bow {:lived [[1 0 2] [2 0 3] [4 0 1] [5 2 1] [6 1 1] [6 3 1] [7 0 2] [8 0 2] [8 1 3] [9 0 1] [11 0 1] [11 1 1] [12 2 1]
+                     [13 0 2] [16 1 1] [17 2 1] [17 4 1] [17 7 1] [18 1 1] [19 0 2] [19 1 1] [20 0 11] [20 1 2]]
+             :died [[1 1 1] [6 3 1]]}
+        near? (fn [want got] (< (js/Math.abs (- want got)) 1e-9))]
+    (doseq [[counts blows shape c20 c5] [[zombie 6.769544125120731 43.566697206644704 0.27302431494366297 0.6249289429830022]
+                                         [bow 3.5373950759349806 4.439186783014941 0.16042298631766747 0.2448134451737375]]
+            :let [post (caught/posterior counts)]]
+      (is (near? blows (:blows post)))
+      (is (near? shape (:shape post)))
+      (is (near? c20 (caught/chance counts 20)))
+      (is (near? c5 (caught/chance counts 5))))))

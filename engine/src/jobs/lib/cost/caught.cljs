@@ -75,21 +75,31 @@
             hs (js/Float64Array.from (map #(- (first %) 10) rows))
             ns (js/Float64Array.from (map #(nth % 2) rows))
             mu-terms (mapv terms mus)
+            nm (count mus)
             ab (for [a as b bs] [a b])
             ps (mapv (fn [[a b]] (js/Float64Array.from (map #(sigmoid (+ a (* b %))) hs))) ab)
             logs (js/Float64Array. (* (count ab) (count lams)))
-            sums (js/Float64Array. (count mus))]
+            sums (js/Float64Array. nm)
+            prods (js/Float64Array. nm)]
         (doseq [[li lam] (map-indexed vector lams)
                 :let [v (terms lam)]
                 [j [a]] (map-indexed vector ab)
                 :let [p (ps j) pa (sigmoid a)]]
-          (dotimes [mi (count mus)]
-            (let [u (mu-terms mi)]
-              (aset sums mi (loop [i 0 acc 0]
-                              (if (< i nr)
-                                (let [pi (aget p i)]
-                                  (recur (inc i) (+ acc (* (aget ns i) (js/Math.log (max 1e-300 (+ (* (- 1 pi) (aget u i)) (* pi (aget v i)))))))))
-                                acc)))))
+          (.fill sums 0)
+          (.fill prods 1)
+          ;; the n-th power of each row's chance is n multiplications, a log only when the product nears underflow
+          (dotimes [i nr]
+            (let [pi (aget p i) q (- 1 pi) vi (* pi (aget v i)) n (aget ns i)]
+              (dotimes [mi nm]
+                (let [t (max 1e-300 (+ (* q (aget (mu-terms mi) i)) vi))]
+                  (loop [c 0 pr (aget prods mi)]
+                    (if (< c n)
+                      (let [pr (* pr t)]
+                        (if (< pr 1e-150)
+                          (do (aset sums mi (+ (aget sums mi) (js/Math.log pr))) (recur (inc c) 1))
+                          (recur (inc c) pr)))
+                      (aset prods mi pr)))))))
+          (dotimes [mi nm] (aset sums mi (+ (aget sums mi) (js/Math.log (aget prods mi)))))
           (let [m (reduce max (array-seq sums))]
             (aset logs (+ (* j (count lams)) li)
                   (+ m (js/Math.log (areduce sums i acc 0 (+ acc (js/Math.exp (- (aget sums i) m)))))
