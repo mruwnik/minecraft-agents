@@ -127,11 +127,10 @@
   "{:gap {:mean s :n gaps} :reached {:k :n} :clear {:k :n} :pillar {:beside {:k :n} :clear {:k :n}}}: the mean seconds
   between two placements of one walls attempt, and per class the walls attempts (:pillar: the pillars) that failed for a
   mob (k) of those that closed or failed for a mob (n), a pillar's first of each situation only (a retry follows only a
-  failure). A row with no :way is a walls attempt."
+  failure; a pillar with no retreat.pillar before it, no situation, is not classed by the engine's class and is left out). A row with no :way is a walls attempt."
   [rows]
   (let [{pillars true walls false} (group-by #(= :pillar (:way %)) (vals rows))
-        pillars (concat (remove :situation pillars)
-                        (map #(apply min-key :t %) (vals (group-by (juxt :situation :class) (filter :situation pillars)))))
+        pillars (map #(apply min-key :t %) (vals (group-by (juxt :situation :class) (filter :situation pillars))))
         gaps (mapcat (fn [{:keys [placed]}] (map #(/ (- %2 %1) 1000) placed (rest placed))) walls)
         of (fn [rs cls] (let [told (filter #(and (= cls (:class %)) (or (:done? %) (:mob? %))) rs)]
                           {:k (count (filter #(and (:mob? %) (not (:done? %))) told)) :n (count told)}))]

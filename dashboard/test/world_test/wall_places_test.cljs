@@ -65,17 +65,17 @@
         "each pillar of the one job is a row")))
 
 (deftest the-report-counts-one-pillar-per-situation-the-first
-  (is (= {:beside {:k 1 :n 2} :clear {:k 0 :n 1}}
+  (is (= {:beside {:k 1 :n 1} :clear {:k 0 :n 1}}
          (:pillar (w/report {:a {:way :pillar :t 0 :class :beside :situation [:g [0 64 0]] :mob? true :done? false}
                              :b {:way :pillar :t 1 :class :beside :situation [:g [0 64 0]] :mob? true :done? false}
                              :c {:way :pillar :t 2 :class :beside :situation [:g [0 64 0]] :done? true :mob? false}
                              :d {:way :pillar :t 3 :class :clear :situation [:g [0 64 0]] :done? true :mob? false}
                              :e {:way :pillar :t 0 :class :beside :done? true :mob? false}})))
-      "the retries at one cell and class after a failure are left out; a row of an older log, with no situation, counts"))
+      "the retries at one cell and class after a failure are left out; a row of an older log, classed with no retreat.pillar (no situation), is left out"))
 
 (deftest the-report-gives-the-gap-and-each-class-failures-for-mobs
   (is (= {:gap {:mean 0.5 :n 3} :reached {:k 1 :n 2} :clear {:k 0 :n 1} :pillar {:beside {:k 1 :n 1} :clear {:k 0 :n 0}}}
-         (w/report {:p {:way :pillar :class :beside :placed [] :done? false :mob? true}
+         (w/report {:p {:way :pillar :class :beside :situation [:g [0 64 0]] :placed [] :done? false :mob? true}
                     :a {:class :reached :placed [0 400 1000] :done? true :mob? false}
                     :b {:class :reached :placed [] :done? false :mob? true}
                     :c {:class :clear :placed [0 500] :done? true :mob? false}
