@@ -5,6 +5,7 @@
             [engine.settings :as settings]
             [engine.test-util :as tu]
             [engine.shut-in-pit-seen-test :as seen]
+            [jobs.lib.util :as u]
             [jobs.survival.pit-cells :as pit]))
 
 (def tunnel
@@ -122,3 +123,13 @@
 (deftest a-zigzag-is-not-dug-through-a-wall-with-air-behind-it
   (is (opens-with? nil) "a one-block wall over air")
   (is (not (opens-with? "stone")) "rock behind the wall"))
+
+(deftest a-cell-to-dig-never-sensed-beside-seen-air-leaves-the-pit-to-a-look
+  (let [p (tu/seeing-all (tu/fake-on-floor {:self {:pos {:x 0.5 :y 64 :z 0.5}}}))
+        cell {:x 1 :y 63 :z 0}
+        sensed u/sensed
+        stop (fn [unseen?] (with-redefs [u/sensed (fn [p pos] (if (and unseen? (= [1 63 0] [(:x pos) (:y pos) (:z pos)])) #js {:unknown true} (sensed p pos)))]
+                             (pit/cell-stop p cell)))]
+    (is (nil? (stop false)) "the floor block seen: stone to dig")
+    (is (= [:no-floor true] ((juxt :stop :unseen) (stop true)))
+        "never sensed, air seen over it: no rock read there, but :unseen, so dig-pit prices a pit it looks at first (old code: a plain :no-floor, the pit priced out)")))

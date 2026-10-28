@@ -21,6 +21,7 @@
             [jobs.survival.respond.doors :as doors]
             [jobs.survival.respond.options :as options]
             [jobs.survival.shut-in :as shut-in]
+            [jobs.survival.dig-pit :as dig-pit]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.threats :as threats]
@@ -251,7 +252,9 @@
   seconds the fuse does not leave."
   [c near sealing]
   (when-not (some combat/creeper? near)
-    (cond-> (shut-in/covers c cover-ways)
+    (cond-> (let [cs (shut-in/covers c cover-ways)]
+              (when-not (:pit cs) (ctx/emit! c :hostile.pit-dropped :debug {:why (dig-pit/why-not c)}))
+              cs)
       sealing (assoc :door (shut-in/door-cover c (:n sealing) (map #(.-name %) near) (:unseen? sealing))))))
 
 (defn cover-answers

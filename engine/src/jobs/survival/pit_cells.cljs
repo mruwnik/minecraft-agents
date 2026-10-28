@@ -61,14 +61,16 @@
     (stop :fluid-above (str (u/seen-name p over) " at or above the roof cell; not digging further"))))
 
 (defn cell-stop
-  "The stop for a cell to dig that is beside fluid, wet, a hazard or open air, nil when it is solid rock to dig."
+  "The stop for a cell to dig that is beside fluid, wet, a hazard or open air, nil when it is solid rock to dig; :unseen when
+  the cell is not sensed (rock-name reads no rock there): plan-of! looks before it rules the pit out."
   [p cell]
   (let [name (look/rock-name p cell)
         beside (dig-cells/lateral-fluid p cell)]
     (cond
       beside (stop :fluid-adjacent (str beside " beside the cell to dig; not opening the pit"))
       (or (dig-cells/wet? p cell) (dig-cells/hazards name)) (stop :hazard-below (str name " in the cell to dig; not digging"))
-      (not (look/rock-solid? p cell)) (stop :no-floor "open air where the pit would go; not digging"))))
+      (not (look/rock-solid? p cell)) (cond-> (stop :no-floor (str (or (u/seen-name p cell) "an unsensed cell") " where the pit would go at " (pr-str (mapv cell [:x :y :z])) "; not digging"))
+                                        (nil? (u/seen-name p cell)) (assoc :unseen true)))))
 
 (defn dug-cells-ok?
   "Whether cells are all solid rock to dig (rock the body has not looked into reads stone, look/rock-name) with no
