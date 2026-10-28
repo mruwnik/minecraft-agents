@@ -85,7 +85,7 @@
 
 (defn seen-box [blocks light-default & [light]]
   (let [raw-p (tu/fake {:time night :blocks blocks})
-        _ (swap! (fake/state raw-p) assoc :light-default light-default :light light)
+        _ (swap! (fake/state raw-p) #(cond-> (assoc % :light-default light-default) light (assoc :light light)))
         per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})]
     (tu/seeing-all (perception/wrap raw-p per))))
 
