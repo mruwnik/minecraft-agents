@@ -27,7 +27,9 @@ export function liveSnapshot (world, { minY, height, unknown }) {
     return ids
   }
   const columns = new Map() // "cx,cz" -> column or null
-  const tried = new Set() // "cx,sy,cz"
+  const tried = new Set() // triedKey(cx, sy, cz)
+  // a number, not a string: sectionHas asks it at every node expanded
+  const triedKey = (cx, sy, cz) => ((cx & 0xFFFF) * 65536 + (cz & 0xFFFF)) * 256 + sy
 
   const columnAt = (cx, cz) => {
     const key = `${cx},${cz}`
@@ -38,7 +40,7 @@ export function liveSnapshot (world, { minY, height, unknown }) {
   }
 
   const ensure = (cx, sy, cz) => {
-    const key = `${cx},${sy},${cz}`
+    const key = triedKey(cx, sy, cz)
     if (tried.has(key)) return
     tried.add(key)
     const container = columnAt(cx, cz)?.sections[sy]?.data
@@ -80,7 +82,7 @@ export function liveSnapshot (world, { minY, height, unknown }) {
     // across plans)
     forgetColumn: (cx, cz) => {
       columns.delete(`${cx},${cz}`)
-      for (let sy = 0; sy < height >> 4; sy++) tried.delete(`${cx},${sy},${cz}`)
+      for (let sy = 0; sy < height >> 4; sy++) tried.delete(triedKey(cx, sy, cz))
       inner.dropColumn(cx, cz)
     },
     columns: () => [...columns].filter(([, column]) => column !== null).map(([key]) => key.split(',').map(Number))

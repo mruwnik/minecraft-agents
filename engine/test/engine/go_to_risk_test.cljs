@@ -78,7 +78,7 @@
         plan (straight-plan c goal)
         walk (* (:dark-s (risk/estimate c goal {:plan plan})) (cost/spawn-chance [0 0 0]))]
     (is (pos? walk))
-    (is (= walk (spawn-light/spawns-over p (spawn-light/walked (sh-sense/feet p) (:steps plan)))))))
+    (is (= walk (spawn-light/spawns-over p (spawn-light/walked (sh-sense/feet p) (:steps plan)) nil)))))
 
 (deftest a-dark-way-by-day-is-not-exposed
   ;; nothing seen: by day only the measured share of open ground the sky does not light at its height is priced

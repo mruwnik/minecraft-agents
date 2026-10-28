@@ -30,6 +30,7 @@
     pen      gap-loss: the animal worth a herd loses through fence gaps till the next pass, from a Gamma prior on the escape rate (jobs.lib.cost.pen); herd-loss, through one gap open a while.
     rise     expected-rise: the blocks up to a sky the body has not seen, from its height, what it knows of the surface, and a prior on the ground height (jobs.lib.cost.rise)."
   (:require [clojure.string :as str]
+            [engine.game :as game]
             [engine.settings :as settings]
             [jobs.lib.cost.answer :as answer]
             [jobs.lib.cost.armour :as armour]
@@ -172,12 +173,30 @@
   [{:keys [k n]}]
   (/ (inc (or k 0)) (+ (or n 0) 2)))
 
+(defonce ^:private kit-kept (atom {}))
+
+(defn by-kit
+  "(f kit), kept while the settings, the call's overrides and the game state prices read (difficulty, simulation
+  distance, version) are the same: f a price of a kit alone, which every costed world asks again (each is a decide over
+  every answer to every spawned mob)."
+  [tag f kit]
+  (let [in [(:values @settings/state) (.getStore settings/call-scope) (threat/difficulty) (threat/simulation-distance) @game/version]
+        k [tag kit]
+        hit (get @kit-kept k)]
+    (if (and hit (= in (:in hit)))
+      (:v hit)
+      (let [v (f kit)]
+        (swap! kit-kept #(assoc (if (>= (count %) 64) {} %) k {:in in :v v}))
+        v))))
+
 (defn dark-factor
   "The planner's extra cost of a dark cell as a share of its own seconds (options.dark.factor): value/dark-factor, the
   floor; with a kit {:weapon :equipment :health :food} the hurt of a mob spawned beside it (spawns-hurt) times
-  spawn-chance of a dark cell and hp-seconds on top: a bare body pays more than an armed, armoured one."
+  spawn-chance of a dark cell and hp-seconds on top: a bare body pays more than an armed, armoured one (by-kit)."
   ([] (value/dark-factor))
-  ([kit] (+ (value/dark-factor) (* (answer/spawns-hurt kit 1 nil) (value/spawn-chance [0 0 0]) (health/walk-hp-seconds)))))
+  ([kit] (by-kit ::dark-factor
+                 #(+ (value/dark-factor) (* (answer/spawns-hurt % 1 nil) (value/spawn-chance [0 0 0]) (health/walk-hp-seconds)))
+                 kit)))
 
 (defn unseen-share
   "Seconds a second of walk over cells the body has not seen adds, at the worse case but finite: the chance the way does
@@ -311,7 +330,7 @@
 (def spawns-hurt answer/spawns-hurt)
 (def lethal-hp answer/lethal-hp)
 (def threat-hurt answer/threat-hurt)
-(def water-factors answer/water-factors)
+(defn water-factors "answer/water-factors, by-kit." [kit] (by-kit ::water-factors answer/water-factors kit))
 (def unseen-water-factors answer/unseen-water-factors)
 (def route-death-cost answer/route-death-cost)
 (def kill-price answer/kill-price)

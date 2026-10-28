@@ -252,6 +252,7 @@
         trapped-at (fn [cell] (or @cornered (cost/route-death-cost body {:cells [cell] :threats caught-by} cell)))
         counts (wworld/way-counts p)
         spawn-kill (delay (cost/spawn-kill body pos))
+        share (spawn-light/share-of p false nil)
         slow (pace)]
     (if (nil? ring-world)
       []
@@ -268,7 +269,7 @@
                           (conj out (assoc r :target t
                                              :open? (or (:found? r) (and (nil? (:pos t)) (given-up? chasers (:end r))))
                                              :price (+ (:priced r)
-                                                       (let [spawns (spawn-light/spawns-over p (:cells r))]
+                                                       (let [spawns (spawn-light/spawns-over p (:cells r) share)]
                                                          (cost/route-death-cost body {:cells (dwelt (:cells r)) :threats others :spawns spawns :spawn-kill (when (pos? spawns) @spawn-kill)} pos)))
                                              :counts counts
                                              :trapped (when (:unseen r) (trapped-at (nth (:cells r) (dec (:seen-n r)))))))

@@ -91,3 +91,16 @@
 (deftest a-walked-way-is-timed-at-walk-speed-its-length-is-already-the-path
   (let [cells (spawn-light/walked {:x 0 :y 64 :z 0} [{:x 10 :y 64 :z 0}])]
     (is (< (js/Math.abs (- (:t (peek cells)) (/ 10 cost/walk-speed))) 1e-9))))
+
+(deftest walks-sharing-a-share-of-read-each-cell-once-and-count-as-apart
+  (let [p (sky/with-sky (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}}}))
+        walk (fn [dz] (spawn-light/walked {:x 0 :y 64 :z 0} (map (fn [x] {:x x :y 64 :z dz}) (range 1 13))))
+        apart (mapv #(spawn-light/spawns-over p (walk %) nil) [0 0 1])
+        reads (atom 0)
+        reaches? sh-sense/sky-reaches-from-above?
+        shared (with-redefs [sh-sense/sky-reaches-from-above? (fn [p cell] (swap! reads inc) (reaches? p cell))]
+                 (let [share (spawn-light/share-of p false nil)]
+                   (mapv #(spawn-light/spawns-over p (walk %) share) [0 0 1])))]
+    (is (pos? (first apart)) "a night walk meets spawns")
+    (is (= apart shared) "the same counts")
+    (is (= 6 @reads) "every 4th cell of each of the two ways, the same walk again none")))

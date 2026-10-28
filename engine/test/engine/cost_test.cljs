@@ -297,6 +297,18 @@
         "an unarmed body pays the hurt of the spawn mix, the one spawn price walk-risk uses")
     (is (> unarmed sword armed-armoured floor) "a bare body pays most, armour and a sword less, never below the floor")))
 
+(deftest a-kit-s-dark-factor-is-worked-out-once-while-the-settings-stay
+  (let [kit {:weapon "stone_sword" :equipment nil :health 13}
+        asked (atom 0)
+        hurt answer/spawns-hurt]
+    (with-redefs [answer/spawns-hurt (fn [& args] (swap! asked inc) (apply hurt args))]
+      (let [once (cost/dark-factor kit)]
+        (is (= once (cost/dark-factor kit)))
+        (is (= 1 @asked) "the second costed world reads the kept factor")
+        (let [rarer (settings/with-settings {:jobs.lib.cost.value/spawn-chance-per-s 0.0001} #(cost/dark-factor kit))]
+          (is (= 2 @asked) "other settings are priced anew")
+          (is (< rarer once) "by them"))))))
+
 (deftest spawns-hurt-is-at-most-the-life
   (let [body {:weapon nil :equipment nil :health 6}]
     (is (< (cost/spawns-hurt body 0.1 nil) 6))

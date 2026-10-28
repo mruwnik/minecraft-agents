@@ -104,25 +104,35 @@
   (let [dark (cost/spawn-chance [0 0 0])]
     (if (pos? dark) (/ (chance-at p cell caves-free? subtract) dark) 0)))
 
+(defn share-of
+  "dark-share of cells {:x :y :z} (caves-free?, subtract as there), each cell read once: for the walks of one decision."
+  [p caves-free? subtract]
+  (let [kept (js/Map.)]
+    (fn [{:keys [x y z] :as cell}]
+      (let [k (str x "," y "," z)]
+        (if (.has kept k)
+          (.get kept k)
+          (let [v (dark-share p (select-keys cell [:x :y :z]) caves-free? subtract)] (.set kept k v) v))))))
+
 (defn dark-seconds
   "Seconds of the walk where a mob could spawn, times (seconds from the start at each cell): every k-th cell and the
   last stand for the stretch walked since the one before, at its dark-share, k the larger of ::step and the cells over
-  ::max-cells; subtract: the sky's darkening to judge them by (default now)."
-  [p cells times caves-free? & [subtract]]
+  ::max-cells; subtract: the sky's darkening to judge them by (default now); share: a share-of to read them by."
+  [p cells times caves-free? & [subtract share]]
   (let [n (count cells)
         k (js/Math.ceil (max (settings/get settings ::step) (/ n (settings/get settings ::max-cells))))
         ends (distinct (concat (range k n k) [(dec n)]))
-        ;; a walk there and back steps on each cell twice
-        share (memoize #(dark-share p % caves-free? subtract))]
+        share (or share (share-of p caves-free? subtract))]
     (reduce + (for [[a b] (map vector (cons 0 ends) ends)]
                 (* (- (times b) (times a)) (share (nth cells b)))))))
 
 (defn spawns-over
   "The mobs (an expected count) met spawning on the timed cells ([{:x :y :z :t}], :t seconds from the start, the first
-  where the body stands) of a walk: cost/spawn-chance a second over its dark-seconds."
-  [p cells]
+  where the body stands) of a walk: cost/spawn-chance a second over its dark-seconds (read by share, a share-of not
+  caves-free?, nil: its own)."
+  [p cells share]
   (if (next cells)
-    (* (cost/spawn-chance [0 0 0]) (dark-seconds p (vec cells) (mapv :t cells) false))
+    (* (cost/spawn-chance [0 0 0]) (dark-seconds p (vec cells) (mapv :t cells) false nil share))
     0))
 
 (defn spawns-at

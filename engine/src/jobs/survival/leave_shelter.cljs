@@ -134,7 +134,7 @@
                          hurt (:danger (cost/route-danger (game/version-of p) #(field/reach-fn (field/field p {:mob (:name %) :pos (:pos %)} lookups))
                                                           (map #(zipmap [:x :y :z] %) cells) mobs (.-equipment self)
                                                           :weapon weapon :health (.-health self)))]]
-               {:heading h :price (cost/opening-price body hurt {:spawns (spawn-light/spawns-over p (spawn-light/walked (sh-sense/feet p) cells))} (sh-sense/feet p)) :hurt hurt}))))
+               {:heading h :price (cost/opening-price body hurt {:spawns (spawn-light/spawns-over p (spawn-light/walked (sh-sense/feet p) cells) nil)} (sh-sense/feet p)) :hurt hurt}))))
 
 (def hold-policy
   "Policy of :fragile-hold, the start of the hold under way: it outlives the runs the dawn trigger fires again (a run's
