@@ -217,7 +217,16 @@
     (is (< (/ (- (price 0.01) (price 0)) (price 0)) 0.02) "a way that goes on 99 times in 100 prices as a seen one, near enough")
     (is (< (price 0) (price 0.5)) "the likelier its dead end, the dearer")
     (is (< (price 0) (price 1)))
-    (is (= (:damage (caught 0 nil)) (:damage (caught 0 0.5))) "with no way caught, the race's seconds bound nothing: the prior's own blows")))
+    (is (= (:damage (caught 0 nil)) (:damage (caught 0 0.5))) "on land the race's seconds bound nothing: the prior's own blows, counted on land flights")))
+
+(deftest a-swim-on-a-free-way-is-caught-for-no-longer-than-the-race-keeps-the-drowned-in-reach
+  (let [m (mob "drowned" 4 35)
+        caught #(:caught (cost/flee-answer {:health 13 :food 20 :mobs [m] :swim 6 :land ##Inf :caught 0 :caught-s %}))
+        own (:damage (cost/flee-answer {:health 13 :food 20 :mobs [m] :swim 6 :land ##Inf}))]
+    (is (< (:damage (caught 0.5)) (:damage (caught nil))) "with no heading caught, the prior's own blows")
+    (is (= (max own (threat/mob-hurt (cost/armour-stats nil) (threat/kind m) (* 0.5 (answer/reach-rate m)) identity 1))
+           (:damage (caught 0.5)))
+        "with headings timed, the prior's blows last no longer than the race's seconds in reach")))
 
 (deftest a-walk-caught-beside-a-creeper-takes-its-blast-as-a-sure-part-of-the-life
   (let [walk (cost/flee-answer {:food 20 :mobs [(mob "creeper" 1) (mob "zombie" 3 35)] :caught 1})
