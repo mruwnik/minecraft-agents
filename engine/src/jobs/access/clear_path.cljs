@@ -134,7 +134,7 @@
                       :units :cells :done (count (:dug m)) :left (max 0 (- (count cells) (count (:dug m))))))))
 
 (defn wall-rows
-  "How many rows of the wall the door has dug or planned, cells (a plan's) on top of the dug ones: their columns."
+  "How many rows of the wall the door has dug, with cells (a plan's) on top of the dug ones: their columns."
   [c cells]
   (count (distinct (map (fn [[x _ z]] [x z]) (concat (map :cell (:dug (ctx/mem c))) cells)))))
 
@@ -144,7 +144,7 @@
   (let [data (result-of c detail)
         {:keys [guessed-rows seen-rows cells]} (ctx/mem c)]
     (when guessed-rows
-      (ctx/emit! c :clear-path.far-side :info {:seen guessed-rows :rows (max (or seen-rows 0) (wall-rows c cells)) :open (= :done reason)
+      (ctx/emit! c :clear-path.far-side :info {:seen guessed-rows :rows (max (or seen-rows 0) (wall-rows c cells)) :dug (wall-rows c nil) :open (= :done reason)
                                                :text (str "a far side it could not see: " (name reason))}))
     (if (= :done reason)
       (ctx/end c :done nil data)

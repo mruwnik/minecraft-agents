@@ -1,22 +1,22 @@
 (ns world-test.far-side-rows
   "tools/event-counts.mjs far-side-rows: counts the measured prior behind jobs.lib.cost.door ::wall-rows from the trial bodies'
   clear-path.far-side events (the probes' walls are staged): a door whose far side it could not see, the rows of wall it had seen then (:seen), all it
-  found (:rows), and whether it found the far side :open. Rows by [body time-ms], folded into the counts file's :far-side.
+  found (:rows, planned ones too), those it dug (:dug), and whether it found the far side :open. Rows by [body time-ms], folded into the counts file's :far-side.
   :setting {:k :n} is ::wall-rows: k unseen rows found wall of n looked at (those and each far side found open). A door
-  given up (:open false) is censored: its :rows are a lower bound of the wall, so it adds its rows past :seen as wall and
-  no far side, never an end at :rows. :censored counts them.
+  given up (:open false) is censored: the rows it dug are a lower bound of the wall (planned ones never looked at), so it adds
+  its :dug rows past :seen as wall and no far side, never an end. :censored counts them.
   Pure parts: scan-line, fold, report."
   (:require [cljs.reader :as reader]
             [clojure.string :as str]))
 
 (defn scan-line
-  "One log line -> [time-ms {:seen :rows :open}] when it is a clear-path.far-side, else nil."
+  "One log line -> [time-ms {:seen :rows :dug :open}] when it is a clear-path.far-side, else nil."
   [line]
   (when (str/includes? line ":kind :clear-path.far-side")
     (let [{:keys [time-ms data]} (reader/read-string line)
-          {:keys [seen rows open]} data]
+          {:keys [seen rows dug open]} data]
       (when (and time-ms (number? seen) (number? rows))
-        [time-ms {:seen seen :rows rows :open (true? open)}]))))
+        [time-ms {:seen seen :rows rows :dug (if (number? dug) dug rows) :open (true? open)}]))))
 
 (defn fold
   "counts with rows {[body time-ms] row} merged into :far-side; a row already there stays."
@@ -27,6 +27,6 @@
   "{:doors :open :censored :setting {:k :n}} of the :far-side rows."
   [rows]
   (let [rs (vals rows)
-        k (reduce + (map #(max 0 (- (:rows %) (:seen %))) rs))
+        k (reduce + (map #(max 0 (- (if (:open %) (:rows %) (:dug %)) (:seen %))) rs))
         open (count (filter :open rs))]
     {:doors (count rs) :open open :censored (- (count rs) open) :setting {:k k :n (+ k open)}}))
