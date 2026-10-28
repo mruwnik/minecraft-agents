@@ -147,6 +147,25 @@
       (is (< (js/Math.abs (- x (min stake (+ back again)))) 1e-4)
           (str "damage " damage " seconds " seconds " then " (some? then) ": the price is its own fixed point")))))
 
+(deftest the-death-price-is-its-own-fixed-point-where-a-kink-lies-just-over-its-root
+  (let [bed (assoc (body 5) :respawn {:x 40 :y 64 :z 0})
+        e (assoc (answer/healed bed) :carried 0 :level 0)
+        stake (death/give-up-cost e)
+        back (death/back-cost e here)]
+    (doseq [damage [8 12 16]
+            seconds (range 0.5 40 0.35)
+            :let [a {:damage damage :hit 5 :seconds 1 :then [{:damage 12 :hit 5 :seconds seconds}]}
+                  x (- (:met (cost/death-price bed [a] here)) (death/experience-cost bed))]
+            :when (< x (death/give-up-cost bed))
+            :let [again (cost/answer-price* e a here {:met x :clear (min stake back)})]]
+      (is (< (js/Math.abs (- x (min stake (+ back again)))) 1e-4)
+          (str "damage " damage " then-seconds " seconds ": the price is its own fixed point")))))
+
+(deftest a-stake-nothing-bounds-leaves-a-death-that-never-ends-unpriced-not-nan
+  (let [bed (assoc (body 5) :respawn {:x 40 :y 64 :z 0} :stake ##Inf)
+        lethal {:damage 100 :hit 5 :blasts [100] :seconds 1}]
+    (is (= ##Inf (:met (cost/death-price bed [lethal] here))))))
+
 (deftest a-survivor-goes-on-or-gives-the-spot-up-as-a-death-does
   (let [dear {:damage 100 :hit 5 :seconds 5000}
         after-it {:damage 0 :seconds 1 :then [dear]}]

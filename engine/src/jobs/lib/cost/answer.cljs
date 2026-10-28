@@ -179,8 +179,8 @@
   (:met; :clear, none, is death/death-cost) at full health with nothing carried by the cheapest of answers, each death
   there costing the same once more. That meet's price is the fixed point x = min(stake, back + min over answers of
   p + k x): p an answer's price with its deaths free, k its chance of a death its mob outlives (the price's rise per
-  second of such a death), so x = min(stake, min over answers of (back + p) / (1 - k)); a survivor's choice to give up
-  (go-on) bends the price, so p and k are its line at x (found from x = 0 on). No answers: no mob waits."
+  second of such a death). A survivor's choice to give up (go-on) bends the price, so x is found by search: the least
+  root of fixed(x) = x (doubling scan, then bisection). No answers: no mob waits."
   [body answers at]
   (let [answers (filter some? answers)
         clear (bare body at)]
@@ -190,23 +190,22 @@
             stake (death/give-up-cost e)
             back (death/back-cost e at)
             price (fn [a x] (answer-price* e a at {:met x :clear (min stake back)}))
-            line (fn [a x] (let [q (price a x) k (- (price a (inc x)) q)] [(- q (* k x)) k]))
-            solve (fn [lines] (reduce min stake (map (fn [[p k]] (if (< k 1) (/ (+ back p) (- 1 k)) ##Inf)) lines)))
             tol 1e-6
             fixed (fn [x] (reduce min stake (map #(+ back (price % x)) answers)))
-            converged? (fn [lines x] (every? (fn [[a [p k]]] (< (js/Math.abs (- (price a x) (+ p (* k x)))) tol)) (map vector answers lines)))
-            ;; the residual fixed(x) - x never rises and is >= 0 at 0, <= 0 at stake: bisection brackets its root when the lines stop short
-            bisect (fn [] (loop [lo 0 hi stake n 0]
+            ;; fixed is nondecreasing but its slope may pass 1, so roots of fixed(x) - x need not be unique: the doubling
+            ;; scan finds the first x past the least one, and the bisection of the cell before it lands on a root in it
+            cap (min stake 1e12)
+            above (loop [x 1] (cond (<= (fixed x) x) x
+                                    (>= x cap) ##Inf
+                                    :else (recur (min cap (* 2 x)))))
+            x (cond (<= (fixed 0) 0) 0
+                    (infinite? above) ##Inf
+                    :else (loop [lo (if (= above 1) 0 (/ above 2)) hi above]
                             (let [mid (/ (+ lo hi) 2)]
-                              (cond (or (= n 60) (< (- hi lo) tol)) mid
-                                    (pos? (- (fixed mid) mid)) (recur mid hi (inc n))
-                                    :else (recur lo mid (inc n))))))
-            x (loop [lines (map #(line % 0) answers) n 0]
-                (let [x (solve lines)]
-                  (cond (converged? lines x) x
-                        (= n 8) (bisect)
-                        :else (recur (map #(line % x) answers) (inc n)))))
-            meet (reduce min (map #(price % x) answers))]
+                              (cond (< (- hi lo) tol) mid
+                                    (pos? (- (fixed mid) mid)) (recur mid hi)
+                                    :else (recur lo mid)))))
+            meet (if (infinite? x) ##Inf (reduce min (map #(price % x) answers)))]
         (assoc clear :met (+ (death/experience-cost body)
                              (min (death/give-up-cost body)
                                   (+ (death/back-cost body at) (if (death/kept? body at) 0 (or (:carried body) 0)) meet))))))))
