@@ -209,7 +209,7 @@
         body (hostile/body-of c)
         at (u/self-pos c)
         answer #(cost/cover-answer {:equipment equipment :mobs mobs} %)
-        death (delay (cost/death-price body (vals (hostile/cornered-answers c hostiles specs (open? :back-off))) at))
+        death (delay (cost/death-price body (hostile/again-answers c hostiles) at))
         price #(cost/answer-price* body (answer %) at @death)
         cheaper (fn [ways] (some->> (keep specs ways) seq (apply min-key price)))
         pillar (when (open? :pillar) (pillar-cover c hostiles))]

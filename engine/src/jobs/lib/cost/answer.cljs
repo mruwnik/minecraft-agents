@@ -4,8 +4,8 @@
   An answer is {:damage hp :hit hp :shape :blasts [hp] :spread [hp] :seconds s :then [answer] :caught {:chance :damage :hit :blasts}}:
   the hp it is expected to cost, the creeper blasts in it landing for certain (:spread: as many equally likely blast
   totals) and the rest in blows of about :hit hp each (:shape: their count's width, death/blow-chance), the seconds it takes, what may follow it (the cheapest of :then is paid too) and,
-  for a walk away, the chance its mobs catch it and the blows they then land; :spent when its mobs are all creepers (the
-  blast that kills spends its creeper: no mob waits at the death spot). answer-price: the hp at the health each
+  for a walk away, the chance its mobs catch it and the blows they then land; :spent when its one mob is a creeper (the
+  blast that kills spends it: no mob waits at the death spot). answer-price: the hp at the health each
   leaves in the outcomes it lives through (lived-damage, health/hp-cost), the death the blows risk (death-chance x death-price), the seconds, and the cheapest
   :then at full health. death-price: the one price of a death, the mob met again where the body goes back.
 
@@ -196,12 +196,16 @@
 
 (defn decide
   "{:answer key :prices {key seconds} :death}: the cheapest of answers {key answer-or-nil} (nil: not open to the body) by
-  answer-price, death the death-price over all of them; nil when none is open."
-  [body answers at]
-  (let [death (delay (death-price body (vals answers) at))
-        prices (into {} (keep (fn [[k a]] (when a [k (answer-price* body a at @death)]))) answers)]
-    (when (seq prices)
-      {:answer (key (first (sort-by val prices))) :prices prices :death @death})))
+  answer-price, death the death-price over again (default all of them): the answers of the meet the walk back comes to,
+  fresh (again-answers); nil when none is open."
+  ([body answers at] (decide body answers at (vals answers)))
+  ([body answers at again]
+   (let [death (delay (death-price body again at))
+         prices (into {} (keep (fn [[k a]] (when a [k (answer-price* body a at @death)]))) answers)]
+     (when (seq prices)
+       {:answer (key (first (sort-by val prices))) :prices prices :death @death}))))
+
+(defn lone-creeper? [mobs] (and (= 1 (count mobs)) (= "creeper" (:name (first mobs)))))
 
 (defn fight-answer
   "The answer of fight (fight/fight-damage's argument, :health the body's, default 20): its damage and seconds, :hit the
@@ -228,7 +232,7 @@
              :hit hit
              :seconds seconds}
       shape (assoc :shape shape)
-      (and (seq mobs) (every? #(= "creeper" (:name %)) mobs)) (assoc :spent true)
+      (lone-creeper? mobs) (assoc :spent true)
       (seq left) (assoc :left (vec left))
       (and m (< (+ damage left-damage) gone-bad)) (assoc :caught (cond-> {:chance (:chance pr) :hit hit :damage gone-bad}
                                                                   (:shape pr) (assoc :shape (:shape pr)))))))
@@ -432,7 +436,7 @@
                             {d :damage d-shape :shape} (mix [[ww {:damage dw :shape (when (pos? extra) (/ (* dw dw) extra))}]
                                                              [(- 1 ww) {:damage dp :shape (:shape pr)}]])]
                         (cond-> (assoc-in walk [:caught :damage] (+ d (reduce + 0 (get-in walk [:caught :blasts]))))
-                          (every? #(= "creeper" (:name %)) mobs) (assoc :spent true)
+                          (lone-creeper? mobs) (assoc :spent true)
                           shape (assoc :shape shape)
                           d-shape (assoc-in [:caught :shape] d-shape))))
             walk (walk-of per times)
@@ -492,6 +496,12 @@
            :flee (flee-answer {:health health :food food :equipment equipment :mobs ms :caught caught :later fight :swim swim})}
           (map (fn [[way cover]] [way (cover-answer {:equipment equipment :mobs ms} cover)]))
           covers)))
+
+(defn again-answers
+  "The answers of the meet a walk back after a death comes to, beside mob names at full health: threat-answers caught at
+  the prior (it comes from the respawn side, not into this spot's dead end), no blows felt."
+  [body names]
+  (vals (threat-answers (healed body) names nil)))
 
 (defn kill-price
   "Seconds killing one mob-name met beside body costs at `at`: answer-price of fighting it (threat-answers' :fight),

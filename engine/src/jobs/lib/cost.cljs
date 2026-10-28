@@ -92,6 +92,7 @@
 (def answer-price* answer/answer-price*)
 (def decide answer/decide)
 (def death-price answer/death-price)
+(def again-answers answer/again-answers)
 (def look-answer glance/look-answer)
 (def look-value glance/look-value)
 (def closed-chance glance/closed-chance)

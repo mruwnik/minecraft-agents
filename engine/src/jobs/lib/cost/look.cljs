@@ -65,11 +65,12 @@
   price of the cheapest now less the expected price of each outcome's cheapest (at the health now), :cost the rest of
   the look's price (its blows and seconds, and the outcomes paid at the health they leave). 0 value when the look
   changes nothing; decide takes the look exactly when the value is over the cost. Each death pays answer/death-price
-  over the look and the answers now."
-  [body now {:keys [outcomes] :as look} at]
-  (let [death (answer/death-price body (cons look (vals now)) at)
-        price #(answer/answer-price* body % at death)
-        best (apply min (map price (filter some? (vals now))))
-        after (reduce + (map (fn [[chance a]] (* chance (price a))) outcomes))]
-    {:value (- best after)
-     :cost (- (price look) after)}))
+  over again (default the look and the answers now), as decide's."
+  ([body now look at] (look-value body now look at (cons look (vals now))))
+  ([body now {:keys [outcomes] :as look} at again]
+   (let [death (answer/death-price body again at)
+         price #(answer/answer-price* body % at death)
+         best (apply min (map price (filter some? (vals now))))
+         after (reduce + (map (fn [[chance a]] (* chance (price a))) outcomes))]
+     {:value (- best after)
+      :cost (- (price look) after)})))

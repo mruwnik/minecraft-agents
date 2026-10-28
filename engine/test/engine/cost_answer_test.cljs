@@ -132,6 +132,22 @@
       (is (zero? (extra "creeper")) "a creeper's blast spends it: no mob waits at the spot")
       (is (pos? (extra "zombie")) "a zombie does"))))
 
+(deftest the-walk-back-meets-the-mob-fresh-not-with-the-blows-felt-or-the-dead-end-here
+  (let [bed (assoc (body 20) :respawn {:x 40 :y 64 :z 0} :weapon sword)
+        zombie (mob "zombie" 2 35)
+        f (cost/fight-answer (fight sword zombie))
+        felt (assoc f :damage 40)
+        dead-end (cost/flee-answer {:food 20 :mobs [zombie] :later f :caught 1})
+        here {:fight felt :flee dead-end}
+        fresh (answer/again-answers bed "zombie")
+        met #(:met (:death (apply cost/decide bed here {:x 0 :y 64 :z 0} %&)))]
+    (is (< (met fresh) (met)) "the blows felt and the dead end are this meet's: the walk back comes from the bed side")
+    (is (= (cost/death-price bed fresh {:x 0 :y 64 :z 0}) (:death (cost/decide bed here {:x 0 :y 64 :z 0} fresh))))))
+
+(deftest a-blast-spends-its-creeper-only-when-no-other-mob-is-left
+  (is (:spent (cost/fight-answer (fight sword (mob "creeper" 3)))))
+  (is (not (:spent (cost/fight-answer (fight sword (mob "creeper" 3) (mob "creeper" 5))))) "the other creeper still waits"))
+
 (deftest a-fight-is-taken-when-it-is-cheaper-than-walking-away-and-meeting-the-mob-again
   (are [health weapon mobs expected] (= expected (choice health weapon mobs))
     20 sword [(mob "zombie" 3 35)] :fight

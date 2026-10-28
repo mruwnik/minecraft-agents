@@ -207,7 +207,7 @@
         fire-tries (:fire-tries (ctx/mem c) 0)
         armed? (some? (combat/best-weapon (:primitives c) weapons))
         weighed-mobs (if (and (:hit-on-the-run (ctx/mem c)) (not fire?)) (hitters c hostiles) hostiles)
-        weighed (hostile/weigh c (cornered-answers c weighed-mobs home?))
+        weighed (hostile/weigh c (cornered-answers c weighed-mobs home?) weighed-mobs)
         swim? (and (boolean (some #(= "drowned" (.-name %)) hostiles)) (breath/swimming? (:primitives c)))
         ;; afloat, a drowned only heard or out of a swing's reach is no fight the body can win: the swim out comes first
         win? (and (not blind?) (seq hostiles) (not-any? combat/creeper? hostiles) (not-any? combat/enderman? hostiles) (= :fight (:answer weighed))

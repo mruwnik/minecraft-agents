@@ -245,7 +245,7 @@
         ring-world (costed c nil other? true)
         cornered (delay (when-let [mobs (seq (keep #(some->> (:mob %) (hash-map :distance 0 :name)) chasers))]
                           (let [fight (cost/fight-answer {:weapon (:weapon body) :equipment (:equipment body) :health (:health body) :mobs mobs})]
-                            (apply min (vals (:prices (cost/decide body (cost/cornered-answers {:equipment (:equipment body) :mobs mobs :fight fight :covers covers}) pos)))))))
+                            (apply min (vals (:prices (cost/decide body (cost/cornered-answers {:equipment (:equipment body) :mobs mobs :fight fight :covers covers}) pos (cost/again-answers body (map :name mobs)))))))))
         trapped-at (fn [cell] (or @cornered (cost/route-death-cost body {:cells [cell] :threats caught-by} cell)))
         counts (wworld/way-counts p)
         spawn-kill (delay (cost/spawn-kill body pos))
