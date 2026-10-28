@@ -1,6 +1,6 @@
 ;; Card 3c8e82a7: a go-to toward a goal with a skeleton and a zombie between the body and the goal. The hostile reflex flees away from the goal
-;; (back toward the start), it does not sprint at the skeleton or run on through the mobs; a lone skeleton between an armed body and its
-;; goal is a fight (the way back passes it), one with nothing past it is stepped away from; one shooting an unarmed
+;; (back toward the start), it does not sprint at the skeleton or run on through the mobs; a lone skeleton between a body in iron with a sword and its
+;; goal is a fight (the way back passes it); unarmoured on hard (the test server) go-to waits instead, one with nothing past it is stepped away from; one shooting an unarmed
 ;; body 8 blocks off is walked away from (it stands and shoots within its bow range).
 ;; Open plot 64 long; body at [4.5 0 16.5], goal at x 56; mobs NoAI with helmets (no sun burn).
 {:defaults
@@ -30,8 +30,18 @@
    :after [[:body-far [48.5 0 16.5] 14]]
    :limit-s 50}
   {:name "armed-body-approaches-a-lone-skeleton"
+   ;; unarmoured on hard, the walk past its arrows prices over the risk the body affords: go-to waits, no fight
    :body {:yaw 270 :inventory [["iron_sword" 1]]}
    :act [[:summon "skeleton" [20.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:job (jobs.movement.go-to {:pos #at [56 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :risky}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :hostile.decided :data {:mob "skeleton" :decision :fight}} :for-s 30}]
+   :limit-s 70}
+  {:name "iron-body-approaches-a-lone-skeleton"
+   :body {:yaw 270 :inventory [["iron_sword" 1]]}
+   :act [[:rcon "item replace entity $BODY armor.head with minecraft:iron_helmet"] [:rcon "item replace entity $BODY armor.chest with minecraft:iron_chestplate"]
+         [:rcon "item replace entity $BODY armor.legs with minecraft:iron_leggings"] [:rcon "item replace entity $BODY armor.feet with minecraft:iron_boots"]
+         [:summon "skeleton" [20.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:job (jobs.movement.go-to {:pos #at [56 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :hostile.decided :data {:mob "skeleton" :decision :fight}} :within-s 30}
             {:event {:source :action :kind :done :data {:name "attack" :status "hit"}} :within-s 60}]
@@ -42,12 +52,13 @@
    :expect [{:event {:source :job :kind :hostile.decided :data {:mob "skeleton" :decision :flee}} :within-s 30}
             {:no-event {:source :action :kind :done :data {:name "attack"}} :for-s 30}]
    :limit-s 40}
-  {:name "armed-body-steps-out-of-range-of-a-lone-skeleton-it-fled-twice"
+  {:name "armed-body-fights-a-lone-skeleton-it-fled-twice"
+   ;; on hard, three walks under its arrows cost more than closing on it
    :body {:yaw 270 :inventory [["iron_sword" 1]]}
    :memory [{:kind :hostile :data {:mob "skeleton" :decision :flee}} {:kind :hostile :data {:mob "skeleton" :decision :flee}}]
    :act [[:summon "skeleton" [16.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
-   :expect [{:event {:source :job :kind :hostile.decided :data {:mob "skeleton" :decision :flee}} :within-s 30}
-            {:no-event {:source :action :kind :done :data {:name "attack"}} :for-s 30}]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:mob "skeleton" :decision :fight}} :within-s 30}
+            {:event {:source :action :kind :done :data {:name "attack" :status "hit"}} :within-s 40}]
    :limit-s 40}
   {:name "armed-body-flees-six-skeletons-it-met-for-the-first-time"
    :body {:yaw 270 :inventory [["wooden_sword" 1]]}
