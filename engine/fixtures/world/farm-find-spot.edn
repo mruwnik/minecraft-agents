@@ -32,6 +32,8 @@
    :act [[:job (jobs.farm.find-spot {:range 20 :settings {:jobs.farm.find-spot/depth 7 :jobs.farm.find-spot/limit 3}})]]
    :expect [{:event {:source :job :kind :completed :data {:spots [:has {:level [:>= 0] :score [:any]}]}} :within-s 60 :of-job true}]}
   ;; Card b019a678: crops need light 9+, so a dark cave floor is no field (the body sees no ground to walk to in the dark and has no light: the job stops nothing-possible, never completes) and a lit one is.
+  ;; The cause is the search's :why (335a1a869; before it every miss ended :none): :stuck when the legs into the unseen dark fail. Card 07fa395c:
+  ;; the root often waits :risky instead (dark open ground over the hp allowance) and never stops: the case then fails, as it should.
   {:name "dark-cave-floor-is-no-spot"
    :plot {:light :dark :height 6 :floor "grass_block"}
    :body {:at [64.5 0 32.5] :settle-s 2}

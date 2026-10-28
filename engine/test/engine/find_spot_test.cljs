@@ -130,7 +130,7 @@
     {:tops [63 64] :worth nil :away 4000} :barren
     {:tops [63 64] :worth 100 :away 0} nil
     {:tops [63 64] :worth 100 :away 4000} :far
-    {:tops [52 64] :worth 10 :away 0} :steep))
+    {:tops [52 64] :worth 5 :away 0} :steep))
 
 (deftest water-is-brought-only-when-some-is-known
   (is (= 0 (:water (:costs (pt/field-price (cells 25 {:wet? false}) 0 (pt/cell-worth true) nil)))) "no water known: none is brought")
