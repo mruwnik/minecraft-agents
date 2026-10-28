@@ -173,7 +173,7 @@
 (defn seen-bed-places
   "The bed cells the body has seen (still beds) within radius, nearest first."
   [p radius]
-  (map :pos (look/seen-blocks p {:names wood/bed-names :radius (min 16 radius) :live? true :max 8})))
+  (map :pos (look/seen-blocks p {:names wood/bed-names :radius radius :live? true :max 8})))
 
 (defn home-target
   "The place to go home to before night: the remembered :home, else :bed (view: an engine.memory view)."
@@ -235,7 +235,7 @@
                              (not (walk-unsafe? p view pos))
                              (or overdue? (not (kept-shelters (sh-inside/walk-leaves-shelter? p shelter pos 1))) (courtesy-walk? p view pos))))]
       (distinct (concat (some-> (seen-bed p ok?) vector)
-                        (->> (concat (sh-spawn/standing-beds p view radius) (seen-bed-places p radius) (some-> (sh-spawn/spawn-bed-pos p view) vector))
+                        (->> (concat (sh-spawn/standing-beds p view radius) (seen-bed-places p (min 16 radius)) (some-> (sh-spawn/spawn-bed-pos p view) vector))
                              distinct
                              (sort-by #(u/dist (u/self-pos {:primitives p}) %))
                              (filter ok?)))))))

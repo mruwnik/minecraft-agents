@@ -8,6 +8,7 @@
             [engine.sense-test :as sense]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.shelter.beds :as sh-beds]
+            [jobs.survival.set-spawn :as set-spawn]
             [engine.shelter-support :as st :refer [setup know-bed! calls entries emitted noon night]]))
 
 (def bed {:x 6 :y 64 :z 0})
@@ -26,6 +27,7 @@
   "Set up world, run (f eng) before the job, run jobs.survival.set-spawn with args: {:eng :p :seen :id}."
   [world args f]
   (let [s (setup world)]
+    (tu/seeing-all (:p s))
     (f (:eng s))
     (let [id (core/submit! (:eng s) (list 'jobs.survival.set-spawn args) {})]
       (await (run-until-empty (:eng s) 6))
@@ -34,7 +36,8 @@
 (defn ^:async wait-reason
   "Why set-spawn waits once it has looked round."
   [world known-bed]
-  (let [{:keys [eng]} (setup world)]
+  (let [{:keys [eng p]} (setup world)]
+    (tu/seeing-all p)
     (when known-bed (know-bed! eng known-bed))
     (let [id (core/submit! eng '(jobs.survival.set-spawn) {})]
       (await (run-until-empty eng 6))
@@ -112,6 +115,27 @@
         (let [far {:x 11 :y 64 :z 0}
               {:keys [p]} (await (run-set-spawn {:time noon :blocks {"11,64,0" "red_bed"}} {} (constantly nil)))]
           (is (= [far] (mapv st/arg-pos (calls p "useOn")))))))))
+
+(deftest set-spawn-uses-a-bed-it-has-seen-20-blocks-off
+  (async done
+    (run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (run-set-spawn {:time noon :blocks {"20,64,5" "red_bed"}} {} (constantly nil)))]
+          (is (= [{:x 20 :y 64 :z 5}] (mapv st/arg-pos (calls p "useOn")))))))))
+
+(defn bed-lookup-reads
+  "Primitive reads set-spawn's bed-of makes with no bed on an open seen floor reaching `half` blocks out."
+  [half]
+  (let [{:keys [eng p]} (setup {:time noon :floor [(- half) (- half) half half]})
+        reads (atom 0)
+        counting (js/Proxy. (tu/seeing-all p) #js {:get (fn [t k]
+                                                          (let [v (aget t k)]
+                                                            (if (fn? v) (fn [& args] (swap! reads inc) (.apply v t (to-array args))) v)))})]
+    (is (nil? (set-spawn/bed-of {:primitives counting :args {} :view #(mem/view (:store eng))})))
+    @reads))
+
+(deftest set-spawn-looks-for-a-bed-in-memory-not-cell-by-cell
+  (is (= (bed-lookup-reads 10) (bed-lookup-reads 60)) "more open seen ground costs no more reads: memory bounds the lookup"))
 
 (deftest set-spawn-finding-the-respawn-bed-gone-says-the-spawn-is-lost-once
   (async done
