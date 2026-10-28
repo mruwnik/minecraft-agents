@@ -739,6 +739,21 @@
           (is (= [47 63 29] (feet p)))
           (is (<= (count (filter #{:approach} (map :step (events-of seen :go-to.escalated)))) 4) "it walks to the nearest cell and looks, not round the yard"))))))
 
+(deftest a-dig-route-over-guesses-is-priced-once-over-the-chance-they-all-hold
+  ;; each guess holds with 1 - its class's risk: the route's seconds over the product, against :worth-s; a guess beside
+  ;; seen undiggable rock (a light) is of class :beside
+  (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "4,64,0" "air" "4,65,0" "air" "2,66,0" "glowstone")
+        p (hiding-with-pickaxe world #{[1 64 0] [1 65 0] [2 64 0] [2 65 0] [3 64 0] [3 65 0]})
+        answer #(choose/route-answer p [0 64 0] [4 64 0] (constantly true) (constantly false) false false %)
+        {:keys [seconds dig]} (answer {})
+        hold (fn [beside apart] (reduce * (map #(if (= % [2 65 0]) (- 1 beside) (- 1 apart)) dig)))
+        priced (fn [risk worth] (some? (answer {:guess-risk risk :worth-s worth})))]
+    (is (some #{[2 65 0]} dig) "the straight tunnel, under the light")
+    (is (= seconds (:seconds (answer {:guess-risk {:beside 0.5 :apart 0.2} :worth-s ##Inf}))) "the risk leaves the search alone")
+    (is (priced {:beside 0.5 :apart 0.2} (* 1.01 (/ seconds (hold 0.5 0.2)))) "priced once: no second factor on the route")
+    (is (not (priced {:beside 0.5 :apart 0.2} (* 0.99 (/ seconds (hold 0.5 0.2))))))
+    (is (= [[2 65 0]] (map :cell (filter :beside (choose/route-cells p [0 64 0] [4 64 0] (constantly true) (constantly false))))))))
+
 (deftest a-dig-route-goes-round-cells-may-dig-refuses
   (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "4,64,0" "air" "4,65,0" "air")
         p (tu/fake {:blocks world :inventory [{:name "stone_pickaxe" :count 1}]})

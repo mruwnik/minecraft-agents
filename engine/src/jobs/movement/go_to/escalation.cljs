@@ -169,15 +169,24 @@
                        (dec best))))))
 
 (defn note-guess!
-  "Memory :guess-looks {:bad :all}: a cell the route guessed as rock was looked at, and was (ok?) or was not as guessed."
-  [c ok?]
-  (ctx/update-mem! c update :guess-looks #(-> % (update :all (fnil inc 0)) (update :bad (fnil + 0) (if ok? 0 1)))))
+  "Memory :guess-looks {class {:bad :all}}: a cell the route guessed as rock, of class :beside or :apart
+  (escalate-choose/beside-undiggable?), was looked at, and was (ok?) or was not as guessed."
+  [c beside? ok?]
+  (ctx/update-mem! c update-in [:guess-looks (if beside? :beside :apart)]
+                   #(-> % (update :all (fnil inc 0)) (update :bad (fnil + 0) (if ok? 0 1)))))
+
+(def prior-good-looks
+  "Good looks a class of guess starts with, none bad: a prior, not measured. Unseen rock apart from seen undiggable rock
+  is nearly always rock, so one bedrock cell does not make every guess dear; beside it, the next looks decide."
+  {:beside 1 :apart 10})
 
 (defn guess-risk
-  "The chance a cell the route guesses as rock is not diggable, from the guesses this call looked at: bad over all and one."
+  "{:beside :apart}: the chance a guess of each class is not diggable, from those this call looked at: bad over all
+  and the class's prior-good-looks."
   [c]
-  (let [{:keys [bad all]} (:guess-looks (ctx/mem c))]
-    (/ (or bad 0) (inc (or all 0)))))
+  (let [looks (:guess-looks (ctx/mem c))]
+    (into {} (map (fn [[k prior]] (let [{:keys [bad all]} (get looks k)] [k (/ (or bad 0) (+ prior (or all 0)))])))
+          prior-good-looks)))
 
 (defn way-opts
   "The opts of go-to call c's choice of a way from feet (escape/choose and the dig ways): a search that stood the body
@@ -565,15 +574,16 @@
   on top only after the dig found no side stand to step aside to and look from), noting it as a hole once dug.
   The dig's outcome, :open for a cell open already, :replan for a guessed cell the look shows otherwise (the route
   was planned over rock that is not there), or :not-diggable."
-  [c {:keys [cell guess block] :as planned}]
+  [c {:keys [cell guess block beside] :as planned}]
   (let [p (:primitives c)]
     (when (dig-look/unknown? p cell) (await (dig-look/look-at! c cell)))
     (let [block-at (escape/block-at-of p)
-          n (block-at cell)]
+          n (block-at cell)
+          undiggable? (or (escape/protected? n) (not (escape/diggable? block-at (may-dig-fn c (own-cut? c)) (own-dig-fn c) cell)))]
       (cond
-        (and guess (not (dig-look/unknown? p cell)) (not= n block)) (do (note-guess! c (or (bs/passable? n) (and (not (escape/protected? n)) (escape/diggable? block-at (may-dig-fn c (own-cut? c)) (own-dig-fn c) cell)))) :replan)
+        (and guess (not (dig-look/unknown? p cell)) (not= n block)) (do (note-guess! c beside (not undiggable?)) :replan)
         (bs/passable? n) :open
-        (or (escape/protected? n) (not (escape/diggable? block-at (may-dig-fn c (own-cut? c)) (own-dig-fn c) cell))) :not-diggable
+        undiggable? :not-diggable
         :else
         (let [fetch? (fetch-tool? c)
               args {:ignore-zones? (boolean (:ignore-zones? (:args c))) :ways (ways-for fetch?) :need-drop fetch? :accept #{:lava-adjacent}}
@@ -586,7 +596,7 @@
           (when (= :dug o)
             (forget-dug-own! c [dug])
             (note-holes! c [dug]))
-          (when guess (note-guess! c true))
+          (when guess (note-guess! c beside true))
           o)))))
 
 (defn replans-spent?
