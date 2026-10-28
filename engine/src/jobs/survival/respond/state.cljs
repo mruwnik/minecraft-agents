@@ -102,14 +102,18 @@
 
 (defn tried! [c option] (ctx/update-mem! c update :tried (fnil conj #{}) option))
 
-(defn seen-fail! [c option] (ctx/update-mem! c update-in [:seen-fails option] (fnil inc 0)))
+(defn seen-fail! [c option class] (ctx/update-mem! c update-in [:seen-fails option class] (fnil inc 0)))
+
+(defn add-seen
+  "Counts {class {:k :n}} with seen {class n} failures added to their class: each is one more attempt, failed."
+  [counts seen]
+  (reduce-kv (fn [m class n] (cond-> m (contains? m class) (update class #(-> % (update :k + n) (update :n + n)))))
+             counts seen))
 
 (defn with-seen-fails
-  "Counts {class {:k :n}} of option's failures with the ones this response saw (seen-fail!) added to every class: each
-  is one more attempt, failed."
+  "Counts {class {:k :n}} of option's failures with the ones this flight saw since its last gain (seen-fail!) added (add-seen)."
   [c option counts]
-  (let [n (get-in (ctx/mem c) [:seen-fails option] 0)]
-    (update-vals counts #(-> % (update :k + n) (update :n + n)))))
+  (add-seen counts (get-in (ctx/mem c) [:seen-fails option])))
 
 (defn near-known
   "The hostiles p can be said to know within radius (ranged ones within ranged-radius), the dead skipped."

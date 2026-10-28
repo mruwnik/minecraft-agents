@@ -44,20 +44,20 @@
     :again))
 
 (defn ^:async refuge-round!
-  "A step in a refuge: building the pillar (a hostile in the cell of the next block is struck out of it and the refusal
-  seen (flight/seen-fail!): the next step decides again, the pillar dearer; one more try after another refusal, which a
-  hit or knockback can cause), or hidden in it (one hold step, :again, until it ends the flight)."
+  "A step in a refuge: building the pillar, or hidden in it (one hold step, :again, until it ends the flight). A pillar
+  that ends short for a mob (a refused block or a knockback with a hostile near) is a seen failure of its class
+  (flight/seen-fail!; a hostile in the cell of the next block struck out of it first): the refuge is dropped and the
+  next step decides again, that pillar dearer. Short for anything else (no floor, no headroom) the option is tried."
   [c]
-  (let [{:keys [kind hidden] :as refuge} (:refuge (ctx/mem c))]
+  (let [{:keys [kind hidden class] :as refuge} (:refuge (ctx/mem c))]
     (if hidden
       (await (hide-hold! c))
       (case (await (pillar/step! c refuge))
-        :failed (cond
-                  (and (= :pillar kind) (await (pillar/knock-off! c))) (do (flight/seen-fail! c :pillar)
-                                                                           (ctx/update-mem! c dissoc :refuge)
-                                                                           :again)
-                  (or (not= :pillar kind) (:retried refuge)) (await (abandon-refuge! c))
-                  :else (do (ctx/update-mem! c assoc-in [:refuge :retried] true) :again))
+        :mob-failed (do (await (pillar/knock-off! c))
+                        (flight/seen-fail! c :pillar class)
+                        (ctx/update-mem! c dissoc :refuge)
+                        :again)
+        :failed (await (abandon-refuge! c))
         :hidden (hide-now! c refuge (hide-texts kind))
         :again))))
 
@@ -145,9 +145,11 @@
     (await (plug! c option ways))))
 
 (defn ^:async pillar!
-  "Start a pillar (respond.pillar/plan!, through another's area only with trespass?) when it fits: a step's result, else nil."
+  "Start a pillar (respond.pillar/plan!, through another's area only with trespass?) when it fits (debug retreat.pillar
+  {:class :at}: its class and feet cell, for event-counts wall-places): a step's result, else nil."
   [c trespass?]
   (when-let [refuge (await (pillar/plan! c trespass?))]
+    (ctx/emit! c :retreat.pillar :debug {:class (:class refuge) :at (mapv (:anchor refuge) [:x :y :z])})
     (await (start-refuge! c refuge))))
 
 (defn ranged-known?

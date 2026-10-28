@@ -43,20 +43,35 @@
     (is (not (:mob? (end (place 150 "failed" "Server refused (entities near the cell: player#1)")
                          (ev 200 :child_ended "j1/plug/walls" {:status :stopped :reason :no-block})))))))
 
-(deftest a-pillar-is-classed-by-a-mob-in-or-beside-the-body-cell-and-fails-for-it-by-its-refused-place
-  (let [pillar (fn [hostiles end] (val (first (w/scan [(choice 0 hostiles) (ev 100 :child_started "j1/pillar" {:slot :pillar})
-                                                       (ev 200 :child_ended "j1/pillar" end)]))))]
-    (is (= {:way :pillar :class :beside :mob? true :done? false}
-           (select-keys (pillar ["zombie 7 [1 64 1]"] {:status :stopped :reason :place-failed}) [:way :class :mob? :done?])))
-    (is (= :clear (:class (pillar ["zombie 7 [2 64 0]"] {:status :done})))
-        "a mob two cells off is beside a side cell, not the body's")
-    (is (= {["g" "j1/pillar" 100] :clear ["g" "j1/pillar" 5100] :beside}
-           (update-vals (w/scan [(choice 0 ["zombie 7 [3 64 0]"])
-                                 (ev 100 :child_started "j1/pillar" {}) (ev 200 :child_ended "j1/pillar" {:status :stopped :reason :place-failed})
-                                 (ev 5000 :retreat.search "j1" {:from [0 64 0] :chasers [["zombie" [1 64 0]]]})
-                                 (ev 5100 :child_started "j1/pillar" {}) (ev 5200 :child_ended "j1/pillar" {:status :stopped :reason :place-failed})])
+(defn begun [t class & [at]] (ev t :retreat.pillar "j1" {:class class :at (or at [0 64 0])}))
+
+(deftest a-pillar-is-classed-by-the-engines-retreat-pillar-and-fails-for-a-mob-only-with-mob-evidence
+  (let [pillar (fn [end] (val (first (w/scan [(choice 0 ["zombie 7 [1 64 1]"]) (begun 50 :clear)
+                                              (ev 100 :child_started "j1/pillar" {:slot :pillar}) (ev 200 :child_ended "j1/pillar" end)]))))
+        refused (fn [mob] {:status :stopped :reason :place-failed :ending {:data (cond-> {:reason :place-failed} mob (assoc :mob mob))}})]
+    (is (= {:way :pillar :class :clear :situation ["g" [0 64 0]] :mob? true :done? false}
+           (select-keys (pillar (refused "zombie")) [:way :class :situation :mob? :done?]))
+        "the engine's class, not one guessed from the choice's floored cells")
+    (is (false? (:mob? (pillar (refused nil)))) "a refusal with no hostile near says nothing of mobs")
+    (is (:mob? (pillar {:status :stopped :reason :mob-in-cell})))
+    (is (:mob? (pillar {:status :stopped :reason :off-column :ending {:data {:mob "zombie"}}})) "a knockback with a hostile near")
+    (is (nil? (:class (val (last (sort-by key (w/scan [(begun 0 :beside) (ev 100 :child_started "j1/pillar" {}) (ev 150 :child_ended "j1/pillar" {:status :done})
+                                                       (ev 9000 :child_started "j1/pillar" {}) (ev 9100 :child_ended "j1/pillar" {:status :done})]))))))
+        "a retreat.pillar is read by the one pillar after it")
+    (is (= {["g" "j1/pillar" 100] :beside ["g" "j1/pillar" 5100] :clear}
+           (update-vals (w/scan [(begun 0 :beside) (ev 100 :child_started "j1/pillar" {}) (ev 200 :child_ended "j1/pillar" {:status :stopped :reason :mob-in-cell})
+                                 (begun 5000 :clear [2 64 0]) (ev 5100 :child_started "j1/pillar" {}) (ev 5200 :child_ended "j1/pillar" {:status :done})])
                         :class))
-        "each pillar of the one job is a row, classed by the flee step's search before it")))
+        "each pillar of the one job is a row")))
+
+(deftest the-report-counts-one-pillar-per-situation-the-first
+  (is (= {:beside {:k 1 :n 2} :clear {:k 0 :n 1}}
+         (:pillar (w/report {:a {:way :pillar :t 0 :class :beside :situation [:g [0 64 0]] :mob? true :done? false}
+                             :b {:way :pillar :t 1 :class :beside :situation [:g [0 64 0]] :mob? true :done? false}
+                             :c {:way :pillar :t 2 :class :beside :situation [:g [0 64 0]] :done? true :mob? false}
+                             :d {:way :pillar :t 3 :class :clear :situation [:g [0 64 0]] :done? true :mob? false}
+                             :e {:way :pillar :t 0 :class :beside :done? true :mob? false}})))
+      "the retries at one cell and class after a failure are left out; a row of an older log, with no situation, counts"))
 
 (deftest the-report-gives-the-gap-and-each-class-failures-for-mobs
   (is (= {:gap {:mean 0.5 :n 3} :reached {:k 1 :n 2} :clear {:k 0 :n 1} :pillar {:beside {:k 1 :n 1} :clear {:k 0 :n 0}}}

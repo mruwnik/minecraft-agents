@@ -1,5 +1,6 @@
 (ns jobs.access.pillar
-  (:require [jobs.lib.choose :as choose]
+  (:require [clojure.string :as str]
+            [jobs.lib.choose :as choose]
             [engine.settings :as settings]
             [engine.args :as a]
             [jobs.lib.price :as price]
@@ -56,7 +57,7 @@
   Ends :done, or with a cause {:reason r ...}: :condition-failed for :too-few-blocks (:short still owed), :mob-in-cell, :ceiling (a roof that cannot be dug, or more than max-ceiling-digs blocks of it; :dig the outcome),
   :not-on-solid, :zone, :footprint, :no-zones, :not-loaded, :not-replaceable and :bad-args; :nothing-possible for
   :off-column (the body left the column it started in) and :place-failed (3 failed jumps in a row with the body in
-  the column, :detail the primitive's reason). Data {:cells [[x y z] ...] :built n :height n}: :cells are this job's
+  the column, :detail the primitive's reason); either, after a refused block or a knockback, with :mob, a seen hostile within 2 blocks of the cell. Data {:cells [[x y z] ...] :built n :height n}: :cells are this job's
   confirmed blocks, lowest first. The give-up data holds by reason
   :at :block :zone :short :detail :mob.")
 
@@ -306,6 +307,15 @@
   [c cell]
   (pl/mob-in (remove #(= "hostile" (:kind %)) (sight/seen-entities (:primitives c) {:radius 4})) cell))
 
+(defn refused? "Whether a jumpPlace result says the server refused the block." [^js r] (boolean (some-> (.-reason r) (str/starts-with? "place-failed"))))
+
+(defn hostile-near-cell
+  "The name of a seen hostile within 2 blocks of the middle of cell, or nil: a refused block (refused?) or a knockback
+  with one there is a failure for a mob."
+  [c [x y z]]
+  (some #(when (and (= "hostile" (:kind %)) (<= (u/dist (:pos %) {:x (+ x 0.5) :y y :z (+ z 0.5)}) 2)) (:name %))
+        (sight/seen-entities (:primitives c) {:radius 4})))
+
 (defn mob-wait!
   "Count one wait for a mob in the cell of the next block (reset by a placed block); false once they add up to
   mob-waits."
@@ -344,9 +354,10 @@
           :again
           (let [settled (ledger/reconcile l block-at)]
             (ledger/remember! c settled)
-            (finish! c settled (if (< failures (max-failures))
-                                 (give-up :off-column :at (pl/feet-cell c) :detail (.-reason r))
-                                 (give-up :place-failed :at cell :detail (.-reason r))))))))))
+            (finish! c settled (cond-> (if (< failures (max-failures))
+                                         (give-up :off-column :at (pl/feet-cell c) :detail (.-reason r))
+                                         (give-up :place-failed :at cell :detail (.-reason r)))
+                                 (and (or shoved? (refused? r)) (hostile-near-cell c cell)) (assoc :mob (hostile-near-cell c cell))))))))))
 
 (defn ^:async shoved-back!
   "Before a round: a body off the base column (whatever the last place did) counts one knockback and walks back

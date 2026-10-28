@@ -7,6 +7,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.blocks :as lb]
+            [jobs.lib.cost.threat :as threat]
             [jobs.lib.dig-look :as look]
             [jobs.lib.escape :as escape]
             [jobs.lib.look :as lk]
@@ -103,8 +104,21 @@
          (sort-by first)
          (mapv second))))
 
+(defn melee-hostiles
+  "The hostiles seen within 4 that strike (not a shooter, a creeper or an enderman), as look/seen-entities maps."
+  [p]
+  (filter #(and (= "hostile" (:kind %)) (not (threat/ranged? %)) (not (#{"creeper" "enderman"} (:name %))))
+          (lk/seen-entities p {:radius 4})))
+
+(defn mob-class
+  "The class of a pillar begun at feet now, for ::pillar-mob-fails: :beside when a melee hostile's box overlaps a cell the
+  pillar fills (pl/mob-in: the server refuses a block there), else :clear."
+  [p feet]
+  (let [hs (melee-hostiles p)]
+    (if (some #(pl/mob-in hs (escape/up feet %)) (range (pillar-height))) :beside :clear)))
+
 (defn ^:async plan!
-  "The pillar refuge ({:kind :pillar :item :anchor :cells}) when a pillar-height pillar fits here, else nil. The cells it
+  "The pillar refuge ({:kind :pillar :item :anchor :cells :class}, :class mob-class as it begins) when a pillar-height pillar fits here, else nil. The cells it
   rises into that the body has not sensed are looked at first, so open sky is not taken for rock; so are the unsensed cells
   round it when the pillar does not fit, so unseen ground behind the body is not taken for a ledge a mob climbs.
   A pillar through another's zone, claim or plan is planned only with trespass? (the last resort, after every way that keeps off)."
@@ -123,21 +137,28 @@
             refusal (some #(access/trespass-refusal (access/rules-input c) :place (cell-map %)) cells)]
         (when (or trespass? (nil? refusal))
           (access/trespass! c "retreat" refusal)
-          {:kind :pillar :item item :anchor (cell-map feet) :cells cells})))))
+          {:kind :pillar :item item :anchor (cell-map feet) :cells cells :class (mob-class p feet)})))))
 
 (defn ^:async build!
-  "A jobs.access.pillar child of height with item, from where the body stands: :continue, or the blocks it built."
+  "A jobs.access.pillar child of height with item, from where the body stands: :continue, or {:built n :mob? m}, m
+  whether it ended short for a mob (one in its cell, or a hostile near a refused block or a knockback: the give-up's
+  :mob). It ends at the first refused block or knockback: the refusal is evidence for the next decision, not a retry."
   [c height item]
-  (let [r (await (ctx/call c :pillar 'jobs.access.pillar {:height height :use {:blocks [item]} :ways #{:carried} :ignore-zones? true :settings {:jobs.access.pillar/mob-waits 0}}))]
-    (if (contract/ending? r) (:built (:data r) 0) r)))
+  (let [r (await (ctx/call c :pillar 'jobs.access.pillar {:height height :use {:blocks [item]} :ways #{:carried} :ignore-zones? true
+                                                          :settings {:jobs.access.pillar/mob-waits 0 :jobs.access.pillar/max-failures 1 :jobs.access.pillar/max-displacements 0}}))]
+    (if (contract/ending? r)
+      {:built (:built (:data r) 0) :mob? (boolean (or (= :mob-in-cell (:reason (:data r))) (:mob (:data r))))}
+      r)))
 
 (defn ^:async step!
-  "One round of the pillar: :again while it builds, :hidden once it ended at least 2 high, else :failed."
+  "One round of the pillar: :again while it builds, :hidden once it ended at least 2 high, else :mob-failed when it
+  ended short for a mob (build!), :failed for anything else."
   [c {:keys [item]}]
   (let [r (await (build! c (pillar-height) item))]
     (cond
       (= :continue r) :again
-      (>= r 2) :hidden
+      (>= (:built r) 2) :hidden
+      (:mob? r) :mob-failed
       :else :failed)))
 
 (def max-knocks 6)
@@ -165,8 +186,9 @@
 
 (defn ^:async raise!
   "A pillared body that was hit: raise the pillar pillar-extend blocks from the top (its cells added to the refuge) when
-  that many blocks are carried, up to pillar-raises times: :again when it rose, else :failed. A hostile standing in the cell of
-  a block (a mob beside the top overlaps it) is struck out of it, and the rest is built."
+  that many blocks are carried, up to pillar-raises times: :again when it rose, else :failed. A raise cut short for a
+  mob (build!) is a seen pillar failure (flight/seen-fail! of its class); a hostile standing in the cell of the next block (a mob beside the top
+  overlaps it) is struck out of it."
   [c]
   (let [{:keys [kind cells] :as refuge} (:refuge (ctx/mem c))
         n (pillar-extend)
@@ -174,12 +196,10 @@
         top (peek cells)]
     (if-not (and item (pos? n) (< (:raised refuge 0) (pillar-raises)))
       :failed
-      (let [built (loop [built 0]
-                    (if (>= built n)
-                      built
-                      (let [r (await (build! c (- n built) item))
-                            more (if (number? r) r 0)
-                            built (+ built more)]
-                        (if (and (< built n) (await (knock-off! c))) (recur built) built))))]
+      (let [r (await (build! c n item))
+            built (:built r 0)]
+        (when (:mob? r)
+          (await (knock-off! c))
+          (flight/seen-fail! c :pillar (mob-class (:primitives c) (pl/feet-cell c))))
         (ctx/update-mem! c update :refuge assoc :raised (inc (:raised refuge 0)) :cells (into cells (take built (mapv #(escape/up top %) (range 1 (inc n))))))
         (if (pos? built) :again :failed)))))

@@ -154,5 +154,5 @@
           (not moved) (await (stuck "the way away from the hostile is blocked"))
           :else
           (let [gap (flight/nearest-gap p threats)]
-            (ctx/update-mem! c #(-> % (dissoc :tried :slow-steps :refused-steps :regrown) (flight/note-gap gap)))
+            (ctx/update-mem! c #(-> % (dissoc :tried :seen-fails :slow-steps :refused-steps :regrown) (flight/note-gap gap)))
             :again))))))

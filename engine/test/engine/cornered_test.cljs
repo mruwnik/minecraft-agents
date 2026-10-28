@@ -712,12 +712,12 @@
                      (fn [_token _args _impl] (js/Promise.resolve #js {:status "failed" :placed 0 :reason "not-raised"})))
           (core/submit! eng retreat {})
           (await (core/tick! eng))
-          (is (= 6 (count (calls p "jumpPlace"))) "the pillar tried, tried once more, and gave up")
+          (is (= 1 (count (calls p "jumpPlace"))) "the pillar ends at its first failed jump; no refusal or knockback names a mob, so the option is tried")
           (is (empty? (pillar-entries eng)) "no block went in")
           (is (not (hiding? seen)) "built under 2: not hidden")
           (is (pos? (count (calls p "attack"))) "hit while sealed: it stops hiding and hits back"))))))
 
-(deftest a-pillar-refused-once-is-tried-once-more-and-then-hides
+(deftest a-pillar-refused-for-a-zombie-in-its-cell-strikes-it-and-decides-again-each-time-then-hides
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -731,9 +731,22 @@
                                                      (if (< (count (calls p "jumpPlace")) 3)
                                                        (js/Promise.resolve #js {:status "failed" :placed 0 :reason "place-failed: the block is still air"})
                                                        (impl token args)))))))]
-          (is (= 67 while-hidden) "the second try raised the whole pillar")
+          (is (= 67 while-hidden) "the third pillar went up whole")
           (is (hiding? seen))
-          (is (zero? (count (calls p "attack")))))))))
+          (is (= 2 (count (calls p "attack"))) "each refusal ends that pillar: the zombie in the cell is struck and the next step decides again")
+          (is (= 3 (count (filter #(= :retreat.pillar (:kind %)) @seen))) "three pillars begun"))))))
+
+(deftest a-pillar-is-classed-beside-only-when-a-melee-mobs-box-overlaps-a-cell-it-fills
+  (are [mob class] (= class (respond.pillar/mob-class (:p (setup {:entities [mob]})) [0 64 0]))
+    (zombie 0.5 64 0.9) :beside
+    (zombie 0.5 65 1.2) :beside
+    (zombie 1.5 64 0.5) :clear
+    (zombie 1.5 64 1.5) :clear
+    (skeleton 0.5 64 0.9) :clear))
+
+(deftest a-seen-failure-counts-for-its-class-alone
+  (is (= {:beside {:k 6 :n 6} :clear {:k 4 :n 8}} (flight/add-seen {:beside {:k 4 :n 4} :clear {:k 4 :n 8}} {:beside 2}))
+      "two refusals with a mob in the pillar's cells say nothing of a pillar begun clear"))
 
 (deftest a-zombie-in-the-cell-of-the-next-block-is-struck-out-and-the-pillar-goes-on
   (async done
@@ -1452,6 +1465,7 @@
           (core/submit! eng retreat {})
           (await (core/tick! eng))
           (is (some #(= :retreat.cornered (:kind %)) @seen) "one healed hit corners the body: its cornered options are weighed")
+          (is (= 1 (count (filter #(= :retreat.target (:kind %)) @seen))) "no second flee step (a back-off is a cornered option, no retreat.target)")
           (is (pos? (+ (count (calls p "place")) (count (calls p "jumpPlace")))) "walled in or pillared, the back-off before them when it is cheaper"))))))
 
 (deftest an-armed-body-with-a-melee-mob-at-its-side-pillars-before-it-walls-or-fights
