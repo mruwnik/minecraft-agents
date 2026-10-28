@@ -31,7 +31,6 @@
             [jobs.survival.respond.refuge :as refuge]
             [jobs.lib.flee-search :as search]
             [jobs.survival.hide-out :as hide-out]
-            [jobs.survival.plug-way :as plug-way]
             [jobs.survival.shut-in :as shut-in]))
 
 (def tool-weapons
@@ -181,14 +180,14 @@
 
 (defn pillar-cover
   "The cover {:open-s :seconds} of a pillar against hostiles (cost/cover-answer): in a melee mob's reach for ::pillar-s,
-  its placements (plug-way/open-place-s each), then the hide-out's quiet on top, all of it in a shooter's line of fire;
+  then the hide-out's quiet on top, all of it in a shooter's line of fire;
   nil when no pillar fits here, a climber is near or a shot was felt within ::hurt-window-s (the top stays in that line of fire)."
   [c hostiles]
   (when (and (pillar/pillar-item c) (not-any? combat/climber? hostiles)
              (not-any? #(pos? (shots-in %)) (ctx/since c :hurt (- (ctx/now c) (* 1000 (hurt-window-s)))))
              (pillar/pillar-ok? (escape/block-at-of (:primitives c)) (pl/feet-cell c)))
     (let [s (settings/get settings ::pillar-s)
-          seconds (+ (* (pillar/pillar-height) (plug-way/open-place-s)) (hide-out/quiet-s))]
+          seconds (+ s (hide-out/quiet-s))]
       {:open-s (if (some combat/ranged? hostiles) seconds s) :seconds seconds})))
 
 (defn cornered-covers
