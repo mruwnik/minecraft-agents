@@ -367,7 +367,7 @@
   "Pieces [{:mob :sprint :blocks :s}] of the flights among rows (flee-steps, sorted or not) with gaps kept: from one step's start
   to the next one's (the step and the stop after it; not to an :off? one), the gap to each chaser seen at the first start: :blocks
   its growth, :s the seconds (a chaser not seen at the next start is out of sight, outrun or dead: its gap there at least
-  the radius it is a danger within, jobs.lib.danger/hostile-radius, ranged-radius for a shooter), :sprint whether the body could sprint (danger/sprints? of its food at the first start)."
+  the radius it is a danger within, jobs.lib.danger/kind-radius), :sprint whether the body could sprint (danger/sprints? of its food at the first start)."
   [rows]
   (let [start #(- (:t %) (* 1000 (:s %)))]
     (mapcat (fn [steps]
@@ -375,7 +375,7 @@
                     :let [s (/ (- (start b) (start a)) 1000)
                           gaps (into {} (map (fn [[_ id g]] [id g])) (:chasers b))]
                     :when (pos? s)
-                    [mob id g] (:chasers a) :let [g1 (or (gaps id) (max g (if (threat/ranged? {:name mob}) (danger-q/ranged-radius) (danger-q/hostile-radius))))]]
+                    [mob id g] (:chasers a) :let [g1 (or (gaps id) (max g (danger-q/kind-radius (threat/ranged? {:name mob}))))]]
                 {:mob mob :sprint (danger/sprints? (:food a)) :blocks (- g1 g) :s s}))
             (vals (group-by :flight (filter #(and (:food %) (:chasers %)) rows))))))
 

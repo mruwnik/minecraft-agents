@@ -101,12 +101,18 @@
 (defn radius-in "The :radius of args, else the ::hostile-radius setting." [args] (or (:radius args) (hostile-radius)))
 (defn ranged-radius-in "The :ranged-radius of args, else the ::ranged-radius setting." [args] (or (:ranged-radius args) (ranged-radius)))
 
+(defn kind-radius
+  "Blocks within which a mob counts as a danger: radius, for a shooter (ranged?) ranged-radius (default radius); with
+  neither given, the settings'."
+  ([ranged?] (kind-radius ranged? (hostile-radius) (ranged-radius)))
+  ([ranged? radius ranged-radius] (if ranged? (or ranged-radius radius) radius)))
+
 (defn known-hostiles
   "The hostiles the body knows of within radius (ranged ones within :ranged-radius), nearest first; a heard one by
   its band (mob-distance). Uses the perception's mob memory (p.knownMobs) when p has one, else the raw hostile list."
   [p radius {:keys [ranged-radius]}]
   (let [rr (or ranged-radius radius)
-        within (fn [e] (<= (mob-distance p e) (if (combat/ranged? e) rr radius)))]
+        within (fn [e] (<= (mob-distance p e) (kind-radius (combat/ranged? e) radius rr)))]
     (->> (combat/known-or-raw p (max (known-scan) radius rr))
          (filter within)
          (sort-by #(mob-distance p %))
@@ -128,7 +134,7 @@
         body (u/pos-of (.-pos (.self p)))
         off (fn [e] (way-distance body goal (mob-pos p e)))]
     (->> (known-hostiles p (+ (u/dist body goal) (max radius rr)) {})
-         (filter #(<= (off %) (if (combat/ranged? %) rr radius)))
+         (filter #(<= (off %) (kind-radius (combat/ranged? %) radius rr)))
          (sort-by off)
          vec)))
 
