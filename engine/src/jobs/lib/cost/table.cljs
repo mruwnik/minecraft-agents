@@ -255,7 +255,7 @@
         pinned (into {} (map (fn [[n o]] [n (override-fn o)])) overrides)
         pin (fn [n w] ((get pinned n identity) w))
         no-source (into {} (map (fn [i] [(.-name i) (* (:no-source-each basis) (/ 64 (max 1 (.-stackSize i))))])) items)
-        step (fn [table]
+        step (fn [natural table]
                (into {} (map (fn [n]
                                (let [via-recipe (some->> (by-result n)
                                                          (map (fn [[_ k ins]] (/ (+ (:craft-step basis) (reduce + (map #(get table % js/Infinity) ins))) k)))
@@ -264,10 +264,14 @@
                                      w (min (get natural n js/Infinity) (or via-recipe js/Infinity) (or via-smelt js/Infinity))]
                                  [n (pin n (if (js/isFinite w) (max w (food-floor n)) w))])))
                      names))
-        start (into {} (map (fn [n] [n (pin n (get natural n js/Infinity))])) names)
-        table (loop [t start i 0]
-                (let [t' (step t)]
-                  (if (or (= t t') (>= i 60)) t' (recur t' (inc i)))))]
+        fixpoint (fn [natural]
+                   (loop [t (into {} (map (fn [n] [n (pin n (get natural n js/Infinity))])) names) i 0]
+                     (let [t' (step natural t)]
+                       (if (or (= t t') (>= i 60)) t' (recur t' (inc i))))))
+        unsourced (into {} (keep (fn [[n w]] (when-not (or (js/isFinite w) (by-result n) (smelts n)) [n (max (no-source n) (food-floor n))])))
+                        (fixpoint natural))
+        ;; again with the items nothing yields at their floor, so a recipe of one (a golden apple of an apple) is priced by its ingredients
+        table (fixpoint (merge natural unsourced))]
     (tier-floors basis overrides (set (keep #(when (number? (.-maxDurability %)) (.-name %)) items))
                  (into {} (map (fn [[n w]] [n (if (js/isFinite w) w (pin n (max (no-source n) (food-floor n))))])) table))))
 

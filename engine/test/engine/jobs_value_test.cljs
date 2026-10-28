@@ -145,6 +145,9 @@
   (is (< (each "apple") (each "diamond")) "a 0.5% drop is not sourced from leaves")
   (is (< (each "cobblestone") (each "coal") (each "raw_iron") (each "diamond"))))
 
+(deftest a-recipe-of-an-item-nothing-yields-is-priced-by-its-ingredients
+  (is (> (each "golden_apple") (* 8 (each "gold_ingot"))) "the apple at its floor, the gold at its own worth"))
+
 (deftest placed-forms-are-no-free-source-and-no-source-items-keep-the-stack-rule
   (is (> (each "redstone") 1))
   (is (= (* (:no-source-each table/default-basis) 64) (each "totem_of_undying")) "no source: 4 x 64 / stack of 1")
