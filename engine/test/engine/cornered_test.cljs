@@ -1549,6 +1549,17 @@
     (is (false? (respond.pillar/pillar-ok? (fn [pos] (if (= [0 64 1] pos) "oak_door" (floor pos))) [0 64 0]))
         "a door beside the foot: the column would shut it")))
 
+(deftest a-pillar-is-priced-under-a-column-the-body-never-looked-up-at
+  (let [p (tu/fake-on-floor {:self {:pos {:x 0.5 :y 64 :z 0.5}}})
+        sensed (tu/sensed-by p)
+        overhead? (fn [pos] (and (zero? (aget pos "x")) (zero? (aget pos "z")) (>= (aget pos "y") 66)))
+        fits? (fn [rock?] (tu/set-sensed! p (fn [pos] (cond (not (overhead? pos)) (sensed pos)
+                                                              rock? #js {:name "stone" :pos pos}
+                                                              :else #js {:unknown true :pos pos})))
+                (respond.pillar/pillar-fits? p [0 64 0]))]
+    (is (true? (fits? false)) "never sensed overhead: the pillar looks up before it builds, so it is priced (old code read the column rock)")
+    (is (false? (fits? true)) "rock seen overhead: no pillar")))
+
 (defn ^:async pillar-then-arrives
   "A body pillared up against a zombie; once it hides, mob replaces the zombie (the hold's next wait), and the round runs on
   with the mob gone after that. The seen events and the world's health at the end."

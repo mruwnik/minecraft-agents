@@ -193,7 +193,7 @@
   [c hostiles]
   (when (and (pillar/pillar-item c) (not-any? combat/climber? hostiles)
              (not-any? #(pos? (shots-in %)) (ctx/since c :hurt (- (ctx/now c) (* 1000 (hurt-window-s)))))
-             (pillar/pillar-ok? (escape/block-at-of (:primitives c)) (pl/feet-cell c)))
+             (pillar/pillar-fits? (:primitives c) (pl/feet-cell c)))
     (let [s (settings/get settings ::pillar-s)
           seconds (+ s (hide-out/quiet-s))]
       {:open-s (if (some combat/ranged? hostiles) seconds s) :seconds seconds})))

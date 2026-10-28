@@ -206,11 +206,12 @@
         _ (when fire? (ctx/update-mem! c update :fire-tries (fnil inc 0)))
         fire-tries (:fire-tries (ctx/mem c) 0)
         armed? (some? (combat/best-weapon (:primitives c) weapons))
-        weighed (hostile/weigh c (cornered-answers c (if (and (:hit-on-the-run (ctx/mem c)) (not fire?)) (hitters c hostiles) hostiles) home?))
+        weighed-mobs (if (and (:hit-on-the-run (ctx/mem c)) (not fire?)) (hitters c hostiles) hostiles)
+        weighed (hostile/weigh c (cornered-answers c weighed-mobs home?))
         win? (and (not blind?) (seq hostiles) (not-any? combat/creeper? hostiles) (not-any? combat/enderman? hostiles) (= :fight (:answer weighed)))
         prices (:prices weighed)
         pillar-first? (boolean (and (not fire?) (not armed?) (pillar/pillar-item c)
-                                    (pillar/pillar-ok? (escape/block-at-of (:primitives c)) (pl/feet-cell c))
+                                    (pillar/pillar-fits? (:primitives c) (pl/feet-cell c))
                                     (mob-in-corner-cell? c hostiles)))
         cheap-pillar? (boolean (and (not fire?) armed? (not win?) (< (get prices :pillar ##Inf) (get prices :fight ##Inf))))
         beaten-fight? (or (beaten-fights? {:beaten? beaten :armed? armed? :blocks? (boolean (seq (lb/carried c (flight/blocks c))))})
@@ -230,6 +231,7 @@
                              :lean? (pillar/lean? c)
                              :pillar-first? pillar-first?
                              :pillar-cheaper? cheap-pillar?})]
+    (ctx/emit! c :retreat.cornered :debug {:prices (update-vals prices js/Math.round) :weighed (mapv #(str (.-name %) " " (js/Math.round (danger-q/mob-distance (:primitives c) %))) weighed-mobs) :order order})
     (loop [[option & more] (with-zone-pillar order)]
       (let [r (when-not (flight/tried? c option)
                 (case option

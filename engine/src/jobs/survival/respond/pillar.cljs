@@ -81,6 +81,15 @@
        (every? #(pl/clear? (block-at (escape/up feet %))) (range 1 (+ 2 (pillar-height))))
        (not (climbable-top? block-at feet))))
 
+(defn pillar-fits?
+  "pillar-ok? where the body at primitives p stands at feet, a cell it rises into that it has not sensed read open:
+  plan! looks there before it builds, so a column overhead the body never looked up at is no rock to price the pillar out."
+  [p feet]
+  (let [block-at (escape/block-at-of p)
+        unseen? (escape/unseen-of p)
+        rise (set (map #(escape/up feet %) (range 1 (+ 2 (pillar-height)))))]
+    (pillar-ok? (fn [cell] (if (and (rise cell) (unseen? cell)) "air" (block-at cell))) feet)))
+
 (defn cell-map [[x y z]] {:x x :y y :z z})
 
 (defn unseen-zone
