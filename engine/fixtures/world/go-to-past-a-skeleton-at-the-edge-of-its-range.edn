@@ -1,0 +1,28 @@
+;; Card 9bf305a3: the only way to the goal passes a skeleton 15.6 blocks off, past its bow range (15) and inside the
+;; trigger's follow-range cut (16). A walk away there is priced near free, so each pass may be trigger, a step out,
+;; go-to back into the band, trigger again. The body must arrive, deciding a few times at most.
+;; Plot 64 x 17 (z 0..16): the farthest lane, z 16.5, passes the skeleton (NoAI at z 0.9: no shots, helmeted) 15.6 off; body at [4.5 0 16.5], goal at x 56.
+{:defaults
+ {:tags [:hostile :survival :go-to]
+  :time :any
+  :mobs :keep
+  :plot {:length 64 :width 17 :height 8}
+  :register [{:trigger :hostile-near}]
+  :body {:at [4.5 0 16.5] :yaw 270 :effects [["resistance" 600 3]]}
+  :limit-s 90}
+ :cases
+ [{:name "a-go-to-past-a-skeleton-just-out-of-bow-range-arrives"
+   :act [[:summon "skeleton" [30.5 0 0.9] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:job (jobs.movement.go-to {:pos #at [56 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 70}
+            {:count-event {:source :job :kind :hostile.decided} :for-s 70 :at-most 3
+             :until {:source :job :kind :completed :data {:name "jobs.movement.go-to"}}}]
+   :after [[:body-near [56 0 16] 2]]}
+  {:name "an-armed-go-to-past-a-skeleton-just-out-of-bow-range-arrives"
+   :body {:inventory [["iron_sword" 1]]}
+   :act [[:summon "skeleton" [30.5 0 0.9] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:job (jobs.movement.go-to {:pos #at [56 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 70}
+            {:count-event {:source :job :kind :hostile.decided} :for-s 70 :at-most 3
+             :until {:source :job :kind :completed :data {:name "jobs.movement.go-to"}}}]
+   :after [[:body-near [56 0 16] 2]]}]}
