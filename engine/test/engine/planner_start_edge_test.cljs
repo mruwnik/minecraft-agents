@@ -101,11 +101,17 @@
   (is (= ["found" nil [2 63 4]]
          (status+first (run (world {:fill [[2 63 4 2 63 4 "farmland"]]}) (near 8 64 8) {} {:x 2 :y 64 :z 4 :px 2.5 :py 64 :pz 4.5})))))
 
+(defn- pod-run [fill props from]
+  (run (world {:fill (into [[2 64 3 2 65 3 "jungle_log"]] fill)
+               :blocks [[2 64 4 "cocoa" props]]})
+       (near 8 64 8) {} (merge {:x 2 :y 64 :z 4 :px 2.6 :py 64.75 :pz 4.4} from)))
+
 (deftest start-on-a-cocoa-pod
-  (are [fill props px pz] (= ["found" nil]
-                             ((juxt :status :reason)
-                              (run (world {:fill (into [[2 64 3 2 65 3 "jungle_log"]] fill)
-                                           :blocks [[2 64 4 "cocoa" props]]})
-                                   (near 8 64 8) {} {:x 2 :y 64 :z 4 :px px :py 64.75 :pz pz})))
-    [] {:age "2" :facing "north"} 2.6 4.4
-    [hole] {:age "0" :facing "north"} 2.9 4.9))
+  (are [fill props from first-cell] (= ["found" nil first-cell]
+                                       (status+first (pod-run fill props from)))
+    [] {:age "2" :facing "north"} {} [2 64 4]
+    [hole] {:age "0" :facing "north"} {:px 2.9 :pz 4.9} [2 64 5]))
+
+(deftest an-airborne-body-beside-a-stand-does-not-start-from-the-side-cell
+  (is (= ["none" "start-not-standable"]
+         ((juxt :status :reason) (pod-run [hole] {:age "2" :facing "north"} {:py 65.5})))))

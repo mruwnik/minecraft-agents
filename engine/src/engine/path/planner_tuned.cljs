@@ -483,10 +483,12 @@
         ;; floor held up, so the floored cell has nothing under it but the cell below stands
         below? (and (some? py) (let [h (.nodeH search fx (dec fy) fz)]
                                  (and (>= h 0) (<= 0 (- py (+ (dec fy) (/ h WHOLE))) (/ 1 WHOLE)))))
-        ;; resting on a partial block (cocoa pod) in the floored cell: no cell under the box stands, so the body steps off
-        ;; to the nearest side cell level with the cell's floor
-        beside (when (and (some? px) (some? pz) (some? py) (> py (+ fy (/ 1 WHOLE))))
-                 (first (filter (fn [[x z]] (>= (.nodeH search x fy z) 0))
+        ;; resting on a partial block (cocoa pod) in the floored cell, its top within 1/16 of the feet (not airborne): no cell
+        ;; under the box stands, so the body steps off to the nearest side cell whose stand is at most half a block over the feet and at most a block under
+        beside (when (and (some? px) (some? pz) (some? py) (> py (+ fy (/ 1 WHOLE)))
+                          (<= (js/Math.abs (- py (+ fy (/ (aget (.-top ^js (.-table search)) (.stateAt ^js (.-snapshot search) fx fy fz)) WHOLE)))) (/ 1 WHOLE)))
+                 (first (filter (fn [[x z]] (let [h (.nodeH search x fy z)]
+                                              (and (>= h 0) (<= -0.5 (- py (+ fy (/ h WHOLE))) 1))))
                                 (sort-by (fn [[x z]] (+ (js/Math.abs (- (+ x 0.5) px)) (js/Math.abs (- (+ z 0.5) pz))))
                                          [[(dec fx) fz] [(inc fx) fz] [fx (dec fz)] [fx (inc fz)]]))))]
     (cond
