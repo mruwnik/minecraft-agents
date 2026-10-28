@@ -128,22 +128,36 @@
   (let [{:keys [dies lived]} (blows-outcome body answer)]
     (assoc body :health (max 1 (- (or health 20) (if (< dies 1) (/ lived (- 1 dies)) 0))))))
 
-(defn answer-price
-  "Seconds answer costs body {:health :absorption, death-cost's :respawn :level :carried} at `at` (see the ns doc); :then
-  is priced at full health: the body meets the mob again once it has healed. :outcomes [[chance answer]] (a look's,
-  jobs.lib.cost.look) are each paid by its chance, at the health the answer's blows leave. Both are paid only by the
-  chance the body lives through the answer's own blows: a death ends the meet (as answer-death-chance)."
-  [{:keys [health] :as body} {:keys [seconds then outcomes] :as answer} at]
+(declare answer-price answer-death-chance)
+
+(defn answer-price*
+  "answer-price with `again` seconds added to each death: what meeting the mob once more on the walk back costs."
+  [{:keys [health] :as body} {:keys [seconds then outcomes] :as answer} at again]
   (let [health (or health 20)
         {:keys [dies lived]} (blows-outcome body answer)
         lives (- 1 dies)
         own (+ (if (pos? lives) (* lives (health/hp-cost health (min (/ lived lives) health))) 0)
-               (* dies (death/death-cost body at))
+               (* dies (+ (death/death-cost body at) again))
                seconds)]
     (cond
       (seq outcomes) (+ own (* lives (reduce + (map (fn [[chance a]] (* chance (answer-price (after body answer) a at))) outcomes))))
       (seq then) (+ own (* lives (apply min (map #(answer-price (healed body) % at) then))))
       :else own)))
+
+(defn answer-price
+  "Seconds answer costs body {:health :absorption, death-cost's :respawn :level :carried} at `at` (see the ns doc); :then
+  is priced at full health: the body meets the mob again once it has healed. :outcomes [[chance answer]] (a look's,
+  jobs.lib.cost.look) are each paid by its chance, at the health the answer's blows leave. Both are paid only by the
+  chance the body lives through the answer's own blows: a death ends the meet (as answer-death-chance). The mob that
+  killed the body is still at `at` when death-cost's walk back arrives: each death also pays the answer once more at full
+  health, so the price of a lethal answer is a geometric series (the chance of surviving it floored at 0.001)."
+  [body answer at]
+  (let [h (healed body)
+        dies (:dies (blows-outcome body answer))]
+    (if (zero? dies)
+      (answer-price* body answer at 0)
+      (let [lives (max 1e-3 (- 1 (answer-death-chance h answer at)))]
+        (answer-price* body answer at (/ (answer-price* h answer at 0) lives))))))
 
 (defn answer-death-chance
   "The chance answer kills body: its blows (blows-chance), then the cheapest of its :then (answer-price at `at`) at full

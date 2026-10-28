@@ -101,8 +101,14 @@
       "what follows is paid too")
   (is (< (- (cost/answer-price (body 5) {:damage 100 :hit 5 :seconds 1 :then [{:damage 0 :seconds 50}]} here)
             (cost/answer-price (body 5) {:damage 100 :hit 5 :seconds 1} here))
-         0.01)
+         1)
       "a death all but sure ends the meet: what would follow it is not paid"))
+
+(deftest a-death-meets-the-mob-again-on-the-walk-back
+  (let [lethal {:damage 100 :hit 5 :seconds 1}
+        once (+ 1 (cost/death-cost (body 20) here))]
+    (is (> (cost/answer-price (body 20) lethal here) (* 100 once))
+        "a death all but sure is paid again and again: the mob waits where the body died")))
 
 (deftest a-fight-is-taken-when-it-is-cheaper-than-walking-away-and-meeting-the-mob-again
   (are [health weapon mobs expected] (= expected (choice health weapon mobs))
@@ -170,7 +176,7 @@
   (let [zombie (mob "zombie" 4 35)
         price #(cost/answer-price (body 12) (cost/flee-answer {:health 12 :food 20 :mobs [zombie] :caught %}) here)
         caught #(:caught (cost/flee-answer {:health 12 :food 20 :mobs [zombie] :caught %1 :caught-s %2}))]
-    (is (< (/ (- (price 0.01) (price 0)) (price 0)) 0.02) "a way that goes on 99 times in 100 prices as a seen one, near enough")
+    (is (< (/ (- (price 0.01) (price 0)) (price 0)) 0.06) "a way that goes on 99 times in 100 prices as a seen one, near enough")
     (is (< (price 0) (price 0.5) (price 1)) "the likelier its dead end, the dearer")
     (is (= (:damage (caught 0 nil)) (:damage (caught 0 0.5))) "with no way caught, the race's seconds bound nothing: the prior's own blows")))
 
@@ -293,8 +299,9 @@
     (is (< 0.6 (:chance (cost/route-parts (body 8) (route 1 "witch")))) "60 s in her range: she seldom misses the body")
     (is (<= (:hurt (cost/route-parts (body 8) (route 1 "witch" "witch"))) 8) "two take no more than the life"))
   (let [death (death/death-cost (body 5) here)]
-    (is (< (js/Math.abs (- (cost/answer-price (body 5) {:damage 100 :hit 5 :seconds 1} here) (+ death 1))) 1e-3)
-        "a sure death is its death-cost and seconds: respawn heals the hp")))
+    (is (> (cost/answer-price (body 5) {:damage 100 :hit 5 :seconds 1} here) (+ death 1))
+        "a sure death is its death-cost and seconds, and again: respawn heals the hp, the mob waits")
+    (is (< (cost/answer-price (body 5) {:damage 100 :hit 5 :seconds 1} here) (* 1500 (+ death 1))) "but not for ever")))
 
 (deftest a-second-in-water-costs-the-drowned-meet-rate-times-the-cheapest-answer-to-one
   (let [kit (assoc (body 20) :weapon "stone_sword")
