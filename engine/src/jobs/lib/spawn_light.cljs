@@ -31,13 +31,18 @@
   (sh-inside/dark-hall-at? p (hall-cell p to)))
 
 (defn walled-yard?
-  "Whether the dark sky-reached cell lies in a walled yard (sh-inside/walled-off-at?). The flood runs only when a seen
-  wall stands within sh-inside/spawn-free-radius of it straight along each axis at its height: a yard wider has a cell
-  beyond that radius."
+  "Whether the dark sky-reached cell lies in a walled yard (sh-inside/walled-off-at?). The flood runs only where a seen
+  solid block stands straight along each axis at the cell's height, within sh-inside/yard-cells (a region the flood
+  closes has one there), before an unseen cell and, beyond sh-inside/spawn-free-radius, through lit cells only: a yard
+  whose far end is lit is flooded. A dark cell there on the line is a far spawn or a pit: open either way (worse case), so
+  dark open ground costs no more than the radius."
   [p cell]
-  (let [walled? (fn [[dx dz]] (some (fn [d] (let [n (u/seen-name p (-> cell (update :x + (* d dx)) (update :z + (* d dz))))]
-                                             (cond (nil? n) :open (solid/solid? n) :wall)))
-                                   (range 1 (inc sh-inside/spawn-free-radius))))]
+  (let [walled? (fn [[dx dz]] (some (fn [d] (let [c (-> cell (update :x + (* d dx)) (update :z + (* d dz)))
+                                                  n (u/seen-name p c)]
+                                              (cond (nil? n) :open
+                                                    (solid/solid? n) :wall
+                                                    (and (> d sh-inside/spawn-free-radius) (not (sh-sense/lit-here? p c))) :open)))
+                                   (range 1 (inc sh-inside/yard-cells))))]
     (and (every? #(= :wall (walled? %)) [[1 0] [-1 0] [0 1] [0 -1]])
          (sh-inside/walled-off-at? p cell))))
 

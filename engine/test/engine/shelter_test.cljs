@@ -83,9 +83,9 @@
                  :when (cond inside? (#{63 66} y) open-sides? (= y 66) :else true)]
              [(str x "," y "," z) "stone"])))
 
-(defn seen-box [blocks light-default]
+(defn seen-box [blocks light-default & [light]]
   (let [raw-p (tu/fake {:time night :blocks blocks})
-        _ (swap! (fake/state raw-p) assoc :light-default light-default)
+        _ (swap! (fake/state raw-p) assoc :light-default light-default :light light)
         per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})]
     (tu/seeing-all (perception/wrap raw-p per))))
 
@@ -139,6 +139,9 @@
     (is (zero? (chance (unroofed 5 5) {:x 2 :y 64 :z 2})) "walled yard open to the night sky: no dark cell beyond 24 blocks")
     (is (zero? (chance (unroofed 20 20) {:x 10 :y 64 :z 10})) "a yard of 400 cells")
     (is (pos? (chance (unroofed 1 40) {:x 0 :y 64 :z 39})) "the walled yard reaches a far dark cell")
+    (is (zero? (:chance (spawn-light/exposure (seen-box (unroofed 3 40) [15 0] (into {} (for [x (range 3) z (range 20 40) y [64 65]] [[x y z] [15 14]])))
+                                              {:x 1 :y 64 :z 1})))
+        "a yard longer than 24 blocks whose far end is lit")
     (is (pos? (chance (box 5 5 true) {:x 2 :y 64 :z 2})) "open sides: a flood too big to close is never safe")))
 
 (deftest one-cell-gives-one-spawn-chance-to-readiness-the-bed-and-the-planner
