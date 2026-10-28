@@ -268,23 +268,18 @@
 
 (def shear-wool "Wool a shorn sheep drops, the game's 1 to 3: 2 on average." 2)
 
-(def animals-lost-per-gap
-  "Prior (no escape rate is measured): animals a fence gap lets out before the next visit."
-  1)
-
 (defn worth-of
   "Seconds a pass is worth: cost/animal-worth of the animals its herd, breed
   (one pair, one calf) and cull steps would add or kill, the item-value of the wool its shear and of the drops its collect
-  would take, the animals lost through the fence gaps its mend would close (animals-lost-per-gap each, at most the
-  herd) and the item-value of the produce its deposit would store (none without a :chest)."
+  would take, what the herd would lose through the fence gaps its mend would close (cost/gap-loss) and the item-value of
+  the produce its deposit would store (none without a :chest)."
   [{:keys [mob target chest]} {:keys [adults babies drops shearable gaps stored-items]}]
-  (let [animals (+ (min (+ adults babies) (* animals-lost-per-gap (count gaps)))
-                   (max 0 (- (min 2 target) adults))
+  (let [animals (+ (max 0 (- (min 2 target) adults))
                    (if (and (>= adults 2) (< (+ adults babies) target)) 1 0)
                    (max 0 (- adults (max 2 (- target babies)))))
         items (cond-> (into (mapv (fn [n] {:name n :count 1}) drops) (when chest stored-items))
                 (= "sheep" mob) (conj {:name "white_wool" :count (* shear-wool shearable)}))]
-    (+ (* animals (cost/animal-worth mob)) (:value (cost/item-value items)))))
+    (+ (* animals (cost/animal-worth mob)) (cost/gap-loss mob (+ adults babies) (count gaps)) (:value (cost/item-value items)))))
 
 (defn pass-worth [c] (worth-of (:args c) (facts c)))
 

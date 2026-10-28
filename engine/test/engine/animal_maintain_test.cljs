@@ -325,6 +325,8 @@
     (is (zero? (worth {})))
     (is (< 0 (worth {:gaps [[1 64 1]]})) "a gap loses animals")
     (is (< (worth {:gaps [[1 64 1]]}) (worth {:gaps [[1 64 1] [2 64 1]]})))
+    (is (= (* 2 (cost/gap-loss "cow" 2 1)) (cost/gap-loss "cow" 4 1)) "escapes grow with the herd")
+    (is (< (cost/gap-loss "cow" 4 1) (* 4 (cost/animal-worth "cow"))) "never more than the herd")
     (is (< 0 (worth beef)) "produce to store is worth its items")
     (is (zero? (maintain/worth-of (dissoc args :chest) (merge at-target beef))) "no chest, no deposit: carried produce is worth nothing here")))
 
