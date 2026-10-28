@@ -13,6 +13,7 @@
             [engine.pen-build-test :as pb]
             [jobs.animals.maintain :as maintain]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.pen :as pen]
             [jobs.lib.world-files :as ew]))
 
 (def box {:min {:x 0 :y 60 :z -5} :max {:x 8 :y 70 :z 5}})
@@ -327,6 +328,8 @@
     (is (< (worth {:gaps [[1 64 1]]}) (worth {:gaps [[1 64 1] [2 64 1]]})))
     (is (= (* 2 (cost/gap-loss "cow" 2 1)) (cost/gap-loss "cow" 4 1)) "escapes grow with the herd")
     (is (< (cost/gap-loss "cow" 4 1) (* 4 (cost/animal-worth "cow"))) "never more than the herd")
+    (is (< (js/Math.abs (- 0.5 (pen/escape-chance 1 300))) 1e-9) "the prior's one escape per 300 animal-seconds: half gone after 300 s at one gap")
+    (is (= (pen/escape-chance 2 150) (pen/escape-chance 1 300)) "gaps and seconds trade evenly")
     (is (< 0 (worth beef)) "produce to store is worth its items")
     (is (zero? (maintain/worth-of (dissoc args :chest) (merge at-target beef))) "no chest, no deposit: carried produce is worth nothing here")))
 

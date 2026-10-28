@@ -48,6 +48,7 @@
             [world-test.spot-returns :as spot-returns]
             [world-test.surface-heights :as surface-heights]
             [world-test.water-lags :as water-lags]
+            [world-test.pen-escapes :as pen-escapes]
             [world-test.wall-sides :as wall-sides]
             [world-test.way-prior :as way-prior]))
 
@@ -533,7 +534,7 @@
        (sort-by :t)
        vec))
 
-(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | walk-pace | gap-miss | way-on | spot-returns | field-passes | arrow-shots | caught-flights | vein-seen | water-lags | surface-heights | resight | wall-sides [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N] [--difficulty D]
+(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | walk-pace | gap-miss | way-on | spot-returns | field-passes | arrow-shots | caught-flights | vein-seen | water-lags | surface-heights | resight | wall-sides | pen-escapes [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N] [--difficulty D]
   every command first folds the logs into the counts file (default worlds/test/priors-counts.edn), then reports from the file; --since-ms keeps the rows of fights started after it.")
 
 (defn- parse-args [argv]
@@ -618,6 +619,9 @@
                       (save-counts! file folded)
                       (println (pr-str (wall-sides/report (:walls folded))))
                       0)
+       "pen-escapes" (let [file (or counts (path/join repo "worlds" "test" "priors-counts.edn"))]
+                       (println (pr-str (pen-escapes/report (:pen-escapes (load-counts file)))))
+                       0)
        "spot-returns" (do (println (pr-str (spot-returns/count-in agents))) 0)
        "field-passes" (do (println (pr-str (field-passes/count-in agents probe?))) 0)
        "arrow-shots" (let [rows (mapcat #(arrow-shots/meets (read-agent (path/join agents % "engine") since-ms))
