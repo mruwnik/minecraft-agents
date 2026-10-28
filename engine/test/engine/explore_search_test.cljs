@@ -143,6 +143,13 @@
                                   [0 64 0] 20 0))
         "lava right under the step's feet height is no floor either")))
 
+(deftest a-step-toward-an-unseen-column-needs-head-room-and-reads-leaves-as-the-stand-cell-does
+  (let [world (fn [m] (fn [[x y z]] (cond (> x 8) :unseen (and (<= 1 x 8) (= z 0) (contains? m y)) (m y) (<= x 0) (if (= y 63) "grass_block" "air") (= y 63) "grass_block" :else "air")))]
+    (is (nil? (search/step-toward (world (zipmap (range 65 90) (repeat "stone"))) [0 64 0] 20 0)) "stone closing the cave one block over the feet leaves no head room")
+    (is (= [6 64 0] (search/step-toward (world {}) [0 64 0] 20 0)) "the same step with open air over it")
+    (is (= [6 51 0] (search/step-toward (world (assoc (zipmap (range 52 64) (repeat "air")) 63 "oak_leaves" 50 "dirt")) [0 64 0] 20 0))
+        "a canopy at feet level is no ground: the step stands on the dirt under it")))
+
 (deftest ore-beyond-the-view-is-walked-toward-and-found-after-looking
   (async done
     (tu/run-async done
