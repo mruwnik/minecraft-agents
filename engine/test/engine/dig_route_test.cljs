@@ -26,6 +26,17 @@
     (is (seq (:dig (dr/route deep [0 20 0] [30 8 0] {:max-s 1000 :margin 3 :max-nodes 100000}))) "within the bound it is found")
     (is (= {:problem :no-route} (dr/route deep [0 20 0] [30 8 0] {:max-dig-s 5 :margin 3 :max-nodes 100000})) "a bound in seconds of digging")))
 
+(deftest a-goal-walled-in-by-what-no-step-opens-has-no-route-without-a-flood
+  (let [shell (fn [name] (into {} (for [x (range 8 13) y (range 8 13) z (range -2 3)
+                                        :when (= 2 (max (js/Math.abs (- x 10)) (js/Math.abs (- y 10)) (js/Math.abs z)))]
+                                    [[x y z] name])))
+        open-land (fn [walls] (fn [[_ y _ :as c]] (or (walls c) (if (< y 10) "stone" "air"))))
+        opts {:max-s 1000 :step-s 0.3 :max-nodes 2000}]
+    (is (= {:problem :no-route} (dr/route (open-land (shell "bedrock")) [0 10 0] [10 10 0] opts)) "a bedrock shell round the goal")
+    (is (= {:problem :no-route} (dr/route (open-land (shell "lava")) [0 10 0] [10 10 0] opts)) "a lava one")
+    (is (= [[8 11 0] [8 10 0]] (:dig (dr/route (open-land (assoc (shell "bedrock") [8 10 0] "stone" [8 11 0] "stone")) [0 10 0] [10 10 0] opts)))
+        "stone in the wall is dug through")))
+
 (deftest a-step-down-does-not-dig-above-the-head
   (let [low (fn [c] (or ({[1 9 0] "air" [1 8 0] "air"} c) (if (or (< (c 1) 10) (>= (c 1) 12)) "stone" "air")))]
     (is (= [] (:dig (dr/route low [0 10 0] [1 8 0] {}))))))

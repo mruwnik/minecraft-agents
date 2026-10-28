@@ -47,6 +47,10 @@
     (< ny my) (mapv (fn [y] [nx y nz]) (range (inc my) (dec ny) -1))
     :else [n [nx (inc ny) nz]]))
 
+(def seal-radius
+  "How far round its goal a search looks for a wall of cells no step opens (route's {:problem :no-route} before it begins)."
+  8)
+
 (defn- before? [^js a ^js b]
   (or (< (aget a 0) (aget b 0)) (and (== (aget a 0) (aget b 0)) (< (aget a 1) (aget b 1)))))
 
@@ -208,9 +212,27 @@
                                 (when (or (< (inc dy) free-fall) (and clear? below-open?))
                                   (recur (inc dy) (and clear? below-open?))))))
                           (recur (+ i 2)))))))
-        start-key (key fx (from 1) fz)]
-    (.set best start-key #js [0 0 0 nil nil 0 #{}])
-    (heap-push! queue #js [(heuristic fx (from 1) fz) 0 start-key])
+        start-key (key fx (from 1) fz)
+        ;; every cell a step passes is open or opened (open-cell!): a goal walled off by cells none opens within
+        ;; seal-radius has no route, proved without flooding all the land the price bound holds
+        passable? (fn [x y z] (let [^js k (at x y z) d (.-cost k)] (and (some? d) (or (zero? d) (some? (dig-at (.-name k) x y z))))))
+        sealed? (fn []
+                  (let [seen (js/Set.) stack #js []
+                        visit! (fn [x y z] (let [k (key x y z)] (when (and (not (.has seen k)) (passable? x y z)) (.add seen k) (.push stack #js [x y z]))))]
+                    (visit! gx gy gz)
+                    (loop []
+                      (if-let [^js c (.pop stack)]
+                        (let [x (aget c 0) y (aget c 1) z (aget c 2)]
+                          (if (or (== (key x y z) start-key)
+                                  (< seal-radius (max (js/Math.abs (- x gx)) (js/Math.abs (- y gy)) (js/Math.abs (- z gz)))))
+                            false
+                            (do (visit! (inc x) y z) (visit! (dec x) y z) (visit! x (inc y) z) (visit! x (dec y) z) (visit! x y (inc z)) (visit! x y (dec z))
+                                (recur))))
+                        true))))]
+    (if (and (nil? range) (sealed?))
+      (vreset! answer {:problem :no-route})
+      (do (.set best start-key #js [0 0 0 nil nil 0 #{}])
+          (heap-push! queue #js [(heuristic fx (from 1) fz) 0 start-key])))
     (fn [n]
       (let [start (.-size done)
             limit (+ start n)
