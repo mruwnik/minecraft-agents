@@ -34,3 +34,8 @@
     (let [text (end/give-up-words [0 64 0] {:why :abilities :kind kind})]
       (is (re-find (re-pattern part) text) text)
       (is (not (re-find #"move the body cannot make" text)) text))))
+
+(deftest a-damage-refused-shut-in-says-the-ways-out-cost-hp
+  (let [words #(end/give-up-words [0 64 0] {:why :start-enclosed :damage-refused %})]
+    (is (re-find #"cost hp" (words true)))
+    (is (re-find #"nothing it can walk" (words nil)))))

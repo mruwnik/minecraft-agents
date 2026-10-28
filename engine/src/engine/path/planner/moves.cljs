@@ -255,8 +255,10 @@
                       ly (.-gap-y s)]
                   (when-not (or (neg? h1) ^boolean (.isTight s lx ly lz))
                     (let [delta (- (+ (* ly 16) h1) h0)
-                          missed (if deadly 0 (* (.-gap-miss s) (aget GAP-MISS-SCALE n) (if (pos? delta) GAP-UP-MISS 1) miss))
-                          risk (+ (if (and (== n 3) pit) (js/Math.max hole GAP-PIT-RISK) hole) (if deadly (.-gap-death s) missed))]
+                          ;; (gap jumps are sprint-only, so sprint is constant in the scale)
+                          share (* (aget GAP-MISS-SCALE n) (if (pos? delta) GAP-UP-MISS 1))
+                          missed (if deadly 0 (* (.-gap-miss s) share miss))
+                          risk (+ (if (and (== n 3) pit) (js/Math.max hole GAP-PIT-RISK) hole) (if deadly (* (.-gap-death s) share) missed))]
                       (when-not (or (< delta -16) (> delta (if up WHOLE 0))
                                     (and (> n 1) ^boolean (.gapOvershootLethal s dx dz lx ly lz h1))
                                     (and (some? ^js (.-limit-gap s))

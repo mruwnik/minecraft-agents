@@ -267,10 +267,14 @@
 
 ;; two ledges over a hole 8 deep (a miss falls 8 blocks, 5 hp) joined only by a bridge at z 20: the jump over the hole is the
 ;; short way. A 1-wide hole is never missed; a 2-wide one is missed at half of gapMiss.
-(defn hole [width]
-  (pf/snapshot {:fill [[0 55 0 20 55 20 "stone"] [0 56 0 2 63 20 "stone"] [(+ 3 width) 56 0 12 63 20 "stone"] [3 56 20 (+ 2 width) 63 20 "stone"]]}))
+(defn hole
+  ([width] (hole width 0))
+  ([width rise]
+   (pf/snapshot {:fill [[0 55 0 20 55 20 "stone"] [0 56 0 2 63 20 "stone"] [(+ 3 width) 56 0 12 (+ 63 rise) 20 "stone"] [3 56 20 (+ 2 width) 63 20 "stone"]]})))
 
-(defn over-hole [width options] (run (hole width) (near (+ 4 width) 64 2) options {:x 1 :y 64 :z 2}))
+(defn over-hole
+  ([width options] (over-hole width 0 options))
+  ([width rise options] (run (hole width rise) (near (+ 4 width) (+ 64 rise) 2) options {:x 1 :y 64 :z 2})))
 
 (deftest a-gap-jump-prices-its-miss-as-chance-times-the-fall
   (let [r (over-hole 2 {:damageBudget 1 :damageWeight 1})
@@ -284,3 +288,23 @@
   (let [r (over-hole 1 {:damageBudget 0})]
     (is (some #{(:gap MOVE)} (moves r)))
     (is (zero? (cost r :damage)))))
+
+(deftest a-wider-gap-is-missed-more-often
+  (let [two (cost (over-hole 2 {:damageBudget 1 :damageWeight 1}) :damage)
+        three (cost (over-hole 3 {:damageBudget 1 :damageWeight 1}) :damage)]
+    (is (< 0.09 three 0.11) "gapMiss 0.02 x 1 for 3 cells x the 5 hp fall")
+    (is (< (* 1.9 two) three))))
+
+(deftest a-jump-up-is-missed-twice-as-often
+  (let [level (over-hole 2 0 {:damageBudget 1 :damageWeight 1})
+        up (over-hole 2 1 {:damageBudget 1 :damageWeight 1})]
+    (is (some #{(:gap MOVE)} (moves up)))
+    (is (< 0.09 (cost up :damage) 0.11) "twice the level jump's 0.05")
+    (is (< 0.04 (cost level :damage) 0.06))))
+
+(deftest a-lethal-hole-is-priced-by-width-as-the-damaging-miss-is
+  (let [risk (fn [w] (let [r (run (pf/world {:fill [[5 60 -2 (+ 4 w) 63 40 "air"] [5 55 -2 (+ 4 w) 55 40 "stone"]]}) (near (+ 5 w 3) 64 2) {:health 4})]
+                       (is (= 1 (cost r :jumps)))
+                       (cost r :risk)))]
+    (is (< (risk 1) 100 (risk 2)))
+    (is (< (* 1.9 (risk 2)) (risk 3)))))
