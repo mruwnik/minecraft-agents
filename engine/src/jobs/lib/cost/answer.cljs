@@ -136,7 +136,7 @@
   [body at]
   (let [d (death/death-cost body at)] {:met d :clear d}))
 
-(declare repeat-price)
+(declare repeat-price answer-death-chance)
 
 (defn answer-price*
   "answer-price with death {:met :clear} the seconds each death costs (death-price): :clear one by a blast that spends
