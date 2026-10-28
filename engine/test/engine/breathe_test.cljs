@@ -2008,3 +2008,27 @@
     (is (= {:land 0 :chance 0.5} (select-keys no-bank [:land :chance])) "water never seen: no shore assumed, even odds one is there")
     (is (nil? (:stand no-bank)))
     (is (nil? (:chance (swim (ledge-lake 10) 99))) "all seen: nothing left to chance")))
+
+(deftest breathe-fires-on-the-first-tick-a-body-under-water-runs-short-after-a-hostile-reflex-ended
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              [seen sink] (tu/legacy-capture-sink)
+              p (tu/seeing-all (tu/fake {:self {:inWater true :oxygen 20 :pos {:x 0 :y 62 :z 0}} :blocks (lake -3 3 3)}))
+              now (tu/act-clock clock p 1000)
+              eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
+                                :events (events/make {:body "Fake" :sinks [sink] :now now})})
+              reflex (fn [kind] (keep #(when (= [:reflex kind] [(:source %) (:kind %)]) (:reflex %)) @seen))
+              tick! (fn ^:async tk [] (await (core/tick! eng)) (swap! clock + 1000))]
+          (core/register-reflex! eng {:trigger :suffocating})
+          (core/register-reflex! eng {:trigger :hostile-near})
+          (fake/add-entity! p {:id 50 :name "zombie" :kind "hostile" :pos [3 62 0] :health 20})
+          (await (tick!))
+          (is (= [:hostile-near] (reflex :fired)))
+          (swap! (fake/state p) assoc :entities [])
+          (loop [i 0] (when (and (< i 4) (not (some #{:hostile-near} (reflex :ended)))) (await (tick!)) (recur (inc i))))
+          (is (some #{:hostile-near} (reflex :ended)) "the fight is over")
+          (fake/swap-self! p assoc :oxygen 4)
+          (await (tick!))
+          (is (= [:hostile-near :suffocating] (reflex :fired)) "breathe fires on the next tick, with no wait after the fight"))))))
