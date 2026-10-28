@@ -195,15 +195,18 @@
 
 (defn keep-for-put-back!
   "With :collect, hold what the dig picked up (the pack now over before, {name n}) for the put-back of the cut (memory
-  :kept, jobs.lib.reserve entries of this call): its floors do not spend the blocks its cut owes."
+  :kept, jobs.lib.reserve entries held by the job :collect names, else this call): its floors, and the holder's until it
+  puts the cut back, do not spend the blocks the cut owes."
   [c before]
-  (let [gained (into {} (keep (fn [[n k]] (let [d (- k (get before n 0))] (when (pos? d) [n d])))) (carried (:primitives c)))]
+  (let [gained (into {} (keep (fn [[n k]] (let [d (- k (get before n 0))] (when (pos? d) [n d])))) (carried (:primitives c)))
+        collect (:collect (:args c))]
     (when (seq gained)
       (let [kept (merge-with + (:kept (ctx/mem c)) gained)]
         (ctx/update-mem! c assoc :kept kept)
-        (reserve/set-job-entries! c (mapv (fn [[n k]] {:id (str (:id c) "-put-back-" n) :item n :count k :strength 1 :by (:id c)
-                                                       :why "the put-back of the stair's cut"})
-                                          kept))))))
+        (doseq [[n k] kept]
+          (ctx/remember! c reserve/kind {:id (str (:id c) "-put-back-" n) :item n :count k :strength 1 :by (if (string? collect) collect (:id c))
+                                         :why "the put-back of the stair's cut"}
+                         reserve/policy))))))
 
 (defn ^:async dig!
   "Equip the best tool, check the cell again, write the intent and dig it (a blocks.dig child). :continue (dug, go on), :yield (the child waits on the world), or a stop map."

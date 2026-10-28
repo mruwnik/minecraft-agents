@@ -6,6 +6,7 @@
             [jobs.lib.blocks :as b]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.reach.room :as reach-room]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]
             [jobs.movement.go-to.holes :refer [note-placed! own-holes]]
@@ -13,8 +14,10 @@
             [jobs.movement.go-to.torch :as torch]))
 
 (defn restore-done!
-  "Tell what was put back and what was left, and end the put-back (the walk goes on from a fresh count)."
+  "Tell what was put back and what was left, and end the put-back (the walk goes on from a fresh count). The blocks a
+  stair kept for it (jobs.lib.reserve entries this call holds) are free again."
   [c]
+  (reserve/set-job-entries! c [])
   (let [{:keys [restored skipped]} (ctx/mem c)]
     (when (seq restored)
       (ctx/emit! c :go-to.restored :info {:cells restored :text (str "put back " (count restored) " dug blocks")}))

@@ -562,7 +562,10 @@
   [c pos]
   (let [{:keys [step] :as e} (:escalation (ctx/mem c))
         [job args] (escalation-job e (hole-tag c) (boolean (or (:exit-zone e) (:ignore-zones? (:args c)) (zone-exit? c (end/feet-cell c)))) (boolean (:by-hand (ctx/mem c))) (fetch-tool? c))
-        args (cond-> args (= :clear-path step) (assoc :max-dig-s (max 0 (dig-left-s c))))
+        args (cond-> args
+               (= :clear-path step) (assoc :max-dig-s (max 0 (dig-left-s c)))
+               ;; the stair's kept drops outlive it: this call's walks must not spend them before the put-back
+               (true? (:collect args)) (assoc :collect (:id c)))
         _ (await (torch/return-torch! c))
         r (await (ctx/call c :escalation job (cond-> (update args :checks #(some->> % (ready/unforced c))) (= :approach step) (->> (ready/forage-walk c)))))]
     (let [dug (concat (:planned (ctx/mem c)) (when (not= :continue r) (map #(assoc % :dug true) (:dug (:data r)))))]

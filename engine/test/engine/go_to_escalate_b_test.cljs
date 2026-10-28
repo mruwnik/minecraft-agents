@@ -18,6 +18,8 @@
             [jobs.lib.own-pen :as own-pen]
             [engine.ready-test :as rt]
             [jobs.movement.go-to.holes :as holes]
+            [jobs.movement.go-to.restore :as restore]
+            [jobs.lib.reserve :as reserve]
             [jobs.movement.go-to.escalate-choose :as ec]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.walk.plan :as wplan]
@@ -288,10 +290,14 @@
       (fn ^:async t []
         (let [zones [{:name "pen" :owner "Fake" :min [-2 60 -2] :max [2 66 2]}]
               cow {:id 7 :name "cow" :kind "passive" :pos {:x -1.5 :y 64 :z -1.5}}
-              {:keys [out p seen]} (await (run-job! {:sight 3 :self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (dissoc thick-pit-pen "7,63,0") :entities [cow]
-                                                     :inventory [{:name "stone_pickaxe" :count 1}]}
-                                                    'jobs.movement.go-to {:pos [10 64 0] :range 1} zones true))]
+              kept (atom [])
+              done! restore/restore-done!
+              {:keys [out p seen]} (with-redefs [restore/restore-done! (fn [c] (swap! kept conj (filterv #(= "the put-back of the stair's cut" (:why %)) (reserve/entries (ctx/view c)))) (done! c))]
+                                     (await (run-job! {:sight 3 :self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (dissoc thick-pit-pen "7,63,0") :entities [cow]
+                                                       :inventory [{:name "stone_pickaxe" :count 1}]}
+                                                      'jobs.movement.go-to {:pos [10 64 0] :range 1} zones true)))]
           (is (= {:arrived true} @out))
+          (is (some seq @kept) (str "the stair's drops are still held for the put-back after the stair ended: " (pr-str @kept)))
           (is (= [:go-to.escalated :go-to.escalation-stopped :go-to.restored]
                  (take 3 (map :kind (filter #(#{:go-to.escalated :go-to.escalation-stopped :go-to.restored} (:kind %)) @seen))))
               "the dead end's cut is put back before the next way, not once the walk is on")
