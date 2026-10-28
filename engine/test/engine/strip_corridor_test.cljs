@@ -4,6 +4,7 @@
             [engine.blocks-dig-test :as bd]
             [engine.fake :as fake]
             [engine.test-util :as tu]
+            [jobs.lib.cost.risk :as risk]
             [jobs.lib.strip :as strip]
             [jobs.strip.corridor :as corridor]))
 
@@ -321,3 +322,13 @@
 
 (deftest a-hop-stop-is-walked-to-exactly-the-end-within-one
   (is (= [0 1] [(corridor/walk-range 5 12) (corridor/walk-range 12 12)])))
+
+(deftest the-walks-along-the-corridor-are-priced-over-a-strips-stay
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (world)
+              calls (atom [])]
+          (await (tu/with-near-spy calls (fn ^:async f [] (await (run! env args)))))
+          (is (seq @calls))
+          (is (every? #(= (risk/work-s :long) (:stay-s (nth % 2))) @calls)))))))

@@ -9,6 +9,7 @@
             [jobs.lib.waits :as waits]
             [jobs.gather.mine.targets :refer [step-cell]]
             [jobs.lib.child :as child]
+            [jobs.lib.cost.risk :as risk]
             [jobs.lib.look :refer [cell-of]]
             [jobs.lib.util :as u]))
 
@@ -51,7 +52,7 @@
                 r))
         why (when (map? r) (contract/cause-key r))
         back (when-not (or (= :continue r) (halting why))
-               (await (child/call-walk* c :branch-back {:pos {:x (+ (:x junction) 0.5) :y (:y junction) :z (+ (:z junction) 0.5)} :range 0
+               (await (child/call-walk* c :branch-back {:pos {:x (+ (:x junction) 0.5) :y (:y junction) :z (+ (:z junction) 0.5)} :range 0 :stay-s (risk/work-s :long)
                                                         :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
     (cond
       (= :continue r) :continue

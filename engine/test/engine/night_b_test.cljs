@@ -23,6 +23,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.health :as health]
             [jobs.lib.price :as price]
+            [jobs.lib.rooms :as rooms]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.targets :as targets]
@@ -424,6 +425,25 @@
     (is (not= {:x 0 :y 64 :z 0} light) "a toll of 0.5 s a second over the pit is dearer than the walk off")
     (is (nil? (danger light)) (pr-str light))
     (is (= {:x 0 :y 64 :z 0} gone))))
+
+(deftest a-saved-site-in-a-known-mobs-field-is-kept-with-no-fresh-site-only-for-a-dearer-dig-at-the-feet
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [dirt (into {} (for [x (range -12 13) z (range -12 13)] [(str x ",63," z) "dirt"]))
+              p (tu/seeing-all (tu/fake {:blocks dirt}))
+              c {:primitives p :id "j" :args {:for :night} :slots [] :engine {:warned (atom #{})} :view (fn [] {:now 0 :data {}})}
+              m {:x 8 :y 64 :z 0}
+              toll-at (fn [toll-m toll-feet] (fn [f] {:toll (if (= (:x f) 8) toll-m toll-feet)}))
+              keeps (fn ^:async keeps [fresh toll-m toll-feet]
+                      (with-redefs [threats/danger-near-fn (fn [_] (toll-at toll-m toll-feet))
+                                    pit-site/pit-site? (fn [_ _] false)
+                                    rooms/route-cost (fn ^:async rc [_ _] 5)]
+                        (await (pit-site/keeps? c m fresh))))]
+          (is (true? (await (keeps nil 0 0))) "no mob covers the saved site: it is walked to")
+          (is (false? (await (keeps nil 0.5 0))) "no fresh site and a mob's field over the saved one: no walk")
+          (is (false? (await (keeps {:at :here} 0.5 0.1))) "digging at the feet costs less toll")
+          (is (true? (await (keeps {:at :here} 0.1 0.5))) "digging at the feet costs more toll")))))) 
 
 (deftest a-relocation-site-tests-only-the-cheapest-columns-whole-however-tolled-the-ground
   (let [dirt (into {} (for [x (range -18 19) z (range -18 19)] [(str x ",63," z) "dirt"]))

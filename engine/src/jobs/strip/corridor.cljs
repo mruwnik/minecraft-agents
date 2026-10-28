@@ -12,6 +12,7 @@
             [engine.settings :as settings]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
+            [jobs.lib.cost.risk :as risk]
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
@@ -233,7 +234,7 @@
         seen? #(let [[x cy z] (strip/at axis y line %)] (reach/seen-standable? (:primitives c) {:x x :y cy :z z}))
         stop-at (walk-stop seen? here far)
         cell (strip/at axis y line stop-at)
-        w (await (near/go-near! c cell (walk-range stop-at far)))]
+        w (await (near/go-near! c cell (walk-range stop-at far) {:stay-s (risk/work-s :long)}))]
     (case w
       :partial :continue
       ;; no floor beyond was ever seen and go-to will not walk there: what can be seen from here is all there is
@@ -258,7 +259,7 @@
   only in part (too few rails, no support in view) is not read as a segment."
   [c seg a]
   (let [{:keys [axis y line]} seg
-        w (await (near/go-near! c (strip/at axis y line a) 1))]
+        w (await (near/go-near! c (strip/at axis y line a) 1 {:stay-s (risk/work-s :long)}))]
     (ctx/update-mem! c update :mouthed (fnil conj []) a)
     (if (= :partial w)
       :continue

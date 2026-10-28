@@ -8,6 +8,7 @@
             [jobs.lib.seal :as seal]
             [jobs.lib.waits :as waits]
             [jobs.lib.blocks :as b]
+            [jobs.lib.cost.risk :as risk]
             [jobs.lib.choose :as choose]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
@@ -117,7 +118,7 @@
 
 (defn ^:async go-stand! [c at axis side]
   (let [stand-cell (stand at axis side)
-        r (await (child/call-walk* c :walk {:pos stand-cell :range 0 :ways #{:walk :clear-seal}}))]
+        r (await (child/call-walk* c :walk {:pos stand-cell :range 0 :ways #{:walk :clear-seal} :stay-s (risk/work-s :long)}))]
     (cond
       (= :continue r) :continue
       (= stand-cell (reach/standing-vec (:primitives c))) :again
