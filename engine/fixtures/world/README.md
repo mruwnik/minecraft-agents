@@ -30,7 +30,7 @@ entities, clear the plot again (so the next restarted body does not start beside
 ## Format
 
 A file is one case map, or `{:defaults {...} :cases [{...} ...]}`. A case over the defaults: `:body` and `:plot` merge
-key by key; `:blocks :act :expect :after :plans` append; the defaults' `:act-end` steps follow the case's own `:act`; the rest replace. The case id is `<file stem>/<:name>`.
+key by key; `:blocks :act :expect :after :plans` append; `:act-end` steps (the case's, then the defaults') follow the case's own `:act`; the rest replace. The case id is `<file stem>/<:name>`.
 
 Positions in `:blocks`, `:body`, `:act` summons and `:after` are plot-relative `[x y z]` (origin = the plot's
 north-west corner at body level; the floor is y -1; the middle is `[16.5 0 16.5]`). Inside job specs, plans and event

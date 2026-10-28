@@ -179,16 +179,17 @@
 
 (defn merge-case
   "A case over its file's defaults: :body and :plot merge key by key, the concatenated keys append, the rest replace.
-  The defaults' :act-end steps come after the case's own :act (a poll that follows each case's summons)."
+  :act-end steps (the case's, then the defaults') come after the case's own :act (a poll that follows each case's summons)."
   [file-defaults c]
   (let [m (reduce-kv (fn [acc k v]
                        (cond
+                         (= :act-end k) acc
                          (concatenated k) (update acc k (fnil into []) v)
                          (#{:body :plot} k) (update acc k merge v)
                          :else (assoc acc k v)))
                      (merge-with (fn [a b] (if (map? a) (merge a b) b)) defaults (dissoc file-defaults :act-end))
                      c)]
-    (update m :act into (:act-end file-defaults))))
+    (update m :act into (concat (:act-end c) (:act-end file-defaults)))))
 
 (defn body-start-plan
   "What the runner does with the body before a case: :restart-clean (stop it, delete its engine/memory.edn, start with

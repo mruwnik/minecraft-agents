@@ -237,6 +237,9 @@
 (deftest the-defaults-act-end-follows-the-cases-own-act
   (let [m (f/merge-case {:act [[:rcon "a"]] :act-end [[:rcon "z"]]} {:name "c" :act [[:rcon "m"]]})]
     (is (= [[:rcon "a"] [:rcon "m"] [:rcon "z"]] (:act m)))
+    (is (not (contains? m :act-end))))
+  (let [m (f/merge-case {:act-end [[:rcon "z"]]} {:name "c" :act [[:rcon "m"]] :act-end [(f/times [2 [[:rcon "p"]]])]})]
+    (is (= [[:rcon "m"] [:rcon "p"] [:rcon "p"] [:rcon "z"]] (f/expand-times (:act m))) "a case's own :act-end follows its :act, #times expanded")
     (is (not (contains? m :act-end)))))
 
 (deftest a-file-of-cases-merges-each-case-over-its-defaults
