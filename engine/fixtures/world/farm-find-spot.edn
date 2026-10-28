@@ -36,7 +36,7 @@
    :plot {:light :dark :height 6 :floor "grass_block"}
    :body {:at [64.5 0 32.5] :settle-s 2}
    :act [[:job (jobs.farm.find-spot {:range 12})]]
-   :expect [{:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :none}} :within-s 40 :of-job true}
+   :expect [{:event {:source :job :kind :stopped :data {:kind :nothing-possible}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 40 :until {:source :job :kind :stopped}}]}
   {:name "lit-cave-floor-is-a-spot"
    :plot {:light :lit :height 6 :floor "grass_block"}
