@@ -166,8 +166,13 @@
 (deftest the-flee-pace-is-blocks-over-the-steps-own-seconds-and-the-stops-between-them
   (let [step (fn [t job s blocks] (rec t :step :job job :slot :step :s s :blocks blocks))
         rows (c/flee-steps [(step 1000 "j1" 1 4) (step 2500 "j1" 1 3) (step 3000 "j1" 0.5 2) (step 9000 "j2" 1 5)])]
-    (is (= {:flights 1 :steps 3 :blocks 9 :seconds 2.5 :bps 3.6 :gaps 2 :gap-s 0.5 :off-gaps 0 :stop-s 0.25} (c/pace-report rows))
-        "a lone step is no flight; the stops run from a step's end to the next one's start")))
+    (is (= {:flights 1 :steps 3 :blocks 9 :seconds 2.5 :bps 3.6 :gaps 2 :gap-s 0.5 :off-gaps 0 :stop-s 0.25} (dissoc (c/pace-report rows) :by-sprint))
+        "a lone step is no flight; the stops run from a step's end to the next one's start")
+    (is (= {:unknown {:flights 1 :steps 3 :blocks 9 :seconds 2.5 :bps 3.6}} (:by-sprint (c/pace-report rows))))
+    (let [fed (fn [t food blocks] (rec t :step :job "j1" :slot :step :s 1 :blocks blocks :food food))]
+      (is (= {:sprint {:flights 1 :steps 2 :blocks 8 :seconds 2 :bps 4} :walk {:flights 1 :steps 2 :blocks 6 :seconds 2 :bps 3}}
+             (:by-sprint (c/pace-report (c/flee-steps [(fed 1000 20 4) (fed 2500 20 4) (fed 4000 5 3) (fed 5500 5 3)]))))
+          "steps split by whether the body could sprint at its food; one flight can hold both"))))
 
 (deftest the-closing-rate-is-the-gap-growth-between-step-starts-per-mob-kind-and-sprint-state
   (let [step (fn [t job food chasers] (rec t :step :job job :slot :step :s 1 :blocks 4 :food food :chasers chasers))

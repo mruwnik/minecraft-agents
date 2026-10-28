@@ -346,7 +346,8 @@
 (defn pace-report
   "The pace of the flights of two steps or more among rows (flee-steps): blocks over the steps' own seconds (:bps), and the
   seconds stood between two steps of a flight (:stop-s: from one step's end to the next one's start, over the gaps a
-  flight stood in, :off? ones left out and counted as :off-gaps)."
+  flight stood in, :off? ones left out and counted as :off-gaps); :by-sprint the same steps' blocks and seconds per :sprint / :walk
+  (danger/sprints? of the step's food; :unknown in a log before food was kept)."
   [rows]
   (let [flights (filter #(>= (count %) 2) (map #(sort-by :t %) (vals (group-by :flight rows))))
         steps (apply concat flights)
@@ -356,7 +357,11 @@
         blocks (sum (map :blocks steps)) secs (sum (map :s steps)) stood (sum gaps)]
     {:flights (count flights) :steps (count steps) :blocks (r2 blocks) :seconds (r2 secs)
      :bps (when (pos? secs) (r2 (/ blocks secs))) :gaps (count gaps) :gap-s (r2 stood) :off-gaps (- (count pairs) (count gaps))
-     :stop-s (when (seq gaps) (r2 (/ stood (count gaps))))}))
+     :stop-s (when (seq gaps) (r2 (/ stood (count gaps))))
+     :by-sprint (into {} (map (fn [[k ss]] (let [b (sum (map :blocks ss)) s (sum (map :s ss))]
+                                             [k {:flights (count (distinct (map :flight ss))) :steps (count ss) :blocks (r2 b) :seconds (r2 s)
+                                                 :bps (when (pos? s) (r2 (/ b s)))}])))
+                        (group-by #(cond (nil? (:food %)) :unknown (danger/sprints? (:food %)) :sprint :else :walk) steps))}))
 
 (defn closing-pieces
   "Pieces [{:mob :sprint :blocks :s}] of the flights among rows (flee-steps, sorted or not) with gaps kept: from one step's start

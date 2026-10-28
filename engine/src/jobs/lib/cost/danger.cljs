@@ -44,7 +44,7 @@
                     :doc "Seconds from a flight's decision until it gets going, the deciles each melee kind's flight stands (flight-starts; a kind with no row: \"pooled\"), the :setting of node tools/event-counts.mjs flight-starts: the first flee decision of each trial run from each kind, the time to 1 block off less that block at sprint speed, known within the gap between two positions (one still within that block of the decision may be 0) or right-censored when the run ended or decided otherwise first (a run that held still first is no flight and left out); the Turnbull fit of each kind's, its times past its last seen end the other melee kinds' past it, shrunk toward the other melee kinds' fit by :w = n / (n + alpha), n the kind's information (its starts, a censored one counted by the share of the others' spread it closes), alpha = 2.46 (DerSimonian-Laird over the kinds' means: tau2 2.06, sigma2 5.07 s2), \"pooled\" all melee kinds' (276 starts, 54 censored; 53 held runs left out); :n the kind's starts; 8 with no position in the 2 s before are left out. A blast on the walk is priced over each (cost.answer/flee-mob)."
                     :spec (a/pred "a map of mob kind to {:n count :deciles [10 seconds]}, holding \"pooled\""
                                   #(and (contains? % "pooled") (a/ok? (a/map-of a/name? (a/map-with {:n (a/int-in 0 nil) :deciles start-deciles?})) %)))}
-   ::flee-walk-speed {:default 3.72 :doc "Blocks a second a flight's steps cover (flee-walk-speed), at food over ::sprint-food; one too hungry to sprint covers the game's walk share of it: 1444 blocks in 389 s of 382 steps (retreat.step-speed, slot :step) of 64 flights of two steps or more, trial logs to 2026-10-23. Recount: tools/event-counts.mjs flee-pace (:bps)." :spec (a/num-in 0.1 nil)}
+   ::flee-walk-speed {:default 3.72 :doc "Blocks a second a flight's steps cover (flee-walk-speed), at food over ::sprint-food; one too hungry to sprint covers the game's walk share of it: 1444 blocks in 389 s of 382 steps (retreat.step-speed, slot :step) of 64 flights of two steps or more, trial logs to 2026-10-23. Recount: tools/event-counts.mjs flee-pace (:bps; :by-sprint :walk has no steps yet, so the hungry pace is the ratio alone)." :spec (a/num-in 0.1 nil)}
    ::flee-step-s {:default 1.02 :doc "Seconds a flee step takes, the mean: 389 s over 382 steps of the same flights (flee-pace, :seconds over :steps)." :spec (a/num-in 0.1 nil)}
    ::flee-stop-s {:default 0.23 :doc "Seconds a flight stands between two of its steps while still in flight (a look, a re-decide, a replan, a respond delay), the mean: 46.8 s over 203 such gaps of the same flights; 115 gaps in which the flight had ended (another answer, action or child ran) are left out. Recount: flee-pace (:stop-s, :gaps, :off-gaps)." :spec (a/num-in 0 nil)}
    ::closing-rates {:default {}
@@ -185,7 +185,8 @@
 
 (defn flee-walk-speed
   "Blocks a second a flight's steps by a body with food food cover: ::flee-walk-speed, times the game's walk speed over
-  its sprint speed when it cannot sprint (sprints?)."
+  its sprint speed when it cannot sprint (sprints?): a ratio, no counted flight was hungry. wins-race?/reach-first? race a
+  hungry body at body-speed (3.2), not at this."
   [food]
   ;; the game's ratio, not body-speed's: fight/walk-speed is a measured go-to walk, slowed by what ::flee-walk-speed already counts
   (cond-> (settings/get settings ::flee-walk-speed) (not (sprints? food)) (* (/ base/SPRINT-S base/WALK-S))))
