@@ -62,7 +62,7 @@
       (is (not= junk (worth item)) (str item " is not the 256 s no-source default")))
     (is (> (worth "netherite_chestplate") (worth "netherite_helmet")) "more armour points save more")
     (is (> (worth "netherite_pickaxe") (worth "diamond_pickaxe")) "the dearer tool is worth more")
-    (is (> (worth "trident") (worth "stone_sword")) "a trident kills faster than a stone sword")))
+    (is (> (worth "stone_sword") (worth "trident")) "a trident hits 9 but every 910 ms: three hits (2.7 s) are slower than a stone sword's four (2.5 s)")))
 
 (deftest gear-use-is-saved-against-the-reference-zombie-fall-and-stone
   (let [basis (assoc tbl/default-basis :gear (assoc (:gear tbl/default-basis) :ref-hardness 1.5))

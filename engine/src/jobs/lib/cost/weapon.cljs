@@ -49,8 +49,19 @@
   (let [i (.indexOf cheapness (material-of item-name))]
     (if (neg? i) (count cheapness) i)))
 
-(def axe-gap-ms
-  {"wooden_axe" 1250 "stone_axe" 1250 "copper_axe" 1250 "iron_axe" 1112 "golden_axe" 1000 "diamond_axe" 1000 "netherite_axe" 1000})
+(def axe-attack-speed
+  {"wooden" 0.8 "stone" 0.8 "copper" 0.8 "iron" 0.9 "golden" 1 "diamond" 1 "netherite" 1})
+
+(defn attack-speed
+  "Vanilla attack speed of the held item (nil: a fist; 4 for an unknown one)."
+  [item-name]
+  (cond
+    (nil? item-name) 4
+    (str/ends-with? item-name "_sword") 1.6
+    (str/ends-with? item-name "_axe") (get axe-attack-speed (material-of item-name) 4)
+    (= item-name "trident") 1.1
+    (= item-name "mace") 0.6
+    :else 4))
 
 (def min-gap-ms
   "Mobs ignore damage for 0.5 s after a hit, so a swing sooner than this is wasted."
@@ -59,10 +70,7 @@
 (defn attack-gap-ms
   "The full-strength attack cooldown in ms of the held item (nil: a fist), at least min-gap-ms."
   [item-name]
-  (max min-gap-ms
-       (cond
-         (and item-name (str/ends-with? item-name "_sword")) 625
-         :else (get axe-gap-ms item-name min-gap-ms))))
+  (max min-gap-ms (js/Math.ceil (/ 1000 (attack-speed item-name)))))
 
 (def mob-max-health
   "Full health of the common hostiles; unknown ones count as 20."
