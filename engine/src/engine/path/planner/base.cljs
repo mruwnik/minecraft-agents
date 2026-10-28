@@ -77,15 +77,16 @@
 (def ^:const GAP-S 0.5) ; a gap jump's run-up and landing, on top of the sprint over its length
 (def ^:const GAP-UP-S 0.3) ; a gap jump landing one block higher costs this much more than a level one
 (def GAP-MISS-JUMPS
-  "gap jumps that fell short of n tried in prismarine-physics (engine.gap-miss-physics-test), by width in cells (index 1-3), then
-  run-up: [1 cell, the takeoff cell only; 2 or more]"
+  "The planner's default of options.gapMissJumps (jobs.lib.cost.planner's ::gap-miss-jumps): gap jumps that fell short of n tried in
+  prismarine-physics (engine.gap-miss-physics-test), by width in cells (index 1-3), then run-up: [1 cell, the takeoff cell only; 2 or more]"
   #js [nil
        #js [#js [0 38] #js [0 114]]
        #js [#js [0 38] #js [0 114]]
        #js [#js [4 38] #js [0 114]]])
-(def GAP-MISS-SHARE
-  "the chance a level gap jump falls short by width then run-up (GAP-MISS-JUMPS under a Beta(1,1) prior), times costs.gapMiss"
-  (.map GAP-MISS-JUMPS (fn [w] (when (some? w) (.map w (fn [[fell n]] (/ (inc fell) (+ n 2))))))))
+(defn gap-miss-share
+  "The chance a level gap jump falls short by width then run-up (jumps, as GAP-MISS-JUMPS, under a Beta(1,1) prior), times costs.gapMiss"
+  [jumps]
+  (.map jumps (fn [w] (when (some? w) (.map w (fn [[fell n]] (/ (inc fell) (+ n 2))))))))
 (def ^:const GAP-UP-MISS 2) ; a jump up misses this many times as often as a level or down one
 (def ^:const GAP-PIT-RISK 0.5) ; hp of risk for a jump over 3 above a pit it cannot jump out of: a short jump traps the body
 (def ^:const TIGHT-S 0.1) ; careful walking: each tight cell entered costs this much more than a plain step

@@ -266,7 +266,7 @@
     (is (= 7 (cost whole :damage)) "5 stands, one fall")))
 
 ;; two ledges over a hole 8 deep (a miss falls 8 blocks, 5 hp) joined only by a bridge at z 20: the jump over the hole is the
-;; short way. The miss share comes from width and run-up (base/GAP-MISS-SHARE): the plan's start is one cell before the takeoff, a run-up of 2.
+;; short way. The miss share comes from width and run-up (base/gap-miss-share): the plan's start is one cell before the takeoff, a run-up of 2.
 (defn hole
   ([width] (hole width 0))
   ([width rise]
@@ -283,6 +283,12 @@
     (is (< 0.04 (cost r :damage) 0.06) "1/116 for a run-up of 2 x the 5 hp fall")
     (is (not-any? #{(:gap MOVE)} (moves round)) "a budget under the priced miss walks round")
     (is (= "found" (:status round)))))
+
+(deftest a-gap-jump-prices-its-miss-from-options-gapMissJumps
+  (let [jumps [nil [[0 38] [1 10]] [[1 10] [1 10]] [[1 10] [1 10]]]
+        r (over-hole 2 {:damageBudget 10 :damageWeight 1 :gapMissJumps jumps})]
+    (is (some #{(:gap MOVE)} (moves r)))
+    (is (< 0.8 (cost r :damage) 0.87) "2/12 for a run-up of 2 x the 5 hp fall")))
 
 (deftest a-one-wide-gap-jump-costs-the-run-ups-share-of-the-fall
   (let [r (over-hole 1 {:damageBudget 1 :damageWeight 1})]

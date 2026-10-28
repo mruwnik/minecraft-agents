@@ -168,6 +168,8 @@
    gap-death
    ;; costs.gapMiss: the chance a gap jump falls short; its hole's fall damage times it is the jump's priced damage
    gap-miss
+   ;; options.gapMissJumps (base/GAP-MISS-JUMPS when left out) as the chance a level gap jump falls short, by width then run-up (base/gap-miss-share)
+   gap-share
    ;; options.unknown.changed (fn x y z: the chance a remembered cell changed since it was seen; nil: none did) and the hp
    ;; of risk a death weighs (options.unknown.deathHp, else lethal-s over riskWeight)
    ^js unk-changed unk-death])

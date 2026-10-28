@@ -1,6 +1,6 @@
 (ns engine.path.planner.moves
   "Search methods: the moves out of a node: walks, diagonals, jumps, drops, gap jumps and climbing."
-  (:require [engine.path.planner.base :refer [CLIMB-FALL-P CLIMB-FALL-SCAN FULL-HEALTH ARC ARC-UP BODY CLIMB-TRAP-SHUT CORNER-S GAP-PIT-RISK GAP-MISS-SHARE GAP-UP-MISS GAP-S GAP-UP-S GRID HAZARD-SLIDE-RISK JUMP-S JUMP-UP LAVA MOVE-CLIMB-DOWN MOVE-CLIMB-UP MOVE-CORNER MOVE-DIAGONAL MOVE-DROP MOVE-GAP MOVE-JUMP MOVE-JUMP-CLIMB MOVE-OPEN MOVE-SWIM MOVE-WALK OPENABLE SLOW-EXTRA SNAP SQRT2 STEP UNLOADED WATER WHOLE FREE-FALL STALAGMITE-FACTOR STALAGMITE-FREE-FALL BOUNCE-S pad-cells]]
+  (:require [engine.path.planner.base :refer [CLIMB-FALL-P CLIMB-FALL-SCAN FULL-HEALTH ARC ARC-UP BODY CLIMB-TRAP-SHUT CORNER-S GAP-PIT-RISK GAP-UP-MISS GAP-S GAP-UP-S GRID HAZARD-SLIDE-RISK JUMP-S JUMP-UP LAVA MOVE-CLIMB-DOWN MOVE-CLIMB-UP MOVE-CORNER MOVE-DIAGONAL MOVE-DROP MOVE-GAP MOVE-JUMP MOVE-JUMP-CLIMB MOVE-OPEN MOVE-SWIM MOVE-WALK OPENABLE SLOW-EXTRA SNAP SQRT2 STEP UNLOADED WATER WHOLE FREE-FALL STALAGMITE-FACTOR STALAGMITE-FREE-FALL BOUNCE-S pad-cells]]
             [engine.path.planner.search :refer [Search]]))
 
 (set! *warn-on-infer* true)
@@ -256,7 +256,7 @@
                   (when-not (or (neg? h1) ^boolean (.isTight s lx ly lz))
                     (let [delta (- (+ (* ly 16) h1) h0)
                           ;; (gap jumps are sprint-only, so sprint is constant in the shares)
-                          share (* (aget (aget GAP-MISS-SHARE n) (if (> (.runUp s i x z dx dz) 1) 1 0)) (if (pos? delta) GAP-UP-MISS 1))
+                          share (* (aget (aget ^js (.-gap-share s) n) (if (> (.runUp s i x z dx dz) 1) 1 0)) (if (pos? delta) GAP-UP-MISS 1))
                           missed (if deadly 0 (* (.-gap-miss s) share miss))
                           risk (+ (if (and (== n 3) pit) (js/Math.max hole GAP-PIT-RISK) hole) (if deadly (* (.-gap-death s) share) missed))]
                       (when-not (or (< delta -16) (> delta (if up WHOLE 0))

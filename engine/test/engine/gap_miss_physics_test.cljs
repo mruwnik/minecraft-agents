@@ -1,9 +1,10 @@
 (ns engine.gap-miss-physics-test
-  "The source of the planner's gap-jump miss prior (planner.base/GAP-MISS-JUMPS): level gaps of 1-3 cells jumped in
+  "The source of the planner's gap-jump miss prior (planner.base/GAP-MISS-JUMPS, the default of jobs.lib.cost's gap-miss-jumps): level gaps of 1-3 cells jumped in
   prismarine-physics by the executor from every start fraction of the run-up, counted by width and run-up cells."
   (:require [cljs.test :refer [deftest is are]]
             [engine.gap-physics-test :as gp]
             [engine.path.planner.base :as base]
+            [jobs.lib.cost :as cost]
             [engine.stairs-physics-test :as sp]))
 
 (def run-ups "run-up cells before the takeoff, the takeoff cell counted: 1 starts in it" [1 2 3 4])
@@ -28,3 +29,6 @@
 (deftest gap-miss-prior-is-the-physics-count
   (is (= (mapv #(mapv vec %) (rest (js->clj base/GAP-MISS-JUMPS)))
          (mapv counts [1 2 3]))))
+
+(deftest gap-miss-setting-defaults-to-the-planner-default
+  (is (= (js->clj base/GAP-MISS-JUMPS) (cost/gap-miss-jumps))))

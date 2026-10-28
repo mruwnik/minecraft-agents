@@ -207,7 +207,7 @@
     (is (< (Math/abs (- risk (cost r :risk))) 1e-9))
     (is (some #{(:gap MOVE)} (moves r)))))
 
-;; risk 1 plus the priced miss: the share for a run-up of 2 (1 of 116, base/GAP-MISS-SHARE) x the fall's damage 5
+;; risk 1 plus the priced miss: the share for a run-up of 2 (1 of 116, base/gap-miss-share) x the fall's damage 5
 (deftest gap-of-1-2-or-3-cells-is-jumped
   (are [gap risk] (check-gap-jumped gap risk) 1 (+ 1 (/ 5 116)) 2 (+ 1 (/ 5 116)) 3 (+ 1 (/ 5 116))))
 

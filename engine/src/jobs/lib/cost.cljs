@@ -161,6 +161,7 @@
 (def walk-costs planner/walk-costs)
 (def walk-landing planner/walk-landing)
 (def walk-drop-cost planner/walk-drop-cost)
+(def gap-miss-jumps planner/gap-miss-jumps)
 (def walk-unknown-prices planner/walk-unknown-prices)
 (def gaits planner/gaits)
 (def gait-problem planner/gait-problem)

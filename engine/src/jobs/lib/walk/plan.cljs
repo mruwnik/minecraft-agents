@@ -101,6 +101,7 @@
       (when-some [v (get policy key)] (unchecked-set options opt v)))
     (when-some [p (:drown-prices policy)] (unchecked-set options "drownPrices" (js/Float64Array.from (clj->js p))))
     (when-some [f (:air-seen policy)] (unchecked-set options "airSeen" f))
+    (unchecked-set options "gapMissJumps" (clj->js (cost/gap-miss-jumps)))
     (unchecked-set options "landing" (cost/planner-landing (:landing policy) gait))
     (when (some? seen) (unchecked-set options "landingSeen" seen))
     (when-some [f (:goal-seen policy)] (unchecked-set options "goalSeen" f))
