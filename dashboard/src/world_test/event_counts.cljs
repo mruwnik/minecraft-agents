@@ -4,7 +4,7 @@
   spot-returns [--agents DIR] (world-test.spot-returns), field-passes [--agents DIR] (world-test.field-passes), arrow-shots [--agents DIR] [--difficulty D] (world-test.arrow-shots; D the
   server's, default 1, easy, the trial server's), caught-flights [--agents DIR] (world-test.caught-flights; trial bodies only) and vein-seen [--agents DIR] count from the logs alone, no fold;
   water-lags [--agents DIR] [--stride N] (world-test.water-lags) and surface-heights (world-test.surface-heights) from the recorded chunks beside DIR;
-  resight [--agents DIR] [--counts FILE] (world-test.resight) folds the bodies' seen memory against those chunks into the counts file.
+  resight [--agents DIR] [--counts FILE] (world-test.resight) folds the bodies' seen memory against those chunks into the counts file; wall-sides likewise folds the trial bodies' enter-room.arrived events (world-test.wall-sides).
   vein-seen: the ore blocks one look saw together (26-connected, a vein's plain and deepslate blocks as one ore) per group, from the
   look tool's :look.observed lists; :capped counts the lists the tool cut short (nearest first, so a far group may be cut).
   creeper-exchange: respond runs that only decided about creepers and fought (a :fight decision) with at least one swing: hp the creepers
@@ -45,6 +45,7 @@
             [world-test.spot-returns :as spot-returns]
             [world-test.surface-heights :as surface-heights]
             [world-test.water-lags :as water-lags]
+            [world-test.wall-sides :as wall-sides]
             [world-test.way-prior :as way-prior]))
 
 (def blast-hp "hp over which one hurt event from a creeper is its blast." 2)
@@ -320,7 +321,7 @@
                     shrunk)}))
 
 ;; The durable counts: the rows of each prior by run id, so the counts only grow while the raw logs rotate away.
-(def empty-counts {:exchange {} :starts {} :notices {} :drowned-exposure {} :drowned-meets {} :flight-steps {} :resight {}})
+(def empty-counts {:exchange {} :starts {} :notices {} :drowned-exposure {} :drowned-meets {} :flight-steps {} :resight {} :walls {}})
 
 (defn better-exchange "Of two rows of one fight, the one that saw more swings (a rotation may have cut the older read short), then the older." [a b]
   (if (> (:swings b) (:swings a)) b a))
@@ -496,7 +497,7 @@
        (sort-by :t)
        vec))
 
-(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | way-on | spot-returns | field-passes | arrow-shots | caught-flights | vein-seen | water-lags | surface-heights | resight [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N] [--difficulty D]
+(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | way-on | spot-returns | field-passes | arrow-shots | caught-flights | vein-seen | water-lags | surface-heights | resight | wall-sides [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N] [--difficulty D]
   every command first folds the logs into the counts file (default worlds/test/priors-counts.edn), then reports from the file; --since-ms keeps the rows of fights started after it.")
 
 (defn- parse-args [argv]
@@ -568,6 +569,17 @@
                    (save-counts! file folded)
                    (println (pr-str (resight/report (:resight folded))))
                    0)
+       "wall-sides" (let [file (or counts (path/join repo "worlds" "test" "priors-counts.edn"))
+                          rows (into {} (for [b (array-seq (fs/readdirSync agents))
+                                              :when (and (not (probe? b)) (fs/existsSync (path/join agents b "engine")))
+                                              line (event-lines (path/join agents b "engine"))
+                                              :let [[t row] (wall-sides/scan-line line)]
+                                              :when t]
+                                          [[b t] row]))
+                          folded (wall-sides/fold (load-counts file) rows)]
+                      (save-counts! file folded)
+                      (println (pr-str (wall-sides/report (:walls folded))))
+                      0)
        "spot-returns" (do (println (pr-str (spot-returns/count-in agents))) 0)
        "field-passes" (do (println (pr-str (field-passes/count-in agents probe?))) 0)
        "arrow-shots" (let [rows (mapcat #(arrow-shots/meets (read-agent (path/join agents % "engine") since-ms))
