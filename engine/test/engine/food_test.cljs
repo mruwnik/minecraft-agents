@@ -7,6 +7,8 @@
             [engine.settings :as settings]
             [engine.core :as core]
             [engine.events :as events]
+            [jobs.lib.cost.food :as food-cost]
+            [jobs.lib.cost.value :as value]
             [jobs.lib.foods :as foods]
             [jobs.lib.reserve :as reserve]
             [engine.memory :as mem]
@@ -419,7 +421,7 @@
             (await (core/tick! eng))
             (is (= [item] (call-args p "eat" "item")))))))))
 
-(deftest eat-keeps-precious-food-for-a-named-meal-or-low-health
+(deftest eat-keeps-precious-food-for-a-named-meal
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -432,9 +434,9 @@
           (await (core/tick! eng))
           (is (= ["golden_apple"] (call-args p "eat" "item")) "named"))
         (let [{:keys [eng p]} (setup {:self {:food 4 :health 4} :inventory [{:name "golden_apple" :count 1}]})]
-          (core/submit! eng '(jobs.survival.eat) {})
+          (core/submit! eng '(jobs.survival.eat {:get-food? false}) {})
           (await (core/tick! eng))
-          (is (= ["golden_apple"] (call-args p "eat" "item")) "low health"))
+          (is (= [] (calls p "eat")) "hurt with no threat known: its hp alone are worth less than it"))
         (let [{:keys [eng p]} (setup {:self {:food 4 :health 4}
                                       :inventory [{:name "golden_apple" :count 1} {:name "bread" :count 1}]})]
           (core/submit! eng '(jobs.survival.eat) {})
@@ -499,12 +501,17 @@
           (is (= 1 (count (filter #(and (= :stopped (:kind %)) (= :not-food (:reason %))) @seen)))))))))
 
 (deftest eat-keeps-harmful-and-precious-food-last-whatever-their-points
-  (is (= "dried_kelp" (eat/best-food [{:name "spider_eye"} {:name "dried_kelp"}] true nil 20 20 #{})) "harmful last")
-  (is (= "dried_kelp" (eat/best-food [{:name "golden_apple"} {:name "dried_kelp"}] false nil 4 20 #{})) "precious after common"))
+  (is (= "dried_kelp" (eat/best-food [{:name "spider_eye"} {:name "dried_kelp"}] true nil 20 (constantly true) #{})) "harmful last")
+  (is (= "dried_kelp" (eat/best-food [{:name "golden_apple"} {:name "dried_kelp"}] false nil 4 (constantly true) #{})) "precious after common"))
+
+(deftest a-golden-apple-is-not-worth-eating-at-8-hp-fed-and-safe
+  (is (not (food-cost/eat-precious? {:health 8} "golden_apple" true))
+      (str "its hp alone: " (food-cost/precious-worth {:health 8} "golden_apple" true) " s against "
+           (:value (value/item-value [{:name "golden_apple" :count 1}])) " s")))
 
 (deftest eat-chooses-by-saturation-when-points-tie
-  (is (= "cooked_mutton" (eat/best-food [{:name "cooked_chicken"} {:name "cooked_mutton"}] false nil 20 20 #{})))
-  (is (= "cooked_mutton" (eat/best-food [{:name "honey_bottle"} {:name "cooked_mutton"}] false nil 20 20 #{}))))
+  (is (= "cooked_mutton" (eat/best-food [{:name "cooked_chicken"} {:name "cooked_mutton"}] false nil 20 (constantly false) #{})))
+  (is (= "cooked_mutton" (eat/best-food [{:name "honey_bottle"} {:name "cooked_mutton"}] false nil 20 (constantly false) #{}))))
 
 (deftest golden-apples-are-rare-for-the-top-up-trigger
   (is (not (foods/top-up? 16 8 ["golden_apple"])))
@@ -912,7 +919,7 @@
                  (when-fn (tu/fake {:self (dissoc self :inventory) :inventory inventory}) {} (or args {})))
         bread [{:name "bread" :count 1}]]
     (is (holds? {:food 19 :health 6 :inventory bread}) "below 7 hp: eat up to 20")
-    (is (not (holds? {:food 19 :health 6 :inventory [{:name "golden_apple" :count 1}]})) "precious food waits until too hurt for risky work (the rest eats it)")
+    (is (not (holds? {:food 19 :health 6 :inventory [{:name "golden_apple" :count 1}]})) "precious food is no meal a trigger counts on")
     (is (not (holds? {:food 19 :health 6 :inventory []})) "nothing to eat and food enough to heal")
     (is (not (holds? {:food 20 :health 6 :inventory bread})) "full")
     (is (not (holds? {:food 19 :health 7 :inventory bread})) "at the line")
@@ -945,7 +952,7 @@
 
 (deftest eat-bad-never-eats-poison-that-leaves-the-body-fragile
   (let [inv [{:name "spider_eye"} {:name "pufferfish"} {:name "rotten_flesh"}]]
-    (is (= "rotten_flesh" (eat/best-food inv true nil 6.5 20 #{})) "rotten flesh only costs hunger")
-    (is (= "spider_eye" (eat/best-food (take 2 inv) true nil 14 20 #{})) "healthy enough for 4 hp of poison")
-    (is (nil? (eat/best-food (take 2 inv) true nil 6.5 20 #{})))
-    (is (nil? (eat/best-food (take 1 inv) true "spider_eye" 9 20 #{})) "a named one too")))
+    (is (= "rotten_flesh" (eat/best-food inv true nil 6.5 (constantly false) #{})) "rotten flesh only costs hunger")
+    (is (= "spider_eye" (eat/best-food (take 2 inv) true nil 14 (constantly false) #{})) "healthy enough for 4 hp of poison")
+    (is (nil? (eat/best-food (take 2 inv) true nil 6.5 (constantly false) #{})))
+    (is (nil? (eat/best-food (take 1 inv) true "spider_eye" 9 (constantly false) #{})) "a named one too")))

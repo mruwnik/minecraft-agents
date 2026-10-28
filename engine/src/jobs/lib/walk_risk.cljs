@@ -20,6 +20,7 @@
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.death :as death]
+            [jobs.lib.cost.health :as health]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.lava-risk :as lava-risk]
             [jobs.lib.look :as look]
@@ -36,9 +37,7 @@
 
 (a/defargs settings
   {::exit-blocks {:default 8 :spec (a/num-in 0 nil)
-                  :doc "Blocks of open ground a walk out of a night shelter crosses before it can go under, even to a goal underground, priced by the light of the way out (exit-dark)."}
-   ::heal-s-per-hp {:default 4 :spec (a/num-in 0 nil)
-                    :doc "Seconds a body that can heal takes to regain an hp, for the wait that would make a risky walk affordable (stay-estimate)."}})
+                  :doc "Blocks of open ground a walk out of a night shelter crosses before it can go under, even to a goal underground, priced by the light of the way out (exit-dark)."}})
 
 (def lava-scan-radius 128)
 
@@ -236,9 +235,9 @@
   sensed mob within its field gets to a body that stays; one near the far end of the way does not reach it) plus the spawns met at
   its cell by the light seen there (price/stay-parts), and the death both risk in hp (cost/death-chance,
   cost/lethal-hp), for the time the walk takes, or, for a body that can heal, for the wait until its health would afford
-  the route (::heal-s-per-hp an hp); for :secs when given. :lethal-hp the death's part of :hp; :heal-s and :secs the wait."
+  the route (cost.health/heal-s-per-hp an hp); for :secs when given. :lethal-hp the death's part of :hp; :heal-s and :secs the wait."
   [c {:keys [goal route-hp feet health cannot-heal? body live chance secs]}]
-  (let [heal-s (if cannot-heal? 0 (* (settings/get settings ::heal-s-per-hp) (max 0 (- (min 20 (/ route-hp (settings/get risk/settings ::risk/risk-share))) health))))
+  (let [heal-s (if cannot-heal? 0 (* (health/heal-s-per-hp) (max 0 (- (min 20 (/ route-hp (settings/get risk/settings ::risk/risk-share))) health))))
         secs (or secs (max heal-s (/ (u/dist feet goal) (cost/walk-blocks-per-s))))
         here [(assoc feet :s secs)]
         live (mapv (fn [{:keys [reach] :as t}] (assoc t :reach (fn [x y z] (when (reach x y z) 1)))) (threats/with-reach c live))

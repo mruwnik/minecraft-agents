@@ -14,6 +14,9 @@
             [jobs.lib.hostile-fight :as hostile]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.food :as food-cost]
+            [jobs.lib.cost.value :as value]
+            [jobs.lib.foods :as foods]
             [jobs.lib.pace :as pace]
             [jobs.lib.shot :as shot]
             [jobs.lib.danger :as danger-q]
@@ -292,6 +295,38 @@
     (when-let [start (and (= :flee (:decision m)) (:flight-start m))]
       (:rate (hostile/incoming c start)))))
 
+(defn precious-to-eat
+  "The carried precious food (cheapest first) whose hp are worth more than it against the answer weighed chose:
+  cost.food/eat-precious? of that answer and weighed's death price, the body not healing by waiting while it faces the
+  mobs; nil when none is, or a bite of one failed this run."
+  [c weighed]
+  (when-let [known (when-not (:precious-failed (ctx/mem c)) (get (:answers weighed) (:answer weighed)))]
+    (let [body (hostile/body-of c)
+          at (u/self-pos c)]
+      (->> (u/inventory (:primitives c))
+           (map :name)
+           (filter foods/precious)
+           distinct
+           (sort-by #(:value (value/item-value [{:name % :count 1}])))
+           (filter #(food-cost/eat-precious? body % false known at (:death weighed)))
+           first))))
+
+(defn ^:async eat-precious!
+  "Eat one precious-to-eat (jobs.survival.eat naming it) before the answer runs, saying what it buys."
+  [c weighed]
+  (when-let [item (precious-to-eat c weighed)]
+    (let [body (hostile/body-of c)
+          known (get (:answers weighed) (:answer weighed))
+          worth (food-cost/precious-worth body item false known (u/self-pos c) (:death weighed))]
+      (ctx/emit! c :hostile.precious-eat :info {:item item :answer (:answer weighed) :worth (js/Math.round worth)
+                                                :value (js/Math.round (:value (value/item-value [{:name item :count 1}])))
+                                                :text (str "eats a " item " before the " (name (:answer weighed)) ": its hp are worth "
+                                                           (js/Math.round worth) " s against the death the " (name (:answer weighed)) " risks")})
+      ;; :until 21: a precious food is eaten for its hp, at any food level
+      (let [r (await (ctx/call c :eat 'jobs.survival.eat {:item item :until 21 :max-bites 1 :get-food? false}))]
+        (when (and (contract/ending? r) (not= :done (:kind r)))
+          (ctx/update-mem! c assoc :precious-failed true))))))
+
 (defn ^:async respond-with!
   "The rest of respond once it has weighed the answers: log the decision, run its child, the other one when it declines."
   [c near weighed decision cover creeper stay?]
@@ -342,7 +377,8 @@
                                                  :text (str "a side of the room is unseen: a look first (closed by chance " (.toFixed (:closed look) 2)
                                                             ", worth " (js/Math.round (:value look)) " s, costs " (.toFixed (:cost look) 1) " s)")})
           (await (doors/look-into-room! c (:room look))))
-      (respond-with! c near weighed decision cover creeper stay?))))
+      (do (await (eat-precious! c weighed))
+          (await (respond-with! c near weighed decision cover creeper stay?))))))
 
 (def cover-sides
   "Of the four sides of the body's cell, how many must be walled (feet and head cell solid) for it to hold cover: a

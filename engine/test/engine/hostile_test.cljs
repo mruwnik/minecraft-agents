@@ -171,6 +171,21 @@
                                                   :entities [(zombie 7 3 0) (zombie 8 3 1)]})))
             "two are fightable in diamond: their blows cost less than walking away and meeting them again")))))
 
+(def iron-armour
+  {:head {:name "iron_helmet" :count 1} :torso {:name "iron_chestplate" :count 1}
+   :legs {:name "iron_leggings" :count 1} :feet {:name "iron_boots" :count 1}})
+
+(deftest respond-eats-a-golden-apple-at-2-hp-against-a-zombie-and-keeps-it-at-20
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [apple {:name "golden_apple" :count 1}
+              eaten (fn [{:keys [p]}] (mapv #(aget (.-args %) "item") (calls p "eat")))]
+          (is (= ["golden_apple"] (eaten (await (flight-round respond {:self {:health 2 :food 10} :inventory (conj sword apple) :equipment iron-armour :entities [(zombie 3 0)]}))))
+              "the fight's death it averts at 2 hp (about 1575 s) is worth more than the apple (1117 s)")
+          (is (= [] (eaten (await (flight-round respond {:self {:health 20 :food 20} :inventory (conj sword apple) :equipment iron-armour :entities [(zombie 3 0)]}))))
+              "at full health it averts little"))))))
+
 (defn fist-stance
   "What decide makes of a body at full health with no bed (a death walks it back from world spawn) with weapon against
   one mob 2 blocks off (health: what is left of it, nil full): fight it, or walk away and meet it again."

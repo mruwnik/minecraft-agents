@@ -7,7 +7,6 @@
             ["minecraft-data" :as minecraft-data]
             [clojure.string :as str]
             [engine.game :as game]
-            [jobs.lib.cost.risk :as risk]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -49,7 +48,7 @@
     (or (nil? d) (> (- health d) (settings/get settings ::fragile-health)))))
 
 (def precious
-  "Foods kept for an emergency: eaten only when named or when too hurt for risky work (cost.risk/too-hurt?)."
+  "Foods kept for an emergency: eaten only when named or when their hp are worth the item (jobs.lib.cost.food/eat-precious?, jobs.survival.eat)."
   #{"golden_apple" "enchanted_golden_apple"})
 
 (def named-only
@@ -137,18 +136,16 @@
         (remove reserved))))
 
 (defn eaten-unnamed?
-  "Whether a meal that names no item would eat item at health and food: food, not harmful, not named-only, and precious
-  only when too hurt for risky work (the rules of jobs.survival.eat)."
-  [health food item]
-  (and (edible? item)
-       (not (contains? named-only item))
-       (or (not (contains? precious item)) (risk/too-hurt? health food :long))))
+  "Whether item counts as carried food for a meal that names no item: food, not harmful, not named-only, not precious
+  (jobs.survival.eat eats one only when it is worth it, so it is no food a trigger or a check counts on)."
+  [item]
+  (and (edible? item) (not (contains? named-only item)) (not (contains? precious item))))
 
 (defn carries-food?
   "Whether the sensed self carries something a meal would eat."
   ([self] (carries-food? self #{}))
   ([self reserved]
-   (boolean (some #(eaten-unnamed? (.-health self) (.-food self) %) (carried-names self reserved)))))
+   (boolean (some eaten-unnamed? (carried-names self reserved)))))
 
 (defn eat-now?
   "Health below :health (default 7), food below 20 and something a meal would eat carried."

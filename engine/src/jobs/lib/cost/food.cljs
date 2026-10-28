@@ -3,8 +3,11 @@
   20 minutes; sprinting, jumping, fighting and healing drain hunger, plain walking and mining hardly do; an
   estimate, not a measure, kept on the safe side), so the reserve is 60 points. Pure over an inventory
   ([{:name :count}]); food is what jobs.lib.foods calls edible, except precious food (golden apples), which is kept
-  for emergencies and never counts."
+  for emergencies and never counts; precious-worth, eat-precious?: what one gives, whether it is worth eating."
   (:require [engine.game :as game]
+            [jobs.lib.cost.answer :as answer]
+            [jobs.lib.cost.health :as health]
+            [jobs.lib.cost.value :as value]
             [jobs.lib.foods :as foods]))
 
 (def days 3)
@@ -40,6 +43,38 @@
   (let [held (reduce (fn [n {:keys [name count]}] (cond-> n (reserve-food? name) (+ (* count (foods/points name)))))
                      0 inventory)]
     (max 0 (- reserve-points held))))
+
+(def precious-heals
+  "hp a precious food gives (vanilla): its regeneration II's (an hp per 1.25 s for 5 s, the enchanted one's 20 s) and its absorption's."
+  {"golden_apple" {:regen 4 :absorb 4} "enchanted_golden_apple" {:regen 16 :absorb 16}})
+
+(defn fed
+  "body once it has eaten precious food item: its regeneration on its health (at most 20), its absorption on top."
+  [{:keys [health absorption] :as body} item]
+  (let [{:keys [regen absorb]} (precious-heals item)]
+    (assoc body :health (min 20 (+ (or health 20) regen)) :absorption (+ (or absorption 0) absorb))))
+
+(defn precious-worth
+  "Seconds what precious food item gives body is worth: its hp (health/gain-worth: its regeneration up to 20, each at
+  most what waiting costs an hp while the body heals by waiting, heals?, then its absorption over that) and, against a
+  known answer met at `at` with death {:met :clear} (answer/decide's), the death it averts: answer/answer-death-chance
+  before and after (fed) at answer/died."
+  ([body item heals?] (precious-worth body item heals? nil nil nil))
+  ([body item heals? known at death]
+   (let [health (or (:health body) 20)
+         healed (:health (fed body item))
+         hp (+ (health/gain-worth health (js/Math.floor (- healed health)) heals?)
+               (health/gain-worth healed (:absorb (precious-heals item)) false))]
+     (if known
+       (+ hp (* (- (answer/answer-death-chance body known at death) (answer/answer-death-chance (fed body item) known at death))
+                (answer/died death known)))
+       hp))))
+
+(defn eat-precious?
+  "Whether precious food item is worth eating: what it gives (precious-worth, the same args) is worth more than the item
+  (cost.value/item-value)."
+  [body item & more]
+  (> (apply precious-worth body item more) (:value (value/item-value [{:name item :count 1}]))))
 
 (defn cooked-name
   "The cooked food a raw one gives, or nil."
