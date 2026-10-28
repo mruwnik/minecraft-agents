@@ -1894,6 +1894,17 @@
           (let [{:keys [seen]} (await (flight-round respond (assoc world :entities [(drowned-at 2.5 57 0.5)])))]
             (is (= [:flee] (mapv :decision (decided seen))) "13 hp, the drowned 3 blocks off and 6 down, the shore 4 blocks off")))))))
 
+(deftest a-fight-that-cannot-reach-a-deep-drowned-costs-at-least-the-swim-out-that-follows-it
+  (let [p (tu/seeing-all (tu/fake-on-floor {:floor flight-floor :blocks lake :self {:pos [-0.5 63 0.5] :health 13}
+                                            :inventory [{:name "stone_sword" :count 1}] :entities [(drowned-at 2.5 57 0.5)]}))
+        c {:primitives p :engine {:warned (atom nil)} :view (fn [] {:now 1000 :data {}}) :id "j1" :root "j1" :slots []}
+        near (danger-q/dangers p 16 {:ranged-radius 16} {})
+        caught {:chance 1 :seconds 20}
+        fight (hostile-fight/fight-answer c near (constantly nil) nil caught)
+        flee (hostile-fight/flee-answer c near nil nil caught)]
+    (is (false? (hostile-fight/reaches? c (first near))) "the drowned is out of a swing")
+    (is (>= (answer/expected-damage fight) (answer/expected-damage flee)) "the fight's own swim out is caught as the flight's")))
+
 (deftest respond-prices-a-wet-drowned-fight-at-the-width-the-cost-answer-gives-it
   (let [p (tu/seeing-all (tu/fake-on-floor {:floor flight-floor :blocks lake :self {:pos [3.5 63 0.5] :health 20}
                                             :inventory [{:name "stone_sword" :count 1}] :entities [(drowned-at 2.5 63 0.5)]}))

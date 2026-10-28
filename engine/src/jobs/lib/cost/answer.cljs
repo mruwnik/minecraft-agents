@@ -352,7 +352,7 @@
     (+ stood (/ (max 0 (- r gap)) gain))))
 
 (defn flee-mob
-  "{:damage :hit :spread :shape :rate-shape :seconds} of a walk away from mob {:name :held :distance :follow (blocks it keeps chasing out to) :speed
+  "{:damage :hit :spread :shape :rate-shape :seconds :swim-s} of a walk away from mob {:name :held :distance :follow (blocks it keeps chasing out to) :speed
   (its chase speed, default danger/chase-speed of the name)} at speed v through the armour stats, nil when it keeps up: the
   gap opens at gain (a fn of the mob's name, default v less its chase speed), v less :speed when that is given.
   It hits while within its hit-range (reach-rate); a shooter on land stands there while it sees the body (vanilla's
@@ -360,7 +360,7 @@
   danger/flight-starts, :shape the width of its blow count over them (fight/sum-shape's); a ranged mob at its uncertain
   rate, :rate-shape (threat/hit-rate-shape), the one rate of its kind (flee-answer-on adds a kind's blows before its shape). A flight that starts in water first swims swim blocks to dry land (##Inf: no land
   known) at speed sv, the mob chasing at danger/swim-chase-speed, then walks from the gap the swim left, over the land blocks
-  there is to walk on (a ledge with none: the mob keeps up). A creeper that
+  there is to walk on (a ledge with none: the mob keeps up); :swim-s the swim's seconds. A creeper that
   reaches its swell start before the body gets going blows at the distance the body reached when its fuse ends, :spread
   that blast for each of danger/flight-starts: a blast is not felt before it lands, as other mobs' blows are (respond's
   felt rate)."
@@ -400,6 +400,7 @@
              damage (mean damages)
              spread (- (mean (map #(* % %) damages)) (* damage damage))]
          (cond-> {:damage damage :hit (blow stats m) :seconds (+ (:seconds wet 0) escape)}
+           wet (assoc :swim-s (:seconds wet))
            (> spread 1e-9) (assoc :shape (/ (* damage damage) spread))
            (and (not= r (danger/melee-reach)) (threat/hit-rate-shape (threat/kind m))) (assoc :rate-shape (threat/hit-rate-shape (threat/kind m)))))))))
 
@@ -435,8 +436,9 @@
   search's chance of it, nil 0), its mobs then landing their blows (a creeper its blast) over the flight, a melee mob over
   caught-s seconds of it (the flee search's race) at reach-rate; or else at the prior of the body's health
   (jobs.lib.cost.caught/prior of its mobs, the likeliest caught), they then landing its blows (the trials counted a
-  flight's blows from all its chasers) of that mob's, in a flight begun in water (the trials counted flights on land) a melee mob's no more than
-  caught-s at reach-rate (blows do not outlast the race's seconds in reach); never fewer than the walk's own. The two catches are one by their chances (caught by both, the prior's blows: the trials counted them on flights of every way): its damage their mean, its :shape the width of their
+  flight's blows from all its chasers) of that mob's, in a flight begun in water (the trials counted flights on land) a melee mob's over
+  the swim's share of the flight's seconds (flee-mob's :swim-s) no more than caught-s at reach-rate (blows do not outlast
+  the race's seconds in reach); never fewer than the walk's own. The two catches are one by their chances (caught by both, the prior's blows: the trials counted them on flights of every way): its damage their mean, its :shape the width of their
   mix (each its own: the way's the walk's, the prior's its blows' uncertainty). A creeper that blows on the
   walk (at the median of its :spread) is spent: what follows is the walk from the rest or later (none left: nothing).
   swim: the blocks a body in water swims to dry land first (flee-mob's; ##Inf none known) and land the blocks to walk on there, at its planner/swim-speed times the share of a sprint a flight's pace is on foot (danger/flee-walk-speed over body-speed).
@@ -477,11 +479,14 @@
                                                                    (threat/mob-hurt stats (threat/kind m) (min (:seconds f) caught-s) identity (reach-rate m))
                                                                    (threat/mob-hurt stats (threat/kind m) (:seconds f) identity (threat/lone-hit-rate (threat/kind m))))))
                                                 hitting))
-                            [m _ pr] (when (seq hitting) (apply max-key #(:chance (nth % 2)) hitting))
+                            [m f pr] (when (seq hitting) (apply max-key #(:chance (nth % 2)) hitting))
+                            swim-share (when (and caught-s (:swim-s f) (pos? (:seconds f)) (= (hit-range m) (danger/melee-reach)))
+                                         (/ (:swim-s f) (:seconds f)))
                             dp (max (reduce + 0 (map #(:damage (second %)) hitting))
                                     (if m (threat/mob-hurt stats (threat/kind m) (cond-> (:blows pr)
-                                                                                   (and caught-s swim (pos? swim) (= (hit-range m) (danger/melee-reach)))
-                                                                                   (min (* caught-s (reach-rate m))))
+                                                                                   swim-share
+                                                                                   (as-> blows (+ (* swim-share (min blows (* caught-s (reach-rate m))))
+                                                                                                  (* (- 1 swim-share) blows))))
                                                            identity 1)
                                         0))
                             pc (:chance prior 0)

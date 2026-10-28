@@ -254,11 +254,12 @@
   mobs by its way (way-mobs), at least the mob blows felt lately (incoming :rate) over its length, :hit the hardest blow
   felt lately or of its mobs, :shape cost/fight-answer's width over the fight's blows, :caught its fight gone bad (at the prior of the health its blasts leave) with the
   same walk, felt blows and blasts. A mob the body cannot get within a swing of (reaches?) is not killed (cost/fight-answer):
-  the fight is followed at once by the walk away from those it leaves (flee-answer, cost/followed). A lone creeper is
+  the fight is followed at once by the walk away from those it leaves (flee-answer, caught by its way as caught, the flee
+  search's caught-chance; nil the prior alone; cost/followed). A lone creeper is
   fought hit-and-back (nil when hit-and-back-ok? fails); any other creeper near, or by the way in time (blasting), is
   not fought: it blows where the fight is, beside its first mob, so its blast at its distance from that mob (at most its
   swell start) is added, in :blasts."
-  [c near struck-of & [walk-q]]
+  [c near struck-of & [walk-q caught]]
   (let [p (:primitives c)
         lone-creeper? (and (= 1 (count near)) (combat/creeper? (first near)))
         fought (fought near)
@@ -282,7 +283,7 @@
           (cond-> (assoc (felt a) :seconds seconds :creepers (vec creepers))
             (:caught a) (assoc :caught (assoc (felt (:caught a)) :chance (:chance (:caught a))))
             (:spent a) (assoc :spent true)
-            (seq left) (cost/followed (flee-answer c left nil nil nil))))))))
+            (seq left) (cost/followed (flee-answer c left nil nil (dissoc caught :cornered?)))))))))
 
 (defn mob-near
   "Hostile e as the answers take a mob: {:name :held :distance :speed (its chase speed) :follow (its follow range)}; a
