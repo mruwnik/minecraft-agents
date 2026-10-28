@@ -63,8 +63,6 @@
 
 (defn hiding? [seen] (some #(and (= :holding (:kind %)) (= "hiding" (some-> (:reason %) name))) @seen))
 
-(defn sleep [ms] (js/Promise. (fn [r] (js/setTimeout r ms))))
-
 (defn ^:async until-hiding
   "Resolve once the round's first wait while hiding is pending (the wait is held there until the returned release is called) or the round ends: no timers, the body waits on the test's release. Returns release."
   [round seen p]
@@ -343,15 +341,27 @@
   (let [{:keys [eng p seen clock] :as s} (setup world)
         listed (atom [])]
     (core/submit! eng spec {})
-    (let [round (core/tick! eng)]
-      ((await (until-hiding round seen p)))
+    (let [round (core/tick! eng)
+          release (atom (await (until-hiding round seen p)))
+          arrive (atom nil)
+          holding (atom true)
+          ended (.then round (constantly nil) (constantly nil))]
+      (.override (.-world p) "wait"
+                 (fn [t a impl]
+                   (if (and (hiding? seen) @holding)
+                     (js/Promise. (fn [go] (reset! release #(go (impl t a))) (when-let [f @arrive] (f))))
+                     (impl t a))))
       (doseq [[ents jump-ms] steps]
         (swap! (fake/state p) assoc :entities [])
         (doseq [e ents] (fake/add-entity! p e))
         (swap! clock + jump-ms)
-        (await (sleep 200))
+        (let [held (js/Promise. (fn [r] (reset! arrive r)))]
+          (@release)
+          (await (js/Promise.race #js [held ended])))
         (swap! listed conj (:list (core/state eng))))
       (swap! (fake/state p) assoc :entities [])
+      (reset! holding false)
+      (@release)
       (await round))
     (assoc s :listed @listed :waits (count (calls p "wait")))))
 
@@ -1010,15 +1020,28 @@
   (is (= 2 (count (flee-walk/walk-cells (fn [{:keys [y]}] (if (= y 63) "stone" "air")) {:x 0.5 :y 64 :z 0.5} (flee-walk/unit 1 1) 2)))
       "past no corner, the diagonal is open"))
 
+(defn acts-on
+  "A promise that resolves once the body has made a call named in names (the call has returned): no timers."
+  [p names]
+  (js/Promise. (fn [resolve]
+                 (doseq [n names]
+                   (.override (.-world p) n
+                              (fn [t a impl] (.then (impl t a) (fn [r] (resolve nil) r))))))))
+
+(defn ^:async until-acts
+  "Resolve once acted resolves or the round ends."
+  [acted round]
+  (await (js/Promise.race #js [acted (.then round (constantly nil) (constantly nil))])))
+
 (defn ^:async first-act-round
   "Submit spec over world and run its round until its first walk or place (5 s at most); then the mobs leave and the
   round ends. The setup map plus :places-before-walk, the place calls made before the first walk."
   [spec world]
   (let [{:keys [eng p] :as s} (setup world)
-        acted? #(or (seq (tu/walked-to eng)) (seq (calls p "place")))]
+        acted (acts-on p ["place" "moveTo" "steer"])]
     (core/submit! eng spec {})
     (let [round (core/tick! eng)]
-      (loop [i 0] (when (and (not (acted?)) (< i 250)) (await (sleep 20)) (recur (inc i))))
+      (await (until-acts acted round))
       (let [places (count (calls p "place"))]
         (swap! (fake/state p) assoc :entities [])
         (await round)
@@ -1062,8 +1085,9 @@
                                       :entities [(assoc (skeleton 6.5 64 0.5) :visible true)]})
               eng (assoc-in eng [:jobs 'jobs.movement.go-to] (standing-go-to n))]
           (core/submit! eng retreat {})
-          (let [round (core/tick! eng)]
-            (loop [i 0] (when (and (empty? (calls p "place")) (< i 250)) (await (sleep 20)) (recur (inc i))))
+          (let [acted (acts-on p ["place"])
+                round (core/tick! eng)]
+            (await (until-acts acted round))
             (swap! (fake/state p) assoc :entities [])
             (await round))
           (is (pos? (count (calls p "place"))) "sealed in")
@@ -1081,8 +1105,9 @@
                                                      (fake/add-entity! p (assoc (creeper 0.5 64 3.5) :visible true))
                                                      (js/Promise.resolve nil))]
             (core/submit! eng retreat {})
-            (let [round (core/tick! eng)]
-              (loop [i 0] (when (and (empty? (tu/walked-to eng)) (empty? (calls p "place")) (< i 250)) (await (sleep 20)) (recur (inc i))))
+            (let [acted (acts-on p ["place" "moveTo" "steer"])
+                  round (core/tick! eng)]
+              (await (until-acts acted round))
               (swap! (fake/state p) assoc :entities [])
               (await round)))
           (is (empty? (calls p "place")) "no seal beside the creeper")
@@ -1100,8 +1125,9 @@
                                       :entities [(assoc (zombie 5.5 64 0.5) :visible true)]})]
           (with-redefs [flight/look! (fn [c] (cond-> (vec (look c)) (even? (swap! n inc)) (conj #js {:id (str "ghost" @n)})))]
             (core/submit! eng retreat {})
-            (let [round (core/tick! eng)]
-              (loop [i 0] (when (and (empty? (tu/walked-to eng)) (< i 250)) (await (sleep 20)) (recur (inc i))))
+            (let [acted (acts-on p ["moveTo" "steer"])
+                  round (core/tick! eng)]
+              (await (until-acts acted round))
               (swap! (fake/state p) assoc :entities [])
               (await round)))
           (is (seq (tu/walked-to eng)) "it walks despite the changing view"))))))
@@ -1115,15 +1141,19 @@
               {:keys [eng p]} (setup {:self {:pos [0.5 64 0.5] :health 20}
                                       :inventory [{:name "cobblestone" :count 20}]
                                       :entities [(assoc (zombie 5.5 64 0.5) :visible true)]})
+              third-run (atom nil)
+              third (js/Promise. (fn [r] (reset! third-run r)))
               slow-once {:ways (:ways (get registry/jobs 'jobs.movement.go-to))
                          :round (fn ^:async slow [c]
+                                  (when (<= 3 (inc @n)) (@third-run nil))
                                   (if (= 1 (swap! n inc))
                                     (ctx/end c :limit-reached {:reason :leg :line :job-time} {:arrived false})
                                     (ctx/end c :done nil {:arrived true})))}
               eng (assoc-in eng [:jobs 'jobs.movement.go-to] slow-once)]
           (core/submit! eng retreat {})
-          (let [round (core/tick! eng)]
-            (loop [i 0] (when (and (< @n 3) (empty? (calls p "place")) (< i 250)) (await (sleep 20)) (recur (inc i))))
+          (let [acted (js/Promise.race #js [(acts-on p ["place"]) third])
+                round (core/tick! eng)]
+            (await (until-acts acted round))
             (swap! (fake/state p) assoc :entities [])
             (await round))
           (is (empty? (calls p "place")) "no plug after one slow step")
