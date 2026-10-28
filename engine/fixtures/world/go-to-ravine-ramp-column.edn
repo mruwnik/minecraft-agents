@@ -1,18 +1,18 @@
-;; Card c6d56086: a column goal over a dark ravine, reached down a ramp that first leads away from it. Land y 0..19 (feet 20)
-;; with a ravine x 18..24 cut down to its floor (feet 1); a light layer at y 21 lights the land and the top of the ravine,
-;; not its floor. The ramp (x 18..19) runs down the ravine's west wall from z 10 to its foot at z 28, away from the
-;; column (x 21 z 8), and the ravine floor leads back. Should-succeed: the body walks the ramp and arrives on the floor by
+;; Card c6d56086: a column goal over a dark ravine, reached down a ramp that first leads away from it. Land y 0..11 (feet 12)
+;; with a ravine x 18..24 cut down to its floor (feet 1); a light layer at y 13 lights the land and the top of the ravine,
+;; not its floor. The ramp (x 18..19) runs down the ravine's west wall from z 10 to its foot at z 20, away from the
+;; column (x 21 z 8), and the ravine floor leads back (the whole way under go-to's 48-block detour floor). Should-succeed: the body walks the ramp and arrives on the floor by
 ;; the column. Should-fail: no ramp: it ends without arriving and never falls.
 {:defaults
  {:tags [:movement :planner]
   :time :any
-  :plot {:light :dark :height 30}
-  :blocks [[:fill [0 0 0] [31 19 31] "stone"] [:fill [18 1 0] [24 19 31] "air"] [:fill [0 21 0] [31 21 31] "light"]]
-  :body {:at [12.5 20 8.5] :yaw 270 :pitch 30 :settle-s 3}
+  :plot {:light :dark :height 20}
+  :blocks [[:fill [0 0 0] [31 11 31] "stone"] [:fill [18 1 0] [24 11 31] "air"] [:fill [0 13 0] [31 13 31] "light"]]
+  :body {:at [12.5 12 8.5] :yaw 270 :pitch 30 :settle-s 3}
   :limit-s 240}
  :cases
  [{:name "column-over-a-dark-ravine-is-reached-down-a-ramp-that-first-leads-away"
-   :blocks [[:fill [18 1 10] [19 19 10] "stone"] [:fill [18 1 11] [19 18 11] "stone"] [:fill [18 1 12] [19 17 12] "stone"] [:fill [18 1 13] [19 16 13] "stone"] [:fill [18 1 14] [19 15 14] "stone"] [:fill [18 1 15] [19 14 15] "stone"] [:fill [18 1 16] [19 13 16] "stone"] [:fill [18 1 17] [19 12 17] "stone"] [:fill [18 1 18] [19 11 18] "stone"] [:fill [18 1 19] [19 10 19] "stone"] [:fill [18 1 20] [19 9 20] "stone"] [:fill [18 1 21] [19 8 21] "stone"] [:fill [18 1 22] [19 7 22] "stone"] [:fill [18 1 23] [19 6 23] "stone"] [:fill [18 1 24] [19 5 24] "stone"] [:fill [18 1 25] [19 4 25] "stone"] [:fill [18 1 26] [19 3 26] "stone"] [:fill [18 1 27] [19 2 27] "stone"] [:fill [18 1 28] [19 1 28] "stone"]]
+   :blocks [[:fill [18 1 10] [19 11 10] "stone"] [:fill [18 1 11] [19 10 11] "stone"] [:fill [18 1 12] [19 9 12] "stone"] [:fill [18 1 13] [19 8 13] "stone"] [:fill [18 1 14] [19 7 14] "stone"] [:fill [18 1 15] [19 6 15] "stone"] [:fill [18 1 16] [19 5 16] "stone"] [:fill [18 1 17] [19 4 17] "stone"] [:fill [18 1 18] [19 3 18] "stone"] [:fill [18 1 19] [19 2 19] "stone"] [:fill [18 1 20] [19 1 20] "stone"]]
    :act [[:job (jobs.movement.go-to {:pos #at [21 8] :range 2 :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 220 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 220 :until {:source :job :kind #{:completed :stopped}}}]
