@@ -154,3 +154,16 @@
         r (dr/route (fn [c] (swap! reads conj c) (at c)) [0 10 0] [20 10 0] {:range 8 :step-s 1})]
     (is (= [] (:dig r)))
     (is (not-any? (fn [[x]] (> x 22)) @reads) "end cells beyond the goal cannot be on the cheapest way: unread")))
+
+(deftest a-range-search-asks-sees-only-for-the-end-cells-its-back-search-comes-to
+  (let [asked (atom 0)
+        r (dr/route (world {}) [0 10 0] [3 10 0] {:range 8 :step-s 1 :sees (fn [_ _ _] (swap! asked inc) true)})]
+    (is (= [] (:dig r)))
+    (is (< @asked (* 17 17 17)) "not every cell of the cube is asked")
+    (is (< @asked 200))))
+
+(deftest a-range-search-ends-dearer-and-with-the-same-path-as-before
+  (let [at (world {})
+        far {:range 4 :step-s 1}]
+    (is (= {:problem :dearer} (dr/route at [0 10 0] [20 10 0] (assoc far :max-s 5))) "every way past the range is dearer")
+    (is (= 16 (count (:steps (dr/route at [0 10 0] [20 10 0] (assoc far :max-s 100))))) "ends at the first cell within range of the goal")))

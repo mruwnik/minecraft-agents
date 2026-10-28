@@ -113,16 +113,16 @@
     (or (->> routes (filter :dig) (sort-by :seconds) (map :dig) first)
         (when (some #{:searching} (map :problem routes)) :searching))))
 
-(defn ^:async cut-to-drop!
-  "Open a way beside the cell dug (drop-cut), one dig child per cell, all the digs priced (cut-prices) at most max-s
+(defn ^:async cut-via
+  "cut-to-drop! with its steps given: a map over {:drop-cut :dig-cell! :look-at! :mem} (the fns of those names' arguments).
+  Open a way beside the cell dug (drop-cut), one dig child per cell, all the digs priced (cut-prices) at most max-s
   seconds (what is beside the cell: its drop, or a seen ore and its vein): the way is planned again after each dig and a
   look at what it laid open, out of what is left (kept in :cut-spent over rounds, each dig booked at its own price once
   dug or failed; a cell that fills again is paid for again). :cut (open: walk again),
   :partial (a dig waits on the world) or nil (no way left, a dig failed, or a dug cell planned again at once: it did not
-  stay open). The steps it takes are (:cut-with c) over the defaults {:drop-cut :dig-cell! :look-at! :mem}."
-  [c dug max-s]
+  stay open)."
+  [c {:keys [drop-cut dig-cell! look-at! mem]} dug max-s]
   (let [p (:primitives c)
-        {:keys [drop-cut dig-cell! look-at! mem]} (merge {:drop-cut drop-cut :dig-cell! dig-cell! :look-at! dig-look/look-at! :mem ctx/mem} (:cut-with c))
         dig-s (:dig-s (cut-prices c))
         price (fn [[x y z :as cell]] (or (dig-s (or (u/seen-name p {:x x :y y :z z}) "stone") cell) 0))]
     (loop [last-dug nil
@@ -143,6 +143,11 @@
                                         (await (look-at! c (update cell 1 dec)))
                                         (recur cell spent))
                     nil)))))))
+
+(defn ^:async cut-to-drop!
+  "Open a way beside the cell dug (cut-via with the real steps)."
+  [c dug max-s]
+  (await (cut-via c {:drop-cut drop-cut :dig-cell! dig-cell! :look-at! dig-look/look-at! :mem ctx/mem} dug max-s)))
 
 (defn lip-point
   "Where the body leans out over the cell it stands beside: its own cell's edge toward dug (a cell [x y z] at its level),

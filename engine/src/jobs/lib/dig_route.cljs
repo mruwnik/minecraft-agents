@@ -233,10 +233,10 @@
                      (when (and (some? s) (stands? x y z)) (back-relax! (+ g s) x y z)))
         seed-due! (fn []
                     (loop []
-                      (when-let [[x y z] (first @seeds)]
+                      (when-let [[x y z :as cell] (first @seeds)]
                         (when (or (zero? (.-length back-queue)) (<= (to-start x z) (aget back-queue 0 0)))
                           (vswap! seeds rest)
-                          (when (stands? x y z) (back-relax! 0 x y z))
+                          (when (and (stands? x y z) (or (= cell goal) (end? (key x y z)))) (back-relax! 0 x y z))
                           (recur)))))
         back-step! (fn []
                      (seed-due!)
@@ -267,10 +267,8 @@
     (vreset! seeds (sort-by (fn [[x _ z]] (to-start x z))
                             (cons goal (when r
                                          (let [w (js/Math.ceil r) ds (range (- w) (inc w))]
-                                           (for [dx ds dy ds dz ds
-                                                 :let [x (+ ax dx) y (+ ay dy) z (+ az dz)]
-                                                 :when (end? (key x y z))]
-                                             [x y z]))))))
+                                           (for [dx ds dy ds dz ds]
+                                             [(+ ax dx) (+ ay dy) (+ az dz)]))))))
     (fn [n]
       (let [start (.-size done)
             limit (+ start n)
