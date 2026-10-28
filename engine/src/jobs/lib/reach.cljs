@@ -210,22 +210,27 @@
 
 (def dirs #js [#js [1 0] #js [-1 0] #js [0 1] #js [0 -1]])
 
-(defn step-to
-  "The cell #js [x y z] a walker at x y z reaches by stepping to the neighbour column nx nz (up one, level, or down up
-  to max-drop), or nil."
+(defn step-y
+  "The feet y a walker at x y z reaches by stepping to the neighbour column nx nz (up one, level, or down up to
+  max-drop), or nil."
   [kind-at x y z nx nz]
   (cond
     (and (not (passable? kind-at nx y nz)) (not (keyword-identical? :tall (kind-at nx y nz)))
          (passable? kind-at x (+ y 2) z) (standable? kind-at nx (inc y) nz))
-    #js [nx (inc y) nz]
+    (inc y)
     (and (passable? kind-at nx y nz) (passable? kind-at nx (inc y) nz))
     (loop [k 0]
       (cond
         (> k max-drop) nil
-        (standable? kind-at nx (- y k) nz) #js [nx (- y k) nz]
+        (standable? kind-at nx (- y k) nz) (- y k)
         (passable? kind-at nx (- y k) nz) (recur (inc k))
         :else nil))
     :else nil))
+
+(defn step-to
+  "The cell #js [x y z] a walker at x y z reaches by stepping to the neighbour column nx nz (step-y), or nil."
+  [kind-at x y z nx nz]
+  (when-let [ny (step-y kind-at x y z nx nz)] #js [nx ny nz]))
 
 (defn forward
   "The cells #js [x y z] a walker standing at x y z steps to in one move."

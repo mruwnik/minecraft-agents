@@ -11,6 +11,7 @@
             [engine.ctx :as ctx]
             [engine.entity-observations :as obs]
             [engine.memory :as mem]
+            [engine.path.planner.base :as base]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
@@ -240,10 +241,13 @@
             :when (pos? f)
             ^js cell (:cells (field/field-of c t))]
       (let [x (aget cell 0) y (aget cell 1) z (aget cell 2)
-            k (str x "," y "," z)
-            ^js row (or (.get by-cell k) (let [r #js {:x x :y y :z z :mobs {}}] (.set by-cell k r) r))]
-        (set! (.-mobs row) (update (.-mobs row) (or key mob) (fnil max 0) (* f (aget cell 3))))))
-    (mapv (fn [^js r] {:x (.-x r) :y (.-y r) :z (.-z r) :factor (min cap (reduce + 0 (vals (.-mobs r))))})
+            k (base/cell-key x y z)
+            ^js row (or (.get by-cell k) (let [r #js {:x x :y y :z z :mobs (js/Map.)}] (.set by-cell k r) r))
+            ^js mobs (.-mobs row)
+            mk (str (or key mob))
+            v (* f (aget cell 3))]
+        (when-not (>= (or (.get mobs mk) 0) v) (.set mobs mk v))))
+    (mapv (fn [^js r] {:x (.-x r) :y (.-y r) :z (.-z r) :factor (min cap (reduce + 0 (es6-iterator-seq (.values (.-mobs r)))))})
           (es6-iterator-seq (.values by-cell)))))
 
 (defn threat-tolls

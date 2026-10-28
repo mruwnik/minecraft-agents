@@ -54,30 +54,44 @@
 
 ;; ---------------------------------------------------------------- walkers
 
+(def walk-rise "Blocks above and below its start a walk keeps the cells it reached in a dense grid." 16)
+
 (defn walker
-  "The walk of a walker from start [x y z] over kind-at (forward), nearest first, grown as it is asked for (walk-to!):
-  #js {:queue (x y z steps of each cell, in order) :head (the cells stepped from) :seen :kindAt :fields}. half: the
-  blocks round start whose kinds are read through one dense cache (boxed)."
+  "The walk of a walker from start [x y z] over kind-at (reach/step-y), nearest first, grown as it is asked for
+  (walk-to!): #js {:queue (x y z steps of each cell, in order) :head (the cells stepped from) :kindAt :fields}. half: the
+  blocks round start whose kinds (boxed) and reached cells are kept dense."
   [kind-at [sx sy sz :as start] half]
-  #js {:kindAt (boxed kind-at start half 16) :queue #js [sx sy sz 0] :head 0
-       :seen (doto (js/Set.) (.add (base/cell-key sx sy sz))) :fields (js/Map.)})
+  (let [w (inc (* 2 half)) h (inc (* 2 walk-rise))
+        grid (js/Uint8Array. (* w w h))
+        ^js walk #js {:kindAt (boxed kind-at start half walk-rise) :queue #js [sx sy sz 0] :head 0 :fields (js/Map.)
+                      :x0 (- sx half) :y0 (- sy walk-rise) :z0 (- sz half) :w w :h h :grid grid :seen (js/Set.)}]
+    (aset grid (+ (* (+ (* half w) half) h) walk-rise) 1)
+    walk))
+
+(defn reach!
+  "Whether cell x y z is new to walk w, marking it reached."
+  [^js w x y z]
+  (let [dx (- x (.-x0 w)) dy (- y (.-y0 w)) dz (- z (.-z0 w)) n (.-w w) h (.-h w)]
+    (if (and (< -1 dx n) (< -1 dy h) (< -1 dz n))
+      (let [i (+ (* (+ (* dx n) dz) h) dy) ^js grid (.-grid w)]
+        (when (zero? (aget grid i)) (aset grid i 1) true))
+      (let [k (base/cell-key x y z) ^js seen (.-seen w)]
+        (when-not (.has seen k) (.add seen k) true)))))
 
 (defn walk-to!
   "Grows walk w until its cells of fewer than span steps are all known, or n of them; true when it grew."
   [^js w span n]
   (let [^js q (.-queue w)
         kind-at (.-kindAt w)
-        ^js seen (.-seen w)]
+        ^js dirs reach/dirs]
     (loop [head (.-head w) grew false]
       (if (and (< head (.-length q)) (< (.-length q) (* 4 n)) (< (aget q (+ head 3)) (dec span)))
-        (let [x (aget q head) y (aget q (+ head 1)) z (aget q (+ head 2)) at (inc (aget q (+ head 3)))
-              nexts (reach/forward kind-at x y z)]
-          (dotimes [i (.-length nexts)]
-            (let [nc (aget nexts i)
-                  k (base/cell-key (aget nc 0) (aget nc 1) (aget nc 2))]
-              (when-not (.has seen k)
-                (.add seen k)
-                (.push q (aget nc 0) (aget nc 1) (aget nc 2) at))))
+        (let [x (aget q head) y (aget q (+ head 1)) z (aget q (+ head 2)) at (inc (aget q (+ head 3)))]
+          (dotimes [i 4]
+            (let [nx (+ x (aget (aget dirs i) 0)) nz (+ z (aget (aget dirs i) 1))]
+              (when-let [ny (reach/step-y kind-at x y z nx nz)]
+                (when (reach! w nx ny nz)
+                  (.push q nx ny nz at)))))
           (recur (+ head 4) true))
         (do (set! (.-head w) head) grew)))))
 
