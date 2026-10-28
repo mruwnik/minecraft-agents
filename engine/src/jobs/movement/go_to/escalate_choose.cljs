@@ -357,7 +357,7 @@
 (defn route-answer
   "The dig-route answer {:dig :steps} of the cheapest way from feet cell from into goal (jobs.lib.dig-route priced by
   jobs.lib.cost: a step's walk-cost, a fall's hp (fall-damage at hp-cost, the falls the body survives), a block's dig-cost, a stair's step at least its stair-cost, a step's unseen cells at the unseen walk's price
-  (wworld/unseen-share), never a floor of the body's own stairs (route-opts :ways)), every cell to dig escape/diggable?
+  (wworld/unseen-share), a cell of the body's own builds at its put-back too (route-opts :own-s, holes/own-cut-fn), never a floor of the body's own stairs (route-opts :ways)), every cell to dig escape/diggable?
   and may-dig?; :searching while route-opts :slice's search goes on; nil when there is none, when route-opts :spent
   holds [from goal] (a search search-bound dropped), or when its digging takes the
   body longer than max-route-s (blocks of the body's own, a scaffold it left, not counted) with what it carries, or with
@@ -367,7 +367,8 @@
   :pillar-s, :margin). With :slice (route-slice) a search that spends it goes on at the next call; without, it ends
   at the node budget as no route."
   [p from goal may-dig? own? floors-unseen-ok? fetch? {:keys [slice spent] :as route-opts}]
-  (let [route-opts (dissoc route-opts :slice :spent)
+  (let [own-s (:own-s route-opts)
+        route-opts (dissoc route-opts :slice :spent :own-s)
         [fx _ fz] from
         ;; each cell is read for its floor, its name to dig and whether it is unseen: sensed once
         known (js/Map.)
@@ -383,7 +384,8 @@
                              access/hidden-guess)))))
         prices (dig-route/body-prices p (fn [[x y z]] (true? (some-> (sensed x y z) .-unknown))))
         opts (fn [refused] (merge prices
-                                  {:dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) own? cell)) ((:dig-s prices) name cell)))
+                                  {:dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) own? cell))
+                                                            (some-> ((:dig-s prices) name cell) (+ (if own-s (own-s cell) 0)))))
                                    :max-dig-s (max-route-s)}
                                   route-opts))
         ;; the search itself reads no may-dig?: escalate!'s choices with other zone rules share it
@@ -425,10 +427,11 @@
   3)
 
 (defn search-opts
-  "route-answer's route-opts for a choice's opts: its :slice, dig-margin, its :spent searches and the floors under its
-  :stands (the body's own stairs) as :ways."
-  [{:keys [stands slice spent]}]
-  (cond-> {:ways (into #{} (map (fn [[x y z]] [x (dec y) z])) stands) :margin dig-margin} slice (assoc :slice slice) (seq spent) (assoc :spent spent)))
+  "route-answer's route-opts for a choice's opts: its :slice, dig-margin, its :spent searches, its :own-s and :own-cut
+  (a way that may cut the body's own builds: searched apart) and the floors under its :stands (the body's own stairs) as :ways."
+  [{:keys [stands slice spent own-s own-cut]}]
+  (cond-> {:ways (into #{} (map (fn [[x y z]] [x (dec y) z])) stands) :margin dig-margin}
+    slice (assoc :slice slice) (seq spent) (assoc :spent spent) own-s (assoc :own-s own-s) own-cut (assoc :own-cut true)))
 
 (defn dig-way
   "{:step :dig-route :cells (route-cells)} when there are cells to dig, {:step :searching} while opts :slice's search

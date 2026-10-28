@@ -48,3 +48,9 @@
   [carried]
   (+ (settings/get settings ::fill-place-s) (settings/get settings ::fill-spent-s)
      (if (< (dec carried) (settings/get settings ::fill-scarce)) (settings/get settings ::fetch-block-s) 0)))
+
+(defn put-back-cost
+  "Seconds putting a dug block back takes: the place and the step to it (as a fill's), and lost-s, the block's worth when
+  its dig dropped something else."
+  [lost-s]
+  (+ (settings/get settings ::fill-place-s) lost-s))

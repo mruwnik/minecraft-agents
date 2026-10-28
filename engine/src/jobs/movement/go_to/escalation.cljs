@@ -16,8 +16,9 @@
     through, it puts back what clear-path or stair dug in another's zone, claim or plan (with :ignore-zones?;
     its own diggings elsewhere stay) (jobs.blocks.place, the dug block or its drop, when carried): info
     go-to.restored, warn go-to.restore-skipped for cells it could not. Pillar blocks and a stair's placed floors are
-    left to jobs.access.cleanup. Shut in its own pen holding livestock (jobs.lib.own-pen) with no other way, it stairs or
-    clears a door through the pen's wall and puts those cells back too (hole-tag :mend). Its walk child (ctx/call) has :ways #{:walk :clear-seal}. Jobs that must not change the world
+    left to jobs.access.cleanup. Every way spares the body's own builds (a plan it made, the wall of its own pen holding
+    livestock), unless the way through them is the only one or costs less with each own cell's put-back (and a stocked
+    pen's escape risk) on top (own-way); those cells are put back at once (hole-tag :mend). Its walk child (ctx/call) has :ways #{:walk :clear-seal}. Jobs that must not change the world
     on the way pass :ways #{:walk}: a shut-in body then gives up with :shut-in true and says so in the text."
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -36,15 +37,14 @@
             [jobs.lib.trip :as trip]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.access :as access]
-            [jobs.lib.own-pen :as own-pen]
             [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.movement.go-to.climb :as climb]
             [jobs.movement.go-to.climb-route :as climb-route]
             [jobs.movement.go-to.route-ways :as route-ways]
             [jobs.movement.go-to.escalate-choose :refer [cheaper-fill climb-on? dive-climb-on? dive? escalate-reason? escalate? fetch-tool? gap-fill
-                                                         goal-way dig-leg dig-way drop-fill frontier-way gap-dig gap-walled? goal-lava? leg-ends goal-walled? own-stair route-cells shelter-exit? skips sprint-only?
+                                                         goal-way dig-leg dig-way drop-fill price frontier-way gap-dig gap-walled? goal-lava? leg-ends goal-walled? own-stair route-cells shelter-exit? skips sprint-only?
                                                          route-owner route-slice routes-searching! searching? searching-ends keep-routes! forget-routes! search-opts]]
-            [jobs.movement.go-to.holes :refer [forget-dug-own! hole-tag may-dig-fn note-holes! own-holes own-placed-fn planned-cells]]
+            [jobs.movement.go-to.holes :refer [forget-dug-own! hole-tag may-dig-fn note-holes! own-cut-fn own-fn own-holes own-placed-fn planned-cells]]
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.search-bound :as search-bound]
             [jobs.movement.go-to.torch :as torch]
@@ -65,9 +65,9 @@
                                    (:item e) (assoc :use {:blocks [(:item e)]})
                                    ;; a climb's pillar digs the roof its route priced
                                    (:roof e) (assoc :settings {:jobs.access.pillar/max-ceiling-digs (:roof e)}))]
-    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :checks {:fit? '(always)} :accept #{:falling-block} :ways (ways-for fetch?) :settings (cond-> {:jobs.lib.trip/spent-uses 0} (:mend-pen e) (assoc :jobs.lib.access/spare-own-builds false)) :ignore-zones? ignore-zones? :need-drop (not by-hand?) :leave-drops true}]
+    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :checks {:fit? '(always)} :accept #{:falling-block} :ways (ways-for fetch?) :settings (cond-> {:jobs.lib.trip/spent-uses 0} (:own-cut e) (assoc :jobs.lib.access/spare-own-builds false)) :ignore-zones? ignore-zones? :need-drop (not by-hand?) :leave-drops true}]
     :clear-path ['jobs.access.clear-path (cond-> {:checks {:fit? '(always)} :heading (:heading e) :ignore-zones? ignore-zones? :need-drop (not by-hand?) :ways #{:carried :craft}}
-                                           (:mend-pen e) (assoc :settings {:jobs.lib.access/spare-own-builds false}))]
+                                           (:own-cut e) (assoc :settings {:jobs.lib.access/spare-own-builds false}))]
     :approach ['jobs.movement.go-to {:checks {:fit? '(always)} :pos (zipmap [:x :y :z] (:pos e)) :range 0 :ways #{:walk :clear-seal}}]
     :fill-gap ['jobs.blocks.place {:pos (zipmap [:x :y :z] (:cell e)) :use {:blocks [(:item e)]} :ways #{:carried} :ignore-zones? ignore-zones?}]))
 
@@ -169,10 +169,48 @@
 
 (defn way-opts
   "The opts of go-to call c's choice of a way from feet (escape/choose and the dig ways): a search that stood the body
-  still past its worth (search-bound, memory :spent-routes) is not begun again."
+  still past its worth (search-bound, memory :spent-routes) is not begun again; a dig route prices a cell of the body's
+  own builds at its put-back (:own-s)."
   [c feet fetch? slice]
-  {:own? (own-placed-fn c) :skip (skips c) :spent (:spent-routes (ctx/mem c) #{}) :fetch? fetch?
+  {:own? (own-placed-fn c) :skip (skips c) :spent (:spent-routes (ctx/mem c) #{}) :fetch? fetch? :own-s (own-cut-fn c)
    :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c) :slice slice})
+
+(defn own-cut?
+  "Whether the escalation under way may cut the body's own builds (:own-cut, chosen by own-way)."
+  [c]
+  (boolean (:own-cut (:escalation (ctx/mem c)))))
+
+(defn own-dig-fn
+  "(own? cell block) of the escalation under way: own-placed-fn's, the body's own builds too when it may cut them (own-cut?)."
+  [c]
+  (cond->> (own-placed-fn c) (own-cut? c) (own-fn c)))
+
+(def priced-steps #{:stair :pillar :clear-path :dig-route :bridge :fill-gap})
+
+(defn own-cells
+  "The cells of the body's own builds way e from feet cuts that it has sensed: a stair's or door's planned cells, a dig
+  route's, and those of the dig routes of a climb's later ways."
+  [p e feet own-s]
+  (->> (concat (if (= :dig-route (:step e)) (:cells e) (planned-cells p e feet))
+               (mapcat :cells (filter #(= :dig-route (:step %)) (:then e))))
+       (map :cell)
+       (filter #(pos? (own-s %)))))
+
+(defn own-way
+  "The way that cuts the body's own builds (own) when it beats base, the way that spares them: base is none, or a priced
+  way dearer (escalate-choose/price) than own's price plus each own cell's put-back (opts :own-s, holes/own-cut-fn).
+  It is marked :own-cut (its holes are put back at once, its child may dig own plans). {:step :searching} while own's
+  search goes on and base is none; else nil."
+  [p feet base own {:keys [own-s]}]
+  (cond
+    (nil? own) nil
+    (= :searching (:step own)) (when (= :none (:step base)) own)
+    (#{:none :approach} (:step own)) nil
+    :else (let [cut-s (reduce + 0 (map own-s (own-cells p own feet own-s)))]
+            (when (and (pos? cut-s)
+                       (or (= :none (:step base))
+                           (and (priced-steps (:step base)) (< (+ (price p feet own) cut-s) (price p feet base)))))
+              (assoc own :own-cut true)))))
 
 (defn search-begun!
   "Note in memory (:route-search) when the dig-route searches kept over rounds from feet began and what the way without
@@ -228,52 +266,45 @@
                        (seq (leg-ends feet goal))
                        (<= (- (goal 1) (feet 1)) (js/Math.hypot (- (goal 0) (feet 0)) (- (goal 2) (feet 2))))
                        (wworld/rock-guess? (:primitives c) (:unknown c)))
-        choose-by (cond into? #(goal-way c feet goal % opts)
+        choose-by (cond into? #(goal-way c feet goal %1 %2)
                      ;; a goal too far for one dig route, no stair, pillar or door out (a plateau top): a dig off the land's edge
-                     dig-in? #(or (dig-way (:primitives c) feet goal % opts)
-                                  (let [e (escape/choose (:primitives c) feet goal % opts)]
-                                    (or (when (#{:none :approach} (:step e)) (frontier-way (:primitives c) feet goal % opts))
+                     dig-in? #(or (dig-way (:primitives c) feet goal %1 %2)
+                                  (let [e (escape/choose (:primitives c) feet goal %1 %2)]
+                                    (or (when (#{:none :approach} (:step e)) (frontier-way (:primitives c) feet goal %1 %2))
                                         e)))
-                     rock-dig? (let [leg (delay (dig-leg c feet goal (may-dig-fn c) opts))]
-                                 ;; one route search a call: each is many cells' zone checks, and choose runs again per zone rule below
-                                 #(or @leg (escape/choose (:primitives c) feet goal % opts)))
+                     ;; its route searches are shared through the slice's answers: choose runs again per zone rule below
+                     rock-dig? #(or (dig-leg c feet goal %1 %2) (escape/choose (:primitives c) feet goal %1 %2))
                      (and (not= :never (some-> (:doors (:args c)) keyword)) (escape/blocked-door-beside? (:primitives c) feet))
-                     #(or (dig-way (:primitives c) feet goal % opts) (escape/choose (:primitives c) feet goal % opts))
-                     @shut? #(or (climb-route/climb-way (:primitives c) feet goal % opts) (escape/choose (:primitives c) feet goal % opts))
-                     :else #(escape/choose (:primitives c) feet goal % opts))
+                     #(or (dig-way (:primitives c) feet goal %1 %2) (escape/choose (:primitives c) feet goal %1 %2))
+                     @shut? #(or (climb-route/climb-way (:primitives c) feet goal %1 %2) (escape/choose (:primitives c) feet goal %1 %2))
+                     :else #(escape/choose (:primitives c) feet goal %1 %2))
         ;; a step up over a gap with nothing to fill it: cutting the riser on the far side makes the jump level
-        choose (if gap? #(or (gap-dig c result % opts) (choose-by %)) choose-by)
+        spare (may-dig-fn c)
+        choose (memoize (fn [may-dig? o] (if gap? (or (gap-dig c result may-dig? o) (choose-by may-dig? o)) (choose-by may-dig? o))))
         e (or (when (shelter-exit? c result) {:step :leave-shelter})
               (cheaper-fill (:primitives c) feet
-                            (or (own-stair c feet goal) (choose (may-dig-fn c)))
+                            (or (own-stair c feet goal) (choose spare opts))
                             (gap-fill c result (:skip opts))
                             (drop-fill c result (:skip opts) feet)))
-        choosable? #(not= :none (:step (choose %)))
+        choosable? #(not= :none (:step (choose % opts)))
         zone-free (exit-dig-fn c feet)
         ;; the only way on is a drop the planner will not take (a loaded pit it cannot climb back out of): a shut-in body takes it, then digs out from the bottom
         drop-in (let [{:keys [kind at]} (when (= :one-way (some-> (:reason result) keyword)) (:one-way result))]
                   (when (and (= :drop (some-> kind keyword)) at (not= :closed (some-> (:one-way (:args c)) keyword)) (not-any? (:skip opts) [:approach]) (not (contains? (:approached (ctx/mem c)) (vec at)))
-                             (not= :none (:step (escape/choose (:primitives c) (vec at) goal (may-dig-fn c) opts))))
+                             (not= :none (:step (escape/choose (:primitives c) (vec at) goal spare opts))))
                     (vec at)))
         chosen e
-        spot (when (= :none (:step e)) (when-not (or (contains? (:skip opts) :approach) (searching? slice)) (escape/way-spot (:primitives c) feet goal (may-dig-fn c) opts (or (:approached (ctx/mem c)) #{}))))
-        ;; shut in its own stocked pen: break out through the wall and put it back once past (hole-tag :mend)
-        mend (delay (when (access/spare-own-builds)
-                      (let [wall? (own-pen/wall? c feet)
-                            own? (:own? opts)
-                            allowed? (may-dig-fn c false false)
-                            spared? (may-dig-fn c true false)
-                            m (escape/choose (:primitives c) feet goal #(and (allowed? %) (or (wall? %) (spared? %)))
-                                             (assoc opts :own? (fn [cell n] (or (own? cell n) (wall? cell)))))]
-                        (when (#{:clear-path :stair} (:step m)) (assoc m :mend-pen true)))))
+        spot (when (= :none (:step e)) (when-not (or (contains? (:skip opts) :approach) (searching? slice)) (escape/way-spot (:primitives c) feet goal spare opts (or (:approached (ctx/mem c)) #{}))))
+        ;; a way through the body's own builds, priced against the one that spares them (own-way)
+        own (delay (when (or (seq (access/own-plans c)) (access/in-own-area? c (zipmap [:x :y :z] feet)))
+                     (own-way (:primitives c) feet e (choose (may-dig-fn c true) (assoc opts :own? (own-fn c (:own? opts)) :own-cut true)) opts)))
         e (cond
+            (priced-steps (:step e)) (or @own e)
             (not= :none (:step e)) e
             spot {:step :approach :pos spot}
             drop-in {:step :approach :pos drop-in}
-            @mend @mend
-            (and (access/spare-own-builds) (choosable? (may-dig-fn c false)))
-            {:step :none :why (if (choosable? (may-dig-fn c true false)) :own-pen :own-build)}
-            (and (zone-exit? c feet) (choosable? zone-free)) (assoc (choose zone-free) :exit-zone true)
+            @own @own
+            (and (zone-exit? c feet) (choosable? zone-free)) (assoc (choose zone-free opts) :exit-zone true)
             (choosable? (constantly true)) {:step :none :why :zone}
             :else e)
         e (if (and (= :none (:step e)) (searching? slice)) {:step :searching} e)]
@@ -369,7 +400,7 @@
   (route-ways/next-way), walk on after its last, else walk again from a fresh count, or escalate again at once after an
   approach, after a whole stair that left the body shut in under the goal (climb-on?), or after any stair that left it
   under ground on its climb away from a dive (dive-climb-on?). Its holes are put back once a walk round gets on past
-  it (restore-next!); a break-out of the own pen's (:mend-pen) at once too, done or stopped in a dead end (what
+  it (restore-next!); a cut of the body's own builds (:own-cut) at once, done or stopped in a dead end (what
   restore/skip-why spares then, the cells the body stands in or needs, waits for that walk). An approach to a cell more than a block nearer the goal than it set out from does not count toward
   max-escalations (its look may show a wall to dig or not); one no nearer does, so a chain of them ends; nor is a cell
   walked to twice (memory :approached)."
@@ -387,9 +418,9 @@
                                             nearer? (update :fruitless (fn [n] (max 0 (dec (or n 0))))))
                                     (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
                           again? (assoc :escalate-now true)
-                          nxt (assoc :escalation nxt :escalation-from feet :planned (planned-cells (:primitives c) nxt feet) :holes-before (count (own-holes c)))
-                          ;; a cut of the own pen opens it to the animals: put back at once, the walk on not waited for
-                          (:mend-pen e) (assoc :restore-now true)
+                          nxt (assoc :escalation (cond-> nxt (:own-cut e) (assoc :own-cut true)) :escalation-from feet :planned (planned-cells (:primitives c) nxt feet) :holes-before (count (own-holes c)))
+                          ;; a cut of its own build (a pen open to the animals): put back at once, the walk on not waited for
+                          (:own-cut e) (assoc :restore-now true)
                           (not (#{:approach :fill-gap} step)) (assoc :restore-pending true)))
     (when nxt
       (ctx/emit! c :go-to.escalated :info {:step (:step nxt) :why :climb-on :at feet :text (str "climbing on: " (name (:step nxt)))})))
@@ -506,7 +537,7 @@
 
 (defn ^:async route-cell!
   "Dig one cell of a :dig-route escalation: look first at a cell the body has not sensed, then check it again as it
-  is now (escape/protected?, escape/diggable? over may-dig-fn and own-placed-fn: a block built there since the route
+  is now (escape/protected?, escape/diggable? over may-dig-fn and own-dig-fn: a block built there since the route
   was planned is someone's) and dig it (b/dig-cell!: no tool needed, the drops left; a cell whose floor is unseen is dug
   on top only after the dig found no side stand to step aside to and look from), noting it as a hole once dug.
   The dig's outcome, :open for a cell open already, :replan for a guessed cell the look shows otherwise (the route
@@ -519,7 +550,7 @@
       (cond
         (and guess (not (dig-look/unknown? p cell)) (not= n block)) :replan
         (bs/passable? n) :open
-        (or (escape/protected? n) (not (escape/diggable? block-at (may-dig-fn c) (own-placed-fn c) cell))) :not-diggable
+        (or (escape/protected? n) (not (escape/diggable? block-at (may-dig-fn c (own-cut? c)) (own-dig-fn c) cell))) :not-diggable
         :else
         (let [fetch? (fetch-tool? c)
               args {:ignore-zones? (boolean (:ignore-zones? (:args c))) :ways (ways-for fetch?) :need-drop fetch? :accept #{:lava-adjacent}}
@@ -575,8 +606,8 @@
             feet (end/feet-cell c)
             goal (stand-goal c (mapv #(js/Math.floor (% pos)) [:x :y :z]))
             plan (fn [floors-unseen-ok?]
-                   (route-cells (:primitives c) feet goal (may-dig-fn c) (own-placed-fn c) floors-unseen-ok? (fetch-tool? c)
-                                (search-opts {:stands (ledger/stair-stands c) :slice slice :spent (:spent-routes m)})))
+                   (route-cells (:primitives c) feet goal (may-dig-fn c (own-cut? c)) (own-dig-fn c) floors-unseen-ok? (fetch-tool? c)
+                                (search-opts {:stands (ledger/stair-stands c) :slice slice :spent (:spent-routes m) :own-s (own-cut-fn c) :own-cut (own-cut? c)})))
             cells (when in-range? (plan false))
             loosened (when (and in-range? (nil? cells)) (plan true))
             walk-on! (fn [] (escalated! c pos (:escalation m) true))]

@@ -252,15 +252,14 @@
   caller chasing something that moves; default one 60 s go-to steer), :look-round (default true; false for a caller that keeps moving, the go-to.tuning setting for this walk),
   :one-way (go-to's arg, default :closed here: no drop the body cannot climb back; not the :one-way key of a give-up
   result), :see (go-to's: in range only where the eye sees the block at pos), always one try (the job counts its own
-  tries), :checks (go-to's call key), :floor (go-to's call key), :y-margin and :max-damage (the walk.world settings for this walk), :dive (false: the walk plans no dive, the setting jobs.lib.walk.world/dive), :dig-own (true: go-to may dig the body's own plans to get out, the setting jobs.lib.access/spare-own-builds false for this walk); :ignore-zones? comes from the job's args."
+  tries), :checks (go-to's call key), :floor (go-to's call key), :y-margin and :max-damage (the walk.world settings for this walk), :dive (false: the walk plans no dive, the setting jobs.lib.walk.world/dive); :ignore-zones? comes from the job's args."
   ([c pos range] (go-near! c pos range nil))
-  ([c pos range {:keys [doors dangers tolls ways spend leg-s look-round one-way see checks floor y-margin dive max-damage dig-own] :or {doors :shut dangers true look-round true one-way :closed}}]
+  ([c pos range {:keys [doors dangers tolls ways spend leg-s look-round one-way see checks floor y-margin dive max-damage] :or {doors :shut dangers true look-round true one-way :closed}}]
    (let [cell (cell-of pos)
          walk-settings (cond-> {} (false? dangers) (assoc :jobs.lib.walk.world/dangers false)
                                   max-damage (assoc :jobs.lib.walk.world/max-damage max-damage)
                                   (false? look-round) (assoc :jobs.movement.go-to.tuning/look-round false)
                                   (false? dive) (assoc :jobs.lib.walk.world/dive false)
-                                  dig-own (assoc :jobs.lib.access/spare-own-builds false)
                                   y-margin (assoc :jobs.lib.walk.world/y-margin y-margin))]
      (cond
        (nil? cell) (do (ctx/emit! c :refused :warn {:reason :bad-pos :text (:message (places/parse-pos pos))})

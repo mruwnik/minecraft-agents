@@ -26,3 +26,8 @@
   (if (zero? gaps)
     0
     (* n (escape-chance gaps (settings/get settings ::pass-gap-s)) (value/animal-worth mob))))
+
+(defn herd-loss
+  "Seconds of animal worth a herd (its mob kinds) loses through one gap left open secs seconds."
+  [mobs secs]
+  (* (escape-chance 1 secs) (reduce + 0 (map value/animal-worth mobs))))

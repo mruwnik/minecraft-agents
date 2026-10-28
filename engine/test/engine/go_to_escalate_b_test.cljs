@@ -182,32 +182,44 @@
           (is (seq (dug-cells p)))
           (is (not-any? #(= 3 (first %)) (dug-cells p))))))))
 
-(deftest go-to-never-digs-the-bodys-own-building
+(deftest go-to-digs-out-of-its-own-house-through-one-wall-column-and-puts-it-back
+  ;; card 1ac3d50f: the only way out cuts the body's own plan: it is priced, not refused, and the fewest own cells are cut
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [hut (shape/with-author {:id "hut" :parts [{:id "shell" :box [[-3 64 -3] [3 66 3]] :want "dirt"}]} "Fake")
               {:keys [out p seen]} (await (run-job! (merge in-room {:blocks room}) 'jobs.movement.go-to
-                                                {:pos [8 64 0] :range 1} {:plans {"hut" hut}}))]
-          (is (= false (:arrived @out)))
-          (is (= {:step :none :why :own-build} (:escalation @out)) "the wall is the body's own plan")
-          (is (empty? (events-of seen :go-to.escalated)))
-          (is (empty? (calls p "dig"))))))))
+                                                {:pos [8 64 0] :range 1} {:plans {"hut" hut}}))
+              dug (dug-cells p)]
+          (is (= {:arrived true} @out))
+          (is (= #{[3 64 0] [3 65 0]} (set dug)) "one wall column toward the goal, nothing else")
+          (is (= (set dug) (set (mapcat :cells (events-of seen :go-to.restored)))) "and put back")
+          (is (= ["dirt" "dirt"] [(block p [3 64 0]) (block p [3 65 0])]))
+          (is (= (set dug) (set (map :cell (events-of seen :go-to.dug-own-build)))) "each own cell dug is named"))))))
 
-(deftest go-to-never-digs-the-bodys-own-plan-unless-told-to-and-then-warns-of-each-cell
+(deftest go-to-cuts-its-own-wall-when-that-costs-less-than-the-natural-way-round
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [world (merge in-pit {:blocks pit :plans {"hut" own-pit-wall}})
-              {:keys [out p seen]} (await (run-job! world 'jobs.movement.go-to {:pos [10 64 0] :range 1} {:plans (:plans world)}))
-              {out2 :out seen2 :seen} (await (run-job! world 'jobs.movement.go-to {:pos [10 64 0] :range 1 :settings {:jobs.lib.access/spare-own-builds false}} {:plans (:plans world)}))
-              warned (events-of seen2 :go-to.dug-own-build)]
-          (is (= false (:arrived @out)))
-          (is (= {:step :none :why :own-build} (:escalation @out)))
-          (is (empty? (calls p "dig")))
-          (is (= {:arrived true} @out2))
-          (is (seq warned) "each own cell dug is named")
-          (is (every? #(and (= :warn (:level %)) (= "hut" (:plan %)) (vector? (:cell %))) warned)))))))
+        (let [east-wall (shape/with-author {:id "hut" :parts [{:id "east" :box [[3 64 -3] [3 66 3]] :want "dirt"}]} "Fake")
+              go (fn [plans] (run-job! (merge in-room {:blocks room}) 'jobs.movement.go-to {:pos [8 64 0] :range 1} {:plans plans}))
+              own (await (go {"hut" east-wall}))
+              free (await (go {}))]
+          (is (= {:arrived true} @(:out own)))
+          (is (= 2 (count (dug-cells (:p own)))) "a door through its own wall is cheaper than any natural way")
+          (is (every? #(= 3 (first %)) (dug-cells (:p own))))
+          (is (seq (events-of (:seen own) :go-to.restored)) "its own cells are put back")
+          (is (empty? (events-of (:seen free) :go-to.restored)) "natural ground is left open"))))))
+
+(deftest go-to-pillars-out-of-a-pit-walled-by-its-own-plan-rather-than-cut-the-walls
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (merge in-pit {:blocks pit :plans {"hut" own-pit-wall} :inventory [{:name "dirt" :count 8}]})
+              {:keys [out p seen]} (await (run-job! world 'jobs.movement.go-to {:pos [10 64 0] :range 1} {:plans (:plans world)}))]
+          (is (= {:arrived true} @out))
+          (is (= [:pillar] (map :step (events-of seen :go-to.escalated))) "the pillar costs less than a stair through its walls and their put-back")
+          (is (empty? (calls p "dig"))))))))
 
 (defn dug-cells-of [p] (set (map #(let [pos (.-pos (.-args %))] [(.-x pos) (.-y pos) (.-z pos)]) (calls p "dig"))))
 

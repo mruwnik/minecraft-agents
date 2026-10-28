@@ -5,6 +5,8 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.cost.ways :as cw]
             [jobs.lib.escape :as escape]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.own-pen :as own-pen]
@@ -20,24 +22,55 @@
         own (access/own-plans c)]
     (fn [cell] (some own [(get footprints (vec cell))]))))
 
-(defn may-dig-fn
-  "(may-dig? cell): no other owner's zone, claim or plan footprint refuses a dig there (jobs.lib.tidy/refusal), and
-  when spare? (default: the access/spare-own-builds setting) no plan this body made covers it and, when pens? (default spare?), it is
-  not the wall of the own pen holding livestock the body stands in (jobs.lib.own-pen), nor a shelter block the call keeps
-  for a hostile (mem :seal-kept)."
-  ([c] (may-dig-fn c (access/spare-own-builds)))
-  ([c spare?] (may-dig-fn c spare? spare?))
-  ([c spare? pens?]
+(defn own-build-fn
+  "(own-build cell): :plan when a plan this body made covers cell, :pen when it is the wall of the own pen holding
+  livestock the body stands in (jobs.lib.own-pen, read on first use), else nil."
+  ([c] (own-build-fn c (own-pen/shut-in c (end/feet-cell c))))
+  ([c pen]
    (let [own-plan (own-plan-fn c)
-         pen-wall? (if pens? (own-pen/wall? c (end/feet-cell c)) (constantly false))
+         pen-wall? (:wall? pen)]
+     (fn [cell]
+       (cond (own-plan cell) :plan
+             (pen-wall? cell) :pen)))))
+
+(defn may-dig-fn
+  "(may-dig? cell): no other owner's zone, claim or plan footprint refuses a dig there (jobs.lib.tidy/refusal), it is
+  not a shelter block the call keeps for a hostile (mem :seal-kept), and unless own? the body's own builds
+  (own-build-fn) are spared: a way through them is priced (own-cut-fn) and chosen apart."
+  ([c] (may-dig-fn c false))
+  ([c own?]
+   (let [own-build (if own? (constantly nil) (own-build-fn c))
          ;; tidy/refusal's input read once: a route search asks of hundreds of cells
          rules (delay (access/rules-input c {:ignore-zones? false}))
          kept (:seal-kept (ctx/mem c) #{})]
      (fn [cell]
        (and (not (contains? kept (vec cell)))
-            (or (not spare?) (nil? (own-plan cell)))
-            (not (pen-wall? cell))
+            (nil? (own-build cell))
             (or (boolean (:ignore-zones? (:args c))) (nil? (access/trespass-refusal @rules :dig (zipmap [:x :y :z] cell)))))))))
+
+(defn own-cut-fn
+  "(cut-s cell): seconds cutting cell costs on top of its dig when it is the body's own build (own-build-fn): putting it
+  back (jobs.lib.cost.ways/put-back-cost, the block's worth when it drops something else) and, for the wall of its stocked
+  pen, what the herd may lose through the gap while it stands open (jobs.lib.cost/herd-loss over the dig and the put-back);
+  0 for any other cell."
+  [c]
+  (let [p (:primitives c)
+        pen (own-pen/shut-in c (end/feet-cell c))
+        own-build (own-build-fn c pen)
+        herd (delay (map :kind @(:herd pen)))]
+    (fn [cell]
+      (if-let [kind (own-build cell)]
+        (let [n (u/seen-name p (zipmap [:x :y :z] cell))
+              lost (if (or (nil? n) (some #{n} (b/drops-of p n))) 0 (:value (cost/item-value [{:name n :count 1}])))
+              back (cw/put-back-cost lost)]
+          (+ back (if (= :pen kind) (cost/herd-loss @herd (+ back (or (some-> n cost/dig-cost) 0))) 0)))
+        0))))
+
+(defn own-fn
+  "(own? cell block) of a way that may cut the body's own builds: own-placed's, or a cell of its own builds (own-build-fn)."
+  [c own-placed]
+  (let [own-build (own-build-fn c)]
+    (fn [cell n] (or (own-placed cell n) (some? (own-build cell))))))
 
 (def placed-policy
   "Body memory policy of :escalation-placed, the cells go-to put a block back in: later escalations may dig them."
@@ -97,9 +130,9 @@
 
 (defn hole-tag
   "What marks a hole as this go-to's in the tidy ledger; its stair child writes it (:note) as it digs; clear-path's are noted by go-to after each round and in its cleanup.
-  :mend while the escalation breaks out of the body's own pen: every hole of it is put back, own ground or not."
+  :mend while the escalation cuts the body's own builds (:own-cut): every hole of it is put back, own ground or not."
   [c]
-  (cond-> {:escalation true :go-to (:id c)} (:mend-pen (:escalation (ctx/mem c))) (assoc :mend true)))
+  (cond-> {:escalation true :go-to (:id c)} (:own-cut (:escalation (ctx/mem c))) (assoc :mend true)))
 
 (defn note-holes!
   "Write every cell of dug ({:cell :block}) that is air now and not yet noted to the ledger, as a :dig entry with

@@ -324,34 +324,6 @@
    :expect [{:no-event {:source :job :kind :stopped :data {:why :one-way}} :for-s 40}]
    :after [[:body-near [7.5 0 16.5] 6]]
    :limit-s 120}
-  {:name "shut-in-own-hut-walls-are-not-dug"
-   ;; card 6fa0c797: the pit shaft is walled by the body's own plan (the hut's corner and door cells): the escalation digs
-   ;; none of them and ends with the named reason :own-build (no dirt: the open shaft would be pillared out of)
-   :plans [{:id "hut" :metadata {:by "$body"}
-            :parts [{:id "wall" :cells [#at [17 0 16] #at [17 1 16] #at [17 2 16] #at [17 3 16]
-                                        #at [15 0 16] #at [15 1 16] #at [15 2 16] #at [15 3 16]
-                                        #at [16 0 17] #at [16 1 17] #at [16 2 17] #at [16 3 17]
-                                        #at [16 0 15] #at [16 1 15] #at [16 2 15] #at [16 3 15]]
-                    :want [:any "stone"]}]}]
-   :body {:inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1})]]
-   :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false :escalation {:step :none :why :own-build}}} :within-s 90 :of-job true}
-            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :own-build}}}}]
-   :after [[:block [17 1 16] "stone"] [:block [15 1 16] "stone"] [:block [16 1 17] "stone"] [:block [16 1 15] "stone"] [:body-near [16.5 0 16.5] 1]]}
-  {:name "shut-in-own-hut-walls-dug-only-when-allowed-and-warned"
-   ;; the same walls with :settings {:jobs.lib.access/spare-own-builds false}: the stair digs out through them, warns go-to.dug-own-build, and arrives
-   :plans [{:id "hut" :metadata {:by "$body"}
-            :parts [{:id "wall" :cells [#at [17 0 16] #at [17 1 16] #at [17 2 16] #at [17 3 16]
-                                        #at [15 0 16] #at [15 1 16] #at [15 2 16] #at [15 3 16]
-                                        #at [16 0 17] #at [16 1 17] #at [16 2 17] #at [16 3 17]
-                                        #at [16 0 15] #at [16 1 15] #at [16 2 15] #at [16 3 15]]
-                    :want [:any "stone"]}]}]
-   :body {:inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1 :settings {:jobs.lib.access/spare-own-builds false}})]]
-   :expect [{:event {:source :job :kind :go-to.dug-own-build} :within-s 120 :of-job true}
-            {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 200 :of-job true}]
-   :after [[:body-near [20.5 4 16.5] 2]]
-   :limit-s 240}
   {:name "own-shelter-by-day-is-left-and-the-goal-reached"
    ;; a dug-in pit (shut-in sealed it): go-to (no way out of the shelter) leaves it first (go-to.escalated :leave-shelter) and arrives; the clock does not hold it
    :time :night

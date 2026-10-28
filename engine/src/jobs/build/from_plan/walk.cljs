@@ -209,9 +209,8 @@
           :again)
       :else
       (let [shut? (or (in-hole? c) (shut-in-walk? c))
-            w (await (walk-stand! c cell stand (if shut?
-                                                           {:dig-own true}
-                                                           {:ways (cond-> #{:walk :clear-seal} (sh-inside/sheltered-in c) (into [:stair :dig-out]))})))]
+            w (await (walk-stand! c cell stand (when-not shut?
+                                                 {:ways (cond-> #{:walk :clear-seal} (sh-inside/sheltered-in c) (into [:stair :dig-out]))})))]
         ;; an arrival in reach that does not see the cell, where another stand would, is a bad stand: else the step walks to it again
         (when (and (= :there w) (:found cell) (not (:dig? cell)) (seq (in-reach c [cell])) (not (place-here? c cells cell)))
           (ctx/update-mem! c #(-> (update % :bad-stands (fnil conj []) stand) (walk-fail (:pos cell) :unreachable (give-up) (u/self-pos c)))))
