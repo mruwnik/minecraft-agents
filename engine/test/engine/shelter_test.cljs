@@ -179,6 +179,13 @@
     (is (= {:seen? false :light nil :lit? nil} (select-keys (sh-sense/light-view (tu/with-light-data (tu/fake {:time night :blocks cave-blocks :unloaded ["40,64,0"]})) {:cell {:x 40 :y 64 :z 0}}) [:seen? :light :lit?])) "no light data: unknown, not a guess")
     (is (= {:cells 27 :radius 1 :darkest 0} (select-keys (sh-sense/light-view lit {:cell {:x 0 :y 64 :z 0} :radius 1}) [:cells :radius :darkest])))))
 
+(deftest light-view-lit-agrees-with-the-reported-light-of-a-cell-not-looked-at
+  (let [raw-p (tu/fake {:time noon :blocks cave-blocks})
+        _ (swap! (fake/state raw-p) assoc :light-default [0 0])
+        p (perception/wrap raw-p (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)}))
+        view (sh-sense/light-view p {:cell {:x 3 :y 64 :z 0}})]
+    (is (= {:block 0 :sky 0 :light 0 :lit? false} (select-keys view [:block :sky :light :lit?])))))
+
 (deftest night-without-light-data-falls-back-to-the-seen-roof
   (is (sh-sense/buried-by-column? (seen-fake {:time night :blocks (stone-above 2 1)})) "one seen block over the head, air above it")
   (is (not (sh-sense/buried-by-column? (seen-fake {:time night :blocks (stone-above 5 3)}))) "air over the head")

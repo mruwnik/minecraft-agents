@@ -220,7 +220,8 @@
 
 (defn light-view
   "Read-only light the body perceives, for observe light. A cell {:x :y :z} gives {:cell :seen? :block :sky :sky-subtract
-  :light (effective) :lit?}, nil values (also :lit?, and :seen? false) where no light data is loaded. With :radius (a cube around the cell)
+  :light (effective) :lit?}, nil values (also :lit?, and :seen? false) where no light data is loaded; :lit? is lit-light? of the
+  reported parts, not lit-here?'s guess for a cell not looked at. With :radius (a cube around the cell)
   the light-read of its cells plus :cells :seen. The cell defaults to the feet; with no position (the body is offline) {:seen? false :note ..}."
   [p {:keys [cell radius]}]
   (if-let [cell (or cell (when (.-pos (.self p)) (feet p)))]
@@ -229,7 +230,8 @@
       (let [known? (some? (light-at p cell))]
         {:cell [x y z] :seen? known?
          :block (block-light-at p cell) :sky (sky-light-at p cell) :sky-subtract (sky-subtract-now p)
-         :light (light-at p cell) :lit? (when known? (lit-here? p cell))})
+         :light (light-at p cell)
+         :lit? (when known? (look/lit-light? (block-light-at p cell) (or (sky-light-at p cell) 0) (sky-subtract-now p)))})
       (let [cells (for [dx (range (- radius) (inc radius)) dy (range (- radius) (inc radius)) dz (range (- radius) (inc radius))]
                     {:x (+ x dx) :y (+ y dy) :z (+ z dz)})]
         (assoc (light-read p cells) :cell [x y z] :radius radius :cells (count cells)
