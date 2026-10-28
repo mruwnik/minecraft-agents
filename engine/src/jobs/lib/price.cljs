@@ -70,21 +70,21 @@
                   " a risky job's work may cost: eat or rest to heal first (natural healing needs food 18+)")})))
 
 (defn stay-parts
-  "{:hurt :dies} of staying `seconds` where mobs spawn at `chance` per second: hurt the hp they take (cost/spawns-hurt),
-  dies the chance they kill the body (cost/spawns-chance)."
+  "{:hurt :dies :death} of staying `seconds` where mobs spawn at `chance` per second: hurt the hp they take
+  (cost/spawns-hurt), dies the chance they kill the body and death what that costs (cost/route-death)."
   [c chance seconds]
   (let [body (threats/death-body c)
         at (u/self-pos c)
         spawns (* chance seconds)]
     (check-cache/keyed c ::stay [spawns body at]
-                       (fn [] {:hurt (cost/spawns-hurt body spawns at)
-                               :dies (cost/spawns-chance body spawns at)}))))
+                       (fn [] (let [{dies :chance death :death} (cost/route-death body {:spawns spawns :at at})]
+                                {:hurt (cost/spawns-hurt body spawns at) :dies dies :death death})))))
 
 (defn stay-hp
   "The hp staying `seconds` where mobs spawn at `chance` per second risks: stay-parts' hurt and its death in hp (cost/lethal-hp)."
   [c chance seconds]
-  (let [{:keys [hurt dies]} (stay-parts c chance seconds)]
-    (+ hurt (cost/lethal-hp (threats/death-body c) dies (u/self-pos c)))))
+  (let [{:keys [hurt dies death]} (stay-parts c chance seconds)]
+    (+ hurt (cost/lethal-hp {:chance dies :death death}))))
 
 (def stay-settings {:click ::place-stay-s :work ::work-stay-s :long ::long-stay-s})
 

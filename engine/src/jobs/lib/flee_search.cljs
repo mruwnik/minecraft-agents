@@ -248,7 +248,7 @@
                             (apply min (vals (:prices (cost/decide body (cost/cornered-answers {:equipment (:equipment body) :mobs mobs :fight fight :covers covers}) pos)))))))
         trapped-at (fn [cell] (or @cornered (cost/route-death-cost body {:cells [cell] :threats caught-by} cell)))
         counts (wworld/way-counts p)
-        spawn-kill (delay (cost/spawn-kill-chance body pos))
+        spawn-kill (delay (cost/spawn-kill body pos))
         slow (pace food)]
     (if (nil? ring-world)
       []

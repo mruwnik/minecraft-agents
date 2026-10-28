@@ -51,7 +51,7 @@
   ([c]
    (let [p (:primitives c)]
      (doto (unknown-spec)
-       (unchecked-set "deathHp" (cost/lethal-hp (cost/death-body p (ctx/view c)) 1 (u/self-pos c)))))))
+       (unchecked-set "deathHp" (cost/lethal-hp {:chance 1 :death (cost/death-cost (cost/death-body p (ctx/view c)) (u/self-pos c))}))))))
 
 (def torch-base*
   (delay (let [^js t (blocks/default-state-table)

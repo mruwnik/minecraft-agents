@@ -9,7 +9,7 @@
     weapon   attack-gap-ms, weapon-damage, remaining-health, mob-max-health, ranged-mobs: the fight inputs; the one tool-material table
              (tool-tier, weapon-rank, cheapness) (jobs.lib.cost.weapon).
     fight    fight-damage, fight-seconds: the damage (and length) of a fight with the current kit (jobs.lib.cost.fight).
-    answer   fight-answer, followed, small (an answer's small blows, the ones its :shape is the width of), flee-answer, build-answer, cover-answer, cornered-answers, answer-price, decide: what each answer to hostiles costs and the cheapest; kill-price: a kill of one mob; death-chance, route-death-cost, route-parts (the death chance and hurt of a route's threats, each pair met in one answer by the chance the second comes while the first is answered), threat-hurt, spawn-kill-chance, spawns-chance, spawns-hurt, lethal-hp: the one chance of dying (threat-hurt one mob met; water-factors the planner's price of a second in water, a drowned met there, unseen-water-factors a phantom floor's by the seen water near it; spawns-chance that of mobs spawned beside the body (spawn-kill-chance one's), spawns-hurt their hurt, lethal-hp a death chance in hp) (a known threat priced by the answer the body would take) and a route's death price; blast-hurt: a creeper's blast (jobs.lib.cost.answer).
+    answer   fight-answer, followed, small (an answer's small blows, the ones its :shape is the width of), flee-answer, build-answer, cover-answer, cornered-answers, answer-price, decide: what each answer to hostiles costs and the cheapest; death-price: the one price of a death; kill-price: a kill of one mob; route-death, death-chance, route-death-cost, route-parts (the death chance and hurt of a route's threats, each pair met in one answer by the chance the second comes while the first is answered), threat-hurt, spawn-kill, spawns-chance, spawns-hurt, lethal-hp: the one chance of dying (threat-hurt one mob met; water-factors the planner's price of a second in water, a drowned met there, unseen-water-factors a phantom floor's by the seen water near it; spawns-chance that of mobs spawned beside the body (spawn-kill one's, with what its death costs), spawns-hurt their hurt, lethal-hp a death chance in hp) (a known threat priced by the answer the body would take) and a route's death price; blast-hurt: a creeper's blast (jobs.lib.cost.answer).
     danger   route-danger: the danger of a walk past mobs; hurt-rate, exposure-price: what standing exposed to them costs; stance, danger-rate, threat-factor: go-to's
              planner dangers; reach-first?, wins-race?: a body's race to a refuge against its chasers; catches?, caught-on?: whether a chaser hits a walk (straight, or a timed route) before it is past; reach-s: the seconds it is within its blow of a timed route; arrival-s: a chaser's seconds to a point (over its way when given); body-speed; flee-walk-speed, flee-stop-s: a flight's measured pace, its steps and the stops between them (jobs.lib.cost.danger).
     health   hp-seconds, health-scale, hp-price, risk-s (a walk's hurt and death chance in seconds), commute-s (a walk there and back against sheltering here), drown-prices, damage-budget, survivable-budget: what an hp costs and how many a walk may spend (jobs.lib.cost.health).
@@ -89,7 +89,9 @@
 (def cover-answer answer/cover-answer)
 (def cornered-answers answer/cornered-answers)
 (def answer-price answer/answer-price)
+(def answer-price* answer/answer-price*)
 (def decide answer/decide)
+(def death-price answer/death-price)
 (def look-answer glance/look-answer)
 (def look-value glance/look-value)
 (def closed-chance glance/closed-chance)
@@ -298,8 +300,10 @@
 (def experience-cost death/experience-cost)
 (def death-cost death/death-cost)
 (def death-chance answer/death-chance)
+(def route-death answer/route-death)
+(def either answer/either)
 (def route-parts answer/route-parts)
-(def spawn-kill-chance answer/spawn-kill-chance)
+(def spawn-kill answer/spawn-kill)
 (def spawns-chance answer/spawns-chance)
 (def spawns-hurt answer/spawns-hurt)
 (def lethal-hp answer/lethal-hp)

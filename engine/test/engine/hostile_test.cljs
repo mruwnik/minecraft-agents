@@ -186,12 +186,12 @@
     nil "zombie" 2 :fight
     "wooden_sword" "zombie" nil :fight))
 
-(deftest an-unarmed-body-with-a-bed-near-walks-away-from-a-zombie-it-would-die-to-only-with-items-to-go-back-for
+(deftest an-unarmed-body-with-a-bed-near-walks-away-from-a-zombie-it-would-die-to-carrying-nothing-or-items
   (let [f (cost/fight-answer {:weapon nil :mobs [{:name "zombie" :distance 2}]})
         flee (cost/flee-answer {:food 20 :mobs [{:name "zombie" :distance 2 :follow 35}] :later f})
         pick #(cost/decide {:health 20 :food 20 :level 0 :carried % :respawn {:x 40 :y 64 :z 0}} {:fight f :flee flee} {:x 0 :y 64 :z 0})]
     (is (= :flee (:answer (pick 300))) (str "the zombie that killed it waits at the pile: " (:prices (pick 300))))
-    (is (= :fight (:answer (pick 0))) (str "nothing to go back for: " (:prices (pick 0))))))
+    (is (= :flee (:answer (pick 0))) (str "carrying nothing, its job still brings it back to the zombie: " (:prices (pick 0))))))
 
 (deftest a-flight-down-a-dead-end-past-its-chaser-is-priced-caught
   ;; the old weighing priced every flight at the 0.15 prior, whatever the flee search found

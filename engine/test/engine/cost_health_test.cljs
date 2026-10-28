@@ -155,6 +155,6 @@
 
 (deftest the-hp-seconds-setting-prices-every-death-term
   (let [body {:health 20 :food 20 :level 0 :carried 0}
-        lethal #(settings/with-settings {:jobs.lib.cost.health/hp-seconds %} (fn [] (cost/lethal-hp body 0.5 {:x 0 :y 64 :z 0})))]
+        lethal #(settings/with-settings {:jobs.lib.cost.health/hp-seconds %} (fn [] (cost/lethal-hp {:chance 0.5 :death (cost/death-cost body {:x 0 :y 64 :z 0})})))]
     (is (< (js/Math.abs (- (lethal 10) (* 2 (lethal 20)))) 1e-9) "a dearer hp makes the same death fewer hp")
     (is (= 20 (settings/with-settings {:jobs.lib.cost.health/hp-seconds 20} cost/per-danger)))))

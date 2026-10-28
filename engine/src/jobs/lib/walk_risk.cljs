@@ -163,21 +163,21 @@
   "estimate of its inputs (estimate-inputs)."
   [c {:keys [goal feet cells body catchers remembered exposed-s lava]}]
   (let [spawns (* exposed-s (cost/spawn-chance [0 0 0]))
-        parts (fn [ts] (if (seq ts) (cost/route-parts body {:cells cells :threats ts :at feet}) {:chance 0 :hurt 0}))
+        parts (fn [ts] (if (seq ts) (cost/route-parts body {:cells cells :threats ts :at feet}) {:chance 0 :death 0 :hurt 0}))
         catchers (threats/with-reach c catchers)
         remembered (threats/with-reach c remembered)
         met-remembered (parts remembered)
         met-all (if (seq catchers) (parts (concat catchers remembered)) met-remembered)
         death-hp (:hurt met-remembered)
-        spawn-dies (cost/death-chance body {:spawns spawns :at feet})
-        dies (fn [{:keys [chance]}] (- 1 (* (- 1 chance) (- 1 spawn-dies))))
-        lethal (cost/lethal-hp body (dies met-all) goal)
+        spawn-dies (cost/route-death body {:spawns spawns :at feet})
+        dies (fn [met] (cost/either spawn-dies (select-keys met [:chance :death])))
+        lethal (cost/lethal-hp (dies met-all))
         spawn-hp (cost/spawns-hurt body spawns feet)
         hostile-hp (max 0 (- (:hurt met-all) death-hp))
-        unfought (if (seq catchers) (cost/lethal-hp body (dies met-remembered) goal) lethal)]
+        unfought (if (seq catchers) (cost/lethal-hp (dies met-remembered)) lethal)]
     {:hp (+ spawn-hp hostile-hp death-hp lethal lava)
      :walk-hp (+ spawn-hp death-hp unfought lava) :lava-hp lava :spawn-hp spawn-hp :hostile-hp hostile-hp :death-hp death-hp :lethal-hp lethal
-     :death-chance (dies met-all) :dark-s exposed-s :hostiles (count catchers) :threats (mapv #(select-keys % [:mob :pos]) (concat catchers remembered))}))
+     :death-chance (:chance (dies met-all)) :dark-s exposed-s :hostiles (count catchers) :threats (mapv #(select-keys % [:mob :pos]) (concat catchers remembered))}))
 
 (defn estimate
   "{:hp :walk-hp :spawn-hp :hostile-hp :death-hp :lethal-hp :death-chance :lava-hp :dark-s :hostiles :threats} of the walk of c's body to `goal` ({:x :y :z})
@@ -237,7 +237,7 @@
         here [(assoc feet :s secs)]
         live (mapv (fn [{:keys [reach] :as t}] (assoc t :reach (fn [x y z] (when (reach x y z) 1)))) (threats/with-reach c live))
         hurt (+ (if (seq live) (:hurt (cost/route-parts body {:cells here :threats live :at feet})) 0) (:hurt (price/stay-parts c chance secs)))
-        lethal (cost/lethal-hp body (cost/death-chance body {:cells here :threats live :spawns (* chance secs) :at feet}) feet)]
+        lethal (cost/lethal-hp (cost/route-death body {:cells here :threats live :spawns (* chance secs) :at feet}))]
     {:hp (+ hurt lethal) :lethal-hp lethal :heal-s heal-s :secs secs
      :hostiles (count (filter #((:reach %) (:x feet) (:y feet) (:z feet)) live))}))
 

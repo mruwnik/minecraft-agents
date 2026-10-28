@@ -206,7 +206,11 @@
         specs (shut-in/covers c (mapcat (fn [[option ways]] (when (and (open? option) (not (and home? (= :plug-dig option)))) ways)) cover-options))
         equipment (cost/equipment-of (.-equipment (.self (:primitives c))))
         mobs (mapv #(hostile/mob-near (:primitives c) %) hostiles)
-        price #(cost/answer-price (hostile/body-of c) (cost/cover-answer {:equipment equipment :mobs mobs} %) (u/self-pos c))
+        body (hostile/body-of c)
+        at (u/self-pos c)
+        answer #(cost/cover-answer {:equipment equipment :mobs mobs} %)
+        death (delay (cost/death-price body (vals (hostile/cornered-answers c hostiles specs (open? :back-off))) at))
+        price #(cost/answer-price* body (answer %) at @death)
         cheaper (fn [ways] (some->> (keep specs ways) seq (apply min-key price)))
         pillar (when (open? :pillar) (pillar-cover c hostiles))]
     (cond-> {}

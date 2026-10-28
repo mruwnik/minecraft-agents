@@ -6,8 +6,8 @@
   totals) and the rest in blows of about :hit hp each (:shape: their count's width, death/blow-chance), the seconds it takes, what may follow it (the cheapest of :then is paid too) and,
   for a walk away, the chance its mobs catch it and the blows they then land; :spent when its mobs are all creepers (the
   blast that kills spends its creeper: no mob waits at the death spot). answer-price: the hp at the health each
-  leaves in the outcomes it lives through (lived-damage, health/hp-cost), the death the blows risk (death-chance x death/death-cost), the seconds, and the cheapest
-  :then at full health; each death also pays its walk-back, the mob met again at the pile.
+  leaves in the outcomes it lives through (lived-damage, health/hp-cost), the death the blows risk (death-chance x death-price), the seconds, and the cheapest
+  :then at full health. death-price: the one price of a death, the mob met again where the body goes back.
 
   death-chance: the one chance of dying every route, spot, wait or answer is priced by. A known threat on a route costs
   the death of the answer the body would take to it (decide over fight, walk away and the covers it has).
@@ -129,66 +129,79 @@
   (let [{:keys [dies lived]} (blows-outcome body answer)]
     (assoc body :health (max 1 (- (or health 20) (if (< dies 1) (/ lived (- 1 dies)) 0))))))
 
-(declare answer-death-chance)
+(defn bare
+  "The death price {:met :clear} with no mob met again: death/death-cost."
+  [body at]
+  (let [d (death/death-cost body at)] {:met d :clear d}))
 
 (defn answer-price*
-  "answer-price with `again` seconds added to each death the answer's mobs outlive (not :spent): its walk-back."
-  [{:keys [health] :as body} {:keys [seconds then outcomes spent] :as answer} at again]
+  "answer-price with death {:met :clear} the seconds each death costs (death-price): :clear one by a blast that spends
+  the answer's mobs (:spent), :met any other."
+  [{:keys [health] :as body} {:keys [seconds then outcomes spent] :as answer} at death]
   (let [health (or health 20)
         {:keys [dies lived]} (blows-outcome body answer)
         lives (- 1 dies)
         own (+ (if (pos? lives) (* lives (health/hp-cost health (min (/ lived lives) health))) 0)
-               (* dies (+ (death/death-cost body at) (if spent 0 again)))
+               (if (pos? dies) (* dies (if spent (:clear death) (:met death))) 0)
                seconds)]
     (cond
-      (seq outcomes) (+ own (* lives (reduce + (map (fn [[chance a]] (* chance (answer-price* (after body answer) a at again))) outcomes))))
-      (seq then) (+ own (* lives (apply min (map #(answer-price* (healed body) % at again) then))))
+      (seq outcomes) (+ own (* lives (reduce + (map (fn [[chance a]] (* chance (answer-price* (after body answer) a at death))) outcomes))))
+      (seq then) (+ own (* lives (apply min (map #(answer-price* (healed body) % at death) then))))
       :else own)))
 
-(defn walk-back
-  "Seconds a death at `at` costs past death/death-cost for the mob met again where the walk back finds the pile: the
-  cheaper of giving the :carried items up and the cheapest of answers at full health with nothing carried. An answer's
-  deaths there each cost this once more, so its price is the fixed point p + d x min(carried, it) (p its price with
-  none, d its answer-death-chance; none for a :spent one). None when the pile is not death/kept? or holds nothing."
+(defn death-price
+  "{:met :clear} seconds a death at `at` costs body: death/experience-cost and the cheaper of giving `at` up
+  (death/give-up-cost) and going back (death/back-cost, the items lost unless death/kept?), there meeting the mob again
+  (:met; :clear, none, is death/death-cost) at full health with nothing carried by the cheapest of answers, each death
+  there costing the same once more. That meet's price is the fixed point x = min(stake, back + min over answers of
+  p + k x): p an answer's price with its deaths free, k its chance of a death its mob outlives (the price's rise per
+  second of such a death), so x = min(stake, min over answers of (back + p) / (1 - k)). No answers: no mob waits."
   [body answers at]
-  (let [c (or (:carried body) 0)]
-    (if (or (not (pos? c)) (not (death/kept? body at)))
-      0
+  (let [answers (filter some? answers)
+        clear (bare body at)]
+    (if (empty? answers)
+      clear
       (let [e (assoc (healed body) :carried 0 :level 0)
-            meet (fn [a]
-                   (let [p (answer-price* e a at 0)
-                         d (if (:spent a) 0 (answer-death-chance e a at))]
-                     (if (and (< d 1) (<= p (* c (- 1 d)))) (/ p (- 1 d)) (+ p (* d c)))))]
-        (reduce min c (map meet (filter some? answers)))))))
+            stake (death/give-up-cost e)
+            back (death/back-cost e at)
+            price (fn [a x] (answer-price* e a at {:met x :clear (min stake back)}))
+            lines (map (fn [a] (let [p (price a 0)] [p (- (price a 1) p)])) answers)
+            at-x (fn [[p k] x] (if (pos? k) (+ p (* k x)) p))
+            x (reduce min stake (map (fn [[p k]] (if (< k 1) (/ (+ back p) (- 1 k)) ##Inf)) lines))
+            meet (reduce min (map #(at-x % x) lines))]
+        (assoc clear :met (+ (death/experience-cost body)
+                             (min (death/give-up-cost body)
+                                  (+ (death/back-cost body at) (if (death/kept? body at) 0 (or (:carried body) 0)) meet))))))))
 
 (defn answer-price
-  "Seconds answer costs body {:health :absorption, death-cost's :respawn :level :carried} at `at` (see the ns doc); :then
-  is priced at full health: the body meets the mob again once it has healed. :outcomes [[chance answer]] (a look's,
-  jobs.lib.cost.look) are each paid by its chance, at the health the answer's blows leave. Both are paid only by the
-  chance the body lives through the answer's own blows: a death ends the meet (as answer-death-chance). Each death also
-  pays its walk-back over answers (default: this one alone)."
-  ([body answer at] (answer-price body answer at [answer]))
-  ([body answer at answers] (answer-price* body answer at (walk-back body answers at))))
+  "Seconds answer costs body {:health :absorption, death-price's :respawn :level :carried :stake} at `at` (see the ns
+  doc); :then is priced at full health: the body meets the mob again once it has healed. :outcomes [[chance answer]] (a
+  look's, jobs.lib.cost.look) are each paid by its chance, at the health the answer's blows leave. Both are paid only by
+  the chance the body lives through the answer's own blows: a death ends the meet (as answer-death-chance). Each death
+  pays death-price over answers, all the body has there (answer among them)."
+  [body answer at answers]
+  (answer-price* body answer at (death-price body answers at)))
 
 (defn answer-death-chance
-  "The chance answer kills body: its blows (blows-chance), then the cheapest of its :then (answer-price* at `at`, no
-  walk-back) at full health, or each of its :outcomes by its chance."
-  [body {:keys [then outcomes] :as answer} at]
-  (let [own (blows-chance body answer)
-        next (when (seq then) (apply min-key #(answer-price* (healed body) % at 0) then))]
-    (cond
-      (seq outcomes) (- 1 (* (- 1 own) (- 1 (reduce + (map (fn [[chance a]] (* chance (answer-death-chance (after body answer) a at))) outcomes)))))
-      next (- 1 (* (- 1 own) (- 1 (answer-death-chance (healed body) next at))))
-      :else own)))
+  "The chance answer kills body: its blows (blows-chance), then the cheapest of its :then (answer-price* at `at`, by
+  death, default bare) at full health, or each of its :outcomes by its chance."
+  ([body answer at] (answer-death-chance body answer at (bare body at)))
+  ([body {:keys [then outcomes] :as answer} at death]
+   (let [own (blows-chance body answer)
+         next (when (seq then) (apply min-key #(answer-price* (healed body) % at death) then))]
+     (cond
+       (seq outcomes) (- 1 (* (- 1 own) (- 1 (reduce + (map (fn [[chance a]] (* chance (answer-death-chance (after body answer) a at death))) outcomes)))))
+       next (- 1 (* (- 1 own) (- 1 (answer-death-chance (healed body) next at death))))
+       :else own))))
 
 (defn decide
-  "{:answer key :prices {key seconds}}: the cheapest of answers {key answer-or-nil} (nil: not open to the body) by
-  answer-price, a death's walk-back over all of them; nil when none is open."
+  "{:answer key :prices {key seconds} :death}: the cheapest of answers {key answer-or-nil} (nil: not open to the body) by
+  answer-price, death the death-price over all of them; nil when none is open."
   [body answers at]
-  (let [again (delay (walk-back body (vals answers) at))
-        prices (into {} (keep (fn [[k a]] (when a [k (answer-price* body a at @again)]))) answers)]
+  (let [death (delay (death-price body (vals answers) at))
+        prices (into {} (keep (fn [[k a]] (when a [k (answer-price* body a at @death)]))) answers)]
     (when (seq prices)
-      {:answer (key (first (sort-by val prices))) :prices prices})))
+      {:answer (key (first (sort-by val prices))) :prices prices :death @death})))
 
 (defn fight-answer
   "The answer of fight (fight/fight-damage's argument, :health the body's, default 20): its damage and seconds, :hit the
@@ -219,12 +232,6 @@
       (seq left) (assoc :left (vec left))
       (and m (< (+ damage left-damage) gone-bad)) (assoc :caught (cond-> {:chance (:chance pr) :hit hit :damage gone-bad}
                                                                   (:shape pr) (assoc :shape (:shape pr)))))))
-
-(defn kill-price
-  "Seconds killing one mob-name met beside body costs at `at`: answer-price of fighting it with the body's :weapon and
-  :equipment."
-  [{:keys [weapon equipment] :as body} mob-name at]
-  (answer-price body (fight-answer {:weapon weapon :equipment equipment :health (:health body) :mobs [{:name mob-name :distance 0}]}) at))
 
 (defn mix
   "{:damage :shape} of blows that are one of parts [[chance {:damage :shape}]] (chances summing to 1): their mean by
@@ -486,14 +493,32 @@
           (map (fn [[way cover]] [way (cover-answer {:equipment equipment :mobs ms} cover)]))
           covers)))
 
-(defn threat-chance
-  "The chance mob-name met beside body kills it at `at`: the answer-death-chance of the answer decide takes of
-  threat-answers; a provoked-only mob counts threat/provoked-share."
+(defn kill-price
+  "Seconds killing one mob-name met beside body costs at `at`: answer-price of fighting it (threat-answers' :fight),
+  among all the answers it has to it."
+  [body mob-name at]
+  (let [answers (threat-answers body mob-name nil)]
+    (answer-price body (:fight answers) at (vals answers))))
+
+(defn died
+  "The seconds a death in answer a costs by death {:met :clear} (decide's): :clear when its blast spends its mobs."
+  [death a]
+  (if (:spent a) (:clear death) (:met death)))
+
+(defn threat-parts
+  "{:chance :death} of mob-name met beside body at `at`: the answer-death-chance of the answer decide takes of
+  threat-answers (a provoked-only mob counts threat/provoked-share) and what that death costs (died)."
   [body mob-name caught at]
   (let [answers (threat-answers body mob-name caught)
-        {:keys [answer]} (decide body answers at)]
-    (* (if (contains? threat/provoked-only mob-name) (threat/provoked-share) 1)
-       (answer-death-chance body (get answers answer) at))))
+        {:keys [answer death]} (decide body answers at)
+        a (get answers answer)]
+    {:chance (* (if (contains? threat/provoked-only mob-name) (threat/provoked-share) 1) (answer-death-chance body a at death))
+     :death (died death a)}))
+
+(defn threat-chance
+  "The :chance of threat-parts."
+  [body mob-name caught at]
+  (:chance (threat-parts body mob-name caught at)))
 
 (defn water-factors
   "The planner's extra share of a second in water (options.dark.water) for body {:health :absorption :food :equipment
@@ -527,8 +552,8 @@
        (lived-damage body (get answers (:answer (decide body answers at)))))))
 
 (defn group-parts
-  "{:chance :hurt :near} of mob names met together by body at `at`, caught at caught: the answer decide takes of
-  threat-answers, its answer-death-chance, the hp taken in the outcomes the body lives through (lived-damage), and the seconds it holds the body
+  "{:chance :death :hurt :near} of mob names met together by body at `at`, caught at caught: the answer decide takes of
+  threat-answers, its answer-death-chance and what that death costs (died), the hp taken in the outcomes the body lives through (lived-damage), and the seconds it holds the body
   at or near the place (its :near, a flight's way out; else its :seconds). A ranged mob gets to the body at its first hit
   (death/notice-prior's count): that blow has landed before the answer, whose blows are the ones after it."
   [body names caught at]
@@ -537,8 +562,10 @@
         shield (or (:absorption body) 0)
         struck (assoc body :absorption (max 0 (- shield first-hits)) :health (- (or (:health body) 20) (max 0 (- first-hits shield))))
         answers (threat-answers struck names caught)
-        a (get answers (:answer (decide struck answers at)))]
-    {:chance (if (pos? (life struck)) (answer-death-chance struck a at) 1)
+        {k :answer death :death} (decide struck answers at)
+        a (get answers k)]
+    {:chance (if (pos? (life struck)) (answer-death-chance struck a at death) 1)
+     :death (died death a)
      :hurt (if (pos? (life struck))
              (let [{:keys [dies lived]} (blows-outcome struck a)] (+ (* first-hits (- 1 dies)) lived))
              0)
@@ -703,7 +730,7 @@
   hurt grows by q (E[H(set + k)] - E[H(set)]) (joins): exact for two threats, and for any that meet surely at once or never.
   A class's notice rate (death/notice-prior) is one unknown over the whole route: Z is kept at each of the classes'
   death/rate-nodes, a threat's sets reckoned at its own class's rate, other classes' notices over their priors. The hurt at
-  most the body's life."
+  most the body's life. :death what a death costs (group-parts'), each threat's by its weight times its own death chance (0 with none)."
   [body {:keys [cells at] :as route}]
   (let [at (or at (first cells))
         group (memoize #(group-parts body %1 %2 at))
@@ -732,22 +759,29 @@
                              (aset z g (+ (* (aget times ri) (aget z g)) (aget adds ri)))))
                          (+ hurt (:hurt step))))
                      0 (range (count found)))
-        survives (areduce z g acc 0 (+ acc (* (aget weights g) (aget z g))))]
+        survives (areduce z g acc 0 (+ acc (* (aget weights g) (aget z g))))
+        shares (map (fn [{:keys [mob caught c]}] (let [g (group [mob] caught)] [(* c (:chance g)) (:death g)])) found)
+        mass (reduce + 0 (map first shares))]
     {:chance (min 1 (max 0 (- 1 survives)))
+     :death (if (pos? mass) (/ (reduce + (map #(* (first %) (second %)) shares)) mass) 0)
      :hurt (min (life body) (max 0 hurt))}))
 
-(defn spawn-kill-chance
-  "The chance one mob spawned beside body kills it at `at`: each its threat-chance, caught at the prior, over
-  threat/spawn-weights."
+(defn spawn-kill
+  "{:chance :death} of one mob spawned beside body at `at`: each its threat-parts, caught at the prior, over
+  threat/spawn-weights, the chance the weighted mean, the death each's by its weight times its chance."
   [body at]
-  (/ (reduce + (map (fn [[mob w]] (* w (threat-chance body mob nil at))) threat/spawn-weights))
-     (reduce + (vals threat/spawn-weights))))
+  (let [parts (map (fn [[mob w]] [w (threat-parts body mob nil at)]) threat/spawn-weights)
+        mass (reduce + (map (fn [[w {:keys [chance]}]] (* w chance)) parts))]
+    {:chance (/ mass (reduce + (vals threat/spawn-weights)))
+     :death (if (pos? mass)
+              (/ (reduce + (map (fn [[w {:keys [chance death]}]] (* w chance death)) parts)) mass)
+              0)}))
 
 (defn spawns-chance
   "The chance spawns mobs (an expected count, a Poisson one) spawned beside body kill it at `at`, each at kill (default
-  spawn-kill-chance: a caller pricing many routes at one place passes it once)."
+  spawn-kill's chance: a caller pricing many routes at one place passes it once)."
   ([body spawns at] (spawns-chance body spawns at nil))
-  ([body spawns at kill] (- 1 (js/Math.exp (- (* spawns (or kill (spawn-kill-chance body at))))))))
+  ([body spawns at kill] (- 1 (js/Math.exp (- (* spawns (or kill (:chance (spawn-kill body at)))))))))
 
 (defn spawns-hurt
   "hp spawns mobs (an expected count) spawned beside body take off it at `at`, at most its life (their death is
@@ -757,24 +791,40 @@
        (* spawns (/ (reduce + (map (fn [[mob w]] (* w (threat-hurt body mob nil at))) threat/spawn-weights))
                     (reduce + (vals threat/spawn-weights))))))
 
+(defn either
+  "{:chance :death} of dying of any of parts {:chance :death}, met apart: the chance one of them kills, and what that
+  death costs, each part's by its chance (0 with none)."
+  [& parts]
+  (let [mass (reduce + 0 (map :chance parts))]
+    {:chance (- 1 (reduce * 1 (map #(- 1 (:chance %)) parts)))
+     :death (if (pos? mass) (/ (reduce + (map #(* (:chance %) (:death %)) (filter #(pos? (:chance %)) parts))) mass) 0)}))
+
+(defn route-death
+  "{:chance :death} of dying on route {:cells :threats :spawns :spawn-kill :at} (cells {:x :y :z :s}, :s the seconds
+  spent there, death/met-stretch): its spawns (the expected count of mobs met spawning, spawns-chance at :at, default the
+  first cell, each at :spawn-kill (spawn-kill's) when given) or route-parts' of its threats, for each known threat {:mob
+  :pos :weight :reach :caught} (pos its place, for death/notice-factor; weight 0-1, reach a fn of a cell x y z, its weight
+  0-1, nil outside: jobs.lib.threat-field; caught the chance a walk away from it is caught, nil the prior), kill the
+  body (either); :death what that death costs. body as threat-answers, with answer-price's."
+  [body {:keys [spawns] :as route}]
+  (let [at (or (:at route) (first (:cells route)))
+        kill (when (pos? (or spawns 0)) (or (:spawn-kill route) (spawn-kill body at)))]
+    (either (if kill {:chance (spawns-chance body spawns at (:chance kill)) :death (:death kill)} {:chance 0 :death 0})
+            (select-keys (route-parts body route) [:chance :death]))))
+
 (defn death-chance
-  "The chance of dying on route {:cells :threats :spawns :spawn-kill :at} (cells {:x :y :z :s}, :s the seconds spent there,
-  death/met-stretch): its spawns (the expected count of mobs met spawning, spawns-chance at :at, default the first cell, each at :spawn-kill when given)
-  or route-parts' :chance of its threats, for each known threat {:mob :pos :weight :reach :caught} (pos its place, for death/notice-factor; weight 0-1, reach a fn of a
-  cell x y z, its weight 0-1, nil outside: jobs.lib.threat-field; caught the chance a walk away from it is caught, nil the prior),
-  kill the body. body as threat-answers, with answer-price's. An answer {:damage :hit :caught}: its blows-chance."
-  [body {:keys [damage spawns] :as route}]
-  (if damage
-    (blows-chance body route)
-    (let [spawn-dies (if (pos? (or spawns 0)) (spawns-chance body spawns (or (:at route) (first (:cells route))) (:spawn-kill route)) 0)]
-      (- 1 (* (- 1 spawn-dies) (- 1 (:chance (route-parts body route))))))))
+  "The :chance of route-death; of an answer {:damage :hit :caught}, its blows-chance."
+  [body {:keys [damage] :as route}]
+  (if damage (blows-chance body route) (:chance (route-death body route))))
 
 (defn lethal-hp
-  "The hp a death chance of body at `at` weighs beside the hp it risks: chance x death/death-cost, at the hp-seconds setting an hp."
-  [body chance at]
-  (/ (* chance (death/death-cost body at)) (health/walk-hp-seconds)))
+  "The hp a death {:chance :death} (route-death's) weighs beside the hp it risks: chance x death, at the hp-seconds
+  setting an hp."
+  [{:keys [chance death]}]
+  (if (pos? chance) (/ (* chance death) (health/walk-hp-seconds)) 0))
 
 (defn route-death-cost
-  "What a route adds to its cost for the death it risks: death-chance x death/death-cost at `at` (where it would die)."
+  "What a route adds to its cost for the death it risks at `at` (where it would die): route-death's chance x death."
   [body route at]
-  (* (death-chance body (assoc route :at at)) (death/death-cost body at)))
+  (let [{:keys [chance death]} (route-death body (assoc route :at at))]
+    (if (pos? chance) (* chance death) 0)))
