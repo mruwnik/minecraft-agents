@@ -30,6 +30,7 @@
    :blocks [[:fill [3 0 6] [46 1 6] "air"]]
    :act [[:job (jobs.items.obtain {:item "raw_iron" :count 1 :ways #{:craft :smelt :gather}
                                    :settings {:jobs.lib.child/max-fruitless 1}})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 300 :of-job true}
+   :expect [{:event {:source :job :kind :obtain.gathering :data {:item "raw_iron"}} :within-s 120 :of-job true}
+            {:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 300 :of-job true}
             {:no-event {:source :job :kind :obtain.strip-on} :for-s 300 :until {:source :job :kind :stopped}}]
    :after [[:item "raw_iron" [:= 0]]]}]}
