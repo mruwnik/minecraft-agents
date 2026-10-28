@@ -23,6 +23,7 @@
             [jobs.lib.goal :as goal]
             [jobs.survival.respond.doors :as doors]
             [jobs.survival.respond.options :as options]
+            [jobs.survival.respond.state :as state]
             [jobs.survival.shut-in :as shut-in]
             [jobs.survival.dig-pit :as dig-pit]
             [jobs.lib.shelter.inside :as sh-inside]
@@ -250,15 +251,18 @@
 
 (defn cover-specs
   "{way cover} of shutting the body in against near by each way shut-in/covers finds possible here (the seconds a side
-  stays open, the quote, the hide-out's quiet). The open doors of the closed (or not yet all seen) room the body stands in, when the flight would shut one (sealing, respond.doors/sealing-doors), are the cover :door (shut-in/door-cover), done by the flight's own door step.
+  stays open, the quote, the hide-out's quiet), and :pillar the pillar up (options/pillar-cover) while not tried this
+  flight. The open doors of the closed (or not yet all seen) room the body stands in, when the flight would shut one (sealing, respond.doors/sealing-doors), are the cover :door (shut-in/door-cover), done by the flight's own door step.
   None with a creeper near (cost/cover-answer: its blast takes the walls), so its quotes are not asked for: they take
   seconds the fuse does not leave."
   [c near sealing]
   (when-not (some combat/creeper? near)
-    (cond-> (let [cs (shut-in/covers c cover-ways)]
-              (when-not (:pit cs) (ctx/emit! c :hostile.pit-dropped :debug {:why (dig-pit/why-not c)}))
-              cs)
-      sealing (assoc :door (shut-in/door-cover c (:n sealing) (map #(.-name %) near) (:unseen? sealing))))))
+    (let [cs (options/covers c cover-ways)
+          pillar (when-not (state/tried? c :pillar) (options/pillar-cover c near))]
+      (when-not (:pit cs) (ctx/emit! c :hostile.pit-dropped :debug {:why (dig-pit/why-not c)}))
+      (cond-> cs
+        pillar (assoc :pillar pillar)
+        sealing (assoc :door (shut-in/door-cover c (:n sealing) (map #(.-name %) near) (:unseen? sealing)))))))
 
 (defn cover-answers
   "{way answer} of the covers specs (cover-specs) against mobs [hostile/mob-near's] wearing equipment (cost/cover-answer:
@@ -360,12 +364,12 @@
         _ (ctx/update-mem! c assoc :hits hits :last-health (.-health self) :last-at (ctx/now c))
         felt (walk-felt c)
         target (when-not (some combat/enderman? near) (first (hostile/fought near)))
-        caught (when-not (some combat/enderman? near) (await (cover/caught-chance! c)))
+        sealing (when-not (some #(or (combat/creeper? %) (combat/enderman? %)) near) (doors/sealing-doors c near))
+        specs (when-not (some combat/enderman? near) (cover-specs c near sealing))
+        caught (when-not (some combat/enderman? near) (await (cover/caught-chance! c specs)))
         fight (when-not (some combat/enderman? near) (hostile/fight-answer c near #(struck-of c %) (when target (await (pick/quote! c (hostile/fight-walk-args p target)))) caught))
         walk (when-not (some combat/enderman? near) (hostile/flee-answer c near fight felt caught))
         then (or (:then walk) (when fight [fight]))
-        sealing (when-not (some #(or (combat/creeper? %) (combat/enderman? %)) near) (doors/sealing-doors c near))
-        specs (when-not (some combat/enderman? near) (cover-specs c near sealing))
         equipment (cost/equipment-of (.-equipment self))
         covers (cover-answers equipment (mapv #(hostile/mob-near p %) near) then fight specs)
         now (merge covers {:fight fight :flee walk})

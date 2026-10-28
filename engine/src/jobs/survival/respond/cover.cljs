@@ -143,10 +143,10 @@
 
 (defn dead-end-covers
   "The covers a dead end of the flee search is priced with (respond.goal/judge!): the cornered step's where the body
-  stands (cornered-covers, against the hostiles it weighs), built when the search first meets a dead end. Not home: the
-  dead end lies away from it."
-  [c]
-  (fn [] (cornered/cornered-covers c (cornered/near-hostiles c) false)))
+  stands (cornered-covers, against the hostiles it weighs, from the ways' specs when given), built when the search
+  first meets a dead end. Not home: the dead end lies away from it."
+  ([c] (dead-end-covers c nil))
+  ([c specs] (fn [] (cornered/cornered-covers c (cornered/near-hostiles c) false specs))))
 
 (defn ^:async judge!
   "The flight's goal, homes (homes) and flee search (respond.goal/judge!) after a glance along the way away
@@ -163,8 +163,10 @@
   flee-search/way-up-chance, no search), else its search (respond.goal/judge! over homes), choose options
   (respond.goal/choose-opts) and cells looked at (memory :glanced), no glance taken; :way-scan the way counts it priced
   with (wworld/way-scan, for jobs.lib.walk.way-log). Kept (memory :caught-chance) for a
-  flee step's seconds (flee-search ::step-s) while its cell, its looks, its chasers and its stair up stay the same."
-  [c]
+  flee step's seconds (flee-search ::step-s) while its cell, its looks, its chasers and its stair up stay the same.
+  specs: the covers' specs the decision priced, its dead ends' covers (dead-end-covers)."
+  ([c] (await (caught-chance! c nil)))
+  ([c specs]
   (let [p (:primitives c)
         now (ctx/now c)
         {:keys [glanced] kept :caught-chance :as mem} (ctx/mem c)
@@ -178,11 +180,11 @@
             chance (if up
                      (search/way-up-chance counts)
                      (let [covered? (cover-fn p threats (flight/fire-spots c))
-                           judged (await (respond.goal/judge! c (homes c (:rooms (survey c threats false)) (seq (blast p threats))) covered? (dead-end-covers c)))]
+                           judged (await (respond.goal/judge! c (homes c (:rooms (survey c threats false)) (seq (blast p threats))) covered? (dead-end-covers c specs)))]
                        (search/caught-chance (:ends judged) counts (respond.goal/choose-opts c threats covered? (:home judged)) glanced)))
             chance (cond-> chance (and chance scan) (assoc :way-scan scan))]
         (ctx/update-mem! c assoc :caught-chance {:in in :t now :chance chance})
-        chance))))
+        chance)))))
 
 (defn ^:async look-ahead!
   "judged again (respond.goal/judge! over its :homes) after a look at the first unseen cells of its routes not looked at

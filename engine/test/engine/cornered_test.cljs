@@ -20,6 +20,7 @@
             [engine.triggers :as triggers]
             [jobs.survival.respond-flight :as retreat]
             [jobs.survival.respond.options :as cornered]
+            [jobs.survival.shut-in :as shut-in]
             [jobs.survival.respond-choose :as choose]
             [jobs.survival.respond.cornered :as pick]
             [jobs.lib.shot :as shot]
@@ -949,6 +950,17 @@
                                    (fn ^:async r [] (await (hidden-round retreat (doorway-zombies 4) 1000 (constantly nil))))))]
           (is (= "jumpPlace" (first-of p #{"attack" "jumpPlace"})) "four zombies outfight an axe: a second of pillar costs fewer blows"))))))
 
+(deftest the-first-decision-against-zombies-it-cannot-beat-prices-the-pillar-and-takes-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen]} (await (settings/with-settings seldom-refused
+                                        (fn ^:async r [] (await (hidden-round '(jobs.survival.respond-to-hostile) (doorway-zombies 4) 1000 (constantly nil))))))
+              decided (first (filter #(= :hostile.decided (:kind %)) @seen))]
+          (is (contains? (:prices decided) :pillar) (pr-str (:prices decided)))
+          (is (= :pillar (:cover decided)) "no second decision before the pillar")
+          (is (= "jumpPlace" (first-of p #{"attack" "jumpPlace" "place"}))))))))
+
 (deftest a-pillar-refused-for-a-zombie-in-its-cell-is-priced-dearer-at-the-next-decision
   (async done
     (tu/run-async done
@@ -1789,6 +1801,24 @@
                 ctx/update-mem! (fn [c f & args] (apply swap! (:mem c) f args))
                 ctx/latest (constantly nil)]
     (f)))
+
+(deftest the-covers-are-priced-once-while-what-they-read-stays
+  (let [m (atom {})
+        p (tu/fake-on-floor {:blocks dead-end :inventory [{:name "dirt" :count 20}] :entities [(zombie 3 64 0)]})
+        c (assoc (stub-ctx p m) :view (constantly {:now 1000 :data {}}))
+        asked (atom [])
+        covers shut-in/covers]
+    (with-redefs [shut-in/covers (fn ([c] (covers c)) ([c ways] (swap! asked conj (vec ways)) (covers c ways)))]
+      (with-stub-mem
+        (fn []
+          (let [first-walls (cornered/covers c [:walls :pit :pocket])]
+            (is (= first-walls (cornered/covers c [:walls :pit :pocket])))
+            (cornered/covers c [:walls])
+            (is (= [[:walls :pit :pocket]] @asked) "asked once: the answers, the dead end and the cornered step share them")
+            (swap! (fake/state p) assoc :entities [])
+            (fake/add-entity! p (zombie 2 64 0))
+            (cornered/covers c [:walls])
+            (is (= [[:walls :pit :pocket] [:walls]] @asked) "a hostile came nearer: priced again")))))))
 
 (deftest a-flight-ends-without-the-plug-it-had-under-way
   (let [m (atom {:plugging {:at {:x 0 :y 64 :z 0} :option :plug :ways #{:walls}}})

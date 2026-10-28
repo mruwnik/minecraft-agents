@@ -91,6 +91,18 @@
      :per per
      :look! #(doseq [yaw [0 90 180 270]] (swap! (fake/state raw) assoc :yaw yaw) (rays/pass! per))}))
 
+(deftest a-walkers-field-and-its-steps-over-an-extent-are-one-walk
+  (let [{:keys [c look!]} (seen-body {:blocks pen})
+        zombie {:mob "zombie" :pos {:x 20.5 :y 64 :z 0.5}}
+        steps (fn [f] (into {} (map vec) (es6-iterator-seq (.entries ^js (:steps f)))))]
+    (look!)
+    (let [f (field/field-of c zombie)
+          e (field/field-of c (assoc zombie :extent 35))]
+      (is (= 1 (.-size (.-fields ^js (.get field/memories (:primitives c))))) "the walk is kept once, for both")
+      (is (= (steps (field/field (:primitives c) zombie)) (steps f)) "the field as its own walk gives it")
+      (is (= (steps (field/field (:primitives c) (assoc zombie :extent 35))) (steps e)) "the steps over the extent as their own walk gives them")
+      (is (< (.-size (:steps f)) (.-size (:steps e))) "the extent walks farther"))))
+
 (deftest a-water-mobs-field-follows-the-water-the-body-sees
   (let [pool (into {} (for [x (range 8 11) z (range -1 2)] [(str x ",63," z) "water"]))
         {:keys [c look!]} (seen-body {:blocks pool})

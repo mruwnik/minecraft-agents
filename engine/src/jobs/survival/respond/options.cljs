@@ -13,6 +13,10 @@
             [jobs.lib.cost.danger :as cost-danger]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.block-sets :as bs]
+            [jobs.lib.check-cache :as check-cache]
+            [jobs.lib.memory-age :as memory-age]
+            [engine.perception.rays :as rays]
+            [jobs.lib.seal :as seal]
             [jobs.lib.escape :as escape]
             [jobs.lib.hostile-fight :as hostile]
             [jobs.lib.look :as look]
@@ -205,12 +209,44 @@
       {:open-s (if (some combat/ranged? hostiles) seconds s) :seconds seconds
        :fails (wall-in/mob-fails (flight/with-seen-fails c :pillar (settings/get settings ::pillar-mob-fails)) (wall-in/beside? c 1))})))
 
+(defn covers-in
+  "What shut-in/covers reads past the ways: the body's feet cell, the cells the hostiles near fill and their kinds, its
+  inventory, the options tried, the args the ways take and the remembered and raw world (their change counters)."
+  [c]
+  (let [p (:primitives c)
+        hs (danger-q/known-hostiles p (danger-q/hostile-radius) {})]
+    {:feet (sh-sense/feet p)
+     :mobs (set (mapcat #(seal/hitbox-cells (danger-q/mob-pos p %)) hs))
+     :kinds (sort (map #(.-name %) hs))
+     :items (mapv (juxt :name :count) (u/inventory p))
+     :tried (:tried (ctx/mem c))
+     :args (select-keys (:args c) [:for :ignore-zones? :trespass? :on-lava])
+     :memory (some-> (aget p "perception") :st memory-age/epoch)
+     :epoch (some-> (look/raw-of p) rays/epoch-of)}))
+
+(defn covers
+  "shut-in/covers of ways where the body stands, each way's kept (memory ::covers) for check-cache/ttl-ms while what
+  they read stays the same (covers-in): one decision prices them once for its answers, its flee search's dead end and
+  its cornered step."
+  [c ways]
+  (let [in (covers-in c)
+        now (ctx/now c)
+        kept (::covers (ctx/mem c))
+        kept (if (and (= in (:in kept)) (<= 0 (- now (:t kept)) (check-cache/ttl-ms))) kept {:in in :t now :asked #{} :v {}})
+        missing (remove (:asked kept) ways)
+        kept (cond-> kept (seq missing) (-> (update :v merge (shut-in/covers c missing)) (update :asked into missing)))]
+    (when (seq missing) (ctx/update-mem! c assoc ::covers kept))
+    (select-keys (:v kept) ways)))
+
 (defn cornered-covers
   "{option cover} of the cornered options not yet tried that shut the body in or lift it: :plug the walls, :plug-dig
-  the cheaper of a pit and a pocket (none at home), :pillar (pillar-cover)."
-  [c hostiles home?]
+  the cheaper of a pit and a pocket (none at home), :pillar (pillar-cover). given: the ways' covers to read them from
+  (default covers) and the pillar's (respond-to-hostile/cover-specs)."
+  ([c hostiles home?] (cornered-covers c hostiles home? nil))
+  ([c hostiles home? given]
   (let [open? #(not (flight/tried? c %))
-        specs (shut-in/covers c (mapcat (fn [[option ways]] (when (and (open? option) (not (and home? (= :plug-dig option)))) ways)) cover-options))
+        ways (mapcat (fn [[option ways]] (when (and (open? option) (not (and home? (= :plug-dig option)))) ways)) cover-options)
+        specs (if given (select-keys given ways) (covers c ways))
         equipment (cost/equipment-of (.-equipment (.self (:primitives c))))
         mobs (mapv #(hostile/mob-near (:primitives c) %) hostiles)
         body (hostile/body-of c)
@@ -219,11 +255,11 @@
         death (delay (cost/death-price body (hostile/again-answers c hostiles) at))
         price #(cost/answer-price* body (answer %) at @death)
         cheaper (fn [ways] (some->> (keep specs ways) seq (apply min-key price)))
-        pillar (when (open? :pillar) (pillar-cover c hostiles))]
+        pillar (when (open? :pillar) (if given (:pillar given) (pillar-cover c hostiles)))]
     (cond-> {}
       (cheaper (:plug cover-options)) (assoc :plug (cheaper (:plug cover-options)))
       (cheaper (:plug-dig cover-options)) (assoc :plug-dig (cheaper (:plug-dig cover-options)))
-      pillar (assoc :pillar pillar))))
+      pillar (assoc :pillar pillar)))))
 
 (defn cornered-answers
   "{option answer} of the cornered options open to the body against hostiles: :fight, the covers (cornered-covers) and,
