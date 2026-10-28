@@ -320,19 +320,28 @@
   (decayDamage [s x y z h]
     (.dropDamage s 1 (.fallScan s x (dec y) z (+ (* y 16) h) true)))
 
+  ;; the hp of the fall a body hanging in a lone climbable cell at x y z takes (fallScan): no player holds on without
+  ;; sneaking, it slides out of the cell. A climbable below is a column, gone on down by climb moves: 0
+  (hangDamage [s x y z]
+    (if ^boolean (.climbHere s x (dec y) z)
+      0
+      (.dropDamage s 1 (.fallScan s x (dec y) z (* y 16) false))))
+
   ;; standH plus what arriving there costs (enter-risk, enter-slow, enter-extra); -1 when not standable. Leaves that decay
   ;; under the feet cost their whole fall as damage: no log holds them, they go at any random tick. A body falls once, so
-  ;; only the first stand of a run of such leaves (src-decays: the cell the move leaves stands on them too) costs it.
+  ;; only the first stand of a run of such leaves (src-decays: the cell the move leaves stands on them too) costs it. A hang
+  ;; in a lone climbable cell costs the fall out of it (hangDamage).
   (landing [s x y z]
     (let [h (.standH s x y z)]
       (if (neg? h)
         -1
         (let [hz (aget (.-tbl-hazard s) (.-support s))
               leaf (== (aget (.-tbl-dripleaf s) (.-support s)) 1)
-              decay (if (and (== (aget (.-tbl-decays s) (.-support s)) 1) (not ^boolean (.-src-decays s))) (.decayDamage s x y z h) 0)]
+              decay (if (and (== (aget (.-tbl-decays s) (.-support s)) 1) (not ^boolean (.-src-decays s))) (.decayDamage s x y z h) 0)
+              hang (if (and (pos? (aget (.-tbl-climb s) (.-support s))) (== (.-support s) (.stateAt s x y z))) (.hangDamage s x y z) 0)]
           (set! (.-enter-risk s) (+ (.-touch s) (if (== hz DAMAGE-STAND) 1 0) (if ^boolean (.lavaNear s x y z) LAVA-ADJACENT 0)
-                              (if leaf (.-c-dripleaf-risk s) 0) (.besideMagma s x y z) decay))
-          (set! (.-enter-dmg s) (+ (.-touch s) (if (== hz DAMAGE-STAND) 1 0) decay))
+                              (if leaf (.-c-dripleaf-risk s) 0) (.besideMagma s x y z) decay hang))
+          (set! (.-enter-dmg s) (+ (.-touch s) (if (== hz DAMAGE-STAND) 1 0) decay hang))
           (set! (.-enter-slow s) (if (== hz SLOW) 1 0))
           (set! (.-enter-extra s) (if leaf (.-c-dripleaf s) 0))
           h)))))

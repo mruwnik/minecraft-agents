@@ -271,3 +271,12 @@
     down-query :south 4 #"ladder down"
     up-query :south 8 #"ladder up"
     down-query :south 8 #"ladder down"))
+
+;; a body caught by a vine holds on only sneaking: it slides out of a lone vine cell and falls
+(deftest a-lone-vine-cell-costs-the-fall-out-of-it
+  (let [vines (fn [low] (world {:fill [[0 64 2 1 72 2 "stone"] [2 low 1 2 70 1 "stone"] [2 low 2 2 70 2 "vine" {:north "true"}]]}))
+        to-vine #(run5 % {:x 1 :y 73 :z 2} (near 2 70 2 1) {})]
+    (is (= "found" (verdict (to-vine (vines 64)))))
+    (is (zero? (:damage (cost (to-vine (vines 64))))) "a vine down to the ground")
+    (is (= "found" (verdict (to-vine (vines 70)))))
+    (is (pos? (:damage (cost (to-vine (vines 70))))) "a lone vine cell over 6 blocks of air")))
