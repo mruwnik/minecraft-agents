@@ -36,4 +36,4 @@
   (:off-plan on a long drop, :needs-health: too costly to walk). The run digs toward other ore or tunnels instead."
   [e]
   (boolean (or (permanent-walk? e)
-               (and (map? e) (not= :done (:kind e)) (contains? #{:off-plan :needs-health} (why e))))))
+               (and (map? e) (not= :done (:kind e)) (contains? #{:off-plan :needs-health :damage-budget} (why e))))))

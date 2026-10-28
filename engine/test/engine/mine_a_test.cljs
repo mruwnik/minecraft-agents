@@ -594,33 +594,27 @@
               e (done-event s)]
           (is (= [:stopped 0] ((juxt :status :got) e)))
           (is (= [[6 63 0]] (:unreached e)))
-          (is (= :needs-health (get-in e [:because :cause :why])))
+          (is (= :damage-budget (get-in e [:because :cause :why])) "at full health: healing cannot help")
           (is (< (get-in e [:because :data :hp-budget]) (get-in e [:because :data :hp-cost])))
           (is (empty? (filter #(re-find #"stuck on drop" %) (walk-texts s))))
           (is (= "iron_ore" (block-at s 6 63 0))))))))
 
-(deftest an-open-platform-over-unseen-floor-ends-on-the-drop-it-costs-too-much-health-without-trying-the-unseen-sides
+(deftest an-open-platform-over-unseen-floor-tries-the-unseen-sides-and-ends-on-them-with-or-without-a-cap
+  ;; a look is the way to learn a floor, so the sides are tried whether the budget or a cap refuses the 13 drop; once
+  ;; the floors felt for keep turning out not there it ends on them (:unseen-floors; capped, the last partial walk's
+  ;; :off-plan), never :needs-health at full health
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (drop-to-ore 77 false {}))
-              e (done-event s)]
-          (is (= [:stopped 0] ((juxt :status :got) e)))
-          (is (= :needs-health (get-in e [:because :cause :why])) "the unseen sides at the worse case are not there: the way left is the drop")
-          (is (empty? (events-of s :replan)) "no unseen side was walked to")
-          (is (= [0 77 0] (feet s))))))))
-
-(deftest an-open-platform-whose-drop-the-cap-refuses-tries-the-unseen-sides-and-learns-their-floors-absent
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (await (drop-to-ore 77 false {:jobs.lib.walk.world/max-damage 0}))
-              e (done-event s)
-              learned (mapcat :learned (events-of s :replan))]
-          (is (= [:stopped 0] ((juxt :status :got) e)))
-          (is (not= :needs-health (get-in e [:because :cause :why])) "healing does not lift the cap")
-          (is (seq learned))
-          (is (every? (fn [[x y z]] (and (contains? #{nil "air"} (block-at s x y z)) (or (< x -4) (> (js/Math.abs z) 4)))) learned) "every floor learned absent is air off the platform's unseen sides"))))))
+        (doseq [[settings why] [[{} :unseen-floors] [{:jobs.lib.walk.world/max-damage 0} :off-plan]]]
+          (let [s (await (drop-to-ore 77 false settings))
+                e (done-event s)
+                learned (mapcat :learned (events-of s :replan))]
+            (is (= [:stopped 0] ((juxt :status :got) e)) (pr-str settings))
+            (is (= why (get-in e [:because :cause :why])) (pr-str settings (get-in e [:because :cause])))
+            (is (seq learned) (pr-str settings))
+            (is (every? (fn [[x y z]] (contains? #{nil "air"} (block-at s x y z))) learned)
+                (str (pr-str settings) ": every floor learned absent is air"))))))))
 
 (deftest a-drop-of-five-blocks-to-a-seen-ore-is-taken
   (async done

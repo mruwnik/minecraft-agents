@@ -113,7 +113,7 @@
 
 (defn give-up-words
   "The give-up reason in words, for the :text of the result: no map dumps."
-  [pos {:keys [why kind detail escalation shut-in nearest-hostile nearest-hostile-at resets-spent jumps mob mob-distance explored walks void-guess torches waypoint-why heal hp-cost hp-budget hungry-food low-passage dip rise route straight in-water goal-left damage-refused]}]
+  [pos {:keys [why kind detail escalation shut-in nearest-hostile nearest-hostile-at resets-spent jumps mob mob-distance explored walks torches waypoint-why hp-cost hp-budget hungry-food low-passage dip rise route straight in-water goal-left damage-refused]}]
   (str "gave up walking to " (if (map? pos) (let [{:keys [x y z]} pos] [x y z]) pos) ": "
        (if (and escalation (not (#{:way-dives :detour} why)))
          (str (if (:into escalation) "the goal is walled in; " "shut in here; ") (escalation-words escalation))
@@ -131,9 +131,7 @@
            :out-of-sight "no stand within range that sees the block (:see) is reachable from here"
            :goal-unloaded "the goal lies in land that is not loaded and the loaded land leads no nearer"
            :no-progress "the walk ended no nearer"
-           :explore-spent (if void-guess
-                            "the column is seen open below the feet deeper than the body may drop, with no ground in view: a walk round for ground no one has seen is worth nothing"
-                            (str "walked " explored " blocks in " walks " walks to the edge of loaded land without coming nearer: more than the goal is worth (the tour-worth setting)"))
+           :explore-spent (str "walked " explored " blocks in " walks " walks to the edge of loaded land without coming nearer: more than the goal is worth (the tour-worth setting)")
            :stuck (str "the body got stuck" (some->> kind name (str " on ")) (some->> detail (str ": ")))
            :off-plan (or detail "the walk left its plan")
            :steer-failed (str "steering failed" (some->> detail (str ": ")))
@@ -142,7 +140,8 @@
            :moved-while-searching (str "the body was pushed about while the path was searched" (when in-water ": it is in water, which moves it; get onto dry land first"))
            :needs-health (str "a way exists but costs " hp-cost " hp, more than the " hp-budget " hp the body may spend"
                            (when hungry-food (str " (hunger sets that: losing more would make it hungry at food " hungry-food ")"))
-                           (if (= :full heal) " at full health (healing cannot help; only a :floor {:health 1} or less, or a lower :floor :health, lets it go)" ", and it cannot heal first"))
+                           ", and it cannot heal first")
+           :damage-budget (str "the only way costs " hp-cost " hp, more than the " hp-budget " hp the body may spend at full health: healing cannot help; only a :floor {:health 1} or less, or a lower :floor :health, lets it go")
            :budget (if (and goal-left (<= goal-left (tuning/budget-near)))
                      (str "the search used up its node budget without reaching the goal " goal-left " blocks away: no way through the blocks seen round it was found, it is walled in, so a block must be dug or the way in looked at (the unknown-max-nodes setting bounds the search)")
                      "the search used up its node budget without reaching the goal, mostly over land the body has not seen (the unknown-max-nodes setting): walk nearer in stages to see more of it")

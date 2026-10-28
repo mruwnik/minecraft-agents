@@ -1,9 +1,9 @@
-;; Card 3b801cdb: a stone block y 0..12 fills x 6..13, z 6..13 with no walls round it (feet y 13 on top), the goal on the floor east of it
-;; at x 17. The body first stands on the floor east of the goal, looking at the floor and then up the block's face, so the drop's
-;; landing and the air over it are seen, then is set on top looking down at its east half: the only way over
-;; seen floors is the 13 drop (10 hp), over the 7 hp budget at full health; the block's other sides drop to floors it has not seen.
-;; Unseen floors take the worse case (not there), so the walk ends :needs-health at once, walking to none of the unseen sides; with
-;; :spend {:health 0} (a cap healing does not lift) it tries them instead and learns their floors absent.
+;; Card 3b801cdb, a8918aec: a stone block y 0..12 fills x 6..13, z 6..13 with no walls round it (feet y 13 on top), the goal on
+;; the floor east of it at x 17. The body first stands on the floor east of the goal, looking at the floor and then up the block's
+;; face, so the drop's landing and the air over it are seen, then is set on top looking down at its east half: the only way
+;; over seen floors is the 13 drop (10 hp), over the 7 hp budget at full health; the block's other sides drop to floors it has not
+;; seen. A look is the way to learn a floor, so the walk tries the unseen sides and learns them absent, with the budget or a cap
+;; (:spend {:health 0}) alike, and ends without arriving, never :needs-health at full health (healing cannot help).
 {:defaults
  {:tags [:movement]
   :time :any
@@ -12,12 +12,14 @@
   :body {:at [22.5 0 9.5] :yaw 90 :pitch 20 :settle-s 3}
   :limit-s 150}
  :cases
- [{:name "over-budget-drop-off-an-open-platform-ends-needs-health-without-trying-the-unseen-sides"
+ [{:name "over-budget-drop-off-an-open-platform-tries-the-unseen-sides-and-never-ends-needs-health"
    :act [[:rcon "execute positioned $X $Y $Z run tp $BODY ~22 ~ ~9 90 -40"] [:wait-s 3] [:rcon "execute positioned $X $Y $Z run tp $BODY ~9 ~13 ~9 270 40"] [:wait-s 3]
          [:job (jobs.movement.go-to {:pos #at [17 0 9] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :stopped :data {:arrived false :why :needs-health :heal :full}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :replan} :for-s 40 :until {:source :job :kind #{:completed :stopped}}}]
-   :after [[:body-near [9.5 13 9.5] 3]]}
+   :expect [{:event {:source :job :kind :replan} :within-s 60 :of-job true}
+            {:event {:source :job :kind :stopped :data {:arrived false}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:why :needs-health}} :for-s 140 :until {:source :job :kind #{:completed :stopped}}}
+            {:no-event {:source :body :kind :hurt} :for-s 140 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:body-far [17.5 0 9.5] 4]]}
   {:name "capped-drop-off-an-open-platform-tries-the-unseen-sides"
    :act [[:rcon "execute positioned $X $Y $Z run tp $BODY ~22 ~ ~9 90 -40"] [:wait-s 3] [:rcon "execute positioned $X $Y $Z run tp $BODY ~9 ~13 ~9 270 40"] [:wait-s 3]
          [:job (jobs.movement.go-to {:pos #at [17 0 9] :range 1 :ways #{:walk :clear-seal} :spend {:health 0}})]]

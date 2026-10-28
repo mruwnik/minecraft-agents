@@ -290,7 +290,7 @@
       (some? pos) (let [walked (await (walk-to-dig! c pos))
                         cell (access/cell pos)
                         cut (when (and (= :blocked walked) (not (mw/stay-level? (:args c))) (cut-after? (near/last-walk c))
-                                       (not (#{:off-plan :needs-health} (result/why (near/last-walk c))))
+                                       (not (#{:off-plan :needs-health :damage-budget} (result/why (near/last-walk c))))
                                        (not (contains? (:target-cut (ctx/mem c)) cell)))
                               (let [r (await (cut-to-drop! c cell (worth c (count (targets/cluster-of pos targets)))))]
                                 (ctx/emit! c :mine.cut-toward :info {:pos cell :result r :text (str "mine cuts toward " (str/join "," cell) ": " (or (some-> r name) "no way"))})

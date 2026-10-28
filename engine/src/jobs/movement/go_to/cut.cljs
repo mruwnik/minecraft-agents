@@ -10,7 +10,7 @@
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.lib.walk.world :as wworld]
-            [jobs.movement.go-to.aim :refer [here? void-guess?]]
+            [jobs.movement.go-to.aim :refer [here?]]
             [jobs.movement.go-to.tuning :refer [max-cut-restarts cut-progress send-back-margin]]))
 
 (def approaches
@@ -108,10 +108,9 @@
 
 (defn tour-spent?
   "Whether the tour so far (tour) costs more than its goal is worth: cost/tour-worth of the goal's
-  straight blocks at the call's start and the caller's :worth (the setting ::tour-worth of jobs.lib.cost.value, when set); the settings there price the tour.
-  A column guessed under a void (aim/void-guess?) is worth no tour: no seen cell says there is ground to walk round to."
+  straight blocks at the call's start and the caller's :worth (the setting ::tour-worth of jobs.lib.cost.value, when set); the settings there price the tour."
   [c]
-  (> (:cost (cost/tour-cost (tour c))) (if (void-guess? c) 0 (cost/tour-worth (:detour-from (ctx/mem c) 0) (:worth (:args c))))))
+  (> (:cost (cost/tour-cost (tour c))) (cost/tour-worth (:detour-from (ctx/mem c) 0) (:worth (:args c)))))
 
 (defn ^:async start-attempt!
   "Begin a call from the world, with memory as a hint: the counters of an earlier call (cut, or ended :continue) start

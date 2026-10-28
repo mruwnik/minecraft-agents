@@ -441,14 +441,28 @@
     (is (nil? (column/waypoint (kinds/seen-kind-at (hiding land (fn [[x _ _]] (> x 0)))) 60 0 [0 64 0]))
         "nothing seen ahead: no waypoint, never the unseen ground")))
 
-(deftest a-column-guessed-under-a-void-past-the-rim-ends-at-the-rim
-  ;; the land ends at x 40: the column at x 44 is seen open far below the rim, its ground never in view, so a walk round
-  ;; the rim for ground no one has seen is worth nothing
+(deftest a-column-over-a-void-past-the-rim-ends-when-the-rim-tour-costs-more-than-it-is-worth
+  ;; the land ends at x 40: the column at x 44 is seen open far below the rim, its ground never in view; every plan round
+  ;; the rim rests on floors not seen, so the tour's price ends it
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p]} (await (go! {:floor [-30 -10 40 10] :light [15 0] :self {:pos {:x 34 :y 64 :z 0}}}
+        (let [{:keys [out]} (await (go! {:floor [-30 -10 40 10] :light [15 0] :self {:pos {:x 34 :y 64 :z 0}}}
+                                        {:pos {:x 44 :z 0} :range 2 :settings {:jobs.movement.go-to.tuning/goal-danger :end}}))]
+          (is (= {:arrived false :why :explore-spent} (select-keys @out [:arrived :why])) (pr-str @out))
+          (is (< (:explored @out) 200) "about the tour's worth (96 blocks of walk and a trip); with no check of found plans it tours about 380"))))))
+
+(deftest a-column-over-a-ravine-reached-by-a-ramp-that-first-leads-away-is-arrived-at
+  ;; the ravine past the rim at x 40 is 24 deep, its floor out of sight; the body has seen the void round the land and the air over the ravine but by the column; a 2-wide ramp down its west wall leads 24 blocks away from the column (x 44 z 0) before its foot, from
+  ;; where the floor leads back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ramp (into {} (for [k (range 24) x [41 42] y (range 40 (- 64 k))] [(str x "," y "," (- -1 k)) "stone"]))
+              {:keys [out p]} (await (go! {:floor [-30 -10 40 10] :light [15 0] :seen [[-31 20 -31 40 70 16] [41 40 -30 51 70 -3] [41 40 3 51 70 16] [46 40 -2 51 70 2] [41 40 -2 42 70 -1]] :self {:pos {:x 34 :y 64 :z 0}}
+                                           :blocks (merge (box 41 39 -30 50 39 10 "stone") ramp)}
                                           {:pos {:x 44 :z 0} :range 2 :settings {:jobs.movement.go-to.tuning/goal-danger :end}}))
-              [x _ z] (at p)]
-          (is (= {:arrived false :why :explore-spent :void-guess true} (select-keys @out [:arrived :why :void-guess])) (pr-str @out))
-          (is (<= (js/Math.hypot (- 44 x) z) column/approach-range) (str "no tour of the rim: at " (at p))))))))
+              [x y z] (at p)]
+          (is (:arrived @out) (pr-str @out))
+          (is (= 40 (js/Math.floor y)) (str "on the ravine floor: at " (at p)))
+          (is (<= (js/Math.hypot (- 44 x) z) 2) (str "at " (at p))))))))

@@ -946,7 +946,7 @@
         (let [{:keys [out]} (await (run-go-to {:self {:pos {:x -6.5 :y 60 :z 0.5}} :exact-eye true :bodyHitbox true
                                                :blocks (slime-pit {[1 0] "slime_block"})}
                                               {:pos [1 56 0] :range 0 :ways #{:walk :clear-seal} :floor {:health 20}}))]
-          (is (= [:needs-health :unreachable] ((juxt :why :reason) out)) (pr-str out)))))))
+          (is (= [:damage-budget :unreachable] ((juxt :why :reason) out)) (pr-str out)))))))
 
 (def glass-shaft
   "slime-pit with one slime block at [1 0] and every other pit cell glass from the floor up to the surface: a 1x1 shaft whose walls the body sees through the glass."
@@ -969,7 +969,7 @@
         (let [{:keys [out]} (await (run-go-to {:self {:pos {:x -6.5 :y 60 :z 0.5}} :exact-eye true :bodyHitbox true
                                                :blocks (slime-pit {})}
                                               {:pos [1 56 0] :range 0 :ways #{:walk :clear-seal} :floor {:health 20}}))]
-          (is (= [:needs-health :unreachable] ((juxt :why :reason) out)) (pr-str out)))))))
+          (is (= [:damage-budget :unreachable] ((juxt :why :reason) out)) (pr-str out)))))))
 
 (def probed (atom nil))
 
@@ -1010,7 +1010,7 @@
       (fn ^:async t []
         (let [{:keys [out]} (await (run-go-to {:self {:pos {:x -6.5 :y 60 :z 0.5}} :exact-eye true :bodyHitbox true :blocks (cliff-foot "stone")}
                                               {:pos [1 54 0] :range 0 :ways #{:walk :clear-seal} :floor {:health 20}}))]
-          (is (= [:needs-health :unreachable] ((juxt :why :reason) out)) (pr-str out)))))))
+          (is (= [:damage-budget :unreachable] ((juxt :why :reason) out)) (pr-str out)))))))
 
 (deftest go-to-takes-a-slime-pad-drop-at-a-cliff-foot-whose-face-is-glass
   (async done

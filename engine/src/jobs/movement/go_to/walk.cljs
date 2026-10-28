@@ -43,7 +43,7 @@
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.watch :as watch]
             [jobs.movement.go-to.air :as air]
-            [jobs.movement.go-to.aim :as aim :refer [aimed here? in-seen-ground? look-along! guess-waypoint look-at-column! look-at-goal-air! hidden-in-ground? lookout pre-aim! sight-end see-cell void-guess?]]
+            [jobs.movement.go-to.aim :as aim :refer [aimed here? in-seen-ground? look-along! guess-waypoint look-at-column! look-at-goal-air! hidden-in-ground? lookout pre-aim! sight-end see-cell]]
             [jobs.movement.go-to.cut :refer [approach-recorder jumped? record tour tour-spent?]]
             [jobs.movement.go-to.detour :as detour]
             [jobs.movement.go-to.escalate-choose :as choose]
@@ -169,20 +169,19 @@
                      (>= (u/dist (peek steps) pos) (dec closest)))
             {:known-end true})))))
 
-(defn void-check
-  "near/walk-round!'s :stair-check: check's why, else {:void-guess true} once the walk toward a column guessed under a void
-  (aim/void-guess?) costs more than its tour is worth (tour-spent?), found plan or not: the planner's ways down end on
-  floors it has not seen."
+(defn tour-check
+  "near/walk-round!'s :stair-check: check's why, else {:tour-spent true} for a plan that rests on floors the body has not
+  seen (:unseen-floor) once the tour so far costs more than it is worth (tour-spent?): such a plan is a tour too, and a
+  found one never meets drive's walk-spent?."
   [c check]
-  (fn [plan first?]
+  (fn [{:keys [steps] :as plan} first?]
     (or (when check (check plan first?))
-        (when (and (void-guess? c) (tour-spent? c)) {:void-guess true}))))
+        (when (and (some :unseen-floor steps) (tour-spent? c)) {:tour-spent true}))))
 
 (defn explore-spent!
-  "Give up :explore-spent with the tour so far (tour), :void-guess true for a column guessed under a void."
+  "Give up :explore-spent with the tour so far (tour)."
   [c pos]
-  (end/give-up! c pos {:status :no-path :reason :explore-spent}
-                (cond-> (update (tour c) :explored js/Math.round) (void-guess? c) (assoc :void-guess true))))
+  (end/give-up! c pos {:status :no-path :reason :explore-spent} (update (tour c) :explored js/Math.round)))
 
 (defn walk-opts
   "The near/walk-round! options of a go-to walk round with doors (the :doors arg as a keyword)."
@@ -458,7 +457,7 @@
             seen-goal? (and (see-cell c) (not (:edge-mode (ctx/mem c))) (not (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))))
             opts (cond-> (assoc (walk-opts c doors) :progress (empty? (:frontier-best (ctx/mem c))))
                    seen-goal? (assoc :explore false))
-            stair-check (health/unseen-check c (void-check c (reprice/check c pos (known-end-check c pos (lookout-check c pos (plan-check c pos (choose/stair-check c pos) (straight-from! c d)))))))
+            stair-check (tour-check c (reprice/check c pos (known-end-check c pos (lookout-check c pos (plan-check c pos (choose/stair-check c pos) (straight-from! c d))))))
             round (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos) :walk-spent? #(tour-spent? c)) pos range (assoc opts :see-cell (see-cell c) :stair-check stair-check)))]
         (if (jumped? c)
           :again
@@ -471,7 +470,7 @@
             surfaced? (when (and (not aided?) (not looked?) (or (= :air (:reason walked)) (air/short-under-water? c status walked pos))) (await (air/surface! c (dissoc opts :progress) pos)))
             way-looked? (when (and (not fetched) (= :goal-not-standable (:reason walked))) (await (look-along! c pos)))
             way (when (and (not fetched) (not way-looked?) (= :goal-not-standable (:reason walked))) (guess-waypoint c pos))
-            col-looked? (when (and (not aided?) (not looked?) (not surfaced?) (not fetched) (not way) (not way-looked?) (not (#{"arrived" "searching"} status)) (not (:unseen-weigh (:why walked))))
+            col-looked? (when (and (not aided?) (not looked?) (not surfaced?) (not fetched) (not way) (not way-looked?) (not (#{"arrived" "searching"} status)))
                           (await (look-at-column! c pos)))
             surveyed? (when (and (:unknown c) (= :exhausted (:reason walked)) (breath/head-under? (:primitives c)) (not (look/surveyed? c :near)))
                         (await (look/survey! c :near))
@@ -502,12 +501,6 @@
           (:learn-spent walked)
           (await (esc/give-up-or-escalate! c pos (max-blocked) status (cond-> {:status :no-path :reason :unseen-floors :cells (:cells walked)} (none-held? c) (assoc :torches :none))))
 
-          (and (= "stair" status) (:unseen-weigh (:why walked)))
-          (let [handled (await (health/weigh-unseen! c pos range))]
-            (if (:needs-health handled)
-              (await (esc/give-up-or-escalate! c pos (max-blocked) status (merge {:status :no-path :reason :needs-health} (select-keys handled [:heal :health :hp-cost :hp-budget :hungry-food]))))
-              :again))
-
           (and (= "stair" status) (:risk (:why walked)))
           (reprice/end c (:risk (:why walked)))
 
@@ -517,7 +510,7 @@
           (and (= "stair" status) (:lookout (:why walked)))
           (do (ctx/update-mem! c assoc :lookout-due true) :again)
 
-          (and (= "stair" status) (:void-guess (:why walked)))
+          (and (= "stair" status) (:tour-spent (:why walked)))
           (explore-spent! c pos)
 
           (and (= "stair" status) (:known-end (:why walked)))
@@ -587,7 +580,7 @@
           :else
           (let [handled (when (health/refused? c result) (await (health/heal-or-drop! c pos range)))]
            (or (when (= :again handled) :again)
-          (let [result (cond-> result (:needs-health handled) (-> (assoc :status :no-path :reason :needs-health) (merge (select-keys handled [:heal :health :hp-cost :hp-budget :hungry-food]))))
+          (let [result (cond-> result (:needs-health handled) (merge (health/budget-end handled)))
                 _ (note-fault! c walked)
                 _ (await (look-at-stuck! c walked))
                 unstuck? (await (unstick/swim-out! c pos walked))

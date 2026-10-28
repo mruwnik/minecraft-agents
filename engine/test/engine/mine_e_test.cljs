@@ -209,7 +209,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [why [:off-plan :needs-health]]
+        (doseq [why [:off-plan :needs-health :damage-budget]]
           (let [stub {:round (fn [c] (ctx/end c :nothing-possible {:reason :unreachable :why why} {:arrived false}))}
                 s (start {:world {:blocks (cells "sand" [15] [64] [-1 0 1 2])} :jobs (assoc registry/jobs 'jobs.movement.go-to stub)})]
             (core/submit! (:eng s) (spec {:block "sand" :count 4 :ways #{:seen}}) {})
