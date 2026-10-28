@@ -1138,7 +1138,7 @@
                         (count (tu/walked-to eng))))
               walks #(settings/with-settings {:jobs.lib.cost.threat/difficulty 3} (fn [] (walks %)))]
           (is (zero? (await (walks 0))) "two shooting: walking away is cheaper, declined, no walk")
-          (is (pos? (await (walks 2))) "fled twice lately: three walks, each caught at the bow prior's arrows at hard's shot rate (cost.caught/prior), cost more than closing on two shooters"))))))
+          (is (pos? (await (walks 3))) "fled three times lately: four walks, each caught at the bow prior's arrows at hard's shot rate (cost.caught/prior), cost more than closing on two shooters at walk-speed 3.2 (fight 1658 s; flee 1630 after two flights, 1706 after three)"))))))
 
 (deftest hostile-near-counts-ranged-mobs-out-to-the-ranged-radius
   (is (holds? {:entities [(skeleton 1 13 0)]} {:radius 8 :ranged-radius 16}) "a skeleton at 13")
