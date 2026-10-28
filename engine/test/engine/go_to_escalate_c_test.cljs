@@ -227,10 +227,10 @@
                                (js/Promise.resolve {:result {:status :jumped} :status "blocked"}))
                            (apply real c to args)))
               {:keys [seen]} (with-redefs [near/walk-round! teleport
-                                           gcut/restart-after-jump! (fn [c]
+                                           gcut/restart-after-jump! (fn [c pos]
                                                                       (swap! jumps inc)
                                                                       (swap! marks conj (:wall-walked (ctx/mem c)))
-                                                                      (real-restart c))]
+                                                                      (real-restart c pos))]
                                (await (run-job! free-by-pocket {:pos [8 64 0] :range 0 :ways #{:walk}})))]
           (is (= [nil] @marks) "the restart finds no :wall-walked from the jumped walk")
           (is (= 2 (count (events-of seen :go-to.wall-walk)))))))))

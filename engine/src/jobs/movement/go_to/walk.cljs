@@ -44,7 +44,7 @@
             [jobs.lib.watch :as watch]
             [jobs.movement.go-to.air :as air]
             [jobs.movement.go-to.aim :as aim :refer [aimed here? in-seen-ground? look-along! guess-waypoint look-at-column! look-at-goal-air! hidden-in-ground? lookout pre-aim! sight-end see-cell]]
-            [jobs.movement.go-to.cut :refer [approach-recorder jumped? record tour tour-spent?]]
+            [jobs.movement.go-to.cut :refer [approach-recorder jumped? record send-back-tolls tour tour-spent?]]
             [jobs.movement.go-to.detour :as detour]
             [jobs.movement.go-to.escalate-choose :as choose]
             [jobs.movement.go-to.escalation :as esc]
@@ -195,7 +195,7 @@
      :shut-also (shut-foreign c)
      :budget wsearch/round-budget
      :avoid (set (:fault-cells (ctx/mem c)))
-     :tolls (:tolls (:args c))
+     :tolls (into (vec (:tolls (:args c))) (send-back-tolls (ctx/mem c)))
      :zone-tolls (wworld/zone-tolls?)
      :unknown (round-unknown c)}))
 

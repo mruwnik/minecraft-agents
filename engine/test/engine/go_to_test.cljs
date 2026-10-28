@@ -646,11 +646,13 @@
 (defn ^:async go-returns!
   "Run go-to with args under returns-parent over world; {:eng :p :seen :out :returns}."
   ([world args] (go-returns! world args nil))
-  ([world args seed]
-   (let [{:keys [eng stop] :as s} (setup world)
+  ([world args seed] (go-returns! world args seed identity))
+  ([world args seed prepare!]
+   (let [{:keys [eng p stop] :as s} (setup world)
          out (atom :not-done)
          returns (atom [])
          eng (assoc eng :jobs (assoc (:jobs eng) 'returns-parent (returns-parent out returns args seed)))]
+     (prepare! p)
      (core/submit! eng '(returns-parent) {})
      (await (tick-out! eng 30))
      (assoc s :eng eng :out out :returns returns))))
@@ -787,110 +789,83 @@
   [m]
   (merge {:open (gcut/session-id) :goal {:x 10 :y 64 :z 0} :last-dist 3} m))
 
+(defn sent-back-spots
+  "n send-backs from [5 64 0] (:cut-walks n too), each undoing a share of the worth of a goal 10 blocks off."
+  [n share]
+  {:cut-walks n :sent-backs (vec (repeat n {:at [5 64 0] :lost-s (* share (cost/tour-worth 10 nil))}))})
+
 (deftest a-new-session-forgets-the-earlier-runs-walks-and-open-calls
   (let [goal {:x 10 :y 64 :z 0}
-        m (cut-seed {:closest 3 :ref 3 :cuts 2})
+        m (cut-seed (merge {:closest 3 :ref 3} (sent-back-spots 2 1)))
         before (gcut/session-id)]
     (swap! gcut/approaches assoc 1 {:last-dist 5})
     (gcut/new-session!)
     (is (= {} @gcut/approaches))
     (is (not= before (gcut/session-id)))
-    (is (zero? (:cuts (gcut/cut-state m goal 10))))))
+    (is (empty? (:sent-backs (gcut/cut-state m goal 10))))))
 
-(deftest a-call-cut-again-sent-back-from-its-closest-approach-gives-up-after-three-cuts
+(deftest a-call-sent-back-for-more-walk-than-its-goal-is-worth-gives-up-cut-again
   (async done
     (tu/run-async done
       (fn ^:async t []
-        ;; the body is 10 from the goal; it got to 3 before, and was sent back twice already: this is the third, and the
-        ;; zombie that sent it back still stands near the way ahead
+        ;; the body is 10 from the goal; it got to 3 before and was sent back twice, each losing the goal's worth: the
+        ;; chance of a third (3/4) times the walk lost passes it, and the zombie that sent it back still stands near
         (let [{:keys [out returns eng]} (await (go-returns! {:blocks flat :entities [way-zombie]} {:pos [10 64 0] :range 0}
-                                                            (cut-seed {:closest 3 :ref 3 :cuts 2})))]
+                                                            (cut-seed (merge {:closest 3 :ref 3} (sent-back-spots 2 1)))))]
           (is (= {:arrived false :reason :unreachable :why :cut-again} (select-keys @out [:arrived :reason :why])) (pr-str @out))
           (is (= "zombie" (:nearest-hostile @out)) (pr-str @out))
           (is (= [14 64 6] (:nearest-hostile-at @out)) (pr-str @out))
+          (is (= 3 (:sent-backs @out)) "the two and the one this restart found")
           (is (= [:done] @returns))
           (is (= [] (moved eng)) "it walked nowhere"))
-        ;; the same three cuts with no hostile known near the way ahead (the sender is dead or gone): it walks on
-        (doseq [[why entities] [["no hostile at all" []] ["a zombie far from the way" [(assoc way-zombie :pos [-20 64 20])]]]]
-          (let [{:keys [out returns]} (await (go-returns! {:blocks flat :entities entities} {:pos [10 64 0] :range 0}
-                                                          (cut-seed {:closest 3 :ref 3 :cuts 2})))]
+        ;; send-backs that undo less than the worth together, however many: it walks on
+        (doseq [[why seed] [["one send-back of the whole worth" (cut-seed (merge {:closest 3 :ref 3} (sent-back-spots 1 1)))]
+                            ["four of a tenth" (cut-seed (merge {:closest 3 :ref 3} (sent-back-spots 4 0.1)))]
+                            ["the closest approach improved 2 blocks since" (cut-seed (merge {:closest 1 :ref 3} (sent-back-spots 3 1)))]
+                            ["another goal in the same slot" (cut-seed (merge {:goal {:x 30 :y 64 :z 0} :closest 3 :ref 3} (sent-back-spots 3 1)))]
+                            ["left open by an earlier run of the engine" (cut-seed (merge {:open "old-run" :closest 3 :ref 3} (sent-back-spots 3 1)))]
+                            ["the last call ended normally" (dissoc (cut-seed (merge {:closest 3 :ref 3} (sent-back-spots 3 1))) :open)]]]
+          (let [{:keys [out returns]} (await (go-returns! {:blocks flat} {:pos [10 64 0] :range 0} seed))]
             (is (= {:arrived true} @out) (str why " " (pr-str @out)))
             (is (= [:done] @returns) why)))
-        ;; two cuts so far: this one walks on
-        (let [{:keys [out]} (await (go-returns! {:blocks flat} {:pos [10 64 0] :range 0}
-                                                (cut-seed {:closest 3 :ref 3 :cuts 1})))]
-          (is (= {:arrived true} @out) (pr-str @out)))
-        ;; the closest approach improved 2 blocks since the count began: it clears
-        (let [{:keys [out]} (await (go-returns! {:blocks flat} {:pos [10 64 0] :range 0}
-                                                (cut-seed {:closest 1 :ref 3 :cuts 2})))]
-          (is (= {:arrived true} @out) (pr-str @out)))
-        ;; a different goal in the same slot starts afresh
-        (let [{:keys [out]} (await (go-returns! {:blocks flat} {:pos [10 64 0] :range 0}
-                                                (cut-seed {:goal {:x 30 :y 64 :z 0} :closest 3 :ref 3 :cuts 2})))]
-          (is (= {:arrived true} @out) (pr-str @out)))
-        ;; left open by an earlier run of the engine: not a cut
-        (let [{:keys [out]} (await (go-returns! {:blocks flat} {:pos [10 64 0] :range 0}
-                                                (cut-seed {:open "old-run" :closest 3 :ref 3 :cuts 2})))]
-          (is (= {:arrived true} @out) (pr-str @out)))
-        ;; the last call ended normally: no cut loop
-        (let [{:keys [out]} (await (go-returns! {:blocks flat} {:pos [10 64 0] :range 0}
-                                                (dissoc (cut-seed {:closest 3 :ref 3 :cuts 2}) :open)))]
-          (is (= {:arrived true} @out) (pr-str @out)))))))
+        ;; the caller's worth counts: the same send-backs undo more than a goal worth little is worth
+        (let [{:keys [out]} (await (go-returns! {:blocks flat} {:pos [10 64 0] :range 0 :worth 1}
+                                                (cut-seed (merge {:closest 3 :ref 3} (sent-back-spots 1 0.1)))))]
+          (is (= :cut-again (:why @out)) (pr-str @out)))))))
 
-(deftest a-hostile-that-keeps-coming-back-spends-the-cut-resets-and-the-call-gives-up
+(defn record-cells!
+  "Steer override: every pose's [cell-x cell-z] is pushed to visited, an atom of pairs."
+  [p visited]
+  (.override (.-world p) "steer"
+             (fn [token ^js a impl]
+               (let [decide (.-decide a)]
+                 (impl token (js/Object.assign #js {} a #js {:decide (fn [pose]
+                                                                       (swap! visited conj [(js/Math.floor (.-x pose)) (js/Math.floor (.-z pose))])
+                                                                       (decide pose))}))))))
+
+(deftest a-way-sent-back-from-is-dearer-and-the-next-walk-takes-a-fresh-one
   (async done
     (tu/run-async done
       (fn ^:async t []
-        ;; three cuts with the sender gone from the way clear the count (a reset); once max-cut-resets (2) are spent the
-        ;; next full set of cuts gives up even with no hostile near the way
-        (let [{:keys [out]} (await (go-returns! {:blocks flat} {:pos [10 64 0] :range 0}
-                                                (cut-seed {:closest 3 :ref 3 :cuts 2 :resets 2})))]
-          (is (= {:arrived false :reason :unreachable :why :cut-again} (select-keys @out [:arrived :reason :why])) (pr-str @out))
-          (is (str/includes? (:text @out) "resets") (:text @out)))
-        (let [{:keys [out]} (await (go-returns! {:blocks flat} {:pos [10 64 0] :range 0}
-                                                (cut-seed {:closest 3 :ref 3 :cuts 2 :resets 1})))]
-          (is (= {:arrived true} @out) (pr-str @out)))))))
+        (let [walked (fn ^:async f [seed]
+                       (let [visited (atom #{})
+                             {:keys [out]} (await (go-returns! {:blocks flat} {:pos [10 64 0] :range 0} seed #(record-cells! % visited)))]
+                         (is (= {:arrived true} @out) (pr-str @out))
+                         @visited))
+              fresh (await (walked nil))
+              sent (await (walked (cut-seed (merge {:closest 3 :ref 3} (sent-back-spots 1 0.5)))))]
+          (is (every? (fn [[_ z]] (zero? z)) fresh) "the straight way crosses the cell")
+          (is (contains? sent [5 1]) "the cell a send-back left the walk at costs more: the walk goes round"))))))
 
-(deftest cut-state-carries-the-reset-count-of-the-same-goal-only
-  (let [goal {:x 10 :y 64 :z 0}
-        m {:open (gcut/session-id) :goal goal :closest 4 :ref 4 :cuts 1 :last-dist 4 :resets 2}]
-    (is (= 2 (:resets (gcut/cut-state m goal 4))))
-    (is (= 0 (:resets (gcut/cut-state (assoc m :goal {:x 30 :y 64 :z 0}) goal 4))))
-    (is (= 0 (:resets (gcut/cut-state (assoc m :open "old-run") goal 4))))))
-
-(deftest a-trip-cut-four-times-in-place-still-arrives
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        ;; cut during the search each time, the body never moving: no cut sent it back, so the fifth call arrives
-        (let [paces (atom 0)]
-          (await
-           (with-small-budget! paces
-             (fn ^:async cut-run []
-               (let [{:keys [eng p] :as s} (setup joined-world)
-                     out (atom :not-done)
-                     returns (atom [])
-                     eng (assoc eng :jobs (assoc (:jobs eng) 'returns-parent
-                                                 (returns-parent out returns {:pos [6 64 0] :range 0} nil)))]
-                 (core/submit! eng '(returns-parent) {})
-                 (loop [n 0 running (core/tick! eng)]
-                   (if (>= n 4)
-                     (await running)
-                     (do (let [target (+ @paces 2)]
-                           (loop [i 0]
-                             (when (and (< @paces target) (< i 400))
-                               (await (js/Promise. (fn [r] (js/setTimeout r 5))))
-                               (recur (inc i)))))
-                         (core/cut! eng (core/holder eng) :test nil)
-                         (await running)
-                         (recur (inc n) (core/tick! eng)))))
-                 (await (tick-out! eng 10))
-                 (is (= {:arrived true} @out) (pr-str @out))
-                 (is (= [6 64 0] (at p))))))))))))
+(deftest a-way-sent-back-from-twice-costs-more-than-once-and-than-a-fresh-one
+  (let [factor (fn [m] (let [c (gcut/send-back-tolls m)] (:factor (first c))))]
+    (is (nil? (seq (gcut/send-back-tolls {}))))
+    (is (< (factor (sent-back-spots 1 0.5)) (factor (sent-back-spots 2 0.5))) "the same place again adds its walk lost, and the chance rises")))
 
 (deftest cut-state-counts-only-a-restart-sent-back-from-where-the-cut-found-the-body
   (let [goal {:x 10 :y 64 :z 0}
-        m {:open (gcut/session-id) :goal goal :closest 4 :ref 4 :cuts 1 :last-dist 4}]
+        m {:open (gcut/session-id) :goal goal :closest 4 :ref 4 :last-dist 4 :cut-walks 1 :sent-backs [{:at [1 64 0] :lost-s 1}]
+           :prev {:x 6.5 :y 64 :z 0.5}}]
     (doseq [[why m dist cuts] [["in place (a meal, a breath, a fight)" m 4 1]
                                ["knockback of half a block" m 4.5 1]
                                ["in place on a detour, far from the closest" (assoc m :last-dist 12) 12.3 1]
@@ -899,9 +874,11 @@
                                ["a new goal" (assoc m :goal {:x 30 :y 64 :z 0}) 14 0]
                                ["left open by another run of the engine" (assoc m :open "old-run") 14 0]
                                ["the last call returned" (dissoc m :open) 14 0]]]
-      (is (= cuts (:cuts (gcut/cut-state m goal dist))) why))
-    (is (= {:goal goal :closest 1 :ref 1 :cuts 1 :last-dist 11 :resets 0} (gcut/cut-state (assoc m :closest 1 :last-dist 1) goal 11)))
-    (is (= {:goal goal :closest 14 :ref 14 :cuts 0 :last-dist 14 :resets 0} (gcut/cut-state (dissoc m :open) goal 14)))))
+      (is (= cuts (count (:sent-backs (gcut/cut-state m goal dist)))) why))
+    (let [s (gcut/cut-state (assoc m :closest 1 :last-dist 1) goal 11)]
+      (is (= [{:at [6 64 0] :lost-s (* 10 (cost/walk-step-s))}] (:sent-backs s)) "the cell left and the walk undone, the cleared count aside")
+      (is (= 1 (:cut-walks s))))
+    (is (= {:goal goal :closest 14 :ref 14 :last-dist 14 :cut-walks 0 :sent-backs []} (gcut/cut-state (dissoc m :open) goal 14)))))
 
 (deftest the-hostiles-near-the-way-are-the-known-ones-within-the-hostile-near-radius-of-it
   ;; the way runs from the start [0 64 0] to [20 64 0]; melee within 8 of it count, ranged within 16, nearest the way first
@@ -975,26 +952,23 @@
     (tu/run-async done
       (fn ^:async t []
         ;; the body walks to 4 blocks short of the goal, is cut there and sent back to the start each time (a stationary
-        ;; zombie's flee): the walk records how near it got, so the fourth restart gives up
+        ;; zombie's flee): the walk records how near it got; the goal is worth little, so the second restart gives up
         (let [near-goal [#(>= (.-x %) 6) send-back!]
-              {:keys [out returns mems]} (await (cut-cycles! {:blocks flat :entities [way-zombie]} {:pos [10 64 0] :range 0 :settings {:jobs.lib.walk.world/dangers false}} [near-goal near-goal near-goal]))]
+              {:keys [out returns mems]} (await (cut-cycles! {:blocks flat :entities [way-zombie]} {:pos [10 64 0] :range 0 :worth 1 :settings {:jobs.lib.walk.world/dangers false}} [near-goal near-goal]))]
           (is (<= (:closest (first mems)) 4.5) (str "the cut walk recorded its approach: " (pr-str (first mems))))
           (is (= {:arrived false :reason :unreachable :why :cut-again} (select-keys @out [:arrived :reason :why])) (pr-str @out))
           (is (str/includes? (:text @out) "sent back") (:text @out))
-          (is (= [:done] @returns) "the cut calls returned nothing; the fourth gave up"))))))
+          (is (= [:done] @returns) "the cut calls returned nothing; the third gave up"))))))
 
-(deftest a-goal-whose-sender-back-is-killed-before-the-restart-is-reached
+(deftest a-goal-sent-back-once-with-walk-to-spare-is-walked-to-on
   (async done
     (tu/run-async done
       (fn ^:async t []
-        ;; sent back three times as above, but the zombie is killed during the third cut: the fourth restart knows of no
-        ;; hostile near the way ahead, so the count no longer predicts a cycle and the walk goes on to the goal
         (let [near-goal [#(>= (.-x %) 6) send-back!]
-              killed [#(>= (.-x %) 6) #(do (send-back! %) (swap! (fake/state %) update :entities (fn [es] (filterv (fn [e] (not= 77 (:id e))) es))))]
-              {:keys [out returns p]} (await (cut-cycles! {:blocks flat :entities [way-zombie]} {:pos [10 64 0] :range 0} [near-goal near-goal killed]))]
+              {:keys [out returns p]} (await (cut-cycles! {:blocks flat :entities [way-zombie]} {:pos [10 64 0] :range 0} [near-goal]))]
           (is (= {:arrived true} @out) (pr-str @out))
           (is (= [10 64 0] (at p)))
-          (is (= [:done] @returns) "the cut calls returned nothing; the fourth arrived"))))))
+          (is (= [:done] @returns) "the cut call returned nothing; the second arrived"))))))
 
 (deftest a-long-bending-trip-cut-three-times-in-place-arrives
   (async done
@@ -1477,7 +1451,7 @@
           (is (= {:arrived true} @out) (pr-str @out))
           (is (= [30 64 0] (at p))))))))
 
-(deftest a-body-moved-far-on-every-walk-to-the-same-place-gives-up-instead-of-starting-again-for-ever
+(deftest a-body-moved-far-on-every-walk-from-the-same-place-gives-up-once-the-moves-cost-more-than-the-goal
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -1497,4 +1471,4 @@
           ((:stop s))
           (is (false? (:arrived @out)) (pr-str @out))
           (is (= :cut-again (:why @out)) (pr-str @out))
-          (is (= 3 (count (events-of s :go-to.jumped))) "one restart per jump, then the call ends"))))))
+          (is (<= 2 (count (events-of s :go-to.jumped)) 30) "a restart per jump until the repeats cost more than the goal is worth"))))))

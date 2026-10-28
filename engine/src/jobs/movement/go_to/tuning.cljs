@@ -11,9 +11,7 @@
    :jobs.movement.go-to.tuning/y-slack {:default 4 :doc "Blocks a go-to :pos y with no standable cell within :range may be re-aimed up or down its column to the ground; 0: never." :spec (a/int-in 0 nil)}
    :jobs.movement.go-to.tuning/goal-danger {:default :wait :doc "When a go-to's goal lies within the full-cost radius of a known mob the body would flee and its toll over the stay costs more than the goal is worth (aim/goal-danger): :wait (walk on; an info goal-in-danger says so once), :end (give up at once, :why :goal-dangerous with the mob)." :spec #{:wait :end}}
    :jobs.movement.go-to.tuning/look-round {:default true :doc "Whether a go-to looks round once on arrival; false for a caller that keeps moving." :spec boolean?}
-   :jobs.movement.go-to.tuning/max-cut-restarts {:default 3 :doc "Cuts in a row, each sending the body back, before a go-to call gives up :cut-again." :spec (a/int-in 1 nil)}
-   :jobs.movement.go-to.tuning/cut-progress {:default 2 :doc "Blocks a go-to's closest approach to its goal must improve to clear its cut count." :spec (a/num-in 0 nil)}
-   :jobs.movement.go-to.tuning/max-cut-resets {:default 2 :doc "Times a go-to clears its cut count at a restart that knows of no hostile near the way, per goal; after that a full set of cuts gives up :cut-again whatever is near." :spec (a/int-in 0 nil)}
+   :jobs.movement.go-to.tuning/cut-progress {:default 2 :doc "Blocks a go-to's closest approach to its goal must improve to clear its send-backs." :spec (a/num-in 0 nil)}
    :jobs.movement.go-to.tuning/send-back-margin {:default 3 :doc "Blocks farther from the goal than where the cut found the body a go-to restart must begin to count as sent back (knockback and in-place reflexes stay under it)." :spec (a/num-in 0 nil)}
    :jobs.movement.go-to.tuning/surface-air {:default 7.5 :doc "Seconds of air left under which a go-to whose head is under water and whose search goes on (no walk) swims to air first: a body holding still in water sinks while it thinks." :spec (a/num-in 0 nil)}
    :jobs.movement.go-to.tuning/wet-restarts {:default 2 :doc "Times a go-to's search under water may begin afresh (no walk) after its first slice before it swims to air first and plans from there." :spec (a/int-in 0 nil)}
@@ -42,8 +40,6 @@
 (defn goal-danger [] (settings/get settings :jobs.movement.go-to.tuning/goal-danger))
 (defn look-round [] (settings/get settings :jobs.movement.go-to.tuning/look-round))
 (defn max-route-s [] (settings/get settings :jobs.movement.go-to.tuning/max-route-s))
-(defn max-cut-restarts [] (settings/get settings :jobs.movement.go-to.tuning/max-cut-restarts))
-(defn max-cut-resets [] (settings/get settings :jobs.movement.go-to.tuning/max-cut-resets))
 (defn cut-progress [] (settings/get settings :jobs.movement.go-to.tuning/cut-progress))
 (defn send-back-margin [] (settings/get settings :jobs.movement.go-to.tuning/send-back-margin))
 

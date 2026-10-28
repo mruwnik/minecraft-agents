@@ -1,5 +1,5 @@
 (ns jobs.movement.go-to.cut
-  "A go-to call's record across restarts: the walk so far (approaches), the cut count that gives up :cut-again, the start
+  "A go-to call's record across restarts: the walk so far (approaches), the send-backs priced against the goal's worth, which end a call :cut-again, the start
   of a call from the world, and the hostile a cut is guessed to come from."
   (:require [engine.core.base :as base]
             [engine.ctx :as ctx]
@@ -11,7 +11,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.walk.world :as wworld]
             [jobs.movement.go-to.aim :refer [here?]]
-            [jobs.movement.go-to.tuning :refer [max-cut-restarts cut-progress send-back-margin]]))
+            [jobs.movement.go-to.tuning :refer [cut-progress send-back-margin]]))
 
 (def approaches
   "This run's record of each open go-to's walk, by job id: {:call :last-dist :closest :explored ...}, the attempt that owns
@@ -64,6 +64,7 @@
         jumped? (and prev (not falling?) (>= (js/Math.hypot (- (:x pose) (:x prev)) dy (- (:z pose) (:z prev))) jump-blocks))]
     (assoc m :last-dist d :closest (min d (:closest m d)) :prev (select-keys pose [:x :y :z])
            :jumped (boolean (or jumped? (:jumped m)))
+           :jump-from (if jumped? (assoc (select-keys prev [:x :y :z]) :blocks (u/dist prev pose)) (:jump-from m))
              :anchor (if nearer? d anchor) :explored (if nearer? 0 (+ explored step)))))
 
 (defn approach-recorder
@@ -81,24 +82,53 @@
   [c]
   (boolean (:jumped (record c))))
 
+(defn cell-of [p] (mapv #(js/Math.floor (% p)) [:x :y :z]))
+
 (defn restart-after-jump!
-  "A call whose body was teleported mid-walk starts again from where it stands: the walk record and the walk's counters go,
-  but what the jump showed stays: the cut bookkeeping (:cuts :closest :ref :last-dist) and :jump-repeats, the jumps in a
-  row that began within send-back-margin of the last one's start (the same place: a way that keeps getting the body moved)."
-  [c]
+  "A call whose body was teleported mid-walk starts again from where it stands: the walk record and the walk's counters go.
+  A jump from within send-back-margin of the last one's start (the same place: a way that keeps getting the body moved)
+  adds a send-back to the call's, losing the blocks it moved the body (:jump-from's :blocks); a jump elsewhere clears them (the evidence was
+  about another place). The closest approach stays, and the distance to pos is where the next cut is measured from."
+  [c pos]
   (let [at (select-keys (u/self-pos c) [:x :y :z])
+        from (:jump-from (record c))
         prev (:jump-at (ctx/mem c))
-        repeat? (and prev (<= (u/dist at prev) (send-back-margin)))]
+        repeat? (and prev (<= (u/dist at prev) (send-back-margin)))
+        spot (when (and repeat? from) {:at (cell-of from) :lost-s (* (:blocks from) (cost/walk-step-s))})]
     (fresh-record! c)
-    (ctx/update-mem! c #(-> % (dissoc :best :starts :tour-walks :edge-mode :waypoint-misses :waypoint-why :waypoints-tried :lookout-walks :lookouts :wall-walked)
-                            (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {} :jump-at at
-                                   :jump-repeats (if repeat? (inc (:jump-repeats % 1)) 1))))
+    (ctx/update-mem! c #(-> %
+                            (dissoc :best :starts :tour-walks :edge-mode :waypoint-misses :waypoint-why :waypoints-tried :lookout-walks :lookouts :wall-walked)
+                            (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {} :jump-at at :last-dist (u/dist at pos)
+                                   :cut-walks (if repeat? (inc (:cut-walks % 0)) 1)
+                                   :sent-backs (cond-> (if repeat? (:sent-backs % []) []) spot (conj spot)))))
     (ctx/emit! c :go-to.jumped :info {:text "the body was moved far in one tick: the walk starts again from here"})))
 
-(defn jump-loop?
-  "Whether the body was moved far, from the same place, max-cut-restarts times in a row."
-  [c]
-  (>= (:jump-repeats (ctx/mem c) 0) (max-cut-restarts)))
+(defn send-back-chance
+  "The chance a walk of the call is sent back, counted: (sends + 1) / (cut-walks + 2) (Beta(1,1)), m the call's memory."
+  [{:keys [sent-backs cut-walks]}]
+  (/ (inc (count sent-backs)) (+ 2 (or cut-walks 0))))
+
+(defn send-back-price
+  "Seconds the way's repeat is expected to cost more: its chance of a send-back times the walk each one lost."
+  [{:keys [sent-backs] :as m}]
+  (* (send-back-chance m) (reduce + 0 (map :lost-s sent-backs))))
+
+(defn send-backs-spent?
+  "Whether the send-backs of m, the call's memory or cut state, cost more (send-back-price) than the goal is worth: the
+  call's :worth, else a tour's (cost/tour-worth)."
+  [c m]
+  (> (send-back-price m) (cost/tour-worth (or (:detour-from (ctx/mem c)) (:last-dist m 0)) (:worth (:args c)))))
+
+(defn send-back-tolls
+  "The :tolls of the call's walks, m its memory: each cell the body stood at when sent back costs its send-back price more,
+  so a fresh way is tried before the same one again."
+  [m]
+  (let [chance (send-back-chance m)
+        step (cost/walk-step-s)]
+    (->> (:sent-backs m)
+         (filter :at)
+         (group-by :at)
+         (map (fn [[[x y z] spots]] {:x x :y y :z z :factor (/ (* chance (reduce + (map :lost-s spots))) step)})))))
 
 (defn tour
   "The call's tour of frontiers so far, {:explored :walks}: the blocks walked away from the goal and the frontier walks
@@ -149,22 +179,23 @@
 (base/on-warm-start! ::session new-session!)
 
 (defn cut-state
-  "The cut bookkeeping after a call restarts at dist from goal, from m, the call's memory: {:goal :closest :ref :cuts
-  :last-dist}. A restart is a cut only when the earlier call was left open in this session, for the same goal. :cuts
-  starts again at 0 when :closest (the least distance a walk reached) has improved cut-progress over :ref (its value then);
-  a cut adds one when it begins more than send-back-margin farther than :last-dist, where the cut found the body (a reflex
-  sent it back; a meal, a breath, a fight in place or knockback do not, on a detour neither)."
+  "The cut bookkeeping after a call restarts at dist from goal, from m, the call's memory: {:goal :closest :ref :last-dist
+  :cut-walks :sent-backs}. A restart is a cut only when the earlier call was left open in this session, for the same goal.
+  The send-backs and the walks cut (:cut-walks) start again when :closest (the least distance a walk reached) has improved
+  cut-progress over :ref (its value then); a cut that begins more than send-back-margin farther than :last-dist, where the
+  cut found the body, is a send-back (a reflex sent it back; a meal, a breath, a fight in place or knockback do not, on a
+  detour neither): {:at the cell the walk was left at :lost-s the seconds of walk undone}."
   [m goal dist]
   (let [cut? (and (= (session-id) (:open m)) (= goal (:goal m)))
         closest (min dist (if cut? (:closest m dist) dist))
         ref (if cut? (:ref m closest) closest)
         improved? (>= (- ref closest) (cut-progress))
-        sent-back? (and cut? (> dist (+ (:last-dist m dist) (send-back-margin))))]
+        sent-back? (and cut? (> dist (+ (:last-dist m dist) (send-back-margin))))
+        keep? (and cut? (not improved?))]
     {:goal goal :closest closest :ref (if improved? closest ref) :last-dist dist
-     :cuts (+ (if (and cut? (not improved?)) (:cuts m 0) 0) (if sent-back? 1 0))
-     :resets (if cut? (:resets m 0) 0)}))
-
-(defn cut-loop? [{:keys [cuts]}] (>= cuts (max-cut-restarts)))
+     :cut-walks (cond keep? (inc (:cut-walks m 0)) cut? 1 :else 0)
+     :sent-backs (cond-> (if keep? (:sent-backs m []) [])
+                   sent-back? (conj {:at (some-> (:prev m) cell-of) :lost-s (* (- dist (:last-dist m dist)) (cost/walk-step-s))}))}))
 
 (defn note-restart!
   "Record this call's start in memory: the call is open (this session) until it returns, an open one found at the start

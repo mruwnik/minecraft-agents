@@ -154,5 +154,5 @@
 (deftest restarting-after-a-jump-clears-the-marks-of-the-walks-before-it
   (let [mem* (atom {:wall-walked true :lookouts [[1 64 1]] :lookout-walks 2 :waypoint-why :needs-health :waypoint-misses 1})
         c (stub-ctx (tu/fake {:self {:pos [0.5 64 0.5]}}) mem* {:pos [60 0] :range 0})]
-    (gcut/restart-after-jump! c)
+    (gcut/restart-after-jump! c {:x 60 :y 64 :z 0})
     (is (= {} (select-keys @mem* [:wall-walked :lookouts :lookout-walks :waypoint-why :waypoint-misses])))))

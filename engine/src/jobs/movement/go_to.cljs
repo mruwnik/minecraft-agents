@@ -17,7 +17,7 @@
             [jobs.movement.go-to.air :as air]
             [jobs.movement.go-to.aim :as aim :refer [args-refusal goal-danger goal-pos pre-aim!]]
             [jobs.movement.go-to.column :as column]
-            [jobs.movement.go-to.cut :refer [cut-loop? drop-record! jump-loop? jumped? nearest-hostile note-restart! restart-after-jump! start-attempt! way-hostiles with-call]]
+            [jobs.movement.go-to.cut :refer [drop-record! jumped? nearest-hostile note-restart! restart-after-jump! send-backs-spent? start-attempt! with-call]]
             [jobs.movement.go-to.escalate-choose :as choose]
             [jobs.movement.go-to.escalation :as esc]
             [jobs.movement.go-to.faults :as faults]
@@ -28,7 +28,7 @@
             [jobs.movement.go-to.preview :as preview]
             [jobs.lib.walk-risk :as risk]
             [jobs.movement.go-to.result :as end]
-            [jobs.movement.go-to.tuning :as tuning :refer [max-cut-resets]]
+            [jobs.movement.go-to.tuning :as tuning]
             [jobs.movement.go-to.torch :as torch]
             [jobs.movement.go-to.walk :as walk]
             [jobs.movement.go-to.way-steps :as ways]))
@@ -58,12 +58,12 @@
     toward walk by walk, and to the edge of loaded land when that is the only way on. It returns :continue only while
     an escalation or put-back child is waiting on the world. A round that ran out of re-plans while each learned an unseen cell counts as progress (no try booked). Each fruitless round that plans again says so (info go-to.retrying: reason, try); each books a try, and a call whose :spend :tries (its own, or a caller's least) is used up
     gives up instead (a caller that re-aims itself passes {:tries 1}).
-  - A body moved 8 or more blocks in one tick (a teleport, a pearl) ends the walk at once and starts the call again from where it stands: the walk's counters go, the cut bookkeeping stays (info go-to.jumped). Moved far from the same place max-cut-restarts times in a row, it gives up :cut-again (data :jumps).
+  - A body moved 8 or more blocks in one tick (a teleport, a pearl) ends the walk at once and starts the call again from where it stands: the walk's counters go, the closest approach stays (info go-to.jumped). Moved far again from the same place it counts as a send-back (below); a jump elsewhere clears them.
   - Gives up with the cause {:reason :unreachable :why ...}, data {:arrived false :why ... :text
     words ...}: limit-reached for :needs-health (:line :health) and :search-spent (:line :job-time); condition-failed
     for :goal-dangerous and :goal-unloaded; else (:explore-spent too) nothing-possible. :why is the planner's
     reason (:exhausted, :goal-unloaded (the goal lies in unloaded land and the loaded land leads no nearer), :goal-enclosed, :goal-cut-off, :goal-on-magma, :door-stuck with :cells, :one-way with :near and :one-way ...), or :stuck
-    (:kind the step, :detail the executor's text), :off-plan, :steer-failed, :no-progress, :cut-again (sent back by 3 cuts, each restart more than send-back-margin farther than where the cut found the body, with no 2 blocks gained on the closest approach in between (in-place cuts do not count or break it); a restart that knows of no hostile within the hostile-near radius of the way ahead clears the count instead; an escalation child's own walk is its own call, a parent waiting on it is not walking; :nearest-hostile names a guess at the cause, :nearest-hostile-at its cell, or {:direction :band} when only heard) or :moved-while-searching; :at is the
+    (:kind the step, :detail the executor's text), :off-plan, :steer-failed, :no-progress, :cut-again (sent back: each restart more than send-back-margin farther than where the cut found the body is a send-back that undid its walk (in-place cuts do not count); a send-back is priced, the call's chance of one (counted) times the walk each lost, and the cell it left the walk at costs that more in the next walk's plan, so a fresh way is tried; the call ends when the price passes the goal's worth (:worth, else a tour's); gaining cut-progress on the closest approach clears them; an escalation child's own walk is its own call, a parent waiting on it is not walking; :nearest-hostile names a guess at the cause, :nearest-hostile-at its cell, or {:direction :band} when only heard) or :moved-while-searching; :at is the
     body's feet cell and :near its blocks from the goal. A failed
     escalation adds :escalation {:step :reason ...}, the child's reason or wait.
   - Success is :done with data {:arrived true}, with :resolved the cell when go-to chose the y, plus :provisional true (a column's
@@ -120,11 +120,11 @@
   "One iteration of a call: :again to go on in the same call, else what the call returns. The flee ways waiting for their
   cells are read first (way-log/resolve!), so a way seen on any walk is counted."
   [c0 pos]
-  (when (jumped? c0) (restart-after-jump! c0))
-  (if (jump-loop? c0)
-    (end/give-up! c0 pos {:reason :cut-again} {:jumps (:jump-repeats (ctx/mem c0))})
-    (await (step-round! c0 pos))))
-
+  (let [jumped (jumped? c0)]
+    (when jumped (restart-after-jump! c0 pos))
+    (if (and jumped (send-backs-spent? c0 (ctx/mem c0)))
+      (end/give-up! c0 pos {:reason :cut-again} {:jumps (count (:sent-backs (ctx/mem c0)))})
+      (await (step-round! c0 pos)))))
 
 (def target [:pos :place])
 
@@ -217,7 +217,7 @@
   record and :open go when the attempt ends (a cut keeps them)."
   [c goal]
   (let [r (await (pace/steps! c (fn [] (step! c (goal-pos c goal)))))]
-    (when (ctx/alive? c) (drop-record! c) (ctx/update-mem! c dissoc :open :jump-at :jump-repeats))
+    (when (ctx/alive? c) (drop-record! c) (ctx/update-mem! c dissoc :open :jump-at))
     r))
 
 (defn ^:async attempt
@@ -236,16 +236,12 @@
       (not (ways/way? c :walk)) (end/refuse! c {:reason :no-way :message "the call's :ways leave out :walk"})
       :else
       (let [state (note-restart! c pos)
-            spent? (and (cut-loop? state) (>= (:resets state) (max-cut-resets)))
-            cycle? (and (cut-loop? state) (or spent? (seq (way-hostiles c pos))))]
+            cycle? (send-backs-spent? c state)]
         (await (torch/return-torch! c))
         (await (start-attempt! c pos))
-        (when (and (cut-loop? state) (not cycle?))
-          (ctx/update-mem! c assoc :cuts 0 :ref (:closest state) :resets (inc (:resets state))))
         (if cycle?
-          (do (ctx/update-mem! c #(-> % (dissoc :open :goal :closest :ref :last-dist) (assoc :cuts 0)))
-              (await (end/give-up! c pos {:reason :cut-again} (cond-> (or (nearest-hostile c pos) {})
-                                                                         spent? (assoc :resets-spent true)))))
+          (do (ctx/update-mem! c #(-> % (dissoc :open :goal :closest :ref :last-dist) (assoc :cut-walks 0 :sent-backs [])))
+              (await (end/give-up! c pos {:reason :cut-again} (assoc (or (nearest-hostile c pos) {}) :sent-backs (count (:sent-backs state))))))
           (let [danger (goal-danger c pos)]
             (when danger (ctx/emit! c :goal-in-danger :info (assoc danger :target pos)))
             (if (and danger (= :end (tuning/goal-danger)))
