@@ -44,7 +44,7 @@
             [jobs.lib.watch :as watch]
             [jobs.movement.go-to.air :as air]
             [jobs.movement.go-to.aim :as aim :refer [aimed here? in-seen-ground? look-along! guess-waypoint look-at-column! look-at-goal-air! hidden-in-ground? lookout pre-aim! sight-end see-cell void-guess?]]
-            [jobs.movement.go-to.cut :refer [approaches approach-recorder jumped? tour tour-spent?]]
+            [jobs.movement.go-to.cut :refer [approach-recorder jumped? record tour tour-spent?]]
             [jobs.movement.go-to.detour :as detour]
             [jobs.movement.go-to.escalate-choose :as choose]
             [jobs.movement.go-to.escalation :as esc]
@@ -163,7 +163,7 @@
   [c pos check]
   (fn [{:keys [status steps r] :as plan} first?]
     (or (when check (check plan first?))
-        (let [closest (:closest (get @approaches (:id c)))]
+        (let [closest (:closest (record c))]
           (when (and (:unknown c) closest (not (:edge-mode (ctx/mem c))) (= "partial" status) (seq steps)
                      (= "budget" (some-> ^js r .-reason)) (not (:frontier-taken plan))
                      (>= (u/dist (peek steps) pos) (dec closest)))

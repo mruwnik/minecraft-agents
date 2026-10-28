@@ -462,11 +462,12 @@
 ;; back up the stair to it, and off it again
 (deftest a-budget-cut-search-that-gets-no-nearer-than-the-body-has-been-tours-the-edge-instead
   (let [mem* (atom {})
-        c (gcol/stub-ctx (tu/fake {}) mem* {:unknown true})
+        c (gcut/with-call (gcol/stub-ctx (tu/fake {}) mem* {:unknown true}))
         check (gwalk/known-end-check c {:x 60 :y 0 :z 16} nil)
         plan (fn [reason end] {:status "partial" :r #js {:reason reason} :steps [{:x 179 :y 0 :z 16} end]})
         dead-end {:x 61 :y 11 :z 8}]
-    (swap! gcut/approaches assoc (:id c) {:closest 13.2})
+    (gcut/fresh-record! c)
+    (swap! gcut/approaches assoc-in [(:id c) :closest] 13.2)
     (is (= {:known-end true} (check (plan "budget" dead-end) false)))
     (is (nil? (check (plan "budget" {:x 64 :y 0 :z 16}) false)) "an end nearer than the body has been")
     (is (nil? (check (plan "exhausted" dead-end) false)) "an ended search")

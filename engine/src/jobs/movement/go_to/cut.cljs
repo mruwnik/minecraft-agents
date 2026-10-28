@@ -14,10 +14,32 @@
             [jobs.movement.go-to.tuning :refer [max-cut-restarts cut-progress send-back-margin]]))
 
 (def approaches
-  "This run's record of each open go-to's walk, by job id: {:last-dist :closest :explored ...}, the body's distance to the
-  goal now, its least, and the blocks walked since it last came nearer (approach-step). In process, not in job memory: a
-  walk updates it every tick and a memory write is an event."
+  "This run's record of each open go-to's walk, by job id: {:call :last-dist :closest :explored ...}, the attempt that owns
+  it (with-call), the body's distance to the goal now, its least, and the blocks walked since it last came nearer
+  (approach-step). In process, not in job memory: a walk updates it every tick and a memory write is an event."
   (atom {}))
+
+(defn with-call
+  "c as one attempt of its call: the walk record it starts (note-restart!) is its own, so a walk of another attempt under the
+  same job id still running (another engine in this process, a round left running) neither writes into it nor drops it."
+  [c]
+  (assoc c ::call #js {}))
+
+(defn record
+  "The attempt's own walk record, nil when another attempt holds the job id's."
+  [c]
+  (let [r (get @approaches (:id c))]
+    (when (identical? (::call c) (:call r)) r)))
+
+(defn drop-record!
+  "Drop the attempt's own walk record (another attempt's stays)."
+  [c]
+  (swap! approaches (fn [m] (cond-> m (identical? (::call c) (:call (get m (:id c)))) (dissoc (:id c))))))
+
+(defn fresh-record!
+  "Start the attempt's walk record again, empty."
+  [c]
+  (swap! approaches assoc (:id c) {:call (::call c)}))
 
 (def jump-blocks
   "Blocks between two ticks' poses that no walk, fall or knockback covers: a teleport. A speed bound, not a radius: on-pose
@@ -50,20 +72,20 @@
   {:status :jumped}, which ends the walk at once (jobs.lib.walk/walk-lit!) instead of walking the old plan on."
   [c pos]
   (fn [pose]
-    (when (ctx/alive? c)
+    (when (and (ctx/alive? c) (record c))
       (when (:jumped (get (swap! approaches update (:id c) approach-step pose (u/dist pose pos)) (:id c)))
         {:status :jumped}))))
 
 (defn jumped?
   "Whether the body was moved far in one tick (a teleport, a pearl) since the call's record began."
   [c]
-  (boolean (:jumped (get @approaches (:id c)))))
+  (boolean (:jumped (record c))))
 
 (defn restart-after-jump!
   "A call whose body was teleported mid-walk starts again from where it stands: the walk record and the counters of the
   walk before the jump go, as at a call's start."
   [c]
-  (swap! approaches dissoc (:id c))
+  (fresh-record! c)
   (ctx/update-mem! c #(-> % (dissoc :best :closest :ref :last-dist :starts :tour-walks :edge-mode :waypoint-misses :waypoint-why :waypoints-tried :lookout-walks :lookouts :wall-walked)
                           (assoc :blocked 0 :searching 0 :cuts 0 :frontier-best {} :target-best {})))
   (ctx/emit! c :go-to.jumped :info {:text "the body was moved far in one tick: the walk starts again from here"}))
@@ -72,7 +94,7 @@
   "The call's tour of frontiers so far, {:explored :walks}: the blocks walked away from the goal and the frontier walks
   taken since the body last came nearer it than ever."
   [c]
-  {:explored (:explored (get @approaches (:id c)) 0) :walks (:tour-walks (ctx/mem c) 0)})
+  {:explored (:explored (record c) 0) :walks (:tour-walks (ctx/mem c) 0)})
 
 (defn tour-spent?
   "Whether the tour so far (tour) costs more than its goal is worth: cost/tour-worth of the goal's
@@ -139,9 +161,9 @@
   "Record this call's start in memory: the call is open (this session) until it returns, an open one found at the start
   was cut. The cut state."
   [c pos]
-  (let [walked (get @approaches (:id c))
+  (let [walked (dissoc (get @approaches (:id c)) :call)
         state (cut-state (merge (ctx/mem c) walked) pos (u/dist (u/self-pos c) pos))]
-    (swap! approaches dissoc (:id c))
+    (fresh-record! c)
     (ctx/update-mem! c #(-> % (assoc :open (session-id)) (merge state)))
     state))
 

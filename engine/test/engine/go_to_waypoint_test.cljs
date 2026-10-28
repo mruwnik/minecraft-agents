@@ -131,8 +131,8 @@
   [f]
   (let [p (tu/fake {:self {:pos [0.5 64 0.5]} :blocks (box -2 63 -3 70 63 3 "stone")})
         mem* (atom {})
-        c (stub-ctx p mem* {:pos [60 0] :range 0})]
-    (swap! gcut/approaches dissoc (:id c))
+        c (gcut/with-call (stub-ctx p mem* {:pos [60 0] :range 0}))]
+    (gcut/fresh-record! c)
     (with-redefs [near/walk-round! (fn [c _ _ _]
                                      (doseq [x [5 90]] ((:on-pose c) {:x x :y 64 :z 0}))
                                      (js/Promise.resolve {:result {:status :jumped} :status "blocked" :to {:x 90 :y 64 :z 0}}))]

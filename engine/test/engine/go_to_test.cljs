@@ -1457,3 +1457,22 @@
           (is (zero? @after) (str "the walk ended on the jump pose itself; poses after it: " @after))
           (is (= {:arrived true} @out) (pr-str @out))
           (is (= [38 64 0] (at p))))))))
+
+(deftest a-call-left-walking-writes-nothing-into-a-new-call-under-its-job-id
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [stale (setup {:blocks flat :self {:pos [38 64 0]}})
+              stale-eng (assoc (:eng stale) :jobs (assoc (:jobs (:eng stale)) 'recording-parent (recording-parent (atom nil) {:pos [0 64 0] :range 0})))
+              {:keys [eng p] :as s} (setup {:blocks flat})
+              out (atom :not-done)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out {:pos [30 64 0] :range 0})))]
+          ;; the left round's walk goes on 30 blocks off, under the same job id j1/kid
+          (core/submit! stale-eng '(recording-parent) {})
+          (let [left (core/tick! stale-eng)]
+            (core/submit! eng '(recording-parent) {})
+            (await (tick-out! eng 30))
+            (await left))
+          (is (empty? (events-of s :go-to.jumped)) "the other call's poses are no jump of this body")
+          (is (= {:arrived true} @out) (pr-str @out))
+          (is (= [30 64 0] (at p))))))))

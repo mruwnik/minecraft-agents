@@ -17,7 +17,7 @@
             [jobs.movement.go-to.air :as air]
             [jobs.movement.go-to.aim :as aim :refer [args-refusal goal-danger goal-pos pre-aim!]]
             [jobs.movement.go-to.column :as column]
-            [jobs.movement.go-to.cut :refer [approaches cut-loop? jumped? nearest-hostile note-restart! restart-after-jump! start-attempt! way-hostiles]]
+            [jobs.movement.go-to.cut :refer [cut-loop? drop-record! jumped? nearest-hostile note-restart! restart-after-jump! start-attempt! way-hostiles with-call]]
             [jobs.movement.go-to.escalate-choose :as choose]
             [jobs.movement.go-to.escalation :as esc]
             [jobs.movement.go-to.faults :as faults]
@@ -209,7 +209,7 @@
   record and :open go when the attempt ends (a cut keeps them)."
   [c goal]
   (let [r (await (pace/steps! c (fn [] (step! c (goal-pos c goal)))))]
-    (when (ctx/alive? c) (swap! approaches dissoc (:id c)) (ctx/update-mem! c dissoc :open))
+    (when (ctx/alive? c) (drop-record! c) (ctx/update-mem! c dissoc :open))
     r))
 
 (defn ^:async attempt
@@ -219,7 +219,7 @@
   (wworld/unknown-spec: one missed Set for all its plans) rides on c as :unknown."
   [c0]
   (let [u (:unknown (:args c0))
-        c (cond-> c0 u (assoc :unknown (wworld/unknown-spec c0)))
+        c (cond-> (with-call c0) u (assoc :unknown (wworld/unknown-spec c0)))
         refusal (args-refusal c)
         goal (when-not refusal (:pos (aim/target c)))
         pos (goal-pos c goal)]
