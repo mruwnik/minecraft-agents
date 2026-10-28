@@ -50,7 +50,7 @@
 
 (def heading-stops
   "Stops that say only this heading is blocked: the stair or tunnel at 0 steps tries the next heading."
-  #{:breach-sealed :undercuts-way :own-zone :floor-unseen :not-loaded :base-block :crop :fluid-in-cut :place-failed :no-support-floor :no-floor :cave-below :walk-failed :step-failed :refused :hazard :dig-failed :plugged :refills})
+  #{:breach-sealed :undercuts-way :own-zone :floor-unseen :not-loaded :base-block :crop :fluid-in-cut :place-failed :no-support-floor :no-floor :cave-below :walk-failed :step-failed :refused :hazard :dig-failed :plugged :refills :unbreakable})
 
 (def leg-stops
   "Stops after which a stay-level run goes on along another heading from the cell it stands in."

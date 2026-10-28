@@ -12,7 +12,7 @@
             [jobs.gather.mine.end :as end :refer [end-run wanted]]
             [jobs.gather.mine.mend :as mend]
             [jobs.gather.mine.way-set :as mw]
-            [jobs.gather.mine.targets :refer [owed carried got had work-s zone-margin within-keep-clear within-own-zone scan items main-block]]
+            [jobs.gather.mine.targets :refer [owed carried got had work-s zone-margin within-keep-clear within-own-zone scan items main-block walled?]]
                         [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.child :as child]
@@ -247,9 +247,11 @@
 ;; ------------------------------------------------------------------ the steps
 
 (defn dig-args
-  "The args of the dig-for call: the trip's, without :mend, tracking the ground when it mends, a tunnel keeping its heading."
+  "The args of the dig-for call: the trip's, without :mend, tracking the ground when it mends, a tunnel keeping its heading
+  unless a seen unbreakable block walls it off where the body stands."
   [c]
-  (let [{:keys [dug-heading]} (ctx/mem c)]
+  (let [{:keys [dug-heading]} (ctx/mem c)
+        dug-heading (when-not (and dug-heading (walled? c (cell-of (u/self-pos c)) dug-heading)) dug-heading)]
     (cond-> (-> (:args c)
                 (dissoc :mend :submitted-at)
                 (assoc :track-ground (boolean (:mend (:args c))) :least (:least (ctx/frozen-call c) :all)

@@ -368,7 +368,7 @@
                          :goal (:count (:args c)) :had now :start start
                          :failures 0 :dry 0 :last-carried now
                          :skipped (mapv (fn [[x y z]] {:x x :y y :z z}) (:skip (:args c)))
-                         :heading (or heading faced)
+                         :heading (or heading (targets/open-heading c start faced))
                          :ground (if (:track-ground (:args c)) (snapshot c start) [])
                          :phase :dig)
         :again)

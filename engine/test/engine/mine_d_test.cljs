@@ -22,6 +22,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
             [jobs.gather.dig-for :as mine]
+            [jobs.gather.mine :as gather-mine]
             [jobs.gather.mine.descent :as mine-descent]
             [jobs.gather.mine.end :as mine-end]
             [jobs.gather.mine.targets :as mine-targets]
@@ -542,3 +543,20 @@
   (is (= :no (classify-in {"0,65,3" "lava"})) "lava on top shows as drips: known")
   (is (= :no (classify-in {"0,64,2" "lava"})) "lava in the open face, seen")
   (is (= :buried (classify-in {"1,64,3" "stone" "-1,64,3" "stone" "0,65,3" "stone" "0,63,3" "stone" "0,64,4" "stone" "0,64,2" "stone"}))))
+
+;; card a053256c: a kit's later mine started its tunnel into the plot's bedrock wall one block ahead
+(deftest a-seen-bedrock-wall-ahead-is-not-the-heading-a-tunnel-starts-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (facing-west-run {"-1,64,0" "bedrock" "-1,65,0" "bedrock"} 4 250))
+              legs (:legs (done-event s))]
+          (is (= {:heading "north" :length 4 :stop :tunnel-length} (first legs)) (pr-str legs))
+          (is (not-any? #(neg? (first %)) (dug-cells s)) "nothing west was cut"))))))
+
+(deftest a-kept-heading-walled-off-by-seen-bedrock-is-not-passed-on
+  (let [heading (fn [extra] (let [s (start {:world (rock-world extra)})]
+                              (with-redefs [ctx/mem (constantly {:dug-heading "west"}) ctx/frozen-call (constantly nil)]
+                                (:heading (gather-mine/dig-args {:primitives (:p s) :args {:block "iron_ore" :count 1}})))))]
+    (is (= "west" (heading {})) "an open heading is kept")
+    (is (nil? (heading {"-1,65,0" "bedrock"})) "bedrock at head height one block west: the dig picks its heading anew")))

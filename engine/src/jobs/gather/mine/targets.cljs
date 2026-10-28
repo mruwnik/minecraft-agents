@@ -295,6 +295,20 @@
   (let [[dx dz] (headings heading)]
     (-> origin (update :x + (* k dx)) (update :z + (* k dz)))))
 
+(defn walled?
+  "Whether the body has seen an unbreakable block (bedrock) in the feet or head cell one step along heading from cell: a
+  tunnel or stair that way cuts nothing."
+  [c cell heading]
+  (let [ahead (step-cell {:origin cell :heading (look/heading-name heading)} 1)]
+    (boolean (some #(rules/unbreakable (u/seen-name (:primitives c) %)) [ahead (update ahead :y inc)]))))
+
+(defn open-heading
+  "heading when it is not walled? from cell, else the first of the other headings (clockwise) that is not; heading when all are."
+  [c cell heading]
+  (let [cycle ["north" "east" "south" "west"]
+        i (.indexOf cycle heading)]
+    (or (first (remove #(walled? c cell %) (map #(nth cycle (mod (+ i %) 4)) (range 4)))) heading)))
+
 (defn zone-margin [] (settings/get settings ::zone-margin))
 
 (defn work-s
