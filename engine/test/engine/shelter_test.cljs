@@ -361,10 +361,16 @@
     {:time night :blocks {"60,64,0" "red_bed"}} {:x 60 :y 64 :z 0}))
 
 (deftest sleep-takes-the-spawn-bed-at-any-distance
-  (let [{:keys [eng]} (setup {:time night :blocks {"60,64,0" "red_bed"}})]
-    (mem/write! (:store eng) :spawn-bed {:pos {:x 60 :y 64 :z 0}} {:cap 1 :ttl :forever})
-    (core/submit! eng '(jobs.survival.sleep) {})
-    (is (some? (core/tick! eng)))))
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:time night :blocks {"60,64,0" "red_bed"}})]
+          (mem/write! (:store eng) :spawn-bed {:pos {:x 60 :y 64 :z 0}} {:cap 1 :ttl :forever})
+          (core/submit! eng '(jobs.survival.sleep) {})
+          (let [round (core/tick! eng)]
+            (is (some? round))
+            ;; a round left running walks on in the next tests, under their go-to's job id "j1/go"
+            (await round)))))))
 
 (deftest sleep-retracts-a-bed-that-is-gone
   (async done
