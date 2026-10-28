@@ -102,6 +102,8 @@
       (fn ^:async t []
         (doseq [[start want] [[(contract/ok :ready "ready") 0]
                               [(contract/later :not-worth "costs 42 s" :price 42 :worth 0) 42]
+                              [(contract/later :dark "waits for light" :wait-ms 90000) 90]
+                              [(contract/later :exposed "dark until light" :wait-ms 30000) 30]
                               [(contract/later :no-source "no source") ##Inf]
                               [(contract/never :bad-args "bad") ##Inf]]]
           (let [price (atom nil)]
