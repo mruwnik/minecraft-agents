@@ -32,7 +32,7 @@
 
 (def pile-values
   "recover-drops :value-overrides that price the field-report pile at a few hundred seconds, so the trip's danger and cost decide it."
-  {"raw_iron" 3 "cobblestone" 0.05 "oak_planks" 0.05 "stone_pickaxe" 1 "diamond_pickaxe" 20 "diamond_sword" 10})
+  {"raw_iron" 3 "cobblestone" 0.05 "oak_planks" 0.05 "stone_pickaxe" 1 "diamond_pickaxe" 20 "diamond_sword" 14})
 
 (def death-pile-of-the-field-report
   [{:name "raw_iron" :count 4 :slot 17} {:name "raw_iron" :count 20 :slot 18}

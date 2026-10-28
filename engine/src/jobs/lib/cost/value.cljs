@@ -42,6 +42,7 @@
             [clojure.set :as set]
             [clojure.string :as str]
             [jobs.lib.cost.table :as tbl]
+            [jobs.lib.cost.fight :as fight]
             [jobs.lib.cost.health :as health]
             [engine.game :as game]
             [engine.settings :as settings]))
@@ -59,8 +60,8 @@
                :doc "Floor of one block walked in the dark, on top of per-block; the hp the spawned mobs would cost the kit (jobs.lib.cost/dark-factor) comes on top, so a bare body pays a dark block most and an armed one less."}
    ::spawn-chance-per-s {:default 0.005 :spec (a/num-in 0 nil)
                          :doc "Chance a mob spawns and reaches the body each second it stands on a cell where one can spawn (jobs.lib.cost/spawn-chance)."}
-   ::walk-blocks-per-s {:default 2.9 :spec (a/num-in 0.1 nil)
-                        :doc "Walking speed with slack for detours (4.3 flat out, 1.5x the way), blocks a second."}
+   ::detour-factor {:default 1.5 :spec (a/num-in 1 nil)
+                    :doc "Times the straight line a walk's way is taken to be (detours), for walk-blocks-per-s."}
    ::per-frontier-walk {:default 1 :spec (a/num-in 0 nil)
                         :doc "Each walk of a tour to the edge of loaded land that brought the body no nearer its goal, on top of its blocks, in seconds."}
    ::tour-ratio {:default 3 :spec (a/num-in 0 nil)
@@ -199,7 +200,10 @@
   [] (/ (per-dark) (per-block)))
 (defn per-danger "One expected point of damage (jobs.lib.cost/route-danger): what an hp costs (jobs.lib.cost.health)." [] (health/walk-hp-seconds))
 (defn own-place-blocks [] (settings/get settings ::own-place-blocks))
-(defn walk-blocks-per-s [] (settings/get settings ::walk-blocks-per-s))
+(defn walk-blocks-per-s
+  "Blocks of straight line a second a walk covers: fight/walk-speed over ::detour-factor."
+  []
+  (/ fight/walk-speed (settings/get settings ::detour-factor)))
 (def lethal-causes ["lava" "fire" "burn" "void" "out_of_world"])
 
 (defn lethal-cause? [cause]

@@ -100,11 +100,11 @@
   (vec (reductions + 0 (map u/dist cells (rest cells)))))
 
 (defn timed-way
-  "The cells of the walk of c's body to goal on plan (way), each with :t the seconds from the start the body is there at its pace by its food."
+  "The cells of the walk of c's body to goal on plan (way), each with :t the seconds from the start the body is there at cost/walk-speed."
   [c goal plan]
   (let [p (:primitives c)
         cells (way (sh-sense/feet p) (update goal :y #(or % (:y (sh-sense/feet p)))) plan)
-        speed (cost/body-speed (or (.-food (.self p)) 20))]
+        speed cost/walk-speed]
     (mapv #(assoc %1 :t (/ %2 speed)) cells (along cells))))
 
 (defn- exit-dark
@@ -144,7 +144,7 @@
         food (or (.-food (.self p)) 20)
         known (threats/known-threats c)
         hides (threats/hide-threats c)
-        speed (cost/body-speed food)
+        speed cost/walk-speed
         later (fn [i] (if (and (pos? stay-s) (> i stay-at)) stay-s 0))
         catchers (live-catchers known (mapv (fn [i cell d] (assoc cell :t (+ (/ d speed) (later i)))) (range) cells (along cells)))
         remembered (remembered-near-way known hides feet goal)]
