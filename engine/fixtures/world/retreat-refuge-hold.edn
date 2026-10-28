@@ -5,8 +5,8 @@
 ;; b5c1d94a 40613c1e 94b5eaee 1f0b4279 and 8035feed (a body in a hole with dirt, a zombie that moves).
 ;; Pit cases: bare level pit. The zombie stands 3 off on the stone top (farther off its line of sight over the lip misses the body);
 ;; the glass case has a zombie seen through glass with no walkable way to the pit: the body stays.
-;; Pillar cases: open ground, 20 dirt, one NoAI zombie 7 blocks off, the pillar counted as never failing for a mob (its
-;; ::pillar-mob-fails) so that it is the priced choice. Tunnel cases: the cornered-retreat stone mass (x 2..30, z 10..22, y 0..4), 1x2 tunnel along z 16 from x 5.
+;; Pillar cases: open ground, 20 dirt, one NoAI zombie 7 blocks off. They test what follows a pillar, so the pillar is
+;; pinned the priced choice: ::pillar-mob-fails 0 of 30 (3%) is a pin, not a count (at the measured counts flee is cheaper here). Tunnel cases: the cornered-retreat stone mass (x 2..30, z 10..22, y 0..4), 1x2 tunnel along z 16 from x 5.
 {:defaults
  {:tags [:hostile :survival :cornered :refuge]
   :time :any

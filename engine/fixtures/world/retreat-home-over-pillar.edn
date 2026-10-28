@@ -2,6 +2,8 @@
 ;; into the house and shuts the door; it builds no column outside (a pillar is no refuge from a shooter and would block the door).
 ;; Hut: planks x 12..18, z 12..18, y 0..3 (hollow), room 13..17, shut oak door at [15 0..1 18]; home bed inside at [14 0 14]; body 2 south of the door.
 ;; Should-succeed: the body ends inside the hut with the door shut, no cobblestone outside. Should-fail: a cobblestone column at [15 0..2 19].
+;; The pillar's mob-fail counts are pinned at the 2026-10-28 counts (the defaults): the house is chosen by price, so a
+;; recount that moves them must re-check this case.
 {:defaults
  {:tags [:hostile :survival :cornered]
   :time :any
@@ -15,6 +17,7 @@
            [:set [14 0 15] "red_bed[facing=south,part=head]"]]
   :body {:at [15.5 0 20.5] :yaw 180 :settle-s 3 :inventory [["cobblestone" 16]]}
   :register [{:trigger :hostile-near}]
+  :settings {:jobs.survival.respond.options/pillar-mob-fails {:beside {:k 4 :n 4} :clear {:k 4 :n 8}}}
   :memory [{:kind :home :data {:pos #xyz [14 0 14]} :policy {:cap 1 :ttl :forever}}]
   :act [[:rcon "damage $BODY 16 minecraft:generic"]
         [:summon "zombie" [15.5 0 27.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]

@@ -748,6 +748,15 @@
   (is (= {:beside {:k 6 :n 6} :clear {:k 4 :n 8}} (flight/add-seen {:beside {:k 4 :n 4} :clear {:k 4 :n 8}} {:beside 2}))
       "two refusals with a mob in the pillar's cells say nothing of a pillar begun clear"))
 
+(deftest a-seen-failure-stays-over-flee-steps-until-the-gap-grows-a-block
+  (let [refused {:seen-fails {:pillar {:beside 1}} :tried #{:back-off}}
+        first-step (flight/after-step refused 2)
+        no-gain (flight/after-step first-step 2.8)]
+    (is (= {:pillar {:beside 1}} (:seen-fails first-step)) "the first step's gap is the baseline: no gain")
+    (is (= {:pillar {:beside 1}} (:seen-fails no-gain)) "a step that gains under a block: the refusal still counts")
+    (is (nil? (:tried no-gain)) "the options tried are open again after a step")
+    (is (nil? (:seen-fails (flight/after-step no-gain 3))) "a block gained: the pillar is priced afresh")))
+
 (deftest a-zombie-in-the-cell-of-the-next-block-is-struck-out-and-the-pillar-goes-on
   (async done
     (tu/run-async done

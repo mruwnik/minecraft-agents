@@ -187,7 +187,7 @@
 (defn ^:async raise!
   "A pillared body that was hit: raise the pillar pillar-extend blocks from the top (its cells added to the refuge) when
   that many blocks are carried, up to pillar-raises times: :again when it rose, else :failed. A raise cut short for a
-  mob (build!) is a seen pillar failure (flight/seen-fail! of its class); a hostile standing in the cell of the next block (a mob beside the top
+  mob (build!) is a seen failure of the pillar's class as it began (flight/seen-fail!); a hostile standing in the cell of the next block (a mob beside the top
   overlaps it) is struck out of it."
   [c]
   (let [{:keys [kind cells] :as refuge} (:refuge (ctx/mem c))
@@ -200,6 +200,6 @@
             built (:built r 0)]
         (when (:mob? r)
           (await (knock-off! c))
-          (flight/seen-fail! c :pillar (mob-class (:primitives c) (pl/feet-cell c))))
+          (flight/seen-fail! c :pillar (:class refuge)))
         (ctx/update-mem! c update :refuge assoc :raised (inc (:raised refuge 0)) :cells (into cells (take built (mapv #(escape/up top %) (range 1 (inc n))))))
         (if (pos? built) :again :failed)))))

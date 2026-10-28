@@ -145,11 +145,11 @@
     (await (plug! c option ways))))
 
 (defn ^:async pillar!
-  "Start a pillar (respond.pillar/plan!, through another's area only with trespass?) when it fits (debug retreat.pillar
+  "Start a pillar (respond.pillar/plan!, through another's area only with trespass?) when it fits (info retreat.pillar
   {:class :at}: its class and feet cell, for event-counts wall-places): a step's result, else nil."
   [c trespass?]
   (when-let [refuge (await (pillar/plan! c trespass?))]
-    (ctx/emit! c :retreat.pillar :debug {:class (:class refuge) :at (mapv (:anchor refuge) [:x :y :z])})
+    (ctx/emit! c :retreat.pillar :info {:class (:class refuge) :at (mapv (:anchor refuge) [:x :y :z])})
     (await (start-refuge! c refuge))))
 
 (defn ranged-known?

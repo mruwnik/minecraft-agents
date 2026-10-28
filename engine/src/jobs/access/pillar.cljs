@@ -354,10 +354,11 @@
           :again
           (let [settled (ledger/reconcile l block-at)]
             (ledger/remember! c settled)
-            (finish! c settled (cond-> (if (< failures (max-failures))
-                                         (give-up :off-column :at (pl/feet-cell c) :detail (.-reason r))
-                                         (give-up :place-failed :at cell :detail (.-reason r)))
-                                 (and (or shoved? (refused? r)) (hostile-near-cell c cell)) (assoc :mob (hostile-near-cell c cell))))))))))
+            (finish! c settled (let [mob (when (or shoved? (refused? r)) (hostile-near-cell c cell))]
+                                 (cond-> (if (< failures (max-failures))
+                                           (give-up :off-column :at (pl/feet-cell c) :detail (.-reason r))
+                                           (give-up :place-failed :at cell :detail (.-reason r)))
+                                   mob (assoc :mob mob))))))))))
 
 (defn ^:async shoved-back!
   "Before a round: a body off the base column (whatever the last place did) counts one knockback and walks back

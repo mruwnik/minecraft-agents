@@ -132,16 +132,23 @@
 
 (defn note-gap
   "mem after a flight step that left the nearest chaser gap blocks off: a gain of a block over the best gap resets the
-  sweeps and the no-gain count, else the count grows. No gap (no chaser left) is no sample: the flight is succeeding,
-  the no-gain count resets and the best gap stays."
+  sweeps and the no-gain count and forgets the cover failures seen (seen-fail!: the chasers no longer press where they
+  were seen), else the count grows. The first gap is the baseline, no gain over a failure seen before it. No gap (no
+  chaser left) is no sample: the flight is succeeding, the no-gain count resets and the best gap stays."
   [mem gap]
   (let [best (:best-gap mem)]
     (cond
       (nil? gap) (assoc mem :since-gain 0)
-      (or (nil? best) (>= gap (inc best)))
-      (assoc mem :best-gap gap :since-gain 0 :sweeps 0)
+      (nil? best) (assoc mem :best-gap gap :since-gain 0 :sweeps 0)
+      (>= gap (inc best)) (-> mem (assoc :best-gap gap :since-gain 0 :sweeps 0) (dissoc :seen-fails))
       :else
       (update mem :since-gain (fnil inc 0)))))
+
+(defn after-step
+  "mem after a flee step that moved the body, leaving the nearest chaser gap blocks off (note-gap): the options tried
+  and the step retries forgotten."
+  [mem gap]
+  (-> mem (dissoc :tried :slow-steps :refused-steps :regrown) (note-gap gap)))
 
 (defn nearest-gap
   "Blocks from the body to the nearest of hostiles, nil with none."
