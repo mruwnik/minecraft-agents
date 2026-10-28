@@ -8,7 +8,7 @@
   for a walk away, the chance its mobs catch it and the blows they then land; :spent when its one mob is a creeper (the
   blast that kills spends it: no mob waits at the death spot). answer-price: the hp at the health each
   leaves in the outcomes it lives through (lived-damage, health/hp-cost), the death the blows risk (death-chance x death-price), the seconds, and the cheapest
-  :then at full health. death-price: the one price of a death, the mob met again where the body goes back.
+  :then at full health or giving the spot up (go-on). death-price: the one price of a death, the mob met again where the body goes back.
 
   death-chance: the one chance of dying every route, spot, wait or answer is priced by. A known threat on a route costs
   the death of the answer the body would take to it (decide over fight, walk away and the covers it has).
@@ -136,6 +136,12 @@
   [body at]
   (let [d (death/death-cost body at)] {:met d :clear d}))
 
+(defn go-on
+  "Seconds a body h that lived through an answer pays for what follows, priced at price: the cheaper of that and giving
+  the spot up (death/give-up-cost, its items kept), the choice death-price gives a death."
+  [h price]
+  (min price (death/give-up-cost (assoc h :carried 0))))
+
 (declare repeat-price answer-death-chance)
 
 (defn answer-price*
@@ -153,9 +159,10 @@
                own)]
     (cond
       stays (let [h (healed body)]
-              (+ base (* lives stays (min (reduce min ##Inf (map #(answer-price* h % at death) then)) (repeat-price h answer at death)))))
+              (+ base (* lives stays (go-on h (min (reduce min ##Inf (map #(answer-price* h % at death) then)) (repeat-price h answer at death))))))
       (seq outcomes) base
-      (seq then) (+ own (* lives (apply min (map #(answer-price* (if (:at-once answer) (after body answer) (healed body)) % at death) then))))
+      (:at-once answer) (+ own (* lives (apply min (map #(answer-price* (after body answer) % at death) then))))
+      (seq then) (let [h (healed body)] (+ own (* lives (go-on h (apply min (map #(answer-price* h % at death) then))))))
       :else own)))
 
 (defn repeat-price
@@ -172,7 +179,8 @@
   (:met; :clear, none, is death/death-cost) at full health with nothing carried by the cheapest of answers, each death
   there costing the same once more. That meet's price is the fixed point x = min(stake, back + min over answers of
   p + k x): p an answer's price with its deaths free, k its chance of a death its mob outlives (the price's rise per
-  second of such a death), so x = min(stake, min over answers of (back + p) / (1 - k)). No answers: no mob waits."
+  second of such a death), so x = min(stake, min over answers of (back + p) / (1 - k)); a survivor's choice to give up
+  (go-on) bends the price, so p and k are its line at x (found from x = 0 on). No answers: no mob waits."
   [body answers at]
   (let [answers (filter some? answers)
         clear (bare body at)]
@@ -182,9 +190,14 @@
             stake (death/give-up-cost e)
             back (death/back-cost e at)
             price (fn [a x] (answer-price* e a at {:met x :clear (min stake back)}))
-            lines (map (fn [a] (let [p (price a 0)] [p (- (price a 1) p)])) answers)
+            line (fn [a x] (let [q (price a x) k (- (price a (inc x)) q)] [(- q (* k x)) k]))
             at-x (fn [[p k] x] (if (pos? k) (+ p (* k x)) p))
-            x (reduce min stake (map (fn [[p k]] (if (< k 1) (/ (+ back p) (- 1 k)) ##Inf)) lines))
+            solve (fn [lines] (reduce min stake (map (fn [[p k]] (if (< k 1) (/ (+ back p) (- 1 k)) ##Inf)) lines)))
+            [lines x] (loop [lines (map #(line % 0) answers) n 0]
+                        (let [x (solve lines)]
+                          (if (or (= n 8) (every? (fn [[a [p k]]] (< (js/Math.abs (- (price a x) (+ p (* k x)))) 1e-6)) (map vector answers lines)))
+                            [lines x]
+                            (recur (map #(line % x) answers) (inc n)))))
             meet (reduce min (map #(at-x % x) lines))]
         (assoc clear :met (+ (death/experience-cost body)
                              (min (death/give-up-cost body)
@@ -203,7 +216,7 @@
   "The chance answer kills body: its blows (blows-chance), then the cheapest of its :then (answer-price* at `at`, by
   death, default bare) at full health, or each of its :outcomes by its chance; with :stays, by that chance the cheapest
   at full health of its :then and itself again (repeat-price; again and again: d / (1 - stays x (1 - d)), d its own
-  chance); :at-once, its :then at the health it leaves."
+  chance), none of them when giving the spot up is cheaper (go-on); :at-once, its :then at the health it leaves."
   ([body answer at] (answer-death-chance body answer at (bare body at)))
   ([body {:keys [then outcomes stays] :as answer} at death]
    (let [own (blows-chance body answer)
@@ -213,12 +226,15 @@
          h (if (and (:at-once answer) (not stays)) (after body answer) (healed body))
          next (when (seq then) (apply min-key #(answer-price* h % at death) then))]
      (cond
-       stays (let [again? (or (nil? next) (< (repeat-price h answer at death) (answer-price* h next at death)))
-                   d (if again?
-                       (let [d (answer-death-chance h (dissoc answer :stays :then) at death)] (if (pos? d) (/ d (- 1 (* stays (- 1 d)))) 0))
-                       (answer-death-chance h next at death))]
+       stays (let [again (repeat-price h answer at death)
+                   onward (if next (answer-price* h next at death) ##Inf)
+                   d (cond
+                       (< (go-on h (min again onward)) (min again onward)) 0
+                       (< again onward) (let [d (answer-death-chance h (dissoc answer :stays :then) at death)] (if (pos? d) (/ d (- 1 (* stays (- 1 d)))) 0))
+                       :else (answer-death-chance h next at death))]
                (- 1 (* (- 1 base) (- 1 (* stays d)))))
        (seq outcomes) base
+       (and next (not (:at-once answer)) (let [p (answer-price* h next at death)] (< (go-on h p) p))) own
        next (- 1 (* (- 1 own) (- 1 (answer-death-chance h next at death))))
        :else own))))
 
@@ -420,7 +436,7 @@
   caught-s seconds of it (the flee search's race) at reach-rate; or else at the prior of the body's health
   (jobs.lib.cost.caught/prior of its mobs, the likeliest caught), they then landing its blows (the trials counted a
   flight's blows from all its chasers) of that mob's, in a flight begun in water (the trials counted flights on land) a melee mob's no more than
-  caught-s at reach-rate (blows do not outlast the race's seconds in reach); never fewer than the walk's own. The two catches are one by their chances (caught by both, the worse): its damage their mean, its :shape the width of their
+  caught-s at reach-rate (blows do not outlast the race's seconds in reach); never fewer than the walk's own. The two catches are one by their chances (caught by both, the prior's blows: the trials counted them on flights of every way): its damage their mean, its :shape the width of their
   mix (each its own: the way's the walk's, the prior's its blows' uncertainty). A creeper that blows on the
   walk (at the median of its :spread) is spent: what follows is the walk from the rest or later (none left: nothing).
   swim: the blocks a body in water swims to dry land first (flee-mob's; ##Inf none known) and land the blocks to walk on there, at its planner/swim-speed times the share of a sprint a flight's pace is on foot (danger/flee-walk-speed over body-speed).
@@ -472,8 +488,7 @@
                             by-way {:damage dw :shape (when (pos? extra) (/ (* dw dw) extra))}
                             by-prior {:damage dp :shape (:shape pr)}
                             {d :damage d-shape :shape} (mix (if (pos? caught)
-                                                              [[(/ (* way (- 1 pc)) caught) by-way] [(/ (* pc (- 1 way)) caught) by-prior]
-                                                               [(/ (* way pc) caught) (max-key :damage by-prior by-way)]]
+                                                              [[(/ (* way (- 1 pc)) caught) by-way] [(/ pc caught) by-prior]]
                                                               [[1 by-prior]]))]
                         (cond-> (assoc-in walk [:caught :damage] (+ d (reduce + 0 (get-in walk [:caught :blasts]))))
                           (lone-creeper? mobs) (assoc :spent true)

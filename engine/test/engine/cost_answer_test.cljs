@@ -132,6 +132,13 @@
       (is (zero? (extra "creeper")) "a creeper's blast spends it: no mob waits at the spot")
       (is (pos? (extra "zombie")) "a zombie does"))))
 
+(deftest a-survivor-goes-on-or-gives-the-spot-up-as-a-death-does
+  (let [dear {:damage 100 :hit 5 :seconds 5000}
+        after-it {:damage 0 :seconds 1 :then [dear]}]
+    (is (= (+ 1 (death/give-up-cost (body 20))) (cost/answer-price (assoc (body 20) :carried 300) after-it here []))
+        "what follows costs more than the work there: the spot is given up, the items kept")
+    (is (zero? (answer/answer-death-chance (body 20) after-it here)) "and the deadly meet is not taken")))
+
 (deftest the-walk-back-meets-the-mob-fresh-not-with-the-blows-felt-or-the-dead-end-here
   (let [bed (assoc (body 20) :respawn {:x 40 :y 64 :z 0} :weapon sword)
         zombie (mob "zombie" 2 35)
@@ -212,13 +219,12 @@
 
 (deftest the-prior-and-the-ways-catch-are-one-mix-so-a-small-dead-end-chance-moves-the-price-little
   (let [zombie (mob "zombie" 4 35)
-        price #(cost/answer-price (assoc (body 12) :carried %2) (cost/flee-answer {:health 12 :food 20 :mobs [zombie] :caught %1}) here [])
+        price #(cost/answer-price (body 12) (cost/flee-answer {:health 12 :food 20 :mobs [zombie] :caught %}) here [])
         caught #(:caught (cost/flee-answer {:health 12 :food 20 :mobs [zombie] :caught %1 :caught-s %2}))
         blows #(let [{:keys [chance damage]} (caught % 0.5)] (* chance damage))]
-    (is (< (/ (- (price 0.01 0) (price 0 0)) (price 0 0)) 0.02) "a way that goes on 99 times in 100 prices as a seen one, near enough")
-    (is (< (price 0 300) (price 0.5 300) (price 1 300))
-        "the likelier its dead end, the dearer, for a body with items to lose (with none a death respawns it whole at the cost of giving the spot up, under a hurt life that meets the zombie again)")
-    (is (< (blows 0) (blows 0.5) (blows 1)) "caught by the race's half second and the prior both, the body takes the prior's larger blows")
+    (is (< (/ (- (price 0.01) (price 0)) (price 0)) 0.02) "a way that goes on 99 times in 100 prices as a seen one, near enough")
+    (is (< (price 0) (price 0.5) (price 1)) "the likelier its dead end, the dearer")
+    (is (< (blows 0) (blows 0.5) (blows 1)) "caught by the race's half second and the prior both, the body takes the prior's blows")
     (is (= (:damage (caught 0 nil)) (:damage (caught 0 0.5))) "on land the race's seconds bound nothing: the prior's own blows, counted on land flights")))
 
 (deftest a-swim-on-a-free-way-is-caught-for-no-longer-than-the-race-keeps-the-drowned-in-reach
