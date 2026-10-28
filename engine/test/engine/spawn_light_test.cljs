@@ -76,3 +76,14 @@
     (is (= #{:light} (at 13 {"15,70,0" "oak_leaves"})) "under a canopy the sky is dimmed but dawn still lights the floor")
     (is (= #{} (at 12 {"15,67,0" "stone"})) "a stair cell the sky reaches only round a corner: dawn is no cure, only threats count")
     (is (= #{} (at 0 {})))))
+
+(deftest a-seen-cell-the-dusk-sky-leaves-dark-is-priced-dark
+  (let [p (sky/with-sky (tu/fake {:floor tu/walk-floor :time st/noon :self {:pos {:x 0 :y 64 :z 0}}}))
+        at (fn [f subtract] (with-redefs [sh-sense/sky-subtract-now (constantly subtract) sh-sense/seen-cell? (constantly true)
+                                          sh-sense/block-light-at (constantly 0) sh-sense/sky-light-at (constantly 13)
+                                          sh-inside/walk-leaves-shelter? (constantly nil)]
+                              (f)))
+        cell {:x 15 :y 64 :z 0}]
+    (is (pos? (at #(spawn-light/chance-at p cell false) 6)) "a canopy floor, sky light 13, at dusk")
+    (is (pos? (:chance (at #(spawn-light/exposure p cell) 6))) "and readiness prices it so")
+    (is (zero? (at #(spawn-light/chance-at p cell false) 0)) "lit at noon")))
