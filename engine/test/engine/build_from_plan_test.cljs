@@ -1219,6 +1219,24 @@
             (is (every? #(= "oak_planks" (block p %)) cells))
             (is (= 1 (count (filter #(= "dirt" (block p (update % 1 dec))) cells))) "one support column, the rest of the floor grows from it")))))))
 
+(deftest a-floor-over-a-two-deep-dip-hidden-from-the-rim-looks-down-the-column-and-grows-from-a-fill
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cells (for [x [2 3] z [2 3]] [x 66 z])
+              plan {:id "floor" :parts [{:id "f" :cells cells :want "oak_planks"}]}
+              {:keys [eng p]} (start {:blocks wide-ground :inventory [{:name "oak_planks" :count 4} {:name "dirt" :count 8}]
+                                      :self {:pos {:x 7.5 :y 64 :z 3.5}}}
+                                     {"floor" plan} [])
+              looked? #(seq (h/calls p "look"))
+              hide (fn [f unseen] (fn [pos] (if (and (< (.-y pos) 66) (not (looked?))) (unseen pos) (f pos))))]
+          (aset p "seenBlockAt" (hide (.-seenBlockAt p) (fn [pos] #js {:unknown true :pos pos})))
+          (aset p "sensedAt" (hide (.-sensedAt p) (fn [_] #js {:unknown true})))
+          (no-support-world! p)
+          (let [result (await (child-outcome eng job {:plan "floor" :worth (* 2.5 (cost/earthwork-s 1))} 400))]
+            (is (= [] (:missing result)) (pr-str (select-keys result [:status :reason :text :given-up])))
+            (is (= 2 (count (for [[x z] [[2 2] [3 2] [2 3] [3 3]] y [64 65] :when (= "dirt" (block p [x y z]))] 1))) "the column is exactly as deep as the worth pays")))))))
+
 (deftest a-fill-column-is-placed-or-declined-by-the-price-against-the-worth-not-by-the-width-of-the-floor
   (async done
     (tu/run-async done
