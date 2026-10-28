@@ -177,26 +177,33 @@
 
 (def fixed-point-rounds "Rounds of least-fixed-point after which it stops whatever the error: a backstop, flagged :capped, not the way it ends." 200)
 
+(def fixed-point-cap "Seconds past which a root with no stake to bound it is no root: ##Inf." 1e9)
+
 (defn least-fixed-point
   "{:root x} the least x >= 0 with (f x) = x, f nondecreasing, continuous, (f 0) >= 0 and at most stake: the limit of x, (f x),
   (f (f x)) ... By induction every iterate is at most the least root r ((f x) <= (f r) = r), and they only rise, so none skips
-  a pair of roots. A round's step over the last one's is the ratio the steps shrink by, and the iterates' limit by it (Aitken)
-  is y + step x ratio / (1 - ratio): the iteration stops when that limit moves less than fixed-point-tolerance-s (or the
-  step is under it), and returns the limit. Steps that do not shrink, whose limit would pass stake twice running, end at
-  once with stake (##Inf when it is: no root). After fixed-point-rounds the limit ends it, with :capped true."
+  a pair of roots and every one is a lower bound: steps that grow (a concave f before its root) are iterated on. A round's
+  step over the last one's is the ratio the steps shrink by, and the iterates' limit by it (Aitken) is y + step x ratio /
+  (1 - ratio): the iteration stops when that limit moves less than fixed-point-tolerance-s between rounds, returning it
+  (a first step under it is the root). An iterate reaching stake ends it with stake, one past fixed-point-cap with no stake (##Inf) is
+  ##Inf. After fixed-point-rounds the iterate is returned with :capped true (##Inf for an infinite stake and steps that
+  have not shrunk)."
   [f stake]
-  (loop [x 0 prev nil n 0 streak 0 last-limit nil]
+  (loop [x 0 prev nil n 0 last-limit nil]
     (let [y (f x)
           step (- y x)
           ratio (when (and prev (pos? prev)) (/ step prev))
-          limit (if (and ratio (< ratio 1)) (+ y (/ (* step ratio) (- 1 ratio))) ##Inf)
-          streak (if (and ratio (>= limit stake)) (inc streak) 0)]
+          shrinking? (and ratio (< ratio 1))
+          error (when shrinking? (/ (* step ratio) (- 1 ratio)))
+          limit (when shrinking? (+ y error))]
       (cond (<= step 0) {:root y}
-            (< step fixed-point-tolerance-s) {:root (min stake (if (< limit ##Inf) limit y))}
-            (and last-limit (< (js/Math.abs (- limit last-limit)) fixed-point-tolerance-s)) {:root (min stake limit)}
-            (>= streak 2) {:root stake}
-            (>= n fixed-point-rounds) {:root (min stake limit) :capped true}
-            :else (recur y step (inc n) streak limit)))))
+            (>= y (min stake fixed-point-cap)) {:root (if (< stake ##Inf) stake ##Inf)}
+            (and (nil? prev) (< step fixed-point-tolerance-s)) {:root y}
+            (and limit last-limit (< (js/Math.abs (- limit last-limit)) fixed-point-tolerance-s)) {:root (min stake limit)}
+            (>= n fixed-point-rounds) (if (or shrinking? (< stake ##Inf))
+                                        {:root (min stake (or limit y)) :capped true}
+                                        {:root ##Inf})
+            :else (recur y step (inc n) limit)))))
 
 (defn death-fixed
   "{:stake :back :price :fixed} of the death price of body over answers at `at` (death-price): fixed x the price of a

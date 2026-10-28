@@ -132,6 +132,12 @@
       (is (zero? (extra "creeper")) "a creeper's blast spends it: no mob waits at the spot")
       (is (pos? (extra "zombie")) "a zombie does"))))
 
+(deftest a-death-price-stopped-by-the-round-backstop-says-so
+  (let [bed (assoc (body 5) :respawn {:x 40 :y 64 :z 0})
+        risky {:damage 12 :hit 5 :seconds 10}]
+    (is (not (:capped (cost/death-price bed [risky] here))))
+    (is (true? (:capped (with-redefs [answer/fixed-point-rounds 0] (cost/death-price bed [risky] here)))))))
+
 (deftest the-death-price-solves-its-fixed-point-near-the-kinks-of-the-price
   (let [bed (assoc (body 5) :respawn {:x 40 :y 64 :z 0})
         e (assoc (answer/healed bed) :carried 0 :level 0)
@@ -180,16 +186,24 @@
     (is (not (:capped r)))
     (is (< @calls 30) (str "rounds: " @calls))))
 
-(deftest steps-that-do-not-shrink-end-at-once-at-the-stake-or-infinity
-  (let [calls (atom 0)
-        grow (fn [x] (swap! calls inc) (+ 1 x))]
+(deftest steps-that-grow-are-iterated-on-to-the-root
+  (is (= 8 (root #(min 8 (+ 1 (* 2 %))) 100)) "steps 1 2 4 grow before the root: the iterates 0 1 3 7 8 are lower bounds, not a limit past the stake")
+  (is (= 8 (root #(min 8 (+ 1 (* 2 %))) ##Inf)) "an infinite stake does not make a finite root infinite"))
+
+(deftest steps-that-never-shrink-end-at-the-stake-or-infinity
+  (let [grow #(+ 1 %)]
     (is (= ##Inf (root grow ##Inf)))
-    (is (= 500 (root grow 500)) "a limit past the stake is the stake")
-    (is (< @calls 10) (str "rounds: " @calls))))
+    (is (= 100 (root grow 100)) "iterating reaches the stake")
+    (is (= ##Inf (root #(* 2 (+ 1 %)) ##Inf)) "doubling passes the cap in a few rounds")))
 
 (deftest the-round-backstop-flags-a-limit-that-never-settles
   (let [r (with-redefs [answer/fixed-point-rounds 5] (answer/least-fixed-point #(+ % (/ 1 (+ 1 %))) 1e6))]
-    (is (:capped r))))
+    (is (:capped r))
+    (is (< (:root r) ##Inf))))
+
+(deftest a-backstop-hit-on-an-infinite-stake-with-steps-not-shrinking-is-infinity
+  (let [r (with-redefs [answer/fixed-point-rounds 5] (answer/least-fixed-point #(+ 1 %) ##Inf))]
+    (is (= ##Inf (:root r)))))
 
 (defn lcg
   "A deterministic stream of numbers in [0 1) from seed."

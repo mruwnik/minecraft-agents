@@ -873,11 +873,9 @@
     (is (< (js/Math.abs (- (gcut/send-back-price m) (* (cost/walk-step-s) (reduce + (map #(at [% 64 0]) (range 2 7)))))) 1e-9)
         "crossing the whole way costs the send-back price once, not once a cell")))
 
-(deftest a-walk-s-trail-keeps-the-last-cells-only
-  (let [m (reduce (fn [m i] (gcut/approach-step m {:x (+ i 0.5) :y 64 :z 0.5} 1000)) {} (range (+ 50 gcut/trail-cells)))]
-    (is (= gcut/trail-cells (count (:trail m))))
-    (is (= [(+ 49 gcut/trail-cells) 64 0] (peek (:trail m))) "the newest cell last")
-    (is (= [50 64 0] (first (:trail m))) "the oldest dropped")))
+(deftest a-walk-s-trail-keeps-each-cell-once-in-a-row
+  (let [m (reduce (fn [m x] (gcut/approach-step m {:x x :y 64 :z 0.5} 1000)) {} [0.2 0.7 1.5 1.9 0.5])]
+    (is (= [[0 64 0] [1 64 0] [0 64 0]] (:trail m)))))
 
 (deftest the-send-back-chance-is-the-counted-chance-of-sends-in-cut-walks
   (is (= (cost/counted-chance {:k 2 :n 5}) (gcut/send-back-chance {:cut-walks 5 :sent-backs [{} {}]}))))

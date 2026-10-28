@@ -140,9 +140,9 @@
 (defn log-encounter!
   "One :hostile entry and event for each change of decision in a run (a fight turned flight is said, with the health;
   the event has the answers' prices, seconds, the cover way a flight begins with and the :near mobs' names (what a flight's
-  catch is counted by); way-log/log-priced! the way counts
+  catch is counted by; :capped when the death price's search hit its round backstop); way-log/log-priced! the way counts
   scan the flight was priced with, when it was). The entry's :run is the run's first decision time (hostile-fight/returns)."
-  [c near threat decision prices cover scan]
+  [c near threat decision prices cover scan capped]
   (when-not (= decision (:logged (ctx/mem c)))
     (let [prev (:data (mem/latest (ctx/view c) :hostile))
           run (or (:run-at (ctx/mem c)) (ctx/now c))
@@ -151,7 +151,8 @@
       (ctx/remember! c :hostile entry hostile-policy)
       (ctx/emit! c :hostile.decided :info (cond-> (assoc (dissoc entry :from :run) :text (encounter-text entry prev) :near (mapv #(.-name %) near))
                                             prices (assoc :prices (update-vals prices js/Math.round))
-                                            cover (assoc :cover cover)))
+                                            cover (assoc :cover cover)
+                                            capped (assoc :capped true)))
       (way-log/log-priced! c scan)
       (ctx/update-mem! c assoc :logged decision :run-at run))))
 
@@ -339,7 +340,7 @@
 (defn ^:async respond-with!
   "The rest of respond once it has weighed the answers: log the decision, run its child, the other one when it declines."
   [c near weighed decision cover creeper stay?]
-  (log-encounter! c near (if (and (= :flee decision) creeper) creeper (first near)) decision (:prices weighed) cover (:way-scan weighed))
+  (log-encounter! c near (if (and (= :flee decision) creeper) creeper (first near)) decision (:prices weighed) cover (:way-scan weighed) (:capped (:death weighed)))
   (when (and stay? (not (:stay-noted (ctx/mem c))))
     (ctx/update-mem! c assoc :stay-noted true)
     (ctx/emit! c :hostile.sealed-hold :info {:text "under a roof: the mobs near are heard only or flyers, so the body stays in" :mobs (mapv #(.-name %) near)}))

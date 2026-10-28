@@ -50,10 +50,6 @@
   "Vertical velocity (blocks per tick) below which a long drop between two samples is a fall, not a teleport: a lagged sample of a fall can span more than jump-blocks."
   -0.5)
 
-(def trail-cells
-  "Cells of walk approach-step keeps in :trail: a send-back lays its toll on the last of them (one for each block undone), and a way that long is a way."
-  128)
-
 (defn cell-of [p] (mapv #(js/Math.floor (% p)) [:x :y :z]))
 
 (defn approach-step
@@ -70,8 +66,7 @@
         falling? (and (neg? dy) (< (:vy pose 0) falling-vy)
                       (< (js/Math.hypot (- (:x pose) (:x prev)) (- (:z pose) (:z prev))) jump-blocks))
         jumped? (and prev (not falling?) (>= (js/Math.hypot (- (:x pose) (:x prev)) dy (- (:z pose) (:z prev))) jump-blocks))]
-    (assoc m :trail (let [t (cond-> trail (not= cell (peek trail)) (conj cell))]
-                      (if (> (count t) trail-cells) (subvec t (- (count t) trail-cells)) t)) :last-dist d :closest (min d (:closest m d)) :prev (select-keys pose [:x :y :z])
+    (assoc m :trail (cond-> trail (not= cell (peek trail)) (conj cell)) :last-dist d :closest (min d (:closest m d)) :prev (select-keys pose [:x :y :z])
            :jumped (boolean (or jumped? (:jumped m)))
            :jump-from (if jumped? (assoc (select-keys prev [:x :y :z]) :blocks (u/dist prev pose)) (:jump-from m))
              :anchor (if nearer? d anchor) :explored (if nearer? 0 (+ explored step)))))
@@ -133,8 +128,8 @@
   (> (send-back-price m) (cost/tour-worth (or (:detour-from (ctx/mem c)) (:last-dist m 0)) (:worth (:args c)))))
 
 (defn beside
-  "The cells one planner move from cell [x y z] (engine.path.planner.moves, neighbour): the 3 x 3 round it at its height, one up
-  or one down, so a step to the side of the way, up or down, stays on it."
+  "The cells round cell [x y z]: the 3 x 3 x 3 block. A side step, a step up or down a block and a diagonal of them are
+  on the way; the planner's drops over a block, gap jumps and longer climbs (engine.path.planner.moves) are not, and dodge the toll."
   [[x y z]]
   (for [dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]] [(+ x dx) (+ y dy) (+ z dz)]))
 
