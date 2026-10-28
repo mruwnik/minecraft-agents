@@ -205,14 +205,18 @@
 
 (defn item-price
   "Seconds the jobs.items.obtain child item-status would ask for n more of item under options o prices (its :not-worth status carries :price
-  when worth 0 is passed), with the light judged under the sky's darkening sky (nil: now; 0: full day); the wait a :later names (:wait-ms, as :dark and :exposed do for the light); ##Inf when it has no way (a :never, or a :later with neither, such as no-source: a search that could find one is priced in :price)."
+  when worth 0 is passed), with the light judged under the sky's darkening sky (nil: now; 0: full day); a :later that names a wait (:wait-ms, as :dark and :exposed do) costs the wait plus the price at full day (0 if none), since the obtain still follows it; ##Inf when it has no way (a :never, or a :later with neither, such as no-source: a search that could find one is priced in :price)."
   [c item n o sky]
-  (let [[kind _ data] (ctx/child-status c (or (:slot o) :need) 'jobs.items.obtain
-                                        (cond-> (assoc (fetch-args 'jobs.items.obtain {:item item :count (+ n (get (counts c [item]) item))} o) :worth 0)
-                                          sky (assoc :sky sky)))]
+  (let [status (fn [sky]
+                 (ctx/child-status c (or (:slot o) :need) 'jobs.items.obtain
+                                   (cond-> (assoc (fetch-args 'jobs.items.obtain {:item item :count (+ n (get (counts c [item]) item))} o) :worth 0)
+                                     sky (assoc :sky sky))))
+        [kind _ data] (status sky)]
     (cond (= :ok kind) 0
           (= :never kind) ##Inf
-          :else (or (:price data) (some-> (:wait-ms data) (/ 1000)) ##Inf))))
+          (:price data) (:price data)
+          (:wait-ms data) (+ (/ (:wait-ms data) 1000) (or (:price (nth (status 0) 2 nil)) 0))
+          :else ##Inf)))
 
 (defn ^:async fetch!
   "Get :count more of what args name (jobs.items.obtain's :count is the amount to carry, so the carried is added here)."

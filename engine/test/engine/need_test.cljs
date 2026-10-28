@@ -24,7 +24,7 @@
   reason's ending (ending-of); :continue yields instead."
   [seen step start]
   {:ways [:chest :craft :smelt :gather]
-   :can-start? (fn [_] (or start (contract/ok :ready "ready")))
+   :can-start? (fn [c] (or (if (fn? start) (start (:args c)) start) (contract/ok :ready "ready")))
    :round (fn ^:async r [c]
             (swap! seen conj (assoc (:args c) :slot (peek (:slots c))))
             (let [s (step c)]
@@ -104,6 +104,9 @@
                               [(contract/later :not-worth "costs 42 s" :price 42 :worth 0) 42]
                               [(contract/later :dark "waits for light" :wait-ms 90000) 90]
                               [(contract/later :exposed "dark until light" :wait-ms 30000) 30]
+                              [#(if (:sky %)
+                                  (contract/later :not-worth "costs 40 s" :price 40 :worth 0)
+                                  (contract/later :dark "waits for light" :wait-ms 90000)) 130]
                               [(contract/later :no-source "no source") ##Inf]
                               [(contract/never :bad-args "bad") ##Inf]]]
           (let [price (atom nil)]
