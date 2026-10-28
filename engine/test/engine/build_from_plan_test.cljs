@@ -13,7 +13,6 @@
             [engine.harvest-test :as h]
             [engine.registry :as registry]
             [engine.test-util :as tu]
-            [jobs.build.pen :as pen]
             [jobs.lib.cost :as cost]
             [engine.triggers :as triggers]
             [jobs.lib.escape :as escape]
@@ -1272,11 +1271,27 @@
                                                  {"three" plan} [])]
                       (no-support-world! p)
                       [(await (child-outcome eng job {:plan "three" :worth worth} 400)) p]))
-              [poor pp] (await (run (* 6.5 (cost/earthwork-s 1))))
-              [rich pr] (await (run (* 9.5 (cost/earthwork-s 1))))]
+              between #(/ (+ (cost/earthwork-s %1) (cost/earthwork-s %2)) 2)
+              [poor pp] (await (run (between 6 9)))
+              [rich pr] (await (run (between 9 12)))]
           (is (zero? (count (filter #(= "oak_planks" (block pp %)) (map #(vector 3 65 %) zs)))) "a worth for two of the three 3-deep columns places nothing")
           (is (zero? (count (for [z zs y [62 63 64] :when (= "dirt" (block pp [3 y z]))] 1))) "and spends no fill")
           (is (= 3 (count (filter #(= "oak_planks" (block pr %)) (map #(vector 3 65 %) zs)))) (pr-str (select-keys rich [:status :reason :text]))))))))
+
+(deftest the-dirt-fetched-for-a-fill-is-spent-from-the-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pit (into {} (for [x (range 2 5) z (range 2 5) y [61 62 63]] [(h/cell-key x y z) (if (= y 61) "stone" "air")]))
+              plan {:id "one" :parts [{:id "f" :cells [[3 65 3]] :want "oak_planks"}]}
+              {:keys [eng p]} (start {:blocks (merge wide-ground pit {"-2,64,3" "chest"}) :containers {"-2,64,3" [{:name "dirt" :count 8}]}
+                                      :inventory [{:name "oak_planks" :count 1}] :self {:pos {:x 7.5 :y 64 :z 3.5}}}
+                                     {"one" plan} [])]
+          (no-support-world! p)
+          (let [result (await (child-outcome eng job {:plan "one" :worth 1000} 400))]
+            (is (= "oak_planks" (block p [3 65 3])) (pr-str (select-keys result [:status :reason :text])))
+            (is (= 3 (:filled result)))
+            (is (< (cost/earthwork-s 3) (:fill-spent result)) "the dirt was fetched after the call began: its obtain is spent with the earthwork")))))))
 
 (deftest a-fill-is-priced-as-earthwork-and-the-obtain-of-the-dirt-short-of-what-is-carried
   (let [c {:primitives (tu/fake-on-floor {:inventory [{:name "dirt" :count 2}]})}
@@ -1288,14 +1303,6 @@
       (is (= [["dirt" 3]] @asked) "the obtain is asked for the 3 short"))
     (with-redefs [need/fetch-opts (constantly nil)]
       (is (= ##Inf (plan/fill-price c 5)) "no fetch allowed and too little carried: no fill"))))
-
-(deftest a-pen-offers-each-part-the-worth-less-the-fill-earlier-parts-placed
-  (let [c {:args {:worth 1000} :primitives (tu/fake-on-floor {:inventory []})}]
-    (with-redefs [need/fetch-opts (constantly {:how #{:chest}})
-                  need/item-price (constantly 100)
-                  ctx/mem (constantly {:built {:filled 2}})]
-      (is (= (- 1000 100 (cost/earthwork-s 2)) (pen/part-worth c)) "the earthwork and the dirt fetched for it are spent")
-      (is (nil? (pen/part-worth (assoc c :args {}))) "no worth: no cap"))))
 
 (deftest a-cell-whose-floor-was-never-seen-is-looked-at-before-it-is-refused-no-support
   (async done

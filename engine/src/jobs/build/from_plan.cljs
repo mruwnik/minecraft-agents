@@ -360,6 +360,9 @@
     (if trouble
       :continue
       (do (when (and wood (nil? (:wood (ctx/mem c)))) (ctx/update-mem! c assoc :wood wood))
+          ;; before any fetch, so the dirt fetched for the fill is priced as spent
+          (when (and (some :fill cells) (not (contains? (ctx/mem c) :fill-carried)))
+            (ctx/update-mem! c assoc :fill-carried (get (storage/carried-totals (u/inventory (:primitives c))) "dirt" 0)))
           (hold-bed! c cells)
           (or (await (fetch-step! c))
               (await (light/light! c cells))

@@ -6,7 +6,6 @@
             [jobs.lib.job-common :as common]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
-            [jobs.lib.storage :as storage]
             [jobs.lib.trip :as trip]
             [jobs.lib.util :as u]
             [jobs.build.from-plan.cells :refer [pos-map]]
@@ -79,7 +78,6 @@
       (:refused h) (ctx/update-mem! c assoc-in [:unplaceable pos] (:refused h))
       :else
       (let [_ (ctx/update-mem! c assoc :placing pos)
-            dirt (get (storage/carried-totals (u/inventory (:primitives c))) "dirt" 0)
             e (await (blocks/place-call! c (zipmap [:x :y :z] pos) item
                                          {:for-plan (:plan (:args c)) :ignore-zones? (boolean (:ignore-zones? (:args c)))
                                           :click (:click h) :clear false}))
@@ -91,7 +89,7 @@
                     (plan/note-placed! c pos item)
                     (ctx/update-mem! c #(cond-> (update (dissoc % :placing :budget-streak) :placed (fnil inc 0))
                                           wrong (assoc-in [:misplaced pos] wrong)
-                                          (:fill cell) (-> (update :filled (fnil conj #{}) pos) (update :fill-carried (fn [d] (or d dirt)))))))
+                                          (:fill cell) (update :filled (fnil conj #{}) pos))))
           :already (ctx/update-mem! c #(count-fail (dissoc % :placing) pos :already limit))
           (:occupied :need :no-item :no-support :unreachable)
           (ctx/update-mem! c #(if (sightless? % outcome e pos)

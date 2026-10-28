@@ -9,6 +9,7 @@
             [engine.harvest-test :as h]
             [engine.test-util :as tu]
             [jobs.build.pen :as pen]
+            [jobs.lib.cost :as cost]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.pen-read :as pen-read]))
 
@@ -260,6 +261,28 @@
                                       {"pen" (ring-plan)} {}))]
           (is (= {"oak_fence" 3} (get-in result [:built :short])))
           (is (= :leak (:reason result))))))))
+
+;; ---------------------------------------------------------------- one worth for every part
+
+(deftest two-parts-whose-fills-together-pass-the-worth-build-one-and-end-not-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pit (into {} (for [x (range 1 6) z (range 1 6) y [61 62 63]] [(h/cell-key x y z) (if (= y 61) "stone" "air")]))
+              plan {:id "pen" :parts [{:id "west" :cells [[2 64 2] [2 64 3] [2 64 4]] :want "oak_fence"}
+                                      {:id "east" :cells [[4 64 2] [4 64 3] [4 64 4]] :want "oak_fence"}]}
+              run (fn ^:async f [worth]
+                    (let [w (b/start (assoc (spec [{:name "oak_fence" :count 6} {:name "dirt" :count 8}] pit) :self {:pos {:x 7.5 :y 64 :z 3.5}})
+                                     {"pen" plan} [])]
+                      (b/no-support-world! (:p w))
+                      [(await (ending-of w job {:plan "pen" :worth worth} 400)) (:p w)]))
+              fences (fn [p x] (count (filter #(= "oak_fence" (h/block-at p x 64 %)) [2 3 4])))
+              between #(/ (+ (cost/earthwork-s %1) (cost/earthwork-s %2)) 2)
+              [poor pp] (await (run (between 2 4)))
+              [rich pr] (await (run (between 4 6)))]
+          (is (= [3 0] [(fences pp 2) (fences pp 4)]) "the first part's fill spends the worth the second needed")
+          (is (= :not-worth (get-in poor [:cause :reason])) (pr-str (select-keys poor [:kind :cause])))
+          (is (= [3 3] [(fences pr 2) (fences pr 4)]) "carried dirt costs only its work, for every part alike"))))))
 
 ;; ---------------------------------------------------------------- the check
 

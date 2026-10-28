@@ -384,12 +384,17 @@
               o (need/item-price c "dirt" short o nil)
               :else ##Inf)))))
 
+(defn fill-spent
+  "Seconds the fill a call placed cost, from its job memory m: fill-price of its :filled, short of the dirt carried before the call's first fetch (:fill-carried)."
+  [c m]
+  (let [n (count (:filled m))]
+    (if (zero? n) 0 (fill-price c n (:fill-carried m 0)))))
+
 (defn fill-worth
-  "The call's :worth less the price (fill-price, the dirt fetched included) of the fill this call placed (:filled, short of the dirt carried at its first block); one budget for every fill; nil: no cap."
+  "The call's :worth less fill-spent: one budget for every fill; nil: no cap."
   [c]
   (when-let [w (:worth (:args c))]
-    (let [n (count (:filled (ctx/mem c)))]
-      (max 0 (- w (if (zero? n) 0 (fill-price c n (:fill-carried (ctx/mem c) 0))))))))
+    (max 0 (- w (fill-spent c (ctx/mem c))))))
 
 (defn fill-depth
   "The deepest fill column the fill-worth affords (fill/max-depth)."
