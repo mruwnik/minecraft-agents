@@ -14,8 +14,7 @@
             [jobs.lib.util :as u]
             [jobs.survival.respond.state :as flight]
             [jobs.lib.flee-search :as search]
-            [jobs.lib.flee-walk :as walk]
-            [jobs.survival.shut-in :as shut-in]))
+            [jobs.lib.flee-walk :as walk]))
 
 (a/defargs settings
   {::drift {:default 3 :doc "Blocks a walk to the goal may take the body farther from the goal's height than where that walk began: a leg that does ends the walk to the goal (a plan that ends under or over the goal, nearer only in x and z, is no way to it)." :spec (a/num-in 0 nil)}
@@ -95,14 +94,15 @@
 
 (defn ^:async judge!
   "What the flight makes of its goal and homes (positions) this step, from one flee search (flee-search/search!, from
-  chasers, the goal and homes named, covered? as cover-fn, a dead end priced with the covers where the body stands): {:goal (active) :why (:given-up, else verdict; nil: it
+  chasers, the goal and homes named, covered? as cover-fn, a dead end priced with covers, a fn of no argument giving the
+  cornered step's covers where the body stands, respond.options/cornered-covers, built at a dead end only): {:goal (active) :why (:given-up, else verdict; nil: it
   may go there) :home (safe-home of homes) :home-why (of the last of homes) :ends (the search's scored ends)}."
-  [c homes covered?]
+  [c homes covered? covers]
   (let [goal (active c)
         named (cond-> (mapv (fn [h] {:pos h :kind :home}) homes)
                 (and goal (not (given-up? c goal)) (not (under-floor? c goal))) (conj {:pos goal :kind :goal}))
         chs (chasers c)
-        ends (await (search/search! c chs named {:covered? covered? :y-margin (margin c) :covers (shut-in/covers c)}))
+        ends (await (search/search! c chs named {:covered? covered? :y-margin (margin c) :covers covers :covers-key (:tried (ctx/mem c))}))
         home (safe-home ends homes)]
     {:goal goal :home home :ends ends :home-why (home-why ends (last homes))
      :why (when goal

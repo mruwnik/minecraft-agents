@@ -189,11 +189,11 @@
   (the steps the walker failed at) :near :sky (the sky's light darkening) :difficulty :values :scope}.
   What a price reads that is time-dependent enters as the value it computes to: the death fade through :dangers; the
   landings the planner asked about are kept with the result and read again (wworld/landing-reads-hold?)."
-  [c st targets {:keys [y-margin chasers covers]} chased other?]
+  [c st targets {:keys [y-margin chasers covers covers-key]} chased other?]
   (let [p (:primitives c)
         raw (look/raw-of p)]
     {:dim (some-> ^js st .-dim) :memory (some-> ^js st memory-age/epoch) :epoch (some-> raw rays/epoch-of) :pos (u/self-pos c) :kit (wworld/kit-of c) :food (.-food (.self p))
-     :body (threats/death-body c) :covers covers
+     :body (threats/death-body c) :covers covers :covers-key covers-key
      :others (threats/threats-of c other?)
      :caught-by (mapv #(assoc % :caught 1) (threats/threats-of c (complement other?)))
      :policy (cond-> (wworld/body-policy c) y-margin (assoc :y-margin y-margin))
@@ -204,13 +204,15 @@
 
 (defn priced-key
   "The inputs of a search (gather) as the key of its kept result: its threats by cell and weight (cell-key-of), its chasers
-  by name, mob, calm and cell, its policy without the fns it carries (the air it counts is the remembered world's)."
+  by name, mob, calm and cell, its policy without the fns it carries (the air it counts is the remembered world's), its
+  covers by their :covers-key (the covers are only built at a dead end)."
   [in]
   (-> in
       (update :others #(mapv cell-key-of %))
       (update :caught-by #(mapv cell-key-of %))
       (update :chasers #(mapv (juxt :name :mob :calm? :pos) %))
-      (update :policy #(into {} (remove (comp fn? val)) %))))
+      (update :policy #(into {} (remove (comp fn? val)) %))
+      (dissoc :covers)))
 
 (declare price-all!)
 
@@ -219,9 +221,10 @@
   doc): [{:target :found? :open? :end :s :priced :price :cells :seen-n :unseen :counts :trapped}] (:open? found, or a ring end whose
   partial route ends where the chasers have given the body up: given-up?), the ones the planner found no way nearer to, and the ring ends
   left when ::ring-nodes ran out (named ones have their own node cap), left out; its meta {:nodes :planned :unrouted} the nodes
-  expanded, the targets planned and why the ones with no route had none (the planner's reason: count). opts {:y-margin :chasers :covers}: blocks past body and end the routes may plan, the chasers (their danger is the race, so death-chance weighs only the other known threats; met at an
+  expanded, the targets planned and why the ones with no route had none (the planner's reason: count). opts {:y-margin :chasers :covers :covers-key}: blocks past body and end the routes may plan, the chasers (their danger is the race, so death-chance weighs only the other known threats; met at an
   unseen dead end, they corner the body: :trapped, the cheapest cornered answer to them (cost/cornered-answers: the fight,
-  or a cover of opts :covers {way {:open-s :seconds}}, those where the body stands), with no mob known the death of
+  or a cover of (:covers) {way {:open-s :seconds :fails}}, a fn called at the first dead end only, those the cornered step
+  would take where the body stands; :covers-key what they depend on past the body and its kit), with no mob known the death of
   being caught at its last seen cell, and :counts, wworld/way-counts, for dead-end). Kept for the body while it asks the same of the
   same inputs (gather, priced-key)."
   [c targets {:keys [chasers] :as opts}]
@@ -245,7 +248,7 @@
         ring-world (costed c nil other? true)
         cornered (delay (when-let [mobs (seq (keep #(some->> (:mob %) (hash-map :distance 0 :name)) chasers))]
                           (let [fight (cost/fight-answer {:weapon (:weapon body) :equipment (:equipment body) :health (:health body) :mobs mobs})]
-                            (apply min (vals (:prices (cost/decide body (cost/cornered-answers {:equipment (:equipment body) :mobs mobs :fight fight :covers covers}) pos (cost/again-answers body (map :name mobs)))))))))
+                            (apply min (vals (:prices (cost/decide body (cost/cornered-answers {:equipment (:equipment body) :mobs mobs :fight fight :covers (when covers (covers))}) pos (cost/again-answers body (map :name mobs)))))))))
         trapped-at (fn [cell] (or @cornered (cost/route-death-cost body {:cells [cell] :threats caught-by} cell)))
         counts (wworld/way-counts p)
         spawn-kill (delay (cost/spawn-kill body pos))
@@ -453,7 +456,7 @@
 (defn ^:async search!
   "The flee search from where the body stands: the targets (named, {:pos :range :kind}) and the ring ends at reach
   (default: reach, where the chasers give the body up) priced (price!) and scored against chasers ([{:name :pos}]), with covers on
-  their routes when covered? is given. opts {:reach :y-margin :covered? :covers} (covers: price!'s)."
+  their routes when covered? is given. opts {:reach :y-margin :covered? :covers :covers-key} (covers: price!'s)."
   [c chasers targets {:keys [covered?] :as opts}]
   (let [t0 (js/performance.now)
         self (.self (:primitives c))

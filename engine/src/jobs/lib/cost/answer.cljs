@@ -535,15 +535,13 @@
 (defn threat-answers
   "The answers {key answer-or-nil} body {:health :food :equipment :weapon :covers :swim :distance} has to mob-name (or
   a coll of names, met together) met :distance blocks off (default 0, beside it): the
-  fight (in water with :swim, fight/fight-damage's wet?), the walk away (caught by its way at chance caught, nil none, and at the prior of :health; :swim, flee-answer's, for a body in water) and each of :covers {way {:open-s :seconds}}
-  (jobs.survival.shut-in/covers) by cover-answer, as respond prices them."
+  fight (in water with :swim, fight/fight-damage's wet?) and each of :covers {way {:open-s :seconds :fails}}
+  (jobs.survival.shut-in/covers) as cornered-answers builds them, and the walk away (caught by its way at chance caught, nil none, and at the prior of :health; :swim, flee-answer's, for a body in water), as respond prices them."
   [{:keys [health food equipment weapon covers swim distance]} mob-name caught]
   (let [ms (mapv (fn [n] {:name n :distance (or distance 0) :follow (threat/follow-range n)}) (if (string? mob-name) [mob-name] mob-name))
         fight (fight-answer {:weapon weapon :equipment equipment :health health :mobs ms :wet? (some? swim)})]
-    (into {:fight fight
-           :flee (flee-answer {:health health :food food :equipment equipment :mobs ms :caught caught :later fight :swim swim})}
-          (map (fn [[way cover]] [way (cover-answer {:equipment equipment :mobs ms :fight fight} cover)]))
-          covers)))
+    (assoc (cornered-answers {:equipment equipment :mobs ms :fight fight :covers covers})
+           :flee (flee-answer {:health health :food food :equipment equipment :mobs ms :caught caught :later fight :swim swim}))))
 
 (defn again-answers
   "The answers of the meet a walk back after a death comes to, beside mob names at full health: threat-answers caught at

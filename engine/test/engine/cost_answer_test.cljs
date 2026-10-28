@@ -267,7 +267,7 @@
 (deftest a-threats-cover-is-priced-as-respond-prices-it
   (let [cover {:open-s 2 :seconds 50}
         zombie (mob "zombie" 0 35)]
-    (is (= (cost/cover-answer {:mobs [zombie]} cover)
+    (is (= (:walls (cost/cornered-answers {:mobs [zombie] :fight (:fight (answer/threat-answers {:food 20} "zombie" nil)) :covers {:walls cover}}))
            (:walls (answer/threat-answers {:food 20 :covers {:walls cover}} "zombie" nil)))
         "one cover-answer over shut-in/covers' seconds, the hide-out's quiet in them, for death-chance and respond alike")))
 

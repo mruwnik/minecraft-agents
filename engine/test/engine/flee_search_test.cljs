@@ -130,9 +130,24 @@
               chasers [{:name "zombie" :mob "zombie" :pos {:x -4.5 :y 64 :z 0.5}}]
               trapped (fn ^:async trapped [opts] (->> (await (search/search! (ctx-of p) chasers [] opts)) (keep :trapped) (reduce max 0)))
               fist (await (trapped {}))
-              walled (await (trapped {:covers {:walls {:open-s 0 :seconds 40}}}))]
+              walled (await (trapped {:covers (constantly {:walls {:open-s 0 :seconds 40}}) :covers-key :walls}))]
           (is (pos? walled))
           (is (< walled (/ fist 2)) "unarmed, walls built unhurt cost far less than the fist fight with the zombie"))))))
+
+(deftest the-covers-are-built-only-at-a-dead-end
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [raw (tu/fake {:blocks junction :light-default [15 15]
+                            :entities [{:id 7 :uuid "u7" :name "zombie" :kind "hostile" :pos {:x -4.5 :y 64 :z 0.5}}]
+                            :self {:pos {:x 0.5 :y 64 :z 0.5}} :yaw 270 :pitch 0})
+              p (tu/seeing-all raw)
+              built (atom 0)
+              ends (await (search/search! (ctx-of p) [{:name "zombie" :mob "zombie" :pos {:x -4.5 :y 64 :z 0.5}}] []
+                                          {:covers (fn [] (swap! built inc) {})}))]
+          (is (seq ends))
+          (is (not-any? :unseen ends) "all seen: no dead end in the dark")
+          (is (zero? @built) "no dead end met: the covers' quotes are never asked for"))))))
 
 ;; card 6699a4ea: the old search priced a dead end the same wherever it lay, so the straight way on through the dark
 ;; beat the branch behind, and the body learnt of the dead end only once the zombie held the branch

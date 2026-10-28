@@ -141,13 +141,20 @@
   [c rooms blast?]
   (if blast? [] (remove nil? [(:start (first rooms)) (home-pos c)])))
 
+(defn dead-end-covers
+  "The covers a dead end of the flee search is priced with (respond.goal/judge!): the cornered step's where the body
+  stands (cornered-covers, against the hostiles it weighs), built when the search first meets a dead end. Not home: the
+  dead end lies away from it."
+  [c]
+  (fn [] (cornered/cornered-covers c (cornered/near-hostiles c) false)))
+
 (defn ^:async judge!
   "The flight's goal, homes (homes) and flee search (respond.goal/judge!) after a glance along the way away
   (glance-away!), the homes kept as :homes."
   [c covered? rooms blast?]
   (await (glance-away! c (search/away (u/self-pos c) (respond.goal/chasers c))))
   (let [hs (homes c rooms blast?)]
-    (assoc (await (respond.goal/judge! c hs covered?)) :homes hs)))
+    (assoc (await (respond.goal/judge! c hs covered? (dead-end-covers c))) :homes hs)))
 
 (defn ^:async caught-chance!
   "{:chance :seconds :cornered?} of the flight's next step from where the body stands (flee-search/caught-chance), for
@@ -171,7 +178,7 @@
             chance (if up
                      (search/way-up-chance counts)
                      (let [covered? (cover-fn p threats (flight/fire-spots c))
-                           judged (await (respond.goal/judge! c (homes c (:rooms (survey c threats false)) (seq (blast p threats))) covered?))]
+                           judged (await (respond.goal/judge! c (homes c (:rooms (survey c threats false)) (seq (blast p threats))) covered? (dead-end-covers c)))]
                        (search/caught-chance (:ends judged) counts (respond.goal/choose-opts c threats covered? (:home judged)) glanced)))
             chance (cond-> chance (and chance scan) (assoc :way-scan scan))]
         (ctx/update-mem! c assoc :caught-chance {:in in :t now :chance chance})
@@ -184,7 +191,7 @@
   (when-let [cells (search/unseen-ahead (:ends judged) (:glanced (ctx/mem c)))]
     (ctx/update-mem! c update :glanced #(vec (take-last (cornered/glance-memory) (into (vec %) cells))))
     (await (dig-look/look-unknown! c cells))
-    (assoc (await (respond.goal/judge! c (:homes judged) covered?)) :homes (:homes judged))))
+    (assoc (await (respond.goal/judge! c (:homes judged) covered? (dead-end-covers c))) :homes (:homes judged))))
 
 (defn ^:async flight-target!
   "The walk target away from threats: the stairs up (way-up), else the step to the end flee-search/choose takes of
