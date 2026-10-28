@@ -34,6 +34,7 @@
             [jobs.survival.respond.pillar :as pillar]
             [jobs.survival.respond.refuge :as refuge]
             [jobs.lib.flee-search :as search]
+            [jobs.lib.walk.world :as wworld]
             [jobs.survival.hide-out :as hide-out]
             [jobs.survival.shut-in :as shut-in]
             [jobs.survival.wall-in :as wall-in]))
@@ -263,17 +264,16 @@
       covers))))
 
 (defn cornered-answers
-  "{option answer} of the cornered options open to the body against hostiles: :fight, the covers (cornered-covers) and,
-  unless the back-off was tried, :back-off the walk away (hostile/cornered-answers); home?: the body is in its home room."
-  [c hostiles home?]
-  (let [a (hostile/cornered-answers c hostiles (cornered-covers c hostiles home?) (not (flight/tried? c :back-off)))]
-    (cond-> (dissoc a :flee) (contains? a :flee) (assoc :back-off (:flee a)))))
-
-(defn fight-wins?
-  "Whether fighting hostiles is the cheapest of the cornered answers (cornered-answers, jobs.lib.hostile-fight/wins?)."
-  ([c hostiles] (fight-wins? c hostiles false))
-  ([c hostiles home?]
-   (hostile/wins? c hostiles (cornered-answers c hostiles home?))))
+  "{option answer} of the cornered options open to the body against hostiles: :fight, the covers (cornered-covers),
+  with a back-off step to take (back-off-search!'s :target; nil: none or tried), :back-off the walk away
+  (hostile/cornered-answers) caught as its search says (:caught), and with swim? (afloat, a drowned near) :swim-out the
+  swim to dry land and walk on (hostile/flee-answer, caught at the prior: no search runs from the shore); home?: the
+  body is in its home room."
+  [c hostiles home? back-off swim?]
+  (let [a (hostile/cornered-answers c hostiles (cornered-covers c hostiles home?) (some? (:target back-off)) (:caught back-off))]
+    (cond-> (dissoc a :flee)
+      (contains? a :flee) (assoc :back-off (:flee a))
+      swim? (assoc :swim-out (hostile/flee-answer c hostiles (:fight a) nil nil)))))
 
 (defn glance-reach [] (settings/get settings ::glance-reach))
 
@@ -325,10 +325,11 @@
 
 (defn step! [c slot target range] (leg-step! c slot target range (flight-timeout-s)))
 
-(defn ^:async back-off!
-  "Step back from chasers ({:name (mob-kind) :pos}): to the best scored end of a flee search (flee-search/search!)
-  ::back-off-reach off that gains on them over standing still, on a route none catches, clear of :hazard places:
-  :again, nil when there is none or the walk is blocked."
+(defn ^:async back-off-search!
+  "The back-off step from chasers ({:name (mob-kind) :pos}) by a flee search (flee-search/search!) ::back-off-reach off:
+  {:target :caught}, target the best scored end that gains on them over standing still, on a route none catches, clear of
+  :hazard places (nil: none, no back-off), caught the chance the step is caught (flee-search/caught-chance at the way
+  counts, wworld/way-scan), the one its price reads."
   [c chasers]
   (let [hazards (keep (comp :pos :data) (ctx/entries c :hazard))
         ends (await (search/search! c chasers [] {:reach (settings/get settings ::back-off-reach)}))
@@ -338,11 +339,17 @@
                         (remove #(search/hazard-near? hazards (:cells %)))
                         seq
                         (apply max-key :score)
-                        :end)]
-    (when target
-      (if-not (await (step! c :back-off target 0))
-        (do (flight/tried! c :back-off) nil)
-        :again))))
+                        :end)
+        counts (or (some-> (wworld/way-scan (:primitives c)) (select-keys [:k :n])) {:k 0 :n 0})]
+    {:target target
+     :caught (when target (search/caught-chance ends counts {:hazards hazards} (:glanced (ctx/mem c))))}))
+
+(defn ^:async back-off!
+  "Step back to target (back-off-search!'s): :again, nil when the walk is blocked (the option is tried then)."
+  [c target]
+  (if-not (await (step! c :back-off target 0))
+    (do (flight/tried! c :back-off) nil)
+    :again))
 
 (defn ^:async hold!
   "One hold (a pause of flight/wait-ms) in a spot an enderman cannot use: :again, or nil once the flight has held

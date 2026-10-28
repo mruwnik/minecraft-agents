@@ -2,7 +2,7 @@
   "The cornered step of a flight: the conditions that rank its options (pressed, beaten, under fire, boxed in) and cornered!, which takes the first option it can."
   (:require [engine.settings :as settings]
             [jobs.survival.respond-choose :refer [escape-order by-price with-zone-pillar]]
-            [jobs.survival.respond.options :as rc :refer [settings near-hostiles hitters arriving close-radius hurt-by press-gap hit-reach fist-sweeps tool-weapons fight! outrun? angry-enderman? cornered-answers shots-in stand! back-off! blocked! recently-hurt? hurt-window-s]]
+            [jobs.survival.respond.options :as rc :refer [settings near-hostiles hitters arriving close-radius hurt-by press-gap hit-reach fist-sweeps tool-weapons fight! outrun? angry-enderman? cornered-answers shots-in stand! back-off-search! back-off! blocked! recently-hurt? hurt-window-s]]
             [engine.args :as a]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as lb]
@@ -207,8 +207,11 @@
         fire-tries (:fire-tries (ctx/mem c) 0)
         armed? (some? (combat/best-weapon (:primitives c) weapons))
         weighed-mobs (if (and (:hit-on-the-run (ctx/mem c)) (not fire?)) (hitters c hostiles) hostiles)
-        weighed (hostile/weigh c (cornered-answers c weighed-mobs home?) weighed-mobs)
+        chasers (respond.goal/chasers c)
+        back-off (when (and (seq chasers) (not (flight/tried? c :back-off)) (outrun? c hostiles))
+                   (await (back-off-search! c chasers)))
         swim? (and (boolean (some #(= "drowned" (.-name %)) hostiles)) (breath/swimming? (:primitives c)))
+        weighed (hostile/weigh c (cornered-answers c weighed-mobs home? back-off swim?) weighed-mobs)
         ;; afloat, a drowned only heard or out of a swing's reach is no fight the body can win: the swim out comes first
         win? (and (not blind?) (seq hostiles) (not-any? combat/creeper? hostiles) (not-any? combat/enderman? hostiles) (= :fight (:answer weighed))
                   (or (not swim?) (some #(and (danger-q/seen-only? %) (hostile/reaches? c %)) hostiles)))
@@ -242,7 +245,7 @@
                   :fight (if (fist-hold? {:armed? (or beaten-fight? armed?) :win? win?
                                           :sweeps (:sweeps (ctx/mem c) 0) :fist-sweeps max-fist-sweeps})
                            (await (fist-look! c))
-                           (await (fight-or-wait! c (if (= [:fight] order) weapons (into (vec weapons) tool-weapons)) (reach-only? blind? hostiles #(danger-q/mob-distance (:primitives c) %) #(mob-offset c %) (rc/creeper-keep)) hostiles)))
+                           (await (fight-or-wait! c (if (and armed? (= [:fight] order)) weapons (into (vec weapons) tool-weapons)) (reach-only? blind? hostiles #(danger-q/mob-distance (:primitives c) %) #(mob-offset c %) (rc/creeper-keep)) hostiles)))
                   :plug (await (refuge/plug-option! c :plug #{:walls}))
                   :plug-zone (when (:zone-walls (ctx/mem c)) (await (refuge/plug-option! c :plug-zone #{:walls})))
                   :plug-dig (await (refuge/plug-option! c :plug-dig #{:pit :pocket}))
@@ -252,8 +255,8 @@
                   :water (await (stand! c :water :water "in water, away from the enderman"))
                   :roof (await (stand! c :roof :roof "under a roof, out of the enderman's reach"))
                   :swim-out (await (stand! c :swim-out :dry nil))
-                  :back-off (when-let [chasers (seq (respond.goal/chasers c))]
-                              (await (back-off! c chasers)))))]
+                  :back-off (when-let [target (:target back-off)]
+                              (await (back-off! c target)))))]
         (cond
           (some? r) r
           (seq more) (recur more)

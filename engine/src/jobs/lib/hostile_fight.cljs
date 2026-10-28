@@ -421,13 +421,13 @@
 
 (defn cornered-answers
   "cost/cornered-answers of c's body to hostiles: the fight (fight-answer), each of covers {way {:open-s :seconds}} and,
-  with walk?, the walk away (:flee, flee-answer; nil when a mob keeps up)."
-  [c hostiles covers walk?]
+  with walk?, the walk away (:flee, flee-answer caught by its way as caught; nil when a mob keeps up)."
+  [c hostiles covers walk? caught]
   (let [p (:primitives c)
         fight (fight-answer c hostiles (constantly nil))]
     (cond-> (cost/cornered-answers {:equipment (cost/equipment-of (.-equipment (.self p))) :mobs (mapv #(mob-near p %) hostiles)
                                     :fight fight :covers covers})
-      walk? (assoc :flee (flee-answer c hostiles fight nil nil)))))
+      walk? (assoc :flee (flee-answer c hostiles fight nil caught)))))
 
 (defn wins?
   "Whether fighting hostiles is the cheapest of answers (weigh; cornered-answers): the one weighing the flight's cornered

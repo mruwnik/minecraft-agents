@@ -285,7 +285,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]}
-              (await (hidden-round retreat {:blocks dead-end :inventory [{:name "cobblestone" :count 20}]
+              (await (hidden-round '(test.flight {:settings {:jobs.survival.plug-way/trespass-s 0}}) {:blocks dead-end :inventory [{:name "cobblestone" :count 20}]
                                             :entities [(skeleton 4 64 0)]
                                             :zones [{:name "vault" :min [1 60 -1] :max [1 70 1] :owner "Miles"}]}
                                    1000 (constantly nil)))]
@@ -420,7 +420,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng listed]}
-              (await (hide-steps '(test.flight {:settings {:jobs.survival.hide-out/quiet-s 2000 :jobs.survival.hide-out/hide-s 100000}})
+              (await (hide-steps '(test.flight {:settings {:jobs.survival.hide-out/quiet-s 20 :jobs.survival.hide-out/hide-s 100000}})
                                  {:blocks long-dead-end :inventory [{:name "cobblestone" :count 20}]
                                   :entities [(zombie-at 4)]}
                                  [[[(zombie-at 12)] 0] [[] 10000]]))]
@@ -1002,6 +1002,27 @@
                                                                (impl token args))))))))))
               pillars (keep #(when (= :retreat.cornered (:kind %)) (:pillar (:prices %))) @seen)]
           (is (< (first pillars) (second pillars)) "the refusal it saw is one more failed pillar in the counts"))))))
+
+(deftest a-back-off-with-no-way-past-the-zombies-is-not-priced-after-a-refused-pillar
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [refused (atom false)
+              {:keys [seen]}
+              (await (settings/with-settings seldom-refused
+                       (fn ^:async r []
+                         (await (hidden-round retreat (doorway-zombies 4) 1000 (constantly nil) []
+                                              (fn [p]
+                                                (.override (.-world p) "jumpPlace"
+                                                           (fn [token args impl]
+                                                             (if (compare-and-set! refused false true)
+                                                               (js/Promise.resolve #js {:status "failed" :placed 0 :reason "place-failed: the block is still air"})
+                                                               (impl token args))))))))))
+              prices (keep #(when (= :retreat.cornered (:kind %)) (:prices %)) @seen)]
+          (is (= 2 (count prices)) "the first pillar, then the decision after its refused block")
+          (is (not-any? :back-off prices) (str "the zombies fill the doorway: a back-off has nowhere to go " (pr-str prices)))
+          (is (= 2 (count (filter #(= :retreat.pillar (:kind %)) @seen))) "the refused pillar is begun again")
+          (is (some #(= :retreat_sealed (:kind %)) @seen)))))))
 
 (deftest an-armed-body-pressed-by-one-zombie-fights-it-when-the-pillar-may-fail-for-it
   (async done

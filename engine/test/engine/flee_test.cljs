@@ -456,7 +456,7 @@
   [out]
   {:defaults {:checks {:safe? '(always) :fit? '(always)}}
    :round (fn ^:async backer-round [c]
-            (let [r (await (cornered/back-off! c (respond.goal/chasers c)))]
+            (let [r (await (cornered/back-off! c (:target (await (cornered/back-off-search! c (respond.goal/chasers c))))))]
               (reset! out {:r r :tried (respond.state/tried? c :back-off)})
               (ctx/end c :done nil)))})
 
