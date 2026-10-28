@@ -20,6 +20,7 @@
             [engine.settings :as settings]
             [engine.test-util :as tu :refer [box]]
             [engine.triggers :as triggers]
+            [jobs.lib.cost :as cost]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.dig-route :as dig-route]
             [jobs.lib.escape :as escape]
@@ -28,6 +29,7 @@
             [jobs.lib.pass :as pass]
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
+            [jobs.lib.tools :as tools]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.vehicle :as vehicle]
             [jobs.lib.walk.drive :as drive]
@@ -81,11 +83,11 @@
 (deftest escape-door-guesses-an-unseen-far-side-and-a-dig-shows-it
   (let [{:keys [p w]} (sensed-only (wall-east 1))]
     (is (= {:cells [[1 65 0] [1 64 0]] :through [2 64 0] :unseen true}
-           (escape/door (escape/block-at-of w) (escape/unseen-of w) [0 64 0] [1 0] 3)))
+           (escape/door (escape/block-at-of w) (escape/unseen-of w) [0 64 0] [1 0])))
     (fake/remove-block! p [1 64 0])
     (fake/remove-block! p [1 65 0])
     (is (= {:cells [] :through [2 64 0]}
-           (escape/door-from (escape/block-at-of w) (escape/unseen-of w) [0 64 0] [1 0] 3 2))
+           (escape/door-from (escape/block-at-of w) (escape/unseen-of w) [0 64 0] [1 0] 2))
         "row one dug: the far side is seen open")))
 
 (deftest escape-door-from-goes-on-through-a-row-seen-solid
@@ -93,25 +95,25 @@
     (fake/remove-block! p [1 64 0])
     (fake/remove-block! p [1 65 0])
     (is (= {:cells [[2 65 0] [2 64 0]] :through [3 64 0] :unseen true}
-           (escape/door-from (escape/block-at-of w) (escape/unseen-of w) [0 64 0] [1 0] 3 2)))))
+           (escape/door-from (escape/block-at-of w) (escape/unseen-of w) [0 64 0] [1 0] 2)))))
 
 (deftest escape-door-from-takes-a-row-seen-open-above-and-unseen-below-for-the-far-side
   (let [block-at #(if (= % [3 65 0]) "air" "stone")]
     (is (= {:cells [[2 65 0] [2 64 0]] :through [3 64 0] :unseen true}
-           (escape/door-from block-at #{[3 64 0]} [0 64 0] [1 0] 3 2)))))
+           (escape/door-from block-at #{[3 64 0]} [0 64 0] [1 0] 2)))))
 
 (deftest escape-door-over-seen-cells-is-as-before
   (let [{:keys [w]} (sensed-only (assoc (wall-east 1) :blocks ground))]
-    (is (nil? (escape/door (escape/block-at-of w) (escape/unseen-of w) [0 64 0] [1 0] 3)) "open ground seen ahead: no door")))
+    (is (nil? (escape/door (escape/block-at-of w) (escape/unseen-of w) [0 64 0] [1 0])) "open ground seen ahead: no door")))
 
 (defn ^:async run-clear-path
-  "Run clear-path :east over the sensed-only world spec as a child; its result."
-  [spec]
+  "Run clear-path :east (with args) over the sensed-only world spec as a child; its result."
+  [spec & [args]]
   (let [clock (atom 1000000)
         [_ sink] (tu/legacy-capture-sink)
         {:keys [w]} (sensed-only spec)
         out (atom :not-done)
-        parent (tu/recording-parent 'jobs.access.clear-path {:heading :east} out)
+        parent (tu/recording-parent 'jobs.access.clear-path (merge {:heading :east} args) out)
         eng (core/create {:primitives w :jobs (assoc registry/jobs 'recording-parent parent) :triggers triggers/all
                           :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -141,13 +143,15 @@
               r (await (run-clear-path spec))]
           (is (= [:done [1 64 1]] [(:status r) (:through r)]) (pr-str r)))))))
 
-(deftest clear-path-in-solid-rock-gives-up-with-a-reason
+(deftest clear-path-in-solid-rock-stops-at-what-it-may-spend-with-a-reason
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [r (await (run-clear-path (assoc (wall-east 8) :inventory [{:name "wooden_pickaxe" :count 1}])))]
-          (is (= [:stopped :no-door] [(:status r) (:reason r)]) (pr-str r))
-          (is (<= (count (:dug r)) 6) "at most max-thick rows of two")
+        (let [spec (assoc (wall-east 8) :inventory [{:name "wooden_pickaxe" :count 1}])
+              cell-s (cost/dig-cells-s [(tools/clear-ms (tu/fake spec) "stone")])
+              r (await (run-clear-path spec {:max-dig-s (* 7 cell-s)}))]
+          (is (= [:stopped :too-dear] [(:status r) (:reason r)]) (pr-str r))
+          (is (<= (count (:dug r)) 6) "no more rows than the seconds it may spend")
           (is (string? (:why r))))))))
 
 (deftest a-floor-the-body-has-not-seen-may-be-a-hazard

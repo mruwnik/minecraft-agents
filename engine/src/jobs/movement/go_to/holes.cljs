@@ -122,7 +122,7 @@
         unseen? (escape/unseen-of p)
         cells (case step
                 :stair (escape/stair-cuts feet (escape/heading-dirs heading) steps)
-                :clear-path (:cells (escape/door block-at unseen? feet (escape/heading-dirs heading) (escape/max-door)))
+                :clear-path (:cells (escape/door block-at unseen? feet (escape/heading-dirs heading)))
                 nil)]
     (vec (for [cell cells :let [n (block-at cell)] :when (and (escape/solid? n) (not (unseen? cell)))] {:cell cell :block n}))))
 

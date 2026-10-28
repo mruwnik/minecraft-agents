@@ -135,7 +135,7 @@
                            :blocks (merge (box -2 63 -2 8 63 2 "stone") (box 1 64 -1 4 65 1 "stone")))
               r (await (run-door thick nil))]
           (is (= [:done [5 64 0]] [(:status r) (:through r)]) (pr-str r))
-          (is (= 8 (count (:dug r))) "four thick, past the max-thick of 3 it could not see"))))))
+          (is (= 8 (count (:dug r))) "four thick, more than it could see"))))))
 
 (deftest digging-on-past-what-it-saw-stops-when-the-next-plan-costs-over-max-dig-s
   (async done
@@ -148,6 +148,18 @@
           (is (= [:stopped :too-dear] [(:status r) (:reason r)]) (pr-str r))
           (is (= 6 (count (:dug r))) "three rows priced 8 cells (the far side it could not see as rock); the next plan, 14, is over")
           (is (= [0 64 0] (:at r)) "it walked back to where it began"))))))
+
+(deftest a-wall-seen-thick-is-priced-by-its-rows-not-refused-by-their-count
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [seen-thick (assoc wall :inventory [{:name "wooden_pickaxe" :count 1}]
+                                :blocks (merge (box -2 63 -2 8 63 2 "stone") (box 1 64 -1 5 65 1 "stone")))
+              cell-s (cost/dig-cells-s [(tools/clear-ms (tu/fake seen-thick) "stone")])
+              through (await (run-door seen-thick nil {:heading :east :max-dig-s (* 10.5 cell-s)}))
+              dear (await (run-door seen-thick nil {:heading :east :max-dig-s (* 9.5 cell-s)}))]
+          (is (= [:done [6 64 0] 10] [(:status through) (:through through) (count (:dug through))]) (pr-str through))
+          (is (= [:stopped :too-dear 0] [(:status dear) (:reason dear) (count (:dug dear))]) (pr-str dear)))))))
 
 (deftest a-walk-back-that-fails-still-ends-the-door-where-the-body-stands
   (async done
@@ -206,7 +218,7 @@
           (is (= [:nothing-possible :refills nil] (await (end (merge wall pick) refilling east))))
           (is (= [:nothing-possible :dig-failed :nothing-possible] (await (end (merge wall pick) failing east))))
           (is (= [:condition-failed :no-door nil] (await (end (dissoc wall :blocks) nil east))))
-          (is (= [:condition-failed :no-door nil] (await (end wall nil {:heading :east :settings {:jobs.access.clear-path/max-thick 1}}))) "a wall thicker than the max-thick setting")
+          (is (= [:condition-failed :too-dear nil] (await (end (merge wall pick) nil (assoc east :max-dig-s 1)))) "a wall dearer than it may spend")
           (is (= [:condition-failed :footprint nil]
                  (await (end (assoc (merge wall pick) :plans {"hut" (shape/with-author {:id "hut" :parts [{:id "w" :cells [[1 64 0]] :want "stone"}]} "Fake")})
                              nil east)))))))))

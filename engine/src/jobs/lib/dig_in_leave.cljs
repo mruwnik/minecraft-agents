@@ -182,7 +182,7 @@
   "escape/door through the wall from the feet along heading h, or nil."
   [p h]
   (let [{:keys [x y z]} (sh-sense/feet p)]
-    (escape/door (escape/block-at-of p) (escape/unseen-of p) [x y z] (get headings h) (escape/max-door))))
+    (escape/door (escape/block-at-of p) (escape/unseen-of p) [x y z] (get headings h))))
 
 (defn exit-cells
   "The cells of a way out along heading h, as [x y z]: its door's (door-of) and the cell beyond, else the two beside the
@@ -196,7 +196,7 @@
 
 (defn level-exit
   "{:heading :cells :through} for the first heading of order not yet tried (leave-mem :level-tried) whose wall
-  is at most escape/max-door thick, has a floor beyond at the feet's level and may be dug here; else nil."
+  has a floor beyond at the feet's level and may be dug here; else nil."
   [c order]
   (let [p (:primitives c)
         tried (:level-tried (leave-mem c))]

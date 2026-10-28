@@ -10,8 +10,10 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.memory :as mem]
+            [jobs.lib.cost :as cost]
             [jobs.lib.escape :as escape]
             [jobs.lib.access.rules :as rules]
+            [jobs.lib.tools :as tools]
             [jobs.lib.ledger :as ledger]
             [plan.shape :as shape]
             [jobs.movement.go-to.escalation :as esc]
@@ -28,18 +30,35 @@
   (is (= 0 (escape/pit-depth (ba {:blocks room}) [0 64 0])) "the middle of a room is no pit"))
 
 (deftest escape-door-is-the-solid-cells-of-a-thin-wall-with-floor-beyond
-  (is (= {:cells [[3 65 0] [3 64 0]] :through [4 64 0]} (escape/door (ba {:blocks room}) [2 64 0] [1 0] 3)))
-  (is (nil? (escape/door (ba {:blocks room}) [1 64 0] [1 0] 3)) "no wall right in front")
-  (is (nil? (escape/door (ba {:blocks pit}) [0 61 0] [1 0] 3)) "no floor beyond the pit's wall"))
+  (is (= {:cells [[3 65 0] [3 64 0]] :through [4 64 0]} (escape/door (ba {:blocks room}) [2 64 0] [1 0])))
+  (is (nil? (escape/door (ba {:blocks room}) [1 64 0] [1 0])) "no wall right in front")
+  (is (nil? (escape/door (ba {:blocks pit}) [0 61 0] [1 0])) "no floor beyond the pit's wall"))
 
 (deftest escape-door-never-goes-through-a-door-a-bed-or-a-container
   (doseq [b ["iron_door" "oak_door" "spruce_fence_gate" "red_bed" "chest" "barrel" "bedrock"]]
-    (is (nil? (escape/door (ba {:blocks (assoc room "3,64,0" b)}) [2 64 0] [1 0] 3)) b)))
+    (is (nil? (escape/door (ba {:blocks (assoc room "3,64,0" b)}) [2 64 0] [1 0])) b)))
 
-(deftest escape-door-is-at-most-max-thick
-  (let [thick (merge room (box 3 64 -3 6 65 3 "dirt"))]
-    (is (nil? (escape/door (ba {:blocks thick}) [2 64 0] [1 0] 3)) "4 thick")
-    (is (= [7 64 0] (:through (escape/door (ba {:blocks thick}) [2 64 0] [1 0] 4))))))
+(deftest escape-door-through-a-seen-wall-is-the-whole-wall-however-thick
+  ;; how thick a wall is worth digging is the digger's price, not a count of rows
+  (let [thick (merge room (box 3 64 -3 8 65 3 "dirt"))]
+    (is (= [9 64 0] (:through (escape/door (ba {:blocks thick}) [2 64 0] [1 0]))))
+    (is (= 12 (count (:cells (escape/door (ba {:blocks thick}) [2 64 0] [1 0])))))))
+
+(deftest escape-choose-skips-only-the-door-that-failed
+  (let [p (tu/fake (merge in-room {:blocks room}))
+        east {:step :clear-path :heading :east}]
+    (is (= east (escape/choose p [2 64 0] [8 64 0])))
+    (is (= east (escape/choose p [2 64 0] [8 64 0] (constantly true) {:skip #{(escape/door-key [2 64 1] :east)}}))
+        "a door from another cell rules out only that one")
+    (is (not= :clear-path (:step (escape/choose p [2 64 0] [8 64 0] (constantly true) {:skip #{(escape/door-key [2 64 0] :east)}})))
+        "the door that failed is not dug again")
+    (let [in-line? #{[3 64 0] [3 65 0]}
+          may-dig? (complement in-line?)
+          spot (escape/choose p [2 64 0] [8 64 0] may-dig? {})
+          other (escape/choose p [2 64 0] [8 64 0] may-dig? {:skip #{(escape/door-key (:pos spot) :east)}})]
+      (is (= :approach (:step spot) (:step other)) "the wall in line may not be dug: a walk to a door beside it")
+      (is (not= (:pos spot) (:pos other)) "no walk to a cell whose door failed"))
+    (is (= [:clear-path [2 64 0] :east] (esc/skip-key east [2 64 0])) "go-to keys a failed door by where it began")))
 
 (deftest escape-choose-walks-to-a-wall-first-from-the-middle-of-a-room
   (is (= {:step :approach :pos [2 64 0]} (escape/choose (tu/fake (merge in-room {:blocks room})) [0 64 0] [8 64 0]))
@@ -223,6 +242,31 @@
           (is (= "dirt" (block p [3 64 0])) "the door is shut again")
           (is (= "dirt" (block p [3 65 0])))
           (is (< 6 (first (feet p)))))))))
+
+;; The sealed room, then a 2-cell pocket (x 4..5) shut by a second dirt wall at x 6: two doors in a row to the goal.
+(def two-walls (merge room (apply dissoc (box 4 64 -1 6 66 1 "dirt") ["4,64,0" "4,65,0" "5,64,0" "5,65,0"])))
+
+(deftest each-door-of-a-go-to-may-spend-only-what-the-doors-before-it-left
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p] :as s} (setup (merge in-room {:blocks two-walls}))
+              budgets (atom [])
+              door (get-in registry/jobs ['jobs.access.clear-path :round])
+              out (atom :not-done)
+              eng (assoc eng :jobs (-> (:jobs eng)
+                                       (assoc-in ['jobs.access.clear-path :round]
+                                                 (fn ^:async spied-door [c]
+                                                   (when-not (:through (ctx/mem c)) (swap! budgets conj (:max-dig-s (:args c))))
+                                                   (await (door c))))
+                                       (assoc 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [9 64 0] :range 1 :worth 600}))))
+              door-s (cost/dig-cells-s (repeat 2 (tools/clear-ms p "dirt")))]
+          (core/submit! eng '(recording-parent) {})
+          (await (tick-out! eng 1000))
+          (is (= {:arrived true} @out))
+          (is (= 2 (count @budgets)) (pr-str @budgets))
+          (is (= 600 (first @budgets)))
+          (is (< (js/Math.abs (- (second @budgets) (- 600 door-s))) 1e-6) "the second door gets what the first left"))))))
 
 (deftest go-to-walks-to-a-wall-and-stairs-out-of-a-wide-hollow
   (async done

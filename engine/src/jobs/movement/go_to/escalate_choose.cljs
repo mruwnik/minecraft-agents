@@ -147,7 +147,7 @@
       :bridge (cw/bridge-cost (:length e) (:short e 0))
       :fill-gap (cw/fill-cost (:count e 1))
       :dig-route (dig-s (map :cell (:cells e)))
-      :clear-path (dig-s (:cells (escape/door @block-at (escape/unseen-of p) feet (escape/heading-dirs (:heading e)) (escape/max-door))))
+      :clear-path (dig-s (:cells (escape/door @block-at (escape/unseen-of p) feet (escape/heading-dirs (:heading e)))))
       0)))
 
 (defn gap-fill
@@ -504,15 +504,20 @@
   [c]
   (or (:worth (:args c)) (get-in (ctx/left c) [:spend :job-time] ##Inf)))
 
+(defn dig-left-s
+  "Seconds of digging the go-to call c has left for its next door or dig leg: call-budget-s less what its doors and
+  legs so far took (memory :dug-s)."
+  [c]
+  (- (call-budget-s c) (:dug-s (ctx/mem c) 0)))
+
 (defn dig-leg
   "A buried body's next leg of a dig toward a goal: {:step
   :dig-route :cells :leg-s} to the farthest of leg-ends that route-cells reaches, :leg-s its dig seconds; nil when none
-  does; {:step :searching} while opts :slice's search goes on; {:step :none :why :dig-budget} when the call's legs so far
-  (memory :leg-dig-s) and this one would dig longer than the caller's :worth, else the call's job time left."
+  does; {:step :searching} while opts :slice's search goes on; {:step :none :why :dig-budget} when this leg would dig
+  longer than the call has left (dig-left-s)."
   [c from goal may-dig? {:keys [own? skip fetch? slice] :as opts}]
   (when-not (skip :dig-route)
     (let [p (:primitives c)
-          budget (call-budget-s c)
           found (loop [ends (leg-ends from goal)]
                   (when-let [end (first ends)]
                     (let [cells (route-cells p from end may-dig? own? false fetch? (assoc (search-opts opts) :margin leg-margin))]
@@ -522,9 +527,9 @@
       (if (= :searching found)
         {:step :searching}
         (when-let [[cells s] found]
-          (if (<= (+ (:leg-dig-s (ctx/mem c) 0) s) budget)
+          (if (<= s (dig-left-s c))
             {:step :dig-route :cells cells :leg-s s}
-            {:step :none :why :dig-budget :dug-s (:leg-dig-s (ctx/mem c) 0) :budget-s budget}))))))
+            {:step :none :why :dig-budget :dug-s (:dug-s (ctx/mem c) 0) :budget-s (call-budget-s c)}))))))
 
 (defn nearest-stand
   "A cell [x y z] the body can walk to (a flood of at most reach-room/room-cells cells) nearest goal: of the cells no farther

@@ -56,7 +56,7 @@
     (is (= :stair (:step (escape/choose p [0 64 0] [6 66 0]))) "a goal above still stairs")))
 
 (deftest escape-choose-stairs-up-out-of-a-sealed-tunnel-to-a-goal-through-thick-rock
-  ;; Rowan #22: a 1-wide pocket (two sides walled, pit depth 0), goal on its level behind more than max-door of rock
+  ;; Rowan #22: a 1-wide pocket (two sides walled, pit depth 0), goal on its level behind rock with no floor beyond
   (let [pocket (apply dissoc (box -8 62 -2 8 67 2 "stone") (for [x (range -2 1) y [64 65]] (str x "," y ",0")))
         p (tu/fake {:self {:pos {:x -1 :y 64 :z 0}} :blocks pocket})]
     (is (= :stair (:step (escape/choose p [-1 64 0] [6 64 0]))))))

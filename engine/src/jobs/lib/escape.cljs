@@ -28,8 +28,7 @@
             [jobs.lib.walk.world :as wworld]))
 
 (a/defargs settings
-  {::max-depth {:default 8 :doc "How deep an escape digs or climbs at most." :spec (a/int-in 1 nil)}
-   ::max-door {:default 3 :doc "The thickest wall (blocks) a :clear-path step digs through." :spec (a/int-in 1 nil)}})
+  {::max-depth {:default 8 :doc "How deep an escape digs or climbs at most." :spec (a/int-in 1 nil)}})
 
 (defn max-depth [] (settings/get settings ::max-depth))
 
@@ -213,7 +212,7 @@
   room for the body and a floor. unseen? (cell -> true for a cell the body has not sensed): a row past the first whose
   cells are unseen or seen open, at least one unseen (a body seeing over the wall sees only some), is taken for the far
   side, {:unseen true}: the dig shows it, and the digger goes on with door-from there."
-  [block-at unseen? feet dir max-thick k]
+  [block-at unseen? feet dir k]
   (loop [k k cells []]
     (let [row (ahead feet dir k)
           pair [(up row 1) row]
@@ -224,7 +223,6 @@
         (and (> k 1) (some unseen? pair) (every? #(or (unseen? %) (bs/passable? (block-at %))) pair))
         {:cells cells :through row :unseen true}
         (every? bs/passable? names) (when (> k 1) {:cells cells :through row})
-        (> k max-thick) nil
         (some protected? names) nil
         (some bs/fluids names) nil
         :else (recur (inc k) (into cells (filter #(solid? (block-at %)) pair)))))))
@@ -232,10 +230,21 @@
 (defn door
   "A door through a wall straight ahead of feet along dir: {:cells [...] :through cell}, the wall's solid cells at feet
   and head height (head first, row by row) and the first cell beyond with room for the body and a floor. nil when
-  the cell in front is open, the wall is thicker than max-thick, a row has no floor, or a cell is protected. With
-  unseen?, a far side the body cannot see is guessed (door-from)."
-  ([block-at feet dir max-thick] (door block-at (constantly false) feet dir max-thick))
-  ([block-at unseen? feet dir max-thick] (door-from block-at unseen? feet dir max-thick 1)))
+  the cell in front is open, a row has no floor, or a cell is protected. How thick a wall is worth digging is the
+  caller's price (jobs.lib.cost/dig-cells-s), not a count. With unseen?, a far side the body cannot see is guessed
+  (door-from)."
+  ([block-at feet dir] (door block-at (constantly false) feet dir))
+  ([block-at unseen? feet dir] (door-from block-at unseen? feet dir 1)))
+
+(defn door-key
+  "The skip key of the door from feet along heading (a keyword): a door that failed rules out only itself."
+  [feet heading]
+  [:clear-path feet heading])
+
+(defn skipped-door-cells
+  "The cells whose door skip (a set of skip keys) rules out."
+  [skip]
+  (keep (fn [k] (when (and (vector? k) (= :clear-path (first k))) (second k))) skip))
 
 (defn log? [n] (boolean (and n (re-find #"_log$" n))))
 
@@ -356,8 +365,6 @@
     (when (and (= 2 (+ (Math/abs dx) (Math/abs dz))) (zero? (* dx dz)))
       (up (add landing [(/ dx 2) 0 (/ dz 2)]) -1))))
 
-(defn max-door [] (settings/get settings ::max-door))
-
 (defn door-spot
   "The cheapest cell (priced-spot through standable cells) from which a wall straight toward goal is a door (door)
   whose every cell is diggable? and whose far side is cheaper to goal from there than from feet, the walk there
@@ -368,7 +375,7 @@
   (let [block-at (block-at-of p)
         unseen? (unseen-of p)
         take? (fn [cell g rest-s] (when-let [d (heading cell goal)]
-                                    (when-let [gap (door block-at unseen? cell d (max-door))]
+                                    (when-let [gap (door block-at unseen? cell d)]
                                       (and (every? diggable (:cells gap)) (< (+ g (rest-s (:through gap))) (rest-s feet))))))]
     (priced-spot p feet goal (level-steps p feet false) take? visited nil)))
 
@@ -400,7 +407,7 @@
   (case step
     :pillar (up cell height)
     :stair (let [[dx dz] (heading-dirs heading)] (add cell [(* steps dx) steps (* steps dz)]))
-    :clear-path (:through (door (block-at-of p) (unseen-of p) cell (heading cell goal) (max-door)))
+    :clear-path (:through (door (block-at-of p) (unseen-of p) cell (heading cell goal)))
     nil))
 
 (defn way-spot
@@ -430,8 +437,8 @@
   - {:step :stair :heading kw :steps n}: a block in front to stair up on, n how far the goal is above or the pit's
     depth, whichever is more, at most max-depth (the pit's depth when the longer cut is not all diggable?), every cell
     of its cut diggable?.
-  - {:step :clear-path :heading kw}: a wall at most max-door thick straight toward the goal, with floor beyond,
-    every cell diggable?. Chosen before a stair when the goal is no higher than the feet: a sealed tunnel reads as a
+  - {:step :clear-path :heading kw}: a wall straight toward the goal, with floor beyond, every cell diggable?, not
+    skipped (door-key; a bare :clear-path skips every door). Chosen before a stair when the goal is no higher than the feet: a sealed tunnel reads as a
     pit, and its stair would climb away from the goal.
   - a stair with no pit and no goal above (a sealed tunnel, a goal through thick rock): the deepest diggable one, up
     to max-depth.
@@ -468,9 +475,13 @@
                               (range (max-depth) 0 -1))))
          ledge (delay (when (and item (not (skip :stair)) (pos? rise) (not (walled-side? block-at feet)))
                         (stair-heading block-at feet (remove #(contains? stands (ahead feet % 1)) stair-dirs) rise may-dig? own? true)))
-         gap (when (and dir (not (skip :clear-path))) (door block-at (unseen-of p) feet dir (max-door)))
-         spot (delay (when (and dir (not (skip :approach)) (not (skip :clear-path)) (walled-side? block-at feet))
-                       (door-spot p feet goal #(diggable? block-at may-dig? own? %) approached)))
+         door-failed? (and dir (skip (door-key feet (heading-names dir))))
+         gap (when (and dir (not (skip :clear-path)) (not door-failed?))
+               (door block-at (unseen-of p) feet dir))
+         ;; door-spot is for a wall in line that may not be dug; one that was dug and failed is no cause to try its neighbour
+         spot (delay (when (and dir (not (skip :approach)) (not (skip :clear-path)) (not door-failed?) (walled-side? block-at feet))
+                       (door-spot p feet goal #(diggable? block-at may-dig? own? %)
+                                  (into approached (skipped-door-cells skip)))))
          wall (delay (wall-spot p feet goal approached))
          back (delay (when-not (or (skip :approach) (skip :clear-path)) (door-back p feet approached)))
          door? (and gap (every? #(diggable? block-at may-dig? own? %) (:cells gap)))
