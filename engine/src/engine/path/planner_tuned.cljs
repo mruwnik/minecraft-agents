@@ -85,7 +85,7 @@
      changed(x, y, z) (nil: 0 everywhere) is the chance a remembered cell changed since it was seen (unseen at that chance):
      a move costs cell times its seconds times the most of its feet, head and floor cells', and a drop into remembered water
      adds that chance of the dry fall to the pool's floor as risk (its damage, or deathHp when it kills; default lethal-s
-     over riskWeight) in place of landingSeen's cut. No proof rests on a cell at 1/2 or more.
+     over riskWeight) in place of landingSeen's cut. No goal-flood proof rests on cells whose chance that none changed is under 1/2.
    - options.stopAtEdge: with the goal unloaded, the search names the first node it expands at the loaded edge (edgeStop)
      as its frontier and ends once it has expanded as many nodes again (or run out, or the caller ends it: endSweep), not
      after searching all loaded land; what only those nodes refused is not in the result. go-to's budgeted searches set it
@@ -370,9 +370,9 @@
      (js/Float64Array. TABLE) (js/Uint8Array. TABLE) (js/Float64Array. TABLE) (js/Uint8Array. TABLE) (js/Map.) (js/Set.) (js/Int8Array. REGIONS)
      (js/Float64Array. REGIONS) (js/Int16Array. REGIONS) nil nil
      0 0 0 0
-     ;; the goal flood: flooding fx fy fz fr hit flooded pre-flooded flood-pending leaked
+     ;; the goal flood: flooding fx fy fz fr hit flooded pre-flooded flood-pending leaked rest-cells rest-p
      false 0 0 0 -1 false 0 0
-     (and near (pos? (option options "goalFlood" 4000))) false
+     (and near (pos? (option options "goalFlood" 4000))) false (js/Set.) 1
      ;; flood-memo flood-base lf-imported verifying
      (when (and near (pos? (option options "goalFlood" 4000))) (.-goalFloodMemo options)) 0 0 false
      ;; flood-moves flood-out flood-h-keys flood-h-vals flood-target

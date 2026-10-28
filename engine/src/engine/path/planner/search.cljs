@@ -72,6 +72,8 @@
    ;; the goal flood: moves go to the probe instead of the search while it runs; fr the probed cell's region (-1 any)
    ^:mutable ^boolean flooding ^:mutable fx ^:mutable fy ^:mutable fz ^:mutable fr ^:mutable ^boolean hit ^:mutable flooded ^:mutable pre-flooded
    ^:mutable ^boolean flood-pending ^:mutable ^boolean leaked
+   ;; the remembered aging cells the flood's proof rests on (cell-key) and the chance none of them changed (restOn)
+   ^:mutable ^js rest-cells ^:mutable rest-p
    ;; the late flood kept over the searches of one goal (options.goalFloodMemo, see keepFlood; nil: none), the expansions
    ;; the earlier searches of that goal made (a late flood is due by all of them), the cells taken over from them, and
    ;; whether a fresh flood is checking their enclosed answer (progress is nil meanwhile, so the caller does not walk)

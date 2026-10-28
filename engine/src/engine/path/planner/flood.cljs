@@ -1,6 +1,6 @@
 (ns engine.path.planner.flood
   "Search methods: the goal flood (is the goal walled in?), and the late flood kept over the searches of one goal."
-  (:require [engine.path.planner.base :refer [BODY FLOOD-MEMO FLOOD-TABLE HALF REGIONS SPAN UNLOADED WATER WHOLE]]
+  (:require [engine.path.planner.base :refer [BODY FLOOD-MEMO FLOOD-TABLE HALF REGIONS SPAN UNLOADED WATER WHOLE cell-key]]
             [engine.path.planner.search :refer [Search]]))
 
 (set! *warn-on-infer* true)
@@ -49,6 +49,24 @@
   (leakBubble [s x y z]
     (when-not (zero? (aget (.-tbl-bubble s) (.stateAt s x y z))) (set! (.-leaked s) true)))
 
+  ;; the proof rests on the remembered cell x y z: each aging cell joins the chance that none changed once (rest-p, kept
+  ;; over the search's floods: the world does not change under it), and the flood leaks once that chance is under 1/2
+  ;; (some way in likelier opened than not); a door's two halves are one
+  (restOn [s x y z q]
+    (when (pos? q)
+      (let [key (if (== (aget (.-tbl-door-half s) (.stateAt ^js (.-snapshot s) x y z)) 2) (cell-key x (dec y) z) (cell-key x y z))]
+        (when-not (true? (.has ^js (.-rest-cells s) key))
+          (.add ^js (.-rest-cells s) key)
+          (set! (.-rest-p s) (* (.-rest-p s) (- 1 q)))
+          (when (< (.-rest-p s) 0.5) (set! (.-leaked s) true))))))
+
+  ;; the proof rests on the cell, its floor and its head cell, as read (unknownNear)
+  (restNear [s x y z]
+    (when (some? (.-unk-changed s))
+      (.restOn s x y z (.changedAt s x y z))
+      (.restOn s x (dec y) z (.changedAt s x (dec y) z))
+      (.restOn s x (inc y) z (.changedAt s x (inc y) z))))
+
   ;; the standable cells of the goal start the flood
   (floodSeeds [s ^js seen ^js queue]
     (let [r (js/Math.ceil (.-goal-range s))]
@@ -70,7 +88,7 @@
                 (.add seen (.keyOf s x y z r))
                 (.push queue x y z r))
               (.leakBubble s x y z)
-              (when ^boolean (.unknownNear s x y z) (set! (.-leaked s) true)))
+              (if ^boolean (.unknownNear s x y z) (set! (.-leaked s) true) (.restNear s x y z)))
             (recur dx dy (inc dz)))))))
 
   ;; the flood's nodes in a cell standing at h: one per region of a tight cell, as the search's nodes are (the strips either
@@ -89,7 +107,8 @@
         ^boolean (.unknownNear s x y z)))
 
   ;; the cell's stand height as the search can reach it: as it stands, or with a closed door, gate or trapdoor in its column
-  ;; read as open (the opening pass makes nodes the body only fits in once something is opened)
+  ;; read as open (the opening pass makes nodes the body only fits in once something is opened); the flood rests on a
+  ;; seen cell it reads (restNear) once, however many flooded cells look at it
   (floodH [s x y z]
     (when (nil? ^js (.-flood-h-keys s))
       (set! (.-flood-h-keys s) (js/Float64Array. FLOOD-TABLE))
@@ -99,6 +118,7 @@
       (if (== (aget ^js (.-flood-h-keys s) slot) key)
         (aget ^js (.-flood-h-vals s) slot)
         (let [h (.floodHeight s x y z)]
+          (when-not ^boolean (.unseen s x y z) (.restNear s x y z))
           (aset ^js (.-flood-h-keys s) slot key)
           (aset ^js (.-flood-h-vals s) slot h)
           h))))
@@ -139,23 +159,31 @@
   ;; cell under it (the head would be in the block), so the cells round it that it has not seen (the underside of a
   ;; floor, the top of a roof, the floor under a wall) do not leak the flood
   (solidSeen [s x y z]
+    (and ^boolean (.solidKnown s x y z) (< (.changedAt s x y z) 0.5)))
+
+  (solidKnown [s x y z]
     (let [id (.stateAt ^js (.-snapshot s) x y z)]
-      (and (not (== id UNLOADED)) (not ^boolean (.isUnknown s id)) (>= (aget (.-tbl-top s) id) WHOLE) (zero? (aget (.-tbl-base s) id))
-           (< (.changedAt s x y z) 0.5))))
+      (and (not (== id UNLOADED)) (not ^boolean (.isUnknown s id)) (>= (aget (.-tbl-top s) id) WHOLE) (zero? (aget (.-tbl-base s) id)))))
+
+  ;; a seen whole block the proof rests on
+  (wallAt [s x y z]
+    (and ^boolean (.solidKnown s x y z)
+         (let [q (.changedAt s x y z)]
+           (and (< q 0.5) (do (.restOn s x y z q) true)))))
 
   ;; is the move between the flood's current cell and the diagonal cell x y z shut: both cells beside the corner hold a
   ;; seen whole block at the body's height on the way (the higher of the two levels or one over it)?
   (cornerShut [s x y z]
     (let [fx (.-fx s) fz (.-fz s) ly (js/Math.max y (.-fy s))
           walled (fn [cx cz] (or ^boolean (.solidSeen s cx ly cz) ^boolean (.solidSeen s cx (inc ly) cz)))]
-      (and (not (== x fx)) (not (== z fz)) ^boolean (walled x fz) ^boolean (walled fx z))))
+      (and (not (== x fx)) (not (== z fz)) ^boolean (walled x fz) ^boolean (walled fx z)
+           (do (.wallAt s x ly fz) (.wallAt s x (inc ly) fz) (.wallAt s fx ly z) (.wallAt s fx (inc ly) z) true))))
 
   (floodVisit [s ^js seen ^js queue start-key x y z jump]
-    (if (and ^boolean (.unseen s x y z) (not ^boolean (.solidSeen s x y z)))
-      (do (when (and (not ^boolean (.solidSeen s x (inc y) z))
-                     (if (neg? jump)
-                       (and (or (<= y (.-fy s)) ^boolean (.dropOver s y)) (not ^boolean (.cornerShut s x y z)))
-                       ^boolean (.jumpOver s jump (- y (.-fy s)) x z)))
+    (if (and ^boolean (.unseen s x y z) (not ^boolean (.wallAt s x y z)))
+      (do (when (and (if (neg? jump) (or (<= y (.-fy s)) ^boolean (.dropOver s y)) ^boolean (.jumpOver s jump (- y (.-fy s)) x z))
+                     (not ^boolean (.wallAt s x (inc y) z))
+                     (or (not (neg? jump)) (not ^boolean (.cornerShut s x y z))))
             (set! (.-leaked s) true))
           false)
       (let [h (.floodH s x y z)]
@@ -242,7 +270,7 @@
       (cond
         (> dy (inc (.-max-drop s))) false
         (zero? dy) (recur (inc dy))
-        (and (pos? dy) ^boolean (.solidSeen s (.-fx s) (+ (.-fy s) dy) (.-fz s))) false ; a roof ends the climb
+        (and (pos? dy) ^boolean (.wallAt s (.-fx s) (+ (.-fy s) dy) (.-fz s))) false ; a roof ends the climb
         ^boolean (.floodVisit s seen queue start-key (.-fx s) (+ (.-fy s) dy) (.-fz s) -1) true
         :else (recur (inc dy)))))
 
@@ -270,7 +298,7 @@
     (let [start-key (aget (.-node-keys s) 0) ; the start node's key, its region in a tight cell (begin)
           seen (js/Set.)
           queue #js []]
-      (set! (.-leaked s) false)
+      (set! (.-leaked s) (< (.-rest-p s) 0.5))
       (.floodSeeds s seen queue)
       (if (true? (.has seen start-key))
         false
@@ -395,7 +423,7 @@
     (set! (.-lf-active s) true)
     (when (nil? ^js (.-lf-seen s))
       (set! (.-lf-seen s) (js/Set.))
-      (set! (.-leaked s) false)
+      (set! (.-leaked s) (< (.-rest-p s) 0.5))
       (when-not ^boolean (.takeFlood s)
         (.freshFlood s))))
 
@@ -405,7 +433,7 @@
     (set! (.-lf-queue s) #js [])
     (set! (.-lf-head s) 0)
     (set! (.-lf-imported s) 0)
-    (set! (.-leaked s) false)
+    (set! (.-leaked s) (< (.-rest-p s) 0.5))
     (set! (.-lf-active s) true)
     (.floodSeeds s ^js (.-lf-seen s) ^js (.-lf-queue s))
     (when (true? (.has ^js (.-lf-seen s) (aget (.-node-keys s) 0)))

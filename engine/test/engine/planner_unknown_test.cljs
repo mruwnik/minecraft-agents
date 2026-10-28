@@ -336,13 +336,21 @@
                 r (run w (pf/near 10 64 0) (unk {}) {:x 0 :y 64 :z 0})]]
     (is (= "goal-enclosed" (:reason r)) (str "unseen cells " cells))))
 
-(deftest a-room-shut-by-a-door-likelier-changed-than-not-is-not-proved-enclosed
-  (let [w (pf/snapshot {:fill stone-room-fill
-                        :blocks [[9 64 0 "iron_door" {:half "lower" :facing "west"}] [9 65 0 "iron_door" {:half "upper" :facing "west"}]]})
-        reason (fn [q] (let [qs {[9 64 0] q [9 65 0] q}]
-                         (:reason (run w (pf/near 10 64 0) (unk {:changed (fn [x y z] (get qs [x y z] 0))}) {:x 0 :y 64 :z 0}))))]
-    (is (= "goal-enclosed" (reason 0.25)) "likely still shut: the proof holds")
-    (is (not= "goal-enclosed" (reason 0.5)) "likelier opened than not: no proof rests on it")))
+(defn- door [x z facing]
+  [[x 64 z "iron_door" {:half "lower" :facing facing}] [x 65 z "iron_door" {:half "upper" :facing facing}]])
+
+;; the proof rests on every door at once: it holds only while the chance that none opened is over 1/2
+(deftest a-room-shut-by-doors-likelier-some-changed-than-not-is-not-proved-enclosed
+  (let [reason (fn [doors q]
+                 (let [w (pf/snapshot {:fill stone-room-fill :blocks (into [] (mapcat #(apply door %)) doors)})
+                       changed (fn [x y z] (if (some (fn [[dx dz]] (and (== x dx) (== z dz) (<= 64 y 65))) doors) q 0))]
+                   (:reason (run w (pf/near 10 64 0) (unk {:changed changed}) {:x 0 :y 64 :z 0}))))
+        one [[9 0 "west"]]
+        three [[9 0 "west"] [9 1 "west"] [13 0 "east"]]]
+    (is (= "goal-enclosed" (reason one 0.4)) "one door likely still shut: the proof holds")
+    (is (not= "goal-enclosed" (reason one 0.5)) "one door likelier opened than not")
+    (is (= "goal-enclosed" (reason three 0.2)) "three doors at 0.2: none opened at 0.51")
+    (is (not= "goal-enclosed" (reason three 0.4)) "three doors at 0.4: some opened at 0.78")))
 
 (deftest a-start-ringed-by-dark-floors-is-not-start-enclosed
   (let [w (pf/snapshot {:blocks [[0 63 2 "stone"] [1 62 2 U] [-1 62 2 U] [0 62 3 U] [0 62 1 U]]})
