@@ -35,8 +35,9 @@
   - Each cell is a jobs.blocks.dig child (zones, claims, hazards and tools are its rules). It picks up the drop
     (:collect) when there is room for it, so the block can be put back; with no room it digs on and leaves it.
   - With :close-behind, a door 2 or more deep has its first column put back (jobs.blocks.place children, the dug blocks)
-    from the second before the body walks on out, so nothing follows it through (go-to's break-out of its own pen); a cell
-    it cannot fill (an animal in it) is left to go-to's put-back.
+    from the second as soon as both are dug, before the far side opens, so nothing follows the body through (go-to's
+    break-out of its own pen); a cell it cannot fill (an animal in it) is left to go-to's put-back, and a dead end digs it
+    open again to walk back.
   - Then it walks into the cell beyond (a go-to child).
   One call is the whole door; it yields :continue only while a dig child waits on the world.
   Needs nothing carried (a tool the dig child cannot find is its :dig-waits). Quote: the door's cells times the time of a
@@ -251,11 +252,14 @@
 
 (defn ^:async step-out!
   "A dead end: walk back to the cell the door was begun from (memory :start), so the cut can be put back behind the
-  body. :continue while it walks, else nil."
+  body; a mouth shut behind it (:shut) is dug open again first (memory :dead-end: the door is not planned on meanwhile).
+  :again, :continue while it walks, else nil."
   [c]
-  (let [from (:start (ctx/mem c))]
-    (when (and from (not= from (reach/standing-vec (:primitives c))))
-      (when (= :continue (await (child/walk-into!* c :back from))) :continue))))
+  (let [{:keys [start shut]} (ctx/mem c)]
+    (cond
+      (seq shut) (do (ctx/update-mem! c #(-> % (update :cells (fn [cs] (vec (distinct (concat shut cs))))) (dissoc :shut) (assoc :dead-end true))) :again)
+      (and start (not= start (reach/standing-vec (:primitives c))))
+      (when (= :continue (await (child/walk-into!* c :back start))) :continue))))
 
 (defn ^:async side-door!
   "The wall ahead goes on but a dug cell may open into air beside it that the body could not see from outside: stand in
@@ -316,8 +320,9 @@
             last-row (escape/ahead from dir (dec k))
             gap (escape/door-from block-at unseen? from dir (max-thick) k)]
         (cond
-          (nil? gap) (or (await (side-door! c dir))
-                         (when-let [on (escape/door-from block-at unseen? last-row dir (max-thick) 1)] (await (plan-on! c on last-row)))
+          (nil? gap) (or (when-not (:dead-end (ctx/mem c))
+                           (or (await (side-door! c dir))
+                               (when-let [on (escape/door-from block-at unseen? last-row dir (max-thick) 1)] (await (plan-on! c on last-row)))))
                          (await (step-out! c))
                          (finish! c :no-door {:why (str "the wall goes on past " (pr-str through) ": thicker than "
                                                         (max-thick) " or no floor beyond")}))
@@ -342,20 +347,29 @@
                   {:digging d}))))))
 
 (defn mouth
-  "[cells inner] of a door at least 2 columns deep: the dug cells of its first column, feet first, and the feet cell of
-  its second; else nil."
+  "[cells inner] once a door's first two columns are dug: the dug cells of its first column, feet first, and the feet
+  cell of its second; else nil."
   [c]
   (let [{:keys [start dug]} (ctx/mem c)
         dir (headings (:heading (:args c)))
         column (fn [k] (let [[x _ z] (escape/ahead start dir k)]
                          (sort-by second (filter (fn [[cx _ cz]] (and (= x cx) (= z cz))) (map :cell dug)))))
         [cells inner] [(column 1) (column 2)]]
-    (when (and (seq cells) (seq inner)) [(vec cells) (first inner)])))
+    (when (and (seq cells) (>= (count inner) (count cells))) [(vec cells) (first inner)])))
+
+(defn all-dug?
+  "Whether every planned cell of the door is dug or open (or shut behind the body) and its far side is no guess."
+  [c]
+  (let [{:keys [cells unseen shut digging]} (ctx/mem c)
+        p (:primitives c)]
+    (and (not unseen) (not digging)
+         (every? #(or (some #{%} shut) (bs/air (u/seen-name p (zipmap [:x :y :z] %)))) cells))))
 
 (defn ^:async close-behind!
-  "With :close-behind, before the walk out: walk into the door's second column (mouth), then put back its first column
-  one cell a call (memory :to-close; :shut the cells placed); once done, or when there is no second column or the
-  walk in did not get there, memory :closed. :again, :continue while a child waits, else nil."
+  "With :close-behind, once the first two columns are dug (mouth) and before the rest opens the far side: walk into the
+  second, then put back the first one cell a call (memory :to-close; :shut the cells placed), so nothing follows the body
+  into the door. Once done, or at the walk out with no second column, or when the walk in did not get there, memory
+  :closed. :again, :continue while a child waits, else nil (also while the two columns are not dug yet)."
   [c]
   (let [m (ctx/mem c)
         p (:primitives c)]
@@ -364,7 +378,8 @@
             left (:to-close m cells)
             closed! (fn [] (ctx/update-mem! c #(-> % (assoc :closed true) (dissoc :to-close))) :again)]
         (cond
-          (or (nil? inner) (empty? left)) (closed!)
+          (nil? inner) (when (all-dug? c) (closed!))
+          (empty? left) (closed!)
           (not= inner (reach/standing-vec p))
           (if (:inside-tried m)
             (closed!)
@@ -387,14 +402,16 @@
   (let [{:keys [cells through unseen digging shut]} (ctx/mem c)]
     (if-not through
       (await (plan! c))
-      (let [start (if digging {:digging digging} (await (start-cell! c (remove (set shut) cells))))]
+      (let [closing (when-not digging (await (close-behind! c)))
+            start (when-not closing (if digging {:digging digging} (await (start-cell! c (remove (set shut) cells)))))]
         (cond
+          closing closing
           (= :open start) :again
           (:unloaded start) (finish! c :no-door {:why (str "the cell " (pr-str (:unloaded start)) " is not loaded")
                                                  :cell (:unloaded start)})
           (:digging start) (await (dig-cell! c (:digging start)))
           unseen (await (replan! c))
-          :else (or (await (close-behind! c)) (await (step-through! c through))))))))
+          :else (await (step-through! c through)))))))
 
 (defn ^:async round
   "The whole door: next! until it ends, a pace between pieces."

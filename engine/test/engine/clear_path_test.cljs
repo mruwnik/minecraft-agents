@@ -241,18 +241,23 @@
     (is (= [:later :digging] (done-of (merge open floor) {:x 0 :y 64 :z 0} plan-mem)) "open but not yet through")
     (is (= [:ok :done] (done-of (merge open floor) {:x 3 :y 64 :z 0} plan-mem)) "open and stood through")))
 
-(deftest close-behind-puts-the-first-column-back-from-inside-before-walking-out
-  ;; go-to's break-out of its own pen: an animal must not follow the body out through the open door
+(deftest close-behind-shuts-the-mouth-from-inside-before-the-far-side-opens
+  ;; go-to's break-out of its own pen: an animal must not follow the body into the door and out through it
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [p (atom nil)
-              w (assoc wall :inventory [{:name "stone_pickaxe" :count 1}] :drops {"stone" "cobblestone"} :p-out p)
+              thick (update wall :blocks merge (box 3 64 -1 3 65 1 "stone"))
+              w (assoc thick :inventory [{:name "stone_pickaxe" :count 1}] :drops {"stone" "cobblestone"} :p-out p)
               r (await (run-door w nil {:heading :east :close-behind true}))
-              block (fn [cell] (get-in @(fake/state @p) [:blocks cell] "air"))]
-          (is (= [:done [3 64 0] [[1 64 0] [1 65 0]]] [(:status r) (:through r) (:shut r)]) (pr-str (dissoc r :ending)))
-          (is (= ["cobblestone" "cobblestone" "air" "air"] (mapv block [[1 64 0] [1 65 0] [2 64 0] [2 65 0]]))
-              "the mouth is shut, the rest of the door left to go-to's put-back"))))))
+              block (fn [cell] (get-in @(fake/state @p) [:blocks cell] "air"))
+              acts (keep (fn [a] (when (#{"dig" "place"} (.-name a)) [(.-name a) (let [{:keys [x y z]} (js->clj (.-pos (.-args a)) :keywordize-keys true)] [x y z])]))
+                         (.-calls (.-world @p)))
+              at (fn [act] (.indexOf (vec acts) act))]
+          (is (= [:done [4 64 0] [[1 64 0] [1 65 0]]] [(:status r) (:through r) (:shut r)]) (pr-str (dissoc r :ending)))
+          (is (= ["cobblestone" "cobblestone" "air" "air" "air" "air"] (mapv block [[1 64 0] [1 65 0] [2 64 0] [2 65 0] [3 64 0] [3 65 0]]))
+              "the mouth is shut, the rest of the door left to go-to's put-back")
+          (is (< (at ["place" [1 65 0]]) (at ["dig" [3 64 0]])) (str "shut before the far side opens: " (pr-str acts))))))))
 
 (deftest a-door-one-column-deep-is-walked-out-of-with-close-behind
   (async done
