@@ -6,7 +6,7 @@
 
 (a/defargs settings
   {::wall-rows {:default {:k 0 :n 0} :spec (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)})
-                :doc "Counts of the unseen rows of doors' walls: k found wall of n looked at (the wall rows, and each far side found open). Recount: `node tools/event-counts.mjs far-side-rows`'s :setting (clear-path.far-side events; none yet, 2026-10-28)."}})
+                :doc "Counts of the unseen rows of doors' walls: k found wall of n looked at (the wall rows, and each far side found open). Recount: `node tools/event-counts.mjs far-side-rows` (dashboard/src/world_test/far_side_rows.cljs) over clear-path.far-side events: a door given up counts its rows as wall only (censored), none yet."}})
 
 (defn wall-on-chance
   "The chance an unseen row of a wall seen rows thick is wall too: the worse of the counted rows' ((k + 1) / (n + 2),
