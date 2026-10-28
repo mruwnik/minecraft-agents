@@ -650,14 +650,15 @@
           (is ((aim/stand-sees-fn p [16 64 0]) x y z) (pr-str [x y z])))))))
 
 (deftest a-dig-leg-is-charged-what-its-dug-cells-took-as-a-door-is
-  ;; one budget for doors and dig legs, booked the same way: the cells dug, as the leg priced them, once dug. The rock the
-  ;; first leg guesses holds a hollow (x 4), so cells it planned are never dug
+  ;; one budget for doors and dig legs, booked the same way: the cells dug, as the leg priced them (cost/dig-cells-s: the
+  ;; break and the walked step into each), once dug. The rock the first leg guesses holds a hollow (x 4), so cells it
+  ;; planned are never dug
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p] :as s} (await (climb! (assoc in-phantom :blocks (dissoc phantom "4,60,0" "4,61,0")) {:pos [26 48 0] :worth 20}))
               digs (filter #(and (= :child_ended (:kind %)) (= :done (:status %)) (re-find #"/dig$" (:job %))) @(:seen s))
-              cell-s (/ (tools/clear-ms p "stone") 1000)]
+              cell-s (cost/dig-cells-s [(tools/clear-ms p "stone")])]
           (is (= [false :dig-budget] [(:arrived @out) (:why (:escalation @out))]) (pr-str @out))
           (is (seq digs) "a leg was dug before the budget ran out")
           (is (< (js/Math.abs (- (* (count digs) cell-s) (:dug-s (:escalation @out)))) 1e-6)
