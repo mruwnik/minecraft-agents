@@ -16,6 +16,7 @@
             [jobs.lib.waits :as waits]
             [jobs.movement.go-to.column :as column]
             [jobs.movement.go-to.escalate-choose :as choose]
+            [jobs.lib.own-builds :as own-builds]
             [jobs.movement.go-to.holes :as holes]
             [jobs.movement.go-to.way-steps :as way-steps]))
 
@@ -109,7 +110,7 @@
   (let [p (:primitives c)
         block-at (escape/block-at-of p)
         may-dig? (holes/may-dig-fn c)
-        own? (holes/own-placed-fn c)
+        own? (own-builds/own-placed-fn c)
         opts {:own? own? :skip skip :fetch? (fetch-tool? c) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c)}
         stair-from (fn [cell] (span/down-stair block-at cell goal may-dig? own? skip))
         stair (when (allowed? c :stair)

@@ -17,6 +17,7 @@
             [jobs.lib.pen :as pen]
             [jobs.lib.own-pen :as own-pen]
             [engine.ready-test :as rt]
+            [jobs.lib.own-builds :as own-builds]
             [jobs.movement.go-to.holes :as holes]
             [jobs.movement.go-to.restore :as restore]
             [jobs.lib.reserve :as reserve]
@@ -267,11 +268,11 @@
         wall [1 62 0]]
     (with-redefs [access/in-own-area? (constantly true)
                   pen/check (fn [o] (swap! checks inc) (check o))]
-      (let [c (holes/with-own-pen c)
+      (let [c (own-builds/with-own-pen c)
             back (cw/put-back-cost 0)
             cut-s ((holes/own-cut-fn c) wall)]
         (is (false? ((holes/may-dig-fn c) wall)) "the wall is spared unless its cut is chosen")
-        (is (true? ((holes/own-fn c (constantly false)) wall "dirt")))
+        (is (true? ((own-builds/own-fn c (constantly false)) wall "dirt")))
         (is (= (+ back (cost/herd-loss ["cow"] (+ back (cost/dig-cost "dirt")))) cut-s))
         (is (< back cut-s) "the herd may walk out while the gap stands open")
         (is (zero? ((holes/own-cut-fn c) [3 62 0])) "natural ground beyond the wall costs no put-back")
@@ -308,7 +309,7 @@
           (is (not-any? #(= "air" (block p %)) [[3 64 0] [3 65 0]]) "the pen wall is whole again"))))))
 
 (deftest go-to-reads-its-own-pen-once-per-escalation-round
-  ;; choose-escalation! and the replan hold the pen read in c (with-own-pen); without it each fn reads the pen itself (holes/pen-of).
+  ;; choose-escalation! and the replan hold the pen read in c (with-own-pen); without it each fn reads the pen itself (own-builds/pen-of).
   ;; Only reads by a c that already holds the pen are counted: a legitimate read outside a round does not matter.
   (async done
     (tu/run-async done
@@ -318,9 +319,9 @@
               reads (atom 0)
               rounds (atom 0)
               read own-pen/shut-in
-              with-pen holes/with-own-pen]
+              with-pen own-builds/with-own-pen]
           (with-redefs [own-pen/shut-in (fn [c f] (when (:own-pen c) (swap! reads inc)) (read c f))
-                        holes/with-own-pen (fn [c] (swap! rounds inc) (with-pen c))]
+                        own-builds/with-own-pen (fn [c] (swap! rounds inc) (with-pen c))]
             (await (run-job! {:sight 3 :self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks thick-pit-pen :entities [cow]
                                 :inventory [{:name "stone_pickaxe" :count 1}]}
                                'jobs.movement.go-to {:pos [10 64 0] :range 1} zones)))

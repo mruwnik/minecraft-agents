@@ -23,7 +23,7 @@
             [jobs.lib.shelter.keep :as keep]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
-            [jobs.movement.go-to.holes :as holes]))
+            [jobs.lib.own-builds :as own-builds]))
 
 (def doc
   "Dig the one block at :pos ([x y z] or {:x :y :z}) and pick up what it dropped, as a player would. One call is the
@@ -475,7 +475,7 @@
       (rules/unbreakable block) (finish! c {:dug false :pos pos :block block :reason :cannot})
       (and (:natural-only? (:args c)) (not (:looked-natural (ctx/mem c))) (look/unknown? (:primitives c) (b/cell pos)))
       (do (ctx/update-mem! c assoc :looked-natural true) (await (look/look-at! c (b/cell pos))) :again)
-      (and (:natural-only? (:args c)) (holes/not-diggable c (access/sensed-at (:primitives c) b/hidden-guess) (b/cell pos)))
+      (and (:natural-only? (:args c)) (own-builds/not-diggable c (access/sensed-at (:primitives c) b/hidden-guess) (b/cell pos)))
       (finish! c {:dug false :pos pos :block block :reason :not-diggable})
       tool (let [r (await (get-tool! c tool))]
              (if (= :fetched r) :again r))

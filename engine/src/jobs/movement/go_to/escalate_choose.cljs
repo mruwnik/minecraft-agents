@@ -28,7 +28,8 @@
             [jobs.lib.walk.world :as wworld]
             [jobs.movement.go-to.aim :as goal-aim]
             [jobs.movement.go-to.climb :as climb]
-            [jobs.movement.go-to.holes :refer [may-dig-fn own-placed-fn]]
+            [jobs.lib.own-builds :refer [own-placed-fn]]
+            [jobs.movement.go-to.holes :refer [may-dig-fn]]
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.tuning :refer [budget-near max-blocked max-route-s]]
             [jobs.movement.go-to.way-steps :as ways]))
