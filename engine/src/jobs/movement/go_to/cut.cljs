@@ -19,15 +19,19 @@
   walk updates it every tick and a memory write is an event."
   (atom {}))
 
+(def jump-blocks "Blocks between two ticks' poses that no walk, fall or knockback covers: a teleport." 8)
+
 (defn approach-step
-  "Approach record m after a tick's pose {:x :z ...} at d from the goal: :last-dist d, :closest the least, and :explored
+  "Approach record m after a tick's pose {:x :y :z ...} at d from the goal: :last-dist d, :closest the least, and :explored
   the blocks walked along x and z away from the goal (a step that ends farther than the last) since the body last came
-  more than 1 block nearer than ever (:anchor, then 0 again)."
+  more than 1 block nearer than ever (:anchor, then 0 again). :jumped once a tick's pose lies jump-blocks or more from the last."
   [m pose d]
   (let [{:keys [prev anchor explored] :or {anchor d explored 0}} m
         nearer? (< d (dec anchor))
-        step (if (and prev (> d (:last-dist m d))) (js/Math.hypot (- (:x pose) (:x prev)) (- (:z pose) (:z prev))) 0)]
-    (assoc m :last-dist d :closest (min d (:closest m d)) :prev (select-keys pose [:x :z])
+        step (if (and prev (> d (:last-dist m d))) (js/Math.hypot (- (:x pose) (:x prev)) (- (:z pose) (:z prev))) 0)
+        jumped? (and prev (>= (js/Math.hypot (- (:x pose) (:x prev)) (- (:y pose 0) (:y prev 0)) (- (:z pose) (:z prev))) jump-blocks))]
+    (assoc m :last-dist d :closest (min d (:closest m d)) :prev (select-keys pose [:x :y :z])
+           :jumped (boolean (or jumped? (:jumped m)))
              :anchor (if nearer? d anchor) :explored (if nearer? 0 (+ explored step)))))
 
 (defn approach-recorder
@@ -37,6 +41,20 @@
   (fn [pose]
     (when (ctx/alive? c)
       (swap! approaches update (:id c) approach-step pose (u/dist pose pos)))))
+
+(defn jumped?
+  "Whether the body was moved far in one tick (a teleport, a pearl) since the call's record began."
+  [c]
+  (boolean (:jumped (get @approaches (:id c)))))
+
+(defn restart-after-jump!
+  "A call whose body was teleported mid-walk starts again from where it stands: the walk record and the counters of the
+  walk before the jump go, as at a call's start."
+  [c]
+  (swap! approaches dissoc (:id c))
+  (ctx/update-mem! c #(-> % (dissoc :best :closest :ref :last-dist :starts :tour-walks :edge-mode :waypoint-misses :waypoints-tried)
+                          (assoc :blocked 0 :searching 0 :cuts 0 :frontier-best {} :target-best {})))
+  (ctx/emit! c :go-to.jumped :info {:text "the body was moved far in one tick: the walk starts again from here"}))
 
 (defn tour
   "The call's tour of frontiers so far, {:explored :walks}: the blocks walked away from the goal and the frontier walks

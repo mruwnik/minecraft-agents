@@ -17,7 +17,7 @@
             [jobs.movement.go-to.air :as air]
             [jobs.movement.go-to.aim :as aim :refer [args-refusal goal-danger goal-pos pre-aim!]]
             [jobs.movement.go-to.column :as column]
-            [jobs.movement.go-to.cut :refer [approaches cut-loop? nearest-hostile note-restart! start-attempt! way-hostiles]]
+            [jobs.movement.go-to.cut :refer [approaches cut-loop? jumped? nearest-hostile note-restart! restart-after-jump! start-attempt! way-hostiles]]
             [jobs.movement.go-to.escalate-choose :as choose]
             [jobs.movement.go-to.escalation :as esc]
             [jobs.movement.go-to.faults :as faults]
@@ -58,6 +58,7 @@
     toward walk by walk, and to the edge of loaded land when that is the only way on. It returns :continue only while
     an escalation or put-back child is waiting on the world. A round that ran out of re-plans while each learned an unseen cell counts as progress (no try booked). Each fruitless round that plans again says so (info go-to.retrying: reason, try); each books a try, and a call whose :spend :tries (its own, or a caller's least) is used up
     gives up instead (a caller that re-aims itself passes {:tries 1}).
+  - A body moved 8 or more blocks in one tick (a teleport, a pearl) starts the call again from where it stands: the walk's counters go (info go-to.jumped).
   - Gives up with the cause {:reason :unreachable :why ...}, data {:arrived false :why ... :text
     words ...}: limit-reached for :needs-health (:line :health) and :search-spent (:line :job-time); condition-failed
     for :goal-dangerous and :goal-unloaded; else (:explore-spent too) nothing-possible. :why is the planner's
@@ -96,6 +97,7 @@
   "One iteration of a call: :again to go on in the same call, else what the call returns. The flee ways waiting for their
   cells are read first (way-log/resolve!), so a way seen on any walk is counted."
   [c0 pos]
+  (when (jumped? c0) (restart-after-jump! c0))
   (let [c (health/with-body-food c0)
         m (ctx/mem c)]
     (way-log/resolve! c)

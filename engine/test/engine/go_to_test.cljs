@@ -1411,3 +1411,11 @@
               s (with-redefs [threats/sensed-mobs (constantly [far])]
                   (await (go! {:blocks flat} {:pos [10 64 0] :range 0 :settings {:jobs.movement.go-to.tuning/goal-danger :end}})))]
           (is (= {:arrived true} @(:out s))))))))
+
+(deftest approach-step-notes-a-teleport-between-two-ticks-not-a-walk-or-a-knockback
+  (let [at (fn [x y z] {:x x :y y :z z})
+        step (fn [m pose] (gcut/approach-step m pose 10))]
+    (is (not (:jumped (-> {} (step (at 0 64 0)) (step (at 0.3 64 0)) (step (at 2 64 0.5))))) "a sprint or knockback")
+    (is (not (:jumped (-> {} (step (at 0 64 0)) (step (at 0 58 0))))) "a fall of 6")
+    (is (:jumped (-> {} (step (at 0 64 0)) (step (at 51 64 0)))) "a teleport")
+    (is (:jumped (-> {} (step (at 0 64 0)) (step (at 51 64 0)) (step (at 51.2 64 0)))) "kept until the call restarts")))
