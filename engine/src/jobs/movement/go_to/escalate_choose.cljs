@@ -419,10 +419,9 @@
        a (mapv (fn [cell] {:cell cell :block (block-at cell) :guess (dig-look/unknown? p cell)}) (:dig a))))))
 
 (def dig-margin
-  "Blocks round its two ends a dig route (dig-way, frontier-way) may stray. Not a price of guessed cells (unseen-step-s
+  "Blocks round its two ends a dig route (dig-way, frontier-way, a climb's) may stray. Not a price of guessed cells (unseen-step-s
   prices those): it bounds the flood, which with no route spreads over about 270k cells of rock within max-route-s.
-  search-bound's stand-still bound alone (the whole way without a route, ~100 s on a far goal) is too loose for that.
-  A climb (climb-route) has none."
+  search-bound's stand-still bound alone (the whole way without a route, ~100 s on a far goal) is too loose for that."
   3)
 
 (defn search-opts

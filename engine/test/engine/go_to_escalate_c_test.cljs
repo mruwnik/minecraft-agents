@@ -493,7 +493,8 @@
         (let [{:keys [out seen]} (await (run-job! {:self {:pos {:x 0 :y 50 :z 0}} :blocks long-loop :inventory [{:name "iron_pickaxe" :count 1}]}
                                               {:pos [10 60 2] :range 1 :tolls loop-tolls}))]
           (is (= {:arrived true} @out))
-          (is (= [:stair] (mapv :step (events-of seen :go-to.escalated)))))))))
+          (is (some #{:stair} (map :step (events-of seen :go-to.escalated))))
+          (is (every? #{:approach :stair} (map :step (events-of seen :go-to.escalated))) "a climb of stairs, not the loop"))))))
 
 (deftest go-to-walks-the-long-loop-when-escalating-is-off-or-the-goal-is-near
   (async done
@@ -944,3 +945,4 @@
     [0 58 0] 3 true false
     [10 58 0] 4 true true
     [0 59 0] 2 true false))
+

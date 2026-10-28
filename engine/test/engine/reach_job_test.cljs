@@ -127,30 +127,30 @@
               (pr-str @replans (keep #(when (re-find #"^go-to\.esc" (name (:kind %))) [(:kind %) (:step %) (:reason %) (:why %) (:at %)]) @seen)))
           (is (<= @replans 2) "the first replan spends the replans"))))))
 
-(deftest a-climb-search-with-no-route-ends-once-standing-for-it-costs-what-the-stair-does
-  ;; the goal sealed in bedrock 20 above a body shut in stone: no climb reaches it, and its search floods the rock round
-  ;; over many rounds; each round of it stands the body still a second here, so once that has cost the stair's price
-  ;; the stair is taken and no search is begun again from that cell
+(deftest a-climb-search-with-no-route-ends-within-its-margin-and-the-stair-is-taken
+  ;; the goal sealed in bedrock 20 above a body shut in stone: no climb reaches it. Its search floods only the rock within
+  ;; dig-margin of its two ends, so it ends by itself (no stand-still bound spent) and the stair is taken from the start cell
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [blocks (-> (box -24 40 -24 24 72 24 "stone")
                          (merge (box -1 69 -1 1 72 1 "bedrock"))
                          (assoc "0,50,0" "air" "0,51,0" "air" "0,70,0" "air" "0,71,0" "air"))
-              {:keys [eng p seen clock]} (setup {:self {:pos {:x 0.5 :y 50 :z 0.5}} :blocks blocks :inventory [{:name "stone_pickaxe" :count 1}]})
+              {:keys [eng p seen]} (setup {:self {:pos {:x 0.5 :y 50 :z 0.5}} :blocks blocks :inventory [{:name "stone_pickaxe" :count 1}]})
               out (atom :not-done)
-              runs (atom []) search dig-route/search
+              nodes (atom 0) search dig-route/search
+              m choose/dig-margin
               eng (assoc-in eng [:jobs 'recording-parent] (recording-parent out 'jobs.movement.go-to {:pos [0 70 0] :range 0}))]
           (with-redefs [dig-route/search (fn [& args] (let [run (apply search args)]
-                                                        (fn [n] (swap! clock + 1000) (swap! runs conj (feet p)) (run n))))]
+                                                        (fn [n] (let [[_ used :as r] (run n)] (when (= [0 50 0] (feet p)) (swap! nodes + used)) r))))]
             (core/submit! eng '(recording-parent) {})
             (await (tick-out! eng 3000)))
-          (let [spent (events-of seen :go-to.search-spent)
-                at (:at (first spent))]
-            (is (not= :not-done @out) "the call ended")
-            (is (seq spent) (pr-str (count @runs) (map (juxt :kind :step :at) (filter #(#{:go-to.escalated :go-to.search-spent} (:kind %)) @seen))))
-            (is (some #(and (= at (:at %)) (= :stair (:step %))) (events-of seen :go-to.escalated)) "the stair is taken from where the search stopped")
-            (is (<= (count (filter #{at} @runs)) (+ (:fallback-s (first spent)) choose/route-searches)) "the stair's price in seconds of search there, a second a run, the last round's runs over")))))))
+          (is (not= :not-done @out) "the call ended")
+          (is (empty? (events-of seen :go-to.search-spent)) "the search ended by itself")
+          (is (some #(= :searching (:reason %)) (events-of seen :holding)) "the rounds it stands the body still declare it")
+          (is (some #(and (= [0 50 0] (:at %)) (= :stair (:step %))) (events-of seen :go-to.escalated)) "the stair is taken from the start cell")
+          (is (<= @nodes (* choose/route-searches (inc (* 2 m)) (inc (* 2 m)) (+ 21 (* 2 m))))
+              "each search from the start expands no more than the cells within the margin of its ends"))))))
 
 (deftest the-ways-are-priced-in-seconds-by-their-blocks
   (is (< (cost/pillar-cost 3) (cost/stair-cost 3)))

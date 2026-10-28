@@ -16,7 +16,7 @@
   (when (and (> (goal 1) (feet 1)) (not-any? skip [:stair :pillar :dig-route]))
     (let [n (:count pillar-item 0)
           a (choose/route-answer p feet goal may-dig? own? false fetch?
-                                 (cond-> (dissoc (choose/search-opts opts) :margin)
+                                 (cond-> (choose/search-opts opts)
                                    (pos? n) (assoc :place-s (cw/fill-cost n) :pillar-s (cw/pillar-cost 1) :max-places n)))]
       (cond
         (= :searching a) {:step :searching}

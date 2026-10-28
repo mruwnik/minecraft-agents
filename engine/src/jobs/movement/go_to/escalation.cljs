@@ -317,6 +317,7 @@
             :else e)
         e (if (and (= :none (:step e)) (searching? slice)) {:step :searching} e)]
     (if (= :searching (:step e)) (keep-routes! slice) (forget-routes! (route-owner c)))
+    (ctx/hold-still! c (when (= :searching (:step e)) :searching))
     (cond
       lava-goal? (end/give-up! c pos result (merge (select-keys result [:route :straight :allowed]) {:escalation {:step :none :why :goal-lava}}))
       (and (:cave-climb (ctx/mem c)) (or (> n (tuning/max-escalations)) (= :none (:step e))))
@@ -355,7 +356,7 @@
       (search-bound/spent? c (ctx/mem c))
       (do (search-spent! c (end/feet-cell c))
           (await (choose-escalation! c pos failed)))
-      (routes-searching! (route-owner c)) (do (ctx/update-mem! c assoc :escalate-now true) :again)
+      (routes-searching! (route-owner c)) (do (ctx/hold-still! c :searching) (ctx/update-mem! c assoc :escalate-now true) :again)
       :else (await (choose-escalation! c pos failed)))))
 
 (defn dive-refused!
@@ -625,6 +626,7 @@
           (searching? slice)
           (do (search-begun! c feet goal (way-opts c feet (fetch-tool? c) nil))
               (keep-routes! slice)
+              (ctx/hold-still! c :searching)
               :continue)
           :else
           (do (forget-routes! (route-owner c))
