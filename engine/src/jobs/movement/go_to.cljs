@@ -99,6 +99,7 @@
   (let [c (health/with-body-food c0)
         m (ctx/mem c)]
     (way-log/resolve! c)
+    (when (:held m) (ctx/update-mem! c dissoc :held))
     (when (:unknown c)
       (wworld/with-seeds (:unknown c) (when (:y pos) (mapv #(js/Math.floor (% pos)) [:x :y :z])) (into (ledger/stair-stands c) (ledger/tunnel-stands c))))
     (walk/surface-before-end!

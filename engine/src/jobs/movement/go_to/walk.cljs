@@ -5,7 +5,7 @@
   Rules of go-to:
   - The walk settings (per world, body or call :settings): jobs.lib.walk.world/dark false plans dark cells like lit ones (default: a dark cell costs twice a lit one, so a lit route up to about 2x
     longer is taken: a cell seen dark, or one never seen guessed dark; look/dark-fn).
-  - A call that ends other than arrived, or yields (:continue), with the head under water first swims to the air it knows (surface-before-end!).
+  - A call that ends other than arrived, or yields (:continue) as a hold or short of air, with the head under water first swims to the air it knows (surface-before-end!).
   - Setting go-to.tuning/goal-danger :end gives up at once (:why :goal-dangerous, :mob, :mob-pos, :mob-distance) when the goal lies within the full-cost radius of a known mob the body would flee; :wait (default) walks on, an info goal-in-danger says so.
   - Setting jobs.lib.walk.world/dangers false plans straight past known dangers (default: the plans keep away from them, jobs.lib.threats). A
     Each steer is bounded by the call's :spend :job-time left (a caller's short leg), and the engine cuts the call at that limit; a search that goes on past it gives up :search-spent (the engine only notices at an act, and a search makes none).
@@ -357,11 +357,20 @@
                (<= (u/dist (u/self-pos c) last-air) 3))
       (await (near/walk-round! (assoc c :to-air true) (zipmap [:x :y :z] (mapv #(js/Math.floor (% last-air)) [:x :y :z])) 0 (dissoc opts :progress))))))
 
+(defn surface-first?
+  "Whether a step's result r leaves the head under water to the air first: a give-up (any ending that is not :done), a
+  hold (held?: a risk hold, which ends when the world changes) or a :continue slice of the walk once the breath is short
+  (breath/drowning?), so a dive that fits its air goes on below."
+  [p r held?]
+  (boolean (and (breath/head-under? p)
+                (or (and (contract/ending? r) (not= :done (:kind r)))
+                    (and (= :continue r) (or held? (breath/drowning? p)))))))
+
 (defn ^:async surface-before-end!
-  "A step's result r: a give-up (any ending that is not :done) or a :continue yield (a hold; no reflex may run) with the head
-  under water first swims to the air it knows (air/swim-to-air!, last-air included), so a body is never left under water."
+  "A step's result r that surface-first? names first swims to the air it knows (air/swim-to-air!, last-air included), so a
+  body is never left under water (an exclusive run has no breathe reflex)."
   [c pos r]
-  (when (or (= :continue r) (and (contract/ending? r) (not= :done (:kind r))))
+  (when (surface-first? (:primitives c) r (:held (ctx/mem c)))
     (let [opts (dissoc (walk-opts c (some-> (:doors (:args c)) keyword)) :progress)]
       (loop [n 0]
         (when (and (< n air/max-surfacings) (ctx/alive? c) (breath/head-under? (:primitives c))

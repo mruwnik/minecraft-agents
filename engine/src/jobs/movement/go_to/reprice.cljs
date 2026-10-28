@@ -94,4 +94,6 @@
   (cond
     (= :never (first s)) (ctx/end c :impossible (contract/status-cause s))
     (ctx/returns-on-later? c) (ctx/end c :condition-failed (contract/status-cause s))
-    :else (do (some-> (:child-wait c) (reset! (contract/status-cause s))) :continue)))
+    :else (do (ctx/update-mem! c assoc :held true)
+              (some-> (:child-wait c) (reset! (contract/status-cause s)))
+              :continue)))

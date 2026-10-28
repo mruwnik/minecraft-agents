@@ -16,4 +16,4 @@
    :act [[:summon "drowned" [16.5 1 15.5] "{NoAI:1b}"]
          [:http :submit (jobs.movement.go-to {:pos #at [3.5 4 15.5]}) [:exclusive] {:ok true}]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :hostile-near}} :within-s 40}]
-   :after [[:body-near [15.5 3.5 15.5] 4]]}]}
+   :after [[:body-near [15.5 3.5 15.5] 1]]}]}

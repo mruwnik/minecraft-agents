@@ -33,6 +33,7 @@
             [jobs.lib.breath :as breath]
             [jobs.movement.go-to.preview :as preview]
             [jobs.movement.go-to.reprice :as reprice]
+            [jobs.movement.go-to.walk :as walk]
             [jobs.survival.recover-drops.estimate :as drops-est]))
 
 (def inside {:x 5 :y 64 :z 0})
@@ -352,6 +353,14 @@
           (dotimes [_ 4] (await (core/tick! eng)))
           (is (seq (:list (core/state eng))) "the walk is held, not ended")
           (is (false? (breath/head-under? p)) "the head out of the water while the walk is held"))))))
+
+(deftest a-dive-slice-yield-surfaces-only-short-of-air-or-held
+  ;; old code swam up on every :continue, so a dive that fits its air (a search slice under water) was cut short
+  (let [under (fn [oxygen] (:primitives (ready-test/ctx-of (assoc pool-world :self {:pos {:x 0.5 :y 64 :z 0.5} :inWater true :oxygen oxygen}))))]
+    (is (false? (walk/surface-first? (under 20) :continue false)) "full air: the slice goes on below")
+    (is (true? (walk/surface-first? (under 20) :continue true)) "a hold has no end in sight")
+    (is (true? (walk/surface-first? (under 0) :continue false)) "short of air")
+    (is (true? (walk/surface-first? (under 20) {:kind :impossible} false)) "a give-up never leaves the head under water")))
 
 ;; a walk is priced over the affordable when it ends past x 10 (a found plan's end, else the goal), but within it when
 ;; unseen cells are not guessed caves; a remembered threat by the way, which a wait may see gone
