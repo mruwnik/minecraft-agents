@@ -65,11 +65,17 @@
 (defn sleep [ms] (js/Promise. (fn [r] (js/setTimeout r ms))))
 
 (defn ^:async until-hiding
-  "Poll until the round hides (a hold), ends, or n polls of 20 ms pass."
-  [round seen n]
-  (let [ended (atom false)]
-    (.then round #(reset! ended true) #(reset! ended true))
-    (loop [i 0] (when (and (not (hiding? seen)) (not @ended) (< i n)) (await (sleep 20)) (recur (inc i))))))
+  "Resolve once the round's first wait while hiding is pending (the wait is held there until the returned release is called) or the round ends: no timers, the body waits on the test's release. Returns release."
+  [round seen p]
+  (let [release (atom nil)
+        entered (js/Promise. (fn [resolve]
+                               (.override (.-world p) "wait"
+                                          (fn [t a impl]
+                                            (if (and (hiding? seen) (nil? @release))
+                                              (js/Promise. (fn [go] (reset! release #(go (impl t a))) (resolve nil)))
+                                              (impl t a))))))]
+    (await (js/Promise.race #js [entered (.then round (constantly nil) (constantly nil))]))
+    #(when-let [r @release] (r))))
 
 (defn ^:async hidden-round
   "Submit spec over world and run its round, which hides (a hold) while the mob stays. Once it hides the clock jumps
@@ -83,13 +89,13 @@
      (prep p)
      (core/submit! eng spec {})
      (let [round (core/tick! eng)]
-       (await (until-hiding round seen 250))
-       (swap! clock + jump-ms)
-       (await (sleep 60))
-       (reset! noted (look s))
-       (swap! (fake/state p) assoc :entities [])
-       (doseq [e after] (fake/add-entity! p e))
-       (await round))
+       (let [release (await (until-hiding round seen p))]
+         (swap! clock + jump-ms)
+         (reset! noted (look s))
+         (swap! (fake/state p) assoc :entities [])
+         (doseq [e after] (fake/add-entity! p e))
+         (release)
+         (await round)))
      (assoc s :while-hidden @noted))))
 
 (defn first-move
@@ -337,7 +343,7 @@
         listed (atom [])]
     (core/submit! eng spec {})
     (let [round (core/tick! eng)]
-      (await (until-hiding round seen 1000))
+      ((await (until-hiding round seen p)))
       (doseq [[ents jump-ms] steps]
         (swap! (fake/state p) assoc :entities [])
         (doseq [e ents] (fake/add-entity! p e))
@@ -438,12 +444,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]}
+        (let [{:keys [p while-hidden]}
               (await (hidden-round retreat {:blocks dead-end :inventory [{:name "cobblestone" :count 20}]
                                             :entities [(skeleton 4 64 0)]}
-                                   0 (constantly nil)
+                                   0 (fn [{:keys [p]}] (count (.-calls (.-world p))))
                                    [{:id 3 :name "zombie" :kind "hostile" :pos {:x 0 :y 64 :z 5} :health 20}]))]
-          (is (>= (count (calls p "wait")) 15) "30 s of holds (each with its look round) before it ends"))))))
+          (is (>= (- (count (.-calls (.-world p))) while-hidden) 25) "each act is a second on the test clock: about 30 s of holds (each with its look round) before it ends"))))))
 
 (def hard-sided-dead-end
   "dead-end with obsidian beside and behind the tunnel: a stone pickaxe digs no pocket into it."
