@@ -324,8 +324,8 @@
                    (when gate
                      (doseq [[k floor] (concat (map vector (remove (get-in @state [:gate :resolved] #{}) (get-in state' [:gate :resolved] #{})) (repeat :present))
                                                (when-let [floor (gate-outcome steps done)] [[(:step done) floor]]))]
-                       (let [cell (wsight/floor-cell (nth steps k))]
-                         (ctx/emit! c :walk.unseen-floor :info {:step k :cell cell :floor floor :block ((:floors gate) cell)})
+                       (let [cell (wsight/floor-cell (nth steps k)) kind (wsight/floor-kind steps k)]
+                         (ctx/emit! c :walk.unseen-floor :info {:step k :cell cell :step-kind kind :floor floor :block ((:floors gate) cell)})
                          (when-let [on-floor (:on-floor c)] (on-floor floor cell)))))
                    (let [[tracked data] (gaps/tick steps @gap (:i (:exec state')) controls done (:y pose))]
                      (vreset! gap tracked)

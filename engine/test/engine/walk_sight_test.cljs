@@ -74,6 +74,10 @@
     (is (= 3 (ws/pending marked #{} 1)))
     (is (nil? (ws/pending marked #{3} 1)))))
 
+(deftest a-floors-kind-is-its-steps-rise-from-the-step-before
+  (is (= [:level :level :level :drop :level] (mapv #(ws/floor-kind road %) (range 5))) "the first step, before none: level")
+  (is (= [:up :down] (mapv #(ws/floor-kind [(st 1 64 0 :start) (st 2 65 0 :walk) (st 3 64 0 :walk)] %) [1 2]))))
+
 (deftest marks-skip-swim-steps-and-the-step-leaving-them
   (let [steps [(st 1 64 0 :start) (assoc (st 2 64 0 :swim) :swim true) (st 3 64 0 :walk) (st 4 64 0 :walk)]
         marked (ws/mark-steps steps (constantly true))]

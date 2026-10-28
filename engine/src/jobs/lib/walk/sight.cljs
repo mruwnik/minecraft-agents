@@ -122,6 +122,13 @@
 
 (defn floor-cell [{:keys [x y z]}] [x (dec y) z])
 
+(defn floor-kind
+  "The kind of steps' step i onto its floor, by its rise from the step before (none before i 0: :level): :level, :up one
+  higher, :down one lower, :drop lower still."
+  [steps i]
+  (let [dy (js/Math.round (- (:y (nth steps i)) (:y (get steps (dec i) (nth steps i)))))]
+    (cond (zero? dy) :level (pos? dy) :up (= -1 dy) :down :else :drop)))
+
 (defn mark-steps
   "steps with :unseen-floor on each step after the first that stands on its floor (h 0) where (unknown-floor? x y z) of
   that floor cell is true. A step in water or leaving it stands on nothing the body could stop to look at: holding still
