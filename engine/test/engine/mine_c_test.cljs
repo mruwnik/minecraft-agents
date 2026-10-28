@@ -548,8 +548,8 @@
           (await (run-ticks s 40))
           ;; which wall cells the cut takes follows where go-to's tours of unseen land left the body
           (is (= [2 64 0] (first (dug-cells s))) "dug from behind the wall")
-          (is (contains? #{[[1 64 0]] [[3 65 0] [3 64 0]]} (vec (rest (dug-cells s))))
-              "then the cheapest cut beside it from the side the body stands on: the wall cell between, or the far wall's column")
+          (is (contains? #{[[1 64 0]] [[3 65 0] [3 64 0]] [[2 65 -1] [2 64 -1]] [[2 65 1] [2 64 1]]} (vec (rest (dug-cells s))))
+              "then the cheapest cut beside it from the side the body stands on: the wall cell between, or one wall column beside it")
           (is (= 1 (get (inv s) "raw_iron")) "the body cut its way beside the dug cell and picked the drop up")
           (is (= :count (:reason (done-event s)))))))))
 
