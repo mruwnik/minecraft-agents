@@ -938,12 +938,12 @@
         (let [{:keys [p]} (await (hidden-round retreat (doorway-zombies 4) 1000 (constantly nil)))]
           (is (= "jumpPlace" (first-of p #{"attack" "jumpPlace"})) "four zombies outfight an axe: a second of pillar costs fewer blows"))))))
 
-(deftest an-armed-body-pressed-by-one-zombie-pillars-when-the-pillar-is-priced-under-the-fight
+(deftest an-armed-body-pressed-by-one-zombie-fights-it-when-the-pillar-may-fail-for-it
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p]} (await (first-round retreat (doorway-zombies 1)))]
-          (is (= "jumpPlace" (first-of p #{"attack" "jumpPlace"})) "the axe's fight costs its blows, a pillar about one: the pillar"))))))
+          (is (= "attack" (first-of p #{"attack" "jumpPlace"})) "a pillar beside the zombie fails for it by (0 + 1) / (0 + 2), and then the fight is owed too: the axe's fight"))))))
 
 (defn edge-world
   "Floor (stone at y 63) for x <= edge on z 0 and air everywhere else."
@@ -1375,7 +1375,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:inventory [{:name "dirt" :count 16}] :entities [(zombie 4.5 64 0)]})
+        (let [{:keys [eng p seen]} (setup {:inventory [{:name "dirt" :count 16}] :entities [(zombie 4.5 64 0)]})
               steers (atom 0)]
           (.override (.-world p) "steer"
                      (fn [_ _ _]
@@ -1388,8 +1388,8 @@
                      (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
           (core/submit! eng retreat {})
           (await (core/tick! eng))
-          (is (pos? (+ (count (calls p "place")) (count (calls p "jumpPlace")))) "walled in or pillared (the cheaper), not walked on, after one healed hit")
-          (is (= 1 @steers) "no second flee step"))))))
+          (is (some #(= :retreat.cornered (:kind %)) @seen) "one healed hit corners the body: its cornered options are weighed")
+          (is (pos? (+ (count (calls p "place")) (count (calls p "jumpPlace")))) "walled in or pillared, the back-off before them when it is cheaper"))))))
 
 (deftest an-armed-body-with-a-melee-mob-at-its-side-pillars-before-it-walls-or-fights
   (async done

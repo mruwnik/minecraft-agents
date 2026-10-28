@@ -5,6 +5,7 @@
             [jobs.lib.blocks :as lb]
             [jobs.lib.choose :as choose]
             [jobs.lib.combat :as combat]
+            [jobs.lib.cost.answer :as answer]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.ready :as ready]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -88,25 +89,30 @@
                   (settings/get settings ::job-time-s))))
 
 (defn beside?
-  "Whether a melee hostile the body knows (not a shooter, a creeper or an enderman) stands in or beside a side cell: within 2
-  cells across and 1 up or down of the body's feet (the class of ::mob-fails)."
-  [c]
-  (let [p (:primitives c)
-        {fx :x fy :y fz :z} (sh-sense/feet p)]
-    (boolean (some (fn [e] (let [{:keys [x y z]} (danger-q/mob-pos p e)]
-                             (and (not (combat/ranged? e)) (not (combat/creeper? e)) (not (combat/enderman? e))
-                                  (<= (js/Math.abs (- (js/Math.floor x) fx)) 2) (<= (js/Math.abs (- (js/Math.floor z) fz)) 2)
-                                  (<= (js/Math.abs (- (js/Math.floor y) fy)) 1))))
-                   (danger-q/known-hostiles p 5 {})))))
+  "Whether a melee hostile the body knows (not a shooter, a creeper or an enderman) stands within across cells (default 2:
+  in or beside a side cell, the class of ::mob-fails) and 1 up or down of the body's feet."
+  ([c] (beside? c 2))
+  ([c across]
+   (let [p (:primitives c)
+         {fx :x fy :y fz :z} (sh-sense/feet p)]
+     (boolean (some (fn [e] (let [{:keys [x y z]} (danger-q/mob-pos p e)]
+                              (and (not (combat/ranged? e)) (not (combat/creeper? e)) (not (combat/enderman? e))
+                                   (<= (js/Math.abs (- (js/Math.floor x) fx)) across) (<= (js/Math.abs (- (js/Math.floor z) fz)) across)
+                                   (<= (js/Math.abs (- (js/Math.floor y) fy)) 1))))
+                    (danger-q/known-hostiles p 5 {}))))))
+
+(defn mob-fails
+  "The chance a cover fails for a mob: answer/counted-chance of the counts {:beside {:k :n} :clear {:k :n}} of its class."
+  [counts beside?]
+  (answer/counted-chance (get counts (if beside? :beside :clear))))
 
 (defn fails
-  "The chance the walls cannot be closed for a mob in a cell: ::mob-fails of the class the body stands in (beside?) under
-  a uniform Beta(1, 1) prior, (k + 1) / (n + 2); 0 with :for :night (a mob in a cell is waited out)."
+  "The chance the walls cannot be closed for a mob in a cell: mob-fails of ::mob-fails by the class the body stands in
+  (beside?); 0 with :for :night (a mob in a cell is waited out)."
   [c]
   (if (= :night (:for (:args c)))
     0
-    (let [{:keys [k n]} (get (settings/get settings ::mob-fails) (if (beside? c) :beside :clear))]
-      (/ (inc k) (+ n 2)))))
+    (mob-fails (settings/get settings ::mob-fails) (beside? c))))
 
 (defn exposed-s
   "Seconds the body stays open to a shooter: the placements of the first side (feet and head), which go up first (wall-placer/facing-first)."

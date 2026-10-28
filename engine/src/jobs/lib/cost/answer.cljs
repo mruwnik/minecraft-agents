@@ -507,10 +507,15 @@
      :hit (reduce max 0 (map #(blow stats %) hitting))
      :seconds seconds}))
 
+(defn counted-chance
+  "The chance of a measured share, k of n counted {:k :n}, under a uniform Beta(1, 1) prior: (k + 1) / (n + 2)."
+  [{:keys [k n]}]
+  (/ (inc k) (+ n 2)))
+
 (defn hide-stays
-  "The chance the danger is still about when a hide in a refuge ends: ::hide-stays under a uniform Beta(1, 1) prior."
+  "The chance the danger is still about when a hide in a refuge ends: counted-chance of ::hide-stays."
   []
-  (let [{:keys [k n]} (settings/get settings ::hide-stays)] (/ (inc k) (+ n 2))))
+  (counted-chance (settings/get settings ::hide-stays)))
 
 (defn cover-answer
   "The answer of shutting the body in against mobs [flee-mob's] wearing equipment by a cover {:open-s :seconds :fails}
