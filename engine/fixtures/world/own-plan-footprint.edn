@@ -76,23 +76,24 @@
             {:event {:source :job :kind :go-to.restored} :within-s 120 :of-job true}]
    :after [[:block [16 0 14] "dirt"] [:block [16 1 14] "dirt"] [:body-near [21.5 0 14.5] 2]]
    :limit-s 150}
-  ;; card 1ac3d50f (from cc4785f9): the body in a closed dirt room of its own plan inside glowstone (lit, rock-bound), a one-cell
-  ;; void east owed dirt: it tunnels to the void through its own east wall (2 own cells, not the whole wall, no stair), fills the
-  ;; void and has the wall whole again
+  ;; card 1ac3d50f (from cc4785f9): the body in a closed dirt room of its own plan inside stone (not glowstone: a light, never
+  ;; dug, left no way out), a one-cell void east owed dirt: go-to digs out to the void through its own east wall (2 own cells
+  ;; at most, not the whole wall, no stair), puts them back and the void is filled. The build itself goes on past the case: it
+  ;; tunnels round the shell to see its edges
   {:name "own-room-in-rock-tunnels-out-by-one-wall-column"
    :plans [{:id "room" :metadata {:by "$body"}
             :parts [{:id "shell" :box [#at [8 1 8] #at [12 5 12]] :want "dirt"}
                     {:id "inside" :box [#at [9 2 9] #at [11 4 11]] :want :clear}
                     {:id "post" :cells [#at [16 2 10]] :want "dirt"}]}]
-   :blocks [[:fill [4 0 4] [20 9 16] "glowstone"] [:fill [8 1 8] [12 5 12] "dirt"] [:fill [9 2 9] [11 4 11] "air"] [:set [16 2 10] "air"]]
+   :blocks [[:fill [4 0 4] [20 9 16] "stone"] [:fill [8 1 8] [12 5 12] "dirt"] [:fill [9 2 9] [11 4 11] "air"] [:set [16 2 10] "air"]]
    ;; 64 dirt: the shell's edges and corners are unseen from inside, so the plan reckons them owed until it sees them
    :body {:at [10.5 2 10.5] :inventory [["dirt" 64] ["stone_pickaxe" 1] ["stone_shovel" 1]]}
    :act [[:job (jobs.build.from-plan {:plan "$plan:room"})]]
-   :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 200 :of-job true}
-            {:count-event {:source :job :kind :go-to.dug-own-build} :for-s 200 :at-most 2}
-            {:no-event {:source :job :kind :go-to.escalated :data {:step :stair}} :for-s 200 :until {:source :job :kind :completed :data {:kind :done}}}]
-   :after [[:block [16 2 10] "dirt"] [:block [12 2 10] "dirt"] [:block [12 3 10] "dirt"] [:block [8 2 10] "dirt"]]
-   :limit-s 230}
+   :expect [{:event {:source :job :kind :go-to.restored} :within-s 150 :of-job true}
+            {:count-event {:source :job :kind :go-to.dug-own-build} :for-s 150 :at-most 2}
+            {:no-event {:source :job :kind :go-to.escalated :data {:step :stair}} :for-s 150 :until {:source :job :kind :go-to.restored} :of-job true}]
+   :after [[:block [16 2 10] "dirt"] [:block [8 2 10] "dirt"]]
+   :limit-s 180}
   {:name "stair-through-own-plan-wall-when-not-spared"
    :plans [{:id "hut" :metadata {:by "$body"}
             :parts [{:id "wall" :cells [#at [17 0 16] #at [17 1 16] #at [17 2 16] #at [17 3 16]] :want [:any "stone"]}]}]

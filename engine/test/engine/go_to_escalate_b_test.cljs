@@ -655,3 +655,28 @@
           (is (= [:clear-path] (map :step (events-of seen :go-to.escalated))))
           (is (= [[[3 64 0]]] (map :cells (events-of seen :go-to.restored))) "the cut fence is put back")
           (is (= "oak_fence" (block p [3 64 0]))))))))
+
+(def glow-room
+  "own-plan-footprint/own-room-in-rock: a dirt shell x 8..12, y 61..65, z 8..12 (inside x 9..11, y 62..64, z 9..11) in
+  glowstone (a light: never dug) x 4..20, y 60..69, z 4..16 with a band of stone east of it, x 13..17, y 62..63, z 8..13."
+  (apply dissoc (merge (box 4 60 4 20 69 16 "glowstone") (box 13 62 8 17 63 13 "stone") (box 8 61 8 12 65 12 "dirt"))
+         (for [x (range 9 12) y (range 62 65) z (range 9 12)] (str x "," y "," z))))
+
+(deftest go-to-out-of-its-own-room-buried-in-rock-cuts-one-wall-column-it-has-not-seen-beyond
+  ;; card f9fbddde: the rock beyond the walls is unseen from inside; the way is priced over it as guessed rock
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [room (shape/with-author {:id "room" :parts [{:id "shell" :box [[8 61 8] [12 65 12]] :want "dirt"}]} "Fake")
+              world {:self {:pos {:x 11.5 :y 62 :z 9.5}} :blocks glow-room :light [15 15] :sight true
+                     :inventory [{:name "dirt" :count 8} {:name "stone_pickaxe" :count 1} {:name "stone_shovel" :count 1}]}
+              {:keys [eng p seen step]} (gt/setup world (ew/of-data {"room" room} {} []))
+              out (atom :not-done)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [14 62 12] :range 0})))]
+          (core/submit! eng '(recording-parent) {})
+          (await (gt/tick-out! eng 400 step))
+          (let [own (map :cell (events-of seen :go-to.dug-own-build))]
+            (is (= {:arrived true} @out))
+            (is (= 2 (count own)) "one column of its own wall")
+            (is (= #{12} (set (map first own))) "the east wall, toward the goal")
+            (is (every? (set (mapcat :cells (events-of seen :go-to.restored))) own) "and put back")))))))
