@@ -73,3 +73,12 @@
         kept {:t 5 :end-t 900 :arrive-s nil :class :clear :done? true}]
     (is (= {:wall-places {:a new :b kept}} (w/fold {:wall-places {:a old :b kept}} {:a new :b (assoc kept :class :reached)}))
         "a row with :end-t stays; one without is rescanned")))
+
+(deftest an-attempt-with-an-open-count-is-classed-by-the-seconds-to-place-every-cell
+  (let [class-with (fn [open end]
+                     (:class (val (first (w/scan [(choice 0 ["zombie 7 [9 64 0]"])
+                                                  (ev 100 :child_started "j1/plug/walls" {})
+                                                  (ev 150 :walls.open "j1/plug/walls" {:open open})
+                                                  (ev end :child_ended "j1/plug/walls" {:status :done})])))))]
+    (is (= :reached (class-with 8 300)) "an attempt that ended early (200 ms) still needed 8 placements, longer than the mob's arrival")
+    (is (= :clear (class-with 1 300)) "one cell is placed before the mob arrives")))

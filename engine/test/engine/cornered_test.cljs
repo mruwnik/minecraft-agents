@@ -191,6 +191,8 @@
           (let [e (first (filter #(= :retreat_sealed (:kind %)) @seen))]
             (is (str/includes? (:text e) "from skeleton at [4 64 0]") "the notice names the mob and where it is")
             (is (= [{:name "skeleton" :pos [4 64 0]}] (:hostiles e)) "and carries them"))
+          (is (= [(count (placed-cells p))] (mapv :open (filter #(= :walls.open (:kind %)) @seen)))
+              "the walls say once how many open cells they cover (the dashboard's wall-places classes by it)")
           (is (= [] (:list (core/state eng))) "done once the skeleton is gone"))))))
 
 (deftest a-seal-cell-with-nothing-to-place-against-waits-for-the-others

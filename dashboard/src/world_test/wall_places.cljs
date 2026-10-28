@@ -13,7 +13,9 @@
   (:require [cljs.reader :as reader]
             [clojure.string :as str]
             [jobs.lib.cost.danger :as danger]
-            [jobs.lib.cost.threat :as threat]))
+            [jobs.lib.cost.threat :as threat]
+            [engine.settings :as settings]
+            [jobs.survival.plug-way :as plug-way]))
 
 (def choice-ms "Longest age of the flee choice an attempt's class is read from." 3000)
 
@@ -44,9 +46,13 @@
 
 (defn class-of
   "An ended walls attempt's class: :reached when a mob stood in a cell or a melee mob of the choice could strike before
-  it ended (arrive-s under its seconds), :clear otherwise."
-  [{:keys [arrive-s t end-t mob?]}]
-  (if (or mob? (and arrive-s (< arrive-s (/ (- end-t t) 1000)))) :reached :clear))
+  every open cell is placed (arrive-s under place-s times :open, as jobs.survival.wall-in/mob-fails is read; an attempt
+  with no :open count, logged before it was emitted, under its seconds), :clear otherwise."
+  [{:keys [arrive-s t end-t mob? open]}]
+  (let [placing-s (if open
+                    (* open (settings/get plug-way/settings ::plug-way/place-s))
+                    (/ (- end-t t) 1000))]
+    (if (or mob? (and arrive-s (< arrive-s placing-s))) :reached :clear)))
 
 (defn mob-place?
   "Whether a place action's done data says a mob stood in its cell."
@@ -86,6 +92,8 @@
             (recur more {:t time-ms :pos (zipmap [:x :y :z] (:from data)) :hostiles (map (fn [[n cell]] (into [n] cell)) (:chasers data))}
                    open out)
             (nil? walls) (recur more choice open out)
+            (and (= :walls.open kind) (contains? open k))
+            (recur more choice (assoc-in open [k :open] (:open data)) out)
             (and place (= :done kind) (= "place" (:name data)) (contains? open k))
             (recur more choice (update open k #(cond-> (update % :mob? (fn [m] (or m (mob-place? data))))
                                                   (= "placed" (:status data)) (update :placed conj time-ms)))

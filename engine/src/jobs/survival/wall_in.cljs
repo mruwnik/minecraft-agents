@@ -1,6 +1,7 @@
 (ns jobs.survival.wall-in
   (:require [engine.args :as a]
             [engine.contract :as contract]
+            [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.blocks :as lb]
             [jobs.lib.choose :as choose]
@@ -140,4 +141,9 @@
 (def safe? ready/ok)
 (def fit? ready/ok)
 
-(defn ^:async round [c] (await (way/run! c :walls way/walls-step!)))
+(defn ^:async round [c]
+  (when-not (:open-said (ctx/mem c))
+    (ctx/update-mem! c assoc :open-said true)
+    (let [open (open-count c)]
+      (ctx/emit! c :walls.open :info {:open open :text (str "walls over " open " open cells")})))
+  (await (way/run! c :walls way/walls-step!)))
