@@ -94,6 +94,7 @@
 (def cornered-answers answer/cornered-answers)
 (def answer-price answer/answer-price)
 (def answer-price* answer/answer-price*)
+(def counted-chance answer/counted-chance)
 (def decide answer/decide)
 (def death-price answer/death-price)
 (def again-answers answer/again-answers)

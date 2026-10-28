@@ -855,17 +855,30 @@
               fresh (await (walked nil))
               sent (await (walked (cut-seed (merge {:closest 3 :ref 3} (sent-back-spots 1 0.5)))))]
           (is (every? (fn [[_ z]] (zero? z)) fresh) "the straight way crosses the cell")
-          (is (contains? sent [5 1]) "the cell a send-back left the walk at costs more: the walk goes round"))))))
+          (is (some #{[5 0]} fresh) "the fresh walk crosses the cell")
+          (is (not-any? #(contains? sent %) [[5 -1] [5 0] [5 1]]) "the cell a send-back left the walk at and those beside it cost more: the walk goes round, not one cell aside"))))))
 
 (deftest a-way-sent-back-from-twice-costs-more-than-once-and-than-a-fresh-one
   (let [factor (fn [m] (let [c (gcut/send-back-tolls m)] (:factor (first c))))]
     (is (nil? (seq (gcut/send-back-tolls {}))))
     (is (< (factor (sent-back-spots 1 0.5)) (factor (sent-back-spots 2 0.5))) "the same place again adds its walk lost, and the chance rises")))
 
+(deftest a-sidestep-of-the-way-that-was-cut-does-not-dodge-its-toll
+  (let [trail (mapv #(vector % 64 0) (range 2 7))
+        m {:cut-walks 1 :sent-backs [(gcut/send-back [6 64 0] 5 trail)]}
+        tolls (gcut/send-back-tolls m)
+        at (into {} (map (fn [{:keys [x y z factor]}] [[x y z] factor])) tolls)]
+    (is (every? at (for [x (range 2 7) z [-1 0 1]] [x 64 z])) "each cell of the way and the cells beside it")
+    (is (< (js/Math.abs (- (gcut/send-back-price m) (* (cost/walk-step-s) (reduce + (map #(at [% 64 0]) (range 2 7)))))) 1e-9)
+        "crossing the whole way costs the send-back price once, not once a cell")))
+
+(deftest the-send-back-chance-is-the-counted-chance-of-sends-in-cut-walks
+  (is (= (cost/counted-chance {:k 2 :n 5}) (gcut/send-back-chance {:cut-walks 5 :sent-backs [{} {}]}))))
+
 (deftest cut-state-counts-only-a-restart-sent-back-from-where-the-cut-found-the-body
   (let [goal {:x 10 :y 64 :z 0}
         m {:open (gcut/session-id) :goal goal :closest 4 :ref 4 :last-dist 4 :cut-walks 1 :sent-backs [{:at [1 64 0] :lost-s 1}]
-           :prev {:x 6.5 :y 64 :z 0.5}}]
+           :prev {:x 6.5 :y 64 :z 0.5} :trail (mapv #(vector % 64 0) (range 2 7))}]
     (doseq [[why m dist cuts] [["in place (a meal, a breath, a fight)" m 4 1]
                                ["knockback of half a block" m 4.5 1]
                                ["in place on a detour, far from the closest" (assoc m :last-dist 12) 12.3 1]
@@ -876,7 +889,8 @@
                                ["the last call returned" (dissoc m :open) 14 0]]]
       (is (= cuts (count (:sent-backs (gcut/cut-state m goal dist)))) why))
     (let [s (gcut/cut-state (assoc m :closest 1 :last-dist 1) goal 11)]
-      (is (= [{:at [6 64 0] :lost-s (* 10 (cost/walk-step-s))}] (:sent-backs s)) "the cell left and the walk undone, the cleared count aside")
+      (is (= [{:at [6 64 0] :lost-s (* 10 (cost/walk-step-s)) :cells (mapv #(vector % 64 0) (range 2 7))}] (:sent-backs s))
+          "the cell left, the walk undone and the cells of the way (as many as blocks undone, the last of the trail), the cleared count aside")
       (is (= 1 (:cut-walks s))))
     (is (= {:goal goal :closest 14 :ref 14 :last-dist 14 :cut-walks 0 :sent-backs []} (gcut/cut-state (dissoc m :open) goal 14)))))
 
@@ -1471,4 +1485,8 @@
           ((:stop s))
           (is (false? (:arrived @out)) (pr-str @out))
           (is (= :cut-again (:why @out)) (pr-str @out))
-          (is (<= 2 (count (events-of s :go-to.jumped)) 30) "a restart per jump until the repeats cost more than the goal is worth"))))))
+          (let [lost (* 14 (cost/walk-step-s))
+                worth (cost/tour-worth 18 nil)
+                price (fn [n] (gcut/send-back-price {:cut-walks n :sent-backs (vec (repeat (dec n) {:lost-s lost}))}))
+                expected (first (filter #(> (price %) worth) (iterate inc 2)))]
+            (is (= expected (count (events-of s :go-to.jumped))) "one restart per jump, the last the first whose repeats cost more than the goal is worth")))))))

@@ -173,6 +173,18 @@
         k (* stays (- 1 (answer-death-chance body base at death)))]
     (if (< k 1) (/ (answer-price* body base at death) (- 1 k)) ##Inf)))
 
+(defn least-fixed-point
+  "The least x >= 0 with (f x) = x, f nondecreasing, continuous, (f 0) >= 0 and at most stake: the limit of x, (f x), (f (f x)) ...
+  By induction every iterate is at most the least root r ((f x) <= (f r) = r), and they only rise, so none skips a pair of roots.
+  Stops when an iterate rises under 1e-6, or after 1000 rounds (a slope near 1: the last iterate, a lower bound; ##Inf when
+  stake is infinite, since then the iterates have no root to meet)."
+  [f stake]
+  (loop [x 0 n 0]
+    (let [y (f x)]
+      (cond (< (- y x) 1e-6) y
+            (>= n 1000) (if (infinite? stake) ##Inf y)
+            :else (recur y (inc n))))))
+
 (defn death-price
   "{:met :clear} seconds a death at `at` costs body: death/experience-cost and the cheaper of giving `at` up
   (death/give-up-cost) and going back (death/back-cost, the items lost unless death/kept?), there meeting the mob again
@@ -180,7 +192,7 @@
   there costing the same once more. That meet's price is the fixed point x = min(stake, back + min over answers of
   p + k x): p an answer's price with its deaths free, k its chance of a death its mob outlives (the price's rise per
   second of such a death). A survivor's choice to give up (go-on) bends the price, so x is found by search: the least
-  root of fixed(x) = x (doubling scan, then bisection). No answers: no mob waits."
+  root of fixed(x) = x (least-fixed-point). No answers: no mob waits."
   [body answers at]
   (let [answers (filter some? answers)
         clear (bare body at)]
@@ -190,21 +202,8 @@
             stake (death/give-up-cost e)
             back (death/back-cost e at)
             price (fn [a x] (answer-price* e a at {:met x :clear (min stake back)}))
-            tol 1e-6
             fixed (fn [x] (reduce min stake (map #(+ back (price % x)) answers)))
-            ;; fixed is nondecreasing but its slope may pass 1, so roots of fixed(x) - x need not be unique: the doubling
-            ;; scan finds the first x past the least one, and the bisection of the cell before it lands on a root in it
-            cap (min stake 1e12)
-            above (loop [x 1] (cond (<= (fixed x) x) x
-                                    (>= x cap) ##Inf
-                                    :else (recur (min cap (* 2 x)))))
-            x (cond (<= (fixed 0) 0) 0
-                    (infinite? above) ##Inf
-                    :else (loop [lo (if (= above 1) 0 (/ above 2)) hi above]
-                            (let [mid (/ (+ lo hi) 2)]
-                              (cond (< (- hi lo) tol) mid
-                                    (pos? (- (fixed mid) mid)) (recur mid hi)
-                                    :else (recur lo mid)))))
+            x (least-fixed-point fixed stake)
             meet (if (infinite? x) ##Inf (reduce min (map #(price % x) answers)))]
         (assoc clear :met (+ (death/experience-cost body)
                              (min (death/give-up-cost body)

@@ -50,19 +50,23 @@
   "Vertical velocity (blocks per tick) below which a long drop between two samples is a fall, not a teleport: a lagged sample of a fall can span more than jump-blocks."
   -0.5)
 
+(defn cell-of [p] (mapv #(js/Math.floor (% p)) [:x :y :z]))
+
 (defn approach-step
   "Approach record m after a tick's pose {:x :y :z ...} at d from the goal: :last-dist d, :closest the least, and :explored
   the blocks walked along x and z away from the goal (a step that ends farther than the last) since the body last came
-  more than 1 block nearer than ever (:anchor, then 0 again). :jumped once a tick's pose lies jump-blocks or more from the last."
+  more than 1 block nearer than ever (:anchor, then 0 again), and :trail the cells the poses stood in, each once in a row.
+  :jumped once a tick's pose lies jump-blocks or more from the last."
   [m pose d]
-  (let [{:keys [prev anchor explored] :or {anchor d explored 0}} m
+  (let [{:keys [prev anchor explored trail] :or {anchor d explored 0 trail []}} m
+        cell (cell-of pose)
         nearer? (< d (dec anchor))
         step (if (and prev (> d (:last-dist m d))) (js/Math.hypot (- (:x pose) (:x prev)) (- (:z pose) (:z prev))) 0)
         dy (- (:y pose 0) (:y prev 0))
         falling? (and (neg? dy) (< (:vy pose 0) falling-vy)
                       (< (js/Math.hypot (- (:x pose) (:x prev)) (- (:z pose) (:z prev))) jump-blocks))
         jumped? (and prev (not falling?) (>= (js/Math.hypot (- (:x pose) (:x prev)) dy (- (:z pose) (:z prev))) jump-blocks))]
-    (assoc m :last-dist d :closest (min d (:closest m d)) :prev (select-keys pose [:x :y :z])
+    (assoc m :trail (cond-> trail (not= cell (peek trail)) (conj cell)) :last-dist d :closest (min d (:closest m d)) :prev (select-keys pose [:x :y :z])
            :jumped (boolean (or jumped? (:jumped m)))
            :jump-from (if jumped? (assoc (select-keys prev [:x :y :z]) :blocks (u/dist prev pose)) (:jump-from m))
              :anchor (if nearer? d anchor) :explored (if nearer? 0 (+ explored step)))))
@@ -82,7 +86,11 @@
   [c]
   (boolean (:jumped (record c))))
 
-(defn cell-of [p] (mapv #(js/Math.floor (% p)) [:x :y :z]))
+(defn send-back
+  "A send-back of a walk left at cell `at` that undid `blocks` of walk: {:at :lost-s the seconds of it :cells} the last
+  cells of trail, one for each block undone, the way that was cut."
+  [at blocks trail]
+  {:at at :lost-s (* blocks (cost/walk-step-s)) :cells (vec (take-last (max 1 (long (js/Math.ceil blocks))) trail))})
 
 (defn restart-after-jump!
   "A call whose body was teleported mid-walk starts again from where it stands: the walk record and the walk's counters go.
@@ -94,7 +102,7 @@
         from (:jump-from (record c))
         prev (:jump-at (ctx/mem c))
         repeat? (and prev (<= (u/dist at prev) (send-back-margin)))
-        spot (when (and repeat? from) {:at (cell-of from) :lost-s (* (:blocks from) (cost/walk-step-s))})]
+        spot (when (and repeat? from) (send-back (cell-of from) (:blocks from) (:trail (record c))))]
     (fresh-record! c)
     (ctx/update-mem! c #(-> %
                             (dissoc :best :starts :tour-walks :edge-mode :waypoint-misses :waypoint-why :waypoints-tried :lookout-walks :lookouts :wall-walked)
@@ -104,9 +112,9 @@
     (ctx/emit! c :go-to.jumped :info {:text "the body was moved far in one tick: the walk starts again from here"})))
 
 (defn send-back-chance
-  "The chance a walk of the call is sent back, counted: (sends + 1) / (cut-walks + 2) (Beta(1,1)), m the call's memory."
+  "The chance a walk of the call is sent back, counted: m the call's memory, its sends k of its cut-walks n (cost/counted-chance)."
   [{:keys [sent-backs cut-walks]}]
-  (/ (inc (count sent-backs)) (+ 2 (or cut-walks 0))))
+  (cost/counted-chance {:k (count sent-backs) :n (or cut-walks 0)}))
 
 (defn send-back-price
   "Seconds the way's repeat is expected to cost more: its chance of a send-back times the walk each one lost."
@@ -119,16 +127,25 @@
   [c m]
   (> (send-back-price m) (cost/tour-worth (or (:detour-from (ctx/mem c)) (:last-dist m 0)) (:worth (:args c)))))
 
+(defn beside
+  "The cells of the 3 x 3 round cell [x y z] at its height: the way's width, so a step to its side stays on it."
+  [[x y z]]
+  (for [dx [-1 0 1] dz [-1 0 1]] [(+ x dx) y (+ z dz)]))
+
 (defn send-back-tolls
-  "The :tolls of the call's walks, m its memory: each cell the body stood at when sent back costs its send-back price more,
-  so a fresh way is tried before the same one again."
+  "The :tolls of the call's walks, m its memory: the way each send-back cut (its cells and those beside them) costs the
+  send-back price more, shared out over the cells of the way, so a fresh way is tried before the same one again."
   [m]
   (let [chance (send-back-chance m)
         step (cost/walk-step-s)]
     (->> (:sent-backs m)
          (filter :at)
-         (group-by :at)
-         (map (fn [[[x y z] spots]] {:x x :y y :z z :factor (/ (* chance (reduce + (map :lost-s spots))) step)})))))
+         (mapcat (fn [{:keys [at cells lost-s]}]
+                   (let [way (distinct (cons at cells))
+                         each (/ (* chance lost-s) (count way) step)]
+                     (map (fn [cell] [cell each]) (distinct (mapcat beside way))))))
+         (reduce (fn [m [cell f]] (update m cell (fnil + 0) f)) {})
+         (map (fn [[[x y z] factor]] {:x x :y y :z z :factor factor})))))
 
 (defn tour
   "The call's tour of frontiers so far, {:explored :walks}: the blocks walked away from the goal and the frontier walks
@@ -184,7 +201,7 @@
   The send-backs and the walks cut (:cut-walks) start again when :closest (the least distance a walk reached) has improved
   cut-progress over :ref (its value then); a cut that begins more than send-back-margin farther than :last-dist, where the
   cut found the body, is a send-back (a reflex sent it back; a meal, a breath, a fight in place or knockback do not, on a
-  detour neither): {:at the cell the walk was left at :lost-s the seconds of walk undone}."
+  detour neither): a send-back of the cell the walk was left at and the walk undone, from m's :trail."
   [m goal dist]
   (let [cut? (and (= (session-id) (:open m)) (= goal (:goal m)))
         closest (min dist (if cut? (:closest m dist) dist))
@@ -195,7 +212,7 @@
     {:goal goal :closest closest :ref (if improved? closest ref) :last-dist dist
      :cut-walks (cond keep? (inc (:cut-walks m 0)) cut? 1 :else 0)
      :sent-backs (cond-> (if keep? (:sent-backs m []) [])
-                   sent-back? (conj {:at (some-> (:prev m) cell-of) :lost-s (* (- dist (:last-dist m dist)) (cost/walk-step-s))}))}))
+                   sent-back? (conj (send-back (some-> (:prev m) cell-of) (- dist (:last-dist m dist)) (:trail m))))}))
 
 (defn note-restart!
   "Record this call's start in memory: the call is open (this session) until it returns, an open one found at the start

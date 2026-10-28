@@ -161,6 +161,13 @@
       (is (< (js/Math.abs (- x (min stake (+ back again)))) 1e-4)
           (str "damage " damage " then-seconds " seconds ": the price is its own fixed point")))))
 
+(deftest the-least-fixed-point-is-the-least-of-several-roots
+  (let [f (fn [x] (cond (< x 10) (+ 5 (* 0.5 x)) (< x 12) (+ 10 (* 5 (- x 10))) :else 20))]
+    (is (< (js/Math.abs (- 10 (answer/least-fixed-point f 100))) 1e-5) "f(x)-x is positive between the roots 10 and 20: a scan with a step over them lands on 20")
+    (is (zero? (answer/least-fixed-point (constantly 0) 100)))
+    (is (= ##Inf (answer/least-fixed-point #(+ 1 (* 2 %)) ##Inf)) "no root and no stake to bound it")
+    (is (= 7 (answer/least-fixed-point #(min 7 (+ 1 (* 2 %))) 7)))))
+
 (deftest a-stake-nothing-bounds-leaves-a-death-that-never-ends-unpriced-not-nan
   (let [bed (assoc (body 5) :respawn {:x 40 :y 64 :z 0} :stake ##Inf)
         lethal {:damage 100 :hit 5 :blasts [100] :seconds 1}]
