@@ -3,6 +3,8 @@
   (:require [cljs.test :refer [deftest is are async]]
             [engine.blocks-dig-test :as bd]
             [engine.test-util :as tu]
+            [jobs.lib.child :as child]
+            [jobs.lib.cost.risk :as risk]
             [jobs.strip.seal :as seal]))
 
 (def job 'jobs.strip.seal)
@@ -158,3 +160,16 @@
               r (await (run! env args))]
           (is (= {:status :stopped :reason :no-blocks} (select-keys r [:status :reason])) (pr-str r))
           (is (some? (:because (:ending r))) "the fetch's own ending rides as the because"))))))
+
+(deftest the-walk-to-the-stand-is-priced-over-a-few-placed-blocks-not-a-strips-stay
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (world)
+              stays (atom [])
+              orig child/call-walk*]
+          (set! child/call-walk* (fn [c slot a] (swap! stays conj (:stay-s a)) (orig c slot a)))
+          (try (await (run! env args))
+               (finally (set! child/call-walk* orig)))
+          (is (seq @stays))
+          (is (every? #(= (risk/work-s :work) %) @stays)))))))

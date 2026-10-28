@@ -16,6 +16,7 @@
             [jobs.lib.tool-kind :as kind]
             [jobs.lib.tools :as tools]
             [engine.memory :as mem]
+            [jobs.lib.cost.risk :as risk]
             [engine.perception :as perception]
             [engine.registry :as registry]
             [engine.settings :as settings]
@@ -145,6 +146,28 @@
           (is (every? (set (dug-cells s)) [[3 64 -1] [3 64 -4]]) "the branch was cut to its length")
           (is (= (dec (count (set (dug-cells s)))) (u/cut-cells (:cut (done-event s)))) "every cell of the run and its branch but the ore target counts as cut")
           (is (pos? (:back (:cut (done-event s)))) "and the walks back from the branch ends"))))))
+
+(deftest the-walk-back-from-a-branch-is-priced-over-the-mines-work-not-a-strips-stay
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[s go-tos] (spy-go-to (start {:world (update (rock-world {"3,64,-4" "iron_ore"}) :inventory into [{:name "cobblestone" :count 5}])}))]
+          (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 7 :ways #{:seen :strip-tunnel} :branches true
+                                        :settings {:jobs.gather.mine-stay/branch-every 3 :jobs.gather.mine-stay/branch-length 4}}) {})
+          (await (run-ticks s 900))
+          (let [backs (filter :stay-s @go-tos)]
+            (is (seq backs) "the walks back carry a stay")
+            (is (every? #(< (:stay-s %) (risk/work-s :long)) backs))))))))
+
+(deftest the-walk-back-from-a-side-cut-is-priced-over-the-mines-work
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[s go-tos] (spy-go-to (start {:world (update (rock-world {"0,65,-1" "air" "0,65,-2" "air" "1,65,-2" "iron_ore"}) :inventory into [{:name "cobblestone" :count 5}])}))]
+          (mem/write! (:store (:eng s)) :tunnel-way {:dim "overworld" :origin [0 64 -1] :delta [0 -1] :steps 0})
+          (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :ways #{:seen :strip-tunnel} :settings {:jobs.gather.mine-stay/ore-reach 3}}) {})
+          (await (run-ticks s 500))
+          (is (some #(and (zero? (:range %)) (:stay-s %)) @go-tos) (pr-str @go-tos)))))))
 
 (defn ^:async ended-branch-run
   "branch-run where every branch child ends condition-failed with reason (the main run is the real dig-for); the setup and the number of branch children started."

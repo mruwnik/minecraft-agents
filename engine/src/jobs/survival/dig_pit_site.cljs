@@ -174,9 +174,10 @@
 
 (defn ^:async keeps?
   "Whether a site cell m chosen earlier is still the one to walk to, given fresh (site, from the feet now): the same cell; or
-  go-to's quote for m is finite and, plus its stay-toll-s, no dearer than the fresh cell's; with no fresh cell, m stays only
-  when no known mob's field covers it, or when digging at the feet (fresh :here) would cost more toll, unless the feet are a pit
-  site themselves (a walk that left the failed site behind on good ground digs there, for nothing)."
+  go-to's quote for m is finite and, plus its stay-toll-s, no dearer than the fresh cell's (m stays when the fresh cell has no
+  quote); with fresh :here, no dearer than digging at the feet (stay-toll-s there, no walk); with no fresh site, m stays only
+  when no known mob's field covers it (a zero threshold: the other end is ending :no-site, not a price), unless the feet are a
+  pit site themselves (a walk that left the failed site behind on good ground digs there, for nothing)."
   [c m fresh]
   (cond
     (and (= :here (:at fresh)) (pit-site? (:primitives c) (sh-sense/feet (:primitives c)))) false
@@ -186,9 +187,9 @@
                 priced (fn ^:async priced [f] (when-let [q (await (rooms/route-cost c {:pos f :range 0}))] (+ q (stay-toll-s c danger-near f))))
                 qm (await (priced m))
                 qf (when (:cell fresh) (await (priced (:cell fresh))))]
-            (boolean (and qm (cond (:cell fresh) (<= qm qf)
-                                   (zero? toll-m) true
-                                   (= :here (:at fresh)) (<= toll-m (stay-toll-s c danger-near (sh-sense/feet (:primitives c))))))))))
+            (boolean (and qm (cond (:cell fresh) (or (nil? qf) (<= qm qf))
+                                   (= :here (:at fresh)) (<= qm (stay-toll-s c danger-near (sh-sense/feet (:primitives c))))
+                                   :else (zero? toll-m)))))))
 
 (defn site
   "Where a night pit is dug from: {:at :here}, {:at :there :cell f} (walk there first: a pit failed at the feet, or a zone

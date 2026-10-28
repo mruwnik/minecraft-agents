@@ -2,9 +2,11 @@
   "jobs.strip.corridor: one mineshaft corridor segment stripped, in the fake world."
   (:require [cljs.test :refer [deftest is async]]
             [engine.blocks-dig-test :as bd]
+            [engine.ctx :as ctx]
             [engine.fake :as fake]
             [engine.test-util :as tu]
             [jobs.lib.cost.risk :as risk]
+            [jobs.lib.near :as near]
             [jobs.lib.strip :as strip]
             [jobs.strip.corridor :as corridor]))
 
@@ -332,3 +334,17 @@
           (await (tu/with-near-spy calls (fn ^:async f [] (await (run! env args)))))
           (is (seq @calls))
           (is (every? #(= (risk/work-s :long) (:stay-s (nth % 2))) @calls)))))))
+
+(deftest the-walk-to-a-side-opening-is-priced-over-a-glance
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom [])
+              k "cljs$core$IFn$_invoke$arity$4"
+              orig (aget near/go-near! k)
+              c {:primitives nil :id "j" :args args :slots [] :engine {:warned (atom #{})} :view (fn [] {:now 0 :data {}})}]
+          (aset near/go-near! k (fn ^:async spy [_ pos range opts] (swap! calls conj [pos range opts]) :partial))
+          (try (with-redefs [ctx/update-mem! (fn [& _])]
+                 (await (corridor/look-mouth! c seg 4)))
+               (finally (aset near/go-near! k orig)))
+          (is (= [(risk/work-s :click)] (map #(:stay-s (nth % 2)) @calls))))))))

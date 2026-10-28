@@ -7,9 +7,8 @@
             [jobs.gather.mine-stay :as stay]
             [jobs.gather.mine.end :refer [add-cut cut-of stop!]]
             [jobs.lib.waits :as waits]
-            [jobs.gather.mine.targets :refer [step-cell]]
+            [jobs.gather.mine.targets :refer [step-cell work-s]]
             [jobs.lib.child :as child]
-            [jobs.lib.cost.risk :as risk]
             [jobs.lib.look :refer [cell-of]]
             [jobs.lib.util :as u]))
 
@@ -52,7 +51,7 @@
                 r))
         why (when (map? r) (contract/cause-key r))
         back (when-not (or (= :continue r) (halting why))
-               (await (child/call-walk* c :branch-back {:pos {:x (+ (:x junction) 0.5) :y (:y junction) :z (+ (:z junction) 0.5)} :range 0 :stay-s (risk/work-s :long)
+               (await (child/call-walk* c :branch-back {:pos {:x (+ (:x junction) 0.5) :y (:y junction) :z (+ (:z junction) 0.5)} :range 0 :stay-s (work-s c)
                                                         :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
     (cond
       (= :continue r) :continue

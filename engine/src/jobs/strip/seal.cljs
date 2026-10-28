@@ -118,7 +118,7 @@
 
 (defn ^:async go-stand! [c at axis side]
   (let [stand-cell (stand at axis side)
-        r (await (child/call-walk* c :walk {:pos stand-cell :range 0 :ways #{:walk :clear-seal} :stay-s (risk/work-s :long)}))]
+        r (await (child/call-walk* c :walk {:pos stand-cell :range 0 :ways #{:walk :clear-seal} :stay-s (risk/work-s :work)}))]
     (cond
       (= :continue r) :continue
       (= stand-cell (reach/standing-vec (:primitives c))) :again

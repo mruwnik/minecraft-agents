@@ -7,7 +7,7 @@
             [engine.ctx :as ctx]
             [jobs.gather.mine-stay :as stay]
             [jobs.gather.mine.end :refer [add-cut cut-of]]
-            [jobs.gather.mine.targets :refer [items rules-in skip! step-cell]]
+            [jobs.gather.mine.targets :refer [items rules-in skip! step-cell work-s]]
             [jobs.gather.mine.tunnel :as tunnel]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
@@ -31,7 +31,7 @@
                 (when-not (= :continue r) (ctx/update-mem! c #(-> % (assoc :side-end (dissoc r :report)) (update :cut add-cut (cut-of r)))))
                 r))
         back (when-not (= :continue r)
-               (await (child/call-walk* c :side-back {:pos {:x (+ (:x from) 0.5) :y (:y from) :z (+ (:z from) 0.5)} :range 0 :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
+               (await (child/call-walk* c :side-back {:pos {:x (+ (:x from) 0.5) :y (:y from) :z (+ (:z from) 0.5)} :range 0 :stay-s (work-s c) :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
     (if (or (= :continue r) (= :continue back))
       :continue
       (let [_ (ctx/update-mem! c dissoc :side-cut :side-from :side-end)

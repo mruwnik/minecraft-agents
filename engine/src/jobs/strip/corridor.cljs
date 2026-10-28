@@ -259,7 +259,7 @@
   only in part (too few rails, no support in view) is not read as a segment."
   [c seg a]
   (let [{:keys [axis y line]} seg
-        w (await (near/go-near! c (strip/at axis y line a) 1 {:stay-s (risk/work-s :long)}))]
+        w (await (near/go-near! c (strip/at axis y line a) 1 {:stay-s (risk/work-s :click)}))]
     (ctx/update-mem! c update :mouthed (fnil conj []) a)
     (if (= :partial w)
       :continue
