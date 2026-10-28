@@ -3,6 +3,7 @@
 // tools/test-run.mjs <ns>...   (called by tools/test-engine after the compile; namespaces space- or comma-separated)
 //  Runs a private copy of out/test.cjs + out/test/cljs-runtime (/tmp/mc-test-run-<pid>, so a concurrent compile cannot swap it) under one
 //  res-slot 'tests' slot sized by the namespace count (needMb), killed when no test has finished for stallLimitS (MC_TEST_STALL_S overrides, MC_TEST_FIRST_S the 300 s allowed to the first finished test; a spinning test too, the watchdog is this parent) so a hung test frees its slot, and after WHOLE_RUN_CAP_S (MC_TEST_TIMEOUT_S overrides).
+//  More than MAX_QUALIFIED <ns>/<deftest> specs run as several node runs in turn (shadow finds none from 9); exit SHORT_RC when fewer tests finished than were named.
 //  Only the requested -test namespaces are loaded (narrowBundle: imports and shadow.test registry cut from the source, only the imported files copied; engine.timing-test, the timing / TEST_EVENTS=1 @@test reporter, always stays); full and shard runs keep the whole bundle.
 import fs from 'node:fs'
 import path from 'node:path'
@@ -21,6 +22,33 @@ export const parseNss = (argv) => argv.flatMap((a) => a.split(',')).filter(Boole
 
 // An arg is a namespace or <namespace>/<deftest> (shadow's --test takes both); narrowing, sizing and timings go by namespace.
 export const nsOf = (spec) => spec.split('/')[0]
+
+// shadow-cljs (--test) finds qualified specs through a hash set whose lookup misses once it holds more than 8 symbols (measured: 8 deftests run, 9 run 0 and exit 0), so a node run gets at most this many.
+export const MAX_QUALIFIED = 8
+
+// Specs in node runs: namespaces ride in the first run, qualified specs go MAX_QUALIFIED to a run.
+export const chunkSpecs = (specs, max = MAX_QUALIFIED) => {
+  const uniq = [...new Set(specs)]
+  const nss = uniq.filter((s) => !s.includes('/'))
+  const qualified = uniq.filter((s) => s.includes('/'))
+  const chunks = []
+  for (let i = 0; i < qualified.length; i += max) chunks.push(qualified.slice(i, i + max))
+  if (!chunks.length) return [nss]
+  chunks[0] = [...nss, ...chunks[0]]
+  return chunks
+}
+
+// Fewest tests a run of specs must finish: each deftest named outside a whole requested namespace, and one for the namespaces together.
+export const minTests = (specs) => {
+  const uniq = [...new Set(specs)]
+  const whole = new Set(uniq.filter((s) => !s.includes('/')))
+  return uniq.filter((s) => s.includes('/') && !whole.has(nsOf(s))).length + (whole.size ? 1 : 0)
+}
+
+// Exit status when fewer tests finished than were named (a run that passes with 0 tests is a silent green).
+export const SHORT_RC = 4
+
+export const finishedCount = (lines) => lines.filter(Boolean).filter((l) => { try { return 'var' in JSON.parse(l) } catch { return false } }).length
 
 const MUNGE = { '-': '_', '?': '_QMARK_', '!': '_BANG_', '*': '_STAR_', '>': '_GT_', '<': '_LT_', '=': '_EQ_', '+': '_PLUS_' }
 const mungeName = (name) => name.replace(/[-?!*><=+]/g, (c) => MUNGE[c])
@@ -262,21 +290,30 @@ const main = async () => {
     console.error(`test-engine: not in the :test bundle (a run would pass with 0 tests): ${missing.join(' ')}${missing.some((n) => nsOf(n).endsWith('-golden')) ? ' (the -golden ones run with tools/test-engine --golden)' : ''}`)
     process.exit(MISSING_RC)
   }
-  const timings = path.join(runDir, 'timings.jsonl')
-  fs.writeFileSync(timings, '')
-  child = spawn(path.join(tools, 'res-slot'),
-    ['tests', '--need', String(needMb(nss.length, res.kinds.tests)), '--',
-      'timeout', '-k', '10', String(limit), 'node', `--max-old-space-size=${res.kinds.tests.heapMb}`, path.join(runDir, 'out/test.cjs'), `--test=${specs.join(',')}`],
-    { cwd: engine, stdio: 'inherit', env: { ...process.env, MC_TEST_TIMINGS: timings, NODE_PATH: path.join(repo, 'node_modules') } })
-  let stalled = false
-  const stop = watchStall(timings, stallS, () => { stalled = true; killStalled(child.pid) }, { firstS: Number(process.env.MC_TEST_FIRST_S) || FIRST_RESULT_S })
-  const exited = await new Promise((resolve) => child.on('exit', (status) => resolve(status ?? 1)))
-  stop()
-  const code = stalled ? 124 : exited
-  slowestLines(readText(timings).split('\n')).forEach((l) => console.log(l))
-  if (stalled) console.error(stallMessage('test-engine', stallS, fs.readFileSync(timings, 'utf8').split('\n'), nss))
-  if (!stalled && (code === 124 || code === 137))
-    console.error(`test-engine: TIMEOUT, killed after ${limit} s (prior timing ~${Math.round(expected / 1000)} s); last finished test: ${lastFinished(fs.readFileSync(timings, 'utf8').split('\n')) ?? 'none'}`)
+  let code = 0, finished = 0, stalled = false
+  for (const [i, chunk] of chunkSpecs(specs).entries()) {
+    const timings = path.join(runDir, `timings-${i}.jsonl`)
+    fs.writeFileSync(timings, '')
+    child = spawn(path.join(tools, 'res-slot'),
+      ['tests', '--need', String(needMb(nss.length, res.kinds.tests)), '--',
+        'timeout', '-k', '10', String(limit), 'node', `--max-old-space-size=${res.kinds.tests.heapMb}`, path.join(runDir, 'out/test.cjs'), `--test=${chunk.join(',')}`],
+      { cwd: engine, stdio: 'inherit', env: { ...process.env, MC_TEST_TIMINGS: timings, NODE_PATH: path.join(repo, 'node_modules') } })
+    const stop = watchStall(timings, stallS, () => { stalled = true; killStalled(child.pid) }, { firstS: Number(process.env.MC_TEST_FIRST_S) || FIRST_RESULT_S })
+    const exited = await new Promise((resolve) => child.on('exit', (status) => resolve(status ?? 1)))
+    stop()
+    const lines = readText(timings).split('\n')
+    finished += finishedCount(lines)
+    slowestLines(lines).forEach((l) => console.log(l))
+    if (stalled) { console.error(stallMessage('test-engine', stallS, lines, nss)); code = 124; break }
+    if (exited === 124 || exited === 137)
+      console.error(`test-engine: TIMEOUT, killed after ${limit} s (prior timing ~${Math.round(expected / 1000)} s); last finished test: ${lastFinished(lines) ?? 'none'}`)
+    if (exited !== 0) { code = exited; break }
+  }
+  const owed = minTests(specs)
+  if (code === 0 && finished < owed) {
+    console.error(`test-engine: FAILED, ${finished} tests finished but ${owed} were named (a green run with missing tests is not a pass)`)
+    code = SHORT_RC
+  }
   process.exit(code)
 }
 

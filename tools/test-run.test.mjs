@@ -5,7 +5,7 @@ import { EventEmitter } from 'node:events'
 import { spawn } from 'node:child_process'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { UNKNOWN_NS_MS, parseNss, nsOf, expectedMs, stallLimitS, slowestPriorMs, slowestLines, watchStall, stallMessage, needMb, lastFinished, isolate, narrowBundle, missingNss, sweepStale, cleanupOnExit, killTree } from './test-run.mjs'
+import { UNKNOWN_NS_MS, parseNss, nsOf, expectedMs, stallLimitS, slowestPriorMs, slowestLines, watchStall, stallMessage, needMb, lastFinished, isolate, narrowBundle, missingNss, chunkSpecs, minTests, finishedCount, sweepStale, cleanupOnExit, killTree } from './test-run.mjs'
 
 test('parseNss: space- and comma-separated namespaces, blanks dropped', () => {
   assert.deepEqual(parseNss(['engine.a-test,engine.b-test', 'engine.c-test', '']), ['engine.a-test', 'engine.b-test', 'engine.c-test'])
@@ -330,4 +330,19 @@ test('res-slot.json needs stay above the measured VmHWM: 476 MB for one namespac
   const t = JSON.parse(fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), 'res-slot.json'), 'utf8')).kinds.tests
   assert.ok(needMb(1, t) >= 476 && needMb(5, t) >= 640 && needMb(30, t) >= 722, JSON.stringify(t))
   assert.ok(needMb(1, t) < 700, JSON.stringify(t))
+})
+
+test('chunkSpecs: at most 8 qualified specs per node run (shadow runs 0 tests from 9), namespaces ride in the first run, duplicates dropped', () => {
+  const q = Array.from({ length: 9 }, (_, i) => `engine.a-test/t${i}`)
+  assert.deepEqual(chunkSpecs([...q, 'engine.b-test', q[0]]), [['engine.b-test', ...q.slice(0, 8)], [q[8]]])
+  assert.deepEqual(chunkSpecs(['engine.b-test']), [['engine.b-test']])
+})
+
+test('minTests: deftests named outside a requested whole namespace, plus one for the namespaces', () => {
+  assert.equal(minTests(['engine.a-test/x', 'engine.a-test/y', 'engine.a-test/x']), 2)
+  assert.equal(minTests(['engine.a-test/x', 'engine.a-test', 'engine.b-test/y']), 2)
+})
+
+test('finishedCount: counts finished test vars, not the started line or a half-written one', () => {
+  assert.equal(finishedCount(['{"started":1}', '{"var":"#\'a/b","ms":3}', '{"var":"#\'a/c","ms":3}', '{"var":', '']), 2)
 })
