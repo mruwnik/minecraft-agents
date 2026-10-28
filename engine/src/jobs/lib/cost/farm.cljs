@@ -2,6 +2,7 @@
   "What a farm field's cells are worth to a pass and what its steps take: the measured share of field cells ripe or
   sowable at a pass (::field-prior), the chance a cell seen growing is ripe by now (ripe-chance), what a sown cell is worth (sown-worth), and the seconds each step works (step-s)."
   (:require [engine.args :as a]
+            [engine.game :as game]
             [engine.settings :as settings]
             [jobs.lib.cost.food :as food]
             [jobs.lib.cost.value :as value]
@@ -36,6 +37,14 @@
   [kind k n]
   (let [[al be] (get (settings/get settings ::field-prior) kind)]
     (/ (+ al k) (+ al be n))))
+
+(def default-simulation-distance "Chunks around a player that tick when the server has not announced its own: vanilla's." 10)
+
+(defn growing-s
+  "The seconds of secs a field `dist` blocks (horizontal) from the body grew: all of them within the server's simulation
+  distance, none beyond (no position history is kept, so a field out of range now is taken as out of range since it was seen)."
+  [secs dist]
+  (if (<= dist (* 16 (or (game/simulation-distance) default-simulation-distance))) secs 0))
 
 (defn ripe-chance
   "The chance a field cell seen holding crop at stage `age` `secs` seconds ago is ripe now: at least the stages left to

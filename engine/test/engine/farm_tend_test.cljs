@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.fake :as fake]
+            [engine.game :as game]
             [engine.memory :as mem]
             [engine.events :as events]
             [engine.registry :as registry]
@@ -656,6 +657,18 @@
     (is (> (cost/ripe-chance "wheat" 6 600 wet) (cost/ripe-chance "wheat" 0 600 wet)) "fewer stages left ripen sooner")
     (is (> (cost/ripe-chance "wheat" 4 600 wet) (cost/ripe-chance "wheat" 4 600 dry-rate)) "dry farmland grows slower")
     (is (= 0 (cost/ripe-chance "wheat" 4 6000 (crops/stages-per-s true 8))) "under light 9 nothing grows")))
+
+(deftest a-field-beyond-the-simulation-distance-does-not-grow
+  (let [wet (crops/stages-per-s true nil)]
+    (game/select! (fake/create {:server {:simulationDistance 10}}))
+    (is (= 2400 (cost/growing-s 2400 100)))
+    (is (= 0 (cost/growing-s 2400 300)))
+    (is (< 0.3 (cost/ripe-chance "wheat" 0 (cost/growing-s 2400 100) wet)) "near, long seen: grows")
+    (is (= 0 (cost/ripe-chance "wheat" 0 (cost/growing-s 2400 300) wet)) "300 blocks behind: not priced ripe")
+    (game/select! (fake/create {:server {:simulationDistance 2}}))
+    (is (= 0 (cost/growing-s 2400 100)) "the server's own distance counts")
+    (game/select! (fake/create {:server {:simulationDistance nil}}))
+    (is (= 2400 (cost/growing-s 2400 100)) "unknown: vanilla's 10 chunks")))
 
 (deftest a-sown-crop-is-worth-its-share-ripe-within-the-food-horizon
   (let [wet (crops/stages-per-s true nil)]

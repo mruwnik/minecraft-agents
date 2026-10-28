@@ -205,7 +205,7 @@
 
 (defn ripe-now
   "[crop chance] of the crop cell at pos (crop: the one wanted there, nil for any) holding a ripe crop now: in view 1 or 0;
-  remembered out of view, cost/ripe-chance since it was seen at its growth-rate; another block [nil 0]; nil when never seen."
+  remembered out of view, cost/ripe-chance since it was seen at its growth-rate, counting only while within the server's simulation distance (cost/growing-s); another block [nil 0]; nil when never seen."
   [p ws pos crop]
   (let [b (u/sensed p pos)]
     (when-not (or (nil? b) (true? (.-unknown b)))
@@ -213,7 +213,7 @@
             age (or (.-age b) 0)]
         (cond
           (not (and (crops/ripe-age name) (or (nil? crop) (= crop name)))) [nil 0]
-          (false? (.-visible b)) [name (cost/ripe-chance name age (/ (or (.-ageMs b) 0) 1000) (growth-rate p ws pos))]
+          (false? (.-visible b)) [name (cost/ripe-chance name age (cost/growing-s (/ (or (.-ageMs b) 0) 1000) (let [me (.-pos (.self p))] (js/Math.hypot (- (.-x me) (:x pos)) (- (.-z me) (:z pos))))) (growth-rate p ws pos))]
           :else [name (if (>= age (crops/ripe-age name)) 1 0)])))))
 
 (defn sow-crop
