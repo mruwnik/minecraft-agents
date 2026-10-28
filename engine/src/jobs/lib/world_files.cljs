@@ -26,7 +26,7 @@
     is why a bad file warns when first used, not when read. Readers that scan every plan skip those whose text lacks their
     needle (mentions?, shaft-ids, plan-authors).
     Expansions are delays, forced by the first reader that needs them (a trigger that asks for gates forces only the plans
-    that mention one), so a body that never asks pays nothing at start.
+    that mention one). A real body's world also forces the footprint index (all expansions) right after each change of the plans.
     An entry is {:stamp [mtime size] :value v :error text}: :value the last good copy, :error the current file's
     trouble. The zone entry is {:missing true} while there is no file.
     :area-claims holds the claims file, :markers the markers file. :claims and :footprints are the plans' cells, by plan and by cell."
@@ -265,6 +265,8 @@
              :when (not= stamp (:stamp (get old id)))]
          (path/join dir (str id ".edn")))))
 
+(declare warm!)
+
 (defn refresh!
   "Stat the files when due (or at once with force?) and fold in what changed; emits a warn per newly broken file. A world
   without files (of-data) is never refreshed."
@@ -292,6 +294,8 @@
           (reset! state (cond-> (assoc old :checked-at now :plans plans :blueprints blueprints :zones zone-entry
                                        :area-claims claims-entry :markers markers-entry)
                           (or (not= (:plans old) plans) (not= (:blueprints old) blueprints)) (expand-all old)))
+          (when (and (:warm? opts) (not= (:footprints old) (:footprints @state)))
+            (js/setTimeout #(warm! {:state state :opts opts}) 0))
           (doseq [[kind [_ warns]] results
                   warn warns]
             ((:emit opts) (warn-event (get kinds kind) warn)))
@@ -310,6 +314,13 @@
 
 ;; ------------------------------------------------------------------ worlds
 
+(defn warm!
+  "Build the plans' expansions, claims and footprint index now (a real body's world does it after each change of the plans,
+  so the first zone check in a danger decision reads them built)."
+  [{:keys [state]}]
+  (some-> (:footprints @state) deref)
+  nil)
+
 (defn open
   "A world over the files of :plans-dir and :blueprint-dir and the zone file :zones-file. opts: :now (ms clock),
   :emit (an event fn), :every-ms. Without :now (a real body) it reads the files right after the open returns (the engine exists by then to take the events) and again every :every-ms by
@@ -318,7 +329,7 @@
   (let [w {:state (atom {:plans {} :blueprints {}})
            :said (atom #{})
            :derived (atom {})
-           :opts (assoc opts :now (or now js/Date.now) :every-ms (or every-ms (default-every-ms)))}]
+           :opts (assoc opts :now (or now js/Date.now) :every-ms (or every-ms (default-every-ms)) :warm? (not now))}]
     (if (or now (not (:plans-dir opts)))
       w
       (do (js/setTimeout #(refresh! w) 0)

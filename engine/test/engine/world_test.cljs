@@ -483,6 +483,25 @@
            (done))
          400)))))
 
+(deftest an-opened-world-builds-its-footprints-before-any-reader-asks
+  (async done
+    (let [plans (tu/tmp-dir)
+          expands (atom 0)
+          real shape/expand]
+      (write! plans "field" (pr-str wheat))
+      (set! shape/expand (fn [& args] (swap! expands inc) (apply real args)))
+      (let [w (world/open {:plans-dir plans :blueprint-dir (tu/tmp-dir) :every-ms 50 :emit (fn [_])})]
+        (js/setTimeout
+         (fn []
+           (let [built @expands]
+             (is (= 1 built) "the plan was expanded with nobody reading")
+             (is (= 2 (count (world/footprints w nil))))
+             (is (= built @expands) "the first lookup built nothing"))
+           (set! shape/expand real)
+           (world/close! w)
+           (done))
+         400)))))
+
 (deftest kept-derived-readers-follow-a-plan-change-at-once
   (let [w (world/of-data {"pad" pad} {})
         calls (atom 0)
