@@ -249,8 +249,8 @@
     (is (= 0 (cost (ledge-over "pointed_dripstone" {:vertical_direction "down" :thickness "tip" :waterlogged false} 5) :damage)))))
 
 ;; card 352092c9: a one-wide bridge of leaves 10 blocks over the floor between two stone pillars. Leaves no log holds (the
-;; block's default state: distance 7, not persistent) decay under a body, so each stand on them costs its fall (7 hp); leaves
-;; of a standing tree are a plain floor.
+;; block's default state: distance 7, not persistent) decay under a body, so a walk over them costs one fall (7 hp), however
+;; many stands it has: a body falls once. Leaves of a standing tree are a plain floor.
 (defn bridge [props budget]
   (run (pf/world {:fill [[0 64 0 2 73 2 "stone"] [8 64 0 10 73 2 "stone"] [3 73 1 7 73 1 "jungle_leaves" props]]})
        (near 9 74 1) {:damageBudget budget} {:x 1 :y 74 :z 1}))
@@ -263,7 +263,7 @@
     (is (= 0 (cost kept :damage)))
     (is (not= "found" (:status hurt)))
     (is (true? (:damageRefused hurt)))
-    (is (= (* 5 7) (cost whole :damage)))))
+    (is (= 7 (cost whole :damage)) "5 stands, one fall")))
 
 ;; two ledges over a hole 8 deep (a miss falls 8 blocks, 5 hp) joined only by a bridge at z 20: the jump over the hole is the
 ;; short way. A 1-wide hole is never missed; a 2-wide one is missed at half of gapMiss.

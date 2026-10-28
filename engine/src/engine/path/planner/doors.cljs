@@ -147,6 +147,7 @@
   (expandAt [s x y z h slow-from i region]
     ;; when no section near the cell holds a partial block or a climbable, no cell this expansion looks at is tight
     (set! (.-quiet s) (.sectionsClear s x y z 2 2 3))
+    (set! (.-src-decays s) (== (aget (.-tbl-decays s) (.stateAt s x (dec y) z)) 1))
     (if (or ^boolean (.-quiet s) (not ^boolean (.nearOpenable s x y z)))
       (.expandMoves s x y z h slow-from i region)
       (.expandOpening s x y z h slow-from i region))))

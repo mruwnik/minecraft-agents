@@ -316,31 +316,20 @@
               (recur (inc c))))))))
 
   ;; the hp of the fall a body standing at feet height h in x y z takes when the leaves under it decay: down through them
-  ;; and any decaying leaves below to the first other block with a top (none into water that holds it; unloaded land or an
-  ;; unseen cell counts CLIMB-FALL-SCAN blocks, as missFall)
+  ;; and any decaying leaves below (fallScan)
   (decayDamage [s x y z h]
-    (let [from16 (+ (* y 16) h)]
-      (loop [y3 (dec y)]
-        (if (< y3 (- y CLIMB-FALL-SCAN))
-          (.dropDamage s 1 (- from16 (* y3 16)))
-          (let [id (.stateAt s x y3 z)]
-            (cond
-              (or (== id UNLOADED) (== id (.-unk-id s))) (.dropDamage s 1 (* CLIMB-FALL-SCAN 16))
-              (and (== (aget (.-tbl-kind s) id) WATER) ^boolean (.fallStops s x y3 z)) 0
-              (and (pos? (aget (.-tbl-top s) id)) (zero? (aget (.-tbl-decays s) id)))
-              (.dropDamage s 1 (js/Math.max 0 (- from16 (+ (* y3 16) (aget (.-tbl-top s) id)))))
-              :else (recur (dec y3))))))))
+    (.dropDamage s 1 (.fallScan s x (dec y) z (+ (* y 16) h) true)))
 
   ;; standH plus what arriving there costs (enter-risk, enter-slow, enter-extra); -1 when not standable. Leaves that decay
-  ;; under the feet cost their whole fall as damage: no log holds them, they go at any random tick, and a walk may halt on
-  ;; any of its stands (a dig there, a stuck step).
+  ;; under the feet cost their whole fall as damage: no log holds them, they go at any random tick. A body falls once, so
+  ;; only the first stand of a run of such leaves (src-decays: the cell the move leaves stands on them too) costs it.
   (landing [s x y z]
     (let [h (.standH s x y z)]
       (if (neg? h)
         -1
         (let [hz (aget (.-tbl-hazard s) (.-support s))
               leaf (== (aget (.-tbl-dripleaf s) (.-support s)) 1)
-              decay (if (== (aget (.-tbl-decays s) (.-support s)) 1) (.decayDamage s x y z h) 0)]
+              decay (if (and (== (aget (.-tbl-decays s) (.-support s)) 1) (not ^boolean (.-src-decays s))) (.decayDamage s x y z h) 0)]
           (set! (.-enter-risk s) (+ (.-touch s) (if (== hz DAMAGE-STAND) 1 0) (if ^boolean (.lavaNear s x y z) LAVA-ADJACENT 0)
                               (if leaf (.-c-dripleaf-risk s) 0) (.besideMagma s x y z) decay))
           (set! (.-enter-dmg s) (+ (.-touch s) (if (== hz DAMAGE-STAND) 1 0) decay))

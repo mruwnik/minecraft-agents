@@ -50,6 +50,7 @@
    ^:mutable enter-risk ^:mutable enter-slow ^:mutable enter-extra ; set by landing
    ^:mutable ty ; y of the cell the last neighbour found
    ^:mutable gap-y ; y of the cell the last gapLanding found
+   ^:mutable ^boolean src-decays ; the cell being expanded stands on decaying leaves
    ^:mutable ^boolean quiet ; no special block near the cell being expanded: nothing it looks at is tight
    ^:mutable ^boolean open-mode ; the opening pass of an expansion: closed doors, gates and trapdoors read as open
    ^:mutable ^boolean allow-shut ; standH refuses a shut trapdoor's cell unless the caller pays for opening it

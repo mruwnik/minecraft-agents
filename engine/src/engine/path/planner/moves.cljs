@@ -171,10 +171,11 @@
           ^boolean (.isUnknown s (.stateAt ^js (.-snapshot s) x y z)) true
           :else (recur (inc y))))))
 
-  ;; the fall (1/16 blocks) from from16 down the column x z, from cell y, to the first block with a top; 0 into water that
-  ;; holds it (fallStops); CLIMB-FALL-SCAN blocks past unloaded land or an unseen cell (the depth behind a ledge is hidden
-  ;; by the ledge itself: a fall into the unknown may kill) and past that many blocks of air
-  (missFall [s x y z from16]
+  ;; the fall (1/16 blocks) from from16 down the column x z, from cell y, to the first block with a top (not a decaying one
+  ;; when skip-decay: it goes under the body); 0 into water that holds it (fallStops); CLIMB-FALL-SCAN blocks past unloaded
+  ;; land or an unseen cell (the depth behind a ledge is hidden by the ledge itself: a fall into the unknown may kill) and
+  ;; past that many blocks of air
+  (fallScan [s x y z from16 ^boolean skip-decay]
     (loop [y3 y]
       (if (< y3 (- y CLIMB-FALL-SCAN))
         (- from16 (* y3 16))
@@ -182,8 +183,11 @@
           (cond
             (or (== id UNLOADED) (== id (.-unk-id s))) (* CLIMB-FALL-SCAN 16)
             (and (== (aget (.-tbl-kind s) id) WATER) ^boolean (.fallStops s x y3 z)) 0
-            (pos? (aget (.-tbl-top s) id)) (js/Math.max 0 (- from16 (+ (* y3 16) (aget (.-tbl-top s) id))))
+            (and (pos? (aget (.-tbl-top s) id)) (not (and skip-decay (== (aget (.-tbl-decays s) id) 1))))
+            (js/Math.max 0 (- from16 (+ (* y3 16) (aget (.-tbl-top s) id))))
             :else (recur (dec y3)))))))
+
+  (missFall [s x y z from16] (.fallScan s x y z from16 false))
 
   ;; a running jump over 2 or 3 cells along dx dz to lx ly lz (stand h1) lands up to a block past its aim with the run's
   ;; speed, so a landing one cell deep is overshot: true when the column past it has no wall to stop the body and a fall
