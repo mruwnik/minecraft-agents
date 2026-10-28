@@ -419,7 +419,7 @@
   search's chance of it, nil 0), its mobs then landing their blows (a creeper its blast) over the flight, a melee mob over
   caught-s seconds of it (the flee search's race) at reach-rate; or else at the prior of the body's health
   (jobs.lib.cost.caught/prior of its mobs, the likeliest caught), they then landing its blows (the trials counted a
-  flight's blows from all its chasers) of that mob's, in a flight begun in water (the trials counted flights on land) a melee mob's, over the swim's share of the flight, no more than
+  flight's blows from all its chasers) of that mob's, in a flight begun in water (the trials counted flights on land) a melee mob's no more than
   caught-s at reach-rate (blows do not outlast the race's seconds in reach); never fewer than the walk's own. The two catches are one by their chances (caught by both, the worse): its damage their mean, its :shape the width of their
   mix (each its own: the way's the walk's, the prior's its blows' uncertainty). A creeper that blows on the
   walk (at the median of its :spread) is spent: what follows is the walk from the rest or later (none left: nothing).
@@ -437,8 +437,7 @@
              :gain #(danger/closing-rate (or food 20) %)}
         per-of (fn [mobs] (map #(flee-mob stats v wet %) mobs))
         per (per-of mobs)
-        times (inc (or returns 0))
-        swim-share (if (and swim (js/isFinite swim) (pos? swim)) (/ swim (+ swim (or land 0))) 1)]
+        times (inc (or returns 0))]
     (when (and (seq per) (every? some? per))
       (let [walk-of (fn [per times]
                       (let [hit (reduce max 0 (map :hit per))
@@ -466,7 +465,7 @@
                             dp (max (reduce + 0 (map #(:damage (second %)) hitting))
                                     (if m (threat/mob-hurt stats (threat/kind m) (cond-> (:blows pr)
                                                                                    (and caught-s swim (pos? swim) (= (hit-range m) (danger/melee-reach)))
-                                                                                   (as-> blows (+ (* swim-share (min blows (* caught-s (reach-rate m)))) (* (- 1 swim-share) blows))))
+                                                                                   (min (* caught-s (reach-rate m))))
                                                            identity 1)
                                         0))
                             pc (:chance prior 0)
