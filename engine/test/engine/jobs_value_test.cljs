@@ -148,6 +148,10 @@
 (deftest a-recipe-of-an-item-nothing-yields-is-priced-by-its-ingredients
   (is (> (each "golden_apple") (* 8 (each "gold_ingot"))) "the apple at its floor, the gold at its own worth"))
 
+(deftest charcoal-is-priced-by-the-log-it-is-smelted-from-not-by-the-no-source-floor
+  (is (< (each "oak_log") (each "charcoal") (each "coal")) "a log and a smelt, under the coal dug")
+  (is (< (each "torch") (each "coal")) "a torch is made of charcoal as well as coal"))
+
 (deftest placed-forms-are-no-free-source-and-no-source-items-keep-the-stack-rule
   (is (> (each "redstone") 1))
   (is (= (* (:no-source-each table/default-basis) 64) (each "totem_of_undying")) "no source: 4 x 64 / stack of 1")

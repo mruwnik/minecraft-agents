@@ -54,7 +54,7 @@
     (into {} (concat by-rule
                      (filter (fn [[o i]] (and (has? o) (has? i)))
                              [["netherite_scrap" "ancient_debris"] ["stone" "cobblestone"] ["glass" "sand"]
-                              ["brick" "clay_ball"]])))))
+                              ["brick" "clay_ball"] ["charcoal" "oak_log"]])))))
 
 (defn ore-block? [name] (or (str/ends-with? name "_ore") (= "ancient_debris" name)))
 

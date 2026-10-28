@@ -62,7 +62,7 @@
 (defn torch-choice
   "The raw items obtain gathers for 4 torches, sticks and a furnace carried, standing on a floor of block at y (its ground)
   with logs at the given cells, every block in sight seen (and the call's searches so far, :explored), and the price of
-  each way: the coal search and the charcoal."
+  each way: the coal search (within a search worth of 100 s: charcoal makes torches cheap) and the charcoal."
   [block y logs & {:keys [explored]}]
   (let [p (tu/seeing-all (tu/fake-on-floor {:floor [y -50 -45 50 45] :floor-block block :time 6000
                                             :self {:pos [0.5 (inc y) 0.5]}
@@ -70,7 +70,7 @@
                                             :inventory [{:name "stick" :count 2} {:name "furnace" :count 1}]}))
         view (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)}))
         c {:primitives p :view (constantly view)
-           :args {:item "torch" :count 4 :ways #{:craft :smelt :gather :search} :explore true :ignore-zones? true}}
+           :args {:item "torch" :count 4 :ways #{:craft :smelt :gather :search} :explore true :ignore-zones? true :search-worth 100}}
         v (game/version-of p)
         price #(plan/plan-cost c v {:steps [] :gather %})]
     (with-redefs [ctx/mem (if explored (constantly {:explored explored}) ctx/mem)]
