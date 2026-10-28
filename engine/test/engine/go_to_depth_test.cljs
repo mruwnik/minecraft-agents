@@ -39,15 +39,17 @@
 
 ;; A body whose goal is far above and whose only way dives first: feet 40 at x 0, a ramp down one block a column to feet
 ;; 10 (x 30), 8 columns level, then up one a column to the goal at feet 60 (x 88). No sky light anywhere: under ground.
+(def dive-heights (concat [39] (range 38 8 -1) (repeat 8 9) (range 10 60)))
+
 (def dive
-  (let [heights (concat [39] (range 38 8 -1) (repeat 8 9) (range 10 60))]
-    (apply merge (map-indexed (fn [x y] (floor y x 0 x 0)) heights))))
+  (apply merge (map-indexed (fn [x y] (floor y x 0 x 0)) dive-heights)))
 
 (def top [88 60 0])
 
 ;; lit by block light: a 100-block walk in the dark is priced over the body's risk allowance (go-to stops :risky), and these
 ;; cases are about the depth bounds, not the risk
-(def buried {:blocks dive :seen :all :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 15]})
+;; a roof 3 over the feet all the way: a block-lit column seen open overhead reads as lit open land, not under ground
+(def buried {:blocks (apply merge dive (map-indexed (fn [x y] (floor (+ y 4) x 0 x 0)) dive-heights)) :seen :all :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 15]})
 
 (deftest a-buried-body-does-not-dive-to-reach-a-goal-far-above
   (async done
