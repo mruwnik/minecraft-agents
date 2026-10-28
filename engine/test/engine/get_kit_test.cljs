@@ -10,6 +10,7 @@
             [engine.fake.raw-world :as fake-raw]
             [engine.fetch-test :as f]
             [engine.game :as game]
+            [jobs.lib.death-spot :as death-spot]
             [engine.memory :as mem]
             [engine.perception :as perception]
             [jobs.items.obtain.bill :as bill]
@@ -104,9 +105,10 @@
   (is (= {:gather :no-plan} (:tried (bill/stop-data "iron_ingot" {:data {:tried {:gather :no-plan} :why "x"}})))))
 
 (deftest a-death-after-the-start-makes-the-memory-stale
-  (is (kit/stale? {:since 100} {:t 200}))
-  (is (not (kit/stale? {:since 300} {:t 200})))
-  (is (not (kit/stale? {:since 300} nil))))
+  (is (death-spot/died-after? {:t 200} 100))
+  (is (not (death-spot/died-after? {:t 200} 300)))
+  (is (not (death-spot/died-after? nil 300)))
+  (is (not (death-spot/died-after? {:t 200} nil))))
 
 (deftest two-pieces-from-carried-ingots-are-made-and-the-helmet-worn
   (async done

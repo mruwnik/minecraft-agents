@@ -1,5 +1,6 @@
 (ns jobs.items.get-kit
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.death-spot :as death-spot]
+            [jobs.lib.ready :as ready]
             [jobs.lib.storage :as storage]
             [clojure.string :as str]
             [engine.args :as a]
@@ -107,11 +108,6 @@
   (cond (= :continue e) :continue
         (and (= :done (:kind e)) (seq (:worn (:data e)))) nil
         :else (stop-of :nothing-possible {:reason :wear-failed} (contract/cause-key e))))
-
-(defn stale?
-  "Whether the body died (latest :died entry) after the job booked :since."
-  [m died]
-  (boolean (and died (:since m) (> (:t died) (:since m)))))
 
 (defn had?
   "Carried, worn, or an armour piece whose slot holds one at least as good."
@@ -318,7 +314,7 @@
                           (ctx/emit! c :kit.plan :info {:items (vec todo) :short short
                                                         :text (str "kit: getting " (str/join ", " todo)
                                                                    (when (seq short) (str " (needs " (str/join ", " (map (fn [[k n]] (str n " " k)) short)) " from the furnace)")))}))
-      (stale? m (ctx/latest c :died))
+      (death-spot/died-after? (ctx/latest c :died) (:since m))
       (do (ctx/update-mem! c restarted (ctx/now c))
           (ctx/emit! c :kit.resumed :info {:text "died since the kit began: starting again from what is carried and worn"})))
     (pace/steps!

@@ -1,5 +1,6 @@
 (ns jobs.items.obtain
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.death-spot :as death-spot]
+            [jobs.lib.ready :as ready]
             [jobs.lib.checks :as checks]
             [engine.contract :as contract]
             [engine.args :as a]
@@ -288,7 +289,7 @@
         died (ctx/latest c :died)]
     (cond
       (nil? (:since m)) (ctx/update-mem! c assoc :since (ctx/now c))
-      (and died (> (:t died) (:since m)))
+      (death-spot/died-after? died (:since m))
       (do (ctx/update-mem! c restarted (ctx/now c))
           (ctx/emit! c :obtain.resumed :info {:text "died since the obtain began: starting again from what is carried"}))))
   (await (if (:bill (:args c)) (bill/run! c) (pace/steps! c #(step! c)))))

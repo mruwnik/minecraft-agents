@@ -21,6 +21,11 @@
 (a/defargs settings
   {::near-death-hp {:default 6 :doc "Health at or under which a hit makes its spot count like a death." :spec (a/num-in 0 nil)}})
 
+(defn died-after?
+  "Whether the :died memory entry `died` (nil: none) is newer than `since`, the time a job booked at its start (nil: not booked)."
+  [died since]
+  (boolean (and died since (> (:t died) since))))
+
 (defn mob-cause?
   "Whether `cause` (the killer's name, else a damage type like fall or lava) is a mob the danger code knows; any other is a death by terrain."
   [p cause]
