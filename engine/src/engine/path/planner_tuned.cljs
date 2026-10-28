@@ -317,7 +317,7 @@
      (.-climbName table) (.-facing table) (.-floor table) (.-special table)
      (.-flowing table) (.-bubble table) (.-magma table) (.-dripleaf table) (.-openable table) (.-openState table)
      (.-openKind table) (.-doorHalf table) (.-activator table)
-     (.-attach table) (.-farmland table) (.-minY snapshot)
+     (.-attach table) (.-farmland table) (.-decays table) (.-minY snapshot)
      ;; the query
      (.-x from) (.-y from) (.-z from) (or-else (.-px from) (+ (.-x from) 0.5)) (or-else (.-pz from) (+ (.-z from) 0.5))
      (.-x goal) (.-y goal) (.-z goal) goal-range (* OCTILE-SLACK goal-range) near goal-unloaded

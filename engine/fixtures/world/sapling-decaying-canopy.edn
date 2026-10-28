@@ -1,0 +1,36 @@
+;; Card 352092c9 (trial: a 12-block fall at 13 hp while gathering jungle saplings in a felled tree's canopy). A canopy of
+;; jungle leaves (two layers, top at y 11) with no log; the body at 13 hp (food 8, no regeneration) stands on a stone column
+;; at its west edge (a neighbour's trunk; vines up its side), the plant spot on the ground.
+;; Should-succeed: leaves of no tree (persistent=false, distance=7) decay under a body, so go-to never stands it on them over a
+;; hurting drop: no fall; a go-to onto them gives up for health. Should-fail: attached leaves (persistent) stay a floor, and the
+;; gather and the go-to walk out onto the canopy. (A sapling may drop at the first dig, so the go-to cases hold the body over the leaves.)
+{:defaults
+ {:tags [:forestry :plant-sapling :go-to :fall]
+  :plot {:height 20 :floor "grass_block"}
+  :blocks [[:fill [9 0 16] [9 10 16] "stone"]
+           [:fill [8 0 16] [8 10 16] "vine[east=true]"]]
+  :body {:at [9.5 11 16.5] :yaw 270 :settle-s 2}
+  :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30] [:rcon "damage $BODY 7 minecraft:generic"]]
+  :limit-s 130}
+ :cases
+ [{:name "decaying-leaves-never-stood-on"
+   :blocks [[:fill [10 9 10] [22 10 22] "jungle_leaves[persistent=false,distance=7]"]]
+   :act [[:job (jobs.forestry.plant-sapling {:at #at [16 0 4] :species "jungle"})]]
+   :expect [{:event {:source :job :kind :obtain.gathering} :within-s 40 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes [:has "fall"]}} :for-s 120}]}
+  {:name "attached-leaves-walked-on"
+   :blocks [[:fill [10 9 10] [22 10 22] "jungle_leaves[persistent=true]"]]
+   :act [[:job (jobs.forestry.plant-sapling {:at #at [16 0 4] :species "jungle"})] [:until-pos {:x-min 11 :y-min 11} 90]]
+   :expect [{:event {:source :job :kind :obtain.gathering} :within-s 40 :of-job true}]}
+  {:name "go-to-onto-decaying-leaves-gives-up"
+   ;; watched on after the go-to ends: a body left on the leaves falls when they go
+   :idle-grace-s 110
+   :blocks [[:fill [10 9 10] [22 10 22] "jungle_leaves[persistent=false,distance=7]"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [16 11 16] :range 0})]]
+   :expect [{:event {:source :job :kind #{:stopped :failed}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes [:has "fall"]}} :for-s 120}]}
+  {:name "go-to-onto-attached-leaves-arrives"
+   :blocks [[:fill [10 9 10] [22 10 22] "jungle_leaves[persistent=true]"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [16 11 16] :range 0})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]}]}

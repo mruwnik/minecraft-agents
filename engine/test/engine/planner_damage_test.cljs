@@ -247,3 +247,20 @@
     (is (= 1 (cost (ledge-over "pointed_dripstone" {:vertical_direction "up" :thickness "tip" :waterlogged false} 5) :damage))))
   (testing "a stalactite (points down) is no landing hazard"
     (is (= 0 (cost (ledge-over "pointed_dripstone" {:vertical_direction "down" :thickness "tip" :waterlogged false} 5) :damage)))))
+
+;; card 352092c9: a one-wide bridge of leaves 10 blocks over the floor between two stone pillars. Leaves no log holds (the
+;; block's default state: distance 7, not persistent) decay under a body, so each stand on them costs its fall (7 hp); leaves
+;; of a standing tree are a plain floor.
+(defn bridge [props budget]
+  (run (pf/world {:fill [[0 64 0 2 73 2 "stone"] [8 64 0 10 73 2 "stone"] [3 73 1 7 73 1 "jungle_leaves" props]]})
+       (near 9 74 1) {:damageBudget budget} {:x 1 :y 74 :z 1}))
+
+(deftest decaying-leaves-cost-their-fall
+  (let [kept (bridge {:persistent true} 0.4)
+        hurt (bridge {} 0.4)
+        whole (bridge {} js/Infinity)]
+    (is (= "found" (:status kept)))
+    (is (= 0 (cost kept :damage)))
+    (is (not= "found" (:status hurt)))
+    (is (true? (:damageRefused hurt)))
+    (is (= (* 5 7) (cost whole :damage)))))
