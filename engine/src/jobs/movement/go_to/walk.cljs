@@ -44,7 +44,7 @@
             [jobs.lib.watch :as watch]
             [jobs.movement.go-to.air :as air]
             [jobs.movement.go-to.aim :as aim :refer [aimed here? in-seen-ground? look-along! guess-waypoint look-at-column! look-at-goal-air! hidden-in-ground? lookout pre-aim! sight-end see-cell]]
-            [jobs.movement.go-to.cut :refer [approaches approach-recorder tour tour-spent?]]
+            [jobs.movement.go-to.cut :refer [approaches approach-recorder jumped? tour tour-spent?]]
             [jobs.movement.go-to.detour :as detour]
             [jobs.movement.go-to.escalate-choose :as choose]
             [jobs.movement.go-to.escalation :as esc]
@@ -465,6 +465,8 @@
             nearer? (boolean (and target (< tdist (dec (get tbests target js/Infinity)))))
             _ (ctx/update-mem! c assoc :tour-walks (if (< left (dec best)) 0 (cond-> (:tour-walks (ctx/mem c) 0) frontier inc)))]
         (cond
+          (jumped? c) :again
+
           (= "arrived" status)
           (await (arrive! c pos))
 

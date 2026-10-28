@@ -58,7 +58,7 @@
     toward walk by walk, and to the edge of loaded land when that is the only way on. It returns :continue only while
     an escalation or put-back child is waiting on the world. A round that ran out of re-plans while each learned an unseen cell counts as progress (no try booked). Each fruitless round that plans again says so (info go-to.retrying: reason, try); each books a try, and a call whose :spend :tries (its own, or a caller's least) is used up
     gives up instead (a caller that re-aims itself passes {:tries 1}).
-  - A body moved 8 or more blocks in one tick (a teleport, a pearl) starts the call again from where it stands: the walk's counters go (info go-to.jumped).
+  - A body moved 8 or more blocks in one tick (a teleport, a pearl) ends the walk at once and starts the call again from where it stands: the walk's counters go (info go-to.jumped).
   - Gives up with the cause {:reason :unreachable :why ...}, data {:arrived false :why ... :text
     words ...}: limit-reached for :needs-health (:line :health) and :search-spent (:line :job-time); condition-failed
     for :goal-dangerous and :goal-unloaded; else (:explore-spent too) nothing-possible. :why is the planner's

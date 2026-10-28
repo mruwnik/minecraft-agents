@@ -1419,3 +1419,34 @@
     (is (not (:jumped (-> {} (step (at 0 64 0)) (step (at 0 58 0))))) "a fall of 6")
     (is (:jumped (-> {} (step (at 0 64 0)) (step (at 51 64 0)))) "a teleport")
     (is (:jumped (-> {} (step (at 0 64 0)) (step (at 51 64 0)) (step (at 51.2 64 0)))) "kept until the call restarts")))
+
+(deftest a-body-teleported-mid-walk-ends-the-walk-at-once-and-the-call-starts-again-from-there
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p] :as s} (setup {:blocks flat})
+              out (atom :not-done)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out {:pos [38 64 0] :range 0})))
+              jumped (atom false)
+              after (atom 0)]
+          ;; the fake steer keeps its own body, so the jump is shown to decide as an offset of this steer's poses, and set in the
+          ;; world for the steers after it
+          (.override (.-world p) "steer"
+                     (fn [token ^js a impl]
+                       (let [decide (.-decide a)
+                             off (atom 0)
+                             wrapped (fn [pose]
+                                       (when (pos? @off) (swap! after inc))
+                                       (when (and (not @jumped) (>= (.-x pose) 6))
+                                         (reset! jumped true)
+                                         (reset! off 14)
+                                         (swap! (fake/state p) assoc-in [:self :pos] [20 64 0]))
+                                       (decide (js/Object.assign #js {} pose #js {:x (+ (.-x pose) @off)})))]
+                       (impl token (js/Object.assign #js {} a #js {:decide wrapped})))))
+          (core/submit! eng '(recording-parent) {})
+          (await (tick-out! eng 30 (:step s)))
+          ((:stop s))
+          (is (= 1 (count (events-of s :go-to.jumped))) "the restart is announced once")
+          (is (zero? @after) (str "the walk ended on the jump pose itself; poses after it: " @after))
+          (is (= {:arrived true} @out) (pr-str @out))
+          (is (= [38 64 0] (at p))))))))

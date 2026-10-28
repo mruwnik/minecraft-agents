@@ -312,8 +312,8 @@
         decide (fn [js-pose]
                  (let [pose (pose-of js-pose)
                        _ (sample!)
-                       _ (when-let [on-pose (:on-pose c)] (on-pose pose))
-                       [state' {:keys [done controls yaw pitch warn]}] (decide-tick env @state pose)]
+                       stop (when-let [on-pose (:on-pose c)] (on-pose pose))
+                       [state' {:keys [done controls yaw pitch warn]}] (if stop [@state {:done stop}] (decide-tick env @state pose))]
                    (when gate
                      (doseq [k (remove (get-in @state [:gate :resolved] #{}) (get-in state' [:gate :resolved] #{}))]
                        (let [cell (wsight/floor-cell (nth steps k))]
@@ -475,7 +475,7 @@
   "Follow steps once. [result ms]: the executor's done map, or {:status :stuck ...} on a timeout,
   {:status :failed ...}; ms is the wall time of the steer acts. With a watch (see watch-stop), the walk also stops at a step
   boundary with {:status :replan ...} when the way ahead changed or a partial plan is due a refresh. (:on-pose c), when
-  set, is called with each tick's pose {:x :y :z ...} (go-to records its approach with it). A floor the plan lights
+  set, is called with each tick's pose {:x :y :z ...} (go-to records its approach with it); a done map it returns ends the walk. A floor the plan lights
   (:light) that the gate cannot see is lit by a torch (light!) and the walk goes on from its takeoff, within timeout-s
   of steering in all; light!'s other ends end the walk. Over a mask (go-to :unknown) the walk goes in legs that end
   before the first step into cells the body has not seen, looks at them there (look-ahead!) and goes on, or ends

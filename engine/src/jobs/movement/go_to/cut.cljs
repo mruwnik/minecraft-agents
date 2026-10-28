@@ -19,7 +19,10 @@
   walk updates it every tick and a memory write is an event."
   (atom {}))
 
-(def jump-blocks "Blocks between two ticks' poses that no walk, fall or knockback covers: a teleport." 8)
+(def jump-blocks
+  "Blocks between two ticks' poses that no walk, fall or knockback covers: a teleport. A speed bound, not a radius: on-pose
+  runs once per physics tick, and a body falls at most about 3.9 blocks a tick (terminal velocity), sprints under 0.4."
+  8)
 
 (defn approach-step
   "Approach record m after a tick's pose {:x :y :z ...} at d from the goal: :last-dist d, :closest the least, and :explored
@@ -36,11 +39,13 @@
 
 (defn approach-recorder
   "The walk's :on-pose for a call to pos: while the round is alive, keeps approaches' record (approach-step), so a cut walk
-  leaves where the cut found it and the tour's price can be checked."
+  leaves where the cut found it and the tour's price can be checked. Once the record says :jumped it returns the done map
+  {:status :jumped}, which ends the walk at once (jobs.lib.walk/walk-lit!) instead of walking the old plan on."
   [c pos]
   (fn [pose]
     (when (ctx/alive? c)
-      (swap! approaches update (:id c) approach-step pose (u/dist pose pos)))))
+      (when (:jumped (get (swap! approaches update (:id c) approach-step pose (u/dist pose pos)) (:id c)))
+        {:status :jumped}))))
 
 (defn jumped?
   "Whether the body was moved far in one tick (a teleport, a pearl) since the call's record began."
