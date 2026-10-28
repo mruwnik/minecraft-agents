@@ -800,7 +800,7 @@
                                     look/glimpse? (constantly true)
                                     sh-sense/block-light-at (fn [_ {:keys [x]}] (if (zero? x) feet-light 0))
                                     spawn-light/hall-at? (constantly true)]
-                        (settings/with-settings {::price/risk-share 0.1}
+                        (settings/with-settings {:jobs.lib.cost.risk/risk-share 0.1}
                           #(do (is (< (price/allowed c) (:hp (risk/estimate c far-goal {:plan (straight-plan c far-goal)})) 19))
                                (planned-status c far-goal)))))]
     (is (= [:ok :cheaper-than-staying] (let [[k _ {:keys [reason]}] (status-with 0)] [k reason])) "staying in the dark hall costs its spawns for ever")
