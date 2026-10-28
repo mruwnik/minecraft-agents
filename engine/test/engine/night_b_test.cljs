@@ -27,6 +27,8 @@
             [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.targets :as targets]
             [jobs.lib.threats :as threats]
+            [jobs.lib.tools :as tools]
+            [jobs.survival.plug-way :as way]
             [jobs.survival.dig-pit-site :as pit-site]
             [jobs.survival.log-out :as log-out]
             [jobs.survival.night :as night]
@@ -396,20 +398,45 @@
     (is (not (pit-site/pit-site? (tu/fake {:blocks stone}) site)) "no pickaxe: stone cannot be dug")
     (is (pit-site/pit-site? (tu/fake {:blocks stone :inventory [{:name "iron_pickaxe" :count 1}]}) site))))
 
-;; a site is priced by its walk, the toll along it and the toll of known mobs over the pit's dig: a zombie by the feet
-;; costs more over the dig than a few blocks of walk; one as good as gone costs less than any walk, so the feet stay the site
-(deftest a-relocation-site-weighs-the-walk-against-the-toll-over-the-dig
+;; a site is priced by its walk, the toll along it and the toll of known mobs over the pit's stay (pit-s: the dig and the roof
+;; placement, as dig-pit's quote has them): a zombie by the feet costs more over the stay than a few blocks of walk; one as
+;; good as gone costs less than any walk, so the feet stay the site
+(deftest a-relocation-site-weighs-the-walk-against-the-toll-over-the-pit
   (let [dirt (into {} (for [x (range -12 13) z (range -12 13)] [(str x ",63," z) "dirt"]))
         p (tu/seeing-all (tu/fake {:blocks dirt}))
-        c {:primitives p :id "j" :slots [] :engine {:warned (atom #{})} :view (fn [] {:now 0 :data {}})}
+        c {:primitives p :id "j" :args {:for :night} :slots [] :engine {:warned (atom #{})} :view (fn [] {:now 0 :data {}})}
         per-weight (cost/threat-factor {:health 20 :equipment nil :weapon nil} "zombie" 1)
         site (fn [toll] (with-redefs [threats/known-threats (constantly [{:mob "zombie" :pos {:x 0.5 :y 64 :z 0.5} :weight (/ toll per-weight)}])]
                           [(pit-site/relocation-site c) (threats/danger-near-fn c)]))
-        [light danger] (site 2)
+        [light danger] (site 0.5)
         [gone] (site 1e-6)]
-    (is (not= {:x 0 :y 64 :z 0} light) "a toll of 2 s a second over the dig is dearer than the walk off")
+    (is (< 1 (pit-site/pit-s c {:x 0 :y 64 :z 0}) 20) "a pit's stay is some seconds: the dig and a placement")
+    (is (not= {:x 0 :y 64 :z 0} light) "a toll of 0.5 s a second over the pit is dearer than the walk off")
     (is (nil? (danger light)) (pr-str light))
     (is (= {:x 0 :y 64 :z 0} gone))))
+
+(deftest a-pit-s-is-the-dig-of-its-cells-and-one-roof-placement
+  (let [p (tu/seeing-all (tu/fake {:blocks (into {} (for [x (range -2 3) z (range -2 3) y [62 63]] [(str x "," y "," z) "dirt"]))}))
+        c {:primitives p :args {:for :night}}
+        dig (* 2 (/ (tools/clear-ms p "dirt") 1000))]
+    (is (= (+ dig (way/place-s c)) (pit-site/pit-s c {:x 0 :y 64 :z 0})))))
+
+;; two sites 4 either side of the body, ground between them that is no site: the walk past a mob's field to one of them
+;; is dearer than the walk to the other, whose stay is as free; with no mob the tie goes west
+(deftest a-relocation-site-by-the-walk-toll-takes-the-side-without-the-mob-on-the-way
+  (let [ground (into {} (for [x (range -8 9) z (range -2 3)] [(str x ",63," z) (if (<= -3 x 3) "obsidian" "dirt")]))
+        p (tu/seeing-all (tu/fake {:blocks ground :inventory [{:name "iron_pickaxe" :count 1}]}))
+        c {:primitives p :id "j" :args {:for :night} :slots [] :engine {:warned (atom #{})} :view (fn [] {:now 0 :data {}})}
+        site (fn [toll-fn] (with-redefs [threats/danger-near-fn (fn [_] (fn [f] {:toll (toll-fn (:x f))}))] (pit-site/relocation-site c)))]
+    (is (= -4 (:x (site (constantly 0)))) "no mob: the tie goes to the first site")
+    (is (= 4 (:x (site #(if (<= -3 % -1) 1 0)))) "a field on the west way: the east site")))
+
+(deftest walk-toll-s-sums-the-toll-at-each-cell-of-the-line-and-not-the-cell-it-starts-from
+  (let [from {:x 0 :y 64 :z 0}
+        toll (fn [f] {:toll (if (<= 2 (:x f) 3) 10 0)})]
+    (is (= (* 2 10 cost/least-block-s) (pit-site/walk-toll-s toll from {:x 5 :y 64 :z 0})) "cells 2 and 3 of the walk east")
+    (is (zero? (pit-site/walk-toll-s toll from {:x -5 :y 64 :z 0})) "none west")
+    (is (zero? (pit-site/walk-toll-s (constantly {:toll 10}) from from)) "no walk, no toll")))
 
 (deftest with-no-pit-site-left-the-night-digs-a-niche-into-the-hill
   (async done

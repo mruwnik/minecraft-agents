@@ -15,6 +15,7 @@
             [jobs.lib.walk-pick :as walk-pick]
             [jobs.lib.walk-risk :as walk-risk]
             [jobs.survival.dig-in-cells :as dig-cells]
+            [jobs.survival.plug-way :as way]
             [jobs.survival.shut-in-night :as shut-night]))
 
 (a/defargs settings
@@ -30,16 +31,20 @@
       (dig-look/rock-name p cell)))
 
 (defn pit-s
-  "Seconds a pit dug at feet cell f takes before a plan is made: the dig time (tools/clear-ms) of a straight pit's cells, stone for one nothing is known of, nothing for one seen open, 2 deep, the least a pit is."
-  [p f]
-  (/ (reduce + (map #(let [n (or (priced-name p %) "stone")] (if (solid/solid? n) (tools/clear-ms p n) 0)) (mapcat :dig (:steps (dig-cells/pit-steps f nil 2))))) 1000))
+  "Seconds a pit dug at feet cell f takes before a plan is made, as dig-pit's quote has it for a straight pit: the dig time
+  (tools/clear-ms) of its cells, stone for one nothing is known of, nothing for one seen open, 2 deep (the least a pit is), and the one roof placement (way/place-s of c's call)
+  that shuts it. The walk in is priced apart (walk-pick, walk-toll-s)."
+  [c f]
+  (let [p (:primitives c)]
+    (+ (/ (reduce + (map #(let [n (or (priced-name p %) "stone")] (if (solid/solid? n) (tools/clear-ms p n) 0)) (mapcat :dig (:steps (dig-cells/pit-steps f nil 2))))) 1000)
+       (way/place-s c))))
 
 (defn stay-toll-s
   "Seconds the known mobs the body would flee cost a pit dug at feet cell f (danger-near, threats/danger-near-fn of c):
   their toll there over pit-s."
-  [p danger-near f]
+  [c danger-near f]
   (let [toll (:toll (danger-near f) 0)]
-    (if (zero? toll) 0 (* toll (pit-s p f)))))
+    (if (zero? toll) 0 (* toll (pit-s c f)))))
 
 (defn walk-toll-s
   "Seconds the known mobs the body would flee cost a walk from `from` to feet cell f: their toll at each cell of walk-risk/way
@@ -73,10 +78,15 @@
   (let [here (sh-sense/feet (:primitives c))]
     (boolean (some #(<= (u/dist here (:pos (:data %))) (shut-night/futile-radius)) (ctx/entries c :night-exposed)))))
 
+(defn clear-of?
+  "Whether feet cell f is at least site-radius+1 from every one of the failed sites (entries of failed)."
+  [fails f]
+  (every? #(>= (u/dist (:pos %) f) (inc (site-radius %))) fails))
+
 (defn clear-of-failed?
   "Whether feet cell f is at least site-radius+1 from every failed site."
   [c f]
-  (every? #(>= (u/dist (:pos %) f) (inc (site-radius %))) (failed c)))
+  (clear-of? (failed c) f))
 
 (defn pit-site?
   "Whether feet cell f looks like a place a pit can be dug, by what a player sees from the surface: standing room, dry
@@ -121,6 +131,7 @@
                                dz (range (- reach) (inc reach))
                                :when (<= (+ (* dx dx) (* dz dz)) (* reach reach))]
                            [dx dz]))
+        fails (failed c)
         walk #(walk-pick/walk-s from {:pos %})]
     (loop [[[dx dz] & more :as left] offsets best nil]
       (if (or (empty? left) (and best (<= (:price best) (walk {:x (+ x dx) :z (+ z dz)}))))
@@ -128,8 +139,9 @@
         (recur more
                (reduce (fn [best dy]
                          (let [f {:x (+ x dx) :y (+ y dy) :z (+ z dz)}]
-                           (if (and (clear-of-failed? c f) (pit-site? p f) (not (and free? (zone-refused? c f))))
-                             (let [s (+ (walk f) (walk-toll-s danger-near from f) (stay-toll-s p danger-near f))]
+                           (if (and (clear-of? fails f) (pit-site? p f) (not (and free? (zone-refused? c f))))
+                             (let [w (walk f)
+                                   s (if (and best (>= w (:price best))) ##Inf (+ w (walk-toll-s danger-near from f) (stay-toll-s c danger-near f)))]
                                (if (or (nil? best) (< s (:price best))) {:cell f :price s} best))
                              best)))
                        best [0 -1 1 -2 2]))))))
@@ -143,7 +155,7 @@
     (and (= :here (:at fresh)) (pit-site? (:primitives c) (sh-sense/feet (:primitives c)))) false
     (= m (:cell fresh)) true
     :else (let [danger-near (threats/danger-near-fn c)
-                priced (fn ^:async priced [f] (when-let [q (await (rooms/route-cost c {:pos f :range 0}))] (+ q (stay-toll-s (:primitives c) danger-near f))))
+                priced (fn ^:async priced [f] (when-let [q (await (rooms/route-cost c {:pos f :range 0}))] (+ q (stay-toll-s c danger-near f))))
                 qm (await (priced m))
                 qf (when (:cell fresh) (await (priced (:cell fresh))))]
             (boolean (and qm (or (nil? qf) (<= qm qf)))))))

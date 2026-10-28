@@ -116,26 +116,26 @@
         s (when (night/night? c) (site/site c))]
     (if (and (night/night? c) (not= :here (:at s)))
       (way/quote-of c (if s
-                        (+ (* (u/dist (sh-sense/feet (:primitives c)) (:cell s)) (settings/get settings ::walk-s-per-block)) (site/pit-s (:primitives c) (:cell s)))
+                        (+ (* (u/dist (sh-sense/feet (:primitives c)) (:cell s)) (settings/get settings ::walk-s-per-block)) (site/pit-s c (:cell s)))
                         ##Inf)
                     (settings/get settings ::job-time-s))
     (way/quote-of c (if stop
                       ##Inf
                       (+ (if plan
                            (+ (dig-seconds c plan) (* (way/place-s c) (inc (count (:plugs plan)))))
-                           (site/pit-s (:primitives c) (sh-sense/feet (:primitives c))))
+                           (site/pit-s c (sh-sense/feet (:primitives c))))
                          (if plan (way/zone-penalty c {:dig (concat (:prep plan) (mapcat :dig (:steps plan))) :plug (conj (:plugs plan) (:roof plan))}) 0)))
                   (settings/get settings ::job-time-s)))))
 
 (defn exposed-s
   "Seconds the body stays open to a shooter before the pit shuts it in: the dig, and plug-way's ::unsensed-s for each cell
-  round it the body never sensed (a gap there fails the pit); dig-pit-site/pit-s (a straight pit's dig time) with no plan yet, ##Inf when it cannot be done."
+  round it the body never sensed (a gap there fails the pit); dig-pit-site/pit-s (a straight pit's dig and roof) with no plan yet, ##Inf when it cannot be done."
   [c]
   (let [{:keys [plan stop]} (assess c)
         feet (sh-sense/feet (:primitives c))]
     (cond
       stop ##Inf
-      (nil? plan) (site/pit-s (:primitives c) feet)
+      (nil? plan) (site/pit-s c feet)
       :else (let [cells (concat (:prep plan) (mapcat :dig (:steps plan)))]
               (+ (dig-seconds c plan)
                  (* (way/unsensed-s) (pit/unsensed-shell (:primitives c) cells (set (into cells [feet (update feet :y inc)])))))))))
@@ -182,7 +182,7 @@
   (if-let [start (site/pit-start c)]
     (let [r (await (dig-leave/climb! c {:start start} cell))]
       (if (map? r) (fail! c :trapped "could not climb out of the failed pit") :continue))
-    (let [e (waits/waiting-out c (await (ctx/call c :walk 'jobs.movement.go-to {:pos cell :range 0 :stay-s (site/pit-s (:primitives c) cell)
+    (let [e (waits/waiting-out c (await (ctx/call c :walk 'jobs.movement.go-to {:pos cell :range 0 :stay-s (site/pit-s c cell)
                                                                    :settings {:jobs.movement.go-to.tuning/goal-danger :end}})))]
       (cond (= :continue e) :continue
             (= :goal-dangerous (or (:why (:data e)) (contract/cause-key e))) (fail! c :no-site "the ground for a pit lies in a known mob's field, dearer than the walk is worth")
