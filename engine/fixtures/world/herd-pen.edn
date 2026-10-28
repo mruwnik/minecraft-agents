@@ -44,6 +44,21 @@
    :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 240 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
            [:block [18 1 16] "oak_fence_gate[open=false]"]]}
+  ;; card 46490387: a second gate east; the west gate, straight nearest the body, opens into a walled lane closed at its far end,
+  ;; (fence, so no perch over the pen's fence) so its walk goes through the pen: herd picks the gate by go-to's quote, leads round to the east one and brings the cow
+  {:name "nearest-gate-walled-off-the-other-gate-used"
+   :blocks [[:fill [18 0 13] [24 0 19] "oak_fence"]
+            [:fill [19 0 14] [23 0 18] "air"]
+            [:set [18 0 16] "oak_fence_gate[facing=east,open=false]"]
+            [:set [24 0 16] "oak_fence_gate[facing=west,open=false]"]
+            [:fill [13 0 15] [17 0 15] "oak_fence"]
+            [:fill [13 0 17] [17 0 17] "oak_fence"]
+            [:set [13 0 16] "oak_fence"]]
+   :act [[:summon "cow" [10.5 0 18.5]]
+         [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 280 :of-job true}]
+   :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
+           [:block [24 0 16] "oak_fence_gate[open=false]"] [:block [18 0 16] "oak_fence_gate[open=false]"]]}
   ;; the pen and the cell outside its gate are behind the body (yaw 90, facing west), so they start unseen: herd looks, then brings the cow
   {:name "pen-behind-the-body-is-looked-at-then-cow-brought"
    :body {:at [12.5 0 16.5] :yaw 90 :inventory [["lead" 4]]}
