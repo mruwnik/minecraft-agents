@@ -86,8 +86,8 @@
     (is (< (* 4 (hp st/noon)) (hp st/night)))))
 
 (deftest a-cell-the-sky-reaches-dimly-spawns-by-day
-  ;; a deep pit open to the sky with sky light 3 is dark at noon (3 < look/dark-light), one with sky light 15 is lit
-  (let [p (:primitives (ready-test/ctx-of (assoc night-hut :time st/noon)))
+  ;; a cell on open ground the sky reaches with sky light 3 is dark at noon (3 < look/dark-light), one with sky light 15 is lit
+  (let [p (:primitives (ready-test/ctx-of (assoc ready-test/open-night :time st/noon)))
         cell (sh-sense/feet p)
         chance #(with-redefs [sh-sense/sky-reaches-from-above? (constantly true)
                               sh-sense/sky-light-at (constantly %)

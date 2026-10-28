@@ -2,14 +2,15 @@
   "Where mobs may spawn on a walk or a stay, by the light the body knows (Q334): the chance a second at a cell
   (chance-at), the seconds a walk spends where one could spawn (dark-seconds) and the mobs met spawning on timed cells
   (spawns-over) or held at one (spawns-at), and a walk's exposure for the readiness checks. The one spawn count
-  jobs.lib.walk-risk, the flee search, a way out of a shelter, a held spot, readiness and bed-down price by (jobs.lib.cost/death-chance's :spawns). A roofed dark cell counts only in a dark hall
-  (hall-at?, Q345)."
+  jobs.lib.walk-risk, the flee search, a way out of a shelter, a held spot, readiness and bed-down price by (jobs.lib.cost/death-chance's :spawns). A dark cell counts only where a mob spawns
+  beyond 24 blocks and walks to it (Q345): a roofed one in a dark hall (hall-at?), one under the sky outside a walled yard."
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.solid :as solid]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -29,6 +30,17 @@
   [p to]
   (sh-inside/dark-hall-at? p (hall-cell p to)))
 
+(defn walled-yard?
+  "Whether the dark sky-reached cell lies in a walled yard (sh-inside/walled-off-at?). The flood runs only when a seen
+  wall stands within sh-inside/spawn-free-radius of it straight along each axis at its height: a yard wider has a cell
+  beyond that radius."
+  [p cell]
+  (let [walled? (fn [[dx dz]] (some (fn [d] (let [n (u/seen-name p (-> cell (update :x + (* d dx)) (update :z + (* d dz))))]
+                                             (cond (nil? n) :open (solid/solid? n) :wall)))
+                                   (range 1 (inc sh-inside/spawn-free-radius))))]
+    (and (every? #(= :wall (walled? %)) [[1 0] [-1 0] [0 1] [0 -1]])
+         (sh-inside/walled-off-at? p cell))))
+
 (defn seen-light
   "The block light of cell, nil when the body has not seen it and cannot see it by turning to it."
   [p cell]
@@ -38,7 +50,7 @@
 
 (defn chance-at
   "The spawn chance per second at `cell`: a seen cell by its light (its own sky light; a roofed cell that leaves dark is
-  dark only in a dark hall), an unseen one at the chance it is dark (look/unseen-lit-chance); under caves-free? an unseen one
+  dark only in a dark hall, one under the sky only outside a walled yard, walled-yard?), an unseen one at the chance it is dark (look/unseen-lit-chance); under caves-free? an unseen one
   only at the chance full day would light it and now does not. subtract: the sky's darkening to judge it by (default:
   now; 0: full day)."
   ([p cell caves-free?] (chance-at p cell caves-free? nil))
@@ -53,7 +65,7 @@
      (cond
        known (let [sky (if (look/lit-light? 0 (or sky-light 0) darkening) 15 0)]
                (cost/spawn-chance [(:x cell) (:y cell) (:z cell)]
-                                  {:light (constantly {:block block :sky (cond (or reaches (= 15 sky)) sky (and (< block (look/dark-light)) (hall-at? p cell)) 0 :else 15)})}))
+                                  {:light (constantly {:block block :sky (cond (= 15 sky) 15 (and (< block (look/dark-light)) (if reaches (not (walled-yard? p cell)) (hall-at? p cell))) 0 :else 15)})}))
        :else (let [now (look/unseen-lit-chance p cell darkening)
                    ;; caves-free? frees the dark full day leaves too: the chance left is that of dark only the sky lifts
                    dark (if caves-free? (max 0 (- (look/unseen-lit-chance p cell 0) now)) (- 1 now))]
