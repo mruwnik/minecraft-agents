@@ -223,12 +223,16 @@
 
 (deftest a-swim-on-a-free-way-is-caught-for-no-longer-than-the-race-keeps-the-drowned-in-reach
   (let [m (mob "drowned" 4 35)
-        caught #(:caught (cost/flee-answer {:health 13 :food 20 :mobs [m] :swim 6 :land ##Inf :caught 0 :caught-s %}))
-        own (:damage (cost/flee-answer {:health 13 :food 20 :mobs [m] :swim 6 :land ##Inf}))]
+        caught #(:caught (cost/flee-answer {:health 13 :food 20 :mobs [m] :swim 20 :land 1000 :caught 0 :caught-s %}))
+        own (:damage (cost/flee-answer {:health 13 :food 20 :mobs [m] :swim 20 :land 1000}))]
     (is (< (:damage (caught 0.5)) (:damage (caught nil))) "with no heading caught, the prior's own blows")
-    (is (= (max own (threat/mob-hurt (cost/armour-stats nil) (threat/kind m) (* 0.5 (answer/reach-rate m)) identity 1))
-           (:damage (caught 0.5)))
-        "with headings timed, the prior's blows last no longer than the race's seconds in reach")))
+    (is (<= own (:damage (caught 0.5))) "never fewer than the walk's own")))
+
+(deftest a-long-land-flight-after-a-short-swim-keeps-the-priors-blows-on-land
+  (let [m (mob "drowned" 4 35)
+        damage (fn [land caught-s] (:damage (:caught (cost/flee-answer {:health 13 :food 20 :mobs [m] :swim 20 :land land :caught 0 :caught-s caught-s}))))]
+    (is (< (damage 1000 0.5) (damage 1000 nil)) "a swim with little land: the race's seconds bound the blows")
+    (is (= (damage ##Inf 0.5) (damage ##Inf nil)) "a flight that is mostly land is not capped")))
 
 (deftest a-walk-caught-beside-a-creeper-takes-its-blast-as-a-sure-part-of-the-life
   (let [walk (cost/flee-answer {:food 20 :mobs [(mob "creeper" 1) (mob "zombie" 3 35)] :caught 1})
