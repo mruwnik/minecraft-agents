@@ -8,6 +8,7 @@
             [engine.path.fixture :as fx]
             [engine.path.planner.base :as base]
             [engine.path.space :as space]
+            [engine.perception.store :as store]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.sight :as ws]))
@@ -162,6 +163,18 @@
         steps (wplan/path-steps pw #js {:steps (clj->js (map (fn [x] {:x x :y 64 :z 0 :h 0 :move 1 :px (+ x 0.5) :pz 0.5})
                                                             (range 2 8)))})]
     (is (= [5] (keep #(when (:unseen-floor %) (:x %)) steps)))))
+
+;; a ledge's own block hides the column under its lip: look-ahead! guesses such a cell rock (the mask's blocked Set reads
+;; it stone), and a drop off the ledge onto it was walked ungated: the body fell to the ground
+(deftest a-floor-read-as-stone-but-never-seen-is-marked
+  (let [pw (masked-pw [[0 63 0 9 63 0 "stone" {}]] #{})
+        seen (js/Uint16Array. 4096)]
+    (doseq [x (range 16) z (range 16)] (aset seen (store/cell-index x 63 z) 1))
+    (aset seen (store/cell-index 5 63 0) 0)
+    (set! (.-known (.-unknown (.-snapshot pw))) (fn [cx sy cz] (when (= [0 3 0] [cx sy cz]) seen)))
+    (let [steps (wplan/path-steps pw #js {:steps (clj->js (map (fn [x] {:x x :y 64 :z 0 :h 0 :move 1 :px (+ x 0.5) :pz 0.5})
+                                                              (range 2 8)))})]
+      (is (= [5] (keep #(when (:unseen-floor %) (:x %)) steps))))))
 
 (deftest a-plan-over-an-unmasked-snapshot-has-no-marks
   (let [pw #js {:snapshot (fx/fixture-snapshot {:fill [[0 63 0 9 63 0 "stone" {}]]})

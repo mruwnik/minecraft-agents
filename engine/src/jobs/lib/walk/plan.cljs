@@ -4,6 +4,7 @@
   (:require [engine.ctx :as ctx]
             [engine.path.executor :as executor]
             [engine.path.planner-tuned :as planner]
+            [engine.perception.store :as store]
             [jobs.lib.breath :as breath]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
@@ -131,14 +132,20 @@
 
 (defn unknown-floor-fn
   "With a mask on pw's snapshot (.unknown, its unseen cells read as the mask's id): a fn [x y z] true for a floor cell the
-  mask hides under a stand that stands on its floor (not in a door's lower half or a climbable, whose floor the planner
-  does not ask for); nil without a mask."
+  body never saw under a stand that stands on its floor (not in a door's lower half or a climbable, whose floor the planner
+  does not ask for); nil without a mask. A cell the mask's memory (.known) holds no sight of counts too, though it reads
+  stone (blocked, the rock guess): a guessed floor is gated as any unseen one."
   [^js pw]
   (when-let [^js u (some-> pw .-snapshot .-unknown)]
-    (let [^js snapshot (.-snapshot pw) ^js table (.-table pw) id (.-id u)]
+    (let [^js snapshot (.-snapshot pw) ^js table (.-table pw) id (.-id u) known (.-known u)
+          never-seen? (fn [x y z]
+                        (or (== id (.stateAt snapshot x y z))
+                            (and (fn? known)
+                                 (let [^js ids (known (bit-shift-right x 4) (bit-shift-right y 4) (bit-shift-right z 4))]
+                                   (or (nil? ids) (zero? (aget ids (store/cell-index x y z))))))))]
       (fn [x y z]
         (let [own (.stateAt snapshot x (inc y) z)]
-          (and (== id (.stateAt snapshot x y z))
+          (and (never-seen? x y z)
                (not (== 1 (aget (.-doorHalf table) own)))
                (zero? (aget (.-climb table) own))))))))
 
