@@ -22,6 +22,7 @@
             [engine.triggers :as triggers]
             [jobs.survival.get-food.report :as report]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [jobs.lib.food-animals :as animals]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
@@ -589,7 +590,7 @@
                 {:keys [eng seen]} (setup {:time 6000 :self {:food 17 :health 20}} :step-ms 5 :other-notes note :perceive? true)]
             (await (pick-test/with-death-chance death-chance
                      (fn ^:async r []
-                       (await (one-round! eng {:carry 60}))
+                       (await (one-round! eng {:carry 60 :explore {:within 24}}))
                        (loop [n 0] (when (and (< n 80) (not-any? #(= :noted-walk (:slot %)) (events-of seen :child_started)))
                          (await (core/tick! eng))
                          (recur (inc n)))))))
@@ -1172,7 +1173,8 @@
   (let [benefit (fn [food carry] (let [{:keys [p]} (setup {:self {:food food}})] (animals/search-benefit {:primitives p :args {:carry carry}})))]
     (is (zero? (benefit 20 0)) "fed and asked to carry nothing: no walk is worth it")
     (is (pos? (benefit 20 60)) "fed but short of the 3-day reserve")
-    (is (< (benefit 8 0) (benefit 2 0)) "the hungrier, the more a walk to food is worth")))
+    (is (< (benefit 8 0) (benefit 2 0)) "the hungrier, the more a walk to food is worth")
+    (is (= (cost/food-search-worth 60) (benefit 13 60)) "fed with an empty pack: the whole reserve it lacks, as find-spot prices it, not one rabbit kill")))
 
 (deftest the-meat-of-a-kill-is-worth-more-hunted-than-from-a-working-pen
   (let [benefit (fn [world] (let [{:keys [p]} (setup (merge {:self {:food 20}} world))]

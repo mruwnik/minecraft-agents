@@ -19,7 +19,7 @@
   water within 4, when water is in range). A patch of 8 or more is tried at every fourth corner. Reads blocks only: it never digs or marks
   anything. A patch whose seen crop-cell light (block or sky) is under 9 is skipped, unless the body carries torches or coal and sticks to light it (:dark? true on the spot; jobs.farm.grow lights it). A scan reads at most jobs.lib.patch's ::max-reads blocks, then settles for the best spots so far. It never walks to the spot: a
   parent does.
-  The search is one jobs.explore.search child with :patch, its walks priced against a 3-day food reserve (cost/food-point-worth x cost/food-reserve-points): it looks round and scans the area round :center (or the body); while no patch
+  The search is one jobs.explore.search child with :patch, its walks priced against a 3-day food reserve (cost/food-search-worth): it looks round and scans the area round :center (or the body); while no patch
   is found it walks that job's legs and scans where each ends, and stops at the first patch.
   With a :plan the patch is as big as the plan's cells in x and z, the farmland score counts only when the plan has crops or farmland, and
   the plan's own cells are not in the way.
@@ -103,7 +103,7 @@
   [c]
   (let [a (merge (settings/job-defaults (quote jobs.farm.find-spot) args) (:args c))]
     (if-let [patch (patch-of c a)]
-      (let [e (await (child/run!* c :search 'jobs.explore.search (cond-> {:patch patch :worth (- (* (cost/food-point-worth) cost/food-reserve-points) (cost/trip))} (:center a) (assoc :center (:center a)))))]
+      (let [e (await (child/run!* c :search 'jobs.explore.search (cond-> {:patch patch :worth (cost/food-search-worth cost/food-reserve-points)} (:center a) (assoc :center (:center a)))))]
         (if (= :continue e)
           :continue
           (let [res (:data e)

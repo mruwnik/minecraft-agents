@@ -5,7 +5,7 @@
 ;; Should-succeed: a starving body past one give-up widens its hunt radius (24 -> 48) and kills a cow 40 blocks off; the
 ;; give-ups widen the radius in the the :no-food ending text (24, 72); an explore search runs for a body with a stale give-up while it
 ;; is starving or asked for a :carry; a melon seen is dug and eaten; a chest booked with bread 100 blocks off is walked to;
-;; 3 cows lose one, 2 are kept; a calf in sight does not end the search, the herd beyond is found and hunted.
+;; a fed body with an empty pack searches for the 3-day reserve and hunts cows 56 blocks off; 3 cows lose one, 2 are kept; a calf in sight does not end the search, the herd beyond is found and hunted.
 ;; A fragile body (hp 6 or less) waits sheltered at night, so the night cases take only 8 damage (get-food-fragile.edn covers the fragile stop).
 ;; Should-fail: a night body that is not
 ;; starving does not search; a booked chest holding cobblestone is not visited.
@@ -60,6 +60,14 @@
          [:job (jobs.survival.get-food {:explore true})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :explore}} :within-s 150}
             {:event {:source :job :kind :food.killed} :within-s 150}]
+   :limit-s 180}
+  {:name "fed-body-with-an-empty-pack-searches-for-the-reserve-and-hunts-cows-56-away"
+   :time :day :time-why :dawn-decision
+   :plot {:height 6 :length 96 :width 32 :light :sky}
+   :body {:at [16.5 0 16.5]}
+   :act [[:summon "cow" [72.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [74.5 0 14.5] "{NoAI:1b}"] [:summon "cow" [74.5 0 18.5] "{NoAI:1b}"]
+         [:job (jobs.survival.get-food {})]]
+   :expect [{:event {:source :job :kind :food.killed} :within-s 150}]
    :limit-s 180}
   {:name "baby-in-sight-does-not-end-the-search-for-the-herd-beyond"
    :plot {:height 6 :length 96 :width 32}

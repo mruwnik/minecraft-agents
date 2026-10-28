@@ -262,6 +262,11 @@
   []
   (settings/get settings ::food-worth-per-point))
 
+(defn food-search-worth
+  "Seconds a search for food is worth while the pack lacks `short` hunger points: food-point-worth each, less one trip."
+  [short]
+  (max 0 (- (* (food-point-worth) short) (trip))))
+
 (defn food-worth
   "Seconds reaching food is worth to a body with `food` points: rising as the bar falls, 0 from ::food-worth-from up."
   [food]

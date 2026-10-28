@@ -84,9 +84,12 @@
   (meat-benefit c (meat (:what n))))
 
 (defn search-benefit
-  "Seconds a search for food is worth the body: the least meat-benefit among the food animals, a find being any of them."
+  "Seconds a search for food is worth the body: the hunger worth of reaching food, or cost/food-search-worth of the
+  points the pack lacks of the :carry reserve."
   [c]
-  (apply min (map #(meat-benefit c %) (vals meat))))
+  (let [p (:primitives c)
+        short (max 0 (- (:carry (:args c) food-cost/reserve-points) (foods/stock-points (u/inventory p))))]
+    (max (cost/food-worth (.-food (.self p))) (cost/food-search-worth short))))
 
 (defn noted-targets
   "The food animals a :seen note (any body's) places anywhere whose meat may be worth the walk (noted-benefit over

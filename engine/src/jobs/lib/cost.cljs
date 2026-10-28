@@ -232,6 +232,7 @@
 (def crop-worth value/crop-worth)
 (def expected-drops value/expected-drops)
 (def food-point-worth value/food-point-worth)
+(def food-search-worth value/food-search-worth)
 (defn trip [] (value/trip))
 (def field-share farm/share)
 (def ripe-chance farm/ripe-chance)
