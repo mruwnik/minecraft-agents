@@ -442,6 +442,14 @@
     #{} :look
     #{[15 64 0]} :ok))
 
+(deftest an-unseen-cell-a-look-round-already-looked-at-is-priced-unseen-not-looked-at-again
+  (are [looked expected] (= expected (with-redefs [sh-sense/seen-cell? (fn [_ c] (not= outside (select-keys c [:x :y :z])))
+                                                   sense/round-looked (constantly looked)
+                                                   lib-look/look-shows? (constantly true)]
+                                       (kind (ready/safe-at (constantly outside)) open-night)))
+    #{} :look
+    #{[15 64 0]} :later))
+
 (deftest an-unseen-cell-well-below-the-feet-under-a-seen-roof-is-underground-and-asks-no-look-or-dawn
   (are [to expected] (= expected (with-redefs [sh-sense/seen-cell? (constantly false)
                                                sh-sense/solid-at? (fn [_ c] (= 66 (:y c)))

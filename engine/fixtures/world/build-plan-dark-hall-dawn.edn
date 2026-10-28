@@ -3,7 +3,7 @@
 ;; Should-fail (waits for dawn, no fetch before it): near-dawn-the-dark-walk-waits-for-day: at 22800 the night left (about 35 s) is
 ;; less than the spawn risk of about 80 blocks of dark grass there and back. Should-succeed: midnight-the-torches-are-fetched: at 16000
 ;; the night left outweighs that risk; the torches are fetched and the site built.
-;; The hall is shut by a door (an open end waits on a look at the pitch-dark site for ever, card in the live note).
+;; The hall's west end is open: the pitch-dark site no look makes out is priced as unseen dark, not waited on.
 ;; The near-dawn body first looks over the grass from outside (unseen ground is guessed dark by day too), then steps in.
 ;; Needs night: run with --allow-time --time-log <the shared time log>.
 {:defaults
@@ -11,7 +11,6 @@
   :time :night :time-why :dawn-decision
   :plot {:height 8 :floor "grass_block" :length 96}
   :blocks [[:fill [40 0 8] [94 3 24] "stone"] [:fill [43 0 12] [92 1 20] "air"] [:fill [40 0 16] [42 1 16] "air"]
-           [:set [42 0 16] "oak_door[facing=west,half=lower,hinge=left,open=false]"] [:set [42 1 16] "oak_door[facing=west,half=upper,hinge=left,open=false]"]
            [:set [2 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:torch\",count:8}]}"]]
   :memory [{:kind :fetch/stock :data {:pos #at [2 0 16] :items {"torch" 8}}}]
   :body {:at [45.5 0 16.5] :effects [["resistance" 600 4]] :inventory [["oak_planks" 6]]}

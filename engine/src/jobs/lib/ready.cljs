@@ -120,7 +120,7 @@
       (contract/ok :sealed (str "unseen below at " where ": underground, no look shows it and dawn does not light it; only threats count"))
       (and (contains? lowered-by :look) (sense-looked? c look-at) (sh-sense/buried? p) (not (u/within? (sh-sense/feet p) to 0)))
       (at-status c (sh-sense/feet p))
-      (and (contains? lowered-by :look) (not-any? #(look/look-shows? p %) look-at))
+      (and (contains? lowered-by :look) (or (sense-looked? c look-at) (not-any? #(look/look-shows? p %) look-at)))
       (unseen-status c to)
       (contains? lowered-by :look) (contract/look :exposed (str "light at " where " not seen") :look-at look-at)
       (and @wait-s (<= @wait-s patience))
