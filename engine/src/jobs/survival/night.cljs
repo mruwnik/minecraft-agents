@@ -606,7 +606,7 @@
         wake-fight (price/round1 (apply max (map #(price/way-fight-hp c %) wakes)))
         open? (and (not (:log-out-failed (ctx/mem c))) (sh-sleepers/log-out-open? p view))]
     {:short (sh-sleepers/sleepers-short p view)
-     :sheltered (bed-down/bed-sheltered? p feet)
+     :sheltered (sh-beds/bed-sheltered? p feet)
      :chance chance
      :wake-chance wake-chance
      :fight fight

@@ -38,7 +38,7 @@
   "Go to bed: sleep in a bed to use, else put a carried bed down beside the body and sleep in it. One step per call, run to its end by the caller (jobs.survival.night).
   Conditions at the start (a listed call waits on them): night (:not-night; asked again before every round), and a bed to use or a bed item to put down (:no-bed; the engine looks round once first; with the default ways, a bed is fetched instead through jobs.lib.need: jobs.items.obtain of any colour, then put down; a failed fetch ends with the cause {:reason :need} and its ending as :because).
   The bed: the :bed argument, else sh-beds/bed-to-use (seen, or remembered within the jobs.lib.shelter.beds bed radius, the urgent radius once max-days-awake days passed without sleep; never an occupied one or one given up on; unless that long without sleep or an underground body sees another player sleep and the bed is near (courtesy), never one whose walk leaves an underground, dug-in or room shelter): jobs.survival.sleep on it.
-  A carried bed the reserve register holds (jobs.lib.reserve, chooser :night) is not put down. Beds are priced against the other ways through the night (answers, cheapest): a bed not shut in a closed roofed room is slept in only when overdue for sleep or lying there is the cheapest; a carried bed goes down as the :answer says (else the cheapest): :bed lain in where it lies, :sealed its row walled and roofed first (seal-and-sleep!), and when another way is cheaper it is not put down. A sleep that stops :bed-open writes :bed-open and ends condition-failed :bed-open, and a carried bed not put down ends condition-failed :bed-open {:answer} too; a row left open ends nothing-possible :seal-failed.
+  A carried bed the reserve register holds (jobs.lib.reserve, chooser :night) is not put down. Beds are priced against the other ways through the night (answers, cheapest): a bed not sheltered (sh-beds/bed-sheltered?: shut in a closed roofed room where no mob spawns) is slept in only when overdue for sleep or lying there is the cheapest; a carried bed goes down as the :answer says (else the cheapest): :bed lain in where it lies, :sealed its row walled and roofed first (seal-and-sleep!), and when another way is cheaper it is not put down. A sleep that stops :bed-open writes :bed-open and ends condition-failed :bed-open, and a carried bed not put down ends condition-failed :bed-open {:answer} too; a row left open ends nothing-possible :seal-failed.
   A sleep that ends otherwise without sleeping writes :sleep-failed (5 minutes) and ends nothing-possible :sleep-failed.
   A bed item carried and no bed to use: put down beside the body (a body outside walks first into a :home that lies in a closed roofed room; roofed cells first, else in the open unless :roofed-only; never in a doorway, on a chest, table or other kept block, or in another's zone, claim or plan footprint), recorded as :bed unless a live :bed is, and as a scaffold-ledger entry (purpose :bed, for survival.leave-shelter to take back by day; a bed at the live respawn bed is not listed) outside the body's own zones (info night.bed-placed {:pos :own-zone}). A placement the server refuses is tried again (twice at most on one foot cell, three in all). No room, or a failed placement, writes :bed-place-failed (10 minutes) and ends nothing-possible :bed-place-failed.
   Ends done {:slept true :bed pos} when asleep, condition-failed :not-night when the day came first or :bed-open {:slept false :bed-open true}; :continue while walking or sleeping. Quote: time by the walk to the bed, done 1 sleep.")
@@ -84,11 +84,6 @@
             (not-empty (filterv stand? (map at [r (add r f -1) (add r f -2) (add [0 0] f -2) (add (neg r) f -2) (add (neg r) f -1) (neg r)])))))
         [head])))
 
-(defn shut-in?
-  "Whether a bed beside the body lies sheltered: the body is shut in a closed roofed room or sealed from the sky."
-  [p]
-  (or (sh-sense/shut-in-room? p) (sh-sense/sealed? p)))
-
 (defn closed-home
   "The :home of a body outside it when it lies in a closed roofed room (the carried bed goes down there), else nil."
   [c]
@@ -102,11 +97,6 @@
   [c]
   (and (sh-beds/bed-place-wanted? (:primitives c) (ctx/view c) (radius c) (bed-permit c))
        (boolean (some #(.endsWith (:name %) "_bed") (reserve/free c :night)))))
-
-(defn bed-sheltered?
-  "Whether a bed at cell lies sheltered: shut in a closed roofed room, or the body sealed from the sky."
-  [p cell]
-  (or (sh-sense/shut-in-room? p cell) (sh-sense/sealed? p)))
 
 (defn seal-cells
   "The cells to fill round a bed layout's row (stand, foot, head) to shut it in: its sides at feet and head height, a
@@ -157,7 +147,7 @@
   "{answer seconds}: the ways through the night from here, each priced as the night's seconds it loses, the hp it risks
   (exposed-price) and, where it sets the respawn point, less cost/spawn-worth there (a body asleep has set it already).
   :bed lying in `bed` (nil: the carried bed put down here, or the bed the body is asleep in): the night left lost unless
-  the body's sleep skips it (sh-sleepers/sleepers-short 0), open (not bed-sheltered?) all that time, plus walk-s (the walk
+  the body's sleep skips it (sh-sleepers/sleepers-short 0), open (not sh-beds/bed-sheltered?) all that time, plus walk-s (the walk
   there, priced by the caller). :sealed (a carried bed in the open, seal-plan): the bed's row shut in first, its seconds
   exposed, then lain in. :shelter sheltering here, from the worst of the cells the bed is got up to (wake-cells) when asleep (sh/shelter-here-s exposed; a body sh/in-ground? works on after, else
   the night left is lost). :log-out (log-out?): jobs.survival.log-out's quoted seconds, the night left to the sleepers."
@@ -172,7 +162,7 @@
         stands (if asleep? (wake-cells p) [feet])
         [_ left] (get-in (sh-clock/night-left-quote c) [:uses :job-time])
         lost (if (zero? (sh-sleepers/sleepers-short p view)) 0 left)
-        sheltered? (if (or bed asleep?) (bed-sheltered? p at) (or (shut-in? p) (some? (closed-home c))))
+        sheltered? (if (or bed asleep?) (sh-beds/bed-sheltered? p at) (or (sh-beds/bed-sheltered? p feet) (some? (closed-home c))))
         body (respawn-body c)
         sealed (when (and carried? (not sheltered?)) (seal-plan c))
         shelter-s (min left (sh/shelter-here-s))
@@ -268,7 +258,7 @@
       (= :bed-open (contract/cause-key s))
       (do (ctx/remember! c :bed-open {:pos bed} sh-beds/bed-open-policy)
           (ctx/end c :condition-failed :bed-open {:slept false :bed-open true :pos bed
-                                                   :text "bed is open (not shut in a roofed room); not lying in it"}))
+                                                   :text "bed is open (not shut in a spawn-free roofed room); not lying in it"}))
       (or (sh-sense/sleeping? p) (seq (ctx/since c :slept started))) (ctx/end c :done nil {:slept true :bed bed})
       (not (sh-sense/night? p)) (ctx/end c :condition-failed :not-night {:slept false})
       :else (do (ctx/remember! c :sleep-failed {:pos bed} sh-beds/sleep-failed-policy)

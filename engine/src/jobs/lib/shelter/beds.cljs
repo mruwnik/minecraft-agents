@@ -190,6 +190,13 @@
          (and home (sh-sense/roofed? p (sh-sense/roof-height))
               (<= (settings/get settings ::ground-depth) (- (:y home) (:y (sh-sense/feet p)))))))))
 
+(defn bed-sheltered?
+  "Whether a bed at cell lies sheltered: shut in a closed roofed room there or the body sealed from the sky, and no mob
+  spawns there through the night (spawn-light/night-chance 0: a dark hall is no shelter)."
+  [p cell]
+  (and (or (sh-sense/shut-in-room? p cell) (sh-sense/sealed? p))
+       (zero? (spawn-light/night-chance p cell))))
+
 (defn walk-state
   "What the price of the walk to the bed at pos reads of the world besides the bed (night/bed-walk-price): the cell the body
   stands in, the ids of the hostiles known near the way, the kit it fights with (wworld/kit-of), the spawn chance at its feet

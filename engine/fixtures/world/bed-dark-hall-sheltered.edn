@@ -1,0 +1,25 @@
+;; Card 506f869b: a bed shut in a closed roofed room is sheltered only where no mob spawns through the night
+;; (sh-beds/bed-sheltered?: spawn-light/night-chance 0). A dark sealed stone tunnel, 1 wide and 2 high, x 1..44 at z 8;
+;; the bed at its west end, the body beside it. Sleep with :open-bed false.
+;; Should-succeed: walled off at x 6 the tunnel is a small dark room, and the body sleeps. Should-fail: the whole tunnel is a
+;; dark hall (dark floor beyond 24 blocks a mob walks from), so the bed is open: the sleep waits :bed-open and never lies down.
+{:defaults
+ {:tags [:night :survival :sleep :light]
+  :time :night :time-why :sleep
+  :plot {:light :sky :length 56 :width 16 :height 6}
+  :blocks [[:fill [0 0 7] [45 3 9] "stone"] [:fill [1 0 8] [44 1 8] "air"]
+           [:set [1 0 8] "red_bed[facing=east,part=foot]"] [:set [2 0 8] "red_bed[facing=east,part=head]"]]
+  :body {:at [3.5 0 8.5] :yaw -90 :effects [["resistance" 600 4]] :settle-s 3}
+  :limit-s 120}
+ :cases
+ [{:name "a-bed-in-a-small-dark-sealed-room-is-slept-in"
+   :blocks [[:fill [0 0 7] [45 3 9] "stone"] [:fill [1 0 8] [44 1 8] "air"] [:fill [6 0 8] [6 1 8] "stone"]
+            [:set [1 0 8] "red_bed[facing=east,part=foot]"] [:set [2 0 8] "red_bed[facing=east,part=head]"]]
+   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
+         [:job (jobs.survival.sleep {:bed #at [2 0 8] :open-bed false})]]
+   :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 60}]}
+  {:name "a-bed-in-a-dark-sealed-hall-is-open"
+   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
+         [:job (jobs.survival.sleep {:bed #at [2 0 8] :open-bed false})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :bed-open}} :within-s 60 :of-job true}
+            {:no-event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :for-s 40}]}]}

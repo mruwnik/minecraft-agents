@@ -40,7 +40,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (st/setup {:time night :blocks st/floor :inventory bed-and-dirt :players ["Alex" "Bo" "Cy"] :skipNight false})]
+        (let [{:keys [eng p]} (st/setup {:time night :blocks st/floor :inventory bed-and-dirt :players ["Alex" "Bo" "Cy"] :skipNight false :light {} :light-default [15 0]})]
           (core/submit! eng '(jobs.survival.night) {})
           (await (tick-until eng #(asleep? p) 80))
           (is (= 1 (count (placed p "red_bed"))) "the bed goes down")

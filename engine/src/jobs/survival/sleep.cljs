@@ -74,16 +74,16 @@
   (.endsWith (or (u/seen-name (:primitives c) bed) "") "_bed"))
 
 (defn open-bed?
-  "Whether the body, standing beside its bed, would lie in the open: not shut in a closed room under a roof nor sealed from the sky."
+  "Whether the body, standing beside its bed, would lie in the open (not sh-beds/bed-sheltered? at its feet)."
   [c]
   (let [p (:primitives c)]
-    (not (or (sh-sense/shut-in-room? p) (sh-sense/sealed? p)))))
+    (not (sh-beds/bed-sheltered? p (sh-sense/feet p)))))
 
 (defn bed-open
   "The cause :bed-open when :open-bed is false, the body stands within 3 blocks of its bed and would lie in the open."
   [c bed]
   (when (and (false? (:open-bed (:args c))) (<= (u/dist (u/self-pos c) bed) 3) (bed-block? c bed) (open-bed? c))
-    {:reason :bed-open :pos bed :text "the bed is open (not shut in a roofed room)"}))
+    {:reason :bed-open :pos bed :text "the bed is open (not shut in a spawn-free roofed room)"}))
 
 (defn bed-status
   "Ok when asleep already or with a bed to sleep in, else later :no-bed, :bed-unreachable (given up on) or :bed-open."
@@ -196,5 +196,5 @@
       (taken?) (await (hold! c {:reason :bed-occupied :pos bed}))
       (= :continue walk) :continue
       (not= :done (:kind walk)) (give-up-unreachable! c bed walk)
-      (bed-open c bed) (ctx/end c :condition-failed :bed-open {:pos bed :text "the bed is open (not shut in a roofed room)"})
+      (bed-open c bed) (ctx/end c :condition-failed :bed-open {:pos bed :text "the bed is open (not shut in a spawn-free roofed room)"})
       :else (await (sleep-at! c bed)))))
