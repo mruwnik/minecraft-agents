@@ -8,6 +8,7 @@
             [engine.memory :as mem]
             [engine.test-util :as tu]
             [jobs.items.obtain :as obtain]
+            [jobs.items.obtain.need :as need]
             [jobs.items.obtain.plan :as plan]
             [jobs.items.obtain.price :as price]
             [jobs.items.obtain.table :as table]
@@ -194,3 +195,14 @@
   (let [worth (+ (cost/trip) 1)]
     (is (nil? (:not-worth (buried-search "raw_iron" worth))) "the ore is tunnelled to: the trip is within the worth")
     (is (= :not-worth (:reason (:not-worth (buried-search "oak_log" worth)))) "the log search adds the stair up")))
+
+(deftest the-price-of-a-seen-gather-and-of-a-search-follow-the-ways-the-call-allows
+  (let [seen (ctx {:time 6000 :inventory (kit 0) :entities [(spider 5)]})
+        unseen (ctx {:time 6000 :inventory (kit 0)})
+        no-gather #(assoc-in % [:args :ways] #{:craft :smelt})]
+    (with-redefs [need/gather-viable? (fn [c names n] (boolean (seq (:gather (plan/gather-plan c names n)))))]
+      (is (= (plan/gathered-s seen (plan/gather-plan seen ["white_bed"] 1)) (price/gather-s seen ["white_bed"] 1)) "the seen spider's gather: its plan's seconds"))
+    (is (= (cost/trip) (price/search-s unseen ["white_bed"] 1)) "the unseen wool: a trip, each walk priced as it goes")
+    (is (nil? (price/search-s (assoc-in unseen [:args :explore] false) ["white_bed"] 1)) "no search when the call may not explore")
+    (is (nil? (price/gather-s (no-gather seen) ["white_bed"] 1)))
+    (is (nil? (price/search-s (no-gather unseen) ["white_bed"] 1)))))

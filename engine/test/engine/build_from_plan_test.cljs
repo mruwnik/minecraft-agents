@@ -22,6 +22,7 @@
             [jobs.build.from-plan.cells :as fp-cells]
             [jobs.build.from-plan.light :as fp-light]
             [jobs.lib.need :as need]
+            [jobs.lib.shelter.sense :as sense]
             [jobs.lib.torch :as torch]
             [engine.contract :as contract]
             [jobs.build.from-plan.walk :as fp-walk]
@@ -2141,7 +2142,8 @@
 (def not-worth (contract/later :not-worth "obtain: costs 400 s, worth 297 s"))
 
 (deftest a-torchless-build-fetches-torches-when-the-obtain-takes-what-the-wait-saves
-  (are [status torches? fetch? obtain mem kind] (= kind (lit-check status torches? fetch? obtain mem (atom [])))
+  (with-redefs [sense/sky-in (constantly nil)]
+   (are [status torches? fetch? obtain mem kind] (= kind (lit-check status torches? fetch? obtain mem (atom [])))
     (dark-wait 3000) false true (contract/ok :ready "ready") {} :ok
     (dark-wait 3000) true false nil {} :ok
     (dark-wait 3000) false false nil {} :later
@@ -2150,10 +2152,17 @@
     no-light false true (contract/ok :ready "ready") {} :ok
     no-light false true not-worth {} :never
     no-light false false nil {} :never)
-  (let [worths (atom [])]
-    (lit-check (dark-wait 300) false true not-worth {} worths)
-    (lit-check no-light false true not-worth {} worths)
-    (is (= [["torch" 2 (cost/light-wait-worth 300 2)] ["torch" 2 nil]] @worths) "the wait less the placing; a wait that never ends, any price")))
+   (let [worths (atom [])]
+     (lit-check (dark-wait 300) false true not-worth {} worths)
+     (lit-check no-light false true not-worth {} worths)
+     (is (= [["torch" 2 (cost/light-wait-worth 300 2)] ["torch" 2 nil]] @worths) "the wait less the placing; no night left to wait out, any price"))))
+
+(deftest a-never-lit-cell-at-night-fetches-torches-only-for-what-waiting-for-dawn-would-cost
+  (let [worths (atom [])
+        check (fn [night-s obtain] (with-redefs [sense/sky-in (constantly night-s)] (lit-check no-light false true obtain {} worths)))]
+    (is (= [:never :ok :ok] [(check 300 not-worth) (check 300 (contract/ok :ready "ready")) (check 0 (contract/ok :ready "ready"))]))
+    (is (= [["torch" 2 (cost/light-wait-worth 300 2)] ["torch" 2 (cost/light-wait-worth 300 2)] ["torch" 2 nil]] @worths)
+        "at night the night left is the wait, by day any price")))
 
 (deftest a-torchless-build-plans-its-torches-only-when-it-could-fetch-them
   (let [planned (atom 0)

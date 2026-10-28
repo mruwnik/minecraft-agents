@@ -37,7 +37,8 @@
 
 (defn fetch-due?
   "Whether the torches short over the owed cells (torches-short) are worth getting (crafted from what is carried, or fetched) to light the site instead of waiting wait-s seconds for the
-  sky's light (nil: it never comes, a cell under a canopy or in a cave): some short, none got yet this call, and the call's ways allow a torch
+  sky's light (nil: it never comes, a cell under a canopy or in a cave, and no night is left to fetch through: any price; a never-lit cell at night is given the night left as its wait,
+  since the torches can as well be fetched at dawn): some short, none got yet this call, and the call's ways allow a torch
   obtain whose start check takes its price (the cheapest way, the death its walk risks) for no more than the wait saves (jobs.lib.cost/light-wait-worth).
   The torches are counted last: that plans the lighting."
   [c wait-s owed]
@@ -55,9 +56,10 @@
         wait-for-light? (fn [[kind :as s]] (and (= :later kind) (exposed? s) (contains? (:lowered-by (nth s 2)) :light)))
         no-light? (fn [[kind :as s]] (and (= :never kind) (exposed? s) (contains? (:lowered-by (nth s 2)) :torch)))
         wait-s (fn [[_ _ data]] (some-> (:wait-ms data) (/ 1000)))
+        dawn-s (fn [c] (let [s (sense/sky-in (:primitives c))] (when (pos? (or s 0)) s)))
         lit (fn [f] (fn [c] (let [s (f c)]
                               (if (and (or (wait-for-light? s) (no-light? s))
-                                       (or (can-light? c) (fetch-due? c (when (wait-for-light? s) (wait-s s)) (plan/owed (cells-of c)))))
+                                       (or (can-light? c) (fetch-due? c (if (wait-for-light? s) (wait-s s) (dawn-s c)) (plan/owed (cells-of c)))))
                                 (contract/ok :torches "dark: the body hangs torches to build by")
                                 (cond-> s (wait-for-light? s) (assoc-in [2 :item] "torch"))))))]
     (with-meta (lit safe) (update (meta safe) :jobs.lib.ready/exposure #(some-> % lit)))))
