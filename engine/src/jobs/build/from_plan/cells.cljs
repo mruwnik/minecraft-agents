@@ -133,7 +133,7 @@
   (let [done (set (:support-looked (ctx/mem c)))
         refused (set (keys (filter (comp #{:no-support} val) (:unplaceable (ctx/mem c)))))]
     (vec (for [cell cells :when (refused (:pos cell))
-               n (plan/unseen-support c (:pos cell)) :when (not (done n))]
+               n (plan/unseen-support c (:pos cell) (count cells)) :when (not (done n))]
            [cell n]))))
 
 (defn rock-bound?

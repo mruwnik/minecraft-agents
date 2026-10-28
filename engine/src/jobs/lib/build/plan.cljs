@@ -409,9 +409,14 @@
       (assoc h :refused :no-support))))
 
 (defn unseen-support
-  "The neighbours of pos (below first) the body has never seen: a cell refused :no-support may only lack a look at its floor."
-  [c pos]
-  (filterv #(nil? (u/seen-block (:primitives c) (zipmap [:x :y :z] %))) (map #(mapv + pos %) neighbour-steps)))
+  "The neighbours of pos (below first) the body has never seen, and the first unseen cell down the column under pos past seen hollow
+  ones (within depth cells): a cell refused :no-support may only lack a look at its floor, or at the ground a fill would stand on."
+  [c pos depth]
+  (let [unseen? #(nil? (u/seen-block (:primitives c) (zipmap [:x :y :z] %)))
+        column (first (filter #(or (unseen? %) (not (fill/hollow (:name (world-block (:primitives c) %)))))
+                              (map (fn [dy] (update pos 1 - dy)) (range 1 (inc depth)))))]
+    (cond-> (filterv unseen? (map #(mapv + pos %) neighbour-steps))
+      (and column (unseen? column)) (conj column))))
 
 (defn placeable
   "The cells of todo a click places now, each with its :click (nil: placed plainly); the others are booked under
