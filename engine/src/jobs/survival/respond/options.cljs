@@ -56,9 +56,9 @@
    ::beaten-hits {:default 2 :doc "Hits by a melee mob near (the damage names one within close-radius; not a creeper or an enderman) within hurt-window-s that show the flight is failing: the body fights it first, armed or not. 0: never." :spec (a/int-in 0 nil)}
    ::press-gap {:default 2 :doc "Blocks within which a melee mob (not a creeper or an enderman) makes a cornered armed body fight before it builds a seal or pillar, hit or not: the mob strikes before a block is placed and stands in the cells to fill." :spec (a/num-in 0 nil)}
    ::arrival-s {:default 4 :doc "Seconds within which a melee mob (not a creeper or an enderman) reaches a cornered armed body: it digs no pit or pocket, which take longer than the mob needs while the mob hits the digger. 0: never." :spec (a/num-in 0 nil)}
-   ::pillar-mob-fails {:default {:beside {:k 0 :n 0} :clear {:k 0 :n 1}}
+   ::pillar-mob-fails {:default {:beside {:k 4 :n 4} :clear {:k 4 :n 8}}
                        :spec (a/map-of #{:beside :clear} (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)}))
-                       :doc "Of n pillars of a flight (built, or failed with a refused place in the body's own cell), k failed so, by the melee hostiles when it began: :beside, one in or beside the body's cell (within 1 cell across and 1 up or down of its feet), :clear none. The trial bodies' logs on 2026-10-28. Recount: node tools/event-counts.mjs wall-places."}
+                       :doc "Of n pillars of a flight (built, or failed with a refused place in the body's own cell), k failed so, by the melee hostiles when it began: :beside, one in or beside the body's cell (within 1 cell across and 1 up or down of its feet), :clear none. The trial and probe bodies' logs on 2026-10-28 (a refusal is physics given the class, which staged scenes do not skew). Recount: node tools/event-counts.mjs wall-places."}
    ::pillar-s {:default 1 :doc "Seconds a cornered pillar takes to lift the body out of a melee mob's reach (a jump and a place a block): the blows it costs then are weighed against the fight's." :spec (a/num-in 0 nil)}
    ::hold-cap {:default 60 :doc "Holds (one wait-ms each) a flight makes in water or under a roof against an angry enderman before it tries the next option (seal, pit, pocket, fight); 0: none." :spec (a/int-in 0 nil)}
    ::refuge-gap {:default 10 :doc "Blocks within which a lone melee hostile the body cannot outfight is pillared against (else sealed against) before any flee step, when blocks are carried; 0 never." :spec (a/num-in 0 nil)}
@@ -193,7 +193,8 @@
 (defn pillar-cover
   "The cover {:open-s :seconds :fails} of a pillar against hostiles (cost/cover-answer): in a melee mob's reach for ::pillar-s,
   then the hide-out's quiet on top, all of it in a shooter's line of fire; it fails for a mob in its cell by
-  ::pillar-mob-fails of the class the body stands in (wall-in/mob-fails, beside? within 1 cell);
+  ::pillar-mob-fails of the class the body stands in (wall-in/mob-fails, beside? within 1 cell), with the refusals this
+  response saw added (flight/with-seen-fails);
   nil when no pillar fits here, a climber is near or a shot was felt within ::hurt-window-s (the top stays in that line of fire)."
   [c hostiles]
   (when (and (pillar/pillar-item c) (not-any? combat/climber? hostiles)
@@ -202,7 +203,7 @@
     (let [s (settings/get settings ::pillar-s)
           seconds (+ s (hide-out/quiet-s))]
       {:open-s (if (some combat/ranged? hostiles) seconds s) :seconds seconds
-       :fails (wall-in/mob-fails (settings/get settings ::pillar-mob-fails) (wall-in/beside? c 1))})))
+       :fails (wall-in/mob-fails (flight/with-seen-fails c :pillar (settings/get settings ::pillar-mob-fails)) (wall-in/beside? c 1))})))
 
 (defn cornered-covers
   "{option cover} of the cornered options not yet tried that shut the body in or lift it: :plug the walls, :plug-dig

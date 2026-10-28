@@ -931,12 +931,35 @@
   {:blocks doorway :inventory [{:name "wooden_axe" :count 1} {:name "dirt" :count 20}]
    :entities (mapv #(assoc (zombie 0 64 %) :id (+ 20 %)) (range 1 (inc n)))})
 
+(def seldom-refused
+  "::pillar-mob-fails under which a pillar beside a mob seldom fails: 1 in 4."
+  {:jobs.survival.respond.options/pillar-mob-fails {:beside {:k 0 :n 2} :clear {:k 0 :n 2}}})
+
 (deftest an-armed-body-pressed-by-zombies-it-cannot-beat-pillars-before-it-fights
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (await (hidden-round retreat (doorway-zombies 4) 1000 (constantly nil)))]
+        (let [{:keys [p]} (await (settings/with-settings seldom-refused
+                                   (fn ^:async r [] (await (hidden-round retreat (doorway-zombies 4) 1000 (constantly nil))))))]
           (is (= "jumpPlace" (first-of p #{"attack" "jumpPlace"})) "four zombies outfight an axe: a second of pillar costs fewer blows"))))))
+
+(deftest a-pillar-refused-for-a-zombie-in-its-cell-is-priced-dearer-at-the-next-decision
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen]}
+              (await (settings/with-settings seldom-refused
+                       (fn ^:async r []
+                         (await (hidden-round retreat (update (doorway-zombies 4) :entities conj (zombie 0.5 64 0.9))
+                                              1000 (constantly nil) []
+                                              (fn [p]
+                                                (.override (.-world p) "jumpPlace"
+                                                           (fn [token args impl]
+                                                             (if (empty? (calls p "attack"))
+                                                               (js/Promise.resolve #js {:status "failed" :placed 0 :reason "place-failed: the block is still air"})
+                                                               (impl token args))))))))))
+              pillars (keep #(when (= :retreat.cornered (:kind %)) (:pillar (:prices %))) @seen)]
+          (is (< (first pillars) (second pillars)) "the refusal it saw is one more failed pillar in the counts"))))))
 
 (deftest an-armed-body-pressed-by-one-zombie-fights-it-when-the-pillar-may-fail-for-it
   (async done
@@ -1395,7 +1418,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (await (beset-round [(zombie 1.5 64 0) (assoc (zombie 0 64 2.5) :id 8)] (constantly nil)))]
+        (let [{:keys [p]} (await (settings/with-settings seldom-refused
+                                   (fn ^:async r [] (await (beset-round [(zombie 1.5 64 0) (assoc (zombie 0 64 2.5) :id 8)] (constantly nil))))))]
           (is (zero? (count (calls p "place"))) "no seal with a mob already in the cell beside it")
           (is (= "jumpPlace" (first-of p #{"attack" "jumpPlace"})) "at 8 health two zombies outfight a sword: a second of pillar costs fewer blows"))))))
 

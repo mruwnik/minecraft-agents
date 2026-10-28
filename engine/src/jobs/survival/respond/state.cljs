@@ -102,6 +102,15 @@
 
 (defn tried! [c option] (ctx/update-mem! c update :tried (fnil conj #{}) option))
 
+(defn seen-fail! [c option] (ctx/update-mem! c update-in [:seen-fails option] (fnil inc 0)))
+
+(defn with-seen-fails
+  "Counts {class {:k :n}} of option's failures with the ones this response saw (seen-fail!) added to every class: each
+  is one more attempt, failed."
+  [c option counts]
+  (let [n (get-in (ctx/mem c) [:seen-fails option] 0)]
+    (update-vals counts #(-> % (update :k + n) (update :n + n)))))
+
 (defn near-known
   "The hostiles p can be said to know within radius (ranged ones within ranged-radius), the dead skipped."
   [p dead radius ranged-radius]

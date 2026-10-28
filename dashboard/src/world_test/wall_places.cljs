@@ -60,12 +60,13 @@
 (def walls-id #"^(j\d+/(?:(?:plug|shut-in)/walls|pillar))(/fill/place)?$")
 
 (defn scan
-  "A body's log lines (any order) -> {[generation job] row} of its walls and pillar attempts that ended: {:t :end-t :way
-  :class :end :done? :mob? :placed [ms]}, a walls attempt also :arrive-s."
+  "A body's log lines (any order) -> {[generation job] row} of its walls attempts and {[generation job t] row} of its
+  pillar attempts (one job, built again each step) that ended: {:t :end-t :way :class :end :done? :mob? :placed [ms]}, a
+  walls attempt also :arrive-s. A flee step's retreat.search (its :from and :chasers) classes like a flee choice."
   [lines]
   (let [events (->> lines
                     (filter #(and (str/includes? % ":hostile-near")
-                                  (or (str/includes? % ":kind :retreat.choice") (str/includes? % "/walls") (str/includes? % "/pillar"))))
+                                  (or (str/includes? % ":kind :retreat.choice") (str/includes? % ":kind :retreat.search,") (str/includes? % "/walls") (str/includes? % "/pillar"))))
                     (map reader/read-string)
                     (sort-by :time-ms))]
     (loop [[e & more] events choice nil open {} out {}]
@@ -82,6 +83,9 @@
                                             [n (js/parseInt x) (js/parseInt y) (js/parseInt z)])
                                          (:hostiles data))}
                    open out)
+            (= :retreat.search kind)
+            (recur more {:t time-ms :pos (zipmap [:x :y :z] (:from data)) :hostiles (map (fn [[n cell]] (into [n] cell)) (:chasers data))}
+                   open out)
             (nil? walls) (recur more choice open out)
             (and place (= :done kind) (= "place" (:name data)) (contains? open k))
             (recur more choice (update open k #(cond-> (update % :mob? (fn [m] (or m (mob-place? data))))
@@ -95,9 +99,10 @@
                    out)
             (and (not place) (= :child_ended kind) (contains? open k))
             (recur more choice (dissoc open k)
-                   (assoc out k (let [r (assoc (dissoc (get open k) :choice?) :end-t time-ms :end (:status data) :done? (= :done (:status data))
-                                               :mob? (or (:mob? (get open k)) (contains? (if pillar? #{:place-failed} mob-reasons) (:reason data))))]
-                                  (cond-> r (:choice? (get open k)) (assoc :class (class-of r))))))
+                   (assoc out (cond-> k pillar? (conj (:t (get open k))))
+                          (let [r (assoc (dissoc (get open k) :choice?) :end-t time-ms :end (:status data) :done? (= :done (:status data))
+                                         :mob? (or (:mob? (get open k)) (contains? (if pillar? #{:place-failed} mob-reasons) (:reason data))))]
+                            (cond-> r (:choice? (get open k)) (assoc :class (class-of r))))))
             :else (recur more choice open out)))))))
 
 (defn fold

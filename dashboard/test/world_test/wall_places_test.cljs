@@ -44,7 +44,14 @@
     (is (= {:way :pillar :class :beside :mob? true :done? false}
            (select-keys (pillar ["zombie 7 [1 64 1]"] {:status :stopped :reason :place-failed}) [:way :class :mob? :done?])))
     (is (= :clear (:class (pillar ["zombie 7 [2 64 0]"] {:status :done})))
-        "a mob two cells off is beside a side cell, not the body's")))
+        "a mob two cells off is beside a side cell, not the body's")
+    (is (= {["g" "j1/pillar" 100] :clear ["g" "j1/pillar" 5100] :beside}
+           (update-vals (w/scan [(choice 0 ["zombie 7 [3 64 0]"])
+                                 (ev 100 :child_started "j1/pillar" {}) (ev 200 :child_ended "j1/pillar" {:status :stopped :reason :place-failed})
+                                 (ev 5000 :retreat.search "j1" {:from [0 64 0] :chasers [["zombie" [1 64 0]]]})
+                                 (ev 5100 :child_started "j1/pillar" {}) (ev 5200 :child_ended "j1/pillar" {:status :stopped :reason :place-failed})])
+                        :class))
+        "each pillar of the one job is a row, classed by the flee step's search before it")))
 
 (deftest the-report-gives-the-gap-and-each-class-failures-for-mobs
   (is (= {:gap {:mean 0.5 :n 3} :reached {:k 1 :n 2} :clear {:k 0 :n 1} :pillar {:beside {:k 1 :n 1} :clear {:k 0 :n 0}}}

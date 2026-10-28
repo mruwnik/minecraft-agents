@@ -4,7 +4,7 @@
   spot-returns [--agents DIR] (world-test.spot-returns), field-passes [--agents DIR] (world-test.field-passes), arrow-shots [--agents DIR] [--difficulty D] (world-test.arrow-shots; D the
   server's, default 1, easy, the trial server's), caught-flights [--agents DIR] (world-test.caught-flights; trial bodies only), hide-ends [--agents DIR] (world-test.hide-ends; trial bodies only) and vein-seen [--agents DIR] count from the logs alone, no fold;
   water-lags [--agents DIR] [--stride N] (world-test.water-lags) and surface-heights (world-test.surface-heights) from the recorded chunks beside DIR;
-  resight [--agents DIR] [--counts FILE] (world-test.resight) folds the bodies' seen memory against those chunks into the counts file; wall-sides likewise folds the trial bodies' enter-room.arrived events (world-test.wall-sides), wall-places their flights' walls attempts (world-test.wall-places).
+  resight [--agents DIR] [--counts FILE] (world-test.resight) folds the bodies' seen memory against those chunks into the counts file; wall-sides likewise folds the trial bodies' enter-room.arrived events (world-test.wall-sides), wall-places their flights' walls attempts and pillars, the probes' pillars too (world-test.wall-places).
   vein-seen: the ore blocks one look saw together (26-connected, a vein's plain and deepslate blocks as one ore) per group, from the
   look tool's :look.observed lists; :capped counts the lists the tool cut short (nearest first, so a far group may be cut).
   creeper-exchange: respond runs that only decided about creepers and fought (a :fight decision) with at least one swing: hp the creepers
@@ -706,9 +706,11 @@
                        (println (pr-str (pen-escapes/report (:pen-escapes added))))
                        0)
        "wall-places" (let [file (or counts (path/join repo "worlds" "test" "priors-counts.edn"))
+                           ;; a pillar refused beside a mob is physics given its class, which staged scenes do not skew
                            rows (into {} (for [b (array-seq (fs/readdirSync agents))
-                                               :when (and (not (probe? b)) (fs/existsSync (path/join agents b "engine")))
-                                               [k row] (wall-places/scan (event-lines (path/join agents b "engine")))]
+                                               :when (fs/existsSync (path/join agents b "engine"))
+                                               [k row] (wall-places/scan (event-lines (path/join agents b "engine")))
+                                               :when (or (not (probe? b)) (= :pillar (:way row)))]
                                            [(into [b] k) row]))
                            folded (wall-places/fold (load-counts file) rows)]
                        (save-counts! file folded)
