@@ -545,14 +545,17 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start {:world {:blocks walled-ore :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270}})]
-          (hide-drop-until-beside! (:p s) [2 64 0])
+        (let [s (start {:world {:blocks walled-ore :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270}})
+              stands (atom [])
+              ;; the cheapest cut from each side of the wall the body may stand on: the one cell between, else a column of two
+              cheapest {:west [[1 64 0]] :east [[3 65 0] [3 64 0]] :north [[2 65 -1] [2 64 -1]] :south [[2 65 1] [2 64 1]]}
+              side (fn [[x _ z]] (get {[-1 0] :west [1 0] :east [0 -1] :north [0 1] :south} [(compare x 2) (compare z 0)]))]
+          (hide-drop-until-beside! (:p s) [2 64 0] stands)
           (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :ways #{:seen}}) {})
           (await (run-ticks s 40))
-          ;; which wall cells the cut takes follows where go-to's tours of unseen land left the body
+          ;; which side the cut starts from follows where go-to's tours of unseen land left the body
           (is (= [2 64 0] (first (dug-cells s))) "dug from behind the wall")
-          (is (contains? #{[[1 64 0]] [[3 65 0] [3 64 0]] [[2 65 -1] [2 64 -1]] [[2 65 1] [2 64 1]]} (vec (rest (dug-cells s))))
-              "then the cheapest cut beside it from the side the body stands on: the wall cell between, or one wall column beside it")
+          (is (= (cheapest (side (second @stands))) (vec (rest (dug-cells s)))) (str "then the cheapest cut from the side the body stands on " (second @stands)))
           (is (= 1 (get (inv s) "raw_iron")) "the body cut its way beside the dug cell and picked the drop up")
           (is (= :count (:reason (done-event s)))))))))
 

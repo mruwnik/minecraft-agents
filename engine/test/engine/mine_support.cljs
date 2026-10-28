@@ -325,13 +325,15 @@
                         r)))))
 
 (defn hide-drop-until-beside!
-  "The fake's dug drops lie out of sight (in a pocket) until the body stands within 1 of cell [x y z]."
-  [p [cx cy cz]]
+  "The fake's dug drops lie out of sight (in a pocket) until the body stands within 1 of cell [x y z]; the body's feet
+  cell at each dig conj'd onto the atom stands, when given."
+  [p [cx cy cz] & [stands]]
   (let [beside? (fn [w] (let [[x y z] (fake/body-pos w)
                               d (map - [(js/Math.floor x) y (js/Math.floor z)] [cx cy cz])]
                           (<= (reduce + (map * d d)) 1)))]
     (.override (.-world p) "dig"
                (fn [token args impl]
+                 (some-> stands (swap! conj (mapv #(js/Math.floor %) (fake/body-pos @(fake/state p)))))
                  (.then (impl token args)
                         (fn [r]
                           (swap! (fake/state p) update :entities (fn [es] (mapv #(if (= "item" (:kind %)) (assoc % :visible false) %) es)))
