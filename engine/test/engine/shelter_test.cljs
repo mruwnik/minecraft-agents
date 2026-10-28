@@ -830,7 +830,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time night :entities [sleeper] :players ["Alex"] :blocks bed-room})]
+        (let [{:keys [eng p]} (setup {:time night :entities [sleeper] :players ["Alex"] :blocks bed-room :light {} :light-default [15 0]})]
           (know-bed! eng {:x 6 :y 64 :z 0})
           (core/submit! eng '(jobs.survival.night) {})
           (await (run-until-empty eng 8))
@@ -1680,6 +1680,12 @@
     1 40 true [0 0] true
     1 40 false [0 14] false
     5 5 false [0 0] false))
+
+(deftest a-bed-shut-in-a-dark-hall-is-not-sheltered
+  (are [w d light sheltered?] (= sheltered? (sh-beds/bed-sheltered? (seen-box (box w d false) light) {:x 0 :y 64 :z 0}))
+    5 5 [0 0] true
+    1 40 [0 14] true
+    1 40 [0 0] false))
 
 (deftest a-sealed-dark-hall-is-lit-with-the-torches-carried-before-any-wall-is-placed
   (async done
