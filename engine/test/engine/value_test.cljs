@@ -1,8 +1,10 @@
 (ns engine.value-test
   "make-room's item worth (jobs.lib.cost.value/item-value per item) against its :toss-below default."
   (:require [cljs.test :refer [deftest is are]]
+            [engine.settings :as settings]
             [jobs.lib.cost.precious :as precious]
             [jobs.lib.cost.table :as tbl]
+            [jobs.lib.meal :as meal]
             [jobs.lib.room-order :as ord]))
 
 (def toss-below (get-in ord/settings [::ord/toss-below :default]))
@@ -48,3 +50,22 @@
   (is (= (precious/hp-worth {:health (:unsourced-food-health tbl/default-basis) :absorption 0} "enchanted_golden_apple" false)
          (ord/item-worth {:name "enchanted_golden_apple" :count 1}))
       "not the no-source junk default"))
+
+(deftest unsourced-gear-is-worth-what-its-uses-save
+  (let [worth #(ord/item-worth {:name % :count 1})
+        junk (* (:no-source-each tbl/default-basis) 64)]
+    (doseq [item ["elytra" "trident" "netherite_chestplate" "netherite_pickaxe" "netherite_sword" "chainmail_chestplate"]]
+      (is (not= junk (worth item)) (str item " is not the 256 s no-source default")))
+    (is (> (worth "netherite_chestplate") (worth "netherite_helmet") (worth "netherite_boots")) "more armour points save more")
+    (is (> (worth "netherite_pickaxe") (worth "diamond_pickaxe")) "the dearer tool is worth more")
+    (is (> (worth "trident") (worth "stone_sword")) "a trident kills faster than a stone sword")))
+
+(deftest the-item-table-follows-the-settings-the-hp-price-reads
+  (let [worth #(ord/item-worth {:name "enchanted_golden_apple" :count 1})
+        base (worth)]
+    (is (not= base (settings/with-settings {:jobs.lib.cost.health/hp-seconds 2} worth))
+        "a cheaper hp makes the same apple worth less, not the memoised table")))
+
+(deftest a-fed-body-decides-a-precious-food-as-the-table-prices-it
+  (let [self (fn [food] #js {:health 5 :food food :absorption 0 :inventory #js [#js {:name "enchanted_golden_apple" :count 1}]})]
+    (is (= (meal/precious-worth? (self 20) "enchanted_golden_apple") (meal/precious-worth? (self 5) "enchanted_golden_apple")))))

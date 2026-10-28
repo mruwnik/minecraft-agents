@@ -20,7 +20,7 @@
                  is raised to at least the next weaker material's tool of its kind plus :craft-step.
     unused       A sourced item that is no tool, armour, edible food, block or ingredient is worth :junk-share of that.
     food         An edible food is worth at least its points x :food-point-s.
-    no source    :no-source-each (4) x 64 / stack size (a 64-stack 4, a 16-stack 16, an unstackable 256); a precious food nothing yields: jobs.lib.cost.precious/hp-worth at :unsourced-food-health (10).
+    no source    :no-source-each (4) x 64 / stack size (a 64-stack 4, a 16-stack 16, an unstackable 256); a precious food nothing yields: jobs.lib.cost.precious/hp-worth at :unsourced-food-health (10). A tool, weapon or armour piece nothing yields: its durability x what a use saves (jobs.lib.cost.gear, :gear).
     unknown      A name minecraft-data does not list: :unknown-each (1).
 
   Per stack: worth x count (nil counts 1; 0, negative or not a number counts 0), x the durability left (:durability

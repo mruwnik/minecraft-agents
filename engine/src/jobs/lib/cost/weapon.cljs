@@ -76,12 +76,17 @@
 
 (def weapon-damage-by-name
   {"wooden_sword" 4 "golden_sword" 4 "stone_sword" 5 "copper_sword" 5 "iron_sword" 6 "diamond_sword" 7 "netherite_sword" 8
-   "wooden_axe" 7 "golden_axe" 7 "stone_axe" 9 "copper_axe" 9 "iron_axe" 9 "diamond_axe" 9 "netherite_axe" 10})
+   "wooden_axe" 7 "golden_axe" 7 "stone_axe" 9 "copper_axe" 9 "iron_axe" 9 "diamond_axe" 9 "netherite_axe" 10 "trident" 9 "mace" 6})
 
 (defn weapon-damage
   "Damage of one hit with item-name (a fist, 1, for nil or an unknown item)."
   [item-name]
   (get weapon-damage-by-name item-name 1))
+
+(defn kill-seconds
+  "Seconds the hits of item-name (a fist for nil) take to kill a mob of hp, one every attack gap."
+  [item-name hp]
+  (* (/ (attack-gap-ms item-name) 1000) (js/Math.ceil (/ hp (weapon-damage item-name)))))
 
 (defn remaining-health
   "What is left of a mob: its reported :health, else full health less :hits times :damage (an estimate)."

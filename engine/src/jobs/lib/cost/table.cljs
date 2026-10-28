@@ -3,6 +3,8 @@
   (:require ["minecraft-data" :as minecraft-data]
             [clojure.string :as str]
             [jobs.lib.cost.base-rates :as base-rates]
+            [jobs.lib.cost.gear :as gear]
+            [jobs.lib.cost.armour :as armour]
             [jobs.lib.cost.health :as health]
             [jobs.lib.cost.precious :as precious]
             [jobs.lib.cost.weapon :as weapon]
@@ -19,6 +21,7 @@
    :craft-step 1
    :smelt-step 2
    :unsourced-food-health 10 ;; the health a precious food that nothing yields is priced at: what it heals a body there
+   :gear {:ref-hit 6 :ref-fall 4 :ref-mob-hp 20 :ref-hardness 3} ;; one use of a tool, weapon or armour piece saves, against the stone tool or the bare body: a 6 hp hit, a 4-block fall, a 20 hp mob, a hardness-3 block
    :junk-share 0.1
    :food-point-s 2
    :farm-s 4
@@ -74,9 +77,7 @@
 (defn mean-range [r] (if r (/ (+ (aget r 0) (aget r 1)) 2) 1))
 
 (defn dig-seconds [md basis b]
-  (let [{:keys [hardness-s max-hardness min-s default-tier speed]} (:dig basis)
-        tier (max default-tier (block-tier md b))]
-    (max min-s (/ (* hardness-s (min max-hardness (.-hardness b))) (get speed tier (get speed default-tier))))))
+  (gear/dig-time (:dig basis) (block-tier md b) (.-hardness b)))
 
 (defn dig-cost
   "Seconds digging the block name takes, the item base's dig term (dig-seconds); nil for a block never dug (bedrock) or
@@ -168,10 +169,9 @@
   (let [{:keys [weapon hurt-hp-per-hp danger find]} (:mob basis)
         passive weapon/passive-max-health
         mobs (merge passive weapon/mob-max-health)
-        gap (/ (weapon/attack-gap-ms weapon) 1000)
-        damage (weapon/weapon-damage weapon)]
+]
     (reduce (fn [acc [mob hp]]
-              (let [kill (* gap (js/Math.ceil (/ hp damage)))
+              (let [kill (weapon/kill-seconds weapon hp)
                     hurt (if (passive mob) 0 (* (health/walk-hp-seconds) hurt-hp-per-hp hp (get danger mob 1)))
                     cost (+ kill hurt (if (passive mob) (:passive find) (:hostile find)))]
                 (reduce (fn [acc e]
@@ -234,8 +234,8 @@
 
 (defn build-table
   "{item name worth} for minecraft-data version with name overrides pinned (overrides: {name override}) and the basis
-  (default-basis with the deep-merged :basis)."
-  [version overrides basis]
+  (default-basis with the deep-merged :basis). The extra args only key table-for's memo."
+  [version overrides basis & _]
   (let [md (minecraft-data version)
         basis (deep-merge default-basis basis)
         items (array-seq (.-itemsArray md))
@@ -254,11 +254,12 @@
         by-result (group-by first recipes)
         pinned (into {} (map (fn [[n o]] [n (override-fn o)])) overrides)
         pin (fn [n w] ((get pinned n identity) w))
-        ;; nothing yields it, so it cannot be replaced: a precious food is worth what eating it gives a body at the reference health
+        ;; nothing yields it, so it cannot be replaced: a precious food is worth what eating it gives a body at the reference health, a tool or armour piece what its uses save
         no-source (into {} (map (fn [i] (let [n (.-name i)]
-                                          [n (if (contains? foods/precious n)
-                                               (precious/hp-worth {:health (:unsourced-food-health basis) :absorption 0} n false)
-                                               (* (:no-source-each basis) (/ 64 (max 1 (.-stackSize i)))))])))
+                                          [n (cond (contains? foods/precious n)
+                                                (precious/hp-worth {:health (:unsourced-food-health basis) :absorption 0} n precious/table-heals?)
+                                                (number? (.-maxDurability i)) (gear/use-worth basis n (.-maxDurability i))
+                                                :else (* (:no-source-each basis) (/ 64 (max 1 (.-stackSize i)))))])))
                          items)
         step (fn [natural table]
                (into {} (map (fn [n]
@@ -280,7 +281,11 @@
     (tier-floors basis overrides (set (keep #(when (number? (.-maxDurability %)) (.-name %)) items))
                  (into {} (map (fn [[n w]] [n (if (js/isFinite w) w (pin n (max (no-source n) (food-floor n))))])) table))))
 
-(def table-for (memoize build-table))
+(def table-for
+  "build-table, memoized on what it reads: its arguments and the settings the hp and fall prices come from."
+  (let [built (memoize build-table)]
+    (fn [version overrides basis]
+      (built version overrides basis (health/walk-hp-seconds) (health/max-scale) (health/heal-s-per-hp) (armour/max-fall)))))
 
 (defn groups-of
   "The override groups item name belongs to."

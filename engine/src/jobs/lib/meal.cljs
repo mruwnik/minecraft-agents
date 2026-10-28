@@ -2,13 +2,14 @@
   "Whether the sensed self has a meal to eat unnamed: what the hungry checks count on. A precious food (golden apple)
   counts only when its hp are worth more than it (cost.food/eat-precious?, the price jobs.survival.eat uses)."
   (:require [jobs.lib.cost.food :as food-cost]
+            [jobs.lib.cost.precious :as precious]
             [jobs.lib.foods :as foods]))
 
 (defn precious-worth?
   "Whether precious food name is worth eating by a meal that names no item: the body's hp alone (no threat known),
-  healing by waiting at top-up food."
+  priced as the item table prices it (cost.precious/table-heals?)."
   [self name]
-  (food-cost/eat-precious? {:health (.-health self) :absorption (.-absorption self)} name (>= (.-food self) foods/top-up-food)))
+  (food-cost/eat-precious? {:health (.-health self) :absorption (.-absorption self)} name precious/table-heals?))
 
 (defn eaten-unnamed?
   "Whether item counts as carried food for a meal that names no item: food, not harmful, not named-only, and precious
