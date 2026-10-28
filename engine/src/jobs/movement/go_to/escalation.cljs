@@ -173,6 +173,7 @@
   "Memory :guess-looks {class {:bad :all}}: a cell the route guessed as rock, of class :beside or :apart
   (escalate-choose/beside-undiggable?), was looked at, and was (ok?) or was not as guessed."
   [c beside? ok?]
+  (ctx/emit! c :go-to.guess-look :info {:class (if beside? :beside :apart) :ok? ok?})
   (ctx/update-mem! c update-in [:guess-looks (if beside? :beside :apart)]
                    #(-> % (update :all (fnil inc 0)) (update :bad (fnil + 0) (if ok? 0 1)))))
 

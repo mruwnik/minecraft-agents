@@ -730,6 +730,7 @@
           (is (= 1 (count (filter #(= :dig-route (:step %)) (events-of seen :go-to.escalated)))) "the dig route is not chosen again")
           (is (= [false :unreachable] ((juxt :arrived :reason) @out)) "the call ends, a failure")
           (is (some? (:why @out)) "with its reason")
+          (is (some (comp false? :ok?) (events-of seen :go-to.guess-look)) "a guess look that showed glowstone is told")
           (is (empty? (for [x (range 4 21) y (range 60 70) z (range 4 17)
                             :when (not (and (<= 8 x 12) (<= 61 y 65) (<= 8 z 12)))
                             :when (not= "glowstone" (block p [x y z]))]

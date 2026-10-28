@@ -748,12 +748,12 @@
         p (hiding-with-pickaxe world #{[1 64 0] [1 65 0] [2 64 0] [2 65 0] [3 64 0] [3 65 0]})
         answer #(choose/route-answer p [0 64 0] [4 64 0] (constantly true) (constantly false) false false %)
         {:keys [seconds dig]} (answer {})
-        hold (fn [beside apart] (reduce * (map #(if (= % [2 65 0]) (- 1 beside) (- 1 apart)) dig)))
         priced (fn [risk worth] (some? (answer {:guess-risk risk :worth-s worth})))]
     (is (some #{[2 65 0]} dig) "the straight tunnel, under the light")
+    (is (= 6 (count dig)))
     (is (= seconds (:seconds (answer {:guess-risk {:beside 0.5 :apart 0.2} :worth-s ##Inf}))) "the risk leaves the search alone")
-    (is (priced {:beside 0.5 :apart 0.2} (* 1.01 (/ seconds (hold 0.5 0.2)))) "priced once: no second factor on the route")
-    (is (not (priced {:beside 0.5 :apart 0.2} (* 0.99 (/ seconds (hold 0.5 0.2))))))
+    (is (priced {:beside 0.5 :apart 0.2} (* 1.01 (/ seconds 0.16384))) "priced once: no second factor on the route")
+    (is (not (priced {:beside 0.5 :apart 0.2} (* 0.99 (/ seconds 0.16384)))))
     (is (= [[2 65 0]] (map :cell (filter :beside (choose/route-cells p [0 64 0] [4 64 0] (constantly true) (constantly false))))))))
 
 (deftest a-dig-route-goes-round-cells-may-dig-refuses
