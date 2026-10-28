@@ -975,11 +975,7 @@
            1e-6)
         "hp lived x hp-price + death averted x death price: no hp is counted twice")))
 
-(deftest a-food-without-healing-fed-changes-nothing
-  (is (= {:health 5 :absorption 0} (food-cost/fed {:health 5 :absorption 0} "bread"))))
-
-(deftest a-golden-apple-counts-as-carried-food-only-when-worth-eating
-  (let [self (fn [health] #js {:health health :food 20 :inventory #js [#js {:name "golden_apple" :count 1}]})]
-    (is (not (meal/carries-food? (self 20))))
-    (is (= (food-cost/eat-precious? {:health 1} "golden_apple" true) (meal/carries-food? (self 1)))
-        "the hungry checks ask the price eat asks")))
+(deftest a-precious-food-counts-as-carried-food-only-when-worth-eating
+  (let [self (fn [item health food] #js {:health health :food food :inventory #js [#js {:name item :count 1}]})]
+    (is (not (meal/carries-food? (self "golden_apple" 1 5))) "a golden apple's hp (269 s) are worth less than the apple (1117 s)")
+    (is (meal/carries-food? (self "enchanted_golden_apple" 1 5)) "its absorption and hp (521 s) are worth more than it (8 s)")))

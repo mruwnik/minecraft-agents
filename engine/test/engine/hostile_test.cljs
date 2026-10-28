@@ -190,6 +190,29 @@
                           (calls (:p (await (flight-round respond (assoc hurt :self {:health 20 :food 20})))) "eat")))
               "at full health it averts little"))))))
 
+(deftest an-apple-turns-a-flight-into-eat-then-fight-or-keeps-it-eat-then-flee
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [two [(zombie 7 3 0) (zombie 8 3 1)]
+              scene (fn [health] {:self {:health health :food 20} :inventory (conj sword {:name "golden_apple" :count 1})
+                                  :equipment iron-armour :entities two})
+              round (fn ^:async r [health]
+                      (let [{:keys [seen p]} (await (flight-round respond (scene health)))]
+                        {:ate (first (filter #(= :hostile.precious-eat (:kind %)) @seen))
+                         :decided (first (filter #(= :hostile.decided (:kind %)) @seen))
+                         :swings (count (calls p "attack"))}))
+              flips (await (round 6))
+              keeps (await (round 4))]
+          (is (= {:flee 1238 :fight 1948} (:prices (:decided flips))))
+          (is (= [:fight 1167] [(:answer (:ate flips)) (:price (:ate flips))])
+              "6 hp, two zombies, iron: without the apple the flee (1238 s) beats the fight (1948 s); with it the fight costs 1167 s")
+          (is (pos? (:swings flips)) "it eats, then fights")
+          (is (= {:flee 1700 :fight 2382} (:prices (:decided keeps))))
+          (is (= [:flee 1217] [(:answer (:ate keeps)) (:price (:ate keeps))])
+              "4 hp: the flee wins with and without it (1217 s against 1700 s): eat, then flee")
+          (is (zero? (:swings keeps))))))))
+
 (defn fist-stance
   "What decide makes of a body at full health with no bed (a death walks it back from world spawn) with weapon against
   one mob 2 blocks off (health: what is left of it, nil full): fight it, or walk away and meet it again."

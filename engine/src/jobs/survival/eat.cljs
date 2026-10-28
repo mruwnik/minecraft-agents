@@ -7,7 +7,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.cond :as cond]
-                        [jobs.lib.foods :as foods]
+            [jobs.lib.foods :as foods]
             [jobs.lib.meal :as meal]
             [jobs.lib.reserve :as reserve]
             [jobs.lib.tidy :as tidy]

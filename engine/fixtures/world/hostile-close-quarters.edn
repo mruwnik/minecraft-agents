@@ -74,7 +74,7 @@
          [:until [:cli "observe" ["$body" "--world" "$world" "status"] {:health 2}] 10]
          [:wait-s 5]
          [:summon "zombie" [19.5 0 16.5] "{NoAI:1b}"]]
-   :expect [{:event {:source :job :kind :hostile.precious-eat :data {:item "golden_apple"}} :within-s 20}
+   :expect [{:event {:source :job :kind :hostile.precious-eat :data {:item "golden_apple" :answer :fight}} :within-s 20}
             {:event {:source :action :kind :done :data {:name "eat" :status "ate"}} :within-s 25}]
    :after [[:item "golden_apple" 0]]
    :limit-s 45}
