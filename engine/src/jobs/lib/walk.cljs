@@ -274,6 +274,13 @@
        :floors (fn [cell] (some-> (known cell) .-name))
        :opts (wsight/gate-opts)})))
 
+(defn gate-outcome
+  "What a walk's done says of its gate floor: :absent (seen, not the floor planned) or :missed (still unseen once
+  looked at), else nil."
+  [steps {:keys [why step cells]}]
+  (when (and step (:unseen-floor (get steps step)) (= cells [(wsight/floor-cell (get steps step))]))
+    ({:changed :absent :unseen :missed} why)))
+
 (defn start-state
   "The decide-tick state for walking steps from the body at pose {:x :z}."
   [steps pose]
@@ -315,9 +322,11 @@
                        stop (when-let [on-pose (:on-pose c)] (on-pose pose))
                        [state' {:keys [done controls yaw pitch warn]}] (if stop [@state {:done stop}] (decide-tick env @state pose))]
                    (when gate
-                     (doseq [k (remove (get-in @state [:gate :resolved] #{}) (get-in state' [:gate :resolved] #{}))]
+                     (doseq [[k floor] (concat (map vector (remove (get-in @state [:gate :resolved] #{}) (get-in state' [:gate :resolved] #{})) (repeat :present))
+                                               (when-let [floor (gate-outcome steps done)] [[(:step done) floor]]))]
                        (let [cell (wsight/floor-cell (nth steps k))]
-                         (ctx/emit! c :walk.gate-resolved :debug {:step k :cell cell :block ((:floors gate) cell)}))))
+                         (ctx/emit! c :walk.unseen-floor :info {:step k :cell cell :floor floor :block ((:floors gate) cell)})
+                         (when-let [on-floor (:on-floor c)] (on-floor floor cell)))))
                    (let [[tracked data] (gaps/tick steps @gap (:i (:exec state')) controls done (:y pose))]
                      (vreset! gap tracked)
                      (when data (ctx/emit! c :gap-jump :info data)))

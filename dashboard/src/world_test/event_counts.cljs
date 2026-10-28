@@ -31,6 +31,7 @@
   over the seconds between the starts, per mob kind and sprint state (cost.danger/::closing-rates).
   walk-pace: the steers of go-to's walks (a job id ending /walk) outside a flight: blocks over the steers' own seconds (cost/walk-speed).
   guess-looks [--agents DIR] (world-test.guess-looks; all bodies) counts from the logs alone: k of n looks of a dig route's guessed rock cells that showed it not diggable, per class (go-to escalation/prior-good-looks).
+  unseen-floors (world-test.unseen-floors; all bodies) counts from the logs alone the unseen floors walks looked at, absent and present (value/::unseen-floor-counts).
   gap-miss: the miss rate of gap jumps per [width run-up dy sprint] from go-to's :gap-jump events (world-test.gap-miss; trial bodies only).
   Pure parts: scan-line, exchange, starts, starts-by-mob, notices, groups, vein-seen, flee-steps, pace-report, closing-pieces, closing-report, walk-steers, walk-report, walk-detour."
   (:require ["fs" :as fs]
@@ -50,6 +51,7 @@
             [world-test.gap-miss :as gap-miss]
             [world-test.fresh-drop :as fresh-drop]
             [world-test.guess-looks :as guess-looks]
+            [world-test.unseen-floors :as unseen-floors]
             [world-test.hide-ends :as hide-ends]
             [world-test.resight :as resight]
             [world-test.spot-returns :as spot-returns]
@@ -613,7 +615,7 @@
        (sort-by :t)
        vec))
 
-(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | closing-rate | walk-pace | walk-detour | gap-miss | way-on | guess-looks | spot-returns | field-passes | arrow-shots | caught-flights | vein-seen | water-lags | surface-heights | resight | wall-sides | far-side-rows | pen-escapes | wall-places | hide-ends [--run ID --animals N --secs S --escaped E] [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N] [--difficulty D]
+(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | closing-rate | walk-pace | walk-detour | gap-miss | way-on | guess-looks | unseen-floors | spot-returns | field-passes | arrow-shots | caught-flights | vein-seen | water-lags | surface-heights | resight | wall-sides | far-side-rows | pen-escapes | wall-places | hide-ends [--run ID --animals N --secs S --escaped E] [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N] [--difficulty D]
   every command first folds the logs into the counts file (default worlds/test/priors-counts.edn), then reports from the file; --since-ms keeps the rows of fights started after it.")
 
 (defn- parse-args [argv]
@@ -744,6 +746,13 @@
                                                                       :when look]
                                                                   look))))
                          0)
+       "unseen-floors" (do (println (pr-str (unseen-floors/report (for [b (array-seq (fs/readdirSync agents))
+                                                                        :when (fs/existsSync (path/join agents b "engine"))
+                                                                        line (event-lines (path/join agents b "engine"))
+                                                                        :let [floor (unseen-floors/scan-line line)]
+                                                                        :when floor]
+                                                                    floor))))
+                           0)
        "spot-returns" (do (println (pr-str (spot-returns/count-in agents))) 0)
        "field-passes" (do (println (pr-str (field-passes/count-in agents probe?))) 0)
        "arrow-shots" (let [rows (mapcat #(arrow-shots/meets (read-agent (path/join agents % "engine") since-ms))
