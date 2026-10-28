@@ -1,0 +1,22 @@
+;; Card 06e1f8a9: jobs.build.from-plan fills under a floor with nothing to click beside it, priced as earthwork (jobs.lib.build.fill).
+;; floor-over-a-two-deep-dip: a 3x3 plank floor above a dip 2 deep and wider than the floor: one dirt column under it, the floor grows from it.
+;; floor-over-a-deep-ravine: the same floor over a ravine 20 deep: the fill dearer than the floor, so it is not placed and the floor is left.
+{:defaults
+ {:tags [:build]
+  :plot {:height 24 :floor "grass_block"}
+  :plans [{:id "floor" :metadata {:by "$body"}
+           :parts [{:id "f" :box [#at [15 0 20] #at [17 0 22]] :want "oak_planks"}]}]
+  :body {:at [16.5 0 12.5] :yaw 0 :inventory [["oak_planks" 9] ["dirt" 8]] :effects [["resistance" 600 4]]}
+  :limit-s 240}
+ :cases
+ [{:name "floor-over-a-two-deep-dip"
+   :blocks [[:fill [13 -2 18] [19 -1 24] "air"]]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:floor"})]]
+   :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 200 :of-job true}]
+   :after [[:block [15 0 20] "oak_planks"] [:block [17 0 22] "oak_planks"] [:block [16 0 21] "oak_planks"]]}
+  {:name "floor-over-a-deep-ravine"
+   :blocks [[:fill [13 -20 18] [19 -1 24] "air"]]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:floor"})]]
+   :expect [{:event {:source :job :kind :stopped} :within-s 120 :of-job true}]
+   :after [[:not-block [16 0 21] "oak_planks"] [:item "dirt" 8]]
+   :limit-s 150}]}

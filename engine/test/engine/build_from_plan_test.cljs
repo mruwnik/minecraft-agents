@@ -1194,6 +1194,22 @@
             (is (= 2 (:placed result)))
             (is (= "dirt" (block p [3 66 3])))))))))
 
+(deftest a-floor-over-a-dip-with-nothing-to-click-starts-from-one-fill-block-the-body-places-under-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cells [[2 65 2] [3 65 2] [2 65 3] [3 65 3]]
+              plan {:id "floor" :parts [{:id "f" :cells cells :want "oak_planks"}]}
+              {:keys [eng p]} (start {:blocks wide-ground :inventory [{:name "oak_planks" :count 4} {:name "dirt" :count 4}]
+                                      :self {:pos {:x 7.5 :y 64 :z 3.5}}}
+                                     {"floor" plan} [])]
+          (no-support-world! p)
+          (let [result (await (child-outcome eng job {:plan "floor"} 400))]
+            (is (= [] (:missing result)))
+            (is (= {} (:given-up result)))
+            (is (every? #(= "oak_planks" (block p %)) cells))
+            (is (= 1 (count (filter #(= "dirt" (block p (update % 1 dec))) cells))) "one support column, the rest of the floor grows from it")))))))
+
 (deftest a-cell-whose-floor-was-never-seen-is-looked-at-before-it-is-refused-no-support
   (async done
     (tu/run-async done

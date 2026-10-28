@@ -15,6 +15,7 @@
             [jobs.lib.reach :as lib-reach]
             [plan.rail :as rail]
             [plan.shape :as shape]
+            [jobs.lib.build.fill :as fill]
             [jobs.lib.build.wood :as wood]
             [jobs.lib.trees :as trees]
             [jobs.lib.need :as need]
@@ -374,7 +375,8 @@
   "{:cells judged} for the plan in the args, or {:trouble text}."
   [c]
   (let [{:keys [plan part]} (:args c)
-        answer (surfaced c (known/plan c plan))
+        answer (let [a (surfaced c (known/plan c plan))]
+                (cond-> a (:cells a) (update :cells #(fill/with-fill (partial world-block (:primitives c)) %))))
         usable? (and answer (not (:broken answer)))
         carried-map (when usable? (storage/carried-totals (u/inventory (:primitives c))))
         wood (when usable? (wood-choice c answer carried-map))
