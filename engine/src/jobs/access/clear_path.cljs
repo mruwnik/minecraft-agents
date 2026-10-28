@@ -34,6 +34,9 @@
   - Never digs a door, gate, trapdoor, bed, container, sign or an unbreakable block.
   - Each cell is a jobs.blocks.dig child (zones, claims, hazards and tools are its rules). It picks up the drop
     (:collect) when there is room for it, so the block can be put back; with no room it digs on and leaves it.
+  - With :close-behind, a door 2 or more deep has its first column put back (jobs.blocks.place children, the dug blocks)
+    from the second before the body walks on out, so nothing follows it through (go-to's break-out of its own pen); a cell
+    it cannot fill (an animal in it) is left to go-to's put-back.
   - Then it walks into the cell beyond (a go-to child).
   One call is the whole door; it yields :continue only while a dig child waits on the world.
   Needs nothing carried (a tool the dig child cannot find is its :dig-waits). Quote: the door's cells times the time of a
@@ -42,7 +45,7 @@
   :no-door (no such wall here), :protected (a block it never digs), :footprint (a cell of a plan this body made,
   unless the spare-own-builds setting is false) and :dig-waits (the dig child's wait or decline, its ending the :because); :too-dear (the price over :max-dig-s); :nothing-possible for
   :dig-failed (its ending the :because), :refills (a cell dug stair.limits/max-digs times, e.g. sand falling in) and :step-failed
-  (the walk through did not arrive). Data {:dug [{:cell :block}] :at [x y z] :through [x y z]}.
+  (the walk through did not arrive). Data {:dug [{:cell :block}] :at [x y z] :through [x y z]}, :shut [cells put back] with :close-behind.
   It does not put the blocks back: jobs.movement.go-to does that once through.
   A tool the dig lacks is fetched (jobs.lib.need, from the call's :ways) unless they are only #{:carried}; a block no carried tool harvests
   is dug bare-handed (slow, the drop is lost) when no fetch is allowed or one failed, or at once with :need-drop false; :need-drop true stops :dig-waits :no-tool instead.")
@@ -51,6 +54,7 @@
   {:heading {:doc ":north :east :south or :west" :spec #{:north :east :south :west} :default nil}
    :ignore-zones? :shared
    :max-dig-s {:doc "seconds of digging the whole door may take (see doc); nil: no bound" :spec (a/num-in 0 nil) :default nil}
+   :close-behind {:doc "true: put the door's first column back from inside before walking on out (see the doc)" :spec boolean? :default false}
    :need-drop {:doc "false: dig a block no carried tool harvests bare-handed (slow, the drop is lost) without fetching; true: never; unset: bare-handed when no pickaxe can be fetched" :spec (a/or-of boolean? #{:auto}) :default :auto}})
 
 (def headings {:north [0 -1] :south [0 1] :east [1 0] :west [-1 0]})
@@ -112,6 +116,7 @@
   (let [m (ctx/mem c)]
     (merge {:dug (:dug m []) :at (reach/standing-vec (:primitives c))}
            (when-let [t (:through m)] {:through t})
+           (when (seq (:shut m)) {:shut (:shut m)})
            detail)))
 
 (defn done?
@@ -121,7 +126,7 @@
   (let [m (ctx/mem c)
         p (:primitives c)
         cells (:cells m)
-        open? (fn [cell] (bs/air (u/seen-name p (zipmap [:x :y :z] cell))))]
+        open? (fn [cell] (or (some #{cell} (:shut m)) (bs/air (u/seen-name p (zipmap [:x :y :z] cell)))))]
     (if (and (seq cells) (:through m) (= (:through m) (reach/standing-vec p)) (every? open? cells))
       (contract/ok :done (str "cleared a way through to " (pr-str (:through m))) :units :cells :done (count cells) :left 0
                    :result (result-of c {}))
@@ -336,21 +341,60 @@
                   (ctx/update-mem! c assoc :digging d)
                   {:digging d}))))))
 
+(defn mouth
+  "[cells inner] of a door at least 2 columns deep: the dug cells of its first column, feet first, and the feet cell of
+  its second; else nil."
+  [c]
+  (let [{:keys [start dug]} (ctx/mem c)
+        dir (headings (:heading (:args c)))
+        column (fn [k] (let [[x _ z] (escape/ahead start dir k)]
+                         (sort-by second (filter (fn [[cx _ cz]] (and (= x cx) (= z cz))) (map :cell dug)))))
+        [cells inner] [(column 1) (column 2)]]
+    (when (and (seq cells) (seq inner)) [(vec cells) (first inner)])))
+
+(defn ^:async close-behind!
+  "With :close-behind, before the walk out: walk into the door's second column (mouth), then put back its first column
+  one cell a call (memory :to-close; :shut the cells placed); once done, or when there is no second column or the
+  walk in did not get there, memory :closed. :again, :continue while a child waits, else nil."
+  [c]
+  (let [m (ctx/mem c)
+        p (:primitives c)]
+    (when (and (:close-behind (:args c)) (not (:closed m)))
+      (let [[cells inner] (mouth c)
+            left (:to-close m cells)
+            closed! (fn [] (ctx/update-mem! c #(-> % (assoc :closed true) (dissoc :to-close))) :again)]
+        (cond
+          (or (nil? inner) (empty? left)) (closed!)
+          (not= inner (reach/standing-vec p))
+          (if (:inside-tried m)
+            (closed!)
+            (let [r (await (child/walk-into!* c :inside inner))]
+              (if (= :continue r) :continue (do (ctx/update-mem! c assoc :inside-tried true) :again))))
+          :else
+          (let [cell (first left)
+                block (some #(when (= cell (:cell %)) (:block %)) (:dug m))
+                r (await (ctx/call c :close 'jobs.blocks.place {:pos (zipmap [:x :y :z] cell) :use {:blocks (vec (distinct (cons block (b/drops-of p block))))}
+                                                                :ways #{:carried} :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+            (if (= :continue r)
+              :continue
+              (do (ctx/update-mem! c #(cond-> (assoc % :to-close (vec (rest left))) (:placed (:data r)) (update :shut (fnil conj []) cell)))
+                  :again))))))))
+
 (defn ^:async next!
   "One piece of the door: plan it, dig a cell, plan on past a far side it could not see, or step through. :again,
   :continue (a child waits) or the ending."
   [c]
-  (let [{:keys [cells through unseen digging]} (ctx/mem c)]
+  (let [{:keys [cells through unseen digging shut]} (ctx/mem c)]
     (if-not through
       (await (plan! c))
-      (let [start (if digging {:digging digging} (await (start-cell! c cells)))]
+      (let [start (if digging {:digging digging} (await (start-cell! c (remove (set shut) cells))))]
         (cond
           (= :open start) :again
           (:unloaded start) (finish! c :no-door {:why (str "the cell " (pr-str (:unloaded start)) " is not loaded")
                                                  :cell (:unloaded start)})
           (:digging start) (await (dig-cell! c (:digging start)))
           unseen (await (replan! c))
-          :else (await (step-through! c through)))))))
+          :else (or (await (close-behind! c)) (await (step-through! c through))))))))
 
 (defn ^:async round
   "The whole door: next! until it ends, a pace between pieces."

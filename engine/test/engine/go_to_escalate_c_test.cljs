@@ -601,6 +601,9 @@
 (deftest a-stair-through-its-own-pen-picks-up-its-drops
   (is (= [true false] (map #(:collect (second (esc/escalation-job {:step :stair :heading :east :steps 2 :own-cut %} nil false false false))) [true nil]))))
 
+(deftest a-door-through-its-own-pen-shuts-its-mouth-behind-the-body
+  (is (= [true nil] (map #(:close-behind (second (esc/escalation-job {:step :clear-path :heading :east :own-cut %} nil false false false))) [true nil]))))
+
 (deftest a-dig-route-s-digs-fetch-a-pickaxe-as-fetch-tool-says
   (async done
     (tu/run-async done

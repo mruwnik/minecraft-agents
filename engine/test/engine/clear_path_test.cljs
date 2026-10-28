@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.fake :as fake]
             [engine.registry :as registry]
             [engine.test-util :as tu :refer [box]]
             [engine.triggers :as triggers]
@@ -29,7 +30,8 @@
   ([world stub args rounds f]
    (let [clock (atom 1000000)
          [_ sink] (tu/legacy-capture-sink)
-         p (cond-> (tu/fake (dissoc world :plans :sight)) (:sight world) (tu/seeing-within (:sight world)))
+         p (cond-> (tu/fake (dissoc world :plans :sight :p-out)) (:sight world) (tu/seeing-within (:sight world)))
+         _ (some-> (:p-out world) (reset! p))
          out (atom :not-done)
          parent (tu/recording-parent job args out f)
          jobs (cond-> (assoc registry/jobs 'recording-parent parent)
@@ -238,3 +240,24 @@
     (is (= [:later :digging] (done-of dug {:x 3 :y 64 :z 0} plan-mem)) "one cell still solid")
     (is (= [:later :digging] (done-of (merge open floor) {:x 0 :y 64 :z 0} plan-mem)) "open but not yet through")
     (is (= [:ok :done] (done-of (merge open floor) {:x 3 :y 64 :z 0} plan-mem)) "open and stood through")))
+
+(deftest close-behind-puts-the-first-column-back-from-inside-before-walking-out
+  ;; go-to's break-out of its own pen: an animal must not follow the body out through the open door
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (atom nil)
+              w (assoc wall :inventory [{:name "stone_pickaxe" :count 1}] :drops {"stone" "cobblestone"} :p-out p)
+              r (await (run-door w nil {:heading :east :close-behind true}))
+              block (fn [cell] (get-in @(fake/state @p) [:blocks cell] "air"))]
+          (is (= [:done [3 64 0] [[1 64 0] [1 65 0]]] [(:status r) (:through r) (:shut r)]) (pr-str (dissoc r :ending)))
+          (is (= ["cobblestone" "cobblestone" "air" "air"] (mapv block [[1 64 0] [1 65 0] [2 64 0] [2 65 0]]))
+              "the mouth is shut, the rest of the door left to go-to's put-back"))))))
+
+(deftest a-door-one-column-deep-is-walked-out-of-with-close-behind
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [thin (update wall :blocks #(apply dissoc % (for [y [64 65] z [-1 0 1]] (str "2," y "," z))))
+              r (await (run-door (assoc thin :inventory [{:name "stone_pickaxe" :count 1}]) nil {:heading :east :close-behind true}))]
+          (is (= [:done [2 64 0] nil] [(:status r) (:through r) (:shut r)]) (pr-str (dissoc r :ending))))))))
