@@ -94,7 +94,7 @@
    :part {:doc "only the cells of this part, and the cells of other parts it stands on (down the column), built first" :spec a/name? :default nil}
    :accept {:doc "fluid hazards of a cell taken: :fluid-adjacent (water beside; placing beside or into water seals and bridges), :lava-adjacent (lava beside; not taken by default: the body stands beside the cell), :falling-block (a dig under sand or gravel that falls in)" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default [:fluid-adjacent]}
    :explore {:doc "walk off to look for blocks and tools that are not in sight when the plan lacks them" :spec boolean? :default true}
-   :worth {:doc "seconds the build is worth to the caller, which the fills under a floor with nothing to click beside it (dirt columns, priced as earthwork and the dirt's obtain) must stay within together; nil: no cap" :spec (a/num-in 0 nil) :default nil}
+   :worth {:doc "seconds the build is worth to the caller, which the fills under a floor with nothing to click beside it (dirt columns, priced as earthwork and the dirt's obtain) must stay within together, or the build is :later :not-worth as a whole; nil: no cap (a fill priced ##Inf is still refused)" :spec (a/num-in 0 nil) :default nil}
    :ignore-zones? :shared})
 
 (def ways need/fetch-ways)
@@ -128,9 +128,10 @@
   saved or fixed later). A readable plan with no cells to build (in :part) is never: the cause is
   {:reason :plan-trouble :why text}."
   [c]
-  (let [{:keys [trouble later?]} (plan-now c)]
+  (let [{:keys [trouble later? not-worth]} (plan-now c)]
     (cond
       (nil? trouble) (contract/ok :plan "the plan can be built")
+      not-worth (contract/later :not-worth trouble :why trouble :price (:price not-worth) :worth (:worth not-worth))
       (= no-zones trouble) (contract/later :no-zones "no zone list has been read")
       later? (contract/later :plan-trouble trouble :why trouble)
       :else (contract/never :plan-trouble trouble :why trouble))))

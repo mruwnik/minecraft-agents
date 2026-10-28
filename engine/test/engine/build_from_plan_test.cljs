@@ -13,6 +13,7 @@
             [engine.harvest-test :as h]
             [engine.registry :as registry]
             [engine.test-util :as tu]
+            [jobs.build.pen :as pen]
             [jobs.lib.cost :as cost]
             [engine.triggers :as triggers]
             [jobs.lib.escape :as escape]
@@ -1258,19 +1259,24 @@
           (is (not= "oak_planks" (block pp [3 65 3])) "declined when the column costs more than the worth")
           (is (= "air" (block pp [3 62 3]))))))))
 
-(deftest two-floor-islands-share-one-worth-for-their-fill-columns
+(deftest a-build-fills-every-island-or-none-when-the-worth-pays-only-some
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [pit (into {} (for [x (range 2 5) z [2 3 4 6 7 8] y [61 62 63]] [(h/cell-key x y z) (if (= y 61) "stone" "air")]))
-              plan {:id "two" :parts [{:id "f" :cells [[3 65 3] [3 65 7]] :want "oak_planks"}]}
-              {:keys [eng p]} (start {:blocks (merge wide-ground pit) :inventory [{:name "oak_planks" :count 2} {:name "dirt" :count 8}]
-                                      :self {:pos {:x 7.5 :y 64 :z 5.5}}}
-                                     {"two" plan} [])]
-          (no-support-world! p)
-          (await (child-outcome eng job {:plan "two" :worth (* 4.5 (cost/earthwork-s 1))} 400))
-          (is (= 1 (count (filter #(= "oak_planks" (block p %)) [[3 65 3] [3 65 7]]))) "the worth pays one 3-deep column, not one for each island")
-          (is (= 3 (count (for [z [3 7] y [62 63 64] :when (= "dirt" (block p [3 y z]))] 1)))))))))
+        (let [zs [3 5 7]
+              pit (into {} (for [x (range 2 5) z (range 2 9) y [61 62 63]] [(h/cell-key x y z) (if (= y 61) "stone" "air")]))
+              plan {:id "three" :parts [{:id "f" :cells (mapv #(vector 3 65 %) zs) :want "oak_planks"}]}
+              run (fn ^:async f [worth]
+                    (let [{:keys [eng p]} (start {:blocks (merge wide-ground pit) :inventory [{:name "oak_planks" :count 3} {:name "dirt" :count 12}]
+                                                  :self {:pos {:x 7.5 :y 64 :z 5.5}}}
+                                                 {"three" plan} [])]
+                      (no-support-world! p)
+                      [(await (child-outcome eng job {:plan "three" :worth worth} 400)) p]))
+              [poor pp] (await (run (* 6.5 (cost/earthwork-s 1))))
+              [rich pr] (await (run (* 9.5 (cost/earthwork-s 1))))]
+          (is (zero? (count (filter #(= "oak_planks" (block pp %)) (map #(vector 3 65 %) zs)))) "a worth for two of the three 3-deep columns places nothing")
+          (is (zero? (count (for [z zs y [62 63 64] :when (= "dirt" (block pp [3 y z]))] 1))) "and spends no fill")
+          (is (= 3 (count (filter #(= "oak_planks" (block pr %)) (map #(vector 3 65 %) zs)))) (pr-str (select-keys rich [:status :reason :text]))))))))
 
 (deftest a-fill-is-priced-as-earthwork-and-the-obtain-of-the-dirt-short-of-what-is-carried
   (let [c {:primitives (tu/fake-on-floor {:inventory [{:name "dirt" :count 2}]})}
@@ -1282,6 +1288,14 @@
       (is (= [["dirt" 3]] @asked) "the obtain is asked for the 3 short"))
     (with-redefs [need/fetch-opts (constantly nil)]
       (is (= ##Inf (plan/fill-price c 5)) "no fetch allowed and too little carried: no fill"))))
+
+(deftest a-pen-offers-each-part-the-worth-less-the-fill-earlier-parts-placed
+  (let [c {:args {:worth 1000} :primitives (tu/fake-on-floor {:inventory []})}]
+    (with-redefs [need/fetch-opts (constantly {:how #{:chest}})
+                  need/item-price (constantly 100)
+                  ctx/mem (constantly {:built {:filled 2}})]
+      (is (= (- 1000 100 (cost/earthwork-s 2)) (pen/part-worth c)) "the earthwork and the dirt fetched for it are spent")
+      (is (nil? (pen/part-worth (assoc c :args {}))) "no worth: no cap"))))
 
 (deftest a-cell-whose-floor-was-never-seen-is-looked-at-before-it-is-refused-no-support
   (async done
@@ -1299,7 +1313,7 @@
             (is (= {} (:given-up result)))
             (is (= 1 (:placed result)))))))))
 
-(deftest a-cell-no-neighbour-ever-supports-and-no-worth-pays-a-fill-for-is-given-up-as-no-support-and-never-placed
+(deftest a-build-with-a-cell-no-neighbour-supports-and-no-worth-pays-a-fill-for-is-not-worth-as-a-whole-and-places-nothing
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -1310,11 +1324,8 @@
           (no-support-world! p)
           (let [result (await (child-outcome eng job {:plan "float" :worth 0} 200))]
             (is (empty? (places p)))
-            (is (= {[3 66 3] :no-support} (:given-up result)))
             (is (= :stopped (:status result)))
-            (is (= :incomplete (:reason result)))
-            (is (re-find #"still missing 1" (:text result)))
-            (is (re-find #"no-support" (:text result)))))))))
+            (is (= :not-worth (:reason result)))))))))
 
 (deftest a-build-that-leaves-cells-ends-stopped-and-a-complete-one-does-not
   (async done

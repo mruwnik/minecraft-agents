@@ -373,33 +373,38 @@
 
 (def no-zones "no zone list has been read")
 
+(defn fill-price
+  "Seconds n fill blocks cost: their earthwork (cost/earthwork-s) and the obtain of the dirt short of `carried` (need/item-price)."
+  ([c n] (fill-price c n (get (storage/carried-totals (u/inventory (:primitives c))) "dirt" 0)))
+  ([c n carried]
+   (let [short (max 0 (- n carried))
+         o (need/fetch-opts c)]
+     (+ (cost/earthwork-s n)
+        (cond (zero? short) 0
+              o (need/item-price c "dirt" short o nil)
+              :else ##Inf)))))
+
 (defn fill-worth
-  "The call's :worth less the earthwork (cost/earthwork-s) of the fill this call placed (:filled): one budget for every fill; nil: no cap."
+  "The call's :worth less the price (fill-price, the dirt fetched included) of the fill this call placed (:filled, short of the dirt carried at its first block); one budget for every fill; nil: no cap."
   [c]
   (when-let [w (:worth (:args c))]
-    (max 0 (- w (cost/earthwork-s (count (:filled (ctx/mem c))))))))
+    (let [n (count (:filled (ctx/mem c)))]
+      (max 0 (- w (if (zero? n) 0 (fill-price c n (:fill-carried (ctx/mem c) 0))))))))
 
 (defn fill-depth
   "The deepest fill column the fill-worth affords (fill/max-depth)."
   [c]
   (fill/max-depth (fill-worth c)))
 
-(defn fill-price
-  "Seconds n fill blocks cost: their earthwork (cost/earthwork-s) and the obtain of the dirt short of what is carried (need/item-price)."
-  [c n]
-  (let [short (max 0 (- n (get (storage/carried-totals (u/inventory (:primitives c))) "dirt" 0)))
-        o (need/fetch-opts c)]
-    (+ (cost/earthwork-s n)
-       (cond (zero? short) 0
-             o (need/item-price c "dirt" short o nil)
-             :else ##Inf))))
-
 (defn planned
   "{:cells judged} for the plan in the args, or {:trouble text}."
   [c]
   (let [{:keys [plan part]} (:args c)
-        answer (let [a (surfaced c (known/plan c plan))]
-                (cond-> a (:cells a) (update :cells #(fill/with-fill (partial world-block (:primitives c)) (fill-worth c) (partial fill-price c) %))))
+        found (surfaced c (known/plan c plan))
+        filled (when (:cells found)
+                 (fill/with-fill (partial world-block (:primitives c)) (fill-worth c) (partial fill-price c)
+                                 (if part (with-supports (:cells found) part) (:cells found))))
+        answer (cond-> found (:fill filled) (update :cells into (:fill filled)))
         usable? (and answer (not (:broken answer)))
         carried-map (when usable? (storage/carried-totals (u/inventory (:primitives c))))
         wood (when usable? (wood-choice c answer carried-map))
@@ -408,11 +413,14 @@
                   (let [cells (prepared (judged (:primitives c) answer part carried-map wood) carried (:misplaced (ctx/mem c) {}) (own-kept c))
                         kept? (kept-ground c cells (sturdy-ground? c))]
                     (mapv #(if (and (:short? %) (kept? %)) (dissoc % :short?) %) cells))))
-        trouble (or (plan-trouble answer cells)
+        trouble (or (when-let [nw (:not-worth filled)]
+                      (str "the fill under the floor costs " (js/Math.round (:price nw)) " s, more than the build is worth"
+                           (when (:worth nw) (str " (" (js/Math.round (:worth nw)) " s)"))))
+                    (plan-trouble answer cells)
                     (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) no-zones))]
     (if-not trouble
       {:cells cells :wood wood}
-      {:trouble trouble :later? (and (not= no-zones trouble) (known/unreadable? answer))})))
+      {:trouble trouble :not-worth (:not-worth filled) :later? (and (not= no-zones trouble) (known/unreadable? answer))})))
 
 (def neighbour-steps [[0 -1 0] [1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0]])
 

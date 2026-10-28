@@ -16,10 +16,11 @@
   respawn bed are not saved or restored here: the caller keeps them (jobs.strip.all does).
   A night set-spawn is waited out with :continue. Needs the plan to be readable and to hold a \"bed\" spot, else
   condition-failed :bad-plan. Done at once when :home is already at the bed. Ends :done {:bed pos}, or the failing child's kind
-  with :child-failed and :child, :because (the child's reason).")
+  with :child-failed and :child, :because (the child's reason). Its :worth is the build's.")
 
 (a/defargs args
   {:base {:doc "id of the field-base plan (blueprint field-base)" :spec a/name? :default nil}
+   :worth {:doc "seconds the base is worth to the caller, which the build's fills must stay within; nil: no cap" :spec (a/num-in 0 nil) :default nil}
    :ignore-zones? :shared})
 
 (a/defargs settings
@@ -33,7 +34,7 @@
 
 (defn ^:async round [c]
   (let [bed (bed c)
-        zones (select-keys (:args c) [:ignore-zones?])]
+        zones (select-keys (:args c) [:ignore-zones? :worth])]
     (if-not bed
       (ctx/end c :condition-failed :bad-plan {:base (:base (:args c))})
       (let [f (await (run-all! c [[:build 'jobs.build.from-plan (merge {:plan (:base (:args c))} zones)]

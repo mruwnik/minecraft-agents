@@ -42,17 +42,19 @@
       (first (sort-by count (keep column island))))))
 
 (defn with-fill
-  "cells with the fill column under each island of the lowest layer that has nothing to click (support-column), shallowest first
-  while (price n) of all n fill blocks so far stays within worth (nil: no cap), else cells. block-at: pos -> {:name} or nil (unseen)."
+  "{:fill cells} of the fill column under each island of the lowest layer that has nothing to click (support-column), or
+  {:not-worth {:price :worth}} when (price n) of all n fill blocks is more than worth (nil: no cap) or ##Inf: a build needs every island, so
+  none is filled on its own. block-at: pos -> {:name} or nil (unseen)."
   [block-at worth price cells]
   (let [live (remove #(= :clear (:want %)) cells)
         low (when (seq live) (apply min (map #(get (:pos %) 1) live)))
         floor (filter #(= low (get (:pos %) 1)) live)
         planned (set (map :pos cells))
         by-pos (into {} (map (juxt :pos identity)) floor)
-        columns (sort-by count (keep #(support-column block-at planned (max-depth worth) %) (islands (keys by-pos))))
-        paid (reduce (fn [paid column]
-                       (if (or (nil? worth) (<= (price (+ (count (apply concat paid)) (count column))) worth)) (conj paid column) paid))
-                     [] columns)
+        columns (keep #(support-column block-at planned ##Inf %) (islands (keys by-pos)))
+        n (count (apply concat columns))
+        cost (when (pos? n) (price n))
         fill (fn [column] (map (fn [pos] {:pos pos :want "dirt" :part (:part (by-pos (update (first column) 1 inc))) :fill true}) column))]
-    (into (vec cells) (mapcat fill) paid)))
+    (if (and cost (or (= ##Inf cost) (and worth (> cost worth))))
+      {:not-worth {:price cost :worth worth}}
+      {:fill (vec (mapcat fill columns))})))

@@ -178,8 +178,15 @@
   [c]
   (or (:part (:args c)) (next-part c) (:part (first (:cells (judged-plan c))))))
 
+(defn part-worth
+  "The call's :worth less the price (plan/fill-price) of the fill earlier parts placed: one worth for every part; nil: no cap."
+  [c]
+  (when-let [w (:worth (:args c))]
+    (let [n (:filled (:built (ctx/mem c)) 0)]
+      (max 0 (- w (if (zero? n) 0 (plan/fill-price c n 0)))))))
+
 (defn build-args [c]
-  (assoc (select-keys (:args c) [:plan :accept :explore :worth :ignore-zones?]) :part (build-part c) :ways (need/pass-ways c)))
+  (assoc (select-keys (:args c) [:plan :accept :explore :ignore-zones?]) :worth (part-worth c) :part (build-part c) :ways (need/pass-ways c)))
 
 ;; ------------------------------------------------------------------ conditions
 

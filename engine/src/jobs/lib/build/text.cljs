@@ -8,7 +8,7 @@
             [jobs.lib.build.plan :refer [owed kept-ground shortage left-text shortage-text]]))
 
 (defn summary
-  "What a build of cells left, from the job memory m: {:placed :missing :short :given-up :wrong :refused}."
+  "What a build of cells left, from the job memory m: {:placed :missing :short :given-up :wrong :refused}, with :filled (the fill blocks placed) when any."
   [c cells m sturdy-ground]
   (let [kept? (kept-ground c cells sturdy-ground)
         left (owed cells)
@@ -23,7 +23,8 @@
         wood (:wood m)]
     (cond-> {:placed (:placed m 0) :missing (mapv :pos left) :short (shortage left (storage/carried-totals (u/inventory (:primitives c))))
              :given-up given-up :wrong wrong :refused refused}
-      wood (assoc :wood wood))))
+      wood (assoc :wood wood)
+      (seq (:filled m)) (assoc :filled (count (:filled m))))))
 
 (defn fetch-failed-text
   "The booked failed fetches of the short items, in words: 'could not fetch birch_log: no-source (why)'."
