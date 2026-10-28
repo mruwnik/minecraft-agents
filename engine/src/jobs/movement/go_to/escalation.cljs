@@ -422,7 +422,7 @@
         target (some-> e :pos vec)
         to-goal #(u/dist (zipmap [:x :y :z] %) pos)
         nearer? (and (= :approach step) target (some-> (:escalation-from (ctx/mem c)) to-goal dec (> (to-goal target))))]
-    (ctx/update-mem! c #(cond-> (-> % (dissoc :escalation :escalation-from :planned :holes-before :best)
+    (ctx/update-mem! c #(cond-> (-> % (dissoc :escalation :escalation-from :planned :holes-before :best :starts)
                                     (cond-> (= :approach step) (update :approached (fnil conj #{}) target)
                                             nearer? (update :fruitless (fn [n] (max 0 (dec (or n 0))))))
                                     (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
@@ -465,12 +465,13 @@
 
 (defn escalation-stopped!
   "The child changed something before it stopped: walk again (escalated!) after a go-to.escalation-stopped warn. On a
-  climb away from a dive (dive-climb-on?) the next stair takes another heading instead."
-  [c pos {:keys [step] :as detail}]
+  climb away from a dive (dive-climb-on?) the next stair takes another heading instead; a door that found a dead end
+  (:no-door, its cut put back) is not dug again."
+  [c pos {:keys [step reason] :as detail}]
   (ctx/emit! c :go-to.escalation-stopped :warn (assoc detail :text (str (name step) " stopped part way: "
                                                                         (some-> (:reason detail) name)
                                                                         (if (dive-climb-on? c pos) "; climbing on another way" "; walking again"))))
-  (when (dive-climb-on? c pos)
+  (when (or (dive-climb-on? c pos) (= :no-door reason))
     (ctx/update-mem! c update :skipped-steps (fnil conj #{}) (skip-key (:escalation (ctx/mem c)))))
   (escalated! c pos detail false))
 
@@ -536,7 +537,7 @@
         [job args] (escalation-job e (hole-tag c) (boolean (or (:exit-zone e) (:ignore-zones? (:args c)) (zone-exit? c (end/feet-cell c)))) (boolean (:by-hand (ctx/mem c))) (fetch-tool? c))
         _ (await (torch/return-torch! c))
         r (await (ctx/call c :escalation job (cond-> (update args :checks #(some->> % (ready/unforced c))) (= :approach step) (->> (ready/forage-walk c)))))]
-    (let [dug (concat (:planned (ctx/mem c)) (when (not= :continue r) (:dug (:data r))))]
+    (let [dug (concat (:planned (ctx/mem c)) (when (not= :continue r) (map #(assoc % :dug true) (:dug (:data r)))))]
       (forget-dug-own! c dug)
       (when-not (:own e) (note-holes! c dug)))
     (cond

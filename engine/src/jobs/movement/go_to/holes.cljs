@@ -127,12 +127,14 @@
     (vec (for [cell cells :let [n (block-at cell)] :when (and (escape/solid? n) (not (unseen? cell)))] {:cell cell :block n}))))
 
 (defn own-holes
-  "The ledger entries (jobs.lib.tidy :tidy, body memory) of cells this go-to's escalations dug, lowest first."
+  "The ledger entries (jobs.lib.tidy :tidy, body memory) of cells this go-to's escalations dug, lowest first, on a level
+  the farthest from the feet first (a dead-end cut is filled from its end back to its mouth)."
   [c]
-  (->> (tidy/entries c)
-       (filter #(and (:escalation %) (= (:root c) (:job %)) (= (:id c) (:go-to %))))
-       (sort-by (comp second :cell))
-       vec))
+  (let [[fx _ fz] (end/feet-cell c)]
+    (->> (tidy/entries c)
+         (filter #(and (:escalation %) (= (:root c) (:job %)) (= (:id c) (:go-to %))))
+         (sort-by (fn [{[x y z] :cell}] [y (- (+ (* (- x fx) (- x fx)) (* (- z fz) (- z fz))))]))
+         vec)))
 
 (defn hole-tag
   "What marks a hole as this go-to's in the tidy ledger; its stair child writes it (:note) as it digs; clear-path's are noted by go-to after each round and in its cleanup.
@@ -141,13 +143,13 @@
   (cond-> {:escalation true :go-to (:id c)} (:own-cut (:escalation (ctx/mem c))) (assoc :mend true)))
 
 (defn note-holes!
-  "Write every cell of dug ({:cell :block}) that is air now and not yet noted to the ledger, as a :dig entry with
+  "Write every cell of dug ({:cell :block}, :dug true when a child reported digging it) that is air now or so dug and not yet noted to the ledger, as a :dig entry with
   :escalation true and :any-of, the items that put it back (the block or what it drops). Body memory outlives the
   round, a cut, a cancel and a restart: jobs.survival.restore-broken puts back what go-to did not."
   [c dug]
   (let [own-plan (own-plan-fn c)]
-    (doseq [{:keys [cell block]} (distinct dug)]
+    (doseq [{:keys [cell block] :as d} (distinct dug)]
       (when-let [plan (own-plan cell)]
         (ctx/warn-once! c [:dug-own cell] :go-to.dug-own-build
                         {:cell (vec cell) :block block :plan plan :text (str "dug " block " at " (pr-str (vec cell)) " in its own plan " plan)}))
-      (escape/note-hole! c (hole-tag c) cell block))))
+      (escape/note-hole! c (hole-tag c) cell block (boolean (:dug d))))))

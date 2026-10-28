@@ -27,7 +27,7 @@
   ([world stub args rounds f]
    (let [clock (atom 1000000)
          [_ sink] (tu/legacy-capture-sink)
-         p (tu/fake (dissoc world :plans))
+         p (cond-> (tu/fake (dissoc world :plans :sight)) (:sight world) (tu/seeing-within (:sight world)))
          out (atom :not-done)
          parent (tu/recording-parent job args out f)
          jobs (cond-> (assoc registry/jobs 'recording-parent parent)
@@ -122,6 +122,16 @@
           (is (= [:done [3 64 0]] [(:status r) (:through r)]) (pr-str r))
           (is (= 4 (count (:dug r))) "two blocks high, two thick")
           (is (= [3 64 0] (:at r))))))))
+
+(deftest a-wall-thicker-than-the-body-sees-is-dug-on-as-each-row-shows-the-next
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [thick (assoc wall :sight 3 :inventory [{:name "wooden_pickaxe" :count 1}]
+                           :blocks (merge (box -2 63 -2 8 63 2 "stone") (box 1 64 -1 4 65 1 "stone")))
+              r (await (run-door thick nil))]
+          (is (= [:done [5 64 0]] [(:status r) (:through r)]) (pr-str r))
+          (is (= 8 (count (:dug r))) "four thick, past the max-thick of 3 it could not see"))))))
 
 (deftest the-step-through-is-a-go-to-child
   (async done

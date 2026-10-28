@@ -282,21 +282,21 @@
          (apply dissoc (box -6 64 -6 6 65 6 "stone") (for [x (range -2 3) z (range -2 3) y [64 65]] (str x "," y "," z)))))
 
 (deftest go-to-mends-a-dead-end-cut-of-its-own-pen-before-the-next-way
-  ;; card b8dbbf2b: a door too thick to finish ends in a dead end; its cut opens the pen, so it is put back before the next way
+  ;; a door whose far side, past what the body saw, has no floor ends in a dead end; its cut opens the pen, so it is put back before the next way
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [zones [{:name "pen" :owner "Fake" :min [-2 60 -2] :max [2 66 2]}]
               cow {:id 7 :name "cow" :kind "passive" :pos {:x -1.5 :y 64 :z -1.5}}
-              {:keys [out p seen]} (await (run-job! {:sight 3 :self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks thick-pit-pen :entities [cow]
+              {:keys [out p seen]} (await (run-job! {:sight 3 :self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (dissoc thick-pit-pen "7,63,0") :entities [cow]
                                                      :inventory [{:name "stone_pickaxe" :count 1}]}
-                                                    'jobs.movement.go-to {:pos [10 64 0] :range 1} zones))]
+                                                    'jobs.movement.go-to {:pos [10 64 0] :range 1} zones true))]
           (is (= {:arrived true} @out))
           (is (= [:go-to.escalated :go-to.escalation-stopped :go-to.restored]
                  (take 3 (map :kind (filter #(#{:go-to.escalated :go-to.escalation-stopped :go-to.restored} (:kind %)) @seen))))
               "the dead end's cut is put back before the next way, not once the walk is on")
           (is (some #{[3 64 0]} (:cells (first (events-of seen :go-to.restored)))) "the cell that opens into the pen first")
-          (is (not-any? #{"air"} [(block p [3 64 0]) (block p [3 65 0])]) "the pen's wall is whole again"))))))
+          (is (= (set (for [x [3 4 5] y [64 65]] [x y 0])) (set (:cells (first (events-of seen :go-to.restored))))) "the whole dead end is put back"))))))
 
 (deftest go-to-reads-its-own-pen-once-per-escalation-round
   ;; choose-escalation! and the replan hold the pen read in c (with-own-pen); without it each fn reads the pen itself (holes/pen-of)
@@ -621,7 +621,7 @@
                             (for [x (range 14 19) z (range 14 19) y [60 61]] (str x "," y "," z)))
               plan (shape/with-author {:id "pit" :parts [{:id "inside" :box [[14 60 14] [18 61 18]] :want [:any "air"]}]} "Fake")
               cows [{:id 7 :name "cow" :kind "passive" :pos {:x 15.5 :y 60 :z 15.5}} {:id 8 :name "cow" :kind "passive" :pos {:x 17.5 :y 60 :z 17.5}}]
-              {:keys [out p seen]} (await (run-job! {:self {:pos {:x 18.4 :y 60 :z 16.5}} :blocks blocks :entities cows}
+              {:keys [out p seen]} (await (run-job! {:sight 3 :self {:pos {:x 18.4 :y 60 :z 16.5}} :blocks blocks :entities cows}
                                                     'jobs.movement.go-to {:pos [26 60 16] :range 1} {:plans {"pit" plan}}))]
           (is (= {:arrived true} @out))
           (is (seq (dug-cells-of p)))
