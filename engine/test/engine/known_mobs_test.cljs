@@ -348,3 +348,10 @@
     (is (= [1] (mapv #(.-id %) (danger-q/dangers (:p (rig {:entities [(assoc (mob 1 "creeper" 0 -5) :fusing true :visible false)] :light-default [0 0]})) 16 {} {:ignore-heard? true}))) "within swell range: not muted")
     (is (= [] (danger-ids quiet)))
     (is (false? (hostile-near? quiet)))))
+
+(deftest a-shooter-counts-out-to-the-ranged-radius-any-other-mob-to-the-radius
+  (is (= 8 (danger-q/kind-radius false 8 16)))
+  (is (= 16 (danger-q/kind-radius true 8 16)))
+  (is (= 8 (danger-q/kind-radius true 8 nil)) "no ranged radius: the radius")
+  (is (= (danger-q/hostile-radius) (danger-q/kind-radius false)))
+  (is (= (danger-q/ranged-radius) (danger-q/kind-radius true))))

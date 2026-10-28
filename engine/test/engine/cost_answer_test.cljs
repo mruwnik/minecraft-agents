@@ -132,6 +132,21 @@
       (is (zero? (extra "creeper")) "a creeper's blast spends it: no mob waits at the spot")
       (is (pos? (extra "zombie")) "a zombie does"))))
 
+(deftest the-death-price-solves-its-fixed-point-near-the-kinks-of-the-price
+  (let [bed (assoc (body 5) :respawn {:x 40 :y 64 :z 0})
+        e (assoc (answer/healed bed) :carried 0 :level 0)
+        stake (death/give-up-cost e)
+        back (death/back-cost e here)]
+    (doseq [damage [8 12 16 20 30 60]
+            seconds [1 10 60 400]
+            then [nil [{:damage 0 :seconds 500}]]
+            :let [a (cond-> {:damage damage :hit 5 :seconds seconds} then (assoc :then then))
+                  x (- (:met (cost/death-price bed [a] here)) (death/experience-cost bed))]
+            :when (< x (death/give-up-cost bed))
+            :let [again (cost/answer-price* e a here {:met x :clear (min stake back)})]]
+      (is (< (js/Math.abs (- x (min stake (+ back again)))) 1e-4)
+          (str "damage " damage " seconds " seconds " then " (some? then) ": the price is its own fixed point")))))
+
 (deftest a-survivor-goes-on-or-gives-the-spot-up-as-a-death-does
   (let [dear {:damage 100 :hit 5 :seconds 5000}
         after-it {:damage 0 :seconds 1 :then [dear]}]

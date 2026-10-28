@@ -269,6 +269,11 @@
   (let [k (kind m)]
     (or (= trident-kind k) (contains? weapon/ranged-mobs k))))
 
+(defn kind-radius
+  "Blocks within which a mob counts: radius, for a shooter (ranged?) ranged-radius (default radius)."
+  [ranged? radius ranged-radius]
+  (if ranged? (or ranged-radius radius) radius))
+
 (defn damage-type [mob-name]
   (cond (= "creeper" mob-name) :explosion
         (or (= trident-kind mob-name) (contains? weapon/ranged-mobs mob-name)) :projectile

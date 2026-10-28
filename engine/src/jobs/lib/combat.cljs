@@ -45,7 +45,7 @@
   ([p radius {:keys [sight ranged-radius]}]
    (let [rr (or ranged-radius radius)
          all (->> (known-or-raw p (max radius rr))
-                  (filter #(<= (.-distance %) (if (ranged? %) rr radius))))]
+                  (filter #(<= (.-distance %) (threat/kind-radius (ranged? %) radius rr))))]
      (case sight
        :only (filterv #(.-visible %) all)
        :prefer (into (filterv #(.-visible %) all) (remove #(.-visible %)) all)

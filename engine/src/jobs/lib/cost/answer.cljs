@@ -191,14 +191,22 @@
             back (death/back-cost e at)
             price (fn [a x] (answer-price* e a at {:met x :clear (min stake back)}))
             line (fn [a x] (let [q (price a x) k (- (price a (inc x)) q)] [(- q (* k x)) k]))
-            at-x (fn [[p k] x] (if (pos? k) (+ p (* k x)) p))
             solve (fn [lines] (reduce min stake (map (fn [[p k]] (if (< k 1) (/ (+ back p) (- 1 k)) ##Inf)) lines)))
-            [lines x] (loop [lines (map #(line % 0) answers) n 0]
-                        (let [x (solve lines)]
-                          (if (or (= n 8) (every? (fn [[a [p k]]] (< (js/Math.abs (- (price a x) (+ p (* k x)))) 1e-6)) (map vector answers lines)))
-                            [lines x]
-                            (recur (map #(line % x) answers) (inc n)))))
-            meet (reduce min (map #(at-x % x) lines))]
+            tol 1e-6
+            fixed (fn [x] (reduce min stake (map #(+ back (price % x)) answers)))
+            converged? (fn [lines x] (every? (fn [[a [p k]]] (< (js/Math.abs (- (price a x) (+ p (* k x)))) tol)) (map vector answers lines)))
+            ;; the residual fixed(x) - x never rises and is >= 0 at 0, <= 0 at stake: bisection brackets its root when the lines stop short
+            bisect (fn [] (loop [lo 0 hi stake n 0]
+                            (let [mid (/ (+ lo hi) 2)]
+                              (cond (or (= n 60) (< (- hi lo) tol)) mid
+                                    (pos? (- (fixed mid) mid)) (recur mid hi (inc n))
+                                    :else (recur lo mid (inc n))))))
+            x (loop [lines (map #(line % 0) answers) n 0]
+                (let [x (solve lines)]
+                  (cond (converged? lines x) x
+                        (= n 8) (bisect)
+                        :else (recur (map #(line % x) answers) (inc n)))))
+            meet (reduce min (map #(price % x) answers))]
         (assoc clear :met (+ (death/experience-cost body)
                              (min (death/give-up-cost body)
                                   (+ (death/back-cost body at) (if (death/kept? body at) 0 (or (:carried body) 0)) meet))))))))

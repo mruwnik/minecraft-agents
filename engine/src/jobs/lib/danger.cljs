@@ -105,7 +105,7 @@
   "Blocks within which a mob counts as a danger: radius, for a shooter (ranged?) ranged-radius (default radius); with
   neither given, the settings'."
   ([ranged?] (kind-radius ranged? (hostile-radius) (ranged-radius)))
-  ([ranged? radius ranged-radius] (if ranged? (or ranged-radius radius) radius)))
+  ([ranged? radius ranged-radius] (threat/kind-radius ranged? radius ranged-radius)))
 
 (defn known-hostiles
   "The hostiles the body knows of within radius (ranged ones within :ranged-radius), nearest first; a heard one by
