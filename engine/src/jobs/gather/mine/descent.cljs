@@ -295,9 +295,11 @@
       (do (ctx/emit! c :mine.restair :info {:at (access/cell (cell-of (u/self-pos c))) :text (str "mine's stair finds the body off its line (" (:why res) "); it starts a new stair here")})
           (ctx/update-mem! c #(-> % (update :children dissoc :stair) (update :descent (fn [d] (-> d (dissoc :top :at) (update :restairs (fnil inc 0)))))))
           :again)
-      :else (let [stop (or (:reason res) :declined)]
-              (or (when (and (heading-stops stop) (turn-heading! c stop)) :again)
-                  (when (blocked-start? c stop) (await (move-stair! c stop)))
+      :else (let [stop (or (:reason res) :declined)
+                  ;; bedrock under the next step is the world's floor, the same on every heading: the stair is done
+                  turnable? (not (and (= :unbreakable stop) (some-> (:cell res) (get 1) (< (get (:at res) 1)))))]
+              (or (when (and turnable? (heading-stops stop) (turn-heading! c stop)) :again)
+                  (when (and turnable? (blocked-start? c stop)) (await (move-stair! c stop)))
                   (do (ctx/update-mem! c update :descent assoc :stop stop)
                       (if level? (stair-stopped! c) (no-stone! c))))))))
 

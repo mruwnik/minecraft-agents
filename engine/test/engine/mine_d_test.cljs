@@ -560,3 +560,18 @@
                                 (:heading (gather-mine/dig-args {:primitives (:p s) :args {:block "iron_ore" :count 1}})))))]
     (is (= "west" (heading {})) "an open heading is kept")
     (is (nil? (heading {"-1,65,0" "bedrock"})) "bedrock at head height one block west: the dig picks its heading anew")))
+
+(deftest a-stair-down-to-the-bedrock-floor-ends-there-without-turning
+  ;; the floor is bedrock on every heading: no turn finds a way down
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks (merge (cells "bedrock" (range -8 9) (range 55 61) (range -8 9)) (cells "dirt" (range -8 9) (range 61 64) (range -8 9)))
+                                :drops cobble :yaw 90 :inventory [{:name "stone_pickaxe" :count 1}]}})]
+          (core/submit! (:eng s) (spec {:block "stone" :count 2 :tunnel-length 4}) {})
+          (await (run-ticks s 300))
+          (is (finished? s))
+          (is (= :unbreakable (get-in (done-event s) [:descent :stop])) (pr-str (done-event s)))
+          (is (empty? (events-of s :mine.turned)) (pr-str (map :text (events-of s :mine.turned))))
+          (is (empty? (events-of s :mine.moved)))
+          (is (= :no-stone-found (:reason (done-event s)))))))))
