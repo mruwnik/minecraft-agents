@@ -37,9 +37,10 @@
 (defn- night? [p] (not (look/lit-light? 0 15 (sh-sense/sky-subtract-now p))))
 
 (defn- chance-by
-  "chance-at with the sky dark (night) or lit (an unseen cell guessed by full day)."
+  "chance-at with the sky darkened as now (night) or not at all (an unseen cell guessed by full day)."
   [p cell caves-free? night]
-  (let [sky (if night 0 15)
+  (let [darkening (if night (sh-sense/sky-subtract-now p) 0)
+        sky (if (look/lit-light? 0 (or (sh-sense/sky-light-at p cell) 0) darkening) 15 0)
         cell (if (sh-sense/solid-at? p cell) (update cell :y inc) cell)
         block (seen-light p cell)]
     (cond

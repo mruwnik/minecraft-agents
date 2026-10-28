@@ -81,6 +81,17 @@
   (let [hp #(:hp (risk/estimate (ready-test/ctx-of (assoc night-hut :time %)) {:x 95 :y 64 :z 0}))]
     (is (< (* 4 (hp st/noon)) (hp st/night)))))
 
+(deftest a-cell-the-sky-reaches-dimly-spawns-by-day
+  ;; a deep pit open to the sky with sky light 3 is dark at noon (3 < look/dark-light), one with sky light 15 is lit
+  (let [p (:primitives (ready-test/ctx-of (assoc night-hut :time st/noon)))
+        cell (sh-sense/feet p)
+        chance #(with-redefs [sh-sense/sky-reaches-from-above? (constantly true)
+                              sh-sense/sky-light-at (constantly %)
+                              spawn-light/seen-light (constantly 0)]
+                  (spawn-light/chance-at p cell false))]
+    (is (pos? (chance 3)))
+    (is (zero? (chance 15)))))
+
 (deftest a-roofed-dark-way-prices-spawns-only-through-a-dark-hall
   (let [c (ready-test/ctx-of (assoc night-hut :time st/noon))]
     (with-redefs [sh-sense/sky-reaches-from-above? (constantly false)
