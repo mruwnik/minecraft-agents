@@ -34,6 +34,8 @@
   A child that brings in nothing three times ends that way (:tried); a mine for an unseen ore that cut new ground looked, so it mines on until the ground counts as barren (base ::barren-ore).
   A bill runs one obtain child per item still missing (not carried or worn), in order, after the furnace material (iron_ingot ..) the missing items need together, which is got in one go and reserved against deposits; each child gets a :spend :job-time of the ::bill-item-s setting. The first child that fails ends the bill with its kind and cause, data {:item the one it stopped at :why}.
 
+  A death since the call began starts it again from what is carried: :got counts from the respawn.
+
   Needs: valid :item or :any-of and :count, or a :bill (else impossible :bad-args); a source (else condition-failed :no-source with :why naming what each way lacks); with :worth, a way priced within it (jobs.items.obtain.price/price-of: walk there and back, the death it risks; else :later :not-worth).
   Returns :done {:got n :item name} only with the count carried (the call's :least, default :all, may name fewer) (a bill: {:have [items]}); nothing-possible :no-source, :table-unreachable or the gather's walk cause (:zone-exit ..) when every allowed way was tried, data {:got :tried :why :next} (:next: jobs.lib.next-call, the gather for the first unseen raw need); limit-reached :timeout after :spend :job-time (default-time: ::job-time-s, ::unit-s more per unit of :count beyond the first; a bill ::bill-item-s per item).
   Quote: the count as yield, time a guess per step, no most for a gather; a bill two gathers' time per missing item.")
@@ -272,7 +274,21 @@
                      (next-call/with-next (assoc data :tried (:tried m) :why why) c 'jobs.items.obtain args nil
                                           (gather-fix c names (shortfall c names))))))))))
 
+(defn restarted
+  "The job memory after a death: the children, the start count, the craft step, the ways tried and the bill's partial
+  went with the body (a half-felled tree stays to fell); the call starts from now."
+  [m now]
+  (-> m (dissoc :children :start :craft :tried :partial) (update :gather select-keys [:tree]) (assoc :since now)))
+
 (defn ^:async round
-  "The whole attempt in one call: step! again until the count is carried or it ends; :continue only while a child waits on the world."
+  "The whole attempt in one call: step! again until the count is carried or it ends; :continue only while a child waits on the world.
+  A death since the call began (body memory :died) starts it again from what is carried (restarted)."
   [c]
+  (let [m (ctx/mem c)
+        died (ctx/latest c :died)]
+    (cond
+      (nil? (:since m)) (ctx/update-mem! c assoc :since (ctx/now c))
+      (and died (> (:t died) (:since m)))
+      (do (ctx/update-mem! c restarted (ctx/now c))
+          (ctx/emit! c :obtain.resumed :info {:text "died since the obtain began: starting again from what is carried"}))))
   (await (if (:bill (:args c)) (bill/run! c) (pace/steps! c #(step! c)))))

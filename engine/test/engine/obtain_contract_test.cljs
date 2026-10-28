@@ -90,6 +90,27 @@
             (is (= :done (:kind e)))
             (is (= 2 @runs))))))))
 
+(deftest a-death-mid-craft-starts-again-from-what-is-carried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [orig ctx/call
+              s (f/start (f/bare [{:name "oak_planks" :count 4} {:name "oak_log" :count 1}]) [])
+              died (atom false)]
+          (set! ctx/call (fn [c slot j args]
+                           (if (and (= 'jobs.items.craft j) (not @died))
+                             (do (reset! died true)
+                                 (swap! (fake/state (:p s)) assoc :inventory [])
+                                 (fake/add-item! (:p s) "oak_log" 2)
+                                 (swap! (:clock s) + 1000)
+                                 (mem/write! (:store (:eng s)) :died {:pos {:x 0 :y 64 :z 0}})
+                                 (js/Promise.resolve :continue))
+                             (orig c slot j args))))
+          (let [e (try (await (ending-of s 'jobs.items.obtain {:item "oak_planks" :count 8 :explore false} 30))
+                       (finally (set! ctx/call orig)))]
+            (is (= :done (:kind e)))
+            (is (= 8 (:got (:data e))) "the planks carried before the death went with the body")))))))
+
 (deftest nothing-to-get-it-from-is-condition-failed-no-source
   (async done
     (tu/run-async done

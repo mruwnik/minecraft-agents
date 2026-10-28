@@ -1,0 +1,34 @@
+;; A job kept through a death (the jobs tool's default) goes on after the respawn from what the body carries then.
+;; The pack is cleared before the kill, so no pile draws recover-drops off.
+;; Should-succeed: obtain-killed-mid-gather: an obtain of 20 planks (3 carried) is killed while it fells; after the respawn it
+;; says obtain.resumed and gets all 20 again. from-plan-killed-mid-build: a 12-cell dirt row is killed half built; the dirt
+;; given after the respawn builds the rest.
+;; Should-fail: none (a death never ends either job).
+{:defaults
+ {:tags [:survival :death :items :build] :time :any
+  :plot {:height 8}
+  :body {:at [10.5 0 10.5] :spawnpoint [4 0 4]}
+  :limit-s 150}
+ :cases
+ [{:name "obtain-killed-mid-gather"
+   :blocks [[:fill [14 0 12] [14 4 12] "oak_log"] [:set [14 5 12] "oak_leaves[persistent=true]"]
+            [:fill [12 0 15] [12 4 15] "oak_log"] [:set [12 5 15] "oak_leaves[persistent=true]"]]
+   :body {:inventory [["oak_planks" 3]]}
+   :act [[:http :submit (jobs.items.obtain {:item "oak_planks" :count 20 :explore false}) [] {:ok true}]
+         [:wait-s 5] [:rcon "clear $BODY"] [:kill-body] [:await {:source :body :kind :respawned} 30]]
+   :expect [{:event {:source :job :kind :obtain.resumed} :within-s 60 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :cancelled} :for-s 20 :of-job true}]
+   :after [[:item "oak_planks" 20]]}
+  {:name "from-plan-killed-mid-build"
+   :body {:inventory [["dirt" 12]]}
+   :plans [{:id "row" :metadata {:by "$body"}
+            :parts [{:id "p" :cells [#at [12 0 14] #at [13 0 14] #at [14 0 14] #at [15 0 14] #at [16 0 14] #at [17 0 14]
+                                     #at [18 0 14] #at [19 0 14] #at [20 0 14] #at [21 0 14] #at [22 0 14] #at [23 0 14]]
+                     :want "dirt"}]}]
+   :act [[:http :submit (jobs.build.from-plan {:plan "$plan:row" :ways #{:carried}}) [] {:ok true}]
+         [:wait-s 4] [:rcon "clear $BODY"] [:kill-body] [:await {:source :body :kind :respawned} 30]
+         [:rcon "give $BODY dirt 12"]]
+   :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :cancelled} :for-s 20 :of-job true}]
+   :after [[:block [12 0 14] "dirt"] [:block [18 0 14] "dirt"] [:block [23 0 14] "dirt"]]}]}
