@@ -1,26 +1,31 @@
-;; Card bf7a26db: from-plan in a dark hall (a never-lit cell) at night, no torch carried, a chest of torches booked 40 blocks west
-;; out on open grass. The torches are needed after dawn too, so the fetch is worth the night left plus their price by day.
-;; Should-fail (waits, no fetch before dawn): near-dawn-the-dark-walk-waits-for-day: at 22800 the night left (about 35 s) is
-;; less than the spawn risk of 80 blocks of dark grass there and back. Should-succeed: midnight-the-torches-are-fetched: at 16000
+;; Card bf7a26db: from-plan in a long dark hall (a never-lit cell) at night, no torch carried, a chest of torches booked 43 blocks
+;; west of the body out on open grass. The torches are needed after dawn too, so the fetch is worth the night left plus their price by day.
+;; Should-fail (waits for dawn, no fetch before it): near-dawn-the-dark-walk-waits-for-day: at 22800 the night left (about 35 s) is
+;; less than the spawn risk of about 80 blocks of dark grass there and back. Should-succeed: midnight-the-torches-are-fetched: at 16000
 ;; the night left outweighs that risk; the torches are fetched and the site built.
+;; The hall is shut by a door (an open end waits on a look at the pitch-dark site for ever, card in the live note).
+;; The near-dawn body first looks over the grass from outside (unseen ground is guessed dark by day too), then steps in.
 ;; Needs night: run with --allow-time --time-log <the shared time log>.
 {:defaults
  {:tags [:build :light :night :fetch]
   :time :night :time-why :dawn-decision
-  :plot {:height 8 :floor "grass_block" :length 64}
-  :blocks [[:fill [40 0 8] [62 3 24] "stone"] [:fill [43 0 12] [60 1 20] "air"] [:fill [40 0 14] [42 1 18] "air"]
-           [:set [6 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:torch\",count:8}]}"]]
-  :memory [{:kind :fetch/stock :data {:pos #at [6 0 16] :items {"torch" 8}}}]
-  :body {:at [46.5 0 16.5] :effects [["resistance" 600 4]] :inventory [["oak_planks" 6]]}
-  :plans [{:id "floor" :metadata {:by "$body"} :parts [{:id "p" :cells [#at [55 0 16] #at [56 0 16]] :want "oak_planks"}]}]
+  :plot {:height 8 :floor "grass_block" :length 96}
+  :blocks [[:fill [40 0 8] [94 3 24] "stone"] [:fill [43 0 12] [92 1 20] "air"] [:fill [40 0 16] [42 1 16] "air"]
+           [:set [42 0 16] "oak_door[facing=west,half=lower,hinge=left,open=false]"] [:set [42 1 16] "oak_door[facing=west,half=upper,hinge=left,open=false]"]
+           [:set [2 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:torch\",count:8}]}"]]
+  :memory [{:kind :fetch/stock :data {:pos #at [2 0 16] :items {"torch" 8}}}]
+  :body {:at [45.5 0 16.5] :effects [["resistance" 600 4]] :inventory [["oak_planks" 6]]}
+  :plans [{:id "floor" :metadata {:by "$body"} :parts [{:id "p" :cells [#at [88 0 16] #at [89 0 16]] :want "oak_planks"}]}]
   :limit-s 300}
  :cases
  [{:name "near-dawn-the-dark-walk-waits-for-day"
-   :act [[:time-set 22800] [:job (jobs.build.from-plan {:plan "$plan:floor"})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 15 :of-job true}
+   :body {:at [30.5 0 16.5]}
+   :act [[:time-set 22800] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 15"] [:until-seen {:block "chest"} 10]
+         [:rcon "execute as $BODY at @s run tp @s ~15 ~ ~ -90 0"] [:job (jobs.build.from-plan {:plan "$plan:floor"})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :exposed :lowered-by #{:torch}}} :within-s 15 :of-job true}
             {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 15 :of-job true}]}
   {:name "midnight-the-torches-are-fetched"
    :act [[:time-set 16000] [:job (jobs.build.from-plan {:plan "$plan:floor"})]]
    :expect [{:event {:source :job :kind :child_started :data {:slot :need}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :data {:missing []}} :within-s 240 :of-job true}]
-   :after [[:block [55 0 16] "oak_planks"] [:block [56 0 16] "oak_planks"]]}]}
+   :after [[:block [88 0 16] "oak_planks"] [:block [89 0 16] "oak_planks"]]}]}
