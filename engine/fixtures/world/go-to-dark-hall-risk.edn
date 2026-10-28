@@ -4,7 +4,7 @@
 {:defaults
  {:tags [:movement :dark] :time :any
   :plot {:light :dark :height 12 :length 130 :width 34}
-  :settings {:jobs.lib.price/risk-share 0.01}
+  :settings {:jobs.lib.cost.risk/risk-share 0.01}
   :body {:at [2.5 0 16.5] :yaw 270 :settle-s 3 :effects [["resistance" 600 4]]}
   :limit-s 200}
  :cases

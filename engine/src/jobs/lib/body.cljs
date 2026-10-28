@@ -12,15 +12,11 @@
             [jobs.lib.util :as u]))
 
 (a/defargs settings
-  {::risky-min-health {:default 6 :spec (a/num-in 0 20)
-                       :doc "Below this health (of 20) a risky job (mining) waits to heal before it starts or goes on."}
-   ::recovery-holds {:default #{:hungry :stuck-underground :door-left :inventory-nearly-full :scaffold-left :tidy-pending :pen-gate :loose-items :ore-seen :dark-work}
+  {::recovery-holds {:default #{:hungry :stuck-underground :door-left :inventory-nearly-full :scaffold-left :tidy-pending :pen-gate :loose-items :ore-seen :dark-work}
                      :spec (a/set-of keyword?)
                      :doc "Trigger ids that do not hold while an unrecovered death is inside ::recovery-hold-s of its time, so a saved register listing one ahead of :died cannot run it on the pile's errand. The sheltering reflexes (:night :dusk-home :needs-bed) are left out on purpose; every covered id also waits while the body is dead."}
    ::recovery-hold-s {:default 180 :spec (a/num-in 0 nil)
                       :doc "Seconds after a death during which the ::recovery-holds reflexes stay back (at most the despawn window)."}})
-
-(defn risky-min-health [] (settings/get settings ::risky-min-health))
 
 (def fires #{"fire" "soul_fire"})
 
@@ -167,19 +163,20 @@
     {:reason :game-mode :mode mode
      :text (str "the body is in " mode " mode: its physics and digging are not a survival body's; set it to survival")}))
 
+(defn poison-wait
+  "The wait reason {:reason :poisoned :health :text} while the body (primitives p) is poisoned or withered, else nil.
+  Healing is up to the body: a cure (the poisoned trigger drinks it) or the effect running out."
+  [p]
+  (when (poisoned? p)
+    {:reason :poisoned :health (.-health (.self p))
+     :text "poisoned: drink milk or wait until the effect is gone before the risk (natural healing stops)"}))
+
 (defn too-hurt
-  "The wait reason {:reason :low-health :health :min-health :text} of a risky job while the body's health (primitives
-  p) is below risky-min-health, or {:reason :poisoned :health :text} while it is poisoned or withered, else nil.
-  Healing is up to the body: carried food (the hungry trigger eats it), a cure (the poisoned trigger drinks it), or rest
-  at food 18+. floor (default risky-min-health) is the job's own lower bound."
-  ([p] (too-hurt p (risky-min-health)))
-  ([p floor]
+  "The wait reason {:reason :low-health :health :min-health :text} while the body's health (primitives p) is below a job's
+  own floor, else poison-wait. Healing is up to the body: carried food (the hungry trigger eats it), or rest at food 18+."
+  [p floor]
   (let [health (.-health (.self p))]
-    (cond
-      (< health floor)
+    (if (< health floor)
       {:reason :low-health :health health :min-health floor
        :text (str "health " (.toFixed health 1) " of 20 is below " floor ": eat or rest to heal first (natural healing needs food 18+)")}
-
-      (poisoned? p)
-      {:reason :poisoned :health health
-       :text "poisoned: drink milk or wait until the effect is gone before the risk (natural healing stops)"}))))
+      (poison-wait p))))

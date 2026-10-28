@@ -373,10 +373,12 @@
   (is (= :later (kind (ready/safe-at (constantly {:x 1 :y 64 :z 0}))
                       {:time st/noon :self {:pos {:x 0 :y 64 :z 0}} :entities [zombie]}))))
 
-(deftest fit-is-later-at-5-hp
-  (are [hp expected] (= expected (kind ready/fit? {:self {:pos {:x 0 :y 64 :z 0} :health hp}}))
-    5 :later
-    20 :ok))
+(deftest fit-waits-while-a-risky-jobs-work-costs-more-than-the-body-may-risk
+  (are [hp food inventory expected] (= expected (kind ready/fit? {:self {:pos {:x 0 :y 64 :z 0} :health hp :food food} :inventory inventory}))
+    5 20 [] :later
+    20 20 [] :ok
+    10 5 [{:name "bread" :count 1}] :later ; hungry: half the share, and the bread heals it
+    5 8 [] :ok))                           ; waiting cannot heal it: all but 1 hp
 
 (deftest ok-is-always-ok
   (is (= :ok (kind ready/ok open-night))))
@@ -523,7 +525,7 @@
     8.2 5 [] {:target ["sheep"] :forage false} :later
     8.2 5 [] {:target ["oak_log"]} :later
     8.2 5 [] {:target ["sheep"]} :ok
-    8.2 5 [{:name "bread" :count 1}] {:target ["oak_log"]} :ok
+    8.2 5 [{:name "bread" :count 1}] {:target ["oak_log"]} :later ; hungry: it eats the bread first
     8.2 20 [] {:target ["oak_log"]} :ok
     12 5 [] {:target ["oak_log"]} :ok))
 

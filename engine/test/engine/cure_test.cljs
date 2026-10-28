@@ -42,7 +42,7 @@
     (is (= :ok (status {:self {:effects poison} :inventory milk})))))
 
 (deftest too-hurt-also-while-poisoned
-  (are [self expected] (= expected (:reason (body/too-hurt (tu/fake {:self self}))))
+  (are [self expected] (= expected (:reason (body/too-hurt (tu/fake {:self self}) 6)))
     {:health 20 :effects poison} :poisoned
     {:health 3 :effects poison} :low-health
     {:health 20 :effects []} nil))

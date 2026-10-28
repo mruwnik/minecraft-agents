@@ -10,6 +10,7 @@
             [engine.settings :as settings]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.risk :as risk]
             [jobs.lib.danger :as danger]
             [jobs.lib.foods :as foods]
             [jobs.lib.reserve :as reserve]
@@ -18,14 +19,8 @@
             [jobs.lib.walk.world :as wworld]))
 
 (a/defargs settings
-  {::risk-share {:default 0.5 :spec (a/num-in 0 nil)
-                 :doc "Share of the health the body has that the expected damage of a walk (spawns met on its dark open stretches, hostiles near its way) or of a stay at an exposed place may take; above it the start check waits."}
-   ::way-radius {:default 16 :spec (a/num-in 0 nil)
+  {::way-radius {:default 16 :spec (a/num-in 0 nil)
                  :doc "Blocks from a way or place within which a known hostile adds its fight to the price of walking or staying there."}
-   ::hungry-food {:default 6 :spec (a/int-in 0 20)
-                  :doc "Food at or under which the body cannot sprint away and does not heal: the damage it can afford is cut by ::hungry-share."}
-   ::hungry-share {:default 0.5 :spec (a/num-in 0 1)
-                   :doc "Share of the affordable damage a body at ::hungry-food or under may risk."}
    ::place-stay-s {:default 10 :spec (a/num-in 0 nil)
                    :doc "Seconds a click act (a door, a lever, one block, a trade) is taken to stay at an exposed place."}
    ::work-stay-s {:default 120 :spec (a/num-in 0 nil)
@@ -40,22 +35,39 @@
     (and (< (.-food self) foods/top-up-food)
          (not (foods/carries-food? self (reserve/spared (ctx/view c) self))))))
 
+(defn round1 [x] (/ (js/Math.round (* 10 x)) 10))
+
+(defn allowed-hp
+  "allowed for a body at health and food: see allowed."
+  [health food worth waits?]
+  (if (and (number? worth) (pos? worth))
+    (min (dec health) (/ worth (cost/hp-price health)))
+    (let [share (risk/share-hp health food)]
+      (if waits? share (max share (dec health))))))
+
 (defn allowed
   "The hp of expected damage the body may take on a risk now. With `worth` (seconds the caller counts the goal worth, the call's
   :worth, when above 0): as many hp as that buys at the price of an hp now (dearer when hurt), all but 1 at most; a goal worth
-  little is refused a dear trip, whatever the share of health or the food (death is a cost). Without one: ::risk-share of the
-  health (cut while hungry), all but 1 hp while waiting never lowers the price (`waits?` false; by default while the body
+  little is refused a dear trip, whatever the share of health or the food (death is a cost). Without one: cost.risk/share-hp, all but 1 hp while waiting never lowers the price (`waits?` false; by default while the body
   can not heal by waiting, cannot-heal?)."
   ([c] (allowed c (:worth (:args c))))
   ([c worth] (allowed c worth (not (cannot-heal? c))))
   ([c worth waits?]
-   (let [self (.self (:primitives c))
-         health (.-health self)]
-     (if (and (number? worth) (pos? worth))
-       (min (dec health) (/ worth (cost/hp-price health)))
-       (let [hungry? (some-> (.-food self) (<= (settings/get settings ::hungry-food)))
-             share (* (settings/get settings ::risk-share) health (if hungry? (settings/get settings ::hungry-share) 1))]
-         (if waits? share (max share (dec health))))))))
+   (let [self (.self (:primitives c))]
+     (allowed-hp (.-health self) (.-food self) worth waits?))))
+
+(defn fit
+  "The wait reason {:reason :low-health :health :work-hp :allowed :text} while a risky job's work (cost.risk/work-hp) is more
+  than allowed without a worth (the share of health, the cannot-heal lift) and healing would bring it within, else nil.
+  A call's :worth is its own pricing (a search's legs, a walk), not the body's fitness."
+  [c]
+  (let [self (.self (:primitives c))
+        allowed (allowed c nil)
+        work (risk/work-hp)]
+    (when (and (> work allowed) (<= work (allowed-hp 20 (.-food self) nil true)))
+      {:reason :low-health :health (.-health self) :work-hp work :allowed (round1 allowed)
+       :text (str "health " (.toFixed (.-health self) 1) " of 20 may risk " (round1 allowed) " hp, under the " work
+                  " a risky job's work may cost: eat or rest to heal first (natural healing needs food 18+)")})))
 
 (defn stay-parts
   "{:hurt :dies} of staying `seconds` where mobs spawn at `chance` per second: hurt the hp they take (cost/spawns-hurt),
@@ -73,8 +85,6 @@
   [c chance seconds]
   (let [{:keys [hurt dies]} (stay-parts c chance seconds)]
     (+ hurt (cost/lethal-hp (threats/death-body c) dies (u/self-pos c)))))
-
-(defn round1 [x] (/ (js/Math.round (* 10 x)) 10))
 
 (def stay-settings {:click ::place-stay-s :work ::work-stay-s :long ::long-stay-s})
 

@@ -11,7 +11,7 @@
   by the chance its mob or a like one is there now (death-spot/present-share: one a sun-burning mob left seen sky-lit by day, or one
   the body went far from, is near free).
   Seen lava within jobs.lib.lava-risk/radius of a cell the way steps into adds jobs.lib.lava-risk/hp, scaled by its closeness (a slip beside it is lethal); a body already at the goal, or a way clear of lava, adds none.
-  Acceptable when it stays within jobs.lib.price/::risk-share of the health the body has now, or, when the caller says what the goal is worth (:worth), within the hp that worth buys (price/allowed)."
+  Acceptable when it stays within jobs.lib.cost.risk/::risk-share of the health the body has now, or, when the caller says what the goal is worth (:worth), within the hp that worth buys (price/allowed)."
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -24,6 +24,7 @@
             [jobs.lib.lava-risk :as lava-risk]
             [jobs.lib.look :as look]
             [jobs.lib.price :as price]
+            [jobs.lib.cost.risk :as risk]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.sense :as sense]
             [jobs.lib.spawn-light :as spawn-light]
@@ -231,7 +232,7 @@
   cost/lethal-hp), for the time the walk takes, or, for a body that can heal, for the wait until its health would afford
   the route (::heal-s-per-hp an hp); for :secs when given. :lethal-hp the death's part of :hp; :heal-s and :secs the wait."
   [c {:keys [goal route-hp feet health cannot-heal? body live chance secs]}]
-  (let [heal-s (if cannot-heal? 0 (* (settings/get settings ::heal-s-per-hp) (max 0 (- (min 20 (/ route-hp (settings/get price/settings ::price/risk-share))) health))))
+  (let [heal-s (if cannot-heal? 0 (* (settings/get settings ::heal-s-per-hp) (max 0 (- (min 20 (/ route-hp (settings/get risk/settings ::risk/risk-share))) health))))
         secs (or secs (max heal-s (/ (u/dist feet goal) (cost/walk-blocks-per-s))))
         here [(assoc feet :s secs)]
         live (mapv (fn [{:keys [reach] :as t}] (assoc t :reach (fn [x y z] (when (reach x y z) 1)))) (threats/with-reach c live))

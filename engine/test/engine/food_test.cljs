@@ -499,12 +499,12 @@
           (is (= 1 (count (filter #(and (= :stopped (:kind %)) (= :not-food (:reason %))) @seen)))))))))
 
 (deftest eat-keeps-harmful-and-precious-food-last-whatever-their-points
-  (is (= "dried_kelp" (eat/best-food [{:name "spider_eye"} {:name "dried_kelp"}] true nil 20 #{})) "harmful last")
-  (is (= "dried_kelp" (eat/best-food [{:name "golden_apple"} {:name "dried_kelp"}] false nil 4 #{})) "precious after common"))
+  (is (= "dried_kelp" (eat/best-food [{:name "spider_eye"} {:name "dried_kelp"}] true nil 20 20 #{})) "harmful last")
+  (is (= "dried_kelp" (eat/best-food [{:name "golden_apple"} {:name "dried_kelp"}] false nil 4 20 #{})) "precious after common"))
 
 (deftest eat-chooses-by-saturation-when-points-tie
-  (is (= "cooked_mutton" (eat/best-food [{:name "cooked_chicken"} {:name "cooked_mutton"}] false nil 20 #{})))
-  (is (= "cooked_mutton" (eat/best-food [{:name "honey_bottle"} {:name "cooked_mutton"}] false nil 20 #{}))))
+  (is (= "cooked_mutton" (eat/best-food [{:name "cooked_chicken"} {:name "cooked_mutton"}] false nil 20 20 #{})))
+  (is (= "cooked_mutton" (eat/best-food [{:name "honey_bottle"} {:name "cooked_mutton"}] false nil 20 20 #{}))))
 
 (deftest golden-apples-are-rare-for-the-top-up-trigger
   (is (not (foods/top-up? 16 8 ["golden_apple"])))
@@ -912,7 +912,7 @@
                  (when-fn (tu/fake {:self (dissoc self :inventory) :inventory inventory}) {} (or args {})))
         bread [{:name "bread" :count 1}]]
     (is (holds? {:food 19 :health 6 :inventory bread}) "below 7 hp: eat up to 20")
-    (is (holds? {:food 19 :health 6 :inventory [{:name "golden_apple" :count 1}]}) "precious food at low health")
+    (is (not (holds? {:food 19 :health 6 :inventory [{:name "golden_apple" :count 1}]})) "precious food waits until too hurt for risky work (the rest eats it)")
     (is (not (holds? {:food 19 :health 6 :inventory []})) "nothing to eat and food enough to heal")
     (is (not (holds? {:food 20 :health 6 :inventory bread})) "full")
     (is (not (holds? {:food 19 :health 7 :inventory bread})) "at the line")
@@ -945,7 +945,7 @@
 
 (deftest eat-bad-never-eats-poison-that-leaves-the-body-fragile
   (let [inv [{:name "spider_eye"} {:name "pufferfish"} {:name "rotten_flesh"}]]
-    (is (= "rotten_flesh" (eat/best-food inv true nil 6.5 #{})) "rotten flesh only costs hunger")
-    (is (= "spider_eye" (eat/best-food (take 2 inv) true nil 14 #{})) "healthy enough for 4 hp of poison")
-    (is (nil? (eat/best-food (take 2 inv) true nil 6.5 #{})))
-    (is (nil? (eat/best-food (take 1 inv) true "spider_eye" 9 #{})) "a named one too")))
+    (is (= "rotten_flesh" (eat/best-food inv true nil 6.5 20 #{})) "rotten flesh only costs hunger")
+    (is (= "spider_eye" (eat/best-food (take 2 inv) true nil 14 20 #{})) "healthy enough for 4 hp of poison")
+    (is (nil? (eat/best-food (take 2 inv) true nil 6.5 20 #{})))
+    (is (nil? (eat/best-food (take 1 inv) true "spider_eye" 9 20 #{})) "a named one too")))

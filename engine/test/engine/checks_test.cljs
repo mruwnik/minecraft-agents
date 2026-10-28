@@ -43,7 +43,7 @@
 
 (deftest a-spectator-or-creative-body-waits-and-survival-or-unreported-is-ready
   (are [mode expected] (let [c {:primitives (tu/fake {:self (cond-> {} mode (assoc :gameMode mode))})}]
-                         (= [expected expected] [(first (checks/low-health c)) (first (checks/survival-mode c))]))
+                         (= [expected expected] [(first (checks/low-health-min 0 c)) (first (checks/survival-mode c))]))
     "spectator" :later
     "creative" :later
     "survival" :ok

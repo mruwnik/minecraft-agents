@@ -257,7 +257,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (sheltered-night-start {} 7 {})]
-          (await (settings/with-settings {:jobs.lib.price/risk-share 0} #(obtain! s {:any-of ["oak_log" "spruce_log" "birch_log"] :count 2 :ways #{:gather} :explore false} 8)))
+          (await (settings/with-settings {:jobs.lib.cost.risk/risk-share 0} #(obtain! s {:any-of ["oak_log" "spruce_log" "birch_log"] :count 2 :ways #{:gather} :explore false} 8)))
           (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))) "the tree is seen")
           (is (empty? (tu/walk-calls (:p s))) "no walk out")
           (is (some #(#{:risky :exposed} (:reason %)) (f/events-of s :waiting)) "the priced dark at the tree is over what the body can afford"))))))
@@ -271,7 +271,7 @@
           (doseq [pitch [-80 80 0]]
             (swap! (fake/state (:p s)) assoc :pitch pitch)
             (perception/pass! (aget (:p s) "perception")))
-          (await (settings/with-settings {:jobs.lib.price/risk-share 0} #(obtain! s {:item "stone_pickaxe" :count 1 :ways #{:craft}} 8)))
+          (await (settings/with-settings {:jobs.lib.cost.risk/risk-share 0} #(obtain! s {:item "stone_pickaxe" :count 1 :ways #{:craft}} 8)))
           (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))) "logs are carried: not no-source")
           (is (some #(#{:dark :exposed} (:reason %)) (f/events-of s :waiting))))))))
 

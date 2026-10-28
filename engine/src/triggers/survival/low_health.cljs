@@ -3,6 +3,7 @@
   (:require [engine.contract :as contract]
             [engine.memory :as mem]
             [jobs.lib.body :as body]
+            [jobs.lib.cost.risk :as risk]
             [jobs.lib.foods :as foods]
             [jobs.lib.reserve :as reserve]
             [jobs.lib.shelter.sense :as sh-sense]))
@@ -26,14 +27,15 @@
                                 (when-let [learned (:t (mem/latest view :food-source))] (> learned t)))))))))
 
 (defn low-health
-  "Holds while the body is alive with health below jobs.lib.body/risky-min-health, not burning or poisoned (their reflexes
+  "Holds while the body is alive and too hurt for risky work even fed (jobs.lib.cost.risk/too-hurt? without the hungry cut:
+  a body hurt only by that cut gets food first, the hungry trigger's), not burning or poisoned (their reflexes
   come first), not asleep (a bed already rests it), and not waiting? on a rest that gave up."
   [world memory _args]
   (let [self (.self world)
         health (.-health self)]
     (and (not (body/recovery-pending? memory :low-health))
          (pos? health)
-         (< health (body/risky-min-health))
+         (risk/too-hurt? health nil)
          (not (body/burning? world))
          (not (body/poisoned? world))
          (not (sh-sense/sleeping? world))

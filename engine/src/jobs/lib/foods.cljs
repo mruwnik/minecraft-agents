@@ -7,12 +7,12 @@
             ["minecraft-data" :as minecraft-data]
             [clojure.string :as str]
             [engine.game :as game]
+            [jobs.lib.cost.risk :as risk]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
   {::starving-rest-ms {:default 60000 :doc "The rest after a fruitless food search while starving (food 0, or hurt and hungry), for the hungry trigger." :spec (a/num-in 0 nil)}
    ::reserve-eat-below {:default 3 :doc "At this much food or less reserved items are eaten as well." :spec (a/int-in 0 20)}
-   ::low-health {:default 10 :doc "Below this health (of 20) precious food is eaten unnamed." :spec (a/int-in 0 nil)}
    ::fragile-health {:default 6 :doc "At or below this health a body with no food carried searches unknown ground for food only in the light with no hostile known near (get-food)." :spec (a/num-in 0 20)}})
 
 (def table-for
@@ -49,14 +49,12 @@
     (or (nil? d) (> (- health d) (settings/get settings ::fragile-health)))))
 
 (def precious
-  "Foods kept for an emergency: eaten only when named or when health is low."
+  "Foods kept for an emergency: eaten only when named or when too hurt for risky work (cost.risk/too-hurt?)."
   #{"golden_apple" "enchanted_golden_apple"})
 
 (def named-only
   "Foods with an effect worse than hunger (a teleport, random effects): eaten only when named."
   #{"chorus_fruit" "suspicious_stew"})
-
-(defn low-health [] (settings/get settings ::low-health))
 
 (defn food? [item] (contains? (table) item))
 
@@ -139,18 +137,18 @@
         (remove reserved))))
 
 (defn eaten-unnamed?
-  "Whether a meal that names no item would eat item at health: food, not harmful, not named-only, and precious only
-  at low health (the rules of jobs.survival.eat)."
-  [health item]
+  "Whether a meal that names no item would eat item at health and food: food, not harmful, not named-only, and precious
+  only when too hurt for risky work (the rules of jobs.survival.eat)."
+  [health food item]
   (and (edible? item)
        (not (contains? named-only item))
-       (or (not (contains? precious item)) (< health (low-health)))))
+       (or (not (contains? precious item)) (risk/too-hurt? health food))))
 
 (defn carries-food?
   "Whether the sensed self carries something a meal would eat."
   ([self] (carries-food? self #{}))
   ([self reserved]
-   (boolean (some #(eaten-unnamed? (.-health self) %) (carried-names self reserved)))))
+   (boolean (some #(eaten-unnamed? (.-health self) (.-food self) %) (carried-names self reserved)))))
 
 (defn eat-now?
   "Health below :health (default 7), food below 20 and something a meal would eat carried."

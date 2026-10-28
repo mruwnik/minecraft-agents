@@ -17,7 +17,7 @@
   :limit-s 90}
  :cases
  [{:name "by-hand-use-on-in-the-shelter-waits-naming-the-reason"
-   :settings {:jobs.lib.price/risk-share 0}
+   :settings {:jobs.lib.cost.risk/risk-share 0}
    :act [[:job (jobs.items.use {:on #at [24 0 16]})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 20 :of-job true}]
    :after [[:block [24 0 16] "oak_fence_gate[open=false]"] [:body-near [16.5 0 16.5] 2]]}

@@ -122,7 +122,6 @@
    ::near-sight {:default 6 :doc "Within this many blocks a look misses no animal: a noted animal not seen there is taken as gone." :spec (a/num-in 0 nil)}
    ::leg-tries {:default 2 :doc "Walks toward one spot (any job or body) that may start before the spot is dropped as tried; counted in notes, so a walk cut off by a reflex (a drowning) counts too." :spec (a/int-in 1 nil)}
    ::leg-tried-ttl-s {:default 3600 :doc "Seconds a note of a walk started toward a spot lasts." :spec (a/num-in 0 nil)}
-   ::roam-min-health {:default 10 :doc "A search that is not for food waits :low-health below this health while the body can not heal (cannot-heal?: food low, nothing edible carried), so a hurt, foodless body does not roam for wool or wood." :spec (a/num-in 0 20)}
    ::stand-cap {:default 48 :doc "Stand cells one choice reads; past it :more says candidates are left for the next step." :spec (a/int-in 0 nil)}})
 
 (defn leg-spacing [] (cost/leg-spacing))
@@ -166,11 +165,9 @@
       (boolean (and (seq (targets c)) (every? foraged (targets c)))))))
 
 (defn fit?
-  "ready/fit-to-forage while the search is for food; else ready/fit?, with the higher ::roam-min-health floor while the body can not heal."
+  "ready/fit-to-forage while the search is for food; else ready/fed-fit? (a hurt body that only food heals does not roam for wool or wood)."
   [c]
-  (cond (forage? c) (ready/fit-to-forage c)
-        (ready/cannot-heal? c) (ready/fit-min (settings/get settings ::roam-min-health) c)
-        :else (ready/fit? c)))
+  (if (forage? c) (ready/fit-to-forage c) (ready/fed-fit? c)))
 
 (defn xz-dist [[ax az] [bx bz]]
   (js/Math.hypot (- ax bx) (- az bz)))
