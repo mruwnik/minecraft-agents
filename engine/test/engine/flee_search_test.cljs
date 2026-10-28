@@ -460,7 +460,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [clock (atom 1000000)
-              raw (tu/fake {:blocks (assoc junction "3,64,0" "water") :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+              raw (tu/fake {:blocks (assoc junction "3,64,0" "oak_door") :self {:pos {:x 0.5 :y 64 :z 0.5}}})
               rw (fake-raw/create raw)
               per (perception/create rw {:now #(deref clock)})
               p (perception/wrap raw per)
