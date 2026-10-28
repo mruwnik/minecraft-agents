@@ -1,12 +1,25 @@
 (ns jobs.lib.game-facts
   "Facts of the game that jobs rely on and that are not tuning: stack sizes, ripe levels, the time dusk comes."
   (:require ["minecraft-data" :as minecraft-data]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [engine.game :as game]))
 
 (def stack-size "Items in a full stack of a stacking item." 64)
 (def slot-max "Items one furnace or chest slot holds at most." 64)
 (def ripe-level "The honey level at which a hive can be harvested." 5)
 (def dusk-tick "The time of day (game ticks) at which dusk comes." 12000)
+
+(def smelted-from
+  "{output input} of what the furnaces cook, for naming the input of a product. The vanilla recipes are in no
+  minecraft-data file."
+  (into
+   {"iron_ingot" "raw_iron" "gold_ingot" "raw_gold" "copper_ingot" "raw_copper" "netherite_scrap" "ancient_debris"
+   "glass" "sand" "smooth_stone" "stone" "brick" "clay_ball" "terracotta" "clay"
+   "nether_brick" "netherrack" "smooth_sandstone" "sandstone" "smooth_red_sandstone" "red_sandstone"
+   "cracked_stone_bricks" "stone_bricks" "cracked_deepslate_bricks" "deepslate_bricks"
+   "cracked_deepslate_tiles" "deepslate_tiles" "cracked_nether_bricks" "nether_bricks" "smooth_quartz" "quartz_block" "lime_dye" "sea_pickle" "green_dye" "cactus"
+   "popped_chorus_fruit" "chorus_fruit"}
+   (map (fn [[raw cooked]] [cooked raw])) game/cooking))
 
 (defn gatherable?
   "Items the body gets by mining, felling or from sheep: logs, coal, wool (white wool is also crafted from string)."

@@ -25,17 +25,7 @@
                    (boolean (re-find #"_(log|wood)$" name)))
      false)))
 
-(def made-from
-  "{output input} of what the furnaces cook, for naming the input of a product. The vanilla recipes are in no
-  minecraft-data file."
-  (into
-   {"iron_ingot" "raw_iron" "gold_ingot" "raw_gold" "copper_ingot" "raw_copper" "netherite_scrap" "ancient_debris"
-   "glass" "sand" "smooth_stone" "stone" "brick" "clay_ball" "terracotta" "clay"
-   "nether_brick" "netherrack" "smooth_sandstone" "sandstone" "smooth_red_sandstone" "red_sandstone"
-   "cracked_stone_bricks" "stone_bricks" "cracked_deepslate_bricks" "deepslate_bricks"
-   "cracked_deepslate_tiles" "deepslate_tiles" "cracked_nether_bricks" "nether_bricks" "smooth_quartz" "quartz_block" "lime_dye" "sea_pickle" "green_dye" "cactus"
-   "popped_chorus_fruit" "chorus_fruit"}
-   (map (fn [[raw cooked]] [cooked raw])) game/cooking))
+(def made-from facts/smelted-from)
 
 (declare smeltable?)
 

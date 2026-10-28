@@ -6,6 +6,7 @@
             [jobs.lib.cost.health :as health]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.foods :as foods]
+            [jobs.lib.game-facts :as facts]
             [engine.game :as game]))
 
 (def default-basis
@@ -43,18 +44,16 @@
         :else b))
 
 (defn smelt-sources
-  "{output name input name}: smelting minecraft-data does not describe, by name rule over the item names it has."
+  "{output [input names]} of what the furnaces cook (facts/smelted-from, which holds game/cooking too), over the item
+  names minecraft-data has; stone is smelted from cobblestone, charcoal from any overworld log."
   [names]
   (let [has? (set names)
-        by-rule (keep (fn [n]
-                        (cond
-                          (and (str/starts-with? n "raw_") (has? (str (subs n 4) "_ingot"))) [(str (subs n 4) "_ingot") n]
-                          (has? (str "cooked_" n)) [(str "cooked_" n) n]))
-                      names)]
-    (into {} (concat by-rule
-                     (filter (fn [[o i]] (and (has? o) (has? i)))
-                             [["netherite_scrap" "ancient_debris"] ["stone" "cobblestone"] ["glass" "sand"]
-                              ["brick" "clay_ball"] ["charcoal" "oak_log"]])))))
+        inputs (-> (update-vals facts/smelted-from vector)
+                   (assoc "stone" ["cobblestone"] "charcoal" (filterv #(str/ends-with? % "_log") names)))]
+    (into {} (keep (fn [[o ins]]
+                     (let [ins (filterv has? ins)]
+                       (when (and (has? o) (seq ins)) [o ins]))))
+          inputs)))
 
 (defn ore-block? [name] (or (str/ends-with? name "_ore") (= "ancient_debris" name)))
 
@@ -260,7 +259,7 @@
                                (let [via-recipe (some->> (by-result n)
                                                          (map (fn [[_ k ins]] (/ (+ (:craft-step basis) (reduce + (map #(get table % js/Infinity) ins))) k)))
                                                          (apply min))
-                                     via-smelt (some-> (smelts n) (#(+ (:smelt-step basis) (get table % js/Infinity))))
+                                     via-smelt (some->> (smelts n) (map #(+ (:smelt-step basis) (get table % js/Infinity))) (apply min))
                                      w (min (get natural n js/Infinity) (or via-recipe js/Infinity) (or via-smelt js/Infinity))]
                                  [n (pin n (if (js/isFinite w) (max w (food-floor n)) w))])))
                      names))
