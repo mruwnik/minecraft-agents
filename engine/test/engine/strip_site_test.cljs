@@ -378,6 +378,17 @@
           (is (= [:condition-failed :child-failed] (ends blocked)))
           (is (= {:child "jobs.movement.go-to" :because :no-path} (select-keys blocked [:child :because]))))))))
 
+(deftest the-walk-down-to-the-site-is-priced-over-the-strips-time
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [shaft {:id "shaft" :kind :mineshaft :parts [{:id "stair" :stair {:from [12 64 100] :heading :east :to-y 60} :want :clear}]}
+              seen (atom [])
+              go (let [stub (ending-job 'jobs.movement.go-to :nothing-possible :unreachable)]
+                   (update stub :round (fn [r] (fn [c] (swap! seen conj (:stay-s (:args c))) (r c)))))]
+          (await (start! (setup :pos {:x 0 :y 64 :z 100} :plans {"shaft" shaft} :ending-jobs {'jobs.movement.go-to go}) (assoc args :shaft "shaft")))
+          (is (= [120] (distinct @seen)) "120 s a segment, one at least"))))))
+
 (deftest a-corridor-that-waits-on-a-danger-is-waited-out-and-never-skips-the-segment
   (async done
     (tu/run-async done

@@ -26,6 +26,7 @@
   {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::collect-radius {:default 6 :doc "How far around the last dug cell to collect drops after a dig, in blocks." :spec (a/num-in 0 nil)}
    ::stall-rounds {:default 5 :doc "Rounds in a row a walk to one target waits without the body getting nearer before the target is skipped as a failure." :spec (a/int-in 1 nil)}
+   ::item-s {:default 6 :doc "Mean seconds one item takes (walk, dig, collect), for the quote and the stay a walk to the dig is priced over." :spec (a/num-in 0 nil)}
    ::zone-margin {:default 8 :doc "Before it digs, the body walks to a start cell this many blocks outside any zone it owns; its stair and tunnel stop at such a zone." :spec (a/int-in 0 nil)}})
 
 (defn reach [] (settings/get settings ::reach))
@@ -295,6 +296,11 @@
     (-> origin (update :x + (* k dx)) (update :z + (* k dz)))))
 
 (defn zone-margin [] (settings/get settings ::zone-margin))
+
+(defn work-s
+  "Mean seconds the call's :count items take: the quote's mean, and the stay go-to prices a walk to the dig over."
+  [c]
+  (* (:count (:args c)) (settings/get settings ::item-s)))
 
 (defn own-zones
   "The zones this body owns (none with :ignore-zones?)."

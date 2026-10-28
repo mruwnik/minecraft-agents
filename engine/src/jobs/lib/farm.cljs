@@ -13,6 +13,11 @@
 
 (defn water-reach [] (settings/get settings ::water-reach))
 
+(defn work-s
+  "Mean seconds n crops take to sow or cut: the farm quotes' mean, and the stay go-to prices a walk's danger over."
+  [n]
+  (* 2 n))
+
 (defn hydrated?
   "True when a water cell of water-set (a set of [x y z]) lies within ::water-reach in x and
   z of the farmland at x y z, at its y or one above."

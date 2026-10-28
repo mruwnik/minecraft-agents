@@ -23,7 +23,7 @@
             [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]
             [jobs.farm.field :as fld]
-            [jobs.lib.farm :refer [bare-cells pick-seed sowable]]
+            [jobs.lib.farm :refer [bare-cells pick-seed sowable work-s]]
             [jobs.lib.plan-field :as pf]
             [jobs.lib.world :as known]))
 
@@ -248,7 +248,7 @@
 (defn quote-of [c]
   (let [n (count (unsown c))
         seed (pick-seed (:seed (:args c)) c)]
-    {:uses (cond-> {:job-time [(* 0.5 n) (* 2 n) (* 10 n)]} (and seed (pos? n)) (assoc :items {seed [0 n n]}))
+    {:uses (cond-> {:job-time [(* 0.5 n) (work-s n) (* 10 n)]} (and seed (pos? n)) (assoc :items {seed [0 n n]}))
      :done [0 n n]}))
 
 ;; ------------------------------------------------------------------ plan mode
@@ -331,7 +331,7 @@
       (let [here (u/self-pos c)
             near (filterv #(<= (u/eye-dist here (:pos %)) (reach)) ready)
             target (first (sort-by #(u/dist here (:pos %)) ready))
-            walked (when (empty? near) (await (common/walk-to! c (:pos target) 3)))]
+            walked (when (empty? near) (await (common/walk-to! c (:pos target) 3 {:stay-s (work-s (count ready))})))]
         (case walked
           :continue :continue
           :blocked (do (ctx/update-mem! c count-fail :walk-fails (:pos target)) :again)
@@ -387,7 +387,7 @@
       (let [here (u/self-pos c)
             near (filterv #(<= (u/eye-dist here %) (reach)) cells)
             target (fld/nearest p cells)
-            walked (when (empty? near) (await (common/walk-to! c target 3)))]
+            walked (when (empty? near) (await (common/walk-to! c target 3 {:stay-s (work-s (count cells))})))]
         (case walked
           :continue :continue
           :blocked (do (ctx/update-mem! c count-fail :walk-fails target) :again)

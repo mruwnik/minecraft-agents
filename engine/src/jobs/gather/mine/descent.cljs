@@ -16,7 +16,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.look :refer [cell-of headings]]
             [jobs.lib.block-sets :as bs]
-            [jobs.gather.mine.targets :refer [base-ore main-block step-cell within-keep-clear within-own-zone]]
+            [jobs.gather.mine.targets :refer [base-ore main-block work-s step-cell within-keep-clear within-own-zone]]
             [jobs.gather.mine.end :refer [stop!]]
             [jobs.gather.mine.way-set :as ways]
             [jobs.gather.mine.torches :refer [mouth-torch-due? stair-torch-due? torch-step!]]
@@ -257,7 +257,7 @@
                                           :text (str "mine's stair is blocked (" (name stop) ") on every heading at " (str/join "," from) "; it tries another spot near " (str/join "," (access/cell to)))})
           (ctx/update-mem! c update :descent #(-> % (assoc :move to) (update :blocked (fnil conj []) from))))))
     (when-let [to (get-in (ctx/mem c) [:descent :move])]
-      (let [r (await (child/call-walk* c slot {:pos {:x (+ (:x to) 0.5) :y (:y to) :z (+ (:z to) 0.5)} :range 2
+      (let [r (await (child/call-walk* c slot {:pos {:x (+ (:x to) 0.5) :y (:y to) :z (+ (:z to) 0.5)} :range 2 :stay-s (work-s c)
                                                :ignore-zones? (boolean (:ignore-zones? (:args c)))
                                                :settings {:jobs.movement.go-to.tuning/y-slack 8}}))]
         (if (= :continue r)

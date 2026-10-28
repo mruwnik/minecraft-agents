@@ -291,7 +291,10 @@
 
 (def site-range "Blocks from the site within which the walk to a field out of sight ends." 8)
 
-(defn walk-args [c site] {:pos (update site :y inc) :range site-range})
+(defn walk-args
+  "The go-to args of the walk to the field out of sight: the pass's measured work (pass-price :work-s) is the stay its danger is priced over."
+  [c site]
+  {:pos (update site :y inc) :range site-range :stay-s (:work-s (pass-price c (check-facts c)))})
 
 (def quote-kind "Memory of the go-to quotes of walks to fields out of sight that cost more than the pass was worth." :farm-tend/walk-quote)
 (def quote-policy {:cap 16 :ttl :forever})

@@ -488,6 +488,19 @@
       (fn ^:async t []
         (is (seq (events-of (await (far-run 150)) :round_started)) "nine ripe wheat are worth more than 150 blocks' walk")))))
 
+(deftest the-walk-to-a-far-field-is-priced-over-the-pass-s-work
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup (assoc (far-ripe 150) :time 1000))
+              seen (atom [])
+              real (get-in (:eng s) [:jobs 'jobs.movement.go-to])
+              spy (assoc real :round (fn [c] (swap! seen conj (:stay-s (:args c))) ((:round real) c)))
+              eng (assoc (:eng s) :jobs (assoc (:jobs (:eng s)) 'jobs.movement.go-to spy))]
+          (core/submit! eng (list 'jobs.farm.tend {:area (far-box 150) :checks {:safe? '(always)}}) {})
+          (await (tu/run-ticks eng (:clock s) 3 700))
+          (is (some pos? (keep identity @seen))))))))
+
 (deftest a-tend-waits-not-worth-while-the-least-walk-to-its-seen-field-costs-more-than-its-crops
   (async done
     (tu/run-async done

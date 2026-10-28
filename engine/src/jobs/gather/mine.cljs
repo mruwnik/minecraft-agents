@@ -12,7 +12,7 @@
             [jobs.gather.mine.end :as end :refer [end-run wanted]]
             [jobs.gather.mine.mend :as mend]
             [jobs.gather.mine.way-set :as mw]
-            [jobs.gather.mine.targets :refer [owed carried got had zone-margin within-keep-clear within-own-zone scan items main-block]]
+            [jobs.gather.mine.targets :refer [owed carried got had work-s zone-margin within-keep-clear within-own-zone scan items main-block]]
                         [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.child :as child]
@@ -46,7 +46,7 @@
   Ends :done when :got meets :count (or the call's :least); else the dig's ending (condition-failed for the facts
   :none :wet :refused :own-zone :no-shaft :flooded :no-tool :no-torches, nothing-possible for
   failed tries). Data {:got n :reason r :mended n} plus the dig's data (:cut-blocks summed over its dig calls); text says reason, :got, :mended, the stair and the
-  tunnel. Quote: about ::item-s s an item, open-ended.")
+  tunnel. Quote: about ::item-s s an item (jobs.gather.mine.targets), open-ended.")
 
 (a/defargs args
   {:block :shared
@@ -72,7 +72,6 @@
 
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds a mine call may take by default (its :spend :job-time)." :spec (a/num-in 0 nil)}
-   ::item-s {:default 6 :doc "Mean seconds one item takes (walk, dig, collect), for the quote." :spec (a/num-in 0 nil)}
    ::max-equip-rounds {:default 3 :doc "Times the trip gets a pickaxe or torches again for a dig that stopped without them before it ends with the dig's ending." :spec (a/int-in 0 nil)}})
 
 (def target [:item :block :heading :center])
@@ -108,7 +107,7 @@
   "Finding out: about ::item-s per item, open-ended (a tunnel may find none); yields up to :count of the item."
   [c]
   (let [{:keys [count] :as a} (:args c)
-        mean (* count (settings/get settings ::item-s))]
+        mean (work-s c)]
     {:uses {:job-time [(min count mean) mean ##Inf]}
      :yields {:items {(first (items a)) [0 count count]}}
      :done [0 count count]}))
@@ -120,8 +119,8 @@
   [c]
   (and (descent-wanted? c) (or (not (mw/shaft? (:args c))) (boolean (:none (pick-shaft c)))) (empty? (:targets (scan c)))))
 
-(defn goal-args [goal]
-  {:pos {:x (+ (:x goal) 0.5) :y (:y goal) :z (+ (:z goal) 0.5)} :range 2 :settings {:jobs.movement.go-to.tuning/y-slack 8}})
+(defn goal-args [c goal]
+  {:pos {:x (+ (:x goal) 0.5) :y (:y goal) :z (+ (:z goal) 0.5)} :range 2 :stay-s (work-s c) :settings {:jobs.movement.go-to.tuning/y-slack 8}})
 
 (defn ^:async exit-order
   "The walks tried to leave zone zn, in turn: first every exit cell on foot only, the cheapest walk first (a wall is walked round, not dug through),
@@ -131,10 +130,10 @@
         priced (loop [[g & more] goals out []]
                  (if-not g
                    out
-                   (recur more (conj out [g (await (rooms/route-cost c (assoc (goal-args g) :ways #{:walk})))]))))
+                   (recur more (conj out [g (await (rooms/route-cost c (assoc (goal-args c g) :ways #{:walk})))]))))
         by-cost (map first (sort-by #(or (second %) ##Inf) priced))]
     (ctx/emit! c :mine.leave-order :info {:zone (:name zn) :priced (mapv (fn [[g s]] [(:x g) (:z g) s]) priced)})
-    (vec (concat (map #(assoc (goal-args %) :ways #{:walk}) by-cost) (map goal-args goals)))))
+    (vec (concat (map #(assoc (goal-args c %) :ways #{:walk}) by-cost) (map #(goal-args c %) goals)))))
 
 (defn ^:async leave-zone!
   "Before the first dig: a go-to child to a cell zone-margin outside the own zone (or, for a stair, building) zn the body stands near (the start moves with it).
@@ -163,7 +162,7 @@
   [c]
   (let [{:keys [x y z] :as cell} (:resume-at (ctx/mem c))
         r (await (child/call-walk* c :back
-                                   {:pos {:x (+ x 0.5) :y y :z (+ z 0.5)} :range 0
+                                   {:pos {:x (+ x 0.5) :y y :z (+ z 0.5)} :range 0 :stay-s (work-s c)
                                     :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (cond
       (= :continue r) :continue

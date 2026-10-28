@@ -114,3 +114,17 @@
          (await (e/tick-out! eng 1000))
          (is (= [7] (distinct @seen)))
          (done))))))
+
+(deftest go-near-hands-the-stay-to-the-walk-it-prices-the-danger-over
+  (async done
+    ((fn ^:async t []
+       (let [{:keys [eng]} (e/setup {:blocks {}})
+             seen (atom [])
+             real (get-in eng [:jobs 'jobs.movement.go-to])
+             spy (assoc real :round (fn [c] (swap! seen conj (:stay-s (:args c))) ((:round real) c)))
+             eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.movement.go-to spy
+                                         'near-probe (probe (atom nil) (atom nil) {:x 10 :y 64 :z 0} 2 {:stay-s 77})))]
+         (core/submit! eng '(near-probe) {})
+         (await (e/tick-out! eng 1000))
+         (is (= #{77} (set @seen)))
+         (done))))))

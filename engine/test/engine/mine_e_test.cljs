@@ -1,7 +1,7 @@
 (ns engine.mine-e-test
   "jobs.gather.mine against the fake world."
   (:require [engine.child-ends :as ce]
-            [cljs.test :refer [deftest is async]]
+            [cljs.test :refer [deftest is are async]]
             [clojure.string]
             [engine.contract :as contract]
             [engine.core :as core]
@@ -258,6 +258,11 @@
           (await (run-ticks s 120))
           (is (= 1 (count (events-of s :tool.broke))))
           (is (= 1 (count (events-of s :tool.none)))))))))
+
+(deftest the-walks-of-a-mine-are-priced-over-the-time-its-items-take
+  (are [n stay] (= stay (:stay-s (mine-job/goal-args {:args {:block "sand" :count n}} {:x 0 :y 64 :z 0})))
+    1 6
+    5 30))
 
 (deftest the-body-walks-out-of-its-own-zone-before-it-digs
   (async done

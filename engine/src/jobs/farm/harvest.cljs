@@ -13,6 +13,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.gate :as gate]
             [jobs.lib.crops :as crops]
+            [jobs.lib.farm :refer [work-s]]
             [jobs.lib.look :as look]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.price :as price]
@@ -297,7 +298,7 @@
   (let [c (with-field c (planned c))
         ripe (ripe-raw c nil)
         n (count ripe)]
-    {:uses (cond-> {:job-time [(* 0.5 n) (* 2 n) (* 10 n)]}
+    {:uses (cond-> {:job-time [(* 0.5 n) (work-s n) (* 10 n)]}
              (and (:replant (:args c)) (pos? n))
              (assoc :items (update-vals (frequencies (keep #(get seed-of (u/seen-name (:primitives c) %)) ripe))
                                         (fn [k] [0 k k]))))
@@ -340,7 +341,7 @@
       (let [here (u/self-pos c)
             near (filterv #(<= (u/eye-dist here (:pos %)) (debt-reach %)) plantable)
             nearest-debt (first (sort-by #(u/dist here (:pos %)) plantable))
-            walked (when (empty? near) (await (common/walk-to! c (:pos nearest-debt) (walk-range nearest-debt))))
+            walked (when (empty? near) (await (common/walk-to! c (:pos nearest-debt) (walk-range nearest-debt) {:stay-s (work-s (count plantable))})))
             targets (if (seq near) near [nearest-debt])]
         (case walked
           :continue :continue
@@ -397,7 +398,7 @@
       (let [here (u/self-pos c)
             shut-in? (reach-room/enclosed? p :ground)
             near (when-not shut-in? (filterv #(<= (u/eye-dist here %) (reach)) ripe))
-            walked (when (empty? near) (await (common/walk-to! c (first ripe) (if shut-in? (settings/get settings ::shut-in-walk-range) (settings/get settings ::walk-range)))))
+            walked (when (empty? near) (await (common/walk-to! c (first ripe) (if shut-in? (settings/get settings ::shut-in-walk-range) (settings/get settings ::walk-range)) {:stay-s (work-s (count ripe))})))
             targets (if (seq near) near [(first ripe)])
             targets (still-ripe p targets)]
         (when (and (empty? targets) (not (#{:continue :blocked} walked)))
@@ -433,7 +434,7 @@
       (when (and shut-in? (not (:in-pit m))) (ctx/update-mem! c assoc :in-pit true))
       (if (>= (:home-fails m 0) (max-home-fails))
         (do (ctx/update-mem! c assoc :unreachable true) :finish)
-        (case (await (common/walk-to! c center (if shut-in? (settings/get settings ::shut-in-walk-range) (quot radius 2))))
+        (case (await (common/walk-to! c center (if shut-in? (settings/get settings ::shut-in-walk-range) (quot radius 2)) {:stay-s (work-s (max 1 (count (:replant m))))}))
           :there (do (ctx/update-mem! c assoc :left-pit true) :again)
           :continue :continue
           (do (ctx/update-mem! c inc-in :home-fails) :again))))))

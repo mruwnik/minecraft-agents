@@ -68,6 +68,11 @@
 (defn sites [c] (or (:data (ctx/latest c kind)) {}))
 (defn site [c] (get (sites c) (:site (:args c))))
 
+(defn work-s
+  "Mean seconds the site's strip takes (120 a segment): the quote's mean, and the stay go-to prices the walk to the site over."
+  [c]
+  (* 120 (max 1 (count (:segments (site c))))))
+
 (defn save!
   "Write the site's state as (f state & xs); sites finished earlier go once there are more than ::max-sites."
   [c f & xs]
@@ -111,7 +116,7 @@
   (let [{:keys [top to-y heading id]} (shaft-for c s)
         above? (and top (> (:y (u/self-pos c)) (inc to-y)))
         cell (if above? top (vec3 (:at s)))
-        w (await (child/call-walk* c :enter (cond-> {:pos cell :range (if above? 1 2)} above? (assoc :ways #{:walk :clear-seal}))))]
+        w (await (child/call-walk* c :enter (cond-> {:pos cell :range (if above? 1 2) :stay-s (work-s c)} above? (assoc :ways #{:walk :clear-seal}))))]
     (cond
       (= :continue w) :continue
       (not= :done (:kind w)) (stop! c (if (= :nothing-possible (:kind w)) :unreachable :child-failed)
@@ -297,6 +302,6 @@
       (apply contract/later :stripping "strip site: segments left to strip" data))))
 
 (defn quote-of [c]
-  {:uses {:job-time [1 (* 120 (max 1 (count (:segments (site c))))) (settings/get settings ::job-time-s)]}})
+  {:uses {:job-time [1 (work-s c) (settings/get settings ::job-time-s)]}})
 
 (def meta {:tags [:mine]})

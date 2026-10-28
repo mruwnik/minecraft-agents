@@ -12,6 +12,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
             [jobs.farm.harvest :as harvest]
+            [jobs.lib.farm :as farm]
             [jobs.farm.field :as fld]
             [jobs.lib.aim :as aim]))
 
@@ -454,6 +455,16 @@
                (let [r (await (impl token args))]
                  (fake/swap-self! p assoc :pos [35 64 0])
                  r))))
+
+(deftest the-walk-back-to-a-replant-is-priced-over-the-time-to-sow-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (start {:world one-cell})
+              calls (atom [])]
+          (send-body-away! p)
+          (await (tu/with-near-spy calls (fn ^:async f [] (await (child-outcome eng job {} 600)))))
+          (is (some #(= (farm/work-s 1) (:stay-s (nth % 2))) @calls)))))))
 
 (deftest a-body-far-from-its-field-walks-back-and-replants
   (async done

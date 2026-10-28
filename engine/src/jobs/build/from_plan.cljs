@@ -26,7 +26,7 @@
             [jobs.build.from-plan.cells :refer [diggable in-reach in-dig-reach seals? seal-exit shuts-out? off-low-floor support-looks retreat-dists fill-order]]
             [jobs.build.from-plan.book :refer [walk-fail retry-walks warn-way-in! place-one! settle-placing! dig-one! result-data finish! book-failed!]]
             [jobs.build.from-plan.light :as light]
-            [jobs.build.from-plan.walk :refer [give-up trace! leave! exit-of walk-to! reach-cell! look-for-support! shut-in? place-here?]]
+            [jobs.build.from-plan.walk :refer [give-up cell-s trace! leave! exit-of walk-to! reach-cell! look-for-support! shut-in? place-here?]]
             [jobs.lib.build.text :refer [summary stopped-text assoc-fetch-failed]]))
 
 (def meta {:tags [:goal]})
@@ -107,8 +107,7 @@
    ::off-bed-tries {:default 3 :doc "Walks off a bed or bottom slab the body stands on, before the roof cells over it are given up." :spec (a/int-in 1 nil)}
    ::stall-steps {:default 3 :doc "Steps in a row that return :again with the job memory unchanged (nothing placed, dug, walked or booked) after which the build stops :stalled." :spec (a/int-in 1 nil)}
    ::budget-streak {:default 4 :doc "Places or digs in a row (no cell placed or dug between) whose walk ended :unreachable :budget (a search that flooded the loaded land and found no stand) after which the build stops :unreachable: the next cells would flood the same land." :spec (a/int-in 1 nil)}
-   ::look-range {:default 16 :doc "Cells farther than this from the eye are walked to, not looked at: they may be unloaded, which a look cannot tell." :spec (a/num-in 0 nil)}
-   ::cell-s {:default 3 :doc "Seconds one cell of the plan is guessed to take, for the quote." :spec (a/num-in 0 nil)}})
+   ::look-range {:default 16 :doc "Cells farther than this from the eye are walked to, not looked at: they may be unloaded, which a look cannot tell." :spec (a/num-in 0 nil)}})
 
 (defn judged-plan
   "planned, judged once per check-cache window."
@@ -193,7 +192,7 @@
   (let [{:keys [cells trouble]} (judged-plan c)
         open (if trouble [] (owed cells))
         n (count open)
-        s (* n (settings/get settings ::cell-s))
+        s (* n (cell-s))
         items (frequencies (keep :item (vals (into {} (map (juxt :pos identity)) open))))
         ;; a door, gate or trapdoor out of sight for 10 s reads unknown (owed), so the done check may find a built one owed
         ;; where this quote, read a moment later, sees it: the quote allows for them, else a :least call ends at once

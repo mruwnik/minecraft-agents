@@ -130,6 +130,16 @@
           (await (child-outcome eng job {:plan "pen"} 200))
           (is (> @body-z 2.5)))))))
 
+(deftest the-walk-to-a-stand-is-priced-over-the-cells-placed-from-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (start {:inventory kit :self {:pos {:x 3 :y 64 :z 7}}} {"pen" (pen-plan)})
+              calls (atom [])]
+          (await (tu/with-near-spy calls (fn ^:async f [] (await (child-outcome eng job {:plan "pen"} 200)))))
+          (is (seq @calls))
+          (is (every? #(let [s (:stay-s (nth % 2))] (and (pos? s) (zero? (rem s (fp-walk/cell-s))))) @calls) "a whole number of cells' time, one at least"))))))
+
 (defn state-at [p pos] (js->clj (.-properties (.blockAt p (clj->js (zipmap [:x :y :z] pos)))) :keywordize-keys true))
 
 (defn clicks [p item] (mapv #(js->clj (.-click (.-args %)) :keywordize-keys true) (filter #(= item (.-item (.-args %))) (h/calls p "place"))))

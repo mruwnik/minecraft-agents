@@ -188,6 +188,18 @@
           (is (pos? (count (tu/walk-calls p))))
           (is (sown p xs [2] "wheat")))))))
 
+(deftest the-walk-to-a-far-field-is-priced-over-the-time-to-sow-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [xs (range 2 14)
+              {:keys [eng]} (start {:blocks (farmland xs [2]) :inventory (inv "wheat_seeds" 12) :floor tu/walk-floor})
+              calls (atom [])]
+          (await (tu/with-near-spy calls (fn ^:async f [] (await (child-outcome eng job {:area (box 2 2 13 2)} 100)))))
+          (let [stay (:stay-s (nth (first @calls) 2))]
+            (is (< 0 stay (inc (farm/work-s 12))))
+            (is (zero? (rem stay (farm/work-s 1)))) "whole cells' time"))))))
+
 (deftest a-wide-field-is-sown-in-one-call
   (async done
     (tu/run-async done

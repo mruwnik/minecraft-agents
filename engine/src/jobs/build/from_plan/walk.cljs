@@ -24,9 +24,12 @@
 (a/defargs settings
   {::give-up {:default 3 :doc "Refused places or failed walks after which a cell is given up." :spec (a/int-in 1 nil)}
    ::hole-depth {:default 2 :doc "Levels of walls round the body from its feet up that make it a body in a hole, whose walks may climb out." :spec (a/int-in 1 nil)}
+   ::cell-s {:default 3 :doc "Seconds one cell of the plan is guessed to take, for the quote and the stay a walk to a stand is priced over." :spec (a/num-in 0 nil)}
    ::pocket-cells {:default 256 :doc "Walkable cells at most which a body whose walk ended shut in counts as shut in a pocket (its walks then climb or dig out); a larger closed room is built in." :spec (a/int-in 1 nil)}})
 
 (defn give-up [] (settings/get settings ::give-up))
+
+(defn cell-s "Seconds one cell of the plan is guessed to take: the quote's figure, and the stay per cell a stand is priced over." [] (settings/get settings ::cell-s))
 
 (defn trace!
   "Note the branch a step took and its cell, for the :stalled ending; kept off the job memory so it never counts as progress."
@@ -183,18 +186,31 @@
   (or (aim/body-sees? c (:pos cell))
       (empty? (seeing c (:all (stand-choices c cells cell)) (:pos cell)))))
 
+(defn- open-cells
+  "The open cells of cell's layer: those still to place or dig the same way, not given up."
+  [c cells cell]
+  (let [closed (merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
+        y (second (:pos cell))]
+    (filter #(and (= y (second (:pos %))) (= (boolean (:dig? cell)) (boolean (:dig? %))) (not= :match (:answer %))
+                  (not (:companion %)) (not (contains? closed (:pos %))))
+            cells)))
+
+(defn stand-eye [[x sy z]] [(+ x 0.5) (+ sy game/eye-height) (+ z 0.5)])
+
 (defn stand-price
   "Seconds stand costs the build (jobs.lib.cost): the walk there, plus cover-tour-s from its eye over the open cells of
   cell's layer, those it reaches wherever it stands in the cell (as reaching) placed from it and the rest priced by the walks on."
   [c cells cell stand]
-  (let [closed (merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
-        y (second (:pos cell))
-        open (filter #(and (= y (second (:pos %))) (= (boolean (:dig? cell)) (boolean (:dig? %))) (not= :match (:answer %))
-                           (not (:companion %)) (not (contains? closed (:pos %))))
-                     cells)
-        [x sy z] stand]
+  (let [[x sy z] stand]
     (+ (:cost (cost/walk-cost {:distance (u/dist (u/self-pos c) {:x (+ x 0.5) :y sy :z (+ z 0.5)})}))
-       (cost/cover-tour-s [(+ x 0.5) (+ sy game/eye-height) (+ z 0.5)] (map #(mapv (partial + 0.5) (:pos %)) open) (stand-reach)))))
+       (cost/cover-tour-s (stand-eye stand) (map #(mapv (partial + 0.5) (:pos %)) (open-cells c cells cell)) (stand-reach)))))
+
+(defn stand-stay-s
+  "Seconds the build stays at stand: cell-s for each open cell of cell's layer it reaches from there (the cell itself at least)."
+  [c cells cell stand]
+  (let [eye (stand-eye stand)
+        reached (count (filter #(<= (apply js/Math.hypot (map - eye (mapv (partial + 0.5) (:pos %)))) (stand-reach)) (open-cells c cells cell)))]
+    (* (max 1 reached) (cell-s))))
 
 (defn ^:async walk-to-stand!
   "Walk to the cheapest (stand-price) stand cell beside cell, among those that see it first (:continue while the walk waits, else :again); a cell that cannot be walked to, or is still out of reach (or unseen, as :unseen) on arrival, counts a failure."
@@ -209,8 +225,8 @@
           :again)
       :else
       (let [shut? (or (in-hole? c) (shut-in-walk? c))
-            w (await (walk-stand! c cell stand (when-not shut?
-                                                 {:ways (cond-> #{:walk :clear-seal} (sh-inside/sheltered-in c) (into [:stair :dig-out]))})))]
+            w (await (walk-stand! c cell stand (cond-> {:stay-s (stand-stay-s c cells cell stand)}
+                                               (not shut?) (assoc :ways (cond-> #{:walk :clear-seal} (sh-inside/sheltered-in c) (into [:stair :dig-out]))))))]
         ;; an arrival in reach that does not see the cell, where another stand would, is a bad stand: else the step walks to it again
         (when (and (= :there w) (:found cell) (not (:dig? cell)) (seq (in-reach c [cell])) (not (place-here? c cells cell)))
           (ctx/update-mem! c #(-> (update % :bad-stands (fnil conj []) stand) (walk-fail (:pos cell) :unreachable (give-up) (u/self-pos c)))))
