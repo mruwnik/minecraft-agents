@@ -610,6 +610,14 @@
     {:x 40 :y 64 :z 0} :ok
     {:x 40 :y 70 :z 0} :later))
 
+(deftest safe-at-by-night-dug-takes-an-unseen-goal-below-an-unburied-body-as-underground
+  (are [goal dug? expected] (= expected (with-redefs [sh-sense/seen-cell? (constantly false)
+                                                     ready/roof-over? (constantly false)]
+                                          (kind (ready/safe-at-by-night (constantly goal) false dug?) open-night)))
+    {:x 6 :y 57 :z 0} true :ok
+    {:x 6 :y 57 :z 0} false :never
+    {:x 6 :y 70 :z 0} true :later))
+
 (defn kind-in-shelter [check world shelter]
   (let [c (assoc (ctx-of world) :view (fn [] {:now 0 :data {:entries {:shelter [{:t 0 :data shelter}]}}}))]
     (first (check c))))

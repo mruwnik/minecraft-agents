@@ -290,9 +290,10 @@
                           feet (sh-sense/feet p)
                           to (to-of c)]
                       (and (pos? (:chance (spawn-light/exposure p (or (f c) feet))))
-                           (not (and to (sh-sense/buried? p)
-                                     (or (sh-sense/buried-at? p to)
-                                         (and (not (sh-sense/seen-cell? p to)) (<= (:y to) (:y feet)) (or dug? (roof-over? p to)))))))))
+                           (not (and to
+                                     (or (and (sh-sense/buried? p) (sh-sense/buried-at? p to))
+                                         (and (not (sh-sense/seen-cell? p to)) (<= (:y to) (:y feet))
+                                              (if dug? true (and (sh-sense/buried? p) (roof-over? p to))))))))))
         threat (fn [c] (if walk? (threatened-walking c (f c)) (threatened c)))]
     (with-meta (fn [c] (cond
                          (sealed c) (contract/all [(threat c) (sealed c)])
