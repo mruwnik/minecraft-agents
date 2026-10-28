@@ -20,6 +20,7 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.shelter.inside :as sh-inside]
+            [jobs.lib.stair-price :as stair-price]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
@@ -112,39 +113,26 @@
     (transduce (comp (filter #(names (:name %))) (map :count)) + 0 (u/inventory p))))
 
 (defn stair-route-s
-  "Seconds the stair way e takes from feet, each step as jobs.lib.dig-route (route-answer) prices one: cw/stair-step-cost of a
-  walk step, the dig-cost of its cuts, a fill for an open floor (a fetch of the blocks, with none carried) and the unseen step price when a cut or its floor is unseen."
+  "Seconds the stair way e takes from feet, each step as jobs.lib.dig-route (route-answer) prices one: jobs.lib.stair-price
+  of its cuts (dig-cost), a fill for an open floor (a fetch of the blocks, with none carried) and an unseen cut or floor."
   [p feet {:keys [heading steps]}]
   (let [block-at (escape/block-at-of p)
         unseen? (escape/unseen-of p)
-        step-s (:cost (cost/walk-cost {:distance 1}))
-        unseen-s (cost/unseen-route-s (wworld/unseen-share p) (constantly :ground) [{:x 0 :y 0 :z 0}])
+        leg-s (stair-price/leg-pricer p)
+        fill-s (cw/fill-cost (carried-build-n p))
         cut-s (fn [cell] (let [n (block-at cell)]
                            (cond (dig-route/open? n) nil
                                  (nil? (dig-route/cell-cost n)) ##Inf
                                  :else (or (cost/dig-cost (or n "stone")) ##Inf))))]
-    (transduce (map (fn [cuts] (cw/stair-step-cost step-s (cw/stair-cost 1)
-                                                    (cond-> (mapv cut-s cuts)
-                                                      (dig-route/open? (block-at (escape/add (nth cuts 2) [0 -1 0]))) (conj (cw/fill-cost (carried-build-n p))))
-                                                    (if (some unseen? (cons (escape/add (nth cuts 2) [0 -1 0]) cuts)) unseen-s 0))))
+    (transduce (map (fn [cuts] (let [floor (escape/add (nth cuts 2) [0 -1 0])]
+                                 (leg-s (map cut-s cuts) (when (dig-route/open? (block-at floor)) fill-s) (some unseen? (cons floor cuts))))))
                + 0 (partition 3 (escape/stair-cuts feet (escape/heading-dirs (keyword heading)) steps)))))
 
 (defn new-stair-step-s
   "Seconds one step of a stair not yet laid out (no heading chosen) takes: its three cuts priced as stone, and its cells
   unseen (the worse case)."
   [p]
-  (let [step-s (:cost (cost/walk-cost {:distance 1}))
-        unseen-s (cost/unseen-route-s (wworld/unseen-share p) (constantly :ground) [{:x 0 :y 0 :z 0}])]
-    (cw/stair-step-cost step-s (cw/stair-cost 1) (repeat 3 (or (cost/dig-cost "stone") 0)) unseen-s)))
-
-(defn pillar-route-s
-  "Seconds the pillar of height blocks up from feet takes as jobs.lib.dig-route prices one: cw/pillar-cost, and the unseen step
-  price for each block whose cell or the two over it is unseen."
-  [p feet height]
-  (let [unseen? (escape/unseen-of p)
-        unseen-s (cost/unseen-route-s (wworld/unseen-share p) (constantly :ground) [{:x 0 :y 0 :z 0}])]
-    (+ (cw/pillar-cost height)
-       (* unseen-s (count (filter #(some unseen? (map (fn [dy] (escape/up feet (+ % dy))) [1 2])) (range height)))))))
+  ((stair-price/leg-pricer p) (repeat 3 (or (cost/dig-cost "stone") 0)) nil true))
 
 (defn price
   "Seconds way e from feet is reckoned to take (jobs.lib.cost): a stair, a pillar, a bridge or a fill by its blocks, a dug door or
@@ -154,7 +142,7 @@
         dig-s (fn [cells] (transduce (map #(+ (/ (tools/clear-ms p (@block-at %)) 1000) (:cost (cost/walk-cost {:distance 1})))) + 0 cells))]
     (case step
       :stair (+ (stair-route-s p feet e) (* (:aside e 0) (or (cost/dig-cost "stone") 1)))
-      :pillar (pillar-route-s p feet (:height e))
+      :pillar (stair-price/pillar-s p feet (:height e))
       :bridge (cw/bridge-cost (:length e) (:short e 0))
       :fill-gap (cw/fill-cost (:count e 1))
       :dig-route (dig-s (map :cell (:cells e)))

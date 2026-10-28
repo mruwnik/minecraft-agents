@@ -4,7 +4,6 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
-            [jobs.lib.cost.ways :as cw]
             [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.breath :as breath]
@@ -12,9 +11,9 @@
             [jobs.lib.ready :as ready]
             [jobs.lib.shore :as shore]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.stair-price :as stair-price]
             [jobs.lib.places :as places]
             [jobs.lib.util :as u]
-            [jobs.lib.walk.world :as wworld]
             [jobs.lib.column-kinds :as kinds]))
 
 (def wall-reach "Blocks out from the feet the nearest wall is looked for." 8)
@@ -140,14 +139,12 @@
   (let [p (:primitives c)]
     (if (or (not (sh-sense/buried? p)) (climbed? c) (own-top c))
       0
-      (let [step-s (:cost (cost/walk-cost {:distance 1}))
-            unseen-s (cost/unseen-route-s (wworld/unseen-share p) (constantly :ground) [{:x 0 :y 0 :z 0}])
+      (let [leg-s (stair-price/leg-pricer p)
             feet (sh-sense/feet p)
             cut-s (fn [n] (when-not (and (sh-sense/seen-cell? p n) (not (sh-sense/solid-at? p n)))
                             (or (cost/dig-cost (or (u/seen-name p n) "stone")) ##Inf)))
             leg (fn [dy] (let [cells (map #(assoc feet :y (+ (:y feet) dy %)) (range 3))]
-                           (cw/stair-step-cost step-s (cw/stair-cost 1) (map cut-s cells)
-                                              (if (some #(not (sh-sense/seen-cell? p %)) (cons (assoc feet :y (+ (:y feet) dy -1)) cells)) unseen-s 0))))]
+                           (leg-s (map cut-s cells) nil (some #(not (sh-sense/seen-cell? p %)) (cons (assoc feet :y (+ (:y feet) dy -1)) cells)))))]
         (transduce (map leg) + 0 (range 1 (inc (rise c))))))))
 
 (defn ^:async climb!
