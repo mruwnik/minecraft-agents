@@ -81,9 +81,9 @@
 
 (defn score-patch
   "Price a patch {:tops [y ...] :cells [{:lit? :wet? :farmable?} ...] :away dist :sky bool :torches n :worth s :fetch-s s}, nil when any top is
-  nil: :score is its :worth (field-price, each wet cell :worth over the cells, nil: cell-worth; 0 with no :cells, a patch for no crops) less the earthwork of levelling it
-  (cost/earthwork-s) and the walk to it, in seconds. A field scoring 0 or less has :why: :far (its crops pay for the levelling,
-  not the walk too), :steep (they pay for no levelling) or :barren (they pay for nothing: dark or untillable). Open sky is
+  nil: :score is its :worth (field-price, each wet cell :worth over the cells, nil: cell-worth; with no :cells, a patch for no crops, :worth whole or 0) less the earthwork of levelling it
+  (cost/earthwork-s) and the walk to it, in seconds. A patch scoring 0 or less has :why: :far (its worth pays for the levelling,
+  not the walk too), :steep (it pays for no levelling) or :barren (it pays for nothing: dark or untillable, or no crops and no :worth). Open sky is
   reported, not priced: crops need light, which the cells say."
   [{:keys [tops cells sky away torches fetch-s] whole :worth}]
   (when-not (some nil? tops)
@@ -93,16 +93,17 @@
           away (or away 0)
           field (when (seq cells) (field-price cells (or torches 0) (if whole (/ whole (count cells)) (cell-worth true)) fetch-s))
           costs (merge (:costs field) {:earthwork (cost/earthwork-s work) :walk (walk-s away)})
-          worth (:worth field 0)
+          worth (if field (:worth field) (or whole 0))
+          net (if field (:net field) worth)
           score (- worth (reduce + (vals costs)))
           n (count tops)]
       (cond-> {:y y :level level :work work :water-share (if field (/ (count (filter :wet? cells)) n) 0) :sky (boolean sky)
                :away (js/Math.round away) :worth (js/Math.round worth) :costs (update-vals costs js/Math.round)
                :score (js/Math.round score) :dark? (boolean (:lit? field))}
         field (assoc :farmable (js/Math.round (/ (* 100 (count (filter :farmable? cells))) n)))
-        (and field (<= score 0)) (assoc :why (cond (pos? (- (:net field) (:earthwork costs))) :far
-                                                   (pos? (:net field)) :steep
-                                                   :else :barren))))))
+        (<= score 0) (assoc :why (cond (pos? (- net (:earthwork costs))) :far
+                                       (pos? net) :steep
+                                       :else :barren))))))
 
 (defn max-step
   "The largest height difference between neighbouring cells of a patch whose tops run x-major, h cells per column."
@@ -178,7 +179,7 @@
   (let [walk #(walk-s (max 0 (dec %)))
         w-wet (if whole (/ whole n) (cell-worth true))]
     (if-not farmland?
-      (- (walk ring))
+      (- (or whole 0) (walk ring))
       (max (- (:net (field-price (repeat n {:lit? true :wet? false :farmable? true}) 0 w-wet (when water? 0))) (walk ring))
            (if wet-ring (- (* n w-wet) (walk wet-ring)) ##-Inf)))))
 
@@ -253,7 +254,7 @@
                            :far (miss {:short 0 :far (:away s)})
                            :steep (let [off (count (remove #(= (:y s) %) tops))] (miss {:short off :steep off}))
                            :barren (let [dark (count (remove :lit? cells)) poor (count (remove :farmable? cells))]
-                                     (miss {:short (max dark poor) :dark dark :unfarmable poor})))))))))]
+                                     (miss {:short (if cells (max dark poor) (count tops)) :dark dark :unfarmable poor})))))))))]
     (loop [rs (drop-while #(< % next-ring) rings) found found miss miss]
       (if (empty? rs)
         {:next-ring ##Inf :found found :miss miss :done true :reads @reads}

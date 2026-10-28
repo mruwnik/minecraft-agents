@@ -34,7 +34,7 @@
   ground level of the :w x :h patch, not its centre; :spot is the first spot's pos. :away is the distance from the patch's centre
   to :center (the body's cell without one), not from the corner.
   Score = :worth less :costs, seconds: worth is the crops of its cells, cost/sown-worth of wheat on wet or dry farmland, or
-  the :worth arg shared over the cells, a dry one at the same share of a wet one (none for a :plan with no crops or farmland); costs are :earthwork (cost/earthwork-s of :work, the blocks the cells are off the
+  the :worth arg shared over the cells, a dry one at the same share of a wet one (a :plan with no crops or farmland is worth the :worth arg, nothing without it); costs are :earthwork (cost/earthwork-s of :work, the blocks the cells are off the
   commonest ground height y), the :walk from :center (cost/walk-cost of :away), and, each only where it pays: torches for cells
   under crop light 9 (cost/light-cost, a trip when none is carried; :dark? true, jobs.farm.grow hangs them), water brought to dry
   cells (a trip a source and the irrigate step), a top a hoe cannot till dug out and filled with dirt. A patch scoring 0 or less

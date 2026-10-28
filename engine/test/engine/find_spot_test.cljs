@@ -112,6 +112,7 @@
         "levelling and the walk are seconds off the crops' worth")
     (is (= -12 (:score (pt/score-patch {:tops [63 63] :away 40})))
         "a patch for no crops is worth nothing: its score is its costs")
+    (is (= 88 (:score (pt/score-patch {:tops [63 63] :worth 100 :away 40}))) "a patch for no crops is worth the caller's :worth")
     (is (nil? (pt/score-patch {:tops [63 nil] :cells (cells 2 {})})))))
 
 (deftest a-cell-is-worth-the-food-its-harvests-give
@@ -126,7 +127,10 @@
     {:tops (vec (concat (repeat 13 60) (repeat 12 64))) :cells (cells 25 {}) :away 0} :steep
     {:tops (vec (repeat 9 63)) :cells (cells 9 {:lit? false}) :away 0} :barren
     {:tops (vec (repeat 9 63)) :cells (cells 9 {:farmable? false}) :away 0} :barren
-    {:tops [63 64] :away 4000} nil))
+    {:tops [63 64] :worth nil :away 4000} :barren
+    {:tops [63 64] :worth 100 :away 0} nil
+    {:tops [63 64] :worth 100 :away 4000} :far
+    {:tops [52 64] :worth 10 :away 0} :steep))
 
 (deftest water-is-brought-only-when-some-is-known
   (is (= 0 (:water (:costs (pt/field-price (cells 25 {:wet? false}) 0 (pt/cell-worth true) nil)))) "no water known: none is brought")
