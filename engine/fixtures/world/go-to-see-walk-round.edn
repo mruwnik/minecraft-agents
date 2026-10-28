@@ -1,0 +1,16 @@
+;; Card 7a416402: a free body whose goal is out of sight behind a tall wall walks round the wall's end, over ground it
+;; never saw, to a stand that sees the goal (:see); it digs nothing (card 818371a5's out-of-sight? is for a search out of land).
+;; A stone wall x 10..11, y 0..5, z 2..29 between the body at [4.5 0 16.5] and a lone stone at [16 0 16]; a light layer over all.
+{:defaults
+ {:tags [:movement :go-to :access]
+  :time :any
+  :plot {:height 10}
+  :blocks [[:fill [10 0 2] [11 5 29] "stone"] [:set [16 0 16] "stone"] [:fill [0 8 0] [31 8 31] "light"]]
+  :body {:at [4.5 0 16.5] :settle-s 2 :inventory [["stone_pickaxe" 1]]}
+  :limit-s 120}
+ :cases
+ [{:name "a-goal-behind-a-wall-is-walked-round-to-not-dug-to"
+   :act [[:job (jobs.movement.go-to {:pos #at [16 0 16] :range 2 :see true})]]
+   :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalated} :for-s 100 :until {:source :job :kind :completed :data {:arrived true}}}]
+   :after [[:block [10 0 16] "stone"] [:block [11 1 16] "stone"] [:block [16 0 16] "stone"]]}]}

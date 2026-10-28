@@ -629,3 +629,19 @@
           (is (true? (:arrived @out)) (pr-str @out))
           (is (some #(= :dig-route (:step %)) (gt/events-of s :go-to.escalated)))
           (is ((aim/stand-sees-fn p [20 3 16]) x y z) (pr-str [x y z])))))))
+
+(deftest a-free-body-under-see-walks-round-a-wall-to-a-goal-past-sight-and-digs-nothing
+  ;; a tall wall between the body and a lone block; the way round its end runs over ground the body never saw
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p] :as s} (await (climb! {:blocks (merge (box -2 63 -34 30 63 34 "stone") (box 10 64 -30 11 69 30 "stone")
+                                                                   (box 16 64 0 16 64 0 "stone"))
+                                                    :self {:pos {:x 3.5 :y 64 :z 0.5}} :light [0 15]
+                                                    :seen [[-2 63 -34 9 70 34]] :inventory [{:name "stone_pickaxe" :count 1}]}
+                                                   {:pos [16 64 0] :range 2 :see true}))
+              [x y z] (mapv js/Math.floor (gt/at p))]
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (empty? (gt/events-of s :go-to.escalated)) (pr-str (gt/events-of s :go-to.escalated)))
+          (is (empty? (filter #(= "dig" (.-name %)) (.-calls (.-world p)))) "nothing is dug")
+          (is ((aim/stand-sees-fn p [16 64 0]) x y z) (pr-str [x y z])))))))
