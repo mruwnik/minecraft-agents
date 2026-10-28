@@ -382,10 +382,10 @@
       (is (not= "start-enclosed" (:reason r))))))
 
 (deftest risk-looks-stop-at-an-unseen-cell
-  (let [w (line [0 63 "stone"] [1 63 "stone"] [2 62 U] [2 61 "lava"] [3 63 "stone"])
-        goal (pf/near 3 64 2)
+  (let [w (line [-2 63 "stone"] [-1 63 "stone"] [0 63 "stone"] [1 63 "stone"] [2 62 U] [2 61 "lava"] [3 61 "stone"] [4 63 "stone"] [5 63 "stone"] [6 63 "stone"])
+        goal (pf/near 4 64 2)
         off (run w goal {})
-        ;; (gapMiss 0: the unseen depth under the gap is also priced as a fall that may kill)
+        ;; (gapMiss 0: the unseen depth under the gap is also priced as a fall that may kill; the gap is 2 wide, a 1-wide hop is never missed)
         on (run w goal (assoc (unk {:seeDepth 0}) :costs {:gapMiss 0}))]
     (is (pos? (get-in off [:path :cost :risk])) "off: the gap's column falls into lava")
     (is (found? on))
