@@ -147,14 +147,14 @@ function blockedWords(words, relax = false) {
   return false
 }
 
-// run_tests launches each step as `{ (cd <dir> && export LIVE_TESTS_NONCE=<x> ... && <argv> 2>&1 | tee ...`.
+// run_tests launches each step as `{ (cd <dir> && export LIVE_TESTS_NONCE=<x> ... [&& set -o pipefail] && <argv> 2>&1 | tee ...`.
 // Only the segment right after such an export (after a lone `{` and a cd) is exempt from the raw-runner
 // rules, never from pkill/killall (also nested in bash -c, find -exec, ...); a command that merely
 // mentions the nonce is judged like any other.
 const nonceExport = (w) => w[0] === 'export' && w.some((x) => /^LIVE_TESTS_NONCE=[A-Za-z0-9]+$/.test(x))
 
 function blockedCommand(command, relax = false) {
-  const segs = segments(command)
+  const segs = segments(command).filter((w) => !(w.length === 3 && w[0] === 'set' && w[1] === '-o' && w[2] === 'pipefail'))
   return segs.some((w, i) => {
     const wrapped = i >= 3 && nonceExport(segs[i - 1]) && segs[i - 2][0] === 'cd' && segs[i - 3].length === 1 && segs[i - 3][0] === '{'
     return blockedWords(w, relax || wrapped)
