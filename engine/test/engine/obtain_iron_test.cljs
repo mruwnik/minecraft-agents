@@ -482,9 +482,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (loop [[[y dug worth runs why] & more] [[64 {:cut-blocks 32 :tunnel {:steps 32}} 1e5 5 "a run that tunnelled looked at new rock: the gather mines on while the next pays"]
-                                                [64 {:legs [{:length 6 :stop :no-floor}] :tunnel {:steps 6}} 1e5 3 "one whose tunnel only walked open air cut nothing: three end the gather"]
-                                                [64 {} 1e5 3 "a run that cut nothing is fruitless: three end the gather"]
+        (loop [[[y dug worth runs why] & more] [[64 {:cut-blocks 32 :tunnel {:steps 32}} 5000 5 "a run that tunnelled looked at new rock: the gather mines on while the next pays"]
+                                                [64 {:legs [{:length 6 :stop :no-floor}] :tunnel {:steps 6}} 5000 3 "one whose tunnel only walked open air cut nothing: three end the gather"]
+                                                [64 {} 5000 3 "a run that cut nothing is fruitless: three end the gather"]
                                                 [64 {:cut-blocks 32 :tunnel {:steps 32}} 1 3 "a run after which no strip leg pays is fruitless: three end the gather"]
                                                 [16 {:cut-blocks 32 :tunnel {:steps 32}} (one-more-run-worth 16) 4 "the second run spends what a third would need: three more runs end it"]]]
           (let [s (f/start (-> (ore-world {} [{:name "stone_pickaxe" :count 1} {:name "torch" :count 16}]) (assoc :floor [-30 -30 40 30]) (assoc-in [:self :pos :y] y)) [f/own-zone])
