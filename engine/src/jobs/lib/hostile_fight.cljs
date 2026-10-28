@@ -281,6 +281,7 @@
                             (:shape x) (assoc :shape (cost-fight/sum-shape [[(walk-hp walk-q) nil] [(max (:damage x) (* rate (:seconds a))) (:shape x)]]))))]
           (cond-> (assoc (felt a) :seconds seconds :creepers (vec creepers))
             (:caught a) (assoc :caught (assoc (felt (:caught a)) :chance (:chance (:caught a))))
+            (:spent a) (assoc :spent true)
             (seq left) (cost/followed (flee-answer c left nil nil nil))))))))
 
 (defn mob-near

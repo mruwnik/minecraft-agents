@@ -64,18 +64,26 @@
   [body]
   (* (settings/get settings ::seconds-per-level) (or (:level body) 0)))
 
+(defn walk-back-blocks
+  "Blocks from the body's :respawn to `at`; ::spawn-walk-blocks with none."
+  [body at]
+  (if-let [from (:respawn body)]
+    (js/Math.hypot (- (:x from) (:x at)) (- (:y from) (:y at)) (- (:z from) (:z at)))
+    (settings/get settings ::spawn-walk-blocks)))
+
+(defn kept?
+  "Whether the walk back from the body's :respawn to `at` beats the despawn of what a death there leaves
+  (value/fetch-cost's :too-far); never with no :respawn."
+  [body at]
+  (boolean (and (:respawn body) (not (:reason (value/fetch-cost {:distance (walk-back-blocks body at) :elapsed-ms 0}))))))
+
 (defn death-cost
   "Seconds a death at `at` ({:x :y :z}) costs: the walk from the body's :respawn to `at` and back for the items (a trip
-  and the walk price), plus experience-cost. What the death leaves, the :carried items (fresh), is lost when the walk back cannot beat the despawn
-  (value/fetch-cost's :too-far), as with no :respawn: that body walks ::spawn-walk-blocks from world spawn."
+  and the walk price), plus experience-cost. What the death leaves, the :carried items (fresh), is lost when it is not
+  kept?, as with no :respawn: that body walks ::spawn-walk-blocks from world spawn."
   [body at]
-  (let [from (:respawn body)
-        blocks (if from
-                 (js/Math.hypot (- (:x from) (:x at)) (- (:y from) (:y at)) (- (:z from) (:z at)))
-                 (settings/get settings ::spawn-walk-blocks))
-        gets (fn [elapsed-ms] (and from (not (:reason (value/fetch-cost {:distance blocks :elapsed-ms elapsed-ms})))))
-        left (if (gets 0) 0 (or (:carried body) 0))]
-    (+ (value/trip) (:cost (value/walk-cost {:distance blocks})) left (experience-cost body))))
+  (+ (value/trip) (:cost (value/walk-cost {:distance (walk-back-blocks body at)}))
+     (if (kept? body at) 0 (or (:carried body) 0)) (experience-cost body)))
 
 (defn blow-outcome
   "{:dies :lived} of blows of about hit hp, damage hp of them expected, against the health and absorption of body: dies the
