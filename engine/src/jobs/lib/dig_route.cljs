@@ -82,9 +82,11 @@
   "route's search begun: a fn of n that runs it on for at most n more cells expanded, [answer expanded]: answer route's
   once the search has ended (the same each run after), nil while it goes on; expanded the cells this run expanded.
   Plain numbers throughout (a cell is a key, its reads are cached by key): a climb expands about 10k cells."
-  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-dig-s margin] :or {dig-s (constantly 1) step-s 0 ways #{}} :as opts}]
+  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-dig-s margin range near] :or {dig-s (constantly 1) step-s 0 ways #{}} :as opts}]
   (let [[fx _ fz] from
         [gx gy gz] goal
+        range (when (and range (pos? range)) range)
+        [ax ay az] (or near goal)
         ;; one number a cell, for js Maps and Sets (a vector key is compared by identity there)
         key (fn [x y z] (+ (* (+ (- x fx) 1048576) 2147483648) (* (+ (- z fz) 1048576) 1024) y 512))
         cell-of (fn [k] (let [y (- (mod k 1024) 512)
@@ -115,7 +117,14 @@
         [lx ly lz] (when margin (mapv #(- (min %1 %2) margin) from goal))
         [hx hy hz] (when margin (mapv #(+ (max %1 %2) margin) from goal))
         inside? (fn [x y z] (or (nil? margin) (and (<= lx x hx) (<= ly y hy) (<= lz z hz))))
-        heuristic (fn [x y z] (* step-s (max (+ (js/Math.abs (- x gx)) (js/Math.abs (- z gz))) (- gy y))))
+        to-goal (fn [x y z] (* step-s (max (+ (js/Math.abs (- x gx)) (js/Math.abs (- z gz))) (- gy y))))
+        ;; a cell within range of near is at most 2 range across and below it
+        heuristic (if range
+                    (fn [x y z] (min (to-goal x y z)
+                                     (* step-s (max 0 (- (max (+ (js/Math.abs (- x ax)) (js/Math.abs (- z az))) (- ay y)) (* 2 range))))))
+                    to-goal)
+        end? (fn [ck] (let [[x y z] (cell-of ck)]
+                        (<= (+ (* (- x ax) (- x ax)) (* (- y ay) (- y ay)) (* (- z az) (- z az))) (* range range))))
         solid-at? (fn [x y z] (let [^js k (at x y z)] (and (some? (.-name k)) (not (.-open k)))))
         ;; a block is placed only against a face (a solid neighbour), never on a step of the body's own stair (it would shut
         ;; it): :seen, :unseen when every face is a guess (it may be air), nil
@@ -213,7 +222,7 @@
                       (cond
                         (nil? top) {:problem :no-route}
                         (.has done ck) (recur)
-                        (== ck goal-key)
+                        (or (== ck goal-key) (and range (end? ck)))
                         (let [path (mapv cell-of (reverse (take-while some? (iterate #(aget (.get best %) 3) ck))))
                               steps (mapv (fn [m n]
                                             (let [move (aget (.get best (apply key n)) 4)]
@@ -257,7 +266,7 @@
   block :dig-s prices nil is not dug, nor a cell under sand or gravel (it would fall on the body walking in), nor a
   floor of :ways (the floors of the body's own stairs), on which nothing is placed either. Bounds, each only when
   given: :max-dig-s seconds of digging, :max-digs cells, :max-places blocks laid or jump-placed (the blocks carried),
-  :margin cells round the two ends.
+  :margin cells round the two ends; :range r (> 0) also ends it on any feet cell within r of :near (default goal).
   {:dig [cell ..] :steps [{:to feet :move :walk|:laid|:pillar :dig [cell ..] :place cell} ..] :seconds the route's price}, {:problem :no-route},
   or {:problem :budget} when :max-nodes cells were expanded first (search goes on past it)."
   [block-at from goal opts]

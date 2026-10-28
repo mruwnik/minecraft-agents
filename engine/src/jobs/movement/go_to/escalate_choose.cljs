@@ -364,7 +364,8 @@
   through rock). A floor never seen under a cell seen open may be a void: dig-route reads it as no floor, unless
   floors-unseen-ok? (a pocket's floor shows only from inside it). Other route-opts go to the search (:place-s,
   :pillar-s, :margin). With :slice (route-slice) a search that spends it goes on at the next call; without, it ends
-  at the node budget as no route."
+  at the node budget as no route. With :range (and :near, the cell it is measured from) the route ends on any stand
+  within it and never digs :near."
   [p from goal may-dig? own? floors-unseen-ok? fetch? {:keys [slice spent] :as route-opts}]
   (let [own-s (:own-s route-opts)
         route-opts (dissoc route-opts :slice :spent :own-s)
@@ -395,7 +396,8 @@
         ;; may-dig? (zones, claims, plans) is asked of a found route's cells only, not of every cell the search weighs: it was
         ;; about half a search's time; a refused cell is searched round, at most route-searches times
         a (when-not (contains? spent [from goal])
-            (loop [refused #{} n 1]
+            ;; with a :range the goal is worked from a stand within it, never dug away
+            (loop [refused (if (>= (:range route-opts 0) 1) #{(:near route-opts goal)} #{}) n 1]
             (let [a (search refused)
                   bad (when (map? a) (remove #(escape/diggable? block-at may-dig? own? %) (:dig a)))]
               (cond (= :searching a) a
@@ -426,10 +428,12 @@
 
 (defn search-opts
   "route-answer's route-opts for a choice's opts: its :slice, dig-margin, its :spent searches, its :own-s and :own-cut
-  (a way that may cut the body's own builds: searched apart) and the floors under its :stands (the body's own stairs) as :ways."
-  [{:keys [stands slice spent own-s own-cut]}]
+  (a way that may cut the body's own builds: searched apart), its :range and :near and the floors under its :stands
+  (the body's own stairs) as :ways."
+  [{:keys [stands slice spent own-s own-cut range near]}]
   (cond-> {:ways (into #{} (map (fn [[x y z]] [x (dec y) z])) stands) :margin dig-margin}
-    slice (assoc :slice slice) (seq spent) (assoc :spent spent) own-s (assoc :own-s own-s) own-cut (assoc :own-cut true)))
+    slice (assoc :slice slice) (seq spent) (assoc :spent spent) own-s (assoc :own-s own-s) own-cut (assoc :own-cut true)
+    (and range near) (assoc :range range :near near)))
 
 (defn dig-way
   "{:step :dig-route :cells (route-cells)} when there are cells to dig, {:step :searching} while opts :slice's search
@@ -573,7 +577,8 @@
           feet (end/feet-cell c)
           goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
           slice (route-slice (route-owner c))
-          opts {:own? (own-placed-fn c) :skip (skips c) :fetch? (fetch-tool? c) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c) :slice slice}
+          opts {:own? (own-placed-fn c) :skip (skips c) :fetch? (fetch-tool? c) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c) :slice slice
+                :range (:range (:args c) 1) :near goal}
           may-dig? (may-dig-fn c)
           e (dig-way p feet goal may-dig? opts)]
       (keep-routes! slice)

@@ -587,3 +587,19 @@
                                             #(climb! (assoc in-loop :blocks rock-loop :inventory [{:name "stone_pickaxe" :count 1}]) {:pos across :range 0 :unknown false})))]
           (is (true? (:arrived @out)) (pr-str (select-keys @out [:why :text])))
           (is (= [:dig-route] (map :step (gt/events-of s :go-to.escalated)))))))))
+
+(deftest a-dig-route-to-a-solid-goal-with-range-ends-within-range-and-leaves-the-goal
+  ;; a stone goal under stone (a block in a cave wall): the detour's dig and a buried body's dig route stop within :range
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pick [{:name "stone_pickaxe" :count 1}]
+              dug-cells (fn [p] (map #(let [q (.-pos (.-args %))] [(.-x q) (.-y q) (.-z q)]) (filter #(= "dig" (.-name %)) (.-calls (.-world p)))))
+              detour (await (climb! (assoc in-loop :blocks rock-loop :inventory pick) {:pos [0 64 5] :range 3 :unknown false}))
+              buried (await (climb! {:blocks near-pocket :self {:pos {:x 1.5 :y 60 :z 0.5}} :light [0 15]
+                                     :seen [[-1 59 -1 3 62 1]] :inventory pick}
+                                    {:pos [9 60 0] :range 3}))]
+          (doseq [[{:keys [out p] :as s} goal] [[detour [0 64 5]] [buried [9 60 0]]]]
+            (is (true? (:arrived @out)) (pr-str @out))
+            (is (seq (gt/events-of s :go-to.escalated)) "a way was dug")
+            (is (not-any? #{goal} (dug-cells p)) "the goal is worked from within range, never dug")))))))
