@@ -22,7 +22,8 @@
  {:name "gap2-food20"
    :blocks [[:fill [3 -9 3] [26 -2 17] "air"] [:fill [3 -10 3] [26 -10 17] "stone"] [:fill [4 -1 10] [8 -1 10] "stone"] [:fill [11 -1 10] [15 -1 10] "stone"]]
    :act [[:job (jobs.movement.go-to {:pos #at [14 0 10] :range 0 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :gap-jump :data {:width 2 :dy 0 :sprint true :out :landed}} :within-s 60 :of-job true}]
    :after [[:body-near [14.5 0 10.5] 1.5]]}
  {:name "gap1-food20"
    :blocks [[:fill [3 -9 3] [26 -2 17] "air"] [:fill [3 -10 3] [26 -10 17] "stone"] [:fill [4 -1 10] [8 -1 10] "stone"] [:fill [10 -1 10] [14 -1 10] "stone"]]

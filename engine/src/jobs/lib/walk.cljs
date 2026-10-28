@@ -15,6 +15,7 @@
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
             [jobs.lib.walk.edges :as edges]
+            [jobs.lib.walk.gaps :as gaps]
             [jobs.lib.walk.light :as wlight]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.search :as wsearch]
@@ -289,6 +290,7 @@
             (ctx/emit! c :walk.gates :debug {:steps (into [] (comp (take 60) (map (juxt :x :y :z :move #(boolean (:unseen-floor %))))) steps)}))
         state (volatile! (start-state steps (let [pos (.-pos (.self (:primitives c)))] {:x (.-x pos) :z (.-z pos)})))
         last-done (volatile! nil)
+        gap (volatile! nil)
         p (:primitives c)
         every (glance-ticks)
         ticks (volatile! 0)
@@ -316,6 +318,9 @@
                      (doseq [k (remove (get-in @state [:gate :resolved] #{}) (get-in state' [:gate :resolved] #{}))]
                        (let [cell (wsight/floor-cell (nth steps k))]
                          (ctx/emit! c :walk.gate-resolved :debug {:step k :cell cell :block ((:floors gate) cell)}))))
+                   (let [[tracked data] (gaps/tick steps @gap (:i (:exec state')) controls done)]
+                     (vreset! gap tracked)
+                     (when data (ctx/emit! c :gap-jump :info data)))
                    (vreset! state state')
                    (when-let [[x y z] (and (:unknown c) (:felt done) (first (:cells done)))]
                      (.add ^js (.-blocked ^js (:unknown c)) (str x "," y "," z)))

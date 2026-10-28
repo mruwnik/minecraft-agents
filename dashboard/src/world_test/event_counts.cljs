@@ -27,6 +27,7 @@
   seconds stood between two steps while still in flight (a look, a re-decide, a replan, a respond delay; a gap in which another
   answer, action or child ran is left out) (cost.danger/::flee-walk-speed, ::flee-stop-s).
   walk-pace: the steers of go-to's walks (a job id ending /walk) outside a flight: blocks over the steers' own seconds (cost/walk-speed).
+  gap-miss: the miss rate of gap jumps per [width dy sprint] from go-to's :gap-jump events (world-test.gap-miss), probe bodies too.
   Pure parts: scan-line, exchange, starts, starts-by-mob, notices, groups, vein-seen, flee-steps, pace-report, walk-steers, walk-report."
   (:require ["fs" :as fs]
             ["path" :as path]
@@ -41,6 +42,7 @@
             [world-test.censored :as censored]
             [world-test.drowned-meets :as drowned]
             [world-test.field-passes :as field-passes]
+            [world-test.gap-miss :as gap-miss]
             [world-test.fresh-drop :as fresh-drop]
             [world-test.resight :as resight]
             [world-test.spot-returns :as spot-returns]
@@ -105,6 +107,10 @@
          :slot (some-> (re-find #":slot :([a-z-]+)" line) second keyword)
          :s (num-of #":seconds (-?[\d.]+)" line) :blocks (num-of #":blocks (-?[\d.]+)" line)}
 
+
+        (str/includes? line ":kind :gap-jump")
+        (let [{{:keys [width dy sprint out from]} :data} (whole)]
+          {:k :gap :t t :gen gen :width width :dy dy :sprint sprint :out out :from from})
 
         (and (str/includes? line ":kind :watch.saw") (str/includes? line ":how :seen"))
         (let [{{:keys [name distance pos id]} :data} (whole)]
@@ -351,7 +357,7 @@
                     shrunk)}))
 
 ;; The durable counts: the rows of each prior by run id, so the counts only grow while the raw logs rotate away.
-(def empty-counts {:exchange {} :starts {} :notices {} :drowned-exposure {} :drowned-meets {} :flight-steps {} :walk-steers {} :resight {} :walls {} :pen-escapes {}})
+(def empty-counts {:exchange {} :starts {} :notices {} :drowned-exposure {} :drowned-meets {} :flight-steps {} :walk-steers {} :gap-jumps {} :resight {} :walls {} :pen-escapes {}})
 
 (defn better-exchange "Of two rows of one fight, the one that saw more swings (a rotation may have cut the older read short), then the older." [a b]
   (if (> (:swings b) (:swings a)) b a))
@@ -527,7 +533,7 @@
        (sort-by :t)
        vec))
 
-(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | walk-pace | way-on | spot-returns | field-passes | arrow-shots | caught-flights | vein-seen | water-lags | surface-heights | resight | wall-sides [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N] [--difficulty D]
+(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | walk-pace | gap-miss | way-on | spot-returns | field-passes | arrow-shots | caught-flights | vein-seen | water-lags | surface-heights | resight | wall-sides [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N] [--difficulty D]
   every command first folds the logs into the counts file (default worlds/test/priors-counts.edn), then reports from the file; --since-ms keeps the rows of fights started after it.")
 
 (defn- parse-args [argv]
@@ -552,10 +558,11 @@
                         :when (fs/existsSync (path/join agents-dir b "engine"))]
                     [b (read-agent (path/join agents-dir b "engine") 0)])
         counts (reduce (fn [c [b records]]
-                         (cond-> (fold c (exchange records) (starts records sprint) (notices records))
-                           (not (probe? b)) (-> (drowned/fold (drowned/exposure at records) (drowned/meets at records))
-                                                (update :flight-steps #(reduce (fn [m r] (assoc m (:id r) r)) % (flee-steps records)))
-                                                (update :walk-steers #(reduce (fn [m r] (assoc m (:id r) r)) % (walk-steers records))))))
+                         (-> (cond-> (fold c (exchange records) (starts records sprint) (notices records))
+                               (not (probe? b)) (-> (drowned/fold (drowned/exposure at records) (drowned/meets at records))
+                                                    (update :flight-steps #(reduce (fn [m r] (assoc m (:id r) r)) % (flee-steps records)))
+                                                    (update :walk-steers #(reduce (fn [m r] (assoc m (:id r) r)) % (walk-steers records)))))
+                             (update :gap-jumps #(reduce (fn [m r] (assoc m (:id r) (assoc r :t (second (:id r))))) % (gap-miss/rows records)))))
                        (load-counts counts-file) per-agent)]
     (save-counts! counts-file counts)
     counts))
@@ -575,7 +582,7 @@
   (let [{[cmd] :pos :keys [agents counts since-ms sprint stride difficulty] :or {since-ms 0 sprint 5.6 stride 1 difficulty 1}} (parse-args (vec (array-seq argv)))
         repo (or js/process.env.WORLD_TEST_REPO ".")
         agents (or agents (path/join repo "worlds" "test" "agents"))
-        folded (when (#{"fold" "creeper-exchange" "flight-starts" "notice-rate" "drowned-meets" "flee-pace" "walk-pace"} cmd)
+        folded (when (#{"fold" "creeper-exchange" "flight-starts" "notice-rate" "drowned-meets" "flee-pace" "walk-pace" "gap-miss"} cmd)
                  (fold-logs! agents (or counts (path/join repo "worlds" "test" "priors-counts.edn")) sprint
                              (cell-reader open-chunks (path/join agents ".." "chunks"))))
         since (fn [rows] (filter #(>= (:t %) since-ms) (vals rows)))]
@@ -634,5 +641,6 @@
                   0)
        "flee-pace" (do (println (pr-str (assoc (pace-report (since (:flight-steps folded))) :since-ms since-ms))) 0)
        "walk-pace" (do (println (pr-str (assoc (walk-report (since (:walk-steers folded))) :since-ms since-ms))) 0)
+       "gap-miss" (do (println (pr-str {:buckets (gap-miss/report (since (:gap-jumps folded))) :since-ms since-ms})) 0)
        "notice-rate" (do (println (pr-str (assoc (notice-report (since (:notices folded))) :since-ms since-ms))) 0)
        (do (js/console.error usage) 2)))))

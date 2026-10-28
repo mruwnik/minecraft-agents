@@ -1,6 +1,7 @@
 (ns world-test.event-counts-test
   (:require [cljs.test :refer [deftest is are]]
-            [world-test.event-counts :as c]))
+            [world-test.event-counts :as c]
+            [world-test.gap-miss :as gm]))
 
 (defn rec [t k & {:as more}] (merge {:t t :k k :gen "g" :job "j1"} more))
 
@@ -206,3 +207,22 @@
                                     (steer "j3/c0/walk" 8000 0 9000 4)))]
     (is (= {:walks 2 :steers 2 :blocks 12 :seconds 3 :bps 4} (c/walk-report rows))
         "a search's steer and a flight's are left out")))
+
+(defn gap-line [t out & {:keys [width dy sprint] :or {width 2 dy 0 sprint true}}]
+  (pr-str {:generation-id "g" :time-ms t :source :job :kind :gap-jump :level :info
+           :data {:width width :dy dy :sprint sprint :from [0 64 1] :to [0 64 4] :out out}}))
+
+(deftest gap-miss-is-the-beta-posterior-of-falls-per-width-dy-and-sprint
+  (let [lines (concat (map #(gap-line % :landed) (range 1000 1009))
+                      [(gap-line 2000 :fell) (gap-line 2001 :stuck)
+                       (gap-line 3000 :landed :width 1 :sprint false)])
+        report (gm/report (gm/rows (keep c/scan-line lines)))]
+    (is (= {:n 10 :fell 1 :stuck 1 :mean 0.06} (select-keys (report [2 0 true]) [:n :fell :stuck :mean]))
+        "(0.2 + 1) / (0.2 + 9.8 + 10): stuck jumps are no miss and no landing")
+    (is (= {:n 1 :fell 0} (select-keys (report [1 0 false]) [:n :fell])))
+    (let [{:keys [lo hi mean]} (report [2 0 true])]
+      (is (< 0 lo mean hi 1) "a 90% interval round the mean"))))
+
+(deftest beta-quantile-inverts-the-beta-cumulative
+  (is (< (js/Math.abs (- 0.5 (gm/beta-cdf 2 2 0.5))) 1e-6) "Beta(2,2) is symmetric")
+  (is (< (js/Math.abs (- 0.9 (gm/beta-cdf 1 3 (gm/beta-quantile 1 3 0.9)))) 1e-6)))
