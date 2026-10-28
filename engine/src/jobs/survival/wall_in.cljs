@@ -4,6 +4,8 @@
             [engine.settings :as settings]
             [jobs.lib.blocks :as lb]
             [jobs.lib.choose :as choose]
+            [jobs.lib.combat :as combat]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.ready :as ready]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.survival.dig-in-cells :as dig-cells]
@@ -31,7 +33,10 @@
   {::wall-value {:default 3 :doc ":night: a block worth more than this each (jobs.lib.cost/item-value; dirt 0.35, cobblestone 0.85, stone 2.85, planks 3.4, log 12.8) is taken back at dawn, which the quote counts" :spec (a/num-in 0 nil)}
    ::job-time-s {:default 60 :doc "Seconds a walls attempt may take." :spec (a/num-in 0 nil)}
    ::short-s {:default 60 :doc "Seconds the quote adds when fewer blocks are carried than open cells: the walls would stop half built, so a way that can finish (a pit digs its own plug) is chosen first." :spec (a/num-in 0 nil)}
-   ::dear-s {:default 0.4 :doc "Seconds a wall block worth more than ::wall-value adds per cell for the night: it is dug again at dawn." :spec (a/num-in 0 nil)}})
+   ::dear-s {:default 0.4 :doc "Seconds a wall block worth more than ::wall-value adds per cell for the night: it is dug again at dawn." :spec (a/num-in 0 nil)}
+   ::mob-fails {:default {:beside {:k 1 :n 1} :clear {:k 3 :n 7}}
+                :spec (a/map-of #{:beside :clear} (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)}))
+                :doc "Of n walls attempts of a flight (closed, or failed for a mob in a cell), k failed for a mob, by the melee hostiles when it began: :beside, one in or beside a side cell (within 2 cells across and 1 up or down of the body's), :clear none. The trial bodies' logs on 2026-10-28. Recount: node tools/event-counts.mjs wall-places."}})
 
 (def target [])
 
@@ -77,6 +82,27 @@
         open (count cells)]
     (way/quote-of c (if (why-not c) ##Inf (+ (* open (cell-seconds c open)) (way/zone-penalty c {:place cells}) (short-penalty c open)))
                   (settings/get settings ::job-time-s))))
+
+(defn beside?
+  "Whether a melee hostile the body knows (not a shooter, a creeper or an enderman) stands in or beside a side cell: within 2
+  cells across and 1 up or down of the body's feet (the class of ::mob-fails)."
+  [c]
+  (let [p (:primitives c)
+        {fx :x fy :y fz :z} (sh-sense/feet p)]
+    (boolean (some (fn [e] (let [{:keys [x y z]} (danger-q/mob-pos p e)]
+                             (and (not (combat/ranged? e)) (not (combat/creeper? e)) (not (combat/enderman? e))
+                                  (<= (js/Math.abs (- (js/Math.floor x) fx)) 2) (<= (js/Math.abs (- (js/Math.floor z) fz)) 2)
+                                  (<= (js/Math.abs (- (js/Math.floor y) fy)) 1))))
+                   (danger-q/known-hostiles p 5 {})))))
+
+(defn fails
+  "The chance the walls cannot be closed for a mob in a cell: ::mob-fails of the class the body stands in (beside?) under
+  a uniform Beta(1, 1) prior, (k + 1) / (n + 2); 0 with :for :night (a mob in a cell is waited out)."
+  [c]
+  (if (= :night (:for (:args c)))
+    0
+    (let [{:keys [k n]} (get (settings/get settings ::mob-fails) (if (beside? c) :beside :clear))]
+      (/ (inc k) (+ n 2)))))
 
 (defn exposed-s
   "Seconds the body stays open to a shooter: the placements of the first side (feet and head), which go up first (wall-placer/facing-first)."

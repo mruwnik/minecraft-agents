@@ -118,10 +118,14 @@
   "The ways whose quote and seconds in the open come from one look at the site: way -> c -> [quote exposed-s]."
   {:pocket dig-pocket/cover})
 
+(def fails
+  "Each way's chance it cannot shut the body in where it stands (none: 0)."
+  {:walls wall-in/fails})
+
 (defn covers
-  "{way {:open-s :seconds}} of each of ways (default :walls :pit :pocket) that can shut the body in where it stands: its
-  seconds in the open (exposed-s), and its quoted seconds with the hide-out's quiet seconds after it, as
-  jobs.lib.cost/cover-answer reads them. The ways read c's :for (default :danger)."
+  "{way {:open-s :seconds :fails}} of each of ways (default :walls :pit :pocket) that can shut the body in where it stands: its
+  seconds in the open (exposed-s), its quoted seconds with the hide-out's quiet seconds after it, and the chance it fails
+  (fails), as jobs.lib.cost/cover-answer reads them. The ways read c's :for (default :danger)."
   ([c] (covers c [:walls :pit :pocket]))
   ([c ways]
    (let [c (update c :args #(merge {:for :danger} (select-keys % [:for :ignore-zones? :trespass? :on-lava])))]
@@ -129,7 +133,8 @@
                       (let [[q open] ((covers-of w (juxt (quotes w) (exposed-s w))) c)
                             s (get-in q [:uses :job-time 1])]
                         (when (and (number? s) (js/isFinite s) (js/isFinite open))
-                          [w {:open-s open :seconds (+ s (hide-out/quiet-s))}]))))
+                          [w (cond-> {:open-s open :seconds (+ s (hide-out/quiet-s))}
+                               (fails w) (assoc :fails ((fails w) c)))]))))
            ways))))
 
 (defn door-cover

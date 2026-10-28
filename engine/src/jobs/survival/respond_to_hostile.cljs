@@ -259,9 +259,9 @@
 
 (defn cover-answers
   "{way answer} of the covers specs (cover-specs) against mobs [hostile/mob-near's] wearing equipment (cost/cover-answer:
-  the blows while a side is open; then: what follows it, or the same cover once more)."
-  [equipment mobs then specs]
-  (into {} (keep (fn [[w cover]] (some->> (cost/cover-answer {:equipment equipment :mobs mobs :then then} cover) (vector w)))) specs))
+  the blows while a side is open; then: what follows it, or the same cover once more; fight: what follows a cover that fails)."
+  [equipment mobs then fight specs]
+  (into {} (keep (fn [[w cover]] (some->> (cost/cover-answer {:equipment equipment :mobs mobs :then then :fight fight} cover) (vector w)))) specs))
 
 (defn look-answer
   "{:answer :room :value :cost}: looking into the room first (respond.doors/room-look) when a cell of it is unseen: the
@@ -327,9 +327,9 @@
         sealing (when-not (some #(or (combat/creeper? %) (combat/enderman? %)) near) (doors/sealing-doors c near))
         specs (when-not (some combat/enderman? near) (cover-specs c near sealing))
         equipment (cost/equipment-of (.-equipment self))
-        covers (cover-answers equipment (mapv #(hostile/mob-near p %) near) then specs)
+        covers (cover-answers equipment (mapv #(hostile/mob-near p %) near) then fight specs)
         now (merge covers {:fight fight :flee walk})
-        now-of (fn [mobs] (merge (cover-answers equipment mobs then specs) {:fight fight :flee (when walk (hostile/flee-answer c near fight felt caught mobs))}))
+        now-of (fn [mobs] (merge (cover-answers equipment mobs then fight specs) {:fight fight :flee (when walk (hostile/flee-answer c near fight felt caught mobs))}))
         look (when (seq covers) (look-answer c near now now-of sealing then))
         weighed (some-> (hostile/weigh c (cond-> now look (assoc :look (:answer look))) near) (assoc :way-scan (:way-scan caught)))
         stay? (and (not (hurt-lately? c)) (stay-under-roof? c near))

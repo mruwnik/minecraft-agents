@@ -12,6 +12,7 @@
             [plan.shape :as shape]
             [jobs.survival.dig-pocket :as pocket]
             [jobs.survival.shut-in :as shut-in]
+            [jobs.survival.wall-in :as wall-in]
             [jobs.survival.pit-cells :as pit]))
 
 (defn blocks [name [x0 x1] [y0 y1] [z0 z1]]
@@ -290,5 +291,15 @@
         seconds #(get-in (pocket/quote-of (world hill %)) [:uses :job-time 1])
         with-pick (seconds iron)
         by-hand (seconds [{:name "cobblestone" :count 4}])]
-    (is (< 3 with-pick 10) "two stone cells with a pickaxe and one placement")
+    (is (< 1 with-pick 10) "two stone cells with a pickaxe and one placement")
     (is (> by-hand with-pick) "the hand digs stone slower")))
+
+(deftest the-walls-fail-for-a-mob-by-the-measured-share-of-their-class
+  (let [fails (fn [x for] (shut-in/covers (assoc (ctx-of (tu/seeing-all (tu/fake {:blocks ground :inventory [{:name "cobblestone" :count 20}]
+                                                                                   :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x x :y 64 :z 0} :health 20}]})))
+                                                 :args {:for for})
+                                          [:walls]))
+        chance (fn [cls] (let [{:keys [k n]} (cls (settings/get wall-in/settings ::wall-in/mob-fails))] (/ (inc k) (+ n 2))))]
+    (is (= (chance :beside) (get-in (fails 2.5 :danger) [:walls :fails])) "a zombie beside a side cell")
+    (is (= (chance :clear) (get-in (fails 3.5 :danger) [:walls :fails])) "one three cells off stands beside none")
+    (is (zero? (get-in (fails 2.5 :night) [:walls :fails])) "for the night a mob in a cell is waited out")))

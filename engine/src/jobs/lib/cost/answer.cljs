@@ -470,20 +470,24 @@
      :seconds seconds}))
 
 (defn cover-answer
-  "The answer of shutting the body in against mobs [flee-mob's] wearing equipment by a cover {:open-s :seconds}
-  (jobs.survival.shut-in/covers: the seconds a side stays open, the seconds it takes with the quiet after it): the blows
-  of build-answer over open-s; then the same cover once more or one of then. nil with a creeper (its blast takes the walls)."
-  [{:keys [equipment mobs then]} {:keys [open-s seconds]}]
+  "The answer of shutting the body in against mobs [flee-mob's] wearing equipment by a cover {:open-s :seconds :fails}
+  (jobs.survival.shut-in/covers: the seconds a side stays open, the seconds it takes with the quiet after it, the chance
+  it cannot be closed, default 0): the blows of build-answer over open-s; then the same cover once more or one of then.
+  A cover that fails is the blows over open-s and then fight at once. nil with a creeper (its blast takes the walls)."
+  [{:keys [equipment mobs then fight]} {:keys [open-s seconds fails]}]
   (when-not (some #(= "creeper" (:name %)) mobs)
-    (let [a (assoc (build-answer {:equipment equipment :mobs mobs :seconds open-s}) :seconds seconds)]
-      (assoc a :then (conj (vec then) a)))))
+    (let [a (assoc (build-answer {:equipment equipment :mobs mobs :seconds open-s}) :seconds seconds)
+          closed (assoc a :then (conj (vec then) a))]
+      (if (and fight fails (pos? fails))
+        (assoc a :seconds open-s :outcomes [[fails fight] [(- 1 fails) {:damage 0 :hit 0 :seconds (- seconds open-s) :then (:then closed)}]])
+        closed))))
 
 (defn cornered-answers
   "The answers {key answer} a cornered body wearing equipment has to mobs [flee-mob's]: the fight and each of covers {way
   {:open-s :seconds}} it can make (cover-answer, the fight after it); decide takes the cheapest."
   [{:keys [equipment mobs fight covers]}]
   (into {:fight fight}
-        (keep (fn [[way cover]] (some->> (cover-answer {:equipment equipment :mobs mobs :then (when fight [fight])} cover) (vector way))))
+        (keep (fn [[way cover]] (some->> (cover-answer {:equipment equipment :mobs mobs :then (when fight [fight]) :fight fight} cover) (vector way))))
         covers))
 
 (defn threat-answers
@@ -496,7 +500,7 @@
         fight (fight-answer {:weapon weapon :equipment equipment :health health :mobs ms :wet? (some? swim)})]
     (into {:fight fight
            :flee (flee-answer {:health health :food food :equipment equipment :mobs ms :caught caught :later fight :swim swim})}
-          (map (fn [[way cover]] [way (cover-answer {:equipment equipment :mobs ms} cover)]))
+          (map (fn [[way cover]] [way (cover-answer {:equipment equipment :mobs ms :fight fight} cover)]))
           covers)))
 
 (defn again-answers

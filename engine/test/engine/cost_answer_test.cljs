@@ -247,6 +247,12 @@
         "a pit dug in 4 s under the spider's blows beats a fist fight it hardly survives")
     (is (nil? (cost/cover-answer {:mobs [(mob "creeper" 4)]} {:open-s 4 :seconds 40})) "a blast takes the cover")))
 
+(deftest a-cover-that-may-fail-pays-the-fight-after-it-by-that-chance
+  (let [zombie (mob "zombie" 1)
+        fight (cost/fight-answer (fight nil zombie))
+        price #(cost/answer-price (body 10) (cost/cover-answer {:mobs [zombie] :then [fight] :fight fight} {:open-s 1.4 :seconds 35 :fails %}) here)]
+    (is (< (price 0) (price 0.4) (price 0.9)) "a placement refused for the mob in its cell leaves the fight, not seconds in the open")))
+
 (deftest a-threats-cover-is-priced-as-respond-prices-it
   (let [cover {:open-s 2 :seconds 50}
         zombie (mob "zombie" 0 35)]

@@ -896,7 +896,7 @@
           (is (zero? (count (calls p "attack"))) "no melee with a creeper")
           (is (pos? (count (calls p "place"))) "blocks between it and the creeper"))))))
 
-(deftest a-hurt-armed-body-fights-a-zombie-when-the-fight-is-priced-under-the-walls
+(deftest a-hurt-armed-body-walls-in-from-a-zombie-3-off-when-the-walls-are-priced-under-the-fight
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -908,8 +908,8 @@
                      (fn [token a impl] (-> (impl token a) (.then (fn [r] (when (= 2 (swap! n inc)) (swap! (fake/state p) assoc :entities [])) r)))))
           (core/submit! eng retreat {})
           (await (core/tick! eng))
-          (is (pos? (count (calls p "attack"))) "4 health against a zombie 3 off: the iron sword's few swings cost less than the walls' seconds open beside it")
-          (is (empty? (placed-cells p))))))))
+          (is (zero? (count (calls p "attack"))) "4 health against a zombie 3 off: the walls' first side, two placements at the measured 0.72 s, failing for a mob by (3 + 1) / (7 + 2), cost less than a fight a blow may end")
+          (is (seq (placed-cells p))))))))
 
 (deftest an-armed-body-that-wins-still-fights-when-cornered
   (async done
