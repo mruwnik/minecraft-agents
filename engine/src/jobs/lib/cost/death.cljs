@@ -4,7 +4,7 @@
   are priced by the answer the body would take to each). Pure.
 
   body: {:level experience levels, :respawn {:x :y :z} where it would wake, :carried the seconds the carried items are
-  worth (item-value), :stake (give-up-cost)}.
+  worth (item-value)}.
 
   A remembered death fades: death-weight. One by terrain (a fall, water, lava, a wall) costs go-to's plans near its spot
   as terrain-danger.
@@ -35,8 +35,6 @@
                       :doc "Deaths an hour of play, every cause: the fresh-start trials of 2026-10-21/22 (Wicken r5, 8 deaths in 6h15; docs/fresh-start-design.md section 1)."}
    ::spawn-walk-blocks {:default 5000 :spec (a/num-in 0 nil)
                         :doc "Blocks from world spawn back to where a body with no respawn bed died: fresh bodies are dropped 5000 or more from it (docs/fresh-start-design.md section 4)."}
-   ::stake-s {:default 1200 :spec (a/num-in 0 nil)
-              :doc "Seconds the work at a death's spot is still worth when the body does not say (its :stake), what giving the spot up costs past the items: a prior, the ::spawn-horizon-s day of work there."}
    ::spawn-horizon-s {:default 1200 :spec (a/num-in 0 nil)
                       :doc "Seconds a respawn point is priced over (spawn-worth): one in-game day, after which the needs-bed errand comes again."}
    ::memory-ms {:default 7200000 :spec (a/num-in 1 nil)
@@ -85,19 +83,12 @@
   [body at]
   (+ (value/trip) (:cost (value/walk-cost {:distance (walk-back-blocks body at)}))))
 
-(defn give-up-cost
-  "Seconds giving up `at` after a death there costs: the :carried items and the :stake, what the body's work still wants
-  there (default ::stake-s)."
-  [body]
-  (+ (or (:carried body) 0) (or (:stake body) (settings/get settings ::stake-s))))
-
 (defn death-cost
-  "Seconds a death at `at` ({:x :y :z}) costs with no mob waiting there: experience-cost and the cheaper of giving `at`
-  up (give-up-cost) and going back (back-cost; the :carried items, fresh, lost when not kept?, as with no :respawn: that
-  body walks ::spawn-walk-blocks from world spawn). jobs.lib.cost.answer/death-price adds the mob met there again."
+  "Seconds a death at `at` ({:x :y :z}) costs: experience-cost and the walk back (back-cost:
+  its job resumes there) with the :carried items when not kept? (with no :respawn that body walks ::spawn-walk-blocks
+  from world spawn)."
   [body at]
-  (+ (experience-cost body)
-     (min (give-up-cost body) (+ (back-cost body at) (if (kept? body at) 0 (or (:carried body) 0))))))
+  (+ (experience-cost body) (back-cost body at) (if (kept? body at) 0 (or (:carried body) 0))))
 
 (defn blow-outcome
   "{:dies :lived} of blows of about hit hp, damage hp of them expected, against the health and absorption of body: dies the

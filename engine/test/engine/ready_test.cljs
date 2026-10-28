@@ -853,11 +853,11 @@
       (is (= :ok (kind plant-sapling/safe? night-hut)) "a debt inside the hut is planted"))))
 
 
-(deftest a-ten-second-stay-at-a-spawn-chance-of-0-005-risks-about-2-5-hp-for-a-bare-body
-  ;; 0.05 mobs expected: each hurts ~4.45 hp and kills at ~0.379, so the death (1200 s at 10 s an hp) is 0.0188 x 120 hp
+(deftest a-ten-second-stay-at-a-spawn-chance-of-0-005-risks-about-3-hp-for-a-bare-body
+  ;; 0.05 mobs expected: each hurts ~4.45 hp and kills at ~0.379, so the death (the 5000-block walk from world spawn, 1510 s at 10 s an hp) is 0.0188 x 151 hp
   (let [c (ctx-of open-night)
         {:keys [hurt dies death]} (price/stay-parts c 0.005 10)]
     (is (< 0.2 hurt 0.25))
     (is (< 0.018 dies 0.0195))
-    (is (= 1200 death))
-    (is (< 2.4 (price/stay-hp c 0.005 10) 2.55))))
+    (is (= 1510 (js/Math.round death)))
+    (is (< 2.95 (price/stay-hp c 0.005 10) 3.15))))

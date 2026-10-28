@@ -9,6 +9,7 @@
             [engine.events :as events]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.answer :as answer]
+            [jobs.lib.cost.death :as death]
             [jobs.lib.cost.food :as food-cost]
             [jobs.lib.cost.precious :as precious]
             [jobs.lib.cost.value :as value]
@@ -965,14 +966,14 @@
   (let [body {:health 2 :absorption 0}
         at {:x 0 :y 64 :z 0}
         known (cost/fight-answer {:weapon nil :mobs [{:name "zombie" :distance 2}]})
-        death (answer/bare body at)
+        death (death/death-cost body at)
         hp (food-cost/precious-worth body "golden_apple" false)
         fed (precious/fed body "golden_apple")
         before (answer/answer-death-chance body known at death)
         after (answer/answer-death-chance fed known at death)]
     (is (< after before))
     (is (< (js/Math.abs (- (food-cost/precious-worth body "golden_apple" false known at death)
-                           (+ (* (- 1 after) hp) (* (- before after) (answer/died death known)))))
+                           (+ (* (- 1 after) hp) (* (- before after) death))))
            1e-6)
         "hp lived x hp-price + death averted x death price: no hp is counted twice")))
 

@@ -211,7 +211,7 @@
         back-off (when (and (seq chasers) (not (flight/tried? c :back-off)) (outrun? c hostiles))
                    (await (back-off-search! c chasers)))
         swim? (and (boolean (some #(= "drowned" (.-name %)) hostiles)) (breath/swimming? (:primitives c)))
-        weighed (hostile/weigh c (cornered-answers c weighed-mobs home? back-off swim?) weighed-mobs)
+        weighed (hostile/weigh c (cornered-answers c weighed-mobs home? back-off swim?))
         ;; afloat, a drowned only heard or out of a swing's reach is no fight the body can win: the swim out comes first
         win? (and (not blind?) (seq hostiles) (not-any? combat/creeper? hostiles) (not-any? combat/enderman? hostiles) (= :fight (:answer weighed))
                   (or (not swim?) (some #(and (danger-q/seen-only? %) (hostile/reaches? c %)) hostiles)))

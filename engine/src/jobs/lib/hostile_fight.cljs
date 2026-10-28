@@ -282,7 +282,6 @@
                             (:shape x) (assoc :shape (cost-fight/sum-shape [[(walk-hp walk-q) nil] [(max (cost/small x) (* rate (:seconds a))) (:shape x)]]))))]
           (cond-> (assoc (felt a) :seconds seconds :creepers (vec creepers))
             (:caught a) (assoc :caught (assoc (felt (:caught a)) :chance (:chance (:caught a))))
-            (:spent a) (assoc :spent true)
             (seq left) (cost/followed (flee-answer c left nil nil (dissoc caught :cornered?)))))))))
 
 (defn mob-near
@@ -364,22 +363,17 @@
     (cond-> a
       (and a felt) (update :damage max (* felt (/ (:seconds a) 2)))))))
 
-(defn again-answers
-  "cost/again-answers of c's body to hostiles: the meet a walk back after a death comes to."
-  [c hostiles]
-  (cost/again-answers (threats/death-body c) (mapv #(.-name %) hostiles)))
-
 (defn weigh
-  "cost/decide over answers ({key answer-or-nil}) to hostiles for the body of c where it stands, a death's walk back
-  meeting them fresh (again-answers), with :answers; nil when none is open."
-  [c answers hostiles]
-  (some-> (cost/decide (body-of c) answers (u/self-pos c) (again-answers c hostiles)) (assoc :answers answers)))
+  "cost/decide over answers ({key answer-or-nil}) to hostiles for the body of c where it stands, with :answers; nil
+  when none is open."
+  [c answers]
+  (some-> (cost/decide (body-of c) answers (u/self-pos c)) (assoc :answers answers)))
 
 (defn answer
   "weigh fighting near (fight-answer) against walking away from them (flee-answer): {:answer :fight|:flee :prices :answers}."
   [c near struck-of]
   (let [fight (fight-answer c near struck-of)]
-    (weigh c {:fight fight :flee (flee-answer c near fight nil nil)} near)))
+    (weigh c {:fight fight :flee (flee-answer c near fight nil nil)})))
 
 (defn too-far-to-chase?
   "Whether a ranged target is better left than walked to with other hostiles in range: answer over them all says :flee."
@@ -437,4 +431,4 @@
   (boolean (and (seq hostiles)
                 (not-any? combat/creeper? hostiles)
                 (not-any? combat/enderman? hostiles)
-                (= :fight (:answer (weigh c answers hostiles))))))
+                (= :fight (:answer (weigh c answers))))))

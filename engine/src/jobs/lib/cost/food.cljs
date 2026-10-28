@@ -47,8 +47,8 @@
 (defn precious-worth
   "Seconds what precious food item gives body is worth, one sum: the hp it adds (precious/hp-worth: its regeneration up
   to 20, each at most what waiting costs an hp while the body heals by waiting, heals?, then its absorption over that)
-  paid only by the chance the body lives, plus, against a known answer met at `at` with death {:met :clear}
-  (answer/decide's), the death it averts: the fall in answer/answer-death-chance with the item eaten, at answer/died."
+  paid only by the chance the body lives, plus, against a known answer met at `at` with death the seconds a death costs
+  (answer/decide's :death), the death it averts: the fall in answer/answer-death-chance with the item eaten, at death."
   ([body item heals?] (precious-worth body item heals? nil nil nil))
   ([body item heals? known at death]
    (let [eaten (precious/fed body item)
@@ -56,7 +56,7 @@
      (if known
        (let [before (answer/answer-death-chance body known at death)
              after (answer/answer-death-chance eaten known at death)]
-         (+ (* (- 1 after) hp) (* (- before after) (answer/died death known))))
+         (+ (* (- 1 after) hp) (* (- before after) death)))
        hp))))
 
 (defn eat-precious?

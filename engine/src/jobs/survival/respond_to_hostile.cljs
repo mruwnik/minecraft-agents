@@ -140,9 +140,9 @@
 (defn log-encounter!
   "One :hostile entry and event for each change of decision in a run (a fight turned flight is said, with the health;
   the event has the answers' prices, seconds, the cover way a flight begins with and the :near mobs' names (what a flight's
-  catch is counted by; :capped when the death price's search hit its round backstop); way-log/log-priced! the way counts
+  catch is counted by); way-log/log-priced! the way counts
   scan the flight was priced with, when it was). The entry's :run is the run's first decision time (hostile-fight/returns)."
-  [c near threat decision prices cover scan capped]
+  [c near threat decision prices cover scan]
   (when-not (= decision (:logged (ctx/mem c)))
     (let [prev (:data (mem/latest (ctx/view c) :hostile))
           run (or (:run-at (ctx/mem c)) (ctx/now c))
@@ -151,8 +151,7 @@
       (ctx/remember! c :hostile entry hostile-policy)
       (ctx/emit! c :hostile.decided :info (cond-> (assoc (dissoc entry :from :run) :text (encounter-text entry prev) :near (mapv #(.-name %) near))
                                             prices (assoc :prices (update-vals prices js/Math.round))
-                                            cover (assoc :cover cover)
-                                            capped (assoc :capped true)))
+                                            cover (assoc :cover cover)))
       (way-log/log-priced! c scan)
       (ctx/update-mem! c assoc :logged decision :run-at run))))
 
@@ -290,7 +289,7 @@
                                                     [(- 1 closed) #(dissoc (now-of %) :door)]]}
                                    (u/self-pos c))]
       (when answer
-        (assoc (cost/look-value body now answer (u/self-pos c) (hostile/again-answers c near)) :answer answer :room room :closed closed)))))
+        (assoc (cost/look-value body now answer (u/self-pos c)) :answer answer :room room :closed closed)))))
 
 (defn walk-felt
   "hp a second of the mob blows felt since the flight began (hostile/incoming), nil while not fleeing: a walk is priced at
@@ -340,7 +339,7 @@
 (defn ^:async respond-with!
   "The rest of respond once it has weighed the answers: log the decision, run its child, the other one when it declines."
   [c near weighed decision cover creeper stay?]
-  (log-encounter! c near (if (and (= :flee decision) creeper) creeper (first near)) decision (:prices weighed) cover (:way-scan weighed) (:capped (:death weighed)))
+  (log-encounter! c near (if (and (= :flee decision) creeper) creeper (first near)) decision (:prices weighed) cover (:way-scan weighed))
   (when (and stay? (not (:stay-noted (ctx/mem c))))
     (ctx/update-mem! c assoc :stay-noted true)
     (ctx/emit! c :hostile.sealed-hold :info {:text "under a roof: the mobs near are heard only or flyers, so the body stays in" :mobs (mapv #(.-name %) near)}))
@@ -376,7 +375,7 @@
         now (merge covers {:fight fight :flee walk})
         now-of (fn [mobs] (merge (cover-answers equipment mobs then fight specs) {:fight fight :flee (when walk (hostile/flee-answer c near fight felt caught mobs))}))
         look (when (seq covers) (look-answer c near now now-of sealing then))
-        weighed (some-> (hostile/weigh c (cond-> now look (assoc :look (:answer look))) near) (assoc :way-scan (:way-scan caught)) (eating-answer c))
+        weighed (some-> (hostile/weigh c (cond-> now look (assoc :look (:answer look)))) (assoc :way-scan (:way-scan caught)) (eating-answer c))
         stay? (and (not (hurt-lately? c)) (stay-under-roof? c near))
         decision (if (or stay? (= :fight (:answer weighed))) :fight :flee)
         cover (when (and (not stay?) (contains? covers (:answer weighed))) (:answer weighed))
@@ -384,7 +383,6 @@
     (if (and (= :look (:answer weighed)) (not stay?))
       (do (ctx/emit! c :hostile.look-first :info {:prices (update-vals (:prices weighed) js/Math.round) :value (:value look) :cost (:cost look)
                                                  :closed (:closed look) :sides (:sides (:room look))
-                                                 :capped (:capped look)
                                                  :text (str "a side of the room is unseen: a look first (closed by chance " (.toFixed (:closed look) 2)
                                                             ", worth " (js/Math.round (:value look)) " s, costs " (.toFixed (:cost look) 1) " s)")})
           (await (doors/look-into-room! c (:room look))))

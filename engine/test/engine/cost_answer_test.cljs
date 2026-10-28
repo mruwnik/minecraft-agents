@@ -94,182 +94,36 @@
   (is (= {:answer :b :prices {:a 10 :b 5}}
          (select-keys (cost/decide (body 20) {:a {:damage 0 :seconds 10} :b {:damage 0 :seconds 5} :c nil} here) [:answer :prices])))
   (is (nil? (cost/decide (body 20) {:a nil} here)) "none open")
-  (is (> (cost/answer-price (body 10) {:damage 4 :hit 2 :seconds 0} here []) (cost/answer-price (body 20) {:damage 4 :hit 2 :seconds 0} here []))
+  (is (> (cost/answer-price (body 10) {:damage 4 :hit 2 :seconds 0} here) (cost/answer-price (body 20) {:damage 4 :hit 2 :seconds 0} here))
       "hp are dearer near the floor")
-  (is (> (cost/answer-price (body 20) {:damage 0 :seconds 5 :then [{:damage 0 :seconds 7}]} here [])
-         (cost/answer-price (body 20) {:damage 0 :seconds 5} here []))
+  (is (> (cost/answer-price (body 20) {:damage 0 :seconds 5 :then [{:damage 0 :seconds 7}]} here)
+         (cost/answer-price (body 20) {:damage 0 :seconds 5} here))
       "what follows is paid too")
-  (is (< (- (cost/answer-price (body 5) {:damage 100 :hit 5 :seconds 1 :then [{:damage 0 :seconds 50}]} here [])
-            (cost/answer-price (body 5) {:damage 100 :hit 5 :seconds 1} here []))
+  (is (< (- (cost/answer-price (body 5) {:damage 100 :hit 5 :seconds 1 :then [{:damage 0 :seconds 50}]} here)
+            (cost/answer-price (body 5) {:damage 100 :hit 5 :seconds 1} here))
          0.01)
       "a death all but sure ends the meet: what would follow it is not paid"))
 
-(deftest a-death-goes-back-and-meets-its-mob-again-unless-giving-the-spot-up-is-cheaper
-  (let [bed (assoc (body 5) :respawn {:x 40 :y 64 :z 0})
+(deftest a-death-costs-its-experience-the-walk-back-and-the-items-that-despawn-first
+  (let [bed (assoc (body 5) :respawn {:x 40 :y 64 :z 0} :level 3)
         lethal {:damage 100 :hit 5 :blasts [100] :seconds 1}
-        safe {:damage 0 :seconds 30}
         back (death/back-cost bed here)
+        xp (death/experience-cost bed)
         near (fn [x y] (< (js/Math.abs (- x y)) 0.01))
-        price (fn [b a answers] (cost/answer-price b a here answers))]
-    (is (near (+ 1 back 30) (price bed lethal [lethal safe])) "nothing carried: its job brings it back, to the cheapest answer at full health")
-    (is (near (+ 1 back 30) (price (assoc bed :carried 200) lethal [lethal safe])) "the items kept are picked up on that walk")
-    (is (near (+ 1 1 back 30) (price bed {:damage 0 :seconds 1 :then [lethal]} [{:damage 0 :seconds 1 :then [lethal]} safe]))
-        "a death in what follows pays it once too")
-    (is (near (+ 1 (death/give-up-cost (assoc (body 5) :carried 200))) (price (assoc (body 5) :carried 200) lethal [lethal safe]))
-        "no bed: the walk from world spawn costs more than the work there, the spot and the items are given up")
-    (is (near (+ 1 10) (price (assoc bed :stake 10) lethal [lethal])) "a sure death waits there: the spot is given up, its work and no walk")
-    (is (near (+ 1 back 1 10) (price (assoc bed :carried 200 :stake 10) lethal [lethal]))
-        "with items worth more than the walk, it goes back for them once, and gives the spot up after the next death")
-    (is (near (+ 1 (death/give-up-cost bed)) (price bed lethal [lethal])) "by default the work there is worth ::stake-s")
-    (is (near 1 (price (assoc bed :stake 0) lethal [lethal safe])) "work worth nothing there is given up for free")
-    (let [risky {:damage 20 :hit 5 :seconds 10}
-          {:keys [met]} (cost/death-price bed [risky] here)
-          again (cost/answer-price* (answer/healed bed) risky here {:met met :clear met})]
-      (is (< 0.3 (cost/death-chance (body 20) risky) 0.9))
-      (is (near met (+ back again)) "each death there costs the same once more: the fixed point"))
-    (let [fight #(cost/fight-answer {:weapon nil :health 5 :mobs [{:name % :distance 0}]})
-          extra #(- (price bed (fight %) [(fight %)]) (price bed (fight %) []))]
-      (is (zero? (extra "creeper")) "a creeper's blast spends it: no mob waits at the spot")
-      (is (pos? (extra "zombie")) "a zombie does"))))
+        price (fn [b a] (cost/answer-price b a here))]
+    (is (near (+ 1 xp back) (price bed lethal)) "nothing carried: its job walks it back from the bed, no mob met again")
+    (is (near (+ 1 xp back) (price (assoc bed :carried 200) lethal)) "the items kept are picked up on that walk")
+    (is (near (+ 1 (death/back-cost (body 5) here) 200) (price (assoc (body 5) :carried 200) lethal))
+        "no bed: the walk from world spawn, and the items despawn before it gets there")
+    (is (near (+ 1 1 xp back) (price bed {:damage 0 :seconds 1 :then [lethal]})) "a death in what follows pays it once too")
+    (is (< (price (body 5) lethal) ##Inf) "a sure death is a finite price, bed or none")))
 
-(deftest a-death-price-stopped-by-the-round-backstop-says-so
-  (let [bed (assoc (body 5) :respawn {:x 40 :y 64 :z 0})
-        risky {:damage 12 :hit 5 :seconds 10}]
-    (is (not (:capped (cost/death-price bed [risky] here))))
-    (is (true? (:capped (with-redefs [answer/fixed-point-rounds 0] (cost/death-price bed [risky] here)))))))
-
-(deftest the-death-price-solves-its-fixed-point-near-the-kinks-of-the-price
-  (let [bed (assoc (body 5) :respawn {:x 40 :y 64 :z 0})
-        e (assoc (answer/healed bed) :carried 0 :level 0)
-        stake (death/give-up-cost e)
-        back (death/back-cost e here)]
-    (doseq [damage [8 12 16 20 30 60]
-            seconds [1 10 60 400]
-            then [nil [{:damage 0 :seconds 500}]]
-            :let [a (cond-> {:damage damage :hit 5 :seconds seconds} then (assoc :then then))
-                  x (- (:met (cost/death-price bed [a] here)) (death/experience-cost bed))]
-            :when (< x (death/give-up-cost bed))
-            :let [again (cost/answer-price* e a here {:met x :clear (min stake back)})]]
-      (is (< (js/Math.abs (- x (min stake (+ back again)))) 1e-4)
-          (str "damage " damage " seconds " seconds " then " (some? then) ": the price is its own fixed point")))))
-
-(deftest the-death-price-is-its-own-fixed-point-where-a-kink-lies-just-over-its-root
-  (let [bed (assoc (body 5) :respawn {:x 40 :y 64 :z 0})
-        e (assoc (answer/healed bed) :carried 0 :level 0)
-        stake (death/give-up-cost e)
-        back (death/back-cost e here)]
-    (doseq [damage [8 12 16]
-            seconds (range 0.5 40 0.35)
-            :let [a {:damage damage :hit 5 :seconds 1 :then [{:damage 12 :hit 5 :seconds seconds}]}
-                  x (- (:met (cost/death-price bed [a] here)) (death/experience-cost bed))]
-            :when (< x (death/give-up-cost bed))
-            :let [again (cost/answer-price* e a here {:met x :clear (min stake back)})]]
-      (is (< (js/Math.abs (- x (min stake (+ back again)))) 1e-4)
-          (str "damage " damage " then-seconds " seconds ": the price is its own fixed point")))))
-
-(def tol answer/fixed-point-tolerance-s)
-
-(defn root [f stake] (:root (answer/least-fixed-point f stake)))
-
-(deftest the-least-fixed-point-is-the-least-of-several-roots
-  (let [f (fn [x] (cond (< x 10) (+ 5 (* 0.5 x)) (< x 12) (+ 10 (* 5 (- x 10))) :else 20))]
-    (is (< (js/Math.abs (- 10 (root f 100))) tol) "f(x)-x is positive between the roots 10 and 20: a scan with a step over them lands on 20")
-    (is (zero? (root (constantly 0) 100)))
-    (is (= ##Inf (root #(+ 1 (* 2 %)) ##Inf)) "no root and no stake to bound it")
-    (is (= 7 (root #(min 7 (+ 1 (* 2 %))) 7)))))
-
-(deftest a-slope-near-one-is-stopped-by-its-error-in-seconds-in-a-few-rounds-not-1000
-  (let [calls (atom 0)
-        f (fn [x] (swap! calls inc) (+ 1 (* 0.99 x)))
-        r (answer/least-fixed-point f 1e6)]
-    (is (< (js/Math.abs (- 100 (:root r))) tol) "the root is 100: the geometric tail is added, not left as the lower bound")
-    (is (not (:capped r)))
-    (is (< @calls 30) (str "rounds: " @calls))))
-
-(deftest steps-that-grow-are-iterated-on-to-the-root
-  (is (= 8 (root #(min 8 (+ 1 (* 2 %))) 100)) "steps 1 2 4 grow before the root: the iterates 0 1 3 7 8 are lower bounds, not a limit past the stake")
-  (is (= 8 (root #(min 8 (+ 1 (* 2 %))) ##Inf)) "an infinite stake does not make a finite root infinite"))
-
-(deftest steps-that-never-shrink-end-at-the-stake-or-infinity
-  (let [grow #(+ 1 %)]
-    (is (= ##Inf (root grow ##Inf)))
-    (is (= 100 (root grow 100)) "iterating reaches the stake")
-    (is (= ##Inf (root #(* 2 (+ 1 %)) ##Inf)) "doubling passes the cap in a few rounds")))
-
-(deftest the-round-backstop-flags-a-limit-that-never-settles
-  (let [r (with-redefs [answer/fixed-point-rounds 5] (answer/least-fixed-point #(+ % (/ 1 (+ 1 %))) 1e6))]
-    (is (:capped r))
-    (is (< (:root r) ##Inf))))
-
-(deftest a-backstop-hit-on-an-infinite-stake-with-steps-not-shrinking-is-infinity
-  (let [r (with-redefs [answer/fixed-point-rounds 5] (answer/least-fixed-point #(+ 1 %) ##Inf))]
-    (is (= ##Inf (:root r)))))
-
-(defn lcg
-  "A deterministic stream of numbers in [0 1) from seed."
-  [seed]
-  (rest (map #(/ % 2147483647.0) (iterate #(mod (+ (* % 48271) 11) 2147483647) seed))))
-
-(defn gen-answer
-  "An answer built from the stream rs, of the shapes the answers take (see the ns doc): a plain one, with a :then, :at-once
-  into a :then, :stays beside a :then (a cover, with a failing outcome that goes at once into a :then), :outcomes, :caught
-  or :blasts; returns [answer rest-of-stream]."
-  [depth [a b c d e f g & rs]]
-  (let [base {:damage (* 22 a) :hit 5 :seconds (* 30 b)}
-        [sub rs] (if (pos? depth) (gen-answer (dec depth) rs) [nil rs])
-        [sub2 rs] (if (pos? depth) (gen-answer (dec depth) rs) [nil rs])]
-    [(cond-> (cond
-               (nil? sub) base
-               (< c 0.2) (assoc base :then [sub])
-               (< c 0.35) (assoc base :then [sub] :at-once true)
-               (< c 0.55) (assoc base :then [sub] :stays (* 0.95 d))
-               (< c 0.75) (assoc base :then [sub] :stays (* 0.95 d)
-                                 :outcomes [[(* 0.9 e) {:damage 0 :hit 0 :seconds 0 :then [sub2] :at-once true}]])
-               (< c 0.9) (assoc base :outcomes [[(* 0.9 d) sub] [(- 1 (* 0.9 d)) sub2]])
-               :else base)
-       (< 0.6 e 0.8) (assoc :caught {:chance f :damage (* 22 f) :hit 5})
-       (< 0.9 g) (assoc :blasts [(* 10 f)]))
-     rs]))
-
-(deftest the-death-price-iteration-is-nondecreasing-in-the-price-of-a-death-met-again
-  (let [bed (assoc (body 5) :respawn {:x 40 :y 64 :z 0})]
-    (loop [seed 1 n 0]
-      (when (< n 60)
-        (let [[a rs] (gen-answer 2 (lcg seed))
-              [b _] (gen-answer 1 rs)
-              {:keys [stake fixed]} (answer/death-fixed (if (even? n) bed (body 12)) [a b] here)
-              xs (range 0 (min stake 600) 7)
-              ys (mapv fixed xs)]
-          (is (every? (fn [[y1 y2]] (>= (+ y2 1e-7) y1)) (partition 2 1 ys)) (str "seed " seed " answers " (pr-str [a b])))
-          (recur (+ seed 7919) (inc n)))))))
-
-(deftest a-stake-nothing-bounds-leaves-a-death-that-never-ends-unpriced-not-nan
-  (let [bed (assoc (body 5) :respawn {:x 40 :y 64 :z 0} :stake ##Inf)
-        lethal {:damage 100 :hit 5 :blasts [100] :seconds 1}]
-    (is (= ##Inf (:met (cost/death-price bed [lethal] here))))))
-
-(deftest a-survivor-goes-on-or-gives-the-spot-up-as-a-death-does
+(deftest a-survivor-pays-what-follows-whatever-it-costs
   (let [dear {:damage 100 :hit 5 :seconds 5000}
         after-it {:damage 0 :seconds 1 :then [dear]}]
-    (is (= (+ 1 (death/give-up-cost (body 20))) (cost/answer-price (assoc (body 20) :carried 300) after-it here []))
-        "what follows costs more than the work there: the spot is given up, the items kept")
-    (is (zero? (answer/answer-death-chance (body 20) after-it here)) "and the deadly meet is not taken")))
-
-(deftest the-walk-back-meets-the-mob-fresh-not-with-the-blows-felt-or-the-dead-end-here
-  (let [bed (assoc (body 20) :respawn {:x 40 :y 64 :z 0} :weapon sword)
-        zombie (mob "zombie" 2 35)
-        f (cost/fight-answer (fight sword zombie))
-        felt (assoc f :damage 40)
-        dead-end (cost/flee-answer {:food 20 :mobs [zombie] :later f :caught 1})
-        here {:fight felt :flee dead-end}
-        fresh (answer/again-answers bed "zombie")
-        met #(:met (:death (apply cost/decide bed here {:x 0 :y 64 :z 0} %&)))]
-    (is (< (met fresh) (met)) "the blows felt and the dead end are this meet's: the walk back comes from the bed side")
-    (is (= (cost/death-price bed fresh {:x 0 :y 64 :z 0}) (:death (cost/decide bed here {:x 0 :y 64 :z 0} fresh))))))
-
-(deftest a-blast-spends-its-creeper-only-when-no-other-mob-is-left
-  (is (:spent (cost/fight-answer (fight sword (mob "creeper" 3)))))
-  (is (not (:spent (cost/fight-answer (fight sword (mob "creeper" 3) (mob "creeper" 5))))) "the other creeper still waits"))
+    (is (< (js/Math.abs (- (+ 1 (cost/answer-price (body 20) dear here)) (cost/answer-price (body 20) after-it here))) 1e-6)
+        "nothing is given up in its place: the job goes on")
+    (is (< 0.999 (answer/answer-death-chance (body 20) after-it here)) "and the deadly meet is taken")))
 
 (deftest a-fight-is-taken-when-it-is-cheaper-than-walking-away-and-meeting-the-mob-again
   (are [health weapon mobs expected] (= expected (choice health weapon mobs))
@@ -335,7 +189,7 @@
 
 (deftest the-prior-and-the-ways-catch-are-one-mix-so-a-small-dead-end-chance-moves-the-price-little
   (let [zombie (mob "zombie" 4 35)
-        price #(cost/answer-price (body 12) (cost/flee-answer {:health 12 :food 20 :mobs [zombie] :caught %}) here [])
+        price #(cost/answer-price (body 12) (cost/flee-answer {:health 12 :food 20 :mobs [zombie] :caught %}) here)
         caught #(:caught (cost/flee-answer {:health 12 :food 20 :mobs [zombie] :caught %1 :caught-s %2}))
         blows #(let [{:keys [chance damage]} (caught % 0.5)] (* chance damage))]
     (is (< (/ (- (price 0.01) (price 0)) (price 0)) 0.02) "a way that goes on 99 times in 100 prices as a seen one, near enough")
@@ -404,11 +258,11 @@
         "one cover-answer over shut-in/covers' seconds, the hide-out's quiet in them, for death-chance and respond alike")))
 
 (deftest a-mob-that-came-back-before-makes-a-walk-dearer
-  (let [walk #(cost/answer-price (body 20) (cost/flee-answer {:food 20 :mobs [(mob "skeleton" 10)] :returns %}) here [])]
+  (let [walk #(cost/answer-price (body 20) (cost/flee-answer {:food 20 :mobs [(mob "skeleton" 10)] :returns %}) here)]
     (is (> (walk 2) (walk 1) (walk 0)))))
 
 (deftest a-lone-creeper-is-fought-hit-and-back-at-the-measured-exchange
-  (let [price #(cost/answer-price (body %) (cost/fight-answer (fight sword (mob "creeper" 3))) here [])]
+  (let [price #(cost/answer-price (body %) (cost/fight-answer (fight sword (mob "creeper" 3))) here)]
     (is (> (price 10) (* 2 (price 20)))))
   (are [health weapon distance returns expected] (= expected (choice health weapon [(mob "creeper" distance)] returns))
     20 "stone_sword" 4 0 :fight
@@ -487,7 +341,7 @@
     (is (< 0.6 (:chance (cost/route-parts (body 8) (route 1 "witch")))) "60 s in her range: she seldom misses the body")
     (is (<= (:hurt (cost/route-parts (body 8) (route 1 "witch" "witch"))) 8) "two take no more than the life"))
   (let [death (death/death-cost (body 5) here)]
-    (is (< (js/Math.abs (- (cost/answer-price (body 5) {:damage 100 :hit 5 :seconds 1} here []) (+ death 1))) 1e-3)
+    (is (< (js/Math.abs (- (cost/answer-price (body 5) {:damage 100 :hit 5 :seconds 1} here) (+ death 1))) 1e-3)
         "a sure death with no mob met again is its death-cost and seconds: respawn heals the hp")))
 
 (deftest a-second-in-water-costs-the-drowned-meet-rate-times-the-cheapest-answer-to-one
@@ -515,13 +369,6 @@
     (is (< (outcome-hp 1) (outcome-hp 10)) "the longer the look, the nearer the zombie when the door is shut")
     (is (= [(danger/melee-reach)] (map :distance (glance/approached [zombie] 60))) "it comes no nearer than its reach")
     (is (= [(mob "skeleton" 8)] (glance/approached [(mob "skeleton" 8)] 1)) "a shooter keeps its range")))
-
-(deftest a-look-value-says-when-its-death-price-hit-the-backstop
-  (let [bed (assoc (body 5) :respawn {:x 40 :y 64 :z 0})
-        now {:risky {:damage 12 :hit 5 :seconds 10}}
-        look (cost/look-answer bed {:mobs [] :looks 1 :outcomes [[1 (constantly now)]]} here)]
-    (is (not (:capped (cost/look-value bed now look here))))
-    (is (true? (:capped (with-redefs [answer/fixed-point-rounds 0] (cost/look-value bed now look here)))))))
 
 (deftest a-look-is-worth-what-it-may-change-less-what-it-costs
   (let [walls (cost/cover-answer {:mobs [(mob "skeleton" 8)]} {:open-s 9 :seconds 39})

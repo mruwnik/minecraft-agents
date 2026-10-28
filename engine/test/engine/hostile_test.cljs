@@ -228,12 +228,12 @@
     nil "zombie" 2 :fight
     "wooden_sword" "zombie" nil :fight))
 
-(deftest an-unarmed-body-with-a-bed-near-walks-away-from-a-zombie-it-would-die-to-carrying-nothing-or-items
+(deftest an-unarmed-body-with-a-bed-near-fights-a-zombie-its-death-there-costs-little-carrying-nothing-or-items
   (let [f (cost/fight-answer {:weapon nil :mobs [{:name "zombie" :distance 2}]})
         flee (cost/flee-answer {:food 20 :mobs [{:name "zombie" :distance 2 :follow 35}] :later f})
         pick #(cost/decide {:health 20 :food 20 :level 0 :carried % :respawn {:x 40 :y 64 :z 0}} {:fight f :flee flee} {:x 0 :y 64 :z 0})]
-    (is (= :flee (:answer (pick 300))) (str "the zombie that killed it waits at the pile: " (:prices (pick 300))))
-    (is (= :flee (:answer (pick 0))) (str "carrying nothing, its job still brings it back to the zombie: " (:prices (pick 0))))))
+    (is (= :fight (:answer (pick 300))) (str "the walk back from the bed is short and picks the items up: " (:prices (pick 300))))
+    (is (= :fight (:answer (pick 0))) (str "carrying nothing, a death costs that walk alone: " (:prices (pick 0))))))
 
 (deftest a-flight-down-a-dead-end-past-its-chaser-is-priced-caught
   ;; the old weighing priced every flight at the 0.15 prior, whatever the flee search found
@@ -2003,7 +2003,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[d decision prices] [[1 :fight {:fight 37 :flee 50}] [2 :fight {:fight 49 :flee 68}] [3 :fight {:fight 186 :flee 282}]]]
+        (doseq [[d decision prices] [[1 :fight {:fight 37 :flee 50}] [2 :fight {:fight 49 :flee 69}] [3 :fight {:fight 203 :flee 314}]]]
           (let [world {:inventory sword :equipment iron-armour :entities [(assoc (skeleton 1 10 0) :visible true)]}
                 {:keys [seen]} (await (settings/with-settings {:jobs.lib.cost.threat/difficulty d} #(flight-round respond world)))
                 [e] (filter #(= :hostile.decided (:kind %)) @seen)]

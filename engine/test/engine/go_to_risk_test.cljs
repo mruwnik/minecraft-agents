@@ -567,20 +567,16 @@
            (* 1.05 (+ (:hostile-hp alone) (:death-hp remembered) (:lethal-hp alone) (:lethal-hp remembered))))
         "fought at once, each zombie hits while the other is fought: the hp it takes where the body lives and the death")))
 
-(def bed-world "day-world with a bed beside the body's place, which with-bed sets its respawn at: a death costs a short walk back." (update day-world :blocks assoc "5,64,1" "red_bed"))
-
-(def with-bed "with-death's more for bed-world." {:spawn-bed [{:t 35000000 :data {:pos {:x 5 :y 64 :z 1}}}]})
-
 (defn in-lit-cave
   "(f) with every cell seen lit before the deaths and roofed from the sky: no mob spawns there and none burns."
   [f]
   (with-redefs [look/seen-block (constantly {:name "air" :age-ms 1e8}) sh-sense/sky-reaches-from-above? (constantly false)] (f)))
 
 (deftest a-hungry-body-affords-less-risk-than-a-fed-one-unless-it-cannot-heal
-  ;; a skeleton death a minute ago, 75 blocks off: most likely it has not despawned; a bed by the body (a death there
-  ;; pays the walk back and the skeleton met again)
-  (let [status-for (fn [food inventory] (let [c (-> (ready-test/ctx-of (assoc bed-world :self {:pos inside :health 20 :food food} :inventory inventory))
-                                                    (with-death {:x 80 :y 64 :z 5} "skeleton" 60000 with-bed))]
+  ;; a skeleton death 2 min ago, 75 blocks off: most likely it has not despawned; no bed, so a death there walks back
+  ;; from world spawn (beside a bed it costs too little to wait for)
+  (let [status-for (fn [food inventory] (let [c (-> (ready-test/ctx-of (assoc day-world :self {:pos inside :health 20 :food food} :inventory inventory))
+                                                    (with-death {:x 80 :y 64 :z 5} "skeleton" 120000))]
                                           (in-lit-cave #(first (planned-status c far-goal)))))
         bread [{:name "bread" :count 3}]]
     (is (= :ok (status-for 20 [])))
@@ -588,8 +584,8 @@
     (is (= :ok (status-for 5 [])) "nothing to eat: waiting never lowers the risk, so the walk goes")))
 
 (deftest a-goal-worth-enough-lets-a-walk-take-a-risk-over-the-share-of-health
-  (let [status-for (fn [worth] (let [c (-> (ready-test/ctx-of (assoc bed-world :self {:pos inside :health 20 :food 5} :inventory [{:name "bread" :count 3}]))
-                                           (with-death {:x 80 :y 64 :z 5} "skeleton" 60000 with-bed)
+  (let [status-for (fn [worth] (let [c (-> (ready-test/ctx-of (assoc day-world :self {:pos inside :health 20 :food 5} :inventory [{:name "bread" :count 3}]))
+                                           (with-death {:x 80 :y 64 :z 5} "skeleton" 120000)
                                            (assoc-in [:args :worth] worth))]
                                  (in-lit-cave #(first (planned-status c far-goal)))))]
     (is (= :later (status-for nil)) "no worth said: the share of health decides")
@@ -852,5 +848,3 @@
           (await (drops-est/quote-trip c {:data {:pos {:x 30 :y 64 :z 0} :inventory {}}}))
           (is (true? (:back @asked)))
           (is (some? (:stay-s @asked))))))))
-
-

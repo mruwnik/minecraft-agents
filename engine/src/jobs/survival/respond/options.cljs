@@ -253,15 +253,14 @@
         body (hostile/body-of c)
         at (u/self-pos c)
         answer #(cost/cover-answer {:equipment equipment :mobs mobs} %)
-        death (delay (cost/death-price body (hostile/again-answers c hostiles) at))
-        price #(cost/answer-price* body (answer %) at @death)
+        death (cost/death-cost body at)
+        price #(cost/answer-price* body (answer %) at death)
         cheaper (fn [ways] (some->> (keep specs ways) seq (apply min-key price)))
         pillar (when (open? :pillar) (if given (:pillar given) (pillar-cover c hostiles)))]
-    (let [covers (cond-> {}
-                   (cheaper (:plug cover-options)) (assoc :plug (cheaper (:plug cover-options)))
-                   (cheaper (:plug-dig cover-options)) (assoc :plug-dig (cheaper (:plug-dig cover-options)))
-                   pillar (assoc :pillar pillar))]
-      covers))))
+    (cond-> {}
+      (cheaper (:plug cover-options)) (assoc :plug (cheaper (:plug cover-options)))
+      (cheaper (:plug-dig cover-options)) (assoc :plug-dig (cheaper (:plug-dig cover-options)))
+      pillar (assoc :pillar pillar)))))
 
 (defn cornered-answers
   "{option answer} of the cornered options open to the body against hostiles: :fight, the covers (cornered-covers),
