@@ -89,7 +89,7 @@
           (is (= [] (fired seen)) "a healthy body in daylight fires nothing")
           (is (= #{"(repeat jobs.time.noop)"} (names-started seen)) "it idles in a pause")
 
-          (fake/swap-self! p assoc :health 5 :food 10)
+          (fake/swap-self! p assoc :health 3 :food 10)
           (await (run-ticks eng clock 3 1000))
           (is (= [:low-health] (fired seen)) "low health is the rest's, food under 18 included")
           (is (< 10 (food)) "the rest ate where the body stands")

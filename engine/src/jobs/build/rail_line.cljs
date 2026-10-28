@@ -215,7 +215,7 @@
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 
 (def safe? (ready/safe-at-build work-place/spot))
-(def fit? ready/fit?)
+(def fit? (ready/fit-for :long))
 
 (def can-start? (cond/and plan-problem ready-problem))
 (def can-run? plan-problem)

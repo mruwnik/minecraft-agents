@@ -1,6 +1,6 @@
 (ns jobs.lib.death-spot
   "Where the body died lately, by any cause, from the :deaths memory (engine.core/record-death!), and where a hit left the
-  body too hurt for risky work (a near-death: jobs.lib.cost.risk/too-hurt? at the health and food it left): a place a player avoids or goes back to prepared. A death or near-death weighs 1 when fresh and fades to 0 (jobs.lib.cost/death-weight);
+  body too hurt for the riskiest work (a near-death: jobs.lib.cost.risk/too-hurt? of a :long stay at the health and food it left): a place a player avoids or goes back to prepared. A death or near-death weighs 1 when fresh and fades to 0 (jobs.lib.cost/death-weight);
   it counts for the cells its killer's field from its spot holds (jobs.lib.threat-field), a death by terrain for those within
   cost.death ::terrain-radius (the cells that killed). A near-death fades over the :hurt memory's own ttl, and counts once with a
   death or newer near-death that counts for its spot (covers?). present-share: the chance its killer, or a like mob spawned since, is there now; sighting-share: the chance a mob seen
@@ -53,7 +53,7 @@
                 (conj kept e)))
             []
             (->> (ctx/entries c :hurt)
-                 (filter #(let [{:keys [health food pos]} (:data %)] (and pos health (risk/too-hurt? health food))))
+                 (filter #(let [{:keys [health food pos]} (:data %)] (and pos health (risk/too-hurt? health food :long))))
                  reverse))))
 
 (defn recent

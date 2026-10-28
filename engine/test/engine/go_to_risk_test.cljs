@@ -480,11 +480,11 @@
   (let [c (ready-test/ctx-of day-world)
         spot {:x 80 :y 64 :z 5}
         hp-of #(:death-hp (estimate-unseen (with-hits c %) far-goal))]
-    (is (zero? (hp-of [[12 spot]])) "a hit that leaves 12 hp is no near-death")
-    (is (pos? (hp-of [[5 spot]])))
-    (is (pos? (hp-of [[10 spot 5]])) "a hungry body left at 10 hp is too hurt for risky work: a near-death")
+    (is (zero? (hp-of [[5 spot]])) "a hit that leaves 5 hp is no near-death")
+    (is (pos? (hp-of [[3 spot]])))
+    (is (pos? (hp-of [[7 spot 5]])) "a hungry body left at 7 hp is too hurt for risky work: a near-death")
     (is (= 1 (count (death-spot/recent (with-hits c (for [h (range 5 0 -1)] [h (update spot :x + h)]))))) "a fight's hits are one spot")
-    (is (= 2 (count (death-spot/recent (with-hits c [[5 spot] [5 (update spot :x + 30)]])))))))
+    (is (= 2 (count (death-spot/recent (with-hits c [[3 spot] [3 (update spot :x + 30)]])))))))
 
 (deftest a-near-death-fades-over-the-hurt-memory-ttl-and-counts-once-with-a-death
   (let [c (ready-test/ctx-of day-world)

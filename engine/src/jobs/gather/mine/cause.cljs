@@ -19,7 +19,7 @@
     (cond
       (breath/head-under? p) {:reason :flooded :text "dig-for stopped: the head is in water"}
       (and (:shed (:args c)) (not (:collecting (ctx/mem c))) (pos? (trip/surplus-slots c))) {:reason :surplus :text "dig-for stopped: the pack holds more junk than a dig needs; jobs.gather.mine throws it away"}
-      (ready/hurt-cannot-heal? c) {:reason :cannot-heal :text "dig-for stopped: hurt, and only food heals the body; going deeper would risk it"}
+      (ready/hurt-cannot-heal? c :long) {:reason :cannot-heal :text "dig-for stopped: hurt, and only food heals the body; going deeper would risk it"}
       (not (tools/can-harvest? p block))
       {:reason :no-tool :tool kind :why :missing :text (str "dig-for stopped: no " kind " that harvests " block " is carried; jobs.gather.mine fetches one before it digs")}
       (and (trip/spent-tool? p block) (not (trip/in-spare? c block)))

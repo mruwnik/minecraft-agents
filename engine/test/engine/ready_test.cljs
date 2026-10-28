@@ -261,7 +261,7 @@
   (are [world expected] (= expected (let [s (ready/fit-armed (ctx-of (merge at-origin world)))] [(first s) (:reason (nth s 2))]))
     {:inventory sword} [:ok :healthy]
     {:inventory []} [:later :unarmed]
-    {:inventory sword :self {:pos {:x 0 :y 64 :z 0} :health 3}} [:later :low-health]))
+    {:inventory sword :self {:pos {:x 0 :y 64 :z 0} :health 0.5}} [:later :low-health]))
 
 (defn zombies-at [& xs] (vec (map-indexed (fn [i x] {:id (+ 20 i) :name "zombie" :kind "hostile" :pos {:x x :y 64 :z 0}}) xs)))
 (def iron-worn (into {} (for [[part item] {"head" "iron_helmet" "torso" "iron_chestplate" "legs" "iron_leggings" "feet" "iron_boots"}] [part {:name item :count 1}])))
@@ -304,7 +304,7 @@
     ["wooden_pickaxe"] [{:name "oak_planks" :count 3} {:name "stick" :count 2}] :later))
 
 (deftest a-stair-up-is-not-held-for-health-a-stair-down-is
-  (are [dir expected] (= expected (first (stair/fit? (assoc (ctx-of (assoc at-origin :self {:pos {:x 0 :y 64 :z 0} :health 3})) :args {:dir dir}))))
+  (are [dir expected] (= expected (first (stair/fit? (assoc (ctx-of (assoc at-origin :self {:pos {:x 0 :y 64 :z 0} :health 0.5})) :args {:dir dir}))))
     :up :ok
     :down :later))
 
@@ -377,12 +377,15 @@
   (is (= :later (kind (ready/safe-at (constantly {:x 1 :y 64 :z 0}))
                       {:time st/noon :self {:pos {:x 0 :y 64 :z 0}} :entities [zombie]}))))
 
-(deftest fit-waits-while-a-risky-jobs-work-costs-more-than-the-body-may-risk
-  (are [hp food inventory expected] (= expected (kind ready/fit? {:self {:pos {:x 0 :y 64 :z 0} :health hp :food food} :inventory inventory}))
-    5 20 [] :later
-    20 20 [] :ok
-    10 5 [{:name "bread" :count 1}] :later ; hungry: half the share, and the bread heals it
-    5 8 [] :ok))                           ; waiting cannot heal it: all but 1 hp
+(deftest fit-waits-while-the-jobs-own-work-costs-more-than-the-body-may-risk
+  (are [category hp food inventory expected]
+       (= expected (kind (ready/fit-for category) {:self {:pos {:x 0 :y 64 :z 0} :health hp :food food} :inventory inventory}))
+    :long 3 20 [] :later ; a mine's 600 s cost 1.9 hp, over half of 3
+    :work 3 20 [] :ok    ; a field's 120 s cost 0.4
+    :long 20 20 [] :ok
+    :long 6 5 [{:name "bread" :count 1}] :later ; hungry: half the share, and the bread heals it
+    :work 6 5 [{:name "bread" :count 1}] :ok
+    :long 3 8 [] :ok))   ; waiting cannot heal it: all but 1 hp
 
 (deftest ok-is-always-ok
   (is (= :ok (kind ready/ok open-night))))
@@ -506,12 +509,12 @@
     mount/safe? open-night {} :ok
     leave-vehicle/safe? open-night {} :ok
     boat-recover/safe? open-night {} :ok
-    search/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 5}} {} :later
-    stay-near/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 5}} {:player "Steve"} :later
-    mount/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 5}} {} :later))
+    search/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 0.5}} {} :later
+    stay-near/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 0.5}} {:player "Steve"} :later
+    mount/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 0.5}} {} :later))
 
 (deftest a-hurt-body-that-cannot-heal-may-search-for-food-only
-  (let [hurt {:pos {:x 0 :y 64 :z 0} :health 5}]
+  (let [hurt {:pos {:x 0 :y 64 :z 0} :health 0.5}]
     (are [self inventory target expected] (= expected (bound search/fit? {:self (assoc hurt :food self) :inventory inventory} {:target target}))
       8 [] ["cow" "carrots"] :ok
       8 [{:name "rotten_flesh" :count 3}] ["cow"] :ok
@@ -534,11 +537,11 @@
 (deftest a-hurt-foodless-body-does-not-roam-for-wool-or-wood
   (are [health food inventory args expected]
        (= expected (bound search/fit? {:self {:pos {:x 0 :y 64 :z 0} :health health :food food} :inventory inventory} args))
-    8.2 5 [] {:target ["sheep"] :forage false} :later
-    8.2 5 [] {:target ["oak_log"]} :later
-    8.2 5 [] {:target ["sheep"]} :ok
-    8.2 5 [{:name "bread" :count 1}] {:target ["oak_log"]} :later ; hungry: it eats the bread first
-    8.2 20 [] {:target ["oak_log"]} :ok
+    1.2 5 [] {:target ["sheep"] :forage false} :later
+    1.2 5 [] {:target ["oak_log"]} :later
+    1.2 5 [] {:target ["sheep"]} :ok
+    1.2 5 [{:name "bread" :count 1}] {:target ["oak_log"]} :later ; hungry: it eats the bread first
+    1.2 20 [] {:target ["oak_log"]} :ok
     12 5 [] {:target ["oak_log"]} :ok))
 
 (deftest a-starving-body-works-its-field-in-the-dark-and-a-fed-one-waits
@@ -552,7 +555,7 @@
       0 15 [] :ok)))
 
 (deftest a-hurt-body-that-cannot-heal-fishes-and-walks-for-food-over-its-health-budget
-  (let [hurt {:pos {:x 0 :y 64 :z 0} :health 5}
+  (let [hurt {:pos {:x 0 :y 64 :z 0} :health 0.5}
         walk {:pos {:x 3 :y 64 :z 0}}]
     (are [food inventory expected-fit expected-walk]
          (let [c (assoc (ctx-of {:self (assoc hurt :food food) :inventory inventory}) :args {})]
@@ -564,7 +567,7 @@
 (deftest a-hurt-body-waits-to-start-the-access-and-boat-jobs
   (doseq [j '[jobs.access.tunnel jobs.access.stair jobs.access.pillar jobs.access.clear-path jobs.access.bridge jobs.blocks.clear-cells jobs.build.path
               jobs.movement.boat-launch jobs.movement.boat-recover jobs.movement.mount]]
-    (is (= :later (kind (:fit? (get registry/jobs j)) {:self {:pos {:x 0 :y 64 :z 0} :health 5}})) (str j))))
+    (is (= :later (kind (:fit? (get registry/jobs j)) {:self {:pos {:x 0 :y 64 :z 0} :health 1 :food 5} :inventory [{:name "bread" :count 1}]})) (str j))))
 
 (deftest a-hurt-body-afloat-still-lands-and-drives
   (doseq [j '[jobs.movement.boat-land jobs.movement.boat-drive jobs.access.toggle]]
@@ -654,7 +657,7 @@
     (are [check world expected] (= expected (kind check world))
       restore-broken/safe? open-night :later
       restore-broken/safe? (assoc open-night :time st/noon) :ok
-      restore-broken/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 5}} :later
+      restore-broken/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 0.5}} :later
       get-food/safe? by-day-hostile :ok
       get-food/safe? open-night :ok
       recover-drops/safe? by-day-hostile :ok
@@ -793,7 +796,7 @@
     'jobs.farm.tend (assoc night-hut :time st/noon) {:area (box-at 40)} :ok))
 
 (deftest an-attack-walk-to-an-animal-spends-hp-only-while-the-body-cannot-heal
-  (let [hurt {:pos {:x 0 :y 64 :z 0} :health 5}]
+  (let [hurt {:pos {:x 0 :y 64 :z 0} :health 0.5}]
     (are [food targets expected]
          (= expected (select-keys (attack/walk-opts (assoc (ctx-of {:self (assoc hurt :food food) :inventory []}) :args {:targets targets}) #js {:id 1 :name "cow" :pos #js {:x 3 :y 64 :z 0}}) [:floor :leg-s]))
       8 ["cow"] {:floor {:health 0} :leg-s 30}

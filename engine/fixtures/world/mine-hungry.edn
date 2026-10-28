@@ -31,12 +31,12 @@
    :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:kind :limit-reached}} :for-s 30 :of-job true}]}
   {:name "hurt-mid-mine-with-no-food-carried-stops-cannot-heal"
-   ;; fit at the start, hurt to 5 hp (too hurt for risky work) during the tunnel with a bar under 18 and nothing to eat: the next dig step stops it, so a caller (get-kit) can get food first.
+   ;; fit at the start, hurt to 3 hp (too hurt for a mine's work) during the tunnel with a bar under 18 and nothing to eat: the next dig step stops it, so a caller (get-kit) can get food first.
    :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["torch" 8]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "effect give $BODY minecraft:mining_fatigue 100 2 true"]
          [:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 14 :radius 16 :mend false})]
          [:wait-s 3]
          [:rcon "effect clear $BODY minecraft:resistance"]
-         [:rcon "damage $BODY 15 minecraft:generic"]]
+         [:rcon "damage $BODY 17 minecraft:generic"]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :cannot-heal}} :within-s 90 :of-job true}]}]}

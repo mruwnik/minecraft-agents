@@ -77,7 +77,7 @@
     (is (= :urgent (level {:self {:food 2}})) "food 2")
     (is (= :urgent (level {:self {:food 6} :inventory [{:name "bread" :count 1}]})) "hungry with food carried: one bite, no waiting for a section")
     (is (= :urgent (level {:self {:food 15 :health 7} :inventory [{:name "bread" :count 1}]})) "hurt, food carried")
-    (is (not (level {:self {:food 15 :health 5} :inventory [{:name "bread" :count 1}]})) "below the risky health: the low-health rest's")))
+    (is (not (level {:self {:food 15 :health 3} :inventory [{:name "bread" :count 1}]})) "below the risky health: the low-health rest's")))
 
 (deftest hungry-in-the-dark-only-holds-with-food-to-eat
   (let [level (fn [world] ((:when (get triggers/all :hungry)) (tu/with-light-data (tu/fake world)) {} {}))

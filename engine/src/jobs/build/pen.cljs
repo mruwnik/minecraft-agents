@@ -210,7 +210,7 @@
 (def ways (into [:build :patch] need/fetch-ways))
 (def defaults {:spend {:job-time ::job-time-s}})
 (def safe? (ready/safe-at-build work-place/spot))
-(def fit? ready/fit?)
+(def fit? (ready/fit-for :long))
 
 (defn builder-items
   "from-plan's :no-items over the parts the builder is called for: it holds when any part has something to build, dig, fetch or look at, else it names the needs of all of them."

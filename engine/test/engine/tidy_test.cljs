@@ -166,7 +166,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[world reason] [[{:inventory [{:name "stone" :count 2}] :self {:health 5}} :low-health]
+        (doseq [[world reason] [[{:inventory [{:name "stone" :count 2}] :self {:health 0.5}} :low-health]
                                 [{:inventory [{:name "stone" :count 2}] :entities [zombie] :blocks floor} :hostile-near]]]
           (let [{:keys [eng p]} (restore! world [(zs/whole-zone "Miles")] [dug])
                 id (first (:list (core/state eng)))]

@@ -1,8 +1,8 @@
 (ns jobs.lib.price
   "The one acceptable-risk rule of go-to's walks and the readiness place checks: the hp of expected damage the body may take
   (allowed), and the price of staying where mobs spawn (stay-hp). A place check that fails only on exposure is ok while the
-  seconds the job stays there (::stay-s of the ctx: its own figure, via stays, else its category's, via staying: ::place-stay-s
-  for a click act, ::work-stay-s, ::long-stay-s) cost no more than allowed (Q380, Q382); the walk to the
+  seconds the job stays there (::stay-s of the ctx: its own figure, via stays, else its category's, via staying:
+  cost.risk/work-s) cost no more than allowed (Q380, Q382); the walk to the
   place is priced by the go-to it runs."
   (:require [engine.args :as a]
             [engine.contract :as contract]
@@ -20,13 +20,7 @@
 
 (a/defargs settings
   {::way-radius {:default 16 :spec (a/num-in 0 nil)
-                 :doc "Blocks from a way or place within which a known hostile adds its fight to the price of walking or staying there."}
-   ::place-stay-s {:default 10 :spec (a/num-in 0 nil)
-                   :doc "Seconds a click act (a door, a lever, one block, a trade) is taken to stay at an exposed place."}
-   ::work-stay-s {:default 120 :spec (a/num-in 0 nil)
-                  :doc "Seconds a job that works a place for a while (a field, a pen, a tree, an apiary) is taken to stay at an exposed place."}
-   ::long-stay-s {:default 600 :spec (a/num-in 0 nil)
-                  :doc "Seconds a mine, a strip or a build is taken to stay at an exposed place."}})
+                 :doc "Blocks from a way or place within which a known hostile adds its fight to the price of walking or staying there."}})
 
 (defn cannot-heal?
   "Whether the body of ctx c can not heal by waiting: food under foods/top-up-food and nothing a meal would eat carried (reserved food, which the hungry trigger and an unnamed meal leave alone, does not count)."
@@ -57,17 +51,17 @@
      (allowed-hp (.-health self) (.-food self) worth waits?))))
 
 (defn fit
-  "The wait reason {:reason :low-health :health :work-hp :allowed :text} while a risky job's work (cost.risk/work-hp) is more
-  than allowed without a worth (the share of health, the cannot-heal lift) and healing would bring it within, else nil.
+  "The wait reason {:reason :low-health :health :work-hp :allowed :text} while the work of a job of category (cost.risk/work-hp)
+  is more than allowed without a worth (the share of health, the cannot-heal lift) and healing would bring it within, else nil.
   A call's :worth is its own pricing (a search's legs, a walk), not the body's fitness."
-  [c]
+  [c category]
   (let [self (.self (:primitives c))
         allowed (allowed c nil)
-        work (risk/work-hp)]
+        work (risk/work-hp category)]
     (when (and (> work allowed) (<= work (allowed-hp 20 (.-food self) nil true)))
-      {:reason :low-health :health (.-health self) :work-hp work :allowed (round1 allowed)
-       :text (str "health " (.toFixed (.-health self) 1) " of 20 may risk " (round1 allowed) " hp, under the " work
-                  " a risky job's work may cost: eat or rest to heal first (natural healing needs food 18+)")})))
+      {:reason :low-health :health (.-health self) :work-hp (round1 work) :allowed (round1 allowed)
+       :text (str "health " (.toFixed (.-health self) 1) " of 20 may risk " (round1 allowed) " hp, under the " (round1 work)
+                  " this job's work may cost: eat or rest to heal first (natural healing needs food 18+)")})))
 
 (defn stay-parts
   "{:hurt :dies :death} of staying `seconds` where mobs spawn at `chance` per second: hurt the hp they take
@@ -86,8 +80,6 @@
   (let [{:keys [hurt dies death]} (stay-parts c chance seconds)]
     (+ hurt (cost/lethal-hp {:chance dies :death death}))))
 
-(def stay-settings {:click ::place-stay-s :work ::work-stay-s :long ::long-stay-s})
-
 (defn with-stay
   "The checker `safe` run with (stay-of c) seconds as the ctx's stay (kept when keep? and one is set); its :jobs.lib.ready/exposure half too."
   [safe stay-of keep?]
@@ -97,7 +89,7 @@
 (defn staying
   "The checker `safe`, run with the stay of category (:click, :work or :long) unless the caller gave one."
   [category safe]
-  (with-stay safe (fn [_] (settings/get settings (stay-settings category))) true))
+  (with-stay safe (fn [_] (risk/work-s category)) true))
 
 (defn priced
   "The status s of a place check, but ok where it is :later or :never on exposure alone (:exposed with a :chance) while the hp the
@@ -106,7 +98,7 @@
   (let [{:keys [reason chance]} (nth s 2 nil)]
     (if-not (and (contains? #{:later :never} (first s)) (= :exposed reason) (number? chance))
       s
-      (let [secs (or (::stay-s c) (settings/get settings ::place-stay-s))
+      (let [secs (or (::stay-s c) (risk/work-s :click))
             hp (stay-hp c chance secs)
             ok-hp (allowed c)]
         (if (<= hp ok-hp)

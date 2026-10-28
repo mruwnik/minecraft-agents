@@ -16,8 +16,8 @@
 
 (deftest low-health-holds-for-a-hurt-body-its-own-reflexes-do-not-heal
   (are [self expected] (= expected (holds? self))
-    {:health 4 :food 18} true
-    {:health 4 :food 3} true
+    {:health 3 :food 18} true
+    {:health 3 :food 3} true
     {:health 6 :food 20} false
     {:health 0 :food 20} false
     {:health 4 :food 20 :effects [{:name "poison" :amplifier 0 :duration 400}]} false
@@ -27,12 +27,12 @@
 (def pocket "A body shut in rock at [0 64 0]: shut-in is done at once." (ct/rock [-3 3] [62 67] #{[0 64 0] [0 65 0]}))
 
 (defn ^:async run!
-  "A 4-hp body in the pocket with the low-health reflex registered and a listed job that records the health it starts at;
+  "A 3-hp body in the pocket with the low-health reflex registered and a listed job that records the health it starts at;
   each wait heals heal hp. {:worked-at :p :eng}."
   [self inventory heal]
   (let [clock (atom 1000000)
         worked-at (atom nil)
-        p (tu/seeing-all (tu/fake {:self (merge {:health 4} self) :blocks pocket :inventory inventory}))
+        p (tu/seeing-all (tu/fake {:self (merge {:health 3} self) :blocks pocket :inventory inventory}))
         _ (.override (.-world p) "wait" (fn [token a impl] (swap! (fake/state p) update-in [:self :health] #(min 20 (+ % heal))) (impl token a)))
         work (tu/job (fn [c] (reset! worked-at (.-health (.self (:primitives c)))) (ctx/end c :done nil)))
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'work work) :triggers triggers/all :dir (tu/tmp-dir)
@@ -56,10 +56,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [worked-at p eng]} (await (run! {:food 20} [] 0))]
-          (is (= 4 worked-at) "the rest ended :not-healing and the listed job ran")
+          (is (= 3 worked-at) "the rest ended :not-healing and the listed job ran")
           (let [holds-now? #(boolean ((:when (get triggers/all :low-health)) p (mem/view (:store eng)) {}))]
             (is (not (holds-now?)) "the trigger lets a rest that could not heal be while its reason stands")
-            (swap! (fake/state p) assoc-in [:self :health] 3)
+            (swap! (fake/state p) assoc-in [:self :health] 2)
             (is (holds-now?) "it fires again at once when health falls below what it was at the give-up")))))))
 
 (deftest a-rest-that-found-no-food-is-lifted-when-food-comes-to-hand
@@ -74,7 +74,7 @@
 
 (deftest hungry-leaves-a-hurt-body-to-low-health
   (are [self expected] (= expected (boolean ((:when (get triggers/all :hungry)) (tu/fake {:self self :inventory [{:name "bread" :count 2}]}) {} {})))
-    {:health 4 :food 10} false
+    {:health 3 :food 10} false
     {:health 10 :food 10} true))
 
 (deftest a-rest-that-could-not-shut-in-goes-for-food-at-once
@@ -82,7 +82,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [clock (atom 1000000)
-              p (tu/seeing-all (tu/fake-on-floor {:self {:health 4 :food 12} :floor-block "bedrock"
+              p (tu/seeing-all (tu/fake-on-floor {:self {:health 3 :food 12} :floor-block "bedrock"
                                                   :entities [{:id 1 :name "zombie" :kind "hostile" :pos {:x 11 :y 64 :z 0}}]}))
               eng (core/create {:primitives p :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now (tu/act-clock clock p 1000)})
               r (await (tu/child-outcome eng 'jobs.survival.rest {} 200))]
@@ -97,7 +97,7 @@
       (fn ^:async t []
         (let [clock (atom 1000000)
               [seen sink] (tu/legacy-capture-sink)
-              p (tu/seeing-all (tu/fake {:self {:health 4 :food 12} :blocks pocket :time 18000}))
+              p (tu/seeing-all (tu/fake {:self {:health 3 :food 12} :blocks pocket :time 18000}))
               eng (core/create {:primitives p :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now (tu/act-clock clock p 1000)
                                 :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
               r (await (tu/child-outcome eng 'jobs.survival.rest {} 8))]

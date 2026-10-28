@@ -170,7 +170,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [hurt {:blocks (merge floor sand-patch) :self {:health 5 :food 12}}
+        (let [hurt {:blocks (merge floor sand-patch) :self {:health 3 :food 12}}
               s (await (scenario {:block "sand" :count 6} hurt 40))]
           (is (zero? (dig-count s)))
           (is (= :cannot-heal (:reason (done-event s)))))))))

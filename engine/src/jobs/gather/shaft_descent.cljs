@@ -37,7 +37,7 @@
 
 (def safe? ready/safe-roaming)
 
-(def fit? ready/fit?)
+(def fit? (ready/fit-for :long))
 
 (def defaults {:spend {:job-time ::job-time-s}})
 

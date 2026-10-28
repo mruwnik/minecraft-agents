@@ -161,7 +161,7 @@
 
 (def safe? (price/staying :long (ready/safe-at-by-night #(a/cell (or (:at (:args %)) (:at (site/site %)))))))
 
-(def fit? ready/fit?)
+(def fit? (ready/fit-for :long))
 
 (defn can-start?
   "Never :bad-args: no :site or :base, and a new site without :at."

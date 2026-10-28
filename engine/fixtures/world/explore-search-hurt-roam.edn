@@ -1,4 +1,4 @@
-;; A search that is not for food waits :low-health when the body is too hurt for risky work (8 hp at food 0: the hungry cut halves its share) and cannot heal (nothing edible carried), so a
+;; A search that is not for food waits :low-health when the body is too hurt for its work (1 hp at food 0: a search's 120 s of work costs 0.4 hp, the hungry cut halves its share) and cannot heal (nothing edible carried), so a
 ;; hurt, foodless body does not roam for wood or wool; a healthy one searches. Should-succeed: both cases.
 {:defaults
  {:tags [:explore :readiness]
@@ -9,7 +9,7 @@
  :cases
  [{:name "hurt-foodless-body-waits-instead-of-roaming-for-wood"
    :body {:at [24.5 0 24.5] :effects [["hunger" 120 255]]}
-   :act [[:rcon "damage $BODY 12 minecraft:generic"]
+   :act [[:rcon "damage $BODY 19 minecraft:generic"]
          [:wait-s 3] ; hunger must have emptied the food bar: a fed body heals, so it would search
          [:job (jobs.explore.search {:target ["oak_log"] :settings {:jobs.explore.search/max-legs 4}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :low-health}} :within-s 20 :of-job true}

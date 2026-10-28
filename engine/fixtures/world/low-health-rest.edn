@@ -1,4 +1,4 @@
-;; Card bcaa14c7: a body too hurt for risky work (under 6 hp when fed) rests until an hp is not worth its wait (15) (shut in, holding :healing, a bite of carried bread while food is
+;; Card bcaa14c7: a body too hurt for risky work (under 3.8 hp when fed) rests until an hp is not worth its wait (15) (shut in, holding :healing, a bite of carried bread while food is
 ;; under 20) before its queued walk goes on. Food under 18 is got first (here bread lying near); short of blocks for the
 ;; walls it digs more (the dirt row at x 3). Should-fail: with no food anywhere the rest ends :no-food, the trigger does not
 ;; fire again within its retry time and the walk runs. On bedrock with no blocks the shut-in fails; a zombie seen in a glass box
@@ -14,7 +14,7 @@
  :cases
  [{:name "hurt-fed-body-rests-before-its-walk"
    :body {:inventory [["dirt" 32] ["bread" 8]]}
-   :act [[:rcon "damage $BODY 16 minecraft:generic"]
+   :act [[:rcon "damage $BODY 17 minecraft:generic"]
          [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :low-health}} :within-s 10}
             {:no-event {:source :job :kind :rest.unsheltered} :for-s 30 :until {:source :reflex :kind :ended :context {:reflex-id :low-health}}}
@@ -25,7 +25,7 @@
   {:name "hurt-fed-body-short-of-blocks-digs-more-then-shuts-in"
    :blocks [[:fill [3 0 14] [3 1 18] "dirt"]]
    :body {:inventory [["dirt" 16] ["bread" 8]]}
-   :act [[:rcon "damage $BODY 16 minecraft:generic"]
+   :act [[:rcon "damage $BODY 17 minecraft:generic"]
          [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :low-health}} :within-s 10}
             {:no-event {:source :job :kind :rest.unsheltered} :for-s 150 :until {:source :reflex :kind :ended :context {:reflex-id :low-health}}}
@@ -38,7 +38,7 @@
    :act [[:until-rcon "data get entity $BODY foodLevel" "data: (1[0-7])$" 60]
          [:rcon "effect clear $BODY minecraft:hunger"]
          [:summon "item" [10.5 0 16.5] "{Item:{id:\"minecraft:bread\",count:8}}"]
-         [:rcon "damage $BODY 15 minecraft:generic"]
+         [:rcon "damage $BODY 17 minecraft:generic"]
          [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :low-health}} :within-s 75}
             {:no-event {:source :job :kind :completed :data {:arrived true}} :for-s 180 :until {:source :reflex :kind :ended :context {:reflex-id :low-health}}}
@@ -51,7 +51,7 @@
    :body {:inventory [["dirt" 32]] :effects [["hunger" 120 49]]}
    :act [[:until-rcon "data get entity $BODY foodLevel" "data: (1[0-7])$" 60]
          [:rcon "effect clear $BODY minecraft:hunger"]
-         [:rcon "damage $BODY 15 minecraft:generic"]
+         [:rcon "damage $BODY 17 minecraft:generic"]
          [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]]
    :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :low-health} :data {:kind :nothing-possible}} :within-s 260}
             {:count-event {:source :reflex :kind :fired :context {:reflex-id :low-health}} :for-s 300 :at-most 1}
@@ -66,7 +66,7 @@
          [:until-rcon "data get entity $BODY foodLevel" "data: (1[0-7])$" 60]
          [:rcon "effect clear $BODY minecraft:hunger"]
          [:summon "item" [6.5 0 10.5] "{Item:{id:\"minecraft:bread\",count:8}}"]
-         [:rcon "damage $BODY 15 minecraft:generic"]]
+         [:rcon "damage $BODY 17 minecraft:generic"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :low-health}} :within-s 75}
             {:event {:source :job :kind :rest.unsheltered} :within-s 120}
             {:event {:source :reflex :kind :ended :context {:reflex-id :low-health} :data {:kind :done}} :within-s 230}]
@@ -79,7 +79,7 @@
    :act [[:summon "zombie" [17.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:until-rcon "data get entity $BODY foodLevel" "data: (1[0-7])$" 60]
          [:rcon "effect clear $BODY minecraft:hunger"]
-         [:rcon "damage $BODY 15 minecraft:generic"]]
+         [:rcon "damage $BODY 17 minecraft:generic"]]
    :expect [{:event {:source :job :kind :rest.unsheltered} :within-s 120}
             {:event {:source :reflex :kind :ended :context {:reflex-id :low-health} :data {:kind :nothing-possible}} :within-s 150}]
    :limit-s 170}]}

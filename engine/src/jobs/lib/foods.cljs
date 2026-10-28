@@ -142,7 +142,7 @@
   [health food item]
   (and (edible? item)
        (not (contains? named-only item))
-       (or (not (contains? precious item)) (risk/too-hurt? health food))))
+       (or (not (contains? precious item)) (risk/too-hurt? health food :long))))
 
 (defn carries-food?
   "Whether the sensed self carries something a meal would eat."

@@ -4,13 +4,12 @@
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
-            [engine.settings :as settings]
             [engine.sight :as sight]
             [jobs.lib.aim :as aim]
             [jobs.lib.breath :as breath]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.risk :as risk]
             [jobs.lib.places :as places]
-            [jobs.lib.price :as price]
             [jobs.lib.reach :as reach]
             [jobs.lib.sense :as sense]
             [jobs.lib.threats :as threats]
@@ -241,12 +240,12 @@
 
 (defn goal-danger
   "The nearest known mob the body would flee that has the cell pos within its full-cost radius (threats/danger-near-fn),
-  with :stay-s and :worth, when the toll there over the stay (:stay-s, else jobs.lib.price's ::place-stay-s) costs more
+  with :stay-s and :worth, when the toll there over the stay (:stay-s, else cost.risk/work-s of a click act) costs more
   than giving up loses, what the goal is worth (one-way/worth: :worth, else a tour's); else nil."
   [c pos]
   (when-let [{:keys [toll] :as d} ((threats/danger-near-fn c) pos)]
     (let [{:keys [stay-s worth]} (:args c)
-          stay (if stay-s stay-s (settings/get price/settings ::price/place-stay-s))
+          stay (if stay-s stay-s (risk/work-s :click))
           w (one-way/worth (u/dist (u/self-pos c) pos) worth)]
       (when (> (* toll stay) w) (assoc d :stay-s stay :worth w)))))
 

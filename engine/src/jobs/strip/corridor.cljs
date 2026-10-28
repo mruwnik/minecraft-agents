@@ -357,7 +357,7 @@
 
 (def safe? (price/staying :long (ready/safe-at-by-night place)))
 
-(def fit? ready/fit?)
+(def fit? (ready/fit-for :long))
 
 (def can-start? (cond/and bad-segment not-now))
 

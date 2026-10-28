@@ -107,7 +107,7 @@
 
 (def safe? (price/staying :long (ready/safe-at-by-night #(work-place/plan-spot {:plan (base %)} %))))
 
-(def fit? ready/fit?)
+(def fit? (ready/fit-for :long))
 
 (defn can-start? [c]
   (cond (not (base c)) (contract/never :bad-args "needs :base")

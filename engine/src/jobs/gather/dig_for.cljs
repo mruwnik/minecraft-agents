@@ -111,7 +111,7 @@
 
 (def safe? (ready/unless-outmatched (price/staying :long (ready/safe-at-or-roaming work-place/dig-spot true))))
 
-(def fit? ready/fit?)
+(def fit? (ready/fit-for :long))
 
 ;; ------------------------------------------------------------------ the contract
 
