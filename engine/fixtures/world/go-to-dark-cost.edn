@@ -1,13 +1,13 @@
-;; Card 8517fe2c: go-to (and its quote, a dry run) costs darkness: a seen dark cell costs at least twice a lit one (more for an unarmed body),
-;; so a lit route up to about 2x longer is taken; :dark false (the walk.world setting) plans dark cells like lit ones. Roofed stone block, rooms at
+;; Card 8517fe2c: go-to (and its quote, a dry run) costs darkness by the chance a mob spawns there (Q334/Q345: a small dark tunnel
+;; costs little), so of two routes about as long the lit one is taken; :dark false (the walk.world setting) plans dark cells like lit ones. Roofed stone block, rooms at
 ;; x 1..3 and x 27..29, two corridors between them: a direct one along z 16 (25 long, never lit; each case walks it there and
 ;; back first so its cells are seen dark: sight makes out a dark cell only within 4 blocks, and the rock guess reads one never
 ;; seen 3 past that as stone) and a detour along z 24 (about 42 long, torches at x 10..19 only, far enough from
 ;; the rooms that no torch light reaches the direct corridor). The body looks east down the direct corridor. The quote's route
-;; reports the route's :length in blocks and never walks: with :dark true the detour, with :dark false the direct one.
+;; reports the route's :length in blocks and its :dark cells, and never walks.
 ;; Cards ea376fb0, c1f4e3be, 53c112a5: the block is roofed, so the body is underground at any hour and a cell never seen counts dark
-;; (look/dark-fn; a player cannot know a corridor round a corner is lit): the lit detour wins once the body has walked it, a detour never
-;; seen takes the direct corridor, and a route dark all the way (torches removed) is still found, the shorter direct corridor.
+;; (look/dark-fn; a player cannot know a corridor round a corner is lit): a lit lane beside the direct corridor (opened mid-case along
+;; z 18, as long from z 17) wins once the body has walked it, a detour never seen takes the direct corridor, and a route dark all the way (torches removed) is still found, the shorter direct corridor.
 {:defaults
  {:tags [:movement :planner :dark]
   :time :any
@@ -31,17 +31,23 @@
    :expect [{:count-event {:source :job :kind :completed :data {:arrived true}} :for-s 90 :at-least 2 :at-most 2 :of-job true}
             {:no-event {:level :error} :for-s 2}]
    :after [[:body-near [2.5 0 16.5] 1]]}
-  {:name "walked-lit-detour-beats-the-dark-direct-corridor"
-   :limit-s 120
-   :act [[:job (jobs.movement.go-to {:pos #at [19 0 24] :range 0})]
-         [:until-pos {:z-min 23} 30]
-         [:job (jobs.movement.go-to {:pos #at [28 0 20] :range 0}) [:alongside]]
-         [:until-pos {:x-min 27} 40]
+  {:name "walked-lit-lane-beats-the-dark-direct-corridor"
+   :limit-s 150
+   :act [[:job (jobs.movement.go-to {:pos #at [26 0 16] :range 0})]
+         [:until-pos {:x-min 25} 40]
          [:job (jobs.movement.go-to {:pos #at [2 0 16] :range 0}) [:alongside]]
-         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 16] :range 1}] {:ok true :quote {:route {:found true :length [:> 35]}}}] 110]]
-   :expect [{:count-event {:source :job :kind :completed :data {:arrived true}} :for-s 90 :at-least 3 :at-most 3 :of-job true}
+         [:until-pos {:x-max 3} 40]
+         [:rcon "execute positioned $X $Y $Z run fill ~3 ~ ~18 ~27 ~1 ~18 air"]
+         [:rcon "execute positioned $X $Y $Z run setblock ~10 ~ ~18 torch"] [:rcon "execute positioned $X $Y $Z run setblock ~13 ~ ~18 torch"]
+         [:rcon "execute positioned $X $Y $Z run setblock ~16 ~ ~18 torch"] [:rcon "execute positioned $X $Y $Z run setblock ~19 ~ ~18 torch"]
+         [:job (jobs.movement.go-to {:pos #at [26 0 18] :range 0}) [:alongside]]
+         [:until-pos {:x-min 25 :z-min 18} 40]
+         [:job (jobs.movement.go-to {:pos #at [2 0 17] :range 0}) [:alongside]]
+         [:until-pos {:x-max 3} 40]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 17] :range 0}] {:ok true :quote {:route {:found true :length [:< 30] :dark [:< 5]}}}] 30]]
+   :expect [{:count-event {:source :job :kind :completed :data {:arrived true}} :for-s 120 :at-least 4 :at-most 4 :of-job true}
             {:no-event {:level :error} :for-s 2}]
-   :after [[:body-near [2.5 0 16.5] 1]]}
+   :after [[:body-near [2.5 0 17.5] 1]]}
   {:name "unseen-lit-detour-counts-dark-takes-the-direct-corridor"
    :limit-s 120
    :act [[:job (jobs.movement.go-to {:pos #at [26 0 16] :range 0})]
