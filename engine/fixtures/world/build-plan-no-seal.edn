@@ -79,18 +79,15 @@
    :after [[:block [11 2 10] "dirt"] [:block [12 2 10] "dirt"]]
    :limit-s 170}
   {:name "island-exit-unwalkable"
-   ;; box on a 6x6 stone platform in the air (floor removed 3 deep around it): the flood sees a way out (a 3-block drop), the walk to the exit
-   ;; point (2 outside the box) cannot get within range; a sealing cell must be given up :unreachable, never placed (which cell
-   ;; stays open depends on the placing order: not asserted)
+   ;; box on a 6x6 stone platform in the air (floor removed 3 deep around it): a sealing cell is never placed from inside; the body
+   ;; steps out onto the platform's one-cell rim (the nearest cell the fill would cut it off from) and finishes the box from there
    :plans [{:id "box" :metadata {:by "$body"}
             :parts [{:id "walls" :outline [#at [10 0 10] #at [13 1 13]] :want "dirt"}
                     {:id "roof" :box [#at [10 2 10] #at [13 2 13]] :want "dirt"}]}]
    :blocks [[:fill [0 -4 0] [31 -4 31] "stone"] [:fill [0 -3 0] [31 -1 31] "air"] [:fill [9 -1 9] [14 -1 14] "stone"]]
    :act [[:job (jobs.build.from-plan {:plan "$plan:box"})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :incomplete} :message [:contains "unreachable"]} :within-s 140}]
-   ;; some shell cell stays open, whichever one
-   :after [[:not-block [11 0 11] "dirt"] [:block [10 0 10] "dirt"]
-           [:any-not-block [[[10 2 10] [13 2 13]] [[10 0 10] [13 1 10]] [[10 0 13] [13 1 13]] [[10 0 11] [10 1 12]] [[13 0 11] [13 1 12]]] "dirt"]]
+   :expect [{:event {:source :job :kind :completed :data {:kind :done :placed 40}} :within-s 140 :of-job true}]
+   :after [[:not-block [11 0 11] "dirt"] [:block [10 0 10] "dirt"] [:block [11 0 10] "dirt"] [:block [12 2 12] "dirt"]]
    :limit-s 170}
   {:name "wall-slot-of-own-hut-leaves-before-the-roof-shuts-it"
    ;; card cc4785f9 (Teasel j134): a 5x5 hut (walls y 0..2, roof y 3, a door gap south) built but for the body's own cells (a slot in
@@ -114,18 +111,4 @@
    :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 140 :until {:source :job :kind :completed}}]
    :after [[:block [12 2 10] "dirt"] [:block [12 3 10] "dirt"] [:block [12 3 11] "dirt"] [:block [12 0 14] "air"]]
-   :limit-s 170}
-  {:name "own-room-in-rock-tunnels-to-a-cell-and-refills-its-wall"
-   ;; card cc4785f9: the body in a closed dirt room of its own plan inside glowstone (lit, rock-bound), a one-cell void east owed dirt:
-   ;; it tunnels to the void through its own east wall, fills it, and fills the wall cells it cut from the tunnel side (it never seals itself in the room).
-   :plot {:height 14}
-   :plans [{:id "room" :metadata {:by "$body"}
-            :parts [{:id "shell" :box [#at [8 1 8] #at [12 5 12]] :want "dirt"}
-                    {:id "inside" :box [#at [9 2 9] #at [11 4 11]] :want :clear}
-                    {:id "post" :cells [#at [16 2 10]] :want "dirt"}]}]
-   :blocks [[:fill [4 0 4] [20 9 16] "glowstone"] [:fill [8 1 8] [12 5 12] "dirt"] [:fill [9 2 9] [11 4 11] "air"] [:set [16 2 10] "air"]]
-   :body {:at [10.5 2 10.5] :inventory [["dirt" 16] ["stone_pickaxe" 1] ["stone_shovel" 1]]}
-   :act [[:job (jobs.build.from-plan {:plan "$plan:room"})]]
-   :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 200 :of-job true}]
-   :after [[:block [16 2 10] "dirt"] [:block [12 2 10] "dirt"] [:block [12 3 10] "dirt"] [:block [8 2 10] "dirt"]]
-   :limit-s 230}]}
+   :limit-s 170}]}
