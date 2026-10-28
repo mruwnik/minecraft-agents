@@ -521,13 +521,24 @@
           (is (empty? (attacked zombie-hunt)) "nothing hostile attacked at 0.5 hp")
           (is (= [:low-health] (distinct (map :reason (events-of zombie-hunt :waiting))))))))))
 
-(deftest a-hunt-at-night-in-the-open-waits-for-dawn
+(deftest a-hunt-at-night-in-the-open-waits-for-dawn-when-its-stay-costs-more-than-the-body-may-risk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng] :as s} (h/setup {:inventory h/sword :time st/night :entities [(cow 1 3)]} 20)]
+          (sky/with-sky p)
+          (fake/swap-self! p assoc :health 4)
+          (core/submit! eng (spec {:item "beef" :count 1 :keep 0}) {})
+          (await (tu/with-looks-showing #(run-ticks s 10 700)))
+          (is (empty? (attacked s)) "nothing attacked at night")
+          (is (= [:exposed] (distinct (map :reason (events-of s :waiting))))))))))
+
+(deftest a-hunt-at-night-in-the-open-goes-ahead-when-its-stay-is-cheap
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (tu/with-looks-showing #(scenario {:item "beef" :count 1 :keep 0} {:inventory h/sword :time st/night :entities [(cow 1 3)]} 10)))]
-          (is (empty? (attacked s)) "nothing attacked at night")
-          (is (= [:exposed] (distinct (map :reason (events-of s :waiting))))))))))
+          (is (seq (attacked s)) "one dark cell at 0.005 spawns/s over the 120 s work stay is a small hurt, within the share of full health"))))))
 
 (deftest the-calls-checks-reach-the-attack-child
   (async done
