@@ -67,8 +67,8 @@
                                    (:item e) (assoc :use {:blocks [(:item e)]})
                                    ;; a climb's pillar digs the roof its route priced
                                    (:roof e) (assoc :settings {:jobs.access.pillar/max-ceiling-digs (:roof e)}))]
-    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :checks {:fit? '(always)} :accept #{:falling-block} :ways (ways-for fetch?) :settings (cond-> {:jobs.lib.trip/spent-uses 0} (:own-cut e) (assoc :jobs.lib.access/spare-own-builds false)) :ignore-zones? ignore-zones? :need-drop (not by-hand?) :leave-drops true :collect (boolean (:own-cut e))}]
-    :clear-path ['jobs.access.clear-path (cond-> {:checks {:fit? '(always)} :heading (:heading e) :ignore-zones? ignore-zones? :need-drop (not by-hand?) :ways #{:carried :craft}}
+    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :natural-only? true :checks {:fit? '(always)} :accept #{:falling-block} :ways (ways-for fetch?) :settings (cond-> {:jobs.lib.trip/spent-uses 0} (:own-cut e) (assoc :jobs.lib.access/spare-own-builds false)) :ignore-zones? ignore-zones? :need-drop (not by-hand?) :leave-drops true :collect (boolean (:own-cut e))}]
+    :clear-path ['jobs.access.clear-path (cond-> {:checks {:fit? '(always)} :heading (:heading e) :natural-only? true :ignore-zones? ignore-zones? :need-drop (not by-hand?) :ways #{:carried :craft}}
                                            (:own-cut e) (assoc :settings {:jobs.lib.access/spare-own-builds false} :close-behind true))]
     :approach ['jobs.movement.go-to {:checks {:fit? '(always)} :pos (zipmap [:x :y :z] (:pos e)) :range 0 :ways #{:walk :clear-seal}}]
     :fill-gap ['jobs.blocks.place {:pos (zipmap [:x :y :z] (:cell e)) :use {:blocks [(:item e)]} :ways #{:carried} :ignore-zones? ignore-zones?}]))
@@ -593,7 +593,7 @@
         undiggable? :not-diggable
         :else
         (let [fetch? (fetch-tool? c)
-              args {:ignore-zones? (boolean (:ignore-zones? (:args c))) :ways (ways-for fetch?) :need-drop fetch? :accept #{:lava-adjacent}}
+              args {:ignore-zones? (boolean (:ignore-zones? (:args c))) :ways (ways-for fetch?) :need-drop fetch? :accept #{:lava-adjacent} :natural-only? true}
               pos (zipmap [:x :y :z] cell)
               e (await (b/dig-cell-ending! c pos args))
               boxed? (and (not= :continue e) (= :no-side-stand (:why (:cause e))))
@@ -603,8 +603,8 @@
           (when (= :dug o)
             (forget-dug-own! c [dug])
             (note-holes! c [dug]))
-          (when guess (note-guess! c beside true))
-          o)))))
+          (when guess (note-guess! c beside (not= :not-diggable o)))
+          (if (and guess (= :not-diggable o)) :replan o))))))
 
 (defn replans-spent?
   "Whether the dig route's replans (memory :replan-budget {:since :fallback-s}, begun at the first) have taken the body as long
