@@ -8,9 +8,11 @@
    {:x 0 :y 64 :z 4 :move :gap}
    {:x 0 :y 64 :z 5 :move :walk}])
 
-(defn run [ticks]
-  (:events (reduce (fn [{:keys [tracked events]} [i controls done]]
-                     (let [[tracked' data] (gaps/tick steps tracked i controls done)]
+(defn run
+  "Events of ticks [i controls done y], y the feet height (default 64: on the platform)."
+  [ticks]
+  (:events (reduce (fn [{:keys [tracked events]} [i controls done y]]
+                     (let [[tracked' data] (gaps/tick steps tracked i controls done (or y 64))]
                        {:tracked tracked' :events (cond-> events data (conj data))}))
                    {} ticks)))
 
@@ -23,10 +25,15 @@
   (is (= [landed] (run [[2 {:sprint true} nil] [2 nil {:status :arrived}]]))
       "the last step of a plan is the gap's landing"))
 
-(deftest a-gap-step-ended-off-plan-or-stuck-is-fell-or-stuck
-  (is (= [(assoc landed :out :fell)] (run [[2 {:sprint true} nil] [2 nil {:status :off-plan :step 2}]])))
+(deftest a-body-ending-below-the-gap-fell-whether-the-walk-ends-off-plan-or-replans
+  (is (= [(assoc landed :out :fell)] (run [[2 {:sprint true} nil] [2 nil {:status :off-plan :step 2} 60.5]])))
+  (is (= [(assoc landed :out :fell)] (run [[2 {:sprint true} nil] [2 nil {:status :replan :why :changed} 60.5]]))
+      "a miss that ends in a replan from the hole is a miss"))
+
+(deftest a-gap-step-stuck-is-stuck
   (is (= [(assoc landed :out :stuck)] (run [[2 {:sprint true} nil] [2 nil {:status :stuck :step 2}]]))))
 
-(deftest a-walk-that-replans-in-the-air-or-never-reaches-the-gap-emits-nothing
+(deftest a-walk-ending-on-the-platform-before-the-jump-is-no-jump
+  (is (empty? (run [[2 {:sprint true} nil] [2 nil {:status :off-plan :step 2}]])) "knocked off the line in the run-up, still level")
   (is (empty? (run [[2 {:sprint true} nil] [2 nil {:status :replan :why :changed}]])))
   (is (empty? (run [[1 {} nil] [1 nil {:status :off-plan :step 1}]]))))

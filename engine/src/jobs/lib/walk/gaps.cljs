@@ -12,22 +12,30 @@
      :from [(:x prev) (:y prev) (:z prev)] :to [(:x step) (:y step) (:z step)]
      :out out}))
 
+(defn below-gap?
+  "Whether feet height y is under the gap step g's stand levels (take-off and landing) by over half a block: the body went into the hole."
+  [steps g y]
+  (let [level (min (executor/stand-y (nth steps (dec g))) (executor/stand-y (nth steps g)))]
+    (< y (- level 0.5))))
+
 (defn outcome
-  "How the jump to gap step g ended when the executor, now aimed at step i, ended the tick with done (nil: still walking), else nil."
-  [g i done]
+  "How the jump to gap step g ended when the executor, now aimed at step i, ended the tick with done (nil: still walking) and the
+  feet at height y, else nil. :fell is the body ending below the gap (whatever ended the walk: off-plan, a replan from the hole); a walk
+  that ends elsewhere, knocked or drifted off in the run-up, is no jump."
+  [steps g i done y]
   (cond
     (> i g) :landed
     (and (= :arrived (:status done)) (= i g)) :landed
-    (not= g (:step done)) nil
-    (= :off-plan (:status done)) :fell
-    (= :stuck (:status done)) :stuck))
+    (nil? done) nil
+    (below-gap? steps g y) :fell
+    (and (= :stuck (:status done)) (= g (:step done))) :stuck))
 
 (defn tick
   "[tracked' data] after one tick of a walk of steps with the executor aimed at step i, now at i2, holding controls (done: the walk's
-  end, if it ended). tracked {:g :sprint} is the gap step being jumped, nil outside one; data is the :gap-jump event to emit when this
-  tick ended the jump, else nil."
-  [steps tracked i2 controls done]
-  (let [out (when-let [g (:g tracked)] (outcome g i2 done))
+  end, if it ended) with the feet at height y. tracked {:g :sprint} is the gap step being jumped, nil outside one; data is the
+  :gap-jump event to emit when this tick ended the jump, else nil."
+  [steps tracked i2 controls done y]
+  (let [out (when-let [g (:g tracked)] (outcome steps g i2 done y))
         now (when (and (not= i2 (when out (:g tracked))) (= :gap (:move (nth steps i2 nil))) (pos? i2))
               {:g i2 :sprint (or (and (= i2 (:g tracked)) (:sprint tracked)) (boolean (:sprint controls)))})]
     [now (when out (event steps (:g tracked) (:sprint tracked) out))]))

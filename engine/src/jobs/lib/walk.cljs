@@ -318,7 +318,7 @@
                      (doseq [k (remove (get-in @state [:gate :resolved] #{}) (get-in state' [:gate :resolved] #{}))]
                        (let [cell (wsight/floor-cell (nth steps k))]
                          (ctx/emit! c :walk.gate-resolved :debug {:step k :cell cell :block ((:floors gate) cell)}))))
-                   (let [[tracked data] (gaps/tick steps @gap (:i (:exec state')) controls done)]
+                   (let [[tracked data] (gaps/tick steps @gap (:i (:exec state')) controls done (:y pose))]
                      (vreset! gap tracked)
                      (when data (ctx/emit! c :gap-jump :info data)))
                    (vreset! state state')
