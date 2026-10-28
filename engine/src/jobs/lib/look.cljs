@@ -416,9 +416,14 @@
 
 (defn remembered-light-fn
   "(fn [x y z]) the packed light (sky << 4 | block) of a cell the body has seen, as its memory gives it
-  (seen-light/light-fn); the raw world's own light where the body has no light table. Ask it of seen cells only."
+  (seen-light/light-fn), but the live light of the cell it stands in, which it sees now; the raw world's own light where
+  the body has no light table. Ask it of seen cells only."
   [p ^js raw]
-  (or (seen-light/light-fn p) (fn [x y z] (.lightAt raw x y z))))
+  (if-let [f (seen-light/light-fn p)]
+    (if-let [[ox oy oz] (feet-cell p)]
+      (fn [x y z] (if (and (== x ox) (== y oy) (== z oz)) (.lightAt raw x y z) (f x y z)))
+      f)
+    (fn [x y z] (.lightAt raw x y z))))
 
 (defn- brightest
   "#js {:block :sky}: the most of each light (by light, remembered-light-fn) among the seen cells of the section at cx

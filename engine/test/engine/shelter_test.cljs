@@ -149,7 +149,7 @@
   (let [field (into {} (for [x (range -30 31) z (range -30 31)] [(str x ",63," z) "stone"]))]
     (doseq [[what blocks light at spawns? mask] [["a small dark roofed room" (box 5 5 false) [0 0] {:x 2 :y 64 :z 2} false 1]
                                                 ["a dark roofed hall" (box 1 40 false) [0 0] {:x 0 :y 64 :z 39} true 1]
-                                                ["a torch-lit room" (assoc (box 5 5 false) "4,64,4" "torch") [0 14] {:x 2 :y 64 :z 2} false 0]
+                                                ["a torch-lit room" (assoc (box 5 5 false) "2,64,2" "torch") [0 14] {:x 2 :y 64 :z 2} false 0]
                                                 ["open ground under the night sky" field [15 0] {:x 0 :y 64 :z 0} true 1]]]
       (let [p (seen-box blocks light)
             chance (spawn-light/chance-at p at false)]
