@@ -446,6 +446,11 @@
   [c m ns]
   (if (false? (:use-notes (:args c))) (filter #(>= (:t %) (:t0 m 0)) ns) ns))
 
+(defn centred-patch?
+  "Whether c is a patch search round a given :center: its patches lie within the patch's :range of it."
+  [c]
+  (boolean (and (:patch (:args c)) (:center (:args c)))))
+
 (defn candidates [c m]
   (let [{:keys [pattern heading]} (:args c)
         max-distance (distance-limit c)
@@ -473,14 +478,18 @@
 
 (defn step-toward
   "Where to walk toward the unseen column [x z] from the body at [bx y bz]: the seen stand cell on the line 12, 6 or 3
-  blocks out, else the 6 or 3 block point at feet height (far ground is seldom in view), nil when within 3. A player
-  walks toward ground out of view and looks again."
+  blocks out, else the 6 or 3 block point at feet height (far ground is seldom in view; past a drop, the seen ground
+  under it, none when that is out of view), nil when within 3. A player walks toward ground out of view and looks again."
   [block-at [bx y bz] x z]
   (let [d (xz-dist [bx bz] [x z])
         at (fn [k] (let [f (/ k d)] [(js/Math.round (+ bx (* f (- x bx)))) (js/Math.round (+ bz (* f (- z bz))))]))
         near (filter #(< % d) [12 6 3])]
     (or (some (fn [k] (let [[sx sz] (at k) {sy :y} (stand-cell block-at sx sz y)] (when sy [sx sy sz]))) near)
-        (when-let [k (first (filter #(<= % 6) near))] (let [[sx sz] (at k)] [sx y sz])))))
+        (when-let [k (first (filter #(<= % 6) near))]
+          (let [[sx sz] (at k)
+                floor (fn [h] (let [n (block-at [sx h sz])] (cond (open? n) (when (> h (- y (descent))) (recur (dec h))) (string? n) (inc h))))
+                sy (if (open? (block-at [sx (dec y) sz])) (floor (dec y)) y)]
+            (when sy [sx sy sz]))))))
 
 (defn held?
   "Whether point [x z] lies the way a leg failed from near the body at [hx hz] (blocked, [{:at [x z] :leg [x z]}] since
@@ -618,12 +627,12 @@
         (if (>= in-row (max-failed-in-row)) (finish! c :not-found :stuck) :again)))))
 
 (defn ^:async patch-step!
-  "Patch mode: look round and scan for a patch (the origin first, then where the body stands). :again while the scan goes on,
-  true when spots are found (booked as the finding), nil when this place has none."
+  "Patch mode: look round and scan for a patch (the origin first, then where the body stands; round a given :center always
+  the origin). :again while the scan goes on, true when spots are found (booked as the finding), nil when this place has none."
   [c]
   (let [a (:patch (:args c))
         _ (when-not (:patch-scan (ctx/mem c)) (await (look/survey! c :near (look/search-effort))))
-        [x y z] (if (zero? (:scans (ctx/mem c) 0)) (:origin (ctx/mem c)) (here c))
+        [x y z] (if (or (zero? (:scans (ctx/mem c) 0)) (centred-patch? c)) (:origin (ctx/mem c)) (here c))
         far? (> (xz-dist [x z] (let [[ox _ oz] (:origin (ctx/mem c))] [ox oz])) (distance-limit c))
         spots (if far? nil (patch/scan-step! c a {:x x :y y :z z}))]
     (when-not (= :again spots)
@@ -745,7 +754,7 @@
 (defn ^:async search-step!
   "One pass: end, walk the leg under way, or look and start the next leg. :again goes on, else a round result."
   [c]
-  (let [w (when-not (:origin (ctx/mem c)) (await (area/walk-within! c (distance-limit c))))]
+  (let [w (when-not (:origin (ctx/mem c)) (await (area/walk-within! c (or (when (centred-patch? c) (:range (:patch (:args c)))) (distance-limit c)))))]
     (cond
       (= :there w) :again
       (= :continue w) :continue

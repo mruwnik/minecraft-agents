@@ -331,6 +331,14 @@
               r (await (child-outcome eng job (assoc small :center {:x 400 :y 64 :z 0} :max-step 0) 60))]
           (is (nil? (:spot r)) "ground beside the body is 400 blocks from :center, beyond what the search may cover"))))))
 
+(deftest a-spot-round-a-given-center-lies-within-its-range-not-by-the-body
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:blocks (merge bumpy (patch 2 -1 3 3 63 "dirt") (patch 2 -1 3 3 64 "dirt"))})
+              r (await (child-outcome eng job (assoc small :center {:x 40 :y 65 :z 0} :max-step 0) 200))]
+          (is (nil? (:spot r)) "the flat patch beside the body is 38 blocks from :center, past its :range 6"))))))
+
 (deftest scan-is-one-call-in-slices-of-a-read-budget
   (async done
     (tu/run-async done
