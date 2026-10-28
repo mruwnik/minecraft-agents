@@ -208,6 +208,15 @@
     (is (= {:walks 2 :steers 2 :blocks 12 :seconds 3 :bps 4} (c/walk-report rows))
         "a search's steer and a flight's are left out")))
 
+(deftest the-walk-detour-is-the-steers-blocks-over-the-straight-line-of-each-walk
+  (let [steer (fn [job t0 x0 t1 x1 & more]
+                [(c/scan-line (apply steer-line t0 :started job x0 more)) (c/scan-line (apply steer-line t1 :done job x1 more))])
+        rows (c/walk-steers (concat (steer "j1/walk" 1000 0 2000 10) (steer "j1/walk" 3000 10 4000 5)
+                                    (steer "j2/walk" 5000 0 6000 8)
+                                    (steer "j3/walk" 7000 0 8000 2)))]
+    (is (= {:walks 2 :walked 23 :straight 13 :ratio 1.77 :median 3} (select-keys (c/walk-detour rows) [:walks :walked :straight :ratio :median]))
+        "out 10 and back 5 is 15 blocks over 5, a straight 8 over 8; a walk under 4 blocks straight is left out")))
+
 (defn gap-line [t out & {:keys [width dy sprint] :or {width 2 dy 0 sprint true}}]
   (pr-str {:generation-id "g" :time-ms t :source :job :kind :gap-jump :level :info
            :data {:width width :dy dy :sprint sprint :from [0 64 1] :to [0 64 4] :out out}}))

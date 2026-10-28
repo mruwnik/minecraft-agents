@@ -60,8 +60,8 @@
                :doc "Floor of one block walked in the dark, on top of per-block; the hp the spawned mobs would cost the kit (jobs.lib.cost/dark-factor) comes on top, so a bare body pays a dark block most and an armed one less."}
    ::spawn-chance-per-s {:default 0.005 :spec (a/num-in 0 nil)
                          :doc "Chance a mob spawns and reaches the body each second it stands on a cell where one can spawn (jobs.lib.cost/spawn-chance)."}
-   ::detour-factor {:default 1.5 :spec (a/num-in 1 nil)
-                    :doc "Times the straight line a walk's way is taken to be (detours), for walk-blocks-per-s."}
+   ::detour-factor {:default 1.27 :spec (a/num-in 1 nil)
+                    :doc "Times the straight line a walk's way is taken to be (detours), for walk-blocks-per-s: 30255 blocks of steers over 23766 of straight line in 1235 walks (go-to walk jobs of 4 blocks or more), trial logs to 2026-10-28; a lower bound (steer chords). Recount: tools/event-counts.mjs walk-detour (:ratio)."}
    ::per-frontier-walk {:default 1 :spec (a/num-in 0 nil)
                         :doc "Each walk of a tour to the edge of loaded land that brought the body no nearer its goal, on top of its blocks, in seconds."}
    ::tour-ratio {:default 3 :spec (a/num-in 0 nil)
