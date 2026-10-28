@@ -195,7 +195,7 @@
    ::drop-cost {:default 1 :doc "Scales the cost of a drop (fall seconds and damage; 1 as is, 0 free, 5 dear); false: no drop of 2 or 3 at all. :one-way :closed instead refuses only a drop the body cannot climb back." :spec (a/or-of (a/num-in 0 nil) false?)}
    ::costs {:default false :doc (str "Map of price name to seconds, overriding the planner's price of a move (" (str/join " " (map name (keys planner-names))) "); a price left out keeps the planner's default. false: none.")
             :spec (a/or-of false? (a/valid-by "a map of planner price name to a number of seconds >= 0" #(planner-costs-problem %)))}
-   ::gap-miss-jumps {:default [nil [[0 38] [0 114]] [[0 38] [0 114]] [[4 38] [0 114]]]
+   ::gap-miss-jumps {:default (js->clj base/GAP-MISS-JUMPS)
                      :doc "Gap jumps that fell short of n tried, [fell n], by width in cells (index 1-3; index 0 nil) then run-up ([1 cell, the takeoff cell only; 2 or more]): the planner's chance of a miss is (fell + 1) / (n + 2). Counted in prismarine-physics from every start fraction of the run-up (engine.gap-miss-physics-test); the live :gap-jump events recount it (tools/event-counts.mjs gap-miss)."
                      :spec (a/pred "a vector of nil then three [[fell n] [fell n]] rows" (fn [v] (and (vector? v) (= 4 (count v)) (nil? (first v)) (every? (fn [row] (and (= 2 (count row)) (every? (fn [[f n]] (and (number? f) (number? n) (<= 0 f n) (pos? n))) row))) (rest v)))))}
    ::lethal-air {:default false :doc "true lets a plan drown the body when no other way to air exists (breathe's); false: such a plan is refused (:why :air-lethal)." :spec boolean?}

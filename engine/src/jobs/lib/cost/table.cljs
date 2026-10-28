@@ -231,6 +231,11 @@
                       t (map vector ranked (rest ranked))))
             table kinds)))
 
+(defn ref-gear-basis
+  "basis with the hardness of the block gear is measured digging (:gear :ref-block) read from md."
+  [md basis]
+  (assoc-in basis [:gear :ref-hardness] (.-hardness (aget (.-blocksByName md) (get-in basis [:gear :ref-block])))))
+
 (defn build-table
   "{item name worth} for minecraft-data version with name overrides pinned (overrides: {name override}) and the basis
   (default-basis with the deep-merged :basis). The extra args only key table-for's memo."
@@ -254,7 +259,7 @@
         pinned (into {} (map (fn [[n o]] [n (override-fn o)])) overrides)
         pin (fn [n w] ((get pinned n identity) w))
         ;; nothing yields it, so it cannot be replaced: a precious food is worth what eating it gives a body at the reference health, a tool or armour piece what its uses save
-        gear-basis (assoc-in basis [:gear :ref-hardness] (.-hardness (aget (.-blocksByName md) (get-in basis [:gear :ref-block]))))
+        gear-basis (ref-gear-basis md basis)
         no-source (into {} (map (fn [i] (let [n (.-name i)]
                                           [n (cond (contains? foods/precious n)
                                                 (precious/hp-worth {:health (:unsourced-food-health basis) :absorption 0} n precious/table-heals?)

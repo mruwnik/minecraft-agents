@@ -4,7 +4,6 @@
   (:require [cljs.test :refer [deftest is are]]
             [engine.gap-physics-test :as gp]
             [engine.path.planner.base :as base]
-            [jobs.lib.cost :as cost]
             [engine.stairs-physics-test :as sp]))
 
 (def run-ups "run-up cells before the takeoff, the takeoff cell counted: 1 starts in it" [1 2 3 4])
@@ -30,5 +29,3 @@
   (is (= (mapv #(mapv vec %) (rest (js->clj base/GAP-MISS-JUMPS)))
          (mapv counts [1 2 3]))))
 
-(deftest gap-miss-setting-defaults-to-the-planner-default
-  (is (= (js->clj base/GAP-MISS-JUMPS) (cost/gap-miss-jumps))))

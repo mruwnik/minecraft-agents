@@ -1,6 +1,8 @@
 (ns engine.value-test
   "make-room's item worth (jobs.lib.cost.value/item-value per item) against its :toss-below default."
-  (:require [cljs.test :refer [deftest is are]]
+  (:require ["minecraft-data" :as minecraft-data]
+            [cljs.test :refer [deftest is are]]
+            [engine.game :as game]
             [engine.settings :as settings]
             [jobs.lib.cost.armour :as armour]
             [jobs.lib.cost.gear :as gear]
@@ -61,15 +63,24 @@
     (doseq [item ["elytra" "trident" "netherite_chestplate" "netherite_pickaxe" "netherite_sword" "chainmail_chestplate"]]
       (is (not= junk (worth item)) (str item " is not the 256 s no-source default")))
     (is (> (worth "netherite_chestplate") (worth "netherite_helmet")) "more armour points save more")
+    (is (> (worth "netherite_chestplate") (worth "netherite_boots")) "more armour points save more")
     (is (> (worth "netherite_pickaxe") (worth "diamond_pickaxe")) "the dearer tool is worth more")
     (is (> (worth "stone_sword") (worth "trident")) "a trident hits 9 but every 910 ms: three hits (2.7 s) are slower than a stone sword's four (2.5 s)")))
 
 (deftest gear-use-is-saved-against-the-reference-zombie-fall-and-stone
-  (let [basis (assoc tbl/default-basis :gear (assoc (:gear tbl/default-basis) :ref-hardness 1.5))
+  (let [md (minecraft-data game/default-version)
+        basis (tbl/ref-gear-basis md tbl/default-basis)
+        hardness (get-in basis [:gear :ref-hardness])
+        stone-tier (weapon/tool-tier "stone_pickaxe")
+        saved #(gear/use-saved basis %)
         hp-s (health/walk-hp-seconds)]
-    (is (= (* hp-s (gear/hit-saved "iron_chestplate" 3)) (gear/use-saved basis "iron_chestplate")) "a zombie's 3 hp hit")
-    (is (= (* hp-s (armour/fall-damage {} armour/ref-fall)) (gear/use-saved basis "elytra")) "the fall fall-profile reads")
-    (is (= (- (weapon/kill-seconds "stone_sword" 20) (weapon/kill-seconds "iron_sword" 20)) (gear/use-saved basis "iron_sword")) "a zombie's 20 hp")))
+    (is (pos? hardness) "the reference block's hardness is read from the data")
+    (is (= (* hp-s (gear/hit-saved "iron_chestplate" 3)) (saved "iron_chestplate")) "a zombie's 3 hp hit")
+    (is (= (* hp-s (armour/fall-damage {} armour/ref-fall)) (saved "elytra")) "the fall fall-profile reads")
+    (is (= (- (weapon/kill-seconds "stone_sword" 20) (weapon/kill-seconds "iron_sword" 20)) (saved "iron_sword")) "a zombie's 20 hp")
+    (is (= (- (gear/dig-time (:dig basis) stone-tier hardness) (gear/dig-time (:dig basis) (weapon/tool-tier "iron_pickaxe") hardness))
+           (saved "iron_pickaxe")) "a tool saves the dig time of the reference block over a stone tool")
+    (is (= (saved "netherite_pickaxe") (saved "diamond_pickaxe")) "one use saves the same (one tier): netherite is worth more by its durability")))
 
 (deftest the-item-table-follows-the-settings-the-hp-price-reads
   (let [worth #(ord/item-worth {:name "enchanted_golden_apple" :count 1})
