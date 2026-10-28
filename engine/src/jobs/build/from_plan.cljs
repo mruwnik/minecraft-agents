@@ -266,13 +266,18 @@
                      (loop [left near]
                        (if (seq left)
                          (let [_ (trace! c :place-one! (:pos (first left)))
-                               exit (when (seals? c (:pos (first left))) (or (seal-exit c (:pos (first left))) (exit-of c cells)))]
+                               seals (seals? c (:pos (first left)))
+                               exit (when seals (or (seal-exit c (:pos (first left))) (exit-of c cells)))]
                            (cond
+                             ;; no way out to place it from: the cell would shut the body in, so it is given up
+                             (and seals (not exit))
+                             (do (trace! c :seals-in-no-exit (:pos (first left)))
+                                 (ctx/update-mem! c assoc-in [:given-up (:pos (first left))] :seals-in)
+                                 (recur (rest left)))
                              ;; never placed from inside: the body walks out by the way still open and places it from there
                              exit
                              (do (trace! c :seals-in (:pos (first left)))
-                                 (ctx/update-mem! c #(-> (count-fail % (:pos (first left)) :unreachable (give-up))
-                                                         (assoc :leave exit :leave-range 0)))
+                                 (ctx/update-mem! c assoc :leave exit :leave-range 0 :leave-for (:pos (first left)))
                                  :again)
                              (= :continue (await (place-one! c (first left) (give-up)))) :continue
                              :else (recur (rest left))))

@@ -21,6 +21,7 @@
             [jobs.build.from-plan.book :as fp-book]
             [jobs.build.from-plan.cells :as fp-cells]
             [jobs.build.from-plan.light :as fp-light]
+            [jobs.build.from-plan.walk :as fp-walk]
             [jobs.lib.need :as need]
             [jobs.lib.shelter.sense :as sense]
             [jobs.lib.torch :as torch]
@@ -304,6 +305,39 @@
             (is (empty? (:given-up result)))
             (is (= "stone" (block p [3 64 4])) "no wall dug")
             (is (not (reach-room/enclosed? p :raw)) "placed from outside")))))))
+
+(defn with-seal-fns
+  "Run async f with the fp-cells seals?/seal-exit and the walk exit-of replaced, restored when it ends."
+  [{:keys [seals seal-exit exit-of]} f]
+  (let [old [fp-cells/seals? fp-cells/seal-exit fp-walk/exit-of]]
+    (set! fp-cells/seals? seals)
+    (set! fp-cells/seal-exit seal-exit)
+    (set! fp-walk/exit-of exit-of)
+    (-> (f) (.finally (fn [] (set! fp-cells/seals? (nth old 0)) (set! fp-cells/seal-exit (nth old 1)) (set! fp-walk/exit-of (nth old 2)))))))
+
+(deftest a-cell-that-seals-the-body-in-with-no-way-out-is-given-up-not-placed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (gap-room [planks])
+              result (await (with-seal-fns {:seals (fn [_ cell] (= cell [5 64 4])) :seal-exit (fn [_ _] nil) :exit-of (fn [_ _] nil)}
+                              #(child-outcome eng job {:plan "gap"} 300)))]
+          (is (not= "oak_planks" (block p [5 64 4])))
+          (is (= :seals-in (get (:given-up result) [5 64 4]))))))))
+
+(deftest a-cell-that-needs-three-successful-walk-outs-is-still-placed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (gap-room [planks])
+              n (atom 0)
+              real-exit fp-cells/seal-exit
+              result (await (with-seal-fns {:seals (fn [_ cell] (and (= cell [5 64 4]) (< (swap! n inc) 4)))
+                                            :seal-exit (fn [c cell] (real-exit c cell))
+                                            :exit-of fp-walk/exit-of}
+                              #(child-outcome eng job {:plan "gap"} 300)))]
+          (is (= "oak_planks" (block p [5 64 4])))
+          (is (not (contains? (:given-up result) [5 64 4]))))))))
 
 (deftest a-seal-that-places-nothing-does-not-dig-the-body-out
   (async done

@@ -40,8 +40,9 @@
   (let [[x y z] (:leave (ctx/mem c))
         r (await (child/call-walk* c :leave {:pos {:x x :y y :z z} :range (if (:mouth (ctx/mem c)) 0 (:leave-range (ctx/mem c) 1)) :ways (cond-> #{:walk :clear-seal} (:mouth (ctx/mem c)) (into [:stair :dig-out])) :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (when-not (= :continue r)
-      (ctx/update-mem! c #(cond-> (dissoc % :leave :leave-range)
-                            (and (not= :done (:kind r)) (:stepped-off %)) (assoc-in [:given-up (:stepped-off %)] :unreachable))))
+      (ctx/update-mem! c #(cond-> (dissoc % :leave :leave-range :leave-for)
+                            (and (not= :done (:kind r)) (:stepped-off %)) (assoc-in [:given-up (:stepped-off %)] :unreachable)
+                            (and (not= :done (:kind r)) (:leave-for %)) (plan/count-fail (:leave-for %) :unreachable (give-up)))))
     (if (= :continue r) :continue :again)))
 
 (defn in-hole?
