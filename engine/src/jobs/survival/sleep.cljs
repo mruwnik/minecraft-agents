@@ -8,6 +8,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
+            [jobs.lib.cost :as cost]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.shelter.clock :as sh-clock]
@@ -38,7 +39,7 @@
   Memory: reads :bed, :bed-unreachable, :spawn-set and :spawn-reset. Writes :slept (cap 10, seven in-game days),
   :spawn-bed {:pos bed} (cap 1, forever),
   :bed (see above) and :bed-unreachable {:pos bed} after an unreachable bed (cap 5, ten minutes).
-  Quote: time by the straight distance to the bed at :speed blocks a second; done 1 sleep.")
+  Quote: time by the straight distance to the bed at cost/walk-speed; done 1 sleep.")
 
 (a/defargs args
   {:open-bed {:doc "false: a bed that is not shut in a closed, roofed room is not lain in (the job ends condition-failed :bed-open once the body is beside it)"
@@ -67,8 +68,7 @@
 (a/defargs settings
   {::pause-s {:default 5 :doc "Seconds one hold pauses (jobs.time.noop) before the call looks again." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 300 :doc "Seconds the walk to the bed and the sleep may take." :spec (a/num-in 0 nil)}
-   ::wall-time-s {:default 600 :doc "Seconds a sleep may last from its start, the holds for an occupied bed or the night in a shelter included." :spec (a/num-in 0 nil)}
-   ::speed {:default 4.3 :doc "Blocks a second the walk to the bed covers, for the quote." :spec (a/num-in 0 nil)}})
+   ::wall-time-s {:default 600 :doc "Seconds a sleep may last from its start, the holds for an occupied bed or the night in a shelter included." :spec (a/num-in 0 nil)}})
 
 (defn bed-block? [c bed]
   (.endsWith (or (u/seen-name (:primitives c) bed) "") "_bed"))
@@ -127,7 +127,7 @@
 
 (defn quote-of [c]
   (let [bed (bed-of c)
-        s (if bed (/ (u/dist (u/self-pos c) bed) (settings/get settings ::speed)) 0)]
+        s (if bed (/ (u/dist (u/self-pos c) bed) cost/walk-speed) 0)]
     {:uses {:job-time [0 s (max (* 3 s) 10)]} :done [0 1 1]}))
 
 (defn give-up-unreachable! [c bed walk]

@@ -51,8 +51,7 @@
 (a/defargs settings
   {::job-time-s {:default 900 :doc "Seconds a bed-down may take: the walk, the bed put down or fetched (an obtain may take its own 600 without a change), the sleep." :spec (a/num-in 0 nil)}
    ::wall-time-s {:default 1800 :doc "Seconds a bed-down may last from its start, the jobs that run between its rounds included." :spec (a/num-in 0 nil)}
-   ::bed-tries {:default 3 :doc "Placements of the carried bed the server may refuse before :bed-place-failed; a foot cell refused twice is left for another row." :spec (a/int-in 1 nil)}
-   ::walk-speed {:default 4.3 :doc "Blocks a second the walk to the bed covers, for the quote." :spec (a/num-in 0 nil)}})
+   ::bed-tries {:default 3 :doc "Placements of the carried bed the server may refuse before :bed-place-failed; a foot cell refused twice is left for another row." :spec (a/int-in 1 nil)}})
 
 (defn bed-permit
   "Whether the body may use a bed (sh-beds/bed-permit over the job's world)."
@@ -244,7 +243,7 @@
 
 (defn quote-of [c]
   (let [bed (bed-to-use c)
-        s (if bed (/ (u/dist (u/self-pos c) bed) (settings/get settings ::walk-speed)) 0)]
+        s (if bed (/ (u/dist (u/self-pos c) bed) cost/walk-speed) 0)]
     {:uses {:job-time [0 s (max (* 3 s) 10)]} :done [0 1 1]}))
 
 (defn ^:async sleep!

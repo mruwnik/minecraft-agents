@@ -4,6 +4,7 @@
   (:require [engine.args :as a]
             [engine.memory :as mem]
             [engine.settings :as settings]
+            [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.util :as u]
@@ -19,8 +20,8 @@
                   :doc "Blocks within which a fresh :bed-open entry makes a roofed body's room count as breached when it is not shut in."}
    ::door-failed-ms {:default 600000 :spec (a/int-in 0 nil)
                      :doc "How long (ms) a room door the night could not shut is left alone from the cell it was tried at."}
-   ::home-due {:default {:margin-s 60 :speed 4.3 :slack 1.4 :arrive 4} :spec (a/map-of keyword? number?)
-               :doc "When to head home before night, read by dusk-home, replant-owed and plant-sapling: seconds of margin, walking speed (blocks a second), slack factor on the straight line, and blocks within which the body counts as home."}
+   ::home-due {:default {:margin-s 60 :slack 1.4 :arrive 4} :spec (a/map-of keyword? number?)
+               :doc "When to head home before night, read by dusk-home, replant-owed and plant-sapling: seconds of margin, slack factor on the straight line, and blocks within which the body counts as home."}
    ::shelter-here-s {:default 12 :spec (a/num-in 0 nil)
                      :doc "Seconds a body takes to shelter where it stands (dig in, wall in): staying put instead of a walk to bed or home is exposed this long at most, and costs this long. Median of 40 completed shut-in and dig-in jobs on the trial bodies (shut-in 11.9 s of 31, dig-in 12.9 s of 9)."}})
 
@@ -167,10 +168,10 @@
 (def home-target sh-beds/home-target)
 
 (defn home-walk-s
-  "Seconds the walk from pos to the home-target is taken to last (::home-due: :slack times the straight line at :speed); 0 with none."
+  "Seconds the walk from pos to the home-target is taken to last (::home-due: :slack times the straight line at cost/walk-speed); 0 with none."
   [view pos]
-  (let [{:keys [speed slack]} (settings/get settings ::home-due)]
-    (if-let [home (home-target view)] (/ (* slack (u/dist pos home)) speed) 0)))
+  (let [{:keys [slack]} (settings/get settings ::home-due)]
+    (if-let [home (home-target view)] (/ (* slack (u/dist pos home)) cost/walk-speed) 0)))
 
 (defn home-due-at?
   "Whether a body standing at pos would be due home before night: its home-target within sh-clock/home-limit and farther

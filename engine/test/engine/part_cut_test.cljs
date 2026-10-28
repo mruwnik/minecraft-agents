@@ -198,7 +198,7 @@
         at (fn [] (ro/replant-owed (:p (lt/setup {:blocks (fm/ground [[6 0]]) :inventory [sapling] :time 11800}))
                                        (view [debt [:home {:pos {:x 30 :y 64 :z 0}}]]) {} (ew/of-data {} {} []) nil))]
     (is (false? (at)) "10 s of day left, inside the default margin: due home")
-    (settings/with-settings {:jobs.lib.shelter/home-due {:margin-s 0 :speed 4.3 :slack 0 :arrive 4}}
+    (settings/with-settings {:jobs.lib.shelter/home-due {:margin-s 0 :slack 0 :arrive 4}}
       #(is (true? (at)) "a retuned timing leaves time to plant"))))
 
 (deftest plant-sapling-notes-a-failed-debt-cell-so-the-trigger-stays-quiet

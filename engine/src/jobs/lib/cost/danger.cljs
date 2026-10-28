@@ -28,7 +28,6 @@
 (a/defargs settings
   {::exposure-s {:default 3 :doc "Seconds a body is exposed to a mob on a route." :spec (a/int-in 0 nil)}
    ::sprint-speed {:default 5.6 :doc "Blocks a second a sprinting body covers (reach-first?)." :spec (a/num-in 0.1 nil)}
-   ::walk-speed {:default 4.3 :doc "Blocks a second a walking body covers, one too hungry to sprint (reach-first?)." :spec (a/num-in 0.1 nil)}
    ::flee-factor {:default 4 :doc "Danger price: a known mob the body would flee costs this times its hp a second." :spec (a/num-in 0 nil)}
    ::fight-factor {:default 0.1 :doc "Danger price: a known mob the body would fight costs this times its hp a second." :spec (a/num-in 0 nil)}
    ::max-rate {:default 4 :doc "Danger price: hp a second one known danger costs at most; above 4 it also raises the total of all dangers a second (the planner's dangerCap)." :spec a/pos-num?}
@@ -173,9 +172,9 @@
 ;; ---------------------------------------------------------------- the race to a refuge
 
 (defn body-speed
-  "Blocks a second a body with food food covers running: ::sprint-speed, ::walk-speed at ::sprint-food or under."
+  "Blocks a second a body with food food covers running: ::sprint-speed, fight/walk-speed at ::sprint-food or under."
   [food]
-  (settings/get settings (if (> food (settings/get settings ::sprint-food)) ::sprint-speed ::walk-speed)))
+  (if (> food (settings/get settings ::sprint-food)) (settings/get settings ::sprint-speed) fight/walk-speed))
 
 (defn flee-walk-speed
   "Blocks a second a flight's steps by a body with food food cover: ::flee-walk-speed, times body-speed's share of

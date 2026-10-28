@@ -116,5 +116,5 @@
 
 (deftest the-home-due-setting-retunes-the-trigger
   (is (true? (holds? 11000 [[:home 150 0]])))
-  (settings/with-settings {:jobs.lib.shelter/home-due {:margin-s 0 :speed 4.3 :slack 0 :arrive 4}}
+  (settings/with-settings {:jobs.lib.shelter/home-due {:margin-s 0 :slack 0 :arrive 4}}
     #(is (false? (holds? 11000 [[:home 150 0]])))))

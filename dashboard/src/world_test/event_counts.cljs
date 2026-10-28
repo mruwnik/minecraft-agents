@@ -26,7 +26,8 @@
   flee-pace: the flee steps (retreat.step-speed, slot :step) of flights of two steps or more: blocks over the steps' own seconds, and the
   seconds stood between two steps while still in flight (a look, a re-decide, a replan, a respond delay; a gap in which another
   answer, action or child ran is left out) (cost.danger/::flee-walk-speed, ::flee-stop-s).
-  Pure parts: scan-line, exchange, starts, starts-by-mob, notices, groups, vein-seen, flee-steps, pace-report."
+  walk-pace: the steers of go-to's walks (a job id ending /walk) outside a flight: blocks over the steers' own seconds (cost/walk-speed).
+  Pure parts: scan-line, exchange, starts, starts-by-mob, notices, groups, vein-seen, flee-steps, pace-report, walk-steers, walk-report."
   (:require ["fs" :as fs]
             ["path" :as path]
             ["zlib" :as zlib]
@@ -140,7 +141,12 @@
 
         (or (and (str/includes? line ":source :action") (str/includes? line ":kind :done")) (re-find stamped-re line))
         (when-let [[_ x y z] (last (re-seq pos-re line))]
-          {:k :pos :t t :gen gen :x (js/parseFloat x) :y (js/parseFloat y) :z (js/parseFloat z)})
+          (cond-> {:k :pos :t t :gen gen :x (js/parseFloat x) :y (js/parseFloat y) :z (js/parseFloat z)}
+            (str/includes? line ":name \"steer\"")
+            (assoc :steer {:id (second (re-find #":action-id \"([^\"]*)\"" line))
+                           :job (second (re-find #":job-id \"([^\"]*)\"" line))
+                           :done? (str/includes? line ":status \"done\"")
+                           :flight? (str/includes? line ":reflex-id :hostile-near")})))
 
         :else
         (when-let [[_ x y z] (re-find pos-re line)]
@@ -265,6 +271,30 @@
 
 (defn r2 [x] (/ (js/Math.round (* 100 x)) 100))
 
+(defn walk-steers
+  "Rows [{:id [gen t] :job :t :s :blocks}] of the steers of walks (a job id ending /walk, go-to's walk child) in records (sorted by
+  :t) that ran to their end outside a hostile-near answer: :s the steer's seconds, :blocks the straight line from where it started to
+  where it ended."
+  [records]
+  (:rows
+   (reduce (fn [st {:keys [gen t steer] :as r}]
+             (cond
+               (not steer) st
+               (not (:done? steer)) (assoc-in st [:open (:id steer)] r)
+               :else (let [from (get-in st [:open (:id steer)])]
+                       (cond-> (update st :open dissoc (:id steer))
+                         (and from (not (:flight? steer)) (re-find #"(?:^|/)walk$" (str (:job steer))))
+                         (update :rows conj {:id [gen (:t from)] :job (:job steer) :t t :s (/ (- t (:t from)) 1000) :blocks (dist from r)})))))
+           {:open {} :rows []} records)))
+
+(defn walk-report
+  "The pace of the walks among rows (walk-steers): blocks over the steers' own seconds (:bps), of :walks jobs and :steers steers."
+  [rows]
+  (let [blocks (reduce + 0 (map :blocks rows)) secs (reduce + 0 (map :s rows))]
+    {:walks (count (distinct (map (juxt (comp first :id) :job) rows))) :steers (count rows)
+     :blocks (r2 blocks) :seconds (r2 secs) :bps (when (pos? secs) (r2 (/ blocks secs)))}))
+
+
 (defn pace-report
   "The pace of the flights of two steps or more among rows (flee-steps): blocks over the steps' own seconds (:bps), and the
   seconds stood between two steps of a flight (:stop-s: from one step's end to the next one's start, over the gaps a
@@ -321,7 +351,7 @@
                     shrunk)}))
 
 ;; The durable counts: the rows of each prior by run id, so the counts only grow while the raw logs rotate away.
-(def empty-counts {:exchange {} :starts {} :notices {} :drowned-exposure {} :drowned-meets {} :flight-steps {} :resight {} :walls {} :pen-escapes {}})
+(def empty-counts {:exchange {} :starts {} :notices {} :drowned-exposure {} :drowned-meets {} :flight-steps {} :walk-steers {} :resight {} :walls {} :pen-escapes {}})
 
 (defn better-exchange "Of two rows of one fight, the one that saw more swings (a rotation may have cut the older read short), then the older." [a b]
   (if (> (:swings b) (:swings a)) b a))
@@ -497,7 +527,7 @@
        (sort-by :t)
        vec))
 
-(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | way-on | spot-returns | field-passes | arrow-shots | caught-flights | vein-seen | water-lags | surface-heights | resight | wall-sides [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N] [--difficulty D]
+(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | walk-pace | way-on | spot-returns | field-passes | arrow-shots | caught-flights | vein-seen | water-lags | surface-heights | resight | wall-sides [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N] [--difficulty D]
   every command first folds the logs into the counts file (default worlds/test/priors-counts.edn), then reports from the file; --since-ms keeps the rows of fights started after it.")
 
 (defn- parse-args [argv]
@@ -524,7 +554,8 @@
         counts (reduce (fn [c [b records]]
                          (cond-> (fold c (exchange records) (starts records sprint) (notices records))
                            (not (probe? b)) (-> (drowned/fold (drowned/exposure at records) (drowned/meets at records))
-                                                (update :flight-steps #(reduce (fn [m r] (assoc m (:id r) r)) % (flee-steps records))))))
+                                                (update :flight-steps #(reduce (fn [m r] (assoc m (:id r) r)) % (flee-steps records)))
+                                                (update :walk-steers #(reduce (fn [m r] (assoc m (:id r) r)) % (walk-steers records))))))
                        (load-counts counts-file) per-agent)]
     (save-counts! counts-file counts)
     counts))
@@ -544,7 +575,7 @@
   (let [{[cmd] :pos :keys [agents counts since-ms sprint stride difficulty] :or {since-ms 0 sprint 5.6 stride 1 difficulty 1}} (parse-args (vec (array-seq argv)))
         repo (or js/process.env.WORLD_TEST_REPO ".")
         agents (or agents (path/join repo "worlds" "test" "agents"))
-        folded (when (#{"fold" "creeper-exchange" "flight-starts" "notice-rate" "drowned-meets" "flee-pace"} cmd)
+        folded (when (#{"fold" "creeper-exchange" "flight-starts" "notice-rate" "drowned-meets" "flee-pace" "walk-pace"} cmd)
                  (fold-logs! agents (or counts (path/join repo "worlds" "test" "priors-counts.edn")) sprint
                              (cell-reader open-chunks (path/join agents ".." "chunks"))))
         since (fn [rows] (filter #(>= (:t %) since-ms) (vals rows)))]
@@ -602,5 +633,6 @@
                   (println (pr-str (assoc (way-prior/report (mapcat :places per) (reduce + (map :evicted per))) :since-ms since-ms)))
                   0)
        "flee-pace" (do (println (pr-str (assoc (pace-report (since (:flight-steps folded))) :since-ms since-ms))) 0)
+       "walk-pace" (do (println (pr-str (assoc (walk-report (since (:walk-steers folded))) :since-ms since-ms))) 0)
        "notice-rate" (do (println (pr-str (assoc (notice-report (since (:notices folded))) :since-ms since-ms))) 0)
        (do (js/console.error usage) 2)))))

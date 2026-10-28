@@ -8,7 +8,7 @@
 
 (def default-reserve "Health a fight must leave: the planner's stance." 4)
 
-(def walk-speed "Blocks a second a body closes on a mob it walks up to." 4)
+(def walk-speed "Blocks a second a body walks, every quote of a walk: 32987 blocks in 10245 s of 7101 steers of 1682 walks outside a flight (go-to walk steers), trial logs to 2026-10-28. Recount: tools/event-counts.mjs walk-pace (:bps)." 3.2)
 
 (a/defargs settings
   {::fist-gap-ms {:default 1300 :doc "Milliseconds between the hits a body with no sword or axe lands: the mob is knocked back and hops, so most of the time goes on walking up to it again." :spec (a/int-in 1 nil)}

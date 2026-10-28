@@ -24,7 +24,7 @@
   With :commute? (the :dusk-home trigger's) a body in the ground (jobs.lib.shelter/in-ground?: its work goes on through the
   night) whose walk there and back, by go-to's quote, costs more than sheltering where it stands (jobs.lib.cost/commute-s)
   stays: nothing-possible {:reason :shelter-cheaper}, :next the night job (the :night trigger's). Other endings carry :next too (jobs.lib.next-call): what a failed walk names, then the call again.
-  Quote: time by the straight distance at :speed blocks a second; done 1 visit.")
+  Quote: time by the straight distance at cost/walk-speed; done 1 visit.")
 
 (a/defargs args
   {:commute? {:doc "price the walk there and back against sheltering where the body stands, when it is in the ground" :spec boolean? :default false}
@@ -33,8 +33,7 @@
 (defn place [c] (sh/home-target (ctx/view c)))
 
 (a/defargs settings
-  {::job-time-s {:default 300 :doc "Seconds the walk home may take." :spec (a/num-in 0 nil)}
-   ::speed {:default 4.3 :doc "Blocks a second the walk home covers, for the quote." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 300 :doc "Seconds the walk home may take." :spec (a/num-in 0 nil)}})
 
 (def arrive-range "How near the place counts as home." 2)
 
@@ -70,7 +69,7 @@
 
 (defn quote-of [c]
   (let [pos (place c)
-        s (if pos (/ (u/dist (u/self-pos c) pos) (settings/get settings ::speed)) 0)]
+        s (if pos (/ (u/dist (u/self-pos c) pos) cost/walk-speed) 0)]
     {:uses {:job-time [0 s (max (* 3 s) 10)]} :done [0 1 1]}))
 
 (defn ^:async walk! [c pos]

@@ -587,5 +587,5 @@
 
 
 (deftest a-walk-toward-a-near-hostile-is-a-short-leg-so-a-mob-that-came-is-swung-at
-  (doseq [[dist expected] [[1 1] [3 1] [7 2] [11 3] [100 10]]]
+  (doseq [[dist expected] [[1 1] [3 1] [7 2.25] [11 3.5] [100 10]]]
     (is (= expected (attack/chase-leg-s dist)))))

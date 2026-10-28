@@ -234,7 +234,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (await (run-job! (setup {:self {:food 2} :inventory [{:name "bread" :count 6}]
+        (let [{:keys [p]} (await (run-job! (setup {:self {:food 7} :inventory [{:name "bread" :count 6}]
                                                    :entities [(zombie 7 5 {:chase {:speed 0.7}})]})
                                            'test.flight {}))
               names (mapv #(.-name %) (.-calls (.-world p)))

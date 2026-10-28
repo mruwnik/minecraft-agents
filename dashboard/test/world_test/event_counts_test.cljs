@@ -191,3 +191,18 @@
 (deftest a-ranged-notice-text-is-a-fixture-sighting
   (is (= {:k :exposed :t 5 :gen "g" :mob "skeleton" :label "skeleton lit 9" :window-ms 20000}
          (c/scan-line "{:generation-id \"g\", :source :job, :kind :job.notify, :context {:job-id \"j1\", :reflex-id :hostile-near}, :time-ms 5, :message \"ranged-notice skeleton lit 9 20 | health 20\"}"))))
+
+(defn steer-line [t kind job x & {:keys [flight?] :or {flight? false}}]
+  (pr-str {:generation-id "g" :time-ms t :source :action :kind kind
+           :context (cond-> {:job-id job :action-id (str job "-a")} flight? (assoc :reflex-id :hostile-near))
+           :data (cond-> {:name "steer" :pos {:x x :y 64 :z 0}} (= :done kind) (assoc :status "done"))}))
+
+(deftest the-walk-pace-is-blocks-over-the-seconds-of-steers-of-walks-outside-a-flight
+  (let [steer (fn [job t0 x0 t1 x1 & more]
+                [(c/scan-line (apply steer-line t0 :started job x0 more)) (c/scan-line (apply steer-line t1 :done job x1 more))])
+        rows (c/walk-steers (concat (steer "j1/walk" 1000 0 3000 8)
+                                    (steer "j1/collect/search" 4000 0 5000 9)
+                                    (steer "j2/walk" 6000 0 7000 9 :flight? true)
+                                    (steer "j3/c0/walk" 8000 0 9000 4)))]
+    (is (= {:walks 2 :steers 2 :blocks 12 :seconds 3 :bps 4} (c/walk-report rows))
+        "a search's steer and a flight's are left out")))
