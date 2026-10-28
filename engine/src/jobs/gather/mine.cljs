@@ -235,7 +235,7 @@
         mended (or mended 0)
         data (cond-> (merge (dissoc dug :text) {:got n :reason reason :mended mended})
                (and tool-why (= :no-tool reason)) (assoc :why tool-why)
-               (pos? (end/cut-cells cut)) (assoc :cut cut))
+               (pos? (u/cut-cells cut)) (assoc :cut cut))
         text (str (dig-text (or (:text dug) (str "dig-for got " n " of " (owed c) ": " (name reason))))
                   (when (pos? mended) (str "; mended " mended)))
         because (if (and tool-ending (= :no-tool reason)) tool-ending dig-ending)

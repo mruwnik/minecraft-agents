@@ -89,7 +89,6 @@
                                        (still-lying c (mapv (fn [[pos n]] {:pos pos :count n}) (:left (ctx/mem c)))))))
 
 (defn add-cut "A mine's :cut {:down :level :back} with another's added." [cut more] (merge-with + cut more))
-(defn cut-cells "The cells a :cut dug." [{:keys [down level]}] (+ (or down 0) (or level 0)))
 (defn cut-of
   "The :cut of a child dig-for run's ending r (a branch or side cut) with the walk back down its tunnel to where it
   started."
@@ -112,7 +111,7 @@
         why (cond-> {} dig-reason (assoc :dig-reason dig-reason) (or (= :no-stone-found reason) (pos? (:steps descent 0))) (assoc :descent descent) (= :wet reason) (assoc :wet-skipped (or wet-skipped 0)) suggest (assoc :shaft-suggest suggest) (seq unreached) (assoc :unreached unreached) (seq skipped) (assoc :skipped skipped) (seq (:holes-open m)) (assoc :holes-open (:holes-open m))
               (pos? (:steps tunnel 0)) (assoc :tunnel (-> tunnel (select-keys [:origin :heading :steps :stop :end]) (update :origin access/cell)))
               (:start-floor-dug m) (assoc :start-floor-dug true)
-              (pos? (cut-cells (:cut m))) (assoc :cut (:cut m))
+              (pos? (u/cut-cells (:cut m))) (assoc :cut (:cut m))
               (seq (:legs m)) (assoc :legs (:legs m))
               (seq left) (assoc :left (mapv (fn [[pos n]] {:pos pos :count n}) (:left (ctx/mem c))))
               (seq (:lost m)) (assoc :lost (:lost m))

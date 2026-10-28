@@ -225,3 +225,5 @@
     (do (ctx/emit! c kind :warn {:tries (max-failures) :text text})
         :done)))
 
+
+(defn cut-cells "The cells a mine's :cut {:down :level} dug." [{:keys [down level]}] (+ (or down 0) (or level 0)))

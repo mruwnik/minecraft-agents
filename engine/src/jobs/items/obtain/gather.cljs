@@ -7,7 +7,6 @@
             [jobs.items.obtain.base :refer [explore-opts own-worth search-names search-scan-radius search-worth site-radius tried! ways-of]]
             [jobs.items.obtain.need :refer [climbs-first? gather-viable? pickaxe-first? tree? light-settling? tools-wanted torch-due trees-unreachable?]]
             [jobs.items.obtain.plan :refer [cut-s gather-plan search-way]]
-            [jobs.gather.mine.end :refer [cut-cells]]
             [jobs.items.obtain.seen :refer [animal-cell animals-of approach-bound gather-carried gather-slot hunt-worth lead-args seen-of shears-source with-avoid with-block with-count]]
             [jobs.lib.breath :as breath]
             [jobs.lib.cost :as cost]
@@ -317,7 +316,7 @@
   look round is the next round's search (info obtain.strip-look). :again, else false."
   [c need cut]
   (let [{:keys [blocks spent]} (get-in (ctx/mem c) [:gather :dug (:key need)])
-        n (cut-cells cut)
+        n (u/cut-cells cut)
         total (+ n (or blocks 0))
         _ (ctx/update-mem! c #(-> % (assoc-in [:gather :dug (:key need)] {:blocks total :spent (+ (cut-s cut) (or spent 0))}) (update :gather dissoc :climb-heading)))
         way (way-left c need)
@@ -430,8 +429,8 @@
                         (light-settling? c (:cause e)) :again
                         (and (#{:flooded :wet :exposed :hazard} (contract/cause-key e)) at)
                         (do (ctx/update-mem! c update :cut-off (fnil conj #{}) at) :again)
-                        (and (:tunnel? need) (not at) (pos? (cut-cells (:cut res))) (strip-on! c need (:cut res))) :again
-                        :else (do (when-not (and (:tunnel? need) (not at) (pos? (cut-cells (:cut res)))) ; else the barren verdict stands
+                        (and (:tunnel? need) (not at) (pos? (u/cut-cells (:cut res))) (strip-on! c need (:cut res))) :again
+                        :else (do (when-not (and (:tunnel? need) (not at) (pos? (u/cut-cells (:cut res)))) ; else the barren verdict stands
                                     (ctx/update-mem! c update :gather dissoc :dug))
                                   (gather-failed! c names need (if (= :done (:kind e)) :nothing-gathered (contract/cause-key e)) e))))))))))))
 
