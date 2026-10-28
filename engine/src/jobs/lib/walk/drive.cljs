@@ -161,7 +161,7 @@
   finished ends the call with its :searching no-walk (the old plan is never walked on past the danger);
   a :health stop (the damage still planned is over what the body may spend now) plans again and walks the new plan, or
   ends the call with its no-walk when that plan is not walkable (the caller decides: go-to heals or goes over its budget);
-  :announce! (fn [:replan data]) per replan, data {:why :ms :kept :replans :at :learned :text} (learned: the cells a learned replan found missing or solid).
+  :announce! (fn [:replan data]) per replan, data {:why :ms :kept :replans :at :learned :cells :text} (cells: the first 6 the look-ahead saw differ, for a :changed that learned nothing) (learned: the cells a learned replan found missing or solid).
   {:done :plan :ms :walked :replans :damage}: done the last walk's done map, or the no-walk result of a replan that has no way; plan
   the plan in force at the end; ms the time in walks; walked the blocks of plan walked; damage the hp the steps walked planned."
   [c plan {:keys [plan-fn walk-fn to policy announce! dangers] :or {policy (wworld/body-policy c) announce! (fn [_ _])}}]
@@ -189,7 +189,7 @@
             finish (fn [d pl w] {:done d :plan pl :ms ms :walked w :replans n :damage damage'})
             tell! (fn [why plan-ms kept]
                     (announce! :replan {:why why :ms (/ (js/Math.round (* 10 plan-ms)) 10) :kept kept :replans (inc n)
-                                        :at (:at done) :learned (when (:learned done) (:cells done))
+                                        :at (:at done) :learned (when (:learned done) (:cells done)) :cells (when (and (= why :changed) (not (:learned done))) (vec (take 6 (:cells done))))
                                         :text (str "re-plan " (inc n) " (" (name why) (when kept ", kept the plan") ")")}))]
         (cond
           (and (= :replan (:status done)) (= :mob (:why done)))
