@@ -369,7 +369,8 @@
   (route-ways/next-way), walk on after its last, else walk again from a fresh count, or escalate again at once after an
   approach, after a whole stair that left the body shut in under the goal (climb-on?), or after any stair that left it
   under ground on its climb away from a dive (dive-climb-on?). Its holes are put back once a walk round gets on past
-  it (restore-next!). An approach to a cell more than a block nearer the goal than it set out from does not count toward
+  it (restore-next!); a break-out of the own pen's (:mend-pen) at once too, done or stopped in a dead end (what
+  restore/skip-why spares then, the cells the body stands in or needs, waits for that walk). An approach to a cell more than a block nearer the goal than it set out from does not count toward
   max-escalations (its look may show a wall to dig or not); one no nearer does, so a chain of them ends; nor is a cell
   walked to twice (memory :approached)."
   [c pos {:keys [step]} done?]
@@ -387,6 +388,8 @@
                                     (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
                           again? (assoc :escalate-now true)
                           nxt (assoc :escalation nxt :escalation-from feet :planned (planned-cells (:primitives c) nxt feet) :holes-before (count (own-holes c)))
+                          ;; a cut of the own pen opens it to the animals: put back at once, the walk on not waited for
+                          (:mend-pen e) (assoc :restore-now true)
                           (not (#{:approach :fill-gap} step)) (assoc :restore-pending true)))
     (when nxt
       (ctx/emit! c :go-to.escalated :info {:step (:step nxt) :why :climb-on :at feet :text (str "climbing on: " (name (:step nxt)))})))
