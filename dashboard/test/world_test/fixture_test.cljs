@@ -274,6 +274,7 @@
     (is (not (solid? (ps carved [5.5 0 16.5] "[[:summon \"skeleton\" [19.5 0 16.5]]]"))))
     (is (solid? (ps carved [5.5 0 16.5] "[[:job (jobs.movement.go-to {:pos #at [28 0 18]})]]")) "a go-to goal in rock")
     (is (not (solid? (ps carved [5.5 0 16.5] "[[:job (jobs.movement.go-to {:pos #at [28 0 16]})]]"))))
+    (is (not (solid? (ps carved [5.5 0 16.5] "[[:job (jobs.movement.go-to {:pos #at [28 0 18] :range 3})]]"))) "a block worked from within range")
     (is (not (solid? (ps [[:fill [0 0 0] [30 4 30] "stone" :hollow]] [5.5 1 5.5] "[]"))) "a hollow fill is air inside")))
 
 (deftest a-single-case-file-is-one-case

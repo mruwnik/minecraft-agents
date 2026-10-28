@@ -405,13 +405,14 @@
 
 (defn solid-placements
   "The :summon positions, :body :at feet and head cells and go-to :pos #at positions of the case that end inside a solid :blocks cell, as [what position].
-  A go-to with :unknown true may aim into ground by design, and an :rcon setblock / fill in :act changes the blocks after the check: neither is judged."
+  A go-to with :unknown true may aim into ground by design, so may one with an explicit :range of 1 or more (a block
+  worked from within range), and an :rcon setblock / fill in :act changes the blocks after the check: none is judged."
   [c]
   (let [rcon-edits? (some #(and (string? %) (re-find #"setblock|fill" %)) (tree-seq coll? seq (:act c)))
         cell #(mapv (fn [v] (js/Math.floor v)) %)
         [bx by bz] (get-in c [:body :at])
         go-to-pos (->> (tree-seq coll? seq (:act c))
-                       (filter #(and (seq? %) (= 'jobs.movement.go-to (first %)) (not (:unknown (second %)))))
+                       (filter #(and (seq? %) (= 'jobs.movement.go-to (first %)) (not (:unknown (second %))) (< (:range (second %) 0) 1)))
                        (keep #(let [p (:pos (second %))] (when (map? p) (::rel p)))))
         summons (->> (tree-seq coll? seq (:act c))
                      (filter #(and (vector? %) (= :summon (first %)) (coords? (nth % 2 nil))))
