@@ -458,8 +458,9 @@
   the feet at from.py (when given, within 1/16); failing that, a cell the box overlaps whose stand is up to half a block
   under the feet (the low half of a stairs block: the body steps down off it). A body whose feet are above the floored
   cell's floor (a stair, whose stand the search puts in the cell above it) otherwise starts from the cell above when that stands;
-  one whose feet are up to 1/16 over the stand of the cell below (a short floor) starts from the cell below. Unchanged when the floored
-  cell stands or no cell does.
+  one whose feet are up to 1/16 over the stand of the cell below (a short floor) starts from the cell below; one whose feet
+  are above the floored cell's floor with nothing else to stand on (resting on a cocoa pod, whose cell has no stand) starts
+  from the nearest side cell that stands, which the body steps off to. Unchanged when the floored cell stands or no cell does.
   search: a search of query, initialised."
   [^Search search ^js query]
   (let [^js from (.-from query)
@@ -481,13 +482,20 @@
         ;; feet a hair above a short floor (farmland, a path: 15/16) that a neighbouring full block level with the cell's
         ;; floor held up, so the floored cell has nothing under it but the cell below stands
         below? (and (some? py) (let [h (.nodeH search fx (dec fy) fz)]
-                                 (and (>= h 0) (<= 0 (- py (+ (dec fy) (/ h WHOLE))) (/ 1 WHOLE)))))]
+                                 (and (>= h 0) (<= 0 (- py (+ (dec fy) (/ h WHOLE))) (/ 1 WHOLE)))))
+        ;; resting on a partial block (cocoa pod) in the floored cell: no cell under the box stands, so the body steps off
+        ;; to the nearest side cell level with the cell's floor
+        beside (when (and (some? px) (some? pz) (some? py) (> py (+ fy (/ 1 WHOLE))))
+                 (first (filter (fn [[x z]] (>= (.nodeH search x fy z) 0))
+                                (sort-by (fn [[x z]] (+ (js/Math.abs (- (+ x 0.5) px)) (js/Math.abs (- (+ z 0.5) pz))))
+                                         [[(dec fx) fz] [(inc fx) fz] [fx (dec fz)] [fx (inc fz)]]))))]
     (cond
       (>= (.-start-h search) 0) query
       (some? edge) (js/Object.assign #js {} query #js {:from (js/Object.assign #js {} from #js {:x (first edge) :z (second edge)})})
       (some? step-off) (js/Object.assign #js {} query #js {:from (js/Object.assign #js {} from #js {:x (first step-off) :z (second step-off)})})
       above? (js/Object.assign #js {} query #js {:from (js/Object.assign #js {} from #js {:y (inc fy)})})
       below? (js/Object.assign #js {} query #js {:from (js/Object.assign #js {} from #js {:y (dec fy)})})
+      (some? beside) (js/Object.assign #js {} query #js {:from (js/Object.assign #js {} from #js {:x (first beside) :z (second beside)})})
       :else query)))
 
 (defn- with-start-air

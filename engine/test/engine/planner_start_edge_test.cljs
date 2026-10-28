@@ -100,3 +100,12 @@
   ;; feet 1/16 over the 15/16-tall floor (held up by a full block beside it, as at a field edge)
   (is (= ["found" nil [2 63 4]]
          (status+first (run (world {:fill [[2 63 4 2 63 4 "farmland"]]}) (near 8 64 8) {} {:x 2 :y 64 :z 4 :px 2.5 :py 64 :pz 4.5})))))
+
+(deftest start-on-a-cocoa-pod
+  (are [fill props px pz] (= ["found" nil]
+                             ((juxt :status :reason)
+                              (run (world {:fill (into [[2 64 3 2 65 3 "jungle_log"]] fill)
+                                           :blocks [[2 64 4 "cocoa" props]]})
+                                   (near 8 64 8) {} {:x 2 :y 64 :z 4 :px px :py 64.75 :pz pz})))
+    [] {:age "2" :facing "north"} 2.6 4.4
+    [hole] {:age "0" :facing "north"} 2.9 4.9))

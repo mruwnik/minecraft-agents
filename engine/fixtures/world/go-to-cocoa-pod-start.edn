@@ -1,0 +1,14 @@
+;; Card d40fef81: a body resting on a cocoa pod over a hole (the pod's cell has no stand) plans from the side cell and walks off, instead of start-not-standable for ever.
+;; Ground = stone up to y 0 (body level 1); a hole at [10 -2..0 10] under a cocoa on a jungle log.
+{:defaults {:tags [:movement :planner]
+            :plot {:height 8}
+            :blocks [[:fill [0 -3 0] [31 0 31] "stone"]]
+            :limit-s 60
+            :time :any}
+ :cases
+ [{:name "stands-on-a-cocoa-pod-over-a-hole"
+   :blocks [[:fill [10 -2 10] [10 0 10] "air"] [:set [10 1 9] "jungle_log"] [:set [10 1 10] "cocoa[age=2,facing=north]"]]
+   :body {:at [10.6 1.75 10.6]}
+   :act [[:job (jobs.movement.go-to {:pos #at [14 1 14] :range 0 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}]
+   :after [[:body-near [14.5 1 14.5] 1.5]]}]}
