@@ -6,7 +6,7 @@
             [jobs.items.obtain.base :refer [bill-item-s bill-of carried-of search-worth]]
             [jobs.lib.armour :as armour]
             [jobs.items.recipes :as recipes]
-            [jobs.items.smelt.plan :as smelt-plan]
+            [jobs.lib.game-facts :as facts]
             [jobs.lib.need :as need]
             [jobs.lib.next-call :as next-call]
             [jobs.lib.pace :as pace]
@@ -30,7 +30,7 @@
   (let [rs (recipes/recipes-for version)
         need (apply merge-with + {} (for [item items
                                           [k v] (:needs (first (get rs item)))
-                                          :when (contains? smelt-plan/made-from k)]
+                                          :when (contains? facts/smelted-from k)]
                                       {k v}))]
     (into {} (keep (fn [[k v]] (let [n (- v (get carried k 0))] (when (pos? n) [k n])))) need)))
 
@@ -52,7 +52,7 @@
   (let [version (game/version-of (:primitives c))]
     (reserve/set-job-entries!
      c (vec (concat (for [[mat n] (furnace-short version items {})
-                          item [mat (get smelt-plan/made-from mat)]]
+                          item [mat (get facts/smelted-from mat)]]
                       {:id (str (:id c) "-bill-" item) :item item :count n :strength 0.9 :by (:id c)
                        :why "material for the bill" :not #{:craft :smelt}})
                     (for [[item n not] (kit-stock version items)]
@@ -83,7 +83,7 @@
   "Whether any of the furnace material mat, or the raw input it is smelted from, is carried."
   [c mat]
   (let [have (carried c)]
-    (pos? (+ (get have mat 0) (get have (get smelt-plan/made-from mat) 0)))))
+    (pos? (+ (get have mat 0) (get have (get facts/smelted-from mat) 0)))))
 
 (defn stop-data
   "The data of the bill's stop at item for child ending e: its :why, :tried and :next."

@@ -9,7 +9,7 @@
             [engine.game :as game]
             [engine.settings :as settings]
             [jobs.items.obtain.bill :as bill]
-            [jobs.items.smelt.plan :as smelt-plan]
+            [jobs.lib.game-facts :as facts]
             [jobs.lib.armour :as armour]
             [jobs.lib.checks :as checks]
             [jobs.lib.combat :as combat]
@@ -168,7 +168,7 @@
   "The carried totals with each raw input of a furnace product counted as the product it will smelt to (raw_iron as ingots)."
   [carried]
   (reduce (fn [m [out in]] (cond-> m (pos? (get carried in 0)) (update out (fnil + 0) (get carried in))))
-          carried smelt-plan/made-from))
+          carried facts/smelted-from))
 
 (defn covered-of
   "The bill {item 1} of the items, in order, that the carried furnace material (ingots, or the raw input to smelt) already covers, each one's share
@@ -286,7 +286,7 @@
 (defn material-of
   "The furnace material (ingots, counting raw ore) carried, to tell whether a bill round gained any."
   [st]
-  (reduce + 0 (vals (select-keys (with-raw (:carried st)) (keys smelt-plan/made-from)))))
+  (reduce + 0 (vals (select-keys (with-raw (:carried st)) (keys facts/smelted-from)))))
 
 (defn retry!
   "Book another bill round: a fresh child slot, the pieces the new material covers made first. A round that gained material

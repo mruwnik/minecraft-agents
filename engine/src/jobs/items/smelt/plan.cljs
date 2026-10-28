@@ -25,8 +25,6 @@
                    (boolean (re-find #"_(log|wood)$" name)))
      false)))
 
-(def made-from facts/smelted-from)
-
 (declare smeltable?)
 
 (defn input-of
@@ -36,10 +34,10 @@
   ([item carried]
    (cond
      (nil? item) item
-     (= "charcoal" item) (or (->> carried (filter #(re-find #"_(log|wood)$" (:name %))) (sort-by :count >) first :name)
+     (= "charcoal" item) (or (->> carried (filter #(some #{(:name %)} (facts/smelt-inputs item))) (sort-by :count >) first :name)
                              "oak_log")
      (smeltable? item) item
-     :else (get made-from item item))))
+     :else (get facts/smelted-from item item))))
 
 (defn smeltable?
   "Whether some kind of furnace cooks the item."
@@ -151,8 +149,8 @@
     :else :done))
 
 (def products
-  "{input output} of made-from, for what a load yields."
-  (into {} (map (fn [[out in]] [in out])) made-from))
+  "{input output} of facts/smelted-from, for what a load yields."
+  (into {} (map (fn [[out in]] [in out])) facts/smelted-from))
 
 (defn product-of
   "What the furnace makes of item (a log makes charcoal), or nil when it is not known."

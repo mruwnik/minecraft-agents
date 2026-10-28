@@ -18,8 +18,16 @@
    "nether_brick" "netherrack" "smooth_sandstone" "sandstone" "smooth_red_sandstone" "red_sandstone"
    "cracked_stone_bricks" "stone_bricks" "cracked_deepslate_bricks" "deepslate_bricks"
    "cracked_deepslate_tiles" "deepslate_tiles" "cracked_nether_bricks" "nether_bricks" "smooth_quartz" "quartz_block" "lime_dye" "sea_pickle" "green_dye" "cactus"
-   "popped_chorus_fruit" "chorus_fruit"}
+   "popped_chorus_fruit" "chorus_fruit" "stone" "cobblestone"}
    (map (fn [[raw cooked]] [cooked raw])) game/cooking))
+
+(def log-names
+  "The overworld log blocks (the stem woods are not logs)."
+  (mapv #(str % "_log") ["oak" "spruce" "birch" "jungle" "acacia" "dark_oak" "mangrove" "cherry" "pale_oak"]))
+
+(def smelt-inputs
+  "{output [input names]} of every furnace product: smelted-from, and charcoal from any overworld log."
+  (assoc (update-vals smelted-from vector) "charcoal" log-names))
 
 (defn gatherable?
   "Items the body gets by mining, felling or from sheep: logs, coal, wool (white wool is also crafted from string)."

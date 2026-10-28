@@ -44,12 +44,11 @@
         :else b))
 
 (defn smelt-sources
-  "{output [input names]} of what the furnaces cook (facts/smelted-from, which holds game/cooking too), over the item
-  names minecraft-data has; stone is smelted from cobblestone, charcoal from any overworld log."
+  "{output [input names]} of what the furnaces cook (facts/smelt-inputs), over the item
+  names minecraft-data has."
   [names]
   (let [has? (set names)
-        inputs (-> (update-vals facts/smelted-from vector)
-                   (assoc "stone" ["cobblestone"] "charcoal" (filterv #(str/ends-with? % "_log") names)))]
+        inputs facts/smelt-inputs]
     (into {} (keep (fn [[o ins]]
                      (let [ins (filterv has? ins)]
                        (when (and (has? o) (seq ins)) [o ins]))))

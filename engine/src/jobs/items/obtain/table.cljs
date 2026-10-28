@@ -3,7 +3,7 @@
   (:require [engine.game :as game]
             [jobs.items.obtain.base :refer [sapling-leaf-limit seen-radius]]
             [jobs.items.recipes :as recipes]
-            [jobs.items.smelt.plan :as smelt-plan]
+            [jobs.lib.game-facts :as facts]
             [jobs.lib.blocks :as b]
             [jobs.lib.trees :as trees]
             [clojure.string]))
@@ -33,10 +33,10 @@
 
 (defn source-opts
   "The recipes/plan options of the gather and smelt sources: ore drops and hand-dug items (sand for glass) count as gathered, and every furnace product
-  (jobs.items.smelt.plan/made-from; charcoal from any overworld log) is also made by a smelt step."
+  (jobs.lib.game-facts/smelt-inputs) is also made by a smelt step."
   []
   {:raw (conj (into ore-drops (concat (keys hand-dug) fish-items (keys mob-drops) (keys crop-blocks))) "obsidian" "bone_meal")
-   :smelts (assoc (into {} (map (fn [[out in]] [out [in]])) smelt-plan/made-from) "charcoal" trees/log-names)})
+   :smelts facts/smelt-inputs})
 
 (defn leaves-of
   "The leaf block that drops this sapling (oak_sapling: oak_leaves; mangrove_propagule: mangrove_leaves), or nil."

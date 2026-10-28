@@ -7,7 +7,7 @@
             [jobs.items.obtain.seen :refer [seen-blocks-of seen-of]]
             [jobs.items.obtain.table :refer [animal? gather-needs material-blocks source-opts]]
             [jobs.items.recipes :as recipes]
-            [jobs.items.smelt.plan :as smelt-plan]
+            [jobs.lib.game-facts :as facts]
             [jobs.lib.look :as look]
             [jobs.lib.next-call :as next-call]
             [jobs.lib.storage :as storage]
@@ -84,7 +84,7 @@
            (str "; no water source seen within " (seen-radius) " blocks")))
 
     :else
-    (if-let [input (and (way? c :smelt) (smelt-plan/made-from item))]
+    (if-let [input (and (way? c :smelt) (facts/smelted-from item))]
       (str "smelting " item " needs " input ", have " (get have input 0))
       (recipes/lacking version have item n))))
 

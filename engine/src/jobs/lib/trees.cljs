@@ -8,6 +8,7 @@
             [engine.memory :as mem]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.cost :as cost]
+            [jobs.lib.game-facts :as facts]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.world :as known]))
@@ -31,9 +32,7 @@
   "Consecutive partial walks toward one tree before it counts as unreachable."
   3)
 
-(def log-names
-  "The overworld log blocks (the stem woods are not logs)."
-  (mapv #(str % "_log") ["oak" "spruce" "birch" "jungle" "acacia" "dark_oak" "mangrove" "cherry" "pale_oak"]))
+(def log-names facts/log-names)
 
 (def species
   "Every species a sapling grows (the logs' species and the two stem woods)."

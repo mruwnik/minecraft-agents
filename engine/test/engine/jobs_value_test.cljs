@@ -151,10 +151,11 @@
 (deftest charcoal-is-priced-by-the-log-it-is-smelted-from-not-by-the-no-source-floor
   (is (< (each "oak_log") (each "charcoal") (each "coal")) "a log and a smelt, under the coal dug"))
 
-(deftest every-smelted-item-is-priced-above-its-input-not-at-the-no-source-floor
+(deftest every-smelted-item-is-priced-at-its-input-plus-the-smelt-step
   (doseq [[out in] [["baked_potato" "potato"] ["dried_kelp" "kelp"] ["nether_brick" "netherrack"] ["green_dye" "cactus"]
-                    ["lime_dye" "sea_pickle"] ["popped_chorus_fruit" "chorus_fruit"]]]
-    (is (> (each out) (each in)) (str out " is its input plus the smelting"))))
+                    ["lime_dye" "sea_pickle"] ["popped_chorus_fruit" "chorus_fruit"] ["stone" "cobblestone"]
+                    ["charcoal" "oak_log"]]]
+    (is (>= (each out) (+ (each in) (:smelt-step table/default-basis))) (str out " is its input plus the smelting"))))
 
 (deftest placed-forms-are-no-free-source-and-no-source-items-keep-the-stack-rule
   (is (> (each "redstone") 1))
