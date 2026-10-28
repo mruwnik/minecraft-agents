@@ -1,6 +1,6 @@
 (ns jobs.movement.go-to.reprice
   "go-to's safe? asked of the plan its round is about to walk, and again mid-walk once per hostile it comes to know near the
-  way: the engine asks it only as a round starts, before there is a plan, and a go-to round walks on for up to a minute
+  way or whose blow it feels: the engine asks it only as a round starts, before there is a plan, and a go-to round walks on for up to a minute
   (an exclusive run has no reflex to meet a hostile met on the way)."
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -55,7 +55,8 @@
 (defn check
   "near/walk-round!'s :stair-check: check's why, else status of the round's first plan, of every re-plan once a plan
   passed by safe-prefix, and of a re-plan that knows of a
-  hostile near the way to pos not known before (at the first plan or a re-plan that passed), read anew (check-cache/fresh):
+  hostile near the way to pos not known before (at the first plan or a re-plan that passed) or of a blow by a mob not felt
+  before (danger/hit-ids: one at the heels, whose hits a walk that does not get away keeps taking), read anew (check-cache/fresh):
   {:risk s} when s is :later or :never, the plan kept (risk/note-plan!) for the start check to hold the call on, unless
   the plan stops short of pos with a safe-prefix, then {:cut prefix} (walked in its place) when that is not the plan, or
   {:searching true} for a plan to where a search that has not ended has got to, whose rest is priced unseen: the search
@@ -65,17 +66,22 @@
   (let [p (:primitives c)
         ids #(into #{} (map (fn [e] (.-id e))) (danger/hostiles-near-way p pos (settings/get price/settings ::price/way-radius) {}))
         known (atom (ids))
+        felt (atom #{})
         prefixed (atom false)
         own? (nil? (get-in (ctx/frozen-call c) [:checks :safe?]))]
     (fn [plan first?]
       (or (when check (check plan first?))
           (when own?
-            (let [now (ids)]
-              (when (or first? @prefixed (seq (remove @known now)))
+            (let [now (ids)
+                  hit (danger/hit-ids (ctx/view c))]
+              (when (or first? @prefixed (seq (remove @known now)) (seq (remove @felt hit)))
                 (let [c' (cond-> c (not first?) check-cache/fresh)
                       s (status c' pos plan)]
                   (cond
-                    (not (#{:later :never} (first s))) (do (swap! known into now) nil)
+                    (not (#{:later :never} (first s))) (do (swap! known into now)
+                                                           ;; under water status passes without a look at the hostiles
+                                                           (when-not (= :submerged (:reason (nth s 2))) (swap! felt into hit))
+                                                           nil)
                     (unfinished? plan) (do (some-> (:search-on plan) (apply [])) {:searching true})
                     :else (if-let [cut (safe-prefix c' pos plan)]
                             (do (reset! prefixed true) (when-not (identical? cut plan) {:cut cut}))

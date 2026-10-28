@@ -309,6 +309,21 @@
       (is @kept "its search kept to go on with"))
     (is (nil? (replaced plan false)) "a caller's :checks :safe? replaces go-to's")))
 
+(deftest a-blow-mid-walk-by-a-hostile-known-at-the-first-plan-asks-go-to-s-check-again
+  ;; old code re-asked only for a hostile newly near the way: an exclusive walk replanned in place under a drowned's blows (Bramble #11)
+  (let [hurt (atom [])
+        c (assoc (ready-test/ctx-of {:time st/noon :self {:pos {:x 0.5 :y 64 :z 0.5}}
+                                     :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x -9.5 :y 64 :z 0.5}}]})
+                 :view (fn [] {:now 36000000 :data {:entries {:hurt @hurt}}}) :update-mem (fn [_ _]))
+        check (reprice/check c {:x 30 :y 64 :z 0} nil)
+        plan (plan-of straight-cells)]
+    (is (nil? (check plan true)) "the zombie behind: the walk leads away from it")
+    (is (nil? (check plan false)) "no blow yet")
+    (swap! (fake/state (:primitives c)) assoc-in [:entities 0 :pos] [-0.5 64 0.5])
+    (is (nil? (check plan false)) "caught up, no blow yet: no hostile new near the way")
+    (reset! hurt [{:t 35999000 :data {:health 15 :attacker {:id 7 :name "zombie"}}}])
+    (is (= :later (first (:risk (check plan false)))) "its blow holds the rest of the walk")))
+
 ;; a walk is priced over the affordable when it ends past x 10 (a found plan's end, else the goal), but within it when
 ;; unseen cells are not guessed caves; a remembered threat by the way, which a wait may see gone
 (defn prefix-estimate [_ goal & [{:keys [plan caves-free?]}]]
