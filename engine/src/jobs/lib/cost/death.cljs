@@ -13,6 +13,7 @@
   each would cost more from the respawn the body has."
   (:require [engine.args :as a]
             [engine.settings :as settings]
+            [jobs.lib.cost.fight :as fight]
             [jobs.lib.cost.survival :as survival]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.cost.value :as value]))
@@ -264,9 +265,9 @@
 
 (defn cell-seconds
   "The seconds spent on each of route cells [{:x :y :z :s}]: a cell's :s, else the walk to it from the cell before (a
-  block for the first)."
+  block for the first), at fight/walk-speed: the cells are a path, whose detour is already in them."
   [cells]
-  (let [speed (value/walk-blocks-per-s)]
+  (let [speed fight/walk-speed]
     (mapv (fn [prev {:keys [x y z s]}]
             (or s (/ (if prev (js/Math.hypot (- x (:x prev)) (- y (:y prev)) (- z (:z prev))) 1) speed)))
           (cons nil cells) cells)))

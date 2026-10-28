@@ -17,6 +17,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.body :as body]
             [jobs.lib.cost.death :as death]
+            [jobs.lib.cost.fight :as fight]
             [jobs.survival.recover-drops :as recover-drops]
             [jobs.survival.recover-drops.config :as cfg]
             [jobs.survival.recover-drops.estimate :as est]
@@ -931,3 +932,8 @@
     (is (< (+ agree 0.1) fall) "the same counts spread by distance are evidence on the near rate, not doubt that lowers it")
     (is (<= (met [{:blocks 2 :k 8 :n-s 40} {:blocks 2 :k 5 :n-s 25}]) (met [{:blocks 2 :k 12 :n-s 25} {:blocks 2 :k 1 :n-s 40}]))
         "cases at one distance that disagree price it no lower than cases that agree on the same counts (Q16)")))
+
+(deftest cell-seconds-time-a-path-at-the-walk-speed
+  (let [cells (for [x (range 11)] {:x x :y 64 :z 0})]
+    (is (< (js/Math.abs (- (reduce + (rest (death/cell-seconds cells))) (/ 10 fight/walk-speed))) 1e-9)
+        "a 10 block path takes 10 / walk-speed: its detour is in the path, not divided in again")))
