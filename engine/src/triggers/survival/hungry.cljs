@@ -6,6 +6,7 @@
             [engine.contract :as contract]
             [engine.settings :as settings]
             [jobs.lib.foods :as foods]
+            [jobs.lib.meal :as meal]
             [jobs.lib.reserve :as reserve]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.look :as look]
@@ -55,7 +56,7 @@
         learned (:t (mem/latest view :food-source))]
     (boolean (and gave-up
                   (< (- (:now view) gave-up) (* 1000 (rest-s self args)))
-                  (not (foods/carries-food? self (reserve/spared view self)))
+                  (not (meal/carries-food? self (reserve/spared view self)))
                   (< (wheat-carried self) (bake-wheat))
                   (not (and learned (> learned gave-up)))))))
 
@@ -74,16 +75,16 @@
   [world memory args]
   (let [self (.self world)
         reserved (reserve/spared memory self)
-        urgent? (or (foods/eat-now? self args reserved)
+        urgent? (or (meal/eat-now? self args reserved)
                     (<= (.-food self) (settings/get settings ::urgent-food))
-                    (and (foods/hungry? (.-food self) (.-health self) args) (foods/carries-food? self reserved)))]
+                    (and (foods/hungry? (.-food self) (.-health self) args) (meal/carries-food? self reserved)))]
     (and (not (body/recovery-pending? memory :hungry))
          (not (risk/too-hurt? (.-health self) nil :long))
-         (foods/wants-meal? self reserved args)
+         (meal/wants-meal? self reserved args)
          (not (resting? self memory args))
-         (or (foods/carries-food? self reserved)
+         (or (meal/carries-food? self reserved)
              (foods/fragile? self)
              (not (look/dark-here? world)))
-         (or (foods/carries-food? self reserved)
+         (or (meal/carries-food? self reserved)
              (not (danger-q/danger-near? world (danger-q/hostile-radius) (danger-q/ranged-radius))))
          (if urgent? :urgent true))))

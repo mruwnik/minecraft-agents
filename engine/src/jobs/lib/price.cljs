@@ -13,6 +13,7 @@
             [jobs.lib.cost.risk :as risk]
             [jobs.lib.danger :as danger]
             [jobs.lib.foods :as foods]
+            [jobs.lib.meal :as meal]
             [jobs.lib.reserve :as reserve]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
@@ -27,7 +28,7 @@
   [c]
   (let [self (.self (:primitives c))]
     (and (< (.-food self) foods/top-up-food)
-         (not (foods/carries-food? self (reserve/spared (ctx/view c) self))))))
+         (not (meal/carries-food? self (reserve/spared (ctx/view c) self))))))
 
 (defn round1 [x] (/ (js/Math.round (* 10 x)) 10))
 

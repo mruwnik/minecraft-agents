@@ -11,6 +11,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.foods :as foods]
+            [jobs.lib.meal :as meal]
             [jobs.lib.look :as look]
             [jobs.lib.pen-read :as pen-read]
             [jobs.lib.util :as u]
@@ -131,7 +132,7 @@
                            (into {} (map (fn [k] [k (count (noted-adults c k seen-uuids radius))])) (distinct (map #(.-name %) adult-es))))
         self (.self (:primitives c))
         pens (atom [])
-        starved? (and (<= (.-food self) lift) (not (foods/carries-food? self)))]
+        starved? (and (<= (.-food self) lift) (not (meal/carries-food? self)))]
     (->> seen
          (mapv (fn [e]
                  (let [n (adults (.-name e))

@@ -47,9 +47,11 @@
   (let [d (get poison-damage item)]
     (or (nil? d) (> (- health d) (settings/get settings ::fragile-health)))))
 
-(def precious
-  "Foods kept for an emergency: eaten only when named or when their hp are worth the item (jobs.lib.cost.food/eat-precious?, jobs.survival.eat)."
-  #{"golden_apple" "enchanted_golden_apple"})
+(def healing
+  "{precious food {:regen :absorb}}: the hp its regeneration II gives (an hp per 1.25 s for 5 s, the enchanted one's 20 s) and its absorption's (vanilla). These are the precious foods: kept for an emergency, eaten unnamed only when their hp are worth the item (jobs.lib.meal, jobs.lib.cost.food/eat-precious?)."
+  {"golden_apple" {:regen 4 :absorb 4} "enchanted_golden_apple" {:regen 16 :absorb 16}})
+
+(def precious (set (keys healing)))
 
 (def named-only
   "Foods with an effect worse than hunger (a teleport, random effects): eaten only when named."
@@ -134,31 +136,6 @@
    (->> (array-seq (.-inventory self))
         (map #(.-name %))
         (remove reserved))))
-
-(defn eaten-unnamed?
-  "Whether item counts as carried food for a meal that names no item: food, not harmful, not named-only, not precious
-  (jobs.survival.eat eats one only when it is worth it, so it is no food a trigger or a check counts on)."
-  [item]
-  (and (edible? item) (not (contains? named-only item)) (not (contains? precious item))))
-
-(defn carries-food?
-  "Whether the sensed self carries something a meal would eat."
-  ([self] (carries-food? self #{}))
-  ([self reserved]
-   (boolean (some eaten-unnamed? (carried-names self reserved)))))
-
-(defn eat-now?
-  "Health below :health (default 7), food below 20 and something a meal would eat carried."
-  ([self args] (eat-now? self args #{}))
-  ([self args reserved]
-   (boolean (and (< (.-health self) (:health args default-health)) (< (.-food self) 20) (carries-food? self reserved)))))
-
-(defn wants-meal?
-  "The hungry trigger's hunger test, shared with the night hold: hungry?, top-up? or eat-now? (reserved: names an unnamed meal spares)."
-  [self reserved args]
-  (boolean (or (hungry? (.-food self) (.-health self) args)
-               (top-up? (.-food self) (.-health self) (carried-names self reserved))
-               (eat-now? self args reserved))))
 
 (def fish-items #{"cod" "salmon" "tropical_fish" "pufferfish"})
 

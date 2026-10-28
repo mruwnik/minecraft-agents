@@ -4,7 +4,7 @@
             [engine.memory :as mem]
             [jobs.lib.body :as body]
             [jobs.lib.cost.risk :as risk]
-            [jobs.lib.foods :as foods]
+            [jobs.lib.meal :as meal]
             [jobs.lib.reserve :as reserve]
             [jobs.lib.shelter.sense :as sh-sense]))
 
@@ -23,7 +23,7 @@
     (boolean (and t
                   (not (and health (< (.-health self) health)))
                   (not (and (= :no-food cause)
-                            (or (foods/carries-food? self (reserve/spared view self))
+                            (or (meal/carries-food? self (reserve/spared view self))
                                 (when-let [learned (:t (mem/latest view :food-source))] (> learned t)))))))))
 
 (defn low-health

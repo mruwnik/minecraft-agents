@@ -16,6 +16,7 @@
             [jobs.lib.walk-pick :as pick]
             [jobs.lib.surface-up :as surface]
             [jobs.lib.foods :as foods]
+            [jobs.lib.meal :as meal]
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.cost.food :as food-cost]
             [jobs.lib.reserve :as reserve]
@@ -179,7 +180,7 @@
   "Food at the ::kept-lifted-below line or less with no food carried: the last adults of a kind may go too."
   [c]
   (let [self (.self (:primitives c))]
-    (and (<= (.-food self) (settings/get settings ::kept-lifted-below)) (not (foods/carries-food? self)))))
+    (and (<= (.-food self) (settings/get settings ::kept-lifted-below)) (not (meal/carries-food? self)))))
 
 (defn keep-for
   "Adults of the kind the kill leaves alive: the spare rule's keep, none when starved or when the animal is a lone adult
@@ -257,7 +258,7 @@
       (not (carry-short? c))
       (not (or (wants-food? c)
              (foods/top-up? (.-food self) (.-health self) (foods/carried-names self (reserve/spared (ctx/view c) self)))
-             (foods/eat-now? self (:args c) (reserve/spared (ctx/view c) self)))))))
+             (meal/eat-now? self (:args c) (reserve/spared (ctx/view c) self)))))))
 
 (def danger-policy {:cap 1 :ttl (* 60 60 1000)})
 

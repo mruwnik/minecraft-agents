@@ -175,15 +175,19 @@
   {:head {:name "iron_helmet" :count 1} :torso {:name "iron_chestplate" :count 1}
    :legs {:name "iron_leggings" :count 1} :feet {:name "iron_boots" :count 1}})
 
-(deftest respond-eats-a-golden-apple-at-2-hp-against-a-zombie-and-keeps-it-at-20
+(deftest respond-prices-every-answer-with-and-without-its-golden-apple
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [apple {:name "golden_apple" :count 1}
-              eaten (fn [{:keys [p]}] (mapv #(aget (.-args %) "item") (calls p "eat")))]
-          (is (= ["golden_apple"] (eaten (await (flight-round respond {:self {:health 2 :food 10} :inventory (conj sword apple) :equipment iron-armour :entities [(zombie 3 0)]}))))
-              "the fight's death it averts at 2 hp (about 1575 s) is worth more than the apple (1117 s)")
-          (is (= [] (eaten (await (flight-round respond {:self {:health 20 :food 20} :inventory (conj sword apple) :equipment iron-armour :entities [(zombie 3 0)]}))))
+              hurt {:self {:health 2 :food 20} :inventory (conj sword apple) :equipment iron-armour :entities [(zombie 3 0)]}
+              {:keys [seen p]} (await (flight-round respond hurt))
+              ate (first (filter #(= :hostile.precious-eat (:kind %)) @seen))]
+          (is (= [:fight 1724 1304] [(:answer ate) (:without ate) (:price ate)])
+              "the fight with its apple (1724 - the apple's 1538 + its 1117 s) beats the fight alone and the flee (1923 s)")
+          (is (= ["golden_apple"] (mapv #(aget (.-args %) "item") (calls p "eat"))))
+          (is (= [] (mapv #(aget (.-args %) "item")
+                          (calls (:p (await (flight-round respond (assoc hurt :self {:health 20 :food 20})))) "eat")))
               "at full health it averts little"))))))
 
 (defn fist-stance

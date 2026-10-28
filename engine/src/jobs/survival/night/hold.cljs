@@ -6,6 +6,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.foods :as foods]
+            [jobs.lib.meal :as meal]
             [jobs.lib.fuel :as fuel]
             [jobs.lib.furnace :as furnace]
             [jobs.lib.reserve :as reserve]
@@ -67,7 +68,7 @@
   [c]
   (let [p (:primitives c)
         self (.self p)
-        hungry (and (not (sh-sense/sleeping? p)) (foods/wants-meal? self (reserve/spared (ctx/view c) self) {}))
+        hungry (and (not (sh-sense/sleeping? p)) (meal/wants-meal? self (reserve/spared (ctx/view c) self) {}))
         cooking (when hungry (await (cooking-in-shelter? c)))]
     (when (and hungry (not cooking) (eat/carried-best (assoc c :args {:allow-bad false})))
       (let [e (await (ctx/call c :eat 'jobs.survival.eat {:until 20 :max-bites 1 :get-food? false}))]
@@ -82,7 +83,7 @@
         self (.self p)]
     (and (not (sh-sense/sleeping? p))
          (foods/starving? self {})
-         (not (foods/carries-food? self (reserve/spared (ctx/view c) self)))
+         (not (meal/carries-food? self (reserve/spared (ctx/view c) self)))
          (zero? (ctx/count-in c :hungry (foods/starving-rest-ms)))
          (not (danger-q/danger-near? p (danger-q/hostile-radius) (danger-q/ranged-radius))))))
 

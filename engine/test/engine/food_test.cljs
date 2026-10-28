@@ -7,9 +7,12 @@
             [engine.settings :as settings]
             [engine.core :as core]
             [engine.events :as events]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.cost.answer :as answer]
             [jobs.lib.cost.food :as food-cost]
             [jobs.lib.cost.value :as value]
             [jobs.lib.foods :as foods]
+            [jobs.lib.meal :as meal]
             [jobs.lib.reserve :as reserve]
             [engine.memory :as mem]
             [engine.test-util :as tu :refer [run-until-empty]]
@@ -217,8 +220,8 @@
     (is (= #{"carrot"} (spared 5 bait)))
     (is (= #{} (spared 1 bait)) "near starving: eaten")
     (is (= #{} (spared 5 (assoc bait :not #{:eat}))))
-    (is (not (foods/carries-food? (self 5) (spared 5 bait))))
-    (is (foods/carries-food? (self 1) (spared 1 bait)))))
+    (is (not (meal/carries-food? (self 5) (spared 5 bait))))
+    (is (meal/carries-food? (self 1) (spared 1 bait)))))
 
 (deftest eat-goes-on-until-fed-or-out-of-food
   (async done
@@ -956,3 +959,27 @@
     (is (= "spider_eye" (eat/best-food (take 2 inv) true nil 14 (constantly false) #{})) "healthy enough for 4 hp of poison")
     (is (nil? (eat/best-food (take 2 inv) true nil 6.5 (constantly false) #{})))
     (is (nil? (eat/best-food (take 1 inv) true "spider_eye" 9 (constantly false) #{})) "a named one too")))
+
+(deftest a-precious-foods-worth-counts-its-hp-only-where-the-body-lives
+  (let [body {:health 2 :absorption 0}
+        at {:x 0 :y 64 :z 0}
+        known (cost/fight-answer {:weapon nil :mobs [{:name "zombie" :distance 2}]})
+        death (answer/bare body at)
+        hp (food-cost/precious-worth body "golden_apple" false)
+        fed (food-cost/fed body "golden_apple")
+        before (answer/answer-death-chance body known at death)
+        after (answer/answer-death-chance fed known at death)]
+    (is (< after before))
+    (is (< (js/Math.abs (- (food-cost/precious-worth body "golden_apple" false known at death)
+                           (+ (* (- 1 after) hp) (* (- before after) (answer/died death known)))))
+           1e-6)
+        "hp lived x hp-price + death averted x death price: no hp is counted twice")))
+
+(deftest a-food-without-healing-fed-changes-nothing
+  (is (= {:health 5 :absorption 0} (food-cost/fed {:health 5 :absorption 0} "bread"))))
+
+(deftest a-golden-apple-counts-as-carried-food-only-when-worth-eating
+  (let [self (fn [health] #js {:health health :food 20 :inventory #js [#js {:name "golden_apple" :count 1}]})]
+    (is (not (meal/carries-food? (self 20))))
+    (is (= (food-cost/eat-precious? {:health 1} "golden_apple" true) (meal/carries-food? (self 1)))
+        "the hungry checks ask the price eat asks")))

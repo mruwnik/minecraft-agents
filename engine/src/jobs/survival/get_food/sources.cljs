@@ -11,6 +11,7 @@
             [jobs.lib.crops :as crops]
             [jobs.lib.stock :as stock]
             [jobs.lib.foods :as foods]
+            [jobs.lib.meal :as meal]
             [jobs.lib.look :as look]
             [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]
@@ -155,7 +156,7 @@
   [c]
   (let [self (.self (:primitives c))]
     (and (foods/hungry? (.-food self) (.-health self) (:args c))
-         (not (foods/carries-food? self)))))
+         (not (meal/carries-food? self)))))
 
 (defn ^:async dig-ripe!
   "Dig the nearest ripe block in a permitted place (blocks.dig walks there and collects the drops): :again, or nil

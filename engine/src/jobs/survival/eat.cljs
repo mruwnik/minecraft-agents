@@ -7,8 +7,8 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.cond :as cond]
-            [jobs.lib.cost.food :as food-cost]
-            [jobs.lib.foods :as foods]
+                        [jobs.lib.foods :as foods]
+            [jobs.lib.meal :as meal]
             [jobs.lib.reserve :as reserve]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]))
@@ -51,7 +51,7 @@
 
 (defn eaten?
   "Is item eaten for these args: the :item when named (precious and named-only foods included), else by the
-  unnamed rules: not harmful unless allow-bad, and precious only when (worth? name) (precious-worth?). Poisoning food is never eaten when the poison would leave the body fragile."
+  unnamed rules: not harmful unless allow-bad, and precious only when (worth? name) (meal/precious-worth?). Poisoning food is never eaten when the poison would leave the body fragile."
   [allow-bad item health worth? name]
   (and (foods/food? name)
        (foods/poison-safe? health name)
@@ -64,7 +64,7 @@
 (defn best-food
   "The name of the carried item to eat, or nil: the common foods by most hunger points then most saturation, then
   precious ones, then harmful ones (allow-bad). Ties by carrying order. Only item when given. Reserved names (jobs.lib.reserve/spared) are left when no item is named.
-  worth?: whether an unnamed meal eats a precious food (precious-worth?)."
+  worth?: whether an unnamed meal eats a precious food (meal/precious-worth?)."
   [inventory allow-bad item health worth? reserved]
   (->> inventory
        (map :name)
@@ -93,20 +93,11 @@
               (when (pos? left) (assoc i :count left))))
           inventory)))
 
-(defn precious-worth?
-  "The worth? of c's body: cost.food/eat-precious? of its hp alone (no known answer: a meal that names no item meets
-  no threat), healing by waiting at 18+ food."
-  [c]
-  (let [self (.self (:primitives c))
-        body {:health (.-health self) :absorption (.-absorption self)}
-        heals? (>= (.-food self) foods/top-up-food)]
-    (fn [name] (food-cost/eat-precious? body name heals?))))
-
 (defn carried-best [c]
   (let [{:keys [item allow-bad]} (:args c)
         self (.self (:primitives c))
         inventory (if item (u/inventory (:primitives c)) (spare-seeds (u/inventory (:primitives c)) (.-food self) (seeds-owed c)))]
-    (best-food inventory allow-bad item (.-health self) (precious-worth? c) (reserve/spared (ctx/view c) self))))
+    (best-food inventory allow-bad item (.-health self) (partial meal/precious-worth? self) (reserve/spared (ctx/view c) self))))
 
 (defn refusal
   "The cause when the :item is not eaten at all (not a food, or harmful without :allow-bad), else nil."

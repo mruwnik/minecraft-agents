@@ -295,37 +295,42 @@
     (when-let [start (and (= :flee (:decision m)) (:flight-start m))]
       (:rate (hostile/incoming c start)))))
 
-(defn precious-to-eat
-  "The carried precious food (cheapest first) whose hp are worth more than it against the answer weighed chose:
-  cost.food/eat-precious? of that answer and weighed's death price, the body not healing by waiting while it faces the
-  mobs; nil when none is, or a bite of one failed this run."
-  [c weighed]
-  (when-let [known (when-not (:precious-failed (ctx/mem c)) (get (:answers weighed) (:answer weighed)))]
-    (let [body (hostile/body-of c)
-          at (u/self-pos c)]
-      (->> (u/inventory (:primitives c))
-           (map :name)
-           (filter foods/precious)
-           distinct
-           (sort-by #(:value (value/item-value [{:name % :count 1}])))
-           (filter #(food-cost/eat-precious? body % false known at (:death weighed)))
-           first))))
+(defn eating-answer
+  "weighed once a carried precious food may make another answer the cheapest: each answer (not the look) priced with
+  each such item eaten first is its price less cost.food/precious-worth against that answer and weighed's death price,
+  plus the item (cost.value/item-value); when the cheapest of them beats weighed's, weighed with :answer that one and
+  :eat {:item :price :worth}. The body is not healing by waiting while it faces the mobs; none after a bite failed this run."
+  [weighed c]
+  (let [items (when-not (:precious-failed (ctx/mem c))
+                (->> (u/inventory (:primitives c)) (map :name) (filter foods/precious) distinct))]
+    (if (empty? items)
+      weighed
+      (let [body (hostile/body-of c)
+            at (u/self-pos c)
+            options (for [[k price] (:prices weighed)
+                          :let [known (get (:answers weighed) k)]
+                          :when (and known (not= :look k))
+                          item items
+                          :let [worth (food-cost/precious-worth body item false known at (:death weighed))]]
+                      {:answer k :item item :worth worth
+                       :price (+ (- price worth) (:value (value/item-value [{:name item :count 1}])))})
+            best (first (sort-by :price options))]
+        (if (and best (< (:price best) (get (:prices weighed) (:answer weighed))))
+          (assoc weighed :answer (:answer best) :eat (select-keys best [:item :price :worth]))
+          weighed)))))
 
 (defn ^:async eat-precious!
-  "Eat one precious-to-eat (jobs.survival.eat naming it) before the answer runs, saying what it buys."
+  "Eat weighed's :eat item (jobs.survival.eat naming it) before the answer runs, saying what it buys."
   [c weighed]
-  (when-let [item (precious-to-eat c weighed)]
-    (let [body (hostile/body-of c)
-          known (get (:answers weighed) (:answer weighed))
-          worth (food-cost/precious-worth body item false known (u/self-pos c) (:death weighed))]
-      (ctx/emit! c :hostile.precious-eat :info {:item item :answer (:answer weighed) :worth (js/Math.round worth)
-                                                :value (js/Math.round (:value (value/item-value [{:name item :count 1}])))
-                                                :text (str "eats a " item " before the " (name (:answer weighed)) ": its hp are worth "
-                                                           (js/Math.round worth) " s against the death the " (name (:answer weighed)) " risks")})
-      ;; :until 21: a precious food is eaten for its hp, at any food level
-      (let [r (await (ctx/call c :eat 'jobs.survival.eat {:item item :until 21 :max-bites 1 :get-food? false}))]
-        (when (and (contract/ending? r) (not= :done (:kind r)))
-          (ctx/update-mem! c assoc :precious-failed true))))))
+  (when-let [{:keys [item price worth]} (:eat weighed)]
+    (ctx/emit! c :hostile.precious-eat :info {:item item :answer (:answer weighed) :worth (js/Math.round worth) :price (js/Math.round price)
+                                              :without (js/Math.round (get (:prices weighed) (:answer weighed)))
+                                              :text (str "eats a " item " before the " (name (:answer weighed)) ": with it the " (name (:answer weighed))
+                                                         " costs " (js/Math.round price) " s, the cheapest answer without it " (js/Math.round (apply min (vals (:prices weighed)))) " s")})
+    ;; :until 21: a precious food is eaten for its hp, at any food level
+    (let [r (await (ctx/call c :eat 'jobs.survival.eat {:item item :until 21 :max-bites 1 :get-food? false}))]
+      (when (and (contract/ending? r) (not= :done (:kind r)))
+        (ctx/update-mem! c assoc :precious-failed true)))))
 
 (defn ^:async respond-with!
   "The rest of respond once it has weighed the answers: log the decision, run its child, the other one when it declines."
@@ -366,7 +371,7 @@
         now (merge covers {:fight fight :flee walk})
         now-of (fn [mobs] (merge (cover-answers equipment mobs then fight specs) {:fight fight :flee (when walk (hostile/flee-answer c near fight felt caught mobs))}))
         look (when (seq covers) (look-answer c near now now-of sealing then))
-        weighed (some-> (hostile/weigh c (cond-> now look (assoc :look (:answer look))) near) (assoc :way-scan (:way-scan caught)))
+        weighed (some-> (hostile/weigh c (cond-> now look (assoc :look (:answer look))) near) (assoc :way-scan (:way-scan caught)) (eating-answer c))
         stay? (and (not (hurt-lately? c)) (stay-under-roof? c near))
         decision (if (or stay? (= :fight (:answer weighed))) :fight :flee)
         cover (when (and (not stay?) (contains? covers (:answer weighed))) (:answer weighed))

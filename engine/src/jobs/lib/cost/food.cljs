@@ -44,30 +44,27 @@
                      0 inventory)]
     (max 0 (- reserve-points held))))
 
-(def precious-heals
-  "hp a precious food gives (vanilla): its regeneration II's (an hp per 1.25 s for 5 s, the enchanted one's 20 s) and its absorption's."
-  {"golden_apple" {:regen 4 :absorb 4} "enchanted_golden_apple" {:regen 16 :absorb 16}})
-
 (defn fed
   "body once it has eaten precious food item: its regeneration on its health (at most 20), its absorption on top."
   [{:keys [health absorption] :as body} item]
-  (let [{:keys [regen absorb]} (precious-heals item)]
+  (let [{:keys [regen absorb]} (foods/healing item)]
     (assoc body :health (min 20 (+ (or health 20) regen)) :absorption (+ (or absorption 0) absorb))))
 
 (defn precious-worth
-  "Seconds what precious food item gives body is worth: its hp (health/gain-worth: its regeneration up to 20, each at
-  most what waiting costs an hp while the body heals by waiting, heals?, then its absorption over that) and, against a
-  known answer met at `at` with death {:met :clear} (answer/decide's), the death it averts: answer/answer-death-chance
-  before and after (fed) at answer/died."
+  "Seconds what precious food item gives body is worth, one sum: the hp it adds (health/gain-worth: its regeneration up
+  to 20, each at most what waiting costs an hp while the body heals by waiting, heals?, then its absorption over that)
+  paid only by the chance the body lives, plus, against a known answer met at `at` with death {:met :clear}
+  (answer/decide's), the death it averts: the fall in answer/answer-death-chance with the item eaten, at answer/died."
   ([body item heals?] (precious-worth body item heals? nil nil nil))
   ([body item heals? known at death]
    (let [health (or (:health body) 20)
-         healed (:health (fed body item))
-         hp (+ (health/gain-worth health (js/Math.floor (- healed health)) heals?)
-               (health/gain-worth healed (:absorb (precious-heals item)) false))]
+         eaten (fed body item)
+         hp (+ (health/gain-worth health (js/Math.floor (- (:health eaten) health)) heals?)
+               (health/gain-worth (:health eaten) (- (:absorption eaten) (or (:absorption body) 0)) false))]
      (if known
-       (+ hp (* (- (answer/answer-death-chance body known at death) (answer/answer-death-chance (fed body item) known at death))
-                (answer/died death known)))
+       (let [before (answer/answer-death-chance body known at death)
+             after (answer/answer-death-chance eaten known at death)]
+         (+ (* (- 1 after) hp) (* (- before after) (answer/died death known))))
        hp))))
 
 (defn eat-precious?
