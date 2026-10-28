@@ -26,6 +26,7 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.shelter.sleepers :as sh-sleepers]
             [jobs.lib.shelter.spawn :as sh-spawn]
+            [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tidy-rules :as tidy-rules]
             [jobs.lib.ledger :as ledger]
@@ -63,13 +64,6 @@
 (defn overdue? [c]
   (let [days (sh-beds/days-awake c)]
     (and (some? days) (>= days (sh-beds/max-days-awake)))))
-
-(defn stay-chance
-  "The spawn chance a second at the feet through the night: none underground or lit by a block (the sky's light goes with
-  the night), else a dark cell's (cost/spawn-chance). The cell defaults to the feet."
-  ([p] (stay-chance p (sh-sense/feet p)))
-  ([p cell]
-   (if (sh-sense/spawn-free-at? p cell) 0 (cost/spawn-chance [0 0 0]))))
 
 (defn wake-cells
   "Where a body asleep in a bed may stand when it gets up: every cell round the bed it can stand in (beside the head,
@@ -174,7 +168,7 @@
         asleep? (sh-sense/sleeping? p)
         carried? (and (nil? bed) (not asleep?) (place-wanted? c))
         at (or bed feet)
-        chance (stay-chance p)
+        chance (spawn-light/night-chance p (sh-sense/feet p))
         stands (if asleep? (wake-cells p) [feet])
         [_ left] (get-in (sh-clock/night-left-quote c) [:uses :job-time])
         lost (if (zero? (sh-sleepers/sleepers-short p view)) 0 left)
@@ -183,7 +177,7 @@
         sealed (when (and carried? (not sheltered?)) (seal-plan c))
         shelter-s (min left (sh/shelter-here-s))
         out-s (when log-out? (get-in (await (ctx/quote c 'jobs.survival.log-out {})) [:uses :job-time 1]))]
-    (cond-> {:shelter (+ (if (sh/in-ground? p view) shelter-s left) (apply max (map #(exposed-price c (stay-chance p %) shelter-s %) stands)))}
+    (cond-> {:shelter (+ (if (sh/in-ground? p view) shelter-s left) (apply max (map #(exposed-price c (spawn-light/night-chance p %) shelter-s %) stands)))}
       (or bed asleep? carried?) (assoc :bed (+ (or walk-s 0) lost (if sheltered? 0 (exposed-price c chance lost at)) (if asleep? 0 (- (cost/spawn-worth body at)))))
       sealed (assoc :sealed (+ lost (:seconds sealed) (exposed-price c chance (:seconds sealed) feet) (- (cost/spawn-worth body (:foot (:layout sealed))))))
       (number? out-s) (assoc :log-out out-s))))

@@ -142,7 +142,7 @@
     night-hut outside :later
     (assoc night-hut :blocks (merge (:blocks night-hut) barn-roof)) outside :later
     tunnel {:x 4 :y 64 :z 0} :ok
-    (assoc open-night :time st/noon) {:x 4 :y 64 :z 0} :look))
+    (assoc open-night :time st/noon) {:x 4 :y 64 :z 0} :ok))
 
 (deftest a-body-in-a-hut-with-a-wall-never-seen-looks-at-it-before-it-judges-a-walk-out
   (let [seen-block u/seen-block
@@ -396,7 +396,7 @@
                                       ((juxt first #(:reason (nth % 2)))
                                        (ready/at-status (ctx-of (assoc open-night :time st/noon)) outside))))
     true [:never :exposed]
-    false [:ok :sealed]))
+    false [:ok :unexposed]))
 
 (defn dim-status
   "at-status of outside under the night sky with sky light sky reaching it, no block light and no dark hall, and go-to's spawn chance there."

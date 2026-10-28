@@ -21,7 +21,8 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.shelter.sleepers :as sh-sleepers]
             [jobs.lib.shelter.spawn :as sh-spawn]
-            [jobs.lib.solid :as solid]))
+            [jobs.lib.solid :as solid]
+            [jobs.lib.spawn-light :as spawn-light]))
 
 (a/defargs settings
   {::ground-depth {:default 6 :spec (a/int-in 0 nil)
@@ -191,14 +192,14 @@
 
 (defn walk-state
   "What the price of the walk to the bed at pos reads of the world besides the bed (night/bed-walk-price): the cell the body
-  stands in, the ids of the hostiles known near the way, the kit it fights with (wworld/kit-of), whether its feet are spawn-free
-  (sh-sense/spawn-free-at?, the spawn chance staying costs) and whether it works on in the ground (in-ground?). A :bed-walk-unsafe verdict holds
+  stands in, the ids of the hostiles known near the way, the kit it fights with (wworld/kit-of), the spawn chance at its feet
+  (spawn-light/night-chance, what staying costs) and whether it works on in the ground (in-ground?). A :bed-walk-unsafe verdict holds
   while this is unchanged."
   [p view pos]
   {:from (mapv #(js/Math.floor %) ((juxt :x :y :z) (u/self-pos {:primitives p})))
    :mobs (into #{} (map #(.-id %)) (danger/hostiles-near-way p pos (settings/get price/settings ::price/way-radius) {}))
    :kit (wworld/kit-of {:primitives p})
-   :spawn-free (sh-sense/spawn-free-at? p (sh-sense/feet p))
+   :spawn (spawn-light/night-chance p (sh-sense/feet p))
    :in-ground (in-ground? p view)})
 
 (defn walk-unsafe?

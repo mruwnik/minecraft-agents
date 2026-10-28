@@ -119,11 +119,6 @@
   (and (sealed-at? p cell)
        (not (and (some-> (block-light-at p cell) (look/lit-light? 0 0)) (open-overhead? p cell)))))
 
-(defn spawn-free-at?
-  "Whether a mob cannot spawn in the cell: it is under ground (buried-at?) or lit by a block."
-  [p cell]
-  (boolean (or (buried-at? p cell) (pos? (or (block-light-at p cell) 0)))))
-
 (defn sealed?
   "The body's feet are sealed from the sky (sealed-at?): the night changes nothing there."
   [p]

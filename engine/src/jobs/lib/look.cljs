@@ -624,7 +624,9 @@
   nil without a perception. A cell the body has seen is lit by block light of 1 or more (mobs do not spawn there) or by
   sky light still at dark-light after the sky darkening; a seen cave stays dark by day. A cell never seen is guessed
   (unseen-lit-chance); with :unseen-dark? false it costs like a lit one (a masked plan prices unseen cells itself). Light
-  is read only for cells seen, as a player would know them."
+  is read only for cells seen, as a player would know them. spawn-light/chance-at's coarse twin, judged per cell for speed:
+  it may call a seen cell dark that chance-at frees (a small dark roofed room: no hall flood), never one lit that
+  chance-at prices a spawn at."
   ([p] (dark-fn p nil))
   ([p {:keys [unseen-dark?]}]
    (when-let [per (aget p "perception")]

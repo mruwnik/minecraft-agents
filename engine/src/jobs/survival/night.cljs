@@ -26,6 +26,7 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.shelter.sleepers :as sh-sleepers]
             [jobs.lib.shelter.spawn :as sh-spawn]
+            [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.threats :as threats]
             [jobs.lib.spent :as spent]
             [jobs.lib.util :as u]
@@ -505,7 +506,7 @@
 (defn bed-walk-price
   "{:walk :stay} in seconds: the hp the walk to bed is expected to cost (spawns over its seconds in the dark, the planner's
   :dark-seconds over jobs.lib.cost/dark-factor of the kit; the fight with the hostiles known near its way) against
-  staying put (spawns at the feet, bed-down/stay-chance, over the walk's
+  staying put (spawns at the feet, spawn-light/night-chance, over the walk's
   seconds but no longer than jobs.lib.shelter/shelter-here-s, the shelter here closing them out; the hostiles known near
   the body), both priced by jobs.lib.price/stay-hp and jobs.lib.cost/fight-damage, each hp at jobs.lib.cost/hp-price; the
   walk also costs jobs.lib.cost/commute-s (in the ground, the walk there and back is work time lost). r is go-to's
@@ -518,7 +519,7 @@
         dark-s (min secs (/ (or (:dark-seconds r) 0) (cost/dark-factor kit)))
         fight #(price/way-fight-hp c %)
         hp-s (cost/hp-price (or (.-health (.self p)) 20))
-        here (bed-down/stay-chance p)]
+        here (spawn-light/night-chance p (sh-sense/feet p))]
     {:walk (+ (* hp-s (+ (price/stay-hp c chance dark-s) (fight bed))) (cost/commute-s (sh/in-ground? p (ctx/view c)) secs (sh/shelter-here-s)))
      :stay (* hp-s (+ (price/stay-hp c here (min secs (sh/shelter-here-s))) (fight (u/self-pos c))))}))
 
@@ -599,8 +600,8 @@
         view (ctx/view c)
         feet (sh-sense/feet p)
         wakes (bed-down/wake-cells p)
-        chance (bed-down/stay-chance p feet)
-        wake-chance (apply max (map #(bed-down/stay-chance p %) wakes))
+        chance (spawn-light/night-chance p feet)
+        wake-chance (apply max (map #(spawn-light/night-chance p %) wakes))
         fight (price/round1 (price/way-fight-hp c feet))
         wake-fight (price/round1 (apply max (map #(price/way-fight-hp c %) wakes)))
         open? (and (not (:log-out-failed (ctx/mem c))) (sh-sleepers/log-out-open? p view))]

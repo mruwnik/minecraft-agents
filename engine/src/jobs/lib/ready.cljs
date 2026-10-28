@@ -1,6 +1,6 @@
 (ns jobs.lib.ready
   "The readiness checkers a job binds as its safe? and fit? exports: fns of the ctx giving a status (engine.contract).
-  safe-at, safe-at-by-night and safe-if-lit are :later while the place is exposed and the stay there is not affordable (jobs.lib.price/priced; the estimate of jobs.lib.cost/exposure is
+  safe-at, safe-at-by-night and safe-if-lit are :later while the place is exposed and the stay there is not affordable (jobs.lib.price/priced; the estimate of jobs.lib.spawn-light/exposure is
   above ::risk-limit; :look while the light there is unseen and a look from here would show it, else priced as unseen (unseen-status); :never when light is further off than the job waits; a dark hall no sky light reaches is exposed by its spawn chance, :never lowered by a torch; a small dark place is no exposure) or a danger is near
   (threatened); fit? is :later below the risky health or while poisoned (fit-armed also while unarmed); ok never refuses."
   (:require [jobs.lib.cost.health :as cost-health]
@@ -32,7 +32,7 @@
 
 (a/defargs settings
   {::risk-limit {:default 0.001 :spec (a/num-in 0 nil)
-                 :doc "Spawn chance per second (jobs.lib.cost/exposure) above which a place or the walk to it is exposed: a single dark cell is 0.005, a lit or sunlit one 0."}
+                 :doc "Spawn chance per second (jobs.lib.spawn-light/exposure) above which a place or the walk to it is exposed: a single dark cell is 0.005, a lit or sunlit one 0."}
    ::light-patience-s {:default 1200 :spec (a/num-in 0 nil)
                        :doc "Seconds readiness waits for light (jobs.lib.shelter.sense/light-in) before it calls the darkness unfixable; 1200 is a whole day, so a full night is waited for."}
    ::hidden-below-depth {:default 2 :spec (a/num-in 0 nil)
@@ -101,11 +101,11 @@
 (defn at-status
   "The status of the exposure of the walk of c's body to `to`: ok while sheltered or the chance is within ::risk-limit,
   else by what lowers it. Waiting is for dawn only where it lifts the darkness, as go-to's walk-risk/wait-lowers? has it (the sky
-  of a way out of the shelter, cost/exposure's :light, or spawn-light/dawn-lowers?), and the light comes within ::light-patience-s; other darkness is dark-status's. Unseen light no look from here would show is unseen-status's."
+  of a way out of the shelter, spawn-light/exposure's :light, or spawn-light/dawn-lowers?), and the light comes within ::light-patience-s; other darkness is dark-status's. Unseen light no look from here would show is unseen-status's."
   [c to]
   (let [p (:primitives c)
         shelter (:data (ctx/latest c :shelter))
-        {:keys [chance lowered-by look-at light-in]} (cost/exposure p to shelter)
+        {:keys [chance lowered-by look-at light-in]} (spawn-light/exposure p to shelter)
         patience (settings/get settings ::light-patience-s)
         where (place-text to)
         unseen-sides (delay (when (and (sh-sense/dark-outside? p) (not (u/within? (sh-sense/feet p) to 1))) (look-edge/pending c (sense/round-looked c) 0)))
@@ -308,7 +308,7 @@
     {::exposure (fn [c] (if (near? c) (contract/ok :in-reach "no walk to make") ((::exposure (meta safe)) c)))}))
 
 (defn dark-near-ok
-  "safe, but a wait for light (jobs.lib.cost/exposure lowered by :light, or light too far off) is lifted to the threat check alone while the place (f c) lies
+  "safe, but a wait for light (jobs.lib.spawn-light/exposure lowered by :light, or light too far off) is lifted to the threat check alone while the place (f c) lies
   within the radius no mob spawns in round the body (cost/near-body?): a build or light job works there in the dark, which only a large dark area or a hidden pit makes a danger."
   [f safe]
   (let [dark-wait? (fn [[kind _ data]] (and (#{:later :never} kind) (= :exposed (:reason data))

@@ -1,8 +1,8 @@
 (ns jobs.lib.spawn-light
   "Where mobs may spawn on a walk or a stay, by the light the body knows (Q334): the chance a second at a cell
   (chance-at), the seconds a walk spends where one could spawn (dark-seconds) and the mobs met spawning on timed cells
-  (spawns-over) or held at one (spawns-at). The one spawn count jobs.lib.walk-risk, the flee search, a way out of a
-  shelter and a held spot price by (jobs.lib.cost/death-chance's :spawns). A roofed dark cell counts only in a dark hall
+  (spawns-over) or held at one (spawns-at), and a walk's exposure for the readiness checks. The one spawn count
+  jobs.lib.walk-risk, the flee search, a way out of a shelter, a held spot, readiness and bed-down price by (jobs.lib.cost/death-chance's :spawns). A roofed dark cell counts only in a dark hall
   (hall-at?, Q345)."
   (:require [engine.args :as a]
             [engine.settings :as settings]
@@ -36,36 +36,38 @@
 
 (defn- night? [p] (not (look/lit-light? 0 15 (sh-sense/sky-subtract-now p))))
 
-(defn- chance-by
-  "chance-at with the sky darkened as now (night) or not at all (an unseen cell guessed by full day)."
-  [p cell caves-free? night]
-  (let [darkening (if night (sh-sense/sky-subtract-now p) 0)
-        cell (if (sh-sense/solid-at? p cell) (update cell :y inc) cell)
-        block (seen-light p cell)
-        reaches (sh-sense/sky-reaches-from-above? p cell)
-        sky-light (sh-sense/sky-light-at p cell)
-        ;; a sky-reached cell with no sky light data is priced as unseen, not as dark
-        known (and block (or (not reaches) sky-light))]
-    (cond
-      known (let [sky (if (look/lit-light? 0 (or sky-light 0) darkening) 15 0)]
-              (cost/spawn-chance [(:x cell) (:y cell) (:z cell)]
-                                 {:light (constantly {:block block :sky (cond reaches sky (and (< block (look/dark-light)) (hall-at? p cell)) 0 :else 15)})}))
-      :else (let [now (look/unseen-lit-chance p cell (when-not night 0))
-                  ;; caves-free? frees the dark full day leaves too: the chance left is that of dark only the sky lifts
-                  dark (if caves-free? (max 0 (- (look/unseen-lit-chance p cell 0) now)) (- 1 now))]
-              (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:dark dark})})))))
-
 (defn chance-at
-  "The spawn chance per second at `cell`: a seen cell by its light (sky reaching it down its column; a roofed cell is dark
-  only in a dark hall), an unseen one at the chance it is dark (look/unseen-lit-chance); under caves-free? an unseen one
-  only at the chance full day would light it and now does not."
-  [p cell caves-free?]
-  (chance-by p cell caves-free? (night? p)))
+  "The spawn chance per second at `cell`: a seen cell by its light (its own sky light; a roofed cell that leaves dark is
+  dark only in a dark hall), an unseen one at the chance it is dark (look/unseen-lit-chance); under caves-free? an unseen one
+  only at the chance full day would light it and now does not. subtract: the sky's darkening to judge it by (default: as
+  now at night, none by day; 0: full day)."
+  ([p cell caves-free?] (chance-at p cell caves-free? nil))
+  ([p cell caves-free? subtract]
+   (let [darkening (or subtract (if (night? p) (sh-sense/sky-subtract-now p) 0))
+         cell (if (sh-sense/solid-at? p cell) (update cell :y inc) cell)
+         block (seen-light p cell)
+         reaches (sh-sense/sky-reaches-from-above? p cell)
+         sky-light (sh-sense/sky-light-at p cell)
+         ;; a sky-reached cell with no sky light data is priced as unseen, not as dark
+         known (and block (or (not reaches) sky-light))]
+     (cond
+       known (let [sky (if (look/lit-light? 0 (or sky-light 0) darkening) 15 0)]
+               (cost/spawn-chance [(:x cell) (:y cell) (:z cell)]
+                                  {:light (constantly {:block block :sky (cond (or reaches (= 15 sky)) sky (and (< block (look/dark-light)) (hall-at? p cell)) 0 :else 15)})}))
+       :else (let [now (look/unseen-lit-chance p cell (or subtract (when-not (night? p) 0)))
+                   ;; caves-free? frees the dark full day leaves too: the chance left is that of dark only the sky lifts
+                   dark (if caves-free? (max 0 (- (look/unseen-lit-chance p cell 0) now)) (- 1 now))]
+                (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:dark dark})}))))))
+
+(defn night-chance
+  "chance-at of a stay at cell through the night: the sky darkened as at a clear midnight, or more."
+  [p cell]
+  (chance-at p cell false (max (sh-sense/sky-subtract-now p) (look/sky-subtract-at 18000 0 0))))
 
 (defn dawn-lowers?
   "Whether day would lower chance-at at cell: it is night and the cell's light comes from the sky."
   [p cell]
-  (and (night? p) (< (chance-by p cell false false) (chance-at p cell false))))
+  (and (night? p) (< (chance-at p cell false 0) (chance-at p cell false))))
 
 (defn dark-guess?
   "Whether chance-at prices cell only by the guess that it is dark (caves-free? undoes it) that a look may yet show lit:
@@ -115,3 +117,27 @@
   [from cells]
   (let [cells (into [(select-keys from [:x :y :z])] (map #(if (vector? %) (zipmap [:x :y :z] %) %)) cells)]
     (mapv #(assoc %1 :t (/ %2 (cost/walk-blocks-per-s))) cells (reductions + 0 (map u/dist cells (rest cells))))))
+
+(defn exposure
+  "{:chance :lowered-by} of the walk of p to `to` ({:x :y :z}, a column {:x :z} at the feet's height; floored): chance-at
+  the judged cell and what lowers it (data the readiness checks read; empty: nothing foreseeable does). A solid `to` is
+  judged by the first seen open cell over it (the air over a pile, not the unseen logs between), else the cell over it.
+  A cell inside the shelter (sh-inside/walk-leaves-shelter?, with the body's latest :shelter entry data when given) that
+  p has not made out is lowered by #{:look}, with :look-at [[x y z]]; else #{:light} where dawn-lowers? it (a cell the
+  sky reaches, or any outside the shelter), with :light-in, the seconds until light."
+  ([p to] (exposure p to nil))
+  ([p to shelter]
+   (let [to (update-vals (assoc to :y (or (:y to) (:y (sh-sense/feet p)))) js/Math.floor)
+         solid? (sh-sense/solid-at? p to)
+         over (fn [y] (assoc to :y y))
+         open-over (when solid? (first (filter #(and (sh-sense/seen-cell? p (over %)) (not (sh-sense/solid-at? p (over %)))) (range (inc (:y to)) (+ (:y to) 32)))))
+         at (over (or open-over (if solid? (inc (:y to)) (:y to))))
+         cell [(:x at) (:y at) (:z at)]
+         leaves? (sh-inside/walk-leaves-shelter? p shelter to 1)
+         chance (chance-at p at false)
+         wait (when (and (or leaves? (sh-sense/sky-reaches-from-above? p at)) (dawn-lowers? p at))
+                (if leaves? (sh-sense/sky-in p) (sh-sense/light-in p at)))]
+     (cond
+       (and (not leaves?) (nil? (seen-light p at))) {:chance chance :lowered-by #{:look} :look-at [cell]}
+       (and wait (pos? wait)) {:chance chance :lowered-by #{:light} :light-in wait}
+       :else {:chance chance :lowered-by #{}}))))

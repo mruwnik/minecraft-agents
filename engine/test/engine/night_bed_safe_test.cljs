@@ -158,17 +158,17 @@
                 (is (empty? (st/calls raw "moveTo")) "no walk toward the far bed")))
             (finally (set! js/Math.random random))))))))
 
-(def overdue-in-open-dark-tunnel
-  "The tunnel open at both ends and unlit, the far bed standing out in the open: every cell of the walk is dark."
-  (-> (tunnel-world (into {} (for [x (range 0 21) y [64 65]] [[x y 0] [0 0]])))
+(def overdue-in-open-lit-tunnel
+  "The tunnel open at both ends and torch-lit, so staying spawns nothing; the far bed stands out on the dark open ground."
+  (-> (tunnel-world buried-light)
       (update :blocks dissoc "-1,64,0" "-1,65,0" "21,64,0" "21,65,0")
       (assoc :inventory [{:name "cobblestone" :count 32}])))
 
-(deftest an-overdue-miner-does-not-walk-the-dark-to-a-far-bed
+(deftest an-overdue-miner-in-a-lit-tunnel-does-not-walk-the-dark-to-a-far-bed
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p raw clock]} (setup overdue-in-open-dark-tunnel)]
+        (let [{:keys [eng p raw clock]} (setup overdue-in-open-lit-tunnel)]
           (swap! clock + (* 4 sh-clock/ms-per-day))
           (is (= far-bed (sh-beds/bed-to-use p (mem/view (:store eng)) 128 (constantly true))) "overdue: the far bed is the bed to use")
           (core/submit! eng '(jobs.survival.night) {})

@@ -114,6 +114,7 @@
 (deftest a-roofed-dark-way-prices-spawns-only-through-a-dark-hall
   (let [c (ready-test/ctx-of (assoc night-hut :time st/noon))]
     (with-redefs [sh-sense/sky-reaches-from-above? (constantly false)
+                  sh-sense/sky-light-at (constantly 0)
                   sh-sense/block-light-at (constantly 0)]
       (let [hp #(:hp (with-redefs [spawn-light/hall-at? (constantly %)] (risk/estimate c {:x 95 :y 64 :z 0} {:plan (straight-plan c {:x 95 :y 64 :z 0})})))]
         (is (< (hp false) (hp true)) "a small dark tunnel is free, a dark hall costs spawns")))))
@@ -765,6 +766,7 @@
   (let [c (ready-test/ctx-of (assoc night-hut :self {:pos {:x 0 :y 64 :z 0} :health 20 :food 20}))
         status-with (fn [feet-light]
                       (with-redefs [sh-sense/sky-reaches-from-above? (constantly false)
+                                    sh-sense/sky-light-at (constantly 0)
                                     look/glimpse? (constantly true)
                                     sh-sense/block-light-at (fn [_ {:keys [x]}] (if (zero? x) feet-light 0))
                                     spawn-light/hall-at? (constantly true)]
