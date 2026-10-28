@@ -4,10 +4,15 @@
   chunk column (worlds/<world>/chunks) holds what the cell held when the column was written, over min-age-s later. Changed:
   a door's state differs (open, shut), a fluid or fire's block (water to kelp, seagrass or a bubble column stays water).
   The fixture grid (x or z from grid-from: its plots, lanes and islands, built and torn down by tests) is left out.
-  Rows: [body cx sy cz kind seen-s] -> {:n cells :k changed :age-s}, a row folded once stays (its shortest age).
+  Rows: [body cx sy cz kind seen-s] -> {:n cells :k changed :age-s :to {block-name changed cells}}, a row folded once stays
+  (the first folded; rows from before :to was kept have none). :to tells a door that toggled (still a door) from one removed.
   report: per kind, each section one unit (its cells weigh 1/n, they change together), the Gamma posterior of the change
   rate under a Jeffreys prior, :a changes over :b-s seconds as memory-age's priors read; the exposure of a changed cell is
-  its whole age (the change time is unseen), which at these rates moves nothing."
+  its whole age (the change time is unseen), which at these rates moves nothing.
+  Two biases, opposite: a cell time is capped 15300 s after its section's base (store/max-age-s: an older cell is moved
+  up to it), which understates the age of an old cell beside fresh ones, so rates read high; a changed cell the body saw
+  again leaves seen.bin as the block it became (not an aging kind when it is stone or air), which loses the change, so
+  rates read low. Neither is fixed: the store keeps no earlier time and no earlier block."
   (:require [jobs.lib.memory-age :as memory-age]))
 
 (def min-age-s 60)
@@ -46,9 +51,10 @@
                      age-s (when now (- (/ (:t now) 1000) seen-s))]
                  (if (and age-s (> age-s min-age-s))
                    (let [key [body (.-cx s) (.-sy s) (.-cz s) kind seen-s]
-                         r (get m key {:n 0 :k 0 :age-s age-s})]
-                     (assoc! m key (-> r (update :n inc)
-                                       (update :k + (if (changed? kind (state-name id) id (:name now) (:id now)) 1 0)))))
+                         r (get m key {:n 0 :k 0 :age-s age-s})
+                         changed (changed? kind (state-name id) id (:name now) (:id now))]
+                     (assoc! m key (cond-> (update r :n inc)
+                                     changed (-> (update :k inc) (update-in [:to (:name now)] (fnil inc 0))))))
                    m)))
              m (range 4096)))))
       (transient {}) sections))))
@@ -71,7 +77,7 @@
     (mapv at [0.05 0.5 0.95])))
 
 (defn report
-  "{kind {:cells :changed :sections :a :b-s :rate-per-s [5% 50% 95%]}} of rows."
+  "{kind {:cells :changed :to {block-name changed cells} :sections :a :b-s :rate-per-s [5% 50% 95%]}} of rows."
   [rows]
   (into (sorted-map)
         (for [[kind rs] (group-by (fn [[[_ _ _ _ kind]]] kind) rows)
@@ -80,5 +86,6 @@
                                              (/ (reduce + (map (comp f val) sec)) n))))
                     a (+ 0.5 (unit :k))
                     b (unit #(* (:n %) (:age-s %)))]]
-          [kind {:cells (reduce + (map (comp :n val) rs)) :changed (reduce + (map (comp :k val) rs)) :sections (count secs)
+          [kind {:cells (reduce + (map (comp :n val) rs)) :changed (reduce + (map (comp :k val) rs))
+                 :to (apply merge-with + (map (comp :to val) rs)) :sections (count secs)
                  :a a :b-s (js/Math.round b) :rate-per-s (quantiles a b)}])))

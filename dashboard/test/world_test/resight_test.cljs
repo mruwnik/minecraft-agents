@@ -21,11 +21,11 @@
         sec (section 0 0 0 0 {0 [1 0] 1 [1 0] 2 [2 0] 3 [6 0]})
         world {[0 0 0] 4 [1 0 0] 5 [2 0 0] 3 [3 0 0] 6}
         rows (r/rows "B" [sec] names (at-from world 100000))]
-    (is (= {["B" 0 0 0 :fluid 0] {:n 2 :k 1 :age-s 100}
-            ["B" 0 0 0 :door 0] {:n 1 :k 1 :age-s 100}
+    (is (= {["B" 0 0 0 :fluid 0] {:n 2 :k 1 :age-s 100 :to {"stone" 1}}
+            ["B" 0 0 0 :door 0] {:n 1 :k 1 :age-s 100 :to {"oak_door" 1}}
             ["B" 0 0 0 :fire 0] {:n 1 :k 0 :age-s 100}}
            rows)
-        "water to stone changed, water to kelp not; the door's state id differs; the fire stays")))
+        "water to stone changed, water to kelp not; the door's state id differs; the fire stays; a changed cell records what it holds now")))
 
 (deftest a-record-under-a-minute-after-the-sighting-the-fixture-grid-and-unrecorded-columns-count-nothing
   (let [near (section 0 0 0 0 {0 [1 0]})
@@ -40,11 +40,12 @@
          (r/fold {:resight {:a {:n 1 :k 0 :age-s 100}}} {:a {:n 1 :k 1 :age-s 900}}))))
 
 (deftest each-section-weighs-one-unit-in-the-jeffreys-gamma-posterior
-  (let [rows {["A" 0 0 0 :fluid 0] {:n 3 :k 1 :age-s 100}
+  (let [rows {["A" 0 0 0 :fluid 0] {:n 3 :k 1 :age-s 100 :to {"stone" 1}}
               ["B" 0 0 0 :fluid 50] {:n 1 :k 0 :age-s 300}
               ["A" 1 0 0 :fluid 0] {:n 10 :k 0 :age-s 1000}}
         {:keys [fluid]} (r/report rows)]
     (is (= {:cells 14 :changed 1 :sections 2} (select-keys fluid [:cells :changed :sections])))
+    (is (= {"stone" 1} (:to fluid)))
     (is (= 0.75 (:a fluid)) "0.5 + the first section's 1 of 4 changed")
     (is (= 1150 (:b-s fluid)) "(3 * 100 + 300) / 4 + 1000")
     (let [[lo mid hi] (:rate-per-s fluid)]
