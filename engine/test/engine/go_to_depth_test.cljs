@@ -4,6 +4,7 @@
   (:require [cljs.test :refer [deftest is are async]]
             [jobs.lib.aim :as aim]
             [jobs.lib.cost :as cost]
+            [jobs.lib.ledger :as ledger]
             [jobs.movement.go-to.search-bound :as search-bound]
             [engine.core :as core]
             [engine.fake :as fake]
@@ -95,10 +96,11 @@
 (defn ^:async climb!
   "go! with ticks enough for a stair, a second of fake time each (the stair waits out a lava delay): {:out :p :seen
   :track}, track every position the body had. A world key :stair-way (floors) is written to memory as a stair the body
-  cut, :own-ways ([kind data] each) as more of its ways, :known (cells) as cells the body remembers as they are. A world key :on-move (fn [p pos]) is called with every position the body has; :ticks bounds the run (default 1000)."
+  cut, :own-ways ([kind data] each) as more of its ways, :known (cells) as cells the body remembers as they are, :placed
+  (cells) as blocks it placed (its ledger's :shelter entries, the block there). A world key :on-move (fn [p pos]) is called with every position the body has; :ticks bounds the run (default 1000)."
   [world args]
   (let [clock (atom 1000000)
-        {:keys [eng p] :as s} (gt/setup (assoc (dissoc world :stair-way :own-ways :known :on-move :ticks) :clock clock))
+        {:keys [eng p] :as s} (gt/setup (assoc (dissoc world :stair-way :own-ways :known :placed :on-move :ticks) :clock clock))
         out (atom :not-done)
         track (atom [])
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (gt/recording-parent out args)))]
@@ -108,6 +110,9 @@
     (run! #(perception/touch! (.-perception p) %) (:known world))
     (some->> (:stair-way world) (hash-map :dim "overworld" :floors) (mem/write! (:store eng) :stair-way))
     (doseq [[kind data] (:own-ways world)] (mem/write! (:store eng) kind (assoc data :dim "overworld")))
+    (some->> (:placed world)
+             (map (fn [[x y z :as cell]] {:cell cell :item (get (:blocks world) (str x "," y "," z)) :before "air" :job "j0" :purpose :shelter :state :placed}))
+             (ledger/write! (:store eng)))
     (core/submit! eng '(recording-parent) {})
     (loop [i 0]
       (when (and (< i (:ticks world 1000)) (seq (:list (core/state eng))))
@@ -366,7 +371,8 @@
           (is (= [[true [-79 59 0]]] (map (juxt :take :to) (gt/events-of s :go-to.own-way)))))))))
 
 ;; A dirt mass with a shut tunnel (feet 40, x 0..6) and the body's own stair from its west end up to feet 46 at x -6
-;; (floors [-1 40 0] .. [-6 45 0]), shut by the body with two cobblestone in the head space of its second step (a pickaxe carried).
+;; (floors [-1 40 0] .. [-6 45 0]), shut by the body with two cobblestone in the head space of its second step, in its
+;; ledger (a pickaxe carried): a block the body has no record of placing may be someone's, and is not dug.
 (def short-floors (vec (for [i (range 1 7)] [(- i) (+ 39 i) 0])))
 (def cap [[-2 43 0] [-2 44 0]])
 
@@ -381,7 +387,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p] :as s} (await (climb! {:blocks capped :seen :all :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 15] :stair-way short-floors
-                                                    :inventory [{:name "stone_pickaxe" :count 1}]}
+                                                    :placed cap :inventory [{:name "stone_pickaxe" :count 1}]}
                                                    {:pos [-6 46 0]}))
               blocks (:blocks @(fake/state p))]
           (is (true? (:arrived @out)))
@@ -390,7 +396,7 @@
           (is (= [[:stair :own-way-blocked]] (map (juxt :step :why) (gt/events-of s :go-to.escalated)))))))))
 
 ;; The forked mass with the stair's top steps shut by the body: cobblestone in the head of its 18th step and the feet of
-;; its 19th, so the 17th stands in a pit under the open sky, 3 below the top (a pickaxe carried). The body remembers the
+;; its 19th, in its ledger, so the 17th stands in a pit under the open sky, 3 below the top (a pickaxe carried). The body remembers the
 ;; stair's top (mouth), and walks its way from the stair's foot in hops of 3, so that no hop goes straight to a step
 ;; above the cap.
 (def mouth-cap [[-24 59 0] [-25 59 0]])
@@ -404,7 +410,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p] :as s} (await (settings/with-settings {:jobs.movement.go-to.climb/own-way-reach 3}
-                                             #(climb! (assoc in-forked :blocks mouth-capped :known mouth :self {:pos {:x -5.5 :y 40 :z 0.5}}
+                                             #(climb! (assoc in-forked :blocks mouth-capped :known mouth :placed mouth-cap :self {:pos {:x -5.5 :y 40 :z 0.5}}
                                                              :inventory [{:name "stone_pickaxe" :count 1}])
                                                       {:pos fork-top})))
               blocks (:blocks @(fake/state p))]
