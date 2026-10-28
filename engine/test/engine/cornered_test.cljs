@@ -748,14 +748,14 @@
   (is (= {:beside {:k 6 :n 6} :clear {:k 4 :n 8}} (flight/add-seen {:beside {:k 4 :n 4} :clear {:k 4 :n 8}} {:beside 2}))
       "two refusals with a mob in the pillar's cells say nothing of a pillar begun clear"))
 
-(deftest a-seen-failure-stays-over-flee-steps-until-the-gap-grows-a-block
+(deftest a-seen-failure-stays-over-flee-steps-whatever-the-gap-does
   (let [refused {:seen-fails {:pillar {:beside 1}} :tried #{:back-off}}
-        first-step (flight/after-step refused 2)
-        no-gain (flight/after-step first-step 2.8)]
-    (is (= {:pillar {:beside 1}} (:seen-fails first-step)) "the first step's gap is the baseline: no gain")
-    (is (= {:pillar {:beside 1}} (:seen-fails no-gain)) "a step that gains under a block: the refusal still counts")
-    (is (nil? (:tried no-gain)) "the options tried are open again after a step")
-    (is (nil? (:seen-fails (flight/after-step no-gain 3))) "a block gained: the pillar is priced afresh")))
+        widened (-> refused (flight/after-step 2) (flight/after-step 5))
+        counts {:beside {:k 4 :n 4} :clear {:k 4 :n 8}}
+        seen (fn [mem] (flight/add-seen counts (get-in mem [:seen-fails :pillar])))]
+    (is (= {:pillar {:beside 1}} (:seen-fails widened)) "the chasers fell behind: the refusal still counts")
+    (is (nil? (:tried widened)) "the options tried are open again after a step")
+    (is (= {:beside {:k 5 :n 5} :clear {:k 4 :n 8}} (seen widened)) "the pillar is dearer in its class, the other class is as before")))
 
 (deftest a-zombie-in-the-cell-of-the-next-block-is-struck-out-and-the-pillar-goes-on
   (async done
@@ -1846,6 +1846,20 @@
                 ctx/update-mem! (fn [c f & args] (apply swap! (:mem c) f args))
                 ctx/latest (constantly nil)]
     (f)))
+
+(deftest a-raise-cut-short-for-a-mob-is-a-seen-failure-of-the-class-the-refuge-began-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [m (atom {:refuge {:kind :pillar :class :clear :cells [[0 64 0]]}})
+              p (tu/fake-on-floor {:inventory [{:name "dirt" :count 20}]})]
+          (with-redefs [respond.pillar/build! (fn ^:async f [& _] {:built 0 :mob? true})
+                        respond.pillar/knock-off! (fn ^:async f [& _] nil)
+                        respond.pillar/pillar-item (fn ([_] "dirt") ([_ _] "dirt"))
+                        ctx/mem (fn [c] @(:mem c))
+                        ctx/update-mem! (fn [c f & args] (apply swap! (:mem c) f args))]
+            (await (respond.pillar/raise! (stub-ctx p m))))
+          (is (= {:pillar {:clear 1}} (:seen-fails @m)) "counted under the refuge's class, not the one the body stands in now"))))))
 
 (deftest the-covers-are-priced-once-while-what-they-read-stays
   (let [m (atom {})

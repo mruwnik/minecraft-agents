@@ -197,7 +197,7 @@
   "The cover {:open-s :seconds :fails} of a pillar against hostiles (cost/cover-answer): in a melee mob's reach for ::pillar-s,
   then the hide-out's quiet on top, all of it in a shooter's line of fire; it fails for a mob in its cell by
   ::pillar-mob-fails of the class the body stands in (wall-in/mob-fails, respond.pillar/mob-class), with the refusals this
-  flight saw since its last gain added (flight/with-seen-fails);
+  flight saw added (flight/with-seen-fails);
   nil when no pillar fits here, a climber is near or a shot was felt within ::hurt-window-s (the top stays in that line of fire)."
   [c hostiles]
   (when (and (pillar/pillar-item c) (not-any? combat/climber? hostiles)

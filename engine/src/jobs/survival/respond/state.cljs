@@ -111,7 +111,7 @@
              counts seen))
 
 (defn with-seen-fails
-  "Counts {class {:k :n}} of option's failures with the ones this flight saw since its last gain (seen-fail!) added (add-seen)."
+  "Counts {class {:k :n}} of option's failures with the ones this flight saw (seen-fail!) added (add-seen)."
   [c option counts]
   (add-seen counts (get-in (ctx/mem c) [:seen-fails option])))
 
@@ -132,15 +132,14 @@
 
 (defn note-gap
   "mem after a flight step that left the nearest chaser gap blocks off: a gain of a block over the best gap resets the
-  sweeps and the no-gain count and forgets the cover failures seen (seen-fail!: the chasers no longer press where they
-  were seen), else the count grows. The first gap is the baseline, no gain over a failure seen before it. No gap (no
+  sweeps and the no-gain count, else the count grows. The first gap is the baseline. No gap (no
   chaser left) is no sample: the flight is succeeding, the no-gain count resets and the best gap stays."
   [mem gap]
   (let [best (:best-gap mem)]
     (cond
       (nil? gap) (assoc mem :since-gain 0)
       (nil? best) (assoc mem :best-gap gap :since-gain 0 :sweeps 0)
-      (>= gap (inc best)) (-> mem (assoc :best-gap gap :since-gain 0 :sweeps 0) (dissoc :seen-fails))
+      (>= gap (inc best)) (assoc mem :best-gap gap :since-gain 0 :sweeps 0)
       :else
       (update mem :since-gain (fnil inc 0)))))
 
