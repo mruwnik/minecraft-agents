@@ -271,6 +271,24 @@
               "the mouth is shut, the rest of the door left to go-to's put-back")
           (is (< (at ["place" [1 65 0]]) (at ["dig" [3 64 0]])) (str "shut before the far side opens: " (pr-str acts))))))))
 
+(deftest a-door-shut-behind-that-turns-too-dear-opens-its-mouth-walks-back-and-ends-too-dear
+  ;; the walk back first digs the shut mouth open again (a dead end): the ending is the price's, not :no-door's
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (atom nil)
+              thick (assoc wall :sight 3 :inventory [{:name "wooden_pickaxe" :count 1}] :drops {"stone" "cobblestone"} :p-out p
+                           :blocks (merge (box -2 63 -2 40 63 2 "stone") (box 1 64 -1 30 65 1 "stone")))
+              cell-s (cost/dig-cells-s [(tools/clear-ms (tu/fake (dissoc thick :sight :p-out)) "stone")])
+              r (await (run-door thick nil {:heading :east :close-behind true :max-dig-s (* 10 cell-s)} nil identity))
+              block (fn [cell] (get-in @(fake/state @p) [:blocks cell] "air"))
+              placed (keep #(when (= "place" (.-name %)) (let [{:keys [x y z]} (js->clj (.-pos (.-args %)) :keywordize-keys true)] [x y z]))
+                           (.-calls (.-world @p)))]
+          (is (= [:condition-failed :too-dear] [(:kind r) (contract/cause-key r)]) (pr-str r))
+          (is (some #{[1 64 0]} placed) (str "the mouth was shut: " (pr-str placed)))
+          (is (= [0 64 0] (:at (:data r))) "it walked back to where it began")
+          (is (= ["air" "air"] (mapv block [[1 64 0] [1 65 0]])) "the mouth it shut is open again"))))))
+
 (deftest a-door-one-column-deep-is-walked-out-of-with-close-behind
   (async done
     (tu/run-async done
