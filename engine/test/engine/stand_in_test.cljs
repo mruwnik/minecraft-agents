@@ -21,7 +21,7 @@
                                    (into {} (for [y (range 59 64)] [(str "-1," y ",0") "stone"]))
                                    (into {} (for [x (range -1 4) z [-1 1] y (range 59 66)] [(str x "," y "," z) "stone"])))
                     :self {:pos [1.5 62.7 0.5]}})]
-    (is (= {:x -1 :y 64 :z 0} (stand-in/dry-cell p {:x 1.5 :y 62.7 :z 0.5} 16))
+    (is (= {:x -1 :y 64 :z 0} (stand-in/dry-cell p {:x 1.5 :y 62.7 :z 0.5} 1))
         "the feet cell is under the surface: the stand on the shore is two up")))
 
 (deftest dry-cell-is-the-bank-with-land-beyond-not-a-nearer-ledge
@@ -91,3 +91,17 @@
         enderman {:x 2.5 :y 64 :z 0.5}]
     (is (= {:x 12 :y 64 :z 0} (stand-in/roof-cell at body 16 [enderman])) "the near gap sits beside the enderman, the far one is a hut 12 blocks off")
     (is (= {:x 2 :y 64 :z 0} (stand-in/roof-cell at body 16 [])))))
+
+(deftest dry-stand-reads-the-flights-hostiles-so-a-mob-outside-their-radius-adds-no-land-needed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cells (fn [xs zs ys] (for [x xs z zs y ys] (str x "," y "," z)))
+              blocks (merge (zipmap (cells (range 0 9) (range -1 2) (range 59 64)) (repeat "water"))
+                            (zipmap (concat (cells [2] [0] [63]) (cells (range 9 16) (range -1 2) (range 59 64))
+                                                     (cells (range -1 16) [-2 2] (range 59 67)) (cells [-1] (range -1 2) (range 59 67)))
+                                      (repeat "stone")))
+              world {:blocks blocks :self {:pos [0.5 63.2 0.5]} :entities [{:id 5 :name "zombie" :kind "hostile" :pos {:x -12 :y 64 :z 0}}]}
+              {:keys [eng]} (stand! world {:where :dry})]
+          (await (tu/run-until-empty eng 10))
+          (is (= 2 (:x (first (tu/walked-to eng)))) "the zombie 12 blocks off is no flight hostile (radius 8): no land needed, the nearest ledge"))))))

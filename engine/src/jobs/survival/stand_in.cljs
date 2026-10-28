@@ -30,14 +30,13 @@
 
 (a/defargs args
   {:where {:doc "the kind of place: :water, :roof or :dry" :spec #{:water :roof :dry} :default nil}
-   :reach {:doc "blocks within which to look for it; nil: the setting of the kind" :spec (a/num-in 0 nil) :default nil}
+   :reach {:doc "blocks within which to look for it (:water, :roof); nil: the setting of the kind" :spec (a/num-in 0 nil) :default nil}
    :leg-s {:doc "seconds one leg may take; nil: the flight step setting" :spec (a/num-in 0.1 120) :default nil}})
 
 (a/defargs settings
   {::water-reach {:default 6 :doc "Blocks within which a body hunted by an enderman looks for water to stand in." :spec (a/num-in 0 nil)}
    ::roof-reach {:default 16 :doc "Blocks within which a body hunted by an enderman looks for a 2-high gap under a roof (its own hut counts)." :spec (a/num-in 0 nil)}
    ::enderman-gap {:default 4 :doc "Blocks from a known enderman within which a roof gap is no place to run to: the walk would end beside it." :spec (a/num-in 0 nil)}
-   ::dry-reach {:default 16 :doc "Blocks within which a body in water looks for dry land to swim out to." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 60 :doc "Seconds a stand may take." :spec (a/num-in 0 nil)}})
 
 (def target [])
@@ -58,7 +57,7 @@
       (case (:where (:args c))
         :water (settings/get settings ::water-reach)
         :roof (settings/get settings ::roof-reach)
-        (settings/get settings ::dry-reach))))
+        nil)))
 
 (defn feet-cell [c]
   (let [{:keys [x y z]} (u/self-pos c)]
@@ -115,7 +114,7 @@
       :water (water-cell block-at (u/self-pos c) reach)
       :roof (roof-cell block-at (u/self-pos c) reach
                      (mapv #(danger-q/mob-pos p %) (filter combat/enderman? (danger-q/known-hostiles p reach {}))))
-      :dry (dry-cell p (u/self-pos c) (reduce max 0 (map #(cost/hit-range (fight/mob-near p %)) (danger-q/known-hostiles p reach {})))))))
+      :dry (dry-cell p (u/self-pos c) (reduce max 0 (map #(cost/hit-range (fight/mob-near p %)) (options/near c)))))))
 
 (defn here?
   "Whether the body stands in a place of its kind."
@@ -159,4 +158,4 @@
                                     (or (:leg-s (:args c)) (options/flight-timeout-s))))
         :continue
         (ctx/end c :nothing-possible :blocked {:text (str "no leg led to the " (name (:where (:args c))) " at " (pr-str (u/cell-vec cell)))}))
-      (ctx/end c :nothing-possible :no-place {:text (str "no " (name (:where (:args c))) " within " (reach-of c) " blocks")}))))
+      (ctx/end c :nothing-possible :no-place {:text (str "no " (name (:where (:args c))) (when-let [r (reach-of c)] (str " within " r " blocks")))}))))

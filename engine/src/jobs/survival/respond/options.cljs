@@ -110,6 +110,14 @@
                       (remove #(or (combat/creeper? %) (combat/enderman? %) (combat/ranged? %)))
                       (map cost/mob-kind))))
 
+(defn near
+  "The hostiles that count: ones the body has seen (jobs.lib.danger/known-hostiles), melee within :radius and ranged
+  within :ranged-radius. One behind a wall cannot reach or shoot the body, so
+  it is left alone, as is one with no walkable way to the body (jobs.lib.danger) unless it hit the body lately (danger/hit-ids),
+  as the hostile-near trigger does."
+  [c]
+  (danger-q/dangers (:primitives c) (danger-q/hostile-radius) {:ranged-radius (danger-q/ranged-radius)} {:hit-ids (danger-q/hit-ids (ctx/view c))}))
+
 (defn near-hostiles
   "The hostiles a cornered body weighs: within :radius, ranged ones within :ranged-radius, the dead skipped."
   [c]
