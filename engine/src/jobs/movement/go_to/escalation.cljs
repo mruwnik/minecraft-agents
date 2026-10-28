@@ -16,7 +16,8 @@
     through, it puts back what clear-path or stair dug in another's zone, claim or plan (with :ignore-zones?;
     its own diggings elsewhere stay) (jobs.blocks.place, the dug block or its drop, when carried): info
     go-to.restored, warn go-to.restore-skipped for cells it could not. Pillar blocks and a stair's placed floors are
-    left to jobs.access.cleanup. Its walk child (ctx/call) has :ways #{:walk :clear-seal}. Jobs that must not change the world
+    left to jobs.access.cleanup. Shut in its own pen holding livestock (jobs.lib.own-pen) with no other way, it stairs or
+    clears a door through the pen's wall and puts those cells back too (hole-tag :mend). Its walk child (ctx/call) has :ways #{:walk :clear-seal}. Jobs that must not change the world
     on the way pass :ways #{:walk}: a shut-in body then gives up with :shut-in true and says so in the text."
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -35,6 +36,7 @@
             [jobs.lib.trip :as trip]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.access :as access]
+            [jobs.lib.own-pen :as own-pen]
             [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.movement.go-to.climb :as climb]
             [jobs.movement.go-to.climb-route :as climb-route]
@@ -63,8 +65,9 @@
                                    (:item e) (assoc :use {:blocks [(:item e)]})
                                    ;; a climb's pillar digs the roof its route priced
                                    (:roof e) (assoc :settings {:jobs.access.pillar/max-ceiling-digs (:roof e)}))]
-    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :checks {:fit? '(always)} :accept #{:falling-block} :ways (ways-for fetch?) :settings {:jobs.lib.trip/spent-uses 0} :ignore-zones? ignore-zones? :need-drop (not by-hand?) :leave-drops true}]
-    :clear-path ['jobs.access.clear-path {:checks {:fit? '(always)} :heading (:heading e) :ignore-zones? ignore-zones? :need-drop (not by-hand?) :ways #{:carried :craft}}]
+    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :checks {:fit? '(always)} :accept #{:falling-block} :ways (ways-for fetch?) :settings (cond-> {:jobs.lib.trip/spent-uses 0} (:mend-pen e) (assoc :jobs.lib.access/spare-own-builds false)) :ignore-zones? ignore-zones? :need-drop (not by-hand?) :leave-drops true}]
+    :clear-path ['jobs.access.clear-path (cond-> {:checks {:fit? '(always)} :heading (:heading e) :ignore-zones? ignore-zones? :need-drop (not by-hand?) :ways #{:carried :craft}}
+                                           (:mend-pen e) (assoc :settings {:jobs.lib.access/spare-own-builds false}))]
     :approach ['jobs.movement.go-to {:checks {:fit? '(always)} :pos (zipmap [:x :y :z] (:pos e)) :range 0 :ways #{:walk :clear-seal}}]
     :fill-gap ['jobs.blocks.place {:pos (zipmap [:x :y :z] (:cell e)) :use {:blocks [(:item e)]} :ways #{:carried} :ignore-zones? ignore-zones?}]))
 
@@ -254,10 +257,20 @@
                     (vec at)))
         chosen e
         spot (when (= :none (:step e)) (when-not (or (contains? (:skip opts) :approach) (searching? slice)) (escape/way-spot (:primitives c) feet goal (may-dig-fn c) opts (or (:approached (ctx/mem c)) #{}))))
+        ;; shut in its own stocked pen: break out through the wall and put it back once past (hole-tag :mend)
+        mend (delay (when (access/spare-own-builds)
+                      (let [wall? (own-pen/wall? c feet)
+                            own? (:own? opts)
+                            allowed? (may-dig-fn c false false)
+                            spared? (may-dig-fn c true false)
+                            m (escape/choose (:primitives c) feet goal #(and (allowed? %) (or (wall? %) (spared? %)))
+                                             (assoc opts :own? (fn [cell n] (or (own? cell n) (wall? cell)))))]
+                        (when (#{:clear-path :stair} (:step m)) (assoc m :mend-pen true)))))
         e (cond
             (not= :none (:step e)) e
             spot {:step :approach :pos spot}
             drop-in {:step :approach :pos drop-in}
+            @mend @mend
             (and (access/spare-own-builds) (choosable? (may-dig-fn c false)))
             {:step :none :why (if (choosable? (may-dig-fn c true false)) :own-pen :own-build)}
             (and (zone-exit? c feet) (choosable? zone-free)) (assoc (choose zone-free) :exit-zone true)

@@ -111,10 +111,10 @@
     (ctx/remember! c :tidy (assoc p :now now :tries 0 :job (:root c)) tidy-policy)))
 
 (defn tidy-work?
-  "Whether entry e is to be put back: a placed block, or a dug one that names another's :zone, :claim or :plan (an
-  entry noted before holes were noted only there may name none)."
+  "Whether entry e is to be put back: a placed block, or a dug one that names another's :zone, :claim or :plan, or is
+  a :mend (a break out of the body's own pen) (an entry noted before holes were noted only there may name none)."
   [{:keys [action] :as e}]
-  (or (not= :dig action) (boolean (some #(contains? e %) [:zone :claim :plan]))))
+  (or (not= :dig action) (boolean (some #(contains? e %) [:zone :claim :plan :mend]))))
 
 (defn entries
   "The :tidy data maps that are tidy work (tidy-work?), oldest first."

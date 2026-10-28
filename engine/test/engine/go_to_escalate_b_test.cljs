@@ -209,19 +209,22 @@
           (is (seq warned) "each own cell dug is named")
           (is (every? #(and (= :warn (:level %)) (= "hut" (:plan %)) (vector? (:cell %))) warned)))))))
 
-(deftest go-to-never-digs-out-of-its-own-pen-holding-animals
+(defn dug-cells-of [p] (set (map #(let [pos (.-pos (.-args %))] [(.-x pos) (.-y pos) (.-z pos)]) (calls p "dig"))))
+
+(deftest go-to-digs-out-of-its-own-pen-holding-animals-and-puts-the-wall-back
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [zones [{:name "pen" :owner "Fake" :min [-2 60 -2] :max [2 64 2]}]
               cow {:id 7 :name "cow" :kind "passive" :pos {:x 0.5 :y 61 :z 0.5}}
               go (fn [world zones] (run-job! world 'jobs.movement.go-to {:pos [10 64 0] :range 1} zones))
-              {:keys [out p seen]} (await (go (merge in-pit {:blocks pit :entities [cow]}) zones))
+              {:keys [out p seen]} (await (go (merge in-pit {:blocks pit :entities [cow] :inventory [{:name "dirt" :count 8}]}) zones))
               open (await (go (merge in-pit {:blocks pit}) zones))]
-          (is (= false (:arrived @out)))
-          (is (= {:step :none :why :own-pen} (:escalation @out)) "animals stand in the pit the body owns")
-          (is (empty? (calls p "dig")))
-          (is (= {:arrived true} @(:out open)) "an own pit with no animals in it is dug out of as before"))))))
+          (is (= {:arrived true} @out))
+          (is (seq (dug-cells-of p)))
+          (is (= (dug-cells-of p) (set (mapcat :cells (events-of seen :go-to.restored)))) "animals stand in the pit the body owns: every cell dug is put back")
+          (is (= {:arrived true} @(:out open)) "an own pit with no animals in it is dug out of as before")
+          (is (empty? (events-of (:seen open) :go-to.restored)) "and its holes are left"))))))
 
 (deftest go-to-hops-the-1-high-sill-of-its-pen-gap-and-digs-nothing
   (async done
@@ -519,20 +522,20 @@
         (is (= {:safe? '(always) :fit? '(always)} (await (pillar-call-checks nil))) "no caller form: a hostile or the dark pit does not stall the way out")
         (is (nil? (:safe? (await (pillar-call-checks {:safe? '(always)})))) "a caller's form reaches the pillar (card 02b795f1)")))))
 
-(deftest go-to-spares-the-wall-of-a-pit-pen-that-is-a-plan-of-the-body-seen-or-not
+(deftest go-to-digs-out-of-a-pit-pen-that-is-a-plan-of-the-body-and-puts-the-wall-back
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [sight [nil 3]]
-          (let [blocks (apply dissoc (merge (box 10 59 10 30 59 22 "grass_block") (box 10 60 10 22 61 22 "stone"))
-                              (for [x (range 14 19) z (range 14 19) y [60 61]] (str x "," y "," z)))
-                plan (shape/with-author {:id "pit" :parts [{:id "inside" :box [[14 60 14] [18 61 18]] :want [:any "air"]}]} "Fake")
-                cows [{:id 7 :name "cow" :kind "passive" :pos {:x 15.5 :y 60 :z 15.5}} {:id 8 :name "cow" :kind "passive" :pos {:x 17.5 :y 60 :z 17.5}}]
-                {:keys [out p]} (await (run-job! {:self {:pos {:x 18.4 :y 60 :z 16.5}} :blocks blocks :entities cows :sight sight}
-                                                'jobs.movement.go-to {:pos [26 60 16] :range 1} {:plans {"pit" plan}}))]
-            (is (= false (:arrived @out)) (str "sight " sight))
-            (is (= {:step :none :why :own-pen} (:escalation @out)) (str "sight " sight " " (pr-str @out)))
-            (is (empty? (calls p "dig")) (str "sight " sight))))))))
+        (let [blocks (apply dissoc (merge (box 10 59 10 30 59 22 "grass_block") (box 10 60 10 22 61 22 "stone"))
+                            (for [x (range 14 19) z (range 14 19) y [60 61]] (str x "," y "," z)))
+              plan (shape/with-author {:id "pit" :parts [{:id "inside" :box [[14 60 14] [18 61 18]] :want [:any "air"]}]} "Fake")
+              cows [{:id 7 :name "cow" :kind "passive" :pos {:x 15.5 :y 60 :z 15.5}} {:id 8 :name "cow" :kind "passive" :pos {:x 17.5 :y 60 :z 17.5}}]
+              {:keys [out p seen]} (await (run-job! {:self {:pos {:x 18.4 :y 60 :z 16.5}} :blocks blocks :entities cows}
+                                                    'jobs.movement.go-to {:pos [26 60 16] :range 1} {:plans {"pit" plan}}))]
+          (is (= {:arrived true} @out))
+          (is (seq (dug-cells-of p)))
+          (is (= (dug-cells-of p) (set (concat (mapcat :cells (events-of seen :go-to.restored)) (map :cell (mapcat :cells (events-of seen :go-to.restore-skipped))))))
+              "every cell dug is put back, or left for restore-broken when nothing carried fills it"))))))
 
 (deftest go-to-takes-back-the-own-blocks-that-shut-the-body-in-when-the-goal-is-farther-than-the-clear-radius
   ;; a seal beside the feet, the goal 6 blocks past it: the cleanup takes back every own block near the feet, also the one behind
@@ -562,3 +565,22 @@
                                                     [8 64 0] [2 67 0] [3 64 0] false))]
     (is (true? (priced? {})) "open ground: escape/choose has no wall to dig, which is no trap")
     (is (false? (priced? bedrock-pit)) "a pit with nothing to dig is a certain trap")))
+
+(def fence-pen
+  "A gateless oak-fence ring (x/z -3..3 at y 64) on a stone floor x -10..12, z -6..6 (feet y 64)."
+  (merge (box -10 63 -6 12 63 6 "stone")
+         (into {} (for [x (range -3 4) z (range -3 4) :when (or (#{-3 3} x) (#{-3 3} z))] [(str x "," 64 "," z) "oak_fence"]))))
+
+(deftest go-to-breaks-out-of-its-own-stocked-gateless-pen-and-puts-the-fence-back
+  ;; card bc302253: no stair climbs onto a fence (1.5 high), so the way out is a dig through the wall, mended once past
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zones [{:name "pen" :owner "Fake" :min [-3 60 -3] :max [3 66 3]}]
+              cow {:id 7 :name "cow" :kind "passive" :pos {:x 1.5 :y 64 :z 1.5}}
+              {:keys [out p seen]} (await (run-job! {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks fence-pen :entities [cow] :inventory [{:name "cobblestone" :count 5}]}
+                                                    'jobs.movement.go-to {:pos [8 64 0] :range 1} zones))]
+          (is (= {:arrived true} @out))
+          (is (= [:clear-path] (map :step (events-of seen :go-to.escalated))))
+          (is (= [[[3 64 0]]] (map :cells (events-of seen :go-to.restored))) "the cut fence is put back")
+          (is (= "oak_fence" (block p [3 64 0]))))))))

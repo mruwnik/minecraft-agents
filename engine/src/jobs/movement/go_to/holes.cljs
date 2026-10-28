@@ -96,9 +96,10 @@
        vec))
 
 (defn hole-tag
-  "What marks a hole as this go-to's in the tidy ledger; its stair child writes it (:note) as it digs; clear-path's are noted by go-to after each round and in its cleanup."
+  "What marks a hole as this go-to's in the tidy ledger; its stair child writes it (:note) as it digs; clear-path's are noted by go-to after each round and in its cleanup.
+  :mend while the escalation breaks out of the body's own pen: every hole of it is put back, own ground or not."
   [c]
-  {:escalation true :go-to (:id c)})
+  (cond-> {:escalation true :go-to (:id c)} (:mend-pen (:escalation (ctx/mem c))) (assoc :mend true)))
 
 (defn note-holes!
   "Write every cell of dug ({:cell :block}) that is air now and not yet noted to the ledger, as a :dig entry with

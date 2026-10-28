@@ -1,7 +1,7 @@
-;; Card b500ec08: go-to's escalation spares the wall of the body's own pen that holds animals. Pit pen: stone x 10..22, z 10..22, y 0..1 with a
+;; Cards b500ec08, bc302253: go-to's escalation breaks out of the body's own pen that holds animals and puts the wall back. Pit pen: stone x 10..22, z 10..22, y 0..1 with a
 ;; 5x5 hole x 14..18, z 14..18 (open top, 2 deep), the body inside; the hole's cells are in a plan of the body (its own area), the walls are not.
-;; Should-succeed: with no animals in the pit go-to digs out (arrives); should-fail: with two cows in the pit it stops {:step :none :why :own-pen},
-;; digs nothing and the cows stay.
+;; Should-succeed: with no animals in the pit go-to digs out (arrives); with two cows in the pit it digs out too, puts back every cell it dug
+;; (go-to.restored) and the cows stay.
 {:defaults
  {:tags [:movement :access :animals]
   :time :any
@@ -11,14 +11,14 @@
   :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
   :limit-s 150}
  :cases
- [{:name "cows-in-the-pit-wall-spared"
+ [{:name "cows-in-the-pit-dug-out-of-and-mended"
    :act [[:summon "cow" [15.5 0 15.5]]
          [:summon "cow" [17.5 0 17.5]]
          [:until [:cli "entities" ["$body" "--world" "$world" "--type" "cow"] {:total 2}] 10]
          [:job (jobs.movement.go-to {:pos #at [26 0 16] :range 1})]]
-   :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false :escalation {:step :none :why :own-pen}}} :within-s 90 :of-job true}
-            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false}}}]
-   :after [[:block [19 0 16] "stone"] [:block [20 0 16] "stone"] [:entities "type=cow,tag=wt" [[14 0 14] [18 2 18]] 2]]}
+   :expect [{:event {:source :job :kind :go-to.restored} :within-s 120 :of-job true}
+            {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 120 :of-job true}]
+   :after [[:body-near [26.5 0 16.5] 2] [:entities "type=cow,tag=wt" [[14 0 14] [18 2 18]] 2]]}
   {:name "empty-pit-dug-out-of"
    :act [[:job (jobs.movement.go-to {:pos #at [26 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 120 :of-job true}]
