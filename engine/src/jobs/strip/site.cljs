@@ -69,9 +69,9 @@
 (defn site [c] (get (sites c) (:site (:args c))))
 
 (defn work-s
-  "Mean seconds the site's strip takes (120 a segment): the quote's mean, and the stay go-to prices the walk to the site over."
+  "Mean seconds the site's strip still takes (120 a segment left open, one before the site is read): the quote's mean, and the stay go-to prices the walk to the site over."
   [c]
-  (* 120 (max 1 (count (:segments (site c))))))
+  (* 120 (max 1 (count (filter #(= :open (:state %)) (vals (:segments (site c))))))))
 
 (defn save!
   "Write the site's state as (f state & xs); sites finished earlier go once there are more than ::max-sites."

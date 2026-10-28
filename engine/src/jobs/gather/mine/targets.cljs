@@ -298,9 +298,9 @@
 (defn zone-margin [] (settings/get settings ::zone-margin))
 
 (defn work-s
-  "Mean seconds the call's :count items take: the quote's mean, and the stay go-to prices a walk to the dig over."
+  "Mean seconds the items still owed take: the quote's mean, and the stay go-to prices a walk to the dig over."
   [c]
-  (* (:count (:args c)) (settings/get settings ::item-s)))
+  (* (owed c) (settings/get settings ::item-s)))
 
 (defn own-zones
   "The zones this body owns (none with :ignore-zones?)."

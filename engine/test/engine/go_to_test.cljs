@@ -1384,7 +1384,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [light (/ 0.5 (cost/threat-factor {:health 20 :equipment nil :weapon nil} "zombie" 1))]
-          (doseq [[weight args arrived] [[1 {:worth 1e9} true] [light {:stay-s 3600} false] [light {} true]]]
+          (doseq [[weight args arrived] [[1 {:worth 1e9} true] [light {:stay-s 3600} false] [light {} true] [1 {} false] [1 {:stay-s 0} true]]]
             (let [s (with-redefs [threats/known-threats (constantly [(assoc goal-zombie :mob "zombie" :weight weight)])]
                       (await (go! {:blocks flat} (merge {:pos [10 64 0] :range 0 :settings {:jobs.movement.go-to.tuning/goal-danger :end}} args))))]
               (is (= arrived (:arrived @(:out s))) (str "weight " weight " " (pr-str args) (pr-str @(:out s)))))))))))

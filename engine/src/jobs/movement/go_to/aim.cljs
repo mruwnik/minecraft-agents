@@ -246,7 +246,7 @@
   [c pos]
   (when-let [{:keys [toll] :as d} ((threats/danger-near-fn c) pos)]
     (let [{:keys [stay-s worth]} (:args c)
-          stay (if (pos? stay-s) stay-s (settings/get price/settings ::price/place-stay-s))
+          stay (if stay-s stay-s (settings/get price/settings ::price/place-stay-s))
           w (one-way/worth (u/dist (u/self-pos c) pos) worth)]
       (when (> (* toll stay) w) (assoc d :stay-s stay :worth w)))))
 

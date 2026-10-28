@@ -260,9 +260,14 @@
           (is (= 1 (count (events-of s :tool.none)))))))))
 
 (deftest the-walks-of-a-mine-are-priced-over-the-time-its-items-take
-  (are [n stay] (= stay (:stay-s (mine-job/goal-args {:args {:block "sand" :count n}} {:x 0 :y 64 :z 0})))
-    1 6
-    5 30))
+  (with-redefs [mine-targets/had (constantly 0)]
+    (are [n stay] (= stay (:stay-s (mine-job/goal-args {:args {:block "sand" :count n}} {:x 0 :y 64 :z 0})))
+      1 6
+      5 30)))
+
+(deftest the-walks-of-a-mine-are-priced-over-the-items-still-owed
+  (with-redefs [mine-targets/had (constantly 3)]
+    (is (= 12 (:stay-s (mine-job/goal-args {:args {:block "sand" :count 5}} {:x 0 :y 64 :z 0}))))))
 
 (deftest the-body-walks-out-of-its-own-zone-before-it-digs
   (async done
@@ -447,7 +452,7 @@
 (deftest the-job-exports-the-contract-and-quotes-validly
   (let [def (get registry/jobs 'jobs.gather.mine)
         c {:primitives (tu/fake-on-floor {:blocks sand-patch}) :args (second (expr/leaf registry/jobs 'jobs.gather.mine {:block "sand" :count 3}))}
-        q ((:quote-of def) c)]
+        q (with-redefs [mine-targets/had (constantly 0)] ((:quote-of def) c))]
     (is (= [:item :block :heading :center] (:target def)))
     (is (fn? (:can-start? def)))
     (is (nil? (:check def)))

@@ -3,7 +3,7 @@
   engine.strip-test (stem z-27-0:0..20 into x-27-20:-20..0 and x-27-20:0..20)."
   (:require [cljs.reader :as reader]
             [engine.contract :as contract]
-            [cljs.test :refer [deftest is async]]
+            [cljs.test :refer [deftest is are async]]
             ["fs" :as fs]
             ["path" :as path]
             [engine.core :as core]
@@ -17,6 +17,7 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.stock :as stock]
+            [jobs.strip.site :as site]
             [jobs.lib.world-files :as world]))
 
 (def job 'jobs.strip.site)
@@ -388,6 +389,12 @@
                    (update stub :round (fn [r] (fn [c] (swap! seen conj (:stay-s (:args c))) (r c)))))]
           (await (start! (setup :pos {:x 0 :y 64 :z 100} :plans {"shaft" shaft} :ending-jobs {'jobs.movement.go-to go}) (assoc args :shaft "shaft")))
           (is (= [120] (distinct @seen)) "120 s a segment, one at least"))))))
+
+(deftest the-strips-time-counts-the-segments-still-open
+  (are [states secs] (= secs (with-redefs [site/site (constantly {:segments (zipmap (range) (map (fn [s] {:state s}) states))})] (site/work-s {})))
+    [:open :open :stripped :skipped] 240
+    [:stripped :sealed] 120
+    [] 120))
 
 (deftest a-corridor-that-waits-on-a-danger-is-waited-out-and-never-skips-the-segment
   (async done
