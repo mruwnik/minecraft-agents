@@ -85,7 +85,8 @@
   (let [down (run (pit 69) plateau (near 28 70 2))
         level (run (pit 70) plateau (near 28 70 2))]
     (is (= [5 70 2] (last-cell down)))
-    (is (= {:move GAP :x 9 :y 69 :z 2} (one-way-of down)))
+    ;; (the pit is lethal: the 2-wide jump to x 8 is missed half as often as the 3-wide one to x 9, and a step walks on)
+    (is (= {:move GAP :x 8 :y 69 :z 2} (one-way-of down)))
     (is (= [14 70 2] (last-cell level)))
     (is (nil? (:oneWay level)))))
 
