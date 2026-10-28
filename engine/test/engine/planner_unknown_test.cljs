@@ -184,6 +184,18 @@
       (is (not (found? r)))
       (is (true? (:unseenRefused r))))))
 
+(deftest a-phantom-off-a-vine-with-no-floor-under-it-is-refused
+  ;; the body hangs in a lone vine (on a stone block at z 1) 8 above the ground; the drop east lands on (1 63), whose floor
+  ;; (1 62) is unseen: hanging, the body slides down the vine while it looks, so it cannot stop to check that floor
+  (let [vine (fn [under floor] (pf/snapshot {:fill [[0 55 2 1 55 2 "stone"] [0 64 1 0 64 1 "stone"]]
+                                             :blocks [[0 64 2 "vine" {:north "true"}] [0 63 2 under] [1 62 2 floor]]}))
+        start {:x 0 :y 64 :z 2}]
+    (is (found? (run (vine "air" "stone") (pf/near 1 63 2) (unk {:seeDepth 2}) start)) "a seen floor")
+    (is (found? (run (vine "stone" U) (pf/near 1 63 2) (unk {:seeDepth 2}) start)) "a vine standing on a floor: the body stops there")
+    (let [r (run (vine "air" U) (pf/near 1 63 2) (unk {:seeDepth 2}) start)]
+      (is (not (found? r)) (pr-str (pf/cells r)))
+      (is (true? (:unseenRefused r))))))
+
 (deftest a-swim-over-an-unseen-bed-is-planned
   (let [pond (fn [bed] (pf/snapshot {:fill [[0 62 2 5 62 2 "stone"] [0 63 2 5 63 2 "water"]]
                                      :blocks [[2 62 2 bed] [3 62 2 bed] [6 63 2 "stone"]]}))
