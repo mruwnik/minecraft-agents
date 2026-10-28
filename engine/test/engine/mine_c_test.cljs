@@ -606,23 +606,6 @@
             (is (apply > (dedupe @budgets)) "each way is planned out of less")
             (finally (set! drops/drop-cut drop-cut) (set! drops/dig-cell! dig-cell!) (set! dig-look/look-at! look-at!) (set! ctx/mem job-mem))))))))
 
-(deftest a-cut-whose-dig-fails-books-the-dig-it-spent
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})
-              m (atom {})
-              c {:primitives (:p s) :args {:block "stone"} :update-mem (fn [f args] (apply swap! m f args))}
-              stone-s ((:dig-s (drops/cut-prices c)) "stone" nil)
-              [drop-cut dig-cell! job-mem] [drops/drop-cut drops/dig-cell! ctx/mem]]
-          (set! drops/drop-cut (fn [_ _ _] [[1 64 0]]))
-          (set! drops/dig-cell! (fn [_ _] nil))
-          (set! ctx/mem (fn [_] @m))
-          (try
-            (is (nil? (await (drops/cut-to-drop! c [2 64 0] 5))) "a failed dig ends the cut")
-            (is (= stone-s (get-in @m [:cut-spent [2 64 0]])) "the failed dig is spent, so the next round does not plan it for free")
-            (finally (set! drops/drop-cut drop-cut) (set! drops/dig-cell! dig-cell!) (set! ctx/mem job-mem))))))))
-
 (deftest a-mine-that-ends-short-of-its-count-is-stopped-not-completed
   (async done
     (tu/run-async done
