@@ -700,3 +700,26 @@
             (is (= 2 (count own)) "one column of its own wall")
             (is (= #{12} (set (map first own))) "the east wall, toward the goal")
             (is (every? (set (mapcat :cells (events-of seen :go-to.restored))) own) "and put back")))))))
+
+(def all-glow-room
+  "glow-room without the stone band: every cell round the shell is a light, never dug."
+  (apply dissoc (merge (box 4 60 4 20 69 16 "glowstone") (box 8 61 8 12 65 12 "dirt"))
+         (for [x (range 9 12) y (range 62 65) z (range 9 12)] (str x "," y "," z))))
+
+(deftest go-to-out-of-its-own-room-in-undiggable-rock-stops-cutting-once-the-cuts-show-no-way
+  ;; each guessed cell looked at and found a light is evidence: the next route over guesses is priced over the chance
+  ;; they are all rock, past the way without a dig route it is none
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [room (shape/with-author {:id "room" :parts [{:id "shell" :box [[8 61 8] [12 65 12]] :want "dirt"}]} "Fake")
+              world {:self {:pos {:x 11.5 :y 62 :z 9.5}} :blocks all-glow-room :light [15 15] :sight true
+                     :inventory [{:name "dirt" :count 8} {:name "stone_pickaxe" :count 1} {:name "stone_shovel" :count 1}]}
+              {:keys [eng p seen step]} (gt/setup world (ew/of-data {"room" room} {} []))
+              out (atom :not-done)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [14 62 12] :range 0})))]
+          (core/submit! eng '(recording-parent) {})
+          (await (gt/tick-out! eng 400 step))
+          (is (<= (count (distinct (map :cell (events-of seen :go-to.dug-own-build)))) 6) "a few own cells cut, not a column per guess")
+          (is (= 1 (count (filter #(= :dig-route (:step %)) (events-of seen :go-to.escalated)))) "the dig route is not chosen again")
+          (is (not= {:arrived true} @out)))))))

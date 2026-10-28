@@ -168,13 +168,25 @@
                          (u/dist {:x x :y y :z z} (zipmap [:x :y :z] goal)))
                        (dec best))))))
 
+(defn note-guess!
+  "Memory :guess-looks {:bad :all}: a cell the route guessed as rock was looked at, and was (ok?) or was not as guessed."
+  [c ok?]
+  (ctx/update-mem! c update :guess-looks #(-> % (update :all (fnil inc 0)) (update :bad (fnil + 0) (if ok? 0 1)))))
+
+(defn guess-risk
+  "The chance a cell the route guesses as rock is not diggable, from the guesses this call looked at: bad over all and one."
+  [c]
+  (let [{:keys [bad all]} (:guess-looks (ctx/mem c))]
+    (/ (or bad 0) (inc (or all 0)))))
+
 (defn way-opts
   "The opts of go-to call c's choice of a way from feet (escape/choose and the dig ways): a search that stood the body
   still past its worth (search-bound, memory :spent-routes) is not begun again; a dig route prices a cell of the body's
   own builds at its put-back (:own-s)."
   [c feet fetch? slice]
   {:own? (own-placed-fn c) :skip (skips c) :spent (:spent-routes (ctx/mem c) #{}) :fetch? fetch? :own-s (own-cut-fn c)
-   :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c) :slice slice})
+   :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c) :slice slice
+   :guess-risk (guess-risk c) :worth-s (:fallback-s (:replan-budget (ctx/mem c)))})
 
 (defn own-cut?
   "Whether the escalation under way may cut the body's own builds (:own-cut, chosen by own-way)."
@@ -559,7 +571,7 @@
     (let [block-at (escape/block-at-of p)
           n (block-at cell)]
       (cond
-        (and guess (not (dig-look/unknown? p cell)) (not= n block)) :replan
+        (and guess (not (dig-look/unknown? p cell)) (not= n block)) (do (note-guess! c (or (bs/passable? n) (and (not (escape/protected? n)) (escape/diggable? block-at (may-dig-fn c (own-cut? c)) (own-dig-fn c) cell)))) :replan)
         (bs/passable? n) :open
         (or (escape/protected? n) (not (escape/diggable? block-at (may-dig-fn c (own-cut? c)) (own-dig-fn c) cell))) :not-diggable
         :else
@@ -574,6 +586,7 @@
           (when (= :dug o)
             (forget-dug-own! c [dug])
             (note-holes! c [dug]))
+          (when guess (note-guess! c true))
           o)))))
 
 (defn replans-spent?
@@ -620,7 +633,8 @@
             plan (fn [floors-unseen-ok?]
                    (route-cells (:primitives c) feet goal (may-dig-fn c (own-cut? c)) (own-dig-fn c) floors-unseen-ok? (fetch-tool? c)
                                 (search-opts {:stands (ledger/stair-stands c) :slice slice :spent (:spent-routes m) :own-s (own-cut-fn c) :own-cut (own-cut? c)
-                                              :range (:range (:args c) 1) :near (mapv #(js/Math.floor (% pos)) [:x :y :z])})))
+                                              :range (:range (:args c) 1) :near (mapv #(js/Math.floor (% pos)) [:x :y :z])
+                                              :guess-risk (guess-risk c) :worth-s (:fallback-s (:replan-budget m))})))
             cells (when in-range? (plan false))
             loosened (when (and in-range? (nil? cells)) (plan true))
             walk-on! (fn [] (escalated! c pos (:escalation m) true))]

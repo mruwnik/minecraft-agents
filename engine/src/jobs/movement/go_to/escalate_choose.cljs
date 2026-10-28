@@ -368,7 +368,9 @@
   within it and never digs :near."
   [p from goal may-dig? own? floors-unseen-ok? fetch? {:keys [slice spent] :as route-opts}]
   (let [own-s (:own-s route-opts)
-        route-opts (dissoc route-opts :slice :spent :own-s)
+        guess-risk (:guess-risk route-opts 0)
+        worth-s (:worth-s route-opts)
+        route-opts (dissoc route-opts :slice :spent :own-s :guess-risk :worth-s)
         [fx _ fz] from
         ;; each cell is read for its floor, its name to dig and whether it is unseen: sensed once
         known (js/Map.)
@@ -383,11 +385,21 @@
                            (when-not (and a (not (true? (.-unknown a))) (dig-route/open? (.-name a)))
                              access/hidden-guess)))))
         prices (dig-route/body-prices p (fn [[x y z]] (true? (some-> (sensed x y z) .-unknown))))
+        ;; undiggable rock comes in veins and rooms: a guess is at risk beside a seen block this route never digs
+        risky? (fn [[x y z]]
+                 (and (pos? guess-risk) (true? (some-> (sensed x y z) .-unknown))
+                      (some (fn [[dx dy dz]] (let [b (sensed (+ x dx) (+ y dy) (+ z dz))]
+                                               (and b (not (true? (.-unknown b))) (escape/solid? (.-name b)) (not (escape/diggable? block-at (constantly true) own? [(+ x dx) (+ y dy) (+ z dz)])))))
+                            [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])))
         opts (fn [refused] (merge prices
                                   {:dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) own? cell))
-                                                            (some-> ((:dig-s prices) name cell) (+ (if own-s (own-s cell) 0)))))
+                                                            (some-> ((:dig-s prices) name cell)
+                                                                    (/ (if (risky? cell) (- 1 guess-risk) 1))
+                                                                    (+ (if own-s (own-s cell) 0)))))
                                    :max-dig-s (max-route-s)}
                                   route-opts))
+        ;; a route is dug again till it holds: its price over the chance every cell at risk is diggable
+        expected-s (fn [a] (/ (:seconds a) (js/Math.pow (- 1 guess-risk) (count (filter risky? (:dig a))))))
         ;; the search itself reads no may-dig?: escalate!'s choices with other zone rules share it
         search (fn [refused]
                  (if slice
@@ -404,7 +416,7 @@
                     (nil? (:dig a)) nil
                     (empty? bad) a
                     (< n route-searches) (recur (into refused bad) (inc n))))))]
-    (when (or (= :searching a) (and a (<= (route-s p (:dig a) own? fetch?) (max-route-s))))
+    (when (or (= :searching a) (and a (<= (route-s p (:dig a) own? fetch?) (max-route-s)) (<= (expected-s a) (or worth-s ##Inf))))
       a)))
 
 (defn route-cells
@@ -428,12 +440,14 @@
 
 (defn search-opts
   "route-answer's route-opts for a choice's opts: its :slice, dig-margin, its :spent searches, its :own-s and :own-cut
-  (a way that may cut the body's own builds: searched apart), its :range and :near and the floors under its :stands
+  (a way that may cut the body's own builds: searched apart), :guess-risk (the chance a guess beside seen undiggable
+  rock fails) and :worth-s (a route costing more is none), its :range and :near and the floors under its :stands
   (the body's own stairs) as :ways."
-  [{:keys [stands slice spent own-s own-cut range near]}]
+  [{:keys [stands slice spent own-s own-cut range near guess-risk worth-s]}]
   (cond-> {:ways (into #{} (map (fn [[x y z]] [x (dec y) z])) stands) :margin dig-margin}
     slice (assoc :slice slice) (seq spent) (assoc :spent spent) own-s (assoc :own-s own-s) own-cut (assoc :own-cut true)
-    (and range near) (assoc :range range :near near)))
+    (and range near) (assoc :range range :near near)
+    (pos? (or guess-risk 0)) (assoc :guess-risk guess-risk :worth-s worth-s)))
 
 (defn dig-way
   "{:step :dig-route :cells (route-cells)} when there are cells to dig, {:step :searching} while opts :slice's search
