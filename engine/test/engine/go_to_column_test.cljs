@@ -440,3 +440,15 @@
         "the farthest seen column toward x 60")
     (is (nil? (column/waypoint (kinds/seen-kind-at (hiding land (fn [[x _ _]] (> x 0)))) 60 0 [0 64 0]))
         "nothing seen ahead: no waypoint, never the unseen ground")))
+
+(deftest a-column-guessed-under-a-void-past-the-rim-ends-at-the-rim
+  ;; the land ends at x 40: the column at x 44 is seen open far below the rim, its ground never in view, so a walk round
+  ;; the rim for ground no one has seen is worth nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (go! {:floor [-30 -10 40 10] :light [15 0] :self {:pos {:x 34 :y 64 :z 0}}}
+                                          {:pos {:x 44 :z 0} :range 2 :settings {:jobs.movement.go-to.tuning/goal-danger :end}}))
+              [x _ z] (at p)]
+          (is (= {:arrived false :why :explore-spent :void-guess true} (select-keys @out [:arrived :why :void-guess])) (pr-str @out))
+          (is (<= (js/Math.hypot (- 44 x) z) column/approach-range) (str "no tour of the rim: at " (at p))))))))

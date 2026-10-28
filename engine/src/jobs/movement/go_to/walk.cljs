@@ -43,7 +43,7 @@
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.watch :as watch]
             [jobs.movement.go-to.air :as air]
-            [jobs.movement.go-to.aim :as aim :refer [aimed here? in-seen-ground? look-along! guess-waypoint look-at-column! look-at-goal-air! hidden-in-ground? lookout pre-aim! sight-end see-cell]]
+            [jobs.movement.go-to.aim :as aim :refer [aimed here? in-seen-ground? look-along! guess-waypoint look-at-column! look-at-goal-air! hidden-in-ground? lookout pre-aim! sight-end see-cell void-guess?]]
             [jobs.movement.go-to.cut :refer [approaches approach-recorder jumped? tour tour-spent?]]
             [jobs.movement.go-to.detour :as detour]
             [jobs.movement.go-to.escalate-choose :as choose]
@@ -168,6 +168,21 @@
                      (= "budget" (some-> ^js r .-reason)) (not (:frontier-taken plan))
                      (>= (u/dist (peek steps) pos) (dec closest)))
             {:known-end true})))))
+
+(defn void-check
+  "near/walk-round!'s :stair-check: check's why, else {:void-guess true} once the walk toward a column guessed under a void
+  (aim/void-guess?) costs more than its tour is worth (tour-spent?), found plan or not: the planner's ways down end on
+  floors it has not seen."
+  [c check]
+  (fn [plan first?]
+    (or (when check (check plan first?))
+        (when (and (void-guess? c) (tour-spent? c)) {:void-guess true}))))
+
+(defn explore-spent!
+  "Give up :explore-spent with the tour so far (tour), :void-guess true for a column guessed under a void."
+  [c pos]
+  (end/give-up! c pos {:status :no-path :reason :explore-spent}
+                (cond-> (update (tour c) :explored js/Math.round) (void-guess? c) (assoc :void-guess true))))
 
 (defn walk-opts
   "The near/walk-round! options of a go-to walk round with doors (the :doors arg as a keyword)."
@@ -443,7 +458,7 @@
             seen-goal? (and (see-cell c) (not (:edge-mode (ctx/mem c))) (not (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))))
             opts (cond-> (assoc (walk-opts c doors) :progress (empty? (:frontier-best (ctx/mem c))))
                    seen-goal? (assoc :explore false))
-            stair-check (reprice/check c pos (health/unseen-check c (known-end-check c pos (lookout-check c pos (plan-check c pos (choose/stair-check c pos) (straight-from! c d))))))
+            stair-check (void-check c (reprice/check c pos (health/unseen-check c (known-end-check c pos (lookout-check c pos (plan-check c pos (choose/stair-check c pos) (straight-from! c d)))))))
             round (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos) :walk-spent? #(tour-spent? c)) pos range (assoc opts :see-cell (see-cell c) :stair-check stair-check)))]
         (if (jumped? c)
           :again
@@ -502,6 +517,9 @@
           (and (= "stair" status) (:lookout (:why walked)))
           (do (ctx/update-mem! c assoc :lookout-due true) :again)
 
+          (and (= "stair" status) (:void-guess (:why walked)))
+          (explore-spent! c pos)
+
           (and (= "stair" status) (:known-end (:why walked)))
           (do (ctx/update-mem! c assoc :edge-mode true)
               (ctx/emit! c :go-to.edge-tour :info {:text "the search ran out of nodes short of anywhere nearer than the body has been: touring to the edge of what it has seen" :at (mapv #(js/Math.floor (% from)) [:x :y :z])})
@@ -523,8 +541,7 @@
           (do (ctx/update-mem! c #(cond-> (assoc % :escalate-now true) (not= :retreats (:why walked)) (assoc :stair-tried true))) :again)
 
           (and (or frontier (= :tour-spent (:status walked))) (tour-spent? c))
-          (end/give-up! c pos {:status :no-path :reason :explore-spent}
-                        (update (tour c) :explored js/Math.round))
+          (explore-spent! c pos)
 
           fetched fetched
 

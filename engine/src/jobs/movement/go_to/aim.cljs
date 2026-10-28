@@ -61,6 +61,20 @@
   (let [{:keys [unknown]} (:args c)]
     (column/aim (:primitives c) goal (tuning/y-slack) (js/Math.floor (:y (u/self-pos c))) (not unknown))))
 
+(defn void-guess?
+  "Whether a column goal's ground is only guessed (mem :column-open :guess) under a void: the body within approach-range of
+  the column, whose guess (mem :aimed) lies so far below the feet that the drop would hurt, the column seen open from the
+  feet down to it with no ground in view (a hurting drop onto ground never seen is none: it may lie deeper still)."
+  [c]
+  (let [{:keys [column-open aimed]} (ctx/mem c)
+        me (u/self-pos c)
+        feet (js/Math.floor (:y me))
+        ka (kinds/seen-kind-at (:primitives c))]
+    (boolean (and (= :guess column-open) aimed
+                  (<= (js/Math.hypot (- (:x aimed) (:x me)) (- (:z aimed) (:z me))) column/approach-range)
+                  (pos? (cost/fall-damage (cost/equipment-of (.-equipment (.self (:primitives c)))) (- feet (:y aimed))))
+                  (every? #(kinds/free? (ka (:x aimed) % (:z aimed))) (range (:y aimed) (inc feet)))))))
+
 (defn not-standable?
   "Whether the planner answers goal-not-standable for pos alone (no search, wplan/goal-stand-problem)."
   [c pos]
