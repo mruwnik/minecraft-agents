@@ -562,13 +562,25 @@
     (is (nil? (heading {"-1,65,0" "bedrock"})) "bedrock at head height one block west: the dig picks its heading anew")))
 
 (defn ^:async bedrock-stair
-  "gather.mine for stone from y -60 down through dirt over bedrock at the given heights: the setup map once it ended."
-  [bedrock-ys]
-  (let [s (start {:world {:blocks (merge (cells "dirt" (range -8 9) (range -63 -60) (range -8 9)) (cells "bedrock" (range -8 9) bedrock-ys (range -8 9)))
-                          :drops cobble :yaw 90 :self {:pos [0.5 -60 0.5]} :inventory [{:name "stone_pickaxe" :count 1}]}})]
-    (core/submit! (:eng s) (spec {:block "stone" :count 2 :tunnel-length 4}) {})
-    (await (run-ticks s 300))
-    s))
+  "gather.mine for stone from 4 y over the world's floor down through dirt over bedrock at the given heights (a world whose
+  lowest y is floor-y): the setup map once it ended."
+  ([bedrock-ys] (bedrock-stair -64 bedrock-ys))
+  ([floor-y bedrock-ys]
+   (let [s (start {:world {:blocks (merge (cells "dirt" (range -8 9) (range (inc floor-y) (+ floor-y 4)) (range -8 9)) (cells "bedrock" (range -8 9) bedrock-ys (range -8 9)))
+                           :drops cobble :yaw 90 :self {:pos [0.5 (+ floor-y 4) 0.5] :minY floor-y} :inventory [{:name "stone_pickaxe" :count 1}]}})]
+     (core/submit! (:eng s) (spec {:block "stone" :count 2 :tunnel-length 4}) {})
+     (await (run-ticks s 300))
+     s)))
+
+(deftest a-stair-down-to-a-nether-floor-at-y-0-ends-there-without-turning
+  ;; the world's lowest y is read from the body, not taken as -64
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (bedrock-stair 0 [0]))]
+          (is (finished? s))
+          (is (empty? (events-of s :mine.turned)) (pr-str (map :text (events-of s :mine.turned))))
+          (is (= :no-stone-found (:reason (done-event s)))))))))
 
 (deftest a-stair-down-to-the-worlds-bedrock-floor-ends-there-without-turning
   ;; y -64 is bedrock on every heading: no turn finds a way down

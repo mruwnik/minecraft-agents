@@ -70,9 +70,10 @@
         stairs (ledger/stair-stands c)
         kind-at (kinds/seen-kind-at p)
         surface-at (kinds/surface-kind-at p)
+        min-y (places/min-y p)
         top? (fn [[x y z]] (and (not-any? (fn [[dx dz]] (contains? stairs [(+ x dx) (inc y) (+ z dz)])) [[1 0] [-1 0] [0 1] [0 -1]])
                                 (keyword-identical? :open (kind-at x (+ y 2) z))
-                                (= y (kinds/top surface-at x z))))]
+                                (= y (kinds/top surface-at x z min-y kinds/top-y))))]
     (->> stairs
          (filter (fn [[_ y _ :as cell]] (and (> y (inc (:y feet))) (top? cell))))
          (map (fn [[x y z]] {:x x :y y :z z})))))

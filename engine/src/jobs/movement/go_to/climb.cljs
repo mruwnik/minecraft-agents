@@ -7,6 +7,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.util :as u]
             [jobs.lib.column-kinds :as kinds]
+            [jobs.lib.places :as places]
             [jobs.lib.cost :as cost]
             [jobs.movement.go-to.column :as column]))
 
@@ -80,6 +81,7 @@
         own (into stairs (ledger/tunnel-stands c))
         kind-at (kinds/seen-kind-at p)
         surface-at (kinds/surface-kind-at p)
+        min-y (places/min-y p)
         low (- (second feet) (cave-dip))
         goes-on? (fn [[x y z]] (some (fn [[dx dz]] (contains? stairs [(+ x dx) (inc y) (+ z dz)])) escape/cardinals))]
     (when (seq stairs)
@@ -91,7 +93,7 @@
              (fn [[x y z :as cell]]
                (and (contains? stairs cell)
                     (or (>= y (dec top))
-                        (and (not (goes-on? cell)) (keyword-identical? :open (kind-at x (+ y 2) z)) (= y (kinds/top surface-at x z))))))
+                        (and (not (goes-on? cell)) (keyword-identical? :open (kind-at x (+ y 2) z)) (= y (kinds/top surface-at x z min-y kinds/top-y))))))
              (own-way-search)))))
 
 (defn hop

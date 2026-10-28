@@ -9,7 +9,7 @@
 
   world.state is an atom of
     {:self {:username :pos [x y z] :health :food :foodSaturation :oxygen :onFire :inWater :inLava :onGround
-            :isSleeping :effects :experience {:level :points :progress} :dimension :held :vehicle}
+            :isSleeping :effects :experience {:level :points :progress} :dimension :minY :held :vehicle}
      :time :players [username] :raining :thundering :blocks {[x y z] name} :unloaded #{pos} :ages {pos n} :states {pos {prop v}}
      :entities [{:id :name :kind :pos [x y z] ...}] (flags kebab-case: :leashed-to-me :in-love :break-at ...)
      :inventory [{:name :count}] :equipment {part stack} :containers {pos [stack]} :drops :chat [{:message :to}]
@@ -85,7 +85,7 @@
 (def default-self
   {:username "Fake" :pos [0 64 0] :health 20 :food 20 :foodSaturation 5 :oxygen 20 :onFire false :inWater false
    :inLava false :onGround true :isSleeping false :effects [] :experience {:level 0 :points 0 :progress 0}
-   :dimension "overworld"})
+   :dimension "overworld" :minY -64})
 (def equipment-parts ["head" "torso" "legs" "feet" "offHand"])
 
 

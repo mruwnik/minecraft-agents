@@ -299,7 +299,7 @@
       :else (let [stop (or (:reason res) :declined)
                   ;; the world's lowest layer is bedrock on every heading, and nothing lies under it: the stair is done
                   ;; (above it, in the ragged layer, a turn may find stone)
-                  turnable? (not (and (#{:unbreakable :not-loaded} stop) (some-> (:cell res) (get 1) (<= places/min-y))))]
+                  turnable? (not (and (#{:unbreakable :not-loaded} stop) (some-> (:cell res) (get 1) (<= (places/min-y (:primitives c))))))]
               (or (when (and turnable? (heading-stops stop) (turn-heading! c stop)) :again)
                   (when (and turnable? (blocked-start? c stop)) (await (move-stair! c stop)))
                   (do (ctx/update-mem! c update :descent assoc :stop stop)

@@ -30,8 +30,13 @@
 
 (def name-pattern #"[a-z][a-z0-9-]{0,31}")
 
-(def min-y -64)
+(def lowest-y "The lowest y any dimension has (the overworld's): parse-pos refuses below it." -64)
 (def max-y 320)
+
+(defn min-y
+  "The lowest y of the body's dimension (its world's min height: -64 overworld, 0 nether and end)."
+  [p]
+  (or (.-minY (.self p)) lowest-y))
 (def max-xz 30000000)
 
 (defn refusal [reason message & {:as more}]
@@ -65,8 +70,8 @@
   (let [[px py pz] (cond (and (sequential? x) (= 3 (count x))) x
                          (map? x) [(:x x) (:y x) (:z x)])
         cell [(coord px max-xz) (coord py max-y) (coord pz max-xz)]]
-    (if (or (some nil? cell) (< (cell 1) min-y))
-      (refusal :bad-pos (str "a position is [x y z] or {:x :y :z}, whole or fractional numbers, y from " min-y " to " max-y
+    (if (or (some nil? cell) (< (cell 1) lowest-y))
+      (refusal :bad-pos (str "a position is [x y z] or {:x :y :z}, whole or fractional numbers, y from " lowest-y " to " max-y
                              "; got " (pr-str x)))
       {:pos (zipmap [:x :y :z] cell)})))
 

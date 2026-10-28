@@ -576,7 +576,7 @@
           off (fn [[x y z]] (for [[dx dz] escape/cardinals
                                   :when (not-any? #(land [(+ x dx) % (+ z dz)]) [(dec y) y (inc y)])]
                               [(+ x dx) y (+ z dz)]))
-          below (fn [[x y z]] (some #(let [c [x % z]] (when (stand? c) c)) (range (inc y) (dec places/min-y) -1)))
+          below (fn [[x y z]] (some #(let [c [x % z]] (when (stand? c) c)) (range (inc y) (dec (places/min-y p)) -1)))
           stands (->> land (mapcat off) (keep below) (remove land) distinct (filter nearer?) (sort-by to-goal))
           edge (delay (->> land (filter #(seq (off %))) (remove #(contains? approached %)) (filter nearer?) (sort-by to-goal) first))]
       (or (->> stands

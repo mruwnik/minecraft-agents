@@ -407,7 +407,7 @@
   (let [{:keys [plan part]} (:args c)
         found (surfaced c (known/plan c plan))
         filled (when (:cells found)
-                 (fill/with-fill (partial world-block (:primitives c)) (fill-worth c) (partial fill-price c)
+                 (fill/with-fill (partial world-block (:primitives c)) (fill-worth c) (partial fill-price c) (places/min-y (:primitives c))
                                  (if part (with-supports (:cells found) part) (:cells found))))
         answer (cond-> found (:fill filled) (update :cells into (:fill filled)))
         usable? (and answer (not (:broken answer)))
@@ -450,7 +450,7 @@
   [c pos depth]
   (let [unseen? #(nil? (u/seen-block (:primitives c) (zipmap [:x :y :z] %)))
         column (first (filter #(or (unseen? %) (not (fill/hollow (:name (world-block (:primitives c) %)))))
-                              (map (fn [dy] (update pos 1 - dy)) (range 1 (+ 2 (min depth (- (pos 1) places/min-y)))))))]
+                              (map (fn [dy] (update pos 1 - dy)) (range 1 (+ 2 (min depth (- (pos 1) (places/min-y (:primitives c)))))))))]
     (cond-> (filterv unseen? (map #(mapv + pos %) neighbour-steps))
       (and column (unseen? column)) (conj column))))
 

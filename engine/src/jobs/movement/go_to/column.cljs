@@ -82,10 +82,10 @@
 
 (defn pick
   "[y why] of the stand of the column x z by the cells of kind-at: :surface, else :nearest-level to body-y; nil if none."
-  [kind-at x z body-y]
-  (if-let [y (top kind-at x z)]
+  [kind-at x z body-y min-y]
+  (if-let [y (top kind-at x z min-y top-y)]
     [y :surface]
-    (when-let [y (ground kind-at x z body-y places/min-y top-y)] [y :nearest-level])))
+    (when-let [y (ground kind-at x z body-y min-y top-y)] [y :nearest-level])))
 
 (defn leads-to?
   "Whether the column x z leads from a goal at y to the stand at g without passing a solid: up only from a goal cell
@@ -111,11 +111,11 @@
 (defn unseen-under
   "The guess y of column x z at y: y when unseen, else, seen open down to an unseen cell (its ground not seen yet), the
   lowest open cell over it; nil on a seen floor or none."
-  [kind-at x z y]
+  [kind-at x z y min-y]
   (loop [g y]
     (let [k (kind-at x g z)]
       (cond (keyword-identical? :unknown k) (min y (inc g))
-            (and (free? k) (> g places/min-y)) (recur (dec g))))))
+            (and (free? k) (> g min-y)) (recur (dec g))))))
 
 (defn waypoint
   "A cell to walk to toward the column x z from the body's feet [bx by bz] when its estimate has no stand in reach: the
@@ -152,10 +152,11 @@
   only). A y goal comes here only once the planner found no cell in its range stands."
   [p {:keys [x y z] :as goal} slack body-y raw?]
   (if (nil? y)
-    (let [seen (cached (surface-kind-at p))]
-      (if-let [[g why] (pick seen x z body-y)]
+    (let [seen (cached (surface-kind-at p))
+          min-y (places/min-y p)]
+      (if-let [[g why] (pick seen x z body-y min-y)]
         {:pos {:x x :y g :z z} :resolved true :why why}
-        (if-let [g (unseen-under seen x z (estimate seen x z body-y))]
+        (if-let [g (unseen-under seen x z (estimate seen x z body-y) min-y)]
           {:pos {:x x :y g :z z} :resolved true :provisional true}
           {:pos {:x x :y body-y :z z}})))
     (if-let [g (when (pos? slack) (let [ka (kind-at p raw?)] (ground ka x z y (- y slack) (+ y slack) #(leads-to? ka x z y %))))]

@@ -82,6 +82,7 @@ export function createSense (env) {
       effects: effects(),
       experience: { level: env.bot.experience?.level ?? 0, points: env.bot.experience?.points ?? 0, progress: env.bot.experience?.progress ?? 0 },
       dimension: env.bot.game?.dimension,
+      minY: env.bot.game?.minY,
       gameMode: env.bot.game?.gameMode,
       timeOfDay: env.bot.time.timeOfDay,
       // the world age in game ticks (stands still while the tick is frozen)

@@ -1,7 +1,6 @@
 (ns jobs.lib.build.fill
   "Fill under a plan's floor: the dirt column that gives a floor with nothing to click beside it a block to start from, priced as earthwork."
   (:require [jobs.lib.cost :as cost]
-            [jobs.lib.places :as places]
             [jobs.lib.placement :as placement]))
 
 (def hollow #{"air" "cave_air" "void_air" "water"})
@@ -31,11 +30,11 @@
 (defn support-column
   "The fill column [pos ...] (highest first) under the cheapest cell of an island with no block beside any of its cells to click, or nil:
   hollow seen cells down to a seen solid one, no longer than depth nor below the world's floor."
-  [block-at planned depth island]
+  [block-at planned depth min-y island]
   (let [name-at #(:name (block-at %))
         held? (fn [pos] (some #(and (not (planned (mapv + pos %))) (placement/clickable? (block-at (mapv + pos %)))) steps))
         column (fn [[x y z]]
-                 (let [below (vec (take-while #(and (not (planned %)) (hollow (name-at %))) (map (fn [dy] [x (- y dy) z]) (range 1 (inc (min depth (- y places/min-y)))))))
+                 (let [below (vec (take-while #(and (not (planned %)) (hollow (name-at %))) (map (fn [dy] [x (- y dy) z]) (range 1 (inc (min depth (- y min-y)))))))
                        ground (name-at [x (- y 1 (count below)) z])]
                    (when (and (seq below) ground (not (hollow ground))) below)))]
     (when-not (some held? island)
@@ -45,13 +44,13 @@
   "{:fill cells} of the fill column under each island of the lowest layer that has nothing to click (support-column), or
   {:not-worth {:price :worth}} when (price n) of all n fill blocks is more than worth (nil: no cap) or ##Inf: a build needs every island, so
   none is filled on its own. block-at: pos -> {:name} or nil (unseen)."
-  [block-at worth price cells]
+  [block-at worth price min-y cells]
   (let [live (remove #(= :clear (:want %)) cells)
         low (when (seq live) (apply min (map #(get (:pos %) 1) live)))
         floor (filter #(= low (get (:pos %) 1)) live)
         planned (set (map :pos cells))
         by-pos (into {} (map (juxt :pos identity)) floor)
-        columns (keep #(support-column block-at planned ##Inf %) (islands (keys by-pos)))
+        columns (keep #(support-column block-at planned ##Inf min-y %) (islands (keys by-pos)))
         n (count (apply concat columns))
         cost (when (pos? n) (price n))
         fill (fn [column] (map (fn [pos] {:pos pos :want "dirt" :part (:part (by-pos (update (first column) 1 inc))) :fill true}) column))]
