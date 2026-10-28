@@ -3,7 +3,7 @@
   small random worlds (no ground, empty bags, absent targets). A job is honest when no round throws, no check throws,
   a declining check or a stop carries a :reason, and the job ends or waits within a bounded number of rounds and calls.
   A failure prints job, seed and args; FUZZ_JOB=<ns> FUZZ_SEED=<n> FUZZ_CASES=<n> replay or widen a run, FUZZ_TRACE=1 names
-  every case as it starts (a sync hang names its case last), FUZZ_CASE=<k> runs only case k of a job, FUZZ_EXTREME=1 adds huge numbers.
+  every case as it starts (a sync hang names its case last) and its ms as it ends (fuzz-ms job k ms), FUZZ_CASE=<k> runs only case k of a job, FUZZ_EXTREME=1 adds huge numbers.
   A case seed is FUZZ_SEED + a hash of the job name + 104729 * k, so it does not depend on the other jobs or on FUZZ_JOB.
   Some args get a value their spec refuses: submit must refuse it."
   (:require [cljs.test :refer [deftest is async]]
@@ -355,10 +355,13 @@
      (try
        (let [results (loop [todo cases done []]
                        (if-let [c (first todo)]
-                         (let [_ (when (env "FUZZ_TRACE" nil) (println "fuzz" (:job c) (:seed c)))
+                         (let [trace? (env "FUZZ_TRACE" nil)
+                               _ (when trace? (println "fuzz" (:job c) (:seed c)))
                                _ (reset! current-case c)
+                               t0 (js/Date.now)
                                res (try (await (run c))
-                                        (catch :default e {:job (:job c) :defects [[:harness-threw (str e)]]}))]
+                                        (catch :default e {:job (:job c) :defects [[:harness-threw (str e)]]}))
+                               _ (when trace? (println "fuzz-ms" (:job c) (:k c) (- (js/Date.now) t0)))]
                            (recur (rest todo) (conj done [c res])))
                          done))
              _ (await (tick!))
