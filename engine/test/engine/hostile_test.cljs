@@ -1853,6 +1853,21 @@
     (is (some? (:shape priced)) "the cost answer carries the wet rate's width")
     (is (= (cost/death-chance {:health 20} priced) (cost/death-chance {:health 20} live)) "respond prices the same fight alike")))
 
+(deftest a-drowned-fight-beside-a-body-afloat-prices-alike-at-every-phase-of-its-bob
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [prices (fn ^:async f [y]
+                       (let [{:keys [seen]} (await (flight-round respond {:blocks lake :self {:pos [2.5 y 0.5] :health 20} :inventory sword
+                                                                          :entities [(drowned-at 3.5 63 0.5)]}))]
+                         (:prices (first (filter #(= :hostile.decided (:kind %)) @seen)))))
+              at-rest (await (prices 63))]
+          (doseq [y [62.4 62.6 62.8 63.2 63.4]
+                  :let [at (await (prices y))]
+                  k [:fight :flee]]
+            (is (< (/ (js/Math.abs (- (k at) (k at-rest))) (k at-rest)) 0.05)
+                (str "feet at " y ": " k " as at rest (the fight wet, the flight from the surface cell)"))))))))
+
 (def wade
   "A wade one deep sunk in the flight floor: water at x -4..4, y 63, z -4..4 over stone."
   (into {} (for [x (range -4 5) z (range -4 5) y [62 63]] [(str x "," y "," z) (if (= y 62) "stone" "water")])))

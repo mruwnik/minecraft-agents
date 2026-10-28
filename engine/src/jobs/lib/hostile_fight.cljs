@@ -296,7 +296,7 @@
   [c mobs]
   (let [p (:primitives c)]
     (when (breath/in-water? p)
-      (let [me (u/self-pos c)
+      (let [me (assoc (u/self-pos c) :y (breath/start-y p))
             reach (reduce max 0 (map cost/hit-range mobs))]
         (check-cache/cached
          c [:swim-out (u/cell-vec me) reach]

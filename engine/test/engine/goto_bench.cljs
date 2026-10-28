@@ -25,9 +25,10 @@
 
 (defn make-body
   "The primitives of a bench body (healthy, fed, unarmoured; the damage probe reads it) standing at (deref where), a step
-  {x y z px pz}. One object per course: it is the key of the body's kept search."
+  {x y z px pz}. One object per course: it is the key of the body's kept search. It feels no block: plans start from its floored cell."
   [where]
-  #js {:self (fn [] (let [^js at @where]
+  #js {:feel (constantly nil)
+       :self (fn [] (let [^js at @where]
                       #js {:pos #js {:x (.-px at) :y (.-y at) :z (.-pz at)}
                            :health 20 :absorption 0 :food 20 :onFire false :effects #js [] :equipment #js {}}))})
 

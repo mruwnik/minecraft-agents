@@ -57,11 +57,12 @@
     (.result p)))
 
 (defn plan-query
-  "The planner query from the body's cell to within range of the goal cell to."
+  "The planner query from the body's cell (breath/start-y) to within range of the goal cell to."
   [c to range]
-  (let [pos (.-pos (.self (:primitives c)))
+  (let [p (:primitives c)
+        pos (.-pos (.self p))
         [gx gy gz] to]
-    #js {:from #js {:x (js/Math.floor (.-x pos)) :y (js/Math.floor (.-y pos)) :z (js/Math.floor (.-z pos))
+    #js {:from #js {:x (js/Math.floor (.-x pos)) :y (breath/start-y p) :z (js/Math.floor (.-z pos))
                     :px (.-x pos) :py (.-y pos) :pz (.-z pos)}
          :goal #js {:kind "near" :x gx :y gy :z gz :range range}}))
 

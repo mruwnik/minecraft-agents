@@ -21,6 +21,7 @@
             [engine.ctx :as ctx]
             [engine.game :as game]
             [engine.memory :as mem]
+            [engine.perception.rays :as rays]
             [engine.settings :as settings]
             [jobs.lib.dig-look :as look]
             [jobs.lib.util :as u]))
@@ -76,10 +77,25 @@
 (declare swimmable)
 
 (defn swimming?
-  "Whether the body in water swims: its head is under or the cell under its feet is water too (a wade stands on its floor)."
+  "Whether the body in water swims: its head is under, its feet are afloat in a water cell (above its floor by more than
+  the feel margin: nothing holds them there, and the cell under is not felt then) or the cell under its feet is water too
+  (a wade stands on its floor)."
   [p]
-  (boolean (and (in-water? p)
-                (or (head-under? p) (contains? swimmable (u/feel-name p (update (feet-cell (.self p)) :y dec)))))))
+  (let [self (.self p)
+        cell (feet-cell self)]
+    (boolean (and (in-water? p)
+                  (or (head-under? p)
+                      (and (contains? swimmable (u/feel-name p cell)) (> (- (.. self -pos -y) (:y cell)) rays/feel-margin))
+                      (contains? swimmable (u/feel-name p (update cell :y dec))))))))
+
+(defn start-y
+  "The y of the cell a plan starts from: the body's floored cell, or the surface water cell over it when the body bobs
+  there (its feet in the water under it, its head out): the bob does not move the start."
+  [p]
+  (let [^js pos (.-pos (.self p))
+        y (js/Math.floor (.-y pos))
+        swim? #(contains? swimmable (u/feel-name p {:x (js/Math.floor (.-x pos)) :y % :z (js/Math.floor (.-z pos))}))]
+    (if (and (swim? y) (swim? (inc y)) (not (head-under? p))) (inc y) y)))
 
 (defn wedged-cell
   "The feet cell when its block fills the cell, else nil."
