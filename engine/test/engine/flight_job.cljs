@@ -1,6 +1,7 @@
 (ns engine.flight-job
   "A test job that runs one flight (jobs.survival.respond-flight/flee!) as its own round: the flight loop without
-  respond-to-hostile's fight-or-flee choice. Its :goal arg seeds the interrupted goal respond-to-hostile would pass on."
+  respond-to-hostile's fight-or-flee choice. Its :goal arg seeds the interrupted goal respond-to-hostile would pass on,
+  its :cover-way the cover respond would have priced cheapest (taken at the flight's start)."
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.registry :as registry]
@@ -10,6 +11,7 @@
 (def job
   (assoc (tu/job (fn ^:async flight-round [c]
                    (when-let [g (:goal (:args c))] (ctx/update-mem! c assoc :goal g))
+                   (when-let [w (:cover-way (:args c))] (when-not (:flight-start (ctx/mem c)) (ctx/update-mem! c assoc :cover-way w)))
                    (await (flight/flee! c))))
          :defaults {:checks {:safe? '(always) :fit? '(always)} :use {:tools :attack}}
          :done? (fn [c] (if (flight/clear? c)

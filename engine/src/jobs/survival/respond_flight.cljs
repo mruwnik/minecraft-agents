@@ -22,9 +22,7 @@
   Underground (jobs.lib.shelter.sense/buried?) it first takes the stairs the body cut (ledger/ways-of) or the places its recent walks began (cover/trail-floors): the highest such cell within 14
   blocks, above it and no nearer a chaser), before any walk to the :goal, and with none digs a side pocket (as below) before it walks across the open cave,
   unless a creeper or a melee mob is within cover-gap.
-  2b. A lone melee mob (no creeper, enderman, spider, flyer or shooter) between ::cover-gap (5) and ::refuge-gap (10) that a fight would not win, with
-     pillar-height blocks carried: pillar up, else seal in, before any flee step (a walk gains little on it); when neither can be
-     done the flight walks. Each flee step emits debug retreat.step-speed (leg-step!).
+  Each flee step emits debug retreat.step-speed (leg-step!).
   3. Walks a go-to leg (:ways #{:walk :clear-seal}) to the end jobs.lib.flee-search picks: it first looks away and to either
      side where it has not seen the ground (at most 3 looks), then plans ring ends round it and the home and the :goal (the
      destination of the walk the flight interrupted) over what it has seen, each priced and scored by when the first chaser
@@ -49,7 +47,7 @@
      - an angry enderman near (one the client flags angry, that hurt the body this flight or is within 3 blocks; it teleports; a walk is no flight): at once, before any walk: water within 6 blocks (it keeps away from water; the body steps in and holds), else a seen 2-high gap under a roof within 16 blocks, not beside the enderman (a 3-tall enderman cannot enter; walks there and holds), else plug in, last of all fight.
      - a drowned near while the body is in water (and no fight wins: one on a drowned only heard, or out of a swing's reach, never does): swims to the nearest seen dry stand within 16 blocks first (past the mob if need be), before seal, pillar or a fist fight.
      - fight (jobs.combat.attack) only when its price is the cheapest of the fight, the covers it can still make and, with none, the walk away (hostile-fight/wins?). Never against a creeper.
-     - plug in (jobs.survival.shut-in, a child: the walls, and later a pit or side pocket, never at home; the early refuge the walls alone): shuts the body
+     - plug in (jobs.survival.shut-in, a child: the walls, and later a pit or side pocket, never at home): shuts the body
        in with carried blocks (or, with none to wall with, ones it digs), the sides towards a seen ranged hostile first. Every
        plug block goes to the scaffold ledger (purpose :retreat-plug), taken back by jobs.access.cleanup once no hostile is near.
      - pillar up 3 (jobs.access.pillar, the carried block with the most, at least 3). Needs a solid floor, free cells above and no slope or ledge a mob could climb to beside its top.
@@ -156,7 +154,6 @@
         {:keys [room way inside?]} (room-lib/pick verdicts)
         gap-way (when (and inside? (:fill? room)) (first (filter #(= (first (:gap room)) (:cell %)) (:doors room))))
         _ (when (and glanced? room inside?) (say-once! c room))
-        early (when (and threat (not hit?) (not door) (nil? room) (not inside?)) (await (step/early-refuge! c)))
         home-now? (fn [] (or inside? (and (nil? survey) (room-lib/in-home? c (cover/home-pos c)))))
         stuck (fn ^:async stuck [why]
                 (if (seq (cornered/near-hostiles c))
@@ -167,7 +164,7 @@
                         (await (wait-far! c))))))
         near (when threat (cornered/near-hostiles c))
         {:keys [option why reset-gain?]}
-        (choose/choose {:threat threat :early early :no-gain? (flight/no-gain? (ctx/mem c) (flight/no-gain-steps))
+        (choose/choose {:threat threat :no-gain? (flight/no-gain? (ctx/mem c) (flight/no-gain-steps))
                         :angry-enderman? (and threat (cornered/angry-enderman? c near)) :hit? hit?
                         :flyer? (some combat/flyer? near) :door door :inside? inside?
                         :home-door (when inside? (respond.doors/home-door c room)) :gap-way gap-way :way way
@@ -177,7 +174,6 @@
       :end (or (await (flight/look-back! c))
                (when (pick/plug-continues? c) (await (refuge/plug-on! c)))
                (flight/end-flight! c nil))
-      :early early
       :dodge (await (step/dodge-shot! c))
       :stuck (do (when (and reset-gain? (seq (cornered/near-hostiles c))) (ctx/update-mem! c assoc :since-gain 0))
                  (await (stuck why)))

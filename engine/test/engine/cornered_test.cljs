@@ -655,15 +655,14 @@
   (is (= [:fight :plug :pillar :plug-dig :plug-zone :plug-dig-zone :pillar-zone] (choose/with-zone-pillar (choose/escape-order {:pressed? true :faster? true}))))
   (is (= [:fight] (choose/with-zone-pillar [:fight])) "no plug or pillar in the order, none added"))
 
-(deftest a-lone-melee-mob-within-ten-with-blocks-carried-is-pillared-against-before-any-flee-step
+(deftest a-lone-melee-mob-within-ten-with-blocks-carried-is-walked-from-the-pillar-is-respond-s-priced-choice
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p]} (await (first-round retreat {:self {:health 10} :inventory [{:name "dirt" :count 39}]
                                                        :entities [(zombie 8 64 0)]}))]
-          (is (= 3 (count (calls p "jumpPlace"))) "a pillar three high")
-          (is (empty? (calls p "steer")) "no flee step first")
-          (is (empty? (calls p "moveTo")) "no flee step first"))))))
+          (is (empty? (calls p "jumpPlace")) "no pillar by rule before a flee step")
+          (is (seq (calls p "steer")) "the flight walks"))))))
 
 (deftest a-pillar-looks-at-the-ground-round-it-before-taking-unseen-cells-for-a-ledge
   (async done
@@ -676,7 +675,7 @@
           (tu/set-sensed! p (fn [q] (if (and (hidden [(.-x q) (.-y q) (.-z q)]) (empty? (calls p "look")))
                                       #js {:unknown true}
                                       (sensed q))))
-          (core/submit! eng retreat {})
+          (core/submit! eng '(test.flight {:cover-way :pillar}) {})
           (await (core/tick! eng))
           (is (= 3 (count (calls p "jumpPlace"))) "unseen cells beside the column read as rock; once looked at they are open air, so the pillar stands"))))))
 
@@ -702,15 +701,6 @@
           (is (= 15 (:food e)))
           (is (= [["zombie" 7]] (map #(subvec % 0 2) (:chasers e))) "the closing rate's gaps (event-counts closing-rate)")
           (is (<= 7 (nth (first (:chasers e)) 2) 8.5) "the zombie about 8 blocks off as the step starts"))))))
-
-(deftest a-lone-melee-mob-with-fewer-than-three-blocks-carried-is-fled-from
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [p]} (await (first-round retreat {:self {:health 10} :inventory [{:name "dirt" :count 2}]
-                                                       :entities [(zombie 8 64 0)]}))]
-          (is (empty? (calls p "jumpPlace")))
-          (is (seq (concat (calls p "steer") (calls p "moveTo")))))))))
 
 (deftest a-pillar-that-gives-up-short-abandons-the-refuge-and-fights
   (async done

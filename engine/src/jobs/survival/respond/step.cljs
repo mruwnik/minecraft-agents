@@ -1,5 +1,5 @@
 (ns jobs.survival.respond.step
-  "What a flight step does once respond-choose has picked an option: the early refuge, the walk away, and what the step says."
+  "What a flight step does once respond-choose has picked an option: the walk away and what the step says."
   (:require [engine.settings :as settings]
             [engine.args :as a]
             [clojure.set :as set]
@@ -96,27 +96,6 @@
                                                   :text "flee step out of the line of an unseen shooter"})
             moved (await (cornered/leg-step! c :step target 1 (cornered/close-leg-s)))]
         (if moved :again (await (pick/cornered! c "shot at by a shooter not seen, the step out of its line is blocked" false)))))))
-
-(defn lone-melee?
-  "Whether hostiles is one melee mob a pillar stops (not a creeper, enderman, spider, flyer or shooter) farther than cover-gap (it would stand in the cells to fill) and within refuge-gap."
-  [p hostiles]
-  (let [h (first hostiles)]
-    (boolean (and h (nil? (second hostiles)) (pos? (cornered/refuge-gap))
-                  (not (combat/ranged? h)) (not (combat/creeper? h)) (not (combat/enderman? h))
-                  (not (combat/climber? h)) (not (combat/flyer? h))
-                  (< (cornered/cover-gap) (danger-q/mob-distance p h) (inc (cornered/refuge-gap)))))))
-
-(defn ^:async early-refuge!
-  "A lone melee hostile close by that a fight would not win, at least a pillar's blocks carried: pillar up, else seal in,
-  before any flee step (a walk gains little on it). Once a flight: nil when it cannot, and then the flight walks."
-  [c]
-  (let [hostiles (cornered/near-hostiles c)]
-    (when (and (not (:early-refuge-failed (ctx/mem c))) (lone-melee? (:primitives c) hostiles)
-               (pillar/pillar-item c) (not (pillar/lean? c)) (not (cornered/fight-wins? c hostiles)))
-      (let [r (or (when-not (flight/tried? c :pillar) (await (refuge/pillar! c false)))
-                  (await (refuge/plug-option! c :plug #{:walls})))]
-        (when (nil? r) (ctx/update-mem! c assoc :early-refuge-failed true))
-        r))))
 
 (defn ^:async walk-away!
   "The flee step when the body outruns the chasers: eat a bite, then take the stairs up, the goal leg or the flight's

@@ -343,7 +343,7 @@
         (do (ctx/emit! c :hostile.fled :warn n)
             (ctx/remember! c :displaced {:from origin} displaced-policy))
         (when origin (ctx/remember! c :flight {:from origin :at (u/self-pos c)} {:cap 1 :ttl (settings/get settings ::chain-window-ms)}))))
-    (ctx/update-mem! c dissoc :chasers :fled :look-back :looked-back :pocket-tried :plugging :early-refuge-failed :refused)
+    (ctx/update-mem! c dissoc :chasers :fled :look-back :looked-back :pocket-tried :plugging :refused)
     (if (= :cannot-escape ended)
       (ctx/end c :nothing-possible :cannot-escape {:fled ids :text "every way of escaping failed twice in a row"})
       (ctx/end c :done nil (merge {:fled ids :ended why} extra)))))
