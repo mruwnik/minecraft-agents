@@ -277,12 +277,18 @@
         struck (cond-> {:hits (get hits id 0)} (number? (get health id)) (assoc :health (get health id)))]
     (max 0 (- (wworld/damage-budget c) (cost/fight-damage (hostile/fight-of c [target] {id struck}))))))
 
+(defn chase-leg-s
+  "Seconds one walk toward a hostile may take: the time to close dist at about 2 blocks a second (swimming), at least 1 and at
+  most ::chase-timeout-s, so the fight looks again before a mob that came to the body is steered past."
+  [dist]
+  (max 1 (min (hostile/chase-timeout-s) (+ 1 (/ (- dist (reach)) 2)))))
+
 (defn walk-opts
-  "The options of one walk towards target: a :hostiles fight leaves doors as they are, prices known dangers, falls only within fall-room and aims again every ::chase-timeout-s, the mob moves.
+  "The options of one walk towards target: a :hostiles fight leaves doors as they are, prices known dangers, falls only within fall-room and aims again after chase-leg-s, the mob moves.
   A walk to an animal may spend hp (with a longer leg, ::forage-walk-timeout-s) while the body can not heal (ready/forage-walk): the animal is the food."
   [c target]
   (if (hostile/hostiles? c)
-    {:ways #{:walk :clear-seal} :look-round false :leg-s (hostile/chase-timeout-s) :max-damage (fall-room c target)}
+    {:ways #{:walk :clear-seal} :look-round false :leg-s (chase-leg-s (u/dist (u/self-pos c) (u/pos-of (.-pos target)))) :max-damage (fall-room c target)}
     (let [walk (ready/forage-walk c {:dangers false :ways #{:walk :clear-seal} :look-round false :doors :shut :leg-s (settings/get settings ::walk-timeout-s)})]
       (cond-> walk (:floor walk) (assoc :leg-s (settings/get settings ::forage-walk-timeout-s))))))
 

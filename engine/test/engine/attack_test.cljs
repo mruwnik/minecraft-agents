@@ -585,3 +585,7 @@
           (is (every? #(and (= #{:walk :clear-seal} (:ways %)) (= 5 (:leg-s %)) (false? (:look-round %)) (false? (:dangers %)) (= :shut (:doors %))) opts)
               "a moving target is chased in legs, never dug or pillared toward"))))))
 
+
+(deftest a-walk-toward-a-near-hostile-is-a-short-leg-so-a-mob-that-came-is-swung-at
+  (doseq [[dist expected] [[1 1] [3 1] [7 3] [100 10]]]
+    (is (= expected (attack/chase-leg-s dist)))))

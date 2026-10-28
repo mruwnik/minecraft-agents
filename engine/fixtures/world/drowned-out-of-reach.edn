@@ -6,6 +6,7 @@
 ;; leaves the water and the drowned is left alive.
 ;; Should-fail (ledge): the shores walled 2 high so the only dry stand is a one-cell stone pillar (card bb51d3df): a swim to it is no escape (the
 ;; drowned comes ashore), so respond decides no :flee in the first 8 s (a walled pond is a trap: the body is not kept alive past that).
+;; Should-succeed (rising): an AI drowned 6 blocks off in the surface water swims to the body: the walk toward it is a short leg, so the fight swings once it is within reach and kills it.
 ;; Should-fail (control): the drowned just under the surface beside the body is in reach: an iron sword fights and kills it.
 {:defaults
  {:tags [:hostile :survival :water]
@@ -43,5 +44,11 @@
    :act [[:summon "drowned" [8.5 7 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :hostile.decided :data {:mob "drowned" :decision :fight}} :within-s 10}
             {:no-event {:source :job :kind :retreat.step-speed :data {:slot :dry}} :for-s 30}]
+   :after [[:entities "type=drowned,tag=wt" [[3 0 9] [30 12 23]] 0]]
+   :limit-s 60}
+  {:name "armed-body-kills-a-drowned-that-swims-to-it"
+   :body {:inventory [["iron_sword" 1]]}
+   :act [[:summon "drowned" [13.5 7 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:mob "drowned" :decision :fight}} :within-s 10}]
    :after [[:entities "type=drowned,tag=wt" [[3 0 9] [30 12 23]] 0]]
    :limit-s 60}]}

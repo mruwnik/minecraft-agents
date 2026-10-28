@@ -528,7 +528,7 @@
               _ (await (tu/with-near-spy calls* (fn ^:async b [] (await (first-round-ms '(jobs.combat.attack {:targets :hostiles :ranged-radius 16 :radius 6}) {:inventory sword :entities [(zombie 5 0)]} 20)))))
               opts (map #(nth % 2) @calls*)]
           (is (seq opts))
-          (is (every? #(and (= #{:walk :clear-seal} (:ways %)) (= 10 (:leg-s %)) (false? (:look-round %)) (nil? (:dangers %))) opts)
+          (is (every? #(and (= #{:walk :clear-seal} (:ways %)) (<= 1 (:leg-s %) 10) (false? (:look-round %)) (nil? (:dangers %))) opts)
               "a moving mob is chased in legs, never dug or pillared toward, its dangers priced")
           (is (every? #(< 0 (:max-damage %) 7) opts) "a sword fight with a zombie leaves part of the budget of 7 for falls"))))))
 

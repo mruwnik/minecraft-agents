@@ -779,7 +779,7 @@
          (= expected (select-keys (attack/walk-opts (assoc (ctx-of {:self (assoc hurt :food food) :inventory []}) :args {:targets targets}) #js {:id 1 :name "cow" :pos #js {:x 3 :y 64 :z 0}}) [:floor :leg-s]))
       8 ["cow"] {:floor {:health 0} :leg-s 30}
       20 ["cow"] {:leg-s 5}
-      8 :hostiles {:leg-s 10})))
+      8 :hostiles {:leg-s 1})))
 
 (deftest a-dark-build-place-within-the-no-spawn-radius-is-no-wait-for-light
   (are [to expected] (= expected (lit 0 15 #(kind (ready/safe-at-build (constantly to)) open-night)))
