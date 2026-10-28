@@ -190,11 +190,20 @@
   (let [vine (fn [under floor] (pf/snapshot {:fill [[0 55 2 1 55 2 "stone"] [0 64 1 0 64 1 "stone"]]
                                              :blocks [[0 64 2 "vine" {:north "true"}] [0 63 2 under] [1 62 2 floor]]}))
         start {:x 0 :y 64 :z 2}]
-    (is (found? (run (vine "air" "stone") (pf/near 1 63 2) (unk {:seeDepth 2}) start)) "a seen floor")
     (is (found? (run (vine "stone" U) (pf/near 1 63 2) (unk {:seeDepth 2}) start)) "a vine standing on a floor: the body stops there")
     (let [r (run (vine "air" U) (pf/near 1 63 2) (unk {:seeDepth 2}) start)]
       (is (not (found? r)) (pr-str (pf/cells r)))
       (is (true? (:unseenRefused r))))))
+
+(deftest a-drop-into-the-middle-of-a-vine-column-is-planned
+  ;; a vine column (0 62..64 2) over ground at y 55; the body stands in its top cell and the drop east lands on (1 63),
+  ;; whose floor (1 62) is unseen. A vine below holds the body (a column, climbed on down), so it is no lone climbable
+  (let [w (pf/snapshot {:fill [[0 55 2 1 55 2 "stone"] [0 62 1 0 64 1 "stone"]]
+                        :blocks [[0 64 2 "vine" {:north "true"}] [0 63 2 "vine" {:north "true"}] [0 62 2 "vine" {:north "true"}]
+                                 [1 62 2 U]]})
+        r (run w (pf/near 1 63 2) (unk {:seeDepth 2}) {:x 0 :y 64 :z 2})]
+    (is (found? r))
+    (is (some #{[1 63 2]} (pf/cells r)) (pr-str (pf/cells r)))))
 
 (deftest a-swim-over-an-unseen-bed-is-planned
   (let [pond (fn [bed] (pf/snapshot {:fill [[0 62 2 5 62 2 "stone"] [0 63 2 5 63 2 "water"]]

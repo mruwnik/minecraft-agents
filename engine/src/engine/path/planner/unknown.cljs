@@ -72,15 +72,14 @@
 
   ;; Can the walk stop on node p's stand before `move` takes it onto a phantom floor, to check the floor? The move is a walk,
   ;; diagonal, corner slide, jump or drop, p was reached by none of a gap jump, a climb (or trapdoor open), a swim, an exit or a
-  ;; bounce, and p is no climbable with no floor under it (the start too: a body hanging there slides down while it looks).
+  ;; bounce, and p is no lone climbable (loneBelow) (the start too: a body hanging there slides down while it looks).
   (gateCheckable [s move p]
     (and (or (== move MOVE-WALK) (== move MOVE-DIAGONAL) (== move MOVE-CORNER) (== move MOVE-JUMP) (== move MOVE-DROP))
          (let [m (aget (.-moves s) p)
-               x (aget (.-xs s) p) y (aget (.-ys s) p) z (aget (.-zs s) p)
-               below (.stateAt s x (dec y) z)]
+               x (aget (.-xs s) p) y (aget (.-ys s) p) z (aget (.-zs s) p)]
            (and (not (== m MOVE-GAP)) (not (and (>= m MOVE-CLIMB-UP) (<= m MOVE-OPEN))) (< m MOVE-SWIM)
                 (not ^boolean (.bounceArrival s p))
-                (not (and ^boolean (.climbHere s x y z) (or (== below UNLOADED) (< (aget (.-tbl-floor s) below) WHOLE))))))))
+                (not (and ^boolean (.climbHere s x y z) ^boolean (.loneBelow s x y z)))))))
 
   ;; 1 when the caller's test (options.unknown.seeLit) calls the landing x y z lit enough to see its floor from the peek,
   ;; else 0; cached as darkOf

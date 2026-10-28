@@ -320,12 +320,18 @@
   (decayDamage [s x y z h]
     (.dropDamage s 1 (.fallScan s x (dec y) z (+ (* y 16) h) true)))
 
+  ;; nothing under x y z holds a body hanging there: no climbable (a column goes on down by climb moves) and no whole floor
+  (loneBelow [s x y z]
+    (and (not ^boolean (.climbHere s x (dec y) z))
+         (let [below (.stateAt s x (dec y) z)]
+           (or (== below UNLOADED) (< (aget (.-tbl-floor s) below) WHOLE)))))
+
   ;; the hp of the fall a body hanging in a lone climbable cell at x y z takes (fallScan): no player holds on without
-  ;; sneaking, it slides out of the cell. A climbable below is a column, gone on down by climb moves: 0
+  ;; sneaking, it slides out of the cell
   (hangDamage [s x y z]
-    (if ^boolean (.climbHere s x (dec y) z)
-      0
-      (.dropDamage s 1 (.fallScan s x (dec y) z (* y 16) false))))
+    (if ^boolean (.loneBelow s x y z)
+      (.dropDamage s 1 (.fallScan s x (dec y) z (* y 16) false))
+      0))
 
   ;; standH plus what arriving there costs (enter-risk, enter-slow, enter-extra); -1 when not standable. Leaves that decay
   ;; under the feet cost their whole fall as damage: no log holds them, they go at any random tick. A body falls once, so
