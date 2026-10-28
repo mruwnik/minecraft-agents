@@ -1494,7 +1494,7 @@
       (fn ^:async t []
         (let [{:keys [eng p] :as s} (setup-flight {:bodyHitbox true :self {:pos [0.5 64 0.75]}
                                                    :inventory [{:name "cobblestone" :count 16}]
-                                                   :blocks stair-exit :entities [(zombie 0.5 2.5)]})]
+                                                   :blocks (assoc stair-exit "0,66,0" "stone") :entities [(zombie 0.5 2.5)]})]
           (js/setTimeout #(set-entities! p []) 300)
           (core/submit! eng retreat {})
           (await (core/tick! eng))

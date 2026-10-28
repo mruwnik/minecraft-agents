@@ -394,7 +394,7 @@
               (await (hide-steps '(test.flight) {:blocks long-dead-end :inventory [{:name "cobblestone" :count 20} {:name "stone_pickaxe" :count 1}]
                                                  :entities [(assoc spider :pos {:x 4 :y 64 :z 0})]}
                                  [[[spider] 61000] [[spider] 1000]]))]
-          (is (empty? (calls p "dig")) "a spider climbs any stair: opening the seal beside it is the death in a pack"))))))
+          (is (not-any? #(> (.. % -args -pos -y) 65) (calls p "dig")) "a spider climbs any stair: opening the seal beside it is the death in a pack (the pocket dug into the rock behind, cheaper than walls the spider may reach, goes no higher than the head)"))))))
 
 (deftest a-sealed-body-listens-for-a-quiet-period-after-the-last-danger
   (async done
@@ -624,6 +624,12 @@
           (is (zero? (count (calls p "place"))) "no wall block went into the zone")
           (is (= 3 (count (calls p "jumpPlace"))) "the pillar, which keeps off the zone, went up instead")
           (is (empty? (filterv #(= :shut-in.trespass-last-resort (:kind %)) @seen))))))))
+
+(deftest the-covers-and-the-back-off-are-tried-cheapest-first-in-the-places-the-rules-give-them
+  (is (= [:fight :pillar :plug-dig :plug] (choose/by-price [:fight :plug :pillar :plug-dig] {:fight 1 :plug 90 :pillar 30 :plug-dig 60}))
+      "the pressed fight keeps its place; the covers go cheapest first")
+  (is (= [:back-off :plug :pillar :fight] (choose/by-price [:plug :pillar :back-off :fight] {:back-off 5 :plug 40}))
+      "one not priced (no pillar fits) goes last of them"))
 
 (deftest a-pillar-through-anothers-area-comes-after-every-other-way-and-before-a-last-fight
   (is (= [:plug :pillar :back-off :plug-dig :plug-zone :plug-dig-zone :pillar-zone :fight] (choose/with-zone-pillar (choose/escape-order {}))))
@@ -1382,7 +1388,7 @@
                      (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
           (core/submit! eng retreat {})
           (await (core/tick! eng))
-          (is (pos? (count (calls p "place"))) "walled in after one healed hit, not walked on")
+          (is (pos? (+ (count (calls p "place")) (count (calls p "jumpPlace")))) "walled in or pillared (the cheaper), not walked on, after one healed hit")
           (is (= 1 @steers) "no second flee step"))))))
 
 (deftest an-armed-body-with-a-melee-mob-at-its-side-pillars-before-it-walls-or-fights

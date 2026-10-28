@@ -9,7 +9,7 @@
 
   Callers: respond's cover-answers (an unseen room cell, the door). Others it fits: shut-in's :room way and enter-room
   (an unseen room judged open), look-edge's look at a region's unseen sides, a pit or pocket's unsensed cells
-  (plug-way ::unsensed-s), a seen-but-dark route cell in go-to."
+  (pit-cells/shell-fails), a seen-but-dark route cell in go-to."
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.cost.answer :as answer]

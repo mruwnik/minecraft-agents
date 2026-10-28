@@ -259,9 +259,9 @@
 
 (defn cover-answers
   "{way answer} of the covers specs (cover-specs) against mobs [hostile/mob-near's] wearing equipment (cost/cover-answer:
-  the blows while a side is open; then: what follows it, or the same cover once more; fight: what follows a cover that fails)."
+  the blows while a side is open; then: what follows it, or the same cover once more; a cover that fails leaves fight and the others)."
   [equipment mobs then fight specs]
-  (into {} (keep (fn [[w cover]] (some->> (cost/cover-answer {:equipment equipment :mobs mobs :then then :fight fight} cover) (vector w)))) specs))
+  (cost/cover-answers {:equipment equipment :mobs mobs :then then :fight fight :covers specs}))
 
 (defn look-answer
   "{:answer :room :value :cost}: looking into the room first (respond.doors/room-look) when a cell of it is unseen: the

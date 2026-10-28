@@ -71,7 +71,7 @@
 (def children
   "Each way's job and the args of this call it takes."
   {:room ['jobs.survival.enter-room [:place :at :flee?]]
-   :walls ['jobs.survival.wall-in [:for :ignore-zones? :trespass?]]
+   :walls ['jobs.survival.wall-in [:for :ignore-zones? :trespass? :on-lava]]
    :pit ['jobs.survival.dig-pit [:for :ignore-zones? :trespass? :on-lava]]
    :pocket ['jobs.survival.dig-pocket [:for :ignore-zones? :trespass? :on-lava]]})
 
@@ -103,24 +103,28 @@
   "Each way's seconds in the open before it covers the body (the :room walk: its whole quote)."
   {:walls wall-in/exposed-s :pit dig-pit/exposed-s :pocket dig-pocket/exposed-s})
 
+(declare fails)
+
 (defn price
-  "A way's quoted seconds plus, under fire (exposure f), f x its seconds in the open."
+  "A way's quoted seconds plus, under fire (exposure f), f x its seconds in the open, each try that fails (fails) paid again."
   [c f way seconds]
   (if (or (zero? f) (infinite? seconds))
     seconds
-    (+ seconds (* f (if-let [e (exposed-s way)] (e (update c :args merge (child-args c way))) seconds)))))
+    (let [c (update c :args merge (child-args c way))]
+      (/ (+ seconds (* f (if-let [e (exposed-s way)] (e c) seconds)))
+         (- 1 (if-let [fl (fails way)] (fl c) 0))))))
 
 (def quotes
   "Each way's quote where the body stands (the :room walk is no cover here)."
   {:walls wall-in/quote-of :pit dig-pit/quote-of :pocket dig-pocket/quote-of})
 
 (def covers-of
-  "The ways whose quote and seconds in the open come from one look at the site: way -> c -> [quote exposed-s]."
+  "The ways whose quote, seconds in the open and chance to fail come from one look at the site: way -> c -> [quote exposed-s fails]."
   {:pocket dig-pocket/cover})
 
 (def fails
-  "Each way's chance it cannot shut the body in where it stands (none: 0)."
-  {:walls wall-in/fails})
+  "Each way's chance it cannot shut the body in where it stands."
+  {:walls wall-in/fails :pit dig-pit/fails :pocket dig-pocket/fails})
 
 (defn covers
   "{way {:open-s :seconds :fails}} of each of ways (default :walls :pit :pocket) that can shut the body in where it stands: its
@@ -130,11 +134,10 @@
   ([c ways]
    (let [c (update c :args #(merge {:for :danger} (select-keys % [:for :ignore-zones? :trespass? :on-lava])))]
      (into {} (keep (fn [w]
-                      (let [[q open] ((covers-of w (juxt (quotes w) (exposed-s w))) c)
+                      (let [[q open f] ((covers-of w (juxt (quotes w) (exposed-s w) (fails w))) c)
                             s (get-in q [:uses :job-time 1])]
                         (when (and (number? s) (js/isFinite s) (js/isFinite open))
-                          [w (cond-> {:open-s open :seconds (+ s (hide-out/quiet-s))}
-                               (fails w) (assoc :fails ((fails w) c)))]))))
+                          [w {:open-s open :seconds (+ s (hide-out/quiet-s)) :fails f}]))))
            ways))))
 
 (defn door-cover

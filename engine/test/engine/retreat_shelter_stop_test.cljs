@@ -337,3 +337,9 @@
         p (tu/seeing-all (tu/fake {:blocks {} :entities [(item 1 0.5 64 0.5) (item 2 0.8 64 0.5) (item 3 2.5 64 0.5) (item 4 0.5 70 0.5)]}))]
     (is (= [1 2] (sort (pit-drops/in-reach-ids {:primitives p} [1 2 3 4]))) "under foot and a step off, not 2 blocks away or 6 above")
     (is (= [2] (pit-drops/in-reach-ids {:primitives p} [2])) "only the ids asked for")))
+
+(deftest a-dig-beside-cells-never-sensed-may-lay-itself-open
+  (let [cells [(cell 1 64 0) (cell 1 65 0)]
+        rock (into {} (for [x (range -2 3) y (range 62 67) z (range -2 3)] [[x y z] "stone"]))]
+    (is (zero? (pit/shell-fails (sensing-stub rock) cells #{})) "rock seen all round: it cannot fail")
+    (is (< 0 (pit/shell-fails (sensing-stub {}) cells #{}) 1) "unseen round it: each cell open at the share of open rock")))

@@ -140,19 +140,25 @@
      (way/quote-of c seconds (settings/get settings ::job-time-s)))))
 
 (defn exposed-s
-  "Seconds the body stays open to a shooter before the pocket shuts it in: the walk and the dig, and plug-way's ::unsensed-s
-  for each cell round the pocket it never sensed (a gap there fails the pocket). ##Inf with no site. pl: its plan (default made here)."
+  "Seconds the body stays open to a shooter before the pocket shuts it in: the walk and the dig. ##Inf with no site. pl: its plan (default made here)."
   ([c] (exposed-s c (plan c)))
-  ([c {:keys [stand cells sink? open-s]}]
+  ([c {:keys [cells sink? open-s]}]
    (cond
-     cells (+ open-s (* (way/unsensed-s) (pit/unsensed-shell (:primitives c) cells (set (into cells [stand (update stand :y inc)])))))
+     cells open-s
      sink? (settings/get settings ::sink-s)
      :else ##Inf)))
 
+(defn fails
+  "The chance the pocket lays itself open through a cell round it the body never sensed (pit-cells/shell-fails); 0 with
+  no site. pl: its plan (default made here)."
+  ([c] (fails c (plan c)))
+  ([c {:keys [stand cells]}]
+   (if cells (pit/shell-fails (:primitives c) cells (set (into cells [stand (update stand :y inc)]))) 0)))
+
 (defn cover
-  "[quote exposed-s] from one plan."
+  "[quote exposed-s fails] from one plan."
   [c]
-  (let [pl (plan c)] [(quote-of c pl) (exposed-s c pl)]))
+  (let [pl (plan c)] [(quote-of c pl) (exposed-s c pl) (fails c pl)]))
 
 (defn ^:async step!
   "A pocket dug once (pit-cells/pocket!: it steps in), then walls on its way in: :done, :again, or nil with none that fits

@@ -1,7 +1,7 @@
 (ns jobs.survival.respond.cornered
   "The cornered step of a flight: the conditions that rank its options (pressed, beaten, under fire, boxed in) and cornered!, which takes the first option it can."
   (:require [engine.settings :as settings]
-            [jobs.survival.respond-choose :refer [escape-order with-zone-pillar]]
+            [jobs.survival.respond-choose :refer [escape-order by-price with-zone-pillar]]
             [jobs.survival.respond.options :as rc :refer [settings near-hostiles hitters arriving close-radius hurt-by press-gap hit-reach fist-sweeps tool-weapons fight! outrun? angry-enderman? cornered-answers shots-in stand! back-off! blocked! recently-hurt? hurt-window-s]]
             [engine.args :as a]
             [jobs.lib.access :as access]
@@ -191,8 +191,8 @@
                    (hitters c hostiles)))))
 
 (defn ^:async cornered!
-  "Nowhere worth walking to: the first option of escape-order that it can take and has not failed since the last
-  start over (blocked!). home?: the body is in its home room."
+  "Nowhere worth walking to: the first option of escape-order (its covers and back-off by price, by-price) that it can
+  take and has not failed since the last start over (blocked!). home?: the body is in its home room."
   ([c why] (await (cornered! c why false)))
   ([c why home?]
   (let [weapons (combat/weapons c)
@@ -220,7 +220,7 @@
         beaten-fight? (or (beaten-fights? {:beaten? beaten :armed? armed? :blocks? (boolean (seq (lb/carried c (flight/blocks c))))})
                           (and (not fire?) (not pillar-first?) (mob-in-corner-cell? c hostiles))
                           (boolean (some #(and (combat/ranged? %) (hostile/point-blank? c %)) hostiles)))
-        order (escape-order {:win? win?
+        order (by-price (escape-order {:win? win?
                              :creeper? (boolean (some combat/creeper? hostiles))
                              :enderman? (angry-enderman? c hostiles)
                              :flyer? (boolean (some combat/flyer? hostiles))
@@ -233,7 +233,8 @@
                              :home? home?
                              :lean? (pillar/lean? c)
                              :pillar-first? pillar-first?
-                             :pillar-cheaper? cheap-pillar?})]
+                             :pillar-cheaper? cheap-pillar?})
+                        prices)]
     (ctx/emit! c :retreat.cornered :debug {:prices (update-vals prices js/Math.round) :weighed (mapv #(str (.-name %) " " (js/Math.round (danger-q/mob-distance (:primitives c) %))) weighed-mobs) :order order})
     (loop [[option & more] (with-zone-pillar order)]
       (let [r (when-not (flight/tried? c option)

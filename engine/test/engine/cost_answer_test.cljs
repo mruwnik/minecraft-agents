@@ -250,8 +250,19 @@
 (deftest a-cover-that-may-fail-pays-the-fight-after-it-by-that-chance
   (let [zombie (mob "zombie" 1)
         fight (cost/fight-answer (fight nil zombie))
-        price #(cost/answer-price (body 10) (cost/cover-answer {:mobs [zombie] :then [fight] :fight fight} {:open-s 1.4 :seconds 35 :fails %}) here)]
+        price #(cost/answer-price (body 10) (cost/cover-answer {:mobs [zombie] :then [fight] :failed [fight]} {:open-s 1.4 :seconds 35 :fails %}) here)]
     (is (< (price 0) (price 0.4) (price 0.9)) "a placement refused for the mob in its cell leaves the fight, not seconds in the open")))
+
+(deftest a-cover-whose-mob-may-stay-pays-the-meet-again-or-the-cover-again
+  (let [zombie (mob "zombie" 1)
+        fight (cost/fight-answer (fight nil zombie))
+        cover {:open-s 1 :seconds 31}
+        price (fn [stays] (settings/with-settings {:jobs.lib.cost.answer/hide-stays stays}
+                            #(cost/answer-price (body 20) (cost/cover-answer {:mobs [zombie] :then [fight]} cover) here)))
+        alone (cost/answer-price (body 20) (assoc (cost/build-answer {:mobs [zombie] :seconds 1}) :seconds 31) here)]
+    (is (< (price {:k 0 :n 1000}) (price {:k 40 :n 100}) (price {:k 90 :n 100})) "the likelier the zombie waits below, the dearer the pillar")
+    (is (< (js/Math.abs (- (price {:k 0 :n 1000}) alone)) 0.05) "it never waits: the cover alone")
+    (is (< (price {:k 99 :n 100}) (+ alone (cost/answer-price (body 20) fight here))) "hiding again and again is bounded by the fight it may end in")))
 
 (deftest a-threats-cover-is-priced-as-respond-prices-it
   (let [cover {:open-s 2 :seconds 50}

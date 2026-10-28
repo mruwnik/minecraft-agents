@@ -1,6 +1,6 @@
 (ns jobs.survival.respond-choose
   "What a response to a hostile does next, from facts it sensed: the step of a flight (choose) and the cornered options in
-  order (escape-order, with-zone-pillar). Pure: no reads, no calls.")
+  order (escape-order, by-price, with-zone-pillar). Pure: no reads, no calls.")
 
 (defn choose
   "The option of a flight step, {:option kw :why str} (why: said to the cornered options; :cornered: where home is judged by the room the body stands in or near, :cornered-inside: by the room it is inside only), in the order the
@@ -45,6 +45,15 @@
                                 (vec (mapcat (fn [o] (case o :pillar [:plug-dig :pillar] :plug-dig [] [o])) %))
                                 %))
     (or home? (and arriving? (not creeper?) (not enderman?))) (filterv #(not= :plug-dig %))))
+
+(def priced-options "The cornered options escape-order places by rule and by-price orders among themselves: the covers and the back-off." #{:plug :pillar :plug-dig :back-off})
+
+(defn by-price
+  "order with its priced-options, in the places they hold in it, cheapest first by prices ({option seconds}; one not
+  priced last, ties in order)."
+  [order prices]
+  (let [sorted (sort-by #(get prices % ##Inf) (filter priced-options order))]
+    (first (reduce (fn [[out [s & more :as ss]] o] (if (priced-options o) [(conj out s) more] [(conj out o) ss])) [[] sorted] order))))
 
 (defn with-zone-pillar
   "order with :plug-zone, :plug-dig-zone and :pillar-zone (walls, a pit or pocket, a pillar through another's area) after every way that keeps off, before a last :fight."

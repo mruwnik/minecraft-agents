@@ -8,6 +8,7 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.ready :as ready]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.plug-way :as way]
             [jobs.survival.wall-placer :as placer]
@@ -27,6 +28,7 @@
 (a/defargs args
   {:ignore-zones? :shared
    :trespass? {:doc "false: walls that would need a cell of another's zone, claim or plan fail instead (the caller tries again with true as a last resort)" :spec boolean? :default true}
+   :on-lava {:doc ":seal: lava in a cell to fill is filled like any; :stop: the walls are not built beside lava (it is left)" :spec #{:seal :stop} :default :seal}
    :for {:doc "why the body shuts itself in: :danger (blocks are taken back by the cleanup once no hostile is near; a hostile in a cell fails it), :night (blocks stay for the night; a mob in a cell is waited out)" :spec #{:danger :night} :default :danger}})
 
 (a/defargs settings
@@ -55,12 +57,14 @@
       (+ (way/place-s c) (if (>= have open) 0 (settings/get settings ::dear-s))))))
 
 (defn why-not
-  "The stop {:stop :no-blocks :text} when too few blocks are carried: none, or for the night fewer than open cells; for the night also {:stop :own-plan} when an open cell lies in a plan the body made; nil otherwise."
+  "The stop {:stop :no-blocks :text} when too few blocks are carried: none, or for the night fewer than open cells; for the night also {:stop :own-plan} when an open cell lies in a plan the body made; {:stop :lava-adjacent} with :on-lava :stop when a cell to fill holds lava; nil otherwise."
   [c]
   (let [cells (dig-cells/open-cells (:primitives c) (sh-sense/feet (:primitives c)))
         open (count cells)
         have (reduce + (map :count (lb/carried c (flight/blocks c))))]
     (cond
+      (and (= :stop (:on-lava (:args c))) (some #(some->> (u/seen-name (:primitives c) %) (re-find #"lava")) cells))
+      {:stop :lava-adjacent :text "lava in a cell the walls would fill"}
       (placer/own-plan-cell c cells) {:stop :own-plan :text "the walls need a cell of the body's own plan"}
       (nil? (lb/pick c (flight/blocks c))) {:stop :no-blocks :text "no block to wall the body in with"}
       (and (= :night (:for (:args c))) (< have open)) {:stop :no-blocks :text (str "fewer blocks carried than the " open " open cells")})))

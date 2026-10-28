@@ -7,7 +7,9 @@
             [jobs.lib.access.rules :as rules]
             [jobs.lib.blocks :as lb]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.cost.base-rates :as base-rates]
             [jobs.lib.dig-look :as look]
+            [jobs.lib.look :as sight]
             [jobs.lib.escape :as escape]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.result :as result]
@@ -265,6 +267,15 @@
                     :let [n (assoc cell :x (+ (:x cell) dx) :y (+ (:y cell) dy) :z (+ (:z cell) dz))]
                     :when (and (not (keep n)) (some-> (u/sensed p n) .-unknown))]
                 n))))
+
+(defn shell-fails
+  "The chance a dig of cells lays itself open through a cell beside, over or under them, outside keep, the body never
+  sensed (unsensed-shell): each is open at 1 - the solid share round the body (look/solid-share; with no memory the
+  prior at the dig's height)."
+  [p cells keep]
+  (let [y (:y (first cells))
+        solid (or (sight/solid-share p) (base-rates/solid-share y y 0 0))]
+    (- 1 (js/Math.pow solid (unsensed-shell p cells keep)))))
 
 (defn ^:async lays-open?
   "After a dig of the last of cells (those dug so far): why what the digs laid open rules the refuge out, :fluid-adjacent

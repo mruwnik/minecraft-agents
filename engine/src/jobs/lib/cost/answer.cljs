@@ -3,7 +3,8 @@
 
   An answer is {:damage hp :hit hp :shape :blasts [hp] :spread [hp] :seconds s :then [answer] :caught {:chance :damage :hit :blasts}}:
   the hp it is expected to cost, the creeper blasts in it landing for certain (:spread: as many equally likely blast
-  totals) and the rest in blows of about :hit hp each (:shape: their count's width, death/blow-chance), the seconds it takes, what may follow it (the cheapest of :then is paid too) and,
+  totals) and the rest in blows of about :hit hp each (:shape: their count's width, death/blow-chance), the seconds it takes, what may follow it (the cheapest of :then is paid too; with :stays only by that chance, the
+  answer itself again one of them: its mobs may still be there when it ends; :at-once, at the health it leaves) and,
   for a walk away, the chance its mobs catch it and the blows they then land; :spent when its one mob is a creeper (the
   blast that kills spends it: no mob waits at the death spot). answer-price: the hp at the health each
   leaves in the outcomes it lives through (lived-damage, health/hp-cost), the death the blows risk (death-chance x death-price), the seconds, and the cheapest
@@ -41,6 +42,8 @@
                          :doc "Chance a second a drowned meets a body in water a drowned can spawn in (its column holds water over water at block light 0, look/water-fn), by day or night: (k+1)/n over the trial bodies' logs on 2026-10-23, k=11 meets in n=5767 s, each meet once (a respond run soon after another is the same meet) and classed by the body's cell (tools/event-counts.mjs drowned-meets :prior :deep; river or ocean and other biomes, sky light high or low, met it alike)."}
    ::drowned-meet-other-per-s {:default 0.00043 :spec (a/num-in 0 nil)
                                :doc "As ::drowned-meet-per-s in any other water (one deep, or block-lit to its floor): k=1 in n=4602 s (:prior :other)."}
+   ::hide-stays {:default {:k 33 :n 52} :spec (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)})
+                 :doc "Of n flights of the trial bodies that ended hidden in a refuge, k handed back with a danger still about (hide-out :hold :spent), 2026-10-28. Recount: node tools/event-counts.mjs hide-ends."}
    ::unseen-water-lags {:default [{:k 1072482 :n 1095455} {:k 1054916 :n 1093513} {:k 1038865 :n 1091547} {:k 1024204 :n 1089545}
                                   {:k 1010196 :n 1087526} {:k 996729 :n 1085500} {:k 983992 :n 1083481} {:k 971757 :n 1081465}
                                   {:k 960096 :n 1079468} {:k 948840 :n 1077476} {:k 937962 :n 1075465} {:k 927498 :n 1073431}
@@ -133,20 +136,35 @@
   [body at]
   (let [d (death/death-cost body at)] {:met d :clear d}))
 
+(declare repeat-price)
+
 (defn answer-price*
   "answer-price with death {:met :clear} the seconds each death costs (death-price): :clear one by a blast that spends
   the answer's mobs (:spent), :met any other."
-  [{:keys [health] :as body} {:keys [seconds then outcomes spent] :as answer} at death]
+  [{:keys [health] :as body} {:keys [seconds then outcomes spent stays] :as answer} at death]
   (let [health (or health 20)
         {:keys [dies lived]} (blows-outcome body answer)
         lives (- 1 dies)
         own (+ (if (pos? lives) (* lives (health/hp-cost health (min (/ lived lives) health))) 0)
                (if (pos? dies) (* dies (if spent (:clear death) (:met death))) 0)
-               seconds)]
+               seconds)
+        base (if (seq outcomes)
+               (+ own (* lives (reduce + (map (fn [[chance a]] (* chance (answer-price* (after body answer) a at death))) outcomes))))
+               own)]
     (cond
-      (seq outcomes) (+ own (* lives (reduce + (map (fn [[chance a]] (* chance (answer-price* (after body answer) a at death))) outcomes))))
-      (seq then) (+ own (* lives (apply min (map #(answer-price* (healed body) % at death) then))))
+      stays (let [h (healed body)]
+              (+ base (* lives stays (min (reduce min ##Inf (map #(answer-price* h % at death) then)) (repeat-price h answer at death)))))
+      (seq outcomes) base
+      (seq then) (+ own (* lives (apply min (map #(answer-price* (if (:at-once answer) (after body answer) (healed body)) % at death) then))))
       :else own)))
+
+(defn repeat-price
+  "The price at body of answer taken again each time its mobs stay (its :stays): the fixed point p = base + lives x stays x p
+  (base its price with no :stays or :then, lives the chance it leaves body alive), ##Inf when it never ends."
+  [body {:keys [stays] :as answer} at death]
+  (let [base (dissoc answer :stays :then)
+        k (* stays (- 1 (answer-death-chance body base at death)))]
+    (if (< k 1) (/ (answer-price* body base at death) (- 1 k)) ##Inf)))
 
 (defn death-price
   "{:met :clear} seconds a death at `at` costs body: death/experience-cost and the cheaper of giving `at` up
@@ -183,14 +201,25 @@
 
 (defn answer-death-chance
   "The chance answer kills body: its blows (blows-chance), then the cheapest of its :then (answer-price* at `at`, by
-  death, default bare) at full health, or each of its :outcomes by its chance."
+  death, default bare) at full health, or each of its :outcomes by its chance; with :stays, by that chance the cheapest
+  at full health of its :then and itself again (repeat-price; again and again: d / (1 - stays x (1 - d)), d its own
+  chance); :at-once, its :then at the health it leaves."
   ([body answer at] (answer-death-chance body answer at (bare body at)))
-  ([body {:keys [then outcomes] :as answer} at death]
+  ([body {:keys [then outcomes stays] :as answer} at death]
    (let [own (blows-chance body answer)
-         next (when (seq then) (apply min-key #(answer-price* (healed body) % at death) then))]
+         base (if (seq outcomes)
+                (- 1 (* (- 1 own) (- 1 (reduce + (map (fn [[chance a]] (* chance (answer-death-chance (after body answer) a at death))) outcomes)))))
+                own)
+         h (if (and (:at-once answer) (not stays)) (after body answer) (healed body))
+         next (when (seq then) (apply min-key #(answer-price* h % at death) then))]
      (cond
-       (seq outcomes) (- 1 (* (- 1 own) (- 1 (reduce + (map (fn [[chance a]] (* chance (answer-death-chance (after body answer) a at death))) outcomes)))))
-       next (- 1 (* (- 1 own) (- 1 (answer-death-chance (healed body) next at death))))
+       stays (let [again? (or (nil? next) (< (repeat-price h answer at death) (answer-price* h next at death)))
+                   d (if again?
+                       (let [d (answer-death-chance h (dissoc answer :stays :then) at death)] (if (pos? d) (/ d (- 1 (* stays (- 1 d)))) 0))
+                       (answer-death-chance h next at death))]
+               (- 1 (* (- 1 base) (- 1 (* stays d)))))
+       (seq outcomes) base
+       next (- 1 (* (- 1 own) (- 1 (answer-death-chance h next at death))))
        :else own))))
 
 (defn decide
@@ -469,26 +498,39 @@
      :hit (reduce max 0 (map #(blow stats %) hitting))
      :seconds seconds}))
 
+(defn hide-stays
+  "The chance the danger is still about when a hide in a refuge ends: ::hide-stays under a uniform Beta(1, 1) prior."
+  []
+  (let [{:keys [k n]} (settings/get settings ::hide-stays)] (/ (inc k) (+ n 2))))
+
 (defn cover-answer
   "The answer of shutting the body in against mobs [flee-mob's] wearing equipment by a cover {:open-s :seconds :fails}
   (jobs.survival.shut-in/covers: the seconds a side stays open, the seconds it takes with the quiet after it, the chance
-  it cannot be closed, default 0): the blows of build-answer over open-s; then the same cover once more or one of then.
-  A cover that fails is the blows over open-s and then fight at once. nil with a creeper (its blast takes the walls)."
-  [{:keys [equipment mobs then fight]} {:keys [open-s seconds fails]}]
+  it cannot be closed, default 0): the blows of build-answer over open-s; then, by the chance the mobs are still about
+  when the hide ends (hide-stays), the cheapest of then and the same cover again (:stays). A cover that fails is the
+  blows over open-s and then at once the cheapest of failed (the answers left: the fight, the other covers). nil with a
+  creeper (its blast takes the walls)."
+  [{:keys [equipment mobs then failed]} {:keys [open-s seconds fails]}]
   (when-not (some #(= "creeper" (:name %)) mobs)
-    (let [a (assoc (build-answer {:equipment equipment :mobs mobs :seconds open-s}) :seconds seconds)
-          closed (assoc a :then (conj (vec then) a))]
-      (if (and fight fails (pos? fails))
-        (assoc a :seconds open-s :outcomes [[fails fight] [(- 1 fails) {:damage 0 :hit 0 :seconds (- seconds open-s) :then (:then closed)}]])
-        closed))))
+    (let [a (build-answer {:equipment equipment :mobs mobs :seconds open-s})
+          fails (if (seq failed) (or fails 0) 0)]
+      (cond-> (assoc a :seconds seconds :stays (* (- 1 fails) (hide-stays)) :then (vec then))
+        (pos? fails) (assoc :seconds open-s :outcomes [[fails {:damage 0 :hit 0 :seconds 0 :then (vec failed) :at-once true}]
+                                                       [(- 1 fails) {:damage 0 :hit 0 :seconds (- seconds open-s)}]])))))
+
+(defn cover-answers
+  "{way answer} of covers {way {:open-s :seconds :fails}} against mobs [flee-mob's] wearing equipment (cover-answer,
+  then what may follow it): a cover that fails leaves fight and the other covers, each of them failing to fight alone."
+  [{:keys [equipment mobs then fight covers]}]
+  (let [of (fn [failed cover] (cover-answer {:equipment equipment :mobs mobs :then then :failed failed} cover))
+        alone (into {} (keep (fn [[w cover]] (some->> (of (when fight [fight]) cover) (vector w)))) covers)]
+    (into {} (keep (fn [[w cover]] (some->> (of (cond-> (vec (vals (dissoc alone w))) fight (conj fight)) cover) (vector w)))) covers)))
 
 (defn cornered-answers
   "The answers {key answer} a cornered body wearing equipment has to mobs [flee-mob's]: the fight and each of covers {way
-  {:open-s :seconds}} it can make (cover-answer, the fight after it); decide takes the cheapest."
+  {:open-s :seconds :fails}} it can make (cover-answers, the fight after it); decide takes the cheapest."
   [{:keys [equipment mobs fight covers]}]
-  (into {:fight fight}
-        (keep (fn [[way cover]] (some->> (cover-answer {:equipment equipment :mobs mobs :then (when fight [fight]) :fight fight} cover) (vector way))))
-        covers))
+  (assoc (cover-answers {:equipment equipment :mobs mobs :then (when fight [fight]) :fight fight :covers covers}) :fight fight))
 
 (defn threat-answers
   "The answers {key answer-or-nil} body {:health :food :equipment :weapon :covers :swim :distance} has to mob-name (or
