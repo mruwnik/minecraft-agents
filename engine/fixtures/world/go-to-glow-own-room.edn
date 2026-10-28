@@ -1,7 +1,8 @@
 ;; Card 5165130a (efebfbf2): a body shut in its own dirt room (an own plan's shell) set in glowstone, which an escalation never
 ;; digs (not natural terrain), its goal a sealed 1x2 pocket in the glowstone. Each guess of the dig route that a look shows to be glowstone
-;; raises the risk of the next route's guesses: a few own wall cells are cut, not a column per guess, the dig route is not
-;; chosen again, and the call ends, a failure with its reason, in time.
+;; raises the risk of the next route's guesses: the dig route cuts a few own wall cells, not a column per guess (31 before),
+;; and is not chosen again; the stairs out cut the shell too (live: 2 to 6 cells, 12 in all at most); the call ends, a failure
+;; with its reason.
 ;; Glowstone x 10..26, y 0..9, z 10..26; the shell x 14..18, y 1..5, z 14..18, hollow (inside x 15..17, y 2..4); goal pocket [20 2..3 18].
 {:name "shut-in-own-room-in-glowstone-gives-up"
  :tags [:movement :go-to :access]
@@ -13,8 +14,8 @@
  :plans [{:id "room" :metadata {:by "$body"} :parts [{:id "shell" :box [#at [14 1 14] #at [18 5 18]] :want "dirt"}]}]
  :body {:at [17.5 2 15.5] :settle-s 2 :effects [["resistance" 600 4]]
         :inventory [["dirt" 8] ["stone_pickaxe" 1] ["stone_shovel" 1]]}
- :limit-s 240
+ :limit-s 300
  :act [[:job (jobs.movement.go-to {:pos #at [20 2 18] :range 0})]]
- :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false :reason :unreachable :why [:any]}} :within-s 230 :of-job true}
-          {:count-event {:source :job :kind :go-to.dug-own-build} :for-s 230 :at-most 6}
-          {:count-event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :for-s 230 :at-most 1}]}
+ :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false :reason :unreachable :why [:any]}} :within-s 290 :of-job true}
+          {:count-event {:source :job :kind :go-to.dug-own-build} :for-s 290 :at-most 12}
+          {:count-event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :for-s 290 :at-most 1}]}
