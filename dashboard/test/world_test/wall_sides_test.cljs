@@ -14,8 +14,9 @@
   (is (= {:rooms 2 :closed 5 :open 3 :setting {:k 5 :n 8}}
          (w/report {["A" 1] {:seen 1 :unseen 3 :open-sides 0 :closed-sides 3}
                     ["A" 2] {:seen 2 :unseen 5 :open-sides 3 :closed-sides 2}
-                    ["A" 3] {:seen 3 :unseen 0 :open-sides 0 :closed-sides 0}}))
-      "a room with nothing unseen says nothing about unseen sides"))
+                    ["A" 3] {:seen 3 :unseen 0 :open-sides 0 :closed-sides 0}
+                    ["A" 4] {:seen 1 :unseen 4}}))
+      "a room with nothing unseen, or an old row without the counts, says nothing about unseen sides"))
 
 (deftest a-row-folded-once-stays
   (is (= {:walls {:a {:unseen 1 :closed-sides 1}}}

@@ -140,6 +140,26 @@
           (is (= [{:seen 12 :unseen 0 :open-sides 0 :closed-sides 0 :closed true}] (mapv #(select-keys % [:seen :unseen :open-sides :closed-sides :closed]) (st/emitted seen :enter-room.arrived)))
               "the arrival reports the room's sides as it set out and that it is closed: a count for the prior"))))))
 
+(deftest the-arrival-counts-only-the-sides-seen-by-then-as-open-or-closed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (-> (hut/hut-world {:x 5 :y 64 :z 6} {})
+                        (assoc :time night :inventory st/dirt-stack :light-default [15 4])
+                        (update :light assoc [5 64 6] [15 0]))
+              {:keys [eng p seen]} (await (night-at-home world {:x 5 :y 64 :z 0} {} {:home? false}))
+              at (.-sensedAt p)
+              head-unseen? (fn [pos] (= [5 65 0] [(.-x pos) (.-y pos) (.-z pos)]))]
+          (aset p "seenBlockAt" (fn [pos] (when-not (head-unseen? pos)
+                                            (let [b (.blockAt p pos)] #js {:name (.-name b) :pos pos :age-ms 0 :properties (.-properties b)}))))
+          (aset p "sensedAt" (fn [pos] (if (or (head-unseen? pos)
+                                               (and (<= 4 (.-x pos) 6) (<= -1 (.-z pos) 1) (< 2 (:z (st/pos-of p)))))
+                                         #js {:unknown true :pos pos}
+                                         (.call at p pos))))
+          (await (tu/run-until-empty eng 80))
+          (is (= [{:unseen 3 :open-sides 1 :closed-sides 1}] (mapv #(select-keys % [:unseen :open-sides :closed-sides]) (st/emitted seen :enter-room.arrived)))
+              "of the three unseen sides one turned out open (a torch), one walled (a chest), one is open at its feet with its head cell still unseen: counted in neither"))))))
+
 (deftest a-room-seen-inside-whose-sides-are-not-all-seen-is-priced-maybe-open
   (let [p (tu/fake (hut/hut-world {:x 5 :y 64 :z 6} {}))
         at (.-sensedAt p)
@@ -154,7 +174,7 @@
 
 (deftest sides-seen-later-count-open-when-a-walker-stands-in-them
   (let [p (tu/fake (hut/hut-world {:x 5 :y 64 :z 6} {}))]
-    (is (= 3 (reach-room/open-sides p [[5 64 0] [6 64 0] [4 64 0] [3 64 0]])) "three floor cells inside, one wall cell")))
+    (is (= {:open 3 :closed 1} (reach-room/open-sides p [[5 64 0] [6 64 0] [4 64 0] [3 64 0]])) "three floor cells inside, one wall cell")))
 
 (deftest a-hut-not-seen-inside-is-dug-in-against-when-the-walk-and-its-chance-of-being-open-cost-more-than-digging-in
   (async done

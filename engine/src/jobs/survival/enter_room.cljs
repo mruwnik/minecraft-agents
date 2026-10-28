@@ -233,8 +233,8 @@
     (when (and sides (not arrived) (here? c (target-of c)) (not (reach-room/unseen-room? p feet)))
       (ctx/update-mem! c assoc :arrived true)
       (let [closed (room-lib/refuge-room? p feet)
-            open (reach-room/open-sides p (:cells sides))]
-        (ctx/emit! c :enter-room.arrived :info (assoc (dissoc sides :cells) :open-sides open :closed-sides (- (:unseen sides) open) :closed closed :at (u/cell-vec (:at (:args c)))
+            {:keys [open] sealed :closed} (reach-room/open-sides p (:cells sides))]
+        (ctx/emit! c :enter-room.arrived :info (assoc (dissoc sides :cells) :open-sides open :closed-sides sealed :closed closed :at (u/cell-vec (:at (:args c)))
                                                       :text (str "arrived in the room seen from outside: " (if closed "closed" "open"))))))))
 
 (defn ^:async flee-leg!

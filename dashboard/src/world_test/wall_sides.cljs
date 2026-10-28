@@ -23,9 +23,9 @@
   (update counts :walls #(merge rows %)))
 
 (defn report
-  "{:rooms :closed :open :setting {:k :n}} of the :walls rows: sides counted closed and open, rooms with an unseen side."
+  "{:rooms :closed :open :setting {:k :n}} of the :walls rows: sides counted closed and open, rooms with an unseen side; rows without the counts are skipped."
   [rows]
-  (let [rs (filter #(pos? (:unseen %)) (vals rows))
+  (let [rs (filter #(and (pos? (:unseen %)) (number? (:open-sides %)) (number? (:closed-sides %))) (vals rows))
         k (reduce + (map :closed-sides rs))
         open (reduce + (map :open-sides rs))]
     {:rooms (count rs) :closed k :open open
