@@ -1,11 +1,19 @@
-(ns jobs.storage.make-room.order
-  "The pure side of jobs.storage.make-room: what is kept, what goes to a chest, what is thrown, and in which order."
+(ns jobs.lib.room-order
+  "The pure side of jobs.storage.make-room (and the junk shed of jobs.lib.trip): what is kept, what goes to a chest, what is thrown, and in which order."
   (:require [clojure.string :as str]
+            [engine.args :as a]
             [engine.memory :as mem]
             [jobs.lib.choose :as choose]
             [jobs.lib.cost :as cost]
             [jobs.lib.foods :as foods]
             [jobs.lib.storage :as storage]))
+
+(def keep-defaults
+  "The default :carry-food, :carry-blocks, :carry-seeds and :carry-items of make-room's args (keep-counts reads them)."
+  {:carry-food nil :carry-blocks 64 :carry-seeds 16 :carry-items []})
+
+(a/defargs settings
+  {::toss-below {:default 3.2 :doc "A stack is tossed to make room only when its item-worth (jobs.lib.cost/item-value per item, seconds of work) is below this: dirt, cobblestone, rotten flesh and seeds go; ores, fuel, tools and food stay." :spec (a/num-in 0 nil)}})
 
 (defn item-worth
   "The worth of one item of an inventory entry ({:name :count? ...}): its jobs.lib.cost/item-value per item."

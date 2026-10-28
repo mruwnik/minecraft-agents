@@ -17,8 +17,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.near :as near]
             [jobs.lib.cost.planner :as cost-planner]
-            [jobs.movement.go-to.preview :as pv]
-            [jobs.movement.go-to.tuning :refer [quote-unseen-factor]]))
+            [jobs.movement.go-to.preview :as pv]))
 
 (defn ^:async quote-reply
   "eng's answer to GET /quote for go-to with args (what ./bin/quote prints)."
@@ -118,7 +117,7 @@
            :partial {:seconds 5 :waypoints [[0 64 0] [10 64 0]]}}
         [least mean] (get-in (pv/quote-of-route r false false) [:uses :job-time])]
     (is (= 5 least))
-    (is (< (js/Math.abs (- mean (+ 5 (* 4 cost-planner/walk-floor (quote-unseen-factor))))) 1e-9)
+    (is (< (js/Math.abs (- mean (+ 5 (* 4 cost-planner/walk-floor (cost-planner/quote-unseen-factor))))) 1e-9)
         "four blocks are left past the route's end, not the 30 of the body")))
 
 (deftest a-quote-with-back-is-the-walk-there-and-back
@@ -132,7 +131,7 @@
         q (pv/quote-of-route r false false)
         [least mean most] (get-in q [:uses :job-time])]
     (is (= 0 least))
-    (is (< (js/Math.abs (- mean (* 30 cost-planner/walk-floor (quote-unseen-factor)))) 1e-9))
+    (is (< (js/Math.abs (- mean (* 30 cost-planner/walk-floor (cost-planner/quote-unseen-factor)))) 1e-9))
     (is (= ##Inf most))
     (is (true? (:estimate q)))))
 

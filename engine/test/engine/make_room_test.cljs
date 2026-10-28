@@ -15,7 +15,7 @@
             [jobs.lib.walk-pick :as pick]
             [jobs.lib.world-files :as ew]
             [jobs.storage.make-room :as mr]
-            [jobs.storage.make-room.order :as ord]))
+            [jobs.lib.room-order :as ord]))
 
 (def t0 1000000)
 
@@ -448,7 +448,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:inventory (vec (concat [{:name "coal" :count 5}] (same "diamond_pickaxe" 31 1) [{:name "item_a" :count 1} {:name "item_b" :count 1}]))})]
-          (await (settings/with-settings {::mr/toss-below 2} #(run-reflex eng {} {})))
+          (await (settings/with-settings {::ord/toss-below 2} #(run-reflex eng {} {})))
           (is (= ["item_a" "item_b"] (mapv #(arg-of "item" %) (calls p "toss"))) "the coal is kept; stops at 4 free")
           (is (= 32 (stack-count p)))
           (is (>= 1 (Math/abs (- -4 (:x (feet p))))) "then it walks 4 blocks back from where it threw, against the throw direction")
@@ -476,7 +476,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:inventory (vec (concat (same "iron_pickaxe" 20 1) (same "bread" 10 3) (same "shield" 4 1)))})]
-          (await (settings/with-settings {::mr/toss-below 1000} #(run-reflex eng {} {})))
+          (await (settings/with-settings {::ord/toss-below 1000} #(run-reflex eng {} {})))
           (is (= 0 (count (calls p "toss"))))
           (is (= [:nothing-to-go] (mapv :reason (of-kind seen :stopped)))))))))
 
@@ -485,7 +485,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory (vec (concat (same "water_bucket" 12 1) (same "bucket" 12 1) (same "lava_bucket" 12 1)))})]
-          (await (settings/with-settings {::mr/toss-below 1000} #(run-reflex eng {} {})))
+          (await (settings/with-settings {::ord/toss-below 1000} #(run-reflex eng {} {})))
           (is (= 0 (count (calls p "toss")))))))))
 
 (deftest building-blocks-keep-their-floor
@@ -556,7 +556,7 @@
         (doseq [ground ["dirt" "stick"]]
           (let [{:keys [eng p]} (setup {:inventory (vec (concat (same "oak_log" 35 5) [{:name "stick" :count 1}]))
                                         :entities [(assoc-in diamond-on-ground [:item :name] ground)]})]
-            (await (settings/with-settings {::mr/toss-below 0} #(run-reflex eng {} {})))
+            (await (settings/with-settings {::ord/toss-below 0} #(run-reflex eng {} {})))
             (is (= 0 (count (calls p "toss"))) ground)
             (is (= 0 (count (calls p "collect"))) ground)))))))
 
@@ -741,7 +741,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (await (settings/with-settings {::mr/toss-below 0}
+        (let [{:keys [p]} (await (settings/with-settings {::ord/toss-below 0}
                                     #(run-child {:inventory (same "oak_log" 35 5) :entities [diamond-on-ground]}
                                                 {:free 2}
                                                 {:acted true :swap {:id 70 :item "diamond" :worth 10}})))]

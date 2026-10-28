@@ -4,7 +4,7 @@
             [jobs.lib.price :as price]
             [jobs.lib.cost :as cost]
             [jobs.lib.ready :as ready]
-            [jobs.storage.make-room.order :as ord]
+            [jobs.lib.room-order :as ord]
             [engine.contract :as contract]
             [engine.args :as a]
             [engine.settings :as settings]
@@ -62,18 +62,17 @@
 
 (a/defargs args
   {:free {:doc "done once at least this many slots are free (above the trigger's 2, so it does not refire at once)" :spec (a/int-in 0 nil) :default 4}
-   :carry-food {:doc "food items kept carried (best food by points first); the body's food reserve (jobs.lib.cost/food-reserve) when nil" :spec (a/int-in 0 nil) :default nil}
-   :carry-blocks {:doc "cobblestone, dirt and each kind of planks kept carried, each up to this many" :spec (a/int-in 0 nil) :default 64}
-   :carry-items {:doc "item names kept carried whole, never put away or thrown (a caller's own inputs)" :spec (a/coll-of a/name?) :default []}
-   :carry-seeds {:doc "each kind of seeds kept carried up to this many (a farming body sows them)" :spec (a/int-in 0 nil) :default 16}
+   :carry-food {:doc "food items kept carried (best food by points first); the body's food reserve (jobs.lib.cost/food-reserve) when nil" :spec (a/int-in 0 nil) :default (:carry-food ord/keep-defaults)}
+   :carry-blocks {:doc "cobblestone, dirt and each kind of planks kept carried, each up to this many" :spec (a/int-in 0 nil) :default (:carry-blocks ord/keep-defaults)}
+   :carry-items {:doc "item names kept carried whole, never put away or thrown (a caller's own inputs)" :spec (a/coll-of a/name?) :default (:carry-items ord/keep-defaults)}
+   :carry-seeds {:doc "each kind of seeds kept carried up to this many (a farming body sows them)" :spec (a/int-in 0 nil) :default (:carry-seeds ord/keep-defaults)}
    :toss-from {:doc "a position {:x :z}: toss away from it (a dig's caller gives a point ahead of the way it goes on, so it does not walk into what it threw)" :spec (a/pred "a position {:x :z}" #(and (map? %) (number? (:x %)) (number? (:z %)))) :default nil}
    :away {:doc "after tossing, walk this far away from where the items were thrown" :spec (a/num-in 0 nil) :default 4}
    :stuck? {:doc "a job cannot go on without a slot: a stack goes when its whole worth is below what a chest costs (the chest and walking to put it down), not by the toss-below line per item" :spec boolean? :default false}
    :ignore-zones? :shared})
 
 (a/defargs settings
-  {::toss-below {:default 3.2 :doc "A stack is tossed to make room only when its item-worth (jobs.lib.cost/item-value per item, seconds of work) is below this: dirt, cobblestone, rotten flesh and seeds go; ores, fuel, tools and food stay." :spec (a/num-in 0 nil)}
-   ::toss-fails {:default 3 :doc "Failed tosses in a row before the call gives up." :spec (a/int-in 1 nil)}
+  {::toss-fails {:default 3 :doc "Failed tosses in a row before the call gives up." :spec (a/int-in 1 nil)}
    ::unusable-ttl-s {:default 600 :doc "Seconds a chest that failed is left alone." :spec (a/num-in 0 nil)}
    ::spot-slack {:default 8 :doc "A toss spot the body is farther than :away plus this from is stale, in blocks." :spec (a/num-in 0 nil)}
    ::swap-radius {:default 8 :doc "When no slot is free, a dropped item worth more than some carried stack within this radius is swapped in." :spec (a/num-in 0 nil)}
@@ -428,7 +427,7 @@
   (:done, through finish-end!). run is {:chest-done}."
   [c run]
   (let [{:keys [free]} (:args c)
-        toss-below (settings/get settings ::toss-below)
+        toss-below (settings/get ord/settings ::ord/toss-below)
         p (:primitives c)
         m (ctx/mem c)
         free-now (u/free-slots p)

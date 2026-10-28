@@ -16,8 +16,7 @@
             [jobs.lib.tool-kind :as kind]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
-            [jobs.storage.make-room :as room]
-            [jobs.storage.make-room.order :as ord]))
+            [jobs.lib.room-order :as ord]))
 
 (a/defargs settings
   {::want-free {:default 12 :doc "Free slots a trip wants at its start: with fewer free and a known chest near, the body deposits first." :spec (a/int-in 0 36)}
@@ -67,8 +66,8 @@
   "The slots to free to throw the junk carried over ::junk-cap: the stacks jobs.storage.make-room would throw of such names, 0 when none is over."
   [c]
   (let [inv (u/inventory (:primitives c))
-        keep (ord/keep-counts inv (settings/job-defaults 'jobs.storage.make-room room/args) (reserve/held c :make-room))]
-    (ord/surplus-slots inv keep (settings/get room/settings ::room/toss-below) (settings/get junk-settings ::junk-cap))))
+        keep (ord/keep-counts inv ord/keep-defaults (reserve/held c :make-room))]
+    (ord/surplus-slots inv keep (settings/get ord/settings ::ord/toss-below) (settings/get junk-settings ::junk-cap))))
 
 (declare heading-steps)
 

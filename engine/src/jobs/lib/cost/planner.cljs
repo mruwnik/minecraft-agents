@@ -191,7 +191,8 @@
   {:peek-s 0.7 :aim-s 0.1 :see-lit-depth 10 :light-depth 5})
 
 (a/defargs settings
-  {::drop-cost {:default 1 :doc "Scales the cost of a drop (fall seconds and damage; 1 as is, 0 free, 5 dear); false: no drop of 2 or 3 at all. :one-way :closed instead refuses only a drop the body cannot climb back." :spec (a/or-of (a/num-in 0 nil) false?)}
+  {::quote-unseen-factor {:default 2 :doc "A go-to quote's mean counts each block still to go past a partial route (or with no route, when the call may change the world) as this many walked blocks of unseen terrain (walk-floor each)." :spec (a/num-in 0 nil)}
+   ::drop-cost {:default 1 :doc "Scales the cost of a drop (fall seconds and damage; 1 as is, 0 free, 5 dear); false: no drop of 2 or 3 at all. :one-way :closed instead refuses only a drop the body cannot climb back." :spec (a/or-of (a/num-in 0 nil) false?)}
    ::costs {:default false :doc (str "Map of price name to seconds, overriding the planner's price of a move (" (str/join " " (map name (keys planner-names))) "); a price left out keeps the planner's default. false: none.")
             :spec (a/or-of false? (a/valid-by "a map of planner price name to a number of seconds >= 0" #(planner-costs-problem %)))}
    ::lethal-air {:default false :doc "true lets a plan drown the body when no other way to air exists (breathe's); false: such a plan is refused (:why :air-lethal)." :spec boolean?}
@@ -260,6 +261,13 @@
   []
   (let [m (settings/get settings ::costs)]
     (cond-> (or m nil) (settings/get settings ::lethal-air) (assoc :lethal-air 1))))
+
+(defn quote-unseen-factor [] (settings/get settings ::quote-unseen-factor))
+
+(defn rest-s
+  "Seconds a quote prices blocks still to go past what is planned: quote-unseen-factor walk blocks (walk-floor) each."
+  [blocks]
+  (* blocks walk-floor (quote-unseen-factor)))
 
 (defn walk-landing "The setting ::landing, nil when none." [] (or (settings/get settings ::landing) nil))
 (defn walk-drop-cost "The setting ::drop-cost." [] (settings/get settings ::drop-cost))

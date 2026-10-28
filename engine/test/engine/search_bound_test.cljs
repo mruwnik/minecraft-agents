@@ -3,12 +3,12 @@
   (:require [cljs.test :refer [deftest is]]
             [engine.ready-test :as ready-test]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.planner :as cost-planner]
             [jobs.lib.escape :as escape]
             [jobs.movement.go-to.escalate-choose :as choose]
             [jobs.lib.walk-risk :as risk]
             [jobs.movement.go-to.escalation :as esc]
-            [jobs.movement.go-to.preview :as preview]
-            [jobs.movement.go-to.search-bound :as sb]))
+                        [jobs.movement.go-to.search-bound :as sb]))
 
 (defn ctx-at [now-ms] (assoc (ready-test/ctx-of {:self {:pos {:x 0.5 :y 64 :z 0.5} :health 14}}) :view (fn [] {:now now-ms :data {}})))
 
@@ -18,7 +18,7 @@
   (let [c (ctx-at 0)]
     (with-redefs [escape/choose (fn ([_ _ _ _] nil) ([_ _ _ _ _] {:step :approach :pos [3 64 0]}))
                   risk/estimate (fn [& _] {:hp 4 :lethal-hp 1})]
-      (is (close? (+ (:cost (cost/walk-cost {:distance 3})) (preview/rest-s 17) (cost/risk-s 14 3 1))
+      (is (close? (+ (:cost (cost/walk-cost {:distance 3})) (cost-planner/rest-s 17) (cost/risk-s 14 3 1))
                   (sb/fallback-s c [0 64 0] [20 64 0] (constantly true) {}))
           "the walk to the spot, the 17 blocks on from it as a quote prices them, and the walk's hurt and death"))))
 

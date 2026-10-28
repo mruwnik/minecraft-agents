@@ -1,10 +1,9 @@
 (ns engine.value-test
   "make-room's item worth (jobs.lib.cost.value/item-value per item) against its :toss-below default."
   (:require [cljs.test :refer [deftest is are]]
-            [jobs.storage.make-room :as mr]
-            [jobs.storage.make-room.order :as ord]))
+            [jobs.lib.room-order :as ord]))
 
-(def toss-below (get-in mr/settings [::mr/toss-below :default]))
+(def toss-below (get-in ord/settings [::ord/toss-below :default]))
 
 (deftest everyday-junk-is-below-the-toss-line
   (are [item] (< (ord/item-worth item) toss-below)

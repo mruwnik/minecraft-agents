@@ -6,12 +6,12 @@
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.planner :as cost-planner]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.targets :as targets]
             [jobs.lib.util :as u]
             [jobs.lib.walk.plan :as wplan]
-            [jobs.lib.walk.world :as wworld]
-            [jobs.movement.go-to.preview :as preview]))
+            [jobs.lib.walk.world :as wworld]))
 
 (defn walk-s
   "Seconds a walk from `from` into :range of :pos (go-to args) takes at the least: the flat blocks between their cells
@@ -162,7 +162,7 @@
         bound #(walk-s feet (target %))
         searching (atom false)
         reaching (atom false)
-        guess-s (fn [x] (* (if (:back (walk x)) 2 1) (preview/rest-s (js/Math.floor (u/flat-dist (cell feet) (cell (:pos (target x))))))))
+        guess-s (fn [x] (* (if (:back (walk x)) 2 1) (cost-planner/rest-s (js/Math.floor (u/flat-dist (cell feet) (cell (:pos (target x))))))))
         rebound (fn ^:async tighter [_ q left]
                   (when (no-way? q)
                     (let [goals (map #(let [{:keys [pos range]} (target %)] (assoc (cell pos) :y (some-> (:y pos) js/Math.floor) :range (or range 0))) left)

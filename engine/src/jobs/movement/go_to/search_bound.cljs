@@ -3,13 +3,13 @@
   the way it would take without them costs (the most a search can save), so a search with no route ends."
   (:require [engine.ctx :as ctx]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.planner :as cost-planner]
             [jobs.lib.escape :as escape]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
             [jobs.lib.walk.one-way :as one-way]
             [jobs.lib.walk-risk :as risk]
-            [jobs.movement.go-to.escalate-choose :as choose]
-            [jobs.movement.go-to.preview :as preview]))
+            [jobs.movement.go-to.escalate-choose :as choose]))
 
 (defn risk-s
   "Seconds a walk-risk estimate's hp cost the body (cost/risk-s of its hurt and its death's :lethal-hp)."
@@ -18,7 +18,7 @@
 
 (defn fallback-s
   "Seconds the way escape/choose finds from feet with no dig route costs to the goal: its step (choose/price, an
-  approach its walk), the blocks on from where the step leaves the body as a quote prices them (preview/rest-s), and
+  approach its walk), the blocks on from where the step leaves the body as a quote prices them (cost-planner/rest-s), and
   the walk's risk to the goal (walk-risk/estimate); with none, or an unpassable one, what the goal is worth (one-way/worth: the caller's
   :worth, else a tour's), all a search can save."
   [c feet goal may-dig? opts]
@@ -30,7 +30,7 @@
                   (+ (if (= :approach (:step e))
                        (:cost (cost/walk-cost {:distance (u/dist (cell feet) (cell end))}))
                        (choose/price (:primitives c) feet e))
-                     (preview/rest-s (js/Math.round (js/Math.hypot (- (goal 0) (end 0)) (- (goal 2) (end 2)))))
+                     (cost-planner/rest-s (js/Math.round (js/Math.hypot (- (goal 0) (end 0)) (- (goal 2) (end 2)))))
                      (risk-s c (risk/estimate c (cell goal)))))]
       (if (and total (js/isFinite total)) total (worth)))))
 
