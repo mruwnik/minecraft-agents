@@ -71,6 +71,7 @@
   {:plan {:doc "id of a plan of the body's world" :spec a/name? :default nil}
    :part {:doc "only the cells of this part" :spec a/name? :default nil}
    :accept {:doc "as jobs.build.from-plan" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default [:fluid-adjacent]}
+   :worth {:doc "seconds the line is worth to the caller, the builder's (jobs.build.rail) :worth; nil: an order, no cap" :spec (a/num-in 0 nil) :default nil}
    :ignore-zones? :shared})
 
 (def ways need/fetch-ways)
@@ -243,11 +244,11 @@
                   :result (when proof (assoc proof :built (some-> (:built (ctx/mem c)) (still-wrong cells (block-at c)))))})))
 
 (defn ^:async quote-of [c]
-  (select-keys (await (ctx/quote c 'jobs.build.from-plan (select-keys (:args c) [:plan :part :accept :ignore-zones?]))) [:uses :yields]))
+  (select-keys (await (ctx/quote c 'jobs.build.from-plan (select-keys (:args c) [:plan :part :accept :worth :ignore-zones?]))) [:uses :yields]))
 
 ;; ------------------------------------------------------------------ rounds
 
-(def builder-args [:plan :part :accept :ignore-zones?])
+(def builder-args [:plan :part :accept :worth :ignore-zones?])
 
 (defn restock?
   "Whether the builder's ending e is only a carried stock run out, with more to fetch: it placed something, gave nothing up

@@ -40,6 +40,7 @@
    :shaft {:doc "id of a mineshaft plan down from the base; nil: the nearest usable one; false: walk" :spec (a/or-of a/name? boolean?) :default nil}
    :take {:doc "classes stripped" :spec (a/coll-of #{:wood :cobweb :rail :ore}) :default [:wood :cobweb :rail :ore]}
    :spawner {:doc "a spawner in a segment: :light lights its spawn box and leaves it, :break lights and digs it, :seal seals the segment's mouth at once (its subtree skipped), :skip leaves it unlit" :spec #{:light :break :seal :skip} :default :light}
+   :worth {:doc "seconds the strip is worth to the caller; the base serves only the strip, so it is the base's worth; nil: an order, no cap" :spec (a/num-in 0 nil) :default nil}
    :ignore-zones? :shared})
 
 (def ways need/fetch-ways)
@@ -96,7 +97,7 @@
     (do (save! c assoc :was {:home (mem/place (ctx/view c) :home)
                              :spawn-bed (:pos (:data (sh-spawn/spawn-bed-live (ctx/view c))))})
         :again)
-    (await (child! c 'jobs.strip.base (base-args c) (fn [_] (save! c assoc :phase :shears))))))
+    (await (child! c 'jobs.strip.base (merge (base-args c) (select-keys (:args c) [:worth])) (fn [_] (save! c assoc :phase :shears))))))
 
 (defn ^:async shears! [c]
   (if (shears? c)

@@ -99,6 +99,15 @@
           (is (pos? (:placed built)))
           (is (= "powered_rail" (h/block-at p 3 64 0))))))))
 
+(deftest the-lines-worth-is-the-builders-whose-fill-under-a-floating-bed-it-refuses
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (b/start (spec "stone" 60 (kit {} {"dirt" 8})) {"line" (line-plan {})} [])
+              e (await (ending-of {:eng eng} job {:plan "line" :worth 0} 400))]
+          (is (= :not-worth (get-in e [:cause :reason])) (pr-str (select-keys e [:kind :cause])))
+          (is (= 0 (count (h/calls p "place")))))))))
+
 ;; ---------------------------------------------------------------- the check
 
 (defn ^:async declines

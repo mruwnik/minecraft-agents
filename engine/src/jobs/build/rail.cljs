@@ -43,6 +43,7 @@
   {:plan {:doc "id of a plan of the body's world" :spec a/name? :default nil}
    :part {:doc "only the cells of this part" :spec a/name? :default nil}
    :accept {:doc "as jobs.build.from-plan" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default [:fluid-adjacent]}
+   :worth {:doc "as jobs.build.from-plan" :spec (a/num-in 0 nil) :default nil}
    :ignore-zones? :shared})
 
 (a/defargs settings
@@ -64,7 +65,7 @@
 (declare cells-of wrong-shapes)
 
 (defn ^:async quote-of [c]
-  (select-keys (await (ctx/quote c 'jobs.build.from-plan (select-keys (:args c) [:plan :part :accept :ignore-zones?]))) [:uses]))
+  (select-keys (await (ctx/quote c 'jobs.build.from-plan (select-keys (:args c) [:plan :part :accept :worth :ignore-zones?]))) [:uses]))
 
 (defn done?
   [c]

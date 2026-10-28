@@ -146,13 +146,13 @@
           (is (= 2 (count (called env 'jobs.items.smelt))) "once per furnace, no retry loop")
           (is (= 1 (count (called env 'jobs.storage.haul))) "the haul still runs"))))))
 
-(deftest the-base-passes-its-worth-to-the-build
+(deftest the-strips-worth-is-the-worth-of-its-base-build
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [base (setup)]
-          (await (start-job! base 'jobs.strip.base {:base "base" :worth 77}))
-          (is (= 77 (:worth (first (called base 'jobs.build.from-plan))))))))))
+        (let [env (setup)]
+          (await (start! env (assoc args :worth 77)))
+          (is (= 77 (:worth (first (called env 'jobs.build.from-plan))))))))))
 
 (deftest the-siblings-run-alone
   (async done
