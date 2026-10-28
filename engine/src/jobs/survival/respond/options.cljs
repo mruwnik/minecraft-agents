@@ -256,10 +256,13 @@
         price #(cost/answer-price* body (answer %) at @death)
         cheaper (fn [ways] (some->> (keep specs ways) seq (apply min-key price)))
         pillar (when (open? :pillar) (if given (:pillar given) (pillar-cover c hostiles)))]
-    (cond-> {}
-      (cheaper (:plug cover-options)) (assoc :plug (cheaper (:plug cover-options)))
-      (cheaper (:plug-dig cover-options)) (assoc :plug-dig (cheaper (:plug-dig cover-options)))
-      pillar (assoc :pillar pillar)))))
+    (let [covers (cond-> {}
+                   (cheaper (:plug cover-options)) (assoc :plug (cheaper (:plug cover-options)))
+                   (cheaper (:plug-dig cover-options)) (assoc :plug-dig (cheaper (:plug-dig cover-options)))
+                   pillar (assoc :pillar pillar))]
+      (when (and (realized? death) (:capped @death))
+        (ctx/emit! c :hostile.capped :info {:text "the death price's search hit its round backstop while the covers were priced"}))
+      covers))))
 
 (defn cornered-answers
   "{option answer} of the cornered options open to the body against hostiles: :fight, the covers (cornered-covers) and,

@@ -397,9 +397,16 @@
   (let [inv [{:name "iron_pickaxe" :count 1}]
         body #(tu/seeing-within (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory inv}) %)
         p (body 4.2)
-        route (choose/route-answer p [0 64 0] [3 67 0] (constantly true) (constantly false) false false {})
+        unseen-s (cost/unseen-route-s (wworld/unseen-share p) (constantly :ground) [{:x 0 :y 0 :z 0}])
         stair {:step :stair :heading :east :steps 3}
-        unseen-s (cost/unseen-route-s (wworld/unseen-share p) (constantly :ground) [{:x 0 :y 0 :z 0}])]
+        route (choose/route-answer p [0 64 0] [3 67 0] (constantly true) (constantly false) false false {})]
+    (are [r steps top] (let [p (body r)]
+                         (= (:seconds (choose/route-answer p [0 64 0] [steps top 0] (constantly true) (constantly false) false false {}))
+                            (choose/price p [0 64 0] {:step :stair :heading :east :steps steps})))
+      4.2 3 67
+      6.1 4 68
+      5.4 3 67
+      50 4 68)
     (is (= (:seconds route) (choose/price p [0 64 0] stair)))
     (is (< (choose/price (body 50) [0 64 0] stair) (choose/price p [0 64 0] stair)) "unseen cells cost more")
     (are [r n] (= (+ (cw/pillar-cost 2) (* n unseen-s)) (choose/price (body r) [0 64 0] {:step :pillar :height 2}))

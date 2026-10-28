@@ -161,7 +161,7 @@
                        placed (cond-> (aget from-node 5) (not (keyword-identical? :walk move)) inc)]
                    (when (and (or (nil? max-dig-s) (<= ds max-dig-s))
                               (or (nil? max-places) (<= placed max-places)))
-                     (let [nd (+ (aget from-node 0) (aget acc 0) (unseen-at nx ny nz))
+                     (let [nd (cw/add-step (aget from-node 0) (aget acc 0) (unseen-at nx ny nz))
                            ^js old (.get best nk)]
                        (when (or (nil? old) (< nd (aget old 0)))
                          (.set best nk #js [nd k ds ck move placed (let [dug (aget from-node 6) ks (aget acc 3)] (if (zero? (alength ks)) dug (into dug (array-seq ks))))])

@@ -27,11 +27,18 @@
 (defn stair-step-cost
   "Seconds one step of a stair takes as the dig route prices it: a walk step of `step-s` and the seconds of each cut (nil for
   a cell already open), the step itself at least `stair-s` when it cuts, and `unseen-s` when a cell of it is unseen, summed in the order the dig route's search
-  adds them (the cuts one by one onto the walk step, the unseen last) so both give the same float."
+  adds them (the cuts one by one onto the walk step)."
   [step-s stair-s cuts unseen-s]
   (let [dug (remove nil? cuts)
         s0 (reduce + step-s dug)]
     (+ (if (seq dug) (stair-leg-cost s0 step-s stair-s) s0) unseen-s)))
+
+(defn add-step
+  "The running seconds of a route after one more step: `total` so far, the step's `leg-s` (a stair step's, from stair-step-cost
+  or the dig route's accumulation) and `unseen-s` for its own unseen cells (0 for none). The one sum both the dig route's
+  search and go-to's stair price use, so their floats are equal by construction."
+  [total leg-s unseen-s]
+  (+ total leg-s unseen-s))
 
 (defn pillar-cost
   "Seconds a pillar of `blocks` blocks takes, `short` of them to be fetched."

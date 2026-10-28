@@ -384,6 +384,7 @@
     (if (and (= :look (:answer weighed)) (not stay?))
       (do (ctx/emit! c :hostile.look-first :info {:prices (update-vals (:prices weighed) js/Math.round) :value (:value look) :cost (:cost look)
                                                  :closed (:closed look) :sides (:sides (:room look))
+                                                 :capped (:capped look)
                                                  :text (str "a side of the room is unseen: a look first (closed by chance " (.toFixed (:closed look) 2)
                                                             ", worth " (js/Math.round (:value look)) " s, costs " (.toFixed (:cost look) 1) " s)")})
           (await (doors/look-into-room! c (:room look))))

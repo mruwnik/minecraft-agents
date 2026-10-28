@@ -117,7 +117,7 @@
 (defn stair-route-s
   "Seconds the stair way e takes from feet, each step as jobs.lib.dig-route (route-answer) prices one: jobs.lib.cost/stair-leg-pricer
   of its cuts (dig-cost), a fill for an open floor (a fetch of the blocks, with none carried) and an unseen cut or floor,
-  the unseen step added onto the running total as the route's search does (the same float)."
+  the unseen step added onto the running total by cw/add-step, as the route's search does."
   [p feet {:keys [heading steps]}]
   (let [block-at (escape/block-at-of p)
         unseen? (escape/unseen-of p)
@@ -131,7 +131,7 @@
     (reduce (fn [total cuts]
               (let [floor (escape/add (nth cuts 2) [0 -1 0])
                     core (leg-s (map cut-s cuts) (when (dig-route/open? (block-at floor)) fill-s) false)]
-                (cond-> (+ total core) (some unseen? (cons floor cuts)) (+ unseen-s))))
+                (cw/add-step total core (if (some unseen? (cons floor cuts)) unseen-s 0))))
             0 (partition 3 (escape/stair-cuts feet (escape/heading-dirs (keyword heading)) steps)))))
 
 (defn new-stair-step-s

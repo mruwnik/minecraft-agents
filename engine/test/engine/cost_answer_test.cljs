@@ -516,6 +516,13 @@
     (is (= [(danger/melee-reach)] (map :distance (glance/approached [zombie] 60))) "it comes no nearer than its reach")
     (is (= [(mob "skeleton" 8)] (glance/approached [(mob "skeleton" 8)] 1)) "a shooter keeps its range")))
 
+(deftest a-look-value-says-when-its-death-price-hit-the-backstop
+  (let [bed (assoc (body 5) :respawn {:x 40 :y 64 :z 0})
+        now {:risky {:damage 12 :hit 5 :seconds 10}}
+        look (cost/look-answer bed {:mobs [] :looks 1 :outcomes [[1 (constantly now)]]} here)]
+    (is (not (:capped (cost/look-value bed now look here))))
+    (is (true? (:capped (with-redefs [answer/fixed-point-rounds 0] (cost/look-value bed now look here)))))))
+
 (deftest a-look-is-worth-what-it-may-change-less-what-it-costs
   (let [walls (cost/cover-answer {:mobs [(mob "skeleton" 8)]} {:open-s 9 :seconds 39})
         door (cost/cover-answer {:mobs [(mob "skeleton" 8)]} {:open-s 3 :seconds 33})
