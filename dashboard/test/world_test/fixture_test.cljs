@@ -234,6 +234,11 @@
     (is (some #(re-find #"drop #at" %) (ps {:after [[:entities {:at [(f/rel [1 2 3]) 4]}]]})))
     (is (empty? (ps {:act [[:rcon "x"]] :expect [{:event {:at (f/rel [1 2 3])} :within-s 1}]})))))
 
+(deftest the-defaults-act-end-follows-the-cases-own-act
+  (let [m (f/merge-case {:act [[:rcon "a"]] :act-end [[:rcon "z"]]} {:name "c" :act [[:rcon "m"]]})]
+    (is (= [[:rcon "a"] [:rcon "m"] [:rcon "z"]] (:act m)))
+    (is (not (contains? m :act-end)))))
+
 (deftest a-file-of-cases-merges-each-case-over-its-defaults
   (let [[open glass bad] (f/file-cases text "hostile")]
     (is (= "hostile/open" (:id open)))

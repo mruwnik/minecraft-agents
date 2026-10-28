@@ -13,41 +13,25 @@
   :blocks [[:fill [18 0 13] [24 0 19] "oak_fence"] [:fill [19 0 14] [23 0 18] "air"] [:set [18 0 16] "air"]]
   :body {:at [4.5 0 4.5] :effects [["resistance" 900 4]]}
   :act [[:rcon "scoreboard objectives add wtpen dummy"] [:rcon "scoreboard players set $BODY wtpen 0"]]
+  :act-end [#times [15 [[:wait-s 2]
+                        [:rcon "execute as @e[type=cow,tag=wt,tag=!out,$BOX] positioned $X $Y $Z positioned ~19 ~ ~14 unless entity @s[dx=4,dy=1,dz=4] run tag @s add out"]
+                        [:rcon "execute positioned $X $Y $Z positioned ~19 ~ ~14 as @e[type=cow,tag=wt,tag=!out,dx=4,dy=1,dz=4] run scoreboard players add $BODY wtpen 2"]]]
+            [:rcon "execute if entity @e[type=cow,tag=wt,tag=out,$BOX]"] [:rcon "scoreboard players get $BODY wtpen"]]
   :limit-s 100}
  :cases
  [{:name "control-closed-1-cow"
    :blocks [[:fill [18 0 13] [24 0 19] "oak_fence"] [:fill [19 0 14] [23 0 18] "air"]]
-   :act [[:summon "cow" [21.5 0 16.5] "{PersistenceRequired:1b}"]
-         #times [15 [[:wait-s 2]
-                [:rcon "execute as @e[type=cow,tag=wt,tag=!out,$BOX] positioned $X $Y $Z positioned ~19 ~ ~14 unless entity @s[dx=4,dy=1,dz=4] run tag @s add out"]
-                [:rcon "execute positioned $X $Y $Z positioned ~19 ~ ~14 as @e[type=cow,tag=wt,tag=!out,dx=4,dy=1,dz=4] run scoreboard players add $BODY wtpen 2"]]]
-         [:rcon "execute if entity @e[type=cow,tag=wt,tag=out,$BOX]"] [:rcon "scoreboard players get $BODY wtpen"]]
+   :act [[:summon "cow" [21.5 0 16.5] "{PersistenceRequired:1b}"]]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 1] [:entities "type=cow,tag=wt,tag=out" [[0 0 0] [31 3 31]] 0]]}
-    {:name "gap-1-cow"
-   :act [[:summon "cow" [21.5 0 16.5] "{PersistenceRequired:1b}"]
-         #times [15 [[:wait-s 2]
-                [:rcon "execute as @e[type=cow,tag=wt,tag=!out,$BOX] positioned $X $Y $Z positioned ~19 ~ ~14 unless entity @s[dx=4,dy=1,dz=4] run tag @s add out"]
-                [:rcon "execute positioned $X $Y $Z positioned ~19 ~ ~14 as @e[type=cow,tag=wt,tag=!out,dx=4,dy=1,dz=4] run scoreboard players add $BODY wtpen 2"]]]
-         [:rcon "execute if entity @e[type=cow,tag=wt,tag=out,$BOX]"] [:rcon "scoreboard players get $BODY wtpen"]]
+  {:name "gap-1-cow"
+   :act [[:summon "cow" [21.5 0 16.5] "{PersistenceRequired:1b}"]]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 1]]}
-    {:name "gap-2-cows"
-   :act [[:summon "cow" [20.5 0 15.5] "{PersistenceRequired:1b}"] [:summon "cow" [22.5 0 17.5] "{PersistenceRequired:1b}"]
-         #times [15 [[:wait-s 2]
-                [:rcon "execute as @e[type=cow,tag=wt,tag=!out,$BOX] positioned $X $Y $Z positioned ~19 ~ ~14 unless entity @s[dx=4,dy=1,dz=4] run tag @s add out"]
-                [:rcon "execute positioned $X $Y $Z positioned ~19 ~ ~14 as @e[type=cow,tag=wt,tag=!out,dx=4,dy=1,dz=4] run scoreboard players add $BODY wtpen 2"]]]
-         [:rcon "execute if entity @e[type=cow,tag=wt,tag=out,$BOX]"] [:rcon "scoreboard players get $BODY wtpen"]]
+  {:name "gap-2-cows"
+   :act [[:summon "cow" [20.5 0 15.5] "{PersistenceRequired:1b}"] [:summon "cow" [22.5 0 17.5] "{PersistenceRequired:1b}"]]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 2]]}
-    {:name "gap-4-cows"
-   :act [[:summon "cow" [20.5 0 15.5] "{PersistenceRequired:1b}"] [:summon "cow" [22.5 0 17.5] "{PersistenceRequired:1b}"] [:summon "cow" [20.5 0 17.5] "{PersistenceRequired:1b}"] [:summon "cow" [22.5 0 15.5] "{PersistenceRequired:1b}"]
-         #times [15 [[:wait-s 2]
-                [:rcon "execute as @e[type=cow,tag=wt,tag=!out,$BOX] positioned $X $Y $Z positioned ~19 ~ ~14 unless entity @s[dx=4,dy=1,dz=4] run tag @s add out"]
-                [:rcon "execute positioned $X $Y $Z positioned ~19 ~ ~14 as @e[type=cow,tag=wt,tag=!out,dx=4,dy=1,dz=4] run scoreboard players add $BODY wtpen 2"]]]
-         [:rcon "execute if entity @e[type=cow,tag=wt,tag=out,$BOX]"] [:rcon "scoreboard players get $BODY wtpen"]]
+  {:name "gap-4-cows"
+   :act [[:summon "cow" [20.5 0 15.5] "{PersistenceRequired:1b}"] [:summon "cow" [22.5 0 17.5] "{PersistenceRequired:1b}"] [:summon "cow" [20.5 0 17.5] "{PersistenceRequired:1b}"] [:summon "cow" [22.5 0 15.5] "{PersistenceRequired:1b}"]]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 4]]}
-    {:name "gap-8-cows"
-   :act [[:summon "cow" [19.5 0 14.5] "{PersistenceRequired:1b}"] [:summon "cow" [21.5 0 14.5] "{PersistenceRequired:1b}"] [:summon "cow" [23.0 0 14.5] "{PersistenceRequired:1b}"] [:summon "cow" [20.5 0 16.5] "{PersistenceRequired:1b}"] [:summon "cow" [22.5 0 16.5] "{PersistenceRequired:1b}"] [:summon "cow" [19.5 0 18.0] "{PersistenceRequired:1b}"] [:summon "cow" [21.5 0 18.0] "{PersistenceRequired:1b}"] [:summon "cow" [23.0 0 18.0] "{PersistenceRequired:1b}"]
-         #times [15 [[:wait-s 2]
-                [:rcon "execute as @e[type=cow,tag=wt,tag=!out,$BOX] positioned $X $Y $Z positioned ~19 ~ ~14 unless entity @s[dx=4,dy=1,dz=4] run tag @s add out"]
-                [:rcon "execute positioned $X $Y $Z positioned ~19 ~ ~14 as @e[type=cow,tag=wt,tag=!out,dx=4,dy=1,dz=4] run scoreboard players add $BODY wtpen 2"]]]
-         [:rcon "execute if entity @e[type=cow,tag=wt,tag=out,$BOX]"] [:rcon "scoreboard players get $BODY wtpen"]]
+  {:name "gap-8-cows"
+   :act [[:summon "cow" [19.5 0 14.5] "{PersistenceRequired:1b}"] [:summon "cow" [21.5 0 14.5] "{PersistenceRequired:1b}"] [:summon "cow" [23.0 0 14.5] "{PersistenceRequired:1b}"] [:summon "cow" [20.5 0 16.5] "{PersistenceRequired:1b}"] [:summon "cow" [22.5 0 16.5] "{PersistenceRequired:1b}"] [:summon "cow" [19.5 0 18.0] "{PersistenceRequired:1b}"] [:summon "cow" [21.5 0 18.0] "{PersistenceRequired:1b}"] [:summon "cow" [23.0 0 18.0] "{PersistenceRequired:1b}"]]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 8]]}]}
