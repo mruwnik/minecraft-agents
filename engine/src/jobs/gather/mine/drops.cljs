@@ -82,13 +82,17 @@
   [c n]
   (* n (cost/worth-to nil (items (:args c)) (u/self-pos c))))
 
+(def min-dig-s "A dig costs at least this, whatever it yields: a cell that fills again ends the cut." 0.1)
+
 (defn cut-prices
-  "dig-route's prices for a cut of the call: go-to's (body-prices), a dig of what the call mines less its drop's worth."
+  "dig-route's prices for a cut of the call: go-to's (body-prices), a dig of what the call mines less its drop's worth.
+  The cut is planned and booked (cut-to-drop!) at these prices alone."
   [c]
   (let [p (:primitives c)
         one (worth c 1)]
     (-> (dig-route/body-prices p (fn [[x y z]] (nil? (u/seen-name p {:x x :y y :z z}))))
-        (dig-route/less-yield #(if (contains? (kinds (:args c)) %) one 0)))))
+        (dig-route/less-yield #(if (contains? (kinds (:args c)) %) one 0))
+        (update :dig-s (fn [dig-s] (fn [name cell] (some-> (dig-s name cell) (max min-dig-s))))))))
 
 (defn drop-cut
   "The cells to dig, in walking order, for the cheapest way (jobs.lib.dig-route priced by cut-prices, a cell never seen
@@ -109,12 +113,12 @@
   "Open a way beside the cell dug (drop-cut), one dig child per cell, all the digs priced (cut-prices) at most max-s
   seconds (what is beside the cell: its drop, or a seen ore and its vein): the way is planned again after each dig and a
   look at what it laid open, out of what is left (kept in :cut-spent over rounds, each dig booked at its own price once
-  dug, its yield none: max-s counts it already; a cell that fills again is paid for again). :cut (open: walk again),
+  dug or failed; a cell that fills again is paid for again). :cut (open: walk again),
   :partial (a dig waits on the world) or nil (no way left, a dig failed, or a dug cell planned again at once: it did not
   stay open)."
   [c dug max-s]
   (let [p (:primitives c)
-        dig-s (:dig-s (dig-route/body-prices p (constantly false)))
+        dig-s (:dig-s (cut-prices c))
         price (fn [[x y z :as cell]] (or (dig-s (or (u/seen-name p {:x x :y y :z z}) "stone") cell) 0))]
     (loop [last-dug nil
            spent (get (:cut-spent (ctx/mem c)) dug 0)]
@@ -127,10 +131,10 @@
           :else (let [cell (first cells)
                       spent (+ spent (price cell))
                       o (await (dig-cell! c (zipmap [:x :y :z] cell)))]
+                  (when-not (= :continue o) (ctx/update-mem! c assoc-in [:cut-spent dug] spent))
                   (case o
                     :continue :partial
-                    (:dug :missing) (do (ctx/update-mem! c assoc-in [:cut-spent dug] spent)
-                                        (await (dig-look/look-at! c cell))
+                    (:dug :missing) (do (await (dig-look/look-at! c cell))
                                         (await (dig-look/look-at! c (update cell 1 dec)))
                                         (recur cell spent))
                     nil)))))))
