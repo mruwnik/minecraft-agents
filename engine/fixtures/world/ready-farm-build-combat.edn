@@ -1,6 +1,6 @@
 ;; Card 07571160 (readiness sweep H): farm, build and combat jobs bind safe?/fit? (jobs.lib.work-place, ready/safe-if-lit). Queued at night in the open
 ;; each waits (the open ground is dark); at day each runs. Needs --allow-time --time-log. Ground is open stone, no hut, no hostiles (the runner kills them).
-;; Should-succeed: plant, build.path, build.clear-cells, hunt and attack all hold at night (no completion for ~10 s after the first wait) and finish once the day comes.
+;; Should-succeed: plant, build.path, build.clear-cells and hunt hold at night (no completion for ~10 s after the first wait) and finish once the day comes; attack on a zombie in reach kills it at night.
 ;; Should-fail (old code): attack/hunt ran at night; plant walked out to its field.
 {:defaults
  {:tags [:readiness :night :farm :build :combat]
@@ -45,13 +45,12 @@
    :expect [{:no-event {:source :job :kind :completed :data {:name "jobs.combat.hunt"}} :for-s 10}
             {:event {:source :job :kind :completed :data {:name "jobs.combat.hunt"}} :within-s 90 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 0]]}
-  {:name "attack-zombie-in-reach-at-night-waits-dark-then-kills-at-day"
+  {:name "attack-zombie-in-reach-at-night-kills-it-without-waiting"
+   :time-why :night-light
+   ;; Q382: the dark of a fight seconds long costs under the hp the body may risk
    :act [[:summon "zombie" [12.5 0 12.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:until-seen {:entity "zombie" :min 1} 10]
-         [:job (jobs.combat.attack {:targets "zombie"})]
-         [:await {:source :job :kind :waiting :data {:reason :dark}} 30]
-         [:wait-s 10]
-         [:time-set 1000]]
-   :expect [{:no-event {:source :job :kind :completed :data {:name "jobs.combat.attack"}} :for-s 10}
-            {:event {:source :job :kind :completed :data {:reason :cleared}} :within-s 90 :of-job true}]
+         [:job (jobs.combat.attack {:targets "zombie"})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :cleared}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :waiting} :for-s 40 :until {:source :job :kind :completed}}]
    :after [[:entities "type=zombie,tag=wt" [[0 0 0] [31 3 31]] 0]]}]}

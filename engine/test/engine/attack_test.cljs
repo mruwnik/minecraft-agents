@@ -60,16 +60,16 @@
 
 (defn finished? [{:keys [eng]}] (empty? (:list (core/state eng))))
 
-;; the target may be the danger: only the dark sky holds an attack
-(deftest an-attack-on-a-zombie-in-reach-is-not-held-by-the-threat-and-waits-at-night
+;; the target may be the danger; the dark of a fight seconds long is priced within the hp the body may risk (Q382)
+(deftest an-attack-on-a-zombie-in-reach-is-held-neither-by-the-threat-nor-by-the-night
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [day (await (scenario {:targets [1]} {:inventory h/sword :entities [(zed 1 2)]} 6))
               night (await (tu/with-looks-showing #(scenario {:targets [1]} {:inventory h/sword :time st/night :entities [(zed 1 2)]} 6)))]
           (is (seq (attacked day)) "a zombie next to the body is attacked by day")
-          (is (empty? (attacked night)))
-          (is (= [:exposed] (distinct (map :reason (events-of night :waiting))))))))))
+          (is (seq (attacked night)) "and at night")
+          (is (empty? (events-of night :waiting))))))))
 
 (deftest a-spider-on-a-ledge-above-is-swung-at-not-walked-to
   (async done
