@@ -27,7 +27,7 @@
    :farm-s 4
    :min-drop-chance 0.05
    :drop-chance {"apple" 0.005 "wheat_seeds" 0.125}
-   :dig {:hardness-s 1.5 :max-hardness 5 :min-s 0.25 :default-tier 2 :speed {0 1 1 2 2 4 3 6 4 8}}
+   :dig {:hardness-s 1.5 :unfit-s 5 :max-hardness 5 :min-s 0.25 :default-tier 2} ;; seconds of dig per hardness at speed 1: 30 ticks with the block's tool tier, 100 without (vanilla)
    :find {:terrain 0.1
           :wood 12 ;; a log, stem, hyphae, wood or bamboo block: the walk to a tree
           :block {"gilded_blackstone" 300}
@@ -233,9 +233,10 @@
             table kinds)))
 
 (defn ref-gear-basis
-  "basis with the hardness of the block gear is measured digging (:gear :ref-block) read from md."
+  "basis with the hardness, tool tag and harvest tier of the block gear is measured digging (:gear :ref-block) read from md."
   [md basis]
-  (assoc-in basis [:gear :ref-hardness] (.-hardness (aget (.-blocksByName md) (get-in basis [:gear :ref-block])))))
+  (let [b (aget (.-blocksByName md) (get-in basis [:gear :ref-block]))]
+    (update basis :gear assoc :ref-hardness (.-hardness b) :ref-material (.-material b) :ref-tier (block-tier md b))))
 
 (defn build-table
   "{item name worth} for minecraft-data version with name overrides pinned (overrides: {name override}) and the basis

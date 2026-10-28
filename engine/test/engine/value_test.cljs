@@ -81,7 +81,18 @@
     (is (= (- (gear/dig-time (:dig basis) stone-speed hardness) (gear/dig-time (:dig basis) (weapon/tool-speed "iron_pickaxe") hardness))
            (saved "iron_pickaxe")) "a tool saves the dig time of the reference block over a stone tool")
     (is (> (saved "netherite_pickaxe") (saved "diamond_pickaxe")) "netherite digs at 9, diamond at 8: a use saves more")
-    (is (> (saved "golden_pickaxe") (saved "iron_pickaxe")) "gold digs at 12, though it harvests as wood does")))
+    (is (> (saved "golden_pickaxe") (saved "iron_pickaxe")) "gold digs at 12 and harvests stone as wood does")
+    (is (zero? (saved "iron_axe")) "an axe is not stone's tool: speed 1 and no drop, slower than the stone pickaxe")
+    (is (zero? (saved "diamond_shovel")))))
+
+(deftest a-tool-that-cannot-harvest-digs-at-a-hundred-over-speed
+  (let [dig (:dig tbl/default-basis)]
+    (is (= 7.5 (gear/dig-time dig 1 1.5 false)) "100 x 1.5 / 1 = 150 ticks")
+    (is (= 1.15 (gear/dig-time dig 4 3 true)) "a harvesting tool keeps the 30 x hardness rule")
+    (is (= 4 (gear/tier-speed dig 0)) "below the default tier it is the default's")
+    (is (zero? (gear/use-saved (assoc-in (tbl/ref-gear-basis (minecraft-data game/default-version) tbl/default-basis) [:gear :ref-tier] 3) "golden_pickaxe"))
+        "a golden pickaxe (tier 1) cannot harvest a block of tier 3")
+    (is (= [4 6 8] (mapv #(gear/tier-speed dig %) [2 3 4])) "the weakest tool of the tier, read from the tool table")))
 
 (deftest the-item-table-follows-the-settings-the-hp-price-reads
   (let [worth #(ord/item-worth {:name "enchanted_golden_apple" :count 1})
