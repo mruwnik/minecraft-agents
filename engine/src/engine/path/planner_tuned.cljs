@@ -430,6 +430,7 @@
      (.-goalSeen options)
      (unchecked-get costs "descentS")
      (if (pos? rw) (/ (* (unchecked-get costs "gapMiss") lethal-s) rw) 0)
+     (unchecked-get costs "gapMiss")
      ;; unk-changed unk-death
      (when unk (.-changed unknown))
      (if (and unk (some? (.-deathHp unknown))) (.-deathHp unknown) (if (pos? rw) (/ lethal-s rw) 0)))))

@@ -25,7 +25,8 @@
             (is (seq planned) "a planned event was emitted")
             (is (every? #(number? (:ms %)) data))
             (is (every? :status data))
-            (is (some :nodes data) "a finished search reports its nodes")))))))
+            (is (some :nodes data) "a finished search reports its nodes")
+            (is (some #(re-find #"^walk \d+" (str (:moves %))) data) "the plan's move kinds, run by run")))))))
 
 (deftest the-planned-event-of-a-body-under-water-says-its-oxygen-and-the-swim-steps
   (async done

@@ -225,6 +225,8 @@
              pit false
              ;; some gap cell so far falls to a death (gapShortLethal)
              deadly false
+             ;; the most damage a fall short into some gap cell so far takes
+             miss 0
              ;; a jump up needs the higher arc over the start and every gap cell
              up-arc (and ^boolean (.clear s x z h0 (+ h0 ARC-UP)) (not ^boolean (.unseenSpan s x z h0 (+ h0 ARC-UP))))]
         (when (<= n 3)
@@ -241,7 +243,9 @@
                       hole (js/Math.max hole (.holeRisk s gx y gz))
                       deadly (or deadly ^boolean (.gapShortLethal s gx y gz h0))
                       pit (or pit ^boolean (.pitBelow s gx y gz))
-                      risk (+ (if (and (== n 3) pit) (js/Math.max hole GAP-PIT-RISK) hole) (if deadly (.-gap-death s) 0))
+                      miss (js/Math.max miss (.dropDamage s 1 (.missFall s gx y gz h0)))
+                      missed (if deadly 0 (* (.-gap-miss s) miss))
+                      risk (+ (if (and (== n 3) pit) (js/Math.max hole GAP-PIT-RISK) hole) (if deadly (.-gap-death s) missed))
                       lx (+ gx dx)
                       lz (+ gz dz)
                       up (and (<= n 2) up-arc)
@@ -255,7 +259,7 @@
                                          ;; (the goal flood expands cells nothing reached: i is -1, the takeoff a plain walk)
                                          (not (true? (^js (.-limit-gap s) x y z (- h0 (* y 16)) (if (neg? i) MOVE-WALK (aget (.-moves s) i)) lx ly lz h1)))
                                          (do (set! (.-limit-refused s) true) true)))
-                        (set! (.-move-dmg s) (.-enter-dmg s))
+                        (set! (.-move-dmg s) (+ (.-enter-dmg s) missed))
                         ;; (the opening pass: the closed gates the jump crosses are opened first, like the one the body stands in)
                         (let [here (.-door-here s)]
                           (when ^boolean (.-open-mode s)
@@ -265,7 +269,7 @@
                                  (+ (.-enter-risk s) risk) (.-enter-slow s) 0 0)
                           (set! (.-door-here s) here))
                         (set! (.-move-dmg s) 0))))
-                  (recur (inc n) hole pit deadly up-arc)))))))))
+                  (recur (inc n) hole pit deadly miss up-arc)))))))))
 
   ;; seconds a block of walking costs after node i: the executor sprints a run of three walk or diagonal steps, so a step
   ;; that follows two of them is priced at sprintS (the gait sets it equal to walkS when the body may not sprint)

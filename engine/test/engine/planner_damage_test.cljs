@@ -264,3 +264,20 @@
     (is (not= "found" (:status hurt)))
     (is (true? (:damageRefused hurt)))
     (is (= (* 5 7) (cost whole :damage)))))
+
+;; two ledges x 0..2 and 4..8 (z 0..20) over a hole 8 deep at x 3, joined only by a bridge at z 20: the jump over the hole is
+;; the short way, a miss falls 8 blocks (5 hp)
+(def hole
+  (pf/snapshot {:fill [[0 55 0 8 55 20 "stone"] [0 56 0 2 63 20 "stone"] [4 56 0 8 63 20 "stone"] [3 56 20 3 63 20 "stone"]]}))
+
+(defn over-hole [options] (run hole (near 5 64 2) options {:x 1 :y 64 :z 2}))
+
+(deftest a-gap-jump-prices-its-miss-as-chance-times-the-fall
+  (let [free (over-hole {})
+        r (over-hole {:damageBudget 1 :damageWeight 1})
+        round (over-hole {:damageBudget 0.05})]
+    (is (some #{(:gap MOVE)} (moves free)))
+    (is (some #{(:gap MOVE)} (moves r)))
+    (is (< 0.09 (cost r :damage) 0.11) "gapMiss 0.02 times the 5 hp fall")
+    (is (not-any? #{(:gap MOVE)} (moves round)) "a budget under the priced miss walks round")
+    (is (= "found" (:status round)))))

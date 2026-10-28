@@ -3,7 +3,8 @@
   within the executor's abilities (jobs.lib.walk), follow the plan once, opening shut doors, gates and trapdoors by the
   :doors policy (jobs.lib.pass), and write the :moved memory entry.
   Its own namespace because jobs.lib.walk and jobs.lib.pass require jobs.lib.util."
-  (:require [jobs.lib.breath :as breath]
+  (:require [clojure.string :as str]
+            [jobs.lib.breath :as breath]
             [jobs.lib.child :as child]
             [jobs.lib.aim :as aim]
             [jobs.lib.click :as click]
@@ -37,6 +38,11 @@
 
 (defn door-stuck [cells] {:status :no-path :reason :door-stuck :cells cells})
 
+(defn move-runs
+  "The plan's move kinds, run by run: \"walk 12 gap 1 walk 4\"."
+  [steps]
+  (str/join " " (map (fn [run] (str (name (first run)) " " (count run))) (partition-by identity (keep :move (rest steps))))))
+
 (defn ^:async plan!
   "Plan from where the body stands over a fresh pathWorld (the live one copies a section the first time it reads it, so an
   old one is stale), with walls read as stone; with doors other than :never, the iron doors the plan would open by hand are walls
@@ -66,7 +72,8 @@
           iron (when-not (= :never doors) (iron-cells c (:steps plan)))]
       (when budget
         (let [^js r (:r plan)]
-          (ctx/emit! c :planned :info (cond-> {:ms (js/Math.round (or (:ms plan) 0)) :status (:status plan) :sprint (boolean (:sprint policy))}
+          (ctx/emit! c :planned :info (cond-> {:ms (js/Math.round (or (:ms plan) 0)) :status (:status plan) :sprint (boolean (:sprint policy))
+                                                 :moves (move-runs (:steps plan))}
                                         (some-> r .-reason) (assoc :why (.-reason r))
                                         (some-> r .-expanded) (assoc :nodes (.-expanded r))
                                         (breath/head-under? (:primitives c)) (assoc :oxygen (.-oxygen (.self (:primitives c)))

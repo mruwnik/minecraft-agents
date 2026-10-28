@@ -1255,7 +1255,8 @@
           (let [{:keys [out p]} (await (go! {:blocks (gap-strip n) :self {:pos {:x 0.5 :y 64 :z 0.5} :food food}}
                                             {:pos [(+ 7 n) 64 0] :range 0 :ways #{:walk :clear-seal}}))]
             (is (false? (:arrived @out)) (str "gap " n " food " food " " (pr-str @out)))
-            (is (= [:abilities :gap-sprint] ((juxt :why :kind) @out)) (str "gap " n " food " food " " (pr-str @out)))
+            ;; (the jump over the 5-deep floor may miss for 2 hp: a starving body's budget is 0, so the planner offers no jump)
+            (is (= :unreachable (:reason @out)) (str "gap " n " food " food " " (pr-str @out)))
             (is (< (first (at p)) 5) (str "gap " n " food " food " at " (at p)))))))))
 
 (deftest go-to-does-not-jump-a-gap-over-a-4-deep-pit-at-food-0
