@@ -127,7 +127,7 @@
               (pr-str @replans (keep #(when (re-find #"^go-to\.esc" (name (:kind %))) [(:kind %) (:step %) (:reason %) (:why %) (:at %)]) @seen)))
           (is (<= @replans 2) "the first replan spends the replans"))))))
 
-(deftest a-climb-search-with-no-route-ends-within-its-margin-and-the-stair-is-taken
+(deftest a-climb-to-a-goal-sealed-in-bedrock-ends-at-once-and-the-stair-is-taken
   ;; the goal sealed in bedrock 20 above a body shut in stone: no climb reaches it. Its search ends by itself (no stand-still
   ;; bound spent: the search back from the goal finds no way out) and the stair is taken from the start cell
   (async done

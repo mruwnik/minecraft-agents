@@ -5,6 +5,7 @@
             [engine.settings :as settings]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.block-sets :as bs]
+            [jobs.lib.clock :as clock]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.armour :as armour]
             [jobs.lib.cost.ways :as cw]
@@ -13,7 +14,8 @@
             [jobs.lib.walk.world :as wworld]))
 
 (a/defargs settings
-  {::max-nodes {:default 500 :doc "The most cells a route search expands before it gives up (:budget)." :spec (a/int-in 1 nil)}})
+  {::max-nodes {:default 500 :doc "The most cells a route search expands before it gives up (:budget)." :spec (a/int-in 1 nil)}
+   ::seed-ms {:default 20 :doc "Milliseconds a route search spends seeding its search back from the goal's range; past it that lower bound is left out." :spec (a/num-in 0 nil)}})
 
 (def falling #{"sand" "red_sand" "gravel"})
 
@@ -136,6 +138,9 @@
                                   (cond (or (keyword-identical? :seen a) (keyword-identical? :seen b) (keyword-identical? :seen c)
                                             (keyword-identical? :seen d) (keyword-identical? :seen e)) :seen
                                         (or a b c d e) :unseen))))
+        ;; what a move costs before the cells it opens, falls and unseen steps: the forward search adds those, the back search
+        ;; (a lower bound) leaves out falls and the refusals of open-cell! (a falling block over a cell, the body's own ways)
+        base-s (fn [move] (case move :walk step-s :laid (+ step-s place-s) :pillar pillar-s))
         ;; seconds to open cell x y z (0 when open), nil when no step opens it
         open-s (fn [x y z] (let [^js k (at x y z) d (.-cost k)] (cond (nil? d) nil (zero? d) 0 :else (dig-at (.-name k) x y z))))
         ;; the cost of opening cell x y z for a step, accumulated in acc #js [seconds digs dig-seconds dug-keys]; false when it may not be
@@ -186,7 +191,7 @@
                                        (aset acc 0 (cw/stair-leg-cost (aget acc 0) step-s stair-s)))
                                      (relax! ck node acc nx ny nz move)))))]
                     (when-let [pf (and pillar-s (placeable mx my mz))]
-                      (try! mx (inc my) mz :pillar pillar-s true 0 1 (= :unseen pf)))
+                      (try! mx (inc my) mz :pillar (base-s :pillar) true 0 1 (= :unseen pf)))
                     (loop [i 0]
                       (when (< i 8)
                         (let [nx (+ mx (aget dirs i)) nz (+ mz (aget dirs (inc i)))
@@ -194,25 +199,24 @@
                               dug? (and (.-floor f) (dug-behind? ck nx my nz))]
                           ;; up: the head cell over m, n and its head
                           (cond
-                            (and (.-floor f) (not dug?)) (try! nx ny nz :walk step-s true (inc ny) ny false)
+                            (and (.-floor f) (not dug?)) (try! nx ny nz :walk (base-s :walk) true (inc ny) ny false)
                             (and place-s (or dug? (and (.-open f) (not (.-fluid f)))))
                             (when-let [pf (placeable nx my nz)]
-                              (try! nx ny nz :laid (+ step-s place-s) true (inc ny) ny (= :unseen pf))))
+                              (try! nx ny nz :laid (base-s :laid) true (inc ny) ny (= :unseen pf))))
                           ;; down by up to max-fall, through the cells it falls by, and level: n and its head
                           (loop [dy 0 clear? (and (.-open ^js (at nx (inc my) nz)) (.-open ^js (at nx my nz)))]
                             (when (<= dy max-fall)
                               (let [ny (- my dy)
                                     below-open? (.-open ^js (at nx (dec ny) nz))]
                                 (when (and (.-floor ^js (at nx (dec ny) nz)) (not (dug-behind? ck nx (dec ny) nz)))
-                                  (try! nx ny nz :walk (+ step-s (aget fall-prices dy)) false (if (zero? dy) (inc ny) (inc my)) ny false))
+                                  (try! nx ny nz :walk (+ (base-s :walk) (aget fall-prices dy)) false (if (zero? dy) (inc ny) (inc my)) ny false))
                                 (when (or (< (inc dy) free-fall) (and clear? below-open?))
                                   (recur (inc dy) (and clear? below-open?))))))
                           (recur (+ i 2)))))))
         start-key (key fx (from 1) fz)
         ;; a lower bound of every route's price, searched back from the goal toward the start: a body's two cells per node,
-        ;; each step priced no more than the steps it stands for (across: step-s and the two cells entered; up across: the cell
-        ;; over the head too; down: the cell entered; a pillar: pillar-s and the cell over the head), floors, falls and refusals
-        ;; left out. Its frontier exhausted is no route; its cheapest entry past max-s, every route dearer.
+        ;; each step priced base-s of its cheapest move and the cells it opens (across: the two cells entered; up across: the cell
+        ;; over the head too; down: the cell entered; a pillar: the cell over the head), floors, falls and refusals left out. Its frontier exhausted is no route; its cheapest entry past max-s, every route dearer.
         back-s (fn [x y z] (if (or (== (key x y z) start-key) (== (key x (dec y) z) start-key)) 0 (open-s x y z)))
         stands? (fn [x y z] (and (inside? x y z) (some? (back-s x y z)) (some? (back-s x (inc y) z))))
         to-start (fn [x z] (* step-s (+ (js/Math.abs (- x fx)) (js/Math.abs (- z fz)))))
@@ -242,23 +246,32 @@
                            (loop [i 0]
                              (when (< i 8)
                                (let [mx (- x (aget dirs i)) mz (- z (aget dirs (inc i)))]
-                                 (back-into! g mx y mz (+ step-s feet head))
+                                 (back-into! g mx y mz (+ (base-s :walk) feet head))
                                  (let [over (back-s mx (inc y) mz)]
-                                   (back-into! g mx (dec y) mz (some-> over (+ step-s feet head))))
+                                   (back-into! g mx (dec y) mz (some-> over (+ (base-s :walk) feet head))))
                                  (recur (+ i 2)))))
                            (back-into! g x (inc y) z feet)
-                           (when pillar-s (back-into! g x (dec y) z (+ pillar-s head)))
+                           (when pillar-s (back-into! g x (dec y) z (+ (base-s :pillar) head)))
                            nil))))]
     (.set best start-key #js [0 0 0 nil nil 0 #{}])
     (heap-push! queue #js [(heuristic fx (from 1) fz) 0 start-key])
-    (doseq [[x y z] (cons goal (when r
-                                 (let [w (js/Math.ceil r) ds (range (- w) (inc w))]
-                                   (for [dx ds dy ds dz ds
-                                         :let [x (+ ax dx) y (+ ay dy) z (+ az dz)]
-                                         :when (end? (key x y z))]
-                                     [x y z]))))
-            :when (stands? x y z)]
-      (back-relax! 0 x y z))
+    ;; a range search seeds the back search from every end cell, up to (2 range + 1)^3 block reads: past seed-ms it seeds no
+    ;; more and runs without the back search, whose verdicts a part-seeded one would get wrong
+    (let [deadline (+ (clock/now) (settings/get settings ::seed-ms))
+          seeded? (reduce (fn [_ [x y z]]
+                            (if (> (clock/now) deadline)
+                              (reduced false)
+                              (do (when (stands? x y z) (back-relax! 0 x y z)) true)))
+                          true
+                          (cons goal (when r
+                                       (let [w (js/Math.ceil r) ds (range (- w) (inc w))]
+                                         (for [dx ds dy ds dz ds
+                                               :let [x (+ ax dx) y (+ ay dy) z (+ az dz)]
+                                               :when (end? (key x y z))]
+                                           [x y z])))))]
+      (when-not seeded?
+        (vreset! back-over true)
+        (set! (.-length back-queue) 0)))
     (fn [n]
       (let [start (.-size done)
             limit (+ start n)
