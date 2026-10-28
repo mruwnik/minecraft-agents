@@ -24,6 +24,16 @@
     (is (= {:x -1 :y 64 :z 0} (stand-in/dry-cell p {:x 1.5 :y 62.7 :z 0.5} 16))
         "the feet cell is under the surface: the stand on the shore is two up")))
 
+(deftest dry-cell-is-the-bank-with-land-beyond-not-a-nearer-ledge
+  (let [water (for [x (range 0 9) z (range -1 2) y (range 59 64)] [x y z])
+        ledge [[2 63 0]]
+        bank (for [x (range 9 16) z (range -1 2) y (range 59 64)] [x y z])
+        p (tu/fake {:blocks (merge (into {} (for [c water] [(apply str (interpose "," c)) "water"]))
+                                   (into {} (for [c (concat ledge bank)] [(apply str (interpose "," c)) "stone"])))
+                    :self {:pos [0.5 63.2 0.5]}})]
+    (is (= 9 (:x (stand-in/dry-cell p {:x 0.5 :y 63.2 :z 0.5} 3)))
+        "a one-cell ledge two blocks off is passed over for the bank with 3 blocks of land beyond")))
+
 (deftest roof-cell-is-the-nearest-seen-two-high-gap-under-a-roof
   (let [solid #{[0 63 0] [3 63 0] [3 66 0] [-2 63 1] [-2 65 1] [9 63 0] [9 66 0]}
         at (fn [{:keys [x y z]}] (if (solid [x y z]) "stone" "air"))]

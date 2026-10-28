@@ -6,8 +6,10 @@
             [jobs.lib.block-sets :as bs]
             [jobs.lib.checks :as checks]
             [jobs.lib.combat :as combat]
+            [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.escape :as escape]
+            [jobs.lib.hostile-fight :as fight]
             [jobs.lib.look :as look]
             [jobs.lib.ready :as ready]
             [jobs.lib.shore :as shore]
@@ -99,10 +101,10 @@
          first))))
 
 (defn dry-cell
-  "The nearest seen dry stand joined to the body by water and air within reach (jobs.lib.shore/reachable-land: the
-  one the hostile answer prices the swim to), or nil."
-  [p from reach]
-  (shore/reachable-land p from reach nil))
+  "The dry stand the hostile answer prices the swim to (jobs.lib.shore/swim-to-land: joined to the body by seen water and
+  air, the nearest swim with land beyond need blocks to walk on, a ledge only when nothing else), or nil."
+  [p from need]
+  (:stand (shore/swim-to-land p from need)))
 
 (defn place-of
   "The cell to stand at for where, or nil: the nearest of its kind within reach."
@@ -113,7 +115,7 @@
       :water (water-cell block-at (u/self-pos c) reach)
       :roof (roof-cell block-at (u/self-pos c) reach
                      (mapv #(danger-q/mob-pos p %) (filter combat/enderman? (danger-q/known-hostiles p reach {}))))
-      :dry (dry-cell p (u/self-pos c) reach))))
+      :dry (dry-cell p (u/self-pos c) (reduce max 0 (map #(cost/hit-range (fight/mob-near p %)) (danger-q/known-hostiles p reach {})))))))
 
 (defn here?
   "Whether the body stands in a place of its kind."
