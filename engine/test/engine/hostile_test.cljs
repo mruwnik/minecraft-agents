@@ -1887,6 +1887,17 @@
   "A wade one deep sunk in the flight floor: water at x -4..4, y 63, z -4..4 over stone."
   (into {} (for [x (range -4 5) z (range -4 5) y [62 63]] [(str x "," y "," z) (if (= y 62) "stone" "water")])))
 
+(deftest a-body-standing-on-a-slab-or-soul-sand-under-water-is-wading-not-swimming
+  (doseq [[floor-block y] [["soul_sand" 62.875] ["stone_slab" 62.5]]
+          :let [blocks (assoc wade "0,62,0" floor-block)
+                p (tu/fake-on-floor {:floor flight-floor :blocks blocks :self {:pos [0.5 y 0.5]}})]]
+    (is (not (breath/swimming? p)) (str "feet at " y " on " floor-block))))
+
+(deftest a-body-on-a-slab-with-two-water-cells-above-is-wading
+  (let [blocks (assoc wade "0,63,0" "stone_slab" "0,64,0" "water")
+        p (tu/fake-on-floor {:floor flight-floor :blocks blocks :self {:pos [0.5 63.5 0.5]}})]
+    (is (not (breath/swimming? p)))))
+
 (deftest a-body-wading-fights-a-drowned-as-on-land-and-one-swimming-a-block-from-shore-swims-out
   (async done
     (tu/run-async done
