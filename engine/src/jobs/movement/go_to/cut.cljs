@@ -24,6 +24,10 @@
   runs once per physics tick, and a body falls at most about 3.9 blocks a tick (terminal velocity), sprints under 0.4."
   8)
 
+(def falling-vy
+  "Vertical velocity (blocks per tick) below which a long drop between two samples is a fall, not a teleport: a lagged sample of a fall can span more than jump-blocks."
+  -0.5)
+
 (defn approach-step
   "Approach record m after a tick's pose {:x :y :z ...} at d from the goal: :last-dist d, :closest the least, and :explored
   the blocks walked along x and z away from the goal (a step that ends farther than the last) since the body last came
@@ -32,7 +36,10 @@
   (let [{:keys [prev anchor explored] :or {anchor d explored 0}} m
         nearer? (< d (dec anchor))
         step (if (and prev (> d (:last-dist m d))) (js/Math.hypot (- (:x pose) (:x prev)) (- (:z pose) (:z prev))) 0)
-        jumped? (and prev (>= (js/Math.hypot (- (:x pose) (:x prev)) (- (:y pose 0) (:y prev 0)) (- (:z pose) (:z prev))) jump-blocks))]
+        dy (- (:y pose 0) (:y prev 0))
+        falling? (and (neg? dy) (< (:vy pose 0) falling-vy)
+                      (< (js/Math.hypot (- (:x pose) (:x prev)) (- (:z pose) (:z prev))) jump-blocks))
+        jumped? (and prev (not falling?) (>= (js/Math.hypot (- (:x pose) (:x prev)) dy (- (:z pose) (:z prev))) jump-blocks))]
     (assoc m :last-dist d :closest (min d (:closest m d)) :prev (select-keys pose [:x :y :z])
            :jumped (boolean (or jumped? (:jumped m)))
              :anchor (if nearer? d anchor) :explored (if nearer? 0 (+ explored step)))))
@@ -57,7 +64,7 @@
   walk before the jump go, as at a call's start."
   [c]
   (swap! approaches dissoc (:id c))
-  (ctx/update-mem! c #(-> % (dissoc :best :closest :ref :last-dist :starts :tour-walks :edge-mode :waypoint-misses :waypoints-tried)
+  (ctx/update-mem! c #(-> % (dissoc :best :closest :ref :last-dist :starts :tour-walks :edge-mode :waypoint-misses :waypoint-why :waypoints-tried :lookout-walks :lookouts :wall-walked)
                           (assoc :blocked 0 :searching 0 :cuts 0 :frontier-best {} :target-best {})))
   (ctx/emit! c :go-to.jumped :info {:text "the body was moved far in one tick: the walk starts again from here"}))
 

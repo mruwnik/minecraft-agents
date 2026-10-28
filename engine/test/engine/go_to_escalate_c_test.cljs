@@ -18,6 +18,7 @@
             [jobs.lib.dig-route :as dig-route]
             [jobs.lib.escape :as escape]
             [jobs.lib.near :as near]
+            [jobs.movement.go-to.cut :as gcut]
             [jobs.lib.ledger :as ledger]
             [plan.shape :as shape]
             [jobs.movement.go-to.escalate-choose :as choose]
@@ -211,6 +212,28 @@
           (is (= :goal-enclosed (:why @out)) (pr-str @out))
           (is (= 2 (count (events-of seen :go-to.wall-walk))) "a walk reported partial is made again")
           (is (= [4 64 0] (feet p))))))))
+
+(deftest a-wall-walk-that-ended-in-a-teleport-is-not-marked-walked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [real near/walk-round!
+              real-restart gcut/restart-after-jump!
+              jumps (atom 0)
+              marks (atom [])
+              teleport (fn [c to & args]
+                         (if (and (= to {:x 4 :y 64 :z 0}) (zero? @jumps))
+                           (do (doseq [x [1 90]] ((:on-pose c) {:x x :y 64 :z 0}))
+                               (js/Promise.resolve {:result {:status :jumped} :status "blocked"}))
+                           (apply real c to args)))
+              {:keys [seen]} (with-redefs [near/walk-round! teleport
+                                           gcut/restart-after-jump! (fn [c]
+                                                                      (swap! jumps inc)
+                                                                      (swap! marks conj (:wall-walked (ctx/mem c)))
+                                                                      (real-restart c))]
+                               (await (run-job! free-by-pocket {:pos [8 64 0] :range 0 :ways #{:walk}})))]
+          (is (= [nil] @marks) "the restart finds no :wall-walked from the jumped walk")
+          (is (= 2 (count (events-of seen :go-to.wall-walk)))))))))
 
 (deftest a-wall-walk-takes-the-short-walk-among-near-equal-cells
   (async done

@@ -209,7 +209,7 @@
   stand whose eye sees that block (jobs.lib.aim) as the goal and as an arrival; unknown the mask spec (walk-once!); zone-tolls true adds the cells of other bodies' zones to tolls (toll-cells/zone-walk-tolls, none under the job's :ignore-zones?); doors, shut-also (jobs.lib.pass), explore, one-way (default :open: past a drop toward a far goal), budget, progress (default true) and dangers (default true) and avoid as walk-once!, timeout-s the bound of each steer (default walk-timeout-s). {:result :status :from :to}: result
   is the walk's result map, status the entry's (\"partial\" too for a walk to a frontier that moved the body over a block:
   it went where a way may be, not stuck). A round whose plan is still searching (result :searching) walked nowhere and
-  failed at nothing: status \"searching\", no :moved entry and no walk booked; likewise status \"stair\" for a stair-check (walk-once!) that ended it."
+  failed at nothing: status \"searching\", no :moved entry and no walk booked (nor for a walk ended :jumped, go-to.cut); likewise status \"stair\" for a stair-check (walk-once!) that ended it."
   [c pos range {:keys [doors shut-also timeout-s explore one-way budget progress dangers avoid dark tolls zone-tolls unknown see-cell stair-check] :or {timeout-s walk-timeout-s one-way :open progress true dangers true}}]
   (let [from (u/self-pos c)
         tolls (if zone-tolls (into (vec tolls) (tc/zone-walk-tolls c pos)) tolls)
@@ -222,7 +222,7 @@
                  (= :stair-cheaper (:status result)) "stair"
                  (and (:frontier result) (> (u/dist from to) 1)) "partial"
                  :else (move-status (and (u/within? to pos range) (or (nil? see-cell) (aim/body-sees? c see-cell))) (u/dist from pos) (u/dist to pos)))]
-    (when-not (#{"searching" "stair"} status)
+    (when-not (or (#{"searching" "stair"} status) (= :jumped (:status result)))
       (ctx/remember! c :moved (cond-> {:from from :to to :status status :target pos}
                                 (= :no-path (:status result)) (assoc :no-path true))
                      mem/moved-policy)

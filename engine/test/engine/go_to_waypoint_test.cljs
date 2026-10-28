@@ -13,6 +13,7 @@
             [jobs.movement.go-to.tuning :as gts]
             [jobs.movement.go-to.aim :as gaim]
             [jobs.movement.go-to.walk :as gwalk]
+            [jobs.movement.go-to.cut :as gcut]
             [jobs.lib.column-kinds :as kinds]
             [jobs.movement.go-to.column :as column]
             [jobs.movement.go-to.result :as end]))
@@ -123,3 +124,35 @@
               narrow (await (settings/with-settings {:jobs.movement.go-to.tuning/off-line-cone 5}
                               #(column/waypoint (kinds/seen-kind-at p) 60 0 [30 64 0])))]
           (is (nil? narrow)))))))
+
+(defn ^:async jumped-walk!
+  "f (gwalk/walk-waypoint! or look-out! with its args) over a near/walk-round! stub whose walk is a teleport: the pose
+  callback sees x 5, then x 90. The memory after it."
+  [f]
+  (let [p (tu/fake {:self {:pos [0.5 64 0.5]} :blocks (box -2 63 -3 70 63 3 "stone")})
+        mem* (atom {})
+        c (stub-ctx p mem* {:pos [60 0] :range 0})]
+    (swap! gcut/approaches dissoc (:id c))
+    (with-redefs [near/walk-round! (fn [c _ _ _]
+                                     (doseq [x [5 90]] ((:on-pose c) {:x x :y 64 :z 0}))
+                                     (js/Promise.resolve {:result {:status :jumped} :status "blocked" :to {:x 90 :y 64 :z 0}}))]
+      (await (f c)))
+    @mem*))
+
+(deftest a-walk-that-ended-in-a-teleport-books-nothing-as-a-waypoint-miss-or-a-tried-lookout
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [m (await (jumped-walk! #(gwalk/walk-waypoint! % {:x 60 :y 64 :z 0} {:x 20 :y 64 :z 0} {})))]
+          (is (nil? (:waypoint-misses m)))
+          (is (nil? (:waypoint-why m)))
+          (is (nil? (:waypoints-tried m))))
+        (let [m (await (jumped-walk! #(gwalk/look-out! % {:x 60 :y 64 :z 0} [20 64 0] {})))]
+          (is (nil? (:lookout-walks m)))
+          (is (nil? (:lookouts m))))))))
+
+(deftest restarting-after-a-jump-clears-the-marks-of-the-walks-before-it
+  (let [mem* (atom {:wall-walked true :lookouts [[1 64 1]] :lookout-walks 2 :waypoint-why :needs-health :waypoint-misses 1})
+        c (stub-ctx (tu/fake {:self {:pos [0.5 64 0.5]}}) mem* {:pos [60 0] :range 0})]
+    (gcut/restart-after-jump! c)
+    (is (= {} (select-keys @mem* [:wall-walked :lookouts :lookout-walks :waypoint-why :waypoint-misses])))))

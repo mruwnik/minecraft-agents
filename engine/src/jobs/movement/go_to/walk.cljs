@@ -103,12 +103,13 @@
         {:keys [result status]} (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) way 1 (dissoc opts :progress)))
         left (u/dist (u/self-pos c) pos)
         why (when-not (#{"arrived" "partial" "searching"} status) (:why (end/give-up-fields result)))]
-    (ctx/update-mem! c #(cond-> (-> % (dissoc :way-looks) (assoc :last-dist left :closest (min left (:closest % left))))
-                          (and why (not= :no-progress why)) (assoc :waypoint-why why)
-                          (nil? why) (dissoc :waypoint-why)))
-    (ctx/update-mem! c update :waypoints-tried (fnil conj #{}) [(:x way) (:y way) (:z way)])
-    (when (> (across (u/self-pos c)) (- before (waypoint-gain)))
-      (ctx/update-mem! c update :waypoint-misses (fnil inc 0)))
+    (when-not (jumped? c)
+      (ctx/update-mem! c #(cond-> (-> % (dissoc :way-looks) (assoc :last-dist left :closest (min left (:closest % left))))
+                            (and why (not= :no-progress why)) (assoc :waypoint-why why)
+                            (nil? why) (dissoc :waypoint-why)))
+      (ctx/update-mem! c update :waypoints-tried (fnil conj #{}) [(:x way) (:y way) (:z way)])
+      (when (> (across (u/self-pos c)) (- before (waypoint-gain)))
+        (ctx/update-mem! c update :waypoint-misses (fnil inc 0))))
     :again))
 
 (defn ^:async look-out!
@@ -121,8 +122,12 @@
         to {:x x :y y :z z}
         there? (= stand (mapv #(js/Math.floor %) ((juxt :x :y :z) (u/self-pos c))))
         status (when-not there? (:status (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) to 0 (dissoc opts :progress)))))
+        jumped (and (not there?) (jumped? c))
         walks (if (= "arrived" status) 0 (inc (:lookout-walks (ctx/mem c) 0)))]
-    (if (or there? (= "arrived" status))
+    (cond
+      jumped nil
+
+      (or there? (= "arrived" status))
       (let [cell (mapv #(js/Math.floor (% pos)) [:x :y :z])]
         (await (sense/look-at! c cell))
         (ctx/update-mem! c #(-> % (update :lookouts (fnil conj []) stand) (dissoc :lookout-walks :lookout-due)))
@@ -130,6 +135,8 @@
           (ctx/emit! c :go-to.lookout :info {:goal (zipmap [:x :y :z] cell) :stand to :seen seen
                                              :text (str "looked at the goal " cell " from " stand (if seen "" ", still unseen"))}))
         (pre-aim! c pos pos))
+
+      :else
       (ctx/update-mem! c #(if (< walks (max-blocked))
                             (assoc % :lookout-walks walks)
                             (-> % (update :lookouts (fnil conj []) stand) (dissoc :lookout-walks :lookout-due)))))
@@ -308,8 +315,8 @@
       (ctx/emit! c :go-to.wall-walk :info {:at @near :why (:reason result)
                                            :text (str "the goal is walled in: walking to " @near ", the nearest cell to it")})
       (let [walk (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) (zipmap [:x :y :z] @near) 0 (dissoc opts :progress)))]
-        ;; a walk that got nearer but was cut short is tried again; one that arrived or got nowhere is not
-        (when-not (= "partial" (:status walk))
+        ;; a walk that got nearer but was cut short is tried again; one that arrived or got nowhere is not; a jumped one is no walk
+        (when-not (or (= "partial" (:status walk)) (jumped? c))
           (ctx/update-mem! c assoc :wall-walked true))
         true))))
 
@@ -437,7 +444,10 @@
             opts (cond-> (assoc (walk-opts c doors) :progress (empty? (:frontier-best (ctx/mem c))))
                    seen-goal? (assoc :explore false))
             stair-check (reprice/check c pos (known-end-check c pos (lookout-check c pos (plan-check c pos (choose/stair-check c pos) (straight-from! c d)))))
-            {walked :result status :status to :to} (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos) :walk-spent? #(tour-spent? c)) pos range (assoc opts :see-cell (see-cell c) :stair-check stair-check)))
+            round (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos) :walk-spent? #(tour-spent? c)) pos range (assoc opts :see-cell (see-cell c) :stair-check stair-check)))]
+        (if (jumped? c)
+          :again
+        (let [{walked :result status :status to :to} round
             status (if (and (= "stair" status) (:searching (:why walked))) "searching" status)
             _ (ctx/hold-still! c (when (= "searching" status) :searching))
             fetched (when (= :no-torch (:status walked)) (await (fetch-torches! c)))
@@ -465,8 +475,6 @@
             nearer? (boolean (and target (< tdist (dec (get tbests target js/Infinity)))))
             _ (ctx/update-mem! c assoc :tour-walks (if (< left (dec best)) 0 (cond-> (:tour-walks (ctx/mem c) 0) frontier inc)))]
         (cond
-          (jumped? c) :again
-
           (= "arrived" status)
           (await (arrive! c pos))
 
@@ -596,4 +604,4 @@
                             (:waypoint-why (ctx/mem c)) (assoc :waypoint-why (:waypoint-why (ctx/mem c))))]
                 (or (await (clear-goal-seal! c pos ended))
                     (when (await (walk-to-wall! c pos tries ended opts)) :again)
-                    (await (esc/give-up-or-escalate! c pos tries status ended)))))))))))))
+                    (await (esc/give-up-or-escalate! c pos tries status ended)))))))))))))))
