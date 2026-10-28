@@ -1636,3 +1636,12 @@
           (is (= :done (:status @out)))
           (is (= "cobblestone" (block-at p lava)))
           (is (= 1 (count (events-of s :stair.sealed)))))))))
+
+(deftest a-natural-only-stair-stops-not-diggable-at-a-block-that-is-not-natural-terrain
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [planks (into {} (for [y (range 62 67) z (range -2 3)] [(str "1," y "," z) "oak_planks"]))
+              {:keys [out p]} (await (stair! {:blocks (merge ground planks)} (assoc east :natural-only? true) (fn [_])))]
+          (is (= [:stopped :not-diggable] [(:status @out) (:reason @out)]) (pr-str @out))
+          (is (empty? (filter #(= 1 (:x %)) (digs p))) "no plank is cut"))))))

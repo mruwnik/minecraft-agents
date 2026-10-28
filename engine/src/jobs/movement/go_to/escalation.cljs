@@ -46,7 +46,7 @@
             [jobs.movement.go-to.escalate-choose :refer [dig-left-s range-opts cheaper-fill climb-on? dive-climb-on? dive? escalate-reason? escalate? fetch-tool? gap-fill
                                                          goal-way dig-leg dig-way drop-fill out-of-sight? price frontier-way gap-dig gap-walled? goal-lava? leg-ends goal-walled? own-stair route-cells shelter-exit? skips sprint-only?
                                                          route-owner route-slice routes-searching! searching? searching-ends keep-routes! forget-routes! search-opts]]
-            [jobs.movement.go-to.holes :refer [forget-dug-own! hole-tag may-dig-fn note-holes! own-cut-fn own-fn own-holes own-placed-fn planned-cells with-own-pen]]
+            [jobs.movement.go-to.holes :refer [forget-dug-own! hole-tag may-dig-fn note-holes! own-cut-fn own-dig-fn own-fn own-holes own-placed-fn planned-cells with-own-pen]]
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.search-bound :as search-bound]
             [jobs.movement.go-to.torch :as torch]
@@ -203,11 +203,6 @@
   "Whether the escalation under way may cut the body's own builds (:own-cut, chosen by own-way)."
   [c]
   (boolean (:own-cut (:escalation (ctx/mem c)))))
-
-(defn own-dig-fn
-  "(own? cell block) of the escalation under way: own-placed-fn's, the body's own builds too when it may cut them (own-cut?)."
-  [c]
-  (cond->> (own-placed-fn c) (own-cut? c) (own-fn c)))
 
 (def priced-steps #{:stair :pillar :clear-path :dig-route :bridge :fill-gap})
 
@@ -595,7 +590,7 @@
     (when (dig-look/unknown? p cell) (await (dig-look/look-at! c cell)))
     (let [block-at (escape/block-at-of p)
           n (block-at cell)
-          undiggable? (or (escape/protected? n) (not (escape/diggable? block-at (may-dig-fn c (own-cut? c)) (own-dig-fn c) cell)))]
+          undiggable? (or (escape/protected? n) (not (escape/diggable? block-at (may-dig-fn c (own-cut? c)) (own-dig-fn c (own-cut? c)) cell)))]
       (cond
         (and guess (not (dig-look/unknown? p cell)) (not= n block)) (do (note-guess! c beside (not undiggable?)) :replan)
         (bs/passable? n) :open
@@ -603,6 +598,7 @@
         :else
         (let [fetch? (fetch-tool? c)
               args {:ignore-zones? (boolean (:ignore-zones? (:args c))) :ways (ways-for fetch?) :need-drop fetch? :accept #{:lava-adjacent} :natural-only? true}
+              args (cond-> args (own-cut? c) (assoc :settings {:jobs.lib.access/spare-own-builds false}))
               pos (zipmap [:x :y :z] cell)
               e (await (b/dig-cell-ending! c pos args))
               boxed? (and (not= :continue e) (= :no-side-stand (:why (:cause e))))
@@ -658,7 +654,7 @@
             feet (end/feet-cell c)
             goal (stand-goal c (mapv #(js/Math.floor (% pos)) [:x :y :z]))
             plan (fn [floors-unseen-ok?]
-                   (route-cells (:primitives c) feet goal (may-dig-fn c (own-cut? c)) (own-dig-fn c) floors-unseen-ok? (fetch-tool? c)
+                   (route-cells (:primitives c) feet goal (may-dig-fn c (own-cut? c)) (own-dig-fn c (own-cut? c)) floors-unseen-ok? (fetch-tool? c)
                                 (search-opts (merge {:stands (ledger/stair-stands c) :slice slice :spent (:spent-routes m) :own-s (own-cut-fn c) :own-cut (own-cut? c)
                                                      :guess-risk (guess-risk c) :worth-s (:fallback-s (:replan-budget m))}
                                                     (range-opts c pos)))))

@@ -43,7 +43,7 @@
   Needs nothing carried (a tool the dig child cannot find is its :dig-waits). Quote: the door's cells times the time of a
   cell, ending at the far side.
   :bad-args and :no-door are conditions, checked at the start. Ends :done, or with a cause {:reason r ...}: :impossible for :bad-args (needs :heading), :condition-failed for
-  :no-door (no such wall here), :protected (a block it never digs), :footprint (a cell of a plan this body made,
+  :no-door (no such wall here), :protected (a block it never digs), :not-diggable (:natural-only? and a cell that is not natural terrain), :footprint (a cell of a plan this body made,
   unless the spare-own-builds setting is false) and :dig-waits (the dig child's wait or decline, its ending the :because); :too-dear (the price over :max-dig-s); :nothing-possible for
   :dig-failed (its ending the :because), :refills (a cell dug stair.limits/max-digs times, e.g. sand falling in) and :step-failed
   (the walk through did not arrive). Data {:dug [{:cell :block}] :at [x y z] :through [x y z]}, :shut [cells put back] with :close-behind.
@@ -108,7 +108,7 @@
 
 (def facts
   "The stops that name a wall or a rule that bars the door (condition-failed); the others are attempts that failed."
-  #{:no-door :protected :footprint :dig-waits :too-dear})
+  #{:no-door :protected :footprint :dig-waits :too-dear :not-diggable})
 
 (defn result-of
   "The data of the door now: {:dug :at} and the :through cell once planned, plus detail."

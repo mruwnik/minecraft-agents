@@ -711,6 +711,29 @@
             (is (= #{12} (set (map first own))) "the east wall, toward the goal")
             (is (every? (set (mapcat :cells (events-of seen :go-to.restored))) own) "and put back")))))))
 
+(def glow-cobble-room
+  "glow-room with a cobblestone shell: its own wall is not natural terrain."
+  (apply dissoc (merge glow-room (box 8 61 8 12 65 12 "cobblestone"))
+         (for [x (range 9 12) y (range 62 65) z (range 9 12)] (str x "," y "," z))))
+
+(deftest go-to-out-of-its-own-cobble-room-buried-in-rock-cuts-one-wall-column-of-its-own-plan
+  ;; the dig route's dig child refuses what is not natural terrain unless it is the body's own build the route may cut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [room (shape/with-author {:id "room" :parts [{:id "shell" :box [[8 61 8] [12 65 12]] :want "cobblestone"}]} "Fake")
+              world {:self {:pos {:x 11.5 :y 62 :z 9.5}} :blocks glow-cobble-room :light [15 15] :sight true
+                     :inventory [{:name "dirt" :count 8} {:name "stone_pickaxe" :count 1} {:name "stone_shovel" :count 1}]}
+              {:keys [eng p seen step]} (gt/setup world (ew/of-data {"room" room} {} []))
+              out (atom :not-done)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [14 62 12] :range 2})))]
+          (core/submit! eng '(recording-parent) {})
+          (await (gt/tick-out! eng 400 step))
+          (let [own (map :cell (events-of seen :go-to.dug-own-build))]
+            (is (= {:arrived true} @out))
+            (is (= 2 (count own)) "one column of its own wall")
+            (is (seq (filter #(= :dig-route (:step %)) (events-of seen :go-to.escalated))) "by a dig route")))))))
+
 (def all-glow-room
   "glow-room without the stone band: every cell round the shell is a light, never dug."
   (apply dissoc (merge (box 4 60 4 20 69 16 "glowstone") (box 8 61 8 12 65 12 "dirt"))

@@ -309,3 +309,12 @@
         (let [thin (update wall :blocks #(apply dissoc % (for [y [64 65] z [-1 0 1]] (str "2," y "," z))))
               r (await (run-door (assoc thin :inventory [{:name "stone_pickaxe" :count 1}]) nil {:heading :east :close-behind true}))]
           (is (= [:done [2 64 0] nil] [(:status r) (:through r) (:shut r)]) (pr-str (dissoc r :ending))))))))
+
+(deftest a-natural-only-door-through-a-built-wall-ends-not-diggable-as-a-fact
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [planks (assoc wall :blocks (merge (:blocks wall) (box 1 64 -1 2 65 1 "oak_planks")))
+              r (await (run-door planks nil {:heading :east :natural-only? true}))]
+          (is (= [:stopped :not-diggable] [(:status r) (:reason r)]) (pr-str r))
+          (is (= :condition-failed (:kind (:ending r))) "a fact about the wall, not an attempt that failed"))))))
