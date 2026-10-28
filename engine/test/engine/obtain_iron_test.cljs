@@ -181,7 +181,8 @@
                                 :floor [-30 -30 40 30]) [f/own-zone])]
           (await (obtain! s {:item "raw_iron" :ways #{:craft :smelt :gather} :explore true} 60))
           (is (seq (f/events-of s :torch.stocked)) "the torches were fetched by obtain, since the mine's ways cannot gather")
-          (is (< 0 (get (f/inv s) "torch" 0))))))))
+          (is (< 0 (+ (get (f/inv s) "torch" 0) (count (filter #(= "torch" (.-item (.-args %))) (f/calls s "place")))))
+              "the torches are carried or were placed (a walk to the floor's edge hangs them to see the floor), not lost"))))))
 
 (deftest a-smelted-product-without-its-input-names-the-smelt-not-a-block-recipe
   (async done
@@ -221,8 +222,8 @@
     (perception/pass! (aget (:p s) "perception"))))
 
 (def lit-tree
-  "Torch light round the tree and the way to it: no mob spawns there."
-  (into {} (for [x (range -2 3) y (range 64 68) z (range 1 7)] [[x y z] [15 14]])))
+  "Torch light round the tree, up to the leaves over its logs (the cell the exposure of a walk to a log column judges), and the way to it: no mob spawns there."
+  (into {} (for [x (range -2 3) y (range 64 69) z (range 1 7)] [[x y z] [15 14]])))
 
 (defn sheltered-night-start
   "A body that saw the tree (and blocks, a stone by it) before it sealed itself in its night pit; light {cell [sky block]} over the sky's."
