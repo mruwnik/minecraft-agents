@@ -105,13 +105,14 @@
     {:eng eng :p p :seen seen :clock clock}))
 
 (defn refuse-with-mob!
-  "The first n place calls are refused with a sheep in the cell."
+  "The first n place calls are refused with a sheep in the cell; the sheep leaves with the nth refusal."
   [p n]
   (let [k (atom 0)]
     (.override (.-world p) "place" (fn ^:async f [token a impl]
                                      (if (< (swap! k inc) n)
                                        #js {:status "failed" :refusal #js {:entities #js [#js {:name "sheep" :id 8}]}}
-                                       (await (impl token a)))))))
+                                       (do (swap! (fake/state p) assoc :entities [])
+                                           (await (impl token a))))))))
 
 (defn placed [p] (count (filter #(= "place" (.-name %)) (.-calls (.-world p)))))
 
@@ -121,7 +122,6 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (retreat-setup)]
           (refuse-with-mob! p 4)
-          (js/setTimeout #(swap! (fake/state p) assoc :entities []) 500)
           (core/submit! eng '(test.flight {}) {})
           (loop [i 0] (when (and (< i 8) (seq (:list (core/state eng)))) (await (core/tick! eng)) (recur (inc i))))
           (is (= "cobblestone" (.-name (.blockAt p (tu/pos 1 64 0)))) "sealed in despite the sheep")
