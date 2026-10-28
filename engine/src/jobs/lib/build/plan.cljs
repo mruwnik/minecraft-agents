@@ -16,6 +16,8 @@
             [plan.rail :as rail]
             [plan.shape :as shape]
             [jobs.lib.build.fill :as fill]
+            [jobs.lib.places :as places]
+            [jobs.lib.cost :as cost]
             [jobs.lib.build.wood :as wood]
             [jobs.lib.trees :as trees]
             [jobs.lib.need :as need]
@@ -371,17 +373,33 @@
 
 (def no-zones "no zone list has been read")
 
-(defn fill-depth
-  "The deepest fill column the build can afford (fill/max-depth of the call's :worth, else fill/build-worth of the plan's cells)."
+(defn fill-worth
+  "The call's :worth less the earthwork (cost/earthwork-s) of the fill this call placed (:filled): one budget for every fill; nil: no cap."
   [c]
-  (fill/max-depth (or (:worth (:args c)) (fill/build-worth (:cells (known/plan c (:plan (:args c))))))))
+  (when-let [w (:worth (:args c))]
+    (max 0 (- w (cost/earthwork-s (count (:filled (ctx/mem c))))))))
+
+(defn fill-depth
+  "The deepest fill column the fill-worth affords (fill/max-depth)."
+  [c]
+  (fill/max-depth (fill-worth c)))
+
+(defn fill-price
+  "Seconds n fill blocks cost: their earthwork (cost/earthwork-s) and the obtain of the dirt short of what is carried (need/item-price)."
+  [c n]
+  (let [short (max 0 (- n (get (storage/carried-totals (u/inventory (:primitives c))) "dirt" 0)))
+        o (need/fetch-opts c)]
+    (+ (cost/earthwork-s n)
+       (cond (zero? short) 0
+             o (need/item-price c "dirt" short o nil)
+             :else ##Inf))))
 
 (defn planned
   "{:cells judged} for the plan in the args, or {:trouble text}."
   [c]
   (let [{:keys [plan part]} (:args c)
         answer (let [a (surfaced c (known/plan c plan))]
-                (cond-> a (:cells a) (update :cells #(fill/with-fill (partial world-block (:primitives c)) (fill-depth c) %))))
+                (cond-> a (:cells a) (update :cells #(fill/with-fill (partial world-block (:primitives c)) (fill-worth c) (partial fill-price c) %))))
         usable? (and answer (not (:broken answer)))
         carried-map (when usable? (storage/carried-totals (u/inventory (:primitives c))))
         wood (when usable? (wood-choice c answer carried-map))
@@ -419,7 +437,7 @@
   [c pos depth]
   (let [unseen? #(nil? (u/seen-block (:primitives c) (zipmap [:x :y :z] %)))
         column (first (filter #(or (unseen? %) (not (fill/hollow (:name (world-block (:primitives c) %)))))
-                              (map (fn [dy] (update pos 1 - dy)) (range 1 (+ 2 depth)))))]
+                              (map (fn [dy] (update pos 1 - dy)) (range 1 (+ 2 (min depth (- (pos 1) places/min-y)))))))]
     (cond-> (filterv unseen? (map #(mapv + pos %) neighbour-steps))
       (and column (unseen? column)) (conj column))))
 

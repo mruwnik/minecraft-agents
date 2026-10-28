@@ -28,7 +28,7 @@
   order, each a child job called once (a child that yields is called again on the next call). A step under way is not re-decided.
 
   - :mend (jobs.build.pen over the whole :plan, only with :plan): a fence, gate or wall cell of the plan beside the box
-    was seen as something else (blown away), so the plan's fence is built again. Only cells the body has seen count; a gap
+    was seen as something else (blown away), so the plan's fence is built again, at the pass's worth (with a :mob). Only cells the body has seen count; a gap
     that stays rests the pen.
   - :herd (jobs.animals.herd for 2 adults, or :target if less): fewer adults than that are in the box, so breeding cannot start; herd fetches
     and searches for animals of the kind within ::herd-radius (64) of the body and brings them in.
@@ -154,12 +154,17 @@
      :food (animals/food-carried (:primitives c) (:mob (:args c)))
      :reach (hunting/reach c)}))
 
+(declare worth-of)
+
 (defn decide-mend
-  [{:keys [plan ways]} {:keys [gaps]}]
+  [{:keys [plan ways mob] :as args} {:keys [gaps] :as facts}]
   (cond
     (nil? plan) {:skip :no-plan}
     (empty? gaps) {:skip :sound}
-    :else {:call {:slot :mend :job (jobs :mend) :args (cond-> {:plan plan} (not (need/fetching? ways)) (assoc :ways #{:carried}))}}))
+    :else {:call {:slot :mend :job (jobs :mend)
+                  :args (cond-> {:plan plan}
+                          mob (assoc :worth (worth-of args facts))
+                          (not (need/fetching? ways)) (assoc :ways #{:carried}))}}))
 
 (defn decide-herd
   [{:keys [mob box ways target]} {:keys [adults]}]

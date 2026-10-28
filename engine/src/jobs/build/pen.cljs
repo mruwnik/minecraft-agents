@@ -36,7 +36,7 @@
   the logs and leaves left, up to the fence tops, with a jobs.blocks.clear-cells child (:only), so no leaf staircase
   leads over the fence; trees not seen yet are left to the check.
   Then a jobs.access.cleanup child takes up the body's own scaffold-ledger blocks in and around the box (a night shelter's cheap blocks stay after dawn; an animal steps from one onto a fence).
-  Phase 1 runs jobs.build.from-plan on the :part, or with none on each part holding fence, wall or gate cells in turn (a house or field of the same plan is not built or fetched for; the pen's cells are those parts' only). Its arg :accept passes through, and its rules
+  Phase 1 runs jobs.build.from-plan on the :part, or with none on each part holding fence, wall or gate cells in turn (a house or field of the same plan is not built or fetched for; the pen's cells are those parts' only). Its args :accept and :worth pass through, and its rules
   (zones, other plans' footprints, materials, cuts) apply. Phase 2: a fence stacked on a gate is dug off, then a body still inside the box walks out through the
   gate (a jobs.movement.go-to child to the cell outside it) and jobs.maintenance.shut shuts it. Phase 3 checks the pen
   over that box with jobs.lib.pen (see jobs.animals.pen-check): a step out of the box is a leak.
@@ -67,6 +67,7 @@
    :part {:doc "only the cells of this part" :spec a/name? :default nil}
    :accept {:doc "as jobs.build.from-plan" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default [:fluid-adjacent]}
    :explore {:doc "as jobs.build.from-plan: walk off to look for blocks that are not in sight" :spec boolean? :default true}
+   :worth {:doc "as jobs.build.from-plan" :spec (a/num-in 0 nil) :default nil}
    :uneven? {:doc "build although the ring steps more than 1 between neighbouring fences or the inside drops more than 1 at the gate" :spec boolean? :default false}
    :ignore-zones? :shared})
 
@@ -178,7 +179,7 @@
   (or (:part (:args c)) (next-part c) (:part (first (:cells (judged-plan c))))))
 
 (defn build-args [c]
-  (assoc (select-keys (:args c) [:plan :accept :explore :ignore-zones?]) :part (build-part c) :ways (need/pass-ways c)))
+  (assoc (select-keys (:args c) [:plan :accept :explore :worth :ignore-zones?]) :part (build-part c) :ways (need/pass-ways c)))
 
 ;; ------------------------------------------------------------------ conditions
 
