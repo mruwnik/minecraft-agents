@@ -10,7 +10,7 @@
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.reserve :as reserve]
             [jobs.lib.tool-kind :as kind]
-            [jobs.lib.trees :as trees]
+            [jobs.lib.game-facts :as facts]
             [jobs.lib.util :as u]))
 
 (def whole "Uses of a tool with no known durability: counts as whole." 1000000)
@@ -71,7 +71,7 @@
   "Filler blocks per purpose, in order. :shelter is :build then logs (worth more, a last resort); :climb is what an
   escape pillars with (no sand or gravel: they fall); :cover and :seal are solid blocks that do not fall."
   {:build building-blocks
-   :shelter (into building-blocks trees/log-names)
+   :shelter (into building-blocks facts/log-names)
    :pillar ["dirt" "cobblestone"]
    :climb ["dirt" "cobblestone" "cobbled_deepslate" "stone" "deepslate" "netherrack" "andesite" "diorite" "granite"
            "oak_planks" "spruce_planks" "birch_planks"]

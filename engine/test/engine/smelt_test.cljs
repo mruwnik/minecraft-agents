@@ -832,6 +832,9 @@
   (are [carried in] (= in (smelt-plan/input-of "charcoal" carried))
     [{:name "oak_log" :count 2} {:name "birch_log" :count 5} {:name "coal" :count 9}] "birch_log"
     [{:name "oak_planks" :count 9}] "oak_log"
+    [{:name "stripped_oak_log" :count 3} {:name "oak_log" :count 1}] "stripped_oak_log"
+    [{:name "birch_wood" :count 2}] "birch_wood"
+    [{:name "stripped_cherry_wood" :count 2}] "stripped_cherry_wood"
     [] "oak_log"))
 
 (deftest an-output-item-is-smelted-from-its-input

@@ -32,11 +32,9 @@
   "Consecutive partial walks toward one tree before it counts as unreachable."
   3)
 
-(def log-names facts/log-names)
-
 (def species
   "Every species a sapling grows (the logs' species and the two stem woods)."
-  (conj (mapv #(subs % 0 (- (count %) 4)) log-names) "crimson" "warped"))
+  (conj (mapv #(subs % 0 (- (count %) 4)) facts/log-names) "crimson" "warped"))
 
 (defn log-name? [n] (boolean (some-> n (str/ends-with? "_log"))))
 (defn leaves-name? [n] (boolean (some-> n (str/ends-with? "_leaves"))))
@@ -237,7 +235,7 @@
     (filterv #(have (sapling-of (:species %))) debts)))
 
 (def all-drops
-  (vec (concat log-names (map #(sapling-of %) species) ["stick" "apple"])))
+  (vec (concat facts/log-names (map #(sapling-of %) species) ["stick" "apple"])))
 
 (defn drop-filter
   "The items a felled tree of the species (any species when nil) leaves: its log, planting item, sticks and apples."

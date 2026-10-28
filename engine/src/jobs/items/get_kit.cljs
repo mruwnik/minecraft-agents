@@ -284,20 +284,21 @@
                 (not= :none-seen (:gathered r)))))
 
 (defn material-of
-  "The furnace material (ingots, counting raw ore) carried, to tell whether a bill round gained any."
-  [st]
-  (reduce + 0 (vals (select-keys (with-raw (:carried st)) (keys facts/smelted-from)))))
+  "The furnace material the items' bill needs (ingots, counting raw ore) carried, to tell whether a bill round gained any;
+  cobblestone counts only for a bill that needs stone."
+  [version items st]
+  (reduce + 0 (vals (select-keys (with-raw (:carried st)) (keys (bill/furnace-short version items {}))))))
 
 (defn retry!
   "Book another bill round: a fresh child slot, the pieces the new material covers made first. A round that gained material
   starts the count again."
   [c r tries]
-  (let [gained? (> (material-of (state c)) (:bill-material (ctx/mem c) 0))
+  (let [gained? (> (material-of (game/version-of (:primitives c)) (:items (:args c)) (state c)) (:bill-material (ctx/mem c) 0))
         tries' (if gained? 1 (inc tries))]
     (ctx/emit! c :kit.retry :warn {:cause (:reason r) :why (:why r) :tries tries'
                                    :text (str "gathering ended without enough (" (:why r) "): trying again, round " (inc tries'))})
     (ctx/update-mem! c (fn [m] (-> m (dissoc :covered :covered-done :bill :fed)
-                                   (assoc :bill-tries tries' :bill-material (material-of (state c)))
+                                   (assoc :bill-tries tries' :bill-material (material-of (game/version-of (:primitives c)) (:items (:args c)) (state c)))
                                    (update :bill-round (fnil inc 0)))))
     :continue))
 
@@ -384,7 +385,7 @@
           :else
           (let [tries (:bill-tries (ctx/mem c) 0)
                 round (:bill-round (ctx/mem c) 0)
-                _ (when-not (:bill-material (ctx/mem c)) (ctx/update-mem! c assoc :bill-material (material-of st)))
+                _ (when-not (:bill-material (ctx/mem c)) (ctx/update-mem! c assoc :bill-material (material-of version (:items a) st)))
                 r (await (run-bill! c (if (zero? round) :bill (keyword (str "bill" round))) (bill-of c)))]
             (cond (= :continue r) :continue
                   (retry? r tries (:explore a)) (retry! c r tries)

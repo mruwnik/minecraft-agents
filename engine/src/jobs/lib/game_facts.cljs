@@ -25,9 +25,15 @@
   "The overworld log blocks (the stem woods are not logs)."
   (mapv #(str % "_log") ["oak" "spruce" "birch" "jungle" "acacia" "dark_oak" "mangrove" "cherry" "pale_oak"]))
 
+(def charcoal-inputs
+  "Every block the furnace turns to charcoal (the vanilla logs_that_burn tag): logs, stripped logs, woods, stripped woods."
+  (vec (for [tree (map #(subs % 0 (- (count %) 4)) log-names)
+             form [[nil "_log"] [nil "_wood"] ["stripped_" "_log"] ["stripped_" "_wood"]]]
+         (str (first form) tree (second form)))))
+
 (def smelt-inputs
-  "{output [input names]} of every furnace product: smelted-from, and charcoal from any overworld log."
-  (assoc (update-vals smelted-from vector) "charcoal" log-names))
+  "{output [input names]} of every furnace product: smelted-from, and charcoal from any burning log or wood."
+  (assoc (update-vals smelted-from vector) "charcoal" charcoal-inputs))
 
 (defn gatherable?
   "Items the body gets by mining, felling or from sheep: logs, coal, wool (white wool is also crafted from string)."

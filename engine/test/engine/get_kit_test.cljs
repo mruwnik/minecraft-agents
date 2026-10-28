@@ -69,6 +69,11 @@
 
 (defn crafted [s] (mapv #(.-item (.-args %)) (f/calls s "craft")))
 
+(deftest carried-cobblestone-is-not-iron-material-nor-a-furnace-bill-item
+  (is (= {"iron_ingot" 3} (bill/furnace-short game/default-version ["iron_pickaxe"] (kit/with-raw {"cobblestone" 20}))))
+  (is (= {} (bill/furnace-short game/default-version ["furnace"] (kit/with-raw {"cobblestone" 0}))))
+  (is (zero? (kit/material-of game/default-version ["iron_pickaxe"] {:carried {"cobblestone" 20}}))))
+
 (deftest the-iron-kit-needs-33-ingots-from-the-furnace
   (is (= {"iron_ingot" 33} (bill/furnace-short game/default-version kit/iron-kit {}))))
 

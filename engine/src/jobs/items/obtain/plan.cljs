@@ -21,6 +21,7 @@
             [jobs.lib.threats :as threats]
             [jobs.lib.torch :as torch]
             [jobs.lib.trip :as trip]
+            [jobs.lib.game-facts :as facts]
             [jobs.lib.trees :as trees]
             [jobs.lib.util :as u]
             [jobs.lib.walk-risk :as walk-risk]))
@@ -78,7 +79,7 @@
   "The gather map with the logs any species would do as \"log\" (summed); a log only its own species makes (oak_log
   for oak_planks) keeps its name: it stays the plan's even with plenty of another species carried."
   [gather version have name n opts]
-  (let [free? (fn [k] (let [other (first (remove #{k} trees/log-names))
+  (let [free? (fn [k] (let [other (first (remove #{k} facts/log-names))
                             pl (recipes/plan version (assoc have other 1000) name n opts)]
                         (not (pos? (get-in pl [:gather k] 0)))))
         free (filter (fn [[k _]] (and (trees/log-name? k) (free? k))) gather)]

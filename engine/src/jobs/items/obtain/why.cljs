@@ -20,7 +20,7 @@
   [c {:keys [key]}]
   (when (trees/log-name? key)
     (not-empty (filter #(seq (look/seen-blocks (:primitives c) {:names [%] :radius (seen-radius) :max 1}))
-                       (remove #{key} trees/log-names)))))
+                       (remove #{key} facts/log-names)))))
 
 (defn raw-needs
   "The raw needs of the chain that makes n of names (jobs.items.obtain.table/gather-needs)."

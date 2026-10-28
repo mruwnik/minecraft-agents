@@ -5,7 +5,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.cost :as cost]
             [jobs.lib.storage :as storage]
-            [jobs.lib.trees :as trees]
+            [jobs.lib.game-facts :as facts]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -142,4 +142,4 @@
   (cond (:sheep need) ["sheep"]
         (:mob need) [(:mob need)]
         (set? (:seen need)) (vec (sort (:seen need)))
-        :else trees/log-names))
+        :else facts/log-names))

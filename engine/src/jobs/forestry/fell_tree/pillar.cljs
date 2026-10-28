@@ -27,7 +27,8 @@
             [jobs.lib.pillar :as pl]
             [jobs.lib.sense :as sense]
             [jobs.lib.tools :as tools]
-            [jobs.lib.trees :as trees :refer [dig-reach log-name? log-names]]
+            [jobs.lib.game-facts :refer [log-names]]
+            [jobs.lib.trees :as trees :refer [dig-reach log-name?]]
             [jobs.lib.util :as u]
             [jobs.lib.walk :as walk]))
 

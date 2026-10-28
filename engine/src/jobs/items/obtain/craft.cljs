@@ -8,6 +8,7 @@
             [jobs.items.smelt :as smelt]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
+            [jobs.lib.game-facts :as facts]
             [jobs.lib.trees :as trees]
             [jobs.lib.util :as u]
             [jobs.lib.need :as need]
@@ -35,7 +36,7 @@
         fuels (smelt/fetch-wood-fuels)
         of-log (fn [n] (let [f (str (trees/species-of n) "_planks")] (when (some #{f} fuels) f)))
         carried-log (some #(when (and (trees/log-name? (:name %)) (pos? (:count %))) (of-log (:name %))) inv)
-        seen-log (some-> (look/seen-blocks p {:names trees/log-names :radius (seen-radius) :max 1}) first :name of-log)]
+        seen-log (some-> (look/seen-blocks p {:names facts/log-names :radius (seen-radius) :max 1}) first :name of-log)]
     (or (first (filter #(pos? (carried-of inv [%])) fuels)) carried-log seen-log (first fuels))))
 
 (defn ^:async smelt-step!
