@@ -272,6 +272,22 @@
          (settings/with-settings {:jobs.lib.cost.value/tour-floor-blocks 0 :jobs.lib.cost.value/tour-ratio 1} #(cost/tour-worth 10))))
   (is (= 7 (:cost (settings/with-settings {:jobs.lib.cost.value/per-frontier-walk 1} #(cost/tour-cost {:explored 0 :walks 7}))))))
 
+(deftest an-unseen-floor-is-absent-at-the-counted-rate-and-costs-its-look-and-the-walk-back
+  (is (= 0.5 (cost/floor-absent-chance nil)) "nothing counted: the uniform prior")
+  (is (= 0.75 (cost/floor-absent-chance {:absent 2})) "a call's floors seen not there raise it")
+  (is (= 0.25 (settings/with-settings {:jobs.lib.cost.value/unseen-floor-counts {:absent 0 :present 2}} #(cost/floor-absent-chance nil)))
+      "the counted prior")
+  (let [walk #(:cost (cost/walk-cost {:distance %}))]
+    (is (= (+ 0.7 (* 0.5 (walk 10))) (:cost (cost/turn-back-cost [{:look 0.7 :back 10 :p 0.5}] 0))))
+    (is (= (+ 0.7 (* 0.5 (walk 14))) (:cost (cost/turn-back-cost [{:look 0.7 :back 10 :p 0.5}] 4))) "the next-best way's extra on top")
+    (is (< (:cost (cost/turn-back-cost [{:look 0.1 :back 2 :p 0.5}] 0)) (:cost (cost/turn-back-cost [{:look 0.1 :back 40 :p 0.5}] 0)))
+        "the farther the walk back, the dearer")
+    (is (< (:cost (cost/turn-back-cost [{:look 0.1 :back 10 :p 0.1}] 0)) (:cost (cost/turn-back-cost [{:look 0.1 :back 10 :p 0.9}] 0)))
+        "the likelier not there, the dearer")
+    (is (> 1e-9 (js/Math.abs (- (+ 0.1 (* 0.5 (walk 2)) (* 0.5 (+ 0.1 (* 0.25 (walk 3)))))
+                                (:cost (cost/turn-back-cost [{:look 0.1 :back 2 :p 0.5} {:look 0.1 :back 3 :p 0.25}] 0)))))
+        "a later floor is reached only while those before it held")))
+
 (deftest a-goal-worth-the-caller-says-budgets-the-tour-less-the-trip-and-the-walk
   (let [walk (:cost (cost/walk-cost {:distance 50}))]
     (is (= 100 (cost/tour-worth 50 (+ 100 (cost/trip) walk))))

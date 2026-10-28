@@ -169,14 +169,46 @@
                      (>= (u/dist (peek steps) pos) (dec closest)))
             {:known-end true})))))
 
-(defn tour-check
-  "near/walk-round!'s :stair-check: check's why, else {:tour-spent true} for a plan that rests on floors the body has not
-  seen (:unseen-floor) once the tour so far costs more than it is worth (tour-spent?): such a plan is a tour too, and a
-  found one never meets drive's walk-spent?."
+(defn turn-back
+  "{:cost :worth :p :cells} of a plan's floors the body has not seen (steps with :unseen-floor; nil when none): each
+  priced by cost/turn-back-cost, its look a peek over a drop or an aim (cost/walk-unknown-prices), its walk back the blocks
+  from the plan's start to its takeoff, its chance of not being there cost/floor-absent-chance of the call's floors found
+  there or not at its height (mem :floor-counts by floor y: one surface's floors tell of each other); no second way is
+  known when the plan is made, so the next-best way's extra is 0. :worth is what trying the way is worth: the chance its
+  first such floor is there (1 - :p) times cost/tour-worth of the goal's straight blocks at the call's start and the
+  caller's :worth."
+  [c steps]
+  (when (some :unseen-floor steps)
+    (let [steps (vec steps)
+          counts (:floor-counts (ctx/mem c))
+          {:keys [peek-s aim-s]} (cost/walk-unknown-prices)
+          backs (vec (reductions + 0 (map #(detour/length [%1 %2]) steps (rest steps))))
+          floors (keep-indexed (fn [i s]
+                                 (when (:unseen-floor s)
+                                   (let [cell [(js/Math.floor (:x s)) (dec (js/Math.floor (:y s))) (js/Math.floor (:z s))]]
+                                     {:look (if (< (:y s) (- (:y (nth steps (dec i))) 0.5)) peek-s aim-s) :back (nth backs (dec i))
+                                      :p (cost/floor-absent-chance (get counts (second cell))) :cell cell})))
+                               steps)
+          p (:p (first floors))]
+      {:cost (:cost (cost/turn-back-cost floors 0))
+       :worth (* (- 1 p) (cost/tour-worth (:detour-from (ctx/mem c) 0) (:worth (:args c))))
+       :p p
+       :cells (vec (take 6 (map :cell floors)))})))
+
+(defn turn-back-check
+  "near/walk-round!'s :stair-check: check's why, else {:turn-back (turn-back)} for a plan whose unseen floors cost more
+  to turn back from than trying it is worth. As a surface's floors turn out not there its p rises, so a rim of missing
+  floors ends."
   [c check]
   (fn [{:keys [steps] :as plan} first?]
     (or (when check (check plan first?))
-        (when (and (some :unseen-floor steps) (tour-spent? c)) {:tour-spent true}))))
+        (when-let [{:keys [cost worth] :as t} (turn-back c steps)]
+          (when (> cost worth) {:turn-back t})))))
+
+(defn count-floor!
+  "The walk's on-floor: one more of the call's unseen floors at the cell's height :present, else absent (mem :floor-counts)."
+  [c floor [_ y _]]
+  (ctx/update-mem! c update-in [:floor-counts y (if (= :present floor) :present :absent)] (fnil inc 0)))
 
 (defn explore-spent!
   "Give up :explore-spent with the tour so far (tour)."
@@ -457,8 +489,8 @@
             seen-goal? (and (see-cell c) (not (:edge-mode (ctx/mem c))) (not (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))))
             opts (cond-> (assoc (walk-opts c doors) :progress (empty? (:frontier-best (ctx/mem c))))
                    seen-goal? (assoc :explore false))
-            stair-check (tour-check c (reprice/check c pos (known-end-check c pos (lookout-check c pos (plan-check c pos (choose/stair-check c pos) (straight-from! c d))))))
-            round (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos) :walk-spent? #(tour-spent? c)) pos range (assoc opts :see-cell (see-cell c) :stair-check stair-check)))]
+            stair-check (turn-back-check c (reprice/check c pos (known-end-check c pos (lookout-check c pos (plan-check c pos (choose/stair-check c pos) (straight-from! c d))))))
+            round (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos) :on-floor #(count-floor! c %1 %2) :walk-spent? #(tour-spent? c)) pos range (assoc opts :see-cell (see-cell c) :stair-check stair-check)))]
         (if (jumped? c)
           :again
         (let [{walked :result status :status to :to} round
@@ -510,8 +542,10 @@
           (and (= "stair" status) (:lookout (:why walked)))
           (do (ctx/update-mem! c assoc :lookout-due true) :again)
 
-          (and (= "stair" status) (:tour-spent (:why walked)))
-          (explore-spent! c pos)
+          (and (= "stair" status) (:turn-back (:why walked)))
+          (let [{:keys [cost worth p cells]} (:turn-back (:why walked))]
+            (await (esc/give-up-or-escalate! c pos (max-blocked) status (cond-> {:status :no-path :reason :unseen-floors :cells cells :p-absent p :turn-back-s cost :worth-s worth}
+                                                                           (none-held? c) (assoc :torches :none)))))
 
           (and (= "stair" status) (:known-end (:why walked)))
           (do (ctx/update-mem! c assoc :edge-mode true)

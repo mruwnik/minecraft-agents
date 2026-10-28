@@ -441,28 +441,43 @@
     (is (nil? (column/waypoint (kinds/seen-kind-at (hiding land (fn [[x _ _]] (> x 0)))) 60 0 [0 64 0]))
         "nothing seen ahead: no waypoint, never the unseen ground")))
 
-(deftest a-column-over-a-void-past-the-rim-ends-when-the-rim-tour-costs-more-than-it-is-worth
+(deftest a-column-over-a-void-past-the-rim-ends-once-its-floors-turn-out-not-there
   ;; the land ends at x 40: the column at x 44 is seen open far below the rim, its ground never in view; every plan round
-  ;; the rim rests on floors not seen, so the tour's price ends it
+  ;; the rim rests on floors not seen, and each found missing raises the chance the next is too, till turning back from
+  ;; them costs more than the goal is worth while they hold
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out]} (await (go! {:floor [-30 -10 40 10] :light [15 0] :self {:pos {:x 34 :y 64 :z 0}}}
                                         {:pos {:x 44 :z 0} :range 2 :settings {:jobs.movement.go-to.tuning/goal-danger :end}}))]
-          (is (= {:arrived false :why :explore-spent} (select-keys @out [:arrived :why])) (pr-str @out))
-          (is (< (:explored @out) 200) "about the tour's worth (96 blocks of walk and a trip); with no check of found plans it tours about 380"))))))
+          (is (= {:arrived false :why :unseen-floors} (select-keys @out [:arrived :why])) (pr-str @out))
+          (is (> (:p-absent @out) 0.5) "the rim's floors found missing raised the chance from the uniform prior")
+          (is (> (:turn-back-s @out) (:worth-s @out))))))))
+
+;; the ravine past the rim at x 40 is 24 deep, its floor out of sight; the body has seen the void round the land and the
+;; air over the ravine but by the column; a 2-wide ramp down its west wall leads 24 blocks away from the column (x 44 z 0)
+;; before its foot, from where the floor leads back
+(def ravine
+  {:floor [-30 -10 40 10] :light [15 0] :seen [[-31 20 -31 40 70 16] [41 40 -30 51 70 -3] [41 40 3 51 70 16] [46 40 -2 51 70 2] [41 40 -2 42 70 -1]] :self {:pos {:x 34 :y 64 :z 0}}
+   :blocks (merge (box 41 39 -30 50 39 10 "stone") (into {} (for [k (range 24) x [41 42] y (range 40 (- 64 k))] [(str x "," y "," (- -1 k)) "stone"])))})
 
 (deftest a-column-over-a-ravine-reached-by-a-ramp-that-first-leads-away-is-arrived-at
-  ;; the ravine past the rim at x 40 is 24 deep, its floor out of sight; the body has seen the void round the land and the air over the ravine but by the column; a 2-wide ramp down its west wall leads 24 blocks away from the column (x 44 z 0) before its foot, from
-  ;; where the floor leads back
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [ramp (into {} (for [k (range 24) x [41 42] y (range 40 (- 64 k))] [(str x "," y "," (- -1 k)) "stone"]))
-              {:keys [out p]} (await (go! {:floor [-30 -10 40 10] :light [15 0] :seen [[-31 20 -31 40 70 16] [41 40 -30 51 70 -3] [41 40 3 51 70 16] [46 40 -2 51 70 2] [41 40 -2 42 70 -1]] :self {:pos {:x 34 :y 64 :z 0}}
-                                           :blocks (merge (box 41 39 -30 50 39 10 "stone") ramp)}
-                                          {:pos {:x 44 :z 0} :range 2 :settings {:jobs.movement.go-to.tuning/goal-danger :end}}))
+        (let [{:keys [out p]} (await (go! ravine {:pos {:x 44 :z 0} :range 2 :settings {:jobs.movement.go-to.tuning/goal-danger :end}}))
               [x y z] (at p)]
           (is (:arrived @out) (pr-str @out))
           (is (= 40 (js/Math.floor y)) (str "on the ravine floor: at " (at p)))
           (is (<= (js/Math.hypot (- 44 x) z) 2) (str "at " (at p))))))))
+
+(deftest a-way-down-a-ramp-onto-unseen-floors-is-not-tried-for-a-goal-worth-less-than-turning-back
+  ;; worth 20 s: 7 s past the trip and the straight walk, half of it while the ravine floor is as likely there as not, under
+  ;; the walk back up the ramp should it not be
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (go! ravine {:pos {:x 44 :z 0} :range 2 :worth 20 :settings {:jobs.movement.go-to.tuning/goal-danger :end}}))]
+          (is (= {:arrived false :why :unseen-floors :p-absent 0.5} (select-keys @out [:arrived :why :p-absent])) (pr-str @out))
+          (is (> (:turn-back-s @out) (:worth-s @out)))
+          (is (= 64 (js/Math.floor (second (at p)))) "it never set off down the ramp"))))))

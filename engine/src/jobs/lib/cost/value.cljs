@@ -69,6 +69,8 @@
                  :doc "Times its straight walk a goal whose worth the caller did not say is worth a tour of loaded land on top of a trip: a near goal is worth a short tour."}
    ::tour-floor-blocks {:default 32 :spec (a/num-in 0 nil)
                         :doc "Straight blocks a goal counts as at least when worth a tour (about 100 blocks of tour): a near goal behind a ravine is still reached."}
+   ::unseen-floor-counts {:default {:absent 0 :present 0} :spec (a/pred "a map {:absent n :present n} of counts >= 0" (fn [m] (and (map? m) (every? #(and (number? (get m %)) (<= 0 (get m %))) [:absent :present]))))
+                          :doc "Unseen floors a walk looked at, {:absent :present}: seen not there (or still unseen once looked at) and seen there; the prior of floor-absent-chance, a call's own outcomes on top. Recount: tools/event-counts.mjs unseen-floors."}
    ::tour-worth {:default false :spec (a/or-of false? (a/num-in 0 nil))
                  :doc "Seconds a tour of frontiers may cost whatever its goal; false: from the goal's straight blocks (tour-ratio, tour-floor-blocks)."}
    ::food-worth-per-point {:default 30 :spec (a/num-in 0 nil)
@@ -261,6 +263,27 @@
      (settings/get settings ::tour-worth) (settings/get settings ::tour-worth)
      (pos? worth) (max 0 (- worth (trip) (:cost (walk-cost {:distance straight}))))
      :else (+ (trip) (* (settings/get settings ::tour-ratio) (:cost (walk-cost {:distance (max straight (settings/get settings ::tour-floor-blocks))})))))))
+
+(defn floor-absent-chance
+  "The chance a floor the body has not seen is not there: a uniform Beta(1,1) prior updated by the counts of
+  unseen-floor-counts and `counts` {:absent :present} (a call's own), (absent+1)/(absent+present+2)."
+  [counts]
+  (let [{:keys [absent present]} (merge-with + (settings/get settings ::unseen-floor-counts) (merge {:absent 0 :present 0} counts))]
+    (/ (inc absent) (+ absent present 2))))
+
+(defn turn-back-cost
+  "{:cost :parts {:look :back}} of a way over unseen `floors` [{:look :back :p}] in walk order, each not there at chance p:
+  the way reaches a floor while those before it held, pays its look (seconds), and when it is not there walks back to the
+  way's start (:back blocks) and takes the next-best way, `extra` blocks longer."
+  [floors extra]
+  (let [parts (:parts (reduce (fn [{:keys [reach] :as acc} {:keys [look back p]}]
+                                (-> acc
+                                    (update-in [:parts :look] + (* reach look))
+                                    (update-in [:parts :back] + (* reach p (:cost (walk-cost {:distance (+ back extra)}))))
+                                    (assoc :reach (* reach (- 1 p)))))
+                              {:reach 1 :parts {:look 0 :back 0}}
+                              floors))]
+    {:cost (+ (:look parts) (:back parts)) :parts parts}))
 
 (defn food-point-worth
   "Seconds one hunger point of food is worth while the pack lacks the food reserve."

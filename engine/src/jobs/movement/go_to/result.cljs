@@ -77,7 +77,7 @@
               reason (assoc :detail (str reason)))
     (cond
       (or reason (= :no-path status)) (merge {:why (if reason (keyword reason) :no-path)}
-                                             (select-keys result [:kind :cells :near :one-way :dark-best :torches :heal :health :hp-cost :hp-budget :hungry-food :dip :rise :goal-left :damage-refused]))
+                                             (select-keys result [:kind :cells :near :one-way :dark-best :torches :heal :health :hp-cost :hp-budget :hungry-food :dip :rise :goal-left :damage-refused :p-absent :turn-back-s :worth-s]))
       :else {:why :no-progress}))
    (select-keys result [:waypoint-why])))
 
@@ -113,7 +113,7 @@
 
 (defn give-up-words
   "The give-up reason in words, for the :text of the result: no map dumps."
-  [pos {:keys [why kind detail escalation shut-in nearest-hostile nearest-hostile-at sent-backs jumps mob mob-distance explored walks torches waypoint-why hp-cost hp-budget hungry-food low-passage dip rise route straight in-water goal-left damage-refused]}]
+  [pos {:keys [why kind detail escalation shut-in nearest-hostile nearest-hostile-at sent-backs jumps mob mob-distance explored walks torches waypoint-why hp-cost hp-budget hungry-food low-passage dip rise route straight in-water goal-left damage-refused p-absent turn-back-s worth-s extra-s]}]
   (str "gave up walking to " (if (map? pos) (let [{:keys [x y z]} pos] [x y z]) pos) ": "
        (if (and escalation (not (#{:way-dives :detour} why)))
          (str (if (:into escalation) "the goal is walled in; " "shut in here; ") (escalation-words escalation))
@@ -155,8 +155,11 @@
                            ", or set the walk.world y-margin setting to walk the deep way")
            :detour (str "the only way found is " route " blocks long for a goal that was " straight " blocks away, mostly over cells the body has never seen under ground: dig toward the goal, or raise the settings jobs.movement.go-to.detour/floor and /ratio to walk it")
            :door-stuck "a door in the way will not open"
-           :unseen-floors (str "the floor ahead keeps turning out not to be there in the dark: a cliff or gap it cannot see across; "
-                                (if (= :none torches) "it carries no torch to light the way: go round or fetch torches first" "light the way (torches) or go round"))
+           :unseen-floors (str (if turn-back-s
+                                 (str "the way goes over floors it has not seen, each not there at chance " (.toFixed p-absent 2) " (from the floors walks found there and not): turning back from them costs "
+                                      (.toFixed turn-back-s 1) " s, more than the " (.toFixed worth-s 1) " s the goal is worth; ")
+                                 "the floor ahead keeps turning out not to be there in the dark: a cliff or gap it cannot see across; ")
+                               (if (= :none torches) "it carries no torch to light the way: go round or fetch torches first" "light the way (torches) or go round"))
            :unseen-floor-dark (str "the way goes down onto floors it cannot see in the dark: carry a torch (held in the off hand it sees deeper), light the way, or pass :torches :fetch (go-to lights them)"
                                    (case torches
                                      :none "; it has no torch to light them and fetches none"
