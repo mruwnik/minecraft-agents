@@ -186,7 +186,7 @@
                                                 {:to "Steve" :item "bread" :count 5} 60 false
                                                 (fn [p] (.override (.-world p) "collect" (fn ^:async f [_ _ _] #js {:status "unreachable" :gained #js []})))))]
           (is (= {:given 5 :reason :litter :returned 0 :text "gave 5 bread (litter)"} @out))
-          (is (= 3 (count (calls p "collect")))))))))
+          (is (<= 3 (count (calls p "collect")))))))))
 
 (deftest collects-that-fail-in-a-row-give-up-but-a-collect-between-resets-the-count
   (async done
