@@ -299,11 +299,17 @@
   [base job k]
   (+ base (mod (hash (str job)) 1000003) (* 104729 k)))
 
+(def shards
+  "The all-jobs test is split in this many deftests: one deftest running every job outlives the 90 s stall guard of test-run."
+  12)
+
+(defn job-shard [job] (mod (hash (str job)) shards))
+
 (defn job-cases
   "Cases [{:job :entry :seed :k :base :n}] for the jobs matching :only (nil = all), :n per job or just case :case."
-  [{:keys [only n base] kase :case}]
+  [{:keys [only n base shard] kase :case}]
   (for [[job entry] (sort-by (comp str key) registry/jobs)
-        :when (and (not (skipped job)) (or (nil? only) (= only (str job))))
+        :when (and (not (skipped job)) (or (nil? only) (= only (str job))) (or (nil? shard) (= shard (job-shard job))))
         k (if kase [kase] (range n))]
     {:job job :entry entry :seed (case-seed base job k) :k k :base base :n n}))
 
@@ -378,18 +384,56 @@
   [{:keys [only n base] kase :case}]
   (and (nil? only) (nil? kase) (>= n known-cases) (= 1 base) (not extreme?)))
 
-(deftest every-job-handles-generated-inputs-honestly
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [opts (env-opts)
-              found (await (run-all opts))
-              fresh (remove #(contains? known [(str (:job %)) (:kind %)]) found)
-              stale (when (full-run? opts) (stale-known known found))]
-          (doseq [[[job kind] ds] (sort-by key (group-by (juxt (comp str :job) :kind) (filter #(contains? known [(str (:job %)) (:kind %)]) found)))]
-            (println "known" job kind (count ds) (pr-str (:detail (first ds)))))
-          (is (empty? fresh) (str (count fresh) " defect(s) across " (count (group-by (juxt :job :kind) fresh)) " job/kind pairs:\n" (summary fresh)))
-          (is (empty? stale) (str "known entries that no longer occur (card fixed? delete them): " (pr-str (map (juxt identity known) stale)))))))))
+(defn check-shard
+  "Runs the cases of the jobs in shard i; a known entry of one of these jobs that did not occur is stale on a full run."
+  [i done]
+  (tu/run-async done
+    (fn ^:async t []
+      (let [opts (assoc (env-opts) :shard i)
+            found (await (run-all opts (job-cases opts) run-case))
+            known? #(contains? known [(str (:job %)) (:kind %)])
+            fresh (remove known? found)
+            stale (when (full-run? opts) (filter #(= i (job-shard (first %))) (stale-known known found)))]
+        (doseq [[[job kind] ds] (sort-by key (group-by (juxt (comp str :job) :kind) (filter known? found)))]
+          (println "known" job kind (count ds) (pr-str (:detail (first ds)))))
+        (is (empty? fresh) (str (count fresh) " defect(s) across " (count (group-by (juxt :job :kind) fresh)) " job/kind pairs:\n" (summary fresh)))
+        (is (empty? stale) (str "known entries that no longer occur (card fixed? delete them): " (pr-str (map (juxt identity known) stale))))))))
+
+(deftest every-job-handles-generated-inputs-honestly-0
+  (async done (check-shard 0 done)))
+
+(deftest every-job-handles-generated-inputs-honestly-1
+  (async done (check-shard 1 done)))
+
+(deftest every-job-handles-generated-inputs-honestly-2
+  (async done (check-shard 2 done)))
+
+(deftest every-job-handles-generated-inputs-honestly-3
+  (async done (check-shard 3 done)))
+
+(deftest every-job-handles-generated-inputs-honestly-4
+  (async done (check-shard 4 done)))
+
+(deftest every-job-handles-generated-inputs-honestly-5
+  (async done (check-shard 5 done)))
+
+(deftest every-job-handles-generated-inputs-honestly-6
+  (async done (check-shard 6 done)))
+
+(deftest every-job-handles-generated-inputs-honestly-7
+  (async done (check-shard 7 done)))
+
+(deftest every-job-handles-generated-inputs-honestly-8
+  (async done (check-shard 8 done)))
+
+(deftest every-job-handles-generated-inputs-honestly-9
+  (async done (check-shard 9 done)))
+
+(deftest every-job-handles-generated-inputs-honestly-10
+  (async done (check-shard 10 done)))
+
+(deftest every-job-handles-generated-inputs-honestly-11
+  (async done (check-shard 11 done)))
 
 (deftest full-run-needs-as-many-cases-as-found-the-known-entries
   (is (not (full-run? {:n 10 :base 1})))

@@ -18,7 +18,7 @@
 (def doc
   "Set the respawn point at a bed without sleeping: by day, click the bed (jobs.items.use walks to within 2 cells where the eye sees it (the server sets the point only within 3 blocks), through the door of a hut) and the
   server answers \"respawn point set\".
-  Needs a bed: the :bed argument, else the remembered :bed within the default-bed-radius setting (forgotten when its block is seen to be gone), else a bed the body sees.
+  Needs a bed: the :bed argument, else the remembered :bed within the default-bed-radius setting (forgotten when its block is seen to be gone), else a bed the body sees (within 16 blocks).
   Conditions (at the start only): not night (at night the sleep job sets it), else it waits :night; a bed: with none the start check looks round first, then waits (:later); with none found it ends condition-failed :no-bed.
   Done at once (:already) when the :spawn-bed it writes is recorded at the bed. Done {:spawn pos} when the server set the point, or at once with :why :unchanged when the spawn is already
   known at that bed (jobs.lib.shelter.spawn/spawn-known?: :spawn-bed or :spawn-set near it, not reset since). A click that reached the bed
@@ -43,7 +43,7 @@
   (if-let [given (:bed (:args c))]
     (:pos (places/parse-pos given))
     (or (when-not (remembered-gone? c) (sh-beds/bed c (sh-beds/default-bed-radius)))
-        (sh-beds/seen-bed (:primitives c) (constantly true) (sh-beds/default-bed-radius)))))
+        (sh-beds/seen-bed (:primitives c) (constantly true) (min 16 (sh-beds/default-bed-radius))))))
 
 (a/defargs settings
   {::job-time-s {:default 60 :doc "Seconds the walk to the bed and the click may take." :spec (a/num-in 0 nil)}
