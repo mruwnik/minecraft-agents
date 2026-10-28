@@ -96,6 +96,18 @@
         (is (= {:reason :need :why :no-source :item "iron_ingot" :count 3 :text "needs 3 iron_ingot: no-source"} (:cause (last @got))))
         (is (= :no-source (contract/cause-key (:because (last @got)))))))))
 
+(deftest item-price-reads-the-price-of-the-obtain-childs-not-worth-status
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[start want] [[(contract/ok :ready "ready") 0]
+                              [(contract/later :not-worth "costs 42 s" :price 42 :worth 0) 42]
+                              [(contract/later :no-source "no source") ##Inf]
+                              [(contract/never :bad-args "bad") ##Inf]]]
+          (let [price (atom nil)]
+            (await (run! (fn [c] (reset! price (need/item-price c "torch" 4 nil nil)) nil) {:obtain-start start}))
+            (is (= want @price) (str (pr-str start)))))))))
+
 (deftest a-fetch-that-waits-for-dawn-is-not-called-but-another-later-is
   (async done
     (tu/run-async done

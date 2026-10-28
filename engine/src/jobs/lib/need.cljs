@@ -205,7 +205,7 @@
 
 (defn item-price
   "Seconds the jobs.items.obtain child item-status would ask for n more of item under options o prices (its :not-worth status carries :price
-  when worth 0 is passed), with the light judged under the sky's darkening sky (nil: now; 0: full day); ##Inf when it has no way."
+  when worth 0 is passed), with the light judged under the sky's darkening sky (nil: now; 0: full day); ##Inf when it has no way (a :never, or a :later with no :price such as no-source: a search that could find one is priced in :price)."
   [c item n o sky]
   (let [[kind _ data] (ctx/child-status c (or (:slot o) :need) 'jobs.items.obtain
                                         (cond-> (assoc (fetch-args 'jobs.items.obtain {:item item :count (+ n (get (counts c [item]) item))} o) :worth 0)
