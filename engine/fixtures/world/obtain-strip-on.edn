@@ -3,14 +3,15 @@
 ;; Stone mass x 3..46, y -1..1, z 3..9, under a bedrock roof (y 2..3), the body 3 west of its face facing east; one iron ore in the tunnel line
 ;; 40 blocks east, past the first run's 32-block tunnel. child/max-fruitless 1 makes one empty run end the gather unless it mines on; the plot
 ;; lies below iron's tunnel level and the roof the body sees bars a stair up to it (obtain.plan/climb-sealed?), so the tunnel keeps the body's
-;; height; no :chest way, so no look round turns the body off its east heading before the mine starts. :search-worth 5000 stands for a goal's
+;; height; the mass's west face is dirt (no host rock seen, so no look round pays first and walks the body off its east heading) and the
+;; walls of the body's own tunnel are no evidence for a look (cost/look-leg-chance), so the run after an empty one mines on. :search-worth 5000 stands for a goal's
 ;; (get-kit passes its bill's). Should-succeed: the second run reaches the ore, no climb. Should-fail: :search-worth 100 (about one raw_iron's
 ;; own worth) pays no strip leg after the first run, so it counts fruitless, no source; a tunnel line open all the way (card 317311e9) cuts
 ;; nothing, so its run is fruitless though its tunnel took steps.
 {:defaults
  {:tags [:obtain :mine :jobs] :time :any
   :plot {:light :lit :height 10 :length 50 :width 16}
-  :blocks [[:fill [3 -1 3] [46 1 9] "stone"] [:fill [3 2 3] [46 3 9] "bedrock"] [:set [40 0 6] "iron_ore"]]
+  :blocks [[:fill [3 -1 3] [46 1 9] "stone"] [:fill [3 2 3] [46 3 9] "bedrock"] [:fill [3 -1 3] [3 1 9] "dirt"] [:set [40 0 6] "iron_ore"]]
   :body {:at [0.5 0 6.5] :yaw 270 :inventory [["stone_pickaxe" 2] ["torch" 16] ["cobblestone" 16]] :effects [["resistance" 900 4]]}
   :limit-s 400}
  :cases
