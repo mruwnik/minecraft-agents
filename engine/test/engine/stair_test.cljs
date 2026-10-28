@@ -1233,11 +1233,12 @@
       "stone" true 20 :up false
       "stone" false 6 :up false
       "gravel" false 20 :down false
-      "stone" true 9 :up false)))
+      "stone" true 12 :up false)))
 
 (deftest an-unseen-cell-over-the-column-is-cut-from-beside-while-the-side-cut-is-cheaper-than-its-risk
-  (is (true? (stair/undermine-worth? 6)) "6 hp: 0.1 hp expected at 33 s an hp is 3.3 s, over the 2.5 s the side cut adds")
-  (is (false? (settings/with-settings {:jobs.lib.cost.health/hp-seconds 1} #(stair/undermine-worth? 6))) "a cheap hp is not worth the side cut"))
+  (is (true? (stair/undermine-worth? 6)) "6 hp: 0.1 hp expected at 33 s an hp is 3.3 s, over the 2.1 s the side cut adds")
+  (is (false? (settings/with-settings {:jobs.lib.cost.health/hp-seconds 1} #(stair/undermine-worth? 6))) "a cheap hp is not worth the side cut")
+  (is (false? (with-redefs [stair/undermine-settle-ms 3000] (stair/undermine-worth? 6))) "a longer settle makes the side cut dearer"))
 
 (deftest gravel-over-the-bodys-own-column-is-cut-from-beside-so-it-falls-into-the-empty-column
   (async done

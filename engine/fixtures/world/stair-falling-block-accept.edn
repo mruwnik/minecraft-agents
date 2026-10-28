@@ -31,7 +31,7 @@
   ;; Card a9dae429 (Hollin #85): at 7 hp, with a cell behind to stand in, the body cuts the headroom cell (the gravel over it
   ;; is hidden by it) from there, so the gravel drops into the empty column, not onto the body; it digs what fell and
   ;; climbs on with no suffocation (no resistance; a hunger first empties the bar so health stays low: a fed body heals to 12+ in 2 s,
-  ;; where the side cut is not worth its 2.5 s, stair/undermine-worth?)
+  ;; where the side cut is not worth its 2.1 s, stair/undermine-worth?)
   {:name "stair-up-under-gravel-with-room-behind-cuts-it-from-beside"
    :blocks [[:fill [9 3 16] [10 4 16] "air"] [:fill [10 6 16] [10 7 16] "gravel"]]
    :body {:at [10.5 3 16.5] :yaw 270 :effects []}
