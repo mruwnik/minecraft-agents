@@ -113,9 +113,9 @@
 
 (defn prior
   "{:chance :blows :shape} of a flight (which ::flights, the default) or a fight (::fights) with mob-name begun at
-  health (default 20): the posterior mean chance it is caught or goes bad (chance) and of the blows it then takes, the Gamma shape of their mean's uncertainty (blow-chance's width)."
+  health (default 20, read in whole hp: chance's memo keys on it): the posterior mean chance it is caught or goes bad (chance) and of the blows it then takes, the Gamma shape of their mean's uncertainty (blow-chance's width)."
   ([mob-name health] (prior ::flights mob-name health))
   ([which mob-name health]
    (let [counts (get (settings/get settings which) (group-of which mob-name))
          {:keys [blows shape]} (posterior counts)]
-     {:chance (chance counts (or health 20)) :blows blows :shape shape})))
+     {:chance (chance counts (js/Math.round (or health 20))) :blows blows :shape shape})))

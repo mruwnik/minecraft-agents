@@ -278,7 +278,7 @@
         (letfn [(felt [x] (cond-> {:damage (+ (walk-hp walk-q) (max (:damage x) (* rate (:seconds a))) (reduce + 0 blasts))
                                    :hit (max (:hit x) hardest)
                                    :blasts (vec (filter pos? blasts))}
-                            (:shape x) (assoc :shape (cost-fight/sum-shape [[(walk-hp walk-q) nil] [(max (:damage x) (* rate (:seconds a))) (:shape x)]]))))]
+                            (:shape x) (assoc :shape (cost-fight/sum-shape [[(walk-hp walk-q) nil] [(max (cost/small x) (* rate (:seconds a))) (:shape x)]]))))]
           (cond-> (assoc (felt a) :seconds seconds :creepers (vec creepers))
             (:caught a) (assoc :caught (assoc (felt (:caught a)) :chance (:chance (:caught a))))
             (:spent a) (assoc :spent true)

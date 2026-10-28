@@ -348,7 +348,8 @@
     (is (= bow (caught/prior "skeleton" 20)) "one group")
     (is (< (:chance bow) (:chance zombie)) "caught less often than by a zombie")
     (is (< (:blows bow) (:blows zombie)) "and hit fewer times when it is")
-    (is (= zombie (caught/prior "spider" 20)) "a group not counted is priced as the zombie family")))
+    (is (= zombie (caught/prior "spider" 20)) "a group not counted is priced as the zombie family")
+    (is (= (caught/prior "zombie" 13) (caught/prior "zombie" 12.6)) "health read in whole hp, so its memo stays a few keys")))
 
 (deftest spawn-chance-is-zero-where-a-mob-cannot-spawn
   (let [lit (fn [block sky] (fn [_] {:block block :sky sky}))
