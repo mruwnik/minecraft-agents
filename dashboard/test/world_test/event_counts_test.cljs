@@ -213,9 +213,10 @@
                 [(c/scan-line (apply steer-line t0 :started job x0 more)) (c/scan-line (apply steer-line t1 :done job x1 more))])
         rows (c/walk-steers (concat (steer "j1/walk" 1000 0 2000 10) (steer "j1/walk" 3000 10 4000 5)
                                     (steer "j2/walk" 5000 0 6000 8)
-                                    (steer "j3/walk" 7000 0 8000 2)))]
-    (is (= {:walks 2 :walked 23 :straight 13 :ratio 1.77 :median 3} (select-keys (c/walk-detour rows) [:walks :walked :straight :ratio :median]))
-        "out 10 and back 5 is 15 blocks over 5, a straight 8 over 8; a walk under 4 blocks straight is left out")))
+                                    (steer "j3/walk" 7000 0 8000 2)
+                                    (steer "j4/walk" 9000 0 10000 5) (steer "j4/walk" 11000 20 12000 30) (steer "j4/walk" 13000 30 14000 25)))]
+    (is (= {:walks 4 :walked 43 :straight 23 :ratio 1.87 :median 2} (select-keys (c/walk-detour rows) [:walks :walked :straight :ratio :median]))
+        "out 10 and back 5 is 15 blocks over 5, a straight 8 over 8; a walk under 4 blocks straight is left out; a steer starting over 3 blocks from the last end is another walk (5 straight, then out 10 and back 5); the median of 4 walks is the mean of the middle two")))
 
 (defn gap-line [t out & {:keys [width dy sprint] :or {width 2 dy 0 sprint true}}]
   (pr-str {:generation-id "g" :time-ms t :source :job :kind :gap-jump :level :info

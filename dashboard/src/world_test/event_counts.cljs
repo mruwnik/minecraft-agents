@@ -28,7 +28,7 @@
   answer, action or child ran is left out) (cost.danger/::flee-walk-speed, ::flee-stop-s).
   walk-detour: the steers' blocks over the straight line of each go-to walk (value/::detour-factor).
   walk-pace: the steers of go-to's walks (a job id ending /walk) outside a flight: blocks over the steers' own seconds (cost/walk-speed).
-  gap-miss: the miss rate of gap jumps per [width dy sprint] from go-to's :gap-jump events (world-test.gap-miss), probe bodies too.
+  gap-miss: the miss rate of gap jumps per [width dy sprint] from go-to's :gap-jump events (world-test.gap-miss; trial bodies only).
   Pure parts: scan-line, exchange, starts, starts-by-mob, notices, groups, vein-seen, flee-steps, pace-report, walk-steers, walk-report, walk-detour."
   (:require ["fs" :as fs]
             ["path" :as path]
@@ -331,7 +331,9 @@
         straight (reduce + 0 (map second walks))]
     {:walks n :walked (r2 walked) :straight (r2 straight)
      :ratio (when (pos? n) (r2 (/ walked straight)))
-     :median (when (pos? n) (r2 (nth (vec (sort (map #(/ (first %) (second %)) walks))) (quot n 2))))}))
+     :median (when (pos? n)
+               (let [v (vec (sort (map #(/ (first %) (second %)) walks)))]
+                 (r2 (/ (+ (v (quot (dec n) 2)) (v (quot n 2))) 2))))}))
 
 (defn pace-report
   "The pace of the flights of two steps or more among rows (flee-steps): blocks over the steps' own seconds (:bps), and the
@@ -597,8 +599,9 @@
                          (-> (cond-> (fold c (exchange records) (starts records sprint) (notices records))
                                (not (probe? b)) (-> (drowned/fold (drowned/exposure at records) (drowned/meets at records))
                                                     (update :flight-steps #(reduce (fn [m r] (assoc m (:id r) r)) % (flee-steps records)))
-                                                    (update :walk-steers #(reduce (fn [m r] (assoc m (:id r) r)) % (walk-steers records)))))
-                             (update :gap-jumps #(reduce (fn [m r] (assoc m (:id r) (assoc r :t (second (:id r))))) % (gap-miss/rows records)))))
+                                                    (update :walk-steers #(reduce (fn [m r] (assoc m (:id r) r)) % (walk-steers records)))
+                                                    ; probes' fixture jumps are perfect run-ups: they would bias the miss rate down
+                                                    (update :gap-jumps #(reduce (fn [m r] (assoc m (:id r) (assoc r :t (second (:id r))))) % (gap-miss/rows records)))))))
                        (load-counts counts-file) per-agent)]
     (save-counts! counts-file counts)
     counts))
