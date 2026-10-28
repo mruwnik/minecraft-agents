@@ -36,8 +36,8 @@
       (await (run-until-empty eng 60))
       {:eng eng :seen seen :p p}))))
 
-(def short-pile "The field-report pile with 8 of its 24 raw iron: its worth, times the chance of living through the walk past a zombie and back, under what that walk costs an unarmed body."
-  (vec (keep #(case (:slot %) 17 nil 18 (assoc % :count 8) %) dt/death-pile-of-the-field-report)))
+(def short-pile "The field-report pile with 4 of its 24 raw iron: its worth, times the chance of living through the walk past a zombie and back, under what that walk costs an unarmed body."
+  (vec (keep #(case (:slot %) 17 nil 18 (assoc % :count 4) %) dt/death-pile-of-the-field-report)))
 
 (deftest an-unarmed-body-fetches-a-sword-and-a-helmet-before-the-zombie-trip
   (async done
