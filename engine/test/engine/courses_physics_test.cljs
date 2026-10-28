@@ -87,3 +87,23 @@
   (doseq [name ["vine-ledge-drop" "vine-ledge-gap"]]
     (let [r (walk-course name)]
       (is (= :arrived (:status r)) (pr-str name r)))))
+
+;; a stone column with a vine down its west side, the body coming off the column top with speed: a plan that ends in the
+;; vine cell lets go of the body only once it coasts to a stop there (a vine holds the feet's own cell only)
+(deftest a-plan-ending-on-a-vine-leaves-the-body-on-it
+  (let [{:keys [mc physics]} @sp/lib
+        fills [[0 63 10 24 63 22 "grass_block" {}] [9 64 16 9 74 16 "stone" {}] [8 64 16 8 74 16 "vine" {:east true}]]
+        world (sp/world-of fills)
+        phys ((.-Physics physics) mc world)
+        _ (set! (.-playerHalfWidth phys) (sp/body-half))
+        bot (sp/bot-at [9 75 16] [9.9 16.5])
+        _ (set! (.-x (.-velocity (.-entity bot))) -0.2)
+        sim! (fn [controls] (.apply (.simulatePlayer phys (new (.-PlayerState physics) bot (clj->js controls)) world) bot))
+        done (loop [t 0 state (ex/start (sp/plan fills [9 75 16] [8 74 16] [9.9 16.5]) 0)]
+               (let [{:keys [done controls yaw] :as r} (ex/tick ex/policy state (pose-in bot world))]
+                 (if (or done (>= t max-ticks))
+                   done
+                   (do (set! (.-yaw (.-entity bot)) yaw) (sim! controls) (recur (inc t) (:state r))))))]
+    (dotimes [_ 40] (sim! {:forward false :back false :left false :right false :jump false :sprint false :sneak false}))
+    (is (= :arrived (:status done)))
+    (is (:on-climbable (pose-in bot world)) (pr-str (sp/pose-of bot)))))

@@ -545,12 +545,14 @@
   (Math/atan2 (- (- ax x)) (- (- az z))))
 
 (defn climb-hold?
-  "A body off the ground on a climbable above the stand height of a non-climb step: pushing forward there with a block over
-  the exit makes the client climb, so it holds (no forward) and falls to the floor first. On the floor it has nowhere to
-  fall: a drop or gap down from a vine cell walks on."
-  [policy step {:keys [y on-ground on-climbable]}]
+  "A body off the ground on a climbable above the stand height of a non-climb step, outside the step's cell: pushing forward
+  there with a block over the exit makes the client climb, so it holds (no forward) and falls to the floor first. On the
+  floor it has nowhere to fall: a drop or gap down from a vine cell walks on. In the step's cell (a drop onto a vine column)
+  it steers on: the push toward the stand point is what keeps a body that came in with speed from drifting off the vine."
+  [policy step {:keys [y on-ground on-climbable] :as pose}]
   (boolean (and on-climbable
                 (not on-ground)
+                (not (in-cell? step pose))
                 (not (contains? climb-moves (:move step)))
                 (> y (+ (stand-y step) (:climb-settle policy))))))
 
@@ -592,15 +594,26 @@
     :i (if (and pose (> (count steps) 1) (beside-start? (first steps) pose)) 0 (min 1 (max 0 (dec (count steps)))))
     :since 0 :tick 0 :yaw nil}))
 
+(defn coasts-in?
+  "Where a body let go on a climbable coasts to lies in the step's cell: its horizontal speed, clamped to the climbable's
+  most, keeps the airborne inertia a tick, so it moves v/(1 - inertia) more. A vine or ladder holds only the feet's own
+  cell, so a body released drifting toward its edge falls."
+  [step {:keys [x z vx vz]}]
+  (let [coast (fn [v] (/ (max (- constants/ladder-max-speed) (min constants/ladder-max-speed (or v 0)))
+                         (- 1 constants/airborne-inertia)))]
+    (in-cell? step {:x (+ x (coast vx)) :z (+ z (coast vz))})))
+
 (defn arrived?
-  "At the final step: reached, close to its point, and held there: on the ground, on a climbable, or (a final step in a
-  water cell) floating."
+  "At the final step: reached, close to its point, and held there: on the ground, on a climbable coasting to a stop in
+  its cell, or (a final step in a water cell) floating."
   [policy steps i {:keys [x z on-ground on-climbable in-water] :as pose}]
   (let [final (nth steps i)]
     (and (= i (dec (count steps)))
          (reached? policy final pose)
          (<= (dist-xz x z (:px final) (:pz final)) (:arrive-xz policy))
-         (boolean (or on-ground on-climbable (and in-water (:swim final)))))))
+         (boolean (or on-ground
+                      (and on-climbable (coasts-in? final pose))
+                      (and in-water (:swim final)))))))
 
 (defn nearer
   "state with the no-progress clock restarted when the body is nearer the aim than it has been on this step: a slowed

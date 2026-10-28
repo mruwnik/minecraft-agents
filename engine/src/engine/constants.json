@@ -11,6 +11,8 @@
   "clipTolerance": 1e-07,
   "groundSlipperiness": 0.6,
   "groundDrag": 0.91,
+  "airborneInertia": 0.91,
+  "ladderMaxSpeed": 0.15,
   "moveInputScale": 0.98,
   "mobMovementSpeed": {
     "zombie": 0.23,

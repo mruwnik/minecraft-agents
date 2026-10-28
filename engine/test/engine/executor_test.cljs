@@ -229,7 +229,10 @@
       (pose 9.5 64 3.5) :arrived
       (pose 9.2 64 3.5) :arrived
       (pose 9.5 64 3.5 {:on-ground false}) nil
-      (pose 9.5 64 3.5 {:on-ground false :on-climbable true}) :arrived)))
+      (pose 9.5 64 3.5 {:on-ground false :on-climbable true}) :arrived
+      ;; on a vine, drifting toward the cell's edge: let go there, it coasts off the vine and falls
+      (pose 9.2 64 3.5 {:on-ground false :on-climbable true :vx -0.06}) nil
+      (pose 9.2 64 3.5 {:on-ground false :on-climbable true :vx 0.01}) :arrived)))
 
 (deftest final-step-reached-but-far-stays-current
   (let [steps [(step 0 64 3 :start) (step 1 64 3 :walk {:px 1.9 :pz 3.5})]
@@ -846,7 +849,9 @@
     [(step 0 64 3 :start) (step 1 66 3 :walk)] 1 (pose 0.5 64.9 3.5 {:on-ground false :on-climbable true}) true
     ;; on the floor of a vine cell, a step down: there is no lower floor to fall to
     [(step 0 64 3 :start) (step 2 63 3 :gap)] 1 (pose 0.31 64 3.5 {:on-climbable true}) true
-    [(step 0 64 3 :start) (step 1 63 3 :drop)] 1 (pose 0.31 64 3.5 {:on-climbable true}) true))
+    [(step 0 64 3 :start) (step 1 63 3 :drop)] 1 (pose 0.31 64 3.5 {:on-climbable true}) true
+    ;; dropped into the step's own vine cell, drifting off its stand point: it steers back before the vine lets go
+    [(step 0 65 3 :start) (step 1 64 3 :drop)] 1 (pose 1.2 64.9 3.5 {:on-ground false :on-climbable true}) true))
 
 (deftest a-bend-step-is-reached-only-within-its-point
   (let [bend (step 2 64 3 :walk {:bend true :px 2.3 :pz 3.5})]

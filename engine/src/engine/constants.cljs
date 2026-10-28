@@ -17,6 +17,8 @@
 (def step-height "The highest rise a body walks up without a jump." (unchecked-get values "stepHeight"))
 (def gravity "The speed a falling body gains each tick, before air-drag." (unchecked-get values "gravity"))
 (def air-drag "What is left of a body's vertical speed each tick." (unchecked-get values "airDrag"))
+(def airborne-inertia "What is left of a body's horizontal speed each tick off the ground." (unchecked-get values "airborneInertia"))
+(def ladder-max-speed "The most horizontal speed a body on a vine or ladder keeps, blocks a tick." (unchecked-get values "ladderMaxSpeed"))
 (def regen-seconds-per-hp "Seconds a fed body (food 18 or more) takes to regenerate one hp." (unchecked-get values "regenSecondsPerHp"))
 (defn ground-speed
   "Blocks a second a walker on open ground (slipperiness 0.6) settles at with move input `input` and movement_speed attribute
