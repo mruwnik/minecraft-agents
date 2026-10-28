@@ -70,7 +70,7 @@
   Ends :done when :got meets :count (or the call's :least); else condition-failed for the facts :none :wet :refused :own-zone
   :no-shaft :flooded :no-tool :no-torches, nothing-possible for failed tries (:no-drops
   :gave-up :tunnel-length :tunnel-stopped :no-stone-found :descent-stopped :not-back). 0 of :count is never done.
-  Data {:got n :reason r} plus :descent, :tunnel, :left, :lost, :unreached, :ground (with :track-ground), :start-floor-dug (the cell under the start was dug), :cut-blocks (the tunnel and stair cells it dug); text says reason,
+  Data {:got n :reason r} plus :descent, :tunnel, :left, :lost, :unreached, :ground (with :track-ground), :start-floor-dug (the cell under the start was dug), :cut-blocks (the tunnel, stair, branch and side-cut cells it dug); text says reason,
   :got, the stair and the tunnel. Quote: about ::item-s s an item, open-ended.")
 
 (a/defargs args

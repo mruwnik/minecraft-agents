@@ -32,7 +32,7 @@
   - :chest: seen containers that allow :take, known stock withdrawn, unknown stock looked into (nearest first, a few per call).
   - :craft and :smelt: a chain planned from the recipes over what is carried (a table is put down when needed); each step a craft or smelt child.
   - :gather, :hunt, :crops, :search: what a chain lacks, or a raw item itself, is felled, mined, fished, cut or scooped (:gather), hunted (:hunt: leather, raw meat, wool, shearing), cut ripe in a field of its own (:crops: wheat, carrot, potato, beetroot) by one child per round; with :search an unseen block or animal need is searched for (jobs.explore.search; :explore false drops it).
-  A child that brings in nothing three times ends that way (:tried); a mine for an unseen ore that cut new ground looked, so it mines on until the ground counts as barren (base ::barren-ore).
+  A child that brings in nothing three times ends that way (:tried); a mine for an unseen ore that cut new ground looked, so it mines on while another run pays out of the search worth left (gather/strip-on!).
   A bill runs one obtain child per item still missing (not carried or worn), in order, after the furnace material (iron_ingot ..) the missing items need together, which is got in one go and reserved against deposits; each child gets a :spend :job-time of the ::bill-item-s setting. The first child that fails ends the bill with its kind and cause, data {:item the one it stopped at :why}.
 
   A death since the call began starts it again from what is carried: :got counts from the respawn.

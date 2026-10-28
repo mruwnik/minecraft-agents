@@ -17,6 +17,8 @@
             [engine.test-util :as tu]
             [jobs.items.obtain :as obtain]
             [jobs.items.obtain.base :as base]
+            [jobs.items.obtain.plan :as plan]
+            [jobs.lib.cost :as cost]
             [jobs.items.obtain.table :as table]
             [jobs.items.obtain.why :as why]
             [jobs.lib.look :as look]
@@ -437,8 +439,8 @@
         (let [pool (into {} (for [x (range 0 5) y [64 65 66] z [2 3 4 5 6]] [(str x "," y "," z) "water"]))
               blocks (merge pool {"1,64,4" "iron_ore" "3,64,5" "iron_ore" "0,64,6" "iron_ore" "4,64,3" "iron_ore"})
               s (f/start (ore-world blocks [{:name "stone_pickaxe" :count 1}]) [])]
-          ;; barren-ore 0: once the ore is all left, the tunnels after it are not this test's
-          (await (obtain! s {:item "raw_iron" :count 1 :settings {:jobs.items.obtain.base/barren-ore 0}} 200))
+          ;; search-worth 1: no tunnel after the ore is all left pays, so none is this test's
+          (await (obtain! s {:item "raw_iron" :count 1 :search-worth 1} 200))
           (is (every? (set (map :at (filter (comp #{:obtain.gathering} :kind) @(:seen s))))
                       [{:x 1 :y 64 :z 4} {:x 3 :y 64 :z 5} {:x 0 :y 64 :z 6} {:x 4 :y 64 :z 3}])
               "each flooded ore is left for the next, none counted fruitless"))))))
@@ -471,14 +473,20 @@
               "each refused ore is left for the next, none counted as nothing seen")
           (is (not-any? #(= :none-seen (:reason %)) (f/events-of s :waiting))))))))
 
+(defn one-more-run-worth
+  "A search worth at y that pays the strip legs of one more run cutting 32 blocks (16 steps) after the first, not of two."
+  [y]
+  (+ (/ (plan/strip-s cost/torch-gap) (cost/ore-chance (cost/tunnel-ore "iron" {:y y} cost/torch-gap))) (* 1.5 (plan/strip-s 16))))
+
 (deftest an-unseen-ore-is-mined-on-while-each-run-cuts-new-ground
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (loop [[[y dug runs why] & more] [[64 {:cut-blocks 32 :tunnel {:steps 32}} 5 "a run that tunnelled looked at new rock: the gather mines on"]
-                                          [64 {:legs [{:length 6 :stop :no-floor}] :tunnel {:steps 6}} 3 "one whose tunnel only walked open air cut nothing: three end the gather"]
-                                          [64 {} 3 "a run that cut nothing is fruitless: three end the gather"]
-                                          [16 {:cut-blocks 200 :tunnel {:steps 200}} 4 "at y 16 the second 200 blocks with no iron make the ground barren: three more runs end it"]]]
+        (loop [[[y dug worth runs why] & more] [[64 {:cut-blocks 32 :tunnel {:steps 32}} 1e5 5 "a run that tunnelled looked at new rock: the gather mines on while the next pays"]
+                                                [64 {:legs [{:length 6 :stop :no-floor}] :tunnel {:steps 6}} 1e5 3 "one whose tunnel only walked open air cut nothing: three end the gather"]
+                                                [64 {} 1e5 3 "a run that cut nothing is fruitless: three end the gather"]
+                                                [64 {:cut-blocks 32 :tunnel {:steps 32}} 1 3 "a run after which no strip leg pays is fruitless: three end the gather"]
+                                                [16 {:cut-blocks 32 :tunnel {:steps 32}} (one-more-run-worth 16) 4 "the second run spends what a third would need: three more runs end it"]]]
           (let [s (f/start (-> (ore-world {} [{:name "stone_pickaxe" :count 1} {:name "torch" :count 16}]) (assoc :floor [-30 -30 40 30]) (assoc-in [:self :pos :y] y)) [f/own-zone])
                 calls (atom 0)
                 eng (assoc-in (:eng s) [:jobs 'jobs.gather.mine :round]
@@ -487,7 +495,7 @@
                                 (if-not (:dug (ctx/mem c))
                                   (do (swap! calls inc) (ctx/update-mem! c assoc :dug true) :continue)
                                   (ctx/end c :nothing-possible {:reason :tunnel-length} (merge {:got 0 :reason :tunnel-length} dug)))))]
-            (await (obtain! (assoc s :eng eng) {:item "raw_iron" :ways #{:craft :smelt :gather} :explore true} 60))
+            (await (obtain! (assoc s :eng eng) {:item "raw_iron" :ways #{:craft :smelt :gather} :explore true :search-worth worth} 60))
             (is (= runs (min 5 @calls)) why))
           (when more (recur more)))))))
 

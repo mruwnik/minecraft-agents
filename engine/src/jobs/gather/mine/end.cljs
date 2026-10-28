@@ -88,6 +88,8 @@
   (ctx/update-mem! c assoc :left (into {} (map (juxt :pos :count))
                                        (still-lying c (mapv (fn [[pos n]] {:pos pos :count n}) (:left (ctx/mem c)))))))
 
+(defn cut-blocks "The blocks a child dig-for run's ending r cut (its data's :cut-blocks)." [r] (:cut-blocks (:data r) 0))
+
 (defn finish!
   "End the dig (end-run) with the outcome in memory (:reason, :end-cause)."
   [c]

@@ -4,9 +4,9 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.game :as game]
-            [jobs.items.obtain.base :refer [barren-ore explore-opts own-worth search-names search-scan-radius search-worth site-radius tried! ways-of]]
+            [jobs.items.obtain.base :refer [explore-opts own-worth search-names search-scan-radius search-worth site-radius tried! ways-of]]
             [jobs.items.obtain.need :refer [climbs-first? gather-viable? pickaxe-first? tree? light-settling? tools-wanted torch-due trees-unreachable?]]
-            [jobs.items.obtain.plan :refer [gather-plan search-way]]
+            [jobs.items.obtain.plan :refer [gather-plan search-way strip-s]]
             [jobs.items.obtain.seen :refer [animal-cell animals-of approach-bound gather-carried gather-slot hunt-worth lead-args seen-of shears-source with-avoid with-block with-count]]
             [jobs.lib.breath :as breath]
             [jobs.lib.cost :as cost]
@@ -303,29 +303,20 @@
       :continue
       (do (ctx/update-mem! c (fn [m] (-> m (update :gather dissoc :light) (assoc-in [:gather :lit cell] (ctx/now c))))) :again))))
 
-(defn ore-resource
-  "The jobs.lib.cost base-rates resource of need's ore block (\"iron\" for deepslate_iron_ore), nil for none."
-  [need]
-  (some-> (:block (:args need)) (str/replace #"^deepslate_" "") (str/replace #"_ore$" "")))
-
-(defn laid-bare
-  "The ore of need's block that n blocks cut at the body's height lay bare on average (cost/tunnel-ore)."
-  [c need n]
-  (* n (cost/tunnel-ore (ore-resource need) (update (u/self-pos c) :y js/Math.floor) 1)))
-
 (defn strip-on!
   "A mine for an ore not seen that cut n blocks of new ground and found none looked at new rock: the next run mines on
-  from where it stands, not counted fruitless, until the ore the blocks cut in a row without a find would have laid bare
-  (laid-bare at each run's height, memory [:gather :dug key]) reaches ::barren-ore, or at once where the ore has no placement;
-  info obtain.strip-on. :again, else false."
+  from where it stands, not counted fruitless, while search-way still tunnels and its legs pay out of the search worth
+  left once the blocks cut in a row without a find (memory [:gather :dug key]) are paid (plan/strip-s of their steps); info
+  obtain.strip-on. :again, else false."
   [c need n]
-  (let [{:keys [blocks ore]} (get-in (ctx/mem c) [:gather :dug (:key need)])
+  (let [{:keys [blocks spent]} (get-in (ctx/mem c) [:gather :dug (:key need)])
         total (+ n (or blocks 0))
-        bare (laid-bare c need n)
+        spent (+ (strip-s (/ n 2)) (or spent 0)) ; a 1x2 tunnel cuts 2 blocks a step
+        way (search-way (assoc-in c [:args :search-worth] (- (search-worth c) spent)) need)
         y (js/Math.floor (:y (u/self-pos c)))]
-    (ctx/update-mem! c #(-> % (assoc-in [:gather :dug (:key need)] {:blocks total :ore (+ bare (or ore 0))}) (update :gather dissoc :climb-heading)))
-    (if (or (not (pos? bare)) (>= (+ bare (or ore 0)) (barren-ore)))
-      (do (ctx/update-mem! c assoc-in [:gather :why] (str "cut " total " blocks down to y " y " and saw no " (:key need) ": too little there to mine on"))
+    (ctx/update-mem! c #(-> % (assoc-in [:gather :dug (:key need)] {:blocks total :spent spent}) (update :gather dissoc :climb-heading)))
+    (if-not (and (= :tunnel (:way way)) (js/isFinite (:cost way)))
+      (do (ctx/update-mem! c assoc-in [:gather :why] (str "cut " total " blocks down to y " y " and saw no " (:key need) ": another run is worth less than it costs"))
           false)
       (do (child/progress! c :gather)
           (ctx/emit! c :obtain.strip-on :info

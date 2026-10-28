@@ -21,8 +21,7 @@
    :jobs.items.obtain.base/gather-need-s {:default 60 :doc "Guess of the seconds one raw need takes to gather: a walk, a fell or a dig (the quote)." :spec (a/num-in 0 nil)}
    :jobs.items.obtain.base/loose-radius {:default 16 :doc "Blocks within which a loose item of the wanted kind is picked up (the :loose way)." :spec (a/num-in 0 32)}
    :jobs.items.obtain.base/bill-item-s {:default 2700 :doc "Seconds each item of a bill may take (its obtain child's :spend :job-time)." :spec (a/num-in 0 nil)}
-   :jobs.items.obtain.base/site-radius {:default 96 :doc "How far from the :center cell (a build's site) a search for a raw need goes at most." :spec (a/num-in 1 nil)}
-   :jobs.items.obtain.base/barren-ore {:default 20 :doc "Ore blocks the rock a mine for an unseen ore cut in a row with no find would be expected to lay bare (jobs.lib.cost base rates at its height) before the gather counts its runs fruitless again." :spec (a/num-in 0 nil)}})
+   :jobs.items.obtain.base/site-radius {:default 96 :doc "How far from the :center cell (a build's site) a search for a raw need goes at most." :spec (a/num-in 1 nil)}})
 (defn max-inspections [] (settings/get settings :jobs.items.obtain.base/max-inspections))
 (defn near-chest [] (settings/get settings :jobs.items.obtain.base/near-chest))
 (defn far-chest [] (settings/get settings :jobs.items.obtain.base/far-chest))
@@ -36,7 +35,6 @@
 (defn loose-radius [] (settings/get settings :jobs.items.obtain.base/loose-radius))
 (defn bill-item-s [] (settings/get settings :jobs.items.obtain.base/bill-item-s))
 (defn site-radius [] (settings/get settings :jobs.items.obtain.base/site-radius))
-(defn barren-ore [] (settings/get settings :jobs.items.obtain.base/barren-ore))
 
 (defn names-of [{:keys [item any-of]}]
   (vec (if item [item] any-of)))
