@@ -7,7 +7,7 @@
 (def doc
   "For testing readiness live: binds a readiness checker and does nothing else. Its safe? is ready/safe-at the cell
   :at (here without it), or ready/safe-if-lit with :lit?; it waits with the checker's reason until that holds. Once
-  started it emits an info job.ready-probe and ends done.")
+  started it emits an info job.ready-probe with the checker's status (:status) and ends done.")
 
 (a/defargs args
   {:at {:doc "the place the job would go to, [x y z] or {:x :y :z}" :spec a/position? :default nil}
@@ -33,5 +33,5 @@
 (defn quote-of [_c] {:uses {}})
 
 (defn ^:async round [c]
-  (ctx/emit! c :job.ready-probe :info {:text "ready-probe started" :attention :notice})
+  (ctx/emit! c :job.ready-probe :info {:text "ready-probe started" :attention :notice :status (safe? c)})
   (ctx/end c :done nil))

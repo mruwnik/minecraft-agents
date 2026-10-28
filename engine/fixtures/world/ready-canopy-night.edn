@@ -1,13 +1,14 @@
 ;; Card 6e2a51d1: readiness (jobs.debug.ready-probe, safe-at) at night. A target under a tree canopy is exposure (sky light under leaves reads 9-14,
 ;; but the sky reaches down the column and dawn lifts it); a target under a stone slab is not (no sky light reaches it: only threats count).
 ;; Surface plot at real night; a persistent oak_leaves slab (2 layers) or a stone slab 4 up over x 18..28, z 12..20 (the target [22 0 16]; the body stands in the open at x 12.5), no light blocks under the leaves, glowstone in the stone slab.
+;; The probe stays 120 s (:stay-s): readiness prices a stay by its expected damage (price/priced), and the 10 s default goes ahead at night.
 ;; Should-succeed: the probe starts for a target under the stone slab. Should-fail: under the leaves slab it waits :exposed and never starts.
 {:defaults
  {:tags [:readiness :night :light]
   :time :night :time-why :night-light
   :plot {:light :sky :floor "grass_block" :height 10}
   :body {:at [12.5 0 16.5] :settle-s 2 :effects [["resistance" 900 4]]}
-  :act [[:job (jobs.debug.ready-probe {:at #at [22 0 16]})]]
+  :act [[:job (jobs.debug.ready-probe {:at #at [22 0 16] :stay-s 120})]]
   :limit-s 70}
  :cases
  [{:name "under-leaves-the-probe-waits-exposed"

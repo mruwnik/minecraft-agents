@@ -18,8 +18,22 @@
    :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
          [:job (jobs.survival.sleep {:bed #at [2 0 8] :open-bed false})]]
    :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 60}]}
+  ;; In the pitch-dark tunnel the body makes out about 5 cells, so it walks the hall (a look every 7 cells) before it lies down.
   {:name "a-bed-in-a-dark-sealed-hall-is-open"
    :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
+         [:rcon "execute positioned $X $Y $Z run tp $BODY ~9 ~ ~8 -90 0"] [:until-pos {:x-min 8.5 :x-max 10.5 :z-min 7 :z-max 10} 10]
+         [:job (jobs.movement.look-around)] [:await {:source :job :kind :completed :after-previous true} 30]
+         [:rcon "execute positioned $X $Y $Z run tp $BODY ~16 ~ ~8 -90 0"] [:until-pos {:x-min 15.5 :x-max 17.5 :z-min 7 :z-max 10} 10]
+         [:job (jobs.movement.look-around)] [:await {:source :job :kind :completed :after-previous true} 30]
+         [:rcon "execute positioned $X $Y $Z run tp $BODY ~23 ~ ~8 -90 0"] [:until-pos {:x-min 22.5 :x-max 24.5 :z-min 7 :z-max 10} 10]
+         [:job (jobs.movement.look-around)] [:await {:source :job :kind :completed :after-previous true} 30]
+         [:rcon "execute positioned $X $Y $Z run tp $BODY ~30 ~ ~8 -90 0"] [:until-pos {:x-min 29.5 :x-max 31.5 :z-min 7 :z-max 10} 10]
+         [:job (jobs.movement.look-around)] [:await {:source :job :kind :completed :after-previous true} 30]
+         [:rcon "execute positioned $X $Y $Z run tp $BODY ~37 ~ ~8 -90 0"] [:until-pos {:x-min 36.5 :x-max 38.5 :z-min 7 :z-max 10} 10]
+         [:job (jobs.movement.look-around)] [:await {:source :job :kind :completed :after-previous true} 30]
+         [:rcon "execute positioned $X $Y $Z run tp $BODY ~43 ~ ~8 -90 0"] [:until-pos {:x-min 42.5 :x-max 44.5 :z-min 7 :z-max 10} 10]
+         [:job (jobs.movement.look-around)] [:await {:source :job :kind :completed :after-previous true} 30]
+         [:rcon "execute positioned $X $Y $Z run tp $BODY ~3 ~ ~8 -90 0"] [:until-pos {:x-min 2.5 :x-max 4.5 :z-min 7 :z-max 10} 10]
          [:job (jobs.survival.sleep {:bed #at [2 0 8] :open-bed false})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :bed-open}} :within-s 60 :of-job true}
             {:no-event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :for-s 40}]}]}

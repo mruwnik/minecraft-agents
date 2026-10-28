@@ -31,12 +31,13 @@
    :after [[:item "porkchop" 0]]}
   ;; Card 148371ab: the same rule under the night sky. A 7x7 yard walled 6 high and open above: no dark cell beyond 24 blocks,
   ;; so readiness lets the probe start at a dark yard cell; with a 2-wide gap in the wall the dark ground outside reaches it.
+;; The probe stays 120 s: a 10 s stay goes ahead priced (price/priced).
   {:name "probe-starts-in-a-walled-yard-under-the-night-sky"
    :time :night :time-why :night-light
    :plot {:light :sky :height 8}
    :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 900 4]]}
    :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
-         [:job (jobs.debug.ready-probe {:at #at [14 0 14]})]]
+         [:job (jobs.debug.ready-probe {:at #at [14 0 14] :stay-s 120})]]
    :expect [{:event {:source :job :kind :job.ready-probe} :within-s 40 :of-job true}]
    :limit-s 90}
   {:name "probe-waits-in-a-yard-with-a-gap-under-the-night-sky"
@@ -45,7 +46,7 @@
    :blocks [[:fill [12 0 12] [20 5 20] "stone"] [:fill [13 0 13] [19 5 19] "air"] [:fill [16 0 12] [17 1 12] "air"]]
    :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 900 4]]}
    :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
-         [:job (jobs.debug.ready-probe {:at #at [14 0 14]})]]
+         [:job (jobs.debug.ready-probe {:at #at [14 0 14] :stay-s 120})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :job.ready-probe} :for-s 30 :of-job true}]
    :limit-s 110}]}
