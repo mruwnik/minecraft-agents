@@ -44,7 +44,7 @@
             [jobs.movement.go-to.climb-route :as climb-route]
             [jobs.movement.go-to.route-ways :as route-ways]
             [jobs.movement.go-to.escalate-choose :refer [dig-left-s range-opts cheaper-fill climb-on? dive-climb-on? dive? escalate-reason? escalate? fetch-tool? gap-fill
-                                                         goal-way dig-leg dig-way drop-fill price frontier-way gap-dig gap-walled? goal-lava? leg-ends goal-walled? own-stair route-cells shelter-exit? skips sprint-only?
+                                                         goal-way dig-leg dig-way drop-fill out-of-sight? price frontier-way gap-dig gap-walled? goal-lava? leg-ends goal-walled? own-stair route-cells shelter-exit? skips sprint-only?
                                                          route-owner route-slice routes-searching! searching? searching-ends keep-routes! forget-routes! search-opts]]
             [jobs.movement.go-to.holes :refer [forget-dug-own! hole-tag may-dig-fn note-holes! own-cut-fn own-fn own-holes own-placed-fn planned-cells with-own-pen]]
             [jobs.movement.go-to.result :as end]
@@ -288,8 +288,8 @@
         into? (or (goal-walled? c result shut?) (and gap? (not @shut?)))
         ;; a goal over or ringed by lava is refused: no dig, in or out, makes it acceptable
         lava-goal? (and (= :goal-enclosed (some-> (:reason result) keyword)) (goal-lava? (:primitives c) goal))
-        ;; a shut-in body (a pit, a plateau it cannot walk off) whose goal is walled in digs straight into it when it can
-        dig-in? (and (not into?) (or gap? (= :goal-enclosed (some-> (:reason result) keyword))))
+        ;; a shut-in body (a pit, a plateau it cannot walk off) whose goal is walled in (or out of sight) digs straight into it when it can
+        dig-in? (and (not into?) (or gap? (= :goal-enclosed (some-> (:reason result) keyword)) (out-of-sight? c result)))
         ;; a buried body whose plan ran out of land read the rock round it as rock: to a goal no higher than it is
         ;; across (a stair climbs to that) it digs toward it leg by leg, the last one into it; else the ways out as before
         rock-dig? (and (#{:exhausted :start-enclosed} (some-> (:reason result) keyword)) (not (:edge-mode (ctx/mem c)))

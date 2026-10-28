@@ -220,17 +220,25 @@
         (when (some shut? (range 1 (inc (:steps e))))
           e)))))
 
+(defn out-of-sight?
+  "Whether a give-up with result under :see is a search that ran out of land (:exhausted): no stand it reached sees the
+  block, so a stand in range that sees only rock leaves the goal walled in."
+  [c result]
+  (boolean (and (= :exhausted (some-> (:reason result) keyword)) (goal-aim/see-cell c))))
+
 (defn goal-walled?
   "Whether a give-up with result is a free body's (not escape/walk-enclosed?) whose goal the planner proved walled in, or whose
   search spent its node budget (:budget) with the body within budget-near of the goal (:goal-left): a goal that close
-  with no whole way found is walled off, whatever the flood could not prove. The ways that change the world run toward
-  the goal (goal-way). shut?: a delay of escape/walk-enclosed?, when the caller has one."
+  with no whole way found is walled off, whatever the flood could not prove, or one out-of-sight?. The ways
+  that change the world run toward the goal (goal-way). shut?: a delay of escape/walk-enclosed?, when the caller has one."
   ([c result] (goal-walled? c result (delay (escape/walk-enclosed? c))))
   ([c result shut?]
-   (boolean
-    (and (or (= :goal-enclosed (some-> (:reason result) keyword))
-             (and (= :budget (some-> (:reason result) keyword)) (some-> (:goal-left result) (<= (budget-near)))))
-         (not @shut?)))))
+   (let [reason (some-> (:reason result) keyword)]
+     (boolean
+      (and (or (= :goal-enclosed reason)
+               (and (= :budget reason) (some-> (:goal-left result) (<= (budget-near))))
+               (out-of-sight? c result))
+           (not @shut?))))))
 
 (defn gap-walled?
   "Whether a give-up with result is one whose only way on is a gap jump the walker refuses (a low ceiling, a
