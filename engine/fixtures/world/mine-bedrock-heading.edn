@@ -20,14 +20,13 @@
    :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :count 1 :level false :heading :west :tunnel-length 6 :radius 8 :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 0 :stop :unbreakable :length 0}} :within-s 120 :of-job true}]
    :after [[:item "raw_iron" 0]]}
-  {:name "stair-down-to-a-bedrock-floor-ends-without-turning"
-   ;; should fail to dig stone (card 54afcf98): dirt y -1..2 over bedrock; the stair down from the middle meets bedrock under
-   ;; its next step, the floor on every heading, and ends there: no turn, no move to another spot
+  {:name "stair-down-onto-bedrock-above-the-world-floor-turns"
+   ;; should fail to dig stone (card 2ef87ad4): dirt y -1..2 over bedrock; the stair down from the middle meets bedrock under
+   ;; its next step above the world's floor, where another heading may find stone: it turns before it ends
    :plot {:height 12 :floor "dirt"}
    :blocks [[:fill [0 -2 0] [31 -2 31] "bedrock"] [:fill [0 0 0] [31 2 31] "dirt"] [:fill [0 3 8] [12 3 24] "air"]]
    :body {:at [16.5 3 16.5] :yaw 90 :inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
    :act [[:job (jobs.gather.dig-for {:torches false :block "stone" :count 2 :tunnel-length 4})]]
-   :expect [{:event {:source :job :kind :stopped :data {:got 0 :reason :no-stone-found}} :within-s 150 :of-job true}
-            {:no-event {:source :job :kind :mine.turned} :for-s 150 :until {:source :job :kind #{:completed :stopped}}}
-            {:no-event {:source :job :kind :mine.moved} :for-s 150 :until {:source :job :kind #{:completed :stopped}}}]
+   :expect [{:event {:source :job :kind :mine.turned} :within-s 150}
+            {:event {:source :job :kind :stopped :data {:got 0 :reason :no-stone-found}} :within-s 150 :of-job true}]
    :after [[:item "cobblestone" 0]]}]}

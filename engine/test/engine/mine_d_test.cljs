@@ -561,17 +561,33 @@
     (is (= "west" (heading {})) "an open heading is kept")
     (is (nil? (heading {"-1,65,0" "bedrock"})) "bedrock at head height one block west: the dig picks its heading anew")))
 
-(deftest a-stair-down-to-the-bedrock-floor-ends-there-without-turning
-  ;; the floor is bedrock on every heading: no turn finds a way down
+(defn ^:async bedrock-stair
+  "gather.mine for stone from y -60 down through dirt over bedrock at the given heights: the setup map once it ended."
+  [bedrock-ys]
+  (let [s (start {:world {:blocks (merge (cells "dirt" (range -8 9) (range -63 -60) (range -8 9)) (cells "bedrock" (range -8 9) bedrock-ys (range -8 9)))
+                          :drops cobble :yaw 90 :self {:pos [0.5 -60 0.5]} :inventory [{:name "stone_pickaxe" :count 1}]}})]
+    (core/submit! (:eng s) (spec {:block "stone" :count 2 :tunnel-length 4}) {})
+    (await (run-ticks s 300))
+    s))
+
+(deftest a-stair-down-to-the-worlds-bedrock-floor-ends-there-without-turning
+  ;; y -64 is bedrock on every heading: no turn finds a way down
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start {:world {:blocks (merge (cells "bedrock" (range -8 9) (range 55 61) (range -8 9)) (cells "dirt" (range -8 9) (range 61 64) (range -8 9)))
-                                :drops cobble :yaw 90 :inventory [{:name "stone_pickaxe" :count 1}]}})]
-          (core/submit! (:eng s) (spec {:block "stone" :count 2 :tunnel-length 4}) {})
-          (await (run-ticks s 300))
+        (let [s (await (bedrock-stair [-64]))]
           (is (finished? s))
-          (is (= :unbreakable (get-in (done-event s) [:descent :stop])) (pr-str (done-event s)))
+          (is (#{:unbreakable :not-loaded} (get-in (done-event s) [:descent :stop])) (pr-str (done-event s)))
           (is (empty? (events-of s :mine.turned)) (pr-str (map :text (events-of s :mine.turned))))
           (is (empty? (events-of s :mine.moved)))
+          (is (= :no-stone-found (:reason (done-event s)))))))))
+
+(deftest a-stair-down-onto-bedrock-above-the-worlds-floor-turns
+  ;; the ragged layer: stone may lie beside the bedrock cell, on another heading
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (bedrock-stair [-64 -62]))]
+          (is (finished? s))
+          (is (seq (events-of s :mine.turned)))
           (is (= :no-stone-found (:reason (done-event s)))))))))

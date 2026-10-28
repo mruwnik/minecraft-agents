@@ -10,6 +10,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.stair-time :as stair-time]
+            [jobs.lib.places :as places]
             [jobs.lib.price :as price]
             [jobs.lib.escape :as escape]
             [jobs.gather.shaft-descent :refer [pick-shaft xyz]]
@@ -296,8 +297,9 @@
           (ctx/update-mem! c #(-> % (update :children dissoc :stair) (update :descent (fn [d] (-> d (dissoc :top :at) (update :restairs (fnil inc 0)))))))
           :again)
       :else (let [stop (or (:reason res) :declined)
-                  ;; bedrock under the next step is the world's floor, the same on every heading: the stair is done
-                  turnable? (not (and (= :unbreakable stop) (some-> (:cell res) (get 1) (< (get (:at res) 1)))))]
+                  ;; the world's lowest layer is bedrock on every heading, and nothing lies under it: the stair is done
+                  ;; (above it, in the ragged layer, a turn may find stone)
+                  turnable? (not (and (#{:unbreakable :not-loaded} stop) (some-> (:cell res) (get 1) (<= places/min-y))))]
               (or (when (and turnable? (heading-stops stop) (turn-heading! c stop)) :again)
                   (when (and turnable? (blocked-start? c stop)) (await (move-stair! c stop)))
                   (do (ctx/update-mem! c update :descent assoc :stop stop)
