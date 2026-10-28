@@ -7,6 +7,12 @@
 
 (def prior "The educated guess ::escape-prior starts from, which counted rows add to." {:escapes 1 :animal-s 300})
 
+(defn row
+  "The row of a run of animals animals watched secs seconds at gaps gaps with escaped of them out at the end: an animal out counts
+  half the watch (it left at a uniform time), one inside all of it, times the gaps."
+  [animals secs escaped gaps]
+  {:escapes escaped :animal-s (* gaps (+ (* (- animals escaped) secs) (* escaped secs 0.5)))})
+
 (defn fold
   "counts with rows {run-id {:escapes :animal-s}} merged into :pen-escapes; a row already there stays."
   [counts rows]

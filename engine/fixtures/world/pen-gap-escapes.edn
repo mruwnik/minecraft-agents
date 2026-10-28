@@ -1,0 +1,38 @@
+;; Card 7650bc63: counts for jobs.lib.cost.pen ::escape-prior (node tools/event-counts.mjs pen-escapes): cows in a fence ring with
+;; one cell missing, no body job, watched 30 s (600 s and 120 s emptied the rings: every cow was out, no rate in it). After it, the cows still inside the ring and the cows anywhere on the plot are
+;; counted (evidence "count K"); escapes = N - K. A cow that walked out may wander back, so a run reads slightly low.
+;; Ring x 18..24, z 13..19, inside 19..23 x 14..18, gap at [18 0 16]. The body waits far from the pen and does nothing.
+;; The control case closes the gap: its cow must stay inside (the counts are real, not a box or tag artefact).
+;; Should-succeed: all four cases pass (the checks only count). Should-fail: none; the result is the counts, not a pass.
+{:defaults
+ {:tags [:animals :pen :measure]
+  :time :any
+  :plot {:floor "grass_block" :height 8 :light :lit}
+  :blocks [[:fill [18 0 13] [24 0 19] "oak_fence"] [:fill [19 0 14] [23 0 18] "air"] [:set [18 0 16] "air"]]
+  :body {:at [4.5 0 4.5] :effects [["resistance" 900 4]]}
+  :limit-s 100}
+ :cases
+ [{:name "control-closed-1-cow"
+   :blocks [[:fill [18 0 13] [24 0 19] "oak_fence"] [:fill [19 0 14] [23 0 18] "air"]]
+   :act [[:summon "cow" [21.5 0 16.5] "{PersistenceRequired:1b}"] [:wait-s 30]]
+   :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]]}
+  {:name "gap-1-cow"
+   :act [[:summon "cow" [21.5 0 16.5] "{PersistenceRequired:1b}"] [:wait-s 30]]
+   :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] [:<= 99]]
+           [:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] [:>= 0]]]}
+  {:name "gap-2-cows"
+   :act [[:summon "cow" [20.5 0 15.5] "{PersistenceRequired:1b}"] [:summon "cow" [22.5 0 17.5] "{PersistenceRequired:1b}"] [:wait-s 30]]
+   :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] [:<= 99]]
+           [:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] [:>= 0]]]}
+  {:name "gap-4-cows"
+   :act [[:summon "cow" [20.5 0 15.5] "{PersistenceRequired:1b}"] [:summon "cow" [22.5 0 17.5] "{PersistenceRequired:1b}"]
+         [:summon "cow" [20.5 0 17.5] "{PersistenceRequired:1b}"] [:summon "cow" [22.5 0 15.5] "{PersistenceRequired:1b}"] [:wait-s 30]]
+   :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] [:<= 99]]
+           [:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] [:>= 0]]]}
+  {:name "gap-8-cows"
+   :act [[:summon "cow" [19.5 0 14.5] "{PersistenceRequired:1b}"] [:summon "cow" [21.5 0 14.5] "{PersistenceRequired:1b}"]
+         [:summon "cow" [23.0 0 14.5] "{PersistenceRequired:1b}"] [:summon "cow" [20.5 0 16.5] "{PersistenceRequired:1b}"]
+         [:summon "cow" [22.5 0 16.5] "{PersistenceRequired:1b}"] [:summon "cow" [19.5 0 18.0] "{PersistenceRequired:1b}"]
+         [:summon "cow" [21.5 0 18.0] "{PersistenceRequired:1b}"] [:summon "cow" [23.0 0 18.0] "{PersistenceRequired:1b}"] [:wait-s 30]]
+   :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] [:<= 99]]
+           [:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] [:>= 0]]]}]}

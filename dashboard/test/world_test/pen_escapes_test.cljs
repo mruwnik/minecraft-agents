@@ -12,3 +12,8 @@
 (deftest a-row-folded-once-stays
   (is (= {:pen-escapes {"a" {:escapes 1 :animal-s 600}}}
          (p/fold {:pen-escapes {"a" {:escapes 1 :animal-s 600}}} {"a" {:escapes 5 :animal-s 1}}))))
+
+(deftest an-escaped-animal-counts-half-the-watch
+  (is (= {:escapes 1 :animal-s 2100} (p/row 4 600 1 1)))
+  (is (= {:escapes 0 :animal-s 2400} (p/row 4 600 0 1)))
+  (is (= {:escapes 0 :animal-s 4800} (p/row 4 600 0 2))))

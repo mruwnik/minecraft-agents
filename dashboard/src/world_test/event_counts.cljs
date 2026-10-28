@@ -534,7 +534,7 @@
        (sort-by :t)
        vec))
 
-(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | walk-pace | gap-miss | way-on | spot-returns | field-passes | arrow-shots | caught-flights | vein-seen | water-lags | surface-heights | resight | wall-sides | pen-escapes [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N] [--difficulty D]
+(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | walk-pace | gap-miss | way-on | spot-returns | field-passes | arrow-shots | caught-flights | vein-seen | water-lags | surface-heights | resight | wall-sides | pen-escapes [--run ID --animals N --secs S --escaped E] [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N] [--difficulty D]
   every command first folds the logs into the counts file (default worlds/test/priors-counts.edn), then reports from the file; --since-ms keeps the rows of fights started after it.")
 
 (defn- parse-args [argv]
@@ -546,6 +546,10 @@
       "--since-ms" (recur (rest more) (assoc o :since-ms (js/parseFloat (first more))))
       "--sprint" (recur (rest more) (assoc o :sprint (js/parseFloat (first more))))
       "--stride" (recur (rest more) (assoc o :stride (js/parseInt (first more))))
+      "--run" (recur (rest more) (assoc o :run (first more)))
+      "--animals" (recur (rest more) (assoc o :animals (js/parseInt (first more))))
+      "--secs" (recur (rest more) (assoc o :secs (js/parseFloat (first more))))
+      "--escaped" (recur (rest more) (assoc o :escaped (js/parseInt (first more))))
       "--difficulty" (recur (rest more) (assoc o :difficulty (js/parseInt (first more))))
       (recur more (update o :pos (fnil conj []) a)))))
 
@@ -580,7 +584,7 @@
   "argv (array) -> promise of the exit code. open-chunks: tools/event-counts.mjs's reader of the recorded chunks; seen: its
   reader of the seen memory files (.load file, .stateName id)."
   [argv open-chunks ^js seen]
-  (let [{[cmd] :pos :keys [agents counts since-ms sprint stride difficulty] :or {since-ms 0 sprint 5.6 stride 1 difficulty 1}} (parse-args (vec (array-seq argv)))
+  (let [{[cmd] :pos :keys [agents counts since-ms sprint stride difficulty run animals secs escaped] :or {since-ms 0 sprint 5.6 stride 1 difficulty 1}} (parse-args (vec (array-seq argv)))
         repo (or js/process.env.WORLD_TEST_REPO ".")
         agents (or agents (path/join repo "worlds" "test" "agents"))
         folded (when (#{"fold" "creeper-exchange" "flight-starts" "notice-rate" "drowned-meets" "flee-pace" "walk-pace" "gap-miss"} cmd)
@@ -619,8 +623,10 @@
                       (save-counts! file folded)
                       (println (pr-str (wall-sides/report (:walls folded))))
                       0)
-       "pen-escapes" (let [file (or counts (path/join repo "worlds" "test" "priors-counts.edn"))]
-                       (println (pr-str (pen-escapes/report (:pen-escapes (load-counts file)))))
+       "pen-escapes" (let [file (or counts (path/join repo "worlds" "test" "priors-counts.edn"))
+                           added (if run (pen-escapes/fold (load-counts file) {run (pen-escapes/row animals secs escaped 1)}) (load-counts file))]
+                       (when run (save-counts! file added))
+                       (println (pr-str (pen-escapes/report (:pen-escapes added))))
                        0)
        "spot-returns" (do (println (pr-str (spot-returns/count-in agents))) 0)
        "field-passes" (do (println (pr-str (field-passes/count-in agents probe?))) 0)

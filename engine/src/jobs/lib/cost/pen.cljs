@@ -8,8 +8,8 @@
             [jobs.lib.cost.value :as value]))
 
 (a/defargs settings
-  {::escape-prior {:default {:escapes 1 :animal-s 300}
-                   :doc "Gamma prior of the rate an animal walks out through one fence gap: :escapes over :animal-s animal-seconds, the :setting of node tools/event-counts.mjs pen-escapes over the :pen-escapes rows of worlds/test/priors-counts.edn, which add their counts to this guess as pseudo-counts. The guess: vanilla's idle passive mob starts a stroll about every 120 ticks (6 s) to a spot within 10 blocks, most of them outside a small pen, and a few of those paths find the gap; one escape in 5 minutes, worth one pseudo-escape (wide). Escapes grow with the herd."
+  {::escape-prior {:default {:escapes 26 :animal-s 765}
+                   :doc "Gamma prior of the rate an animal walks out through one fence gap: :escapes over :animal-s animal-seconds, the :setting of node tools/event-counts.mjs pen-escapes over the :pen-escapes rows of worlds/test/priors-counts.edn: the educated guess of 1 per 300 animal-seconds plus the fixture pen-gap-escapes (cows in a 5x5 ring with one gap, 30 s watches: 25 of 28 cows out, 465 animal-s; 7 of 8 alone and 18 of 20 in fours, so the chance does not grow with the herd and its escapes do). An escaped animal counts half the watch."
                    :spec (a/map-with {:escapes a/pos-num? :animal-s a/pos-num?})}
    ::pass-gap-s {:default 1200 :spec (a/num-in 0 nil)
                  :doc "Seconds a gap left now stays open until the next pass mends it: a Minecraft day, a proxy (no pen keeps a pass schedule or a record of its last pass)."}})
