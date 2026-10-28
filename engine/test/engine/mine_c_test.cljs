@@ -12,6 +12,7 @@
             [engine.fake.raw-world :as fake-raw]
             [jobs.lib.blocks :as lb]
             [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.dig-route :as dr]
             [jobs.lib.look :as lk]
             [jobs.lib.tool-kind :as kind]
             [jobs.lib.tools :as tools]
@@ -588,7 +589,8 @@
               m (atom {})
               budgets (atom [])
               digs (atom 0)
-              c {:primitives (:p s) :update-mem (fn [f args] (apply swap! m f args))}
+              c {:primitives (:p s) :args {:block "stone"} :update-mem (fn [f args] (apply swap! m f args))}
+              stone-s ((:dig-s (dr/body-prices (:p s) (constantly false))) "stone" nil)
               [drop-cut dig-cell! look-at! job-mem] [drops/drop-cut drops/dig-cell! dig-look/look-at! ctx/mem]]
           (set! drops/drop-cut (fn [_ _ max-s]
                                  (swap! budgets conj max-s)
@@ -600,7 +602,9 @@
             (is (= :partial (await (drops/cut-to-drop! c [2 64 0] 5))) "the third dig waits on the world")
             (is (nil? (await (drops/cut-to-drop! c [2 64 0] 5))) "the next round goes on with what is left, and runs out")
             (is (< (count @budgets) 200))
-            (is (apply > @budgets) "each way is planned out of less")
+            (is (= (nth @budgets 2) (nth @budgets 3)) "the dig cut short is paid once it is dug, not when it begins")
+            (is (= (- (nth @budgets 0) stone-s) (nth @budgets 1)) "a dig of what the call mines is paid at its own price: its yield is in the worth")
+            (is (apply > (dedupe @budgets)) "each way is planned out of less")
             (finally (set! drops/drop-cut drop-cut) (set! drops/dig-cell! dig-cell!) (set! dig-look/look-at! look-at!) (set! ctx/mem job-mem))))))))
 
 (deftest a-mine-that-ends-short-of-its-count-is-stopped-not-completed

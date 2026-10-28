@@ -108,12 +108,13 @@
 (defn ^:async cut-to-drop!
   "Open a way beside the cell dug (drop-cut), one dig child per cell, all the digs priced (cut-prices) at most max-s
   seconds (what is beside the cell: its drop, or a seen ore and its vein): the way is planned again after each dig and a
-  look at what it laid open, out of what is left (kept in :cut-spent over rounds: a cell that fills again is paid for
-  again). :cut (open: walk again), :partial (a dig waits on the world) or nil (no way left, a dig failed, or a dug cell
-  planned again at once: it did not stay open)."
+  look at what it laid open, out of what is left (kept in :cut-spent over rounds, each dig booked at its own price once
+  dug, its yield none: max-s counts it already; a cell that fills again is paid for again). :cut (open: walk again),
+  :partial (a dig waits on the world) or nil (no way left, a dig failed, or a dug cell planned again at once: it did not
+  stay open)."
   [c dug max-s]
   (let [p (:primitives c)
-        dig-s (:dig-s (cut-prices c))
+        dig-s (:dig-s (dig-route/body-prices p (constantly false)))
         price (fn [[x y z :as cell]] (or (dig-s (or (u/seen-name p {:x x :y y :z z}) "stone") cell) 0))]
     (loop [last-dug nil
            spent (get (:cut-spent (ctx/mem c)) dug 0)]
@@ -125,11 +126,11 @@
           (= last-dug (first cells)) nil
           :else (let [cell (first cells)
                       spent (+ spent (price cell))
-                      _ (ctx/update-mem! c assoc-in [:cut-spent dug] spent)
                       o (await (dig-cell! c (zipmap [:x :y :z] cell)))]
                   (case o
                     :continue :partial
-                    (:dug :missing) (do (await (dig-look/look-at! c cell))
+                    (:dug :missing) (do (ctx/update-mem! c assoc-in [:cut-spent dug] spent)
+                                        (await (dig-look/look-at! c cell))
                                         (await (dig-look/look-at! c (update cell 1 dec)))
                                         (recur cell spent))
                     nil)))))))
