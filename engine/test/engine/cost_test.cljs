@@ -363,6 +363,13 @@
       (is (< (js/Math.abs (- (* 1.5 (at 1 "skeleton")) (at 3 "skeleton"))) 1e-9) "on hard a skeleton shoots 1.5x as often as on easy, where the arrows were counted")
       (is (= (at 1 "zombie") (at 3 "zombie")) "a zombie's blow count does not change with difficulty"))))
 
+(deftest the-posterior-keeps-its-points-when-a-row-term-is-quite-zero
+  ;; row 1 (80 blows) is 1e-144 to 1e-32 over the lambda grid, row 2 (400 blows) 0 for every mu and lambda: without the floor
+  ;; on a term each product underflows to 0, every log is -Infinity and no point is left
+  (let [{:keys [blows points]} (caught/posterior {:lived [[10 80 1] [10 400 1]] :died []})]
+    (is (seq points))
+    (is (pos? blows))))
+
 (deftest spawn-chance-is-zero-where-a-mob-cannot-spawn
   (let [lit (fn [block sky] (fn [_] {:block block :sky sky}))
         dark (cost/spawn-chance [0 0 0] {:light (lit 0 0)})]

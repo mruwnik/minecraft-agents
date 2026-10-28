@@ -1,5 +1,8 @@
 (ns world-test.event-counts-test
   (:require [cljs.test :refer [deftest is are]]
+            ["fs" :as fs]
+            ["os" :as os]
+            ["path" :as path]
             [world-test.event-counts :as c]
             [world-test.gap-miss :as gm]))
 
@@ -254,6 +257,18 @@
     (is (= {:n 1 :fell 0} (select-keys (report [1 0 false]) [:n :fell])))
     (let [{:keys [lo hi mean]} (report [2 0 true])]
       (is (< 0 lo mean hi 1) "a 90% interval round the mean"))))
+
+(deftest gap-jumps-are-folded-from-trial-bodies-only
+  (let [dir (fs/mkdtempSync (path/join (os/tmpdir) "event-counts-"))
+        body (fn [name t]
+               (fs/mkdirSync (path/join dir "agents" name "engine") #js {:recursive true})
+               (fs/writeFileSync (path/join dir "agents" name "engine" "events.edn") (str (gap-line t :landed) "\n")))]
+    (try
+      (body "ProbeFixture" 1000)
+      (body "Oriel" 2000)
+      (let [counts (c/fold-logs! (path/join dir "agents") (path/join dir "counts.edn") 5.6 (constantly nil))]
+        (is (= [2000] (map (comp second key) (:gap-jumps counts))) "a probe's fixture jumps are perfect run-ups: left out"))
+      (finally (fs/rmSync dir #js {:recursive true :force true})))))
 
 (deftest beta-quantile-inverts-the-beta-cumulative
   (is (< (js/Math.abs (- 0.5 (gm/beta-cdf 2 2 0.5))) 1e-6) "Beta(2,2) is symmetric")

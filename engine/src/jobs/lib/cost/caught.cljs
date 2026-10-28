@@ -87,11 +87,11 @@
                 :let [p (ps j) pa (sigmoid a)]]
           (.fill sums 0)
           (.fill prods 1)
-          ;; the n-th power of each row's chance is n multiplications, a log only when the product nears underflow
+          ;; the n-th power of each row's chance is n multiplications, a log only when the product nears underflow (t and the product both stay over 1e-150, so a multiply never reaches 0)
           (dotimes [i nr]
             (let [pi (aget p i) q (- 1 pi) vi (* pi (aget v i)) n (aget ns i)]
               (dotimes [mi nm]
-                (let [t (max 1e-300 (+ (* q (aget (mu-terms mi) i)) vi))]
+                (let [t (max 1e-150 (+ (* q (aget (mu-terms mi) i)) vi))]
                   (loop [c 0 pr (aget prods mi)]
                     (if (< c n)
                       (let [pr (* pr t)]
