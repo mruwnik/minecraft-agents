@@ -459,6 +459,17 @@
           (is (= 4 (:length (second legs))))
           (is (some #(< (nth % 2) 0) (dug-cells s)) "it went on north"))))))
 
+(deftest an-unheaded-tunnel-turns-from-a-facing-with-no-rock-to-the-rock-the-body-sees
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [hall (merge (cells "stone" (range -3 4) [62 63] (range -9 10))
+                          (cells "stone" (range 1 13) (range 64 68) (range -9 10)))
+              s (await (scenario {:block "iron_ore" :count 30 :tunnel-length 4 :ways #{:seen :strip-tunnel}}
+                                 {:blocks hall :yaw 180 :inventory pickaxe} 200))]
+          (is (seq (dug-cells s)))
+          (is (every? #(>= (first %) 1) (dug-cells s)) (pr-str (take 4 (dug-cells s)))))))))
+
 (deftest a-cave-under-the-tunnel-floor-is-no-stop
   (async done
     (tu/run-async done
