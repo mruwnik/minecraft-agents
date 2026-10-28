@@ -260,8 +260,6 @@
                    (cheaper (:plug cover-options)) (assoc :plug (cheaper (:plug cover-options)))
                    (cheaper (:plug-dig cover-options)) (assoc :plug-dig (cheaper (:plug-dig cover-options)))
                    pillar (assoc :pillar pillar))]
-      (when (and (realized? death) (:capped @death))
-        (ctx/emit! c :hostile.capped :info {:text "the death price's search hit its round backstop while the covers were priced"}))
       covers))))
 
 (defn cornered-answers

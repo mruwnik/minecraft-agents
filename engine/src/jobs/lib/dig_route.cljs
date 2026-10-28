@@ -155,13 +155,14 @@
         best (js/Map.) done (js/Set.) queue #js []
         tick (volatile! 1)
         answer (volatile! nil)
-        relax! (fn [ck ^js from-node ^js acc nx ny nz move]
+        relax! (fn [ck ^js from-node ^js acc nx ny nz move stair? face-s]
                  (let [nk (key nx ny nz)
                        k (+ (aget from-node 1) (aget acc 1)) ds (+ (aget from-node 2) (aget acc 2))
                        placed (cond-> (aget from-node 5) (not (keyword-identical? :walk move)) inc)]
                    (when (and (or (nil? max-dig-s) (<= ds max-dig-s))
                               (or (nil? max-places) (<= placed max-places)))
-                     (let [nd (cw/add-step (aget from-node 0) (aget acc 0) (unseen-at nx ny nz))
+                     (let [unseen-s (let [u (unseen-at nx ny nz)] (if (zero? u) face-s u))
+                           nd (+ (aget from-node 0) (cw/step-price (aget acc 0) step-s stair-s stair? unseen-s))
                            ^js old (.get best nk)]
                        (when (or (nil? old) (< nd (aget old 0)))
                          (.set best nk #js [nd k ds ck move placed (let [dug (aget from-node 6) ks (aget acc 3)] (if (zero? (alength ks)) dug (into dug (array-seq ks))))])
@@ -178,16 +179,14 @@
                         ;; (unseen-face?) only when n's own cells are seen
                         try! (fn [nx ny nz move s0 head? top bot unseen-face?]
                                (when (and (inside? nx ny nz) (not (.has done (key nx ny nz))))
-                                 (let [acc #js [(+ s0 (if (and unseen? (zero? (unseen-at nx ny nz))
-                                                               (or unseen-face? (and head? (unseen-cell? mx (+ my 2) mz))))
-                                                        unseen-step-s 0))
-                                                0 0 #js []]]
+                                 (let [acc #js [s0 0 0 #js []]
+                                       face-s (if (and unseen? (or unseen-face? (and head? (unseen-cell? mx (+ my 2) mz)))) unseen-step-s 0)]
                                    (when (and (or (not head?) (open-cell! acc mx (+ my 2) mz))
                                               (loop [y top] (or (< y bot) (and (open-cell! acc nx y nz) (recur (dec y))))))
                                      ;; a step up that cuts or lays its floor is a stair's step: no less than :stair-s
-                                     (when (and stair-s (> ny my) (not= :pillar move) (or (= :laid move) (pos? (aget acc 1))))
-                                       (aset acc 0 (cw/stair-leg-cost (aget acc 0) step-s stair-s)))
-                                     (relax! ck node acc nx ny nz move)))))]
+                                     (relax! ck node acc nx ny nz move
+                                             (boolean (and stair-s (> ny my) (not= :pillar move) (or (= :laid move) (pos? (aget acc 1)))))
+                                             face-s)))))]
                     (when-let [pf (and pillar-s (placeable mx my mz))]
                       (try! mx (inc my) mz :pillar (base-s :pillar) true 0 1 (= :unseen pf)))
                     (loop [i 0]

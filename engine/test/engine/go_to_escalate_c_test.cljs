@@ -406,6 +406,11 @@
       4.2 3 67
       6.1 4 68
       5.4 3 67
+      4.4 3 67
+      4.8 3 67
+      6.5 4 68
+      7.3 4 68
+      5.2 3 67
       50 4 68)
     (is (= (:seconds route) (choose/price p [0 64 0] stair)))
     (is (< (choose/price (body 50) [0 64 0] stair) (choose/price p [0 64 0] stair)) "unseen cells cost more")
