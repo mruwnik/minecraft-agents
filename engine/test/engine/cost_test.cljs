@@ -445,7 +445,7 @@
     (is (< 0.25 (chance fist (route 40) (zombie)) 0.35) "a fist walks away now and again when it meets the mob later, that one a return, each caught at the prior of full health (cost.caught/prior)")
     (is (< 0.02 (chance {:health 20 :weapon "diamond_sword"} (route 40) (zombie)) 0.1) "a body that would fight it takes only the fight, which goes bad now and again (cost.caught ::fights: 4 of 51 sword fights begun at 20 hp died)")
     (is (= (chance fist (route 40) (zombie)) (chance fist (route 40) (zombie :caught 0))) "a way the race calls free adds nothing to the prior")
-    (is (< 0.9 (chance fist (route 40) (zombie :caught 1))) "no way out, no blocks: the fist fight")
+    (is (< 0.85 (chance fist (route 40) (zombie :caught 1))) "no way out, no blocks: the fist fight, nearly sure death (the 40 cells are timed at fight/walk-speed, so ~0.89)")
     (is (< (chance (assoc fist :covers {:walls {:open-s 1 :seconds 5}}) (route 40) (zombie :caught 1)) 0.01) "no way out, blocks carried: the body walls in")))
 
 (deftest threats-met-at-once-are-one-meeting-and-threats-met-apart-are-each-their-own
