@@ -8,6 +8,8 @@
             [engine.registry :as registry]
             [engine.settings :as settings]
             [engine.test-util :as tu]
+            [jobs.lib.cost.danger :as cost-danger]
+            [jobs.lib.util :as u]
             [jobs.lib.world-files :as ew]
             [plan.shape :as shape]
             [jobs.survival.dig-pocket :as pocket]
@@ -293,6 +295,15 @@
         by-hand (seconds [{:name "cobblestone" :count 4}])]
     (is (< 1 with-pick 10) "two stone cells with a pickaxe and one placement")
     (is (> by-hand with-pick) "the hand digs stone slower")))
+
+(deftest a-baby-mob-arrives-at-the-baby-pace-the-race-checks-use
+  (let [mob (fn [baby?] [(cond-> {:id 7 :name "zombie" :kind "hostile" :pos {:x 6.5 :y 64 :z 0.5} :health 20} baby? (assoc :baby true))])
+        p (fn [baby?] (tu/seeing-all (tu/fake {:blocks ground :entities (mob baby?)})))
+        arrive (fn [baby?] (wall-in/arrive-s (assoc (ctx-of (p baby?)) :args {:for :danger})))
+        body (u/pos-of (.-pos (.self (p false))))]
+    (is (= (cost-danger/arrival-s "zombie" {:x 6.5 :y 64 :z 0.5} body) (arrive false)))
+    (is (= (cost-danger/arrival-s "baby" {:x 6.5 :y 64 :z 0.5} body) (arrive true)) "the baby's own speed")
+    (is (< (arrive true) (arrive false)))))
 
 (deftest the-walls-fail-for-a-mob-and-stay-open-to-it-till-their-last-cell-is-placed
   (let [c (fn [entities for] (assoc (ctx-of (tu/seeing-all (tu/fake {:blocks ground :inventory [{:name "cobblestone" :count 20}] :entities entities})))

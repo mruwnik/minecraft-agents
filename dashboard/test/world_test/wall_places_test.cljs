@@ -6,7 +6,7 @@
 (defn ev [t kind job data]
   (pr-str {:time-ms t :generation-id "g" :kind kind :context {:job-id job :reflex-id :hostile-near} :data data}))
 
-(defn choice [t hostiles] (ev t :retreat.choice "j1" {:pos {:x 0.5 :y 64 :z 0.5} :hostiles hostiles}))
+(defn choice [t hostiles & [pos]] (ev t :retreat.choice "j1" {:pos (or pos {:x 0.5 :y 64 :z 0.5}) :hostiles hostiles}))
 
 (defn place [t status & [reason]] (ev t :done "j1/plug/walls/fill/place" (cond-> {:name "place" :status status} reason (assoc :reason reason))))
 
@@ -29,6 +29,11 @@
                                          (ev 5000 :child_started "j1/plug/walls" {})
                                          (ev 5100 :child_ended "j1/plug/walls" {:status :done})])))))
       "a choice older than choice-ms says nothing of where the mobs stand"))
+
+(deftest the-arrival-is-the-engines-from-the-bodys-exact-place
+  (let [at {:x 0.9 :y 64 :z 0.1}
+        rows (w/scan [(choice 0 ["zombie 7 [3 64 0]"] at) (ev 100 :child_started "j1/plug/walls" {}) (ev 200 :child_ended "j1/plug/walls" {:status :done})])]
+    (is (= (danger/arrival-s "zombie" {:x 3.5 :y 64 :z 0.5} at) (:arrive-s (val (first rows)))))))
 
 (deftest a-failure-counts-for-a-mob-only-when-a-mob-caused-it
   (let [end (fn [& lines] (val (first (w/scan (concat [(choice 0 ["zombie 7 [1 64 1]"]) (ev 100 :child_started "j1/plug/walls" {})] lines)))))]

@@ -32,16 +32,15 @@
                    hostiles))))
 
 (defn arrive-s
-  "Seconds before the nearest melee hostile of hostiles [[name x y z]] could strike a body whose feet are at pos: its
-  distance less the melee reach at its chase speed (jobs.survival.wall-in/arrive-s); nil with none."
-  [{:keys [x y z]} hostiles]
-  (let [f [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]]
-    (some->> hostiles
-             (filter (comp melee? first))
-             (map (fn [[n & cell]] (/ (max 0 (- (js/Math.hypot (- (nth cell 0) (f 0)) (- (nth cell 1) (f 1)) (- (nth cell 2) (f 2))) (danger/melee-reach)))
-                                     (danger/chase-speed n))))
-             seq
-             (reduce min))))
+  "Seconds before the nearest melee hostile of hostiles [[name x y z]] (the cell it stands in) could strike a body at
+  pos: danger/arrival-s from the middle of its cell, as the engine's jobs.survival.wall-in/arrive-s; nil with none. The
+  log names no baby."
+  [pos hostiles]
+  (some->> hostiles
+           (filter (comp melee? first))
+           (map (fn [[n x y z]] (danger/arrival-s n {:x (+ x 0.5) :y y :z (+ z 0.5)} pos)))
+           seq
+           (reduce min)))
 
 (defn class-of
   "An ended walls attempt's class: :reached when a mob stood in a cell or a melee mob of the choice could strike before

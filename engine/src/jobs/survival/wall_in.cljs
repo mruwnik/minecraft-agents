@@ -40,7 +40,7 @@
    ::dear-s {:default 0.4 :doc "Seconds a wall block worth more than ::wall-value adds per cell for the night: it is dug again at dawn." :spec (a/num-in 0 nil)}
    ::mob-fails {:default {:reached {:k 4 :n 7} :clear {:k 0 :n 1}}
                 :spec (a/map-of #{:reached :clear} (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)}))
-                :doc "Of n walls attempts of a flight (closed, or failed for a mob in a cell), k failed for a mob, by the melee hostiles when it began: :reached, one could strike the body before the walls were closed (arrive-s), :clear none. The trial bodies' logs on 2026-10-28. Recount: node tools/event-counts.mjs wall-places."}})
+                :doc "Of n walls attempts of a flight (closed, or failed for a mob in a cell), k failed for a mob, by the melee hostiles when it began: :reached, one could strike the body before the walls were closed (arrive-s), :clear none. Attempts that failed for another reason are left out of n, so k is a floor for :reached (they might have lost to the mob later). The trial bodies' logs on 2026-10-28. Recount: node tools/event-counts.mjs wall-places."}})
 
 (def target [])
 
@@ -108,12 +108,13 @@
 
 (defn arrive-s
   "Seconds before the nearest melee hostile the body knows within the hostile radius (not a shooter, a creeper or an
-  enderman) can strike it: its distance less the melee reach at its chase speed; nil with none."
+  enderman) can strike it (cost-danger/arrival-s); nil with none."
   [c]
-  (let [p (:primitives c)]
+  (let [p (:primitives c)
+        at (u/pos-of (.-pos (.self p)))]
     (some->> (danger-q/known-hostiles p (danger-q/hostile-radius) {})
              (remove #(or (combat/ranged? %) (combat/creeper? %) (combat/enderman? %)))
-             (map #(/ (max 0 (- (danger-q/mob-distance p %) (cost-danger/melee-reach))) (cost-danger/chase-speed (cost-danger/mob-kind %))))
+             (map #(cost-danger/arrival-s (cost-danger/mob-kind %) (danger-q/mob-pos p %) at))
              seq
              (reduce min))))
 
