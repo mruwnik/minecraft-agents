@@ -5,6 +5,7 @@
             [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.body :as body]
+            [jobs.lib.cost.health :as cost-health]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.next-call :as next-call]
@@ -26,7 +27,7 @@
   blocks go to the scaffold ledger and jobs.access.cleanup takes them back; walls that ran out of blocks get more with
   jobs.items.obtain, :explore false, once a stay when calm, and are tried again) and holds still (:healing) while natural regeneration works, a bite of carried food
   whenever food is under foods/full-food so it goes on. A shut-in that fails warns rest.unsheltered and the body rests where it
-  stands. Done {:health} once health reaches ::rested-health. Nothing-possible :no-food {:health :text} when no food was
+  stands. Done {:health} once one more hp is not worth its wait and food (cost.health/heal-worth?: 15 hp by default). Nothing-possible :no-food {:health :text} when no food was
   got (the eat ending's text), :hurt-resting {:health} when health falls while resting, :not-healing when no hp came back in
   ::stall-holds holds in a row, :harmed while burning or poisoned (their reflexes heal that). Run by the low-health trigger,
   which then waits until health falls or (:no-food) food comes to hand. Every ending but done carries :next (jobs.lib.next-call): for :no-food a get-food that searches, then the rest again. Quote: job time up to ::job-time-s.")
@@ -34,8 +35,7 @@
 (a/defargs args {})
 
 (a/defargs settings
-  {::rested-health {:default 12 :doc "Health (of 20) at which the rest ends." :spec (a/num-in 0 20)}
-   ::pause-s {:default 4 :doc "Seconds of one hold between two health readings (natural regeneration heals 1 hp in 4 s at food 18)." :spec (a/num-in 0 nil)}
+  {::pause-s {:default 4 :doc "Seconds of one hold between two health readings (natural regeneration heals 1 hp in 4 s at food 18)." :spec (a/num-in 0 nil)}
    ::spare-blocks {:default 4 :doc "Blocks at least that walls short of blocks get before they are tried again." :spec (a/int-in 1 nil)}
    ::stall-holds {:default 8 :doc "Holds in a row with no hp gained after which the rest gives up (counted, not timed)." :spec (a/int-in 1 nil)}
    ::job-time-s {:default 900 :doc "Seconds a rest may take, a wait for a calm moment included." :spec (a/num-in 0 nil)}})
@@ -63,7 +63,7 @@
   (ctx/end c :nothing-possible cause data))
 
 (defn done? [c]
-  (checks/goal (>= (health c) (settings/get settings ::rested-health)) [:rested "healed"] [:resting "resting to heal"]
+  (checks/goal (not (cost-health/heal-worth? (health c) (settings/get settings ::pause-s))) [:rested "healed"] [:resting "resting to heal"]
                {:result {:health (health c)}}))
 
 (defn quote-of [_] {:uses {:job-time [0 60 (settings/get settings ::job-time-s)]}})

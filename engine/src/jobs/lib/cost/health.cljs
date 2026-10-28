@@ -2,7 +2,7 @@
   "What an hp costs and how many a walk may spend, the one place. Pure.
 
   hp-seconds: an hp is about 10 s: healing it takes 6 exhaustion, 60 blocks sprinted (0.1 each), 10 s at 5.6 blocks/s.
-  health-scale: the price rises x20/health (at most 4) near zero health (the danger rate's scale too); hp-price: the two together; hp-cost: the price of losing some hp; risk-s: a walk's risk in seconds.
+  health-scale: the price rises x20/health (at most 4) near zero health (the danger rate's scale too); hp-price: the two together; hp-cost: the price of losing some hp; heal-worth?: whether one more hp is worth the wait and food it costs; risk-s: a walk's risk in seconds.
   drown-prices: the planner's drownPrices, the cumulative price of each hp of drowning at the health it leaves.
   damage-budget: the hp a walk may spend on certain damage (drops over 3 blocks, plants that hurt on touch): the health
   and absorption over the floor (:min-health, default 12) less a margin of 1, at most :max-damage; less when the food
@@ -42,6 +42,12 @@
   "Seconds one hp costs at health: walk-hp-seconds x health-scale."
   [health]
   (* (walk-hp-seconds) (health-scale health)))
+
+(defn heal-worth?
+  "Whether healing one more hp at health is worth its cost: the hp's hp-price is more than the heal-s seconds of waiting
+  for it plus its food (6 exhaustion, the walk-hp-seconds an hp is priced at full health). Never at 20."
+  [health heal-s]
+  (and (< health 20) (> (hp-price health) (+ (walk-hp-seconds) heal-s))))
 
 (defn hp-cost
   "Seconds losing damage hp from health costs: each hp at the hp-price of the health it leaves, a part hp pro rata."

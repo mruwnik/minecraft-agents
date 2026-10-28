@@ -1,4 +1,4 @@
-;; Card bcaa14c7: a body under the risky health (6) rests (shut in, holding :healing, a bite of carried bread while food is
+;; Card bcaa14c7: a body too hurt for risky work (under 6 hp when fed) rests until an hp is not worth its wait (15) (shut in, holding :healing, a bite of carried bread while food is
 ;; under 20) before its queued walk goes on. Food under 18 is got first (here bread lying near); short of blocks for the
 ;; walls it digs more (the dirt row at x 3). Should-fail: with no food anywhere the rest ends :no-food, the trigger does not
 ;; fire again within its retry time and the walk runs. On bedrock with no blocks the shut-in fails; a zombie seen in a glass box
