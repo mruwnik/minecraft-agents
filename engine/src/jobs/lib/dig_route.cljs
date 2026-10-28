@@ -229,7 +229,7 @@
                             (do (visit! (inc x) y z) (visit! (dec x) y z) (visit! x (inc y) z) (visit! x (dec y) z) (visit! x y (inc z)) (visit! x y (dec z))
                                 (recur))))
                         true))))]
-    (if (and (nil? range) (sealed?))
+    (if (and (nil? r) (sealed?))
       (vreset! answer {:problem :no-route})
       (do (.set best start-key #js [0 0 0 nil nil 0 #{}])
           (heap-push! queue #js [(heuristic fx (from 1) fz) 0 start-key])))
