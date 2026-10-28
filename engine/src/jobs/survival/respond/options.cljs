@@ -29,7 +29,10 @@
             [jobs.lib.rooms :as room-lib]
             [jobs.survival.respond.pillar :as pillar]
             [jobs.survival.respond.refuge :as refuge]
-            [jobs.lib.flee-search :as search]))
+            [jobs.lib.flee-search :as search]
+            [jobs.survival.hide-out :as hide-out]
+            [jobs.survival.plug-way :as plug-way]
+            [jobs.survival.shut-in :as shut-in]))
 
 (def tool-weapons
   "Item name substrings a cornered body with no weapon and no seal swings: any of them beats the fist."
@@ -163,10 +166,59 @@
     (ctx/update-mem! c assoc :step-health health :step-at now :hit-on-the-run hit?)
     hit?))
 
-(defn fight-wins?
-  "Whether fighting hostiles is expected to leave :reserve health (jobs.lib.hostile-fight/wins?, as the response weighs)."
+(def cover-options
+  "The cornered options that shut the body in, each with the jobs.survival.shut-in ways it builds."
+  {:plug [:walls] :plug-dig [:pit :pocket]})
+
+(defn hurt-window-s [] (settings/get settings ::hurt-window-s))
+
+(defn shots-in
+  "Shots in one :hurt entry: its hits when the entry is a shot, else the shot packets among its merged damages (a skeleton's arrow and a zombie's blow in one loss)."
+  [e]
+  (if (shot/shot? e)
+    (:hits (:data e) 1)
+    (count (filter #(shot/shot? {:data %}) (:damages (:data e))))))
+
+(defn pillar-cover
+  "The cover {:open-s :seconds} of a pillar against hostiles (cost/cover-answer): in a melee mob's reach for ::pillar-s,
+  its placements (plug-way/open-place-s each), then the hide-out's quiet on top, all of it in a shooter's line of fire;
+  nil when no pillar fits here, a climber is near or a shot was felt within ::hurt-window-s (the top stays in that line of fire)."
   [c hostiles]
-  (hostile/wins? c hostiles))
+  (when (and (pillar/pillar-item c) (not-any? combat/climber? hostiles)
+             (not-any? #(pos? (shots-in %)) (ctx/since c :hurt (- (ctx/now c) (* 1000 (hurt-window-s)))))
+             (pillar/pillar-ok? (escape/block-at-of (:primitives c)) (pl/feet-cell c)))
+    (let [s (settings/get settings ::pillar-s)
+          seconds (+ (* (pillar/pillar-height) (plug-way/open-place-s)) (hide-out/quiet-s))]
+      {:open-s (if (some combat/ranged? hostiles) seconds s) :seconds seconds})))
+
+(defn cornered-covers
+  "{option cover} of the cornered options not yet tried that shut the body in or lift it: :plug the walls, :plug-dig
+  the cheaper of a pit and a pocket (none at home), :pillar (pillar-cover)."
+  [c hostiles home?]
+  (let [open? #(not (flight/tried? c %))
+        specs (shut-in/covers c (mapcat (fn [[option ways]] (when (and (open? option) (not (and home? (= :plug-dig option)))) ways)) cover-options))
+        equipment (cost/equipment-of (.-equipment (.self (:primitives c))))
+        mobs (mapv #(hostile/mob-near (:primitives c) %) hostiles)
+        price #(cost/answer-price (hostile/body-of c) (cost/cover-answer {:equipment equipment :mobs mobs} %) (u/self-pos c))
+        cheaper (fn [ways] (some->> (keep specs ways) seq (apply min-key price)))
+        pillar (when (open? :pillar) (pillar-cover c hostiles))]
+    (cond-> {}
+      (cheaper (:plug cover-options)) (assoc :plug (cheaper (:plug cover-options)))
+      (cheaper (:plug-dig cover-options)) (assoc :plug-dig (cheaper (:plug-dig cover-options)))
+      pillar (assoc :pillar pillar))))
+
+(defn cornered-answers
+  "{option answer} of the cornered options open to the body against hostiles: :fight, the covers (cornered-covers) and,
+  unless the back-off was tried, :back-off the walk away (hostile/cornered-answers); home?: the body is in its home room."
+  [c hostiles home?]
+  (let [a (hostile/cornered-answers c hostiles (cornered-covers c hostiles home?) (not (flight/tried? c :back-off)))]
+    (cond-> (dissoc a :flee) (contains? a :flee) (assoc :back-off (:flee a)))))
+
+(defn fight-wins?
+  "Whether fighting hostiles is the cheapest of the cornered answers (cornered-answers, jobs.lib.hostile-fight/wins?)."
+  ([c hostiles] (fight-wins? c hostiles false))
+  ([c hostiles home?]
+   (hostile/wins? c hostiles (cornered-answers c hostiles home?))))
 
 (defn glance-reach [] (settings/get settings ::glance-reach))
 
@@ -179,20 +231,6 @@
    (filterv #(and (not (combat/ranged? %)) (not (combat/creeper? %)) (not (combat/enderman? %))
                   (<= (/ (danger-q/mob-distance (:primitives c) %) (cost-danger/chase-speed (cost/mob-kind %))) s))
             hostiles)))
-
-(defn build-price
-  "hp a way out that takes s seconds to build costs beside hostiles: the blows over s of each melee mob arriving within
-  s (through the armour worn), at least the blows felt lately (hostile/incoming) over s."
-  [c hostiles s]
-  (let [stats (cost/armour-stats (cost/equipment-of (.-equipment (.self (:primitives c)))))]
-    (max (* (:rate (hostile/incoming c)) s)
-         (reduce + 0 (map #(cost/mob-hurt stats (.-name %) s) (arriving c hostiles s))))))
-
-(defn pillar-cheaper?
-  "Whether a pillar (::pillar-s of blows, build-price) costs less than fighting hostiles (hostile/fight-answer)."
-  [c hostiles]
-  (< (build-price c hostiles (settings/get settings ::pillar-s))
-     (:damage (hostile/fight-answer c hostiles (constantly nil)) ##Inf)))
 
 (defn cover-gap [] (settings/get settings ::cover-gap))
 
@@ -251,8 +289,6 @@
     (do (ctx/update-mem! c update :holds (fnil inc 0))
         (await (child/pause! c (/ (flight/wait-ms) 1000) why))
         :again)))
-
-(defn hurt-window-s [] (settings/get settings ::hurt-window-s))
 
 (defn recently-hurt?
   "Whether the body lost health within hurt-window-s."

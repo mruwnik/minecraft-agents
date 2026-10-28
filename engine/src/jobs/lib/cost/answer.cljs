@@ -436,6 +436,14 @@
     (let [a (assoc (build-answer {:equipment equipment :mobs mobs :seconds open-s}) :seconds seconds)]
       (assoc a :then (conj (vec then) a)))))
 
+(defn cornered-answers
+  "The answers {key answer} a cornered body wearing equipment has to mobs [flee-mob's]: the fight and each of covers {way
+  {:open-s :seconds}} it can make (cover-answer, the fight after it); decide takes the cheapest."
+  [{:keys [equipment mobs fight covers]}]
+  (into {:fight fight}
+        (keep (fn [[way cover]] (some->> (cover-answer {:equipment equipment :mobs mobs :then (when fight [fight])} cover) (vector way))))
+        covers))
+
 (defn threat-answers
   "The answers {key answer-or-nil} body {:health :food :equipment :weapon :covers :swim :distance} has to mob-name (or
   a coll of names, met together) met :distance blocks off (default 0, beside it): the

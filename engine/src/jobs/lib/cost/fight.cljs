@@ -6,7 +6,7 @@
             [jobs.lib.cost.armour :as armour]
             [jobs.lib.cost.threat :as threat]))
 
-(def default-reserve "Health a fight must leave: the planner's stance and the cornered fight's." 4)
+(def default-reserve "Health a fight must leave: the planner's stance." 4)
 
 (def walk-speed "Blocks a second a body closes on a mob it walks up to." 4)
 

@@ -118,6 +118,22 @@
           (is (some? e) "a step, not cornered")
           (is (<= (:x (:step e)) 2) (str "the step stays in what the body has seen, a cell into the dark at most: " (pr-str (:step e)))))))))
 
+(deftest a-dark-dead-end-is-trapped-at-the-cheapest-cornered-answer-a-cover-where-the-body-can-make-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [raw (tu/fake {:blocks (merge junction (box -32 66 -32 32 66 32 "stone")) :light-default [0 0]
+                            :entities [{:id 7 :uuid "u7" :name "zombie" :kind "hostile" :pos {:x -4.5 :y 64 :z 0.5}}]
+                            :self {:pos {:x 0.5 :y 64 :z 0.5}} :yaw 270 :pitch 0})
+              p (perception/wrap raw (perception/create (fake-raw/create raw) {:now (constantly 1000000)}))
+              _ (perception/pass! (aget p "perception") {:effort 1 :reuse? true})
+              chasers [{:name "zombie" :mob "zombie" :pos {:x -4.5 :y 64 :z 0.5}}]
+              trapped (fn ^:async trapped [opts] (->> (await (search/search! (ctx-of p) chasers [] opts)) (keep :trapped) (reduce max 0)))
+              fist (await (trapped {}))
+              walled (await (trapped {:covers {:walls {:open-s 0 :seconds 40}}}))]
+          (is (pos? walled))
+          (is (< walled (/ fist 2)) "unarmed, walls built unhurt cost far less than the fist fight with the zombie"))))))
+
 ;; card 6699a4ea: the old search priced a dead end the same wherever it lay, so the straight way on through the dark
 ;; beat the branch behind, and the body learnt of the dead end only once the zombie held the branch
 (def long-dead-end

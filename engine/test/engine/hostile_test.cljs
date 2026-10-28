@@ -1675,8 +1675,17 @@
         c {:primitives p :args {} :root "j1" :slots [] :view (fn [] {:now 0 :data {:entries {}}})}
         mob (fn [n] (clj->js {:id 100 :name n :type "hostile" :pos {:x 2 :y 64 :z 0} :health 20}))]
     (fake/swap-self! p assoc :health 200)
-    (is (hostile-fight/wins? c [(mob "zombie")]) "control: the same kit beats a zombie")
-    (is (not (hostile-fight/wins? c [(mob "enderman")])) "however much health: still a loss")))
+    (is (hostile-fight/wins? c [(mob "zombie")] (hostile-fight/cornered-answers c [(mob "zombie")] {} false)) "control: the same kit beats a zombie")
+    (is (not (hostile-fight/wins? c [(mob "enderman")] (hostile-fight/cornered-answers c [(mob "enderman")] {} false))) "however much health: still a loss")))
+
+(deftest a-cornered-fight-is-taken-only-when-priced-under-the-covers-the-body-can-make
+  (let [{:keys [p]} (setup {:inventory [{:name "stone_sword" :count 1}]})
+        c {:primitives p :args {} :root "j1" :slots [] :view (fn [] {:now 0 :data {:entries {}}})}
+        zombies [(clj->js {:id 100 :name "zombie" :type "hostile" :pos {:x 2 :y 64 :z 0} :health 20})]]
+    (fake/swap-self! p assoc :health 12)
+    (is (<= (:damage (hostile-fight/fight-answer c zombies (constantly nil))) 8) "the fight's mean leaves 4 hp")
+    (is (not (hostile-fight/wins? c zombies (hostile-fight/cornered-answers c zombies {:walls {:open-s 0 :seconds 40}} false))) "walls built unhurt cost less than the fight's death chance")
+    (is (hostile-fight/wins? c zombies (hostile-fight/cornered-answers c zombies {:walls {:open-s 30 :seconds 70}} false)) "walls with a side open half a minute beside the zombie cost more")))
 
 (deftest a-calm-enderman-is-no-danger-an-angry-one-is
   (async done

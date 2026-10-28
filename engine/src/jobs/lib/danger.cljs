@@ -21,7 +21,6 @@
 (a/defargs settings
   {::hostile-radius {:default 8 :doc "Blocks within which a known hostile mob that can reach the body counts as a danger (the hostile-near trigger and go-to's cut check read it)." :spec (a/int-in 0 nil)}
    ::ranged-radius {:default 16 :doc "Blocks within which a known ranged mob with a line of fire counts as a danger." :spec (a/int-in 0 nil)}
-   ::fight-reserve {:default 4 :doc "Health a fight must be expected to leave for the hostile reflexes to take it (respond-to-hostile and retreat)." :spec (a/num-in 0 20)}
    ::known-scan {:default 64 :doc "Blocks out to which the mobs a distance filter weighs are fetched." :spec (a/int-in 1 nil)}
    ::close-hearing {:default 2 :doc "Blocks within which a heard mob is loud enough to be beside the body (heard-close?)." :spec (a/num-in 0 nil)}
    ::hit-s {:default 5 :doc "Seconds a melee mob whose blow hurt the body counts as a real danger whatever the way test says (hit-ids): it reached the body." :spec (a/num-in 0 nil)}
@@ -97,7 +96,6 @@
 (defn close-hearing [] (settings/get settings ::close-hearing))
 (defn hostile-radius [] (settings/get settings ::hostile-radius))
 (defn ranged-radius [] (settings/get settings ::ranged-radius))
-(defn fight-reserve [] (settings/get settings ::fight-reserve))
 
 (defn radius-in "The :radius of args, else the ::hostile-radius setting." [args] (or (:radius args) (hostile-radius)))
 (defn ranged-radius-in "The :ranged-radius of args, else the ::ranged-radius setting." [args] (or (:ranged-radius args) (ranged-radius)))

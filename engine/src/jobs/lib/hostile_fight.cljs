@@ -407,14 +407,22 @@
                   (contains? weapon/weapon-damage-by-name (combat/best-weapon p (combat/weapons c)))
                   (back-cell-of c creeper)))))
 
+(defn cornered-answers
+  "cost/cornered-answers of c's body to hostiles: the fight (fight-answer), each of covers {way {:open-s :seconds}} and,
+  with walk?, the walk away (:flee, flee-answer; nil when a mob keeps up)."
+  [c hostiles covers walk?]
+  (let [p (:primitives c)
+        fight (fight-answer c hostiles (constantly nil))]
+    (cond-> (cost/cornered-answers {:equipment (cost/equipment-of (.-equipment (.self p))) :mobs (mapv #(mob-near p %) hostiles)
+                                    :fight fight :covers covers})
+      walk? (assoc :flee (flee-answer c hostiles fight nil nil)))))
+
 (defn wins?
-  "Whether fighting hostiles leaves :reserve health (jobs.lib.danger/fight-reserve; fight-answer's damage): the one weighing the flight's
-  cornered options share. Never against a creeper, nor against none, nor against an
-  enderman: only thorns armour with tamed wolves would win, and the body cannot see wolves."
-  ([c hostiles] (wins? c hostiles (constantly nil)))
-  ([c hostiles struck-of]
-   (boolean (and (seq hostiles)
-                 (not-any? combat/creeper? hostiles)
-                 (not-any? combat/enderman? hostiles)
-                 (cost/leaves-reserve? {:health (.-health (.self (:primitives c))) :reserve (danger-q/fight-reserve)
-                                        :damage (:damage (fight-answer c hostiles struck-of))})))))
+  "Whether fighting hostiles is the cheapest of answers (weigh; cornered-answers): the one weighing the flight's cornered
+  options share. Never against a creeper, nor against none, nor against an enderman: only thorns armour with tamed
+  wolves would win, and the body cannot see wolves."
+  [c hostiles answers]
+  (boolean (and (seq hostiles)
+                (not-any? combat/creeper? hostiles)
+                (not-any? combat/enderman? hostiles)
+                (= :fight (:answer (weigh c answers))))))

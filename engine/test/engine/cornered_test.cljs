@@ -929,12 +929,12 @@
         (let [{:keys [p]} (await (hidden-round retreat (doorway-zombies 4) 1000 (constantly nil)))]
           (is (= "jumpPlace" (first-of p #{"attack" "jumpPlace"})) "four zombies outfight an axe: a second of pillar costs fewer blows"))))))
 
-(deftest an-armed-body-pressed-by-one-zombie-it-beats-fights-it
+(deftest an-armed-body-pressed-by-one-zombie-pillars-when-the-pillar-is-priced-under-the-fight
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p]} (await (first-round retreat (doorway-zombies 1)))]
-          (is (= "attack" (first-of p #{"attack" "jumpPlace"})) "one zombie the axe beats is fought where it stands"))))))
+          (is (= "jumpPlace" (first-of p #{"attack" "jumpPlace"})) "the axe's fight costs its blows, a pillar about one: the pillar"))))))
 
 (defn edge-world
   "Floor (stone at y 63) for x <= edge on z 0 and air everywhere else."
@@ -1330,18 +1330,20 @@
 
 (defn ^:async beset-round
   "A retreat of an armed body that carries blocks, at 8 health with zombies about and every walk blocked ((on-walk
-  setup-map) runs at each); the mobs leave at its first place or attack. The setup map."
-  [zombies on-walk]
+  setup-map) runs at each, (before setup-map) before the round); the mobs leave at its first place or attack. The setup map."
+  ([zombies on-walk] (await (beset-round zombies on-walk (constantly nil))))
+  ([zombies on-walk before]
   (let [{:keys [eng p] :as s} (setup {:self {:health 8}
                                       :inventory [{:name "iron_sword" :count 1} {:name "dirt" :count 16}]
                                       :entities zombies})
         leave! (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r))))]
+    (before s)
     (.override (.-world p) "steer" (fn [_ _ _] (on-walk s) (js/Promise.resolve #js {:status "timeout" :pose #js {}})))
     (.override (.-world p) "place" leave!)
     (.override (.-world p) "attack" leave!)
     (core/submit! eng retreat {})
     (await (core/tick! eng))
-    s))
+    s)))
 
 (defn hit-and-closed-on!
   "The zombies, kept off so far, hit the body once and stand just out of arm's reach of it."
@@ -1411,7 +1413,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (await (beset-round [(zombie 2.5 64 0) (assoc (zombie 0 64 2.5) :id 8)] shot!))]
+        (let [{:keys [p]} (await (beset-round [(zombie 2.5 64 0) (assoc (zombie 0 64 2.5) :id 8)] shot! shot!))]
           (is (pos? (count (calls p "place"))) "the line of fire is broken first")
           (is (zero? (count (calls p "attack"))) "no blows traded in the open under arrows"))))))
 

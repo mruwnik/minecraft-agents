@@ -8,7 +8,6 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.answer :as answer]
             [jobs.lib.cost.caught :as caught]
-            [jobs.lib.danger :as danger]
             [jobs.lib.cost.death :as death]
             [jobs.lib.cost.threat :as threat]))
 
@@ -138,9 +137,6 @@
   (is (= 16 (:max-drop (cost/fall-profile {:health 20 :equipment iron-set :damage-budget 99}))) "never over 16")
   (is (= {:max-drop 12 :fall-factor 0.52} (update (cost/fall-profile {:health 20 :equipment (ff-boots 4) :damage-budget 5}) :fall-factor round2))
       "feather falling stretches the same budget"))
-
-(deftest the-fight-reserve-has-one-default
-  (is (= cost/default-reserve (danger/fight-reserve)) "the ::fight-reserve setting's default is the cost's"))
 
 ;; ---------------------------------------------------------------- cooking against eating now
 

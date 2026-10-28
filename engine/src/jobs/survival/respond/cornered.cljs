@@ -2,7 +2,7 @@
   "The cornered step of a flight: the conditions that rank its options (pressed, beaten, under fire, boxed in) and cornered!, which takes the first option it can."
   (:require [engine.settings :as settings]
             [jobs.survival.respond-choose :refer [escape-order with-zone-pillar]]
-            [jobs.survival.respond.options :as rc :refer [settings near-hostiles hitters arriving close-radius hurt-by press-gap hit-reach fist-sweeps tool-weapons fight! outrun? angry-enderman? fight-wins? pillar-cheaper? stand! back-off! blocked! recently-hurt? hurt-window-s]]
+            [jobs.survival.respond.options :as rc :refer [settings near-hostiles hitters arriving close-radius hurt-by press-gap hit-reach fist-sweeps tool-weapons fight! outrun? angry-enderman? cornered-answers shots-in stand! back-off! blocked! recently-hurt? hurt-window-s]]
             [engine.args :as a]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as lb]
@@ -24,7 +24,6 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.util :as u]
-            [jobs.lib.shot :as shot]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.respond.state :as flight]
             [jobs.survival.respond.goal :as respond.goal]
@@ -119,13 +118,6 @@
   [{:keys [beaten? armed? blocks?]}]
   (boolean (and beaten? (or armed? (not blocks?)))))
 
-(defn shots-in
-  "Shots in one :hurt entry: its hits when the entry is a shot, else the shot packets among its merged damages (a skeleton's arrow and a zombie's blow in one loss)."
-  [e]
-  (if (shot/shot? e)
-    (:hits (:data e) 1)
-    (count (filter #(shot/shot? {:data %}) (:damages (:data e))))))
-
 (defn fire-hits [] (settings/get settings :jobs.survival.respond.options/fire-hits))
 
 (defn under-fire?
@@ -214,13 +206,13 @@
         _ (when fire? (ctx/update-mem! c update :fire-tries (fnil inc 0)))
         fire-tries (:fire-tries (ctx/mem c) 0)
         armed? (some? (combat/best-weapon (:primitives c) weapons))
-        win? (and (not blind?)
-                  (fight-wins? c (if (and (:hit-on-the-run (ctx/mem c)) (not fire?)) (hitters c hostiles) hostiles)))
+        weighed (hostile/weigh c (cornered-answers c (if (and (:hit-on-the-run (ctx/mem c)) (not fire?)) (hitters c hostiles) hostiles) home?))
+        win? (and (not blind?) (seq hostiles) (not-any? combat/creeper? hostiles) (not-any? combat/enderman? hostiles) (= :fight (:answer weighed)))
+        prices (:prices weighed)
         pillar-first? (boolean (and (not fire?) (not armed?) (pillar/pillar-item c)
                                     (pillar/pillar-ok? (escape/block-at-of (:primitives c)) (pl/feet-cell c))
                                     (mob-in-corner-cell? c hostiles)))
-        cheap-pillar? (boolean (and (not fire?) armed? (not win?) (pillar/pillar-item c) (not-any? combat/climber? hostiles)
-                                    (pillar-cheaper? c hostiles)))
+        cheap-pillar? (boolean (and (not fire?) armed? (not win?) (< (get prices :pillar ##Inf) (get prices :fight ##Inf))))
         beaten-fight? (or (beaten-fights? {:beaten? beaten :armed? armed? :blocks? (boolean (seq (lb/carried c (flight/blocks c))))})
                           (and (not fire?) (not pillar-first?) (mob-in-corner-cell? c hostiles))
                           (boolean (some #(and (combat/ranged? %) (hostile/point-blank? c %)) hostiles)))
