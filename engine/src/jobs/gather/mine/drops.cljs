@@ -82,17 +82,22 @@
   [c n]
   (* n (cost/worth-to nil (items (:args c)) (u/self-pos c))))
 
+(defn cut-prices
+  "dig-route's prices for a cut of the call: go-to's (body-prices), a dig of what the call mines less its drop's worth."
+  [c]
+  (let [p (:primitives c)
+        one (worth c 1)]
+    (-> (dig-route/body-prices p (fn [[x y z]] (nil? (u/seen-name p {:x x :y y :z z}))))
+        (dig-route/less-yield #(if (contains? (kinds (:args c)) %) one 0)))))
+
 (defn drop-cut
-  "The cells to dig, in walking order, for the cheapest way (jobs.lib.dig-route priced as go-to's, a dig of what the call
-  mines less its drop's worth, a cell never seen taken for stone) from the body's cell to a stand within 1 of the dug cell, priced at most max-s seconds; nil with no such way,
+  "The cells to dig, in walking order, for the cheapest way (jobs.lib.dig-route priced by cut-prices, a cell never seen
+  taken for stone) from the body's cell to a stand within 1 of the dug cell, priced at most max-s seconds; nil with no such way,
   :searching while a search that spent its nodes goes on (kept: ask again)."
   [c dug max-s]
   (let [p (:primitives c)
         at (fn [[x y z]] (or (u/seen-name p {:x x :y y :z z}) "stone"))
-        one (worth c 1)
-        prices (-> (dig-route/body-prices p (fn [[x y z]] (nil? (u/seen-name p {:x x :y y :z z}))))
-                   (dig-route/less-yield #(if (contains? (kinds (:args c)) %) one 0))
-                   (assoc :max-s max-s))
+        prices (assoc (cut-prices c) :max-s max-s)
         from (u/cell-vec (u/self-pos c))
         routes (mapv #(let [goal (mapv + dug %)]
                         (dig-route/route-resumed [(:id c) :drop-cut from goal max-s] at from goal prices))
@@ -101,26 +106,33 @@
         (when (some #{:searching} (map :problem routes)) :searching))))
 
 (defn ^:async cut-to-drop!
-  "Open a way beside the cell dug (drop-cut), one dig child per cell, no way priced over max-s seconds (what is beside the
-  cell: its drop, or a seen ore and its vein); the way is planned again after each dig and a look at what it laid open.
-  :cut (open: walk again), :partial (a dig waits on the world) or nil (no way, a dig failed, or a dug cell planned again: it
-  did not stay open)."
+  "Open a way beside the cell dug (drop-cut), one dig child per cell, all the digs priced (cut-prices) at most max-s
+  seconds (what is beside the cell: its drop, or a seen ore and its vein): the way is planned again after each dig and a
+  look at what it laid open, out of what is left (kept in :cut-spent over rounds: a cell that fills again is paid for
+  again). :cut (open: walk again), :partial (a dig waits on the world) or nil (no way left, a dig failed, or a dug cell
+  planned again at once: it did not stay open)."
   [c dug max-s]
-  (loop [last-dug nil]
-    (let [cells (drop-cut c dug max-s)]
-      (cond
-        (nil? cells) nil
-        (= :searching cells) :partial
-        (empty? cells) :cut
-        (= last-dug (first cells)) nil
-        :else (let [cell (first cells)
-                    o (await (dig-cell! c (zipmap [:x :y :z] cell)))]
-                (case o
-                  :continue :partial
-                  (:dug :missing) (do (await (dig-look/look-at! c cell))
-                                      (await (dig-look/look-at! c (update cell 1 dec)))
-                                      (recur cell))
-                  nil))))))
+  (let [p (:primitives c)
+        dig-s (:dig-s (cut-prices c))
+        price (fn [[x y z :as cell]] (or (dig-s (or (u/seen-name p {:x x :y y :z z}) "stone") cell) 0))]
+    (loop [last-dug nil
+           spent (get (:cut-spent (ctx/mem c)) dug 0)]
+      (let [cells (drop-cut c dug (- max-s spent))]
+        (cond
+          (nil? cells) nil
+          (= :searching cells) :partial
+          (empty? cells) :cut
+          (= last-dug (first cells)) nil
+          :else (let [cell (first cells)
+                      spent (+ spent (price cell))
+                      _ (ctx/update-mem! c assoc-in [:cut-spent dug] spent)
+                      o (await (dig-cell! c (zipmap [:x :y :z] cell)))]
+                  (case o
+                    :continue :partial
+                    (:dug :missing) (do (await (dig-look/look-at! c cell))
+                                        (await (dig-look/look-at! c (update cell 1 dec)))
+                                        (recur cell spent))
+                    nil)))))))
 
 (defn lip-point
   "Where the body leans out over the cell it stands beside: its own cell's edge toward dug (a cell [x y z] at its level),

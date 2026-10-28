@@ -11,6 +11,7 @@
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
             [jobs.lib.blocks :as lb]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.lib.look :as lk]
             [jobs.lib.tool-kind :as kind]
             [jobs.lib.tools :as tools]
@@ -573,6 +574,31 @@
     (is (= [[1 64 0]] (cut walled-ore 100)) "the wall cell between is the way")
     (is (not-any? #{[1 64 0]} (cut (assoc walled-ore "1,65,0" "gravel") 100)) "gravel over it would fall on the body walking in: the cut goes round")
     (is (nil? (cut walled-ore 0.01)) "a drop worth less than one cell's dig is not cut to")))
+
+(deftest a-cut-whose-cells-fill-again-pays-each-dig-out-of-the-drops-worth
+  ;; the way swaps between two cells for ever (each fills again behind the dig): what is spent stays spent, a round
+  ;; cut short included
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})
+              m (atom {})
+              budgets (atom [])
+              digs (atom 0)
+              c {:primitives (:p s) :update-mem (fn [f args] (apply swap! m f args))}
+              [drop-cut dig-cell! look-at! job-mem] [drops/drop-cut drops/dig-cell! dig-look/look-at! ctx/mem]]
+          (set! drops/drop-cut (fn [_ _ max-s]
+                                 (swap! budgets conj max-s)
+                                 (when (and (pos? max-s) (< (count @budgets) 200)) [(if (odd? (count @budgets)) [1 64 0] [1 64 -1])])))
+          (set! drops/dig-cell! (fn [_ _] (if (= 3 (swap! digs inc)) :continue :dug)))
+          (set! dig-look/look-at! (fn [_ _] nil))
+          (set! ctx/mem (fn [_] @m))
+          (try
+            (is (= :partial (await (drops/cut-to-drop! c [2 64 0] 5))) "the third dig waits on the world")
+            (is (nil? (await (drops/cut-to-drop! c [2 64 0] 5))) "the next round goes on with what is left, and runs out")
+            (is (< (count @budgets) 200))
+            (is (apply > @budgets) "each way is planned out of less")
+            (finally (set! drops/drop-cut drop-cut) (set! drops/dig-cell! dig-cell!) (set! dig-look/look-at! look-at!) (set! ctx/mem job-mem))))))))
 
 (deftest a-mine-that-ends-short-of-its-count-is-stopped-not-completed
   (async done
