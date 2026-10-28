@@ -7,8 +7,9 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.gather.mine.targets :refer [carried book-ground! drop-radius items left-behind]]
+            [jobs.gather.mine.targets :refer [carried book-ground! drop-radius items kinds left-behind]]
             [jobs.lib.access.rules :as rules]
+            [jobs.lib.cost :as cost]
             [jobs.lib.waits :as waits]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.dig-look :as dig-look]
@@ -19,9 +20,7 @@
             [jobs.lib.walk :as walk]))
 
 (a/defargs settings
-  {::pickup-grace-ms {:default 400 :doc "How long the body waits for a drop to be picked up, in ms." :spec (a/int-in 0 nil)}
-   ::drop-cut-max {:default 4 :doc "The most cells dug to open a way beside a dug cell whose drop did not come in and that no walk gets beside; 0: no such cut." :spec (a/int-in 0 nil)}
-   ::target-cut-max {:default 12 :doc "The most cells dug to open a way beside a seen ore that no walk gets beside; 0: no such cut." :spec (a/int-in 0 nil)}})
+  {::pickup-grace-ms {:default 400 :doc "How long the body waits for a drop to be picked up, in ms." :spec (a/int-in 0 nil)}})
 
 (defn pickup-grace-ms [] (settings/get settings ::pickup-grace-ms))
 
@@ -78,44 +77,49 @@
   (book-ground! c pos)
   (await (blocks/dig-cell! c pos {:accept (ways/accept (:args c)) :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
 
-(defn drop-cut-max [] (settings/get settings ::drop-cut-max))
-(defn target-cut-max [] (settings/get settings ::target-cut-max))
+(defn worth
+  "Seconds n of the call's item are worth (jobs.lib.cost/worth-to: the least of its items; no body: a mine digs for no bed)."
+  [c n]
+  (* n (cost/worth-to nil (items (:args c)) (u/self-pos c))))
 
 (defn drop-cut
-  "The cells to dig, in walking order, for the cheapest way (jobs.lib.dig-route priced as go-to's, falls of 1 at most, a cell
-  never seen taken for stone) from the body's cell to a stand within 1 of the dug cell, at most max-digs of them; nil with
-  no such way, :searching while a search that spent its nodes goes on (kept: ask again)."
-  [c dug max-digs]
+  "The cells to dig, in walking order, for the cheapest way (jobs.lib.dig-route priced as go-to's, a dig of what the call
+  mines less its drop's worth, a cell never seen taken for stone) from the body's cell to a stand within 1 of the dug cell, priced at most max-s seconds; nil with no such way,
+  :searching while a search that spent its nodes goes on (kept: ask again)."
+  [c dug max-s]
   (let [p (:primitives c)
         at (fn [[x y z]] (or (u/seen-name p {:x x :y y :z z}) "stone"))
-        prices (assoc (dig-route/body-prices p (fn [[x y z]] (nil? (u/seen-name p {:x x :y y :z z})))) :max-digs max-digs :max-fall 1)
+        one (worth c 1)
+        prices (-> (dig-route/body-prices p (fn [[x y z]] (nil? (u/seen-name p {:x x :y y :z z}))))
+                   (dig-route/less-yield #(if (contains? (kinds (:args c)) %) one 0))
+                   (assoc :max-s max-s))
         from (u/cell-vec (u/self-pos c))
         routes (mapv #(let [goal (mapv + dug %)]
-                        (dig-route/route-resumed [(:id c) :drop-cut from goal max-digs] at from goal prices))
+                        (dig-route/route-resumed [(:id c) :drop-cut from goal max-s] at from goal prices))
                      [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 -1 0] [0 1 0]])]
     (or (->> routes (filter :dig) (sort-by :seconds) (map :dig) first)
         (when (some #{:searching} (map :problem routes)) :searching))))
 
 (defn ^:async cut-to-drop!
-  "Open a way beside the cell dug (drop-cut), one dig child per cell, at most cap tries per cell (a dug cell's drop: ::drop-cut-max; a seen ore: ::target-cut-max); the
-  way is planned again after each dig and a look at what it laid open. :cut (open: walk again), :partial (a dig waits on
-  the world) or nil (no way, or a dig failed)."
-  [c dug cap]
-  (loop []
-    (let [n (get-in (ctx/mem c) [:drop-cut dug] 0)
-          cells (drop-cut c dug (- cap n))]
+  "Open a way beside the cell dug (drop-cut), one dig child per cell, no way priced over max-s seconds (what is beside the
+  cell: its drop, or a seen ore and its vein); the way is planned again after each dig and a look at what it laid open.
+  :cut (open: walk again), :partial (a dig waits on the world) or nil (no way, a dig failed, or a dug cell planned again: it
+  did not stay open)."
+  [c dug max-s]
+  (loop [last-dug nil]
+    (let [cells (drop-cut c dug max-s)]
       (cond
         (nil? cells) nil
         (= :searching cells) :partial
         (empty? cells) :cut
+        (= last-dug (first cells)) nil
         :else (let [cell (first cells)
                     o (await (dig-cell! c (zipmap [:x :y :z] cell)))]
                 (case o
                   :continue :partial
-                  (:dug :missing) (do (ctx/update-mem! c assoc :drop-cut {dug (inc n)})
-                                      (await (dig-look/look-at! c cell))
+                  (:dug :missing) (do (await (dig-look/look-at! c cell))
                                       (await (dig-look/look-at! c (update cell 1 dec)))
-                                      (recur))
+                                      (recur cell))
                   nil))))))
 
 (defn lip-point
@@ -188,7 +192,7 @@
             w (await (go!))
             w (if (and (= :blocked w) (await (look-floor-toward! c dug-at))) (await (go!)) w)
             cut (when (and (= :blocked w) (not (ways/stay-level? (:args c))) (cut-after? (near/last-walk c)))
-                  (await (cut-to-drop! c dug-at (drop-cut-max))))
+                  (await (cut-to-drop! c dug-at (worth c 1))))
             w (case cut :cut (await (go!)) :partial :partial w)]
         (when (= :there w) (await (peek-over-lip! c dug-at)))
         (when-not (= :partial w) (ctx/update-mem! c assoc :drop-walked dug-at))

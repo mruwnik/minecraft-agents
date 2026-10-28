@@ -272,10 +272,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [sand (cells "sand" [8] [64] [0])
+        ;; ore, not sand: a cut is dug only when the vein is worth more than the cut costs
+        (let [ore (cells "iron_ore" [8] [64] [0])
               wall (cells "glass" (range 3 10) [64 65 66] (range -6 7))
-              s (await (scenario {:block "sand" :count 1 :ways #{:seen}}
-                                 {:blocks (merge floor wall sand) :inventory pickaxe :unreachable (vec (keys sand))} 60))]
+              s (await (scenario {:block "iron_ore" :count 1 :ways #{:seen}}
+                                 {:blocks (merge floor wall ore) :drops {"iron_ore" "raw_iron"} :inventory pickaxe :unreachable (vec (keys ore))} 60))]
           (is (<= 2 (dig-count s)) "rock was dug toward the ore")
           (is (= 1 (count (events-of s :mine.unreachable))) "then it was skipped, no failure")
           (is (zero? (:failures (job-mem s) 0)))

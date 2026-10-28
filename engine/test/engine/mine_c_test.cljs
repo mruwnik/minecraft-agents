@@ -548,7 +548,8 @@
           (await (run-ticks s 40))
           ;; which wall cells the cut takes follows where go-to's tours of unseen land left the body
           (is (= [2 64 0] (first (dug-cells s))) "dug from behind the wall")
-          (is (<= (count (dug-cells s)) 3) "then the cheapest cut beside it: one cell from the start, two from the far side")
+          (is (contains? #{[[1 64 0]] [[3 65 0] [3 64 0]]} (vec (rest (dug-cells s))))
+              "then the cheapest cut beside it from the side the body stands on: the wall cell between, or the far wall's column")
           (is (= 1 (get (inv s) "raw_iron")) "the body cut its way beside the dug cell and picked the drop up")
           (is (= :count (:reason (done-event s)))))))))
 
@@ -564,11 +565,12 @@
   (is (= :lost (drops/drop-verdict [0 64 0] 3 [] [[0 64 0]])) "unreached far away, then lost from beside it")
   (is (nil? (drops/drop-verdict [0 64 0] 3 [[0 64 0]] []))))
 
-(deftest a-cut-beside-a-dug-cell-never-opens-a-cell-under-gravel
-  (let [cut (fn [blocks] (let [s (start {:world {:blocks blocks :inventory pickaxe :yaw 270}})]
-                           (drops/drop-cut {:primitives (:p s)} [2 64 0] 4)))]
-    (is (= [[1 64 0]] (cut walled-ore)) "the wall cell between is the way")
-    (is (nil? (cut (assoc walled-ore "1,65,0" "gravel"))) "gravel over it would fall on the body walking in")))
+(deftest a-cut-beside-a-dug-cell-never-opens-a-cell-under-gravel-nor-costs-more-than-the-drop
+  (let [cut (fn [blocks worth] (let [s (start {:world {:blocks blocks :inventory pickaxe :yaw 270}})]
+                                 (drops/drop-cut {:primitives (:p s)} [2 64 0] worth)))]
+    (is (= [[1 64 0]] (cut walled-ore 100)) "the wall cell between is the way")
+    (is (not-any? #{[1 64 0]} (cut (assoc walled-ore "1,65,0" "gravel") 100)) "gravel over it would fall on the body walking in: the cut goes round")
+    (is (nil? (cut walled-ore 0.01)) "a drop worth less than one cell's dig is not cut to")))
 
 (deftest a-mine-that-ends-short-of-its-count-is-stopped-not-completed
   (async done
@@ -662,7 +664,7 @@
   (let [s (doto (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}}) (set-pos! -0.5 64 0.5))
         c {:primitives (:p s) :id "cut-resume"}
         asks (settings/with-settings {:jobs.lib.dig-route/max-nodes 1}
-               #(vec (take-while #{:searching} (repeatedly (fn [] (drops/drop-cut c [2 64 0] 4))))))]
+               #(vec (take-while #{:searching} (repeatedly (fn [] (drops/drop-cut c [2 64 0] 100))))))]
     (is (seq asks) "the first call is cut short")
     (is (= [1 64 0] (last (settings/with-settings {:jobs.lib.dig-route/max-nodes 1}
-                            #(loop [n 0] (let [r (drops/drop-cut c [2 64 0] 4)] (if (and (= :searching r) (< n 200)) (recur (inc n)) r)))))))))
+                            #(loop [n 0] (let [r (drops/drop-cut c [2 64 0] 100)] (if (and (= :searching r) (< n 200)) (recur (inc n)) r)))))))))

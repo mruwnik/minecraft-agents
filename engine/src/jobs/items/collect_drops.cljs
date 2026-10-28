@@ -93,8 +93,6 @@
 (a/defargs settings
   {::max-settle-waits {:default 10 :doc "Checks of a hole drop that still moves before it counts as settled." :spec (a/int-in 0 nil)}
    ::walk-s-per-block {:default 0.4 :doc "Seconds a quote counts to walk one block to a drop." :spec (a/num-in 0 nil)}
-   ::dig-max-cells {:default 16 :doc "The most cells :dig digs to reach one drop; a dearer route leaves it." :spec (a/int-in 0 nil)}
-   ::dig-margin {:default 3 :doc "How far outside the box round the body and the drop the dig route may wander, in blocks." :spec (a/int-in 0 nil)}
    ::replans {:default 4 :doc "How often a dig route is planned again after a dig of it failed, the cells before it dug." :spec (a/int-in 0 nil)}
    ::pile-reach {:default 10 :doc "How far from the place of an open death a :near spot still counts as its pile, in blocks." :spec (a/num-in 0 nil)}
    ::radius {:default 16 :doc "How far from the work area a drop is looked for when the call gives no :radius, in blocks." :spec (a/num-in 0 nil)}
@@ -262,12 +260,16 @@
         (do (await (ctx/act c :moveTo #js {:pos #js {:x (+ x 0.5) :y y :z (+ z 0.5)} :range 0.15}))
             (sh-sense/solid-at? p (update (sh-sense/feet p) :y dec))))))
 
+(defn item-worth
+  "Seconds the item entity is worth (jobs.lib.cost/item-value)."
+  [^js item]
+  (let [{:keys [name count]} (js->clj (.-item item) :keywordize-keys true)]
+    (:value (cost/item-value [{:name name :count (or count 1)}]))))
+
 (defn drops-worth
   "Seconds the drops in sight round the anchor are worth (jobs.lib.cost/item-value): what a walk to them may risk."
   [c]
-  (:value (cost/item-value (for [e (candidates c (or (:anchor (ctx/mem c)) (:near (:args c)) (u/self-pos c)))
-                                 :let [{:keys [name count]} (js->clj (.-item e) :keywordize-keys true)]]
-                             {:name name :count (or count 1)}))))
+  (reduce + 0 (map item-worth (candidates c (or (:anchor (ctx/mem c)) (:near (:args c)) (u/self-pos c))))))
 
 (defn ^:async walk-down!
   "Walk within a block of item, more than a block lower than the feet (or, with ways, higher: a column top is climbed by
@@ -306,15 +308,15 @@
   "dig-route/route, priced by prices (dig-route/body-prices), from a feet cell to the cell of a drop lying at goal; block-at
   answers a cell's name or nil when never seen; a cell never seen is taken for stone (a rim sees no floor down a dug column),
   except under a seen open cell: it may be air of any depth (a trench), so no step lands on it. A drop at rest has a solid
-  floor, seen or not. With an owner (a job id) a search that spends its nodes is kept and gone on at the next call:
-  {:problem :searching} till it ends."
-  [prices owner block-at from [gx gy gz :as goal]]
+  floor, seen or not. A route priced over worth (seconds, nil: no bound) is none: {:problem :dearer}. With an owner (a job id)
+  a search that spends its nodes is kept and gone on at the next call: {:problem :searching} till it ends."
+  [prices worth owner block-at from [gx gy gz :as goal]]
   ((if owner (partial dig-route/route-resumed [owner :drop-route from goal]) dig-route/route)
    (fn [cell]
      (or (block-at cell)
          (when (or (= cell [gx (dec gy) gz]) (not (open-above? block-at cell))) "stone")))
    from goal
-   (merge prices {:max-digs (settings/get settings ::dig-max-cells) :margin (settings/get settings ::dig-margin)}
+   (merge prices (when worth {:max-s worth})
           ;; a nameless cell is dug to see it, at the price of the rock it is guessed for
           (when-let [dig-s (:dig-s prices)] {:dig-s (fn [name cell] (dig-s (or name blocks/hidden-guess) cell))}))))
 
@@ -363,10 +365,12 @@
       (let [from (u/cell-vec (u/self-pos c))
             _ (await (look-pit! c from (item-cell item)))
             seen-name (fn [[x y z]] (u/seen-name p {:x x :y y :z z}))
-            r (drop-route (dig-route/body-prices p #(nil? (seen-name %))) (:id c) seen-name from (item-cell item))]
+            wanted (set (:items (:args c)))
+            yield (fn [n] (let [i (blocks/item-name {:block n})] (if (contains? wanted i) (:value (cost/item-value [{:name i :count 1}])) 0)))
+            r (drop-route (dig-route/less-yield (dig-route/body-prices p #(nil? (seen-name %))) yield) (item-worth item) (:id c) seen-name from (item-cell item))]
         (case (:problem r)
           :searching :continue
-          :no-route :no-route
+          (:no-route :dearer) :no-route
           nil
           (let [d (await (dig-cells! c (:dig r)))]
             (cond

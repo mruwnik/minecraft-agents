@@ -11,7 +11,7 @@
             [engine.settings :as settings]
             [jobs.gather.mine.cause :as cause]
             [jobs.gather.mine.descent :refer [descend-due? descend-round! dig-here-due? shaft-due? shaft-under-way? shaft-round!]]
-            [jobs.gather.mine.drops :refer [collect! dig-cell! cut-to-drop! cut-after? target-cut-max]]
+            [jobs.gather.mine.drops :refer [collect! dig-cell! cut-to-drop! cut-after? worth]]
             [jobs.gather.mine.end :refer [stop! wanted]]
             [jobs.gather.mine.branch :as branch]
             [jobs.gather.mine.side :as wall]
@@ -292,7 +292,7 @@
                         cut (when (and (= :blocked walked) (not (mw/stay-level? (:args c))) (cut-after? (near/last-walk c))
                                        (not (#{:off-plan :needs-health} (result/why (near/last-walk c))))
                                        (not (contains? (:target-cut (ctx/mem c)) cell)))
-                              (let [r (await (cut-to-drop! c cell (target-cut-max)))]
+                              (let [r (await (cut-to-drop! c cell (worth c (count (targets/cluster-of pos targets)))))]
                                 (ctx/emit! c :mine.cut-toward :info {:pos cell :result r :text (str "mine cuts toward " (str/join "," cell) ": " (or (some-> r name) "no way"))})
                                 r))]
                     (cond

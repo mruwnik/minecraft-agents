@@ -386,7 +386,7 @@
   "The target to walk to next: of the targets off the ground snapshot (else those over it) that the body sees in a
   clear line when any does (the block under the feet only when there is no other: it is dug from beside, where a drop
   deeper down is out of sight), the one the body walks to
-  soonest (targets/nearest!), :searching while that search goes on, the nearest in a line when none is found reachable
+  soonest (targets/nearest! over all of them: the search's heuristic is the lower bound), :searching while that search goes on, the nearest in a line when none is found reachable
   (its walk decides); nil with no targets."
   [c targets]
   (let [{:keys [ground start]} (ctx/mem c)
@@ -397,7 +397,7 @@
         off (or (not-empty (filterv #(not (floor-hole? c %)) off)) off)
         group (in-line c (if (seq off) off pool))]
     (when (seq group)
-      (let [a (await (targets/nearest! c group (reach) {:tag :mine}))]
+      (let [a (await (targets/nearest! c group (reach) {:tag :mine :all true}))]
         (case (:status a)
           :found (:target a)
           :searching :searching

@@ -1,5 +1,5 @@
 (ns jobs.lib.dig-route
-  "The fewest cells to dig for a walkable way from one feet cell to another through stone: a pure search over what the
+  "The cheapest walkable way, cells dug included, from one feet cell to another through stone: a pure search over what the
   caller says each cell is (block-at cell -> name, or nil when never seen)."
   (:require [engine.args :as a]
             [engine.settings :as settings]
@@ -82,7 +82,7 @@
   "route's search begun: a fn of n that runs it on for at most n more cells expanded, [answer expanded]: answer route's
   once the search has ended (the same each run after), nil while it goes on; expanded the cells this run expanded.
   Plain numbers throughout (a cell is a key, its reads are cached by key): a climb expands about 10k cells."
-  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-dig-s margin range near] :or {dig-s (constantly 1) step-s 0 ways #{}} :as opts}]
+  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-dig-s max-s margin range near] :or {dig-s (constantly 1) step-s 0 ways #{}} :as opts}]
   (let [[fx _ fz] from
         [gx gy gz] goal
         range (when (and range (pos? range)) range)
@@ -108,7 +108,6 @@
         ;; a step whose feet, head or floor is unseen, as cost/unseen-route-s prices one
         unseen-at (fn [x y z] (if (and unseen? (or (unseen-cell? x y z) (unseen-cell? x (inc y) z) (unseen-cell? x (dec y) z))) unseen-step-s 0))
         way-keys (let [s (js/Set.)] (doseq [[x y z] ways] (.add s (key x y z))) s)
-        max-digs (:max-digs opts)
         ;; without a body's own, the drops a body with no hp to spend takes
         max-fall (or (:max-fall opts) (:max-drop (armour/fall-profile {})))
         fall-prices (let [a #js []] (dotimes [dy (inc max-fall)] (.push a (if (and fall-s (pos? dy)) (fall-s dy) 0))) a)
@@ -156,7 +155,7 @@
                  (let [nk (key nx ny nz)
                        k (+ (aget from-node 1) (aget acc 1)) ds (+ (aget from-node 2) (aget acc 2))
                        placed (cond-> (aget from-node 5) (not (keyword-identical? :walk move)) inc)]
-                   (when (and (or (nil? max-digs) (<= k max-digs)) (or (nil? max-dig-s) (<= ds max-dig-s))
+                   (when (and (or (nil? max-dig-s) (<= ds max-dig-s))
                               (or (nil? max-places) (<= placed max-places)))
                      (let [nd (+ (aget from-node 0) (aget acc 0) (unseen-at nx ny nz))
                            ^js old (.get best nk)]
@@ -221,6 +220,8 @@
                           ck (some-> top (aget 2))]
                       (cond
                         (nil? top) {:problem :no-route}
+                        ;; the heuristic is a lower bound: every route left costs more
+                        (and max-s (> (aget top 0) max-s)) {:problem :dearer}
                         (.has done ck) (recur)
                         (or (== ck goal-key) (and range (end? ck)))
                         (let [path (mapv cell-of (reverse (take-while some? (iterate #(aget (.get best %) 3) ck))))
@@ -254,6 +255,12 @@
      :unseen? unseen?
      :unseen-step-s (cost/unseen-step-s (wworld/unseen-share p))}))
 
+(defn less-yield
+  "prices with each seen block's dig priced less what its drop is worth to the caller (yield-s name -> seconds), never
+  below 0: a cut through what the caller digs for pays for itself."
+  [prices yield-s]
+  (update prices :dig-s (fn [dig-s] (fn [name cell] (when-let [s (dig-s name cell)] (max 0 (- s (if name (yield-s name) 0))))))))
+
 (defn route
   "The cells to dig (head cell first within a step, in walking order) of the cheapest route from feet cell from to feet
   cell goal, falls of at most :max-fall blocks (default: those a body with no hp to spend takes, cost.armour/fall-profile),
@@ -265,10 +272,10 @@
   floor is (:unseen? cell), or on a step up the cell over the head it leaves, or every face its placed block rests on; a
   block :dig-s prices nil is not dug, nor a cell under sand or gravel (it would fall on the body walking in), nor a
   floor of :ways (the floors of the body's own stairs), on which nothing is placed either. Bounds, each only when
-  given: :max-dig-s seconds of digging, :max-digs cells, :max-places blocks laid or jump-placed (the blocks carried),
+  given: :max-dig-s seconds of digging, :max-s seconds of the whole route, :max-places blocks laid or jump-placed (the blocks carried),
   :margin cells round the two ends; :range r (> 0) also ends it on any feet cell within r of :near (default goal).
   {:dig [cell ..] :steps [{:to feet :move :walk|:laid|:pillar :dig [cell ..] :place cell} ..] :seconds the route's price}, {:problem :no-route},
-  or {:problem :budget} when :max-nodes cells were expanded first (search goes on past it)."
+  {:problem :dearer} when every route costs more than :max-s, or {:problem :budget} when :max-nodes cells were expanded first (search goes on past it)."
   [block-at from goal opts]
   (or (first ((search block-at from goal opts) (get opts :max-nodes (settings/get settings ::max-nodes)))) {:problem :budget}))
 
