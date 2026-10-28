@@ -285,9 +285,14 @@
             (seq left) (cost/followed (flee-answer c left nil nil nil))))))))
 
 (defn mob-near
-  "Hostile e as the answers take a mob: {:name :held :distance :speed (its chase speed) :follow (its follow range)}."
+  "Hostile e as the answers take a mob: {:name :held :distance :speed (its chase speed) :follow (its follow range)}; a
+  seen mob's distance from a body afloat at the surface is from the surface cell's floor (breath/start-y), not the bob."
   [p e]
-  {:name (.-name e) :held (.-held e) :distance (danger-q/mob-distance p e) :speed (cost/chase-speed (cost/mob-kind e)) :follow (threats/follow-range (.-name e))})
+  {:name (.-name e) :held (.-held e)
+   :distance (if (and (breath/swimming? p) (not (breath/head-under? p)) (danger-q/seen-only? e))
+               (u/dist (assoc (u/pos-of (.-pos (.self p))) :y (breath/start-y p)) (danger-q/mob-pos p e))
+               (danger-q/mob-distance p e))
+   :speed (cost/chase-speed (cost/mob-kind e)) :follow (threats/follow-range (.-name e))})
 
 (defn swim-out
   "{:swim blocks :land blocks :chance c} of a body in water swimming to the nearest dry stand joined to it by water and air
