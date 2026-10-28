@@ -47,6 +47,7 @@
    :after [[:body-near [22.5 0 16.5] 2]]
    :limit-s 290}
   {:name "hurt-hungry-body-with-no-food-gives-up-and-walks-on"
+   :time :day :time-why :dawn-decision :plot {:light :sky}
    :body {:inventory [["dirt" 32]] :effects [["hunger" 120 49]]}
    :act [[:until-rcon "data get entity $BODY foodLevel" "data: (1[0-7])$" 60]
          [:rcon "effect clear $BODY minecraft:hunger"]
