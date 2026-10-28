@@ -1,4 +1,4 @@
-;; Card 6186b2dd (8062eebc): a lone melee mob 5..10 blocks away that a fight would not win, with 3+ blocks carried: the retreat pillars
+;; Card 6186b2dd (8062eebc): a lone melee mob 5..10 blocks away that a fight would not win, with 3+ blocks carried: respond prices the pillar cheapest and pillars
 ;; up before any flee step (a walk gains little on a zombie). Open flat ground, a helmeted zombie 7 blocks east, the body at 10 hp
 ;; with no weapon. Should-succeed: dirt 24: a pillar, retreat_sealed "pillared up", no flee step first. Should-fail (flees as before):
 ;; 2 blocks carried: flee steps, no pillar.

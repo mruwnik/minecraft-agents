@@ -5,8 +5,8 @@
 ;; b5c1d94a 40613c1e 94b5eaee 1f0b4279 and 8035feed (a body in a hole with dirt, a zombie that moves).
 ;; Pit cases: bare level pit. The zombie stands 3 off on the stone top (farther off its line of sight over the lip misses the body);
 ;; the glass case has a zombie seen through glass with no walkable way to the pit: the body stays.
-;; Pillar cases: open ground, 20 dirt, one NoAI zombie 7 blocks off (a lone melee mob between cover-gap 5 and refuge-gap 10:
-;; pillar first). Tunnel cases: the cornered-retreat stone mass (x 2..30, z 10..22, y 0..4), 1x2 tunnel along z 16 from x 5.
+;; Pillar cases: open ground, 20 dirt, one NoAI zombie 7 blocks off, the pillar counted as never failing for a mob (its
+;; ::pillar-mob-fails) so that it is the priced choice. Tunnel cases: the cornered-retreat stone mass (x 2..30, z 10..22, y 0..4), 1x2 tunnel along z 16 from x 5.
 {:defaults
  {:tags [:hostile :survival :cornered :refuge]
   :time :any
@@ -17,6 +17,7 @@
   :limit-s 120}
  :cases
  [{:name "creeper-at-the-pillar-body-leaves-before-a-hit"
+   :settings {:jobs.survival.respond.options/pillar-mob-fails {:beside {:k 0 :n 30} :clear {:k 0 :n 30}}}
    :body {:inventory [["dirt" 20]]}
    :act [[:summon "zombie" [9.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:await {:source :job :kind :retreat_sealed} 40]
@@ -24,7 +25,8 @@
    :expect [{:event {:source :job :kind :retreat_sealed :message [:contains "pillared up"]} :within-s 40}
             {:event {:source :job :kind :retreat.hide-breached :message [:contains "creeper"]} :within-s 70}]}
   {:name "creeper-at-the-pillar-setting-off-body-stays"
-   :settings {:jobs.survival.hide-out/leave-for-breakers false}
+   :settings {:jobs.survival.hide-out/leave-for-breakers false
+              :jobs.survival.respond.options/pillar-mob-fails {:beside {:k 0 :n 30} :clear {:k 0 :n 30}}}
    :body {:inventory [["dirt" 20]]}
    :act [[:summon "zombie" [9.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:await {:source :job :kind :retreat_sealed} 40]
@@ -34,6 +36,7 @@
    :after [[:body-near [16.5 3 16.5] 1.5]]
    :limit-s 80}
   {:name "zombie-at-the-pillar-foot-keeps-the-hide-past-60-s"
+   :settings {:jobs.survival.respond.options/pillar-mob-fails {:beside {:k 0 :n 30} :clear {:k 0 :n 30}}}
    :body {:inventory [["dirt" 20]]}
    :act [[:summon "zombie" [9.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:await {:source :job :kind :retreat_sealed} 40]
@@ -55,6 +58,7 @@
             {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind :completed :data {:arrived true}}}]
    :limit-s 70}
   {:name "hide-names-the-zombie-and-the-queued-dig-runs-after"
+   :settings {:jobs.survival.respond.options/pillar-mob-fails {:beside {:k 0 :n 30} :clear {:k 0 :n 30}}}
    :blocks [[:set [24 0 24] "dirt"]]
    :body {:inventory [["dirt" 20]]}
    :act [[:summon "zombie" [9.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]

@@ -1,4 +1,4 @@
-;; A body at 4 hp two blocks outside its own shut house, carrying blocks, with a lone zombie 8 blocks off (the early pillar's case): it runs
+;; A body at 4 hp two blocks outside its own shut house, carrying blocks, with a lone zombie 8 blocks off: it runs
 ;; into the house and shuts the door; it builds no column outside (a pillar is no refuge from a shooter and would block the door).
 ;; Hut: planks x 12..18, z 12..18, y 0..3 (hollow), room 13..17, shut oak door at [15 0..1 18]; home bed inside at [14 0 14]; body 2 south of the door.
 ;; Should-succeed: the body ends inside the hut with the door shut, no cobblestone outside. Should-fail: a cobblestone column at [15 0..2 19].
