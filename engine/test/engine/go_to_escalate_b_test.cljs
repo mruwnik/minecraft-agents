@@ -15,6 +15,7 @@
             [jobs.lib.cost.ways :as cw]
             [jobs.lib.escape :as escape]
             [jobs.lib.pen :as pen]
+            [jobs.lib.own-pen :as own-pen]
             [engine.ready-test :as rt]
             [jobs.movement.go-to.holes :as holes]
             [jobs.movement.go-to.escalate-choose :as ec]
@@ -296,6 +297,25 @@
               "the dead end's cut is put back before the next way, not once the walk is on")
           (is (some #{[3 64 0]} (:cells (first (events-of seen :go-to.restored)))) "the cell that opens into the pen first")
           (is (not-any? #{"air"} [(block p [3 64 0]) (block p [3 65 0])]) "the pen's wall is whole again"))))))
+
+(deftest go-to-reads-its-own-pen-once-per-escalation-round
+  ;; choose-escalation! and the replan hold the pen read in c (with-own-pen); without it each fn reads the pen itself (holes/pen-of)
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zones [{:name "pen" :owner "Fake" :min [-2 60 -2] :max [2 66 2]}]
+              cow {:id 7 :name "cow" :kind "passive" :pos {:x -1.5 :y 64 :z -1.5}}
+              reads (atom 0)
+              rounds (atom 0)
+              read own-pen/shut-in
+              with-pen holes/with-own-pen]
+          (with-redefs [own-pen/shut-in (fn [c f] (swap! reads inc) (read c f))
+                        holes/with-own-pen (fn [c] (swap! rounds inc) (with-pen c))]
+            (await (run-job! {:sight 3 :self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks thick-pit-pen :entities [cow]
+                                :inventory [{:name "stone_pickaxe" :count 1}]}
+                               'jobs.movement.go-to {:pos [10 64 0] :range 1} zones)))
+          (is (pos? @rounds) "the escalation round holds the pen read in c")
+          (is (= @rounds @reads) "and no fn of the round reads the pen again"))))))
 
 (deftest go-to-hops-the-1-high-sill-of-its-pen-gap-and-digs-nothing
   (async done
