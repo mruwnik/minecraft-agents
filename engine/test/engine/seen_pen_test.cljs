@@ -11,6 +11,7 @@
             [engine.test-util :as tu]
             [jobs.animals.herd-survey :as hs]
             [jobs.animals.herd-run :as hr]
+            [jobs.lib.memory-age :as memory-age]
             [jobs.lib.pen :as pen]
             [jobs.lib.pen-gate :as pg]))
 
@@ -28,13 +29,13 @@
     (perception/pass! (aget (:p s) "perception"))))
 
 (defn seeing
-  "The body west of the pen after a full sight pass; aged?: then 30 s on and looking at its feet, so the fence and floor
-  are remembered and the gate (a mutable block, remembered 10 s) is unknown."
+  "The body west of the pen after a full sight pass; aged?: then on till the gate (a door kind) is likelier changed than
+  not and looking at its feet, so the fence and floor are remembered and the gate is unknown."
   [w aged?]
   (let [s (ht/clock-on-wait! (h/setup-seeing (coarse-world w) nil 700))]
     (scan! s)
     (when aged?
-      (swap! (:clock s) + 30000)
+      (swap! (:clock s) + (memory-age/due-age-ms memory-age/DOOR (dec memory-age/LIKELIER)))
       (perception/pass! (aget (:p s) "perception")))
     s))
 
@@ -62,7 +63,7 @@
 
 (deftest read-pen-reads-what-the-body-sees
   (is (false? (gate-unknown? (seeing {} false))) "gate in view")
-  (is (true? (gate-unknown? (seeing {} true))) "gate remembered past its 10 s: unknown, the fence still remembered"))
+  (is (true? (gate-unknown? (seeing {} true))) "gate remembered till likelier changed than not: unknown, the fence still remembered"))
 
 (deftest a-pen-with-an-unknown-gate-herds-and-does-not-end-no-pen
   (async done
@@ -126,7 +127,7 @@
           (is (= :no-pen (:reason (ht/done-event s))) "nothing can be read: the run ends :no-pen, never :unreachable, never brings"))))))
 
 (defn aged-run
-  "A herd run with the gate remembered past its 10 s, after f was applied to the setup."
+  "A herd run with the gate aged to unknown (seeing), after f was applied to the setup."
   [f world]
   (let [s (f (seeing world true))]
     (ht/submit! (ht/clock-on-wait! s) {:target 1})))

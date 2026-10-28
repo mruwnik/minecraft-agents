@@ -81,7 +81,7 @@
            cells))
 
 (defn gate-state
-  "The gate at cell as the body knows it: :open, :shut, or :unknown (never seen, or remembered past its 10 s)."
+  "The gate at cell as the body knows it: :open, :shut, or :unknown (never seen, or remembered so long it is likelier changed than not: jobs.lib.memory-age)."
   [p cell]
   (let [b (u/seen-block-at-fn p)]
     (cond

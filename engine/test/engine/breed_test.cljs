@@ -198,7 +198,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[label world] [["night" {:time 15000}] ["rain" {:raining true}]]]
+        ;; the night is block-lit: a world with no light data guesses its unseen cells dark (look/unseen-lit?), so exposure would wait first
+        (doseq [[label world] [["night" {:time 15000 :light {} :light-default [15 15]}] ["rain" {:raining true}]]]
           (let [s (await (scenario {:mob "bee"} (merge world {:inventory [{:name "dandelion" :count 2}] :entities [(ent 1 "bee" 2) (ent 2 "bee" 3)]}) 4))]
             (is (not (finished? s)) label)
             (is (= :bees-indoors (:reason (first (events-of s :waiting)))) label)
@@ -693,3 +694,4 @@
           (core/submit! (:eng s) (list 'jobs.animals.breed {:mob "cow"}) {})
           (await (run-ticks s 10 700))
           (is (= 2 (count (:fed (done-event s))))))))))
+
