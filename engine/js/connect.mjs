@@ -17,6 +17,7 @@ const { pathfinder } = pf
 // viewDistance: chunks loaded around the body (mineflayer's own default 'far' is 12; ~80-100 KB heap per column)
 export const DEFAULTS = { version: MC_VERSION, auth: 'offline', viewDistance: 8 }
 export const SPAWN_TIMEOUT_MS = 60000
+const DIFFICULTIES = ['peaceful', 'easy', 'normal', 'hard']
 
 // The mineflayer createBot options for a body's connection settings. followTickRate (default on) swaps in
 // physics that follows /tick rate, see tick-rate-physics.mjs.
@@ -46,6 +47,8 @@ export function connectBot (params, { timeoutMs = SPAWN_TIMEOUT_MS, create = min
     // Mineflayer keeps no simulation distance; the login packet precedes spawn, so catch it here, on the bot's own client.
     bot._client.on('login', packet => { bot.simulationDistance = packet.simulationDistance ?? bot.simulationDistance })
     bot._client.on('simulation_distance', packet => { bot.simulationDistance = packet.distance ?? bot.simulationDistance })
+    // 26.1's difficulty packet carries the name, which mineflayer's bot.game.difficulty looks up as an index (undefined).
+    bot._client.on('difficulty', ({ difficulty: d }) => { bot.difficulty = typeof d === 'string' ? d : DIFFICULTIES[d] ?? null })
     const timer = setTimeout(() => fail(new Error(`no spawn within ${timeoutMs} ms`)), timeoutMs)
     const onError = err => fail(err)
     const onKicked = reason => fail(new Error(`kicked before spawn: ${JSON.stringify(reason)}`))

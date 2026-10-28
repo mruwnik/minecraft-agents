@@ -52,3 +52,10 @@ test('the simulation distance is caught from the login packet and kept current b
   env.bot = updated
   assert.equal(sense.serverRules().simulationDistance, 4)
 })
+
+test('the difficulty packet sets the difficulty name, given as 26.1 names it or as an index', async () => {
+  const named = await dropAfter([['difficulty', { difficulty: 'easy', difficultyLocked: false }]])
+  assert.equal(createSense({ bot: named, isOffline: () => false }).serverRules().difficulty, 'easy')
+  const indexed = await dropAfter([['difficulty', { difficulty: 3, difficultyLocked: false }]])
+  assert.equal(indexed.difficulty, 'hard')
+})
