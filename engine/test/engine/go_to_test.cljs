@@ -1476,3 +1476,25 @@
           (is (empty? (events-of s :go-to.jumped)) "the other call's poses are no jump of this body")
           (is (= {:arrived true} @out) (pr-str @out))
           (is (= [30 64 0] (at p))))))))
+
+(deftest a-body-moved-far-on-every-walk-to-the-same-place-gives-up-instead-of-starting-again-for-ever
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p] :as s} (setup {:blocks flat :self {:pos [20 64 0]}})
+              out (atom :not-done)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out {:pos [38 64 0] :range 0})))]
+          ;; every walk's second pose lies 14 blocks off its first, and the body stays where it was
+          (.override (.-world p) "steer"
+                     (fn [token ^js a impl]
+                       (let [decide (.-decide a)
+                             poses (atom 0)
+                             wrapped (fn [pose]
+                                       (decide (js/Object.assign #js {} pose #js {:x (+ (.-x pose) (if (< 1 (swap! poses inc)) 14 0))})))]
+                         (impl token (js/Object.assign #js {} a #js {:decide wrapped})))))
+          (core/submit! eng '(recording-parent) {})
+          (await (tick-out! eng 30 (:step s)))
+          ((:stop s))
+          (is (false? (:arrived @out)) (pr-str @out))
+          (is (= :cut-again (:why @out)) (pr-str @out))
+          (is (= 3 (count (events-of s :go-to.jumped))) "one restart per jump, then the call ends"))))))

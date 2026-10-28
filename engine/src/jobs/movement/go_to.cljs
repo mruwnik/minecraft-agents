@@ -17,7 +17,7 @@
             [jobs.movement.go-to.air :as air]
             [jobs.movement.go-to.aim :as aim :refer [args-refusal goal-danger goal-pos pre-aim!]]
             [jobs.movement.go-to.column :as column]
-            [jobs.movement.go-to.cut :refer [cut-loop? drop-record! jumped? nearest-hostile note-restart! restart-after-jump! start-attempt! way-hostiles with-call]]
+            [jobs.movement.go-to.cut :refer [cut-loop? drop-record! jump-loop? jumped? nearest-hostile note-restart! restart-after-jump! start-attempt! way-hostiles with-call]]
             [jobs.movement.go-to.escalate-choose :as choose]
             [jobs.movement.go-to.escalation :as esc]
             [jobs.movement.go-to.faults :as faults]
@@ -58,7 +58,7 @@
     toward walk by walk, and to the edge of loaded land when that is the only way on. It returns :continue only while
     an escalation or put-back child is waiting on the world. A round that ran out of re-plans while each learned an unseen cell counts as progress (no try booked). Each fruitless round that plans again says so (info go-to.retrying: reason, try); each books a try, and a call whose :spend :tries (its own, or a caller's least) is used up
     gives up instead (a caller that re-aims itself passes {:tries 1}).
-  - A body moved 8 or more blocks in one tick (a teleport, a pearl) ends the walk at once and starts the call again from where it stands: the walk's counters go (info go-to.jumped).
+  - A body moved 8 or more blocks in one tick (a teleport, a pearl) ends the walk at once and starts the call again from where it stands: the walk's counters go, the cut bookkeeping stays (info go-to.jumped). Moved far from the same place max-cut-restarts times in a row, it gives up :cut-again (data :jumps).
   - Gives up with the cause {:reason :unreachable :why ...}, data {:arrived false :why ... :text
     words ...}: limit-reached for :needs-health (:line :health) and :search-spent (:line :job-time); condition-failed
     for :goal-dangerous and :goal-unloaded; else (:explore-spent too) nothing-possible. :why is the planner's
@@ -93,11 +93,9 @@
    :worth {:doc "seconds the caller counts reaching the goal worth, nil or 0: not said. It budgets a tour of frontiers when no route is known (that less the trip and the straight walk; nil: a few times the straight walk) and lets the start check accept a route risk over the share of health it allows, up to all but 1 hp, when the hp cost (jobs.lib.cost/hp-seconds, dearer when hurt) is within it" :spec (a/num-in 0 nil) :default nil}
    :ignore-zones? :shared})
 
-(defn ^:async step!
-  "One iteration of a call: :again to go on in the same call, else what the call returns. The flee ways waiting for their
-  cells are read first (way-log/resolve!), so a way seen on any walk is counted."
+(defn ^:async step-round!
+  "One walk round of a step (see step!)."
   [c0 pos]
-  (when (jumped? c0) (restart-after-jump! c0))
   (let [c (health/with-body-food c0)
         m (ctx/mem c)]
     (way-log/resolve! c)
@@ -117,6 +115,16 @@
                                 (cond (and (= :guess (:column-open m)) (not (:column-near m))) (max (:range (:args c)) column/approach-range)
                                       :else (:range (:args c)))
                                 (some-> (:doors (:args c)) keyword)))))))))
+
+(defn ^:async step!
+  "One iteration of a call: :again to go on in the same call, else what the call returns. The flee ways waiting for their
+  cells are read first (way-log/resolve!), so a way seen on any walk is counted."
+  [c0 pos]
+  (when (jumped? c0) (restart-after-jump! c0))
+  (if (jump-loop? c0)
+    (end/give-up! c0 pos {:reason :cut-again} {:jumps (:jump-repeats (ctx/mem c0))})
+    (await (step-round! c0 pos))))
+
 
 (def target [:pos :place])
 
@@ -209,7 +217,7 @@
   record and :open go when the attempt ends (a cut keeps them)."
   [c goal]
   (let [r (await (pace/steps! c (fn [] (step! c (goal-pos c goal)))))]
-    (when (ctx/alive? c) (drop-record! c) (ctx/update-mem! c dissoc :open))
+    (when (ctx/alive? c) (drop-record! c) (ctx/update-mem! c dissoc :open :jump-at :jump-repeats))
     r))
 
 (defn ^:async attempt

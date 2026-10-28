@@ -82,13 +82,23 @@
   (boolean (:jumped (record c))))
 
 (defn restart-after-jump!
-  "A call whose body was teleported mid-walk starts again from where it stands: the walk record and the counters of the
-  walk before the jump go, as at a call's start."
+  "A call whose body was teleported mid-walk starts again from where it stands: the walk record and the walk's counters go,
+  but what the jump showed stays: the cut bookkeeping (:cuts :closest :ref :last-dist) and :jump-repeats, the jumps in a
+  row that began within send-back-margin of the last one's start (the same place: a way that keeps getting the body moved)."
   [c]
-  (fresh-record! c)
-  (ctx/update-mem! c #(-> % (dissoc :best :closest :ref :last-dist :starts :tour-walks :edge-mode :waypoint-misses :waypoint-why :waypoints-tried :lookout-walks :lookouts :wall-walked)
-                          (assoc :blocked 0 :searching 0 :cuts 0 :frontier-best {} :target-best {})))
-  (ctx/emit! c :go-to.jumped :info {:text "the body was moved far in one tick: the walk starts again from here"}))
+  (let [at (select-keys (u/self-pos c) [:x :y :z])
+        prev (:jump-at (ctx/mem c))
+        repeat? (and prev (<= (u/dist at prev) (send-back-margin)))]
+    (fresh-record! c)
+    (ctx/update-mem! c #(-> % (dissoc :best :starts :tour-walks :edge-mode :waypoint-misses :waypoint-why :waypoints-tried :lookout-walks :lookouts :wall-walked)
+                            (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {} :jump-at at
+                                   :jump-repeats (if repeat? (inc (:jump-repeats % 1)) 1))))
+    (ctx/emit! c :go-to.jumped :info {:text "the body was moved far in one tick: the walk starts again from here"})))
+
+(defn jump-loop?
+  "Whether the body was moved far, from the same place, max-cut-restarts times in a row."
+  [c]
+  (>= (:jump-repeats (ctx/mem c) 0) (max-cut-restarts)))
 
 (defn tour
   "The call's tour of frontiers so far, {:explored :walks}: the blocks walked away from the goal and the frontier walks
