@@ -1,6 +1,6 @@
 ;; Card 9bf305a3: the only way to the goal passes a skeleton 15.6 blocks off, past its bow range (15) and inside the
 ;; trigger's follow-range cut (16). A walk away there is priced near free, so each pass may be trigger, a step out,
-;; go-to back into the band, trigger again. The body must arrive, deciding a few times at most.
+;; go-to back into the band, trigger again. The body must arrive, deciding at least once and a few times at most.
 ;; Plot 64 x 17 (z 0..16): the farthest lane, z 16.5, passes the skeleton (NoAI at z 0.9: no shots, helmeted) 15.6 off; body at [4.5 0 16.5], goal at x 56.
 {:defaults
  {:tags [:hostile :survival :go-to]
@@ -15,7 +15,7 @@
    :act [[:summon "skeleton" [30.5 0 0.9] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:job (jobs.movement.go-to {:pos #at [56 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 70}
-            {:count-event {:source :job :kind :hostile.decided} :for-s 70 :at-most 3
+            {:count-event {:source :job :kind :hostile.decided} :for-s 70 :at-least 1 :at-most 3
              :until {:source :job :kind :completed :data {:name "jobs.movement.go-to"}}}]
    :after [[:body-near [56 0 16] 2]]}
   {:name "an-armed-go-to-past-a-skeleton-just-out-of-bow-range-arrives"
@@ -23,6 +23,6 @@
    :act [[:summon "skeleton" [30.5 0 0.9] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:job (jobs.movement.go-to {:pos #at [56 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 70}
-            {:count-event {:source :job :kind :hostile.decided} :for-s 70 :at-most 3
+            {:count-event {:source :job :kind :hostile.decided} :for-s 70 :at-least 1 :at-most 3
              :until {:source :job :kind :completed :data {:name "jobs.movement.go-to"}}}]
    :after [[:body-near [56 0 16] 2]]}]}
