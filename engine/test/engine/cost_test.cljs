@@ -629,6 +629,14 @@
     (is (nil? (rate (line -40 ["lava"]))))
     (is (= (rate (line 16 ["stone"])) (rate (line 16 ["stone" "bedrock" "iron_ore"]))) "the cut ends at a block never dug")))
 
+(deftest an-ore-look-takes-no-evidence-from-the-walls-of-the-bodys-own-tunnel
+  (let [walls (for [x (range 32) z [-1 1] y [16 17]] #js {:name "stone" :pos #js {:x x :y y :z z}})
+        p #js {:seenBlocks (fn [_] (clj->js walls))}
+        tunnel (set (for [x (range 32) y [16 17]] [x y 0]))
+        chance #(cost/look-leg-chance p [] ["iron_ore" "deepslate_iron_ore"] [0 0] 16 %)]
+    (is (pos? (chance #{})) "a cave's walls: a look elsewhere shows rock alike")
+    (is (zero? (chance tunnel)) "walls the body cut itself tell nothing of the rock a search leg sees")))
+
 (deftest a-kill-is-priced-by-the-fight-and-drops-by-the-loot-table
   (let [body {:health 20 :level 0 :carried 0 :weapon "stone_sword" :equipment {}}]
     (is (< (cost/kill-price body "spider" {:x 0 :y 64 :z 0}) (cost/kill-price (assoc body :health 4) "spider" {:x 0 :y 64 :z 0}))

@@ -13,6 +13,7 @@
             [jobs.lib.access.rules :as rules]
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.cost :as cost]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.stair-time :as stair-time]
@@ -197,7 +198,7 @@
           self (u/self-pos c)
           r (search-scan-radius)
           leg (:cost (cost/walk-cost {:distance (cost/leg-spacing)}))]
-      (+ (cost/search-s (cost/look-leg-chance p (notes/notes c) (search-names need) [(:x self) (:z self)] r) leg (search-worth c))
+      (+ (cost/search-s (cost/look-leg-chance p (notes/notes c) (search-names need) [(:x self) (:z self)] r (ledger/own-cells c)) leg (search-worth c))
          (:cost (cost/walk-cost {:distance r}))))))
 
 (defn climb-sealed?

@@ -16,6 +16,7 @@
             [jobs.lib.breath :as breath]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.food-animals :as food-animals]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.surface-up :as surface-up]
@@ -580,7 +581,7 @@
           [x y z] leg
           q (await (ctx/quote c 'jobs.movement.go-to (leg-args c leg)))
           price (pick/quoted-s c q)
-          chance (if sure? 1 (cost/chance-of (or (cost/look-leg-chance p (notes/notes c) (targets c) [x z] (:scan-radius (:args c))) 1) 0))]
+          chance (if sure? 1 (cost/chance-of (or (cost/look-leg-chance p (notes/notes c) (targets c) [x z] (:scan-radius (:args c)) (ledger/own-cells c)) 1) 0))]
       (cond
         (:estimate q) :continue
         (infinite? price) (do (ctx/update-mem! c dissoc :leg-price) nil)

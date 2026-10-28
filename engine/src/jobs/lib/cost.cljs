@@ -395,12 +395,16 @@
 
 (defn look-leg-chance
   "leg-chance of a search for names by the body p, its looks of radius r: an animal's over the ground the notes ns
-  searched in vain round [x z], an ore's over the faces of its host rock p has seen within r."
-  [p ns names [x z] r]
-  (leg-chance names {:looked (looked-area ns names [x z])
-                     :a (* js/Math.PI r r)
-                     :seen (when-let [ore (ore-of names)]
-                             (look/seen-blocks p {:names (vec (host-blocks ore)) :radius r :max js/Infinity}))}))
+  searched in vain round [x z], an ore's over the faces of its host rock p has seen within r, but those beside own,
+  the cells [x y z] the body cut itself: its own tunnel's walls tell nothing of the rock a look elsewhere shows."
+  [p ns names [x z] r own]
+  (let [beside-own? (fn [{{:keys [x y z]} :pos}]
+                      (let [[x y z] (map js/Math.floor [x y z])]
+                        (some own [[(inc x) y z] [(dec x) y z] [x (inc y) z] [x (dec y) z] [x y (inc z)] [x y (dec z)]])))]
+    (leg-chance names {:looked (looked-area ns names [x z])
+                       :a (* js/Math.PI r r)
+                       :seen (when-let [ore (ore-of names)]
+                               (remove beside-own? (look/seen-blocks p {:names (vec (host-blocks ore)) :radius r :max js/Infinity})))})))
 
 (def torch-gap "Blocks of a dark way one torch lights: its light's spread (jobs.lib.torch-plan) to each side." (inc (* 2 torch-plan/spread)))
 
