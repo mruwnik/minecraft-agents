@@ -12,7 +12,6 @@
             [jobs.lib.look :as look]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
-            [jobs.lib.stair-price :as stair-price]
             [jobs.lib.tools :as tools]
             [jobs.lib.torch :as torch]
             [jobs.lib.util :as u]
@@ -63,13 +62,13 @@
         cut-s (fn [cell] (let [n (or (block-at cell) access/hidden-guess)]
                            (when-not (bs/passable? n) (/ (tools/clear-ms p n) 1000))))
         unseen? (escape/unseen-of p)
-        leg-s (stair-price/leg-pricer p)
+        leg-s (cost/stair-leg-pricer (wworld/unseen-share p))
         fill-s (cw/fill-cost (:count (escape/carried-pillar-item p) 0))
         step-cost (fn [cuts]
                     (let [floor (escape/add (nth cuts 2) [0 -1 0])]
                       (leg-s (map cut-s cuts) (when (bs/passable? (block-at floor)) fill-s) (some unseen? (cons floor cuts)))))
         stair (fn [d] (transduce (map step-cost) + 0 (partition 3 (escape/stair-cuts at d h))))
-        pillar (if (<= h (:count (escape/carried-pillar-item p) 0)) (stair-price/pillar-s p at h) ##Inf)]
+        pillar (if (<= h (:count (escape/carried-pillar-item p) 0)) (cost/pillar-s (wworld/unseen-share p) h (escape/unseen-pillar-blocks p at h)) ##Inf)]
     (apply min pillar (map stair escape/cardinals))))
 
 (defn price

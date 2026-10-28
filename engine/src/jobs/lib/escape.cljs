@@ -62,6 +62,12 @@
 
 (defn up [cell n] (add cell [0 n 0]))
 
+(defn unseen-pillar-blocks
+  "How many of the height blocks of a pillar up from feet have their cell or one of the two over it unseen."
+  [p feet height]
+  (let [unseen? (unseen-of p)]
+    (count (filter #(some unseen? (map (fn [dy] (up feet (+ % dy))) [1 2])) (range height)))))
+
 (defn ahead [cell [dx dz] k] (add cell [(* k dx) 0 (* k dz)]))
 
 (defn solid?

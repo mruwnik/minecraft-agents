@@ -240,10 +240,10 @@
     {:max-fall (:max-drop (cost/fall-profile {:equipment equipment :damage-budget (cost/survivable-budget (wworld/self-body p) {})}))
      :fall-s (fn [blocks] (cost/hp-cost (.-health self) (cost/fall-damage equipment blocks)))
      :dig-s (fn [name _] (dig-cost name))
-     :step-s (:cost (cost/walk-cost {:distance 1}))
+     :step-s (cost/walk-step-s)
      :stair-s (cw/stair-cost 1)
      :unseen? unseen?
-     :unseen-step-s (cost/unseen-route-s (wworld/unseen-share p) (constantly :ground) [{:x 0 :y 0 :z 0}])}))
+     :unseen-step-s (cost/unseen-step-s (wworld/unseen-share p))}))
 
 (defn route
   "The cells to dig (head cell first within a step, in walking order) of the cheapest route from feet cell from to feet

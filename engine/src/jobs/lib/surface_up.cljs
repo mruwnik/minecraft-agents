@@ -11,10 +11,10 @@
             [jobs.lib.ready :as ready]
             [jobs.lib.shore :as shore]
             [jobs.lib.shelter.sense :as sh-sense]
-            [jobs.lib.stair-price :as stair-price]
             [jobs.lib.places :as places]
             [jobs.lib.util :as u]
-            [jobs.lib.column-kinds :as kinds]))
+            [jobs.lib.column-kinds :as kinds]
+            [jobs.lib.walk.world :as wworld]))
 
 (def wall-reach "Blocks out from the feet the nearest wall is looked for." 8)
 
@@ -139,7 +139,7 @@
   (let [p (:primitives c)]
     (if (or (not (sh-sense/buried? p)) (climbed? c) (own-top c))
       0
-      (let [leg-s (stair-price/leg-pricer p)
+      (let [leg-s (cost/stair-leg-pricer (wworld/unseen-share p))
             feet (sh-sense/feet p)
             cut-s (fn [n] (when-not (and (sh-sense/seen-cell? p n) (not (sh-sense/solid-at? p n)))
                             (or (cost/dig-cost (or (u/seen-name p n) "stone")) ##Inf)))

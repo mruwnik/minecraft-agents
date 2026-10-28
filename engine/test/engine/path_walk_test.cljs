@@ -10,6 +10,8 @@
             [engine.settings :as settings]
             [engine.path.planner-tuned :as planner]
             [jobs.lib.clock :as clock]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.cost.ways :as cw]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.drive :as drive]
             [jobs.lib.walk.world :as wworld]
@@ -531,6 +533,19 @@
     (is (< picked deep) "a pickaxe cuts the stair quicker")
     (is (< pillared picked) "20 carried blocks pillar out quicker than any stair")
     (is (> (* 0.1 deep) 30) "the deep shaft costs more than the old flat trap price (0.1 x 300 s)")))
+
+(deftest the-pillar-out-of-a-landing-adds-the-unseen-step-price-for-each-block-over-unseen-cells
+  (let [p (tu/fake {:blocks (shaft 4) :inventory [{:name "dirt" :count 4}] :self {:pos {:x 1.5 :y 71 :z 0.5}}})
+        climb #(one-way/climb-out-s p {:x 1 :y 65 :z 0} {:x 0 :y 61 :z 0})
+        seen (climb)
+        sensed (.-sensedAt p)
+        _ (aset p "sensedAt" (fn [pos] (if (and (zero? (.-x pos)) (zero? (.-z pos)) (> (.-y pos) 61))
+                                         #js {:unknown true :pos pos}
+                                         (sensed pos))))
+        unseen (climb)]
+    (is (= (cw/pillar-cost 4) seen) "seen cells: the pillar's blocks only")
+    (is (< (js/Math.abs (- unseen (+ (cw/pillar-cost 4) (* 4 (cost/unseen-step-s (wworld/unseen-share p)))))) 1e-9)
+        "4 blocks over unseen cells: each adds the unseen step")))
 
 ;; a drop whose landing is walled by what cannot be dug is a certain trap: no goal is worth it (the wall runs the whole floor: a
 ;; short one leaves its top walkable and open ground beside it, a drop onto which is no trap)

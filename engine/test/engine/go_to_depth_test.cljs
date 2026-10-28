@@ -2,6 +2,7 @@
   "go-to's :y-margin: blocks past the lowest and highest of body and goal that a walk's search may reach, so a route that
   dips far below both ends (through deep caves) is refused instead of walked; absent: the walks' wide box."
   (:require [cljs.test :refer [deftest is are async]]
+            [jobs.lib.cost :as cost]
             [jobs.movement.go-to.search-bound :as search-bound]
             [engine.core :as core]
             [engine.fake :as fake]
@@ -431,7 +432,10 @@
       ends 4)))
 
 (deftest a-walk-up-its-own-way-slower-than-a-new-stair-is-not-taken
-  (is (= [true false] (map #(:take (climb/weigh (vec (range %)) 16 3)) [193 200]))))
+  (let [cut-s (* 16 3)
+        route (fn [blocks] (vec (range (inc blocks))))]
+    (is (= [true false] (map #(:take (climb/weigh (route %) 16 3))
+                             [(js/Math.floor (* cut-s cost/walk-speed)) (js/Math.ceil (* (inc cut-s) cost/walk-speed))])))))
 
 ;; (These cases are about the planner's refusal of a long way over cells never seen, so they pass :unknown false.)
 ;; Two corridors 6 apart (z 0 and z 6, x 0..40) joined only at their far end: the goal is 6 blocks from the body across

@@ -20,7 +20,6 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.shelter.inside :as sh-inside]
-            [jobs.lib.stair-price :as stair-price]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
@@ -113,12 +112,12 @@
     (transduce (comp (filter #(names (:name %))) (map :count)) + 0 (u/inventory p))))
 
 (defn stair-route-s
-  "Seconds the stair way e takes from feet, each step as jobs.lib.dig-route (route-answer) prices one: jobs.lib.stair-price
+  "Seconds the stair way e takes from feet, each step as jobs.lib.dig-route (route-answer) prices one: jobs.lib.cost/stair-leg-pricer
   of its cuts (dig-cost), a fill for an open floor (a fetch of the blocks, with none carried) and an unseen cut or floor."
   [p feet {:keys [heading steps]}]
   (let [block-at (escape/block-at-of p)
         unseen? (escape/unseen-of p)
-        leg-s (stair-price/leg-pricer p)
+        leg-s (cost/stair-leg-pricer (wworld/unseen-share p))
         fill-s (cw/fill-cost (carried-build-n p))
         cut-s (fn [cell] (let [n (block-at cell)]
                            (cond (dig-route/open? n) nil
@@ -132,7 +131,7 @@
   "Seconds one step of a stair not yet laid out (no heading chosen) takes: its three cuts priced as stone, and its cells
   unseen (the worse case)."
   [p]
-  ((stair-price/leg-pricer p) (repeat 3 (or (cost/dig-cost "stone") 0)) nil true))
+  ((cost/stair-leg-pricer (wworld/unseen-share p)) (repeat 3 (or (cost/dig-cost "stone") 0)) nil true))
 
 (defn price
   "Seconds way e from feet is reckoned to take (jobs.lib.cost): a stair, a pillar, a bridge or a fill by its blocks, a dug door or
@@ -142,7 +141,7 @@
         dig-s (fn [cells] (transduce (map #(+ (/ (tools/clear-ms p (@block-at %)) 1000) (:cost (cost/walk-cost {:distance 1})))) + 0 cells))]
     (case step
       :stair (+ (stair-route-s p feet e) (* (:aside e 0) (or (cost/dig-cost "stone") 1)))
-      :pillar (stair-price/pillar-s p feet (:height e))
+      :pillar (cost/pillar-s (wworld/unseen-share p) (:height e) (escape/unseen-pillar-blocks p feet (:height e)))
       :bridge (cw/bridge-cost (:length e) (:short e 0))
       :fill-gap (cw/fill-cost (:count e 1))
       :dig-route (dig-s (map :cell (:cells e)))
