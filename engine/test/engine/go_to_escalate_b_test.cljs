@@ -17,6 +17,7 @@
             [jobs.lib.pen :as pen]
             [engine.ready-test :as rt]
             [jobs.movement.go-to.holes :as holes]
+            [jobs.movement.go-to.escalate-choose :as ec]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.search :as wsearch]
@@ -243,6 +244,16 @@
           (is (= (dug-cells-of p) (set (mapcat :cells (events-of seen :go-to.restored)))) "animals stand in the pit the body owns: every cell dug is put back")
           (is (= {:arrived true} @(:out open)) "an own pit with no animals in it is dug out of as before")
           (is (empty? (events-of (:seen open) :go-to.restored)) "and its holes are left"))))))
+
+(deftest a-way-through-own-builds-is-searched-only-when-its-least-cost-can-beat-the-way-that-spares-them
+  ;; card f1d55046: an own cut adds at least one cell's put-back to its way
+  (let [p (tu/fake (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 8}]}))
+        feet [0 61 0]
+        pillar {:step :pillar :height 3}]
+    (is (true? (esc/own-may-beat? p feet {:step :none})) "no way spares them")
+    (is (< (cw/put-back-cost 0) (ec/price p feet pillar)))
+    (is (true? (esc/own-may-beat? p feet pillar)))
+    (is (false? (esc/own-may-beat? p feet {:step :dig-route :cells []})) "a way that costs nothing is never beaten")))
 
 (deftest an-own-stocked-pen-wall-cut-costs-its-put-back-and-the-herd-s-loss-and-the-pen-is-read-once
   ;; card dbd43651: the herd-loss branch of the put-back price; the may-dig, own and price fns of one escalation share one pen read

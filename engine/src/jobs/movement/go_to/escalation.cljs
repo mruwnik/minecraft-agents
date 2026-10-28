@@ -28,6 +28,7 @@
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.dig-route :as dig-route]
+            [jobs.lib.cost.ways :as cw]
             [jobs.lib.escape :as escape]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.shelter.inside :as sh-inside]
@@ -212,6 +213,12 @@
                            (and (priced-steps (:step base)) (< (+ (price p feet own) cut-s) (price p feet base)))))
               (assoc own :own-cut true)))))
 
+(defn own-may-beat?
+  "Whether a way cutting the body's own builds may beat base, the way that spares them, so it is worth searching: base is
+  none, or dearer (price) than the least such a way adds, one cell's put-back."
+  [p feet base]
+  (or (= :none (:step base)) (> (price p feet base) (cw/put-back-cost 0))))
+
 (defn search-begun!
   "Note in memory (:route-search) when the dig-route searches kept over rounds from feet began and what the way without
   them is worth (search-bound/fallback-s), once."
@@ -297,7 +304,7 @@
         chosen e
         spot (when (= :none (:step e)) (when-not (or (contains? (:skip opts) :approach) (searching? slice)) (escape/way-spot (:primitives c) feet goal spare opts (or (:approached (ctx/mem c)) #{}))))
         ;; a way through the body's own builds, priced against the one that spares them (own-way)
-        own (delay (when (or (seq (access/own-plans c)) (access/in-own-area? c (zipmap [:x :y :z] feet)))
+        own (delay (when (and (or (seq (access/own-plans c)) (access/in-own-area? c (zipmap [:x :y :z] feet))) (own-may-beat? (:primitives c) feet e))
                      (own-way (:primitives c) feet e (choose (may-dig-fn c true) (assoc opts :own? (own-fn c (:own? opts)) :own-cut true)) opts)))
         e (cond
             (priced-steps (:step e)) (or @own e)
