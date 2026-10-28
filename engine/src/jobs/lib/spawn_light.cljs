@@ -40,12 +40,16 @@
   "chance-at with the sky darkened as now (night) or not at all (an unseen cell guessed by full day)."
   [p cell caves-free? night]
   (let [darkening (if night (sh-sense/sky-subtract-now p) 0)
-        sky (if (look/lit-light? 0 (or (sh-sense/sky-light-at p cell) 0) darkening) 15 0)
         cell (if (sh-sense/solid-at? p cell) (update cell :y inc) cell)
-        block (seen-light p cell)]
+        block (seen-light p cell)
+        reaches (sh-sense/sky-reaches-from-above? p cell)
+        sky-light (sh-sense/sky-light-at p cell)
+        ;; a sky-reached cell with no sky light data is priced as unseen, not as dark
+        known (and block (or (not reaches) sky-light))]
     (cond
-      block (cost/spawn-chance [(:x cell) (:y cell) (:z cell)]
-                               {:light (constantly {:block block :sky (cond (sh-sense/sky-reaches-from-above? p cell) sky (and (< block (look/dark-light)) (hall-at? p cell)) 0 :else 15)})})
+      known (let [sky (if (look/lit-light? 0 (or sky-light 0) darkening) 15 0)]
+              (cost/spawn-chance [(:x cell) (:y cell) (:z cell)]
+                                 {:light (constantly {:block block :sky (cond reaches sky (and (< block (look/dark-light)) (hall-at? p cell)) 0 :else 15)})}))
       :else (let [now (look/unseen-lit-chance p cell (when-not night 0))
                   ;; caves-free? frees the dark full day leaves too: the chance left is that of dark only the sky lifts
                   dark (if caves-free? (max 0 (- (look/unseen-lit-chance p cell 0) now)) (- 1 now))]

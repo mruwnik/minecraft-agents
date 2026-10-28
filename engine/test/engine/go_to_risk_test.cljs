@@ -92,6 +92,25 @@
     (is (pos? (chance 3)))
     (is (zero? (chance 15)))))
 
+(deftest a-solid-cell-under-open-sky-is-judged-by-the-cell-above-it
+  (let [p (:primitives (ready-test/ctx-of (assoc night-hut :time st/noon)))
+        feet (sh-sense/feet p)]
+    (with-redefs [sh-sense/solid-at? (fn [_ c] (= (:y c) (:y feet)))
+                  sh-sense/sky-reaches-from-above? (constantly true)
+                  sh-sense/sky-light-at (fn [_ c] (if (= (:y c) (:y feet)) 0 15))
+                  spawn-light/seen-light (constantly 0)]
+      (is (zero? (spawn-light/chance-at p feet false))))))
+
+(deftest a-sky-reached-cell-without-sky-light-data-is-priced-as-unseen
+  (let [p (:primitives (ready-test/ctx-of (assoc night-hut :time st/noon)))
+        chance #(with-redefs [sh-sense/sky-reaches-from-above? (constantly true)
+                              sh-sense/sky-light-at (constantly nil)
+                              look/unseen-lit-chance (fn ([_ _] %) ([_ _ _] %))
+                              spawn-light/seen-light (constantly 0)]
+                  (spawn-light/chance-at p (sh-sense/feet p) false))]
+    (is (zero? (chance 1)))
+    (is (pos? (chance 0)))))
+
 (deftest a-roofed-dark-way-prices-spawns-only-through-a-dark-hall
   (let [c (ready-test/ctx-of (assoc night-hut :time st/noon))]
     (with-redefs [sh-sense/sky-reaches-from-above? (constantly false)
