@@ -87,9 +87,7 @@
 (defn radius-of [c] (or (second (field-sphere c)) default-radius))
 
 (a/defargs settings
-  {::min-health {:default 0 :spec (a/num-in 0 20)
-                :doc "Health (of 20) below which the job waits to heal; 0 = never (its acts are short and in the body's own field). Poison still holds."}
-   ::give-up {:default 4 :doc "Unreachable crops after which cutting stops." :spec (a/int-in 1 nil)}
+  {::give-up {:default 4 :doc "Unreachable crops after which cutting stops." :spec (a/int-in 1 nil)}
    ::reach {:default u/eye-reach :doc "Cells whose centre is this close to the eye (dig and place accept 4.5) are worked without walking, in blocks." :spec (a/num-in 0 nil)}
    ::max-place-fails {:default 3 :doc "Failed placements before the job gives up." :spec (a/int-in 0 nil)}
    ::failed-reach {:default 3.0 :doc "Reach for a block a failed attempt left, in blocks." :spec (a/num-in 0 nil)}
@@ -101,7 +99,7 @@
    ::shut-in-walk-range {:default 1 :doc "How near a crop or the centre a shut-in body walks, in blocks." :spec (a/int-in 0 nil)}
    ::collect-margin {:default 4 :doc "Blocks beyond :radius the drops are collected from." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 600 :doc "Seconds a call may take: the digs, the walks and the sweep of the drops." :spec (a/num-in 0 nil)}})
-(defn fit? [c] (ready/fit-min (settings/get settings ::min-health) c))
+(def fit? (ready/fit-for :work))
 (defn give-up [] (settings/get settings ::give-up))
 (defn reach [] (settings/get settings ::reach))
 (defn max-place-fails [] (settings/get settings ::max-place-fails))

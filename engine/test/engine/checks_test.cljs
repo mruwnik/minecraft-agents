@@ -4,6 +4,7 @@
             [engine.ctx :as ctx]
             [engine.test-util :as tu]
             [jobs.lib.checks :as checks]
+            [jobs.lib.ready :as ready]
             [jobs.lib.world :as known]))
 
 (deftest args-fit-is-ok-or-never-bad-args-with-the-text
@@ -43,7 +44,7 @@
 
 (deftest a-spectator-or-creative-body-waits-and-survival-or-unreported-is-ready
   (are [mode expected] (let [c {:primitives (tu/fake {:self (cond-> {} mode (assoc :gameMode mode))})}]
-                         (= [expected expected] [(first (checks/low-health-min 0 c)) (first (checks/survival-mode c))]))
+                         (= [expected expected] [(first (ready/fit? c)) (first (checks/survival-mode c))]))
     "spectator" :later
     "creative" :later
     "survival" :ok

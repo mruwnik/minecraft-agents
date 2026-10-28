@@ -41,8 +41,7 @@
     (is (= :later (status {:self {:effects poison}})))
     (is (= :ok (status {:self {:effects poison} :inventory milk})))))
 
-(deftest too-hurt-also-while-poisoned
-  (are [self expected] (= expected (:reason (body/too-hurt (tu/fake {:self self}) 6)))
-    {:health 20 :effects poison} :poisoned
-    {:health 3 :effects poison} :low-health
-    {:health 20 :effects []} nil))
+(deftest a-field-job-waits-while-poisoned
+  (are [self expected] (= expected (first ((:fit? (get registry/jobs 'jobs.farm.till)) {:primitives (tu/fake {:self self})})))
+    {:health 20 :effects poison} :later
+    {:health 20 :effects []} :ok))

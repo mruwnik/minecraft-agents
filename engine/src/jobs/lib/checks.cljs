@@ -104,14 +104,6 @@
 
 (defn day "Day, else :later with reason." [reason] (cond/because reason "night" (cond/daytime)))
 
-(defn low-health-min
-  "Health at the job's own floor or above, not poisoned and not in spectator or creative mode, else :later :low-health
-  {:health :min-health}, :poisoned or :game-mode."
-  [floor c]
-  (if-let [hurt (or (body/off-mode (:primitives c)) (body/too-hurt (:primitives c) floor))]
-    (cause-status :later hurt)
-    (contract/ok :healthy "health enough")))
-
 (defn survival-mode
   "Later :game-mode while the body is a spectator or in creative mode."
   [c]

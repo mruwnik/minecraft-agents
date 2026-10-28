@@ -49,12 +49,11 @@
 (def ways need/fetch-ways)
 
 (a/defargs settings
-  {::min-health {:default 0 :spec (a/num-in 0 20) :doc "Health (of 20) below which the job waits to heal; 0 = never (its acts are short and harmless). Poison still holds."}
-   ::job-time-s {:default 180 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 180 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}})
 
 (def target [:area])
 (def defaults {:spend {:job-time ::job-time-s}})
-(defn fit? [c] (ready/fit-min (settings/get settings ::min-health) c))
+(def fit? (ready/fit-for :work))
 
 
 (defn field-cells

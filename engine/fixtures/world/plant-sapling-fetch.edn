@@ -31,11 +31,11 @@
    :expect [{:event {:source :job :kind :completed} :within-s 50 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :low-health}} :for-s 10 :until {:source :job :kind :completed}}]
    :after [[:block [20 0 14] "oak_sapling"]]}
-  {:name "hurt-body-waits-when-the-min-health-setting-is-raised"
-   ;; card 06e0bb68 should-fail: the floor is a setting; hp under it holds the planting
+  {:name "hurt-body-waits-when-its-work-is-priced-dear"
+   ;; should-fail: the planting's fit is priced (cost.risk work-hp, 10 s of work); at 0.5 hp a second the 5 hp left may not risk it
    :body {:inventory [["oak_sapling" 1]] :effects []}
    :act [[:rcon "damage $BODY 15 minecraft:generic"]
-         [:job (jobs.forestry.plant-sapling {:at #at [20 0 14] :species "oak" :settings {:jobs.forestry.plant-sapling/min-health 12}})]]
+         [:job (jobs.forestry.plant-sapling {:at #at [20 0 14] :species "oak" :settings {:jobs.lib.cost.risk/work-hp-rate 0.5}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :low-health}} :within-s 20 :of-job true}]
    :after [[:not-block [20 0 14] "oak_sapling"]]}
   {:name "already-planted-spot-clears-debt"

@@ -54,8 +54,7 @@
    :max-step {:doc "drop patches whose largest step between neighbouring cells is over this; nil: keep all" :spec (a/int-in 0 16) :default nil}})
 
 (a/defargs settings
-  {::min-health {:default 0 :spec (a/num-in 0 20) :doc "Health (of 20) below which the job waits to heal; 0 = never (its acts are short and harmless). Poison still holds."}
-   ::depth {:default 12 :doc "How far above and below the centre's y to look for ground." :spec (a/int-in 1 16)}
+  {::depth {:default 12 :doc "How far above and below the centre's y to look for ground." :spec (a/int-in 1 16)}
    ::limit {:default 3 :doc "How many spots to keep; the scan stops once that many good ones are found." :spec (a/int-in 1 8)}
    ::job-time-s {:default 300 :doc "Seconds the call may take, exploring included (a guess until measured)." :spec (a/num-in 0 nil)}})
 
@@ -66,7 +65,7 @@
   "Scanning needs only no danger near; the exploring walks are go-to children, which check their own light."
   (with-meta ready/threatened
     {::ready/exposure (fn [_] (contract/ok :survey "the scan walks nowhere; a leg's go-to child judges its own exposure"))}))
-(defn fit? [c] (ready/fit-min (settings/get settings ::min-health) c))
+(def fit? (ready/fit-for :work))
 
 (defn done?
   "Ok once spots are found; else later."

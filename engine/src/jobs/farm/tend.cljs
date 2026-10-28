@@ -93,11 +93,9 @@
 (def safe? (price/staying :work (ready/safe-at-by-night work-place/spot)))
 
 (a/defargs settings
-  {::min-health {:default 0 :spec (a/num-in 0 20)
-                :doc "Health (of 20) below which the job waits to heal; 0 = never (its acts are short and in the body's own field). Poison still holds."}
-   ::job-time-s {:default 1200 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 1200 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
    ::max-cells {:default 2048 :doc "Most cells a field may cover; a larger box is refused :no-box." :spec (a/int-in 0 nil)}})
-(defn fit? [c] (ready/fit-min (settings/get settings ::min-health) c))
+(def fit? (ready/fit-for :work))
 (defn max-cells [] (settings/get settings ::max-cells))
 
 (defn usable-box?

@@ -171,12 +171,3 @@
     {:reason :poisoned :health (.-health (.self p))
      :text "poisoned: drink milk or wait until the effect is gone before the risk (natural healing stops)"}))
 
-(defn too-hurt
-  "The wait reason {:reason :low-health :health :min-health :text} while the body's health (primitives p) is below a job's
-  own floor, else poison-wait. Healing is up to the body: carried food (the hungry trigger eats it), or rest at food 18+."
-  [p floor]
-  (let [health (.-health (.self p))]
-    (if (< health floor)
-      {:reason :low-health :health health :min-health floor
-       :text (str "health " (.toFixed health 1) " of 20 is below " floor ": eat or rest to heal first (natural healing needs food 18+)")}
-      (poison-wait p))))

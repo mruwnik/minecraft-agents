@@ -47,12 +47,10 @@
    :ignore-zones? :shared})
 
 (a/defargs settings
-  {::min-health {:default 0 :spec (a/num-in 0 20)
-                :doc "Health (of 20) below which the job waits to heal; 0 = never (its acts are short and in the body's own field). Poison still holds."}
-   ::accept {:default #{:fluid-adjacent} :doc "Dig hazards accepted: :fluid-adjacent (water beside; lava beside is :lava-adjacent and is not accepted by default), :falling-block."
+  {::accept {:default #{:fluid-adjacent} :doc "Dig hazards accepted: :fluid-adjacent (water beside; lava beside is :lava-adjacent and is not accepted by default), :falling-block."
              :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block})}
    ::job-time-s {:default 600 :doc "Seconds a tidy run may take: the digs, the walks and the drops." :spec (a/num-in 0 nil)}})
-(defn fit? [c] (ready/fit-min (settings/get settings ::min-health) c))
+(def fit? (ready/fit-for :work))
 (defn accepted [] (settings/get settings ::accept))
 
 ;; ------------------------------------------------------------------ conditions

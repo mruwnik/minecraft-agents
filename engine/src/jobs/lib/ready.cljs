@@ -424,11 +424,6 @@
 
 (def fit? "fit-for a job that works a place for a while (:work)." (fit-for :work))
 
-(defn fit-min
-  "fit? with a fixed health floor from a job's own setting."
-  [floor c]
-  (checks/low-health-min floor c))
-
 (def cannot-heal? price/cannot-heal?)
 
 (defn hurt-cannot-heal?

@@ -75,9 +75,7 @@
                    (when (pos? spare) [n spare])))))))
 
 (a/defargs settings
-  {::min-health {:default 0 :spec (a/num-in 0 20)
-                :doc "Health (of 20) below which the job waits to heal; 0 = never (its acts are short and in the body's own field). Poison still holds."}
-   ::job-time-s {:default 120 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 120 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
    ::max-strikes {:default 3 :doc "Failures in a row before the job gives up." :spec (a/int-in 1 nil)}
    ::meal-looks {:default 5 :doc "Looks at the composter right after a take for the meal it dropped." :spec (a/int-in 0 nil)}
    ::radius {:default 16 :doc "How far to look for a composter when no :at is given, in blocks." :spec (a/num-in 0 nil)}
@@ -86,7 +84,7 @@
    ::meal-look {:default 20 :doc "Bone meal on the ground is looked for this far from the body, in blocks." :spec (a/num-in 0 nil)}
    ::meal-reach {:default 3 :doc "Bone meal this close to the composter counts as its own, in blocks." :spec (a/num-in 0 nil)}})
 
-(defn fit? [c] (ready/fit-min (settings/get settings ::min-health) c))
+(def fit? (ready/fit-for :work))
 (def target [:at])
 
 (def defaults {:spend {:job-time ::job-time-s}})

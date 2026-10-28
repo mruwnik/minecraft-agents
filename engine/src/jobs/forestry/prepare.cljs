@@ -50,9 +50,7 @@
   Quote: time only.")
 
 (a/defargs settings
-  {::min-health {:default 0 :spec (a/num-in 0 20)
-                 :doc "Health (of 20) below which the job waits to heal; 0 = never (its acts are short and in the body's own plot). Poison still holds."}
-   ::collect-radius {:default 8 :doc "How far from where the body stands the drops are collected, in blocks." :spec (a/num-in 0 nil)}
+  {::collect-radius {:default 8 :doc "How far from where the body stands the drops are collected, in blocks." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 1200 :doc "Seconds a prepare run may take: the digs, soil, plants and walks." :spec (a/num-in 0 nil)}
    ::recede-wait-s {:default 2 :doc "Seconds the body pauses while a dammed flow recedes, before it looks again." :spec (a/num-in 0 nil)}})
 
@@ -364,7 +362,7 @@
 
 (def safe? (price/staying :work (ready/safe-at-by-night (fn [c] (some-> (field/planned c) :trees keys first)))))
 
-(defn fit? [c] (ready/fit-min (settings/get settings ::min-health) c))
+(def fit? (ready/fit-for :work))
 
 (defn can-run? [c] (lib/trouble-status (field/planned c)))
 

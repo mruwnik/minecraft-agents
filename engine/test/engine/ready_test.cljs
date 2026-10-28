@@ -573,10 +573,15 @@
   (doseq [j '[jobs.movement.boat-land jobs.movement.boat-drive jobs.access.toggle]]
     (is (= :ok (kind (:fit? (get registry/jobs j)) {:self {:pos {:x 0 :y 64 :z 0} :health 5}})) (str j))))
 
-(deftest the-field-jobs-work-at-low-health-where-risky-jobs-wait
+(deftest the-field-tree-and-pen-jobs-price-their-own-work
   (doseq [j '[jobs.farm.fertilize jobs.farm.plant jobs.farm.harvest jobs.farm.till jobs.farm.tend jobs.farm.compost jobs.farm.tidy jobs.farm.maintain
-             jobs.forestry.plant-sapling jobs.forestry.prepare]]
-    (is (= :ok (kind (:fit? (get registry/jobs j)) {:self {:pos {:x 0 :y 64 :z 0} :health 2}})) (str j))))
+             jobs.farm.irrigate jobs.farm.find-spot jobs.forestry.plant-sapling jobs.forestry.prepare
+             jobs.animals.breed jobs.animals.shear jobs.animals.cull jobs.animals.maintain]
+          :let [fit (:fit? (get registry/jobs j))]]
+    (is (= :ok (kind fit {:self {:pos {:x 0 :y 64 :z 0} :health 2}})) (str j " at 2 hp: its work costs well under 1 hp"))
+    (is (= :later (settings/with-settings {:jobs.lib.cost.risk/work-hp-rate 0.05}
+                    #(kind fit {:self {:pos {:x 0 :y 64 :z 0} :health 0.5 :food 20}})))
+        (str j " waits when its work would cost more than the body may risk"))))
 
 (deftest safe-at-by-night-waits-for-an-unseen-place-only-at-night
   (are [world expected] (= expected (kind (ready/safe-at-by-night (constantly outside)) world))

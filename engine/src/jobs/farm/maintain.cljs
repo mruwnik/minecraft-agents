@@ -52,11 +52,9 @@
    :ignore-zones? :shared})
 
 (a/defargs settings
-  {::min-health {:default 0 :spec (a/num-in 0 20)
-                :doc "Health (of 20) below which the job waits to heal; 0 = never (its acts are short and in the body's own field). Poison still holds."}
-   ::job-time-s {:default 1800 :doc "Seconds a maintain pass may take: its three steps." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 1800 :doc "Seconds a maintain pass may take: its three steps." :spec (a/num-in 0 nil)}})
 
-(defn fit? [c] (ready/fit-min (settings/get settings ::min-health) c))
+(def fit? (ready/fit-for :work))
 (def target [:area])
 (def ways need/fetch-ways)
 (def defaults {:spend {:job-time ::job-time-s}})

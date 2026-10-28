@@ -56,12 +56,10 @@
 (def ways need/fetch-ways)
 
 (a/defargs settings
-  {::min-health {:default 0 :spec (a/num-in 0 20)
-                :doc "Health (of 20) below which the job waits to heal; 0 = never (its acts are short and in the body's own field). Poison still holds."}
-   ::reach {:default u/eye-reach :doc "Cells whose centre is this close to the eye (place accepts 4.5) are planted without walking, in blocks." :spec (a/num-in 0 nil)}
+  {::reach {:default u/eye-reach :doc "Cells whose centre is this close to the eye (place accepts 4.5) are planted without walking, in blocks." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 600 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
    ::max-fails {:default 3 :doc "Failures before the job gives up." :spec (a/int-in 0 nil)}})
-(defn fit? [c] (ready/fit-min (settings/get settings ::min-health) c))
+(def fit? (ready/fit-for :work))
 (defn reach [] (settings/get settings ::reach))
 (defn max-fails [] (settings/get settings ::max-fails))
 

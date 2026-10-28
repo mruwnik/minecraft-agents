@@ -76,8 +76,7 @@
 (def target [:plan :part :box])
 
 (a/defargs settings
-  {::min-health {:default 0 :spec (a/num-in 0 20) :doc "Health (of 20) below which the job waits to heal; 0 = never (its acts are short and harmless). Poison still holds."}
-   ::job-time-s {:default 600 :doc "Seconds a maintain pass may take." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 600 :doc "Seconds a maintain pass may take." :spec (a/num-in 0 nil)}
    ::herd-radius {:default 64 :doc "Blocks from the body within which the herd step fetches or searches for animals of the kind." :spec (a/num-in 0 nil)}})
 
 (defn herd-radius [] (settings/get settings ::herd-radius))
@@ -239,7 +238,7 @@
 (def safe?
   "Not exposed at the middle of the pen: its :box, else the box of its plan part."
   (price/staying :work (ready/safe-at-by-night pen-spot)))
-(defn fit? [c] (ready/fit-min (settings/get settings ::min-health) c))
+(def fit? (ready/fit-for :work))
 
 
 (defn pen-fact
