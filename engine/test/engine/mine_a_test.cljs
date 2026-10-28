@@ -570,7 +570,7 @@
 
 ;; walled?: the pit has a wall round it, so no way round through unseen ground competes with the drop; open: the platform's other sides
 ;; lead off over unseen floor. The ore and the floor under the drop were seen from over the floor first (the platform's wall hides its foot from the rim, and go-to drops no deeper than 5 onto a floor it has not seen), so only go-to's health floor decides the drop.
-(defn ^:async drop-to-ore [top walled?]
+(defn ^:async drop-to-ore [top walled? settings]
   (let [high (range 62 (+ top 3))
         wall (when walled? (merge (cells "stone" (range -5 14) high [-5 5]) (cells "stone" [-5 13] high (range -4 5))))
         s (start {:world {:blocks (assoc (merge (cells "stone" (range -4 1) (range 64 top) (range -4 5)) (cells "stone" (range 1 13) [62] (range -4 5)) wall)
@@ -579,7 +579,7 @@
                   :sight {:radius 24} :rand (constantly 0.5)})]
     (dotimes [_ 20] (perception/pass! (aget (:p s) "perception")))
     (set-pos! s 0.5 top 0.5)
-    (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :radius 16 :ways #{:seen}}) {})
+    (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :radius 16 :ways #{:seen} :settings settings}) {})
     (await (run-ticks s 120))
     s))
 
@@ -589,7 +589,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (drop-to-ore 77 true))
+        (let [s (await (drop-to-ore 77 true {}))
               e (done-event s)]
           (is (= [:stopped 0] ((juxt :status :got) e)))
           (is (= [[6 63 0]] (:unreached e)))
@@ -598,22 +598,34 @@
           (is (empty? (filter #(re-find #"stuck on drop" %) (walk-texts s))))
           (is (= "iron_ore" (block-at s 6 63 0))))))))
 
-(deftest an-open-platform-over-unseen-floor-is-tried-first-and-ends-on-the-drop-it-costs-too-much-health
+(deftest an-open-platform-over-unseen-floor-ends-on-the-drop-it-costs-too-much-health-without-trying-the-unseen-sides
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (drop-to-ore 77 false))
+        (let [s (await (drop-to-ore 77 false {}))
               e (done-event s)]
           (is (= [:stopped 0] ((juxt :status :got) e)))
-          (is (<= 5 (count (events-of s :replan))) "the floors off the platform's sides were tried and found not there")
-          (is (not= [0 77 0] (get-in e [:because :data :at])) "the body left the spot it started on to try them")
-          (is (= :needs-health (get-in e [:because :cause :why])) "the one way left is the drop, refused for its hp"))))))
+          (is (= :needs-health (get-in e [:because :cause :why])) "the unseen sides at the worse case are not there: the way left is the drop")
+          (is (empty? (events-of s :replan)) "no unseen side was walked to")
+          (is (= [0 77 0] (feet s))))))))
+
+(deftest an-open-platform-whose-drop-the-cap-refuses-tries-the-unseen-sides-and-learns-their-floors-absent
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (drop-to-ore 77 false {:jobs.lib.walk.world/max-damage 0}))
+              e (done-event s)
+              learned (mapcat :learned (events-of s :replan))]
+          (is (= [:stopped 0] ((juxt :status :got) e)))
+          (is (not= :needs-health (get-in e [:because :cause :why])) "healing does not lift the cap")
+          (is (seq learned))
+          (is (every? (fn [[x y z]] (and (contains? #{nil "air"} (block-at s x y z)) (or (< x -4) (> (js/Math.abs z) 4)))) learned) "every floor learned absent is air off the platform's unseen sides"))))))
 
 (deftest a-drop-of-five-blocks-to-a-seen-ore-is-taken
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (drop-to-ore 69 true))]
+        (let [s (await (drop-to-ore 69 true {}))]
           (is (= 1 (:got (done-event s))))
           (is (empty? (filter #(re-find #"stuck on drop" %) (walk-texts s)))))))))
 

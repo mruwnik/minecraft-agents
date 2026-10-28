@@ -50,7 +50,7 @@
      cell into the to cell costs those seconds more, the same way; a to cell-key of -1 prices every move of that kind out of
      the cell that has no entry of its own (a step the walker failed at, jobs.lib.walk.edges).
    - options.damageBudget (Infinity): the most hp of certain damage a path may take (falls over 3 blocks, plants that hurt on
-     touch); a move over it is refused, and a search that finds nothing for that reason says damageRefused true. options.maxDrop
+     touch); a move over it is refused, and a search that finds nothing for that reason says damageRefused true, any search that refused one damageMet true. options.maxDrop
      is still the length of the longest fall. options.damageWeight (riskWeight): seconds an hp of that damage costs.
      options.fallFactor (1) scales a fall's damage (feather falling, protection); options.landing, a Map of state id to the
      factor of the fall damage onto that block (hay 0.2), a negative one: a bounce (no damage, BOUNCE-S settle seconds) when the

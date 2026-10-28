@@ -443,7 +443,7 @@
             seen-goal? (and (see-cell c) (not (:edge-mode (ctx/mem c))) (not (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))))
             opts (cond-> (assoc (walk-opts c doors) :progress (empty? (:frontier-best (ctx/mem c))))
                    seen-goal? (assoc :explore false))
-            stair-check (reprice/check c pos (known-end-check c pos (lookout-check c pos (plan-check c pos (choose/stair-check c pos) (straight-from! c d)))))
+            stair-check (reprice/check c pos (health/unseen-check c (known-end-check c pos (lookout-check c pos (plan-check c pos (choose/stair-check c pos) (straight-from! c d))))))
             round (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos) :walk-spent? #(tour-spent? c)) pos range (assoc opts :see-cell (see-cell c) :stair-check stair-check)))]
         (if (jumped? c)
           :again
@@ -486,6 +486,12 @@
 
           (:learn-spent walked)
           (await (esc/give-up-or-escalate! c pos (max-blocked) status (cond-> {:status :no-path :reason :unseen-floors :cells (:cells walked)} (none-held? c) (assoc :torches :none))))
+
+          (and (= "stair" status) (:unseen-weigh (:why walked)))
+          (let [handled (await (health/weigh-unseen! c pos range))]
+            (if (:needs-health handled)
+              (await (esc/give-up-or-escalate! c pos (max-blocked) status (merge {:status :no-path :reason :needs-health} (select-keys handled [:heal :health :hp-cost :hp-budget :hungry-food]))))
+              :again))
 
           (and (= "stair" status) (:risk (:why walked)))
           (reprice/end c (:risk (:why walked)))

@@ -104,18 +104,28 @@
           (look/see! c)
           true)))))
 
+(defn seen-floors-only
+  "pw with no stand on a floor the body has not seen (a phantom floor): its mask sees no depth and lights none."
+  [^js pw]
+  (when-let [^js snap (some-> pw .-snapshot)]
+    (when-let [unknown (.-unknown snap)]
+      (set! (.-unknown snap) (js/Object.assign #js {} unknown #js {:seeDepth -1 :seeLit nil :lightCost -1}))))
+  pw)
+
 (defn ^:async probe-plan!
   "Whether a whole way exists for the body that may spend all but 1 hp (:max-damage still capping): the hp it costs, or nil
   when there is none. A refusal of the budget in a search that finds no whole way anyway (:damage-refused is only a move the
-  budget turned away) is no reason to heal."
-  [c pos range]
-  (let [{:keys [max-damage]} (wworld/walk-settings c)
-        policy (assoc (wworld/body-policy c) :damage-budget (cost/survivable-budget (wworld/damage-body c) {:max-damage max-damage}))
-        within (await (wplan/plan-within! c (wworld/path-world (:primitives c) (:unknown c)) [(:x pos) (:y pos) (:z pos)] range (walk/default-weight) policy))
-        ^js r (:r within)]
-    (when (= "found" (.-status r))
-      (ctx/update-mem! c assoc :probe-drops (drops (:primitives c) (some-> r .-path .-steps)))
-      (or (some-> r .-path .-cost .-damage) 0))))
+  budget turned away) is no reason to heal. seen?: over floors the body has seen only (seen-floors-only)."
+  ([c pos range] (probe-plan! c pos range false))
+  ([c pos range seen?]
+   (let [{:keys [max-damage]} (wworld/walk-settings c)
+         policy (assoc (wworld/body-policy c) :damage-budget (cost/survivable-budget (wworld/damage-body c) {:max-damage max-damage}))
+         pw (cond-> (wworld/path-world (:primitives c) (:unknown c)) seen? seen-floors-only)
+         within (await (wplan/plan-within! c pw [(:x pos) (:y pos) (:z pos)] range (walk/default-weight) policy))
+         ^js r (:r within)]
+     (when (= "found" (.-status r))
+       (ctx/update-mem! c assoc :probe-drops (drops (:primitives c) (some-> r .-path .-steps)))
+       (or (some-> r .-path .-cost .-damage) 0)))))
 
 (def probe-keep-ms "How long a probe is kept while the body waits." 10000)
 
@@ -133,22 +143,45 @@
         (when planned (ctx/update-mem! c assoc :probe {:key key :planned planned :at now}))
         planned))))
 
+(defn ^:async over-budget!
+  "planned, the hp of the whole way for a body that may spend all but 1 hp (nil: none): nil when there is none or it costs no
+  more than the budget (the budget is not why); else :again after a look at a drop that may reprice it (look-at-drops!) or
+  after going over the budget (only a call with a :floor :health of 1 or less), or {:needs-health true :heal :health :hp-cost
+  :hp-budget :hungry-food?}: healing is the caller's or the reflexes'."
+  [c planned]
+  (cond
+    (or (not planned) (<= planned (wworld/damage-budget c))) nil
+    (await (look-at-drops! c)) :again
+    :else
+    (let [{:keys [min-health]} (wworld/walk-settings c)
+          body (body-of c)]
+      (if (or (:over-budget (ctx/mem c)) min-health (not (:allow-over-budget (:args c))))
+        (cond-> {:needs-health true :heal (heal-way body) :health (:health body) :hp-cost planned :hp-budget (wworld/damage-budget c)}
+          (health/food-limited? (wworld/damage-body c) (wworld/walk-settings c)) (assoc :hungry-food (:food body)))
+        (do (ctx/update-mem! c assoc :over-budget true)
+            (ctx/emit! c :go-to.over-budget :info {:health (:health body) :planned planned
+                                                   :text (str "no way within the damage budget: going over it at " (:health body) " hp for " planned " hp")})
+            :again)))))
+
 (defn ^:async heal-or-drop!
-  "A walk whose search found no way and met the damage budget (:damage-refused): nil when a way with all but 1 hp spent
-  does not exist either, or costs no more than the budget (the budget is not why); else :again after going over the budget (only a call with a :floor :health
-  of 1 or less), or {:needs-health true :heal :health :hp-cost :hp-budget :hungry-food?}: healing is the caller's or the reflexes'."
+  "A walk whose search found no way and met the damage budget (:damage-refused): over-budget! of the whole way's hp (probe!)."
   [c pos range]
-  (let [planned (await (probe! c pos range))]
-    (cond
-      (or (not planned) (<= planned (wworld/damage-budget c))) nil
-      (await (look-at-drops! c)) :again
-      :else
-      (let [{:keys [min-health]} (wworld/walk-settings c)
-            body (body-of c)]
-        (if (or (:over-budget (ctx/mem c)) min-health (not (:allow-over-budget (:args c))))
-          (cond-> {:needs-health true :heal (heal-way body) :health (:health body) :hp-cost planned :hp-budget (wworld/damage-budget c)}
-            (health/food-limited? (wworld/damage-body c) (wworld/walk-settings c)) (assoc :hungry-food (:food body)))
-          (do (ctx/update-mem! c assoc :over-budget true)
-              (ctx/emit! c :go-to.over-budget :info {:health (:health body) :planned planned
-                                                     :text (str "no way within the damage budget: going over it at " (:health body) " hp for " planned " hp")})
-              :again))))))
+  (await (over-budget! c (await (probe! c pos range)))))
+
+(defn unseen-check
+  "near/walk-round!'s :stair-check: check's why, else {:unseen-weigh true} for the call's first plan that rests on a floor the
+  body has not seen (:unseen-floor) from a search that met the damage budget (damageMet), when the call leaves the budget to go-to."
+  [c check]
+  (fn [{:keys [steps r] :as plan} first?]
+    (or (when check (check plan first?))
+        (when (and (:unknown c) (not (:unseen-weighed (ctx/mem c))) (some :unseen-floor steps)
+                   (true? (some-> ^js r .-damageMet)) (nil? (:max-damage (wworld/walk-settings c))))
+          {:unseen-weigh true}))))
+
+(defn ^:async weigh-unseen!
+  "unseen-check's why: unseen floors take the worse case, not there, so the way left is the one over seen floors: over-budget!
+  of its hp (probe-plan! seen only); nil when that way is none or within the budget, and the unseen floors are tried. Once
+  per call (mem :unseen-weighed)."
+  [c pos range]
+  (ctx/update-mem! c assoc :unseen-weighed true)
+  (await (over-budget! c (await (probe-plan! c pos range true)))))

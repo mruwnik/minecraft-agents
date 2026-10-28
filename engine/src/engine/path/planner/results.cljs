@@ -243,7 +243,8 @@
            :edges ^js (.-edges-new s)
            :searchedOut ^boolean (.-searched-out s)
            :limited ^boolean (.-limit-refused s)
-           :damageRefused (and ^boolean (.-damage-refused s) (not (identical? status "found")))})))
+           :damageRefused (and ^boolean (.-damage-refused s) (not (identical? status "found")))
+           :damageMet ^boolean (.-damage-refused s)})))
 
   ;; with options.unknown, the result says whether a phantom floor was refused: darkRefused (unseeable; darkBest {x y z h}
   ;; the refused stand nearest the goal, h its distance) and unseenRefused (no stop to check it first)
