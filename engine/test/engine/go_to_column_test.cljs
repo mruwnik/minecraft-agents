@@ -7,6 +7,7 @@
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.test-util :as tu :refer [box floor]]
+            [jobs.lib.cost :as cost]
             [jobs.lib.near :as near]
             [jobs.lib.sense :as sense]
             [jobs.movement.go-to :as go-to]
@@ -441,18 +442,17 @@
     (is (nil? (column/waypoint (kinds/seen-kind-at (hiding land (fn [[x _ _]] (> x 0)))) 60 0 [0 64 0]))
         "nothing seen ahead: no waypoint, never the unseen ground")))
 
-(deftest a-column-over-a-void-past-the-rim-ends-once-its-floors-turn-out-not-there
+(deftest a-column-over-a-void-past-the-rim-ends-once-its-tour-is-spent
   ;; the land ends at x 40: the column at x 44 is seen open far below the rim, its ground never in view; every plan round
-  ;; the rim rests on floors not seen, and each found missing raises the chance the next is too, till turning back from
-  ;; them costs more than the goal is worth while they hold
+  ;; the rim rests on floors not seen, priced worth trying (a floor not there is mostly a step lower), so the walk along it
+  ;; is a tour, and it ends once that tour costs more than the goal is worth, not when the land runs out (379 blocks)
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out]} (await (go! {:floor [-30 -10 40 10] :light [15 0] :self {:pos {:x 34 :y 64 :z 0}}}
                                         {:pos {:x 44 :z 0} :range 2 :settings {:jobs.movement.go-to.tuning/goal-danger :end}}))]
-          (is (= {:arrived false :why :unseen-floors} (select-keys @out [:arrived :why])) (pr-str @out))
-          (is (> (:p-absent @out) 0.5) "the rim's floors found missing raised the chance from the uniform prior")
-          (is (> (:turn-back-s @out) (:worth-s @out))))))))
+          (is (= {:arrived false :why :explore-spent} (select-keys @out [:arrived :why])) (pr-str @out))
+          (is (< (:explored @out) 150) "ended by the tour's price (130 blocks at 0.3 s over 38.8 s), not by the land's end (379)"))))))
 
 ;; the ravine past the rim at x 40 is 24 deep, its floor out of sight; the body has seen the void round the land and the
 ;; air over the ravine but by the column; a 2-wide ramp down its west wall leads 24 blocks away from the column (x 44 z 0)
@@ -478,6 +478,6 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p]} (await (go! ravine {:pos {:x 44 :z 0} :range 2 :worth 20 :settings {:jobs.movement.go-to.tuning/goal-danger :end}}))]
-          (is (= {:arrived false :why :unseen-floors :p-absent 0.5} (select-keys @out [:arrived :why :p-absent])) (pr-str @out))
+          (is (= {:arrived false :why :unseen-floors :p-absent (cost/floor-absent-chance :down nil)} (select-keys @out [:arrived :why :p-absent])) (pr-str @out))
           (is (> (:turn-back-s @out) (:worth-s @out)))
           (is (= 64 (js/Math.floor (second (at p)))) "it never set off down the ramp"))))))

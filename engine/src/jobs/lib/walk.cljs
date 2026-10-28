@@ -326,7 +326,7 @@
                                                (when-let [floor (gate-outcome steps done)] [[(:step done) floor]]))]
                        (let [cell (wsight/floor-cell (nth steps k)) kind (wsight/floor-kind steps k)]
                          (ctx/emit! c :walk.unseen-floor :info {:step k :cell cell :step-kind kind :floor floor :block ((:floors gate) cell)})
-                         (when-let [on-floor (:on-floor c)] (on-floor floor cell)))))
+                         (when-let [on-floor (:on-floor c)] (on-floor floor kind)))))
                    (let [[tracked data] (gaps/tick steps @gap (:i (:exec state')) controls done (:y pose))]
                      (vreset! gap tracked)
                      (when data (ctx/emit! c :gap-jump :info data)))

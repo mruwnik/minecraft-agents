@@ -40,6 +40,7 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
             [jobs.lib.walk.search :as wsearch]
+            [jobs.lib.walk.sight :as wsight]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.watch :as watch]
             [jobs.movement.go-to.air :as air]
@@ -172,27 +173,32 @@
 (defn turn-back
   "{:cost :worth :p :cells} of a plan's floors the body has not seen (steps with :unseen-floor; nil when none): each
   priced by cost/turn-back-cost, its look a peek over a drop or an aim (cost/walk-unknown-prices), its walk back the blocks
-  from the plan's start to its takeoff, its chance of not being there cost/floor-absent-chance of the call's floors found
-  there or not at its height (mem :floor-counts by floor y: one surface's floors tell of each other); no second way is
-  known when the plan is made, so the next-best way's extra is 0. :worth is what trying the way is worth: the chance its
-  first such floor is there (1 - :p) times cost/tour-worth of the goal's straight blocks at the call's start and the
-  caller's :worth."
+  from the plan's start to its takeoff, its chance of not being there cost/floor-absent-chance of its kind
+  (wsight/floor-kind) over the call's floors of each kind found there or not (mem :floor-counts). :worth is cost/tour-worth
+  of the goal's straight blocks at the call's start and the caller's :worth. No second way is known when the plan is
+  made: a floor not there costs, when no lower step has one either (cost/floor-dead-end-chance), the worse case of
+  finding one, the tour that worth still pays for (less cost/tour-cost of the call's tour so far), whose end without one
+  loses the goal; a lower step's replan adds nothing. A floor not there costs no more than that, so the worth is not
+  weighed by its chance again. :p is the first floor's chance."
   [c steps]
   (when (some :unseen-floor steps)
     (let [steps (vec steps)
           counts (:floor-counts (ctx/mem c))
           {:keys [peek-s aim-s]} (cost/walk-unknown-prices)
+          worth (cost/tour-worth (:detour-from (ctx/mem c) 0) (:worth (:args c)))
+          left (max 0 (- worth (:cost (cost/tour-cost (tour c)))))
           backs (vec (reductions + 0 (map #(detour/length [%1 %2]) steps (rest steps))))
           floors (keep-indexed (fn [i s]
                                  (when (:unseen-floor s)
-                                   (let [cell [(js/Math.floor (:x s)) (dec (js/Math.floor (:y s))) (js/Math.floor (:z s))]]
-                                     {:look (if (< (:y s) (- (:y (nth steps (dec i))) 0.5)) peek-s aim-s) :back (nth backs (dec i))
-                                      :p (cost/floor-absent-chance (get counts (second cell))) :cell cell})))
-                               steps)
-          p (:p (first floors))]
-      {:cost (:cost (cost/turn-back-cost floors 0))
-       :worth (* (- 1 p) (cost/tour-worth (:detour-from (ctx/mem c) 0) (:worth (:args c))))
-       :p p
+                                   (let [kind (wsight/floor-kind steps i)]
+                                     {:look (if (#{:down :drop} kind) peek-s aim-s) :back (get backs (max 0 (dec i)))
+                                      :p (cost/floor-absent-chance kind (get counts kind))
+                                      :extra-s (* left (cost/floor-dead-end-chance kind counts))
+                                      :cell [(js/Math.floor (:x s)) (dec (js/Math.floor (:y s))) (js/Math.floor (:z s))]})))
+                               steps)]
+      {:cost (:cost (cost/turn-back-cost floors))
+       :worth worth
+       :p (:p (first floors))
        :cells (vec (take 6 (map :cell floors)))})))
 
 (defn turn-back-check
@@ -206,9 +212,11 @@
           (when (> cost worth) {:turn-back t})))))
 
 (defn count-floor!
-  "The walk's on-floor: one more of the call's unseen floors at the cell's height :present, else absent (mem :floor-counts)."
-  [c floor [_ y _]]
-  (ctx/update-mem! c update-in [:floor-counts y (if (= :present floor) :present :absent)] (fnil inc 0)))
+  "The walk's on-floor: one more of the call's unseen floors of kind :present or :absent (mem :floor-counts). A :missed
+  floor (still unseen once looked at) tells nothing of the ground, so it is not counted; the next plan avoids it."
+  [c floor kind]
+  (when (#{:present :absent} floor)
+    (ctx/update-mem! c update-in [:floor-counts kind floor] (fnil inc 0))))
 
 (defn explore-spent!
   "Give up :explore-spent with the tour so far (tour)."

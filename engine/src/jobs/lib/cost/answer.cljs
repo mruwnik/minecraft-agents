@@ -35,6 +35,7 @@
             [jobs.lib.cost.health :as health]
             [jobs.lib.cost.planner :as planner]
             [jobs.lib.cost.threat :as threat]
+            [jobs.lib.cost.value :as value]
             [jobs.lib.cost.weapon :as weapon]))
 
 (a/defargs settings
@@ -562,9 +563,31 @@
      :seconds seconds}))
 
 (defn counted-chance
-  "The chance of a measured share, k of n counted {:k :n}, under a uniform Beta(1, 1) prior: (k + 1) / (n + 2)."
-  [{:keys [k n]}]
-  (/ (inc k) (+ n 2)))
+  "The chance of a measured share, k of n counted {:k :n}, under a Beta(a, b) prior of pseudo-counts :prior [a b] (a of the
+  share, b of the rest; default the uniform [1 1]): (k + a) / (n + a + b)."
+  [{:keys [k n prior]}]
+  (let [[a b] (or prior [1 1])]
+    (/ (+ k a) (+ n a b))))
+
+(defn floor-absent-chance
+  "The chance a floor the body has not seen is not there, for a step of kind (jobs.lib.walk.sight/floor-kind): counted-chance
+  of the call's own `counts` {:absent :present} of that kind over value/::unseen-floor-counts' pseudo-counts of it."
+  [kind counts]
+  (let [{:keys [absent present]} (merge {:absent 0 :present 0} counts)
+        prior (get (settings/get value/settings ::value/unseen-floor-counts) kind)]
+    (counted-chance {:k absent :n (+ absent present) :prior [(:absent prior) (:present prior)]})))
+
+(defn floor-dead-end-chance
+  "The chance that, an unseen floor of a step of kind not being there, no lower step from its takeoff has one either, so
+  the walk's next plan has no way on from there: floor-absent-chance of each lower kind in turn (a drop 2 and 3 lower)
+  over the call's `counts` {kind {:absent :present}}."
+  [kind counts]
+  (let [p #(floor-absent-chance % (get counts %))]
+    (case kind
+      :up (* (p :level) (p :down) (p :drop) (p :drop))
+      :level (* (p :down) (p :drop) (p :drop))
+      :down (* (p :drop) (p :drop))
+      (p :drop))))
 
 (defn hide-stays
   "The chance the danger is still about when a hide in a refuge ends: counted-chance of ::hide-stays."

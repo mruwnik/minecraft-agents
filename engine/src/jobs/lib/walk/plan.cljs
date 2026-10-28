@@ -196,7 +196,7 @@
 (defn look-first?
   "Whether walking within's partial plan and looking at the unseen floors of the gap wide's steps jump (unseen-gap) costs
   less than filling the gap now (cost/gap-look-cost): the walk's detour is its blocks and those from its end to the
-  takeoff, less wide's blocks to the takeoff; each floor not there at cost/floor-absent-chance."
+  takeoff, less wide's blocks to the takeoff; each floor not there at cost/floor-absent-chance of a level step."
   [c pw within wide-steps {:keys [at from]}]
   (let [walk (:steps within)
         gap (when (and (= "partial" (some-> (:r within) .-status)) (>= (count walk) 2)) (unseen-gap pw wide-steps from at))]
@@ -204,7 +204,7 @@
       (let [to-from (take-while #(not= from [(:x %) (:y %) (:z %)]) wide-steps)
             detour (- (+ (steps-blocks walk) (u/dist (peek walk) (zipmap [:x :y :z] from)))
                       (steps-blocks (concat to-from [(zipmap [:x :y :z] from)])))
-            {:keys [fill look]} (cost/gap-look-cost (count gap) (:count (escape/carried-pillar-item (:primitives c)) 0) detour (cost/floor-absent-chance {}))]
+            {:keys [fill look]} (cost/gap-look-cost (count gap) (:count (escape/carried-pillar-item (:primitives c)) 0) detour (cost/floor-absent-chance :level nil))]
         (< look fill)))))
 
 (defn with-beyond
