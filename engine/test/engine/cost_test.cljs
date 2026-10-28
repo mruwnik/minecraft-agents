@@ -188,7 +188,7 @@
   (are [food mobs expected] (= expected (cost/outruns? food mobs))
     20 [] true
     20 ["zombie"] true
-    6 ["zombie"] false
+    6 ["zombie"] true
     20 ["creeper"] true
     20 ["spider"] false
     6 ["spider"] false

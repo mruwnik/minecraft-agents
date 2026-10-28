@@ -98,10 +98,10 @@
           cells at)))
 
 (defn pace
-  "How much longer than the planner's seconds a flight's steps by a body with food food take on a route: the planner
-  times a sprint, a flight's steps go at cost/flee-walk-speed."
-  [food]
-  (/ (cost/body-speed 20) (cost/flee-walk-speed food)))
+  "How much longer than the planner's seconds a flight's steps take on a route: the planner times the gait the body's food
+  allows (a walk when it cannot sprint, wworld/body-policy), a flight's steps go at cost/flee-walk-speed of that gait."
+  []
+  (/ (cost/body-speed 20) (cost/flee-walk-speed 20)))
 
 (defn dwelt
   "Timed cells (timed-cells) with :s, the seconds the body spends in each (what death-chance reads)."
@@ -243,7 +243,7 @@
 
 (defn ^:async price-all!
   "price! without the kept result, over the inputs gathered (gather); the landings its plans asked about are kept in landings."
-  [c {:keys [targets chasers pos body covers others caught-by policy food]} other? landings]
+  [c {:keys [targets chasers pos body covers others caught-by policy]} other? landings]
   (let [p (:primitives c)
         ring-world (costed c nil other? true)
         cornered (delay (when-let [mobs (seq (keep #(some->> (:mob %) (hash-map :distance 0 :name)) chasers))]
@@ -252,7 +252,7 @@
         trapped-at (fn [cell] (or @cornered (cost/route-death-cost body {:cells [cell] :threats caught-by} cell)))
         counts (wworld/way-counts p)
         spawn-kill (delay (cost/spawn-kill body pos))
-        slow (pace food)]
+        slow (pace)]
     (if (nil? ring-world)
       []
       (loop [[t & more] targets out [] nodes 0 ring-left (settings/get settings ::ring-nodes) planned 0 unrouted {}]

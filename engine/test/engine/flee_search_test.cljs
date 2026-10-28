@@ -230,14 +230,17 @@
               behind (fn [d] {:x (- 0.5 d) :y 64 :z 0.5})
               baby (await (ends-of field from [{:name "baby" :pos (behind 3)}] [] {:food 6}))
               spider (await (ends-of field from [{:name "spider" :mob "spider" :pos (behind 4)}] [] {:food 20}))
-              far (await (ends-of field from [{:name "zombie" :mob "zombie" :pos (behind 7)}] [] {:food 20}))]
+              far (await (ends-of field from [{:name "zombie" :mob "zombie" :pos (behind 7)}] [] {:food 20}))
+              creeper (await (ends-of field from [{:name "creeper" :mob "creeper" :pos (behind 7)}] [] {:food 0}))]
           (is (seq baby) "the ways are planned")
           (is (every? :caught? baby) "a baby zombie runs faster than a body too hungry to sprint")
           (is (nil? (search/pick baby {})) "no flee step: the body is cornered")
           (is (= 1 (:chance (search/caught-chance baby {:k 0 :n 0} {} nil))) "the fight-or-flee weighing prices the flight caught")
           (is (every? :caught? spider) "a spider 4 behind catches a flight")
           (is (some? (search/pick far {})) "one 7 behind is left behind over the ring")
-          (is (< (:chance (search/caught-chance far {:k 0 :n 0} {} nil)) 1) "a way left: not caught for sure"))))))
+          (is (< (:chance (search/caught-chance far {:k 0 :n 0} {} nil)) 1) "a way left: not caught for sure")
+          ;; card fbe87241: a hungry body's walk was slowed twice (the planner's walk, then the walk share again): every way caught
+          (is (some? (search/pick creeper {})) "a body too hungry to sprint walks away from a creeper 7 behind"))))))
 
 (deftest a-chaser-behind-a-wall-is-timed-along-its-way-round-it
   ;; the old arrival ran a straight line through the wall: every way was caught
