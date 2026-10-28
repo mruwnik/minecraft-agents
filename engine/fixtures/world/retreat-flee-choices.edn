@@ -6,7 +6,8 @@
  {:tags [:hostile :survival :flee]
   :time :any
   :mobs :keep
-  :register [{:trigger :hostile-near}]
+  :register [{:trigger :suffocating}
+             {:trigger :hostile-near}]
   :body {:at [16.5 0 16.5] :effects [["resistance" 900 4]]}
   :limit-s 90}
  :cases

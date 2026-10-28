@@ -7,7 +7,8 @@
  {:tags [:hostile :survival :flee :water]
   :time :any
   :mobs :keep
-  :register [{:trigger :hostile-near :why "the mobs stand beyond the default radius" :args {:radius 12 :ranged-radius 16} :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 12}})}]
+  :register [{:trigger :suffocating}
+             {:trigger :hostile-near :why "the mobs stand beyond the default radius" :args {:radius 12 :ranged-radius 16} :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 12}})}]
   :plot {:length 32 :width 64 :height 8}
   :blocks [[:fill [2 0 0] [30 2 63] "stone"]
            [:fill [2 0 24] [9 2 40] "air"]
