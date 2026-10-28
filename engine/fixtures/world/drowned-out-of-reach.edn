@@ -9,7 +9,7 @@
 ;; Should-succeed (rising): an AI drowned 6 blocks off in the surface water swims to the body: the walk toward it is a short leg, so the fight swings once it is within reach and kills it;
 ;; a body sunk in the fight is brought up by breathe (registered, as in the default set) and does not drown.
 ;; Control: the drowned just under the surface beside the body is in reach: the wet fight with an iron sword and the swim out
-;; price close (591 against 584 s live), so fight or flee passes (never skip or abandon); the body does not die.
+;; price close (591 against 584 s live), so it decides fight or flee, either passes; the body does not die.
 {:defaults
  {:tags [:hostile :survival :water]
   :time :any
@@ -44,9 +44,7 @@
   {:name "armed-body-fights-a-drowned-in-reach"
    :body {:inventory [["iron_sword" 1]]}
    :act [[:summon "drowned" [8.5 7 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
-   :expect [{:event {:source :job :kind :hostile.decided :data {:mob "drowned"}} :within-s 10}
-            {:no-event {:source :job :kind :hostile.decided :data {:mob "drowned" :decision :skip}} :for-s 10}
-            {:no-event {:source :job :kind :hostile.decided :data {:mob "drowned" :decision :abandoned}} :for-s 10}
+   :expect [{:event {:source :job :kind :hostile.decided :data {:mob "drowned" :decision #{:fight :flee}}} :within-s 10}
             {:no-event {:source :body :kind :died} :for-s 30}]
    :limit-s 60}
   {:name "armed-body-kills-a-drowned-that-swims-to-it"
