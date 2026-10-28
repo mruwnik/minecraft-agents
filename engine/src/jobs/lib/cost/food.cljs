@@ -6,7 +6,7 @@
   for emergencies and never counts; precious-worth, eat-precious?: what one gives, whether it is worth eating."
   (:require [engine.game :as game]
             [jobs.lib.cost.answer :as answer]
-            [jobs.lib.cost.health :as health]
+            [jobs.lib.cost.precious :as precious]
             [jobs.lib.cost.value :as value]
             [jobs.lib.foods :as foods]))
 
@@ -44,23 +44,15 @@
                      0 inventory)]
     (max 0 (- reserve-points held))))
 
-(defn fed
-  "body once it has eaten precious food item: its regeneration on its health (at most 20), its absorption on top."
-  [{:keys [health absorption] :as body} item]
-  (let [{:keys [regen absorb]} (foods/healing item)]
-    (assoc body :health (min 20 (+ (or health 20) regen)) :absorption (+ (or absorption 0) absorb))))
-
 (defn precious-worth
-  "Seconds what precious food item gives body is worth, one sum: the hp it adds (health/gain-worth: its regeneration up
+  "Seconds what precious food item gives body is worth, one sum: the hp it adds (precious/hp-worth: its regeneration up
   to 20, each at most what waiting costs an hp while the body heals by waiting, heals?, then its absorption over that)
   paid only by the chance the body lives, plus, against a known answer met at `at` with death {:met :clear}
   (answer/decide's), the death it averts: the fall in answer/answer-death-chance with the item eaten, at answer/died."
   ([body item heals?] (precious-worth body item heals? nil nil nil))
   ([body item heals? known at death]
-   (let [health (or (:health body) 20)
-         eaten (fed body item)
-         hp (+ (health/gain-worth health (js/Math.floor (- (:health eaten) health)) heals?)
-               (health/gain-worth (:health eaten) (- (:absorption eaten) (or (:absorption body) 0)) false))]
+   (let [eaten (precious/fed body item)
+         hp (precious/hp-worth body item heals?)]
      (if known
        (let [before (answer/answer-death-chance body known at death)
              after (answer/answer-death-chance eaten known at death)]

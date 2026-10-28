@@ -10,6 +10,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.answer :as answer]
             [jobs.lib.cost.food :as food-cost]
+            [jobs.lib.cost.precious :as precious]
             [jobs.lib.cost.value :as value]
             [jobs.lib.foods :as foods]
             [jobs.lib.meal :as meal]
@@ -966,7 +967,7 @@
         known (cost/fight-answer {:weapon nil :mobs [{:name "zombie" :distance 2}]})
         death (answer/bare body at)
         hp (food-cost/precious-worth body "golden_apple" false)
-        fed (food-cost/fed body "golden_apple")
+        fed (precious/fed body "golden_apple")
         before (answer/answer-death-chance body known at death)
         after (answer/answer-death-chance fed known at death)]
     (is (< after before))
@@ -977,5 +978,6 @@
 
 (deftest a-precious-food-counts-as-carried-food-only-when-worth-eating
   (let [self (fn [item health food] #js {:health health :food food :inventory #js [#js {:name item :count 1}]})]
-    (is (not (meal/carries-food? (self "golden_apple" 1 5))) "a golden apple's hp (269 s) are worth less than the apple (1117 s)")
-    (is (meal/carries-food? (self "enchanted_golden_apple" 1 5)) "its absorption and hp (521 s) are worth more than it (8 s)")))
+    (is (not (meal/carries-food? (self "golden_apple" 5 5))) "a golden apple's hp are worth less than the apple a recipe makes")
+    (is (meal/carries-food? (self "enchanted_golden_apple" 5 5)) "nothing yields an enchanted one: its worth is the hp it heals from 10, and 5 hp gain more")
+    (is (not (meal/carries-food? (self "enchanted_golden_apple" 19 5))) "at 19 hp it heals less than it does from 10")))

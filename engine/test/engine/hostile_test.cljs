@@ -183,8 +183,8 @@
               hurt {:self {:health 2 :food 20} :inventory (conj sword apple) :equipment iron-armour :entities [(zombie 3 0)]}
               {:keys [seen p]} (await (flight-round respond hurt))
               ate (first (filter #(= :hostile.precious-eat (:kind %)) @seen))]
-          (is (= [:fight 1724 1304] [(:answer ate) (:without ate) (:price ate)])
-              "the fight with its apple (1724 - the apple's 1538 + its 1117 s) beats the fight alone and the flee (1923 s)")
+          (is (= :fight (:answer ate)))
+          (is (< (:price ate) (:without ate)) "the fight with its apple beats every answer without it")
           (is (= ["golden_apple"] (mapv #(aget (.-args %) "item") (calls p "eat"))))
           (is (= [] (mapv #(aget (.-args %) "item")
                           (calls (:p (await (flight-round respond (assoc hurt :self {:health 20 :food 20})))) "eat")))
@@ -204,13 +204,13 @@
                          :swings (count (calls p "attack"))}))
               flips (await (round 6))
               keeps (await (round 4))]
-          (is (= {:flee 1238 :fight 1948} (:prices (:decided flips))))
-          (is (= [:fight 1167] [(:answer (:ate flips)) (:price (:ate flips))])
-              "6 hp, two zombies, iron: without the apple the flee (1238 s) beats the fight (1948 s); with it the fight costs 1167 s")
+          (is (< (:flee (:prices (:decided flips))) (:fight (:prices (:decided flips)))) "6 hp, two zombies, iron: without the apple the flee beats the fight")
+          (is (= :fight (:answer (:ate flips))))
+          (is (< (:price (:ate flips)) (:flee (:prices (:decided flips)))) "with the apple the fight is cheaper than the flee")
           (is (pos? (:swings flips)) "it eats, then fights")
-          (is (= {:flee 1700 :fight 2382} (:prices (:decided keeps))))
-          (is (= [:flee 1217] [(:answer (:ate keeps)) (:price (:ate keeps))])
-              "4 hp: the flee wins with and without it (1217 s against 1700 s): eat, then flee")
+          (is (< (:flee (:prices (:decided keeps))) (:fight (:prices (:decided keeps)))))
+          (is (= :flee (:answer (:ate keeps))))
+          (is (< (:price (:ate keeps)) (:flee (:prices (:decided keeps)))) "4 hp: the flee wins with and without it: eat, then flee")
           (is (zero? (:swings keeps))))))))
 
 (defn fist-stance

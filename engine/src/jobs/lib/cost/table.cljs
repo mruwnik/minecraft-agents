@@ -4,6 +4,7 @@
             [clojure.string :as str]
             [jobs.lib.cost.base-rates :as base-rates]
             [jobs.lib.cost.health :as health]
+            [jobs.lib.cost.precious :as precious]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.foods :as foods]
             [jobs.lib.game-facts :as facts]
@@ -17,6 +18,7 @@
    :min-durability-share 0.1
    :craft-step 1
    :smelt-step 2
+   :unsourced-food-health 10 ;; the health a precious food that nothing yields is priced at: what it heals a body there
    :junk-share 0.1
    :food-point-s 2
    :farm-s 4
@@ -252,7 +254,12 @@
         by-result (group-by first recipes)
         pinned (into {} (map (fn [[n o]] [n (override-fn o)])) overrides)
         pin (fn [n w] ((get pinned n identity) w))
-        no-source (into {} (map (fn [i] [(.-name i) (* (:no-source-each basis) (/ 64 (max 1 (.-stackSize i))))])) items)
+        ;; nothing yields it, so it cannot be replaced: a precious food is worth what eating it gives a body at the reference health
+        no-source (into {} (map (fn [i] (let [n (.-name i)]
+                                          [n (if (contains? foods/precious n)
+                                               (precious/hp-worth {:health (:unsourced-food-health basis) :absorption 0} n false)
+                                               (* (:no-source-each basis) (/ 64 (max 1 (.-stackSize i)))))])))
+                         items)
         step (fn [natural table]
                (into {} (map (fn [n]
                                (let [via-recipe (some->> (by-result n)

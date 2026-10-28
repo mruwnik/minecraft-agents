@@ -1,6 +1,8 @@
 (ns engine.value-test
   "make-room's item worth (jobs.lib.cost.value/item-value per item) against its :toss-below default."
   (:require [cljs.test :refer [deftest is are]]
+            [jobs.lib.cost.precious :as precious]
+            [jobs.lib.cost.table :as tbl]
             [jobs.lib.room-order :as ord]))
 
 (def toss-below (get-in ord/settings [::ord/toss-below :default]))
@@ -41,3 +43,8 @@
 (deftest worth-is-per-item-and-a-missing-count-is-one
   (is (= (ord/item-worth {:name "iron_ingot" :count 8}) (ord/item-worth {:name "iron_ingot"})))
   (is (> (ord/item-worth {:name "diamond"}) (ord/item-worth {:name "iron_ingot"}) (ord/item-worth {:name "dirt"}))))
+
+(deftest a-precious-food-nothing-yields-is-worth-the-hp-it-heals
+  (is (= (precious/hp-worth {:health (:unsourced-food-health tbl/default-basis) :absorption 0} "enchanted_golden_apple" false)
+         (ord/item-worth {:name "enchanted_golden_apple" :count 1}))
+      "not the no-source junk default"))
