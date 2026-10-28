@@ -46,8 +46,8 @@
    :after [[:block [20 0 18] "air"]]
    :limit-s 60}
   ;; card 1ac3d50f: a way through the body's own plan is priced, not refused: the shaft walled by its own plan is the only way, so
-  ;; go-to stairs out through it, warns go-to.dug-own-build per cell and puts the cells back (cobblestone, the stone's drop)
-  {:name "shut-in-own-walls-go-to-stairs-out-and-puts-them-back"
+  ;; go-to climbs out through it, warns go-to.dug-own-build per cell and puts the cells back (cobblestone, the stone's drop)
+  {:name "shut-in-own-walls-go-to-climbs-out-and-puts-them-back"
    :plans [{:id "hut" :metadata {:by "$body"}
             :parts [{:id "wall" :cells [#at [17 0 16] #at [17 1 16] #at [17 2 16] #at [17 3 16]
                                         #at [15 0 16] #at [15 1 16] #at [15 2 16] #at [15 3 16]
@@ -56,8 +56,7 @@
                     :want [:any "stone"]}]}]
    :blocks [[:fill [10 0 10] [22 3 22] "stone"] [:fill [16 0 16] [16 3 16] "air"]]
    :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1})]]
-   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 90 :of-job true}
-            {:event {:source :job :kind :go-to.dug-own-build} :within-s 120 :of-job true}
+   :expect [{:event {:source :job :kind :go-to.dug-own-build} :within-s 120 :of-job true}
             {:event {:source :job :kind :go-to.restored} :within-s 180 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}]
    :after [[:body-near [20.5 4 16.5] 2]]
@@ -86,7 +85,8 @@
                     {:id "inside" :box [#at [9 2 9] #at [11 4 11]] :want :clear}
                     {:id "post" :cells [#at [16 2 10]] :want "dirt"}]}]
    :blocks [[:fill [4 0 4] [20 9 16] "glowstone"] [:fill [8 1 8] [12 5 12] "dirt"] [:fill [9 2 9] [11 4 11] "air"] [:set [16 2 10] "air"]]
-   :body {:at [10.5 2 10.5] :inventory [["dirt" 16] ["stone_pickaxe" 1] ["stone_shovel" 1]]}
+   ;; 64 dirt: the shell's edges and corners are unseen from inside, so the plan reckons them owed until it sees them
+   :body {:at [10.5 2 10.5] :inventory [["dirt" 64] ["stone_pickaxe" 1] ["stone_shovel" 1]]}
    :act [[:job (jobs.build.from-plan {:plan "$plan:room"})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 200 :of-job true}
             {:count-event {:source :job :kind :go-to.dug-own-build} :for-s 200 :at-most 2}
