@@ -208,7 +208,10 @@
         armed? (some? (combat/best-weapon (:primitives c) weapons))
         weighed-mobs (if (and (:hit-on-the-run (ctx/mem c)) (not fire?)) (hitters c hostiles) hostiles)
         weighed (hostile/weigh c (cornered-answers c weighed-mobs home?))
-        win? (and (not blind?) (seq hostiles) (not-any? combat/creeper? hostiles) (not-any? combat/enderman? hostiles) (= :fight (:answer weighed)))
+        swim? (and (boolean (some #(= "drowned" (.-name %)) hostiles)) (breath/swimming? (:primitives c)))
+        ;; afloat, a drowned only heard or out of a swing's reach is no fight the body can win: the swim out comes first
+        win? (and (not blind?) (seq hostiles) (not-any? combat/creeper? hostiles) (not-any? combat/enderman? hostiles) (= :fight (:answer weighed))
+                  (or (not swim?) (some #(and (danger-q/seen-only? %) (hostile/reaches? c %)) hostiles)))
         prices (:prices weighed)
         pillar-first? (boolean (and (not fire?) (not armed?) (pillar/pillar-item c)
                                     (pillar/pillar-fits? (:primitives c) (pl/feet-cell c))
@@ -226,7 +229,7 @@
                              :faster? (not (outrun? c hostiles))
                              :arriving? (boolean (and armed? (seq (arriving c hostiles))))
                              :pressed? (or beaten-fight? (press-fights? {:fire? fire? :pressed? (pressed? c hostiles) :tries fire-tries :limit (settings/get settings :jobs.survival.respond.options/cover-tries)}))
-                             :swim? (and (boolean (some #(= "drowned" (.-name %)) hostiles)) (breath/swimming? (:primitives c)))
+                             :swim? swim?
                              :home? home?
                              :lean? (pillar/lean? c)
                              :pillar-first? pillar-first?
