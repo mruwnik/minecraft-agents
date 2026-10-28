@@ -14,10 +14,10 @@
 (def meta {:tags [:goal]})
 
 (def doc
-  "Pick where a farm patch would go: the footprint of :plan (a plan id), else :w x :h. Ranks patches by flatness first, then water
-  within 4 and nearness to :center. It tries patches nearest-first and stops once ::limit spots are found that no farther ring can beat
+  "Pick where a farm patch would go: the footprint of :plan (a plan id), else :w x :h. Ranks patches by their price in seconds
+  (jobs.lib.patch score-patch). It tries patches nearest-first and stops once ::limit spots are found that no farther ring can beat
   (the best score a farther ring could have, less its walk, is no more than the worst kept). A patch of 8 or more is tried at every fourth corner. Reads blocks only: it never digs or marks
-  anything. A patch whose seen crop-cell light (block or sky) is under 9 is skipped, unless the body carries torches or coal and sticks to light it (:dark? true on the spot; jobs.farm.grow lights it). A scan reads at most jobs.lib.patch's ::max-reads blocks, then settles for the best spots so far. It never walks to the spot: a
+  anything. A scan reads at most jobs.lib.patch's ::max-reads blocks, then settles for the best spots so far. It never walks to the spot: a
   parent does.
   The search is one jobs.explore.search child with :patch, its walks priced against a 3-day food reserve (cost/food-search-worth): it looks round and scans the area round :center (or the body); while no patch
   is found it walks that job's legs and scans where each ends (with :center, the centre again: spots stay within :range of it), and stops at the first patch.
@@ -26,16 +26,20 @@
   Ends with data {:spot pos :spots [...]}: done with the spots, or nothing-possible with cause and :why :distance (no leg left), :legs
   (the search's max legs walked), :stuck (three walks in a row failed), :time (the call's :job-time spent) or :no-plan (the plan is
   missing or unreadable), the search's :text and :best, the patch fewest cells short of a spot
-  {:pos :w :h :short :unseen :no-floor :dark :foreign :away} (cells with no seen ground, water/lava/ice on top, too dark, another's). A leg go-to gives up for the body's own shelter under a dark sky waits :dark (jobs.explore.search).
-  :spots best first up to ::limit, each {:pos :w :h :score :level :work :step :water-share :sky :away :y :farmable :dark?}; :step is
+  {:pos :w :h :short :unseen :no-floor :foreign :steep :dark :unfarmable :far :away} (cells with no seen ground, water/lava/ice on top,
+  another's; off height, too dark or untillable where the crops do not pay for the fix; :far, short 0, a patch whose crops pay for
+  all but the walk). A leg go-to gives up for the body's own shelter under a dark sky waits :dark (jobs.explore.search).
+  :spots best first up to ::limit, each {:pos :w :h :score :worth :costs :level :work :step :water-share :sky :away :y :farmable :dark?}; :step is
   the largest height difference between two neighbouring cells of the patch. A pos is the north-west (minimum x and z) corner at
   ground level of the :w x :h patch, not its centre; :spot is the first spot's pos. :away is the distance from the patch's centre
   to :center (the body's cell without one), not from the corner.
-  Score = level (% of the patch's cells at its commonest ground height y, 0-100) + water-weight x water-share, less :work (sum of blocks
-  the other cells are off y) and :away (blocks from :center) priced in seconds (jobs.lib.cost earthwork-s, walk-cost; ::point-blocks of
-  walking a point), uncapped, and up to farmable-weight for cells a hoe cannot make farmland of (the weights are jobs.lib.patch settings). A spot with level under 100
-  has cells to level or build up; one whose score falls under 0 (earthwork dearer than the patch is worth) is no spot. Open sky is reported in :sky, not scored (crops need light). :farmable is the % of its cells whose ground is farmland or a hoe makes farmland of (dirt, grass, path,
-  coarse or rooted dirt).
+  Score = :worth less :costs, seconds: worth is the crops of its cells, cost/sown-worth of wheat on wet or dry farmland, or
+  the :worth arg shared over the cells, a dry one at the same share of a wet one (none for a :plan with no crops or farmland); costs are :earthwork (cost/earthwork-s of :work, the blocks the cells are off the
+  commonest ground height y), the :walk from :center (cost/walk-cost of :away), and, each only where it pays: torches for cells
+  under crop light 9 (cost/light-cost, a trip when none is carried; :dark? true, jobs.farm.grow hangs them), water brought to dry
+  cells (a trip a source and the irrigate step), a top a hoe cannot till dug out and filled with dirt. A patch scoring 0 or less
+  is no spot. :level is the % of cells at y; open sky is reported in :sky, not scored. :farmable is the % of its cells whose
+  ground is farmland or a hoe makes farmland of (dirt, grass, path, coarse or rooted dirt).
   A patch is left out when a column of it is unseen, lies under another plan's footprint, or in a zone or claim of another owner (the body's
   own zones are fine); :max-step drops patches with a bigger step.
   Needs nothing; it reads only what the body has seen and looks around at each place it scans.")
@@ -46,6 +50,7 @@
    :h {:doc "patch height (z), 1 to 16; without a :plan" :spec (a/int-in 1 16) :default 5}
    :range {:doc "patches lie within this many blocks of :center in x and z, 1 to 48" :spec (a/int-in 1 48) :default 24}
    :center {:doc "where to search from {:x :y :z}; nil is the body's cell" :spec ::a/pos :default nil}
+   :worth {:doc "seconds the patch is worth to the caller when every cell grows on wet farmland; nil: its crops' own worth" :spec (a/num-in 0 nil) :default nil}
    :max-step {:doc "drop patches whose largest step between neighbouring cells is over this; nil: keep all" :spec (a/int-in 0 16) :default nil}})
 
 (a/defargs settings
@@ -94,8 +99,7 @@
                (when-not (known/unreadable? pl) (footprint (:cells pl))))
              (select-keys a [:w :h]))]
     (when fp
-      (merge fp (select-keys a [:plan :range :max-step]) {:dark-ok? (torch/lightable? (:primitives c))}
-             
+      (merge fp (select-keys a [:plan :range :max-step :worth]) {:torches (torch/torches-held (:primitives c))}
              {:depth (settings/get settings ::depth) :limit (settings/get settings ::limit)}))))
 
 (defn ^:async step

@@ -14,7 +14,8 @@
             [jobs.farm.find-spot :as fs]
             [jobs.lib.patch :as pt]
             [jobs.lib.farm :as farm]
-            [jobs.lib.surface :as surface]))
+            [jobs.lib.surface :as surface]
+            [jobs.lib.cost :as cost]))
 
 (defn setup [world]
   (let [clock (atom 1000000)
@@ -97,31 +98,43 @@
     (is (nil? (surface/column-top (fn [{:keys [y]}] (cond (= y 63) "dirt" (<= 64 y 67) "air" (<= y 70) "stone" (= y 71) nil :else "air")) 0 0 64 12))
         "a surface with nothing seen above it and rock under it is no roof: the pocket below is not its top")))
 
-(deftest score-patch-table
-  (are [in expected] (= expected (pt/score-patch in))
-    {:tops [63 63 63 63] :water-share 0 :sky true :away 0}
-    {:y 63 :level 100 :work 0 :water-share 0 :sky true :away 0 :score 100}
-    {:tops [63 63 63 64] :water-share 1 :sky true :away 8}
-    {:y 63 :level 75 :work 1 :water-share 1 :sky true :away 8 :score 98}
-    {:tops [63 64] :water-share 0 :sky false :away 0}
-    {:y 63 :level 50 :work 1 :water-share 0 :sky false :away 0 :score 50}
-    {:tops (vec (concat (repeat 30 60) (repeat 3 70))) :water-share 0.5 :sky false :away 200}
-    {:y 60 :level 91 :work 30 :water-share 0.5 :sky false :away 200 :score 40}
-    {:tops [60 80] :water-share 0 :sky false :away 400}
-    {:y 60 :level 50 :work 20 :water-share 0 :sky false :away 400 :score -59}
-    {:tops [63 63 63 63] :water-share 0 :sky true :away 0 :farmable 0.5}
-    {:y 63 :level 100 :work 0 :water-share 0 :sky true :away 0 :farmable 50 :score 80}
-    {:tops [63 nil] :water-share 0 :sky true :away 0} nil))
+(defn cells [n m] (vec (repeat n (merge {:lit? true :wet? true :farmable? true} m))))
 
-(deftest earthwork-is-priced-uncapped
-  (is (neg? (:score (pt/score-patch {:tops (vec (concat (repeat 30 60) (repeat 30 80))) :water-share 1 :sky true :away 0})))
-      "600 blocks of earthwork cost more than a flat wet patch is worth")
-  (is (< (:score (pt/score-patch {:tops [60 80 100] :water-share 0 :sky true :away 0}))
-         (:score (pt/score-patch {:tops [60 80 80] :water-share 0 :sky true :away 0})))))
+(deftest score-patch-prices-the-crops-against-the-work
+  (let [w (pt/cell-worth true)
+        flat (pt/score-patch {:tops (vec (repeat 9 63)) :cells (cells 9 {}) :sky true :away 0})]
+    (is (= {:y 63 :level 100 :work 0 :water-share 1 :sky true :away 0 :worth (js/Math.round (* 9 w))
+            :costs {:light 0 :water 0 :replace 0 :earthwork 0 :walk 0} :score (js/Math.round (* 9 w)) :dark? false :farmable 100}
+           flat))
+    (is (= (js/Math.round (- (* 9 w) (cost/earthwork-s 2) (pt/walk-s 8)))
+           (:score (pt/score-patch {:tops (conj (vec (repeat 8 63)) 65) :cells (cells 9 {}) :away 8})))
+        "levelling and the walk are seconds off the crops' worth")
+    (is (= -12 (:score (pt/score-patch {:tops [63 63] :away 40})))
+        "a patch for no crops is worth nothing: its score is its costs")
+    (is (nil? (pt/score-patch {:tops [63 nil] :cells (cells 2 {})})))))
+
+(deftest a-patch-that-does-not-pay-says-why
+  (are [in why] (= why (:why (pt/score-patch in)))
+    {:tops (vec (repeat 25 63)) :cells (cells 25 {}) :away 0} nil
+    {:tops (vec (repeat 25 63)) :cells (cells 25 {}) :away 400} :far
+    {:tops (vec (concat (repeat 13 60) (repeat 12 64))) :cells (cells 25 {}) :away 0} :steep
+    {:tops (vec (repeat 9 63)) :cells (cells 9 {:lit? false}) :away 0} :barren
+    {:tops (vec (repeat 9 63)) :cells (cells 9 {:farmable? false}) :away 0} :barren
+    {:tops [63 64] :away 4000} nil))
+
+(deftest light-and-water-are-bought-only-where-they-pay
+  (let [dark (fn [n] (pt/field-price (cells n {:lit? false}) 1 (pt/cell-worth true)))
+        dry (fn [n] (pt/field-price (cells n {:wet? false}) 0 (pt/cell-worth true)))]
+    (is (not (:lit? (dark 9))) "nine crops do not pay for a torch")
+    (is (:lit? (dark 144)) "a dark 12 x 12 field pays for its torches")
+    (is (= (* 3 (:cost (cost/light-cost {:carried 1}))) (:light (:costs (dark 144)))) "a torch lights pt/torch-cells crops")
+    (is (not (:watered? (dry 9))) "nine dry cells do not pay for a bucket of water")
+    (is (:watered? (dry 25)))
+    (is (< (:net (dry 25)) (:net (pt/field-price (cells 25 {}) 0 (pt/cell-worth true)))) "water brought costs what water in reach does not")))
 
 (deftest sky-is-reported-not-scored
-  (is (= (:score (pt/score-patch {:tops [63 63] :water-share 0 :sky true :away 0}))
-         (:score (pt/score-patch {:tops [63 63] :water-share 0 :sky false :away 0})))))
+  (is (= (:score (pt/score-patch {:tops [63 63] :cells (cells 2 {}) :sky true :away 0}))
+         (:score (pt/score-patch {:tops [63 63] :cells (cells 2 {}) :sky false :away 0})))))
 
 (deftest hydrated-table
   (are [ws x y z expected] (= expected (farm/hydrated? ws x y z))
@@ -158,8 +171,8 @@
 ;; ---- job
 
 (def stepped-world
-  (merge (patch 2 0 3 3 63 "dirt") {"3,64,1" "dirt"}
-         (patch -4 0 3 3 63 "dirt") {"-3,64,1" "dirt" "-3,65,1" "dirt"}))
+  (merge (patch 2 0 3 3 63 "dirt") {"3,64,1" "dirt" "6,63,1" "water"}
+         (patch -4 0 3 3 63 "dirt") {"-3,64,1" "dirt" "-3,65,1" "dirt" "-6,63,1" "water"}))
 
 (deftest max-step-keeps-only-patches-with-small-steps
   (async done
@@ -176,17 +189,17 @@
          {"6,63,1" "water"}
          (patch -4 0 3 3 63 "dirt")
          (patch 2 -6 3 3 63 "dirt")
-         {"3,64,-5" "dirt"}))
+         {"3,64,-5" "dirt" "6,63,-5" "water"}))
 
-(deftest wet-flat-beats-dry-flat-beats-bumpy
+(deftest wet-flat-beats-wet-bumpy-and-a-small-dry-patch-is-no-spot
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:blocks wet-world})
               r (await (child-outcome eng job small 4))]
-          (is (= [{:x 2 :y 63 :z 0} {:x -4 :y 63 :z 0} {:x 2 :y 63 :z -6}] (mapv :pos (:spots r))))
+          (is (= [{:x 2 :y 63 :z 0} {:x 2 :y 63 :z -6}] (mapv :pos (:spots r))) "nine dry cells do not pay for the walk to them")
           (is (= {:x 2 :y 63 :z 0} (:spot r)))
-          (is (= [1.0 0] (mapv :water-share (take 2 (:spots r))))))))))
+          (is (every? pos? (mapv :water-share (:spots r)))))))))
 
 (deftest never-picks-water-or-lava
   (async done
@@ -280,18 +293,20 @@
   (let [p (tu/seeing-all (tu/fake {:blocks world :self {:pos self}}))]
     (pt/scan p (merge {:w 3 :h 3 :range 6 :depth 12 :limit 50} args) from)))
 
+(def wet-patch (assoc (patch 2 0 3 3 63 "dirt") "6,63,1" "water"))
+
 (deftest scan-reports-sky-for-open-ground-and-not-under-a-roof
   (let [deep (patch 2 0 3 3 2 "stone")
-        open (scan-at (merge (patch 2 0 3 3 63 "dirt") deep) {:x 0 :y 64 :z 0} {} {:x 0 :y 64 :z 0})
-        roofed (scan-at (merge (patch 2 0 3 3 63 "dirt") {"3,79,1" "oak_leaves"}) {:x 0 :y 64 :z 0} {} {:x 0 :y 64 :z 0})]
+        open (scan-at (merge wet-patch deep) {:x 0 :y 64 :z 0} {} {:x 0 :y 64 :z 0})
+        roofed (scan-at (merge wet-patch {"3,79,1" "oak_leaves"}) {:x 0 :y 64 :z 0} {} {:x 0 :y 64 :z 0})]
     (is (= [true] (mapv :sky open)) "stone far below must not matter")
     (is (= [false] (mapv :sky roofed)) "leaves at from-y + depth + 3 over one column")))
 
 (defn lit-scan [light]
-  (let [p (tu/fake {:blocks (patch 2 0 3 3 63 "dirt") :self {:pos {:x 0 :y 64 :z 0}} :time 6000 :light {} :light-default light})]
-    (pt/scan p {:w 3 :h 3 :range 6 :depth 12 :limit 50} {:x 0 :y 64 :z 0})))
+  (let [p (tu/fake {:blocks wet-patch :self {:pos {:x 0 :y 64 :z 0}} :time 6000 :light {} :light-default light})]
+    (pt/scan p {:w 3 :h 3 :range 6 :depth 12 :limit 50 :torches 1} {:x 0 :y 64 :z 0})))
 
-(deftest a-dark-floor-is-no-field-and-a-lit-one-is
+(deftest a-small-dark-floor-is-no-field-and-a-lit-one-is
   (are [light n] (= n (count (lit-scan light)))
     [0 0] 0
     [8 0] 0
@@ -300,22 +315,31 @@
     [9 0] 1
     [15 0] 1))
 
-(deftest a-dark-floor-is-a-spot-when-the-body-can-light-it
-  (let [p (tu/fake {:blocks (patch 2 0 3 3 63 "dirt") :self {:pos {:x 0 :y 64 :z 0}} :time 6000 :light {} :light-default [0 0]})
-        spots (pt/scan p {:w 3 :h 3 :range 6 :depth 12 :limit 50 :dark-ok? true} {:x 0 :y 64 :z 0})]
-    (is (= [true] (mapv :dark? spots)))
-    (is (= [false] (mapv :dark? (lit-scan [9 0]))) "a lit patch is not marked dark")
-    (is (< (:score (first spots)) (:score (first (lit-scan [9 0])))) "a lit patch is preferred")))
+(deftest a-callers-worth-pays-for-the-light-its-crops-do-not
+  (let [p (tu/fake {:blocks wet-patch :self {:pos {:x 0 :y 64 :z 0}} :time 6000 :light {} :light-default [0 0]})
+        scan #(pt/scan p (merge {:w 3 :h 3 :range 6 :depth 12 :limit 50 :torches 1} %) {:x 0 :y 64 :z 0})]
+    (is (empty? (scan {})))
+    (is (= [true] (mapv :dark? (scan {:worth 1000}))))))
+
+(deftest a-big-dark-floor-is-a-spot-lit-with-torches
+  (let [scan (fn [light] (pt/scan (tu/fake {:blocks (patch 0 0 12 12 63 "dirt") :self {:pos {:x 6 :y 64 :z 6}} :time 6000 :light {} :light-default light})
+                                  {:w 12 :h 12 :range 6 :depth 12 :limit 50 :torches 1} {:x 6 :y 64 :z 6}))
+        dark (scan [0 0])
+        lit (scan [9 0])]
+    (is (= [true] (mapv :dark? dark)) "144 crops pay for 3 torches")
+    (is (pos? (:light (:costs (first dark)))))
+    (is (= [false] (mapv :dark? lit)) "a lit patch is not marked dark")
+    (is (< (:score (first dark)) (:score (first lit))) "a lit patch is preferred")))
 
 (deftest scan-sees-water-sitting-on-the-platform
-  (let [world (assoc (patch -3 -3 9 9 99 "stone") "6,100,0" "water")
+  (let [world (assoc (patch -3 -3 9 9 99 "dirt") "6,100,0" "water")
         spots (scan-at world {:x 0 :y 100 :z 0} {:range 8} {:x 0 :y 100 :z 0})
         at (fn [x z] (first (filter #(= {:x x :y 99 :z z} (:pos %)) spots)))]
     (is (pos? (:water-share (at 2 -1))) "patch x 2..4 is within 4 of water at x 6")
-    (is (zero? (:water-share (at -3 -3))))))
+    (is (nil? (at -3 -3)) "nine dry cells out of its reach do not pay for the walk")))
 
 (deftest distance-is-measured-from-center-when-given
-  (let [world (merge (patch 2 0 3 3 63 "dirt") (patch -14 0 3 3 63 "dirt"))
+  (let [world (merge wet-patch (patch -14 0 3 3 63 "dirt") {"-16,63,1" "water"})
         spots (scan-at world {:x 0 :y 64 :z 0} {:range 20} {:x -12 :y 64 :z 1})]
     (is (= {:x -14 :y 63 :z 0} (:pos (first spots))) "the patch near :center beats the one near the body")
     (is (= [{:x -14 :y 63 :z 0} {:x 2 :y 63 :z 0}] (mapv :pos spots)))
@@ -438,12 +462,13 @@
               _ (tu/seeing-after-look p)
               r (await (child-outcome eng job small 8))]
           (is (seq (calls p "look")))
-          (is (= [1.0 0] (mapv :water-share (take 2 (:spots r))))))))))
+          (is (every? pos? (mapv :water-share (take 2 (:spots r))))))))))
 
-(deftest a-stone-patch-scores-below-a-grass-patch
-  (let [p (tu/seeing-all (tu/fake {:blocks (merge (patch 0 0 3 3 63 "stone") (patch 10 0 3 3 63 "grass_block"))}))
-        spots (pt/scan p {:w 3 :h 3 :range 12 :depth 4 :limit 2} {:x 1 :y 64 :z 1})]
-    (is (= [100 0] (mapv :farmable (sort-by (comp - :farmable) spots))))))
+(deftest a-stone-patch-is-no-field
+  (let [p (tu/seeing-all (tu/fake {:blocks (merge (patch 0 0 3 3 63 "stone") (patch 10 0 3 3 63 "grass_block") {"-2,63,1" "water" "14,63,1" "water"})}))
+        r (pt/scan-rows p {:w 3 :h 3 :range 12 :depth 4 :limit 2} {:x 1 :y 64 :z 1} {:next-ring 0 :found []} ##Inf)]
+    (is (= [{:x 10 :y 63 :z 0}] (mapv :pos (:found r))) "a top a hoe cannot till costs more to replace than its crop is worth")
+    (is (= [100] (mapv :farmable (:found r))))))
 
 (def pond-east
   (merge (tu/box -30 63 -30 30 63 30 "grass_block") (tu/box 18 63 -1 20 63 1 "water")))
@@ -478,7 +503,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (setup {:blocks (merge (patch 1 0 3 3 63 "farmland") (patch -6 0 3 3 63 "grass_block"))})
+        (let [{:keys [eng]} (setup {:blocks (merge (patch 1 0 3 3 63 "farmland") (patch -6 0 3 3 63 "grass_block") {"5,63,1" "water" "-8,63,1" "water"})})
               r (await (child-outcome eng job small 4))]
           (is (= [{:x 1 :y 63 :z 0} {:x -6 :y 63 :z 0}] (mapv :pos (:spots r))))
           (is (= [100 100] (mapv :farmable (:spots r)))))))))
@@ -495,3 +520,11 @@
 
 (deftest lacks-text-names-steep-cells
   (is (re-find #"18 of 36 cells short: 18 off the patch's height" (pt/lacks-text {:w 6 :h 6 :short 18 :steep 18}))))
+
+
+(deftest a-far-flat-patch-is-a-far-miss-not-a-steep-one
+  (let [p (tu/seeing-all (tu/fake {:blocks (patch 43 0 5 5 63 "grass_block") :self {:pos {:x 45 :y 64 :z 2}}}))
+        r (pt/scan-rows p {:w 5 :h 5 :range 48 :depth 4 :limit 3} {:x 0 :y 64 :z 2} {:next-ring 0 :found []} ##Inf)]
+    (is (empty? (:found r)) "25 dry cells with water brought do not pay for a 45-block walk")
+    (is (= {:short 0 :far 45} (select-keys (:miss r) [:short :far :steep])))
+    (is (re-find #"lies 45 blocks off" (pt/lacks-text (pt/lacks p (:miss r) 64 4))))))

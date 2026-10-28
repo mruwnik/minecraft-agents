@@ -5,11 +5,11 @@
             [engine.settings :as settings]
             [jobs.lib.access :as access]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [jobs.lib.crops :as crops]
             [jobs.lib.need :as need]
             [jobs.lib.next-call :as next-call]
             [jobs.lib.pace :as pace]
-            [jobs.lib.patch :as patch]
             [jobs.lib.ready :as ready]
             [jobs.lib.util :as u]))
 
@@ -22,7 +22,7 @@
   1. A crop of :crop seen and ripe (a zone or claim of another owner leaves it): cut it with jobs.farm.harvest, which replants.
   2. A crop seen, none ripe: wait (a jobs.time.noop pause of ::wait-s, holding still, then look again). A field growing is never replaced.
   3. No crop seen: get a hoe (jobs.items.get-tool) and one seed per cell of a :w x :h field (jobs.items.obtain; a failed seed fetch with :count seeds carried sows what is carried; wheat seeds are
-     broken out of grass), pick the spot (jobs.farm.find-spot, nearest to the body) and work it with jobs.farm.tend (till,
+     broken out of grass), pick the spot (jobs.farm.find-spot, nearest to the body, the field worth a 3-day food reserve: cost/food-search-worth) and work it with jobs.farm.tend (till,
      irrigate, plant, bone meal when carried), once per round; a spot that is dark is lit first (jobs.build.light-area to crop light, torches hung beside the field). Three tends that leave no crop standing end the run (a tend refused before it started, e.g. :away, is not one: the run yields). A planted field is judged from its remembered cells at any distance.
   Needs: a source of a hoe and seed (the fetch jobs say what lacks), a field spot in range, a zone list.
   Done once :count of the crop's item is carried. Ends nothing-possible with the failed child's cause: :no-spot (find-spot found none),
@@ -132,7 +132,7 @@
   "Pick the field's place into memory: :continue while the search runs, :again once set, else the ending."
   [c]
   (let [{:keys [w h]} (:args c)
-        e (await (ctx/call c :spot 'jobs.farm.find-spot {:w w :h h}))]
+        e (await (ctx/call c :spot 'jobs.farm.find-spot {:w w :h h :worth (cost/food-search-worth cost/food-reserve-points)}))]
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) (do (let [spot (first (:spots (:data e)))]
@@ -146,7 +146,7 @@
   (let [{:keys [area dark? lit]} (ctx/mem c)]
     (when (and dark? (not lit))
       (let [e (await (ctx/call c :light 'jobs.build.light-area
-                               (cond-> {:boxes [[(:min area) (:max area)]] :level patch/crop-light :beside? true}
+                               (cond-> {:boxes [[(:min area) (:max area)]] :level crops/grow-light :beside? true}
                                  (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))]
         (cond
           (= :continue e) :continue

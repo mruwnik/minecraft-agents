@@ -183,7 +183,7 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:kind :nothing-possible :cause :distance} (kc (await (ending-of (fst/setup {:blocks {}}) find-spot fst/small 4)))))
-        (let [e (await (ending-of (fst/setup {:blocks (fst/patch 4 0 3 3 63 "dirt")}) find-spot (assoc fst/small :range 8) 4))]
+        (let [e (await (ending-of (fst/setup {:blocks (assoc (fst/patch 4 0 3 3 63 "dirt") "8,63,1" "water")}) find-spot (assoc fst/small :range 8) 4))]
           (is (= :done (:kind e)))
           (is (= {:x 4 :y 63 :z 0} (get-in e [:data :spot]))))))))
 
