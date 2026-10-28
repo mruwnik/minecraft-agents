@@ -12,7 +12,8 @@
             [jobs.lib.pen :as pen]
             [jobs.lib.pen-read :as pen-read]
             [jobs.lib.sense :as sense]
-                        [jobs.lib.util :as u]
+            [jobs.lib.util :as u]
+            [jobs.lib.walk-pick :as pick]
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.bait :as bait]
@@ -99,16 +100,15 @@
 
 (def max-pit-looks 12)
 
-(defn unseen-wall
-  "The nearest cell of answer's :unloaded leaks (never seen) not yet looked at from where the eye sees it, or nil."
+(defn ^:async unseen-wall!
+  "The cell of answer's :unloaded leaks (never seen) not yet looked at the body walks cheapest to see from (walk-pick), or nil."
   [c answer]
-  (let [here (u/self-pos c)
-        looked (set (:looked-pit (ctx/mem c)))]
-    (->> (:leaks answer) (filter #(= :unloaded (:why %))) (map :pos)
-         (remove #(contains? looked [(:x %) (:y %) (:z %)]))
-         (take (- max-pit-looks (count looked)))
-         (sort-by #(u/dist here {:x (+ (:x %) 0.5) :y (+ (:y %) 0.5) :z (+ (:z %) 0.5)}))
-         first)))
+  (let [looked (set (:looked-pit (ctx/mem c)))]
+    (await (pick/pick-walk! c (->> (:leaks answer) (filter #(= :unloaded (:why %))) (map :pos)
+                                   (remove #(contains? looked [(:x %) (:y %) (:z %)]))
+                                   distinct
+                                   (take (- max-pit-looks (count looked))))
+                            (fn [pos] {:pos pos :range (look-range) :doors :never :ways #{:walk :clear-seal}})))))
 
 (defn ^:async trapped?
   "Whether animal a stands in a closed pocket of ground (a pit it cannot step out of) that does not hold the staging cell:
@@ -118,7 +118,7 @@
   (let [{:keys [x y z]} (u/pos-of (.-pos a))
         answer (pen-read/read (:primitives c) {:at {:x (js/Math.floor x) :y (js/Math.floor (+ y 0.01)) :z (js/Math.floor z)}
                                                :max-cells (settings/get spare/settings ::spare/pen-max-cells)})
-        unk (when (= :unloaded (:reason answer)) (unseen-wall c answer))]
+        unk (when (= :unloaded (:reason answer)) (await (unseen-wall! c answer)))]
     (if unk
       (let [cell [(:x unk) (:y unk) (:z unk)]
             r (await (near/go-near! c unk (look-range) {:doors :never :ways #{:walk :clear-seal} :see true}))]
@@ -233,17 +233,15 @@
                             (remove animals/leashed?)
                             (mapv (fn [e] {:key (animals/key-of e) :pos (u/pos-of (.-pos e))})))))))
 
-(defn look-back-target
-  "The remembered animal to go and look for when none is listed within :radius of the start now: the nearest to the body not
-  yet looked for, else nil."
+(defn ^:async look-back-target!
+  "The remembered animal to go and look for when none is listed within :radius of the start now: the one not yet looked
+  for whose spot the body walks cheapest to see from (walk-pick), else nil."
   [c]
   (let [m (ctx/mem c)
         looked (set (:looked-back m))]
     (when (empty? (lure-candidates c))
-      (->> (:remembered m)
-           (remove #(contains? looked (:key %)))
-           (sort-by #(u/dist (u/self-pos c) (:pos %)))
-           first))))
+      (await (pick/pick-walk! c (remove #(contains? looked (:key %)) (:remembered m))
+                              (fn [{:keys [pos]}] {:pos pos :range (look-back-range) :doors :never :ways #{:walk :clear-seal}}))))))
 
 (defn ^:async look-back!
   "Walk to where the eye sees the animal's last spot from within look-back-range (a wall between hides it), so it is loaded and listed again; turns round there
@@ -267,7 +265,7 @@
       (finish! c nil)
       :else
       (do (when-not (:method (ctx/mem c)) (ctx/update-mem! c assoc :method (resolve-method c)))
-          (if-let [lost (look-back-target c)]
+          (if-let [lost (await (look-back-target! c))]
             (await (look-back! c lost))
             (if (search-due? c)
               (await (search! c))

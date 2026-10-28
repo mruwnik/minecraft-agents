@@ -12,7 +12,8 @@
             [jobs.lib.sense :as sense]
             [jobs.lib.animals :as animals]
             [jobs.lib.util :as u]
-            [jobs.animals.herd-pen :refer [approach-cells approach-free? axis choose-gate depth free-floor? gate-diagnosis gate-look-range look-range max-approach-walks open-stage other-leaks precheck?]]
+            [jobs.lib.walk-pick :as pick]
+            [jobs.animals.herd-pen :refer [approach-cells approach-free? axis depth usable-gates free-floor? gate-diagnosis gate-look-range look-range max-approach-walks open-stage other-leaks precheck?]]
             [jobs.animals.herd-run :refer [approach-range box-centre cell detail-text pen-box finish! in-pen-adults near-pen pen-opts read-pen]]))
 
 (defn box-gates
@@ -38,9 +39,8 @@
   [c answer]
   (let [m (ctx/mem c)
         wanted (:gate (:args c))
-        gates (->> (concat (map :pos (:gates answer)) (box-gates c)) (filter #(or (nil? wanted) (= (cell wanted) (cell %))))
-                   (sort-by #(u/dist (u/self-pos c) %)))
-        g (first gates)]
+        gates (->> (concat (map :pos (:gates answer)) (box-gates c)) (filter #(or (nil? wanted) (= (cell wanted) (cell %)))) distinct)
+        g (await (pick/pick-walk! c gates (fn [g] {:pos g :range (gate-look-range) :doors :never :ways #{:walk :clear-seal}})))]
     (cond
       (or (nil? g) (:gate-visited m)) (finish! c :no-pen (unseen-extra answer))
       (u/within? (u/self-pos c) g (gate-look-range))
@@ -54,10 +54,9 @@
   once, then read the pen again. No such cell left, or one too far to look at, goes to the pen's gate to look in (look-from-gate!)."
   [c answer]
   (let [here (u/self-pos c)
-        centre (fn [{:keys [x y z]}] {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)})
         looked (set (:looked-pen (ctx/mem c)))
-        unk (->> (:leaks answer) (filter #(= :unloaded (:why %))) (map :pos) (remove #(contains? looked (cell %)))
-                 (sort-by #(u/dist here (centre %))) first)]
+        unk (await (pick/pick-walk! c (->> (:leaks answer) (filter #(= :unloaded (:why %))) (map :pos) (remove #(contains? looked (cell %))) distinct)
+                                    (fn [pos] {:pos pos :range (look-range) :doors :never :ways #{:walk :clear-seal}})))]
     (cond
       (nil? unk) (await (look-from-gate! c answer))
       (not (u/within? here unk (look-range)))
@@ -68,11 +67,11 @@
                 (ctx/update-mem! c update :looked-pen (fnil conj []) (cell unk))
                 :continue))))
 
-(defn verdict
-  "What the pen read says of the run: {:refuse reason :extra map} or {:chosen {:gate :in :out}}."
-  [c answer]
+(defn gate-verdict
+  "What the pen read says of the run through chosen ({:gate :in :out}, nil: no usable gate): {:refuse reason :extra map}
+  or {:chosen chosen}."
+  [c answer {:keys [gate in out] :as chosen}]
   (let [{:keys [target]} (:args c)
-        {:keys [gate in out] :as chosen} (choose-gate c answer)
         leaks (when chosen (other-leaks answer gate))
         inside (count (in-pen-adults c answer))
         refuse (fn [reason & [extra]] {:refuse reason :extra extra})]
@@ -88,6 +87,26 @@
       (< (depth (:inside answer) (cell gate) in) pen-fit/min-depth)
       (refuse :too-shallow {:cell in :depth (depth (:inside answer) (cell gate) in) :need pen-fit/min-depth})
       :else {:chosen chosen})))
+
+(defn verdicts
+  "The gate-verdict of each usable gate (one of no gate when none is): [ok...] those that choose, [refusal...] the rest."
+  [c answer]
+  (let [vs (map #(gate-verdict c answer %) (or (seq (usable-gates c answer)) [nil]))]
+    [(filter :chosen vs) (remove :chosen vs)]))
+
+(defn verdict
+  "A choosing gate-verdict if any gate has one, else the first refusal."
+  [c answer]
+  (let [[oks refusals] (verdicts c answer)]
+    (or (first oks) (first refusals))))
+
+(defn ^:async verdict!
+  "verdict, the gate among those that choose the one whose outside cell the body walks to cheapest (walk-pick)."
+  [c answer]
+  (let [[oks refusals] (verdicts c answer)]
+    (if (seq oks)
+      (await (pick/pick-walk! c oks (fn [v] {:pos (u/cell-pos (:out (:chosen v))) :range 0 :ways #{:walk :clear-seal}})))
+      (first refusals))))
 
 (defn unseen-approach
   "A cell of the approach cell (or the cell outside the gate) that refused the gate (its floor, feet or head) the body has
@@ -107,7 +126,7 @@
   "The pen is read in full: choose the gate and go to the leash phase, or end with the reason. An approach cell never
   seen is looked at first."
   [c answer]
-  (let [{:keys [refuse extra chosen]} (verdict c answer)
+  (let [{:keys [refuse extra chosen]} (await (verdict! c answer))
         {:keys [gate in out]} chosen
         unseen (when refuse (unseen-approach c extra))
         axis-cells (when chosen (axis (:primitives c) (:inside answer) (cell gate) in out (depth (:inside answer) (cell gate) in)))]

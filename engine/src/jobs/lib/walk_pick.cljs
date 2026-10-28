@@ -108,6 +108,16 @@
   [c candidates opts]
   (or (:pick (await (best! c candidates opts))) (first (by-bound (:bound opts) candidates))))
 
+(defn ^:async pick-walk!
+  "The one of xs the body walks to cheapest by pick!: (to x) the go-to args of the walk, (on x) seconds after it that do
+  not hang on the way (default 0). nil for no xs; a lone one is taken unquoted."
+  ([c xs to] (pick-walk! c xs to (constantly 0)))
+  ([c xs to on]
+   (if (next xs)
+     (let [me (u/self-pos c)]
+       (await (pick! c xs {:bound #(+ (walk-s me (to %)) (on %)) :args to :price (fn [x q] (+ (quoted-s c q) (on x)))})))
+     (first xs))))
+
 (defn no-way?
   "Whether go-to's quote q found no way because its search ran out of land: the body's land is closed under that walk's
   policy, so another goal is reached only from within it."

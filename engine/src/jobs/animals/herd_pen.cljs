@@ -39,18 +39,15 @@
                  :when (and in out (not-any? inside far))]
              [in out]))))
 
-(defn choose-gate
-  "{:gate pos :in cell :out cell} of the usable gate (:gate, else the nearest of the pen's), or nil."
+(defn usable-gates
+  "[{:gate pos :in cell :out cell}] of the pen's usable gates (only :gate when given)."
   [c answer]
   (let [p (:primitives c)
-        here (u/self-pos c)
         wanted (:gate (:args c))]
     (->> (:gates answer)
          (map :pos)
          (filter #(or (nil? wanted) (= (cell wanted) (cell %))))
-         (keep (fn [g] (when-let [[in out] (gate-sides p (:inside answer) g)] {:gate g :in in :out out})))
-         (sort-by #(u/dist here (:gate %)))
-         first)))
+         (keep (fn [g] (when-let [[in out] (gate-sides p (:inside answer) g)] {:gate g :in in :out out}))))))
 
 (defn gate-diagnosis
   "Why no gate of the pen is usable, as {:why :cell}: :no-floor-outside with the cell outside a gate that is not free

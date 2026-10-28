@@ -164,13 +164,16 @@
   [c {:keys [closed? inside gates] :as checked}]
   (when (and closed? (seq inside))
     (let [p (:primitives c)
-          {:keys [gate in out] :as chosen} (herd-pen/choose-gate c checked)]
+          usable (herd-pen/usable-gates c checked)
+          free? (fn [{:keys [gate in out]}] (herd-pen/approach-free? p inside (herd-run/cell gate) in out))
+          {:keys [gate in out]} (first usable)]
       (cond
-        (and (nil? chosen) (seq gates))
+        (some free? usable) nil
+        (and (empty? usable) (seq gates))
         (let [{:keys [why cell]} (herd-pen/gate-diagnosis c checked)]
           (str "no gate herd can use (" (name why) (when cell (str " at " (pr-str (vec cell)))) ")"))
-        (nil? chosen) "no gate in the pen for herd"
-        (not (herd-pen/approach-free? p inside (herd-run/cell gate) in out))
+        (empty? usable) "no gate in the pen for herd"
+        :else
         (str "no free floor 4 cells out from the gate at "
              (pr-str (vec (first (remove #(herd-pen/free-floor? p %) (take herd-pen/approach-cells (herd-pen/axis p inside (herd-run/cell gate) in out 0))))))
              ", so herd cannot lead animals in")))))

@@ -12,6 +12,7 @@
             [engine.settings :as settings]
             [jobs.lib.bait :as bait]
             [jobs.lib.escort :as escort]
+            [jobs.lib.walk-pick :as pick]
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.animals :as animals]
             [jobs.lib.child :as child]
@@ -399,25 +400,29 @@
             wy (or (some #(when (reach/standable-cell? (:primitives c) {:x wx :y % :z wz} (reach/lookup (:primitives c))) %) [y (dec y) (- y 2) (inc y)]) y)]
         {:gate {:x (+ (:x g) 0.5) :y y :z (+ (:z g) 0.5)} :past {:x (+ wx 0.5) :y wy :z (+ wz 0.5)}}))))
 
-(defn gate-waypoint
-  "The cell two past the destination's nearest fence gate (to the animal) when the body stands inside the destination and
-  the animal outside it; else nil. The animal follows the food over the ground, so a gate on the far side is walked round
-  to, not leaned across, and an animal stopped at the shut gate is let in by walking out and in again."
+(defn ^:async gate-waypoint!
+  "The cell two past a fence gate of the destination when the body stands inside the destination and the animal outside
+  it, else nil: the gate whose trip costs least, the body's walk out to that cell (go-to's quote) plus the animal's least
+  walk to it (walk-pick). The animal follows the food over the ground, so a gate on the far side is walked round to, not
+  leaned across, and an animal stopped at the shut gate is let in by walking out and in again."
   [c a]
   (let [cells (destination-cells c)
         me (u/cell-vec (u/self-pos c))
         there (u/pos-of (.-pos a))]
     (when (and (seq cells) (contains? cells me) (not (contains? cells (animal-cell a))))
-      (first (sort-by #(u/flat-dist there %) (map :past (gates-of c cells)))))))
+      (await (pick/pick-walk! c (map :past (gates-of c cells)) (fn [past] {:pos past :range 1 :ways #{:walk :clear-seal}})
+                              #(pick/walk-s there {:pos % :range 1}))))))
 
-(defn entry-gate
-  "The cell of the destination's gate nearest the body when the body stands outside the destination; else nil. The body
-  steps into the gateway first: from there the pen is in sight and the way in is short."
+(defn ^:async entry-gate!
+  "The cell of a gate of the destination when the body stands outside the destination, else nil: the one whose walk
+  there and on to :pos costs least (walk-pick). The body steps into the gateway first: from there the pen is in sight
+  and the way in is short."
   [c]
   (let [cells (destination-cells c)
         me (u/self-pos c)]
     (when (and (seq cells) (not (contains? cells (u/cell-vec me))))
-      (first (sort-by #(u/flat-dist me %) (map :gate (gates-of c cells)))))))
+      (await (pick/pick-walk! c (map :gate (gates-of c cells)) (fn [g] {:pos g :range 0 :ways #{:walk :clear-seal}})
+                              #(pick/walk-s % {:pos (:pos (:args c)) :range 0}))))))
 
 (defn ^:async arrive!
   "The body stands at :pos: the job ends :arrived once the led animal is at the destination; until then the body holds
@@ -425,11 +430,12 @@
   [c]
   (let [a (escort/animal-now c)
         now (ctx/now c)
-        since (or (:arrive-since (ctx/mem c)) now)]
+        since (or (:arrive-since (ctx/mem c)) now)
+        waypoint (when (and a (not (at-destination? c a)) (not (:gated (ctx/mem c)))) (await (gate-waypoint! c a)))]
     (cond
       (and a (at-destination? c a)) (finish! c :arrived)
-      (and a (not (:gated (ctx/mem c))) (gate-waypoint c a))
-      (do (ctx/update-mem! c #(-> % (assoc :via-gate (gate-waypoint c a)) (dissoc :arrive-since))) :again)
+      waypoint
+      (do (ctx/update-mem! c #(-> % (assoc :via-gate waypoint) (dissoc :arrive-since))) :again)
       (and a (pen-read/arg-box c) (not (:led-deeper (ctx/mem c))) (<= (u/flat-dist (u/self-pos c) (u/pos-of (.-pos a))) (escort/lead-deeper-gap)))
       (await (escort/lead-deeper! c (pen-read/arg-box c) (u/pos-of (.-pos a))))
       (> (- now since) (escort/max-wait-ms)) (finish! c (if a :animal-outside :lost))
@@ -442,7 +448,7 @@
   (contains? (set (destination-cells c)) (u/cell-vec (:pos (:args c)))))
 
 (defn ^:async walk-legs-to-pos! [c]
-  (if-let [wp (when (and (spot-in-destination? c) (not (:entered (ctx/mem c)))) (entry-gate c))]
+  (if-let [wp (when (and (spot-in-destination? c) (not (:entered (ctx/mem c)))) (await (entry-gate! c)))]
     (do (ctx/update-mem! c assoc :via-gate wp :via-flag :entered) :again)
     (await (walk-legs-in! c))))
 

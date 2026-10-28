@@ -41,6 +41,26 @@
           (is (nil? best) "no candidate with a finite price")
           (is (= [:a :b] asked)))))))
 
+(deftest pick-walk-takes-the-place-whose-quoted-walk-is-cheapest-not-the-nearest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [c {:primitives (tu/fake {})}
+              quote! pick/quote!
+              asked (atom [])
+              round {:x 3 :y 64 :z 0}
+              straight {:x 9 :y 64 :z 0}
+              to (fn [pos] {:pos pos :range 0})]
+          (set! pick/quote! (fn [_ {:keys [pos]}] (swap! asked conj pos) (js/Promise.resolve {:uses {:job-time [0 (if (= pos round) 60 4) 0]}})))
+          (try
+            (is (= straight (await (pick/pick-walk! c [round straight] to))) "the near place's way round costs more than the far one's walk")
+            (is (= straight (await (pick/pick-walk! c [round straight] to #(if (= % round) 0 2)))) "seconds after the walk add to its price")
+            (reset! asked [])
+            (is (= round (await (pick/pick-walk! c [round] to))))
+            (is (empty? @asked) "a lone place is taken unquoted")
+            (is (nil? (await (pick/pick-walk! c [] to))))
+            (finally (set! pick/quote! quote!))))))))
+
 (deftest by-bound-orders-as-sort-by-asking-each-bound-once
   (let [xs (conj (mapv (fn [i] {:id i :b (mod (* 7 i) 5)}) (range 20)) {:id :far :b ##Inf} {:id :near :b -1})
         asked (atom 0)]
