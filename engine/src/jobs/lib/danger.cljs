@@ -86,11 +86,12 @@
       (rough-pos (assoc (obs/rough-hearing from (u/pos-of (.-pos e))) :from from)))))
 
 (defn mob-distance
-  "Blocks from the body to hostile e: exact when seen, else to its rough spot (mob-pos)."
-  [p e]
-  (if (seen-only? e)
-    (.-distance e)
-    (u/dist (u/pos-of (.-pos (.self p))) (mob-pos p e))))
+  "Blocks from the body (or the spot from) to hostile e: exact when seen from the body, else to its mob-pos."
+  ([p e] (mob-distance p e nil))
+  ([p e from]
+   (if (and (seen-only? e) (nil? from))
+     (.-distance e)
+     (u/dist (or from (u/pos-of (.-pos (.self p)))) (mob-pos p e)))))
 
 (defn known-scan [] (settings/get settings ::known-scan))
 (defn close-hearing [] (settings/get settings ::close-hearing))
