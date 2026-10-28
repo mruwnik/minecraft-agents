@@ -599,6 +599,9 @@
     (is (false? (fetch? (merge {:blocks room :inventory (picks 1)} in-room))) "shut in: no walk to a tool")
     (is (= [(esc/ways-for true) #{:carried}] (map #(:ways (second (esc/escalation-job {:step :stair :heading :east :steps 2} nil false false %))) [true false])))))
 
+(deftest a-stair-through-its-own-pen-picks-up-its-drops
+  (is (= [true false] (map #(:collect (second (esc/escalation-job {:step :stair :heading :east :steps 2 :own-cut %} nil false false false))) [true nil]))))
+
 (deftest a-dig-route-s-digs-fetch-a-pickaxe-as-fetch-tool-says
   (async done
     (tu/run-async done

@@ -21,6 +21,7 @@
             [jobs.lib.escape.span :as span]
             [jobs.lib.lava :as lava]
             [jobs.lib.reach :as reach]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.tools :as tools]
             [jobs.lib.torch-stock :as stock]
             [jobs.lib.trip :as trip]
@@ -190,6 +191,20 @@
   (let [need (trip/spare-need c block worn-uses)]
     (boolean (and need (not (:dear need))))))
 
+(defn carried [p] (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} (u/inventory p)))
+
+(defn keep-for-put-back!
+  "With :collect, hold what the dig picked up (the pack now over before, {name n}) for the put-back of the cut (memory
+  :kept, jobs.lib.reserve entries of this call): its floors do not spend the blocks its cut owes."
+  [c before]
+  (let [gained (into {} (keep (fn [[n k]] (let [d (- k (get before n 0))] (when (pos? d) [n d])))) (carried (:primitives c)))]
+    (when (seq gained)
+      (let [kept (merge-with + (:kept (ctx/mem c)) gained)]
+        (ctx/update-mem! c assoc :kept kept)
+        (reserve/set-job-entries! c (mapv (fn [[n k]] {:id (str (:id c) "-put-back-" n) :item n :count k :strength 1 :by (:id c)
+                                                       :why "the put-back of the stair's cut"})
+                                          kept))))))
+
 (defn ^:async dig!
   "Equip the best tool, check the cell again, write the intent and dig it (a blocks.dig child). :continue (dug, go on), :yield (the child waits on the world), or a stop map."
   [c in cell cut accept]
@@ -222,11 +237,14 @@
                                     (not= cell (:counted %)) (update-in [:cell-tries cell] (fnil inc 0))))
               (let [[x y z] cell
                     fetch? (and (fetch-tool? c) (lacks-tool? c block))
+                    before (carried p)
                     e (await (blocks/dig-cell-ending! c {:x x :y y :z z}
                                                       (cond-> {:accept #{:fluid-adjacent :lava-adjacent :falling-block} :on-lava :leave :ignore-zones? true}
                                                         (= :down (:dir (:args c))) (assoc :checks {:safe? '(not (threatened))})
-                                                        fetch? (assoc :ways (need/call-ways c) :need-drop (not (false? (:need-drop (:args c))))))))
-                    outcome (blocks/dig-outcome e)]
+                                                        fetch? (assoc :ways (need/call-ways c) :need-drop (not (false? (:need-drop (:args c)))))
+                                                        (and (:collect (:args c)) (blocks/room-for? p (blocks/item-name {:block block}))) (assoc :collect true))))
+                    outcome (blocks/dig-outcome e)
+                    _ (when (:collect (:args c)) (keep-for-put-back! c before))]
                 (if (= :continue outcome)
                   :yield
                   (do

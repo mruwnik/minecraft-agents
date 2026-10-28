@@ -296,7 +296,10 @@
                  (take 3 (map :kind (filter #(#{:go-to.escalated :go-to.escalation-stopped :go-to.restored} (:kind %)) @seen))))
               "the dead end's cut is put back before the next way, not once the walk is on")
           (is (some #{[3 64 0]} (:cells (first (events-of seen :go-to.restored)))) "the cell that opens into the pen first")
-          (is (= (set (for [x [3 4 5] y [64 65]] [x y 0])) (set (:cells (first (events-of seen :go-to.restored))))) "the whole dead end is put back"))))))
+          (is (= (set (for [x [3 4 5] y [64 65]] [x y 0])) (set (:cells (first (events-of seen :go-to.restored))))) "the whole dead end is put back")
+          ;; the next way, a stair through the pen wall, picks up its drops: nothing is left open for want of a block
+          (is (empty? (filter #(= :need (:why %)) (mapcat :cells (events-of seen :go-to.restore-skipped)))) (pr-str (events-of seen :go-to.restore-skipped)))
+          (is (not-any? #(= "air" (block p %)) [[3 64 0] [3 65 0]]) "the pen wall is whole again"))))))
 
 (deftest go-to-reads-its-own-pen-once-per-escalation-round
   ;; choose-escalation! and the replan hold the pen read in c (with-own-pen); without it each fn reads the pen itself (holes/pen-of).

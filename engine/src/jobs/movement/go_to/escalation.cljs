@@ -66,7 +66,7 @@
                                    (:item e) (assoc :use {:blocks [(:item e)]})
                                    ;; a climb's pillar digs the roof its route priced
                                    (:roof e) (assoc :settings {:jobs.access.pillar/max-ceiling-digs (:roof e)}))]
-    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :checks {:fit? '(always)} :accept #{:falling-block} :ways (ways-for fetch?) :settings (cond-> {:jobs.lib.trip/spent-uses 0} (:own-cut e) (assoc :jobs.lib.access/spare-own-builds false)) :ignore-zones? ignore-zones? :need-drop (not by-hand?) :leave-drops true}]
+    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :checks {:fit? '(always)} :accept #{:falling-block} :ways (ways-for fetch?) :settings (cond-> {:jobs.lib.trip/spent-uses 0} (:own-cut e) (assoc :jobs.lib.access/spare-own-builds false)) :ignore-zones? ignore-zones? :need-drop (not by-hand?) :leave-drops true :collect (boolean (:own-cut e))}]
     :clear-path ['jobs.access.clear-path (cond-> {:checks {:fit? '(always)} :heading (:heading e) :ignore-zones? ignore-zones? :need-drop (not by-hand?) :ways #{:carried :craft}}
                                            (:own-cut e) (assoc :settings {:jobs.lib.access/spare-own-builds false}))]
     :approach ['jobs.movement.go-to {:checks {:fit? '(always)} :pos (zipmap [:x :y :z] (:pos e)) :range 0 :ways #{:walk :clear-seal}}]
