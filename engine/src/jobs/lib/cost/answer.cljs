@@ -420,7 +420,7 @@
   caught-s seconds of it (the flee search's race) at reach-rate; or else at the prior of the body's health
   (jobs.lib.cost.caught/prior of its mobs, the likeliest caught), they then landing its blows (the trials counted a
   flight's blows from all its chasers) of that mob's, in a flight begun in water (the trials counted flights on land) a melee mob's no more than
-  caught-s at reach-rate (blows do not outlast the race's seconds in reach); never fewer than the walk's own. The two catches are one by their chances: its damage their mean, its :shape the width of their
+  caught-s at reach-rate (blows do not outlast the race's seconds in reach); never fewer than the walk's own. The two catches are one by their chances (caught by both, the worse): its damage their mean, its :shape the width of their
   mix (each its own: the way's the walk's, the prior's its blows' uncertainty). A creeper that blows on the
   walk (at the median of its :spread) is spent: what follows is the walk from the rest or later (none left: nothing).
   swim: the blocks a body in water swims to dry land first (flee-mob's; ##Inf none known) and land the blocks to walk on there, at its planner/swim-speed times the share of a sprint a flight's pace is on foot (danger/flee-walk-speed over body-speed).
@@ -468,9 +468,13 @@
                                                                                    (min (* caught-s (reach-rate m))))
                                                            identity 1)
                                         0))
-                            ww (if (pos? caught) (/ way caught) 0)
-                            {d :damage d-shape :shape} (mix [[ww {:damage dw :shape (when (pos? extra) (/ (* dw dw) extra))}]
-                                                             [(- 1 ww) {:damage dp :shape (:shape pr)}]])]
+                            pc (:chance prior 0)
+                            by-way {:damage dw :shape (when (pos? extra) (/ (* dw dw) extra))}
+                            by-prior {:damage dp :shape (:shape pr)}
+                            {d :damage d-shape :shape} (mix (if (pos? caught)
+                                                              [[(/ (* way (- 1 pc)) caught) by-way] [(/ (* pc (- 1 way)) caught) by-prior]
+                                                               [(/ (* way pc) caught) (max-key :damage by-prior by-way)]]
+                                                              [[1 by-prior]]))]
                         (cond-> (assoc-in walk [:caught :damage] (+ d (reduce + 0 (get-in walk [:caught :blasts]))))
                           (lone-creeper? mobs) (assoc :spent true)
                           shape (assoc :shape shape)
