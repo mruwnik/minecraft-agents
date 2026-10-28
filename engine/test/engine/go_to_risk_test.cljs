@@ -324,6 +324,13 @@
     (reset! hurt [{:t 35999000 :data {:health 15 :attacker {:id 7 :name "zombie"}}}])
     (is (= :later (first (:risk (check plan false)))) "its blow holds the rest of the walk")))
 
+(deftest a-hostile-at-the-heels-holds-the-walk-with-the-head-under-water
+  ;; old code answered ok :submerged before looking at the hostiles: a drowned's blows under water never asked the check
+  (let [at (fn [x] (ready-test/ctx-of {:time st/noon :self {:pos {:x 0.5 :y 64 :z 0.5} :inWater true}
+                                       :entities [{:id 7 :name "drowned" :kind "hostile" :pos {:x x :y 64 :z 0.5}}]}))]
+    (is (= :later (first (reprice/status (at 1.5) {:x -30 :y 64 :z 0} nil))) "the walk leads toward the hostile")
+    (is (= :ok (first (reprice/status (at -9.5) {:x 30 :y 64 :z 0} nil))) "away from it, air first")))
+
 ;; a walk is priced over the affordable when it ends past x 10 (a found plan's end, else the goal), but within it when
 ;; unseen cells are not guessed caves; a remembered threat by the way, which a wait may see gone
 (defn prefix-estimate [_ goal & [{:keys [plan caves-free?]}]]

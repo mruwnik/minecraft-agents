@@ -17,11 +17,12 @@
 
 (defn status
   "go-to's own safe? for the walk to pos on plan (risk/status; none: the plan its round held on, to its goal): not threatened
-  (ready/threatened-walking, on the plan's way when there is one) and the risk acceptable; ok with the head under water (air first)."
+  (ready/threatened-walking, on the plan's way when there is one) and the risk acceptable; with the head under water only the hostiles are priced (ok :submerged, air first)."
   ([c pos] (let [kept (risk/planned c)] (status c (or (:goal kept) pos) kept)))
   ([c pos plan]
    (if (breath/head-under? (:primitives c))
-     (contract/ok :submerged "head under water: air first")
+     (let [t (ready/threatened-walking c pos (when plan (risk/timed-way c pos plan)))]
+       (if (= :ok (first t)) (contract/ok :submerged "head under water: air first") t))
      (contract/all [(ready/threatened-walking c pos (when plan (risk/timed-way c pos plan))) (risk/status c pos plan)]))))
 
 (defn unfinished?
@@ -79,8 +80,7 @@
                       s (status c' pos plan)]
                   (cond
                     (not (#{:later :never} (first s))) (do (swap! known into now)
-                                                           ;; under water status passes without a look at the hostiles
-                                                           (when-not (= :submerged (:reason (nth s 2))) (swap! felt into hit))
+                                                           (swap! felt into hit)
                                                            nil)
                     (unfinished? plan) (do (some-> (:search-on plan) (apply [])) {:searching true})
                     :else (if-let [cut (safe-prefix c' pos plan)]
