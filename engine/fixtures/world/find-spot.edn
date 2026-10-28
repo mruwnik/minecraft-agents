@@ -37,13 +37,13 @@
             {:no-event {:source :system :kind :error} :for-s 30}]
    :limit-s 150}
   ;; Should-succeed: every 16 x 16 patch within range 24 of the body lies on ground waving 0 to 8 high in steps of 1 (period 16 in x, from
-  ;; 41 to 89); levelling one (at least 512 blocks, about 280 s) costs less than its 256 wheat cells with water brought are worth as food
-  ;; (about 3300 s), so the job ends done with a levelled spot (:work over 0) by the body, without walking on to flat ground.
-  {:name "ridged-range-is-worth-levelling-for-a-field"
+  ;; 41 to 89), so levelling it (at least 512 blocks, about 280 s) costs more than the caller's :worth (2000 s wet, about 170 s as these cells stay dry: no water is known); the job walks on and
+  ;; ends done with a flat spot (:work 0) on either side.
+  {:name "ridged-range-is-no-spot-explores-to-flat-ground"
    :plot {:light :lit}
    :body {:at [64.5 4 32.5]}
    :blocks [[:fill [41 0 0] [41 2 63] "grass_block"] [:fill [42 0 0] [42 1 63] "grass_block"] [:fill [43 0 0] [43 0 63] "grass_block"] [:fill [45 0 0] [45 0 63] "grass_block"] [:fill [46 0 0] [46 1 63] "grass_block"] [:fill [47 0 0] [47 2 63] "grass_block"] [:fill [48 0 0] [48 3 63] "grass_block"] [:fill [49 0 0] [49 4 63] "grass_block"] [:fill [50 0 0] [50 5 63] "grass_block"] [:fill [51 0 0] [51 6 63] "grass_block"] [:fill [52 0 0] [52 7 63] "grass_block"] [:fill [53 0 0] [53 6 63] "grass_block"] [:fill [54 0 0] [54 5 63] "grass_block"] [:fill [55 0 0] [55 4 63] "grass_block"] [:fill [56 0 0] [56 3 63] "grass_block"] [:fill [57 0 0] [57 2 63] "grass_block"] [:fill [58 0 0] [58 1 63] "grass_block"] [:fill [59 0 0] [59 0 63] "grass_block"] [:fill [61 0 0] [61 0 63] "grass_block"] [:fill [62 0 0] [62 1 63] "grass_block"] [:fill [63 0 0] [63 2 63] "grass_block"] [:fill [64 0 0] [64 3 63] "grass_block"] [:fill [65 0 0] [65 4 63] "grass_block"] [:fill [66 0 0] [66 5 63] "grass_block"] [:fill [67 0 0] [67 6 63] "grass_block"] [:fill [68 0 0] [68 7 63] "grass_block"] [:fill [69 0 0] [69 6 63] "grass_block"] [:fill [70 0 0] [70 5 63] "grass_block"] [:fill [71 0 0] [71 4 63] "grass_block"] [:fill [72 0 0] [72 3 63] "grass_block"] [:fill [73 0 0] [73 2 63] "grass_block"] [:fill [74 0 0] [74 1 63] "grass_block"] [:fill [75 0 0] [75 0 63] "grass_block"] [:fill [77 0 0] [77 0 63] "grass_block"] [:fill [78 0 0] [78 1 63] "grass_block"] [:fill [79 0 0] [79 2 63] "grass_block"] [:fill [80 0 0] [80 3 63] "grass_block"] [:fill [81 0 0] [81 4 63] "grass_block"] [:fill [82 0 0] [82 5 63] "grass_block"] [:fill [83 0 0] [83 6 63] "grass_block"] [:fill [84 0 0] [84 7 63] "grass_block"] [:fill [85 0 0] [85 6 63] "grass_block"] [:fill [86 0 0] [86 5 63] "grass_block"] [:fill [87 0 0] [87 4 63] "grass_block"] [:fill [88 0 0] [88 3 63] "grass_block"] [:fill [89 0 0] [89 2 63] "grass_block"]]
-   :act [[:job (jobs.farm.find-spot {:w 16 :h 16 :range 24 :settings {:jobs.farm.find-spot/depth 7}})]]
-   :expect [{:event {:source :job :kind :completed :data {:spot [:near #at [64 -1 32] 24] :spots [:has {:work [:> 0]}]}} :within-s 200 :of-job true}
+   :act [[:job (jobs.farm.find-spot {:w 16 :h 16 :range 24 :worth 2000 :settings {:jobs.farm.find-spot/depth 7}})]]
+   :expect [{:event {:source :job :kind :completed :data {:spots [:has {:work 0}]}} :within-s 200 :of-job true}
             {:no-event {:source :system :kind :error} :for-s 30}]
    :limit-s 230}]}
