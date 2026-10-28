@@ -77,7 +77,7 @@
               reason (assoc :detail (str reason)))
     (cond
       (or reason (= :no-path status)) (merge {:why (if reason (keyword reason) :no-path)}
-                                             (select-keys result [:kind :cells :near :one-way :dark-best :torches :heal :health :hp-cost :hp-budget :hungry-food :dip :rise :goal-left]))
+                                             (select-keys result [:kind :cells :near :one-way :dark-best :torches :heal :health :hp-cost :hp-budget :hungry-food :dip :rise :goal-left :damage-refused]))
       :else {:why :no-progress}))
    (select-keys result [:waypoint-why])))
 
@@ -115,7 +115,7 @@
 
 (defn give-up-words
   "The give-up reason in words, for the :text of the result: no map dumps."
-  [pos {:keys [why kind detail escalation shut-in nearest-hostile nearest-hostile-at resets-spent mob mob-distance explored walks torches waypoint-why heal hp-cost hp-budget hungry-food low-passage dip rise route straight in-water goal-left]}]
+  [pos {:keys [why kind detail escalation shut-in nearest-hostile nearest-hostile-at resets-spent mob mob-distance explored walks torches waypoint-why heal hp-cost hp-budget hungry-food low-passage dip rise route straight in-water goal-left damage-refused]}]
   (str "gave up walking to " (if (map? pos) (let [{:keys [x y z]} pos] [x y z]) pos) ": "
        (if (and escalation (not (#{:way-dives :detour} why)))
          (str (if (:into escalation) "the goal is walled in; " "shut in here; ") (escalation-words escalation))
@@ -124,7 +124,9 @@
            :goal-enclosed (if low-passage (headroom/words low-passage) "the goal is walled in with no way through")
            :goal-cut-off "the goal is cut off by a drop: no walkable way leads to it"
            :goal-on-magma "every cell in range is on magma or in a magma bubble column, where a route never ends"
-           :start-enclosed "the body is shut in and nothing it can walk reaches out"
+           :start-enclosed (if damage-refused
+                            "the only ways out cost hp (a fall) and the damage budget allows none"
+                            "the body is shut in and nothing it can walk reaches out")
            :exhausted (if shut-in
                         "the body is shut in and this walk may not dig or build out"
                         "no walkable way leads there from here")

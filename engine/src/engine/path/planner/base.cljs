@@ -76,6 +76,8 @@
 (def ^:const JUMP-S 0.35) ; a jump up costs this much more than the walk it replaces
 (def ^:const GAP-S 0.5) ; a gap jump's run-up and landing, on top of the sprint over its length
 (def ^:const GAP-UP-S 0.3) ; a gap jump landing one block higher costs this much more than a level one
+(def GAP-MISS-SCALE "the chance a gap jump over n cells falls short, as a share of costs.gapMiss (guesses: a 1-wide hop is not missed)" #js [0 0 0.5 1])
+(def ^:const GAP-UP-MISS 2) ; a jump up misses this many times as often as a level or down one
 (def ^:const GAP-PIT-RISK 0.5) ; hp of risk for a jump over 3 above a pit it cannot jump out of: a short jump traps the body
 (def ^:const TIGHT-S 0.1) ; careful walking: each tight cell entered costs this much more than a plain step
 ;; in picking a crossing, a leg that is not straight through the cell's free mask counts as this many 1/16 of distance: a bent
