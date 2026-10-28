@@ -304,6 +304,12 @@
         {unseen true seen false} (group-by (fn [[cx cy cz]] (nil? (u/seen-block p {:x cx :y cy :z cz}))) sides)]
     {:seen (count seen) :unseen (vec unseen)}))
 
+(defn open-sides
+  "How many of the feet cells [[x y z]] (boundary's :unseen, seen by now) a walker could stand in: the sides that turned out open."
+  [p cells]
+  (let [kind-at (shut-kind-at p)]
+    (count (filter (fn [[x y z]] (passable? kind-at x y z)) cells))))
+
 (defn unseen-sides
   "The feet cells [x y z] beside the room cells of the room around pos {:x :y :z} (as unseen-room?) that the body has not
   seen (boundary's :unseen)."

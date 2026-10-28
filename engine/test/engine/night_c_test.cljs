@@ -137,7 +137,7 @@
       (fn ^:async t []
         (let [{:keys [p seen]} (await (night-at-hut-seen-outside st/dirt-stack 6))]
           (is (>= 2 (:z (st/pos-of p))) "the walk to the hut and its chance of being open cost less than the dig-in quoted at 12 s: walked in to look")
-          (is (= [{:seen 12 :unseen 0 :closed true}] (mapv #(select-keys % [:seen :unseen :closed]) (st/emitted seen :enter-room.arrived)))
+          (is (= [{:seen 12 :unseen 0 :open-sides 0 :closed-sides 0 :closed true}] (mapv #(select-keys % [:seen :unseen :open-sides :closed-sides :closed]) (st/emitted seen :enter-room.arrived)))
               "the arrival reports the room's sides as it set out and that it is closed: a count for the prior"))))))
 
 (deftest a-room-seen-inside-whose-sides-are-not-all-seen-is-priced-maybe-open
@@ -151,6 +151,10 @@
       (is (seq unseen) "west wall feet cells unseen, every cell inside seen")
       (is (= (cost/closed-chance seen (count unseen)) (night/room-chance p room)))
       (is (< (night/room-chance p room) 1) "an opening may hide in a side not seen"))))
+
+(deftest sides-seen-later-count-open-when-a-walker-stands-in-them
+  (let [p (tu/fake (hut/hut-world {:x 5 :y 64 :z 6} {}))]
+    (is (= 3 (reach-room/open-sides p [[5 64 0] [6 64 0] [4 64 0] [3 64 0]])) "three floor cells inside, one wall cell")))
 
 (deftest a-hut-not-seen-inside-is-dug-in-against-when-the-walk-and-its-chance-of-being-open-cost-more-than-digging-in
   (async done
