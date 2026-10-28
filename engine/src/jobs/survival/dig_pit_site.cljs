@@ -30,14 +30,21 @@
       (->> (range 1 (inc (dig-look/rock-depth))) (keep #(u/seen-name p (update cell :y + %))) (filter solid/solid?) first)
       (dig-look/rock-name p cell)))
 
-(defn pit-s
-  "Seconds a pit dug at feet cell f takes before a plan is made, as dig-pit's quote has it for a straight pit: the dig time
-  (tools/clear-ms) of its cells, stone for one nothing is known of, nothing for one seen open, 2 deep (the least a pit is), and the one roof placement (way/place-s of c's call)
-  that shuts it. The walk in is priced apart (walk-pick, walk-toll-s)."
-  [c f]
+(defn dig-s
+  "Seconds digging cells takes (tools/clear-ms with the best carried tool or the hand): stone for one nothing is known of, nothing for one seen open."
+  [c cells]
   (let [p (:primitives c)]
-    (+ (/ (reduce + (map #(let [n (or (priced-name p %) "stone")] (if (solid/solid? n) (tools/clear-ms p n) 0)) (mapcat :dig (:steps (dig-cells/pit-steps f nil 2))))) 1000)
-       (way/place-s c))))
+    (/ (reduce + (map #(let [n (or (priced-name p %) "stone")] (if (solid/solid? n) (tools/clear-ms p n) 0)) cells)) 1000)))
+
+(defn plan-s
+  "Seconds a pit plan {:prep :steps :plugs} takes before it is dug: dig-s of its cells and a placement (way/place-s of c's call) for each plug and the roof. dig-pit's quote and pit-s both."
+  [c {:keys [prep steps plugs]}]
+  (+ (dig-s c (concat prep (mapcat :dig steps))) (* (way/place-s c) (inc (count plugs)))))
+
+(defn pit-s
+  "Seconds a pit dug at feet cell f takes before a plan is made: plan-s of a straight pit, 2 deep (the least a pit is). The walk in is priced apart (walk-pick, walk-toll-s)."
+  [c f]
+  (plan-s c (dig-cells/pit-steps f nil 2)))
 
 (defn stay-toll-s
   "Seconds the known mobs the body would flee cost a pit dug at feet cell f (danger-near, threats/danger-near-fn of c):

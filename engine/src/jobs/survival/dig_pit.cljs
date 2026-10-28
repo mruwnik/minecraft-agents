@@ -8,7 +8,6 @@
             [jobs.lib.pen-gate :as pen-gate]
             [jobs.lib.ready :as ready]
             [jobs.lib.shelter.sense :as sh-sense]
-            [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.waits :as waits]
             [jobs.survival.dig-in-cells :as dig-cells]
@@ -105,12 +104,6 @@
   (await (pit/plan-of! c (flight/blocks c)))
   nil)
 
-(defn dig-seconds
-  "Seconds the plan's cells take to dig with the best carried tool or the hand."
-  [c plan]
-  (let [p (:primitives c)]
-    (/ (reduce + (map #(tools/clear-ms p (site/priced-name p %)) (concat (:prep plan) (mapcat :dig (:steps plan))))) 1000)))
-
 (defn quote-of [c]
   (let [{:keys [plan stop]} (assess c)
         s (when (night/night? c) (site/site c))]
@@ -122,7 +115,7 @@
     (way/quote-of c (if stop
                       ##Inf
                       (+ (if plan
-                           (+ (dig-seconds c plan) (* (way/place-s c) (inc (count (:plugs plan)))))
+                           (site/plan-s c plan)
                            (site/pit-s c (sh-sense/feet (:primitives c))))
                          (if plan (way/zone-penalty c {:dig (concat (:prep plan) (mapcat :dig (:steps plan))) :plug (conj (:plugs plan) (:roof plan))}) 0)))
                   (settings/get settings ::job-time-s)))))
@@ -137,7 +130,7 @@
       stop ##Inf
       (nil? plan) (site/pit-s c feet)
       :else (let [cells (concat (:prep plan) (mapcat :dig (:steps plan)))]
-              (+ (dig-seconds c plan)
+              (+ (site/dig-s c cells)
                  (* (way/unsensed-s) (pit/unsensed-shell (:primitives c) cells (set (into cells [feet (update feet :y inc)])))))))))
 
 (defn ^:async step!

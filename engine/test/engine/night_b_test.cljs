@@ -433,7 +433,7 @@
 
 (deftest walk-toll-s-sums-the-toll-at-each-cell-of-the-line-and-not-the-cell-it-starts-from
   (let [from {:x 0 :y 64 :z 0}
-        toll (fn [f] {:toll (if (<= 2 (:x f) 3) 10 0)})]
+        toll (fn [f] {:toll (if (or (zero? (:x f)) (<= 2 (:x f) 3)) 10 0)})]
     (is (= (* 2 10 cost/least-block-s) (pit-site/walk-toll-s toll from {:x 5 :y 64 :z 0})) "cells 2 and 3 of the walk east")
     (is (zero? (pit-site/walk-toll-s toll from {:x -5 :y 64 :z 0})) "none west")
     (is (zero? (pit-site/walk-toll-s (constantly {:toll 10}) from from)) "no walk, no toll")))

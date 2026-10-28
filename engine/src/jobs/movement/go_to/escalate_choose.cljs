@@ -138,7 +138,7 @@
   route by what its cells take to dig with the tool carried, plus a step a cell; 0 for a step that is no span."
   [p feet {:keys [step] :as e}]
   (let [block-at (delay (escape/block-at-of p))
-        dig-s (fn [cells] (transduce (map #(+ (/ (tools/clear-ms p (@block-at %)) 1000) (:cost (cost/walk-cost {:distance 1})))) + 0 cells))]
+        dig-s (fn [cells] (transduce (map #(+ (/ (tools/clear-ms p (@block-at %)) 1000) (cost/walk-step-s))) + 0 cells))]
     (case step
       :stair (+ (stair-route-s p feet e) (* (:aside e 0) (or (cost/dig-cost "stone") 1)))
       :pillar (cost/pillar-s (wworld/unseen-share p) (:height e) (escape/unseen-pillar-blocks p feet (:height e)))
