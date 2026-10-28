@@ -26,15 +26,18 @@
     (is (seq (:dig (dr/route deep [0 20 0] [30 8 0] {:max-s 1000 :margin 3 :max-nodes 100000}))) "within the bound it is found")
     (is (= {:problem :no-route} (dr/route deep [0 20 0] [30 8 0] {:max-dig-s 5 :margin 3 :max-nodes 100000})) "a bound in seconds of digging")))
 
-(deftest a-goal-walled-in-by-what-no-step-opens-has-no-route-without-a-flood
-  (let [shell (fn [name] (into {} (for [x (range 8 13) y (range 8 13) z (range -2 3)
-                                        :when (= 2 (max (js/Math.abs (- x 10)) (js/Math.abs (- y 10)) (js/Math.abs z)))]
-                                    [[x y z] name])))
+(deftest a-goal-walled-in-ends-without-a-flood-however-wide-the-wall
+  (let [shell (fn [d name] (into {} (for [x (range (- 10 d) (+ 11 d)) y (range (- 10 d) (+ 11 d)) z (range (- d) (inc d))
+                                          :when (= d (max (js/Math.abs (- x 10)) (js/Math.abs (- y 10)) (js/Math.abs z)))]
+                                      [[x y z] name])))
         open-land (fn [walls] (fn [[_ y _ :as c]] (or (walls c) (if (< y 10) "stone" "air"))))
         opts {:max-s 1000 :step-s 0.3 :max-nodes 2000}]
-    (is (= {:problem :no-route} (dr/route (open-land (shell "bedrock")) [0 10 0] [10 10 0] opts)) "a bedrock shell round the goal")
-    (is (= {:problem :no-route} (dr/route (open-land (shell "lava")) [0 10 0] [10 10 0] opts)) "a lava one")
-    (is (= [[8 11 0] [8 10 0]] (:dig (dr/route (open-land (assoc (shell "bedrock") [8 10 0] "stone" [8 11 0] "stone")) [0 10 0] [10 10 0] opts)))
+    (is (= {:problem :no-route} (dr/route (open-land (shell 2 "bedrock")) [-20 10 0] [10 10 0] opts)) "a bedrock shell round the goal")
+    (is (= {:problem :no-route} (dr/route (open-land (shell 2 "lava")) [-20 10 0] [10 10 0] opts)) "a lava one")
+    (is (= {:problem :no-route} (dr/route (open-land (shell 10 "bedrock")) [-20 10 0] [10 10 0] (assoc opts :max-nodes 10000))) "one ten blocks out: its inside is searched, never the land round it")
+    (is (= {:problem :dearer} (dr/route (open-land (shell 2 "obsidian")) [-20 10 0] [10 10 0] (assoc opts :max-s 30 :dig-s #(if (= "obsidian" %) 50 1))))
+        "one dearer to dig through than the route's bound")
+    (is (= [[8 11 0] [8 10 0]] (:dig (dr/route (open-land (assoc (shell 2 "bedrock") [8 10 0] "stone" [8 11 0] "stone")) [0 10 0] [10 10 0] opts)))
         "stone in the wall is dug through")))
 
 (deftest a-step-down-does-not-dig-above-the-head
@@ -107,7 +110,7 @@
         reads (atom #{})
         w (fn [c] (swap! reads conj c) (cond (#{goal (update goal 1 inc)} c) "air" (< (c 1) 64) "stone" :else "air"))]
     (is (= {:problem :budget} (dr/route w [0 64 0] goal {:dig-s (constantly 0.5) :step-s 0.2 :max-nodes 500})))
-    (is (< (count @reads) 6000) "cells read: about a dozen a node expanded, not the whole box between")))
+    (is (< (count @reads) 12000) "cells read: about a dozen a node expanded, by both searches, not the whole box between")))
 
 (deftest a-search-run-in-slices-ends-as-one-run-does
   (let [w (world {[20 4 6] "air" [20 5 6] "air"})

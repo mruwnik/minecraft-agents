@@ -128,8 +128,8 @@
           (is (<= @replans 2) "the first replan spends the replans"))))))
 
 (deftest a-climb-search-with-no-route-ends-within-its-margin-and-the-stair-is-taken
-  ;; the goal sealed in bedrock 20 above a body shut in stone: no climb reaches it. Its search floods only the rock within
-  ;; dig-margin of its two ends, so it ends by itself (no stand-still bound spent) and the stair is taken from the start cell
+  ;; the goal sealed in bedrock 20 above a body shut in stone: no climb reaches it. Its search ends by itself (no stand-still
+  ;; bound spent: the search back from the goal finds no way out) and the stair is taken from the start cell
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -147,9 +147,7 @@
             (await (tick-out! eng 3000)))
           (is (not= :not-done @out) "the call ended")
           (is (empty? (events-of seen :go-to.search-spent)) "the search ended by itself")
-          (is (some #(= :searching (:reason %)) (events-of seen :holding)) "the rounds it stands the body still declare it")
           (is (some #(and (= [0 50 0] (:at %)) (= :stair (:step %))) (events-of seen :go-to.escalated)) "the stair is taken from the start cell")
-          (is (pos? @nodes) "a search ran from the start cell")
           (is (<= @nodes (* choose/route-searches (inc (* 2 m)) (inc (* 2 m)) (+ 21 (* 2 m))))
               "each search from the start expands no more than the cells within the margin of its ends"))))))
 

@@ -47,10 +47,6 @@
     (< ny my) (mapv (fn [y] [nx y nz]) (range (inc my) (dec ny) -1))
     :else [n [nx (inc ny) nz]]))
 
-(def seal-radius
-  "How far round its goal a search looks for a wall of cells no step opens (route's {:problem :no-route} before it begins)."
-  8)
-
 (defn- before? [^js a ^js b]
   (or (< (aget a 0) (aget b 0)) (and (== (aget a 0) (aget b 0)) (< (aget a 1) (aget b 1)))))
 
@@ -81,6 +77,8 @@
     top))
 
 (def dirs #js [1 0 -1 0 0 1 0 -1])
+
+(def back-pace "Steps of the search back from the goal (its lower bound) to each cell the search proper expands: one is cheaper." 4)
 
 (defn search
   "route's search begun: a fn of n that runs it on for at most n more cells expanded, [answer expanded]: answer route's
@@ -138,19 +136,17 @@
                                   (cond (or (keyword-identical? :seen a) (keyword-identical? :seen b) (keyword-identical? :seen c)
                                             (keyword-identical? :seen d) (keyword-identical? :seen e)) :seen
                                         (or a b c d e) :unseen))))
+        ;; seconds to open cell x y z (0 when open), nil when no step opens it
+        open-s (fn [x y z] (let [^js k (at x y z) d (.-cost k)] (cond (nil? d) nil (zero? d) 0 :else (dig-at (.-name k) x y z))))
         ;; the cost of opening cell x y z for a step, accumulated in acc #js [seconds digs dig-seconds dug-keys]; false when it may not be
         open-cell! (fn [^js acc x y z]
-                     (let [^js k (at x y z)
-                           d (.-cost k)]
+                     (let [s (open-s x y z)]
                        (cond
-                         (nil? d) false
-                         (zero? d) true
+                         (nil? s) false
+                         (zero? (.-cost ^js (at x y z))) true
                          (.-falling ^js (at x (inc y) z)) false
                          (.has way-keys (key x y z)) false
-                         :else (let [s (dig-at (.-name k) x y z)]
-                                 (if (nil? s)
-                                   false
-                                   (do (aset acc 0 (+ (aget acc 0) s)) (aset acc 1 (+ (aget acc 1) d)) (aset acc 2 (+ (aget acc 2) s)) (.push ^js (aget acc 3) (key x y z)) true))))))
+                         :else (do (aset acc 0 (+ (aget acc 0) s)) (aset acc 1 (+ (aget acc 1) 1)) (aset acc 2 (+ (aget acc 2) s)) (.push ^js (aget acc 3) (key x y z)) true))))
         ;; key -> #js [seconds digs dig-seconds prev-key move blocks-placed dug] of the cheapest way found to the cell, dug the set
         ;; of the keys of every cell its steps dug
         best (js/Map.) done (js/Set.) queue #js []
@@ -213,33 +209,65 @@
                                   (recur (inc dy) (and clear? below-open?))))))
                           (recur (+ i 2)))))))
         start-key (key fx (from 1) fz)
-        ;; every cell a step passes is open or opened (open-cell!): a goal walled off by cells none opens within
-        ;; seal-radius has no route, proved without flooding all the land the price bound holds
-        passable? (fn [x y z] (let [^js k (at x y z) d (.-cost k)] (and (some? d) (or (zero? d) (some? (dig-at (.-name k) x y z))))))
-        sealed? (fn []
-                  (let [seen (js/Set.) stack #js []
-                        visit! (fn [x y z] (let [k (key x y z)] (when (and (not (.has seen k)) (passable? x y z)) (.add seen k) (.push stack #js [x y z]))))]
-                    (visit! gx gy gz)
-                    (loop []
-                      (if-let [^js c (.pop stack)]
-                        (let [x (aget c 0) y (aget c 1) z (aget c 2)]
-                          (if (or (== (key x y z) start-key)
-                                  (< seal-radius (max (js/Math.abs (- x gx)) (js/Math.abs (- y gy)) (js/Math.abs (- z gz)))))
-                            false
-                            (do (visit! (inc x) y z) (visit! (dec x) y z) (visit! x (inc y) z) (visit! x (dec y) z) (visit! x y (inc z)) (visit! x y (dec z))
-                                (recur))))
-                        true))))]
-    (if (and (nil? r) (sealed?))
-      (vreset! answer {:problem :no-route})
-      (do (.set best start-key #js [0 0 0 nil nil 0 #{}])
-          (heap-push! queue #js [(heuristic fx (from 1) fz) 0 start-key])))
+        ;; a lower bound of every route's price, searched back from the goal toward the start: a body's two cells per node,
+        ;; each step priced no more than the steps it stands for (across: step-s and the two cells entered; up across: the cell
+        ;; over the head too; down: the cell entered; a pillar: pillar-s and the cell over the head), floors, falls and refusals
+        ;; left out. Its frontier exhausted is no route; its cheapest entry past max-s, every route dearer.
+        back-s (fn [x y z] (if (or (== (key x y z) start-key) (== (key x (dec y) z) start-key)) 0 (open-s x y z)))
+        stands? (fn [x y z] (and (inside? x y z) (some? (back-s x y z)) (some? (back-s x (inc y) z))))
+        to-start (fn [x z] (* step-s (+ (js/Math.abs (- x fx)) (js/Math.abs (- z fz)))))
+        back-best (js/Map.) back-done (js/Set.) back-queue #js []
+        back-tick (volatile! 0)
+        back-over (volatile! false)
+        back-relax! (fn [g x y z]
+                      (let [k (key x y z) old (.get back-best k)]
+                        (when (and (not (.has back-done k)) (or (nil? old) (< g old)))
+                          (.set back-best k g)
+                          (heap-push! back-queue #js [(+ g (to-start x z)) (vswap! back-tick inc) k]))))
+        back-into! (fn [g x y z s]
+                     (when (and (some? s) (stands? x y z)) (back-relax! (+ g s) x y z)))
+        back-step! (fn []
+                     (let [top (heap-pop! back-queue)
+                           k (some-> top (aget 2))]
+                       (cond
+                         (nil? top) {:problem :no-route}
+                         (and max-s (> (aget top 0) max-s)) {:problem :dearer}
+                         (.has back-done k) nil
+                         (== k start-key) (do (vreset! back-over true) nil)
+                         :else
+                         (let [[x y z] (cell-of k)
+                               g (.get back-best k)
+                               feet (back-s x y z) head (back-s x (inc y) z)]
+                           (.add back-done k)
+                           (loop [i 0]
+                             (when (< i 8)
+                               (let [mx (- x (aget dirs i)) mz (- z (aget dirs (inc i)))]
+                                 (back-into! g mx y mz (+ step-s feet head))
+                                 (let [over (back-s mx (inc y) mz)]
+                                   (back-into! g mx (dec y) mz (some-> over (+ step-s feet head))))
+                                 (recur (+ i 2)))))
+                           (back-into! g x (inc y) z feet)
+                           (when pillar-s (back-into! g x (dec y) z (+ pillar-s head)))
+                           nil))))]
+    (.set best start-key #js [0 0 0 nil nil 0 #{}])
+    (heap-push! queue #js [(heuristic fx (from 1) fz) 0 start-key])
+    (doseq [[x y z] (cons goal (when r
+                                 (let [w (js/Math.ceil r) ds (range (- w) (inc w))]
+                                   (for [dx ds dy ds dz ds
+                                         :let [x (+ ax dx) y (+ ay dy) z (+ az dz)]
+                                         :when (end? (key x y z))]
+                                     [x y z]))))
+            :when (stands? x y z)]
+      (back-relax! 0 x y z))
     (fn [n]
       (let [start (.-size done)
             limit (+ start n)
             goal-key (key gx gy gz)
             a (or @answer
                   (loop []
-                    (let [top (heap-pop! queue)
+                    (or
+                     (loop [i 0] (when (and (< i back-pace) (not @back-over)) (or (back-step!) (recur (inc i)))))
+                     (let [top (heap-pop! queue)
                           ck (some-> top (aget 2))]
                       (cond
                         (nil? top) {:problem :no-route}
@@ -258,7 +286,7 @@
                           {:dig (vec (distinct (mapcat :dig steps))) :steps steps :seconds (aget (.get best ck) 0)})
                         ;; the popped cell goes back: the next run expands it first
                         (>= (.-size done) limit) (do (heap-push! queue top) nil)
-                        :else (do (.add done ck) (expand! ck) (recur))))))]
+                        :else (do (.add done ck) (expand! ck) (recur)))))))]
         (vreset! answer a)
         [a (- (.-size done) start)]))))
 
