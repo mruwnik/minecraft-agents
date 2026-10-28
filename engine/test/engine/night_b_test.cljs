@@ -89,6 +89,16 @@
                                 :view (fn [] {:data mem/empty-data :now 0})}))
         why)))
 
+(deftest a-log-out-stint-with-blocks-for-a-dead-end-seal-is-the-short-one-where-open-ground-is-not
+  (let [tunnel (set (for [x (range 0 9) y [64 65]] [x y 0]))
+        rock (into {} (for [x (range -3 11) y (range 62 68) z (range -2 3) :when (not (tunnel [x y z]))] [(str x "," y "," z) "stone"]))
+        away (fn [inventory] (log-out/away-ms {:primitives (tu/fake {:time 20000 :blocks rock :self {:health 10} :inventory inventory
+                                                                     :entities [(assoc zombie :pos {:x 5.5 :y 64 :z 0.5})]})
+                                               :args {:offline-ms 30000}
+                                               :view (fn [] {:data mem/empty-data :now 0})}))]
+    (is (= 30000 (away [{:name "cobblestone" :count 32}])) "one open side: two placements shut it before the zombie strikes")
+    (is (= 175050 (away [])) "no block to shut it with: away until morning")))
+
 (deftest coming-back-online-to-a-dark-spot-risks-the-stay-prices-death-for-the-same-seconds
   (let [c {:primitives (tu/fake {:floor tu/walk-floor :time 20000}) :args {:offline-ms 30000} :id "j1" :slots []
            :engine {:warned (atom #{})} :view (fn [] {:data mem/empty-data :now 0})}
