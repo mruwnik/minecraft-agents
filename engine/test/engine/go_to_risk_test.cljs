@@ -4,7 +4,9 @@
   (:require [cljs.test :refer [are deftest is async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
+            [engine.events :as events]
             [engine.fake :as fake]
+            [engine.registry :as registry]
             [engine.hut-shelter-test :as hut]
             [engine.path.planner-tuned :as planner]
             [engine.ready-test :as ready-test]
@@ -28,6 +30,7 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.walk-risk :as risk]
             [jobs.lib.walk.drive :as drive]
+            [jobs.lib.breath :as breath]
             [jobs.movement.go-to.preview :as preview]
             [jobs.movement.go-to.reprice :as reprice]
             [jobs.survival.recover-drops.estimate :as drops-est]))
@@ -325,12 +328,30 @@
     (reset! hurt [{:t 35999000 :data {:health 15 :attacker {:id 7 :name "zombie"}}}])
     (is (= :later (first (:risk (check plan false)))) "its blow holds the rest of the walk")))
 
+(def pool-world {:time st/noon :blocks (tu/box -2 64 -2 2 66 2 "water")})
+
 (deftest a-hostile-at-the-heels-holds-the-walk-with-the-head-under-water
   ;; old code answered ok :submerged before looking at the hostiles: a drowned's blows under water never asked the check
-  (let [at (fn [x] (ready-test/ctx-of {:time st/noon :self {:pos {:x 0.5 :y 64 :z 0.5} :inWater true}
-                                       :entities [{:id 7 :name "drowned" :kind "hostile" :pos {:x x :y 64 :z 0.5}}]}))]
+  (let [at (fn [x] (ready-test/ctx-of (assoc pool-world :self {:pos {:x 0.5 :y 64 :z 0.5} :inWater true}
+                                             :entities [{:id 7 :name "drowned" :kind "hostile" :pos {:x x :y 64 :z 0.5}}])))]
+    (is (true? (breath/head-under? (:primitives (at 1.5)))) "water over the eye cell")
     (is (= :later (first (reprice/status (at 1.5) {:x -30 :y 64 :z 0} nil))) "the walk leads toward the hostile")
     (is (= :ok (first (reprice/status (at -9.5) {:x 30 :y 64 :z 0} nil))) "away from it, air first")))
+
+(deftest a-root-walk-held-under-water-swims-up-with-no-reflex-to-do-it
+  ;; a :continue hold left the head under water to the breathe reflex, which an exclusive run does not have: the engine here has no triggers
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/seeing-all (tu/fake-on-floor (assoc pool-world :self {:pos {:x 0.5 :y 64 :z 0.5} :inWater true :oxygen 20}
+                                                        :entities [{:id 7 :name "drowned" :kind "hostile" :pos {:x 1.5 :y 64 :z 0.5}}])))
+              eng (core/create {:primitives p :jobs registry/jobs :triggers {} :dir (tu/tmp-dir)
+                                :events (events/make {:stdout? false})})]
+          (is (true? (breath/head-under? p)) "under water to start")
+          (core/submit! eng '(jobs.movement.go-to {:pos [-30 64 0]}) {})
+          (dotimes [_ 4] (await (core/tick! eng)))
+          (is (seq (:list (core/state eng))) "the walk is held, not ended")
+          (is (false? (breath/head-under? p)) "the head out of the water while the walk is held"))))))
 
 ;; a walk is priced over the affordable when it ends past x 10 (a found plan's end, else the goal), but within it when
 ;; unseen cells are not guessed caves; a remembered threat by the way, which a wait may see gone

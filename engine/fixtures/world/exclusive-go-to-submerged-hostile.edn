@@ -1,0 +1,19 @@
+;; An exclusive go-to (no reflexes, so no breathe) from the bottom of a pond with a hostile beside it: the walk is held (hostile-near),
+;; and the hold must not leave the head under water. Should-succeed: the call stops :hostile-near and the body is at the surface.
+;; Should-fail (old code): the call held at its start with the body still on the bottom.
+{:defaults
+ {:tags [:movement :hostile :water]
+  :time :any
+  :plot {:light :lit :height 10}
+  :blocks [[:fill [0 0 0] [31 3 31] "stone"]
+           [:fill [10 4 10] [21 5 21] "stone"]
+           [:fill [11 4 11] [20 5 20] "air"]
+           [:fill [11 0 11] [20 3 20] "water"]]
+  :body {:at [15.5 1 15.5] :settle-s 1}
+  :limit-s 60}
+ :cases
+ [{:name "exclusive-go-to-surfaces-before-it-holds-on-a-hostile"
+   :act [[:summon "drowned" [16.5 1 15.5] "{NoAI:1b}"]
+         [:http :submit (jobs.movement.go-to {:pos #at [3.5 4 15.5]}) [:exclusive] {:ok true}]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :hostile-near}} :within-s 40}]
+   :after [[:body-near [15.5 3.5 15.5] 4]]}]}

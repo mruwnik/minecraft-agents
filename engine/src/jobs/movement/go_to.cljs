@@ -175,8 +175,10 @@
 
 (def safe?
   "Not threatened (a walk leading away from a hostile is not held) and the walk's risk acceptable (risk/status). Always ok
-  with the head under water: breathing comes before any wait, and go-to swims up for air first."
-  (with-meta (fn [c] (if-let [goal (goal-of c)] (reprice/status c goal) (contract/ok :no-goal "no goal to judge")))
+  with the head under water: the call starts, and swims up for air before any hold of its walk (walk/surface-before-end!)."
+  (with-meta (fn [c] (if-let [goal (goal-of c)]
+                       (if (breath/head-under? (:primitives c)) (contract/ok :submerged "head under water: air first") (reprice/status c goal))
+                       (contract/ok :no-goal "no goal to judge")))
     {:jobs.lib.ready/exposure (fn [c] (if-let [goal (goal-of c)] (risk/status c goal) (contract/ok :no-goal "no goal to judge")))}))
 
 (def fit? ready/ok)
