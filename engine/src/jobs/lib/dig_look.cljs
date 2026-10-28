@@ -49,14 +49,16 @@
   plans (pit, pocket, niche) read the rock they dig through this way, then dig to see (jobs.lib.dig-look)."
   ([p cell] (rock-name p cell #{}))
   ([p cell except]
-  (or (u/seen-name p cell)
-      (when (some-> (u/sensed p cell) .-unknown)
-        (let [name-at (fn [d k] (u/seen-name p (shift cell (mapv #(* k %) d))))
-              behind (fn [d] (first (filter solid/solid? (take 1 (remove nil? (map #(name-at d %) (range 1 (inc (rock-depth)))))))))
-              nearest (->> neighbours (keep (fn [d] (when-let [n (behind d)] [(count (take-while #(nil? (name-at d %)) (range 1 (inc (rock-depth))))) n]))) sort first second)]
-          (when (and (every? #(or (nil? %) (solid/solid? %)) (map #(when-not (except (shift cell %)) (name-at % 1)) neighbours))
-                     nearest)
-            (if (loose-ground nearest) nearest "stone")))))))
+  (when-let [b (u/sensed p cell)]
+    (if-not (true? (.-unknown b))
+      (.-name b)
+      (let [name-at (fn [[dx dy dz] k] (u/seen-name p {:x (+ (:x cell) (* k dx)) :y (+ (:y cell) (* k dy)) :z (+ (:z cell) (* k dz))}))
+            depth (rock-depth)
+            ;; [unseen cells before it, name] of the first block seen along d, when it is solid
+            behind (fn [d] (loop [k 1] (when (<= k depth) (if-let [n (name-at d k)] (when (solid/solid? n) [(dec k) n]) (recur (inc k))))))]
+        (when (every? #(or (except (shift cell %)) (let [n (name-at % 1)] (or (nil? n) (solid/solid? n)))) neighbours)
+          (when-let [[_ nearest] (reduce (fn [best d] (let [e (behind d)] (if (and e (or (nil? best) (neg? (compare e best)))) e best))) nil neighbours)]
+            (if (loose-ground nearest) nearest "stone"))))))))
 
 (defn rock-solid?
   "Whether cell is solid rock as the body reads it (rock-name)."

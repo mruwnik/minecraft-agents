@@ -104,9 +104,11 @@
   (await (pit/plan-of! c (flight/blocks c)))
   nil)
 
-(defn quote-of [c]
-  (let [{:keys [plan stop]} (assess c)
-        s (when (night/night? c) (site/site c))]
+(defn quote-of
+  "The pit's quote where the body stands. a: its assess (default made here)."
+  ([c] (quote-of c (assess c)))
+  ([c {:keys [plan stop]}]
+  (let [s (when (night/night? c) (site/site c))]
     (if (and (night/night? c) (not= :here (:at s)))
       (way/quote-of c (if s
                         (+ (* (u/dist (sh-sense/feet (:primitives c)) (:cell s)) (settings/get settings ::walk-s-per-block)) (site/pit-s c (:cell s)))
@@ -118,25 +120,31 @@
                            (site/plan-s c plan)
                            (site/pit-s c (sh-sense/feet (:primitives c))))
                          (if plan (way/zone-penalty c {:dig (concat (:prep plan) (mapcat :dig (:steps plan))) :plug (conj (:plugs plan) (:roof plan))}) 0)))
-                  (settings/get settings ::job-time-s)))))
+                  (settings/get settings ::job-time-s))))))
 
 (defn exposed-s
-  "Seconds the body stays open to a shooter before the pit shuts it in: the dig; dig-pit-site/pit-s (a straight pit's dig and roof) with no plan yet, ##Inf when it cannot be done."
-  [c]
-  (let [{:keys [plan stop]} (assess c)]
-    (cond
-      stop ##Inf
-      (nil? plan) (site/pit-s c (sh-sense/feet (:primitives c)))
-      :else (site/dig-s c (concat (:prep plan) (mapcat :dig (:steps plan)))))))
+  "Seconds the body stays open to a shooter before the pit shuts it in: the dig; dig-pit-site/pit-s (a straight pit's dig and roof) with no plan yet, ##Inf when it cannot be done. a: its assess (default made here)."
+  ([c] (exposed-s c (assess c)))
+  ([c {:keys [plan stop]}]
+   (cond
+     stop ##Inf
+     (nil? plan) (site/pit-s c (sh-sense/feet (:primitives c)))
+     :else (site/dig-s c (concat (:prep plan) (mapcat :dig (:steps plan)))))))
 
 (defn fails
-  "The chance the pit lays itself open through a cell round its dig the body never sensed (pit-cells/shell-fails); 0 with no plan yet."
+  "The chance the pit lays itself open through a cell round its dig the body never sensed (pit-cells/shell-fails); 0 with
+  no plan yet. a: its assess (default made here)."
+  ([c] (fails c (assess c)))
+  ([c {:keys [plan]}]
+   (let [feet (sh-sense/feet (:primitives c))]
+     (if-let [cells (some->> plan ((juxt :prep #(mapcat :dig (:steps %)))) (apply concat) seq)]
+       (pit/shell-fails (:primitives c) cells (set (into cells [feet (update feet :y inc)])))
+       0))))
+
+(defn cover
+  "[quote exposed-s fails] from one assess."
   [c]
-  (let [{:keys [plan]} (assess c)
-        feet (sh-sense/feet (:primitives c))]
-    (if-let [cells (some->> plan ((juxt :prep #(mapcat :dig (:steps %)))) (apply concat) seq)]
-      (pit/shell-fails (:primitives c) cells (set (into cells [feet (update feet :y inc)])))
-      0)))
+  (let [a (assess c)] [(quote-of c a) (exposed-s c a) (fails c a)]))
 
 (defn ^:async step!
   "One step of the pit: its plan is made once and kept in job memory, made again when the body has left its column. :done,

@@ -15,7 +15,8 @@
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.dig-pit-site :as pit-site]
             [jobs.survival.plug-way :as way]
-            [jobs.survival.pit-cells :as pit]))
+            [jobs.survival.pit-cells :as pit]
+            [jobs.survival.respond.state :as flight]))
 
 (def doc
   "A way of jobs.survival.shut-in: dig a pocket into a wall beside the body (feet and head cell, depth 1), step in and wall the way in
@@ -55,18 +56,23 @@
 
 (defn done? [c] (way/done? c :pocket))
 
+(def stand-offsets
+  "[dx dy dz] of the cells within walk radius r (dy -3 to 3) but the feet, nearest first."
+  (memoize (fn [r]
+             (->> (for [dx (range (- r) (inc r)) dz (range (- r) (inc r)) dy [0 -1 1 -2 2 -3 3]
+                        :when (and (not= [0 0 0] [dx dy dz]) (<= (+ (* dx dx) (* dz dz)) (* r r)))]
+                    [dx dy dz])
+                  (sort-by (fn [[dx dy dz]] (js/Math.hypot dx dy dz)))
+                  vec))))
+
 (defn stand-cells
   "The cells within ::walk-radius (dy -3 to 3) of feet, nearest first, that the body sees open (feet and head over a solid floor)
   and hold no hostile: where a pocket may be dug from."
   [c feet]
   (let [p (:primitives c)
-        r (int (settings/get settings ::walk-radius))
         mobs (pit/hostiles c)]
-    (->> (for [dx (range (- r) (inc r)) dz (range (- r) (inc r)) dy [0 -1 1 -2 2 -3 3]
-               :let [cell (assoc feet :x (+ (:x feet) dx) :y (+ (:y feet) dy) :z (+ (:z feet) dz))]
-               :when (and (not= cell feet) (<= (+ (* dx dx) (* dz dz)) (* r r)))]
-           cell)
-         (sort-by #(u/dist feet %))
+    (->> (stand-offsets (int (settings/get settings ::walk-radius)))
+         (map (fn [[dx dy dz]] (assoc feet :x (+ (:x feet) dx) :y (+ (:y feet) dy) :z (+ (:z feet) dz))))
          (filter #(and (dig-cells/open-cell? p %) (dig-cells/open-cell? p (update % :y inc))
                        (dig-cells/known-solid? p (update % :y dec)) (not (mobs %)))))))
 
@@ -87,13 +93,20 @@
   "Where the pocket is dug from: the feet, else the nearest of stand-cells with a pocket side (pit/pocket-site), one that digs
   no other's wall first: {:stand cell :fetch? true when no carried tool harvests its wall and one may be fetched}; with
   no site {:no-tool? true} when only a wall no carried tool harvests is left and no fetch is allowed, {:sink? true} when a night
-  shaft down may find rock, else {}. One pass for both: a side a carried tool digs is one the hand digs."
+  shaft down may find rock, else {}; :cells the pocket's (pit/pocket-site at :stand, by hand with :fetch?). One pass for
+  both: a side a carried tool digs is one the hand digs."
   [c]
   (let [feet (sh-sense/feet (:primitives c))
         by-hand? (:by-hand (ctx/mem c))
-        in (access/rules-input c)
-        refused? (fn [cells] (some #(access/trespass-refusal in :dig %) cells))
-        sides (fn [cell] (when-let [hand (pit/pocket-site c cell true)] {:hand hand :carried (if by-hand? hand (pit/pocket-site c cell false))}))
+        ;; the zone rules are read only once a side fits: on open ground none does
+        in (delay (access/rules-input c))
+        own-in (delay (access/rules-input c {:spare-own? true}))
+        blocks (flight/blocks c)
+        refused? (fn [cells] (some #(access/trespass-refusal @in :dig %) cells))
+        sites (volatile! {})
+        sides (fn [cell] (let [s (pit/pocket-sites c cell own-in blocks)]
+                           (vswap! sites assoc cell s)
+                           (when-let [hand (:hand s)] {:hand hand :carried (if by-hand? hand (:carried s))})))
         here (sides feet)
         ;; {kind [cell refused?]}: the first cell of each kind, one not refused replacing a refused one
         better (fn [found kind cell cells]
@@ -111,8 +124,10 @@
                         (if (:hand here) {:hand [feet false]} {})
                         (stand-cells c feet)))]
     (cond
-      (:carried found) {:stand (first (:carried found))}
-      (and (:hand found) (not by-hand?)) (if (fetch-tool? c) {:stand (first (:hand found)) :fetch? true} {:no-tool? true})
+      (:carried found) (let [stand (first (:carried found))] {:stand stand :cells (:carried (@sites stand))})
+      (and (:hand found) (not by-hand?)) (if (fetch-tool? c)
+                                           (let [stand (first (:hand found))] {:stand stand :fetch? true :cells (:hand (@sites stand))})
+                                           {:no-tool? true})
       (sink-site? c) {:sink? true}
       :else {})))
 
@@ -121,8 +136,7 @@
   [c]
   (let [p (:primitives c)
         feet (sh-sense/feet p)
-        {:keys [stand fetch? sink?]} (site c)
-        cells (when stand (pit/pocket-site c stand (boolean fetch?)))]
+        {:keys [stand fetch? sink? cells]} (site c)]
     {:feet feet :stand stand :cells cells :sink? sink?
      :open-s (when cells
                (+ (* (u/dist feet stand) (settings/get settings ::walk-s-per-block))

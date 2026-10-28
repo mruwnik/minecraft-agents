@@ -12,6 +12,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.world-files :as ew]
             [plan.shape :as shape]
+            [jobs.survival.dig-pit :as dig-pit]
             [jobs.survival.dig-pocket :as pocket]
             [jobs.survival.shut-in :as shut-in]
             [jobs.survival.wall-in :as wall-in]
@@ -63,11 +64,13 @@
     (aset p "sensedAt" at)
     @n))
 
-(deftest the-pocket-cover-in-the-open-tries-each-standing-cell-once
+(deftest a-cover-reads-its-site-once
   (let [c (world {} [{:name "dirt" :count 4}])
         one-pass (reads c (fn [c] (doseq [cell (cons feet (pocket/stand-cells c feet))] (pit/pocket-site c cell true))))]
     (is (< (reads c #(shut-in/covers % [:pocket])) (* 1.5 one-pass))
-        "one search of the stand cells serves both kinds of wall and the quote and the seconds in the open")))
+        "one search of the stand cells serves both kinds of wall and the quote and the seconds in the open")
+    (is (< (reads c #(shut-in/covers % [:pit])) (* 2 (reads c dig-pit/assess)))
+        "one look at the pit serves its quote, its seconds in the open and its chance to fail (their prices read the dug cells)")))
 
 (defn fits? [extra]
   (boolean (pit/pocket-cells (world (merge (blocks "stone" [4 8] [64 66] [-3 3]) extra) iron) {:x 3 :y 64 :z 0} [1 0])))
