@@ -208,15 +208,21 @@
 
 (defn danger-near-fn
   "A fn of a cell pos: the nearest known threat (threats-of c) the body would flee whose field weighs the cell in full
-  (within threat-field ::close steps of its way), as {:mob :mob-pos :mob-distance}, else nil. Threats are read once."
+  (within threat-field ::close steps of its way) and whose toll there, cost/threat-factor at its weight, is at least a
+  second for each second spent (a faded sighting or death costs less), as {:mob :mob-pos :mob-distance :weight :toll},
+  else nil. Threats are read once."
   [c]
   (let [body (body-of (:primitives c))
-        ts (filterv #(= :flee (cost/stance body (:mob %))) (threats-of c))]
+        ts (->> (threats-of c)
+                (filter #(= :flee (cost/stance body (:mob %))))
+                (mapv #(assoc % :toll (cost/threat-factor body (:mob %) (:weight %))))
+                (filterv #(<= 1 (:toll %))))]
     (fn [{:keys [x y z] :as pos}]
       (->> ts
-           (keep (fn [{:keys [mob reach] :as t}]
+           (keep (fn [{:keys [mob reach weight toll] :as t}]
                    (when (= 1 (reach (js/Math.floor x) (js/Math.floor y) (js/Math.floor z)))
-                     {:mob mob :mob-pos (select-keys (:pos t) [:x :y :z]) :mob-distance (js/Math.round (u/dist pos (:pos t)))})))
+                     {:mob mob :mob-pos (select-keys (:pos t) [:x :y :z]) :mob-distance (js/Math.round (u/dist pos (:pos t)))
+                      :weight weight :toll toll})))
            (sort-by :mob-distance)
            first))))
 

@@ -1365,6 +1365,15 @@
             (is (= {:arrived true} @(:out s)) (pr-str args))
             (is (= 1 (count (events-of s :goal-in-danger))))))))))
 
+(deftest goal-danger-end-ignores-a-faded-sighting-and-keeps-a-fresh-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[weight arrived] [[1 false] [1e-5 true]]]
+          (let [s (with-redefs [threats/known-threats (constantly [(assoc goal-zombie :mob "zombie" :weight weight :remembered true :sighted true)])]
+                    (await (go! {:blocks flat} {:pos [10 64 0] :range 0 :settings {:jobs.movement.go-to.tuning/goal-danger :end}})))]
+            (is (= arrived (:arrived @(:out s))) (str "weight " weight (pr-str @(:out s))))))))))
+
 (deftest goal-danger-reads-a-remembered-creeper-spot-only-while-the-client-lists-the-creeper
   (async done
     (tu/run-async done

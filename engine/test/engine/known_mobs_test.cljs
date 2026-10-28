@@ -116,8 +116,21 @@
     (is (= [] (danger-ids p)))
     (is (= 0 (alength (.knownMobs p))))
     (is (= [[1 "creeper" 2.5 4.5 180000]] (sightings p)) "kept as a sighting where it was last seen")
-    (later! clock (* 8 60 1000))
-    (is (= [] (sightings p)) "past :sighting-ms")))
+    (later! clock (* 45 60 1000))
+    (is (= [] (sightings p)) "its best weight is under :sighting-weight")))
+
+(deftest sightings-past-the-cap-drop-the-lightest
+  (let [{:keys [p clock]} (rig {:entities [(mob 1 "creeper" 2 4)] :blocks wall} {:max-sightings 2})]
+    (is (= [1] (danger-ids p)))
+    (move! p 1 hidden-spot)
+    (later! clock (* 3 60 1000))
+    (is (= [[1 "creeper" 2.5 4.5 180000]] (sightings p)))
+    (swap! (fake/state p) update :entities conj {:id 2 :name "creeper" :kind "hostile" :pos [2.5 64 4.5]} {:id 3 :name "creeper" :kind "hostile" :pos [-1.5 64 4.5]})
+    (is (= [2 3] (danger-ids p)))
+    (move! p 2 hidden-spot)
+    (move! p 3 hidden-spot)
+    (later! clock (* 3 60 1000))
+    (is (= [2 3] (mapv first (sightings p))) "the oldest, the lightest, went")))
 
 (deftest a-mob-lost-out-of-sight-is-a-sighting-until-sensed-again
   (let [{:keys [p clock]} (rig {:entities [(mob 1 "creeper" 2 4)] :blocks wall})]

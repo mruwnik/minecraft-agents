@@ -7,6 +7,7 @@
             [engine.game :as game]
             [engine.settings :as settings]
             ["minecraft-data" :as minecraft-data]
+            [jobs.lib.cost.survival :as survival]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.cost.armour :as armour]))
 
@@ -223,7 +224,7 @@
   idle-despawn-blocks (it strolls only then, and stroll-idle-s past): (1 + s/b)^-a, the Gamma(a, b) prior on its leaving
   rate (::wander-leaves over ::wander-seconds), as jobs.lib.memory-age prices a remembered cell."
   [near-s]
-  (js/Math.pow (+ 1 (/ (+ (max 0 near-s) stroll-idle-s) (settings/get settings ::wander-seconds))) (- (settings/get settings ::wander-leaves))))
+  (survival/gamma-survival (settings/get settings ::wander-leaves) (settings/get settings ::wander-seconds) (+ (max 0 near-s) stroll-idle-s)))
 
 (defn spawned-there
   "The chance a mob spawned since is at a place that may spawn one (any cell of it not seen lit), after seconds with the

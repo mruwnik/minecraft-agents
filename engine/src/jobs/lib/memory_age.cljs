@@ -15,7 +15,8 @@
   (:require [engine.args :as a]
             [engine.perception.rays :as rays]
             [engine.perception.store :as store]
-            [engine.settings :as settings]))
+            [engine.settings :as settings]
+            [jobs.lib.cost.survival :as survival]))
 
 (a/defargs settings
   {::fire-changes {:default 2 :spec a/pos-num? :doc "Prior changes of a remembered fire (vanilla: one off a non-flammable floor dies in ~20-60 s)."}
@@ -58,7 +59,7 @@
 (defn- chance
   "q of a cell seen age-ms ago (at most HORIZON-MS) under a prior of a changes over b-ms."
   [a b-ms age-ms]
-  (- 1 (js/Math.pow (+ 1 (/ (js/Math.min HORIZON-MS (js/Math.max 0 age-ms)) b-ms)) (- a))))
+  (- 1 (survival/gamma-survival a b-ms (js/Math.min HORIZON-MS (js/Math.max 0 age-ms)))))
 
 (defn changed-chance
   "q: the chance a remembered cell of kind seen age-ms ago has changed since."

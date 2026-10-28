@@ -3,7 +3,8 @@
   (:require [engine.perception.light :refer [table-now]]
             [engine.perception.rays :refer [basis in-cone? near-of]]
             [engine.constants :as constants]
-            [engine.game :as game]))
+            [engine.game :as game]
+            [jobs.lib.cost.threat :as threat]))
 
 (def silent-mobs "Hostiles that make no sound while they stalk: known only once seen, or while fusing (hissing)." #{"creeper"})
 
@@ -63,17 +64,23 @@
   [per ^js eye ^js e]
   (sense-thing per eye (.-pos e) (true? (.-visible e)) (and (silent-mobs (.-name e)) (not (true? (.-fusing e))))))
 
+(defn- sighting-weight
+  "The most a sighting seen at seenAt can weigh at now: the chance it stayed near all along (threat/stayed-near over its
+  whole age); jobs weigh it by less."
+  [^js f now]
+  (threat/stayed-near (/ (- now (.-seenAt f)) 1000)))
+
 (defn- fade!
   "Keep a forgotten mob m that was seen as a sighting (its kind, where and when it was last seen), dropping sightings
-  older than :sighting-ms and the oldest past :max-sightings."
+  whose best weight (sighting-weight) is under :sighting-weight, and the lightest past :max-sightings."
   [{:keys [opts]} ^js st ^js m now]
   (let [^js faded (.-faded st)]
     (when (.-seenAt m)
       (.set faded (.-id m) #js {:id (.-id m) :uuid (.-uuid m) :name (.-name m) :kind (.-kind m)
                                 :pos (.-seenPos m) :seenAt (.-seenAt m)}))
     (doseq [[id ^js f] (vec (es6-iterator-seq (.entries faded)))]
-      (when (> (- now (.-seenAt f)) (:sighting-ms opts)) (.delete faded id)))
-    (doseq [[id] (take (- (.-size faded) (:max-sightings opts)) (sort-by #(.-seenAt ^js (second %)) (es6-iterator-seq (.entries faded))))]
+      (when (< (sighting-weight f now) (:sighting-weight opts)) (.delete faded id)))
+    (doseq [[id] (take (- (.-size faded) (:max-sightings opts)) (sort-by #(sighting-weight (second %) now) (es6-iterator-seq (.entries faded))))]
       (.delete faded id))))
 
 (defn sense-mobs!
@@ -117,12 +124,12 @@
         sensed))))
 
 (defn sightings
-  "The hostiles the body saw and then forgot (sense-mobs!), oldest kept :sighting-ms: {:id :uuid :name :kind :pos (where
+  "The hostiles the body saw and then forgot (sense-mobs!), kept while sighting-weight is at least :sighting-weight: {:id :uuid :name :kind :pos (where
   last seen) :ageMs (since)}, JS objects."
   [{:keys [opts st]}]
   (let [now ((:now opts))]
     (into-array (for [^js f (es6-iterator-seq (.values ^js (.-faded ^js st)))
-                      :when (<= (- now (.-seenAt f)) (:sighting-ms opts))]
+                      :when (>= (sighting-weight f now) (:sighting-weight opts))]
                   (js/Object.assign #js {} f #js {:ageMs (- now (.-seenAt f))})))))
 
 (defn enderman-at-yaw?
