@@ -132,6 +132,17 @@
   (let [[filled open] (fill-kinds p unseen)]
     (boolean (and (enclosed-over p #{(vec cell)} filled shut-room-cells) (not (enclosed-over p #{} open room-cells))))))
 
+(defn cut-off
+  "The feet cells [x y z], nearest walk first, the body walks to now but would not with cell [x y z] solid: the far side of
+  a fill that closes it in (closes-in?). unseen as fill-kinds."
+  [p unseen cell]
+  (let [[filled open] (fill-kinds p unseen)
+        with (fn [x y z] (if (= [x y z] (vec cell)) :solid (filled x y z)))
+        {:keys [x y z]} (standing-cell p open)
+        visit (fn [kind-at budget] (map vec (:cells (flood-visit (fn [x y z] (forward kind-at x y z)) [x y z] budget))))
+        shut (set (visit with shut-room-cells))]
+    (remove shut (visit open room-cells))))
+
 (defn walls-in?
   "Whether a walker on the floor under pos [x y z] (within four cells) can walk to fewer than 64 cells with cell solid,
   and to more without, shut in or not (a small room only: the floods stay cheap). unseen as fill-kinds."

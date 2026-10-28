@@ -287,39 +287,23 @@
 (def pick {:name "stone_pickaxe" :count 1})
 (def gap-cells [{:pos [5 64 4] :part "p" :answer :missing :item "oak_planks"} {:pos [5 65 4] :part "p" :answer :missing :item "oak_planks"}])
 
-(deftest a-seal-is-priced-as-the-dig-out-with-a-pickaxe-and-a-trap-without
-  (let [priced (:cost (fp-cells/seal-price {:primitives (:p (gap-room [planks pick]))} gap-cells [5 64 4]))
-        trap (fp-cells/seal-price {:primitives (:p (gap-room [planks]))} gap-cells [5 64 4])]
-    (is (pos? priced))
-    (is (< priced (:worth (fp-cells/seal-price {:primitives (:p (gap-room [planks pick]))} gap-cells [5 64 4]))) "the part is worth more than the dig-out")
-    (is (nil? (:cost trap)))
-    (is (string? (:why trap)))
-    (is (nil? (fp-cells/seal-price {:primitives (:p (gap-room [planks]))} gap-cells [5 66 4])) "a cell that does not seal has no price")))
+(deftest a-cell-that-would-seal-the-body-in-is-left-by-the-gap-it-closes
+  (let [c {:primitives (:p (gap-room [planks]))}]
+    (is (fp-cells/seals? c [5 64 4]))
+    (is (= [6 64 4] (fp-cells/seal-exit c [5 64 4])) "the nearest cell beyond the gap, outside the cell's column")
+    (is (not (fp-cells/seals? c [5 66 4])))))
 
-(deftest a-seal-in-a-part-worth-less-than-the-dig-out-is-refused-with-a-reason
-  (let [cheap (mapv #(assoc % :item "dirt") gap-cells)
-        price (fp-cells/seal-price {:primitives (:p (gap-room [planks pick]))} cheap [5 64 4])]
-    (is (nil? (:cost price)))
-    (is (re-find #"more than the part is worth" (:why price)))))
-
-(deftest a-body-with-a-pickaxe-places-the-cell-that-seals-it-in
+(deftest a-body-walks-out-before-it-places-the-cell-that-would-seal-it-in
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (gap-room [planks pick])
-              result (await (child-outcome eng job {:plan "gap"} 300))]
-          (is (= "oak_planks" (block p [5 64 4])) "placed although it closes the room")
-          (is (empty? (:given-up result)))
-          (is (= "air" (block p [3 64 4])) "dug out through the wall afterwards"))))))
-
-(deftest a-body-with-no-tool-to-dig-out-refuses-the-cell-that-seals-it-in
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (gap-room [planks])
-              result (await (child-outcome eng job {:plan "gap"} 300))]
-          (is (not= "oak_planks" (block p [5 64 4])))
-          (is (= :unreachable (get (:given-up result) [5 64 4]))))))))
+        (doseq [kit [[planks pick] [planks]]]
+          (let [{:keys [eng p]} (gap-room kit)
+                result (await (child-outcome eng job {:plan "gap"} 300))]
+            (is (= ["oak_planks" "oak_planks"] (mapv #(block p %) [[5 64 4] [5 65 4]])) (pr-str kit))
+            (is (empty? (:given-up result)))
+            (is (= "stone" (block p [3 64 4])) "no wall dug")
+            (is (not (reach-room/enclosed? p :raw)) "placed from outside")))))))
 
 (deftest a-seal-that-places-nothing-does-not-dig-the-body-out
   (async done
@@ -329,10 +313,6 @@
           (await (child-outcome eng job {:plan "gap"} 300))
           (is (not= "oak_planks" (block p [5 64 4])))
           (is (= "stone" (block p [3 64 4])) "no seal placed, so no dig-out"))))))
-
-(deftest bare-hands-price-a-dig-above-any-tool
-  (let [dirt-with (fn [kit] (fp-cells/dig-seconds (:p (gap-room kit)) "dirt"))]
-    (is (> (dirt-with []) (dirt-with [{:name "wooden_shovel" :count 1}])))))
 
 (deftest a-dig-in-rock-with-no-pickaxe-is-given-up-no-tool-without-a-tunnel
   (async done
@@ -2193,3 +2173,68 @@
     (is (zero? @planned) "no fetch allowed or one tried already: the lighting is not planned")
     (is (= :ok (check true {})))
     (is (= 1 @planned))))
+
+(defn wall-slot-hut
+  "Teasel j134's hut (a 5x5 box, walls y 64..66, roof y 67, a door gap south) built but for the body's own cells (a slot in
+  the top course of the north wall, head in the roof) and the roof cell south of its head; leaves outside the slot."
+  [kit]
+  (let [cells (for [x (range 5) y (range 63 68) z (range 5)
+                    :when (or (#{63 67} y) (#{0 4} x) (#{0 4} z))
+                    :when (not (#{[2 64 4] [2 65 4]} [x y z]))]
+                [x y z])
+        open #{[2 66 0] [2 67 0] [2 67 1]}
+        built (into {} (for [c cells :when (not (open c))] [(apply h/cell-key c) "oak_planks"]))
+        leaves (into {} (for [y [64 65 66 67] x [1 2 3]] [(h/cell-key x y -1) "jungle_leaves"]))]
+    (start {:blocks (merge leaves built) :floor [-30 -30 30 30] :self {:pos {:x 2.5 :y 66 :z 0.5}} :inventory kit}
+           {"hut" {:id "hut" :parts [{:id "house" :cells (vec cells) :want "oak_planks"}
+                                     {:id "door" :cells [[2 64 4] [2 65 4]] :want "air"}]}})))
+
+(deftest a-body-in-a-wall-slot-of-its-own-hut-is-never-sealed-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (wall-slot-hut [{:name "oak_planks" :count 8}])
+              result (await (child-outcome eng job {:plan "hut"} 300))]
+          (is (not= :shut-in (:reason result)) (pr-str result))
+          (is (not (reach-room/enclosed? p :raw)) (str "body at " (js->clj (.-pos (.self p)))))
+          (is (every? #(= "oak_planks" (block p %)) [[2 66 0] [2 67 0] [2 67 1]]) (pr-str (places p))))))))
+
+(deftest a-body-shut-in-its-own-closed-room-gets-out-and-leaves-the-room-whole
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [room (for [x (range 3 8) y (range 64 67) z (range 3 8)
+                         :when (or (= y 66) (#{3 7} x) (#{3 7} z))]
+                     [x y z])
+              plan {:id "own" :metadata {:by "Fake"} :parts [{:id "room" :cells (vec room) :want "dirt"}
+                                      {:id "post" :cells [[12 64 5]] :want "oak_fence"}]}
+              {:keys [eng p]} (start {:blocks (merge (tu/floor 3 3 7 7) (into {} (for [c room] [(apply h/cell-key c) "dirt"])))
+                                      :floor [-30 -30 30 30] :self {:pos {:x 5.5 :y 64 :z 5.5}}
+                                      :inventory [{:name "oak_fence" :count 1} {:name "dirt" :count 8} {:name "stone_shovel" :count 1}]}
+                                     {"own" plan})
+              result (await (child-outcome eng job {:plan "own"} 400))]
+          (is (= "oak_fence" (block p [12 64 5])))
+          (is (every? #(= "dirt" (block p %)) room) (pr-str (remove #(= "dirt" (block p %)) room)))
+          (is (empty? (:missing result)) (pr-str result)))))))
+
+(deftest a-cell-tunnelled-to-from-a-closed-room-of-the-plan-leaves-the-room-wall-refilled
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [shell (for [x (range 3 8) y (range 63 68) z (range 3 8)
+                          :when (or (#{63 67} y) (#{3 7} x) (#{3 7} z))]
+                      [x y z])
+              inside (set (for [x (range 4 7) y (range 64 67) z (range 4 7)] [x y z]))
+              rock (into {} (for [x (range -2 15) y (range 62 70) z (range -2 13)
+                                  :when (not (inside [x y z])) :when (not= [x y z] [11 64 5])]
+                              [(h/cell-key x y z) "stone"]))
+              plan {:id "own" :metadata {:by "Fake"} :parts [{:id "room" :cells (vec shell) :want "dirt"}
+                                                            {:id "post" :cells [[11 64 5]] :want "dirt"}]}
+              {:keys [eng p]} (start {:blocks (merge rock (into {} (for [c shell] [(apply h/cell-key c) "dirt"])))
+                                      :floor [-30 -30 30 30] :self {:pos {:x 5.5 :y 64 :z 5.5}}
+                                      :inventory [{:name "dirt" :count 16} {:name "stone_pickaxe" :count 1} {:name "stone_shovel" :count 1}]}
+                                     {"own" plan})
+              result (await (child-outcome eng job {:plan "own"} 600))]
+          (is (= "dirt" (block p [11 64 5])))
+          (is (every? #(= "dirt" (block p %)) shell) (pr-str (remove #(= "dirt" (block p %)) shell)))
+          (is (empty? (:missing result)) (pr-str result)))))))

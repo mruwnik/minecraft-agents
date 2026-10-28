@@ -1,9 +1,6 @@
 (ns jobs.build.from-plan.cells
   "Where the body can reach, stand and dig for jobs.build.from-plan: the cells of a plan read against the body's spot."
   (:require [engine.ctx :as ctx]
-            [jobs.lib.cost :as cost]
-            [jobs.lib.cost.ways :as cw]
-            [jobs.lib.tool-kind :as kind]
             [jobs.lib.tools :as tools]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.aim :as aim]
@@ -54,45 +51,11 @@
     (boolean (and (<= by cy (+ by 2))
                   (reach-room/closes-in? p :fill cell)))))
 
-(defn dig-seconds
-  "Seconds the body takes to dig block n with the best carried tool of its kind (bare hands with none)."
-  [p n]
-  (let [tier (->> (u/inventory p)
-                  (filter #(kind/of-kind? (:name %) (kind/tool-kind n)))
-                  (map #(cost/tool-tier (:name %)))
-                  (reduce max nil))]
-    (cost/dig-cost n :basis {:dig {:default-tier (or tier 0)}})))
-
-(defn seal-price
-  "Nil when placing at cell does not shut the body in. Else the dig-out through the cheapest wall outside the plan that
-  the carried kit clears (ways/seal-cost) against the worth of the cell's part still owed (item-value of its missing
-  cells): {:cost s :worth w :exit cell outside the wall} to place when the worth beats the price, else {:cost nil :why ...} (no way out, or the
-  dig-out costs more than the part is worth: refused)."
-  [c cells cell]
-  (when (seals? c cell)
-    (let [p (:primitives c)
-          own (into #{} (map :pos) cells)
-          {:keys [x y z]} (u/self-pos c)
-          [bx by bz] (map #(js/Math.floor %) [x y z])
-          walls (for [dx (range -2 3) dz (range -2 3) dy (range 0 3)
-                      :let [n (u/seen-name p {:x (+ bx dx) :y (+ by dy) :z (+ bz dz)})]
-                      :when (and n (not (shape/air? n)) (not (#{"water" "lava"} n))
-                                 (not (own [(+ bx dx) (+ by dy) (+ bz dz)]))
-                                 (not (tools/needs-tool-to-clear? p n)))]
-              {:s (dig-seconds p n) :d [dx dz]})
-          walls (filter :s walls)
-          wall (first (sort-by (juxt :s #(let [[dx dz] (:d %)] (+ (js/Math.abs dx) (js/Math.abs dz)))) (remove #(= [0 0] (:d %)) walls)))
-          exit (when wall
-                 (let [[dx dz] (:d wall)
-                       along-x (>= (js/Math.abs dx) (js/Math.abs dz))]
-                   [(+ bx dx (if along-x (js/Math.sign dx) 0)) by (+ bz dz (if along-x 0 (js/Math.sign dz)))]))
-          part (:part (first (filter #(= cell (:pos %)) cells)))
-          worth (:value (cost/item-value (for [m (plan/missing cells) :when (= part (:part m))] {:name (:item m) :count 1})))
-          price (cw/seal-cost (map :s walls))]
-      (cond
-        (nil? price) {:cost nil :why "no carried tool clears a wall of the room"}
-        (< price worth) {:cost price :worth worth :exit exit}
-        :else {:cost nil :why (str "digging out of the room costs " (js/Math.round price) " s, more than the part is worth (" (js/Math.round worth) " s)")}))))
+(defn seal-exit
+  "Where the body walks before it places a cell that would seal it in (seals?): the nearest cell it walks to now that the
+  fill cuts it off from, the cell's own column left out."
+  [c [cx cy cz :as cell]]
+  (first (remove (fn [[x y z]] (and (== x cx) (== z cz) (<= (dec cy) y cy))) (reach-room/cut-off (:primitives c) :fill cell))))
 
 (defn shuts-out?
   "Whether placing cell would wall in the floor under another cell still owed at its height or above, which can then only

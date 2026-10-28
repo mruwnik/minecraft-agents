@@ -23,7 +23,7 @@
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.build.plan :as plan :refer [retry-distance max-retries facing-ok? body-cells count-fail plan-trouble owed need-of shortage hazards decide rules-input refuse permitted judged no-zones planned how placeable misplaced missing covered digging unseen buildable problem]]
             [jobs.lib.build.scaffold :as scaffold]
-            [jobs.build.from-plan.cells :refer [diggable in-reach in-dig-reach seal-price shuts-out? off-low-floor support-looks retreat-dists fill-order]]
+            [jobs.build.from-plan.cells :refer [diggable in-reach in-dig-reach seals? seal-exit shuts-out? off-low-floor support-looks retreat-dists fill-order]]
             [jobs.build.from-plan.book :refer [walk-fail retry-walks warn-way-in! place-one! settle-placing! dig-one! result-data finish! book-failed!]]
             [jobs.build.from-plan.light :as light]
             [jobs.build.from-plan.walk :refer [give-up trace! leave! exit-of walk-to! reach-cell! look-for-support! shut-in? place-here?]]
@@ -266,17 +266,15 @@
                      (loop [left near]
                        (if (seq left)
                          (let [_ (trace! c :place-one! (:pos (first left)))
-                               seal (seal-price c cells (:pos (first left)))
-                               placed-before (:placed (ctx/mem c) 0)]
+                               exit (when (seals? c (:pos (first left))) (or (seal-exit c (:pos (first left))) (exit-of c cells)))]
                            (cond
-                             (and seal (nil? (:cost seal)))
+                             ;; never placed from inside: the body walks out by the way still open and places it from there
+                             exit
                              (do (trace! c :seals-in (:pos (first left)))
                                  (ctx/update-mem! c #(-> (count-fail % (:pos (first left)) :unreachable (give-up))
-                                                         (assoc :leave (exit-of c cells))))
+                                                         (assoc :leave exit :leave-range 0)))
                                  :again)
                              (= :continue (await (place-one! c (first left) (give-up)))) :continue
-                             (and seal (> (:placed (ctx/mem c) 0) placed-before))
-                             (do (ctx/update-mem! c assoc :leave (or (:exit seal) (exit-of c cells)) :sealed true) :again)
                              :else (recur (rest left))))
                          :again)))
       (seq dig-near) (loop [left dig-near]

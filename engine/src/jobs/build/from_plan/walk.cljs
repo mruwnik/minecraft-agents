@@ -39,9 +39,9 @@
   or not: the next step judges where the body stands; a walk that did not arrive gives up the plan cell the body stands in, :unreachable). :continue while the walk waits, else :again."
   [c]
   (let [[x y z] (:leave (ctx/mem c))
-        r (await (child/call-walk* c :leave {:pos {:x x :y y :z z} :range (if (:mouth (ctx/mem c)) 0 (:leave-range (ctx/mem c) 1)) :ways (cond-> #{:walk :clear-seal} (:mouth (ctx/mem c)) (into [:stair :dig-out]) (:sealed (ctx/mem c)) (conj :clear-path)) :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+        r (await (child/call-walk* c :leave {:pos {:x x :y y :z z} :range (if (:mouth (ctx/mem c)) 0 (:leave-range (ctx/mem c) 1)) :ways (cond-> #{:walk :clear-seal} (:mouth (ctx/mem c)) (into [:stair :dig-out])) :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (when-not (= :continue r)
-      (ctx/update-mem! c #(cond-> (dissoc % :leave :leave-range :sealed)
+      (ctx/update-mem! c #(cond-> (dissoc % :leave :leave-range)
                             (and (not= :done (:kind r)) (:stepped-off %)) (assoc-in [:given-up (:stepped-off %)] :unreachable))))
     (if (= :continue r) :continue :again)))
 

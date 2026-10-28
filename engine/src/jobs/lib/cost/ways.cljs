@@ -12,7 +12,6 @@
    ::fill-place-s {:default 1.5 :doc "Seconds laying one carried block over a gap or a drop is reckoned to take (place, step)." :spec (a/num-in 0 nil)}
    ::fill-spent-s {:default 1 :doc "Seconds the one block a fill spends is reckoned to be worth (the block is not recovered)." :spec (a/num-in 0 nil)}
    ::fill-scarce {:default 2 :doc "A fill leaving fewer than this many blocks carried adds ::fetch-block-s: the pack is nearly out." :spec (a/num-in 0 nil)}
-   ::seal-place-s {:default 3 :doc "Seconds being sealed in is reckoned to cost on top of digging out (turn, step to the wall, climb out)." :spec (a/num-in 0 nil)}
    ::fetch-block-s {:default 3 :doc "Seconds one block the pack lacks for a pillar or a bridge adds (fetching it)." :spec (a/num-in 0 nil)}})
 
 (defn stair-step-s [] (settings/get settings ::stair-step-s))
@@ -49,10 +48,3 @@
   [carried]
   (+ (settings/get settings ::fill-place-s) (settings/get settings ::fill-spent-s)
      (if (< (dec carried) (settings/get settings ::fill-scarce)) (settings/get settings ::fetch-block-s) 0)))
-
-(defn seal-cost
-  "Seconds being sealed in by a place costs: digging out through the cheapest of `dig-seconds` (what each wall block takes
-  with the carried kit), plus ::seal-place-s; nil when there is none (a real trap)."
-  [dig-seconds]
-  (when-let [dig (some->> dig-seconds seq (apply min))]
-    (+ dig (settings/get settings ::seal-place-s))))

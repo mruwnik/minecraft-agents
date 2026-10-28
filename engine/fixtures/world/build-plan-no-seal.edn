@@ -91,4 +91,41 @@
    ;; some shell cell stays open, whichever one
    :after [[:not-block [11 0 11] "dirt"] [:block [10 0 10] "dirt"]
            [:any-not-block [[[10 2 10] [13 2 13]] [[10 0 10] [13 1 10]] [[10 0 13] [13 1 13]] [[10 0 11] [10 1 12]] [[13 0 11] [13 1 12]]] "dirt"]]
-   :limit-s 170}]}
+   :limit-s 170}
+  {:name "wall-slot-of-own-hut-leaves-before-the-roof-shuts-it"
+   ;; card cc4785f9 (Teasel j134): a 5x5 hut (walls y 0..2, roof y 3, a door gap south) built but for the body's own cells (a slot in
+   ;; the top course of the north wall, head in the roof) and the roof cell south of its head; leaves outside the slot. Placing that
+   ;; roof cell would shut the body in its slot: it drops into the hut first and builds the three cells from inside, then leaves by the door.
+   :plans [{:id "hut" :metadata {:by "$body"}
+            :parts [{:id "north" :box [#at [10 0 10] #at [14 2 10]] :want "dirt"}
+                    {:id "west" :box [#at [10 0 11] #at [10 2 13]] :want "dirt"}
+                    {:id "east" :box [#at [14 0 11] #at [14 2 13]] :want "dirt"}
+                    {:id "south-a" :box [#at [10 0 14] #at [11 2 14]] :want "dirt"}
+                    {:id "south-b" :box [#at [13 0 14] #at [14 2 14]] :want "dirt"}
+                    {:id "lintel" :cells [#at [12 2 14]] :want "dirt"}
+                    {:id "door" :cells [#at [12 0 14] #at [12 1 14]] :want :clear}
+                    {:id "roof" :box [#at [10 3 10] #at [14 3 14]] :want "dirt"}]}]
+   :blocks [[:fill [10 0 10] [14 3 14] "dirt"] [:fill [11 0 11] [13 2 13] "air"] [:fill [12 0 14] [12 1 14] "air"]
+            [:fill [12 2 10] [12 3 10] "air"] [:set [12 3 11] "air"]
+            [:fill [11 0 9] [13 3 9] "oak_leaves[persistent=true]"]
+            [:set [13 2 13] "light"] [:set [9 0 12] "sea_lantern"] [:set [15 0 12] "sea_lantern"] [:set [12 0 16] "sea_lantern"]]
+   :body {:at [12.5 2 10.5] :inventory [["dirt" 8]]}
+   :act [[:job (jobs.build.from-plan {:plan "$plan:hut"})]]
+   :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 140 :until {:source :job :kind :completed}}]
+   :after [[:block [12 2 10] "dirt"] [:block [12 3 10] "dirt"] [:block [12 3 11] "dirt"] [:block [12 0 14] "air"]]
+   :limit-s 170}
+  {:name "own-room-in-rock-tunnels-to-a-cell-and-refills-its-wall"
+   ;; card cc4785f9: the body in a closed dirt room of its own plan inside glowstone (lit, rock-bound), a one-cell void east owed dirt:
+   ;; it tunnels to the void through its own east wall, fills it, and fills the wall cells it cut from the tunnel side (it never seals itself in the room).
+   :plot {:height 14}
+   :plans [{:id "room" :metadata {:by "$body"}
+            :parts [{:id "shell" :box [#at [8 1 8] #at [12 5 12]] :want "dirt"}
+                    {:id "inside" :box [#at [9 2 9] #at [11 4 11]] :want :clear}
+                    {:id "post" :cells [#at [16 2 10]] :want "dirt"}]}]
+   :blocks [[:fill [4 0 4] [20 9 16] "glowstone"] [:fill [8 1 8] [12 5 12] "dirt"] [:fill [9 2 9] [11 4 11] "air"] [:set [16 2 10] "air"]]
+   :body {:at [10.5 2 10.5] :inventory [["dirt" 16] ["stone_pickaxe" 1] ["stone_shovel" 1]]}
+   :act [[:job (jobs.build.from-plan {:plan "$plan:room"})]]
+   :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 200 :of-job true}]
+   :after [[:block [16 2 10] "dirt"] [:block [12 2 10] "dirt"] [:block [12 3 10] "dirt"] [:block [8 2 10] "dirt"]]
+   :limit-s 230}]}
