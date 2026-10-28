@@ -1695,7 +1695,7 @@
     1 40 true [0 0] false))
 
 (deftest a-dark-hall-reaches-beyond-the-spawn-free-radius-whether-open-floored-or-sealed-a-small-dark-room-does-not
-  (are [w d open-sides? light hall?] (= hall? (sh-inside/dark-hall-at? (seen-box (box w d open-sides?) light) {:x 0 :y 64 :z 0}))
+  (are [w d open-sides? light hall?] (= hall? (sh-inside/dark-hall-at? (seen-box (box w d open-sides?) light) {:x 0 :y 64 :z 0} nil))
     1 40 false [0 0] true
     1 40 true [0 0] true
     1 40 false [0 14] false

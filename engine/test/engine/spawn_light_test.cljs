@@ -1,6 +1,6 @@
 (ns engine.spawn-light-test
   "jobs.lib.spawn-light/exposure: the spawn chance a walk to a place meets, by chance-at, and what lowers it."
-  (:require [cljs.test :refer [deftest is]]
+  (:require [cljs.test :refer [are deftest is]]
             [engine.shelter-support :as st]
             [engine.sky-perception :as sky]
             [engine.test-util :as tu]
@@ -104,3 +104,28 @@
     (is (pos? (first apart)) "a night walk meets spawns")
     (is (= apart shared) "the same counts")
     (is (= 6 @reads) "every 4th cell of each of the two ways, the same walk again none")))
+
+(defn walled
+  "Stone walls two high round the cells x and z -r..r (feet y 64), with the cells of gap left out."
+  [r gap]
+  (into {} (for [x (range (- -1 r) (+ r 2)) z (range (- -1 r) (+ r 2)) y [64 65]
+                 :when (and (or (= (js/Math.abs x) (inc r)) (= (js/Math.abs z) (inc r))) (not (gap [x z])))]
+             [(str x "," y "," z) "stone"])))
+
+(defn hall
+  "A stone hall one wide along x 0..len-1 (z 0, feet y 64), roofed at y 66 and shut at both ends."
+  [len]
+  (merge (tu/box -1 64 -1 len 65 -1 "stone") (tu/box -1 64 1 len 65 1 "stone") (tu/box -1 66 -1 len 66 1 "stone")
+         (tu/box -1 64 0 -1 65 0 "stone") (tu/box len 64 0 len 65 0 "stone")))
+
+(deftest a-dark-cell-counts-only-where-a-mob-walks-to-it-from-dark-floor-past-24-blocks-roofed-or-not
+  (are [blocks block why expected]
+       (= [why expected] [why (with-redefs [sh-sense/block-light-at (constantly block) sh-sense/sky-light-at (constantly 15)]
+                                (spawn-light/chance-at (sky/with-sky (tu/fake {:floor [-30 -30 30 30] :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks blocks}))
+                                                       {:x 0 :y 64 :z 0} false))])
+    (walled 14 #{}) 0 "a walled yard of 841 cells, all within 24 blocks: nothing spawns that reaches the body" 0
+    (walled 14 #{[15 0]}) 0 "a gap in its wall lets in the dark field beyond" open-night-chance
+    {} 0 "a dark open field" open-night-chance
+    {} 14 "a lit open field, by its light" 0
+    (hall 30) 0 "a roofed hall reaching past 24 blocks" open-night-chance
+    (hall 10) 0 "a short shut hall" 0))

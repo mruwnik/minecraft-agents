@@ -145,11 +145,12 @@
 
 (defn lit-here?
   "Whether the cell is lit enough that monsters cannot spawn (look/lit-light?: any source, dawn or a torch) as the body knows
-  it; a cell it has not seen is guessed (look/unseen-lit?)."
-  [p cell]
-  (if (cell-light p cell)
-    (look/lit-light? (block-light-at p cell) (or (sky-light-at p cell) 0) (sky-subtract-now p))
-    (look/unseen-lit? p cell)))
+  it; a cell it has not seen is guessed (look/unseen-lit?). subtract: the sky's darkening to judge it by (default now)."
+  ([p cell] (lit-here? p cell nil))
+  ([p cell subtract]
+   (if (cell-light p cell)
+     (look/lit-light? (block-light-at p cell) (or (sky-light-at p cell) 0) (or subtract (sky-subtract-now p)))
+     (look/unseen-lit? p cell subtract))))
 
 (defn wide-room?
   "Whether the room has a 2x2 floor patch: a hut, not a one-wide tunnel the body dug."

@@ -91,6 +91,7 @@
         cell (sh-sense/feet p)
         chance #(with-redefs [sh-sense/sky-reaches-from-above? (constantly true)
                               sh-sense/sky-light-at (constantly %)
+                              sh-sense/block-light-at (constantly 0)
                               spawn-light/seen-light (constantly 0)]
                   (spawn-light/chance-at p cell false))]
     (is (pos? (chance 3)))

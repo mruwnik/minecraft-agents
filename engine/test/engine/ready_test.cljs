@@ -408,11 +408,12 @@
     false [:ok :unexposed]))
 
 (defn dim-status
-  "at-status of outside under the night sky with sky light sky reaching it, no block light and no dark hall, and go-to's spawn chance there."
+  "at-status of outside under the night sky with sky light sky reaching it, no block light and dark open ground round it
+  (a dark hall), and go-to's spawn chance there."
   [sky]
   (with-redefs [sh-sense/block-light-at (constantly 0)
                 sh-sense/sky-light-at (constantly sky)
-                sh-inside/dark-hall-at? (constantly false)]
+                sh-inside/dark-hall-at? (constantly true)]
     (let [c (ctx-of open-night)]
       [(ready/at-status c outside) (spawn-light/chance-at (:primitives c) outside false)])))
 
@@ -851,3 +852,12 @@
     (with-redefs [plant-sapling/current-target (constantly {:pos {:x 6 :y 64 :z 0} :species "oak"})]
       (is (= :ok (kind plant-sapling/safe? night-hut)) "a debt inside the hut is planted"))))
 
+
+(deftest a-ten-second-stay-at-a-spawn-chance-of-0-005-risks-about-2-5-hp-for-a-bare-body
+  ;; 0.05 mobs expected: each hurts ~4.45 hp and kills at ~0.379, so the death (1200 s at 10 s an hp) is 0.0188 x 120 hp
+  (let [c (ctx-of open-night)
+        {:keys [hurt dies death]} (price/stay-parts c 0.005 10)]
+    (is (< 0.2 hurt 0.25))
+    (is (< 0.018 dies 0.0195))
+    (is (= 1200 death))
+    (is (< 2.4 (price/stay-hp c 0.005 10) 2.55))))

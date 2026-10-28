@@ -40,6 +40,17 @@
          [:job (jobs.debug.ready-probe {:at #at [14 0 14] :stay-s 120})]]
    :expect [{:event {:source :job :kind :job.ready-probe} :within-s 40 :of-job true}]
    :limit-s 90}
+  ;; Card 86b53553: a 23x23 yard (529 cells, past the old 500-cell flood cap) walled 6 high, open above; every cell within 24
+  ;; blocks of its centre, so the probe starts there.
+  {:name "probe-starts-in-a-wide-walled-yard-under-the-night-sky"
+   :time :night :time-why :night-light
+   :plot {:light :sky :height 8 :length 40 :width 40}
+   :blocks [[:fill [8 0 8] [32 5 32] "stone"] [:fill [9 0 9] [31 5 31] "air"]]
+   :body {:at [20.5 0 20.5] :settle-s 2 :effects [["resistance" 900 4]]}
+   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
+         [:job (jobs.debug.ready-probe {:at #at [20 0 20] :stay-s 120})]]
+   :expect [{:event {:source :job :kind :job.ready-probe} :within-s 40 :of-job true}]
+   :limit-s 90}
   {:name "probe-waits-in-a-yard-with-a-gap-under-the-night-sky"
    :time :night :time-why :night-light
    :plot {:light :sky :height 8}

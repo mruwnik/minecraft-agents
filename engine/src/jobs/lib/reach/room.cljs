@@ -188,16 +188,16 @@
 (defn unseen-edge?
   "Whether a walker at cell #js [x y z] may lead somewhere the body has not seen: a side feet cell, or the head cell over
   a side block it could step onto, is unseen. Unseen is unknown, not wall. A side block with a seen solid two over it
-  cannot be stepped onto, so what is unseen over it leads nowhere."
-  [p kind-at c]
-  (let [x (aget c 0) y (aget c 1) z (aget c 2)
-        unseen? (fn [x y z] (nil? (u/seen-block p {:x x :y y :z z})))]
+  cannot be stepped onto, so what is unseen over it leads nowhere. unseen? (x y z): a caller's own read of it."
+  ([p kind-at c] (unseen-edge? p kind-at c (fn [x y z] (nil? (u/seen-block p {:x x :y y :z z})))))
+  ([_p kind-at c unseen?]
+  (let [x (aget c 0) y (aget c 1) z (aget c 2)]
     (some (fn [[dx dz]]
             (let [nx (+ x dx) nz (+ z dz)]
               (or (unseen? nx y nz)
                   (and (not (passable? kind-at nx y nz)) (passable? kind-at x (+ y 2) z) (unseen? nx (inc y) nz)
                        (or (unseen? nx (+ y 2) nz) (passable? kind-at nx (+ y 2) nz))))))
-          [[1 0] [-1 0] [0 1] [0 -1]])))
+          [[1 0] [-1 0] [0 1] [0 -1]]))))
 
 (defn room-flood
   "{:cells [...] :unseen? bool}: the cells a walker at cell [x y z] reaches (room-kind-at) fewer than budget (default
@@ -399,8 +399,10 @@
 
 (defn walker-sources
   "The cells of the flood `cells` (#js [[x y z]..] from start [x y z]) a walker steps from to the start and so on, within the
-  flood: each reaches everything the start does."
-  [kind-at cells [sx sy sz]]
+  flood: each reaches everything the start does. step (default backward): forward for a flood of backward steps, the
+  cells the start walks to, which everything that reaches the start reaches."
+  ([kind-at cells start] (walker-sources kind-at cells start backward))
+  ([kind-at cells [sx sy sz] step]
   (let [key (keyer sx sz)
         in-flood (js/Set.)
         _ (.forEach cells (fn [c] (.add in-flood (key (aget c 0) (aget c 1) (aget c 2)))))
@@ -410,7 +412,7 @@
     (loop [head 0]
       (when (< head (.-length queue))
         (let [c (aget queue head)
-              ns (backward kind-at (aget c 0) (aget c 1) (aget c 2))]
+              ns (step kind-at (aget c 0) (aget c 1) (aget c 2))]
           (dotimes [i (.-length ns)]
             (let [n (aget ns i)
                   k (key (aget n 0) (aget n 1) (aget n 2))]
@@ -418,7 +420,7 @@
                 (.add seen k)
                 (.push queue n))))
           (recur (inc head)))))
-    queue))
+    queue)))
 
 (defn walled-region
   "{:room :checks} for the walkers' flood from cell pos {:x :y :z} (doors shut, within budget, at most wall-cells): :room as room*'s answer

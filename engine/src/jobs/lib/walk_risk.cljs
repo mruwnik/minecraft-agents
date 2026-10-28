@@ -127,36 +127,37 @@
   its shelter, death-body and food, the known threats and hides, the memory epoch of what it knows, the sky's
   darkening the light is judged by (:sky, default now; 0 prices the walk by full day's light), the cells its look round has looked at, and what the way is priced by as perceived now: its cells, the
   seconds of it spent where a mob could spawn (:exit-s those of leaving a shelter at night by the way out's light, :exit-dawn? whether dawn lowers them) and the hp of the lava seen near it, and the reach of the threats it prices
-  (:weights, their fields' cells, which change as cells they read are seen anew). :cells, :catchers and :remembered are derived, left out of a key."
+  (:weights, their fields' cells, which change as cells they read are seen anew). :cells, :catchers and :remembered are derived, left out of a key. Its spawn prices share one set of floods (sh-inside/*regions*)."
   [c goal & [{:keys [plan caves-free? back? stay-s sky]}]]
-  (let [p (:primitives c)
-        feet (sh-sense/feet p)
-        goal (update goal :y #(or % (:y feet)))
-        shelter (:data (ctx/latest c :shelter))
-        there (way feet goal plan)
-        stay-s (or stay-s 0)
-        stay-at (dec (count there))
-        there (cond-> there (pos? stay-s) (update stay-at assoc :s (+ stay-s (peek (death/cell-seconds there)))))
-        cells (cond-> there back? (#(into % (rest (rseq %)))))
-        exit (if (sh-inside/walk-leaves-shelter? p shelter goal 1) (exit-dark p there caves-free? sky) {:share 0 :dawn? false})
-        exit-s (* (/ (settings/get settings ::exit-blocks) cost/walk-speed) (:share exit))
-        food (or (.-food (.self p)) 20)
-        known (threats/known-threats c)
-        hides (threats/hide-threats c)
-        speed cost/walk-speed
-        later (fn [i] (if (and (pos? stay-s) (> i stay-at)) stay-s 0))
-        catchers (live-catchers known (mapv (fn [i cell d] (assoc cell :t (+ (/ d speed) (later i)))) (range) cells (along cells)))
-        remembered (remembered-near-way known hides feet goal)]
-    {:goal goal :plan (select-keys plan [:status :steps]) :back? back? :stay-at (when (pos? stay-s) stay-at) :stay-s stay-s
-     :feet feet :cells cells :body (threats/death-body c) :food food
-     :known known :hides hides :catchers catchers :remembered remembered
-     :weights (mapv #(:weights (field/field-of c %)) (concat catchers remembered))
-     :memory (sense/known-memory p) :sky (or sky (sh-sense/sky-subtract-now p)) :looked (sense/round-looked c)
-     :exit-s exit-s :exit-dawn? (and (pos? exit-s) (:dawn? exit))
-     :exposed-s (+ exit-s
-                   (spawn-light/dark-seconds p cells (mapv #(/ % cost/walk-speed) (along cells)) caves-free? sky)
-                   (* stay-s (spawn-light/dark-share p (nth cells stay-at) caves-free? sky)))
-     :lava (route-lava-hp p cells)}))
+  (binding [sh-inside/*regions* (or sh-inside/*regions* (js/Map.))]
+    (let [p (:primitives c)
+          feet (sh-sense/feet p)
+          goal (update goal :y #(or % (:y feet)))
+          shelter (:data (ctx/latest c :shelter))
+          there (way feet goal plan)
+          stay-s (or stay-s 0)
+          stay-at (dec (count there))
+          there (cond-> there (pos? stay-s) (update stay-at assoc :s (+ stay-s (peek (death/cell-seconds there)))))
+          cells (cond-> there back? (#(into % (rest (rseq %)))))
+          exit (if (sh-inside/walk-leaves-shelter? p shelter goal 1) (exit-dark p there caves-free? sky) {:share 0 :dawn? false})
+          exit-s (* (/ (settings/get settings ::exit-blocks) cost/walk-speed) (:share exit))
+          food (or (.-food (.self p)) 20)
+          known (threats/known-threats c)
+          hides (threats/hide-threats c)
+          speed cost/walk-speed
+          later (fn [i] (if (and (pos? stay-s) (> i stay-at)) stay-s 0))
+          catchers (live-catchers known (mapv (fn [i cell d] (assoc cell :t (+ (/ d speed) (later i)))) (range) cells (along cells)))
+          remembered (remembered-near-way known hides feet goal)]
+      {:goal goal :plan (select-keys plan [:status :steps]) :back? back? :stay-at (when (pos? stay-s) stay-at) :stay-s stay-s
+       :feet feet :cells cells :body (threats/death-body c) :food food
+       :known known :hides hides :catchers catchers :remembered remembered
+       :weights (mapv #(:weights (field/field-of c %)) (concat catchers remembered))
+       :memory (sense/known-memory p) :sky (or sky (sh-sense/sky-subtract-now p)) :looked (sense/round-looked c)
+       :exit-s exit-s :exit-dawn? (and (pos? exit-s) (:dawn? exit))
+       :exposed-s (+ exit-s
+                     (spawn-light/dark-seconds p cells (mapv #(/ % cost/walk-speed) (along cells)) caves-free? sky)
+                     (* stay-s (spawn-light/dark-share p (nth cells stay-at) caves-free? sky)))
+       :lava (route-lava-hp p cells)})))
 
 (defn estimate-of
   "estimate of its inputs (estimate-inputs)."

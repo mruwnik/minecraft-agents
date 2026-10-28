@@ -4,6 +4,7 @@
             [jobs.lib.breath :as breath]
             [jobs.lib.click :as click]
             [jobs.lib.danger :as danger]
+            [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.util :as u]
@@ -85,11 +86,6 @@
         (.set way-out-of room cells)
         cells)))
 
-(def yard-cells
-  "Cells the flood may hold for a place with no roof over it (a walled yard); a roofed one may hold reach-room/wall-cells,
-  since open sky ground floods without end and the cost is the flood."
-  500)
-
 (defn dark-spawn-beyond?
   "Whether some cell of the room where a mob could spawn is dark (dark-spawnable-cells) and farther than spawn-free-radius
   from `at` ({:x :y :z}, where the body is or will be)."
@@ -100,10 +96,10 @@
 
 (defn sealed-region
   "The closed, fully seen region round `at` ({:x :y :z}) with no open door and no way in for a walking mob or a spider
-  (reach-room/walled-region: up to reach-room/wall-cells cells under a roof, yard-cells in the open, judged once for all
-  its cells), else nil: safe but for the dark. A region too big to flood or with an unseen edge is none: unseen is never safe."
+  (reach-room/walled-region of up to reach-room/wall-cells cells, judged once for all its cells), else nil: safe but for
+  the dark. A region too big to flood or with an unseen edge is none: unseen is never safe."
   [p at]
-  (let [{:keys [room checks]} (reach-room/walled-region p at (if (sh-sense/room-roofed? p at) reach-room/wall-cells yard-cells))]
+  (let [{:keys [room checks]} (reach-room/walled-region p at reach-room/wall-cells)]
     (when (and room (not-any? #(open-door? p %) (:doors room)) @checks)
       room)))
 
@@ -115,15 +111,98 @@
   (boolean (when-let [room (sealed-region p at)]
              (not (dark-spawn-beyond? p room at)))))
 
+(def ^:dynamic *regions*
+  "A Map the spawn-regions of one decision share (spawn-light/share-of, walk-risk/estimate-inputs), the body's
+  perception or not; nil: kept per body (reach-room/kept-with)."
+  nil)
+
+(defn far-dark?
+  "Whether a cell of dark (a flat #js [x y z ..]) lies farther than spawn-free-radius from x y z."
+  [^js dark x y z]
+  (let [r2 (* spawn-free-radius spawn-free-radius)]
+    (loop [i 0]
+      (cond (>= i (.-length dark)) false
+            (> (+ (js/Math.pow (- (aget dark i) x) 2) (js/Math.pow (- (aget dark (+ i 1)) y) 2) (js/Math.pow (- (aget dark (+ i 2)) z) 2)) r2) true
+            :else (recur (+ i 3))))))
+
+(defn region-flood
+  "spawn-region's flood from [x y z], depth first and farthest from the start first (a far dark cell in the open is met in
+  some 30 cells, not after the whole 24-block disc): ends at an unseen edge (:open?) or at the first dark cell farther
+  than spawn-free-radius (:partial?: its :dark are those met so far), and puts the region for every cell x y z walks to
+  within it."
+  [p [x y z] subtract kind-at put!]
+  (let [unseen? (reach-room/memo-kind-at (fn [x y z] (nil? (u/seen-block p {:x x :y y :z z}))))
+        ;; a flooded cell is standable: spawnable where its feet and head were seen and it is not under water; seen, so
+        ;; lit-here?'s light read without its sight check
+        dark-at? (fn [cx cy cz]
+                   (and (not (unseen? cx cy cz)) (not (unseen? cx (inc cy) cz)) (not= :water (kind-at cx cy cz))
+                        (let [cell {:x cx :y cy :z cz}
+                              block (sh-sense/block-light-at p cell)]
+                          (not (if block
+                                 (look/lit-light? block (or (sh-sense/sky-light-at p cell) 0) subtract)
+                                 (look/unseen-lit? p cell subtract))))))
+        key (reach/keyer x z)
+        seen (js/Set.)
+        cells #js []
+        stack #js [#js [x y z]]
+        dark #js []
+        far2 (fn [c] (+ (js/Math.pow (- (aget c 0) x) 2) (js/Math.pow (- (aget c 2) z) 2)))
+        _ (.add seen (key x y z))
+        end (loop []
+              (if (zero? (.-length stack))
+                :closed
+                (let [c (.pop stack)
+                      cx (aget c 0) cy (aget c 1) cz (aget c 2)]
+                  (.push cells c)
+                  (cond
+                    (reach-room/unseen-edge? p kind-at c unseen?) :open
+                    (and (dark-at? cx cy cz) (do (.push dark cx cy cz) (far-dark? c x y z))) :far
+                    :else (let [ns (.sort (reach/backward kind-at cx cy cz) (fn [a b] (- (far2 a) (far2 b))))]
+                            (.forEach ns (fn [n] (let [k (key (aget n 0) (aget n 1) (aget n 2))]
+                                                   (when-not (.has seen k) (.add seen k) (.push stack n)))))
+                            (recur))))))
+        region {:open? (= :open end) :dark dark :partial? (= :far end)}]
+    (.forEach (reach-room/walker-sources kind-at cells [x y z] reach/forward)
+              (fn [c] (put! (str "spawn|" subtract "|" (aget c 0) "|" (aget c 1) "|" (aget c 2)) region)))
+    region))
+
+(defn spawn-region
+  "{:open? :dark :partial?}: the cells a walker reaches `at` ({:x :y :z}) from over the blocks the body has seen, doors
+  shut, with no cap (backward steps: a mob on a pit's rim steps down to the body). :open? when one is an unseen-edge?
+  (what lies past it may be dark floor); :dark the flat #js [x y z ..] of its spawnable cells not lit-here? by the sky's
+  darkening subtract, all of them unless :partial? (the flood ended at the first farther than spawn-free-radius from
+  `at`). One flood serves every cell `at` walks to within it (reach-room/walker-sources: the same walkers reach it): kept
+  in *regions*, else per body (reach-room/kept-with); a cell a kept partial region holds no far dark cell for floods
+  anew. A perch no walker steps to (a tree top) is judged by the ground it drops to."
+  [p {:keys [x y z]} subtract]
+  (let [k (str "spawn|" subtract "|" x "|" y "|" z)
+        region (fn [kind-at put!]
+                 (if (zero? (.-length (reach/backward kind-at x y z)))
+                   (let [drops (mapv #(spawn-region p {:x (aget % 0) :y (aget % 1) :z (aget % 2)} subtract) (reach/forward kind-at x y z))]
+                     {:open? (boolean (some :open? drops)) :dark (reduce (fn [^js a d] (.concat a (:dark d))) #js [] drops)
+                      :partial? (boolean (some :partial? drops))})
+                   (region-flood p [x y z] subtract kind-at put!)))
+        fits? (fn [{:keys [open? dark partial?]}] (or open? (not partial?) (far-dark? dark x y z)))]
+    (if-let [^js m *regions*]
+      (let [kind-at (or (.get m "kind") (let [f (reach-room/room-kind-at p (reach-room/shut-kind-at p))] (.set m "kind" f) f))
+            kept (.get m k)]
+        (if (and kept (fits? kept))
+          kept
+          (let [v (region kind-at (fn [k v] (.set m k v)))] (.set m k v) v)))
+      (let [kept (reach-room/kept-with p k region)]
+        (if (fits? kept)
+          kept
+          (reach-room/kept-with p (str "own|" k) region))))))
+
 (defn dark-hall-at?
-  "Whether a mob could spawn on a dark floor farther than spawn-free-radius from `at` ({:x :y :z}) and walk to it (owner Q345, Q388): `at` is dark and
-  the cells a walker reaches over what the body has seen, open ends included, hold such a floor. A small dark tunnel or room is no hall; a big cave is."
-  [p at]
-  (let [r2 (* spawn-free-radius spawn-free-radius)
-        dark-floor? (fn [[x y z]] (let [cell {:x x :y y :z z}] (and (sh-sense/spawnable? p cell) (not (sh-sense/lit-here? p cell)))))
-        far? (fn [[x y z :as c]] (and (> (+ (js/Math.pow (- x (:x at)) 2) (js/Math.pow (- y (:y at)) 2) (js/Math.pow (- z (:z at)) 2)) r2) (dark-floor? c)))]
-    (boolean (and (not (sh-sense/lit-here? p at))
-                  (reach-room/reaches? p at reach-room/wall-cells (fn [c] (far? [(aget c 0) (aget c 1) (aget c 2)])))))))
+  "Whether a mob could spawn on a dark floor farther than spawn-free-radius from `at` ({:x :y :z}) and walk to it, roofed
+  or under the sky (owner Q345, Q45): `at` is dark and its spawn-region is open or holds such a floor. A small dark
+  tunnel, room or walled yard is no hall; a big cave or an open field is. subtract: the sky's darkening to judge by (nil: now)."
+  [p {:keys [x y z] :as at} subtract]
+  (let [subtract (or subtract (sh-sense/sky-subtract-now p))]
+    (boolean (and (not (sh-sense/lit-here? p at subtract))
+                  (let [{:keys [open? dark]} (spawn-region p at subtract)]
+                    (or open? (far-dark? dark x y z)))))))
 
 (defn safe-room-at?
   "Whether a body at `at` would be safe from the night (owner Q345): walled-off-at? under a roof (sh-sense/room-roofed?).

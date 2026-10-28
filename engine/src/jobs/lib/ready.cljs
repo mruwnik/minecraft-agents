@@ -88,7 +88,7 @@
 
 (defn dark-status
   "The exposure of the dark place `to` no wait lights: go-to's spawn chance (spawn-light/chance-at) of the cell the body would
-  stand in there (hall-cell), dark under a roof only in a dark hall; over ::risk-limit :never, lowered by a torch."
+  stand in there (hall-cell), dark only in a dark hall; over ::risk-limit :never, lowered by a torch."
   [c to]
   (let [p (:primitives c)
         at (spawn-light/hall-cell p to)

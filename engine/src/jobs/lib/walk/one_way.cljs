@@ -46,7 +46,7 @@
     (and small? (sh-sense/seen-cell? p (update at :y dec))) 0
     (light-carried? p) (settings/get settings ::lit-chance)
     (lit-in-view? p at) (settings/get settings ::lit-chance)
-    (sh-inside/dark-hall-at? p at) (settings/get settings ::hall-chance)
+    (sh-inside/dark-hall-at? p at nil) (settings/get settings ::hall-chance)
     :else (settings/get settings ::dark-chance)))
 
 (defn climb-out-s
