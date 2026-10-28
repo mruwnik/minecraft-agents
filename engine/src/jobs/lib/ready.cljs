@@ -271,7 +271,7 @@
                       :recheck-after-ms (* 1000 (sh-sense/sky-in p)) :wait-ms (* 1000 (sh-sense/sky-in p))))))
 
 (defn safe-at-by-night
-  "The checker of a job that goes to the place (f c): while the place is dark safe-at it, by day or when body and place are both
+  "The checker of a job that goes to the place (f c): while a mob may spawn at the place (spawn-light/exposure's chance) safe-at it, by day or when body and place are both
   underground not threatened and not in a dark hall (hall-status; an unseen place's light is no reason to wait, and darkness underground does not end
   at dawn; a walk from a tunnel to open ground is exposed). A buried body's unseen place no higher than its feet with a seen solid block over it is
   underground (Q345: a small dark cave counts only reachable hostiles, a hall its spawns); one above them, or with open sky over it (outside a hut), may be open ground. dug?: the job digs to the place, so no seen roof is needed (rock is what a player digs through). hall? false: a dark hall underground is no exposure (a job that leads out of it). A walk that leaves the body's own sealed night shelter (:dug-in) waits :dark till the sky lights, whatever the place: the night job keeps the seal till day."
@@ -286,7 +286,7 @@
                     (let [p (:primitives c)
                           feet (sh-sense/feet p)
                           to (to-of c)]
-                      (and (not (sh-sense/lit-here? p (if (and to (sh-sense/solid-at? p to)) (update to :y inc) (or to feet))))
+                      (and (pos? (:chance (spawn-light/exposure p (or (f c) feet))))
                            (not (and to (sh-sense/buried? p)
                                      (or (sh-sense/buried-at? p to)
                                          (and (not (sh-sense/seen-cell? p to)) (<= (:y to) (:y feet)) (or dug? (roof-over? p to)))))))))

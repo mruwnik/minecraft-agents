@@ -735,6 +735,11 @@
       'jobs.food.fish {:pos [15 64 0]} night-hut :later
       'jobs.food.fish {:pos [6 64 0]} night-hut :ok)))
 
+(deftest a-place-column-is-judged-where-the-body-would-stand-there-not-at-the-feet
+  ;; the hut torch-lit, the ground outside dark under the night sky
+  (with-redefs [sh-sense/block-light-at (fn [_ cell] (if (< (:x cell) 10) 14 0)) sh-sense/sky-light-at (constantly 15)]
+    (is (= :later (bound (safe-of 'jobs.animals.cull) night-hut {:center {:x 15 :z 0}})))))
+
 (deftest farm-and-build-jobs-bind-the-place-of-their-args
   (doseq [job (remove '#{jobs.build.light-area jobs.build.from-plan jobs.farm.irrigate} work-jobs)]
     (are [args world expected] (= expected (lit 0 15 #(bound (safe-of job) world args)))
