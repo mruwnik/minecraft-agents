@@ -100,18 +100,28 @@
 (deftest score-patch-table
   (are [in expected] (= expected (pt/score-patch in))
     {:tops [63 63 63 63] :water-share 0 :sky true :away 0}
-    {:y 63 :level 100 :work 0 :water-share 0 :sky true :away 0 :score 115}
+    {:y 63 :level 100 :work 0 :water-share 0 :sky true :away 0 :score 100}
     {:tops [63 63 63 64] :water-share 1 :sky true :away 8}
-    {:y 63 :level 75 :work 1 :water-share 1 :sky true :away 8 :score 112}
+    {:y 63 :level 75 :work 1 :water-share 1 :sky true :away 8 :score 98}
     {:tops [63 64] :water-share 0 :sky false :away 0}
-    {:y 63 :level 50 :work 1 :water-share 0 :sky false :away 0 :score 49}
+    {:y 63 :level 50 :work 1 :water-share 0 :sky false :away 0 :score 50}
     {:tops (vec (concat (repeat 30 60) (repeat 3 70))) :water-share 0.5 :sky false :away 200}
-    {:y 60 :level 91 :work 30 :water-share 0.5 :sky false :away 200 :score 44}
+    {:y 60 :level 91 :work 30 :water-share 0.5 :sky false :away 200 :score 40}
     {:tops [60 80] :water-share 0 :sky false :away 400}
-    {:y 60 :level 50 :work 20 :water-share 0 :sky false :away 400 :score 0}
+    {:y 60 :level 50 :work 20 :water-share 0 :sky false :away 400 :score -59}
     {:tops [63 63 63 63] :water-share 0 :sky true :away 0 :farmable 0.5}
-    {:y 63 :level 100 :work 0 :water-share 0 :sky true :away 0 :farmable 50 :score 95}
+    {:y 63 :level 100 :work 0 :water-share 0 :sky true :away 0 :farmable 50 :score 80}
     {:tops [63 nil] :water-share 0 :sky true :away 0} nil))
+
+(deftest earthwork-is-priced-uncapped
+  (is (neg? (:score (pt/score-patch {:tops (vec (concat (repeat 30 60) (repeat 30 80))) :water-share 1 :sky true :away 0})))
+      "600 blocks of earthwork cost more than a flat wet patch is worth")
+  (is (< (:score (pt/score-patch {:tops [60 80 100] :water-share 0 :sky true :away 0}))
+         (:score (pt/score-patch {:tops [60 80 80] :water-share 0 :sky true :away 0})))))
+
+(deftest sky-is-reported-not-scored
+  (is (= (:score (pt/score-patch {:tops [63 63] :water-share 0 :sky true :away 0}))
+         (:score (pt/score-patch {:tops [63 63] :water-share 0 :sky false :away 0})))))
 
 (deftest hydrated-table
   (are [ws x y z expected] (= expected (farm/hydrated? ws x y z))
@@ -464,3 +474,16 @@
               r (await (child-outcome eng job small 4))]
           (is (= [{:x 1 :y 63 :z 0} {:x -6 :y 63 :z 0}] (mapv :pos (:spots r))))
           (is (= [100 100] (mapv :farmable (:spots r)))))))))
+
+(deftest a-hillside-too-dear-to-level-is-no-spot
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks (into {} (for [x (range 0 6) z (range 0 6) y (range 60 (+ 63 (* 12 (mod (+ x z) 2))))] [(str x "," y "," z) "dirt"]))
+              {:keys [eng]} (setup {:blocks blocks})
+              r (await (child-outcome eng job {:w 6 :h 6 :range 6} 4))]
+          (is (nil? (:spot r)))
+          (is (= :distance (:why r))))))))
+
+(deftest lacks-text-names-steep-cells
+  (is (re-find #"18 of 36 cells short: 18 off the patch's height" (pt/lacks-text {:w 6 :h 6 :short 18 :steep 18}))))

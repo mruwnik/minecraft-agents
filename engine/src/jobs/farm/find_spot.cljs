@@ -15,8 +15,8 @@
 
 (def doc
   "Pick where a farm patch would go: the footprint of :plan (a plan id), else :w x :h. Ranks patches by flatness first, then water
-  within 4, open sky and nearness to :center. It tries patches nearest-first and stops once ::limit flat open-sky ones are found (with
-  water within 4, when water is in range). A patch of 8 or more is tried at every fourth corner. Reads blocks only: it never digs or marks
+  within 4 and nearness to :center. It tries patches nearest-first and stops once ::limit spots are found that no farther ring can beat
+  (the best score a farther ring could have, less its walk, is no more than the worst kept). A patch of 8 or more is tried at every fourth corner. Reads blocks only: it never digs or marks
   anything. A patch whose seen crop-cell light (block or sky) is under 9 is skipped, unless the body carries torches or coal and sticks to light it (:dark? true on the spot; jobs.farm.grow lights it). A scan reads at most jobs.lib.patch's ::max-reads blocks, then settles for the best spots so far. It never walks to the spot: a
   parent does.
   The search is one jobs.explore.search child with :patch, its walks priced against a 3-day food reserve (cost/food-search-worth): it looks round and scans the area round :center (or the body); while no patch
@@ -31,10 +31,10 @@
   the largest height difference between two neighbouring cells of the patch. A pos is the north-west (minimum x and z) corner at
   ground level of the :w x :h patch, not its centre; :spot is the first spot's pos. :away is the distance from the patch's centre
   to :center (the body's cell without one), not from the corner.
-  Score = level (% of the patch's cells at its commonest ground height y, 0-100) + water-weight x water-share + sky-weight for open sky,
-  less :work (sum of blocks the other cells are off y, at most work-cap), :away / 4 (blocks from :center, at most away-cap)
-  and up to farmable-weight for cells a hoe cannot make farmland of (the weights are jobs.lib.patch settings). A spot with level under 100
-  has cells to level or build up. :farmable is the % of its cells whose ground is farmland or a hoe makes farmland of (dirt, grass, path,
+  Score = level (% of the patch's cells at its commonest ground height y, 0-100) + water-weight x water-share, less :work (sum of blocks
+  the other cells are off y) and :away (blocks from :center) priced in seconds (jobs.lib.cost earthwork-s, walk-cost; ::point-blocks of
+  walking a point), uncapped, and up to farmable-weight for cells a hoe cannot make farmland of (the weights are jobs.lib.patch settings). A spot with level under 100
+  has cells to level or build up; one whose score falls under 0 (earthwork dearer than the patch is worth) is no spot. Open sky is reported in :sky, not scored (crops need light). :farmable is the % of its cells whose ground is farmland or a hoe makes farmland of (dirt, grass, path,
   coarse or rooted dirt).
   A patch is left out when a column of it is unseen, lies under another plan's footprint, or in a zone or claim of another owner (the body's
   own zones are fine); :max-step drops patches with a bigger step.

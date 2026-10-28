@@ -11,6 +11,7 @@
             [jobs.lib.world :as known]
             [jobs.lib.access.zones :as zones]
             [jobs.lib.util :as u]
+            [jobs.lib.cost :as cost]
             [jobs.lib.farm :as farm]))
 
 (a/defargs settings
@@ -18,9 +19,7 @@
    ::read-budget {:default 4096 :doc "blockAt reads after which a round stops scanning (at the end of the row it is in)." :spec (a/int-in 1 nil)}
    ::max-reads {:default 45000 :doc "blockAt reads one attempt may spend on scanning (a cut and restart keeps the count); then it settles for the best spots found." :spec (a/int-in 1 nil)}
    ::water-weight {:default 25 :doc "Score points for a patch wholly within reach of water." :spec (a/num-in 0 nil)}
-   ::sky-weight {:default 15 :doc "Score points for open sky over a patch." :spec (a/num-in 0 nil)}
-   ::work-cap {:default 40 :doc "Most score points the earthwork (blocks the cells are off the commonest height) costs." :spec (a/num-in 0 nil)}
-   ::away-cap {:default 30 :doc "Most score points the distance from the centre costs." :spec (a/num-in 0 nil)}
+   ::point-blocks {:default 4 :doc "Blocks walked (jobs.lib.cost/per-block each) that one score point is worth in seconds: the price of earthwork and of the walk from the centre in points." :spec (a/num-in 0.1 nil)}
    ::farmable-weight {:default 40 :doc "Score points lost when no cell of a patch can be made farmland." :spec (a/num-in 0 nil)}})
 
 (defn commonest
@@ -30,18 +29,29 @@
        (sort-by (fn [[v n]] [(- n) v]))
        ffirst))
 
+(defn points
+  "Score points a number of seconds costs."
+  [seconds]
+  (/ seconds (* (settings/get settings ::point-blocks) (cost/per-block))))
+
+(defn away-points
+  "Score points the walk of away blocks from the centre costs."
+  [away]
+  (points (:cost (cost/walk-cost {:distance away}))))
+
 (defn score-patch
   "Score a patch {:tops [y ...] :water-share 0..1 :sky bool :away dist}, nil
-  when any top is nil."
+  when any top is nil. Earthwork and the walk are priced in seconds (jobs.lib.cost) and not capped: a patch dearer to level than it is
+  worth scores under 0. Open sky is reported, not scored: crops need light, which the scan checks cell by cell."
   [{:keys [tops water-share sky away farmable]}]
   (when-not (some nil? tops)
     (let [y (commonest tops)
           work (reduce + (map #(js/Math.abs (- % y)) tops))
           level (js/Math.round (/ (* 100 (count (filter #(= y %) tops))) (count tops)))
           away (or away 0)
-          score (- (+ level (js/Math.round (* (settings/get settings ::water-weight) water-share)) (if sky (settings/get settings ::sky-weight) 0))
-                   (min (settings/get settings ::work-cap) work)
-                   (min (settings/get settings ::away-cap) (js/Math.round (/ away 4)))
+          score (- (+ level (js/Math.round (* (settings/get settings ::water-weight) water-share)))
+                   (js/Math.round (points (cost/earthwork-s work)))
+                   (js/Math.round (away-points away))
                    (if farmable (js/Math.round (* (settings/get settings ::farmable-weight) (- 1 farmable))) 0))]
       (cond-> {:y y :level level :work work :water-share water-share :sky (boolean sky)
                :away (js/Math.round away) :score score}
@@ -117,10 +127,12 @@
            [x z])
          (group-by (fn [[x z]] (patch-ring a from x z))))))
 
-(defn good?
-  "A spot that needs no earthwork under open sky, and water within 4 when any water is in range: nothing nearer can improve much on it."
-  [wet-needed? {:keys [level sky water-share]}]
-  (and sky (= 100 level) (or (not wet-needed?) (pos? water-share))))
+(defn best-possible
+  "The most score a patch whose centre lies ring cells from the centre can have: level 100, all the water share when water is in
+  range, no earthwork, every cell farmable, less the walk to its ring."
+  [wet-needed? ring]
+  (- (+ 100 (if wet-needed? (settings/get settings ::water-weight) 0))
+     (js/Math.round (away-points ring))))
 
 (defn nearest-miss
   "Of misses (nils skipped), the one with the fewest cells short, then the nearest."
@@ -171,9 +183,13 @@
                        (when s
                          (let [step (max-step tops h)]
                            (when (or (nil? limit-step) (<= step limit-step))
-                             (let [dark? (not (every? true? (map (fn [[cx cz] t] (lit? cx t cz)) cols tops)))]
-                               (cond-> (assoc s :step step :w w :h h :pos {:x x :y (:y s) :z z} :dark? dark?)
-                                 dark? (update :score - dark-penalty)))))))))))]
+                             (let [dark? (not (every? true? (map (fn [[cx cz] t] (lit? cx t cz)) cols tops)))
+                                   spot (cond-> (assoc s :step step :w w :h h :pos {:x x :y (:y s) :z z} :dark? dark?)
+                                          dark? (update :score - dark-penalty))]
+                               (if (neg? (:score spot))
+                                 {:miss true :pos (:pos spot) :w w :h h :short (count (remove #(= (:y s) %) tops)) :steep (count (remove #(= (:y s) %) tops))
+                                  :bare [] :dark 0 :foreign 0 :away (:away spot)}
+                                 spot))))))))))]
     (loop [rs (drop-while #(< % next-ring) rings) found found miss miss]
       (if (empty? rs)
         {:next-ring ##Inf :found found :miss miss :done true :reads @reads}
@@ -185,7 +201,7 @@
                          vec)
               miss (nearest-miss (cons miss misses))]
           (cond
-            (and (= limit (count found)) (every? (partial good? (seq waters)) found)) {:next-ring (inc r) :found found :miss miss :done true :reads @reads}
+            (and (= limit (count found)) (<= (best-possible (seq waters) (inc r)) (:score (peek found)))) {:next-ring (inc r) :found found :miss miss :done true :reads @reads}
             (>= @reads budget) {:next-ring (inc r) :found found :miss miss :done false :reads @reads :cache {:tops @tops :skies @skies}}
             :else (recur (rest rs) found miss)))))))
 
@@ -207,10 +223,10 @@
 
 (defn lacks-text
   "What a miss of lacks lacks, e.g. \"40 of 256 cells short: 30 unseen, 6 water/lava/ice, 4 dark\"."
-  [{:keys [w h short unseen no-floor dark foreign]}]
+  [{:keys [w h short unseen no-floor dark foreign steep]}]
   (str short " of " (* w h) " cells short: "
        (str/join ", " (keep (fn [[n what]] (when (pos? n) (str n " " what)))
-                            [[unseen "unseen"] [no-floor "water/lava/ice"] [dark "too dark for crops"] [foreign "another's plan, zone or claim"]]))))
+                            [[unseen "unseen"] [no-floor "water/lava/ice"] [dark "too dark for crops"] [foreign "another's plan, zone or claim"] [steep "off the patch's height, dearer to level than the patch is worth"]]))))
 
 (defn scan-step!
   "One bounded slice of a scan of the patch args a round from (the state is kept in memory, so a cut resumes it, and its centre stays

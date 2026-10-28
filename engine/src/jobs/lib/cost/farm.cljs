@@ -5,6 +5,7 @@
             [engine.game :as game]
             [engine.settings :as settings]
             [jobs.lib.cost.food :as food]
+            [jobs.lib.cost.table :as table]
             [jobs.lib.cost.value :as value]
             [jobs.lib.crops :as crops]))
 
@@ -76,3 +77,9 @@
   [step units]
   (let [{:keys [fixed-s per-unit-s]} (get (settings/get settings ::field-work) step)]
     (if (pos? units) (+ fixed-s (* per-unit-s units)) 0)))
+
+(defn earthwork-s
+  "Seconds levelling a patch whose cells are `blocks` off its commonest height in all: each block dug or filled, dirt's dig time
+  and a step to reach it."
+  [blocks]
+  (* blocks (+ (table/dig-cost "dirt") (value/per-block))))
