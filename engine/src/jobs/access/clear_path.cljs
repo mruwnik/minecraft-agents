@@ -15,6 +15,7 @@
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.reach :as reach]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [jobs.lib.escape :as escape]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
@@ -27,6 +28,9 @@
     row and room for the body beyond it (jobs.lib.escape/door). A cell it has not seen is rock (one not loaded ends :no-door); a far side it cannot
     see is guessed: once the cells before it are dug it steps in, looks, and plans on from there with what it sees,
     digging on past the max-thick while each dug row shows more wall; a dead end walks back to where it began.
+  - With :max-dig-s, each plan is priced before it is dug (jobs.lib.cost/dig-cells-s with the best carried tool or the hand,
+    a far side it cannot see priced as two more cells of rock): one that would take the dug cells and it over :max-dig-s
+    walks back to where it began and ends :too-dear.
   - Never digs a door, gate, trapdoor, bed, container, sign or an unbreakable block.
   - Each cell is a jobs.blocks.dig child (zones, claims, hazards and tools are its rules). It picks up the drop
     (:collect) when there is room for it, so the block can be put back; with no room it digs on and leaves it.
@@ -36,7 +40,7 @@
   cell, ending at the far side.
   :bad-args and :no-door are conditions, checked at the start. Ends :done, or with a cause {:reason r ...}: :impossible for :bad-args (needs :heading), :condition-failed for
   :no-door (no such wall here), :protected (a block it never digs), :footprint (a cell of a plan this body made,
-  unless the spare-own-builds setting is false) and :dig-waits (the dig child's wait or decline, its ending the :because); :nothing-possible for
+  unless the spare-own-builds setting is false) and :dig-waits (the dig child's wait or decline, its ending the :because); :too-dear (the price over :max-dig-s); :nothing-possible for
   :dig-failed (its ending the :because), :refills (a cell dug stair.limits/max-digs times, e.g. sand falling in) and :step-failed
   (the walk through did not arrive). Data {:dug [{:cell :block}] :at [x y z] :through [x y z]}.
   It does not put the blocks back: jobs.movement.go-to does that once through.
@@ -46,6 +50,7 @@
 (a/defargs args
   {:heading {:doc ":north :east :south or :west" :spec #{:north :east :south :west} :default nil}
    :ignore-zones? :shared
+   :max-dig-s {:doc "seconds of digging the whole door may take (see doc); nil: no bound" :spec (a/num-in 0 nil) :default nil}
    :need-drop {:doc "false: dig a block no carried tool harvests bare-handed (slow, the drop is lost) without fetching; true: never; unset: bare-handed when no pickaxe can be fetched" :spec (a/or-of boolean? #{:auto}) :default :auto}})
 
 (def headings {:north [0 -1] :south [0 1] :east [1 0] :west [-1 0]})
@@ -99,7 +104,7 @@
 
 (def facts
   "The stops that name a wall or a rule that bars the door (condition-failed); the others are attempts that failed."
-  #{:no-door :protected :footprint :dig-waits})
+  #{:no-door :protected :footprint :dig-waits :too-dear})
 
 (defn result-of
   "The data of the door now: {:dug :at} and the :through cell once planned, plus detail."
@@ -132,13 +137,28 @@
       (ctx/end c (if (facts reason) :condition-failed :nothing-possible)
                {:reason reason :hint (str "clear-path stopped: " (name reason) (some->> (:cell detail) pr-str (str " at ")))} data))))
 
+(defn too-dear
+  "Why digging plan {:cells :unseen} on top of the cells dug so far would take over :max-dig-s seconds, else nil. A
+  far side not seen (:unseen) is priced as two more cells of rock: the worse case."
+  [c {:keys [cells unseen]}]
+  (when-let [most (:max-dig-s (:args c))]
+    (let [p (:primitives c)
+          block-at (escape/block-at-of p)
+          blocks (concat (map :block (:dug (ctx/mem c))) (map block-at cells) (when unseen [b/hidden-guess b/hidden-guess]))
+          s (cost/dig-cells-s (map #(tools/clear-ms p %) blocks))]
+      (when (> s most)
+        (str "digging on would take " (js/Math.round s) " s, over the " (js/Math.round most) " s the door may take")))))
+
 (defn ^:async plan! [c]
   (let [dir (headings (:heading (:args c)))
-        p (:primitives c)]
-    (if-let [{:keys [cells through unseen]} (escape/door (escape/block-at-of p) (escape/unseen-of p) (reach/standing-vec (:primitives c)) dir (max-thick))]
-      (do (ctx/update-mem! c assoc :cells cells :through through :unseen unseen :from (reach/standing-vec (:primitives c)) :start (reach/standing-vec (:primitives c)) :dug [])
-          :again)
-      (finish! c :no-door {:why (no-door-why (:heading (:args c)) p)}))))
+        p (:primitives c)
+        gap (escape/door (escape/block-at-of p) (escape/unseen-of p) (reach/standing-vec (:primitives c)) dir (max-thick))]
+    (cond
+      (nil? gap) (finish! c :no-door {:why (no-door-why (:heading (:args c)) p)})
+      (too-dear c gap) (finish! c :too-dear {:why (too-dear c gap)})
+      :else (let [{:keys [cells through unseen]} gap]
+              (ctx/update-mem! c assoc :cells cells :through through :unseen unseen :from (reach/standing-vec (:primitives c)) :start (reach/standing-vec (:primitives c)) :dug [])
+              :again))))
 
 (defn room-for-drop?
   "A free slot, or a carried stack of what block drops (b/drops-of) under 64."
@@ -257,12 +277,20 @@
             (ctx/update-mem! c #(-> % (assoc :through side) (dissoc :unseen)))
             :again)))))
 
+(defn ^:async plan-on!
+  "Plan the door on with gap from from: :again; when it is too dear, walk back to where the door was begun (step-out!) and end :too-dear."
+  [c gap from]
+  (if-let [why (too-dear c gap)]
+    (or (await (step-out! c)) (finish! c :too-dear {:why why}))
+    (do (ctx/update-mem! c assoc :cells (:cells gap) :through (:through gap) :unseen (:unseen gap) :from from)
+        :again)))
+
 (defn ^:async replan!
   "The far side was a guess (:unseen) and the cells before it are dug: step into the deepest dug cell, so the row is
   in sight, look at that row's unseen cells (memory :looked-at), then plan on from it with what the body sees
   (escape/door-from); a row still unseen is taken as guessed. A guessed row that is wall, with no opening beside
   the dug cells (side-door!), is dug on: the door is planned again from the last dug row, at most max-thick on from
-  there, since each dug row shows the next.
+  there, since each dug row shows the next. Each plan on is priced (plan-on!).
   :again, :continue (the walk waits), or the :no-door ending."
   [c]
   (let [{:keys [through from]} (ctx/mem c)
@@ -281,16 +309,15 @@
       (let [block-at (escape/block-at-of p)
             unseen? (escape/unseen-of p)
             last-row (escape/ahead from dir (dec k))
-            gap (escape/door-from block-at unseen? from dir (max-thick) k)
-            plan-on! (fn [gap from] (ctx/update-mem! c assoc :cells (:cells gap) :through (:through gap) :unseen (:unseen gap) :from from) :again)]
+            gap (escape/door-from block-at unseen? from dir (max-thick) k)]
         (cond
           (nil? gap) (or (await (side-door! c dir))
-                         (some-> (escape/door-from block-at unseen? last-row dir (max-thick) 1) (plan-on! last-row))
+                         (when-let [on (escape/door-from block-at unseen? last-row dir (max-thick) 1)] (await (plan-on! c on last-row)))
                          (await (step-out! c))
                          (finish! c :no-door {:why (str "the wall goes on past " (pr-str through) ": thicker than "
                                                         (max-thick) " or no floor beyond")}))
           (= through (:through gap)) (do (ctx/update-mem! c dissoc :unseen) :again)
-          :else (plan-on! gap from))))))
+          :else (await (plan-on! c gap from)))))))
 
 (defn ^:async start-cell!
   "Look at the first cell not seen open, then say what to do with it: {:digging d} (kept in memory), :open (the look

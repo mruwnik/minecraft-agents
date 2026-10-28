@@ -8,6 +8,8 @@
             [engine.registry :as registry]
             [engine.test-util :as tu :refer [box]]
             [engine.triggers :as triggers]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.tools :as tools]
             [jobs.lib.world-files :as ew]
             [plan.shape :as shape]))
 
@@ -132,6 +134,32 @@
               r (await (run-door thick nil))]
           (is (= [:done [5 64 0]] [(:status r) (:through r)]) (pr-str r))
           (is (= 8 (count (:dug r))) "four thick, past the max-thick of 3 it could not see"))))))
+
+(deftest digging-on-past-what-it-saw-stops-when-the-next-plan-costs-over-max-dig-s
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [thick (assoc wall :sight 3 :inventory [{:name "wooden_pickaxe" :count 1}]
+                           :blocks (merge (box -2 63 -2 40 63 2 "stone") (box 1 64 -1 30 65 1 "stone")))
+              cell-s (cost/dig-cells-s [(tools/clear-ms (tu/fake (dissoc thick :sight)) "stone")])
+              r (await (run-door thick nil {:heading :east :max-dig-s (* 10 cell-s)}))]
+          (is (= [:stopped :too-dear] [(:status r) (:reason r)]) (pr-str r))
+          (is (= 6 (count (:dug r))) "three rows priced 8 cells (the far side it could not see as rock); the next plan, 14, is over")
+          (is (= [0 64 0] (:at r)) "it walked back to where it began"))))))
+
+(deftest a-walk-back-that-fails-still-ends-the-door-where-the-body-stands
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [thick (assoc wall :sight 3 :inventory [{:name "wooden_pickaxe" :count 1}]
+                           :blocks (merge (box -2 63 -2 40 63 2 "stone") (box 1 64 -1 30 65 1 "stone")))
+              cell-s (cost/dig-cells-s [(tools/clear-ms (tu/fake (dissoc thick :sight)) "stone")])
+              walk (get-in registry/jobs ['jobs.movement.go-to :round])
+              no-way-back (fn ^:async no-way-back-walk [c] (if (= [0 64 0] (:pos (:args c)))
+                                            (ctx/end c :nothing-possible {:reason :unreachable} {:arrived false})
+                                            (await (walk c))))
+              r (await (run-door thick nil {:heading :east :max-dig-s (* 10 cell-s)} {'jobs.movement.go-to no-way-back}))]
+          (is (= [:stopped :too-dear [3 64 0]] [(:status r) (:reason r) (:at r)]) (pr-str r)))))))
 
 (deftest the-step-through-is-a-go-to-child
   (async done

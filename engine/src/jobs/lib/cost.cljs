@@ -230,6 +230,11 @@
 
 (defn walk-step-s "Seconds one walked block takes." [] (:cost (value/walk-cost {:distance 1})))
 
+(defn dig-cells-s
+  "Seconds a row of cells dug and walked into takes: clear-ms, the ms each cell's block takes to break, plus a walked step each."
+  [clear-ms]
+  (transduce (map #(+ (/ % 1000) (walk-step-s))) + 0 clear-ms))
+
 (defn unseen-step-s
   "Seconds one step into a cell not seen takes on top: unseen-route-s of one such step at the share of the world not seen."
   [share]

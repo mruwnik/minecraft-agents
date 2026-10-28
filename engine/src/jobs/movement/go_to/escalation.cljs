@@ -10,7 +10,7 @@
     search ran out of land (:goal-enclosed or :goal-cut-off) or of nodes (:budget) within the budget-near setting of the goal, any body whose only way needs a sprint it lacks the food for (:abilities :corner-jump or :gap-sprint), or any body whose last 3 walks failed at the walker (stuck, off-plan, steer failed, no nearer; escalation/walker-fault?) with no door it can open beside its room (one with room for the body behind it; a trunk over that cell makes it no way out, and the dig route cuts the tree's logs: escape/tree-log?), makes a way instead of giving up, one child job
     each (jobs.lib.escape/choose, over the ways the call allows), at most 3 in a row that start no nearer the goal than one before (escalation/count-escalation; a dig route is taken past them): standing on a stair of its own under the goal, that stair cut again when something shuts it (escalation/own-stair: a cap it put in the stair is dug, :why :own-way-blocked); else, shut in under a higher goal, the cheapest climb there (climb-route: one dig route of digs, laid stair floors and pillar blocks, never through a floor of its own stairs), its stairs, pillars and dig routes run back to back with no walk between; else jobs.access.pillar up out of a pit when it carries enough blocks; else
     jobs.access.clear-path through a wall up to 3 thick toward the goal (into a walled-in goal no door or stair reaches:
-    the fewest cells dug down or across to it (to any stand within :range, the goal cell never dug when :range >= 1), escalation/dig-way, tried first for a shut-in body, none that takes over max-route-s seconds to dig with the pickaxe it carries or would fetch; for a shut-in body with no stair, pillar or door out, a dig down to the seen stand beyond its land's edge nearest the goal, else a walk to that edge to look over it (escalate-choose/frontier-way); a gap jump the walker refuses with no block to fill it counts as a walled-in goal (escalate-choose/gap-walled?): a step up over a one-cell gap cuts the riser beyond it (gap-dig), else the body digs toward the goal; a leg of it (escalate-choose/dig-leg) is tried first when the search of a body under ground ran out of land over rock it guessed (jobs.lib.walk.world/rock-guess?) and the goal is no higher than it is across); else jobs.access.stair up out of a pit or
+    the fewest cells dug down or across to it (to a stand within :range, under :see one that sees it), escalation/dig-way, tried first for a shut-in body, none that takes over max-route-s seconds to dig with the pickaxe it carries or would fetch; for a shut-in body with no stair, pillar or door out, a dig down to the seen stand beyond its land's edge nearest the goal, else a walk to that edge to look over it (escalate-choose/frontier-way); a gap jump the walker refuses with no block to fill it counts as a walled-in goal (escalate-choose/gap-walled?): a step up over a one-cell gap cuts the riser beyond it (gap-dig), else the body digs toward the goal; a leg of it (escalate-choose/dig-leg) is tried first when the search of a body under ground ran out of land over rock it guessed (jobs.lib.walk.world/rock-guess?) and the goal is no higher than it is across); else jobs.access.stair up out of a pit or
     toward a higher goal (as far as the goal is above, at most 8; a stair that leaves the body shut in under the goal is
     followed by the next escalation at once); else a walk to a wall first; when no way can be made where the body stands, a walk to a cell it can stand on from which one can that leads toward the goal (escape/way-spot: a body in its hut beside the doorway, whose walls it spares); each such cell the cheapest walk there and on to the goal (escape/priced-spot). Each emits go-to.escalated {:step :why :n}. Once
     through, it puts back what clear-path or stair dug in another's zone, claim or plan (with :ignore-zones?;
@@ -42,7 +42,7 @@
             [jobs.movement.go-to.climb :as climb]
             [jobs.movement.go-to.climb-route :as climb-route]
             [jobs.movement.go-to.route-ways :as route-ways]
-            [jobs.movement.go-to.escalate-choose :refer [cheaper-fill climb-on? dive-climb-on? dive? escalate-reason? escalate? fetch-tool? gap-fill
+            [jobs.movement.go-to.escalate-choose :refer [call-budget-s range-opts cheaper-fill climb-on? dive-climb-on? dive? escalate-reason? escalate? fetch-tool? gap-fill
                                                          goal-way dig-leg dig-way drop-fill price frontier-way gap-dig gap-walled? goal-lava? leg-ends goal-walled? own-stair route-cells shelter-exit? skips sprint-only?
                                                          route-owner route-slice routes-searching! searching? searching-ends keep-routes! forget-routes! search-opts]]
             [jobs.movement.go-to.holes :refer [forget-dug-own! hole-tag may-dig-fn note-holes! own-cut-fn own-fn own-holes own-placed-fn planned-cells with-own-pen]]
@@ -273,8 +273,7 @@
         goal (stand-goal c (mapv #(js/Math.floor (% pos)) [:x :y :z]))
         slice (route-slice (route-owner c))
         shut? (delay (escape/walk-enclosed? c))
-        opts (assoc (way-opts c feet (fetch-tool? (:primitives c) (:doors (:args c)) shut?) slice)
-                    :range (:range (:args c) 1) :near (mapv #(js/Math.floor (% pos)) [:x :y :z]))
+        opts (merge (way-opts c feet (fetch-tool? (:primitives c) (:doors (:args c)) shut?) slice) (range-opts c pos))
         gap? (gap-walled? c result (skips c))
         into? (or (goal-walled? c result shut?) (and gap? (not @shut?)))
         ;; a goal over or ringed by lava is refused: no dig, in or out, makes it acceptable
@@ -479,12 +478,12 @@
 (defn escalation-stopped!
   "The child changed something before it stopped: walk again (escalated!) after a go-to.escalation-stopped warn. On a
   climb away from a dive (dive-climb-on?) the next stair takes another heading instead; a door that found a dead end
-  (:no-door, its cut put back) is not dug again."
+  or grew too dear (:no-door, :too-dear; its cut put back) is not dug again."
   [c pos {:keys [step reason] :as detail}]
   (ctx/emit! c :go-to.escalation-stopped :warn (assoc detail :text (str (name step) " stopped part way: "
                                                                         (some-> (:reason detail) name)
                                                                         (if (dive-climb-on? c pos) "; climbing on another way" "; walking again"))))
-  (when (or (dive-climb-on? c pos) (= :no-door reason))
+  (when (or (dive-climb-on? c pos) (#{:no-door :too-dear} reason))
     (ctx/update-mem! c update :skipped-steps (fnil conj #{}) (skip-key (:escalation (ctx/mem c)))))
   (escalated! c pos detail false))
 
@@ -543,11 +542,12 @@
 
 (defn ^:async escalation-child-round!
   "One call of the escalation child (ctx/call): the whole pillar, stair or door. After it, every planned cell now dug
-  is in the ledger (note-holes!). A child that ends other than done gives up, with its cause, unless it got part of
-  the way."
+  is in the ledger (note-holes!). A door digs at most what the call may spend (call-budget-s). A child that ends other
+  than done gives up, with its cause, unless it got part of the way."
   [c pos]
   (let [{:keys [step] :as e} (:escalation (ctx/mem c))
         [job args] (escalation-job e (hole-tag c) (boolean (or (:exit-zone e) (:ignore-zones? (:args c)) (zone-exit? c (end/feet-cell c)))) (boolean (:by-hand (ctx/mem c))) (fetch-tool? c))
+        args (cond-> args (= :clear-path step) (assoc :max-dig-s (call-budget-s c)))
         _ (await (torch/return-torch! c))
         r (await (ctx/call c :escalation job (cond-> (update args :checks #(some->> % (ready/unforced c))) (= :approach step) (->> (ready/forage-walk c)))))]
     (let [dug (concat (:planned (ctx/mem c)) (when (not= :continue r) (map #(assoc % :dug true) (:dug (:data r)))))]
@@ -632,9 +632,9 @@
             goal (stand-goal c (mapv #(js/Math.floor (% pos)) [:x :y :z]))
             plan (fn [floors-unseen-ok?]
                    (route-cells (:primitives c) feet goal (may-dig-fn c (own-cut? c)) (own-dig-fn c) floors-unseen-ok? (fetch-tool? c)
-                                (search-opts {:stands (ledger/stair-stands c) :slice slice :spent (:spent-routes m) :own-s (own-cut-fn c) :own-cut (own-cut? c)
-                                              :range (:range (:args c) 1) :near (mapv #(js/Math.floor (% pos)) [:x :y :z])
-                                              :guess-risk (guess-risk c) :worth-s (:fallback-s (:replan-budget m))})))
+                                (search-opts (merge {:stands (ledger/stair-stands c) :slice slice :spent (:spent-routes m) :own-s (own-cut-fn c) :own-cut (own-cut? c)
+                                                     :guess-risk (guess-risk c) :worth-s (:fallback-s (:replan-budget m))}
+                                                    (range-opts c pos)))))
             cells (when in-range? (plan false))
             loosened (when (and in-range? (nil? cells)) (plan true))
             walk-on! (fn [] (escalated! c pos (:escalation m) true))]

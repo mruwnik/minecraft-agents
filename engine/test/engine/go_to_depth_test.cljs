@@ -2,6 +2,7 @@
   "go-to's :y-margin: blocks past the lowest and highest of body and goal that a walk's search may reach, so a route that
   dips far below both ends (through deep caves) is refused instead of walked; absent: the walks' wide box."
   (:require [cljs.test :refer [deftest is are async]]
+            [jobs.lib.aim :as aim]
             [jobs.lib.cost :as cost]
             [jobs.movement.go-to.search-bound :as search-bound]
             [engine.core :as core]
@@ -603,3 +604,15 @@
             (is (true? (:arrived @out)) (pr-str @out))
             (is (seq (gt/events-of s :go-to.escalated)) "a way was dug")
             (is (not-any? #{goal} (dug-cells p)) "the goal is worked from within range, never dug")))))))
+
+(deftest a-dig-route-under-see-ends-on-a-stand-that-sees-the-goal
+  ;; seen rock hides the goal from the nearest stands within :range: the route digs on to one that sees it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (climb! {:blocks near-pocket :self {:pos {:x 1.5 :y 60 :z 0.5}} :light [0 15]
+                                              :seen [[-4 50 -4 20 70 4]] :inventory [{:name "stone_pickaxe" :count 1}]}
+                                             {:pos [9 60 0] :range 3 :see true}))
+              [x y z] (mapv js/Math.floor (gt/at p))]
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is ((aim/stand-sees-fn p [9 60 0]) x y z) (pr-str [x y z])))))))
