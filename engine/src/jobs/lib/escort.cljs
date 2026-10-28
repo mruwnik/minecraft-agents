@@ -157,6 +157,42 @@
       (and step (< 1 (u/flat-dist me {:x (:px step) :z (:pz step)}))) {:leg (select-keys step [:x :y :z])}
       :else {})))
 
+(defn leg-reach
+  "Blocks a leg the animal keeps up with may cover when it starts gap behind: the rest of follow-reach, at least leg-steps."
+  [gap]
+  (max (leg-steps) (- (follow-reach) gap)))
+
+(defn ring-cells
+  "The cells the body can stand in, as it has seen them, r flat blocks from me in 16 headings, each its column's nearest
+  to me's height (2 up to 3 down)."
+  [p me r]
+  (let [kind-at (reach/seen-lookup p)
+        [x0 y0 z0] (mapv js/Math.floor [(:x me) (:y me) (:z me)])]
+    (vec (distinct
+          (for [i (range 16)
+                :let [a (/ (* i js/Math.PI) 8)
+                      x (js/Math.floor (+ x0 0.5 (* r (js/Math.cos a))))
+                      z (js/Math.floor (+ z0 0.5 (* r (js/Math.sin a))))
+                      y (some #(when (reach/standable-cell? p {:x x :y % :z z} kind-at) %) [y0 (inc y0) (dec y0) (+ y0 2) (- y0 2) (- y0 3)])]
+                :when y]
+            {:x x :y y :z z})))))
+
+(defn ^:async quoted-leg!
+  "When no leg was planned toward a target farther than a leg (leg-reach): the ring cell (ring-cells) whose go-to quote
+  plus the least walk from it on to target costs least (walk-pick/best!), nil when none is priced or the target is that
+  near (the caller walks the whole way)."
+  [c target gap]
+  (let [me (u/self-pos c)
+        r (leg-reach gap)
+        goal {:pos (:pos (places/parse-pos target)) :range 0}
+        on #(pick/walk-s % goal)]
+    (when (< r (u/flat-dist me (:pos goal)))
+      (let [args (fn [cell] {:pos cell :range 1 :doors :leave-open :ways #{:walk :clear-seal}})]
+        (:pick (await (pick/best! c (ring-cells (:primitives c) me r)
+                                  {:bound #(+ (pick/walk-s me (args %)) (on %))
+                                   :args args
+                                   :price (fn [cell q] (+ (pick/quoted-s c q) (on cell)))})))))))
+
 (defn ^:async leg-target
   "The :leg of leg-plan, nil when none."
   [c target]
@@ -283,8 +319,8 @@
   round before the next leg. Answer :arrived, :failed (a leg did not arrive),
   :waiting (a leg's child is waiting on the world: the job yields), :catching-up (the caller waits for the animal) or
   {:problem :lost|:lead-broke|:animal-stalled}. :searching: the plan search for the next leg is still
-  going on (nothing was walked; the caller calls again), at most max-search-rounds calls in a row; then go-to walks the
-  whole way (its own search and prices), and the animal is looked at when it ends."
+  going on (nothing was walked; the caller calls again), at most max-search-rounds calls in a row; with no leg planned
+  then, a leg to the ring cell go-to's quote prices best toward target (quoted-leg!), else go-to walks the whole way."
   [c slot target range gap]
   (let [pre (when (:catching-up (ctx/mem c)) (escort-problem c gap))]
     (cond
@@ -296,6 +332,7 @@
         (loop []
           (let [{:keys [leg searching]} (await (leg-plan c target))
                 searching (and searching (<= (inc (:search-rounds (ctx/mem c) 0)) (max-search-rounds)))
+                leg (or leg (when-not searching (await (quoted-leg! c target gap))))
                 r (when-not searching
                     (await (child/call-walk* c slot
                                              {:pos (or leg target) :range (if leg 1 range) :doors :leave-open :ways #{:walk :clear-seal} :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]

@@ -14,6 +14,7 @@
             [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.lib.escort :as escort]
+            [jobs.lib.util :as u]
             [jobs.animals.lure-to :as lure-to]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.search :as wsearch]
@@ -625,17 +626,19 @@
               (is (< 10 (count (tu/walked-to (:eng s)))) (pr-str (tu/walked-to (:eng s)))))
             (finally (set! wsearch/round-budget budget))))))))
 
-(deftest a-target-whose-leg-search-finds-nothing-is-walked-to-by-go-to-not-a-blind-leg
+(deftest a-target-whose-leg-search-finds-nothing-is-walked-to-in-quoted-legs-the-cow-keeps-up-with
+  ;; card ac986eff: the whole way in one walk leaves the cow (it follows within 10 blocks) behind
   (async done
     (tu/run-async done
       (fn ^:async t []
         (with-redefs [escort/leg-plan (fn [_ _] (js/Promise.resolve {:searching true}))
                       escort/max-search-rounds (constantly 1)]
-          (let [s (await (scenario {:pos {:x 38 :y 64 :z 0}} {:floor [-30 -30 40 30] :inventory wheat :entities [(cow 1 2)]} 10))
+          (let [s (await (scenario {:pos {:x 38 :y 64 :z 0}} {:floor [-30 -30 40 30] :inventory wheat :entities [(cow 1 2)]} 200))
                 legs (tu/walked-to (:eng s))]
-            (is (not= :unreachable (:reason (done-event s))) "a search that finds nothing is not unreachable")
-            (is (some #(= 38 (:x %)) legs) (pr-str legs))
-            (is (not-any? #(< 2 (:x %) 38) legs) "no walk goes to a point picked on the straight line")))))))
+            (is (= :arrived (:reason (done-event s))) (pr-str (done-event s)))
+            (is (< 30 (first (:pos (cow-of s 1)))) "the cow came along")
+            (is (every? (fn [[a b]] (<= (u/flat-dist a b) (+ 2 (escort/leg-reach (escort/lure-gap))))) (partition 2 1 (cons {:x 0 :z 0} legs)))
+                "each walk is a leg the cow keeps up with")))))))
 
 (deftest the-leg-plan-may-open-gates-as-go-to-plans-them
   (async done
