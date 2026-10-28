@@ -37,12 +37,12 @@
             {:event {:source :job :kind :blocks.dig.sealed} :within-s 120 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:body-near [19.5 2 16.5] 1.5]]}
-  ;; card d2458f1a: a goal that is stone under stone (a block in a rock wall) with :range 3 is worked from a stand dug within range, the goal itself never dug
+  ;; card d2458f1a: a goal in the pocket's wall with stone above it (ore in a cave wall), :range 2: the dig route ends on a stand within range, the goal itself never dug
   {:name "solid-goal-in-the-rock-is-reached-within-range-not-dug"
-   :act [[:job (jobs.movement.go-to {:pos #at [22 1 16] :range 3 :unknown false})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [20 3 16] :range 2 :unknown false})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
-   :after [[:block [22 1 16] "stone"] [:body-near [22.5 1 16.5] 3.6]]}
+   :after [[:block [20 3 16] "stone"] [:body-near [20.5 3 16.5] 2.6]]}
   ;; should fail: the pocket's floor is lava, so its goal cell is no place to stand: go-to refuses at once (goal-not-standable), digs nothing and never steps in
   {:name "pocket-over-lava-is-refused"
    :blocks [[:set [19 1 16] "lava"]]
