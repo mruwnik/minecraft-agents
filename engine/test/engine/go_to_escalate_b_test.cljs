@@ -742,8 +742,8 @@
 
 (deftest go-to-out-of-its-own-room-in-undiggable-rock-stops-cutting-once-the-cuts-show-no-way
   ;; each guess beside a seen light that a look finds a light is evidence: the next route's guesses there are priced
-  ;; over the chance they are rock, past the way without a dig route it is none; the clock moves, as the stair's
-  ;; settle waits on it, so the call ends
+  ;; over the chance they are rock, past the way without a dig route it is none; a stair or door over guesses is priced
+  ;; so too, against the goal's worth; the clock moves, so the call ends
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -756,10 +756,10 @@
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [14 62 12] :range 0})))]
           (core/submit! eng '(recording-parent) {})
           (await (gt/tick-out! eng 400 #(do (swap! clock + 500) (step))))
-          (is (<= (count (distinct (map :cell (events-of seen :go-to.dug-own-build)))) 6) "a few own cells cut, not a column per guess")
-          (is (= 1 (count (filter #(= :dig-route (:step %)) (events-of seen :go-to.escalated)))) "the dig route is not chosen again")
-          (is (= [false :unreachable] ((juxt :arrived :reason) @out)) "the call ends, a failure")
-          (is (some? (:why @out)) "with its reason")
+          (is (<= (count (events-of seen :go-to.dug-own-build)) 4) "two columns of its own wall cut, not a column per guess")
+          (is (= [:dig-route] (map :step (events-of seen :go-to.escalated)))
+              "the dig route is not chosen again, nor a stair over guesses past the goal's worth once the looks showed glowstone")
+          (is (= [false :unreachable :past-worth] ((juxt :arrived :reason (comp :why :escalation)) @out)) "the call ends, a failure, with its reason")
           (is (some (comp false? :ok?) (events-of seen :go-to.guess-look)) "a guess look that showed glowstone is told")
           (is (empty? (for [x (range 4 21) y (range 60 70) z (range 4 17)
                             :when (not (and (<= 8 x 12) (<= 61 y 65) (<= 8 z 12)))

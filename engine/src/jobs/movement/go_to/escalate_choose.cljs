@@ -460,6 +460,27 @@
                                 (and guess (beside-undiggable? sensed block-at own? cell)) (assoc :beside true))))
                  (:dig a)))))))
 
+(defn way-guesses
+  "[{:cell :beside}]: the cells stair or door e from feet cuts that the body has not sensed (read as rock), :beside
+  when beside-undiggable?."
+  [p {:keys [step heading steps]} feet own?]
+  (let [block-at (escape/block-at-of p)
+        unseen? (escape/unseen-of p)
+        sensed #(u/sensed p (zipmap [:x :y :z] %))
+        cells (case step
+                :stair (escape/stair-cuts feet (escape/heading-dirs heading) steps)
+                :clear-path (:cells (escape/door block-at unseen? feet (escape/heading-dirs heading)))
+                nil)]
+    (vec (for [cell cells :when (unseen? cell)] {:cell cell :beside (beside-undiggable? sensed block-at own? cell)}))))
+
+(defn past-worth?
+  "Whether a way priced price-s (its own cells' put-backs too) is dearer than worth-s once priced over the chance each
+  of its guesses is diggable (1 - its class's risk in guess-risk {:beside :apart}), as route-answer prices a dig route:
+  only once a look has shown a guess wrong (some risk above 0)."
+  [price-s guesses {:keys [beside apart] :as guess-risk} worth-s]
+  (and (some pos? (vals guess-risk))
+       (> (/ price-s (reduce * 1 (map #(- 1 (if (:beside %) beside apart)) guesses))) worth-s)))
+
 (def dig-margin
   "Blocks round its two ends a dig route (dig-way, frontier-way, a climb's) may stray. Not a price of guessed cells (unseen-step-s
   prices those): it bounds the flood, which with no route spreads over about 270k cells of rock within max-route-s.

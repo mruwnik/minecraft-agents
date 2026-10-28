@@ -763,6 +763,27 @@
     (is (not (priced {:beside 0.5 :apart 0.2} (* 0.99 (/ seconds 0.16384)))))
     (is (= [[2 65 0]] (map :cell (filter :beside (choose/route-cells p [0 64 0] [4 64 0] (constantly true) (constantly false))))))))
 
+(deftest a-stair-over-guesses-is-priced-over-the-chance-they-all-hold-once-a-guess-failed
+  ;; the stair east from [0 64 0] two steps cuts [0 66 0] [1 66 0] [1 65 0] [1 67 0] [2 67 0] [2 66 0]; three are hidden,
+  ;; [2 66 0] under a seen light (class :beside): 10 s holds with 0.8 * 0.8 * 0.5 = 0.32
+  (let [p (hiding-with-pickaxe (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "2,67,0" "glowstone")
+                               #{[1 65 0] [1 66 0] [2 66 0]})
+        guesses (choose/way-guesses p {:step :stair :heading :east :steps 2} [0 64 0] (constantly false))
+        risk {:beside 0.5 :apart 0.2}]
+    (is (= {[1 65 0] false [1 66 0] false [2 66 0] true} (into {} (map (juxt :cell :beside)) guesses)))
+    (is (choose/past-worth? 10 guesses risk 31))
+    (is (not (choose/past-worth? 10 guesses risk 32)))
+    (is (not (choose/past-worth? 10 guesses {:beside 0 :apart 0} 1)) "no look has shown a guess wrong: no bound")))
+
+(deftest the-guesses-a-stair-reached-count-as-looks-the-cell-it-could-not-dig-a-bad-one
+  (let [{:keys [eng]} (gt/setup {:blocks {}})
+        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+        e {:step :stair :guesses [{:cell [1 65 0] :beside false} {:cell [2 66 0] :beside true} {:cell [3 67 0] :beside false}]}]
+    (.setOwner (:primitives eng) "tx")
+    (esc/note-guesses! c e {:kind :stopped :cause {:reason :not-diggable :cell [2 66 0] :block "glowstone"}
+                            :data {:dug [{:cell [1 65 0] :block "stone"}]}})
+    (is (= {:beside {:all 1 :bad 1} :apart {:all 1 :bad 0}} (:guess-looks (ctx/mem c))) "the cell past the stop is no look")))
+
 (deftest a-dig-route-goes-round-cells-may-dig-refuses
   (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "4,64,0" "air" "4,65,0" "air")
         p (tu/fake {:blocks world :inventory [{:name "stone_pickaxe" :count 1}]})

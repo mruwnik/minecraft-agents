@@ -37,6 +37,7 @@
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.trip :as trip]
+            [jobs.lib.walk.one-way :as one-way]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.access :as access]
             [jobs.lib.dig-in-leave :as dig-leave]
@@ -45,7 +46,7 @@
             [jobs.movement.go-to.route-ways :as route-ways]
             [jobs.movement.go-to.escalate-choose :refer [dig-left-s range-opts cheaper-fill climb-on? dive-climb-on? dive? escalate-reason? escalate? fetch-tool? gap-fill
                                                          goal-way dig-leg dig-way drop-fill out-of-sight? price frontier-way gap-dig gap-walled? goal-lava? leg-ends goal-walled? own-stair route-cells shelter-exit? skips sprint-only?
-                                                         route-owner route-slice routes-searching! searching? searching-ends keep-routes! forget-routes! search-opts]]
+                                                         route-owner route-slice routes-searching! searching? searching-ends keep-routes! forget-routes! search-opts way-guesses past-worth?]]
             [jobs.lib.own-builds :refer [own-dig-fn own-fn own-placed-fn with-own-pen]]
             [jobs.movement.go-to.holes :refer [forget-dug-own! hole-tag may-dig-fn note-holes! own-cut-fn own-holes planned-cells]]
             [jobs.movement.go-to.result :as end]
@@ -178,6 +179,17 @@
   (ctx/update-mem! c update-in [:guess-looks (if beside? :beside :apart)]
                    #(-> % (update :all (fnil inc 0)) (update :bad (fnil + 0) (if ok? 0 1)))))
 
+(defn note-guesses!
+  "Count the guesses of stair or door e (:guesses, escalate-choose/way-guesses) its child r reached as looks
+  (note-guess!): one it dug was rock, the cell it stopped :not-diggable at was not."
+  [c {:keys [guesses]} r]
+  (let [dug (set (map (comp vec :cell) (:dug (:data r))))
+        {:keys [reason cell]} (stop-detail r)
+        bad (when (= :not-diggable reason) (some-> cell vec))]
+    (doseq [{g :cell beside :beside} guesses
+            :when (or (dug g) (= bad g))]
+      (note-guess! c beside (not= bad g)))))
+
 (def prior-good-looks
   "Good looks a class of guess starts with, none bad: a prior, not measured. Unseen rock apart from seen undiggable rock
   is nearly always rock, so one bedrock cell does not make every guess dear; beside it, the next looks decide."
@@ -308,12 +320,20 @@
         ;; a step up over a gap with nothing to fill it: cutting the riser on the far side makes the jump level
         spare (may-dig-fn c)
         choose (memoize (fn [may-dig? o] (if gap? (or (gap-dig c result may-dig? o) (choose-by may-dig? o)) (choose-by may-dig? o))))
-        e (or (when (shelter-exit? c result) {:step :leave-shelter})
-              (cheaper-fill (:primitives c) feet
-                            (or (own-stair c feet goal) (choose spare opts))
-                            (gap-fill c result (:skip opts))
-                            (drop-fill c result (:skip opts) feet)))
-        choosable? #(not= :none (:step (choose % opts)))
+        ;; a stair or door over guesses, once a look showed one wrong, priced as a dig route is: past the goal's worth it is none
+        worth (one-way/worth (u/dist (zipmap [:x :y :z] feet) (zipmap [:x :y :z] goal)) (:worth (:args c)))
+        guesses #(way-guesses (:primitives c) % feet (own-dig-fn c (:own-cut %)))
+        worth-it #(if (and (#{:stair :clear-path} (:step %))
+                           (past-worth? (+ (price (:primitives c) feet %) (reduce + 0 (map (:own-s opts) (own-cells (:primitives c) % feet (:own-s opts)))))
+                                        (guesses %) (:guess-risk opts) worth))
+                    {:step :none :why :past-worth}
+                    %)
+        e (worth-it (or (when (shelter-exit? c result) {:step :leave-shelter})
+                        (cheaper-fill (:primitives c) feet
+                                      (or (own-stair c feet goal) (choose spare opts))
+                                      (gap-fill c result (:skip opts))
+                                      (drop-fill c result (:skip opts) feet))))
+        choosable? #(not= :none (:step (worth-it (choose % opts))))
         zone-free (exit-dig-fn c feet)
         ;; the only way on is a drop the planner will not take (a loaded pit it cannot climb back out of): a shut-in body takes it, then digs out from the bottom
         drop-in (let [{:keys [kind at]} (when (= :one-way (some-> (:reason result) keyword)) (:one-way result))]
@@ -323,17 +343,19 @@
         chosen e
         spot (when (= :none (:step e)) (when-not (or (contains? (:skip opts) :approach) (searching? slice)) (escape/way-spot (:primitives c) feet goal spare opts (or (:approached (ctx/mem c)) #{}))))
         ;; a way through the body's own builds, priced against the one that spares them (own-way)
-        own (delay (when (and (or (seq (access/own-plans c)) (access/in-own-area? c (zipmap [:x :y :z] feet))) (own-may-beat? (:primitives c) feet e))
-                     (own-way (:primitives c) feet e (choose (may-dig-fn c true) (assoc opts :own? (own-fn c (:own? opts)) :own-cut true)) opts)))
+        priced-own (delay (when (and (or (seq (access/own-plans c)) (access/in-own-area? c (zipmap [:x :y :z] feet))) (own-may-beat? (:primitives c) feet e))
+                            (some-> (own-way (:primitives c) feet e (choose (may-dig-fn c true) (assoc opts :own? (own-fn c (:own? opts)) :own-cut true)) opts)
+                                    worth-it)))
+        own (delay (when-not (= :none (:step @priced-own)) @priced-own))
         e (cond
             (priced-steps (:step e)) (or @own e)
             (not= :none (:step e)) e
             spot {:step :approach :pos spot}
             drop-in {:step :approach :pos drop-in}
             @own @own
-            (and (zone-exit? c feet) (choosable? zone-free)) (assoc (choose zone-free opts) :exit-zone true)
+            (and (zone-exit? c feet) (choosable? zone-free)) (assoc (worth-it (choose zone-free opts)) :exit-zone true)
             (choosable? (constantly true)) {:step :none :why :zone}
-            :else e)
+            :else (or @priced-own e))
         e (if (and (= :none (:step e)) (searching? slice)) {:step :searching} e)]
     (if (= :searching (:step e)) (keep-routes! slice) (forget-routes! (route-owner c)))
     (ctx/hold-still! c (when (= :searching (:step e)) :searching))
@@ -355,7 +377,7 @@
       (do (ctx/emit! c :go-to.escalated :info {:step (:step e) :why (if (:own e) :own-way-blocked (:why (end/give-up-fields result))) :n n :at feet
                                                :text (if (:own e) "its own stair up is blocked: cutting it again" (str "no way " (if (or into? (= :dig-route (:step e))) "in" "out") " on foot: " (name (:step e))))})
           (ctx/update-mem! c #(-> (merge (dissoc % :escalate-failed :route-search) counted)
-                                  (assoc :escalations (inc (:escalations % 0)) :escalation e :escalation-from feet
+                                  (assoc :escalations (inc (:escalations % 0)) :escalation (assoc e :guesses (guesses e)) :escalation-from feet
                                          :planned (planned-cells (:primitives c) e feet) :holes-before (count (own-holes c)))))
           :again))))
 
@@ -572,6 +594,7 @@
     (let [dug (concat (:planned (ctx/mem c)) (when (not= :continue r) (map #(assoc % :dug true) (:dug (:data r)))))]
       (forget-dug-own! c dug)
       (when-not (:own e) (note-holes! c dug)))
+    (when (not= :continue r) (note-guesses! c e r))
     (when (and (= :clear-path step) (not= :continue r))
       (charge-dug! c (cost/dig-cells-s (map #(tools/clear-ms (:primitives c) (:block %)) (:dug (:data r))))))
     (cond
