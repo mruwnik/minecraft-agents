@@ -95,13 +95,17 @@
   [c f]
   (clear-of? (failed c) f))
 
+(defn standing?
+  "Whether the three block names (below, at, over the feet; each a fn of no args) leave standing room over ground the carried tools dig."
+  [p below at over]
+  (and (solid/solid? (below)) (not (solid/solid? (at))) (not (solid/solid? (over))) (tools/can-harvest? p (below))))
+
 (defn pit-site?
   "Whether feet cell f looks like a place a pit can be dug, by what a player sees from the surface: standing room, dry
   ground the carried tools dig, no fluid beside it. How deep the ground goes is left to the pit, which stops a bad site."
   [p {:keys [x y z] :as f}]
-  (let [at (fn [dy] (u/seen-name p {:x x :y (+ y dy) :z z}))
-        below {:x x :y (dec y) :z z}]
-    (and (solid/solid? (at -1)) (tools/can-harvest? p (at -1)) (not (solid/solid? (at 0))) (not (solid/solid? (at 1)))
+  (let [below {:x x :y (dec y) :z z}]
+    (and (standing? p #(u/seen-name p below) #(u/seen-name p f) #(u/seen-name p {:x x :y (inc y) :z z}))
          (not (dig-cells/wet? p f)) (not (dig-cells/wet? p {:x x :y (inc y) :z z}))
          (not (dig-cells/wet? p below))
          (not (dig-cells/lateral-fluid p below)))))
@@ -123,7 +127,10 @@
 (defn relocation-site
   "The cheapest feet cell within ::reach of the top of the pit the body is in, else of the failed site it is at, else of
   its feet, clear of every failed site, where a pit can be dug (pit-site?): the least walk-pick/walk-s from there plus
-  walk-toll-s and stay-toll-s, the nearer first on a tie; or nil. With :free?, only cells no zone, claim or plan refuses."
+  walk-toll-s and stay-toll-s, the nearer first on a tie; or nil. With :free?, only cells no zone, claim or plan refuses.
+  Best first: each column where a pit stands (standing?) gets the lower bound of its price without the walk's toll, the
+  nearest columns first; the cheapest bound is priced whole, then tested whole (pit-site?, zones) once no column not yet
+  read can undercut it, so the dear wet and zone tests run on the winner (and the winners that fail them) only."
   [c & [{:keys [free?]}]]
   (let [p (:primitives c)
         feet (sh-sense/feet p)
@@ -133,25 +140,37 @@
         start (pit-start c)
         {:keys [x z] :as from} (or start here feet)
         y (:y (or start feet))
-        offsets (sort-by (fn [[dx dz]] (+ (* dx dx) (* dz dz)))
-                         (for [dx (range (- reach) (inc reach))
-                               dz (range (- reach) (inc reach))
-                               :when (<= (+ (* dx dx) (* dz dz)) (* reach reach))]
-                           [dx dz]))
+        columns (->> (for [dx (range (- reach) (inc reach))
+                           dz (range (- reach) (inc reach))
+                           :when (<= (+ (* dx dx) (* dz dz)) (* reach reach))]
+                       [dx dz])
+                     (sort-by (fn [[dx dz]] (+ (* dx dx) (* dz dz)))))
         fails (failed c)
-        walk #(walk-pick/walk-s from {:pos %})]
-    (loop [[[dx dz] & more :as left] offsets best nil]
-      (if (or (empty? left) (and best (<= (:price best) (walk {:x (+ x dx) :z (+ z dz)}))))
-        (:cell best)
-        (recur more
-               (reduce (fn [best dy]
-                         (let [f {:x (+ x dx) :y (+ y dy) :z (+ z dz)}]
-                           (if (and (clear-of? fails f) (pit-site? p f) (not (and free? (zone-refused? c f))))
-                             (let [w (walk f)
-                                   s (if (and best (>= w (:price best))) ##Inf (+ w (walk-toll-s danger-near from f) (stay-toll-s c danger-near f)))]
-                               (if (or (nil? best) (< s (:price best))) {:cell f :price s} best))
-                             best)))
-                       best [0 -1 1 -2 2]))))))
+        walk #(walk-pick/walk-s from {:pos %})
+        lower-bounds (fn [[dx dz] n]
+                       (let [cx (+ x dx)
+                             cz (+ z dz)
+                             w (walk {:x cx :z cz})
+                             names (into {} (map (fn [d] [d (delay (u/seen-name p {:x cx :y (+ y d) :z cz}))])) (range -3 4))]
+                         (keep-indexed (fn [i dy]
+                                         (let [f {:x cx :y (+ y dy) :z cz}
+                                               at #(deref (names (+ dy %)))]
+                                           (when (and (clear-of? fails f) (standing? p #(at -1) #(at 0) #(at 1)))
+                                             [(+ w (stay-toll-s c danger-near f)) n i f false])))
+                                       [0 -1 1 -2 2])))]
+    (loop [[col & more :as left] columns n 0 pool (sorted-set)]
+      (let [[price _ _ f exact? :as best] (first pool)
+            next-w (when col (walk {:x (+ x (first col)) :z (+ z (second col))}))]
+        (cond
+          (not (and best (or (empty? left) (<= price next-w))))
+          (when (seq left) (recur more (inc n) (into pool (lower-bounds col n))))
+
+          (not exact?)
+          (recur left n (-> pool (disj best) (conj (assoc best 0 (+ price (walk-toll-s danger-near from f)) 4 true))))
+
+          (and (pit-site? p f) (not (and free? (zone-refused? c f)))) f
+
+          :else (recur left n (disj pool best)))))))
 
 (defn ^:async keeps?
   "Whether a site cell m chosen earlier is still the one to walk to, given fresh (site, from the feet now): the same cell; or

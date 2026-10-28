@@ -415,6 +415,27 @@
     (is (nil? (danger light)) (pr-str light))
     (is (= {:x 0 :y 64 :z 0} gone))))
 
+(deftest a-relocation-site-tests-only-the-cheapest-columns-whole-however-tolled-the-ground
+  (let [dirt (into {} (for [x (range -18 19) z (range -18 19)] [(str x ",63," z) "dirt"]))
+        p (tu/seeing-all (tu/fake {:blocks dirt}))
+        c {:primitives p :id "j" :args {:for :night} :slots [] :engine {:warned (atom #{})} :view (fn [] {:now 0 :data {}})}
+        tested (atom 0)
+        real pit-site/pit-site?]
+    (with-redefs [threats/danger-near-fn (fn [_] (fn [_] {:toll 5}))
+                  pit-site/pit-site? (fn [p f] (swap! tested inc) (real p f))]
+      (is (= {:x 0 :y 64 :z 0} (pit-site/relocation-site c))))
+    (is (= 1 @tested) "the nearest site is the cheapest: no other column is tested")))
+
+(deftest a-relocation-site-passes-a-cheapest-column-that-fails-the-whole-test
+  (let [dirt (into {} (for [x (range -4 5) z (range -4 5)] [(str x ",63," z) "dirt"]))
+        p (tu/seeing-all (tu/fake {:blocks (assoc dirt "0,63,-1" "water")}))
+        c {:primitives p :id "j" :args {:for :night} :slots [] :engine {:warned (atom #{})} :view (fn [] {:now 0 :data {}})}]
+    (with-redefs [threats/danger-near-fn (fn [_] (fn [_] {:toll 1}))]
+      (let [f (pit-site/relocation-site c)]
+        (is (some? f))
+        (is (pit-site/pit-site? p f))
+        (is (not= {:x 0 :y 64 :z 0} f) "the feet, beside the water, are the cheapest priced but no site")))))
+
 (deftest a-pit-s-is-the-dig-of-its-cells-and-one-roof-placement
   (let [p (tu/seeing-all (tu/fake {:blocks (into {} (for [x (range -2 3) z (range -2 3) y [62 63]] [(str x "," y "," z) "dirt"]))}))
         c {:primitives p :args {:for :night}}
