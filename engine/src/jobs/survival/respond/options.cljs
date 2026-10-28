@@ -252,11 +252,19 @@
 (defn close-leg-s [] (settings/get settings ::close-leg-s))
 
 
+(defn sighted-gaps
+  "{id [name blocks]} of the near hostiles the body sees now (not remembered): the gaps a step's closing rate is read from."
+  [c]
+  (into {} (for [e (near-hostiles c) :when (and (not (true? (.-remembered e))) (danger-q/seen-only? e))]
+             [(.-id e) [(.-name e) (danger-q/mob-distance (:primitives c) e)]])))
+
 (defn ^:async leg-step!
-  "One flee step to target as a jobs.movement.run-away child of at most leg-s seconds (y-margin (16) blocks past body and target bound its route): true when the body arrived or got on a leg nearer, false when go-to gave up, waited or was declined (mem :leg-timed-out: it ran out of the leg's seconds unhurt)."
+  "One flee step to target as a jobs.movement.run-away child of at most leg-s seconds (y-margin (16) blocks past body and target bound its route): true when the body arrived or got on a leg nearer, false when go-to gave up, waited or was declined (mem :leg-timed-out: it ran out of the leg's seconds unhurt).
+  Emits debug retreat.step-speed {:slot :blocks :seconds :bps :food :chasers [[name id gap]]}, :chasers the hostiles seen as it starts (sighted-gaps; the body faces away from them as it walks)."
   ([c slot target range leg-s] (await (leg-step! c slot target range leg-s (respond.goal/leg-margin))))
   ([c slot target range leg-s y-margin]
   (let [from (u/self-pos c)
+        gaps0 (sighted-gaps c)
         t0 (ctx/now c)
         health0 (.-health (.self (:primitives c)))
         r (await (ctx/call c slot 'jobs.movement.run-away
@@ -267,7 +275,9 @@
         d (u/dist from (u/self-pos c))
         _ (ctx/update-mem! c assoc :leg-timed-out (and (= :limit-reached (:kind r)) (>= (.-health (.self (:primitives c))) health0)))]
     (ctx/emit! c :retreat.step-speed :debug {:slot slot :blocks (/ (js/Math.round (* 10 d)) 10) :seconds (/ (js/Math.round (* 10 s)) 10)
-                                             :bps (when (pos? s) (/ (js/Math.round (* 10 (/ d s))) 10))})
+                                             :bps (when (pos? s) (/ (js/Math.round (* 10 (/ d s))) 10))
+                                             :food (room-lib/food (:primitives c))
+                                             :chasers (vec (for [[id [n g]] gaps0] [n id (/ (js/Math.round (* 10 g)) 10)]))})
     (boolean (or (:arrived res) (:nearer res))))))
 
 (defn step! [c slot target range] (leg-step! c slot target range (flight-timeout-s)))

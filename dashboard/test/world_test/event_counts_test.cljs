@@ -166,6 +166,28 @@
     (is (= {:flights 1 :steps 3 :blocks 9 :seconds 2.5 :bps 3.6 :gaps 2 :gap-s 0.5 :off-gaps 0 :stop-s 0.25} (c/pace-report rows))
         "a lone step is no flight; the stops run from a step's end to the next one's start")))
 
+(deftest the-closing-rate-is-the-gap-growth-between-step-starts-per-mob-kind-and-sprint-state
+  (let [step (fn [t job food chasers] (rec t :step :job job :slot :step :s 1 :blocks 4 :food food :chasers chasers))
+        line (pr-str {:generation-id "g" :time-ms 5 :source :job :kind :retreat.step-speed :context {:job-id "j1" :reflex-id :hostile-near}
+                      :data {:slot :step :seconds 1 :blocks 4 :bps 4 :food 18 :chasers [["zombie" 7 3.5]]}})
+        rows (c/flee-steps [(step 1000 "j1" 20 [["zombie" 7 3] ["spider" 8 6]])
+                            (step 2500 "j1" 20 [["zombie" 7 4] ["spider" 8 5]])
+                            (step 3500 "j1" 20 [["zombie" 7 6]])
+                            (step 5000 "j2" 5 [["zombie" 9 3]])
+                            (step 7000 "j2" 5 [["zombie" 9 2]])
+                            (rec 7500 :step :job "j3" :slot :step :s 1 :blocks 4)
+                            (rec 9500 :step :job "j3" :slot :step :s 1 :blocks 4)])]
+    (is (= {:food 18 :chasers [["zombie" 7 3.5]]} (select-keys (c/scan-line line) [:food :chasers])))
+    (is (= {:flights 2
+            :by-mob {"spider" {:sprint {:blocks -1 :s 1.5 :pieces 1 :bps -0.67}}
+                     "zombie" {:sprint {:blocks 3 :s 2.5 :pieces 2 :bps 1.2} :walk {:blocks -1 :s 2 :pieces 1 :bps -0.5}}}
+            :setting {"spider" {:sprint {:blocks -1 :s 1.5}} "zombie" {:sprint {:blocks 3 :s 2.5} :walk {:blocks -1 :s 2}}}}
+           (c/closing-report rows))
+        "each piece runs from one step's start to the next one's; a mob not seen at both starts and steps kept before gaps were are left out")
+    (is (empty? (:setting (c/closing-report (c/flee-steps [(step 1000 "j1" 20 [["zombie" 7 3]]) (rec 2200 :step :job "j1" :slot :back-off :s 1 :blocks 1)
+                                                            (step 3500 "j1" 20 [["zombie" 7 4]])]))))
+        "a stop in which the flight ended (another answer's step) is no part of a flight")))
+
 (deftest a-gap-in-which-the-flight-ended-is-no-stop
   (let [step (fn [t slot] (rec t :step :job "j1" :slot slot :s 1 :blocks 4))
         line (fn [t kind data] (pr-str {:generation-id "g" :time-ms t :source (if (= :started kind) :action :job) :kind kind

@@ -194,7 +194,12 @@
     6 ["spider"] false
     20 ["cave_spider"] false
     20 ["zombie" "spider"] false)
-  (is (true? (settings/with-settings {:jobs.lib.cost.danger/outrun-factor 1} #(cost/outruns? 20 ["spider"])))))
+  (is (false? (settings/with-settings {:jobs.lib.cost.danger/closing-rates {"zombie" {:sprint {:blocks -20 :s 40}}}} #(cost/outruns? 20 ["zombie"])))
+      "flights from zombies measured closing: a fed body no longer outruns one")
+  (is (true? (settings/with-settings {:jobs.lib.cost.danger/closing-rates {"zombie" {:sprint {:blocks -20 :s 40}}}} #(cost/outruns? 20 ["creeper"])))
+      "the count is per kind")
+  (is (true? (settings/with-settings {:jobs.lib.cost.danger/closing-rates {"spider" {:walk {:blocks 40 :s 40}}}} #(cost/outruns? 6 ["spider"])))
+      "measured gains outweigh the weak prior"))
 
 (deftest the-race-to-a-refuge-counts-each-chaser-at-its-own-speed
   (are [names expected] (= expected (cost/reach-first? 5 [5] 20 names))

@@ -665,15 +665,18 @@
           (is (empty? (calls p "jumpPlace")) "no pillar of cobblestone the call did not list")
           (is (seq (concat (calls p "steer") (calls p "moveTo"))) "it flees instead"))))))
 
-(deftest a-flee-step-logs-its-speed
+(deftest a-flee-step-logs-its-speed-the-food-and-the-gap-to-each-chaser-seen-as-it-starts
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [seen]} (await (first-round retreat {:self {:health 10} :inventory [{:name "dirt" :count 2}]
+        (let [{:keys [seen]} (await (first-round retreat {:self {:health 10 :food 15} :inventory [{:name "dirt" :count 2}]
                                                           :entities [(zombie 8 64 0)]}))
               e (first (filter #(= :retreat.step-speed (:kind %)) @seen))]
           (is (some? e))
-          (is (every? number? [(:blocks e) (:seconds e)])))))))
+          (is (every? number? [(:blocks e) (:seconds e)]))
+          (is (= 15 (:food e)))
+          (is (= [["zombie" 7]] (map #(subvec % 0 2) (:chasers e))) "the closing rate's gaps (event-counts closing-rate)")
+          (is (<= 7 (nth (first (:chasers e)) 2) 8.5) "the zombie about 8 blocks off as the step starts"))))))
 
 (deftest a-lone-melee-mob-with-fewer-than-three-blocks-carried-is-fled-from
   (async done

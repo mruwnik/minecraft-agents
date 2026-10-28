@@ -24,7 +24,7 @@
   unless a creeper or a melee mob is within cover-gap.
   2b. A lone melee mob (no creeper, enderman, spider, flyer or shooter) between ::cover-gap (5) and ::refuge-gap (10) that a fight would not win, with
      pillar-height blocks carried: pillar up, else seal in, before any flee step (a walk gains little on it); when neither can be
-     done the flight walks. Each flee step emits debug retreat.step-speed {:blocks :seconds :bps}.
+     done the flight walks. Each flee step emits debug retreat.step-speed (leg-step!).
   3. Walks a go-to leg (:ways #{:walk :clear-seal}) to the end jobs.lib.flee-search picks: it first looks away and to either
      side where it has not seen the ground (at most 3 looks), then plans ring ends round it and the home and the :goal (the
      destination of the walk the flight interrupted) over what it has seen, each priced and scored by when the first chaser

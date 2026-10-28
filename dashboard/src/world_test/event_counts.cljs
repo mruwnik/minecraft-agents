@@ -27,9 +27,11 @@
   seconds stood between two steps while still in flight (a look, a re-decide, a replan, a respond delay; a gap in which another
   answer, action or child ran is left out) (cost.danger/::flee-walk-speed, ::flee-stop-s).
   walk-detour: the steers' blocks over the straight line of each go-to walk (value/::detour-factor).
+  closing-rate: of the same flights, the gap to each chaser seen as two steps in a row start (retreat.step-speed :chasers), its growth
+  over the seconds between the starts, per mob kind and sprint state (cost.danger/::closing-rates).
   walk-pace: the steers of go-to's walks (a job id ending /walk) outside a flight: blocks over the steers' own seconds (cost/walk-speed).
   gap-miss: the miss rate of gap jumps per [width dy sprint] from go-to's :gap-jump events (world-test.gap-miss; trial bodies only).
-  Pure parts: scan-line, exchange, starts, starts-by-mob, notices, groups, vein-seen, flee-steps, pace-report, walk-steers, walk-report, walk-detour."
+  Pure parts: scan-line, exchange, starts, starts-by-mob, notices, groups, vein-seen, flee-steps, pace-report, closing-pieces, closing-report, walk-steers, walk-report, walk-detour."
   (:require ["fs" :as fs]
             ["path" :as path]
             ["zlib" :as zlib]
@@ -107,7 +109,8 @@
         (str/includes? line ":kind :retreat.step-speed")
         {:k :step :t t :gen gen :job (root-job (second (re-find #":job-id \"([^\"]*)\"" line)))
          :slot (some-> (re-find #":slot :([a-z-]+)" line) second keyword)
-         :s (num-of #":seconds (-?[\d.]+)" line) :blocks (num-of #":blocks (-?[\d.]+)" line)}
+         :s (num-of #":seconds (-?[\d.]+)" line) :blocks (num-of #":blocks (-?[\d.]+)" line)
+         :food (num-of #":food (\d+)" line) :chasers (when (str/includes? line ":chasers [[") (get-in (whole) [:data :chasers]))}
 
 
         (str/includes? line ":kind :gap-jump")
@@ -260,20 +263,22 @@
     (:out (close (reduce watch {:last-pos {} :pending [] :out []} records) identity :logs-end))))
 
 (defn flee-steps
-  "Rows [{:id [gen t] :flight [gen job] :t :s :blocks :off?}] of the flee steps in records (sorted by :t;
-  retreat.step-speed of slot :step: :s the step's own seconds, ending at :t). :off? when, since the flight's step before,
+  "Rows [{:id [gen t] :flight [gen job] :t :s :blocks :off? :food :chasers}] of the flee steps in records (sorted by :t;
+  retreat.step-speed of slot :step: :s the step's own seconds, ending at :t; :chasers [[name id gap]], nil
+  in a log before they were kept; gap the blocks to a hostile seen as the step started). :off? when, since the flight's step before,
   another answer's step or an action or child no flight runs between its steps came (:off): the flight had ended, so
   the gap before it was no stop."
   [records]
   (:rows
-   (reduce (fn [{:keys [off] :as st} {:keys [k gen job t s blocks slot] :as r}]
+   (reduce (fn [{:keys [off] :as st} {:keys [k gen job t s blocks slot food chasers] :as r}]
              (let [f [gen job]]
                (cond
                  (:off r) (assoc-in st [:off [gen (:off r)]] true)
                  (not (and (= :step k) s blocks)) st
                  (not= :step slot) (assoc-in st [:off f] true)
                  :else (-> st
-                           (update :rows conj {:id [gen t] :flight f :t t :s s :blocks blocks :off? (boolean (get off f))})
+                           (update :rows conj (cond-> {:id [gen t] :flight f :t t :s s :blocks blocks :off? (boolean (get off f))}
+                                                food (assoc :food food) chasers (assoc :chasers chasers)))
                            (update :off dissoc f)))))
            {:off {} :rows []} records)))
 
@@ -349,6 +354,35 @@
     {:flights (count flights) :steps (count steps) :blocks (r2 blocks) :seconds (r2 secs)
      :bps (when (pos? secs) (r2 (/ blocks secs))) :gaps (count gaps) :gap-s (r2 stood) :off-gaps (- (count pairs) (count gaps))
      :stop-s (when (seq gaps) (r2 (/ stood (count gaps))))}))
+
+(defn closing-pieces
+  "Pieces [{:mob :sprint :blocks :s}] of the flights among rows (flee-steps, sorted or not) with gaps kept: from one step's start
+  to the next one's (the step and the stop after it; not to an :off? one), the gap to each chaser seen at both starts: :blocks
+  its growth, :s the seconds, :sprint whether the body could sprint (danger/sprints? of its food at the first start)."
+  [rows]
+  (let [start #(- (:t %) (* 1000 (:s %)))]
+    (mapcat (fn [steps]
+              (for [[a b] (partition 2 1 (sort-by :t steps)) :when (not (:off? b))
+                    :let [s (/ (- (start b) (start a)) 1000)
+                          gaps (into {} (map (fn [[_ id g]] [id g])) (:chasers b))]
+                    :when (pos? s)
+                    [mob id g] (:chasers a) :let [g1 (gaps id)] :when g1]
+                {:mob mob :sprint (danger/sprints? (:food a)) :blocks (- g1 g) :s s}))
+            (vals (group-by :flight (filter #(and (:food %) (:chasers %)) rows))))))
+
+(defn closing-report
+  "The closing rate of the flights among rows (flee-steps): per mob kind and :sprint / :walk, the gap's growth over the seconds
+  (closing-pieces), :bps blocks a second (negative: the mob gains), :pieces counted; :setting, danger/::closing-rates."
+  [rows]
+  (let [groups (group-by (juxt :mob #(if (:sprint %) :sprint :walk)) (closing-pieces rows))
+        sum (fn [ps k] (reduce + 0 (map k ps)))
+        tally (fn [ps] {:blocks (r2 (sum ps :blocks)) :s (r2 (sum ps :s))})]
+    {:flights (count (distinct (map :flight (filter #(and (:food %) (:chasers %)) rows))))
+     :by-mob (reduce (fn [m [[mob sprint] ps]]
+                       (let [t (tally ps)]
+                         (assoc-in m [mob sprint] (assoc t :pieces (count ps) :bps (when (pos? (:s t)) (r2 (/ (:blocks t) (:s t))))))))
+                     (sorted-map) groups)
+     :setting (reduce (fn [m [[mob sprint] ps]] (assoc-in m [mob sprint] (tally ps))) {} groups)}))
 
 (def tenths "The levels of the deciles a start prior holds." (mapv #(/ (+ % 0.5) 10) (range 10)))
 
@@ -567,7 +601,7 @@
        (sort-by :t)
        vec))
 
-(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | walk-pace | walk-detour | gap-miss | way-on | spot-returns | field-passes | arrow-shots | caught-flights | vein-seen | water-lags | surface-heights | resight | wall-sides | pen-escapes [--run ID --animals N --secs S --escaped E] [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N] [--difficulty D]
+(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | closing-rate | walk-pace | walk-detour | gap-miss | way-on | spot-returns | field-passes | arrow-shots | caught-flights | vein-seen | water-lags | surface-heights | resight | wall-sides | pen-escapes [--run ID --animals N --secs S --escaped E] [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N] [--difficulty D]
   every command first folds the logs into the counts file (default worlds/test/priors-counts.edn), then reports from the file; --since-ms keeps the rows of fights started after it.")
 
 (defn- parse-args [argv]
@@ -621,7 +655,7 @@
   (let [{[cmd] :pos :keys [agents counts since-ms sprint stride difficulty run inside-s step-s escaped] :or {since-ms 0 sprint 5.6 stride 1 difficulty 1}} (parse-args (vec (array-seq argv)))
         repo (or js/process.env.WORLD_TEST_REPO ".")
         agents (or agents (path/join repo "worlds" "test" "agents"))
-        folded (when (#{"fold" "creeper-exchange" "flight-starts" "notice-rate" "drowned-meets" "flee-pace" "walk-pace" "walk-detour" "gap-miss"} cmd)
+        folded (when (#{"fold" "creeper-exchange" "flight-starts" "notice-rate" "drowned-meets" "flee-pace" "closing-rate" "walk-pace" "walk-detour" "gap-miss"} cmd)
                  (fold-logs! agents (or counts (path/join repo "worlds" "test" "priors-counts.edn")) sprint
                              (cell-reader open-chunks (path/join agents ".." "chunks"))))
         since (fn [rows] (filter #(>= (:t %) since-ms) (vals rows)))]
@@ -684,6 +718,7 @@
                   (println (pr-str (assoc (way-prior/report (mapcat :places per) (reduce + (map :evicted per))) :since-ms since-ms)))
                   0)
        "flee-pace" (do (println (pr-str (assoc (pace-report (since (:flight-steps folded))) :since-ms since-ms))) 0)
+       "closing-rate" (do (println (pr-str (assoc (closing-report (since (:flight-steps folded))) :since-ms since-ms))) 0)
        "walk-pace" (do (println (pr-str (assoc (walk-report (since (:walk-steers folded))) :since-ms since-ms))) 0)
        "walk-detour" (do (println (pr-str (assoc (walk-detour (since (:walk-steers folded))) :since-ms since-ms))) 0)
        "gap-miss" (do (println (pr-str {:buckets (gap-miss/report (since (:gap-jumps folded))) :since-ms since-ms})) 0)

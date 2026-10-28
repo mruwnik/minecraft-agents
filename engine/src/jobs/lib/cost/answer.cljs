@@ -15,8 +15,7 @@
   fight-answer: a fight with the kit (fight/fight-damage, fight-seconds); a mob out of reach is left alive, hitting all
   the fight (followed: what comes at once after it). A lone creeper fought hit-and-back risks the
   blast of a late step back: its :hit is the blast at the creeper's swell start.
-  flee-answer: a walk away from the mobs, nil when one of them keeps up (outruns?: the flight's speed is body-speed over
-  ::outrun-factor). A melee mob hits while within its reach, a ranged one while the body is within its bow's range (it
+  flee-answer: a walk away from the mobs, nil when one of them keeps up (its danger/closing-rate is not positive). A melee mob hits while within its reach, a ranged one while the body is within its bow's range (it
   stands and shoots there; both follow at their chase speed past it; a body in water first swims to land against their swim speed), a creeper that reaches its swell start before the body gets going
   (danger/flight-starts) blows at the distance the body reached when its fuse ends. The mob is left alive:
   :then the fight with it, or the walk once more as a return. A stub until the priced flee search (card ee045b60).
@@ -309,7 +308,8 @@
 
 (defn flee-mob
   "{:damage :hit :spread :shape :rate-shape :seconds} of a walk away from mob {:name :held :distance :follow (blocks it keeps chasing out to) :speed
-  (its chase speed, default danger/chase-speed of the name)} at speed v through the armour stats, nil when it keeps up.
+  (its chase speed, default danger/chase-speed of the name)} at speed v through the armour stats, nil when it keeps up: the
+  gap opens at gain (a fn of the mob's name, default v less its chase speed), v less :speed when that is given.
   It hits while within its hit-range (reach-rate); a shooter on land stands there while it sees the body (vanilla's
   ranged attack goals stop it within range) and chases only past it; a melee mob on land from the decision: start-reach over each of
   danger/flight-starts, :shape the width of its blow count over them (fight/sum-shape's); a ranged mob at its uncertain
@@ -320,7 +320,7 @@
   that blast for each of danger/flight-starts: a blast is not felt before it lands, as other mobs' blows are (respond's
   felt rate)."
   ([stats v m] (flee-mob stats v nil m))
-  ([stats v {:keys [sv swim land]} {:keys [name distance follow speed] :as m}]
+  ([stats v {:keys [sv swim land gain]} {:keys [name distance follow speed] :as m}]
    (let [d (or distance 0)
          follow (or follow d)
          chase (or speed (danger/chase-speed name))
@@ -328,7 +328,7 @@
          wet (when (and swim (pos? swim) (not= "creeper" name))
                (swim-leg sv (danger/swim-chase-speed name) d r follow swim))
          d (if wet (:gap wet) d)
-         gain (- v chase)
+         gain (if (or speed (nil? gain)) (- v chase) (gain name))
          stands (when-not (or wet (= r (danger/melee-reach))) (/ (max 0 (- r d)) v))
          escape (cond (:away? wet) 0
                       (and wet (not (js/isFinite swim))) nil
@@ -393,7 +393,8 @@
   flight's blows from all its chasers) of that mob's; never fewer than the walk's own. The two catches are one by their chances: its damage their mean, its :shape the width of their
   mix (each its own: the way's the walk's, the prior's its blows' uncertainty). A creeper that blows on the
   walk (at the median of its :spread) is spent: what follows is the walk from the rest or later (none left: nothing).
-  swim: the blocks a body in water swims to dry land first (flee-mob's; ##Inf none known) and land the blocks to walk on there, at its planner/swim-speed over danger's outrun factor as on foot.
+  swim: the blocks a body in water swims to dry land first (flee-mob's; ##Inf none known) and land the blocks to walk on there, at its planner/swim-speed times the share of a sprint a flight's pace is on foot (danger/flight-speed over body-speed).
+  The flight gains on each mob at its danger/closing-rate.
   nil when a mob keeps up or none is given."
   [{:keys [health food equipment mobs returns later caught caught-s swim land] :as args}]
   (let [stats (armour/armour-stats equipment)
@@ -402,7 +403,8 @@
         way (or caught 0)
         caught (- 1 (* (- 1 (:chance prior 0)) (- 1 way)))
         v (danger/flight-speed (or food 20))
-        wet {:swim swim :land land :sv (/ (planner/swim-speed equipment) (danger/outrun-factor))}
+        wet {:swim swim :land land :sv (* (planner/swim-speed equipment) (/ v (danger/body-speed (or food 20))))
+             :gain #(danger/closing-rate (or food 20) %)}
         per-of (fn [mobs] (map #(flee-mob stats v wet %) mobs))
         per (per-of mobs)
         times (inc (or returns 0))]
