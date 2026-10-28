@@ -36,9 +36,9 @@
   (assoc (update-vals smelted-from vector) "charcoal" charcoal-inputs))
 
 (defn gatherable?
-  "Items the body gets by mining, felling or from sheep: logs, coal, wool (white wool is also crafted from string)."
+  "Items the body gets by mining, felling or from sheep: logs (stripped ones are not dropped), coal, wool (white wool is also crafted from string)."
   [item]
-  (boolean (or (= "coal" item) (str/ends-with? item "_log") (str/ends-with? item "_wool"))))
+  (boolean (or (= "coal" item) (and (str/ends-with? item "_log") (not (str/starts-with? item "stripped_"))) (str/ends-with? item "_wool"))))
 
 (def crafted-from
   "How many of `input` one craft of `item` takes in a recipe of `input` alone (4 string for a white_wool), or nil: the

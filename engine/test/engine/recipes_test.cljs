@@ -1,6 +1,7 @@
 (ns engine.recipes-test
   "jobs.items.recipes: crafting chains planned from minecraft-data recipes."
   (:require [cljs.test :refer [deftest is]]
+            [clojure.string :as str]
             [jobs.items.recipes :as recipes]
             [engine.game :as game]))
 
@@ -96,6 +97,10 @@
 (deftest a-gathered-chain-prefers-no-furnace
   (is (= {"coal" 1} (:gather (plan {"stick" 1} "torch" 4 {:gather? true :smelts {"charcoal" ["oak_log"]}})))
       "coal is gathered rather than a log smelted to charcoal"))
+
+(deftest a-gather-plan-never-asks-for-a-stripped-log
+  (is (not-any? #(str/starts-with? % "stripped_") (keys (:gather (plan {} "stripped_oak_wood" 3 {:gather? true}))))
+      "no tree drops one"))
 
 (deftest a-needed-item-is-never-crafted-down-to-be-crafted-back
   (is (nil? (plan {"iron_ingot" 3} "iron_ingot" 3 {:table? true})) "ingots are not turned into nuggets to make more ingots"))

@@ -74,6 +74,12 @@
   (is (= {} (bill/furnace-short game/default-version ["furnace"] (kit/with-raw {"cobblestone" 0}))))
   (is (zero? (kit/material-of game/default-version ["iron_pickaxe"] {:carried {"cobblestone" 20}}))))
 
+(deftest carried-cobblestone-is-material-for-a-bill-that-needs-stone-only
+  (is (pos? (kit/material-of game/default-version ["stone_bricks"] {:carried {"cobblestone" 20}})))
+  (is (= (kit/material-of game/default-version ["iron_pickaxe" "stone_bricks"] {:carried {}})
+         (kit/material-of game/default-version ["iron_pickaxe"] {:carried {"cobblestone" 20}}))
+      "a round that gained only cobblestone gained no material for an iron bill"))
+
 (deftest the-iron-kit-needs-33-ingots-from-the-furnace
   (is (= {"iron_ingot" 33} (bill/furnace-short game/default-version kit/iron-kit {}))))
 
