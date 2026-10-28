@@ -1,4 +1,4 @@
-;; A search that is not for food waits :low-health when the body is hurt below 10 hp and cannot heal (hunger, nothing edible carried), so a
+;; A search that is not for food waits :low-health when the body is too hurt for risky work (8 hp at food 0: the hungry cut halves its share) and cannot heal (nothing edible carried), so a
 ;; hurt, foodless body does not roam for wood or wool; a healthy one searches. Should-succeed: both cases.
 {:defaults
  {:tags [:explore :readiness]
