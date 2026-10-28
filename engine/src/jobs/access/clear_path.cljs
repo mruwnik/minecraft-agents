@@ -289,7 +289,8 @@
   "Plan the door on with gap from from: :again; when it is too dear, walk back to where the door was begun (step-out!) and end :too-dear."
   [c gap from]
   (if-let [why (too-dear c gap)]
-    (or (await (step-out! c)) (finish! c :too-dear {:why why}))
+    (do (ctx/update-mem! c assoc :too-dear why)
+        (or (await (step-out! c)) (finish! c :too-dear {:why why})))
     (do (ctx/update-mem! c assoc :cells (:cells gap) :through (:through gap) :unseen (:unseen gap) :from from)
         :again)))
 
@@ -298,8 +299,8 @@
   in sight, look at that row's unseen cells (memory :looked-at), then plan on from it with what the body sees
   (escape/door-from); a row still unseen is taken as guessed. A guessed row seen wall: an opening beside the dug
   cells (side-door!) is the far side, else the wall is dug on, each plan on priced (plan-on!); with no floor beyond
-  it walks back.
-  :again, :continue (the walk waits), or the :no-door ending."
+  it walks back. Once a dead end is reached (memory :dead-end, :too-dear for one too dear) nothing is planned on.
+  :again, :continue (the walk waits), or the :no-door or :too-dear ending."
   [c]
   (let [{:keys [through from]} (ctx/mem c)
         dir (headings (:heading (:args c)))
@@ -319,10 +320,13 @@
             gap (escape/door-from block-at unseen? from dir k)]
         (if (= through (:through gap))
           (do (ctx/update-mem! c dissoc :unseen) :again)
-          (or (when-not (:dead-end (ctx/mem c)) (await (side-door! c dir)))
-              (when gap (await (plan-on! c gap from)))
+          (or (when-not (:dead-end (ctx/mem c))
+                (or (await (side-door! c dir))
+                    (when gap (await (plan-on! c gap from)))))
               (await (step-out! c))
-              (finish! c :no-door {:why (str "the wall goes on past " (pr-str through) " with no floor beyond")})))))))
+              (if-let [why (:too-dear (ctx/mem c))]
+                (finish! c :too-dear {:why why})
+                (finish! c :no-door {:why (str "the wall goes on past " (pr-str through) " with no floor beyond")}))))))))
 
 (defn ^:async start-cell!
   "Look at the first cell not seen open, then say what to do with it: {:digging d} (kept in memory), :open (the look
