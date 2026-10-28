@@ -104,6 +104,7 @@
         why (cond-> {} dig-reason (assoc :dig-reason dig-reason) (or (= :no-stone-found reason) (pos? (:steps descent 0))) (assoc :descent descent) (= :wet reason) (assoc :wet-skipped (or wet-skipped 0)) suggest (assoc :shaft-suggest suggest) (seq unreached) (assoc :unreached unreached) (seq skipped) (assoc :skipped skipped) (seq (:holes-open m)) (assoc :holes-open (:holes-open m))
               (pos? (:steps tunnel 0)) (assoc :tunnel (-> tunnel (select-keys [:origin :heading :steps :stop :end]) (update :origin access/cell)))
               (:start-floor-dug m) (assoc :start-floor-dug true)
+              (pos? (:cut-blocks m 0)) (assoc :cut-blocks (:cut-blocks m))
               (seq (:legs m)) (assoc :legs (:legs m))
               (seq left) (assoc :left (mapv (fn [[pos n]] {:pos pos :count n}) (:left (ctx/mem c))))
               (seq (:lost m)) (assoc :lost (:lost m))

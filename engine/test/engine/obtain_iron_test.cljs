@@ -475,10 +475,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (loop [[[y dug runs why] & more] [[64 {:tunnel {:steps 32}} 5 "a run that tunnelled looked at new rock: the gather mines on"]
-                                          [64 {:legs [{:length 20} {:length 12}] :tunnel {:steps 12}} 5 "so did one that turned"]
+        (loop [[[y dug runs why] & more] [[64 {:cut-blocks 32 :tunnel {:steps 32}} 5 "a run that tunnelled looked at new rock: the gather mines on"]
+                                          [64 {:legs [{:length 6 :stop :no-floor}] :tunnel {:steps 6}} 3 "one whose tunnel only walked open air cut nothing: three end the gather"]
                                           [64 {} 3 "a run that cut nothing is fruitless: three end the gather"]
-                                          [16 {:tunnel {:steps 200}} 4 "at y 16 the second 200 blocks with no iron make the ground barren: three more runs end it"]]]
+                                          [16 {:cut-blocks 200 :tunnel {:steps 200}} 4 "at y 16 the second 200 blocks with no iron make the ground barren: three more runs end it"]]]
           (let [s (f/start (-> (ore-world {} [{:name "stone_pickaxe" :count 1} {:name "torch" :count 16}]) (assoc :floor [-30 -30 40 30]) (assoc-in [:self :pos :y] y)) [f/own-zone])
                 calls (atom 0)
                 eng (assoc-in (:eng s) [:jobs 'jobs.gather.mine :round]
@@ -491,13 +491,6 @@
             (is (= runs (min 5 @calls)) why))
           (when more (recur more)))))))
 
-(deftest the-dug-count-follows-the-site-not-the-ore
-  (let [at {:x 0 :y 16 :z 32}
-        mem {:gather {:dug {"iron_ore" {:n0 200 :at at}}}}]
-    (is (= 232 (gather/dug-total mem "iron_ore" {:x 0 :y 16 :z 60} 32)) "the run went on from where the last ended")
-    (is (= 32 (gather/dug-total mem "iron_ore" {:x 300 :y 16 :z 0} 32)) "site B, far from where A's count ended, starts at its own run")
-    (is (= 32 (gather/dug-total {} "iron_ore" at 32)))))
-
 (deftest the-blocks-dug-without-a-find-do-not-outlive-the-gather
   (async done
     (tu/run-async done
@@ -509,7 +502,7 @@
                               (if-not (:dug (ctx/mem c))
                                 (do (ctx/update-mem! c assoc :dug true) :continue)
                                 (ctx/end c :nothing-possible {:reason :tunnel-length}
-                                         (merge {:got 0 :reason :tunnel-length} (when (= 1 (swap! runs inc)) {:tunnel {:steps 32}}))))))]
+                                         (merge {:got 0 :reason :tunnel-length} (when (= 1 (swap! runs inc)) {:cut-blocks 32 :tunnel {:steps 32}}))))))]
           (await (obtain! (assoc s :eng eng) {:item "raw_iron" :ways #{:craft :smelt :gather} :explore true} 60))
           (is (map? (core/job-memory (:eng s) "j1")) "the job memory is read")
           (is (nil? (get-in (core/job-memory (:eng s) "j1") [:gather :dug])) "the count of a gather that ended fruitless is gone"))))))

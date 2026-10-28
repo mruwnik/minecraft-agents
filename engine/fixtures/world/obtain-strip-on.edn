@@ -4,7 +4,8 @@
 ;; 40 blocks east, past the first run's 32-block tunnel. child/max-fruitless 1 makes one empty run end the gather unless it mines on; the plot
 ;; lies below iron's tunnel level and the roof the body sees bars a stair up to it (obtain.plan/climb-sealed?), so the tunnel keeps the body's
 ;; height; no :chest way, so no look round turns the body off its east heading before the mine starts. Should-succeed: the second run reaches the
-;; ore, no climb. Should-fail: barren-ore 0 counts the first run fruitless, no source.
+;; ore, no climb. Should-fail: barren-ore 0 counts the first run fruitless, no source; a tunnel line open all the way (card 317311e9) cuts
+;; nothing, so its run is fruitless though its tunnel took steps.
 {:defaults
  {:tags [:obtain :mine :jobs] :time :any
   :plot {:light :lit :height 10 :length 50 :width 16}
@@ -22,6 +23,13 @@
   {:name "barren-ground-ends-after-the-empty-tunnel"
    :act [[:job (jobs.items.obtain {:item "raw_iron" :count 1 :ways #{:craft :smelt :gather}
                                    :settings {:jobs.lib.child/max-fruitless 1 :jobs.items.obtain.base/barren-ore 0}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 300 :of-job true}
+            {:no-event {:source :job :kind :obtain.strip-on} :for-s 300 :until {:source :job :kind :stopped}}]
+   :after [[:item "raw_iron" [:= 0]]]}
+  {:name "a-tunnel-through-open-air-is-no-new-ground"
+   :blocks [[:fill [3 0 6] [46 1 6] "air"]]
+   :act [[:job (jobs.items.obtain {:item "raw_iron" :count 1 :ways #{:craft :smelt :gather}
+                                   :settings {:jobs.lib.child/max-fruitless 1}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 300 :of-job true}
             {:no-event {:source :job :kind :obtain.strip-on} :for-s 300 :until {:source :job :kind :stopped}}]
    :after [[:item "raw_iron" [:= 0]]]}]}

@@ -131,9 +131,10 @@
         :else (walk-of c pos (result-of r))))))
 
 (defn book-cut!
-  "After a stretch of tunnel: the cells it dug booked for the mend (ground under the start), and the last mined block among them
-  collected like a target."
+  "After a stretch of tunnel: the cells it dug booked for the mend (ground under the start) and counted (memory :cut-blocks), and the
+  last mined block among them collected like a target."
   [c dug]
+  (ctx/update-mem! c update :cut-blocks (fnil + 0) (count dug))
   (doseq [{:keys [cell block]} dug] (book-ground! c (zipmap [:x :y :z] cell) block))
   (when-let [cell (last (keep #(when (contains? (kinds (:args c)) (:block %)) (:cell %)) dug))]
     (ctx/update-mem! c assoc :collecting true :dug-at cell)))

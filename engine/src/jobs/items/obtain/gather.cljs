@@ -303,39 +303,28 @@
       :continue
       (do (ctx/update-mem! c (fn [m] (-> m (update :gather dissoc :light) (assoc-in [:gather :lit cell] (ctx/now c))))) :again))))
 
-(defn dug-blocks
-  "The new ground a mine run cut (data res): its tunnel legs (the last one included), else its tunnel, and its stair down."
-  [{:keys [legs tunnel descent]}]
-  (+ (if (seq legs) (reduce + 0 (map :length legs)) (:steps tunnel 0)) (:steps descent 0)))
-
 (defn ore-resource
   "The jobs.lib.cost base-rates resource of need's ore block (\"iron\" for deepslate_iron_ore), nil for none."
   [need]
   (some-> (:block (:args need)) (str/replace #"^deepslate_" "") (str/replace #"_ore$" "")))
 
-(defn barren?
-  "Whether n blocks cut in a row with no find of need's ore would, at the body's height, have laid bare ::barren-ore of it
-  (cost/tunnel-ore): the ground there is too poor to mine on. Always for a block with no ore placement."
+(defn laid-bare
+  "The ore of need's block that n blocks cut at the body's height lay bare on average (cost/tunnel-ore)."
   [c need n]
-  (let [per-block (cost/tunnel-ore (ore-resource need) (update (u/self-pos c) :y js/Math.floor) 1)]
-    (or (not (pos? per-block)) (>= (* n per-block) (barren-ore)))))
-
-(defn dug-total
-  "Blocks cut in a row without a find, counting this run's n: the count of the ore key in mem's [:gather :dug] ({:n :at},
-  where the last run ended) while pos is within n blocks of that end (the run went on from there), else n (a new site)."
-  [mem key pos n]
-  (let [{:keys [n0 at]} (get-in mem [:gather :dug key])]
-    (if (and at (<= (u/dist at pos) n)) (+ n n0) n)))
+  (* n (cost/tunnel-ore (ore-resource need) (update (u/self-pos c) :y js/Math.floor) 1)))
 
 (defn strip-on!
   "A mine for an ore not seen that cut n blocks of new ground and found none looked at new rock: the next run mines on
-  from where it stands, not counted fruitless, until the blocks cut in a row without a find make the ground barren?; info obtain.strip-on. :again."
+  from where it stands, not counted fruitless, until the ore the blocks cut in a row without a find would have laid bare
+  (laid-bare at each run's height, memory [:gather :dug key]) reaches ::barren-ore, or at once where the ore has no placement;
+  info obtain.strip-on. :again, else false."
   [c need n]
-  (let [pos (u/self-pos c)
-        total (dug-total (ctx/mem c) (:key need) pos n)
-        y (js/Math.floor (:y pos))]
-    (ctx/update-mem! c #(-> % (assoc-in [:gather :dug (:key need)] {:n0 total :at pos}) (update :gather dissoc :climb-heading)))
-    (if (barren? c need total)
+  (let [{:keys [blocks ore]} (get-in (ctx/mem c) [:gather :dug (:key need)])
+        total (+ n (or blocks 0))
+        bare (laid-bare c need n)
+        y (js/Math.floor (:y (u/self-pos c)))]
+    (ctx/update-mem! c #(-> % (assoc-in [:gather :dug (:key need)] {:blocks total :ore (+ bare (or ore 0))}) (update :gather dissoc :climb-heading)))
+    (if (or (not (pos? bare)) (>= (+ bare (or ore 0)) (barren-ore)))
       (do (ctx/update-mem! c assoc-in [:gather :why] (str "cut " total " blocks down to y " y " and saw no " (:key need) ": too little there to mine on"))
           false)
       (do (child/progress! c :gather)
@@ -434,8 +423,8 @@
                         (light-settling? c (:cause e)) :again
                         (and (#{:flooded :wet :exposed :hazard} (contract/cause-key e)) at)
                         (do (ctx/update-mem! c update :cut-off (fnil conj #{}) at) :again)
-                        (and (:tunnel? need) (not at) (pos? (dug-blocks res)) (strip-on! c need (dug-blocks res))) :again
-                        :else (do (when-not (and (:tunnel? need) (not at) (pos? (dug-blocks res))) ; else the barren verdict stands
+                        (and (:tunnel? need) (not at) (pos? (:cut-blocks res 0)) (strip-on! c need (:cut-blocks res))) :again
+                        :else (do (when-not (and (:tunnel? need) (not at) (pos? (:cut-blocks res 0))) ; else the barren verdict stands
                                     (ctx/update-mem! c update :gather dissoc :dug))
                                   (gather-failed! c names need (if (= :done (:kind e)) :nothing-gathered (contract/cause-key e)) e))))))))))))
 

@@ -288,7 +288,7 @@
     (cond
       (= :continue r) :continue
       (= :done (:status res))
-      (do (ctx/update-mem! c #(-> % (dissoc :tried-headings)
+      (do (ctx/update-mem! c #(-> % (dissoc :tried-headings) (update :cut-blocks (fnil + 0) (count (:dug res)))
                                   (update :descent (fn [d] (assoc d :steps (+ (:steps d 0) (or (:steps res) 1)) :bottom-y (js/Math.floor (:y (u/self-pos c))) :at (:at res))))))
           :again)
       (and (= :off-stair (:reason res)) (< (get-in (ctx/mem c) [:descent :restairs] 0) (max-restairs)))

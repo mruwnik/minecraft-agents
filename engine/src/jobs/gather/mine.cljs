@@ -45,7 +45,7 @@
 
   Ends :done when :got meets :count (or the call's :least); else the dig's ending (condition-failed for the facts
   :none :wet :refused :own-zone :no-shaft :flooded :no-tool :no-torches, nothing-possible for
-  failed tries). Data {:got n :reason r :mended n} plus the dig's data; text says reason, :got, :mended, the stair and the
+  failed tries). Data {:got n :reason r :mended n} plus the dig's data (:cut-blocks summed over its dig calls); text says reason, :got, :mended, the stair and the
   tunnel. Quote: about ::item-s s an item, open-ended.")
 
 (a/defargs args
@@ -226,7 +226,7 @@
 (defn finish!
   "End the trip: the dig's ending in memory and the mend's count."
   [c]
-  (let [{:keys [dig-end dig-ending tool-ending end-cause reason mended tool-why dug-got]} (ctx/mem c)
+  (let [{:keys [dig-end dig-ending tool-ending end-cause reason mended tool-why dug-got cut-blocks]} (ctx/mem c)
         dug (let [d (merge dig-end end-cause)]
               (if (seq (:left d))
                 (let [left (end/still-lying c (:left d))]
@@ -235,7 +235,8 @@
         n (or dug-got (got c))
         mended (or mended 0)
         data (cond-> (merge (dissoc dug :text) {:got n :reason reason :mended mended})
-               (and tool-why (= :no-tool reason)) (assoc :why tool-why))
+               (and tool-why (= :no-tool reason)) (assoc :why tool-why)
+               (pos? (or cut-blocks 0)) (assoc :cut-blocks cut-blocks))
         text (str (dig-text (or (:text dug) (str "dig-for got " n " of " (owed c) ": " (name reason))))
                   (when (pos? mended) (str "; mended " mended)))
         because (if (and tool-ending (= :no-tool reason)) tool-ending dig-ending)
@@ -263,6 +264,7 @@
         known (into #{} (map :pos) (:ground m))]
     (-> m
         (assoc :dig-end d)
+        (update :cut-blocks (fnil + 0) (:cut-blocks d 0))
         (update :ground (fnil into []) (remove #(known (:pos %))) (:ground d))
         (update-in [:descent :steps] #(max (or % 0) (get-in d [:descent :steps] 0)))
         (cond-> (get-in d [:tunnel :heading]) (assoc :dug-heading (get-in d [:tunnel :heading]))))))
