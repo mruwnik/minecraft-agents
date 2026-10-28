@@ -359,7 +359,6 @@
       (do (ctx/emit! c :go-to.escalated :info {:step (:step e) :why (if (:own e) :own-way-blocked (:why (end/give-up-fields result))) :n n :at feet
                                                :text (if (:own e) "its own stair up is blocked: cutting it again" (str "no way " (if (or into? (= :dig-route (:step e))) "in" "out") " on foot: " (name (:step e))))})
           (ctx/update-mem! c #(-> (merge (dissoc % :escalate-failed :route-search) counted)
-                                  (cond-> (:leg-s e) (update :dug-s (fnil + 0) (:leg-s e)))
                                   (assoc :escalations (inc (:escalations % 0)) :escalation e :escalation-from feet
                                          :planned (planned-cells (:primitives c) e feet) :holes-before (count (own-holes c)))))
           :again))))
@@ -555,6 +554,12 @@
                                 (escalated! c pos e true))
       :else (escalation-failed! c pos {:step :leave-shelter :reason (:reason r) :why (:why r)}))))
 
+(defn charge-dug!
+  "Charge the go-to call's dig budget (memory :dug-s, escalate-choose/dig-left-s) s seconds of digging, once dug: a door
+  its dug cells as clear-path priced them (cost/dig-cells-s), a dig leg each cell as dig-leg did (its break time)."
+  [c s]
+  (ctx/update-mem! c update :dug-s (fnil + 0) s))
+
 (defn ^:async escalation-child-round!
   "One call of the escalation child (ctx/call): the whole pillar, stair or door. After it, every planned cell now dug
   is in the ledger (note-holes!). A door digs at most what the call has left (dig-left-s), and what it dug is charged
@@ -572,7 +577,7 @@
       (forget-dug-own! c dug)
       (when-not (:own e) (note-holes! c dug)))
     (when (and (= :clear-path step) (not= :continue r))
-      (ctx/update-mem! c update :dug-s (fnil + 0) (cost/dig-cells-s (map #(tools/clear-ms (:primitives c) (:block %)) (:dug (:data r))))))
+      (charge-dug! c (cost/dig-cells-s (map #(tools/clear-ms (:primitives c) (:block %)) (:dug (:data r))))))
     (cond
       (= :continue r) :continue
       (succeeded? e r) (escalated! c pos e true)
@@ -606,7 +611,8 @@
               dug (assoc planned :block n)]
           (when (= :dug o)
             (forget-dug-own! c [dug])
-            (note-holes! c [dug]))
+            (note-holes! c [dug])
+            (charge-dug! c (/ (tools/clear-ms p n) 1000)))
           (when guess (note-guess! c beside (not= :not-diggable o)))
           (if (and guess (= :not-diggable o)) :replan o))))))
 

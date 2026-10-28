@@ -17,7 +17,8 @@
             [jobs.movement.go-to.climb :as climb]
             [jobs.movement.go-to.detour :as detour]
             [jobs.movement.go-to :as go-to]
-            [jobs.lib.pace :as pace]))
+            [jobs.lib.pace :as pace]
+            [jobs.lib.tools :as tools]))
 
 ;; level ground x 0..6 (feet 64), a valley stepping down one block a column to feet 52 and up again, level ground to x 40
 (def valley
@@ -645,3 +646,17 @@
           (is (empty? (gt/events-of s :go-to.escalated)) (pr-str (gt/events-of s :go-to.escalated)))
           (is (empty? (filter #(= "dig" (.-name %)) (.-calls (.-world p)))) "nothing is dug")
           (is ((aim/stand-sees-fn p [16 64 0]) x y z) (pr-str [x y z])))))))
+
+(deftest a-dig-leg-is-charged-what-its-dug-cells-took-as-a-door-is
+  ;; one budget for doors and dig legs, booked the same way: the cells dug, as the leg priced them, once dug. The rock the
+  ;; first leg guesses holds a hollow (x 4), so cells it planned are never dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p] :as s} (await (climb! (assoc in-phantom :blocks (dissoc phantom "4,60,0" "4,61,0")) {:pos [26 48 0] :worth 20}))
+              digs (filter #(and (= :child_ended (:kind %)) (= :done (:status %)) (re-find #"/dig$" (:job %))) @(:seen s))
+              cell-s (/ (tools/clear-ms p "stone") 1000)]
+          (is (= [false :dig-budget] [(:arrived @out) (:why (:escalation @out))]) (pr-str @out))
+          (is (seq digs) "a leg was dug before the budget ran out")
+          (is (< (js/Math.abs (- (* (count digs) cell-s) (:dug-s (:escalation @out)))) 1e-6)
+              (pr-str [(count digs) cell-s (:escalation @out)])))))))
