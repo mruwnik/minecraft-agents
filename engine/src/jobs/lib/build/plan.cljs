@@ -371,12 +371,17 @@
 
 (def no-zones "no zone list has been read")
 
+(defn fill-depth
+  "The deepest fill column the build can afford (fill/max-depth of the call's :worth, else fill/build-worth of the plan's cells)."
+  [c]
+  (fill/max-depth (or (:worth (:args c)) (fill/build-worth (:cells (known/plan c (:plan (:args c))))))))
+
 (defn planned
   "{:cells judged} for the plan in the args, or {:trouble text}."
   [c]
   (let [{:keys [plan part]} (:args c)
         answer (let [a (surfaced c (known/plan c plan))]
-                (cond-> a (:cells a) (update :cells #(fill/with-fill (partial world-block (:primitives c)) %))))
+                (cond-> a (:cells a) (update :cells #(fill/with-fill (partial world-block (:primitives c)) (fill-depth c) %))))
         usable? (and answer (not (:broken answer)))
         carried-map (when usable? (storage/carried-totals (u/inventory (:primitives c))))
         wood (when usable? (wood-choice c answer carried-map))

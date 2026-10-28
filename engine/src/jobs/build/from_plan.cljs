@@ -94,6 +94,7 @@
    :part {:doc "only the cells of this part, and the cells of other parts it stands on (down the column), built first" :spec a/name? :default nil}
    :accept {:doc "fluid hazards of a cell taken: :fluid-adjacent (water beside; placing beside or into water seals and bridges), :lava-adjacent (lava beside; not taken by default: the body stands beside the cell), :falling-block (a dig under sand or gravel that falls in)" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default [:fluid-adjacent]}
    :explore {:doc "walk off to look for blocks and tools that are not in sight when the plan lacks them" :spec boolean? :default true}
+   :worth {:doc "seconds the build is worth to the caller, which the fill under a floor with nothing to click beside it (a dirt column, priced as earthwork) must stay within; nil: the value of the blocks the plan wants" :spec (a/num-in 0 nil) :default nil}
    :ignore-zones? :shared})
 
 (def ways need/fetch-ways)

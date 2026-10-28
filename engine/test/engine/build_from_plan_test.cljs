@@ -1220,6 +1220,27 @@
             (is (every? #(= "oak_planks" (block p %)) cells))
             (is (= 1 (count (filter #(= "dirt" (block p (update % 1 dec))) cells))) "one support column, the rest of the floor grows from it")))))))
 
+(deftest a-fill-column-is-placed-or-declined-by-the-price-against-the-worth-not-by-the-width-of-the-floor
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pit (into {} (for [x (range 2 5) z (range 2 5) y [61 62 63]] [(h/cell-key x y z) (if (= y 61) "stone" "air")]))
+              plan {:id "one" :parts [{:id "f" :cells [[3 65 3]] :want "oak_planks"}]}
+              run (fn ^:async f [worth]
+                    (let [{:keys [eng p]} (start {:blocks (merge wide-ground pit) :inventory [{:name "oak_planks" :count 1} {:name "dirt" :count 4}]
+                                                  :self {:pos {:x 7.5 :y 64 :z 3.5}}}
+                                                 {"one" plan} [])]
+                      (no-support-world! p)
+                      [(await (child-outcome eng job {:plan "one" :worth worth} 400)) p]))
+              [rich pr] (await (run 1000))
+              [poor pp] (await (run 0.5))]
+          (is (= [] (:missing rich)) (pr-str (select-keys rich [:status :reason :text :given-up])))
+          (is (= "oak_planks" (block pr [3 65 3])) "a one-cell floor gets its 3-deep column when the worth pays it")
+          (is (= ["dirt" "dirt" "dirt"] (map #(block pr [3 % 3]) [64 63 62])))
+          (is (= :stopped (:status poor)))
+          (is (not= "oak_planks" (block pp [3 65 3])) "declined when the column costs more than the worth")
+          (is (= "air" (block pp [3 62 3]))))))))
+
 (deftest a-cell-whose-floor-was-never-seen-is-looked-at-before-it-is-refused-no-support
   (async done
     (tu/run-async done
