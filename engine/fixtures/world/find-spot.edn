@@ -2,14 +2,18 @@
 ;; are found; an early accept must have water within 4 when water is in range. A 128 x 64 grass plot, body in the middle, :range 24.
 ;; Should-succeed: flat grass with a pond 10 east: the best spot lies by the pond (water within 4), the job ends within 20 s; a pond 18
 ;; east, 3 wide (beyond a block of dry flat ground by the body) still wins the best spot; a grass hillside (1 up every 4 columns) finds its
-;; best-so-far spots within 40 s whatever the 30000-read cap does. The water-all-round and cliff cases (:none) are in farm-find-spot.edn.
+;; best-so-far spots within 40 s whatever the 30000-read cap does; a plan with no crops and no :worth (an order, card 3f946164) takes the nearest flat spot. The water-all-round and cliff cases (:none) are in farm-find-spot.edn.
 {:defaults
  {:tags [:farm :find-spot :jobs] :time :any
   :plot {:light :sky :height 31 :floor "grass_block" :length 128 :width 64}
   :body {:at [64.5 0 32.5] :settle-s 2 :effects [["resistance" 600 4]]}
   :limit-s 60}
  :cases
- [{:name "pond-10-east-best-spot-is-by-the-pond"
+ [{:name "a-plan-with-no-crops-and-no-worth-finds-the-nearest-spot"
+   :plans [{:id "hut" :metadata {:by "$body"} :parts [{:id "f" :box [#at [10 0 10] #at [12 0 12]] :want "oak_planks"}]}]
+   :act [[:job (jobs.farm.find-spot {:plan "$plan:hut" :range 8 :settings {:jobs.farm.find-spot/depth 7}})]]
+   :expect [{:event {:source :job :kind :completed :data {:spot [:near #at [63 -1 31] 4]}} :within-s 30 :of-job true}]}
+  {:name "pond-10-east-best-spot-is-by-the-pond"
    :blocks [[:fill [74 -2 30] [76 -2 34] "stone"] [:fill [74 -1 30] [76 -1 34] "water"]]
    :act [[:job (jobs.farm.find-spot {:w 5 :h 5 :range 24 :settings {:jobs.farm.find-spot/depth 7}})]]
    :expect [{:event {:source :job :kind :completed :data {:spot [:near #at [70 -1 32] 10]}} :within-s 20 :of-job true}
