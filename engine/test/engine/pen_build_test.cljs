@@ -7,8 +7,10 @@
             [engine.fake :as fake]
             [engine.farm-contract-test :refer [ending-of kc]]
             [engine.harvest-test :as h]
+            [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.build.pen :as pen]
+            [jobs.lib.check-cache :as cc]
             [jobs.lib.cost :as cost]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.pen-read :as pen-read]))
@@ -491,3 +493,16 @@
             (is (true? (:closed? (:data e))))
             (is (every? #{nil "air"} (concat (map #(h/block-at p 5 % 3) [64 65]) (map #(h/block-at p 3 % 1) [64 65]))) "the shelter blocks beside the fence and in front of the gate are gone, with no weapon carried")
             (is (some #(= :tidy (:slot %)) (kinds-of seen :child_started)))))))))
+
+(deftest the-plan-judged-for-one-part-is-not-reused-for-another-in-the-same-slot
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [seen-cells (atom {})
+              judge {:round (fn ^:async judge-parts [c]
+                              (doseq [id ["fence" "gate"]]
+                                (swap! seen-cells assoc id (mapv :pos (:cells (pen/judged-plan (assoc c :args {:plan "pen" :part id}))))))
+                              (ctx/end c :done nil))}
+              {:keys [eng]} (b/start (spec kit) {"pen" (ring-plan)} [] {'judge-parts judge})]
+          (await (settings/scoped {::cc/ttl-ms 100000000} #(tu/child-outcome eng 'judge-parts {} 20)))
+          (is (= {"fence" fenced-ring "gate" [[3 64 2]]} (update-vals @seen-cells vec))))))))

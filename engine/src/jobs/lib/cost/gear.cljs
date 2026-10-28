@@ -5,6 +5,7 @@
   price; a piece is worth that times its durability. Pure."
   (:require [jobs.lib.cost.armour :as armour]
             [jobs.lib.cost.health :as health]
+            [jobs.lib.cost.threat :as threat]
             [jobs.lib.cost.weapon :as weapon]))
 
 (defn dig-time
@@ -23,11 +24,13 @@
 (defn use-saved
   "Seconds one use of item saves against the stone tool or the bare body (0 when it saves none)."
   [{:keys [dig gear]} item]
-  (let [{:keys [ref-hit ref-fall ref-mob-hp ref-hardness]} gear
+  (let [{:keys [ref-mob ref-hardness]} gear
+        ref-hit (get threat/mob-hit ref-mob)
+        ref-mob-hp (get weapon/mob-max-health ref-mob)
         stone-tier (weapon/tool-tier "stone_pickaxe")]
     (max 0
          (cond
-           (= "elytra" item) (* (health/walk-hp-seconds) (armour/fall-damage {} ref-fall))
+           (= "elytra" item) (* (health/walk-hp-seconds) (armour/fall-damage {} armour/ref-fall))
            (pos? (armour/piece-points item)) (* (health/walk-hp-seconds) (hit-saved item ref-hit))
            (weapon? item) (- (weapon/kill-seconds "stone_sword" ref-mob-hp) (weapon/kill-seconds item ref-mob-hp))
            :else (- (dig-time dig stone-tier ref-hardness) (dig-time dig (weapon/tool-tier item) ref-hardness))))))

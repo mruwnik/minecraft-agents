@@ -164,7 +164,7 @@
 (defn judged-plan
   "planned, once per check-cache window."
   [c]
-  (check-cache/cached c :planned #(planned c)))
+  (check-cache/cached c [:planned (:args c)] #(planned c)))
 
 (defn next-part
   "With no :part, the first part holding fence, wall or gate cells that still owes cells and was not built this job (a pen is built part by part, not as the whole plan), else nil."

@@ -81,11 +81,13 @@
 
 (defn max-fall [] (settings/get settings ::max-fall))
 
+(def ref-fall "The fall in blocks fall-profile reads a body's fall factor at, and the item base prices an elytra's use by." 4)
+
 (defn fall-profile
   "How a body {:health :equipment :damage-budget} takes drops: {:fall-factor the share of the usual fall damage left (1:
   none reduced), :max-drop the longest drop in blocks the planner may take}: the longest (up to max-fall, at least 3)
   whose fall damage the budget (hp: jobs.lib.walk.world passes the survivable-budget, jobs.lib.cost.health) pays for."
   [{:keys [equipment damage-budget]}]
   (let [budget (or damage-budget 0)]
-    {:fall-factor (fall-damage equipment 4)
-     :max-drop (or (last (take-while #(<= (fall-damage equipment %) budget) (range 4 (inc (max-fall))))) 3)}))
+    {:fall-factor (fall-damage equipment ref-fall)
+     :max-drop (or (last (take-while #(<= (fall-damage equipment %) budget) (range ref-fall (inc (max-fall))))) 3)}))

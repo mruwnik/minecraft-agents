@@ -99,8 +99,10 @@
       "coal is gathered rather than a log smelted to charcoal"))
 
 (deftest a-gather-plan-never-asks-for-a-stripped-log
-  (is (not-any? #(str/starts-with? % "stripped_") (keys (:gather (plan {} "stripped_oak_wood" 3 {:gather? true}))))
-      "no tree drops one"))
+  (is (nil? (plan {} "stripped_oak_wood" 3 {:gather? true})) "no tree drops one, so no plan")
+  (let [p (plan {} "oak_planks" 4 {:gather? true})]
+    (is (seq (:gather p)) "a plan that does gather")
+    (is (not-any? #(str/starts-with? % "stripped_") (keys (:gather p))))))
 
 (deftest a-needed-item-is-never-crafted-down-to-be-crafted-back
   (is (nil? (plan {"iron_ingot" 3} "iron_ingot" 3 {:table? true})) "ingots are not turned into nuggets to make more ingots"))

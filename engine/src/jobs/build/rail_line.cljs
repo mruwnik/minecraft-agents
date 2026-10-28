@@ -192,7 +192,7 @@
 (defn judged-plan
   "planned, once per check-cache window."
   [c]
-  (check-cache/cached c :planned #(planned c)))
+  (check-cache/cached c [:planned (:args c)] #(planned c)))
 
 (defn plan-problem
   "The trouble of the plan: later for no zone list read, or a plan missing or unreadable (it may be saved or fixed
@@ -211,7 +211,7 @@
    (fn [c]
      (let [{:keys [cells trouble]} (judged-plan c)]
        (when-not (or trouble (sound? c cells))
-         (check-cache/cached c :ready #(not-ready c cells)))))))
+         (check-cache/cached c [:ready (:args c)] #(not-ready c cells)))))))
 
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 
