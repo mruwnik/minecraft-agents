@@ -3,7 +3,8 @@
 // height (y, its lowest block) a Beta {a b} fitted by moments to the share of solid among the blocks sight meets (the open
 // blocks and the solid ones beside them: walls) in every 3x3x3-section window centred there, over the columns the bodies have recorded (worlds/<world>/chunks: the game's terrain as the server sent
 // it, not what a body saw), less the fixture plot grid and its lanes (built courses, not terrain); and as reach, by
-// source and target section, the slope of a window's share on the share at another height of the same column. Solid is the engine's rule
+// source and target section, the slope of a window's share on the share at another height of the same column (shrunk
+// toward 0 by its sampling variance, in [0, 1]) and as reach-n the windows it was fitted over. Solid is the engine's rule
 // (jobs.lib.walk.rock/open-ids), read from the planner's block table in the compile cache, so run any engine build or test
 // first. Rerun when the world or the game version changes:
 //   node tools/solid-shares.mjs [chunks-dir]
@@ -84,14 +85,26 @@ export const fitWindows = (columns, minY, empty = (w, o) => o === 0) => {
   })
 }
 
-// [[slope by target section] by source section]: the least-squares slope of a window's share on the share of the window
-// centred on the same column at the source section, over the windows where both are samples (1 on the diagonal, 0
-// where the source's share never varies): how far a share seen at one height moves the share expected at another
+// Under a Normal(0, 1) prior on the slope, the residual variance taken from the fit, the posterior mean of a share's
+// slope on another's from a pair's sums, cut to [0, 1] (a seen share cannot say more about another height than about its
+// own, nor less than nothing): a source whose share barely varies carries no evidence, so its slope stays near 0
+export const shrunkSlope = ({ n, x, y, xy, xx, yy }) => {
+  if (n < 3) return 0
+  const sxx = Math.max(0, xx - x * x / n)
+  const sxy = xy - x * y / n
+  const syy = Math.max(0, yy - y * y / n)
+  const residual = (sxx > 0 ? Math.max(0, syy - sxy * sxy / sxx) : syy) / (n - 2)
+  return sxx + residual > 0 ? Math.min(1, Math.max(0, sxy / (sxx + residual))) : 0
+}
+
+// {slope n}, [[by target section] by source section]: shrunkSlope of a window's share on the share of the window centred
+// on the same column at the source section, over the n columns where both are samples (1 on the diagonal): how far a
+// share seen at one height moves the share expected at another
 export const fitReach = (columns, empty = (w, o) => o === 0) => {
   let acc = null
   for (const windows of windowShares(columns, empty)) {
     const n = windows.length
-    acc ??= Array.from({ length: n * n }, () => ({ n: 0, x: 0, y: 0, xy: 0, xx: 0 }))
+    acc ??= Array.from({ length: n * n }, () => ({ n: 0, x: 0, y: 0, xy: 0, xx: 0, yy: 0 }))
     for (let s = 0; s < n; s++) {
       const x = windows[s].share
       if (Number.isNaN(x)) continue
@@ -99,18 +112,14 @@ export const fitReach = (columns, empty = (w, o) => o === 0) => {
         const y = windows[t].share
         if (Number.isNaN(y)) continue
         const e = acc[s * n + t]
-        e.n++; e.x += x; e.y += y; e.xy += x * y; e.xx += x * x
+        e.n++; e.x += x; e.y += y; e.xy += x * y; e.xx += x * x; e.yy += y * y
       }
     }
   }
-  if (!acc) return []
+  if (!acc) return { slope: [], n: [] }
   const n = Math.sqrt(acc.length)
-  return Array.from({ length: n }, (_, s) => Array.from({ length: n }, (_, t) => {
-    const e = acc[s * n + t]
-    const v = e.n ? e.xx - e.x * e.x / e.n : 0
-    const slope = s === t ? 1 : v > 1e-12 ? (e.xy - e.x * e.y / e.n) / v : 0
-    return Number(slope.toPrecision(3))
-  }))
+  const rows = f => Array.from({ length: n }, (_, s) => Array.from({ length: n }, (_, t) => f(acc[s * n + t], s === t)))
+  return { slope: rows((e, diagonal) => diagonal ? 1 : Number(shrunkSlope(e).toPrecision(3))), n: rows(e => e.n) }
 }
 
 // {wall open} Int32Arrays per section of a column from solid (1 by block, section by section, lowest first): its open
@@ -151,7 +160,7 @@ const main = dir => {
   const sections = fitWindows(columns, minY)
   const reach = fitReach(columns)
   const rows = xs => xs.map(e => ' ' + JSON.stringify(e)).join(',\n')
-  fs.writeFileSync(OUT, `{"version": "${MC_VERSION}", "columns": ${columns.size}, "sections": [\n${rows(sections)}],\n"reach": [\n${rows(reach)}]}\n`)
+  fs.writeFileSync(OUT, `{"version": "${MC_VERSION}", "columns": ${columns.size}, "sections": [\n${rows(sections)}],\n"reach": [\n${rows(reach.slope)}],\n"reach-n": [\n${rows(reach.n)}]}\n`)
   console.log(`${columns.size} columns, ${sections.length} section heights -> ${path.relative(ROOT, OUT)}`)
 }
 

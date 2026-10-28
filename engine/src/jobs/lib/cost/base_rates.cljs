@@ -161,13 +161,13 @@
 (defn solid-share
   "The share of solid expected among the blocks sight meets round height y, with solid and open those it has met in the
   window round height seen's section: their posterior mean over that section's prior, carried to y by the slope of the
-  share at y on the share at seen's section in the recorded terrain (reach in solid_shares.json): the posterior in seen's
-  section, the prior at y where the two heights' shares are unrelated."
+  share y - seen away on the share at seen's section in the recorded terrain (reach in solid_shares.json, in [0, 1]):
+  the posterior at seen, the prior at y where the two heights' shares are unrelated."
   [y seen solid open]
   (let [s (-> (js/Math.floor (/ (- seen (:y (first solid-shares))) 16)) (max 0) (min (dec (count solid-shares))))
         {sa :a sb :b} (solid-shares s)
         {:keys [a b]} (solid-prior y)
-        slope (mix (between solid-shares y) (reach s))]
+        slope (mix (between solid-shares (+ y (- (:y (solid-shares s)) seen -8))) (reach s))]
     (-> (+ (/ a (+ a b)) (* slope (- (/ (+ sa solid) (+ sa sb solid open)) (/ sa (+ sa sb))))) (max 0) (min 1))))
 
 (defn open-run-chance

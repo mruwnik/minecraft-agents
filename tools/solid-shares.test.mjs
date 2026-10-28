@@ -1,7 +1,7 @@
 // Why JavaScript: node --test file for tools/solid-shares.mjs (a Node tool over recorded chunk columns).
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { betaOf, columnCounts, fitReach, fitWindows, reserved, solidStates } from './solid-shares.mjs'
+import { betaOf, columnCounts, fitReach, fitWindows, reserved, shrunkSlope, solidStates } from './solid-shares.mjs'
 
 const grid = (counts) => {
   const columns = new Map()
@@ -44,8 +44,20 @@ test('solid is the engine rule by block kind, and the fixture plot grid is left 
 
 test('reach is the slope of the share at one height on the share at another, 0 where the source never varies', () => {
   // the open blocks of the two lowest sections vary together from column to column; the top two sections are alike in all
-  const reach = fitReach(grid((cx, cz) => { const o = 1 + ((cx + 2) * 5 + cz + 2) % 4; return [[1, 1, 1, 1, 1], [o, o, 1, 1, 1]] }))
-  assert.deepEqual(reach.map((r, s) => r[s]), [1, 1, 1, 1, 1])
-  assert.ok(reach[0][1] > 0.5, 'the lowest two sections tied')
-  assert.deepEqual(reach.slice(3).map(r => r.filter(v => v !== 1)), [[0, 0, 0, 0], [0, 0, 0, 0]], 'a share that never varies says nothing')
+  const { slope, n } = fitReach(grid((cx, cz) => { const o = 1 + ((cx + 2) * 5 + cz + 2) % 4; return [[1, 1, 1, 1, 1], [o, o, 1, 1, 1]] }))
+  assert.deepEqual(slope.map((r, s) => r[s]), [1, 1, 1, 1, 1])
+  assert.ok(slope[0][1] > 0.5, 'the lowest two sections tied')
+  assert.deepEqual(slope.slice(3).map(r => r.filter(v => v !== 1)), [[0, 0, 0, 0], [0, 0, 0, 0]], 'a share that never varies says nothing')
+  assert.equal(n[0][1], 9, 'the windows with all 9 columns recorded')
+})
+
+test('a slope is shrunk toward 0 by its sampling variance and cut to [0, 1]', () => {
+  const sums = pairs => pairs.reduce((e, [x, y]) => ({ n: e.n + 1, x: e.x + x, y: e.y + y, xy: e.xy + x * y, xx: e.xx + x * x, yy: e.yy + y * y }),
+    { n: 0, x: 0, y: 0, xy: 0, xx: 0, yy: 0 })
+  const tied = Array.from({ length: 100 }, (_, i) => [i / 100, i / 100])
+  assert.ok(shrunkSlope(sums(tied)) > 0.99, 'many samples of a real tie keep it')
+  const faint = Array.from({ length: 100 }, (_, i) => [0.5 + (i % 2) * 1e-6, (i % 2) * 0.3 + (i % 3) * 0.2])
+  assert.ok(shrunkSlope(sums(faint)) < 0.01, 'a source that barely varies says next to nothing, however steep its least-squares slope')
+  assert.equal(shrunkSlope(sums(tied.map(([x, y]) => [x, 1 - y]))), 0, 'never negative')
+  assert.equal(shrunkSlope(sums(tied.map(([x, y]) => [x / 4, y]))), 1, 'never past 1')
 })

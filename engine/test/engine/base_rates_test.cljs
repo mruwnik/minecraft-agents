@@ -63,6 +63,10 @@
     (is (< (rates/open-run-chance 42 72 72 0 3000) 0.05) "an unseen shaft from there up to the feet is unlikely open")
     (is (> (rates/solid-share 42 72 3000 0) deep) "seen rock round the feet still says more rock down there")))
 
+(deftest blocks-seen-off-a-section-centre-move-the-share-at-their-own-height-in-full
+  (let [shift #(- (rates/solid-share % % 1500 1500) (let [{:keys [a b]} (rates/solid-prior %)] (/ a (+ a b))))]
+    (is (close? (shift 65) (shift 72)) "the seen share at the feet, wherever the feet are in their section")))
+
 (deftest the-sky-share-is-the-height-prior-until-the-seen-open-blocks-outweigh-it
   (is (< (rates/sky-share -40 8 0 0) 0.01) "nothing seen deep down: caves")
   (is (> (rates/sky-share 120 15 0 0) 0.9) "nothing seen high up: open air")
