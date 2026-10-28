@@ -22,16 +22,23 @@
         own (access/own-plans c)]
     (fn [cell] (some own [(get footprints (vec cell))]))))
 
+(defn with-own-pen
+  "c with the own pen holding livestock the body stands in (jobs.lib.own-pen/shut-in, read on first use) as :own-pen: the
+  fns below built from it share one read."
+  [c]
+  (assoc c :own-pen (own-pen/shut-in c (end/feet-cell c))))
+
+(defn pen-of [c] (or (:own-pen c) (own-pen/shut-in c (end/feet-cell c))))
+
 (defn own-build-fn
   "(own-build cell): :plan when a plan this body made covers cell, :pen when it is the wall of the own pen holding
-  livestock the body stands in (jobs.lib.own-pen, read on first use), else nil."
-  ([c] (own-build-fn c (own-pen/shut-in c (end/feet-cell c))))
-  ([c pen]
-   (let [own-plan (own-plan-fn c)
-         pen-wall? (:wall? pen)]
-     (fn [cell]
-       (cond (own-plan cell) :plan
-             (pen-wall? cell) :pen)))))
+  livestock the body stands in (pen-of), else nil."
+  [c]
+  (let [own-plan (own-plan-fn c)
+        pen-wall? (:wall? (pen-of c))]
+    (fn [cell]
+      (cond (own-plan cell) :plan
+            (pen-wall? cell) :pen))))
 
 (defn may-dig-fn
   "(may-dig? cell): no other owner's zone, claim or plan footprint refuses a dig there (jobs.lib.tidy/refusal), it is
@@ -55,9 +62,8 @@
   0 for any other cell."
   [c]
   (let [p (:primitives c)
-        pen (own-pen/shut-in c (end/feet-cell c))
-        own-build (own-build-fn c pen)
-        herd (delay (map :kind @(:herd pen)))]
+        own-build (own-build-fn c)
+        herd (delay (map :kind @(:herd (pen-of c))))]
     (fn [cell]
       (if-let [kind (own-build cell)]
         (let [n (u/seen-name p (zipmap [:x :y :z] cell))

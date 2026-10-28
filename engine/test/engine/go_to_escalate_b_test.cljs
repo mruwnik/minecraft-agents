@@ -10,7 +10,13 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.memory :as mem]
+            [jobs.lib.access :as access]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.cost.ways :as cw]
             [jobs.lib.escape :as escape]
+            [jobs.lib.pen :as pen]
+            [engine.ready-test :as rt]
+            [jobs.movement.go-to.holes :as holes]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.search :as wsearch]
@@ -237,6 +243,25 @@
           (is (= (dug-cells-of p) (set (mapcat :cells (events-of seen :go-to.restored)))) "animals stand in the pit the body owns: every cell dug is put back")
           (is (= {:arrived true} @(:out open)) "an own pit with no animals in it is dug out of as before")
           (is (empty? (events-of (:seen open) :go-to.restored)) "and its holes are left"))))))
+
+(deftest an-own-stocked-pen-wall-cut-costs-its-put-back-and-the-herd-s-loss-and-the-pen-is-read-once
+  ;; card dbd43651: the herd-loss branch of the put-back price; the may-dig, own and price fns of one escalation share one pen read
+  (let [cow {:id 7 :name "cow" :kind "passive" :pos {:x 0.5 :y 61 :z 0.5}}
+        c (assoc (rt/ctx-of (merge in-pit {:blocks pit :entities [cow]})) :args {})
+        checks (atom 0)
+        check pen/check
+        wall [1 62 0]]
+    (with-redefs [access/in-own-area? (constantly true)
+                  pen/check (fn [o] (swap! checks inc) (check o))]
+      (let [c (holes/with-own-pen c)
+            back (cw/put-back-cost 0)
+            cut-s ((holes/own-cut-fn c) wall)]
+        (is (false? ((holes/may-dig-fn c) wall)) "the wall is spared unless its cut is chosen")
+        (is (true? ((holes/own-fn c (constantly false)) wall "dirt")))
+        (is (= (+ back (cost/herd-loss ["cow"] (+ back (cost/dig-cost "dirt")))) cut-s))
+        (is (< back cut-s) "the herd may walk out while the gap stands open")
+        (is (zero? ((holes/own-cut-fn c) [3 62 0])) "natural ground beyond the wall costs no put-back")
+        (is (= 1 @checks))))))
 
 (def thick-pit-pen
   "A 2-deep 5x5 pit (inside x -2..2, z -2..2, feet y 64) in stone x -6..6, y 64..65, z -6..6 (walls 4 thick) on a stone

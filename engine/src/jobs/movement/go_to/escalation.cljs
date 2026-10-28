@@ -44,7 +44,7 @@
             [jobs.movement.go-to.escalate-choose :refer [cheaper-fill climb-on? dive-climb-on? dive? escalate-reason? escalate? fetch-tool? gap-fill
                                                          goal-way dig-leg dig-way drop-fill price frontier-way gap-dig gap-walled? goal-lava? leg-ends goal-walled? own-stair route-cells shelter-exit? skips sprint-only?
                                                          route-owner route-slice routes-searching! searching? searching-ends keep-routes! forget-routes! search-opts]]
-            [jobs.movement.go-to.holes :refer [forget-dug-own! hole-tag may-dig-fn note-holes! own-cut-fn own-fn own-holes own-placed-fn planned-cells]]
+            [jobs.movement.go-to.holes :refer [forget-dug-own! hole-tag may-dig-fn note-holes! own-cut-fn own-fn own-holes own-placed-fn planned-cells with-own-pen]]
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.search-bound :as search-bound]
             [jobs.movement.go-to.torch :as torch]
@@ -243,7 +243,8 @@
 (defn ^:async choose-escalation!
   "escalate!'s choice and start of the next way, or its give-up."
   [c pos failed]
-  (let [{:keys [tries status result]} (:give-up (ctx/mem c))
+  (let [c (with-own-pen c)
+        {:keys [tries status result]} (:give-up (ctx/mem c))
         feet (end/feet-cell c)
         counted (count-escalation (ctx/mem c) (if (:dive-climb (ctx/mem c))
                                                 (- (:y pos) (second feet))
@@ -582,7 +583,8 @@
   (climb-route) walks again instead, counted as a replan too: the climb is searched again, and past the count it fails
   :replans-spent, which skips dig routes for the rest of the call."
   [c pos cell]
-  (let [feet (end/feet-cell c)
+  (let [c (with-own-pen c)
+        feet (end/feet-cell c)
         _ (when-not (:replan-budget (ctx/mem c))
             (ctx/update-mem! c assoc :replan-budget
                              {:since (ctx/now c)
