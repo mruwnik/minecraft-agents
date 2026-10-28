@@ -147,3 +147,10 @@
                   stood (reductions (fn [dug s] (into dug (:dig s))) #{} (:steps r))]]
       (is (seq (:steps r)) "a route is found")
       (is (every? true? (map (fn [dug {[x y z] :to}] (not (dug [x (dec y) z]))) stood (:steps r)))))))
+
+(deftest a-range-search-seeds-its-back-search-from-the-end-cells-nearest-the-start-only
+  (let [reads (atom #{})
+        at (world {})
+        r (dr/route (fn [c] (swap! reads conj c) (at c)) [0 10 0] [20 10 0] {:range 8 :step-s 1})]
+    (is (= [] (:dig r)))
+    (is (not-any? (fn [[x]] (> x 22)) @reads) "end cells beyond the goal cannot be on the cheapest way: unread")))

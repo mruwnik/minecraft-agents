@@ -590,21 +590,34 @@
               digs (atom 0)
               c {:primitives (:p s) :args {:block "stone"} :update-mem (fn [f args] (apply swap! m f args))}
               stone-s ((:dig-s (drops/cut-prices c)) "stone" nil)
-              [drop-cut dig-cell! look-at! job-mem] [drops/drop-cut drops/dig-cell! dig-look/look-at! ctx/mem]]
-          (set! drops/drop-cut (fn [_ _ max-s]
+              steps {:drop-cut (fn [_ _ max-s]
                                  (swap! budgets conj max-s)
-                                 (when (and (pos? max-s) (< (count @budgets) 200)) [(if (odd? (count @budgets)) [1 64 0] [1 64 -1])])))
-          (set! drops/dig-cell! (fn [_ _] (if (= 3 (swap! digs inc)) :continue :dug)))
-          (set! dig-look/look-at! (fn [_ _] nil))
-          (set! ctx/mem (fn [_] @m))
-          (try
-            (is (= :partial (await (drops/cut-to-drop! c [2 64 0] 5))) "the third dig waits on the world")
-            (is (nil? (await (drops/cut-to-drop! c [2 64 0] 5))) "the next round goes on with what is left, and runs out")
-            (is (< (count @budgets) 200))
-            (is (= (nth @budgets 2) (nth @budgets 3)) "the dig cut short is paid once it is dug, not when it begins")
-            (is (= (- (nth @budgets 0) stone-s) (nth @budgets 1)) "a dig is booked at the price it was planned at (cut-prices)")
-            (is (apply > (dedupe @budgets)) "each way is planned out of less")
-            (finally (set! drops/drop-cut drop-cut) (set! drops/dig-cell! dig-cell!) (set! dig-look/look-at! look-at!) (set! ctx/mem job-mem))))))))
+                                 (when (and (pos? max-s) (< (count @budgets) 200)) [(if (odd? (count @budgets)) [1 64 0] [1 64 -1])]))
+                     :dig-cell! (fn [_ _] (if (= 3 (swap! digs inc)) :continue :dug))
+                     :look-at! (fn [_ _] nil)
+                     :mem (fn [_] @m)}
+              c (assoc c :cut-with steps)]
+          (is (= :partial (await (drops/cut-to-drop! c [2 64 0] 5))) "the third dig waits on the world")
+          (is (nil? (await (drops/cut-to-drop! c [2 64 0] 5))) "the next round goes on with what is left, and runs out")
+          (is (< (count @budgets) 200))
+          (is (= (nth @budgets 2) (nth @budgets 3)) "the dig cut short is paid once it is dug, not when it begins")
+          (is (= (- (nth @budgets 0) stone-s) (nth @budgets 1)) "a dig is booked at the price it was planned at (cut-prices)")
+          (is (apply > (dedupe @budgets)) "each way is planned out of less"))))))
+
+(deftest a-cut-whose-dig-fails-books-the-dig-at-its-price
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})
+              m (atom {})
+              c {:primitives (:p s) :args {:block "stone"} :update-mem (fn [f args] (apply swap! m f args))
+                 :cut-with {:drop-cut (fn [_ _ _] [[1 64 0]])
+                            :dig-cell! (fn [_ _] nil)
+                            :look-at! (fn [_ _] nil)
+                            :mem (fn [_] @m)}}
+              stone-s ((:dig-s (drops/cut-prices c)) "stone" nil)]
+          (is (nil? (await (drops/cut-to-drop! c [2 64 0] 5))) "a failed dig ends the cut")
+          (is (= stone-s (get-in @m [:cut-spent [2 64 0]])) "and is booked: the next round plans out of what is left"))))))
 
 (deftest a-mine-that-ends-short-of-its-count-is-stopped-not-completed
   (async done

@@ -5,7 +5,6 @@
             [engine.settings :as settings]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.block-sets :as bs]
-            [jobs.lib.clock :as clock]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.armour :as armour]
             [jobs.lib.cost.ways :as cw]
@@ -14,8 +13,7 @@
             [jobs.lib.walk.world :as wworld]))
 
 (a/defargs settings
-  {::max-nodes {:default 500 :doc "The most cells a route search expands before it gives up (:budget)." :spec (a/int-in 1 nil)}
-   ::seed-ms {:default 20 :doc "Milliseconds a route search spends seeding its search back from the goal's range; past it that lower bound is left out." :spec (a/num-in 0 nil)}})
+  {::max-nodes {:default 500 :doc "The most cells a route search expands before it gives up (:budget)." :spec (a/int-in 1 nil)}})
 
 (def falling #{"sand" "red_sand" "gravel"})
 
@@ -222,6 +220,9 @@
         to-start (fn [x z] (* step-s (+ (js/Math.abs (- x fx)) (js/Math.abs (- z fz)))))
         back-best (js/Map.) back-done (js/Set.) back-queue #js []
         back-tick (volatile! 0)
+        ;; the end cells of a range search, nearest the start first: one enters the back search only once its bound is the
+        ;; cheapest there (a farther one cannot change what is popped before), so the block reads of the many stay unread
+        seeds (volatile! ())
         back-over (volatile! false)
         back-relax! (fn [g x y z]
                       (let [k (key x y z) old (.get back-best k)]
@@ -230,7 +231,15 @@
                           (heap-push! back-queue #js [(+ g (to-start x z)) (vswap! back-tick inc) k]))))
         back-into! (fn [g x y z s]
                      (when (and (some? s) (stands? x y z)) (back-relax! (+ g s) x y z)))
+        seed-due! (fn []
+                    (loop []
+                      (when-let [[x y z] (first @seeds)]
+                        (when (or (zero? (.-length back-queue)) (<= (to-start x z) (aget back-queue 0 0)))
+                          (vswap! seeds rest)
+                          (when (stands? x y z) (back-relax! 0 x y z))
+                          (recur)))))
         back-step! (fn []
+                     (seed-due!)
                      (let [top (heap-pop! back-queue)
                            k (some-> top (aget 2))]
                        (cond
@@ -255,23 +264,13 @@
                            nil))))]
     (.set best start-key #js [0 0 0 nil nil 0 #{}])
     (heap-push! queue #js [(heuristic fx (from 1) fz) 0 start-key])
-    ;; a range search seeds the back search from every end cell, up to (2 range + 1)^3 block reads: past seed-ms it seeds no
-    ;; more and runs without the back search, whose verdicts a part-seeded one would get wrong
-    (let [deadline (+ (clock/now) (settings/get settings ::seed-ms))
-          seeded? (reduce (fn [_ [x y z]]
-                            (if (> (clock/now) deadline)
-                              (reduced false)
-                              (do (when (stands? x y z) (back-relax! 0 x y z)) true)))
-                          true
-                          (cons goal (when r
-                                       (let [w (js/Math.ceil r) ds (range (- w) (inc w))]
-                                         (for [dx ds dy ds dz ds
-                                               :let [x (+ ax dx) y (+ ay dy) z (+ az dz)]
-                                               :when (end? (key x y z))]
-                                           [x y z])))))]
-      (when-not seeded?
-        (vreset! back-over true)
-        (set! (.-length back-queue) 0)))
+    (vreset! seeds (sort-by (fn [[x _ z]] (to-start x z))
+                            (cons goal (when r
+                                         (let [w (js/Math.ceil r) ds (range (- w) (inc w))]
+                                           (for [dx ds dy ds dz ds
+                                                 :let [x (+ ax dx) y (+ ay dy) z (+ az dz)]
+                                                 :when (end? (key x y z))]
+                                             [x y z]))))))
     (fn [n]
       (let [start (.-size done)
             limit (+ start n)
