@@ -44,11 +44,12 @@
                     :spec (a/pred "a map of mob kind to {:n count :deciles [10 seconds]}, holding \"pooled\""
                                   #(and (contains? % "pooled") (a/ok? (a/map-of a/name? (a/map-with {:n (a/int-in 0 nil) :deciles start-deciles?})) %)))}
    ::flee-walk-speed {:default 3.72 :doc "Blocks a second a flight's steps cover (flee-walk-speed), at food over ::sprint-food; one too hungry to sprint covers body-speed's share of it: 1444 blocks in 389 s of 382 steps (retreat.step-speed, slot :step) of 64 flights of two steps or more, trial logs to 2026-10-23. Recount: tools/event-counts.mjs flee-pace (:bps)." :spec (a/num-in 0.1 nil)}
+   ::flee-step-s {:default 1.02 :doc "Seconds a flee step takes, the mean: 389 s over 382 steps of the same flights (flee-pace, :seconds over :steps)." :spec (a/num-in 0.1 nil)}
    ::flee-stop-s {:default 0.23 :doc "Seconds a flight stands between two of its steps while still in flight (a look, a re-decide, a replan, a respond delay), the mean: 46.8 s over 203 such gaps of the same flights; 115 gaps in which the flight had ended (another answer, action or child ran) are left out. Recount: flee-pace (:stop-s, :gaps, :off-gaps)." :spec (a/num-in 0 nil)}
    ::closing-rates {:default {}
                     :doc "Blocks a second the gap between a fleeing body and each mob kind it saw as two flee steps in a row started grew, by :sprint (food over ::sprint-food) or :walk, as {kind {:sprint {:blocks :s}}}: over the seconds between the starts (closing-rate). None counted yet: the trial logs before 2026-10-28 hold no gaps (retreat.step-speed :chasers). Recount: tools/event-counts.mjs closing-rate (:setting)."
                     :spec (a/map-of a/name? (a/map-of #{:sprint :walk} (a/map-with {:blocks (a/pred "a number" a/finite?) :s (a/num-in 0 nil)})))}
-   ::closing-prior-s {:default 5 :doc "Seconds of flight the prior closing rate (flee-walk-speed less chase-speed) counts as against ::closing-rates' (closing-rate): a weak prior." :spec (a/num-in 0 nil)}
+   ::closing-prior-s {:default 5 :doc "Seconds of flight the prior closing rate (flee-pace less chase-speed) counts as against ::closing-rates' (closing-rate): a weak prior." :spec (a/num-in 0 nil)}
    ::race-margin-s {:default 0.5 :doc "Seconds the body must win a race to a refuge by (reach-first?)." :spec (a/num-in 0 nil)}
    ::melee-reach {:default 1.4 :doc "Blocks from the body within which a melee mob's blow lands, vanilla's for a zombie (catches?)." :spec (a/num-in 0 nil)}})
 
@@ -189,6 +190,12 @@
 
 (defn flee-stop-s [] (settings/get settings ::flee-stop-s))
 
+(defn flee-pace
+  "Blocks a second a flight by a body with food food gains, stops included (flee-walk-speed over a step of ::flee-step-s and the ::flee-stop-s after it): the quantity closing-rates count, step start to step start."
+  [food]
+  (let [step (settings/get settings ::flee-step-s)]
+    (* (flee-walk-speed food) (/ step (+ step (flee-stop-s))))))
+
 (defn chase-speed
   "Blocks a second mob-name covers chasing the body: engine.constants/mob-speeds, engine.constants/baby-speed for \"baby\" (mob-kind), ::chase-speed for a mob not listed there."
   [mob-name]
@@ -230,20 +237,15 @@
 
 (defn closing-rate
   "Blocks a second a flight by a body with food food opens the gap to a chasing mob-name: ::closing-rates' measured gap
-  growth of its kind and sprint state (sprints?), shrunk toward the prior flee-walk-speed less chase-speed weighted as
+  growth of its kind and sprint state (sprints?), shrunk toward the prior flee-pace less chase-speed weighted as
   ::closing-prior-s seconds of flight. Negative: the mob gains."
   [food mob-name]
   (let [{:keys [blocks s]} (get-in (settings/get settings ::closing-rates) [mob-name (if (sprints? food) :sprint :walk)])
         k (settings/get settings ::closing-prior-s)
-        prior (- (flee-walk-speed food) (chase-speed mob-name))]
+        prior (- (flee-pace food) (chase-speed mob-name))]
     (if (pos? (+ (or s 0) k))
       (/ (+ (or blocks 0) (* k prior)) (+ (or s 0) k))
       prior)))
-
-(defn flight-speed
-  "Blocks a second a flight by a body with food food gains away from its start: flee-walk-speed."
-  [food]
-  (flee-walk-speed food))
 
 (defn melee-reach [] (settings/get settings ::melee-reach))
 (defn flight-starts
@@ -253,9 +255,9 @@
     (:deciles (get rows mob-name (get rows "pooled")))))
 
 (defn outruns?
-  "Whether a body with food food gets away from every one of mob-names on foot: no closing-rate of theirs is negative."
+  "Whether a body with food food gets away from every one of mob-names on foot: every one of their closing-rates is positive (flee-mob's test)."
   [food mob-names]
-  (every? #(>= (closing-rate food %) 0) mob-names))
+  (every? #(pos? (closing-rate food %)) mob-names))
 
 (defn way-blocks
   "Blocks a chaser at pos covers to within ::melee-reach of `at`: way when known, else the straight line less the reach."

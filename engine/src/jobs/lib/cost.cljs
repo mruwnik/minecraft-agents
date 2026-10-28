@@ -124,6 +124,7 @@
 (def body-speed danger/body-speed)
 (def flee-walk-speed danger/flee-walk-speed)
 (defn flee-stop-s [] (danger/flee-stop-s))
+(def flee-pace danger/flee-pace)
 (def mob-kind danger/mob-kind)
 (def chase-speed danger/chase-speed)
 

@@ -393,7 +393,7 @@
   flight's blows from all its chasers) of that mob's; never fewer than the walk's own. The two catches are one by their chances: its damage their mean, its :shape the width of their
   mix (each its own: the way's the walk's, the prior's its blows' uncertainty). A creeper that blows on the
   walk (at the median of its :spread) is spent: what follows is the walk from the rest or later (none left: nothing).
-  swim: the blocks a body in water swims to dry land first (flee-mob's; ##Inf none known) and land the blocks to walk on there, at its planner/swim-speed times the share of a sprint a flight's pace is on foot (danger/flight-speed over body-speed).
+  swim: the blocks a body in water swims to dry land first (flee-mob's; ##Inf none known) and land the blocks to walk on there, at its planner/swim-speed times the share of a sprint a flight's pace is on foot (danger/flee-walk-speed over body-speed).
   The flight gains on each mob at its danger/closing-rate.
   nil when a mob keeps up or none is given."
   [{:keys [health food equipment mobs returns later caught caught-s swim land] :as args}]
@@ -402,7 +402,7 @@
         prior (when (seq priors) (apply max-key :chance priors))
         way (or caught 0)
         caught (- 1 (* (- 1 (:chance prior 0)) (- 1 way)))
-        v (danger/flight-speed (or food 20))
+        v (danger/flee-walk-speed (or food 20))
         wet {:swim swim :land land :sv (* (planner/swim-speed equipment) (/ v (danger/body-speed (or food 20))))
              :gain #(danger/closing-rate (or food 20) %)}
         per-of (fn [mobs] (map #(flee-mob stats v wet %) mobs))

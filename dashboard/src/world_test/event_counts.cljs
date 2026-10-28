@@ -38,6 +38,7 @@
             [cljs.reader :as reader]
             [clojure.string :as str]
             [jobs.lib.cost.danger :as danger]
+            [jobs.lib.danger :as danger-q]
             [engine.settings :as settings]
             [jobs.lib.cost.threat :as threat]
             [world-test.arrow-shots :as arrow-shots]
@@ -357,8 +358,9 @@
 
 (defn closing-pieces
   "Pieces [{:mob :sprint :blocks :s}] of the flights among rows (flee-steps, sorted or not) with gaps kept: from one step's start
-  to the next one's (the step and the stop after it; not to an :off? one), the gap to each chaser seen at both starts: :blocks
-  its growth, :s the seconds, :sprint whether the body could sprint (danger/sprints? of its food at the first start)."
+  to the next one's (the step and the stop after it; not to an :off? one), the gap to each chaser seen at the first start: :blocks
+  its growth, :s the seconds (a chaser not seen at the next start is out of sight, outrun or dead: its gap there at least
+  the sight radius, jobs.lib.danger/hostile-radius), :sprint whether the body could sprint (danger/sprints? of its food at the first start)."
   [rows]
   (let [start #(- (:t %) (* 1000 (:s %)))]
     (mapcat (fn [steps]
@@ -366,7 +368,7 @@
                     :let [s (/ (- (start b) (start a)) 1000)
                           gaps (into {} (map (fn [[_ id g]] [id g])) (:chasers b))]
                     :when (pos? s)
-                    [mob id g] (:chasers a) :let [g1 (gaps id)] :when g1]
+                    [mob id g] (:chasers a) :let [g1 (or (gaps id) (max g (danger-q/hostile-radius)))]]
                 {:mob mob :sprint (danger/sprints? (:food a)) :blocks (- g1 g) :s s}))
             (vals (group-by :flight (filter #(and (:food %) (:chasers %)) rows))))))
 

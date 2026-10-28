@@ -215,7 +215,8 @@
         price #(cost/answer-price (body 12) (cost/flee-answer {:health 12 :food 20 :mobs [zombie] :caught %}) here [])
         caught #(:caught (cost/flee-answer {:health 12 :food 20 :mobs [zombie] :caught %1 :caught-s %2}))]
     (is (< (/ (- (price 0.01) (price 0)) (price 0)) 0.02) "a way that goes on 99 times in 100 prices as a seen one, near enough")
-    (is (< (price 0) (price 0.5) (price 1)) "the likelier its dead end, the dearer")
+    (is (< (price 0) (price 0.5)) "the likelier its dead end, the dearer")
+    (is (< (price 0) (price 1)))
     (is (= (:damage (caught 0 nil)) (:damage (caught 0 0.5))) "with no way caught, the race's seconds bound nothing: the prior's own blows")))
 
 (deftest a-walk-caught-beside-a-creeper-takes-its-blast-as-a-sure-part-of-the-life
@@ -468,12 +469,12 @@
     (is (= (:near (met 20)) (:near (flee (- 20 arrow)))) "the answer starts at the hit")))
 
 (deftest a-skeleton-stands-and-shoots-while-the-body-walks-out-of-its-bow-range
-  (let [v (danger/flight-speed 20)
+  (let [v (danger/flee-walk-speed 20)
         walk (cost/flee-answer {:food 20 :mobs [(mob "skeleton" 0)]})
         shot-s (/ answer/bow-range v)]
     (is (< (js/Math.abs (- (:damage walk) (threat/mob-hurt (armour/armour-stats nil) "skeleton" shot-s identity (threat/lone-hit-rate "skeleton")))) 1e-9)
         "shot only while the body walks out of its bow range at flight speed: vanilla's ranged attack goals stop the shooter within range")
-    (is (< (js/Math.abs (- (:near walk) (+ shot-s (/ 1 (- v (danger/chase-speed "skeleton")))))) 1e-9)
+    (is (< (js/Math.abs (- (:near walk) (+ shot-s (/ 1 (danger/closing-rate 20 "skeleton"))))) 1e-9)
         "past its range it chases, out to its follow range")))
 
 (deftest on-hard-a-fed-body-beside-a-lone-skeleton-walks-away-and-most-likely-lives

@@ -179,11 +179,11 @@
                             (rec 9500 :step :job "j3" :slot :step :s 1 :blocks 4)])]
     (is (= {:food 18 :chasers [["zombie" 7 3.5]]} (select-keys (c/scan-line line) [:food :chasers])))
     (is (= {:flights 2
-            :by-mob {"spider" {:sprint {:blocks -1 :s 1.5 :pieces 1 :bps -0.67}}
+            :by-mob {"spider" {:sprint {:blocks 2 :s 2.5 :pieces 2 :bps 0.8}}
                      "zombie" {:sprint {:blocks 3 :s 2.5 :pieces 2 :bps 1.2} :walk {:blocks -1 :s 2 :pieces 1 :bps -0.5}}}
-            :setting {"spider" {:sprint {:blocks -1 :s 1.5}} "zombie" {:sprint {:blocks 3 :s 2.5} :walk {:blocks -1 :s 2}}}}
+            :setting {"spider" {:sprint {:blocks 2 :s 2.5}} "zombie" {:sprint {:blocks 3 :s 2.5} :walk {:blocks -1 :s 2}}}}
            (c/closing-report rows))
-        "each piece runs from one step's start to the next one's; a mob not seen at both starts and steps kept before gaps were are left out")
+        "each piece runs from one step's start to the next one's; a mob not seen at the next start counts as at least the sight radius away (spider 5 to 8); steps kept before gaps were are left out")
     (is (empty? (:setting (c/closing-report (c/flee-steps [(step 1000 "j1" 20 [["zombie" 7 3]]) (rec 2200 :step :job "j1" :slot :back-off :s 1 :blocks 1)
                                                             (step 3500 "j1" 20 [["zombie" 7 4]])]))))
         "a stop in which the flight ended (another answer's step) is no part of a flight")))
