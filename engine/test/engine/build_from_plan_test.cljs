@@ -1558,6 +1558,19 @@
                               (fn ^:async b [] (await (child-outcome eng job {:plan "far"} 30)))))]
           (is (not= :shut-in (:reason result)) "a node-budget give-up is not a body shut in a hole"))))))
 
+(deftest a-walk-the-walker-got-stuck-in-is-no-hole-ending
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "far" :parts [{:id "posts" :cells [[40 64 0] [41 64 0] [42 64 0] [43 64 0]] :want "oak_fence"}]}
+              hole (into {} (for [x [3 4 5] z [3 4 5] y [64 65 66] :when (not= [4 4] [x z])] [(h/cell-key x y z) "dirt"]))
+              {:keys [eng]} (start {:inventory kit :blocks hole :self {:pos {:x 4.5 :y 64 :z 4.5}}} {"far" plan})
+              result (await (tu/with-near-stub (fn ^:async f [c _ _ _]
+                                                 (ctx/update-mem! c assoc :near-walk {:data {:why :stuck}})
+                                                 :blocked)
+                              (fn ^:async b [] (await (child-outcome eng job {:plan "far"} 30)))))]
+          (is (not= :shut-in (:reason result)) "a walker fault is not a body shut in a hole"))))))
+
 (deftest a-body-shut-in-by-a-walk-stops-shut-in-instead-of-walking-to-every-cell
   (async done
     (tu/run-async done

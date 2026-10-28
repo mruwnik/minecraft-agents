@@ -216,7 +216,7 @@
         ;; an arrival in reach that does not see the cell, where another stand would, is a bad stand: else the step walks to it again
         (when (and (= :there w) (:found cell) (not (:dig? cell)) (seq (in-reach c [cell])) (not (place-here? c cells cell)))
           (ctx/update-mem! c #(-> (update % :bad-stands (fnil conj []) stand) (walk-fail (:pos cell) :unreachable (give-up) (u/self-pos c)))))
-        (if (and (= :blocked w) (or shut? (shut-in-walk? c)) (not= :budget (:why (:data (near/last-walk c)))))
+        (if (and (= :blocked w) (or shut? (shut-in-walk? c)) (not (#{:budget :stuck} (:why (:data (near/last-walk c))))))
           (hole-blocked! c)
           (do (ctx/update-mem! c dissoc :hole-blocked)
               (if (= :partial w) :continue :again)))))))
