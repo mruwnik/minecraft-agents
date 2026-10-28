@@ -2,7 +2,7 @@
 ;; with food 6 cannot outrun a spider: it goes on fighting once a fight has begun; before that it flees a whole spider), f7e75f9e 89661b40 db3338ae 7725ab3f a0e376ef (a flee leg never stands
 ;; searching with a mob in reach: the body swings within seconds), 8ab62538 (an axe swings at its own cooldown: few strong
 ;; hits), 05029ce5 (an armed body hit at a dead end fights before it seals), 222faba7 (a witch is not fought in iron at
-;; health 11), d2f4d76e (a full-iron body with a sword does not flee skeletons it only hears), 1f49c0b7 (a golden apple is eaten at 2 hp before a zombie fight, kept at full health).
+;; health 11), d2f4d76e (a full-iron body with a sword does not flee skeletons it only hears), 1f49c0b7 (a golden apple is eaten at 2 hp before a zombie fight, kept at full health; the wait lets the 18 hp hit age out of the blows a fight is priced at, hostile-fight/::felt-s).
 ;; Food 6: the runner feeds the body to food 20 and saturation 20; hunger amplifier 226 for 6 s burns 136 exhaustion, 34 points (20 saturation, 14 food).
 ;; The witch case drains to food ~12 (hunger 5 s) so health 11 is not regenerated away (food >= 18 heals 2 hp/s) before the decision.
 {:defaults
@@ -72,9 +72,10 @@
          [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 18 minecraft:generic"]
          [:until [:cli "observe" ["$body" "--world" "$world" "status"] {:health 2}] 10]
-         [:summon "zombie" [19.5 0 16.5] "{NoAI:1b}"]]
+         [:wait-s 5]
+         [:summon "zombie" [17.5 0 16.5] "{NoAI:1b}"]]
    :expect [{:event {:source :job :kind :hostile.precious-eat :data {:item "golden_apple"}} :within-s 20}
-            {:event {:source :action :kind :started :data {:name "eat"}} :within-s 25}]
+            {:event {:source :action :kind :done :data {:name "eat" :status "ate"}} :within-s 25}]
    :after [[:item "golden_apple" 0]]
    :limit-s 45}
   {:name "iron-body-at-full-health-keeps-its-golden-apple-against-a-zombie"
