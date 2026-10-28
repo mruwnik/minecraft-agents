@@ -152,7 +152,11 @@
     (with-redefs [u/seen-block (hide [3 64 0])]
       (let [s (status)]
         (is (= :look (first s)))
-        (is (= [[3 64 0]] (:look-at (nth s 2))))))))
+        (is (= [[3 64 0]] (:look-at (nth s 2))))))
+    (with-redefs [u/seen-block (hide [3 64 0])
+                  sh-sense/seen-cell? (fn [_ c] (not= outside (select-keys c [:x :y :z])))
+                  lib-look/look-shows? (constantly true)]
+      (is (= [[3 64 0] [15 64 0]] (:look-at (nth (status) 2))) "the site's own look rides the walls' round"))))
 
 (deftest a-wall-a-look-round-did-not-show-counts-as-open-not-looked-at-again
   (let [seen-block u/seen-block
@@ -442,13 +446,13 @@
     #{} :look
     #{[15 64 0]} :ok))
 
-(deftest an-unseen-cell-a-look-round-already-looked-at-is-priced-unseen-not-looked-at-again
+(deftest an-unseen-cell-a-look-round-already-looked-at-is-priced-dark-not-looked-at-again
   (are [looked expected] (= expected (with-redefs [sh-sense/seen-cell? (fn [_ c] (not= outside (select-keys c [:x :y :z])))
                                                    sense/round-looked (constantly looked)
                                                    lib-look/look-shows? (constantly true)]
                                        (kind (ready/safe-at (constantly outside)) open-night)))
     #{} :look
-    #{[15 64 0]} :later))
+    #{[15 64 0]} :never))
 
 (deftest an-unseen-cell-well-below-the-feet-under-a-seen-roof-is-underground-and-asks-no-look-or-dawn
   (are [to expected] (= expected (with-redefs [sh-sense/seen-cell? (constantly false)

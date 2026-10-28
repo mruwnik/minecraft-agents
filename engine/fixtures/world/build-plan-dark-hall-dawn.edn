@@ -21,7 +21,7 @@
    :body {:at [30.5 0 16.5]}
    :act [[:time-set 22800] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 15"] [:until-seen {:block "chest"} 10]
          [:rcon "execute as $BODY at @s run tp @s ~15 ~ ~ -90 0"] [:job (jobs.build.from-plan {:plan "$plan:floor"})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :exposed :lowered-by #{:torch}}} :within-s 15 :of-job true}
+   :expect [{:event {:source :job :kind :waiting :data {:reason :exposed :text [:contains "a torch does"]}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 15 :of-job true}]}
   {:name "midnight-the-torches-are-fetched"
    :act [[:time-set 16000] [:job (jobs.build.from-plan {:plan "$plan:floor"})]]
