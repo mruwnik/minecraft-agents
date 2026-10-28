@@ -1511,7 +1511,7 @@
           (is (every? (comp nil? :ways) @opts) "shut in by its own dig: go-to may pillar or stair out")
           (is (every? :dig-own @opts) "and dig the body's own plan walls when they are all that shuts it in"))))))
 
-(deftest a-body-that-cannot-climb-out-of-its-hole-stops-shut-in-at-once
+(deftest a-body-go-to-finds-no-way-out-of-its-hole-for-stops-shut-in-at-once
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -1519,12 +1519,31 @@
               hole (into {} (for [x [3 4 5] z [3 4 5] y [64 65 66] :when (not= [4 4] [x z])] [(h/cell-key x y z) "dirt"]))
               walks (atom 0)
               {:keys [eng]} (start {:inventory kit :blocks hole :self {:pos {:x 4.5 :y 64 :z 4.5}}} {"far" plan})
-              result (await (tu/with-near-stub (fn ^:async f [_ _ _ _] (swap! walks inc) :blocked)
+              result (await (tu/with-near-stub (fn ^:async f [c _ _ _]
+                                                 (swap! walks inc)
+                                                 (ctx/update-mem! c assoc :near-walk {:data {:why :exhausted :shut-in true}})
+                                                 :blocked)
                               (fn ^:async b [] (await (child-outcome eng job {:plan "far"} 30)))))]
           (is (= :stopped (:status result)))
           (is (= :shut-in (:reason result)))
-          (is (re-find #"hole" (:text result)))
-          (is (<= @walks 3) "not one failed walk per planned cell"))))))
+          (is (re-find #"no way out" (:text result)))
+          (is (= 1 @walks) "go-to's verdict on the one escalating walk decides, no count of walks"))))))
+
+(deftest blocked-walks-from-a-hole-without-a-shut-in-verdict-give-the-cells-up-and-build-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [posts [[40 64 0] [41 64 0] [42 64 0] [43 64 0]]
+              plan {:id "far" :parts [{:id "posts" :cells posts :want "oak_fence"}]}
+              hole (into {} (for [x [3 4 5] z [3 4 5] y [64 65 66] :when (not= [4 4] [x z])] [(h/cell-key x y z) "dirt"]))]
+          (doseq [why [:exhausted :stuck]]
+            (let [{:keys [eng]} (start {:inventory kit :blocks hole :self {:pos {:x 4.5 :y 64 :z 4.5}}} {"far" plan})
+                  result (await (tu/with-near-stub (fn ^:async f [c _ _ _]
+                                                     (ctx/update-mem! c assoc :near-walk {:data {:why why}})
+                                                     :blocked)
+                                  (fn ^:async b [] (await (child-outcome eng job {:plan "far"} 60)))))]
+              (is (= :incomplete (:reason result)) (pr-str why result))
+              (is (= (zipmap posts (repeat :unreachable)) (:given-up result)) "each cell given up for its own failed walks"))))))))
 
 (deftest a-walk-that-gives-up-on-its-node-budget-is-no-hole-ending
   (async done
@@ -1537,20 +1556,7 @@
                                                  (ctx/update-mem! c assoc :near-walk {:data {:why :budget}})
                                                  :blocked)
                               (fn ^:async b [] (await (child-outcome eng job {:plan "far"} 30)))))]
-          (is (not= :shut-in (:reason result)) "a node-budget give-up is not a body shut in a hole"))))))
-
-(deftest a-walk-the-walker-got-stuck-in-is-no-hole-ending
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [plan {:id "far" :parts [{:id "posts" :cells [[40 64 0] [41 64 0] [42 64 0] [43 64 0]] :want "oak_fence"}]}
-              hole (into {} (for [x [3 4 5] z [3 4 5] y [64 65 66] :when (not= [4 4] [x z])] [(h/cell-key x y z) "dirt"]))
-              {:keys [eng]} (start {:inventory kit :blocks hole :self {:pos {:x 4.5 :y 64 :z 4.5}}} {"far" plan})
-              result (await (tu/with-near-stub (fn ^:async f [c _ _ _]
-                                                 (ctx/update-mem! c assoc :near-walk {:data {:why :stuck}})
-                                                 :blocked)
-                              (fn ^:async b [] (await (child-outcome eng job {:plan "far"} 30)))))]
-          (is (not= :shut-in (:reason result)) "a walker fault is not a body shut in a hole"))))))
+          (is (= :unreachable (:reason result)) "a node-budget give-up is no verdict on a way out: the budget streak ends it"))))))
 
 (deftest a-body-shut-in-by-a-walk-stops-shut-in-instead-of-walking-to-every-cell
   (async done

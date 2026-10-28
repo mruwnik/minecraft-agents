@@ -24,8 +24,7 @@
 (a/defargs settings
   {::give-up {:default 3 :doc "Refused places or failed walks after which a cell is given up." :spec (a/int-in 1 nil)}
    ::hole-depth {:default 2 :doc "Levels of walls round the body from its feet up that make it a body in a hole, whose walks may climb out." :spec (a/int-in 1 nil)}
-   ::pocket-cells {:default 256 :doc "Walkable cells at most which a body whose walk ended shut in counts as shut in a pocket (the build stops :shut-in); a larger closed room is built in." :spec (a/int-in 1 nil)}
-   ::hole-walks {:default 2 :doc "Walks in a row that fail from a hole after which the build stops :shut-in." :spec (a/int-in 1 nil)}})
+   ::pocket-cells {:default 256 :doc "Walkable cells at most which a body whose walk ended shut in counts as shut in a pocket (its walks then climb or dig out); a larger closed room is built in." :spec (a/int-in 1 nil)}})
 
 (defn give-up [] (settings/get settings ::give-up))
 
@@ -52,15 +51,12 @@
     (and (not (breath/in-water? (:primitives c)))
          (<= (settings/get settings ::hole-depth) (escape/pit-depth (escape/block-at-of (:primitives c)) [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)])))))
 
-(defn hole-blocked!
-  "Count a failed walk from a hole; at ::hole-walks of them in a row end the build :shut-in, else :again."
+(defn shut-in-end
+  "End the build :shut-in: go-to, with every way out allowed, gave up with the body still shut in."
   [c]
-  (ctx/update-mem! c update :hole-blocked (fnil inc 0))
-  (if (< (:hole-blocked (ctx/mem c)) (settings/get settings ::hole-walks))
-    :again
-    (ctx/end c :nothing-possible :shut-in
-             {:placed (:placed (ctx/mem c) 0)
-              :text (str "build of " (:plan (:args c)) " stopped: the body is shut in a hole and cannot climb out")})))
+  (ctx/end c :nothing-possible :shut-in
+           {:placed (:placed (ctx/mem c) 0)
+            :text (str "build of " (:plan (:args c)) " stopped: the body is shut in and go-to found no way out")}))
 
 (defn sealed-in-shelter?
   "Whether the last walk was refused because the body is sealed in its own shelter, which the night job opens by day: no verdict on the cell or the body's way out."
@@ -218,10 +214,10 @@
         ;; an arrival in reach that does not see the cell, where another stand would, is a bad stand: else the step walks to it again
         (when (and (= :there w) (:found cell) (not (:dig? cell)) (seq (in-reach c [cell])) (not (place-here? c cells cell)))
           (ctx/update-mem! c #(-> (update % :bad-stands (fnil conj []) stand) (walk-fail (:pos cell) :unreachable (give-up) (u/self-pos c)))))
-        (if (and (= :blocked w) (or shut? (shut-in-walk? c)) (not (#{:budget :stuck} (:why (:data (near/last-walk c))))))
-          (hole-blocked! c)
-          (do (ctx/update-mem! c dissoc :hole-blocked)
-              (if (= :partial w) :continue :again)))))))
+        (cond
+          (and shut? (= :blocked w) (:shut-in (:data (near/last-walk c)))) (shut-in-end c)
+          (= :partial w) :continue
+          :else :again)))))
 
 
 (defn ^:async walk-to!
