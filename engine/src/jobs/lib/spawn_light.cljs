@@ -126,11 +126,11 @@
   (* secs (chance-at p (update-vals (select-keys cell [:x :y :z]) js/Math.floor) false)))
 
 (defn walked
-  "Cells ({:x :y :z} or [x y z]) walked one after another from `from` at cost/walk-blocks-per-s, timed for spawns-over:
+  "Cells ({:x :y :z} or [x y z]) walked one after another from `from` at cost/walk-speed, timed for spawns-over:
   from first at :t 0."
   [from cells]
   (let [cells (into [(select-keys from [:x :y :z])] (map #(if (vector? %) (zipmap [:x :y :z] %) %)) cells)]
-    (mapv #(assoc %1 :t (/ %2 (cost/walk-blocks-per-s))) cells (reductions + 0 (map u/dist cells (rest cells))))))
+    (mapv #(assoc %1 :t (/ %2 cost/walk-speed)) cells (reductions + 0 (map u/dist cells (rest cells))))))
 
 (defn exposure
   "{:chance :lowered-by} of the walk of p to `to` ({:x :y :z}, a column {:x :z} at the feet's height; floored): chance-at

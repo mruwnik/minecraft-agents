@@ -140,7 +140,7 @@
         there (cond-> there (pos? stay-s) (update stay-at assoc :s (+ stay-s (peek (death/cell-seconds there)))))
         cells (cond-> there back? (#(into % (rest (rseq %)))))
         exit (if (sh-inside/walk-leaves-shelter? p shelter goal 1) (exit-dark p there caves-free? sky) {:share 0 :dawn? false})
-        exit-s (* (/ (settings/get settings ::exit-blocks) (cost/walk-blocks-per-s)) (:share exit))
+        exit-s (* (/ (settings/get settings ::exit-blocks) cost/walk-speed) (:share exit))
         food (or (.-food (.self p)) 20)
         known (threats/known-threats c)
         hides (threats/hide-threats c)
@@ -155,7 +155,7 @@
      :memory (sense/known-memory p) :sky (or sky (sh-sense/sky-subtract-now p)) :looked (sense/round-looked c)
      :exit-s exit-s :exit-dawn? (and (pos? exit-s) (:dawn? exit))
      :exposed-s (+ exit-s
-                   (spawn-light/dark-seconds p cells (mapv #(/ % (cost/walk-blocks-per-s)) (along cells)) caves-free? sky)
+                   (spawn-light/dark-seconds p cells (mapv #(/ % cost/walk-speed) (along cells)) caves-free? sky)
                    (* stay-s (spawn-light/dark-share p (nth cells stay-at) caves-free? sky)))
      :lava (route-lava-hp p cells)}))
 

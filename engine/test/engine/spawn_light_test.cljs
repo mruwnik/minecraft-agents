@@ -87,3 +87,7 @@
     (is (pos? (at #(spawn-light/chance-at p cell false) 6)) "a canopy floor, sky light 13, at dusk")
     (is (pos? (:chance (at #(spawn-light/exposure p cell) 6))) "and readiness prices it so")
     (is (zero? (at #(spawn-light/chance-at p cell false) 0)) "lit at noon")))
+
+(deftest a-walked-way-is-timed-at-walk-speed-its-length-is-already-the-path
+  (let [cells (spawn-light/walked {:x 0 :y 64 :z 0} [{:x 10 :y 64 :z 0}])]
+    (is (< (js/Math.abs (- (:t (peek cells)) (/ 10 cost/walk-speed))) 1e-9))))
