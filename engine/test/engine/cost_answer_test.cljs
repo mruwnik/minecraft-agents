@@ -161,12 +161,73 @@
       (is (< (js/Math.abs (- x (min stake (+ back again)))) 1e-4)
           (str "damage " damage " then-seconds " seconds ": the price is its own fixed point")))))
 
+(def tol answer/fixed-point-tolerance-s)
+
+(defn root [f stake] (:root (answer/least-fixed-point f stake)))
+
 (deftest the-least-fixed-point-is-the-least-of-several-roots
   (let [f (fn [x] (cond (< x 10) (+ 5 (* 0.5 x)) (< x 12) (+ 10 (* 5 (- x 10))) :else 20))]
-    (is (< (js/Math.abs (- 10 (answer/least-fixed-point f 100))) 1e-5) "f(x)-x is positive between the roots 10 and 20: a scan with a step over them lands on 20")
-    (is (zero? (answer/least-fixed-point (constantly 0) 100)))
-    (is (= ##Inf (answer/least-fixed-point #(+ 1 (* 2 %)) ##Inf)) "no root and no stake to bound it")
-    (is (= 7 (answer/least-fixed-point #(min 7 (+ 1 (* 2 %))) 7)))))
+    (is (< (js/Math.abs (- 10 (root f 100))) tol) "f(x)-x is positive between the roots 10 and 20: a scan with a step over them lands on 20")
+    (is (zero? (root (constantly 0) 100)))
+    (is (= ##Inf (root #(+ 1 (* 2 %)) ##Inf)) "no root and no stake to bound it")
+    (is (= 7 (root #(min 7 (+ 1 (* 2 %))) 7)))))
+
+(deftest a-slope-near-one-is-stopped-by-its-error-in-seconds-in-a-few-rounds-not-1000
+  (let [calls (atom 0)
+        f (fn [x] (swap! calls inc) (+ 1 (* 0.99 x)))
+        r (answer/least-fixed-point f 1e6)]
+    (is (< (js/Math.abs (- 100 (:root r))) tol) "the root is 100: the geometric tail is added, not left as the lower bound")
+    (is (not (:capped r)))
+    (is (< @calls 30) (str "rounds: " @calls))))
+
+(deftest steps-that-do-not-shrink-end-at-once-at-the-stake-or-infinity
+  (let [calls (atom 0)
+        grow (fn [x] (swap! calls inc) (+ 1 x))]
+    (is (= ##Inf (root grow ##Inf)))
+    (is (= 500 (root grow 500)) "a limit past the stake is the stake")
+    (is (< @calls 10) (str "rounds: " @calls))))
+
+(deftest the-round-backstop-flags-a-limit-that-never-settles
+  (let [r (with-redefs [answer/fixed-point-rounds 5] (answer/least-fixed-point #(+ % (/ 1 (+ 1 %))) 1e6))]
+    (is (:capped r))))
+
+(defn lcg
+  "A deterministic stream of numbers in [0 1) from seed."
+  [seed]
+  (rest (map #(/ % 2147483647.0) (iterate #(mod (+ (* % 48271) 11) 2147483647) seed))))
+
+(defn gen-answer
+  "An answer built from the stream rs, of the shapes the answers take (see the ns doc): a plain one, with a :then, :at-once
+  into a :then, :stays beside a :then (a cover, with a failing outcome that goes at once into a :then), :outcomes, :caught
+  or :blasts; returns [answer rest-of-stream]."
+  [depth [a b c d e f g & rs]]
+  (let [base {:damage (* 22 a) :hit 5 :seconds (* 30 b)}
+        [sub rs] (if (pos? depth) (gen-answer (dec depth) rs) [nil rs])
+        [sub2 rs] (if (pos? depth) (gen-answer (dec depth) rs) [nil rs])]
+    [(cond-> (cond
+               (nil? sub) base
+               (< c 0.2) (assoc base :then [sub])
+               (< c 0.35) (assoc base :then [sub] :at-once true)
+               (< c 0.55) (assoc base :then [sub] :stays (* 0.95 d))
+               (< c 0.75) (assoc base :then [sub] :stays (* 0.95 d)
+                                 :outcomes [[(* 0.9 e) {:damage 0 :hit 0 :seconds 0 :then [sub2] :at-once true}]])
+               (< c 0.9) (assoc base :outcomes [[(* 0.9 d) sub] [(- 1 (* 0.9 d)) sub2]])
+               :else base)
+       (< 0.6 e 0.8) (assoc :caught {:chance f :damage (* 22 f) :hit 5})
+       (< 0.9 g) (assoc :blasts [(* 10 f)]))
+     rs]))
+
+(deftest the-death-price-iteration-is-nondecreasing-in-the-price-of-a-death-met-again
+  (let [bed (assoc (body 5) :respawn {:x 40 :y 64 :z 0})]
+    (loop [seed 1 n 0]
+      (when (< n 60)
+        (let [[a rs] (gen-answer 2 (lcg seed))
+              [b _] (gen-answer 1 rs)
+              {:keys [stake fixed]} (answer/death-fixed (if (even? n) bed (body 12)) [a b] here)
+              xs (range 0 (min stake 600) 7)
+              ys (mapv fixed xs)]
+          (is (every? (fn [[y1 y2]] (>= (+ y2 1e-7) y1)) (partition 2 1 ys)) (str "seed " seed " answers " (pr-str [a b])))
+          (recur (+ seed 7919) (inc n)))))))
 
 (deftest a-stake-nothing-bounds-leaves-a-death-that-never-ends-unpriced-not-nan
   (let [bed (assoc (body 5) :respawn {:x 40 :y 64 :z 0} :stake ##Inf)

@@ -173,17 +173,41 @@
         k (* stays (- 1 (answer-death-chance body base at death)))]
     (if (< k 1) (/ (answer-price* body base at death) (- 1 k)) ##Inf)))
 
+(def fixed-point-tolerance-s "Seconds a least fixed point may be off by." 0.01)
+
+(def fixed-point-rounds "Rounds of least-fixed-point after which it stops whatever the error: a backstop, flagged :capped, not the way it ends." 200)
+
 (defn least-fixed-point
-  "The least x >= 0 with (f x) = x, f nondecreasing, continuous, (f 0) >= 0 and at most stake: the limit of x, (f x), (f (f x)) ...
-  By induction every iterate is at most the least root r ((f x) <= (f r) = r), and they only rise, so none skips a pair of roots.
-  Stops when an iterate rises under 1e-6, or after 1000 rounds (a slope near 1: the last iterate, a lower bound; ##Inf when
-  stake is infinite, since then the iterates have no root to meet)."
+  "{:root x} the least x >= 0 with (f x) = x, f nondecreasing, continuous, (f 0) >= 0 and at most stake: the limit of x, (f x),
+  (f (f x)) ... By induction every iterate is at most the least root r ((f x) <= (f r) = r), and they only rise, so none skips
+  a pair of roots. A round's step over the last one's is the ratio the steps shrink by, and the iterates' limit by it (Aitken)
+  is y + step x ratio / (1 - ratio): the iteration stops when that limit moves less than fixed-point-tolerance-s (or the
+  step is under it), and returns the limit. Steps that do not shrink, whose limit would pass stake twice running, end at
+  once with stake (##Inf when it is: no root). After fixed-point-rounds the limit ends it, with :capped true."
   [f stake]
-  (loop [x 0 n 0]
-    (let [y (f x)]
-      (cond (< (- y x) 1e-6) y
-            (>= n 1000) (if (infinite? stake) ##Inf y)
-            :else (recur y (inc n))))))
+  (loop [x 0 prev nil n 0 streak 0 last-limit nil]
+    (let [y (f x)
+          step (- y x)
+          ratio (when (and prev (pos? prev)) (/ step prev))
+          limit (if (and ratio (< ratio 1)) (+ y (/ (* step ratio) (- 1 ratio))) ##Inf)
+          streak (if (and ratio (>= limit stake)) (inc streak) 0)]
+      (cond (<= step 0) {:root y}
+            (< step fixed-point-tolerance-s) {:root (min stake (if (< limit ##Inf) limit y))}
+            (and last-limit (< (js/Math.abs (- limit last-limit)) fixed-point-tolerance-s)) {:root (min stake limit)}
+            (>= streak 2) {:root stake}
+            (>= n fixed-point-rounds) {:root (min stake limit) :capped true}
+            :else (recur y step (inc n) streak limit)))))
+
+(defn death-fixed
+  "{:stake :back :price :fixed} of the death price of body over answers at `at` (death-price): fixed x the price of a
+  death met again when each costs x more."
+  [body answers at]
+  (let [e (assoc (healed body) :carried 0 :level 0)
+        stake (death/give-up-cost e)
+        back (death/back-cost e at)
+        price (fn [a x] (answer-price* e a at {:met x :clear (min stake back)}))]
+    {:stake stake :back back :price price
+     :fixed (fn [x] (reduce min stake (map #(+ back (price % x)) answers)))}))
 
 (defn death-price
   "{:met :clear} seconds a death at `at` costs body: death/experience-cost and the cheaper of giving `at` up
@@ -198,16 +222,13 @@
         clear (bare body at)]
     (if (empty? answers)
       clear
-      (let [e (assoc (healed body) :carried 0 :level 0)
-            stake (death/give-up-cost e)
-            back (death/back-cost e at)
-            price (fn [a x] (answer-price* e a at {:met x :clear (min stake back)}))
-            fixed (fn [x] (reduce min stake (map #(+ back (price % x)) answers)))
-            x (least-fixed-point fixed stake)
+      (let [{:keys [stake price fixed]} (death-fixed body answers at)
+            {x :root :keys [capped]} (least-fixed-point fixed stake)
             meet (if (infinite? x) ##Inf (reduce min (map #(price % x) answers)))]
-        (assoc clear :met (+ (death/experience-cost body)
-                             (min (death/give-up-cost body)
-                                  (+ (death/back-cost body at) (if (death/kept? body at) 0 (or (:carried body) 0)) meet))))))))
+        (cond-> (assoc clear :met (+ (death/experience-cost body)
+                                     (min (death/give-up-cost body)
+                                          (+ (death/back-cost body at) (if (death/kept? body at) 0 (or (:carried body) 0)) meet))))
+          capped (assoc :capped true))))))
 
 (defn answer-price
   "Seconds answer costs body {:health :absorption, death-price's :respawn :level :carried :stake} at `at` (see the ns

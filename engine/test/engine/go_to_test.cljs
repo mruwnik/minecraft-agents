@@ -868,9 +868,16 @@
         m {:cut-walks 1 :sent-backs [(gcut/send-back [6 64 0] 5 trail)]}
         tolls (gcut/send-back-tolls m)
         at (into {} (map (fn [{:keys [x y z factor]}] [[x y z] factor])) tolls)]
-    (is (every? at (for [x (range 2 7) z [-1 0 1]] [x 64 z])) "each cell of the way and the cells beside it")
+    (is (every? at (for [x (range 2 7) y [63 64 65] z [-1 0 1]] [x y z])) "each cell of the way and the cells a planner move from it: beside, one up, one down")
+    (is (not-any? at [[4 66 0] [4 62 0] [0 64 0] [8 64 0] [4 64 2]]) "and no cell farther")
     (is (< (js/Math.abs (- (gcut/send-back-price m) (* (cost/walk-step-s) (reduce + (map #(at [% 64 0]) (range 2 7)))))) 1e-9)
         "crossing the whole way costs the send-back price once, not once a cell")))
+
+(deftest a-walk-s-trail-keeps-the-last-cells-only
+  (let [m (reduce (fn [m i] (gcut/approach-step m {:x (+ i 0.5) :y 64 :z 0.5} 1000)) {} (range (+ 50 gcut/trail-cells)))]
+    (is (= gcut/trail-cells (count (:trail m))))
+    (is (= [(+ 49 gcut/trail-cells) 64 0] (peek (:trail m))) "the newest cell last")
+    (is (= [50 64 0] (first (:trail m))) "the oldest dropped")))
 
 (deftest the-send-back-chance-is-the-counted-chance-of-sends-in-cut-walks
   (is (= (cost/counted-chance {:k 2 :n 5}) (gcut/send-back-chance {:cut-walks 5 :sent-backs [{} {}]}))))
