@@ -382,7 +382,7 @@
   in one section and no block it remembers changed or aged."
   [p]
   (when-let [^js st (some-> (aget p "perception") :st)]
-    (when-let [[x y z] (feet-cell p)]
+    (when-let [[x y z] (and (.-stores st) (feet-cell p))]
       (let [^js sections (store/store-of st (.-dim st))
             [cx sy cz :as at] (mapv #(bit-shift-right % 4) [x y z])
             k [(.-dim st) (memory-age/epoch st) at]
