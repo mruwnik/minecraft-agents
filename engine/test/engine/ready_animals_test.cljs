@@ -110,7 +110,7 @@
     maintain/fit?))
 
 (deftest fit-jobs-rest-below-the-risky-health-and-ok-jobs-never
-  (are [check expected] (= expected (status check {} {:self {:pos {:x 0 :y 64 :z 0} :health 5}}))
+  (are [check expected] (= expected (status check {} {:self {:pos {:x 0 :y 64 :z 0} :health 0.5}}))
     herd/fit? :later
     guard/fit? :later
     roll/fit? :later

@@ -38,7 +38,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[inventory logs] [[[] 3] [[{:name "bread" :count 3}] 0]]]
-          (let [{:keys [eng p]} (lt/setup {:self {:health 2 :food 5} :blocks (lt/tree 3 0 "oak" 3) :inventory inventory})]
+          (let [{:keys [eng p]} (lt/setup {:self {:health 0.5 :food 5} :blocks (lt/tree 3 0 "oak" 3) :inventory inventory})]
             (core/submit! eng harvest {})
             (await (tu/run-until-empty eng 30))
             (is (= logs (get (lt/inv p) "oak_log" 0)) (pr-str inventory))))))))

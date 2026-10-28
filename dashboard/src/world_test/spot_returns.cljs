@@ -38,7 +38,7 @@
     (when t
       (cond
         (and body? (str/includes? line ":kind :died")) (assoc r :k (if cause :spot :pos))
-        (and body? (str/includes? line ":kind :hurt")) (assoc r :k (cond (and cause (risk/too-hurt? (or (num-of #":health (-?[\d.]+)" line) 99) (num-of #":food (-?[\d.]+)" line))) :spot
+        (and body? (str/includes? line ":kind :hurt")) (assoc r :k (cond (and cause (risk/too-hurt? (or (num-of #":health (-?[\d.]+)" line) 99) (num-of #":food (-?[\d.]+)" line) :long)) :spot
                                                                          cause :met
                                                                          :else :pos))
         (str/includes? line ":kind :hostile.decided") (assoc r :k :met)
