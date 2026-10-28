@@ -2,7 +2,8 @@
 // Writes engine/src/jobs/lib/cost/solid_shares.json, the prior jobs.lib.cost.base-rates/solid-prior reads: per section
 // height (y, its lowest block) a Beta {a b} fitted by moments to the share of solid among the blocks sight meets (the open
 // blocks and the solid ones beside them: walls) in every 3x3x3-section window centred there, over the columns the bodies have recorded (worlds/<world>/chunks: the game's terrain as the server sent
-// it, not what a body saw), less the fixture plot grid and its lanes (built courses, not terrain). Solid is the engine's rule
+// it, not what a body saw), less the fixture plot grid and its lanes (built courses, not terrain); and as reach, by
+// source and target section, the slope of a window's share on the share at another height of the same column. Solid is the engine's rule
 // (jobs.lib.walk.rock/open-ids), read from the planner's block table in the compile cache, so run any engine build or test
 // first. Rerun when the world or the game version changes:
 //   node tools/solid-shares.mjs [chunks-dir]
@@ -43,35 +44,73 @@ export const betaOf = (m, v, cells) => {
   return { a: m * strength, b: (1 - m) * strength }
 }
 
-// [{y a b n}] by section from columns: Map "cx,cz" -> {wall open} Int32Arrays of counts per section, lowest first, minY the
-// lowest block, the share fitted wall / (wall + open); a window empty? says is no sample (default: no open block, sight
-// meets nothing there)
-export const fitWindows = (columns, minY, empty = (w, o) => o === 0) => {
-  const acc = new Map()
-  for (const [key, { wall, open }] of columns) {
+// Each window centred on a column whose 9 columns are all recorded, as [{share cells}] by section: its share wall /
+// (wall + open) and its wall + open, share NaN where empty? says the window is no sample
+const windowShares = function* (columns, empty) {
+  for (const [key, { wall }] of columns) {
     const [cx, cz] = key.split(',').map(Number)
     const around = []
     for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) around.push(columns.get(`${cx + dx},${cz + dz}`))
     if (around.some(c => !c)) continue
-    for (let sy = 0; sy < wall.length; sy++) {
+    yield Array.from(wall, (_, sy) => {
       let w = 0
       let o = 0
       for (let d = -1; d <= 1; d++) {
         if (sy + d < 0 || sy + d >= wall.length) continue
         around.forEach(c => { w += c.wall[sy + d]; o += c.open[sy + d] })
       }
-      if (empty(w, o)) continue
-      const share = w / (w + o)
+      return { share: empty(w, o) ? NaN : w / (w + o), cells: w + o }
+    })
+  }
+}
+
+// [{y a b n}] by section from columns: Map "cx,cz" -> {wall open} Int32Arrays of counts per section, lowest first, minY the
+// lowest block, the share fitted wall / (wall + open); a window empty? says is no sample (default: no open block, sight
+// meets nothing there)
+export const fitWindows = (columns, minY, empty = (w, o) => o === 0) => {
+  const acc = new Map()
+  for (const windows of windowShares(columns, empty)) {
+    windows.forEach(({ share, cells }, sy) => {
+      if (Number.isNaN(share)) return
       const e = acc.get(sy) ?? { n: 0, sum: 0, sq: 0, cells: 0 }
-      e.n++; e.sum += share; e.sq += share * share; e.cells += w + o
+      e.n++; e.sum += share; e.sq += share * share; e.cells += cells
       acc.set(sy, e)
-    }
+    })
   }
   return [...acc].sort((p, q) => p[0] - q[0]).map(([sy, { n, sum, sq, cells }]) => {
     const m = sum / n
     const { a, b } = betaOf(m, Math.max(0, sq / n - m * m), cells / n)
     return { y: minY + 16 * sy, a: Number(a.toPrecision(4)), b: Number(b.toPrecision(4)), n }
   })
+}
+
+// [[slope by target section] by source section]: the least-squares slope of a window's share on the share of the window
+// centred on the same column at the source section, over the windows where both are samples (1 on the diagonal, 0
+// where the source's share never varies): how far a share seen at one height moves the share expected at another
+export const fitReach = (columns, empty = (w, o) => o === 0) => {
+  let acc = null
+  for (const windows of windowShares(columns, empty)) {
+    const n = windows.length
+    acc ??= Array.from({ length: n * n }, () => ({ n: 0, x: 0, y: 0, xy: 0, xx: 0 }))
+    for (let s = 0; s < n; s++) {
+      const x = windows[s].share
+      if (Number.isNaN(x)) continue
+      for (let t = 0; t < n; t++) {
+        const y = windows[t].share
+        if (Number.isNaN(y)) continue
+        const e = acc[s * n + t]
+        e.n++; e.x += x; e.y += y; e.xy += x * y; e.xx += x * x
+      }
+    }
+  }
+  if (!acc) return []
+  const n = Math.sqrt(acc.length)
+  return Array.from({ length: n }, (_, s) => Array.from({ length: n }, (_, t) => {
+    const e = acc[s * n + t]
+    const v = e.n ? e.xx - e.x * e.x / e.n : 0
+    const slope = s === t ? 1 : v > 1e-12 ? (e.xy - e.x * e.y / e.n) / v : 0
+    return Number(slope.toPrecision(3))
+  }))
 }
 
 // {wall open} Int32Arrays per section of a column from solid (1 by block, section by section, lowest first): its open
@@ -110,7 +149,9 @@ const main = dir => {
     columns.set(`${m[1]},${m[2]}`, columnCounts(flags))
   }
   const sections = fitWindows(columns, minY)
-  fs.writeFileSync(OUT, `{"version": "${MC_VERSION}", "columns": ${columns.size}, "sections": [\n${sections.map(e => ' ' + JSON.stringify(e)).join(',\n')}]}\n`)
+  const reach = fitReach(columns)
+  const rows = xs => xs.map(e => ' ' + JSON.stringify(e)).join(',\n')
+  fs.writeFileSync(OUT, `{"version": "${MC_VERSION}", "columns": ${columns.size}, "sections": [\n${rows(sections)}],\n"reach": [\n${rows(reach)}]}\n`)
   console.log(`${columns.size} columns, ${sections.length} section heights -> ${path.relative(ROOT, OUT)}`)
 }
 

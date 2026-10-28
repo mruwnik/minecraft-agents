@@ -1,7 +1,7 @@
 // Why JavaScript: node --test file for tools/solid-shares.mjs (a Node tool over recorded chunk columns).
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { betaOf, columnCounts, fitWindows, reserved, solidStates } from './solid-shares.mjs'
+import { betaOf, columnCounts, fitReach, fitWindows, reserved, solidStates } from './solid-shares.mjs'
 
 const grid = (counts) => {
   const columns = new Map()
@@ -40,4 +40,12 @@ test('a wall is a solid block with an open one beside it in the column', () => {
 test('solid is the engine rule by block kind, and the fixture plot grid is left out', () => {
   assert.deepEqual([...solidStates([0, 1, 2, 3, 4, 5, 6])], [0, 1, 0, 0, 0, 0, 1], 'open, solid, water, lava, climb, openable, narrow')
   assert.deepEqual([[1246, 1246], [1245, 1300], [1300, 1245]].map(([cx, cz]) => reserved(cx, cz)), [true, false, false])
+})
+
+test('reach is the slope of the share at one height on the share at another, 0 where the source never varies', () => {
+  // the open blocks of the two lowest sections vary together from column to column; the top two sections are alike in all
+  const reach = fitReach(grid((cx, cz) => { const o = 1 + ((cx + 2) * 5 + cz + 2) % 4; return [[1, 1, 1, 1, 1], [o, o, 1, 1, 1]] }))
+  assert.deepEqual(reach.map((r, s) => r[s]), [1, 1, 1, 1, 1])
+  assert.ok(reach[0][1] > 0.5, 'the lowest two sections tied')
+  assert.deepEqual(reach.slice(3).map(r => r.filter(v => v !== 1)), [[0, 0, 0, 0], [0, 0, 0, 0]], 'a share that never varies says nothing')
 })

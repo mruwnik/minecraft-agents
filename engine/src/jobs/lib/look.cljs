@@ -411,7 +411,7 @@
   solid-counts. Nil without a perception's memory."
   [p]
   (when-let [[solid open] (solid-counts p)]
-    (base-rates/solid-share (nth (feet-cell p) 1) solid open)))
+    (let [y (nth (feet-cell p) 1)] (base-rates/solid-share y y solid open))))
 
 (defn- brightest
   "#js {:block :sky}: the most of each light among the seen cells of the section at cx sy cz (its ids)."
@@ -458,7 +458,7 @@
                    (when (and (or (nil? ids) (zero? (aget ids (store/cell-index ox oy oz)))) (>= v 0)) v)))
            own? (fn [x y z] (and own (== x ox) (== y oy) (== z oz)))
            [n-solid n-open] (or (solid-counts p) [0 0])
-           open-chance (- 1 (base-rates/solid-share oy n-solid n-open))
+           open-chance (- 1 (base-rates/solid-share oy oy n-solid n-open))
            ^js open (rock/open-ids)
            summaries (js/Map.)
            summary (fn [cx sy cz]
@@ -566,7 +566,7 @@
                             (cond (or (nil? v) (neg? v)) (recur (inc y'))
                                   (not= 15 (bit-shift-right v 4)) 0
                                   (== y' (inc y)) 1
-                                  :else (base-rates/open-run-chance (inc y) y' n-solid n-open)))
+                                  :else (base-rates/open-run-chance (inc y) y' oy n-solid n-open)))
                           (let [up (* 16 (inc (bit-shift-right y' 4)))] (recur up))))))
            memo (js/Map.)]
        (fn [x y z]

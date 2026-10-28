@@ -116,22 +116,32 @@
   jungle) against the land that spawns none (desert, badlands, snowy plains, mushroom fields, beaches): a rough prior."
   0.6)
 
-(defn- sections-of [json] (vec (:sections (js->clj (js/JSON.parse json) :keywordize-keys true))))
+(defn- table-of [json] (js->clj (js/JSON.parse json) :keywordize-keys true))
 
-(def ^:private solid-shares (sections-of (rc/inline "jobs/lib/cost/solid_shares.json")))
+(def ^:private solid-data (table-of (rc/inline "jobs/lib/cost/solid_shares.json")))
 
-(def ^:private sky-shares (sections-of (rc/inline "jobs/lib/cost/sky_shares.json")))
+(def ^:private solid-shares (vec (:sections solid-data)))
+
+(def ^:private reach (mapv vec (:reach solid-data)))
+
+(def ^:private sky-shares (vec (:sections (table-of (rc/inline "jobs/lib/cost/sky_shares.json")))))
+
+(defn- between
+  "[i f]: height y lies f of the way from the centre of table's section i to that of i + 1, the end ones past the table's
+  ends."
+  [table y]
+  (let [t (-> (/ (- y (:y (first table)) 8) 16) (max 0) (min (dec (count table))))
+        i (min (js/Math.floor t) (- (count table) 2))]
+    [i (- t i)]))
+
+(defn- mix "x-of section index, linear between sections i and i + 1 at f." [[i f] x-of] (+ (* (- 1 f) (x-of i)) (* f (x-of (inc i)))))
 
 (defn- prior-at
   "{:a :b} of a table of Betas by section height at height y, a-of and b-of reading a section's: linear in y between the
   sections' centres, the end ones past the table's ends."
   [table y a-of b-of]
-  (let [t (-> (/ (- y (:y (first table)) 8) 16) (max 0) (min (dec (count table))))
-        i (min (js/Math.floor t) (- (count table) 2))
-        f (- t i)
-        [lo hi] (subvec table i (+ i 2))
-        mix #(+ (* (- 1 f) (% lo)) (* f (% hi)))]
-    {:a (mix a-of) :b (mix b-of)}))
+  (let [w (between table y)]
+    {:a (mix w #(a-of (table %))) :b (mix w #(b-of (table %)))}))
 
 (defn solid-prior
   "{:a :b} the Beta prior on the share of solid among the blocks sight meets round height y (the open blocks and the
@@ -149,17 +159,22 @@
     (/ (+ a lit) (+ a b open))))
 
 (defn solid-share
-  "The share of solid expected among the blocks sight meets round height y, with solid and open those it has met there:
-  the posterior mean over solid-prior."
-  [y solid open]
-  (let [{:keys [a b]} (solid-prior y)]
-    (/ (+ a solid) (+ a b solid open))))
+  "The share of solid expected among the blocks sight meets round height y, with solid and open those it has met in the
+  window round height seen's section: their posterior mean over that section's prior, carried to y by the slope of the
+  share at y on the share at seen's section in the recorded terrain (reach in solid_shares.json): the posterior in seen's
+  section, the prior at y where the two heights' shares are unrelated."
+  [y seen solid open]
+  (let [s (-> (js/Math.floor (/ (- seen (:y (first solid-shares))) 16)) (max 0) (min (dec (count solid-shares))))
+        {sa :a sb :b} (solid-shares s)
+        {:keys [a b]} (solid-prior y)
+        slope (mix (between solid-shares y) (reach s))]
+    (-> (+ (/ a (+ a b)) (* slope (- (/ (+ sa solid) (+ sa sb solid open)) (/ sa (+ sa sb))))) (max 0) (min 1))))
 
 (defn open-run-chance
   "The chance every block of a column from height y0 up to y1 (not counted) is open, each at 1 - solid-share at its own
-  height with solid and open those sight has met; under 1e-6 reads 0."
-  [y0 y1 solid open]
+  height with solid and open those sight has met round height seen; under 1e-6 reads 0."
+  [y0 y1 seen solid open]
   (loop [y y0 c 1]
     (cond (< c 1e-6) 0
           (>= y y1) c
-          :else (recur (inc y) (* c (- 1 (solid-share y solid open)))))))
+          :else (recur (inc y) (* c (- 1 (solid-share y seen solid open)))))))

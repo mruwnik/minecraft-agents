@@ -256,7 +256,7 @@
         top (first (filter #(sh-sense/seen-cell? p {:x 0 :y % :z 7}) (range 49 64)))
         chance (look/unseen-lit-chance p {:x 0 :y 48 :z 7})]
     (is (< 52 top) "the hole is seen, the shaft under it not")
-    (is (= (base-rates/open-run-chance 49 top solid open) chance))
+    (is (= (base-rates/open-run-chance 49 top (js/Math.floor (:y (sh-sense/feet p))) solid open) chance))
     (is (< chance 0.5))))
 
 (deftest an-unseen-cell-under-open-sky-is-lit-by-day-only

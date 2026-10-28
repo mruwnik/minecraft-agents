@@ -48,12 +48,20 @@
       "the placements' peaks; redstone and diamond grow denser down to the lava; coal and emerald are densest above 64"))
 
 (deftest the-solid-share-is-the-depth-prior-until-the-seen-blocks-outweigh-it
-  (is (> (rates/solid-share -40 0 0) 0.3) "nothing seen deep down: walls close all round")
-  (is (< (rates/solid-share 120 0 0) 0.05) "nothing seen high up: open air")
-  (is (< (rates/solid-share 0 400 2000) 0.2) "a hall seen open deep down")
-  (is (> (rates/solid-share 120 300 100) 0.5) "a tunnel seen in rock high up")
-  (is (< (js/Math.abs (- (rates/solid-share 63 0 0) (rates/solid-share 64 0 0))) 0.01) "no step at a section border")
+  (is (> (rates/solid-share -40 -40 0 0) 0.3) "nothing seen deep down: walls close all round")
+  (is (< (rates/solid-share 120 120 0 0) 0.05) "nothing seen high up: open air")
+  (is (< (rates/solid-share 0 0 400 2000) 0.2) "a hall seen open deep down")
+  (is (> (rates/solid-share 120 120 300 100) 0.5) "a tunnel seen in rock high up")
+  (is (< (js/Math.abs (- (rates/solid-share 63 63 0 0) (rates/solid-share 64 64 0 0))) 0.01) "no step at a section border")
   (is (= (rates/solid-prior -500) (rates/solid-prior -56)) "past the table's ends, its end window"))
+
+(deftest blocks-seen-at-one-height-say-less-of-another-the-less-the-terrain-ties-them
+  ;; a body on the surface that has seen only open air knows little of the rock 30 blocks down (Q16)
+  (let [deep (rates/solid-share 42 42 0 0)]
+    (is (< (rates/solid-share 72 72 0 3000) 0.01) "round the feet: open, as seen")
+    (is (< (js/Math.abs (- (rates/solid-share 42 72 0 3000) deep)) (* 0.25 deep)) "30 down: near the prior there")
+    (is (< (rates/open-run-chance 42 72 72 0 3000) 0.05) "an unseen shaft from there up to the feet is unlikely open")
+    (is (> (rates/solid-share 42 72 3000 0) deep) "seen rock round the feet still says more rock down there")))
 
 (deftest the-sky-share-is-the-height-prior-until-the-seen-open-blocks-outweigh-it
   (is (< (rates/sky-share -40 8 0 0) 0.01) "nothing seen deep down: caves")
