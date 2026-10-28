@@ -7,6 +7,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
+            [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.vehicle :as vehicle]))
@@ -38,7 +39,6 @@
    ::sight-radius {:default 64 :doc "How far a vehicle is looked for among the entities in sight." :spec (a/num-in 1 nil)}})
 
 (defn max-walks [] (settings/get settings ::max-walks))
-(def walk-speed "Blocks a second a walk covers, for the quote." 4)
 (def seat-s "Seconds the server takes to seat the body, for the quote." 1)
 
 (defn sensed
@@ -132,7 +132,7 @@
         {:keys [id name]} (:args c)
         id (if (and (nil? id) (string? name)) (nearest-named c name) id)
         e (when id (entity-of p id))
-        walk-s (if e (/ (max 0 (- (u/dist (u/self-pos c) (u/pos-of (.-pos e))) reach)) walk-speed) 0)]
+        walk-s (if e (/ (max 0 (- (u/dist (u/self-pos c) (u/pos-of (.-pos e))) reach)) cost/walk-speed) 0)]
     {:uses {:job-time [seat-s (+ seat-s walk-s) (+ (* 2 seat-s) (* 3 walk-s) 10)]}}))
 
 (defn stop!

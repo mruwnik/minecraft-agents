@@ -17,6 +17,7 @@
             [jobs.lib.need :as need]
             [jobs.lib.stock :as stock]
             [jobs.lib.checks :as checks]
+            [jobs.lib.cost :as cost]
             [jobs.lib.util :as u]
             [engine.memory :as mem]
             [jobs.lib.pace :as pace]
@@ -80,8 +81,7 @@
 
 (a/defargs settings
   {::job-time-s {:default 300 :doc "Seconds a put-away may last: the walk, the transfers and a chest placed." :spec (a/num-in 0 nil)}
-   ::take-s {:default 1 :doc "Seconds a quote counts for one transfer." :spec (a/num-in 0 nil)}
-   ::walk-speed {:default 4 :doc "Blocks a second a quote counts for the walk to the chest." :spec (a/num-in 0 nil)}})
+   ::take-s {:default 1 :doc "Seconds a quote counts for one transfer." :spec (a/num-in 0 nil)}})
 (defn time-s [] (settings/get settings ::job-time-s))
 
 (def ways need/fetch-ways)
@@ -133,7 +133,7 @@
   [c]
   (let [spare (spare-items c)
         chest (some-> (storage/chest-of (ctx/view c) (:args c)))
-        walk (if chest (/ (u/dist (u/self-pos c) chest) (settings/get settings ::walk-speed)) 0)
+        walk (if chest (/ (u/dist (u/self-pos c) chest) cost/walk-speed) 0)
         t (+ walk (* (count spare) (settings/get settings ::take-s)))]
     {:uses {:job-time [(* (count spare) (settings/get settings ::take-s)) t (max t (time-s))]}}))
 

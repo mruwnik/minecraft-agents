@@ -8,6 +8,7 @@
             [engine.settings :as settings]
             [jobs.lib.stock :as stock]
             [jobs.lib.checks :as checks]
+            [jobs.lib.cost :as cost]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.chests :as chests]
@@ -57,8 +58,7 @@
 
 (a/defargs settings
   {::job-time-s {:default 120 :doc "Seconds a take may last: the walk and the transfers." :spec (a/num-in 0 nil)}
-   ::take-s {:default 1 :doc "Seconds a quote counts for one transfer." :spec (a/num-in 0 nil)}
-   ::walk-speed {:default 4 :doc "Blocks a second a quote counts for the walk to the chest." :spec (a/num-in 0 nil)}})
+   ::take-s {:default 1 :doc "Seconds a quote counts for one transfer." :spec (a/num-in 0 nil)}})
 (defn time-s [] (settings/get settings ::job-time-s))
 
 (def target [:chest :entity])
@@ -111,7 +111,7 @@
   [c]
   (let [short (shortfall (u/inventory (:primitives c)) (:items (:args c)))
         chest (storage/chest-of (ctx/view c) (:args c))
-        walk (if chest (/ (u/dist (u/self-pos c) chest) (settings/get settings ::walk-speed)) 0)
+        walk (if chest (/ (u/dist (u/self-pos c) chest) cost/walk-speed) 0)
         t (+ walk (* (count short) (settings/get settings ::take-s)))]
     {:uses {:job-time [(* (count short) (settings/get settings ::take-s)) t (max t (time-s))]}
      :yields {:items (into {} (map (fn [[name n]] [name [0 n n]])) short)}}))

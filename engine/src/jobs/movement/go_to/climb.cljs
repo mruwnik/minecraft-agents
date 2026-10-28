@@ -7,6 +7,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.util :as u]
             [jobs.lib.column-kinds :as kinds]
+            [jobs.lib.cost :as cost]
             [jobs.movement.go-to.column :as column]))
 
 (a/defargs settings
@@ -20,8 +21,6 @@
 (defn own-way-reach [] (settings/get settings ::own-way-reach))
 (defn own-way-search [] (settings/get settings ::own-way-search))
 (defn own-way-digs [] (settings/get settings ::own-way-digs))
-
-(def walk-speed "Blocks a second a walk along the body's own way is reckoned at, against the seconds of a new stair." 4)
 
 (defn dives?
   "Whether a plan's steps ({:x :y :z} feet) go below floor on a cell that stands on none of ways (stair floors [x y z])."
@@ -110,7 +109,7 @@
   :cut-steps :cut-s :text}, :take whether the walk is no slower."
   [route rise step-s]
   (let [blocks (dec (count route))
-        walk-s (js/Math.round (/ blocks walk-speed))
+        walk-s (js/Math.round (/ blocks cost/walk-speed))
         cut-s (* rise step-s)
         take (<= walk-s cut-s)]
     {:take take :to (peek route) :blocks blocks :walk-s walk-s :cut-steps rise :cut-s cut-s
