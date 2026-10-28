@@ -48,7 +48,7 @@
    :limit-s 60}
   {:name "armed-body-kills-a-drowned-that-swims-to-it"
    :body {:inventory [["iron_sword" 1]]}
-   :act [[:summon "drowned" [13.5 7 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :act [[:summon "drowned" [13.5 7 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"] [:wait-s 20]]
    :expect [{:event {:source :job :kind :hostile.decided :data {:mob "drowned" :decision :fight}} :within-s 10}]
    :after [[:entities "type=drowned,tag=wt" [[3 0 9] [30 12 23]] 0]]
    :limit-s 60}]}
