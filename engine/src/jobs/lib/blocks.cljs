@@ -342,6 +342,7 @@
                             (:cannot :fluid) :cannot
                             :fluid-adjacent :fluid-adjacent
                             :no-tool :no-tool
+                            :not-diggable :not-diggable
                             :unreachable)
         :impossible :unreachable
         (:cut-off :limit-reached) :failed

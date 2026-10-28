@@ -22,7 +22,8 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter.keep :as keep]
             [jobs.lib.shelter.sense :as sh-sense]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.movement.go-to.holes :as holes]))
 
 (def doc
   "Dig the one block at :pos ([x y z] or {:x :y :z}) and pick up what it dropped, as a player would. One call is the
@@ -76,6 +77,7 @@
    :on-lava {:doc ":seal: seen lava beside the dug cell is filled with a building block (jobs.lib.lava); :leave: the caller deals with it (stair, tunnel)" :spec #{:seal :leave} :default :seal}
    :on-fluid {:doc ":wait: a block beside a fluid that :accept does not take waits :hazard; :fail: the job ends at once, reason :fluid-adjacent, with a :hint" :spec #{:wait :fail} :default :wait}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
+   :natural-only? {:doc "true (go-to's escalation): the block, seen before it is dug, must be natural terrain or the body's own (jobs.lib.escape/diggable?, own builds too unless jobs.lib.access/spare-own-builds); else ends :not-diggable" :spec boolean? :default false}
    :ignore-zones? :shared})
 
 (def ways need/fetch-ways)
@@ -236,7 +238,7 @@
 
 (def done-reasons #{:dug :already-clear})
 
-(def condition-reasons #{:fluid :fluid-adjacent :cannot})
+(def condition-reasons #{:fluid :fluid-adjacent :cannot :not-diggable})
 
 (defn text-of [result cell place stepped-aside stepped-down]
   (str (if (:dug result) "dug " "did not dig ") (or (:block result) "") " at " (pr-str (b/cell (:pos result)))
@@ -471,6 +473,10 @@
       (bs/air block) (finish! c {:dug false :pos pos :block block :reason :already-clear})
       (bs/fluids block) (finish! c {:dug false :pos pos :block block :reason :fluid})
       (rules/unbreakable block) (finish! c {:dug false :pos pos :block block :reason :cannot})
+      (and (:natural-only? (:args c)) (not (:looked-natural (ctx/mem c))) (look/unknown? (:primitives c) (b/cell pos)))
+      (do (ctx/update-mem! c assoc :looked-natural true) (await (look/look-at! c (b/cell pos))) :again)
+      (and (:natural-only? (:args c)) (holes/not-diggable c (access/sensed-at (:primitives c) b/hidden-guess) (b/cell pos)))
+      (finish! c {:dug false :pos pos :block block :reason :not-diggable})
       tool (let [r (await (get-tool! c tool))]
              (if (= :fetched r) :again r))
       (and (not (:walk (:args c))) (not (b/in-reach? c pos (:see (:args c)))))

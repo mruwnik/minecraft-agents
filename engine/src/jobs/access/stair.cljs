@@ -93,6 +93,7 @@
    :need-drop {:doc "false: dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of waiting :no-tool; true: never; unset: bare-handed only when no pickaxe can be fetched (the ways allow none, or the fetch failed)" :spec (a/or-of boolean? #{:auto}) :default :auto}
    :leave-drops {:doc "true: dig on with a full pack and leave the stone lying, as a player escaping does (go-to); unset: wait :no-free-slot" :spec boolean? :default false}
    :collect {:doc "true: pick up each dig's drop while the pack has room for it and keep it from the stair's floors (keep-for-put-back!), so the cut can be put back (go-to's break-out of its own pen)" :spec boolean? :default false}
+   :natural-only? {:doc "true (go-to's escalation): stops :not-diggable at a cell that is not natural terrain or the body's own block (jobs.lib.escape/diggable?), including one first seen while digging" :spec boolean? :default false}
    :through {:doc "the id of a plan the stair works for (a mineshaft it runs down, a rail line it tunnels): its footprint is no obstacle" :spec string? :default nil}})
 
 (a/defargs settings

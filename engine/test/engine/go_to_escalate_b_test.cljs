@@ -729,5 +729,10 @@
           (is (<= (count (distinct (map :cell (events-of seen :go-to.dug-own-build)))) 6) "a few own cells cut, not a column per guess")
           (is (= 1 (count (filter #(= :dig-route (:step %)) (events-of seen :go-to.escalated)))) "the dig route is not chosen again")
           (is (= [false :unreachable] ((juxt :arrived :reason) @out)) "the call ends, a failure")
-          (is (some? (:why @out)) "with its reason"))))))
+          (is (some? (:why @out)) "with its reason")
+          (is (empty? (for [x (range 4 21) y (range 60 70) z (range 4 17)
+                            :when (not (and (<= 8 x 12) (<= 61 y 65) (<= 8 z 12)))
+                            :when (not= "glowstone" (block p [x y z]))]
+                        [x y z (block p [x y z])]))
+              "no glowstone is dug, by the dig route or by a stair's cell first seen mid-way"))))))
 

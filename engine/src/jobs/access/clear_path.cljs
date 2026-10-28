@@ -54,6 +54,7 @@
   {:heading {:doc ":north :east :south or :west" :spec #{:north :east :south :west} :default nil}
    :ignore-zones? :shared
    :max-dig-s {:doc "seconds of digging the whole door may take (see doc); nil: no bound" :spec (a/num-in 0 nil) :default nil}
+   :natural-only? {:doc "true (go-to's escalation): stops :not-diggable at a cell that is not natural terrain or the body's own block (jobs.lib.escape/diggable?)" :spec boolean? :default false}
    :close-behind {:doc "true: put the door's first column back from inside before walking on out (see the doc)" :spec boolean? :default false}
    :need-drop {:doc "false: dig a block no carried tool harvests bare-handed (slow, the drop is lost) without fetching; true: never; unset: bare-handed when no pickaxe can be fetched" :spec (a/or-of boolean? #{:auto}) :default :auto}})
 
@@ -191,7 +192,7 @@
         hand? (and (not (tools/can-harvest? (:primitives c) block))
                    (or (false? nd) (and (= :auto nd) (or (:by-hand (ctx/mem c)) (empty? (need/fetch-how c))))))
         args {:pos cell :collect (and collect (not hand?)) :need-drop (not hand?) :ways (need/call-ways c)
-              :ignore-zones? (:ignore-zones? (:args c))}
+              :ignore-zones? (:ignore-zones? (:args c)) :natural-only? (:natural-only? (:args c))}
         done! (fn [] (ctx/update-mem! c dissoc :digging))]
     (cond
       (escape/protected? block) (finish! c :protected {:cell cell :block block})
@@ -213,6 +214,7 @@
           (and (declined? e) (= :auto nd) (not hand?) (= :no-tool (contract/cause-key e)))
           (do (done!) (ctx/update-mem! c assoc :by-hand true) :again)
           (declined? e) (do (done!) (finish! c :dig-waits {:cell cell :block block}))
+          (= :not-diggable (contract/cause-key e)) (do (done!) (finish! c :not-diggable {:cell cell :block block}))
           :else (do (done!)
                     (finish! c :dig-failed {:cell cell :block block})))))))
 

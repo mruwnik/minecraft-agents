@@ -96,6 +96,14 @@
               :intent (= :placed (ledger/decide e (constantly block)))
               (and (#{:placed :removing} (:state e)) (= block (:item e)))))))))
 
+(defn not-diggable
+  "The block at cell when an escalation's stair or clear-path child may not cut it (escape/diggable?: natural terrain, or
+  the body's own blocks, its own builds too when the call does not spare them), else nil. For a cell first seen while digging."
+  [c block-at cell]
+  (let [own? (cond->> (own-placed-fn c) (not (access/spare-own-builds)) (own-fn c))]
+    (when-not (escape/diggable? block-at (constantly true) own? cell)
+      (block-at cell))))
+
 (defn forget-dug-own!
   "Drop from the scaffold ledger each entry of dug ({:cell :block}) whose block it was and whose cell is air now: a
   block built there later is someone else's."
