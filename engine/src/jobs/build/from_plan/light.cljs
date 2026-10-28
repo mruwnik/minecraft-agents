@@ -36,20 +36,28 @@
   [c owed]
   (max 0 (- (torches-owed c owed) (torch/torches-held (:primitives c)))))
 
+(defn wait-worth
+  "A worth-of for fetch-due?: what n torches save against waiting wait-s seconds for the sky's light (nil wait-s: nil, any price)."
+  [wait-s]
+  (when wait-s (fn [n _] (cost/light-wait-worth wait-s n))))
+
+(defn night-worth
+  "A worth-of for fetch-due?: for a cell never lit at night, the night left (night-s) plus the torches' price by day (obtain.price/item-price at :sky 0), since they are needed after dawn too (nil night-s: nil, any price)."
+  [c night-s]
+  (when night-s (fn [n o] (+ night-s (obtain-price/item-price c "torch" n o 0)))))
+
 (defn fetch-due?
-  "Whether the torches short over the owed cells (torches-short) are worth getting (crafted from what is carried, or fetched) to light the site instead of waiting wait-s seconds for the
-  sky's light (nil: it never comes, a cell under a canopy or in a cave, and no night is left to fetch through: any price). A never-lit cell at night
-  (dawn?) needs them after dawn too: worth the night left plus their price by day (obtain.price/item-price at :sky 0), so it stays :later until dawn when the night's
-  walk risk costs more than waiting: some short, none got yet this call, and the call's ways allow a torch
-  obtain whose start check takes its price (the cheapest way, the death its walk risks) for no more than the wait saves (jobs.lib.cost/light-wait-worth).
+  "Whether the torches short over the owed cells (torches-short) are worth getting (crafted from what is carried, or fetched) to light the site instead of waiting:
+  some short, none got yet this call, and the call's ways allow a torch obtain whose start check takes its price (the cheapest way, the death its walk risks)
+  for no more than (worth-of n opts) seconds, which is what the wait saves (wait-worth, night-worth; nil: no wait is left to save, any price).
   The torches are counted last: that plans the lighting."
-  [c wait-s owed & [dawn?]]
+  [c worth-of owed]
   (and (not (:torches-tried (ctx/mem c)))
        (some? (need/fetch-opts c))
        (let [n (torches-short c owed)
              o (need/fetch-opts c)]
          (and (pos? n)
-              (composite/ok? (need/item-status c "torch" n o (when wait-s (if dawn? (+ wait-s (obtain-price/item-price c "torch" n o 0)) (cost/light-wait-worth wait-s n)))))))))
+              (composite/ok? (need/item-status c "torch" n o (when worth-of (worth-of n o))))))))
 
 (defn lights-itself
   "safe, but ok where it only waits for light (:exposed, lowered by :light) or no light comes (:exposed, a torch lowers it) and the body can hang torches
@@ -62,7 +70,7 @@
         dawn-s (fn [c] (let [s (sense/sky-in (:primitives c))] (when (pos? (or s 0)) s)))
         lit (fn [f] (fn [c] (let [s (f c)]
                               (if (and (or (wait-for-light? s) (no-light? s))
-                                       (or (can-light? c) (if (wait-for-light? s) (fetch-due? c (wait-s s) (plan/owed (cells-of c))) (fetch-due? c (dawn-s c) (plan/owed (cells-of c)) true))))
+                                       (or (can-light? c) (if (wait-for-light? s) (fetch-due? c (wait-worth (wait-s s)) (plan/owed (cells-of c))) (fetch-due? c (night-worth c (dawn-s c)) (plan/owed (cells-of c))))))
                                 (contract/ok :torches "dark: the body hangs torches to build by")
                                 (cond
                                   (wait-for-light? s) (assoc-in s [2 :item] "torch")
@@ -108,7 +116,7 @@
   (let [owed (plan/owed cells)]
     (cond
       (or (empty? owed) (not (dark-site? c owed))) nil
-      (and (not (:light-tried (ctx/mem c))) (fetch-due? c (site-wait c owed) owed)) (await (fetch-torches! c (torches-short c owed)))
+      (and (not (:light-tried (ctx/mem c))) (fetch-due? c (wait-worth (site-wait c owed)) owed)) (await (fetch-torches! c (torches-short c owed)))
       (can-light? c) (let [d (await (ctx/call c :light 'jobs.build.light-area (assoc (light-args owed) :ways #{:carried})))]
                        (when-not (= :continue d)
                          (ctx/update-mem! c assoc :light-tried true))

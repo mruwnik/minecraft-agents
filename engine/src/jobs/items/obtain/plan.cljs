@@ -117,11 +117,11 @@
 
 (defn walk-s
   "A trip, the straight walk to `at` and back, and its risk there and back (jobs.lib.walk-risk/estimate on the straight way,
-  under the call's :sky, default now) in seconds (cost/risk-s)."
+  under the call's :sky, default now) in seconds (walk-risk/risk-s)."
   [c at]
-  (let [{:keys [hp lethal-hp]} (walk-risk/estimate c at {:back? true :sky (:sky (:args c))})]
+  (let [est (walk-risk/estimate c at {:back? true :sky (:sky (:args c))})]
     (+ (cost/trip) (:cost (cost/walk-cost {:distance (* 2 (u/dist (u/self-pos c) at))}))
-       (cost/risk-s (.-health (.self (:primitives c))) (- hp lethal-hp) lethal-hp))))
+       (walk-risk/risk-s c est))))
 
 (defn chest-s
   "The walk to the nearest chest the chest way would try: one booked as holding a name, or a seen one not looked into yet."

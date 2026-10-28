@@ -11,6 +11,7 @@
             [jobs.lib.targets :as targets]
             [jobs.lib.util :as u]
             [jobs.lib.walk.plan :as wplan]
+            [jobs.lib.walk-risk :as walk-risk]
             [jobs.lib.walk.world :as wworld]))
 
 (defn walk-s
@@ -34,10 +35,7 @@
   extra-hurt hp besides, with its :risk's hurt and death chance."
   ([c q] (risk-s c q 0))
   ([c q extra-hurt]
-   (let [{:keys [hp lethal-hp] :or {hp 0 lethal-hp 0}} (:risk q)]
-     (cost/risk-s (.-health (.self (:primitives c)))
-                  (+ (- hp lethal-hp) (second (get-in q [:uses :health] [0 0 0])) extra-hurt)
-                  lethal-hp))))
+   (walk-risk/risk-s c (:risk q) (+ (second (get-in q [:uses :health] [0 0 0])) extra-hurt))))
 
 (defn ev-worth
   "Seconds a find worth `worth` is worth to the body that walks go-to's quote q to it: worth times the chance the walk

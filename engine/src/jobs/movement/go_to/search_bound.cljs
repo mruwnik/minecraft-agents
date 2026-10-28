@@ -11,11 +11,6 @@
             [jobs.lib.walk-risk :as risk]
             [jobs.movement.go-to.escalate-choose :as choose]))
 
-(defn risk-s
-  "Seconds a walk-risk estimate's hp cost the body (cost/risk-s of its hurt and its death's :lethal-hp)."
-  [c {:keys [hp lethal-hp]}]
-  (cost/risk-s (.-health (.self (:primitives c))) (- hp lethal-hp) lethal-hp))
-
 (defn fallback-s
   "Seconds the way escape/choose finds from feet with no dig route costs to the goal: its step (choose/price, an
   approach its walk), the blocks on from where the step leaves the body as a quote prices them (cost-planner/rest-s), and
@@ -31,15 +26,15 @@
                        (:cost (cost/walk-cost {:distance (u/dist (cell feet) (cell end))}))
                        (choose/price (:primitives c) feet e))
                      (cost-planner/rest-s (js/Math.round (js/Math.hypot (- (goal 0) (end 0)) (- (goal 2) (end 2)))))
-                     (risk-s c (risk/estimate c (cell goal)))))]
+                     (risk/risk-s c (risk/estimate c (cell goal)))))]
       (if (and total (js/isFinite total)) total (worth)))))
 
 (defn stood-s
   "Seconds standing still since `since` (ctx/now ms) has cost the body: the time and what staying at its cell risks over
-  it (walk-risk/stay-estimate, risk-s)."
+  it (walk-risk/stay-estimate, risk/risk-s)."
   [c since]
   (let [secs (/ (- (ctx/now c) since) 1000)]
-    (+ secs (risk-s c (risk/stay-estimate c (assoc (risk/stay-inputs c (sh-sense/feet (:primitives c)) 0) :secs secs))))))
+    (+ secs (risk/risk-s c (risk/stay-estimate c (assoc (risk/stay-inputs c (sh-sense/feet (:primitives c)) 0) :secs secs))))))
 
 (defn spent?
   "Whether the searches begun as memory m's :route-search {:since :fallback-s} have stood the body longer than their fallback is worth."

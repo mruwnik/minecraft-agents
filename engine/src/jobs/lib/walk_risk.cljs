@@ -179,6 +179,12 @@
      :walk-hp (+ spawn-hp death-hp unfought lava) :lava-hp lava :spawn-hp spawn-hp :hostile-hp hostile-hp :death-hp death-hp :lethal-hp lethal
      :death-chance (:chance (dies met-all)) :dark-s exposed-s :hostiles (count catchers) :threats (mapv #(select-keys % [:mob :pos]) (concat catchers remembered))}))
 
+(defn risk-s
+  "Seconds the hp cost of a walk-risk estimate (its :hp and :lethal-hp, plus `extra-hurt` hp, default 0) costs c's body at its health now (cost/risk-s)."
+  ([c est] (risk-s c est 0))
+  ([c {:keys [hp lethal-hp] :or {hp 0 lethal-hp 0}} extra-hurt]
+   (cost/risk-s (.-health (.self (:primitives c))) (+ (- hp lethal-hp) extra-hurt) lethal-hp)))
+
 (defn estimate
   "{:hp :walk-hp :spawn-hp :hostile-hp :death-hp :lethal-hp :death-chance :lava-hp :dark-s :hostiles :threats} of the walk of c's body to `goal` ({:x :y :z})
   on the way of :plan (go-to's plan of it, {:status :steps}; none: all of it unplanned), and with :back? back on the same way
