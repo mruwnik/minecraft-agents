@@ -54,7 +54,10 @@
   ;; (some way in likelier opened than not); a door's two halves are one
   (restOn [s x y z q]
     (when (pos? q)
-      (let [key (if (== (aget (.-tbl-door-half s) (.stateAt ^js (.-snapshot s) x y z)) 2) (cell-key x (dec y) z) (cell-key x y z))]
+      (let [door? (not (zero? (aget (.-tbl-door-half s) (.stateAt ^js (.-snapshot s) x y z))))
+            by (if (== (aget (.-tbl-door-half s) (.stateAt ^js (.-snapshot s) x y z)) 2) (dec y) y)
+            key (cell-key x by z)
+            q (if door? (js/Math.max q (.changedAt s x by z) (.changedAt s x (inc by) z)) q)]
         (when-not (true? (.has ^js (.-rest-cells s) key))
           (.add ^js (.-rest-cells s) key)
           (set! (.-rest-p s) (* (.-rest-p s) (- 1 q)))
@@ -166,7 +169,7 @@
       (and (not (== id UNLOADED)) (not ^boolean (.isUnknown s id)) (>= (aget (.-tbl-top s) id) WHOLE) (zero? (aget (.-tbl-base s) id)))))
 
   ;; a seen whole block the proof rests on
-  (wallAt [s x y z]
+  (proofWallAt [s x y z]
     (and ^boolean (.solidKnown s x y z)
          (let [q (.changedAt s x y z)]
            (and (< q 0.5) (do (.restOn s x y z q) true)))))
@@ -177,12 +180,12 @@
     (let [fx (.-fx s) fz (.-fz s) ly (js/Math.max y (.-fy s))
           walled (fn [cx cz] (or ^boolean (.solidSeen s cx ly cz) ^boolean (.solidSeen s cx (inc ly) cz)))]
       (and (not (== x fx)) (not (== z fz)) ^boolean (walled x fz) ^boolean (walled fx z)
-           (do (.wallAt s x ly fz) (.wallAt s x (inc ly) fz) (.wallAt s fx ly z) (.wallAt s fx (inc ly) z) true))))
+           (do (.proofWallAt s x ly fz) (.proofWallAt s x (inc ly) fz) (.proofWallAt s fx ly z) (.proofWallAt s fx (inc ly) z) true))))
 
   (floodVisit [s ^js seen ^js queue start-key x y z jump]
-    (if (and ^boolean (.unseen s x y z) (not ^boolean (.wallAt s x y z)))
+    (if (and ^boolean (.unseen s x y z) (not ^boolean (.proofWallAt s x y z)))
       (do (when (and (if (neg? jump) (or (<= y (.-fy s)) ^boolean (.dropOver s y)) ^boolean (.jumpOver s jump (- y (.-fy s)) x z))
-                     (not ^boolean (.wallAt s x (inc y) z))
+                     (not ^boolean (.proofWallAt s x (inc y) z))
                      (or (not (neg? jump)) (not ^boolean (.cornerShut s x y z))))
             (set! (.-leaked s) true))
           false)
@@ -270,7 +273,7 @@
       (cond
         (> dy (inc (.-max-drop s))) false
         (zero? dy) (recur (inc dy))
-        (and (pos? dy) ^boolean (.wallAt s (.-fx s) (+ (.-fy s) dy) (.-fz s))) false ; a roof ends the climb
+        (and (pos? dy) ^boolean (.proofWallAt s (.-fx s) (+ (.-fy s) dy) (.-fz s))) false ; a roof ends the climb
         ^boolean (.floodVisit s seen queue start-key (.-fx s) (+ (.-fy s) dy) (.-fz s) -1) true
         :else (recur (inc dy)))))
 

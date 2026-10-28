@@ -108,11 +108,11 @@
 
 ;; a 1x1 slime pad at (5 64 2) at the foot of the cliff, walled round by stone h blocks over the pad's level: the 10-block
 ;; drop bounces about 6.3 blocks, so a lower wall lets the bounce carry the body onto it or over it
-(defn walled-pad [h budget]
+(defn walled-pad [h budget & [options]]
   (run (pf/world {:fill [[0 64 0 4 74 4 "stone"] [6 64 1 6 (+ 64 h) 3 "stone"] [5 64 1 5 (+ 64 h) 1 "stone"]
                          [5 64 3 5 (+ 64 h) 3 "stone"] [5 64 2 5 64 2 "slime_block"]]})
        (near 5 65 2)
-       {:maxDrop 16 :damageBudget budget :landing (landing slime-id -1)}
+       (merge {:maxDrop 16 :damageBudget budget :landing (landing slime-id -1)} options)
        {:x 4 :y 75 :z 2}))
 
 (deftest the-bounce-peak-and-settle-time-follow-vanilla-physics
@@ -157,6 +157,12 @@
     (is (true? (:damageRefused (pad-drop wide-pad 0 {:landingSeen (fn [x _ z] (not (and (== x 6) (== z 3))))})))))
   (testing "no pad cell seen"
     (is (= 7 (cost (pad-drop wide-pad 10 {:landingSeen (fn [_ _ _] false)}) :damage)))))
+
+(deftest a-bounce-needs-the-walls-the-body-sees
+  (testing "every wall cell of the shaft seen: the bounce, no damage"
+    (is (= 0 (cost (walled-pad 7 0) :damage))))
+  (testing "the walls not seen now: the full fall"
+    (is (true? (:damageRefused (walled-pad 7 0 {:landingSeen (fn [_ _ _ wall?] (not wall?))}))))))
 
 (deftest water-drops-stay-free
   (let [r (run (pf/world {:fill [[0 64 0 4 83 4 "stone"] [5 63 0 7 64 4 "water"]]}) (near 6 63 2)
