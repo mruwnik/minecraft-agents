@@ -113,7 +113,7 @@
 (defn judged-plan
   "planned, judged once per check-cache window."
   [c]
-  (check-cache/cached c :planned #(planned c)))
+  (check-cache/cached c [:planned (:args c)] #(planned c)))
 
 (def safe? (light/lights-itself (ready/safe-at-build work-place/spot) #(:cells (judged-plan %))))
 (def fit? ready/fit?)

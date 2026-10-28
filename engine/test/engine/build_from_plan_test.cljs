@@ -18,6 +18,8 @@
             [jobs.lib.escape :as escape]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.world-files :as world]
+            [engine.settings :as settings]
+            [jobs.lib.check-cache :as cc]
             [jobs.build.from-plan :as build]
             [jobs.build.from-plan.book :as fp-book]
             [jobs.build.from-plan.cells :as fp-cells]
@@ -102,6 +104,20 @@
           (is (= {:placed 9 :missing [] :short {} :given-up {} :wrong [] :refused [] :text "build of pen done: placed 9"}
                  result))
           (is (empty? (h/events-of seen :build.done)) "the ending tells it"))))))
+
+(deftest the-plan-judged-for-one-part-is-not-reused-for-another-in-the-same-slot
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "two" :parts [{:id "a" :cells [[3 64 2]] :want "oak_fence"} {:id "b" :cells [[3 64 4]] :want "oak_fence"}]}
+              seen-cells (atom {})
+              judge {:round (fn ^:async judge-parts [c]
+                              (doseq [id ["a" "b"]]
+                                (swap! seen-cells assoc id (mapv :pos (:cells (build/judged-plan (assoc c :args {:plan "two" :part id}))))))
+                              (ctx/end c :done nil))}
+              {:keys [eng]} (start {:inventory kit} {"two" plan} [] {'judge-parts judge})]
+          (await (settings/scoped {::cc/ttl-ms 100000000} #(tu/child-outcome eng 'judge-parts {} 20)))
+          (is (= {"a" [[3 64 2]] "b" [[3 64 4]]} @seen-cells)))))))
 
 (deftest a-water-cell-is-poured-from-the-carried-water-bucket
   (async done
