@@ -1,0 +1,26 @@
+;; Card ab58ec22 (b37e22cd, 0a82bb14): from-plan in a long dark hall (no dawn lights it; a never-lit cell) at night, no torch carried.
+;; Should-succeed: a seen chest of torches is fetched and the far site built. A fetch with no source is not worth it: the build waits for dawn
+;; (:later, the cell is fetched for then), it does not fail.
+;; Needs night: run with --allow-time --time-log <the shared time log>.
+{:defaults
+ {:tags [:build :light :night :fetch]
+  :time :night :time-why :night-light
+  :plot {:height 8 :floor "grass_block" :length 64}
+  :blocks [[:fill [0 0 8] [60 3 24] "stone"] [:fill [3 0 12] [58 1 20] "air"]]
+  :body {:at [7.5 0 16.5] :effects [["resistance" 600 4]] :inventory [["oak_planks" 6]]}
+  :plans [{:id "floor" :metadata {:by "$body"} :parts [{:id "p" :cells [#at [50 0 16] #at [51 0 16]] :want "oak_planks"}]}]
+  :limit-s 200}
+ :cases
+ [{:name "hall-at-night-torches-are-fetched-then-built"
+   :blocks [[:set [10 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:torch\",count:8}]}"]]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 45 20"] [:until-seen {:block "chest"} 10]
+         [:job (jobs.build.from-plan {:plan "$plan:floor"})]]
+   :expect [{:event {:source :job :kind :child_started :data {:slot :need}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :completed :data {:missing []}} :within-s 180 :of-job true}]
+   :after [[:block [50 0 16] "oak_planks"] [:block [51 0 16] "oak_planks"]]}
+  {:name "hall-at-night-no-source-waits-for-dawn-not-failing"
+   :act [[:job (jobs.build.from-plan {:plan "$plan:floor"})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :failed} :for-s 20 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 1 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 1 :of-job true}]}]}
