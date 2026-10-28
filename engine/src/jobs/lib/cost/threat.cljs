@@ -24,6 +24,9 @@
    ::provoked-share {:default 0.1 :doc "What a provoked-only mob's threat counts for when it is met, not fought." :spec (a/num-in 0 nil)}
    ::default-follow-range {:default 16 :doc "Blocks a mob of unknown kind notices the body from." :spec (a/int-in 1 nil)}
    ::default-fire-range {:default 16 :doc "Blocks a ranged mob without a known attack range (breeze, an unknown kind) shoots from." :spec (a/int-in 1 nil)}
+   ::wander-leaves {:default 1 :spec a/pos-num?
+                    :doc "Prior leavings of an idle hostile from where it was seen (out past 16 blocks; vanilla: a stroll of up to 10 blocks about every 6 s while a player is within 32 blocks, so about 4 strolls). A stated prior: the logs carry no unseen mob's place to count."}
+   ::wander-seconds {:default 24 :spec a/pos-num? :doc "Seconds of wandering those leavings were seen over."}
    ::field-close {:default 3 :doc "Steps of a mob's way within which its field weighs 1 (way-weight)." :spec (a/int-in 0 nil)}})
 
 (defn difficulty
@@ -212,6 +215,15 @@
         kept (- 1 (* (- 1 looted) (- 1 (custom-kept mob))))
         despawned (if (and (> farthest despawn-blocks) (some-> (simulation-distance) (* 16) (> despawn-blocks))) 1 (- 1 (js/Math.exp (- (* idle-despawn-per-s (max 0 (- away-s idle-despawn-s)))))))]
     (- 1 (* (- 1 kept) despawned))))
+
+(def stroll-idle-s "Seconds a hostile with no player within idle-despawn-blocks keeps strolling (vanilla: none at 100 ticks of no action)." 5)
+
+(defn stayed-near
+  "The chance an idle hostile has not wandered from where it was seen, after near-s seconds with a player within
+  idle-despawn-blocks (it strolls only then, and stroll-idle-s past): (1 + s/b)^-a, the Gamma(a, b) prior on its leaving
+  rate (::wander-leaves over ::wander-seconds), as jobs.lib.memory-age prices a remembered cell."
+  [near-s]
+  (js/Math.pow (+ 1 (/ (+ (max 0 near-s) stroll-idle-s) (settings/get settings ::wander-seconds))) (- (settings/get settings ::wander-leaves))))
 
 (defn spawned-there
   "The chance a mob spawned since is at a place that may spawn one (any cell of it not seen lit), after seconds with the

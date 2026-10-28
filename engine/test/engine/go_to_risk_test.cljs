@@ -610,6 +610,29 @@
 (defn pct [x] (js/Math.round (* 1000 x)))
 (def respawned-far {:respawned [{:t (- 36000000 50000) :data {:pos {:x 300 :y 64 :z 5}}}]})
 
+(defn with-sighting
+  "ctx c whose body saw a `name` at pos age-ms ago and lost it (the perception's fadedMobs), remembering the entries
+  {kind [entry]} of more (clock at 10 hours)."
+  [c name pos age-ms more]
+  (aset (:primitives c) "fadedMobs" (fn [] #js [#js {:id 7 :name name :kind "hostile" :pos (clj->js pos) :ageMs age-ms}]))
+  (assoc c :view (fn [] {:now 36000000 :data {:entries more}})))
+
+(deftest a-mob-seen-and-lost-by-the-goal-is-priced-by-the-chance-it-is-still-there
+  ;; 75 blocks from the body, its place last seen before the sighting; old code: no sighting priced, 0 hp
+  (let [at {:x 80 :y 64 :z 5}
+        hp (fn [name age-ms more] (with-redefs [look/seen-block (constantly {:name "air" :age-ms 600000})]
+                                    (:death-hp (risk/estimate (with-sighting (ready-test/ctx-of day-world) name at age-ms more) far-goal))))
+        stayed-by {:moved [{:t (- 36000000 1000) :data {:from {:x 70 :y 64 :z 5} :to {:x 72 :y 64 :z 5}}}]}
+        fresh (hp "creeper" 10000 {})]
+    (is (zero? (:death-hp (estimate-unseen (ready-test/ctx-of day-world) far-goal))) "none seen")
+    (is (pos? fresh) "seen 10 s ago, the body far off since: it stands where it was")
+    (is (< (hp "creeper" 120000 stayed-by) (* 0.5 fresh)) "two minutes with the body near: it likely wandered off")
+    (is (zero? (hp "creeper" 60000 respawned-far)) "the body went 128 blocks off since: it despawned")
+    (is (zero? (hp "zombie" 10000 {})) "a zombie burns under the day sky")
+    (is (zero? (with-redefs [look/seen-block (constantly {:name "air" :age-ms 5000})]
+                 (:death-hp (risk/estimate (with-sighting (ready-test/ctx-of day-world) "creeper" at 10000 {}) far-goal))))
+        "its place seen lit since: not there")))
+
 (deftest a-dark-death-spot-holds-a-spawned-mob-at-the-measured-share-falling-with-its-fade-and-none-once-the-body-went-far
   ;; the body 75 blocks off, the spot all dark
   (let [[ten] (dark-share 1 (died "creeper" 600000))

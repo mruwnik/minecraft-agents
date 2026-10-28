@@ -42,6 +42,9 @@
   An entry not sensed now stays at its last place while the mob could not have drifted `:mob-drift` (16) blocks
   (time x `mob-speed`): about 6 s for a zombie.
   An entry whose id the client no longer tracks (dead, despawned, far off) is dropped at once.
+  A forgotten entry once seen stays a sighting (`fadedMobs`: kind, last seen place and age) for `:sighting-ms`, at
+  most `:max-sightings`, unless it vanished while sensed at the last sample (died or despawned in sight) or is sensed
+  again; the danger checks never read it, jobs price it by the chance it is still there.
   So an unseen silent creeper behind the body is no danger, but a creeper seen 3 s ago that went round a corner still is.
 
   One cell. `sensed` answers what the body knows of a cell now, first match:
@@ -54,7 +57,7 @@
   Answers are cached for one tick (`:step-ms`) while the eye and the raw world's epoch stay the same.
   A cell outside the cone needs a turn first: the wrapped look glances its cell and the 6 neighbours once it settles.
 
-  Wrapping leaves blocks, blockAt and entities raw. It adds seenBlockAt, seenBlocks, knownMobs, and sensedAt, feel and
+  Wrapping leaves blocks, blockAt and entities raw. It adds seenBlockAt, seenBlocks, knownMobs, fadedMobs, and sensedAt, feel and
   glance (blockAt-like answers: name, pos, properties, age, fullCube, plus ageMs and felt / visible).
   dig, place, jumpPlace and useOn let memory take the true state of their cell once they settle.
 
@@ -114,7 +117,9 @@
    :engine.perception/mob-ms {:default 250 :spec (a/int-in 1 nil) :doc "A mob sample is taken this often, ms."}
    :engine.perception/mob-scan {:default 64 :spec (a/num-in 0 nil) :doc "Hostiles within this many blocks of the body are sampled."}
    :engine.perception/hearing {:default 16 :spec (a/num-in 0 nil) :doc "A mob within this many blocks of the eye is heard."}
-   :engine.perception/mob-drift {:default 16 :spec (a/num-in 0 nil) :doc "A mob not sensed is forgotten once it could have walked this many blocks."}})
+   :engine.perception/mob-drift {:default 16 :spec (a/num-in 0 nil) :doc "A mob not sensed is forgotten once it could have walked this many blocks."}
+   :engine.perception/sighting-ms {:default 600000 :spec (a/int-in 0 nil) :doc "A forgotten mob once seen stays a sighting this long, ms."}
+   :engine.perception/max-sightings {:default 32 :spec (a/int-in 0 nil) :doc "The most sightings kept, the newest."}})
 
 (defn defaults
   "The perception options as set (:save-ms from engine.settings)."
@@ -137,7 +142,7 @@
      :st #js {:stores (js/Map.) :count 0 :cap (max 1 (js/Math.floor (/ (:cap-bytes o) store/section-bytes)))
               :writes 0 :stamp 0 :lastKey -1 :lastSec nil :minSec nil :minNow nil :minVal 0 :dim "overworld" :sight nil :visible nil
               :pass nil :passRays nil :lastStart nil :unsubscribe nil
-              :mobs (js/Map.) :mobSource nil
+              :mobs (js/Map.) :faded (js/Map.) :mobSampleAt nil :mobSource nil
               :infoOf (fn [id] (.stateInfo ^js raw id)) :kinds nil :sensedKey nil :sensed (js/Map.) :blockBases (js/Map.) :jsBases (js/Map.)
               :nowFn (:now o) :tickMs (:step-ms o) :radius (:radius o) :hx (:hx g) :hy (:hy g)
               :passes 0 :rays 0 :cells 0 :steps 0 :stepMs 0 :stepMsMax 0}}))
@@ -365,7 +370,7 @@
   "The primitives object p with every primitive as it is (blocks and entities stay raw; blockAt is sensedAt; dig, place, jumpPlace and useOn also let memory
   take the true state of their cell, see touching; look glances where it turned, see looking), plus
   seenBlockAt({x,y,z}) and seenBlocks({radius, names, max}) over memory, knownMobs() (known-mobs: the hostiles the body
-  has seen or heard, sampled from p's entities), sensedAt, feel and glance ({x,y,z}: answer-js of sensed, feel!,
+  has seen or heard, sampled from p's entities), fadedMobs() (the sightings, after a sample), sensedAt, feel and glance ({x,y,z}: answer-js of sensed, feel!,
   glance!), and the perception itself."
   [p per]
   (let [out (js/Object.assign #js {} p)
@@ -374,6 +379,7 @@
     (when-not (.-rawWorld out) (aset out "rawWorld" (:raw per)))
     (set! (.-mobSource ^js (:st per)) p)
     (aset out "knownMobs" (fn [] (mobs/known-mobs per p)))
+    (aset out "fadedMobs" (fn [] (mobs/sense-mobs! per p) (mobs/sightings per)))
     (run! #(when-let [f (aget p %)] (aset out % (rays/touching per p f))) touching-primitives)
     (when-let [f (aget p "look")] (aset out "look" (looking per p f)))
     (aset out "seenBlockAt" (fn [^js a]

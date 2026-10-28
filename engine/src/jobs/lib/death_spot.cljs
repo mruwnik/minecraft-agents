@@ -3,7 +3,8 @@
   a place a player avoids or goes back to prepared. A death or near-death weighs 1 when fresh and fades to 0 (jobs.lib.cost/death-weight);
   it counts for the cells its killer's field from its spot holds (jobs.lib.threat-field), a death by terrain for those within
   cost.death ::terrain-radius (the cells that killed). A near-death fades over the :hurt memory's own ttl, and counts once with a
-  death or newer near-death that counts for its spot (covers?). present-share: the chance its killer, or a like mob spawned since, is there now."
+  death or newer near-death that counts for its spot (covers?). present-share: the chance its killer, or a like mob spawned since, is there now; sighting-share: the chance a mob seen
+  and lost is still near where it was seen."
   (:require [clojure.string :as str]
             [engine.args :as a]
             [engine.ctx :as ctx]
@@ -121,6 +122,29 @@
          (keep #(when (not= me (.-username %)) (u/pos-of (.-pos %))))
          (filter #(<= (u/dist pos %) threat/despawn-blocks)))))
 
+(defn- presence
+  "What c knows of the players near pos since age-ms ago (whereabouts, other-players): :farthest the body went from
+  it (0 while another player is near), :last-near and :last-far the last ms it was within threat/idle-despawn-blocks
+  and more than threat/despawn-blocks off (the start when never), :since the start."
+  [c pos age-ms]
+  (let [p (:primitives c)
+        now (ctx/now c)
+        since (- now age-ms)
+        seen (whereabouts c since)
+        off #(u/dist pos %)
+        others (other-players p pos)
+        kept-near (seq others)]
+    {:since since
+     :farthest (if kept-near 0 (reduce max 0 (map (comp off second) seen)))
+     :last-near (reduce max since (keep (fn [[t at]] (when (<= (off at) threat/idle-despawn-blocks) t)) (concat seen (map #(vector now %) others))))
+     :last-far (if kept-near since (reduce max since (keep (fn [[t at]] (when (> (off at) threat/despawn-blocks) t)) seen)))}))
+
+(defn- left-alive
+  "threat/left-alive of mob at pos by its presence, none while it burns there (burning?)."
+  [c mob pos {:keys [farthest last-near]} drops]
+  (let [p (:primitives c)]
+    (if (burning? p mob pos) 0 (threat/left-alive mob farthest (/ (- (ctx/now c) last-near) 1000) drops (some-> p .self threat/clock-of)))))
+
 (defn present-share
   "The chance the mob that killed or hunted c's body at pos age-ms ago, or a like one, is there now, times the spot's weight
   (its fade): 1 - (1 - old)(1 - new). old, the mob itself: threat/left-alive by the farthest the body has been from the spot
@@ -132,23 +156,23 @@
   now when within idle-despawn-blocks). A water mob's is old alone: it keeps to its water, where it never burns."
   [c {:keys [mob pos weight age-ms drops]}]
   (let [p (:primitives c)
-        now (ctx/now c)
-        since (- now age-ms)
-        seen (whereabouts c since)
-        off #(u/dist pos %)
-        others (other-players p pos)
-        kept-near (seq others)
-        farthest (if kept-near 0 (reduce max 0 (map (comp off second) seen)))
-        last-near (reduce max since (keep (fn [[t at]] (when (<= (off at) threat/idle-despawn-blocks) t)) (concat seen (map #(vector now %) others))))
-        last-far (if kept-near since (reduce max since (keep (fn [[t at]] (when (> (off at) threat/despawn-blocks) t)) seen)))
-        old (if (burning? p mob pos) 0 (threat/left-alive mob farthest (/ (- now last-near) 1000) drops (some-> p .self threat/clock-of)))]
+        {:keys [last-far] :as at} (presence c pos age-ms)
+        old (left-alive c mob pos at drops)]
     (* weight
        (if (contains? field/water-mobs mob)
          old
          (let [close (map #(vec (take 3 %)) (take-while #(= 1 (aget % 3)) (:cells (field/field-of c {:mob mob :pos pos}))))
                share (cost/spawn-share close {:light (fn [[x y z]] (when (lit? p {:x x :y y :z z}) {:block 15}))})
-               new (if (pos? share) (threat/spawned-there (/ (- now last-far) 1000)) 0)]
+               new (if (pos? share) (threat/spawned-there (/ (- (ctx/now c) last-far) 1000)) 0)]
            (- 1 (* (- 1 old) (- 1 new))))))))
+
+(defn sighting-share
+  "The chance a hostile mob c's body saw at pos age-ms ago and lost is still near there: old of present-share (no
+  drops), times threat/stayed-near for the seconds from the sighting to the last time a player was near enough for it
+  to stroll. No like mob spawned since: a walk prices the dark it crosses itself."
+  [c {:keys [mob pos age-ms]}]
+  (let [{:keys [since last-near] :as at} (presence c pos age-ms)]
+    (* (left-alive c mob pos at nil) (threat/stayed-near (/ (- last-near since) 1000)))))
 
 (defn uncleared
   "The remembered deaths of c not seen-clear?."

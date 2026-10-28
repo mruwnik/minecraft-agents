@@ -37,6 +37,7 @@
   (swap! (fake/state p) update :entities (fn [es] (mapv #(if (= id (:id %)) (assoc % :pos [x y z]) %) es))))
 (defn remove-mob! [p id] (swap! (fake/state p) update :entities (fn [es] (filterv #(not= id (:id %)) es))))
 (defn later! [clock ms] (swap! clock + ms))
+(defn sightings [p] (mapv #(vector (.-id %) (.-name %) (.-x (.-pos %)) (.-z (.-pos %)) (.-ageMs %)) (.fadedMobs p)))
 
 (defn danger-ids [p] (mapv #(.-id %) (danger-q/dangers p 8 {:ranged-radius 16} {})))
 (defn nearest-id [p] (some-> (danger-q/nearest-danger p 8 {:ranged-radius 16} {}) .-id))
@@ -113,7 +114,23 @@
     (move! p 1 hidden-spot)
     (later! clock (* 3 60 1000))
     (is (= [] (danger-ids p)))
-    (is (= 0 (alength (.knownMobs p))))))
+    (is (= 0 (alength (.knownMobs p))))
+    (is (= [[1 "creeper" 2.5 4.5 180000]] (sightings p)) "kept as a sighting where it was last seen")
+    (later! clock (* 8 60 1000))
+    (is (= [] (sightings p)) "past :sighting-ms")))
+
+(deftest a-mob-lost-out-of-sight-is-a-sighting-until-sensed-again
+  (let [{:keys [p clock]} (rig {:entities [(mob 1 "creeper" 2 4)] :blocks wall})]
+    (is (= [1] (danger-ids p)))
+    (move! p 1 hidden-spot)
+    (later! clock 3000)
+    (is (= [] (sightings p)) "remembered, not yet a sighting")
+    (remove-mob! p 1)
+    (later! clock 1000)
+    (is (= [[1 "creeper" 2.5 4.5 4000]] (sightings p)) "the client stopped tracking it out of sight: a player would not know it is gone")
+    (swap! (fake/state p) update :entities conj (assoc (mob 1 "creeper" 2 4) :pos [2.5 64 4.5]))
+    (is (= [1] (danger-ids p)))
+    (is (= [] (sightings p)) "sensed again: known, no sighting")))
 
 (deftest a-mob-seen-far-off-long-ago-is-no-danger
   (let [{:keys [p clock]} (rig {:entities [(mob 1 "creeper" 0 40)]})]
@@ -128,6 +145,7 @@
     (is (= [1] (danger-ids p)))
     (remove-mob! p 1)
     (is (= 0 (alength (.knownMobs p))))
+    (is (= [] (sightings p)) "it vanished in sight: dead or despawned")
     (is (= [] (danger-ids p)))))
 
 (deftest recover-drops-weighs-only-known-hostiles

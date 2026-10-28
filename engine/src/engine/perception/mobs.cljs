@@ -63,16 +63,32 @@
   [per ^js eye ^js e]
   (sense-thing per eye (.-pos e) (true? (.-visible e)) (and (silent-mobs (.-name e)) (not (true? (.-fusing e))))))
 
+(defn- fade!
+  "Keep a forgotten mob m that was seen as a sighting (its kind, where and when it was last seen), dropping sightings
+  older than :sighting-ms and the oldest past :max-sightings."
+  [{:keys [opts]} ^js st ^js m now]
+  (let [^js faded (.-faded st)]
+    (when (.-seenAt m)
+      (.set faded (.-id m) #js {:id (.-id m) :uuid (.-uuid m) :name (.-name m) :kind (.-kind m)
+                                :pos (.-seenPos m) :seenAt (.-seenAt m)}))
+    (doseq [[id ^js f] (vec (es6-iterator-seq (.entries faded)))]
+      (when (> (- now (.-seenAt f)) (:sighting-ms opts)) (.delete faded id)))
+    (doseq [[id] (take (- (.-size faded) (:max-sightings opts)) (sort-by #(.-seenAt ^js (second %)) (es6-iterator-seq (.entries faded))))]
+      (.delete faded id))))
+
 (defn sense-mobs!
   "One mob sample over primitives src: sensed mobs take their place and time, mobs the client no longer tracks or that
-  could have drifted :mob-drift blocks since they were last sensed are forgotten. Returns the map of live entities
-  sensed now, by id."
+  could have drifted :mob-drift blocks since they were last sensed are forgotten. A forgotten mob once seen fades into
+  a sighting (fade!), unless the body sensed it at the last sample and the client dropped it since (it died or
+  despawned before the body's eyes); a sensed mob is no sighting. Returns the map of live entities sensed now, by id."
   [{:keys [raw opts st] :as per} ^js src]
   (let [^js st st
         ^js mobs (.-mobs st)
         ^js eye (.eye ^js raw)
         now ((:now opts))
+        prev (.-mobSampleAt st)
         sensed (js/Map.)]
+    (set! (.-mobSampleAt st) now)
     (if-not (and eye src)
       sensed
       (let [listed (js/Set.)]
@@ -81,19 +97,33 @@
           (.add listed (.-id e))
           (when-let [how (mob-sense per eye e)]
             (let [^js old (.get mobs (.-id e))
-                  ^js pos (.-pos e)]
+                  ^js pos (.-pos e)
+                  seen? (keyword-identical? how :seen)
+                  at #js {:x (.-x pos) :y (.-y pos) :z (.-z pos)}]
               (.set sensed (.-id e) e)
+              (.delete (.-faded st) (.-id e))
               (.set mobs (.-id e)
-                    #js {:id (.-id e) :name (.-name e) :kind (.-kind e) :held (.-held e)
-                         :pos #js {:x (.-x pos) :y (.-y pos) :z (.-z pos)}
+                    #js {:id (.-id e) :uuid (.-uuid e) :name (.-name e) :kind (.-kind e) :held (.-held e)
+                         :pos at
                          :at now
-                         :seenAt (if (keyword-identical? how :seen) now (some-> old .-seenAt))
+                         :seenAt (if seen? now (some-> old .-seenAt))
+                         :seenPos (if seen? at (some-> old .-seenPos))
                          :heard (keyword-identical? how :heard)}))))
         (doseq [[id ^js m] (vec (es6-iterator-seq (.entries mobs)))]
-          (when (or (not (.has listed id))
-                    (> (- now (.-at m)) (mob-forget-ms per (.-name m))))
-            (.delete mobs id)))
+          (let [gone? (not (.has listed id))]
+            (when (or gone? (> (- now (.-at m)) (mob-forget-ms per (.-name m))))
+              (.delete mobs id)
+              (when-not (and gone? (= prev (.-at m))) (fade! per st m now)))))
         sensed))))
+
+(defn sightings
+  "The hostiles the body saw and then forgot (sense-mobs!), oldest kept :sighting-ms: {:id :uuid :name :kind :pos (where
+  last seen) :ageMs (since)}, JS objects."
+  [{:keys [opts st]}]
+  (let [now ((:now opts))]
+    (into-array (for [^js f (es6-iterator-seq (.values ^js (.-faded ^js st)))
+                      :when (<= (- now (.-seenAt f)) (:sighting-ms opts))]
+                  (js/Object.assign #js {} f #js {:ageMs (- now (.-seenAt f))})))))
 
 (defn enderman-at-yaw?
   "Whether a known enderman stands in the view cone of a head turned to yaw (level) from the body's eye: a glance there

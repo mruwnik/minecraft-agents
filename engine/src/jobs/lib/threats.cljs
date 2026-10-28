@@ -3,7 +3,7 @@
   body memory. One :threat entry per mob fled per flight {:mob :id :uuid :key :pos (last known) :ended}, kept
   threat-policy. The third flight from one mob (same :key, uuid else id) within the ttl warns hostile.chased.
   planner-dangers: the cells of sensed mobs and deaths by terrain go-to's searches keep off (the planner's
-  options.dangers). known-threats: every mob the body knows may hurt it, seen, fled from or met at a death;
+  options.dangers). known-threats: every mob the body knows may hurt it, seen, fled from, met at a death or seen and lost;
   threats-of gives each its reach (jobs.lib.threat-field) for jobs.lib.cost/death-chance, tolls-of prices each one's field
   for the planner (options.tolls, threat-tolls)."
   (:require [engine.args :as a]
@@ -114,6 +114,18 @@
   (keep #(let [d (:data %)] (when-let [at (rough-pos d)] (assoc d :pos at)))
         (listed-threats (:primitives c) (ctx/entries c :threat))))
 
+(defn sightings
+  "The hostiles c's body saw and lost (the perception's fadedMobs; none without one), [{:mob :pos :key :weight
+  :remembered :sighted}], weight death-spot/sighting-share; none whose place the body has seen clear since (death-spot/seen-clear?)."
+  [c]
+  (when-let [f (.-fadedMobs (:primitives c))]
+    (for [^js m (array-seq (.call f (:primitives c)))
+          :let [s {:mob (.-name m) :pos (u/pos-of (.-pos m)) :age-ms (.-ageMs m)}]
+          :when (not (death-spot/seen-clear? c (assoc s :mob? true)))
+          :let [w (death-spot/sighting-share c s)]
+          :when (pos? w)]
+      {:mob (:mob s) :pos (:pos s) :key (or (.-uuid m) (.-id m)) :weight w :remembered true :sighted true})))
+
 (defn planner-dangers
   "The planner's options.dangers for the body of c (JS array, nil for none): the cell of each sensed mob (sensed-mobs,
   nearest first), no way through it (:block; its price is its field's tolls, threat-tolls), and each uncleared death by
@@ -137,7 +149,8 @@
   :key is sensed now is left out: the sensed place wins), and, :remembered, a recent death or near-death by a mob at its
   spot (death-spot/recent, weighing death-spot/present-share of its fading weight; a walker's only while not seen-clear?, a water
   mob's whatever the light: it lives in the water, not in the dark) and a :hurt entry by a water mob (fading over the
-  :hurt memory's ttl). One mob at one cell counts once, at its greatest weight."
+  :hurt memory's ttl), and, :remembered :sighted, a mob seen and lost (sightings) not sensed or fled from now. One mob
+  at one cell counts once, at its greatest weight."
   [c]
   (let [p (:primitives c)
         now (ctx/now c)
@@ -145,9 +158,12 @@
         fade (fn [age] (if (number? ttl) (cost/death-weight age ttl) (cost/death-weight age)))
         sensed (sensed-mobs p {:way? false :any-range? true})
         now-keys (set (map :key sensed))
+        fled (vec (remove #(contains? now-keys (:key %)) (remembered-spots c)))
+        known-keys (into now-keys (map :key) fled)
         here (u/pos-of (.-pos (.self p)))]
     (->> (concat (for [{:keys [key name chaser pos]} sensed] {:mob name :pos pos :weight 1 :key key :chaser chaser})
-                 (for [{:keys [mob pos key]} (remembered-spots c) :when (not (contains? now-keys key))] {:mob mob :pos pos :weight 1 :key key :fled true})
+                 (for [{:keys [mob pos key]} fled] {:mob mob :pos pos :weight 1 :key key :fled true})
+                 (remove #(contains? known-keys (:key %)) (sightings c))
                  (for [{:keys [cause pos weight mob?] :as d} (death-spot/recent c)
                        :when (and mob? (or (field/water-mobs cause) (not (death-spot/seen-clear? c d))))]
                    {:mob cause :pos pos :weight (death-spot/present-share c (assoc d :mob cause)) :remembered true})
