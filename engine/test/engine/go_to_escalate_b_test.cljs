@@ -299,7 +299,8 @@
           (is (= (set (for [x [3 4 5] y [64 65]] [x y 0])) (set (:cells (first (events-of seen :go-to.restored))))) "the whole dead end is put back"))))))
 
 (deftest go-to-reads-its-own-pen-once-per-escalation-round
-  ;; choose-escalation! and the replan hold the pen read in c (with-own-pen); without it each fn reads the pen itself (holes/pen-of)
+  ;; choose-escalation! and the replan hold the pen read in c (with-own-pen); without it each fn reads the pen itself (holes/pen-of).
+  ;; Only reads by a c that already holds the pen are counted: a legitimate read outside a round does not matter.
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -309,13 +310,13 @@
               rounds (atom 0)
               read own-pen/shut-in
               with-pen holes/with-own-pen]
-          (with-redefs [own-pen/shut-in (fn [c f] (swap! reads inc) (read c f))
+          (with-redefs [own-pen/shut-in (fn [c f] (when (:own-pen c) (swap! reads inc)) (read c f))
                         holes/with-own-pen (fn [c] (swap! rounds inc) (with-pen c))]
             (await (run-job! {:sight 3 :self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks thick-pit-pen :entities [cow]
                                 :inventory [{:name "stone_pickaxe" :count 1}]}
                                'jobs.movement.go-to {:pos [10 64 0] :range 1} zones)))
           (is (pos? @rounds) "the escalation round holds the pen read in c")
-          (is (= @rounds @reads) "and no fn of the round reads the pen again"))))))
+          (is (zero? @reads) "and no fn of the round reads the pen again"))))))
 
 (deftest go-to-hops-the-1-high-sill-of-its-pen-gap-and-digs-nothing
   (async done
