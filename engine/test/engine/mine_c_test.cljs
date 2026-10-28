@@ -40,7 +40,8 @@
         (let [s (await (side-ore-run 2))]
           (is (= 1 (get (inv s) "raw_iron")) (pr-str (keep :text @(:seen s)) (dug-cells s) (feet s)))
           (is (= "cobblestone" (block-at s 1 64 -1)) "the side cut is shut behind")
-          (is (= (dec (count (set (dug-cells s)))) (:cut-blocks (done-event s))) "every cell of the run and its side cut but the ore target counts as cut"))))))
+          (is (= (dec (count (set (dug-cells s)))) (mine-end/cut-cells (:cut (done-event s)))) "every cell of the run and its side cut but the ore target counts as cut")
+          (is (pos? (:back (:cut (done-event s)))) "and the walk back out of the side cut"))))))
 
 (deftest stay-level-takes-ore-seen-through-glass-by-a-side-cut
   (async done
@@ -141,7 +142,8 @@
         (let [s (await (branch-run true))]
           (is (= 1 (get (inv s) "raw_iron")) (pr-str (keep :text @(:seen s)) (dug-cells s)))
           (is (every? (set (dug-cells s)) [[3 64 -1] [3 64 -4]]) "the branch was cut to its length")
-          (is (= (dec (count (set (dug-cells s)))) (:cut-blocks (done-event s))) "every cell of the run and its branch but the ore target counts as cut"))))))
+          (is (= (dec (count (set (dug-cells s)))) (mine-end/cut-cells (:cut (done-event s)))) "every cell of the run and its branch but the ore target counts as cut")
+          (is (pos? (:back (:cut (done-event s)))) "and the walks back from the branch ends"))))))
 
 (defn ^:async ended-branch-run
   "branch-run where every branch child ends condition-failed with reason (the main run is the real dig-for); the setup and the number of branch children started."

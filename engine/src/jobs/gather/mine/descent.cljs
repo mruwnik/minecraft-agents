@@ -17,7 +17,7 @@
             [jobs.lib.look :refer [cell-of headings]]
             [jobs.lib.block-sets :as bs]
             [jobs.gather.mine.targets :refer [base-ore main-block work-s step-cell within-keep-clear within-own-zone]]
-            [jobs.gather.mine.end :refer [stop!]]
+            [jobs.gather.mine.end :refer [add-cut stop!]]
             [jobs.gather.mine.way-set :as ways]
             [jobs.gather.mine.torches :refer [mouth-torch-due? stair-torch-due? torch-step!]]
             [jobs.gather.mine.tunnel :refer [heading-stops turn-heading! result-of]]))
@@ -288,7 +288,7 @@
     (cond
       (= :continue r) :continue
       (= :done (:status res))
-      (do (ctx/update-mem! c #(-> % (dissoc :tried-headings) (update :cut-blocks (fnil + 0) (count (:dug res)))
+      (do (ctx/update-mem! c #(-> % (dissoc :tried-headings) (update :cut add-cut {:down (count (:dug res))})
                                   (update :descent (fn [d] (assoc d :steps (+ (:steps d 0) (or (:steps res) 1)) :bottom-y (js/Math.floor (:y (u/self-pos c))) :at (:at res))))))
           :again)
       (and (= :off-stair (:reason res)) (< (get-in (ctx/mem c) [:descent :restairs] 0) (max-restairs)))

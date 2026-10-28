@@ -6,7 +6,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.gather.mine-stay :as stay]
-            [jobs.gather.mine.end :refer [cut-blocks]]
+            [jobs.gather.mine.end :refer [add-cut cut-of]]
             [jobs.gather.mine.targets :refer [items rules-in skip! step-cell]]
             [jobs.gather.mine.tunnel :as tunnel]
             [jobs.lib.access :as access]
@@ -28,7 +28,7 @@
                  (assoc :heading heading :tunnel-length steps :count (need/carry-count c :side (items (:args c)) 1) :ways #{:seen :strip-tunnel} :track-ground false))
         r (or (:side-end (ctx/mem c))
               (let [r (await (ctx/call c :side 'jobs.gather.dig-for (assoc args :settings {::stay/ore-reach 0})))]
-                (when-not (= :continue r) (ctx/update-mem! c #(-> % (assoc :side-end (dissoc r :report)) (update :cut-blocks (fnil + 0) (cut-blocks r)))))
+                (when-not (= :continue r) (ctx/update-mem! c #(-> % (assoc :side-end (dissoc r :report)) (update :cut add-cut (cut-of r)))))
                 r))
         back (when-not (= :continue r)
                (await (child/call-walk* c :side-back {:pos {:x (+ (:x from) 0.5) :y (:y from) :z (+ (:z from) 0.5)} :range 0 :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]

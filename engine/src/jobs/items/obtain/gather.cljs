@@ -6,7 +6,8 @@
             [engine.game :as game]
             [jobs.items.obtain.base :refer [explore-opts own-worth search-names search-scan-radius search-worth site-radius tried! ways-of]]
             [jobs.items.obtain.need :refer [climbs-first? gather-viable? pickaxe-first? tree? light-settling? tools-wanted torch-due trees-unreachable?]]
-            [jobs.items.obtain.plan :refer [gather-plan search-way strip-s]]
+            [jobs.items.obtain.plan :refer [cut-s gather-plan search-way]]
+            [jobs.gather.mine.end :refer [cut-cells]]
             [jobs.items.obtain.seen :refer [animal-cell animals-of approach-bound gather-carried gather-slot hunt-worth lead-args seen-of shears-source with-avoid with-block with-count]]
             [jobs.lib.breath :as breath]
             [jobs.lib.cost :as cost]
@@ -258,14 +259,20 @@
     (or (await (fetch-need/return! c))
         (await (torch-stock/torches! c)))))
 
+(defn way-left
+  "search-way for need within the search worth left once the strip cost spent on it without a find (memory
+  [:gather :dug key :spent], strip-on!) is paid."
+  [c need]
+  (search-way (assoc-in c [:args :search-worth] (- (search-worth c) (get-in (ctx/mem c) [:gather :dug (:key need) :spent] 0))) need))
+
 (defn climb-y
   "The height a stair up goes to before a mine for an ore not seen starts: the one under way, else (once a need) the
-  tunnel height obtain.plan/search-way prices when that lies above the feet, else nil."
+  tunnel height way-left prices when that lies above the feet, else nil."
   [c need]
   (or (get-in (ctx/mem c) [:gather :climb])
       (when (and (:tunnel? need) (= 'jobs.gather.mine (:job need)) (not (seen-of c need))
                  (not (get-in (ctx/mem c) [:gather :climbed (:key need)])))
-        (let [{:keys [way y]} (search-way c need)]
+        (let [{:keys [way y]} (way-left c need)]
           (when (and (= :tunnel way) (> y (js/Math.floor (:y (u/self-pos c))))) y)))))
 
 (defn ^:async climb-step!
@@ -304,23 +311,32 @@
       (do (ctx/update-mem! c (fn [m] (-> m (update :gather dissoc :light) (assoc-in [:gather :lit cell] (ctx/now c))))) :again))))
 
 (defn strip-on!
-  "A mine for an ore not seen that cut n blocks of new ground and found none looked at new rock: the next run mines on
-  from where it stands, not counted fruitless, while search-way still tunnels and its legs pay out of the search worth
-  left once the blocks cut in a row without a find (memory [:gather :dug key]) are paid (plan/strip-s of their steps); info
-  obtain.strip-on. :again, else false."
-  [c need n]
+  "A mine for an ore not seen whose run's cut ({:down :level :back}, jobs.gather.mine) laid bare new rock and found
+  none: the cut's seconds (plan/cut-s) are booked as spent on it (memory [:gather :dug key]) and the next run is not
+  counted fruitless while way-left still pays: a tunnel mines on from where the body stands (info obtain.strip-on), a
+  look round is the next round's search (info obtain.strip-look). :again, else false."
+  [c need cut]
   (let [{:keys [blocks spent]} (get-in (ctx/mem c) [:gather :dug (:key need)])
+        n (cut-cells cut)
         total (+ n (or blocks 0))
-        spent (+ (strip-s (/ n 2)) (or spent 0)) ; a 1x2 tunnel cuts 2 blocks a step
-        way (search-way (assoc-in c [:args :search-worth] (- (search-worth c) spent)) need)
-        y (js/Math.floor (:y (u/self-pos c)))]
-    (ctx/update-mem! c #(-> % (assoc-in [:gather :dug (:key need)] {:blocks total :spent spent}) (update :gather dissoc :climb-heading)))
-    (if-not (and (= :tunnel (:way way)) (js/isFinite (:cost way)))
+        _ (ctx/update-mem! c #(-> % (assoc-in [:gather :dug (:key need)] {:blocks total :spent (+ (cut-s cut) (or spent 0))}) (update :gather dissoc :climb-heading)))
+        way (way-left c need)
+        y (js/Math.floor (:y (u/self-pos c)))
+        saw (str "mine cut " n " blocks at y " y " and saw no " (:key need))]
+    (cond
+      (not (js/isFinite (:cost way)))
       (do (ctx/update-mem! c assoc-in [:gather :why] (str "cut " total " blocks down to y " y " and saw no " (:key need) ": another run is worth less than it costs"))
           false)
+      (= :look (:way way))
+      (do (child/progress! c :gather)
+          (ctx/emit! c :obtain.strip-look :info
+                     {:message (str saw ": a search round costs less now than another run (" total " blocks so far)")
+                      :item (:key need) :blocks n :total total :y y})
+          :again)
+      :else
       (do (child/progress! c :gather)
           (ctx/emit! c :obtain.strip-on :info
-                     {:message (str "mine cut " n " blocks at y " y " and saw no " (:key need) ": mining on (" total " blocks so far)")
+                     {:message (str saw ": mining on (" total " blocks so far)")
                       :item (:key need) :blocks n :total total :y y})
           :again))))
 
@@ -355,7 +371,7 @@
       (and (not (get-in (ctx/mem c) [:gather :before])) (explore-opts c) (searchable? need)
            (or (not (seen-of c need)) (get-in (ctx/mem c) [:gather :unreachable (:key need)]) (trees-unreachable? c need))
            (zero? (get-in (ctx/mem c) [:explored (:key need)] 0))
-           (or (not (:tunnel? need)) (= :look (:way (search-way c need)))))
+           (or (not (:tunnel? need)) (= :look (:way (way-left c need)))))
       (await (explore-walk! c need #(not= (:key need) (some-> (gather-plan c names (- target have)) :gather (gather-need (game/version-of p)) :key))))
       (and (not (get-in (ctx/mem c) [:gather :before])) (torch-due c (start-cause c need)))
       (book-light! c (torch-due c (start-cause c need)))
@@ -414,8 +430,8 @@
                         (light-settling? c (:cause e)) :again
                         (and (#{:flooded :wet :exposed :hazard} (contract/cause-key e)) at)
                         (do (ctx/update-mem! c update :cut-off (fnil conj #{}) at) :again)
-                        (and (:tunnel? need) (not at) (pos? (:cut-blocks res 0)) (strip-on! c need (:cut-blocks res))) :again
-                        :else (do (when-not (and (:tunnel? need) (not at) (pos? (:cut-blocks res 0))) ; else the barren verdict stands
+                        (and (:tunnel? need) (not at) (pos? (cut-cells (:cut res))) (strip-on! c need (:cut res))) :again
+                        :else (do (when-not (and (:tunnel? need) (not at) (pos? (cut-cells (:cut res)))) ; else the barren verdict stands
                                     (ctx/update-mem! c update :gather dissoc :dug))
                                   (gather-failed! c names need (if (= :done (:kind e)) :nothing-gathered (contract/cause-key e)) e))))))))))))
 

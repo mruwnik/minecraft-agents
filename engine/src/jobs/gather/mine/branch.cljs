@@ -5,7 +5,7 @@
             [engine.settings :as settings]
             [engine.contract :as contract]
             [jobs.gather.mine-stay :as stay]
-            [jobs.gather.mine.end :refer [cut-blocks stop!]]
+            [jobs.gather.mine.end :refer [add-cut cut-of stop!]]
             [jobs.lib.waits :as waits]
             [jobs.gather.mine.targets :refer [step-cell]]
             [jobs.lib.child :as child]
@@ -47,7 +47,7 @@
                  (assoc :heading side :tunnel-length (settings/get stay/settings ::stay/branch-length) :branches false :ways #{:seen :strip-tunnel} :track-ground false))
         r (or (:branch-end (ctx/mem c))
               (let [r (waits/waiting-out c (await (ctx/call c :branch 'jobs.gather.dig-for args)))]
-                (when-not (= :continue r) (ctx/update-mem! c #(-> % (assoc :branch-end true) (update :cut-blocks (fnil + 0) (cut-blocks r)))))
+                (when-not (= :continue r) (ctx/update-mem! c #(-> % (assoc :branch-end true) (update :cut add-cut (cut-of r)))))
                 r))
         why (when (map? r) (contract/cause-key r))
         back (when-not (or (= :continue r) (halting why))

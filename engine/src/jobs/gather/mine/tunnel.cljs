@@ -12,7 +12,7 @@
             [engine.settings :as settings]
             [jobs.gather.mine-stay :as stay]
             [jobs.gather.mine.branch :as branch]
-            [jobs.gather.mine.end :refer [stop!]]
+            [jobs.gather.mine.end :refer [add-cut stop!]]
             [jobs.gather.mine.targets :as targets :refer [kinds book-ground! step-cell main-block]]
             [jobs.gather.mine.torches :as torches]
             [jobs.lib.access :as access]
@@ -131,10 +131,10 @@
         :else (walk-of c pos (result-of r))))))
 
 (defn book-cut!
-  "After a stretch of tunnel: the cells it dug booked for the mend (ground under the start) and counted (memory :cut-blocks), and the
+  "After a stretch of tunnel: the cells it dug booked for the mend (ground under the start) and counted (memory :cut :level), and the
   last mined block among them collected like a target."
   [c dug]
-  (ctx/update-mem! c update :cut-blocks (fnil + 0) (count dug))
+  (ctx/update-mem! c update :cut add-cut {:level (count dug)})
   (doseq [{:keys [cell block]} dug] (book-ground! c (zipmap [:x :y :z] cell) block))
   (when-let [cell (last (keep #(when (contains? (kinds (:args c)) (:block %)) (:cell %)) dug))]
     (ctx/update-mem! c assoc :collecting true :dug-at cell)))

@@ -110,19 +110,21 @@
 
 (defn tunnel-chance
   "leg-chance of a strip tunnel for resource at height y, n blocks a leg: ore-chance of tunnel-ore over each leg's cut,
-  every leg alike."
+  every leg alike (a number)."
   [resource y n]
-  (constantly (ore-chance (tunnel-ore resource {:y y} n))))
+  (ore-chance (tunnel-ore resource {:y y} n)))
 
 (defn leg-chance
-  "A fn of a leg's index (0 the first) -> the chance its look finds one of names, or nil when none is priced. Animals:
-  find-chance of `a` blocks of new ground per leg after `looked` searched in vain. An ore's blocks: ore-chance of
-  seen-ore over `seen`, the faces a look round here shows, each leg's look taken to show rock alike. Others (logs,
-  other blocks): nil."
+  "The chance a leg's look finds one of names: a number when every leg's is alike, else a fn of the leg's index (0 the
+  first); nil when none is priced. Animals: a fn, find-chance of `a` blocks of new ground per leg after `looked`
+  searched in vain. An ore's blocks: ore-chance of seen-ore over `seen`, the faces a look round here shows, each leg's
+  look taken to show rock alike. Others (logs, other blocks): nil."
   [names {:keys [looked a seen]}]
   (cond
     (density names) (fn [i] (find-chance names (+ looked (* i a)) a))
-    (ore-of names) (constantly (ore-chance (seen-ore (ore-of names) seen)))))
+    (ore-of names) (ore-chance (seen-ore (ore-of names) seen))))
+
+(defn chance-of "Leg i's chance of a leg-chance." [chance i] (if (number? chance) chance (chance i)))
 
 (defn leg-stops?
   "The :price stop of a search: a leg of price leg stops it when it costs more than the worth left times the chance its
@@ -134,12 +136,15 @@
   "Seconds a search spends per find: legs of leg-s seconds, leg i finding with (chance i) (leg-chance's), walked until
   leg-stops? on the worth left, the seconds expected until a find or that stop over the chance of a find by then: a
   search tried before a sure way of cost C (taken when it finds none) is cheaper exactly when this is under C.
-  Infinity when no leg pays, chance is nil (none priced) or the worth has no bound (it sets no stop). Each leg spends
-  leg-s (positive) of a finite worth, so it ends."
+  Infinity when no leg pays, chance is nil (none priced) or the worth has no bound (it sets no stop). A chance alike
+  for every leg (a number) is leg-s / chance once the first leg pays, however many legs the worth pays for. Each leg
+  spends leg-s (positive) of a finite worth, so it ends."
   [chance leg-s worth]
   {:pre [(pos? leg-s)]}
-  (if-not (and chance (js/isFinite worth))
-    js/Infinity
+  (cond
+    (not (and chance (js/isFinite worth))) js/Infinity
+    (number? chance) (if (leg-stops? leg-s chance worth) js/Infinity (/ leg-s chance))
+    :else
     (loop [i 0 spent 0 miss 1 expect 0]
       (let [p (chance i)]
         (if (leg-stops? leg-s p (- worth spent))

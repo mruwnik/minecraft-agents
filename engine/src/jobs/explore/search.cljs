@@ -580,7 +580,7 @@
           [x y z] leg
           q (await (ctx/quote c 'jobs.movement.go-to (leg-args c leg)))
           price (pick/quoted-s c q)
-          chance (if sure? 1 ((or (cost/look-leg-chance p (notes/notes c) (targets c) [x z] (:scan-radius (:args c))) (constantly 1)) 0))]
+          chance (if sure? 1 (cost/chance-of (or (cost/look-leg-chance p (notes/notes c) (targets c) [x z] (:scan-radius (:args c))) 1) 0))]
       (cond
         (:estimate q) :continue
         (infinite? price) (do (ctx/update-mem! c dissoc :leg-price) nil)

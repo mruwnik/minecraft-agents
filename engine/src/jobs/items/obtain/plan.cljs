@@ -209,10 +209,21 @@
         cuts (mapcat :cut (take climb (rest (iterate #(geo/step-cells (:next %) :up heading) {:next feet}))))]
     (boolean (some #(contains? rules/unbreakable (:name (look/seen-block p (zipmap [:x :y :z] %)))) cuts))))
 
-(defn strip-s
-  "Seconds n blocks of strip tunnel take, lit as they go (cost/lit-way-s over stair-time's level steps)."
-  [n]
-  (cost/lit-way-s (stair-time/steps-s :level n) n))
+(defn lit-steps-s
+  "Seconds n steps of a stair dir (:down, :level) take, lit as they go (cost/lit-way-s over stair-time's steps)."
+  [dir n]
+  (cost/lit-way-s (stair-time/steps-s dir n) n))
+
+(defn strip-s "Seconds n blocks of strip tunnel take (lit-steps-s :level)." [n] (lit-steps-s :level n))
+
+(defn cut-s
+  "Seconds a mine's cut {:down :level :back} took (jobs.gather.mine's :cut): its stair cells down and its level cells
+  (tunnel, branches, side cuts) at lit-steps-s of the steps they make (stair-time/step-cells), and the blocks it walked
+  back (from branch and side-cut ends) at cost/walk-cost."
+  [{:keys [down level back]}]
+  (+ (lit-steps-s :down (/ (or down 0) (stair-time/step-cells :down)))
+     (lit-steps-s :level (/ (or level 0) (stair-time/step-cells :level)))
+     (:cost (cost/walk-cost {:distance (or back 0)}))))
 
 (defn tunnel-way
   "{:way :tunnel :cost :y} of a tunnelled ore need as jobs.gather.mine gets it unseen: the torches it stocks first
@@ -238,7 +249,7 @@
                    (let [dy (- feet y)
                          stair (if (neg? dy)
                                  (cost/dark-way-s (stair-time/steps-s :up (- dy)) (- dy) kit)
-                                 (cost/lit-way-s (stair-time/steps-s :down dy) dy))
+                                 (lit-steps-s :down dy))
                          leg (strip-s n)]
                      {:way :tunnel :y y
                       :cost (+ stock stair (cost/search-s (cost/tunnel-chance ore y n) leg (search-worth c)))}))

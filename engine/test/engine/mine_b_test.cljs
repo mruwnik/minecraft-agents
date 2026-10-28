@@ -210,7 +210,7 @@
           (is (= [[1 65 0] [1 64 0] [2 65 0] [2 64 0] [3 65 0] [3 64 0]] cut) "a 1x2 run east, no further")
           (is (= {:heading "east" :steps 3} (select-keys (:tunnel (done-event s)) [:heading :steps])))
           (is (= [3 64 0] (feet s)) "stays where the tunnel ended")
-          (is (= 6 (:cut-blocks (last (done-events s)))) "the trip counts the tunnel cells cut, not the ore")
+          (is (= {:level 6} (:cut (last (done-events s)))) "the trip counts the tunnel cells cut, not the ore")
           (is (= [3 64 0] (:end (:tunnel (done-event s)))) "where the tunnel ended: the side ore pocket is picked from beside it"))))))
 
 (deftest a-short-run-keeps-the-tunnel-text
@@ -273,7 +273,7 @@
           (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 2}) {})
           (await (run-ticks s 80))
           (is (= [[6 65 0] [6 64 0] [7 65 0] [7 64 0]] (dug-cells s)) "new rock only, no torch")
-          (is (= 4 (:cut-blocks (done-event s))) "the open corridor walked is not counted as cut")
+          (is (= {:level 4} (:cut (done-event s))) "the open corridor walked is not counted as cut")
           (is (= 2 (:length (first (tunnel-ends s))))))))))
 
 (deftest the-tunnel-steps-down-a-stair-to-its-level

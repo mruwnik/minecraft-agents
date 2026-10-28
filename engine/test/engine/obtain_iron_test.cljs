@@ -483,11 +483,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (loop [[[y dug worth runs why] & more] [[64 {:cut-blocks 32 :tunnel {:steps 32}} 5000 5 "a run that tunnelled looked at new rock: the gather mines on while the next pays"]
+        (loop [[[y dug worth runs why] & more] [[64 {:cut {:level 32} :tunnel {:steps 32}} 5000 5 "a run that tunnelled looked at new rock: the gather mines on while the next pays"]
                                                 [64 {:legs [{:length 6 :stop :no-floor}] :tunnel {:steps 6}} 5000 3 "one whose tunnel only walked open air cut nothing: three end the gather"]
                                                 [64 {} 5000 3 "a run that cut nothing is fruitless: three end the gather"]
-                                                [64 {:cut-blocks 32 :tunnel {:steps 32}} 1 3 "a run after which no strip leg pays is fruitless: three end the gather"]
-                                                [16 {:cut-blocks 32 :tunnel {:steps 32}} (one-more-run-worth 16) 4 "the second run spends what a third would need: three more runs end it"]]]
+                                                [64 {:cut {:level 32} :tunnel {:steps 32}} 1 3 "a run after which no strip leg pays is fruitless: three end the gather"]
+                                                [16 {:cut {:level 32} :tunnel {:steps 32}} (one-more-run-worth 16) 4 "the second run spends what a third would need: three more runs end it"]
+                                                [16 {:cut {:level 32 :back 64} :tunnel {:steps 32}} (+ (one-more-run-worth 16) (* 0.5 (- (:cost (cost/walk-cost {:distance 64})) (plan/strip-s 16)))) 3 "the walk back from its branches is spent too: no second run pays"]]]
           (let [s (f/start (-> (ore-world {} [{:name "stone_pickaxe" :count 1} {:name "torch" :count 16}]) (assoc :floor [-30 -30 40 30]) (assoc-in [:self :pos :y] y)) [f/own-zone])
                 calls (atom 0)
                 eng (assoc-in (:eng s) [:jobs 'jobs.gather.mine :round]
@@ -500,6 +501,31 @@
             (is (= runs (min 5 @calls)) why))
           (when more (recur more)))))))
 
+(deftest a-mine-run-after-which-a-look-round-costs-less-hands-the-gather-to-the-search
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (-> (ore-world {} [{:name "stone_pickaxe" :count 1} {:name "torch" :count 16}]) (assoc :floor [-30 -30 40 30]) (assoc-in [:self :pos :y] 16)) [f/own-zone])
+              look-cost plan/look-cost
+              call ctx/call
+              calls (atom [])
+              eng (-> (:eng s)
+                      (assoc-in [:jobs 'jobs.gather.mine :round]
+                                (fn ^:async f [c]
+                                  (if-not (:dug (ctx/mem c))
+                                    (do (ctx/update-mem! c assoc :dug true) :continue)
+                                    (ctx/end c :nothing-possible {:reason :tunnel-length} {:got 0 :reason :tunnel-length :cut {:level 32} :tunnel {:steps 32}}))))
+                      (assoc-in [:jobs 'jobs.explore.search :round] (fn ^:async f [c] (ctx/end c :nothing-possible {:reason :price} {:reason :price}))))]
+          ;; the rock a run lays bare makes a look round cheaper than the next run
+          (set! plan/look-cost (fn [c need] (if (and (get-in (ctx/mem c) [:gather :dug]) (zero? (get-in (ctx/mem c) [:explored (:key need)] 0))) 10 js/Infinity)))
+          (set! ctx/call (fn [c slot j args] (swap! calls conj j) (call c slot j args)))
+          (try
+            (await (obtain! (assoc s :eng eng) {:item "raw_iron" :ways #{:craft :smelt :gather} :explore true :search-worth 1000} 30))
+            (finally (set! plan/look-cost look-cost) (set! ctx/call call)))
+          (is (= 1 (count (f/events-of s :obtain.strip-look))) "the run is not counted fruitless: the next round looks")
+          (is (= ['jobs.gather.mine 'jobs.explore.search] (take 2 (distinct (filter #{'jobs.gather.mine 'jobs.explore.search} @calls)))))
+          (is (not-any? #(re-find #"worth less than it costs" (str (:message %))) @(:seen s))))))))
+
 (deftest the-blocks-dug-without-a-find-do-not-outlive-the-gather
   (async done
     (tu/run-async done
@@ -511,7 +537,7 @@
                               (if-not (:dug (ctx/mem c))
                                 (do (ctx/update-mem! c assoc :dug true) :continue)
                                 (ctx/end c :nothing-possible {:reason :tunnel-length}
-                                         (merge {:got 0 :reason :tunnel-length} (when (= 1 (swap! runs inc)) {:cut-blocks 32 :tunnel {:steps 32}}))))))]
+                                         (merge {:got 0 :reason :tunnel-length} (when (= 1 (swap! runs inc)) {:cut {:level 32} :tunnel {:steps 32}}))))))]
           (await (obtain! (assoc s :eng eng) {:item "raw_iron" :ways #{:craft :smelt :gather} :explore true} 60))
           (is (map? (core/job-memory (:eng s) "j1")) "the job memory is read")
           (is (nil? (get-in (core/job-memory (:eng s) "j1") [:gather :dug])) "the count of a gather that ended fruitless is gone"))))))
@@ -580,3 +606,4 @@
           (is (pos? @asked) "the mine child's can-start? was read")
           (is (seq (f/events-of s :obtain.gathering)) "the mine child was called")
           (is (not-any? #(#{:none-seen :no-source} (:reason %)) (f/events-of s :waiting))))))))
+

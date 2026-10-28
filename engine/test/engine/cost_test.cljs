@@ -568,6 +568,13 @@
     (is (nil? (cost/leg-chance ["oak_log"] {:looked 0 :a a})) "logs have no base rate: no chance is priced")
     (is (infinite? (cost/search-s nil 6 2000)))))
 
+(deftest a-search-whose-legs-all-find-alike-costs-a-leg-over-the-chance-at-any-worth
+  (is (= 24 (cost/search-s 0.25 6 1e15)) "a worth that pays for 1e14 legs is priced without walking them")
+  (is (> 1e-9 (js/Math.abs (- (cost/search-s 0.25 6 1e3) (cost/search-s (constantly 0.25) 6 1e3)))) "the same as each leg walked")
+  (is (infinite? (cost/search-s 0.25 6 20)) "a worth whose first leg does not pay walks none")
+  (is (infinite? (cost/search-s 0 6 1e15)))
+  (is (number? (cost/tunnel-chance "iron" 16 cost/torch-gap)) "a tunnel's legs all cut rock alike"))
+
 (deftest the-price-stop-is-a-leg-dearer-than-the-worth-left-times-its-chance
   (is (not (cost/leg-stops? 5 0.5 10)))
   (is (cost/leg-stops? 6 0.5 10))
@@ -576,7 +583,7 @@
 (defn faces [block y n] (repeat n {:name block :pos {:x 0 :y y :z 0}}))
 
 (deftest an-ore-look-is-priced-by-the-rock-it-sees-at-its-height-and-a-tunnel-by-the-rock-it-cuts
-  (let [chance (fn [seen] ((cost/leg-chance ["coal_ore" "deepslate_coal_ore"] {:seen seen}) 0))]
+  (let [chance (fn [seen] (cost/leg-chance ["coal_ore" "deepslate_coal_ore"] {:seen seen}))]
     (is (= "coal" (cost/ore-of ["coal_ore" "deepslate_coal_ore"])))
     (is (nil? (cost/ore-of ["coal_ore" "iron_ore"])))
     (is (< 0.3 (chance (faces "stone" 60 800)) 0.9) "a cave of stone at y 60 shows coal more often than not")
@@ -666,3 +673,4 @@
       (is (near? shape (:shape post)))
       (is (near? c20 (caught/chance counts 20)))
       (is (near? c5 (caught/chance counts 5))))))
+
