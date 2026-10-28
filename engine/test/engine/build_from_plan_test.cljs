@@ -1528,7 +1528,8 @@
               _ (await (tu/with-near-stub (fn ^:async f [_ _ _ o] (swap! opts conj o) :partial)
                          (fn ^:async b [] (await (child-outcome eng job {:plan "far"} 6)))))]
           (is (seq @opts))
-          (is (every? (comp nil? :ways) @opts) "shut in by its own dig: go-to may pillar or stair out"))))))
+          (is (every? (comp nil? :ways) @opts) "shut in by its own dig: go-to may pillar or stair out")
+          (is (every? :dig-own @opts) "and dig the body's own plan walls when they are all that shuts it in"))))))
 
 (deftest a-body-that-cannot-climb-out-of-its-hole-stops-shut-in-at-once
   (async done
@@ -1586,7 +1587,8 @@
                               (fn ^:async b [] (await (child-outcome eng job {:plan "far" :settings {:jobs.build.from-plan.walk/pocket-cells 1000000}} 30)))))]
           (is (= :shut-in (:reason result)))
           (is (<= (count @walks) 3) "not one failed walk per planned cell")
-          (is (every? (comp nil? :ways) (rest @walks)) "after a shut-in verdict go-to may dig or build out"))))))
+          (is (every? (comp nil? :ways) (rest @walks)) "after a shut-in verdict go-to may dig or build out")
+          (is (every? :dig-own (rest @walks)) "its own plan's walls included: a house closed round the body has no other way out"))))))
 
 (deftest a-shut-in-verdict-in-a-room-larger-than-a-pocket-is-not-a-stop
   (async done
