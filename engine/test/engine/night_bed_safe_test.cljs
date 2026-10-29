@@ -10,6 +10,7 @@
             [engine.hut-shelter-test :as hut]
             [engine.memory :as mem]
             [engine.perception :as perception]
+            [engine.perception.rays :as rays]
             [engine.registry :as registry]
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
@@ -38,11 +39,16 @@
 
 (defn lit-fake
   "{:raw :p}: a fake body and its perception wrap, so the raw world's sky light is read (sh-sense/buried?). :sees-all in the
-  world: the fake's own sight (every block seen) with the perception only for its light."
+  world: the fake's own sight (every block seen) with the perception only for its light, its memory holding the floor's
+  cells up to two blocks over head height (what the walk planner reads as seen)."
   [world]
   (let [raw-p (tu/fake (dissoc world :light))
         _ (swap! (fake/state raw-p) assoc :light (:light world {}))
         per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})]
+    (when (:sees-all world)
+      (let [[x0 z0 x1 z1] (:floor world tu/walk-floor)]
+        (doseq [x (range x0 (inc x1)) y (range 63 68) z (range z0 (inc z1))]
+          (rays/touch! per [x y z]))))
     {:raw raw-p :p (if (:sees-all world)
                      (doto (js/Object.assign #js {} (tu/seeing-all raw-p)) (aset "perception" per))
                      (perception/wrap raw-p per))}))

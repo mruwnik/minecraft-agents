@@ -159,7 +159,11 @@
         (swap! (fake/state raw-p) assoc :yaw yaw)
         (perception/pass! per))
       (doseq [x (range (- (:x pos) 3) (+ (:x pos) 4)) y (range 62 68) z (range (- (:z pos) 3) (+ (:z pos) 4))] ; the inside of the home it has lived in, which no ray from outside reaches
-        (rays/touch! per [x y z])))
+        (rays/touch! per [x y z]))
+      (when home?
+        (let [[sx sz] (map js/Math.floor ((juxt :x :z) (st/pos-of raw-p)))]
+          (doseq [x (range (min sx (:x pos)) (inc (max sx (:x pos)))) y (range 62 67) z (range (dec (min sz (:z pos))) (+ 2 (max sz (:z pos))))] ; the way home it has walked: past its sight radius too
+            (rays/touch! per [x y z])))))
     (swap! (fake/state raw-p) assoc :yaw 0)
     (st/dawn-after! p st/default-dawn)
     (when home? (know-home! eng pos))

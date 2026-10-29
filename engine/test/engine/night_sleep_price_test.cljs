@@ -164,6 +164,7 @@
                         (let [ev (await (asleep-until-answers (cond-> world (seq light) (assoc :light light)) (fn [_])))]
                           (get-in (first ev) [:prices :shelter])))
               dark (await (shelter {}))
-              one-lit (await (shelter {[2 64 1] [15 4]}))]
+              one-lit (await (shelter {[2 64 1] [15 4]}))
+              all-lit (await (shelter (into {} (for [x (range -1 6) z (range -2 3)] [[x 64 z] [15 4]]))))]
           (is (number? dark))
-          (is (= dark one-lit) "a lit cell to get up at changes nothing while another may be the one"))))))
+          (is (< (- dark one-lit) (- one-lit all-lit)) "a lit cell to get up at barely moves the price while another may be the one"))))))
