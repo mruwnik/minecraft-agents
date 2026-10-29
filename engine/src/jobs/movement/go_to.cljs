@@ -1,5 +1,6 @@
 (ns jobs.movement.go-to
   (:require [engine.args :as a]
+            [jobs.lib.goal :as goal]
             [clojure.string :as str]
             [engine.contract :as contract]
             [jobs.lib.cond :as cond]
@@ -217,7 +218,7 @@
   record and :open go when the attempt ends (a cut keeps them)."
   [c goal]
   (let [r (await (pace/steps! c (fn [] (step! c (goal-pos c goal)))))]
-    (when (ctx/alive? c) (drop-record! c) (ctx/update-mem! c dissoc :open :jump-at))
+    (when (ctx/alive? c) (drop-record! c) (goal/clear! c) (ctx/update-mem! c dissoc :open :jump-at))
     r))
 
 (defn ^:async attempt
@@ -240,7 +241,8 @@
         (await (torch/return-torch! c))
         (await (start-attempt! c pos))
         (if cycle?
-          (do (ctx/update-mem! c #(-> % (dissoc :open :goal :closest :ref :last-dist) (assoc :cut-walks 0 :sent-backs [])))
+          (do (goal/clear! c)
+              (ctx/update-mem! c #(-> % (dissoc :open :goal :closest :ref :last-dist) (assoc :cut-walks 0 :sent-backs [])))
               (await (end/give-up! c pos {:reason :cut-again} (assoc (or (nearest-hostile c pos) {}) :sent-backs (count (:sent-backs state))))))
           (let [danger (goal-danger c pos)]
             (when danger (ctx/emit! c :goal-in-danger :info (assoc danger :target pos)))
@@ -260,6 +262,7 @@
   [c _]
   (when-not (:own (:escalation (ctx/mem c))) (note-holes! c (:planned (ctx/mem c))))
   (wsearch/release! c)
+  (goal/clear! c)
   (choose/forget-routes! (:route-owner (ctx/mem c)))
   (await (torch/return-torch! c))
   (ctx/end c :done nil {}))

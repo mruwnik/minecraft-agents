@@ -396,4 +396,10 @@
   [c]
   (await (pace/steps! c #(step c))))
 
+(defn cleanup
+  "However the dig ends: its :ore-mark is dropped."
+  [c _]
+  (ore-pick/release-mark! c)
+  (ctx/end c :done nil))
+
 (def meta {:tags [:mine :dig :ore :light] :position-bound? true})

@@ -223,8 +223,9 @@
       (contract/later :cutting "the stair is being cut" :units :steps :done n :left (max 0 (- (or (:target m) n) n))))))
 
 (defn ^:async cleanup
-  "After a stair that ended :done: the way cut is remembered (:stair-way)."
+  "However the stair ends: its :ore-mark is dropped; after one that ended :done the way cut is remembered (:stair-way)."
   [c ending]
+  (ore-pick/release-mark! c)
   (when (= :done (:kind ending))
     (let [steps (:steps (:data ending))
           {:keys [dir heading]} (:args (with-heading c))]

@@ -266,8 +266,9 @@
       (contract/later :digging "the tunnel is being dug" :units :steps :done k :left (max 0 (- n k))))))
 
 (defn ^:async cleanup
-  "After a tunnel that reached its stand: the level run walked is remembered (:tunnel-way)."
+  "However the tunnel ends: its :ore-mark is dropped; after one that reached its stand the level run walked is remembered (:tunnel-way)."
   [c ending]
+  (ore-pick/release-mark! c)
   (when (= :done (:kind ending))
     (record-run! c))
   (ctx/end c :done nil {}))

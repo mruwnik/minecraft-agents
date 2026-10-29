@@ -1,31 +1,36 @@
 (ns jobs.lib.goal
-  "Where a walk that was cut is going: the :goal an open go-to keeps in its job memory (go-to drops :open and :goal when its
-  walk ends), found in the memory of the other listed jobs."
+  "Where a walk that was cut is going: body memory :walk-goal {:job root :slots :goal}, written by an open go-to of a
+  job no trigger fired (a reflex's walk is no destination the body was bound for) and dropped when the walk ends or its
+  call is cleaned up."
   (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [engine.memory :as mem]))
 
 (def pos-spec
   "The spec of a :goal arg: a position map or vector."
   (a/pred "{:x :y :z} or [x y z]" #(or (map? %) (vector? %))))
 
-(def errands
-  "The comfort errands' jobs (the :comfort entries of triggers/defaults.edn): their walks are not where the body was bound. Listed here because a job library does not read the trigger defaults (engine); keep in step with them."
-  #{"jobs.access.cleanup" "jobs.maintenance.shut" "jobs.storage.make-room" "jobs.survival.restore-broken"
-    "jobs.items.pick-up-loose" "jobs.gather.pick-ores" "jobs.movement.leave-vehicle"})
+(def kind :walk-goal)
 
-(defn open-goals
-  "The :goal of every open go-to in a job memory map, its children included."
-  [m]
-  (concat (when (and (:open m) (:goal m)) [(:goal m)])
-          (mapcat open-goals (vals (:children m)))))
+(def ttl-ms "A walk-goal no cleanup dropped is forgotten after this." (* 60 60 1000))
+
+(defn- mine? [c] #(and (= (:job %) (:root c)) (= (:slots %) (:slots c))))
+
+(defn note!
+  "This call's walk is open toward goal."
+  [c goal]
+  (when (nil? (:reflex c))
+    (when-not (some #(= goal (:goal (:data %))) (filter (comp (mine? c) :data) (ctx/entries c kind)))
+      (ctx/forget-where! c kind (mine? c))
+      (ctx/remember! c kind {:job (:root c) :slots (:slots c) :goal goal} {:cap 8 :ttl ttl-ms}))))
+
+(defn clear! "This call's walk has ended." [c] (ctx/forget-where! c kind (mine? c)))
 
 (defn interrupted-goal
-  "The goal of the most recently written job memory, other than root-id's own and an errands job's, that holds an open go-to; nil when none."
+  "The goal of the most recently noted open walk of a job other than root-id's; nil when none."
   [view root-id]
-  (->> (keys (:entries (:data view)))
-       (filter #(and (mem/job-kind? %) (not= % (mem/job-kind root-id))))
-       (remove #(errands (:job (:data (mem/latest view %)))))
-       (keep #(let [e (mem/latest view %)] (when-let [g (first (open-goals (:data e)))] [(:t e) g])))
-       (sort-by first >)
-       first
-       second))
+  (->> (mem/entries view kind)
+       (remove #(= root-id (:job (:data %))))
+       last
+       :data
+       :goal))

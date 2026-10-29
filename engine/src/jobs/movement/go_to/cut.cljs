@@ -3,6 +3,7 @@
   of a call from the world, and the hostile a cut is guessed to come from."
   (:require [engine.core.base :as base]
             [engine.ctx :as ctx]
+            [jobs.lib.goal :as goal]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
@@ -242,6 +243,7 @@
         state (cut-state (merge (ctx/mem c) walked) pos (u/dist (u/self-pos c) pos))]
     (fresh-record! c)
     (ctx/update-mem! c #(-> % (assoc :open (session-id)) (merge state)))
+    (goal/note! c pos)
     state))
 
 (defn way-hostiles

@@ -31,7 +31,7 @@
 (def s-per-ore 4)
 
 (defn opts-of [c]
-  (let [m (ore-pick/merged (ore-pick/marks (ctx/view c)))]
+  (let [m (ore-pick/merged (ore-pick/marks (ctx/view c) nil))]
     (assoc m :left (ore-pick/left-cells (ctx/view c)))))
 
 (defn seen-cells

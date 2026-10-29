@@ -1,6 +1,6 @@
 (ns jobs.lib.ore-pick
   "Ore a player passes digs itself: an exposed ore block within reach of the stand a stair, a tunnel or a mine is working
-  from, with no walk to it. A mining job (dig-for, a root stair or tunnel) marks its memory (mark!) with what it digs itself;
+  from, with no walk to it. A mining job (dig-for, a root stair or tunnel) marks body memory (mark!, :ore-mark) with what it digs itself;
   the :ore-seen trigger holds while a mark is live and candidates finds a block, and fires jobs.gather.pick-ores, whose
   pick! takes the nearest such block (a seen air face, none of its faces fluid, a carried tool that harvests it, room in
   the bag, the rules' dig verdict ok) with a jobs.blocks.dig child, then steps back to the stand it dug from. Picked blocks
@@ -25,6 +25,7 @@
            :doc "The ore blocks a stair, tunnel or mine digs when it passes them exposed within reach (the deepslate kinds too)."
            :spec (a/coll-of string?)}
    ::radius {:default 5 :doc "Blocks around the body searched for an ore to pick up on the way." :spec (a/int-in 1 8)}
+   ::mark-ttl-s {:default 21600 :doc "Seconds an :ore-mark lasts in body memory when its job never released it." :spec (a/int-in 1 nil)}
    ::per-call {:default 6 :doc "Ore blocks one call picks up before the job goes on." :spec (a/int-in 1 nil)}})
 
 (def faces rules/neighbour-deltas)
@@ -34,21 +35,31 @@
   []
   (into #{} (mapcat (fn [n] [n (str "deepslate_" n)])) (settings/get settings ::ores)))
 
+(def mark-kind :ore-mark)
+
 (defn mark!
-  "Say in this job's memory that the :ore-seen trigger may fire for it. opts :leave (block names the job digs itself) and
-  :except (cells it never lets go: its own target)."
+  "Say in body memory (an :ore-mark of this call's root job and slots) that the :ore-seen trigger may fire for it; once per
+  change, and release-mark! takes it back. opts :leave (block names the job digs itself) and :except (cells it never lets
+  go: its own target)."
   [c {:keys [leave except]}]
-  (let [m {:leave (vec leave) :except (vec except) :ignore-zones? (boolean (:ignore-zones? (:args c))) :for-plan (:for-plan (:args c))}]
-    (when (not= m (:ore-mark (ctx/mem c)))
-      (ctx/update-mem! c assoc :ore-mark m))))
+  (let [m {:job (:root c) :slots (:slots c) :leave (vec leave) :except (vec except)
+           :ignore-zones? (boolean (:ignore-zones? (:args c))) :for-plan (:for-plan (:args c))}
+        mine? #(and (= (:job %) (:root c)) (= (:slots %) (:slots c)))]
+    (when-not (some #(= m (:data %)) (filter (comp mine? :data) (ctx/entries c mark-kind)))
+      (ctx/forget-where! c mark-kind mine?)
+      (ctx/remember! c mark-kind m {:cap 8 :ttl (* 1000 (settings/get settings ::mark-ttl-s))}))))
+
+(defn release-mark!
+  "Drop the mark of this call (a cleanup of a job that marks)."
+  [c]
+  (ctx/forget-where! c mark-kind #(and (= (:job %) (:root c)) (= (:slots %) (:slots c)))))
 
 (defn marks
-  "The marks (mark!) of every listed job and its children."
-  [view]
-  (->> (keys (:entries (:data view)))
-       (filter mem/job-kind?)
-       (mapcat #(tree-seq map? (fn [m] (vals (:children m))) (:data (mem/latest view %))))
-       (keep :ore-mark)))
+  "The marks (mark!) of the jobs in live (a set of root ids; all when nil)."
+  [view live]
+  (->> (mem/entries view mark-kind)
+       (map :data)
+       (filter #(or (nil? live) (contains? live (:job %))))))
 
 (defn merged
   "One opts map for candidates and pick! over several marks: what any job digs itself or keeps stays; zones are
