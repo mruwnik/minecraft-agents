@@ -8,7 +8,8 @@
             [engine.test-util :as tu]
             [jobs.lib.cost.base-rates :as base-rates]
             [jobs.lib.frontier :as frontier]
-            [jobs.lib.look :as look]))
+            [jobs.lib.look :as look]
+            [jobs.lib.walk.rock :as rock]))
 
 (def cave
   "A seen slab east of the body with a window in it, a pillar and a roof: frontiers where reach cuts sight, through the
@@ -31,17 +32,36 @@
                       :when (neg? (store/remembered-id st x y z))]
                   [x y z]))))
 
+(defn searched
+  "The oracle: the Chebyshev distance from cell [x y z] to the nearest remembered frontier cell (open, with a face neighbour never seen), searched out ring by ring; d-max when none lies nearer."
+  [w [x y z] d-max]
+  (let [st (:st (aget w "perception"))
+        ^js open (rock/open-ids)
+        id #(inc (store/remembered-id st %1 %2 %3))
+        frontier? (fn [cx cy cz]
+                    (let [v (id cx cy cz)]
+                      (and (pos? v) (== 1 (aget open (dec v)))
+                           (some #(zero? (apply id %)) [[(inc cx) cy cz] [(dec cx) cy cz] [cx (inc cy) cz] [cx (dec cy) cz] [cx cy (inc cz)] [cx cy (dec cz)]]))))]
+    (or (some (fn [r]
+                (when (some (fn [[dx dy dz]] (frontier? (+ x dx) (+ y dy) (+ z dz)))
+                            (for [dx (range (- r) (inc r)) dy (range (- r) (inc r)) dz (range (- r) (inc r))
+                                  :when (== r (max (js/Math.abs dx) (js/Math.abs dy) (js/Math.abs dz)))]
+                              [dx dy dz]))
+                  r))
+              (range 1 d-max))
+        d-max)))
+
 (defn distances [w f] (mapv #(f w %) (unseen-cells w)))
 
 (deftest the-block-distance-of-an-unseen-cell-is-the-searched-distance
   (let [p (tu/fake-on-floor {:blocks (assoc cave "3,65,0" "air")})
         w (seeing p)
-        searched #(frontier/within %1 %2 base-rates/unseen-d-max)]
-    (is (= (distances w searched) (distances w frontier/distance)))
+        by-search #(searched %1 %2 base-rates/unseen-d-max)]
+    (is (= (distances w by-search) (distances w frontier/distance)))
     (is (= (set (range 1 (inc base-rates/unseen-d-max))) (set (distances w frontier/distance))) "every distance, the cap too")
     (fake/remove-block! p {:x 3 :y 66 :z 0})
     (perception/pass! (aget w "perception"))
-    (is (= (distances w searched) (distances w frontier/distance)) "a memory write: worked out again")))
+    (is (= (distances w by-search) (distances w frontier/distance)) "a memory write: worked out again")))
 
 (deftest a-weighing-of-a-block-of-cells-works-the-block-out-once
   (let [w (seeing (tu/fake-on-floor {:blocks cave}))
@@ -56,10 +76,6 @@
   (let [w (seeing (tu/fake-on-floor {:blocks (assoc cave "3,65,0" "air")}))
         chance (look/unseen-solid-at-fn w)
         verdict (look/unseen-solid?-fn w)
-        built (atom 0)
-        f frontier/block-field
         cells (unseen-cells w)]
-    (with-redefs [frontier/block-field (fn [& args] (swap! built inc) (apply f args))]
-      (is (= (mapv #(> (chance %) 0.5) cells) (mapv verdict cells)))
-      (is (< 1 (count (distinct (map verdict cells)))) "both verdicts occur")
-      (is (pos? @built) "read from the block field, not a search per cell"))))
+    (is (= (mapv #(> (chance %) 0.5) cells) (mapv verdict cells)))
+    (is (< 1 (count (distinct (map verdict cells)))) "both verdicts occur")))

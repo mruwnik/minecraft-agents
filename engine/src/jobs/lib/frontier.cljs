@@ -11,27 +11,6 @@
                              .-ids (aget (store/cell-index cx cy cz)))
                      0)))
 
-(defn within
-  "The Chebyshev distance from cell [x y z] to the nearest frontier cell the body remembers, d-max when none lies nearer;
-  nil without a perception's memory. Searches out from the cell, so it suits a few cells and a small d-max."
-  [p [x y z] d-max]
-  (when-let [^js st (some-> (aget p "perception") :st)]
-    (when (.-stores st)
-      (let [id (id-fn (store/store-of st (.-dim st)))
-            ^js open (rock/open-ids)
-            frontier? (fn [cx cy cz]
-                        (let [v (id cx cy cz)]
-                          (and (pos? v) (== 1 (aget open (dec v)))
-                               (some #(zero? (apply id %)) [[(inc cx) cy cz] [(dec cx) cy cz] [cx (inc cy) cz] [cx (dec cy) cz] [cx cy (inc cz)] [cx cy (dec cz)]]))))]
-        (or (some (fn [r]
-                    (when (some (fn [[dx dy dz]] (frontier? (+ x dx) (+ y dy) (+ z dz)))
-                                (for [dx (range (- r) (inc r)) dy (range (- r) (inc r)) dz (range (- r) (inc r))
-                                      :when (== r (max (js/Math.abs dx) (js/Math.abs dy) (js/Math.abs dz)))]
-                                  [dx dy dz]))
-                      r))
-                  (range 1 d-max))
-            d-max)))))
-
 (def ^:private side "The edge of a block of cells whose distances are worked out together." 8)
 
 (defn block-field
