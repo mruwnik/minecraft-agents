@@ -38,7 +38,7 @@
   for a worn last one, and torches before a descent or tunnel (all through jobs.lib.need; ways #{:carried} skips them), walks out of an own
   zone it stands near, walks back to the start cell, and calls jobs.gather.dig-for with the same args until it ends. Flooded
   at the start, or a pickaxe or torches that cannot be had, end it before the dig. A dig that stops for a pickaxe or torches (:no-tool,
-  :no-torches) gets them again and goes on from where it stood (while another round is worth its price, cost/try-again? :dig of the rounds in a row that cut nothing); any other ending is passed on.
+  :no-torches) gets them again and goes on from where it stood (while another round is worth its price, cost/try-again? :craft of the rounds in a row that cut nothing); any other ending is passed on.
   Then, with :mend, it fills the ground under the start that the dig opened (mine.mend; a mend with nothing to fill with or six failed
   fills warns mine.mend-short / mine.mend-failed, and never changes the ending). The body stays where the dig ends: walking home is the
   caller's, or the :stuck-underground trigger's.
@@ -272,9 +272,9 @@
         (cond-> (get-in d [:tunnel :heading]) (assoc :dug-heading (get-in d [:tunnel :heading]))))))
 
 (defn round-worth?
-  "Whether another equip round is worth its price: none has failed in a row (u/failed!, a round after which the dig cut cells is u/progress!), else cost/try-again? :dig."
+  "Whether another equip round is worth its price: none has failed in a row (u/failed!, a round after which the dig cut cells is u/progress!), else cost/try-again? :craft."
   [c]
-  (or (zero? (u/failures c)) (cost/try-again? c :dig)))
+  (or (zero? (u/failures c)) (cost/try-again? c :craft)))
 
 (defn gettable?
   "Whether the trip may get again what a dig that stopped for reason lacked."
