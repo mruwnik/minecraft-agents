@@ -45,3 +45,8 @@
     (is (= 2 (:calls craft)) "two calls, one won and one lost, have no spread to fit")
     (is (< (abs (- (+ (:win walk) (:fail walk)) (+ (:win craft) (:fail craft)))) 0.01) "the craft prior has the walk's spread")
     (is (= 0.5 (/ (:win craft) (+ (:win craft) (:fail craft)))) "and keeps its own mean")))
+
+(deftest a-risky-wait-refusal-then-the-stay-allowed-is-a-won-risky-stay-retry
+  (let [ev (fn [kind t] (pr-str {:generation-id "g" :time-ms t :source :job :kind kind :context {:job-id "j/x"} :data {}}))
+        {:keys [risky-stay]} (r/report (keep r/scan-line [(ev :near.risky-wait 0) (ev :near.risky-wait 5000) (ev :near.risky-over 10000)]))]
+    (is (= {:won 1 :retries 2 :calls 1 :try-s 5} (select-keys risky-stay [:won :retries :calls :try-s])))))

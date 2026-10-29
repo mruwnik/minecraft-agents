@@ -102,12 +102,12 @@
 (deftest a-refused-stay-is-waited-only-while-another-wait-is-worth-its-seconds
   (async done
     ((fn ^:async t []
-       (let [[low out-low] (await (waits-by-a-killer 40))
-             [high out-high] (await (waits-by-a-killer 150))]
+       (let [[low out-low] (await (waits-by-a-killer 30))
+             [high out-high] (await (waits-by-a-killer 3000))]
          (is (= [:blocked nil] out-low) "a danger that never fades: the refusal goes back to the caller, not the budget's end")
          (is (= [:blocked nil] out-high))
-         (is (pos? low))
-         (is (< low high) "a goal worth more waits longer for the danger to fade"))
+         (is (zero? low) "a goal worth little is not waited for at the pooled chance a danger fades")
+         (is (pos? high) "a goal worth much is"))
        (done)))))
 
 (deftest a-target-no-way-leads-to-is-blocked

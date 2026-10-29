@@ -265,10 +265,13 @@
   caller's :job-time) and resolve :continue. Else nil: the refusal is the caller's to act on (any other answer clears the count)."
   [c r]
   (if-not (and (= :blocked r) (risky-stay? c))
-    (do (ctx/update-mem! c dissoc ::risky-fails) nil)
+    (do (when (::risky-fails (ctx/mem c)) (ctx/emit! c :near.risky-over :info {}))
+        (ctx/update-mem! c dissoc ::risky-fails)
+        nil)
     (let [fails (inc (::risky-fails (ctx/mem c) 0))
           wait-s (settings/get settings ::risky-wait-s)]
       (ctx/update-mem! c assoc ::risky-fails fails)
+      (ctx/emit! c :near.risky-wait :info {:fails fails})
       (when (cost/try-again? c :risky-stay {:fails fails :try-s wait-s})
         (await (child/pause! c wait-s :risky-stay))
         :continue))))

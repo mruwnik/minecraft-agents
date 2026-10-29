@@ -5,7 +5,8 @@
   with none), and :try-s, the mean seconds from a failed try's end to the next try's end (with no retry, the mean seconds of
   one try, start to end). Kinds (`kinds`): :craft the craft action (a timeout fails), :furnace the furnace action (a busy
   slot fails), :dig the dig action (a timeout, a failure or an unreachable block fails), :walk a go-to's result (not arrived
-  fails), :respond respond-to-hostile's :hostile.call (a call that changed nothing fails); :pooled all kinds' tries together,
+  fails), :respond respond-to-hostile's :hostile.call (a call that changed nothing fails), :risky-stay jobs.lib.near/risky-wait!'s
+  events (:near.risky-wait a refusal, :near.risky-over the stay allowed after one); :pooled all kinds' tries together,
   the prior of a kind with none counted.
   Pure parts: scan-line, retries, report."
   (:require [clojure.string :as str]
@@ -26,6 +27,9 @@
         (let [done? (str/includes? line ":kind :done")]
           {:kind kind :key (key) :t (t) :edge (if done? :end :start) :action (field line #":action-id \"([^\"]*)\"")
            :fail? (and done? (contains? fails (field line #":status \"([^\"]*)\"")))}))
+
+      (or (str/includes? line ":kind :near.risky-wait") (str/includes? line ":kind :near.risky-over"))
+      {:kind :risky-stay :key (key) :t (t) :edge :end :fail? (str/includes? line ":kind :near.risky-wait")}
 
       (str/includes? line ":kind :hostile.call")
       {:kind :respond :key (key) :t (t) :edge :end :fail? (str/includes? line ":changed false")}
