@@ -30,10 +30,11 @@
 (def min-swim-ms "A swim shorter than this lands nowhere: not begun." 250)
 
 (defn swim-ms
-  "Milliseconds one swim holds: the setting, no more than the job time the call chain has left (an act whose quote does
-  not fit is refused, so a short flee step could never swim at all)."
+  "Milliseconds one swim holds: the setting when the job time the call chain has left covers it, else 0 (not begun). A
+  swim cut to exactly the time left is refused a moment later, when the act's most is checked against what is left."
   [c]
-  (min (settings/get settings ::swim-ms) (* 1000 (get-in (ctx/left c) [:spend :job-time] ##Inf))))
+  (let [ms (settings/get settings ::swim-ms)]
+    (if (<= ms (* 1000 (get-in (ctx/left c) [:spend :job-time] ##Inf))) ms 0)))
 
 (defn ^:async swim-out!
   "After a walk that ended walked ({:status :stuck :target ...}) toward goal: a body in water swims at the banks round it
