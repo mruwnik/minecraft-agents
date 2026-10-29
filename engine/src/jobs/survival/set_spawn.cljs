@@ -47,10 +47,11 @@
         (first (sh-beds/seen-bed-places (:primitives c) (sh-beds/default-bed-radius))))))
 
 (defn worth-of
-  "Seconds a root call is worth: the respawn point at the bed, cost/spawn-worth (the death walks back it shortens); 0 with no bed."
+  "Seconds a root call is worth: the respawn point at the bed, cost/spawn-worth (the walks back it shortens from deaths
+  where the body stands, as it works here); 0 with no bed."
   [c]
   (if-let [bed (bed-of c)]
-    (cost/spawn-worth (cost/death-body (:primitives c) (ctx/view c)) bed)
+    (cost/spawn-worth (cost/death-body (:primitives c) (ctx/view c)) bed (u/self-pos c))
     0))
 
 (a/defargs settings
