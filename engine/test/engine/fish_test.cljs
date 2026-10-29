@@ -116,3 +116,22 @@
   (is (fish/arrived? {:kind :done :data {:arrived true}}))
   (is (not (fish/arrived? {:kind :done :data {:arrived false :leg true}})))
   (is (not (fish/arrived? {:kind :stopped :data {:arrived true}}))))
+
+(deftest only-a-bite-that-never-came-is-a-miss
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [mem (atom {})
+              spot {:land {:x 9 :y 64 :z 4} :water {:x 8 :y 63 :z 4}}
+              cast (fn ^:async cast-with [status]
+                     (reset! mem {})
+                     (with-redefs [ctx/act (fn [& _] (js/Promise.resolve #js {:status status}))
+                                   ctx/update-mem! (fn [_ f & args] (apply swap! mem f args))]
+                       (await (fish/cast! nil spot))
+                       @mem))]
+          (is (= 1 (:misses (await (cast "timeout")))))
+          (is (= 1 (:misses (await (cast "nothing")))))
+          (is (nil? (:misses (await (cast "lost")))) "a catch lost in the water is no miss")
+          (is (nil? (:misses (await (cast "no-rod")))))
+          (is (= [{:x 8 :y 63 :z 4}] (:bad-water (await (cast "unreachable")))) "the cell is not cast at again")
+          (is (nil? (:misses (await (cast "unreachable"))))))))))

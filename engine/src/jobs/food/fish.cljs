@@ -25,7 +25,7 @@
   - :done: :count fish (cod, salmon, tropical fish, pufferfish) are carried, or the call's :least (default 1, :all = :count)
     before any stop below, or when the time ends it (the engine's rule: report :limit).
   - :condition-failed: a failed rod fetch (the cause names the rod, :because the fetch's ending).
-  - :nothing-possible :unreachable (the bank could not be walked to) or :no-bite (the max-misses setting, 8, casts in a row caught nothing).
+  - :nothing-possible :unreachable (the bank could not be walked to) or :no-bite (the max-misses setting, 8, casts in a row got no bite; a cast cell found not water or out of reach is not cast at again, and a catch lost in the water is no miss).
   - :limit-reached: the call's :spend :job-time (default ::job-time-s) is used up with fewer than :least caught; the engine ends it, with {:got}.
   It waits (can-start?, before the first cast) on :no-rod (none carried and the call's :ways #{:carried}) and :no-water (no seen water with a bank
   within the bank-radius setting); can-run? waits on :no-water again after a look round (the water gone mid-run).
@@ -61,15 +61,16 @@
 
 (defn spots
   "The banks {:land :water} to cast from: the one beside :pos when given, else the seen ones within the bank radius, nearest first;
-  only water with water below it (two deep)."
+  only water with water below it (two deep), and not a cell a cast found not water or out of reach."
   [c]
   (let [p (:primitives c)
         deep? #(= "water" (u/seen-name p (update (:water %) :y dec)))
+        bad (set (:bad-water (ctx/mem c)))
         found (if-let [pos (:pos (:args c))]
                 (let [w (near/cell-of pos)]
                   (filter #(= w (:water %)) (shore/spots p (u/self-pos c) {:radius (bank-radius)})))
                 (shore/spots p (u/self-pos c) {:radius (bank-radius)}))]
-    (filter deep? found)))
+    (filter #(and (deep? %) (not (bad (:water %)))) found)))
 
 
 (defn done? [c]
@@ -117,14 +118,16 @@
     (look/surveyed? c) (contract/later :no-water "no seen water with a bank in reach")
     :else (contract/look :no-water "no seen water with a bank in reach")))
 
-(defn ^:async cast! [c {:keys [water]}]
+(defn ^:async cast! [c {:keys [water] :as spot}]
   (let [r (await (ctx/act c :fish (clj->js {:pos water :timeoutS (cast-s)})))
         status (.-status r)]
     (case status
       "caught" (do (ctx/update-mem! c assoc :misses 0)
                    (ctx/emit! c :fish.caught :info {:item (.-item r) :text (str "caught a " (.-item r))})
                    :again)
-      (do (ctx/update-mem! c update :misses (fnil inc 0)) :again))))
+      ("timeout" "nothing") (do (ctx/update-mem! c update :misses (fnil inc 0)) :again)
+      ("no-water" "unreachable") (do (ctx/update-mem! c update :bad-water (fnil conj []) (select-keys water [:x :y :z])) :again)
+      :again)))
 
 (defn ^:async get-rod!
   "A rod through jobs.lib.need (its time counts in the call's :spend like any child): :again once it is done, :continue while it waits, else the ending."
