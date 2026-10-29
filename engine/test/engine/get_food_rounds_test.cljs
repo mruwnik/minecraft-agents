@@ -21,6 +21,7 @@
             [engine.walk-pick-test :as pick-test]
             [engine.triggers :as triggers]
             [jobs.survival.get-food.report :as report]
+            [engine.contract :as contract]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
             [jobs.lib.food-animals :as animals]
@@ -946,6 +947,26 @@
           (is (some #{"take"} (call-args p "furnace" "op")) "the cooked output was taken")
           (is (> (food p) 2) "and eaten")
           (is (empty? (entries eng :smelt/cooking)) "the note is gone"))))))
+
+(deftest a-cooking-furnace-whose-stay-is-too-dear-is-waited-for-and-the-cooking-kept
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks {"20,64,0" "furnace"} :self {:food 2}
+                                      :furnaces {"20,64,0" {:output {:name "cooked_chicken" :count 2}}}} :step-ms 2000)
+              pauses (atom 0)
+              orig child/call-walk*
+              pause child/pause!]
+          (mem/write! (:store eng) :smelt/cooking {:pos {:x 20 :y 64 :z 0} :item "chicken" :count 2} {:cap 5 :ttl :forever})
+          (set! child/call-walk* (fn [_c _slot _a]
+                                   (js/Promise.resolve (contract/ending :condition-failed :goal-dangerous {:why :goal-dangerous :arrived false}))))
+          (set! child/pause! (fn [c seconds why] (swap! pauses inc) (pause c seconds why)))
+          (try
+            (core/submit! eng (list 'jobs.survival.get-food {:carry 0}) {})
+            (await (run-until-idle! eng p 6))
+            (is (pos? @pauses) "the refused stay is waited out")
+            (is (= 1 (count (entries eng :smelt/cooking))) "the cooking is not forgotten")
+            (finally (set! child/call-walk* orig) (set! child/pause! pause))))))))
 
 (deftest raw-chicken-is-cooked-in-the-dark-sky-at-a-furnace-the-body-can-reach
   (async done

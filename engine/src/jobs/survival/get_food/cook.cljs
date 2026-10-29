@@ -122,7 +122,7 @@
 
 (defn ^:async collect-cooked!
   "Take the food out of the furnace of cooking note p: :again when something came out or the furnace holds nothing of it any more,
-  :continue while it walks or the cook is still on, nil when the furnace cannot be reached or is gone."
+  :continue while it walks, waits out a refused stay (near/risky-wait!) or the cook is still on, nil when the furnace cannot be reached or is gone."
   [c p]
   (let [pos (:pos p)
         now (ctx/now c)]
@@ -131,7 +131,7 @@
       (let [w (await (near/go-near! c pos 3))]
         (case w
           :partial :continue
-          :blocked (do (furnace/forget-cooking! c pos) nil)
+          :blocked (or (await (near/risky-wait! c w)) (do (furnace/forget-cooking! c pos) nil))
           (let [r (js->clj (await (ctx/act c :furnace (clj->js {:pos pos :op "take"}))) :keywordize-keys true)
                 got (reduce + 0 (map :count (:taken r)))]
             (cond
