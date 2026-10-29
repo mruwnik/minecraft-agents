@@ -11,6 +11,7 @@
             [engine.contract :as contract]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [jobs.lib.need :as need]
             [jobs.lib.access :as access]
             [jobs.lib.dig-look :as look]
@@ -26,7 +27,7 @@
 (def doc
   "Pillar up :height blocks (or until the feet are at :y) from the cell the body stands in, by jump-placing one block at a time under itself.
   Done (:already before the start) when the body stands on the ground with its feet at :y or above.
-  A roof over the head (one of the two cells above the feet) is dug out first; a sand or gravel column that falls into the body's cells is dug out at once, and more than max-landings landings end :ceiling with the cells clear. One call builds the whole pillar; it yields :continue only while a recentring go-to or a roof dig waits on the world.
+  A roof over the head (one of the two cells above the feet) is dug out first; a sand or gravel column that falls into the body's cells is dug out at once, and each landing counts as a failure in a row (retry?: another is tried while it is worth its price, else :ceiling with the cells clear). One call builds the whole pillar; it yields :continue only while a recentring go-to or a roof dig waits on the world.
 
   Every block is written to the scaffold ledger (jobs.lib.ledger, body memory) as an intent before its
   jump and confirmed when the cell is seen holding it, so a cleanup can take the pillar back after a cut or
@@ -54,9 +55,9 @@
   Run short part way, it gives up :too-few-blocks. Every give-up ends the job, so a parent running this as a child
   reads the ending.
 
-  Ends :done, or with a cause {:reason r ...}: :condition-failed for :too-few-blocks (:short still owed), :mob-in-cell, :ceiling (a roof that cannot be dug, or more than max-ceiling-digs blocks of it; :dig the outcome),
+  Ends :done, or with a cause {:reason r ...}: :condition-failed for :too-few-blocks (:short still owed), :mob-in-cell, :ceiling (a roof that cannot be dug, or one whose next block is not worth its price after the failures in a row; :dig the outcome),
   :not-on-solid, :zone, :footprint, :no-zones, :not-loaded, :not-replaceable and :bad-args; :nothing-possible for
-  :off-column (the body left the column it started in) and :place-failed (3 failed jumps in a row with the body in
+  :off-column (the body left the column it started in) and :place-failed (failed jumps in a row, until another is not worth its price, with the body in
   the column, :detail the primitive's reason); either, after a refused block or a knockback, with :mob, a seen hostile within 2 blocks of the cell. Data {:cells [[x y z] ...] :built n :height n}: :cells are this job's
   confirmed blocks, lowest first. The give-up data holds by reason
   :at :block :zone :short :detail :mob.")
@@ -69,12 +70,8 @@
 (a/defargs settings
   {::job-time-s {:default 120 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
    ::max-height {:default 64 :doc "Tallest pillar a call may ask for, in blocks." :spec (a/int-in 0 nil)}
-   ::max-failures {:default 3 :doc "Failed placements before the pillar gives up." :spec (a/int-in 0 nil)}
-   ::max-ceiling-digs {:default 6 :doc "Blocks a pillar digs out of the roof over its head before it gives up :ceiling (sand and gravel, which fall back, are counted by ::max-landings instead)." :spec (a/int-in 0 nil)}
-   ::max-landings {:default 3 :doc "Falling blocks (sand, gravel) that may land in the pillar's own cells, each dug out at once, before it gives up :ceiling." :spec (a/int-in 0 nil)}
    ::fall-wait-ms {:default 1000 :doc "Milliseconds a pillar waits after digging a roof cell for the falling block over it to drop." :spec (a/int-in 0 nil)}
    ::mob-waits {:default 20 :doc "Looks a pillar waits for a mob to leave the cell it places into before it gives up :mob-in-cell." :spec (a/int-in 0 nil)}
-   ::max-displacements {:default 8 :doc "Knockbacks (a failed jump with the body airborne or off its column) a pillar rides out before it gives up :off-column." :spec (a/int-in 0 nil)}
    ::mob-step-ms {:default 500 :doc "Wait between looks for a mob in the pillar's cell, in ms." :spec (a/int-in 1 nil)}
    ::land-step-ms {:default 50 :doc "Wait between looks for the ground after a pillar, in ms." :spec (a/int-in 0 nil)}
    ::land-max-steps {:default 20 :doc "Looks for the ground after a pillar before it goes on." :spec (a/int-in 0 nil)}
@@ -93,9 +90,10 @@
 
 (def defaults {:use {:blocks :pillar} :spend {:job-time ::job-time-s}})
 
-(defn max-failures [] (settings/get settings ::max-failures))
-
-(defn max-displacements [] (settings/get settings ::max-displacements))
+(defn retry?
+  "Whether the pillar goes on after the failures in a row (u/failed!: a refused place, a knockback, a landed falling block, a dug roof block; a placed block is u/progress!): none yet, else while another try is worth its price (cost/try-again? :place)."
+  [c]
+  (or (zero? (u/failures c)) (cost/try-again? c :place)))
 
 (defn land-step-ms [] (settings/get settings ::land-step-ms))
 
@@ -334,9 +332,8 @@
     (finish! c l (give-up :mob-in-cell :at cell :mob (:name mob)))))
 
 (defn ^:async place!
-  "Write the intent, jump-place one block, confirm it when the jump reports it (the sensed cell may lag). Three failed jumps in a row give up;
-  a failure with the body shoved off or airborne is a knockback and does not count towards the three, nor does one
-  with a mob in the cell (until mob-waits of such waits)."
+  "Write the intent, jump-place one block, confirm it when the jump reports it (the sensed cell may lag). A failed jump is a failure in a
+  row (retry?), a knockback too (the body shoved off or airborne); one with a mob in the cell is not (until mob-waits of such waits)."
   [c l {:keys [cell item]}]
   (let [block-at (access/sensed-at (:primitives c) nil)
         l (ledger/intend l {:cell cell :item item :before (block-at cell) :job (:id c) :purpose purpose})
@@ -344,33 +341,34 @@
         r (await (ctx/act c :jumpPlace #js {:item item :count 1}))]
     (if (pos? (or (.-placed r) 0))
       (do (ledger/remember! c (ledger/confirm l cell))
-          (ctx/update-mem! c #(-> % (assoc :failures 0) (dissoc :mob-waits)))
+          (u/progress! c)
+          (ctx/update-mem! c dissoc :mob-waits)
           :again)
       (let [shoved? (displaced? c (:base (ctx/mem c)) (:home (ctx/mem c)))
-            _ (when shoved? (ctx/update-mem! c #(-> % (update :displaced (fnil inc 0)) (assoc :counted true))))
-            failures (if (or shoved? (and (mob-in-cell c cell) (mob-wait! c))) (:failures (ctx/mem c) 0) (inc (:failures (ctx/mem c) 0)))]
-        (ctx/update-mem! c assoc :failures failures)
-        (if (and (< failures (max-failures)) (<= (:displaced (ctx/mem c) 0) (max-displacements)))
+            _ (when shoved? (ctx/update-mem! c assoc :counted true))
+            _ (when (or shoved? (not (and (mob-in-cell c cell) (mob-wait! c)))) (u/failed! c))]
+        (if (retry? c)
           :again
           (let [settled (ledger/reconcile l block-at)]
             (ledger/remember! c settled)
             (finish! c settled (let [mob (when (or shoved? (refused? r)) (hostile-near-cell c cell))]
-                                 (cond-> (if (< failures (max-failures))
+                                 (cond-> (if shoved?
                                            (give-up :off-column :at (pl/feet-cell c) :detail (.-reason r))
                                            (give-up :place-failed :at cell :detail (.-reason r)))
                                    mob (assoc :mob mob))))))))))
 
 (defn ^:async shoved-back!
-  "Before a round: a body off the base column (whatever the last place did) counts one knockback and walks back
-  (up to the max-displacements setting). :continue while the walk goes on, else nil."
+  "Before a round: a body off the base column (whatever the last place did) counts one knockback (a failure in a row) and walks back
+  while retry? holds. :continue while the walk goes on, else nil."
   [c]
-  (let [{:keys [stand base counted walking displaced home]} (ctx/mem c)
+  (let [{:keys [stand base counted walking home]} (ctx/mem c)
         [bx _ bz] base
         [fx _ fz] (pl/feet-cell c)
         off? (and base home (not (centred? c [bx bz] home)))
-        displaced (cond-> (or displaced 0) (and off? (not counted) (not walking)) inc)]
-    (ctx/update-mem! c #(-> % (assoc :displaced displaced) (dissoc :counted) (assoc :walking (boolean (and off? (<= displaced (max-displacements)))))))
-    (when (and off? stand (<= displaced (max-displacements)))
+        _ (when (and off? (not counted) (not walking)) (u/failed! c))
+        walk? (and off? (retry? c))]
+    (ctx/update-mem! c #(-> % (dissoc :counted) (assoc :walking (boolean walk?))))
+    (when (and walk? stand)
       (let [[x y z] stand
             block-at (access/sensed-at (:primitives c) "air")
             top (or (first (filter #(pl/clear? (block-at [x % z])) (range y (+ y 3)))) y)
@@ -395,17 +393,16 @@
 
 (defn ^:async dig-ceiling!
   "A diggable roof over the head is dug out (a jobs.blocks.dig child, by hand when no tool harvests it), up to
-  max-ceiling-digs blocks per call (a falling block does not count: its column is one obstacle, see clear-landed!); after a dig
+  a dug block is a failure in a row (retry?; a falling block's column is one obstacle, see clear-landed!); after a dig
   with a falling block over a cell above the head it waits for it to drop (over the head cell it does not: the block lands on the body, clear-landed! digs it at once). :again, :continue while the child waits, or the :ceiling give-up
   with the dig's outcome."
   [c l {:keys [at block] :as step}]
-  (let [n (:ceiling-digs (ctx/mem c) 0)
-        falling? (rules/falling? block)]
-    (if (and (not falling?) (>= n (settings/get settings ::max-ceiling-digs)))
+  (let [falling? (rules/falling? block)]
+    (if (and (not falling?) (not (retry? c)))
       (finish! c l step)
       (let [outcome (await (dig-one! c at))
             block-at (access/sensed-at (:primitives c) nil)]
-        (when-not falling? (ctx/update-mem! c update :ceiling-digs (fnil inc 0)))
+        (when-not falling? (u/failed! c))
         (case outcome
           :continue :continue
           (:dug :missing) (if (and (rules/falling? (block-at (up at 1))) (not= at (up (pl/feet-cell c) 1))
@@ -416,14 +413,14 @@
 
 (defn ^:async clear-landed!
   "A falling block (sand, gravel) that landed in the head or feet cell is dug out at once, head first, so the body never
-  stands in a filled cell. Each landing counts; after max-landings it gives up :ceiling once the cells are clear. Nil when both
+  stands in a filled cell. Each landing is a failure in a row; once retry? fails it gives up :ceiling with the cells clear. Nil when both
   cells are open, else :again, :continue or the ending."
   [c l feet]
   (let [block-at (access/sensed-at (:primitives c) nil)]
     (when-let [cell (first (filter #(rules/falling? (block-at %)) [(up feet 1) feet]))]
-      (let [landed (inc (:landed (ctx/mem c) 0))]
-        (ctx/update-mem! c assoc :landed landed)
-        (if (> landed (settings/get settings ::max-landings))
+      (do
+        (u/failed! c)
+        (if-not (retry? c)
           (do (await (dig-one! c cell))
               (finish! c l (give-up :ceiling :at cell :block (block-at cell) :dig :landed)))
           (if (= :continue (await (dig-one! c cell))) :continue :again))))))

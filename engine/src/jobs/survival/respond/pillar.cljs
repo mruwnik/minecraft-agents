@@ -162,8 +162,8 @@
   whether it ended short for a mob (one in its cell, or a hostile near a refused block or a knockback: the give-up's
   :mob). It ends at the first refused block or knockback: the refusal is evidence for the next decision, not a retry."
   [c height item]
-  (let [r (await (ctx/call c :pillar 'jobs.access.pillar {:height height :use {:blocks [item]} :ways #{:carried} :ignore-zones? true
-                                                          :settings {:jobs.access.pillar/mob-waits 0 :jobs.access.pillar/max-failures 1 :jobs.access.pillar/max-displacements 0}}))]
+  (let [r (await (ctx/call c :pillar 'jobs.access.pillar {:height height :use {:blocks [item]} :ways #{:carried} :ignore-zones? true :worth 0
+                                                          :settings {:jobs.access.pillar/mob-waits 0}}))]
     (if (contract/ending? r)
       {:built (:built (:data r) 0) :mob? (boolean (or (= :mob-in-cell (:reason (:data r))) (:mob (:data r))))}
       r)))
