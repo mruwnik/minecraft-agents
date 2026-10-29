@@ -17,7 +17,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.bait :as bait]
-            [jobs.animals.herd-run :refer [animal-now deepest end! finish! gate-open? held-by-me? in-pen-adults lure? near-pen out-1 read-pen regather-radius set-phase! stage]]
+            [jobs.animals.herd-run :refer [animal-now deepest end! finish! gate-open? held-by-me? in-pen-adults lure? near-pen out-1 read-pen set-phase! stage]]
             [jobs.animals.herd-pen :refer [look-range animal-pos nearer-stage! pinned-ms settle-at! step-in-step]]))
 
 
@@ -302,7 +302,7 @@
 (defn ^:async regather! [c]
   (if (lure? c)
     (set-phase! c :leash)
-    (let [e (waits/waiting-out c (await (ctx/call c :collect 'jobs.items.collect-drops {:radius (regather-radius) :items ["lead"]})))]
+    (let [e (waits/waiting-out c (await (ctx/call c :collect 'jobs.items.collect-drops {:items ["lead"]})))]
       (if (= :continue e) :continue (set-phase! c :leash)))))
 
 

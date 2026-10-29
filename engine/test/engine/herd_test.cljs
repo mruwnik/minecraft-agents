@@ -912,6 +912,19 @@
           (is (= 2 (count (filter #(= "lead" (.. % -args -item)) (calls-of s "interact")))) "leashed twice, not more")
           (is (empty? (calls-of s "useOn")) "the gate is never opened"))))))
 
+(deftest regathering-the-broken-leads-leaves-the-reach-to-collect-drops
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [orig ctx/call
+              seen (atom [])
+              s (submit! (setup (world {:entities [(cow 1 4 3 {:snaps true})]})) {:target 1})]
+          (set! ctx/call (fn [c slot job args] (when (= :collect slot) (swap! seen conj args)) (orig c slot job args)))
+          (try (await (run-ticks s 400))
+               (finally (set! ctx/call orig)))
+          (is (seq @seen) "the leads are collected")
+          (is (every? #(not (contains? % :radius)) @seen) "no reach of herd's own: collect-drops prices the walks"))))))
+
 (deftest bringing-none-fails-the-job-with-the-reason-and-the-pen-state
   (async done
     (tu/run-async done

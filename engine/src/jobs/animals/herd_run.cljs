@@ -8,6 +8,7 @@
             [jobs.lib.bait :as bait]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.escort :as escort]
             [jobs.lib.pen :as pen]
             [jobs.lib.pen-gate :as pg]
             [jobs.lib.pen-read :as pen-read]
@@ -17,10 +18,8 @@
   {::near-pen {:default 16 :doc "Blocks from the pen within which the body counts as near it." :spec (a/int-in 0 nil)}
    ::approach-range {:default 12 :doc "Blocks from the animal at which the body starts to approach." :spec (a/int-in 0 nil)}
    ::listed-range {:default 32 :doc "Blocks from the pen within which an animal known in it that is not listed is gone (dead or out); farther the server lists no animals there." :spec (a/int-in 0 nil)}
-   ::watch-radius {:default 64 :doc "Blocks within which animals are watched." :spec (a/int-in 0 nil)}
    ::release-radius {:default 8 :doc "Blocks within which a released animal counts as near." :spec (a/int-in 0 nil)}
    ::follow-range {:default 10 :doc "Blocks within which an animal follows the food in the body's hand." :spec (a/int-in 0 nil)}
-   ::regather-radius {:default 8 :doc "Blocks within which strays are gathered again." :spec (a/int-in 0 nil)}
    ::settle-ms {:default 500 :doc "How long the body waits for an animal to settle, in ms." :spec (a/int-in 0 nil)}
    ::settle-out-ms {:default 8000 :doc "How long the body waits for the animal to rest at a position outside the gate." :spec (a/int-in 0 nil)}
    ::crowd-ms {:default 10000 :doc "How long the cells inside the gate may stay crowded before the body goes on." :spec (a/int-in 0 nil)}
@@ -31,10 +30,8 @@
    ::max-reopens {:default 2 :doc "How often a gate shut with the body inside is opened again for the body to go out." :spec (a/int-in 0 nil)}})
 (defn near-pen [] (settings/get settings ::near-pen))
 (defn approach-range [] (settings/get settings ::approach-range))
-(defn watch-radius [] (settings/get settings ::watch-radius))
 (defn release-radius [] (settings/get settings ::release-radius))
 (defn follow-range [] (settings/get settings ::follow-range))
-(defn regather-radius [] (settings/get settings ::regather-radius))
 (defn settle-ms [] (settings/get settings ::settle-ms))
 (def orthogonal [[1 0] [-1 0] [0 1] [0 -1]])
 
@@ -87,7 +84,7 @@
   (filterv #(pen/in-pen? answer (u/pos-of (.-pos %))) (adults c)))
 
 (defn animal-now [c k]
-  (animals/find-by-key (:primitives c) (:mob (:args c)) (watch-radius) k))
+  (animals/find-by-key (:primitives c) (:mob (:args c)) (escort/watch-radius) k))
 
 (defn lure? [c] (= :lure (:method (ctx/mem c))))
 
@@ -160,7 +157,7 @@
   (let [m (ctx/mem c)
         sensed (into #{} (map animals/key-of) (in-pen-adults c answer))
         far? (> (u/dist (u/self-pos c) (box-centre (pen-box c))) (settings/get settings ::listed-range))
-        unseen? #(and far? (nil? (animals/find-by-key (:primitives c) (:mob (:args c)) (watch-radius) %)))]
+        unseen? #(and far? (nil? (animals/find-by-key (:primitives c) (:mob (:args c)) (escort/watch-radius) %)))]
     (into sensed (filter unseen?) (concat (:in-pen-start m) (:brought m)))))
 
 (defn pen-count-text
@@ -198,7 +195,7 @@
         least (let [l (:least (ctx/frozen-call c) 1)] (if (= :all l) target l))
         answer (read-pen c)
         inside (pen-keys c answer)
-        rows (animals/in-pen-rows (:primitives c) answer (watch-radius))
+        rows (animals/in-pen-rows (:primitives c) answer (escort/watch-radius))
         brought (filterv inside (:brought m))
         reason (or reason
                    (cond (>= (count (remove (set (keys (:given-up m))) inside)) target) :brought
