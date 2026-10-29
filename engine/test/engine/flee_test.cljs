@@ -732,6 +732,58 @@
           (is (= {:status :stopped :reason :no-response} (select-keys out [:status :reason])))
           (is (= :nothing-possible (get-in out [:ending :kind]))))))))
 
+;; the call's worth is frozen at its start (call-worth design section 1); a call that ends :no-response with the danger
+;; still there is fired again by the hostile trigger, whose fresh call reads the loss as it is now
+(defn reflex-events [seen kind] (filterv #(and (= :reflex (:source %)) (= kind (:kind %))) @seen))
+
+(defn ^:async refire-run
+  "Two ticks of the hostile-near reflex over a zombie at 5 with an idle flight (stub) whose calls record ctx/worth; between
+  the ticks (between!) runs. {:worths :ended :fired}."
+  [stub between!]
+  (let [{:keys [eng p seen clock]} (setup {:entities [(zombie 7 5 {:chase false})]})
+        worths (atom [])]
+    (await (with-flee (fn recording-flight [c] (swap! worths conj (ctx/worth c)) (stub c p clock))
+                      (fn ^:async ticks []
+                        (core/register-reflex! eng {:trigger :hostile-near})
+                        (await (core/tick! eng))
+                        (between! p)
+                        (await (core/tick! eng)))))
+    {:worths @worths :ended (mapv (juxt :outcome :reason :how) (reflex-events seen :ended)) :fired (count (reflex-events seen :fired))}))
+
+(defn idle-flight
+  "A flight of 300 s that changes nothing: under the call's time spend, dearer than another try at these worths."
+  [c _p clock]
+  (swap! clock + 300000) (ctx/end c :done nil))
+
+(defn add-zombie! [p id x] (swap! (fake/state p) update :entities conj (zombie id x {:chase false :pos [x 64 0]})))
+
+(deftest a-call-ended-no-response-with-the-danger-there-fires-again-at-a-fresh-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [worths ended fired]} (await (refire-run idle-flight #(add-zombie! % 8 -5)))
+              [w1 w2] worths]
+          (is (= [:stopped :no-response :completed_not_cleared] (first ended)) "a call that changed nothing ends while the zombie stands")
+          (is (= 2 fired) "and the trigger fires again at once")
+          (is (< 0 w1 ##Inf) "a real, finite worth: the loss of doing nothing")
+          (is (> w2 w1) "the fresh call is worth the loss now, a second zombie with it"))))))
+
+(deftest a-mob-come-mid-call-is-answered-and-priced-by-the-next-call
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [n (atom 0)
+              stub (fn [c p clock]
+                     (if (= 1 (swap! n inc))
+                       (do (add-zombie! p 8 -5) (swap! clock + 1000) (ctx/end c :done nil))
+                       (idle-flight c p clock)))
+              {:keys [worths ended fired]} (await (refire-run stub (fn [_])))
+              [w1 w1-again w2] worths]
+          (is (= w1 w1-again) "within one call the worth is the one it began with")
+          (is (= [:stopped :no-response :completed_not_cleared] (first ended)) "the call answered the new zombie (a changed call) before it stopped")
+          (is (= 2 fired))
+          (is (> w2 w1) "the next call is worth both zombies"))))))
+
 (deftest respond-to-hostile-stops-retreat-failed-with-the-flights-ending-as-because
   (async done
     (tu/run-async done
