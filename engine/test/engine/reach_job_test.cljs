@@ -52,12 +52,11 @@
 
 (deftest down-stair-needs-a-goal-two-below-and-cuts-it-may-dig
   (let [stone (box -25 40 -5 20 63 5 "stone")
-        at (block-at-of-map stone)
-        none (constantly false)]
-    (is (= {:step :stair :dir :down :heading :east :steps 10 :aside 2} (span/down-stair at [0 63 0] [8 53 0] (constantly true) none #{})))
-    (is (nil? (span/down-stair at [0 63 0] [8 62 0] (constantly true) none #{})) "one below is a drop or a dig-route")
-    (is (nil? (span/down-stair at [0 63 0] [8 53 0] (constantly true) none #{[:stair :east] [:stair :south] [:stair :north]})) "west ends 18 blocks off the goal's column")
-    (is (nil? (span/down-stair at [0 63 0] [8 53 0] (constantly false) none #{})) "no cell may be dug")))
+        at (block-at-of-map stone)]
+    (is (= {:step :stair :dir :down :heading :east :steps 10 :aside 2} (span/down-stair at [0 63 0] [8 53 0] (constantly true) #{})))
+    (is (nil? (span/down-stair at [0 63 0] [8 62 0] (constantly true) #{})) "one below is a drop or a dig-route")
+    (is (nil? (span/down-stair at [0 63 0] [8 53 0] (constantly true) #{[:stair :east] [:stair :south] [:stair :north]})) "west ends 18 blocks off the goal's column")
+    (is (nil? (span/down-stair at [0 63 0] [8 53 0] (constantly false) #{})) "no cell may be dug")))
 
 (def thin-mine
   "The live mine room: a 25x25x3 room (x 4..28, y 1..3) in a stone mass two blocks thick (x 2..30, y 0..16), a 1-wide air

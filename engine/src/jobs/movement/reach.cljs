@@ -112,7 +112,7 @@
         may-dig? (holes/may-dig-fn c)
         own? (own-builds/own-placed-fn c)
         opts {:own? own? :skip skip :fetch? (fetch-tool? c) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c)}
-        stair-from (fn [cell] (span/down-stair block-at cell goal may-dig? own? skip))
+        stair-from (fn [cell] (span/down-stair block-at cell goal may-dig? skip))
         stair (when (allowed? c :stair)
                 (let [here (stair-from feet)
                       stand (when (and (not (skip :approach)) (>= (- (second feet) (second goal)) 2))

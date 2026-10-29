@@ -255,47 +255,26 @@
   [skip]
   (keep (fn [k] (when (and (vector? k) (= :clear-path (first k))) (second k))) skip))
 
-(defn log? [n] (boolean (and n (re-find #"_log$" n))))
-
-(def tree-gap
-  "How far up a trunk is followed past cells already cut out of it."
-  12)
-
-(defn tree-log?
-  "Whether the log at cell belongs to a tree: its column of logs stands on natural ground and leaves grow at its top.
-  A log wall or pillar of a build has no leaves, so it stays a build; a trunk part cut away (air between its logs) is
-  still a trunk."
-  [block-at cell]
-  (let [base (last (take-while #(log? (block-at %)) (iterate #(up % -1) cell)))
-        reach (take-while #(or (log? (block-at %)) (= "air" (block-at %))) (take tree-gap (iterate #(up % 1) cell)))
-        top (last (filter #(log? (block-at %)) reach))]
-    (boolean (and (rules/natural? (block-at (up base -1)))
-                  (some (fn [d] (some->> (block-at (add top d)) (re-find #"_leaves$")))
-                        (for [dx [-1 0 1] dy (range 4) dz [-1 0 1]] [dx dy dz]))))))
-
 (defn diggable?
-  "Whether an escalation may cut cell: it is open (air or a plant), or natural terrain (a tree's log too) or a block
-  the body placed itself (own?: (own? cell block)) that may-dig? allows."
-  ([block-at may-dig? cell] (diggable? block-at may-dig? (constantly false) cell))
-  ([block-at may-dig? own? cell]
-   (let [n (block-at cell)]
-     (or (bs/passable? n)
-         (and (or (rules/natural? n) (and (log? n) (tree-log? block-at cell)) (boolean (and n (own? cell n))))
-              (boolean (may-dig? cell)))))))
+  "Whether an escalation may cut cell: it is open (air or a plant), or not protected and may-dig? allows it (go-to: no
+  other owner's zone, claim or plan footprint; outside those every block may be broken, a build too, priced like any dig)."
+  [block-at may-dig? cell]
+  (let [n (block-at cell)]
+    (or (bs/passable? n)
+        (and n (not (protected? n)) (boolean (may-dig? cell))))))
 
 (defn stair-heading
   "The first heading of dirs (each [dx dz]) with a solid block in front at feet height to stand on, no fence or wall
-  (reach/tall-block: no step climbs onto one) (bridge?: or none, the stair lays that floor) and every cell of the n steps' cuts diggable? (natural terrain, may-dig?), as a keyword
+  (reach/tall-block: no step climbs onto one) (bridge?: or none, the stair lays that floor) and every cell of the n steps' cuts diggable? (may-dig?), as a keyword
   (:east ...), or nil."
   ([block-at feet dirs] (stair-heading block-at feet dirs 1 (constantly true)))
-  ([block-at feet dirs n may-dig?] (stair-heading block-at feet dirs n may-dig? (constantly false)))
-  ([block-at feet dirs n may-dig? own?] (stair-heading block-at feet dirs n may-dig? own? false))
-  ([block-at feet dirs n may-dig? own? bridge?]
+  ([block-at feet dirs n may-dig?] (stair-heading block-at feet dirs n may-dig? false))
+  ([block-at feet dirs n may-dig? bridge?]
    (some (fn [d]
            (let [front (ahead feet d 1)]
              (when (and (or bridge? (solid? (block-at front))) (not (protected? (block-at front)))
                         (not (some->> (block-at front) (re-find reach/tall-block)))
-                        (every? #(diggable? block-at may-dig? own? %) (stair-cuts feet d (max 1 n))))
+                        (every? #(diggable? block-at may-dig? %) (stair-cuts feet d (max 1 n))))
                (heading-names d))))
          dirs)))
 
@@ -436,8 +415,8 @@
     (priced-spot p feet goal (level-steps p feet true) take? visited way-spot-cap)))
 
 (defn choose
-  "How a body at feet (a cell) that cannot walk to goal (a cell) can make a way, cheapest first. It only ever digs
-  natural terrain (natural?) and blocks it placed itself (opts :own?, (own? cell block)) in cells (may-dig? cell)
+  "How a body at feet (a cell) that cannot walk to goal (a cell) can make a way, cheapest first. It digs
+  any block in cells (may-dig? cell)
   allows (go-to: no other owner's zone or claim); opts :pillar-item ({:item :count} or nil, escape/pillar-item) replaces the climb block read from the inventory. opts :skip is a set of steps that already failed (a stair heading
   that failed: [:stair :east]): the next one is chosen; opts :approached, the cells an approach already walked to; opts :stands, the feet cells of the body's own stairs (a ledge stair's first floor never lands on one: the stair job refuses :undercuts-way).
   - {:step :pillar :height n :item}: in a pit d deep with room above the head and at least n pillar blocks carried: n
@@ -458,10 +437,10 @@
   - on a ledge (no side solid, no wall-spot) under a higher goal with a pillar block carried: a stair whose first
     floor the stair job lays.
   - {:step :none :why kw}: none of these. :why :no-headroom: a pit the carried blocks would pillar out of but for
-    the block over the head; :no-dig: nothing natural and allowed to dig; :no-wall: no wall to walk to."
+    the block over the head; :no-dig: nothing allowed to dig; :no-wall: no wall to walk to."
   ([p feet goal] (choose p feet goal (constantly true)))
   ([p feet goal may-dig?] (choose p feet goal may-dig? nil))
-  ([p feet goal may-dig? {:keys [own? skip approached stands] :or {own? (constantly false) skip #{} approached #{} stands #{}} :as opts}]
+  ([p feet goal may-dig? {:keys [skip approached stands] :or {skip #{} approached #{} stands #{}} :as opts}]
    (let [approached (or approached #{})
          block-at (block-at-of p)
          dir (heading feet goal)
@@ -476,24 +455,24 @@
          stair-dirs (remove #(skip [:stair (heading-names %)]) (distinct (cond->> cardinals dir (cons dir))))
          [stair rise] (if (or (skip :stair) (not (pos? rise)))
                         [nil rise]
-                        (or (some (fn [n] (some-> (stair-heading block-at feet stair-dirs n may-dig? own?) (vector n)))
+                        (or (some (fn [n] (some-> (stair-heading block-at feet stair-dirs n may-dig?) (vector n)))
                                   (distinct (filter pos? [rise depth])))
                             [nil rise]))
          climb (delay (when-not (or (skip :stair) (pos? rise))
-                        (some (fn [n] (some-> (stair-heading block-at feet stair-dirs n may-dig? own?) (vector n)))
+                        (some (fn [n] (some-> (stair-heading block-at feet stair-dirs n may-dig?) (vector n)))
                               (range (max-depth) 0 -1))))
          ledge (delay (when (and item (not (skip :stair)) (pos? rise) (not (walled-side? block-at feet)))
-                        (stair-heading block-at feet (remove #(contains? stands (ahead feet % 1)) stair-dirs) rise may-dig? own? true)))
+                        (stair-heading block-at feet (remove #(contains? stands (ahead feet % 1)) stair-dirs) rise may-dig? true)))
          door-failed? (and dir (skip (door-key feet (heading-names dir))))
          gap (when (and dir (not (skip :clear-path)) (not door-failed?))
                (door block-at (unseen-of p) feet dir))
          ;; door-spot is for a wall in line that may not be dug; one that was dug and failed is no cause to try its neighbour
          spot (delay (when (and dir (not (skip :approach)) (not (skip :clear-path)) (not door-failed?) (walled-side? block-at feet))
-                       (door-spot p feet goal #(diggable? block-at may-dig? own? %)
+                       (door-spot p feet goal #(diggable? block-at may-dig? %)
                                   (into approached (skipped-door-cells skip)))))
          wall (delay (wall-spot p feet goal approached))
          back (delay (when-not (or (skip :approach) (skip :clear-path)) (door-back p feet approached)))
-         door? (and gap (every? #(diggable? block-at may-dig? own? %) (:cells gap)))
+         door? (and gap (every? #(diggable? block-at may-dig? %) (:cells gap)))
          rim (when (and rim-n (>= count rim-n)) rim-n)]
      (cond
        (and open-above? headroom?)

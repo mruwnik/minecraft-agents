@@ -111,9 +111,9 @@
     (is (= {:step :pillar :height 1 :item "dirt"} (escape/choose p [2 61 2] [2 64 10] (constantly false)))
         "the south wall when the goal is south")))
 
-(deftest escape-choose-walks-to-a-door-it-may-dig-before-it-rim-pillars
+(deftest escape-choose-cuts-the-planks-door-nobody-claims-else-rim-pillars
   (let [p (tu/fake {:self {:pos {:x 2 :y 64 :z 0}} :blocks plank-yard :inventory [{:name "dirt" :count 9}]})]
-    (is (= :approach (:step (escape/choose p [2 64 0] [8 64 0]))) "the dirt beside the planks")
+    (is (= :clear-path (:step (escape/choose p [2 64 0] [8 64 0]))) "the planks are nobody's claim")
     (is (= {:step :pillar :height 1 :item "dirt"} (escape/choose p [2 64 0] [8 64 0] (constantly false)))
         "no dig allowed: over the wall")))
 
@@ -569,13 +569,13 @@
 
 (deftest escape-choose-walks-to-an-unseen-part-of-a-build-wall-once-then-finds-no-dig
   ;; unseen wall cells are guessed as rock, so each looks like a door: the body walks to look, and a cell it walked to
-  ;; (:approached) is not chosen again; the chain ends in :no-dig
+  ;; (:approached) is not chosen again; the chain ends in :no-dig. The seen planks are a claim's (may-dig? refuses them).
   (let [planks (into {} (map (fn [[k v]] [k (if (= v "dirt") "oak_planks" v)])) room)
         p (tu/fake {:self {:pos {:x 2 :y 64 :z 0}} :blocks planks})
         hide? (fn [[x _ z]] (and (= 3 x) (not= 0 z)))]
     (aset p "sensedAt" (fn [pos] (if (hide? [(.-x pos) (.-y pos) (.-z pos)]) #js {:unknown true} (.blockAt p pos))))
     (let [steps (loop [seen #{} out []]
-                  (let [e (escape/choose p [2 64 0] [8 64 0] (constantly true) {:approached seen})]
+                  (let [e (escape/choose p [2 64 0] [8 64 0] hide? {:approached seen})]
                     (if (or (not= :approach (:step e)) (> (count out) 8))
                       (conj out e)
                       (recur (conj seen (:pos e)) (conj out e)))))]

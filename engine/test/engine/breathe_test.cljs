@@ -311,7 +311,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:self {:inWater true :oxygen 4}
-                                         :blocks (merge water-column walls {"0,68,0" "oak_planks" "1,64,0" "stone"})})]
+                                         :blocks (merge water-column walls {"0,68,0" "spawner" "1,64,0" "stone"})})]
           (await (one-run! eng side-args))
           (is (= [] (:list (core/state eng))))
           (is (= [[:stopped :no-air]] (ended seen)))
@@ -1138,18 +1138,26 @@
 
 (defn ^:async never-dug!
   "A cap of block: stopped :no-air with :cap why, the block still there, no dig call."
-  [done block why]
+  [done block why & {:keys [zones]}]
   (tu/run-async done
     (fn ^:async t []
-      (let [{:keys [ended data p] at :block} (await (cap-run! {:block block}))]
+      (let [{:keys [ended data p] at :block} (await (cap-run! (cond-> {:block block} zones (assoc :zones zones))))]
         (is (= [[:stopped :no-air]] ended))
         (is (= why (:cap data)))
         (is (= 1 (:air-radius data)) "the stop says how far it looked")
         (is (= block (at [0 68 0])))
         (is (not (some #{"dig"} (call-names p))))))))
 
-(deftest a-cap-that-is-not-natural-is-never-dug
-  (async done (never-dug! done "oak_planks" :not-natural)))
+(deftest a-built-cap-in-a-claimed-cell-is-never-dug
+  (async done (never-dug! done "oak_planks" :not-natural :zones [{:name "keep-out" :owner "Miles" :min [0 68 0] :max [0 68 0]}])))
+
+(deftest a-built-cap-nobody-claims-is-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [ended block]} (await (cap-run! {:block "glass"}))]
+          (is (= [[:completed nil]] ended))
+          (is (= "air" (block [0 68 0]))))))))
 
 (deftest a-protected-cap-is-never-dug
   (async done (never-dug! done "chest" :protected)))
@@ -1448,7 +1456,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4} :blocks (capped-world "obsidian")})]
+        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4} :blocks (capped-world "spawner")})]
           (await (one-run! eng cap-args))
           (is (not-any? #{"swim"} (call-names p)) "a seen cap blocks the swim fallback")
           (is (= [[:stopped :no-air]] (ended seen))))))))
@@ -1485,7 +1493,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:self {:inWater true :oxygen 4} :blocks (capped-world "obsidian")})
+        (let [{:keys [eng p]} (setup {:self {:inWater true :oxygen 4} :blocks (capped-world "spawner")})
               looks (atom [])]
           (stub-seen! p (fn [[x y z]] (and (zero? x) (zero? z) (or (<= y 65) (= y 68)))))
           (.override (.-world p) "look" (fn [_ a _]
@@ -1797,21 +1805,21 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [ended p pos block]} (await (cut-run! 72 "oak_planks" 70 kit))]
+        (let [{:keys [ended p pos block]} (await (cut-run! 72 "spawner" 70 kit))]
           (is (= [[:completed nil]] ended))
           (is (nil? (breath/situation p)) "breathing")
           (is (= "cobblestone" (block [0 69 0])) "the footing under the feet")
           (is (= {:x 2.5 :y 70 :z 0.5} pos) "in the pocket")
-          (is (= "oak_planks" (block [0 73 0])) "the cap is left"))))))
+          (is (= "spawner" (block [0 73 0])) "the cap is left"))))))
 
 (deftest a-stop-with-no-air-says-why-no-pocket-was-made
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [ended data]} (await (cut-run! 72 "oak_planks" 70 []))]
+        (let [{:keys [ended data]} (await (cut-run! 72 "spawner" 70 []))]
           (is (= [[:stopped :no-air]] ended))
-          (is (= [:not-natural :no-block] [(:cap data) (:pocket data)]))
-          (is (re-find #"pocket: no-block.*cap: not-natural" (:text data))))))))
+          (is (= [:protected :no-block] [(:cap data) (:pocket data)]))
+          (is (re-find #"pocket: no-block.*cap: protected" (:text data))))))))
 
 (deftest a-cap-dig-over-its-share-of-the-air-is-started-when-nothing-else-is-left
   ;; oxygen 4 and health 20 leave 13 s: 9 s is over the share (6.5 s) and within the air left
@@ -1866,7 +1874,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup (-> (crossing-world true) (assoc-in [:blocks "0,68,0"] "oak_planks") (assoc-in [:self :pos] {:x 0 :y 64 :z 0})
+        (let [{:keys [eng p seen]} (setup (-> (crossing-world true) (assoc-in [:blocks "0,68,0"] "spawner") (assoc-in [:self :pos] {:x 0 :y 64 :z 0})
                           (update :blocks merge (into {} (for [x (range -2 4) z (range -2 3)] [(str x ",63," z) "stone"])))))]
           (await (one-run! eng (tune defaults :radius 2 :air-radius 4)))
           (is (= [[:stopped :no-air]] (ended seen)))

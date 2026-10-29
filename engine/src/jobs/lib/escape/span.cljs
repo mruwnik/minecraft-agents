@@ -26,7 +26,7 @@
   "{:step :stair :dir :down :heading kw :steps n :aside a} for a goal at least 2 below feet: n steps down to the goal's
   height (at most max-descent) along the heading, among the four, whose landing is nearest the goal's column and at most
   max-aside blocks off it (the rest is dug flat), not in skip as [:stair heading], every cut cell escape/diggable? and most of them solid (no stair through air); nil when none."
-  [block-at feet goal may-dig? own? skip]
+  [block-at feet goal may-dig? skip]
   (let [n (- (second feet) (second goal))]
     (when (and (>= n 2) (<= n (max-descent)) (not (skip :stair)))
       (->> (headings-toward feet goal)
@@ -36,7 +36,7 @@
                          [lx _ lz] (last cells)
                          aside (js/Math.round (js/Math.hypot (- lx (goal 0)) (- lz (goal 2))))]
                      (when (and (<= aside (max-aside))
-                                (every? #(escape/diggable? block-at may-dig? own? %) cells)
+                                (every? #(escape/diggable? block-at may-dig? %) cells)
                                 (> (* 2 (count (filter #(escape/solid? (block-at %)) cells))) (count cells)))
                        {:step :stair :dir :down :heading heading :steps n :aside aside}))))
            (sort-by :aside)

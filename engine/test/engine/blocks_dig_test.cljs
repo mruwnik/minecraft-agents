@@ -1213,13 +1213,13 @@
             (is (= :again (await (dig/pillar-up! c pos))) "the second round resumes the child")
             (is (nil? (await (dig/pillar-up! c pos))) "one pillar per call once it ended")))))))
 
-(deftest natural-only-digs-natural-terrain-and-refuses-a-built-block
+(deftest natural-only-digs-any-block-but-refuses-a-protected-one
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:self body :blocks {"2,64,0" "oak_planks" "3,64,0" "stone"} :inventory pick})
+        (let [{:keys [eng p]} (setup {:self body :blocks {"2,64,0" "chest" "3,64,0" "oak_planks"} :inventory pick})
               built (await (tu/child-outcome eng job {:pos [2 64 0] :natural-only? true} 10))
               natural (await (tu/child-outcome eng job {:pos [3 64 0] :natural-only? true} 10))]
           (is (= [false :not-diggable] [(:dug built) (:reason built)]) (pr-str built))
-          (is (= "oak_planks" (block-at p {:x 2 :y 64 :z 0})) "the built block stays")
+          (is (= "chest" (block-at p {:x 2 :y 64 :z 0})) "the protected block stays")
           (is (= :dug (:reason natural))))))))

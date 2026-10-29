@@ -44,7 +44,7 @@
   Needs nothing carried (a tool the dig child cannot find is its :dig-waits). Quote: the door's cells times the time of a
   cell, ending at the far side.
   :bad-args and :no-door are conditions, checked at the start. Ends :done, or with a cause {:reason r ...}: :impossible for :bad-args (needs :heading), :condition-failed for
-  :no-door (no such wall here), :protected (a block it never digs), :not-diggable (:natural-only? and a cell that is not natural terrain), :footprint (a cell of a plan this body made,
+  :no-door (no such wall here), :protected (a block it never digs), :not-diggable (:natural-only? and a protected block), :footprint (a cell of a plan this body made,
   unless the spare-own-builds setting is false) and :dig-waits (the dig child's wait or decline, its ending the :because); :too-dear (the price over :max-dig-s); :nothing-possible for
   :dig-failed (its ending the :because), :refills (a cell dug stair.limits/max-digs times, e.g. sand falling in) and :step-failed
   (the walk through did not arrive). Data {:dug [{:cell :block}] :at [x y z] :through [x y z]}, :shut [cells put back] with :close-behind.
@@ -56,7 +56,7 @@
   {:heading {:doc ":north :east :south or :west" :spec #{:north :east :south :west} :default nil}
    :ignore-zones? :shared
    :max-dig-s {:doc "seconds of digging the whole door may take (see doc); nil: no bound" :spec (a/num-in 0 nil) :default nil}
-   :natural-only? {:doc "true (go-to's escalation): stops :not-diggable at a cell that is not natural terrain or the body's own block (jobs.lib.escape/diggable?)" :spec boolean? :default false}
+   :natural-only? {:doc "true (go-to's escalation): stops :not-diggable at a protected block (jobs.lib.escape/diggable?)" :spec boolean? :default false}
    :close-behind {:doc "true: put the door's first column back from inside before walking on out (see the doc)" :spec boolean? :default false}
    :need-drop {:doc "false: dig a block no carried tool harvests bare-handed (slow, the drop is lost) without fetching; true: never; unset: bare-handed when no pickaxe can be fetched" :spec (a/or-of boolean? #{:auto}) :default :auto}})
 

@@ -576,31 +576,6 @@
           (is (empty? (events-of seen :go-to.escalated)) "a caller that re-aims itself gets the stuck walk back, no door dug")
           (is (empty? (calls p "dig"))))))))
 
-(deftest a-dig-route-never-digs-a-block-built-there-after-it-was-planned
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [below (apply dissoc (box -20 55 -20 20 63 20 "stone") ["3,60,0" "3,61,0"])
-              around [[2 60 0] [4 60 0] [3 60 1] [3 60 -1] [3 59 0] [2 61 0] [4 61 0] [3 61 1] [3 61 -1] [3 62 0]]
-              {:keys [eng p seen]} (setup {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks below
-                                           :inventory [{:name "stone_pickaxe" :count 1}]})
-              walled? (atom false)
-              out (atom :not-done)
-              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [3 60 0] :range 0})))]
-          (.override (.-world p) "dig"
-                     (fn [token a impl]
-                       (when-not @walled?
-                         (reset! walled? true)
-                         (swap! (fake/state p) update :blocks merge (zipmap around (repeat "bricks"))))
-                       (impl token a)))
-          (core/submit! eng '(recording-parent) {})
-          (await (tick-out! eng 1000))
-          (is (false? (:arrived @out)) (pr-str @out))
-          (is (= (repeat (count around) "bricks") (map #(block p %) around))
-              "a brick wall put round the goal after the route was planned is someone's build")
-          (is (some #(= [:dig-route :not-diggable] ((juxt :step :reason) %)) (events-of seen :go-to.escalation-stopped))
-              (pr-str (events-of seen :go-to.escalation-stopped))))))))
-
 (deftest a-free-body-with-one-pickaxe-or-none-lets-its-stair-fetch-a-tool
   (let [flat {:blocks (box -20 63 -20 20 63 20 "stone") :self {:pos {:x 0 :y 64 :z 0}}}
         fetch? #(choose/fetch-tool? {:primitives (tu/fake %) :args {}})
@@ -754,8 +729,8 @@
 
 (deftest a-dig-route-over-guesses-is-priced-once-over-the-chance-they-all-hold
   ;; each guess holds with 1 - its class's risk: the route's seconds over the product, against :worth-s; a guess beside
-  ;; seen undiggable rock (a light) is of class :beside
-  (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "4,64,0" "air" "4,65,0" "air" "2,66,0" "glowstone")
+  ;; seen undiggable rock (a chest) is of class :beside
+  (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "4,64,0" "air" "4,65,0" "air" "2,66,0" "chest")
         p (hiding-with-pickaxe world #{[1 64 0] [1 65 0] [2 64 0] [2 65 0] [3 64 0] [3 65 0]})
         answer #(choose/route-answer p [0 64 0] [4 64 0] (constantly true) (constantly false) false false %)
         {:keys [seconds dig]} (answer {})
@@ -770,7 +745,7 @@
 (deftest a-stair-over-guesses-is-priced-over-the-chance-they-all-hold-and-at-zero-risk-by-its-price
   ;; the stair east from [0 64 0] two steps cuts [0 66 0] [1 66 0] [1 65 0] [1 67 0] [2 67 0] [2 66 0]; three are hidden,
   ;; [2 66 0] under a seen light (class :beside): 10 s holds with 0.8 * 0.8 * 0.5 = 0.32
-  (let [p (hiding-with-pickaxe (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "2,67,0" "glowstone")
+  (let [p (hiding-with-pickaxe (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "2,67,0" "chest")
                                #{[1 65 0] [1 66 0] [2 66 0]})
         guesses (choose/way-guesses p {:step :stair :heading :east :steps 2} [0 64 0] (constantly false))
         risk {:beside 0.5 :apart 0.2}]
@@ -786,7 +761,7 @@
         c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
         e {:step :stair :guesses [{:cell [1 65 0] :beside false} {:cell [2 66 0] :beside true} {:cell [3 67 0] :beside false}]}]
     (.setOwner (:primitives eng) "tx")
-    (esc/note-guesses! c e {:kind :stopped :cause {:reason :not-diggable :cell [2 66 0] :block "glowstone"}
+    (esc/note-guesses! c e {:kind :stopped :cause {:reason :not-diggable :cell [2 66 0] :block "chest"}
                             :data {:dug [{:cell [1 65 0] :block "stone"}]}})
     (is (= {:beside {:all 1 :bad 1} :apart {:all 1 :bad 0}} (:guess-looks (ctx/mem c))) "the cell past the stop is no look")))
 
@@ -943,6 +918,10 @@
         pit (for [y [66 67 68]] (str "61," y ",11"))]
     (apply dissoc (merge ground floor walls roof field) (concat door pit))))
 
+(def protected-house
+  "oriel-house built of blocks nothing digs (spawners)."
+  (into {} (for [[k v] oriel-house] [k (if (#{"oak_planks" "cobblestone"} v) "spawner" v)])))
+
 (deftest go-to-a-house-whose-planks-and-cobble-cannot-be-dug-drops-into-the-pit-outside-its-door-and-digs-out
   (async done
     (tu/run-async done
@@ -954,7 +933,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p]} (await (run-job! {:self {:pos {:x 61.5 :y 69 :z 9.5}} :blocks oriel-house :light [0 0]} {:pos [63 69 12] :range 1 :one-way :closed}))]
+        (let [{:keys [out p]} (await (run-job! {:self {:pos {:x 61.5 :y 69 :z 9.5}} :blocks protected-house :light [0 0]} {:pos [63 69 12] :range 1 :one-way :closed}))]
           (is (false? (:arrived @out)) (pr-str @out))
           (is (= 69 (second (feet p))) "the caller's :closed forbids the drop"))))))
 
@@ -962,7 +941,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [blocks (merge oriel-house (into {} (for [[k v] oriel-house :when (= "dirt" v)] [k "bedrock"])))
+        (let [blocks (merge protected-house (into {} (for [[k v] oriel-house :when (= "dirt" v)] [k "bedrock"])))
               {:keys [out p]} (await (run-job! {:self {:pos {:x 61.5 :y 69 :z 9.5}} :blocks blocks :light [0 0]} {:pos [63 69 12] :range 1}))]
           (is (false? (:arrived @out)) (pr-str @out))
           (is (= 69 (second (feet p))) "the body did not drop into the pit"))))))

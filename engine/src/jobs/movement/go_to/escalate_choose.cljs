@@ -267,7 +267,7 @@
             floor (escape/up riser -1)]
         (when (and (= 2 (u/dist (zipmap [:x :y :z] riser) (zipmap [:x :y :z] from)))
                    (escape/solid? (block-at riser))
-                   (escape/diggable? block-at may-dig? own? riser)
+                   (escape/diggable? block-at may-dig? riser)
                    (escape/solid? (block-at floor)))
           {:step :dig-route :cells [{:cell riser :block (block-at riser)}]})))))
 
@@ -368,12 +368,12 @@
   (swap! kept-routes dissoc id))
 
 (defn beside-undiggable?
-  "Whether a seen face-neighbour of cell is solid rock an escalation never digs (escape/diggable? over own?): such rock
+  "Whether a seen face-neighbour of cell is solid rock an escalation never digs (escape/diggable?): such rock
   comes in veins and rooms, so a guess beside it is at risk. sensed: cell -> the sensed block or nil."
   [sensed block-at own? [x y z]]
   (boolean (some (fn [[dx dy dz]] (let [at [(+ x dx) (+ y dy) (+ z dz)] b (sensed at)]
                                     (and b (not (true? (.-unknown b))) (escape/solid? (.-name b))
-                                         (not (escape/diggable? block-at (constantly true) own? at)))))
+                                         (not (escape/diggable? block-at (constantly true) at)))))
                  [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])))
 
 (defn route-answer
@@ -416,7 +416,7 @@
                      (beside-undiggable? (fn [[x y z]] (sensed x y z)) block-at own? cell) beside
                      :else apart))
         opts (fn [refused] (merge prices
-                                  {:dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) own? cell))
+                                  {:dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) cell))
                                                             (some-> ((:dig-s prices) name cell) (+ (if own-s (own-s cell) 0)))))
                                    :max-dig-s (max-route-s)}
                                   route-opts
@@ -434,7 +434,7 @@
             ;; with a :range the goal is worked from a stand within it, never dug away
             (loop [refused (if (>= (:range route-opts 0) 1) #{(:near route-opts goal)} #{}) n 1]
             (let [a (search refused)
-                  bad (when (map? a) (remove #(escape/diggable? block-at may-dig? own? %) (:dig a)))]
+                  bad (when (map? a) (remove #(escape/diggable? block-at may-dig? %) (:dig a)))]
               (cond (= :searching a) a
                     (nil? (:dig a)) nil
                     (empty? bad) a

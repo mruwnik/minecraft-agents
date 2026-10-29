@@ -63,12 +63,19 @@
             true
             :dug)))))
 
+(defn claimed-fn
+  "(claimed? cell): another's zone, claim or plan footprint covers cell (jobs.lib.tidy/refusal); the rules input is read once."
+  [c]
+  (let [in (delay (access/rules-input c {:ignore-zones? false}))]
+    (fn [cell] (some? (access/trespass-refusal @in :dig cell)))))
+
 (defn cap-above
   "The own column's cap: {:cells [..]} to dig, or {:why kw} when none may be. The first block within 3 above the head
-  that is neither air nor water is the cap (the only cell read, as seen); it must be natural, not protected and not a
-  falling block; a cell not seen (look first, see look-up!) gives :unseen. What lies over the cap is learned by digging,
+  that is neither air nor water is the cap (the only cell read, as seen); it must not be protected, not a falling
+  block and, in a claimed cell (claimed?), natural; a cell not seen (look first, see look-up!) gives :unseen. What lies over the cap is learned by digging,
   a cell a pass."
-  [p head]
+  ([p head] (cap-above p head (constantly false)))
+  ([p head claimed?]
   (let [cell (fn [k] (update head :y + k))]
     (loop [k 0]
       (let [n (when (<= k 3) (breath/seen-water-name p (cell k)))]
@@ -77,9 +84,9 @@
           (nil? n) {:why :unseen}
           (breath/passable-water-or-air? n) (recur (inc k))
           (escape/protected? n) {:why :protected}
-          (not (rules/natural? n)) {:why :not-natural}
+          (and (not (rules/natural? n)) (claimed? (cell k))) {:why :not-natural}
           (contains? pocket/falling n) {:why :gravity}
-          :else {:cells [(cell k)]})))))
+          :else {:cells [(cell k)]}))))))
 
 (defn ^:async look-up!
   "Look at each cell within 3 above head that the body has not seen, so cap-above reads what is there."
@@ -98,7 +105,7 @@
   (let [p (:primitives c)
         head (breath/eye-cell (.self p))
         _ (await (look-up! c head))
-        {:keys [cells]} (cap-above p head)
+        {:keys [cells]} (cap-above p head (claimed-fn c))
         ms (reduce + (map #(.digTime p (clj->js %)) cells))]
     (when (and cells (< (:cap-digs (ctx/mem c) 0) (max-cap-digs))
                (<= ms (* (cap-dig-share) (breath/air-left-ms (.self p)))))
@@ -173,7 +180,7 @@
         self (.self p)
         head (breath/eye-cell self)
         _ (await (look-up! c head))
-        {:keys [cells why]} (cap-above p head)
+        {:keys [cells why]} (cap-above p head (claimed-fn c))
         _ (when (and cells (< (:cap-digs (ctx/mem c) 0) (max-cap-digs))) (await (tools/equip! c (u/seen-name p (first cells)))))
         air-ms (breath/air-left-ms self)
         allowed-ms (* share air-ms)]
