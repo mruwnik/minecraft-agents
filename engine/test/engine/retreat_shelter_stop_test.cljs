@@ -297,7 +297,7 @@
    :self {:pos [0.5 64 0.5]}
    :inventory kit})
 
-(defn plan-ctx [p] {:primitives p :view (constantly {:data {} :now 0}) :root 1 :slots [] :args {}})
+(defn plan-ctx [p] {:engine {:warned (js-obj)} :primitives p :view (constantly {:data {} :now 0}) :root 1 :slots [] :args {}})
 
 (defn seen-closed-cell
   "Primitives over world that know every cell but those below y 63 (unknown, as the ground under a body's own floor is) when
@@ -330,13 +330,17 @@
               p (seen-closed-cell (assoc w :inventory []) true)]
           (is (some? (pit/pit-plan (plan-ctx p) (cell 0 64 0))) "dirt below the surface is not read as stone the bare hand cannot clear"))))))
 
-(deftest walls-with-fewer-blocks-than-open-cells-quote-the-blow-of-a-melee-hostile-that-gets-in
-  (let [zombie {:id 9 :name "zombie" :kind "hostile" :pos {:x 4 :y 64 :z 0} :health 20}
-        with (fn [n mobs] (plan-ctx (tu/seeing-all (tu/fake {:inventory [{:name "dirt" :count n}] :entities mobs}))))]
-    (is (pos? (wall-in/half-built-s (with 3 [zombie]) 10)) "3 blocks for 10 cells would stop half built")
-    (is (zero? (wall-in/half-built-s (with 10 [zombie]) 10)))
-    (is (zero? (wall-in/half-built-s (with 3 []) 10)) "no melee hostile known: nothing gets in")
-    (is (zero? (wall-in/half-built-s (with 3 [(assoc zombie :name "skeleton")]) 10)) "a shooter does not walk in")))
+(deftest a-half-built-wall-quotes-the-one-blow-of-the-melee-hostile-that-arrives-in-time-and-the-mobs-unseen
+  (let [zombie (fn [id x] {:id id :name "zombie" :kind "hostile" :pos {:x x :y 64 :z 0} :health 20})
+        with (fn [n mobs] (plan-ctx (tu/seeing-all (tu/fake {:inventory [{:name "dirt" :count n}] :entities mobs}))))
+        half (fn [n mobs] (wall-in/half-built-s (with n mobs) 10))
+        none (half 3 [])]
+    (is (pos? none) "unseen mobs spawn while the wall stands half built")
+    (is (> (half 3 [(zombie 9 4)]) none) "a zombie that arrives before the wall is placed gets in")
+    (is (= none (half 3 [(zombie 9 200)])) "a zombie too far to arrive in the placing seconds is not a blow")
+    (is (= (half 3 [(zombie 9 4)]) (half 3 [(zombie 9 4) (zombie 10 5)])) "one gets in, not all")
+    (is (= none (half 3 [(assoc (zombie 9 4) :name "skeleton")])) "a shooter does not walk in")
+    (is (zero? (half 10 [(zombie 9 4)])) "blocks for every cell: nothing is left open")))
 
 (deftest a-closed-cell-with-walls-it-cannot-dig-gets-no-pit
   (async done

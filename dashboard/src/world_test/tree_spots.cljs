@@ -1,5 +1,5 @@
 (ns world-test.tree-spots
-  "tools/event-counts.mjs tree-spots: counts the measured prior jobs.lib.forestry.plant-sapling/::unseen-spot-counts from the
+  "tools/event-counts.mjs tree-spots: counts the measured prior jobs.lib.cost.value/::unseen-spot-counts from the
   recorded chunk columns (worlds/<world>/chunks): the base of a tree (a log on soil, no log under it) as a replant debt
   once the tree is felled, whether a sapling of its species could be planted there, its trunk and the leaves gone: the
   growth space over it (jobs.forestry.prepare-rule/headroom-of cells) holds nothing a tree cannot grow through (logs count

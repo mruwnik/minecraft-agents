@@ -11,6 +11,7 @@
             [jobs.lib.cost.danger :as cost-danger]
             [jobs.lib.cost.health :as health]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
@@ -126,16 +127,26 @@
 (defn open-count [c] (count (dig-cells/open-cells (:primitives c) (sh-sense/feet (:primitives c)))))
 
 (defn half-built-s
-  "Seconds a wall left half built (fewer carried blocks than open cells) costs: a melee hostile known gets in by a cell left open
-  (chance 1), each at the hp-cost of its blow (answer/blow, at the body's health and armour); 0 with the blocks for every cell."
+  "Seconds a wall left half built (fewer carried blocks than open cells) costs: over the seconds its placing takes, the nearest
+  melee hostile known that arrives (arrive-s) in them gets in by a cell left open, at the hp-cost of its blow (answer/blow, at
+  the body's health and armour), and a mob unseen spawns at the dark chance a second (price/stay-hp); 0 with the blocks for every cell."
   [c open]
   (let [have (reduce + (map :count (lb/carried c (flight/blocks c))))
         self (.self (:primitives c))
-        health (.-health self)
-        stats (cost/armour-stats (cost/equipment-of (.-equipment self)))]
+        health (let [h (.-health self)] (if (number? h) h 20))
+        stats (cost/armour-stats (cost/equipment-of (.-equipment self)))
+        p (:primitives c)
+        at (u/pos-of (.-pos self))
+        window (* open (cell-seconds c open))
+        arrives (keep #(let [a (cost-danger/arrival-s (cost-danger/mob-kind %) (danger-q/mob-pos p %) at)]
+                         (when (< a window) [a %]))
+                      (melee-hostiles c))
+        nearest (some->> (seq arrives) (apply min-key first) second)
+        known (if nearest (answer/blow stats {:name (.-name nearest)}) 0)
+        unseen (price/stay-hp c (cost/spawn-chance [0 0 0]) window)]
     (if (>= have open)
       0
-      (reduce + 0 (map #(health/hp-cost (if (number? health) health 20) (answer/blow stats {:name (.-name %)})) (melee-hostiles c))))))
+      (health/hp-cost health (+ known unseen)))))
 
 (defn fails
   "The chance the walls cannot be closed for a mob in a cell: answer/counted-chance of ::mob-fails of the class the body

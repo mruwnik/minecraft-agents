@@ -1868,7 +1868,7 @@
 (defn stub-ctx
   "A ctx over a fake world whose job memory is the atom m."
   [p m]
-  {:primitives p :mem m :remember (fn [& _]) :forget (fn [& _]) :emit (fn [& _])})
+  {:engine {:warned (js-obj)} :primitives p :mem m :remember (fn [& _]) :forget (fn [& _]) :emit (fn [& _])})
 
 (defn with-stub-mem [f]
   (with-redefs [ctx/mem (fn [c] @(:mem c))
