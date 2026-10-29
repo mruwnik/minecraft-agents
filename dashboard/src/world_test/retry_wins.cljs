@@ -46,7 +46,7 @@
 (defn- r3 [x] (/ (js/Math.round (* 1000 x)) 1000))
 
 (defn report
-  "{kind {:win :fail :try-s :retries :calls}} of the scanned rows (a kind with no retry and no timed try is left out)."
+  "{kind {:win :fail :try-s :won :retries :calls}} of the scanned rows (a kind with no retry and no timed try is left out)."
   [rows]
   (into (sorted-map)
         (for [[kind rs] (group-by :kind rows)
@@ -56,4 +56,4 @@
                     [win fail] (if (seq tries) (passes/beta-fit shares won (count tries)) [1 1])
                     s (if (seq tries) (/ (reduce + (map :s tries)) (count tries)) (try-s rs))]
               :when s]
-          [kind {:win win :fail fail :try-s (r3 s) :retries (count tries) :calls (count shares)}])))
+          [kind {:win win :fail fail :try-s (r3 s) :won won :retries (count tries) :calls (count shares)}])))

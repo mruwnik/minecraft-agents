@@ -16,11 +16,11 @@
                                 (action "j2/craft" :done 3000 "timeout")
                                 (walk "j3/go-to" 0 false) (walk "j3/go-to" 4000 true) (walk "j4/go-to" 0 true)])
         {:keys [craft walk]} (r/report rows)]
-    (is (= {:retries 3 :calls 2} (select-keys craft [:retries :calls])) "a won try ends the run of a call's fails")
+    (is (= {:won 1 :retries 3 :calls 2} (select-keys craft [:won :retries :calls])) "a won try ends the run of a call's fails")
     (is (= 1.333 (:try-s craft)) "a retry's seconds run from the failed try's end")
     (is (> (:fail craft) (:win craft)) "one call won one retry of three")
-    (is (= {:win 1 :fail 0 :try-s 4 :retries 1 :calls 1} walk) "a walk that did not arrive, then did")))
+    (is (= {:win 1 :fail 0 :try-s 4 :won 1 :retries 1 :calls 1} walk) "a walk that did not arrive, then did")))
 
 (deftest a-kind-with-no-retry-is-priced-by-its-tries-on-the-uniform-prior
-  (is (= {:craft {:win 1 :fail 1 :try-s 2 :retries 0 :calls 0}}
+  (is (= {:craft {:win 1 :fail 1 :try-s 2 :won 0 :retries 0 :calls 0}}
          (r/report (keep r/scan-line [(action "j1/craft" :started 1000 nil) (action "j1/craft" :done 3000 "crafted")])))))
