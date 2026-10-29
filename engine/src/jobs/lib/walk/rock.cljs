@@ -73,13 +73,22 @@
               (aset b (+ base (* t s)) (if (pos? cnt) 1 0))
               (recur (inc t) cnt))))))))
 
+(defn- spare-heights!
+  "out (a 4096-cell section array, 1 rock) of the section at section y sy with every cell set 0 at a height where spare?
+  (fn [y]) holds: there the prior holds an unseen cell no likelier solid than open. Returns a new array, or out when no
+  height is spared."
+  [^js out sy spare?]
+  (let [spared (filterv #(spare? (+ (* 16 sy) %)) (range 16))]
+    (if (empty? spared)
+      out
+      (let [res (js/Uint8Array. out)]
+        (doseq [ly spared] (.fill res 0 (bit-shift-left ly 8) (bit-shift-left (inc ly) 8)))
+        res))))
+
 (def all-rock (js/Uint8Array. 4096))
 (.fill all-rock 1)
 
-(defn rock-section
-  "The section (cx sy cz, sy the world's section y) as a 4096-cell Uint8Array (store/cell-index), 1 where an unseen cell
-  is guessed rock: more than k blocks from every remembered open cell (known: (fn [cx sy cz]) the memory's ids + 1, or
-  nil; open: open-ids) and every one of seeds ([x y z] cells)."
+(defn- rock-section*
   [known ^js open k cx sy cz seeds]
   (let [n (+ 16 (* 2 k))
         nn (* n n)
@@ -119,9 +128,18 @@
                 (aset out (bit-or cells lx) (- 1 (aget b (+ row lx))))))))
         (or (shaft! known out cx sy cz) out)))))
 
+(defn rock-section
+  "The section (cx sy cz, sy the world's section y) as a 4096-cell Uint8Array (store/cell-index), 1 where an unseen cell
+  is guessed rock: more than k blocks from every remembered open cell (known: (fn [cx sy cz]) the memory's ids + 1, or
+  nil; open: open-ids) and every one of seeds ([x y z] cells), and with spare? not at a height it spares (spare-heights!)."
+  ([known open k cx sy cz seeds] (rock-section known open k cx sy cz seeds nil))
+  ([known ^js open k cx sy cz seeds spare?]
+   (let [out (rock-section* known open k cx sy cz seeds)]
+     (if spare? (spare-heights! out sy spare?) out))))
+
 (defn rock-at
   "(fn [x y z]) true where an unseen cell is guessed rock (rock-section, built once a section)."
-  [{:keys [k known seeds]}]
+  [{:keys [k known seeds spare?]}]
   (let [open (open-ids)
         cache (js/Map.)
         last-key (volatile! nil)
@@ -132,7 +150,7 @@
             ^js r (if (== key @last-key)
                     @last-rock
                     (let [r (or (.get cache key)
-                                (let [r (rock-section known open k cx sy cz seeds)] (.set cache key r) r))]
+                                (let [r (rock-section known open k cx sy cz seeds spare?)] (.set cache key r) r))]
                       (vreset! last-key key)
                       (vreset! last-rock r)))]
         (== 1 (aget r (store/cell-index x y z)))))))

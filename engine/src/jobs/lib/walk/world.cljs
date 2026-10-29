@@ -139,6 +139,14 @@
                   (when-let [solid-at (look/unseen-solid-fn p)]
                     (> (solid-at (:y (sh-sense/feet p)) (inc k)) 0.5))))))
 
+(defn- spare-fn
+  "(fn [y]) whether the rock guess spares the unseen cells at height y: there one ::rock-beyond + 1 from a frontier is no
+  likelier solid than open (look/unseen-solid-fn), as over the feet in daylight."
+  [p]
+  (when-let [solid-at (look/unseen-solid-fn p)]
+    (let [d (inc (rock-beyond))]
+      (memoize (fn [y] (<= (solid-at y d) 0.5))))))
+
 (defn- rock-seeds
   "The cells path-world's rock guess spares for a walk over mask spec unknown: the feet and the spec's seeds (with-seeds)."
   [p ^js unknown]
@@ -153,7 +161,7 @@
   (if-not unknown
     :raw
     (let [rock (when-let [known (and (rock-guess? p unknown) (memory-sections p))]
-                 (rock/rock-at {:k (rock-beyond) :known (memory-sections p) :seeds (rock-seeds p unknown)}))
+                 (rock/rock-at {:k (rock-beyond) :known (memory-sections p) :seeds (rock-seeds p unknown) :spare? (spare-fn p)}))
           ^js blocked (.-blocked unknown)
           blocked (when (and blocked (pos? (.-size blocked))) blocked)]
       (if (or rock blocked)
@@ -177,7 +185,7 @@
   or felt read void_air (its known cells as remembered, however old), and the snapshot carries the planner's options.unknown:
   the spec with the mask's id, changed (memory-age/changed-fn: the chance a remembered cell changed), cell (unseen-share), seeDepth (from what the body holds now) and seeLit (look/see-lit-fn). Where
   the rock guess holds (rock-guess?), an unseen cell past ::rock-beyond of every seen open cell, the
-  feet and the spec's seeds (with-seeds) reads stone (jobs.lib.walk.rock), or with the spec's rockEdge the loaded edge (a
+  feet and the spec's seeds (with-seeds), at a height the guess does not spare (spare-fn), reads stone (jobs.lib.walk.rock), or with the spec's rockEdge the loaded edge (a
   frontier, the snapshot's edge); the mask's rockBeyond says so (0: none)."
   ([p] (path-world p nil))
   ([p unknown]
@@ -196,7 +204,7 @@
          (let [pw (js/Object.assign #js {:table table :space space/space} pw)]
            (when k
              (set! (.-snapshot pw) (rock/with-rock (.-snapshot pw) {:mask (.-id mask) :stone (if (.-rockEdge unknown) unloaded-id stone) :edge (true? (.-rockEdge unknown))
-                                                                    :k k :known (memory-sections p) :seeds (rock-seeds p unknown)})))
+                                                                    :k k :known (memory-sections p) :seeds (rock-seeds p unknown) :spare? (spare-fn p)})))
            pw))))))
 
 (defn unknown-of

@@ -12,6 +12,7 @@
             [engine.settings :as settings]
             [engine.test-util :as tu :refer [box]]
             [jobs.lib.cost :as cost]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.lib.look :as look]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.rock :as rock]
@@ -145,6 +146,16 @@
     (is (false? (rock? known [[40 60 -9]] [42 58 -11])) "2 from a seed")
     (is (identical? rock/all-rock (rock/rock-section (memory-of []) (rock/open-ids) 3 0 4 0 [])) "nothing seen near: all rock")))
 
+(deftest an-unseen-cell-is-no-rock-at-a-height-the-prior-spares
+  (let [known (memory-of [[5 66 5]])
+        rock? (fn [spare? [x y z]]
+                (== 1 (aget (rock/rock-section known (rock/open-ids) 3 0 4 0 [] spare?) (bit-or (bit-shift-left (bit-and y 15) 8) (bit-shift-left z 4) x))))
+        over-70? #(> % 70)]
+    (is (true? (rock? nil [5 75 5])) "past 3 of every seen open cell")
+    (is (false? (rock? over-70? [5 75 5])) "a height spared")
+    (is (true? (rock? over-70? [5 70 5])) "a height not spared")
+    (is (zero? (aget (rock/rock-section (memory-of []) (rock/open-ids) 3 0 4 0 [] over-70?) (bit-shift-left 12 8))) "nothing seen near: spared all the same")))
+
 (def ladder-id (delay (first (blocks/state-ids (blocks/default-state-table) "ladder"))))
 (def stone-id (delay (first (blocks/state-ids (blocks/default-state-table) "stone"))))
 
@@ -247,8 +258,8 @@
         (wworld/way-counts w)
         (is (= 2 @n) "a block seen to change counts again")))))
 
-(defn- looked-round
-  "rock-guess? of a body in world at light [sky block] after sight passes facing each of yaws."
+(defn- looked-round-body
+  "A body in world at light [sky block] after sight passes facing each of yaws."
   [world light yaws]
   (let [p (tu/fake (dissoc world :now))
         _ (swap! (fake/state p) assoc :light-default light)
@@ -257,7 +268,20 @@
         w (perception/wrap p per)]
     (aset w "rawWorld" raw)
     (doseq [yaw yaws] (swap! (fake/state p) assoc :yaw yaw) (perception/pass! per))
-    (wworld/rock-guess? w (wworld/unknown-spec))))
+    w))
+
+(defn- looked-round
+  "rock-guess? of a body in world at light [sky block] after sight passes facing each of yaws."
+  [world light yaws]
+  (wworld/rock-guess? (looked-round-body world light yaws) (wworld/unknown-spec)))
+
+(deftest a-lit-body-guesses-no-rock-over-its-head-where-the-prior-holds-it-open
+  (let [w (looked-round-body {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (box -12 63 -12 12 63 12 "stone")} [0 14] [270])
+        kind (wworld/unseen-kind w (wworld/unknown-spec))]
+    (is (true? (wworld/rock-guess? w (wworld/unknown-spec))))
+    (is (true? (dig-look/unknown? w [-10 72 0])))
+    (is (= :ground (kind -10 72 0)) "8 over the feet, behind the body: lit, mostly open")
+    (is (= :solid (kind -10 56 0)) "under the floor: rock")))
 
 (defn- room
   "A body on the floor of an open room x 0..(sx-1), y 0..(sy-1) over its feet, z 0..(sz-1), in a stone mass, feet at y."
