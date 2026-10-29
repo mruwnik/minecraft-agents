@@ -101,8 +101,8 @@
     {:block "oak_door" :facing :north :half :lower} {[-1 64 0] "stone"} :no-support
     {:block "oak_door" :facing :north :half :lower} (assoc floor [0 65 0] "stone") :no-room
     {:block "white_bed" :facing :south :part :foot} (assoc floor [0 64 1] "stone") :no-room
-    {:block "oak_door" :facing :north :half :lower} (assoc floor [0 65 0] :unloaded) :no-support
-    {:block "white_bed" :facing :south :part :foot} (assoc floor [0 64 1] :unloaded) :no-support))
+    {:block "oak_door" :facing :north :half :lower} (assoc floor [0 65 0] :unloaded) :never-seen
+    {:block "white_bed" :facing :south :part :foot} (assoc floor [0 64 1] :unloaded) :never-seen))
 
 (deftest front-blocks-face-the-placer-and-chests-never-join-by-accident
   (are [want cells out] (= out (click want cells))

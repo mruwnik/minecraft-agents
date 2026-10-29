@@ -84,9 +84,9 @@
 (defn sturdy? [block] (and (clickable? block) (not (re-find thin (:name block)))))
 (defn free? [block] (and block (contains? loose (:name block))))
 (defn room-refusal
-  "Why the cell next to a placement is no room: :no-support when it was never seen (a look decides), :no-room when it is solid, nil when free."
+  "Why the cell next to a placement is no room: :never-seen when it was never seen (a look decides), :no-room when it is solid, nil when free."
   [block]
-  (cond (nil? block) :no-support (not (free? block)) :no-room))
+  (cond (nil? block) :never-seen (not (free? block)) :no-room))
 (defn usable? [block] (boolean (re-find usable (:name block))))
 
 (defn cursor
@@ -243,7 +243,7 @@
   {:x :y :z} (nil: any) in a world block-at ([x y z] -> nil when unloaded | {:name n}):
   {:item i :click {:against [x y z] :cursor [cx cy cz] :yaw :pitch :sneak}} (cursor on the against block, 0..1;
   :yaw, :pitch, :sneak only when they matter), {:item i} to place plainly, or {:item i :refused reason}:
-  :other-half, :opened, :double-slab, :no-support (no neighbour gives the state, or the cell a door or bed needs was never seen), :no-room."
+  :other-half, :opened, :double-slab, :no-support (no neighbour gives the state), :never-seen (the cell a door or bed needs was not seen), :no-room."
   [want cell eye block-at]
   (let [want (if (string? want) {:block want} want)]
     (decide (family (:block want)) want cell {:eye eye :block-at block-at})))

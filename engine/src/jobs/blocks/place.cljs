@@ -261,6 +261,10 @@
         "no-item" "the item is not carried"
         (str "the primitive answered " (.-status r)))))
 
+(def refusal-text
+  "The words for a placement refusal that its keyword does not say."
+  {:never-seen "the cell it needs beside it was never seen"})
+
 (defn click-for
   "{:click} of the call's :click, else the one that turns a :facing block (jobs.lib.placement); {:refused kw} when no
   click gives that facing; {} to place plainly. A bed with no :facing takes the first direction its head has room in."
@@ -286,7 +290,7 @@
         {:keys [click refused]} (click-for c pos item)]
     (if refused
       (stop! c :nothing-possible {:placed false :pos pos :item item :reason :failed
-                                  :why (str "no way to place " item (some->> (:facing (:args c)) (str " facing ")) ": " (name refused))})
+                                  :why (str "no way to place " item (some->> (:facing (:args c)) (str " facing ")) ": " (get refusal-text refused (name refused)))})
       (let [r (await (tidy/place! c pos item false (some-> click placement/js-click)))]
         (case (.-status r)
           "placed" (finish! c :done nil (cond-> {:placed true :pos pos :item item :reason :placed}

@@ -588,6 +588,18 @@
               scooped (await (tu/child-outcome (:eng env) use-on {:on at :item "bucket"} 40))]
           (is (= [:stopped :missing] [(:status scooped) (:reason scooped)])))))))
 
+(deftest a-bed-whose-head-cell-was-never-seen-says-so-not-no-support
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (bd/setup {:self body :inventory [{:name "white_bed" :count 1}]})
+              sensed (.-sensedAt p)]
+          (aset p "sensedAt" (fn [q] (if (= [2 64 1] [(.-x q) (.-y q) (.-z q)]) #js {:unknown true :pos q} (sensed q))))
+          (let [result (await (tu/child-outcome eng job {:pos [2 64 0] :item "white_bed" :facing "south"} 5))]
+            (is (= :stopped (:status result)))
+            (is (re-find #"never seen" (str (:why result))))
+            (is (not (re-find #"no-support" (str (:why result)))))))))))
+
 (deftest a-bed-with-no-facing-turns-to-the-side-its-head-has-room
   (async done
     (tu/run-async done

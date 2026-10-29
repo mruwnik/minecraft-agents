@@ -128,10 +128,10 @@
     (filter (fn [[x y z]] (sees? x y z)) (reaching c stands pos))))
 
 (defn support-looks
-  "[cell neighbour] pairs: a cell refused :no-support with a neighbour never seen and not yet looked at."
+  "[cell neighbour] pairs: a cell refused :no-support or :never-seen with a neighbour never seen and not yet looked at."
   [c cells]
   (let [done (set (:support-looked (ctx/mem c)))
-        refused (set (keys (filter (comp #{:no-support} val) (:unplaceable (ctx/mem c)))))]
+        refused (set (keys (filter (comp #{:no-support :never-seen} val) (:unplaceable (ctx/mem c)))))]
     (vec (for [cell cells :when (refused (:pos cell))
                n (plan/unseen-support c (:pos cell) (plan/fill-depth c)) :when (not (done n))]
            [cell n]))))
