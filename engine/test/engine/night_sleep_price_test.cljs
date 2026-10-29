@@ -71,6 +71,21 @@
           (is (empty? (st/calls p "sleep")))
           (is (seq (placed p "dirt")) "walled in where it stands"))))))
 
+(deftest sheltering-where-nothing-can-shut-the-body-in-is-priced-as-the-night-in-the-open
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [shelter (fn ^:async s [inventory]
+                        (let [{:keys [eng p seen]} (st/setup {:time night :blocks {"2,64,0" "red_bed"} :inventory inventory :players ["Alex" "Bo" "Cy"]})]
+                          (st/know-bed! eng {:x 2 :y 64 :z 0})
+                          (core/submit! eng '(jobs.survival.night) {})
+                          (await (tick-until eng #(seq (st/emitted seen :night.answers)) 20))
+                          (get-in (first (st/emitted seen :night.answers)) [:prices :shelter])))
+              walls (await (shelter st/wall-stack))
+              none (await (shelter []))]
+          (is (number? walls))
+          (is (< walls none) "no blocks and stone underfoot: shut-in quotes no way, so the stay is open all night"))))))
+
 (deftest a-bed-that-is-no-longer-there-is-seen-as-gone
   (let [{:keys [p]} (st/setup {:time night :blocks {"2,64,0" "red_bed" "3,64,0" "dirt"}})]
     (is (false? (bed-down/bed-gone? p {:x 2 :y 64 :z 0})))

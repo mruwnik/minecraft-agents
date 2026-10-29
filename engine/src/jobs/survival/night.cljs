@@ -248,15 +248,6 @@
   [closed-chance dig-in-s]
   (if (or (>= closed-chance 1) (infinite? dig-in-s)) 0 (* (- 1 closed-chance) dig-in-s)))
 
-(defn ^:async dig-in-seconds
-  "Seconds shut-in's quote of digging in here (a wall or a pit) takes, ##Inf when it quotes none: what a walk to a roofed place is weighed against."
-  [c]
-  (await (pick/once! c :dig-in
-                (fn ^:async f []
-                  (let [q (await (ctx/quote c 'jobs.survival.shut-in {:ways #{:walls :pit} :for :night :settings {:jobs.survival.wall-in/wall-value (sites/wall-value)}}))
-                        mean (second (get-in q [:uses :job-time]))]
-                    (if (number? mean) mean ##Inf))))))
-
 (defn room-chance
   "The chance the room at pose is closed: 1 for a closed room, cost/closed-chance of its sides seen and unseen for a room
   not seen inside yet (an opening can only be in a side), nil for any other."
@@ -275,7 +266,7 @@
         chances (atom {})
         chance (fn [pose] (get (swap! chances #(if (contains? % pose) % (assoc % pose (room-chance p pose)))) pose))]
     (when (seq poses)
-      (let [dig-s (await (dig-in-seconds c))
+      (let [dig-s (await (bed-down/dig-in-s c))
             walk #(enter-room/walk-args {:pos %})
             best (await (cheapest-walk! c poses {:target walk :walk walk :limit-s limit-s :ok? #(some? (chance %))
                                                  :price (fn [pose s] (+ s (open-room-cost (chance pose) dig-s)))}))]
@@ -295,7 +286,7 @@
         budget (sites/home-walk-budget-s p)
         fits (fn ^:async fits [args] (when-let [s (await (walk-seconds c args))] (<= s budget)))]
     (if (seq places)
-      (let [limit (if by-dig? (min budget (await (dig-in-seconds c))) budget)
+      (let [limit (if by-dig? (min budget (await (bed-down/dig-in-s c))) budget)
             best (await (cheapest-walk! c places {:target place-walk-target :walk enter-room/walk-args :limit-s limit}))]
         (cond
           (= :searching best) :searching
@@ -450,12 +441,12 @@
 
 (defn ^:async shelter!
   "No bed, nobody asleep, not roofed: dig in here (dig-in!), shut-in pricing a walk into the roofed place whose walk go-to quotes cheapest
-  (cheapest-walk!, only those no dearer than digging in is quoted, dig-in-seconds); a quote still searching waits a pass."
+  (cheapest-walk!, only those no dearer than digging in is quoted, bed-down/dig-in-s); a quote still searching waits a pass."
   [c]
   (hold/busy! c)
   (let [places (when-not (:roof-walk-failed (ctx/mem c))
                  (await (sense/decide! c ::roofed-place #(seq (room-lib/roofed-places-in c (:args c) ##Inf)) {:verify-guesses true})))
-        pick (when (seq places) (await (cheapest-walk! c places {:target place-walk-target :walk enter-room/walk-args :limit-s (await (dig-in-seconds c))})))]
+        pick (when (seq places) (await (cheapest-walk! c places {:target place-walk-target :walk enter-room/walk-args :limit-s (await (bed-down/dig-in-s c))})))]
     (if (= :searching pick)
       :again
       (await (dig-in! c (:name (:pick pick)))))))
@@ -683,7 +674,7 @@
             bed-wanted (and bed-way (carried-bed-wanted? c))
             door (sh/open-room-door p (ctx/view c))
             home (when-not roofed (await (walkable-home c (not bed) (not (or bed bed-wanted)))))
-            dig-s (if (and (map? home) (not (:seen home)) (not (or bed bed-wanted))) (await (dig-in-seconds c)) ##Inf)
+            dig-s (if (and (map? home) (not (:seen home)) (not (or bed bed-wanted))) (await (bed-down/dig-in-s c)) ##Inf)
             go-home (when (and (map? home) (walk-home-wanted? c)
                                (cond
                                  (:seen home) true

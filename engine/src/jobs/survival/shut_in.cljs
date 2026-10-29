@@ -42,7 +42,7 @@
   shut-in.sealed (when it placed blocks and the world shows the body shut in, with :spent; a warning when :resealed) or shut-in.unsealed (warning, naming the open
   cells); and for a way that failed on the site a :shut-in-failed {:pos :way :reason} entry (cap 5, ten
   minutes; none for a lack of blocks or of a tool, or a hostile near), after which that way is dropped within ::futile-radius of it (jobs.survival.shut-in-night), except the pit, which walks to another site (jobs.survival.dig-pit-site).
-  Quote: time.")
+  Quote: time, the cheapest way's price (quote-of).")
 
 (a/defargs args
   {:ignore-zones? :shared
@@ -77,9 +77,6 @@
 
 (defn done? [c] (way/done? c (:way (ctx/mem c)) (merge (spent/summary (spent/log c)) (select-keys (ctx/mem c) [:placed :roof :start]))))
 
-(defn quote-of [c]
-  (let [mean (if (way/enclosed? c) 0 (settings/get settings ::mean-s))]
-    {:uses {:job-time [0 mean (max (* 3 mean) (settings/get settings ::job-time-s))]} :done [0 1 1]}))
 
 (defn child-args [c way]
   (merge (select-keys (:args c) (second (children way)))
@@ -151,23 +148,38 @@
         broken (* (threat/door-break-chance mob-names (some-> (:primitives c) .self threat/clock-of)) (max 0 (- quiet threat/door-break-s)))]
     {:open-s (+ s (if unseen? quiet broken)) :seconds (+ s quiet)}))
 
-(defn ^:async choose
-  "{:way the cheapest allowed way not failed (nil when none) :dropped [ways that cannot be done]}: quoted seconds, under
-  fire plus what each way's seconds in the open cost (price)."
+(defn ^:async way-costs
+  "{:costs [[way price]] of the allowed ways not failed or barred :barred [ways failed near, for :night] :exposure f}: each
+  way's quoted seconds, under fire plus what its seconds in the open cost (price); ##Inf for one that cannot be done here."
   [c]
   (let [failed (set (:failed-ways (ctx/mem c)))
         allowed (remove failed (filter #(ctx/way? c %) ways))
         barred (if (night/night? c) (filter #(and (not= :pit %) (night/failed-near c %)) allowed) [])
         left (remove (set barred) allowed)
-        f (exposure c)
-        costs (loop [[w & more] left acc []]
-                (if (nil? w) acc (recur more (conj acc [w (price c f w (await (cost-of c w)))]))))
+        f (exposure c)]
+    {:costs (loop [[w & more] left acc []]
+              (if (nil? w) acc (recur more (conj acc [w (price c f w (await (cost-of c w)))]))))
+     :barred (vec barred)
+     :exposure f}))
+
+(defn ^:async quote-of
+  "Time: 0 when the body is enclosed, else ::mean-s or the cheapest way's price (way-costs) when that is dearer, ##Inf when
+  none can be done here."
+  [c]
+  (let [s (if (way/enclosed? c) 0 (max (settings/get settings ::mean-s) (reduce min ##Inf (map second (:costs (await (way-costs c)))))))]
+    {:uses {:job-time [s s (max (* 3 s) (settings/get settings ::job-time-s))]} :done (if (infinite? s) [0 0 0] [0 1 1])}))
+
+(defn ^:async choose
+  "{:way the cheapest allowed way not failed (nil when none) :dropped [ways that cannot be done]}: way-costs, the cheapest
+  finite."
+  [c]
+  (let [{:keys [costs barred exposure]} (await (way-costs c))
         able (remove (comp infinite? second) costs)]
     (let [shown (into {} (map (fn [[w s]] [w (if (infinite? s) :inf (/ (js/Math.round (* 10 s)) 10))]) costs))]
-      (ctx/emit! c :shut-in.quotes :debug {:costs shown :exposure f :text (str "ways quoted (seconds): " (pr-str shown))}))
+      (ctx/emit! c :shut-in.quotes :debug {:costs shown :exposure exposure :text (str "ways quoted (seconds): " (pr-str shown))}))
     {:way (first (first (sort-by second able)))
-     :barred (vec barred)
-     :dropped (into (vec barred) (map first (filter (comp infinite? second) costs)))}))
+     :barred barred
+     :dropped (into barred (map first (filter (comp infinite? second) costs)))}))
 
 (defn end!
   "The call's ending with what the children placed; with :for :night the shelter entry and events first."

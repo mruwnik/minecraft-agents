@@ -185,7 +185,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (st/setup {:time night :blocks {"20,64,0" "red_bed"} :inventory st/dirt-stack :players ["Alex" "Bo" "Cy"]})]
+        (let [{:keys [eng p seen]} (st/setup {:time night :blocks {"20,64,0" "red_bed"} :inventory st/wall-stack :players ["Alex" "Bo" "Cy"]})]
           (st/know-bed! eng {:x 20 :y 64 :z 0})
           (core/submit! eng '(jobs.survival.night) {})
           (await (tu/run-until-empty eng 40))

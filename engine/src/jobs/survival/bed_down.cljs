@@ -30,6 +30,8 @@
             [jobs.lib.tidy-rules :as tidy-rules]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.util :as u]
+            [jobs.lib.walk-pick :as pick]
+            [jobs.survival.night.sites :as sites]
             [jobs.survival.shut-in-night :as sin]
             [jobs.survival.wall-in :as wall-in]))
 
@@ -127,14 +129,25 @@
       (assoc body :respawn (:pos (:data slept)))
       body)))
 
+(defn ^:async dig-in-s
+  "Seconds shut-in's quote of digging in here (a wall or a pit) takes, ##Inf when it quotes none (asked once a pass,
+  walk-pick/once!)."
+  [c]
+  (await (pick/once! c :dig-in
+                     (fn ^:async f []
+                       (let [q (await (ctx/quote c 'jobs.survival.shut-in {:ways #{:walls :pit} :for :night :settings {:jobs.survival.wall-in/wall-value (sites/wall-value)}}))
+                             mean (second (get-in q [:uses :job-time]))]
+                         (if (number? mean) mean ##Inf))))))
+
 (defn ^:async answers
   "{answer seconds}: the ways through the night from here, each priced as the night's seconds it loses, the hp it risks
   (exposed-price) and, where it sets the respawn point, less cost/spawn-worth there (a body asleep has set it already).
   :bed lying in `bed` (nil: the carried bed put down here, or the bed the body is asleep in): the night left lost unless
   the body's sleep skips it (sh-sleepers/sleepers-short 0), open (not sh-beds/bed-sheltered?) all that time, plus walk-s (the walk
   there, priced by the caller). :sealed (a carried bed in the open, seal-plan): the bed's row shut in first, its seconds
-  exposed, then lain in. :shelter sheltering here, from the worst of the cells the bed is got up to (wake-cells) when asleep (sh/shelter-here-s exposed; a body sh/in-ground? works on after, else
-  the night left is lost). :log-out (log-out?): jobs.survival.log-out's quoted seconds, the night left to the sleepers."
+  exposed, then lain in. :shelter sheltering here, from the worst of the cells the bed is got up to (wake-cells) when asleep, exposed
+  for dig-in-s (shut-in's quote; the whole night left when it has no way); a body sh/in-ground? works on after, else the night left
+  is lost. :log-out (log-out?): jobs.survival.log-out's quoted seconds, the night left to the sleepers."
   [c {:keys [bed walk-s log-out?]}]
   (let [p (:primitives c)
         view (ctx/view c)
@@ -149,7 +162,7 @@
         sheltered? (if (or bed asleep?) (sh-beds/bed-sheltered? p at) (or (sh-beds/bed-sheltered? p feet) (some? (sh-beds/closed-home c))))
         body (respawn-body c)
         sealed (when (and carried? (not sheltered?)) (seal-plan c))
-        shelter-s (min left (sh/shelter-here-s))
+        shelter-s (min left (await (dig-in-s c)))
         out-s (when log-out? (get-in (await (ctx/quote c 'jobs.survival.log-out {})) [:uses :job-time 1]))]
     (cond-> {:shelter (+ (if (sh/in-ground? p view) shelter-s left) (apply max (map #(exposed-price c (spawn-light/night-chance p %) shelter-s %) stands)))}
       (or bed asleep? carried?) (assoc :bed (+ (or walk-s 0) lost (if sheltered? 0 (exposed-price c chance lost at)) (if asleep? 0 (- (cost/spawn-worth body at)))))
