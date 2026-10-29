@@ -129,9 +129,13 @@
 
 (defn worth-of
   "The loss the night averts: the night left in the open where the body stands (open-price of stand-cells), its hurt and
-  death at cost/hp-price."
+  death at cost/hp-price, plus the night left itself when the body's own sleep skips it (sleepers-short 0: the time that
+  skip saves)."
   [c]
-  (open-price c (stand-cells (:primitives c)) (second (get-in (sh-clock/night-left-quote c) [:uses :job-time]))))
+  (let [p (:primitives c)
+        left (second (get-in (sh-clock/night-left-quote c) [:uses :job-time]))
+        skipped (if (zero? (sh-sleepers/sleepers-short p (ctx/view c))) left 0)]
+    (+ skipped (open-price c (stand-cells p) left))))
 
 (defn respawn-body
   "threats/death-body, its :respawn the bed slept in last when that came after the latest :spawn-bed (lying down sets

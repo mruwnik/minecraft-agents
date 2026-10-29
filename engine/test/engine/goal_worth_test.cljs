@@ -9,6 +9,7 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [jobs.lib.cost :as cost]
+            [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.world-files :as world]))
 
 (defn ctx-of
@@ -85,3 +86,12 @@
                          {:engine {:world (world/of-data {"forest" forest} {} []) :warned (atom #{})}})]
     (is (= (:value (cost/goal-value [(item "oak_log" 4)])) (forestry oak-world)))
     (is (= ##Inf (forestry {:blocks {"3,63,0" "dirt"} :inventory [(item "oak_sapling" 1)]})) "planting has no price")))
+
+(deftest the-night-is-worth-its-exposure-and-the-time-a-sleep-that-skips-it-saves
+  (let [night (fn [status] (worth 'jobs.survival.night (tu/seeing-all (tu/fake-on-floor {:time 14000})) {}
+                                  {:view (fn [] {:now 100000 :data {:entries {:sleep-status [{:t 99000 :data status}]}}})}))
+        alone (night {:sleeping 0 :needed 1})
+        short (night {:sleeping 0 :needed 4})
+        left (second (get-in (sh-clock/night-left-quote {:primitives (tu/fake {:time 14000})}) [:uses :job-time]))]
+    (is (pos? left))
+    (is (< (Math/abs (- left (- alone short))) 1e-6) "alone the sleep skips the night: its seconds are worth saving; three short it skips nothing")))
