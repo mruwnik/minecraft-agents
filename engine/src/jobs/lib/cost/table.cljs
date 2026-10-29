@@ -26,10 +26,10 @@
    :food-point-s 2
    :farm-s 4
    :min-drop-chance 0.05
-   :drop-chance {"apple" 0.005 "wheat_seeds" 0.125}
+   :drop-chance {"apple" 0.005 "wheat_seeds" 0.125 "stick" 0.02} ;; vanilla's, where minecraft-data lists 1 (leaves' sticks)
    :dig {:hardness-s 1.5 :unfit-s 5 :max-hardness 5 :min-s 0.25 :default-tier 2} ;; seconds of dig per hardness at speed 1: 30 ticks with the block's tool tier, 100 without (vanilla)
    :find {:terrain 0.1
-          :wood 12 ;; a log, stem, hyphae, wood or bamboo block: the walk to a tree
+          :wood 12 ;; a log, stem, hyphae, wood or bamboo block, or bamboo itself (jungles alone): the walk to a tree
           :block {"gilded_blackstone" 300}
           :ore-by-tier {1 10 2 30 3 300 4 300}
           ;; seconds of looking per unit of the best layer's ore density (base-rates/peak-density): find = this / density.
@@ -97,7 +97,7 @@
     (some (fn [e] (when (= name (.-item e)) (* (.-dropChance e) (mean-range (.-stackSizeRange e)))))
           (some-> (aget (.-entityLoot md) mob) .-drops array-seq))))
 
-(defn wood-block? [name] (boolean (re-find #"(_log|_stem|_wood|_hyphae|^bamboo_block)$" name)))
+(defn wood-block? [name] (boolean (re-find #"(_log|_stem|_wood|_hyphae|^bamboo_block|^bamboo|^bamboo_sapling)$" name)))
 
 (defn ore-find-seconds
   "Seconds to find ore: its hand figure, else :ore-scan-s over the density of its best layer (nil: no placement)."

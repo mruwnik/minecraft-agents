@@ -585,6 +585,11 @@
     (is (= (:value (cost/item-value [{:name "chicken" :count (cost/kill-drops "chicken" "chicken")}])) (cost/animal-worth "chicken"))
         "a kill counts the drops the game data lists, not a flat count")))
 
+(deftest a-stick-is-worth-its-share-of-the-planks-it-is-made-of
+  (let [worth #(:value (cost/item-value [{:name % :count 1}]))]
+    (is (<= (/ (* 2 (worth "oak_planks")) 4) (worth "stick"))
+        "not a leaf's (vanilla drops one 1 in 50, not every time) nor bamboo's, which grows in jungles alone")))
+
 (deftest a-look-for-animals-pays-less-the-more-ground-round-it-showed-none
   (let [note (fn [x z] {:kind :searched :what ["sheep"] :pos [x 64 z] :r 24})
         first-look (cost/look-chance [] ["sheep"] [0 0] 24)

@@ -9,7 +9,7 @@
     block        A block's drops (blockLoot, no silk touch, chance at least :min-drop-chance): (dig + find) / drops.
                  dig = hardness x :hardness-s / the speed of the stone tool (the block's own tier if higher; the base assumes a
                  tool, never the hand);
-                 find = :terrain, :wood for a log, stem or bamboo block, or :ores {ore [find drops]} (a nil find: :ore-scan-s over the base-rates density of the ore's best layer), or :find-s for a block. Crafted blocks are no source
+                 find = :terrain, :wood for a log, stem, bamboo or bamboo block, or :ores {ore [find drops]} (a nil find: :ore-scan-s over the base-rates density of the ore's best layer), or :find-s for a block. Crafted blocks are no source
                  except :natural ones (granite, clay ...); a block that is no item (redstone_wire) is none.
     crop         A block with an age state: :farm-s / the age-7 yield.
     mob          entityLoot of the mobs in weapon/mob-max-health and passive-max-health: (kill + hurt + find) / expected
