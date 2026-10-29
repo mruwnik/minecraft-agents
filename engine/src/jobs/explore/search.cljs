@@ -40,8 +40,9 @@
   the spot (:searched) (engine.notes). Blocks the body saw earlier anywhere within the max-distance setting of the origin count as
   found too, nearest first. It ends when :count are found. Otherwise it walks the next leg with
   jobs.movement.go-to as a child (range 2). One call is the whole search; it yields (:continue) only while go-to waits
-  on the world, for leg columns to load (:chunks-loading), or (waiting :dark, the leg kept) when go-to gave a leg up because the
-  body is sealed in its own shelter under a dark sky.
+  on the world, for leg columns to load (:chunks-loading), or (waiting :dark, the leg kept) while the body is shut in a hut or its own shelter whose way out is dark till dawn.
+
+  With no leg left and the body shut in a closed room, it digs out: a leg to the nearest column not yet tried (go-to's :clear-seal), priced and weighed against waiting for dawn by go-to like any walk.
 
   Under rock a step toward an unseen column is only taken to a seen open cell (a tunnel or cave), never at feet height into unseen rock: the search then ends :distance when no tunnel leads on.
 
@@ -71,7 +72,7 @@
   The ending's data: {:found [{:what :pos :id? (the uuid) :entity-id? (the number entities and combat.attack use) :noted? :by?}] :coverage {:legs :scans
   :failed [{:pos :reason}] :skipped :farthest} :why :text} and the ending:
   - :done: :count found.
-  - :nothing-possible :distance (no leg left), :no-way-out (no leg left, the body shut in a closed room with nothing seen outside; at night it first waits :dark for dawn while that costs no more than the find is worth), :no-way-up (animals that live at the surface, the body under rock and no stair up), :legs (::max-legs walked), :stuck (three failed walks in a row) or :price (with :worth, the next walk costs more than is left of it times the chance a look there finds one, cost/look-leg-chance: farm animals' falls with the ground searched round there in vain, ore's is that of the rock seen; 1 for other blocks).
+  - :nothing-possible :distance (no leg left), :no-way-out (no leg left, none walked, and the body shut in a closed room with no column left to dig out toward), :no-way-up (animals that live at the surface, the body under rock and no stair up), :legs (::max-legs walked), :stuck (three failed walks in a row) or :price (with :worth, the next walk costs more than is left of it times the chance a look there finds one, cost/look-leg-chance: farm animals' falls with the ground searched round there in vain, ore's is that of the rock seen; 1 for other blocks).
   - :limit-reached :job-time (the call's :spend :job-time, default ::job-time-s) or :wall-time (default ::wall-time-s); the engine ends it, with the data of done? ({:found :coverage :why}) and neither event; with :least targets found (default 1) the engine ends it :done instead.
   - A call with no :target and no :patch never runs (:bad-args).
 
@@ -604,16 +605,21 @@
   (let [s (ready/sheltered-dark c)]
     (when (= :later (first s)) s)))
 
-(defn shut-in-wait
-  "Later :dark while no leg is left and the body is shut in a closed room under a dark sky (sh-inside/night-sheltered): nothing
-  is seen outside to walk to and dawn is the cheapest way to see it, the night's seconds left (sh-sense/sky-in) against what
-  the find is worth (cost/affords?, unpriced: always); else nil."
-  [c]
-  (let [p (:primitives c)
-        wait-s (when (sh-inside/night-sheltered p (:data (ctx/latest c :shelter))) (sh-sense/sky-in p))]
-    (when (and wait-s (pos? wait-s) (or (nil? (:worth (:args c))) (cost/affords? wait-s (:worth (:args c)))))
-      (contract/later :dark "shut in a room at night with no way out seen, waits for dawn to look outside"
-                      :recheck-after-ms (* 1000 wait-s) :wait-ms (* 1000 wait-s)))))
+(defn dig-out-leg
+  "{:leg [x y z] :column [x z]} toward the nearest column of the sweep that is not tried, searched or beyond the max-distance,
+  at the feet's height: where a body shut in a closed room with no leg left digs out to (go-to's :clear-seal way, priced
+  and weighed against waiting like any walk), nil when none is left."
+  [c m names ns]
+  (let [[ox y oz] (here c)
+        origin [((:origin m) 0) ((:origin m) 2)]
+        tried (set (:tried m))
+        covering (searched-notes c m ns)]
+    (->> (candidates c m)
+         (remove #(or (tried %) (= % [ox oz]) (> (xz-dist % origin) (distance-limit c))
+                      (some (fn [n] (notes/covers? n % names)) covering)))
+         (sort-by #(xz-dist [ox oz] %))
+         first
+         (#(when % {:leg [(% 0) y (% 1)] :column %})))))
 
 (defn ^:async walk!
   "One go-to call toward the leg (the last one before the failed legs in a row end the search may dig out); on its end book the leg arrived or failed. :continue when go-to yields or
@@ -727,9 +733,12 @@
               more :again
               (and (empty? unloaded) (pos? held)) (do (ctx/update-mem! c dissoc :blocked) :again)
               (and (empty? unloaded) (sh-sense/shut-in-room? (:primitives c)))
-              (if-let [w (shut-in-wait c)]
-                (do (some-> (:child-wait c) (reset! (contract/status-cause w))) :continue)
-                (finish! c :not-found :no-way-out))
+              (if-let [{:keys [leg column]} (dig-out-leg c m names ns)]
+                (or (await (price-leg! c leg false))
+                    (do (ctx/update-mem! c (fn [m] (-> m (assoc :leg leg :leg-column column) (update :tried (fnil conj []) column) (update :legs (fnil inc 0)))))
+                        (note-leg-start! c leg)
+                        (await (walk! c))))
+                (finish! c :not-found (if (zero? (:legs m 0)) :no-way-out :distance)))
               (empty? unloaded) (finish! c :not-found :distance)
               (far-unloaded c unloaded) (or (await (price-leg! c (far-unloaded c unloaded) false))
                                             (do (ctx/update-mem! c assoc :leg (far-unloaded c unloaded) :leg-column nil)

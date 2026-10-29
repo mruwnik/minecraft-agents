@@ -680,7 +680,7 @@
           (let [ps (map :pos (get-in e [:coverage :failed]))]
             (is (= (count ps) (count (set ps))) "a column whose step failed is not stepped toward again")))))))
 
-(deftest a-body-under-rock-never-steps-into-unseen-rock-toward-an-unseen-column
+(deftest a-body-in-a-closed-pocket-steps-no-unseen-column-but-digs-out-toward-an-untried-one
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -690,7 +690,7 @@
               pocket (merge (tu/box -12 70 -12 12 120 12 "stone") (tu/box 0 80 0 0 81 0 "air"))
               s (await (search! {:target "rail" :max-distance 20} {:self {:pos [0.5 80 0.5]} :blocks pocket} 60 blind-far))]
           (is (finished? s))
-          (is (empty? (walks s)) "no go-to toward a point inside rock"))))))
+          (is (seq (walks s)) "no step into unseen rock, but the closed pocket is dug out of by a priced leg"))))))
 
 (deftest the-last-leg-before-stuck-digs-out-of-a-sealed-pocket
   (async done
@@ -769,14 +769,32 @@
           (is (zero? @calls) "go-to digs out of a hut that is no shelter of its own: it is not asked while the night keeps the seal")
           (is (some #(and (= :waiting (:kind %)) (= :dark (:reason %))) @(:seen s))))))))
 
-(deftest shut-in-wait-prices-the-night-against-the-worth-of-the-find
-  (let [c (fn [worth] {:args {:worth worth}})]
-    (are [worth left expected] (= expected (with-redefs [ctx/latest (constantly nil) sh-inside/night-sheltered (constantly :room) sh-sense/sky-in (constantly left)]
-                                             (some-> (search/shut-in-wait (c worth)) first)))
-      nil 300 :later
-      1000 300 :later
-      100 300 nil
-      nil 0 nil)))
+(deftest a-body-shut-in-a-room-with-no-leg-left-digs-out-toward-an-untried-column
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [asked (atom [])
+              s (with-redefs [sh-sense/shut-in-room? (fn ([_] true) ([_ _] true))
+                              search/choose-leg (fn [_ _ _ _] {:tried [] :failed [] :skipped 0 :held 0 :unloaded []})
+                              child/call-walk* (fn [_ _ a] (swap! asked conj a) (js/Promise.resolve {:kind :done :data {:arrived true}}))]
+                  (await (search! {:target "diamond_block" :max-distance 23} {} 40)))]
+          (is (seq @asked) "a dig-out walk was asked, not :no-way-out at once")
+          (is (every? #(contains? (:ways %) :clear-seal) @asked))
+          (is (not= :no-way-out (:why (not-found-of s)))))))))
+
+(deftest a-search-that-walked-legs-and-stands-shut-in-a-room-ends-distance-not-no-way-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom 0)
+              s (with-redefs [sh-sense/shut-in-room? (fn ([_] true) ([_ _] true))
+                              search/dig-out-leg (constantly nil)
+                              search/choose-leg (fn [_ _ _ _]
+                                                  (let [r {:tried [[16 0]] :failed [] :skipped 0 :held 0 :unloaded []}]
+                                                    (if (= 1 (swap! calls inc)) (assoc r :leg [16 64 0] :column [16 0]) (dissoc r :tried))))
+                              child/call-walk* (fn [_ _ _] (js/Promise.resolve {:kind :done :data {:arrived true}}))]
+                  (await (search! {:target "diamond_block" :max-distance 23} {} 40)))]
+          (is (= :distance (:why (not-found-of s)))))))))
 
 ;; live (Juniper, card e51d1fe9): three legs east all failed at the same rim and the search ended stuck; a leg that lies
 ;; the way a leg just failed from here waits until a leg arrives, so the next leg goes another way
