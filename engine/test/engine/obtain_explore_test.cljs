@@ -130,7 +130,7 @@
           (swap! (fake/state (:p s)) assoc :light (into {} (for [x (range -20 21) z (range -20 21) y (range 64 71)] [[x y z] [0 0]])))
           (await (obtain! s {:worth 500 :item "oak_log" :count 1 :explore true} 900))
           (is (seq (f/events-of s :stair.step)) "a stair was cut up through the roof")
-          (is (every? #(<= 71 (get-in % [:from 1])) (f/events-of s :obtain.exploring)) "no walk to look for trees starts under the roof")
+          (is (every? #(<= 70 (get-in % [:from 1])) (f/events-of s :obtain.exploring)) "no walk to look for trees starts under the roof (the stone tops at y 70: the stair's last cut has its head in the open)")
           (is (<= 1 (get (f/inv s) "oak_log" 0)) "and the tree outside was felled"))))))
 
 (defn rock-room
