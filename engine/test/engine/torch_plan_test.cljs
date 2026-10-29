@@ -68,6 +68,12 @@
     (is (= 3 (spots 4)) "a torch lights 4 cells each way: 9 cells")
     (is (= 1 (spots 13)))))
 
+(deftest a-soul-torch-lights-less-of-a-line-than-a-torch
+  (let [cells (line 60)
+        spots (fn [item] (count (:spots (tp/plan {:cells cells :dark? (constantly true) :open? (open-in cells) :spots cells
+                                                  :spread (tp/reach item)}))))]
+    (is (> (spots "soul_torch") (spots "torch")))))
+
 (deftest light-spreads-over-and-round-a-wall-through-open-air
   (let [open? (fn [[x y z]] (and (<= 0 y 20) (not (and (= x 4) (<= y 3) (not= z 8)))))
         cells (filterv open? (for [x (range 12) z (range 12)] [x 0 z]))

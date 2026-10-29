@@ -38,7 +38,7 @@
 (defn torch-cells
   "Crop cells one torch lights to crops/grow-light: those within the steps its light falls before it is under it."
   []
-  (let [s (- (inc torch-plan/spread) crops/grow-light)]
+  (let [s (- (inc (torch-plan/reach nil)) crops/grow-light)]
     (inc (* 2 s (inc s)))))
 
 (defn water-s

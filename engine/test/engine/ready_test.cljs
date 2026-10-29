@@ -481,7 +481,7 @@
         ctx (fn [ore inv args] (assoc (ctx-of (cond-> (assoc tunnel :time st/noon :inventory inv) ore (assoc-in [:blocks "3,64,1"] "iron_ore")))
                                       :args (merge {:block "iron_ore" :count 1 :radius 4 :torches true :tunnel-length 20 :ways #{:seen :strip-tunnel :carried}} args)))
         tunnel-s (stair-time/steps-s :level 20)]
-    (are [ore args blocks] (= {:blocks blocks :carried 4} (mine-expect/torch-way (ctx ore torches args)))
+    (are [ore args blocks] (= {:blocks blocks :carried 4 :item "torch"} (mine-expect/torch-way (ctx ore torches args)))
       true {} cost/torch-gap
       true {:count 3} (+ cost/torch-gap 20)
       true {:count 3 :block "coal_ore" :tunnel-length 1000} (+ cost/torch-gap 28)
@@ -500,7 +500,7 @@
 (deftest the-torches-of-a-short-carry-cost-a-trip-and-a-tunnel-prices-the-steps-it-has-left
   (let [need (js/Math.ceil (/ 40 cost/torch-gap))]
     (is (= (+ (cost/torch-way-s 40 need) (cost/trip)) (cost/torch-way-s 40 (dec need))) "one torch short fetches")
-    (is (= (strip-tunnel/torch-way (assoc (ctx-of (assoc tunnel :inventory [{:name "torch" :count 4}])) :args {:torches true :limit 40 :steps 40})) {:blocks 0 :carried 4}) "a finished tunnel hangs none")
+    (is (= (strip-tunnel/torch-way (assoc (ctx-of (assoc tunnel :inventory [{:name "torch" :count 4}])) :args {:torches true :limit 40 :steps 40})) {:blocks 0 :carried 4 :item "torch"}) "a finished tunnel hangs none")
     (is (nil? (strip-tunnel/torch-way (assoc (ctx-of (assoc tunnel :inventory [{:name "torch" :count 4}])) :args {:torches true}))) "no limit, no torch way")))
 
 (deftest an-unseen-cell-a-look-would-show-asks-for-a-look-at-it

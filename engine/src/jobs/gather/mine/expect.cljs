@@ -7,6 +7,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look :refer [cell-of]]
             [jobs.lib.stair-time :as stair-time]
+            [jobs.lib.torch :as torch]
             [jobs.lib.torch-stock :as stock]
             [jobs.lib.util :as u]
             [jobs.lib.work-place :as work-place]))
@@ -55,6 +56,6 @@
   and the blocks of the stair it cuts and of its tunnel (run), more torches by its own get; nil when it hangs none."
   [c]
   (let [{:keys [seen down level]} (run c)
-        n (+ (if (seq seen) cost/torch-gap 0) (if (mw/stair? (:args c)) down 0) level)]
+        n (+ (if (seq seen) (cost/torch-gap-of (torch/carried-torch (:primitives c))) 0) (if (mw/stair? (:args c)) down 0) level)]
     (when (and (:torches (:args c)) (pos? n))
       (stock/torch-way c n (stock/fetch-allows? c)))))

@@ -419,15 +419,21 @@
                        :seen (when-let [ore (ore-of names)]
                                (remove beside-own? (look/seen-blocks p {:names (vec (host-blocks ore)) :radius r :max js/Infinity})))})))
 
-(def torch-gap "Blocks of a dark way one torch lights: its light's spread (jobs.lib.torch-plan) to each side." (inc (* 2 torch-plan/spread)))
+(defn torch-gap-of
+  "Blocks of a dark way one torch of item (nil: the plain torch) lights: its light's reach (jobs.lib.torch-plan) to each side."
+  [item]
+  (inc (* 2 (torch-plan/reach item))))
+
+(def torch-gap (torch-gap-of nil))
 
 (defn torch-way-s
-  "Seconds the torches of a way of n blocks lit as it goes cost: one every torch-gap blocks, each its worth and placing
+  "Seconds the torches of a way of n blocks lit as it goes cost: one every torch-gap-of item blocks (nil: the plain torch), each its worth and placing
   (light-cost), and one trip for them when fewer are carried than the way hangs."
-  [n carried]
-  (let [torches (js/Math.ceil (/ n torch-gap))
+  ([n carried] (torch-way-s n carried nil))
+  ([n carried item]
+  (let [torches (js/Math.ceil (/ n (torch-gap-of item)))
         {:keys [torch place]} (:parts (light-cost {:carried 1}))]
-    (+ (* torches (+ torch place)) (if (< carried torches) (trip) 0))))
+    (+ (* torches (+ torch place)) (if (< carried torches) (trip) 0)))))
 
 (defn lit-way-s
   "Seconds a way of s seconds over n blocks costs lit as it goes (the mine's stair and tunnel): s and its torches (torch-way-s, all carried)."
@@ -436,10 +442,10 @@
 
 (defn dark-or-lit
   "{:way :lit or :dark, :dark-s :lit-s}: the cheaper of staying in the dark at a risk of `hurt` hp (each at hp-price of
-  health) and lighting the job's way instead (torch-way-s of `torch-way` {:blocks :carried}; nil: the job hangs none)."
+  health) and lighting the job's way instead (torch-way-s of `torch-way` {:blocks :carried :item}; nil: the job hangs none)."
   [hurt health torch-way]
   (let [dark (* hurt (hp-price health))
-        lit (if torch-way (torch-way-s (:blocks torch-way) (:carried torch-way)) ##Inf)]
+        lit (if torch-way (torch-way-s (:blocks torch-way) (:carried torch-way) (:item torch-way)) ##Inf)]
     {:way (if (< lit dark) :lit :dark) :dark-s dark :lit-s lit}))
 
 (defn dark-way-s

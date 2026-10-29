@@ -66,6 +66,7 @@
           plan (tp/plan {:cells (concat cells ahead)
                          :dark? #(if (ahead? %) (or (nil? feet-light) (<= feet-light 1)) (torch/perceived-dark? p %))
                          :open? #(or (ahead? %) (let [n (u/seen-name p (zipmap [:x :y :z] %))] (and n (not (solid/solid? n)))))
+                         :spread (tp/reach (torch/carried-torch p))
                          :spots [site]
                          :sources (:hung (ctx/mem c))})]
       (first (:spots plan)))))
@@ -80,7 +81,7 @@
         n (:steps tunnel 0)
         cell #(vec-of (step-cell tunnel %))]
     (when (and (on? c) (on-line? c))
-      (due-spot c (map cell (range (max 0 (- n tp/spread)) (inc n))) [(cell (inc n))] (cell (dec n))))))
+      (due-spot c (map cell (range (max 0 (- n (tp/reach (torch/carried-torch (:primitives c))))) (inc n))) [(cell (inc n))] (cell (dec n))))))
 
 (defn torch-due? [c] (some? (tunnel-spot c)))
 

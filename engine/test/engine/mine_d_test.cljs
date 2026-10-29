@@ -142,7 +142,8 @@
       (fn ^:async t []
         (let [world (torch-world [{:name "iron_pickaxe" :count 1} {:name "soul_torch" :count 8}])
               s (await (scenario-lit {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 13} world 200 [0 0]))]
-          (is (= [0 11] (torch-xs s)) "soul torches hung like plain ones")
+          (is (= 2 (count (torch-xs s))))
+          (is (< (second (torch-xs s)) 11) "a soul torch lights less far than the plain torch's gap of 11")
           (is (= 6 (get (inv s) "soul_torch")))
           (is (empty? (events-of s :mine.no-torches))))))))
 

@@ -3,16 +3,21 @@
   caller says which cells matter, which are dark, which let light through and where a torch may hang
   (jobs.lib.torch/perceived-dark? reads darkness from the body's perception).")
 
-(def spread
-  "Steps a torch's light travels through open cells and still leaves block light 1 (14 at the torch, one less a step):
-  from 1 up a cell is no spawn ground."
-  13)
+(def light-levels "The block light of each torch item at the torch." {"torch" 14 "soul_torch" 10})
+
+(defn light-of "The block light of a torch item (nil: the plain torch)." [item] (get light-levels item 14))
+
+(defn reach
+  "Steps the light of a torch item (nil: the plain torch) travels through open cells and still leaves block light 1 (one
+  less a step): from 1 up a cell is no spawn ground."
+  [item]
+  (dec (light-of item)))
 
 (def neighbours [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
 
 (defn lit-by
-  "The set of cells a torch hung at spot lights: those within spread steps of it through cells open? lets light through."
-  ([open? spot] (lit-by open? spot spread))
+  "The set of cells a torch hung at spot lights: those within reach steps of it through cells open? lets light through."
+  ([open? spot] (lit-by open? spot (reach nil)))
   ([open? spot reach]
   (loop [seen #{spot} edge [spot] depth 0]
     (if (or (empty? edge) (= depth reach))
@@ -47,11 +52,11 @@
 (defn plan
   "Torch spots lighting every dark cell of cells (in the order given):
   {:cells the cells that must not stay dark (spawnable ones) :dark? (fn [cell]) :open? (fn [cell]) light passes
-   :spots the cells a torch may hang in, best first :sources torches already hanging :spread steps a torch lights (default spread)}
+   :spots the cells a torch may hang in, best first :sources torches already hanging :spread steps a torch lights (default: the plain torch's reach)}
   -> {:spots [cell ...] :uncovered [cell ...]}. Takes the first dark cell no spot chosen yet lights, then the spot
   lighting it (lit-by) that lights most cells still dark (the earliest listed on a tie): a line gets one torch per 2 x spread
   cells. :uncovered are the cells no spot can reach. open? is asked once per cell."
-  [{:keys [cells dark? open? spots sources] reach-steps :spread :or {reach-steps spread}}]
+  [{:keys [cells dark? open? spots sources] reach-steps :spread :or {reach-steps (reach nil)}}]
   (let [all (concat cells spots sources)
         lo (when (seq all) (mapv (fn [i] (- (apply min (map #(nth % i) all)) reach-steps 1)) [0 1 2]))
         key-of (fn [[x y z]] (+ (* (- x (lo 0)) x-step) (* (- y (lo 1)) y-step) (- z (lo 2))))
