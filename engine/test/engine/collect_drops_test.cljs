@@ -741,3 +741,7 @@
             (is (= 1 (:collected result)))
             (is (= 1 (bd/carried p "iron_ingot")))))))))
 
+
+(deftest a-climb-books-what-the-inventory-gained-not-the-blocks-it-spent
+  (is (= {"diamond" 1} (job-ns/gains {"cobblestone" 16} {"cobblestone" 11 "diamond" 1})))
+  (is (= {"cobblestone" 2} (job-ns/gains {"cobblestone" 3} {"cobblestone" 5}))))
