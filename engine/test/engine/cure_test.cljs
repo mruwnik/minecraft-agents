@@ -52,6 +52,6 @@
     (is (= :later (status 20 {:ways #{:carried}})) "a call that leaves fetching out waits")))
 
 (deftest a-field-job-waits-while-poisoned
-  (are [self expected] (= expected (first ((:fit? (get registry/jobs 'jobs.farm.till)) {:primitives (tu/fake {:self self})})))
+  (are [self expected] (= expected (first ((:fit? (get registry/jobs 'jobs.farm.till)) {:primitives (tu/fake {:self self}) :view (constantly {:data {} :now 0})})))
     {:health 20 :effects poison} :later
     {:health 20 :effects []} :ok))
