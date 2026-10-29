@@ -251,7 +251,7 @@
               known (fn [x] {:mob "zombie" :pos {:x x :y 64 :z 0.5} :weight 1e6})]
           (mem/write! (:store eng) :shut-in-failed {:pos {:x 0 :y 64 :z 0} :way :pit :reason :no-floor} {:cap 5 :ttl 600000})
           (let [r (with-redefs [threats/known-threats (constantly [(known -11.5)])]
-                    (await (tu/child-outcome eng 'jobs.survival.dig-pit {:for :night} 5)))]
+                    (await (tu/child-outcome eng 'jobs.survival.dig-pit {:for :night :worth 10} 5)))]
             (is (= :no-site (:reason r)) (pr-str r))
             (is (empty? (st/calls p "place")) "no pit was dug")))))))
 
