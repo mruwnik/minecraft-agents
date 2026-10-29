@@ -475,6 +475,18 @@
     (is (nil? (check (plan "budget" dead-end) true)) "already touring the edge")
     (swap! gcut/approaches dissoc (:id c))))
 
+(deftest a-walk-counts-its-floors-in-process-and-a-restart-keeps-them
+  (let [mem* (atom {})
+        c (gcut/with-call (gcol/stub-ctx (tu/fake {}) mem* {}))]
+    (gcut/fresh-record! c)
+    (doseq [floor [:present :present :present :absent :missed]] (gwalk/count-floor! c floor :level))
+    (is (nil? (:floor-counts @mem*)) "a floor is no memory write: a walk counts many at once")
+    (is (= {:level {:present 3 :absent 1}} (gcut/floor-counts c)) "a missed floor is not counted")
+    (gcut/fresh-record! c)
+    (gwalk/count-floor! c :present :level)
+    (is (= {:level {:present 4 :absent 1}} (gcut/floor-counts c)) "a restart keeps the counts")
+    (swap! gcut/approaches dissoc (:id c))))
+
 (deftest go-to-with-unknown-holds-a-carried-torch-in-the-dark
   (async done
     (tu/run-async done

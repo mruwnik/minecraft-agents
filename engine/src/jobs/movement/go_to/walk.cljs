@@ -45,7 +45,7 @@
             [jobs.lib.watch :as watch]
             [jobs.movement.go-to.air :as air]
             [jobs.movement.go-to.aim :as aim :refer [aimed here? in-seen-ground? look-along! guess-waypoint look-at-column! look-at-goal-air! hidden-in-ground? lookout pre-aim! sight-end see-cell]]
-            [jobs.movement.go-to.cut :refer [approach-recorder jumped? record send-back-tolls tour tour-spent?]]
+            [jobs.movement.go-to.cut :as cut :refer [approach-recorder jumped? record send-back-tolls tour tour-spent?]]
             [jobs.movement.go-to.detour :as detour]
             [jobs.movement.go-to.escalate-choose :as choose]
             [jobs.movement.go-to.escalation :as esc]
@@ -174,7 +174,7 @@
   "{:cost :worth :p :cells} of a plan's floors the body has not seen (steps with :unseen-floor; nil when none): each
   priced by cost/turn-back-cost, its look a peek over a drop or an aim (cost/walk-unknown-prices), its walk back the blocks
   from the plan's start to its takeoff, its chance of not being there cost/floor-absent-chance of its kind
-  (wsight/floor-kind) over the call's floors of each kind found there or not (mem :floor-counts). :worth is cost/tour-worth
+  (wsight/floor-kind) over the call's floors of each kind found there or not (cut/floor-counts). :worth is cost/tour-worth
   of the goal's straight blocks at the call's start and the call's worth (ctx/worth). No second way is known when the plan is
   made: a floor not there costs, when no lower step has one either (cost/floor-dead-end-chance), the worse case of
   finding one, the tour that worth still pays for (less cost/tour-cost of the call's tour so far), whose end without one
@@ -183,7 +183,7 @@
   [c steps]
   (when (some :unseen-floor steps)
     (let [steps (vec steps)
-          counts (:floor-counts (ctx/mem c))
+          counts (cut/floor-counts c)
           {:keys [peek-s aim-s]} (cost/walk-unknown-prices)
           worth (cost/tour-worth (:detour-from (ctx/mem c) 0) (ctx/worth c))
           left (max 0 (- worth (:cost (cost/tour-cost (tour c)))))
@@ -213,11 +213,11 @@
           (when (> cost worth) {:turn-back t})))))
 
 (defn count-floor!
-  "The walk's on-floor: one more of the call's unseen floors of kind :present or :absent (mem :floor-counts). A :missed
+  "The walk's on-floor: one more of the call's unseen floors of kind :present or :absent (cut/count-floor!). A :missed
   floor (still unseen once looked at) tells nothing of the ground, so it is not counted; the next plan avoids it."
   [c floor kind]
   (when (#{:present :absent} floor)
-    (ctx/update-mem! c update-in [:floor-counts kind floor] (fnil inc 0))))
+    (cut/count-floor! c floor kind)))
 
 (defn explore-spent!
   "Give up :explore-spent with the tour so far (tour)."
@@ -351,7 +351,7 @@
 (def wall-walk-slack "Blocks farther from the goal than the nearest cell that a wall walk still takes, for a shorter walk." 1.5)
 
 (defn ^:async walk-to-wall!
-  "A walled-in goal (result :goal-enclosed, :goal-cut-off) that no escalation will open: once a call (mem :wall-walked, set once the walk arrived or got nowhere),
+  "A walled-in goal (result :goal-enclosed, :goal-cut-off) that no escalation will open: until a walk gets no block nearer (mem :wall-walked; the flood stops at room-cells, so its nearest cell may be only the nearest it reached),
   walk to a cell near it the body can reach (escalation/nearest-stand: the shortest walk within wall-walk-slack of the nearest) when the nearest cell is at least a block nearer than the feet (and the one chosen nearer at all) and
   the walk there (jobs.lib.cost/walk-cost) fits budget-s. True when it walked."
   [c pos tries result opts]
@@ -370,8 +370,8 @@
       (ctx/emit! c :go-to.wall-walk :info {:at @near :why (:reason result)
                                            :text (str "the goal is walled in: walking to " @near ", the nearest cell to it")})
       (let [walk (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) (zipmap [:x :y :z] @near) 0 (dissoc opts :progress)))]
-        ;; a walk that got nearer but was cut short is tried again; one that arrived or got nowhere is not; a jumped one is no walk
-        (when-not (or (= "partial" (:status walk)) (jumped? c))
+        ;; a walk cut short or a block nearer is tried again; one that got nowhere is not; a jumped one is no walk
+        (when-not (or (= "partial" (:status walk)) (jumped? c) (<= (to (end/feet-cell c) goal) (dec (to feet goal))))
           (ctx/update-mem! c assoc :wall-walked true))
         true))))
 

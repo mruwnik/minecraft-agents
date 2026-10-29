@@ -36,9 +36,28 @@
   [c]
   (swap! approaches (fn [m] (cond-> m (identical? (::call c) (:call (get m (:id c)))) (dissoc (:id c))))))
 
-(defn fresh-record!
-  "Start the attempt's walk record again, empty."
+(defn add-floor-counts
+  "Floor counts a and b ({kind {floor n}}) summed."
+  [a b]
+  (merge-with (partial merge-with +) a b))
+
+(defn floor-counts
+  "The call's unseen floors counted by kind and what they turned out to be: job memory's and the walk record's since."
   [c]
+  (add-floor-counts (:floor-counts (ctx/mem c)) (:floor-counts (record c))))
+
+(defn count-floor!
+  "One more unseen floor of kind found floor (:present, :absent) in the attempt's walk record: a walk counts many at once
+  and a memory write is an event."
+  [c floor kind]
+  (when (and (ctx/alive? c) (record c))
+    (swap! approaches update-in [(:id c) :floor-counts kind floor] (fnil inc 0))))
+
+(defn fresh-record!
+  "Start the attempt's walk record again, empty; the floors the last one counted go to job memory."
+  [c]
+  (when-let [counts (:floor-counts (get @approaches (:id c)))]
+    (ctx/update-mem! c update :floor-counts add-floor-counts counts))
   (swap! approaches assoc (:id c) {:call (::call c)}))
 
 (def jump-blocks

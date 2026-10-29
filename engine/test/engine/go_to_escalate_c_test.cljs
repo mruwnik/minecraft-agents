@@ -213,6 +213,17 @@
           (is (= 2 (count (events-of seen :go-to.wall-walk))) "a walk reported partial is made again")
           (is (= [4 64 0] (feet p))))))))
 
+(deftest a-wall-walk-past-the-flood-s-reach-walks-on-to-the-nearest-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; the 1024-cell flood from x -10 on a 25-wide floor stops near x 20, short of the pocket's wall at x 27
+        (let [far-pocket (apply dissoc (merge (box -40 63 -12 40 63 12 "stone") (box 28 64 -2 32 66 2 "stone")) ["30,64,0" "30,65,0"])
+              {:keys [out p seen]} (await (run-job! {:self {:pos {:x -10 :y 64 :z 0}} :blocks far-pocket} {:pos [30 64 0] :range 0 :ways #{:walk}}))]
+          (is (= :goal-enclosed (:why @out)) (pr-str @out))
+          (is (<= (js/Math.hypot (- (first (feet p)) 30) (last (feet p))) 4.5) (str (feet p) ": the nearest cell, 3 off, within the wall-walk slack"))
+          (is (= 2 (count (events-of seen :go-to.wall-walk)))))))))
+
 (deftest a-wall-walk-that-ended-in-a-teleport-is-not-marked-walked
   (async done
     (tu/run-async done
