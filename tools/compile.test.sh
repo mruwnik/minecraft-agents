@@ -19,7 +19,7 @@ export RES_SLOT_DIR="$T/res" RES_SLOT_CONFIG="$T/res/cfg.json"
 sleep 300 & SRV=$!; trap 'kill $SRV 2>/dev/null; rm -rf "$T"' EXIT
 echo $SRV > "$T/repo/dashboard/.shadow-cljs/server.pid"
 printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\n' "$T" > "$T/bin/npx"; chmod +x "$T/bin/npx"
-printf 'function SHADOW_IMPORT() {} console.log("NODE", process.argv.slice(1).join(" "), process.execArgv.join(" ")); if (process.argv.join(" ").includes("hang-test")) setInterval(() => {}, 1000); if (process.argv.join(" ").includes("stall-test")) { require("fs").writeFileSync(process.env.STALL_PID_FILE, String(process.pid)); require("fs").appendFileSync(process.env.MC_TEST_TIMINGS, JSON.stringify({started: 1}) + "\\n"); for (;;); }\n' > "$T/repo/engine/out/test.cjs"
+printf 'function SHADOW_IMPORT() {} console.log("NODE", process.argv.slice(1).join(" "), process.execArgv.join(" ")); if (process.env.MC_TEST_TIMINGS && !/hang-test|stall-test/.test(process.argv.join(" "))) require("fs").appendFileSync(process.env.MC_TEST_TIMINGS, JSON.stringify({var: "stub/test"}) + "\\n"); if (process.argv.join(" ").includes("hang-test")) setInterval(() => {}, 1000); if (process.argv.join(" ").includes("stall-test")) { require("fs").writeFileSync(process.env.STALL_PID_FILE, String(process.pid)); require("fs").appendFileSync(process.env.MC_TEST_TIMINGS, JSON.stringify({started: 1}) + "\\n"); for (;;); }\n' > "$T/repo/engine/out/test.cjs"
 export PATH="$T/bin:$PATH"
 C="$T/repo/tools/compile"
 
