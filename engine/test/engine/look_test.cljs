@@ -23,6 +23,11 @@
 
 (defn names-of [hits] (mapv :name hits))
 
+(deftest a-look-shows-the-top-of-a-floor-block-whose-centre-the-floor-in-front-hides
+  (let [p (seeing {:blocks wall})]
+    (is (look/look-shows? p {:x -4 :y 63 :z 0}) "the floor 4 blocks off: its top is in view")
+    (is (not (look/look-shows? p {:x 6 :y 63 :z 0})) "behind the wall neither its centre nor a face is")))
+
 (deftest a-block-behind-a-wall-is-not-seen-and-one-in-view-is
   (let [p (seeing {:blocks (merge wall {"6,64,0" "coal_ore" "0,64,5" "iron_ore"})})]
     (is (= ["iron_ore"] (names-of (look/seen-blocks p {:names ["coal_ore" "iron_ore"] :radius 16}))))

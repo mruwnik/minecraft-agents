@@ -796,16 +796,26 @@
 
 (defn look-shows?
   "Whether a look from where the body stands would show the cell {:x :y :z} or [x y z]: within sight's :radius and a clear
-  line from the eye (lit, it is seen; dark, it is seen dark). False without a perception."
+  line from the eye to its centre or to a face turned to the eye (lit, it is seen; dark, it is seen dark). A floor block
+  a few blocks off shows its top though the floor in front hides its centre. False without a perception."
   [p cell]
   (boolean
    (when-let [per (aget p "perception")]
      (let [[x y z] (if (map? cell) [(:x cell) (:y cell) (:z cell)] cell)
            ^js raw (:raw per)
-           ^js eye (.eye raw)]
+           ^js eye (.eye raw)
+           ex (when eye (.-x eye)) ey (when eye (.-y eye)) ez (when eye (.-z eye))
+           ;; a face's centre, just inside the cell: the line ends in the cell, so only what lies before it can hide it
+           faces (fn [] (cond-> [[(+ x 0.5) (+ y 0.5) (+ z 0.5)]]
+                          (> ey (inc y)) (conj [(+ x 0.5) (+ y 0.99) (+ z 0.5)])
+                          (< ey y) (conj [(+ x 0.5) (+ y 0.01) (+ z 0.5)])
+                          (> ex (inc x)) (conj [(+ x 0.99) (+ y 0.5) (+ z 0.5)])
+                          (< ex x) (conj [(+ x 0.01) (+ y 0.5) (+ z 0.5)])
+                          (> ez (inc z)) (conj [(+ x 0.5) (+ y 0.5) (+ z 0.99)])
+                          (< ez z) (conj [(+ x 0.5) (+ y 0.5) (+ z 0.01)])))]
        (and eye
-            (<= (js/Math.hypot (- (+ x 0.5) (.-x eye)) (- (+ y 0.5) (.-y eye)) (- (+ z 0.5) (.-z eye))) (:radius (:opts per)))
-            (rays/line-clear? raw (.sightTable raw) (.-x eye) (.-y eye) (.-z eye) (+ x 0.5) (+ y 0.5) (+ z 0.5)))))))
+            (<= (js/Math.hypot (- (+ x 0.5) ex) (- (+ y 0.5) ey) (- (+ z 0.5) ez)) (:radius (:opts per)))
+            (some (fn [[tx ty tz]] (rays/line-clear? raw (.sightTable raw) ex ey ez tx ty tz)) (faces)))))))
 
 (defn dark-in-sight?
   "Whether a look at the cell {:x :y :z} would show it dark: within sight's :radius, a clear line from the eye, neither lit
