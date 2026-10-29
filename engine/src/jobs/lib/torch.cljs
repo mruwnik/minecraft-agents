@@ -5,12 +5,22 @@
             [jobs.lib.placement :as placement]
             [jobs.lib.shelter.sense :as sense]))
 
-(def torch-blocks #{"torch" "wall_torch"})
+(def torch-items
+  "The items that hang as a torch, the plain one first: perception, go-to's off hand and placement take either."
+  ["torch" "soul_torch"])
+
+(def torch-blocks #{"torch" "wall_torch" "soul_torch" "soul_wall_torch"})
 
 (def light-items #{"torch" "soul_torch" "lantern" "soul_lantern"})
 
 (defn torches-carried [p]
-  (reduce + (map :count (filter #(= "torch" (:name %)) (u/inventory p)))))
+  (reduce + (map :count (filter #((set torch-items) (:name %)) (u/inventory p)))))
+
+(defn carried-torch
+  "The name of the first of torch-items the inventory holds, else nil."
+  [p]
+  (let [names (set (map :name (u/inventory p)))]
+    (some names torch-items)))
 
 (defn fuel-held
   "How many coal and charcoal are carried: each makes 4 torches with a stick."
@@ -30,7 +40,7 @@
   "The torches in the off hand (the place act takes only the inventory's)."
   [p]
   (let [o (some-> (.self p) .-equipment .-offHand)]
-    (if (= "torch" (some-> o .-name)) (or (.-count o) 1) 0)))
+    (if (some #{(some-> o .-name)} torch-items) (or (.-count o) 1) 0)))
 
 (defn torches-held [p] (+ (torches-carried p) (off-hand-torches p)))
 
@@ -73,12 +83,12 @@
          {:refused :no-support}))))
 
 (defn ^:async place!
-  "Place the torch of choice (torch-at's) from the body's place; true when the cell holds a torch after (placed, or
-  already there). block-at: a fn of a cell, the block name seen there."
+  "Place the torch of choice (torch-at's), the first torch item carried, from the body's place; true when the cell holds
+  a torch after (placed, or already there). block-at: a fn of a cell, the block name seen there."
   [c choice block-at]
   (let [cell (:cell choice)]
     (await (off-hand-to-inventory! c))
-    (let [r (await (ctx/act c :place (clj->js {:pos (zipmap [:x :y :z] cell) :item "torch"
+    (let [r (await (ctx/act c :place (clj->js {:pos (zipmap [:x :y :z] cell) :item (or (carried-torch (:primitives c)) "torch")
                                                :click (placement/js-click (:click choice))})))]
       (boolean (or (= "placed" (.-status r)) (torch-blocks (block-at cell)))))))
 

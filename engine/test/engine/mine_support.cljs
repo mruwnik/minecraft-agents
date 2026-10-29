@@ -383,7 +383,7 @@
   "The sorted x of the torches standing in the tunnel (z -1..1, y 64..65, x 0..40)."
   [s]
   (vec (sort (for [x (range 0 41) y [64 65] z [-1 0 1]
-                   :when (#{"torch" "wall_torch"} (block-at s x y z))]
+                   :when (#{"torch" "wall_torch" "soul_torch" "soul_wall_torch"} (block-at s x y z))]
                x))))
 
 (def torches8 [{:name "iron_pickaxe" :count 1} {:name "torch" :count 8}])
@@ -395,7 +395,7 @@
   "The cells of torches standing off the tunnel line (z 3..9, y 64..65, x 4..11)."
   [s]
   (vec (for [x (range 4 12) y [64 65] z (range 3 10)
-             :when (#{"torch" "wall_torch"} (block-at s x y z))]
+             :when (#{"torch" "wall_torch" "soul_torch" "soul_wall_torch"} (block-at s x y z))]
          [x y z])))
 
 (defn ^:async branch-torches
@@ -409,7 +409,7 @@
                            (assoc (torch-world torches8) :blocks (merge long-rock room)) 300))]
     {:dug (dug-cells s)
      :torches (vec (for [x (range 4 16) y [64 65] z (range 2 (inc zmax))
-                         :when (#{"torch" "wall_torch"} (block-at s x y z))]
+                         :when (#{"torch" "wall_torch" "soul_torch" "soul_wall_torch"} (block-at s x y z))]
                      [x y z]))}))
 
 ;; ------------------------------------------------------------------ honest ends, soil, fetching the pickaxe

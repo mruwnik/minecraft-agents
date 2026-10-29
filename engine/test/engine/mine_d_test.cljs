@@ -136,6 +136,16 @@
           (is (= [0 11] (torch-xs lit)))
           (is (= (count (calls dark "look")) (count (calls lit "look")))))))))
 
+(deftest a-body-with-only-soul-torches-hangs-them-and-is-not-torchless
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (torch-world [{:name "iron_pickaxe" :count 1} {:name "soul_torch" :count 8}])
+              s (await (scenario-lit {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 13} world 200 [0 0]))]
+          (is (= [0 11] (torch-xs s)) "soul torches hung like plain ones")
+          (is (= 6 (get (inv s) "soul_torch")))
+          (is (empty? (events-of s :mine.no-torches))))))))
+
 (deftest torches-held-in-the-off-hand-are-hung-and-none-crafted
   (async done
     (tu/run-async done
