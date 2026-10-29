@@ -44,3 +44,9 @@
     (is (= 0 (tries s)) "a goal worth one try's price is not worth it at under a sure chance")
     (is (< 0 (tries (* 100 s)) (tries (* 10000 s))) "each failure lowers the chance, so a dearer goal tries more")
     (is (= 100 (tries ##Inf)) "an arrive tries on: only its :spend stops it")))
+
+(deftest a-caller-that-counts-and-prices-its-own-tries-passes-them-as-opts
+  (let [[rs] (with-mem (fn [c] (with-redefs [ctx/worth (constantly 0)]
+                                 (mapv #(cost/try-again? c :respond %)
+                                       [{:fails 1 :worth 30 :try-s 5} {:fails 4 :worth 30 :try-s 5} {:fails 1 :worth 30 :try-s 500} {:fails 1 :worth 0 :try-s 0.05}]))))]
+    (is (= [true false false false] rs))))

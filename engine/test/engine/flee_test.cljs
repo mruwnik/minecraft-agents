@@ -338,7 +338,7 @@
               paces (atom 0)]
           (mem/write! (:store (:eng s)) :hurt {:amount 5 :health 10 :attacker {:name "zombie"}} {:cap 50 :ttl 60000})
           (with-redefs [pace/timer (fn [] (swap! paces inc) (js/Promise.resolve nil))
-                        respond/respond (fn [_ _] (swap! (fake/state (:p s)) assoc :entities []) (js/Promise.resolve nil))]
+                        respond/respond (fn [c _] (ctx/update-mem! c assoc :try-worth 100) (swap! (fake/state (:p s)) assoc :entities []) (js/Promise.resolve nil))]
             (await (run-job! s 'jobs.survival.respond-to-hostile {})))
           (is (>= @paces 2) "a hit within the hit window keeps the response looking, not one blink look"))))))
 
@@ -716,15 +716,19 @@
     (try (await (f))
          (finally (set! retreat/flee! flee)))))
 
-(deftest respond-to-hostile-stops-after-three-calls-that-change-nothing
+(deftest respond-to-hostile-stops-when-another-call-that-changes-nothing-costs-more-than-it-may-win
+  ;; a call that changes nothing and takes 1000 s costs more than a third (the chance after one such call) of what another
+  ;; may win: no second call
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup {:entities [(zombie 7 5 {:chase false})]})
               clock (:clock s)
-              {:keys [calls out]} (await (with-flee (fn idle-flight [c] (swap! clock + 1000) (ctx/end c :done nil))
-                                                    #(run-job! s 'jobs.survival.respond-to-hostile {})))]
+              flights (atom 0)
+              {:keys [calls out]} (await (with-flee (fn idle-flight [c] (swap! flights inc) (swap! clock + 1000000) (ctx/end c :done nil))
+                                                        #(run-job! s 'jobs.survival.respond-to-hostile {})))]
           (is (= [:done] calls))
+          (is (= 1 @flights) "one call that changed nothing is not tried again at that price")
           (is (= {:status :stopped :reason :no-response} (select-keys out [:status :reason])))
           (is (= :nothing-possible (get-in out [:ending :kind]))))))))
 

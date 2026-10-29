@@ -43,7 +43,8 @@
   none near is done at once. The call's :use :tools are the weapons, handed to both children.
   Returns: :done when no danger is near and the body holds no refuge, or when every danger is only heard and the fight declined
   (they are muted, the ending names the mob), or when a fight held for a seen mob that neither came nor hurt the body (it is watched: muted while it comes no nearer than danger/answered-within and the body is unhurt); :nothing-possible :retreat-failed (the flight's ending is the :because) when the
-  flight ends so; :nothing-possible :no-response after ::max-unchanged calls in a row that change nothing; :limit-reached on its
+  flight ends so; :nothing-possible :no-response once another call after calls in a row that change nothing is not worth
+  its seconds (try-again?); :limit-reached on its
   time budget. Never :continue. Writes one :hostile memory entry per encounter. A danger reflex: never backed off.")
 
 (a/defargs settings
@@ -51,7 +52,6 @@
    ::job-time-s {:default 480 :doc "Seconds a response to a hostile may take (a hide runs long)." :spec (a/num-in 0 nil)}
    ::hold-radius {:default 16 :doc "Hostiles known within this many blocks count for holding position in the dark." :spec (a/num-in 0 nil)}
    ::hit-window-s {:default 5 :doc "How recent a hurt keeps a fight from leaving heard or watched mobs, and makes a round look once more; the flight's hits within it are counted (:hits)." :spec (a/num-in 0 nil)}
-   ::max-unchanged {:default 3 :doc "Calls of a child in a row that leave the body and the dangers as they were before the reflex stops :no-response." :spec (a/int-in 1 nil)}
    ::struck-s {:default 30 :doc "Seconds the hits the fight landed outlive the round (:struck-hits), so a refired reflex still counts them." :spec (a/num-in 0 nil)}
    ::struck-cap {:default 8 :doc "How many :struck-hits entries memory keeps." :spec (a/int-in 1 nil)}
    ::quote-mean-s {:default 20 :doc "Seconds an encounter is guessed to take, for the quote." :spec (a/num-in 0 nil)}})
@@ -59,7 +59,6 @@
 (defn stay-inside? [] (settings/get settings ::stay-inside))
 (defn hold-radius [] (settings/get settings ::hold-radius))
 (defn hit-window-ms [] (* 1000 (settings/get settings ::hit-window-s)))
-(defn max-unchanged [] (settings/get settings ::max-unchanged))
 (defn struck-policy [] {:cap (settings/get settings ::struck-cap) :ttl (* 1000 (settings/get settings ::struck-s))})
 
 (def target [])
@@ -377,6 +376,8 @@
         look (when (seq covers) (look-answer c near now now-of sealing then))
         weighed (some-> (hostile/weigh c (cond-> now look (assoc :look (:answer look)))) (assoc :way-scan (:way-scan caught)) (eating-answer c))
         stay? (and (not (hurt-lately? c)) (stay-under-roof? c near))
+        _ (when-let [ps (seq (vals (:prices weighed)))]
+            (ctx/update-mem! c assoc :try-worth (min (apply min ps) (cost/hp-cost (.-health self) (:hit (get (:answers weighed) (:answer weighed)) 0)))))
         decision (if (or stay? (= :fight (:answer weighed))) :fight :flee)
         cover (when (and (not stay?) (contains? covers (:answer weighed))) (:answer weighed))
         creeper (first (get-in weighed [:answers :fight :creepers]))]
@@ -464,21 +465,31 @@
 
 (defn fight-unsettled?
   "Whether a round that now sees no danger may be a blink: the fight child yielded :continue or the body was hurt within
-  hit-window-ms (a mob knocked a cell off is still there). The round then looks again, up to ::max-unchanged times, before it ends."
+  hit-window-ms (a mob knocked a cell off is still there). The round then looks again while try-again? says so."
   [c outcome]
   (boolean (or (= :continue outcome)
                (seq (ctx/since c :hurt (- (ctx/now c) (hit-window-ms)))))))
 
+(defn try-again?
+  "Whether one more call is worth its s seconds (the last one's and the pace after it) after n in a row that changed
+  nothing: cost/try-again? :respond of the n failures, at what another call may win as respond last priced it (:try-worth,
+  ##Inf before it priced one: a look round or a gap step comes first): no more than the cheapest answer (a walk from a mob
+  that cannot reach the body is free, so it is not tried again), nor than the blow (hp-cost of the answer's :hit) a
+  mob may land meanwhile."
+  [c n s]
+  (cost/try-again? c :respond {:fails n :worth (:try-worth (ctx/mem c) ##Inf) :try-s s}))
+
 (defn ^:async round
   "One whole attempt: respond (or let the retreat hide on) while a danger is near; :nothing-possible when the retreat
-  ends other than :done, or :no-response after max-unchanged calls in a row that changed nothing; never for the time a
-  danger stays."
+  ends other than :done, or :no-response once calls in a row that changed nothing make another not worth it (try-again?);
+  never for the time a danger stays."
   [c]
   (when-not (contains? (ctx/mem c) :goal)
     (ctx/update-mem! c assoc :goal (goal/interrupted-goal (ctx/view c) (:root c))))
   (loop [unchanged 0 looks 0]
     (way-log/resolve! c)
     (let [hs (near c)
+          t0 (ctx/now c)
           before (signature c hs)
           outcome (cond
                     (hiding? c) (await (run-child c :flee false))
@@ -487,7 +498,8 @@
                     (cover-unseen? c hs (:gap-tried (ctx/mem c))) (await (look/look-around! c))
                     (look-unheard? c hs) (await (look/look-around! c))
                     :else (await (respond c hs)))
-          after (near c)]
+          after (near c)
+          s (/ (+ (- (ctx/now c) t0) pace/pace-ms) 1000)]
       (if (contract/ending? outcome)
         (do (mute-heard! c hs)
             (ctx/end c (:kind outcome) (if (= :nothing-possible (:kind outcome)) :retreat-failed (:cause outcome))
@@ -495,11 +507,13 @@
         (cond
           (:left-heard outcome) (ctx/end c :done nil (:left-heard outcome))
           (:left-watched outcome) (ctx/end c :done nil (:left-watched outcome))
-          (and (empty? after) (not (hiding? c)) (not (and (< looks (max-unchanged)) (fight-unsettled? c outcome)))) (ctx/end c :done nil (:flight-end (ctx/mem c)))
+          (and (empty? after) (not (hiding? c)) (not (and (fight-unsettled? c outcome) (try-again? c (inc looks) s)))) (ctx/end c :done nil (:flight-end (ctx/mem c)))
           (and (empty? after) (not (hiding? c))) (do (await (pace/pace! c)) (recur unchanged (inc looks)))
           :else
           (let [n (if (= before (signature c after)) (inc unchanged) 0)]
-            (if (>= n (max-unchanged))
+            (if (and (pos? n) (not (try-again? c n s)))
               (do (mute-heard! c hs)
-                  (ctx/end c :nothing-possible :no-response {:text (str "a hostile is still near and " n " tries changed nothing")}))
+                  (ctx/end c :nothing-possible :no-response
+                           {:text (str "a hostile is still near and " n " tries changed nothing; another is not worth its " (.toFixed s 1)
+                                       " s for at most " (js/Math.round (:try-worth (ctx/mem c) ##Inf)) " s it may win")}))
               (do (await (pace/pace! c)) (recur n 0)))))))))

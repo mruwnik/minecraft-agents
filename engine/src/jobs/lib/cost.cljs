@@ -308,10 +308,12 @@
 (defn try-again?
   "Whether call c's next try of kind (a key of value/::retry-counts) is worth its price: its retry-chance after the call's
   failures in a row (u/failed!, u/progress! resets) times ctx/worth over the kind's measured :try-s. Never at a worth of 0;
-  at ##Inf (arrive) whenever the kind ever wins, where only the call's :spend stops it."
-  [c kind]
-  (> (value/chance-times (retry-chance kind (u/failures c)) (ctx/worth c))
-     (:try-s (get (settings/get value/settings ::value/retry-counts) kind))))
+  at ##Inf (arrive) whenever the kind ever wins, where only the call's :spend stops it. opts {:fails :worth :try-s} replace
+  the call's failures, worth and the kind's seconds for a caller that counts and prices its own."
+  ([c kind] (try-again? c kind nil))
+  ([c kind {:keys [fails worth try-s]}]
+   (> (value/chance-times (retry-chance kind (or fails (u/failures c))) (or worth (ctx/worth c)))
+      (or try-s (:try-s (get (settings/get value/settings ::value/retry-counts) kind))))))
 
 (def turn-back-cost value/turn-back-cost)
 (def cover-tour-s value/cover-tour-s)
