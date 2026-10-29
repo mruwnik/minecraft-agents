@@ -1,0 +1,28 @@
+;; go-to out of a hut at night prices sleeping the night away as one of its waits (card 4619bd6f): a bed in the hut, the
+;; body alone, the walk then by day. A bare body far from world spawn (no bed set: its death walks back from world spawn,
+;; card c4610613; the surface grid lies 20000 out) pays a dark open walk to the plot's far corner dearly.
+;; Should-succeed: with a bed in the hut, go-to holds :risky :wait :sleep and the body stays in the hut.
+;; Should-fail (no sleep way): with no bed, no :wait :sleep; walking now and dawn are priced alone.
+;; Hut: stone walls x 2..8, z 2..8, roof at y 3, the room x 3..7, z 3..7 lit by torches, a shut oak door at [5 0 8].
+{:defaults
+ {:tags [:night :go-to :sleep]
+  :time :night-exclusive
+  :time-why :sleep
+  :plot {:light :sky}
+  :blocks [[:fill [2 0 2] [8 3 8] "stone" :hollow]
+           [:fill [3 0 3] [7 2 7] "air"]
+           [:set [3 1 7] "torch"] [:set [7 1 3] "torch"]
+           [:set [5 0 8] "oak_door[facing=south,half=lower,open=false]"] [:set [5 1 8] "oak_door[facing=south,half=upper,open=false]"]]
+  :body {:at [6.5 0 5.5] :effects [["resistance" 600 4]] :settle-s 2}
+  :limit-s 60}
+ :cases
+ [{:name "a-bed-in-the-hut-holds-the-walk-for-the-sleep"
+   :blocks [[:set [3 0 4] "red_bed[facing=east,part=foot]"] [:set [4 0 4] "red_bed[facing=east,part=head]"]]
+   :act [[:job (jobs.memory.set-place {:name :bed :pos #at [4 0 4]})]
+         [:job (jobs.movement.go-to {:pos #at [29 0 29]})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :risky :wait :sleep}} :within-s 30}]
+   :after [[:body-near [5.5 0 5.5] 3]]}
+  {:name "no-bed-has-no-sleep-wait"
+   :act [[:job (jobs.movement.go-to {:pos #at [29 0 29]})]]
+   :expect [{:event {:source :job :kind :round_started} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:wait :sleep}} :for-s 20}]}]}
