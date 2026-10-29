@@ -452,6 +452,13 @@
     (is (= {:x 100 :y 70 :z -40} (:respawn (cost/death-body (body [100 70 -40]) none))) "no bed: world spawn")
     (is (nil? (:respawn (cost/death-body (body nil) none))) "a spawn the game has not sent")))
 
+(deftest a-death-prices-the-carried-items-at-their-replacement-cost
+  (let [items [{:name "raw_iron" :count 3}]
+        p (fake/create {:self {:pos [40 64 3]} :inventory items})
+        carried (:carried (cost/death-body p nil))]
+    (is (= (:value (cost/goal-value items)) carried))
+    (is (not= (:value (cost/item-value items)) carried) "the margin value is not what a death loses")))
+
 (deftest a-kit-prices-its-death-from-the-body-s-respawn-to-its-feet
   (is (= 32 (death/walk-back-blocks (wworld/kit-of (fake/create {:self {:pos [40 64 3] :worldSpawn [0 64 0]}}) nil) nil))
       "to 16 blocks"))
