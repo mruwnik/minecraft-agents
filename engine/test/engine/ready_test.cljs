@@ -478,15 +478,18 @@
 (deftest a-dig-prices-the-run-it-makes-the-seen-ore-then-the-tunnel-the-count-still-needs
   (let [hall [:never "dark hall" {:reason :exposed :lowered-by #{:torch} :chance 0.004}]
         torches [{:name "torch" :count 4}]
-        ctx (fn [ore inv args] (assoc (ctx-of (cond-> (assoc tunnel :time st/noon :inventory inv) ore (assoc-in [:blocks "3,64,1"] "iron_ore")))
+        ctx (fn [ore inv args] (assoc (ctx-of (cond-> (assoc tunnel :time st/noon :inventory inv) ore (assoc-in [:blocks "3,64,1"] (or (:block args) "iron_ore"))))
                                       :args (merge {:block "iron_ore" :count 1 :radius 4 :torches true :tunnel-length 20 :ways #{:seen :strip-tunnel :carried}} args)))
         tunnel-s (stair-time/steps-s :level 20)]
     (are [ore args blocks] (= {:blocks blocks :carried 4 :item "torch"} (mine-expect/torch-way (ctx ore torches args)))
       true {} cost/torch-gap
       true {:count 3} (+ cost/torch-gap 20)
-      true {:count 3 :block "coal_ore" :tunnel-length 1000} (+ cost/torch-gap 28)
       false {} 20
       true {:count 3 :ways #{:seen :carried}} cost/torch-gap)
+    (let [coal (ctx true torches {:count 3 :block "coal_ore" :tunnel-length 1000})
+          level (:level (mine-expect/run coal))]
+      (is (< 20 level 1000) "the count still owed sets the tunnel: neither the default nor the length cap")
+      (is (= {:blocks (+ cost/torch-gap level) :carried 4} (mine-expect/torch-way coal)) "the spot's stretch and the tunnel's own blocks"))
     (is (< 0 (mine-expect/stay-s (ctx true torches {})) 10) "the seen ore beside the body: its walk and dig")
     (is (< tunnel-s (mine-expect/stay-s (ctx false torches {}))) "none seen: the tunnel")
     (is (< tunnel-s (mine-expect/stay-s (ctx true torches {:count 3}))) "more owed than seen: the tunnel too")
