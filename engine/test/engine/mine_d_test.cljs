@@ -383,7 +383,7 @@
           (is (= 1 (count (events-of s :mine.moved))))
           (is (= :count (:reason (done-event s)))))))))
 
-(deftest a-stair-blocked-at-every-spot-ends-no-stone-found-once-another-move-is-not-worth-its-price
+(deftest a-stair-blocked-at-every-spot-ends-no-stone-found-after-its-moves
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -391,9 +391,10 @@
                                 :inventory [{:name "stone_pickaxe" :count 1}]}})
               chests {"-1,64,0" "chest" "1,64,0" "chest" "0,64,1" "chest" "0,64,-1" "chest"}]
           (doseq [[k v] chests] (fake/set-block! (:p s) (mapv js/parseInt (clojure.string/split k #",")) v))
-          (core/submit! (:eng s) (spec {:block "stone" :count 2 :tunnel-length 4 :worth 0}) {})
-          (await (run-ticks s 300))
-          (is (<= (count (events-of s :mine.moved)) 1) "a move that failed makes the next not worth a goal of nothing")
+          (core/submit! (:eng s) (spec {:block "stone" :count 2 :tunnel-length 4}) {})
+          (await (settings/with-settings {::mine-descent/max-moves 0}
+                   #(run-ticks s 300)))
+          (is (empty? (events-of s :mine.moved)))
           (is (= :no-stone-found (:reason (done-event s)))))))))
 
 (deftest a-given-heading-is-not-turned

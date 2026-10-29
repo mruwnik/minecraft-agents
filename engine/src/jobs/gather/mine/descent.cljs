@@ -28,12 +28,11 @@
    ::own-stair-reach {:default 32 :doc "Blocks from the body the top of a stair it cut earlier may lie for the descent to walk down that stair instead of cutting a new one." :spec (a/int-in 0 nil)}
    ::dig-here-reach {:default 8 :doc "Stone gathered on soil or sand: a seen stone block farther than this from the body is not walked to; the stair down is cut where the body stands, as a player digs down to stone." :spec (a/num-in 0 nil)}
    ::back-reach {:default 32 :doc "Blocks from the stair's last step the body may be for the descent to walk back onto it; farther, only a whole way back quoted no longer than cutting a stair down to it again is walked, else it starts a new stair where it stands." :spec (a/int-in 0 nil)}
+   ::max-restairs {:default 3 :doc "Times the descent starts a new stair where the body stands after the stair found it off its line (a reflex, a fall or a drop pick-up moved it) before the stop stands." :spec (a/int-in 0 nil)}
+   ::max-moves {:default 3 :doc "Times the stair down walks to another spot after all four headings were blocked at its start (water, a plug, a hazard) before the stop stands." :spec (a/int-in 0 nil)}
    ::move-reach {:default 8 :doc "Blocks from the blocked start the stair's next spot lies; it grows by 4 each move." :spec (a/int-in 1 nil)}})
 
-(defn worth-another?
-  "Whether another new stair or another move is worth its price: none has failed in a row (u/failed!; a stair step cut is u/progress!), else cost/try-again? of kind."
-  [c kind]
-  (or (zero? (u/failures c)) (cost/try-again? c kind)))
+(defn max-restairs [] (settings/get settings ::max-restairs))
 (defn level-slack [] (settings/get settings ::level-slack))
 
 (defn tunnel-level
@@ -252,12 +251,11 @@
   (let [m (ctx/mem c)
         n (get-in m [:descent :moves] 0)
         slot (keyword (str "move-" n))]
-    (when (and (not (get-in m [:descent :move])) (worth-another? c :walk))
+    (when (and (not (get-in m [:descent :move])) (< n (settings/get settings ::max-moves)))
       (when-let [to (move-goal c)]
         (let [from (access/cell (cell-of (u/self-pos c)))]
           (ctx/emit! c :mine.moved :info {:from from :to (access/cell to) :stop stop :move (inc n)
                                           :text (str "mine's stair is blocked (" (name stop) ") on every heading at " (str/join "," from) "; it tries another spot near " (str/join "," (access/cell to)))})
-          (u/failed! c)
           (ctx/update-mem! c update :descent #(-> % (assoc :move to) (update :blocked (fnil conj []) from))))))
     (when-let [to (get-in (ctx/mem c) [:descent :move])]
       (let [r (await (child/call-walk* c slot {:pos {:x (+ (:x to) 0.5) :y (:y to) :z (+ (:z to) 0.5)} :range 2 :stay-s (work-s c)
@@ -291,14 +289,12 @@
     (cond
       (= :continue r) :continue
       (= :done (:status res))
-      (do (u/progress! c)
-          (ctx/update-mem! c #(-> % (dissoc :tried-headings) (update :cut add-cut {:down (count (:dug res))})
+      (do (ctx/update-mem! c #(-> % (dissoc :tried-headings) (update :cut add-cut {:down (count (:dug res))})
                                   (update :descent (fn [d] (assoc d :steps (+ (:steps d 0) (or (:steps res) 1)) :bottom-y (js/Math.floor (:y (u/self-pos c))) :at (:at res))))))
           :again)
-      (and (= :off-stair (:reason res)) (worth-another? c :dig))
-      (do (u/failed! c)
-          (ctx/emit! c :mine.restair :info {:at (access/cell (cell-of (u/self-pos c))) :text (str "mine's stair finds the body off its line (" (:why res) "); it starts a new stair here")})
-          (ctx/update-mem! c #(-> % (update :children dissoc :stair) (update :descent (fn [d] (-> d (dissoc :top :at))))))
+      (and (= :off-stair (:reason res)) (< (get-in (ctx/mem c) [:descent :restairs] 0) (max-restairs)))
+      (do (ctx/emit! c :mine.restair :info {:at (access/cell (cell-of (u/self-pos c))) :text (str "mine's stair finds the body off its line (" (:why res) "); it starts a new stair here")})
+          (ctx/update-mem! c #(-> % (update :children dissoc :stair) (update :descent (fn [d] (-> d (dissoc :top :at) (update :restairs (fnil inc 0)))))))
           :again)
       :else (let [stop (or (:reason res) :declined)
                   ;; the world's lowest layer is bedrock on every heading, and nothing lies under it: the stair is done
