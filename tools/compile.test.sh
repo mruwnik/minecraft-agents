@@ -39,12 +39,13 @@ WARN='------ WARNING #1 - :redef ---' timeout 20 "$C" engine test >/dev/null 2>&
 printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\n' "$T" > "$T/bin/npx"
 
 # body-release is built to a temp file, checked for every jobs/ file, then renamed; a bundle lacking a job leaves the old one in place
-mkdir -p "$T/repo/engine/src/jobs/movement"; echo '(ns jobs.movement.go-to)' > "$T/repo/engine/src/jobs/movement/go_to.cljs"
+mkdir -p "$T/repo/engine/src/jobs/movement"; printf '(ns jobs.movement.go-to)\n(defn round [c] c)\n' > "$T/repo/engine/src/jobs/movement/go_to.cljs"
+mkdir -p "$T/repo/engine/src/jobs/lib"; echo '(ns jobs.lib.unrequired)' > "$T/repo/engine/src/jobs/lib/unrequired.cljs"
 echo old > "$T/repo/engine/out/body-release.cjs"
 bundle_stub() { printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\n[ "$BUNDLE" = none ] || echo "$BUNDLE" > ../engine/out/body-release.new.cjs\n' "$T" > "$T/bin/npx"; }
 bundle_stub
 mkdir -p "$T/repo/engine/out/compile-cache/v"; touch -d '5 days ago' "$T/repo/engine/out/compile-cache/v/old"; touch "$T/repo/engine/out/compile-cache/v/new"
-BUNDLE='jobs.movement.go_to.round=1' timeout 20 "$C" engine body-release >/dev/null 2>&1; check "complete body-release bundle is renamed into place" "$(cat "$T/repo/engine/out/body-release.cjs")" 'jobs.movement.go_to.round=1'
+BUNDLE='jobs.movement.go_to.round=1' timeout 20 "$C" engine body-release >/dev/null 2>&1; check "complete body-release bundle (no unrequired helper in it) is renamed into place" "$(cat "$T/repo/engine/out/body-release.cjs")" 'jobs.movement.go_to.round=1'
 check "body-release prunes only stale compile-cache entries" "$(ls "$T/repo/engine/out/compile-cache/v")" new
 check "no temp bundle left" "$(ls "$T/repo/engine/out" | grep -c 'body-release.new')" 0
 BUNDLE='jobs.movement.other.x=1' timeout 20 "$C" engine body-release >/dev/null 2>&1; check "bundle missing a job fails the build" "$?" 1

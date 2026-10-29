@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # tools/bundle-jobs-check <bundle.cjs> <jobs-dir>
-# Exit 1, naming them, when a file under jobs-dir (engine/src/jobs) has no definition in the bundle: the job registry is built from the files
+# Exit 1, naming them, when a job file (one defining round, the registry's rule; helper files like jobs.lib.* are in the bundle only when required) under jobs-dir (engine/src/jobs) has no definition in the bundle: the job registry is built from the files
 # present at compile time, so a file that was unreadable or half-written then ("unknown job jobs.movement.go-to") leaves a bundle that builds fine and lacks the job.
 set -u
 [ $# -eq 2 ] && [ -s "$1" ] && [ -d "$2" ] || { echo "usage: tools/bundle-jobs-check <bundle.cjs> <jobs-dir>" >&2; exit 2; }
 bundle=$1; dir=${2%/}; missing=
 while IFS= read -r f; do
+  grep -qE '^\(def[a-z]*-? (\^[^ ]+ )*round([[:space:]]|\)|$)' "$f" || continue
   rel=${f#"$dir"/}; ns="jobs.$(sed -E 's/\.clj[sc]$//; s#/#.#g; s/-/_/g' <<<"$rel")"
   grep -qE -m1 "${ns//./\\.}\\.[A-Za-z0-9_\$]+=" "$bundle" || missing="$missing ${ns//_/-}"
 done < <(find "$dir" -name '*.clj[sc]' | sort)
