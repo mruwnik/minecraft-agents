@@ -67,11 +67,18 @@
   [c cells]
   (every? (sense/round-looked c) cells))
 
+(defn look-first
+  "The exposure s with :look-hp, the {:hp :lethal-hp} of walking to `goal` to look and back at the chance `dark` the look
+  shows it too dark to stay (walk-risk/look-hp, Q66): priced weighs it as a way, and the start checks judge the stay again
+  on arrival."
+  [s c goal dark]
+  (assoc-in s [2 :look-hp] (walk-risk/look-hp c goal dark)))
+
 (defn unseen-status
   "The exposure of the unseen place `to` no look from here shows, priced as unseen at its chance (Q16): spawn-light/chance-at's
   guess of its light. Dark that dawn lifts (chance-at with caves-free?: dark only the sky lights) waits for dawn
   (::light-patience-s) while what is left once it lifts is within ::risk-limit; other dark is :never lowered by a torch;
-  priced prices either for the stay."
+  priced prices either for the stay, the :never also as the walk there to look (look-first)."
   [c to]
   (let [p (:primitives c)
         chance (spawn-light/chance-at p to false)
@@ -82,7 +89,8 @@
         where (str "unseen " (place-text to) ", which no look from here shows")]
     (cond
       (<= chance limit) (contract/ok :unexposed (str "no spawn risk at " where ": guessed lit"))
-      (> left limit) (contract/never :exposed (str "dark at " where ": guessed out of the sky's reach, which dawn does not light") :lowered-by #{:torch} :chance chance)
+      (> left limit) (-> (contract/never :exposed (str "dark at " where ": guessed out of the sky's reach, which dawn does not light") :lowered-by #{:torch} :chance chance)
+                         (look-first c to (spawn-light/dark-share p to false)))
       (<= light-in patience) (contract/later :exposed (str "dark at " where ": guessed open ground, dark until light") :lowered-by #{:light} :chance chance
                                              :recheck-after-ms (* 1000 light-in) :wait-ms (* 1000 light-in))
       :else (contract/never :exposed (str "dark at " where ", light is " (js/Math.round light-in) " s away, over the " (js/Math.round patience) " s it waits") :chance chance))))
@@ -163,9 +171,10 @@
   "The status s of a place check, priced where it is :later or :never on exposure alone (:exposed with a :chance): the stay's
   hp there (price/stay-parts over price/stay-s) acted on now against waiting (act-price; s's :wait-ms is its wait for light).
   ok :priced while acting now is affordable and no affordable wait is cheaper; a cheaper wait, or the only affordable one,
-  holds :later with both prices (a wait to heal keeps s's data); else s."
+  holds :later with both prices (a wait to heal keeps s's data); else s. An exposure resting on what the body has not seen
+  (:look-hp, look-first) has a third way: walk there to look, ok :look-first while it is affordable and no cheaper way is."
   [c s]
-  (let [[kind _ {:keys [reason chance wait-ms] :as data}] s]
+  (let [[kind _ {:keys [reason chance wait-ms look-hp] :as data}] s]
     (if-not (and (contains? #{:later :never} kind) (= :exposed reason) (number? chance))
       s
       (let [secs (price/stay-s c)
@@ -173,6 +182,10 @@
             lethal (cost/lethal-hp {:chance dies :death death})
             hp (+ hurt lethal)
             {:keys [now-s now? best]} (act-price c hurt lethal (when (= :later kind) (some-> wait-ms (/ 1000))))
+            self (.self (:primitives c))
+            look (when (and look-hp (<= (:hp look-hp) (price/allowed-hp (.-health self) (.-food self) (ctx/worth c) true)))
+                   {:s (walk-risk/risk-s c look-hp)})
+            look? (fn [than] (and look (or (nil? than) (< (:s look) than))))
             wait (fn [{:keys [wait] :as w}]
                    (if (= :light wait)
                      (update s 2 assoc :now-s now-s :wait-s (:s w))
@@ -180,8 +193,10 @@
                                                            " s now; healing " (price/round1 (:secs w)) " s first costs " (price/round1 (:s w)) " s")
                                       (assoc data :wait :heal :now-s now-s :wait-s (:s w) :recheck-after-ms walk-risk/recheck-ms))))]
         (cond
-          (and best (< (:s best) now-s)) (wait best)
-          now? (contract/ok :priced (str "exposed, but " (price/round1 secs) " s there cost " (price/round1 hp) " hp, " (price/round1 now-s) " s, no wait cheaper"))
+          (and best (< (:s best) now-s) (not (look? (:s best)))) (wait best)
+          (and now? (not (look? now-s))) (contract/ok :priced (str "exposed, but " (price/round1 secs) " s there cost " (price/round1 hp) " hp, " (price/round1 now-s) " s, no wait cheaper"))
+          (look? (:s best)) (contract/ok :look-first (str "exposed: " (price/round1 secs) " s there cost " (price/round1 hp) " hp, but the walk to look costs "
+                                                          (price/round1 (:hp look-hp)) " hp, " (price/round1 (:s look)) " s: the stay is judged there"))
           best (wait best)
           :else s)))))
 

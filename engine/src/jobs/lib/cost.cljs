@@ -208,6 +208,12 @@
   [counts kit]
   (+ (* 2 (- 1 (way-on-chance counts))) (dark-factor kit)))
 
+(defn look-first-hp
+  "hp of walking to an unseen place to look before staying: the walk there, and the walk back at the chance `dark` the
+  look shows the place too dark to stay (Q66). The stay is judged on arrival."
+  [there-hp back-hp dark]
+  (+ there-hp (* dark back-hp)))
+
 (defn dead-end-cost
   "Seconds a route that runs on into cells the body has not seen adds past their unseen-share (its planner price):
   at the chance the way does not go on (counts), what a dead end costs: trapped (what the chasers cost where they corner the body), or the

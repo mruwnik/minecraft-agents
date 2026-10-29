@@ -559,8 +559,10 @@
     (is (= #{:light} (:lowered-by (nth s 2))) "dawn lifts it")
     (is (re-find #"no look from here shows" (second s))))
   (is (= :ok (kind (ready/safe-at (constantly outside)) (assoc open-night :time st/noon))) "lit by day")
-  (is (= :never (with-redefs [sh-sense/seen-cell? (constantly false) sh-sense/solid-at? (constantly false)]
-                  (kind (ready/safe-at (constantly {:x 15 :y 40 :z 0})) open-night))) "a cave guess deep below: a torch lowers it"))
+  (let [cave (fn [] (with-redefs [sh-sense/seen-cell? (constantly false) sh-sense/solid-at? (constantly false)]
+                     ((juxt first #(:reason (nth % 2))) ((::ready/exposure (meta (ready/safe-at (constantly {:x 15 :y 40 :z 0})))) (ctx-of open-night)))))]
+    (is (= [:ok :look-first] (cave)) "a cave guess deep below: the walk there to look is affordable, the stay is judged there")
+    (is (= [:never :exposed] (settings/with-settings {:jobs.lib.cost.risk/risk-share 0} cave)) "no risk allowed: a torch lowers it")))
 
 (def escapes
   '[respond-to-hostile block-arrow-gap unwedge breathe extinguish night dig-pocket shut-in])
@@ -691,7 +693,8 @@
 (deftest safe-at-by-night-dug-takes-an-unseen-goal-below-an-unburied-body-as-underground
   (are [goal dug? expected] (= expected (with-redefs [sh-sense/seen-cell? (constantly false)
                                                      ready/roof-over? (constantly false)]
-                                          (kind (ready/safe-at-by-night (constantly goal) false dug?) open-night)))
+                                          (settings/with-settings {:jobs.lib.cost.risk/risk-share 0}
+                                            #(kind (ready/safe-at-by-night (constantly goal) false dug?) open-night))))
     {:x 6 :y 57 :z 0} true :ok
     {:x 6 :y 57 :z 0} false :never
     {:x 6 :y 70 :z 0} true :later))
