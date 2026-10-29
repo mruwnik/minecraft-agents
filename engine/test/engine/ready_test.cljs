@@ -497,8 +497,13 @@
     (is (= [[15 64 0]] (:look-at (nth s 2))))))
 
 (deftest the-unseen-walls-of-a-dark-room-are-looked-at-by-day-too
-  (with-redefs [look-edge/pending (fn ([_] nil) ([_ _ _] [[1 64 0]]))]
-    (is (= :look (lit 0 0 #(kind (ready/safe-at (constantly outside)) (assoc open-night :time st/noon)))))))
+  (with-redefs [look-edge/pending (fn ([_] nil) ([_ _ _] [[1 64 0]]))
+                sh-inside/dark-hall (constantly :roofed)]
+    (are [check buried?] (= :look (with-redefs [sh-sense/buried? (constantly buried?) sh-sense/buried-at? (constantly buried?)]
+                                    (lit 0 0 #(kind check (assoc open-night :time st/noon)))))
+      (ready/safe-at (constantly outside)) false
+      (ready/safe-at (constantly {:x 0 :y 63 :z 0})) false
+      ready/safe-here-by-night true)))
 
 (deftest an-unseen-cell-a-look-round-could-not-show-is-judged-where-a-buried-body-stands
   (are [looked expected] (= expected (with-redefs [sh-sense/seen-cell? (fn [_ c] (not= outside (select-keys c [:x :y :z])))

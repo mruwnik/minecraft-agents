@@ -88,13 +88,19 @@
 
 (defn dark-status
   "The exposure of the dark place `to` no wait lights: go-to's spawn chance (spawn-light/chance-at) of the cell the body would
-  stand in there (hall-cell), dark only in a dark hall; over ::risk-limit :never, lowered by a torch."
+  stand in there (hall-cell), dark only in a dark hall; over ::risk-limit :never, lowered by a torch. Where that cell is
+  the body's own, the unseen walls of its room (look-edge/pending) are looked at first: an unseen wall is an open side."
   [c to]
   (let [p (:primitives c)
         at (spawn-light/hall-cell p to)
-        chance (spawn-light/chance-at p at false)]
-    (if (<= chance (settings/get settings ::risk-limit))
+        chance (spawn-light/chance-at p at false)
+        sides (delay (when (u/within? (sh-sense/feet p) at 1) (look-edge/pending c (sense/round-looked c) 0)))]
+    (cond
+      (<= chance (settings/get settings ::risk-limit))
       (contract/ok :sealed (str "dark at " (place-text to) ", no dark floor reaches beyond " sh-inside/spawn-free-radius " blocks: nothing spawns near the body"))
+      (seq @sides)
+      (contract/look :exposed (str "dark at " (place-text to) ", walls of the room round the body not all seen") :look-at (vec @sides) :room-sides true)
+      :else
       (contract/never :exposed (str "dark at " (place-text to) ", and a mob can walk from dark floor farther than " sh-inside/spawn-free-radius " blocks off (a hall, or an open side of this room): mobs spawn there, waiting never lights it, a torch does")
                       :lowered-by #{:torch} :chance chance :at at))))
 
