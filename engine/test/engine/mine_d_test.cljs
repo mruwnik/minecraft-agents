@@ -1,7 +1,7 @@
 (ns engine.mine-d-test
   "jobs.gather.mine against the fake world."
   (:require [engine.child-ends :as ce]
-            [cljs.test :refer [deftest is async]]
+            [cljs.test :refer [deftest is are async]]
             [clojure.string]
             [engine.contract :as contract]
             [engine.core :as core]
@@ -559,8 +559,15 @@
 (deftest lava-behind-the-block-is-unseen-so-no-hazard
   (is (= :ok (classify-in {"0,63,3" "lava"})) "lava behind the block is not known")
   (is (= :no (classify-in {"0,65,3" "lava"})) "lava on top shows as drips: known")
-  (is (= :no (classify-in {"0,64,2" "lava"})) "lava in the open face, seen")
-  (is (= :buried (classify-in {"1,64,3" "stone" "-1,64,3" "stone" "0,65,3" "stone" "0,63,3" "stone" "0,64,4" "stone" "0,64,2" "stone"}))))
+  (is (= :no (classify-in {"0,64,2" "lava"})) "lava in the open face, seen"))
+
+(deftest a-face-held-by-a-torch-or-a-plant-is-open-and-a-fluid-or-rock-is-not
+  (are [face expected] (= expected (classify-in {"1,64,3" "stone" "-1,64,3" "stone" "0,65,3" "stone" "0,63,3" "stone" "0,64,4" "stone" "0,64,2" face}))
+    "wall_torch" :ok
+    "torch" :ok
+    "short_grass" :ok
+    "water" :buried
+    "stone" :buried))
 
 ;; card a053256c: a kit's later mine started its tunnel into the plot's bedrock wall one block ahead
 (deftest a-seen-bedrock-wall-ahead-is-not-the-heading-a-tunnel-starts-on

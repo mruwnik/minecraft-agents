@@ -102,14 +102,17 @@
          rules/neighbour-deltas)))
 
 (defn classify
-  "How the cell of a block would be dug: :ok, :wet (only water stops it), :buried (no seen air face) or :no (seen
-  lava beside it, or lava on top). A face never seen is neither air nor a hazard. The cell open, when given, is a face the dig will
-  have opened (the end of a side cut)."
+  "How the cell of a block would be dug: :ok, :wet (only water stops it), :buried (no seen open face: air, or a block
+  of no collision shape the body reaches past, a torch or a plant; not a fluid) or :no (seen lava beside it, or lava
+  on top). A face never seen is neither open nor a hazard. The cell open, when given, is a face the dig will have
+  opened (the end of a side cut)."
   ([c wet pos] (classify c wet pos nil))
   ([c wet pos open]
-   (let [names (face-names c pos open)]
+   (let [names (face-names c pos open)
+         version (game/version-of (:primitives c))
+         open? #(and % (not (bs/fluids %)) (rules/empty-shape? version %))]
      (cond
-       (not-any? bs/air names) :buried
+       (not-any? open? names) :buried
        (some #{"lava"} names) :no
        (and (some #{"water"} names) (not wet)) :wet
        :else :ok))))

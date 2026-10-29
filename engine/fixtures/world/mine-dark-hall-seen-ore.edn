@@ -22,4 +22,8 @@
    :settings {:jobs.lib.cost.risk/risk-share 0}
    :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 16]]}
    :expect [{:event {:source :job :data {:reason :exposed}} :within-s 60 :of-job true}]
-   :after [[:block [3 1 16] "iron_ore"] [:item "raw_iron" [:= 0]]]}]}
+   :after [[:block [3 1 16] "iron_ore"] [:item "raw_iron" [:= 0]]]}
+  {:name "a-torch-in-the-ores-only-open-face-leaves-it-diggable"
+   :blocks [[:set [4 1 16] "wall_torch[facing=south]"]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:block [3 1 16] "air"] [:item "raw_iron" [:= 1]]]}]}

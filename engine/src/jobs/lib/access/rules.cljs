@@ -52,13 +52,23 @@
    "melon_seeds" "melon_stem" "pumpkin_seeds" "pumpkin_stem" "torchflower_seeds" "torchflower_crop"
    "pitcher_pod" "pitcher_crop"})
 
+(defn shape-of
+  "The collision shape minecraft-data for version gives block (a name): \"block\", \"empty\", nil for no such block."
+  [version block]
+  (some-> block (->> (aget (aget (minecraft-data version) "blocksByName"))) (aget "boundingBox")))
+
+(defn empty-shape?
+  "Whether block has an empty collision shape (shape-of): air, fluids, torches, plants. A body stands in it and reaches past it."
+  [version block]
+  (= "empty" (shape-of version block)))
+
 (defn no-collision?
-  "True when the block that item places has an empty collision shape in minecraft-data for version, so the body
+  "True when the block that item places has an empty collision shape (empty-shape?), so the body
   may stand in the cell: seeds, saplings, torches, flowers, crops. Carpets count too (a 1/16 layer). False for an
   item that places no block."
   [version item]
   (let [block (if (contains? item-block item) (item-block item) item)
-        shape (some-> block (->> (aget (aget (minecraft-data version) "blocksByName"))) (aget "boundingBox"))]
+        shape (shape-of version block)]
     (boolean (and block (or (= "empty" shape) (and shape (str/ends-with? block "_carpet")))))))
 
 (def not-a-floor bs/bad-floor)
