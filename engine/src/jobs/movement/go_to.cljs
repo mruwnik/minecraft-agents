@@ -40,7 +40,7 @@
   instead, a name not in memory falling back to the shared marker of that name (jobs.lib.world/marker). With :see a cell
   counts only where the eye sees the block at :pos (jobs.lib.aim); a search that finds no such stand gives up :why :out-of-sight.
   How it walks, escalates, climbs and swims is in the docstrings of jobs.movement.go-to.* (walk, escalation, own-way, air, torch, health, preview).
-  - The call's worth (ctx/worth, the :worth call key; ##Inf, arrive, when no caller says one) bounds a tour of frontiers when no route is known (that less the trip and the straight walk), a stair or door over guessed cells, the dig budget, the send-backs and a one-way drop, and, when finite, sets the route risk the start check accepts (jobs.lib.price/allowed: what it buys at the price of an hp, all but 1 hp at most).
+  - The call's worth (ctx/worth, the :worth call key; ##Inf, arrive, when no caller says one) bounds a tour of frontiers when no route is known (that less the trip and the straight walk), a stair or door over guessed cells, the dig budget, the send-backs and a one-way drop, and sets the route risk the start check accepts (jobs.lib.walk-risk/buys-hp: what it buys at the price of an hp; no hp refuses ##Inf).
   - Refused at submit (or the caller's ctx/call throws): an arg its spec refuses, such as a :tolls entry that is not {:x :y :z :factor} (finite cell, factor 0 or more), a :gait that is not :auto, :walk or :sneak.
   - Ends at once, before any walk, data {:arrived false :text}: impossible :bad-pos (a :pos
     outside the world), :bad-name (a :place that is not a valid name), :unsupported (a body with no pathWorld sensing)

@@ -439,6 +439,16 @@
         (is (nil? (check (plan-of (take 10 straight-cells)) true)) "a found plan within the affordable")
         (is (nil? (check (plan-of straight-cells) false)) "is not priced again without a hostile new")))))
 
+(deftest a-goal-worth-arrival-lets-a-safe-prefix-through-at-any-hp
+  ;; the walk on, caves free, costs 25 hp, past all but 1 of 20: a plain go-to (##Inf) buys it, a worth of 400 does not
+  (let [c (ready-test/ctx-of {:time st/noon :self {:pos {:x 0 :y 64 :z 0}}})
+        goal {:x 30 :y 64 :z 0}
+        prefix {:status "partial" :steps (vec (take 10 straight-cells))}
+        estimate (fn [c goal & [{:keys [caves-free?]} :as opts]] (cond-> (apply prefix-estimate c goal opts) caves-free? (assoc :hp 25)))]
+    (with-redefs [risk/estimate estimate risk/estimate-of prefix-estimate-of]
+      (is (identical? prefix (reprice/safe-prefix c goal prefix)))
+      (is (nil? (reprice/safe-prefix (assoc c :worth worth-400) goal prefix))))))
+
 (deftest the-stay-a-risky-walk-is-weighed-against-is-priced-anew-when-what-it-reads-changes
   (let [c (ready-test/ctx-of {:time st/noon :self {:pos {:x 0.5 :y 64 :z 0.5}}})
         state (fake/state (:primitives c))

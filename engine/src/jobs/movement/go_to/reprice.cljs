@@ -32,7 +32,7 @@
   (= "searching" (some-> ^js (:r plan) .-reason)))
 
 (defn safe-prefix
-  "The plan to walk of a plan that stops short of pos and whose walk to pos is within price/allowed but for the unseen
+  "The plan to walk of a plan that stops short of pos and whose walk to pos is within what the worth buys (risk/buys-hp) but for the unseen
   cells guessed dark (risk/estimate's caves-free?): its steps before the first more likely dark than not
   (spawn-light/dark-share), when that step is such a guess (spawn-light/dark-guess?: a look may show it lit), and they leave
   the body's cell and pass status, with :cut-rest the look-ahead steps from that step on (drive/follow! walks to the cut,
@@ -47,7 +47,8 @@
     (when (and (not= "found" (:status plan)) end
                (or (empty? more) (spawn-light/dark-guess? p (first more)))
                (not= feet (mapv js/Math.floor ((juxt :x :y :z) end)))
-               (<= (:hp (risk/estimate c pos {:plan plan :caves-free? true})) (price/allowed c))
+               (<= (:hp (risk/estimate c pos {:plan plan :caves-free? true}))
+                   (let [self (.self (:primitives c))] (risk/buys-hp (.-health self) (.-food self) (ctx/worth c))))
                (= :ok (first (status c end (assoc plan :status "found" :steps steps)))))
       (if (seq more)
         (-> plan (assoc :steps steps :status "partial" :cut-rest (vec (take wwalk/look-ahead-steps more))) (dissoc :frontier-taken))
