@@ -5,6 +5,7 @@
             [engine.settings :as settings]
             [jobs.lib.danger :as danger]
             [jobs.lib.shelter.clock :as sh-clock]
+            [jobs.lib.util :as u]
             [jobs.lib.shelter.sense :as sh-sense]))
 
 (a/defargs settings
@@ -15,14 +16,20 @@
 
 (def sleep-start-s "Seconds in a bed before the night skips (vanilla: 100 ticks of every player's sleep)." 5)
 
+(def rest-box-xz "Blocks either side of a bed a monster keeps its sleeper from resting (vanilla Player.startSleepInBed: an AABB of 8 either way across, 5 either way up and down, round the bed block's bottom centre)." 8)
+(def rest-box-y "See rest-box-xz." 5)
+
 (defn monsters-near-bed?
-  "Whether a hostile the body knows of stands within 8 blocks across and 5 up or down of the bed cell `at`: vanilla refuses
-  the sleep then (\"you may not rest now\")."
+  "Whether a hostile the body knows of stands in the rest box (rest-box-xz, rest-box-y) round the bed cell `at`: vanilla
+  refuses the sleep then (\"you may not rest now\"). Known hostiles are taken from the box's far corner as seen from the
+  body, since their distance is the body's."
   [p at]
-  (boolean (some (fn [e] (let [m (danger/mob-pos p e)]
-                           (and (<= (Math/abs (- (:x m) (:x at))) 8) (<= (Math/abs (- (:z m) (:z at))) 8)
-                                (<= (Math/abs (- (:y m) (:y at))) 5))))
-                 (danger/known-hostiles p 12 {}))))
+  (let [corner (Math/sqrt (+ (* 2 rest-box-xz rest-box-xz) (* rest-box-y rest-box-y)))
+        reach (+ corner (u/dist (u/self-pos {:primitives p}) at))]
+    (boolean (some (fn [e] (let [m (danger/mob-pos p e)]
+                             (and (<= (Math/abs (- (:x m) (+ (:x at) 0.5))) rest-box-xz) (<= (Math/abs (- (:z m) (+ (:z at) 0.5))) rest-box-xz)
+                                  (<= (Math/abs (- (:y m) (:y at))) rest-box-y))))
+                   (danger/known-hostiles p reach {})))))
 
 (defn sleeping-players
   "Other players within radius the body sees asleep (the primitives report a sleeping pose only in sight)."

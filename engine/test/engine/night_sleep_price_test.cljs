@@ -79,7 +79,9 @@
         zombie {:id 8 :name "zombie" :kind "hostile" :pos {:x 4 :y 64 :z 2} :health 20}]
     (is (true? (near zombie {:x 0 :y 64 :z 0})))
     (is (false? (near zombie {:x 20 :y 64 :z 0})) "more than 8 blocks across")
-    (is (false? (near zombie {:x 0 :y 72 :z 0})) "more than 5 blocks up")))
+    (is (false? (near zombie {:x 0 :y 72 :z 0})) "more than 5 blocks up")
+    (is (true? (near (assoc zombie :pos {:x 8 :y 69 :z 8}) {:x 0 :y 64 :z 0})) "the box's far corner, 12.4 blocks off")
+    (is (true? (near (assoc zombie :pos {:x 0 :y 64 :z 8}) {:x 0 :y 64 :z 0})) "8 across to the cell's centre")))
 
 (deftest with-the-respawn-point-worth-nothing-the-body-shelters-rather-than-shut-its-bed-in
   (async done
