@@ -223,7 +223,7 @@
   seen (:look, look-first) has a third way: walk there to look, its hp priced (walk-risk/risk-s) plus its seconds, ok
   :look-first while it is affordable and cheaper than the other ways and than the job's own answers to s (own-way), with
   the way's :child as its :look-first child call when it has one (walk-look). An own answer cheaper than acting now leaves
-  s to the job.
+  s to the job."
   [c s]
   (let [[kind _ {:keys [reason chance wait-ms] look-way :look :as data}] s]
     (if-not (and (contains? #{:later :never} kind) (= :exposed reason) (number? chance))
