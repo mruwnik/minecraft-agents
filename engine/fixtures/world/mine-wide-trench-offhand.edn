@@ -1,4 +1,5 @@
 ;; jobs.gather.mine (no tunnel), dark ore 6 blocks east in an open floored corridor (a pit would make it unreachable, not unseen):
+;; (the place act hangs only plain torches, so the soul-torch case carries four for the branch stock check)
 ;; unseen without a torch (engine.perception :near 4), seen and dug with a torch or soul torch in either hand (:near-torch 7, cards 50602363/10d96ca4).
 {:defaults
  {:tags [:mine :jobs] :time :any
@@ -17,7 +18,7 @@
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 50 :of-job true}]
    :after [[:not-block [25 0 16] "iron_ore"]]}
   {:name "offhand-soul-torch-sees-and-digs-ore-6-away"
-   :act [[:rcon "item replace entity $BODY weapon.offhand with soul_torch"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:offHand {:name "soul_torch"}}}] 10]
+   :act [[:rcon "item replace entity $BODY inventory.1 with torch 4"] [:rcon "item replace entity $BODY weapon.offhand with soul_torch"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:offHand {:name "soul_torch"}}}] 10]
          [:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :ways #{:seen} :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 50 :of-job true}]
    :after [[:not-block [25 0 16] "iron_ore"]]}
