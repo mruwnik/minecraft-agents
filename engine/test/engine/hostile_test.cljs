@@ -218,7 +218,7 @@
   one mob 2 blocks off (health: what is left of it, nil full): fight it, or walk away and meet it again."
   [weapon mob health]
   (let [f (cost/fight-answer {:weapon weapon :mobs [{:name mob :distance 2 :health health}]})]
-    (:answer (cost/decide {:health 20 :food 20 :level 0 :carried 0}
+    (:answer (cost/decide {:health 20 :food 20 :level 0 :carried 0 :respawn {:x 0 :y 64 :z 5000}}
                           {:fight f :flee (cost/flee-answer {:food 20 :mobs [{:name mob :distance 2 :follow 35}] :later f})}
                           {:x 0 :y 64 :z 0}))))
 

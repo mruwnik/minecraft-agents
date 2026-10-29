@@ -224,6 +224,7 @@
  :jobs.lib.child/max-fruitless
  :jobs.lib.combat/attack-gap-ms
  :jobs.lib.cost.death/spawn-horizon-s
+ :jobs.lib.cost.death/unknown-respawn-blocks
  :jobs.lib.cost.find/leg-spacing
  :jobs.lib.cost.planner/drop-cost
  :jobs.lib.cost.threat/difficulty

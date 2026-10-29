@@ -440,7 +440,7 @@
   (let [lost #(- (cost/death-cost (assoc % :carried 3000) far) (cost/death-cost % far))]
     (is (zero? (lost {:respawn {:x 0 :y 64 :z 0}})) "a bed 100 blocks off: the walk back gets it")
     (is (= 3000 (lost {:respawn {:x 3000 :y 64 :z 0}})) "a bed too far for the despawn window")
-    (is (= 3000 (lost {})) "no bed: world spawn")))
+    (is (= 3000 (lost {})) "no respawn known: the load is given up")))
 
 (deftest a-death-wakes-at-the-live-spawn-bed-else-at-world-spawn
   (let [body #(fake/create {:self {:pos [40 64 3] :worldSpawn %}})
@@ -458,7 +458,7 @@
 (deftest a-death-is-priced-from-the-body-s-own-respawn-not-a-default-walk
   (let [at #(fake/create {:self {:pos [40 64 3] :worldSpawn %}})]
     (is (< (cost/death-s (at [40 64 40]) nil) (cost/death-s (at [4000 64 0]) nil)) "a near spawn is a cheap death")
-    (is (< (cost/death-s (at nil) nil) (cost/death-s (at [40 64 40]) nil)) "no known respawn: no walk priced")))
+    (is (< (cost/death-s (at [40 64 40]) nil) (cost/death-s (at nil) nil) (cost/death-s (at [4000 64 0]) nil)) "no known respawn: a death with a walk, not a free one")))
 
 (deftest a-hold-costs-its-seconds-and-hp-lost-and-a-way-out-its-hurt-and-death-risk
   (let [body {:respawn {:x 0 :y 64 :z 0} :level 0 :health 3}

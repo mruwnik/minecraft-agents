@@ -35,6 +35,8 @@
                       :doc "Deaths an hour of play, every cause: the fresh-start trials of 2026-10-21/22 (Wicken r5, 8 deaths in 6h15; docs/fresh-start-design.md section 1)."}
    ::spawn-horizon-s {:default 1200 :spec (a/num-in 0 nil)
                       :doc "Seconds a respawn point is priced over (spawn-worth): one in-game day, after which the needs-bed errand comes again."}
+   ::unknown-respawn-blocks {:default 90 :spec (a/num-in 0 nil)
+                             :doc "Blocks of walk back priced for a death of a body that knows no respawn (before the game sends its spawn): the median of 48 deaths in the trial bodies' events, death to respawned (quartiles 31 and 345), 2026-10-29."}
    ::memory-ms {:default 7200000 :spec (a/num-in 1 nil)
                 :doc "Milliseconds over which the memory of a death fades from full weight to none."}
    ::terrain-rate {:default 4 :spec (a/num-in 0 nil)
@@ -64,18 +66,19 @@
   (* (settings/get settings ::seconds-per-level) (or (:level body) 0)))
 
 (defn walk-back-blocks
-  "Blocks from the body's :respawn to `at` (nil: the body's own :at, where a kit was read); 0 with either unknown: a body
-  that knows no respawn is priced as waking where it died."
+  "Blocks from the body's :respawn to `at` (nil: the body's own :at, where a kit was read); 0 with no place; with no
+  :respawn (the game has not sent its spawn yet) the prior ::unknown-respawn-blocks."
   [body at]
   (let [from (:respawn body)
         at (or at (:at body))]
-    (if (and from at)
-      (js/Math.hypot (- (:x from) (:x at)) (- (:y from) (:y at)) (- (:z from) (:z at)))
-      0)))
+    (cond
+      (nil? from) (settings/get settings ::unknown-respawn-blocks)
+      (nil? at) 0
+      :else (js/Math.hypot (- (:x from) (:x at)) (- (:y from) (:y at)) (- (:z from) (:z at))))))
 
 (defn kept?
   "Whether the walk back from the body's :respawn to `at` beats the despawn of what a death there leaves
-  (value/fetch-cost's :too-far); never with no :respawn."
+  (value/fetch-cost's :too-far); never with no :respawn: what is carried is then given up."
   [body at]
   (boolean (and (:respawn body) (not (:reason (value/fetch-cost {:distance (walk-back-blocks body at) :elapsed-ms 0}))))))
 
