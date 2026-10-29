@@ -6,7 +6,7 @@
             [engine.core.attention :refer [request-attention!]]
             [engine.core.fruitless :refer [end-silent-spell! reset-backoff!]]
             [engine.core.register :refer [effective-register evaluate-register! expire-changes! levels preempts?]]
-            [engine.core.ending :refer [clear-asked! run-status]]
+            [engine.core.ending :refer [call-of clear-asked! run-status]]
             [engine.core.cleanup :as cleanup]
             [engine.core.activity :refer [check-body-idle! check-idle! restart-body-idle! section-level sections]]
             [engine.core.list-edits :refer [submit!]]
@@ -142,13 +142,14 @@
 
 (defn trigger-status
   "The status entry's job would start with now: its start and run checks as one (contract/all), over a ctx of the job
-  as it would be fired. A check that throws holds the trigger (:check-threw, told by startable-trigger?)."
+  as it would be fired, reading the call it would fire with (ctx/worth). A check that throws holds the trigger
+  (:check-threw, told by startable-trigger?)."
   [eng entry]
   (try (let [node (expr/parse (:jobs eng) (:job entry))
              inst {:id (str "trigger:" (name (:id entry))) :spec node :reflex (:id entry)}
              [def args] (job-of eng inst)
              c (check-ctx eng inst args)]
-         (contract/all [(ctx/check-status c def) (run-status def c)]))
+         (contract/all [(ctx/check-status c def) (run-status def (assoc c :quote-call (first (call-of c def))))]))
        (catch :default e
          (contract/later :check-threw (str e)))))
 
