@@ -19,6 +19,8 @@
   {:name "hungry-reflex-cuts-the-pause-which-then-completes"
    :register [{:trigger :hungry}]
    :body {:inventory [["bread" 6]] :effects []}
+   :blocks [[:set [12 0 16] "red_bed[facing=east,part=foot]"] [:set [13 0 16] "red_bed[facing=east,part=head]"]]
+   :memory [{:kind :spawn-bed :data {:pos #xyz [12 0 16]} :policy {:cap 1 :ttl :forever}}]
    :act [[:job (jobs.time.noop {:seconds 30})]
          [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 15 minecraft:generic"]]

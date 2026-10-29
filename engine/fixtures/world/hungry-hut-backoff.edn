@@ -4,8 +4,9 @@
 {:defaults
  {:tags [:survival :hungry :night] :time :any
   :plot {:height 8}
-  :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"] [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
+  :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"] [:set [9 1 9] "torch"] [:set [15 1 15] "torch"] [:set [11 0 12] "red_bed[facing=east,part=foot]"] [:set [12 0 12] "red_bed[facing=east,part=head]"]]
   :body {:at [13.5 0 13.5] :settle-s 2}
+  :memory [{:kind :spawn-bed :data {:pos #xyz [11 0 12]} :policy {:cap 1 :ttl :forever}}]
   :limit-s 130}
  :cases
  [{:name "hungry-in-a-hut-with-no-food-fires-once-then-rests"
@@ -14,4 +15,4 @@
          [:rcon "damage $BODY 14 minecraft:generic"]] 
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 30}
             {:count-event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :for-s 100 :at-least 1 :at-most 2}]
-   :after [[:body-near [13.5 0 13.5] 4]]}]}
+   :after [[:body-near [12.5 0 12.5] 5]]}]}

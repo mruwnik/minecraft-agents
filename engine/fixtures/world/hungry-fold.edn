@@ -4,12 +4,14 @@
 ;; Not here: hp 10, food 14, no food carried. The known-chest case is hungry-memory-seed.edn (a :memory seed).
 ;; Rules: look for food when food < min(18, 6 + missing hp); eat at once when hp < 7, food < 20 and food is carried;
 ;; a hurt body never goes to bed or stands still to heal, it keeps working (a bed is known in every case).
+;; The spawn-bed memory seed matters: a death far from the spawn is dear, and a hurt body is then the low-health trigger's, not hungry's.
 {:defaults
  {:tags [:survival :hungry]
   :plot {:height 6}
   :register [{:trigger :hungry}]
   :blocks [[:set [8 0 16] "red_bed[facing=east,part=foot]"] [:set [9 0 16] "red_bed[facing=east,part=head]"]]
   :body {:at [16.5 0 16.5] :settle-s 2}
+  :memory [{:kind :spawn-bed :data {:pos #xyz [8 0 16]} :policy {:cap 1 :ttl :forever}}]
   :limit-s 60}
  :cases
  [{:name "hp5-food9-bread-eats-in-place"
