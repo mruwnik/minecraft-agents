@@ -229,6 +229,15 @@
           (is (= #{{:x 10 :y 64 :z 0} {:x 12 :y 64 :z 0}} (set (call-args p "dig" "pos"))) "only the ripe ones")
           (is (= 2 (count (calls p "eat")))))))))
 
+(deftest a-melon-beside-the-body-out-of-view-is-looked-for-and-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:food 1} :blocks {"8,64,0" "melon"} :drops {:melon "melon_slice"}} :perceive? true)]
+          (await (one-round! eng {:explore false}))
+          (is (= [{:x 8 :y 64 :z 0}] (call-args p "dig" "pos")) "the hunt's look for animals sees no blocks: the crop way looks for its own")
+          (is (= ["melon_slice"] (call-args p "eat" "item"))))))))
+
 (deftest harvest-drops-seen-but-none-taken-end-the-round-stopped-not-looping
   (async done
     (tu/run-async done
