@@ -140,6 +140,7 @@
    'top {:args {:kid-worth {:doc "worth for the kid" :default nil}}
          :worth-of (fn [_] 7)
          :can-start? (fn [c] (swap! worths assoc :top-start (ctx/worth c)) (contract/ok :ready "ready"))
+         :safe? (fn [c] (swap! worths update :top-safe (fnil conj #{}) (ctx/worth c)) (contract/ok :ready "ready"))
          :round (fn ^:async top [c]
                   (swap! worths assoc :top (ctx/worth c))
                   (await (ctx/call c :a 'kid {}))
@@ -172,6 +173,7 @@
           (core/submit! eng '(top {:worth 12}) {})
           (await (core/tick! eng))
           (is (= 12 (:top @worths) (:top-start @worths)) "the root's args beat the hook")
+          (is (= #{12} (:top-safe @worths)) "safe? before the start sees the would-be call's worth too")
           (is (= 12 (:kid @worths)) "inherited")
           (is (some? (contract/call-problem 'bare nil {:worth -1})) "a negative worth is refused")
           (is (some? (contract/call-problem 'bare nil {:worth js/NaN})) "NaN is refused")
