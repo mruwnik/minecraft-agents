@@ -9,8 +9,8 @@
   A remembered death fades: death-weight. One by terrain (a fall, water, lava, a wall) costs go-to's plans near its spot
   as terrain-danger.
 
-  spawn-worth: what a respawn point here is worth over the next ::spawn-horizon-s, the deaths expected meanwhile times what
-  each would cost more from the respawn the body has."
+  spawn-worth: what a respawn point is worth over the next ::spawn-horizon-s, the deaths expected meanwhile where the body
+  works times what each would cost more from the respawn the body has."
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.cost.fight :as fight]
@@ -288,8 +288,8 @@
 
 (defn spawn-worth
   "Seconds a respawn point at `at` is worth to body: the deaths expected over ::spawn-horizon-s (::deaths-per-hour) times
-  what each costs more from the body's own :respawn than from `at`."
-  [body at]
+  what each costs more from the body's own :respawn than from `at`, the death at `site`, where the body will work meanwhile."
+  [body at site]
   (* (settings/get settings ::deaths-per-hour) (/ (spawn-horizon-s) 3600)
-     (max 0 (- (death-cost body at) (death-cost (assoc body :respawn at) at)))))
+     (max 0 (- (death-cost body site) (death-cost (assoc body :respawn at) site)))))
 

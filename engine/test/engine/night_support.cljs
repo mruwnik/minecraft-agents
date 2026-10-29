@@ -195,7 +195,10 @@
   "A cell at [10 64 4] walled in with a built block, which go-to never digs to reach it."
   (into {} (for [x [9 10 11] y [64 65] z [3 4 5] :when (not= [x z] [10 4])] [(str x "," y "," z) "stone_bricks"])))
 
-(def bed-world (update lit-world :inventory conj {:name "red_bed" :count 1}))
+(def bed-world
+  "lit-world with a carried bed and two players awake: the body's sleep does not skip the night, so a bed in the open
+  lies exposed to it all night (one that skips it costs nothing more than one at home)."
+  (-> lit-world (update :inventory conj {:name "red_bed" :count 1}) (assoc :players ["Alex" "Bo" "Cy"] :skipNight false)))
 
 (defn with-room
   "bed-world with room built in place of the home-roof cell: its walls would close a doorway or fill a room that room opens."

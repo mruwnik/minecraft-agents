@@ -494,11 +494,11 @@
 
 (defn worth-to
   "Seconds getting one of names is worth to body at `at`: the least goal-value among them, a bed (it sets the respawn)
-  with its spawn-worth on top; 0 for no names."
+  with its spawn-worth on top, put down and died near at `at`; 0 for no names."
   [body names at]
   (if (seq names)
     (apply min (map (fn [n] (+ (:value (goal-value [{:name n :count 1}]))
-                               (if (bed? n) (spawn-worth body at) 0)))
+                               (if (bed? n) (spawn-worth body at at) 0)))
                     names))
     0))
 

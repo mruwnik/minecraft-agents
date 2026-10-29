@@ -472,12 +472,15 @@
     (is (= 2 (:rate (danger 3600000))))
     (is (zero? (:rate (danger 8000000))))))
 
-(deftest a-respawn-point-here-is-worth-the-deaths-it-brings-nearer
+(deftest a-respawn-point-is-worth-the-deaths-at-the-work-site-it-brings-nearer
   (let [here {:x 0 :y 64 :z 0}
-        lost (cost/spawn-worth {:carried 100} here)]
-    (is (> lost (cost/spawn-worth {:carried 0} here)) "with no respawn the carried items are lost too")
-    (is (> lost (cost/spawn-worth {:respawn far} here) 0) "a far respawn bed is worth less to replace")
-    (is (zero? (cost/spawn-worth {:respawn here} here)))))
+        off {:x 10 :y 64 :z 0}
+        lost (cost/spawn-worth {:carried 100} here here)]
+    (is (> lost (cost/spawn-worth {:carried 0} here here)) "with no respawn the carried items are lost too")
+    (is (> lost (cost/spawn-worth {:respawn far} here here) 0) "a far respawn bed is worth less to replace")
+    (is (zero? (cost/spawn-worth {:respawn here} here here)))
+    (is (> (cost/spawn-worth {:respawn spawn-far} here here) (cost/spawn-worth {:respawn spawn-far} off here))
+        "a bed where the body works brings its deaths nearer than one 10 blocks off")))
 
 (deftest a-find-is-worth-its-value-a-bed-its-respawn-too-and-no-names-nothing
   (let [here {:x 0 :y 64 :z 0}]

@@ -86,9 +86,10 @@
             (is (< (:home prices) (:shelter prices)) "cheaper than digging in, whose morning and dark cell are priced")))))))
 
 (defn ^:async night-at-seen-hut
-  "The night with no home set, the body outside the hut of hut-shelter-test (door at z 2) at dusk with extra items; {:eng :p}."
-  [inventory]
-  (let [world (-> (hut/hut-world {:x 5 :y 64 :z 6} {}) (assoc :time night :inventory inventory :light-default [15 4])
+  "The night with no home set, the body outside the hut of hut-shelter-test (door at z 2) at dusk with extra items and
+  world keys more; {:eng :p}."
+  [inventory more]
+  (let [world (-> (hut/hut-world {:x 5 :y 64 :z 6} {}) (assoc :time night :inventory inventory :light-default [15 4]) (merge more)
                   (update :light assoc [5 64 6] [15 0]))
         {:keys [eng p] :as r} (await (night-at-home world {:x 5 :y 64 :z 0} {} {:home? false}))]
     (aset p "seenBlockAt" (fn [pos] (let [b (.blockAt p pos)] #js {:name (.-name b) :pos pos :age-ms 0 :properties (.-properties b)})))
@@ -99,7 +100,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (await (night-at-seen-hut st/dirt-stack))]
+        (let [{:keys [p]} (await (night-at-seen-hut st/dirt-stack {}))]
           (is (empty? (filter #(< 3 (:z (st/arg-pos %))) (st/calls p "place"))) "no pit dug beside the hut")
           (is (< (:z (st/pos-of p)) 2) "inside the hut")
           (is (false? (hut/door-open? p)) "the door is shut"))))))
@@ -197,7 +198,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (await (night-at-seen-hut (conj st/dirt-stack {:name "red_bed" :count 1})))]
+        (let [{:keys [p]} (await (night-at-seen-hut (conj st/dirt-stack {:name "red_bed" :count 1}) (select-keys bed-world [:players :skipNight])))]
           (is (= 1 (count (bed-places p))))
           (is (every? #(< (:z (st/arg-pos %)) 2) (bed-places p)) "the bed is put down in the hut"))))))
 
@@ -324,7 +325,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (await (night-at-home (update far-home-world :inventory conj {:name "red_bed" :count 1}) {:x 40 :y 64 :z 0}))]
+        (let [{:keys [eng p]} (await (night-at-home (merge far-home-world (select-keys bed-world [:inventory :players :skipNight])) {:x 40 :y 64 :z 0}))]
           (await (tu/run-until-empty eng 80))
           (is (= [] (filterv #(< (:x (st/arg-pos %)) 38) (bed-places p))) "no bed was set down on the open ground on the way")
           (is (<= 39 (:x (st/pos-of p))) "walked to the far home"))))))
@@ -395,16 +396,26 @@
           (is (= [] (filterv #(< (:x (st/arg-pos %)) 9) (bed-places p))) "no bed was set down on the open ground")
           (is (seq (bed-places p)) "it was set down in the home"))))))
 
-(deftest a-home-that-cannot-be-entered-leaves-the-carried-bed-in-the-bag
+(deftest a-home-that-cannot-be-entered-leaves-the-carried-bed-to-the-lit-ground-outside
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [j [0.0 0.5 0.99]]
-          (let [{:keys [eng p seen]} (await (night-at-home (update bed-world :blocks merge walled-home) {:x 10 :y 64 :z 0} {} {:rand (constantly j) :ray-deg 1 :radius 14}))]
-            (await (tu/run-until-empty eng 60))
-            (is (= [] (bed-places p)) (str "no bed in the open, sight jitter " j))
-            (is (= [] (st/calls p "sleep")) "and no sleep out there")
-            (is (seq (st/emitted seen :night.bed-kept)) "said why")))))))
+          (let [{:keys [eng p]} (await (night-at-home (update bed-world :blocks merge walled-home) {:x 10 :y 64 :z 0} {} {:rand (constantly j) :ray-deg 1 :radius 14}))
+                _ (await (tu/run-until-empty eng 60))
+                [placed :as places] (mapv st/arg-pos (bed-places p))]
+            (is (= 1 (count places)) (str "one bed put down, sight jitter " j))
+            (is (not= {:x 10 :y 64 :z 0} placed) "outside the walled cell")
+            (is (= [placed] (mapv st/arg-pos (st/calls p "sleep"))) "and slept in: nothing spawns on the lit ground")))))))
+
+(deftest a-carried-bed-whose-sleep-skips-the-night-goes-down-here-not-in-a-home-a-walk-off
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (await (night-at-home (dissoc (with-room room-with-doorway) :players :skipNight) {:x 10 :y 64 :z 0}))]
+          (await (tu/run-until-empty eng 40))
+          (is (< (:x (st/pos-of p)) 9) "no walk home")
+          (is (= 1 (count (filterv #(< (:x (st/arg-pos %)) 9) (bed-places p)))) "the bed went down here, the night skipped by the sleep"))))))
 
 (deftest a-roof-walk-into-a-breached-home-is-not-repeated
   (async done
