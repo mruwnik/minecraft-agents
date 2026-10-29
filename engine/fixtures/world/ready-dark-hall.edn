@@ -1,6 +1,6 @@
 ;; Cards 7e68c68b (Q345/Q388): a dark roofed place is exposed only when dark floor beyond the 24-block spawn-free radius is reachable on foot, and then
 ;; priced by the stay (jobs.debug.ready-probe :stay-s). Stone mass x 2..60, z 2..30, y 0..6, a 1x2 dark tunnel cut along z 16; the body walks to x 40 of a long one (dark cells count as seen only near, so it must have walked it) and the probe judges the place it stands.
-;; Should-succeed: a very long stay in a short tunnel the body has walked to its end, a short stay in a long one. Should-fail: a very long stay (5000 s) at the far end of a long dark tunnel, or in a short one whose end the body has not seen (it may go on: cost/hall-chance), starts nothing.
+;; Should-succeed: a very long stay in a short tunnel whose ends the body has seen (dark blocks are made out only within 4: it looks round, then walks to the far end), a short stay in a long one. Should-fail: a very long stay (5000 s) at the far end of a long dark tunnel, or in a short one whose end the body has not seen (it may go on: cost/hall-chance), starts nothing.
 {:defaults
  {:tags [:readiness :survival] :time :any
   :plot {:light :dark :height 12 :length 64 :width 34}
@@ -9,14 +9,16 @@
  :cases
  [{:name "a-long-stay-in-a-short-dark-tunnel-starts"
    :blocks [[:fill [2 0 2] [60 6 30] "stone"] [:fill [4 0 16] [20 1 16] "air"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [18 0 16]})]
+   :act [[:job (jobs.movement.look-around)]
+         [:await {:source :job :kind :completed :data {:name "jobs.movement.look-around"}} 30]
+         [:job (jobs.movement.go-to {:pos #at [20 0 16]})]
          [:await {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} 60]
          [:job (jobs.debug.ready-probe {:stay-s 5000})]]
    :expect [{:event {:source :job :kind :job.ready-probe} :within-s 30 :of-job true}]}
   {:name "a-long-stay-in-a-short-dark-tunnel-whose-end-is-unseen-is-refused"
    :blocks [[:fill [2 0 2] [60 6 30] "stone"] [:fill [4 0 16] [20 1 16] "air"]]
    :act [[:job (jobs.debug.ready-probe {:at #at [18 0 16] :stay-s 5000})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 30 :of-job true}
+   :expect [{:event {:source :job :kind :stopped :message [:contains "farther than 24 blocks"]} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :job.ready-probe} :for-s 25 :of-job true}]}
   {:name "a-short-stay-at-the-far-end-of-a-long-dark-tunnel-starts"
    :blocks [[:fill [2 0 2] [60 6 30] "stone"] [:fill [4 0 16] [58 1 16] "air"]]
