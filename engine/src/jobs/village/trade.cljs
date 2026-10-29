@@ -8,6 +8,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.aim :as aim]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.villager :as villager]
             [jobs.lib.util :as u]
@@ -73,6 +74,12 @@
 (def job 'jobs.village.trade)
 
 (defn bought [c] (:bought (ctx/mem c) 0))
+
+(defn worth-of
+  "Seconds a root purchase is worth: the cost/goal-value of the :buy items still to buy."
+  [c]
+  (let [{:keys [buy count]} (:args c)]
+    (if (string? buy) (:value (cost/goal-value [{:name buy :count (max 0 (- count (bought c)))}])) 0)))
 
 (def currency "The item villagers sell for; the price is known only once the offers are read." "emerald")
 

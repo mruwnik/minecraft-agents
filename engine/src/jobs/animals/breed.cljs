@@ -9,6 +9,7 @@
             [jobs.lib.pen-read :as pen-read]
             [jobs.lib.animals :as animals]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.bait :as bait]
@@ -94,6 +95,11 @@
 
 
 (def defaults {:spend {:job-time ::job-time-s} :least 2})
+
+(defn worth-of
+  "Seconds a root call is worth: a calf per pair, each cost/animal-worth of :mob."
+  [c]
+  (* (:pairs (:args c)) (cost/animal-worth (:mob (:args c)))))
 
 (defn can-start?
   "Never :unknown-mob: no breeding food is known for :mob. Later :no-food: a known mob, no breeding food carried and

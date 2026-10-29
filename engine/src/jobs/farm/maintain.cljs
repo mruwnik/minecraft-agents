@@ -113,6 +113,13 @@
 
 (defn tidy-work? [c] (boolean (:call (decide :tidy (:args c) (facts c)))))
 
+(defn worth-of
+  "Seconds a root pass is worth: tend's pass-price :worth; ##Inf while a step the price leaves out would run (tend's
+  :unpriced, a tidy, a compost or a deposit), as tend never declines for those."
+  [c]
+  (let [{:keys [worth unpriced]} (tend/pass-price c (tend/check-facts c))]
+    (if (or (seq unpriced) (tidy-work? c) (stock-work? c)) ##Inf worth)))
+
 (defn can-start?
   "Tend's start check, or ok while a tidy or stock step has work."
   [c]

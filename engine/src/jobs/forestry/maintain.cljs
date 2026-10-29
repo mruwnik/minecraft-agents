@@ -12,6 +12,7 @@
             [engine.settings :as settings]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.checks :as checks]
+            [jobs.lib.cost :as cost]
             [jobs.lib.access :as access]
             [jobs.lib.trees :as forestry]
             [jobs.lib.forestry :as lib :refer [cell-vec down feet-cell field-cells soil-for survey-field! trouble-status]]
@@ -212,6 +213,12 @@
   [classes]
   (keep (fn [[pos [kind _]]] (when (#{:no-ground :cramped} kind) pos)) classes))
 
+(defn checked-classes
+  "classes-of the field's trees, read once per check-cache window while every cell has been seen."
+  [c field]
+  (let [read #(classes-of c (:trees field))]
+    (if (look/unseen? (:primitives c) (field-cells field)) (read) (check-cache/cached c :classes read))))
+
 (defn not-ready
   "Whether the job may start: ok while a grown tree is ripe on a planned cell or a bare one has its sapling carried; else
   later with the cells that hold it back, a look first while one was never seen. The cells are read once per
@@ -220,10 +227,8 @@
   (let [field (planned c)]
     (if (:trouble field)
       (checks/cause-status :later {:reason :plan-trouble :why (:trouble field)})
-      (let [cells (field-cells field)
-            unseen? (look/unseen? (:primitives c) cells)
-            read #(classes-of c (:trees field))
-            classes (if unseen? (read) (check-cache/cached c :classes read))]
+      (let [unseen? (look/unseen? (:primitives c) (field-cells field))
+            classes (checked-classes c field)]
         (if (or (seq (ripe-cells c classes))
                 (seq (plantable c (owed-cells c classes)))
                 (seq (unplantable-cells classes)))
@@ -416,6 +421,21 @@
 (def target [:plan :part])
 
 (def defaults {:spend {:job-time ::job-time-s}})
+
+(defn worth-of
+  "Seconds a root call is worth: the cost/goal-value of the logs standing on the grown trees it would fell; ##Inf while a
+  planned cell is unseen or a sapling would be planted or a cell readied, which no price covers."
+  [c]
+  (let [field (planned c)
+        classes (when-not (:trouble field) (checked-classes c field))]
+    (if (or (look/unseen? (:primitives c) (field-cells field))
+            (seq (plantable c (owed-cells c classes)))
+            (seq (unplantable-cells classes)))
+      ##Inf
+      (reduce + 0 (map (fn [pos]
+                         (let [species (second (classes pos))]
+                           (:value (cost/goal-value [{:name (str species "_log") :count (count (remaining-logs c pos species))}]))))
+                       (ripe-cells c classes))))))
 
 (defn plan-place "A tree cell of the plan, nil when it cannot be worked." [c] (some-> (planned c) :trees keys first))
 

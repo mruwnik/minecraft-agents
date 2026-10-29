@@ -9,6 +9,9 @@
             [engine.settings :as settings]
             [clojure.string :as str]
             [jobs.forestry.fell-tree :as fell-tree]
+            [jobs.forestry.fell-tree.log :as log]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.game-facts :as facts]
             [jobs.lib.area :as area]
             [jobs.lib.checks :as checks]
             [jobs.lib.need :as need]
@@ -59,6 +62,21 @@
   [c]
   (let [n (:count (:args c))]
     (and n (< (logs-carried c) n))))
+
+(defn worth-of
+  "Seconds a root harvest is worth: the cost/goal-value of the logs :count still wants (of the species, else the least
+  worth of any log), or without :count of the logs of the tree it would fell first; ##Inf while it must walk into its
+  area before it can see that tree."
+  [c]
+  (let [{:keys [species radius] :as args} (fell-args (:args c))
+        fc (assoc c :args args)
+        n (:count (:args c))
+        tree (when-not (or n (area/outside c)) (first (fell-tree/candidates fc radius species)))
+        logs (fn [names k] (apply min (map #(:value (cost/goal-value [{:name % :count k}])) names)))]
+    (cond
+      n (logs (if species [(str species "_log")] facts/log-names) (max 0 (- n (logs-carried c))))
+      tree (logs [(str (:species tree) "_log")] (count (log/tree-logs fc radius tree)))
+      :else ##Inf)))
 
 (defn end-with
   "The felling's ending e as this job's: its kind, cause and data, the logs carried added."

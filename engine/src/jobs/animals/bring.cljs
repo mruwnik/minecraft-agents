@@ -63,6 +63,8 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
+(defn worth-of "Seconds a root call is worth: the animal it brings, cost/animal-worth of :mob." [c] (cost/animal-worth (:mob (:args c))))
+
 (defn method-of
   "The way the order takes: :method as given; :auto picks :lead for a :fence, :lure for a :box or :uuid, else
   animals/resolve-method."

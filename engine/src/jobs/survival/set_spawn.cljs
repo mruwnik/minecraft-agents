@@ -8,6 +8,7 @@
             [engine.settings :as settings]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
+            [jobs.lib.cost :as cost]
             [jobs.lib.places :as places]
             [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.shelter.spawn :as sh-spawn]
@@ -44,6 +45,13 @@
     (:pos (places/parse-pos given))
     (or (when-not (remembered-gone? c) (sh-beds/bed c (sh-beds/default-bed-radius)))
         (first (sh-beds/seen-bed-places (:primitives c) (sh-beds/default-bed-radius))))))
+
+(defn worth-of
+  "Seconds a root call is worth: the respawn point at the bed, cost/spawn-worth (the death walks back it shortens); 0 with no bed."
+  [c]
+  (if-let [bed (bed-of c)]
+    (cost/spawn-worth (cost/death-body (:primitives c) (ctx/view c)) bed)
+    0))
 
 (a/defargs settings
   {::job-time-s {:default 60 :doc "Seconds the walk to the bed and the click may take." :spec (a/num-in 0 nil)}

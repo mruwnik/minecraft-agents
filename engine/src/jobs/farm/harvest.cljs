@@ -9,6 +9,9 @@
             [jobs.lib.cond :as cond]
             [jobs.lib.job-common :as common]
             [jobs.farm.field :as fld]
+            [jobs.farm.irrigate :as irrigate]
+            [jobs.farm.tend :as tend]
+            [jobs.lib.cost :as cost]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.access :as access]
             [jobs.lib.gate :as gate]
@@ -291,6 +294,23 @@
     (if waiting
       (apply contract/later waiting (str "harvest: cut " cut ", " ripe " ripe left") data)
       (apply contract/ok :harvested (str "harvest done: cut " cut ", no ripe crop left") data))))
+
+(defn worth-of
+  "Seconds a root harvest is worth: each ripe crop it may cut at cost/crop-worth, with its replanting, and each planned
+  bare cell it sows, at cost/sown-worth (at farm.tend's growth-rate); ##Inf while it must look or walk before it can tell
+  what the field holds."
+  [c]
+  (let [c (with-field c (planned c))
+        m (ctx/mem c)
+        p (:primitives c)]
+    (if (or (blind? c) (away-start? c m) (shut-in-start? c m))
+      ##Inf
+      (let [cut (map (fn [pos] [pos (u/seen-name p pos)]) (when (cutting? c) (ripe-of c nil)))
+            sown (map (fn [{:keys [pos]}] [pos (get (:plan-cells c) pos)]) (sowable c))
+            ws (irrigate/waters c (map #(update (first %) :y dec) (concat cut sown)))
+            sow-s (fn [[pos crop]] (cost/sown-worth crop (tend/growth-rate p ws pos)))]
+        (+ (reduce + 0 (map #(+ (cost/crop-worth (second %)) (if (:replant (:args c)) (sow-s %) 0)) cut))
+           (reduce + 0 (map sow-s sown)))))))
 
 (defn quote-of [c]
   (let [c (with-field c (planned c))

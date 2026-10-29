@@ -5,6 +5,7 @@
             [engine.settings :as settings]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.foods :as foods]
             [jobs.lib.need :as need]
@@ -78,6 +79,15 @@
     (if (>= n want)
       (contract/ok :caught (str "caught " n " fish") :units :fish :done n :left 0 :result {:got n})
       (contract/later :fishing (str "caught " n " of " want " fish") :units :fish :done n :left (- want n) :result {:got n}))))
+
+(def catch-weights "Vanilla's fishing loot weights within its fish pool." {"cod" 60 "salmon" 25 "pufferfish" 13 "tropical_fish" 2})
+
+(defn worth-of
+  "Seconds a root call is worth: the fish still to catch, each the cost/goal-value of a fish of catch-weights' mix."
+  [c]
+  (let [total (reduce + (vals catch-weights))
+        each (reduce + (map (fn [[n w]] (* (/ w total) (:value (cost/goal-value [{:name n :count 1}])))) catch-weights))]
+    (* each (max 0 (- (:count (:args c)) (got c))))))
 
 (defn time-limit "Seconds the call may fish." [c]
   (or (get-in (ctx/frozen-call c) [:spend :job-time]) (time-s)))

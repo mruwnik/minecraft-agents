@@ -9,6 +9,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.apiary :as apiary]
+            [jobs.lib.cost :as cost]
             [jobs.lib.need :as need]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
@@ -180,6 +181,22 @@
   [c]
   (let [f (facts c)]
     (boolean (some #(:call (decide % (need/args-with-ways c) f)) steps))))
+
+(def hive-yield "What one ripe hive gives a harvest with each tool: the game's 3 honeycomb to shears, a honey bottle to a bottle." {"shears" {:name "honeycomb" :count 3} "glass_bottle" {:name "honey_bottle" :count 1}})
+
+(defn worth-of
+  "Seconds a root pass is worth: the cost/goal-value of what its harvest takes from the hives it would work (hive-yield of
+  the tool carried, else of the first :with allows); ##Inf while part of the area was never seen or a guard, breed or
+  deposit would run, which no price covers."
+  [c]
+  (let [args (need/args-with-ways c)
+        f (facts c)
+        runs? #(:call (decide % args f))
+        tool (or (:tool f) (apiary/tool-item (if (= :bottle (:with args)) :bottle :shears)))]
+    (cond
+      (or (look/unseen? (:primitives c) (apiary/watched-cells c)) (some runs? [:guard :breed :deposit])) ##Inf
+      (runs? :harvest) (* (count (:todo (:hives f))) (:value (cost/goal-value [(hive-yield tool)])))
+      :else 0)))
 
 (defn can-start?
   "Later :nothing-to-do when nothing would run, with a look first while part of the area was never seen."
