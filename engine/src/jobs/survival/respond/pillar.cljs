@@ -160,7 +160,7 @@
 (defn ^:async build!
   "A jobs.access.pillar child of height with item, from where the body stands: :continue, or {:built n :mob? m}, m
   whether it ended short for a mob (one in its cell, or a hostile near a refused block or a knockback: the give-up's
-  :mob). It ends at the first refused block or knockback: the refusal is evidence for the next decision, not a retry."
+  :mob). A refused block is tried again while cost/try-again? :place says it pays; a knockback, or a refusal that names a mob, ends it at once as evidence for the next decision."
   [c height item]
   (let [r (await (ctx/call c :pillar 'jobs.access.pillar {:height height :use {:blocks [item]} :ways #{:carried} :ignore-zones? true
                                                           :settings {:jobs.access.pillar/mob-waits 0}}))]
