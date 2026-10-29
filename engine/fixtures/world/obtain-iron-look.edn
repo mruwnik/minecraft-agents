@@ -1,6 +1,6 @@
 ;; Iron wanted, none seen (obtain.plan/search-way): a look over the rock in sight against a strip tunnel from the feet.
 ;; Should-succeed: a lit hall with a stone floor at y -41 (iron's small placement only) and iron behind a wall: for a raw
-;; iron worth a goal's search (:search-worth, about 8 raw iron's own) the look pays and a tunnel there does not, so the
+;; iron worth a goal's search (:worth, about 8 raw iron's own) the look pays and a tunnel there does not, so the
 ;; body searches, sees the ore and mines it.
 ;; Should-fail (no look, no climb): a dirt floor in a bedrock shell shows no rock and a roof no stair goes up through: the mine
 ;; tunnels for it at the feet, no search starts.
@@ -13,7 +13,7 @@
  :cases
  [{:name "unseen-iron-in-a-stone-hall-is-looked-for-not-tunnelled"
    :blocks [[:fill [12 0 0] [12 4 17] "stone"] [:set [22 0 4] "iron_ore"]]
-   :act [[:job (jobs.items.obtain {:item "raw_iron" :count 1 :search-worth 1000 :ways #{:gather}})]]
+   :act [[:job (jobs.items.obtain {:item "raw_iron" :count 1 :worth 1000 :ways #{:gather}})]]
    :expect [{:event {:source :job :kind :obtain.exploring :data {:for ["deepslate_iron_ore" "iron_ore"]}} :within-s 60 :of-job true}
             {:event {:source :job :kind :obtain.gathering :data {:item "raw_iron" :at #xyz [22 0 4]}} :within-s 200 :of-job true}
             {:event {:source :job :kind :completed} :within-s 230 :of-job true}]

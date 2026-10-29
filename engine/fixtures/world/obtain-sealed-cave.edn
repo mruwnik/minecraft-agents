@@ -2,6 +2,7 @@
 ;; search finds nothing (no sight through rock), so obtain walks to a wall and cuts a stair up (by hand) to the sky, then finds the tree.
 ;; Tree at x 28, z 16: five logs under a leaf crown. Stone x 0..31, z 0..31, y 0..9 (surface y 10); a 7x2x7 hollow round the body at feet y 0.
 ;; Untimed: day, because the tree is seen on the surface and the body waits out a dark one.
+;; The furnace case passes the :worth an agent gives its goal (a furnace of carried cobblestone is worth less than one walk to look for the table's logs).
 ;; Should-succeed: oak logs carried. Should-fail: none (the dig must not stop :no-source or :no-way-up).
 {:defaults
  {:tags [:obtain :explore :mining :no-tool]
@@ -27,7 +28,7 @@
   {:name "sealed-cave-furnace-from-carried-cobble-surfaces-for-the-table-logs"
    :tags [:obtain :explore :mining]
    :body {:inventory [["cobblestone" 64] ["stone_pickaxe" 1]]}
-   :act [[:job (jobs.items.obtain {:item "furnace" :count 1 :explore true})]]
+   :act [[:job (jobs.items.obtain {:item "furnace" :count 1 :explore true :worth 300})]]
    :expect [{:event {:source :job :kind :completed} :within-s 950 :of-job true}
             {:no-event {:source :job :kind :obtain.exploring} :for-s 900 :until {:source :job :kind :stair.step}}]
    :after [[:item "furnace" [:>= 1]]]}]}

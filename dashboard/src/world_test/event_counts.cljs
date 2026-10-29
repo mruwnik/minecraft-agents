@@ -32,6 +32,7 @@
   walk-pace: the steers of go-to's walks (a job id ending /walk) outside a flight: blocks over the steers' own seconds (cost/walk-speed).
   guess-looks [--agents DIR] (world-test.guess-looks; all bodies) counts from the logs alone: k of n looks of a dig route's guessed rock cells that showed it not diggable, per class (go-to escalation/prior-good-looks).
   retry-wins (world-test.retry-wins; trial bodies only) counts from the logs alone the tries after a failed one per retry kind, won or not, and their seconds (value/::retry-counts).
+  item-costs [--agents DIR] [--counts FILE] (world-test.item-costs; trial bodies only) folds the obtains' mined gathers, seconds and items got, into the counts file (value/::gather-counts).
   unseen-floors (world-test.unseen-floors; all bodies) counts from the logs alone the unseen floors walks looked at, absent and present (value/::unseen-floor-counts).
   gap-miss: the miss rate of gap jumps per [width run-up dy sprint] from go-to's :gap-jump events (world-test.gap-miss; trial bodies only).
   Pure parts: scan-line, exchange, starts, starts-by-mob, notices, groups, vein-seen, flee-steps, pace-report, closing-pieces, closing-report, walk-steers, walk-report, walk-detour."
@@ -57,6 +58,7 @@
             [world-test.respond-calls :as respond-calls]
             [world-test.retry-wins :as retry-wins]
             [world-test.respawn-distance :as respawn-distance]
+            [world-test.item-costs :as item-costs]
             [world-test.resight :as resight]
             [world-test.spot-returns :as spot-returns]
             [world-test.surface-heights :as surface-heights]
@@ -448,7 +450,7 @@
                     shrunk)}))
 
 ;; The durable counts: the rows of each prior by run id, so the counts only grow while the raw logs rotate away.
-(def empty-counts {:exchange {} :starts {} :notices {} :drowned-exposure {} :drowned-meets {} :flight-steps {} :walk-steers {} :gap-jumps {} :resight {} :walls {} :wall-places {} :pen-escapes {}})
+(def empty-counts {:exchange {} :starts {} :notices {} :drowned-exposure {} :drowned-meets {} :flight-steps {} :walk-steers {} :gap-jumps {} :resight {} :walls {} :wall-places {} :pen-escapes {} :item-costs {}})
 
 (defn better-exchange "Of two rows of one fight, the one that saw more swings (a rotation may have cut the older read short), then the older." [a b]
   (if (> (:swings b) (:swings a)) b a))
@@ -624,7 +626,11 @@
        (sort-by :t)
        vec))
 
+<<<<<<< HEAD
 (def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | closing-rate | walk-pace | walk-detour | gap-miss | way-on | guess-looks | unseen-floors | spot-returns | field-passes | arrow-shots | caught-flights | work-hurt | vein-seen | water-lags | surface-heights | floor-neighbours | unseen-solid | dark-reach | tree-spots | resight | wall-sides | far-side-rows | pen-escapes | wall-places | hide-ends | respond-calls | respawn-distance | retry-wins [--run ID --animals N --secs S --escaped E] [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N] [--difficulty D]
+=======
+(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | closing-rate | walk-pace | walk-detour | gap-miss | way-on | guess-looks | unseen-floors | spot-returns | field-passes | arrow-shots | caught-flights | work-hurt | vein-seen | water-lags | surface-heights | floor-neighbours | unseen-solid | dark-reach | tree-spots | resight | wall-sides | far-side-rows | pen-escapes | wall-places | hide-ends | respawn-distance | retry-wins | item-costs [--run ID --animals N --secs S --escaped E] [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N] [--difficulty D]
+>>>>>>> 492d330af (Card 3b1b3cba: a call's worth is the whole call's. The root's worth-of (cost/find-worth, a bill's items-find-worth) is ctx/worth all the way down, walks included; :search-worth and given-worth are gone, and a search's worth is ctx/worth within the job time left, less what a mine spent without a find. find-worth no longer takes a trip off: walk-s, tour-worth and search-s price their own. A search whose worth pays for no first walk takes none (plan/first-leg-pays?), and the exploring notice is said once across out-of-time repeats of one search.)
   every command first folds the logs into the counts file (default worlds/test/priors-counts.edn), then reports from the file; --since-ms keeps the rows of fights started after it.")
 
 (defn- parse-args [argv]
@@ -772,6 +778,7 @@
                                                                       :when look]
                                                                   look))))
                          0)
+<<<<<<< HEAD
        "respond-calls" (do (println (pr-str (respond-calls/report (for [b (array-seq (fs/readdirSync agents))
                                                                        :when (and (not (probe? b)) (fs/existsSync (path/join agents b "engine")))
                                                                        line (event-lines (path/join agents b "engine"))
@@ -779,6 +786,17 @@
                                                                        :when row]
                                                                    (update row :key conj b)))))
                            0)
+=======
+       "item-costs" (let [file (or counts (path/join repo "worlds" "test" "priors-counts.edn"))
+                          rows (into {} (for [b (array-seq (fs/readdirSync agents))
+                                              :when (and (not (probe? b)) (fs/existsSync (path/join agents b "engine")))
+                                              [k row] (item-costs/spans (keep item-costs/scan-line (event-lines (path/join agents b "engine"))))]
+                                          [(into [b] k) row]))
+                          folded (item-costs/fold (load-counts file) rows)]
+                      (save-counts! file folded)
+                      (println (pr-str (item-costs/report (:item-costs folded))))
+                      0)
+>>>>>>> 492d330af (Card 3b1b3cba: a call's worth is the whole call's. The root's worth-of (cost/find-worth, a bill's items-find-worth) is ctx/worth all the way down, walks included; :search-worth and given-worth are gone, and a search's worth is ctx/worth within the job time left, less what a mine spent without a find. find-worth no longer takes a trip off: walk-s, tour-worth and search-s price their own. A search whose worth pays for no first walk takes none (plan/first-leg-pays?), and the exploring notice is said once across out-of-time repeats of one search.)
        "retry-wins" (do (println (pr-str (retry-wins/report (for [b (array-seq (fs/readdirSync agents))
                                                                   :when (and (not (probe? b)) (fs/existsSync (path/join agents b "engine")))
                                                                   line (event-lines (path/join agents b "engine"))

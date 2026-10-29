@@ -2,6 +2,7 @@
 ;; Should-succeed: stone floor, logs 42 off, coal 24 off behind a wall: coal is searched for and mined, no log smelted.
 ;; Should-succeed: no coal: the search finds none and the logs are gathered for charcoal.
 ;; Should-fail (no coal search): dirt floor (no ore), a tree beside the body: charcoal, no look for coal.
+;; The two searching cases pass the :worth an agent gives its goal (4 torches alone are worth less than one walk to look).
 ;; Sky plots (y 150): coal lies only above y 0. Light blocks keep the plot lit at any time.
 {:defaults
  {:tags [:obtain :explore] :time :any
@@ -13,7 +14,7 @@
    :blocks [[:fill [0 2 0] [63 2 63] "light"] [:fill [46 0 30] [46 3 34] "oak_log"] [:fill [46 4 30] [46 4 34] "oak_leaves[persistent=true]"]
             [:fill [24 0 36] [24 2 50] "stone"] [:set [28 0 44] "coal_ore"]]
    :body {:inventory [["wooden_pickaxe" 1] ["stick" 2]]}
-   :act [[:job (jobs.items.obtain {:item "torch" :count 4 :explore true})]]
+   :act [[:job (jobs.items.obtain {:item "torch" :count 4 :explore true :worth 60})]]
    :expect [{:event {:source :job :kind :obtain.exploring :data {:for ["coal_ore" "deepslate_coal_ore"]}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed} :within-s 220 :of-job true}
             {:no-event {:source :job :kind :smelt.loaded} :for-s 200 :until {:source :job :kind :completed}}]
@@ -21,7 +22,7 @@
   {:name "a-coal-search-that-finds-none-falls-back-to-the-far-logs"
    :blocks [[:fill [0 2 0] [63 2 63] "light"] [:fill [46 0 30] [46 3 34] "oak_log"] [:fill [46 4 30] [46 4 34] "oak_leaves[persistent=true]"] [:set [6 0 36] "furnace"]]
    :body {:inventory [["wooden_pickaxe" 1] ["stick" 2] ["oak_planks" 4]]}
-   :act [[:job (jobs.items.obtain {:item "torch" :count 4 :explore true})]]
+   :act [[:job (jobs.items.obtain {:item "torch" :count 4 :explore true :worth 60})]]
    :expect [{:event {:source :job :kind :obtain.exploring :data {:for ["coal_ore" "deepslate_coal_ore"]}} :within-s 60 :of-job true}
             {:event {:source :job :kind :obtain.gathering :data {:item "log"}} :within-s 200 :of-job true}]}
   {:name "logs-beside-on-dirt-make-charcoal-not-a-coal-search"

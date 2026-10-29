@@ -340,8 +340,7 @@
       (if (and bed? (need/fetch-opts c) (own-bed-near? c))
         (await (take-own-bed! c))
         (let [cells (:cells (planned c))
-              o (assoc (need/fetch-opts c) :explore (:explore (:args c)) :for-plan (:plan (:args c)) :center (site-of cells)
-                       :search-worth (cost/items-find-worth (frequencies (keep :item cells))))
+              o (assoc (need/fetch-opts c) :explore (:explore (:args c)) :for-plan (:plan (:args c)) :center (site-of cells))
               e (await (cond
                          bed? (need/blocks! c wood/bed-names (:count w) o)
                          (= :need (:reason w)) (need/item! c (:item w) (:count w) o)

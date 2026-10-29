@@ -8,7 +8,6 @@
             [engine.core :as core]
             [engine.core.ending :as ending]
             [engine.ctx :as ctx]
-            [engine.registry :as registry]
             [engine.fake :as fake]
             [engine.fetch-test :as f]
             [engine.game :as game]
@@ -254,7 +253,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (sheltered-night-start {"1,64,4" "stone"} 20 lit-tree)]
-          (await (obtain! s {:item "cobblestone" :count 3 :ways #{:gather :craft} :explore false} 8))
+          ;; 3 cobblestone alone are worth less than a night walk: the agent says they are worth it
+          (await (obtain! s {:item "cobblestone" :count 3 :ways #{:gather :craft} :explore false :worth 600} 8))
           (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))) "the stone and the logs are known")
           (is (seq (tu/walk-calls (:p s))) "the logs are walked to under go-to's own pricing"))))))
 
@@ -307,18 +307,6 @@
           (await (f/run-ticks s 200))
           (is (= 3 (get (f/inv s) "iron_ingot")))
           (is (empty? (f/listed s))))))))
-
-;; The smelt child's fetches (coal, furnace) are worth the obtain's goal, not their own find-worth.
-(deftest the-smelt-and-craft-children-carry-the-obtains-search-worth
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s0 (f/start (ore-world {"1,64,2" "furnace"} [{:name "raw_iron" :count 3} {:name "coal" :count 1}]) [f/own-zone])
-              got (atom {})
-              spy (fn [sym] (assoc (get registry/jobs sym) :round (fn [c] (swap! got assoc sym (:search-worth (:args c))) (ctx/end c :done nil))))
-              s (reduce (fn [s sym] (assoc-in s [:eng :jobs sym] (spy sym))) s0 ['jobs.items.smelt 'jobs.items.craft])]
-          (await (obtain! s {:item "iron_ingot" :count 3 :ways #{:craft :smelt :gather} :search-worth 777} 6))
-          (is (= 777 (get @got 'jobs.items.smelt))))))))
 
 (deftest an-iron-pickaxe-from-seen-ore-is-mined-smelted-and-crafted
   (async done
@@ -443,8 +431,8 @@
         (let [pool (into {} (for [x (range 0 5) y [64 65 66] z [2 3 4 5 6]] [(str x "," y "," z) "water"]))
               blocks (merge pool {"1,64,4" "iron_ore" "3,64,5" "iron_ore" "0,64,6" "iron_ore" "4,64,3" "iron_ore"})
               s (f/start (ore-world blocks [{:name "stone_pickaxe" :count 1}]) [])]
-          ;; search-worth 1: no tunnel after the ore is all left pays, so none is this test's
-          (await (obtain! s {:item "raw_iron" :count 1 :search-worth 1} 200))
+          ;; no search: no tunnel after the ore is all left, so none is this test's
+          (await (obtain! s {:item "raw_iron" :count 1 :explore false} 200))
           (is (every? (set (map :at (filter (comp #{:obtain.gathering} :kind) @(:seen s))))
                       [{:x 1 :y 64 :z 4} {:x 3 :y 64 :z 5} {:x 0 :y 64 :z 6} {:x 4 :y 64 :z 3}])
               "each flooded ore is left for the next, none counted fruitless"))))))
@@ -489,7 +477,7 @@
         (loop [[[y dug worth runs why] & more] [[64 {:cut {:level 32} :tunnel {:steps 32}} 5000 5 "a run that tunnelled looked at new rock: the gather mines on while the next pays"]
                                                 [64 {:legs [{:length 6 :stop :no-floor}] :tunnel {:steps 6}} 5000 3 "one whose tunnel only walked open air cut nothing: three end the gather"]
                                                 [64 {} 5000 3 "a run that cut nothing is fruitless: three end the gather"]
-                                                [64 {:cut {:level 32} :tunnel {:steps 32}} 1 3 "a run after which no strip leg pays is fruitless: three end the gather"]
+                                                [64 {:cut {:level 32} :tunnel {:steps 32}} 1 0 "a call worth less than a search's trip does not start"]
                                                 [16 {:cut {:level 32} :tunnel {:steps 32}} (one-more-run-worth 16) 4 "the second run spends what a third would need: three more runs end it"]
                                                 [16 {:cut {:level 32 :back 64} :tunnel {:steps 32}} (+ (one-more-run-worth 16) (* 0.5 (- (:cost (cost/walk-cost {:distance 64})) (plan/strip-s 16)))) 3 "the walk back from its branches is spent too: no second run pays"]]]
           (let [s (f/start (-> (ore-world {} [{:name "stone_pickaxe" :count 1} {:name "torch" :count 16}]) (assoc :floor [-30 -30 40 30]) (assoc-in [:self :pos :y] y)) [f/own-zone])
@@ -500,7 +488,7 @@
                                 (if-not (:dug (ctx/mem c))
                                   (do (swap! calls inc) (ctx/update-mem! c assoc :dug true) :continue)
                                   (ctx/end c :nothing-possible {:reason :tunnel-length} (merge {:got 0 :reason :tunnel-length} dug)))))]
-            (await (obtain! (assoc s :eng eng) {:item "raw_iron" :ways #{:craft :smelt :gather} :explore true :search-worth worth} 60))
+            (await (obtain! (assoc s :eng eng) {:item "raw_iron" :ways #{:craft :smelt :gather} :explore true :worth worth} 60))
             (is (= runs (min 5 @calls)) why))
           (when more (recur more)))))))
 
@@ -510,6 +498,7 @@
       (fn ^:async t []
         (let [s (f/start (-> (ore-world {} [{:name "stone_pickaxe" :count 1} {:name "torch" :count 16}]) (assoc :floor [-30 -30 40 30]) (assoc-in [:self :pos :y] 16)) [f/own-zone])
               look-cost plan/look-cost
+              first-leg-pays plan/first-leg-pays?
               call ctx/call
               calls (atom [])
               eng (-> (:eng s)
@@ -522,9 +511,11 @@
           ;; the rock a run lays bare makes a look round cheaper than the next run
           (set! plan/look-cost (fn [c need] (if (and (get-in (ctx/mem c) [:gather :dug]) (zero? (get-in (ctx/mem c) [:explored (:key need)] 0))) 10 js/Infinity)))
           (set! ctx/call (fn [c slot j args] (swap! calls conj j) (call c slot j args)))
+          ;; the first leg is priced by the same look, here the stub's
+          (set! plan/first-leg-pays? (constantly true))
           (try
-            (await (obtain! (assoc s :eng eng) {:item "raw_iron" :ways #{:craft :smelt :gather} :explore true :search-worth 1000} 30))
-            (finally (set! plan/look-cost look-cost) (set! ctx/call call)))
+            (await (obtain! (assoc s :eng eng) {:item "raw_iron" :ways #{:craft :smelt :gather} :explore true :worth 1000} 30))
+            (finally (set! plan/look-cost look-cost) (set! plan/first-leg-pays? first-leg-pays) (set! ctx/call call)))
           (is (= 1 (count (f/events-of s :obtain.strip-look))) "the run is not counted fruitless: the next round looks")
           (is (= ['jobs.gather.mine 'jobs.explore.search] (take 2 (distinct (filter #{'jobs.gather.mine 'jobs.explore.search} @calls)))))
           (is (not-any? #(re-find #"worth less than it costs" (str (:message %))) @(:seen s))))))))

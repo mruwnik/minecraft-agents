@@ -201,6 +201,15 @@
       (+ (cost/search-s (cost/look-leg-chance p (notes/notes c) (search-names need) [(:x self) (:z self)] r (ledger/own-cells c)) leg (search-worth c))
          (:cost (cost/walk-cost {:distance r}))))))
 
+(defn first-leg-pays?
+  "Whether the call's search-worth pays for a search's first leg for need, a straight walk of its spacing, at the chance
+  its look finds one (cost/look-leg-chance, 1 when none is priced): the search's own :price stop, before it starts."
+  [c need]
+  (let [self (u/self-pos c)
+        leg (:cost (cost/walk-cost {:distance (cost/leg-spacing)}))
+        chance (cost/look-leg-chance (:primitives c) (notes/notes c) (search-names need) [(:x self) (:z self)] (search-scan-radius) (ledger/own-cells c))]
+    (not (cost/leg-stops? leg (cost/chance-of (or chance 1) 0) (search-worth c)))))
+
 (defn climb-sealed?
   "Whether the body has seen an unbreakable block (jobs.lib.access.rules) in a cell a stair up of climb steps along the
   way it faces would cut (a world-test shell, the nether's roof)."

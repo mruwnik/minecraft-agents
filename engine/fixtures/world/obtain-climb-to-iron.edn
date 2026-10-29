@@ -1,4 +1,4 @@
-;; Iron wanted, none seen, the body 55 levels under iron's tunnel level (obtain.plan/tunnel-way, priced at a search-worth of 1000): a stair up to it, then a strip tunnel.
+;; Iron wanted, none seen, the body 55 levels under iron's tunnel level (obtain.plan/tunnel-way, priced at a worth of 1000): a stair up to it, then a strip tunnel.
 ;; Tall rock cell (plot y 0 is world y -40): stone x 0..139, y 0..69; the body in a hollow lit by two light blocks (a row of them would hide the roof from the body) at plot y 1 (world y -39) in the middle of the plot, iron
 ;; at plot y 56 (world y 16, the level base-rates/best-level gives iron) 5 blocks past the stair's top on each side (the stair climbs the way the body faces, east or west).
 ;; Should-succeed: obtain.climbed (the stair up), then the strip tunnel finds the ore and the body mines it.
@@ -13,13 +13,13 @@
   :limit-s 600}
  :cases
  [{:name "iron-far-above-is-reached-by-a-stair-up-and-a-tunnel"
-   :act [[:job (jobs.items.obtain {:item "raw_iron" :count 1 :search-worth 1000 :ways #{:craft :smelt :gather}})]]
+   :act [[:job (jobs.items.obtain {:item "raw_iron" :count 1 :worth 1000 :ways #{:craft :smelt :gather}})]]
    :expect [{:event {:source :job :kind :obtain.climbed} :within-s 400 :of-job true}
             {:event {:source :job :kind :completed} :within-s 590 :of-job true}]
    :after [[:item "raw_iron" [:>= 1]]]}
   {:name "a-seen-bedrock-roof-bars-the-stair-and-no-iron-is-found"
    :blocks [[:fill [0 3 0] [139 3 15] "bedrock"]]
-   :act [[:job (jobs.items.obtain {:item "raw_iron" :count 1 :search-worth 1000 :ways #{:craft :smelt :gather}
+   :act [[:job (jobs.items.obtain {:item "raw_iron" :count 1 :worth 1000 :ways #{:craft :smelt :gather}
                                    :settings {:jobs.lib.child/max-fruitless 1}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 700 :of-job true}
             {:no-event {:source :job :kind :obtain.climbed} :for-s 700 :until {:source :job :kind :stopped}}]

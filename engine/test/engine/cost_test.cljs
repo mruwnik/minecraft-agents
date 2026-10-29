@@ -576,9 +576,9 @@
     (is (< (js/Math.abs (- 1 (/ (chance [(on "zombie")]) (settings/with-settings counted-often #(chance [(on "zombie")]))))) 0.05)
         "a zombie, its class counted 8 times, prices within 5% of a class counted a hundred times as often at the same mean")))
 
-(deftest a-find-is-worth-its-count-less-a-trip-and-an-animal-its-meat
+(deftest a-find-is-worth-its-count-and-an-animal-its-meat
   (let [body {:level 0 :carried 0}]
-    (is (= (- (* 3 (cost/worth-to body ["oak_log"] nil)) (cost/trip)) (cost/find-worth body ["oak_log"] nil 3)))
+    (is (= (* 3 (cost/worth-to body ["oak_log"] nil)) (cost/find-worth body ["oak_log"] nil 3)) "its walks price their own trip")
     (is (< (cost/find-worth body ["oak_log"] nil 1) (cost/find-worth body ["oak_log"] nil 3)))
     (is (< (cost/animal-worth "horse") (cost/animal-worth "cow")) "a cow is worth its beef, a kind with no meat the unknown item")
     (is (= (cost/animal-worth "cow") (cost/animal-worth "sheep")) "mutton as dear as beef")
@@ -589,6 +589,15 @@
   (let [worth #(:value (cost/item-value [{:name % :count 1}]))]
     (is (<= (/ (* 2 (worth "oak_planks")) 4) (worth "stick"))
         "not a leaf's (vanilla drops one 1 in 50, not every time) nor bamboo's, which grows in jungles alone")))
+
+(deftest a-measured-item-is-worth-its-gathers-seconds-per-item-as-a-goal-and-what-is-made-of-it-follows
+  (let [goal #(:value (cost/goal-value [{:name % :count 1}]))
+        measured (settings/with-settings {:jobs.lib.cost.value/gather-counts {"cobblestone" {:s 900 :got 10}}}
+                   #(mapv goal ["cobblestone" "cobbled_deepslate" "stone_pickaxe"]))]
+    (is (= [90 90] (subvec measured 0 2)) "one gather takes whichever stone material is seen")
+    (is (< (* 3 90) (peek measured)) "three of them and the sticks")
+    (is (< 20 (goal "stone_pickaxe")) "the counted gathers: a stone pickaxe is worth a walk, not a leaf's dig")
+    (is (< (:value (cost/item-value [{:name "cobblestone" :count 1}])) (goal "cobblestone")) "at the margin a block is its dig")))
 
 (deftest a-look-for-animals-pays-less-the-more-ground-round-it-showed-none
   (let [note (fn [x z] {:kind :searched :what ["sheep"] :pos [x 64 z] :r 24})

@@ -41,6 +41,7 @@
             ["minecraft-data" :as minecraft-data]
             [clojure.set :as set]
             [clojure.string :as str]
+            [jobs.items.recipes :as recipes]
             [jobs.lib.cost.table :as tbl]
             [jobs.lib.cost.fight :as fight]
             [jobs.lib.cost.health :as health]
@@ -84,7 +85,15 @@
                    :spec (a/pred "a map of retry kind to {:win n :fail n :try-s s}, pseudo-counts >= 0 not both 0 and seconds >= 0"
                                  (fn [m] (and (map? m) (every? (fn [{:keys [win fail try-s]}] (and (number? win) (number? fail) (number? try-s) (<= 0 win) (<= 0 fail) (pos? (+ win fail)) (<= 0 try-s)))
                                                                (vals m)))))
+<<<<<<< HEAD
                    :doc "The Beta prior per retry kind that a try after a failed one wins (answer/retry-chance; cost/try-again?), and :try-s the seconds that try takes: of the tries after a failed one in the same job in the trial bodies' logs (probes left out, 2026-10-29), :craft a craft action after a timeout, 17 of 20 won in 18 calls; :furnace a furnace action after a busy slot, none counted (the uniform prior, a visit's own seconds); :dig a dig action after a timeout, a failure or an unreachable block, 11 of 92 won in 2 calls (too few calls to fit a spread: the mean 0.12 at the mean 0.13 pseudo-counts of the kinds that did fit); :walk a go-to after one that did not arrive, 93 of 882 in 183 calls; spread fitted by moments over the calls (effective n 0.15, 0.11: a call's own failures soon outweigh the pool). :respond (respond-to-hostile's call after calls that changed nothing, :hostile.call): none counted yet, so :pooled, all kinds' retries fitted together, 121 of 994 in 203 calls; its seconds come from the caller. :risky-stay (jobs.lib.near/risky-wait!'s re-check after a stay refused for its price, :near.risky-wait and :near.risky-over): none counted yet, so :pooled; its seconds are the caller's pause. :comb-look (jobs.apiary.harvest's look for comb after one that took none, :apiary.comb-wait and :apiary.comb-over): none counted yet, so :pooled; its seconds are the comb-wait-s pause. Recount: node tools/event-counts.mjs retry-wins."}
+=======
+                   :doc "The Beta prior per retry kind that a try after a failed one wins (answer/retry-chance; cost/try-again?), and :try-s the seconds that try takes: of the tries after a failed one in the same job in the trial bodies' logs (probes left out, 2026-10-29), :craft a craft action after a timeout, 17 of 20 won in 18 calls; :furnace a furnace action after a busy slot, none counted (the uniform prior, a visit's own seconds); :dig a dig action after a timeout, a failure or an unreachable block, 11 of 92 won in 2 calls (too few calls to fit a spread: the mean 0.12 at the mean 0.13 pseudo-counts of the kinds that did fit); :walk a go-to after one that did not arrive, 93 of 882 in 183 calls; spread fitted by moments over the calls (effective n 0.15, 0.11: a call's own failures soon outweigh the pool). :respond (respond-to-hostile's call after calls that changed nothing, :hostile.call): none counted yet, so :pooled, all kinds' retries fitted together, 121 of 994 in 203 calls; its seconds come from the caller. :risky-stay (jobs.lib.near/risky-wait!'s re-check after a stay refused for its price, :near.risky-wait and :near.risky-over): none counted yet, so :pooled; its seconds are the caller's pause. Recount: node tools/event-counts.mjs retry-wins."}
+   ::gather-counts {:default {"cobblestone" {:s 344.247 :got 39} "coal" {:s 76.602 :got 3} "dirt" {:s 160.984 :got 13} "raw_iron" {:s 3750.614 :got 11}}
+                    :spec (a/pred "a map of item name to {:s seconds >= 0 :got items > 0}"
+                                  (fn [m] (and (map? m) (every? (fn [{:keys [s got]}] (and (number? s) (number? got) (<= 0 s) (pos? got))) (vals m)))))
+                    :doc "Seconds and items got of the trial bodies' obtain gathers that mined the item (2026-10-29): cobblestone 39 in 13 gathers, coal 3 in 5, dirt 13 in 2, raw iron 11 in 11, fruitless mines' seconds counted. s / got, the gather's walk and look included, is the item's price as a goal (measured-worths: jobs.lib.cost/find-worth), not at the margin (item-value). Recount: node tools/event-counts.mjs item-costs."}
+>>>>>>> 492d330af (Card 3b1b3cba: a call's worth is the whole call's. The root's worth-of (cost/find-worth, a bill's items-find-worth) is ctx/worth all the way down, walks included; :search-worth and given-worth are gone, and a search's worth is ctx/worth within the job time left, less what a mine spent without a find. find-worth no longer takes a trip off: walk-s, tour-worth and search-s price their own. A search whose worth pays for no first walk takes none (plan/first-leg-pays?), and the exploring notice is said once across out-of-time repeats of one search.)
    ::food-worth-per-point {:default 30 :spec (a/num-in 0 nil)
                            :doc "Seconds reaching food is worth per food point the body is under ::food-worth-from."}
    ::food-worth-from {:default 10 :spec (a/num-in 0 20)
@@ -136,6 +145,16 @@
                    per-stack (/ price (max 1 n))
                    :else price)]
     {:name name :count n :each each :value (* n each)}))
+
+(defn measured-worths
+  "{item seconds} of ::gather-counts for minecraft-data version, as item-value :overrides: the seconds its measured gathers
+  took per item got; cobblestone's for every stone tool material (jobs.items.recipes/stone-materials), as one gather takes
+  whichever is seen."
+  [version]
+  (let [m (into {} (map (fn [[n {:keys [s got]}]] [n (/ s got)])) (settings/get settings ::gather-counts))]
+    (if-let [cobble (m "cobblestone")]
+      (merge (zipmap (recipes/stone-materials version) (repeat cobble)) m)
+      m)))
 
 (defn item-value
   "{:value total :items [{:name :count :each :value} ...]} of items ([{:name :count ...}], inventory or drop shape),

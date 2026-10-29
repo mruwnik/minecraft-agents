@@ -185,14 +185,24 @@
                                items))]
     (if (= (count covered) (count items)) {} covered)))
 
+(defn unhad
+  "The bill {item 1} of the items not had now."
+  [c]
+  (let [st (state c)]
+    (into {} (map (fn [item] [item 1])) (remove #(had? (:carried st) (:worn st) %) (:items (:args c))))))
+
 (defn bill-of
-  "The bill {item 1} of the items not had, booked once in memory so the obtain child's args hold still."
+  "The bill (unhad), booked once in memory so the obtain child's args hold still."
   [c]
   (or (:bill (ctx/mem c))
-      (let [st (state c)
-            bill (into {} (map (fn [item] [item 1])) (remove #(had? (:carried st) (:worn st) %) (:items (:args c))))]
+      (let [bill (unhad c)]
         (ctx/update-mem! c assoc :bill bill)
         bill)))
+
+(defn worth-of
+  "The worth of a root kit: what its bill is to the body (cost/items-find-worth)."
+  [c]
+  (cost/items-find-worth (or (:bill (ctx/mem c)) (unhad c))))
 
 (defn ^:async run-bill!
   "The obtain child of the bill: :continue, nil when it got everything, else the stop (stop-of) of its ending."
@@ -262,10 +272,9 @@
       :else {:cause cause :why (why-of e)})))
 
 (defn ^:async run-arm!
-  "One obtain child round for a sword (the best it can make), its search worth the kit's: :continue, nil when armed, or {:cause :why} when it could not."
+  "One obtain child round for a sword (the best it can make), its worth the kit's: :continue, nil when armed, or {:cause :why} when it could not."
   [c]
-  (let [e (await (ctx/call c :arm 'jobs.items.obtain {:any-of ["iron_sword" "stone_sword" "wooden_sword"] :count 1 :explore (:explore (:args c))
-                                                       :search-worth (cost/items-find-worth (bill-of c))}))]
+  (let [e (await (ctx/call c :arm 'jobs.items.obtain {:any-of ["iron_sword" "stone_sword" "wooden_sword"] :count 1 :explore (:explore (:args c))}))]
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) nil

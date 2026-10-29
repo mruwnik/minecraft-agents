@@ -4,13 +4,15 @@
             [engine.path.blocks :as blocks]
             [engine.settings :as settings]
             [jobs.lib.cost.caught :as caught]
-            [jobs.lib.cost.table :as table]))
+            [jobs.lib.cost.table :as table]
+            [jobs.lib.cost.value :as value]))
 
 (defn warm!
-  "Build the item worth table of the body's game version (as item-value asks it), the planner's block table and the
+  "Build the item worth tables of the body's game version (as item-value and find-worth ask them), the planner's block table and the
   posterior of every counted flight and fight group (caught/prior: the first masked plan's unseen-share prices spawns with them)."
   []
   (table/table-for @game/version {} nil)
+  (table/table-for @game/version (value/measured-worths @game/version) nil)
   (blocks/default-state-table)
   (doseq [which [::caught/flights ::caught/fights]
           counts (vals (settings/get caught/settings which))]

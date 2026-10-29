@@ -1,6 +1,6 @@
 ;; Planks of any species are found by looking for any log, not for the first name's (oak) alone.
 ;; Should-succeed: charcoal wanted with only spruce logs carried and a furnace: some logs burn as fuel, no walk to look for oak.
-;; Should-succeed: oak_planks or birch_planks wanted, a birch tree far from the body (out of sight) and nothing else: the search finds the birch tree and one log makes 4 planks.
+;; Should-succeed: oak_planks or birch_planks wanted at the :worth an agent gives its goal (2 planks alone are worth less than one walk to look), a birch tree far from the body (out of sight) and nothing else: the search finds the birch tree and one log makes 4 planks.
 {:defaults
  {:tags [:obtain :explore] :time :any
   :plot {:height 8 :length 64 :width 64}
@@ -9,7 +9,7 @@
  :cases
  [{:name "any-planks-explores-for-any-log"
    :blocks [[:fill [50 0 50] [50 3 50] "birch_log"] [:set [50 4 50] "birch_leaves[persistent=true]"]]
-   :act [[:job (jobs.items.obtain {:any-of ["oak_planks" "birch_planks"] :count 2 :explore true})]]
+   :act [[:job (jobs.items.obtain {:any-of ["oak_planks" "birch_planks"] :count 2 :explore true :worth 120})]]
    :expect [{:event {:source :job :kind :completed} :within-s 180 :of-job true}]
    :after [[:item "birch_planks" 4]]}
   {:name "charcoal-from-the-only-logs-carried-burns-some-of-them"

@@ -3,7 +3,7 @@
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.game :as game]
-            [jobs.items.obtain.base :refer [bill-item-s bill-of carried-of search-worth]]
+            [jobs.items.obtain.base :refer [bill-item-s bill-of carried-of]]
             [jobs.lib.armour :as armour]
             [jobs.items.recipes :as recipes]
             [jobs.lib.game-facts :as facts]
@@ -60,10 +60,10 @@
                        :why "fuel and sticks for the bill" :not not}))))))
 
 (defn child-args
-  "The obtain child's args for item, carrying total in all: its search is worth the whole bill's (base/search-worth)."
+  "The obtain child's args for item, carrying total in all (its worth the whole bill's, inherited)."
   [c item total]
   (let [a (:args c)]
-    (into {:item item :count total :spend {:job-time (bill-item-s)} :search-worth (search-worth c)}
+    (into {:item item :count total :spend {:job-time (bill-item-s)}}
           (remove (comp nil? val))
           (select-keys a [:ways :explore :for-plan :avoid]))))
 

@@ -40,22 +40,15 @@
   (vec (if item [item] any-of)))
 
 (defn own-worth
-  "What n of names is worth to the body here, less a trip (jobs.lib.cost/find-worth)."
+  "What n of names is worth to the body here (jobs.lib.cost/find-worth)."
   [c names n]
   (cost/find-worth (cost/death-body (:primitives c) (ctx/view c)) names (u/self-pos c) n))
 
-(defn given-worth
-  "Seconds the caller says the call's need is worth: :search-worth (the goal of the caller, or of the obtain whose need
-  asked for this one), else :worth, else for a bill all of it (jobs.lib.cost/items-find-worth), else nil."
-  [c]
-  (let [{:keys [search-worth worth bill]} (:args c)]
-    (or search-worth worth (when bill (cost/items-find-worth bill)))))
-
 (defn search-worth
-  "Seconds a search for the call's need is worth: given-worth, else own-worth of :count."
+  "Seconds a search for the call's need may spend: the call's worth (ctx/worth), within the job time it has left (the
+  bound of a call that arrives, ##Inf), less what a mine for it already spent without a find (::spent, gather/way-left)."
   [c]
-  (or (given-worth c)
-      (let [a (:args c)] (own-worth c (names-of a) (:count a 1)))))
+  (- (min (ctx/worth c) (get-in (ctx/left c) [:spend :job-time] ##Inf)) (::spent c 0)))
 
 (defn wanted-fields
   "{:item name} or {:any-of [..]} of the args, for reasons and results."
@@ -123,12 +116,9 @@
 (defn tried! [c k v] (ctx/update-mem! c assoc-in [:tried k] v) :again)
 
 (defn priced-search
-  "The search options: search-worth as the search's :worth, which prices each walk, and that many seconds to spend. A
-  worth that pays for no more than the trip is 0: the search ends :price at its first walk."
+  "The search options: search-worth as the search's :worth, which prices each walk."
   [c]
-  (let [worth (search-worth c)]
-    {:worth (max 0 worth)
-     :spend {:job-time (max 1 worth)}}))
+  {:worth (max 0 (search-worth c))})
 
 (defn explore-opts
   "The search options, or nil when the :search way is off (or :explore false)."

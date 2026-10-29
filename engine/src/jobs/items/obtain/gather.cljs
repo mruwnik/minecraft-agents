@@ -6,7 +6,7 @@
             [engine.game :as game]
             [jobs.items.obtain.base :refer [explore-opts own-worth search-names search-scan-radius search-worth site-radius tried! ways-of]]
             [jobs.items.obtain.need :refer [climbs-first? gather-viable? pickaxe-first? tree? light-settling? tools-wanted torch-due trees-unreachable?]]
-            [jobs.items.obtain.plan :refer [cut-s gather-plan search-way]]
+            [jobs.items.obtain.plan :refer [cut-s first-leg-pays? gather-plan search-way]]
             [jobs.items.obtain.seen :refer [animal-cell animals-of approach-bound gather-carried gather-slot hunt-worth lead-args seen-of shears-source with-avoid with-block with-count]]
             [jobs.lib.breath :as breath]
             [jobs.lib.cost :as cost]
@@ -82,13 +82,13 @@
       :again)))
 
 (defn pickaxe-args
-  "The args of the obtain child that gets a tool for need: its search is worth the need's, or the tool's own when more."
+  "The args of the obtain child that gets a tool for need: its :worth the need's, or the tool's own when more (the tool outlives the need)."
   [c names need]
   (let [a (:args c)
         tools (tools-wanted c names need)]
     (into {} (remove (comp nil? val))
           {:any-of tools :count 1 :ways (ways-of c) :explore (:explore a)
-           :search-worth (max (search-worth c) (own-worth c tools 1))})))
+           :worth (max (ctx/worth c) (own-worth c tools 1))})))
 
 (defn ^:async pickaxe-step!
   "Get the cheapest tool that harvests the need's block (a jobs.items.obtain child): :again once it is carried, :continue
@@ -183,7 +183,7 @@
 
 (def approach-range "Blocks from an :approach goal its walk ends within." 8)
 
-(defn ^:async explore-walk!
+(defn ^:async search-walk!
   "Walk and look for need (a jobs.explore.search child): :again once it is seen; a search that finds none stops the
   gather source, as does the search for one need, unless at its start (other-way?) said the plan gathers something else
   once this search is spent (it was priced as tried before that seen way, obtain.plan/search-cost): then the body walks
@@ -221,8 +221,7 @@
             ;; a search that ran out of its own time is not counted, unless that keeps happening
             out-of-time? (and timed-out? (<= timeouts max-search-timeouts))
             k (cond-> (get-in (ctx/mem c) [:explored (:key need)] 0) (not out-of-time?) inc)]
-        (ctx/update-mem! c dissoc :explore-said)
-        (when-not out-of-time? (ctx/update-mem! c dissoc :explore-start))
+        (when-not out-of-time? (ctx/update-mem! c dissoc :explore-said :explore-start))
         (ctx/update-mem! c assoc-in [:explore-timeouts (:key need)] (if out-of-time? timeouts 0))
         (ctx/update-mem! c assoc-in [:explored (:key need)] k)
         (ctx/update-mem! c update :gather update :unreachable dissoc (:key need))
@@ -242,6 +241,16 @@
             :else (tried! c :gather (cond-> {:searched (:key need) :for targets :result (or (:reason res) (contract/cause-key e))}
                                       (:why res) (assoc :why (:why res))
                                       (:coverage res) (assoc :legs (:legs (:coverage res)) :farthest (:farthest (:coverage res)))))))))))
+
+(defn ^:async explore-walk!
+  "search-walk! for need while its search-worth pays for the first walk to look (obtain.plan/first-leg-pays?), else the
+  gather source fails :price without a walk."
+  [c need other-way?]
+  (if (first-leg-pays? c need)
+    (await (search-walk! c need other-way?))
+    (tried! c :gather {:searched (:key need) :for (search-names need) :result :price
+                       :why (str "a search for " (str/join "/" (search-names need)) " is worth " (js/Math.round (max 0 (search-worth c)))
+                                 " s, less than its first walk to look costs")})))
 
 (defn ^:async approach-step!
   "Walk up to the log a search found far off (the felling child works within its radius of the body), or back to where a
@@ -264,7 +273,7 @@
   "search-way for need within the search worth left once the strip cost spent on it without a find (memory
   [:gather :dug key :spent], strip-on!) is paid."
   [c need]
-  (search-way (assoc-in c [:args :search-worth] (- (search-worth c) (get-in (ctx/mem c) [:gather :dug (:key need) :spent] 0))) need))
+  (search-way (assoc c :jobs.items.obtain.base/spent (get-in (ctx/mem c) [:gather :dug (:key need) :spent] 0)) need))
 
 (defn climb-y
   "The height a stair up goes to before a mine for an ore not seen starts: the one under way, else (once a need) the

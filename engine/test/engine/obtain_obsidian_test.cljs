@@ -25,7 +25,8 @@
 
 (defn ^:async obtain [w]
   (let [{:keys [eng p]} (lt/setup w)
-        res (await (tu/child-outcome eng 'jobs.items.obtain {:item "obsidian" :count 1} 300))]
+        ;; obsidian's table worth is its dig, not the diamond pickaxe and the lava's risk: the agent says what one is worth
+        res (await (tu/child-outcome eng 'jobs.items.obtain {:item "obsidian" :count 1 :worth 300} 300))]
     {:res res :p p}))
 
 (defn carried [p name] (reduce + (map #(.-count %) (filter #(= name (.-name %)) (array-seq (.-inventory (.self p)))))))

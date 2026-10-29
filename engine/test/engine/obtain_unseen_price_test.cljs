@@ -16,12 +16,17 @@
             [jobs.lib.cost :as cost]
             [jobs.items.get-kit :as kit]))
 
+(defn rooted
+  "c with the ctx fns a root call has: its worth (w, else obtain's own worth-of) and no limits left to bind."
+  ([c] (rooted c (obtain/worth-of c)))
+  ([c w] (assoc c :worth (constantly w) :left (constantly {}))))
+
 (defn spider [x] {:id 1 :name "spider" :kind "hostile" :pos {:x x :y 64 :z 0} :drops [{:name "string" :count 1}]})
 
 (defn ctx [world]
   (let [view (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)}))]
-    {:primitives (tu/fake-on-floor (merge {:floor h/flight-floor} world)) :view (constantly view)
-     :args {:item "white_bed" :count 1 :ways #{:craft :smelt :gather :hunt :search} :explore true}}))
+    (rooted {:primitives (tu/fake-on-floor (merge {:floor h/flight-floor} world)) :view (constantly view)
+             :args {:item "white_bed" :count 1 :ways #{:craft :smelt :gather :hunt :search} :explore true}})))
 
 (defn kit [wool]
   (cond-> (into h/sword [{:name "oak_planks" :count 3} {:name "crafting_table" :count 1}])
@@ -69,8 +74,9 @@
                                             :blocks (into {} (map (fn [[x z]] [(str x "," (inc y) "," z) "oak_log"])) logs)
                                             :inventory [{:name "stick" :count 2} {:name "furnace" :count 1}]}))
         view (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)}))
-        c {:primitives p :view (constantly view)
-           :args {:item "torch" :count 4 :ways #{:craft :smelt :gather :search} :explore true :ignore-zones? true :search-worth 100}}
+        c (rooted {:primitives p :view (constantly view)
+                   :args {:item "torch" :count 4 :ways #{:craft :smelt :gather :search} :explore true :ignore-zones? true}}
+                  100)
         v (game/version-of p)
         price #(plan/plan-cost c v {:steps [] :gather %})]
     (with-redefs [ctx/mem (if explored (constantly {:explored explored}) ctx/mem)]
@@ -99,16 +105,16 @@
     (is (infinite? (plan/need-cost c {:key "bone" :count 1 :mob "spider" :job 'jobs.combat.hunt})) "a spider drops no bone")))
 
 (defn iron-way
-  "search-way of 3 unseen raw iron (worth the call's :search-worth, given) for a body on a floor of block at y (every block
+  "search-way of 3 unseen raw iron (worth the call's worth, given, else its own) for a body on a floor of block at y (every block
   in sight seen), carrying a stone pickaxe and inventory (16 torches by default), and the price of the plan that gathers them."
   [block y & {:keys [worth inventory ways blocks] :or {inventory [{:name "torch" :count 16}] ways #{:craft :smelt :gather :search}}}]
   (let [p (tu/seeing-all (tu/fake-on-floor {:floor [y -50 -45 50 45] :floor-block block :time 6000 :blocks blocks
                                             :self {:pos [0.5 (inc y) 0.5]}
                                             :inventory (into [{:name "stone_pickaxe" :count 1}] inventory)}))
         view (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)}))
-        c {:primitives p :view (constantly view)
-           :args (cond-> {:item "raw_iron" :count 3 :ways ways :explore true :ignore-zones? true}
-                   worth (assoc :search-worth worth))}
+        c0 {:primitives p :view (constantly view)
+            :args {:item "raw_iron" :count 3 :ways ways :explore true :ignore-zones? true}}
+        c (if worth (rooted c0 worth) (rooted c0))
         v (game/version-of p)
         need (first (table/gather-needs {"raw_iron" 3} v))]
     (assoc (plan/search-way c need)
@@ -118,7 +124,7 @@
 (def kit-worth (cost/items-find-worth (zipmap kit/iron-kit (repeat 1))))
 
 (deftest the-iron-kits-worth-pays-the-stair-up-from-deep-levels
-  (is (<= 1000 kit-worth) "the climb fixture's :search-worth 1000 is no more than the kit bill's own worth")
+  (is (<= 1000 kit-worth) "the climb fixture's :worth 1000 is no more than the kit bill's own worth")
   (doseq [y [-39 -20]]
     (is (= [:tunnel 16] ((juxt :way :y) (iron-way "dirt" y :worth kit-worth)))
         "the 36 to 55 dark levels up cost less than the finds a strip tunnel at the feet would wait for")))
@@ -154,7 +160,7 @@
                                             :blocks {"0,62,9" "coal_ore" "0,63,9" "air"}
                                             :light (into {} (for [x (range -1 2) y (range 61 66) z (range 8 11)] [[x y z] light]))}))
         view (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)}))
-        c {:primitives p :view (constantly view) :args {:item "coal" :count 1 :ways #{:gather} :ignore-zones? true}}]
+        c (rooted {:primitives p :view (constantly view) :args {:item "coal" :count 1 :ways #{:gather} :ignore-zones? true}})]
     (plan/need-cost c (first (table/gather-needs {"coal" 1} (game/version-of p))))))
 
 (deftest a-dark-ore-seen-below-with-no-torch-is-priced-by-its-dark-way-not-refused
@@ -166,8 +172,8 @@
                                             :self {:pos [0.5 70 0.5]}
                                             :inventory [{:name "stone_pickaxe" :count 1}]}))
         view (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)}))
-        c {:primitives p :view (constantly view)
-           :args {:item "iron_ingot" :count 3 :ways #{:craft :smelt :gather :search} :explore true :ignore-zones? true}}
+        c (rooted {:primitives p :view (constantly view)
+                   :args {:item "iron_ingot" :count 3 :ways #{:craft :smelt :gather :search} :explore true :ignore-zones? true}})
         v (game/version-of p)
         pl {:steps [] :gather {"raw_iron" 3 "raw_copper" 3}}
         needs (table/gather-needs (:gather pl) v)]
@@ -181,7 +187,8 @@
   (let [p (tu/with-sky-only (tu/seeing-all (tu/fake {:self {:pos {:x 0.5 :y 40 :z 0.5}} :inventory [{:name "stone_pickaxe" :count 1}]
                                                       :blocks (dissoc (tu/box -3 39 -3 3 43 3 "stone") "0,40,0" "0,41,0")})))
         view (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)}))
-        c {:primitives p :view (constantly view) :args {:item item :count 1 :ways #{:craft :gather :search} :explore true :ignore-zones? true :worth worth}}]
+        c0 {:primitives p :view (constantly view) :args {:item item :count 1 :ways #{:craft :gather :search} :explore true :ignore-zones? true :worth worth}}
+        c (if worth (rooted c0 worth) (rooted c0))]
     (with-redefs [ctx/mem (constantly {}) ctx/entries (constantly [])]
       {:price (price/search-s c [item] 1) :not-worth (obtain/not-worth c)})))
 

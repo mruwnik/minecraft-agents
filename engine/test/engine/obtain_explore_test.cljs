@@ -1,6 +1,7 @@
 (ns engine.obtain-explore-test
   "items.obtain's long looks: logs in a foreign zone or cut off from the body, ore seen from far. Split from engine.obtain-iron-test, whose ray casts over a wide sight made one namespace outlast the test runner's limit."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.core :as core]
             [engine.fetch-test :as f]
             [engine.obtain-iron-test :refer [ore-world obtain!]]
             [engine.core :as core]
@@ -9,12 +10,14 @@
             [engine.test-util :as tu]
             [engine.memory :as mem]
             [engine.ctx :as ctx]
+            [jobs.items.obtain :as obtain]
             [jobs.items.obtain.gather :as gather]
             [jobs.items.obtain.base :as base]
             [jobs.items.obtain.plan :as plan]
             [jobs.items.obtain.seen :as seen]
             [jobs.items.obtain.table :as table]
             [jobs.lib.access :as access]
+            [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]))
 
 (def village-trunk
@@ -37,19 +40,18 @@
   (is (= 192 (:max-distance (gather/within-site {:max-distance 192} nil))) "no centre: unbounded as before"))
 
 (defn search-at
-  "explore-opts of an obtain of args by a fake body."
+  "explore-opts of a root obtain of args by a fake body: its worth obtain's own worth-of."
   [args]
-  (let [view (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)}))]
-    (base/explore-opts {:primitives (tu/fake-on-floor {}) :view (constantly view) :args (merge {:explore true} args)})))
+  (let [view (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)}))
+        c {:primitives (tu/fake-on-floor {}) :view (constantly view) :args (merge {:explore true} args) :left (constantly {})}]
+    (base/explore-opts (assoc c :worth (constantly (obtain/worth-of c))))))
 
 (def bed {:any-of ["white_bed" "red_bed"]})
 
-(deftest a-priced-search-is-worth-what-the-find-is-and-no-count-binds-it
+(deftest a-root-search-is-worth-what-the-find-is-and-no-count-binds-it
   (let [o (search-at bed)]
     (is (< 0 (:worth (search-at {:item "stone_axe"})) (:worth o)) "an axe is worth a shorter search than a bed")
-    (is (= (:worth o) (get-in o [:spend :job-time])))
-    (is (not-any? o [:max-legs :max-distance]) "the walks' price binds it, not a count or a radius")
-    (is (zero? (:worth (search-at {:item "dirt" :count 1}))) "a find worth no more than a trip pays for no walk")))
+    (is (not-any? o [:max-legs :max-distance]) "the walks' price binds it, not a count or a radius")))
 
 (deftest logs-seen-only-in-a-foreign-zone-are-explored-past-and-then-named
   (async done
@@ -172,7 +174,7 @@
 (deftest an-ore-whose-tunnel-is-priced-above-the-feet-is-climbed-to-once
   (let [p (tu/seeing-all (tu/fake-on-floor {:inventory [{:name "stone_pickaxe" :count 1}]}))
         view (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)}))
-        c {:primitives p :view (constantly view) :args {:item "raw_iron" :count 1 :ways #{:gather} :ignore-zones? true}}
+        c {:primitives p :view (constantly view) :args {:item "raw_iron" :count 1 :ways #{:gather} :ignore-zones? true} :worth (constantly 500) :left (constantly {})}
         need (first (table/gather-needs {"raw_iron" 1}))
         climb (fn [mem way] (with-redefs [ctx/mem (constantly mem) plan/search-way (constantly way)] (gather/climb-y c need)))]
     (is (= 68 (climb {} {:way :tunnel :y 68})) "the tunnel priced above the feet")
@@ -189,6 +191,26 @@
           (await (obtain-small! s {:worth 500 :item "oak_log" :count 1 :ways #{:gather} :explore true} 60))
           (is (seq (f/events-of s :waiting)) "the hurt, foodless body's search waits")
           (is (= 1 (count (f/events-of s :obtain.exploring))) "and the notice is said once, not each round"))))))
+
+;; Old code priced every obtain's search at the item's own find-worth (a hoe or a sword: a few seconds, or 0), so a
+;; means job's obtain never searched and a root sword's walked off at 0 s.
+(deftest a-means-jobs-obtain-searches-at-its-callers-worth-a-root-at-its-goal-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (ore-world {} []) [f/own-zone])]
+          (core/submit! (:eng s) '(jobs.items.get-tool {:kind "hoe"}) {})
+          (await (f/run-ticks s 60))
+          (is (< 60 (:worth (first (f/events-of s :obtain.exploring))))
+              "get-tool arrives (##Inf): the obtain under it searches within its job time, not at the hoe's own few seconds"))
+        (let [s (f/start (ore-world {} []) [f/own-zone])]
+          (await (obtain! s {:item "wooden_sword" :count 1 :explore true} 60))
+          (is (< 0 (:worth (first (f/events-of s :obtain.exploring))) (inc (cost/items-find-worth {"wooden_sword" 1})))
+              "a root sword looks at its own goal worth"))
+        (let [s (f/start (ore-world {} []) [f/own-zone])]
+          (await (obtain! s {:item "stick" :count 1 :explore true} 60))
+          (is (empty? (f/events-of s :obtain.exploring)) "a stick alone is worth less than one walk to look for logs: no walk")
+          (is (re-find #"less than its first walk" (str (:why (first (f/events-of s :stopped)))))))))))
 
 (deftest planks-of-any-species-search-for-any-log
   (async done
@@ -224,8 +246,8 @@
       (fn ^:async t []
         (let [m (atom {})
               view (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)}))
-              c {:primitives (tu/seeing-all (tu/fake-on-floor {})) :view (constantly view)
-                 :args {:item "torch" :count 1 :ways #{:gather :search} :explore true :worth 500}}
+              c {:primitives (tu/seeing-all (tu/fake-on-floor {})) :view (constantly view) :worth (constantly 500) :left (constantly {})
+                 :args {:item "torch" :count 1 :ways #{:gather :search} :explore true}}
               ends (atom [{:kind :done :data {:reason :found :found [{:what "oak_log" :pos [3 64 3]}]}}
                           {:kind :nothing-possible :data {:reason :not-found}}])
               logs {:key "log" :count 1 :seen #{"oak_log"}}

@@ -1,7 +1,7 @@
 (ns jobs.items.obtain.seen
   "A gather need against the body: the blocks and sheep seen for it, and the need made ready to run."
   (:require [engine.ctx :as ctx]
-            [jobs.items.obtain.base :refer [given-worth search-worth seen-radius]]
+            [jobs.items.obtain.base :refer [search-worth seen-radius]]
             [jobs.lib.access :as access]
             [jobs.lib.animal-spare :as spare]
             [jobs.items.obtain.chest :as chest]
@@ -17,9 +17,9 @@
             [jobs.lib.walk-pick :as pick]))
 
 (defn hunt-worth
-  "Seconds an animal of mob is worth the call: its given-worth, else the larger of the animal's meat and the call's search-worth."
+  "Seconds an animal of mob is worth the call: the :worth it is given, else the larger of the animal's meat and the call's search-worth."
   [c mob]
-  (or (given-worth c) (max (cost/animal-worth mob) (search-worth c))))
+  (or (:worth (:args c)) (max (cost/animal-worth mob) (search-worth c))))
 
 (defn lead-args "The go-to args of the walk to within 6 blocks of cell [x y z]." [cell]
   {:pos (zipmap [:x :y :z] cell) :range 6 :ways #{:walk} :spend {:tries 1}})

@@ -7,7 +7,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.items.obtain.base :refer [args-error carried-of bill-item-s craft-step-s gather-need-s gathers? holds makes? max-inspections names-of near-chest smelt-item-s shortfall tried! wanted-fields way?]]
+            [jobs.items.obtain.base :refer [args-error carried-of bill-item-s craft-step-s gather-need-s gathers? holds makes? max-inspections names-of near-chest own-worth smelt-item-s shortfall tried! wanted-fields way?]]
             [jobs.items.obtain.bill :as bill]
             [jobs.items.obtain.loose :as loose-way]
             [jobs.items.obtain.chest :refer [blocked-text candidates cheapest! inspect! withdraw!]]
@@ -38,7 +38,8 @@
 
   A death since the call began starts it again from what is carried: :got counts from the respawn.
 
-  Needs: valid :item or :any-of and :count, or a :bill (else impossible :bad-args); a source (else condition-failed :no-source with :why naming what each way lacks); with :worth, a way priced within it (jobs.items.obtain.price/price-of: walk there and back, the death it risks; else :later :not-worth).
+  Needs: valid :item or :any-of and :count, or a :bill (else impossible :bad-args); a source (else condition-failed :no-source with :why naming what each way lacks); with a :worth given (the call key), a way priced within it (jobs.items.obtain.price/price-of: walk there and back, the death it risks; else :later :not-worth).
+  Worth (ctx/worth): the caller's, at the root worth-of; each walk of a search for an unseen need is priced against it, within the job time left.
   Returns :done {:got n :item name} only with the count carried (the call's :least, default :all, may name fewer) (a bill: {:have [items]}); nothing-possible :no-source, :table-unreachable or the gather's walk cause (:zone-exit ..) when every allowed way was tried, data {:got :tried :why :next} (:next: jobs.lib.next-call, the gather for the first unseen raw need); limit-reached :timeout after :spend :job-time (default-time: ::job-time-s, ::unit-s more per unit of :count beyond the first; a bill ::bill-item-s per item).
   Quote: the count as yield, time a guess per step, no most for a gather; a bill two gathers' time per missing item.")
 
@@ -50,9 +51,7 @@
    :for-plan {:doc "id of the plan whose work this is: a crafting table may stand in its own cells; passed to the craft steps" :spec a/name? :default nil}
    :avoid {:doc "cells [x y z] a crafting table is never put in or dug for and a climb out of the rock never starts through (a caller's dig line); passed to the craft steps" :spec (a/coll-of a/position?) :default nil}
    :center {:doc "a cell [x y z] the searches for an unseen block or animal centre on (a build's site): each starts there and stays within the ::site-radius setting of it; nil: where the body stands" :spec a/position? :default nil}
-   :worth {:doc "seconds the count is worth to the caller: the start check waits :not-worth while price-of (the cheapest way that would start, the death its walk risks) is more, and each walk of a search for an unseen need is priced against it (jobs.explore.search :worth); nil: any price (a bill: unpriced), the search worth what the item (:count of it, a bill all of it) is to the body (jobs.lib.cost/find-worth)" :spec (a/num-in nil nil) :default nil}
    :sky {:doc "the sky's darkening (0-15) the start check's price judges the light of its walks by (jobs.lib.walk-risk/estimate :sky); nil: as now" :spec (a/num-in 0 15) :default nil}
-   :search-worth {:doc "seconds a search for an unseen need is worth to the goal it serves (a bill, a build, the need of the obtain that asked for this tool), over :worth; unlike :worth it arms no start check" :spec (a/num-in nil nil) :default nil}
    :explore {:doc "false drops the :search way (the search, priced by what the need is worth, for a raw need not seen): fails :no-source instead" :spec boolean? :default true}})
 
 (a/defargs settings
@@ -122,8 +121,14 @@
       (when-not (and (= :no-source (:reason cause)) (way? c :chest) (not (look/surveyed? c)))
         cause))))
 
+(defn worth-of
+  "The worth of a root call: what its count of the item (a bill all of it) is to the body (cost/find-worth)."
+  [c]
+  (let [a (:args c)]
+    (if (:bill a) (cost/items-find-worth (:bill a)) (own-worth c (names-of a) (:count a 1)))))
+
 (defn not-worth
-  "{:reason :not-worth :price :worth} when the call has a :worth (and no bill) and price-of is more."
+  "{:reason :not-worth :price :worth} when the call is given a :worth (and no bill) and price-of is more."
   [c]
   (let [{:keys [worth bill]} (:args c)]
     (when (and worth (not bill) (not (args-error (:args c))))

@@ -63,11 +63,11 @@
             (is (contains? vias 'jobs.combat.hunt) (pr-str vias))
             (is (not (contains? vias 'jobs.food.fish)))))))))
 
-(deftest a-rabbit-30-blocks-off-is-not-hunted-when-the-search-worth-is-one
+(deftest a-rabbit-30-blocks-off-is-not-hunted-when-it-is-worth-one-second
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (h/setup (assoc (ft/world [] {}) :entities [{:id 1 :name "rabbit" :kind "passive" :pos {:x 30 :y 64 :z 4} :drops [{:name "rabbit" :count 1}]}]) 50)]
-          (core/submit! (:eng s) '(jobs.items.obtain {:item "rabbit" :count 1 :search-worth 1}) {})
+          (core/submit! (:eng s) '(jobs.items.obtain {:item "rabbit" :count 1 :worth 1}) {})
           (await (tu/run-ticks (:eng s) (:clock s) 12 700))
           (is (not (contains? (set (map :via (filter #(= :obtain.gathering (:kind %)) @(:seen s)))) 'jobs.combat.hunt))))))))
