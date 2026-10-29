@@ -148,13 +148,13 @@
 (deftest a-walk-over-dark-open-ground-at-night-is-held-when-its-death-costs-more-than-waiting-for-dawn
   ;; 190 blocks of dark open ground at tick 14000: an 11% death chance; dawn in 473 s, the day walk after it near free.
   ;; With no bed a death wakes at world spawn: by the hut, the walk back keeps the drops; 5000 blocks off, they are lost,
-  ;; and the kit's walk risks over three times the hp the body may afford (67 against 19): held for dawn, not on a
-  ;; price margin.
+  ;; and the kit's walk risks over three times the hp the body may afford (67 against 19): held for dawn. A bare body
+  ;; far off is not pinned: its walk and the allowance are near equal (the load's price is cost-test's).
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [[spawn inventory held?] [[[0 64 0] [] false] [[0 64 0] diamond-kit false]
-                                         [[-5000 64 0] [] false] [[-5000 64 0] diamond-kit true]]]
+                                         [[-5000 64 0] diamond-kit true]]]
           (let [world (-> night-hut (assoc :inventory inventory) (assoc-in [:self :worldSpawn] spawn))
                 {:keys [eng p seen]} (let [r (st/setup world)] (sky/with-sky (:p r)) r)
                 id (core/submit! eng '(jobs.movement.go-to {:pos [195 64 0]}) {})
