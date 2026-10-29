@@ -622,7 +622,6 @@
           (= :running (:niche (ctx/mem c))) (await (niche! c nil))
           (and (:no-site (ctx/mem c)) (not= :tried (:niche (ctx/mem c))) (pit-site/pit-start c)) (await (niche! c (pit-site/pit-start c)))
           (and (:no-site (ctx/mem c)) (not (look/surveyed? c))) (do (hold/busy! c) (await (look/look-around! c)) :again)
-          (and (ctx/way? c :shelter) (not (:no-site (ctx/mem c))) (infinite? (await (bed-down/dig-in-s c)))) (await (shelter! c))
           :else (await (shelter-answer! c)))))
 
 (defn home-target

@@ -22,7 +22,9 @@
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.dig-pit-site :as pit-site]
             [jobs.survival.night.hold :as hold]
-            [jobs.survival.night.sites :as sites]))
+            [jobs.survival.night.sites :as sites]
+            [jobs.survival.pit-cells :as pit]
+            [jobs.survival.respond.state :as flight]))
 
 (defn ground-sites
   "Natural ground among the seen solids [{:name :pos}] that the carried tools dig and that is no sand or gravel, as the
@@ -38,9 +40,12 @@
          (map (fn [b] {:kind :ground :pos (update (:pos b) :y inc)})))))
 
 (defn ground-ok?
-  "Whether a pit can be dug at ground site x (pit-site/pit-site?) and it is clear of failed sites."
+  "Whether a pit can be dug at ground site x (pit-site/pit-site?), clear of failed sites, and a pit fits there by what the
+  body has sensed (pit-cells/pit-plan, else a stop pit-cells/stop-of gives only for a cell not sensed)."
   [c {:keys [pos]}]
-  (and (pit-site/pit-site? (:primitives c) pos) (pit-site/clear-of-failed? c pos)))
+  (and (pit-site/pit-site? (:primitives c) pos) (pit-site/clear-of-failed? c pos)
+       (let [blocks (flight/blocks c)]
+         (boolean (or (pit/pit-plan c pos blocks) (:unseen (pit/stop-of c blocks pos)))))))
 
 (defn cave-sites
   "Feet cells over the seen solids [{:name :pos}] under a roof (a seen solid block 2..roof-height above), with two seen

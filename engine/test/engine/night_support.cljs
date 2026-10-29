@@ -260,7 +260,8 @@
             r))))
 
 (def stone-and-dirt-patch
-  (merge (into {} (for [x (range 28 33) z (range -2 3)] [(str x ",63," z) "dirt"]))))
+  "Dirt four deep at x 28..32 (a pit fits), the floor elsewhere."
+  (into {} (for [x (range 28 33) z (range -2 3) y (range 60 64)] [(str x "," y "," z) "dirt"])))
 
 (defn ^:async flee-with
   "The home flee night (a roofed home the time left does not cover) with go-to's quote of every walk walk-pick asks for (pick/quote!) answering by answer-of (a fn of the
