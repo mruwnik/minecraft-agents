@@ -1,20 +1,17 @@
-;; Treeless island start: a 9 x 9 sand islet in open water (surface water, floor 1 below, 40 to 50 blocks to the east shore, water all round
-;; the rest), and a tree on the east shore 35 blocks inland and one on each of the north and south banks (the walls hide what lies past those banks, so a search toward them must find a tree there). obtain oak_log with :explore and the :worth a kit that needs wood passes (a bare log is worth a few seconds, less than any crossing): the search walks out over the water to the
-;; far shore (go-to swims) and on to the tree, which is felled.
+;; Treeless island start: a 9 x 9 sand islet in open water (surface water, floor 1 below), 50 blocks from the east shore, in water that reaches the plot walls on the other three sides (no bank, no tree: the legs toward the walls are nearer than the east shore and find nothing). The only tree stands on the east shore 35 blocks inland: obtain oak_log with :explore and the :worth a kit that needs wood passes (a bare log is worth a few seconds, less than any crossing) must swim the 50 blocks east (go-to swims) and walk on to the tree, which is felled.
 ;; Should-succeed: the log is got.
-;; Water ends 4 short of the plot edges (dry banks) and a 3 high wall runs round the plot, so the body cannot walk off it.
+;; A 3 high wall runs round the plot, so the body cannot walk off it.
 ;; Open sky, so the case needs daylight: at night the body waits for light on the bank and the limit runs out (a roofed plot would make the body "buried" and stair up).
 {:defaults
  {:tags [:items :obtain :explore :water :jobs]
   :plot {:height 12 :length 200 :width 64 :floor "stone" :light :sky}
   :body {:at [100.5 0 32.5] :yaw 270 :settle-s 2 :inventory [["iron_axe" 1]] :effects [["resistance" 600 4]]}
-  :blocks [[:fill [4 -2 4] [150 -2 59] "stone"] [:fill [4 -1 4] [150 -1 59] "water"] [:fill [0 0 0] [199 2 0] "stone"] [:fill [0 0 63] [199 2 63] "stone"] [:fill [0 0 0] [0 2 63] "stone"] [:fill [199 0 0] [199 2 63] "stone"]
+  :blocks [[:fill [1 -2 1] [150 -2 62] "stone"] [:fill [1 -1 1] [150 -1 62] "water"] [:fill [0 0 0] [199 2 0] "stone"] [:fill [0 0 63] [199 2 63] "stone"] [:fill [0 0 0] [0 2 63] "stone"] [:fill [199 0 0] [199 2 63] "stone"]
            [:fill [96 -1 28] [104 -1 36] "sand"]
-           [:fill [185 0 32] [185 4 32] "oak_log"] [:fill [184 4 31] [186 6 33] "oak_leaves[persistent=true]"]
-           [:fill [100 0 2] [100 4 2] "oak_log"] [:fill [99 4 1] [101 6 3] "oak_leaves[persistent=true]"] [:fill [100 0 61] [100 4 61] "oak_log"] [:fill [99 4 60] [101 6 62] "oak_leaves[persistent=true]"]]
+           [:fill [185 0 32] [185 4 32] "oak_log"] [:fill [184 4 31] [186 6 33] "oak_leaves[persistent=true]"]]
   :limit-s 700}
  :cases
- [{:name "wooded-shore-across-the-water-is-swum-to"
+ [{:name "only-the-wooded-east-shore-across-the-water-is-swum-to"
    :time :day :time-why :night-light
    :act [[:job (jobs.items.obtain {:item "oak_log" :count 1 :ways #{:gather} :explore true :worth 600})]]
    :expect [{:event {:source :job :kind :completed} :within-s 650 :of-job true}]
