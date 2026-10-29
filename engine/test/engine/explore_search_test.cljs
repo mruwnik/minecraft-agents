@@ -755,19 +755,36 @@
                                 #(mem/write! (:store (:eng %)) :shelter {:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built} {:cap 10 :ttl st/day-ms})))]
           (is (seq (walks s)) "no flat dark hold: each leg's go-to prices its own route"))))))
 
-(deftest a-body-shut-in-a-room-at-night-waits-for-light-before-asking-go-to-to-dig-out
+(defn ^:async search-sheltered-at-night!
+  "A search of a body sealed in for a night with 20 s left, go-to's quote of every walk answered by quote (a map); {:state s :calls n}, calls those go-to was asked to walk."
+  [quote]
+  (let [calls (atom 0)
+        arity "cljs$core$IFn$_invoke$arity$3"
+        real (aget ctx/quote arity)]
+    (aset ctx/quote arity (fn [_ _ _] (js/Promise.resolve quote)))
+    (let [state (try (with-redefs [child/call-walk* (fn [_ _ _] (swap! calls inc) (js/Promise.resolve {:kind :done}))
+                                   ready/sheltered-dark (constantly (contract/later :dark "sealed in for the night" :wait-ms 20000))]
+                       (await (search! {:target "diamond_block" :max-distance 23}
+                                       {:time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks night-pit}
+                                       40)))
+                     (finally (aset ctx/quote arity real)))]
+      {:state state :calls @calls})))
+
+(deftest a-body-shut-in-a-room-at-night-waits-for-light-while-the-walk-costs-more
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [calls (atom 0)
-              s (with-redefs [child/call-walk* (fn [_ _ _] (swap! calls inc) (js/Promise.resolve {:kind :done}))
-                              ready/sheltered-dark (constantly (contract/later :dark "sealed in for the night"))]
-                  (await (search! {:target "diamond_block" :max-distance 23}
-                                  {:time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks night-pit}
-                                  40)))]
-          (is (not (finished? s)) "a kept seal is no failed leg")
-          (is (zero? @calls) "go-to digs out of a hut that is no shelter of its own: it is not asked while the night keeps the seal")
-          (is (some #(and (= :waiting (:kind %)) (= :dark (:reason %))) @(:seen s))))))))
+        (let [{:keys [state calls]} (await (search-sheltered-at-night! {:uses {:job-time [5 5 5] :health [0 12 12]} :risk {:hp 0}}))]
+          (is (not (finished? state)) "a kept seal is no failed leg")
+          (is (zero? calls) "go-to digs out of a hut that is no shelter of its own: it is not asked while waiting costs less than the walk")
+          (is (some #(and (= :waiting (:kind %)) (= :dark (:reason %))) @(:seen state))))))))
+
+(deftest a-body-shut-in-a-room-at-night-digs-out-when-the-walk-costs-less-than-waiting
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [calls]} (await (search-sheltered-at-night! {:uses {:job-time [5 5 5]} :risk {:hp 0}}))]
+          (is (pos? calls) "a walk that risks nothing is not worth the 20 s of waiting"))))))
 
 (deftest a-body-shut-in-a-room-with-no-leg-left-digs-out-toward-an-untried-column
   (async done
