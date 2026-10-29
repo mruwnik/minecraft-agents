@@ -4,10 +4,12 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.fake :as fake]
+            [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.go-to-escalate-support :as e :refer [in-pit pit stone-pit]]
             [engine.test-util :refer [floor]]
-            [jobs.lib.near :as near]))
+            [jobs.lib.near :as near]
+            [jobs.lib.result :as result]))
 
 (defn probe
   "A job that calls go-near! toward pos each round and keeps its outcome in out and its last-walk in walk."
@@ -43,6 +45,24 @@
          (is (= :there @out))
          (is (= [0 61 0] (e/feet p)))
          (done))))))
+
+;; a body within range of its work where a zombie killed it seconds ago, in the dark: the stay in its field is priced
+;; (threats/stay-danger, as go-to prices a goal's) against the goal's worth before :there; ctx/worth of a root call is arrival (##Inf), a zero stay costs nothing
+(deftest a-stay-in-range-by-a-recent-killer-is-blocked-only-when-it-costs-more-than-the-goal-is-worth
+  (async done
+    ((fn ^:async t []
+       (doseq [[opts answer why] [[{:stay-s 600 :worth 1} :blocked :goal-dangerous] [{:stay-s 600} :there nil] [{:stay-s 0 :worth 1} :there nil]]]
+         (let [{:keys [eng clock p]} (e/setup {:blocks (floor -2 -3 12 3) :light-default [0 0]})
+               out (atom :not-done)
+               walk (atom :unset)
+               eng (assoc eng :jobs (assoc (:jobs eng) 'near-probe (probe out walk {:x 2 :y 64 :z 0} 3 opts)))]
+           (mem/write! (:store eng) :deaths {:pos {:x 3 :y 64 :z 0} :cause "zombie" :death-t (- @clock 4000)} core/deaths-policy)
+           (core/submit! eng '(near-probe) {})
+           (await (e/tick-out! eng 1000))
+           (is (= answer @out) (pr-str opts))
+           (is (= why (result/why @walk)) (pr-str opts @walk))
+           (is (= [0 64 0] (e/feet p)) "no walk")))
+       (done)))))
 
 (deftest a-target-no-way-leads-to-is-blocked
   (async done

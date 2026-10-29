@@ -12,6 +12,7 @@
             [jobs.lib.near :as near]
             [jobs.lib.result :as result]
             [engine.ctx :as ctx]
+            [jobs.lib.threats :as threats]
             [engine.memory :as mem]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
@@ -142,6 +143,19 @@
          (not (contains? soil-blocks block))
          (not (contains? blocks/ores (base-ore block))))))
 
+(defn skip! [c pos] (ctx/update-mem! c update :skipped (fnil conj []) pos))
+
+(defn skip-risky!
+  "Skip pos while its dig from where the body stands costs more than it is worth: risky, go-near!'s refusal
+  (threats/stay-danger with its :stay-s and :worth), priced again on every scan."
+  [c pos {:keys [stay-s worth]}]
+  (ctx/update-mem! c update :risky assoc pos [stay-s worth]))
+
+(defn risky-now
+  "The targets skip-risky! skipped whose stay still costs more than they are worth."
+  [c]
+  (keep (fn [[pos [stay-s worth]]] (when (threats/stay-danger c (cell-of pos) stay-s worth) pos)) (:risky (ctx/mem c))))
+
 (defn scan
   "{:targets [pos] nearest first (the higher of two as near; next-target! prices the walks, a death or hide spot's mob on the way
   among them), those below the feet after all level or higher ones (a hole in the floor loses its drop; not soil or ores) and those over the ground snapshot after all others, :refused [verdict] of blocks a
@@ -151,7 +165,7 @@
   (let [{:keys [radius wet]} (:args c)
         accept (ways/accept (:args c))
         p (:primitives c)
-        skipped (set (:skipped (ctx/mem c)))
+        skipped (into (set (:skipped (ctx/mem c))) (risky-now c))
         ground (into #{} (map :pos) (:ground (ctx/mem c)))
         here (u/self-pos c)
         stay? (ways/stay-level? (:args c))
@@ -230,7 +244,7 @@
     (and (pos? (reach-lib/exits p :ground feet))
          (zero? (reach-lib/exits p :solid feet [(:x pos) (:y pos) (:z pos)])))))
 
-(defn skip! [c pos] (ctx/update-mem! c update :skipped (fnil conj []) pos))
+
 
 (defn drop-radius
   "The entity search radius that covers the collect-radius setting around the last dug cell, seen from the body: the body

@@ -8,7 +8,10 @@
             [jobs.lib.child :as child]
             [jobs.lib.aim :as aim]
             [jobs.lib.click :as click]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.cost.risk :as risk]
+            [jobs.lib.price :as price]
             [jobs.lib.util :as u]
             [engine.memory :as mem]
             [engine.path.executor :as executor]
@@ -19,7 +22,8 @@
             [jobs.lib.walk.drive :as drive]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.walk.plan :as wplan]
-            [jobs.lib.walk.search :as wsearch]))
+            [jobs.lib.walk.search :as wsearch]
+            [jobs.lib.threats :as threats]))
 
 (def walk-timeout-s
   "The default bound of one steer of a walk round. A caller that chases something that moves passes a shorter one, so it
@@ -244,6 +248,19 @@
   [c]
   (:near-goal (ctx/mem c)))
 
+(defn in-range!
+  "go-near!'s answer for a body already within range of cell: :there, or :blocked when the stay there (stay-s, nil: a
+  click's) costs more than worth (threats/stay-danger, as go-to prices its goal's; last-walk then reads :why :goal-dangerous)."
+  [c cell stay-s worth]
+  (if-let [risky (threats/stay-danger c cell (or stay-s (risk/work-s :click)) worth)]
+    (let [goal (mapv #(js/Math.floor (% cell)) [:x :y :z])
+          text (str "working at " (str/join "," goal) " from here risks " (price/round1 (:risk risky)) " s, over the " (price/round1 (:worth risky)) " s it is worth")]
+      (ctx/emit! c :near.risky-stay :info (assoc risky :reason :risky :pos goal :text text))
+      (ctx/update-mem! c assoc :near-walk (contract/ending :condition-failed :goal-dangerous (assoc risky :why :goal-dangerous :arrived false :text text))
+                       :near-goal goal)
+      :blocked)
+    :there))
+
 (defn ^:async go-near!
   "Walk until the body's cell is within range cells of pos's cell (u/within?), as a jobs.movement.go-to child in slot :walk,
   so a body shut in escalates (pillar, stair, dig a way out and put back). Resolves to :there, :partial (the child waits on the world: yield and call
@@ -252,9 +269,10 @@
   caller chasing something that moves; default one 60 s go-to steer), :look-round (default true; false for a caller that keeps moving, the go-to.tuning setting for this walk),
   :one-way (go-to's arg, default :closed here: no drop the body cannot climb back; not the :one-way key of a give-up
   result), :see (go-to's: in range only where the eye sees the block at pos), always one try (the job counts its own
-  tries), :checks (go-to's call key), :floor (go-to's call key), :y-margin and :max-damage (the walk.world settings for this walk), :dive (false: the walk plans no dive, the setting jobs.lib.walk.world/dive), :stay-s (seconds the job works at the goal, go-to's arg: the danger there is priced over them); :ignore-zones? comes from the job's args."
+  tries), :checks (go-to's call key), :floor (go-to's call key), :y-margin and :max-damage (the walk.world settings for this walk), :dive (false: the walk plans no dive, the setting jobs.lib.walk.world/dive), :stay-s (seconds the job works at the goal, go-to's arg: the danger there is priced over them; nil: a click's), :worth (the goal's
+  worth, default ctx/worth): a body already in range whose stay costs more than it is worth is :blocked (in-range!); :ignore-zones? comes from the job's args."
   ([c pos range] (go-near! c pos range nil))
-  ([c pos range {:keys [doors dangers tolls ways spend leg-s look-round one-way see checks floor y-margin dive max-damage stay-s] :or {doors :shut dangers true look-round true one-way :closed}}]
+  ([c pos range {:keys [doors dangers tolls ways spend leg-s look-round one-way see checks floor y-margin dive max-damage stay-s worth] :or {doors :shut dangers true look-round true one-way :closed}}]
    (let [cell (cell-of pos)
          walk-settings (cond-> {} (false? dangers) (assoc :jobs.lib.walk.world/dangers false)
                                   max-damage (assoc :jobs.lib.walk.world/max-damage max-damage)
@@ -264,7 +282,8 @@
      (cond
        (nil? cell) (do (ctx/emit! c :refused :warn {:reason :bad-pos :text (:message (places/parse-pos pos))})
                        :blocked)
-       (and (u/within? (u/self-pos c) cell range) (or (not see) (aim/body-sees? c [(:x cell) (:y cell) (:z cell)]))) :there
+       (and (u/within? (u/self-pos c) cell range) (or (not see) (aim/body-sees? c [(:x cell) (:y cell) (:z cell)])))
+       (in-range! c cell stay-s (or worth (ctx/worth c)))
        :else (let [walk (cond-> {:pos cell :range range :doors doors :tolls tolls
                                  :one-way one-way :see (boolean see) :spend (merge {:tries 1} spend) :ignore-zones? (boolean (:ignore-zones? (:args c)))}
                           checks (assoc :checks checks)

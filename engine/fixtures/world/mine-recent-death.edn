@@ -2,7 +2,7 @@
 ;; Lit plot, no clock; the near ore, the death and the spawn lie in a closed stone room (x 2..14, door east at x 15), dark inside: a spot seen lit since is cleared, so a lit death spot would not be shunned. The body dies at [10.5 0 6.5] beside iron ore [11 0 6] (a NoAI zombie hit), respawns at [4 0 4] and is given a pickaxe.
 ;; Should-succeed: a second ore at [34 0 20], further off and 27 blocks from the death, is mined instead of the near one, which stays.
 ;; Should-succeed: a body that died of a fall at the ore mines it (no mob to price).
-;; Should-fail: with no other ore the walk to the death-side ore is held :risky (go-to waits, or mine skips an ore it stands within reach of: mine.risky-dig; mine then stops :none), nothing is dug.
+;; Should-fail: with no other ore the walk to the death-side ore is held :risky (go-to waits, or mine skips an ore it stands within reach of: near.risky-stay; mine then stops :none), nothing is dug.
 {:defaults
  {:tags [:mine :death :jobs] :time :any
   :plot {:light :lit :height 12 :floor "dirt" :length 48 :width 48}
@@ -31,7 +31,7 @@
          [:rcon "give $BODY minecraft:stone_pickaxe"]
          [:wait-s 3]
          [:job (jobs.gather.mine {:torches false :block "iron_ore" :item "raw_iron" :count 1 :radius 45 :ways #{:seen}})]]
-   :expect [{:event {:source :job :kind #{:waiting :mine.risky-dig} :data {:reason :risky}} :within-s 90}
+   :expect [{:event {:source :job :kind #{:waiting :near.risky-stay} :data {:reason :risky}} :within-s 90}
             {:event {:source :job :kind :stopped :data {:reason :none}} :within-s 90 :of-job true}]
    :after [[:block [11 0 6] "iron_ore"]]
    :limit-s 150}

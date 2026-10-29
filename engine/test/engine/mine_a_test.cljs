@@ -633,15 +633,54 @@
     (is (= [["jobs.gather.mine" {:block "sand" :count 2}]] (nxt :no-tool)))))
 
 ;; the sand east is within reach (no walk to it), but a zombie killed the body beside it seconds ago: the dig's seconds there are priced
+(defn near-sand-by-a-death
+  "The sand east within reach in the dark, a zombie death beside it age-ms ago (nil: none), sand west at -12, mine for n
+  sand: the setup map with :go-tos, the go-to args of each walk round."
+  [age-ms n]
+  (let [[s go-tos] (spy-go-to (start {:world {:blocks (merge floor {"3,64,0" "sand" "-12,64,0" "sand"})}}))
+        _ (swap! (fake/state (:p s)) assoc :light dark-by-the-near-sand :worldSpawn [0 64 0])
+        now @(:clock s)]
+    (when age-ms
+      (mem/write! (:store (:eng s)) :deaths {:pos {:x 3 :y 64 :z 0} :cause "zombie" :death-t (- now age-ms)} core/deaths-policy))
+    (core/submit! (:eng s) (spec {:block "sand" :count n :ways #{:seen}}) {})
+    (assoc s :go-tos go-tos)))
+
+;; the sand east is within reach (no walk to it), but a zombie killed the body beside it seconds ago: the dig's seconds
+;; there are priced (go-near!'s in-range stay) against the sand's worth, and the walk west carries the dig's seconds
 (deftest a-target-in-reach-of-a-recent-death-is-dug-last
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start {:world {:blocks (merge floor {"3,64,0" "sand" "-12,64,0" "sand"})}})
-              _ (swap! (fake/state (:p s)) assoc :light dark-by-the-near-sand :worldSpawn [0 64 0])
-              now @(:clock s)]
-          (mem/write! (:store (:eng s)) :deaths {:pos {:x 3 :y 64 :z 0} :cause "zombie" :death-t (- now 4000)} core/deaths-policy)
-          (core/submit! (:eng s) (spec {:block "sand" :count 1 :ways #{:seen}}) {})
+        (let [s (near-sand-by-a-death 4000 1)]
           (await (run-ticks s 30))
           (is (= [-12 64 0] (first (dug-cells s))))
+          (is (= 1 (count (events-of s :near.risky-stay))))
+          (is (some #(and (= -12 (:x (:pos %))) (pos? (:stay-s %))) @(:go-tos s)) (pr-str @(:go-tos s)))
           (is (finished? s)))))))
+
+;; with no death remembered, or one faded (cost.death memory-ms), the stay in the dark is no threat's: dug first
+(deftest a-target-in-reach-in-the-dark-is-dug-first-while-its-stay-is-within-its-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [age-ms [nil 7200000]]
+          (let [s (near-sand-by-a-death age-ms 1)]
+            (await (run-ticks s 30))
+            (is (= [3 64 0] (first (dug-cells s))) (pr-str age-ms))
+            (is (empty? (events-of s :near.risky-stay)) (pr-str age-ms))))))))
+
+;; a risky skip is priced again on every scan: once the death has faded (cost.death memory-ms) the body walks back to
+;; the near sand it skipped
+(deftest a-target-skipped-as-risky-is-priced-again-once-the-death-has-faded
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (near-sand-by-a-death 4000 2)
+              back? (fn [] (some #(= 3 (:x (:pos %))) @(:go-tos s)))]
+          (await (settings/with-settings {:jobs.lib.cost.death/memory-ms 10000}
+                   (fn ^:async run []
+                     (await (run-until s 60 #(some #{[-12 64 0]} (dug-cells %))))
+                     (is (not (back?)) "skipped while the death is fresh")
+                     (swap! (:clock s) + 10000)
+                     (await (run-ticks s 10)))))
+          (is (back?) (pr-str @(:go-tos s))))))))

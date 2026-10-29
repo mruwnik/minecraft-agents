@@ -7,7 +7,6 @@
             [engine.sight :as sight]
             [jobs.lib.aim :as aim]
             [jobs.lib.breath :as breath]
-            [jobs.lib.cost :as cost]
             [jobs.lib.cost.risk :as risk]
             [jobs.lib.places :as places]
             [jobs.lib.reach :as reach]
@@ -238,15 +237,10 @@
       (wworld/stand-goal (wworld/path-world (:primitives c) (:unknown c)) pos))))
 
 (defn goal-danger
-  "The nearest known mob the body would flee that has the cell pos within its full-cost radius (threats/danger-near-fn),
-  with :stay-s and :worth, when the toll there over the stay (:stay-s, else cost.risk/work-s of a click act) costs more
-  than giving up loses, what the goal is worth (ctx/worth); else nil."
+  "threats/stay-danger of the goal pos over the call's stay (:stay-s, else cost.risk/work-s of a click act) against what the
+  goal is worth (ctx/worth)."
   [c pos]
-  (when-let [{:keys [toll] :as d} ((threats/danger-near-fn c) pos)]
-    (let [{:keys [stay-s]} (:args c)
-          stay (if stay-s stay-s (risk/work-s :click))
-          w (ctx/worth c)]
-      (when-not (cost/affords? (* toll stay) w) (assoc d :stay-s stay :worth w)))))
+  (threats/stay-danger c pos (or (:stay-s (:args c)) (risk/work-s :click)) (ctx/worth c)))
 
 (defn pre-aim!
   "Before the first walk: a y goal pos (goal-pos) that the planner answers goal-not-standable for alone (no search,
