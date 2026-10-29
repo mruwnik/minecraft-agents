@@ -158,3 +158,12 @@
         lethal #(settings/with-settings {:jobs.lib.cost.health/hp-seconds %} (fn [] (cost/lethal-hp {:chance 0.5 :death (cost/death-cost body {:x 0 :y 64 :z 0})})))]
     (is (< (js/Math.abs (- (lethal 10) (* 2 (lethal 20)))) 1e-9) "a dearer hp makes the same death fewer hp")
     (is (= 20 (settings/with-settings {:jobs.lib.cost.health/hp-seconds 20} cost/per-danger)))))
+
+(deftest waiting-out-poison-takes-an-hp-per-25-ticks-down-to-one-hp-and-wither-down-to-none
+  (are [effects health hp] (= hp (health/ticking-hp effects health))
+    [{:name "poison" :amplifier 0 :duration 100}] 20 4
+    [{:name "poison" :amplifier 1 :duration 100}] 20 8
+    [{:name "poison" :amplifier 0 :duration 1000}] 6 5
+    [{:name "wither" :amplifier 0 :duration 1000}] 6 6
+    [{:name "poison" :amplifier 0 :duration 50} {:name "wither" :amplifier 0 :duration 80}] 20 4
+    [{:name "speed" :amplifier 0 :duration 1000}] 20 0))

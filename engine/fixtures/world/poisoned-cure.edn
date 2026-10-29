@@ -11,4 +11,18 @@
    :act [[:rcon "damage $BODY 14 minecraft:generic"] [:rcon "effect give $BODY minecraft:poison 30 0 true"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :poisoned}} :within-s 20}
             {:event {:source :reflex :kind :ended :data {:outcome :done}} :within-s 30}]
-   :after [[:item "bucket" 1]]}]}
+   :after [[:item "bucket" 1]]}
+  {:name "withered-body-fetches-milk-from-a-near-chest"
+   :blocks [[:set [14 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:milk_bucket\",count:1}]}"]]
+   :body {:at [16.5 1 16.5] :yaw 90 :inventory []}
+   :act [[:rcon "damage $BODY 12 minecraft:generic"] [:rcon "effect give $BODY minecraft:wither 30 0 true"]
+         [:until-seen {:block "chest"} 10]
+         [:job (jobs.survival.cure)]]
+   :expect [{:event {:source :job :kind :completed} :within-s 50 :of-job true}]
+   :after [[:item "bucket" 1]]}
+  {:name "poisoned-body-without-a-source-waits-it-out"
+   :body {:at [16.5 1 16.5] :inventory []}
+   :act [[:rcon "damage $BODY 12 minecraft:generic"] [:rcon "effect give $BODY minecraft:poison 20 0 true"]
+         [:job (jobs.survival.cure)]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-cure}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :completed} :of-job true :for-s 10 :until {:source :job :kind :waiting :data {:reason :no-cure}}}]}]}

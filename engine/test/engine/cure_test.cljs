@@ -5,7 +5,8 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [jobs.lib.body :as body]))
+            [jobs.lib.body :as body]
+            [jobs.lib.need :as need]))
 
 (def poison [{:name "poison" :amplifier 0 :duration 400}])
 (def milk [{:name "milk_bucket" :count 1}])
@@ -37,9 +38,18 @@
 
 (deftest cure-without-a-cure-waits
   (let [can-start? (:can-start? (get registry/jobs 'jobs.survival.cure))
-        status (fn [world] (first (can-start? {:primitives (tu/fake world) :args {}})))]
+        status (fn [world] (first (can-start? {:primitives (tu/fake world) :args {:ways #{:carried}}})))]
     (is (= :later (status {:self {:effects poison}})))
     (is (= :ok (status {:self {:effects poison} :inventory milk})))))
+
+(deftest cure-fetches-a-cure-only-when-that-is-cheaper-than-waiting-the-poison-out
+  (let [can-start? (:can-start? (get registry/jobs 'jobs.survival.cure))
+        status (fn [price args] (with-redefs [need/item-price (constantly price)]
+                                  (first (can-start? {:primitives (tu/fake {:self {:health 6 :effects poison}}) :args args}))))]
+    (is (= :ok (status 20 {})) "a fetch worth 20 s against about 190 s of poison")
+    (is (= :later (status 1000 {})) "a dear fetch loses to waiting")
+    (is (= :later (status ##Inf {})) "no source")
+    (is (= :later (status 20 {:ways #{:carried}})) "a call that leaves fetching out waits")))
 
 (deftest a-field-job-waits-while-poisoned
   (are [self expected] (= expected (first ((:fit? (get registry/jobs 'jobs.farm.till)) {:primitives (tu/fake {:self self})})))

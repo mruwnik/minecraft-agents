@@ -89,6 +89,15 @@
 
 (def ticking-effects "Effects that keep costing hp." #{"poison" "wither"})
 
+(defn ticking-hp
+  "The hp the poison and wither of effects ({:name :amplifier :duration} in ticks) take off a body at health if waited out: one hp
+  per 25 ticks of poison (halved each level) down to 1 hp, per 40 of wither (halved each level) down to none."
+  [effects health]
+  (let [lost (fn [name tick] (transduce (comp (filter #(= name (:name %)))
+                                              (map #(/ (:duration %) (max 1 (/ tick (js/Math.pow 2 (:amplifier % 0)))))))
+                                        + 0 effects))]
+    (min health (+ (min (lost "poison" 25) (max 0 (dec health))) (lost "wither" 40)))))
+
 (defn food-cap
   "The most hp a body with food and health can lose and still not be hungry, less the margin; nil when the food is
   at or over top-up-food (the line stops rising there)."
