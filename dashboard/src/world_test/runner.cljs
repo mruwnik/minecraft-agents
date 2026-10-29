@@ -1427,8 +1427,8 @@
 (defn submit-job!
   "Submits spec with tools/jobs.mjs under one request id; resolves to the job id or throws with the tool's answer (a submit held back as a :job-clash names the
   running job, not a new one: the step needs [:alongside]). A
-  {:reason :timeout} answer (busy body) repeats the same request id (the body returns the first result) every second, up
-  to :submit-retries (default 8) times."
+  {:reason :timeout} answer (busy body) or a :clash-check-failed one (the job list unreadable, nothing queued) repeats the
+  same request id (the body returns the first result) every second, up to :submit-retries (default 8) times."
   [opts spec flags]
   (let [exec (:exec opts exec-file)
         nap (:sleep opts sleep)
@@ -1440,7 +1440,7 @@
                      (fn [{:keys [out]}]
                        (if-let [[_ id] (and (not (re-find #":reason :job-clash" out)) (re-find #":id \"(j\d+)\"" out))]
                          id
-                         (if (and (pos? left) (re-find #":reason :?\"?timeout" out))
+                         (if (and (pos? left) (re-find #":reason :?\"?(timeout|clash-check-failed)" out))
                            (.then (nap 1000) #(go (dec left)))
                            (throw (js/Error. (str "submit refused: " (str/trim out)))))))))]
       (go (:submit-retries opts 8)))))

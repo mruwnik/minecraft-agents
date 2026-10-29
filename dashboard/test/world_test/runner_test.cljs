@@ -1179,6 +1179,15 @@
                     (is (= 3 (count @calls)) "bounded retries")
                     (done)))))))
 
+(deftest a-submit-whose-clash-check-could-not-read-the-job-list-is-sent-again
+  (async done
+    (let [answers (atom ["{:ok false :reason :clash-check-failed :confirmation :not-sent}" "{:ok true :job {:id \"j3\"}}"])]
+      (-> (r/submit-job! {:body "B" :world "w"
+                          :exec (fn [_] (let [a (first @answers)] (swap! answers rest) (js/Promise.resolve {:code 1 :out a})))
+                          :sleep (fn [_] (js/Promise.resolve nil))}
+                         {:job :x} [])
+          (.then (fn [id] (is (= "j3" id)) (done)))))))
+
 (deftest a-submit-held-back-as-a-job-clash-is-refused-not-taken-for-the-running-jobs-id
   (async done
     (-> (r/submit-job! {:body "B" :world "w"
