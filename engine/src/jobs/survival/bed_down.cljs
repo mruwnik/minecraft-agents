@@ -166,8 +166,9 @@
   exposed, then lain in. :shelter sheltering here (dig-in-quote, when shut-in quotes a way) and :niche (niche, the caller's shelter-quote
   of a pocket dug nearby) alike: busy their time (time-s), the toll their quote names, that time exposed from the worst of the cells the bed
   is got up to (wake-cells) when asleep, and their :morning-s. :flee and :home (flee, home: the caller's target with go-to's :seconds and
-  :cost of the walk and :risk-s, the hostiles by the target; go-to's price has its dark cells' spawns): busy the walk's seconds and, a flee to a cave or
-  natural ground, the shelter's time on arrival (flee-after; here's toll is here's), the walk's cost beyond its seconds and risk-s, that shelter exposed at the target,
+  :cost of the walk; go-to's price has its dark cells' spawns and the threats that catch it): busy the walk's seconds and, a flee to a cave or
+  natural ground, the shelter's time on arrival (flee-after; here's toll is here's), the walk's cost beyond its seconds, that shelter exposed at the target
+  (exposed-price: the hostiles known there once),
   and by day that shelter's morning and, in the ground (its work goes on here), the walk back (cost/commute-s's); :home with a carried bed (it goes down there) loses the night as :bed
   does, plus the work its walk loses, less spawn-worth there. :exposed the night left in the open where the body stands (or the worst cell
   it gets up to). :log-out (log-out?): jobs.survival.log-out's quoted seconds, the night left to the sleepers."
@@ -186,10 +187,10 @@
         way-s #(cost/night-way-s in-ground? left %)
         open #(apply max (map (fn [cell] (exposed-price c (spawn-light/night-chance p cell) % cell)) stands))
         dig (fn [q] (let [t (min left (sin/time-s q))] (way-s {:busy-s t :risk-s (:risk-s q) :open-s (open t) :morning-s (:morning-s q)})))
-        walk (fn [{:keys [cost pos risk-s] :as t} after]
+        walk (fn [{:keys [cost pos] :as t} after]
                (let [seconds (min cost (or (:seconds t) cost))
                      busy (min left (sin/time-s after))]
-                 {:busy-s (+ seconds busy) :risk-s (+ (- cost seconds) (or risk-s 0))
+                 {:busy-s (+ seconds busy) :risk-s (- cost seconds)
                   :open-s (exposed-price c (spawn-light/night-chance p pos) busy pos) :morning-s (+ (if in-ground? seconds 0) (:morning-s after))}))
         sheltered? (if (or bed asleep?) (sh-beds/bed-sheltered? p at) (or (sh-beds/bed-sheltered? p feet) (some? (sh-beds/closed-home c))))
         body (respawn-body c)

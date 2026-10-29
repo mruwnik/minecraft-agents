@@ -20,6 +20,7 @@
             [engine.scenario :as scenario]
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
+            [jobs.lib.price :as price]
             [jobs.lib.util :as u]
             [engine.triggers :as triggers]
             
@@ -101,6 +102,23 @@
           (is (seq (filter #(= :flee (first %)) log)))
           (is (= [7] (mapv :cost (st/emitted seen :shelter.fled))) "the quote's price is reported")
           (is (every? #(or (:place %) (:pos %)) calls) "each candidate is quoted as the flight would walk it"))))))
+
+(deftest a-flee-prices-the-fight-at-its-target-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [prices (fn ^:async a [fight]
+                       (let [real price/way-fight-hp]
+                         (set! price/way-fight-hp (fn [_ _] fight))
+                         (try
+                           (let [[_ seen] (await (flee-with (fn [_] {:uses {:job-time [0 7 0]}})))]
+                             (:prices (first (st/emitted seen :night.answers))))
+                           (finally (set! price/way-fight-hp real)))))
+              calm (await (prices 0))
+              hurt (await (prices 2))
+              more #(- (% hurt) (% calm))]
+          (is (pos? (more :exposed)) (pr-str calm hurt))
+          (is (< (js/Math.abs (- (more :flee) (more :exposed))) 0.5) "the same fight adds as much at the target as here"))))))
 
 (deftest a-flee-search-still-going-walks-nowhere-until-it-answers
   (async done

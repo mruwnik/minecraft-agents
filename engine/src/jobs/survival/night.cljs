@@ -477,20 +477,15 @@
     (when (sh-spawn/seen-not-bed? (:primitives c) pos)
       (places/retract-if-missing! c :bed pos "missing"))))
 
-(defn target-hp-s
-  "Seconds the fight with the hostiles known near pos is expected to cost (jobs.lib.price/way-fight-hp, each hp at jobs.lib.cost/hp-price):
-  what a walk there costs beyond go-to's price, whose dark cells already price their spawns."
-  [c pos]
-  (* (cost/hp-price (or (.-health (.self (:primitives c))) 20)) (price/way-fight-hp c pos)))
-
 (defn walk-hp-s
   "Seconds the hp a walk to pos along go-to's quoted route r is expected to cost: spawns over its dark seconds (the planner's
-  :dark-seconds over jobs.lib.cost/dark-factor of the kit, by jobs.lib.price/stay-hp, each hp at jobs.lib.cost/hp-price) and target-hp-s."
+  :dark-seconds over jobs.lib.cost/dark-factor of the kit, by jobs.lib.price/stay-hp) and the fight with the hostiles known near pos
+  (jobs.lib.price/way-fight-hp), each hp at jobs.lib.cost/hp-price."
   [c pos r]
   (let [secs (or (:seconds r) 0)
         dark-s (min secs (/ (or (:dark-seconds r) 0) (cost/dark-factor (wworld/kit-of c))))]
-    (+ (* (cost/hp-price (or (.-health (.self (:primitives c))) 20)) (price/stay-hp c (cost/spawn-chance [0 0 0]) dark-s))
-       (target-hp-s c pos))))
+    (* (cost/hp-price (or (.-health (.self (:primitives c))) 20))
+       (+ (price/stay-hp c (cost/spawn-chance [0 0 0]) dark-s) (price/way-fight-hp c pos)))))
 
 (defn bed-walk-price
   "{:walk :walk-hp :stay} in seconds: the hp the walk to bed is expected to cost (spawns over its seconds in the dark, the planner's
@@ -573,7 +568,7 @@
         t (when (ctx/way? c :flee) (await (flee/flee-target c (not dig?))))]
     (if (= :searching t)
       :searching
-      (let [flee (when (map? t) (assoc t :seconds (get-in t [:route :seconds]) :risk-s (target-hp-s c (:pos t))))
+      (let [flee (when (map? t) (assoc t :seconds (get-in t [:route :seconds])))
             prices (await (bed-down/answers c {:niche n :flee flee}))]
         [(cond-> (dissoc prices :bed :sealed :log-out) (not dig?) (dissoc :shelter)) t]))))
 
@@ -624,18 +619,13 @@
           (and (:no-site (ctx/mem c)) (not (look/surveyed? c))) (do (hold/busy! c) (await (look/look-around! c)) :again)
           :else (await (shelter-answer! c)))))
 
-(defn home-target
-  "bed-down/answers' :home of walkable-home's home: its go-to seconds and price, and the hostiles known by it (target-hp-s)."
-  [c {:keys [pos route] :as home}]
-  (assoc home :seconds (:seconds route) :risk-s (target-hp-s c pos)))
-
 (defn ^:async night-prices
   "bed-down/answers from here: :bed (bed, its walk's price from :bed-walk, else with carried? the carried bed here) and :sealed only
   with one of them, :log-out with bed-way and log-out-wanted?, :home with home (walkable-home's)."
   [c bed carried? bed-way home]
   (let [walk (:bed-walk (ctx/mem c))
         prices (await (bed-down/answers c {:bed bed :walk-s (when (= bed (:bed walk)) (:walk-s walk)) :log-out? (and bed-way (log-out-wanted? c))
-                                           :home (some->> home (home-target c))}))]
+                                           :home (some-> home (assoc :seconds (get-in home [:route :seconds])))}))]
     (if (or bed carried?) prices (dissoc prices :bed :sealed))))
 
 (defn ^:async night-answer
