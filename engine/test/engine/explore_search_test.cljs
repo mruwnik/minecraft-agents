@@ -190,6 +190,33 @@
           (is (= "cow" (:what (first (:found (found-of s))))) "the cow was found by stepping toward the sound")
           (is (zero? (:legs (:coverage (found-of s)))) "no leg was walked"))))))
 
+(defn see-only-ahead!
+  "Passive mobs count only on the side the body last looked at (a look act's target), facing +x at first: a view cone."
+  [^js p]
+  (let [facing (atom [1 0])
+        orig (.-entities p)]
+    (.override (.-world p) "look" (fn [token a impl]
+                                    (let [me (.-pos (.self p))]
+                                      (reset! facing [(- (.-x (.-pos a)) (.-x me)) (- (.-z (.-pos a)) (.-z me))]))
+                                    (impl token a)))
+    (set! (.-entities p)
+          (fn [opts]
+            (let [me (.-pos (.self p)) [fx fz] @facing]
+              (.filter (.call orig p opts)
+                       #(or (not= "passive" (.-kind %))
+                            (pos? (+ (* fx (- (.-x (.-pos %)) (.-x me))) (* fz (- (.-z (.-pos %)) (.-z me))))))))))))
+
+(deftest a-look-round-finds-the-animals-seen-in-any-heading-not-only-the-last
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (search! {:target "cow" :count 2 :use-notes false :settings {:jobs.explore.search/max-legs 0}}
+                                {:entities [{:id 3 :uuid "u3" :name "cow" :kind "passive" :pos {:x 8.5 :y 64 :z 0.5}}
+                                            {:id 4 :uuid "u4" :name "cow" :kind "passive" :pos {:x -8.5 :y 64 :z 0.5}}]}
+                                400 #(see-only-ahead! (:p %))))]
+          (is (= #{"u3" "u4"} (set (map :id (:found (found-of s))))) "both cows are found, though one is out of view at the end of the look round")
+          (is (= #{"u3" "u4"} (set (map :id (filter #(= :seen (:kind %)) (file-notes s))))) "and both are noted"))))))
+
 (deftest a-target-in-sight-is-found-without-walking
   (async done
     (tu/run-async done
@@ -859,22 +886,22 @@
           (is (= 1 (count (:found e))))
           (is (some #(= :seen (:kind %)) (file-notes s))))))))
 
-(deftest a-scan-notes-ore-it-last-saw-until-a-look-corrects-it
+(deftest a-scan-drops-ore-a-later-look-of-the-round-saw-gone
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (search! {:target "diamond_block" :max-distance 20 :settings {:jobs.explore.search/max-legs 0}}
                                 {:blocks {"0,64,5" "diamond_block"} :cone? true}
                                 400 (fn [{:keys [p]}]
-                                      ;; mined once the body saw it, before sense reads memory: the body cannot know
+                                      ;; mined once the body saw it: the looks that follow in the round see the cell empty
                                       (let [seen-blocks (aget p "seenBlocks")]
                                         (aset p "seenBlocks" (fn [q]
                                                                (let [r (seen-blocks q)]
                                                                  (when (some #(= "diamond_block" (.-name %)) r)
                                                                    (fake/set-block! p {:x 0 :y 64 :z 5} "air"))
                                                                  r)))))))]
-          (is (some? (found-of s)) "no sight pass corrected it: memory still says ore")
-          (is (some #(= :seen (:kind %)) (file-notes s))))))))
+          (is (nil? (found-of s)) "a later look corrected the ore seen earlier in the round")
+          (is (not-any? #(= :seen (:kind %)) (file-notes s))))))))
 
 (deftest a-name-with-many-sightings-does-not-fill-the-scan-cap-for-the-others
   (let [p (tu/seeing-all (tu/fake {:blocks (merge (tu/box 1 64 1 10 64 7 "hay_block") {"14,64,0" "diamond_block"})}))

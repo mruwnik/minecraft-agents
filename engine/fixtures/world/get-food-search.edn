@@ -92,7 +92,7 @@
          [:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 8 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore true})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :no-food :text [:contains "not searched"]}} :within-s 60}
+   :expect [{:event {:source :job :kind :waiting :data {:reason :hostile-near}} :within-s 60}
             {:no-event {:source :job :kind :child_started :data {:slot :explore}} :for-s 40}]}
   {:name "starving-body-hunts-a-sheep-30-away"
    :act [[:summon "sheep" [34.5 0 16.5] "{NoAI:1b}"]

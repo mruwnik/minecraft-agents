@@ -650,6 +650,32 @@
           (await (one-round! eng {}))
           (is (empty? (calls p "attack")) "two known cows are the last pair, though only one is in sight"))))))
 
+(defn see-only-ahead!
+  "Passive mobs count only on the side the body last looked at (a look act's target), facing +x at first: a view cone."
+  [^js p]
+  (let [facing (atom [1 0])
+        orig (.-entities p)]
+    (.override (.-world p) "look" (fn [token a impl]
+                                    (let [me (.-pos (.self p))]
+                                      (reset! facing [(- (.-x (.-pos a)) (.-x me)) (- (.-z (.-pos a)) (.-z me))]))
+                                    (impl token a)))
+    (set! (.-entities p)
+          (fn [opts]
+            (let [me (.-pos (.self p)) [fx fz] @facing]
+              (.filter (.call orig p opts)
+                       #(or (not= "passive" (.-kind %))
+                            (pos? (+ (* fx (- (.-x (.-pos %)) (.-x me))) (* fz (- (.-z (.-pos %)) (.-z me))))))))))))
+
+(deftest a-cow-in-view-is-not-hunted-as-lone-before-the-body-has-looked-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:time 6000 :self {:food 8 :health 10} :entities [(assoc cow :uuid "u1") (assoc cow :id 8 :uuid "u2" :pos {:x -6 :y 64 :z 0})]}
+                                     :step-ms 5 :other-notes [])]
+          (see-only-ahead! p)
+          (await (one-round! eng {}))
+          (is (empty? (calls p "attack")) "the second cow behind the body makes the two the last pair"))))))
+
 (deftest a-baby-in-sight-does-not-end-the-search-for-an-adult-noted-farther-off
   (async done
     (tu/run-async done

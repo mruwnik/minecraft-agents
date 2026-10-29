@@ -35,7 +35,7 @@
 
   A look round that finds too few and hears target animals it cannot see walks up to 4 short steps toward the sound, looking round after each.
 
-  Each step looks around (blocks and entities with those names within :scan-radius; not again within 3 blocks of the
+  Each step looks around (blocks and entities with those names within :scan-radius, counted after every look of the round, not only the last; not again within 3 blocks of the
   last look round, nor when what it has seen already makes up :count), notes what it saw (:seen) and
   the spot (:searched) (engine.notes). Blocks the body saw earlier anywhere within the max-distance setting of the origin count as
   found too, nearest first. It ends when :count are found. Otherwise it walks the next leg with
@@ -322,6 +322,11 @@
           (map (fn [e] (cond-> {:what (:name e) :pos (cell-of (:pos e))} (:uuid e) (assoc :id (:uuid e)) (:id e) (assoc :entity-id (:id e))))
                (look/seen-entities p {:names names :radius radius :max 32}))))
 
+(defn distinct-sightings
+  "The sightings with each entity (its :id) or block cell once."
+  [found]
+  (vec (vals (into (array-map) (map (fn [f] [(or (:id f) [(:what f) (:pos f)]) f])) found))))
+
 (defn remembered
   "Findings from blocks the body saw earlier anywhere within max-distance (XZ) of the origin [x y z], beyond what a look
   reaches, nearest the body first. The memory read is capped after the sort by distance from the body, so the cap is
@@ -422,7 +427,8 @@
         seen-ttl-s (settings/get settings ::seen-ttl-s)
         entity-ttl-s (settings/get settings ::entity-ttl-s)
         searched-ttl-s (settings/get settings ::searched-ttl-s)
-        sensed #(sense (:primitives c) names scan-radius)
+        passed (atom [])
+        sensed #(distinct-sightings (concat @passed (sense (:primitives c) names scan-radius)))
         short-by? #(< (count (add-found (:found (ctx/mem c) []) % want)) want)
         short? #(short-by? (vec (takeable c (sensed))))
         first-sensed (sensed)
@@ -431,7 +437,9 @@
         _ (when looking?
             (if (breath/in-water? (:primitives c))
               (look/see! c (look/search-effort) :search)
-              (when-not (await (look/survey! c :near (look/search-effort))) (look/see! c (look/search-effort) :search))))
+              (if (look/surveyed? c :near)
+                (look/see! c (look/search-effort) :search)
+                (await (look/survey-until! c :near #(do (swap! passed into (sense (:primitives c) names scan-radius)) nil) (look/search-effort) nil)))))
         _ (do (ctx/update-mem! c dissoc :vantage) (when looking? (await (hear-lead! c names short?))))
         all-seen (if looking? (sensed) first-sensed)
         sighted (if looking? (vec (takeable c all-seen)) first-look)
