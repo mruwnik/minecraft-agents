@@ -210,8 +210,9 @@
     crop worth when the cell may hold any crop.
   - Sowing: the seed carried, up to the seen bare cells, the untilled ones while till can run, and the unseen cells' share
     cost/field-share :sowable, each at cost/sown-worth. The rate is wet when :irrigate wets the field or every ground cell is wet.
-  :work-s is each step's measured seconds (cost/field-step-s) over those expected units. :unpriced lists the steps that
-  would run whose worth has no term of its own here: irrigate (its gain is the wet rate of the sowing), fertilize, a plant whose sowing is priced at 0 (a seed worth more than its crop, as a carrot) and a till that sows nothing more."
+  Irrigate is priced by the wet rate of the sowing. :work-s is each step's measured seconds (cost/field-step-s) over those
+  expected units. :unpriced lists the steps that would run whose worth is left out: fertilize, a plant whose sowing is
+  priced at 0 (a seed worth more than its crop, as a carrot) and a till that sows nothing more."
   [c f]
   (let [p (:primitives c)
         args (decide-args c)
@@ -232,7 +233,7 @@
         sowing (if crop (* sown (cost/sown-worth crop (crops/stages-per-s wet? nil))) 0)]
     {:worth (+ harvest sowing)
      :unpriced (filterv #(and (:call (decide/decide % args f))
-                              (case % :harvest false :plant (zero? sowing) :till (or (zero? sowing) (<= sown (:bare f 0))) true))
+                              (case % (:harvest :irrigate) false :plant (zero? sowing) :till (or (zero? sowing) (<= sown (:bare f 0))) true))
                         decide/steps)
      :work-s (+ (cost/field-step-s :harvest ripe)
                 (cost/field-step-s :till (max 0 (- sown (:bare f 0))))

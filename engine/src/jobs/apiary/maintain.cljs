@@ -13,6 +13,11 @@
             [jobs.lib.need :as need]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
+            [jobs.lib.check-cache :as check-cache]
+            [jobs.lib.reach :as reach]
+            [jobs.lib.sense :as sense]
+            [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.walk-risk :as walk-risk]
             [jobs.lib.steps :as steps]
             [jobs.lib.util :as u]))
 
@@ -35,8 +40,10 @@
   :not-ripe, :no-tool, :unsafe-fire, :not-smoked, :open-fire, :no-target, :at-target, :night, :raining,
   :too-few-adults, :no-food, :no-chest, :nothing-to-store). One that declines is booked {:skipped :declined :reason why} (the child's wait)
   and the pass goes on.
-  It waits (a skipped job, :nothing-to-do) unless some step would run, after one look around when part of the area
-  was never seen. A started run always continues.
+  It waits (a skipped job, :nothing-to-do) unless some step would run. While part of the area was never seen it looks
+  round first, then walks to look (jobs.movement.walk-look, one leg to a seen stand cell near the nearest unseen watched
+  cell, run before the start) while the walk's price is within the pass's worth, else waits :not-worth; once no leg is
+  left it waits :nothing-to-do. An unseen part is never in order. A started run always continues.
   It ends :done with {:target :bees :steps {step summary}} when some step ran to its end; else nothing-possible
   :failed-steps when one stopped, else condition-failed :nothing-to-do (every step skipped). Summaries: guard {:sunk :carpeted :reason :left}, harvest {:harvested :reason :declined}, breed {:fed
   :reason}, deposit {:gave-up :reason}.
@@ -182,6 +189,12 @@
   (let [f (facts c)]
     (boolean (some #(:call (decide % (need/args-with-ways c) f)) steps))))
 
+(defn unseen-cells
+  "The watched cells never seen, floored."
+  [c]
+  (let [p (:primitives c)]
+    (filterv #(look/unseen? p [%]) (map #(update-vals % js/Math.floor) (apiary/watched-cells c)))))
+
 (def hive-yield "What one ripe hive gives a harvest with each tool: the game's 3 honeycomb to shears, a honey bottle to a bottle." {"shears" {:name "honeycomb" :count 3} "glass_bottle" {:name "honey_bottle" :count 1}})
 
 (a/defargs settings
@@ -203,7 +216,7 @@
         stored (keep (fn [n] (let [over (- (reduce + 0 (map :count (filter #(= n (:name %)) carried))) (get (:carry args) n 0))]
                                (when (pos? over) {:name n :count over})))
                      (:stored f))]
-    (+ (if (look/unseen? (:primitives c) (apiary/watched-cells c))
+    (+ (if (seq (unseen-cells c))
          (* yield (cost/field-share :ripe (:ripe (:hives f)) (:hives (:hives f))))
          0)
        (if (runs? :harvest) (* (count (:todo (:hives f))) yield) 0)
@@ -211,14 +224,56 @@
        (if (runs? :breed) yield 0)
        (if (runs? :deposit) (:value (cost/goal-value stored)) 0))))
 
+(defn stand-near
+  "The seen stand cell (reach/seen-standable?) within look/near-blocks of cell nearest it (then nearest the feet), not
+  beside the feet (a look from there shows as much as one here), or nil."
+  [p feet {:keys [x y z] :as cell}]
+  (let [r look/near-blocks]
+    (->> (for [dx (range (- r) (inc r)) dy (range (- r) (inc r)) dz (range (- r) (inc r))] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
+         (filter #(reach/seen-standable? p %))
+         (remove #(u/within? feet % 1))
+         (sort-by (juxt #(u/dist cell %) #(u/dist feet %)))
+         first)))
+
+(defn look-leg
+  "{:side :to}: the nearest unseen watched cell no walk-look has looked at (:walk-looked: from close by it stayed unseen),
+  with a stand cell near it to walk to and look from (stand-near); nil when none."
+  [c]
+  (let [p (:primitives c)
+        feet (sh-sense/feet p)
+        looked (into #{} (mapcat (comp :cells :data)) (ctx/entries c :walk-looked))]
+    (check-cache/cached c [::look-leg (sense/known-memory p) (mapv js/Math.floor [(:x feet) (:y feet) (:z feet)]) looked]
+                        #(->> (unseen-cells c)
+                              (remove (fn [{:keys [x y z]}] (looked [x y z])))
+                              (sort-by (fn [cell] (u/dist feet cell)))
+                              (keep (fn [side] (when-let [to (stand-near p feet side)] {:side side :to to})))
+                              first))))
+
+(defn unseen-status
+  "Nothing to do in what was seen, a look round near here made, part of the area still unseen: the walk to look at it
+  (look-leg), priced as walk-risk/look-way there and back (ready/look-cost) against the job's worth (worth-of: the unseen
+  part's share of a hive): later :unseen with the walk-look leg as its :look-first child while the worth pays it, later
+  :not-worth {:worth :look-s} while not, later :nothing-to-do {:unseen true} when no leg is left."
+  [c]
+  (if-let [{:keys [side to]} (look-leg c)]
+    (let [cost (ready/look-cost c (walk-risk/look-way c to 1))
+          worth (ctx/worth c)]
+      (if (and cost (<= cost worth))
+        (contract/later :unseen (str "part of the apiary was never seen: the walk to look costs " (price/round1 cost) " s of its " (price/round1 worth) " s")
+                        :look-first ['jobs.movement.walk-look {:side side :to to}])
+        (contract/later :not-worth (str "part of the apiary was never seen, but the walk to look costs "
+                                        (if cost (str (price/round1 cost) " s") "more hp than it buys") ", over its " (price/round1 worth) " s")
+                        :worth worth :look-s cost)))
+    (contract/later :nothing-to-do "nothing to do at the apiary; part of it was never seen and no walk to look is left" :unseen true)))
+
 (defn can-start?
-  "Later :nothing-to-do when nothing would run, with a look first while part of the area was never seen."
+  "Later :nothing-to-do when nothing would run; while part of the area was never seen, a look round first, then unseen-status."
   [c]
   (cond
     (would-run? c) (contract/ok :step "a step would run")
-    (and (look/unseen? (:primitives c) (apiary/watched-cells c)) (not (look/surveyed? c :near)))
-    (contract/look :nothing-to-do "nothing to do at the apiary yet; part of it was never seen")
-    :else (contract/later :nothing-to-do "nothing to do at the apiary")))
+    (empty? (unseen-cells c)) (contract/later :nothing-to-do "nothing to do at the apiary")
+    (not (look/surveyed? c :near)) (contract/look :nothing-to-do "nothing to do at the apiary yet; part of it was never seen")
+    :else (unseen-status c)))
 
 ;; ------------------------------------------------------------------ the run
 
@@ -313,8 +368,8 @@
 
 (defn done?
   "Ok when the apiary is in order, wrap-up included (no fire unsafe or lacking a carpet, nothing ripe, bees at :target
-  or none wanted, nothing to store); before the start that is done :already. Later while part of the area was never
-  seen (can-start? asks the look). Else later with the steps run and left."
+  or none wanted, nothing to store) and every watched cell was seen; before the start that is done :already. Later
+  :unseen while part of the area was never seen (can-start? looks or walks to look). Else later with the steps run and left."
   [c]
   (let [ran (count (filter ran? (vals (:report (ctx/mem c)))))
         left (count (:todo (ctx/mem c)))
@@ -323,7 +378,7 @@
       (not (in-order? (need/args-with-ways c) facts))
       (contract/later :steps (str ran " steps run") :units :steps :done ran :left left)
 
-      (and (look/unseen? (:primitives c) (apiary/watched-cells c)) (not (look/surveyed? c :near)))
+      (seq (unseen-cells c))
       (contract/later :unseen "part of the apiary was never seen" :units :steps :done ran :left left)
 
       :else

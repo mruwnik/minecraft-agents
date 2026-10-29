@@ -5,6 +5,7 @@
             [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
+            [engine.hooks :as hooks]
             [engine.hostile-test :as h]
             [engine.registry :as registry]
             [engine.fake :as fake]
@@ -208,13 +209,18 @@
           (is (= 1 (:harvested (step s :harvest))))
           (is (true? (finished? s))))))))
 
-(defn ^:async looks-after
-  "The look calls after n ticks of the engine of s, then after n more."
-  [{:keys [eng clock] :as s} n]
-  (await (tu/run-ticks eng clock n 700))
-  (let [first-n (count (calls s "look"))]
-    (await (tu/run-ticks eng clock n 700))
-    [first-n (count (calls s "look"))]))
+(defn ^:async look-rounds
+  "The look rounds (the :look/around hook) the engine of s makes in n ticks, and in n more: [first-n later-n]."
+  [{:keys [eng clock]} n]
+  (let [rounds (atom 0)
+        real (:look/around hooks/all)]
+    (with-redefs [hooks/all (assoc hooks/all :look/around (fn [c cells] (swap! rounds inc) (real c cells)))]
+      (await (tu/run-ticks eng clock n 700))
+      (let [first-n @rounds]
+        (await (tu/run-ticks eng clock n 700))
+        [first-n @rounds]))))
+
+(defn reasons [s] (distinct (map :reason (events-of s :waiting))))
 
 (deftest an-apiary-with-nothing-to-do-waits-after-one-look
   (async done
@@ -222,23 +228,57 @@
       (fn ^:async t []
         (let [s (doto (h/setup (world {:inventory (inv "shears" 1) :raised? true})) (-> :p tu/seeing-after-look))]
           (core/submit! (:eng s) (spec {:ways #{:carried}}) {})
-          (let [[first-n later-n] (await (looks-after s 10))]
-            (is (pos? first-n) "the unseen area is looked at")
-            (is (= first-n later-n) "one look around, not one per run"))
-          (is (= [:nothing-to-do] (distinct (map :reason (events-of s :waiting)))))
+          (is (= [1 1] (await (look-rounds s 10))) "one look round, not one per run")
+          (is (= [:nothing-to-do] (reasons s)))
           (is (nil? (done-event s))))))))
 
-(deftest a-body-that-sees-nothing-even-after-one-look-ends-already-the-job-cannot-walk-to-look
+(deftest an-apiary-that-stays-unseen-after-one-look-and-has-no-walk-to-look-waits-never-in-order
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (doto (h/setup (world {:inventory (inv "shears" 1) :raised? true}))
                   (-> :p (doto tu/blind (aset "sensedAt" (fn [_] #js {:unknown true})))))]
           (core/submit! (:eng s) (spec {:ways #{:carried}}) {})
-          (let [[first-n later-n] (await (looks-after s 10))]
-            (is (pos? first-n) "it looked before it ended")
-            (is (= first-n later-n) "one look around, not one per run"))
-          (is (= :already (:cause (done-event s)))))))))
+          (is (= [1 1] (await (look-rounds s 10))) "one look round, not one per run")
+          (is (= [:nothing-to-do] (reasons s)) "no seen cell to stand on: no walk to look is left")
+          (is (nil? (done-event s)) "an unseen part is not in order: not done :already")
+          (is (false? (finished? s))))))))
+
+(defn unseen-at
+  "p seeing all but cell {:x :y :z}, never seen."
+  [p cell]
+  (let [real (.-sensedAt p)
+        at? #(= [(:x cell) (:y cell) (:z cell)] (mapv (fn [k] (js/Math.floor (aget % k))) ["x" "y" "z"]))]
+    (aset p "sensedAt" (fn [q] (if (at? q) #js {:unknown true :pos q} (real q))))
+    p))
+
+(defn ^:async unseen-center-run
+  "An apiary of radius 1 round the cell center, nothing in it, the cell itself never seen: s after 30 ticks."
+  [center]
+  (let [s (doto (h/setup (assoc (world {:inventory (inv "shears" 1)}) :floor [-5 -5 (+ (:x center) 5) 5])) (-> :p tu/seeing-all) (-> :p (unseen-at center)))]
+    (core/submit! (:eng s) (list 'jobs.apiary.maintain {:center center :radius 1 :ways #{:carried}}) {})
+    (await (tu/run-ticks (:eng s) (:clock s) 30 700))
+    s))
+
+(deftest an-unseen-apiary-whose-walk-to-look-its-worth-pays-is-walked-to-and-looked-at-once-then-waits
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (unseen-center-run {:x 1 :y 64 :z 2}))]
+          (is (= 1 (count (events-of s :walk-look.ended))) "one leg: from close by the cell stayed unseen, so no second walk")
+          (is (seq (tu/walk-calls (:p s))))
+          (is (= [:nothing-to-do] (reasons s)))
+          (is (nil? (done-event s))))))))
+
+(deftest an-unseen-apiary-whose-walk-to-look-costs-more-than-its-worth-waits-not-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (unseen-center-run {:x 10 :y 64 :z 0}))]
+          (is (empty? (events-of s :walk-look.ended)))
+          (is (empty? (tu/walk-calls (:p s))))
+          (is (= [:not-worth] (reasons s)) "one hive at the prior ripe share is not worth 10 blocks there and back")
+          (is (nil? (done-event s))))))))
 
 (deftest a-fully-seen-idle-apiary-does-not-look
   (async done

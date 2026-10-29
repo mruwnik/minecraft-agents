@@ -104,7 +104,8 @@
         base (farm grown {})
         c (ctx-of grown (merge args {:irrigate true}) {})]
     (with-redefs [tend/check-facts (let [real tend/check-facts] #(assoc (real %) :dry 5))]
-      (is (= (:worth (tend/pass-price c (tend/check-facts c))) (farm grown {:irrigate true})) "irrigate: the pass price already sows wet, no second gain"))
+      (is (= (:worth (tend/pass-price c (tend/check-facts c))) (farm grown {:irrigate true})) "irrigate: the pass price already sows wet, no second gain")
+      (is (= [] (:unpriced (tend/pass-price c (tend/check-facts c)))) "irrigate is priced, so tend's walk check runs"))
     (let [wet (crops/stages-per-s true nil)]
       (is (< (Math/abs (- (* 9 (/ farm-maintain/bone-meal-stages wet) (/ (cost/sown-worth "wheat" wet) (cost-farm/horizon-s)))
                           (- (farm meal {:fertilize true}) (farm meal {}))))

@@ -87,6 +87,14 @@
       (assoc-in s [2 :look] (assoc (walk-risk/look-way c to 1) :child ['jobs.movement.walk-look {:side side :to to}]))
       s)))
 
+(defn look-cost
+  "Seconds the walk to look `way` (walk-risk/look-way) costs c's body: its hp priced (walk-risk/risk-s) plus its seconds;
+  nil while the hp are more than the call's worth buys (walk-risk/buys-hp)."
+  [c way]
+  (let [self (.self (:primitives c))]
+    (when (<= (:hp way) (walk-risk/buys-hp (.-health self) (.-food self) (ctx/worth c)))
+      (+ (walk-risk/risk-s c way) (:secs way)))))
+
 (defn own-way
   "c with (f c s) among the ways its job answers a refusal s on exposure itself (its torches, a wait for dawn): seconds,
   nil none. priced takes the walk to look only while it is cheaper than each of them."
@@ -233,9 +241,7 @@
             lethal (cost/lethal-hp {:chance dies :death death})
             hp (+ hurt lethal)
             {:keys [now-s now? best]} (act-price c hurt lethal (when (= :later kind) (some-> wait-ms (/ 1000))))
-            self (.self (:primitives c))
-            look-s (when (and look-way (<= (:hp look-way) (walk-risk/buys-hp (.-health self) (.-food self) (ctx/worth c))))
-                     (+ (walk-risk/risk-s c look-way) (:secs look-way)))
+            look-s (some->> look-way (look-cost c))
             own-s (keep #(% (dissoc c ::own-ways) s) (::own-ways c))
             own? (fn [than] (some #(< % than) own-s))
             look (when (and look-s (every? #(< look-s %) own-s)) {:s look-s})
