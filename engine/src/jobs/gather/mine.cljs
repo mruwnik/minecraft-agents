@@ -11,6 +11,7 @@
             [jobs.gather.shaft-descent :refer [pick-shaft]]
             [jobs.gather.mine.end :as end :refer [end-run wanted]]
             [jobs.gather.mine.mend :as mend]
+            [jobs.gather.mine.torches :as torches]
             [jobs.gather.mine.way-set :as mw]
             [jobs.gather.mine.targets :refer [owed carried got had work-s zone-margin within-keep-clear within-own-zone scan items main-block walled?]]
                         [jobs.lib.access :as access]
@@ -82,7 +83,7 @@
 
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 
-(def safe? (ready/unless-outmatched (price/staying :long (ready/dark-near-ok #(and (mw/hangs-torches? (:args %)) (stock/lit-way? %)) work-place/dig-spot (ready/safe-at-or-roaming work-place/dig-spot true)))))
+(def safe? (ready/unless-outmatched (price/staying :long (ready/dark-near-ok torches/torch-way work-place/dig-spot (ready/safe-at-or-roaming work-place/dig-spot true)))))
 
 (def fit? (ready/fit-for :long))
 

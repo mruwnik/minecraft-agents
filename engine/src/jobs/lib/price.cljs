@@ -95,6 +95,8 @@
   [category safe]
   (with-stay safe (fn [_] (risk/work-s category)) true))
 
+(defn stay-s "Seconds c's job stays at its place: its ::stay-s, else a click's." [c] (or (::stay-s c) (risk/work-s :click)))
+
 (defn priced
   "The status s of a place check, but ok where it is :later or :never on exposure alone (:exposed with a :chance) while the hp the
   job's stay there costs are within (allowed c nil): the share of health (body fitness; its wait is not priced as a way yet)."
@@ -102,7 +104,7 @@
   (let [{:keys [reason chance]} (nth s 2 nil)]
     (if-not (and (contains? #{:later :never} (first s)) (= :exposed reason) (number? chance))
       s
-      (let [secs (or (::stay-s c) (risk/work-s :click))
+      (let [secs (stay-s c)
             hp (stay-hp c chance secs)
             ok-hp (allowed c nil)]
         (if (<= hp ok-hp)

@@ -15,10 +15,11 @@
 (defn shaft? [args] (contains? (ways args) :descend-shaft))
 (defn tunnel? [args] (and (contains? (ways args) :strip-tunnel) (pos? (:tunnel-length args))))
 (defn descends? [args] (or (stair? args) (shaft? args)))
-(defn hangs-torches?
-  "Whether the dig the args allow hangs torches: it tunnels or descends and :torches is on."
+(defn lit-blocks
+  "The blocks of the dig the args allow that hang torches (its tunnel and its descent), nil when :torches is off or it has neither."
   [args]
-  (boolean (and (:torches args) (or (tunnel? args) (descends? args)))))
+  (let [n (+ (if (tunnel? args) (:tunnel-length args) 0) (if (descends? args) (:descend-limit args 0) 0))]
+    (when (and (:torches args) (pos? n)) n)))
 
 (defn stay-level?
   "A run that may tunnel but never go down keeps the level it starts at: seen ore only beside the tunnel, breaches sealed."

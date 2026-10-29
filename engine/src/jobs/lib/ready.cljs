@@ -314,15 +314,27 @@
 (defn dark-near-ok
   "safe, but a wait for light (jobs.lib.spawn-light/exposure lowered by :light, or light too far off) is lifted to the threat check alone while the place (f c) lies
   within the radius no mob spawns in round the body (cost/near-body?): a build or light job works there in the dark, which only a large dark area or a hidden pit makes a danger.
-  With hangs? (c -> boolean: the job hangs torches and has them, carried or to be fetched) the lift holds only while it is true: a job that lights its own way has no other claim on the dark."
-  ([f safe] (dark-near-ok (constantly true) f safe))
-  ([hangs? f safe]
+  With torch-way (c -> {:blocks :carried}, nil: the job hangs no torches) the lift is the job's own torches instead, while they cost less than the stay's exposure (cost/dark-or-lit)."
+  ([f safe] (dark-near-ok nil f safe))
+  ([torch-way f safe]
   (let [dark-wait? (fn [[kind _ data]] (and (#{:later :never} kind) (= :exposed (:reason data))
                                            (or (= :never kind) (contains? (:lowered-by data) :light))))
-        near? (fn [c] (and (hangs? c) (let [at (f c)] (or (nil? at) (cost/near-body? (:primitives c) at)))))
-        lift (fn [g lifted] (fn [c] (let [s (g c)] (if (and (dark-wait? s) (near? c)) (lifted c) s))))]
-    (with-meta (lift safe threatened)
-      (update (meta safe) ::exposure #(some-> % (lift (fn [_] (contract/ok :dark-near "dark, but within the radius no mob spawns in")))))))))
+        near? (fn [c] (let [at (f c)] (or (nil? at) (cost/near-body? (:primitives c) at))))
+        way (fn [c [_ _ {:keys [chance]}]]
+              (when torch-way
+                (cost/dark-or-lit (if (number? chance) (price/stay-hp c chance (price/stay-s c)) ##Inf)
+                                  (.-health (.self (:primitives c))) (torch-way c))))
+        lift (fn [g lifted]
+               (fn [c] (let [s (g c)]
+                         (if-not (and (dark-wait? s) (near? c))
+                           s
+                           (let [w (way c s)]
+                             (cond (nil? w) (lifted c (contract/ok :dark-near "dark, but within the radius no mob spawns in"))
+                                   (= :lit (:way w)) (lifted c (contract/ok :lit-way (str "dark, but within the radius no mob spawns in, and its torches cost "
+                                                                                          (price/round1 (:lit-s w)) " s, under the dark's " (price/round1 (:dark-s w)))))
+                                   :else s))))))]
+    (with-meta (lift safe (fn [c _] (threatened c)))
+      (update (meta safe) ::exposure #(some-> % (lift (fn [_ ok] ok))))))))
 
 (defn safe-at-build
   "safe-at-by-night for a job that builds at the place (f c): dark-near-ok, a long stay."

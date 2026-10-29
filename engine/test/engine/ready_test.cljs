@@ -449,12 +449,15 @@
       (are [safe args expected] (= expected (first (safe (assoc (ctx-of (assoc tunnel :time st/noon :inventory [{:name "torch" :count 4}])) :args args))))
         mine/safe? {:at near :torches true :tunnel-length 20} :ok
         dig-for/safe? {:at near :torches true :tunnel-length 20} :ok
-        strip-tunnel/safe? {:heading "east" :torches true} :ok
+        strip-tunnel/safe? {:heading "east" :torches true :limit 20} :ok
         mine/safe? {:at near :torches false :tunnel-length 20} :never
         dig-for/safe? {:at near :torches true :tunnel-length 20 :ways #{:seen}} :never
-        strip-tunnel/safe? {:heading "east" :torches false} :never
+        strip-tunnel/safe? {:heading "east" :torches false :limit 20} :never
         mine/safe? {:at far :torches true :tunnel-length 20} :never
-        (ready/safe-at-by-night (constantly near)) {} :never))))
+        (ready/safe-at-by-night (constantly near)) {} :never)
+      (are [ways expected] (= expected (first (mine/safe? (assoc (ctx-of (assoc tunnel :time st/noon)) :args {:at near :torches true :tunnel-length 20 :ways ways}))))
+        #{:strip-tunnel} :ok
+        #{:strip-tunnel :carried} :never))))
 
 (deftest an-unseen-cell-a-look-would-show-asks-for-a-look-at-it
   (let [s (showing #((ready/safe-at (constantly outside)) (ctx-of open-night)))]
@@ -844,10 +847,10 @@
     {:x 15 :y 64 :z 0} :ok
     {:x 40 :y 64 :z 0} :later))
 
-(deftest the-dark-near-the-body-is-waived-only-for-a-job-that-has-torches-to-hang
-  (are [hangs? expected] (= expected (lit 0 15 #(kind (ready/dark-near-ok (constantly hangs?) (constantly {:x 15 :y 64 :z 0}) (ready/safe-at-by-night (constantly {:x 15 :y 64 :z 0}))) open-night)))
-    true :ok
-    false :later))
+(deftest the-dark-near-the-body-is-lifted-for-a-job-whose-torches-cost-less-than-the-dark
+  (are [torch-way expected] (= expected (lit 0 15 #(kind (ready/dark-near-ok (constantly torch-way) (constantly {:x 15 :y 64 :z 0}) (ready/safe-at-by-night (constantly {:x 15 :y 64 :z 0}))) open-night)))
+    {:blocks 20 :carried 4} :ok
+    nil :later))
 
 (deftest a-light-block-around-the-body-is-placed-in-the-dark
   (are [item pos expected] (= expected (lit 0 15 #(bound place/safe? open-night {:item item :pos pos})))

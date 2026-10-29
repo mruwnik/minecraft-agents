@@ -16,7 +16,7 @@
     food     food-reserve: the food a body keeps carried, 3 days of it; cook-worth?, cook-gain: whether cooking raw food beats eating it now; meat-factor, meat-animal: raw meat's replacement cost, dear for hunted, 1 with a working pen (jobs.lib.cost.food).
     value    item-value, survived-worth (a find's worth times the chance the trip does not end in death), chance-times (p x s, 0 at p 0 though s be ##Inf), affords? (a price within a worth, never ##Inf), reserve-cost (using a reserved unit: value x s/(1-s)), fetch-cost, walk-cost, walk-beats-making (walk to what exists vs make one and place it), detour-cost: what items are worth, what fetching them, walking or a pick-up detour costs; tour-cost, tour-worth, turn-back-cost (an unseen floor's look and, not there, the walk back), food-worth, crop-worth (a ripe crop's food points at food-point-worth): a tour of
              frontiers against what its goal is worth; cover-tour-s: the walk that brings a set of points within reach; light-cost: a torch go-to places; light-wait-worth: what n torches fetched save over a wait for light; wear-saved: the wear of a dear tool a spare's digs save; dig-cost: the seconds a block takes to dig, kill-drops: the items a kill drops (jobs.lib.cost.value);
-             per-dark, dark-factor: the one price of a dark block, which go-to's planner costs; lit-way-s, torch-gap: a way lit as it goes; dark-way-s: one walked or dug dark; spawn-chance: the chance a mob spawns at a cell or
+             per-dark, dark-factor: the one price of a dark block, which go-to's planner costs; lit-way-s, torch-way-s, torch-gap: a way lit as it goes; dark-way-s: one walked or dug dark; dark-or-lit: a dark stay against lighting it; spawn-chance: the chance a mob spawns at a cell or
              over an area (a set or {:min :max} box of cells) per second, from the light the body knows (unseen counts as dark), spawn-share its share of cells that spawn.
     planner  planner-costs-problem, planner-costs, planner-names: go-to's :costs, the per-move prices it may override; least-block-s: the least a plan prices a block; landing-problem, planner-landing: go-to's :landing, fall damage by landing block; air-profile, water-breathing-s, air-used, air-costs: the planner's air drain and grace from the body's helmet, the air a dive has used; air-left-s, wet-move-s, wet-way-s, wet-spare-s, wet-ok?: the air a walk over unseen water keeps back at its last breath, each move at its measured pace; swim-profile: its swimH from Depth Strider on the boots; gait-problem, gait-costs: go-to's :gait; unknown-prices: the planner's peek and aim prices of unseen cells (jobs.lib.cost.planner); way-on-chance, unseen-share: the one price of walking over unseen cells, a dead end and a mob in the dark at the worse case, from how often the seen ways near the body go on (the planner's :cell); unseen-route-s: that price of a route's unseen steps, unseen-step-s of one, walk-step-s a walked block; stair-leg-pricer, pillar-s: a stair step's and a pillar's seconds with the unseen step on top (go-to's escalations, surface-up, the one-way climb-out); gap-look-cost: a refused gap jump over unseen floors filled now or looked at first; dead-end-cost: what an unseen dead end costs a flight; flight-caught-chance: the chance a flight is caught by its way, from its search's ways.
     tolls    farm-tolls, zone-tolls: go-to's :tolls for planted cells and zone cells to cross only as a last resort; fail-chance,
@@ -410,11 +410,25 @@
 
 (def torch-gap "Blocks of a dark way one torch lights: its light's spread (jobs.lib.torch-plan) to each side." (inc (* 2 torch-plan/spread)))
 
+(defn torch-way-s
+  "Seconds the torches of a way of n blocks lit as it goes cost: one every torch-gap blocks, each its worth and placing
+  (light-cost), and one trip for them when none is carried."
+  [n carried]
+  (let [{:keys [torch place trip]} (:parts (light-cost {:carried carried}))]
+    (+ (* (js/Math.ceil (/ n torch-gap)) (+ torch place)) (or trip 0))))
+
 (defn lit-way-s
-  "Seconds a way of s seconds over n blocks costs lit as it goes (the mine's stair and tunnel): s and a torch every
-  torch-gap blocks, each its worth and placing (light-cost of one carried)."
+  "Seconds a way of s seconds over n blocks costs lit as it goes (the mine's stair and tunnel): s and its torches (torch-way-s, carried)."
   [s n]
-  (+ s (* (js/Math.ceil (/ n torch-gap)) (:cost (light-cost {:carried 1})))))
+  (+ s (torch-way-s n 1)))
+
+(defn dark-or-lit
+  "{:way :lit or :dark, :dark-s :lit-s}: the cheaper of staying in the dark at a risk of `hurt` hp (each at hp-price of
+  health) and lighting the job's way instead (torch-way-s of `torch-way` {:blocks :carried}; nil: the job hangs none)."
+  [hurt health torch-way]
+  (let [dark (* hurt (hp-price health))
+        lit (if torch-way (torch-way-s (:blocks torch-way) (:carried torch-way)) ##Inf)]
+    {:way (if (< lit dark) :lit :dark) :dark-s dark :lit-s lit}))
 
 (defn dark-way-s
   "Seconds a way of s seconds over n blocks costs walked or dug dark: s, its n blocks' walk at the planner's dark price

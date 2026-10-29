@@ -23,6 +23,7 @@
             [jobs.lib.tools :as tools]
             [jobs.lib.solid :as solid]
             [jobs.lib.torch :as torch]
+            [jobs.lib.torch-stock :as stock]
             [jobs.lib.torch-plan :as tp]
             [jobs.lib.trip :as trip]
             [jobs.lib.util :as u]))
@@ -50,7 +51,7 @@
   standing in the segment (the caller seals behind it).
   It does not start (a skipped job) while the body is short of food (:food-short). Its can-run? is later, with what was taken in
   the cause, when the next step cannot go on: :food-short, :bag-full (under jobs.lib.trip/want-free slots free with
-  work left), :no-torches (one is due, none carried), :no-tool (:tool, :cell); a called child ends condition-failed with it. Its safe? is ready/safe-at-by-night the end of the segment nearest :entry, its dark waived within the radius no mob spawns in (ready/dark-near-ok): the job hangs its own torches. A :segment that
+  work left), :no-torches (one is due, none carried), :no-tool (:tool, :cell); a called child ends condition-failed with it. Its safe? is ready/safe-at-by-night the end of the segment nearest :entry, its dark waived within the radius no mob spawns in while its own torches (a trip when none is carried) cost less than the exposure (ready/dark-near-ok). A :segment that
   is neither a map nor a readable id is never possible (:bad-args).
   A spawner seen at any step stays in the result (the far end may be out of sight of it). A spawner follows :spawner: :light (default) hangs torches on the dark standable centre-line cells of the segment inside its
   spawn box (4 either side, 1 up or down; light 8), leaves the spawner and those torches, and lists it in :kept {:why :spawner :lit true};
@@ -356,7 +357,12 @@
           d (fn [v] (if entry (u/dist entry (cell v)) 0))]
       (cell (if (< (d to) (d from)) to from)))))
 
-(def safe? (price/staying :long (ready/dark-near-ok #(pos? (torch/torches-held (:primitives %))) place (ready/safe-at-by-night place))))
+(defn torch-way
+  "The torch way of the segment (ready/dark-near-ok): its blocks, more torches by the caller's trip on :no-torches."
+  [c]
+  (when-let [{:keys [from to]} (seg-of (:segment (:args c)))] (stock/torch-way c (inc (abs (- to from))) true)))
+
+(def safe? (price/staying :long (ready/dark-near-ok torch-way place (ready/safe-at-by-night place))))
 
 (def fit? (ready/fit-for :long))
 

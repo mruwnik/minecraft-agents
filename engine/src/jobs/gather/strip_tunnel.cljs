@@ -61,7 +61,7 @@
 
 (def target [:heading])
 
-(def safe? (ready/unless-outmatched (price/staying :long (ready/dark-near-ok #(and (:torches (:args %)) (stock/lit-way? %)) work-place/ahead (ready/safe-at-or work-place/ahead ready/safe-if-lit true)))))
+(def safe? (ready/unless-outmatched (price/staying :long (ready/dark-near-ok #(when (:torches (:args %)) (stock/torch-way % (:limit (:args %) 0) (stock/fetch-allows? %))) work-place/ahead (ready/safe-at-or work-place/ahead ready/safe-if-lit true)))))
 
 (def fit? (ready/fit-for :long))
 

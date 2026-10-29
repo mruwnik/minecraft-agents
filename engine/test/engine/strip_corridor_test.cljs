@@ -165,13 +165,13 @@
           (is (= :again o))
           (is (= {:no-spot-at [[5 64 0]]} @mem) "a torch source would mark 13 cells round it lit"))))))
 
-(deftest no-torch-in-the-dark-stops-before-the-first-dig
+(deftest no-torch-in-the-dark-stops-no-torches
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p] :as env} (dark-world kit)
               r (await (run! env args))]
-          (is (= {:status :stopped :reason :exposed} (select-keys r [:status :reason])) "the dark is waived only for a body that carries torches to hang")
+          (is (= {:status :stopped :reason :no-torches} (select-keys r [:status :reason])) "the torches are priced with a trip, so the caller stocks them")
           (is (empty? (bd/calls p "dig"))))))))
 
 (deftest the-segment-may-be-given-as-its-id

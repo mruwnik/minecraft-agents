@@ -13,10 +13,12 @@
   [c]
   (contains? (need/fetch-how c) :gather))
 
-(defn lit-way?
-  "Whether the job has torches to hang: carried, craftable on the spot, or fetchable through need/ (the call's ways allow a gather)."
-  [c]
-  (or (torch/lightable? (:primitives c)) (fetch-allows? c)))
+(defn torch-way
+  "The torch way (ready/dark-near-ok) of a job that hangs torches along `blocks` blocks: {:blocks :carried} while it has torches
+  carried or craftable, or can get them (fetch?: its own need/ get, or its caller's trip on :no-torches), else nil."
+  [c blocks fetch?]
+  (let [p (:primitives c)]
+    (when (or fetch? (torch/lightable? p)) {:blocks blocks :carried (torch/torches-held p)})))
 
 (defn no-stock-text [held e]
   (let [tried (get-in e [:data :tried])]
