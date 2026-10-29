@@ -80,13 +80,13 @@
 (deftest a-log-out-stint-lasts-till-morning-when-coming-back-costs-more-than-the-longer-stint
   (doseq [[entities world ms why] [[[zombie] {:self {:health 10}} 175050 "a zombie with a way to a body at 10 hp, no respawn bed: away until morning, not back beside it"]
                                    [[zombie] {:self {:health 10} :inventory [{:name "diamond_sword" :count 1}]} 30000 "the same zombie a diamond sword answers: the death it risks is worth less than the longer stint"]
-                                   [[zombie] {:self {:health 20}} 30000 "at full health the 1.4 s before it answers and a fist's flight risk a death worth less than the longer stint: back after :offline-ms"]
+                                   [[zombie] {:self {:health 20}} 175050 "at full health with bare hands the flight's death risk, a bedless death walking 5000 blocks back, is worth more than the longer stint: away until morning"]
                                    [[zombie] {:self {:health 10} :inventory [{:name "cobblestone" :count 32}]} 175050 "a block for every open cell carried, but on open ground the zombie strikes through whichever side is still open while every cell goes up: away until morning"]
                                    [[(assoc zombie :pos {:x 38 :y 64 :z 0})] {} 30000 "a zombie beyond its follow range: back after :offline-ms"]
                                    [[{:id 9 :name "skeleton" :kind "hostile" :pos {:x 14 :y 64 :z 0} :health 20}] {:self {:health 10}} 175050 "a skeleton with a line of fire is a known threat: away until morning"]
                                    [[] {} 30000 "no hostile known: back after :offline-ms"]]]
     (is (= ms (log-out/away-ms {:primitives (tu/fake (merge {:floor tu/walk-floor :time 20000 :entities entities} world))
-                                :args {:offline-ms 30000}
+                                :args {:offline-ms 30000} :id "j1" :slots [] :engine {:warned (atom #{})}
                                 :view (fn [] {:data mem/empty-data :now 0})}))
         why)))
 
@@ -95,7 +95,7 @@
         rock (into {} (for [x (range -3 11) y (range 62 68) z (range -2 3) :when (not (tunnel [x y z]))] [(str x "," y "," z) "stone"]))
         away (fn [inventory] (log-out/away-ms {:primitives (tu/fake {:time 20000 :blocks rock :self {:health 10} :inventory inventory
                                                                      :entities [(assoc zombie :pos {:x 5.5 :y 64 :z 0.5})]})
-                                               :args {:offline-ms 30000}
+                                               :args {:offline-ms 30000} :id "j1" :slots [] :engine {:warned (atom #{})}
                                                :view (fn [] {:data mem/empty-data :now 0})}))]
     (is (= 30000 (away [{:name "cobblestone" :count 32}])) "one open side: two placements shut it before the zombie strikes")
     (is (= 175050 (away [])) "no block to shut it with: away until morning")))
