@@ -22,6 +22,7 @@
             [jobs.items.obtain.table :as table]
             [jobs.items.obtain.why :as why]
             [jobs.lib.look :as look]
+            [jobs.lib.ready :as ready]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.items.recipes :as recipes]))
 
@@ -567,6 +568,21 @@
                                         (fn [def lit] (update def :round (fn [r] (fn [c] (if (seq @lit) (r c) (ctx/end c :impossible hall-cause))))))]]]
           (is (= [[[{:x 0 :y 64 :z 0}]] 1] (await (hall-refusal-run refuse))) (str "refused by " how ": the hall cell is lit once, then the ore mined"))
           (when more (recur more)))))))
+
+(deftest the-gather-registers-its-torch-so-a-dark-hall-is-lit-before-the-walk-to-look
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walked-unlit (atom 0)
+              refuse (fn [def lit]
+                       (-> def
+                           (update :passed-status (fn [ps] (fn [c]
+                                                             (cond (seq @lit) (ps c)
+                                                                   (seq (::ready/own-ways c)) [:never "dark hall" hall-cause]
+                                                                   :else [:ok :look-first "the walk to look is cheaper"]))))
+                           (update :round (fn [r] (fn [c] (when (empty? @lit) (swap! walked-unlit inc)) (r c))))))]
+          (is (= [[[{:x 0 :y 64 :z 0}]] 1] (await (hall-refusal-run refuse))))
+          (is (zero? @walked-unlit) "the mine was not started toward the walk to look before the torch"))))))
 
 (deftest a-mine-after-a-climb-heads-along-the-stair-until-it-has-cut-tunnel
   (let [need {:key "raw_iron" :job 'jobs.gather.mine :args {:block "iron_ore"}}

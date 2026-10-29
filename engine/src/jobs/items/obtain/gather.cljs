@@ -12,12 +12,14 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.foods :as foods]
             [jobs.lib.look :as look]
+            [jobs.lib.ready :as ready]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.surface-up :as surface]
             [jobs.items.obtain.table :refer [animal? gather-need searchable?]]
             [jobs.lib.waits :as waits]
             [jobs.lib.child :as child]
             [jobs.lib.need :as fetch-need]
+            [jobs.lib.torch :as torch]
             [jobs.lib.torch-stock :as torch-stock]
             [jobs.lib.reserve :as reserve]
             [jobs.lib.util :as u]
@@ -289,10 +291,19 @@
                                             :message (str "stair up for " (:key need) " ended " (name (contract/cause-key r)) " at y " at (when (< at y) (str ", short of y " y)))})
         :again))))
 
+(defn torch-way
+  "The seconds of the gather's own torch at a dark hall its child refuses (torch-due): nothing when torches are carried, else
+  the fetch (need/item-price); nil for any other refusal (ready/own-way)."
+  [c s]
+  (when (torch-due c (contract/status-cause s))
+    (if (pos? (torch/torches-held (:primitives c)))
+      0
+      (fetch-need/item-price c "torch" 1 (when-let [how (seq (fetch-need/fetch-how c))] {:how (set how)}) nil))))
+
 (defn start-cause
-  "The cause of the need's child's start check now."
+  "The cause of the need's child's start check now, with the gather's torch among the ways the check prices against the walk to look."
   [c need]
-  (contract/status-cause (ctx/child-status c (gather-slot need) (:job need) (:args need))))
+  (contract/status-cause (ctx/child-status (ready/own-way c torch-way) (gather-slot need) (:job need) (:args need))))
 
 (defn book-light!
   "Book the cell for the light step of the next round; :again."
