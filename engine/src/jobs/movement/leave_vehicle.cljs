@@ -6,6 +6,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
+            [jobs.lib.pace :as pace]
             [jobs.lib.cond :as cond]
             [jobs.lib.util :as u]
             [jobs.lib.vehicle :as vehicle]))
@@ -73,22 +74,26 @@
         names (keep #(u/seen-name p %) [cell (update cell :y dec)])]
     (if (seq names) (boolean (some #{"water"} names)) (boolean flag))))
 
-(defn ^:async round [c]
+(defn ^:async step
+  "One dismount try; :again after a failed one (the tries are kept in job memory), else the ending."
+  [c]
   (let [p (:primitives c)
-        max-tries (settings/get settings ::max-tries)]
-    (loop [tries 0]
-      (let [v (vehicle/vehicle-of (.self p))]
-        (if-not v
-          (ctx/end c :done nil nil)
-          (let [yaw (yaw-for c v)
-                r (await (ctx/act c :dismount (clj->js (if (some? yaw) {:yaw yaw} {}))))]
-            (if (= "dismounted" (.-status r))
-              (let [self (.self p)
-                    pos (u/pos-of (.-pos r))
-                    out {:pos pos :landed (if (landed-in-water? p pos (.-inWater self)) :in-water :dry)}]
-                (ctx/end c :done nil out))
-              (let [tries (inc tries)]
-                (if (< tries max-tries)
-                  (let [r (await (child/pause! c (settings/get settings ::retry-wait-s) :dismount-retry))]
-                    (if (= :continue r) :continue (recur tries)))
-                  (ctx/end c :nothing-possible :dismount-failed {:tries tries :status (.-status r)}))))))))))
+        max-tries (settings/get settings ::max-tries)
+        v (vehicle/vehicle-of (.self p))]
+    (if-not v
+      (ctx/end c :done nil nil)
+      (let [yaw (yaw-for c v)
+            r (await (ctx/act c :dismount (clj->js (if (some? yaw) {:yaw yaw} {}))))]
+        (if (= "dismounted" (.-status r))
+          (let [self (.self p)
+                pos (u/pos-of (.-pos r))
+                out {:pos pos :landed (if (landed-in-water? p pos (.-inWater self)) :in-water :dry)}]
+            (ctx/end c :done nil out))
+          (let [tries (inc (or (:tries (ctx/mem c)) 0))]
+            (ctx/update-mem! c assoc :tries tries)
+            (if (< tries max-tries)
+              (if (= :continue (await (child/pause! c (settings/get settings ::retry-wait-s) :dismount-retry))) :continue :again)
+              (ctx/end c :nothing-possible :dismount-failed {:tries tries :status (.-status r)}))))))))
+
+(defn ^:async round [c]
+  (await (pace/steps! c #(step c))))
