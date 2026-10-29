@@ -280,10 +280,10 @@
                                 (:cost (cost/turn-back-cost [{:look 0.1 :back 2 :p 0.5} {:look 0.1 :back 3 :p 0.25}])))))
         "a later floor is reached only while those before it held")))
 
-(deftest a-goal-s-worth-budgets-the-tour-less-the-trip-and-the-walk
+(deftest a-goal-s-worth-budgets-the-tour-less-the-walk
   (let [walk (:cost (cost/walk-cost {:distance 50}))]
-    (is (= 100 (cost/tour-worth 50 (+ 100 (cost/trip) walk))))
-    (is (zero? (cost/tour-worth 50 1)) "worth less than the trip and walk: no tour")
+    (is (= 100 (cost/tour-worth 50 (+ 100 walk))) "no trip is taken off: the goal is known")
+    (is (zero? (cost/tour-worth 50 1)) "worth less than the walk: no tour")
     (is (= ##Inf (cost/tour-worth 50 ##Inf)) "arrive: any tour")))
 
 (deftest a-chance-of-0-of-an-unbounded-worth-is-0-not-nan

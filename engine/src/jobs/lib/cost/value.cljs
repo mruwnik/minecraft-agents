@@ -292,9 +292,9 @@
 
 (defn tour-worth
   "Seconds of tour a goal `straight` blocks off is worth to a caller counting arrival `worth` seconds (##Inf: arrive):
-  that less the trip and the straight walk, 0 at least."
+  that less the straight walk, 0 at least. A goal go-to is given is known: a search nets its own trip in its worth."
   [straight worth]
-  (max 0 (- worth (trip) (:cost (walk-cost {:distance straight})))))
+  (max 0 (- worth (:cost (walk-cost {:distance straight})))))
 
 (defn turn-back-cost
   "{:cost :parts {:look :back}} of a way over unseen `floors` [{:look :back :p :extra-s}] in walk order, each not there at

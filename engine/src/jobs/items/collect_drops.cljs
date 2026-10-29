@@ -279,8 +279,7 @@
   go-to's pillar or stair): one go-to call (child/run!*, slot :walk). :arrived, :continue (go-to waits on the world) or :unreachable (go-to's :risky cause kept in the job memory as :walk-fail, see walk-fail)."
   ([c item] (walk-down! c item #{:walk :clear-seal}))
   ([c item ways]
-  ;; the trip is added back: go-to's tour-worth takes it off, and a drop in sight needs no finding
-  (let [r (await (child/run!* c :walk 'jobs.movement.go-to {:pos (item-cell item) :range 1 :ways ways :worth (+ (drops-worth c item) (cost/trip))}))]
+  (let [r (await (child/run!* c :walk 'jobs.movement.go-to {:pos (item-cell item) :range 1 :ways ways :worth (drops-worth c item)}))]
     (cond
       (= :continue r) :continue
       (and (= :done (:kind r)) (:arrived (:data r))) :arrived
@@ -603,10 +602,12 @@
   (into {} (keep (fn [[n k]] (let [d (- k (get before n 0))] (when (pos? d) [n d])))) after))
 
 (defn book-gained!
-  "Counts what a walk that is no try at a drop (the climb to :near) picked up on the way (gains of the inventory since `before`)."
+  "Counts what a walk that is no try at a drop (the climb to :near) picked up on the way (gains of the inventory since
+  `before`) of the items the job wants (:items, :least-items): the blocks go-to's :clear-seal digs are not drops."
   [c before]
-  (let [least-items (some-> (:least-items (:args c)) set)
-        gained (gains before (held-counts c))
+  (let [named (some-> (concat (:items (:args c)) (:least-items (:args c))) seq set)
+        least-items (some-> (:least-items (:args c)) set)
+        gained (cond->> (gains before (held-counts c)) named (filter (comp named key)))
         wanted (reduce + 0 (for [[n d] gained :when (or (nil? least-items) (least-items n))] d))
         total (reduce + 0 (vals gained))]
     (when (pos? total)
@@ -726,7 +727,7 @@
       (or (await (look!))
           (when (> (- (second (u/cell-vec near)) (feet-y c)) 1)
             (let [before (held-counts c)
-                  r (await (child/run!* c :walk 'jobs.movement.go-to {:pos (u/cell-vec near) :range 1 :ways #{:walk :pillar :stair}}))]
+                  r (await (child/run!* c :walk 'jobs.movement.go-to {:pos (u/cell-vec near) :range 1 :ways #{:walk :pillar :stair :clear-seal}}))]
               (book-gained! c before)
               (cond
                 (= :continue r) :continue

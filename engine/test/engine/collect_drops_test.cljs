@@ -337,7 +337,7 @@
           (is (= [:done 1] ((juxt :status :collected) result)))
           (is (= 1 @walks) "no second search walk once the log came in"))))))
 
-(deftest a-walk-to-drops-may-risk-what-the-drops-in-sight-are-worth-and-the-trip-go-to-takes-off
+(deftest a-walk-to-drops-may-risk-what-the-drops-in-sight-are-worth
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -350,9 +350,9 @@
           (drop! p [5 64 0] "diamond")
           (with-redefs [child/run!* record]
             (await (tu/child-outcome eng job {:radius 6 :items ["diamond"]} 10)))
-          (is (= (+ (:value (cost/item-value [{:name "diamond" :count 2}])) (cost/trip)) (:worth (first @walks)))
-              "go-to's tour-worth takes a trip off; a drop in sight needs no finding, so the walk is worth the drops")
-          (is (= (:value (cost/item-value [{:name "diamond" :count 2}])) (cost/tour-worth 0 (:worth (first @walks))))))))))
+          (is (= (:value (cost/item-value [{:name "diamond" :count 2}])) (:worth (first @walks)))
+              "a drop in sight needs no finding: the walk is worth the drops")
+          (is (< 0 (cost/tour-worth 2 (cost/tour-worth 0 (:worth (first @walks))))) "a tour of two blocks stays worth it"))))))
 
 (deftest a-walk-to-a-drop-that-is-not-a-candidate-may-risk-its-own-worth
   ;; the target is not among the wanted drops in sight: the walk to it is still worth the target, never 0 ("only if free")
@@ -761,12 +761,15 @@
         before (job-ns/held-counts (c {}))]
     (swap! (fake/state p) fake/give "diamond" 2)
     (swap! (fake/state p) fake/give "oak_log" 1)
-    (job-ns/book-gained! (c {:least-items ["diamond"]}) before)
-    (is (= {:collected 3 :wanted 2} @mem) "all gains are collected, the least-items among them wanted")
-    (job-ns/book-gained! (c {}) (job-ns/held-counts (c {})))
-    (is (= {:collected 3 :wanted 2} @mem) "no gain books nothing")))
+    (job-ns/book-gained! (c {:items ["diamond" "oak_log"] :least-items ["diamond"]}) before)
+    (is (= {:collected 3 :wanted 2} @mem) "the items asked for are collected, the least-items among them wanted")
+    (swap! (fake/state p) fake/give "cobblestone" 4)
+    (job-ns/book-gained! (c {:items ["diamond"]}) (job-ns/held-counts (c {})))
+    (is (= {:collected 3 :wanted 2} @mem) "no gain books nothing")
+    (job-ns/book-gained! (c {:items ["diamond"]}) before)
+    (is (= {:collected 5 :wanted 4} @mem) "blocks dug out of a seal are not items asked for")))
 
-(deftest the-climb-to-near-never-takes-seal-blocks-back-for-it-would-book-them-as-drops
+(deftest the-climb-to-near-may-clear-a-seal-for-a-body-shut-in-by-its-own-blocks
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -777,4 +780,4 @@
                        f)]
           (with-redefs [child/run!* record]
             (await (tu/child-outcome eng job {:radius 6 :near {:x 4 :y 68 :z 0}} 10)))
-          (is (= [#{:walk :pillar :stair}] (distinct @ways))))))))
+          (is (= [#{:walk :pillar :stair :clear-seal}] (distinct @ways))))))))
