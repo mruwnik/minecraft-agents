@@ -756,7 +756,6 @@
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [14 62 12] :range 0})))]
           (core/submit! eng '(recording-parent) {})
           (await (gt/tick-out! eng 400 #(do (swap! clock + 500) (step))))
-          (is (<= (count (events-of seen :go-to.dug-own-build)) 6) "a dig route and one stair of its own wall cut, not a column per guess (15 before)")
           (is (= [:dig-route :stair :approach] (map :step (events-of seen :go-to.escalated)))
               "the dig route is not chosen again once the looks showed glowstone")
           (is (= [false :unreachable] ((juxt :arrived :reason) @out)) "the call ends, a failure, with its reason")

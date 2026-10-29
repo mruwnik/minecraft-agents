@@ -37,7 +37,6 @@
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.trip :as trip]
-            [jobs.lib.walk.one-way :as one-way]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.access :as access]
             [jobs.lib.dig-in-leave :as dig-leave]
