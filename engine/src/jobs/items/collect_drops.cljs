@@ -262,17 +262,17 @@
             (sh-sense/solid-at? p (update (sh-sense/feet p) :y dec))))))
 
 (defn item-worth
-  "Seconds the item entity is worth (jobs.lib.cost/item-value)."
-  [^js item]
+  "Seconds the item entity is worth to the body (jobs.lib.cost/find-worth, as the dig yield is priced)."
+  [c ^js item]
   (let [{:keys [name count]} (js->clj (.-item item) :keywordize-keys true)]
-    (:value (cost/item-value [{:name name :count (or count 1)}]))))
+    (cost/find-worth nil [name] (u/self-pos c) (or count 1))))
 
 (defn drops-worth
-  "Seconds the drops in sight round the anchor are worth (jobs.lib.cost/item-value), the target item among them though it
+  "Seconds the drops in sight round the anchor are worth (item-worth), the target item among them though it
   is not a candidate (out of sight, skipped): what a walk to it may risk."
   [c item]
   (let [cands (candidates c (or (:anchor (ctx/mem c)) (:near (:args c)) (u/self-pos c)))]
-    (reduce + 0 (map item-worth (if (some #(= (.-id %) (.-id item)) cands) cands (cons item cands))))))
+    (reduce + 0 (map #(item-worth c %) (if (some #(= (.-id %) (.-id item)) cands) cands (cons item cands))))))
 
 (defn ^:async walk-down!
   "Walk within a block of item, more than a block lower than the feet (or, with ways, higher: a column top is climbed by
@@ -372,7 +372,7 @@
             seen-name (fn [[x y z]] (u/seen-name p {:x x :y y :z z}))
             wanted (set (:items (:args c)))
             yield (fn [n _] (let [i (blocks/item-name {:block n})] (if (contains? wanted i) (cost/worth-to nil [i] (u/self-pos c)) 0)))
-            r (drop-route (dig-route/by-share (dig-route/less-yield (dig-route/body-prices p #(nil? (seen-name %))) yield) (escape/dig-share-fn p)) (item-worth item) (:id c) seen-name (look/unseen-solid?-fn p) from (item-cell item))]
+            r (drop-route (dig-route/by-share (dig-route/less-yield (dig-route/body-prices p #(nil? (seen-name %))) yield) (escape/dig-share-fn p)) (item-worth c item) (:id c) seen-name (look/unseen-solid?-fn p) from (item-cell item))]
         (case (:problem r)
           :searching :continue
           (:no-route :dearer) :no-route

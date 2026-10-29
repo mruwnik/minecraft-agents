@@ -350,7 +350,7 @@
           (drop! p [5 64 0] "diamond")
           (with-redefs [child/run!* record]
             (await (tu/child-outcome eng job {:radius 6 :items ["diamond"]} 10)))
-          (is (= (:value (cost/item-value [{:name "diamond" :count 2}])) (:worth (first @walks)))
+          (is (= (cost/find-worth nil ["diamond"] (:pos body) 2) (:worth (first @walks)))
               "a drop in sight needs no finding: the walk is worth the drops")
           (is (< 0 (cost/tour-worth 2 (cost/tour-worth 0 (:worth (first @walks))))) "a tour of two blocks stays worth it"))))))
 
@@ -361,7 +361,7 @@
         _ (drop! p [5 64 0] "dirt")
         c {:primitives p :args {:radius 6 :items ["dirt"]} :slots [] :view (fn [] {:now 0 :data {}})}
         [diamond dirt] (map (fn [n] (first (filter #(= n (.. % -item -name)) (look/seen-items p {:radius 10})))) ["diamond" "dirt"])
-        worth #(:value (cost/item-value %))]
+        worth (fn [[{:keys [name count]}]] (cost/find-worth nil [name] (:pos body) count))]
     (is (= (worth [{:name "dirt" :count 1}]) (job-ns/drops-worth c dirt)) "a candidate target: the drops in sight")
     (is (= (+ (worth [{:name "dirt" :count 1}]) (worth [{:name "diamond" :count 1}])) (job-ns/drops-worth c diamond)))))
 

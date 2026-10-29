@@ -148,9 +148,8 @@
 
 (defn ^:async cut-to-drop!
   "Open a way beside the cell dug (cut-via with the real steps). counted: the cells whose worth max-s already holds."
-  ([c dug max-s] (cut-to-drop! c dug max-s #{}))
-  ([c dug max-s counted]
-   (cut-via (assoc c ::counted counted) {:drop-cut drop-cut :dig-cell! dig-cell! :look-at! dig-look/look-at! :mem ctx/mem} dug max-s)))
+  [c dug max-s counted]
+  (cut-via (assoc c ::counted counted) {:drop-cut drop-cut :dig-cell! dig-cell! :look-at! dig-look/look-at! :mem ctx/mem} dug max-s))
 
 (defn lip-point
   "Where the body leans out over the cell it stands beside: its own cell's edge toward dug (a cell [x y z] at its level),
