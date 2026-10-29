@@ -474,12 +474,18 @@
   [p view]
   (or (when view (sh-spawn/spawn-bed-pos p view)) (some-> (.self p) .-worldSpawn u/pos-of)))
 
+(defn goal-value
+  "item-value of items as a goal: each measured item at its gathers' seconds per item (value/measured-worths), what is
+  made of it after them."
+  [items]
+  (item-value items :overrides (value/measured-worths @game/version)))
+
 (defn death-body
-  "The body of p as the death costs read it: :level, :respawn (respawn-of) and :carried (the item-value of the inventory)."
+  "The body of p as the death costs read it: :level, :respawn (respawn-of) and :carried (the goal-value of the inventory, its replacement cost)."
   [p view]
   {:level (or (some-> (.self p) .-experience .-level) 0)
    :respawn (respawn-of p view)
-   :carried (:value (item-value (u/inventory p)))})
+   :carried (:value (goal-value (u/inventory p)))})
 
 (defn death-s
   "Seconds a death of the body of p costs at `at` (default its feet): death-cost of death-body."
@@ -487,12 +493,6 @@
   ([p view at] (death-cost (death-body p view) at)))
 
 (defn bed? [n] (or (= "bed" n) (str/ends-with? n "_bed")))
-
-(defn goal-value
-  "item-value of items as a goal: each measured item at its gathers' seconds per item (value/measured-worths), what is
-  made of it after them."
-  [items]
-  (item-value items :overrides (value/measured-worths @game/version)))
 
 (defn worth-to
   "Seconds getting one of names is worth to body at `at`: the least goal-value among them, a bed (it sets the respawn)
