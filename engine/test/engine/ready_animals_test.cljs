@@ -102,12 +102,10 @@
     "hut-gate" :ok
     "far-gate" :later))
 
-(deftest pen-acts-skip-the-low-health-rest
-  (are [check] (= :ok (status check {} {:self {:pos {:x 0 :y 64 :z 0} :health 1}}))
-    breed/fit?
-    shear/fit?
-    cull/fit?
-    maintain/fit?))
+(deftest pen-acts-are-fit-for-work-at-full-health-and-rest-at-one-hp
+  (are [health expected] (= expected (mapv #(status % {} {:self {:pos {:x 0 :y 64 :z 0} :health health}}) [breed/fit? shear/fit? cull/fit? maintain/fit?]))
+    20 [:ok :ok :ok :ok]
+    1 [:later :later :later :later]))
 
 (deftest fit-jobs-rest-below-the-risky-health-and-ok-jobs-never
   (are [check expected] (= expected (status check {} {:self {:pos {:x 0 :y 64 :z 0} :health 0.5}}))
