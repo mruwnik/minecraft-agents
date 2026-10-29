@@ -10,6 +10,7 @@
             [engine.test-util :as tu :refer [box]]
             [engine.triggers :as triggers]
             [jobs.lib.cost :as cost]
+            [jobs.lib.look :as look]
             [jobs.lib.tools :as tools]
             [jobs.lib.world-files :as ew]
             [plan.shape :as shape]))
@@ -21,16 +22,31 @@
   {:self {:pos {:x 0 :y 64 :z 0}}
    :blocks (merge (box -2 63 -2 8 63 2 "stone") (box 1 64 -1 2 65 1 "stone"))})
 
+(defn hidden-until-looked-at
+  "p sensing the cells of hide as never seen until a look aims at one."
+  [p hide]
+  (let [hidden (atom (set hide))
+        sensed (tu/sensed-by p)
+        cell-of (fn [pos] (mapv #(js/Math.floor (aget pos %)) ["x" "y" "z"]))]
+    (.override (.-world p) "look" (fn [token args impl]
+                                    (some->> (.-pos args) cell-of (swap! hidden disj))
+                                    (impl token args)))
+    (tu/set-sensed! p (fn [pos] (if (@hidden (cell-of pos)) #js {:unknown true :pos pos} (sensed pos))))
+    p))
+
 (defn ^:async run-door
   "Run clear-path over world (stub: a replacement round for jobs.blocks.dig, or nil) as a child, :east
-  unless args says otherwise; its result. World keys :p-out and :seen-out (atoms) get the primitives and the events."
+  unless args says otherwise; its result. World keys :p-out and :seen-out (atoms) get the primitives and the events;
+  :hide cells are unseen until looked at."
   ([world stub] (run-door world stub {:heading :east}))
   ([world stub args] (run-door world stub args nil))
   ([world stub args rounds] (run-door world stub args rounds tu/outcome))
   ([world stub args rounds f]
    (let [clock (atom 1000000)
          [seen sink] (tu/legacy-capture-sink)
-         p (cond-> (tu/fake (dissoc world :plans :sight :p-out :seen-out)) (:sight world) (tu/seeing-within (:sight world)))
+         p (cond-> (tu/fake (dissoc world :plans :sight :hide :p-out :seen-out))
+             (:sight world) (tu/seeing-within (:sight world))
+             (:hide world) (hidden-until-looked-at (:hide world)))
          _ (some-> (:p-out world) (reset! p))
          _ (some-> (:seen-out world) (reset! seen))
          out (atom :not-done)
@@ -173,6 +189,23 @@
               dear (await (run-door seen-thick nil {:heading :east :max-dig-s (* 9.5 cell-s)}))]
           (is (= [:done [6 64 0] 10] [(:status through) (:through through) (count (:dug through))]) (pr-str through))
           (is (= [:stopped :too-dear 0] [(:status dear) (:reason dear) (count (:dug dear))]) (pr-str dear)))))))
+
+(deftest an-unseen-wall-cell-is-priced-at-the-chance-it-is-rock
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pick (assoc wall :inventory [{:name "wooden_pickaxe" :count 1}])
+              ms (tools/clear-ms (tu/fake pick) "stone")
+              near-row [[1 65 0] [1 64 0]]
+              chance (look/unseen-solid-at-fn (tu/fake pick))
+              rock-s (cost/dig-cells-s (repeat 4 ms))
+              guessed-s (cost/dig-cells-s (concat (map #(* ms (chance %)) near-row) [ms ms]))
+              args {:heading :east :max-dig-s (/ (+ rock-s guessed-s) 2)}
+              guessed (await (run-door (assoc pick :hide near-row) nil args))
+              seen (await (run-door pick nil args))]
+          (is (< guessed-s rock-s) "the prior holds the near row more likely open than rock")
+          (is (= [:done 4] [(:status guessed) (count (:dug guessed))]) (pr-str guessed))
+          (is (= [:stopped :too-dear 0] [(:status seen) (:reason seen) (count (:dug seen))]) (pr-str seen)))))))
 
 (deftest a-walk-back-that-fails-still-ends-the-door-where-the-body-stands
   (async done

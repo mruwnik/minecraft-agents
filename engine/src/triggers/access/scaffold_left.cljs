@@ -37,7 +37,7 @@
     (and (= [x z] [fx fz]) (< y fy))))
 
 (defn block-at-of
-  "Names only loaded cells: an unseen one is offered too (the run looks at it)."
+  "Names loaded cells: an unseen one read by the measured prior (access/guessed-at)."
   [p]
   (access/guessed-at p))
 
