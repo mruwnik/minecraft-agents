@@ -15,6 +15,7 @@
             [jobs.survival.dig-pit :as dig-pit]
             [jobs.survival.dig-pocket :as pocket]
             [jobs.survival.shut-in :as shut-in]
+            [jobs.survival.plug-way :as way]
             [jobs.survival.wall-in :as wall-in]
             [jobs.survival.pit-cells :as pit]))
 
@@ -324,3 +325,12 @@
     (is (< (- place-s 1e-9) (:open-s (cover (zombie 6.5) :danger)) (+ place-s 1e-9)) "a melee mob walks to whichever side is still open")
     (is (< (- 1.44 1e-9) (:open-s (cover [{:id 9 :name "skeleton" :kind "hostile" :pos {:x 6.5 :y 64 :z 0} :health 20}] :danger)) (+ 1.44 1e-9))
         "a shooter sees in only by the side facing it, placed first")))
+
+(deftest a-night-wall-of-dear-blocks-quotes-its-placing-and-leaves-the-dawn-dig-to-morning-s
+  (let [c (fn [item] (assoc (ctx-of (tu/seeing-all (tu/fake {:blocks ground :inventory [{:name item :count 20}]})))
+                            :args {:for :night}))
+        q (fn [item] (wall-in/quote-of (c item)))
+        open (wall-in/open-count (c "stone"))]
+    (is (= (* open (settings/get way/settings ::way/night-place-s)) (get-in (q "stone") [:uses :job-time 1])) "placing only, however dear the block")
+    (is (= (get-in (q "dirt") [:uses :job-time 1]) (get-in (q "stone") [:uses :job-time 1])))
+    (is (< (:morning-s (q "dirt")) (:morning-s (q "stone"))) "the dig back is morning-s's")))

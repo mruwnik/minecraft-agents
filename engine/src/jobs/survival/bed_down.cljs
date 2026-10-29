@@ -34,7 +34,7 @@
             [jobs.survival.night.sites :as sites]
             [jobs.survival.shut-in :as shut-in]
             [jobs.survival.shut-in-night :as sin]
-            [jobs.survival.wall-in :as wall-in]))
+            [jobs.survival.plug-way :as way]))
 
 (def doc
   "Go to bed: sleep in a bed to use, else put a carried bed down beside the body and sleep in it. One step per call, run to its end by the caller (jobs.survival.night).
@@ -103,14 +103,14 @@
 (defn night-c [c] (assoc-in c [:args :for] :night))
 
 (defn seal-plan
-  "{:layout :cells :seconds} to put the carried bed down here and shut its row in (seal-cells, each at wall-in/cell-seconds
+  "{:layout :cells :seconds} to put the carried bed down here and shut its row in (seal-cells, each at plug-way/place-s
   for the night), when a row fits in the open and the shelter blocks carried cover every cell; else nil."
   [c]
   (let [layout (sh-beds/bed-layout c false)
         cells (when layout (seal-cells (:primitives c) layout))
         have (reduce + 0 (map :count (lb/carried c (sin/blocks (night-c c)))))]
     (when (and (seq cells) (<= (count cells) have))
-      {:layout layout :cells cells :seconds (* (count cells) (wall-in/cell-seconds (night-c c) (count cells)))})))
+      {:layout layout :cells cells :seconds (* (count cells) (way/place-s (night-c c)))})))
 
 (defn exposed-price
   "Seconds secs in the open at `at` cost: spawns at chance (price/stay-hp) and the fight with the hostiles known near `at`
@@ -135,7 +135,7 @@
   [c]
   (await (pick/once! c :dig-in
                      (fn ^:async f []
-                       (sin/shelter-quote (await (ctx/quote c 'jobs.survival.shut-in {:ways #{:walls :pit} :for :night :settings {:jobs.survival.wall-in/wall-value (sites/wall-value)}})))))))
+                       (sin/shelter-quote (await (ctx/quote c 'jobs.survival.shut-in {:ways #{:walls :pit} :for :night})))))))
 
 (defn ^:async dig-in-s
   "Seconds shut-in's quote of digging in here takes (dig-in-quote), its toll in."

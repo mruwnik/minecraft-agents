@@ -4,7 +4,6 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.blocks :as lb]
-            [jobs.lib.choose :as choose]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.answer :as answer]
@@ -28,8 +27,7 @@
   hostile stands in a cell (not with :for :night), no block is left or a place is refused. A place refused for a mob in the cell is waited out
   (jobs.lib.seal/mob-wait-ticks), then fails; one refused otherwise goes after the others (blocks.fill-cells: the walls are placed one cell a step through it, in place, ledgered; a torch in a cell is dug first, an open door shut) and fails with the other failures; a block that stays in a cell is left alone. Every block goes to the scaffold ledger with :for (default :danger, ledger :retreat-plug, taken
   back by jobs.access.cleanup once no hostile is near; :night: ledger :shelter, left alone). Quote: time, a placement per open cell
-  (##Inf with no block carried; with fewer blocks than open cells, which would stop half built, a melee hostile known gets in by an open cell, a mob unseen spawns: their hp-cost over the stay (::job-time-s) added, half-built-s). With :for :night the quote counts night seconds only (placing), and a block worth more than the ::wall-value setting
-  (jobs.lib.cost/item-value) adds the dig back at dawn, and :morning-s names the door dug out and the blocks left (plug-way/morning-s); it needs a carried block for every open cell. A cell another's zone refuses adds plug-way's ::trespass-s.
+  (##Inf with no block carried; with fewer blocks than open cells, which would stop half built, a melee hostile known gets in by an open cell, a mob unseen spawns: their hp-cost over the stay (::job-time-s) added, half-built-s). With :for :night the quote counts night seconds only (placing), and :morning-s names the door dug out and the blocks left (plug-way/morning-s); it needs a carried block for every open cell. A cell another's zone refuses adds plug-way's ::trespass-s.
   Picked by jobs.survival.shut-in, which shuts the body in by the cheapest way.")
 
 (a/defargs args
@@ -39,9 +37,7 @@
    :for {:doc "why the body shuts itself in: :danger (blocks are taken back by the cleanup once no hostile is near; a hostile in a cell fails it), :night (blocks stay for the night; a mob in a cell is waited out)" :spec #{:danger :night} :default :danger}})
 
 (a/defargs settings
-  {::wall-value {:default 3 :doc ":night: a block worth more than this each (jobs.lib.cost/item-value; dirt 0.35, cobblestone 0.85, stone 2.85, planks 3.4, log 12.8) is taken back at dawn, which the quote counts" :spec (a/num-in 0 nil)}
-   ::job-time-s {:default 60 :doc "Seconds a walls attempt may take." :spec (a/num-in 0 nil)}
-   ::dear-s {:default 0.4 :doc "Seconds a wall block worth more than ::wall-value adds per cell for the night: it is dug again at dawn." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 60 :doc "Seconds a walls attempt may take." :spec (a/num-in 0 nil)}
    ::mob-fails {:default {:reached {:k 4 :n 7} :clear {:k 0 :n 1}}
                 :spec (a/map-of #{:reached :clear} (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)}))
                 :doc "Of n walls attempts of a flight (closed, or failed for a mob in a cell), k failed for a mob, by the melee hostiles when it began: :reached, one could strike the body before the walls were closed (arrive-s), :clear none. Attempts that failed for another reason are left out of n, so k is a floor for :reached (they might have lost to the mob later). The trial bodies' logs on 2026-10-28. Recount: node tools/event-counts.mjs wall-places."}})
@@ -51,16 +47,6 @@
 (def defaults {:spend {:job-time ::job-time-s}})
 
 (defn done? [c] (way/done? c :walls))
-
-(defn cell-seconds
-  "Seconds one wall cell is priced at: a placement, for the night only the placing plus the dawn dig of a block worth more than
-  ::wall-value when the carried cheap ones do not cover every open cell."
-  [c open]
-  (if-not (= :night (:for (:args c)))
-    (way/place-s c)
-    (let [cheap (choose/cheap-blocks (flight/blocks c) (settings/get settings ::wall-value))
-          have (reduce + (map :count (lb/carried c cheap)))]
-      (+ (way/place-s c) (if (>= have open) 0 (settings/get settings ::dear-s))))))
 
 (defn why-not
   "The stop {:stop :no-blocks :text} when too few blocks are carried: none, or for the night fewer than open cells; for the night also {:stop :own-plan} when an open cell lies in a plan the body made; {:stop :lava-adjacent} with :on-lava :stop when a cell to fill holds lava; nil otherwise."
@@ -89,7 +75,7 @@
 (defn quote-of [c]
   (let [cells (dig-cells/open-cells (:primitives c) (sh-sense/feet (:primitives c)))
         open (count cells)]
-    (way/quote-of c (if (why-not c) ##Inf (+ (* open (cell-seconds c open)) (way/zone-penalty c {:place cells}) (half-built-s c open)))
+    (way/quote-of c (if (why-not c) ##Inf (+ (* open (way/place-s c)) (way/zone-penalty c {:place cells}) (half-built-s c open)))
                   (settings/get settings ::job-time-s)
                   {:morning-s (way/morning-s c (min open door-cells) (max 0 (- open door-cells)))})))
 

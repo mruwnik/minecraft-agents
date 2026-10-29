@@ -356,7 +356,7 @@
     (if (not= pos (sh-sense/feet p))
       (do (ctx/update-mem! c dissoc :enclose) :again)
       (let [_ (hold/busy! c)
-            d (await (ctx/call c :enclose 'jobs.survival.shut-in {:ways #{:walls} :for :night :settings {:jobs.survival.wall-in/wall-value (sites/wall-value)}}))]
+            d (await (ctx/call c :enclose 'jobs.survival.shut-in {:ways #{:walls} :for :night}))]
         (if (= :continue d)
           :again
           (do (ctx/update-mem! c dissoc :enclose)
@@ -411,7 +411,7 @@
             (await (sense/look-round! c [])))
         d (await (ctx/call c :shut-in 'jobs.survival.shut-in
                            (cond-> {:ways (cond-> #{:walls :pit} (or place (sh-sense/roofed? p (sh-sense/room-roof-height)) (room-plug/room-plug p (sh-sense/feet p) (dig-in-roof-height c))) (conj :room))
-                                    :for :night :settings {:jobs.lib.shelter.sense/roof-height (dig-in-roof-height c) :jobs.survival.wall-in/wall-value (sites/wall-value)}}
+                                    :for :night :settings {:jobs.lib.shelter.sense/roof-height (dig-in-roof-height c)}}
                              place (assoc :place place))))]
     (when-not (= :continue d)
       (ctx/update-mem! c #(cond-> (-> % (dissoc :digging) (update :shut-ins (fnil inc 0))) place (assoc :roof-walk-failed true)))

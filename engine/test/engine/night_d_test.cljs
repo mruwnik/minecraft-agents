@@ -180,21 +180,6 @@
           (is (seq (filter #(and (= 'jobs.survival.shut-in (second %)) (not= #{:walls} (:ways (nth % 2)))) log))
               "dug in where it stood, not walled in at the cave"))))))
 
-(deftest the-night-hands-its-wall-value-to-dig-in
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [quotes (atom [])
-              orig ctx/quote
-              _ (set! ctx/quote (fn ([c job a] (ctx/quote c job a nil)) ([c job a d] (when (= 'jobs.survival.shut-in job) (swap! quotes conj a)) (orig c job a d))))
-              {:keys [eng]} (cave-night [{:name "dirt" :count 8}] {:settings {:jobs.survival.night.sites/wall-value 5}})
-              log (await (with-child-log #(tu/run-until-empty eng 160)))
-              _ (set! ctx/quote orig)
-              dig-ins (concat (filter #(contains? (:ways %) :walls) @quotes)
-                              (map #(nth % 2) (filter #(and (= 'jobs.survival.shut-in (second %)) (contains? (:ways (nth % 2)) :walls)) log)))]
-          (is (seq dig-ins))
-          (is (every? #(= 5 (get-in % [:settings :jobs.survival.wall-in/wall-value])) dig-ins) (pr-str dig-ins)))))))
-
 (deftest an-overhang-whose-roof-the-body-has-not-seen-is-no-flee-target
   (async done
     (tu/run-async done
