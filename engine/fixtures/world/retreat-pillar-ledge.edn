@@ -1,5 +1,5 @@
 ;; Card 68a0d04f: retreat's pillar step is refused where a mob could climb 1 block steps to stand beside the pillar's top
-;; (respond.pillar/climb-chance): the cornered body then falls back to another refuge instead of pillaring beside a slope.
+;; (respond.pillar/climb-chance): the cornered body pillars on the bump itself or climbs the ledge instead of pillaring beside the slope, and ends up on the ledge's level or higher.
 ;; The same stone yard as retreat-pillar.edn (x 14..18, z 14..18, y 0..2, interior 3x3, open top), three NoAI helmeted zombies on
 ;; the west, north and south sides of the body, a stone block east of it. Case ledge: the east side is a 2 high ledge (reached by a
 ;; 1 high step at the north east corner), so a zombie could walk up beside a pillar at the start spot: none is built there. A pillar on the bump itself (the zombies' only way up) is safe and may follow. Case low-bump: the east block is 1 high.
@@ -22,4 +22,4 @@
   {:name "climbable-ledge-beside-builds-no-pillar"
    :blocks [[:set [17 0 15] "stone"] [:fill [17 0 16] [17 1 16] "stone"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 15}]
-   :after [[:not-block [16 0 16] "dirt"]]}]}
+   :after [[:not-block [16 0 16] "dirt"] [:body-near [17.5 3 16.5] 2.5]]}]}

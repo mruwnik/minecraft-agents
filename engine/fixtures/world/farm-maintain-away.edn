@@ -17,7 +17,7 @@
    :act [[:job (jobs.farm.maintain {:area {:min #xyz [60 -1 16] :max #xyz [62 0 19]}})]]
    :expect [{:no-event {:source :job :kind :waiting :data {:reason :not-worth}} :for-s 10}
             {:event {:source :job :kind :completed :data {:kind :done}} :within-s 120 :of-job true}]
-   :after [[:not-block [60 0 16] "wheat[age=7]"] [:not-block [62 0 16] "wheat[age=7]"]]}
+   :after [[:not-block [60 0 16] "wheat[age=7]"] [:not-block [62 0 16] "wheat[age=7]"] [:not-block [60 0 18] "wheat[age=7]"] [:not-block [62 0 19] "wheat[age=7]"]]}
   {:name "maintain-on-the-field-cuts-the-wheat"
    :body {:at [61.5 0 14.5]}
    :act [[:job (jobs.farm.maintain {:area {:min #xyz [60 -1 16] :max #xyz [62 0 19]}})]]
