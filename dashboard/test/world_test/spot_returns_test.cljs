@@ -11,6 +11,7 @@
     died :spot
     (line 0 :died {:damageType "fall" :pos (at 0)}) :pos
     (line 0 :hurt {:health 1 :causes ["skeleton"] :pos (at 0)}) :spot
+    (line 0 :hurt {:health 3 :causes ["skeleton"] :pos (at 0)}) :met
     (line 0 :hurt {:health 14 :causes ["skeleton"] :pos (at 0)}) :met
     (line 0 :hurt {:health 3 :causes ["wolf"] :pos (at 0)}) :pos
     (line 0 :planned {:pos (at 0)}) :pos
