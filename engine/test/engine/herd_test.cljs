@@ -871,20 +871,22 @@
             (is (some? e) "the run ends")
             (is (= {"u1" :refused} (:given-up e)))))))))
 
-(deftest the-release-looks-as-far-as-a-lead-holds
+(deftest a-cow-led-9-and-a-half-blocks-off-is-let-go
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [orig ctx/call
-              radii (atom [])
-              s (submit! (setup (world {:entities [(cow 1 4 3)]})) {:target 1})]
+        (let [s (submit! (setup (world {:entities [(cow 1 4 3 {:pin true})]})) {:target 1})
+              orig ctx/call
+              moved (atom false)]
           (set! ctx/call (fn [c slot job args]
-                           (when (= :unleash slot) (swap! radii conj (:radius args)))
+                           (when (and (= :unleash slot) (not @moved))
+                             (reset! moved true)
+                             (update-entity! s 1 assoc :pos [(- (self-x s) 9.5) 64 3]))
                            (orig c slot job args)))
-          (try (await (run-ticks s 400))
+          (try (await (run-ticks s 900))
                (finally (set! ctx/call orig)))
-          (is (seq @radii) "the animals were released by the unleash child")
-          (is (every? #(> % 10) @radii) "a led animal 9-10 blocks off (the lead's reach) is in range"))))))
+          (is @moved "the cow was released by the unleash child")
+          (is (empty? (on-lead s)) "the cow 9.5 blocks away is freed"))))))
 
 (deftest the-escape-census-counts-the-animals-gone-from-the-pen
   (doseq [[before after escaped] [[3 3 0] [3 2 1] [2 0 2] [1 2 0]]]
