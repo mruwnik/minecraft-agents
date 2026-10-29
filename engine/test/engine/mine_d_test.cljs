@@ -162,12 +162,12 @@
           (is (nil? (:tunnel (job-mem s))) "no tunnel was cut")
           (is (some #{[6 64 0]} (dug-cells s)) "the ore is dug"))))))
 
-(deftest a-dark-dig-beside-the-start-hangs-one-torch-in-its-cell-and-none-when-it-has-none
+(deftest a-dark-dig-beside-the-start-hangs-one-torch-in-its-cell-off-the-ores-faces-and-none-when-it-has-none
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [run (fn ^:async run-dig [inv]
-                    (let [p (tu/fake-on-floor (assoc (rock-world {"1,64,0" "iron_ore"}) :inventory inv :floor-block floor-block))
+                    (let [p (tu/fake-on-floor (assoc (rock-world {"1,65,0" "iron_ore"}) :inventory inv :floor-block floor-block))
                           _ (swap! (fake/state p) assoc :light-default [0 0])
                           s (start {:p p})]
                       (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 0 :ways #{:seen :carried}}) {})
@@ -175,10 +175,10 @@
                       s))
               lit (await (run [{:name "iron_pickaxe" :count 1} {:name "torch" :count 4}]))
               dark (await (run bare-pickaxe))]
-          (is (= [[0 64 0]] (mapv #(let [q (.-pos (.-args %))] [(.-x q) 64 (.-z q)]) (calls lit "place"))) "one torch, in the digging cell")
-          (is (some #{[1 64 0]} (dug-cells lit)) "the ore is dug")
+          (is (= [[0 64 0]] (mapv #(let [q (.-pos (.-args %))] [(.-x q) (.-y q) (.-z q)]) (calls lit "place"))) "one floor torch at the feet: the head cell is the ore's open face")
+          (is (some #{[1 65 0]} (dug-cells lit)) "the ore is dug")
           (is (empty? (calls dark "place")) "no torch to hang")
-          (is (some #{[1 64 0]} (dug-cells dark)) "the dig goes on dark"))))))
+          (is (some #{[1 65 0]} (dug-cells dark)) "the dig goes on dark"))))))
 
 (deftest torches-false-hangs-none
   (async done

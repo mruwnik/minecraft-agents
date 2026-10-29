@@ -184,7 +184,7 @@
                   (torch/lightable? (:primitives c)) (due-spot c [here] [] here)))))
 
 (defn ^:async hang-torch!
-  "Hang a torch on the cell behind the body (a branch: behind it on its way off the tunnel; a cell pos: in the body's own cell, beside the dig of pos), after a glance at it and
+  "Hang a torch on the cell behind the body (a branch: behind it on its way off the tunnel; a cell pos: in the body's own cell, never on a face of pos, which the dig needs open), after a glance at it and
   its side walls when the support is not yet seen."
   [c branch]
   (let [p (:primitives c)
@@ -196,7 +196,8 @@
                              (map? branch) {:dir (toward here branch) :site here}
                              branch (branch-site (ctx/mem c) here)
                              :else {:dir (headings (:heading tunnel)) :site (step-cell tunnel (dec (:steps tunnel)))})
-        pick (fn [] (when site (torch/torch-at dir [(:x site) (:y site) (:z site)] (placement/eye (u/self-pos c)) block-at)))
+        clear-of (if (map? branch) (let [{:keys [x y z]} (cell-of branch)] #(not= 1 (reduce + (map (comp js/Math.abs -) % [x y z])))) (constantly true))
+        pick (fn [] (when site (torch/torch-at dir [(:x site) (:y site) (:z site)] (placement/eye (u/self-pos c)) block-at clear-of)))
         choice (or (let [c0 (pick)] (when-not (:refused c0) c0))
                    (when site (let [[dx dz] dir] (await (glance! c [[(- dx) (- dz)] [(- dz) dx] [dz (- dx)]]))))
                    (pick))
