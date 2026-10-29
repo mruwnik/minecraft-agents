@@ -7,6 +7,7 @@
   :choose/override :avoid names), each at strength 1. (held c chooser) {name count} of those units, the one answer to
   \"what may this chooser not use\". (price c name n) the extra cost of using n units of name: the units over the free
   surplus, lowest strength first, each (cost/reserve-cost value strength); ##Inf when one is strength 1.
+  (replace-strength item) the strength that prices a spent unit at fetching it again.
   (free c chooser) the inventory with the held units taken out: what a job may spend without weighing a price."
   (:require [jobs.lib.crops :as crops]
             [engine.ctx :as ctx]
@@ -114,6 +115,14 @@
   "See the ns doc."
   [c chooser]
   (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} (rows c chooser)))
+
+(defn replace-strength
+  "The strength at which spending one unit of item costs what getting it back does: a trip (cost/trip) and the item's
+  value again, so (cost/reserve-cost value s) is that. Below 1, so a chooser spends it only when that beats every other way."
+  [item]
+  (let [each (:value (cost/item-value [{:name item :count 1}]))
+        back (+ (cost/trip) each)]
+    (/ back (+ back each))))
 
 (defn price
   "See the ns doc."

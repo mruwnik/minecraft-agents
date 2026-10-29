@@ -1,6 +1,7 @@
 (ns jobs.build.from-plan
   (:require [jobs.lib.build.wood :as wood]
             [jobs.lib.reserve :as reserve]
+            [jobs.items.obtain.plan :as obtain-plan]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -351,17 +352,24 @@
             :else (do (book-failed! c w e) :again)))))))
 
 (defn hold-carried!
-  "The carried units of the items the plan's missing cells still need, reserved for the call's life, so a craft or
-  smelt for another need (a furnace for a torch) does not spend them, nor the night its bed. The entries follow what is still missing."
+  "The carried units the plan's missing cells still need, reserved for the call's life, so a craft or smelt for another
+  need (a furnace for a torch) does not spend them, nor the night its bed: the cell's own item, and the carried items
+  obtain's craft plan would turn into the rest (logs for planks). Each at the strength that prices a spent unit at
+  getting it back (reserve/replace-strength). The entries follow what is still missing."
   [c cells]
   (let [need (frequencies (keep :item (missing cells)))
         carried (storage/carried-totals (u/inventory (:primitives c)))
-        wanted (for [[item n] (sort need) :let [k (min n (get carried item 0))] :when (pos? k)]
-                 {:id (str (:id c) "-carried-" item) :item item :count k :strength 1 :by (:id c)
+        held (reduce (fn [m [item n]]
+                       (let [have (min n (get carried item 0))
+                             crafted (when (< have n) (:uses (obtain-plan/craft-plan c [item] (- n have))))]
+                         (merge-with + m {item have} crafted)))
+                     {} (sort need))
+        wanted (for [[item n] (sort held) :let [k (min n (get carried item 0))] :when (pos? k)]
+                 {:id (str (:id c) "-carried-" item) :item item :count k :strength (reserve/replace-strength item) :by (:id c)
                   :why "carried for the plan's cells"})
         bed? (and (some #(wood/bed? (:item %)) (missing cells)) (some #(wood/bed? (:name %)) (u/inventory (:primitives c))))]
     (reserve/set-job-entries! c (cond-> (vec wanted)
-                                  bed? (conj {:id (str (:id c) "-bed") :tag :bed :count 1 :strength 1 :by (:id c) :why "bed for the plan"})))))
+                                  bed? (conj {:id (str (:id c) "-bed") :tag :bed :count 1 :strength (reserve/replace-strength "white_bed") :by (:id c) :why "bed for the plan"})))))
 
 (defn ^:async look-first!
   "While a fetch is due: a glance (a head turn, cost/look-s, against a trip) at the nearest cell never seen within

@@ -26,6 +26,12 @@
     0.9 90
     1 ##Inf))
 
+(deftest a-replace-strength-prices-a-spent-unit-above-the-item-and-below-never
+  (are [name] (let [v (:value (cost/item-value [(item name 1)]))
+                    price (cost/reserve-cost v (reserve/replace-strength name))]
+                (and (< (reserve/replace-strength name) 1) (js/isFinite price) (< v price)))
+    "oak_log" "cobblestone" "white_bed"))
+
 (deftest an-item-entry-holds-up-to-its-count-of-what-is-carried
   (are [carried count held] (= held (reserve/held (body [(item "diamond" carried)] [{:item "diamond" :count count :strength 1}]) :tools))
     5 3 {"diamond" 3}

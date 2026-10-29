@@ -1998,6 +1998,39 @@
             (finally (set! ctx/call orig)))
           (is (some #(= ["torch" {"cobblestone" 3}] %) @held) (pr-str @held)))))))
 
+(deftest a-reserved-carried-item-is-priced-not-barred
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [orig ctx/call
+              rows (atom [])
+              plan {:id "wall" :parts [{:id "wall" :cells [[3 64 3] [4 64 3] [5 64 3]] :want "cobblestone"}]}
+              {:keys [eng]} (start {:inventory [{:name "cobblestone" :count 3}] :time 18000 :light {} :light-default [0 0]} {"wall" plan})]
+          (set! ctx/call (fn [c slot j args]
+                           (when (= 'jobs.items.obtain j) (swap! rows into (reserve/rows c :craft)))
+                           (orig c slot j args)))
+          (try
+            (await (child-outcome eng job {:plan "wall" :explore false} 20))
+            (finally (set! ctx/call orig)))
+          (is (seq @rows))
+          (is (every? #(< (:strength %) 1) @rows) (pr-str @rows)))))))
+
+(deftest the-torch-fetch-of-a-plank-build-leaves-the-logs-reserved
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [orig ctx/call
+              held (atom [])
+              plan {:id "wall" :parts [{:id "wall" :cells [[3 64 3] [4 64 3]] :want "oak_planks"}]}
+              {:keys [eng]} (start {:inventory [{:name "oak_log" :count 1}] :time 18000 :light {} :light-default [0 0]} {"wall" plan})]
+          (set! ctx/call (fn [c slot j args]
+                           (when (= 'jobs.items.obtain j) (swap! held conj [(:item args) (reserve/held c :craft)]))
+                           (orig c slot j args)))
+          (try
+            (await (child-outcome eng job {:plan "wall" :explore false} 20))
+            (finally (set! ctx/call orig)))
+          (is (some #(= ["torch" {"oak_log" 1}] %) @held) (pr-str @held)))))))
+
 (deftest a-fetch-due-waits-for-a-glance-at-the-unseen-cells-the-body-carries-the-items-for
   (async done
     (tu/run-async done
