@@ -154,7 +154,7 @@
      :food (animals/food-carried (:primitives c) (:mob (:args c)))
      :reach (hunting/reach c)}))
 
-(declare worth-of)
+(declare mend-worth)
 
 (defn decide-mend
   [{:keys [plan ways mob] :as args} {:keys [gaps] :as facts}]
@@ -163,7 +163,7 @@
     (empty? gaps) {:skip :sound}
     :else {:call {:slot :mend :job (jobs :mend)
                   :args (cond-> {:plan plan}
-                          mob (assoc :worth (worth-of args facts))
+                          mob (assoc :worth (mend-worth args facts))
                           (not (need/fetching? ways)) (assoc :ways #{:carried}))}}))
 
 (defn decide-herd
@@ -272,7 +272,7 @@
 
 (def shear-wool "Wool a shorn sheep drops, the game's 1 to 3: 2 on average." 2)
 
-(defn worth-of
+(defn mend-worth
   "Seconds a pass is worth: cost/animal-worth of the animals its herd, breed
   (one pair, one calf) and cull steps would add or kill, the item-value of the wool its shear and of the drops its collect
   would take, what the herd would lose through the fence gaps its mend would close (cost/gap-loss) and the item-value of
@@ -285,7 +285,7 @@
                 (= "sheep" mob) (conj {:name "white_wool" :count (* shear-wool shearable)}))]
     (+ (* animals (cost/animal-worth mob)) (cost/gap-loss mob (+ adults babies) (count gaps)) (:value (cost/item-value items)))))
 
-(defn pass-worth [c] (worth-of (:args c) (facts c)))
+(defn pass-worth [c] (mend-worth (:args c) (facts c)))
 
 (defn can-start?
   "Never :no-box without a box or a plan, :no-mob without :mob or a plan; later for :plan-trouble, nothing to do, or :not-worth while even the least walk onto the pen costs more than the pass is worth (walk-pick/not-worth)."

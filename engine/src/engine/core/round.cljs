@@ -141,6 +141,8 @@
     {:engine eng :primitives (:primitives eng) :token token :args args :id id
      :root root :slots slots :chain chain :round round :reflex reflex :wait (:wait base) :t0s (:t0s base) :child-wait child-wait
      :quote-deadline (:quote-deadline base)
+     :worth #(let [worth-at (fn [ss] (get-in (mem/job-mem (mem/view store) root ss) [:contract :call :worth]))]
+               (or (worth-at slots) (when (seq slots) (worth-at (pop slots))) ##Inf))
      :left #(let [t (now eng)]
               (contract/least-left (for [[s state] (limits/frames eng root slots)]
                                      (contract/left state t (- t (nth (:t0s base) (count s) t))))))
@@ -235,7 +237,7 @@
             id (mem/path->id (:root base) (conj (:slots base) slot))
             c (child-ctx eng (cond-> b ident (update :quoting (fnil conj []) [ident id])) slot args)
             call (first (ending/call-of c def))]
-        (assoc c :quote-call call :left (constantly (contract/left {:call call} (now eng) 0)) :job-ways (:ways def))))))
+        (assoc c :quote-call call :worth (constantly (:worth call)) :left (constantly (contract/left {:call call} (now eng) 0)) :job-ways (:ways def))))))
 
 (defn ^:async call
   "One round of job def as the child in slot under parent base (ctx/call): :continue, or its ending with the :report;

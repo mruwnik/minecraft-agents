@@ -149,7 +149,7 @@
           (let [told (job-ev seen :limit_reached)
                 data (:data (first told))]
             (is (= [id] (mapv #(get-in % [:context :job-id]) told)))
-            (is (= {:name 'slow :cause {:line :job-time :spend 5} :used 6 :call {:spend {:job-time 5} :least 1}}
+            (is (= {:name 'slow :cause {:line :job-time :spend 5} :used 6 :call {:spend {:job-time 5} :least 1 :worth ##Inf}}
                    (select-keys data [:name :cause :used :call])))
             (is (= 6 (get-in data [:report :uses :job-time])))))))))
 

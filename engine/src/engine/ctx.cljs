@@ -32,6 +32,12 @@
   [ctx]
   (or (:quote-call ctx) (get-in (mem/job-mem ((:view ctx)) (:root ctx) (:slots ctx)) [:contract :call])))
 
+(defn worth
+  "What the goal of this call is worth, in seconds, never nil: the frozen call's (in a start check, the would-be call's),
+  else the caller's, else ##Inf. Sunk cost does not lower it."
+  [ctx]
+  ((:worth ctx)))
+
 (defn left
   "What is left of the call's limits and its callers', each line the least over the chain: {:spend {line remainder}
   :floor {line level} :deadline ms}."

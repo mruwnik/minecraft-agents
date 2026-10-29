@@ -131,3 +131,47 @@
            (contract/moved-cause {:submitted-at [10 65 0]} {:x 20.5 :y 65 :z 0} 6)))
     (is (nil? (contract/call-problem 'x nil {:submitted-at at :here true})))
     (is (some? (contract/call-problem 'x nil {:submitted-at "there"})))))
+
+(def worths (atom {}))
+
+(def worth-jobs
+  {'kid {:args {} :can-start? (fn [c] (swap! worths update :kid-start #(or % (ctx/worth c))) (contract/ok :ready "ready"))
+         :round (fn ^:async kid [c] (swap! worths assoc :kid (ctx/worth c)) (ctx/end c :done nil))}
+   'top {:args {:kid-worth {:doc "worth for the kid" :default nil}}
+         :worth-of (fn [_] 7)
+         :round (fn ^:async top [c]
+                  (swap! worths assoc :top (ctx/worth c))
+                  (await (ctx/call c :a 'kid {}))
+                  (await (ctx/call c :b 'kid (cond-> {} (:kid-worth (:args c)) (assoc :worth (:kid-worth (:args c))))))
+                  (ctx/end c :done nil))}
+   'bare {:args {} :round (fn ^:async bare [c]
+                            (swap! worths assoc :bare (ctx/worth c))
+                            (await (ctx/call c :a 'kid {}))
+                            (ctx/end c :done nil))}})
+
+(deftest worth-is-the-roots-hook-or-inf-inherited-and-overridable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup worth-jobs)]
+          (reset! worths {})
+          (core/submit! eng '(top {:kid-worth 900}) {})
+          (await (core/tick! eng))
+          (is (= 7 (:top @worths)) "the root's worth-of")
+          (is (= 900 (:kid @worths)) "a child's given worth wins, above its caller's")
+          (is (= 7 (:kid-start @worths)) "the start check sees the would-be worth, before the freeze"))
+        (let [{:keys [eng]} (setup worth-jobs)]
+          (reset! worths {})
+          (core/submit! eng '(bare) {})
+          (await (core/tick! eng))
+          (is (= ##Inf (:bare @worths)) "no hook: arrive")
+          (is (= ##Inf (:kid @worths)) "inherited"))
+        (let [{:keys [eng]} (setup worth-jobs)]
+          (reset! worths {})
+          (core/submit! eng '(bare {:worth 12}) {})
+          (await (core/tick! eng))
+          (is (= 12 (:bare @worths)) "the root's args beat the hook")
+          (is (= 12 (:kid @worths)) "inherited")
+          (is (some? (contract/call-problem 'bare nil {:worth -1})) "a negative worth is refused")
+          (is (some? (contract/call-problem 'bare nil {:worth js/NaN})) "NaN is refused")
+          (is (nil? (contract/call-problem 'bare nil {:worth ##Inf})) "##Inf is accepted"))))))

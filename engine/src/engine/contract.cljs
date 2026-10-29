@@ -232,6 +232,8 @@
               :spec (a/valid-by "a map {setting-key value} of declared settings" #(when-not (map? %) "not a map"))}
    :deadline {:doc "the wall-clock ms by which the call must have ended; default the caller's" :default nil
               :spec (a/num-in 0 nil)}
+   :worth {:doc "what the goal is worth, in seconds of the body's time, ##Inf for \"arrive\"; default the caller's, at the root the job's worth-of, else ##Inf" :default nil
+           :spec (a/or-of (a/num-in 0 nil) #{##Inf})}
    :submitted-at {:doc "where the body stood at submit (the agent tool adds it): the call waits :moved-since-submit before its first round while the body stands over ::moved-limit from it; each job of this body that ends before it starts, and a respawn, moves this mark to where the body then stands" :default nil
                   :spec a/position?}
    :here {:doc "true: start wherever the body is, whatever :submitted-at says" :default nil :spec boolean?}
@@ -273,7 +275,7 @@
 
 (defn freeze
   "The call keys of a call to a job with ways and defaults (settings resolved): given (the args) over the defaults,
-  :spend, :floor and :use line by line; :ways all of the job's when neither says; :least 1; :deadline the caller's
+  :spend, :floor and :use line by line; :ways all of the job's when neither says; :least 1; :deadline and :worth the caller's
   call's. :use from the defaults names a chooser, filled by engine.core.ending/fill-use, so only given lists count."
   [{:keys [ways defaults]} given caller]
   (let [defaults (cond-> (dissoc defaults :use) (seq ways) (update :ways #(set (or % ways))))
@@ -285,7 +287,9 @@
                            (some? d) (assoc m k d)
                            :else m)))
                      {:least 1} (keys call-keys))]
-    (cond-> call (and (nil? (:deadline call)) (:deadline caller)) (assoc :deadline (:deadline caller)))))
+    (cond-> call
+      (and (nil? (:deadline call)) (:deadline caller)) (assoc :deadline (:deadline caller))
+      (and (nil? (:worth call)) (some? (:worth caller))) (assoc :worth (:worth caller)))))
 
 ;; ------------------------------------------------------------------ limits
 

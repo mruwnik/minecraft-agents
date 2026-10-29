@@ -319,13 +319,13 @@
     {:call {:slot :mend :job 'jobs.build.pen :args {:plan "pen" :ways #{:carried}}}} {:plan "pen" :ways #{:carried}} {:gaps [[1 64 1]]})
   (let [args {:plan "pen" :mob "cow" :target 4}
         facts {:adults 4 :babies 0 :drops [] :shearable 0 :gaps [[1 64 1]] :stored-items []}]
-    (is (= {:plan "pen" :worth (maintain/worth-of args facts)} (get-in (maintain/decide :mend args facts) [:call :args]))
+    (is (= {:plan "pen" :worth (maintain/mend-worth args facts)} (get-in (maintain/decide :mend args facts) [:call :args]))
         "the mend is built at the pass's worth")))
 
 (deftest a-fence-gap-and-carried-produce-add-to-the-pass-worth
   (let [args {:mob "cow" :target 4 :chest {:x 0 :y 64 :z 0}}
         at-target {:adults 4 :babies 0 :drops [] :shearable 0 :gaps [] :stored-items []}
-        worth #(maintain/worth-of args (merge at-target %))
+        worth #(maintain/mend-worth args (merge at-target %))
         beef {:stored-items [{:name "beef" :count 8}]}]
     (is (zero? (worth {})))
     (is (< 0 (worth {:gaps [[1 64 1]]})) "a gap loses animals")
@@ -336,7 +336,7 @@
       #(do (is (< (js/Math.abs (- 0.5 (pen/escape-chance 1 300))) 1e-9) "one escape per 300 animal-seconds: half gone after 300 s at one gap")
            (is (= (pen/escape-chance 2 150) (pen/escape-chance 1 300)) "gaps and seconds trade evenly")))
     (is (< 0 (worth beef)) "produce to store is worth its items")
-    (is (zero? (maintain/worth-of (dissoc args :chest) (merge at-target beef))) "no chest, no deposit: carried produce is worth nothing here")))
+    (is (zero? (maintain/mend-worth (dissoc args :chest) (merge at-target beef))) "no chest, no deposit: carried produce is worth nothing here")))
 
 (def ring-pen-plan
   (update (pb/ring-plan) :parts conj {:id "cows" :box [[3 64 3] [3 64 3]] :want "air" :herd {:mob "cow" :target 0}}))

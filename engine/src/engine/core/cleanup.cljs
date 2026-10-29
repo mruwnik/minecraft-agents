@@ -69,7 +69,7 @@
                      (fn [s] (-> (dissoc s :limit)
                                  (assoc :closing e
                                         :cleanup {:call (:call s) :started-ms (:started-ms s) :ran-ms (+ (or (:ran-ms s) 0) pre)}
-                                        :call (cleanup-call def (:args c)) :started-ms t :ran-ms (- pre)))))))
+                                        :call (cond-> (cleanup-call def (:args c)) (:worth (:call s)) (assoc :worth (:worth (:call s)))) :started-ms t :ran-ms (- pre)))))))
 
 (defn finish!
   "End the cleanup of the frame of c with ce (its ending, or the failure): the job's call back, the cleanup's time
