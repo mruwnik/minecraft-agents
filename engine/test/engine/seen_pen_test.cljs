@@ -95,9 +95,11 @@
         (update :blocks #(apply dissoc % (keys (apply dissoc ht/ground (keys (apply tu/floor floor)))))))))
 
 (defn dark-run
-  "A herd run in a pitch-dark pen: a cell is made out only within 4 blocks (perception's near)."
+  "A herd run in a pitch-dark pen: a cell is made out only within 4 blocks (perception's near). The ground round the cow and past the gate is lit: a dark
+  place with unseen edges is exposed, which ends the run."
   []
   (let [s (ht/clock-on-wait! (h/setup-seeing (small-dark-world {:entities [(ht/cow 1 4 3)]}) [0 0] 700))]
+    (swap! (fake/state (:p s)) assoc :light (into {} (for [x (concat (range 2 7) (range 12 17)) y [64 65] z (range 0 8)] [[x y z] [0 14]])))
     (ht/submit! s {:target 1})))
 
 (deftest a-dark-pen-is-looked-at-then-the-run-ends

@@ -505,7 +505,10 @@
         (let [w {:floor [-10 -8 20 8] :inventory lead :entities [(cow 1 3)]}
               near {:pos {:x 10 :y 64 :z 0}}
               lit (await (submit (h/setup-seeing w nil call-ms) near 12))
-              dark (await (submit (h/setup-seeing w [0 0] call-ms) near 12))]
+              ;; the unleash spot is lit: a dark place with unseen edges is exposed, which ends the job there
+              dark-s (h/setup-seeing w [0 0] call-ms)
+              _ (swap! (fake/state (:p dark-s)) assoc :light (into {} (for [x (range 7 17) y [64 65] z [-2 -1 0 1 2]] [[x y z] [0 14]])))
+              dark (await (submit dark-s near 12))]
           (is (empty? (watched lit)))
           (is (seq (watched dark)))
           (is (= :unleashed (:reason (done-event dark)))))))))

@@ -24,12 +24,14 @@
   (wt/known-of (fn [[x y z]] (not (and (= z 0) (#{64 65} y) (open-x? x)))) {} [-12 60 -8 12 68 8]))
 
 (defn with-body
-  "Calls f with the body's block memory known and the light at its feet light ({:light n :lit? bool}, nil no light data)."
+  "Calls f with the body's block memory known and the light at its feet light ({:light n}, nil no light data)."
   [known light f]
   (with-redefs [wworld/memory-sections (constantly known)
                 sh-sense/feet (constantly {:x 0 :y 64 :z 0})
                 sh-sense/cell-light (constantly (:light light))
-                sh-sense/lit-here? (constantly (:lit? light))]
+                sh-sense/block-light-at (constantly (:light light))
+                sh-sense/sky-light-at (constantly 0)
+                sh-sense/sky-subtract-now (constantly 0)]
     (f)))
 
 (defn pending [c] (mapv (comp :way :data) (mem/entries ((:view c)) :way-pending)))
@@ -38,7 +40,7 @@
 
 (deftest a-decision-logs-the-counts-it-priced-and-each-way-is-read-once-its-cells-are-seen
   (let [seen (atom []) c (stub seen) scan {:k 1 :n 2 :ways ways}]
-    (with-body wt/open-corridor {:light 15 :lit? true}
+    (with-body wt/open-corridor {:light 15}
       (fn []
         (way-log/log-priced! c scan)
         (way-log/log-priced! c scan)
@@ -56,7 +58,7 @@
 (deftest past-the-cap-the-oldest-waiting-ways-are-dropped-and-said
   (let [seen (atom []) c (stub seen)
         way #(vector (+ 100 %) 64 0 0)]  ; far past the seen box: never read
-    (with-body wt/open-corridor {:light 15 :lit? true}
+    (with-body wt/open-corridor {:light 15}
       (fn [] (doseq [i (range 0 (+ way-log/pending-cap 2) 6)] (way-log/log-priced! c {:k 0 :n 0 :ways (mapv way (range i (+ i 6)))}))))
     (is (= [[:way-on.censored {:way (way 0) :why :evicted}] [:way-on.censored {:way (way 1) :why :evicted}]]
            (filter #(= :way-on.censored (first %)) @seen))
@@ -68,9 +70,9 @@
   (let [setting (fn [light] (let [seen (atom [])]
                               (with-body wt/open-corridor light #(way-log/log-priced! (stub seen) {:k 0 :n 0 :ways []}))
                               (:set (second (first @seen)))))]
-    (is (= :unknown (setting {:light nil :lit? true})) "no light data: unknown, not a guess")
-    (is (= :dark (setting {:light 0 :lit? false})))
-    (is (= :lit (setting {:light 15 :lit? true}))))
+    (is (= :unknown (setting {:light nil})) "no light data: unknown, not a guess")
+    (is (= :dark (setting {:light 0})))
+    (is (= :lit (setting {:light 15}))))
   (let [seen (atom [])]
     (with-body wt/open-corridor nil #(way-log/log-priced! (stub seen) nil))
     (is (= [] @seen) "a decision that priced no way counts logs none")))
