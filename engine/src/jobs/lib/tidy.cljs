@@ -12,6 +12,7 @@
             [engine.game :as game]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.blocks :as b]
             [jobs.lib.built :as built]
             [jobs.lib.crops :as crops]
             [jobs.lib.reach :as reach]
@@ -187,7 +188,8 @@
          _ (await (tools/note-wear! c))]
      (when (= "dug" (.-status r))
        (built/forget! c (spent/cell-vec pos))
-       (let [drops (dropped-names r)]
+       (let [own (set (b/drops-of (:primitives c) (:was pend)))
+             drops (filterv own (dropped-names r))]
          ;; ground cover drops nothing and is not carried: no item could put it back
          (when (or (not (:mend pend)) (seq drops) (carried? (:primitives c) (:was pend)))
            (record! c (cond-> pend (:mend pend) (assoc :any-of (put-back-items (:was pend) drops))) "air"))))

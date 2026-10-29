@@ -592,6 +592,7 @@
       (fn ^:async t []
         (doseq [[block drops carry want] [["stone" {"stone" "cobblestone"} [] [{:was "stone" :any-of ["stone" "cobblestone"]}]]
                                           ["dirt" {} [] [{:was "dirt" :any-of ["dirt"]}]]
+                                          ["dirt" {"dirt" "wheat_seeds"} [{:name "dirt" :count 1}] [{:was "dirt" :any-of ["dirt"]}]]
                                           ["short_grass" {"short_grass" ""} [{:name "short_grass" :count 1}] [{:was "short_grass" :any-of ["short_grass"]}]]
                                           ["short_grass" {"short_grass" ""} [] []]]]
           (let [env (setup {:self body :inventory carry :blocks {"2,64,0" block} :drops drops
