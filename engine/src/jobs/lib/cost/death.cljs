@@ -66,8 +66,8 @@
   (* (settings/get settings ::seconds-per-level) (or (:level body) 0)))
 
 (defn walk-back-blocks
-  "Blocks from the body's :respawn to `at` (nil: the body's own :at, where a kit was read); 0 with no place; with no
-  :respawn (the game has not sent its spawn yet) the prior ::unknown-respawn-blocks."
+  "Blocks from the body's :respawn to `at` (nil: the body's own :at, where a kit was read); with no
+  :respawn (the game has not sent its spawn yet) the prior ::unknown-respawn-blocks, place or none; 0 with a respawn and no place."
   [body at]
   (let [from (:respawn body)
         at (or at (:at body))]
