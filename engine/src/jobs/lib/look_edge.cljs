@@ -98,19 +98,13 @@
 
 (defn far-side
   "{:side [x y z] :to {:x :y :z}}: the unseen side, not in `looked`, of the region round the feet whose walkable-near cell
-  `to` (within max-edge-walk of `from`, default the feet) lies farthest from `from`, nil when none: a walk to `to` shows `side` (within
-  look/near-of), and `to` is no cell beside the feet, where a look round shows as much. The end of a dark tunnel a look
-  from here cannot make out."
+  `to` (within max-edge-walk of `from`, default the feet) lies farthest from `from`, nil when none: a walk to `to` and a
+  look there shows `side` or the region past it. The end of a dark tunnel a look from here cannot make out."
   ([p] (far-side p (sh-sense/feet p) #{}))
   ([p from looked]
-   (let [feet (sh-sense/feet p)
-         near (look/near-of p)
-         near-fn (delay (walkable-near-fn p from))]
-     (some->> (seq (remove looked (reach-room/unseen-sides p feet)))
-              (keep (fn [[x y z :as side]]
-                      (when-let [to (@near-fn side)]
-                        (when (and (not (u/within? feet to 1)) (or (nil? near) (<= (u/dist to {:x x :y y :z z}) near)))
-                          {:side side :to to}))))
+   (let [near-fn (delay (walkable-near-fn p from))]
+     (some->> (seq (remove looked (reach-room/unseen-sides p (sh-sense/feet p))))
+              (keep (fn [side] (when-let [to (@near-fn side)] {:side side :to to})))
               seq
               (apply max-key #(u/dist from (:to %)))))))
 
