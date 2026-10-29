@@ -20,7 +20,7 @@
   Children: jobs.movement.boat-launch (put a boat on the water and board it; a boat not carried is fetched), then jobs.movement.boat-land (drive to the water beside
   the far shore, step off facing the land, and with :recover take the boat back). A body already aboard skips the launch.
   The far shore is :pos (a land cell: it must be a seen shore), else a seen shore within ::radius of the body, at least ::min-cross blocks away, with water between it and the body
-  (not the start bank): the one nearest :goal when given, else the farthest.
+  (not the start bank): the one nearest :goal when given, else the nearest (the crossing's quote grows with its distance).
   A given :pos is looked at first; one the body still cannot make out is crossed toward all the same (boat-land drives nearer to it).
   Impossible: :bad-args (:pos or :goal names no cell, :item is no boat). Conditions, asked before every round (a listed call waits on them; the engine looks round once first): :no-far-shore (:pos is no shore,
   or none far enough is in sight), :not-water (no water in sight to launch on, unless already aboard). A crossing under way skips them.
@@ -35,7 +35,7 @@
 
 (a/defargs args
   {:pos {:doc "the far-shore land cell to step onto, [x y z] or {:x :y :z}; nil: choose one (see :goal)" :spec ::a/pos :default nil}
-   :goal {:doc "with no :pos: pick the seen far shore nearest this cell; nil: the farthest" :spec ::a/pos :default nil}
+   :goal {:doc "with no :pos: pick the seen far shore nearest this cell; nil: the nearest" :spec ::a/pos :default nil}
    :item {:doc "the boat item to launch; nil: the first carried boat or raft, else one is fetched" :spec a/item? :default nil}
    :recover {:doc "take the boat back after landing" :spec boolean? :default true}})
 
@@ -70,14 +70,14 @@
 
 (defn far-spot
   "The shore spot {:land :water} within ::radius of `from`, at least ::min-cross away and across water from it, or nil:
-  the one nearest :goal when given, else the farthest. Shores less than ::min-cross from `bank` (the launch bank, if known) are left out."
+  the one nearest :goal when given, else the nearest (the crossing's quote grows with its distance). Shores less than ::min-cross from `bank` (the launch bank, if known) are left out."
   [p from {:keys [goal bank]}]
   (->> (shore/spots p from {:radius (radius)})
        (map #(assoc % :d (u/dist from (vehicle/centre (:land %)))))
        (filter #(and (>= (:d %) (min-cross))
                     (or (nil? bank) (>= (u/dist bank (vehicle/centre (:land %))) (min-cross)))
                     (water-between? p from %)))
-       (sort-by (if goal #(u/dist goal (vehicle/centre (:land %))) #(- (:d %))))
+       (sort-by (if goal #(u/dist goal (vehicle/centre (:land %))) :d))
        first))
 
 (defn target-spot [c]

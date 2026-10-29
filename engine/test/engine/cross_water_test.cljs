@@ -68,7 +68,7 @@
       (fn ^:async t []
         (let [{:keys [res]} (await (run world {:settings {::cw/min-cross 4} :recover false}))]
           (is (= :done (:status res)) (pr-str res))
-          (is (= 7 (:x (:land res))) "a cell on the far side"))))))
+          (is (<= 4 (:x (:land res))) "a shore at least min-cross away"))))))
 
 (defn ^:async waits-on
   "How a listed cross-water call over world ends: {:event :waiting :reason} for a start fact that does not hold now."
@@ -123,9 +123,11 @@
   ([p min-cross goal]
    (settings/with-settings {::cw/min-cross min-cross} #(cw/far-spot p {:x 0 :y 64 :z 0} {:goal goal}))))
 
-(deftest far-shore-prefers-the-far-side
-  (let [{:keys [p]} (lt/setup world)]
-    (is (= 7 (:x (:land (spot p 4)))))))
+(deftest the-nearest-shore-across-water-is-chosen
+  (let [{:keys [p]} (lt/setup world)
+        land (:land (spot p 4))]
+    (is (<= 4 (js/Math.hypot (:x land) (:z land))) "at least min-cross away")
+    (is (< (:x land) 7) "a nearer bank than the far bank x 7")))
 
 (def two-channels
   "Water at x 4 and x 9, z -3..3: land at x 5..8 between them, a far bank at x 10."
@@ -133,9 +135,9 @@
 
 (defn land-x [spot] (:x (:land spot)))
 
-(deftest far-spot-takes-the-farthest-across-water-not-the-nearest
+(deftest far-spot-takes-the-nearest-across-water-not-the-farthest
   (let [{:keys [p]} (lt/setup {:blocks two-channels})]
-    (is (= 10 (land-x (spot p 4))))))
+    (is (= 5 (land-x (spot p 4))))))
 
 (deftest far-spot-excludes-the-start-bank
   (let [{:keys [p]} (lt/setup {:blocks two-channels})]
