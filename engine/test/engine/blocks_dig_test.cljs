@@ -574,6 +574,19 @@
           (is (= [{:cell [2 64 0] :was "dirt" :plan "hut" :mend true}] (tidy-cells (:eng own))))
           (is (empty? (tidy-cells (:eng working)))))))))
 
+(deftest a-dig-for-one-plan-notes-a-cell-of-the-bodys-other-plan-and-no-ground-cover
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plans {"hut" (shape/with-author hut "Fake")
+                     "shed" (shape/with-author {:id "shed" :parts [{:id "w" :cells [[5 64 0]] :want "stone"}]} "Fake")}
+              other (setup {:self body :blocks {"2,64,0" "dirt"} :plans plans})
+              cover (setup {:self body :blocks {"2,64,0" "short_grass"} :drops {"short_grass" ""} :plans plans})]
+          (await (tu/child-outcome (:eng other) job {:pos [2 64 0] :for-plan "shed"} 10))
+          (await (tu/child-outcome (:eng cover) job {:pos [2 64 0] :need-drop false} 10))
+          (is (= [{:cell [2 64 0] :was "dirt" :plan "hut" :mend true}] (tidy-cells (:eng other))))
+          (is (empty? (tidy-cells (:eng cover)))))))))
+
 ;; ------------------------------------------------------------------ the block under the feet
 
 (defn hiding

@@ -107,11 +107,19 @@
 
 (defn own-pending
   "pending's entry for a :dig at pos in a plan this body made, a :mend (the body breaking its own build puts it back),
-  else nil. Reads the block, so call it before the act."
+  else nil; the plan the job works (:for-plan) is its own work, not a break. Reads the block, so call it before the act."
   [c pos]
   (let [cell (access/cell pos)]
     (when-let [id (get (access/own-plans c) (get (known/footprints c) cell))]
-      {:cell cell :action :dig :was (u/block-name (:primitives c) pos) :plan id :mend true})))
+      (when-not (= id (:for-plan (:args c)))
+        {:cell cell :action :dig :was (u/block-name (:primitives c) pos) :plan id :mend true}))))
+
+(defn gives-back?
+  "Whether dig result r left the block of mend entry e to put back: it dropped it or the body carries it. Ground cover
+  and the like drop nothing, so no restore could ever place them."
+  [c {:keys [was]} r]
+  (or (carried? (:primitives c) was)
+      (boolean (some #(= was (.-name %)) (array-seq (or (.-drops r) #js []))))))
 
 (defn record!
   "Remember pending entry p (see pending) with the block now at its cell; nil p does nothing."
@@ -173,12 +181,13 @@
   ([c pos] (dig! c pos false))
   ([c pos last-resort?] (dig! c pos last-resort? nil))
   ([c pos last-resort? opts]
-   (let [pend (when (noting? c last-resort?) (pending c :dig pos))
+   (let [pend (or (when (noting? c last-resort?) (pending c :dig pos)) (own-pending c pos))
          r (await (ctx/act c :dig (clj->js (merge opts {:pos pos}))))
          _ (await (tools/note-wear! c))]
      (when (= "dug" (.-status r))
        (built/forget! c (spent/cell-vec pos))
-       (record! c pend "air"))
+       (when (or (not (:mend pend)) (gives-back? c pend r))
+         (record! c pend "air")))
      r)))
 
 (defn ^:async place!
