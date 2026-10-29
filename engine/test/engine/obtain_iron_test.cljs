@@ -253,7 +253,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (sheltered-night-start {} 20 lit-tree)]
-          (await (obtain! s {:any-of ["oak_log" "spruce_log" "birch_log"] :count 2 :ways #{:gather} :explore false} 8))
+          ;; 16 logs, about 120 s by the measured gathers; 2 (15 s) are refused the walk out of the pit
+          (await (obtain! s {:any-of ["oak_log" "spruce_log" "birch_log"] :count 16 :ways #{:gather} :explore false} 8))
           (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))) "the tree is known, no search stands in")
           (is (seq (tu/walk-calls (:p s))) "go-to prices its own route; there is no flat night hold"))))))
 

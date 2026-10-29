@@ -11,6 +11,7 @@
             [engine.settings :as settings]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [jobs.lib.cost :as cost]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.walk-pick :as pick]
             [jobs.lib.world-files :as ew]
@@ -213,8 +214,8 @@
     (is (= ["tuff" "granite" "cobbled_deepslate"]
            (names-of (ord/toss-order inventory {} {} 3)))
         "cheapest first; coal and raw copper are worth keeping")
-    (is (= #{"tuff" "granite" "cobbled_deepslate" "iron_ore" "raw_copper" "coal"}
-           (set (names-of (ord/toss-order inventory {} {} 100))))
+    (is (= ["tuff" "granite" "cobbled_deepslate" "iron_ore" "raw_copper" "coal"]
+           (names-of (ord/toss-order inventory {} {} (inc (:value (cost/item-value [{:name "coal" :count 1}]))))))
         "raised :toss-below lets the stacks of raw copper and coal go")))
 
 (def linden-bag

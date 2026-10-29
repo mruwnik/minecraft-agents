@@ -171,16 +171,17 @@
   "{:basis :ores :goals} of ::gather-counts for minecraft-data version. Each measured item is worth (s + k x tree) / (got
   + k), its gathers' seconds and items with the recipe tree's price at k = ::gather-prior-items items. :basis's
   :ore-scan-s is fitted to the measured ores (an item whose tree price grows with it) pooled, so every ore follows by
-  density; :ores, those ores' worths, are item-value's (the margin's and the goal's); :goals, the rest's, the goal's
-  alone (goal-value): at the margin a block is its dig."
+  density at the margin too (item-value); :ores, those ores' worths, and :goals, the rest's, are the goal's alone
+  (goal-value): at the margin a block is its dig and find (an ore's at the fitted scan), its fruitless runs not counted."
   [version]
   (measured version (settings/get settings ::gather-counts) (settings/get settings ::gather-prior-items)))
 
 (defn measured-worths
-  "{item seconds} of the measured items that are not ores (measured-worth :goals), as item-value :overrides for a goal;
+  "{item seconds} of the measured items (measured-worth :ores and :goals), as item-value :overrides for a goal;
   cobblestone's for every stone tool material (jobs.items.recipes/stone-materials), as one gather takes whichever is seen."
   [version]
-  (let [m (:goals (measured-worth version))]
+  (let [{:keys [ores goals]} (measured-worth version)
+        m (merge ores goals)]
     (if-let [cobble (m "cobblestone")]
       (merge (zipmap (recipes/stone-materials version) (repeat cobble)) m)
       m)))
@@ -196,9 +197,8 @@
         group-names #{"ore" "tool" "armor" "food" "block" "unknown"}
         group-overrides (select-keys overrides group-names)
         name-overrides (apply dissoc overrides group-names)
-        {measured-basis :basis ores :ores} (when-not (get-in basis [:find :ore-scan-s]) (measured-worth version))
-        basis (tbl/deep-merge measured-basis basis)
-        table (tbl/table-for version (merge ores name-overrides) basis)
+        basis (tbl/deep-merge (when-not (get-in basis [:find :ore-scan-s]) (:basis (measured-worth version))) basis)
+        table (tbl/table-for version name-overrides basis)
         basis (tbl/deep-merge tbl/default-basis basis)
         named (filter #(string? (:name %)) items)
         merged (map (fn [[k stacks]] (assoc k :count (reduce + 0 (map count-of stacks))))

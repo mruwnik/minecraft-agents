@@ -195,13 +195,12 @@
 (deftest a-buried-bodys-search-pays-the-stair-up-only-when-the-gather-climbs-first
   (let [ore (:price (buried-search "raw_iron"))
         log (:price (buried-search "oak_log"))]
-    (is (zero? ore) "an unseen ore is tunnelled to: no stair up in its price")
-    (is (pos? log) "a tree is climbed toward before any search: the stair is in its price")))
+    (is (= (cost/worth-to nil ["raw_iron"] nil) ore) "an unseen ore is tunnelled to: what one usually costs, no stair up")
+    (is (< (cost/worth-to nil ["oak_log"] nil) log) "a tree is climbed toward before any search: the stair is in its price")))
 
-(deftest the-start-check-refuses-a-buried-bodys-log-search-worth-less-than-its-stair-but-not-its-ore-search
-  (let [worth 1]
-    (is (nil? (:not-worth (buried-search "raw_iron" worth))) "the ore is tunnelled to: its legs are priced as it walks them")
-    (is (= :not-worth (:reason (:not-worth (buried-search "oak_log" worth)))) "the log search adds the stair up")))
+(deftest the-start-check-refuses-a-buried-bodys-log-search-worth-less-than-its-usual-cost-and-stair-but-not-its-ore-search
+  (is (nil? (:not-worth (buried-search "raw_iron" (+ (cost/worth-to nil ["raw_iron"] nil) 1)))) "the ore is tunnelled to: what it usually costs is within the worth")
+  (is (= :not-worth (:reason (:not-worth (buried-search "oak_log" (+ (cost/worth-to nil ["oak_log"] nil) 1))))) "the log search adds the stair up"))
 
 (deftest the-price-of-a-seen-gather-and-of-a-search-follow-the-ways-the-call-allows
   (let [seen (ctx {:time 6000 :inventory (kit 0) :entities [(spider 5)]})
@@ -209,7 +208,8 @@
         no-gather #(assoc-in % [:args :ways] #{:craft :smelt})]
     (with-redefs [need/gather-viable? (fn [c names n] (boolean (seq (:gather (plan/gather-plan c names n)))))]
       (is (= (plan/gathered-s seen (plan/gather-plan seen ["white_bed"] 1)) (price/gather-s seen ["white_bed"] 1)) "the seen spider's gather: its plan's seconds"))
-    (is (zero? (price/search-s unseen ["white_bed"] 1)) "the unseen wool: nothing up front, each walk priced as it goes")
+    (is (= (* 3 (cost/worth-to nil ["white_wool"] nil)) (price/search-s unseen ["white_bed"] 1)) "the unseen wool: what three usually cost, each walk priced as it goes")
     (is (nil? (price/search-s (assoc-in unseen [:args :explore] false) ["white_bed"] 1)) "no search when the call may not explore")
     (is (nil? (price/gather-s (no-gather seen) ["white_bed"] 1)))
     (is (nil? (price/search-s (no-gather unseen) ["white_bed"] 1)))))
+

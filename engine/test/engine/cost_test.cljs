@@ -620,11 +620,11 @@
 
 (deftest a-thin-measure-leans-on-the-recipe-tree-and-a-fruitless-one-costs-more-than-it
   (let [goal (fn [counts] (settings/with-settings {:jobs.lib.cost.value/gather-counts counts}
-                            #(:value (cost/goal-value [{:name "dirt" :count 1}]))))
+                            #(:value (cost/goal-value [{:name "white_wool" :count 1}]))))
         tree (goal {})]
-    (is (< tree (goal {"dirt" {:s 90 :got 1}}) 90) "one item got in 90 s: between the tree and the gathers")
-    (is (< (goal {"dirt" {:s 90 :got 1}}) (goal {"dirt" {:s 9000 :got 100}})) "the same rate over a hundred items moves it further")
-    (is (< tree (goal {"dirt" {:s 60 :got 0}})) "fruitless gathers make it dearer")))
+    (is (< tree (goal {"white_wool" {:s 90 :got 1}}) 90) "one item got in 90 s: between the tree and the gathers")
+    (is (< (goal {"white_wool" {:s 90 :got 1}}) (goal {"white_wool" {:s 9000 :got 100}})) "the same rate over a hundred items moves it further")
+    (is (< tree (goal {"white_wool" {:s 60 :got 0}})) "fruitless gathers make it dearer")))
 
 (deftest a-measured-ore-has-one-worth-and-the-ores-it-was-not-measured-for-follow-by-density
   (let [worths (fn [counts] (settings/with-settings {:jobs.lib.cost.value/gather-counts counts}
@@ -633,7 +633,7 @@
                                        (:value (cost/item-value [{:name "raw_gold" :count 1}])))))
         [goal margin gold] (worths {"raw_iron" {:s 20000 :got 100}})
         [_ _ gold-dear] (worths {"raw_iron" {:s 40000 :got 100}})]
-    (is (= goal margin) "the goal and the margin take the same measured raw iron")
+    (is (< (js/Math.abs (- goal margin)) 1e-9) "one ore measured: the margin's scan is fitted to it, so both take its seconds per item")
     (is (< 190 goal 210) "a hundred raw iron got in 20000 s")
     (is (< (* 1.8 gold) gold-dear) "raw gold's find is the same scan over its own density")))
 

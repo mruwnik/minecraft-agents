@@ -4,6 +4,9 @@
             [jobs.items.obtain.base :refer [gathers? names-of shortfall]]
             [jobs.items.obtain.need :refer [climbs-first? explorable-needs gather-viable?]]
             [jobs.items.obtain.plan :refer [chest-s craft-s gather-plan gathered-s loose-s]]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.game-facts :as facts]
+            [jobs.lib.util :as u]
             [jobs.lib.need :as need]
             [jobs.lib.surface-up :as surface]))
 
@@ -14,13 +17,16 @@
     (gathered-s c (gather-plan c names n))))
 
 (defn search-s
-  "A search for an unseen raw need: the stair up first when the gather climbs before searching (need/climbs-first?: a tree
-  for a body under rock, surface-up/climb-s), else 0; each walk of it is priced against the need's worth as it goes
-  (go-to's quote with its risk)."
+  "A search for unseen raw needs: what getting them usually costs, their goal worth (cost/worth-to: the measured gathers,
+  search and walks in them; each walk is priced against the call's worth as it goes, go-to's quote with its risk), and
+  the stair up first when the gather climbs before searching (need/climbs-first?: a tree for a body under rock,
+  surface-up/climb-s)."
   [c names n]
   (when (gathers? c)
     (when-let [needs (seq (explorable-needs c names n))]
-      (if (some #(climbs-first? c %) needs) (surface/climb-s c) 0))))
+      (+ (reduce + (map (fn [{:keys [key count]}] (* count (cost/worth-to nil (if (= "log" key) facts/log-names [key]) (u/self-pos c))))
+                        needs))
+         (if (some #(climbs-first? c %) needs) (surface/climb-s c) 0)))))
 
 (defn price-of
   "Seconds getting the call's shortfall of its :item or :any-of costs the body: 0 when carried, else the cheapest way that would
