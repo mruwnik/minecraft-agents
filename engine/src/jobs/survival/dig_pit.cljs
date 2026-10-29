@@ -110,10 +110,11 @@
   ([c {:keys [plan stop]}]
   (let [s (when (night/night? c) (site/site c))]
     (if (and (night/night? c) (not= :here (:at s)))
-      (way/quote-of c (if s
-                        (+ (* (u/dist (sh-sense/feet (:primitives c)) (:cell s)) (settings/get settings ::walk-s-per-block)) (site/pit-s c (:cell s)) (site/toll-s c (:cell s)))
-                        ##Inf)
-                    (settings/get settings ::job-time-s))
+      (let [toll (if s (site/toll-s c (:cell s)) 0)]
+        (way/quote-of c (if s
+                          (+ (* (u/dist (sh-sense/feet (:primitives c)) (:cell s)) (settings/get settings ::walk-s-per-block)) (site/pit-s c (:cell s)) toll)
+                          ##Inf)
+                      (settings/get settings ::job-time-s) toll))
     (way/quote-of c (if stop
                       ##Inf
                       (+ (if plan

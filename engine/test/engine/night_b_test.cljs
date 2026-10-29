@@ -255,6 +255,19 @@
             (is (= :walls (:way r)) (pr-str (st/emitted seen :shut-in.quotes)))
             (is (every? #(< -5 (:x %)) (mapv st/arg-pos (st/calls p "place"))) "nothing placed out in the field")))))))
 
+(deftest a-pit-across-a-known-mobs-field-loses-to-the-lit-night-where-the-body-stands
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (st/setup {:time night :blocks (into {} (filter (fn [[k _]] (.endsWith k ",0"))) west-ground) :inventory [{:name "dirt" :count 12}]
+                                              :light {} :light-default [15 15]})]
+          (mem/write! (:store eng) :shut-in-failed {:pos {:x 0 :y 64 :z 0} :way :pit :reason :no-floor} {:cap 5 :ttl 600000})
+          (with-redefs [threats/known-threats (constantly [{:mob "zombie" :pos {:x -11.5 :y 64 :z 0.5} :weight 1e6}])]
+            (core/submit! eng '(jobs.survival.night) {})
+            (await (tu/run-until-empty eng 20)))
+          (is (empty? (filterv #(< (:x %) -5) (mapv st/arg-pos (st/calls p "place")))) "the pit is shut-in's only way, its toll dearer than the night here, where nothing spawns")
+          (is (seq (st/emitted seen :shelter.exposed)) (pr-str (st/emitted seen :night.answers))))))))
+
 (deftest a-site-walked-to-is-given-up-for-good-ground-the-body-stands-on-whatever-the-distance
   (async done
     (tu/run-async done

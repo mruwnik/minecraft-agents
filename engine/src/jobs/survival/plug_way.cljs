@@ -98,10 +98,13 @@
                   :result (merge {:pos (sh-sense/feet (:primitives c)) :way way} extra)}))))
 
 (defn quote-of
-  "Time of a way: 0 once enclosed, else seconds (##Inf when it cannot be done here, which shut-in drops)."
-  [c seconds job-time-s]
-  (let [mean (if (enclosed? c) 0 seconds)]
-    {:uses {:job-time [0 mean (if (infinite? mean) mean (max (* 3 mean) job-time-s))]} :done [0 1 1]}))
+  "Time of a way: 0 once enclosed, else seconds (##Inf when it cannot be done here, which shut-in drops), with :risk-s the part of
+  them that is a price, not time (risk-s: a site's toll)."
+  ([c seconds job-time-s] (quote-of c seconds job-time-s 0))
+  ([c seconds job-time-s risk-s]
+   (let [mean (if (enclosed? c) 0 seconds)]
+     (cond-> {:uses {:job-time [0 mean (if (infinite? mean) mean (max (* 3 mean) job-time-s))]} :done [0 1 1]}
+       (and (pos? risk-s) (pos? mean) (js/isFinite mean)) (assoc :risk-s risk-s)))))
 
 (defn ^:async walls-step!
   "One step of the walls (wall-placer/seal!): :done once enclosed, :again, :hit (a melee mob hit the body: run! yields), or nil when they cannot be placed."

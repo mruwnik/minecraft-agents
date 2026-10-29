@@ -130,15 +130,20 @@
       (assoc body :respawn (:pos (:data slept)))
       body)))
 
-(defn ^:async dig-in-s
-  "Seconds shut-in's quote of digging in here (a wall or a pit) takes, ##Inf when it quotes none (asked once a pass,
-  walk-pick/once!)."
+(defn ^:async dig-in-quote
+  "[seconds risk-s] of shut-in's quote of digging in here (a wall or a pit): ##Inf when it quotes none; risk-s its :risk-s, the part
+  of the seconds that is a toll, not time (asked once a pass, walk-pick/once!)."
   [c]
   (await (pick/once! c :dig-in
                      (fn ^:async f []
                        (let [q (await (ctx/quote c 'jobs.survival.shut-in {:ways #{:walls :pit} :for :night :settings {:jobs.survival.wall-in/wall-value (sites/wall-value)}}))
                              mean (second (get-in q [:uses :job-time]))]
-                         (if (number? mean) mean ##Inf))))))
+                         (if (number? mean) [mean (:risk-s q 0)] [##Inf 0]))))))
+
+(defn ^:async dig-in-s
+  "Seconds shut-in's quote of digging in here takes (dig-in-quote), its toll in."
+  [c]
+  (first (await (dig-in-quote c))))
 
 (defn flee-after-s
   "Seconds a flee to target t shelters in on arrival at a cave or natural ground: what sheltering here takes (here-s, shut-in's quote), or
@@ -156,8 +161,8 @@
   the body's sleep skips it (sh-sleepers/sleepers-short 0), open (not sh-beds/bed-sheltered?) all that time, plus walk-s (the walk
   there, priced by the caller). :sealed (a carried bed in the open, seal-plan): the bed's row shut in first, its seconds
   exposed, then lain in. :shelter sheltering here and :niche (niche-s, the caller's quote of a pocket dug nearby) alike: from the worst of
-  the cells the bed is got up to (wake-cells) when asleep, exposed for its seconds (:shelter: dig-in-s, shut-in's quote; the whole night
-  left when it has no way); a body sh/in-ground? works on after, else the night left is lost. :flee (flee, the caller's target with go-to's
+  the cells the bed is got up to (wake-cells) when asleep, its toll (the quote's :risk-s) and its time (the rest of its seconds; :shelter:
+  dig-in-quote, shut-in's; the whole night left when it has no way) exposed, and the night's work that time costs (cost/night-lost-s). :flee (flee, the caller's target with go-to's
   :seconds and :cost of the walk and :risk-s, the hp its dark seconds and the hostiles by the target cost): the walk's seconds and the shelter's
   on arrival (flee-after-s) lost like a dig's, the walk's cost beyond its seconds, risk-s, and the shelter's seconds exposed at the target. :exposed the night left in the open
   where the body stands (or the worst cell it gets up to), lost like a dig of no seconds. :log-out (log-out?): jobs.survival.log-out's quoted seconds, the night left to the sleepers."
@@ -172,24 +177,24 @@
         stands (if asleep? (wake-cells p) [feet])
         [_ left] (get-in (sh-clock/night-left-quote c) [:uses :job-time])
         lost (if (zero? (sh-sleepers/sleepers-short p view)) 0 left)
-        in-ground? (sh/in-ground? p view)
-        night-lost #(if in-ground? (min left %) left)
-        dig (fn [s] (let [s (min left s)] (+ (night-lost s) (apply max (map #(exposed-price c (spawn-light/night-chance p %) s %) stands)))))
+        night-lost #(cost/night-lost-s (sh/in-ground? p view) left %)
+        open #(apply max (map (fn [cell] (exposed-price c (spawn-light/night-chance p cell) % cell)) stands))
+        dig (fn [s risk] (let [t (min left (- s risk))] (+ (night-lost t) risk (open t))))
         sheltered? (if (or bed asleep?) (sh-beds/bed-sheltered? p at) (or (sh-beds/bed-sheltered? p feet) (some? (sh-beds/closed-home c))))
         body (respawn-body c)
         sealed (when (and carried? (not sheltered?)) (seal-plan c))
         out-s (when log-out? (get-in (await (ctx/quote c 'jobs.survival.log-out {})) [:uses :job-time 1]))
-        here-s (await (dig-in-s c))]
-    (cond-> {:shelter (dig here-s)}
+        [here-s here-risk] (await (dig-in-quote c))]
+    (cond-> {:shelter (dig here-s here-risk)}
       (or bed asleep? carried?) (assoc :bed (+ (or walk-s 0) lost (if sheltered? 0 (exposed-price c chance lost at)) (if asleep? 0 (- (cost/spawn-worth body at)))))
       sealed (assoc :sealed (+ lost (:seconds sealed) (exposed-price c chance (:seconds sealed) feet) (- (cost/spawn-worth body (:foot (:layout sealed))))))
-      (and (number? niche-s) (js/isFinite niche-s)) (assoc :niche (dig niche-s))
+      (and (number? niche-s) (js/isFinite niche-s)) (assoc :niche (dig niche-s 0))
       flee (assoc :flee (let [{:keys [cost pos risk-s]} flee
                               seconds (min cost (or (:seconds flee) cost))
                               after (flee-after-s flee here-s)]
                           (+ (night-lost (+ seconds after)) (- cost seconds) (or risk-s 0) (exposed-price c (spawn-light/night-chance p pos) after pos))))
       (number? out-s) (assoc :log-out out-s)
-      true (assoc :exposed (+ (night-lost 0) (apply max (map #(exposed-price c (spawn-light/night-chance p %) left %) stands)))))))
+      true (assoc :exposed (+ (night-lost 0) (open left))))))
 
 (def answer-order [:bed :sealed :log-out :shelter :niche :flee :exposed])
 

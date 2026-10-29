@@ -80,6 +80,12 @@
   [in-ground? secs shelter-s]
   (if in-ground? (- (* 2 secs) shelter-s) 0))
 
+(defn night-lost-s
+  "Seconds of work a way through a night with left seconds still to run costs a body busy at it busy-s seconds: for a body in the
+  ground (in-ground?, its work goes on after) those seconds, at most the night; else the night left (the night stops the work either way)."
+  [in-ground? left busy-s]
+  (if in-ground? (min left busy-s) left))
+
 (defn drown-prices
   "The seconds the first k hp of drowning cost a body with hp left, k from 0 to n (default: hp, rounded up): each hp at
   hp-seconds x health-scale of the health it is taken from, so the price rises as the hp runs out."
