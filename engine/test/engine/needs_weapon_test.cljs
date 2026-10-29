@@ -59,7 +59,8 @@
        (mem/create-job! store "j0" "jobs.time.noop" {})
        (mem/update-job! store "j0" [] assoc :contract ahead))
      (swap! clock inc)
-     (mem/create-job! store "j1" label (update args :spend #(or % {:job-time 30})))
+     (mem/create-job! store "j1" label (cond-> args (not= ::default (:spend args)) (update :spend #(or % {:job-time 30}))
+                                              (= ::default (:spend args)) (dissoc :spend)))
      (when own
        (mem/update-job! store "j1" [] assoc :contract own))
      (nw/needs-weapon (tu/fake-on-floor {:floor [-10 -10 10 10] :inventory []}) (mem/view store) {} (world/of-data {} {}) (cond-> #{"j1"} ahead (conj "j0"))))))
@@ -80,6 +81,14 @@
 (deftest a-weapon-maker-with-no-time-budget-is-not-waited-for
   (is (true? (holds-with-listed? "jobs.items.obtain" {:item "iron_sword" :spend {:job-time ##Inf}}))
       "the sword exists only when the maker ends, and that is unknown"))
+
+(deftest a-weapon-maker-queued-with-no-budget-is-waited-for-by-its-default-budget
+  (is (false? (settings/with-settings {:jobs.items.obtain/job-time-s 60}
+                #(holds-with-listed? "jobs.items.obtain" {:item "iron_sword" :spend ::default})))
+      "an obtain submitted with no :spend runs under its contract default, a minute here: cheap to wait for")
+  (is (true? (settings/with-settings {:jobs.items.obtain/job-time-s 36000}
+               #(holds-with-listed? "jobs.items.obtain" {:item "iron_sword" :spend ::default})))
+      "a default of ten hours is past the need"))
 
 (deftest a-started-weapon-maker-is-waited-for-only-for-the-time-it-has-left
   (is (false? (holds-with-listed? "jobs.items.obtain" {:item "iron_sword"} nil {:call {:spend {:job-time 60}} :ran-ms 0}))

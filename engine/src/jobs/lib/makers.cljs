@@ -3,14 +3,15 @@
   would fetch one itself then waits for it instead (needs-bed, needs-weapon)."
   (:require [engine.contract :as contract]
             [engine.memory :as mem]
+            [engine.settings :as settings]
+            [jobs.build.from-plan :as from-plan]
+            [jobs.items.get-kit :as kit]
+            [jobs.items.obtain :as obtain]
             [jobs.lib.cost :as cost]
             [jobs.lib.pen-read :as pen-read]
             [jobs.lib.util :as u]
-            [jobs.lib.world-files :as world]))
-
-(def iron-kit
-  "jobs.items.get-kit's default :items."
-  ["iron_pickaxe" "iron_sword" "iron_axe" "iron_shovel" "iron_helmet" "iron_chestplate" "iron_leggings" "iron_boots"])
+            [jobs.lib.world-files :as world]
+            [jobs.time.noop :as noop]))
 
 (defn makes
   "The item names a listed leaf job {:job label :args} brings: an obtain's :item, :any-of and :bill, a get-kit's :items,
@@ -18,7 +19,7 @@
   [kn {:keys [job args]}]
   (case (str job)
     "jobs.items.obtain" (concat (some-> (:item args) vector) (:any-of args) (keys (:bill args)))
-    "jobs.items.get-kit" (or (:items args) iron-kit)
+    "jobs.items.get-kit" (or (:items args) kit/iron-kit)
     "jobs.build.from-plan" (->> (:cells (world/plan kn (:plan args)))
                                 (filter #(or (nil? (:part args)) (= (:part args) (:part %))))
                                 (mapcat (comp pen-read/want-blocks :want)))
@@ -29,14 +30,26 @@
   [view kn live wanted?]
   (keep (fn [id] (when-let [names (seq (filter wanted? (makes kn (:data (mem/latest view (mem/job-kind id))))))] [id names])) live))
 
+(defn default-job-time
+  "The :spend :job-time a queued job gets when its caller names none (its contract default), for the jobs a body queues
+  in front of a maker; nil for any other."
+  [label args]
+  (case (str label)
+    "jobs.items.obtain" (obtain/default-time args)
+    "jobs.items.get-kit" (settings/get kit/settings ::kit/job-time-s)
+    "jobs.build.from-plan" (settings/get from-plan/settings ::from-plan/job-time-s)
+    "jobs.time.noop" (settings/get noop/settings ::noop/job-time-s)
+    nil))
+
 (defn time-left
   "Seconds of :job-time listed job memory m has left: a started one's remainder (contract/remainder), a queued one's
-  :spend :job-time arg; ##Inf with neither."
+  :spend :job-time arg, else its default; ##Inf with none."
   [m now]
   (let [state (:contract m)]
     (or (if (:call state)
           (get (contract/remainder state now 0) :job-time)
-          (let [t (get-in m [:args :spend :job-time])] (when (number? t) t)))
+          (let [t (get-in m [:args :spend :job-time])]
+            (if (number? t) t (default-job-time (:job m) (:args m)))))
         ##Inf)))
 
 (defn wait-s

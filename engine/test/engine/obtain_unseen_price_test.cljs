@@ -14,7 +14,7 @@
             [jobs.items.obtain.table :as table]
             [jobs.items.recipes :as recipes]
             [jobs.lib.cost :as cost]
-            [jobs.lib.makers :as makers]))
+            [jobs.items.get-kit :as kit]))
 
 (defn spider [x] {:id 1 :name "spider" :kind "hostile" :pos {:x x :y 64 :z 0} :drops [{:name "string" :count 1}]})
 
@@ -115,7 +115,7 @@
            :tunnel (:cost (plan/tunnel-way c need))
            :plan (plan/plan-cost c v {:steps [] :gather {"raw_iron" 3}}))))
 
-(def kit-worth (cost/items-find-worth (zipmap makers/iron-kit (repeat 1))))
+(def kit-worth (cost/items-find-worth (zipmap kit/iron-kit (repeat 1))))
 
 (deftest the-iron-kits-worth-pays-the-stair-up-from-deep-levels
   (is (<= 1000 kit-worth) "the climb fixture's :search-worth 1000 is no more than the kit bill's own worth")
