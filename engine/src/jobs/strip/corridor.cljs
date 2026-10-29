@@ -125,7 +125,7 @@
   [c spot feet]
   (let [o (if (nil? spot)
             :no-spot
-            (await (b/place-cell! c (zipmap [:x :y :z] spot) "torch" (select-keys (:args c) [:ignore-zones?]))))]
+            (await (b/place-cell! c (zipmap [:x :y :z] spot) (or (torch/carried-torch (:primitives c)) "torch") (select-keys (:args c) [:ignore-zones?]))))]
     (case o
       :continue :continue
       :no-spot (do (ctx/update-mem! c update :no-spot-at (fnil conj []) feet) :again)

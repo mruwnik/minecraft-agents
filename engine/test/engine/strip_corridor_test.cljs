@@ -156,6 +156,15 @@
           (is (pos? (count (filter #(= "torch" (.-item (.-args %))) (bd/calls p "place")))))
           (is (= 8 (bd/carried p "torch")) "the torches it hung are taken back at the end"))))))
 
+(deftest a-dark-corridor-with-only-soul-torches-hangs-them
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as env} (dark-world (into kit [{:name "soul_torch" :count 8}]))
+              r (await (run! env args))]
+          (is (= {:status :done} (select-keys r [:status :reason :child :cell])))
+          (is (= #{"soul_torch"} (set (map #(.-item (.-args %)) (bd/calls p "place"))))))))))
+
 (deftest a-cell-with-no-torch-spot-is-not-booked-as-a-torch
   (async done
     (tu/run-async done

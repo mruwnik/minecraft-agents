@@ -55,7 +55,7 @@
             cell (:cell choice)
             there? #(torch/torch-blocks (block-at cell))
             r (when (and cell (not (there?)))
-                (await (tidy/place! c (zipmap [:x :y :z] cell) "torch" false (placement/js-click (:click choice)))))
+                (await (tidy/place! c (zipmap [:x :y :z] cell) (or (torch/carried-torch (:primitives c)) "torch") false (placement/js-click (:click choice)))))
             placed? (= "placed" (some-> r .-status))]
         (cond
           (:refused choice) (no-light (:refused choice))

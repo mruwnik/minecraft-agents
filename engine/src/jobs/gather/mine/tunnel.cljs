@@ -15,6 +15,7 @@
             [jobs.gather.mine.end :refer [add-cut stop!]]
             [jobs.gather.mine.targets :as targets :refer [kinds book-ground! step-cell main-block]]
             [jobs.gather.mine.torches :as torches]
+            [jobs.lib.torch :as ltorch]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.child :as child]
@@ -26,7 +27,7 @@
   {::max-open-skip {:default 64 :doc "The most open cells the strip tunnel skips along its line before it starts." :spec (a/int-in 0 nil)}
    ::open-skip-drop {:default 3 :doc "The most blocks the strip tunnel's start steps down while it skips open cells on its line (a stair); the tunnel then runs at that level." :spec (a/int-in 0 nil)}})
 
-(def passable "Blocks a body walks through in a tunnel cell: air and torches (never dug)." (into bs/air #{"torch" "wall_torch"}))
+(def passable "Blocks a body walks through in a tunnel cell: air and torches (never dug)." (into bs/air ltorch/torch-blocks))
 
 (defn max-open-skip [] (settings/get settings ::max-open-skip))
 

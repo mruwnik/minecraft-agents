@@ -360,7 +360,7 @@
   dark before looking down it), so the cell can be looked at. :continue while the place child waits, :lit after it ended, nil when not due."
   [c]
   (when (and (not (:lit (ctx/mem c))) (pos? (torch/torches-held (:primitives c))))
-    (let [o (await (blocks/place-cell! c (zipmap [:x :y :z] (u/cell-vec (u/self-pos c))) "torch" {}))]
+    (let [o (await (blocks/place-cell! c (zipmap [:x :y :z] (u/cell-vec (u/self-pos c))) (or (torch/carried-torch (:primitives c)) "torch") {}))]
       (when-not (= :continue o) (ctx/update-mem! c assoc :lit true))
       (if (= :continue o) :continue :lit))))
 

@@ -146,7 +146,7 @@
   from what is carried and a gather of their raw needs (plan-cost and the crafts; none while torches are priced for that
   gather: a dark way to its coal would need the torches it is for); Infinity when none would."
   [c k]
-  (let [n (- k (storage/carried (u/inventory (:primitives c)) "torch"))
+  (let [n (- k (torch/torches-carried (:primitives c)))
         names ["torch"]
         inner (assoc c ::torches true)
         gather (when (and (gathers? c) (not (::torches c)))
@@ -160,7 +160,7 @@
   carried, up to trip/torch-stock): torch-get-s of them; none with some carried and none to be got (the dig goes on
   with them)."
   [c]
-  (let [held (storage/carried (u/inventory (:primitives c)) "torch")
+  (let [held (torch/torches-carried (:primitives c))
         s (if (< held (trip/torch-low)) (torch-get-s c (trip/torch-stock)) 0)]
     (if (and (infinite? s) (pos? held)) 0 s)))
 

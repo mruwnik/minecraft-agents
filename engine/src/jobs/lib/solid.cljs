@@ -5,7 +5,7 @@
 (def non-solid
   "Block names that are not a roof: air, fluids, plants and fixtures a body can stand in, and the invisible light block."
   (into (into bs/air bs/fluids)
-        #{"short_grass" "grass" "tall_grass" "fern" "large_fern" "torch" "wall_torch" "snow" "vine" "dead_bush"
+        #{"short_grass" "grass" "tall_grass" "fern" "large_fern" "torch" "wall_torch" "soul_torch" "soul_wall_torch" "snow" "vine" "dead_bush"
           "seagrass" "tall_seagrass" "fire" "sugar_cane"}))
 
 (defn solid?

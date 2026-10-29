@@ -9,7 +9,7 @@
         #{"water" "bubble_column" "short_grass" "tall_grass" "fern" "large_fern" "dead_bush" "leaf_litter"
           "seagrass" "tall_seagrass" "kelp" "kelp_plant" "vine" "glow_lichen" "snow" "cobweb" "structure_void"
           "lily_pad" "sugar_cane" "redstone_wire" "rail" "powered_rail" "detector_rail" "activator_rail" "lever" "tripwire"
-          "tripwire_hook" "string" "ladder" "torch" "wall_torch" "redstone_torch" "redstone_wall_torch"
+          "tripwire_hook" "string" "ladder" "torch" "wall_torch" "soul_torch" "soul_wall_torch" "redstone_torch" "redstone_wall_torch"
           "wheat" "carrots" "potatoes" "beetroots" "melon_stem" "pumpkin_stem" "nether_wart" "hanging_roots" "bamboo_sapling"}))
 
 (def pass-patterns

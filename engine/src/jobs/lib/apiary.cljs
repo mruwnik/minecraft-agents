@@ -14,7 +14,7 @@
 (def passes
   "Blocks smoke goes through: open cells, water and the plants and torches with no full face. Carpets, signs and rails
   are walk-through but stop smoke. Anything not listed counts as in the way, which can only make a hive look unsmoked."
-  (into (conj bs/air "water") #{"short_grass" "tall_grass" "fern" "large_fern" "dead_bush" "torch" "wall_torch"}))
+  (into (conj bs/air "water") #{"short_grass" "tall_grass" "fern" "large_fern" "dead_bush" "torch" "wall_torch" "soul_torch" "soul_wall_torch"}))
 
 (defn campfire? [b] (contains? #{"campfire" "soul_campfire"} (some-> b .-name)))
 

@@ -550,3 +550,6 @@
           (await (run-ticks s 200))
           (is (= 2 @calls) "the dig is called again")
           (is (= 2 (count (events-of s :mine.left-zone))) "the body walked out of the zone again before the second dig"))))))
+
+(deftest a-soul-torch-in-a-tunnel-cell-is-walked-through-not-dug
+  (is (every? mine-tunnel/passable ["torch" "wall_torch" "soul_torch" "soul_wall_torch"])))
