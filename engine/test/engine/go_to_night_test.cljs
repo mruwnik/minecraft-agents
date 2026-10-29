@@ -11,7 +11,6 @@
             [engine.registry :as registry]
             [engine.sky-perception :as sky]
             [engine.scenario :as scenario]
-            [engine.settings :as settings]
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
@@ -28,12 +27,10 @@
 
 (defn waiting-of [eng id] (core/waiting eng id))
 
-(def no-risk "A death walks back 300000 blocks: a night walk out of the hut costs more than waiting for dawn." {:jobs.lib.cost.death/spawn-walk-blocks 3e5})
-
-(defn ^:async too-risky
-  "Runs async fn f with every walk over a dark open stretch too risky."
-  [f]
-  (await (settings/with-settings no-risk f)))
+(defn far-hut
+  "night-hut 300000 blocks from world spawn, the body with no bed: a death on a night walk out costs more than waiting for dawn."
+  [extra]
+  (assoc-in (night-hut extra) [:self :worldSpawn] [300000 64 0]))
 
 (def walker-job
   "A parent that walks out of the hut with one go-to child call."
@@ -54,11 +51,11 @@
     r))
 
 (defn hut-with
-  "{:eng :p :seen} for the night hut with extra jobs registered."
-  [extra]
+  "{:eng :p :seen} for world with extra jobs registered."
+  [world extra]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (with-sky-and-light (tu/fake (merge {:offlineScale 0.0001 :floor tu/walk-floor} (night-hut {}))) (night-hut {}))
+        p (with-sky-and-light (tu/fake (merge {:offlineScale 0.0001 :floor tu/walk-floor} world)) world)
         eng (core/create {:primitives p :jobs (merge registry/jobs extra) :triggers triggers/all
                           :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -115,42 +112,40 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (too-risky (fn ^:async t2 [] (doseq [safe ['(not (threatened)) '(always)]]
-          (let [{:keys [eng p]} (setup (night-hut {}))]
+        (doseq [safe ['(not (threatened)) '(always)]]
+          (let [{:keys [eng p]} (setup (far-hut {}))]
             (core/submit! eng (list 'jobs.movement.go-to {:pos [15 64 0] :checks {:safe? safe}}) {})
             (await (tu/run-until-empty eng 40))
             (is (empty? (:list (core/state eng))))
-            (is (> 2 (js/Math.abs (- 15 (:x (st/pos-of p))))) (pr-str safe)))))))))))
+            (is (> 2 (js/Math.abs (- 15 (:x (st/pos-of p))))) (pr-str safe))))))))
 
 (deftest a-child-under-an-escape-default-walks-out-at-night-when-the-walk-is-too-risky
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (too-risky (fn ^:async t2 []
-                 (let [{:keys [eng p]} (hut-with {'escaper escaper-job})]
-                   (core/submit! eng '(escaper) {})
-                   (await (tu/run-until-empty eng 200))
-                   (is (> 2 (js/Math.abs (- 15 (:x (st/pos-of p))))) "the escape's walk ignores the risk")))))))))
+        (let [{:keys [eng p]} (hut-with (far-hut {}) {'escaper escaper-job})]
+          (core/submit! eng '(escaper) {})
+          (await (tu/run-until-empty eng 200))
+          (is (> 2 (js/Math.abs (- 15 (:x (st/pos-of p))))) "the escape's walk ignores the risk"))))))
 
 (deftest an-exclusive-go-to-too-risky-ends-at-once-with-the-reason-and-walks-with-a-checks-override
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (too-risky (fn ^:async t2 []
-                 (doseq [[args walks?] [[{:pos [15 64 0]} false] [{:pos [15 64 0] :checks {:safe? '(not (threatened))}} true]]]
-                   (let [{:keys [eng p seen]} (setup (night-hut {}))
-                         id (core/exclusive-run! eng (list 'jobs.movement.go-to args))]
-                     (await (ticks eng 40))
-                     (is (nil? (waiting-of eng id)) "the exclusive go-to is not held")
-                     (is (= walks? (> 2 (js/Math.abs (- 15 (:x (st/pos-of p)))))) (pr-str args))
-                     (is (= (not walks?) (some? (some #(= :risky (:reason %)) (st/emitted seen :stopped)))) (pr-str args)))))))))))
+        (doseq [[args walks?] [[{:pos [15 64 0]} false] [{:pos [15 64 0] :checks {:safe? '(not (threatened))}} true]]]
+          (let [{:keys [eng p seen]} (setup (far-hut {}))
+                id (core/exclusive-run! eng (list 'jobs.movement.go-to args))]
+            (await (ticks eng 40))
+            (is (nil? (waiting-of eng id)) "the exclusive go-to is not held")
+            (is (= walks? (> 2 (js/Math.abs (- 15 (:x (st/pos-of p)))))) (pr-str args))
+            (is (= (not walks?) (some? (some #(= :risky (:reason %)) (st/emitted seen :stopped)))) (pr-str args))))))))
 
 (defn parent-world
-  "{:eng :p :seen} for the night hut with a parent job 'walker whose round is round-fn."
+  "{:eng :p :seen} for far-hut with a parent job 'walker whose round is round-fn."
   [round-fn]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (sky/with-sky (tu/fake-on-floor (night-hut {})))
+        p (sky/with-sky (tu/fake-on-floor (far-hut {})))
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'walker {:round round-fn}) :triggers triggers/all
                           :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -160,29 +155,27 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (too-risky (fn ^:async t2 []
-                 (let [rounds (atom [])
-                       {:keys [eng p]} (parent-world (fn ^:async walker [c]
-                                                       (let [r (await (ctx/call c :walk 'jobs.movement.go-to {:pos [15 64 0]}))]
-                                                         (swap! rounds conj r)
-                                                         (if (= :continue r) r (ctx/end c :done nil)))))]
-                   (core/submit! eng '(walker) {})
-                   (await (ticks eng 4))
-                   (is (= inside (st/pos-of p)))
-                   (is (= [:condition-failed :risky] [(:kind (first @rounds)) (:reason (:cause (first @rounds)))]))))))))))
+        (let [rounds (atom [])
+              {:keys [eng p]} (parent-world (fn ^:async walker [c]
+                                              (let [r (await (ctx/call c :walk 'jobs.movement.go-to {:pos [15 64 0]}))]
+                                                (swap! rounds conj r)
+                                                (if (= :continue r) r (ctx/end c :done nil)))))]
+          (core/submit! eng '(walker) {})
+          (await (ticks eng 4))
+          (is (= inside (st/pos-of p)))
+          (is (= [:condition-failed :risky] [(:kind (first @rounds)) (:reason (:cause (first @rounds)))])))))))
 
 (deftest a-parent-walking-with-walk-into-or-run!-waits-with-the-childs-risky-reason
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (too-risky (fn ^:async t2 []
-                 (doseq [walk [(fn ^:async walker [c] (await (child/walk-into!* c :walk [15 64 0])))
-                               (fn ^:async walker [c] (await (child/run!* c :walk 'jobs.movement.go-to {:pos [15 64 0]})))]]
-                   (let [{:keys [eng p]} (parent-world walk)
-                         id (core/submit! eng '(walker) {})]
-                     (await (ticks eng 4))
-                     (is (= inside (st/pos-of p)))
-                     (is (= :risky (:reason (waiting-of eng id))) "the parent waits with the child's reason"))))))))))
+        (doseq [walk [(fn ^:async walker [c] (await (child/walk-into!* c :walk [15 64 0])))
+                      (fn ^:async walker [c] (await (child/run!* c :walk 'jobs.movement.go-to {:pos [15 64 0]})))]]
+          (let [{:keys [eng p]} (parent-world walk)
+                id (core/submit! eng '(walker) {})]
+            (await (ticks eng 4))
+            (is (= inside (st/pos-of p)))
+            (is (= :risky (:reason (waiting-of eng id))) "the parent waits with the child's reason")))))))
 
 (deftest an-exclusive-go-to-at-night-walks
   (async done
@@ -227,7 +220,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p seen]} (await (too-risky #(fell-tree-world! (update (night-hut {}) :blocks merge oak-tree))))]
+        (let [{:keys [p seen]} (await (fell-tree-world! (update (far-hut {}) :blocks merge oak-tree)))]
           (is (= inside (st/pos-of p)) "stayed in the hut")
           (is (empty? (st/emitted seen :stopped)) (pr-str (map :reason (st/emitted seen :stopped)))))))))
 
@@ -237,16 +230,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (settings/with-settings no-risk
-                 (fn ^:async t2 []
-                   (let [{:keys [eng p]} (setup (merge (night-hut {"5,67,0" "air"}) {:inventory st/dirt-stack}))
-                         id (core/submit! eng '(jobs.movement.go-to {:pos [15 64 0]}) {})]
-                     (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
-                     (await (ticks eng 20))
-                     (is (= inside (st/pos-of p)) "the body stays in its room all night")
-                     (is (= [{:x 5 :y 67 :z 0}] (mapv st/arg-pos (st/calls p "place"))) "one block mends the roof, no dig-in after")
-                     (is (= :risky (:reason (waiting-of eng id))))
-                     (is (= 1 (count (st/calls p "place"))))))))))))
+        (let [{:keys [eng p]} (setup (merge (far-hut {"5,67,0" "air"}) {:inventory st/dirt-stack}))
+              id (core/submit! eng '(jobs.movement.go-to {:pos [15 64 0]}) {})]
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
+          (await (ticks eng 20))
+          (is (= inside (st/pos-of p)) "the body stays in its room all night")
+          (is (= [{:x 5 :y 67 :z 0}] (mapv st/arg-pos (st/calls p "place"))) "one block mends the roof, no dig-in after")
+          (is (= :risky (:reason (waiting-of eng id))))
+          (is (= 1 (count (st/calls p "place")))))))))
 
 (deftest a-queued-walk-with-an-acceptable-risk-goes-out-at-night-without-digging-in-again
   (async done
@@ -289,14 +280,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (settings/with-settings no-risk
-                 (fn ^:async t2 []
-                   (let [{:keys [eng p]} (setup (-> (night-hut {}) (update :blocks assoc "10,64,0" "crafting_table")
-                                                       (assoc :inventory [{:name "wheat" :count 3}])))]
-                     (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
-                     (core/submit! eng '(jobs.items.craft {:item "bread" :table {:x 10 :y 64 :z 0}}) {})
-                     (await (ticks eng 20))
-                     (is (= inside (st/pos-of p)) "the body stays in the hut")))))))))
+        (let [{:keys [eng p]} (setup (-> (far-hut {}) (update :blocks assoc "10,64,0" "crafting_table")
+                                         (assoc :inventory [{:name "wheat" :count 3}])))]
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
+          (core/submit! eng '(jobs.items.craft {:item "bread" :table {:x 10 :y 64 :z 0}}) {})
+          (await (ticks eng 20))
+          (is (= inside (st/pos-of p)) "the body stays in the hut"))))))
 
 (deftest a-queued-craft-with-an-acceptable-walk-risk-goes-to-the-table-at-night
   (async done
@@ -313,10 +302,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (too-risky
-                 (fn ^:async t2 []
-                   (let [{:keys [eng p]} (setup (night-hut {}))
-                         id (core/submit! eng '(jobs.items.use {:on [15 64 0]}) {})]
-                     (await (ticks eng 6))
-                     (is (= inside (st/pos-of p)))
-                     (is (= :exposed (:reason (waiting-of eng id))))))))))))
+        (let [{:keys [eng p]} (setup (far-hut {}))
+              id (core/submit! eng '(jobs.items.use {:on [15 64 0]}) {})]
+          (await (ticks eng 6))
+          (is (= inside (st/pos-of p)))
+          (is (= :exposed (:reason (waiting-of eng id)))))))))

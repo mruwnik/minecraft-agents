@@ -9,7 +9,7 @@
 
   world.state is an atom of
     {:self {:username :pos [x y z] :health :food :foodSaturation :oxygen :onFire :inWater :inLava :onGround
-            :isSleeping :effects :experience {:level :points :progress} :dimension :minY :held :vehicle}
+            :isSleeping :effects :experience {:level :points :progress} :dimension :minY :worldSpawn :held :vehicle}
      :time :players [username] :raining :thundering :blocks {[x y z] name} :unloaded #{pos} :ages {pos n} :states {pos {prop v}}
      :entities [{:id :name :kind :pos [x y z] ...}] (flags kebab-case: :leashed-to-me :in-love :break-at ...)
      :inventory [{:name :count}] :equipment {part stack} :containers {pos [stack]} :drops :chat [{:message :to}]
@@ -83,9 +83,10 @@
    "wooden_pickaxe" {:count 1 :needs {"oak_planks" 3 "stick" 2} :table true}
    "stone_pickaxe" {:count 1 :needs {"cobblestone" 3 "stick" 2} :table true}})
 (def default-self
+  "World spawn 5000 blocks off, as for a body dropped far out (tools/fresh-drop.mjs: 5000 or more from every base)."
   {:username "Fake" :pos [0 64 0] :health 20 :food 20 :foodSaturation 5 :oxygen 20 :onFire false :inWater false
    :inLava false :onGround true :isSleeping false :effects [] :experience {:level 0 :points 0 :progress 0}
-   :dimension "overworld" :minY -64})
+   :dimension "overworld" :minY -64 :worldSpawn [5000 64 0]})
 (def equipment-parts ["head" "torso" "legs" "feet" "offHand"])
 
 
@@ -120,7 +121,7 @@
   [a]
   (norm-pos (js->clj a :keywordize-keys true)))
 
-(def pos-keys #{:pos :table :dismountAt})
+(def pos-keys #{:pos :table :dismountAt :worldSpawn})
 
 (defn to-js
   "A result as JS: keywords to strings, :pos-like vectors to {x y z} objects; raw JS values stay."

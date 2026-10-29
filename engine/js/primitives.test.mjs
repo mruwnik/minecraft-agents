@@ -413,10 +413,16 @@ test('worldAge reads the age without the self snapshot', () => {
 test('self reports the body in the contract shape', () => {
   const { p } = rig(world)
   const s = p.self()
-  assert.deepEqual(Object.keys(s).sort(), ['chunkLoaded', 'dayTime', 'dimension', 'effects', 'equipment', 'experience', 'food', 'foodSaturation', 'gameMode', 'health', 'held', 'inLava', 'inWater', 'inventory', 'isSleeping', 'minY', 'moonPhase', 'onFire', 'onGround', 'oxygen', 'players', 'pos', 'rainState', 'settling', 'thunderState', 'timeOfDay', 'username', 'vehicle', 'worldAge'])
+  assert.deepEqual(Object.keys(s).sort(), ['chunkLoaded', 'dayTime', 'dimension', 'effects', 'equipment', 'experience', 'food', 'foodSaturation', 'gameMode', 'health', 'held', 'inLava', 'inWater', 'inventory', 'isSleeping', 'minY', 'moonPhase', 'onFire', 'onGround', 'oxygen', 'players', 'pos', 'rainState', 'settling', 'thunderState', 'timeOfDay', 'username', 'vehicle', 'worldAge', 'worldSpawn'])
   assert.equal(s.timeOfDay, 15000)
   assert.equal(s.worldAge, 1234)
   assert.deepEqual(s.inventory[0], { name: 'bread', count: 2, slot: 36 })
+})
+
+test('self reports the world spawn the game sent', () => {
+  const { bot, p } = rig(world)
+  bot.spawnPoint = { x: 100, y: 70, z: -40 }
+  assert.deepEqual(p.self().worldSpawn, { x: 100, y: 70, z: -40 })
 })
 
 test('self lists the other players in the player list (the tab list), not the body itself', () => {

@@ -82,6 +82,8 @@ export function createSense (env) {
       effects: effects(),
       experience: { level: env.bot.experience?.level ?? 0, points: env.bot.experience?.points ?? 0, progress: env.bot.experience?.progress ?? 0 },
       dimension: env.bot.game?.dimension,
+      // the world spawn the game tells every player: where a body with no bed wakes
+      worldSpawn: env.bot.spawnPoint ? xyz(env.bot.spawnPoint) : null,
       minY: env.bot.game?.minY,
       gameMode: env.bot.game?.gameMode,
       timeOfDay: env.bot.time.timeOfDay,

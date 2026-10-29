@@ -3,7 +3,7 @@
   experience is worth. A route pays chance-of-dying x death-cost (jobs.lib.cost.answer/death-chance: the known threats
   are priced by the answer the body would take to each). Pure.
 
-  body: {:level experience levels, :respawn {:x :y :z} where it would wake, :carried the seconds the carried items are
+  body: {:level experience levels, :respawn {:x :y :z} where it would wake (its bed, else world spawn), :carried the seconds the carried items are
   worth (item-value)}.
 
   A remembered death fades: death-weight. One by terrain (a fall, water, lava, a wall) costs go-to's plans near its spot
@@ -34,7 +34,7 @@
    ::deaths-per-hour {:default 1.3 :spec (a/num-in 0 nil)
                       :doc "Deaths an hour of play, every cause: the fresh-start trials of 2026-10-21/22 (Wicken r5, 8 deaths in 6h15; docs/fresh-start-design.md section 1)."}
    ::spawn-walk-blocks {:default 5000 :spec (a/num-in 0 nil)
-                        :doc "Blocks from world spawn back to where a body with no respawn bed died: fresh bodies are dropped 5000 or more from it (docs/fresh-start-design.md section 4)."}
+                        :doc "Blocks of the walk back priced for a body given with no :respawn (a kit priced for any place, jobs.lib.walk.world/kit-of; death-body always gives one online): a body dropped far out is 5000 or more from world spawn (docs/fresh-start-design.md section 4)."}
    ::spawn-horizon-s {:default 1200 :spec (a/num-in 0 nil)
                       :doc "Seconds a respawn point is priced over (spawn-worth): one in-game day, after which the needs-bed errand comes again."}
    ::memory-ms {:default 7200000 :spec (a/num-in 1 nil)
@@ -85,8 +85,7 @@
 
 (defn death-cost
   "Seconds a death at `at` ({:x :y :z}) costs: experience-cost and the walk back (back-cost:
-  its job resumes there) with the :carried items when not kept? (with no :respawn that body walks ::spawn-walk-blocks
-  from world spawn)."
+  its job resumes there) with the :carried items when not kept?."
   [body at]
   (+ (experience-cost body) (back-cost body at) (if (kept? body at) 0 (or (:carried body) 0))))
 
@@ -285,7 +284,7 @@
 
 (defn spawn-worth
   "Seconds a respawn point at `at` is worth to body: the deaths expected over ::spawn-horizon-s (::deaths-per-hour) times
-  what each costs more from the body's own :respawn (none: world spawn) than from `at`."
+  what each costs more from the body's own :respawn than from `at`."
   [body at]
   (* (settings/get settings ::deaths-per-hour) (/ (spawn-horizon-s) 3600)
      (max 0 (- (death-cost body at) (death-cost (assoc body :respawn at) at)))))

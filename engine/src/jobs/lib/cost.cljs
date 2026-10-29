@@ -438,12 +438,12 @@
   (+ s (* (dark-factor) (:cost (walk-cost {:distance n}))) (* (- (dark-factor kit) (dark-factor)) s)))
 
 (defn death-body
-  "The body of p as the death costs read it: :level, :respawn (the live spawn bed, sh-spawn/spawn-bed-pos) and :carried
-  (the item-value of the inventory)."
+  "The body of p as the death costs read it: :level, :respawn (the live spawn bed, sh-spawn/spawn-bed-pos, else the
+  world spawn the game gives every player) and :carried (the item-value of the inventory)."
   [p view]
   (let [self (.self p)]
     {:level (or (some-> self .-experience .-level) 0)
-     :respawn (sh-spawn/spawn-bed-pos p view)
+     :respawn (or (sh-spawn/spawn-bed-pos p view) (some-> self .-worldSpawn u/pos-of))
      :carried (:value (item-value (u/inventory p)))}))
 
 (defn bed? [n] (or (= "bed" n) (str/ends-with? n "_bed")))
