@@ -401,7 +401,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [j [0.0 0.5 0.99]]
-          (let [{:keys [eng p]} (await (night-at-home (update bed-world :blocks merge walled-home) {:x 10 :y 64 :z 0} {} {:rand (constantly j) :ray-deg 1 :radius 14}))
+          (let [{:keys [eng p]} (await (night-at-home (update bed-world :blocks merge walled-home) {:x 10 :y 64 :z 0} {:worth 30} {:rand (constantly j) :ray-deg 1 :radius 14}))
                 _ (await (tu/run-until-empty eng 60))
                 [placed :as places] (mapv st/arg-pos (bed-places p))]
             (is (= 1 (count places)) (str "one bed put down, sight jitter " j))
@@ -412,7 +412,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (await (night-at-home (-> bed-world (assoc :light-default [15 0]) (update :blocks merge walled-home)) {:x 10 :y 64 :z 0}))]
+        (let [{:keys [eng p]} (await (night-at-home (-> bed-world (assoc :light-default [15 0]) (update :blocks merge walled-home)) {:x 10 :y 64 :z 0} {:worth 30}))]
           (await (tu/run-until-empty eng 60))
           (is (= [] (bed-places p)) "the failed walk into the home does not put the bed down in the dark open, priced as sheltered")
           (is (= [] (st/calls p "sleep")))
@@ -427,6 +427,18 @@
           (let [{:keys [prices]} (first (st/emitted seen :night.answers))]
             (is (number? (:home prices)) "the walk into the home carries the bed there")
             (is (not (contains? prices :bed)) "no second answer for the same walk-in, priced with no walk")))))))
+
+(deftest one-failed-walk-into-a-closed-home-does-not-take-the-home-off-the-night-while-another-walk-is-worth-its-price
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [price (fn ^:async p [fails]
+                      (let [{:keys [eng seen]} (await (night-at-home (with-room stone-room) {:x 10 :y 64 :z 0} {:worth 1000}))]
+                        (dotimes [_ fails] (mem/write! (:store eng) :home-walk-failed {:pos {:x 10 :y 64 :z 0}} sh-beds/home-walk-failed-policy))
+                        (await (core/tick! eng))
+                        (:prices (first (st/emitted seen :night.answers)))))]
+          (is (not (contains? (await (price 1)) :bed)) "one failure: the bed still goes with the walk into the home")
+          (is (contains? (await (price 12)) :bed) "many failures: another walk is not worth it, the bed is priced where it goes down"))))))
 
 (deftest a-carried-bed-whose-sleep-skips-the-night-goes-down-here-not-in-a-home-a-walk-off
   (async done
