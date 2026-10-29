@@ -47,7 +47,16 @@
         n (max 1 (js/Math.abs (- (:x goal) x)) (js/Math.abs (- (:z goal) z)))]
     (plan-of (for [i (range 1 (inc n))] {:x (js/Math.round (+ x (* i (/ (- (:x goal) x) n)))) :y y :z (js/Math.round (+ z (* i (/ (- (:z goal) z) n))))}))))
 
-(defn planned-status "risk/status of the walk to goal planned straight." [c goal] (risk/status c goal (straight-plan c goal)))
+(def worth-400
+  "A call worth a finite 400 s, as a job's goal is: a goal worth arrival (##Inf, a plain go-to) is refused no walk by its hp."
+  (constantly 400))
+
+(defn finite-worth
+  "c, with a worth of 400 s unless the test set one."
+  [c]
+  (if (infinite? (ctx/worth c)) (assoc c :worth worth-400) c))
+
+(defn planned-status "risk/status of the walk to goal planned straight, on a call worth a finite 400 s unless c says one." [c goal] (risk/status (finite-worth c) goal (straight-plan c goal)))
 
 (deftest seen-lava-by-the-way-adds-hp-scaled-by-closeness-and-lava-far-from-it-adds-none
   (let [c (ready-test/ctx-of (assoc night-hut :time st/noon :blocks {"22,64,20" "lava"}))
@@ -163,8 +172,9 @@
             (is (= held? (= :risky (:reason (core/waiting eng id)))) (pr-str spawn (mapv :name inventory)))
             (is (not-any? #(= :risky (:reason %)) (st/emitted seen :stopped)) "never ended for its risk")))
         (let [c (ready-test/ctx-of (assoc night-hut :self {:pos inside :health 20 :food 20 :worldSpawn [-5000 64 0]} :inventory diamond-kit))
-              [_ text {:keys [wait]}] (planned-status c {:x 195 :y 64 :z 0})]
-          (is (= :dawn wait))
+              goal {:x 195 :y 64 :z 0}
+              [_ text {:keys [wait]}] (risk/status c goal (straight-plan c goal))]
+          (is (= :dawn wait) "a goal worth arrival still waits for a cheaper way")
           (is (re-find #"hp" text)))))))
 
 (def hut-bed {"4,64,-1" "red_bed"})
@@ -414,7 +424,7 @@
 
 (deftest a-plan-let-through-as-a-safe-prefix-has-every-re-plan-after-it-priced
   (let [m (atom {})
-        c (assoc (ready-test/ctx-of {:time st/noon :self {:pos {:x 0 :y 64 :z 0}}}) :update-mem (fn [f args] (apply swap! m f args)))
+        c (assoc (ready-test/ctx-of {:time st/noon :self {:pos {:x 0 :y 64 :z 0}}}) :update-mem (fn [f args] (apply swap! m f args)) :worth worth-400)
         goal {:x 30 :y 64 :z 0}
         prefix {:status "partial" :steps (vec (take 10 straight-cells))}]
     (with-redefs [risk/estimate prefix-estimate risk/estimate-of prefix-estimate-of]
@@ -705,6 +715,14 @@
     (is (zero? (with-redefs [look/seen-block (constantly {:name "air" :age-ms 120000})]
                  (:hp (risk/estimate (with-death (ready-test/ctx-of day-world) {:x 80 :y 64 :z 5} "creeper" 60000 respawned-far) far-goal))))
         "nor any death it risks")))
+
+(deftest a-goal-worth-arrival-walks-a-risk-over-all-but-one-hp-when-no-wait-is-cheaper
+  ;; the death share alone is over all but 1 hp; with worth 400 it is refused (below), with none said (a plain go-to) it walks
+  (let [c (with-death (ready-test/ctx-of day-world) {:x 80 :y 64 :z 5} "zombie" 10000)
+        status #(with-redefs [look/seen-block (constantly {:unknown true})] (risk/status c far-goal (straight-plan c far-goal)))]
+    (is (> (:lethal-hp (estimate-unseen c far-goal)) (price/allowed c 400)))
+    (is (= [:ok :acceptable] ((juxt first #(:reason (nth % 2))) (status))))
+    (is (= :never (first (planned-status (assoc c :worth worth-400) far-goal))))))
 
 (deftest a-walk-for-an-unseen-fresh-death-spot-risks-the-death-of-meeting-its-killer
   ;; a fist body with no bed; the death risk alone is over half its health

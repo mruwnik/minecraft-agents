@@ -11,7 +11,7 @@
   by the chance its mob or a like one is there now (death-spot/present-share: one a sun-burning mob left seen sky-lit by day, or one
   the body went far from, is near free).
   Seen lava within jobs.lib.lava-risk/radius of a cell the way steps into adds jobs.lib.lava-risk/hp, scaled by its closeness (a slip beside it is lethal); a body already at the goal, or a way clear of lava, adds none.
-  Walked now while that costs less than waiting for dawn or healing first (status: ways chosen by cost alone), within the hp the call's worth buys (price/allowed)."
+  Walked now while that costs less than waiting for dawn or healing first (status: ways chosen by cost alone), within the hp the call's worth buys (price/allowed; none for a goal worth arrival, ##Inf)."
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -291,13 +291,19 @@
         stay (check-cache/keyed c ::wait-stay s-in #(stay-estimate c s-in))]
     {:wait kind :secs secs :health healed :hp (:hp after) :s (+ secs (risk-s c stay) (risk-s c after 0 healed))}))
 
+(defn buys-hp
+  "The hp a walk may cost at health and food on a call worth `worth`: price/allowed-hp, but without end for a goal worth
+  arrival (##Inf), which no hp refuses; only a cheaper way (a wait) is chosen over walking it."
+  [health food worth]
+  (if (infinite? worth) ##Inf (price/allowed-hp health food worth true)))
+
 (defn cheapest-affordable
-  "The way of ways with the least :s whose hp the call's worth buys at the way's health (price/allowed-hp) and whose
+  "The way of ways with the least :s whose hp the call's worth buys at the way's health (buys-hp) and whose
   seconds it affords, or nil."
   [c ways]
   (let [food (.-food (.self (:primitives c)))
         worth (ctx/worth c)]
-    (first (sort-by :s (filter #(and (<= (:hp %) (price/allowed-hp (:health %) food worth true)) (cost/affords? (:s %) worth)) ways)))))
+    (first (sort-by :s (filter #(and (<= (:hp %) (buys-hp (:health %) food worth)) (cost/affords? (:s %) worth)) ways)))))
 
 (defn wait-ways
   "The ways of waiting where the body stands, then walking the way of estimate-inputs `in` (stay-inputs stay-in): until dawn
@@ -344,7 +350,7 @@
      (let [in (estimate-inputs c goal {:plan plan})
            {:keys [hp spawn-hp hostile-hp death-hp lethal-hp lava-hp dark-s hostiles] :as est} (check-cache/keyed c ::risk (dissoc in :cells :catchers :remembered) #(estimate-of c in))
            worth (ctx/worth c)
-           allowed (price/allowed c worth)
+           allowed (buys-hp (.-health (.self (:primitives c))) (.-food (.self (:primitives c))) worth)
            stay-in (stay-inputs c goal hp)
            stay (check-cache/keyed c ::stay stay-in #(stay-estimate c stay-in))
            now-s (risk-s c est)
