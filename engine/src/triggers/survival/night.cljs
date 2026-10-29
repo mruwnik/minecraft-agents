@@ -7,7 +7,7 @@
     a bed item carried and no bed to use (sh-beds/bed-place-wanted?)
     a look round first (sh/unlooked-for-bed?): a bed known or carried and cells beside the feet never seen, or a closed hut
       not looked round from tonight while it could still sleep
-    someone else on the server asleep (sh-sleepers/log-out-for-sleepers?)
+    someone else on the server asleep, or online with a skip to wait for (sh-sleepers/log-out-for-sleepers?)
     not safe from the night (sh-inside/safe-from-night?: shut in a closed, roofed room with no dark spawnable cell beyond the 24-block spawn-free radius; a roof with open sides or a cave is not; a buried body is never unsafe for the trigger: waiting out the night changes nothing underground)
     an open door in the closed room the body stands in (sh/open-room-doors), also one the night could not shut
   By day it holds while the body is shut in its own latest :shelter (no :shelter-trapped entry for the cell), or a bed

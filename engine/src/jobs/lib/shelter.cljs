@@ -120,7 +120,7 @@
 
 (defn bed-holds?
   "The bed terms of night-holds?: night by the clock, awake, the :bed way, and a bed to use, a look round for one, a
-  carried bed to put down, or someone else asleep. Not a bed to put down while shut in the body's own shelter: the
+  carried bed to put down, or someone else asleep or online (sh-sleepers/log-out-for-sleepers?). Not a bed to put down while shut in the body's own shelter: the
   night job ends :dug-in there before it sets one down (bed-to-use skips a bed whose walk leaves a safe shelter)."
   [p view args permit?]
   (let [buried (buried-outside-hut? p)

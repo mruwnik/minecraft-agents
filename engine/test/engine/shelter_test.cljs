@@ -851,13 +851,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time night :entities [sleeper] :players ["Alex"] :blocks bed-room :light {} :light-default [15 0]})]
-          (know-bed! eng {:x 6 :y 64 :z 0})
-          (core/submit! eng '(jobs.survival.night) {})
-          (await (run-until-empty eng 8))
-          (is (= 1 (count (calls p "sleep"))))
-          (is (= [] (calls p "offline")))
-          (is (= 1 (count (entries eng :slept)))))))))
+        (let [run (fn ^:async r [other]
+                    (let [{:keys [eng p]} (setup {:time night :entities [other] :players [(:name other)] :blocks bed-room :light {} :light-default [15 0]})]
+                      (know-bed! eng {:x 6 :y 64 :z 0})
+                      (core/submit! eng '(jobs.survival.night) {})
+                      (await (run-until-empty eng 8))
+                      [(count (calls p "sleep")) (count (calls p "offline")) (count (entries eng :slept))]))]
+          (is (= [1 0 1] (await (run sleeper))) "another player asleep")
+          (is (= [1 0 1] (await (run awake))) "another player online and awake"))))))
 
 (deftest ms-until-morning-counts-to-the-end-of-the-night-plus-a-margin
   (are [t ms] (= ms (sh-clock/ms-until-morning t))
@@ -869,15 +870,17 @@
     1000 0
     0 0))
 
-(deftest another-player-online-and-awake-is-no-reason-to-log-out
+(deftest another-player-online-and-awake-logs-the-body-out-unless-it-is-mid-danger
   (async done
     (tu/run-async done
       (walls-cheap (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time night :players ["Alex"] :entities [awake] :inventory wall-stack :blocks floor})]
-          (core/submit! eng '(jobs.survival.night) {})
-          (await (tick-n eng 8))
-          (is (= [] (calls p "offline")))
-          (is (= 18 (count (calls p "place"))) "dug in")))))))
+        (let [run (fn ^:async r [self]
+                    (let [{:keys [eng p]} (setup {:time night :self self :players ["Sam"] :entities [awake] :inventory wall-stack :blocks floor})]
+                      (core/submit! eng '(jobs.survival.night) {})
+                      (await (tick-n eng 8))
+                      [(pos? (count (calls p "offline"))) (count (calls p "place"))]))]
+          (is (= [true 0] (await (run {}))) "its staying awake would hold up the other's skip: logged out, not dug in")
+          (is (= false (first (await (run {:onFire true})))) "burning: never logged out")))))))
 
 (deftest shelter-digs-in-when-the-log-out-fails
   (async done

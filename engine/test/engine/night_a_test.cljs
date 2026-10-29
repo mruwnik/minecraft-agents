@@ -95,6 +95,12 @@
     (is (false? (holds? (assoc world :time noon) (status! 1 2))) "by day")
     (is (false? (holds? (assoc-in world [:self :isSleeping] true) (status! 1 2))) "asleep itself")))
 
+(deftest night-holds-for-another-player-online-while-the-night-can-skip
+  (let [world {:time night :blocks roof :players ["Alex"]}]
+    (is (true? (holds? world (fn [_]))) "awake, the body holds up the other's skip")
+    (is (false? (holds? world (status! 0 3))) "the count needs more players than there are: no skip to hold up")
+    (is (false? (holds? (dissoc world :players) (fn [_]))) "alone")))
+
 (deftest a-count-sent-while-the-body-lay-in-bed-counts-the-body-itself
   (let [world {:time night :blocks roof}
         slept-and-woke (fn [status] [[:sleep-status status] [:slept {}] [:woke {}]])]
@@ -186,6 +192,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (st/setup {:time night :blocks {"20,64,0" "red_bed"} :inventory st/wall-stack :players ["Alex" "Bo" "Cy"]})]
+          ((status! 0 5) eng)
           (st/know-bed! eng {:x 20 :y 64 :z 0})
           (core/submit! eng '(jobs.survival.night) {})
           (await (tu/run-until-empty eng 40))

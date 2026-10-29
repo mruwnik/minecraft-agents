@@ -414,6 +414,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (await (night-at-home (-> bed-world (assoc :light-default [15 0]) with-walled-home) {:x 10 :y 64 :z 0}))]
+          ((status! 0 5) eng)
           (await (tu/run-until-empty eng 60))
           (is (= [] (bed-places p)) "the failed walk into the home does not put the bed down in the dark open, priced as sheltered")
           (is (= [] (st/calls p "sleep")))

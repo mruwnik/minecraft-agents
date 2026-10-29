@@ -88,6 +88,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup {:time night :blocks st/floor :inventory bed-and-dirt :players ["Alex" "Bo" "Cy"]})]
+          (sleep-count! p 0 5)
           (core/submit! eng '(jobs.survival.night {:settings {:jobs.lib.cost.death/spawn-horizon-s 0}}) {})
           (await (tick-until eng #(seq (placed p "dirt")) 60))
           (await (st/tick-n eng 20))

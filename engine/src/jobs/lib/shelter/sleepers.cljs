@@ -1,5 +1,5 @@
 (ns jobs.lib.shelter.sleepers
-  "Who sleeps on the server, and the log-out the night takes when someone does."
+  "Who sleeps or is online on the server, and the log-out the night takes for them."
   (:require [engine.args :as a]
             [engine.memory :as mem]
             [engine.settings :as settings]
@@ -75,14 +75,26 @@
                       (or (nil? status) (< (:t status) back)))
                  (asleep-known? p view)))))
 
+(defn others-online "How many other players the tab list shows." [p] (count (.-players (.self p))))
+
+(defn skip-wait-s
+  "Seconds of skipped night the other players online lose while the body stays awake, left seconds of night still to run:
+  each waits it out. None when tonight's latest count says the night skips anyway, or needs more players than there are
+  (the server's sleeping percentage over 100)."
+  [p view left]
+  (let [{:keys [skipping needed]} (:data (sh-clock/latest-since view :sleep-status (sh-clock/tonight p view)))
+        others (others-online p)]
+    (if (or skipping (and needed (> needed (inc others)))) 0 (* others left))))
+
 (defn log-out-open?
-  "Night, someone else asleep (others-asleep?), and no log-out tonight that failed (unsupported, closed)."
+  "Night, someone else asleep (others-asleep?) or online with a skip to wait for (skip-wait-s), and no log-out tonight
+  that failed (unsupported, closed)."
   [p view]
   (let [out (sh-clock/latest-since view :log-out (sh-clock/tonight p view))]
     (and (sh-sense/night? p)
          (not (log-out-unsupported? view))
          (or (nil? out) (contains? #{"ok" "cut"} (:status (:data out))))
-         (others-asleep? p view))))
+         (or (others-asleep? p view) (pos? (skip-wait-s p view 1))))))
 
 (defn log-out-for-sleepers?
   "log-out-open? for a body awake."

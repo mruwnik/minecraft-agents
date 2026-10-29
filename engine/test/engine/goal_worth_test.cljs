@@ -165,6 +165,12 @@
     (is (pos? left))
     (is (< (Math/abs (- left (- alone short))) 1e-6) "alone the sleep skips the night: its seconds are worth saving; three short it skips nothing")))
 
+(deftest the-night-is-worth-the-skip-the-other-players-online-wait-for-while-the-body-stays-awake
+  (let [night #(worth 'jobs.survival.night (tu/seeing-all (tu/fake-on-floor {:time 14000 :players %})) {})
+        left (second (get-in (sh-clock/night-left-quote {:primitives (tu/fake {:time 14000})}) [:uses :job-time]))]
+    (is (< (Math/abs (- (night []) (night ["Alex"]))) 1e-6) "alone its sleep skips the night; with one other awake, the other waits it out")
+    (is (< (Math/abs (- (* 2 left) (- (night ["Alex" "Bo" "Cy"]) (night ["Alex"])))) 1e-6) "each other player waits out the night left")))
+
 (deftest an-exposed-night-weighs-a-death-at-its-cost-not-scaled-by-health-again
   (let [p (tu/seeing-all (tu/fake-on-floor {:self {:health 5}}))
         c (ctx-of p {} {})
