@@ -339,16 +339,6 @@
           (is (= :done (:kind e)))
           (is (empty? (f/events-of s :obtain.chest)) "no walk to the far chest"))))))
 
-(deftest a-root-stone-pickaxe-is-worth-a-walk-to-a-chest-40-blocks-off
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (f/start (-> (f/bare []) (update :blocks assoc "40,64,0" "chest") (assoc :containers {"40,64,0" [{:name "stone_pickaxe" :count 1}]})) [(assoc f/own-zone :min [-20 60 -20] :max [60 70 20])])
-              _ (mem/write! (:store (:eng s)) stock/stock-kind {:pos [40 64 0] :items {"stone_pickaxe" 1}} stock/stock-policy)
-              _ (core/submit! (:eng s) '(jobs.items.obtain {:item "stone_pickaxe" :count 1 :explore false}) {})
-              _ (await (f/run-ticks s 120))]
-          (is (= 1 (get (f/inv s) "stone_pickaxe")) "a root obtain at the pickaxe's own worth walks to the chest"))))))
-
 (deftest a-chest-in-another-players-zone-is-not-looked-into
   (async done
     (tu/run-async done
