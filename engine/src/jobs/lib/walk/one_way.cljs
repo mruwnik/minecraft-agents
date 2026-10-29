@@ -1,7 +1,7 @@
 (ns jobs.lib.walk.one-way
   "The price of a one-way drop go-to's :one-way :open takes into land past what is loaded or seen (Q385): the chance the
   landing is a trap (no walk back up) times what climbing back out to the rim costs, against what the goal is worth. A landing seen lit is
-  nearly free; one seen dark or not seen costs ::dark-chance, a dark hall (sh-inside/dark-hall-at?) ::hall-chance; a body carrying a light sees the floor from the rim and pays the lit chance."
+  nearly free; one seen dark or not seen costs ::dark-chance, ::hall-chance by the chance it is a dark hall (cost/hall-chance); a body carrying a light sees the floor from the rim and pays the lit chance."
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
@@ -40,14 +40,15 @@
 (defn chance
   "The chance that a drop landing at `at` ({:x :y :z}) traps the body: 0 for a one-block drop onto a floor seen (a step down the
   body can jump back up); ::lit-chance when it has seen the floor lit or carries a
-  light to see it by, else (seen dark, or not seen at all) ::dark-chance, ::hall-chance in a dark hall."
+  light to see it by, else (seen dark, or not seen at all) ::dark-chance, ::hall-chance by the chance it is a dark hall
+  (cost/hall-chance)."
   [p at small?]
   (cond
     (and small? (sh-sense/seen-cell? p (update at :y dec))) 0
     (light-carried? p) (settings/get settings ::lit-chance)
     (lit-in-view? p at) (settings/get settings ::lit-chance)
-    (sh-inside/dark-hall-at? p at nil) (settings/get settings ::hall-chance)
-    :else (settings/get settings ::dark-chance)))
+    :else (let [hall (cost/hall-chance (sh-inside/dark-hall p at nil))]
+            (+ (* hall (settings/get settings ::hall-chance)) (* (- 1 hall) (settings/get settings ::dark-chance))))))
 
 (defn climb-out-s
   "Seconds the cheapest way back up from landing `at` to the rim it dropped from takes, as go-to's escalations price them: a

@@ -1,6 +1,7 @@
 (ns engine.spawn-light-test
   "jobs.lib.spawn-light/exposure: the spawn chance a walk to a place meets, by chance-at, and what lowers it."
   (:require [cljs.test :refer [are deftest is]]
+            [clojure.string :as str]
             [engine.shelter-support :as st]
             [engine.sky-perception :as sky]
             [engine.test-util :as tu]
@@ -129,3 +130,11 @@
     {} 14 "a lit open field, by its light" 0
     (hall 30) 0 "a roofed hall reaching past 24 blocks" open-night-chance
     (hall 10) 0 "a short shut hall" 0))
+
+(deftest a-dark-hall-whose-far-end-the-body-has-not-seen-is-priced-by-the-measured-chance-it-goes-on-past-24-blocks
+  (let [chance (with-redefs [sh-sense/block-light-at (constantly 0) sh-sense/sky-light-at (constantly 0)]
+                 (spawn-light/chance-at (sky/with-sky (tu/fake {:floor [-30 -30 10 30] :time st/night :self {:pos {:x 0 :y 64 :z 0}}
+                                                                :blocks (into {} (remove #(str/starts-with? (key %) "11,")) (hall 11))}))
+                                        {:x 0 :y 64 :z 0} false))]
+    (is (< 0 chance open-night-chance) "neither free nor a hall for sure")
+    (is (= (* (cost/hall-chance :roofed) open-night-chance) chance))))

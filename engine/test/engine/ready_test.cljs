@@ -399,13 +399,13 @@
 
 
 (deftest a-roofed-dark-cell-is-exposed-in-a-dark-hall-and-free-in-a-small-dark-place
-  (are [hall? expected] (= expected (with-redefs [sh-sense/block-light-at (constantly 0)
+  (are [hall expected] (= expected (with-redefs [sh-sense/block-light-at (constantly 0)
                                                   sh-sense/sky-light-at (constantly 0)
-                                                  sh-inside/dark-hall-at? (constantly hall?)]
+                                                  sh-inside/dark-hall (constantly hall)]
                                       ((juxt first #(:reason (nth % 2)))
                                        (ready/at-status (ctx-of (assoc open-night :time st/noon)) outside))))
-    true [:never :exposed]
-    false [:ok :unexposed]))
+    :far [:never :exposed]
+    nil [:ok :unexposed]))
 
 (defn dim-status
   "at-status of outside under the night sky with sky light sky reaching it, no block light and dark open ground round it
@@ -413,7 +413,7 @@
   [sky]
   (with-redefs [sh-sense/block-light-at (constantly 0)
                 sh-sense/sky-light-at (constantly sky)
-                sh-inside/dark-hall-at? (constantly true)]
+                sh-inside/dark-hall (constantly :far)]
     (let [c (ctx-of open-night)]
       [(ready/at-status c outside) (spawn-light/chance-at (:primitives c) outside false)])))
 
@@ -426,7 +426,7 @@
 (deftest the-hall-text-says-a-walker-reaches-far-dark-floor-not-that-the-cell-is-far
   (with-redefs [sh-sense/block-light-at (constantly 0)
                 sh-sense/sky-light-at (constantly 0)
-                sh-inside/dark-hall-at? (constantly true)]
+                sh-inside/dark-hall (constantly :far)]
     (let [text (second (ready/at-status (ctx-of (assoc open-night :time st/noon)) outside))]
       (is (re-find #"a mob can walk from dark floor farther than 24 blocks off" text))
       (is (not (re-find #"a hall of dark floor beyond" text))))))

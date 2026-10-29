@@ -3,7 +3,7 @@
   (chance-at), the seconds a walk spends where one could spawn (dark-seconds) and the mobs met spawning on timed cells
   (spawns-over) or held at one (spawns-at), and a walk's exposure for the readiness checks. The one spawn count
   jobs.lib.walk-risk, the flee search, a way out of a shelter, a held spot, readiness and bed-down price by (jobs.lib.cost/death-chance's :spawns). A dark cell counts only where a mob spawns
-  beyond 24 blocks and walks to it, roofed or not (Q345, Q45): in a dark hall (hall-at?)."
+  beyond 24 blocks and walks to it, roofed or not (Q345, Q45): by the chance it is in a dark hall (hall-chance)."
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.cost :as cost]
@@ -19,15 +19,16 @@
                 :doc "Most cells of the way whose light is judged, so a far goal costs a bounded number of reads."}})
 
 (defn hall-cell
-  "The open cell the body would stand in at `to`: the feet when `to` is solid rock or unseen. A torch there ends a hall-at?."
+  "The open cell the body would stand in at `to`: the feet when `to` is solid rock or unseen. A torch there ends a dark hall."
   [p to]
   (let [to (update-vals to js/Math.floor)]
     (if (or (nil? (:y to)) (sh-sense/solid-at? p to) (not (sh-sense/seen-cell? p to))) (sh-sense/feet p) to)))
 
-(defn hall-at?
-  "Whether the dark place `to` is in a dark hall (sh-inside/dark-hall-at?, by the sky's darkening subtract), judged from its hall-cell."
+(defn hall-chance
+  "The chance a mob spawned farther than 24 blocks walks to the dark place `to` (cost/hall-chance of its
+  sh-inside/dark-hall, by the sky's darkening subtract), judged from its hall-cell."
   [p to subtract]
-  (sh-inside/dark-hall-at? p (hall-cell p to) subtract))
+  (cost/hall-chance (sh-inside/dark-hall p (hall-cell p to) subtract)))
 
 (defn seen-light
   "The block light of cell, nil when the body has not seen it and cannot see it by turning to it."
@@ -37,8 +38,8 @@
 (defn- night? [p] (not (look/lit-light? 0 15 (sh-sense/sky-subtract-now p))))
 
 (defn chance-at
-  "The spawn chance per second at `cell`: a seen cell by its light (its own sky light; one that leaves dark is dark only
-  in a dark hall, hall-at?), an unseen one at the chance it is dark (look/unseen-lit-chance); under caves-free? an unseen one
+  "The spawn chance per second at `cell`: a seen cell by its light (its own sky light; one that leaves dark is dark by
+  the chance it is in a dark hall, hall-chance), an unseen one at the chance it is dark (look/unseen-lit-chance); under caves-free? an unseen one
   only at the chance full day would light it and now does not. subtract: the sky's darkening to judge it by (default:
   now; 0: full day)."
   ([p cell caves-free?] (chance-at p cell caves-free? nil))
@@ -51,9 +52,11 @@
          ;; a sky-reached cell with no sky light data is priced as unseen, not as dark
          known (and block (or (not reaches) sky-light))]
      (cond
-       known (let [sky (if (look/lit-light? 0 (or sky-light 0) darkening) 15 0)]
-               (cost/spawn-chance [(:x cell) (:y cell) (:z cell)]
-                                  {:light (constantly {:block block :sky (cond (= 15 sky) 15 (and (< block (look/dark-light)) (hall-at? p cell darkening)) 0 :else 15)})}))
+       known (let [at-sky #(cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block block :sky %})})]
+               (if (or (look/lit-light? 0 (or sky-light 0) darkening) (>= block (look/dark-light)))
+                 (at-sky 15)
+                 (let [hall (hall-chance p cell darkening)]
+                   (+ (* hall (at-sky 0)) (* (- 1 hall) (at-sky 15))))))
        :else (let [now (look/unseen-lit-chance p cell darkening)
                    ;; caves-free? frees the dark full day leaves too: the chance left is that of dark only the sky lifts
                    dark (if caves-free? (max 0 (- (look/unseen-lit-chance p cell 0) now)) (- 1 now))]

@@ -194,15 +194,18 @@
           kept
           (reach-room/kept-with p (str "own|" k) region))))))
 
-(defn dark-hall-at?
+(defn dark-hall
   "Whether a mob could spawn on a dark floor farther than spawn-free-radius from `at` ({:x :y :z}) and walk to it, roofed
-  or under the sky (owner Q345, Q45): `at` is dark and its spawn-region is open or holds such a floor. A small dark
-  tunnel, room or walled yard is no hall; a big cave or an open field is. subtract: the sky's darkening to judge by (nil: now)."
+  or under the sky (owner Q345, Q45), as far as the body has seen: `at` is dark and its spawn-region holds such a floor
+  (:far), or ends at an unseen edge past which there may be one (:sky or :roofed, by the sky light at `at`), else nil. A
+  small dark tunnel, room or walled yard seen whole is nil; a big cave or an open field is :far. subtract: the sky's
+  darkening to judge by (nil: now)."
   [p {:keys [x y z] :as at} subtract]
   (let [subtract (or subtract (sh-sense/sky-subtract-now p))]
-    (boolean (and (not (sh-sense/lit-here? p at subtract))
-                  (let [{:keys [open? dark]} (spawn-region p at subtract)]
-                    (or open? (far-dark? dark x y z)))))))
+    (when-not (sh-sense/lit-here? p at subtract)
+      (let [{:keys [open? dark]} (spawn-region p at subtract)]
+        (cond (far-dark? dark x y z) :far
+              open? (if (pos? (or (sh-sense/sky-light-at p at) 0)) :sky :roofed))))))
 
 (defn safe-room-at?
   "Whether a body at `at` would be safe from the night (owner Q345): walled-off-at? under a roof (sh-sense/room-roofed?).

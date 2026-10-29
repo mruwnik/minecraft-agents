@@ -3,7 +3,7 @@
   go-to plans (way): its plan's cells, and past a plan that is not found (partial, or none yet) the rest to the goal on the
   straight line. It replaces any wait for dawn: a night walk is judged by the light the body perceives along
   the way (Q334), a walk underground by the hostiles it can reach and the dark halls it crosses (a roofed dark cell prices
-  spawns only where dark floor beyond the spawn-free radius is reachable: spawn-light/hall-at?, Q345).
+  spawns only where dark floor beyond the spawn-free radius is reachable: spawn-light/hall-chance, Q345).
   Risk = the hurt of the mobs expected to spawn on the exposed stretches (jobs.lib.cost/spawn-chance per second of walking,
   jobs.lib.cost/spawns-hurt) plus what the known threats take off the body over
   the way (jobs.lib.cost/route-parts, each over its field, jobs.lib.threats, in meetings): every mob sensed now that catches

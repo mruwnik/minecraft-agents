@@ -121,8 +121,8 @@
     (with-redefs [sh-sense/sky-reaches-from-above? (constantly false)
                   sh-sense/sky-light-at (constantly 0)
                   sh-sense/block-light-at (constantly 0)]
-      (let [hp #(:hp (with-redefs [spawn-light/hall-at? (constantly %)] (risk/estimate c {:x 95 :y 64 :z 0} {:plan (straight-plan c {:x 95 :y 64 :z 0})})))]
-        (is (< (hp false) (hp true)) "a small dark tunnel is free, a dark hall costs spawns")))))
+      (let [hp #(:hp (with-redefs [spawn-light/hall-chance (constantly %)] (risk/estimate c {:x 95 :y 64 :z 0} {:plan (straight-plan c {:x 95 :y 64 :z 0})})))]
+        (is (< (hp 0) (hp 1)) "a small dark tunnel is free, a dark hall costs spawns")))))
 
 (deftest a-walk-out-of-a-night-hut-pays-the-exit-at-the-light-of-the-way-out
   (let [inputs (fn [light] (risk/estimate-inputs (ready-test/ctx-of (assoc night-hut :light {} :light-default light)) {:x 95 :y 64 :z 0}))]
@@ -798,7 +798,7 @@
                                     sh-sense/sky-light-at (constantly 0)
                                     look/glimpse? (constantly true)
                                     sh-sense/block-light-at (fn [_ {:keys [x]}] (if (zero? x) feet-light 0))
-                                    spawn-light/hall-at? (constantly true)]
+                                    spawn-light/hall-chance (constantly 1)]
                         (settings/with-settings {:jobs.lib.cost.risk/risk-share 0.1}
                           #(do (is (< (price/allowed c) (:hp (risk/estimate c far-goal {:plan (straight-plan c far-goal)})) 19))
                                (planned-status c far-goal)))))]

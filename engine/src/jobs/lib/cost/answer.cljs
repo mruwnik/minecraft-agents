@@ -502,6 +502,17 @@
       :down (* (p :drop) (p :drop))
       (p :drop))))
 
+(defn hall-chance
+  "The chance a mob spawned farther than 24 blocks walks to a dark place, by its sh-inside/dark-hall: 1 when the body has
+  seen such floor that walks there (:far), 0 when it has seen there is none (nil), else (:sky or :roofed, past an unseen
+  edge) counted-chance of value/::unseen-edge-dark-counts' pseudo-counts of that kind."
+  [hall]
+  (case hall
+    :far 1
+    nil 0
+    (let [{:keys [far near]} (get (settings/get value/settings ::value/unseen-edge-dark-counts) hall)]
+      (counted-chance {:k 0 :n 0 :prior [far near]}))))
+
 (defn hide-stays
   "The chance the danger is still about when a hide in a refuge ends: counted-chance of ::hide-stays."
   []
