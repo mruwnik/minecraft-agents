@@ -1,6 +1,7 @@
 ;; Card b9737e9d (Oriel #125): the night slept in another body's bed and set its spawn there. A bed in another owner's zone or
 ;; on another body's plan is not one to use (sh-beds/others-bed?); one on the body's own plan is.
-;; Overdue (max-days-awake 0), so a bed in the open counts. Should-succeed: no sleep in the others' beds (the night shelters
+;; Overdue (max-days-awake 0), so a bed in the open counts. The own-plan case starts beside its bed (within 2 blocks, no walk to
+;; price: a walk of 5 blocks and staying put cost the same). Should-succeed: no sleep in the others' beds (the night shelters
 ;; instead), sleep in the own-plan bed. Should-fail: a sleep call at the other's bed.
 ;; Needs the night (bed use is decided by the clock).
 {:defaults
@@ -21,5 +22,6 @@
    :expect [{:no-event {:source :action :kind :started :data {:name "sleep"}} :for-s 60}]
    :after [[:body-far [12.5 0 8.5] 2]]}
   {:name "a-bed-on-the-bodys-own-plan-is-slept-in"
+   :body {:at [10.5 0 8.5] :yaw -90 :effects [["resistance" 600 4]] :settle-s 3 :inventory [["cobblestone" 32]]}
    :plans [{:id "hut" :metadata {:by "$body"} :parts [{:id "bed" :cells [#at [12 0 8] #at [13 0 8]] :want [:any "red_bed"]}]}]
    :expect [{:event {:source :action :kind :done :data {:name "sleep"}} :within-s 60}]}]}
