@@ -92,6 +92,17 @@ test('a caller reading one section now and then sees a light change within the l
   assert.equal(raw.lightAt(3, 71, 4), 0)
 })
 
+test('lightChanged drops the cached light copy of the column at once, inside the light ttl', () => {
+  const { bot } = makeBot()
+  let level = 0
+  const overlay = () => ({ sky: new Uint8Array(4096), block: new Uint8Array(4096).fill(level) })
+  const raw = createRawWorld({ getBot: () => bot, lightOverlay: overlay, lightTtlMs: 60000 })
+  assert.equal(raw.lightAt(3, 71, 4), 0)
+  level = 12
+  raw.lightChanged(0, 0)
+  assert.equal(raw.lightAt(3, 71, 4), 12)
+})
+
 test('a block update reaches the listeners with the new state and the stale section copy is dropped', () => {
   const { bot, column } = makeBot()
   const raw = createRawWorld({ getBot: () => bot })

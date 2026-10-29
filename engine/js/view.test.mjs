@@ -538,6 +538,25 @@ test('disabled view writes nothing but still relights a block change', async () 
   assert.deepEqual(fs.readdirSync(dir), [])
 })
 
+test("the body's own block change is relit at once, before any flush, and the relit column is announced", async () => {
+  const columns = { '0,0': new ChunkColumn() }
+  const bot = fakeBot({ columns })
+  bot.registry = undefined
+  bot.entity.position = new Vec3(8.5, 65, 10.5)
+  const view = createView({ stateDir: tmp(), agent: 'Bob', world: 'w', onEvent: () => {}, mode: 'off' })
+  const relit = []
+  view.onRelit((cx, cz) => relit.push([cx, cz]))
+  view.attach(bot)
+  columns['0,0'].setBlockStateId({ x: 8, y: 64, z: 8 }, stateOf('stone'))
+  columns['0,0'].setBlockStateId({ x: 8, y: 65, z: 8 }, stateOf('torch'))
+  bot.emit('blockUpdate', { position: new Vec3(8, 65, 8), stateId: AIR }, { position: new Vec3(8, 65, 8), stateId: stateOf('torch') })
+  view.markCell(8, 65, 8)
+  assert.equal(view.lightOverlay(0, 0, (65 + 64) >> 4)?.block[((65 + 64) & 15) << 8 | 8 << 4 | 8], 14)
+  assert.deepEqual(relit, [[0, 0]])
+  await view.detach()
+  view.stop()
+})
+
 test('demand mode dumps only while the watch marker is fresh, and dumps the loaded columns once when it turns on', async () => {
   const columns = { '0,0': makeColumn(), '-1,2': makeColumn() }
   const dir = tmp()

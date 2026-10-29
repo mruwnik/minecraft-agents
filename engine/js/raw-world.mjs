@@ -291,6 +291,8 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
       const t = tablesOf(bot)
       return t.light ?? (t.light = lightTableCached(bot.registry, bot.version))
     },
+    // the light of column (cx, cz) changed outside the server's packets (the view's relit overlay)
+    lightChanged: (cx, cz) => onLight({ chunkX: cx, chunkZ: cz }),
     // fn(x, y, z, stateId) for every changed cell; returns the unsubscribe
     onBlockChange: fn => {
       follow()

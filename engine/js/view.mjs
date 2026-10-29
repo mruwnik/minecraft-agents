@@ -169,6 +169,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
   let mcVersion = null
   const pending = new Set()
   const overlays = new Map()
+  const relitListeners = new Set() // fn(cx, cz) after a column's overlay changed
   const dirty = new Map() // column key -> Map of block changes waiting for the body to come near (a Set of section indices: over the point bound, the whole column)
   let changes = new Map()
   const inflight = new Set()
@@ -195,8 +196,12 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
   }
 
   const markColumn = (cx, cz) => pending.add(`${cx},${cz}`)
-  // the body's own dig, place, jumpPlace or useOn: the column is dumped by the next flush (every FLUSH_MS), whatever the server's block update does
-  const markCell = (x, y, z) => markColumn(Math.floor(x / 16), Math.floor(z / 16))
+  // the body's own dig, place, jumpPlace or useOn: relit now, since the server sends no light update and the job reads the
+  // cell's light next (a dug cell kept the dark of the solid block until the flush); the column is dumped by the next flush
+  const markCell = (x, y, z) => {
+    markColumn(Math.floor(x / 16), Math.floor(z / 16))
+    if (bot) relight(bot)
+  }
   const onLoad = safely(point => {
     const cx = Math.floor(point.x / 16)
     const cz = Math.floor(point.z / 16)
@@ -421,7 +426,11 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
           touched.add(info.key)
         }
       })
-      for (const key of touched) pending.add(key)
+      for (const key of touched) {
+        pending.add(key)
+        const [cx, cz] = key.split(',').map(Number)
+        for (const fn of relitListeners) fn(cx, cz)
+      }
       const t4 = performance.now()
       stats.relightStatesMs += t1 - t0
       stats.relightLightMs += t2 - t1
@@ -679,5 +688,5 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
 
   // the relit light of world section s of column (cx, cz), {sky, block} one byte per cell, or undefined (engine.perception reads light through it)
   const lightOverlay = (cx, cz, s) => overlays.get(`${cx},${cz}`)?.get(s)
-  return { attach, detach, stop, markCell, checkWatch, isLive: () => live, flushColumns, tickPose, tickHud, idle, pendingCount: () => pending.size, stats: takeStats, lightOverlay }
+  return { attach, detach, stop, markCell, checkWatch, isLive: () => live, flushColumns, tickPose, tickHud, idle, pendingCount: () => pending.size, stats: takeStats, lightOverlay, onRelit: fn => { relitListeners.add(fn); return () => relitListeners.delete(fn) } }
 }
