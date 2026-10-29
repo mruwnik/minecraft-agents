@@ -33,11 +33,13 @@
    :act [[:job (jobs.apiary.maintain {:radius 20})]]
    :expect [{:event {:kind :completed :data {:cause :already}} :within-s 30 :of-job true}]
    :after [[:block [14 1 10] "beehive[honey_level=0]"] [:item "honeycomb" 0] [:item "white_carpet" 1]]}
-  ;; card 87dab6c8: an apiary part never seen is not in order; the walk to look (13 blocks, there and back) costs more than one hive at the prior ripe share
+  ;; card 87dab6c8: an apiary part never seen (open ground behind a wall) is not in order; the walk to look from the
+  ;; wall's near side (13 blocks, there and back) costs more than one hive at the prior ripe share; safe? always: the
+  ;; unseen spot is guessed dark and would end it impossible first (card 0093d2a8)
   {:name "maintain-unseen-apiary-far-waits-not-worth"
-   :blocks [[:fill [20 0 15] [22 2 17] "stone"]]
+   :blocks [[:fill [20 0 10] [20 4 22] "stone"]]
    :body {:inventory [["shears" 1]]}
-   :act [[:job (jobs.apiary.maintain {:center #at [21 1 16] :radius 1 :ways #{:carried}})]]
+   :act [[:job (jobs.apiary.maintain {:center #at [22 0 16] :radius 1 :ways #{:carried} :checks {:safe? (always)}})]]
    :expect [{:event {:kind :waiting :data {:reason :not-worth}} :within-s 30 :of-job true}
             {:no-event {:kind :completed} :for-s 20}
             {:no-event {:kind :walk-look.ended} :for-s 1}]}
