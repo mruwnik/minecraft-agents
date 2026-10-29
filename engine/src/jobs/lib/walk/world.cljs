@@ -533,7 +533,7 @@
 
 (defn body-policy
   "executor/policy for the body: the gait (:walk, :sneak) never sprints; with the walk's food (food-of) 6 or less the client does not sprint, so :sprint is false (a corner jump past
-  a high block is then refused). :damage-budget (hp, damage-budget) and :damage-weight (seconds an hp costs at its health, and the hunger it brings, cost/hunger-s)
+  a high block is then refused). :damage-budget (hp, damage-budget) and :damage-weight (seconds an hp costs at its health, and the mean hunger an hp of the budget brings, cost/hunger-s over the budget: it is a hinge, so not the first hp's)
   price the damage of a walk, :danger-cap the total hp a second its known dangers cost (jobs.lib.cost/danger-cap, more when the job's :danger-max-rate is) (the job's :hp-seconds arg: the seconds an hp costs at full health, default jobs.lib.cost/hp-seconds);
   :max-drop and :fall-factor follow its fall enchantments and the longest drop it survives (the survivable-budget under the job's :max-damage,
   whatever the budget: a drop the budget refuses is a refusal the planner reports as :damageRefused, jobs.lib.cost/fall-profile).
@@ -543,14 +543,16 @@
   [c]
   (let [self (.self (:primitives c))
         food (food-of c)
-        under? (breath/head-under? (:primitives c))]
+        under? (breath/head-under? (:primitives c))
+        budget (damage-budget c)
+        hp (max 1 budget)]
     (cond-> (merge executor/policy
                    (cost/fall-profile {:damage-budget (cost/survivable-budget (damage-body c) (select-keys (walk-settings c) [:max-damage]))
                                        :equipment (cost/equipment-of (.-equipment self))})
                    (cost/air-profile (.-equipment self) (array-seq (.-effects self)))
                    (cost/swim-profile (.-equipment self))
-                   {:damage-budget (damage-budget c)
-                    :damage-weight (+ (cost/hp-price (.-health self)) (cost/hunger-s food (.-health self) 1))
+                   {:damage-budget budget
+                    :damage-weight (+ (cost/hp-price (.-health self)) (/ (cost/hunger-s food (.-health self) hp) hp))
                     :danger-cap (max cost/danger-cap (:max-rate (cost/danger-opts)))}
                    (when-some [landing (cost/walk-landing)] {:landing landing})
                    {:drop-cost (cost/walk-drop-cost)}

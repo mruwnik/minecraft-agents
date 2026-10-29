@@ -12,7 +12,6 @@
   (:require [engine.args :as a]
             [engine.settings :as settings]))
 
-
 (a/defargs settings
   {::default-min-health {:default 12 :doc "Health a walk does not spend below." :spec (a/int-in 0 nil)}
    ::margin {:default 1 :doc "hp left over the floor." :spec (a/int-in 0 nil)}

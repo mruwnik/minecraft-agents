@@ -52,17 +52,19 @@
   (is (= #{7} (set (for [food [0 5 6 7 8 12 18 20]] (health/damage-budget {:health 20 :food food} {}))))))
 
 (deftest the-hunger-an-hp-brings-is-priced-and-falls-smoothly-as-the-food-rises
-  (let [hunger (fn [food damage] (cost/hunger-s food 20 damage))
-        pt (cost/food-point-worth)]
-    (is (= [(* 3 pt) (* 3 pt) (* 3 pt) (* 2 pt) pt 0 0] (map #(hunger % 3) [5 6 7 8 9 10 11])) "fed or not, each missing point of the new line costs a point")
-    (is (= [pt pt 0] (map #(hunger % 1) [6 7 8])) "one hp at food 6 (hungry) costs what it does at 7")
-    (is (zero? (cost/hunger-s 20 20 7)))))
+  (let [hunger (fn [damage food] (cost/hunger-s food 20 damage))
+        foods (range 5 12)]
+    (are [damage] (apply >= (map #(hunger damage %) foods)) 1 3 7)
+    (is (zero? (cost/hunger-s 20 20 7)) "fed: nothing")
+    (is (= 3 (/ (hunger 3 5) (cost/food-point-worth))) "far below the line, each hp costs a point")
+    (is (= (* 4 (cost/food-point-worth)) (hunger 7 10)) "a drop that crosses the line prices the points past it")))
 
 (deftest the-walk-policy-carries-the-budget-weight-and-the-longest-drop-it-survives
   (let [policy (fn [self args] (wworld/body-policy {:primitives (tu/fake {:self self}) :args args}))]
     (is (= [7 10 16] ((juxt :damage-budget :damage-weight :max-drop) (policy {:health 20 :food 20} {}))))
     (is (= [7 (+ 10 (cost/food-point-worth))] ((juxt :damage-budget :damage-weight) (policy {:health 20} {:food 7}))) "food 7: an hp brings hunger, priced")
     (is (= [3 12.5 16] ((juxt :damage-budget :damage-weight :max-drop) (policy {:health 16 :food 20} {}))))
+    (is (< 10 (:damage-weight (policy {:health 20} {:food 10}))) "food 10: the budget's drop crosses the hungry line, so the mean hp brings hunger")
     (is (= [1 16] ((juxt :damage-budget :max-drop) (policy {:health 20 :food 20} {:min-health 18}))) "a floor of 18: the drops it refuses are the budget's to refuse")
     (is (= [3 6] ((juxt :damage-budget :max-drop) (policy {:health 20 :food 20} {:max-damage 3}))))))
 
