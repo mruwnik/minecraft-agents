@@ -122,6 +122,14 @@
                  (map #(select-keys % [:pos :ways :floor :job-time :settings]) @calls)))
           (is (= {:arrived false :leg true :nearer false} (:data r))))))))
 
+(deftest an-entity-hidden-behind-a-wall-is-not-aimed-at
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom [])]
+          (await (run-chase {:entities [(assoc (cow 12) :kind "item" :visible false)]} {:pos {:x 3 :y 64 :z 0} :entity 7 :leg-s 4} calls (fn [c _] (leg-over c))))
+          (is (= [{:x 3 :y 64 :z 0}] (map :pos @calls)) "the last :pos, not the cow behind the wall"))))))
+
 (deftest under-see-a-thing-in-range-behind-a-wall-is-not-arrived
   (async done
     (tu/run-async done

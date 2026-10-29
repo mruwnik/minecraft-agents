@@ -6,12 +6,13 @@
             [jobs.lib.aim :as aim]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
+            [jobs.lib.look :as look]
             [jobs.lib.places :as places]
             [jobs.lib.util :as u]))
 
 (def doc
   "Walk one leg toward a thing that moves: a go-to child of at most :leg-s seconds aimed at where the thing is now. The
-  thing is the entity :entity (an id) or the player :player, seen within the radius setting (64); out of sight, the last
+  thing is the entity :entity (an id) or the player :player, seen within the radius setting (64; an entity behind a wall is not); out of sight, the last
   :pos given. A caller that wants more legs calls again, so it can look at its target, fight or check danger between legs.
   The :walk map is the go-to call (its args and call keys, such as :ways :doors :see :checks :settings :floor, and a
   :spend; :tries is 1 unless it says otherwise: a leg is re-aimed by the caller, not retried); :pos, :range and :spend :job-time are this job's.
@@ -50,10 +51,10 @@
                              (and (number? leg-s) (or pos entity player))))))
 
 (defn thing-pos
-  "Where the :entity or :player of the call stands now within the radius setting, else nil."
+  "Where the :entity or :player of the call is seen standing now within the radius setting, else nil."
   [c]
   (let [{:keys [entity player]} (:args c)
-        seen (array-seq (.entities (:primitives c) (clj->js (cond-> {:radius (settings/get settings ::radius)} player (assoc :kind "player")))))
+        seen (look/seen-objs (:primitives c) (cond-> {:radius (settings/get settings ::radius)} player (assoc :kind "player")))
         match? (cond entity #(= entity (.-id %))
                      player #(or (= player (.-username %)) (= player (.-name %))))]
     (when match?
