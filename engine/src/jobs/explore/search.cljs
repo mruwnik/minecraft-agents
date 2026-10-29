@@ -652,15 +652,30 @@
       :continue
       (some->> (seq quotes) (sort-by first) first second))))
 
+(defn ^:async walks-cheaper-than-night?
+  "Whether the walk to leg now beats waiting out the dark sky of a body sheltered in a room (ready/act-price: the night's
+  seconds left, then the walk by day, against the walk's own risk by go-to's quote), or :continue while a quote goes on."
+  [c leg wait]
+  (let [q (await (ctx/quote c 'jobs.movement.go-to (leg-args c leg)))]
+    (if (:estimate q)
+      :continue
+      (let [lethal (get-in q [:risk :lethal-hp] 0)
+            hurt (- (+ (get-in q [:risk :hp] 0) (second (get-in q [:uses :health] [0 0 0]))) lethal)
+            {:keys [now-s now? best]} (ready/act-price c hurt lethal (some-> (:wait-ms (nth wait 2 nil)) (/ 1000)))]
+        (not (and best (or (not now?) (< (:s best) now-s))))))))
+
 (defn ^:async walk!
   "One go-to call toward the leg (the last one before the failed legs in a row end the search may dig out); on its end book the leg arrived or failed. :continue when go-to yields or
-  the body is shut in a room under a dark sky (sheltered-dark, asked before go-to, which would dig out of a hut): the night
-  keeps the seal, so the round waits :dark with the leg kept. Else :again (or the ending when the failed legs in a row end the search)."
+  the body is shut in a room under a dark sky (sheltered-dark, asked before go-to, which would dig out of a hut) and
+  waiting for dawn costs less than the walk now (walks-cheaper-than-night?): the round waits :dark with the leg kept. Else :again (or the ending when the failed legs in a row end the search)."
   [c]
   (let [leg (:leg (ctx/mem c))
         [x y z] leg
-        wait (sheltered-dark c)
-        r (if wait (do (some-> (:child-wait c) (reset! (contract/status-cause wait))) :continue) (await (child/call-walk* c :leg (leg-args c leg))))]
+        shelter (sheltered-dark c)
+        cheaper (if shelter (await (walks-cheaper-than-night? c leg shelter)) true)
+        r (cond (= :continue cheaper) :continue
+                cheaper (await (child/call-walk* c :leg (leg-args c leg)))
+                :else (do (some-> (:child-wait c) (reset! (contract/status-cause shelter))) :continue))]
     (if (= :continue r)
       :continue
       (let [{:keys [in-water why] :as data} (:data r)
