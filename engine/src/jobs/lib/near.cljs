@@ -262,7 +262,8 @@
 (defn ^:async risky-wait!
   "For go-near!'s answer r: when it is :blocked for the price of the stay (risky-stay?) and another re-check is worth its
   price (cost/try-again? :risky-stay, after the refusals in a row, at ctx/worth), pause ::risky-wait-s (charged to the
-  caller's :job-time) and resolve :continue. Else nil: the refusal is the caller's to act on (any other answer clears the count)."
+  caller's :job-time) and resolve :continue. Else nil, and the count is cleared: the refusal is the caller's to act on, and
+  :near.risky-over is emitted only when a stay refused before is then answered otherwise (the retry won)."
   [c r]
   (if-not (and (= :blocked r) (risky-stay? c))
     (do (when (::risky-fails (ctx/mem c)) (ctx/emit! c :near.risky-over :info {}))
@@ -272,9 +273,11 @@
           wait-s (settings/get settings ::risky-wait-s)]
       (ctx/update-mem! c assoc ::risky-fails fails)
       (ctx/emit! c :near.risky-wait :info {:fails fails})
-      (when (cost/try-again? c :risky-stay {:fails fails :try-s wait-s})
-        (await (child/pause! c wait-s :risky-stay))
-        :continue))))
+      (if (cost/try-again? c :risky-stay {:fails fails :try-s wait-s})
+        (do (await (child/pause! c wait-s :risky-stay))
+            :continue)
+        (do (ctx/update-mem! c dissoc ::risky-fails)
+            nil)))))
 
 (defn in-range!
   "go-near!'s answer for a body already within range of cell: :there, or :blocked when the stay there (stay-s, nil: a

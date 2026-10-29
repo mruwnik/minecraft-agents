@@ -82,6 +82,22 @@
          (is (= [:blocked :continue :blocked false nil] @out))
          (done))))))
 
+(deftest a-refusal-handed-back-leaves-no-count-for-the-next-target
+  (async done
+    ((fn ^:async t []
+       (let [{:keys [eng clock seen]} (e/setup {:blocks (floor -2 -3 12 3) :light-default [0 0]})
+             job {:round (fn ^:async two-targets [c]
+                           (let [a (await (near/go-near! c {:x 2 :y 64 :z 0} 3 {:stay-s 600 :worth 1}))
+                                 _ (await (near/risky-wait! c a))
+                                 b (await (near/go-near! c {:x 8 :y 64 :z 0} 1))]
+                             (await (near/risky-wait! c b))
+                             (ctx/end c :done nil)))}]
+         (mem/write! (:store eng) :deaths {:pos {:x 3 :y 64 :z 0} :cause "zombie" :death-t (- @clock 4000)} core/deaths-policy)
+         (await (tu/child-outcome eng job {:worth 30} 1000))
+         (is (empty? (e/events-of seen :near.risky-over)) "target A was given up on: B's plain answer is no won retry")
+         (is (= [1] (mapv :fails (e/events-of seen :near.risky-wait))))
+         (done))))))
+
 (defn ^:async waits-by-a-killer
   "The pauses a job that re-asks go-near! (a stay by a zombie that killed the body, never fading) takes at the call's worth
   before risky-wait! hands the refusal back: [pauses answer-of-the-last-wait]."
