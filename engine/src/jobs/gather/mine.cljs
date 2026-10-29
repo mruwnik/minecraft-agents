@@ -218,9 +218,9 @@
   :again)
 
 (defn dig-text
-  "The dig's end text as the trip's: its leading \"dig-for\" is \"mine\"."
+  "The dig's end text as the trip's: its leading \"dig-for\" is \"mine\", a child's text is led by \"mine: \"."
   [text]
-  (str "mine" (str/replace-first text #"^dig-for" "")))
+  (if (str/starts-with? text "dig-for") (str "mine" (subs text 7)) (str "mine: " text)))
 
 (defn finish!
   "End the trip: the dig's ending in memory and the mend's count."

@@ -6,6 +6,7 @@
             [engine.ctx :as ctx]
             [engine.fake :as fake]
             [engine.memory :as mem]
+            [jobs.gather.mine :as mine]
             [jobs.gather.mine.cause :as cause]
             [jobs.lib.need :as need]
             [engine.mine-support :as m :refer [as-child rock-world inv cells]]
@@ -26,6 +27,10 @@
                    r)))))
 
 (def ore-world (assoc (rock-world {"3,64,1" "iron_ore"}) :inventory sturdy-pickaxe))
+
+(deftest the-digs-end-text-reads-as-the-trips
+  (is (= "mine got 1 of 2: no-tool" (mine/dig-text "dig-for got 1 of 2: no-tool")))
+  (is (= "mine: dark at 1 2 3" (mine/dig-text "dark at 1 2 3")) "a child's text keeps its words apart"))
 
 (deftest a-pickaxe-that-breaks-mid-dig-is-fetched-and-the-dig-goes-on
   (async done
