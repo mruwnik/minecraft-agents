@@ -28,7 +28,7 @@
             [jobs.survival.night :as night]
             [jobs.survival.night.flee :as flee]
             [jobs.survival.night.sites :as sites]
-            [engine.night-support :refer [night noon roof holds? write! status! closed-hut holds-after? sleeper offline-why on-return! sleep-count! log-out-child fired wide-ground hillside breached-room run-night-in home-roof lit-world know-home! night-at-home with-child-log walled-home walled-pen bed-world bed-places dug-into-home stone-room block-at room-with-doorway doorway-shut-early dawn-holds-now? dark-world flee-home-night stone-and-dirt-patch flee-with cave-blocks cave-night held-starving zombie]]))
+            [engine.night-support :refer [night noon roof holds? write! status! closed-hut holds-after? sleeper offline-why on-return! sleep-count! log-out-child fired wide-ground hillside breached-room run-night-in home-roof lit-world know-home! night-at-home with-child-log walled-home with-walled-home walled-pen bed-world bed-places dug-into-home stone-room block-at room-with-doorway doorway-shut-early dawn-holds-now? dark-world flee-home-night stone-and-dirt-patch flee-with cave-blocks cave-night held-starving zombie]]))
 
 (deftest with-flee-radius-0-the-night-holds-exposed
   (async done
@@ -44,7 +44,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (await (flee-home-night (update dark-world :blocks merge walled-home) {}))]
+        (let [{:keys [eng p seen]} (await (flee-home-night (with-walled-home dark-world) {}))]
           (st/dawn-after! p 6)
           (let [log (await (with-child-log #(tu/run-until-empty eng 80)))]
             (is (= 1 (count (filter #(= :flee (first %)) log))) "one walk, never the same target twice")
@@ -57,7 +57,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (await (flee-home-night (update dark-world :blocks merge walled-home) {}))]
+        (let [{:keys [eng p seen]} (await (flee-home-night (with-walled-home dark-world) {}))]
           (st/dawn-after! p 6)
           (await (with-child-log #(tu/run-until-empty eng 80)
                    (fn [_ k _ _] (when (= :flee k) {:kind :impossible :cause {:reason :stranded}}))))

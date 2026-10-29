@@ -28,7 +28,7 @@
             [jobs.lib.targets :as targets]
             [jobs.survival.night :as night]
             [jobs.survival.night.sites :as sites]
-            [engine.night-support :refer [night noon roof holds? write! status! closed-hut holds-after? sleeper offline-why on-return! sleep-count! log-out-child fired wide-ground hillside breached-room run-night-in home-roof lit-world know-home! night-at-home with-child-log walled-home walled-pen bed-world bed-places with-room dug-into-home stone-room block-at room-with-doorway doorway-shut-early dawn-holds-now? dark-world flee-home-night stone-and-dirt-patch flee-with cave-blocks cave-night]]))
+            [engine.night-support :refer [night noon roof holds? write! status! closed-hut holds-after? sleeper offline-why on-return! sleep-count! log-out-child fired wide-ground hillside breached-room run-night-in home-roof lit-world know-home! night-at-home with-child-log walled-home with-walled-home walled-pen bed-world bed-places with-room dug-into-home stone-room block-at room-with-doorway doorway-shut-early dawn-holds-now? dark-world flee-home-night stone-and-dirt-patch flee-with cave-blocks cave-night]]))
 
 (deftest a-roof-over-a-breached-room-does-not-end-the-night
   (run-night-in {:blocks breached-room :inventory st/wall-stack}
@@ -358,7 +358,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (await (night-at-home (update lit-world :blocks merge walled-home) {:x 10 :y 64 :z 0}))]
+        (let [{:keys [eng p]} (await (night-at-home (with-walled-home lit-world) {:x 10 :y 64 :z 0}))]
           (let [log (await (with-child-log #(tu/run-until-empty eng 60)))]
             (is (empty? (filter #(= :roof-walk (first %)) log)) "go-to's quote finds no route: no walk"))
           (is (seq (st/calls p "place")) "the night dug in"))))))
@@ -402,7 +402,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [j [0.0 0.5 0.99]]
-          (let [{:keys [eng p]} (await (night-at-home (update bed-world :blocks merge walled-home) {:x 10 :y 64 :z 0} {} {:rand (constantly j) :ray-deg 1 :radius 14}))
+          (let [{:keys [eng p]} (await (night-at-home (with-walled-home bed-world) {:x 10 :y 64 :z 0} {} {:rand (constantly j) :ray-deg 1 :radius 14}))
                 _ (await (tu/run-until-empty eng 60))
                 [placed :as places] (mapv st/arg-pos (bed-places p))]
             (is (= 1 (count places)) (str "one bed put down, sight jitter " j))
@@ -413,7 +413,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (await (night-at-home (-> bed-world (assoc :light-default [15 0]) (update :blocks merge walled-home)) {:x 10 :y 64 :z 0}))]
+        (let [{:keys [eng p]} (await (night-at-home (-> bed-world (assoc :light-default [15 0]) with-walled-home) {:x 10 :y 64 :z 0}))]
           (await (tu/run-until-empty eng 60))
           (is (= [] (bed-places p)) "the failed walk into the home does not put the bed down in the dark open, priced as sheltered")
           (is (= [] (st/calls p "sleep")))
@@ -506,7 +506,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p log]} (await (dug-into-home (update-vals walled-home #(if (= "bedrock" %) "stone" %))))]
+        (let [{:keys [p log]} (await (dug-into-home walled-home))]
           (is (= 1 (count (filter #(= :roof-walk (first %)) log))) "walked into the home once, not back and forth with the bed walk")
           (is (= [] (bed-places p)) "no bed in the open beside the home")
           (is (= [] (st/calls p "sleep")) "and no sleep out there"))))))

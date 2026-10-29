@@ -18,6 +18,7 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.shelter.beds :as sh-beds]
+            [jobs.lib.world-files :as ew]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.walk-pick :as pick]
             [jobs.survival.night :as night]
@@ -146,12 +147,13 @@
   ([world pos args] (night-at-home world pos args {}))
   ([world pos args {:keys [unseen rand ray-deg radius home?] :or {ray-deg 2 radius 24 home? true}}]
   (let [[seen sink] (tu/legacy-capture-sink)
-        raw-p (tu/fake (merge {:offlineScale 0.0001 :floor tu/walk-floor} (dissoc world :light-default :light)))
+        raw-p (tu/fake (merge {:offlineScale 0.0001 :floor tu/walk-floor} (dissoc world :light-default :light :zones)))
         _ (swap! (fake/state raw-p) merge (select-keys world [:light-default :light]))
         per (perception/create (fake-raw/create raw-p) {:ray-deg ray-deg :radius radius :now (constantly 1000000) :rand (or rand (constantly 0.5))})
         p (perception/wrap raw-p per)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                           :now (constantly 1000000)
+                          :world (ew/of-data {} {} (:zones world []))
                           :events (events/make {:body "Fake" :sinks [sink] :now (constantly 1000000)})})]
     (when-not unseen
       (aset p "seenBlockAt" (fn [pos] #js {:name (.-name (.blockAt raw-p pos)) :pos pos :age-ms 0}))
@@ -188,8 +190,18 @@
      @log)))
 
 (def walled-home
-  "The home walled in with an unbreakable block, which go-to never digs to reach it."
-  (into home-roof (for [x [9 10 11] y [64 65] z [-1 0 1] :when (not= [x z] [10 0])] [(str x "," y "," z) "bedrock"])))
+  "The home walled in with stone bricks, on the one-cell home's open west side too."
+  (into home-roof (for [x [9 10 11] y [64 65] z [-1 0 1] :when (not= [x z] [10 0])] [(str x "," y "," z) "stone_bricks"])))
+
+(def walled-home-zones
+  "Another owner's zones over the home's four walls and its roof: go-to may not dig them."
+  (mapv (fn [[n lo hi]] {:name n :owner "Other" :min lo :max hi})
+        [["w-west" [9 64 -1] [9 65 1]] ["w-east" [11 64 -1] [11 65 1]] ["w-north" [9 64 -1] [11 65 -1]] ["w-south" [9 64 1] [11 65 1]] ["w-roof" [10 66 0] [10 66 0]]]))
+
+(defn with-walled-home
+  "world with walled-home under another owner's zones (night-at-home passes a world's :zones to the engine)."
+  [world]
+  (-> world (update :blocks merge walled-home) (assoc :zones walled-home-zones)))
 
 (def walled-pen
   "A cell at [10 64 4] walled in with a built block, which go-to never digs to reach it."

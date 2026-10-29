@@ -19,17 +19,21 @@
    :expect [{:event {:source :job :kind :place.set :data {:name :bed :auto true :pos [:near #at [12 0 12] 4.5]}} :within-s 90}]
    :after [[:item "red_bed" 0] [:body-near [12.5 0 12.5] 5]]
    :limit-s 100}
-  ;; aedc6ef7: no way in (stone bricks are built blocks, go-to never digs them). Alone on the server the body's own sleep skips the night
+  ;; aedc6ef7: no way in (the walls are another owner's zones, so go-to may not dig them). Alone on the server the body's own sleep skips the night
   ;; and a bed makes the respawn point near its work, worth more than the seconds to place it and lie down: the walk in fails, the
   ;; bed is priced again where the body stands and put down outside. (With others awake the bed stays in the bag: night-c-test.)
   {:name "walled-home-alone-puts-the-carried-bed-down-outside-and-sleeps"
    :time :night-exclusive
    :time-why :sleep
    :blocks [[:fill [8 0 8] [16 3 16] "stone_bricks" :hollow]]
+   :zones [{:name "w-west" :min [8 0 8] :max [8 3 16] :owner "Other"} {:name "w-east" :min [16 0 8] :max [16 3 16] :owner "Other"}
+           {:name "w-north" :min [8 0 8] :max [16 3 8] :owner "Other"} {:name "w-south" :min [8 0 16] :max [16 3 16] :owner "Other"}
+           {:name "w-roof" :min [8 3 8] :max [16 3 16] :owner "Other"} {:name "w-floor" :min [8 0 8] :max [16 0 16] :owner "Other"}]
    :body {:at [12.5 0 19.5] :inventory [["red_bed" 1] ["cobblestone" 16]]}
    :act [[:job (jobs.memory.set-place {:name :home :pos #at [12 0 12]}) [:now]]
          [:job (jobs.survival.night)]]
    :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 120}]
+   :after [[:item "red_bed" 0] [:body-near [12.5 0 19.5] 5]]
    :limit-s 130}
   ;; 724f7976: a 2-high hole in the east wall and a fresh :bed-open entry in the room: the room_open warn, then walled in under the roof
   {:name "hut-with-a-hole-is-walled-in-not-left-roofed"
