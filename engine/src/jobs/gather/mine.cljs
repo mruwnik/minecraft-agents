@@ -272,7 +272,7 @@
         (cond-> (get-in d [:tunnel :heading]) (assoc :dug-heading (get-in d [:tunnel :heading]))))))
 
 (defn round-worth?
-  "Whether another equip round is worth its price: none has failed in a row (u/failed!, a round after which the dig cut cells is u/progress!), else cost/try-again? :craft."
+  "Whether another equip round is worth its price: none has failed in a row (u/failed!, a round after which the dig cut cells is u/progress!), else cost/try-again? :craft (tool and torch rounds are crafts and fetches, which win more often than digs)."
   [c]
   (or (zero? (u/failures c)) (cost/try-again? c :craft)))
 

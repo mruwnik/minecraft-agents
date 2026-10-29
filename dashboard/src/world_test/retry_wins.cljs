@@ -4,7 +4,7 @@
   job id), won or failed again, fitted as a Beta prior over the calls' shares (field-passes/beta-fit; the uniform [1 1]
   with none), and :try-s, the mean seconds from a failed try's end to the next try's end (with no retry, the mean seconds of
   one try, start to end). Kinds (`kinds`): :craft the craft action (a timeout fails), :furnace the furnace action (a busy
-  slot fails), :dig the dig action (a timeout, a failure or an unreachable block fails), :place the place and jumpPlace actions (an occupied cell, no support, a failure or a timeout fails), :walk a go-to's result (not arrived
+  slot fails), :dig the dig action (a timeout, a failure or an unreachable block fails), :place the place action (an occupied cell, no support, a failure or a timeout fails) and jumpPlace (no block raised, part of them, or a timeout fails), :walk a go-to's result (not arrived
   fails), :respond respond-to-hostile's :hostile.call (a call that changed nothing fails), :risky-stay jobs.lib.near/risky-wait!'s
   events (:near.risky-wait a refusal, :near.risky-over the stay allowed after one), :comb-look jobs.apiary.harvest's look
   for comb (:apiary.comb-wait a look that took none, :apiary.comb-over a look that took some after one); :pooled all kinds' tries together,
@@ -15,7 +15,7 @@
 
 (def kinds "Action name -> [kind, the statuses that fail a try]." {"craft" [:craft #{"timeout"}] "furnace" [:furnace #{"busy"}] "dig" [:dig #{"timeout" "failed" "unreachable"}]
                                                  "place" [:place #{"occupied" "no-support" "failed" "timeout"}]
-                                                 "jumpPlace" [:place #{"occupied" "no-support" "failed" "timeout"}]})
+                                                 "jumpPlace" [:place #{"partial" "failed" "timeout"}]})
 
 (defn- field [line re] (second (re-find re line)))
 

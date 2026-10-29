@@ -2,11 +2,14 @@
   "mine and get-seeds run as one whole attempt: a single tick of the engine digs, tunnels, mends and walks home."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.fake :as fake]
             [engine.get-seeds-test :as gs]
             [engine.memory :as mem]
             [engine.mine-support :as m]
-            [engine.test-util :as tu]))
+            [engine.test-util :as tu]
+            [jobs.gather.mine :as mine]
+            [jobs.lib.util :as u]))
 
 (deftest mine-digs-a-patch-mends-and-ends-in-one-round
   (async done
@@ -189,3 +192,12 @@
         (let [[_ sand ev] (await (hungry-mine 2 [{:name "torch" :count 10}]))]
           (is (= :count (:reason ev)))
           (is (>= sand 6)))))))
+
+(defn rounds-until-refused
+  "How many equip rounds in a row that cut nothing a call of the given worth still starts."
+  [worth]
+  (with-redefs [ctx/worth (constantly worth)]
+    (count (take-while #(with-redefs [ctx/mem (constantly {::u/failures %})] (mine/round-worth? {})) (range 1 1000)))))
+
+(deftest equip-rounds-that-cut-nothing-are-priced-as-crafts-and-stop-after-a-bounded-count
+  (is (<= 1 (rounds-until-refused 100) 20) "tool and torch rounds are crafts and fetches, which win far more often than digs: a few go on, not none and not for ever"))
