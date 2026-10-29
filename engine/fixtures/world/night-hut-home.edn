@@ -1,5 +1,5 @@
 ;; The night job and a hut (cards aedc6ef7 724f7976 9570fa13): a carried bed outside a roofed :home is walked in and put down
-;; inside; a walled home keeps the bed in the bag; a hut with a hole in its wall is no shelter (room_open, walled in) while an intact
+;; inside; a walled home gets the bed outside when the body sleeps alone; a hut with a hole in its wall is no shelter (room_open, walled in) while an intact
 ;; one with a stale :bed-open entry still ends :roofed; the night sleeps in the hut's live respawn bed whatever stale :bed place is
 ;; remembered far off, and ignores a respawn bed that is gone.
 ;; Hut: stone x 8..16, z 8..16, y 0..3, room 9..15 a case that sleeps is :night-exclusive.
@@ -19,15 +19,17 @@
    :expect [{:event {:source :job :kind :place.set :data {:name :bed :auto true :pos [:near #at [12 0 12] 4.5]}} :within-s 90}]
    :after [[:item "red_bed" 0] [:body-near [12.5 0 12.5] 5]]
    :limit-s 100}
-  ;; aedc6ef7: no way in (stone bricks are built blocks, go-to never digs them): the carried bed is not put down outside
-  {:name "walled-home-keeps-the-carried-bed-in-the-bag"
+  ;; aedc6ef7: no way in (stone bricks are built blocks, go-to never digs them). Alone on the server the body's own sleep skips the night
+  ;; and a bed makes the respawn point near its work, worth more than the seconds to place it and lie down: the walk in fails, the
+  ;; bed is priced again where the body stands and put down outside. (With others awake the bed stays in the bag: night-c-test.)
+  {:name "walled-home-alone-puts-the-carried-bed-down-outside-and-sleeps"
+   :time :night-exclusive
+   :time-why :sleep
    :blocks [[:fill [8 0 8] [16 3 16] "stone_bricks" :hollow]]
    :body {:at [12.5 0 19.5] :inventory [["red_bed" 1] ["cobblestone" 16]]}
    :act [[:job (jobs.memory.set-place {:name :home :pos #at [12 0 12]}) [:now]]
          [:job (jobs.survival.night)]]
-   :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 120 :of-job true}
-            {:no-event {:source :job :kind :place.set :data {:name :bed}} :for-s 120 :until {:source :job :kind :shut-in.sealed}}]
-   :after [[:item "red_bed" 1]]
+   :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 120}]
    :limit-s 130}
   ;; 724f7976: a 2-high hole in the east wall and a fresh :bed-open entry in the room: the room_open warn, then walled in under the roof
   {:name "hut-with-a-hole-is-walled-in-not-left-roofed"
