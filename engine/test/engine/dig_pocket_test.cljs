@@ -330,7 +330,7 @@
   (let [c (fn [item] (assoc (ctx-of (tu/seeing-all (tu/fake {:blocks ground :inventory [{:name item :count 20}]})))
                             :args {:for :night}))
         q (fn [item] (wall-in/quote-of (c item)))
-        open (wall-in/open-count (c "stone"))]
-    (is (= (* open (settings/get way/settings ::way/night-place-s)) (get-in (q "stone") [:uses :job-time 1])) "placing only, however dear the block")
-    (is (= (get-in (q "dirt") [:uses :job-time 1]) (get-in (q "stone") [:uses :job-time 1])))
-    (is (< (:morning-s (q "dirt")) (:morning-s (q "stone"))) "the dig back is morning-s's")))
+        open (wall-in/open-count (c "oak_planks"))]
+    (is (= (* open (settings/get way/settings ::way/night-place-s)) (get-in (q "oak_planks") [:uses :job-time 1])) "placing only, however dear the block")
+    (is (= (get-in (q "dirt") [:uses :job-time 1]) (get-in (q "oak_planks") [:uses :job-time 1])))
+    (is (< (:morning-s (q "dirt")) (:morning-s (q "oak_planks"))) "the dig back is morning-s's")))
