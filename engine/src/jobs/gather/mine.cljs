@@ -381,10 +381,12 @@
 (def meta {:tags [:goal :mine :dig :ore :light] :position-bound? true})
 
 (defn worth-of
-  "Seconds a root mine is worth: the cost/goal-value of the items still to carry up to :count (the :item, else what the :block drops)."
+  "Seconds a root mine is worth: the cost/goal-value of the items still to carry up to :count, once, at the cheapest of the :item (one or several, any counts), else of what the :block drops."
   [c]
   (let [{:keys [item block count]} (:args c)
         p (:primitives c)
-        names (if item [item] (blocks/drops-of p block))
+        names (if item (items (:args c)) (blocks/drops-of p block))
         left (max 0 (- (or count 1) (reduce + (map #(u/carried-count p %) names))))]
-    (:value (cost/goal-value (mapv (fn [n] {:name n :count left}) names)))))
+    (if (empty? names)
+      (:value (cost/goal-value []))
+      (transduce (map #(:value (cost/goal-value [{:name % :count left}]))) min ##Inf names))))

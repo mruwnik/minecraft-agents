@@ -70,6 +70,8 @@
     (is (priced? (mine {:item "coal" :count 2})))
     (is (= (* 2 (mine {:item "coal" :count 1})) (mine {:item "coal" :count 2})))
     (is (= (mine {:item "coal" :count 1}) (worth 'jobs.gather.mine (tu/fake {:inventory [(item "coal" 1)]}) {:item "coal" :count 2})) "what is carried is got already")
+    (is (priced? (mine {:item ["coal" "charcoal"] :count 2})) "a list of items")
+    (is (= (mine {:item ["coal" "charcoal"] :count 2}) (min (mine {:item "coal" :count 2}) (mine {:item "charcoal" :count 2}))) "any counts toward :count: priced once, not per item")
     (is (= (mine {:item "cobblestone" :count 3}) (mine {:block "stone" :count 3})) "a block is worth what it drops")))
 
 (deftest set-spawn-is-worth-the-respawn-at-its-bed
