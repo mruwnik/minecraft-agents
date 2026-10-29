@@ -1119,3 +1119,21 @@
     [] false
     ["cow" "pig"] true
     ["cow" "iron_ore"] false))
+
+(deftest steps-that-show-nothing-new-are-no-progress-so-the-failed-walks-end-it-stuck
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              [seen sink] (tu/legacy-capture-sink)
+              p (tu/seeing-all (tu/fake {:floor tu/walk-floor}))
+              eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                                :world (world/of-data {} {} [])
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
+              s {:eng eng :clock clock :seen seen}]
+          ;; a starving body's food worth: legs priced, the search radius ~200 blocks round a 70x20 floor whose edge no walk passes
+          (core/submit! eng (list 'jobs.explore.search {:target ["chicken" "cow" "pig" "sheep"] :worth 1790 :spend {:job-time 1790}}) {})
+          (await (run-until-done s 400))
+          (let [e (not-found-of s)]
+            (is (= :stuck (:why e)) (pr-str (dissoc e :coverage)))
+            (is (< (get-in e [:coverage :legs]) 16) "not a walk toward each of the ~450 unseen columns past the edge")))))))

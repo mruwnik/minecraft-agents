@@ -101,8 +101,7 @@
       (fn ^:async t []
         (doseq [[zone extra taken] [[{:name "pantry" :min [19 60 -1] :max [21 70 1] :owner "Miles"} {} []]
                                     [{:name "pantry" :min [19 60 -1] :max [21 70 1] :owner "Fake"} {} ["bread"]]
-                                    [{:name "pantry" :min [19 60 -1] :max [21 70 1] :owner "Miles"} {:ignore-zones? true} ["bread"]]]
-                :let [extra (assoc extra :explore false)]] ; a starving search walks hundreds of legs on the fake floor, whose clock never moves
+                                    [{:name "pantry" :min [19 60 -1] :max [21 70 1] :owner "Miles"} {:ignore-zones? true} ["bread"]]]]
           (let [{:keys [eng p]} (setup {:self {:food 0} :containers {"20,64,0" [{:name "bread" :count 4}]}} [zone])]
             (know-source! eng {:x 20 :y 64 :z 0} :chest)
             (core/submit! eng (list 'jobs.survival.get-food extra) {})
@@ -117,7 +116,7 @@
               {:keys [eng p]} (setup {:self {:food 0} :containers two-chests} [pantry])]
           (know-source! eng {:x 30 :y 64 :z 0} :chest)
           (know-source! eng {:x 20 :y 64 :z 0} :chest)
-          (core/submit! eng '(jobs.survival.get-food {:explore false}) {})
+          (core/submit! eng '(jobs.survival.get-food {}) {})
           (await (run-until-empty eng 30))
           (is (= ["apple"] (mapv #(.-item (.-args %)) (calls p "transfer")))))))))
 
@@ -130,7 +129,7 @@
         (let [pantry {:name "pantry" :min [19 60 -1] :max [21 70 1] :owner "Miles"}
               {:keys [eng p]} (setup {:self {:food 0} :containers two-chests} [pantry] pantry-plan)]
           (mem/write! (:store eng) :fetch/stock {:pos [20 64 0] :items {"bread" 4}} {:cap 5 :ttl :forever})
-          (core/submit! eng '(jobs.survival.get-food {:explore false}) {})
+          (core/submit! eng '(jobs.survival.get-food {}) {})
           (await (run-until-empty eng 30))
           (is (empty? (calls p "transfer"))))))))
 

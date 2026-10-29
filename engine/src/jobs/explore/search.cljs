@@ -60,7 +60,7 @@
   counted in max-legs) and looked at again (over water the step swims, glancing ahead as it goes, so a far shore comes into sight; a step ending in water is progress, not a failure); within 3 blocks of it, it is recorded failed. An unloaded column is not tried but looked at again later. When only unloaded ones are
   left the round pauses 2 s (jobs.time.noop, holding :chunks-loading) and yields, until they load or the call's time is spent (a body just logged in has no chunks
   yet). Unloaded ones farther than ::load-reach (64) from the body (a far :center) are walked toward instead, once the ground under it is loaded. A walk go-to gives up on is recorded :unreachable. The next walk after
-  such failures in a row is tried while cost/try-again? :walk says it is worth its price, else the search ends :stuck (never at the default worth ##Inf: only :spend, legs and distance stop it); until a leg arrives, a leg within 60 degrees of the way one failed from where the
+  such failures in a row (a step that arrives with its column still unseen breaks no row: it showed nothing new) is tried while cost/try-again? :walk says it is worth its price, else the search ends :stuck (never at the default worth ##Inf: only :spend, legs and distance stop it); until a leg arrives, a leg within 60 degrees of the way one failed from where the
   body stands waits (the same obstacle likely blocks it), and the search ends :stuck when only such legs are left.
   A leg whose goal lies by a mob the body would flee is not walked (go-to :goal-danger
   :end): it is recorded :goal-dangerous, no stuck walk; a step toward an unseen column given up so leaves that column.
@@ -662,6 +662,11 @@
             {:keys [now-s now? best]} (ready/act-price c hurt lethal (some-> (:wait-ms (nth wait 2 nil)) (/ 1000)))]
         (not (and best (or (not now?) (< (:s best) now-s))))))))
 
+(defn column-seen?
+  "Whether the column [x z] a step walked toward is no longer unseen from where the body stands: the step showed it."
+  [c [x z]]
+  (not= :unseen (:fail (stand-cell (seen-at (:primitives c)) x z ((here c) 1)))))
+
 (defn ^:async walk!
   "One go-to call toward the leg (the last one before the failed legs in a row end the search may dig out); on its end book the leg arrived or failed. :continue when go-to yields or
   the body is shut in a room under a dark sky (sheltered-dark, asked before go-to, which would dig out of a hut) and
@@ -680,7 +685,8 @@
             cause (contract/cause-key r)
             floor (when (and (map? (:cause r)) (:floor (:cause r))) (select-keys (:cause r) [:floor :min]))
             res (assoc data :reason cause)
-            step? (some? (:leg-column (ctx/mem c)))
+            column (:leg-column (ctx/mem c))
+            step? (some? column)
             arrived (and (:arrived data) (or step? (not in-water)))
             dangerous? (= :goal-dangerous (or why cause))
             [hx _ hz] (here c)]
@@ -693,7 +699,8 @@
                                                                                     floor (assoc :floor floor)))
                                      (and (not arrived) (not (interrupted? res)) (:leg-column m)) (-> (update :tried (fnil conj []) (:leg-column m))
                                                                               (cond-> (not dangerous?) (update :legs (fnil inc 0)))))))
-        (cond arrived (u/progress! c)
+        (cond (and arrived (or (not step?) (column-seen? c column))) (u/progress! c)
+              arrived nil
               (not dangerous?) (u/failed! c))
         (if (and (not arrived) (not dangerous?) (not (cost/try-again? c :walk))) (finish! c :not-found :stuck) :again)))))
 
