@@ -29,6 +29,11 @@
             (nil? (own-build cell))
             (or (boolean (:ignore-zones? (:args c))) (nil? (access/trespass-refusal @rules :dig (zipmap [:x :y :z] cell)))))))))
 
+(defn put-back-s
+  "Seconds putting back block n costs (jobs.lib.cost.ways/put-back-cost of its worth): 0 for a block its dig drops itself (nil: not seen)."
+  [p n]
+  (cw/put-back-cost (if (or (nil? n) (some #{n} (b/drops-of p n))) 0 (:value (cost/item-value [{:name n :count 1}])))))
+
 (defn own-cut-fn
   "(cut-s cell): seconds cutting cell costs on top of its dig when it is the body's own build (own-build-fn): putting it
   back (jobs.lib.cost.ways/put-back-cost, the block's worth when it drops something else) and, for the wall of its stocked
@@ -41,8 +46,7 @@
     (fn [cell]
       (if-let [kind (own-build cell)]
         (let [n (u/seen-name p (zipmap [:x :y :z] cell))
-              lost (if (or (nil? n) (some #{n} (b/drops-of p n))) 0 (:value (cost/item-value [{:name n :count 1}])))
-              back (cw/put-back-cost lost)]
+              back (put-back-s p n)]
           (+ back (if (= :pen kind) (cost/herd-loss @herd (+ back (or (some-> n cost/dig-cost) 0))) 0)))
         0))))
 

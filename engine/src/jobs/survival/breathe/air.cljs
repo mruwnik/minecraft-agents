@@ -14,7 +14,8 @@
             [jobs.lib.swim :as swim]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.cost :as cost]
-            [jobs.lib.cost.ways :as cw]
+            [jobs.lib.cost.answer :as answer]
+            [jobs.lib.threats :as threats]
             [jobs.lib.own-builds :refer [own-build-fn]]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.tidy :as tidy]
@@ -67,16 +68,27 @@
             true
             :dug)))))
 
-(defn death-averted
-  "Seconds the death of a drowning costs (cost/death-s)."
-  [c]
-  (cost/death-s (:primitives c) (ctx/view c)))
+(defn averted-s
+  "Seconds a drowning averts that body ({:health :absorption} and death-body's keys) would take with death-s the cost of
+  dying: the death of its drowning (all its life, in the 2 hp ticks of drowning) at death-s, and the hp it lives through
+  at hp-price."
+  [body death-s]
+  (let [drowning {:damage (+ (or (:health body) 20) (or (:absorption body) 0)) :hit 2}]
+    (+ (* (cost/death-chance body drowning) death-s)
+       (cost/hp-cost (:health body) (answer/lived-damage body drowning)))))
+
+(defn opening-s
+  "Seconds opening the seal at cell v costs body with the known threats (jobs.lib.threats/threats-of) about: the hurt and
+  the death they risk (cost/opening-price of the route {:cells [v] :threats}) at `at`."
+  [body threats v at]
+  (let [route {:cells [v] :threats threats}]
+    (cost/opening-price body (:hurt (cost/route-parts body route)) route at)))
 
 (defn judge-fn
   "(judge cell block): why cell may not be the cap, else nil. A kept seal (mem :seal-kept) or an own build is dug when
-  its price (the block put back, jobs.lib.cost.ways/put-back-cost of its goal-value or own-cut-fn, and for a seal
-  the opening-price of the exposure) is under the death a drowning averts (cost/death-s): else :too-dear. Another
-  owner's zone or claim, ignore-zones? or not, refuses a non-natural block (:not-natural)."
+  its price (the block put back, jobs.lib.cost.ways/put-back-cost via holes/put-back-s or own-cut-fn, and for a seal
+  the opening-price of the hurt and death of the known threats, jobs.lib.threats/threats-of) is under what the drowning
+  averts (averted-s): else :too-dear. Another owner's zone or claim refuses a non-natural block (:not-natural)."
   [c]
   (let [p (:primitives c)
         zoned (assoc-in c [:args :ignore-zones?] false)
@@ -84,9 +96,10 @@
         own-build (own-build-fn c)
         own-cut (own-cut-fn c)
         kept (:seal-kept (ctx/mem c) #{})
-        body (delay (assoc (cost/death-body p (ctx/view c)) :health (.-health (.self p))))
-        averted (delay (death-averted c))
-        feet (delay (u/self-pos c))]
+        body (delay (assoc (threats/death-body c) :absorption (.-absorption (.self p))))
+        averted (delay (averted-s @body (cost/death-s p (ctx/view c))))
+        feet (delay (u/self-pos c))
+        threats (delay (threats/threats-of c))]
     (fn [cell n]
       (let [v (u/cell-vec cell)
             own? (some? (own-build v))
@@ -94,8 +107,8 @@
         (cond
           (or own? sealed?)
           (let [price (+ (own-cut v)
-                         (if (and sealed? (not own?)) (cw/put-back-cost (:value (cost/goal-value [{:name n :count 1}]))) 0)
-                         (if sealed? (cost/opening-price @body 0 {:cells [v]} @feet) 0))]
+                         (if (and sealed? (not own?)) (holes/put-back-s p n) 0)
+                         (if sealed? (opening-s @body @threats v @feet) 0))]
             (when-not (< price @averted) :too-dear))
           (and (not (rules/natural? n)) (not (may-dig? v))) :not-natural)))))
 
