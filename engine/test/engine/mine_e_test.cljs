@@ -52,7 +52,7 @@
             (fn ^:async b [] (core/submit! (:eng s) (spec {:block "sand" :ways #{:seen}}) {})
             (await (run-ticks s 6)))))
           (is (seq @opts))
-          (is (zero? (:failures (job-mem s) 0)) "a waiting walk is no failure")
+          (is (zero? (:jobs.lib.util/failures (job-mem s) 0)) "a waiting walk is no failure")
           (is (zero? (dig-count s))))))))
 
 (deftest a-mine-started-on-its-own-stair-ignores-the-dark
@@ -101,7 +101,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:block "sand" :count 1 :ways #{:seen} :settings {:jobs.gather.dig-for/max-failures 1}}
+        (let [s (await (scenario {:block "sand" :count 1 :ways #{:seen}}
                                  {:floor [0 0 0 0] :blocks {"0,63,0" "sand" "0,62,0" "stone"}} 20))]
           (is (empty? (dug-cells s)) "a pillar top is never dug from on top")
           (is (= [{:x 0 :y 63 :z 0}] (mapv :pos (events-of s :mine.refused))))
@@ -504,16 +504,20 @@
     (is (empty? (mine/lava-side-tolls {:primitives p} {:x 20 :y 63 :z 20})))
     (is (= tolls (:tolls (mine/dig-walk-opts {} false nil tolls))))))
 
-(deftest a-walk-that-gives-up-for-a-passing-reason-is-told-and-counted
+(deftest a-walk-that-gives-up-for-a-passing-reason-is-told-and-priced-against-the-worth
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [stub {:round (fn [c] (ctx/end c :nothing-possible {:reason :unreachable :why :no-progress} {:arrived false}))}
-              s (start {:world {:blocks (cells "sand" [15] [64] [-1 0 1 2])} :jobs (assoc registry/jobs 'jobs.movement.go-to stub)})]
-          (core/submit! (:eng s) (spec {:block "sand" :count 4 :ways #{:seen}}) {})
-          (await (run-ticks s 60))
-          (is (= [:no-progress :no-progress :no-progress] (mapv :why (events-of s :mine.walk-failed))))
-          (is (= :gave-up (:reason (done-event s)))))))))
+              failed (fn ^:async f [worth]
+                       (let [s (start {:world {:blocks (cells "sand" [15] [64] [-1 0 1 2])} :jobs (assoc registry/jobs 'jobs.movement.go-to stub)})]
+                         (core/submit! (:eng s) (spec {:block "sand" :count 4 :ways #{:seen} :worth worth}) {})
+                         (await (run-ticks s 60))
+                         [(count (events-of s :mine.walk-failed)) (:reason (done-event s))]))
+              [cheap-walks cheap-end] (await (failed 20))
+              [dear-walks _] (await (failed 5000))]
+          (is (= [1 :gave-up] [cheap-walks cheap-end]) "a cheap goal is not worth a second walk after the first gave up")
+          (is (> dear-walks cheap-walks) "a dear goal is"))))))
 
 (deftest cells-a-call-gave-up-on-are-passed-on-and-not-walked-to-again
   (async done
@@ -526,10 +530,10 @@
               _ (await (run-ticks first-run 60))
               gave-up (:skipped (done-event first-run))
               s (start world)]
-          (is (= 3 (count gave-up)))
+          (is (= 4 (count gave-up)))
           (core/submit! (:eng s) (spec {:block "sand" :count 4 :ways #{:seen} :skip gave-up}) {})
           (await (run-ticks s 60))
-          (is (= [:no-progress] (mapv :why (events-of s :mine.walk-failed)))))))))
+          (is (empty? (events-of s :mine.walk-failed))))))))
 
 (deftest a-stair-that-stopped-own-zone-with-the-body-inside-the-zone-walks-out-and-digs-again
   (async done

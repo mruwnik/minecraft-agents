@@ -248,10 +248,10 @@
       (fn ^:async t []
         (let [s (start {:world {:blocks (cells "sand" [3 4 5 6 7 8] [64] [0])}})]
           (.override (.-world (:p s)) "dig" (fn ^:async f [_ _ _] #js {:status "cannot"}))
-          (core/submit! (:eng s) (spec {:block "sand" :settings {:jobs.gather.dig-for/max-failures 2} :ways #{:seen}}) {})
+          (core/submit! (:eng s) (spec {:block "sand" :ways #{:seen}}) {})
           (await (run-ticks s 30))
           (is (= :none (:reason (done-event s))))
-          (is (zero? (:failures (job-mem s) 0)))
+          (is (zero? (:jobs.lib.util/failures (job-mem s) 0)))
           (is (= 6 (dig-count s)) "each cell once")
           (is (finished? s)))))))
 
@@ -265,7 +265,7 @@
                                  {:blocks (merge floor sand) :unreachable (vec (keys sand))} 30))]
           (is (= [4] (map :cluster (events-of s :mine.unreachable))) "one event per touching cluster, not per block")
           (is (empty? (filter (set (map #(mapv js/Number (clojure.string/split % #",")) (keys sand))) (dug-cells s))) "the unreachable ore is never dug")
-          (is (zero? (:failures (job-mem s) 0)))
+          (is (zero? (:jobs.lib.util/failures (job-mem s) 0)))
           (is (finished? s)))))))
 
 (deftest seen-ore-behind-a-wall-the-walk-cannot-pass-is-cut-to-once-then-skipped
@@ -279,7 +279,7 @@
                                  {:blocks (merge floor wall ore) :drops {"iron_ore" "raw_iron"} :inventory pickaxe :unreachable (vec (keys ore))} 60))]
           (is (<= 2 (dig-count s)) "rock was dug toward the ore")
           (is (= 1 (count (events-of s :mine.unreachable))) "then it was skipped, no failure")
-          (is (zero? (:failures (job-mem s) 0)))
+          (is (zero? (:jobs.lib.util/failures (job-mem s) 0)))
           (is (finished? s)))))))
 
 (deftest a-short-first-walk-is-partial-and-the-job-ends-without-digging

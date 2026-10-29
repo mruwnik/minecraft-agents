@@ -4,12 +4,12 @@
   job id), won or failed again, fitted as a Beta prior over the calls' shares (field-passes/beta-fit; the uniform [1 1]
   with none), and :try-s, the mean seconds from a failed try's end to the next try's end (with no retry, the mean seconds of
   one try, start to end). Kinds (`kinds`): :craft the craft action (a timeout fails), :furnace the furnace action (a busy
-  slot fails), :walk a go-to's result (not arrived fails).
+  slot fails), :dig the dig action (a timeout, a failure or an unreachable block fails), :walk a go-to's result (not arrived fails).
   Pure parts: scan-line, retries, report."
   (:require [clojure.string :as str]
             [world-test.field-passes :as passes]))
 
-(def kinds "Action name -> [kind, the statuses that fail a try]." {"craft" [:craft #{"timeout"}] "furnace" [:furnace #{"busy"}]})
+(def kinds "Action name -> [kind, the statuses that fail a try]." {"craft" [:craft #{"timeout"}] "furnace" [:furnace #{"busy"}] "dig" [:dig #{"timeout" "failed" "unreachable"}]})
 
 (defn- field [line re] (second (re-find re line)))
 

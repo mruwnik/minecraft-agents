@@ -272,7 +272,7 @@
   "Skip the target and count a failure."
   [c pos]
   (skip! c pos)
-  (ctx/update-mem! c update :failures (fnil inc 0)))
+  (u/failed! c))
 
 (defn cluster-of
   "pos and the cells of targets joined to it by touching sides, edges or corners."

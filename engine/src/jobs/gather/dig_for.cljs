@@ -58,7 +58,7 @@
      Each text says what is missing and that jobs.gather.mine gets it first.
   1. Collecting the drop of a dig (mine.targets, mine.drops): collect-drops within the collect-radius setting, one walk or cut to the dug cell, a
      drop still lying is mine.left-behind, a dig that brought nothing and shows no drop is mine.drop-lost (judged within 8 blocks of the dug cell; from farther mine.drop-unreached). The count is the inventory's.
-  2. Carrying the goal ends :count; max-failures digs failed in a row end :gave-up; :dry-digs (setting) digs that raised no count end :no-drops.
+  2. Carrying the goal ends :count; digs failed in a row end :gave-up when another is not worth its price (cost/try-again? :dig); :dry-digs (setting) digs that raised no count end :no-drops.
   3. Dig the nearest target (the 5x5x2 ground under the start last with :track-ground; a walk within reach first; mine.targets), with :torches a torch first in a dark cell no hung one reaches (torches carried or craftable).
   4. No target: look round once per cell, then by a mineshaft (:descend-shaft, mine.descent) or a stair down (:descend-stair, :descend-limit, to the ore's :level) to
      find stone or the tunnel level; a stair that finds no stone ends :no-stone-found.
@@ -98,7 +98,6 @@
 
 (a/defargs settings
   {::dry-digs {:default 3 :doc "Digs in a row after which the carried count of the item did not rise before giving up (:no-drops)." :spec (a/int-in 1 nil)}
-   ::max-failures {:default 3 :doc "Dig failures in a row before giving up." :spec (a/int-in 1 nil)}
    ::job-time-s {:default 1800 :doc "Seconds a mine call may take by default (its :spend :job-time)." :spec (a/num-in 0 nil)}
    ::stay-margin {:default 8 :doc "Blocks over the higher or under the lower of body and ore that a level-keeping walk to ore may plan through (go-to :y-margin): a body a reflex took far off does not climb a hill to get back." :spec (a/num-in 0 nil)}
    ::item-s {:default 6 :doc "Mean seconds one item takes (walk, dig, collect), for the quote." :spec (a/num-in 0 nil)}})
@@ -193,7 +192,8 @@
 (defn dug-booked!
   "Book a dig of the mined block at pos: drops to collect, a look round at the next cell."
   [c pos]
-  (ctx/update-mem! c #(cond-> (-> % (dissoc :digging) (assoc :failures 0 :collecting true ::look/looked :dug :dug-at (access/cell pos)))
+  (u/progress! c)
+  (ctx/update-mem! c #(cond-> (-> % (dissoc :digging) (assoc :collecting true ::look/looked :dug :dug-at (access/cell pos)))
                         (mw/stay-level? (:args c)) (update :holes (fnil conj []) (access/cell pos)))))
 
 (defn settle-dig!
@@ -220,7 +220,7 @@
           :missing nil
           :cannot (skip! c pos)
           :refused (refused! c pos v :hazard)
-          (do (skip! c pos) (ctx/update-mem! c update :failures (fnil inc 0))))
+          (do (skip! c pos) (u/failed! c)))
         (if (= :continue outcome) :continue :again)))))
 
 ;; ------------------------------------------------------------------ the dig phase
@@ -275,19 +275,24 @@
       :else walked)))
 
 
+(defn give-up?
+  "Whether the digs failed in a row (u/failed!, a dug cell resets) make another not worth its price."
+  [c]
+  (and (pos? (u/failures c)) (not (cost/try-again? c :dig))))
+
 (defn ^:async dig-round-1! [c]
-  (let [{:keys [goal failures dry]} (ctx/mem c)
+  (let [{:keys [goal dry]} (ctx/mem c)
         looked (::look/looked (ctx/mem c))
         {:keys [wet]} (:args c)
         dry-digs (settings/get settings ::dry-digs)
         {:keys [targets refused wet? wet-n side far]} (scan c)
-        ready? (and (< (carried c) goal) (< (or dry 0) dry-digs) (< failures (settings/get settings ::max-failures)) (some? looked))
+        ready? (and (< (carried c) goal) (< (or dry 0) dry-digs) (not (give-up? c)) (some? looked))
         pos (when ready? (await (next-target! c targets)))]
     (when (seq far) (ctx/update-mem! c update :unreached #(into (vec %) (remove (set %)) far)))
     (cond
       (>= (carried c) goal) (stop! c :count)
       (>= (or dry 0) dry-digs) (stop! c :no-drops)
-      (>= failures (settings/get settings ::max-failures)) (stop! c :gave-up)
+      (give-up? c) (stop! c :gave-up)
       (nil? looked) (do (await (look-around! c)) :again)
       (= :searching pos) :again
       (shaft-under-way? c) (await (shaft-round! c))
@@ -376,7 +381,7 @@
             heading (or (toward start heading) (heading-name direction))]
         (ctx/update-mem! c assoc
                          :goal (:count (:args c)) :had now :start start
-                         :failures 0 :dry 0 :last-carried now
+                         :dry 0 :last-carried now
                          :skipped (mapv (fn [[x y z]] {:x x :y y :z z}) (:skip (:args c)))
                          :heading (or heading (targets/open-heading c start faced))
                          :ground (if (:track-ground (:args c)) (snapshot c start) [])
