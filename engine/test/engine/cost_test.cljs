@@ -321,7 +321,12 @@
         (is (= 1 @asked) "the second costed world reads the kept factor")
         (let [rarer (settings/with-settings {:jobs.lib.cost.value/spawn-chance-per-s 0.0001} #(cost/dark-factor kit))]
           (is (= 2 @asked) "other settings are priced anew")
-          (is (< rarer once) "by them"))))))
+          (is (< rarer once) "by them")
+          (is (= once (cost/dark-factor kit)))
+          (is (= once (settings/scoped {:jobs.lib.walk.world/dangers false} #(cost/dark-factor kit))))
+          (is (= once (cost/dark-factor kit)))
+          (is (= once (settings/scoped {:jobs.lib.walk.world/dangers false} #(cost/dark-factor kit))))
+          (is (= 3 @asked) "calls under two scopes in turn each keep their own factor"))))))
 
 (deftest spawns-hurt-is-at-most-the-life
   (let [body {:weapon nil :equipment nil :health 6 :respawn spawn-far :at {:x 0 :y 64 :z 0}}]

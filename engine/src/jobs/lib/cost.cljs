@@ -182,17 +182,15 @@
 (defonce ^:private kit-kept (atom {}))
 
 (defn by-kit
-  "(f kit), kept while the settings, the call's overrides and the game state prices read (difficulty, simulation
-  distance, version) are the same: f a price of a kit alone, which every costed world asks again (each is a decide over
-  every answer to every spawned mob)."
+  "(f kit), kept per kit, settings, call's overrides and the game state prices read (difficulty, simulation distance,
+  version), so callers under different overrides in turn each hit: f a price of a kit alone, which every costed world
+  asks again (each is a decide over every answer to every spawned mob)."
   [tag f kit]
-  (let [in [(:values @settings/state) (.getStore settings/call-scope) (threat/difficulty) (threat/simulation-distance) @game/version]
-        k [tag kit]
-        hit (get @kit-kept k)]
-    (if (and hit (= in (:in hit)))
-      (:v hit)
+  (let [k [tag kit (:values @settings/state) (.getStore settings/call-scope) (threat/difficulty) (threat/simulation-distance) @game/version]]
+    (if-let [hit (find @kit-kept k)]
+      (val hit)
       (let [v (f kit)]
-        (swap! kit-kept #(assoc (if (>= (count %) 64) {} %) k {:in in :v v}))
+        (swap! kit-kept #(assoc (if (>= (count %) 64) {} %) k v))
         v))))
 
 (defn dark-factor
