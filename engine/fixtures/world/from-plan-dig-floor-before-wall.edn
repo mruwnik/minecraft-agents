@@ -1,6 +1,6 @@
 ;; Card bccfad13: jobs.build.from-plan digs and replaces a wrong floor block before it places the wall cell right above it,
 ;; even while the floor item is not yet carried (logs are crafted to planks first), so the floor is never dug from under a wall.
-;; Sealed dark plot (no clock). Should-succeed: dirt-floor-under-wall-is-dug-then-planked-and-walled.
+;; Sealed dark plot (no clock); torches are carried, else the build fetches them and crafts a furnace from the cobblestone the walls need. Should-succeed: dirt-floor-under-wall-is-dug-then-planked-and-walled.
 {:defaults
  {:tags [:build] :time :any
   :plot {:height 8 :light :dark :length 64}
@@ -10,7 +10,7 @@
   :limit-s 240}
  :cases
  [{:name "dirt-floor-under-wall-is-dug-then-planked-and-walled"
-   :body {:inventory [["cobblestone" 8] ["oak_log" 2]]}
+   :body {:inventory [["cobblestone" 8] ["oak_log" 2] ["torch" 4]]}
    :plans [{:id "hut" :metadata {:by "$body"}
             :parts [{:id "floor" :cells [#at [5 0 14] #at [6 0 14] #at [7 0 14] #at [8 0 14]] :want "oak_planks"}
                     {:id "wall" :cells [#at [5 1 14] #at [6 1 14] #at [7 1 14] #at [8 1 14]] :want "cobblestone"}]}]
