@@ -11,7 +11,7 @@
  [;; should succeed: (always) from the call reaches the buried walk
   {:name "always-form-walks-past-a-hostile"
    :act [[:summon "zombie" [20.5 0 17.5] "{NoAI:1b,Silent:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:summon "item" [23.5 0 16.5] "{Item:{id:\"minecraft:diamond\",count:1}}"]
+         [:summon "item" [23.5 0 16.5] "{Item:{id:\"minecraft:cobblestone\",count:1}}"]
          [:job (jobs.items.collect-drops {:radius 14 :checks {:safe? (always)}})]]
    :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 60 :of-job true}]
-   :after [[:item "diamond" 1]]}]}
+   :after [[:item "cobblestone" 1]]}]}
