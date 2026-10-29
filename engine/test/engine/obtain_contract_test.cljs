@@ -401,6 +401,8 @@
           (is (= [:later :not-worth ##Inf] [(first none) (:reason (nth none 2)) (:price (nth none 2))]) "no way, however much it is worth"))
         (is (= :ok (first (await (torch-status (f/start (f/bare [{:name "coal" :count 1} {:name "stick" :count 1}]) []) 100))))
             "a craft from carried coal costs its steps")
+        (is (= [:later :not-worth] (let [[kind _ data] (await (torch-status (f/start (f/bare [{:name "coal" :count 1} {:name "stick" :count 1}]) []) -5))] [kind (:reason data)]))
+            "a worth below 0 (light's wait less the placing) is not worth even that craft")
         (let [day (await (torch-chest-price 6000))
               night (await (torch-chest-price 18000))
               lit-night (await (torch-chest-price 18000 [15 15]))]

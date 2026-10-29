@@ -135,10 +135,11 @@
 (def worths (atom {}))
 
 (def worth-jobs
-  {'kid {:args {} :can-start? (fn [c] (swap! worths update :kid-start #(or % (ctx/worth c))) (contract/ok :ready "ready"))
+  {'kid {:args {} :can-start? (fn [c] (swap! worths assoc-in [:kid-start (peek (:slots c))] (ctx/worth c)) (contract/ok :ready "ready"))
          :round (fn ^:async kid [c] (swap! worths assoc :kid (ctx/worth c)) (ctx/end c :done nil))}
    'top {:args {:kid-worth {:doc "worth for the kid" :default nil}}
          :worth-of (fn [_] 7)
+         :can-start? (fn [c] (swap! worths assoc :top-start (ctx/worth c)) (contract/ok :ready "ready"))
          :round (fn ^:async top [c]
                   (swap! worths assoc :top (ctx/worth c))
                   (await (ctx/call c :a 'kid {}))
@@ -157,9 +158,9 @@
           (reset! worths {})
           (core/submit! eng '(top {:kid-worth 900}) {})
           (await (core/tick! eng))
-          (is (= 7 (:top @worths)) "the root's worth-of")
+          (is (= 7 (:top @worths) (:top-start @worths)) "the root's worth-of, in its start check too")
           (is (= 900 (:kid @worths)) "a child's given worth wins, above its caller's")
-          (is (= 7 (:kid-start @worths)) "the start check sees the would-be worth, before the freeze"))
+          (is (= {:a 7 :b 900} (:kid-start @worths)) "a start check sees the would-be call's worth, before the freeze"))
         (let [{:keys [eng]} (setup worth-jobs)]
           (reset! worths {})
           (core/submit! eng '(bare) {})
@@ -168,9 +169,9 @@
           (is (= ##Inf (:kid @worths)) "inherited"))
         (let [{:keys [eng]} (setup worth-jobs)]
           (reset! worths {})
-          (core/submit! eng '(bare {:worth 12}) {})
+          (core/submit! eng '(top {:worth 12}) {})
           (await (core/tick! eng))
-          (is (= 12 (:bare @worths)) "the root's args beat the hook")
+          (is (= 12 (:top @worths) (:top-start @worths)) "the root's args beat the hook")
           (is (= 12 (:kid @worths)) "inherited")
           (is (some? (contract/call-problem 'bare nil {:worth -1})) "a negative worth is refused")
           (is (some? (contract/call-problem 'bare nil {:worth js/NaN})) "NaN is refused")

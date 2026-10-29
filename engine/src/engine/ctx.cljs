@@ -36,7 +36,7 @@
   "What the goal of this call is worth, in seconds, never nil: the frozen call's (in a start check, the would-be call's),
   else the caller's, else ##Inf. Sunk cost does not lower it."
   [ctx]
-  ((:worth ctx)))
+  (or (:worth (frozen-call ctx)) ((:worth ctx))))
 
 (defn left
   "What is left of the call's limits and its callers', each line the least over the chain: {:spend {line remainder}

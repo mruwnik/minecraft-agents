@@ -168,7 +168,7 @@
   "The worth of a call that gets none from its args or its caller: def's worth-of for c, else ##Inf (arrive)."
   [c def]
   (let [w (if-let [f (:worth-of def)] (f c) ##Inf)]
-    (if (and (number? w) (not (js/isNaN w)) (>= w 0))
+    (if (and (number? w) (>= w 0))
       w
       (throw (js/Error. (str (or (:sym def) "a job") "'s worth-of returned " (pr-str w) ", not a number >= 0 or ##Inf"))))))
 

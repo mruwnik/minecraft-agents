@@ -197,11 +197,14 @@
 
 (defn item-status
   "The start status of the jobs.items.obtain child item! would call now for n more of item under options o, worth `worth`
-  seconds to the caller (its :worth: the obtain's price must not pass it; nil: any price)."
+  seconds to the caller (its :worth: the obtain's price must not pass it; nil: any price; below 0: :later :not-worth,
+  as no price is within it, and a call key :worth below 0 is refused)."
   [c item n o worth]
-  (ctx/child-status c (or (:slot o) :need) 'jobs.items.obtain
-                    (cond-> (fetch-args 'jobs.items.obtain {:item item :count (+ n (get (counts c [item]) item))} o)
-                      worth (assoc :worth worth))))
+  (if (and worth (neg? worth))
+    (contract/later :not-worth (str "obtain: worth " (js/Math.round worth) " s, below nothing") :worth worth)
+    (ctx/child-status c (or (:slot o) :need) 'jobs.items.obtain
+                      (cond-> (fetch-args 'jobs.items.obtain {:item item :count (+ n (get (counts c [item]) item))} o)
+                        worth (assoc :worth worth)))))
 
 (defn item-price
   "Seconds the jobs.items.obtain child item-status would ask for n more of item under options o prices (its :not-worth status carries :price
