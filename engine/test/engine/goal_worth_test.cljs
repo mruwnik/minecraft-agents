@@ -27,7 +27,7 @@
 
 (defn item [n k] {:name n :count k})
 
-(deftest fish-trade-breed-and-bring-are-worth-what-they-still-want
+(deftest fish-trade-breed-bring-and-hunt-are-worth-what-they-still-want
   (let [fish #(worth 'jobs.food.fish (tu/fake {:inventory %2}) {:count %1})
         trade #(worth 'jobs.village.trade (tu/fake {}) {:buy "bread" :count %})
         breed #(worth 'jobs.animals.breed (tu/fake {}) {:mob "cow" :pairs %})]
@@ -36,7 +36,9 @@
     (is (priced? (trade 1)))
     (is (= (* 4 (trade 1)) (trade 4)))
     (is (= (* 2 (breed 1)) (breed 2)) "a calf a pair")
-    (is (priced? (worth 'jobs.animals.bring (tu/fake {}) {:mob "cow"})))))
+    (is (priced? (worth 'jobs.animals.bring (tu/fake {}) {:mob "cow"})))
+    (is (= (worth 'jobs.combat.hunt (tu/fake {}) {:item "beef" :count 1})
+           (worth 'jobs.combat.hunt (tu/fake {:inventory [(item "beef" 1)]}) {:item "beef" :count 2})) "a hunt: the items still to carry")))
 
 (def oak-world {:blocks (merge {"3,63,0" "dirt"} (lt/tree 3 0 "oak" 4))})
 

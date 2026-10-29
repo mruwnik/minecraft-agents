@@ -14,6 +14,7 @@
             [engine.sky-perception :as sky]
             [engine.test-util :as tu]
             [jobs.combat.hunt :as hunt]
+            [jobs.lib.cost :as cost]
             [jobs.lib.hunting :as hunting]
             [jobs.lib.world-files :as ew]))
 
@@ -537,8 +538,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (tu/with-looks-showing #(scenario {:item "beef" :count 1 :keep 0} {:inventory h/sword :time st/night :entities [(cow 1 3)]} 10)))]
-          (is (seq (attacked s)) "one dark cell at 0.005 spawns/s over the 120 s work stay is a small hurt, within the share of full health"))))))
+        ;; the agent passes the hunt what food is worth to a hungry body (cost/food-worth at food 6, as get-food prices it)
+        (let [s (await (tu/with-looks-showing #(scenario {:item "beef" :count 1 :keep 0 :worth (cost/food-worth 6)} {:inventory h/sword :time st/night :entities [(cow 1 3)]} 10)))]
+          (is (seq (attacked s)) "one dark cell at 0.005 spawns/s over the 120 s work stay costs less than food is worth to a hungry body"))))))
 
 (deftest the-calls-checks-reach-the-attack-child
   (async done
@@ -660,3 +662,4 @@
   (is (= ["salmon"] (hunting/mobs {:args {:item "salmon"}})))
   (is (= ["cod"] (hunting/mobs {:args {:item "cod"}})))
   (is (= ["cod"] (hunting/mobs {:args {:item "bone_meal"}}))))
+

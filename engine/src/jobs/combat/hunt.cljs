@@ -241,6 +241,11 @@
 
 (defn carried "How many of the call's :item are carried." [c] (u/carried-count (:primitives c) (:item (:args c))))
 
+(defn worth-of
+  "Seconds a root hunt is worth: the cost/goal-value of the items still to carry."
+  [c]
+  (if-let [item (:item (:args c))] (:value (cost/goal-value [{:name item :count (max 0 (- (:count (:args c)) (carried c)))}])) 0))
+
 (defn base
   "What was carried of the item at the first run (now, before it): the gained items are counted from it."
   [c]
