@@ -505,20 +505,24 @@
       (fn ^:async t []
         (let [heard (zombie 7 0.5 -5.5)
               stay '(jobs.survival.respond-to-hostile {:settings {:jobs.survival.respond-to-hostile/stay-inside false}})]
-          (doseq [[world spec decision held? muted? why]
-                  [[{:time 14000 :entities [heard] :self {:health 2}} respond :flee false false "no roof: no hold, the mob is seen and the prices decide; at 2 hp the flight is clearly the cheaper"]
-                   [{:time 14000 :blocks roofed-passage :entities [heard]} respond :fight true true "roofed, heard only: it stays"]
-                   [{:time 14000 :blocks roofed-passage :entities [heard]} stay :fight false true "stay-inside off: no hold, and at 5 hp a flight is caught more often than not: it would fight, with nothing in sight to swing at"]
-                   [{:time 1000 :blocks roofed-passage :entities [heard]} respond :fight true true "day: it stays too (the roof, not the clock)"]]]
+          ;; it fights when the roof holds it in, else when the fight is the cheapest answer priced (a cover is a flight): the
+          ;; prices are never pinned. A fight with the mob only heard has nothing in sight to swing at: it ends done, leaving the mob (muted)
+          (doseq [[world spec held? heard-only? why]
+                  [[{:time 14000 :entities [heard]} respond false false "no roof: no hold, the mob is seen and the prices decide"]
+                   [{:time 14000 :blocks roofed-passage :entities [heard]} respond true true "roofed, heard only: it stays"]
+                   [{:time 14000 :blocks roofed-passage :entities [heard]} stay false true "stay-inside off: no hold, the prices decide"]
+                   [{:time 1000 :blocks roofed-passage :entities [heard]} respond true true "day: it stays too (the roof, not the clock)"]]]
             (let [{:keys [eng p seen]} (setup-seeing (merge {:self {:health 5}} world {:inventory sword :pitch -80}) nil 1000)]
               (perception/pass! (aget p "perception"))
               (swap! (fake/state p) assoc :pitch 0)
               (perception/pass! (aget p "perception"))
               (core/submit! eng spec {})
               (await (core/tick! eng))
-              (is (= decision (:decision (first (hostile-entries eng)))) why)
-              (is (= held? (boolean (:text (first (filter #(= :hostile.sealed-hold (:kind %)) @seen))))) (str why ": sealed-hold event with its reason"))
-              (is (= muted? (boolean (seq (filterv :mute-s @seen)))) (str why ": a body with nothing to fight ends done, leaving the heard mob (not no-response)")))))))))
+              (let [decision (:decision (first (hostile-entries eng)))
+                    prices (:prices (first (filter #(= :hostile.decided (:kind %)) @seen)))]
+                (is (= (or held? (= :fight (key (apply min-key val prices)))) (= :fight decision)) (str why ": " (pr-str prices)))
+                (is (= held? (boolean (:text (first (filter #(= :hostile.sealed-hold (:kind %)) @seen))))) (str why ": sealed-hold event with its reason"))
+                (is (= (and heard-only? (= :fight decision)) (boolean (seq (filterv :mute-s @seen)))) (str why ": a body with nothing to fight ends done, leaving the heard mob (not no-response)"))))))))))
 
 (deftest a-roofed-body-hit-lately-does-not-stay-for-a-mob-it-only-hears
   (async done
