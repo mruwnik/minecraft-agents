@@ -7,7 +7,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.gather.mine.targets :refer [carried book-ground! drop-radius items left-behind]]
+            [jobs.gather.mine.targets :refer [carried book-ground! drop-radius items kinds left-behind]]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.cost :as cost]
             [jobs.lib.waits :as waits]
@@ -89,11 +89,15 @@
   (cost/dig-cost "dirt"))
 
 (defn cut-prices
-  "dig-route's prices for a cut of the call: go-to's (body-prices). What the call mines is no yield here: its goal worth
-  already pays for it. The cut is planned and booked (cut-to-drop!) at these prices alone."
+  "dig-route's prices for a cut of the call: go-to's (body-prices), a dig of what the call mines less one item's worth:
+  an extra item nothing else counts. Not the cells in (::counted c), whose worth the cut's max-s already holds (the
+  target's cluster). The cut is planned and booked (cut-to-drop!) at these prices alone."
   [c]
-  (let [p (:primitives c)]
+  (let [p (:primitives c)
+        one (worth c 1)
+        counted (::counted c)]
     (-> (dig-route/body-prices p (fn [[x y z]] (nil? (u/seen-name p {:x x :y y :z z}))))
+        (dig-route/less-yield (fn [name cell] (if (and (contains? (kinds (:args c)) name) (not (contains? counted cell))) one 0)))
         (update :dig-s (fn [dig-s] (fn [name cell] (some-> (dig-s name cell) (max (min-dig-s)))))))))
 
 (defn drop-cut
@@ -143,9 +147,10 @@
                     nil)))))))
 
 (defn ^:async cut-to-drop!
-  "Open a way beside the cell dug (cut-via with the real steps)."
-  [c dug max-s]
-  (await (cut-via c {:drop-cut drop-cut :dig-cell! dig-cell! :look-at! dig-look/look-at! :mem ctx/mem} dug max-s)))
+  "Open a way beside the cell dug (cut-via with the real steps). counted: the cells whose worth max-s already holds."
+  ([c dug max-s] (cut-to-drop! c dug max-s #{}))
+  ([c dug max-s counted]
+   (cut-via (assoc c ::counted counted) {:drop-cut drop-cut :dig-cell! dig-cell! :look-at! dig-look/look-at! :mem ctx/mem} dug max-s)))
 
 (defn lip-point
   "Where the body leans out over the cell it stands beside: its own cell's edge toward dug (a cell [x y z] at its level),
@@ -217,7 +222,7 @@
             w (await (go!))
             w (if (and (= :blocked w) (await (look-floor-toward! c dug-at))) (await (go!)) w)
             cut (when (and (= :blocked w) (not (ways/stay-level? (:args c))) (cut-after? (near/last-walk c)))
-                  (await (cut-to-drop! c dug-at (worth c 1))))
+                  (await (cut-to-drop! c dug-at (worth c 1) #{dug-at})))
             w (case cut :cut (await (go!)) :partial :partial w)]
         (when (= :there w) (await (peek-over-lip! c dug-at)))
         (when-not (= :partial w) (ctx/update-mem! c assoc :drop-walked dug-at))

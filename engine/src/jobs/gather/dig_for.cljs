@@ -305,7 +305,8 @@
                         cut (when (and (= :blocked walked) (not (mw/stay-level? (:args c))) (cut-after? (near/last-walk c))
                                        (not (#{:off-plan :needs-health :damage-budget} (result/why (near/last-walk c))))
                                        (not (contains? (:target-cut (ctx/mem c)) cell)))
-                              (let [r (await (cut-to-drop! c cell (worth c (count (targets/cluster-of pos targets)))))]
+                              (let [cluster (targets/cluster-of pos targets)
+                                    r (await (cut-to-drop! c cell (worth c (count cluster)) (set (map access/cell cluster))))]
                                 (ctx/emit! c :mine.cut-toward :info {:pos cell :result r :text (str "mine cuts toward " (str/join "," cell) ": " (or (some-> r name) "no way"))})
                                 r))]
                     (cond

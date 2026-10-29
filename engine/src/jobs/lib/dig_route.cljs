@@ -321,10 +321,10 @@
   (update prices :dig-s (fn [dig-s] (fn [name cell] (when-let [s (dig-s name cell)] (* s (share cell)))))))
 
 (defn less-yield
-  "prices with each seen block's dig priced less what its drop is worth to the caller (yield-s name -> seconds), never
+  "prices with each seen block's dig priced less what its drop is worth to the caller (yield-s name cell -> seconds), never
   below 0: a cut through what the caller digs for pays for itself."
   [prices yield-s]
-  (update prices :dig-s (fn [dig-s] (fn [name cell] (when-let [s (dig-s name cell)] (max 0 (- s (if name (yield-s name) 0))))))))
+  (update prices :dig-s (fn [dig-s] (fn [name cell] (when-let [s (dig-s name cell)] (max 0 (- s (if name (yield-s name cell) 0))))))))
 
 (defn route
   "The cells to dig (head cell first within a step, in walking order) of the cheapest route from feet cell from to feet

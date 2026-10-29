@@ -626,11 +626,14 @@
     (is (not-any? #{[1 64 0]} (cut (assoc walled-ore "1,65,0" "gravel") 100)) "gravel over it would fall on the body walking in: the cut goes round")
     (is (nil? (cut walled-ore 0.01)) "a drop worth less than one cell's dig is not cut to")))
 
-(deftest a-drops-worth-is-its-replacement-cost-and-the-goal-item-pays-nothing-more-per-cut
+(deftest a-drops-worth-is-its-replacement-cost-and-a-goal-ore-dug-on-the-way-is-an-extra-item
   (let [c {:primitives (:p (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})) :args {:item "raw_iron"}}
-        goal (:value (cost/goal-value [{:name "raw_iron" :count 1}]))]
+        goal (:value (cost/goal-value [{:name "raw_iron" :count 1}]))
+        dig (cost/dig-cost "iron_ore")
+        dig-s (fn [c] ((:dig-s (drops/cut-prices c)) "iron_ore" [0 64 0]))]
     (is (= (* 3 goal) (drops/worth c 3)) "a lost drop is worth what getting it again costs")
-    (is (>= ((:dig-s (drops/cut-prices c)) "iron_ore" [0 64 0]) (cost/dig-cost "iron_ore")) "the goal worth already pays for the ore: no per-cut deduction")))
+    (is (= (max (drops/min-dig-s) (- dig goal)) (dig-s c)) "a goal ore the cut digs through yields one more item: its dig less one worth")
+    (is (= dig (dig-s (assoc c ::drops/counted #{[0 64 0]}))) "a cell of the target's own cluster is in max-s already: no second deduction")))
 
 (deftest a-cut-whose-cells-fill-again-pays-each-dig-out-of-the-drops-worth
   ;; the way swaps between two cells for ever (each fills again behind the dig): what is spent stays spent, a round

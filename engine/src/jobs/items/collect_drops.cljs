@@ -371,7 +371,7 @@
             _ (await (look-pit! c from (item-cell item)))
             seen-name (fn [[x y z]] (u/seen-name p {:x x :y y :z z}))
             wanted (set (:items (:args c)))
-            yield (fn [n] (let [i (blocks/item-name {:block n})] (if (contains? wanted i) (:value (cost/item-value [{:name i :count 1}])) 0)))
+            yield (fn [n _] (let [i (blocks/item-name {:block n})] (if (contains? wanted i) (cost/worth-to nil [i] (u/self-pos c)) 0)))
             r (drop-route (dig-route/by-share (dig-route/less-yield (dig-route/body-prices p #(nil? (seen-name %))) yield) (escape/dig-share-fn p)) (item-worth item) (:id c) seen-name (look/unseen-solid?-fn p) from (item-cell item))]
         (case (:problem r)
           :searching :continue
