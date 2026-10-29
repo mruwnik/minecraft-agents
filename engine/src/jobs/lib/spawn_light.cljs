@@ -79,7 +79,7 @@
 
 (defn dark-guess?
   "Whether chance-at prices cell only by the guess that it is dark (caves-free? undoes it) that a look may yet show lit:
-  an unseen cell even full day would not light (look/unseen-lit? by day: guessed out of the sky's reach, where only a
+  an unseen cell even full day would not light (look/unseen-lit? by day: guessed dark even by full day, where only a
   light it has not seen would light it). One dark by the night sky alone, or one a look would show dark
   (look/dark-in-sight?), is no guess."
   [p cell]

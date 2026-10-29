@@ -504,6 +504,10 @@
 (def ^:private face-y #js [0 0 1 -1 0 0])
 (def ^:private face-z #js [0 0 0 0 1 -1])
 
+(def ^:private room-air-cells
+  "The most air the closed room round the feet holds for unseen-lit-chance-fn; a bigger flood is taken as open ground."
+  4096)
+
 (defn unseen-lit-chance-fn
   "The chance that a cell the body has not seen is lit (lit-light?), as (fn [x y z]) over what it has seen now (none
   without a perception's memory); nil without a raw world. The cell is taken open (a feet cell) and lit by the likeliest
@@ -515,7 +519,8 @@
   lies unseen between, not when that cell has less (a roof); past unseen cells, the chance every one is open (the same,
   the seen cell lit); with
   none seen over it, base-rates/sky-share at the sky light it needs, of the open cells seen in the 27 sections round its
-  own (none seen there: round the feet's, at its height). Kept per cell.
+  own (none seen there: round the feet's, at its height) outside the seen air sealed round the feet (no light reaches
+  through its walls, so its dark says nothing of the light outside). Kept per cell.
   subtract: the sky's darkening to judge it by (default: now; 0: by full day)."
   ([p] (unseen-lit-chance-fn p nil))
   ([p subtract]
@@ -599,12 +604,42 @@
                                 (if hit
                                   (base-rates/open-run-chance oy (- y oy) (dec d) lit-here? q)
                                   (recur next-ring (inc d))))))))))
-           ;; [open cells seen with light, those at sky light sky-need or more] in the section cx sy cz
+           ;; the seen air of the closed room round the feet (a flood over seen open cells, the feet's own one, that meets
+           ;; no unseen cell within room-air-cells), as cell keys and section keys; nil when it is open: light passes doors
+           ;; and every open cell, so a room sealed so is one the light outside does not reach, its own dark no evidence for
+           ;; an unseen cell (which lies outside it)
+           room-air (delay
+                      (when (feet-cell p)
+                        (let [ck (fn [x y z] (str x "," y "," z))
+                              cells (js/Set.)
+                              in (js/Set.)
+                              queue #js [#js [ox oy oz]]]
+                          (.add cells (ck ox oy oz))
+                          (loop [head 0]
+                            (cond
+                              (== head (.-length queue)) {:cells cells :sections in}
+                              (> (.-length queue) room-air-cells) nil
+                              :else
+                              (let [^js c (aget queue head)
+                                    x (aget c 0) y (aget c 1) z (aget c 2)]
+                                (.add in (store/section-key (bit-shift-right x 4) (bit-shift-right y 4) (bit-shift-right z 4)))
+                                (when (loop [f 0]
+                                        (or (== f 6)
+                                            (let [nx (+ x (aget face-x f)) ny (+ y (aget face-y f)) nz (+ z (aget face-z f))
+                                                  ^js ids (ids-at (bit-shift-right nx 4) (bit-shift-right ny 4) (bit-shift-right nz 4))
+                                                  v (if ids (aget ids (store/cell-index nx ny nz)) 0)]
+                                              (cond (zero? v) false
+                                                    (or (not= 1 (aget open (dec v))) (.has cells (ck nx ny nz))) (recur (inc f))
+                                                    :else (do (.add cells (ck nx ny nz)) (.push queue #js [nx ny nz]) (recur (inc f)))))))
+                                  (recur (inc head)))))))))
+           ;; [open cells seen with light, those at sky light sky-need or more] in the section cx sy cz, the room's left out
            counted (js/Map.)
            counts (fn [cx sy cz]
                     (let [k (store/section-key cx sy cz)]
                       (or (.get counted k)
-                          (let [mine (if (and own (== cx (bit-shift-right ox 4)) (== sy (bit-shift-right oy 4)) (== cz (bit-shift-right oz 4)))
+                          (let [^js shut (when-let [{:keys [cells sections]} @room-air] (when (.has sections k) cells))
+                                out? (fn [x y z] (not (and shut (.has shut (str x "," y "," z)))))
+                                mine (if (and own (== cx (bit-shift-right ox 4)) (== sy (bit-shift-right oy 4)) (== cz (bit-shift-right oz 4)) (out? ox oy oz))
                                        [1 (if (>= (bit-shift-right own 4) sky-need) 1 0)]
                                        [0 0])
                                 n-sky (if-let [^js ids (ids-at cx sy cz)]
@@ -613,7 +648,8 @@
                                             [n sky]
                                             (let [v (aget ids i)
                                                   l (when (and (pos? v) (== 1 (aget open (dec v))))
-                                                      (light (index-x (* 16 cx) i) (index-y (* 16 sy) i) (index-z (* 16 cz) i)))]
+                                                      (let [x (index-x (* 16 cx) i) y (index-y (* 16 sy) i) z (index-z (* 16 cz) i)]
+                                                        (when (out? x y z) (light x y z))))]
                                               (cond (or (nil? l) (neg? l)) (recur (inc i) n sky)
                                                     (>= (bit-shift-right l 4) sky-need) (recur (inc i) (inc n) (inc sky))
                                                     :else (recur (inc i) (inc n) sky)))))

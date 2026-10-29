@@ -254,6 +254,18 @@
     (is (every? #(sh-sense/seen-cell? p %) [{:x 2 :y 64 :z 0} {:x 0 :y 67 :z 0} {:x 0 :y 64 :z -2}]) "the walls round the room are seen")
     (is (zero? (look/unseen-lit-chance p {:x 4 :y 64 :z 0})) "the room's light 14 does not pass its seen walls")))
 
+(deftest a-sealed-room-s-dark-is-no-evidence-for-the-light-outside-its-walls
+  ;; by day in a dark stone room seen whole: the old guess pooled its dark air into the sky share, so the open ground
+  ;; past the walls read dark
+  (let [inside (for [x [-1 0 1] y [64 65] z [-1 0 1]] [x y z])
+        p (seeing {:time day :light-default [0 0] :blocks (apply dissoc (tu/box -2 63 -2 2 66 2 "stone") (map #(.join (clj->js %) ",") inside))})]
+    (doseq [yaw [0 90 180 270] pitch [-60 0 60]]
+      (swap! (fake/state p) assoc :yaw yaw :pitch pitch)
+      (perception/pass! (aget p "perception")))
+    (is (every? #(sh-sense/seen-cell? p %) [{:x 2 :y 64 :z 0} {:x 0 :y 66 :z 0} {:x 0 :y 64 :z -2}]) "the walls round the room are seen")
+    (is (= (base-rates/sky-share 64 (look/dark-light) 0 0) (look/unseen-lit-chance p {:x 6 :y 64 :z 0}))
+        "outside: the measured prior at its height and the sky light day needs")))
+
 (deftest an-unseen-gap-under-seen-open-sky-is-priced-not-free
   ;; a shaft down from a hole in the floor by day, seen open to the sky round the body: under the hole's seen air, past
   ;; every seen light's reach, the sky gets down only if every unseen cell between is open (the old guess: the open

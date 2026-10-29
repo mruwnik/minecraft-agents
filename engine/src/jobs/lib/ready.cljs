@@ -104,7 +104,7 @@
         where (str "unseen " (place-text to) ", which no look from here shows")]
     (cond
       (<= chance limit) (contract/ok :unexposed (str "no spawn risk at " where ": guessed lit"))
-      (> left limit) (-> (contract/never :exposed (str "dark at " where ": guessed out of the sky's reach, which dawn does not light") :lowered-by #{:torch} :chance chance)
+      (> left limit) (-> (contract/never :exposed (str "dark at " where ": guessed dark even by full day, so dawn does not light it") :lowered-by #{:torch} :chance chance)
                          (look-first c to (spawn-light/dark-share p to false)))
       (<= light-in patience) (contract/later :exposed (str "dark at " where ": guessed open ground, dark until light") :lowered-by #{:light} :chance chance
                                              :recheck-after-ms (* 1000 light-in) :wait-ms (* 1000 light-in))
