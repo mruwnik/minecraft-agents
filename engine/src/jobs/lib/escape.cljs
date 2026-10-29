@@ -20,6 +20,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
             
@@ -56,6 +57,14 @@
   "(unseen? cell): the body at primitives p has not sensed cell (loaded, never seen)."
   [p]
   (fn [cell] (dig-look/unknown? p cell)))
+
+(defn dig-share-fn
+  "(fn [cell]) what share of a rock dig an unsensed cell is expected to cost: the measured chance it is solid
+  (look/unseen-solid-at-fn), 1 for a sensed cell."
+  [p]
+  (let [unseen? (unseen-of p)
+        solid-at (look/unseen-solid-at-fn p)]
+    (fn [cell] (if (unseen? cell) (solid-at cell) 1))))
 
 (defn add [[x y z] [dx dy dz]] [(+ x dx) (+ y dy) (+ z dz)])
 

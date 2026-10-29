@@ -15,6 +15,7 @@
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-route :as dig-route]
+            [jobs.lib.escape :as escape]
             [jobs.lib.look :as look]
             [jobs.lib.loose :as loose]
             [jobs.lib.pace :as pace]
@@ -371,7 +372,7 @@
             seen-name (fn [[x y z]] (u/seen-name p {:x x :y y :z z}))
             wanted (set (:items (:args c)))
             yield (fn [n] (let [i (blocks/item-name {:block n})] (if (contains? wanted i) (:value (cost/item-value [{:name i :count 1}])) 0)))
-            r (drop-route (dig-route/less-yield (dig-route/body-prices p #(nil? (seen-name %))) yield) (item-worth item) (:id c) seen-name (look/unseen-solid?-fn p) from (item-cell item))]
+            r (drop-route (dig-route/by-share (dig-route/less-yield (dig-route/body-prices p #(nil? (seen-name %))) yield) (escape/dig-share-fn p)) (item-worth item) (:id c) seen-name (look/unseen-solid?-fn p) from (item-cell item))]
         (case (:problem r)
           :searching :continue
           (:no-route :dearer) :no-route

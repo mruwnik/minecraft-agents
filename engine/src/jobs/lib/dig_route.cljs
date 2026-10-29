@@ -315,6 +315,11 @@
      :unseen? unseen?
      :unseen-step-s (cost/unseen-step-s (wworld/unseen-share p))}))
 
+(defn by-share
+  "prices with each cell's dig priced at (share cell) of its price (escape/dig-share-fn: an unseen cell is dug only at the chance it is solid)."
+  [prices share]
+  (update prices :dig-s (fn [dig-s] (fn [name cell] (when-let [s (dig-s name cell)] (* s (share cell)))))))
+
 (defn less-yield
   "prices with each seen block's dig priced less what its drop is worth to the caller (yield-s name -> seconds), never
   below 0: a cut through what the caller digs for pays for itself."

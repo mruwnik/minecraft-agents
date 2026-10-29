@@ -167,3 +167,9 @@
         far {:range 4 :step-s 1}]
     (is (= {:problem :dearer} (dr/route at [0 10 0] [20 10 0] (assoc far :max-s 5))) "every way past the range is dearer")
     (is (= 16 (count (:steps (dr/route at [0 10 0] [20 10 0] (assoc far :max-s 100))))) "ends at the first cell within range of the goal")))
+
+(deftest a-cell-is-dug-at-its-share-of-the-price
+  (let [prices (dr/by-share {:dig-s (fn [name _] (when (= "stone" name) 10))} #(if (= [0 0 0] %) 0.25 1))]
+    (is (= 2.5 ((:dig-s prices) "stone" [0 0 0])))
+    (is (= 10 ((:dig-s prices) "stone" [1 0 0])))
+    (is (nil? ((:dig-s prices) "bedrock" [0 0 0])) "a cell never dug stays so")))

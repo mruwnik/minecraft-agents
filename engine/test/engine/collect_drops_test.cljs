@@ -459,16 +459,22 @@
               solid?-fn look/unseen-solid?-fn
               route job-ns/drop-route
               prior (solid?-fn p)
-              asked (atom [])]
+              asked (atom [])
+              priced (atom nil)]
           (drop! p [5 58 0] "diamond")
           (seen-from-above! p)
           (set! look/unseen-solid?-fn (constantly prior))
-          (set! job-ns/drop-route (fn [& args] (swap! asked conj (nth args 4)) (apply route args)))
+          (set! job-ns/drop-route (fn [& args] (swap! asked conj (nth args 4)) (reset! priced (first args)) (apply route args)))
           (try (await (tu/child-outcome eng job {:radius 8 :dig true} 80))
                (finally (set! look/unseen-solid?-fn solid?-fn)
                         (set! job-ns/drop-route route)))
           (is (seq @asked) "the drop was dug to")
-          (is (every? #(identical? prior %) @asked) "each route read unseen cells by look/unseen-solid?-fn"))))))
+          (is (every? #(identical? prior %) @asked) "each route read unseen cells by look/unseen-solid?-fn")
+          (let [seen-cell [1 59 0] far-cell [60 59 0]
+                chance ((look/unseen-solid-at-fn p) far-cell)]
+            (is (< chance 1))
+            (is (< (js/Math.abs (- (* chance ((:dig-s @priced) "stone" seen-cell)) ((:dig-s @priced) "stone" far-cell))) 1e-9)
+                "an unseen cell is dug at rock's price times the chance it is solid")))))))
 
 (deftest a-dug-cell-the-dark-hides-is-lit-with-a-carried-torch-and-looked-at-again
   (async done
