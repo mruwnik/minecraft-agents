@@ -308,29 +308,24 @@
       (cond (= :continue r) :continue
             (= :done (:kind r)) :arrived))))
 
-(defn open-above?
-  "Whether the nearest seen cell above cell in its column (within 8) is open."
-  [block-at [x y z]]
-  (boolean (some-> (first (keep #(block-at [x % z]) (range (inc y) (+ y 9)))) dig-route/open?)))
-
 (defn drop-route
   "dig-route/route, priced by prices (dig-route/body-prices), from a feet cell to the cell of a drop lying at goal; block-at
-  answers a cell's name or nil when never seen; a cell never seen is taken for stone (a rim sees no floor down a dug column),
-  except under a seen open cell: it may be air of any depth (a trench), so no step lands on it. A drop at rest has a solid
-  floor, seen or not. A route priced over worth (seconds, nil: no bound) is none: {:problem :dearer}. With an owner (a job id)
+  answers a cell's name or nil when never seen; a cell never seen is taken for stone where solid? (look/unseen-solid?-fn:
+  the measured prior holds it likelier solid than open), else it may be air (no step lands on it); either is dug at stone's
+  price. A drop at rest has a solid floor, seen or not. A route priced over worth (seconds, nil: no bound) is none: {:problem :dearer}. With an owner (a job id)
   a search that spends its nodes is kept and gone on at the next call: {:problem :searching} till it ends."
-  [prices worth owner block-at from [gx gy gz :as goal]]
+  [prices worth owner block-at solid? from [gx gy gz :as goal]]
   ((if owner (partial dig-route/route-resumed [owner :drop-route from goal]) dig-route/route)
    (fn [cell]
      (or (block-at cell)
-         (when (or (= cell [gx (dec gy) gz]) (not (open-above? block-at cell))) "stone")))
+         (when (or (= cell [gx (dec gy) gz]) (solid? cell)) "stone")))
    from goal
    (merge prices (when worth {:max-s worth})
-          ;; a nameless cell is dug to see it, at the price of the rock it is guessed for
+          ;; a nameless cell is dug to see it, at the price of rock
           (when-let [dig-s (:dig-s prices)] {:dig-s (fn [name cell] (dig-s (or name blocks/hidden-guess) cell))}))))
 
 (defn ^:async look-pit!
-  "A route over cells never seen takes them for stone, so a drop in a pit is dug to round the pit: first a look at the unsensed
+  "A route takes most cells never seen for stone (drop-route), so a drop in a pit is dug to round the pit: first a look at the unsensed
   cells of the box between the feet and the drop, nearest to the drop first (jobs.lib.dig-look), as a player would lean over
   the edge."
   [c from [gx gy gz :as goal]]
@@ -376,7 +371,7 @@
             seen-name (fn [[x y z]] (u/seen-name p {:x x :y y :z z}))
             wanted (set (:items (:args c)))
             yield (fn [n] (let [i (blocks/item-name {:block n})] (if (contains? wanted i) (:value (cost/item-value [{:name i :count 1}])) 0)))
-            r (drop-route (dig-route/less-yield (dig-route/body-prices p #(nil? (seen-name %))) yield) (item-worth item) (:id c) seen-name from (item-cell item))]
+            r (drop-route (dig-route/less-yield (dig-route/body-prices p #(nil? (seen-name %))) yield) (item-worth item) (:id c) seen-name (look/unseen-solid?-fn p) from (item-cell item))]
         (case (:problem r)
           :searching :continue
           (:no-route :dearer) :no-route

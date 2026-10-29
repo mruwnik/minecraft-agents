@@ -17,6 +17,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
             [jobs.lib.escape :as escape]
+            [jobs.lib.look :as look]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.tools :as tools]
@@ -153,7 +154,8 @@
 
 (defn too-dear
   "Why digging plan {:cells :unseen} on top of the cells dug so far would take over :max-dig-s seconds, else nil:
-  jobs.lib.cost/dig-cells-s with the best carried tool or the hand, every seen row of the plan priced as it is. A far
+  jobs.lib.cost/dig-cells-s with the best carried tool or the hand, every seen cell of the plan priced as it is, an unseen
+  one as rock at the measured chance it is solid (look/unseen-solid-at-fn). A far
   side not seen (:unseen) is a run of rock rows of unknown length (cost/door-s at cost/wall-on-chance of the rows so
   far): the rows the budget leaves, and past them a dead end that wastes the digging and walks back. Each dug row is
   looked at and the plan priced again before the next row is paid."
@@ -161,8 +163,11 @@
   (when-let [most (:max-dig-s (:args c))]
     (let [p (:primitives c)
           block-at (escape/block-at-of p)
+          unseen? (escape/unseen-of p)
+          solid-chance (look/unseen-solid-at-fn p)
           dig-s #(cost/dig-cells-s (map (fn [block] (tools/clear-ms p block)) %))
-          sure-s (dig-s (concat (map :block (:dug (ctx/mem c))) (map block-at cells)))
+          cell-ms #(cond-> (tools/clear-ms p (block-at %)) (unseen? %) (* (solid-chance %)))
+          sure-s (cost/dig-cells-s (concat (map #(tools/clear-ms p (:block %)) (:dug (ctx/mem c))) (map cell-ms cells)))
           rows (wall-rows c cells)
           s (if unseen
               (cost/door-s {:sure-s sure-s :row-s (dig-s [b/hidden-guess b/hidden-guess]) :most most :q (cost/wall-on-chance rows)
