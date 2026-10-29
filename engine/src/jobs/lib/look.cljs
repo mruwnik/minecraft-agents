@@ -438,10 +438,10 @@
                (let [^js raw (:raw per) l (.lightAt raw x y z)]
                  (and (<= 0 l) (== 1 (aget (light/table-now raw (:seeing-min (:opts per))) l))))))))
 
-(defn frontier-distance
+(defn frontier-within
   "The Chebyshev distance from cell [x y z] to the nearest frontier cell the body remembers (open, with a face neighbour
-  it has not seen), base-rates/unseen-d-max when none lies nearer; nil without a perception's memory."
-  [p [x y z]]
+  it has not seen), d-max when none lies nearer; nil without a perception's memory."
+  [p [x y z] d-max]
   (when-let [^js st (some-> (aget p "perception") :st)]
     (when (.-stores st)
       (let [^js sections (store/store-of st (.-dim st))
@@ -452,8 +452,7 @@
             frontier? (fn [cx cy cz]
                         (let [v (id cx cy cz)]
                           (and (pos? v) (== 1 (aget open (dec v)))
-                               (some #(zero? (apply id %)) [[(inc cx) cy cz] [(dec cx) cy cz] [cx (inc cy) cz] [cx (dec cy) cz] [cx cy (inc cz)] [cx cy (dec cz)]]))))
-            d-max base-rates/unseen-d-max]
+                               (some #(zero? (apply id %)) [[(inc cx) cy cz] [(dec cx) cy cz] [cx (inc cy) cz] [cx (dec cy) cz] [cx cy (inc cz)] [cx cy (dec cz)]]))))]
         (or (some (fn [r]
                     (when (some (fn [[dx dy dz]] (frontier? (+ x dx) (+ y dy) (+ z dz)))
                                 (for [dx (range (- r) (inc r)) dy (range (- r) (inc r)) dz (range (- r) (inc r))
@@ -462,6 +461,11 @@
                       r))
                   (range 1 d-max))
             d-max)))))
+
+(defn frontier-distance
+  "frontier-within base-rates/unseen-d-max."
+  [p cell]
+  (frontier-within p cell base-rates/unseen-d-max))
 
 (defn unseen-solid-fn
   "(fn [cell-y d]) base-rates/unseen-solid for the body of primitives p: the chance an unseen cell at height cell-y, d from
@@ -478,6 +482,25 @@
   [p]
   (let [solid-at (or (unseen-solid-fn p) #(base-rates/unseen-solid %1 0 %2 false nil))]
     (fn [[_ y _ :as cell]] (solid-at y (or (frontier-distance p cell) 1)))))
+
+(defn unseen-solid?-fn
+  "(fn [[x y z]]) whether an unseen cell is more likely solid than open (unseen-solid-at-fn's chance over 0.5), its
+  frontier searched only as far as the answer can still change; kept by cell, the body's state read at the first ask."
+  [p]
+  (let [solid-at* (delay (or (unseen-solid-fn p) #(base-rates/unseen-solid %1 0 %2 false nil)))
+        solid-at (fn [y d] (@solid-at* y d))
+        d-max base-rates/unseen-d-max
+        reach-of (memoize (fn [y] (let [far? (> (solid-at y d-max) 0.5)]
+                                    (inc (or (last (filter #(not= far? (> (solid-at y %) 0.5)) (range 1 d-max))) 0)))))
+        kept (js/Map.)]
+    (fn [[x y z :as cell]]
+      (let [k (str x "," y "," z)]
+        (if (.has kept k)
+          (.get kept k)
+          (let [reach (reach-of y)
+                v (> (solid-at y (if (== 1 reach) 1 (or (frontier-within p cell reach) 1))) 0.5)]
+            (.set kept k v)
+            v))))))
 
 (defn remembered-light-fn
   "(fn [x y z]) the packed light (sky << 4 | block) of a cell the body has seen, as its memory gives it
