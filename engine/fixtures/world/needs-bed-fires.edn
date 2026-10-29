@@ -32,7 +32,7 @@
             {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 80}]
    :after [[:item "red_bed" [:>= 1]] [:item "white_bed" 0]]}
   ;; d2a66a22, 1c50b7f5: one wool, planks, no sheep and no shears: no bed can be made here, so the obtain searches, as far as a bed is
-  ;; worth to a body with no respawn (a priced obtain: each walk priced against what is left of that, which reaches past the plot, so it is still walking when the case ends, short of leaving the plot by more than the runner allows); needs the dusk window (time-set 9000)
+  ;; worth to a body with no respawn (a priced obtain: each walk priced against what is left of that, which reaches past the plot; the obtain.exploring event carries that worth, a minute at least, and the case ends short of the plot walls the runner allows); needs the dusk window (time-set 9000)
   {:name "no-wool-source-searches-as-far-as-a-bed-is-worth"
    :memory [{:kind :spawn-bed :data {:pos #xyz [8 0 16]} :age-s 60}
             {:kind :spawn-reset :data {:pos #xyz [8 0 16]} :age-s 30}]
@@ -40,7 +40,7 @@
    :body {:inventory [["white_wool" 1] ["oak_planks" 3]]}
    :act [[:time-set 9000]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :needs-bed}} :within-s 30}
-            {:event {:source :job :kind :obtain.exploring} :within-s 60}
+            {:event {:source :job :kind :obtain.exploring :data {:worth [:>= 60]}} :within-s 60}
             {:no-event {:source :job :kind :stopped :data {:cause {:reason :no-source}}} :for-s 12}]
    :after [[:item "white_bed" 0]]}
   ;; d2a66a22: the same body on land a look noted as searched in vain for sheep 128 blocks round (no sheep in sight, 1 wool): no way to
