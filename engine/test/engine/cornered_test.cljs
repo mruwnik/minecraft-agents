@@ -1039,6 +1039,20 @@
     (is (zero? (respond.pillar/pillar-climb p [0 64 0]))
         "a 1-high ledge beside the walls, shut in by higher walls: neither the zombie in the slot nor one outside gets onto it")))
 
+(def ledge-yard
+  "A 3x3 yard (x, z -1..1) in 3-high walls, a 2-high ledge on its east side (x 1, z 0) and a 1-high bump at its north east corner."
+  (merge (into {} (for [x (range -2 3) z (range -2 3) :when (= 2 (max (js/Math.abs x) (js/Math.abs z))) y [64 65 66]] [(key-of x y z) "stone"]))
+         (into {} (for [y [64 65]] [(key-of 1 y 0) "stone"]))
+         {(key-of 1 64 -1) "stone"}))
+
+(deftest a-pillar-beside-a-ledge-a-mob-climbs-by-a-bump-fits-on-the-bump-itself
+  (let [zombies [(zombie -1 64 0) (zombie 0 64 -1) (zombie 0 64 1)]
+        p (tu/fake-on-floor {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks ledge-yard :entities zombies})]
+    (is (false? (respond.pillar/pillar-fits? p [0 64 0]))
+        "from the yard floor a zombie takes the bump, the ledge and the wall top beside the pillar's top")
+    (is (zero? (respond.pillar/pillar-climb p [1 65 -1]))
+        "on the bump the pillar stands in the zombies' only way up the ledge: nothing climbs to its top")))
+
 (deftest a-pillar-in-an-open-field-at-night-is-not-priced-out-by-the-dark-round-it
   (let [p (tu/fake-on-floor {:self {:pos {:x 0.5 :y 64 :z 0.5}}})
         sensed (tu/sensed-by p)
