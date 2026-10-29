@@ -60,12 +60,12 @@
   "An engine over primitives p (made from world, on a floor-block floor, when not given) on dir, seeing through
   perception; one sight pass first (what the body sees where it faces before the job; the job's own looks do the
   rest)."
-  [{:keys [world p dir clock shared jobs rand sight]}]
+  [{:keys [world p dir clock shared jobs rand sight call-ms]}]
   (let [clock (or clock (atom 1000000))
         [seen sink] (tu/legacy-capture-sink)
         p (seeing (or p (tu/fake-on-floor (-> world (assoc :floor-block floor-block) (update :inventory #(or % [{:name "torch" :count 10}]))))) rand sight)
         eng (core/create {:primitives p :jobs (or jobs registry/jobs) :triggers triggers/all :dir (or dir (tu/tmp-dir))
-                          :now #(deref clock) :world shared
+                          :now (if call-ms (tu/act-clock clock p call-ms) #(deref clock)) :world shared
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     (perception/pass! (aget p "perception"))
     {:eng eng :p p :seen seen :clock clock}))
@@ -83,11 +83,12 @@
     s))
 
 (defn start-lit
-  "start for a world whose cells all have light [sky block]."
-  [world light]
-  (let [p (tu/fake-on-floor (assoc world :floor-block floor-block))]
-    (swap! (fake/state p) assoc :light-default light)
-    (start {:p p})))
+  "start for a world whose cells all have light [sky block]; opts as start's (:call-ms: the clock moves that many ms per primitive call)."
+  ([world light] (start-lit world light nil))
+  ([world light opts]
+   (let [p (tu/fake-on-floor (assoc world :floor-block floor-block))]
+     (swap! (fake/state p) assoc :light-default light)
+     (start (assoc opts :p p)))))
 
 (defn ^:async scenario-lit
   "scenario in a world whose cells all have light [sky block] (a lit tunnel [0 8], a dark one [0 0])."

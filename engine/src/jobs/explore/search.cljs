@@ -60,7 +60,7 @@
   counted in max-legs) and looked at again (over water the step swims, glancing ahead as it goes, so a far shore comes into sight; a step ending in water is progress, not a failure); within 3 blocks of it, it is recorded failed. An unloaded column is not tried but looked at again later. When only unloaded ones are
   left the round pauses 2 s (jobs.time.noop, holding :chunks-loading) and yields, until they load or the call's time is spent (a body just logged in has no chunks
   yet). Unloaded ones farther than ::load-reach (64) from the body (a far :center) are walked toward instead, once the ground under it is loaded. A walk go-to gives up on is recorded :unreachable. The next walk after
-  such failures in a row is tried while cost/try-again? :walk says it is worth its price, else the search ends :stuck; until a leg arrives, a leg within 60 degrees of the way one failed from where the
+  such failures in a row is tried while cost/try-again? :walk says it is worth its price, else the search ends :stuck (never at the default worth ##Inf: only :spend, legs and distance stop it); until a leg arrives, a leg within 60 degrees of the way one failed from where the
   body stands waits (the same obstacle likely blocks it), and the search ends :stuck when only such legs are left.
   A leg whose goal lies by a mob the body would flee is not walked (go-to :goal-danger
   :end): it is recorded :goal-dangerous, no stuck walk; a step toward an unseen column given up so leaves that column.
@@ -80,7 +80,7 @@
   With :patch it looks for ground, not things: each look round (the origin first, then every leg's arrival) scans for a patch
   of the footprint (jobs.lib.patch, in slices) and ends :done at the first that has one, :found [{:what \"patch\" :pos :spots}]; notes are neither read nor written.
 
-  Memory: :origin :legs :scans :found :tried :failed :skipped :farthest :failed-in-row :spent and :leg-price (with :worth: the prices of the walks done, and of the one under way) :stepped (the nearest a step has come to each unseen column: a step must end nearer) :blocked (the ways legs
+  Memory: :origin :legs :scans :found :tried :failed :skipped :farthest :spent and :leg-price (with :worth: the prices of the walks done, and of the one under way) :stepped (the nearest a step has come to each unseen column: a step must end nearer) :blocked (the ways legs
   failed since the last arrival) :deferred (unloaded legs set aside while a sweep goes on), and :leg while
   a walk is under way, so a cut or restart resumes it.")
 
@@ -352,7 +352,7 @@
 (defn refused-text
   "When the legs that ended a :stuck search were all refused by the call's own floor, the sentence saying so, else nil."
   [c m]
-  (let [row (take-last (:failed-in-row m 0) (:failed m))
+  (let [row (take-last (u/failures c) (:failed m))
         floor (:floor (first row))]
     (when (and floor (seq row) (every? #(= floor (:floor %)) row))
       (let [line (name (:floor floor))]
@@ -683,9 +683,8 @@
             step? (some? (:leg-column (ctx/mem c)))
             arrived (and (:arrived data) (or step? (not in-water)))
             dangerous? (= :goal-dangerous (or why cause))
-            in-row (cond arrived 0 dangerous? (:failed-in-row (ctx/mem c) 0) :else (inc (:failed-in-row (ctx/mem c) 0)))
             [hx _ hz] (here c)]
-        (ctx/update-mem! c (fn [m] (cond-> (assoc (dissoc m :leg :leg-column :leg-price) :failed-in-row in-row)
+        (ctx/update-mem! c (fn [m] (cond-> (dissoc m :leg :leg-column :leg-price)
                                      (:leg-price m) (update :spent (fnil + 0) (:leg-price m))
                                      arrived (dissoc :blocked)
                                      (and arrived (:leg-column m)) (update-in [:stepped (:leg-column m)] (fnil min ##Inf) (xz-dist [hx hz] (:leg-column m)))

@@ -20,14 +20,18 @@
             [jobs.lib.spot :as spot]
             [jobs.lib.world-files :as world]))
 
-(defn setup [world]
+(defn setup
+  "An engine over a fake world; with call-ms its clock moves that many ms for every primitive call, as a real act takes time."
+  ([world] (setup world nil))
+  ([world call-ms]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/seeing-all (tu/fake-on-floor world))
-        eng (core/create (cond-> {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+        eng (core/create (cond-> {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
+                                  :now (if call-ms (tu/act-clock clock p call-ms) #(deref clock))
                                   :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}
                            (:plans world) (assoc :world (world/of-data (:plans world) {} []))))]
-    {:eng eng :p p :seen seen}))
+    {:eng eng :p p :seen seen})))
 
 (defn ^:async child-outcome
   "tu/child-outcome without the :ending an old parent also reads."
@@ -339,15 +343,29 @@
           (is (= 2 cheap) "a goal worth one try's price is not worth a second at under a sure chance")
           (is (> dear cheap) "a dear goal tries again"))))))
 
-(deftest a-craft-that-fails-for-good-is-not-tried-again-however-dear-the-goal
+(deftest a-craft-the-server-rejected-is-tried-again-only-while-the-goal-is-worth-a-try
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3}] :blocks {"2,64,0" "crafting_table"}})
-              _ (.override (.-world p) "craft" (fn ^:async f [_ _ _] #js {:status "failed" :reason "no-recipe"}))
-              result (await (child-outcome eng job {:item "bread" :worth ##Inf} 12))]
-          (is (= :craft-failed (:reason result)))
-          (is (= 1 (count (calls p "craft"))) "only a timeout is worth a retry: a refusal repeats"))))))
+        (let [rejected (fn ^:async f [w]
+                         (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3}] :blocks {"2,64,0" "crafting_table"}})
+                               _ (.override (.-world p) "craft" (fn ^:async f [_ _ _] #js {:status "failed" :made 0 :reason "server rejected the craft"}))
+                               result (await (child-outcome eng job {:item "bread" :worth w} 12))]
+                           [(:reason result) (count (calls p "craft"))]))
+              [cheap-end cheap] (await (rejected (try-s :craft)))
+              [_ dear] (await (rejected (* 1000 (try-s :craft))))]
+          (is (= [:craft-failed 1] [cheap-end cheap]) "a rejection can be passing: one that costs more than it is worth to repeat is not")
+          (is (> dear cheap) "a dear goal tries again"))))))
+
+(deftest a-craft-at-an-endless-worth-that-keeps-failing-ends-on-its-time-spend
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3}] :blocks {"2,64,0" "crafting_table"}} 1000)
+              _ (.override (.-world p) "craft" (fn ^:async f [_ _ _] #js {:status "failed" :made 0 :reason "server rejected the craft"}))
+              result (await (child-outcome eng job {:item "bread" :worth ##Inf} 400))]
+          (is (= :job-time (:reason result)) (pr-str result))
+          (is (< 1 (count (calls p "craft")) 400) "retried while the spend lasted, then stopped"))))))
 
 (deftest craft-hands-over-the-alternatives-of-a-missing-ingredient
   (async done
