@@ -1119,7 +1119,7 @@
             (core/submit! eng '(jobs.survival.night) {})
             (await (tick-n eng 3))
             (is (= [] (calls p "dig")) (pr-str blocks))
-            (is (= 5 (count (no-way-stops seen))) (str (pr-str blocks) ": one try at the site, then max-sites sites in all, then the niche"))
+            (is (= 4 (count (no-way-stops seen))) (str (pr-str blocks) ": one try at the site, then max-sites sites in all; no niche, whose quote finds no face to dig"))
             (is (= reason (:reason (first (entries eng :shut-in-failed)))) (str (pr-str blocks) ": dig-in's futile entry written and kept for the next firing in the dark"))))))))
 
 (deftest night-over-an-open-floor-walks-to-another-site-before-holding

@@ -103,10 +103,10 @@
   "The place not yet tried tonight, somewhere safer than here (see the doc), whose walk go-to quotes cheapest (jobs.lib.walk-pick/
   cheapest!: every candidate within flee-radius is ranked by the least its straight walk takes and quoted best-first, as the flight itself
   will walk, until the best quoted is no dearer than the next bound; a site's own tests, ground-ok? and cave-needed, asked only when its
-  turn comes; quotes shared with the pass, pick/quote-once!), as the candidate with its :distance and :cost (seconds); :searching
-  while a quote's search goes on, or while the body looks round first; nil when there is none (none with the flee-radius setting 0 or
-  after sites/max-flees). Candidates: the bed, :roofed-places, caves, ground."
-  [c]
+  turn comes; quotes shared with the pass, pick/quote-once!), as the candidate with its :distance, :cost (seconds) and go-to's
+  :route; :searching while a quote's search goes on, or, with survey?, while the body looks round first; nil when there is none (none with
+  the flee-radius setting 0 or after sites/max-flees). Candidates: the bed, :roofed-places, caves, ground."
+  [c survey?]
   (let [m (ctx/mem c)
         p (:primitives c)
         flee-radius (sites/flee-radius)
@@ -129,10 +129,10 @@
                                                  :walk walk :ok? ok? :quote pick/quote-once!}))]
         (cond
           (map? best) (let [{:keys [kind pos] :as t} (:pick best)]
-                        (cond-> (assoc t :distance (u/dist here pos) :cost (:price best))
+                        (cond-> (assoc t :distance (u/dist here pos) :cost (:price best) :route (get-in best [:quote :route]))
                           (= :cave kind) (assoc :needed (get @needed pos))))
           best best
-          (not (look/surveyed? c)) (do (await (look/survey! c)) ; a cave or roofed place behind the body is not seen until it looks
+          (and survey? (not (look/surveyed? c))) (do (await (look/survey! c)) ; a cave or roofed place behind the body is not seen until it looks
                                        :searching))))))
 
 (defn ^:async flee!
