@@ -83,6 +83,10 @@
 (defn clickable? [block] (and block (not (loose (:name block)))))
 (defn sturdy? [block] (and (clickable? block) (not (re-find thin (:name block)))))
 (defn free? [block] (and block (contains? loose (:name block))))
+(defn room-refusal
+  "Why the cell next to a placement is no room: :no-support when it was never seen (a look decides), :no-room when it is solid, nil when free."
+  [block]
+  (cond (nil? block) :no-support (not (free? block)) :no-room))
 (defn usable? [block] (boolean (re-find usable (:name block))))
 
 (defn cursor
@@ -137,6 +141,8 @@
 
 (defn opened? [want] (= "true" (state-value want :open)))
 
+(defn refused [want block] {:item (:block want) :refused (room-refusal block)})
+
 (defmulti decide (fn [fam _want _cell _ctx] fam))
 
 (defmethod decide :plain [_ want _ _] {:item (:block want)})
@@ -180,14 +186,14 @@
     (= "upper" (state-value want :half)) {:item (:block want) :refused :other-half}
     (opened? want) {:item (:block want) :refused :opened}
     (not (sturdy? (block-at (add cell down)))) {:item (:block want) :refused :no-support}
-    (not (free? (block-at (add cell up)))) {:item (:block want) :refused :no-room}
+    (room-refusal (block-at (add cell up))) (refused want (block-at (add cell up)))
     :else (facing-click want cell ctx (any-options cell))))
 
 (defmethod decide :bed [_ want cell {:keys [block-at] :as ctx}]
   (let [facing (state-value want :facing)]
     (cond
       (= "head" (state-value want :part)) {:item (:block want) :refused :other-half}
-      (and (steps facing) (not (free? (block-at (add cell (steps facing)))))) {:item (:block want) :refused :no-room}
+      (and (steps facing) (room-refusal (block-at (add cell (steps facing))))) (refused want (block-at (add cell (steps facing))))
       :else (facing-click want cell ctx (any-options cell)))))
 
 (defmethod decide :front [_ want cell {:keys [eye block-at]}]
@@ -237,7 +243,7 @@
   {:x :y :z} (nil: any) in a world block-at ([x y z] -> nil when unloaded | {:name n}):
   {:item i :click {:against [x y z] :cursor [cx cy cz] :yaw :pitch :sneak}} (cursor on the against block, 0..1;
   :yaw, :pitch, :sneak only when they matter), {:item i} to place plainly, or {:item i :refused reason}:
-  :other-half, :opened, :double-slab, :no-support (no neighbour gives the state), :no-room."
+  :other-half, :opened, :double-slab, :no-support (no neighbour gives the state, or the cell a door or bed needs was never seen), :no-room."
   [want cell eye block-at]
   (let [want (if (string? want) {:block want} want)]
     (decide (family (:block want)) want cell {:eye eye :block-at block-at})))
