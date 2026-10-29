@@ -14,6 +14,7 @@
             [jobs.lib.waits :as waits]
             [jobs.lib.access :as access]
             [jobs.lib.access-tool :as atool]
+            [jobs.lib.cost :as cost]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.need :as need]
             [jobs.lib.look :as look :refer [cell-of headings glance!]]
@@ -54,8 +55,7 @@
    :ignore-zones? :shared})
 
 (a/defargs settings
-  {::job-time-s {:default 1800 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
-   ::max-redigs {:default 32 :doc "The most times one step is cut again because a falling block landed in it (a column of gravel above the tunnel)." :spec (a/int-in 0 nil)}})
+  {::job-time-s {:default 1800 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
 (def ways need/fetch-ways)
 
@@ -133,10 +133,10 @@
     {:reason (cond (nil? res) :refused (and h (= :hazard (:reason res))) (access/hazard-key h) :else (:reason res)) :at at}))
 
 (defn landed?
-  "The walk into the cut stalled on a line cell that is solid again (a falling block landed in it after the cut): the step is cut again."
+  "The walk into the cut stalled on a line cell that is solid again (a falling block landed in it after the cut): the step is cut again while that is worth its price (cost/try-again? :dig of the cuts landed on in a row)."
   [c name-at cell]
   (and (not (passable (name-at cell)))
-       (< (:redigs (ctx/mem c) 0) (settings/get settings ::max-redigs))))
+       (or (zero? (u/failures c)) (cost/try-again? c :dig))))
 
 (defn under [cell] (update (zipmap [:x :y :z] cell) :y dec))
 
@@ -148,7 +148,7 @@
                                                           {:pos (access/cell cell) :ways #{:carried} :accept [:falling-block]}))))]
     (if (= :continue e)
       :continue
-      (do (ctx/update-mem! c update :redigs (fnil inc 0)) :again))))
+      (do (u/failed! c) :again))))
 
 (defn ^:async stair-step!
   "The next cells by a jobs.access.stair child, one :level step (it judges, digs, seals exposed lava, plugs laid-open
@@ -187,9 +187,9 @@
                 (cond
                   (= :continue w) :continue
                   (and w (do (await (glance! c [(headings heading)])) (landed? c name-at next)))
-                  (do (ctx/update-mem! c #(-> % (update :redigs (fnil inc 0)) (update-in [:tunnel :steps] dec))) :again)
+                  (do (u/failed! c) (ctx/update-mem! c update-in [:tunnel :steps] dec) :again)
                   w (finish! c :walk-failed next nil w)
-                  :else (do (ctx/update-mem! c dissoc :redigs)
+                  :else (do (u/progress! c)
                             (await (glance! c [(headings heading)]))
                             (if (watch-hit? c) (finish! c :watch nil nil nil) :again))))))))))
 

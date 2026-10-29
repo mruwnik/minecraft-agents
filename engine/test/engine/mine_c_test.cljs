@@ -474,6 +474,27 @@
           (is (= "air" (block-at s 2 65 0)) "the fallen gravel is dug")
           (is (= 4 (count (filter #{[2 65 0]} (dug-cells s)))) "the cut, then each of the 3 that fell"))))))
 
+(deftest gravel-that-keeps-filling-the-line-cell-under-the-body-is-dug-past-the-old-count-of-cuts
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world (rock-world {})})
+              landed (atom 0)]
+          (doseq [walk ["moveTo" "steer"]]
+            (.override (.-world (:p s)) walk
+                       (fn ^:async f [token a impl]
+                         (let [r (await (impl token a))
+                               st (fake/state (:p s))
+                               [x _ z] (:pos (:self @st))]
+                           (when (and (< @landed 35) (<= 2 x 3) (= "air" (block-at s 2 64 0)))
+                             (swap! landed inc)
+                             (swap! st #(-> % (fake/put-block [2 64 0] "gravel") (assoc-in [:self :pos] [2.5 65 (+ z 0)]))))
+                           r))))
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 4 :ways #{:seen :strip-tunnel}}) {})
+          (await (run-ticks s 3000))
+          (is (= 35 @landed))
+          (is (= [{:reason :tunnel-length :length 4}] (map #(select-keys % [:reason :length]) (tunnel-ends s))) (pr-str (map :text (tunnel-ends s)))))))))
+
 (deftest the-tunnel-runs-the-way-asked-or-the-way-the-body-faces
   (async done
     (tu/run-async done
