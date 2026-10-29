@@ -254,12 +254,20 @@
   [p bed]
   (if bed (/ (u/dist (u/self-pos {:primitives p}) bed) cost/walk-speed) 0))
 
+(def home-walk-failed-policy
+  "Policy of the :home-walk-failed {:pos} entry bed-down writes when its walk into the closed home failed: closed-home skips
+  that home for the rest of the night."
+  {:cap 1 :ttl :forever})
+
 (defn closed-home
-  "The :home of a body outside it when it lies in a closed roofed room (the carried bed goes down there), else nil."
+  "The :home of a body outside it when it lies in a closed roofed room (the carried bed goes down there), else nil: also
+  nil once a walk into it failed tonight (:home-walk-failed)."
   [c]
   (let [p (:primitives c)
-        home (mem/place (ctx/view c) :home)]
-    (when (and home (not (sh-sense/shut-in-room? p (sh-sense/feet p))) (sh-sense/shut-in-room? p home))
+        view (ctx/view c)
+        home (mem/place view :home)
+        failed (sh-clock/latest-since view :home-walk-failed (sh-clock/tonight p view))]
+    (when (and home (not= home (:pos (:data failed))) (not (sh-sense/shut-in-room? p (sh-sense/feet p))) (sh-sense/shut-in-room? p home))
       home)))
 
 (defn sleep-s

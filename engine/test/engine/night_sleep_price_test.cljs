@@ -8,6 +8,7 @@
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.shelter.sleepers :as sh-sleepers]
             [jobs.survival.bed-down :as bed-down]
             [jobs.survival.shut-in-night :as sin]))
 
@@ -59,6 +60,26 @@
           (is (= 1 (count (placed p "red_bed"))))
           (is (empty? (placed p "dirt")) "alone, its sleep ends the night: walls would only cost time")
           (is (seq (st/calls p "sleep"))))))))
+
+(deftest an-open-bed-whose-sleep-skips-the-night-still-costs-the-seconds-to-place-it-and-lie-down-in-the-dark
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [bed-price (fn ^:async b [light]
+                          (let [{:keys [eng p seen]} (st/setup {:time night :blocks st/floor :inventory bed-and-dirt :light {} :light-default light})]
+                            (core/submit! eng '(jobs.survival.night) {})
+                            (await (tick-until eng #(seq (st/emitted seen :night.answers)) 20))
+                            (:bed (:prices (first (st/emitted seen :night.answers))))))
+              dark (await (bed-price [15 0]))
+              lit (await (bed-price [15 4]))]
+          (is (< lit dark) "alone the sleep skips the night, but placing the bed and falling asleep are seconds in the dark"))))))
+
+(deftest a-hostile-within-the-boxes-vanilla-keeps-from-sleeping-refuses-the-sleep
+  (let [near (fn [mob at] (sh-sleepers/monsters-near-bed? (tu/fake {:floor tu/walk-floor :time night :entities [mob]}) at))
+        zombie {:id 8 :name "zombie" :kind "hostile" :pos {:x 4 :y 64 :z 2} :health 20}]
+    (is (true? (near zombie {:x 0 :y 64 :z 0})))
+    (is (false? (near zombie {:x 20 :y 64 :z 0})) "more than 8 blocks across")
+    (is (false? (near zombie {:x 0 :y 72 :z 0})) "more than 5 blocks up")))
 
 (deftest with-the-respawn-point-worth-nothing-the-body-shelters-rather-than-shut-its-bed-in
   (async done

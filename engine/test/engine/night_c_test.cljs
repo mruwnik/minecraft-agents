@@ -408,14 +408,43 @@
             (is (not= {:x 10 :y 64 :z 0} placed) "outside the walled cell")
             (is (= [placed] (mapv st/arg-pos (st/calls p "sleep"))) "and slept in: nothing spawns on the lit ground")))))))
 
+(deftest a-home-that-cannot-be-entered-leaves-the-carried-bed-in-the-bag-on-dark-ground
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (await (night-at-home (-> bed-world (assoc :light-default [15 0]) (update :blocks merge walled-home)) {:x 10 :y 64 :z 0}))]
+          (await (tu/run-until-empty eng 60))
+          (is (= [] (bed-places p)) "the failed walk into the home does not put the bed down in the dark open, priced as sheltered")
+          (is (= [] (st/calls p "sleep")))
+          (is (seq (st/calls p "place")) "the body dug in"))))))
+
+(deftest a-carried-bed-bound-for-a-closed-home-is-priced-as-the-home-walk-alone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (await (night-at-home (with-room stone-room) {:x 10 :y 64 :z 0}))]
+          (await (core/tick! eng))
+          (let [{:keys [prices]} (first (st/emitted seen :night.answers))]
+            (is (number? (:home prices)) "the walk into the home carries the bed there")
+            (is (not (contains? prices :bed)) "no second answer for the same walk-in, priced with no walk")))))))
+
 (deftest a-carried-bed-whose-sleep-skips-the-night-goes-down-here-not-in-a-home-a-walk-off
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (await (night-at-home (dissoc (with-room room-with-doorway) :players :skipNight) {:x 10 :y 64 :z 0}))]
+        (let [{:keys [eng p]} (await (night-at-home (-> (with-room room-with-doorway) (dissoc :players :skipNight :light)) {:x 10 :y 64 :z 0}))]
           (await (tu/run-until-empty eng 40))
           (is (< (:x (st/pos-of p)) 9) "no walk home")
           (is (= 1 (count (filterv #(< (:x (st/arg-pos %)) 9) (bed-places p)))) "the bed went down here, the night skipped by the sleep"))))))
+
+(deftest a-carried-bed-whose-sleep-skips-the-night-is-not-put-down-on-dark-ground-a-lit-home-is-a-walk-off
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (await (night-at-home (-> (with-room room-with-doorway) (dissoc :players :skipNight)) {:x 10 :y 64 :z 0}))]
+          (await (tu/run-until-empty eng 40))
+          (is (<= 9 (:x (st/pos-of p))) "placing the bed and lying down are seconds in the dark: the lit home is cheaper")
+          (is (= [] (filterv #(< (:x (st/arg-pos %)) 9) (bed-places p)))))))))
 
 (deftest a-roof-walk-into-a-breached-home-is-not-repeated
   (async done

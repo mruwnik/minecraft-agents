@@ -3,6 +3,7 @@
   (:require [engine.args :as a]
             [engine.memory :as mem]
             [engine.settings :as settings]
+            [jobs.lib.danger :as danger]
             [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.shelter.sense :as sh-sense]))
 
@@ -11,6 +12,17 @@
                             :doc "Blocks within which a sleeping player counts when the night is skipped."}})
 
 (defn default-player-radius [] (settings/get settings ::default-player-radius))
+
+(def sleep-start-s "Seconds in a bed before the night skips (vanilla: 100 ticks of every player's sleep)." 5)
+
+(defn monsters-near-bed?
+  "Whether a hostile the body knows of stands within 8 blocks across and 5 up or down of the bed cell `at`: vanilla refuses
+  the sleep then (\"you may not rest now\")."
+  [p at]
+  (boolean (some (fn [e] (let [m (danger/mob-pos p e)]
+                           (and (<= (Math/abs (- (:x m) (:x at))) 8) (<= (Math/abs (- (:z m) (:z at))) 8)
+                                (<= (Math/abs (- (:y m) (:y at))) 5))))
+                 (danger/known-hostiles p 12 {}))))
 
 (defn sleeping-players
   "Other players within radius the body sees asleep (the primitives report a sleeping pose only in sight)."

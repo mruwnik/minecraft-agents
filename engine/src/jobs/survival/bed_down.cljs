@@ -42,7 +42,7 @@
   The bed: the :bed argument, else sh-beds/bed-to-use (seen, or remembered within the jobs.lib.shelter.beds bed radius, the urgent radius once max-days-awake days passed without sleep; never an occupied one or one given up on; unless that long without sleep or an underground body sees another player sleep and the bed is near (courtesy), never one whose walk leaves an underground, dug-in or room shelter): jobs.survival.sleep on it.
   A carried bed the reserve register holds (jobs.lib.reserve, chooser :night) is not put down. Beds are priced against the other ways through the night (answers, cheapest): a bed not sheltered (sh-beds/bed-sheltered?: shut in a closed roofed room where no mob spawns) is slept in only when overdue for sleep or lying there is the cheapest; a carried bed goes down as the :answer says (else the cheapest): :bed lain in where it lies, :sealed its row walled and roofed first (seal-and-sleep!), and when another way is cheaper it is not put down. A sleep that stops :bed-open writes :bed-open and ends condition-failed :bed-open, and a carried bed not put down ends condition-failed :bed-open {:answer} too; a row left open ends nothing-possible :seal-failed.
   A sleep that ends otherwise without sleeping writes :sleep-failed (5 minutes) and ends nothing-possible :sleep-failed.
-  A bed item carried and no bed to use: put down beside the body (a body outside walks first into a :home that lies in a closed roofed room; roofed cells first, else in the open unless :roofed-only; never in a doorway, on a chest, table or other kept block, or in another's zone, claim or plan footprint), recorded as :bed unless a live :bed is, and as a scaffold-ledger entry (purpose :bed, for survival.leave-shelter to take back by day; a bed at the live respawn bed is not listed) outside the body's own zones (info night.bed-placed {:pos :own-zone}). A placement the server refuses is tried again (twice at most on one foot cell, three in all). No room, or a failed placement, writes :bed-place-failed (10 minutes) and ends nothing-possible :bed-place-failed.
+  A bed item carried and no bed to use: put down beside the body (a body outside walks first into a :home that lies in a closed roofed room, and when that walk fails writes :home-walk-failed and ends condition-failed :bed-open, the night pricing the bed again without that home; roofed cells first, else in the open unless :roofed-only; never in a doorway, on a chest, table or other kept block, or in another's zone, claim or plan footprint), recorded as :bed unless a live :bed is, and as a scaffold-ledger entry (purpose :bed, for survival.leave-shelter to take back by day; a bed at the live respawn bed is not listed) outside the body's own zones (info night.bed-placed {:pos :own-zone}). A placement the server refuses is tried again (twice at most on one foot cell, three in all). No room, or a failed placement, writes :bed-place-failed (10 minutes) and ends nothing-possible :bed-place-failed.
   Ends done {:slept true :bed pos} when asleep, condition-failed :not-night when the day came first or :bed-open {:slept false :bed-open true}; :continue while walking or sleeping. Quote: time by the walk to the bed, done 1 sleep.")
 
 (a/defargs args
@@ -163,8 +163,9 @@
   set it already).
   :bed lying in `bed` (nil: the carried bed put down here, or in a closed home (sh-beds/closed-home) put-down-bed! walks
   into first, then left to :home when home is given; or the bed the body is asleep in): the night left lost unless
-  the body's sleep skips it (sh-sleepers/sleepers-short 0), open (not sh-beds/bed-sheltered?) all that time, plus walk-s (the walk
-  there, priced by the caller). :sealed (a carried bed in the open, seal-plan): the bed's row shut in first, its seconds
+  the body's sleep skips it (sh-sleepers/sleepers-short 0) and no known hostile is near the bed (sh-sleepers/monsters-near-bed?:
+  the server refuses the sleep), open (not sh-beds/bed-sheltered?) all that time or at least the time to place the bed and lie
+  asleep (sh-sleepers/sleep-start-s), plus walk-s (the walk there, priced by the caller). :sealed (a carried bed in the open, seal-plan): the bed's row shut in first, its seconds
   exposed, then lain in. :shelter sheltering here (dig-in-quote, when shut-in quotes a way) and :niche (niche, the caller's shelter-quote
   of a pocket dug nearby) alike: busy their time (time-s), the toll their quote names, that time exposed from the worst of the cells the bed
   is got up to (wake-cells) when asleep, and their :morning-s. :flee and :home (flee, home: the caller's target with go-to's :seconds and
@@ -185,6 +186,9 @@
         stands (if asleep? (wake-cells p) [feet])
         [_ left] (get-in (sh-clock/night-left-quote c) [:uses :job-time])
         lost (if (zero? (sh-sleepers/sleepers-short p view)) 0 left)
+        refused? (and (not asleep?) (sh-sleepers/monsters-near-bed? p at))
+        bed-lost (if refused? left lost)
+        bed-open (min left (max bed-lost (if asleep? 0 (+ sh-sleepers/sleep-start-s (if carried? (sh-beds/sleep-s c nil) 0)))))
         in-ground? (sh/in-ground? p view)
         way-s #(cost/night-way-s in-ground? left %)
         open #(apply max (map (fn [cell] (exposed-price c (spawn-light/night-chance p cell) % cell)) stands))
@@ -202,7 +206,7 @@
         here (await (dig-in-quote c))]
     (cond-> {:exposed (way-s {:open-s (open left)})}
       (js/isFinite (:seconds here)) (assoc :shelter (dig here))
-      (or bed asleep? (and carried? (not (and home into-home?)))) (assoc :bed (+ (or walk-s 0) lost (if sheltered? 0 (exposed-price c (spawn-light/night-chance p at) lost at)) (if asleep? 0 (- (cost/spawn-worth body at feet)))))
+      (or bed asleep? (and carried? (not (and home into-home?)))) (assoc :bed (+ (or walk-s 0) bed-lost (if sheltered? 0 (exposed-price c (spawn-light/night-chance p at) bed-open at)) (if asleep? 0 (- (cost/spawn-worth body at feet)))))
       sealed (assoc :sealed (+ lost (:seconds sealed) (exposed-price c chance (:seconds sealed) feet) (- (cost/spawn-worth body (:foot (:layout sealed)) feet))))
       (and niche (js/isFinite (:seconds niche))) (assoc :niche (dig niche))
       flee (assoc :flee (way-s (walk flee (flee-after flee here))))
@@ -336,11 +340,13 @@
 
 (defn ^:async walk-into-home!
   "A body outside, with a :home that lies in a closed roofed room: walk there so the bed goes down inside it.
-  :continue while walking; nil when no such home or the walk failed (the bed then goes down where the body is)."
+  :continue while walking; :walk-failed when it failed (:home-walk-failed: closed-home skips that home from now on); nil when no such home."
   [c]
   (when-let [home (sh-beds/closed-home c)]
     (let [w (await (child/call-walk* c :home-walk {:pos home :range 1}))]
-      (when (= :continue w) :continue))))
+      (cond
+        (= :continue w) :continue
+        (not= :done (:kind w)) (do (ctx/remember! c :home-walk-failed {:pos home} sh-beds/home-walk-failed-policy) :walk-failed)))))
 
 (defn ^:async put-down-bed-here!
   "Walk to the layout's stand cell if the body is not on it, then place the carried bed on the foot cell (facing along
@@ -372,7 +378,8 @@
           (when (or (= :continue w) (= :done (:kind w))) :continue))))))
 
 (defn ^:async put-down-bed!
-  "put-down-bed-here!, after a walk into a home that is a closed roofed room when the body is outside it."
+  "put-down-bed-here!, after a walk into a home that is a closed roofed room when the body is outside it (:walk-failed when
+  that walk failed: the bed is not put down on the price of a roofed place)."
   [c]
   (or (await (walk-into-home! c))
       (await (put-down-bed-here! c))))
@@ -413,6 +420,8 @@
         r (await (put-down-bed! c))]
     (cond
       (= :continue r) :continue
+      (= :walk-failed r) (ctx/end c :condition-failed :bed-open {:slept false :bed-open true :answer answer
+                                                                :text "the walk into the closed home failed; the carried bed is priced again where the body stands"})
       (and r (= :sealed answer))
       (let [stand (sh-sense/feet p)
             head (merge-with + r (merge-with - r stand))]
