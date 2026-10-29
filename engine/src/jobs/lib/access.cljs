@@ -102,6 +102,11 @@
             (fn? guess) (guess cell)
             :else guess))))
 
+(defn guessed-at
+  "sensed-at with an unsensed cell read by guess-at: what the body takes a cell for when it asks whether it is solid."
+  [p]
+  (sensed-at p (guess-at p)))
+
 (defn seen-at
   "A block-at fn [x y z] -> name over what the body has seen, nil for a cell it has not seen or that is not loaded."
   [p]
@@ -123,7 +128,7 @@
   ([c opts]
    (let [p (:primitives c)
          {:keys [x y z]} (u/self-pos c)]
-     (merge {:block-at (sensed-at p (guess-at p))
+     (merge {:block-at (guessed-at p)
              :floor-at (seen-at p)
              :feet [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]
              :body-cols (body-columns x z)

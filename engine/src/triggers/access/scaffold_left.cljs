@@ -39,14 +39,14 @@
 (defn block-at-of
   "Names only loaded cells: an unseen one is offered too (the run looks at it)."
   [p]
-  (access/sensed-at p access/hidden-guess))
+  (access/guessed-at p))
 
 (defn walk-blocked?
   "Whether the entry e, out of the body's dig reach, is not worth a walk: far below, near a death, roofed (ledger/walk-blocker)."
   [p memory entries e]
   (boolean (and (> (ledger/distance (ledger/eye-of {:primitives p}) (ledger/centre (:cell e))) (ledger/dig-reach))
                 (ledger/walk-blocker {:feet (reach/standing-vec p) :max-below (ledger/max-below) :roof-height (ledger/roof-height)
-                               :died-near? (ledger/died-near-of memory) :block-at (access/sensed-at p access/hidden-guess)
+                               :died-near? (ledger/died-near-of memory) :block-at (access/guessed-at p)
                                :ledger (ledger/cells entries)}
                               e))))
 

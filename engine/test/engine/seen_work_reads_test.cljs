@@ -74,8 +74,9 @@
 
 (deftest rules-input-reads-what-the-body-senses
   (let [blocks {"0,64,4" "lava"}
-        at (fn [w] ((:block-at (access/rules-input {:primitives w :args {} :root "j1" :slots [] :view (fn [] {:now 0 :data {}})})) [0 64 4]))]
-    (is (not= "lava" (at (wrapped blocks true))) "unsensed: the guess, not what is there")
+        at (fn [w] ((:block-at (access/rules-input {:primitives w :args {} :root "j1" :slots [] :view (fn [] {:now 0 :data {}})})) [0 64 4]))
+        hidden (wrapped blocks true)]
+    (is (= (if ((look/unseen-solid?-fn hidden) [0 64 4]) "stone" "air") (at hidden)) "unsensed: the prior's verdict, not what is there")
     (is (= "lava" (at (wrapped blocks false))) "in view: what it is")))
 
 (deftest harvest-ripe-reading-needs-sight

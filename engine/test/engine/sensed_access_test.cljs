@@ -10,7 +10,8 @@
             [jobs.lib.access.approach :as approach]
             [jobs.lib.dig-look :as look]
             [jobs.lib.blocks :as b]
-            [jobs.lib.ledger :as ledger]))
+            [jobs.lib.ledger :as ledger]
+            [triggers.access.scaffold-left :as scaffold-left]))
 
 (deftest a-cell-whose-neighbours-are-all-unseen-has-no-support
   (let [p (d/sensing {:blocks (dissoc d/ground "5,60,0")})]
@@ -24,6 +25,7 @@
         {:keys [block-at floor-at]} (access/rules-input {:primitives p :args {} :root "j1" :slots [] :view (fn [] {:now 0 :data {}})})]
     (is (true? (look/unknown? p [6 69 0])) "over the roof, out of the eye's sight")
     (is (true? (approach/standing-cell? block-at floor-at [6 69 0])) "an inner roof cell under open sky is a stand")
+    (is (= "air" ((scaffold-left/block-at-of p) [6 69 0])) "the scaffold trigger reads it open too")
     (is (true? (look/unknown? p [5 52 0])))
     (is (= "stone" (block-at [5 52 0])) "deep in the ground an unseen cell is rock")))
 
