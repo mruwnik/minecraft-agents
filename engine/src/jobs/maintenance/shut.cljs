@@ -33,7 +33,7 @@
   animal stands in (:animal-in-the-way, info only) keeps its entry untouched and counts no failure.
 
   Both: one run shuts them all. Each is walked to within the reach setting (3) (a jobs.movement.go-to child, doors :never: it opens nothing on
-  the way). A walk that goes on or waits (go-to :continue) yields the round with :continue; the block is not given up.
+  the way). A walk that goes on or waits (go-to :continue) is another step; the block is not given up.
   Ends :done with {:shut n :left []} when every opening was shut (a call that finds none open ends done at once); with any left,
   :nothing-possible :left with {:shut n :left [{:cell :reason}]}. Spends :job-time.")
 
@@ -54,11 +54,14 @@
 
 (defn ^:async step
   "The nearest opening is walked to and shut or given up (the counts and the openings left are kept in job memory);
-  :again while one is left to try, else the ending."
+  :again while one is left to try, else the ending. A gate just seen open without :plan, or a plan in trouble, is
+  :again too: steps! then asks can-run?, which is later while the grace or the trouble lasts."
   [c]
   (let [{:keys [shut left skip] :or {shut 0 left [] skip []}} (ctx/mem c)
-        {:keys [targets shut! give-up! finish]} (ops c)
+        {:keys [targets shut! give-up! finish wait-first?]} (ops c)
         keep! (fn [shut left skip] (ctx/update-mem! c assoc :shut shut :left left :skip skip) :again)]
+    (if (wait-first? c)
+      :again
     (if-let [t (first (targets c left skip))]
       (let [reason (await (shut! c t))]
         (cond
@@ -71,15 +74,13 @@
             result {:shut shut :left left :text text}]
         (if (empty? left)
           (ctx/end c :done nil result)
-          (ctx/end c :nothing-possible :left result))))))
+          (ctx/end c :nothing-possible :left result)))))))
 
 (defn ^:async round
   "The openings one by one (pace/steps!: done? and can-run? are asked between them, so a cancel or an interrupt cuts
-  between them); a gate just seen open without :plan waits out its grace first."
+  between them)."
   [c]
-  (if ((:wait-first? (ops c)) c)
-    :continue
-    (await (pace/steps! c #(step c)))))
+  (await (pace/steps! c #(step c))))
 
 (def target [:openings :plan])
 

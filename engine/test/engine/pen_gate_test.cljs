@@ -6,6 +6,7 @@
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
@@ -407,6 +408,17 @@
           (is (some #(and (= :reflex (:source %)) (= :fired (:kind %)) (= :pen-gate (:reflex %))) @seen))
           (is (some #(and (= :reflex (:source %)) (= :ended (:kind %)) (= :done (:outcome %))) @seen))
           (is (empty? (:list (core/state eng))) "the reflex job left the list"))))))
+
+(deftest a-reflex-run-inside-the-grace-ends-condition-failed-never-declined
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (start (pen-world true 2 -5) {"pen-a" pen-a})]
+          (core/register-reflex! eng {:trigger :pen-gate})
+          (await (settings/with-settings {:jobs.lib.shut-gates/open-s 4}
+                   (fn ^:async f [] (dotimes [_ 6] (swap! clock + 700) (await (core/tick! eng))))))
+          (is (some #(and (= :reflex (:source %)) (= :fired (:kind %))) @seen) "the trigger fired")
+          (is (not-any? #(= :declined (:kind %)) @seen) "the grace is a condition-failed ending, not a :continue"))))))
 
 (deftest a-gate-held-by-a-job-does-not-fire-until-the-entry-is-old
   (let [data (mem/add-entry mem/empty-data :gate-held {:t 0 :data {:cell [2 64 0]}} nil)
