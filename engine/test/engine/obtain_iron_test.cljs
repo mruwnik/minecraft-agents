@@ -289,7 +289,8 @@
           (doseq [pitch [-80 80 0]]
             (swap! (fake/state (:p s)) assoc :pitch pitch)
             (perception/pass! (aget (:p s) "perception")))
-          (core/submit! (:eng s) (list 'jobs.items.craft {:item "stone_pickaxe"}) {})
+          ;; a root obtain: the pickaxe's goal worth, which a night walk to the tree costs more than
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "stone_pickaxe"}) {})
           (await (f/run-ticks s 30))
           (is (= [:exposed] (distinct (map :reason (f/events-of s :waiting)))) "harvest-wood judges the tree it walks to, not the room")
           (is (= 1 (count (f/events-of s :waiting))) "one wait, not one per round")

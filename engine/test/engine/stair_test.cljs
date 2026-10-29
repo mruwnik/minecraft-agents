@@ -19,6 +19,7 @@
             [jobs.access.stair :as stair]
             [jobs.lib.ore-pick :as ore-pick]
             [jobs.lib.access :as access]
+            [jobs.lib.cost :as cost]
             [jobs.lib.bridge :as bridge]
             [jobs.lib.dig-look :as dig-look]
             [jobs.access.stair.step :as sstep]
@@ -325,14 +326,15 @@
 
 (defn setup
   "An engine over the fake world and world data (zones, default none; nil: never read; plans); a recording parent runs
-  the job as its child and keeps its result in :out."
+  the job as its child and keeps its result in :out, at the spec's :worth (default ##Inf, arrive)."
   [spec args prep]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake (merge {:self {:pos {:x 0 :y 65 :z 0}} :inventory pick} (dissoc spec :zones :plans :wrap-rounds :raw)))
+        p (tu/fake (merge {:self {:pos {:x 0 :y 65 :z 0}} :inventory pick} (dissoc spec :zones :plans :wrap-rounds :raw :worth)))
         out (atom :not-done)
         w (world/of-data (:plans spec {}) {} (get spec :zones []))
-        parent {:round (fn ^:async recording-round [c]
+        parent {:worth-of (constantly (:worth spec ##Inf))
+                :round (fn ^:async recording-round [c]
                          (let [r (await (ctx/call c :kid job (if (satisfies? IDeref args) @args args)))]
                            (if (= :continue r)
                              r
@@ -1433,8 +1435,8 @@
           (is (nil? (waiting s))))))))
 
 (defn ^:async night-stair!
-  [args]
-  (await (stair! {:blocks ground :time 13000} args (fn [p] (tu/seeing-all p) (sky/with-sky p)))))
+  ([args] (night-stair! args ##Inf))
+  ([args worth] (await (stair! {:blocks ground :time 13000 :worth worth} args (fn [p] (tu/seeing-all p) (sky/with-sky p))))))
 
 (deftest a-stair-down-from-open-ground-at-night-digs-in
   (async done
@@ -1448,7 +1450,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p]} (await (night-stair! (assoc east :dir :up)))]
+        ;; called by obtain's climb for a log out of sight: the stair is worth the log
+        (let [{:keys [out p]} (await (night-stair! (assoc east :dir :up) (cost/find-worth nil ["oak_log"] nil 1)))]
           (is (= [:stopped :exposed] ((juxt :status :reason) @out)) "a called stair ends at once with the reason")
           (is (empty? (digs p))))))))
 

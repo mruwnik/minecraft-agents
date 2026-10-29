@@ -69,7 +69,8 @@
             [jobs.survival.restore-broken :as restore-broken]
             [engine.settings :as settings]
             [jobs.time.noop :as noop]
-            [jobs.time.wait-for-light :as wait-for-light]))
+            [jobs.time.wait-for-light :as wait-for-light]
+            [jobs.lib.world-files :as world-files]))
 
 (defn ctx-of
   "A job's ctx over a fake body built from world (a fresh job id: the check cache is per job), staying at its place long enough that no exposure is affordable (jobs.lib.price)."
@@ -79,6 +80,16 @@
     {::price/stay-s 1e6 :id (str (random-uuid)) :slots [] :engine {:warned (atom #{}) :jobs registry/jobs} :primitives p :view (fn [] {:now 0 :data {}}) :worth (constantly ##Inf)}))
 
 (defn worthless "ctx c of a goal worth nothing: it affords no risk." [c] (assoc c :worth (constantly 0)))
+
+(defn under
+  "ctx c checked at the worth the engine gives a root call of job with args: its worth-of, else ##Inf."
+  [c job args]
+  (let [f (:worth-of (get registry/jobs job))]
+    (assoc c :worth (constantly (if f (f (assoc c :args args)) ##Inf)))))
+
+(defn for-a-log "ctx c checked for a root obtain of one oak log." [c] (under c 'jobs.items.obtain {:item "oak_log" :count 1}))
+
+(defn for-iron "ctx c checked for a root obtain of one raw iron." [c] (under c 'jobs.items.obtain {:item "raw_iron" :count 1}))
 
 (def inside {:x 5 :y 64 :z 0})
 (def outside {:x 15 :y 64 :z 0})
@@ -142,7 +153,7 @@
 
 (deftest safe-at-waits-for-light-only-within-the-light-patience
   (let [check (ready/safe-at (constantly outside))
-        status (fn [patience] (settings/with-settings {:jobs.lib.ready/light-patience-s patience} #(lit 0 15 (fn [] (check (ctx-of open-night))))))]
+        status (fn [patience] (settings/with-settings {:jobs.lib.ready/light-patience-s patience} #(lit 0 15 (fn [] (check (for-a-log (ctx-of open-night)))))))]
     (is (= :later (first (status 100000))))
     (is (= :never (first (status 10))) "light further off than the patience is not waited for")
     (is (re-find #"s away" (second (status 10))))))
@@ -198,13 +209,13 @@
     1e6 :later))
 
 (deftest a-long-stay-in-the-dark-open-is-refused-where-a-click-is-accepted
-  (let [bare (fn [] (dissoc (ctx-of open-night) ::price/stay-s))
+  (let [bare (fn [] (for-iron (dissoc (ctx-of open-night) ::price/stay-s)))
         status (fn [category] (lit 0 15 #(first ((price/staying category (ready/safe-at (constantly outside))) (bare)))))]
     (is (= [:ok :later :later] (mapv status [:click :work :long])))))
 
 (deftest a-dark-furnace-is-exposed-for-a-whole-stack-but-not-for-one-item
   (let [world (assoc open-night :inventory [{:name "furnace" :count 1}])
-        exposed? (fn [n] (lit 0 15 #(smelt/exposed-furnace? (assoc (ctx-of world) :args {:item "raw_iron" :count n}) outside)))]
+        exposed? (fn [n] (lit 0 15 #(smelt/exposed-furnace? (assoc (under (ctx-of world) 'jobs.items.obtain {:item "iron_ingot" :count n}) :args {:item "raw_iron" :count n}) outside)))]
     (is (= [false true] (mapv exposed? [1 64])))))
 
 (deftest safe-if-lit-waits-at-night-above-ground
@@ -220,9 +231,9 @@
     5 st/night :ok))
 
 (deftest a-job-that-goes-to-its-place-binds-safe-at-that-place
-  (are [check args] (= :later (lit 0 15 #(first (check (assoc (ctx-of (assoc open-night :blocks {"1,64,0" "red_bed"})) :args args)))))
-    smelt/safe? {:furnace outside}
-    pick-up-loose/safe? {})
+  (are [check args caller] (= :later (lit 0 15 #(first (check (assoc (caller (ctx-of (assoc open-night :blocks {"1,64,0" "red_bed"}))) :args args)))))
+    smelt/safe? {:furnace outside} #(under % 'jobs.items.obtain {:item "iron_ingot" :count 1})
+    pick-up-loose/safe? {} for-a-log)
   (testing "a kitchen's stay at a furnace 40 blocks off in the open night is weighed against the pass it serves: a full stock's worth goes ahead, a loaf's waits"
     (let [world (assoc open-night :blocks {"1,64,0" "red_bed"})
           check (fn [bread] (lit 0 15 #(kitchen/safe? (assoc (ctx-of world) :args {:furnace {:x 40 :y 64 :z 0}}
@@ -282,7 +293,7 @@
 (def iron-worn (into {} (for [[part item] {"head" "iron_helmet" "torso" "iron_chestplate" "legs" "iron_leggings" "feet" "iron_boots"}] [part {:name item :count 1}])))
 
 (deftest outmatched-waits-while-the-hostiles-known-past-the-trigger-radius-outfight-the-kit
-  (are [world expected] (= expected (let [s (ready/outmatched (ctx-of (merge at-origin world)))] [(first s) (:reason (nth s 2))]))
+  (are [world expected] (= expected (let [s (ready/outmatched (for-iron (ctx-of (merge at-origin world))))] [(first s) (:reason (nth s 2))]))
     {:inventory [{:name "wooden_sword" :count 1}] :entities (zombies-at 10 11)} [:later :outmatched]
     {:inventory sword :equipment iron-worn :entities (zombies-at 10 11)} [:ok :matched]
     {:inventory [{:name "wooden_sword" :count 1}] :entities (zombies-at 10)} [:ok :matched]
@@ -299,7 +310,7 @@
 
 (deftest the-long-dig-jobs-wait-while-outmatched
   (are [safe] (= [:later :ok] (for [kit [{:inventory [{:name "wooden_sword" :count 1}]} {:inventory sword :equipment iron-worn}]]
-                                (first (safe (ctx-of (merge at-origin kit {:entities (zombies-at 10 11)}))))))
+                                (first (safe (for-iron (ctx-of (merge at-origin kit {:entities (zombies-at 10 11)})))))))
     mine/safe? dig-for/safe? strip-tunnel/safe?))
 
 (def far-husk {:id 9 :name "husk" :kind "hostile" :pos {:x 30 :y 64 :z 0}})
@@ -537,7 +548,7 @@
                  sh-inside/dark-hall (fn [& _] (when (seq sides) :roofed))
                  sh-sense/buried? (constantly true)]
      (lit 0 0 #((juxt first (fn [s] (:reason (nth s 2))) (fn [s] (:look-first (nth s 2))))
-                (ready/hall-status (cond-> (ctx-of (assoc world :time st/noon))
+                (ready/hall-status (cond-> (for-iron (ctx-of (assoc world :time st/noon)))
                                      walk-looked (assoc :view (constantly {:now 0 :data (mem/add-entry mem/empty-data :walk-looked {:t 0 :data {:cells walk-looked}} walk-look/walked-policy)})))
                                    nil))))))
 
@@ -571,7 +582,7 @@
                   sh-sense/buried? (constantly true)
                   sh-sense/seen-cell? (fn [_ cell] (or seen? (not= site (select-keys cell [:x :y :z]))))
                   sense/round-looked (constantly (if looked? #{[6 64 0]} #{}))]
-      (lit 0 0 #(f site (fn [x] (ctx-of (assoc tunnel :time st/noon :self {:pos {:x (+ x 0.5) :y 64 :z 0.5}}))))))))
+      (lit 0 0 #(f site (fn [x] (for-iron (ctx-of (assoc tunnel :time st/noon :self {:pos {:x (+ x 0.5) :y 64 :z 0.5}})))))))))
 
 (defn unseen-site-exposure
   "The exposure safe-at gives the tunnel's east end as a dark hall past an unseen edge, the body standing at x."
@@ -705,7 +716,9 @@
 (deftest a-starving-body-works-its-field-in-the-dark-and-a-fed-one-waits
   (let [safe? (:safe? (get registry/jobs 'jobs.farm.harvest))]
     (are [food health inventory expected]
-         (= expected (lit 0 15 #(kind safe? (assoc open-night :self {:pos {:x 0 :y 64 :z 0} :food food :health health} :inventory inventory))))
+         (= expected (lit 0 15 #(let [world (assoc open-night :self {:pos {:x 0 :y 64 :z 0} :food food :health health} :inventory inventory
+                                                   :blocks {"2,63,0" "farmland" "2,64,0" "wheat"} :ages {"2,64,0" 7})]
+                                  (first (safe? (under (assoc-in (ctx-of world) [:engine :world] (world-files/of-data {} {} [])) 'jobs.farm.harvest {:radius 12 :replant true}))))))
       6 3.8 [] :ok
       6 3.8 [{:name "bread" :count 1}] :later
       20 3.8 [] :later
@@ -1032,4 +1045,3 @@
     (is (< 0.018 dies 0.0195))
     (is (= 1510 (js/Math.round death)))
     (is (< 2.95 (price/stay-hp c 0.005 10) 3.15))))
-

@@ -200,7 +200,7 @@
   first, by cost alone whatever the worth: until light (light-s, nil: no wait lights it), the act then risking nothing, and
   until healed to full while the body can heal, the same risk then at full health. A wait costs its seconds, staying put
   over them (walk-risk/stay-estimate) and the act after it (cost/risk-s). now? while the hp are within what the call's worth
-  (ctx/worth) buys (price/allowed-hp); best the cheapest wait {:wait :secs :s} whose hp and seconds the worth affords."
+  (ctx/worth) buys (walk-risk/buys-hp); best the cheapest wait {:wait :secs :s} whose hp and seconds the worth affords."
   [c hurt lethal light-s]
   (let [health (.-health (.self (:primitives c)))
         worth (ctx/worth c)
@@ -212,7 +212,7 @@
                light-s (conj (walk-risk/wait-way c :light light-s stay-in health {:hp 0}))
                heal-s (conj (walk-risk/wait-way c :heal heal-s stay-in 20 {:hp hp :lethal-hp lethal})))]
     {:now-s (cost/risk-s health hurt lethal)
-     :now? (<= hp (price/allowed-hp health (.-food (.self (:primitives c))) worth true))
+     :now? (<= hp (walk-risk/buys-hp health (.-food (.self (:primitives c))) worth))
      :best (walk-risk/cheapest-affordable c ways)}))
 
 (defn priced
@@ -222,7 +222,8 @@
   holds :later with both prices (a wait to heal keeps s's data); else s. An exposure resting on a place the body has not
   seen (:look, look-first) has a third way: walk there to look, its hp priced (walk-risk/risk-s) plus its seconds, ok
   :look-first while it is affordable and cheaper than the other ways and than the job's own answers to s (own-way), with
-  the way's :child as its :look-first child call when it has one (walk-look)."
+  the way's :child as its :look-first child call when it has one (walk-look). An own answer cheaper than acting now leaves
+  s to the job.
   [c s]
   (let [[kind _ {:keys [reason chance wait-ms] look-way :look :as data}] s]
     (if-not (and (contains? #{:later :never} kind) (= :exposed reason) (number? chance))
@@ -233,9 +234,10 @@
             hp (+ hurt lethal)
             {:keys [now-s now? best]} (act-price c hurt lethal (when (= :later kind) (some-> wait-ms (/ 1000))))
             self (.self (:primitives c))
-            look-s (when (and look-way (<= (:hp look-way) (price/allowed-hp (.-health self) (.-food self) (ctx/worth c) true)))
+            look-s (when (and look-way (<= (:hp look-way) (walk-risk/buys-hp (.-health self) (.-food self) (ctx/worth c))))
                      (+ (walk-risk/risk-s c look-way) (:secs look-way)))
-            own-s (when look-s (keep #(% (dissoc c ::own-ways) s) (::own-ways c)))
+            own-s (keep #(% (dissoc c ::own-ways) s) (::own-ways c))
+            own? (fn [than] (some #(< % than) own-s))
             look (when (and look-s (every? #(< look-s %) own-s)) {:s look-s})
             look? (fn [than] (and look (or (nil? than) (< (:s look) than))))
             wait (fn [{:keys [wait] :as w}]
@@ -245,12 +247,12 @@
                                                            " s now; healing " (price/round1 (:secs w)) " s first costs " (price/round1 (:s w)) " s")
                                       (assoc data :wait :heal :now-s now-s :wait-s (:s w) :recheck-after-ms walk-risk/recheck-ms))))]
         (cond
-          (and best (< (:s best) now-s) (not (look? (:s best)))) (wait best)
-          (and now? (not (look? now-s))) (contract/ok :priced (str "exposed, but " (price/round1 secs) " s there cost " (price/round1 hp) " hp, " (price/round1 now-s) " s, no wait cheaper"))
+          (and best (< (:s best) now-s) (not (look? (:s best))) (not (own? (:s best)))) (wait best)
+          (and now? (not (look? now-s)) (not (own? now-s))) (contract/ok :priced (str "exposed, but " (price/round1 secs) " s there cost " (price/round1 hp) " hp, " (price/round1 now-s) " s, no wait cheaper"))
           (look? (:s best)) (cond-> (contract/ok :look-first (str "exposed: " (price/round1 secs) " s there cost " (price/round1 hp) " hp, but the walk to look costs "
                                                                   (price/round1 (:hp look-way)) " hp, " (price/round1 (:s look)) " s: the stay is judged once looked"))
                               (:child look-way) (assoc-in [2 :look-first] (:child look-way)))
-          best (wait best)
+          (and best (not (own? (:s best)))) (wait best)
           :else s)))))
 
 (defn hall-status
