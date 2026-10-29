@@ -595,6 +595,13 @@
     (is (= (:value (cost/item-value [{:name "chicken" :count (cost/kill-drops "chicken" "chicken")}])) (cost/animal-worth "chicken"))
         "a kill counts the drops the game data lists, not a flat count")))
 
+(deftest an-animal-is-worth-the-measured-replacement-cost-of-its-meat
+  (let [measured {:jobs.lib.cost.value/gather-counts {"beef" {:s 500 :got 1}}}
+        worth #(settings/with-settings measured (fn [] (% [{:name "beef" :count (cost/kill-drops "cow" "beef")}])))]
+    (is (= (:value (worth cost/goal-value)) (settings/with-settings measured #(cost/animal-worth "cow")))
+        "a cow is worth its beef (kill-drops) at their measured gathers")
+    (is (not= (:value (worth cost/item-value)) (settings/with-settings measured #(cost/animal-worth "cow"))))))
+
 (deftest a-stick-is-worth-its-share-of-the-planks-it-is-made-of
   (let [worth #(:value (cost/item-value [{:name % :count 1}]))]
     (is (<= (/ (* 2 (worth "oak_planks")) 4) (worth "stick"))

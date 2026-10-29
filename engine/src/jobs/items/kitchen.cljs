@@ -186,7 +186,7 @@
 (defn would-run? [c f] (boolean (some :call (vals (decisions c f)))))
 
 (defn worth-of
-  "Seconds a pass is worth: the item-value of the cooked food and bread it would stock (the shortfall its carried raw
+  "Seconds a pass is worth: the goal-value of the cooked food and bread it would stock (the shortfall its carried raw
   food and wheat cover)."
   [c]
   (let [{:keys [foods stock] :as a} (:args c)
@@ -197,7 +197,7 @@
                          (when (pos? n) {:name (foods/cooked-of food) :count n})))
                      foods)
         bread (loaves a f)]
-    (:value (cost/item-value (cond-> (vec cooked) (pos? bread) (conj {:name "bread" :count bread}))))))
+    (:value (cost/goal-value (cond-> (vec cooked) (pos? bread) (conj {:name "bread" :count bread}))))))
 
 (defn not-worth
   "The cause of a kitchen declining while even the least walk to its chest costs more than the pass is worth, or nil."

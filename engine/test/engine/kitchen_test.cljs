@@ -9,6 +9,7 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [engine.withdraw-test :as wt]
+            [engine.settings :as settings]
             [jobs.items.kitchen :as kitchen]))
 
 (def job 'jobs.items.kitchen)
@@ -299,4 +300,7 @@
   (let [{:keys [p]} (setup {:inventory [(item "beef" 3)] :containers {"10,64,0" []}})
         worth (:worth-of (get registry/jobs job))
         w (worth {:primitives p :args args :id "k" :slots [] :view (fn [] {:now 0 :data {}})})]
-    (is (and (pos? w) (not= ##Inf w)))))
+    (is (and (pos? w) (not= ##Inf w)))
+    (is (<= 1000 (settings/with-settings {:jobs.lib.cost.value/gather-counts {"cooked_beef" {:s 1000 :got 1} "cooked_chicken" {:s 1000 :got 1} "cooked_porkchop" {:s 1000 :got 1} "bread" {:s 1000 :got 1}}}
+                   #(worth {:primitives p :args args :id "k" :slots [] :view (fn [] {:now 0 :data {}})})))
+        "the cooked food is priced at its measured gathers, not at the margin")))
