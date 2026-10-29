@@ -19,7 +19,8 @@
   (reset! clock 1000000)
   (let [[seen sink] (tu/capture-sink)
         p (tu/fake {})
-        eng (core/create {:primitives p :dir (tu/tmp-dir) :now #(deref clock) :jobs jobs :triggers {}
+        ;; no CPU clock: these pin what the game clock charges, to the ms
+        eng (core/create {:primitives p :dir (tu/tmp-dir) :now #(deref clock) :cpu (constantly 0) :jobs jobs :triggers {}
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :seen seen :p p}))
 
@@ -65,6 +66,23 @@
           (await (core/tick! eng))
           (is (= {:kind :limit-reached :cause {:line :job-time :spend 5}} (stopped seen)))
           (is (<= 100 (:steps @world) 102) "it ends once its paces (pace-ms each on the test clock) spent the 5 s"))))))
+
+(deftest a-loop-of-steps-with-no-act-ends-on-its-cpu-time-under-a-frozen-game-clock
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (reset! world {})
+        (let [[seen sink] (tu/capture-sink)
+              cpu (atom 0)
+              spins {:defaults {:spend {:job-time 5}}
+                     :round (fn [c] (pace/steps! c (fn [] (swap! world update :steps (fnil inc 0)) (swap! cpu + 100) :again)))}
+              eng (core/create {:primitives (tu/fake {}) :dir (tu/tmp-dir) :now (constantly 1000000) :cpu #(deref cpu)
+                                :jobs {'spins spins} :triggers {}
+                                :events (events/make {:body "Fake" :sinks [sink] :now (constantly 1000000)})})]
+          (core/submit! eng '(spins) {})
+          (await (core/tick! eng))
+          (is (= {:kind :limit-reached :cause {:line :job-time :spend 5}} (stopped seen)))
+          (is (<= 50 (:steps @world) 52) "it ends once its steps' 100 ms of CPU each spent the 5 s"))))))
 
 (def waits
   {:round (fn [_] (swap! world update :wait-rounds (fnil inc 0)) :continue)})

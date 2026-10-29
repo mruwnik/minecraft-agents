@@ -8,7 +8,7 @@
   (:require [engine.args :as a]
             [engine.condition :as condition]
             [engine.contract :as contract]
-            [engine.core.base :refer [cut-error exclusive-job now owner?]]
+            [engine.core.base :refer [cut-error elapsed exclusive-job mark now owner?]]
             [engine.core.limits :as limits]
             [engine.ctx :as ctx]
             [engine.hooks :as hooks]
@@ -192,8 +192,8 @@
         call (cond-> call (nil? (:worth call)) (assoc :worth (root-worth c def)))
         call (cond-> call (seq (inherited-checks c)) (update :checks #(merge (inherited-checks c) %)))]
     (if (:call caller)
-      (let [t (now (:engine c))]
-        (contract/clamp call (:call caller) (contract/remainder caller t (- t (nth (:t0s c) (dec (count (:slots c))) t)))))
+      (let [n (mark (:engine c))]
+        (contract/clamp call (:call caller) (contract/remainder caller (first n) (elapsed n (get (:t0s c) (dec (count (:slots c))))))))
       [call []])))
 
 (defn inherited-checks

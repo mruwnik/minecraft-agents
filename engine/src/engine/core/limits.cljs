@@ -6,7 +6,7 @@
   are still checked), and a crossing inside ctx/atomic is held until the section closes. Before an act, its most
   (engine.primitive) is checked against what each frame has left: a crossing refuses the act at once."
   (:require [engine.contract :as contract]
-            [engine.core.base :refer [emit! now]]
+            [engine.core.base :refer [elapsed emit! mark]]
             [engine.expr :as expr]
             [engine.memory :as mem]
             [engine.primitive :as primitive]))
@@ -32,12 +32,13 @@
 
 (defn crossings
   "{:slots :cause :amount :state :now :extra-ms} of each line frames cross, outermost frame first (engine.contract/crossings).
-  t0s: when each frame's round in flight started."
+  t0s: the mark (engine.core.base/mark) of each frame's round in flight."
   [eng frames t0s]
   (let [lv (levels (:primitives eng))
-        t (now eng)]
+        n (mark eng)
+        t (first n)]
     (for [[s state] frames
-          :let [extra-ms (- t (nth t0s (count s) t))]
+          :let [extra-ms (elapsed n (get t0s (count s)))]
           [cause amount] (contract/crossings state lv t extra-ms)]
       {:slots s :cause cause :amount amount :state state :now t :extra-ms extra-ms})))
 
@@ -91,9 +92,10 @@
     (let [p (:primitives eng)
           q (quote-of p (js->clj args :keywordize-keys true))
           lv (levels p)
-          t (now eng)]
+          n (mark eng)
+          t (first n)]
       (for [[s state] frames
-            :let [extra-ms (- t (nth t0s (count s) t))]
+            :let [extra-ms (elapsed n (get t0s (count s)))]
             [cause amount] (contract/most-crossings state q lv t extra-ms)]
         {:slots s :cause (assoc cause :act k) :amount amount :state state :now t :extra-ms extra-ms}))))
 

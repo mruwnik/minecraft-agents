@@ -158,7 +158,8 @@
    (let [clock (atom 1000000)
          [seen sink] (if canonical? (tu/capture-sink) (tu/legacy-capture-sink))
          p (tu/fake world)
-         eng (core/create {:primitives p :jobs registry :triggers triggers :dir dir :now #(deref clock)
+         ;; no CPU clock: these pin what the game clock charges, to the ms
+         eng (core/create {:primitives p :jobs registry :triggers triggers :dir dir :now #(deref clock) :cpu (constantly 0)
                            :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
      {:eng eng :p p :clock clock :seen seen :dir dir})))
 

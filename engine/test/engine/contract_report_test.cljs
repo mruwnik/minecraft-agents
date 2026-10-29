@@ -71,7 +71,8 @@
         dir (tu/tmp-dir)
         p (tu/fake {:self (assoc fake/default-self :food 2)
                     :inventory [{:name "bread" :count 9} {:name "oak_log" :count 3}]})
-        eng (core/create {:primitives p :dir dir :now #(deref clock)
+        ;; no CPU clock: these pin what the game clock charges, to the ms
+        eng (core/create {:primitives p :dir dir :now #(deref clock) :cpu (constantly 0)
                           :jobs {'top {:round (fn ^:async top-round [c]
                                                 (let [n (:n (ctx/mem c) 0)]
                                                   (ctx/update-mem! c assoc :n (inc n))

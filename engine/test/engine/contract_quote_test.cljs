@@ -17,7 +17,8 @@
   (reset! world {})
   (reset! clock 1000000)
   (let [[seen sink] (tu/capture-sink)
-        eng (core/create {:primitives (tu/fake {}) :dir (tu/tmp-dir) :now #(deref clock) :jobs jobs :triggers {}
+        ;; no CPU clock: these pin what the game clock charges, to the ms
+        eng (core/create {:primitives (tu/fake {}) :dir (tu/tmp-dir) :now #(deref clock) :cpu (constantly 0) :jobs jobs :triggers {}
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :seen seen}))
 

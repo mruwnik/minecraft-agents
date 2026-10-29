@@ -203,11 +203,15 @@
                         {:source :body :kind (keyword (:kind m))
                          :level (body-event-level (:kind m))})))))
 
+(defn process-cpu-ms []
+  (let [u (.cpuUsage js/process)] (/ (+ (.-user u) (.-system u)) 1000)))
+
 (defn create
   "An engine over primitives with state under dir. Restores engine.edn and
   memory.edn when present, sweeps memory and appends a :restart entry.
   Options:
     :primitives, :dir, :now, :events, :body
+    :cpu         the CPU clock in ms a round's time also counts (process CPU time)
     :jobs        the registry {sym {:round :doc :args}}; a contract job's {:can-start? :round ...} is wrapped
                  (engine.core.ending)
     :triggers    {name trigger}
@@ -221,7 +225,7 @@
     :max-event-bytes   event log size cap (setting :engine.events/max-bytes, 64 MiB)"
   [{:keys [primitives jobs triggers dir now events body idle-s body-idle-s sweep-ms stats-ms world
            max-event-bytes
-           backoff backoff-alert-ms mono]
+           backoff backoff-alert-ms mono cpu]
     :or {idle-s default-idle-s sweep-ms default-sweep-ms
          backoff-alert-ms default-backoff-alert-ms}}]
   (let [_ (game/select! primitives)
@@ -242,7 +246,7 @@
                              :world-time #(or (.-timeOfDay (.self primitives)) nil)
                              :world-age #(.worldAge primitives)
                              :live-jobs #(set (keys (:instances @st)))})
-        eng {:primitives primitives :jobs (ending/registry jobs) :triggers triggers :dir dir :now now :mono mono :clock-mark (atom [(now) (mono)]) :events ev
+        eng {:primitives primitives :jobs (ending/registry jobs) :triggers triggers :dir dir :now now :mono mono :cpu (or cpu process-cpu-ms) :clock-mark (atom [(now) (mono)]) :events ev
              :store store
              :hurt (hurt/new-state)
              :world (or world ((:world/blank hooks/all)))

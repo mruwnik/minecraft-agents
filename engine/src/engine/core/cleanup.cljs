@@ -9,7 +9,7 @@
   job.cleanup_failed; a done one's data merges into the ending's."
   (:require [engine.args :as a]
             [engine.contract :as contract]
-            [engine.core.base :refer [cut-off! emit! now owner?]]
+            [engine.core.base :refer [cut-off! elapsed emit! mark now owner? since]]
             [engine.core.limits :as limits]
             [engine.core.tally :as tally]
             [engine.memory :as mem]
@@ -63,8 +63,9 @@
   part of this round run so far stays the job's)."
   [def c e]
   (let [eng (:engine c)
-        t (now eng)
-        pre (- t (nth (:t0s c) (count (:slots c)) t))]
+        n (mark eng)
+        t (first n)
+        pre (elapsed n (get (:t0s c) (count (:slots c))))]
     (mem/update-job! (:store eng) (:root c) (:slots c) update :contract
                      (fn [s] (-> (dissoc s :limit)
                                  (assoc :closing e
@@ -131,9 +132,9 @@
       (let [dc (ctx-below c rel)
             ddef (cleanup-def eng (state-of dc))
             _ (when-not (:cleanup (state-of dc)) (begin! ddef dc (contract/ending :cut-off :ended nil)))
-            t0 (now eng)
+            t0 (mark eng)
             r (try (await (run-once ddef dc))
-                   (finally (tally/add-time! eng (:root dc) (:slots dc) (- (now eng) t0))))]
+                   (finally (tally/add-time! eng (:root dc) (:slots dc) (since eng t0))))]
         (if (= :continue r)
           :continue
           (do (finish! dc r)

@@ -1,7 +1,7 @@
 (ns engine.core.round
   "One round: the ctx a round or check receives, the act wrapper (token check, memory saves, action
   events) and ctx/call."
-  (:require [engine.core.base :refer [cut-error cut? cut-off! cut-off-dropped! distance emit! job-of exclusive-job normalize-result now offline-cut-error offline? owner? save-memory-soon! self-pos]]
+  (:require [engine.core.base :refer [cut-error cut? cut-off! cut-off-dropped! distance emit! job-of exclusive-job mark normalize-result now offline-cut-error offline? owner? save-memory-soon! self-pos since elapsed]]
             [engine.core.attention :refer [request-attention! resolve-attention!]]
             [engine.core.fruitless :refer [record-act!]]
             [engine.core.activity :refer [act-ended! act-started! body-act! close-section! hold-still! log-out-record open-section! useful-act?]]
@@ -142,9 +142,9 @@
      :root root :slots slots :chain chain :round round :reflex reflex :wait (:wait base) :t0s (:t0s base) :child-wait child-wait
      :quote-deadline (:quote-deadline base)
      :worth #(or (when (seq slots) (get-in (mem/job-mem (mem/view store) root (pop slots)) [:contract :call :worth])) ##Inf)
-     :left #(let [t (now eng)]
+     :left #(let [n (mark eng)]
               (contract/least-left (for [[s state] (limits/frames eng root slots)]
-                                     (contract/left state t (- t (nth (:t0s base) (count s) t))))))
+                                     (contract/left state (first n) (elapsed n (get (:t0s base) (count s)))))))
      :book-try (fn [job reason] (check!) (when (seq slots) (tally/count-try! eng root (pop slots) job reason)))
      :book-time (fn [ms] (check!) (tally/add-time-chain! eng root slots ms))
      :section-depth (:section-depth base) :held (:held base) :section-closed #(limits/section-closed! eng base)
@@ -214,7 +214,7 @@
   "The ctx of the child in slot under parent base, with args."
   [eng base slot args]
   (let [slots (conj (:slots base) slot)]
-    (make-ctx eng (assoc base :slots slots :args args :t0s (conj (or (:t0s base) []) (now eng))
+    (make-ctx eng (assoc base :slots slots :args args :t0s (conj (or (:t0s base) []) (mark eng))
                          :chain (conj (:chain base) (mem/path->id (:root base) slots))))))
 
 (defn ctx-below
@@ -263,7 +263,7 @@
     (let [fresh? (empty? (mem/job-mem (mem/view store) (:root base) slots))
           _ (when fresh?
               (mem/update-job! store (:root base) slots (fn [m] (let [ident (ending/frame-identity def args)] (cond-> (assoc m :args args :children {}) ident (assoc :contract ident))))))
-          t0 (now eng)
+          t0 (mark eng)
           c (child-ctx eng base slot args)
           own-limit #(ending/with-progress def c (limits/ending eng (:root base) slots %))
           below #(ctx-below eng %1 %2)
@@ -278,7 +278,7 @@
                                       (do (when-not (contract/passes-through? e) (emit! eng (assoc fields :kind :child_ended :status :error)))
                                           (throw e)))))]
                      (if (= :continue r) r (await (cleanup/close eng def c r below)))))
-                 (finally (tally/add-time! eng (:root base) slots (- (now eng) t0))))]
+                 (finally (tally/add-time! eng (:root base) slots (since eng t0))))]
       (when-not (owner? eng (:token base)) (throw (cut-error)))
       (if (= :continue r)
         (do (emit! eng (assoc fields :kind :child_ended :status :continue))
@@ -309,7 +309,7 @@
 (defn ^:async run-round [eng run inst]
   (let [[def args] (job-of eng inst)
         child-wait (atom nil)
-        t0 (now eng)
+        t0 (mark eng)
         c (make-ctx eng {:root (:id run) :slots [] :chain [(:id run)] :token (:token run)
                          :args args :round (:round run) :reflex (:reflex run)
                          :child-wait child-wait :t0s [t0]})
@@ -338,7 +338,7 @@
           (do (await (close-after-throw eng def c e)) {:status :error :error e})
           :else {:status :error :error e}))
       (finally
-        (tally/add-time! eng (:id run) [] (- (now eng) t0))))))
+        (tally/add-time! eng (:id run) [] (since eng t0))))))
 
 (defn check-ctx
   "The ctx a listed job's check receives: memory and sensing, no token."
