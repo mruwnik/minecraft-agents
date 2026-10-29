@@ -76,6 +76,17 @@
   (cond-> s
     (not (sh-sense/seen-cell? (:primitives c) goal)) (assoc-in [2 :look] (walk-risk/look-way c goal dark))))
 
+(defn walk-look
+  "The exposure s with :look, the walk of the jobs.movement.walk-look child to the cell look-edge/far-side shows the
+  region's far side from and back, sure as the job works from here (walk-risk/look-way), while such a side is left that
+  no walk-look has looked at yet (:walk-looked entries: from close by it stayed unseen, so another walk shows nothing);
+  priced runs it as the check's :look-first child."
+  [s c]
+  (if-let [{:keys [to]} (look-edge/far-side (:primitives c) (sh-sense/feet (:primitives c))
+                                            (into #{} (mapcat (comp :cells :data)) (ctx/entries c :walk-looked)))]
+    (assoc-in s [2 :look] (assoc (walk-risk/look-way c to 1) :child ['jobs.movement.walk-look {}]))
+    s))
+
 (defn own-way
   "c with (f c s) among the ways its job answers a refusal s on exposure itself (its torches, a wait for dawn): seconds,
   nil none. priced takes the walk to look only while it is cheaper than each of them."
@@ -128,7 +139,7 @@
   stand in there (hall-cell), dark only in a dark hall; over ::risk-limit :never, lowered by a torch. Where that cell is
   the body's own, the unseen walls of its room are looked at first (room-look). A hall judged by an unseen edge
   (sh-inside/dark-hall :roofed or :sky) is also priced as the walk to look at `goal` (default `to`; look-first), back
-  at the chance the edge is open (cost/hall-chance)."
+  at the chance the edge is open (cost/hall-chance); a seen `goal` within look-edge/max-edge-walk, as the walk to look at the far side of the body's region (walk-look)."
   ([c to] (dark-status c to to))
   ([c to goal]
    (let [p (:primitives c)
@@ -144,7 +155,9 @@
        :else
        (cond-> (contract/never :exposed (str "dark at " where ", and a mob can walk from dark floor farther than " sh-inside/spawn-free-radius " blocks off (a hall, or an open side of this room): mobs spawn there, waiting never lights it, a torch does")
                                :lowered-by #{:torch} :chance chance :at at)
-         (#{:roofed :sky} @hall) (look-first c goal (cost/hall-chance @hall)))))))
+         (#{:roofed :sky} @hall) (as-> s (if (sh-sense/seen-cell? p goal)
+                                             (cond-> s (u/within? (sh-sense/feet p) goal look-edge/max-edge-walk) (walk-look c))
+                                             (look-first s c goal (cost/hall-chance @hall)))))))))
 
 (defn at-status
   "The status of the exposure of the walk of c's body to `to`: ok while sheltered or the chance is within ::risk-limit,
@@ -208,7 +221,8 @@
   ok :priced while acting now is affordable and no affordable wait is cheaper; a cheaper wait, or the only affordable one,
   holds :later with both prices (a wait to heal keeps s's data); else s. An exposure resting on a place the body has not
   seen (:look, look-first) has a third way: walk there to look, its hp priced (walk-risk/risk-s) plus its seconds, ok
-  :look-first while it is affordable and cheaper than the other ways and than the job's own answers to s (own-way)."
+  :look-first while it is affordable and cheaper than the other ways and than the job's own answers to s (own-way), with
+  the way's :child as its :look-first child call when it has one (walk-look)."
   [c s]
   (let [[kind _ {:keys [reason chance wait-ms] look-way :look :as data}] s]
     (if-not (and (contains? #{:later :never} kind) (= :exposed reason) (number? chance))
@@ -233,8 +247,9 @@
         (cond
           (and best (< (:s best) now-s) (not (look? (:s best)))) (wait best)
           (and now? (not (look? now-s))) (contract/ok :priced (str "exposed, but " (price/round1 secs) " s there cost " (price/round1 hp) " hp, " (price/round1 now-s) " s, no wait cheaper"))
-          (look? (:s best)) (contract/ok :look-first (str "exposed: " (price/round1 secs) " s there cost " (price/round1 hp) " hp, but the walk to look costs "
-                                                          (price/round1 (:hp look-way)) " hp, " (price/round1 (:s look)) " s: the stay is judged there"))
+          (look? (:s best)) (cond-> (contract/ok :look-first (str "exposed: " (price/round1 secs) " s there cost " (price/round1 hp) " hp, but the walk to look costs "
+                                                                  (price/round1 (:hp look-way)) " hp, " (price/round1 (:s look)) " s: the stay is judged once looked"))
+                              (:child look-way) (assoc-in [2 :look-first] (:child look-way)))
           best (wait best)
           :else s)))))
 
@@ -252,7 +267,7 @@
   [c to]
   (let [p (:primitives c)
         to (update-vals (or to (sh-sense/feet p)) js/Math.floor)]
-    (priced c (check-cache/cached c [::exposed to (sense/round-looked c)] #(at-status c to)))))
+    (priced c (check-cache/cached c [::exposed to (sense/round-looked c) (sense/known-memory p) (:t (ctx/latest c :walk-looked))] #(at-status c to)))))
 
 (defn trigger-args
   "The args of the register's hostile-near entry (muted or not), {} when it has none."

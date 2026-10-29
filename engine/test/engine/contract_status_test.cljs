@@ -231,6 +231,22 @@
           (await (core/tick! eng))
           (is (= 2 (:asks @world)) "a started job's next round"))))))
 
+(deftest a-check-that-passes-with-a-look-first-child-runs-it-under-the-call-then-asks-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {'stayer {:can-run? (fn [_]
+                                                         (swap! world update :asks (fnil inc 0))
+                                                         (if (:looked @world)
+                                                           (contract/ok :seen "seen")
+                                                           (contract/ok :look-first "walk to look" :look-first ['looker {}])))
+                                             :round (fn [c] (swap! world assoc :ran (:looked @world)) (ctx/end c :done nil))}
+                                    'looker {:round (fn [c] (swap! world assoc :looked true :worth (ctx/worth c)) (ctx/end c :done nil))}})]
+          (core/submit! eng '(stayer {:worth 12}) {})
+          (await (core/tick! eng))
+          (is (= {:worth 12 :asks 2 :ran true} (select-keys @world [:worth :asks :ran]))
+              "the child ran with the call's worth, the checks were asked again, then the round ran"))))))
+
 (deftest a-called-child-whose-can-run-turns-later-ends-condition-failed-for-its-parent
   (async done
     (tu/run-async done

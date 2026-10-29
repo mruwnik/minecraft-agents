@@ -74,20 +74,45 @@
             (sort-by (fn [[x y z]] (u/dist feet {:x x :y y :z z})))
             vec)))))
 
-(defn walkable-near
-  "The cell {:x :y :z} of the closed region the body stands in (doors shut, as pending reads it) nearest cell [x y z], or nil.
-  Only dry stand cells with a seen roof, and not a doorway beside a cell without one: a player judging a room does not walk out through
-  its doorway to look at the outside, nor stand in the doorway (the flood runs past an open one over seen cells), where the
-  night could not fill it. Nil when that cell lies farther than max-edge-walk from the feet."
-  [p [x y z]]
+(defn walkable-near-fn
+  "walkable-near as a fn of the cell [x y z], the region read once, max-edge-walk counted from `from` ({:x :y :z})."
+  [p from]
   (let [feet (sh-sense/feet p)
         flood (set (map vec (:cells (reach-room/room-flood p (reach-room/room-kind-at p (reach-room/shut-kind-at p)) (:x feet) (:y feet) (:z feet)))))
         roofed (set (filter (fn [[cx cy cz]] (sh-sense/roofed? p (sh-sense/room-roof-height) {:x cx :y cy :z cz})) flood))
         exit? (fn [[cx cy cz]] (and (sh-sense/doorway? p {:x cx :y cy :z cz})
                                     (some (fn [[dx dz]] (let [n [(+ cx dx) cy (+ cz dz)]] (and (flood n) (not (roofed n))))) [[1 0] [-1 0] [0 1] [0 -1]])))
-        best (first (sort-by (fn [[cx cy cz]] (+ (js/Math.abs (- cx x)) (js/Math.abs (- cy y)) (js/Math.abs (- cz z)))) (remove exit? (filter #(shore/standable? p {:x (% 0) :y (% 1) :z (% 2)}) roofed))))]
-    (when (and best (<= (u/dist feet {:x (best 0) :y (best 1) :z (best 2)}) max-edge-walk))
-      {:x (best 0) :y (best 1) :z (best 2)})))
+        stands (remove exit? (filter #(shore/standable? p {:x (% 0) :y (% 1) :z (% 2)}) roofed))]
+    (fn [[x y z]]
+      (let [best (first (sort-by (fn [[cx cy cz]] (+ (js/Math.abs (- cx x)) (js/Math.abs (- cy y)) (js/Math.abs (- cz z)))) stands))]
+        (when (and best (<= (u/dist from {:x (best 0) :y (best 1) :z (best 2)}) max-edge-walk))
+          {:x (best 0) :y (best 1) :z (best 2)})))))
+
+(defn walkable-near
+  "The cell {:x :y :z} of the closed region the body stands in (doors shut, as pending reads it) nearest cell [x y z], or nil.
+  Only dry stand cells with a seen roof, and not a doorway beside a cell without one: a player judging a room does not walk out through
+  its doorway to look at the outside, nor stand in the doorway (the flood runs past an open one over seen cells), where the
+  night could not fill it. Nil when that cell lies farther than max-edge-walk from the feet."
+  [p cell]
+  ((walkable-near-fn p (sh-sense/feet p)) cell))
+
+(defn far-side
+  "{:side [x y z] :to {:x :y :z}}: the unseen side, not in `looked`, of the region round the feet whose walkable-near cell
+  `to` (within max-edge-walk of `from`, default the feet) lies farthest from `from`, nil when none: a walk to `to` shows `side` (within
+  look/near-of), and `to` is no cell beside the feet, where a look round shows as much. The end of a dark tunnel a look
+  from here cannot make out."
+  ([p] (far-side p (sh-sense/feet p) #{}))
+  ([p from looked]
+   (let [feet (sh-sense/feet p)
+         near (look/near-of p)
+         near-fn (delay (walkable-near-fn p from))]
+     (some->> (seq (remove looked (reach-room/unseen-sides p feet)))
+              (keep (fn [[x y z :as side]]
+                      (when-let [to (@near-fn side)]
+                        (when (and (not (u/within? feet to 1)) (or (nil? near) (<= (u/dist to {:x x :y y :z z}) near)))
+                          {:side side :to to}))))
+              seq
+              (apply max-key #(u/dist from (:to %)))))))
 
 (defn ^:async look!
   "A closed region with sides never seen is not yet known shut (an unseen cell may be an opening). The nearest of cells is

@@ -138,7 +138,7 @@
 
 (def status-kinds
   "A check's status [kind text data]: :ok holds, :later not now, :never can never hold, :look fails unless a look round
-  finds otherwise."
+  finds otherwise. An :ok whose data has :look-first [job args] holds once that child has run (engine.core.ending/run)."
   #{:ok :later :never :look})
 
 (defn status?
@@ -162,12 +162,14 @@
 (defn with-slot "Status s with :slot in its data." [s slot] (assoc-in s [2 :slot] slot))
 
 (defn all
-  "Statuses ss as one: any :never, else the first :later, else the first :look, else :ok (texts joined by \"; \")."
+  "Statuses ss as one: any :never, else the first :later, else the first :look, else :ok (texts joined by \"; \"), with
+  the first :look-first child call among them."
   [ss]
   (let [first-of (fn [k] (some #(when (= k (first %)) %) ss))]
     (or (first-of :never) (first-of :later) (first-of :look)
         (if (seq ss)
-          [:ok (str/join "; " (map second ss)) (nth (first ss) 2)]
+          [:ok (str/join "; " (map second ss))
+           (let [child (some #(:look-first (nth % 2)) ss)] (cond-> (nth (first ss) 2) child (assoc :look-first child)))]
           (ok :holds "holds")))))
 
 (defn fn-name [f] (or (some-> (.-name f) not-empty demunge) "an anonymous fn"))

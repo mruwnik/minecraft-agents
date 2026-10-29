@@ -346,13 +346,27 @@
   (when-not (= :continue r) (forget-done! c) (note-look! c nil))
   r)
 
+(declare run)
+
+(defn ^:async look-first!
+  "The round of contract job def whose checks passed with a :look-first [job args] child call: the call starts (fresh?:
+  frozen now, so the child gets its :spend and worth), the child runs in slot ::look-first, and once it ends :done the
+  round asks the checks again (run); :continue while it runs, condition-failed :look-first when it ends otherwise."
+  [def c fresh? [job args]]
+  (when fresh? (freeze! c def))
+  (let [r (await (ctx/call c ::look-first job args))]
+    (cond
+      (= :continue r) :continue
+      (= :done (:kind r)) (await (run def c))
+      :else (finish def c (contract/ending :condition-failed {:reason :look-first} nil)))))
+
 (defn ^:async run
   "One round of contract job def: an ending, or :continue. A goal that holds ends it :done (:already before the start),
   whatever its checks say but a can-start? :never :bad-args (a done? that throws is told with job.done_failed and counts
   as not done); else a :never ends it impossible. A :later from its can-start? keeps a listed job
   not started queued, else ends it condition-failed; one from can-run? yields a listed root job; a reflex and a called child end condition-failed
   with the status as cause (ctx/returns-on-later?), and the caller decides. The round's ctx asks done? and can-run? between
-  steps (ctx/done, ctx/can-run)."
+  steps (ctx/done, ctx/can-run). Checks that pass with a :look-first child run it first (look-first!)."
   [def c]
   (let [asked (take-asked! c)
         ss (statuses def c asked)
@@ -373,9 +387,11 @@
        (= :later (first run-s)) (if (ctx/returns-on-later? c) (failed run-s) :continue)
        :else (if-let [floor (when-not (started? c) (limits/floor-cause c #(first (call-of c def))))]
                (counted (contract/ending :condition-failed floor nil))
-               (await (started-round def (assoc c :can-run #(contract/verdict c (select-keys def [:can-run?]))
-                                                :done #(done-between def c))
-                                     d)))))))
+               (if-let [child (:look-first (nth s 2))]
+                 (await (look-first! def c fresh? child))
+                 (await (started-round def (assoc c :can-run #(contract/verdict c (select-keys def [:can-run?]))
+                                                  :done #(done-between def c))
+                                       d))))))))
 
 (defn spent?
   "Whether a started job's spend or deadline line is crossed (a floor is not: below one it waits)."
