@@ -113,11 +113,13 @@
       {:layout layout :cells cells :seconds (* (count cells) (way/place-s (night-c c)))})))
 
 (defn exposed-price
-  "Seconds secs in the open at `at` cost: spawns at chance (price/stay-hp) and the fight with the hostiles known near `at`
-  (price/way-fight-hp), each hp at cost/hp-price."
+  "Seconds secs in the open at `at` cost: the hp the spawns at chance hurt (price/stay-parts) and the fight with the hostiles
+  known near `at` (price/way-fight-hp), each at cost/hp-price, plus the death they risk at what cost/route-death says
+  it costs (chance x seconds: a death is not scaled by health again)."
   [c chance secs at]
-  (* (cost/hp-price (or (.-health (.self (:primitives c))) 20))
-     (+ (price/stay-hp c chance secs) (price/way-fight-hp c at))))
+  (let [{:keys [hurt dies death]} (price/stay-parts c chance secs)]
+    (+ (* (cost/hp-price (or (.-health (.self (:primitives c))) 20)) (+ hurt (price/way-fight-hp c at)))
+       (if (pos? dies) (* dies death) 0))))
 
 (defn open-price
   "exposed-price of secs in the open at the worst of cells, each at its night-chance."

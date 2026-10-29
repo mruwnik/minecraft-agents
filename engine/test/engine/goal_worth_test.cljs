@@ -9,6 +9,9 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [jobs.lib.cost :as cost]
+            [jobs.lib.price :as price]
+            [jobs.lib.util :as u]
+            [jobs.survival.bed-down :as bed-down]
             [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.world-files :as world]))
 
@@ -95,3 +98,12 @@
         left (second (get-in (sh-clock/night-left-quote {:primitives (tu/fake {:time 14000})}) [:uses :job-time]))]
     (is (pos? left))
     (is (< (Math/abs (- left (- alone short))) 1e-6) "alone the sleep skips the night: its seconds are worth saving; three short it skips nothing")))
+
+(deftest an-exposed-night-weighs-a-death-at-its-cost-not-scaled-by-health-again
+  (let [p (tu/seeing-all (tu/fake-on-floor {:self {:health 5}}))
+        c (ctx-of p {} {})
+        at (zipmap [:x :y :z] (u/self-pos c))
+        {:keys [hurt dies death]} (price/stay-parts c 0.01 600)]
+    (is (pos? (* dies death)))
+    (is (< (Math/abs (- (+ (* (cost/hp-price 5) hurt) (* dies death)) (bed-down/exposed-price c 0.01 600 at))) 1e-6)
+        "hurt at hp-price, the death as chance x cost: the death scale already counts low health in its chance")))
