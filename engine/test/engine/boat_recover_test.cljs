@@ -105,3 +105,12 @@
     {:blocks pond} {:target {:id 9 :item "oak_boat" :before 0}} :later
     {:blocks pond :inventory [{:name "oak_boat" :count 1}]} {:target {:id 9 :item "oak_boat" :before 0}} :ok
     {:blocks pond :inventory [{:name "oak_boat" :count 1}]} {:target {:id 9 :item "oak_boat" :before 1}} :later))
+
+(deftest a-boat-broken-before-a-resume-is-collected-not-gone
+  (let [target {:id 9 :item "oak_boat" :pos {:x 1.5 :y 64 :z 0.5} :before 0}
+        broken (fn [world mem]
+                 (br/broken-target {:primitives (tu/seeing-all (tu/fake-on-floor world)) :root "j1" :slots [] :args {}
+                                    :view (fn [] {:now 0 :data {:entries {:job/j1 [{:t 0 :data mem}]}}})}))]
+    (is (= target (broken {:blocks pond} {:target target})) "out of sight: its drop is collected")
+    (is (nil? (broken {:blocks pond :entities [(boat-at 9 1.5)]} {:target target})) "still afloat: hit again")
+    (is (nil? (broken {:blocks pond} {})) "never began: gone")))

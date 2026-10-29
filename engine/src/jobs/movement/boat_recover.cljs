@@ -14,6 +14,7 @@
 (def doc
   "Take a boat back: the boat is :id, else the nearest boat or raft in sight (the boat jobs' radius setting). When aboard, it gets off first (jobs.movement.leave-vehicle),
   walks into reach (jobs.movement.go-to), hits it until it breaks and collects the dropped item (jobs.items.collect-drops).
+  A boat broken in an earlier round of the call (its drop not yet picked up) is collected on resume.
   Condition at the start: :no-boat (none in sight); a listed call waits on it.
   Done once the boat is gone and its item is carried (data {:id :item name :collected n}), or
   condition-failed :gone (the boat is no longer in sight), or
@@ -75,6 +76,22 @@
         mean (min most recover-s)]
     {:uses {:job-time [(min 1 mean) mean most]}}))
 
+(defn ^:async collect!
+  "Pick up the drop of the boat {:id :item :pos} that was broken: :continue while the pick-up waits, else the ending."
+  [c {:keys [id item pos]}]
+  (let [k (waits/waiting-out c (await (ctx/call c :collect 'jobs.items.collect-drops {:near pos :radius 4 :items [item]})))
+        n (:collected (:data k) 0)]
+    (cond
+      (= :continue k) :continue
+      (zero? n) (ctx/end c :nothing-possible :not-collected {:id id :item item})
+      :else (ctx/end c :done nil {:id id :item item :collected n}))))
+
+(defn broken-target
+  "The boat this call began breaking (mem :target) when it is out of sight now: its drop is still to be collected."
+  [c]
+  (let [{:keys [id] :as t} (:target (ctx/mem c))]
+    (when (and t (not-any? #(= id (:id %)) (launch/boats-in-sight c))) t)))
+
 (defn ^:async round [c]
   (let [p (:primitives c)
         id (:id (:args c))
@@ -86,7 +103,9 @@
       (loop [hits 0 failed 0]
         (let [boat (pick-boat c)]
           (cond
-            (nil? boat) (ctx/end c :condition-failed :gone {:id id})
+            (nil? boat) (if-let [t (broken-target c)]
+                          (await (collect! c t))
+                          (ctx/end c :condition-failed :gone {:id id}))
             (> (u/dist (u/self-pos c) (:pos boat)) (reach))
             (let [w (await (child/call-walk* c :walk {:pos (:pos boat) :range 2 :ways #{:walk :clear-seal}}))]
               (cond
@@ -97,15 +116,9 @@
             :else
             (let [item (:name boat)
                   _ (when-not (= (:id boat) (:id (:target (ctx/mem c))))
-                      (ctx/update-mem! c assoc :target {:id (:id boat) :item item :before (carried c item)}))
+                      (ctx/update-mem! c assoc :target {:id (:id boat) :item item :pos (:pos boat) :before (carried c item)}))
                   r (await (ctx/act c :attack #js {:id (:id boat)}))]
               (if (= "killed" (.-status r))
-                (let [k (waits/waiting-out c (await (ctx/call c :collect 'jobs.items.collect-drops
-                                         {:near (:pos boat) :radius 4 :items [item]})))
-                      n (:collected (:data k) 0)]
-                  (cond
-                    (= :continue k) :continue
-                    (zero? n) (ctx/end c :nothing-possible :not-collected {:id (:id boat) :item item})
-                    :else (ctx/end c :done nil {:id (:id boat) :item item :collected n})))
+                (await (collect! c (:target (ctx/mem c))))
                 (do (ctx/update-mem! c assoc :hits (inc hits))
                     (recur (inc hits) failed))))))))))
