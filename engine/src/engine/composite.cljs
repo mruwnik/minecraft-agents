@@ -126,8 +126,9 @@
       s)))
 
 (defn rest!
-  "Start the rest r: the round that did it declares the same wait the rest-status check will give, so it is not silent."
+  "Start the rest r, charged to the :job-time of this job and its callers, so a budget ends a job that rests: the round that did it declares the same wait the rest-status check will give, so it is not silent."
   [c r]
+  (ctx/book-time! c (- (:until r) (ctx/now c)))
   (ctx/update-mem! c assoc :rest r)
   (some-> (:child-wait c) (reset! (contract/status-cause (contract/status :later :resting (str "resting after " (name (:after r))) r))))
   :continue)

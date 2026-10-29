@@ -50,6 +50,12 @@
   [ctx job reason]
   ((:book-try ctx) job reason))
 
+(defn book-time!
+  "Charge ms of waiting to this job's :job-time spend line and its callers' (a back-off inside a job comes out of its
+  own budget). Throws a cut error if this round was cut; a ctx with no engine behind it books nothing."
+  [ctx ms]
+  (when-let [f (:book-time ctx)] (f ms)))
+
 (defn tries-left
   "How many more tries the :tries spend lines of the call's callers and its children's endings allow (least over the chain), ##Inf when none is set."
   [ctx]

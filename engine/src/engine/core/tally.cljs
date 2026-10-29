@@ -51,6 +51,12 @@
   (when (pos? ms)
     (update-frames! eng root [(mem/slot-path slots)] #(update % :ran-ms (fnil + 0) ms))))
 
+(defn add-time-chain!
+  "Book ms of waiting on every frame from root down to slots (a wait is in no round, so no parent's round holds it)."
+  [eng root slots ms]
+  (when (pos? ms)
+    (update-frames! eng root (frame-paths slots) #(update % :ran-ms (fnil + 0) ms))))
+
 (defn report [eng root slots]
   (contract/report (:contract (mem/job-mem (mem/view (:store eng)) root slots)) ((:now eng))))
 

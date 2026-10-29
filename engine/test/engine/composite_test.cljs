@@ -3,6 +3,7 @@
             [engine.composite :as composite]
             [engine.contract :as contract]
             [engine.core :as core]
+            [engine.core.tally :as tally]
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.settings :as settings]
@@ -210,6 +211,16 @@
           (reset! (:ending s) [:done nil])
           (await (run-s! s (+ (rest-s) 5)))
           (is (< 3 @(:runs s)) "a done run ends the rests"))))))
+
+(deftest a-rest-is-charged-to-the-job-time-of-the-repeat
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (repeat-setup :condition-failed '(repeat (kid)))
+              id (first (:list (core/state (:eng s))))]
+          (await (run-s! s 2))
+          (is (<= (rest-s) (get-in (tally/report (:eng s) id []) [:uses :job-time]))
+              "the 30 s rest counts against the job's :job-time"))))))
 
 (deftest repeat-ends-when-its-child-is-impossible-or-cut-off
   (async done
