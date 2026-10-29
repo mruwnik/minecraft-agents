@@ -603,10 +603,12 @@ test('body events: the respawn point chat line is spawn-set, the library spawnRe
   assert.deepEqual(seen, [{ kind: 'spawn-set', pos: at(12, 70, 3) }, { kind: 'spawn-reset' }])
 })
 
-test('close quits the bot', async () => {
+test('close quits the bot and the raw world lets go of it', async () => {
   const { bot, p } = rig(world)
+  p.rawWorld.onBlockChange(() => {})
   await p.close()
   assert.deepEqual(names(bot), ['quit'])
+  assert.equal(bot.listenerCount('chunkColumnLoad'), 0)
 })
 
 // ---- survival sensing ----

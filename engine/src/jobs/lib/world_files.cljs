@@ -36,6 +36,7 @@
             ["path" :as path]
             [clojure.string :as str]
             [engine.file-sync :as fsync]
+            [jobs.lib.per-body :as per-body]
             [jobs.lib.zone-file :as zones]
             [plan.parse :as parse]
             [plan.shape :as shape]))
@@ -321,10 +322,16 @@
   (some-> (:footprints @state) deref)
   nil)
 
+(defonce ^{:doc "The timers of the open worlds' watches. A stopped body's timer would keep its engine (:emit) and through it the
+  old bot and its chunks: a warm process stops them at its next start."}
+  watches (js/Set.))
+
+(per-body/store! ::watches #(do (.forEach watches js/clearInterval) (.clear watches)))
+
 (defn open
   "A world over the files of :plans-dir and :blueprint-dir and the zone file :zones-file. opts: :now (ms clock),
   :emit (an event fn), :every-ms. Without :now (a real body) it reads the files right after the open returns (the engine exists by then to take the events) and again every :every-ms by
-  a timer, so a file written at any time is logged as world.reloaded even when no job reads the world (close! stops it)."
+  a timer, so a file written at any time is logged as world.reloaded even when no job reads the world (close! stops it, so does a warm start: watches)."
   [{:keys [now every-ms] :as opts}]
   (let [w {:state (atom {:plans {} :blueprints {}})
            :said (atom #{})
@@ -332,13 +339,17 @@
            :opts (assoc opts :now (or now js/Date.now) :every-ms (or every-ms (default-every-ms)) :warm? (not now))}]
     (if (or now (not (:plans-dir opts)))
       w
-      (do (js/setTimeout #(refresh! w) 0)
-          (assoc w :timer (doto (js/setInterval #(refresh! w) (get-in w [:opts :every-ms])) (.unref)))))))
+      (let [timer (doto (js/setInterval #(refresh! w) (get-in w [:opts :every-ms])) (.unref))]
+        (js/setTimeout #(refresh! w) 0)
+        (.add watches timer)
+        (assoc w :timer timer)))))
 
 (defn close!
   "Stops the world's watch (see open)."
   [w]
-  (some-> (:timer w) js/clearInterval))
+  (when-let [t (:timer w)]
+    (js/clearInterval t)
+    (.delete watches t)))
 
 (defn data-state [plans blueprints]
   (expand-all {:plans (update-vals plans (fn [p] {:value p}))

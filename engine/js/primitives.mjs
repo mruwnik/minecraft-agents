@@ -536,6 +536,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     clearInterval(watchdog)
     unbind()
     entityDeathListeners.clear()
+    rawWorld.close() // its light timer holds the bot, and the bot its chunks: a warm restart would keep every old world
     bot.on('error', () => {}) // a quitting socket may still report a late error after lifecycle cleanup
     setOwner(null)
     await view?.detach()

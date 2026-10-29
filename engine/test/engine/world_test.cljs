@@ -4,6 +4,7 @@
             ["fs" :as fs]
             ["path" :as path]
             [engine.test-util :as tu]
+            [jobs.lib.per-body :as per-body]
             [jobs.lib.world-files :as world]
             [plan.shape :as shape]
             [engine.file-sync :as fsync]))
@@ -482,6 +483,23 @@
            (world/close! w)
            (done))
          400)))))
+
+;; the timer's :emit holds the body's engine: a watch left running kept every earlier run's bot in a warm process
+(deftest a-warm-start-stops-the-watch-of-a-world-left-open
+  (async done
+    (let [plans (tu/tmp-dir)
+          seen (atom [])]
+      (world/open {:plans-dir plans :blueprint-dir (tu/tmp-dir) :every-ms 50 :emit #(swap! seen conj %)})
+      (js/setTimeout
+       (fn []
+         (per-body/clear-stores!)
+         (write! plans "after" (pr-str huts))
+         (js/setTimeout
+          (fn []
+            (is (not (contains? (reloaded-names seen) "after.edn")) "no watch runs on after the warm start")
+            (done))
+          300))
+       100))))
 
 (deftest an-opened-world-builds-its-footprints-before-any-reader-asks
   (async done
