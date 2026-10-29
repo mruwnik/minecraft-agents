@@ -28,13 +28,16 @@
   24)
 
 (defn lit-side?
-  "A predicate on an unseen side cell [x y z]: some flood cell beside it is bright enough to be seen, so a look or a walk can
-  show it. A side of a dark stretch is never shown (a dark cell is not recorded), so the region stays open there."
+  "A predicate on an unseen side cell [x y z]: within near-of of the feet (a dark wall that close shows), or some flood cell beside
+  it is bright enough to be seen, so a look or a walk can show it. A side of a dark stretch farther off is never shown (a dark
+  cell is not recorded), so the region stays open there."
   [p feet]
   (let [see-lit (look/see-lit-fn p)
+        near (look/near-of p)
         cells (set (map vec (:cells (reach-room/room-flood p (reach-room/room-kind-at p (reach-room/shut-kind-at p)) (:x feet) (:y feet) (:z feet)))))]
     (fn [[x y z]]
       (or (nil? see-lit)
+          (and near (<= (u/dist feet {:x x :y y :z z}) near))
           (some (fn [[dx dz]] (and (contains? cells [(+ x dx) y (+ z dz)]) (== 1 (see-lit (+ x dx) y (+ z dz)))))
                 [[1 0] [-1 0] [0 1] [0 -1]])))))
 

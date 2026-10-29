@@ -108,7 +108,7 @@
         {:keys [chance lowered-by look-at light-in]} (spawn-light/exposure p to shelter)
         patience (settings/get settings ::light-patience-s)
         where (place-text to)
-        unseen-sides (delay (when (and (sh-sense/dark-outside? p) (not (u/within? (sh-sense/feet p) to 1))) (look-edge/pending c (sense/round-looked c) 0)))
+        unseen-sides (delay (when-not (u/within? (sh-sense/feet p) to 1) (look-edge/pending c (sense/round-looked c) 0)))
         wait-s (delay (cond (contains? lowered-by :light) light-in (spawn-light/dawn-lowers? p to) (sh-sense/light-in p to)))]
     (cond
       (and (sh-sense/dark-outside? p) (sh-inside/safe-from-night? p) (not (sh-inside/walk-leaves-shelter? p shelter to 1)))

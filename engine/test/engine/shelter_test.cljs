@@ -1597,7 +1597,11 @@
   (let [lit (look-edge/pending {:primitives (tunnel-edge-body nil)} #{} 0)]
     (is (seq lit) "an unseen side beside lit cells is looked at")
     (is (= lit (sort-by (fn [[x]] x) lit)) "nearest first")
-    (is (empty? (look-edge/pending {:primitives (tunnel-edge-body {})} #{} 0)) "dark cells are never shown by a look: the region stays open")))
+    (let [dark (tunnel-edge-body {})
+          feet (sh-sense/feet dark)]
+      (is (every? (fn [[x y z]] (<= (Math/hypot (- x (:x feet)) (- y (:y feet)) (- z (:z feet))) (look/near-of dark)))
+                  (look-edge/pending {:primitives dark} #{} 0))
+          "a dark side is shown only within near-of; farther dark cells stay open"))))
 
 (deftest the-edge-walk-stops-after-fifteen-cells-or-two-hundred-steps
   (let [c {:primitives (tunnel-edge-body nil)}
