@@ -224,7 +224,6 @@
  :jobs.lib.child/max-fruitless
  :jobs.lib.combat/attack-gap-ms
  :jobs.lib.cost.death/spawn-horizon-s
- :jobs.lib.cost.death/unknown-respawn-blocks
  :jobs.lib.cost.find/leg-spacing
  :jobs.lib.cost.planner/drop-cost
  :jobs.lib.cost.threat/difficulty
@@ -233,6 +232,7 @@
  :jobs.lib.hostile-fight/leash
  :jobs.lib.loose/radius
  :jobs.lib.price/way-radius
+ :jobs.lib.room-order/toss-below
  :jobs.lib.shelter.beds/max-days-awake
  :jobs.lib.shelter.keep/at-night?
  :jobs.lib.shut-gates/open-s
@@ -240,7 +240,6 @@
  :jobs.lib.swim/air-radius
  :jobs.movement.boat-launch/radius
  :jobs.movement.cross-water/min-cross
- :jobs.storage.make-room/toss-below
  :jobs.survival.breathe/search-radius
  :jobs.survival.breathe/swim-range
  :jobs.survival.get-food.sources/source-radius
