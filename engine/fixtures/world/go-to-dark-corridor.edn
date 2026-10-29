@@ -1,8 +1,8 @@
 ;; go-to into the dark, no item at the goal (card 35a80b18). Underground cells: the light does not hang on the clock.
 ;; Should-succeed: a corridor x 10..29, 1 wide, cut in stone filling x 10..31, out of a room x 0..9 lit by a glowstone ceiling (x 20..29
 ;; block light 0): a small dark tunnel holds no spawns (Q345), and go-to walks in to its far end.
-;; Should-fail (waits): a goal worth 1 s across 30 blocks of a dark hall (the plot all dark but a glowstone over the body) is not worth
-;; the spawns it risks: the walk waits :risky and the body stays put.
+;; Should-fail (waits): a cobblestone drop (worth about a second) across 30 blocks of a dark hall (the plot all dark but a glowstone
+;; over the body, a torch by the drop) is not worth the spawns the walk risks: collect-drops' go-to waits :risky and the body stays put.
 {:defaults
  {:tags [:go-to :movement]
   :time :any
@@ -17,7 +17,8 @@
    :after [[:body-near [28.5 0 16.5] 1]]}
   {:name "a-goal-worth-little-across-a-dark-hall-waits"
    :plot {:height 6 :floor "stone" :light :dark :length 40}
-   :blocks [[:set [4 4 16] "glowstone"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [35 0 16] :range 0 :worth 1})]]
+   :blocks [[:set [4 4 16] "glowstone"] [:set [35 0 15] "torch"]]
+   :act [[:summon "item" [35.5 0 16.5] "{Item:{id:\"minecraft:cobblestone\",count:1}}"]
+         [:job (jobs.items.collect-drops {:radius 34})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :risky}} :within-s 40 :of-job true}]
    :after [[:body-near [4.5 0 16.5] 2]]}]}
