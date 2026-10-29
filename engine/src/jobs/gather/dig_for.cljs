@@ -1,5 +1,7 @@
 (ns jobs.gather.dig-for
   (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.walk-risk :as walk-risk]
             [jobs.lib.need :as need]
             [jobs.lib.work-place :as work-place]
             [jobs.lib.price :as price]
@@ -234,10 +236,11 @@
                  (contains? (ledger/ways-of c) (access/cell (update feet :y dec)))))))
 
 (defn dig-walk-opts
-  "The go-near! options of the walk to a dig: other ways only beyond reach, no dive under water, walks inside own cuts ignore the dark (the :checks forms given, when any), a level bound with :stay-level."
-  [args in-reach? checks & [tolls]]
+  "The go-near! options of the walk to a dig: other ways only beyond reach, :stay-s the dig seconds the danger at the stand is priced over, no dive under water, walks inside own cuts ignore the dark (the :checks forms given, when any), a level bound with :stay-level."
+  [args in-reach? checks & [tolls stay-s]]
   (cond-> {:dive false}
     (seq tolls) (assoc :tolls tolls)
+    stay-s (assoc :stay-s stay-s)
     in-reach? (assoc :ways #{:walk :clear-seal})
     (seq checks) (assoc :checks checks)
     (mw/stay-level? args) (assoc :y-margin (settings/get settings ::stay-margin))))
@@ -253,19 +256,38 @@
                :when (lava/beside-lava? p cell)]
            (zipmap [:x :y :z :factor] (conj cell lava-side-toll))))))
 
+(defn risky-stay
+  "{:risk :worth} (seconds) when the dig of pos costs the body more in risk (walk-risk/risk-s) than the item it yields is worth
+  (worth); else nil. The dig is priced as a stay at its cell (it stands for the stand beside it; a remembered threat prices a
+  stay only where it ends nearer the threat's spot than the feet), over the dig's seconds."
+  [c pos]
+  (let [p (:primitives c)
+        est (walk-risk/estimate c (cell-of pos) {:stay-s (cost/dig-cost (u/seen-name p pos))})
+        risk (walk-risk/risk-s c est)
+        worth (worth c 1)]
+    (when-not (cost/affords? risk worth) {:risk risk :worth worth})))
+
 (defn ^:async walk-to-dig!
   "Walk toward pos until the body is within reach of it, and close enough to see its drop (range 1) when the line to it
   is blocked from here; a body within reach that cannot get closer digs from there. :there, :partial or :blocked
-  (jobs.lib.near/go-near!)."
+  (jobs.lib.near/go-near!), or :risky when it stands within the range already and the dig there costs more hp than it may risk (risky-stay;
+  go-to prices a stay only on a walk)."
   [c pos]
   (let [in-reach? (u/within? (u/self-pos c) (cell-of pos) (reach))
         close? (not (or (mw/stay-level? (:args c)) (drop-in-line? c pos)))
-        walked (await (near/go-near! c pos (if close? 1 (reach))
-                                     (dig-walk-opts (:args c) in-reach? (when (underground? c) (ready/unforced c {:safe? '(not (threatened))}))
-                                                    (when close? (lava-side-tolls c pos)))))]
-    (if (and (not= :there walked) (u/within? (u/self-pos c) (cell-of pos) (reach)))
-      :there
-      walked)))
+        range (if close? 1 (reach))
+        risky (when (u/within? (u/self-pos c) (cell-of pos) range) (risky-stay c pos))]
+    (if risky
+      (do (ctx/emit! c :mine.risky-dig :info (assoc risky :reason :risky :pos (access/cell pos)
+                                                    :text (str "mine skips " (str/join "," (access/cell pos)) ": digging it from here risks " (price/round1 (:risk risky)) " s, over the " (price/round1 (:worth risky)) " s it is worth")))
+          :risky)
+      (let [walked (await (near/go-near! c pos range
+                                         (dig-walk-opts (:args c) in-reach? (when (underground? c) (ready/unforced c {:safe? '(not (threatened))}))
+                                                        (when close? (lava-side-tolls c pos))
+                                                        (cost/dig-cost (u/seen-name (:primitives c) pos)))))]
+        (if (and (not= :there walked) (u/within? (u/self-pos c) (cell-of pos) (reach)))
+          :there
+          walked)))))
 
 
 (defn ^:async dig-round-1! [c]
@@ -297,6 +319,7 @@
                                 (ctx/emit! c :mine.cut-toward :info {:pos cell :result r :text (str "mine cuts toward " (str/join "," cell) ": " (or (some-> r name) "no way"))})
                                 r))]
                     (cond
+                      (= :risky walked) (do (skip! c pos) :again)
                       (= :cut cut) (do (ctx/update-mem! c update :target-cut (fnil conj #{}) cell) :again)
                       (= :partial cut) :continue
                       (and (= :blocked walked) (result/unreachable-walk? (near/last-walk c))) (do (skip-unreachable! c pos targets) :again)

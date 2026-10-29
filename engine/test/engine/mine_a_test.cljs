@@ -74,7 +74,7 @@
           (is (not-any? #(= {:x 5 :y 68 :z 0} (:target %)) (moved s)) "no walk toward the pillar")
           (is (finished? s)))))))
 
-(def dark-by-the-near-sand (into {} (for [x [5 6 7] y [64 65] z [-1 0 1]] [[x y z] [0 0]])))
+(def dark-by-the-near-sand (into {} (for [x [3 4 5 6 7] y [64 65] z [-1 0 1]] [[x y z] [0 0]])))
 
 ;; the sand east is half as far, but a creeper killed the body beside it a minute ago in the dark: the walk there is priced with it
 (deftest a-target-by-a-recent-death-is-dug-last
@@ -631,3 +631,17 @@
     (is (= [["jobs.gather.mine" {:block "sand" :count 2 :wet true}]] (nxt :wet)))
     (is (= [["jobs.blocks.seal-opening" {:at [1 2 3]}] ["jobs.gather.mine" {:block "sand" :count 2}]] (nxt :flooded)))
     (is (= [["jobs.gather.mine" {:block "sand" :count 2}]] (nxt :no-tool)))))
+
+;; the sand east is within reach (no walk to it), but a zombie killed the body beside it seconds ago: the dig's seconds there are priced
+(deftest a-target-in-reach-of-a-recent-death-is-dug-last
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks (merge floor {"3,64,0" "sand" "-12,64,0" "sand"})}})
+              _ (swap! (fake/state (:p s)) assoc :light dark-by-the-near-sand :worldSpawn [0 64 0])
+              now @(:clock s)]
+          (mem/write! (:store (:eng s)) :deaths {:pos {:x 3 :y 64 :z 0} :cause "zombie" :death-t (- now 4000)} core/deaths-policy)
+          (core/submit! (:eng s) (spec {:block "sand" :count 1 :ways #{:seen}}) {})
+          (await (run-ticks s 30))
+          (is (= [-12 64 0] (first (dug-cells s))))
+          (is (finished? s)))))))
