@@ -136,6 +136,15 @@
           (is (= 3 @breaks))
           (is (<= 4 (get (f/inv s) "raw_iron" 0))))))))
 
+(defn stub-mine
+  "s with the mine's round replaced by one that only yields, counting the rounds it was given in the returned atom: the
+  tests of obtain's flow need not dig a stair."
+  [s]
+  (let [rounds (atom 0)]
+    [(assoc-in s [:eng :jobs 'jobs.gather.mine :round]
+               (fn ^:async f [c] (swap! rounds inc) :continue))
+     rounds]))
+
 (deftest raw-iron-with-no-ore-seen-waits-no-source-naming-it
   (async done
     (tu/run-async done
@@ -151,7 +160,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (f/start (assoc (ore-world {} [{:name "stone_pickaxe" :count 1}]) :floor [-30 -30 40 30] :floor-block "dirt") [f/own-zone])]
+        (let [s (f/start (assoc (ore-world {} [{:name "stone_pickaxe" :count 1}]) :floor [-12 -12 16 16] :floor-block "dirt") [f/own-zone])]
           (await (obtain! s {:item "raw_iron" :ways #{:craft :smelt :gather} :explore true} 4))
           (is (empty? (f/events-of s :obtain.exploring)) "no surface search")
           (is (seq (mine-events s)) "the mine child ran"))))))
@@ -160,17 +169,17 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (f/start (assoc (ore-world {} [{:name "stone_pickaxe" :count 1} {:name "stick" :count 2} {:name "crafting_table" :count 1}]) :floor [-30 -30 40 30] :floor-block "dirt") [f/own-zone])]
+        (let [[s rounds] (stub-mine (f/start (assoc (ore-world {} [{:name "stone_pickaxe" :count 1} {:name "stick" :count 2} {:name "crafting_table" :count 1}]) :floor [-12 -12 16 16] :floor-block "dirt") [f/own-zone]))]
           (await (obtain! s {:item "iron_pickaxe"} 4))
           (is (empty? (f/events-of s :waiting)) "no silent wait")
-          (is (seq (mine-events s)) "the mine child ran"))))))
+          (is (pos? @rounds) "the mine child ran"))))))
 
 (deftest raw-iron-unseen-at-night-with-torches-waits-or-digs-not-none-seen
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (f/start (assoc (ore-world {} [{:name "stone_pickaxe" :count 1} {:name "torch" :count 16}])
-                                :floor [-30 -30 40 30] :time st/night) [f/own-zone])]
+        (let [[s _] (stub-mine (f/start (assoc (ore-world {} [{:name "stone_pickaxe" :count 1} {:name "torch" :count 16}])
+                                               :floor [-12 -12 16 16] :time st/night) [f/own-zone]))]
           (await (obtain! s {:item "raw_iron" :ways #{:craft :smelt :gather} :explore true} 6))
           (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))) "no source is not claimed")
           (is (empty? (filter #(= :stopped (:kind %)) @(:seen s)))))))))
@@ -179,8 +188,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (f/start (assoc (ore-world {} [{:name "stone_pickaxe" :count 1} {:name "stick" :count 2} {:name "coal" :count 2} {:name "crafting_table" :count 1}])
-                                :floor [-30 -30 40 30]) [f/own-zone])]
+        (let [[s _] (stub-mine (f/start (assoc (ore-world {} [{:name "stone_pickaxe" :count 1} {:name "stick" :count 2} {:name "coal" :count 2} {:name "crafting_table" :count 1}])
+                                               :floor [-12 -12 16 16]) [f/own-zone]))]
           (await (obtain! s {:item "raw_iron" :ways #{:craft :smelt :gather} :explore true} 60))
           (is (seq (f/events-of s :torch.stocked)) "the torches were fetched by obtain, since the mine's ways cannot gather")
           (is (< 0 (+ (get (f/inv s) "torch" 0) (count (filter #(= "torch" (.-item (.-args %))) (f/calls s "place")))))
@@ -200,10 +209,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (f/start (assoc (ore-world {} [{:name "wooden_pickaxe" :count 1}]) :floor [-30 -30 40 30]) [f/own-zone])]
+        (let [[s rounds] (stub-mine (f/start (assoc (ore-world {} [{:name "wooden_pickaxe" :count 1}]) :floor [-12 -12 16 16]) [f/own-zone]))]
           (await (obtain! s {:item "cobblestone" :count 3 :ways #{:gather} :explore true} 6))
           (is (empty? (f/events-of s :obtain.exploring)) "no surface search")
-          (is (seq (mine-events s)) "the mine child ran"))))))
+          (is (pos? @rounds) "the mine child ran"))))))
 
 (deftest a-badly-hurt-body-does-not-walk-off-to-look-for-an-unseen-need
   (async done
@@ -482,7 +491,7 @@
                                                 [64 {:cut {:level 32} :tunnel {:steps 32}} 1 0 "a call worth less than a search's trip does not start"]
                                                 [16 {:cut {:level 32} :tunnel {:steps 32}} (one-more-run-worth 16) 4 "the second run spends what a third would need: three more runs end it"]
                                                 [16 {:cut {:level 32 :back 64} :tunnel {:steps 32}} (+ (one-more-run-worth 16) (* 0.5 (- (:cost (cost/walk-cost {:distance 64})) (plan/strip-s 16)))) 3 "the walk back from its branches is spent too: no second run pays"]]]
-          (let [s (f/start (-> (ore-world {} [{:name "stone_pickaxe" :count 1} {:name "torch" :count 16}]) (assoc :floor [-30 -30 40 30]) (assoc-in [:self :pos :y] y)) [f/own-zone])
+          (let [s (f/start (-> (ore-world {} [{:name "stone_pickaxe" :count 1} {:name "torch" :count 16}]) (assoc :floor [-12 -12 16 16]) (assoc-in [:self :pos :y] y)) [f/own-zone])
                 calls (atom 0)
                 eng (assoc-in (:eng s) [:jobs 'jobs.gather.mine :round]
                               (fn ^:async f [c]
@@ -498,7 +507,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (f/start (-> (ore-world {} [{:name "stone_pickaxe" :count 1} {:name "torch" :count 16}]) (assoc :floor [-30 -30 40 30]) (assoc-in [:self :pos :y] 16)) [f/own-zone])
+        (let [s (f/start (-> (ore-world {} [{:name "stone_pickaxe" :count 1} {:name "torch" :count 16}]) (assoc :floor [-12 -12 16 16]) (assoc-in [:self :pos :y] 16)) [f/own-zone])
               look-cost plan/look-cost
               first-leg-pays plan/first-leg-pays?
               call ctx/call
@@ -526,7 +535,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (f/start (-> (ore-world {} [{:name "stone_pickaxe" :count 1} {:name "torch" :count 16}]) (assoc :floor [-30 -30 40 30])) [f/own-zone])
+        (let [s (f/start (-> (ore-world {} [{:name "stone_pickaxe" :count 1} {:name "torch" :count 16}]) (assoc :floor [-12 -12 16 16])) [f/own-zone])
               runs (atom 0)
               eng (assoc-in (:eng s) [:jobs 'jobs.gather.mine :round]
                             (fn ^:async f [c]
