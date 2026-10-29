@@ -90,7 +90,6 @@
    :after [[:item "red_bed" 1] [:body-near [10.5 0 12.5] 1.5]]
    :limit-s 80}
   {:name "monster-near-one-sleep-failed-no-refire"
-   :memory [{:kind :sleep-status :data {:skipping true} :policy {:cap 1 :ttl :forever}}]
    :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
             [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
    :body {:at [13.5 0 13.5] :yaw 90}
@@ -100,7 +99,6 @@
             {:no-event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :for-s 75}]
    :limit-s 90}
   {:name "far-known-bed-kept-carried-bed-placed"
-   :memory [{:kind :sleep-status :data {:skipping true} :policy {:cap 1 :ttl :forever}}]
    :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
             [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
    :body {:at [12.5 0 12.5]}

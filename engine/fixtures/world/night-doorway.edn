@@ -16,7 +16,6 @@
    :after [[:item "red_bed" 1] [:body-near [12.5 0 12.5] 1.5]]
    :limit-s 80}
   {:name "overhang-without-walls-gets-the-bed-beside-it"
-   :memory [{:kind :sleep-status :data {:skipping true} :policy {:cap 1 :ttl :forever}}]
    :blocks [[:fill [11 2 11] [14 2 14] "stone"] [:fill [11 0 11] [11 1 11] "stone"]]
    :body {:at [12.5 0 12.5] :inventory [["red_bed" 1]]}
    :act [[:job (jobs.survival.night)]]
@@ -24,7 +23,6 @@
    :limit-s 100}
   ;; c4ca97c3: a camp bed put down in the open that set the respawn point is the body's only bed: picked up at dawn, the respawn point noted lost
   {:name "camp-bed-in-the-open-is-picked-up-after-waking"
-   :memory [{:kind :sleep-status :data {:skipping true} :policy {:cap 1 :ttl :forever}}]
    :time-why :sleep
    :body {:at [12.5 0 12.5] :inventory [["red_bed" 1]]}
    :act [[:job (jobs.survival.night)]

@@ -60,7 +60,7 @@
   {:name "stale-far-bed-place-the-hut-spawn-bed-is-slept-in"
    :time :night-exclusive
    :blocks [[:set [10 0 12] "red_bed[facing=east,part=foot]"] [:set [11 0 12] "red_bed[facing=east,part=head]"]]
-   :memory [{:kind :sleep-status :data {:skipping true} :policy {:cap 1 :ttl :forever}} {:kind :spawn-bed :data {:pos #xyz [10 0 12]} :policy {:cap 1 :ttl :forever}}]
+   :memory [{:kind :spawn-bed :data {:pos #xyz [10 0 12]} :policy {:cap 1 :ttl :forever}}]
    :body {:spawnpoint [11 0 12]}
    :act [[:job (jobs.memory.set-place {:name :bed :pos #at [150 0 16]}) [:now]]
          [:job (jobs.survival.night)]]
