@@ -100,11 +100,12 @@
 
 (def forest {:id "forest" :parts [{:id "a" :cells [[3 64 0]] :want {:tree "oak"}}]})
 
-(deftest a-forest-pass-is-worth-the-logs-of-its-grown-trees
+(deftest a-forest-pass-is-worth-the-logs-of-its-grown-trees-and-its-planting
   (let [forestry #(worth 'jobs.forestry.maintain (tu/seeing-all (tu/fake-on-floor %)) {:plan "forest" :accept #{:fluid-adjacent}}
                          {:engine {:world (world/of-data {"forest" forest} {} []) :warned (atom #{})}})]
     (is (= (:value (cost/goal-value [(item "oak_log" 4)])) (forestry oak-world)))
-    (is (= ##Inf (forestry {:blocks {"3,63,0" "dirt"} :inventory [(item "oak_sapling" 1)]})) "planting has no price")))
+    (is (< 0 (forestry {:blocks {"3,63,0" "dirt"} :inventory [(item "oak_sapling" 1)]})
+           (:value (cost/goal-value [(item "oak_log" 8.7)]))) "a sapling to plant: less than the mean grown tree")))
 
 (deftest the-night-is-worth-its-exposure-and-the-time-a-sleep-that-skips-it-saves
   (let [night (fn [status] (worth 'jobs.survival.night (tu/seeing-all (tu/fake-on-floor {:time 14000})) {}

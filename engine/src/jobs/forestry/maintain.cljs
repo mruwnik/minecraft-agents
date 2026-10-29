@@ -1,6 +1,7 @@
 (ns jobs.forestry.maintain
   (:require [jobs.lib.block-sets :as bs]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.farm :as cost-farm]
             [jobs.lib.waits :as waits]
             [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
@@ -422,20 +423,38 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
+(def sapling-grow-s
+  "Seconds a sapling takes to grow into a tree: two growth events (its stage, then the tree) each at 1/7 of the random ticks
+  a block gets, 3 a game tick of 4096 blocks' section, 20 ticks a second."
+  (/ (* 2 7) (/ (* 3 20) 4096)))
+
+(defn tree-worth
+  "Seconds one grown tree of species is worth: the cost/goal-value of its logs (forestry/logs-per-tree)."
+  [species]
+  (:value (cost/goal-value [{:name (str species "_log") :count (forestry/logs-per-tree)}])))
+
+(defn planting-worth
+  "Seconds planting a sapling of species is worth: its grown tree, less the share of the food horizon its growth takes."
+  [species]
+  (* (max 0 (- 1 (/ sapling-grow-s (cost-farm/horizon-s)))) (tree-worth species)))
+
 (defn worth-of
-  "Seconds a root call is worth: the cost/goal-value of the logs standing on the grown trees it would fell; ##Inf while a
-  planned cell is unseen or a sapling would be planted or a cell readied, which no price covers."
+  "Seconds a root call is worth: the cost/goal-value of the logs standing on the grown trees it would fell; a sapling it
+  would plant on a bare cell it can plant, or on one prepare readies, planting-worth; a planned cell never seen one tree at
+  the ripe share (cost/field-share, as farm tend prices unseen cells) of the cells seen."
   [c]
   (let [field (planned c)
-        classes (when-not (:trouble field) (checked-classes c field))]
-    (if (or (look/unseen? (:primitives c) (field-cells field))
-            (seq (plantable c (owed-cells c classes)))
-            (seq (unplantable-cells classes)))
-      ##Inf
-      (reduce + 0 (map (fn [pos]
-                         (let [species (second (classes pos))]
-                           (:value (cost/goal-value [{:name (str species "_log") :count (count (remaining-logs c pos species))}]))))
-                       (ripe-cells c classes))))))
+        classes (when-not (:trouble field) (checked-classes c field))
+        unseen (filter #(look/unseen? (:primitives c) [%]) (keys (:trees field)))
+        seen (apply dissoc classes unseen)
+        share (cost/field-share :ripe (count (filter (comp #{:ripe} first val) seen)) (count seen))]
+    (+ (reduce + 0 (map (fn [pos]
+                          (let [species (second (classes pos))]
+                            (:value (cost/goal-value [{:name (str species "_log") :count (count (remaining-logs c pos species))}]))))
+                        (filter (set (keys seen)) (ripe-cells c classes))))
+       (reduce + 0 (map (comp planting-worth :species) (plantable c (filter (comp (set (keys seen)) :pos) (owed-cells c classes)))))
+       (reduce + 0 (map #(planting-worth (second (classes %))) (filter (set (keys seen)) (unplantable-cells classes))))
+       (reduce + 0 (map #(* share (tree-worth ((:trees field) %))) unseen)))))
 
 (defn plan-place "A tree cell of the plan, nil when it cannot be worked." [c] (some-> (planned c) :trees keys first))
 

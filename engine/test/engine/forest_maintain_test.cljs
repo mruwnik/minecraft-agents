@@ -488,14 +488,14 @@
             (is (< 0 (count (places (:p s))) 6) status)
             (is (= [{:pos {:x 3 :y 64 :z 0} :reason :no-sapling}] (map #(select-keys % [:pos :reason]) (warns (:seen s) :forest.left))) status)))))))
 
-(deftest a-place-the-server-answers-occupied-five-times-is-tried-again-at-the-roots-endless-worth
+(deftest a-place-the-server-answers-occupied-five-times-is-tried-again-at-an-endless-worth
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (start {:blocks (ground [[3 0]]) :inventory [(item "oak_sapling" 1)]} {"forest" oak-cell})
               refused (atom 6)]
           (.override (.-world (:p s)) "place" (fn ^:async f [token a impl] (if (pos? (swap! refused dec)) #js {:status "occupied"} (await (impl token a)))))
-          (core/submit! (:eng s) (list job {:plan "forest"}) {})
+          (core/submit! (:eng s) (list job {:plan "forest" :worth ##Inf}) {})
           (await (ticks (:eng s) 30))
           (is (= 6 (count (places (:p s)))) "five refused, the sixth placed")
           (is (empty? (warns (:seen s) :forest.left))))))))
