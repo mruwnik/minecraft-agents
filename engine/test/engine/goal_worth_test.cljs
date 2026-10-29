@@ -58,6 +58,13 @@
     (is (priced? w))
     (is (< (worth 'jobs.forestry.harvest-wood none {:radius 16 :species "oak"}) ##Inf))))
 
+(deftest a-root-mine-is-worth-the-items-it-digs
+  (let [mine #(worth 'jobs.gather.mine (tu/fake {}) %)]
+    (is (priced? (mine {:item "coal" :count 2})))
+    (is (= (* 2 (mine {:item "coal" :count 1})) (mine {:item "coal" :count 2})))
+    (is (= (mine {:item "coal" :count 1}) (worth 'jobs.gather.mine (tu/fake {:inventory [(item "coal" 1)]}) {:item "coal" :count 2})) "what is carried is got already")
+    (is (= (mine {:item "cobblestone" :count 3}) (mine {:block "stone" :count 3})) "a block is worth what it drops")))
+
 (deftest set-spawn-is-worth-the-respawn-at-its-bed
   (let [p (tu/seeing-all (tu/fake-on-floor {:blocks {"6,64,0" "red_bed"}}))]
     (is (priced? (worth 'jobs.survival.set-spawn p {:bed {:x 6 :y 64 :z 0}})))
