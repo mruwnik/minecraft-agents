@@ -6,7 +6,10 @@
             [jobs.farm.maintain-stock :as stock]
             [jobs.farm.tend :as tend]
             [jobs.farm.tend-box :as box]
+            [jobs.farm.tend-decide :as tend-decide]
             [jobs.farm.tend-plan :as tend-plan]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.cost.farm :as cost-farm]
             [jobs.lib.crops :as crops]
             [jobs.lib.field-area :as fa]
             [jobs.lib.need :as need]
@@ -14,6 +17,7 @@
             [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [jobs.lib.reserve :as rsv]
+            [jobs.lib.storage :as storage]
             [jobs.lib.steps :as steps]
             [jobs.lib.util :as u]
             [jobs.lib.work-place :as work-place]))
@@ -113,12 +117,53 @@
 
 (defn tidy-work? [c] (boolean (:call (decide :tidy (:args c) (facts c)))))
 
-(defn worth-of
-  "Seconds a root pass is worth: tend's pass-price :worth; ##Inf while a step the price leaves out would run (tend's
-  :unpriced, a tidy, a compost or a deposit), as tend never declines for those."
+(def seed-compost-chance "Chance a composted seed raises the pile a level (the game's 0.3)." 0.3)
+(def compost-levels "Levels a composter fills before it gives a bone meal." 7)
+(def bone-meal-stages "Mean growth stages a bone meal gives a crop (the game's 2 to 5)." 3.5)
+
+(defn carried-over
+  "[{:name :count}] of the names carried above the keep map."
+  [c names keep]
+  (let [have (storage/carried-totals (u/inventory (:primitives c)))]
+    (filterv #(pos? (:count %)) (map (fn [n] {:name n :count (- (get have n 0) (get keep n 0))}) names))))
+
+(defn field-steps-worth
+  "Seconds the field steps tend's pass price leaves out are worth, each only while it would run: irrigate, the sown-worth
+  a wet cell gains over a dry one on each dry cell; fertilize, the growth seconds bone meal saves on each unripe crop at
+  the sown-worth a second of growth earns over the horizon."
+  [c f]
+  (let [args (tend/decide-args c)
+        crop (or (tend/sow-crop c) "wheat")
+        sown #(cost/sown-worth crop (crops/stages-per-s % nil))
+        run? #(:call (tend-decide/decide % args f))]
+    (+ (if (run? :irrigate) (* (:dry f) (- (sown true) (sown false))) 0)
+       (if (run? :fertilize)
+         (* (:unripe f) (/ (min bone-meal-stages (get crops/ripe-age crop 7)) (crops/stages-per-s true nil))
+            (/ (sown true) (cost-farm/horizon-s)))
+         0))))
+
+(defn stock-worth
+  "Seconds the stock steps are worth, each only while it would run: the goal-value of the farm goods a deposit stores and
+  of the bone meal the waste seed composted makes."
   [c]
-  (let [{:keys [worth unpriced]} (tend/pass-price c (tend/check-facts c))]
-    (if (or (seq unpriced) (tidy-work? c) (stock-work? c)) ##Inf worth)))
+  (let [{:keys [keep waste stored] :as f} (facts c)
+        meal (/ (transduce (map :count) + 0 (carried-over c waste keep)) (/ compost-levels seed-compost-chance))]
+    (+ (if (:call (decide :deposit (:args c) f)) (:value (cost/goal-value (carried-over c stored keep))) 0)
+       (if (:call (decide :compost (:args c) f)) (:value (cost/goal-value [{:name "bone_meal" :count meal}])) 0))))
+
+(defn tidy-worth
+  "Seconds clearing the blocked crop cells is worth: each cell sown after it (cost/sown-worth of the crop at the dry rate)."
+  [c]
+  (if (tidy-work? c)
+    (* (:blocked (facts c)) (cost/sown-worth (or (tend/sow-crop c) "wheat") (crops/stages-per-s false nil)))
+    0))
+
+(defn worth-of
+  "Seconds a root pass is worth: tend's pass-price :worth, what its irrigate and fertilize steps add (field-steps-worth),
+  and the tidy and stock steps' own (tidy-worth, stock-worth). Never ##Inf: cells never seen are priced by tend's prior."
+  [c]
+  (let [f (tend/check-facts c)]
+    (+ (:worth (tend/pass-price c f)) (field-steps-worth c f) (tidy-worth c) (stock-worth c))))
 
 (defn can-start?
   "Tend's start check, or ok while a tidy or stock step has work."

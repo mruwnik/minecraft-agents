@@ -62,11 +62,12 @@
 
 (def field {:min {:x 2 :y 63 :z 2} :max {:x 4 :y 64 :z 4}})
 
-(deftest a-farm-pass-is-worth-its-tend-unless-a-stock-step-would-run
+(deftest a-farm-pass-is-worth-its-tend-and-the-stock-it-stores
   (let [p (tu/seeing-all (tu/fake-on-floor (assoc ht/wheat-world :inventory [(item "wheat" 30)])))
         args {:area field :till false :irrigate false :fertilize false :carry {}}]
     (is (priced? (worth 'jobs.farm.maintain p args)))
-    (is (= ##Inf (worth 'jobs.farm.maintain p (assoc args :chest {:x 8 :y 64 :z 0}))) "storing the wheat has no price")))
+    (is (= (+ (worth 'jobs.farm.maintain p args) (:value (cost/goal-value [(item "wheat" 28)])))
+           (worth 'jobs.farm.maintain p (assoc args :chest {:x 8 :y 64 :z 0}))) "the wheat above the 2 kept as bait, stored at its goal-value")))
 
 (deftest an-apiary-pass-is-worth-the-honeycomb-of-its-ripe-hive
   (let [args {:box am/box :with :either :carry {} :ways #{:carried}}
