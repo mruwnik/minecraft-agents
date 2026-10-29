@@ -57,7 +57,7 @@
   1. Collecting the drop of a dig (mine.targets, mine.drops): collect-drops within the collect-radius setting, one walk or cut to the dug cell, a
      drop still lying is mine.left-behind, a dig that brought nothing and shows no drop is mine.drop-lost (judged within 8 blocks of the dug cell; from farther mine.drop-unreached). The count is the inventory's.
   2. Carrying the goal ends :count; max-failures digs failed in a row end :gave-up; :dry-digs (setting) digs that raised no count end :no-drops.
-  3. Dig the nearest target (the 5x5x2 ground under the start last with :track-ground; a walk within reach first; mine.targets).
+  3. Dig the nearest target (the 5x5x2 ground under the start last with :track-ground; a walk within reach first; mine.targets), with :torches a torch first in a dark cell no hung one reaches (torches carried or craftable).
   4. No target: look round once per cell, then by a mineshaft (:descend-shaft, mine.descent) or a stair down (:descend-stair, :descend-limit, to the ore's :level) to
      find stone or the tunnel level; a stair that finds no stone ends :no-stone-found.
   5. Else the strip tunnel (mine.tunnel): 1-wide 2-high at the start level along :heading / :direction, :tunnel-length blocks, torches where the planner says (jobs.lib.torch-plan;
@@ -109,7 +109,7 @@
 
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 
-(def safe? (ready/unless-outmatched (price/staying :long (ready/dark-near-ok torches/torch-way work-place/dig-spot (ready/safe-at-or-roaming work-place/dig-spot true)))))
+(def safe? (ready/unless-outmatched (price/with-stay (ready/dark-near-ok torches/torch-way work-place/dig-spot (ready/safe-at-or-roaming work-place/dig-spot true)) torches/stay-s true)))
 
 (def fit? (ready/fit-for :long))
 
@@ -305,6 +305,7 @@
                                             (skip-failed! c pos) :again)
                       (= :partial walked) (stalled! c pos)
                       (torches/branch-torch-due? c) (await (torches/torch-step! c true))
+                      (torches/spot-torch-due? c) (await (torches/spot-torch! c pos))
                       :else (do (await (watch/watch! c {:before-dig pos}))
                                 (await (dig! c pos)))))
       (not= looked (cell-of (u/self-pos c))) (do (await (look-around! c)) :again)

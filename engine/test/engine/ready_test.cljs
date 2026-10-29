@@ -44,6 +44,8 @@
             [jobs.items.get-kit :as get-kit]
             [jobs.items.obtain :as obtain]
             [jobs.gather.mine :as mine]
+            [jobs.gather.mine.torches :as mine-torches]
+            [jobs.lib.cost.risk :as risk]
             [jobs.gather.dig-for :as dig-for]
             [jobs.gather.strip-tunnel :as strip-tunnel]
             [jobs.items.pick-up-loose :as pick-up-loose]
@@ -461,14 +463,22 @@
         #{:strip-tunnel} :ok
         #{:strip-tunnel :carried} :never))))
 
-(deftest a-dig-of-seen-ore-hangs-no-torch-so-the-dark-is-not-lifted-for-its-torches
+(deftest a-dig-of-seen-ore-stays-a-click-and-its-torch-way-is-one-torch-at-the-spot
   (let [hall [:never "dark hall" {:reason :exposed :lowered-by #{:torch} :chance 0.004}]
         near {:x 3 :y 64 :z 0}
-        ctx (assoc (ctx-of (assoc tunnel :time st/noon :inventory [{:name "torch" :count 4}])) :args {:block "iron_ore" :radius 4 :torches true :tunnel-length 20})]
+        ctx (fn [inv] (assoc (ctx-of (assoc tunnel :time st/noon :inventory inv)) :args {:block "iron_ore" :radius 4 :torches true :tunnel-length 20 :ways #{:seen :strip-tunnel :carried}}))
+        torches [{:name "torch" :count 4}]]
     (with-redefs [ready/at-status (fn [_ _] hall) ready/hall-status (fn [_ _] hall)]
-      (are [seen expected] (= expected (with-redefs [work-place/nearest-block (constantly seen)] (first (mine/safe? ctx))))
-        near :never
-        nil :ok))))
+      (with-redefs [work-place/nearest-block (constantly near)]
+        (is (= (risk/work-s :click) (mine-torches/stay-s (ctx torches))) "a seen dig stays a click")
+        (is (= {:blocks 1 :carried 4} (mine-torches/torch-way (ctx torches))))
+        (settings/with-settings {:jobs.lib.cost.risk/risk-share 0}
+          (fn [] (are [inv expected] (= expected (first (mine/safe? (ctx inv))))
+                   torches :ok
+                   [] :never))))
+      (with-redefs [work-place/nearest-block (constantly nil)]
+        (is (= (risk/work-s :long) (mine-torches/stay-s (ctx torches))))
+        (is (= {:blocks 20 :carried 4} (mine-torches/torch-way (ctx torches))))))))
 
 (deftest the-torches-of-a-short-carry-cost-a-trip-and-a-tunnel-prices-the-steps-it-has-left
   (let [need (js/Math.ceil (/ 40 cost/torch-gap))]

@@ -5,6 +5,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.cost.risk :as risk]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look :refer [cell-of headings glance!]]
             [jobs.lib.need :as need]
@@ -22,13 +23,24 @@
             [jobs.gather.mine.targets :refer [step-cell]]
             [jobs.gather.mine.way-set :as mw]))
 
-(defn torch-way
-  "The torch way (ready/dark-near-ok) of a mine or dig-for call: nil while a seen block of the item is in view and :seen is a way (it is dug first, no torch hung),
-  else its lit blocks (way-set/lit-blocks), more torches by its own get."
+(defn seen-in-view?
+  "Whether :seen is a way of the call and a seen block of its :block is in view: the dig takes it from where it stands first."
   [c]
   (let [{:keys [block radius] :as args} (:args c)]
-    (when-not (and (mw/seen? args) (work-place/nearest-block c block (or radius 16)))
-      (when-let [n (mw/lit-blocks args)] (stock/torch-way c n (stock/fetch-allows? c))))))
+    (boolean (and (mw/seen? args) (work-place/nearest-block c block (or radius 16))))))
+
+(defn stay-s
+  "Seconds a mine or dig-for call stays at its place: a click's while it digs a seen block (seen-in-view?), else a long stay's."
+  [c]
+  (risk/work-s (if (seen-in-view? c) :click :long)))
+
+(defn torch-way
+  "The torch way (ready/dark-near-ok) of a mine or dig-for call: one torch at the spot while it digs a seen block (seen-in-view?,
+  spot-torch!), else its lit blocks (way-set/lit-blocks), more torches by its own get."
+  [c]
+  (let [args (:args c)]
+    (when-let [n (if (seen-in-view? c) (when (:torches args) 1) (mw/lit-blocks args))]
+      (stock/torch-way c n (stock/fetch-allows? c)))))
 
 (a/defargs settings
   {::torch-min {:default 2 :doc "A torch round crafts more when fewer torches than this are carried." :spec (a/int-in 0 nil)}
@@ -154,8 +166,25 @@
   (ctx/emit! c :mine.torch-left-out :info {:cell cell :reason reason
                                            :text (str "mine hung no torch" (some->> cell (str/join ",") (str " at ")) ": " (name reason))}))
 
+(defn toward
+  "The heading [dx dz] from the cell here to pos along the axis it is farther off on ([1 0] straight above or below)."
+  [here pos]
+  (let [dx (- (js/Math.floor (:x pos)) (:x here))
+        dz (- (js/Math.floor (:z pos)) (:z here))]
+    (cond (and (zero? dx) (zero? dz)) [1 0]
+          (>= (js/Math.abs dx) (js/Math.abs dz)) [(js/Math.sign dx) 0]
+          :else [0 (js/Math.sign dz)])))
+
+(defn spot-torch-due?
+  "Whether a dig from the line (no tunnel cut, so no branch site) stands in a dark cell no hung torch reaches, with torches
+  carried or craftable: its torch way (torch-way) is that one torch."
+  [c]
+  (let [here (vec-of (cell-of (u/self-pos c)))]
+    (boolean (and (on? c) (nil? (:tunnel (ctx/mem c))) (nil? (branch-site (ctx/mem c) (cell-of (u/self-pos c))))
+                  (torch/lightable? (:primitives c)) (due-spot c [here] [] here)))))
+
 (defn ^:async hang-torch!
-  "Hang a torch on the cell behind the body (a branch: behind it on its way off the tunnel), after a glance at it and
+  "Hang a torch on the cell behind the body (a branch: behind it on its way off the tunnel; a cell pos: in the body's own cell, beside the dig of pos), after a glance at it and
   its side walls when the support is not yet seen."
   [c branch]
   (let [p (:primitives c)
@@ -164,6 +193,7 @@
         here (cell-of (u/self-pos c))
         {:keys [dir site]} (cond
                              (= :stair branch) {:dir (headings (:heading (ctx/mem c))) :site (zipmap [:x :y :z] (stair-site c))}
+                             (map? branch) {:dir (toward here branch) :site here}
                              branch (branch-site (ctx/mem c) here)
                              :else {:dir (headings (:heading tunnel)) :site (step-cell tunnel (dec (:steps tunnel)))})
         pick (fn [] (when site (torch/torch-at dir [(:x site) (:y site) (:z site)] (placement/eye (u/self-pos c)) block-at)))
@@ -185,6 +215,7 @@
   [c branch]
   (let [{:keys [tunnel]} (ctx/mem c)]
     (vec-of (cond (= :stair branch) (zipmap [:x :y :z] (stair-site c))
+                  (map? branch) (cell-of (u/self-pos c))
                   branch (:site (branch-site (ctx/mem c) (cell-of (u/self-pos c))))
                   :else (step-cell tunnel (dec (:steps tunnel)))))))
 
@@ -221,6 +252,14 @@
       (zero? n) :no-torches
 
       :else (do (await (hang-torch! c branch)) (mouth-done! c branch) :again))))
+
+(defn ^:async spot-torch!
+  "torch-round! for the cell a dig of pos stands in: a torch it could not make is left out, the dig goes on dark."
+  [c pos]
+  (let [r (await (torch-round! c pos))]
+    (if (= :no-torches r)
+      (let [here (vec-of (cell-of (u/self-pos c)))] (left-out! c here here :no-torches) :again)
+      r)))
 
 (defn ^:async torch-step!
   "torch-round! for the dig itself: no torch left ends the dig :no-torches."
