@@ -1948,7 +1948,9 @@
             (drowned-at 2.5 63 0.5) true
             (drowned-at -0.5 60 0.5) true)
           (let [{:keys [seen]} (await (flight-round respond (assoc world :entities [(drowned-at 2.5 57 0.5)])))]
-            (is (= [:flee] (mapv :decision (decided seen))) "13 hp, the drowned 3 blocks off and 6 down, the shore 4 blocks off")))))))
+            (is (= [:flee] (mapv :decision (decided seen))) "13 hp, the drowned 3 blocks off and 6 down, the shore 4 blocks off")
+            (is (not-any? #(and (= :hostile.call (:kind %)) (false? (:changed %))) @seen)
+                "the flight runs from the drowned the call answers: no call ends at once with nothing changed")))))))
 
 (deftest a-fight-that-cannot-reach-a-deep-drowned-costs-at-least-the-swim-out-that-follows-it
   (let [p (tu/seeing-all (tu/fake-on-floor {:floor flight-floor :blocks lake :self {:pos [-0.5 63 0.5] :health 13}

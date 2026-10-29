@@ -17,6 +17,14 @@
             {:event {:source :action :kind :done :data {:name "attack" :status "killed"}} :within-s 40}
             {:no-event {:source :body :kind :died} :for-s 40}]
    :after [[:entities "type=zombie,tag=wt" [[0 0 0] [47 6 47]] 0]]}
+  {:name "a-zombie-inside-the-entrys-radius-past-the-default-is-answered"
+   ;; card 2bec8dcb: the entry's :radius 10 holds the trigger for a still zombie 9 off, past the danger setting's 8;
+   ;; respond answers that zombie (decides), not an empty list it ends done with while the trigger fires again
+   :register [{:trigger :hostile-near :args {:radius 10} :why "an agent's wider radius: the call must answer what the entry fires for"}]
+   :body {:inventory [["wooden_sword" 1] ["dirt" 16]]}
+   :act [[:summon "zombie" [15.5 0 24.5] "{NoAI:1b}"]]
+   :expect [{:event {:source :job :kind :hostile.decided} :within-s 20}
+            {:no-event {:source :body :kind :died} :for-s 30}]}
   {:name "unarmed-body-gets-away-from-a-zombie-beside-it"
    :body {:inventory [["dirt" 16]]}
    :act [[:summon "zombie" [22.5 0 24.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]

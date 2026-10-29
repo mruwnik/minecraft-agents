@@ -186,12 +186,12 @@
 
 (defn seen-now
   "What stopped-chasing needs of hostile e (a JS entity; visible: a clear line from the eye, whichever way the body
-  faces). A way: a walkable way to the body, or for a ranged mob a line of fire (a shut door takes both), or a blast
-  that reaches it (blaster?)."
+  faces). A way: a walkable way to the body, or the way or line of fire that makes it a danger (danger/danger?: a seen
+  swimmer from the water's top, as the hostile trigger reads it; a shut door takes both), or a blast that reaches it (blaster?)."
   [p e low?]
   {:mob (.-name e) :low? low? :ranged? (boolean (combat/ranged? e)) :distance (danger-q/mob-distance p e) :in-line? (true? (.-visible e))
    :way? (or (reach/walkable-way? p (danger-q/mob-pos p e) (u/pos-of (.-pos (.self p))))
-             (and (combat/ranged? e) (danger-q/danger? p e {:sight? false}))
+             (danger-q/danger? p e {:sight? false})
              (blaster? p e))})
 
 (defn known-chasers
