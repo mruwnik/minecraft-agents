@@ -259,9 +259,11 @@
   counts tonight's of a home and prices another walk by them."
   {:cap 12 :ttl :forever})
 
+(declare bed-layout)
+
 (defn closed-home
-  "The :home of a body outside it when it lies in a closed roofed room (the carried bed goes down there), else nil: also
-  nil once the walks into it that failed tonight (:home-walk-failed) make another walk not worth its price (cost/try-again? :walk)."
+  "The :home of a body outside it when it lies in a closed roofed room with room for the carried bed's row
+  (bed-layout), else nil: also nil once the walks into it that failed tonight (:home-walk-failed) make another walk not worth its price (cost/try-again? :walk)."
   [c]
   (let [p (:primitives c)
         view (ctx/view c)
@@ -269,7 +271,8 @@
         failed (when home
                  (count (filter #(= home (:pos (:data %))) (mem/since view :home-walk-failed (sh-clock/tonight p view)))))]
     (when (and home (or (zero? failed) (cost/try-again? c :walk {:fails failed}))
-               (not (sh-sense/shut-in-room? p (sh-sense/feet p))) (sh-sense/shut-in-room? p home))
+               (not (sh-sense/shut-in-room? p (sh-sense/feet p))) (sh-sense/shut-in-room? p home)
+               (bed-layout c true home))
       home)))
 
 (defn sleep-s
@@ -365,11 +368,12 @@
   the body's headroom for the stand cell) within 3 cells of the body, the foot and head not in a doorway or another's
   zone, claim or plan footprint (a missing zone list refuses nothing), and roofed within roof-height when roofed? is
   set, and not a foot cell the server refused twice. The stand cell nearest the body first (its own cell when it fits); nil
-  when no row fits."
-  [c roofed?]
+  when no row fits. With `at` ({:x :y :z}), the row for a body standing there (its stand cell free too)."
+  ([c roofed?] (bed-layout c roofed? nil))
+  ([c roofed? at]
   (let [p (:primitives c)
         roof (sh-sense/roof-height)
-        {:keys [x y z]} (sh-sense/feet p)
+        {:keys [x y z]} (or at (sh-sense/feet p))
         in (access/rules-input c)
         air? #(bs/air (u/seen-name p %))
         free? (fn [pos] (and (air? pos) (sh-sense/solid-at? p (update pos :y dec))
@@ -383,10 +387,10 @@
                  :let [stand {:x (+ x sx) :y y :z (+ z sz)}
                        foot {:x (+ x sx dx) :y y :z (+ z sz dz)}
                        head {:x (+ x sx dx dx) :y y :z (+ z sz dz dz)}]
-                 :when (and (or (zero? (+ (js/Math.abs sx) (js/Math.abs sz))) (free? stand))
+                 :when (and (or (and (nil? at) (zero? (+ (js/Math.abs sx) (js/Math.abs sz)))) (free? stand))
                             (air? (update stand :y inc))
                             (free? foot) (free? head) (covered? foot) (covered? head)
                             (permitted? foot) (permitted? head)
                             (not= foot (sh-sense/feet p))
                             (not (refused-twice? c foot)))]
-             {:stand stand :foot foot :head head}))))
+             {:stand stand :foot foot :head head})))))

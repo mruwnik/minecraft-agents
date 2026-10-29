@@ -429,6 +429,15 @@
             (is (number? (:home prices)) "the walk into the home carries the bed there")
             (is (not (contains? prices :bed)) "no second answer for the same walk-in, priced with no walk")))))))
 
+(deftest a-home-with-no-room-for-the-carried-bed-is-not-walked-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (await (night-at-home (update bed-world :blocks merge walled-home) {:x 10 :y 64 :z 0}))]
+          (await (core/tick! eng))
+          (let [{:keys [prices]} (first (st/emitted seen :night.answers))]
+            (is (number? (:bed prices)) "the one-cell home holds no bed row: the carried bed is priced where it goes down outside, not as the home walk")))))))
+
 (deftest one-failed-walk-into-a-closed-home-does-not-take-the-home-off-the-night-while-another-walk-is-worth-its-price
   (async done
     (tu/run-async done
