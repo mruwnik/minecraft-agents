@@ -130,13 +130,12 @@
 (def stair-floors "The floors of stair-cells, as the stairs the body cut." (vec (for [x (range -9 6)] [x (+ 63 x) 0])))
 
 (def retreat
-  "A flight whose danger is worth 60 s to escape: a pillar refused again is not tried a second time. The worth is the
-  knob under test: respond-to-hostile's real worth for a zombie (hostile-loss/loss) prices over a hundred jumps."
-  '(test.flight {:worth 60}))
+  "A flight at respond-to-hostile's real worth (hostile-loss/loss of the dangers near)."
+  '(test.real-flight))
 
 (def hiding-retreat
   "A retreat that hides on for as long as the test needs (:hide-s far off)."
-  '(test.flight {:worth 60 :settings {:jobs.survival.hide-out/hide-s 100000}}))
+  '(test.real-flight {:settings {:jobs.survival.hide-out/hide-s 100000}}))
 
 (deftest a-retreat-walks-back-down-the-stair-it-came-up
   (async done
@@ -224,7 +223,7 @@
         (let [{:keys [eng p seen]} (setup {:blocks dead-end :inventory [{:name "cobblestone" :count 20}] :entities [(skeleton 4 64 0)]})
               _ (add-watch (fake/state p) :mob-out
                            (fn [_ _ _ w] (when (and (seq (:entities w)) (get-in w [:blocks [1 64 0]])) (swap! (fake/state p) assoc :entities []))))
-              round (do (core/submit! eng '(test.flight {:worth 60 :settings {:jobs.survival.wall-placer/max-places 1}}) {})
+              round (do (core/submit! eng '(test.real-flight {:settings {:jobs.survival.wall-placer/max-places 1}}) {})
                         (core/tick! eng))]
           (await round)
           (is (= [[1 64 0] [1 65 0]] (placed-cells p)) "the seal is finished though the skeleton is out of sense")
@@ -290,7 +289,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]}
-              (await (hidden-round '(test.flight {:worth 60 :settings {:jobs.survival.plug-way/trespass-s 0}}) {:blocks dead-end :inventory [{:name "cobblestone" :count 20}]
+              (await (hidden-round '(test.real-flight {:settings {:jobs.survival.plug-way/trespass-s 0}}) {:blocks dead-end :inventory [{:name "cobblestone" :count 20}]
                                             :entities [(skeleton 4 64 0)]
                                             :zones [{:name "vault" :min [1 60 -1] :max [1 70 1] :owner "Miles"}]}
                                    1000 (constantly nil)))]
@@ -425,7 +424,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng listed]}
-              (await (hide-steps '(test.flight {:worth 60 :settings {:jobs.survival.hide-out/quiet-s 20 :jobs.survival.hide-out/hide-s 100000}})
+              (await (hide-steps '(test.real-flight {:settings {:jobs.survival.hide-out/quiet-s 20 :jobs.survival.hide-out/hide-s 100000}})
                                  {:blocks long-dead-end :inventory [{:name "cobblestone" :count 20}]
                                   :entities [(zombie-at 4)]}
                                  [[[(zombie-at 12)] 0] [[] 10000]]))]
@@ -724,7 +723,7 @@
                      (fn [_token _args _impl] (js/Promise.resolve #js {:status "failed" :placed 0 :reason "not-raised"})))
           (core/submit! eng retreat {})
           (await (core/tick! eng))
-          (is (= 1 (count (calls p "jumpPlace"))) "the pillar ends when another jump is not worth its price; no refusal or knockback names a mob, so the option is tried")
+          (is (= 1 (count (calls p "jumpPlace"))) "at respond's real worth the pillar ends after the first refusal: a second try next to the zombie costs more than it wins")
           (is (empty? (pillar-entries eng)) "no block went in")
           (is (not (hiding? seen)) "built under 2: not hidden")
           (is (pos? (count (calls p "attack"))) "hit while sealed: it stops hiding and hits back"))))))
@@ -733,14 +732,17 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [jumps (fn ^:async jumps* [worth]
+        (let [jumps (fn ^:async jumps* [job]
                       (let [{:keys [eng p]} (setup {:blocks doorway :inventory [{:name "cobblestone" :count 20}] :entities [(zombie 0.5 64 1.6)]})]
                         (.override (.-world p) "jumpPlace"
                                    (fn [_token _args _impl] (js/Promise.resolve #js {:status "failed" :placed 0 :reason "not-raised"})))
-                        (core/submit! eng (list 'test.flight {:worth worth}) {})
+                        (core/submit! eng job {})
                         (await (core/tick! eng))
-                        (count (calls p "jumpPlace"))))]
-          (is (< 0 (await (jumps 60)) (await (jumps 600))) "a dearer danger pays for more jumps"))))))
+                        (count (calls p "jumpPlace"))))
+              real (await (jumps '(test.real-flight)))
+              dear (await (jumps '(test.flight {:worth 100000})))]
+          (is (<= 1 real 6) "at respond's real worth a try next to a zombie costs its seconds and the zombie's blows: a few tries, not over a hundred")
+          (is (< real dear) "a dearer danger pays for more jumps"))))))
 
 (deftest a-pillar-refused-for-a-zombie-in-its-cell-strikes-it-and-decides-again-each-time-then-hides
   (async done
@@ -1735,7 +1737,7 @@
                                            :entities [(assoc (zombie 3 64 0) :visible true)]})
               hurt! #(lose-health! eng p {:attacker {:name "zombie"}})]
           (.override (.-world p) "wait" (fn [token a impl] (when (hiding? seen) (hurt!)) (impl token a)))
-          (core/submit! eng '(test.flight {:worth 60 :settings {:jobs.survival.hide-out/hide-s 100000}}) {})
+          (core/submit! eng '(test.real-flight {:settings {:jobs.survival.hide-out/hide-s 100000}}) {})
           (await (core/tick! eng))
           (is (= 1 (count (filter #(= :retreat_sealed (:kind %)) @seen))) "sealed first")
           (is (pos? (count (calls p "attack"))) "hit while sealed: it stops hiding and hits back"))))))
@@ -1840,7 +1842,7 @@
                        (when (and (hiding? seen) (= 1 (swap! holds inc)))
                          (fake/add-entity! p (assoc (creeper 3 64 0) :visible true)))
                        (impl token a)))
-          (core/submit! eng '(test.flight {:worth 60 :settings {:jobs.survival.hide-out/hide-s 100000 :jobs.survival.hide-out/opened-s 10}}) {})
+          (core/submit! eng '(test.real-flight {:settings {:jobs.survival.hide-out/hide-s 100000 :jobs.survival.hide-out/opened-s 10}}) {})
           (await (core/tick! eng))
           (is (seq (filter #(= :retreat.hide-breached (:kind %)) @seen)) "the blast opens the wall onto the zombie: leaving is cheaper"))))))
 

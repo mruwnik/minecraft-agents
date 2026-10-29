@@ -63,7 +63,7 @@
                 rows (keep r/scan-line [(place 1000 "failed") (place 3000 "done")])]]
     (is (= {:won 1 :retries 1 :calls 1} (select-keys (:place (r/report rows)) [:won :retries :calls])) action)))
 
-(deftest a-jump-place-fails-on-partial-failed-or-timeout-only
+(deftest a-jump-place-fails-on-partial-or-failed-only
   (let [place (fn [t status] (pr-str {:generation-id "g" :time-ms t :source :action :kind :done :context {:job-id "j1/pillar" :action-id "a"}
                                       :data {:name "jumpPlace" :status status}}))
         report (fn [status] (:place (r/report (keep r/scan-line [(place 1000 status) (place 3000 "done")]))))]

@@ -6,7 +6,8 @@
             [engine.ctx :as ctx]
             [engine.registry :as registry]
             [engine.test-util :as tu]
-            [jobs.survival.respond-flight :as flight]))
+            [jobs.survival.respond-flight :as flight]
+            [jobs.survival.respond-to-hostile :as respond]))
 
 (def job
   (assoc (tu/job (fn ^:async flight-round [c]
@@ -18,4 +19,8 @@
                           (contract/ok :clear "no hostile is near" :units :hostiles :done 0 :left 0)
                           (contract/later :fleeing "a flight is on" :units :hostiles :done 0 :left 1)))))
 
-(def jobs (assoc registry/jobs 'test.flight job))
+(def real-job
+  "The flight at respond's own root worth (worth-of: the loss of doing nothing about the dangers near), as a respond call runs it."
+  (assoc job :worth-of respond/worth-of))
+
+(def jobs (assoc registry/jobs 'test.flight job 'test.real-flight real-job))

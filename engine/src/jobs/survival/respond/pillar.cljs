@@ -7,10 +7,12 @@
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.blocks :as lb]
+            [jobs.lib.cost :as cost]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-look :as look]
             [jobs.lib.escape :as escape]
+            [jobs.lib.hostile-loss :as hostile-loss]
             [jobs.lib.look :as lk]
             [jobs.lib.pillar :as pl]
             [jobs.lib.reach :as reach]
@@ -157,12 +159,19 @@
           (access/trespass! c "retreat" refusal)
           {:kind :pillar :item item :anchor (cell-map feet) :cells cells :class (mob-class p feet)})))))
 
+(defn try-s
+  "Seconds one more pillar try costs the flight: a place's measured seconds and the loss of standing by the known
+  hostiles for them (hostile-loss/loss-over), which the other ways out (fight, seal, walk) do not pay."
+  [c]
+  (let [s (cost/retry-s :place)]
+    (+ s (hostile-loss/loss-over (:primitives c) (ctx/view c) (flight/near-known (:primitives c) (set (flight/dead-ids c)) (danger-q/hostile-radius) (danger-q/ranged-radius)) s))))
+
 (defn ^:async build!
   "A jobs.access.pillar child of height with item, from where the body stands: :continue, or {:built n :mob? m}, m
   whether it ended short for a mob (one in its cell, or a hostile near a refused block or a knockback: the give-up's
-  :mob). A refused block is tried again while cost/try-again? :place says it pays; a knockback, or a refusal that names a mob, ends it at once as evidence for the next decision."
+  :mob). A refused block or a knockback is tried again while cost/try-again? :place says it pays, a try priced at its seconds and the loss of standing by the hostiles for them (try-s); a mob in the next cell ends it at once as evidence for the next decision."
   [c height item]
-  (let [r (await (ctx/call c :pillar 'jobs.access.pillar {:height height :use {:blocks [item]} :ways #{:carried} :ignore-zones? true
+  (let [r (await (ctx/call c :pillar 'jobs.access.pillar {:height height :use {:blocks [item]} :ways #{:carried} :ignore-zones? true :try-s (try-s c)
                                                           :settings {:jobs.access.pillar/mob-waits 0}}))]
     (if (contract/ending? r)
       {:built (:built (:data r) 0) :mob? (boolean (or (= :mob-in-cell (:reason (:data r))) (:mob (:data r))))}

@@ -312,6 +312,11 @@
 (def spot-plantable-chance answer/spot-plantable-chance)
 (def retry-chance answer/retry-chance)
 
+(defn retry-s
+  "The measured seconds one try of kind takes (value/::retry-counts :try-s)."
+  [kind]
+  (:try-s (get (settings/get value/settings ::value/retry-counts) kind)))
+
 (defn try-again?
   "Whether call c's next try of kind (a key of value/::retry-counts) is worth its price: its retry-chance after the call's
   failures in a row (u/failed!, u/progress! resets) times ctx/worth over the kind's measured :try-s. Never at a worth of 0;
@@ -320,7 +325,7 @@
   ([c kind] (try-again? c kind nil))
   ([c kind {:keys [fails try-s]}]
    (> (value/chance-times (retry-chance kind (or fails (u/failures c))) (ctx/worth c))
-      (or try-s (:try-s (get (settings/get value/settings ::value/retry-counts) kind))))))
+      (or try-s (retry-s kind)))))
 
 (def turn-back-cost value/turn-back-cost)
 (def cover-tour-s value/cover-tour-s)

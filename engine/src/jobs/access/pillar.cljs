@@ -65,6 +65,7 @@
 (a/defargs args
   {:height {:doc "blocks to rise, 1 to 64 (the short form of :y: the feet's y at the start plus this)" :spec (a/int-in 1 64) :default 1}
    :y {:doc "the y the feet end at; nil: the start's y plus :height" :spec (a/int-in -64 320) :default nil}
+   :try-s {:doc "seconds one more try costs the caller, for retry? (nil: the measured seconds of a place); a caller with a danger near adds what standing there for the try costs" :spec (a/num-in 0 nil) :default nil}
    :ignore-zones? :shared})
 
 (a/defargs settings
@@ -91,9 +92,9 @@
 (def defaults {:use {:blocks :pillar} :spend {:job-time ::job-time-s}})
 
 (defn retry?
-  "Whether the pillar goes on after the failures in a row (u/failed!: a refused place, a knockback, a landed falling block, a dug roof block; a placed block is u/progress!): none yet, else while another try is worth its price (cost/try-again? :place)."
+  "Whether the pillar goes on after the failures in a row (u/failed!: a refused place, a knockback, a landed falling block, a dug roof block; a placed block is u/progress!): none yet, else while another try is worth its price (cost/try-again? :place, at the call's :try-s)."
   [c]
-  (or (zero? (u/failures c)) (cost/try-again? c :place)))
+  (or (zero? (u/failures c)) (cost/try-again? c :place {:try-s (:try-s (:args c))})))
 
 (defn land-step-ms [] (settings/get settings ::land-step-ms))
 
