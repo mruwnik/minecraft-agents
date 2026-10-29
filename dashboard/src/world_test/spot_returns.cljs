@@ -10,6 +10,7 @@
             ["path" :as path]
             ["zlib" :as zlib]
             [clojure.string :as str]
+            [jobs.lib.cost.death :as death]
             [jobs.lib.cost.risk :as risk]
             [world-test.fresh-drop :as fresh-drop]))
 
@@ -18,6 +19,7 @@
 (def return-blocks 16)
 (def away-s 300)
 (def met-ms 60000)
+(def death-s "The price of a death in a log line: the log has no respawn, so death-cost's unknown-spawn walk." (death/death-cost {} nil))
 (def memory-ms "jobs.lib.cost.death ::memory-ms's default: how long a spot counts." 7200000)
 
 (defn- num-of [re line] (some-> (re-find re line) second js/parseFloat))
@@ -38,7 +40,7 @@
     (when t
       (cond
         (and body? (str/includes? line ":kind :died")) (assoc r :k (if cause :spot :pos))
-        (and body? (str/includes? line ":kind :hurt")) (assoc r :k (cond (and cause (risk/too-hurt? (or (num-of #":health (-?[\d.]+)" line) 99) (num-of #":food (-?[\d.]+)" line) :long)) :spot
+        (and body? (str/includes? line ":kind :hurt")) (assoc r :k (cond (and cause (risk/too-hurt? (or (num-of #":health (-?[\d.]+)" line) 99) (num-of #":food (-?[\d.]+)" line) :long death-s)) :spot
                                                                          cause :met
                                                                          :else :pos))
         (str/includes? line ":kind :hostile.decided") (assoc r :k :met)
