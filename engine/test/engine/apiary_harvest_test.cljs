@@ -81,6 +81,29 @@
           (is (= 3 (:collected result)))
           (is (= 3 (carried p "honeycomb"))))))))
 
+(deftest a-comb-no-walk-reaches-yet-is-waited-for-then-looked-for-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (world {:inventory (inv "shears" 1)}))
+              pauses (atom 0)
+              first-collect? (atom true)
+              searches (atom [])
+              orig-call ctx/call
+              orig-pause child/pause!]
+          (with-redefs [ctx/call (fn ^:async call [c slot job-name args]
+                                   (when (= 'jobs.items.collect-drops job-name) (swap! searches conj (:search args)))
+                                   (if (and (= 'jobs.items.collect-drops job-name) (first (reset-vals! first-collect? false)))
+                                     {:kind :nothing-possible :cause :none-collected
+                                      :data {:collected 0 :left [{:pos {:x 2 :y 64 :z 0} :reason :unreachable}]}}
+                                     (await (orig-call c slot job-name args))))
+                        child/pause! (fn ^:async pause [c s why] (swap! pauses inc) (await (orig-pause c s why)))]
+            (let [result (await (child-outcome eng job {} 60))]
+              (is (= 1 @pauses) "an unreachable comb is waited for like a comb not heard yet")
+              (is (= [0 4] @searches) "only the second look walks round the hive")
+              (is (= 3 (:collected result)))
+              (is (= 3 (carried p "honeycomb"))))))))))
+
 (deftest a-cut-comb-pause-is-resumed-not-skipped
   (async done
     (tu/run-async done
