@@ -561,6 +561,19 @@
                  (select-keys (wait-cause (await (waiting-after other (list job {:pos at}) 3))) [:reason :pos :by :plan])))
           (is (empty? (calls (:p other) "dig"))))))))
 
+(defn tidy-cells [eng] (mapv #(select-keys (:data %) [:cell :was :plan :mend]) (mem/entries (mem/view (:store eng)) :tidy)))
+
+(deftest a-dig-of-the-bodys-own-build-is-noted-to-be-put-back-unless-it-is-the-plans-own-work
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [own (setup {:self body :blocks {"2,64,0" "dirt"} :plans {"hut" (shape/with-author hut "Fake")}})
+              working (setup {:self body :blocks {"2,64,0" "dirt"} :plans {"hut" (shape/with-author hut "Fake")}})]
+          (await (tu/child-outcome (:eng own) job {:pos [2 64 0]} 10))
+          (await (tu/child-outcome (:eng working) job {:pos [2 64 0] :for-plan "hut"} 10))
+          (is (= [{:cell [2 64 0] :was "dirt" :plan "hut" :mend true}] (tidy-cells (:eng own))))
+          (is (empty? (tidy-cells (:eng working)))))))))
+
 ;; ------------------------------------------------------------------ the block under the feet
 
 (defn hiding

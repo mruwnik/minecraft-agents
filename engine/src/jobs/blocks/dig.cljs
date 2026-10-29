@@ -343,8 +343,10 @@
     (ctx/emit! c :blocks.dig.by-hand :info {:pos (b/cell pos) :block block
                                             :text (str "digging " block " at " (pr-str (b/cell pos)) " by hand (slow, no drop)")}))
   (let [before (u/inventory (:primitives c))
+        own (when-not (:for-plan (:args c)) (tidy/own-pending c pos))
         r (await (tidy/dig! c pos))
         status (.-status r)
+        _ (when (= "dug" status) (tidy/record! c own "air"))
         ids (vec (keep #(.-id %) (array-seq (or (.-drops r) #js []))))]
     (case status
       "dug" (do (ctx/update-mem! c assoc :dug {:block block :ids ids :names (vec (distinct (keep #(.-name %) (array-seq (or (.-drops r) #js [])))))

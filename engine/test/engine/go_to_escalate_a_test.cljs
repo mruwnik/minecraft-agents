@@ -198,6 +198,29 @@
           (is (= (sort @stood) (sort @stepped)) "each is stepped off once")
           (is (= "dirt" (block p [1 62 0]))))))))
 
+(deftest go-to-keeps-stepping-off-a-dug-cell-after-the-step-off-waited-and-avoids-the-other-holes
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [moved (atom #{})
+              waited (atom #{})
+              avoided (atom [])
+              in-body? (fn [_ cell] (not (@moved cell)))
+              step-off! (fn [_ cell opts]
+                          (swap! avoided conj (:avoid opts))
+                          (js/Promise.resolve
+                           (if (@waited cell)
+                             (do (swap! moved conj cell) :arrived)
+                             (do (swap! waited conj cell) :continue))))
+              {:keys [out p seen]} (with-redefs [tidy/in-body? in-body?
+                                                 step-off/step-off! step-off!]
+                                     (await (run-job! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 2}]})
+                                                      'jobs.movement.go-to (merge {:pos [10 64 0] :range 1 :ways #{:walk :stair}} trespass) foreign)))]
+          (is (= {:arrived true} @out))
+          (is (= [[1 62 0] [1 63 0]] (sort (:cells (first (events-of seen :go-to.restored))))) "a waiting step-off does not use the cell up")
+          (is (every? (first @avoided) [[1 62 0] [1 63 0]]) "the dug cells are not stepped onto")
+          (is (= "dirt" (block p [1 62 0]))))))))
+
 (deftest go-to-stairs-out-of-a-sealed-stone-pit-with-a-full-pack-leaving-the-drops
   (async done
     (tu/run-async done

@@ -18,7 +18,8 @@
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.spent :as spent]
             [jobs.lib.tools :as tools]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.lib.world :as known]))
 
 (a/defargs settings
   {::max-tries {:default 3 :doc "Tries to tidy one cell before it is left." :spec (a/int-in 1 nil)}
@@ -103,6 +104,14 @@
       (merge {:cell (access/cell pos) :action action :was was}
              (when (and (= :dig action) (crops/seed-of was)) {:any-of [(crops/seed-of was)]}) ; a crop is put back as its seed
              (select-keys v [:zone :claim :plan])))))
+
+(defn own-pending
+  "pending's entry for a :dig at pos in a plan this body made, a :mend (the body breaking its own build puts it back),
+  else nil. Reads the block, so call it before the act."
+  [c pos]
+  (let [cell (access/cell pos)]
+    (when-let [id (get (access/own-plans c) (get (known/footprints c) cell))]
+      {:cell cell :action :dig :was (u/block-name (:primitives c) pos) :plan id :mend true})))
 
 (defn record!
   "Remember pending entry p (see pending) with the block now at its cell; nil p does nothing."

@@ -77,9 +77,11 @@
                       (done! :skipped {:cell cell :block was :why why})))]
         (if-let [why (skip-why c e)]
           (if (and (= :occupied why) (not (contains? (:restore-stepped (ctx/mem c)) cell)))
-            (let [_ (ctx/update-mem! c update :restore-stepped (fnil conj #{}) cell)
-                  r (await (step-off/step-off! c cell {}))]
-              (if (= :continue r) :continue :again))
+            (let [r (await (step-off/step-off! c cell {:avoid (into #{} (map (comp vec :cell)) (own-holes c))}))]
+              (if (= :continue r)
+                :continue
+                (do (ctx/update-mem! c update :restore-stepped (fnil conj #{}) cell)
+                    :again)))
             (skip! why))
           (let [_ (await (torch/return-torch! c))
                 r (await (ctx/call c :restore 'jobs.blocks.place args))]
