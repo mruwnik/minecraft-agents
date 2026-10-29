@@ -114,12 +114,13 @@
       (when-not (= id (:for-plan (:args c)))
         {:cell cell :action :dig :was (u/block-name (:primitives c) pos) :plan id :mend true}))))
 
-(defn gives-back?
-  "Whether dig result r left the block of mend entry e to put back: it dropped it or the body carries it. Ground cover
-  and the like drop nothing, so no restore could ever place them."
-  [c {:keys [was]} r]
-  (or (carried? (:primitives c) was)
-      (boolean (some #(= was (.-name %)) (array-seq (or (.-drops r) #js []))))))
+(defn put-back-items
+  "The items that put a dug block back: the block and what its dig dropped (names)."
+  [block drops]
+  (vec (distinct (cons block drops))))
+
+(defn dropped-names [r]
+  (into [] (keep #(.-name %)) (array-seq (or (.-drops r) #js []))))
 
 (defn record!
   "Remember pending entry p (see pending) with the block now at its cell; nil p does nothing."
@@ -186,8 +187,10 @@
          _ (await (tools/note-wear! c))]
      (when (= "dug" (.-status r))
        (built/forget! c (spent/cell-vec pos))
-       (when (or (not (:mend pend)) (gives-back? c pend r))
-         (record! c pend "air")))
+       (let [drops (dropped-names r)]
+         ;; ground cover drops nothing and is not carried: no item could put it back
+         (when (or (not (:mend pend)) (seq drops) (carried? (:primitives c) (:was pend)))
+           (record! c (cond-> pend (:mend pend) (assoc :any-of (put-back-items (:was pend) drops))) "air"))))
      r)))
 
 (defn ^:async place!

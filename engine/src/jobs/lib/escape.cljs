@@ -542,6 +542,6 @@
         v (when-not (:escalation noted) (tidy/refusal c :dig (zipmap [:x :y :z] cell)))]
     (when (and (or v (and (:mend tag) (not (:escalation noted)))) (or dug? (bs/air (u/seen-name p (zipmap [:x :y :z] cell)))))
       (when noted (tidy/forget-cell! c cell))
-      (tidy/record! c (merge {:cell cell :action :dig :was block :any-of (vec (distinct (cons block (b/drops-of p block))))}
+      (tidy/record! c (merge {:cell cell :action :dig :was block :any-of (tidy/put-back-items block (b/drops-of p block))}
                              (select-keys v [:zone :claim :plan]) tag)
                     "air")))))

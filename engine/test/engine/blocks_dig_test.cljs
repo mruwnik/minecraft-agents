@@ -574,18 +574,44 @@
           (is (= [{:cell [2 64 0] :was "dirt" :plan "hut" :mend true}] (tidy-cells (:eng own))))
           (is (empty? (tidy-cells (:eng working)))))))))
 
-(deftest a-dig-for-one-plan-notes-a-cell-of-the-bodys-other-plan-and-no-ground-cover
+(deftest a-dig-for-one-plan-notes-a-cell-of-the-bodys-other-plan
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [plans {"hut" (shape/with-author hut "Fake")
                      "shed" (shape/with-author {:id "shed" :parts [{:id "w" :cells [[5 64 0]] :want "stone"}]} "Fake")}
-              other (setup {:self body :blocks {"2,64,0" "dirt"} :plans plans})
-              cover (setup {:self body :blocks {"2,64,0" "short_grass"} :drops {"short_grass" ""} :plans plans})]
+              other (setup {:self body :blocks {"2,64,0" "dirt"} :plans plans})]
           (await (tu/child-outcome (:eng other) job {:pos [2 64 0] :for-plan "shed"} 10))
-          (await (tu/child-outcome (:eng cover) job {:pos [2 64 0] :need-drop false} 10))
-          (is (= [{:cell [2 64 0] :was "dirt" :plan "hut" :mend true}] (tidy-cells (:eng other))))
-          (is (empty? (tidy-cells (:eng cover)))))))))
+          (is (= [{:cell [2 64 0] :was "dirt" :plan "hut" :mend true}] (tidy-cells (:eng other)))))))))
+
+(defn mend-entries [eng] (mapv #(select-keys (:data %) [:was :any-of]) (mem/entries (mem/view (:store eng)) :tidy)))
+
+(deftest a-mend-is-noted-with-the-items-that-put-it-back-and-none-for-what-nothing-can-fill
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[block drops carry want] [["stone" {"stone" "cobblestone"} [] [{:was "stone" :any-of ["stone" "cobblestone"]}]]
+                                          ["dirt" {} [] [{:was "dirt" :any-of ["dirt"]}]]
+                                          ["short_grass" {"short_grass" ""} [{:name "short_grass" :count 1}] [{:was "short_grass" :any-of ["short_grass"]}]]
+                                          ["short_grass" {"short_grass" ""} [] []]]]
+          (let [env (setup {:self body :inventory carry :blocks {"2,64,0" block} :drops drops
+                            :plans {"hut" (shape/with-author hut "Fake")}})]
+            (await (tu/child-outcome (:eng env) job {:pos [2 64 0] :need-drop false} 10))
+            (is (= want (mend-entries (:eng env))) (pr-str block drops carry))))))))
+
+(deftest a-direct-tidy-dig-of-the-bodys-own-build-is-a-mend-too
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [roof {:id "roof" :parts [{:id "w" :cells [[0 65 0]] :want "stone"}]}
+              env (setup {:self {:pos {:x 0 :y 64 :z 0}} :drops {"stone" "cobblestone"}
+                          :blocks {"0,63,0" "stone" "1,64,0" "stone" "-1,64,0" "stone" "0,64,1" "stone" "0,64,-1" "stone"
+                                   "0,65,0" "stone" "1,65,0" "stone" "-1,65,0" "stone" "0,65,1" "stone" "0,65,-1" "stone"
+                                   "0,66,0" "stone" "1,66,0" "stone"}
+                          :plans {"roof" (shape/with-author roof "Fake")}})]
+          (core/submit! (:eng env) '(jobs.survival.breathe) {})
+          (await (core/tick! (:eng env)))
+          (is (= [{:was "stone" :any-of ["stone" "cobblestone"]}] (mend-entries (:eng env)))))))))
 
 ;; ------------------------------------------------------------------ the block under the feet
 
