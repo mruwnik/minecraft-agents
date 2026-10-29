@@ -1598,10 +1598,11 @@
     (is (seq lit) "an unseen side beside lit cells is looked at")
     (is (= lit (sort-by (fn [[x]] x) lit)) "nearest first")
     (let [dark (tunnel-edge-body {})
-          feet (sh-sense/feet dark)]
-      (is (every? (fn [[x y z]] (<= (Math/hypot (- x (:x feet)) (- y (:y feet)) (- z (:z feet))) (look/near-of dark)))
-                  (look-edge/pending {:primitives dark} #{} 0))
-          "a dark side is shown only within near-of; farther dark cells stay open"))))
+          feet (sh-sense/feet dark)
+          near? (fn [[x y z]] (<= (Math/hypot (- x (:x feet)) (- y (:y feet)) (- z (:z feet))) (look/near-of dark)))
+          shown (look-edge/pending {:primitives dark} #{} 0)]
+      (is (seq shown) "a dark wall within near-of is looked at")
+      (is (every? near? shown)))))
 
 (deftest the-edge-walk-stops-after-fifteen-cells-or-two-hundred-steps
   (let [c {:primitives (tunnel-edge-body nil)}
