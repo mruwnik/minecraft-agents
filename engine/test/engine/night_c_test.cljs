@@ -75,6 +75,16 @@
           (is (nothing-placed-at-the-start? p) "no pit dug")
           (is (= 10 (js/Math.floor (:x (st/pos-of p)))) "walked home"))))))
 
+(deftest the-walk-home-is-one-of-the-nights-answers
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (await (night-at-home lit-world {:x 10 :y 64 :z 0}))]
+          (await (core/tick! eng))
+          (let [{:keys [pick prices]} (first (st/emitted seen :night.answers))]
+            (is (= :home pick) "the lit walk home, priced among the ways through the night")
+            (is (< (:home prices) (:shelter prices)) "cheaper than digging in, whose morning and dark cell are priced")))))))
+
 (defn ^:async night-at-seen-hut
   "The night with no home set, the body outside the hut of hut-shelter-test (door at z 2) at dusk with extra items; {:eng :p}."
   [inventory]
@@ -205,10 +215,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (await (night-at-home (-> lit-world (assoc :light-default [15 0])
-                                                             (update :blocks merge {"30,66,0" "stone"}))
-                                                         {:x 30 :y 64 :z 0}))]
+                                                             (update :blocks merge {"60,66,0" "stone"}))
+                                                         {:x 60 :y 64 :z 0}))]
           (await (core/tick! eng))
-          (is (seq (st/calls p "place")) "go-to's planned cost of the dark route beats digging in: dug in")
+          (is (seq (st/calls p "place")) "go-to's planned cost of the dark route is dearer than digging in, its dark seconds priced too: dug in")
           (is (< (:x (st/pos-of p)) 5)))))))
 
 (deftest a-short-lit-route-with-one-dark-cell-is-walked
@@ -262,9 +272,9 @@
           (set! pick/quote! (fn [c args] (when (and (:floor args) (:pos args)) (swap! quoted conj args)) (quote! c args)))
           (try (await (tu/run-until-empty eng 60))
                (finally (set! pick/quote! quote!)))
-          (is (= [[:roofed-place 40] [:ground 14]] (mapv (juxt :target (comp :x :pos)) (st/emitted seen :shelter.fled)))
-              "shut in at the home it walked to and failing there, flees to the nearest seen ground, a dig away")
-          (is (<= (count @quoted) (count (st/emitted seen :night.answers))) "at each choice the night prices, one quote's search ran out of land: one search proves the other 140-odd sites out of reach too, none quoted"))))))
+          (is (= [[:roofed-place 40]] (mapv (juxt :target (comp :x :pos)) (st/emitted seen :shelter.fled)))
+              "fled to the home; failing to shut in there, it stays: the home's cell is lit, no night to shelter from, a flight and dig dearer")
+          (is (< (count @quoted) 10) "one quote's search ran out of land: one search proves the other 140-odd sites out of reach too, none quoted"))))))
 
 (deftest of-two-far-homes-the-one-go-to-quotes-a-walk-to-is-taken-not-the-straight-line-nearer
   (async done
@@ -373,11 +383,11 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [j [0.0 0.5 0.99]]
-          (let [{:keys [eng p]} (await (night-at-home (update bed-world :blocks merge walled-home) {:x 10 :y 64 :z 0} {} {:rand (constantly j) :ray-deg 1 :radius 14}))]
+          (let [{:keys [eng p seen]} (await (night-at-home (update bed-world :blocks merge walled-home) {:x 10 :y 64 :z 0} {} {:rand (constantly j) :ray-deg 1 :radius 14}))]
             (await (tu/run-until-empty eng 60))
             (is (= [] (bed-places p)) (str "no bed in the open, sight jitter " j))
             (is (= [] (st/calls p "sleep")) "and no sleep out there")
-            (is (seq (st/calls p "place")) "the shelter step dug in instead")))))))
+            (is (seq (st/emitted seen :night.bed-kept)) "said why")))))))
 
 (deftest a-roof-walk-into-a-breached-home-is-not-repeated
   (async done
@@ -570,18 +580,13 @@
             (is (= 10 @asked) "the next pass asks again: the world may have changed")
             (finally (set! pick/quote! quote!))))))))
 
-(deftest a-place-whose-straight-walk-costs-more-than-digging-in-is-not-quoted-and-the-body-digs-in
+(deftest a-place-whose-walk-costs-more-than-digging-in-is-not-walked-to-and-the-body-digs-in
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [quoted (atom [])
-              quote! pick/quote!
-              {:keys [eng p]} (await (night-at-home (assoc lit-world :blocks (assoc wide-ground "100,66,0" "stone")) {:x 100 :y 64 :z 0}))]
-          (set! pick/quote! (fn [c args] (swap! quoted conj args) (quote! c args)))
-          (try (await (tu/run-until-empty eng 60))
-               (finally (set! pick/quote! quote!)))
+        (let [{:keys [eng p]} (await (night-at-home (assoc lit-world :blocks (assoc wide-ground "100,66,0" "stone")) {:x 100 :y 64 :z 0}))]
+          (await (tu/run-until-empty eng 60))
           (is (< (* 100 cost/least-block-s) 60) "the walk's straight bound fits the time left before the dark plus the margin")
-          (is (not-any? #(= :home (:place %)) @quoted) "its straight walk alone is dearer than the dig-in's quote: no search")
           (is (seq (st/calls p "place")) "dug in")
           (is (< (:x (st/pos-of p)) 5)))))))
 

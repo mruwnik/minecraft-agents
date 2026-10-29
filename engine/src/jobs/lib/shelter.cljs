@@ -21,9 +21,7 @@
    ::door-failed-ms {:default 600000 :spec (a/int-in 0 nil)
                      :doc "How long (ms) a room door the night could not shut is left alone from the cell it was tried at."}
    ::home-due {:default {:margin-s 60 :slack 1.4 :arrive 4} :spec (a/map-of keyword? number?)
-               :doc "When to head home before night, read by dusk-home, replant-owed and plant-sapling: seconds of margin, slack factor on the straight line, and blocks within which the body counts as home."}
-   ::shelter-here-s {:default 12 :spec (a/num-in 0 nil)
-                     :doc "Seconds a body takes to shelter where it stands (dig in, wall in): staying put instead of a walk to bed or home is exposed this long at most, and costs this long. Median of 40 completed shut-in and dig-in jobs on the trial bodies (shut-in 11.9 s of 31, dig-in 12.9 s of 9)."}})
+               :doc "When to head home before night, read by dusk-home, replant-owed and plant-sapling: seconds of margin, slack factor on the straight line, and blocks within which the body counts as home."}})
 
 
 (defn breach-near [] (settings/get settings ::breach-near))
@@ -185,8 +183,6 @@
      (and home (pos? left-s)
           (let [d (u/dist pos home)]
             (and (< arrive d) (<= d sh-clock/home-limit) (<= left-s (+ margin-s (home-walk-s view pos)))))))))
-
-(defn shelter-here-s [] (settings/get settings ::shelter-here-s))
 
 (def in-ground? sh-beds/in-ground?)
 

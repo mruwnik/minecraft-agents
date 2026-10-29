@@ -214,3 +214,11 @@
         {:at :there :cell f}
         (when-not failed? {:at :here}))
       {:at :here})))
+
+(defn climb-s
+  "Seconds a stair up out of a pit depth deep at feet cell f takes (jobs.lib.dig-in-leave/climb!): a stair step a block, each
+  cutting two cells of the ground under f (stone when unseen), by the best carried tool."
+  [c f depth]
+  (let [p (:primitives c)
+        cut (/ (tools/clear-ms p (or (priced-name p (update f :y dec)) "stone")) 1000)]
+    (* depth ((cost/stair-leg-pricer 0) [cut cut] nil false))))

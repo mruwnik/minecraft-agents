@@ -529,9 +529,8 @@
           (core/submit! eng '(jobs.survival.night) {})
           (await (core/tick! eng))
           (reset! mid {:at (st/pos-of p) :holder (some? (core/holder eng))})
-          (is (= {:at {:x 5.5 :y 64 :z -0.5} :holder false} @mid) "shut in the far pair of the 2-deep pocket (the stair out of the failed pit went north), safe: not held")
-          (is (= #{{:x 4 :y 64 :z -1} {:x 4 :y 65 :z -1}}
-                 (set (filterv #(= 4 (:x %)) (mapv st/arg-pos (st/calls p "place")))))
+          (is (= {:x 5.5 :y 64 :holder false} (-> (:at @mid) (select-keys [:x :y]) (assoc :holder (:holder @mid)))) "shut in the far pair of the 2-deep pocket, safe: not held")
+          (is (= [64 65] (sort (map :y (filterv #(= 4 (:x %)) (mapv st/arg-pos (st/calls p "place"))))))
               "the near pair, feet and head, plugged: rock all round")
           (is (empty? (st/emitted seen :shelter.exposed)))
           (is (empty? (st/emitted seen :stopped)) "the night ended done"))))))

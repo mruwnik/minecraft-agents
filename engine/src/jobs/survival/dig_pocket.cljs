@@ -151,7 +151,9 @@
    (let [seconds (if cells
                    (+ open-s (way/place-s c) (way/zone-penalty c {:dig cells :plug [feet]}))
                    (if sink? (+ (settings/get settings ::sink-s) (way/place-s c)) ##Inf))]
-     (way/quote-of c seconds (settings/get settings ::job-time-s)))))
+     (way/quote-of c seconds (settings/get settings ::job-time-s)
+                   {:morning-s (+ (way/morning-s c 1 0)
+                                  (if (and sink? (not cells) (= :night (:for (:args c)))) (pit-site/climb-s c feet 2) 0))}))))
 
 (defn exposed-s
   "Seconds the body stays open to a shooter before the pocket shuts it in: the walk and the dig. ##Inf with no site. pl: its plan (default made here)."

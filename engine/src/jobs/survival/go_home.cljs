@@ -11,7 +11,8 @@
             [jobs.lib.places :as places]
             [jobs.lib.shelter :as sh]
             [jobs.lib.shelter.clock :as sh-clock]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.survival.shut-in-night :as sin]))
 
 (def doc
   "Walk home before night: to the remembered :home, else the remembered :bed (a go-to child, :range 2, walking on
@@ -22,7 +23,7 @@
   nothing-possible {:reason :walk-failed :walk go-to's cause} with {:text}. The :dusk-home trigger starts it when the day left
   no longer covers the walk; a work job it cuts is resumed by the scheduler afterwards.
   With :commute? (the :dusk-home trigger's) a body in the ground (jobs.lib.shelter/in-ground?: its work goes on through the
-  night) whose walk there and back, by go-to's quote, costs more than sheltering where it stands (jobs.lib.cost/commute-s)
+  night) whose walk there and back, by go-to's quote, costs more than sheltering where it stands (jobs.lib.cost/commute-s, against shut-in's quote)
   stays: nothing-possible {:reason :shelter-cheaper}, :next the night job (the :night trigger's). Other endings carry :next too (jobs.lib.next-call): what a failed walk names, then the call again.
   Quote: time by the straight distance at cost/walk-speed; done 1 visit.")
 
@@ -82,12 +83,13 @@
                       {:text (or (get-in e [:data :text]) "could not walk home")}))))
 
 (defn ^:async commute-dearer?
-  "Whether the call is priced (:commute?), the body in the ground and go-to's quote of the way to pos dearer than sheltering here."
+  "Whether the call is priced (:commute?), the body in the ground and go-to's quote of the way to pos dearer than sheltering here
+  (shut-in's quote, its time: shut-in-night/time-s)."
   [c pos]
   (let [p (:primitives c)]
     (and (:commute? (:args c)) (sh/in-ground? p (ctx/view c))
          (let [r (:route (await (ctx/quote c 'jobs.movement.go-to {:pos pos :range arrive-range})))]
-           (and (:found r) (pos? (cost/commute-s true (or (:seconds r) 0) (sh/shelter-here-s))))))))
+           (and (:found r) (pos? (cost/commute-s true (or (:seconds r) 0) (sin/time-s (sin/shelter-quote (await (ctx/quote c 'jobs.survival.shut-in {:ways #{:walls :pit} :for :night})))))))))))
 
 (defn ^:async round [c]
   (let [pos (place c)]

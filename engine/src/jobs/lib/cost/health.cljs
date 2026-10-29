@@ -86,6 +86,22 @@
   [in-ground? left busy-s]
   (if in-ground? (min left busy-s) left))
 
+(defn night-way-s
+  "Seconds a way through a night with left seconds still to run costs: the work it loses keeping the body busy busy-s
+  seconds (night-lost-s), risk-s (its tolls and hurt, no time), open-s (its seconds exposed, priced) and morning-s (what
+  it costs by day: a shelter's blocks and dig out, the walk back to where the night found the body)."
+  [in-ground? left {:keys [busy-s risk-s open-s morning-s] :or {busy-s 0 risk-s 0 open-s 0 morning-s 0}}]
+  (+ (night-lost-s in-ground? left busy-s) risk-s open-s morning-s))
+
+(defn night-walk-bound-s
+  "The longest walk whose least night-way-s (busy its seconds and, in the ground, the same seconds back by day: commute-s's walk there
+  and back) is within price; -1 when none is."
+  [in-ground? left price]
+  (cond
+    (not in-ground?) (if (<= left price) ##Inf -1)
+    (<= (/ price 2) left) (/ price 2)
+    :else (- price left)))
+
 (defn drown-prices
   "The seconds the first k hp of drowning cost a body with hp left, k from 0 to n (default: hp, rounded up): each hp at
   hp-seconds x health-scale of the health it is taken from, so the price rises as the hp runs out."

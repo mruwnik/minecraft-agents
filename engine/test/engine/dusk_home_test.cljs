@@ -47,14 +47,14 @@
   (is (true? (holds? 11000 [[:home 100 0]] {:floor [-20 -20 20 20] :blocks {"0,67,0" "stone"}}))))
 
 (def stair-home-world
-  "A roof over the body at x 0 and a home at x 60, y 70, up a stair from x 55: the body is in the ground (6 under home)."
-  {:time 11500 :floor [-20 -20 120 20]
+  "A roof over the body at x 0 and a home at x 60, y 70, up a stair from x 55: the body is in the ground (6 under home), with blocks to wall in."
+  {:time 11500 :floor [-20 -20 120 20] :inventory [{:name "cobblestone" :count 64}]
    :blocks (into {"0,67,0" "stone"} (for [k (range 1 7)] [(str (+ 54 k) "," (+ 63 k) ",0") "stone"]))})
 
 (defn ^:async go-home-from-the-ground
-  "[blocks the body ends from the home at x, why go-home gave up, the jobs its :next names] with the home at x y."
-  [x y args]
-  (let [{:keys [eng p seen]} (st/setup stair-home-world)]
+  "[blocks the body ends from the home at x, why go-home gave up, the jobs its :next names] with the home at x y (in world, default stair-home-world)."
+  [x y args & [world]]
+  (let [{:keys [eng p seen]} (st/setup (or world stair-home-world))]
     (mem/write! (:store eng) :home {:pos {:x x :y y :z 0}} mem/place-policy)
     (core/submit! eng (list 'jobs.survival.go-home args) {})
     (await (tu/run-until-empty eng 30))
@@ -75,6 +75,14 @@
           (is (= ["jobs.survival.night"] (nth far 2)) "the night job the reflex runs, not go-home again")
           (is (< (first near) 3) "a close home is walked to")
           (is (< (first plain) 3) "without :commute? the call walks home"))))))
+
+(deftest go-home-in-the-ground-walks-when-nothing-can-shelter-the-body-where-it-stands
+  ;; the stay is priced by shut-in's quote (no blocks, obsidian underfoot: no way), not a flat 12 s of sheltering
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (-> stair-home-world (assoc :inventory []) (update :blocks merge (tu/box -1 62 -1 1 63 1 "obsidian")))]
+          (is (< (first (await (go-home-from-the-ground 60 70 {:commute? true} world))) 3) "the far home is walked to"))))))
 
 (deftest go-home-walks-to-the-home-and-waits-with-none
   (async done

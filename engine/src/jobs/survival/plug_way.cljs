@@ -6,20 +6,24 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
+            [jobs.lib.blocks :as lb]
             [jobs.lib.checks :as checks]
+            [jobs.lib.cost :as cost]
             [jobs.lib.pace :as pace]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.shelter :as sh]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.spent :as spent]
+            [jobs.lib.tools :as tools]
             [jobs.survival.dig-in-cells :as dig-cells]
+            [jobs.survival.respond.state :as flight]
             [jobs.lib.util :as u]
             [jobs.survival.wall-placer :as wall-placer]))
 
 (a/defargs settings
   {::place-s {:default 0.72 :doc "Seconds a placement takes, for a way's quote: the mean gap between two placements of one walls attempt of a flight, n=62 gaps in the trial bodies' logs on 2026-10-28. Recount: node tools/event-counts.mjs wall-places (:gap)." :spec (a/num-in 0 nil)}
-   ::night-place-s {:default 1 :doc "Seconds a placement (aim, place, settle) takes for a night's shelter; the dig back at dawn is daylight work, so only placing is priced." :spec (a/num-in 0 nil)}
+   ::night-place-s {:default 1 :doc "Seconds a placement (aim, place, settle) takes for a night's shelter; the dig back at dawn is priced apart (morning-s)." :spec (a/num-in 0 nil)}
    ::trespass-s {:default 1000 :doc "Seconds a way's quote adds when a cell it digs or fills is another's (zone, claim or plan): a last resort, after every way that keeps off." :spec (a/num-in 0 nil)}})
 
 
@@ -97,14 +101,25 @@
                  {:units :enclosures :done (if done 1 0) :left (if done 0 1)
                   :result (merge {:pos (sh-sense/feet (:primitives c)) :way way} extra)}))))
 
+(defn morning-s
+  "Seconds a night's shelter costs by day (0 unless :for :night): dug of its placed blocks dug again on the way out, at the
+  best carried tool's time for the block it places (jobs.lib.blocks/pick), and left of them left in the world at their item value."
+  [c dug left]
+  (let [b (when (= :night (:for (:args c))) (lb/pick c (flight/blocks c)))]
+    (if-not b
+      0
+      (+ (* dug (/ (tools/clear-ms (:primitives c) b) 1000)) (* left (:value (cost/item-value [{:name b :count 1}])))))))
+
 (defn quote-of
   "Time of a way: 0 once enclosed, else seconds (##Inf when it cannot be done here, which shut-in drops), with :risk-s the part of
-  them that is a price, not time (risk-s: a site's toll)."
-  ([c seconds job-time-s] (quote-of c seconds job-time-s 0))
-  ([c seconds job-time-s risk-s]
-   (let [mean (if (enclosed? c) 0 seconds)]
+  them that is a price, not time (risk-s: a site's toll), and :morning-s what the shelter costs by day (morning-s), beside them."
+  ([c seconds job-time-s] (quote-of c seconds job-time-s {}))
+  ([c seconds job-time-s {:keys [risk-s morning-s] :or {risk-s 0 morning-s 0}}]
+   (let [mean (if (enclosed? c) 0 seconds)
+         open? (and (pos? mean) (js/isFinite mean))]
      (cond-> {:uses {:job-time [0 mean (if (infinite? mean) mean (max (* 3 mean) job-time-s))]} :done [0 1 1]}
-       (and (pos? risk-s) (pos? mean) (js/isFinite mean)) (assoc :risk-s risk-s)))))
+       (and open? (pos? risk-s)) (assoc :risk-s risk-s)
+       (and open? (pos? morning-s)) (assoc :morning-s morning-s)))))
 
 (defn ^:async walls-step!
   "One step of the walls (wall-placer/seal!): :done once enclosed, :again, :hit (a melee mob hit the body: run! yields), or nil when they cannot be placed."

@@ -83,10 +83,10 @@
          (when-let [blocks (night/blocks c)] {:use {:blocks blocks}})))
 
 (defn ^:async cost-of
-  "[seconds risk-s] the child of way quotes (risk-s: its :risk-s, the part that is no time), ##Inf when it cannot be done here or cannot be quoted."
+  "[seconds risk-s morning-s] the child of way quotes (risk-s: its :risk-s, the part that is no time; morning-s: its :morning-s), ##Inf when it cannot be done here or cannot be quoted."
   [c way]
   (let [q (await (ctx/quote c (first (children way)) (child-args c way)))]
-    (if (contract/ending? q) [##Inf 0] [(get-in q [:uses :job-time 1] ##Inf) (:risk-s q 0)])))
+    (if (contract/ending? q) [##Inf 0 0] [(get-in q [:uses :job-time 1] ##Inf) (:risk-s q 0) (:morning-s q 0)])))
 
 (defn exposure
   "Seconds each second in the open costs the body now: cost/exposure-price over the real dangers (jobs.lib.danger/dangers); 0 with none."
@@ -149,8 +149,8 @@
     {:open-s (+ s (if unseen? quiet broken)) :seconds (+ s quiet)}))
 
 (defn ^:async way-costs
-  "{:costs [[way price risk-s]] of the allowed ways not failed or barred :barred [ways failed near, for :night] :exposure f}: each
-  way's quoted seconds, under fire plus what its seconds in the open cost (price), and its quote's :risk-s; ##Inf for one that cannot be done here."
+  "{:costs [[way price risk-s seconds morning-s]] of the allowed ways not failed or barred :barred [ways failed near, for :night] :exposure f}: each
+  way's quoted seconds, under fire plus what its seconds in the open cost (price), its quote's :risk-s, its quoted seconds and its :morning-s; ##Inf for one that cannot be done here."
   [c]
   (let [failed (set (:failed-ways (ctx/mem c)))
         allowed (remove failed (filter #(ctx/way? c %) ways))
@@ -158,18 +158,22 @@
         left (remove (set barred) allowed)
         f (exposure c)]
     {:costs (loop [[w & more] left acc []]
-              (if (nil? w) acc (recur more (let [[s r] (await (cost-of c w))] (conj acc [w (price c f w s) r])))))
+              (if (nil? w) acc (recur more (let [[s r m] (await (cost-of c w))] (conj acc [w (price c f w s) r s m])))))
      :barred (vec barred)
      :exposure f}))
 
 (defn ^:async quote-of
   "Time: 0 when the body is enclosed, else ::mean-s or the cheapest way's price (way-costs) when that is dearer, ##Inf when
-  none can be done here; :risk-s that way's."
+  none can be done here; of that way, :risk-s its toll,
+  :exposure-s what its price adds under fire to its quoted seconds, and :morning-s its :morning-s."
   [c]
-  (let [[_ price risk] (when-not (way/enclosed? c) (first (sort-by second (:costs (await (way-costs c))))))
-        s (if (way/enclosed? c) 0 (max (settings/get settings ::mean-s) (or price ##Inf)))]
+  (let [[_ price risk seconds morning] (when-not (way/enclosed? c) (first (sort-by second (:costs (await (way-costs c))))))
+        s (if (way/enclosed? c) 0 (max (settings/get settings ::mean-s) (or price ##Inf)))
+        named? (fn [x] (and (number? x) (pos? x) (js/isFinite s)))]
     (cond-> {:uses {:job-time [s s (max (* 3 s) (settings/get settings ::job-time-s))]} :done (if (infinite? s) [0 0 0] [0 1 1])}
-      (and (number? risk) (pos? risk) (js/isFinite s)) (assoc :risk-s risk))))
+      (named? risk) (assoc :risk-s risk)
+      (named? (some-> price (- seconds))) (assoc :exposure-s (- price seconds))
+      (named? morning) (assoc :morning-s morning))))
 
 (defn ^:async choose
   "{:way the cheapest allowed way not failed (nil when none) :dropped [ways that cannot be done]}: way-costs, the cheapest

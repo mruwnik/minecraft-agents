@@ -29,7 +29,7 @@
   (jobs.lib.seal/mob-wait-ticks), then fails; one refused otherwise goes after the others (blocks.fill-cells: the walls are placed one cell a step through it, in place, ledgered; a torch in a cell is dug first, an open door shut) and fails with the other failures; a block that stays in a cell is left alone. Every block goes to the scaffold ledger with :for (default :danger, ledger :retreat-plug, taken
   back by jobs.access.cleanup once no hostile is near; :night: ledger :shelter, left alone). Quote: time, a placement per open cell
   (##Inf with no block carried; with fewer blocks than open cells, which would stop half built, a melee hostile known gets in by an open cell, a mob unseen spawns: their hp-cost over the stay (::job-time-s) added, half-built-s). With :for :night the quote counts night seconds only (placing), and a block worth more than the ::wall-value setting
-  (jobs.lib.cost/item-value) adds the dig back at dawn; it needs a carried block for every open cell. A cell another's zone refuses adds plug-way's ::trespass-s.
+  (jobs.lib.cost/item-value) adds the dig back at dawn, and :morning-s names the door dug out and the blocks left (plug-way/morning-s); it needs a carried block for every open cell. A cell another's zone refuses adds plug-way's ::trespass-s.
   Picked by jobs.survival.shut-in, which shuts the body in by the cheapest way.")
 
 (a/defargs args
@@ -84,11 +84,14 @@
 
 (declare half-built-s)
 
+(def door-cells "Wall cells dug again to step out by day (jobs.lib.dig-in-leave/leave!: the door at the feet and the head)." 2)
+
 (defn quote-of [c]
   (let [cells (dig-cells/open-cells (:primitives c) (sh-sense/feet (:primitives c)))
         open (count cells)]
     (way/quote-of c (if (why-not c) ##Inf (+ (* open (cell-seconds c open)) (way/zone-penalty c {:place cells}) (half-built-s c open)))
-                  (settings/get settings ::job-time-s))))
+                  (settings/get settings ::job-time-s)
+                  {:morning-s (way/morning-s c (min open door-cells) (max 0 (- open door-cells)))})))
 
 (defn beside?
   "Whether a melee hostile the body knows (not a shooter, a creeper or an enderman) stands within across cells and 1 up or

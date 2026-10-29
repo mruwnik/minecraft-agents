@@ -27,7 +27,7 @@
   laid a cave or fluid open). The pit is never dug into what the body sees as fluid, a hazard or open air, and it is planned again
   when the body has left its column. Lava a dig lays open is filled first (:on-lava :seal). Every plug goes to the scaffold ledger
   with :for (default :danger, ledger :retreat-plug, taken back by jobs.access.cleanup once no hostile is near; :night: ledger :shelter, left alone). Quote:
-  time, with :for :night plus the walk and the site's toll (dig-pit-site/toll-s: how shut-in weighs a site in a known mob's field against its other ways; ##Inf when no pit fits, or with :for :night when the pit would cut into a plan the body made or stand on a plan's doorstep, :spared; a cell another's zone refuses adds plug-way's ::trespass-s). With :for :night, can-start? is :later (:no-site, or :spared at the feet) before any round. Picked by jobs.survival.shut-in, which shuts the body in by the cheapest way.
+  time, with :for :night plus the walk and the site's toll (dig-pit-site/toll-s: how shut-in weighs a site in a known mob's field against its other ways; ##Inf when no pit fits, or with :for :night when the pit would cut into a plan the body made or stand on a plan's doorstep, :spared; a cell another's zone refuses adds plug-way's ::trespass-s; with :for :night, :morning-s, morning-s). With :for :night, can-start? is :later (:no-site, or :spared at the feet) before any round. Picked by jobs.survival.shut-in, which shuts the body in by the cheapest way.
   With :for :night, when a pit failed at the feet tonight (shut-in's :shut-in-failed) or another's zone refuses them and a free site is near, it first walks (go-to) to the cheapest seen ground within jobs.survival.dig-pit-site's ::reach (16) that looks like a pit fits (clear of every failed site; its walk plus the toll of known mobs it would flee over the pit's stay, relocation-site), climbing out of its own failed pit first; with no such ground it ends :failed :no-site.")
 
 (a/defargs args
@@ -104,24 +104,34 @@
   (await (pit/plan-of! c (flight/blocks c)))
   nil)
 
+(defn morning-s
+  "Seconds pit plan p dug at feet cell f costs by day (plug-way/morning-s): its roof dug on the way out, its plugs left, and the
+  stair up (dig-pit-site/climb-s), :for :night only."
+  [c f {:keys [steps plugs]}]
+  (if (night/night? c)
+    (+ (way/morning-s c 1 (count plugs)) (site/climb-s c f (count steps)))
+    0))
+
 (defn quote-of
   "The pit's quote where the body stands. a: its assess (default made here)."
   ([c] (quote-of c (assess c)))
   ([c {:keys [plan stop]}]
-  (let [s (when (night/night? c) (site/site c))]
+  (let [s (when (night/night? c) (site/site c))
+        straight #(dig-cells/pit-steps % nil 2)]
     (if (and (night/night? c) (not= :here (:at s)))
       (let [toll (if s (site/toll-s c (:cell s)) 0)]
         (way/quote-of c (if s
                           (+ (* (u/dist (sh-sense/feet (:primitives c)) (:cell s)) (settings/get settings ::walk-s-per-block)) (site/pit-s c (:cell s)) toll)
                           ##Inf)
-                      (settings/get settings ::job-time-s) toll))
+                      (settings/get settings ::job-time-s) {:risk-s toll :morning-s (if s (morning-s c (:cell s) (straight (:cell s))) 0)}))
     (way/quote-of c (if stop
                       ##Inf
                       (+ (if plan
                            (site/plan-s c plan)
                            (site/pit-s c (sh-sense/feet (:primitives c))))
                          (if plan (way/zone-penalty c {:dig (concat (:prep plan) (mapcat :dig (:steps plan))) :plug (conj (:plugs plan) (:roof plan))}) 0)))
-                  (settings/get settings ::job-time-s))))))
+                  (settings/get settings ::job-time-s)
+                  {:morning-s (if stop 0 (let [f (sh-sense/feet (:primitives c))] (morning-s c f (or plan (straight f)))))})))))
 
 (defn exposed-s
   "Seconds the body stays open to a shooter before the pit shuts it in: the dig; dig-pit-site/pit-s (a straight pit's dig and roof) with no plan yet, ##Inf when it cannot be done. a: its assess (default made here)."

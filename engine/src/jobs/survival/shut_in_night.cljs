@@ -106,3 +106,16 @@
                    sh/shelter-policy)
     (when (>= reseals (settings/get settings ::max-reseals))
       (fail! c way :seal-lost start))))
+
+(defn shelter-quote
+  "{:seconds :risk-s :exposure-s :morning-s} of shut-in's quote q (see its quote-of): :seconds ##Inf when it quotes none."
+  [q]
+  (let [mean (get-in q [:uses :job-time 1])]
+    (if (and (number? mean) (js/isFinite mean))
+      {:seconds mean :risk-s (:risk-s q 0) :exposure-s (:exposure-s q 0) :morning-s (:morning-s q 0)}
+      {:seconds ##Inf :risk-s 0 :exposure-s 0 :morning-s 0})))
+
+(defn time-s
+  "Seconds of a shelter-quote that are the body's time: its seconds less its toll and what fire adds."
+  [{:keys [seconds risk-s exposure-s]}]
+  (- seconds risk-s exposure-s))

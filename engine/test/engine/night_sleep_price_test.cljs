@@ -8,7 +8,8 @@
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [jobs.lib.shelter.sense :as sh-sense]
-            [jobs.survival.bed-down :as bed-down]))
+            [jobs.survival.bed-down :as bed-down]
+            [jobs.survival.shut-in-night :as sin]))
 
 (def bed-and-dirt [{:name "red_bed" :count 1} {:name "dirt" :count 40}])
 
@@ -71,6 +72,23 @@
           (is (empty? (st/calls p "sleep")))
           (is (seq (placed p "dirt")) "walled in where it stands"))))))
 
+(deftest a-shelters-toll-and-what-fire-adds-to-its-price-are-not-time-in-the-open
+  ;; shut-in's price under fire already holds its seconds in the open; the night prices the hostiles itself (exposed-price)
+  (let [q (sin/shelter-quote {:uses {:job-time [20 20 60]} :risk-s 3 :exposure-s 5 :morning-s 2})]
+    (is (= 12 (sin/time-s q)))
+    (is (= ##Inf (:seconds (sin/shelter-quote {:uses {:job-time [##Inf ##Inf ##Inf]}}))))))
+
+(deftest on-lit-ground-walling-in-costs-its-morning-more-than-the-night-in-the-open
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (st/setup {:time night :inventory st/wall-stack :light {} :light-default [15 15]})]
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tick-until eng #(seq (st/emitted seen :night.answers)) 20))
+          (let [{:keys [pick prices]} (first (st/emitted seen :night.answers))]
+            (is (< (:exposed prices) (:shelter prices)) "nothing spawns here, so only the walls' morning is between them: the door dug out, the blocks left")
+            (is (= :exposed pick))))))))
+
 (deftest sheltering-where-nothing-can-shut-the-body-in-is-priced-as-the-night-in-the-open
   (async done
     (tu/run-async done
@@ -84,8 +102,8 @@
               walls (await (shelter st/wall-stack))
               none (await (shelter []))]
           (is (number? (:shelter walls)))
-          (is (< (:shelter walls) (:shelter none)) "no blocks and stone underfoot: shut-in quotes no way, so the stay is open all night")
-          (is (= (:exposed none) (:shelter none)) "the night left in the open is an answer of its own, priced as that stay")
+          (is (not (contains? none :shelter)) "no blocks and stone underfoot: shut-in quotes no way, so sheltering here is no answer")
+          (is (< (:shelter walls) (:exposed none)) "the night left in the open is an answer of its own, dearer than walls")
           (is (< (:shelter walls) (:exposed walls)) "walls cost less than the night in the open"))))))
 
 (deftest a-bed-that-is-no-longer-there-is-seen-as-gone
