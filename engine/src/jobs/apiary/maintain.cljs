@@ -185,16 +185,13 @@
 (def hive-yield "What one ripe hive gives a harvest with each tool: the game's 3 honeycomb to shears, a honey bottle to a bottle." {"shears" {:name "honeycomb" :count 3} "glass_bottle" {:name "honey_bottle" :count 1}})
 
 (a/defargs settings
-  {::job-time-s {:default 1800 :doc "Seconds a maintain pass may take: its four steps." :spec (a/num-in 0 nil)}
-   ::guard-hives {:default 1 :doc "Hives' yield a guarded open fire is worth (harvest waits on the carpet). No apiary pass is in the trial logs to measure it from: a prior of the hive the fire smokes." :spec (a/num-in 0 nil)}
-   ::breed-hives {:default 1 :doc "Hives' yield a breeding step is worth (one more bee fills a hive). No apiary pass is in the trial logs to measure it from: a prior." :spec (a/num-in 0 nil)}
-   ::unseen-hives {:default 1 :doc "Hives expected in a watched area never seen, each at the ripe share the hives seen give. No apiary pass is in the trial logs to measure it from: a prior." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 1800 :doc "Seconds a maintain pass may take: its four steps." :spec (a/num-in 0 nil)}})
 
 (defn worth-of
   "Seconds a root pass is worth, each step only while it would run: harvest the cost/goal-value of what it takes from the
-  hives it would work (hive-yield of the tool carried, else of the first :with allows); guard ::guard-hives' yield for
-  each open fire smoking a ripe hive (harvest waits on it); breed ::breed-hives' yield; deposit the goal-value of the
-  produce carried above :carry. A part of the area never seen adds ::unseen-hives' yield at the ripe share the hives seen give
+  hives it would work (hive-yield of the tool carried, else of the first :with allows); guard one hive's yield for
+  each open fire smoking a ripe hive (harvest waits on it); breed one hive's yield (one more bee fills a hive); deposit the goal-value of the
+  produce carried above :carry. A part of the area never seen adds one hive's yield at the ripe share the hives seen give
   (cost/field-share, as farm tend prices unseen cells)."
   [c]
   (let [args (need/args-with-ways c)
@@ -207,11 +204,11 @@
                                (when (pos? over) {:name n :count over})))
                      (:stored f))]
     (+ (if (look/unseen? (:primitives c) (apiary/watched-cells c))
-         (* yield (settings/get settings ::unseen-hives) (cost/field-share :ripe (:ripe (:hives f)) (:hives (:hives f))))
+         (* yield (cost/field-share :ripe (:ripe (:hives f)) (:hives (:hives f))))
          0)
        (if (runs? :harvest) (* (count (:todo (:hives f))) yield) 0)
-       (if (runs? :guard) (* (count (:unsafe f)) yield (settings/get settings ::guard-hives)) 0)
-       (if (runs? :breed) (* yield (settings/get settings ::breed-hives)) 0)
+       (if (runs? :guard) (* (count (:unsafe f)) yield) 0)
+       (if (runs? :breed) yield 0)
        (if (runs? :deposit) (:value (cost/goal-value stored)) 0))))
 
 (defn can-start?

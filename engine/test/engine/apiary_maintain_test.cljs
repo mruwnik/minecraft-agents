@@ -228,7 +228,7 @@
           (is (= [:nothing-to-do] (distinct (map :reason (events-of s :waiting)))))
           (is (nil? (done-event s))))))))
 
-(deftest a-body-that-sees-nothing-even-after-looking-finds-the-apiary-in-order
+(deftest a-body-that-sees-nothing-even-after-one-look-ends-already-the-job-cannot-walk-to-look
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -236,7 +236,7 @@
                   (-> :p (doto tu/blind (aset "sensedAt" (fn [_] #js {:unknown true})))))]
           (core/submit! (:eng s) (spec {:ways #{:carried}}) {})
           (let [[first-n later-n] (await (looks-after s 10))]
-            (is (pos? first-n))
+            (is (pos? first-n) "it looked before it ended")
             (is (= first-n later-n) "one look around, not one per run"))
           (is (= :already (:cause (done-event s)))))))))
 

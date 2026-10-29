@@ -488,17 +488,18 @@
             (is (< 0 (count (places (:p s))) 6) status)
             (is (= [{:pos {:x 3 :y 64 :z 0} :reason :no-sapling}] (map #(select-keys % [:pos :reason]) (warns (:seen s) :forest.left))) status)))))))
 
-(deftest a-place-the-server-answers-occupied-five-times-is-tried-again-at-an-hours-worth
+(deftest a-place-the-server-answers-occupied-is-tried-again-only-when-the-worth-beats-the-retries
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start {:blocks (ground [[3 0]]) :inventory [(item "oak_sapling" 1)]} {"forest" oak-cell})
-              refused (atom 6)]
-          (.override (.-world (:p s)) "place" (fn ^:async f [token a impl] (if (pos? (swap! refused dec)) #js {:status "occupied"} (await (impl token a)))))
-          (core/submit! (:eng s) (list job {:plan "forest" :worth 3600}) {})
-          (await (ticks (:eng s) 30))
-          (is (= 6 (count (places (:p s)))) "five refused, the sixth placed")
-          (is (empty? (warns (:seen s) :forest.left))))))))
+        (doseq [[worth placed left?] [[nil 1 true] [3600 6 false]]]
+          (let [s (start {:blocks (ground [[3 0]]) :inventory [(item "oak_sapling" 1)]} {"forest" oak-cell})
+                refused (atom 6)]
+            (.override (.-world (:p s)) "place" (fn ^:async f [token a impl] (if (pos? (swap! refused dec)) #js {:status "occupied"} (await (impl token a)))))
+            (core/submit! (:eng s) (list job (merge {:plan "forest"} (when worth {:worth worth}))) {})
+            (await (ticks (:eng s) 30))
+            (is (= placed (count (places (:p s)))) (str "worth " worth))
+            (is (= left? (boolean (seq (warns (:seen s) :forest.left)))) (str "worth " worth))))))))
 
 ;; ------------------------------------------------------------------ restart
 

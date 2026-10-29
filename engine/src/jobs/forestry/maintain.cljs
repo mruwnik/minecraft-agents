@@ -428,8 +428,8 @@
   (:value (cost/goal-value [{:name (str species "_log") :count (forestry/logs-per-tree)}])))
 
 (defn planting-worth
-  "Seconds planting a sapling of species is worth: its grown tree. The tree grows while the body works elsewhere and the
-  goal-value of logs has no horizon to discount by (the food horizon is for crops), so the growth time costs nothing."
+  "Seconds planting a sapling of species is worth: its grown tree: an upper bound (no chance the sapling fails to
+  grow), as logs have no horizon to discount growth time by (the food horizon is for crops)."
   [species]
   (tree-worth species))
 

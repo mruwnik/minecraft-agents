@@ -3,6 +3,7 @@
   ##Inf only while a step would run that no price covers."
   (:require [cljs.test :refer [deftest is]]
             [engine.apiary-maintain-test :as am]
+            [engine.farm-tidy-test :as ft]
             [engine.harvest-test :as ht]
             [engine.library-test :as lt]
             [engine.memory :as mem]
@@ -12,6 +13,7 @@
             [jobs.farm.tend :as tend]
             [jobs.forestry.maintain :as forest-maintain]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.farm :as cost-farm]
             [jobs.lib.crops :as crops]
             [jobs.lib.trees :as forestry]
             [jobs.lib.price :as price]
@@ -101,15 +103,19 @@
         c (ctx-of grown (merge args {:irrigate true}) {})]
     (with-redefs [tend/check-facts (let [real tend/check-facts] #(assoc (real %) :dry 5))]
       (is (= (:worth (tend/pass-price c (tend/check-facts c))) (farm grown {:irrigate true})) "irrigate: the pass price already sows wet, no second gain"))
-    (is (< (farm meal {}) (farm meal {:fertilize true})) "fertilize: the growth seconds bone meal saves on unripe crops")
+    (let [wet (crops/stages-per-s true nil)]
+      (is (< (Math/abs (- (* 9 (/ farm-maintain/bone-meal-stages wet) (/ (cost/sown-worth "wheat" wet) (cost-farm/horizon-s)))
+                          (- (farm meal {:fertilize true}) (farm meal {}))))
+             1e-6) "fertilize: nine unripe wheat cells, each the stages a bone meal gives over the stage rate, at the sown-worth share of the horizon"))
     (is (priced? (farm meal {:fertilize true})))
     (let [seeds (tu/seeing-all (tu/fake-on-floor (assoc ht/wheat-world :inventory [(item "melon_seeds" 100)])))]
       (is (< (Math/abs (- (* 36 (/ farm-maintain/seed-compost-chance farm-maintain/compost-levels) (:value (cost/goal-value [(item "bone_meal" 1)])))
                           (- (farm seeds {:composter {:x 8 :y 64 :z 0}}) (farm seeds {}))))
              1e-6) "compost: the bone meal the seeds above the 64 kept make"))
-    (with-redefs [farm-maintain/facts (constantly {:keep {} :waste [] :stored [] :blocked 3})]
-      (is (= (* 3 (cost/sown-worth "wheat" (crops/stages-per-s false nil)))
-             (farm-maintain/tidy-worth (ctx-of grown (assoc args :area {:plan "p"}) {}))) "tidy: each cleared cell sown after it"))))
+    (let [stray (tu/seeing-all (tu/fake-on-floor ft/tidy-spec))
+          c (ctx-of stray (assoc args :area {:plan "field"}) {:engine {:world (world/of-data {"field" ft/field-plan} {} []) :warned (atom #{})}})]
+      (is (= (* 3 (cost/sown-worth "wheat" (crops/stages-per-s false nil))) (farm-maintain/tidy-worth c))
+          "tidy: the weed, cobblestone and sapling in crop cells (blocked), each sown after they are cleared"))))
 
 (deftest an-apiary-pass-is-worth-the-honeycomb-of-its-ripe-hive-and-the-produce-it-stores
   (let [args {:box am/box :with :either :carry {} :ways #{:carried}}

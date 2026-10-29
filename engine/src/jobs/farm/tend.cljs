@@ -211,7 +211,7 @@
   - Sowing: the seed carried, up to the seen bare cells, the untilled ones while till can run, and the unseen cells' share
     cost/field-share :sowable, each at cost/sown-worth. The rate is wet when :irrigate wets the field or every ground cell is wet.
   :work-s is each step's measured seconds (cost/field-step-s) over those expected units. :unpriced lists the steps that
-  would run whose worth is left out: irrigate, fertilize, a plant whose sowing is priced at 0 (a seed worth more than its crop, as a carrot) and a till that sows nothing more."
+  would run whose worth has no term of its own here: irrigate (its gain is the wet rate of the sowing), fertilize, a plant whose sowing is priced at 0 (a seed worth more than its crop, as a carrot) and a till that sows nothing more."
   [c f]
   (let [p (:primitives c)
         args (decide-args c)
