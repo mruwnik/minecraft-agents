@@ -167,6 +167,14 @@
               s (await (scenario {:block "sand" :count 2 :wet true :accept #{} :ways #{:seen}} world 30))]
           (is (= [[3 64 0]] (dug-cells s))))))))
 
+(deftest water-beside-a-block-does-not-stop-the-default-dig
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:blocks {"6,64,0" "sand" "6,64,1" "water"}}
+              s (await (scenario {:block "sand" :count 1 :wet true :ways #{:seen} :trip true} world 30))]
+          (is (= [[6 64 0]] (dug-cells s))))))))
+
 (deftest ore-the-body-has-not-seen-is-never-dug
   (async done
     (tu/run-async done

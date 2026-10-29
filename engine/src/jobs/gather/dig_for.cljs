@@ -206,7 +206,7 @@
 (defn ^:async dig! [c pos]
   (await (tools/equip! c))
   (let [v (access/may-dig? (rules-in c) pos)
-        verdict (access/judge v (:accept (:args c)))]
+        verdict (access/judge v (mw/accept (:args c)))]
     (if (not= :ok verdict)
       (do (refused! c pos v verdict) :again)
       (let [_ (ctx/update-mem! c #(cond-> (assoc % :digging pos)
