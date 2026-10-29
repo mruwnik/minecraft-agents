@@ -239,10 +239,11 @@
     (case w
       :partial :continue
       ;; no floor beyond was ever seen and go-to will not walk there: what can be seen from here is all there is
-      :blocked (if (seen? stop-at)
-                 (stop! c :unreachable {:cell cell})
-                 (do (await (look/look-around! c))
-                     :again))
+      :blocked (or (await (near/risky-wait! c w))
+                   (if (seen? stop-at)
+                     (stop! c :unreachable {:cell cell})
+                     (do (await (look/look-around! c))
+                         :again)))
       (if (= stop-at far)
         (do (await (look/look-around! c))
             :again)

@@ -125,7 +125,9 @@
   "Walk to within range of pos (jobs.lib.near/go-near!): :there, :continue (it waits on the world, or a leg that got nearer) or :blocked."
   [c pos range]
   (let [w (await (near/go-near! c pos range))]
-    (if (= :partial w) :continue w)))
+    (cond (= :partial w) :continue
+          (await (near/risky-wait! c w)) :continue
+          :else w)))
 
 (defn cell-of [v] (if (map? v) v (zipmap [:x :y :z] v)))
 
@@ -176,7 +178,7 @@
   (remembered lava is stale; if it is still there the next step sees it). :again, or :continue while the walk waits."
   [c entry]
   (let [target (cell-of (or (first (:seals entry)) (:at entry) (first (or (seq (:lava entry)) (:cells entry)))))
-        w (let [w (await (near/go-near! c target 4 {:see true}))] (if (= :partial w) :continue w))]
+        w (let [w (await (near/go-near! c target 4 {:see true}))] (if (= :partial w) :continue (or (await (near/risky-wait! c w)) w)))]
     (if (= :continue w)
       :continue
       (do (when (= :there w) (await (open-seal! c entry)))

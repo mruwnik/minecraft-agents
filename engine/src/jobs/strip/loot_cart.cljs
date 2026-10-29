@@ -141,6 +141,7 @@
           (stop! c :refused "the cart is in another's zone, claim or plan" (select-keys (access/refusal-fields [verdict]) [:zones :claims :plans]))
           (let [w (await (near/go-near! c pos 2))]
             (cond
+              (await (near/risky-wait! c w)) :continue
               (= :blocked w) (stop! c :unreachable "cannot walk within reach of the cart")
               (= :partial w) :continue
               :else

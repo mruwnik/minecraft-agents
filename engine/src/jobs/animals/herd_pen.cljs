@@ -264,9 +264,11 @@
   [c]
   (hold-gate! c)
   (let [r (await (near/go-near! c (u/cell-pos (nth (:axis (ctx/mem c)) out-1)) 0 {:ways #{:walk :clear-seal}}))
+        waited (await (near/risky-wait! c r))
         outside? (body-outside? c)
         open? (gate-open? c)]
     (cond
+      waited :continue
       (and outside? (#{:there :partial} r) (not open?)) (do (drop-gate! c) (set-phase! c :census))
       (and outside? (#{:there :partial} r)) (set-phase! c :shut-out)
       :else (set-phase! c :exit-open {:dash-tries (inc (:dash-tries (ctx/mem c) 0))}))))

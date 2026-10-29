@@ -255,7 +255,7 @@
   (let [w (await (near/go-near! c pos (reach) {:ways #{:walk :clear-seal}}))]
     (case w
       :partial :continue
-      :blocked (do (skip! c pos :unreachable) :again)
+      :blocked (or (await (near/risky-wait! c w)) (do (skip! c pos :unreachable) :again))
       (if-not (await (clear-fire! c pos))
         (do (skip! c pos :on-fire) :again)
         (if (= :sink action)
@@ -269,7 +269,7 @@
         w (await (near/go-near! c fire (reach) {:ways #{:walk :clear-seal}}))]
     (case w
       :partial :continue
-      :blocked (do (abandon! c fire :unreachable) :again)
+      :blocked (or (await (near/risky-wait! c w)) (do (abandon! c fire :unreachable) :again))
       (if (await (clear-fire! c fire))
         (await (sink! c))
         (do (abandon! c fire :on-fire) :again)))))

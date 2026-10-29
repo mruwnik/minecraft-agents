@@ -262,7 +262,7 @@
       (let [r (await (near/go-near! c pos (reach) {:ways #{:walk :clear-seal}}))]
         (case r
           :partial :continue
-          :blocked (fail-up! c "unreachable")
+          :blocked (or (await (near/risky-wait! c r)) (fail-up! c "unreachable"))
           (await (consider! c pos)))))))
 
 (defn ^:async supply!

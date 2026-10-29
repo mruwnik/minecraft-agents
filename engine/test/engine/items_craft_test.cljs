@@ -242,9 +242,25 @@
           (try
             (let [[result p _ _] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks table-block} {:item "bread" :table table}))]
               (is (< 1 @walks) "asked again in later rounds")
-              (is (not= :unreachable (:reason result)))
+              (is (= :not-done result) "still waiting: no table given up, no ending")
               (is (= 1 (count (calls p "craft"))) "one failed act, then only the walk"))
             (finally (set! child/call-walk* orig))))))))
+
+(deftest craft-holds-still-for-a-pause-each-round-its-table-stay-is-too-dear
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pauses (atom [])
+              walk child/call-walk*
+              pause child/pause!]
+          (set! child/call-walk* (fn [_c _slot _args]
+                                   (js/Promise.resolve (contract/ending :condition-failed :goal-dangerous {:why :goal-dangerous :arrived false}))))
+          (set! child/pause! (fn [c seconds why] (swap! pauses conj why) (pause c seconds why)))
+          (try
+            (await (craft {:inventory [{:name "wheat" :count 3}] :blocks table-block} {:item "bread" :table table}))
+            (is (< 1 (count @pauses)) "every refused round waits on the clock, so the job's :job-time is charged")
+            (is (= #{:risky-stay} (set @pauses)))
+            (finally (set! child/call-walk* walk) (set! child/pause! pause))))))))
 
 (deftest craft-with-a-full-inventory-that-make-room-cannot-free-stops
   (async done

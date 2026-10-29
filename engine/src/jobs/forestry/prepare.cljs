@@ -157,6 +157,7 @@
   (let [w (await (near/go-near! c target 3 {}))]
     (cond
       (= :partial w) :continue
+      (await (near/risky-wait! c w)) :continue
       (= :blocked w) (count-cell-fail! c cell :unreachable)
       (and column? (field/in-column? c cell)) (await (step-off! c cell))
       :else nil)))

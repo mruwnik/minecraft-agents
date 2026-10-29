@@ -191,7 +191,7 @@
   (let [w (await (near/go-near! c pos (reach) {:ways #{:walk :clear-seal}}))]
     (case w
       :partial :continue
-      :blocked (do (skip! c pos :unreachable) :again)
+      :blocked (or (await (near/risky-wait! c w)) (do (skip! c pos :unreachable) :again))
       (let [_ (when (hive-allowed? c pos) (ctx/update-mem! c assoc :clicking {:pos pos :tool tool}))
             res (if (hive-allowed? c pos)
                   (await (child/use-on! c pos tool (face-toward pos (u/self-pos c))))

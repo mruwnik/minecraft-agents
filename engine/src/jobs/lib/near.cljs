@@ -8,8 +8,10 @@
             [jobs.lib.child :as child]
             [jobs.lib.aim :as aim]
             [jobs.lib.click :as click]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.lib.price :as price]
             [jobs.lib.result :as result]
             [jobs.lib.util :as u]
@@ -253,6 +255,16 @@
   [c]
   (= :goal-dangerous (result/why (last-walk c))))
 
+(a/defargs settings
+  {::risky-wait-s {:default 5 :doc "Seconds a job holds still when go-near! refused a stay for its price, before it asks again (risky-wait!); the pause counts on the job's :job-time." :spec (a/num-in 0 nil)}})
+
+(defn ^:async risky-wait!
+  "For go-near!'s answer r: when it is :blocked for the price of the stay (risky-stay?), pause ::risky-wait-s (charged to the caller's :job-time, so a stay that never gets cheaper ends on the budget) and resolve :continue, else nil."
+  [c r]
+  (when (and (= :blocked r) (risky-stay? c))
+    (await (child/pause! c (settings/get settings ::risky-wait-s) :risky-stay))
+    :continue))
+
 (defn in-range!
   "go-near!'s answer for a body already within range of cell: :there, or :blocked when the stay there (stay-s, nil: a
   click's) costs more than worth (threats/stay-danger, as go-to prices its goal's; last-walk then reads :why :goal-dangerous)."
@@ -286,6 +298,7 @@
                                   y-margin (assoc :jobs.lib.walk.world/y-margin y-margin))]
      (cond
        (nil? cell) (do (ctx/emit! c :refused :warn {:reason :bad-pos :text (:message (places/parse-pos pos))})
+                       (ctx/update-mem! c dissoc :near-walk :near-goal)
                        :blocked)
        (and (u/within? (u/self-pos c) cell range) (or (not see) (aim/body-sees? c [(:x cell) (:y cell) (:z cell)])))
        (in-range! c cell stay-s (or worth (ctx/worth c)))

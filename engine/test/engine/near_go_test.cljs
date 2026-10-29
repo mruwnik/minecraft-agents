@@ -64,6 +64,24 @@
            (is (= [0 64 0] (e/feet p)) "no walk")))
        (done)))))
 
+(deftest a-refused-stay-is-waited-out-and-a-bad-position-after-it-is-not-read-as-one
+  (async done
+    ((fn ^:async t []
+       (let [{:keys [eng clock]} (e/setup {:blocks (floor -2 -3 12 3) :light-default [0 0]})
+             out (atom [])
+             job {:round (fn ^:async bad-pos-round [c]
+                           (let [risky (await (near/go-near! c {:x 2 :y 64 :z 0} 3 {:stay-s 600 :worth 1}))
+                                 waited (await (near/risky-wait! c risky))
+                                 bad (await (near/go-near! c nil 3))]
+                             (reset! out [risky waited bad (near/risky-stay? c) (await (near/risky-wait! c bad))])
+                             (ctx/end c :done nil)))}
+             eng (assoc eng :jobs (assoc (:jobs eng) 'near-probe job))]
+         (mem/write! (:store eng) :deaths {:pos {:x 3 :y 64 :z 0} :cause "zombie" :death-t (- @clock 4000)} core/deaths-policy)
+         (core/submit! eng '(near-probe) {})
+         (await (e/tick-out! eng 1000))
+         (is (= [:blocked :continue :blocked false nil] @out))
+         (done))))))
+
 (deftest a-target-no-way-leads-to-is-blocked
   (async done
     ((fn ^:async t []

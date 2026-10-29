@@ -83,8 +83,9 @@
   [c cell stand opts]
   (let [limit (give-up)
         w (await (near/go-near! c (zipmap [:x :y :z] stand) 0 opts))
+        waited (await (near/risky-wait! c w))
         climb? (and (not (:dig? cell)) (not (in-hole? c)) (<= (+ 2 (js/Math.floor (:y (u/self-pos c)))) (second stand)))]
-    (when (and (= :blocked w) (not (sealed-in-shelter? c)))
+    (when (and (= :blocked w) (not waited) (not (sealed-in-shelter? c)))
       (ctx/update-mem! c #(cond-> (update % :bad-stands (fnil conj []) stand)
                             (not climb?) (walk-fail (:pos cell) :unreachable limit (u/self-pos c))
                             (= :budget (:why (:data (near/last-walk c)))) (update :budget-streak (fnil inc 0))
@@ -101,6 +102,7 @@
     (when (and (= :there w) (:found cell) (empty? (if (:dig? cell) (in-dig-reach c [cell]) (in-reach c [cell]))))
       (ctx/update-mem! c walk-fail (:pos cell) :unreachable limit (u/self-pos c)))
     (cond
+      waited :partial
       (and (= :blocked w) (sealed-in-shelter? c)) :partial
       (and (= :there w) (nil? (:found cell)) (chunk-pending? (:primitives c) (:pos cell))) :partial
       :else w)))

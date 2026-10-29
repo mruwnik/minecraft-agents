@@ -669,6 +669,28 @@
           (is (empty? (calls p "furnace")))
           (is (> dear cheap) "a dear goal walks again"))))))
 
+(deftest a-furnace-whose-stay-is-too-dear-is-waited-for-not-given-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:blocks {"20,64,0" "furnace"}
+                                         :inventory [{:name "raw_iron" :count 3} {:name "coal" :count 2}]})
+              walks (atom 0)
+              pauses (atom 0)
+              orig child/call-walk*
+              pause child/pause!]
+          (set! child/call-walk* (fn [_c _slot _a] (swap! walks inc)
+                                   (js/Promise.resolve (contract/ending :condition-failed :goal-dangerous {:why :goal-dangerous :arrived false}))))
+          (set! child/pause! (fn [c seconds why] (swap! pauses inc) (pause c seconds why)))
+          (try
+            (core/submit! eng (list 'jobs.items.smelt {:furnace {:x 20 :y 64 :z 0} :item "raw_iron" :count 3}) {})
+            (await (ticks eng 8))
+            (is (< 1 @walks) "asked again each round")
+            (is (<= (dec @walks) @pauses) "each refused round holds still, so the time spend is charged")
+            (is (empty? (of-kind seen :stopped)) "no unreachable ending")
+            (is (seq (:list (core/state eng))) "the job is still running")
+            (finally (set! child/call-walk* orig) (set! child/pause! pause))))))))
+
 (deftest output-in-the-furnace-that-does-not-fit-the-pockets-stops-before-loading
   (async done
     (tu/run-async done

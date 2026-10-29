@@ -281,6 +281,7 @@
   (let [walked (await (near/go-near! c pos (reach)))]
     (cond
       (= :partial walked) :walking
+      (await (near/risky-wait! c walked)) :walking
       (and (= :blocked walked) (shut-in-walk? c)) :shut-in
       (= :blocked walked) (do (skip! c pos) :skipped)
       :else
@@ -300,9 +301,10 @@
 (defn ^:async approach!
   "Walk toward the nearest source seen beyond :radius so it lies within it: :continue while the walk waits on the world, else :again (a blocked walk skips that block)."
   [c pos]
-  (let [walked (await (near/go-near! c pos (min (reach) (:radius (:args c)))))]
-    (when (and (= :blocked walked) (not (shut-in-walk? c))) (skip! c pos))
-    (cond (= :partial walked) :continue
+  (let [walked (await (near/go-near! c pos (min (reach) (:radius (:args c)))))
+        waited (await (near/risky-wait! c walked))]
+    (when (and (= :blocked walked) (not waited) (not (shut-in-walk? c))) (skip! c pos))
+    (cond (or waited (= :partial walked)) :continue
           (and (= :blocked walked) (shut-in-walk? c)) :shut-in
           :else :again)))
 

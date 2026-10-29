@@ -46,8 +46,10 @@
       (u/within? (u/self-pos c) g (gate-look-range))
       (do (ctx/update-mem! c #(-> % (assoc :gate-visited true) (dissoc :looked-pen)))
           :continue)
-      (= :blocked (await (near/go-near! c g (gate-look-range) {:doors :never :ways #{:walk :clear-seal}}))) (finish! c :no-pen (unseen-extra answer))
-      :else :continue)))
+      :else (let [r (await (near/go-near! c g (gate-look-range) {:doors :never :ways #{:walk :clear-seal}}))]
+              (if (and (= :blocked r) (not (await (near/risky-wait! c r))))
+                (finish! c :no-pen (unseen-extra answer))
+                :continue)))))
 
 (defn ^:async check-unknown!
   "The pen has cells the body has not seen (a gate in the dark decays): go near the nearest not yet looked at, look at it
@@ -169,10 +171,11 @@
 (defn ^:async survey! [c]
   (let [centre (box-centre (pen-box c))]
     (if (> (u/dist (u/self-pos c) centre) (near-pen))
-      (if (= :blocked (await (near/go-near! c centre (approach-range) {:doors :never :ways #{:walk :clear-seal}})))
-        (let [walk (:data (:near-walk (ctx/mem c)))]
-          (finish! c :unreachable {:why (:why walk) :walk (:text walk)}))
-        :continue)
+      (let [r (await (near/go-near! c centre (approach-range) {:doors :never :ways #{:walk :clear-seal}}))]
+        (if (and (= :blocked r) (not (await (near/risky-wait! c r))))
+          (let [walk (:data (:near-walk (ctx/mem c)))]
+            (finish! c :unreachable {:why (:why walk) :walk (:text walk)}))
+          :continue))
       (let [answer (await (pen-read/read! c (pen-opts c) #(= :unloaded (:reason %))))]
         (if (= :unloaded (:reason answer))
           (await (check-unknown! c answer))

@@ -201,7 +201,7 @@
         (case r
           :there :there
           :partial :partial
-          (if (near/risky-stay? c)
+          (if (await (near/risky-wait! c r))
             :partial
             (do (give-up! c k :unreachable)
                 (bump-row! c)
