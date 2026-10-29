@@ -456,7 +456,8 @@
         "full" (or (await (room! c))
                    (finish! c made {:reason :full :text "inventory is full and make-room freed nothing"}))
         "cannot" (finish! c made {:reason :cannot :detail (.-reason r) :text (str "cannot craft " item ": " (.-reason r))})
-        (give-up! c made :craft :craft-failed {:detail status})))))
+        "timeout" (give-up! c made :craft :craft-failed {:detail status})
+        (finish! c made {:reason :craft-failed :detail status :text (str "craft gave up: craft-failed " status)})))))
 
 (defn ^:async cleanup
   "However the call ended: dig up the table this call put down, once, unless :keep-table, a zone or claim refuses the dig

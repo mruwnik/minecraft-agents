@@ -324,6 +324,16 @@
           (is (= 2 cheap) "a goal worth one try's price is not worth a second at under a sure chance")
           (is (> dear cheap) "a dear goal tries again"))))))
 
+(deftest a-craft-that-fails-for-good-is-not-tried-again-however-dear-the-goal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3}] :blocks {"2,64,0" "crafting_table"}})
+              _ (.override (.-world p) "craft" (fn ^:async f [_ _ _] #js {:status "failed" :reason "no-recipe"}))
+              result (await (child-outcome eng job {:item "bread" :worth ##Inf} 12))]
+          (is (= :craft-failed (:reason result)))
+          (is (= 1 (count (calls p "craft"))) "only a timeout is worth a retry: a refusal repeats"))))))
+
 (deftest craft-hands-over-the-alternatives-of-a-missing-ingredient
   (async done
     (tu/run-async done
