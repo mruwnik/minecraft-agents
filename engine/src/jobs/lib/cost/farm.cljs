@@ -28,7 +28,7 @@
 
 (defn horizon-s
   "Seconds over which a crop still to grow is needed: the food reserve's days (cost.food/days). A crop ripe later than that
-  is worth nothing now, one ripe at once all its worth, as cost/wait-price prices a wait for a find."
+  is worth nothing now, one ripe at once all its worth."
   []
   (* food/days day-s))
 
@@ -64,7 +64,7 @@
 (def harvests
   "The harvests a crop at stage age growing at rate stages a second (crops/stages-per-s) and replanted at each cut is worth now: the mean
   over horizon-s of the harvests ripe by then (the k-th at its stages left plus k-1 whole growths), so a harvest ripe at once counts 1
-  and one past the horizon nothing, as cost/wait-price prices a wait for a find. Memoised: patch scans price every patch with it."
+  and one past the horizon nothing. Memoised: patch scans price every patch with it."
   (memoize
    (fn [crop age rate]
      (let [h (horizon-s)

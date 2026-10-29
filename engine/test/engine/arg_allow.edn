@@ -231,7 +231,6 @@
  :jobs.lib.danger/ranged-radius
  :jobs.lib.hostile-fight/leash
  :jobs.lib.loose/radius
- :jobs.lib.price/way-radius
  :jobs.lib.room-order/toss-below
  :jobs.lib.shelter.beds/max-days-awake
  :jobs.lib.shelter.keep/at-night?

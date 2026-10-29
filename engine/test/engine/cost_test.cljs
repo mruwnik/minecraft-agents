@@ -488,11 +488,6 @@
     (is (= (cost/worth-to {:respawn spawn-far :at {:x 0 :y 64 :z 0}} ["white_bed"] here) (cost/worth-to {:respawn spawn-far :at {:x 0 :y 64 :z 0}} ["red_bed" "white_bed"] here)))
     (is (zero? (cost/worth-to {:respawn spawn-far :at {:x 0 :y 64 :z 0}} [] here)))))
 
-(deftest waiting-costs-the-share-of-the-time-until-needed-all-of-it-from-then
-  (is (= 25 (cost/wait-price 100 30 120)))
-  (is (= 100 (cost/wait-price 100 300 120)) "a wait past the need loses all of it")
-  (is (= 100 (cost/wait-price 100 ##Inf)) "a wait with no date"))
-
 (deftest a-search-radius-grows-with-the-worth
   (is (> (cost/search-radius 600 16) (cost/search-radius 100 16) 0))
   (is (zero? (cost/search-radius 0 16))))

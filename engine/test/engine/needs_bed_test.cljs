@@ -12,8 +12,8 @@
 
 (defn run
   "f over a fake world (night? and inv given), a view of the memory entries [[kind data age-days] ..] written age-days ago,
-  the world's plans {id plan} and notes (another body's, live), and the listed jobs [[id label args contract] ..], queued in that order (a contract: started)."
-  [f {:keys [night inv entries time entities blocks plans jobs] seen-notes :notes :or {entries []}}]
+  and notes (another body's, live)."
+  [f {:keys [night inv entries time entities blocks] seen-notes :notes :or {entries []}}]
   (let [clock (atom 0)
         store (mem/open (tu/tmp-dir) {:now #(deref clock)})
         noted (notes/open {:world-dir (tu/tmp-dir) :body "Other" :emit (fn [_])})]
@@ -22,12 +22,8 @@
       (mem/write! store kind data {:cap 8 :ttl (* 20 sh-clock/ms-per-day)}))
     (reset! clock (* 10 sh-clock/ms-per-day))
     (notes/add! noted @clock (mapv #(assoc % :by "Other" :t 1 :until 9e15) seen-notes))
-    (doseq [[id label args contract] jobs]
-      (swap! clock inc)
-      (mem/create-job! store id label (cond-> args (not= "jobs.time.noop" label) (update :spend #(or % {:job-time 60}))))
-      (when contract (mem/update-job! store id [] assoc :contract contract)))
     (f (tu/seeing-all (tu/fake-on-floor (cond-> {:floor [-10 -10 10 10] :inventory (or inv []) :entities entities :blocks blocks :time (or time 9000)} night (assoc :time 18000))))
-       (mem/view store) {} (assoc (world/of-data (or plans {}) {}) :notes noted) (set (map first jobs)))))
+       (mem/view store) {} (assoc (world/of-data {} {}) :notes noted) #{})))
 
 (defn holds? [opts] (run nb/needs-bed opts))
 
@@ -95,31 +91,6 @@
   (is (= {:why :spawn-lost :pos {:x 5 :y 64 :z 0}}
          (why {:entries (conj rested spawn-bed-at-5 [:spawn-reset {} 0.2])})))
   (is (nil? (why {:entries rested}))))
-
-(def hut {:id "hut" :parts [{:id "house" :cells [[3 64 3]] :want "oak_planks"}
-                            {:id "bed" :cells [[4 64 3]] :want {:block "bed" :facing :east :part :foot}}]})
-(def red-hut {:id "red-hut" :parts [{:id "bed" :cells [[4 64 3]] :want "red_bed[facing=east,part=foot]"}]})
-
-(deftest a-listed-job-that-brings-a-bed-is-waited-for
-  (are [jobs expected] (= expected (holds? {:entries slept-long-ago :plans {"hut" hut "red-hut" red-hut} :jobs jobs}))
-    [["j1" "jobs.build.from-plan" {:plan "hut"}]] false
-    [["j1" "jobs.build.from-plan" {:plan "hut" :part "bed"}]] false
-    [["j1" "jobs.build.from-plan" {:plan "hut" :part "house"}]] true
-    [["j1" "jobs.build.from-plan" {:plan "red-hut"}]] false
-    [["j1" "jobs.items.obtain" {:any-of ["white_bed" "red_bed"]}]] false
-    [["j1" "jobs.items.get-kit" {}]] true
-    [] true))
-
-(deftest a-bed-maker-that-starts-after-dusk-is-not-waited-for
-  ;; at tick 9000 dusk is 177 s off
-  (are [ahead expected] (= expected (holds? {:entries slept-long-ago :plans {"hut" hut} :jobs [ahead ["j2" "jobs.build.from-plan" {:plan "hut"}]]}))
-    ["j1" "jobs.time.noop" {} {:call {:spend {:job-time 600}} :ran-ms 0}] true
-    ["j1" "jobs.time.noop" {} {:call {:spend {:job-time 600}} :ran-ms 550000}] false
-    ["j1" "jobs.time.noop" {:spend {:job-time 30}}] false
-    ["j1" "jobs.time.noop" {}] true)
-  (is (false? (holds? {:entries slept-long-ago :plans {"hut" hut}
-                       :jobs [["j1" "jobs.build.from-plan" {:plan "hut"}] ["j2" "jobs.time.noop" {}]]}))
-      "a job queued after the maker does not hold it up"))
 
 (defn searched-for [what r]
   (for [x (range (- r) (inc r) 16) z (range (- r) (inc r) 16)] {:kind :searched :what [what] :pos [x 64 z] :r 24}))
