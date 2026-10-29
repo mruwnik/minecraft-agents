@@ -42,12 +42,12 @@
 (defn spec [args] (list 'jobs.apiary.maintain (merge {:box box} args)))
 
 (defn ^:async scenario
-  "Submit the job with args in a world; run n ticks 700 ms apart; the setup map."
+  "Submit the job with args in a world; run n ticks 700 ms apart; the setup map. The fake world's rooms read dark, so the steps are asked at :worth ##Inf, which the pass worth (goal-worth-test) does not give."
   ([args w n] (scenario args w n identity))
   ([args w n tweak-jobs]
    (let [s (doto (h/setup w) (-> :p tu/seeing-all) (-> :p bt/calf-per-pair!))
          s (update s :eng #(update % :jobs tweak-jobs))]
-     (core/submit! (:eng s) (spec args) {})
+     (core/submit! (:eng s) (spec (merge {:worth ##Inf} args)) {})
      (await (tu/run-ticks (:eng s) (:clock s) n 700))
      s)))
 
@@ -201,7 +201,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (doto (h/setup (world {:inventory kit})) (-> :p tu/seeing-after-look))]
-          (core/submit! (:eng s) (spec {}) {})
+          (core/submit! (:eng s) (spec {:worth ##Inf}) {})
           (await (tu/run-ticks (:eng s) (:clock s) 60 700))
           (is (seq (calls s "look")))
           (is (= 1 (:harvested (step s :harvest))))
@@ -214,11 +214,11 @@
         (let [s (doto (h/setup (world {:inventory (inv "shears" 1) :raised? true})) (-> :p tu/seeing-after-look))]
           (core/submit! (:eng s) (spec {:ways #{:carried}}) {})
           (await (tu/run-ticks (:eng s) (:clock s) 10 700))
-          (is (= 8 (count (calls s "look"))) "one look around")
+          (is (= 9 (count (calls s "look"))) "one look around")
           (is (= [:nothing-to-do] (distinct (map :reason (events-of s :waiting)))))
           (is (nil? (done-event s))))))))
 
-(deftest a-body-that-sees-nothing-even-after-looking-finds-the-apiary-in-order
+(deftest a-body-that-sees-nothing-even-after-looking-waits-on-the-apiary
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -226,8 +226,9 @@
                   (-> :p (doto tu/blind (aset "sensedAt" (fn [_] #js {:unknown true})))))]
           (core/submit! (:eng s) (spec {:ways #{:carried}}) {})
           (await (tu/run-ticks (:eng s) (:clock s) 10 700))
-          (is (= 12 (count (calls s "look"))) "one look around, not one per run")
-          (is (= :already (:cause (done-event s)))))))))
+          (is (= 16 (count (calls s "look"))) "one look around, not one per run")
+          (is (= [:nothing-to-do] (distinct (map :reason (events-of s :waiting)))) "a pass over an area nothing of which is seen is worth little: it waits")
+          (is (nil? (done-event s))))))))
 
 (deftest a-fully-seen-idle-apiary-does-not-look
   (async done

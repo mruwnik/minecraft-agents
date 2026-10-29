@@ -86,14 +86,17 @@
     (is (= (+ (worth 'jobs.farm.maintain p args) (:value (cost/goal-value [(item "wheat" 28)])))
            (worth 'jobs.farm.maintain p (assoc args :chest {:x 8 :y 64 :z 0}))) "the wheat above the 2 kept as bait, stored at its goal-value")))
 
-(deftest an-apiary-pass-is-worth-the-honeycomb-of-its-ripe-hive
+(deftest an-apiary-pass-is-worth-the-honeycomb-of-its-ripe-hive-and-the-produce-it-stores
   (let [args {:box am/box :with :either :carry {} :ways #{:carried}}
         apiary #(worth 'jobs.apiary.maintain % args)
         seen #(tu/seeing-all (tu/fake-on-floor (assoc-in (am/world %) [:blocks "2,65,0"] "white_carpet")))
         p (seen {:inventory (am/inv "shears" 1)})]
     (is (= (:value (cost/goal-value [(item "honeycomb" 3)])) (apiary p)) "a carpeted fire, a ripe hive")
     (is (zero? (apiary (seen {:inventory (am/inv "shears" 1) :level 0}))) "no hive ripe")
-    (is (= ##Inf (apiary (doto (tu/blind (tu/fake-on-floor (am/world {:inventory (am/inv "shears" 1)}))) (aset "sensedAt" (fn [_] #js {:unknown true}))))) "an area never seen")))
+    (is (= (:value (cost/goal-value [(item "honeycomb" 7)]))
+           (worth 'jobs.apiary.maintain (seen {:inventory (am/inv "shears" 1 "honeycomb" 4)}) (assoc args :chest am/chest))) "the hive's 3 combs and the 4 carried, stored")
+    (is (= (* (cost/field-share :ripe 0 0) (:value (cost/goal-value [(item "honeycomb" 3)])))
+           (apiary (doto (tu/blind (tu/fake-on-floor (am/world {:inventory (am/inv "shears" 1)}))) (aset "sensedAt" (fn [_] #js {:unknown true}))))) "an area never seen: one hive at the prior ripe share")))
 
 (def forest {:id "forest" :parts [{:id "a" :cells [[3 64 0]] :want {:tree "oak"}}]})
 

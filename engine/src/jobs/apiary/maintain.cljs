@@ -185,18 +185,28 @@
 (def hive-yield "What one ripe hive gives a harvest with each tool: the game's 3 honeycomb to shears, a honey bottle to a bottle." {"shears" {:name "honeycomb" :count 3} "glass_bottle" {:name "honey_bottle" :count 1}})
 
 (defn worth-of
-  "Seconds a root pass is worth: the cost/goal-value of what its harvest takes from the hives it would work (hive-yield of
-  the tool carried, else of the first :with allows); ##Inf while part of the area was never seen or a guard, breed or
-  deposit would run, which no price covers."
+  "Seconds a root pass is worth, each step only while it would run: harvest the cost/goal-value of what it takes from the
+  hives it would work (hive-yield of the tool carried, else of the first :with allows); guard one hive's yield for
+  each open fire smoking a ripe hive (harvest waits on it); breed one hive's yield (the harvest one more bee fills); deposit the goal-value of the
+  produce carried above :carry. A part of the area never seen adds one hive's yield at the ripe share the hives seen give
+  (cost/field-share, as farm tend prices unseen cells)."
   [c]
   (let [args (need/args-with-ways c)
         f (facts c)
         runs? #(:call (decide % args f))
-        tool (or (:tool f) (apiary/tool-item (if (= :bottle (:with args)) :bottle :shears)))]
-    (cond
-      (or (look/unseen? (:primitives c) (apiary/watched-cells c)) (some runs? [:guard :breed :deposit])) ##Inf
-      (runs? :harvest) (* (count (:todo (:hives f))) (:value (cost/goal-value [(hive-yield tool)])))
-      :else 0)))
+        tool (or (:tool f) (apiary/tool-item (if (= :bottle (:with args)) :bottle :shears)))
+        yield (:value (cost/goal-value [(hive-yield tool)]))
+        carried (u/inventory (:primitives c))
+        stored (keep (fn [n] (let [over (- (reduce + 0 (map :count (filter #(= n (:name %)) carried))) (get (:carry args) n 0))]
+                               (when (pos? over) {:name n :count over})))
+                     (:stored f))]
+    (+ (if (look/unseen? (:primitives c) (apiary/watched-cells c))
+         (* yield (cost/field-share :ripe (:ripe (:hives f)) (:hives (:hives f))))
+         0)
+       (if (runs? :harvest) (* (count (:todo (:hives f))) yield) 0)
+       (if (runs? :guard) (* (count (:unsafe f)) yield) 0)
+       (if (runs? :breed) yield 0)
+       (if (runs? :deposit) (:value (cost/goal-value stored)) 0))))
 
 (defn can-start?
   "Later :nothing-to-do when nothing would run, with a look first while part of the area was never seen."
