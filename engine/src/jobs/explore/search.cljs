@@ -18,6 +18,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.food-animals :as food-animals]
+            [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.surface-up :as surface-up]
             [jobs.lib.look :as look]
@@ -70,7 +71,7 @@
   The ending's data: {:found [{:what :pos :id? (the uuid) :entity-id? (the number entities and combat.attack use) :noted? :by?}] :coverage {:legs :scans
   :failed [{:pos :reason}] :skipped :farthest} :why :text} and the ending:
   - :done: :count found.
-  - :nothing-possible :distance (no leg left), :no-way-up (animals that live at the surface, the body under rock and no stair up), :legs (::max-legs walked), :stuck (three failed walks in a row) or :price (with :worth, the next walk costs more than is left of it times the chance a look there finds one, cost/look-leg-chance: farm animals' falls with the ground searched round there in vain, ore's is that of the rock seen; 1 for other blocks).
+  - :nothing-possible :distance (no leg left), :no-way-out (no leg left, the body shut in a closed room with nothing seen outside; at night it first waits :dark for dawn while that costs no more than the find is worth), :no-way-up (animals that live at the surface, the body under rock and no stair up), :legs (::max-legs walked), :stuck (three failed walks in a row) or :price (with :worth, the next walk costs more than is left of it times the chance a look there finds one, cost/look-leg-chance: farm animals' falls with the ground searched round there in vain, ore's is that of the rock seen; 1 for other blocks).
   - :limit-reached :job-time (the call's :spend :job-time, default ::job-time-s) or :wall-time (default ::wall-time-s); the engine ends it, with the data of done? ({:found :coverage :why}) and neither event; with :least targets found (default 1) the engine ends it :done instead.
   - A call with no :target and no :patch never runs (:bad-args).
 
@@ -79,7 +80,7 @@
 
   Memory: :origin :legs :scans :found :tried :failed :skipped :farthest :failed-in-row :spent and :leg-price (with :worth: the prices of the walks done, and of the one under way) :stepped (the nearest a step has come to each unseen column: a step must end nearer) :blocked (the ways legs
   failed since the last arrival) :deferred (unloaded legs set aside while a sweep goes on), and :leg while
-  a walk is under way, so a cut or restart resumes it (:shelter-held while it waits for light).")
+  a walk is under way, so a cut or restart resumes it.")
 
 (def diagonal 0.7071)
 (def headings {:north [0 -1] :east [1 0] :south [0 1] :west [-1 0]
@@ -595,19 +596,26 @@
   (let [s (ready/sheltered-dark c)]
     (when (= :later (first s)) s)))
 
+(defn shut-in-wait
+  "Later :dark while no leg is left and the body is shut in a closed room under a dark sky (sh-inside/night-sheltered): nothing
+  is seen outside to walk to and dawn is the cheapest way to see it, the night's seconds left (sh-sense/sky-in) against what
+  the find is worth (cost/affords?, unpriced: always); else nil."
+  [c]
+  (let [p (:primitives c)
+        wait-s (when (sh-inside/night-sheltered p (:data (ctx/latest c :shelter))) (sh-sense/sky-in p))]
+    (when (and wait-s (pos? wait-s) (or (nil? (:worth (:args c))) (cost/affords? wait-s (:worth (:args c)))))
+      (contract/later :dark "shut in a room at night with no way out seen, waits for dawn to look outside"
+                      :recheck-after-ms (* 1000 wait-s) :wait-ms (* 1000 wait-s)))))
+
 (defn ^:async walk!
-  "One go-to call toward the leg (the last one before the failed legs in a row end the search may dig out); on its end book the leg arrived or failed. :continue when go-to yields
-  or gave the leg up for the body's own shelter (result/body-side?) under a dark sky: the night keeps the seal, so the round
-  waits :dark (sheltered-dark) with the leg kept, and go-to is not asked again till that lifts. Else :again
-  (or the ending when the failed legs in a row end the search)."
+  "One go-to call toward the leg (the last one before the failed legs in a row end the search may dig out); on its end book the leg arrived or failed. :continue when go-to yields or
+  the body is shut in a room under a dark sky (sheltered-dark, asked before go-to, which would dig out of a hut): the night
+  keeps the seal, so the round waits :dark with the leg kept. Else :again (or the ending when the failed legs in a row end the search)."
   [c]
   (let [leg (:leg (ctx/mem c))
         [x y z] leg
-        held (when (:shelter-held (ctx/mem c)) (sheltered-dark c))
-        r (if held :held (await (child/call-walk* c :leg (leg-args c leg))))
-        wait (or held (when (result/body-side? r) (sheltered-dark c)))
-        _ (ctx/update-mem! c #(if wait (assoc % :shelter-held true) (dissoc % :shelter-held)))
-        r (if wait (do (some-> (:child-wait c) (reset! (contract/status-cause wait))) :continue) r)]
+        wait (sheltered-dark c)
+        r (if wait (do (some-> (:child-wait c) (reset! (contract/status-cause wait))) :continue) (await (child/call-walk* c :leg (leg-args c leg))))]
     (if (= :continue r)
       :continue
       (let [{:keys [in-water why] :as data} (:data r)
@@ -710,6 +718,10 @@
                           (await (walk! c))))
               more :again
               (and (empty? unloaded) (pos? held)) (do (ctx/update-mem! c dissoc :blocked) :again)
+              (and (empty? unloaded) (sh-sense/shut-in-room? (:primitives c)))
+              (if-let [w (shut-in-wait c)]
+                (do (some-> (:child-wait c) (reset! (contract/status-cause w))) :continue)
+                (finish! c :not-found :no-way-out))
               (empty? unloaded) (finish! c :not-found :distance)
               (far-unloaded c unloaded) (or (await (price-leg! c (far-unloaded c unloaded) false))
                                             (do (ctx/update-mem! c assoc :leg (far-unloaded c unloaded) :leg-column nil)

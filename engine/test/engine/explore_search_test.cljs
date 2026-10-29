@@ -23,6 +23,9 @@
             [jobs.lib.child :as child]
             [plan.shape :as shape]
             [jobs.explore.search :as search]
+            [engine.contract :as contract]
+            [jobs.lib.ready :as ready]
+            [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]))
 
 (def ground
@@ -473,6 +476,18 @@
           (is (= 8 (get-in e [:coverage :skipped])))
           (is (= :distance (:why e))))))))
 
+(deftest a-search-with-no-leg-left-shut-in-a-room-says-it-has-no-way-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [marks (for [[x z] (search/spiral-points [0 0] 16 23)]
+                      {:kind :searched :what ["diamond_block"] :pos [x 64 z] :r 24 :by "Other" :t 1 :until 9e15})
+              s (with-redefs [sh-sense/shut-in-room? (fn ([_] true) ([_ _] true))]
+                  (await (search! {:target "diamond_block" :max-distance 23} {} 400 #(write-other! % "Other" marks))))
+              e (not-found-of s)]
+          (is (= :no-way-out (:why e)))
+          (is (re-find #"\(no-way-out\) after 0 legs" (:text e))))))))
+
 (deftest a-spot-walked-toward-twice-without-a-look-is-not-walked-again
   (async done
     (tu/run-async done
@@ -713,21 +728,28 @@
                                 #(mem/write! (:store (:eng %)) :shelter {:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built} {:cap 10 :ttl st/day-ms})))]
           (is (seq (walks s)) "no flat dark hold: each leg's go-to prices its own route"))))))
 
-(deftest a-leg-given-up-for-the-sealed-night-shelter-waits-for-light-not-stuck
+(deftest a-body-shut-in-a-room-at-night-waits-for-light-before-asking-go-to-to-dig-out
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [kept {:kind :nothing-possible :cause {:reason :unreachable :why :seal-kept}
-                    :data {:inside-own-shelter {:x 0 :y 64 :z 0} :arrived false}}
-              calls (atom 0)
-              s (with-redefs [child/call-walk* (fn [_ _ _] (swap! calls inc) (js/Promise.resolve kept))]
+        (let [calls (atom 0)
+              s (with-redefs [child/call-walk* (fn [_ _ _] (swap! calls inc) (js/Promise.resolve {:kind :done}))
+                              ready/sheltered-dark (constantly (contract/later :dark "sealed in for the night"))]
                   (await (search! {:target "diamond_block" :max-distance 23}
-                                  {:time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks night-pit :light {[0 64 0] [0 0] [0 65 0] [0 0]}}
-                                  40
-                                  #(mem/write! (:store (:eng %)) :shelter {:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built} {:cap 10 :ttl st/day-ms}))))]
+                                  {:time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks night-pit}
+                                  40)))]
           (is (not (finished? s)) "a kept seal is no failed leg")
-          (is (= 1 @calls) "go-to is not asked again while the night keeps the seal")
+          (is (zero? @calls) "go-to digs out of a hut that is no shelter of its own: it is not asked while the night keeps the seal")
           (is (some #(and (= :waiting (:kind %)) (= :dark (:reason %))) @(:seen s))))))))
+
+(deftest shut-in-wait-prices-the-night-against-the-worth-of-the-find
+  (let [c (fn [worth] {:args {:worth worth}})]
+    (are [worth left expected] (= expected (with-redefs [ctx/latest (constantly nil) sh-inside/night-sheltered (constantly :room) sh-sense/sky-in (constantly left)]
+                                             (some-> (search/shut-in-wait (c worth)) first)))
+      nil 300 :later
+      1000 300 :later
+      100 300 nil
+      nil 0 nil)))
 
 ;; live (Juniper, card e51d1fe9): three legs east all failed at the same rim and the search ended stuck; a leg that lies
 ;; the way a leg just failed from here waits until a leg arrives, so the next leg goes another way

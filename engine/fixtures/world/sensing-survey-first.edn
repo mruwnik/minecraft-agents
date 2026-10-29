@@ -147,8 +147,7 @@
    :limit-s 90}
 
   ;; Night: the body is shut in a stone room with a torch and a glass window at night; a search for a target outside waits for day in the room
-  ;; (a room with no seen way out holds nothing: ready/sheltered-dark has no dark cell past the wall to wait for, and the search ends :distance with no leg)
-  ;; (job.waiting :dark, "dark sky above ground") and its job time does not run out meanwhile; once the time is set to day it leaves and finds the target.
+  ;; (job.waiting :dark) and its job time does not run out meanwhile; once the time is set to day it leaves and finds the target.
   ;; Run with --allow-time and a shared --time-log.
   {:name "search-waits-the-night-in-a-room-without-timing-out"
    :time :night-exclusive
@@ -164,4 +163,22 @@
             {:no-event {:source :job :kind :stopped} :for-s 70 :of-job true}
             {:no-event {:source :job :kind :limit-reached} :for-s 70}
             {:event {:source :job :kind :completed :data {:reason :found}} :within-s 200 :of-job true}]
+   :limit-s 220}
+
+  ;; Night: shut in a stone room with a torch and no window, nothing seen outside, no leg to walk: the search waits for dawn (job.waiting :dark,
+  ;; its job time does not run out) and then ends with the honest reason :no-way-out, never :distance after 0 legs.
+  ;; Run with --allow-time and a shared --time-log.
+  {:name "search-sealed-in-a-room-waits-for-dawn-then-says-no-way-out"
+   :time :night-exclusive :time-why :dawn-decision
+   :plot {:height 8 :floor "grass_block" :length 64 :width 32}
+   :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"] [:set [9 0 9] "torch"]]
+   :body {:at [12.5 0 12.5] :inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :scan-radius 8
+                                     :use-notes false :settings {:jobs.explore.search/max-distance 60 :jobs.explore.search/max-legs 16} :spend {:job-time 45}})]
+         [:wait-s 70]
+         [:time-set 1000]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :dark}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 70 :of-job true}
+            {:no-event {:source :job :kind :limit-reached} :for-s 70}
+            {:event {:source :job :kind :stopped :data {:why :no-way-out}} :within-s 120 :of-job true}]
    :limit-s 220}]}

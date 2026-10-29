@@ -722,12 +722,22 @@
       (update :blocks merge {"0,30,1" "dirt" "0,31,1" "dirt" "0,30,2" "air" "0,31,2" "air"})
       (assoc :light {[0 30 2] [15 0] [0 31 2] [15 0]})))
 
+(def lit-hut-with-window
+  "A torch-lit 3x3 room in rock at y 64 with a glass window in its east wall, the dark open land of the night seen past it."
+  (let [room (hollow 0 2 64 -1 1)
+        out (for [dy [0 1] x [4 5]] [x (+ 64 dy) 0])]
+    (-> room
+        (update :blocks merge {"3,64,0" "glass" "3,65,0" "glass"} (into {} (for [[x y z] out] [(str x "," y "," z) "air"])))
+        (assoc :light (merge (into {} (for [x (range 0 3) y [64 65] z (range -1 2)] [[x y z] [0 14]]))
+                             (into {} (for [cell out] [cell [15 0]])))))))
+
 (deftest a-night-above-holds-a-walk-out-of-a-room-only-when-its-way-out-is-dark-till-dawn
   (are [world shelter expected] (= expected (kind-in-shelter ready/sheltered-dark world shelter))
     night-hut nil :later
     mine-room nil :ok
     mine-room dug-in-entry :ok
     ravine-niche {:pos {:x 0 :y 30 :z 0}} :later
+    lit-hut-with-window nil :later
     (assoc night-hut :time st/noon) nil :ok))
 
 (deftest felling-a-tree-outside-the-night-shelter-waits-for-day-instead-of-walking-out
