@@ -1,5 +1,5 @@
-;; A dig of the ore beside the body in a wide dark hall stays a click (10 s), priced like any exposure (jobs.lib.price/priced); priced over
-;; what the body may risk (risk-share 0), it goes ahead only with one torch for its cell (ready/dark-near-ok, cost/dark-or-lit) and hangs it.
+;; A dig of the ore beside the body in a wide dark hall stays its walk and dig (mine.expect/stay-s), priced like any exposure (jobs.lib.price/priced);
+;; priced over what the body may risk (risk-share 0), it goes ahead only with one torch for its cell (ready/dark-near-ok, cost/dark-or-lit) and hangs it.
 ;; Hall x 5..40, z 4..28, y 0..1, unlit; the body in a 1-cell alcove at [4 0 16] facing west at iron ore in the wall [3 1 16].
 ;; Stone mass x 2..44, z 2..30, y 0..6.
 {:defaults
@@ -23,6 +23,12 @@
    :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 16]]}
    :expect [{:event {:source :job :data {:reason :exposed}} :within-s 60 :of-job true}]
    :after [[:block [3 1 16] "iron_ore"] [:item "raw_iron" [:= 0]]]}
+  {:name "no-risk-allowed-ore-at-the-feet-in-the-open-hall-gets-a-floor-torch"
+   :settings {:jobs.lib.cost.risk/risk-share 0}
+   :blocks [[:set [3 1 16] "stone"] [:set [21 0 16] "iron_ore"]]
+   :body {:at [20.5 0 16.5] :yaw 270}
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:block [21 0 16] "air"] [:item "raw_iron" [:= 1]] [:item "torch" [:= 7]] [:block [20 0 16] "torch"]]}
   {:name "a-torch-in-the-ores-only-open-face-leaves-it-diggable"
    :blocks [[:set [4 1 16] "wall_torch[facing=south]"]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]

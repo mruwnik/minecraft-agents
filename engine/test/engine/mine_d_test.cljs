@@ -162,21 +162,26 @@
           (is (nil? (:tunnel (job-mem s))) "no tunnel was cut")
           (is (some #{[6 64 0]} (dug-cells s)) "the ore is dug"))))))
 
-(deftest a-dark-dig-beside-the-start-hangs-one-torch-in-its-cell-off-the-ores-faces-and-none-when-it-has-none
+(deftest a-dark-dig-beside-the-start-hangs-one-torch-in-its-cell-never-on-the-ore-and-none-when-it-has-none
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [run (fn ^:async run-dig [inv]
-                    (let [p (tu/fake-on-floor (assoc (rock-world {"1,65,0" "iron_ore"}) :inventory inv :floor-block floor-block))
+        (let [run (fn ^:async run-dig [world inv]
+                    (let [p (tu/fake-on-floor (assoc world :inventory inv :floor-block floor-block))
                           _ (swap! (fake/state p) assoc :light-default [0 0])
                           s (start {:p p})]
                       (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 0 :ways #{:seen :carried}}) {})
                       (await (run-ticks s 150))
                       s))
-              lit (await (run [{:name "iron_pickaxe" :count 1} {:name "torch" :count 4}]))
-              dark (await (run bare-pickaxe))]
-          (is (= [[0 64 0]] (mapv #(let [q (.-pos (.-args %))] [(.-x q) (.-y q) (.-z q)]) (calls lit "place"))) "one floor torch at the feet: the head cell is the ore's open face")
-          (is (some #{[1 65 0]} (dug-cells lit)) "the ore is dug")
+              torches [{:name "iron_pickaxe" :count 1} {:name "torch" :count 4}]
+              placed (fn [s] (mapv #(let [q (.-pos (.-args %))] [(.-x q) (.-y q) (.-z q)]) (calls s "place")))
+              pocket (await (run (rock-world {"1,65,0" "iron_ore"}) torches))
+              hall (await (run (assoc (rock-world {}) :blocks {"1,64,0" "iron_ore"}) torches))
+              dark (await (run (rock-world {"1,65,0" "iron_ore"}) bare-pickaxe))]
+          (is (= [[0 65 0]] (placed pocket)) "a wall torch on the pocket's side wall, in the head cell the ore is dug through")
+          (is (some #{[1 65 0]} (dug-cells pocket)) "the ore is dug")
+          (is (= [[0 64 0]] (placed hall)) "no wall in an open hall: a floor torch at the feet, beside the ore at feet level")
+          (is (some #{[1 64 0]} (dug-cells hall)) "the ore is dug")
           (is (empty? (calls dark "place")) "no torch to hang")
           (is (some #{[1 65 0]} (dug-cells dark)) "the dig goes on dark"))))))
 

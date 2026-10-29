@@ -5,7 +5,6 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.lib.cost.risk :as risk]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look :refer [cell-of headings glance!]]
             [jobs.lib.need :as need]
@@ -18,29 +17,8 @@
             [jobs.lib.torch-stock :as stock]
             [jobs.lib.trip :as trip]
             [jobs.lib.util :as u]
-            [jobs.lib.work-place :as work-place]
             [jobs.gather.mine.end :refer [stop!]]
-            [jobs.gather.mine.targets :refer [step-cell]]
-            [jobs.gather.mine.way-set :as mw]))
-
-(defn seen-in-view?
-  "Whether :seen is a way of the call and a seen block of its :block is in view: the dig takes it from where it stands first."
-  [c]
-  (let [{:keys [block radius] :as args} (:args c)]
-    (boolean (and (mw/seen? args) (work-place/nearest-block c block (or radius 16))))))
-
-(defn stay-s
-  "Seconds a mine or dig-for call stays at its place: a click's while it digs a seen block (seen-in-view?), else a long stay's."
-  [c]
-  (risk/work-s (if (seen-in-view? c) :click :long)))
-
-(defn torch-way
-  "The torch way (ready/dark-near-ok) of a mine or dig-for call: one torch at the spot while it digs a seen block (seen-in-view?,
-  spot-torch!), else its lit blocks (way-set/lit-blocks), more torches by its own get."
-  [c]
-  (let [args (:args c)]
-    (when-let [n (if (seen-in-view? c) (when (:torches args) 1) (mw/lit-blocks args))]
-      (stock/torch-way c n (stock/fetch-allows? c)))))
+            [jobs.gather.mine.targets :refer [step-cell]]))
 
 (a/defargs settings
   {::torch-min {:default 2 :doc "A torch round crafts more when fewer torches than this are carried." :spec (a/int-in 0 nil)}
@@ -177,14 +155,14 @@
 
 (defn spot-torch-due?
   "Whether a dig from the line (no tunnel cut, so no branch site) stands in a dark cell no hung torch reaches, with torches
-  carried or craftable: its torch way (torch-way) is that one torch."
+  carried or craftable: the one torch of its torch way (mine.expect/torch-way)."
   [c]
   (let [here (vec-of (cell-of (u/self-pos c)))]
     (boolean (and (on? c) (nil? (:tunnel (ctx/mem c))) (nil? (branch-site (ctx/mem c) (cell-of (u/self-pos c))))
                   (torch/lightable? (:primitives c)) (due-spot c [here] [] here)))))
 
 (defn ^:async hang-torch!
-  "Hang a torch on the cell behind the body (a branch: behind it on its way off the tunnel; a cell pos: in the body's own cell, never on a face of pos, which the dig needs open), after a glance at it and
+  "Hang a torch on the cell behind the body (a branch: behind it on its way off the tunnel; a cell pos: in the body's own cell, never hung on pos, whose dig would drop it), after a glance at it and
   its side walls when the support is not yet seen."
   [c branch]
   (let [p (:primitives c)
@@ -196,7 +174,7 @@
                              (map? branch) {:dir (toward here branch) :site here}
                              branch (branch-site (ctx/mem c) here)
                              :else {:dir (headings (:heading tunnel)) :site (step-cell tunnel (dec (:steps tunnel)))})
-        clear-of (if (map? branch) (let [{:keys [x y z]} (cell-of branch)] #(not= 1 (reduce + (map (comp js/Math.abs -) % [x y z])))) (constantly true))
+        clear-of (if (map? branch) (let [ore (vec-of (cell-of branch))] (fn [_ on] (not= ore on))) (constantly true))
         pick (fn [] (when site (torch/torch-at dir [(:x site) (:y site) (:z site)] (placement/eye (u/self-pos c)) block-at clear-of)))
         choice (or (let [c0 (pick)] (when-not (:refused c0) c0))
                    (when site (let [[dx dz] dir] (await (glance! c [[(- dx) (- dz)] [(- dz) dx] [dz (- dx)]]))))

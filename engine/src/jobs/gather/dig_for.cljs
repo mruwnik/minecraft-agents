@@ -16,6 +16,7 @@
             [jobs.gather.mine.branch :as branch]
             [jobs.gather.mine.side :as wall]
             [jobs.gather.mine.targets :as targets :refer [owed reach kinds items main-block carried rules-in scan snapshot way-floor last-exit? skip! skip-failed! skip-unreachable! stalled! drop-in-line? next-target!]]
+            [jobs.gather.mine.expect :as expect]
             [jobs.gather.mine.torches :as torches]
             [jobs.gather.mine.tunnel :as tunnel]
             [jobs.gather.mine.way-set :as mw]
@@ -109,7 +110,7 @@
 
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 
-(def safe? (ready/unless-outmatched (price/with-stay (ready/dark-near-ok torches/torch-way work-place/dig-spot (ready/safe-at-or-roaming work-place/dig-spot true)) torches/stay-s true)))
+(def safe? (ready/unless-outmatched (price/with-stay (ready/dark-near-ok expect/torch-way work-place/dig-spot (ready/safe-at-or-roaming work-place/dig-spot true)) expect/stay-s true)))
 
 (def fit? (ready/fit-for :long))
 

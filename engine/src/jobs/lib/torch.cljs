@@ -59,7 +59,8 @@
 (defn torch-at
   "How to hang a torch for the cell feet ([x y z]) of a run going dir ([dx dz]) from the eye: a wall torch in the head
   cell on the first side wall (left, then right of the run) that takes it, else a floor torch in the feet cell:
-  {:cell :block :click}, or {:refused :no-support}. ok? (default: any), a fn of a cell, leaves out the cells it refuses."
+  {:cell :block :click}, or {:refused :no-support}. ok? (default: any), a fn of the torch's cell and the
+  cell it hangs on, leaves out the torches it refuses."
   ([dir feet eye block-at] (torch-at dir feet eye block-at (constantly true)))
   ([dir [x y z :as feet] eye block-at ok?]
    (let [head [x (inc y) z]
@@ -67,8 +68,8 @@
          wall (fn [d] (assoc (placement/click {:block "wall_torch" :facing (facing-name (mapv - d))} head eye world)
                              :cell head :block "wall_torch"))
          floor (assoc (placement/click "torch" feet eye world) :cell feet :block "torch")]
-     (or (when (ok? head) (first (remove :refused (map wall (side-dirs dir)))))
-         (when (and (ok? feet) (not (:refused floor))) floor)
+     (or (first (remove :refused (map wall (filter #(ok? head (mapv + head %)) (side-dirs dir)))))
+         (when (and (ok? feet [x (dec y) z]) (not (:refused floor))) floor)
          {:refused :no-support}))))
 
 (defn ^:async place!
