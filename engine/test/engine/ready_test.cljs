@@ -440,6 +440,18 @@
       ready/safe-at-from-out :ok
       ready/safe-at-from :never)))
 
+(deftest the-jobs-that-hang-their-own-torches-dig-on-in-a-dark-hall-near-the-body
+  (let [hall [:never "dark hall" {:reason :exposed :lowered-by #{:torch} :chance 0.004}]
+        near {:x 3 :y 64 :z 0}
+        far {:x 40 :y 64 :z 0}]
+    (with-redefs [ready/at-status (fn [_ _] hall) ready/hall-status (fn [_ _] hall)]
+      (are [safe args expected] (= expected (first (safe (assoc (ctx-of (assoc tunnel :time st/noon)) :args args))))
+        mine/safe? {:at near} :ok
+        dig-for/safe? {:at near} :ok
+        strip-tunnel/safe? {:heading "east"} :ok
+        mine/safe? {:at far} :never
+        (ready/safe-at-by-night (constantly near)) {} :never))))
+
 (deftest an-unseen-cell-a-look-would-show-asks-for-a-look-at-it
   (let [s (showing #((ready/safe-at (constantly outside)) (ctx-of open-night)))]
     (is (= :look (first s)))
