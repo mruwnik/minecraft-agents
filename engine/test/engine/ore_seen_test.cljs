@@ -76,6 +76,16 @@
           (is (= :done (:status r)) (pr-str r))
           (is (= ["air" "air"] [(block-at p [2 63 0]) (block-at p [-2 63 0])])))))))
 
+(deftest the-job-ignores-a-mark-of-a-job-no-longer-listed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup room)]
+          (mem/write! (:store eng) :ore-mark (assoc mark :job "gone" :leave ["coal_ore"]) {:cap 8 :ttl 600000})
+          (let [r (await (tu/child-outcome eng 'jobs.gather.pick-ores {} 60))]
+            (is (= :done (:status r)) (pr-str r))
+            (is (= "air" (block-at p [2 63 0])))))))))
+
 (defn store-ctx
   "A ctx over a real memory store, for the root job \"j1\" at slots."
   [slots args]

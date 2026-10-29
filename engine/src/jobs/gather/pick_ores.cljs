@@ -5,14 +5,15 @@
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.checks :as checks]
+            [jobs.lib.loose :as loose]
             [jobs.lib.ore-pick :as ore-pick]
             [jobs.lib.pace :as pace]
             [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]))
 
 (def doc
-  "The :ore-seen trigger's job: dig the ore a mining job passes. It reads what the live mining jobs dig themselves
-  (jobs.lib.ore-pick marks), then picks the seen ores exposed within reach one after another (jobs.lib.ore-pick/pick!,
+  "The :ore-seen trigger's job: dig the ore a mining job passes. It reads the body-memory marks (jobs.lib.ore-pick) of the listed mining jobs
+  (a dead job's mark is no mark) for what they dig themselves, then picks the seen ores exposed within reach one after another (jobs.lib.ore-pick/pick!,
   a blocks.dig child each, back to the stand between). Cells the trigger saw and this run could not take are
   remembered (:ore-left, 5 min), so the trigger does not fire for them again.
   Ends :done with data {:picked [{:cell :block :got}]} when it dug ore, else nothing-possible :none-picked. A call that
@@ -31,7 +32,7 @@
 (def s-per-ore 4)
 
 (defn opts-of [c]
-  (let [m (ore-pick/merged (ore-pick/marks (ctx/view c) nil))]
+  (let [m (ore-pick/merged (ore-pick/marks (ctx/view c) (loose/live-ids (ctx/view c) nil)))]
     (assoc m :left (ore-pick/left-cells (ctx/view c)))))
 
 (defn seen-cells
