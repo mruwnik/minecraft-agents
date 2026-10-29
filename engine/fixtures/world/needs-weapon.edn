@@ -24,13 +24,13 @@
    :expect [{:event {:source :reflex :kind :fired} :within-s 20}
             {:count-event {:source :job :kind :obtain.exploring} :for-s 25 :at-most 3}]
    :limit-s 40}
-  ;; Card 1c50b7f5: a sword is worth less than a search (a :priced obtain): with no wood in sight the reflex does not walk off to look. A sealed lit room.
-  {:name "no-wood-in-sight-no-search-for-a-sword"
+  ;; Cards 1c50b7f5, 96c23f9a: the reflex fires with no hostile near, so a sword is worth its goal price (about 10 s), not a loss averted: with no wood in sight the obtain looks only as far as that pays, a first leg of about 4 s does. A sealed lit room.
+  {:name "no-wood-in-sight-searches-only-as-far-as-a-sword-is-worth"
    :time :any
    :blocks [[:fill [8 0 8] [24 4 24] "glowstone" :hollow]]
    :body {:at [16.5 1 16.5]}
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :needs-weapon}} :within-s 20}
-            {:no-event {:source :job :kind :obtain.exploring} :for-s 25}]
+            {:event {:source :job :kind :obtain.exploring} :within-s 25}]
    :limit-s 40}
   ;; Card 1c50b7f5: a get-kit queued behind a short wait (its :job-time budget says so) makes the sword first itself, so the reflex waits for it (registered once the kit is listed).
   {:name "listed-get-kit-is-waited-for"
