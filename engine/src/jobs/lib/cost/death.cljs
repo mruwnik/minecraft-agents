@@ -36,7 +36,7 @@
    ::spawn-horizon-s {:default 1200 :spec (a/num-in 0 nil)
                       :doc "Seconds a respawn point is priced over (spawn-worth): one in-game day, after which the needs-bed errand comes again."}
    ::unknown-respawn-blocks {:default 90 :spec (a/num-in 0 nil)
-                             :doc "Blocks of walk back priced for a death of a body that knows no respawn (before the game sends its spawn): the median of 48 deaths in the trial bodies' events, death to respawned (quartiles 31 and 345), 2026-10-29."}
+                             :doc "Blocks of walk back priced for a death of a body that knows no respawn (before the game sends its spawn): near the median of 113 deaths in the trial bodies' events (probes left out), death to respawned: 83 (quartiles 48 and 226). Recount: node tools/event-counts.mjs respawn-distance, 2026-10-29."}
    ::memory-ms {:default 7200000 :spec (a/num-in 1 nil)
                 :doc "Milliseconds over which the memory of a death fades from full weight to none."}
    ::terrain-rate {:default 4 :spec (a/num-in 0 nil)
