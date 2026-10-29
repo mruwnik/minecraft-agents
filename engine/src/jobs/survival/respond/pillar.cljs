@@ -129,10 +129,10 @@
     (when item
       (doseq [cell (map #(escape/up feet %) (range 1 (+ 2 (pillar-height))))]
         (when (look/unknown? p cell) (await (look/look-at! c cell)))))
-    (when (and item (not (pillar-ok? (escape/block-at-of p) feet)))
+    (when (and item (not (pillar-fits? p feet)))
       (when-let [zone (not-empty (unseen-zone p feet))]
         (await (look/look-unknown! c zone))))
-    (when (and item (pillar-ok? (escape/block-at-of p) feet))
+    (when (and item (pillar-fits? p feet))
       (let [cells (mapv #(escape/up feet %) (range (pillar-height)))
             refusal (some #(access/trespass-refusal (access/rules-input c) :place (cell-map %)) cells)]
         (when (or trespass? (nil? refusal))

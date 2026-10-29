@@ -1011,6 +1011,18 @@
     (tu/set-sensed! p (fn [pos] (if (behind? pos) #js {:unknown true :pos pos} (sensed pos))))
     (is (true? (respond.pillar/pillar-fits? p [0 64 0])) "the ground the walls hide is no ledge to climb from: the pillar looks round it before it builds")))
 
+(deftest a-pillar-in-a-slot-is-planned-with-the-ground-behind-its-walls-unseen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [slot (wall-cells (concat (for [z (range -1 9)] [-1 z]) (for [z (range -1 9)] [1 z]) [[0 -1]]))
+              world {:self {:health 10} :inventory [{:name "dirt" :count 39}] :entities [(zombie 0 64 6)] :blocks slot}
+              prep (fn [p] (let [sensed (.-sensedAt p)]
+                             (tu/set-sensed! p (fn [q] (if (and (= 64 (.-y q)) (= 2 (js/Math.abs (.-x q)))) #js {:unknown true} (sensed q))))))
+              {:keys [while-hidden]} (await (hidden-round '(test.flight {:cover-way :pillar}) world 0
+                                                          #(count (calls (:p %) "jumpPlace")) [] prep))]
+          (is (= 3 while-hidden) "the pillar rose its three blocks and hid: cells walled off from the body stay unseen after its looks and read open in plan! as in the price"))))))
+
 (deftest a-back-off-with-no-way-past-the-zombies-is-not-priced-after-a-refused-pillar
   (async done
     (tu/run-async done
