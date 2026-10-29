@@ -2,6 +2,7 @@
 ;; line, a melee mob only with a way to the body. Body in the plot's middle, the mob 6 east, a wall 3 east.
 ;; The crop boxes have their floor at y -1, so the zombie stands in a 2-high room and can walk out through the gap.
 ;; :mobs :keep: the runner does not clear hostile mobs near the plot before :act (it does by default).
+;; The *-quiet cases look around first: a wall the body has not seen is open ground and an open arrow line (danger reads what the body has seen).
 {:defaults
  {:tags [:hostile :triggers] :mobs :keep
   :register [{:trigger :hostile-near}]
@@ -27,27 +28,32 @@
    :after [[:block [19 0 16] "torch"]]}
   {:name "skeleton-glass-quiet"
    :blocks [[:fill [19 0 12] [19 6 20] "glass"]]
-   :act [[:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
+         [:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 10}]
    :after [[:entities "type=skeleton,tag=wt" [[20 0 14] [24 2 18]] 1]]}
   {:name "skeleton-leaves-quiet"
    :blocks [[:fill [19 0 12] [19 6 20] "oak_leaves[persistent=true]"]]
-   :act [[:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
+         [:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 10}]
    :after [[:entities "type=skeleton,tag=wt" [[20 0 14] [24 2 18]] 1]]}
   {:name "skeleton-stone-quiet"
    :blocks [[:fill [19 0 12] [19 6 20] "stone"]]
-   :act [[:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
+         [:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 10}]
    :after [[:entities "type=skeleton,tag=wt" [[20 0 14] [24 2 18]] 1]]}
   {:name "zombie-sealed-glass-quiet"
    :blocks [[:fill [20 -1 14] [24 3 18] "glass" :hollow]]
-   :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
+         [:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 10}]
    :after [[:entities "type=zombie,tag=wt" [[21 0 15] [23 1 17]] 1]]}
   {:name "skeleton-ai-sealed-glass-quiet"
    :blocks [[:fill [20 -1 14] [24 3 18] "glass" :hollow]]
-   :act [[:summon "skeleton" [22.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
+         [:summon "skeleton" [22.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 10}]
    :after [[:entities "type=skeleton,tag=wt" [[21 0 15] [23 1 17]] 1]]}
   {:name "zombie-way-round-glass-fires"
@@ -86,7 +92,8 @@
    :plot {:height 8}
    :blocks [[:fill [4 -1 4] [28 6 28] "stone"] [:fill [8 0 16] [26 1 16] "air"]]
    :body {:at [12.5 0 16.5]}
-   :act [[:summon "skeleton" [19.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
+         [:summon "skeleton" [19.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 10}]
    :after [[:entities "type=skeleton,tag=wt" [[18 0 15] [21 2 17]] 1]]}
   {:name "seen-skeleton-in-a-lit-tunnel-fires"
@@ -101,7 +108,8 @@
    :plot {:height 8}
    :blocks [[:fill [4 -1 4] [28 6 28] "stone"] [:fill [8 0 16] [17 1 16] "air"] [:fill [19 0 16] [20 1 16] "air"]]
    :body {:at [12.5 0 16.5]}
-   :act [[:summon "zombie" [19.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
+         [:summon "zombie" [19.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 10}]
    :after [[:entities "type=zombie,tag=wt" [[19 0 16] [20 1 16]] 1]]}
   {:name "zombie-seen-in-a-lit-tunnel-fires"
