@@ -61,7 +61,13 @@
 
 (def target [:heading])
 
-(def safe? (ready/unless-outmatched (price/staying :long (ready/dark-near-ok #(when (:torches (:args %)) (stock/torch-way % (:limit (:args %) 0) (stock/fetch-allows? %))) work-place/ahead (ready/safe-at-or work-place/ahead ready/safe-if-lit true)))))
+(defn torch-way
+  "The torch way (ready/dark-near-ok): the steps the tunnel still has to cut (:limit less :steps), nil when it hangs none or has no limit."
+  [c]
+  (let [{:keys [torches limit steps]} (:args c)]
+    (when (and torches limit) (stock/torch-way c (max 0 (- limit (or steps 0))) (stock/fetch-allows? c)))))
+
+(def safe? (ready/unless-outmatched (price/staying :long (ready/dark-near-ok torch-way work-place/ahead (ready/safe-at-or work-place/ahead ready/safe-if-lit true)))))
 
 (def fit? (ready/fit-for :long))
 

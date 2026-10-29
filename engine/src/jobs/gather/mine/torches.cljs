@@ -17,14 +17,18 @@
             [jobs.lib.torch-stock :as stock]
             [jobs.lib.trip :as trip]
             [jobs.lib.util :as u]
+            [jobs.lib.work-place :as work-place]
             [jobs.gather.mine.end :refer [stop!]]
             [jobs.gather.mine.targets :refer [step-cell]]
             [jobs.gather.mine.way-set :as mw]))
 
 (defn torch-way
-  "The torch way (ready/dark-near-ok) of a mine or dig-for call: its lit blocks (way-set/lit-blocks), more torches by its own get."
+  "The torch way (ready/dark-near-ok) of a mine or dig-for call: nil while a seen block of the item is in view and :seen is a way (it is dug first, no torch hung),
+  else its lit blocks (way-set/lit-blocks), more torches by its own get."
   [c]
-  (when-let [n (mw/lit-blocks (:args c))] (stock/torch-way c n (stock/fetch-allows? c))))
+  (let [{:keys [block radius] :as args} (:args c)]
+    (when-not (and (mw/seen? args) (work-place/nearest-block c block (or radius 16)))
+      (when-let [n (mw/lit-blocks args)] (stock/torch-way c n (stock/fetch-allows? c))))))
 
 (a/defargs settings
   {::torch-min {:default 2 :doc "A torch round crafts more when fewer torches than this are carried." :spec (a/int-in 0 nil)}

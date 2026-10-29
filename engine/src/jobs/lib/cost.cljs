@@ -412,15 +412,16 @@
 
 (defn torch-way-s
   "Seconds the torches of a way of n blocks lit as it goes cost: one every torch-gap blocks, each its worth and placing
-  (light-cost), and one trip for them when none is carried."
+  (light-cost), and one trip for them when fewer are carried than the way hangs."
   [n carried]
-  (let [{:keys [torch place trip]} (:parts (light-cost {:carried carried}))]
-    (+ (* (js/Math.ceil (/ n torch-gap)) (+ torch place)) (or trip 0))))
+  (let [torches (js/Math.ceil (/ n torch-gap))
+        {:keys [torch place]} (:parts (light-cost {:carried 1}))]
+    (+ (* torches (+ torch place)) (if (< carried torches) (trip) 0))))
 
 (defn lit-way-s
-  "Seconds a way of s seconds over n blocks costs lit as it goes (the mine's stair and tunnel): s and its torches (torch-way-s, carried)."
+  "Seconds a way of s seconds over n blocks costs lit as it goes (the mine's stair and tunnel): s and its torches (torch-way-s, all carried)."
   [s n]
-  (+ s (torch-way-s n 1)))
+  (+ s (torch-way-s n ##Inf)))
 
 (defn dark-or-lit
   "{:way :lit or :dark, :dark-s :lit-s}: the cheaper of staying in the dark at a risk of `hurt` hp (each at hp-price of

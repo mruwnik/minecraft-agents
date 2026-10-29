@@ -47,6 +47,8 @@
             [jobs.gather.dig-for :as dig-for]
             [jobs.gather.strip-tunnel :as strip-tunnel]
             [jobs.items.pick-up-loose :as pick-up-loose]
+            [jobs.lib.work-place :as work-place]
+            [jobs.lib.cost :as cost]
             [jobs.items.smelt :as smelt]
             [jobs.storage.deposit :as deposit]
             [jobs.storage.withdraw :as withdraw]
@@ -458,6 +460,21 @@
       (are [ways expected] (= expected (first (mine/safe? (assoc (ctx-of (assoc tunnel :time st/noon)) :args {:at near :torches true :tunnel-length 20 :ways ways}))))
         #{:strip-tunnel} :ok
         #{:strip-tunnel :carried} :never))))
+
+(deftest a-dig-of-seen-ore-hangs-no-torch-so-the-dark-is-not-lifted-for-its-torches
+  (let [hall [:never "dark hall" {:reason :exposed :lowered-by #{:torch} :chance 0.004}]
+        near {:x 3 :y 64 :z 0}
+        ctx (assoc (ctx-of (assoc tunnel :time st/noon :inventory [{:name "torch" :count 4}])) :args {:block "iron_ore" :radius 4 :torches true :tunnel-length 20})]
+    (with-redefs [ready/at-status (fn [_ _] hall) ready/hall-status (fn [_ _] hall)]
+      (are [seen expected] (= expected (with-redefs [work-place/nearest-block (constantly seen)] (first (mine/safe? ctx))))
+        near :never
+        nil :ok))))
+
+(deftest the-torches-of-a-short-carry-cost-a-trip-and-a-tunnel-prices-the-steps-it-has-left
+  (let [need (js/Math.ceil (/ 40 cost/torch-gap))]
+    (is (= (+ (cost/torch-way-s 40 need) (cost/trip)) (cost/torch-way-s 40 (dec need))) "one torch short fetches")
+    (is (= (strip-tunnel/torch-way (assoc (ctx-of (assoc tunnel :inventory [{:name "torch" :count 4}])) :args {:torches true :limit 40 :steps 40})) {:blocks 0 :carried 4}) "a finished tunnel hangs none")
+    (is (nil? (strip-tunnel/torch-way (assoc (ctx-of (assoc tunnel :inventory [{:name "torch" :count 4}])) :args {:torches true}))) "no limit, no torch way")))
 
 (deftest an-unseen-cell-a-look-would-show-asks-for-a-look-at-it
   (let [s (showing #((ready/safe-at (constantly outside)) (ctx-of open-night)))]
