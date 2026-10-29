@@ -266,7 +266,12 @@
             (core/submit! eng '(jobs.survival.night) {})
             (await (tu/run-until-empty eng 20)))
           (is (empty? (filterv #(< (:x %) -5) (mapv st/arg-pos (st/calls p "place")))) "the pit is shut-in's only way, its toll dearer than the night here, where nothing spawns")
-          (is (seq (st/emitted seen :shelter.exposed)) (pr-str (st/emitted seen :night.answers))))))))
+          (is (empty? (st/emitted seen :shelter.exposed)) "a priced stay is no failure: no warn")
+          (is (empty? (st/entries eng :night-exposed)) "nor is the spot marked given up for the night")
+          (swap! (fake/state p) assoc :light-default [15 0])
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tu/run-until-empty eng 30))
+          (is (seq (filterv #(< (:x %) -5) (mapv st/arg-pos (st/calls p "place")))) "dark now, and the mob gone: the next firing prices again and digs the pit"))))))
 
 (deftest a-site-walked-to-is-given-up-for-good-ground-the-body-stands-on-whatever-the-distance
   (async done

@@ -577,9 +577,19 @@
             prices (await (bed-down/answers c {:niche n :flee flee}))]
         [(cond-> (dissoc prices :bed :sealed :log-out) (not dig?) (dissoc :shelter)) t]))))
 
+(defn stay!
+  "The night in the open here is the cheapest of prices while another way is priced too: the round ends nothing-possible
+  :exposed {:prices :text}, nothing remembered of the site (no :night-exposed), so the trigger fires again after its
+  cooldown and the night prices again. The failed sites stay known in the dark (:sheltered :exposed, ending/forget-night!)."
+  [c prices]
+  (let [shown (into {} (map (fn [[k v]] [k (price/round1 v)])) prices)]
+    (hold/sheltered! c :exposed)
+    (ctx/end c :nothing-possible :exposed {:prices shown
+                                           :text (str "the night in the open here is the cheapest way through it (seconds: " (pr-str shown) "); priced again at the next firing")})))
+
 (defn ^:async shelter-answer!
   "The cheapest of shelter-prices (bed-down/cheapest; debug night.answers): dig in here (shelter!), a niche (niche!), a flee
-  (flee/flee!), or the night in the open (exposed!)."
+  (flee/flee!), or the night in the open: stay! while another way is priced, else exposed! (none is left)."
   [c]
   (hold/busy! c)
   (let [r (await (shelter-prices c))]
@@ -592,7 +602,7 @@
           :shelter (await (shelter! c))
           :niche (await (niche! c (pit-site/pit-start c)))
           :flee (await (flee/flee! c t))
-          (await (exposed! c)))))))
+          (if (next prices) (stay! c prices) (await (exposed! c))))))))
 
 (defn ^:async answer-pass
   "The rest of a pass (see doc) once pick, night-answer's choice, is known: bed the bed to use, nil for the carried one."

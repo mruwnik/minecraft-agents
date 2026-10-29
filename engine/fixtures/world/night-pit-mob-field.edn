@@ -1,7 +1,7 @@
 ;; Card 8320d746: the night prices a pit across a known mob's field against its other answers. A stone pad the body cannot dig
 ;; (no pickaxe), lit by four torches round the start; the only pit ground is a dirt patch 14-22 blocks west. Three dirt carried: the pit's
 ;; roof, too few to wall in. With two zombie deaths remembered on the patch the pit's toll makes it dearer than the night at the lit start
-;; (exposed). The control has no deaths and no torches: the dark start costs more than the walk to the patch, where the pit is dug.
+;; (a priced stay: the round ends :exposed, no shelter.exposed warn, priced again at the next firing). The control has no deaths and no torches: the dark start costs more than the walk to the patch, where the pit is dug.
 ;; Needs night: --allow-time, one case per call.
 {:defaults
  {:tags [:night :survival :shelter]
@@ -17,8 +17,9 @@
    :memory [{:kind :deaths :age-s 60 :policy {:cap 10 :ttl :forever} :data {:pos #xyz [8 0 12] :cause "zombie"}}
             {:kind :deaths :age-s 60 :policy {:cap 10 :ttl :forever} :data {:pos #xyz [11 0 9] :cause "zombie"}}]
    :act [[:job (jobs.survival.night {})]]
-   :expect [{:event {:source :job :kind :shelter.exposed} :within-s 90}
-            {:no-event {:source :job :kind :shut-in.sealed} :for-s 90 :until {:source :job :kind :shelter.exposed}}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :exposed}} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :shut-in.sealed} :for-s 90 :until {:source :job :kind :stopped :data {:reason :exposed}}}
+            {:no-event {:source :job :kind :shelter.exposed} :for-s 90 :until {:source :job :kind :stopped :data {:reason :exposed}}}]
    :after [[:body-near [26.5 0 12.5] 3]]}
   {:name "pit-across-a-clear-field-is-dug-from-a-dark-start"
    :blocks [[:set [24 0 10] "air"] [:set [28 0 10] "air"] [:set [24 0 14] "air"] [:set [28 0 14] "air"]]
