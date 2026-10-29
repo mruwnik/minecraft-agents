@@ -80,7 +80,6 @@
 (deftest a-log-out-stint-lasts-till-morning-when-coming-back-costs-more-than-the-longer-stint
   (doseq [[entities world ms why] [[[zombie] {:self {:health 10}} 175050 "a zombie with a way to a body at 10 hp, no respawn bed: away until morning, not back beside it"]
                                    [[zombie] {:self {:health 10} :inventory [{:name "diamond_sword" :count 1}]} 30000 "the same zombie a diamond sword answers: the death it risks is worth less than the longer stint"]
-                                   [[zombie] {:self {:health 20}} 175050 "at full health with bare hands the flight's death risk, a bedless death walking 5000 blocks back, is worth more than the longer stint: away until morning"]
                                    [[zombie] {:self {:health 10} :inventory [{:name "cobblestone" :count 32}]} 175050 "a block for every open cell carried, but on open ground the zombie strikes through whichever side is still open while every cell goes up: away until morning"]
                                    [[(assoc zombie :pos {:x 38 :y 64 :z 0})] {} 30000 "a zombie beyond its follow range: back after :offline-ms"]
                                    [[{:id 9 :name "skeleton" :kind "hostile" :pos {:x 14 :y 64 :z 0} :health 20}] {:self {:health 10}} 175050 "a skeleton with a line of fire is a known threat: away until morning"]
@@ -89,6 +88,20 @@
                                 :args {:offline-ms 30000} :id "j1" :slots [] :engine {:warned (atom #{})}
                                 :view (fn [] {:data mem/empty-data :now 0})}))
         why)))
+
+(deftest coming-back-costs-more-the-weaker-and-the-barer-the-body-and-more-with-a-known-hostile
+  (let [cost (fn [entities world]
+               (log-out/back-death-cost {:primitives (tu/fake (merge {:floor tu/walk-floor :time 20000 :entities entities} world))
+                                         :args {:offline-ms 30000} :id "j1" :slots [] :engine {:warned (atom #{})}
+                                         :view (fn [] {:data mem/empty-data :now 0})}))
+        sword [{:name "diamond_sword" :count 1}]
+        weak-bare (cost [zombie] {:self {:health 10}})
+        strong-bare (cost [zombie] {:self {:health 20}})
+        strong-sword (cost [zombie] {:self {:health 20} :inventory sword})]
+    (is (> weak-bare strong-bare) "less health: the same mob kills sooner")
+    (is (> strong-bare strong-sword) "a sword shortens the fight")
+    (is (pos? strong-sword) "a known zombie still risks something")
+    (is (< (cost [] {:self {:health 10}}) weak-bare) "no known hostile: only the spawn prior is left, less than with one known")))
 
 (deftest a-log-out-stint-with-blocks-for-a-dead-end-seal-is-the-short-one-where-open-ground-is-not
   (let [tunnel (set (for [x (range 0 9) y [64 65]] [x y 0]))
