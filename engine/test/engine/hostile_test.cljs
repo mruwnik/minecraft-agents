@@ -1668,17 +1668,29 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[why entry fired]
-                [["the default: fired again at once" {:trigger :hostile-near :args {:radius 10}} 2]
-                 ["the agent's own cooldown" {:trigger :hostile-near :args {:radius 10} :persistence :cooldown :cooldown-s 30} 1]]]
-          (let [{:keys [eng seen clock]} (setup {:inventory sword
-                                                 :entities [(assoc (zombie 1 3 0) :health 5 :visible true)
-                                                            (assoc (zombie 2 0 7) :visible true)]})]
-            (core/register-reflex! eng (assoc entry :job '(jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 4 :jobs.lib.price/way-radius 4}})))
+                [["the default: fired again at once" {:trigger :hostile-near} 2]
+                 ["the agent's own cooldown" {:trigger :hostile-near :persistence :cooldown :cooldown-s 30} 1]]]
+          (let [{:keys [eng p seen]} (setup-flight {:entities [(zombie 5 0)]})]
+            (stuck-walks! p)
+            (core/register-reflex! eng (assoc entry :job '(jobs.survival.respond-to-hostile {:spend {:job-time 2}})))
             (await (core/tick! eng))
-            (is (= [:done] (mapv :outcome (reflex-ended seen))) (str why ": the near zombie killed, the one at 7 is beyond the job's 4"))
-            (swap! clock + 1000)
+            (is (= [[:stopped :completed_not_cleared]] (mapv (juxt :outcome :how) (reflex-ended seen))) (str why ": the time budget ended the call, the zombie still there"))
             (await (core/tick! eng))
             (is (= fired (count (reflex-fired seen))) why)))))))
+
+;; the entry's radius holds the trigger for a zombie past the danger setting's 8: the call weighs that zombie too, not
+;; an empty list it is done with at once while the trigger fires again and again
+(deftest the-call-answers-the-dangers-the-trigger-fired-for
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup-flight {:entities [(zombie 9 0)]})]
+          (stuck-walks! p)
+          (core/register-reflex! eng {:trigger :hostile-near :args {:radius 10}})
+          (await (core/tick! eng))
+          (is (= [[:stopped :completed_not_cleared]] (mapv (juxt :outcome :how) (reflex-ended seen))) "the flight held, then stopped, the zombie still there")
+          (await (core/tick! eng))
+          (is (= 2 (count (reflex-fired seen))) "fired again at once, with the loss read afresh"))))))
 
 (deftest a-hostile-reflex-cut-by-a-higher-one-fires-again-while-the-danger-stands
   (async done
