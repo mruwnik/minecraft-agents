@@ -508,6 +508,55 @@
   "The most air the closed room round the feet holds for unseen-lit-chance-fn; a bigger flood is taken as open ground."
   4096)
 
+(defn- room-air-of
+  "The seen air round the feet cell [x y z] (its own taken open): a flood over seen open cells (a memory's sections),
+  {:cells (\"x,y,z\" keys) :sections (section keys) :unseen #js [x y z ..] the unseen cells beside it}; nil past
+  room-air-cells or without sections or feet; with first? it ends at the first unseen cell. Light passes doors and every
+  open cell, so with no unseen cell beside it the light outside does not reach it."
+  [^js sections feet first?]
+  (when (and sections feet)
+    (let [[ox oy oz] feet
+          ids-at (fn [cx sy cz] (some-> sections (.get (store/section-key cx sy cz)) .-ids))
+          ^js open (rock/open-ids)
+          ck (fn [x y z] (str x "," y "," z))
+          cells (js/Set.)
+          in (js/Set.)
+          unseen #js []
+          met (js/Set.)
+          queue #js [#js [ox oy oz]]]
+      (.add cells (ck ox oy oz))
+      (loop [head 0]
+        (cond
+          (or (== head (.-length queue)) (and first? (pos? (.-length unseen)))) {:cells cells :sections in :unseen unseen}
+          (> (.-length queue) room-air-cells) nil
+          :else
+          (let [^js c (aget queue head)
+                x (aget c 0) y (aget c 1) z (aget c 2)]
+            (.add in (store/section-key (bit-shift-right x 4) (bit-shift-right y 4) (bit-shift-right z 4)))
+            (dotimes [f 6]
+              (let [nx (+ x (aget face-x f)) ny (+ y (aget face-y f)) nz (+ z (aget face-z f))
+                    k (ck nx ny nz)
+                    ^js ids (ids-at (bit-shift-right nx 4) (bit-shift-right ny 4) (bit-shift-right nz 4))
+                    v (if ids (aget ids (store/cell-index nx ny nz)) 0)]
+                (cond (or (.has cells k) (.has met k)) nil
+                      (zero? v) (do (.add met k) (.push unseen nx ny nz))
+                      (== 1 (aget open (dec v))) (do (.add cells k) (.push queue #js [nx ny nz])))))
+            (recur (inc head))))))))
+
+(defn room-air-unseen
+  "The unseen cells [x y z] beside the seen air round the body's feet (room-air-of), nearest the feet first: none when
+  that air is sealed, so its dark is no evidence for the light outside (unseen-lit-chance-fn); nil without a memory or
+  past room-air-cells."
+  [p]
+  (when-let [^js st (some-> (aget p "perception") :st)]
+    (when (.-stores st)
+      (when-let [r (room-air-of (store/store-of st (.-dim st)) (feet-cell p) false)]
+        (let [[ox oy oz] (feet-cell p)]
+          (->> (partition 3 (:unseen r))
+               (map vec)
+               (sort-by (fn [[x y z]] (+ (js/Math.abs (- x ox)) (js/Math.abs (- y oy)) (js/Math.abs (- z oz)))))
+               vec))))))
+
 (defn unseen-lit-chance-fn
   "The chance that a cell the body has not seen is lit (lit-light?), as (fn [x y z]) over what it has seen now (none
   without a perception's memory); nil without a raw world. The cell is taken open (a feet cell) and lit by the likeliest
@@ -604,34 +653,7 @@
                                 (if hit
                                   (base-rates/open-run-chance oy (- y oy) (dec d) lit-here? q)
                                   (recur next-ring (inc d))))))))))
-           ;; the seen air of the closed room round the feet (a flood over seen open cells, the feet's own one, that meets
-           ;; no unseen cell within room-air-cells), as cell keys and section keys; nil when it is open: light passes doors
-           ;; and every open cell, so a room sealed so is one the light outside does not reach, its own dark no evidence for
-           ;; an unseen cell (which lies outside it)
-           room-air (delay
-                      (when (feet-cell p)
-                        (let [ck (fn [x y z] (str x "," y "," z))
-                              cells (js/Set.)
-                              in (js/Set.)
-                              queue #js [#js [ox oy oz]]]
-                          (.add cells (ck ox oy oz))
-                          (loop [head 0]
-                            (cond
-                              (== head (.-length queue)) {:cells cells :sections in}
-                              (> (.-length queue) room-air-cells) nil
-                              :else
-                              (let [^js c (aget queue head)
-                                    x (aget c 0) y (aget c 1) z (aget c 2)]
-                                (.add in (store/section-key (bit-shift-right x 4) (bit-shift-right y 4) (bit-shift-right z 4)))
-                                (when (loop [f 0]
-                                        (or (== f 6)
-                                            (let [nx (+ x (aget face-x f)) ny (+ y (aget face-y f)) nz (+ z (aget face-z f))
-                                                  ^js ids (ids-at (bit-shift-right nx 4) (bit-shift-right ny 4) (bit-shift-right nz 4))
-                                                  v (if ids (aget ids (store/cell-index nx ny nz)) 0)]
-                                              (cond (zero? v) false
-                                                    (or (not= 1 (aget open (dec v))) (.has cells (ck nx ny nz))) (recur (inc f))
-                                                    :else (do (.add cells (ck nx ny nz)) (.push queue #js [nx ny nz]) (recur (inc f)))))))
-                                  (recur (inc head)))))))))
+           room-air (delay (let [r (room-air-of sections (feet-cell p) true)] (when (and r (zero? (.-length (:unseen r)))) r)))
            ;; [open cells seen with light, those at sky light sky-need or more] in the section cx sy cz, the room's left out
            counted (js/Map.)
            counts (fn [cx sy cz]

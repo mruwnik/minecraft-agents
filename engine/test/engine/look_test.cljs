@@ -259,10 +259,12 @@
   ;; past the walls read dark
   (let [inside (for [x [-1 0 1] y [64 65] z [-1 0 1]] [x y z])
         p (seeing {:time day :light-default [0 0] :blocks (apply dissoc (tu/box -2 63 -2 2 66 2 "stone") (map #(.join (clj->js %) ",") inside))})]
+    (is (seq (look/room-air-unseen p)) "one look ahead leaves cells beside the room's air unseen")
     (doseq [yaw [0 90 180 270] pitch [-60 0 60]]
       (swap! (fake/state p) assoc :yaw yaw :pitch pitch)
       (perception/pass! (aget p "perception")))
     (is (every? #(sh-sense/seen-cell? p %) [{:x 2 :y 64 :z 0} {:x 0 :y 66 :z 0} {:x 0 :y 64 :z -2}]) "the walls round the room are seen")
+    (is (= [] (look/room-air-unseen p)) "looked round: the air is seen sealed")
     (is (= (base-rates/sky-share 64 (look/dark-light) 0 0) (look/unseen-lit-chance p {:x 6 :y 64 :z 0}))
         "outside: the measured prior at its height and the sky light day needs")))
 

@@ -89,10 +89,21 @@
   (when-let [sides (seq (look-edge/pending c (sense/round-looked c) 0))]
     (contract/look :exposed text :look-at (into (vec sides) extra) :room-sides true)))
 
+(defn air-look
+  "Under a seen roof, a :look at the unseen cells beside the seen air round the body (look/room-air-unseen) a look from here
+  shows and no look round looked at yet, nil when none is left: once none is unseen, that air's own dark is no evidence for
+  the light outside. Open ground has no such room to seal."
+  [c text]
+  (let [p (:primitives c)]
+    (when-let [cells (and (sh-sense/roofed? p (sh-sense/room-roof-height))
+                          (seq (filter #(and (not ((sense/round-looked c) %)) (look/look-shows? p %)) (look/room-air-unseen p))))]
+      (contract/look :exposed text :look-at (vec cells)))))
+
 (defn unseen-status
   "The exposure of the unseen place `to` no look from here shows, priced as unseen at its chance (Q16): spawn-light/chance-at's
   guess of its light. Dark that dawn lifts (chance-at with caves-free?: dark only the sky lights) waits for dawn
-  (::light-patience-s) while what is left once it lifts is within ::risk-limit; other dark is :never lowered by a torch;
+  (::light-patience-s) while what is left once it lifts is within ::risk-limit; other dark looks first at the unseen walls of
+  the room round the body (room-look) and at the unseen cells beside its air (air-look), else is :never lowered by a torch;
   priced prices either for the stay, the :never also as the walk there to look (look-first)."
   [c to]
   (let [p (:primitives c)
@@ -104,8 +115,10 @@
         where (str "unseen " (place-text to) ", which no look from here shows")]
     (cond
       (<= chance limit) (contract/ok :unexposed (str "no spawn risk at " where ": guessed lit"))
-      (> left limit) (-> (contract/never :exposed (str "dark at " where ": guessed dark even by full day, so dawn does not light it") :lowered-by #{:torch} :chance chance)
-                         (look-first c to (spawn-light/dark-share p to false)))
+      (> left limit) (or (room-look c (str "dark at " where ", walls of the room round the body not all seen") nil)
+                         (air-look c (str "dark at " where ", the air round the body not seen sealed"))
+                         (-> (contract/never :exposed (str "dark at " where ": guessed dark even by full day, so dawn does not light it") :lowered-by #{:torch} :chance chance)
+                             (look-first c to (spawn-light/dark-share p to false))))
       (<= light-in patience) (contract/later :exposed (str "dark at " where ": guessed open ground, dark until light") :lowered-by #{:light} :chance chance
                                              :recheck-after-ms (* 1000 light-in) :wait-ms (* 1000 light-in))
       :else (contract/never :exposed (str "dark at " where ", light is " (js/Math.round light-in) " s away, over the " (js/Math.round patience) " s it waits") :chance chance))))
