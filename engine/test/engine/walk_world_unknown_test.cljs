@@ -181,24 +181,29 @@
     (is (= [@void @stone @void] (map #(state buried % 64 0) [3 4 -3])) "3 from the feet unseen, 4 rock")
     (is (= [@void 0xFFFF true] [(state rim 3 64 0) (state rim 4 64 0) (.-edge (.-snapshot rim))]) "with :rockEdge the guessed rock is the loaded edge")
     (is (not= (wworld/unknown-key buried) (wworld/unknown-key rim)))
-    (is (= [@stone @void] (map #(state % 4 64 0) [sky off])) "sky light changes nothing; the setting off: unseen")
+    (is (= [@stone @void] (map #(state % 4 64 0) [sky off])) "sky light: the pocket's walls are in reach; the setting off: unseen")
     (is (= @void (state goal 4 64 0)) "3 from the goal")
     (is (= [@void @stone] [(state own -4 64 0) (state own 4 64 0)]) "3 from a cell of its own ways")
     (is (not= (wworld/unknown-key buried) (wworld/unknown-key off)) "the guess is in a kept search's key")))
 
 (deftest under-ground-a-seen-fluid-that-aged-still-keeps-the-rock-guess-off-its-surroundings
+  ;; a dark tunnel, 2 high to x 2, then 1 high on past the water: the water, at the near ball's edge, is where sight was cut
   (let [clock (atom 1000000)
-        tunnel (-> (apply dissoc (box -8 62 -8 12 67 8 "stone") (for [x (range 0 7) y [64 65]] (str x "," y ",0")))
-                   (assoc "6,64,0" "water"))
-        {:keys [p w]} (sensed {:self {:pos {:x 0.5 :y 64 :z 0.5}} :yaw 270 :now #(deref clock) :blocks tunnel})
-        _ (swap! (fake/state p) assoc :light-default [0 15])
-        _ (perception/pass! (aget w "perception"))
+        tunnel (-> (apply dissoc (box -8 62 -8 16 67 8 "stone") (concat (for [x (range 0 13)] (str x ",64,0")) (for [x (range 0 3)] (str x ",65,0"))))
+                   (assoc "4,64,0" "water"))
+        p (tu/fake {:self {:pos {:x 0.5 :y 64 :z 0.5}} :yaw 270 :blocks tunnel})
+        _ (swap! (fake/state p) assoc :light-default [0 0])
+        raw (fake-raw/create p)
+        per (perception/create raw {:now #(deref clock)})
+        w (perception/wrap p per)
+        _ (aset w "rawWorld" raw)
+        _ (perception/pass! per)
         read #(state (wworld/path-world w (wworld/unknown-spec)) %1 64 0)
-        fresh (read 8)
+        fresh (read 7)
         _ (swap! clock + 11000)]
-    (is (= @void fresh) "water at 6 seen: 8 is within 3 of it, unseen")
-    (is (= @void (read 8)) "the water aged: 8 stays unseen, not rock")
-    (is (= @stone (read 10)) "4 from the water's cell: rock")))
+    (is (= @void fresh) "water at 4 seen: 7 is within 3 of it, unseen")
+    (is (= @void (read 7)) "the water aged: 7 stays unseen, not rock")
+    (is (= @stone (read 8)) "4 from the water's cell: rock")))
 
 (def hall-world
   "A body on a stone floor (y 63) of a hall roofed 10 over its feet (y 74), x, z -12..12."
@@ -260,14 +265,18 @@
   {:self {:pos {:x (+ 0.5 (quot sx 2)) :y y :z (+ 0.5 (quot sz 2))}}
    :blocks (apply dissoc (box -1 (dec y) -1 sx (+ y sy) sz "stone") (for [x (range sx) dy (range sy) z (range sz)] (str x "," (+ y dy) "," z)))})
 
-(deftest the-rock-guess-follows-the-blocks-sight-meets-round-the-body
+(deftest the-rock-guess-follows-the-measured-chance-at-its-height-and-light
+  ;; a cell 4 past where sight was cut is mostly rock in the dark (a floor-only ball too: under cover); lit, only with walls in reach
   (are [world light yaws guess] (= guess (looked-round world light yaws))
     hall-world [0 14] [270] false
     hall-world [0 14] [0 90 180 270] false
+    hall-world [0 0] [0 90 180 270] true
+    (assoc hall-world :equipment {"offHand" {:name "torch" :count 1}}) [0 0] [0 90 180 270] true
     (room 96 16 32 -40) [0 14] [0 90 180 270] false
     (room 24 10 24 -20) [0 0] [0 90 180 270] true
-    (room 24 10 24 -20) [0 14] [0 90 180 270] true
+    (room 24 10 24 -20) [0 14] [0 90 180 270] false
     pocket-world [0 0] [270] true
     pocket-world [0 14] [270] true
-    {:self {:pos {:x 10.5 :y 64 :z 0.5}} :blocks tunnel} [0 14] [270] true)
-  (is (= [false true] (map #(wworld/rock-likely? % 3) [0.15 0.16])) "4 open blocks in a row under even from 0.159"))
+    {:self {:pos {:x 10.5 :y 64 :z 0.5}} :blocks tunnel} [0 0] [270] true
+    (room 1 2 30 -40) [0 14] [0 180] true))
+

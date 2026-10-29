@@ -47,25 +47,20 @@
          (into {} (map (juxt identity rates/best-level)) ["iron" "copper" "gold" "lapis" "redstone" "diamond" "coal" "emerald" "cheese"]))
       "the placements' peaks; redstone and diamond grow denser down to the lava; coal and emerald are densest above 64"))
 
-(deftest the-solid-share-is-the-depth-prior-until-the-seen-blocks-outweigh-it
-  (is (> (rates/solid-share -40 -40 0 0) 0.3) "nothing seen deep down: walls close all round")
-  (is (< (rates/solid-share 120 120 0 0) 0.05) "nothing seen high up: open air")
-  (is (< (rates/solid-share 0 0 400 2000) 0.2) "a hall seen open deep down")
-  (is (> (rates/solid-share 120 120 300 100) 0.5) "a tunnel seen in rock high up")
-  (is (< (js/Math.abs (- (rates/solid-share 63 63 0 0) (rates/solid-share 64 64 0 0))) 0.01) "no step at a section border")
-  (is (= (rates/solid-prior -500) (rates/solid-prior -56)) "past the table's ends, its end window"))
+(deftest an-unseen-cell-is-likelier-rock-the-farther-it-lies-from-where-sight-was-cut
+  (is (every? (fn [y] (apply < (map #(rates/unseen-solid y 0 % false nil) [1 3 6]))) [-40 0 30]) "a cut ray's next cell is likelier open than one further on")
+  (is (> (rates/unseen-solid -40 0 4 false nil) 0.5) "deep down, 4 past a dark frontier: rock")
+  (is (< (rates/unseen-solid 90 0 1 true nil) 0.5) "high up, the next cell past a lit cut: air")
+  (is (< (rates/unseen-solid -20 0 4 false 0.25) (rates/unseen-solid -20 0 4 false 0.6)) "walls in reach round the eye: a cave, likelier rock")
+  (is (< (js/Math.abs (- (rates/unseen-solid 63 0 3 false nil) (rates/unseen-solid 64 0 3 false nil))) 0.05) "no step at a section border")
+  (is (= (rates/unseen-solid 0 0 rates/unseen-d-max false nil) (rates/unseen-solid 0 0 40 false nil)) "past the table's farthest, its farthest")
+  (is (> (rates/unseen-solid 70 -4 4 true nil) (rates/unseen-solid 70 0 4 true nil)) "under the floor likelier rock than where the body walks")
+  (is (= [false false true] (map rates/walls-in-reach? [nil 0.25 0.6])) "a floor under open air, or walls in reach"))
 
-(deftest blocks-seen-at-one-height-say-less-of-another-the-less-the-terrain-ties-them
-  ;; a body on the surface that has seen only open air knows little of the rock 30 blocks down (Q16)
-  (let [deep (rates/solid-share 42 42 0 0)]
-    (is (< (rates/solid-share 72 72 0 3000) 0.01) "round the feet: open, as seen")
-    (is (< (js/Math.abs (- (rates/solid-share 42 72 0 3000) deep)) (* 0.25 deep)) "30 down: near the prior there")
-    (is (< (rates/open-run-chance 42 72 72 0 3000) 0.05) "an unseen shaft from there up to the feet is unlikely open")
-    (is (> (rates/solid-share 42 72 3000 0) deep) "seen rock round the feet still says more rock down there")))
-
-(deftest blocks-seen-off-a-section-centre-move-the-share-at-their-own-height-in-full
-  (let [shift #(- (rates/solid-share % % 1500 1500) (let [{:keys [a b]} (rates/solid-prior %)] (/ a (+ a b))))]
-    (is (close? (shift 65) (shift 72)) "the seen share at the feet, wherever the feet are in their section")))
+(deftest an-unseen-run-under-a-frontier-is-open-only-if-every-cell-is
+  (is (= 1 (rates/open-run-chance 70 0 0 true nil)) "no cell between")
+  (is (= (- 1 (rates/unseen-solid 70 0 1 true nil)) (rates/open-run-chance 70 0 1 true nil)) "one cell, next to the frontier")
+  (is (< (rates/open-run-chance 42 0 30 false nil) 0.05) "a long dark shaft is unlikely open"))
 
 (deftest the-sky-share-is-the-height-prior-until-the-seen-open-blocks-outweigh-it
   (is (< (rates/sky-share -40 8 0 0) 0.01) "nothing seen deep down: caves")

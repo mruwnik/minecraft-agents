@@ -376,43 +376,79 @@
 
 (defonce ^:private shares (js/WeakMap.))
 
-(defn solid-counts
-  "[solid open]: the blocks the body remembers, aged ones too, in the feet's section and the 26 round it (the window the
-  solid prior is fitted to), solid and open. Sight meets every open block along a ray and the solid one that ends it, as
-  the prior counts open blocks and the walls beside them. Nil without a perception's memory. Kept while the body stands
-  in one section and no block it remembers changed or aged."
+(defn near-share
+  "The solid share of the cells the body remembers whose centre lies within perception's :near (no torch) of its eye, as
+  the measured prior base-rates/unseen-solid buckets it: a body sees those in any light. Nil without a perception's memory
+  or with none of them seen. Kept while the body stands in one cell and no block it remembers changed or aged."
   [p]
-  (when-let [^js st (some-> (aget p "perception") :st)]
-    (when-let [[x y z] (and (.-stores st) (feet-cell p))]
-      (let [^js sections (store/store-of st (.-dim st))
-            [cx sy cz :as at] (mapv #(bit-shift-right % 4) [x y z])
-            k [(.-dim st) (memory-age/epoch st) at]
+  (when-let [per (aget p "perception")]
+    (when-let [[x y z :as feet] (and (.-stores ^js (:st per)) (feet-cell p))]
+      (let [^js st (:st per)
+            ^js sections (store/store-of st (.-dim st))
+            k [(.-dim st) (memory-age/epoch st) feet]
             hit (.get shares st)]
         (if (= k (:k hit))
           (:v hit)
           (let [^js open (rock/open-ids)
-                [solid seen] (reduce (fn [[solid seen :as acc] [dx dy dz]]
-                                       (if-let [^js ids (some-> (.get sections (store/section-key (+ cx dx) (+ sy dy) (+ cz dz))) .-ids)]
-                                         (loop [i 0 solid solid seen seen]
-                                           (if (== i 4096)
-                                             [solid seen]
-                                             (let [v (aget ids i)]
-                                               (cond (zero? v) (recur (inc i) solid seen)
-                                                     (== 1 (aget open (dec v))) (recur (inc i) solid (inc seen))
-                                                     :else (recur (inc i) (inc solid) (inc seen))))))
-                                         acc))
-                                     [0 0]
-                                     (for [dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]] [dx dy dz]))
-                v [solid (- seen solid)]]
+                near (:near (:opts per))
+                r (js/Math.ceil (+ near 2))
+                ey (+ y 1.62)
+                [solid seen] (loop [cells (for [dx (range (- r) (inc r)) dy (range (- r) (inc r)) dz (range (- r) (inc r))] [(+ x dx) (+ y dy) (+ z dz)])
+                                    solid 0 seen 0]
+                               (if-let [[cx cy cz] (first cells)]
+                                 (let [ddx (- cx x) ddy (- (+ cy 0.5) ey) ddz (- cz z)
+                                       v (when (<= (+ (* ddx ddx) (* ddy ddy) (* ddz ddz)) (* near near))
+                                           (some-> (.get sections (store/section-key (bit-shift-right cx 4) (bit-shift-right cy 4) (bit-shift-right cz 4)))
+                                                   .-ids (aget (store/cell-index cx cy cz))))]
+                                   (cond (not (pos? v)) (recur (rest cells) solid seen)
+                                         (== 1 (aget open (dec v))) (recur (rest cells) solid (inc seen))
+                                         :else (recur (rest cells) (inc solid) (inc seen))))
+                                 [solid seen]))
+                v (when (pos? seen) (/ solid seen))]
             (.set shares st {:k k :v v})
             v))))))
 
-(defn solid-share
-  "The chance that a block sight meets round the feet is solid: base-rates/solid-share at the feet's height of
-  solid-counts. Nil without a perception's memory."
+(defn feet-lit?
+  "Whether the body's feet cell is lit enough to make out by perception's seeing rule now; false without a perception."
   [p]
-  (when-let [[solid open] (solid-counts p)]
-    (let [y (nth (feet-cell p) 1)] (base-rates/solid-share y y solid open))))
+  (boolean (when-let [per (aget p "perception")]
+             (when-let [[x y z] (and (:raw per) (feet-cell p))]
+               (let [^js raw (:raw per) l (.lightAt raw x y z)]
+                 (and (<= 0 l) (== 1 (aget (light/table-now raw (:seeing-min (:opts per))) l))))))))
+
+(defn frontier-distance
+  "The Chebyshev distance from cell [x y z] to the nearest frontier cell the body remembers (open, with a face neighbour
+  it has not seen), base-rates/unseen-d-max when none lies nearer; nil without a perception's memory."
+  [p [x y z]]
+  (when-let [^js st (some-> (aget p "perception") :st)]
+    (when (.-stores st)
+      (let [^js sections (store/store-of st (.-dim st))
+            ^js open (rock/open-ids)
+            id (fn [cx cy cz] (or (some-> (.get sections (store/section-key (bit-shift-right cx 4) (bit-shift-right cy 4) (bit-shift-right cz 4)))
+                                          .-ids (aget (store/cell-index cx cy cz)))
+                                  0))
+            frontier? (fn [cx cy cz]
+                        (let [v (id cx cy cz)]
+                          (and (pos? v) (== 1 (aget open (dec v)))
+                               (some #(zero? (apply id %)) [[(inc cx) cy cz] [(dec cx) cy cz] [cx (inc cy) cz] [cx (dec cy) cz] [cx cy (inc cz)] [cx cy (dec cz)]]))))
+            d-max base-rates/unseen-d-max]
+        (or (some (fn [r]
+                    (when (some (fn [[dx dy dz]] (frontier? (+ x dx) (+ y dy) (+ z dz)))
+                                (for [dx (range (- r) (inc r)) dy (range (- r) (inc r)) dz (range (- r) (inc r))
+                                      :when (== r (max (js/Math.abs dx) (js/Math.abs dy) (js/Math.abs dz)))]
+                                  [dx dy dz]))
+                      r))
+                  (range 1 d-max))
+            d-max)))))
+
+(defn unseen-solid-fn
+  "(fn [cell-y d]) base-rates/unseen-solid for the body of primitives p: the chance an unseen cell at height cell-y, d from
+  the nearest frontier, is solid, by the body's feet's height, the frontier taken lit as the feet are (feet-lit?) and q
+  its near-share; nil without a perception."
+  [p]
+  (when-let [[_ y] (and (aget p "perception") (feet-cell p))]
+    (let [lit? (feet-lit? p) q (near-share p)]
+      (fn [cell-y d] (base-rates/unseen-solid y (- cell-y y) d lit? q)))))
 
 (defn remembered-light-fn
   "(fn [x y z]) the packed light (sky << 4 | block) of a cell the body has seen, as its memory gives it
@@ -449,10 +485,11 @@
   without a perception's memory); nil without a raw world. The cell is taken open (a feet cell) and lit by the likeliest
   of the ways light reaches it, a lower bound on the chance some way does (Q16: unseen is its worse case). Light falls by
   one a step from a seen cell (the body's own counts as seen; its light is what every way brings it), block and sky
-  light alike, through unseen cells, each open at chance 1 - solid-share (the rock guess's): a seen cell of light L
-  lights one d steps off at L - d, at chance (1 - solid-share)^(d - 1), the nearest such cell counted. Sky light 15
-  reaches it down its column when the first seen cell over it has it and none lies unseen between, not when that cell
-  has less (a roof); past unseen cells, the chance every one is open (base-rates/open-run-chance of solid-counts); with
+  light alike, through unseen cells: a seen cell of light L lights one d steps off at L - d, at the chance the d - 1
+  between are all open (base-rates/open-run-chance at the feet's height, light and near-share, the rock guess's), the
+  nearest such cell counted. Sky light 15 reaches it down its column when the first seen cell over it has it and none
+  lies unseen between, not when that cell has less (a roof); past unseen cells, the chance every one is open (the same,
+  the seen cell lit); with
   none seen over it, base-rates/sky-share at the sky light it needs, of the open cells seen in the 27 sections round its
   own (none seen there: round the feet's, at its height). Kept per cell.
   subtract: the sky's darkening to judge it by (default: now; 0: by full day)."
@@ -471,8 +508,8 @@
                        v (.lightAt raw ox oy oz)]
                    (when (and (or (nil? ids) (zero? (aget ids (store/cell-index ox oy oz)))) (>= v 0)) v)))
            own? (fn [x y z] (and own (== x ox) (== y oy) (== z oz)))
-           [n-solid n-open] (or (solid-counts p) [0 0])
-           open-chance (- 1 (base-rates/solid-share oy oy n-solid n-open))
+           lit-here? (feet-lit? p)
+           q (near-share p)
            ^js open (rock/open-ids)
            summaries (js/Map.)
            summary (fn [cx sy cz]
@@ -536,7 +573,7 @@
                                                           (.push next-ring nx ny nz))))
                                                     (recur (+ i 3)))))))]
                                 (if hit
-                                  (js/Math.pow open-chance (max 0 (dec d)))
+                                  (base-rates/open-run-chance oy (- y oy) (dec d) lit-here? q)
                                   (recur next-ring (inc d))))))))))
            ;; [open cells seen with light, those at sky light sky-need or more] in the section cx sy cz
            counted (js/Map.)
@@ -580,7 +617,7 @@
                             (cond (or (nil? v) (neg? v)) (recur (inc y'))
                                   (not= 15 (bit-shift-right v 4)) 0
                                   (== y' (inc y)) 1
-                                  :else (base-rates/open-run-chance (inc y) y' oy n-solid n-open)))
+                                  :else (base-rates/open-run-chance oy (- (inc y) oy) (- y' y 1) true q)))
                           (let [up (* 16 (inc (bit-shift-right y' 4)))] (recur up))))))
            memo (js/Map.)]
        (fn [x y z]

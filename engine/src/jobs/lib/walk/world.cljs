@@ -12,6 +12,7 @@
             [jobs.lib.breath :as breath]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.base-rates :as base-rates]
             [jobs.lib.look :as look]
             [jobs.lib.placement :as placement]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -129,20 +130,18 @@
 
 (defn rock-beyond "The setting ::rock-beyond, nil when off." [] (or (settings/get settings ::rock-beyond) nil))
 
-(defn rock-likely?
-  "Whether a cell k + 1 blocks past a seen open one, the nearest the rock guess reads as stone, is more likely solid than
-  open when each block sight meets there is solid at chance share (look/solid-share): k + 1 open blocks in a row are under even."
-  [share k]
-  (< (js/Math.pow (- 1 share) (inc k)) 0.5))
-
 (defn rock-guess?
-  "Whether a walk over mask spec unknown (nil: none) reads far unseen cells as rock (path-world): ::rock-beyond is on, a
-  cell past it is more likely solid than open (rock-likely? of look/solid-share), the body's head is out of water, and the mask
-  is neither :edge nor without-rock. Light counts only through what sight made out (a dark cell beyond perception's
-  :near is not met): it says how dangerous a place is, not what an unseen cell holds."
+  "Whether a walk over mask spec unknown (nil: none) reads far unseen cells as rock (path-world): ::rock-beyond k is on,
+  an unseen cell k + 1 from the nearest frontier at the feet's height is more likely solid than open (look/unseen-solid-fn:
+  measured over the body's own kind of sight, so how far it sees in the dark does not move it), with lit feet only with
+  walls in reach (base-rates/walls-in-reach?: past a lit cut over open ground the measure sits at about a half, and a
+  wrong rock shuts a seen hall's way on), the body's head is out of water, and the mask is neither :edge nor without-rock."
   [p ^js unknown]
   (boolean (and unknown (not (.-edge unknown)) (not (.-noRock unknown)) (not (breath/head-under? p))
-                (when-let [k (rock-beyond)] (some-> (look/solid-share p) (rock-likely? k))))))
+                (when-let [k (rock-beyond)]
+                  (when-let [solid-at (look/unseen-solid-fn p)]
+                    (and (or (not (look/feet-lit? p)) (base-rates/walls-in-reach? (look/near-share p)))
+                         (> (solid-at (:y (sh-sense/feet p)) (inc k)) 0.5)))))))
 
 (defn- rock-seeds
   "The cells path-world's rock guess spares for a walk over mask spec unknown: the feet and the spec's seeds (with-seeds)."

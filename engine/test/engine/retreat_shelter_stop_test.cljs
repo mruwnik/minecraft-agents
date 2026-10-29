@@ -365,13 +365,12 @@
     (is (zero? (pit/shell-fails (sensing-stub rock) cells #{})) "rock seen all round: it cannot fail")
     (is (< 0 (pit/shell-fails (sensing-stub {}) cells #{}) 1) "unseen round it: each cell open at the share of open rock")))
 
-(deftest unsensed-shell-cells-are-never-priced-better-than-the-prior
+(deftest an-unsensed-shell-cell-is-solid-at-the-measured-share-for-its-distance-from-the-frontier
   (let [cells [(cell 1 64 0)]
         p (sensing-stub {})
-        prior (base-rates/solid-share 64 64 0 0)
         keep (set (rest (for [[dx dy dz] rules/neighbour-deltas] (cell (+ 1 dx) (+ 64 dy) dz))))
         n (pit/unsensed-shell p cells keep)
-        fails (fn [local] (with-redefs [sight/solid-share (constantly local)] (pit/shell-fails p cells keep)))]
-    (is (= (- 1 (Math/pow prior n)) (fails 0.999)) "rock seen all round the body says nothing of cells behind it: the prior bounds it")
-    (is (< (- 1 (Math/pow prior n)) (fails 0.01)) "a cave round the body prices them dearer than the prior")))
-
+        fails (fn [d] (with-redefs [sight/frontier-distance (constantly d)] (pit/shell-fails p cells keep)))]
+    (is (pos? n))
+    (is (> 1e-12 (Math/abs (- (- 1 (Math/pow (base-rates/unseen-solid 64 0 1 false nil) n)) (fails nil)))) "no memory: as near a frontier as can be")
+    (is (> (fails 1) (fails 6)) "far from where sight was cut: more likely rock")))

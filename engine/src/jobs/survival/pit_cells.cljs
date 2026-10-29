@@ -264,24 +264,25 @@
                :when (and (not (keep n)) (some-> (u/seen-name p n) (as-> nm (not (solid/solid? nm)))))]
            n)))
 
-(defn unsensed-shell
-  "How many cells beside, over or under cells, outside keep, the body never sensed: each may lay the dig open."
+(defn unsensed-cells
+  "The cells beside, over or under cells, outside keep, the body never sensed: each may lay the dig open."
   [p cells keep]
-  (count (set (for [cell cells
-                    [dx dy dz] rules/neighbour-deltas
-                    :let [n (assoc cell :x (+ (:x cell) dx) :y (+ (:y cell) dy) :z (+ (:z cell) dz))]
-                    :when (and (not (keep n)) (some-> (u/sensed p n) .-unknown))]
-                n))))
+  (set (for [cell cells
+             [dx dy dz] rules/neighbour-deltas
+             :let [n (assoc cell :x (+ (:x cell) dx) :y (+ (:y cell) dy) :z (+ (:z cell) dz))]
+             :when (and (not (keep n)) (some-> (u/sensed p n) .-unknown))]
+         n)))
+
+(defn unsensed-shell "How many unsensed-cells there are." [p cells keep] (count (unsensed-cells p cells keep)))
 
 (defn shell-fails
   "The chance a dig of cells lays itself open through a cell beside, over or under them, outside keep, the body never
-  sensed (unsensed-shell): each is open at 1 - the solid share round the body (look/solid-share), never above the
-  prior's at the dig's height: seen rock round the body does not make the unseen cells behind it solid (Q16 worse case)."
+  sensed (unsensed-cells): each is solid at look/unseen-solid-fn at its distance from the nearest frontier the body
+  remembers (look/frontier-distance; 1, the likeliest open, without a memory), at the dig's height without a perception."
   [p cells keep]
-  (let [y (:y (first cells))
-        prior (base-rates/solid-share y y 0 0)
-        solid (min prior (or (sight/solid-share p) prior))]
-    (- 1 (js/Math.pow solid (unsensed-shell p cells keep)))))
+  (let [solid-at (or (sight/unseen-solid-fn p) #(base-rates/unseen-solid (:y (first cells)) 0 %2 false nil))]
+    (- 1 (reduce (fn [c {:keys [x y z]}] (* c (solid-at y (or (sight/frontier-distance p [x y z]) 1))))
+                 1 (unsensed-cells p cells keep)))))
 
 (defn ^:async lays-open?
   "After a dig of the last of cells (those dug so far): why what the digs laid open rules the refuge out, :fluid-adjacent

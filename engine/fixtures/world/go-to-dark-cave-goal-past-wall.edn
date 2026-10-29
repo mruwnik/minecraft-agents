@@ -1,6 +1,6 @@
 ;; Card 99a1bc9f: a body inside a big dark cave (x 2..25, y 0..9, z 4..27, 24x10x24) whose goal lies past its east wall, in a
 ;; pocket (x 34..35, feet 0, z 15) behind 8 blocks of rock. In the dark the body sees about 4 blocks round it; the rock guess
-;; must still hold (wworld/rock-likely?), so the cells past what it saw read stone and no plan runs through the unseen rock.
+;; must still hold (wworld/rock-guess?, measured over its own kind of sight), so the cells past what it saw read stone and no plan runs through the unseen rock.
 ;; Should-succeed: go-to digs toward the goal (:dig-route) and arrives, with no search spending its node budget. Should-fail:
 ;; with :ways #{:walk} it gives up unarrived, again with no budget flood.
 ;; The dark cave's spawns may price the walk over what the body affords, but staying in the sealed cave costs them too and

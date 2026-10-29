@@ -118,11 +118,9 @@
 
 (defn- table-of [json] (js->clj (js/JSON.parse json) :keywordize-keys true))
 
-(def ^:private solid-data (table-of (rc/inline "jobs/lib/cost/solid_shares.json")))
+(def ^:private unseen-data (table-of (rc/inline "jobs/lib/cost/unseen_solid.json")))
 
-(def ^:private solid-shares (vec (:sections solid-data)))
-
-(def ^:private reach (mapv vec (:reach solid-data)))
+(def ^:private unseen-sections (vec (:sections unseen-data)))
 
 (def ^:private sky-shares (vec (:sections (table-of (rc/inline "jobs/lib/cost/sky_shares.json")))))
 
@@ -143,13 +141,6 @@
   (let [w (between table y)]
     {:a (mix w #(a-of (table %))) :b (mix w #(b-of (table %)))}))
 
-(defn solid-prior
-  "{:a :b} the Beta prior on the share of solid among the blocks sight meets round height y (the open blocks and the
-  solid ones beside them) before a body has looked: fitted to the 3x3x3-section windows of the recorded terrain
-  (solid_shares.json, tools/solid-shares.mjs)."
-  [y]
-  (prior-at solid-shares y :a :b))
-
 (defn sky-share
   "The chance an open block round height y has sky light `level` (1-15) or more, with open blocks seen there and lit of
   them at that sky light: the posterior mean over a Beta fitted to the 3x3x3-section windows of the recorded terrain
@@ -158,23 +149,41 @@
   (let [{:keys [a b]} (prior-at sky-shares y #(nth (:a %) (dec level)) #(nth (:b %) (dec level)))]
     (/ (+ a lit) (+ a b open))))
 
-(defn solid-share
-  "The share of solid expected among the blocks sight meets round height y, with solid and open those it has met in the
-  window round height seen's section: their posterior mean over that section's prior, carried to y by the slope of the
-  share y - seen away on the share at seen's section in the recorded terrain (reach in solid_shares.json, in [0, 1]):
-  the posterior at seen, the prior at y where the two heights' shares are unrelated."
-  [y seen solid open]
-  (let [s (-> (js/Math.floor (/ (- seen (:y (first solid-shares))) 16)) (max 0) (min (dec (count solid-shares))))
-        {sa :a sb :b} (solid-shares s)
-        {:keys [a b]} (solid-prior y)
-        slope (mix (between solid-shares (+ y (- (:y (solid-shares s)) seen -8))) (reach s))]
-    (-> (+ (/ a (+ a b)) (* slope (- (/ (+ sa solid) (+ sa sb solid open)) (/ sa (+ sa sb))))) (max 0) (min 1))))
+(def unseen-d-max "The farthest distance unseen-solid tells apart: a cell farther off reads as this far." (count (:dark (first unseen-sections))))
+
+(defonce ^:private unseen-kept (js/Map.))
+
+(defn unseen-solid
+  "The chance a cell a body whose feet are at height y has not seen is solid, dy blocks over the feet, d blocks
+  (Chebyshev) from the nearest frontier cell (seen open beside unseen: where sight was cut by light or reach, not by a
+  wall), that frontier lit (lit?, by perception's seeing rule) or dark, q the solid share of the cells the body has seen
+  within perception's :near of its eye (nil: none, pooled over q): the posterior mean of a Beta measured by casting the
+  body's sight over the recorded chunks (unseen_solid.json, node tools/event-counts.mjs unseen-solid), by bucket of q and
+  of dy (under the floor, the band the body walks in, above), linear in y between section centres."
+  [y dy d lit? q]
+  (let [{:keys [q-edges dy-edges]} unseen-data
+        qb (if (nil? q) (count q-edges) (count (filter #(>= q %) q-edges)))
+        dyb (count (filter #(>= dy %) dy-edges))
+        di (dec (-> d (max 1) (min unseen-d-max)))
+        key (str y "," dyb "," di "," lit? "," qb)]
+    (or (.get unseen-kept key)
+        (let [at [(if lit? :lit :dark) di qb dyb]
+              {:keys [a b]} (prior-at unseen-sections y #(first (get-in % at)) #(second (get-in % at)))
+              v (if (pos? (+ a b)) (/ a (+ a b)) 0.5)]
+          (.set unseen-kept key v)
+          v))))
+
+(defn walls-in-reach?
+  "Whether a near share q (the solid share seen within :near of the eye) is past unseen-solid's lowest q bucket, a floor
+  under open air: walls or a roof in reach."
+  [q]
+  (boolean (and q (>= q (first (:q-edges unseen-data))))))
 
 (defn open-run-chance
-  "The chance every block of a column from height y0 up to y1 (not counted) is open, each at 1 - solid-share at its own
-  height with solid and open those sight has met round height seen; under 1e-6 reads 0."
-  [y0 y1 seen solid open]
-  (loop [y y0 c 1]
+  "The chance n unseen cells in a row out from a frontier cell are all open, the i-th at 1 - unseen-solid at distance i
+  (y dy lit? q as its); under 1e-6 reads 0."
+  [y dy n lit? q]
+  (loop [i 1 c 1]
     (cond (< c 1e-6) 0
-          (>= y y1) c
-          :else (recur (inc y) (* c (- 1 (solid-share y seen solid open)))))))
+          (> i n) c
+          :else (recur (inc i) (* c (- 1 (unseen-solid y dy i lit? q)))))))

@@ -214,8 +214,8 @@
 
 (deftest an-unseen-cell-in-a-block-lit-sealed-hall-is-lit-at-night
   (let [p (sealed midnight [0 14] {} (tu/box -12 68 -12 12 68 12 "glowstone"))]
-    (is (= 0 ((:at (look/dark-fn p)) 6 64 0)) "the old guess read every unseen cell dark at night")
-    (is (true? (sh-sense/lit-here? p {:x 6 :y 64 :z 0})))))
+    (is (= 0 ((:at (look/dark-fn p)) 4 67 0)) "just past the wall's top, beside the seen lit air: the old guess read every unseen cell dark at night")
+    (is (true? (sh-sense/lit-here? p {:x 4 :y 67 :z 0})))))
 
 (deftest seen-block-light-lights-an-unseen-cell-less-one-a-block
   ;; a light 5 (a lit candle's 3 and a two-candle's 6 less one) three blocks ahead, falling one a block to the body's cell
@@ -232,10 +232,10 @@
     wrapped))
 
 (deftest unseen-cells-between-dim-the-chance-the-body-s-light-reaches-past-them
-  ;; nothing seen yet at y 0, where the measured solid share is 0.36: the old guess spread the light 14 through them as air
+  ;; nothing seen yet at y 0: the old guess spread the light 14 through them as air
   (let [p (unlooked {:self {:pos [0 0 0]} :light {[0 0 0] [0 14]} :light-default [0 0]})]
-    (is (< 0.6 (look/unseen-lit-chance p {:x 2 :y 0 :z 0}) 0.7) "one unseen cell between")
-    (is (false? (look/unseen-lit? p {:x 3 :y 0 :z 0})) "two: more likely rock than not")))
+    (is (= (- 1 (base-rates/unseen-solid 0 0 1 true nil)) (look/unseen-lit-chance p {:x 2 :y 0 :z 0})) "one unseen cell between, next to the body's lit cell")
+    (is (= (base-rates/open-run-chance 0 0 2 true nil) (look/unseen-lit-chance p {:x 3 :y 0 :z 0})) "two: the second further from the cut, likelier rock")))
 
 (deftest a-seen-wall-stops-the-spread
   (let [inside (for [x [-1 0 1] y [64 65 66] z [-1 0 1]] [x y z])
@@ -252,11 +252,11 @@
   ;; every seen light's reach, the sky gets down only if every unseen cell between is open (the old guess: the open
   ;; ground's sky share at that height, lit)
   (let [p (seeing {:time day :blocks {"0,63,5" "air" "0,63,6" "air" "0,63,7" "air"}})
-        [solid open] (look/solid-counts p)
         top (first (filter #(sh-sense/seen-cell? p {:x 0 :y % :z 7}) (range 49 64)))
         chance (look/unseen-lit-chance p {:x 0 :y 48 :z 7})]
     (is (< 52 top) "the hole is seen, the shaft under it not")
-    (is (= (base-rates/open-run-chance 49 top (js/Math.floor (:y (sh-sense/feet p))) solid open) chance))
+    (is (= (let [y (js/Math.floor (:y (sh-sense/feet p)))] (base-rates/open-run-chance y (- 49 y) (- top 49) true (look/near-share p))) chance)
+        "each cell open at its distance under the seen sky")
     (is (< chance 0.5))))
 
 (deftest an-unseen-cell-under-open-sky-is-lit-by-day-only
@@ -318,3 +318,4 @@
                      {:id 4 :name "Bob" :kind "player" :pos [0 64 6] :visible false}] [])]
     (is (= [1 3 4] (map #(.-id %) (look/seen-objs p {:radius 10}))))
     (is (= [1] (map #(.-id %) (look/seen-objs p {:radius 10 :max 1}))) "max counts after the hiding")))
+
