@@ -482,6 +482,13 @@
   (let [[a b] (or prior [1 1])]
     (/ (+ k a) (+ n a b))))
 
+(defn retry-chance
+  "The chance the next try of kind wins after fails tries of the call failed in a row: counted-chance of no win in fails
+  over value/::retry-counts' pseudo-counts of kind."
+  [kind fails]
+  (let [{:keys [win fail]} (get (settings/get value/settings ::value/retry-counts) kind)]
+    (counted-chance {:k 0 :n fails :prior [win fail]})))
+
 (defn floor-absent-chance
   "The chance a floor the body has not seen is not there, for a step of kind (jobs.lib.walk.sight/floor-kind): counted-chance
   of the call's own `counts` {:absent :present} of that kind over value/::unseen-floor-counts' pseudo-counts of it."

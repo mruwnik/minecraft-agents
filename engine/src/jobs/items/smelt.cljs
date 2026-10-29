@@ -217,11 +217,13 @@
   (stop! c reason))
 
 (defn give-up!
-  "Count a failed round in a row: :continue until u/max-failures, then stop with the reason."
-  [c reason]
-  (if (u/count-fail! c)
-    (stop! c reason)
-    :continue))
+  "One more failed round of kind (u/failed!): :continue while another is worth it (cost/try-again?), else stop with the
+  reason."
+  [c kind reason]
+  (u/failed! c)
+  (if (cost/try-again? c kind)
+    :continue
+    (stop! c reason)))
 
 (defn ^:async load!
   "Put the planned input and fuel in. :continue when they are in, else the ending it gives up with."
@@ -243,7 +245,7 @@
                (wait-until! c (+ (slack-ms) (settings/ticks->ms (* target (sp/cook-ticks (:kind state)))))))
       "busy" (if (= "input" (:slot r))
                (do (ctx/update-mem! c dissoc :owed :target)
-                   (give-up! c "furnace-busy"))
+                   (give-up! c :furnace "furnace-busy"))
                (stop! c "fuel-busy"))
       "no-item" (stop! c "no-item")
       "rejected" (stop! c (if (= "fuel" (:slot r)) "rejected-fuel" "furnace-full"))
@@ -311,7 +313,7 @@
   "A furnace the job chose for itself and cannot reach, with no load in it, is dropped for this job (the next round takes another or puts its own down): :continue. Else give-up! \"unreachable\"."
   [c pos]
   (if (or (:furnace (:args c)) (furnace/loaded? (ctx/mem c)))
-    (give-up! c "unreachable")
+    (give-up! c :walk "unreachable")
     (do (ctx/update-mem! c #(-> % (update :unreachable-furnaces (fnil conj #{}) pos) (dissoc :furnace)))
         (furnace/note-unreachable! c pos)
         (ctx/emit! c :smelt.furnace-unreachable :info {:furnace pos :text (str "the furnace at " (:x pos) " " (:y pos) " " (:z pos) " cannot be reached: taking another")})

@@ -16,6 +16,8 @@
             [engine.triggers :as triggers]
             [jobs.items.smelt :as smelt]
             [jobs.items.smelt.plan :as smelt-plan]
+            [jobs.lib.child :as child]
+            [jobs.lib.cost.value :as value]
             [jobs.lib.fuel :as fuel]
             [jobs.lib.world-files :as ew]))
 
@@ -640,19 +642,32 @@
               _ (await (ticks eng 2))]
           (is (= :furnace-gone (:reason (first (of-kind seen :stopped))))))))))
 
-(deftest an-unreachable-furnace-is-given-up-after-three-tries
+(defn ^:async unreachable-furnace
+  "Smelt at a given furnace the body cannot walk to, with :worth w, 8 ticks: [stops walks-asked p eng]."
+  [w]
+  (let [{:keys [eng p seen]} (setup {:blocks {"20,64,0" "furnace"} :unreachable ["20,64,0"]
+                                     :inventory [{:name "raw_iron" :count 3} {:name "coal" :count 2}]})
+        walks (atom 0)
+        orig child/call-walk*]
+    (set! child/call-walk* (fn [c slot a] (swap! walks inc) (orig c slot a)))
+    (try
+      (core/submit! eng (list 'jobs.items.smelt {:furnace {:x 20 :y 64 :z 0} :item "raw_iron" :count 3 :worth w}) {})
+      (await (ticks eng 8))
+      [(of-kind seen :stopped) @walks p eng]
+      (finally (set! child/call-walk* orig)))))
+
+(deftest an-unreachable-furnace-is-tried-again-while-the-goal-is-worth-a-walk
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:blocks {"20,64,0" "furnace"} :unreachable ["20,64,0"]
-                                            :inventory [{:name "raw_iron" :count 3} {:name "coal" :count 2}]})]
-          (core/submit! eng '(jobs.items.smelt {:furnace {:x 20 :y 64 :z 0} :item "raw_iron" :count 3}) {})
-          (await (ticks eng 2))
-          (is (empty? (of-kind seen :stopped)) "two tries do not end it")
-          (await (ticks eng 3))
-          (is (= :unreachable (:reason (first (of-kind seen :stopped)))))
+        (let [walk-s (get-in (settings/get value/settings ::value/retry-counts) [:walk :try-s])
+              [stops cheap p eng] (await (unreachable-furnace walk-s))
+              [_ dear] (await (unreachable-furnace (* 1000 walk-s)))]
+          (is (= :unreachable (:reason (first stops))) "a goal worth one walk's price is not worth a second at under a sure chance")
+          (is (= 1 cheap))
           (is (empty? (:list (core/state eng))))
-          (is (empty? (calls p "furnace"))))))))
+          (is (empty? (calls p "furnace")))
+          (is (> dear cheap) "a dear goal walks again"))))))
 
 (deftest output-in-the-furnace-that-does-not-fit-the-pockets-stops-before-loading
   (async done
@@ -688,7 +703,7 @@
                 (fn ^:async one [[op result reason]]
                   (let [{:keys [eng p seen]} (setup base-world)]
                     (forcing p op result)
-                    (core/submit! eng iron-job {})
+                    (core/submit! eng (list 'jobs.items.smelt (assoc (second iron-job) :worth (get-in (settings/get value/settings ::value/retry-counts) [:furnace :try-s]))) {})
                     (await (ticks eng 3))
                     (is (= (keyword (.replace reason " " "-")) (:reason (first (of-kind seen :stopped)))) reason)
                     (is (empty? (:list (core/state eng))) reason)))))))))

@@ -1,7 +1,10 @@
 (ns engine.util-fail-test
-  "jobs.lib.util failure counting: failures count in a row, progress! resets them."
+  "jobs.lib.util failure counting: failures count in a row, progress! resets them; cost/try-again? prices another try."
   (:require [cljs.test :refer [deftest is]]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.cost.value :as value]
             [jobs.lib.util :as u]))
 
 (defn with-mem
@@ -32,3 +35,12 @@
 (deftest count-fail-says-when-the-row-is-full
   (let [[rs] (with-mem (fn [c] (mapv (fn [_] (u/count-fail! c)) (range 3))))]
     (is (= [false false true] rs))))
+
+(deftest another-try-is-worth-it-while-its-chance-times-the-worth-beats-its-price
+  (let [s (get-in (settings/get value/settings ::value/retry-counts) [:walk :try-s])
+        tries (fn [w] (first (with-mem (fn [c] (with-redefs [ctx/worth (constantly w)]
+                                                 (count (take-while (fn [_] (u/failed! c) (cost/try-again? c :walk)) (range 100))))))))]
+    (is (= 0 (tries 0)))
+    (is (= 0 (tries s)) "a goal worth one try's price is not worth it at under a sure chance")
+    (is (< 0 (tries (* 100 s)) (tries (* 10000 s))) "each failure lowers the chance, so a dearer goal tries more")
+    (is (= 100 (tries ##Inf)) "an arrive tries on: only its :spend stops it")))

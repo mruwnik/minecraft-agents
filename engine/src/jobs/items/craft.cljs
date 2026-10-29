@@ -214,12 +214,14 @@
       :else (least/end! c :nothing-possible reason data made total))))
 
 (defn give-up!
-  "u/fail!: :again until the third failure in a row, then finish with the made count and the reason."
-  ([c made reason] (give-up! c made reason nil))
-  ([c made reason extra]
-   (if (u/count-fail! c)
-     (finish! c made (assoc extra :reason reason :text (str "craft gave up: " (name reason) (when-let [d (:detail extra)] (str " " d)))))
-     :again)))
+  "One more failed try of kind (u/failed!): :again while another is worth it (cost/try-again?), else finish with the made
+  count and the reason."
+  ([c made kind reason] (give-up! c made kind reason nil))
+  ([c made kind reason extra]
+   (u/failed! c)
+   (if (cost/try-again? c kind)
+     :again
+     (finish! c made (assoc extra :reason reason :text (str "craft gave up: " (name reason) (when-let [d (:detail extra)] (str " " d))))))))
 
 (defn table-problem
   "The crafting table to get while one is wanted and none is carried, else nil."
@@ -326,12 +328,12 @@
       :else
       (do (ctx/update-mem! c assoc :table table)
           (if (u/within? (u/self-pos c) table (reach))
-            (if handed? (give-up! c made :unreachable) :again)
+            (if handed? (give-up! c made :craft :unreachable) :again)
             (let [r (await (near/go-near! c table (reach) {:ways #{:walk :clear-seal}}))]
               (cond
                 (= :partial r) :continue
                 (and (= :there r) (u/within? (u/self-pos c) table (reach))) :again
-                arg? (give-up! c made :unreachable)
+                arg? (give-up! c made :walk :unreachable)
                 :else (do (ctx/update-mem! c #(-> % (update :unreachable-tables (fnil conj #{}) (crafting-table/cell-vec table)) (dissoc :table)))
                           (or (await (table-fetch! c)) :again)))))))))
 
@@ -454,7 +456,7 @@
         "full" (or (await (room! c))
                    (finish! c made {:reason :full :text "inventory is full and make-room freed nothing"}))
         "cannot" (finish! c made {:reason :cannot :detail (.-reason r) :text (str "cannot craft " item ": " (.-reason r))})
-        (give-up! c made :craft-failed {:detail status})))))
+        (give-up! c made :craft :craft-failed {:detail status})))))
 
 (defn ^:async cleanup
   "However the call ended: dig up the table this call put down, once, unless :keep-table, a zone or claim refuses the dig

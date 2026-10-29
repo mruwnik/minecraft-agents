@@ -14,6 +14,7 @@
             [engine.triggers :as triggers]
             [jobs.items.craft :as craft]
             [jobs.lib.child :as child]
+            [jobs.lib.cost.value :as value]
             [jobs.lib.crafting-table :as crafting-table]
             [jobs.lib.pace :as pace]
             [jobs.lib.spot :as spot]
@@ -295,16 +296,33 @@
           (is (= {:item "bread" :made 0 :status :stopped :reason :not-a-table} (dissoc result :text)))
           (is (empty? (filter #(str/starts-with? (name (:kind %)) "craft.") @seen)) "the ending carries it"))))))
 
+(defn try-s "The measured seconds of a retry of kind." [kind] (get-in (settings/get value/settings ::value/retry-counts) [kind :try-s]))
+
+(defn ^:async refusing-in-reach
+  "Craft bread with :worth w beside a table that refuses every craft, at most 12 ticks: [result craft-calls eng seen]."
+  [w]
+  (let [{:keys [eng p seen]} (setup {:inventory [{:name "wheat" :count 3}] :blocks {"2,64,0" "crafting_table"}})
+        _ (.override (.-world p) "craft" (fn ^:async f [_ _ _] #js {:status "unreachable" :reason "too-far"}))
+        result (await (child-outcome eng job {:item "bread" :worth w} 12))]
+    [result (count (calls p "craft")) eng seen]))
+
 (deftest craft-gives-up-when-in-reach-of-a-table-that-still-refuses
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:inventory [{:name "wheat" :count 3}] :blocks {"2,64,0" "crafting_table"}})
-              _ (.override (.-world p) "craft" (fn ^:async f [_ _ _] #js {:status "unreachable" :reason "too-far"}))
-              result (await (child-outcome eng job {:item "bread"} 8))]
+        (let [[result _ eng seen] (await (refusing-in-reach (try-s :craft)))]
           (is (= {:item "bread" :made 0 :status :stopped :reason :unreachable} (dissoc result :text)))
           (is (empty? (tu/walked-to eng)))
           (is (empty? (filter #(str/starts-with? (name (:kind %)) "craft.") @seen)) "the ending carries it"))))))
+
+(deftest craft-tries-a-refusing-table-again-while-the-goal-is-worth-a-try
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[_ cheap] (await (refusing-in-reach (try-s :craft)))
+              [_ dear] (await (refusing-in-reach (* 1000 (try-s :craft))))]
+          (is (= 2 cheap) "a goal worth one try's price is not worth a second at under a sure chance")
+          (is (> dear cheap) "a dear goal tries again"))))))
 
 (deftest craft-hands-over-the-alternatives-of-a-missing-ingredient
   (async done
@@ -334,10 +352,10 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3}] :blocks table-block})
               _ (.override (.-world p) "craft" (fn ^:async f [_ _ _] #js {:status "unreachable" :reason "too-far"}))
-              result (await (child-outcome eng job {:item "bread"} 10))]
+              result (await (child-outcome eng job {:item "bread" :worth (try-s :craft)} 10))]
           (is (= {:item "bread" :made 0 :status :stopped :reason :unreachable} (dissoc result :text)))
           (is (= 1 (count (tu/walked-to eng))))
-          (is (= 4 (count (calls p "craft"))) "the walk is a round of its own, then 3 refusals in reach"))))))
+          (is (= 2 (count (calls p "craft"))) "the refusal that walked is not counted; the one in reach ends a goal worth one try"))))))
 
 (deftest craft-a-gone-table-is-searched-for-afresh
   (async done
