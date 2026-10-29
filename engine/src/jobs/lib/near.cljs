@@ -259,10 +259,16 @@
 (a/defargs settings
   {::risky-wait-s {:default 5 :doc "Seconds a job holds still when go-near! refused a stay for its price, before it asks again (risky-wait!); the pause counts on the job's :job-time." :spec (a/num-in 0 nil)}})
 
+(defn wait-price
+  "Seconds a pause of wait-s where the body stands costs: the pause and the :stay-loss of the known threats whose field
+  holds the body's cell (threats/danger-near-fn) over it."
+  [c wait-s]
+  (+ wait-s (if-let [{:keys [stay-loss]} ((threats/danger-near-fn c) (u/self-pos c))] (stay-loss wait-s) 0)))
+
 (defn ^:async risky-wait!
   "For go-near!'s answer r: when it is :blocked for the price of the stay (risky-stay?) and another re-check is worth its
-  price (cost/try-again? :risky-stay, after the refusals in a row, at ctx/worth), pause ::risky-wait-s (charged to the
-  caller's :job-time) and resolve :continue. Else nil, and the count is cleared: the refusal is the caller's to act on, and
+  price (cost/try-again? :risky-stay, after the refusals in a row, at ctx/worth; a try is the pause and what standing that
+  long where the body is costs, wait-price), pause ::risky-wait-s (charged to the caller's :job-time) and resolve :continue. Else nil, and the count is cleared: the refusal is the caller's to act on, and
   :near.risky-over is emitted only when a stay refused before is then answered otherwise (the retry won)."
   [c r]
   (if-not (and (= :blocked r) (risky-stay? c))
@@ -273,7 +279,7 @@
           wait-s (settings/get settings ::risky-wait-s)]
       (ctx/update-mem! c assoc ::risky-fails fails)
       (ctx/emit! c :near.risky-wait :info {:fails fails})
-      (if (cost/try-again? c :risky-stay {:fails fails :try-s wait-s})
+      (if (cost/try-again? c :risky-stay {:fails fails :try-s (wait-price c wait-s)})
         (do (await (child/pause! c wait-s :risky-stay))
             :continue)
         (do (ctx/update-mem! c dissoc ::risky-fails)

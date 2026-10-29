@@ -100,8 +100,8 @@
 
 (defn ^:async waits-by-a-killer
   "The pauses a job that re-asks go-near! (a stay by a zombie that killed the body, never fading) takes at the call's worth
-  before risky-wait! hands the refusal back: [pauses answer-of-the-last-wait]."
-  [worth]
+  before risky-wait! hands the refusal back: [pauses answer-of-the-last-wait]. killer-x: where it killed (default 3)."
+  [worth & [killer-x]]
   (let [{:keys [eng clock]} (e/setup {:blocks (floor -2 -3 12 3) :light-default [0 0]})
         out (atom nil)
         pauses (atom 0)
@@ -111,7 +111,7 @@
                         (if w
                           (do (swap! pauses inc) :continue)
                           (do (reset! out [r w]) (ctx/end c :done nil)))))}]
-    (mem/write! (:store eng) :deaths {:pos {:x 3 :y 64 :z 0} :cause "zombie" :death-t (- @clock 4000)} core/deaths-policy)
+    (mem/write! (:store eng) :deaths {:pos {:x (or killer-x 3) :y 64 :z 0} :cause "zombie" :death-t (- @clock 4000)} core/deaths-policy)
     (await (tu/child-outcome eng job {:worth worth} 1000))
     [@pauses @out]))
 
@@ -119,11 +119,13 @@
   (async done
     ((fn ^:async t []
        (let [[low out-low] (await (waits-by-a-killer 30))
-             [high out-high] (await (waits-by-a-killer 3000))]
+             [high out-high] (await (waits-by-a-killer 3000))
+             [beside] (await (waits-by-a-killer 3000 1))]
          (is (= [:blocked nil] out-low) "a danger that never fades: the refusal goes back to the caller, not the budget's end")
          (is (= [:blocked nil] out-high))
          (is (zero? low) "a goal worth little is not waited for at the pooled chance a danger fades")
-         (is (pos? high) "a goal worth much is"))
+         (is (pos? high) "a goal worth much is")
+         (is (zero? beside) "not where the killer's blows land the wait: it stands in them for its seconds"))
        (done)))))
 
 (deftest a-target-no-way-leads-to-is-blocked

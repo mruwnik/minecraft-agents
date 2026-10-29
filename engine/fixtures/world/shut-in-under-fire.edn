@@ -1,4 +1,4 @@
-;; Card da621127: jobs.survival.shut-in under fire prices each way's seconds in the open (cost/exposure-price), and a pocket's
+;; Card da621127: jobs.survival.shut-in under fire prices each way's seconds in the open (cost/stand-loss), and a pocket's
 ;; unsensed rock as a risk of laying it open. Body at [16.5 0 16.5] with a stone face behind it (x 10..15), open on the other
 ;; sides, looking south-west so it sees both the wall and the skeleton. Hunger, then `damage` leaves 10 hp. Should-succeed: a
 ;; skeleton (NoAI) 6 south in its line of fire: the walls; no skeleton: the pocket, the fewer seconds.
