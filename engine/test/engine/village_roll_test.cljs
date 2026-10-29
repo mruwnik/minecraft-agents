@@ -92,7 +92,7 @@
   (let [args {:villager "v-1" :pos ws-pos :profession "librarian" :want "enchanted_book"}
         world {:blocks {ws-key "lectern"}}
         cause (fn [p surveyed?]
-                (with-redefs [look/surveyed? (fn ([_] surveyed?) ([_ _] surveyed?))]
+                (with-redefs [look/surveyed? (fn ([_] surveyed?) ([_ _] surveyed?) ([_ _ _] surveyed?))]
                   (roll/cell-unseen {:primitives p :args args})))
         kind-reason (juxt first (comp :reason last))]
     (is (= [:look :cell-unseen] (kind-reason (cause (tu/blind (tu/fake world)) false))))

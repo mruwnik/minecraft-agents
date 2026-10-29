@@ -527,7 +527,7 @@
                   (and (pos? (:search (:args c))) (< (wanted-count c) (least c))) :searching
                   (expecting? c) :expecting
                   (and (zero? n) (or (seq (:skipped m)) (pos? (:search (:args c))) (:near (:args c)))) :skipped
-                  (and (nil? (:ids (:args c))) (not (look/surveyed? c :cell))) :looking)]
+                  (and (nil? (:ids (:args c))) (not (look/surveyed? c :cell look/hazards-only))) :looking)]
     (if waiting
       (contract/later waiting (str "collect-drops: " n " collected, " in-sight " in sight") :units :items :done n :left in-sight :result {:collected n})
       (contract/ok :collected (str "collect-drops: " n " collected, no drop in sight") :units :items :done n :left 0 :result {:collected n}))))

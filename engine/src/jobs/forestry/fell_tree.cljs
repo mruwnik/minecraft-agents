@@ -344,12 +344,17 @@
                 (:unreachable :cannot :out-of-reach :refused) (do (log/mark-unreachable! c) :again)
                 (log/blocked! c (str "cannot dig the tree: " (name r))))))))))
 
+(defn tree-want
+  "The look/see! want for a look for trees: logs and leaves within radius."
+  [radius]
+  {:match #(or (log-name? %) (trees/leaves-name? %)) :radius radius})
+
 (defn ^:async step
   "One piece of the felling: :again, :continue (a child waits on the world) or the ending."
   [c]
   (let [{:keys [species radius]} (:args c)
         walked (when (and (not (:column (ctx/mem c))) (not (first (candidates c radius species))))
-                 (or (await (walk-to-at! c)) (await (look/survey! c :cell (look/glance-effort) {:match #(or (log-name? %) (trees/leaves-name? %)) :radius radius}))))
+                 (or (await (walk-to-at! c)) (await (look/survey! c :cell (look/glance-effort) (tree-want radius)))))
         _ (when (and (not (:pillar (ctx/mem c))) (log/open-scaffold? c))
             (ctx/update-mem! c assoc :pillar {}))
         fresh? (not (:column (ctx/mem c)))
@@ -440,7 +445,7 @@
 (def no-tree
   "Later :no-tree as tree-missing; a look first while the body has not looked round within a few blocks of here. With
   :at the cell is seen (tree-missing says so): no log there, never."
-  (checks/refusing #(cond (:at (:args %)) :never (look/surveyed? % :near) :later :else :look)
+  (checks/refusing #(cond (:at (:args %)) :never (look/surveyed? % :near (tree-want (:radius (:args %)))) :later :else :look)
                    :tree-found "a tree to fell" tree-missing))
 
 (def can-start? no-tree)

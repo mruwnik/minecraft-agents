@@ -132,21 +132,37 @@
   ([c dirs] (glance! c dirs (glance-effort)))
   ([c dirs effort] (await (glance-until! c dirs (constantly nil) effort)) nil))
 
+(defn want-key
+  "What a look for want searched for, as the key its note is kept under: nil for a full pass, the names, :match,
+  :cells, or :hazards (entities only)."
+  [want]
+  (cond
+    (nil? want) nil
+    (:names want) (set (:names want))
+    (:match want) :match
+    (:cells want) :cells
+    :else :hazards))
+
 (defn note-surveyed!
-  "Book that the job has looked around from the cell the body stands in (what surveyed? reads)."
+  "Book that the job has looked around from the cell the body stands in, for want (see!; nil: a full pass), which
+  surveyed? reads. A narrow look does not book a full pass."
   ([c] (note-surveyed! c (cell-of (u/self-pos c))))
-  ([c cell] (ctx/update-mem! c assoc ::looked cell) nil))
+  ([c cell] (note-surveyed! c cell nil))
+  ([c cell want]
+   (let [k (want-key want)]
+     (ctx/update-mem! c #(if k (assoc-in % [::looked-for k] cell) (assoc % ::looked cell))))
+   nil))
 
 (defn forget-survey!
-  "Drop the note that the job has looked around, so surveyed? is false again."
+  "Drop the notes that the job has looked around, so surveyed? is false again."
   [c]
-  (ctx/update-mem! c dissoc ::looked)
+  (ctx/update-mem! c dissoc ::looked ::looked-for)
   nil)
 
 (defn ^:async look-around-until!
   "Look along every heading from here at effort (default glance-effort), level, down and, unless that ray is seen
   already, up. Test (f) after each look: stop at the first truthy one, returned (nil when none; the cell is noted in
-  job memory under ::looked). Entities are sensed only inside the view cone, so what a job wants in view must be
+  job memory, for want). Entities are sensed only inside the view cone, so what a job wants in view must be
   checked between looks, not after the last. want: see!."
   ([c f] (look-around-until! c f (glance-effort)))
   ([c f effort] (look-around-until! c f effort nil))
@@ -161,7 +177,7 @@
                (see! c effort :look-around want)
                (or (f) (recur (rest steps))))
            (recur (rest steps)))
-         (do (note-surveyed! c)
+         (do (note-surveyed! c (cell-of (u/self-pos c)) want)
              nil))))))
 
 (defn ^:async look-around!
@@ -175,15 +191,21 @@
 (def near-blocks 3)
 
 (defn surveyed?
-  "Whether the job has looked around: this run (per :run, the default), from the cell the body stands in (:cell) or
-  from within near-blocks of it (:near)."
+  "Whether the job has looked around for want (see!; nil: a full pass, which covers every want): this run (per :run,
+  the default), from the cell the body stands in (:cell) or from within near-blocks of it (:near). A look for
+  another want (entities only, other block names) does not count."
   ([c] (surveyed? c :run))
-  ([c per]
-   (let [looked (::looked (ctx/mem c))]
-     (case per
-       :cell (= looked (cell-of (u/self-pos c)))
-       :near (boolean (and looked (<= (u/dist looked (cell-of (u/self-pos c))) near-blocks)))
-       (some? looked)))))
+  ([c per] (surveyed? c per nil))
+  ([c per want]
+   (let [m (ctx/mem c)
+         here (cell-of (u/self-pos c))
+         at? (fn [looked]
+               (case per
+                 :cell (= looked here)
+                 :near (boolean (and looked (<= (u/dist looked here) near-blocks)))
+                 (some? looked)))]
+     (or (at? (::looked m))
+         (and (some? want) (at? (get-in m [::looked-for (want-key want)])))))))
 
 (defn ^:async survey!
   "Look around once before choosing work from what the body has seen, as a player turns before deciding there is
@@ -193,7 +215,7 @@
   ([c per] (survey! c per (glance-effort)))
   ([c per effort] (survey! c per effort nil))
   ([c per effort want]
-   (when-not (surveyed? c per)
+   (when-not (surveyed? c per want)
      (await (look-around! c effort want)))))
 
 (defn ^:async survey-until!
@@ -203,7 +225,7 @@
   ([c per f] (survey-until! c per f (glance-effort)))
   ([c per f effort] (survey-until! c per f effort nil))
   ([c per f effort want]
-   (if (surveyed? c per)
+   (if (surveyed? c per want)
      (f)
      (await (look-around-until! c f effort want)))))
 

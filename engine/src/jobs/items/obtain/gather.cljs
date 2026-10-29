@@ -358,7 +358,7 @@
       (nil? need) (tried! c :gather :no-plan)
       (= (:key need) (get-in (ctx/mem c) [:gather :lead :key]))
       (await (lead-step! c))
-      (and (animal? need) (not (get-in (ctx/mem c) [:gather :before])) (not (look/surveyed? c :near)) (not (seen-of c need)))
+      (and (animal? need) (not (get-in (ctx/mem c) [:gather :before])) (not (look/surveyed? c :near look/hazards-only)) (not (seen-of c need)))
       (do (await (look/survey-until! c :near #(seen-of c need) (look/glance-effort) look/hazards-only)) :again)
       (and (not (get-in (ctx/mem c) [:gather :before])) (approach-due? c need))
       (await (approach! c need))

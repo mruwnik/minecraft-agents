@@ -1,6 +1,7 @@
 (ns engine.look-test
   "jobs.lib.look sight helpers over a real perception on the fake world: nothing is sensed through walls."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.ctx :as ctx]
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
@@ -8,7 +9,8 @@
             [jobs.explore.look :as explore-look]
             [jobs.lib.cost.base-rates :as base-rates]
             [jobs.lib.look :as look]
-            [jobs.lib.shelter.sense :as sh-sense]))
+            [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.util :as u]))
 
 (defn seeing
   "Fake primitives over world with a perception (the body's rules, a shorter radius), one sight pass done."
@@ -324,3 +326,22 @@
     (is (= [1 3 4] (map #(.-id %) (look/seen-objs p {:radius 10}))))
     (is (= [1] (map #(.-id %) (look/seen-objs p {:radius 10 :max 1}))) "max counts after the hiding")))
 
+
+(deftest a-look-for-entities-or-other-blocks-is-no-look-for-the-wanted-blocks
+  (let [c {:primitives (seeing {})}
+        mem (atom {})
+        crops {:names #{"melon"} :radius 8}
+        surveyed? (fn [per want] (with-redefs [ctx/mem (fn [_] @mem)] (look/surveyed? c per want)))
+        note! (fn [want] (with-redefs [ctx/update-mem! (fn [_ f & args] (apply swap! mem f args))]
+                           (look/note-surveyed! c (look/cell-of (u/self-pos c)) want)))]
+    (note! look/hazards-only)
+    (is (surveyed? :cell look/hazards-only) "the entity look covers an entity want")
+    (is (not (surveyed? :cell nil)) "but no full pass")
+    (is (not (surveyed? :cell crops)) "and no look for blocks")
+    (note! {:names #{"carrots"} :radius 8})
+    (is (not (surveyed? :cell crops)) "a look for other block names is no look for melons")
+    (note! crops)
+    (is (surveyed? :near crops))
+    (is (not (surveyed? :cell nil)) "a narrow look is no full pass")
+    (note! nil)
+    (is (every? #(surveyed? :cell %) [nil look/hazards-only crops]) "a full pass covers every want")))

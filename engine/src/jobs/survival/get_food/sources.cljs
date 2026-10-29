@@ -163,12 +163,10 @@
   when there is none. Another's area is dug only when the caller passed :ignore-zones? and last-resort? (hungry,
   nothing edible carried), after every permitted block; otherwise the block is left and noted in the :foreign-food
   memory for the end text. A block not dug is skipped from then on. With none seen it looks around for them once per
-  cell (a look for animals sees no blocks, so its survey does not count)."
+  cell."
   [c ripe-ages center radius last-resort?]
-  (let [cell (look/cell-of (u/self-pos c))]
-    (when (and (empty? (ripe-blocks c ripe-ages center radius)) (not= cell (::crops-looked (ctx/mem c))))
-      (await (look/look-around! c (look/glance-effort) {:names (set (keys ripe-ages)) :radius (+ radius (u/dist (u/self-pos c) center))}))
-      (ctx/update-mem! c assoc ::crops-looked cell)))
+  (when (empty? (ripe-blocks c ripe-ages center radius))
+    (await (look/survey! c :cell (look/glance-effort) {:names (set (keys ripe-ages)) :radius (+ radius (u/dist (u/self-pos c) center))})))
   (let [in (assoc (access/rules-input c) :ignore-zones? false)
         refusal #(access/trespass-refusal in :dig %)
         blocks (ripe-blocks c ripe-ages center radius)

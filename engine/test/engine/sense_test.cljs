@@ -80,8 +80,10 @@
           (is (= "iron_ore" (:name (await (sense/decide! c ::ore ore)))))
           (is (= [[0.5 65.62 -3.5]] (look-points p)) "one survey, stopped at its first look: level, north, at the ore")
           (let [before (looks p)]
+            (is (nil? (await (sense/decide! c ::iron-again #(first (remove (constantly true) (look/seen-blocks p {:names ["iron_ore"] :radius 16})))))))
+            (is (= before (looks p)) "surveyed for iron from this cell already: no second survey")
             (is (nil? (await (sense/decide! c ::gold #(first (look/seen-blocks p {:names ["gold_ore"] :radius 16}))))))
-            (is (= before (looks p)) "surveyed from this cell already: no second survey")))))))
+            (is (< before (looks p)) "a look for iron is no look for gold: it surveys again")))))))
 
 (deftest an-entity-query-stops-at-the-first-look-that-shows-it
   (async done

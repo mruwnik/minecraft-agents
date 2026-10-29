@@ -152,16 +152,17 @@
                    (do (await (look-at! c target))
                        (recur (inc looks) (conj looked target) surveyed))
 
-                   (and ask (not surveyed) (not (look/surveyed? c :cell)))
-                   (do (await (look/survey-until! c :cell #(let [[v] (decide decide-fn)] (when-not (retry? v) [v])) (look/glance-effort) (want-of reads)))
-                       (recur looks looked true))
+                   (and ask (not surveyed) (not (look/surveyed? c :cell (want-of reads))))
+                   (let [want (want-of reads)]
+                     (await (look/survey-until! c :cell #(let [[v] (decide decide-fn)] (when-not (retry? v) [v])) (look/glance-effort) want))
+                     (recur looks looked {:want want}))
 
                    :else [v looked surveyed])))))
          new (remove looked0 looked)]
      (when (or (seq new) surveyed)
        (let [[total-ms max-ms] (step-ms p)]
-         (ctx/update-mem! c #(cond-> (assoc % ::looked {:at cell :cells looked})
-                               surveyed (assoc ::look/looked cell)))
+         (ctx/update-mem! c assoc ::looked {:at cell :cells looked})
+         (when surveyed (look/note-surveyed! c cell (:want surveyed)))
          (ctx/emit! c :sense.looked :debug
                     (cond-> {:decision k :looks (count new) :cells (vec new) :surveyed? (boolean surveyed)}
                       t0 (assoc :step-ms (- total-ms (first t0)) :step-ms-max max-ms)))))
