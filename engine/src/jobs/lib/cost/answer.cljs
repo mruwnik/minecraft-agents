@@ -460,14 +460,15 @@
 
 (defn blows-over
   "{:damage :hit} of mobs [flee-mob's] on a body that stands for seconds wearing armour stats: each melee mob's blows from its
-  arrival (its chase speed), each shooter's arrows within its bow's range, at its measured hit rate."
+  arrival (its chase speed), each shooter's arrows within its bow's range, at its measured hit rate; a mob of :weight w
+  (default 1: the chance it is there, a fading memory's) lands w of them."
   [stats mobs seconds]
   (let [hitting (remove #(and (threat/ranged? %) (> (or (:distance %) 0) (hit-range %))) mobs)
         left (fn [{:keys [name distance speed] :as m}]
                (if (threat/ranged? m)
                  seconds
                  (max 0 (- seconds (/ (max 0 (- (or distance 0) (danger/melee-reach))) (or speed (danger/chase-speed name)))))))]
-    {:damage (reduce + 0 (map #(threat/mob-hurt stats (threat/kind %) (left %) identity (threat/lone-hit-rate (threat/kind %))) hitting))
+    {:damage (reduce + 0 (map #(* (:weight % 1) (threat/mob-hurt stats (threat/kind %) (left %) identity (threat/lone-hit-rate (threat/kind %)))) hitting))
      :hit (reduce max 0 (map #(blow stats %) hitting))}))
 
 (defn build-answer
@@ -484,16 +485,19 @@
         {creepers true others false} (group-by #(= "creeper" (:name %)) mobs)
         blasts (vec (for [{:keys [name distance speed] :as m} creepers
                           :when (<= (/ (max 0 (- (or distance 0) swell-start)) (or speed (danger/chase-speed name))) seconds)]
-                      (blow stats m)))]
+                      (* (:weight m 1) (blow stats m))))]
     (cond-> (-> (blows-over stats others seconds) (update :damage + (reduce + 0 blasts)) (update :hit #(reduce max % blasts)) (assoc :seconds 0))
       (seq blasts) (assoc :blasts blasts))))
 
 (defn stand-loss
-  "Seconds doing nothing about mobs [flee-mob's] for seconds costs body (answer-price's) wearing equipment at `at`: the
-  price of their stand-answer, the hp they take and the death they risk. 0 when none can hit."
+  "Seconds doing nothing about mobs [flee-mob's, :weight as blows-over's] for seconds costs body (answer-price's) wearing
+  equipment at `at`: the price of their stand-answer, the hp they take and the death they risk. 0 when none can hit. The
+  one price of standing in reach of mobs. seconds may be a spread, equally likely stays (their mean loss)."
   [body equipment mobs at seconds]
-  (let [a (stand-answer {:equipment equipment :mobs mobs :seconds seconds})]
-    (if (pos? (:damage a)) (answer-price body a at) 0)))
+  (if (sequential? seconds)
+    (mean (map #(stand-loss body equipment mobs at %) seconds))
+    (let [a (stand-answer {:equipment equipment :mobs mobs :seconds seconds})]
+      (if (pos? (:damage a)) (answer-price body a at) 0))))
 
 (defn counted-chance
   "The chance of a measured share, k of n counted {:k :n}, under a Beta(a, b) prior of pseudo-counts :prior [a b] (a of the

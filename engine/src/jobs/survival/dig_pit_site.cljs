@@ -48,10 +48,9 @@
 
 (defn stay-toll-s
   "Seconds the known mobs the body would flee cost a pit dug at feet cell f (danger-near, threats/danger-near-fn of c):
-  their toll there over pit-s."
+  their :stay-loss there over pit-s."
   [c danger-near f]
-  (let [toll (:toll (danger-near f) 0)]
-    (if (zero? toll) 0 (* toll (pit-s c f)))))
+  (if-let [{:keys [stay-loss]} (danger-near f)] (stay-loss (pit-s c f)) 0))
 
 (defn walk-toll-s
   "Seconds the known mobs the body would flee cost a walk from `from` to feet cell f: their toll at each cell of walk-risk/way

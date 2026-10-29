@@ -47,6 +47,13 @@
     (is (< (get armed [6 64 0]) (get bare [6 64 0])) "with a diamond sword: a fight, cheap")
     (is (= {} (tolls {:blocks wall :entities [(zombie 1 6 0)]})) "behind a wall the body never saw it through: not known (no x-ray)")))
 
+;; a stay is priced by the blows the mob lands in it (cost/stand-loss), not by a rate whatever its arrival
+(deftest a-stay-over-before-the-mob-can-come-costs-nothing
+  (let [c (ready-test/ctx-of {:entities [(zombie 1 6 0)]})
+        at {:x 3.5 :y 64 :z 0.5}]
+    (is (nil? (threats/stay-danger c at 0.1 0)) "a tenth of a second: the zombie some blocks off lands no blow")
+    (is (some? (threats/stay-danger c at 60 0)) "a minute: it comes and hits")))
+
 (deftest the-sensed-place-wins-over-a-flight-from-the-same-mob-and-at-most-max-threats
   (let [c (assoc (ready-test/ctx-of {:entities [(assoc (zombie 1 6 0) :uuid "a")]}) :view
                  (fn [] {:now 0 :data {:entries {:threat [{:t 0 :data {:mob "zombie" :id 1 :uuid "a" :key "a" :pos {:x 30 :y 64 :z 0}}}]}}}))]

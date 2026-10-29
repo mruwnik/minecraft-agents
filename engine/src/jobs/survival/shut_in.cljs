@@ -7,9 +7,9 @@
             [engine.settings :as settings]
             [jobs.lib.breath :as breath]
             [jobs.lib.combat :as combat]
-            [jobs.lib.cost :as cost]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.hostile-loss :as hostile-loss]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.spent :as spent]
             [jobs.lib.util :as u]
@@ -89,12 +89,12 @@
     (if (contract/ending? q) [##Inf 0 0] [(get-in q [:uses :job-time 1] ##Inf) (:risk-s q 0) (:morning-s q 0)])))
 
 (defn exposure
-  "Seconds each second in the open costs the body now: cost/exposure-price over the real dangers (jobs.lib.danger/dangers); 0 with none."
+  "A fn of seconds: what that long in the open costs the body now (hostile-loss/loss-over the real dangers,
+  jobs.lib.danger/dangers); nil with none."
   [c]
   (let [p (:primitives c)
-        self (.self p)
-        names (map #(.-name %) (danger-q/dangers p (danger-q/hostile-radius) {:ranged-radius (danger-q/ranged-radius)}))]
-    (cost/exposure-price {:health (.-health self) :equipment (cost/equipment-of (.-equipment self))} names)))
+        hs (danger-q/dangers p (danger-q/hostile-radius) {:ranged-radius (danger-q/ranged-radius)})]
+    (when (seq hs) #(hostile-loss/loss-over p (ctx/view c) hs %))))
 
 (def exposed-s
   "Each way's seconds in the open before it covers the body (the :room walk: its whole quote)."
@@ -103,12 +103,12 @@
 (declare fails)
 
 (defn price
-  "A way's quoted seconds plus, under fire (exposure f), f x its seconds in the open, each try that fails (fails) paid again."
+  "A way's quoted seconds plus, under fire (exposure f), what its seconds in the open cost (f of them), each try that fails (fails) paid again."
   [c f way seconds]
-  (if (or (zero? f) (infinite? seconds))
+  (if (or (nil? f) (infinite? seconds))
     seconds
     (let [c (update c :args merge (child-args c way))]
-      (/ (+ seconds (* f (if-let [e (exposed-s way)] (e c) seconds)))
+      (/ (+ seconds (f (if-let [e (exposed-s way)] (e c) seconds)))
          (- 1 (if-let [fl (fails way)] (fl c) 0))))))
 
 (def quotes
@@ -149,7 +149,7 @@
     {:open-s (+ s (if unseen? quiet broken)) :seconds (+ s quiet)}))
 
 (defn ^:async way-costs
-  "{:costs [[way price risk-s seconds morning-s]] of the allowed ways not failed or barred :barred [ways failed near, for :night] :exposure f}: each
+  "{:costs [[way price risk-s seconds morning-s]] of the allowed ways not failed or barred :barred [ways failed near, for :night]}: each
   way's quoted seconds, under fire plus what its seconds in the open cost (price), its quote's :risk-s, its quoted seconds and its :morning-s; ##Inf for one that cannot be done here."
   [c]
   (let [failed (set (:failed-ways (ctx/mem c)))
@@ -159,8 +159,7 @@
         f (exposure c)]
     {:costs (loop [[w & more] left acc []]
               (if (nil? w) acc (recur more (let [[s r m] (await (cost-of c w))] (conj acc [w (price c f w s) r s m])))))
-     :barred (vec barred)
-     :exposure f}))
+     :barred (vec barred)}))
 
 (defn ^:async quote-of
   "Time: 0 when the body is enclosed, else ::mean-s or the cheapest way's price (way-costs) when that is dearer, ##Inf when
@@ -179,10 +178,10 @@
   "{:way the cheapest allowed way not failed (nil when none) :dropped [ways that cannot be done]}: way-costs, the cheapest
   finite."
   [c]
-  (let [{:keys [costs barred exposure]} (await (way-costs c))
+  (let [{:keys [costs barred]} (await (way-costs c))
         able (remove (comp infinite? second) costs)]
     (let [shown (into {} (map (fn [[w s]] [w (if (infinite? s) :inf (/ (js/Math.round (* 10 s)) 10))]) costs))]
-      (ctx/emit! c :shut-in.quotes :debug {:costs shown :exposure exposure :text (str "ways quoted (seconds): " (pr-str shown))}))
+      (ctx/emit! c :shut-in.quotes :debug {:costs shown :text (str "ways quoted (seconds): " (pr-str shown))}))
     {:way (first (first (sort-by second able)))
      :barred barred
      :dropped (into barred (map first (filter (comp infinite? second) costs)))}))

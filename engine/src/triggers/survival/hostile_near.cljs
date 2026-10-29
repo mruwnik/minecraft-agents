@@ -6,7 +6,7 @@
 
 (defn hostile-near
   "Holds when doing nothing about the real dangers near would cost the body (jobs.lib.hostile-loss: their blows and the
-  death they risk over an encounter, positive). A danger is either:
+  death they risk over a respond call, positive). A danger is either:
     a known hostile mob within :radius (args, default 8) that has a walkable way to the body
       (jobs.lib.danger: not walled off, not across a pit it cannot climb, body not sealed in; in closed quarters a heard
       one counts only once seen or beside the body), or

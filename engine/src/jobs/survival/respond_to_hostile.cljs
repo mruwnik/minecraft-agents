@@ -447,9 +447,9 @@
                  {:units :hostiles :done (count fled) :left (+ n (count chasers))})))
 
 (defn quote-of
-  "Find-out: an encounter lasts as long as the danger stays."
+  "Find-out: a call lasts as long as the danger stays (hostile-loss/mean-call-s on the mean)."
   [_c]
-  {:uses {:job-time [0 (hostile-loss/encounter-s) ##Inf]}})
+  {:uses {:job-time [0 (hostile-loss/mean-call-s) ##Inf]}})
 
 (defn worth-of
   "The loss the response averts: what doing nothing about the dangers near costs (hostile-loss/loss, as the hostile-near

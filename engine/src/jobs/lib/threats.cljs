@@ -212,11 +212,13 @@
 
 (defn danger-near-fn
   "A fn of a cell pos: the nearest known threat (threats-of c) the body would flee whose field weighs the cell in full
-  (within threat-field ::close steps of its way), as {:mob :mob-pos :mob-distance :toll}, else nil. :toll is what each
-  second there costs more: cost/threat-factor of every such threat at its weight, summed, at most
-  cost/threat-factor-cap. A caller prices a stay there by it. Threats are read once."
+  (within threat-field ::close steps of its way), as {:mob :mob-pos :mob-distance :toll :stay-loss}, else nil. :toll is what
+  each second walked there costs more: cost/threat-factor of every such threat at its weight, summed, at most
+  cost/threat-factor-cap. :stay-loss, a fn of seconds, is what standing there that long costs: cost/stand-loss of them all,
+  each at its weight and distance from pos. Threats are read once."
   [c]
   (let [body (body-of (:primitives c))
+        dying (delay (death-body c))
         cap (cost/threat-factor-cap body)
         ts (->> (threats-of c)
                 (filter #(= :flee (cost/stance body (:mob %))))
@@ -225,24 +227,28 @@
     (fn [{:keys [x y z] :as pos}]
       (let [in (filterv (fn [{:keys [reach]}] (= 1 (reach (js/Math.floor x) (js/Math.floor y) (js/Math.floor z)))) ts)]
         (when (seq in)
-          (let [t (first (sort-by #(u/dist pos (:pos %)) in))]
+          (let [t (first (sort-by #(u/dist pos (:pos %)) in))
+                mobs (mapv (fn [{:keys [mob chaser weight] :as m}]
+                             {:name mob :distance (u/dist pos (:pos m)) :speed (cost/chase-speed (or chaser mob)) :weight weight})
+                           in)]
             {:mob (:mob t) :mob-pos (select-keys (:pos t) [:x :y :z]) :mob-distance (js/Math.round (u/dist pos (:pos t)))
-             :toll (min cap (reduce + (map :toll in)))}))))))
+             :toll (min cap (reduce + (map :toll in)))
+             :stay-loss (fn [seconds] (cost/stand-loss @dying (:equipment body) mobs pos seconds))}))))))
 
 (defn stay-danger-fn
   "(fn [pos stay-s worth]) of stay-danger over one reading of c's threats, for a caller pricing many positions."
   [c]
   (let [near (danger-near-fn c)]
     (fn [pos stay-s worth]
-      (when-let [{:keys [toll] :as d} (near pos)]
+      (when-let [{:keys [stay-loss] :as d} (near pos)]
         (let [stay-s (or stay-s (risk/work-s :click))
-              risk (* toll stay-s)]
-          (when-not (cost/affords? risk worth) (assoc (dissoc d :toll) :stay-s stay-s :risk risk :worth worth)))))))
+              risk (stay-loss stay-s)]
+          (when-not (cost/affords? risk worth) (assoc (dissoc d :toll :stay-loss) :stay-s stay-s :risk risk :worth worth)))))))
 
 (defn stay-danger
   "The nearest known threat the body would flee whose field holds pos (danger-near-fn), with :stay-s, :risk and :worth,
-  when its toll over stay-s seconds there (nil: a click's; :risk, seconds) costs more than worth; else nil. The one price
-  of staying to work in a threat's field, walked to (go-to) or in reach (jobs.lib.near/go-near!)."
+  when standing there stay-s seconds (nil: a click's; :risk, its :stay-loss) costs more than worth; else nil. The one
+  price of staying to work in a threat's field, walked to (go-to) or in reach (jobs.lib.near/go-near!)."
   [c pos stay-s worth]
   ((stay-danger-fn c) pos stay-s worth))
 

@@ -442,20 +442,21 @@
     (is (not (pit-site/pit-site? (tu/fake {:blocks stone}) site)) "no pickaxe: stone cannot be dug")
     (is (pit-site/pit-site? (tu/fake {:blocks stone :inventory [{:name "iron_pickaxe" :count 1}]}) site))))
 
-;; a site is priced by its walk, the toll along it and the toll of known mobs over the pit's stay (pit-s: the dig and the roof
+(defn tolled "A danger-near of toll seconds a second, walked or stood in." [toll] {:toll toll :stay-loss #(* toll %)})
+
+;; a site is priced by its walk, the toll along it and the loss of standing by known mobs over the pit's stay (pit-s: the dig and the roof
 ;; placement, as dig-pit's quote has them): a zombie by the feet costs more over the stay than a few blocks of walk; one as
 ;; good as gone costs less than any walk, so the feet stay the site
 (deftest a-relocation-site-weighs-the-walk-against-the-toll-over-the-pit
   (let [dirt (into {} (for [x (range -12 13) z (range -12 13)] [(str x ",63," z) "dirt"]))
         p (tu/seeing-all (tu/fake {:blocks dirt}))
         c {:primitives p :id "j" :args {:for :night} :slots [] :engine {:warned (atom #{})} :view (fn [] {:now 0 :data {}})}
-        per-weight (cost/threat-factor {:health 20 :equipment nil :weapon nil} "zombie" 1)
-        site (fn [toll] (with-redefs [threats/known-threats (constantly [{:mob "zombie" :pos {:x 0.5 :y 64 :z 0.5} :weight (/ toll per-weight)}])]
-                          [(pit-site/relocation-site c) (threats/danger-near-fn c)]))
+        site (fn [weight] (with-redefs [threats/known-threats (constantly [{:mob "zombie" :pos {:x 0.5 :y 64 :z 0.5} :weight weight}])]
+                            [(pit-site/relocation-site c) (threats/danger-near-fn c)]))
         [light danger] (site 0.5)
         [gone] (site 1e-6)]
     (is (< 1 (pit-site/pit-s c {:x 0 :y 64 :z 0}) 20) "a pit's stay is some seconds: the dig and a placement")
-    (is (not= {:x 0 :y 64 :z 0} light) "a toll of 0.5 s a second over the pit is dearer than the walk off")
+    (is (not= {:x 0 :y 64 :z 0} light) "a zombie as likely by the feet as not costs more over the pit than the walk off")
     (is (nil? (danger light)) (pr-str light))
     (is (= {:x 0 :y 64 :z 0} gone))))
 
@@ -468,7 +469,7 @@
               c {:primitives p :id "j" :args {:for :night} :slots [] :engine {:warned (atom #{})} :view (fn [] {:now 0 :data {}})}
               m {:x 8 :y 64 :z 0}
               unquoted {:x 9 :y 64 :z 0}
-              toll-at (fn [toll-m toll-feet] (fn [f] {:toll (if (= (:x f) 8) toll-m toll-feet)}))
+              toll-at (fn [toll-m toll-feet] (fn [f] (tolled (if (= (:x f) 8) toll-m toll-feet))))
               keeps (fn ^:async keeps [fresh toll-m toll-feet walk]
                       (with-redefs [threats/danger-near-fn (fn [_] (toll-at toll-m toll-feet))
                                     pit-site/pit-site? (fn [_ _] false)
@@ -488,7 +489,7 @@
         c {:primitives p :id "j" :args {:for :night} :slots [] :engine {:warned (atom #{})} :view (fn [] {:now 0 :data {}})}
         tested (atom 0)
         real pit-site/pit-site?]
-    (with-redefs [threats/danger-near-fn (fn [_] (fn [_] {:toll 5}))
+    (with-redefs [threats/danger-near-fn (fn [_] (fn [_] (tolled 5)))
                   pit-site/pit-site? (fn [p f] (swap! tested inc) (real p f))]
       (is (= {:x 0 :y 64 :z 0} (pit-site/relocation-site c))))
     (is (= 1 @tested) "the nearest site is the cheapest: no other column is tested")))
@@ -497,7 +498,7 @@
   (let [dirt (into {} (for [x (range -4 5) z (range -4 5)] [(str x ",63," z) "dirt"]))
         p (tu/seeing-all (tu/fake {:blocks (assoc dirt "0,63,-1" "water")}))
         c {:primitives p :id "j" :args {:for :night} :slots [] :engine {:warned (atom #{})} :view (fn [] {:now 0 :data {}})}]
-    (with-redefs [threats/danger-near-fn (fn [_] (fn [_] {:toll 1}))]
+    (with-redefs [threats/danger-near-fn (fn [_] (fn [_] (tolled 1)))]
       (let [f (pit-site/relocation-site c)]
         (is (some? f))
         (is (pit-site/pit-site? p f))
@@ -515,7 +516,7 @@
   (let [ground (into {} (for [x (range -8 9) z (range -2 3)] [(str x ",63," z) (if (<= -3 x 3) "obsidian" "dirt")]))
         p (tu/seeing-all (tu/fake {:blocks ground :inventory [{:name "iron_pickaxe" :count 1}]}))
         c {:primitives p :id "j" :args {:for :night} :slots [] :engine {:warned (atom #{})} :view (fn [] {:now 0 :data {}})}
-        site (fn [toll-fn] (with-redefs [threats/danger-near-fn (fn [_] (fn [f] {:toll (toll-fn (:x f))}))] (pit-site/relocation-site c)))]
+        site (fn [toll-fn] (with-redefs [threats/danger-near-fn (fn [_] (fn [f] (tolled (toll-fn (:x f)))))] (pit-site/relocation-site c)))]
     (is (= -4 (:x (site (constantly 0)))) "no mob: the tie goes to the first site")
     (is (= 4 (:x (site #(if (<= -3 % -1) 1 0)))) "a field on the west way: the east site")))
 

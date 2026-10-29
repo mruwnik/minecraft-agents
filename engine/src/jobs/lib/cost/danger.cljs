@@ -9,8 +9,6 @@
   weighted by the most its reach (its way and line of fire, jobs.lib.threat-field) weighs a cell of the route, none
   outside it. Overrides {mob-name number-or-{:times n}}: threat before armour.
 
-  exposure-price: the seconds a second exposed to mobs that reach the body costs (hurt-rate, the hp a second, at the hp price).
-
   danger-rate: mob-hurt over 1 s x stance factor (:flee x4, :fight x0.1), at most max-rate: hp a second (the factors and the
   cap are settings, danger-opts); threat-factor prices it at the hp price of the body's health."
   (:require [engine.args :as a]
@@ -154,12 +152,6 @@
    (min (get opts :max-rate max-rate)
         (* (hurt-rate equipment mob-name)
            (get (merge stances (:stances opts)) (stance body mob-name))))))
-
-(defn exposure-price
-  "Seconds each second spent exposed costs body {:health :equipment} to mob-names that can reach it: their hurt-rates
-  summed, at health/hp-price. 0 with none."
-  [{:keys [health equipment]} mob-names]
-  (* (reduce + 0 (map #(hurt-rate equipment %) mob-names)) (health/hp-price (if (number? health) health 20))))
 
 (defn threat-factor
   "Seconds more each second within a known mob's reach costs body {:health :equipment :weapon}: mob-name's danger-rate x

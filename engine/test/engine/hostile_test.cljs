@@ -1209,7 +1209,7 @@
   (is (not (holds? {:entities [(skeleton 1 16 0)]} {})) "at 16 it is in follow range with a line of fire, but out of the bow's 15: standing still loses nothing"))
 
 (deftest doing-nothing-costs-the-blows-of-the-mobs-that-can-hit
-  (let [loss (fn [mobs & [equipment]] (cost/stand-loss {:health 20 :level 0 :carried 2000} equipment mobs {:x 0 :y 64 :z 0} 20))
+  (let [loss (fn [mobs & [equipment s]] (cost/stand-loss {:health 20 :level 0 :carried 2000} equipment mobs {:x 0 :y 64 :z 0} (or s 20)))
         sk (fn [d] {:name "skeleton" :distance d})
         z (fn [d] {:name "zombie" :distance d})]
     (is (= 0 (loss [(sk 16)])) "past its bow's 15 a skeleton lands nothing")
@@ -1217,7 +1217,19 @@
     (is (< (loss [(z 7)]) (loss [(z 2)])) "a zombie farther off hits for less of the stay")
     (is (< (loss [(z 2)]) (loss [(z 2) (sk 14)])) "every mob that can hit adds its blows")
     (is (< (loss [(z 2)] diamond-armour) (loss [(z 2)])) "armour takes some of them")
-    (is (< 0 (loss [{:name "creeper" :distance 7}])) "a creeper walking up blows")))
+    (is (< 0 (loss [{:name "creeper" :distance 7}])) "a creeper walking up blows")
+    (is (< 0 (loss [(assoc (z 2) :weight 0.5)]) (loss [(z 2)])) "a mob as likely there as not lands some of its blows")
+    (is (= (/ (+ (loss [(z 2)] nil 1) (loss [(z 2)] nil 20)) 2) (loss [(z 2)] nil [1 20])) "a spread of stays costs their mean")))
+
+;; the shot's skeleton stands for a shooter not seen: one seen is that shooter, not a second
+(deftest a-seen-skeleton-and-its-shot-count-once
+  (let [p (tu/fake-on-floor {:entities [(assoc (skeleton 1 14 0) :visible true)]})
+        quiet {:data mem/empty-data :now 2000}
+        shot {:data (mem/add-entry mem/empty-data :hurt {:t 1500 :data {:damageType "arrow" :dir {:x 1 :z 0}}} {:cap 50 :ttl 60000}) :now 2000}
+        loss (fn [view] (hostile-loss/loss p view (danger-q/hostile-dangers p view {})))]
+    (is (= ["skeleton"] (mapv :name (hostile-loss/mobs-of p shot []))) "no shooter seen: the shot stands for one")
+    (is (pos? (loss quiet)))
+    (is (= (loss quiet) (loss shot)) "the seen skeleton is the shooter")))
 
 (defn respond-worth [world]
   (respond-to-hostile/worth-of {:primitives (tu/fake-on-floor world) :view (fn [] {:data mem/empty-data :now 0}) :args {}}))

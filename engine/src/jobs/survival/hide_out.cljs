@@ -5,10 +5,10 @@
             [jobs.lib.body :as body]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
-            [jobs.lib.cost :as cost]
             [jobs.lib.combat :as combat]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-in-leave :as dig-leave]
+            [jobs.lib.hostile-loss :as hostile-loss]
             [jobs.lib.look :as look]
             [jobs.lib.ready :as ready]
             [jobs.lib.reach :as reach]
@@ -120,18 +120,17 @@
           :else (do (ctx/update-mem! c assoc-in [:dig-out :i] (inc i)) :again))))))
 
 (defn stays-for-creeper?
-  "Whether staying in the refuge is the cheaper of the two with a creeper at it (cost/exposure-price): a plug or pit shuts the blast off
+  "Whether staying in the refuge is the cheaper of the two with a creeper at it (hostile-loss/loss-over): a plug or pit shuts the blast off
   the body (it only opens the walls, leaving it ::opened-s exposed to the other hostiles near), so it stays when leaving costs more (::leave-s in the open among them); a pillar takes the blast and is left."
   [c]
   (let [p (:primitives c)
-        self (.self p)
-        body {:health (.-health self) :equipment (cost/equipment-of (.-equipment self))}
-        others (remove combat/creeper? (flight/near-known p (dead c) (danger-q/hostile-radius) (danger-q/ranged-radius)))
+        near (flight/near-known p (dead c) (danger-q/hostile-radius) (danger-q/ranged-radius))
+        others (remove combat/creeper? near)
         shielded? (contains? #{:plug :plug-dig :pit} (:kind (:args c)))
-        others-price (cost/exposure-price body (map #(.-name %) others))
-        stay (if shielded? (* (settings/get settings ::opened-s) others-price) (cost/exposure-price body ["creeper"]))
-        leave (* (settings/get settings ::leave-s) others-price)]
-    (< stay leave)))
+        loss #(hostile-loss/loss-over p (ctx/view c) %1 %2)
+        leave-s (settings/get settings ::leave-s)
+        stay (if shielded? (loss others (settings/get settings ::opened-s)) (loss near leave-s))]
+    (< stay (loss others leave-s))))
 
 (defn breaker
   "The known hostile that would breach the refuge: a creeper (unless staying is cheaper: stays-for-creeper?) or, against a pillar, a climber, within breaker-reach; nil when none or leave-for-breakers is off."
