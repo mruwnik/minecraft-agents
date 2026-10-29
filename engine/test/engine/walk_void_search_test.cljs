@@ -14,6 +14,7 @@
   {:self {:pos {:x 0.5 :y 64 :z 10.5}} :yaw 180 :pitch 0
    :blocks (merge (box -30 63 -10 40 63 10 "stone") (box 0 63 38 2 65 38 "iron_ore"))})
 
+;; the rock guess off: it would read the void as stone and end the search early
 (deftest a-masked-search-over-a-void-stops-at-the-node-limit-and-runs-no-second-search
   (async done
     (tu/run-async done
@@ -27,7 +28,7 @@
           (aset w "rawWorld" raw)
           (perception/pass! per)
           (with-redefs [planner/create-plan (fn [& args] (swap! searches inc) (apply create args))]
-            (let [{:keys [r]} (await (settings/with-settings {:jobs.lib.walk.world/unknown-max-nodes 2000}
+            (let [{:keys [r]} (await (settings/with-settings {:jobs.lib.walk.world/unknown-max-nodes 2000 :jobs.lib.walk.world/rock-beyond false}
                                       #(wplan/plan-within! {:primitives w} (wworld/path-world w (wworld/unknown-spec)) [1 64 38] 4 1.2 executor/policy)))]
               (is (= "budget" (.-reason r)) "no seen route: the unseen cells were flooded to the limit")
               (is (<= (.-expanded r) 2200))

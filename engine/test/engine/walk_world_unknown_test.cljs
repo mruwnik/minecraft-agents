@@ -266,15 +266,15 @@
    :blocks (apply dissoc (box -1 (dec y) -1 sx (+ y sy) sz "stone") (for [x (range sx) dy (range sy) z (range sz)] (str x "," (+ y dy) "," z)))})
 
 (deftest the-rock-guess-follows-the-measured-chance-at-its-height-and-light
-  ;; a cell 4 past where sight was cut is mostly rock in the dark (a floor-only ball too: under cover); lit, only with walls in reach
+  ;; a cell 4 past where sight was cut is mostly rock in the dark (a floor-only ball too: under cover); lit or dark alike: the measure alone
   (are [world light yaws guess] (= guess (looked-round world light yaws))
-    hall-world [0 14] [270] false
-    hall-world [0 14] [0 90 180 270] false
+    hall-world [0 14] [270] true
+    hall-world [0 14] [0 90 180 270] true
     hall-world [0 0] [0 90 180 270] true
     (assoc hall-world :equipment {"offHand" {:name "torch" :count 1}}) [0 0] [0 90 180 270] true
-    (room 96 16 32 -40) [0 14] [0 90 180 270] false
+    (room 96 16 32 -40) [0 14] [0 90 180 270] true
     (room 24 10 24 -20) [0 0] [0 90 180 270] true
-    (room 24 10 24 -20) [0 14] [0 90 180 270] false
+    (room 24 10 24 -20) [0 14] [0 90 180 270] true
     pocket-world [0 0] [270] true
     pocket-world [0 14] [270] true
     {:self {:pos {:x 10.5 :y 64 :z 0.5}} :blocks tunnel} [0 0] [270] true

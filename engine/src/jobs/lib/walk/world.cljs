@@ -12,7 +12,6 @@
             [jobs.lib.breath :as breath]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
-            [jobs.lib.cost.base-rates :as base-rates]
             [jobs.lib.look :as look]
             [jobs.lib.placement :as placement]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -133,15 +132,12 @@
 (defn rock-guess?
   "Whether a walk over mask spec unknown (nil: none) reads far unseen cells as rock (path-world): ::rock-beyond k is on,
   an unseen cell k + 1 from the nearest frontier at the feet's height is more likely solid than open (look/unseen-solid-fn:
-  measured over the body's own kind of sight, so how far it sees in the dark does not move it), with lit feet only with
-  walls in reach (base-rates/walls-in-reach?: past a lit cut over open ground the measure sits at about a half, and a
-  wrong rock shuts a seen hall's way on), the body's head is out of water, and the mask is neither :edge nor without-rock."
+  measured over the body's own kind of sight, so how far it sees in the dark does not move it), the body's head is out of water, and the mask is neither :edge nor without-rock."
   [p ^js unknown]
   (boolean (and unknown (not (.-edge unknown)) (not (.-noRock unknown)) (not (breath/head-under? p))
                 (when-let [k (rock-beyond)]
                   (when-let [solid-at (look/unseen-solid-fn p)]
-                    (and (or (not (look/feet-lit? p)) (base-rates/walls-in-reach? (look/near-share p)))
-                         (> (solid-at (:y (sh-sense/feet p)) (inc k)) 0.5)))))))
+                    (> (solid-at (:y (sh-sense/feet p)) (inc k)) 0.5))))))
 
 (defn- rock-seeds
   "The cells path-world's rock guess spares for a walk over mask spec unknown: the feet and the spec's seeds (with-seeds)."

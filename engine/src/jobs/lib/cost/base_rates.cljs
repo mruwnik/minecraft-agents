@@ -173,12 +173,6 @@
           (.set unseen-kept key v)
           v))))
 
-(defn walls-in-reach?
-  "Whether a near share q (the solid share seen within :near of the eye) is past unseen-solid's lowest q bucket, a floor
-  under open air: walls or a roof in reach."
-  [q]
-  (boolean (and q (>= q (first (:q-edges unseen-data))))))
-
 (defn open-run-chance
   "The chance n unseen cells in a row out from a frontier cell are all open, the i-th at 1 - unseen-solid at distance i
   (y dy lit? q as its); under 1e-6 reads 0."

@@ -54,8 +54,7 @@
   (is (< (rates/unseen-solid -20 0 4 false 0.25) (rates/unseen-solid -20 0 4 false 0.6)) "walls in reach round the eye: a cave, likelier rock")
   (is (< (js/Math.abs (- (rates/unseen-solid 63 0 3 false nil) (rates/unseen-solid 64 0 3 false nil))) 0.05) "no step at a section border")
   (is (= (rates/unseen-solid 0 0 rates/unseen-d-max false nil) (rates/unseen-solid 0 0 40 false nil)) "past the table's farthest, its farthest")
-  (is (> (rates/unseen-solid 70 -4 4 true nil) (rates/unseen-solid 70 0 4 true nil)) "under the floor likelier rock than where the body walks")
-  (is (= [false false true] (map rates/walls-in-reach? [nil 0.25 0.6])) "a floor under open air, or walls in reach"))
+  (is (> (rates/unseen-solid 70 -4 4 true nil) (rates/unseen-solid 70 0 4 true nil)) "under the floor likelier rock than where the body walks"))
 
 (deftest an-unseen-run-under-a-frontier-is-open-only-if-every-cell-is
   (is (= 1 (rates/open-run-chance 70 0 0 true nil)) "no cell between")
