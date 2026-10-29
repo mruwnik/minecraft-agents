@@ -17,7 +17,6 @@
   Done? means no hp-costing effect. Poisoned, it needs a cure carried, else condition-failed :no-cure (a listed job waits), unless
   the call's :ways allow a fetch and the cheapest fetch of milk or a golden apple (jobs.lib.need/item-price) is cheaper than
   waiting the effect out (cost.health/hp-cost of ticking-hp): then it is fetched (need/item!) and taken.
-  The trigger fires only with a cure carried, so it never fetches.
   Ends :done {:used item} after the item was taken; a failed attempt is nothing-possible :cure-failed.
   Quote: one drink or bite, the cure as the item used.")
 

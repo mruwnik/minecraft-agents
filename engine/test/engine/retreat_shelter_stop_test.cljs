@@ -9,12 +9,15 @@
             [engine.perception :as perception]
             [engine.registry :as registry]
             [engine.flight-job :as fj]
+            [engine.shelter-support :as st]
+            [engine.sky-perception :as sky]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.cost.base-rates :as base-rates]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.look :as sight]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.pit-drops :as pit-drops]
             [jobs.survival.wall-in :as wall-in]
@@ -332,7 +335,7 @@
 
 (deftest a-half-built-wall-quotes-the-one-blow-of-the-melee-hostile-that-arrives-in-time-and-the-mobs-unseen
   (let [zombie (fn [id x] {:id id :name "zombie" :kind "hostile" :pos {:x x :y 64 :z 0} :health 20})
-        with (fn [n mobs] (plan-ctx (tu/seeing-all (tu/fake {:inventory [{:name "dirt" :count n}] :entities mobs}))))
+        with (fn [n mobs] (plan-ctx (sky/with-sky (tu/seeing-all (tu/fake {:time st/night :inventory [{:name "dirt" :count n}] :entities mobs})))))
         half (fn [n mobs] (wall-in/half-built-s (with n mobs) 10))
         none (half 3 [])]
     (is (pos? none) "unseen mobs spawn while the wall stands half built")
@@ -341,6 +344,14 @@
     (is (= (half 3 [(zombie 9 4)]) (half 3 [(zombie 9 4) (zombie 10 5)])) "one gets in, not all")
     (is (= none (half 3 [(assoc (zombie 9 4) :name "skeleton")])) "a shooter does not walk in")
     (is (zero? (half 10 [(zombie 9 4)])) "blocks for every cell: nothing is left open")))
+
+(deftest a-half-built-wall-prices-the-unseen-by-the-light-at-the-feet-not-as-dark
+  (let [ctx (plan-ctx (sky/with-sky (tu/seeing-all (tu/fake {:time st/night :inventory [{:name "dirt" :count 3}] :entities []}))))
+        lit (with-redefs [sh-sense/seen-cell? (constantly true) sh-sense/sky-reaches-from-above? (constantly false)
+                          sh-sense/block-light-at (constantly 14)]
+              (wall-in/half-built-s ctx 10))]
+    (is (pos? (wall-in/half-built-s ctx 10)) "unlit feet: mobs spawn while the wall stands half built")
+    (is (zero? lit) "a torch-lit spot spawns none")))
 
 (deftest a-closed-cell-with-walls-it-cannot-dig-gets-no-pit
   (async done

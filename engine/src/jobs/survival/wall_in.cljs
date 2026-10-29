@@ -13,6 +13,7 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
+            [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]
@@ -27,7 +28,7 @@
   hostile stands in a cell (not with :for :night), no block is left or a place is refused. A place refused for a mob in the cell is waited out
   (jobs.lib.seal/mob-wait-ticks), then fails; one refused otherwise goes after the others (blocks.fill-cells: the walls are placed one cell a step through it, in place, ledgered; a torch in a cell is dug first, an open door shut) and fails with the other failures; a block that stays in a cell is left alone. Every block goes to the scaffold ledger with :for (default :danger, ledger :retreat-plug, taken
   back by jobs.access.cleanup once no hostile is near; :night: ledger :shelter, left alone). Quote: time, a placement per open cell
-  (##Inf with no block carried; with fewer blocks than open cells, which would stop half built, a melee hostile known gets in by an open cell: its blow's hp-cost added, half-built-s). With :for :night the quote counts night seconds only (placing), and a block worth more than the ::wall-value setting
+  (##Inf with no block carried; with fewer blocks than open cells, which would stop half built, a melee hostile known gets in by an open cell, a mob unseen spawns: their hp-cost over the stay (::job-time-s) added, half-built-s). With :for :night the quote counts night seconds only (placing), and a block worth more than the ::wall-value setting
   (jobs.lib.cost/item-value) adds the dig back at dawn; it needs a carried block for every open cell. A cell another's zone refuses adds plug-way's ::trespass-s.
   Picked by jobs.survival.shut-in, which shuts the body in by the cheapest way.")
 
@@ -113,37 +114,36 @@
     (->> (danger-q/known-hostiles p (danger-q/hostile-radius) {})
          (remove #(or (combat/ranged? %) (combat/creeper? %) (combat/enderman? %))))))
 
+(defn arrivals
+  "[seconds mob] of each melee hostile the body knows (melee-hostiles): the seconds before it can strike the body (cost-danger/arrival-s)."
+  [c]
+  (let [p (:primitives c)
+        at (u/pos-of (.-pos (.self p)))]
+    (map #(vector (cost-danger/arrival-s (cost-danger/mob-kind %) (danger-q/mob-pos p %) at) %) (melee-hostiles c))))
+
 (defn arrive-s
   "Seconds before the nearest melee hostile the body knows within the hostile radius (not a shooter, a creeper or an
   enderman) can strike it (cost-danger/arrival-s); nil with none."
   [c]
-  (let [p (:primitives c)
-        at (u/pos-of (.-pos (.self p)))]
-    (some->> (melee-hostiles c)
-             (map #(cost-danger/arrival-s (cost-danger/mob-kind %) (danger-q/mob-pos p %) at))
-             seq
-             (reduce min))))
+  (some->> (seq (arrivals c)) (map first) (reduce min)))
 
 (defn open-count [c] (count (dig-cells/open-cells (:primitives c) (sh-sense/feet (:primitives c)))))
 
 (defn half-built-s
-  "Seconds a wall left half built (fewer carried blocks than open cells) costs: over the seconds its placing takes, the nearest
-  melee hostile known that arrives (arrive-s) in them gets in by a cell left open, at the hp-cost of its blow (answer/blow, at
-  the body's health and armour), and a mob unseen spawns at the dark chance a second (price/stay-hp); 0 with the blocks for every cell."
+  "Seconds a wall left half built (fewer carried blocks than open cells, so a gap stays open for the whole stay,
+  ::job-time-s) costs: the nearest melee hostile known that arrives (arrive-s) within the stay gets in by a cell left open,
+  at the hp-cost of its blow (answer/blow, at the body's health and armour), and a mob unseen spawns at the chance a second
+  at the feet by their light (spawn-light/chance-at; price/stay-hp); 0 with the blocks for every cell."
   [c open]
   (let [have (reduce + (map :count (lb/carried c (flight/blocks c))))
-        self (.self (:primitives c))
+        p (:primitives c)
+        self (.self p)
         health (let [h (.-health self)] (if (number? h) h 20))
         stats (cost/armour-stats (cost/equipment-of (.-equipment self)))
-        p (:primitives c)
-        at (u/pos-of (.-pos self))
-        window (* open (cell-seconds c open))
-        arrives (keep #(let [a (cost-danger/arrival-s (cost-danger/mob-kind %) (danger-q/mob-pos p %) at)]
-                         (when (< a window) [a %]))
-                      (melee-hostiles c))
-        nearest (some->> (seq arrives) (apply min-key first) second)
+        stay (settings/get settings ::job-time-s)
+        nearest (some->> (seq (filter #(< (first %) stay) (arrivals c))) (apply min-key first) second)
         known (if nearest (answer/blow stats {:name (.-name nearest)}) 0)
-        unseen (price/stay-hp c (cost/spawn-chance [0 0 0]) window)]
+        unseen (price/stay-hp c (spawn-light/chance-at p (sh-sense/feet p) false) stay)]
     (if (>= have open)
       0
       (health/hp-cost health (+ known unseen)))))

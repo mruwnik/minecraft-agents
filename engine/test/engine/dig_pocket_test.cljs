@@ -25,7 +25,7 @@
 (def feet {:x 0 :y 64 :z 0})
 (def iron [{:name "iron_pickaxe" :count 1} {:name "cobblestone" :count 4}])
 
-(defn ctx-of [p] {:primitives p :view (constantly {:data {} :now 0}) :root 1 :slots [] :args {}})
+(defn ctx-of [p] {:engine {:warned (js-obj)} :primitives p :view (constantly {:data {} :now 0}) :root 1 :slots [] :args {}})
 
 (defn world [extra inventory]
   (ctx-of (tu/seeing-all (tu/fake {:blocks (merge ground extra) :inventory inventory}))))
