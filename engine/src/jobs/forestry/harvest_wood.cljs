@@ -43,7 +43,8 @@
 (def ways (conj need/fetch-ways :pillar))
 
 (a/defargs settings
-  {::job-time-s {:default 1800 :doc "Seconds a harvest may take: every tree's felling." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 1800 :doc "Seconds a harvest may take: every tree's felling." :spec (a/num-in 0 nil)}
+   ::logs-per-tree {:default 8.7 :doc "Logs a felled tree gives, for pricing a harvest before any tree is seen: the mean of 37 fell-tree :done endings (median 6), 2026-10-29. Recount: the :logs of the fell-tree :done events." :spec (a/num-in 0 nil)}})
 
 (defn fell-args [{:keys [species radius ignore-zones? ways avoid leafless?]}]
   (cond-> {:species species :radius radius :ignore-zones? ignore-zones?}
@@ -65,8 +66,8 @@
 
 (defn worth-of
   "Seconds a root harvest is worth: the cost/goal-value of the logs :count still wants (of the species, else the least
-  worth of any log), or without :count of the logs of the tree it would fell first; ##Inf while it must walk into its
-  area before it can see that tree."
+  worth of any log), or without :count of the logs of the tree it would fell first; with no such tree in sight (outside
+  its area, or none seen) ::logs-per-tree logs, the measured mean of a tree."
   [c]
   (let [{:keys [species radius] :as args} (fell-args (:args c))
         fc (assoc c :args args)
@@ -76,7 +77,7 @@
     (cond
       n (logs (if species [(str species "_log")] facts/log-names) (max 0 (- n (logs-carried c))))
       tree (logs [(str (:species tree) "_log")] (count (log/tree-logs fc radius tree)))
-      :else ##Inf)))
+      :else (logs facts/log-names (settings/get settings ::logs-per-tree)))))
 
 (defn end-with
   "The felling's ending e as this job's: its kind, cause and data, the logs carried added."

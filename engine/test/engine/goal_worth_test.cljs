@@ -52,6 +52,12 @@
     (is (= (wood {:count 2 :species "oak"} []) (wood {:count 3 :species "oak"} [(item "oak_log" 1)])))
     (is (= (wood {:count 4 :species "oak"} []) (wood {} [])) "one tree: its four logs")))
 
+(deftest a-harvest-with-no-tree-in-sight-is-worth-a-typical-tree-not-inf
+  (let [none (tu/seeing-all (tu/fake-on-floor {}))
+        w (worth 'jobs.forestry.harvest-wood none {:radius 16})]
+    (is (priced? w))
+    (is (< (worth 'jobs.forestry.harvest-wood none {:radius 16 :species "oak"}) ##Inf))))
+
 (deftest set-spawn-is-worth-the-respawn-at-its-bed
   (let [p (tu/seeing-all (tu/fake-on-floor {:blocks {"6,64,0" "red_bed"}}))]
     (is (priced? (worth 'jobs.survival.set-spawn p {:bed {:x 6 :y 64 :z 0}})))
