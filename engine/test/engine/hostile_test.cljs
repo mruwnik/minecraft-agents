@@ -506,7 +506,7 @@
         (let [heard (zombie 7 0.5 -5.5)
               stay '(jobs.survival.respond-to-hostile {:settings {:jobs.survival.respond-to-hostile/stay-inside false}})]
           (doseq [[world spec decision held? muted? why]
-                  [[{:time 14000 :entities [heard]} respond :fight false true "no roof: no hold; at 5 hp a flight is caught more often than not and two blows kill (fight 880 s, flee 1203 s): it would fight, with nothing in sight to swing at"]
+                  [[{:time 14000 :entities [heard]} respond :flee false false "no roof: no hold, the mob is seen; a death costs the same either way, so the prices decide (fight 1340 s, flee 1333 s)"]
                    [{:time 14000 :blocks roofed-passage :entities [heard]} respond :fight true true "roofed, heard only: it stays"]
                    [{:time 14000 :blocks roofed-passage :entities [heard]} stay :fight false true "stay-inside off: no hold, and at 5 hp a flight is caught more often than not: it would fight, with nothing in sight to swing at"]
                    [{:time 1000 :blocks roofed-passage :entities [heard]} respond :fight true true "day: it stays too (the roof, not the clock)"]]]

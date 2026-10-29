@@ -8,9 +8,7 @@
             ["fs" :as fs]))
 
 (def allowed
-  {['jobs.survival.night 'jobs.survival.sleep] "sleep is only called once night has chosen the bed, and asks (not (threatened))"
-   ['jobs.survival.get-food 'jobs.combat.hunt] "get-food passes its own :checks (job-safe-or-starving) at the hunt call, so a starving body still hunts"
-   ['jobs.survival.extinguish 'jobs.survival.get-food] "extinguish only reaches get-food by quoting eat's helper source; its eat call passes :get-food? false"
+  {['jobs.survival.get-food 'jobs.combat.hunt] "get-food passes its own :checks (job-safe-or-starving) at the hunt call, so a starving body still hunts"
    ['jobs.survival.respond-to-hostile 'jobs.combat.attack] "the :hostiles fight call passes :checks (always) itself: a reflex fight is not refused for the danger it answers"
    ['jobs.survival.night 'jobs.survival.bed-down] "bed-down is only called once night has chosen the bed, and asks (not (threatened))"
    ['jobs.survival.rest 'jobs.survival.get-food] "rest fetches food (through eat) only when starving or calm, so get-food's own job-safe-or-starving form is the intent"
@@ -20,7 +18,6 @@
    ['jobs.survival.extinguish 'jobs.access.cleanup] "the scoop call passes :checks (always) itself: putting the fire out is not refused for the danger it answers"
    ['jobs.survival.breathe 'jobs.combat.attack] "the fight call passes :checks (always) itself: a reflex fight is not refused for the danger it answers"
    ['jobs.survival.stand-in 'jobs.combat.attack] "the cornered fight call (respond options) passes :checks (always) itself: a reflex fight is not refused for the danger it answers"
-   ['jobs.survival.night 'jobs.combat.attack] "night only reaches the cornered fight through enter-room's respond options, which pass :checks (always) itself: a reflex fight is not refused for the danger it answers"
    ['jobs.survival.go-home 'jobs.survival.night] "go-home only names night in a :next hint for the caller; it never runs it"})
 
 (defn source-of [ns-sym]
