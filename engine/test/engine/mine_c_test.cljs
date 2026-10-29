@@ -605,11 +605,11 @@
     (is (not-any? #{[1 64 0]} (cut (assoc walled-ore "1,65,0" "gravel") 100)) "gravel over it would fall on the body walking in: the cut goes round")
     (is (nil? (cut walled-ore 0.01)) "a drop worth less than one cell's dig is not cut to")))
 
-(deftest a-cuts-yield-is-the-items-worth-at-the-margin-not-its-whole-gather
+(deftest a-drops-worth-is-its-replacement-cost-and-the-goal-item-pays-nothing-more-per-cut
   (let [c {:primitives (:p (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})) :args {:item "raw_iron"}}
-        margin (:value (cost/item-value [{:name "raw_iron" :count 1}]))]
-    (is (= (* 3 margin) (drops/worth c 3)) "the gather's walk and look are no part of what one more block yields")
-    (is (< margin (:value (cost/goal-value [{:name "raw_iron" :count 1}]))))))
+        goal (:value (cost/goal-value [{:name "raw_iron" :count 1}]))]
+    (is (= (* 3 goal) (drops/worth c 3)) "a lost drop is worth what getting it again costs")
+    (is (>= ((:dig-s (drops/cut-prices c)) "iron_ore" [0 64 0]) (cost/dig-cost "iron_ore")) "the goal worth already pays for the ore: no per-cut deduction")))
 
 (deftest a-cut-whose-cells-fill-again-pays-each-dig-out-of-the-drops-worth
   ;; the way swaps between two cells for ever (each fills again behind the dig): what is spent stays spent, a round

@@ -7,7 +7,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.gather.mine.targets :refer [carried book-ground! drop-radius items kinds left-behind]]
+            [jobs.gather.mine.targets :refer [carried book-ground! drop-radius items left-behind]]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.cost :as cost]
             [jobs.lib.waits :as waits]
@@ -78,9 +78,9 @@
   (await (blocks/dig-cell! c pos {:accept (ways/accept (:args c)) :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
 
 (defn worth
-  "Seconds n of the call's item are worth (jobs.lib.cost/margin-worth: the least of its items): what a cut yields, the gather's walk and look not counted in it twice."
+  "Seconds n of the call's item are worth (jobs.lib.cost/worth-to: the least of its items; no body: a mine digs for no bed)."
   [c n]
-  (* n (cost/margin-worth (items (:args c)))))
+  (* n (cost/worth-to nil (items (:args c)) (u/self-pos c))))
 
 (defn min-dig-s
   "A dig costs at least the dig of dirt, the softest block a cut meets, whatever the drop yields: a cell that fills again
@@ -89,13 +89,11 @@
   (cost/dig-cost "dirt"))
 
 (defn cut-prices
-  "dig-route's prices for a cut of the call: go-to's (body-prices), a dig of what the call mines less its drop's worth.
-  The cut is planned and booked (cut-to-drop!) at these prices alone."
+  "dig-route's prices for a cut of the call: go-to's (body-prices). What the call mines is no yield here: its goal worth
+  already pays for it. The cut is planned and booked (cut-to-drop!) at these prices alone."
   [c]
-  (let [p (:primitives c)
-        one (worth c 1)]
+  (let [p (:primitives c)]
     (-> (dig-route/body-prices p (fn [[x y z]] (nil? (u/seen-name p {:x x :y y :z z}))))
-        (dig-route/less-yield #(if (contains? (kinds (:args c)) %) one 0))
         (update :dig-s (fn [dig-s] (fn [name cell] (some-> (dig-s name cell) (max (min-dig-s)))))))))
 
 (defn drop-cut
