@@ -303,6 +303,23 @@
           (is (seq @quoted))
           (is (not-any? #(= :far (:place %)) @quoted) "the place no walk could cover in the time left costs no search"))))))
 
+(deftest a-place-whose-walk-is-far-longer-than-digging-in-costs-is-not-quoted-however-much-time-is-left
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [quoted (atom [])
+              quote! pick/quote!
+              {:keys [eng p]} (await (night-at-home far-home-world {:x 40 :y 64 :z 0}
+                                                    {:roofed-places [:home :far]
+                                                     :settings (assoc no-flee :jobs.survival.night.sites/home-walk-margin-s 1000000)}))]
+          (mem/write! (:store eng) :far {:pos {:x 3000 :y 64 :z 0}} mem/place-policy)
+          (set! pick/quote! (fn [c args] (swap! quoted conj args) (quote! c args)))
+          (try (await (tu/run-until-empty eng 60))
+               (finally (set! pick/quote! quote!)))
+          (is (= 40 (js/Math.floor (:x (st/pos-of p)))) "walked to the home that costs less than digging in")
+          (is (some #(= :home (:place %)) @quoted))
+          (is (not-any? #(= :far (:place %)) @quoted) "a walk of minutes costs more than any other answer: not asked"))))))
+
 (deftest a-carried-bed-waits-for-a-home-far-off-whose-walk-go-to-quotes-no-dearer-than-digging-in
   (async done
     (tu/run-async done

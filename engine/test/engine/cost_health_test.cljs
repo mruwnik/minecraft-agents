@@ -167,3 +167,10 @@
     [{:name "wither" :amplifier 0 :duration 1000}] 6 6
     [{:name "poison" :amplifier 0 :duration 50} {:name "wither" :amplifier 0 :duration 80}] 20 4
     [{:name "speed" :amplifier 0 :duration 1000}] 20 0))
+
+(deftest the-longest-walk-worth-quoting-by-a-night-is-bound-by-the-least-price-and-the-night-left
+  (are [in-ground? left price bound] (= bound (health/night-walk-bound-s in-ground? left price))
+    false 100 500 ##Inf
+    false 500 100 -1
+    true 1000 100 50
+    true 100 500 400))
