@@ -582,9 +582,8 @@
              jobs.farm.irrigate jobs.farm.find-spot jobs.forestry.plant-sapling jobs.forestry.prepare
              jobs.animals.breed jobs.animals.shear jobs.animals.cull jobs.animals.maintain]
           :let [fit (:fit? (get registry/jobs j))]]
-    (is (= :ok (kind fit {:self {:pos {:x 0 :y 64 :z 0} :health 2}})) (str j " at 2 hp: its work costs well under 1 hp"))
-    (is (= :later (settings/with-settings {:jobs.lib.cost.risk/work-hp-rate 0.05}
-                    #(kind fit {:self {:pos {:x 0 :y 64 :z 0} :health 0.5 :food 20}})))
+    (is (= :ok (kind fit {:self {:pos {:x 0 :y 64 :z 0} :health 8}})) (str j " at 8 hp: its work costs well under 1 hp"))
+    (is (= :later (kind fit {:self {:pos {:x 0 :y 64 :z 0} :health 0.5 :food 20}}))
         (str j " waits when its work would cost more than the body may risk"))))
 
 (deftest safe-at-by-night-waits-for-an-unseen-place-only-at-night

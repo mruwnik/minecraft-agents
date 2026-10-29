@@ -26,10 +26,10 @@
       (some :estimate qs) (assoc :estimate true))))
 
 (defn work
-  "The quote of a job's own work of category (:click, :work, :long): its stay (risk/work-s) and the hurt it costs (risk/work-hp)."
+  "The quote of a job's own work of category (:click, :work, :long): its stay (risk/work-s) and the hurt it costs (risk/work-hurt)."
   [category]
   (let [s (risk/work-s category)
-        hp (risk/work-hp category)]
+        hp (risk/work-hurt category)]
     {:uses {:job-time [0 s s] :health [0 hp hp]}}))
 
 (defn walk-args

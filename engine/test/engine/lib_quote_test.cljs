@@ -48,7 +48,7 @@
               q (await ((quote/standard {:place (constantly {:x 5 :y 64 :z 5}) :category :work}) c))]
           (is (= {:pos {:x 5 :y 64 :z 5} :back true :stay-s (risk/work-s :work)} @asked))
           (is (= (quote/then walk work) q))
-          (is (= (+ 1 (risk/work-hp :work)) (get-in q [:uses :health 1])))
+          (is (= (+ 1 (risk/work-hurt :work)) (get-in q [:uses :health 1])))
           (reset! asked nil)
           (let [q (await ((quote/standard {:place (constantly nil) :category :long}) c))]
             (is (nil? @asked) "no place: no walk")

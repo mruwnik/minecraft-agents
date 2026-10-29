@@ -43,7 +43,7 @@
     (constantly :look) [:look :why]))
 
 (deftest a-spectator-or-creative-body-waits-and-survival-or-unreported-is-ready
-  (are [mode expected] (let [c {:primitives (tu/fake {:self (cond-> {} mode (assoc :gameMode mode))})}]
+  (are [mode expected] (let [c {:primitives (tu/fake {:self (cond-> {} mode (assoc :gameMode mode))}) :view (fn [] {:now 0 :data {}})}]
                          (= [expected expected] [(first (ready/fit? c)) (first (checks/survival-mode c))]))
     "spectator" :later
     "creative" :later

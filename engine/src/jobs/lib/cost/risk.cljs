@@ -55,12 +55,17 @@
   [category health]
   (- 1 (js/Math.exp (- (* (work-s category) (hit-rate category) (js/Math.exp (- (/ health (hit-mean)))))))))
 
+(defn work-hurt
+  "hp a job's work of category hurts a body on average: hit-rate x hit-mean over work-s."
+  [category]
+  (* (hit-rate category) (hit-mean) (work-s category)))
+
 (defn work-hp
   "hp a job's work of category costs a body at health: its hurt (hit-rate x hit-mean over work-s) and its death
   (work-death-chance) in hp at `death` seconds (cost/lethal-hp; default a bare body's, death/death-cost), as price/stay-hp."
   ([category health] (work-hp category health (death/death-cost {} nil)))
   ([category health death]
-   (+ (* (hit-rate category) (hit-mean) (work-s category))
+   (+ (work-hurt category)
       (answer/lethal-hp {:chance (work-death-chance category health) :death death}))))
 
 (defn share-hp
