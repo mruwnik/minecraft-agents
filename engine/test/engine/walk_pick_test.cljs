@@ -98,8 +98,8 @@
           (doseq [[bound mean] @out]
             (is (< 0 bound mean) "a sprint over the flat blocks less the range: under the planner's seconds")))))))
 
-(deftest an-unreachable-walk-is-not-worth-even-at-an-endless-worth
+(deftest a-walk-costing-more-than-the-pass-is-worth-is-not-worth
   (let [c {:primitives (tu/fake {})}
-        far {:pos {:x ##Inf :y 64 :z 0}}]
-    (is (= :not-worth (:reason (pick/not-worth c far (fn [] ##Inf)))))
-    (is (nil? (pick/not-worth c {:pos {:x 3 :y 64 :z 0}} (fn [] ##Inf))))))
+        far {:pos {:x 3000 :y 64 :z 0}}]
+    (is (= :not-worth (:reason (pick/not-worth c far (fn [] 1)))))
+    (is (nil? (pick/not-worth c far (fn [] ##Inf))) "an endless worth affords any finite walk")))

@@ -209,6 +209,7 @@
   (fn [{:keys [steps] :as plan} first?]
     (or (when check (check plan first?))
         (when-let [{:keys [cost worth] :as t} (turn-back c steps)]
+          ;; not cost/affords?: the cost is bounded by its worth and ##Inf at an arrive worth, which must still walk on
           (when (> cost worth) {:turn-back t})))))
 
 (defn count-floor!
