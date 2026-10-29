@@ -68,11 +68,25 @@
   (every? (sense/round-looked c) cells))
 
 (defn look-first
-  "The exposure s with :look-hp, the {:hp :lethal-hp} of walking to `goal` to look and back at the chance `dark` the look
-  shows it too dark to stay (walk-risk/look-hp, Q66): priced weighs it as a way, and the start checks judge the stay again
-  on arrival."
+  "The exposure s with :look, the {:hp :lethal-hp :secs} of walking to `goal` to look and back at the chance `dark` the look
+  shows it too dark to stay (walk-risk/look-way, Q66), while `goal` is unseen: priced weighs it as a way. The job's own
+  walk there is the look; there the goal is seen, so the stay is priced."
   [s c goal dark]
-  (assoc-in s [2 :look-hp] (walk-risk/look-hp c goal dark)))
+  (cond-> s
+    (not (sh-sense/seen-cell? (:primitives c) goal)) (assoc-in [2 :look] (walk-risk/look-way c goal dark))))
+
+(defn own-way
+  "c with (f c s) among the ways its job answers a refusal s on exposure itself (its torches, a wait for dawn): seconds,
+  nil none. priced takes the walk to look only while it is cheaper than each of them."
+  [c f]
+  (update c ::own-ways (fnil conj []) f))
+
+(defn room-look
+  "A :look at the unseen walls of the room round the body (look-edge/pending) not looked at yet, and at `extra`, nil when
+  no wall is left to look at: an unseen wall is an open side."
+  [c text extra]
+  (when-let [sides (seq (look-edge/pending c (sense/round-looked c) 0))]
+    (contract/look :exposed text :look-at (into (vec sides) extra) :room-sides true)))
 
 (defn unseen-status
   "The exposure of the unseen place `to` no look from here shows, priced as unseen at its chance (Q16): spawn-light/chance-at's
@@ -95,41 +109,28 @@
                                              :recheck-after-ms (* 1000 light-in) :wait-ms (* 1000 light-in))
       :else (contract/never :exposed (str "dark at " where ", light is " (js/Math.round light-in) " s away, over the " (js/Math.round patience) " s it waits") :chance chance))))
 
-(defn farthest-unseen-side
-  "The unseen side cell {:x :y :z} of the room round the feet farthest from them within look-edge/max-edge-walk, nil
-  when none: the far end of a dark tunnel a walk shows."
-  [p]
-  (let [feet (sh-sense/feet p)]
-    (some->> (reach-room/unseen-sides p feet)
-             (map #(zipmap [:x :y :z] %))
-             (filter #(<= (u/dist feet %) look-edge/max-edge-walk))
-             seq
-             (apply max-key #(u/dist feet %)))))
-
 (defn dark-status
   "The exposure of the dark place `to` no wait lights: go-to's spawn chance (spawn-light/chance-at) of the cell the body would
   stand in there (hall-cell), dark only in a dark hall; over ::risk-limit :never, lowered by a torch. Where that cell is
-  the body's own, the unseen walls of its room (look-edge/pending) are looked at first: an unseen wall is an open side.
-  A hall judged by an unseen edge (sh-inside/dark-hall :roofed or :sky) is also priced as the walk to look (look-first):
-  to `goal` (default `to`), or, where that is the body's cell, to the room's farthest unseen side."
+  the body's own, the unseen walls of its room are looked at first (room-look). A hall judged by an unseen edge
+  (sh-inside/dark-hall :roofed or :sky) is also priced as the walk to look at `goal` (default `to`; look-first), back
+  at the chance the edge is open (cost/hall-chance)."
   ([c to] (dark-status c to to))
   ([c to goal]
    (let [p (:primitives c)
-         feet (sh-sense/feet p)
          at (spawn-light/hall-cell p to)
          chance (spawn-light/chance-at p at false)
-         sides (delay (when (u/within? feet at 1) (look-edge/pending c (sense/round-looked c) 0)))
-         look-to (delay (when (#{:roofed :sky} (sh-inside/dark-hall p at nil))
-                          (if (u/within? feet goal 1) (farthest-unseen-side p) goal)))]
+         where (place-text to)
+         hall (delay (sh-inside/dark-hall p at nil))
+         look (delay (when (u/within? (sh-sense/feet p) at 1) (room-look c (str "dark at " where ", walls of the room round the body not all seen") nil)))]
      (cond
        (<= chance (settings/get settings ::risk-limit))
-       (contract/ok :sealed (str "dark at " (place-text to) ", no dark floor reaches beyond " sh-inside/spawn-free-radius " blocks: nothing spawns near the body"))
-       (seq @sides)
-       (contract/look :exposed (str "dark at " (place-text to) ", walls of the room round the body not all seen") :look-at (vec @sides) :room-sides true)
+       (contract/ok :sealed (str "dark at " where ", no dark floor reaches beyond " sh-inside/spawn-free-radius " blocks: nothing spawns near the body"))
+       @look @look
        :else
-       (cond-> (contract/never :exposed (str "dark at " (place-text to) ", and a mob can walk from dark floor farther than " sh-inside/spawn-free-radius " blocks off (a hall, or an open side of this room): mobs spawn there, waiting never lights it, a torch does")
+       (cond-> (contract/never :exposed (str "dark at " where ", and a mob can walk from dark floor farther than " sh-inside/spawn-free-radius " blocks off (a hall, or an open side of this room): mobs spawn there, waiting never lights it, a torch does")
                                :lowered-by #{:torch} :chance chance :at at)
-         @look-to (look-first c @look-to (spawn-light/dark-share p at false)))))))
+         (#{:roofed :sky} @hall) (look-first c goal (cost/hall-chance @hall)))))))
 
 (defn at-status
   "The status of the exposure of the walk of c's body to `to`: ok while sheltered or the chance is within ::risk-limit,
@@ -138,34 +139,34 @@
   `goal` (default `to`) is where the job goes, when its place is judged at the feet."
   ([c to] (at-status c to to))
   ([c to goal]
-  (let [p (:primitives c)
-        shelter (:data (ctx/latest c :shelter))
-        {:keys [chance lowered-by look-at light-in]} (spawn-light/exposure p to shelter)
-        patience (settings/get settings ::light-patience-s)
-        where (place-text to)
-        unseen-sides (delay (when-not (u/within? (sh-sense/feet p) to 1) (look-edge/pending c (sense/round-looked c) 0)))
-        wait-s (delay (cond (contains? lowered-by :light) light-in (spawn-light/dawn-lowers? p to) (sh-sense/light-in p to)))]
-    (cond
-      (and (sh-sense/dark-outside? p) (sh-inside/safe-from-night? p) (not (sh-inside/walk-leaves-shelter? p shelter to 1)))
-      (contract/ok :sheltered (str "sheltered at " where))
-      (<= chance (settings/get settings ::risk-limit)) (contract/ok :unexposed (str "no spawn risk at " where))
-      (seq @unseen-sides)
-      (contract/look :exposed (str "walls of the room round the body not all seen; at " where)
-                     :look-at (into (vec @unseen-sides) (when (and (contains? lowered-by :look) (some #(look/look-shows? p %) look-at)) look-at)) :room-sides true)
-      (and (contains? lowered-by :look) (hidden-below? p to))
-      (contract/ok :sealed (str "unseen below at " where ": underground, no look shows it and dawn does not light it; only threats count"))
-      (and (contains? lowered-by :look) (sense-looked? c look-at) (sh-sense/buried? p) (not (u/within? (sh-sense/feet p) to 0)))
-      (at-status c (sh-sense/feet p) to)
-      (and (contains? lowered-by :look) (not-any? #(look/look-shows? p %) look-at))
-      (unseen-status c to)
-      (and (contains? lowered-by :look) (sense-looked? c look-at))
-      (dark-status c to goal)
-      (contains? lowered-by :look) (contract/look :exposed (str "light at " where " not seen") :look-at look-at)
-      (and @wait-s (<= @wait-s patience))
-      (contract/later :exposed (str "dark at " where " until light") :lowered-by #{:light} :chance chance :recheck-after-ms (* 1000 @wait-s) :wait-ms (* 1000 @wait-s))
-      @wait-s
-      (contract/never :exposed (str "dark at " where ", light is " (js/Math.round @wait-s) " s away, over the " (js/Math.round patience) " s it waits") :chance chance)
-      :else (dark-status c to goal)))))
+   (let [p (:primitives c)
+         shelter (:data (ctx/latest c :shelter))
+         {:keys [chance lowered-by look-at light-in]} (spawn-light/exposure p to shelter)
+         patience (settings/get settings ::light-patience-s)
+         where (place-text to)
+         room (delay (when-not (u/within? (sh-sense/feet p) to 1)
+                       (room-look c (str "walls of the room round the body not all seen; at " where)
+                                  (when (and (contains? lowered-by :look) (some #(look/look-shows? p %) look-at)) look-at))))
+         wait-s (delay (cond (contains? lowered-by :light) light-in (spawn-light/dawn-lowers? p to) (sh-sense/light-in p to)))]
+     (cond
+       (and (sh-sense/dark-outside? p) (sh-inside/safe-from-night? p) (not (sh-inside/walk-leaves-shelter? p shelter to 1)))
+       (contract/ok :sheltered (str "sheltered at " where))
+       (<= chance (settings/get settings ::risk-limit)) (contract/ok :unexposed (str "no spawn risk at " where))
+       @room @room
+       (and (contains? lowered-by :look) (hidden-below? p to))
+       (contract/ok :sealed (str "unseen below at " where ": underground, no look shows it and dawn does not light it; only threats count"))
+       (and (contains? lowered-by :look) (sense-looked? c look-at) (sh-sense/buried? p) (not (u/within? (sh-sense/feet p) to 0)))
+       (at-status c (sh-sense/feet p) goal)
+       (and (contains? lowered-by :look) (not-any? #(look/look-shows? p %) look-at))
+       (unseen-status c to)
+       (and (contains? lowered-by :look) (sense-looked? c look-at))
+       (dark-status c to goal)
+       (contains? lowered-by :look) (contract/look :exposed (str "light at " where " not seen") :look-at look-at)
+       (and @wait-s (<= @wait-s patience))
+       (contract/later :exposed (str "dark at " where " until light") :lowered-by #{:light} :chance chance :recheck-after-ms (* 1000 @wait-s) :wait-ms (* 1000 @wait-s))
+       @wait-s
+       (contract/never :exposed (str "dark at " where ", light is " (js/Math.round @wait-s) " s away, over the " (js/Math.round patience) " s it waits") :chance chance)
+       :else (dark-status c to goal)))))
 
 (defn act-price
   "{:now-s :now? :best} of acting now, risking hurt hp and lethal (its death in hp), against waiting where the body stands
@@ -191,10 +192,11 @@
   "The status s of a place check, priced where it is :later or :never on exposure alone (:exposed with a :chance): the stay's
   hp there (price/stay-parts over price/stay-s) acted on now against waiting (act-price; s's :wait-ms is its wait for light).
   ok :priced while acting now is affordable and no affordable wait is cheaper; a cheaper wait, or the only affordable one,
-  holds :later with both prices (a wait to heal keeps s's data); else s. An exposure resting on what the body has not seen
-  (:look-hp, look-first) has a third way: walk there to look, ok :look-first while it is affordable and no cheaper way is."
+  holds :later with both prices (a wait to heal keeps s's data); else s. An exposure resting on a place the body has not
+  seen (:look, look-first) has a third way: walk there to look, its hp priced (walk-risk/risk-s) plus its seconds, ok
+  :look-first while it is affordable and cheaper than the other ways and than the job's own answers to s (own-way)."
   [c s]
-  (let [[kind _ {:keys [reason chance wait-ms look-hp] :as data}] s]
+  (let [[kind _ {:keys [reason chance wait-ms] look-way :look :as data}] s]
     (if-not (and (contains? #{:later :never} kind) (= :exposed reason) (number? chance))
       s
       (let [secs (price/stay-s c)
@@ -203,8 +205,10 @@
             hp (+ hurt lethal)
             {:keys [now-s now? best]} (act-price c hurt lethal (when (= :later kind) (some-> wait-ms (/ 1000))))
             self (.self (:primitives c))
-            look (when (and look-hp (<= (:hp look-hp) (price/allowed-hp (.-health self) (.-food self) (ctx/worth c) true)))
-                   {:s (walk-risk/risk-s c look-hp)})
+            look-s (when (and look-way (<= (:hp look-way) (price/allowed-hp (.-health self) (.-food self) (ctx/worth c) true)))
+                     (+ (walk-risk/risk-s c look-way) (:secs look-way)))
+            own-s (when look-s (keep #(% (dissoc c ::own-ways) s) (::own-ways c)))
+            look (when (and look-s (every? #(< look-s %) own-s)) {:s look-s})
             look? (fn [than] (and look (or (nil? than) (< (:s look) than))))
             wait (fn [{:keys [wait] :as w}]
                    (if (= :light wait)
@@ -216,7 +220,7 @@
           (and best (< (:s best) now-s) (not (look? (:s best)))) (wait best)
           (and now? (not (look? now-s))) (contract/ok :priced (str "exposed, but " (price/round1 secs) " s there cost " (price/round1 hp) " hp, " (price/round1 now-s) " s, no wait cheaper"))
           (look? (:s best)) (contract/ok :look-first (str "exposed: " (price/round1 secs) " s there cost " (price/round1 hp) " hp, but the walk to look costs "
-                                                          (price/round1 (:hp look-hp)) " hp, " (price/round1 (:s look)) " s: the stay is judged there"))
+                                                          (price/round1 (:hp look-way)) " hp, " (price/round1 (:s look)) " s: the stay is judged there"))
           best (wait best)
           :else s)))))
 
@@ -403,7 +407,8 @@
 (defn dark-near-ok
   "safe, but a wait for light (jobs.lib.spawn-light/exposure lowered by :light, or light too far off) is lifted to the threat check alone while the place (f c) lies
   within the radius no mob spawns in round the body (cost/near-body?): a build or light job works there in the dark, which only a large dark area or a hidden pit makes a danger.
-  With torch-way (c -> {:blocks :carried}, nil: the job hangs no torches) the lift is the job's own torches instead, while they cost less than the stay's exposure (cost/dark-or-lit)."
+  With torch-way (c -> {:blocks :carried}, nil: the job hangs no torches) the lift is the job's own torches instead, while they cost less than the stay's exposure (cost/dark-or-lit).
+  Either is an own-way: a walk to look that costs more is not taken."
   ([f safe] (dark-near-ok nil f safe))
   ([torch-way f safe]
   (let [dark-wait? (fn [[kind _ data]] (and (#{:later :never} kind) (= :exposed (:reason data))
@@ -413,8 +418,10 @@
               (when torch-way
                 (cost/dark-or-lit (if (number? chance) (price/stay-hp c chance (price/stay-s c)) ##Inf)
                                   (.-health (.self (:primitives c))) (torch-way c))))
+        own-s (fn [c s] (when (and (dark-wait? s) (near? c))
+                          (let [w (way c s)] (cond (nil? w) 0 (= :lit (:way w)) (:lit-s w)))))
         lift (fn [g lifted]
-               (fn [c] (let [s (g c)]
+               (fn [c] (let [s (g (own-way c own-s))]
                          (if-not (and (dark-wait? s) (near? c))
                            s
                            (let [w (way c s)]

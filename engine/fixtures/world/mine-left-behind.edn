@@ -23,10 +23,11 @@
    :after [[:item "raw_iron" 1]]
    :limit-s 140}
   {:name "drop-across-a-trench-is-dug-to"
-   ;; the ore stands across a 1-wide, 5-deep trench and a 1-high ledge cell in the line: seen from the start, dug from
-   ;; the cut's end (3 away), its drop lies on the ledge in plain view and cannot be walked to; collect-drops :dig (card
-   ;; dd4e8bf6) cuts to it nothing left behind.
-   :blocks [[:fill [20 -4 16] [20 1 16] "air"] [:set [21 0 16] "air"] [:set [22 0 16] "iron_ore"]]
+   ;; the ore stands across a 1-wide, 5-deep trench and a 1-high ledge cell in the line: seen from the start (the light
+   ;; block lights the cut: in the dark the body makes out nothing beyond 4 blocks), dug from the cut's end (3 away), its
+   ;; drop lies on the ledge in plain view and cannot be walked to; collect-drops :dig (card dd4e8bf6) cuts to it nothing
+   ;; left behind.
+   :blocks [[:fill [20 -4 16] [20 1 16] "air"] [:set [21 0 16] "air"] [:set [22 0 16] "iron_ore"] [:set [18 1 16] "light"]]
    :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 150 :of-job true}
             {:no-event {:source :job :kind :mine.left-behind} :for-s 150 :until {:source :job :kind #{:completed :stopped}}}]

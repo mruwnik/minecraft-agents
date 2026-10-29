@@ -201,14 +201,17 @@
   [c goal & [opts]]
   (estimate-of c (estimate-inputs c goal opts)))
 
-(defn look-hp
-  "{:hp :lethal-hp} of walking to `goal` to look at it and, at the chance `dark` the look shows it too dark to stay, back
-  the same way (cost/look-first-hp of estimate's), cached for the check."
+(defn look-way
+  "{:hp :lethal-hp :secs} of walking to `goal` to look at it and, at the chance `dark` the look shows it too dark to stay,
+  back the same way (cost/look-first of estimate's hp, and of the straight walk's seconds at cost/walk-speed), cached for
+  the check."
   [c goal dark]
-  (check-cache/cached c [::look-hp goal dark]
+  (check-cache/cached c [::look-way goal dark]
                       #(let [there (estimate c goal)
-                             both (estimate c goal {:back? true})]
-                         (into {} (for [k [:hp :lethal-hp]] [k (cost/look-first-hp (k there) (- (k both) (k there)) dark)])))))
+                             both (estimate c goal {:back? true})
+                             secs (/ (u/dist (sh-sense/feet (:primitives c)) goal) cost/walk-speed)]
+                         (assoc (into {} (for [k [:hp :lethal-hp]] [k (cost/look-first (k there) (- (k both) (k there)) dark)]))
+                                :secs (cost/look-first secs secs dark)))))
 
 (def recheck-ms "How long a walk held :risky waits before status prices it again." 10000)
 

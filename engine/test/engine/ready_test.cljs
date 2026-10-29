@@ -21,6 +21,7 @@
             [jobs.movement.look-around :as look-around]
             [jobs.access.stair :as stair]
             [jobs.build.light-area :as light-area]
+            [jobs.build.from-plan.light :as fp-light]
             [jobs.access.toggle :as toggle]
             [jobs.blocks.dig :as dig]
             [jobs.blocks.fill-cells :as fill-cells]
@@ -523,15 +524,41 @@
       (ready/safe-at (constantly {:x 0 :y 63 :z 0})) false
       ready/safe-here-by-night true)))
 
-(deftest a-dark-tunnel-whose-far-end-no-look-shows-is-priced-as-the-walk-to-look
-  (let [status (fn [hall f] (with-redefs [look-edge/pending (fn ([_] nil) ([_ _ _] nil))
-                                        reach-room/unseen-sides (constantly [[6 64 0] [6 65 0]])
-                                        sh-inside/dark-hall (constantly hall)
-                                        sh-sense/buried? (constantly true)]
-                            (lit 0 0 #((juxt first (fn [s] (:reason (nth s 2)))) (ready/hall-status (f (ctx-of (assoc tunnel :time st/noon))) nil)))))]
-    (is (= [:ok :look-first] (status :roofed identity)) "the end is unseen: the walk to it is affordable, the stay judged on the way")
-    (is (= [:never :exposed] (status :far identity)) "dark floor seen reaching far: no look changes it")
-    (is (= [:never :exposed] (status :roofed worthless)) "a goal worth nothing buys no walk: a torch lowers it")))
+(deftest a-dark-tunnel-judged-where-the-body-stands-is-priced-as-the-stay-with-no-walk-to-look
+  (with-redefs [look-edge/pending (fn ([_] nil) ([_ _ _] nil))
+                reach-room/unseen-sides (constantly [[6 64 0] [6 65 0]])
+                sh-inside/dark-hall (constantly :roofed)
+                sh-sense/buried? (constantly true)]
+    (is (= [:never :exposed] (lit 0 0 #((juxt first (fn [s] (:reason (nth s 2)))) (ready/hall-status (ctx-of (assoc tunnel :time st/noon)) nil))))
+        "the end is unseen, but the job makes no walk to it: the stay is priced")))
+
+(defn unseen-site-exposure
+  "The exposure safe-at gives the tunnel's east end {:x 6 :y 64 :z 0} as a dark hall past an unseen edge, the body standing at x,
+  that end seen or not (with raw?, at-status's status before it is priced, once a look round looked at the end and could not
+  make it out)."
+  [x seen? & [raw?]]
+  (let [site {:x 6 :y 64 :z 0}]
+    (with-redefs [look-edge/pending (fn ([_] nil) ([_ _ _] nil))
+                  reach-room/unseen-sides (constantly [[0 64 0] [0 65 0]])
+                  sh-inside/dark-hall (constantly :roofed)
+                  sh-sense/buried? (constantly true)
+                  sh-sense/seen-cell? (fn [_ cell] (or seen? (not= site (select-keys cell [:x :y :z]))))
+                  sense/round-looked (constantly (if raw? #{[6 64 0]} #{}))]
+      (lit 0 0 #(let [c (ctx-of (assoc tunnel :time st/noon :self {:pos {:x (+ x 0.5) :y 64 :z 0.5}}))]
+                  (if raw? (ready/at-status c site) ((::ready/exposure (meta (ready/safe-at (constantly site)))) c)))))))
+
+(deftest the-walk-to-an-unseen-dark-site-is-the-look-and-there-the-stay-is-priced
+  (let [far (unseen-site-exposure 0 false)]
+    (is (= [:ok :look-first] [(first far) (:reason (nth far 2))]) "6 blocks off and unseen: the job's walk there is the look")
+    (is (= (* (/ 6 cost/walk-speed) (+ 1 (cost/hall-chance :roofed))) (:secs (:look (nth (unseen-site-exposure 0 false true) 2))))
+        "the look's seconds: the walk there, and back at the chance the unseen edge opens onto the hall"))
+  (is (= [:never :exposed] ((juxt first #(:reason (nth % 2))) (unseen-site-exposure 6 true))) "arrived and seen: the stay is priced, no second look"))
+
+(deftest a-torch-the-body-carries-beats-the-walk-to-look
+  (with-redefs [sh-sense/seen-cell? (constantly false) sh-sense/solid-at? (constantly false) ctx/mem (constantly {})]
+    (let [safe (fp-light/lights-itself (ready/safe-at (constantly {:x 15 :y 40 :z 0})) (constantly []))]
+      (is (= [:ok :torches] ((juxt first #(:reason (nth % 2))) (safe (ctx-of (assoc open-night :inventory [{:name "torch" :count 4}])))))
+          "hanging the torches carried costs nothing: the build lights the dark cave guess, it does not walk to look first"))))
 
 (deftest an-unseen-cell-a-look-round-could-not-show-is-judged-where-a-buried-body-stands
   (are [looked expected] (= expected (with-redefs [sh-sense/seen-cell? (fn [_ c] (not= outside (select-keys c [:x :y :z])))
