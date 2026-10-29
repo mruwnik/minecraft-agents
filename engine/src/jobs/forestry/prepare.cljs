@@ -1,5 +1,6 @@
 (ns jobs.forestry.prepare
   (:require [jobs.lib.price :as price]
+            [jobs.lib.cost :as cost]
             [jobs.lib.ready :as ready]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -40,7 +41,7 @@
   Drops are collected (jobs.items.collect-drops) when the next step is on another cell or none is left. Dirt
   is brought by another job. Every dig and place is checked against zones and the other active plans'
   footprints, when the cell is chosen and before the act. A refusal or a dig hazard not in :accept skips the cell
-  for the call (:refused); the third failed try (walk, dig, place) gives it up (:gave-up).
+  for the call (:refused); a failed try (walk, dig, place) gives it up (:gave-up) when another is not worth its price (cost/try-again?).
   Does not start while the plan is missing or unreadable or no zone list is loaded (a wait), or has no tree cells
   (impossible), unless a step can be taken; cells never seen are looked at first. What is left is in the ending.
   Ends :done with {:cleared :soiled :dammed :wrong :no-soil :no-tool :cramped :wet
@@ -124,11 +125,11 @@
   (ctx/update-mem! c assoc-in [:skipped pos] {:pos pos :reason reason}))
 
 (defn count-cell-fail!
-  "Count a failed try on the cell; given up at the third. :again."
-  [c pos reason]
+  "Count a failed try (a retry kind: :walk :dig :place) on the cell; given up when another is not worth its price (cost/try-again? of the cell's failures). :again."
+  [c pos reason kind]
   (let [n (inc (get-in (ctx/mem c) [:fails pos] 0))]
     (ctx/update-mem! c assoc-in [:fails pos] n)
-    (when (>= n (u/max-failures))
+    (when-not (cost/try-again? c kind {:fails n})
       (ctx/update-mem! c assoc-in [:gave-up pos] {:pos pos :reason reason}))
     :again))
 
@@ -137,7 +138,7 @@
   [c cell v]
   (if (vector? v)
     (skip! c cell (second v))
-    (count-cell-fail! c cell :not-loaded))
+    (count-cell-fail! c cell :not-loaded :walk))
   :again)
 
 (defn bump [m k] (update m k (fnil inc 0)))
@@ -147,7 +148,7 @@
   [c pos]
   (let [r (await (step-off/step-off-zoned! c pos {}))]
     (when (:unreachable r)
-      (count-cell-fail! c pos :unreachable))
+      (count-cell-fail! c pos :unreachable :walk))
     :again))
 
 (defn ^:async ready!
@@ -158,7 +159,7 @@
     (cond
       (= :partial w) :continue
       (await (near/risky-wait! c w)) :continue
-      (= :blocked w) (count-cell-fail! c cell :unreachable)
+      (= :blocked w) (count-cell-fail! c cell :unreachable :walk)
       (and column? (field/in-column? c cell)) (await (step-off! c cell))
       :else nil)))
 
@@ -180,8 +181,8 @@
                   :dug (do (on-dug c) :again)
                   :missing :again
                   :cannot (do (skip! c cell :cannot) :again)
-                  :unreachable (do (count-cell-fail! c cell :unreachable) :again)
-                  (do (count-cell-fail! c cell :failed) :again)))))))))
+                  :unreachable (do (count-cell-fail! c cell :unreachable :walk) :again)
+                  (do (count-cell-fail! c cell :failed :dig) :again)))))))))
 
 (def refusals
   "The clear-cells skip reasons that are a refusal (the cell is left for the call); any other is given up on."
@@ -229,8 +230,8 @@
                       :continue :continue
                       (:placed :already) (do (ctx/update-mem! c #(-> % (bump :soiled) (update :holes disj (lib/cell-vec under))))
                                              :again)
-                      (:need :no-item :occupied :no-support) (do (count-cell-fail! c pos (if (= :need outcome) :no-item outcome)) :again)
-                      (do (count-cell-fail! c pos :failed) :again))))))))))
+                      (:need :no-item :occupied :no-support) (do (count-cell-fail! c pos (if (= :need outcome) :no-item outcome) :place) :again)
+                      (do (count-cell-fail! c pos :failed :place) :again))))))))))
 
 (defn ^:async place-source!
   "Place the carried soil into the water of a wet cell: the source in the cell (:fill), or the source elsewhere
@@ -254,8 +255,8 @@
                     (case outcome
                       :continue :continue
                       (:placed :already) (do (ctx/update-mem! c dammed) :again)
-                      (:need :no-item :occupied :no-support) (do (count-cell-fail! c pos (if (= :need outcome) :no-item outcome)) :again)
-                      (do (count-cell-fail! c pos :failed) :again))))))))))
+                      (:need :no-item :occupied :no-support) (do (count-cell-fail! c pos (if (= :need outcome) :no-item outcome) :place) :again)
+                      (do (count-cell-fail! c pos :failed :place) :again))))))))))
 
 (defn ^:async collect!
   "One collect-drops round while the drops of the digs are owed. :again, :continue while it waits."

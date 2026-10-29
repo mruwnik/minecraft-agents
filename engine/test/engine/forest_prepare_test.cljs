@@ -601,7 +601,7 @@
           (is (= "lava" (h/block-at p 3 64 0)))
           (is (= (expect {:cleared 1 :wrong [{:pos [3 64 0] :found "lava" :species "oak"}]}) result)))))))
 
-(deftest a-place-that-finds-no-item-or-an-occupied-cell-is-tried-three-times-then-the-cell-is-given-up
+(deftest a-place-that-finds-no-item-or-an-occupied-cell-is-tried-once-at-a-worth-of-nothing-then-the-cell-is-given-up
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -610,9 +610,9 @@
                               ["dam" (apply wet-world {"3,64,0" 1 "2,64,0" 0} sapling-and-dirt)]]]
           (let [s (start spec {"forest" one-cell})]
             (.override (.-world (:p s)) "place" (fn ^:async f [_ _ _] #js {:status status}))
-            (core/submit! (:eng s) (list job {:plan "forest"}) {})
+            (core/submit! (:eng s) (list job {:plan "forest" :worth 0}) {})
             (await (ticks (:eng s) 8))
-            (is (= 3 (count (places (:p s)))) (str label " " status))))))))
+            (is (= 1 (count (places (:p s)))) (str label " " status))))))))
 
 (deftest a-given-up-cell-is-tried-again-by-the-next-call
   (async done

@@ -1,5 +1,6 @@
 (ns jobs.forestry.maintain
   (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.cost :as cost]
             [jobs.lib.waits :as waits]
             [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
@@ -299,11 +300,11 @@
         :again))))
 
 (defn fail-plant!
-  "Count a failed attempt to plant at pos; leave the cell at the third."
+  "Count a failed attempt to plant at pos (kind :walk, or :place); leave the cell when another is not worth its price (cost/try-again? of the cell's failures)."
   [c pos why & {:as more}]
   (let [n (inc (get-in (ctx/mem c) [:fails pos] 0))]
     (ctx/update-mem! c assoc-in [:fails pos] n)
-    (when (>= n (u/max-failures))
+    (when-not (cost/try-again? c (if (= :unreachable why) :walk :place) {:fails n})
       (apply leave! c pos why (mapcat identity more)))))
 
 (defn body-cells

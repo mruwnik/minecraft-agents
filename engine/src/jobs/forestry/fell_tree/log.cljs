@@ -8,6 +8,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.aim :as aim]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [jobs.lib.gate :as gate]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.ledger :as ledger]
@@ -115,9 +116,10 @@
                              (assoc :partials 0))))))
 
 (defn blocked!
-  "A log that cannot be dug, or a pillar that cannot be taken back: a failed round (:continue), the ending at the third in a row."
+  "A log that cannot be dug, or a pillar that cannot be taken back: a failed round (:continue) while another is worth its price (cost/try-again? :dig), else the ending."
   [c text]
-  (if-not (u/count-fail! c)
+  (u/failed! c)
+  (if (cost/try-again? c :dig)
     :continue
     (ctx/end c :nothing-possible :tree-blocked {:text text :logs (:dug (ctx/mem c) 0)})))
 

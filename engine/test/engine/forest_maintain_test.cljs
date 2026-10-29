@@ -476,17 +476,29 @@
           (is (= [] (vec (.-calls (.-world p)))) "no dig, no place on the cell holding the tree")
           (is (= "oak_log" (h/block-at p 3 64 0))))))))
 
-(deftest a-place-that-finds-no-item-or-an-occupied-cell-is-tried-three-times-then-the-cell-is-left
+(deftest a-place-that-finds-no-item-or-an-occupied-cell-is-tried-once-at-a-worth-of-nothing-then-the-cell-is-left
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [status ["no-item" "occupied"]]
           (let [s (start {:blocks (ground [[3 0]]) :inventory [(item "oak_sapling" 1)]} {"forest" oak-cell})]
             (.override (.-world (:p s)) "place" (fn ^:async f [_ _ _] #js {:status status}))
-            (core/submit! (:eng s) (list job {:plan "forest"}) {})
+            (core/submit! (:eng s) (list job {:plan "forest" :worth 0}) {})
             (await (ticks (:eng s) 6))
-            (is (= 3 (count (places (:p s)))) status)
+            (is (= 1 (count (places (:p s)))) status)
             (is (= [{:pos {:x 3 :y 64 :z 0} :reason :no-sapling}] (map #(select-keys % [:pos :reason]) (warns (:seen s) :forest.left))) status)))))))
+
+(deftest a-place-the-server-answers-occupied-five-times-is-tried-again-at-the-roots-endless-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:blocks (ground [[3 0]]) :inventory [(item "oak_sapling" 1)]} {"forest" oak-cell})
+              refused (atom 6)]
+          (.override (.-world (:p s)) "place" (fn ^:async f [token a impl] (if (pos? (swap! refused dec)) #js {:status "occupied"} (await (impl token a)))))
+          (core/submit! (:eng s) (list job {:plan "forest"}) {})
+          (await (ticks (:eng s) 30))
+          (is (= 6 (count (places (:p s)))) "five refused, the sixth placed")
+          (is (empty? (warns (:seen s) :forest.left))))))))
 
 ;; ------------------------------------------------------------------ restart
 
@@ -608,7 +620,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [seen]} (await (run {:blocks (ground [[3 0]])} {"forest" oak-cell} {:plan "forest"} 200))
+        (let [{:keys [seen]} (await (run {:blocks (ground [[3 0]])} {"forest" oak-cell} {:plan "forest" :worth 0} 200))
               left (warns seen :forest.left)]
           (is (= [:no-sapling] (map :reason left)))
           (is (some? (:because (first left))) "the child's cause rides on the note"))))))
