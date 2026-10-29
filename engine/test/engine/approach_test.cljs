@@ -166,6 +166,14 @@
     (is (not (contains? (stands :sight? true) [0 64 0])))
     (is (contains? (stands :sight? true) [3 67 1]) "on the roof, looking down")))
 
+(deftest an-unseen-layer-over-a-roof-does-not-hide-a-hole-from-a-pillar-stand
+  (let [over-roof? (fn [[x y _]] (and (> y 66) (<= 1 x 5)))
+        hut (fn [[x y z :as c]] (if (and (#{64 65} y) (<= 1 x 5) (<= -2 z 2)) "stone" (roof-world c)))
+        guessed (fn [c] (if (over-roof? c) "stone" (hut c)))
+        seen (fn [c] (when-not (over-roof? c) (hut c)))
+        r (plan :targets #{[3 66 0]} :feet [0 64 0] :block-at guessed :floor-at seen :sight? true)]
+    (is (some? (:pillar r)))))
+
 (deftest a-beside-plan-rises-to-the-feet-cell-next-to-the-target
   (let [p (:pillar (plan :targets #{[1 67 0]} :feet [0 64 0] :block-at roof-world :beside? true))]
     (is (= 67 (second (:stand p))))

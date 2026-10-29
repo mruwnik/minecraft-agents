@@ -88,12 +88,14 @@
     (every? #(<= (u/eye-dist here %) reach) targets)))
 
 (defn in-view?
-  "in-reach?, and with :sight? the eye also aims at every target past the solid cells between (jobs.lib.aim/sees-cell?)."
-  [{:keys [reach targets block-at sight?]} [x y z :as stand]]
+  "in-reach?, and with :sight? the eye also aims at every target past the solid cells between (jobs.lib.aim/sees-cell?).
+  Only cells as seen (floor-at) block the line: a guessed rock layer over an unseen roof is no wall the eye meets."
+  [{:keys [reach targets block-at floor-at sight?]} [x y z :as stand]]
   (and (in-reach? reach targets stand)
        (or (not sight?)
            (let [eye (aim/eye-at {:x (+ x 0.5) :y y :z (+ z 0.5)})
-                 kind-at (fn [x y z] (when (solid/solid? (block-at [x y z])) :solid))]
+                 seen-at (or floor-at block-at)
+                 kind-at (fn [x y z] (when (solid/solid? (seen-at [x y z])) :solid))]
              (every? #(aim/sees-cell? kind-at eye %) targets)))))
 
 (defn dist3 [[ax ay az] [bx by bz]]
