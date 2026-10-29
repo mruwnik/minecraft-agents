@@ -18,7 +18,6 @@
   {::near-pen {:default 16 :doc "Blocks from the pen within which the body counts as near it." :spec (a/int-in 0 nil)}
    ::approach-range {:default 12 :doc "Blocks from the animal at which the body starts to approach." :spec (a/int-in 0 nil)}
    ::listed-range {:default 32 :doc "Blocks from the pen within which an animal known in it that is not listed is gone (dead or out); farther the server lists no animals there." :spec (a/int-in 0 nil)}
-   ::release-radius {:default 8 :doc "Blocks within which a released animal counts as near." :spec (a/int-in 0 nil)}
    ::follow-range {:default 10 :doc "Blocks within which an animal follows the food in the body's hand." :spec (a/int-in 0 nil)}
    ::settle-ms {:default 500 :doc "How long the body waits for an animal to settle, in ms." :spec (a/int-in 0 nil)}
    ::settle-out-ms {:default 8000 :doc "How long the body waits for the animal to rest at a position outside the gate." :spec (a/int-in 0 nil)}
@@ -30,7 +29,6 @@
    ::max-reopens {:default 2 :doc "How often a gate shut with the body inside is opened again for the body to go out." :spec (a/int-in 0 nil)}})
 (defn near-pen [] (settings/get settings ::near-pen))
 (defn approach-range [] (settings/get settings ::approach-range))
-(defn release-radius [] (settings/get settings ::release-radius))
 (defn follow-range [] (settings/get settings ::follow-range))
 (defn settle-ms [] (settings/get settings ::settle-ms))
 (def orthogonal [[1 0] [-1 0] [0 1] [0 -1]])
@@ -278,7 +276,7 @@
       :else
       (do (ctx/update-mem! c assoc :releasing k)
           (let [e (await (ctx/call c :unleash 'jobs.animals.unleash
-                                   (cond-> {:mob (:mob (:args c)) :animal k :radius (release-radius)}
+                                   (cond-> {:mob (:mob (:args c)) :animal k :radius (escort/watch-radius)}
                                      (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))
                 reason (if (= :done (:kind e)) (get-in e [:data :reason]) (contract/cause-key e))]
             (when-not (= :continue e)
