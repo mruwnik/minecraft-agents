@@ -1,5 +1,5 @@
 (ns engine.layering-test
-  "Layering guard: jobs call other jobs as children, shared helpers live in jobs.lib, and jobs and libs never reach into
+  "Layering guard: jobs call other jobs as children (never by require, in or across a family), shared helpers live in jobs.lib, and jobs and libs never reach into
   triggers. Rules over the ns forms of src/jobs and src/triggers; the known leftovers are the shrink-only
   allow-list layering_allow.edn (one reason per edge). The engine (src/engine) never requires a jobs namespace: no
   allow-list."
@@ -15,7 +15,7 @@
 (defn segments [ns-sym] (str/split (str ns-sym) #"\."))
 
 (defn kind
-  "What a namespace is: :trigger, :lib (jobs.lib.*), :job, :helper (a non-lib jobs.* file without check+round), or
+  "What a namespace is: :trigger, :lib (jobs.lib.*), :job, :helper (a non-lib jobs.* file without round), or
   nil for anything else."
   [files ns-sym]
   (let [[root second-seg] (segments ns-sym)]
@@ -39,7 +39,8 @@
       (and (= fk :lib) (= tk :trigger)) :lib-requires-trigger
       (and (#{:lib :trigger} fk) (#{:job :helper} tk)) :lib-requires-job
       (and (#{:job :helper} fk) (#{:job :helper} tk) (not= (family from) (family to)))
-      (if (= tk :job) :job-requires-other-family-job :helper-required-cross-family))))
+      (if (= tk :job) :job-requires-other-family-job :helper-required-cross-family)
+      (and (= fk :job) (= tk :job) (not= from to)) :job-requires-same-family-job)))
 
 (defn violations
   "Sorted [from to rule] for every require edge that breaks a rule. files: {ns-sym {:requires #{sym} :job? bool}}."
@@ -79,7 +80,7 @@
 (defn defines? [text name]
   (boolean (re-find (re-pattern (str "(?m)^\\(def[a-z-]*\\s+(?:\\^\\S+\\s+)*" name "(?:\\s|\\)|$)")) text)))
 
-(defn job-text? [text] (and (defines? text "check") (defines? text "round")))
+(defn job-text? [text] (defines? text "round"))
 
 (defn read-file [file]
   (let [text (.readFileSync fs file "utf8")
@@ -95,7 +96,8 @@
 ;; ------------------------------------------------------------------- tests
 
 (def fabricated
-  {'jobs.a.job {:requires '#{triggers.a.cond jobs.lib.x jobs.a.split jobs.b.job jobs.b.help} :job? true}
+  {'jobs.a.job {:requires '#{triggers.a.cond jobs.lib.x jobs.a.split jobs.a.other jobs.b.job jobs.b.help} :job? true}
+   'jobs.a.other {:requires #{} :job? true}
    'jobs.a.split {:requires #{} :job? false}
    'jobs.b.job {:requires #{} :job? true}
    'jobs.b.help {:requires #{} :job? false}
@@ -103,7 +105,8 @@
    'triggers.a.cond {:requires '#{jobs.lib.x jobs.b.help} :job? false}})
 
 (deftest guard-finds-fabricated-violations
-  (is (= '[[jobs.a.job jobs.b.help :helper-required-cross-family]
+  (is (= '[[jobs.a.job jobs.a.other :job-requires-same-family-job]
+           [jobs.a.job jobs.b.help :helper-required-cross-family]
            [jobs.a.job jobs.b.job :job-requires-other-family-job]
            [jobs.a.job triggers.a.cond :job-requires-trigger]
            [jobs.lib.x jobs.a.job :lib-requires-job]
@@ -111,8 +114,8 @@
            [triggers.a.cond jobs.b.help :lib-requires-job]]
          (violations fabricated))))
 
-(deftest job-text-needs-check-and-round
-  (is (job-text? "(ns x)\n(defn check [ctx] 1)\n(defn round [ctx] 2)"))
+(deftest job-text-needs-round
+  (is (job-text? "(ns x)\n(defn ^:async round [ctx] 2)"))
   (is (not (job-text? "(ns x)\n(defn check [ctx] 1)\n(defn rounds [ctx] 2)"))))
 
 (deftest requires-of-reads-vectors-and-symbols

@@ -1,0 +1,259 @@
+{:args [
+ [jobs.access.clear-path :max-dig-s]
+ [jobs.access.stair :direction]
+ [jobs.access.stair :stock-torches]
+ [jobs.access.tunnel :heading]
+ [jobs.access.tunnel :tags]
+ [jobs.access.tunnel :to]
+ [jobs.animals.breed :box]
+ [jobs.animals.breed :ignore-zones?]
+ [jobs.animals.breed :mob]
+ [jobs.animals.breed :pairs]
+ [jobs.animals.breed :radius]
+ [jobs.animals.cull :color]
+ [jobs.animals.cull :ignore-zones?]
+ [jobs.animals.herd :box]
+ [jobs.animals.herd :mob]
+ [jobs.animals.herd :target]
+ [jobs.animals.lead-to :fence]
+ [jobs.animals.lead-to :mob]
+ [jobs.animals.lead-to :pos]
+ [jobs.animals.lure-to :box]
+ [jobs.animals.maintain :box]
+ [jobs.animals.maintain :mob]
+ [jobs.animals.maintain :target]
+ [jobs.animals.pen-check :at]
+ [jobs.animals.pen-check :box]
+ [jobs.animals.pen-check :plan]
+ [jobs.animals.shear :ignore-zones?]
+ [jobs.apiary.guard :box]
+ [jobs.apiary.guard :radius]
+ [jobs.apiary.harvest :box]
+ [jobs.apiary.harvest :center]
+ [jobs.apiary.harvest :radius]
+ [jobs.apiary.harvest :with]
+ [jobs.apiary.maintain :box]
+ [jobs.apiary.maintain :chest]
+ [jobs.apiary.maintain :radius]
+ [jobs.apiary.maintain :target]
+ [jobs.blocks.clear-cells :keep]
+ [jobs.blocks.seal-opening :radius]
+ [jobs.build.from-plan :explore]
+ [jobs.build.pen :ignore-zones?]
+ [jobs.build.pen :uneven?]
+ [jobs.build.rail :plan]
+ [jobs.combat.attack :round]
+ [jobs.combat.hunt :inventory]
+ [jobs.debug.notify :chat?]
+ [jobs.debug.notify :text]
+ [jobs.debug.notify :to]
+ [jobs.debug.ready-probe :lit?]
+ [jobs.debug.ready-probe :stay-s]
+ [jobs.explore.look :block-names]
+ [jobs.explore.look :entity-names]
+ [jobs.explore.look :max-blocks]
+ [jobs.explore.look :max-entities]
+ [jobs.explore.look :properties?]
+ [jobs.explore.look :radius]
+ [jobs.explore.look :useful?]
+ [jobs.explore.search :heading]
+ [jobs.explore.search :max-legs]
+ [jobs.explore.search :pattern]
+ [jobs.explore.search :within]
+ [jobs.farm.compost :at]
+ [jobs.farm.compost :items]
+ [jobs.farm.find-spot :center]
+ [jobs.farm.find-spot :max-step]
+ [jobs.farm.find-spot :plan]
+ [jobs.farm.find-spot :range]
+ [jobs.farm.grow :h]
+ [jobs.farm.grow :w]
+ [jobs.farm.harvest :plan]
+ [jobs.farm.irrigate :for-plan]
+ [jobs.farm.maintain :chest]
+ [jobs.farm.maintain :irrigate]
+ [jobs.farm.plant :area]
+ [jobs.farm.plant :blocks]
+ [jobs.farm.plant :ignore-zones?]
+ [jobs.farm.tend :irrigate]
+ [jobs.farm.tend :till]
+ [jobs.farm.tidy :blocks]
+ [jobs.farm.tidy :plan]
+ [jobs.farm.till :area]
+ [jobs.farm.till :for-plan]
+ [jobs.food.fish :inventory]
+ [jobs.food.fish :pos]
+ [jobs.forestry.fell-tree :leafless?]
+ [jobs.forestry.fell-tree :radius]
+ [jobs.forestry.harvest-wood :center]
+ [jobs.forestry.harvest-wood :ignore-zones?]
+ [jobs.forestry.maintain :blocks]
+ [jobs.forestry.maintain :inventory]
+ [jobs.forestry.maintain :plan]
+ [jobs.forestry.plant-sapling :at]
+ [jobs.forestry.plant-sapling :blocks]
+ [jobs.forestry.plant-sapling :bone-meal]
+ [jobs.forestry.plant-sapling :species]
+ [jobs.forestry.prepare :blocks]
+ [jobs.gather.cast-obsidian :inventory]
+ [jobs.gather.dig-for :block]
+ [jobs.gather.dig-for :item]
+ [jobs.gather.dig-for :level]
+ [jobs.gather.dig-for :radius]
+ [jobs.gather.dig-for :torches]
+ [jobs.gather.get-seeds :chest]
+ [jobs.gather.mine :branches]
+ [jobs.gather.mine :descend-limit]
+ [jobs.gather.mine :direction]
+ [jobs.gather.mine :inventory]
+ [jobs.gather.mine :level]
+ [jobs.gather.mine :tags]
+ [jobs.gather.mine :torches]
+ [jobs.gather.mine :tunnel-length]
+ [jobs.gather.mine :wet]
+ [jobs.items.collect-drops :center]
+ [jobs.items.craft :blocks]
+ [jobs.items.craft :inventory]
+ [jobs.items.craft :radius]
+ [jobs.items.craft :table]
+ [jobs.items.enchant :item]
+ [jobs.items.enchant :table]
+ [jobs.items.equip :inventory]
+ [jobs.items.equip :off]
+ [jobs.items.equip :self]
+ [jobs.items.get-kit :explore]
+ [jobs.items.get-kit :food]
+ [jobs.items.get-kit :items]
+ [jobs.items.get-kit :partial-first]
+ [jobs.items.get-kit :wear]
+ [jobs.items.get-tool :for-plan]
+ [jobs.items.get-tool :how]
+ [jobs.items.get-tool :reason]
+ [jobs.items.get-tool :status]
+ [jobs.items.kitchen :chest]
+ [jobs.items.kitchen :furnace]
+ [jobs.items.obtain :inventory]
+ [jobs.items.obtain :status]
+ [jobs.items.smelt :inventory]
+ [jobs.items.smelt :tags]
+ [jobs.items.use :air]
+ [jobs.memory.forget-place :ok]
+ [jobs.memory.remember :data]
+ [jobs.memory.remember :ttl-s]
+ [jobs.memory.reserve :count]
+ [jobs.memory.reserve :id]
+ [jobs.memory.reserve :item]
+ [jobs.memory.reserve :strength]
+ [jobs.memory.reserve :tag]
+ [jobs.memory.reserve :ttl-s]
+ [jobs.memory.reserve :why]
+ [jobs.memory.set-place :block]
+ [jobs.memory.set-place :ok]
+ [jobs.memory.unreserve :id]
+ [jobs.memory.unreserve :item]
+ [jobs.movement.boat-launch :board]
+ [jobs.movement.chase :leg-s]
+ [jobs.movement.chase :pos]
+ [jobs.movement.cross-water :pos]
+ [jobs.movement.cross-water :recover]
+ [jobs.movement.go-to :can-start?]
+ [jobs.movement.go-to :doors]
+ [jobs.movement.go-to :gait]
+ [jobs.movement.go-to :place]
+ [jobs.movement.go-to :round]
+ [jobs.movement.go-to :tolls]
+ [jobs.movement.stay-near :player]
+ [jobs.storage.deposit :blocks]
+ [jobs.storage.deposit :inventory]
+ [jobs.storage.haul :gave-up]
+ [jobs.storage.haul :inventory]
+ [jobs.storage.haul :leave]
+ [jobs.storage.make-room :carry-blocks]
+ [jobs.strip.all :base]
+ [jobs.strip.all :site]
+ [jobs.strip.base :base]
+ [jobs.strip.corridor :blocks]
+ [jobs.strip.corridor :status]
+ [jobs.strip.seal :blocks]
+ [jobs.strip.seal :height]
+ [jobs.strip.seal :placed]
+ [jobs.strip.seal :reason]
+ [jobs.strip.seal :status]
+ [jobs.strip.seal :width]
+ [jobs.survival.breathe :ignore-zones?]
+ [jobs.survival.extinguish :ignore-zones?]
+ [jobs.survival.extinguish :water-radius]
+ [jobs.survival.get-food :ignore-zones?]
+ [jobs.survival.get-food :status]
+ [jobs.survival.go-home :self]
+ [jobs.survival.go-home :time]
+ [jobs.survival.log-out :news-ms]
+ [jobs.survival.log-out :offline-ms]
+ [jobs.survival.recover-drops :value-overrides]
+ [jobs.survival.respond-to-hostile :radius]
+ [jobs.survival.set-spawn :status]
+ [jobs.survival.shut-in :ignore-zones?]
+ [jobs.survival.unwedge :ignore-zones?]
+ [jobs.village.breed :target]
+ [jobs.village.roll :pos]
+ [jobs.village.roll :profession]
+ [jobs.village.roll :villager]
+ [jobs.village.roll :want]
+ [jobs.village.trade :buy]
+ [jobs.village.trade :count]
+ [jobs.village.trade :villager]
+ ]
+ :settings [
+ :jobs.animals.breed/calf-wait-s
+ :jobs.animals.pen-check/max-cells
+ :jobs.combat.attack/no-damage-hits
+ :jobs.explore.search/animal-searched-ttl-s
+ :jobs.explore.search/stale-s
+ :jobs.farm.find-spot/depth
+ :jobs.farm.find-spot/job-time-s
+ :jobs.farm.find-spot/limit
+ :jobs.food.fish/cast-s
+ :jobs.food.fish/max-misses
+ :jobs.gather.mine-stay/branch-length
+ :jobs.gather.mine-stay/ore-reach
+ :jobs.items.craft/table-radius
+ :jobs.items.enchant/table-radius
+ :jobs.items.give/wait-s
+ :jobs.items.obtain.base/far-chest
+ :jobs.lib.animal-spare/off-limits
+ :jobs.lib.child/max-fruitless
+ :jobs.lib.combat/attack-gap-ms
+ :jobs.lib.cost.death/spawn-horizon-s
+ :jobs.lib.cost.find/leg-spacing
+ :jobs.lib.cost.planner/drop-cost
+ :jobs.lib.cost.threat/difficulty
+ :jobs.lib.danger/hostile-radius
+ :jobs.lib.danger/ranged-radius
+ :jobs.lib.hostile-fight/leash
+ :jobs.lib.loose/radius
+ :jobs.lib.price/way-radius
+ :jobs.lib.shelter.beds/max-days-awake
+ :jobs.lib.shelter.keep/at-night?
+ :jobs.lib.shut-gates/open-s
+ :jobs.lib.shut-walked/unrecorded?
+ :jobs.lib.swim/air-radius
+ :jobs.movement.boat-launch/radius
+ :jobs.movement.cross-water/min-cross
+ :jobs.storage.make-room/toss-below
+ :jobs.survival.breathe/search-radius
+ :jobs.survival.breathe/swim-range
+ :jobs.survival.get-food.sources/source-radius
+ :jobs.survival.get-food/eat-bad-food
+ :jobs.survival.get-food/hunt-radius
+ :jobs.survival.hide-out/hide-s
+ :jobs.survival.hide-out/quiet-s
+ :jobs.survival.night.sites/flee-radius
+ :jobs.survival.night.sites/home-walk-margin-s
+ :jobs.survival.plug-way/night-place-s
+ :jobs.survival.recover-drops.config/collect-radius
+ :jobs.survival.recover-drops.config/leg-s
+ :jobs.survival.respond-to-hostile/stay-inside
+ :jobs.survival.respond.state/hide-health
+ :jobs.survival.wall-placer/max-places
+ :jobs.village.breed/wait-s
+ ]}
