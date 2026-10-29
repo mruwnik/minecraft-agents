@@ -27,7 +27,7 @@
   laid a cave or fluid open). The pit is never dug into what the body sees as fluid, a hazard or open air, and it is planned again
   when the body has left its column. Lava a dig lays open is filled first (:on-lava :seal). Every plug goes to the scaffold ledger
   with :for (default :danger, ledger :retreat-plug, taken back by jobs.access.cleanup once no hostile is near; :night: ledger :shelter, left alone). Quote:
-  time, with :for :night plus the walk (##Inf when no pit fits, or with :for :night when the pit would cut into a plan the body made or stand on a plan's doorstep, :spared; a cell another's zone refuses adds plug-way's ::trespass-s). With :for :night, can-start? is :later (:no-site, or :spared at the feet) before any round. Picked by jobs.survival.shut-in, which shuts the body in by the cheapest way.
+  time, with :for :night plus the walk and the site's toll (dig-pit-site/toll-s: how shut-in weighs a site in a known mob's field against its other ways; ##Inf when no pit fits, or with :for :night when the pit would cut into a plan the body made or stand on a plan's doorstep, :spared; a cell another's zone refuses adds plug-way's ::trespass-s). With :for :night, can-start? is :later (:no-site, or :spared at the feet) before any round. Picked by jobs.survival.shut-in, which shuts the body in by the cheapest way.
   With :for :night, when a pit failed at the feet tonight (shut-in's :shut-in-failed) or another's zone refuses them and a free site is near, it first walks (go-to) to the cheapest seen ground within jobs.survival.dig-pit-site's ::reach (16) that looks like a pit fits (clear of every failed site; its walk plus the toll of known mobs it would flee over the pit's stay, relocation-site), climbing out of its own failed pit first; with no such ground it ends :failed :no-site.")
 
 (a/defargs args
@@ -111,7 +111,7 @@
   (let [s (when (night/night? c) (site/site c))]
     (if (and (night/night? c) (not= :here (:at s)))
       (way/quote-of c (if s
-                        (+ (* (u/dist (sh-sense/feet (:primitives c)) (:cell s)) (settings/get settings ::walk-s-per-block)) (site/pit-s c (:cell s)))
+                        (+ (* (u/dist (sh-sense/feet (:primitives c)) (:cell s)) (settings/get settings ::walk-s-per-block)) (site/pit-s c (:cell s)) (site/toll-s c (:cell s)))
                         ##Inf)
                     (settings/get settings ::job-time-s))
     (way/quote-of c (if stop
@@ -188,10 +188,8 @@
   (if-let [start (site/pit-start c)]
     (let [r (await (dig-leave/climb! c {:start start} cell))]
       (if (map? r) (fail! c :trapped "could not climb out of the failed pit") :continue))
-    (let [e (waits/waiting-out c (await (ctx/call c :walk 'jobs.movement.go-to {:pos cell :range 0 :stay-s (site/pit-s c cell)
-                                                                   :settings {:jobs.movement.go-to.tuning/goal-danger :end}})))]
+    (let [e (waits/waiting-out c (await (ctx/call c :walk 'jobs.movement.go-to {:pos cell :range 0 :stay-s (site/pit-s c cell)})))]
       (cond (= :continue e) :continue
-            (= :goal-dangerous (or (:why (:data e)) (contract/cause-key e))) (fail! c :no-site "the ground for a pit lies in a known mob's field, dearer than the walk is worth")
             (or (not (:arrived (:data e))) (:re-aimed (:data e))) (fail! c :walk-failed "could not walk to ground for a pit")
             :else (do (ctx/update-mem! c dissoc :walk-to)
                       (ctx/emit! c :shut-in.relocated :info {:pos cell :sites (site/failed c) :text "the last site failed; moved to dig in elsewhere"})

@@ -124,9 +124,22 @@
     (some #(when (and (:start %) (< (:y feet) (:y (:start %))) (<= (u/dist feet (:start %)) (site-radius %))) (:start %))
           (failed c))))
 
+(defn walk-from
+  "Where a walk to a relocation site is priced from: the top of the pit the body is in, else the failed site it is at, else its feet."
+  [c]
+  (let [feet (sh-sense/feet (:primitives c))]
+    (or (pit-start c)
+        (:pos (first (filter #(and (= :pit (:way %)) (<= (u/dist feet (:pos %)) (site-radius %))) (failed c))))
+        feet)))
+
+(defn toll-s
+  "Seconds the known mobs the body would flee cost a pit at feet cell f: walk-toll-s from walk-from plus stay-toll-s."
+  [c f]
+  (let [danger-near (threats/danger-near-fn c)]
+    (+ (walk-toll-s danger-near (walk-from c) f) (stay-toll-s c danger-near f))))
+
 (defn relocation-site
-  "The cheapest feet cell within ::reach of the top of the pit the body is in, else of the failed site it is at, else of
-  its feet, clear of every failed site, where a pit can be dug (pit-site?): the least walk-pick/walk-s from there plus
+  "The cheapest feet cell within ::reach of walk-from, clear of every failed site, where a pit can be dug (pit-site?): the least walk-pick/walk-s from there plus
   walk-toll-s and stay-toll-s, the nearer first on a tie; or nil. With :free?, only cells no zone, claim or plan refuses.
   Best first: each column where a pit stands (standing?) gets the lower bound of its price without the walk's toll, the
   nearest columns first; the cheapest bound is priced whole, then tested whole (pit-site?, zones) once no column not yet
@@ -135,10 +148,9 @@
   (let [p (:primitives c)
         feet (sh-sense/feet p)
         reach (settings/get settings ::reach)
-        here (:pos (first (filter #(and (= :pit (:way %)) (<= (u/dist feet (:pos %)) (site-radius %))) (failed c))))
         danger-near (threats/danger-near-fn c)
         start (pit-start c)
-        {:keys [x z] :as from} (or start here feet)
+        {:keys [x z] :as from} (walk-from c)
         y (:y (or start feet))
         columns (->> (for [dx (range (- reach) (inc reach))
                            dz (range (- reach) (inc reach))

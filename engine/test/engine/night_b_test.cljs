@@ -243,17 +243,17 @@
           (is (seq (st/calls p "place")))
           (is (every? #(< 90 (:x %)) (mapv st/arg-pos (st/calls p "place"))) "the pit is dug where the body was moved to"))))))
 
-(deftest a-pit-site-in-a-known-mobs-field-is-not-walked-to-when-the-toll-over-the-dig-costs-more-than-the-walk-is-worth
+(deftest a-pit-site-in-a-known-mobs-field-loses-to-walls-at-the-feet-by-its-toll
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (st/setup {:time night :blocks (into {} (filter (fn [[k _]] (.endsWith k ",0"))) west-ground) :inventory st/dirt-stack})
+        (let [{:keys [eng p seen]} (st/setup {:time night :blocks (into {} (filter (fn [[k _]] (.endsWith k ",0"))) west-ground) :inventory [{:name "dirt" :count 64}]})
               known (fn [x] {:mob "zombie" :pos {:x x :y 64 :z 0.5} :weight 1e6})]
           (mem/write! (:store eng) :shut-in-failed {:pos {:x 0 :y 64 :z 0} :way :pit :reason :no-floor} {:cap 5 :ttl 600000})
           (let [r (with-redefs [threats/known-threats (constantly [(known -11.5)])]
-                    (await (tu/child-outcome eng 'jobs.survival.dig-pit {:for :night :worth 10} 5)))]
-            (is (= :no-site (:reason r)) (pr-str r))
-            (is (empty? (st/calls p "place")) "no pit was dug")))))))
+                    (await (tu/child-outcome eng 'jobs.survival.shut-in {:for :night} 5)))]
+            (is (= :walls (:way r)) (pr-str (st/emitted seen :shut-in.quotes)))
+            (is (every? #(< -5 (:x %)) (mapv st/arg-pos (st/calls p "place"))) "nothing placed out in the field")))))))
 
 (deftest a-site-walked-to-is-given-up-for-good-ground-the-body-stands-on-whatever-the-distance
   (async done
