@@ -6,6 +6,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.checks :as checks]
+            [jobs.lib.cost :as cost]
             [jobs.lib.cond :as cond]
             [jobs.lib.gate :as gate]
             [jobs.lib.need :as need]
@@ -19,7 +20,7 @@
             [jobs.lib.pace :as pace]))
 
 (def doc
-  "Plant a sapling at :at, or at the oldest replant debt (then at the next, until none is owed), and clear that debt. A debt on a planned crop plot, or on a cell another block fills, is dropped, never planted.
+  "Plant a sapling at :at, or at the cheapest replant debt (spot-price: the walk over the chance the spot can be planted; then at the next, until none is owed), and clear that debt. A debt on a planned crop plot, or on a cell another block fills, is dropped, never planted.
   With no :species a debt whose sapling is carried comes before older ones.
   With :near and :within only the debts within :within blocks of :near count; the others stay owed.
   A missing sapling is got with jobs.lib.need (a seen chest, or the leaves of its tree broken for the drop) unless the call's :ways are #{:carried}
@@ -68,15 +69,59 @@
 
 (def saplings (mapv sapling-of all-species))
 
+(defn light-at
+  "The better of the sky and block light at pos, from the raw world; nil when it is unknown."
+  [p pos]
+  (when-let [raw (look/raw-of p)]
+    (let [{:keys [x y z]} pos]
+      (when (look/light-known? raw x y z)
+        (let [v (.lightAt raw x y z)]
+          (max (bit-and v 15) (bit-shift-right v 4)))))))
+
+(defn unfit
+  "Why a sapling of species cannot grow at pos, as a cause {:reason ..}, or nil (unseen ground, room or light is no refusal)."
+  [c pos species]
+  (let [p (:primitives c)
+        under (u/seen-name p (lib/down pos))
+        space (when (rule/headroom-of species) (rule/growth-space p pos species))
+        here (u/seen-name p pos)
+        light (when (and here (tree-free? here)) (light-at p pos))]
+    (cond
+      (and under (not ((lib/soil-for species) under))) {:reason :no-soil :pos pos :found under}
+      (= :cramped (:state space)) (assoc (select-keys space [:at :block]) :reason :cramped :pos pos)
+      (and light (< light (settings/get settings ::min-light))) {:reason :too-dark :pos pos :light light})))
+
+(defn spot-chance
+  "The chance a sapling of species can be planted at pos: 0 when its seen soil, room or light rule it out, the measured
+  cost/spot-plantable-chance when any of them is unseen, else 1."
+  [c pos species]
+  (let [p (:primitives c)]
+    (cond
+      (#{"crimson" "warped"} species) 1
+      (unfit c pos species) 0
+      (or (nil? (u/seen-name p (lib/down pos)))
+          (nil? (u/seen-name p pos))
+          (= :unloaded (:state (when (rule/headroom-of species) (rule/growth-space p pos species))))
+          (and (tree-free? (u/seen-name p pos)) (nil? (light-at p pos)))) (cost/spot-plantable-chance)
+      :else 1)))
+
+(defn spot-price
+  "Seconds expected to plant debt d: the walk to it over the chance it can be planted there (##Inf when it cannot)."
+  [c d]
+  (let [chance (spot-chance c (:pos d) (or (:species (:args c)) (:species d)))]
+    (if (zero? chance)
+      ##Inf
+      (/ (u/dist (u/self-pos c) (:pos d)) cost/walk-speed chance))))
+
 (defn current-target
-  "The spot to plant: :at, else the oldest debt; of the debts whose sapling is carried first when no species is asked.
+  "The spot to plant: :at, else the cheapest debt (spot-price; the oldest of equals); of the debts whose sapling is carried first when no species is asked.
   Debts whose cell is unloaded, that failed lately or where the body would be due home before night (sh/home-due-at?)
   come last: the replant-owed trigger holds for the others only."
   [c]
   (let [all (debts c)
         p (:primitives c)
         reachable (filterv #(and (u/block-at p (:pos %)) (debt-near-body? p (:pos %)) (not (sh/home-due-at? p (ctx/view c) (:pos %)))) (without-stalled (ctx/view c) all))
-        ds (if (seq reachable) reachable all)
+        ds (sort-by #(spot-price c %) (if (seq reachable) reachable all))
         carried (when-not (:species (:args c)) (seq (with-sapling ds (u/inventory (:primitives c)))))]
     (target-of (or carried ds) (:args c))))
 
@@ -103,28 +148,6 @@
   [c]
   (when-let [how (seq (need/fetch-how c))]
     {:how (set how)}))
-
-(defn light-at
-  "The better of the sky and block light at pos, from the raw world; nil when it is unknown."
-  [p pos]
-  (when-let [raw (look/raw-of p)]
-    (let [{:keys [x y z]} pos]
-      (when (look/light-known? raw x y z)
-        (let [v (.lightAt raw x y z)]
-          (max (bit-and v 15) (bit-shift-right v 4)))))))
-
-(defn unfit
-  "Why a sapling of species cannot grow at pos, as a cause {:reason ..}, or nil (unseen ground, room or light is no refusal)."
-  [c pos species]
-  (let [p (:primitives c)
-        under (u/seen-name p (lib/down pos))
-        space (when (rule/headroom-of species) (rule/growth-space p pos species))
-        here (u/seen-name p pos)
-        light (when (and here (tree-free? here)) (light-at p pos))]
-    (cond
-      (and under (not ((lib/soil-for species) under))) {:reason :no-soil :pos pos :found under}
-      (= :cramped (:state space)) (assoc (select-keys space [:at :block]) :reason :cramped :pos pos)
-      (and light (< light (settings/get settings ::min-light))) {:reason :too-dark :pos pos :light light})))
 
 (defn target-unfit
   "Why the current target's spot cannot grow its sapling (unfit), or nil."

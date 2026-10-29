@@ -80,6 +80,10 @@
                                             (fn [m] (and (map? m) (every? (fn [k] (let [c (get m k)] (and (map? c) (every? #(and (number? (get c %)) (<= 0 (get c %))) [:far :near]))))
                                                                           [:roofed :sky]))))
                               :doc "The Beta prior, by the sky light where the body stands (:sky over 0, :roofed 0), that a dark place whose walkers' region ends at an unseen edge is walked to from dark floor farther than 24 blocks (answer/hall-chance): of dark stands (block light 0) in 2009 recorded chunk files (every 40th, the fixture grid left out, 2026-10-29), the share a walker reaches from such floor over the true blocks, roofed 0.80 (7214 of 8990), under sky 0.98 (3154 of 3218); a walk into land never recorded is left out, so both are low if anything; spread fitted by moments over the chunks (effective n 3.6, 3.9). Recount: node tools/event-counts.mjs dark-reach --stride 40."}
+   ::unseen-spot-counts {:default {:plantable 2.417 :unfit 0.634}
+                         :spec (a/pred "a map {:plantable n :unfit n} of pseudo-counts >= 0"
+                                       (fn [m] (and (map? m) (every? #(and (number? (get m %)) (<= 0 (get m %))) [:plantable :unfit]))))
+                         :doc "The Beta prior that a replant spot the body has not seen the soil, room or light of can be planted (answer/spot-plantable-chance): of the bases of felled trees (a log on soil) in 2009 recorded chunk files (every 40th, the fixture grid left out, 2026-10-29), 3513 of 4448 had the species' growth space free of anything a tree cannot grow through (logs counted felled) and an open side lit 9 or more, 0.79; spread fitted by moments over 482 chunks (effective n 3.1). Recount: node tools/event-counts.mjs tree-spots --stride 40."}
    ::tour-worth {:default false :spec (a/or-of false? (a/num-in 0 nil))
                  :doc "Seconds a tour of frontiers may cost whatever its goal; false: from the goal's straight blocks (tour-ratio, tour-floor-blocks)."}
    ::food-worth-per-point {:default 30 :spec (a/num-in 0 nil)

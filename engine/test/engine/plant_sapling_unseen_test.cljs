@@ -73,3 +73,25 @@
                                      plant-sapling/current-target (constantly {:pos {:x 3 :y 64 :z 0} :species "oak"})]
                          (f c)))]
     (is (= [:later :log-on-spot] ((juxt first (comp :reason last)) (status (:can-run? def)))))))
+
+(defn spot-price-of
+  "plant-sapling/spot-price of a debt at x (0 of y 64, z 0) from a body at the origin: soil under it blocks, none of it seen
+  when unseen-soil-at holds x."
+  [blocks unseen-soil-at x]
+  (let [p (tu/seeing-all (tu/fake-on-floor {:blocks blocks}))
+        omniscient (.-sensedAt p)]
+    (aset p "sensedAt" (fn [pos] (if (and (= 63 (.-y pos)) (unseen-soil-at (.-x pos))) #js {:unknown true} (omniscient pos))))
+    (with-redefs [plant-sapling/light-at (constantly 15)]
+      (plant-sapling/spot-price {:primitives p :args {}} {:pos {:x x :y 64 :z 0} :species "oak"}))))
+
+(deftest an-unseen-spot-costs-its-walk-over-the-measured-chance-and-a-seen-fit-one-near-it-wins
+  (let [soil {"6,63,0" "dirt" "7,63,0" "dirt"}
+        unseen-near (spot-price-of soil #{6} 6)
+        seen-far (spot-price-of soil #{6} 7)
+        seen-same (spot-price-of soil #{} 6)]
+    (is (< seen-far unseen-near) "a seen spot slightly farther beats an unseen nearer one")
+    (is (< seen-same unseen-near))
+    (is (< 0.5 (/ seen-same unseen-near) 1) "priced by a chance under 1 and over a half, not refused")))
+
+(deftest a-seen-unfit-spot-costs-infinity
+  (is (= ##Inf (spot-price-of {"6,63,0" "stone"} #{} 6))))

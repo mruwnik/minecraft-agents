@@ -513,6 +513,13 @@
     (let [{:keys [far near]} (get (settings/get value/settings ::value/unseen-edge-dark-counts) hall)]
       (counted-chance {:k 0 :n 0 :prior [far near]}))))
 
+(defn spot-plantable-chance
+  "The chance a replant spot of which the body has not seen the soil, room or light can be planted: counted-chance of
+  value/::unseen-spot-counts' pseudo-counts."
+  []
+  (let [{:keys [plantable unfit]} (settings/get value/settings ::value/unseen-spot-counts)]
+    (counted-chance {:k 0 :n 0 :prior [plantable unfit]})))
+
 (defn hide-stays
   "The chance the danger is still about when a hide in a refuge ends: counted-chance of ::hide-stays."
   []
