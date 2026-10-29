@@ -7,6 +7,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.reserve :as reserve]
+            [jobs.lib.step-off :as step-off]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]
             [jobs.movement.go-to.holes :refer [note-placed! own-holes]]
@@ -24,7 +25,7 @@
     (when (seq skipped)
       (ctx/emit! c :go-to.restore-skipped :warn {:cells skipped
                                                  :text (str "left " (count skipped) " dug blocks for restore-broken")}))
-    (ctx/update-mem! c #(-> % (dissoc :restore-now :restore-seen :restored :skipped :changed :best)
+    (ctx/update-mem! c #(-> % (dissoc :restore-now :restore-seen :restore-stepped :restored :skipped :changed :best)
                             (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {})))))
 
 (defn changed?
@@ -57,7 +58,8 @@
   trespass, so the place ignores zones), lowest first, with jobs.blocks.place (the dug block or what it drops), one
   child call each (ctx/call). It runs once the body got on past the escalation (restore-next!). A hole skip-why
   refuses, or the place child ends without placing (nothing to place), stays in the ledger for restore-broken (a
-  :changed one is forgotten). A placed one is forgotten."
+  :changed one is forgotten). A hole the body stands in is stepped off once (jobs.lib.step-off) before it is tried again.
+  A placed one is forgotten."
   [c]
   (let [p (:primitives c)
         seen (:restore-seen (ctx/mem c) #{})
@@ -74,7 +76,11 @@
                       (do (tidy/forget-cell! c cell) (done! :changed cell))
                       (done! :skipped {:cell cell :block was :why why})))]
         (if-let [why (skip-why c e)]
-          (skip! why)
+          (if (and (= :occupied why) (not (contains? (:restore-stepped (ctx/mem c)) cell)))
+            (let [_ (ctx/update-mem! c update :restore-stepped (fnil conj #{}) cell)
+                  r (await (step-off/step-off! c cell {}))]
+              (if (= :continue r) :continue :again))
+            (skip! why))
           (let [_ (await (torch/return-torch! c))
                 r (await (ctx/call c :restore 'jobs.blocks.place args))]
             (cond

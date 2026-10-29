@@ -14,6 +14,8 @@
             [jobs.lib.escape :as escape]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.tools :as tools]
+            [jobs.lib.step-off :as step-off]
+            [jobs.lib.tidy :as tidy]
             [jobs.lib.ledger :as ledger]
             [plan.shape :as shape]
             [jobs.movement.go-to.escalation :as esc]
@@ -179,6 +181,22 @@
           (is (= "dirt" (block p [1 62 0])))
           (is (= "dirt" (block p [1 63 0])))
           (is (= [[2 63 0]] (mapv :cell (:cells skipped))) "nothing left to put back the third"))))))
+
+(deftest go-to-steps-off-a-dug-cell-it-stands-in-once-and-then-puts-it-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [stood (atom #{})
+              stepped (atom [])
+              in-body? (fn [_ cell] (when-not (@stood cell) (swap! stood conj cell) true))
+              {:keys [out p seen]} (with-redefs [tidy/in-body? in-body?
+                                                 step-off/step-off! (fn [_ cell _] (swap! stepped conj cell) (js/Promise.resolve :arrived))]
+                                     (await (run-job! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 2}]})
+                                                      'jobs.movement.go-to (merge {:pos [10 64 0] :range 1 :ways #{:walk :stair}} trespass) foreign)))]
+          (is (= {:arrived true} @out))
+          (is (= [[1 62 0] [1 63 0]] (sort (:cells (first (events-of seen :go-to.restored))))) "the cells the body stood in are put back")
+          (is (= (sort @stood) (sort @stepped)) "each is stepped off once")
+          (is (= "dirt" (block p [1 62 0]))))))))
 
 (deftest go-to-stairs-out-of-a-sealed-stone-pit-with-a-full-pack-leaving-the-drops
   (async done
