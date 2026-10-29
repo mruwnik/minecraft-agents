@@ -50,3 +50,8 @@
   (let [ev (fn [kind t] (pr-str {:generation-id "g" :time-ms t :source :job :kind kind :context {:job-id "j/x"} :data {}}))
         {:keys [risky-stay]} (r/report (keep r/scan-line [(ev :near.risky-wait 0) (ev :near.risky-wait 5000) (ev :near.risky-over 10000)]))]
     (is (= {:won 1 :retries 2 :calls 1 :try-s 5} (select-keys risky-stay [:won :retries :calls :try-s])))))
+
+(deftest a-comb-look-that-took-none-then-some-is-a-won-comb-look-retry
+  (let [ev (fn [kind t] (pr-str {:generation-id "g" :time-ms t :source :job :kind kind :context {:job-id "j/x"} :data {}}))
+        {:keys [comb-look]} (r/report (keep r/scan-line [(ev :apiary.comb-wait 0) (ev :apiary.comb-wait 5000) (ev :apiary.comb-over 10000)]))]
+    (is (= {:won 1 :retries 2 :calls 1 :try-s 5} (select-keys comb-look [:won :retries :calls :try-s])))))

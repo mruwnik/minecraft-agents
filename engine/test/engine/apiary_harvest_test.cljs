@@ -92,7 +92,7 @@
               orig-call ctx/call
               orig-pause child/pause!]
           (with-redefs [ctx/call (fn ^:async call [c slot job-name args]
-                                   (when (= 'jobs.items.collect-drops job-name) (swap! searches conj (:search args)))
+                                   (when (= 'jobs.items.collect-drops job-name) (swap! searches conj (select-keys args [:near :search])))
                                    (if (and (= 'jobs.items.collect-drops job-name) (first (reset-vals! first-collect? false)))
                                      {:kind :nothing-possible :cause :none-collected
                                       :data {:collected 0 :left [{:pos {:x 2 :y 64 :z 0} :reason :unreachable}]}}
@@ -100,9 +100,32 @@
                         child/pause! (fn ^:async pause [c s why] (swap! pauses inc) (await (orig-pause c s why)))]
             (let [result (await (child-outcome eng job {} 60))]
               (is (= 1 @pauses) "an unreachable comb is waited for like a comb not heard yet")
-              (is (= [0 4] @searches) "only the second look walks round the hive")
+              (is (= [{} {:near {:x 2 :y 64 :z 0} :search 2}] @searches) "only the second look walks round the hive, as far as a popped drop flies")
               (is (= 3 (:collected result)))
               (is (= 3 (carried p "honeycomb"))))))))))
+
+(defn ^:async pauses-for-a-comb-that-never-shows
+  "The comb pauses a harvest takes at the call's worth when no comb ever shows, with its outcome: [pauses outcome]."
+  [worth]
+  (let [{:keys [eng p]} (setup (world {:inventory (inv "shears" 1)}))
+        pauses (atom 0)
+        orig child/pause!
+        orig-entities (.bind (.-entities p) p)]
+    (aset p "entities" (fn [q] (if (seq (calls p "useOn")) #js [] (orig-entities q))))
+    (with-redefs [child/pause! (fn ^:async pause [c s why] (when (= :comb why) (swap! pauses inc)) (await (orig c s why)))]
+      (let [result (await (child-outcome eng job {:worth worth} 600))]
+        [@pauses result]))))
+
+(deftest a-comb-that-never-shows-is-looked-for-only-while-another-look-is-worth-its-pause
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[low out-low] (await (pauses-for-a-comb-that-never-shows 30))
+              [high out-high] (await (pauses-for-a-comb-that-never-shows 1000))]
+          (is (zero? low) "a goal worth little is not waited on at the pooled chance a comb shows")
+          (is (< 1 high) "a goal worth much is, look after look")
+          (is (= [1 0] [(:harvested out-low) (:collected out-low)]))
+          (is (= [1 0] [(:harvested out-high) (:collected out-high)])))))))
 
 (deftest a-cut-comb-pause-is-resumed-not-skipped
   (async done

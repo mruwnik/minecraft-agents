@@ -6,7 +6,8 @@
   one try, start to end). Kinds (`kinds`): :craft the craft action (a timeout fails), :furnace the furnace action (a busy
   slot fails), :dig the dig action (a timeout, a failure or an unreachable block fails), :walk a go-to's result (not arrived
   fails), :respond respond-to-hostile's :hostile.call (a call that changed nothing fails), :risky-stay jobs.lib.near/risky-wait!'s
-  events (:near.risky-wait a refusal, :near.risky-over the stay allowed after one); :pooled all kinds' tries together,
+  events (:near.risky-wait a refusal, :near.risky-over the stay allowed after one), :comb-look jobs.apiary.harvest's look
+  for comb (:apiary.comb-wait a look that took none, :apiary.comb-over a look that took some after one); :pooled all kinds' tries together,
   the prior of a kind with none counted.
   Pure parts: scan-line, retries, report."
   (:require [clojure.string :as str]
@@ -30,6 +31,9 @@
 
       (or (str/includes? line ":kind :near.risky-wait") (str/includes? line ":kind :near.risky-over"))
       {:kind :risky-stay :key (key) :t (t) :edge :end :fail? (str/includes? line ":kind :near.risky-wait")}
+
+      (or (str/includes? line ":kind :apiary.comb-wait") (str/includes? line ":kind :apiary.comb-over"))
+      {:kind :comb-look :key (key) :t (t) :edge :end :fail? (str/includes? line ":kind :apiary.comb-wait")}
 
       (str/includes? line ":kind :hostile.call")
       {:kind :respond :key (key) :t (t) :edge :end :fail? (str/includes? line ":changed false")}

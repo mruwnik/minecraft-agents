@@ -7,6 +7,7 @@
 (def stack-size "Items in a full stack of a stacking item." 64)
 (def slot-max "Items one furnace or chest slot holds at most." 64)
 (def ripe-level "The honey level at which a hive can be harvested." 5)
+(def popped-item-reach "Blocks from a block's cell its popped drop lies at most: it spawns 0.65 out of the clicked face, moves 0.1 a tick sideways and 0.2 up, so flies and slides about 1 block more." 2)
 (def dusk-tick "The time of day (game ticks) at which dusk comes." 12000)
 
 (def smelted-from

@@ -11,6 +11,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.apiary :as apiary :refer [classify found-hives hives tool-for tool-item]]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
@@ -22,7 +23,7 @@
   "Take the honey of the ripe hives (honey_level 5) near a centre, nearest first, at most :max hives, all in one call
   (:continue only while a walk or pick-up waits on the world). It looks around once first. Shears give 3
   honeycomb, a glass bottle gives a honey bottle. After each shears harvest the honeycomb on the ground is
-  collected; when none is taken yet the job pauses (jobs.time.noop, holding :comb) for the comb-wait setting and looks once more, walking round the hive (comb-search setting).
+  collected round the hive; when none is taken the job pauses (jobs.time.noop, holding :comb) for the comb-wait setting and looks again, walking round the hive as far as a popped drop flies (facts/popped-item-reach), while another look is worth its price (cost/try-again? :comb-look).
   A hive is worked only when it is smoked by vanilla's rule: a lit campfire at most 5 blocks under it with only
   air-like blocks between, or a lit campfire directly under the first block in the way.
   - An unsmoked hive angers the bees, so it is declined without a click (:not-smoked).
@@ -57,9 +58,8 @@
 (a/defargs settings
   {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::max-strikes {:default 3 :doc "Strikes at one target before the job gives up on it." :spec (a/int-in 0 nil)}
-   ::comb-wait-s {:default 5 :doc "Seconds a shears harvest pauses for its comb to show, once, before it goes on without." :spec (a/num-in 0 nil)}
+   ::comb-wait-s {:default 5 :doc "Seconds a shears harvest pauses for its comb to show before it looks again (while another look is worth it)." :spec (a/num-in 0 nil)}
    ::collect-radius {:default 8 :doc "Blocks round the body in which honeycomb is picked up." :spec (a/num-in 0 nil)}
-   ::comb-search {:default 4 :doc "Blocks round the hive searched for comb on the second look, when none shows after the pause (a comb can fly behind the hive, out of sight)." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 120 :doc "Seconds a harvest run may take." :spec (a/num-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
 (defn max-strikes [] (settings/get settings ::max-strikes))
@@ -134,32 +134,48 @@
 (defn comb-wait-s [] (settings/get settings ::comb-wait-s))
 
 (defn ^:async wait-for-comb!
-  "The one comb-wait-s pause; :continue while it is cut, then the second look (:again)."
+  "The comb-wait-s pause; :continue while it is cut, then the next look (:again)."
   [c]
   (if (= :continue (await (child/pause! c (comb-wait-s) :comb)))
     :continue
-    (do (ctx/update-mem! c assoc :comb-wait :waited) :again)))
+    (do (ctx/update-mem! c dissoc :comb-wait) :again)))
+
+(defn close-collect!
+  "End the collect phase; :apiary.comb-over when a look after one that took none took some."
+  [c got]
+  (when (and (pos? got) (:comb-fails (ctx/mem c)))
+    (ctx/emit! c :apiary.comb-over :info {}))
+  (ctx/update-mem! c #(-> % (dissoc :phase :comb-wait :comb-fails :comb-at)))
+  :again)
 
 (defn ^:async collect!
-  "Pick up the honeycomb lying about, then go back to the hives. :continue while the pick-up waits; when no comb is
-  taken yet (the spawn may not have reached the body, or the comb still lies in the hive's own cell, which no walk
-  reaches) one comb-wait-s pause, then a second look that also walks round the hive (comb-search, as a comb can fly
-  behind it, out of sight); any other end of it closes the phase."
+  "Pick up the honeycomb lying about the hive just harvested, then go back to the hives. :continue while the pick-up
+  waits; when none is taken (the spawn may not have reached the body, or the comb lies in the hive's own cell, which no
+  walk reaches) a comb-wait-s pause and another look, which also walks round the hive as far as a popped drop flies,
+  for as long as another look is worth its price (cost/try-again? :comb-look after the looks in a row that took none);
+  any other end of it closes the phase."
   [c]
   (if (= :pausing (:comb-wait (ctx/mem c)))
     (await (wait-for-comb! c))
-    (let [e (waits/waiting-out c (await (ctx/call c :collect 'jobs.items.collect-drops {:radius (settings/get settings ::collect-radius) :items ["honeycomb"]
-                                                                                     :search (if (= :waited (:comb-wait (ctx/mem c))) (settings/get settings ::comb-search) 0)})))
+    (let [m (ctx/mem c)
+          e (waits/waiting-out c (await (ctx/call c :collect 'jobs.items.collect-drops
+                                                  (cond-> {:radius (settings/get settings ::collect-radius) :items ["honeycomb"]}
+                                                    (:comb-fails m) (assoc :near (:comb-at m) :search facts/popped-item-reach)))))
           ended? (contains? #{:done :nothing-possible} (:kind e))
           got (if ended? (get-in e [:data :collected] 0) 0)]
       (when ended?
         (ctx/update-mem! c update :collected (fnil + 0) got))
       (cond
         (= :continue e) :continue
-        (and ended? (zero? got) (not (:comb-wait (ctx/mem c))))
-        (do (ctx/update-mem! c assoc :comb-wait :pausing)
-            (await (wait-for-comb! c)))
-        :else (do (ctx/update-mem! c #(-> % (dissoc :phase) (dissoc :comb-wait))) :again)))))
+        (and ended? (zero? got))
+        (let [fails (inc (:comb-fails m 0))]
+          (ctx/update-mem! c assoc :comb-fails fails)
+          (ctx/emit! c :apiary.comb-wait :info {:fails fails})
+          (if (cost/try-again? c :comb-look {:fails fails :try-s (comb-wait-s)})
+            (do (ctx/update-mem! c assoc :comb-wait :pausing)
+                (await (wait-for-comb! c)))
+            (close-collect! c 0)))
+        :else (close-collect! c got)))))
 
 (defn book-harvest!
   "Count the hive at pos as taken when it is no longer ripe; the comb is then collected after shears."
@@ -167,7 +183,7 @@
   (let [level (some-> (u/seen-block (:primitives c) pos) .-properties .-honey_level)]
     (if (< (or level facts/ripe-level) facts/ripe-level)
       (ctx/update-mem! c #(cond-> (-> % (update :harvested (fnil inc 0)) (assoc :strikes 0))
-                            (= "shears" tool) (assoc :phase :collect)))
+                            (= "shears" tool) (assoc :phase :collect :comb-at (select-keys pos [:x :y :z]))))
       (skip! c pos :no-effect))))
 
 (defn settle-click!
