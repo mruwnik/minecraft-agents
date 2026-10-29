@@ -185,7 +185,7 @@
 
 (defn would-run? [c f] (boolean (some :call (vals (decisions c f)))))
 
-(defn pass-worth
+(defn worth-of
   "Seconds a pass is worth: the item-value of the cooked food and bread it would stock (the shortfall its carried raw
   food and wheat cover)."
   [c]
@@ -202,7 +202,7 @@
 (defn not-worth
   "The cause of a kitchen declining while even the least walk to its chest costs more than the pass is worth, or nil."
   [c]
-  (pick/not-worth c (some->> (storage/chest-of (ctx/view c) (:args c)) (chests/walk-args c)) #(pass-worth c)))
+  (pick/not-worth c (some->> (storage/chest-of (ctx/view c) (:args c)) (chests/walk-args c)) #(worth-of c)))
 
 (defn nothing-to-do
   "The cause of a kitchen with no step to run: each step's skip."

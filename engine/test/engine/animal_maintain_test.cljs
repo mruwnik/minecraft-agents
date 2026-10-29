@@ -4,6 +4,7 @@
             [engine.core :as core]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [engine.registry :as registry]
             [engine.hostile-test :as h]
             [engine.fake :as fake]
             [engine.settings :as settings]
@@ -321,6 +322,9 @@
         facts {:adults 4 :babies 0 :drops [] :shearable 0 :gaps [[1 64 1]] :stored-items []}]
     (is (= {:plan "pen" :worth (maintain/mend-worth args facts)} (get-in (maintain/decide :mend args facts) [:call :args]))
         "the mend is built at the pass's worth")))
+
+(deftest maintain-prices-its-own-pass-at-the-root-instead-of-arriving
+  (is (fn? (:worth-of (get registry/jobs 'jobs.animals.maintain)))))
 
 (deftest a-fence-gap-and-carried-produce-add-to-the-pass-worth
   (let [args {:mob "cow" :target 4 :chest {:x 0 :y 64 :z 0}}

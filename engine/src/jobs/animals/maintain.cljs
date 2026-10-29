@@ -285,7 +285,7 @@
                 (= "sheep" mob) (conj {:name "white_wool" :count (* shear-wool shearable)}))]
     (+ (* animals (cost/animal-worth mob)) (cost/gap-loss mob (+ adults babies) (count gaps)) (:value (cost/item-value items)))))
 
-(defn pass-worth [c] (mend-worth (:args c) (facts c)))
+(defn worth-of [c] (mend-worth (:args c) (facts c)))
 
 (defn can-start?
   "Never :no-box without a box or a plan, :no-mob without :mob or a plan; later for :plan-trouble, nothing to do, or :not-worth while even the least walk onto the pen costs more than the pass is worth (walk-pick/not-worth)."
@@ -301,7 +301,7 @@
       trouble (can-run? c)
       :else (let [fact (pen-fact c)
                   cause (when (= :ok (first fact))
-                          (pick/not-worth c (when centre {:pos centre :range (u/flat-dist centre max)}) #(pass-worth c)))]
+                          (pick/not-worth c (when centre {:pos centre :range (u/flat-dist centre max)}) #(worth-of c)))]
               (if cause (checks/cause-status :later cause) fact)))))
 
 (defn report-with-skips

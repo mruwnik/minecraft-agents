@@ -217,10 +217,11 @@
   (are [check args] (= :later (lit 0 15 #(first (check (assoc (ctx-of (assoc open-night :blocks {"1,64,0" "red_bed"})) :args args)))))
     smelt/safe? {:furnace outside}
     pick-up-loose/safe? {})
-  (testing "a stay cheaper than waiting the night out where the body stands, at hp an arrive-worth affords, goes ahead: prices decide"
-    (let [[kind text] (lit 0 15 #(kitchen/safe? (assoc (ctx-of (assoc open-night :blocks {"1,64,0" "red_bed"})) :args {:furnace {:x 40 :y 64 :z 0}})))]
-      (is (= :ok kind))
-      (is (re-find #"exposed, but 61.8 s there" text) "the stay is the walk to the furnace 40 blocks off and back"))))
+  (testing "a kitchen's stay at a furnace 40 blocks off in the open night is weighed against the pass it serves: a full stock's worth goes ahead, a loaf's waits"
+    (let [world (assoc open-night :blocks {"1,64,0" "red_bed"})
+          check (fn [bread] (lit 0 15 #(kitchen/safe? (assoc (ctx-of world) :args {:furnace {:x 40 :y 64 :z 0}}
+                                                              :worth (constantly (:value (cost/item-value [{:name "bread" :count bread}])))))))]
+      (is (= [:ok :later] (mapv (comp first check) [16 1]))))))
 
 (deftest a-short-visit-in-the-open-night-goes-ahead-priced-by-its-exposure
   ;; the respawn set beside the body: a death there costs a short walk back

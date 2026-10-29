@@ -294,3 +294,9 @@
       {:chest chest} [:ok :chest]
       {:chest {:x 20 :y 64 :z 0}} [:never :chest-gone]
       {} [:later :no-chest])))
+
+(deftest a-kitchen-prices-its-own-pass-at-the-root-instead-of-arriving
+  (let [{:keys [p]} (setup {:inventory [(item "beef" 3)] :containers {"10,64,0" []}})
+        worth (:worth-of (get registry/jobs job))
+        w (worth {:primitives p :args args :id "k" :slots [] :view (fn [] {:now 0 :data {}})})]
+    (is (and (pos? w) (not= ##Inf w)))))
