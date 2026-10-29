@@ -182,7 +182,7 @@
 (defn outmatched
   "Later :outmatched while the fight with every real danger known within ::crowd-radius (jobs.lib.danger/dangers with a way to
   the body or a line of fire; heard mobs while muted and watched ones left out, as the hostile-near trigger does) would cost the
-  kit carried more than price/allowed (jobs.lib.cost/fight-damage, the hostile reflex's formula): a player with a wooden sword
+  kit carried more than (price/allowed c nil), the share of health (jobs.lib.cost/fight-damage, the hostile reflex's formula): a player with a wooden sword
   does not dig on in a cave five mobs walk, one in iron does."
   [c]
   (let [p (:primitives c)
@@ -195,7 +195,7 @@
                                  :equipment (cost/equipment-of (.-equipment (.self p)))
                                  :mobs (mapv (fn [e] {:name (.-name e) :distance (danger/mob-distance p e) :hits 0}) near)})
              0)
-        ok-hp (price/allowed c)]
+        ok-hp (price/allowed c nil)]
     (if (<= hp ok-hp)
       (contract/ok :matched "no fight known near that the kit cannot afford")
       (contract/later :outmatched (str "a fight with the hostiles known near costs " (price/round1 hp) " hp, over the " (price/round1 ok-hp)

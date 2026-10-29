@@ -35,16 +35,17 @@
 (defn allowed-hp
   "allowed for a body at health and food: see allowed."
   [health food worth waits?]
-  (if (and (number? worth) (js/isFinite worth))
+  (if (number? worth)
     (min (dec health) (/ worth (cost/hp-price health)))
     (let [share (risk/share-hp health food)]
       (if waits? share (max share (dec health))))))
 
 (defn allowed
-  "The hp of expected damage the body may take on a risk now. With a finite `worth` (seconds the goal is worth, by default the call's,
-  ctx/worth): as many hp as that buys at the price of an hp now (dearer when hurt), all but 1 at most; a goal worth
-  little is refused a dear trip, whatever the share of health or the food (death is a cost). With ##Inf (arrive: walking now or waiting is a choice of ways, by cost alone) or nil (price/fit): cost.risk/share-hp, all but 1 hp while waiting never lowers the price (`waits?` false; by default while the body
-  can not heal by waiting, cannot-heal?)."
+  "The hp of expected damage the body may take on a risk now: as many as `worth` (seconds the goal is worth, by default the
+  call's, ctx/worth) buys at the price of an hp now (dearer when hurt), all but 1 at most (##Inf, arrive: all but 1); a goal
+  worth little is refused a dear trip (death is a cost), one worth 0 buys none. Whether to take the risk now or wait first is
+  a choice of ways (walk-risk/status). With nil (body fitness: fit): cost.risk/share-hp, all but 1 hp while waiting never
+  lowers the price (`waits?` false; by default while the body can not heal by waiting, cannot-heal?)."
   ([c] (allowed c (ctx/worth c)))
   ([c worth] (allowed c worth (not (cannot-heal? c))))
   ([c worth waits?]
@@ -96,14 +97,14 @@
 
 (defn priced
   "The status s of a place check, but ok where it is :later or :never on exposure alone (:exposed with a :chance) while the hp the
-  job's stay there costs are within (allowed c)."
+  job's stay there costs are within (allowed c nil): the share of health (body fitness; its wait is not priced as a way yet)."
   [c s]
   (let [{:keys [reason chance]} (nth s 2 nil)]
     (if-not (and (contains? #{:later :never} (first s)) (= :exposed reason) (number? chance))
       s
       (let [secs (or (::stay-s c) (risk/work-s :click))
             hp (stay-hp c chance secs)
-            ok-hp (allowed c)]
+            ok-hp (allowed c nil)]
         (if (<= hp ok-hp)
           (contract/ok :priced (str "exposed, but " (round1 secs) " s there cost " (round1 hp) " hp, within " (round1 ok-hp)))
           s)))))

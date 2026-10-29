@@ -142,17 +142,26 @@
     (is (zero? (exit-s east [15 0])) "lit east, dark round the rest")
     (is (pos? (exit-s (update-vals east (constantly [15 0])) [15 14])) "dark east, lit round the rest")))
 
-(deftest a-walk-over-dark-open-ground-at-night-is-held-with-the-risk-in-the-reason
+(def diamond-kit [{:name "diamond_pickaxe" :count 1} {:name "diamond" :count 20}])
+
+(deftest a-walk-over-dark-open-ground-at-night-is-held-when-its-death-costs-more-than-waiting-for-dawn
+  ;; 190 blocks of dark open ground at tick 14000: an 11% death chance; dawn in 473 s, the day walk after it near free
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (let [r (st/setup night-hut)] (sky/with-sky (:p r)) r)
-              id (core/submit! eng '(jobs.movement.go-to {:pos [195 64 0]}) {})]
-          (await (st/tick-n eng 6))
-          (is (= inside (st/pos-of p)) "the body stays in")
-          (let [w (core/waiting eng id)]
-            (is (= :risky (:reason w)))
-            (is (re-find #"hp" (str (:text w))))))))))
+        (doseq [[inventory held?] [[[] false] [diamond-kit true]]]
+          (let [{:keys [eng p seen]} (let [r (st/setup (assoc night-hut :inventory inventory))] (sky/with-sky (:p r)) r)
+                id (core/submit! eng '(jobs.movement.go-to {:pos [195 64 0]}) {})]
+            (await (st/tick-n eng 6))
+            (is (= held? (= :risky (:reason (core/waiting eng id)))) (str "carrying " (mapv :name inventory)))
+            (is (not-any? #(= :risky (:reason %)) (st/emitted seen :stopped)) "never ended for its risk")))
+        (let [c (ready-test/ctx-of (assoc night-hut :self {:pos inside :health 20 :food 20} :inventory diamond-kit))
+              [_ text {:keys [now-s wait-s wait]}] (planned-status c {:x 195 :y 64 :z 0})]
+          (is (= :dawn wait))
+          (is (< wait-s now-s) "the death of a body carrying a kit costs more than the night's wait")
+          (is (re-find #"hp" text)))
+        (is (= :acceptable (:reason (nth (planned-status (ready-test/ctx-of (assoc night-hut :self {:pos inside :health 20 :food 20})) {:x 195 :y 64 :z 0}) 2)))
+            "a bare body's death costs less than the night's wait: it walks")))))
 
 (def day-world (assoc night-hut :time st/noon))
 (def dark-spot-world "day-world with the death spot of the tests, [80 64 5], dark (a cave): its killer may be there by day too." (assoc day-world :light {[80 64 5] [0 0]}))
@@ -378,12 +387,12 @@
         goal {:x 30 :y 64 :z 0}
         prefix {:status "partial" :steps (vec (take 10 straight-cells))}]
     (with-redefs [risk/estimate prefix-estimate risk/estimate-of prefix-estimate-of]
-      (is (= :later (first (reprice/status c goal prefix))) "the whole walk is over the affordable")
+      (is (= :never (first (reprice/status c goal prefix))) "the whole walk is over the affordable and no wait lowers it")
       (is (identical? prefix (reprice/safe-prefix c goal prefix)) "no step of it where a mob could spawn: walked whole, not cut")
       (let [check (reprice/check c goal nil)]
         (is (nil? (check prefix true)) "the prefix is walked")
-        (is (= :later (first (:risk (check (plan-of straight-cells) false)))) "a refresh past the prefix, no hostile new, holds"))
-      (is (= :later (first (:risk ((reprice/check c goal nil) {:status "partial" :steps (vec (take 12 straight-cells))} true))))
+        (is (= :never (first (:risk (check (plan-of straight-cells) false)))) "a refresh past the prefix, no hostile new, holds"))
+      (is (= :never (first (:risk ((reprice/check c goal nil) {:status "partial" :steps (vec (take 12 straight-cells))} true))))
           "a prefix itself over the affordable holds")
       (let [check (reprice/check c goal nil)]
         (is (nil? (check (plan-of (take 10 straight-cells)) true)) "a found plan within the affordable")
@@ -396,7 +405,7 @@
         plan {:status "partial" :steps (vec (take 10 straight-cells))}
         stays (atom [])]
     (with-redefs [risk/estimate-of prefix-estimate-of
-                  risk/stay-estimate (fn [_ {:keys [feet live]}] (swap! stays conj [(mapv js/Math.floor ((juxt :x :y :z) feet)) (mapv (comp :x :pos) live)]) {:hp 0 :hostiles 0})]
+                  risk/stay-estimate (fn [_ {:keys [feet live health secs]}] (swap! stays conj [(mapv js/Math.floor ((juxt :x :y :z) feet)) (mapv (comp :x :pos) live) health secs]) {:hp 0 :hostiles 0})]
       (risk/status c goal plan)
       (swap! state assoc-in [:self :pos] [10.5 64 0.5])
       (risk/status c goal plan)
@@ -407,8 +416,9 @@
       (risk/status c goal plan)
       (swap! state assoc-in [:entities 0 :pos 0] 15.5)
       (risk/status c goal plan)
-      (is (= [[[0 64 0] []] [[10 64 0] []] [[10 64 0] []] [[10 64 0] [20.5]] [[10 64 0] [15.5]]] @stays)
-          "the stay is priced where the body stands, again once it is hurt, not again while nothing it reads changed, and again as a zombie comes closer"))))
+      (is (= [[[0 64 0] []] [[10 64 0] []] [[10 64 0] []] [[10 64 0] [20.5]] [[10 64 0] [15.5]]] (map #(subvec % 0 2) (remove peek @stays)))
+          "the stay is priced where the body stands, again once it is hurt, not again while nothing it reads changed, and again as a zombie comes closer")
+      (is (apply distinct? @stays) "a wait's stay neither"))))
 
 (deftest the-stay-is-priced-anew-when-only-the-sky-darkens
   (let [c (ready-test/ctx-of {:time st/noon :self {:pos {:x 0.5 :y 64 :z 0.5}}})
@@ -417,7 +427,7 @@
         plan {:status "partial" :steps (vec (take 10 straight-cells))}
         chances (atom [])]
     (with-redefs [risk/estimate-of prefix-estimate-of
-                  risk/stay-estimate (fn [_ {:keys [chance]}] (swap! chances conj chance) {:hp 0 :hostiles 0})]
+                  risk/stay-estimate (fn [_ {:keys [chance secs]}] (when-not secs (swap! chances conj chance)) {:hp 0 :hostiles 0})]
       (risk/status c goal plan)
       (swap! state assoc :time st/night)
       (risk/status c goal plan)
@@ -572,24 +582,24 @@
   [f]
   (with-redefs [look/seen-block (constantly {:name "air" :age-ms 1e8}) sh-sense/sky-reaches-from-above? (constantly false)] (f)))
 
-(deftest a-hungry-body-affords-less-risk-than-a-fed-one-unless-it-cannot-heal
+(deftest a-hurt-body-that-can-heal-waits-for-a-walk-it-cannot-afford-until-healed
   ;; a skeleton death 2 min ago, 75 blocks off: most likely it has not despawned; no bed, so a death there walks back
-  ;; from world spawn (beside a bed it costs too little to wait for)
-  (let [status-for (fn [food inventory] (let [c (-> (ready-test/ctx-of (assoc day-world :self {:pos inside :health 20 :food food} :inventory inventory))
-                                                    (with-death {:x 80 :y 64 :z 5} "skeleton" 120000))]
-                                          (in-lit-cave #(first (planned-status c far-goal)))))
+  ;; from world spawn. At 10 hp its death share is over the 9 hp a walk may risk, healed to 20 it is within 19.
+  (let [status-for (fn [health inventory] (let [c (-> (ready-test/ctx-of (assoc day-world :self {:pos inside :health health :food 5} :inventory inventory))
+                                                      (with-death {:x 80 :y 64 :z 5} "skeleton" 120000))]
+                                            (in-lit-cave #(let [[k _ {:keys [reason wait]}] (planned-status c far-goal)] [k reason wait]))))
         bread [{:name "bread" :count 3}]]
-    (is (= :ok (status-for 20 [])))
-    (is (= :later (status-for 5 bread)))
-    (is (= :ok (status-for 5 [])) "nothing to eat: waiting never lowers the risk, so the walk goes")))
+    (is (= [:ok :acceptable nil] (status-for 20 [])))
+    (is (= [:later :risky :heal] (status-for 10 bread)))
+    (is (= [:never :risky nil] (status-for 10 [])) "nothing to eat: waiting never lowers the risk")))
 
-(deftest a-goal-worth-enough-lets-a-walk-take-a-risk-over-the-share-of-health
+(deftest a-goal-worth-sets-the-risk-a-walk-may-take
   (let [status-for (fn [worth] (let [c (-> (ready-test/ctx-of (assoc day-world :self {:pos inside :health 20 :food 5} :inventory [{:name "bread" :count 3}]))
                                            (with-death {:x 80 :y 64 :z 5} "skeleton" 120000)
                                            (assoc :worth (constantly worth)))]
                                  (in-lit-cave #(first (planned-status c far-goal)))))]
-    (is (= :later (status-for ##Inf)) "a goal worth arrival: the share of health decides")
-    (is (= :later (status-for 5)) "a goal worth little buys little risk")
+    (is (= :ok (status-for ##Inf)) "a goal worth arrival: all but 1 hp, and no wait lowers a death spot's price")
+    (is (= :never (status-for 5)) "a goal worth little buys little risk")
     (is (= :ok (status-for 400)))))
 
 (deftest a-goal-worth-sets-the-allowance-not-just-raises-it
@@ -601,7 +611,7 @@
     (is (< (allowed fed 5 []) 0.5) "a goal worth little buys little, under the share of health")
     (is (< (allowed starving 5 []) 0.5) "a body that cannot heal is no freer with a worthless goal")
     (is (= 9 (allowed fed 100000 [])) "a goal worth a lot: all but 1")
-    (is (= 5 (allowed fed ##Inf [])) "arrive: walk now or wait is a choice of ways, the share of health decides")
+    (is (= 9 (allowed fed ##Inf [])) "arrive: all but 1; walking now or waiting is a choice of ways (walk-risk/status)")
     (is (zero? (allowed fed 0 [])) "a goal worth nothing buys no risk")))
 
 (deftest a-death-by-terrain-adds-no-risk
@@ -670,7 +680,7 @@
   (let [c (with-death (ready-test/ctx-of day-world) {:x 80 :y 64 :z 5} "zombie" 10000)
         {:keys [lethal-hp]} (estimate-unseen c far-goal)]
     (is (> lethal-hp (price/allowed c)))
-    (is (= :later (first (with-redefs [look/seen-block (constantly {:unknown true})] (planned-status c far-goal)))))))
+    (is (= :never (first (with-redefs [look/seen-block (constantly {:unknown true})] (planned-status c far-goal)))) "no wait lowers a death spot's price")))
 
 (deftest a-drowned-death-spot-holds-while-the-body-stays-near-its-water-and-goes-once-it-went-far
   ;; 3 h old, past the 2 h fade of a walker's spot; 25 blocks from the body
@@ -767,7 +777,7 @@
                                              (with-death {:x 80 :y 64 :z 5} "zombie" 20000))
                                          far-goal)))]
     (is (= :ok (status-for zombies)) "hostiles reach the body where it stands, the walk leaves them behind: the walk is the cheaper risk")
-    (is (= :later (status-for [])) "nothing near the body: waiting costs nothing, so it waits")))
+    (is (= :never (status-for [])) "nothing near the body, but no wait lowers the walk: the body cannot heal and a death spot is priced as staying")))
 
 (deftest a-body-that-cannot-heal-and-is-no-safer-staying-ends-stranded-instead-of-waiting
   ;; on open ground: a zombie by the way 30 blocks off, whose field reaches the body's cell, and three 60 blocks off, whose fields do not; a notice rate at which the zombies get to the body on the walk as surely as at its cell; lava by the goal
@@ -793,19 +803,20 @@
 
 (deftest a-body-in-a-sealed-dark-hall-whose-wait-lowers-nothing-walks-at-its-price
   ;; night, full health, fed: no healing, no sky over the seen way for dawn to light, no threat to move off; only the dark
-  ;; hall's spawns, over the 2 hp share the body affords and within all but 1 hp of its health
+  ;; hall's spawns, within all but 1 hp of its health
   (let [c (ready-test/ctx-of (assoc night-hut :self {:pos {:x 0 :y 64 :z 0} :health 20 :food 20}))
-        status-with (fn [feet-light]
+        status-with (fn [feet-light worth]
                       (with-redefs [sh-sense/sky-reaches-from-above? (constantly false)
                                     sh-sense/sky-light-at (constantly 0)
                                     look/glimpse? (constantly true)
                                     sh-sense/block-light-at (fn [_ {:keys [x]}] (if (zero? x) feet-light 0))
                                     spawn-light/hall-chance (constantly 1)]
-                        (settings/with-settings {:jobs.lib.cost.risk/risk-share 0.1}
-                          #(do (is (< (price/allowed c) (:hp (risk/estimate c far-goal {:plan (straight-plan c far-goal)})) 19))
-                               (planned-status c far-goal)))))]
-    (is (= [:ok :cheaper-than-staying] (let [[k _ {:keys [reason]}] (status-with 0)] [k reason])) "staying in the dark hall costs its spawns for ever")
-    (is (= [:ok :no-wait-helps] (let [[k _ {:keys [reason]}] (status-with 15)] [k reason])) "a lit spot is free to stay at, but waiting there never makes the walk cheaper: go-to must still arrive")))
+                        (let [c (assoc c :worth (constantly worth))
+                              [k _ {:keys [reason]}] (planned-status c far-goal)]
+                          [k reason])))]
+    (is (= [:ok :acceptable] (status-with 15 ##Inf)) "go-to must arrive: no wait makes it cheaper")
+    (is (= [:ok :cheaper-than-staying] (status-with 0 5)) "a goal worth little, but staying in the dark hall costs its spawns for ever")
+    (is (= [:never :risky] (status-with 15 5)) "a goal worth little, a lit spot free to stay at")))
 
 (deftest a-hostile-near-the-far-end-of-a-way-does-not-make-staying-dear-enough-to-walk-past-lava
   (let [zombie {:id 9 :name "zombie" :kind "hostile" :pos {:x 20 :y 64 :z 60}}
@@ -824,7 +835,7 @@
         hidden? (fn [{:keys [x y z]}] (and (<= cx x (inc cx)) (<= 63 y 65) (<= 15 z 17)))
         s (with-redefs [u/seen-block (fn [p pos] (when-not (hidden? pos) (real p pos))) look/seen-block (constantly {:unknown true})]
             (planned-status c {:x 27.5 :y 64 :z 18.5}))]
-    (is (= :later (first s)))
+    (is (= :never (first s)) "its death share is over all but 1 hp, and no wait lowers a death spot's price")
     (is (= :risky (:reason (nth s 2))))))
 
 
@@ -850,3 +861,4 @@
           (await (drops-est/quote-trip c {:data {:pos {:x 30 :y 64 :z 0} :inventory {}}}))
           (is (true? (:back @asked)))
           (is (some? (:stay-s @asked))))))))
+

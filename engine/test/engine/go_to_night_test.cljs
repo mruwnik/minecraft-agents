@@ -28,7 +28,7 @@
 
 (defn waiting-of [eng id] (core/waiting eng id))
 
-(def no-risk "A risk share of 0: every walk with a dark open stretch is too risky." {:jobs.lib.cost.risk/risk-share 0})
+(def no-risk "A death walks back 300000 blocks: a night walk out of the hut costs more than waiting for dawn." {:jobs.lib.cost.death/spawn-walk-blocks 3e5})
 
 (defn ^:async too-risky
   "Runs async fn f with every walk over a dark open stretch too risky."
