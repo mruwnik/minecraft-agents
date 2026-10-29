@@ -17,6 +17,7 @@
             [jobs.lib.crops :as crops]
             [jobs.lib.trees :as forestry]
             [jobs.lib.price :as price]
+            [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.util :as u]
             [jobs.survival.bed-down :as bed-down]
             [jobs.lib.shelter.clock :as sh-clock]
@@ -165,6 +166,16 @@
         left (second (get-in (sh-clock/night-left-quote {:primitives (tu/fake {:time 14000})}) [:uses :job-time]))]
     (is (pos? left))
     (is (< (Math/abs (- left (- alone short))) 1e-6) "alone the sleep skips the night: its seconds are worth saving; three short it skips nothing")))
+
+(deftest the-night-is-worth-only-the-exposure-it-adds-to-the-day
+  (let [c (ctx-of (tu/fake-on-floor {:time 14000}) {} {})
+        stand (bed-down/stand-cells (:primitives c))
+        night (bed-down/open-price c stand 600)
+        gain (bed-down/open-gain c stand 600)
+        day (bed-down/exposed-price c (spawn-light/chance-at (:primitives c) (first stand) false 0 true) 600 (first stand))]
+    (is (pos? day) "an unseen cell is dark by day by the chance it is")
+    (is (< (Math/abs (- gain (- night day))) 1e-6) "the night's exposure less the same span by day")
+    (is (< gain night))))
 
 (deftest the-night-is-worth-the-skip-the-other-players-online-wait-for-while-the-body-stays-awake
   (let [night #(worth 'jobs.survival.night (tu/seeing-all (tu/fake-on-floor {:time 14000 :players %})) {})

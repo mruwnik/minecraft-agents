@@ -128,19 +128,27 @@
   [c cells secs]
   (let [p (:primitives c)] (apply max (map #(exposed-price c (spawn-light/night-chance p %) secs %) cells))))
 
+(defn open-gain
+  "open-price of secs at night less the same secs by day (full sky light) at the worst of cells: only the dark the night
+  adds counts, a dark hall is as dangerous by day. Never below 0."
+  [c cells secs]
+  (let [p (:primitives c)
+        day (apply max (map #(exposed-price c (spawn-light/chance-at p % false 0 true) secs %) cells))]
+    (max 0 (- (open-price c cells secs) day))))
+
 (defn stand-cells "Where the body spends the night if it does nothing: its feet, or asleep the cells it gets up to (wake-cells)." [p]
   (if (sh-sense/sleeping? p) (wake-cells p) [(sh-sense/feet p)]))
 
 (defn worth-of
-  "The loss the night averts: the night left in the open where the body stands (open-price of stand-cells), its hurt and
-  death at cost/hp-price, plus the night left itself when the body's own sleep skips it (sleepers-short 0: the time that
+  "The loss the night averts: the night left in the open where the body stands less the same by day (open-gain of
+  stand-cells), its hurt and death at cost/hp-price, plus the night left itself when the body's own sleep skips it (sleepers-short 0: the time that
   skip saves), plus the skip the other players online wait for while it stays awake (sh-sleepers/skip-wait-s)."
   [c]
   (let [p (:primitives c)
         view (ctx/view c)
         left (second (get-in (sh-clock/night-left-quote c) [:uses :job-time]))
         skipped (if (zero? (sh-sleepers/sleepers-short p view)) left 0)]
-    (+ skipped (sh-sleepers/skip-wait-s p view left) (open-price c (stand-cells p) left))))
+    (+ skipped (sh-sleepers/skip-wait-s p view left) (open-gain c (stand-cells p) left))))
 
 (defn respawn-body
   "threats/death-body, its :respawn the bed slept in last when that came after the latest :spawn-bed (lying down sets
