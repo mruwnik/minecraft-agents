@@ -30,7 +30,7 @@
   An item is tried once; one that is gone, cannot be reached or picked up is skipped. A drop that slid to another cell while the body
   walked or dug to it is judged again there (at most ::max-moves times).
   An item more than 2 blocks off (not above the feet), or more than a block lower than the feet, is walked to first (a jobs.movement.go-to child, range 1, which prices
-  falls and dangers against the worth of the drops in sight, :worth); one it cannot reach is left, with a debug collect-drops.left {:reason :unreachable}. A nearer one whose
+  falls and dangers against the worth of the drops in sight, :worth); one it cannot reach is left, with a debug collect-drops.left {:reason :unreachable}, or {:reason :risky :risk :allowed} when go-to declined the walk for its route risk (also in the stop's :left). A nearer one whose
   straight way crosses a drop (a shaft between) is walked to the same way. A body whose centre overhangs a drop first steps onto
   the block holding it up; failing that the drop is left {:reason :unsafe-floor}.
   A drop in water with a known hostile within the hostile radius of it is left, with {:reason :water-danger}.
@@ -275,14 +275,21 @@
 
 (defn ^:async walk-down!
   "Walk within a block of item, more than a block lower than the feet (or, with ways, higher: a column top is climbed by
-  go-to's pillar or stair): one go-to call (child/run!*, slot :walk). :arrived, :continue (go-to waits on the world) or :unreachable."
+  go-to's pillar or stair): one go-to call (child/run!*, slot :walk). :arrived, :continue (go-to waits on the world) or :unreachable (go-to's :risky cause kept in the job memory as :walk-fail, see walk-fail)."
   ([c item] (walk-down! c item #{:walk :clear-seal}))
   ([c item ways]
   (let [r (await (child/run!* c :walk 'jobs.movement.go-to {:pos (item-cell item) :range 1 :ways ways :worth (drops-worth c item)}))]
     (cond
       (= :continue r) :continue
       (and (= :done (:kind r)) (:arrived (:data r))) :arrived
-      :else :unreachable))))
+      :else (do (ctx/update-mem! c assoc :walk-fail (select-keys (:cause r) [:reason :risk :allowed]))
+                :unreachable)))))
+
+(defn walk-fail
+  "Why a drop no walk reaches is left: :risky with go-to's risk and allowed when its last walk was declined for route risk, else :unreachable. {:reason ...}"
+  [c]
+  (let [f (:walk-fail (ctx/mem c))]
+    (if (= :risky (:reason f)) f {:reason :unreachable})))
 
 (defn pillar-height
   "How many blocks to pillar to bring the feet level with item: it lies above the feet by 2 to 6 and within 1 cell sideways (a drop is picked up from a block away); else nil."
@@ -393,14 +400,15 @@
     (when (and now (.-pos now) (not= (item-cell now) (item-cell item))) now)))
 
 (defn leave!
-  "Leave item where it lies: why is the hole-problem. Its id is remembered (loose/left!), so the :loose-items reflex does not fetch it after."
+  "Leave item where it lies: why is the hole-problem (a keyword, or a map {:reason ..} with more, as walk-fail). Its id is remembered (loose/left!), so the :loose-items reflex does not fetch it after."
   [c item why]
   (let [[x y z] (item-cell item)
-        cell {:x x :y y :z z}]
-    (ctx/emit! c :collect-drops.left :debug {:pos cell :reason why :item (some-> (.-item item) .-name)
-                                             :text (str "left a drop at " x "," y "," z ": " (name why))})
+        cell {:x x :y y :z z}
+        left (merge {:pos cell} (if (map? why) why {:reason why}))]
+    (ctx/emit! c :collect-drops.left :debug (assoc left :item (some-> (.-item item) .-name)
+                                                   :text (str "left a drop at " x "," y "," z ": " (name (:reason left)))))
     (loose/left! c [(.-id item)] (loose/options {}))
-    (ctx/update-mem! c update :left (fnil conj []) {:pos cell :reason why})))
+    (ctx/update-mem! c update :left (fnil conj []) left)))
 
 (defn leave-unseen!
   "The wanted :ids that were neither picked up nor skipped are not in sight (a pit, a wall): booked as one :left entry."
@@ -602,6 +610,7 @@
   waits on the world, else {:acts [act results] :left why-or-nil :retry? bool}."
   [c item]
   (let [item-name (some-> (.-item item) .-name)
+        _ (ctx/update-mem! c dissoc :walk-fail)
         hole? (in-hole? c item)
         moving? (and (at-hole? c item) (nothing-under? c item) (settling? c item))
         why (when-not (await (footing! c)) :unsafe-floor)
@@ -635,13 +644,14 @@
     (if (or moving? (= :continue walk) (= :continue dug) (= :continue dug2) (= :continue walk2) (= :continue up) (= :continue near-walk))
       {:wait true}
       {:acts (remove nil? [r r2])
-       :left (cond
+       :left (as-> (cond
                dig-why dig-why
                why why
                (= :unreachable walk) :unreachable
                dig2-why dig2-why
                (and stuck? (not= :dug dug2) (not= :arrived up) (not= :arrived near-walk)) :unreachable
-               r2-stuck? :unreachable)
+               r2-stuck? :unreachable) l
+               (if (= :unreachable l) (walk-fail c) l))
        :retry? (and (not why) (< (get-in (ctx/mem c) [:moves (.-id item)] 0) (max-moves))
                     (or dig-why (= :unreachable walk) dig2-why stuck? r2-stuck?)
                     (not (and r2 (not r2-stuck?)))

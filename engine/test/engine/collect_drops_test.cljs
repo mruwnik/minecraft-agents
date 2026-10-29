@@ -147,6 +147,26 @@
             (is (= [:unreachable] (mapv :reason (:left result))))
             (is (= [:unreachable] (mapv :reason (bd/left-drops seen))))))))))
 
+(deftest a-drop-go-to-declines-for-route-risk-is-left-risky-with-the-price
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pocket (into {} (for [x [4 5 6] y [56 57 58 59] z [-1 0 1]
+                                    :when (not= [5 58 0] [x y z])]
+                                [(str x "," y "," z) "stone"]))
+              {:keys [eng p seen]} (bd/setup {:self body :blocks pocket})
+              declined (let [f (fn [_ _ _ _] (js/Promise.resolve {:kind :impossible :cause {:reason :risky :risk 6 :allowed 2 :text "too risky"}}))]
+                         (aset f "cljs$core$IFn$_invoke$arity$4" f)
+                         f)]
+          (drop! p [5 58 0] "dirt")
+          (seen-from-above! p)
+          (let [result (with-redefs [child/run!* declined]
+                         (await (tu/child-outcome eng job {:radius 8} 30)))
+                left (first (:left result))]
+            (is (= :none-collected (:reason result)))
+            (is (= [:risky 6 2] ((juxt :reason :risk :allowed) left)))
+            (is (= :risky (:reason (first (bd/left-drops seen)))))))))))
+
 (deftest a-drop-dug-to-is-routed-after-a-look-at-the-unseen-cells-between-it-and-the-feet
   (async done
     (tu/run-async done
