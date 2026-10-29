@@ -143,6 +143,11 @@
         block (when pos (u/seen-block (:primitives c) pos))]
     (when (and block (= "composter" (.-name block))) pos)))
 
+(defn want
+  "What the round's first look searches for (look/see!), and the note surveyed? reads back."
+  []
+  {:names #{"composter"} :radius (settings/get settings ::radius)})
+
 (defn meal-near
   "The nearest bone_meal item entity within ::meal-reach blocks of the composter, or nil."
   [c at]
@@ -175,7 +180,7 @@
   to give (level 7 or 8, or meal lying by it)."
   [c]
   (cond
-    (not (look/surveyed? c)) nil ; the round looks first: a composter or its meal may be out of the view cone
+    (not (look/surveyed? c :run (want))) nil ; the round looks first: a composter or its meal may be out of the view cone
     (composter-at c)
     (let [pos (composter-at c)]
      (when (and (empty? (feedable (reserve/free c :compost) (:args c)))
@@ -225,10 +230,10 @@
         pos (composter-at c)
         block (when pos (u/seen-block p pos))]
     (cond
-      (not (look/surveyed? c))
-      (let [meal (await (look/survey-until! c :run #(some->> (composter-at c) (meal-near c)) (look/glance-effort) {:names #{"composter"} :radius (settings/get settings ::radius)}))]
+      (not (look/surveyed? c :run (want)))
+      (let [meal (await (look/survey-until! c :run #(some->> (composter-at c) (meal-near c)) (look/glance-effort) (want)))]
         (when meal
-          (look/note-surveyed! c) ; the early stop skips look-around's own note: without it a meal that cannot be taken repeats this step for ever
+          (look/note-surveyed! c (look/cell-of (u/self-pos c)) (want)) ; the early stop skips look-around's own note: without it a meal that cannot be taken repeats this step for ever
           (await (take-meal! c meal)))
         :again)
 
