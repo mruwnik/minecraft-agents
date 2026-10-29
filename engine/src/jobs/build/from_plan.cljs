@@ -16,6 +16,7 @@
             [jobs.lib.ready :as ready]
             [jobs.lib.work-place :as work-place]
             [jobs.lib.sense :as sense]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.lib.util :as u]
             [jobs.lib.storage :as storage]
             [jobs.lib.watch :as watch]
@@ -78,7 +79,7 @@
   Start facts: no zone list read (unless :ignore-zones?) is a
   failed condition {:reason :no-zones}; a plan that is missing, unreadable or has no cells to
   build (in :part) is impossible {:reason :plan-trouble :why text} (a plan missing or unreadable waits), at the start and later in the call; at the start, with nothing to place, dig, fetch or
-  look at, a failed condition {:reason :no-items :needs {item n}}; a fetch that is due (even with some cells unseen) is never that.
+  look at, a failed condition {:reason :no-items :needs {item n}}; a fetch that is due (even with some cells unseen) is never that; while one is due the body first glances once at each unseen cell within ::look-range whose item it carries.
   Wood: a generic wood want (jobs.lib.build.wood: planks, logs, wooden_stairs, wooden_slabs, wooden_doors, wooden_fences,
   fence_gates, wooden_trapdoors ...) is built in one species chosen for the plan (carried most, else the nearest log seen,
   else oak), booked, fetched by that species, and named in the result (:wood \"birch\"); a species name (oak_planks) stays exact.
@@ -362,6 +363,27 @@
     (reserve/set-job-entries! c (cond-> (vec wanted)
                                   bed? (conj {:id (str (:id c) "-bed") :tag :bed :count 1 :strength 1 :by (:id c) :why "bed for the plan"})))))
 
+(defn ^:async look-first!
+  "While a fetch is due: a glance (a head turn, cost/look-s, against a trip) at the nearest cell never seen within
+  ::look-range whose item is carried, once per cell, so carried cells found there go in before the fetch. :again after a
+  glance, nil when none is due."
+  [c]
+  (when (plan/problem c)
+    (let [{:keys [cells]} (planned c)
+          closed (merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
+          carried (storage/carried-totals (u/inventory (:primitives c)))
+          here (u/self-pos c)
+          looked (:looked (ctx/mem c) #{})
+          todo (->> (unseen cells closed)
+                    (filter #(pos? (get carried (:item %) 0)))
+                    (map :pos)
+                    (remove looked)
+                    (filter #(and (<= (u/eye-dist here %) (look-range)) (sense/unknown? (:primitives c) %))))]
+      (when-let [cell (first (sort-by #(u/eye-dist here %) todo))]
+        (ctx/update-mem! c update :looked (fnil conj #{}) cell)
+        (await (dig-look/look-at! c cell))
+        :again))))
+
 (defn ^:async step [c]
   (let [{:keys [trouble wood cells]} (planned c)]
     (if trouble
@@ -371,7 +393,8 @@
           (when (and (some :fill cells) (not (contains? (ctx/mem c) :fill-carried)))
             (ctx/update-mem! c assoc :fill-carried (get (storage/carried-totals (u/inventory (:primitives c))) "dirt" 0)))
           (hold-carried! c cells)
-          (or (await (fetch-step! c))
+          (or (await (look-first! c))
+              (await (fetch-step! c))
               (await (light/light! c cells))
               (let [cells (:cells (planned c))]
                 (settle-placing! c cells)

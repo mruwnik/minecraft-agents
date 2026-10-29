@@ -1,5 +1,5 @@
 ;; Card b1fac1cb: jobs.build.from-plan gets a plan bed last, and from the body's own put-down bed first.
-;; The body faces the roof cell and the chest or bed: a cell out of its view is unseen, and a due fetch comes before a look.
+;; The body faces the roof cell and the chest or bed (case 4 faces away): a cell out of its view is unseen, and a glance at it comes before a due fetch.
 ;; A plan wants a bed on the floor and a dirt cell on top of the stone at [20 0 16]; the body carries the dirt.
 ;; Case 1: a seen chest at [21 0 19] holds a red bed. The dirt goes in before the need child starts, then the bed is fetched and placed.
 ;; Case 2: no chest; the bed the night put down (scaffold ledger :bed) stands at [20 0 12]. It is broken and placed in the plan, no fetch.
@@ -39,4 +39,12 @@
    :act [[:job (jobs.build.from-plan {:plan "$plan:house" :explore true})]]
    :expect [{:count-event {:source :job :kind :obtain.exploring} :for-s 140 :at-least 1 :at-most 3}
             {:no-event {:source :system :kind :error} :for-s 140}]
-   :after [[:block [20 1 16] "dirt"] [:block [17 0 19] "air"]]}]}
+   :after [[:block [20 1 16] "dirt"] [:block [17 0 19] "air"]]}
+  ;; Body facing away from the roof cell: the glance comes before the bed fetch, so the dirt goes in first.
+  {:name "carried-cell-behind-the-body-is-looked-at-before-the-bed-is-fetched"
+   :blocks [[:set [20 0 16] "stone"]]
+   :body {:yaw 90}
+   :act [[:job (jobs.build.from-plan {:plan "$plan:house" :explore true})]]
+   :expect [{:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 100 :of-job true
+             :until {:source :job :kind :child_ended :data {:slot :place}}}]
+   :after [[:block [20 1 16] "dirt"]]}]}

@@ -1998,6 +1998,22 @@
             (finally (set! ctx/call orig)))
           (is (some #(= ["torch" {"cobblestone" 3}] %) @held) (pr-str @held)))))))
 
+(deftest a-fetch-due-waits-for-a-glance-at-the-unseen-cells-the-body-carries-the-items-for
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [orig ctx/call
+              looks (atom nil)
+              {:keys [eng p]} (start {:inventory (vec (butlast kit))} {"pen" (pen-plan)})
+              p (tu/seeing-after-look p)]
+          (set! ctx/call (fn [c slot j args]
+                           (when (and (= 'jobs.items.obtain j) (nil? @looks)) (reset! looks (count (h/calls p "look"))))
+                           (orig c slot j args)))
+          (try
+            (await (child-outcome eng job {:plan "pen" :explore false} 20))
+            (finally (set! ctx/call orig)))
+          (is (pos? @looks) "the first fetch started after a look"))))))
+
 (deftest stand-levels-are-the-cells-first-then-the-bodys-when-near
   (are [body cell levels] (= levels (plan/stand-levels body cell))
     64 64 [64]
