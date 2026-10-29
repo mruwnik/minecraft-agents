@@ -310,7 +310,7 @@
 
 (defn danger-near?
   "Whether a real danger (nearest-danger) is within radius, ranged mobs within :ranged-radius (default radius). The one
-  definition of danger for the hostile-near trigger and fact and the tidy safety check; opts as nearest-danger's
+  definition of danger for the hostile-near fact and the tidy safety check; opts as nearest-danger's
   danger-opts."
   ([p radius ranged-radius] (danger-near? p radius ranged-radius {}))
   ([p radius ranged-radius danger-opts]
@@ -324,11 +324,12 @@
   (let [known (known-hostiles p 64 {})]
     (if (.-knownMobs p) known (filterv seen-mob? known))))
 
-(defn hostile-near?
-  "Whether the hostile-near trigger would hold (triggers.survival.hostile-near; args :radius, :ranged-radius,
-  :visible-only): a dead body sees no danger, heard mobs are muted while jobs.lib.body/heard-muted?, a ranged mob counts
-  only within its fire range (:shooting?): doing nothing about one past it loses nothing, and the trigger re-arms as it closes."
+(defn hostile-dangers
+  "The dangers (dangers) the hostile-near trigger weighs (args :radius, :ranged-radius, :visible-only), nearest first:
+  heard mobs are muted while jobs.lib.body/heard-muted?, a ranged mob counts only within its fire range (:shooting?):
+  doing nothing about one past it loses nothing, and the trigger re-arms as it closes. None for a dead body."
   [world memory args]
-  (boolean (and (not (body/dead? memory))
-                (danger-near? world (:radius args (hostile-radius)) (:ranged-radius args (ranged-radius))
-                              {:sight? (:visible-only args true) :ignore-heard? (body/heard-muted? memory) :watched (body/watched memory) :hit-ids (hit-ids memory) :shooting? true}))))
+  (if (body/dead? memory)
+    []
+    (dangers world (:radius args (hostile-radius)) {:ranged-radius (:ranged-radius args (ranged-radius))}
+             {:sight? (:visible-only args true) :ignore-heard? (body/heard-muted? memory) :watched (body/watched memory) :hit-ids (hit-ids memory) :shooting? true})))

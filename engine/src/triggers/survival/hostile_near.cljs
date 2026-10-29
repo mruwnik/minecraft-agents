@@ -1,17 +1,16 @@
 (ns triggers.survival.hostile-near
   "The hostile-near trigger: a real danger is near."
-  (:require [jobs.lib.body :as body]
-            [jobs.lib.danger :as danger-q]
-            [jobs.lib.shot :as shot]))
+  (:require [jobs.lib.hostile-loss :as loss]))
 
 (def defaults {})
 
 (defn hostile-near
-  "Holds when a real danger is near. A danger is either:
+  "Holds when doing nothing about the real dangers near would cost the body (jobs.lib.hostile-loss: their blows and the
+  death they risk over an encounter, positive). A danger is either:
     a known hostile mob within :radius (args, default 8) that has a walkable way to the body
       (jobs.lib.danger: not walled off, not across a pit it cannot climb, body not sealed in; in closed quarters a heard
       one counts only once seen or beside the body), or
-    a known ranged mob (jobs.lib.cost.weapon/ranged-mobs) with a line of fire within :ranged-radius (default 16), or
+    a known ranged mob (jobs.lib.cost.weapon/ranged-mobs) with a line of fire within :ranged-radius (default 16) and its fire range, or
     a recent shot from a shooter not seen (jobs.lib.shot/open?: the hit's direction, a line of fire to the body's feet).
   Only known mobs count (engine.perception's mob memory), so an unseen silent creeper behind the body does not.
   :visible-only false lets a heard melee mob count unseen; the way to the body still counts.
@@ -21,5 +20,4 @@
   A danger reflex: it never cools down by default (:persistence :retry) and its job is never backed off.
   An agent may set :persistence :cooldown with :cooldown-s, or :backoff, in its own entry."
   [world memory args]
-  (or (danger-q/hostile-near? world memory args)
-      (and (not (body/dead? memory)) (shot/open? world memory))))
+  (loss/hostile-near? world memory args))

@@ -21,6 +21,7 @@
             [jobs.lib.shot :as shot]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.goal :as goal]
+            [jobs.lib.hostile-loss :as hostile-loss]
             [jobs.survival.respond.doors :as doors]
             [jobs.survival.respond.options :as options]
             [jobs.survival.respond.state :as state]
@@ -53,8 +54,7 @@
    ::hold-radius {:default 16 :doc "Hostiles known within this many blocks count for holding position in the dark." :spec (a/num-in 0 nil)}
    ::hit-window-s {:default 5 :doc "How recent a hurt keeps a fight from leaving heard or watched mobs, and makes a round look once more; the flight's hits within it are counted (:hits)." :spec (a/num-in 0 nil)}
    ::struck-s {:default 30 :doc "Seconds the hits the fight landed outlive the round (:struck-hits), so a refired reflex still counts them." :spec (a/num-in 0 nil)}
-   ::struck-cap {:default 8 :doc "How many :struck-hits entries memory keeps." :spec (a/int-in 1 nil)}
-   ::quote-mean-s {:default 20 :doc "Seconds an encounter is guessed to take, for the quote." :spec (a/num-in 0 nil)}})
+   ::struck-cap {:default 8 :doc "How many :struck-hits entries memory keeps." :spec (a/int-in 1 nil)}})
 
 (defn stay-inside? [] (settings/get settings ::stay-inside))
 (defn hold-radius [] (settings/get settings ::hold-radius))
@@ -376,8 +376,6 @@
         look (when (seq covers) (look-answer c near now now-of sealing then))
         weighed (some-> (hostile/weigh c (cond-> now look (assoc :look (:answer look)))) (assoc :way-scan (:way-scan caught)) (eating-answer c))
         stay? (and (not (hurt-lately? c)) (stay-under-roof? c near))
-        _ (when-let [ps (seq (vals (:prices weighed)))]
-            (ctx/update-mem! c assoc :try-worth (min (apply min ps) (cost/hp-cost (.-health self) (:hit (get (:answers weighed) (:answer weighed)) 0)))))
         decision (if (or stay? (= :fight (:answer weighed))) :fight :flee)
         cover (when (and (not stay?) (contains? covers (:answer weighed))) (:answer weighed))
         creeper (first (get-in weighed [:answers :fight :creepers]))]
@@ -451,7 +449,13 @@
 (defn quote-of
   "Find-out: an encounter lasts as long as the danger stays."
   [_c]
-  {:uses {:job-time [0 (settings/get settings ::quote-mean-s) ##Inf]}})
+  {:uses {:job-time [0 (hostile-loss/encounter-s) ##Inf]}})
+
+(defn worth-of
+  "The loss the response averts: what doing nothing about the dangers near costs (hostile-loss/loss, as the hostile-near
+  trigger weighs it)."
+  [c]
+  (hostile-loss/loss (:primitives c) (ctx/view c) (near c)))
 
 (defn signature
   "What a call may change: the body's cell, its health (a fight that costs health is a response), the ids of the
@@ -472,12 +476,9 @@
 
 (defn try-again?
   "Whether one more call is worth its s seconds (the last one's and the pace after it) after n in a row that changed
-  nothing: cost/try-again? :respond of the n failures, at what another call may win as respond last priced it (:try-worth,
-  ##Inf before it priced one: a look round or a gap step comes first): no more than the cheapest answer (a walk from a mob
-  that cannot reach the body is free, so it is not tried again), nor than the blow (hp-cost of the answer's :hit) a
-  mob may land meanwhile."
+  nothing: cost/try-again? :respond of the n failures at the call's worth (worth-of: the loss of doing nothing)."
   [c n s]
-  (cost/try-again? c :respond {:fails n :worth (:try-worth (ctx/mem c) ##Inf) :try-s s}))
+  (cost/try-again? c :respond {:fails n :try-s s}))
 
 (defn ^:async round
   "One whole attempt: respond (or let the retreat hide on) while a danger is near; :nothing-possible when the retreat
@@ -511,9 +512,12 @@
           (and (empty? after) (not (hiding? c))) (do (await (pace/pace! c)) (recur unchanged (inc looks)))
           :else
           (let [n (if (= before (signature c after)) (inc unchanged) 0)]
+            (when (pos? (max n unchanged))
+              (ctx/emit! c :hostile.call :info {:changed (zero? n) :unchanged n :s s
+                                                :text (if (zero? n) "a call after calls that changed nothing changed something" (str n " calls in a row changed nothing"))}))
             (if (and (pos? n) (not (try-again? c n s)))
               (do (mute-heard! c hs)
                   (ctx/end c :nothing-possible :no-response
                            {:text (str "a hostile is still near and " n " tries changed nothing; another is not worth its " (.toFixed s 1)
-                                       " s for at most " (js/Math.round (:try-worth (ctx/mem c) ##Inf)) " s it may win")}))
+                                       " s for at most " (js/Math.round (ctx/worth c)) " s it may win")}))
               (do (await (pace/pace! c)) (recur n 0)))))))))

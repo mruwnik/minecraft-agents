@@ -17,6 +17,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.risk :as risk]
             [jobs.lib.danger :as danger]
+            [jobs.lib.hostile-loss :as hostile-loss]
             [jobs.lib.price :as price]
             [jobs.lib.dawn :as dawn]
             [jobs.lib.look :as look]
@@ -257,7 +258,7 @@
 (defn threatened
   "Later :hostile-near while the hostile-near trigger would hold (the radii and options of its register entry)."
   [c]
-  (if (check-cache/cached c ::threatened #(danger/hostile-near? (:primitives c) (ctx/view c) (trigger-args c)))
+  (if (check-cache/cached c ::threatened #(hostile-loss/hostile-near? (:primitives c) (ctx/view c) (trigger-args c)))
     (contract/later :hostile-near (str "a hostile is near" (nearest-text c) ": deal with it first (an exclusive run pauses the hostile reflex)"))
     (contract/ok :no-hostile-near "no hostile near")))
 

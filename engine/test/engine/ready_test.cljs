@@ -58,6 +58,7 @@
             [jobs.storage.withdraw :as withdraw]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.danger :as danger]
+            [jobs.lib.hostile-loss :as hostile-loss]
             [jobs.maintenance.shut :as shut]
             [jobs.survival.eat :as eat]
             [jobs.survival.get-food :as get-food]
@@ -357,7 +358,7 @@
 (deftest threatened-is-read-once-per-window
   (let [c (ctx-of (merge at-origin {:entities [zombie]}))
         asked (atom 0)]
-    (with-redefs [danger/hostile-near? (fn [& _] (swap! asked inc) true)]
+    (with-redefs [hostile-loss/hostile-near? (fn [& _] (swap! asked inc) true)]
       (ready/threatened c)
       (ready/threatened c))
     (is (= 1 @asked))))

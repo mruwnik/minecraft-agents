@@ -13,6 +13,7 @@
             [jobs.lib.combat :as combat]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.hostile-fight :as hostile-fight]
+            [jobs.lib.hostile-loss :as hostile-loss]
             [jobs.lib.breath :as breath]
             [jobs.combat.attack :as attack]
             [jobs.lib.util :as u]
@@ -1207,6 +1208,26 @@
   (is (holds? {:entities [(skeleton 1 14 0)]} {}) "at 14 its arrows land")
   (is (not (holds? {:entities [(skeleton 1 16 0)]} {})) "at 16 it is in follow range with a line of fire, but out of the bow's 15: standing still loses nothing"))
 
+(deftest doing-nothing-costs-the-blows-of-the-mobs-that-can-hit
+  (let [loss (fn [mobs & [equipment]] (cost/stand-loss {:health 20 :level 0 :carried 2000} equipment mobs {:x 0 :y 64 :z 0} 20))
+        sk (fn [d] {:name "skeleton" :distance d})
+        z (fn [d] {:name "zombie" :distance d})]
+    (is (= 0 (loss [(sk 16)])) "past its bow's 15 a skeleton lands nothing")
+    (is (< 0 (loss [(sk 14)])) "within it its arrows land")
+    (is (< (loss [(z 7)]) (loss [(z 2)])) "a zombie farther off hits for less of the stay")
+    (is (< (loss [(z 2)]) (loss [(z 2) (sk 14)])) "every mob that can hit adds its blows")
+    (is (< (loss [(z 2)] diamond-armour) (loss [(z 2)])) "armour takes some of them")
+    (is (< 0 (loss [{:name "creeper" :distance 7}])) "a creeper walking up blows")))
+
+(defn respond-worth [world]
+  (respond-to-hostile/worth-of {:primitives (tu/fake-on-floor world) :view (fn [] {:data mem/empty-data :now 0}) :args {}}))
+
+(deftest respond-is-worth-the-loss-of-doing-nothing
+  (is (= 0 (respond-worth {:entities [(skeleton 1 16 0)]})) "a skeleton past its bow's range: nothing to avert")
+  (is (< 0 (respond-worth {:entities [(skeleton 1 14 0)]})) "the same skeleton within it")
+  (is (< (respond-worth {:entities [(zombie 7 0)]}) (respond-worth {:entities [(zombie 2 0)]})) "a zombie beside the body costs more than one walking up")
+  (is (< (respond-worth {:entities [(zombie 2 0)] :equipment diamond-armour}) (respond-worth {:entities [(zombie 2 0)]})) "armour lowers it"))
+
 (deftest hostile-near-holds-for-a-creeper-walking-up-before-its-blast-range
   (is (holds? {:entities [(assoc (skeleton 1 7 0) :name "creeper")]} {}) "a creeper at 7 has a way to the body and holds the trigger"))
 
@@ -1836,9 +1857,9 @@
             (is (= [7] (keys (body/watched view))) "the mob that never came is watched")
             (is (empty? (tu/walked-to eng)) "no flight")
             (is (= [] (:list (core/state eng))) "done, so the reflex does not fire again for it")
-            (is (not (danger-q/hostile-near? p view {})) "and the trigger stays quiet while it stays there, inside danger/watch-gap")
+            (is (not (hostile-loss/hostile-near? p view {})) "and the trigger stays quiet while it stays there, inside danger/watch-gap")
             (swap! (fake/state raw) assoc-in [:entities 0 :pos] [2.5 64 0])
-            (is (danger-q/hostile-near? p (mem/view (:store eng)) {}) "it fires again once the mob comes nearer")))))))
+            (is (hostile-loss/hostile-near? p (mem/view (:store eng)) {}) "it fires again once the mob comes nearer")))))))
 
 (deftest only-seen-melee-mobs-may-be-watched
   (let [p (tu/fake-on-floor {:floor flight-floor :entities [(zombie 5 0) (skeleton 9 -4 0)

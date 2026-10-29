@@ -12,6 +12,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.flee-walk :as walk]
             [jobs.lib.goal :as goal]
+            [jobs.lib.hostile-loss :as hostile-loss]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.body :as body]
             [jobs.lib.breath :as breath]
@@ -20,7 +21,6 @@
             [engine.game :as game]
             [jobs.lib.price :as price]
             [jobs.lib.reach :as reach]
-            [jobs.lib.threats :as threats]
             [jobs.lib.toll-cells :as toll-cells]
             [jobs.lib.util :as u]))
 
@@ -191,12 +191,9 @@
   (if (and (= 1 (count near)) (combat/creeper? (first near))) near (remove combat/creeper? near)))
 
 (defn body-of
-  "What the answers' prices read of the body of c: health, absorption, food and what a death costs it (cost/death-body)."
+  "What the answers' prices read of the body of c (hostile-loss/body-at)."
   [c]
-  (let [p (:primitives c)
-        self (.self p)]
-    (assoc (cost/death-body p (ctx/view c))
-           :health (.-health self) :absorption (.-absorption self) :food (or (.-food self) 20))))
+  (hostile-loss/body-at (:primitives c) (ctx/view c)))
 
 (defn blasting
   "The creepers known within ::price/way-radius of the way to the nearest of near (none of near) that come within their
@@ -284,14 +281,7 @@
             (:caught a) (assoc :caught (assoc (felt (:caught a)) :chance (:chance (:caught a))))
             (seq left) (cost/followed (flee-answer c left nil nil (dissoc caught :cornered?)))))))))
 
-(defn mob-near
-  "Hostile e as the answers take a mob: {:name :held :distance :speed (its chase speed) :follow (its follow range)}; a
-  seen mob's distance from a body afloat at the surface is from the surface cell's floor (breath/start-y), not the bob."
-  [p e]
-  {:name (.-name e) :held (.-held e)
-   :distance (danger-q/mob-distance p e (when (and (breath/swimming? p) (not (breath/head-under? p)) (danger-q/seen-only? e))
-                                        (assoc (u/pos-of (.-pos (.self p))) :y (breath/start-y p))))
-   :speed (cost/chase-speed (cost/mob-kind e)) :follow (threats/follow-range (.-name e))})
+(def mob-near hostile-loss/mob-near)
 
 (defn swim-out
   "{:swim blocks :land blocks :chance c} of a body in water swimming to the nearest dry stand joined to it by water and air
