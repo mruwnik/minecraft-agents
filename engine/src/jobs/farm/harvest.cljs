@@ -9,8 +9,7 @@
             [jobs.lib.cond :as cond]
             [jobs.lib.job-common :as common]
             [jobs.farm.field :as fld]
-            [jobs.farm.irrigate :as irrigate]
-            [jobs.farm.tend :as tend]
+            [jobs.lib.crop-worth :as cw]
             [jobs.lib.cost :as cost]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.access :as access]
@@ -295,22 +294,32 @@
       (apply contract/later waiting (str "harvest: cut " cut ", " ripe " ripe left") data)
       (apply contract/ok :harvested (str "harvest done: cut " cut ", no ripe crop left") data))))
 
+(defn worth-cells
+  "{pos crop} the worth reads: the plan's crop cells, or a box's (ground y, crops above) or circle's (at its y) crop layer (crop nil: any); [cells fixed?] with neither: the
+  crops seen ripe, each certain (fixed? true), else the centre as one cell never seen."
+  [c]
+  (let [p (:primitives c)
+        {lo :min hi :max} (when-not (:plan-cells c) (fa/arg-box c))
+        crop-y (if (= :circle (fa/kind (fa/of c))) (:y lo) (some-> lo :y inc))]
+    (cond
+      (:plan-cells c) [(:plan-cells c) false]
+      lo [(into {} (for [x (range (:x lo) (inc (:x hi))) z (range (:z lo) (inc (:z hi)))] [{:x x :y crop-y :z z} nil])) false]
+      :else (let [ripe (into {} (map (fn [pos] [pos (u/seen-name p pos)])) (when (cutting? c) (ripe-of c nil)))]
+              [(if (seq ripe) ripe {(center-of c) nil}) true]))))
+
 (defn worth-of
-  "Seconds a root harvest is worth: each ripe crop it may cut at cost/crop-worth, with its replanting, and each planned
-  bare cell it sows, at cost/sown-worth (at farm.tend's growth-rate); ##Inf while it must look or walk before it can tell
-  what the field holds."
+  "Seconds a root harvest is worth: the crops of its field read as farm.tend's pass is (cw/harvest-worth: each ripe crop it
+  may cut at cost/crop-worth, with its replanting when :replant, a cell never seen at the measured prior) and each planned
+  bare cell it sows, at cost/sown-worth."
   [c]
   (let [c (with-field c (planned c))
-        m (ctx/mem c)
-        p (:primitives c)]
-    (if (or (blind? c) (away-start? c m) (shut-in-start? c m))
-      ##Inf
-      (let [cut (map (fn [pos] [pos (u/seen-name p pos)]) (when (cutting? c) (ripe-of c nil)))
-            sown (map (fn [{:keys [pos]}] [pos (get (:plan-cells c) pos)]) (sowable c))
-            ws (irrigate/waters c (map #(update (first %) :y dec) (concat cut sown)))
-            sow-s (fn [[pos crop]] (cost/sown-worth crop (tend/growth-rate p ws pos)))]
-        (+ (reduce + 0 (map #(+ (cost/crop-worth (second %)) (if (:replant (:args c)) (sow-s %) 0)) cut))
-           (reduce + 0 (map sow-s sown)))))))
+        p (:primitives c)
+        [cells fixed?] (worth-cells c)
+        sown (map (fn [{:keys [pos]}] [pos (get (:plan-cells c) pos)]) (sowable c))
+        ws (cw/waters c (map #(update % :y dec) (concat (keys cells) (map first sown))))
+        rows (map (fn [[pos crop]] [pos crop (if fixed? (when crop [crop 1]) (cw/ripe-now p ws pos crop))]) cells)]
+    (+ (:worth (cw/harvest-worth p ws rows (:replant (:args c))))
+       (reduce + 0 (map (fn [[pos crop]] (cost/sown-worth crop (cw/growth-rate p ws pos))) sown)))))
 
 (defn quote-of [c]
   (let [c (with-field c (planned c))

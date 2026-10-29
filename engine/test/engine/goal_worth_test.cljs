@@ -75,7 +75,8 @@
         harvest #(worth 'jobs.farm.harvest %1 (ht/plain-args %2))]
     (is (= (* 9 (cost/crop-worth "wheat")) (harvest seen {:replant false})) "nine ripe wheat")
     (is (< (harvest seen {:replant false}) (harvest seen {})) "replanting adds the sown cells")
-    (is (= ##Inf (harvest (tu/fake-on-floor ht/wheat-world) {})) "nothing seen yet: a look first")))
+    (is (priced? (harvest (tu/fake-on-floor ht/wheat-world) {})) "nothing seen yet: one cell at the measured prior, a look first")
+    (is (< (harvest (tu/fake-on-floor ht/wheat-world) {}) (harvest seen {})) "less than nine ripe wheat")))
 
 (def field {:min {:x 2 :y 63 :z 2} :max {:x 4 :y 64 :z 4}})
 

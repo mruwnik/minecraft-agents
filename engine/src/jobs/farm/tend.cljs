@@ -23,6 +23,7 @@
             [jobs.farm.field :as fld]
             [jobs.lib.farm :as lib-farm]
             [jobs.farm.irrigate :as irrigate]
+            [jobs.lib.crop-worth :as cw]
             [jobs.farm.tend-decide :as decide]
             [jobs.farm.tend-box :refer [box-facts box-census]]
             [jobs.farm.tend-plan :as tend-plan]
@@ -193,27 +194,6 @@
     (facts c)
     (check-cache/cached c [:facts (fa/part c)] #(facts c))))
 
-(defn growth-rate
-  "Stages a second the crop at pos grows (crops/stages-per-s): wet while water seen in ws (a set of [x y z]) reaches the
-  ground under it, else dry (the worse case when its reach is not seen), at its light as seen."
-  [p ws {:keys [x y z] :as pos}]
-  (crops/stages-per-s (lib-farm/hydrated? ws x (dec y) z)
-                      (when (sh-sense/seen-cell? p pos)
-                        (some-> (sh-sense/block-light-at p pos) (max (or (sh-sense/sky-light-at p pos) 0))))))
-
-(defn ripe-now
-  "[crop chance] of the crop cell at pos (crop: the one wanted there, nil for any) holding a ripe crop now: in view 1 or 0;
-  remembered out of view, cost/ripe-chance since it was seen at its growth-rate, counting only while within the server's simulation distance (cost/growing-s); another block [nil 0]; nil when never seen."
-  [p ws pos crop]
-  (let [b (u/sensed p pos)]
-    (when-not (or (nil? b) (true? (.-unknown b)))
-      (let [name (.-name b)
-            age (or (.-age b) 0)]
-        (cond
-          (not (and (crops/ripe-age name) (or (nil? crop) (= crop name)))) [nil 0]
-          (false? (.-visible b)) [name (cost/ripe-chance name age (cost/growing-s (/ (or (.-ageMs b) 0) 1000) (let [me (.-pos (.self p))] (js/Math.hypot (- (.-x me) (:x pos)) (- (.-z me) (:z pos))))) (growth-rate p ws pos))]
-          :else [name (if (>= age (crops/ripe-age name)) 1 0)])))))
-
 (defn sow-crop
   "The crop a pass sows: the plan's first crop whose seed may be sown, else (a box) the one of the seed it would pick; nil without seed."
   [c]
@@ -235,18 +215,13 @@
   [c f]
   (let [p (:primitives c)
         args (decide-args c)
-        ws (irrigate/waters c (ground-cells c))
+        ws (cw/waters c (ground-cells c))
         cells (crop-cells c)
-        read (map (fn [[pos crop]] [pos crop (ripe-now p ws pos crop)]) cells)
+        read (map (fn [[pos crop]] [pos crop (cw/ripe-now p ws pos crop)]) cells)
         seen (keep #(nth % 2) read)
         unseen (remove #(nth % 2) read)
         n (count seen)
-        least #(apply min (map cost/crop-worth (if % [%] (keys crops/ripe-age))))
-        replant #(cost/sown-worth % (growth-rate p ws %2))
-        ripe-seen (reduce + 0 (map (fn [[_ _ [name chance]]] (if name chance 0)) read))
-        ripe-share (cost/field-share :ripe ripe-seen n)
-        harvest (+ (reduce + 0 (map (fn [[pos _ [name chance]]] (if name (* chance (+ (cost/crop-worth name) (replant name pos))) 0)) read))
-                   (reduce + 0 (map (fn [[pos crop]] (* ripe-share (+ (least crop) (if crop (replant crop pos) 0)))) unseen)))
+        {harvest :worth ripe :ripe} (cw/harvest-worth p ws read true)
         till? (and (:till args) (or (:hoe f) (need/fetching? (:ways args))))
         open (+ (:bare f 0) (if till? (count (:untilled f)) 0))
         sowable (+ open (* (count unseen) (cost/field-share :sowable open n)))
@@ -254,7 +229,6 @@
         seeds (if crop (get (lib-farm/sowable c) (crops/seed-of crop) 0) 0)
         sown (min seeds sowable)
         wet? (or (:irrigate args) (every? (fn [{:keys [x y z]}] (lib-farm/hydrated? ws x y z)) (ground-cells c)))
-        ripe (+ ripe-seen (* ripe-share (count unseen)))
         sowing (if crop (* sown (cost/sown-worth crop (crops/stages-per-s wet? nil))) 0)]
     {:worth (+ harvest sowing)
      :unpriced (filterv #(and (:call (decide/decide % args f))

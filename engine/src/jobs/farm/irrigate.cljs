@@ -5,6 +5,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.waits :as waits]
             [jobs.lib.farm :as farm]
+            [jobs.lib.crop-worth :as cw]
             [jobs.farm.till :as till]
             [jobs.farm.field :as fld]
             [jobs.lib.field-area :as fa]
@@ -72,15 +73,6 @@
              (safe-at-box c)))
    (meta safe-at-box)))
 
-(defn waters
-  "The seen water as a set of [x y z] near the cells; a cell poured is water only once it is seen as such."
-  [c cs]
-  (let [me (u/self-pos c)
-        reach (min 64 (+ (farm/water-reach) 1 (apply max 0 (map #(u/dist me %) cs))))]
-    (into #{}
-          (map (fn [{:keys [x y z]}] [x y z]))
-          (map :pos (look/seen-blocks (:primitives c) {:names ["water"] :radius reach :max 4096 :live? true})))))
-
 (def neighbours [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
 
 (defn reach-seen?
@@ -102,7 +94,7 @@
   "The field cells by state: :dry (reach seen, no water), :unknown (water absent, reach partly unseen), :wet."
   [c]
   (let [cs (field-cells c)
-        ws (waters c cs)
+        ws (cw/waters c cs)
         p (:primitives c)]
     (group-by (fn [{:keys [x y z] :as cell}]
                 (cond (farm/hydrated? ws x y z) :wet
