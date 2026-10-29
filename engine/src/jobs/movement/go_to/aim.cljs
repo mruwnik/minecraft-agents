@@ -7,6 +7,7 @@
             [engine.sight :as sight]
             [jobs.lib.aim :as aim]
             [jobs.lib.breath :as breath]
+            [jobs.lib.cost :as cost]
             [jobs.lib.cost.risk :as risk]
             [jobs.lib.places :as places]
             [jobs.lib.reach :as reach]
@@ -245,7 +246,7 @@
     (let [{:keys [stay-s]} (:args c)
           stay (if stay-s stay-s (risk/work-s :click))
           w (ctx/worth c)]
-      (when (> (* toll stay) w) (assoc d :stay-s stay :worth w)))))
+      (when-not (cost/affords? (* toll stay) w) (assoc d :stay-s stay :worth w)))))
 
 (defn pre-aim!
   "Before the first walk: a y goal pos (goal-pos) that the planner answers goal-not-standable for alone (no search,

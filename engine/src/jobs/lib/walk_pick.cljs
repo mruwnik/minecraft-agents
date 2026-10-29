@@ -28,7 +28,7 @@
   (let [s (if walk (walk-s (u/self-pos c) walk) 0)]
     (when (pos? s)
       (let [w (worth)]
-        (when (> s w) {:reason :not-worth :worth w :walk-s s})))))
+        (when-not (cost/affords? s w) {:reason :not-worth :worth w :walk-s s})))))
 
 (defn risk-s
   "Seconds the risk of go-to's quote q costs the body (cost/risk-s): the hp its plan takes (its :uses :health) and

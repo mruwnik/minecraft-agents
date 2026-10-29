@@ -2,6 +2,7 @@
   (:require [jobs.lib.death-spot :as death-spot]
             [jobs.lib.ready :as ready]
             [jobs.lib.checks :as checks]
+            [jobs.lib.cost :as cost]
             [engine.contract :as contract]
             [engine.args :as a]
             [engine.ctx :as ctx]
@@ -127,7 +128,7 @@
   (let [{:keys [worth bill]} (:args c)]
     (when (and worth (not bill) (not (args-error (:args c))))
       (let [s (price-of c)]
-        (when (> s worth) {:reason :not-worth :price s :worth worth})))))
+        (when-not (cost/affords? s worth) {:reason :not-worth :price s :worth worth})))))
 
 (defn can-start? [c]
   (let [cause (no-source c)
