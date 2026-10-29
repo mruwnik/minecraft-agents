@@ -17,6 +17,7 @@
                         [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [jobs.lib.look :refer [cell-of heading-name]]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
@@ -37,7 +38,7 @@
   for a worn last one, and torches before a descent or tunnel (all through jobs.lib.need; ways #{:carried} skips them), walks out of an own
   zone it stands near, walks back to the start cell, and calls jobs.gather.dig-for with the same args until it ends. Flooded
   at the start, or a pickaxe or torches that cannot be had, end it before the dig. A dig that stops for a pickaxe or torches (:no-tool,
-  :no-torches) gets them again and goes on from where it stood (at most ::max-equip-rounds rounds); any other ending is passed on.
+  :no-torches) gets them again and goes on from where it stood (while another round is worth its price, cost/try-again? :dig of the rounds in a row that cut nothing); any other ending is passed on.
   Then, with :mend, it fills the ground under the start that the dig opened (mine.mend; a mend with nothing to fill with or six failed
   fills warns mine.mend-short / mine.mend-failed, and never changes the ending). The body stays where the dig ends: walking home is the
   caller's, or the :stuck-underground trigger's.
@@ -72,8 +73,7 @@
 
 
 (a/defargs settings
-  {::job-time-s {:default 1800 :doc "Seconds a mine call may take by default (its :spend :job-time)." :spec (a/num-in 0 nil)}
-   ::max-equip-rounds {:default 3 :doc "Times the trip gets a pickaxe or torches again for a dig that stopped without them before it ends with the dig's ending." :spec (a/int-in 0 nil)}})
+  {::job-time-s {:default 1800 :doc "Seconds a mine call may take by default (its :spend :job-time)." :spec (a/num-in 0 nil)}})
 
 (def target [:item :block :heading :center])
 
@@ -271,10 +271,15 @@
         (update-in [:descent :steps] #(max (or % 0) (get-in d [:descent :steps] 0)))
         (cond-> (get-in d [:tunnel :heading]) (assoc :dug-heading (get-in d [:tunnel :heading]))))))
 
+(defn round-worth?
+  "Whether another equip round is worth its price: none has failed in a row (u/failed!, a round after which the dig cut cells is u/progress!), else cost/try-again? :dig."
+  [c]
+  (or (zero? (u/failures c)) (cost/try-again? c :dig)))
+
 (defn gettable?
   "Whether the trip may get again what a dig that stopped for reason lacked."
   [c reason]
-  (and (< (:rounds (ctx/mem c) 0) (settings/get settings ::max-equip-rounds))
+  (and (round-worth? c)
        (case reason
          :no-tool (some? (need/fetch-opts c))
          :no-torches (and (:stocked? (ctx/mem c)) (stock/fetch-allows? c))
@@ -287,10 +292,10 @@
 
 (defn left-zone-again?
   "Whether a dig whose stair stopped :own-zone with the body standing inside the zone (a new stair started there after a reflex took it
-  home) goes back to the equip phase, which walks it out first (at most ::max-equip-rounds times)."
+  home) goes back to the equip phase, which walks it out first (while another round is worth its price)."
   [c e]
   (and (= :own-zone (get-in e [:data :descent :stop]))
-       (< (:rounds (ctx/mem c) 0) (settings/get settings ::max-equip-rounds))
+       (round-worth? c)
        (boolean (within-own-zone c 0 (access/cell (cell-of (u/self-pos c)))))))
 
 (defn ^:async dig-step!
@@ -300,8 +305,10 @@
   (let [e (waits/waiting-out c (await (ctx/call c :dig 'jobs.gather.dig-for (dig-args c))))]
     (if (= :continue e)
       :continue
-      (let [reason (or (:reason (:data e)) (contract/cause-key e))]
+      (let [reason (or (:reason (:data e)) (contract/cause-key e))
+            cut-before (u/cut-cells (:cut (ctx/mem c)))]
         (ctx/update-mem! c booked e)
+        (if (< cut-before (u/cut-cells (:cut (ctx/mem c)))) (u/progress! c) (u/failed! c))
         (ctx/update-mem! c assoc :dig-ending (dissoc e :report))
         (cond
           (shed-again? c reason)
@@ -309,10 +316,10 @@
                                       (dissoc :equipped?)))
               :again)
           (left-zone-again? c e)
-          (do (ctx/update-mem! c #(-> % (update :rounds (fnil inc 0)) (assoc :phase nil :zoned? false :resume-at (cell-of (u/self-pos c)))))
+          (do (ctx/update-mem! c #(-> % (assoc :phase nil :zoned? false :resume-at (cell-of (u/self-pos c)))))
               :again)
           (gettable? c reason)
-          (do (ctx/update-mem! c #(-> % (update :rounds (fnil inc 0))
+          (do (ctx/update-mem! c #(-> %
                                       (assoc :phase nil :resume-at (cell-of (u/self-pos c)) :wanted reason)
                                       (dissoc :equipped? :torches-tried :tool-why :tool-ending)))
               :again)
