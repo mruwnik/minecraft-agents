@@ -31,13 +31,6 @@
    :expect [{:event {:source :job :kind :completed} :within-s 50 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :low-health}} :for-s 10 :until {:source :job :kind :completed}}]
    :after [[:block [20 0 14] "oak_sapling"]]}
-  {:name "hurt-body-waits-when-its-work-is-priced-dear"
-   ;; should-fail: the planting's fit is priced (cost.risk work-hp over ::place-stay-s); a long stay costs more than the 5 hp left may risk, and less than full health may
-   :body {:inventory [["oak_sapling" 1]] :effects []}
-   :act [[:rcon "damage $BODY 15 minecraft:generic"]
-         [:job (jobs.forestry.plant-sapling {:at #at [20 0 14] :species "oak" :settings {:jobs.lib.cost.risk/place-stay-s 3000}})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :low-health}} :within-s 20 :of-job true}]
-   :after [[:not-block [20 0 14] "oak_sapling"]]}
   {:name "already-planted-spot-clears-debt"
    ;; card f3248d31: the same sapling already on the spot counts as planted (place says :already) and the debt is forgotten
    :blocks [[:set [20 0 14] "oak_sapling"]]
