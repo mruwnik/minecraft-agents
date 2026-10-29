@@ -21,6 +21,15 @@
     (is (> (:fail craft) (:win craft)) "one call won one retry of three")
     (is (= {:win 1 :fail 0 :try-s 4 :won 1 :retries 1 :calls 1} walk) "a walk that did not arrive, then did")))
 
+(defn call [job t changed]
+  (pr-str {:generation-id "g" :time-ms t :source :job :kind :hostile.call :context {:job-id job} :data {:changed changed :unchanged (if changed 0 1)}}))
+
+(deftest respond-calls-count-as-their-own-kind-and-every-kind-pools
+  (let [{:keys [respond pooled]} (r/report (keep r/scan-line [(call "j5" 1000 false) (call "j5" 1500 false) (call "j5" 2500 true)
+                                                              (walk "j3/go-to" 0 false) (walk "j3/go-to" 4000 true)]))]
+    (is (= {:won 1 :retries 2 :calls 1} (select-keys respond [:won :retries :calls])) "a call after one that changed nothing, won or not")
+    (is (= {:won 2 :retries 3 :calls 2} (select-keys pooled [:won :retries :calls])) "the walk's retry joins the respond calls'")))
+
 (deftest a-kind-with-no-retry-is-priced-by-its-tries-on-the-uniform-prior
   (is (= {:craft {:win 1 :fail 1 :try-s 2 :won 0 :retries 0 :calls 0}}
          (r/report (keep r/scan-line [(action "j1/craft" :started 1000 nil) (action "j1/craft" :done 3000 "crafted")])))))

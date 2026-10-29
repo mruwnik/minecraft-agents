@@ -4,7 +4,9 @@
   job id), won or failed again, fitted as a Beta prior over the calls' shares (field-passes/beta-fit; the uniform [1 1]
   with none), and :try-s, the mean seconds from a failed try's end to the next try's end (with no retry, the mean seconds of
   one try, start to end). Kinds (`kinds`): :craft the craft action (a timeout fails), :furnace the furnace action (a busy
-  slot fails), :dig the dig action (a timeout, a failure or an unreachable block fails), :walk a go-to's result (not arrived fails).
+  slot fails), :dig the dig action (a timeout, a failure or an unreachable block fails), :walk a go-to's result (not arrived
+  fails), :respond respond-to-hostile's :hostile.call (a call that changed nothing fails); :pooled all kinds' tries together,
+  the prior of a kind with none counted.
   Pure parts: scan-line, retries, report."
   (:require [clojure.string :as str]
             [world-test.field-passes :as passes]))
@@ -24,6 +26,9 @@
         (let [done? (str/includes? line ":kind :done")]
           {:kind kind :key (key) :t (t) :edge (if done? :end :start) :action (field line #":action-id \"([^\"]*)\"")
            :fail? (and done? (contains? fails (field line #":status \"([^\"]*)\"")))}))
+
+      (str/includes? line ":kind :hostile.call")
+      {:kind :respond :key (key) :t (t) :edge :end :fail? (str/includes? line ":changed false")}
 
       (and (str/includes? line ":kind :result") (re-find #":arrived (true|false)" line))
       {:kind :walk :key (key) :t (t) :edge :end :fail? (= "false" (field line #":arrived (true|false)"))})))
@@ -57,13 +62,17 @@
 (defn report
   "{kind {:win :fail :try-s :won :retries :calls}} of the scanned rows (a kind with no retry and no timed try is left out). A
   kind with retries but no fitted spread (too few calls) keeps its pooled mean at the mean pseudo-count total of the kinds
-  that did fit; with none fitted, its pooled counts."
+  that did fit; with none fitted, its pooled counts. :pooled fits all kinds' tries together."
   [rows]
   (let [fits (fit rows)
+        all (mapcat (fn [{:keys [kind tries]}] (map #(update % :key conj kind) tries)) fits)
+        all-shares (for [[_ ts] (group-by :key all)] (/ (count (filter :won? ts)) (count ts)))
         spreads (keep :spread fits)
         pooled (when (seq spreads) (/ (reduce + spreads) (count spreads)))]
     (into (sorted-map)
-          (for [{:keys [kind rs tries won shares spread]} fits
+          (for [{:keys [kind rs tries won shares spread]} (cond-> fits
+                                                            (seq all) (concat [{:kind :pooled :rs rows :tries all :won (count (filter :won? all))
+                                                                                :shares all-shares :spread (passes/beta-spread all-shares)}]))
                 :let [[win fail] (cond (empty? tries) [1 1]
                                        spread (passes/beta-fit shares won (count tries))
                                        pooled (let [m (/ won (count tries))] [(r3 (* m pooled)) (r3 (* (- 1 m) pooled))])

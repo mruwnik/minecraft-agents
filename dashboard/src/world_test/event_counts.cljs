@@ -31,7 +31,7 @@
   over the seconds between the starts, per mob kind and sprint state (cost.danger/::closing-rates).
   walk-pace: the steers of go-to's walks (a job id ending /walk) outside a flight: blocks over the steers' own seconds (cost/walk-speed).
   guess-looks [--agents DIR] (world-test.guess-looks; all bodies) counts from the logs alone: k of n looks of a dig route's guessed rock cells that showed it not diggable, per class (go-to escalation/prior-good-looks).
-  retry-wins (world-test.retry-wins; all bodies) counts from the logs alone the tries after a failed one per retry kind, won or not, and their seconds (value/::retry-counts).
+  retry-wins (world-test.retry-wins; trial bodies only) counts from the logs alone the tries after a failed one per retry kind, won or not, and their seconds (value/::retry-counts).
   unseen-floors (world-test.unseen-floors; all bodies) counts from the logs alone the unseen floors walks looked at, absent and present (value/::unseen-floor-counts).
   gap-miss: the miss rate of gap jumps per [width run-up dy sprint] from go-to's :gap-jump events (world-test.gap-miss; trial bodies only).
   Pure parts: scan-line, exchange, starts, starts-by-mob, notices, groups, vein-seen, flee-steps, pace-report, closing-pieces, closing-report, walk-steers, walk-report, walk-detour."
@@ -772,7 +772,7 @@
                                                                   look))))
                          0)
        "retry-wins" (do (println (pr-str (retry-wins/report (for [b (array-seq (fs/readdirSync agents))
-                                                                  :when (fs/existsSync (path/join agents b "engine"))
+                                                                  :when (and (not (probe? b)) (fs/existsSync (path/join agents b "engine")))
                                                                   line (event-lines (path/join agents b "engine"))
                                                                   :let [row (retry-wins/scan-line line)]
                                                                   :when row]
