@@ -4,7 +4,7 @@
             [engine.core :as core]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
-            [engine.registry :as registry]
+            [engine.memory :as mem]
             [engine.hostile-test :as h]
             [engine.fake :as fake]
             [engine.settings :as settings]
@@ -324,7 +324,14 @@
         "the mend is built at the pass's worth")))
 
 (deftest maintain-prices-its-own-pass-at-the-root-instead-of-arriving
-  (is (fn? (:worth-of (get registry/jobs 'jobs.animals.maintain)))))
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock]} (h/setup {:inventory [(wheat 4)] :entities [(cow 1 2) (cow 2 3)] :time 1000} 50)
+              id (core/submit! eng (spec {:target 4 :checks {:safe? '(always)}}) {})]
+          (await (tu/run-ticks eng clock 1 700))
+          (is (= (cost/animal-worth "cow") (get-in (mem/job-mem (mem/view (:store eng)) id []) [:contract :call :worth]))
+              "a pair below a target of 4: the pass breeds one calf, and the call is frozen at its worth"))))))
 
 (deftest a-fence-gap-and-carried-produce-add-to-the-pass-worth
   (let [args {:mob "cow" :target 4 :chest {:x 0 :y 64 :z 0}}

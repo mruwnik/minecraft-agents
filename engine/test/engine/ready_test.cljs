@@ -240,11 +240,11 @@
   (are [check args caller] (= :later (lit 0 15 #(first (check (assoc (caller (ctx-of (assoc open-night :blocks {"1,64,0" "red_bed"}))) :args args)))))
     smelt/safe? {:furnace outside} #(under % 'jobs.items.obtain {:item "iron_ingot" :count 1})
     pick-up-loose/safe? {} for-a-log)
-  (testing "a kitchen's stay at a furnace 40 blocks off in the open night is weighed against the pass it serves: a full stock's worth goes ahead, a loaf's waits"
+  (testing "a kitchen's stay at a furnace 40 blocks off in the open night is weighed against the pass it serves (its root worth-of): 64 loaves' worth goes ahead, a loaf's waits"
     (let [world (assoc open-night :blocks {"1,64,0" "red_bed"})
-          check (fn [bread] (lit 0 15 #(kitchen/safe? (assoc (ctx-of world) :args {:furnace {:x 40 :y 64 :z 0}}
-                                                              :worth (constantly (:value (cost/item-value [{:name "bread" :count bread}])))))))]
-      (is (= [:ok :later] (mapv (comp first check) [16 1]))))))
+          check (fn [bread] (let [args {:furnace {:x 40 :y 64 :z 0} :stock {"bread" bread} :reserve {"wheat" 2}}]
+                              (lit 0 15 #(kitchen/safe? (assoc (under (ctx-of world) 'jobs.items.kitchen args) :args args)))))]
+      (is (= [:ok :later] (mapv (comp first check) [64 1]))))))
 
 (deftest a-short-visit-in-the-open-night-goes-ahead-priced-by-its-exposure
   ;; the respawn set beside the body: a death there costs a short walk back
