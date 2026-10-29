@@ -75,10 +75,10 @@
             vec)))))
 
 (defn walkable-near-fn
-  "walkable-near as a fn of the cell [x y z], the region read once, max-edge-walk counted from `from` ({:x :y :z})."
-  [p from]
-  (let [feet (sh-sense/feet p)
-        flood (set (map vec (:cells (reach-room/room-flood p (reach-room/room-kind-at p (reach-room/shut-kind-at p)) (:x feet) (:y feet) (:z feet)))))
+  "walkable-near as a fn of the cell [x y z], over the closed region round `region` ({:x :y :z}) read once, max-edge-walk
+  counted from `from` ({:x :y :z})."
+  [p from region]
+  (let [flood (set (map vec (:cells (reach-room/room-flood p (reach-room/room-kind-at p (reach-room/shut-kind-at p)) (:x region) (:y region) (:z region)))))
         roofed (set (filter (fn [[cx cy cz]] (sh-sense/roofed? p (sh-sense/room-roof-height) {:x cx :y cy :z cz})) flood))
         exit? (fn [[cx cy cz]] (and (sh-sense/doorway? p {:x cx :y cy :z cz})
                                     (some (fn [[dx dz]] (let [n [(+ cx dx) cy (+ cz dz)]] (and (flood n) (not (roofed n))))) [[1 0] [-1 0] [0 1] [0 -1]])))
@@ -94,36 +94,38 @@
   its doorway to look at the outside, nor stand in the doorway (the flood runs past an open one over seen cells), where the
   night could not fill it. Nil when that cell lies farther than max-edge-walk from the feet."
   [p cell]
-  ((walkable-near-fn p (sh-sense/feet p)) cell))
+  (let [feet (sh-sense/feet p)] ((walkable-near-fn p feet feet) cell)))
 
 (defn far-side
-  "{:side [x y z] :to {:x :y :z}}: the unseen side, not in `looked`, of the region round the feet whose walkable-near cell
-  `to` (within max-edge-walk of `from`, default the feet) lies farthest from `from`, nil when none: a walk to `to` and a
-  look there shows `side` or the region past it. The end of a dark tunnel a look from here cannot make out."
-  ([p] (far-side p (sh-sense/feet p) #{}))
-  ([p from looked]
-   (let [near-fn (delay (walkable-near-fn p from))]
-     (some->> (seq (remove looked (reach-room/unseen-sides p (sh-sense/feet p))))
-              (keep (fn [side] (when-let [to (@near-fn side)] {:side side :to to})))
-              seq
-              (apply max-key #(u/dist from (:to %)))))))
+  "{:side [x y z] :to {:x :y :z}}: the unseen side, not in `looked`, of the closed region round `region` whose walkable-near
+  cell `to` (within max-edge-walk of `from`, and not beside it: a look from there shows as much) lies farthest from `from`,
+  nil when none: a walk to `to` and a look there shows `side` or the region past it, however far `to` lies from `side`
+  (a tunnel seen without its floor has no stand cell nearer). The end of a dark tunnel a look from here cannot make out."
+  [p from region looked]
+  (let [near-fn (delay (walkable-near-fn p from region))]
+    (some->> (seq (remove looked (reach-room/unseen-sides p region)))
+             (keep (fn [side] (when-let [to (@near-fn side)] (when-not (u/within? from to 1) {:side side :to to}))))
+             seq
+             (apply max-key #(u/dist from (:to %))))))
 
 (defn ^:async look!
   "A closed region with sides never seen is not yet known shut (an unseen cell may be an opening). The nearest of cells is
   looked at; what the look shows is read on the next pass, once the sight has settled. A side it did not show (a far wall
   of a long tunnel) is walked towards, on foot (walkable-near, edge-stride) and looked at again, as a player would; :again.
-  The cell counts as tried when that second look has been read and the cell is still unseen."
-  [c cells]
-  (ctx/update-mem! c update :edge-steps (fnil inc 0))
-  (let [cell (first cells)
-        phase (get-in (ctx/mem c) [:edge-phase cell] 0)
-        advance! #(ctx/update-mem! c assoc-in [:edge-phase cell] %)]
-    (case phase
-      0 (do (advance! 1) (await (dig-look/look-at! c cell)))
-      1 (let [reach-to (last (take-while #(<= (u/dist {:x (first cell) :y (second cell) :z (nth cell 2)} {:x (first %) :y (second %) :z (nth % 2)}) edge-stride) cells))
-              near (walkable-near (:primitives c) reach-to)
-              w (if near (await (ctx/call c :edge-walk 'jobs.movement.go-to {:pos near :range 0 :ways #{:walk} :floor cost-health/spend-down})) :none)]
-          (when (not= :continue w) (advance! 2)))
-      2 (do (advance! 3) (await (dig-look/look-at! c cell)))
-      (ctx/update-mem! c update :edge-looked (fnil conj #{}) cell))
-    :again))
+  The cell counts as tried when that second look has been read and the cell is still unseen. `to`: the cell to walk to, in
+  place of walkable-near's."
+  ([c cells] (look! c cells nil))
+  ([c cells to]
+   (ctx/update-mem! c update :edge-steps (fnil inc 0))
+   (let [cell (first cells)
+         phase (get-in (ctx/mem c) [:edge-phase cell] 0)
+         advance! #(ctx/update-mem! c assoc-in [:edge-phase cell] %)]
+     (case phase
+       0 (do (advance! 1) (await (dig-look/look-at! c cell)))
+       1 (let [reach-to (last (take-while #(<= (u/dist {:x (first cell) :y (second cell) :z (nth cell 2)} {:x (first %) :y (second %) :z (nth % 2)}) edge-stride) cells))
+               near (or to (walkable-near (:primitives c) reach-to))
+               w (if near (await (ctx/call c :edge-walk 'jobs.movement.go-to {:pos near :range 0 :ways #{:walk} :floor cost-health/spend-down})) :none)]
+           (when (not= :continue w) (advance! 2)))
+       2 (do (advance! 3) (await (dig-look/look-at! c cell)))
+       (ctx/update-mem! c update :edge-looked (fnil conj #{}) cell))
+     :again)))

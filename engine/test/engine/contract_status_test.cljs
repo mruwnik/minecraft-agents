@@ -34,6 +34,12 @@
     (is (= :look (kind {:can-start? ok :can-run? peek})))
     (is (= "not yet" (second (contract/verdict {} {:can-start? later}))))))
 
+(deftest a-look-first-child-is-kept-only-while-every-refusal-carries-one
+  (let [dark (contract/never :exposed "dark" :look-first ['looker {}])
+        child #(:look-first (nth (contract/all %) 2))]
+    (is (= ['looker {}] (child [(ok nil) dark])))
+    (is (nil? (child [(contract/later :low-health "hurt") dark])) "a refusal the look cannot change wins")))
+
 (defn odd-check [_] :not-a-status)
 
 (deftest an-export-that-returns-no-status-is-an-error-naming-it
@@ -231,21 +237,64 @@
           (await (core/tick! eng))
           (is (= 2 (:asks @world)) "a started job's next round"))))))
 
-(deftest a-check-that-passes-with-a-look-first-child-runs-it-under-the-call-then-asks-again
+(defn looker
+  "A look-first child that runs :rounds rounds (cut after each but the last), noting the worth it ran under."
+  [rounds]
+  {:round (fn [c]
+            (swap! world update :look-rounds (fnil inc 0))
+            (if (< (:look-rounds @world) rounds)
+              :continue
+              (do (swap! world assoc :looked true :worth (ctx/worth c)) (ctx/end c :done nil))))})
+
+(defn stayer
+  "A job whose can-start? says :never with the looker as its :look-first child until it has looked, then says (after)."
+  [after]
+  {:can-start? (fn [_]
+                 (swap! world update :asks (fnil inc 0))
+                 (if (or (:looked @world) (:look-rounds @world))
+                   (after)
+                   (contract/never :exposed "dark past an unseen edge" :look-first ['looker {}])))
+   :cleanup (fn [c _] (swap! world assoc :cleaned true) (ctx/end c :done nil))
+   :round (fn [c] (swap! world assoc :ran (:looked @world)) (ctx/end c :done nil))})
+
+(deftest a-start-check-that-passes-with-a-look-first-child-runs-it-under-the-call-yields-then-asks-the-start-checks-again
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (setup {'stayer {:can-run? (fn [_]
-                                                         (swap! world update :asks (fnil inc 0))
-                                                         (if (:looked @world)
-                                                           (contract/ok :seen "seen")
-                                                           (contract/ok :look-first "walk to look" :look-first ['looker {}])))
-                                             :round (fn [c] (swap! world assoc :ran (:looked @world)) (ctx/end c :done nil))}
-                                    'looker {:round (fn [c] (swap! world assoc :looked true :worth (ctx/worth c)) (ctx/end c :done nil))}})]
+        (let [{:keys [eng]} (setup {'stayer (stayer #(contract/ok :seen "seen")) 'looker (looker 1)})]
           (core/submit! eng '(stayer {:worth 12}) {})
           (await (core/tick! eng))
-          (is (= {:worth 12 :asks 2 :ran true} (select-keys @world [:worth :asks :ran]))
-              "the child ran with the call's worth, the checks were asked again, then the round ran"))))))
+          (is (= {:worth 12 :asks 1} (select-keys @world [:worth :asks :ran])) "the child ran with the call's worth; the round yields")
+          (await (core/tick! eng))
+          (is (= {:asks 2 :ran true} (select-keys @world [:asks :ran])) "can-start? is asked again, then the round runs"))))))
+
+(deftest a-look-child-cut-mid-walk-goes-on-before-the-checks-and-a-never-after-it-ends-the-job-with-its-cleanup
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {'stayer (stayer #(contract/never :gone "gone")) 'looker (looker 2)})]
+          (core/submit! eng '(stayer) {})
+          (await (core/tick! eng))
+          (await (core/tick! eng))
+          (is (= {:look-rounds 2 :looked true :asks 1} (select-keys @world [:look-rounds :looked :asks :ran]))
+              "the child goes on, unasked, though can-start? would now answer without it")
+          (await (core/tick! eng))
+          (is (= {:asks 2 :cleaned true} (select-keys @world [:asks :cleaned :ran])))
+          (is (= :impossible (:kind (:data (first (job-ev seen :stopped)))))))))))
+
+(deftest a-started-job-whose-check-offers-a-look-first-child-runs-no-look-and-the-status-stands
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {'worker {:can-run? (fn [_] (if (:rounds @world)
+                                                                  (contract/ok :look-first "walk to look" :look-first ['looker {}])
+                                                                  (contract/ok :go "go")))
+                                             :round (fn [_] (swap! world update :rounds (fnil inc 0)) :continue)}
+                                    'looker (looker 1)})]
+          (core/submit! eng '(worker) {})
+          (await (core/tick! eng))
+          (await (core/tick! eng))
+          (is (= {:rounds 2} (select-keys @world [:rounds :look-rounds]))))))))
 
 (deftest a-called-child-whose-can-run-turns-later-ends-condition-failed-for-its-parent
   (async done

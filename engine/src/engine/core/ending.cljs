@@ -24,7 +24,16 @@
   [def]
   (boolean (or (some some? ((juxt :can-start? :can-run?) def)) (::wrapped def) (and (:round def) (nil? (:check def))))))
 
-(defn started? [c] (some? (ctx/frozen-call c)))
+(defn job-state [c] (mem/job-mem ((:view c)) (:root c) (:slots c)))
+
+(defn looking
+  "The [job args] look-first child c's call runs under before it starts (look-first!), or nil."
+  [c]
+  (get-in (job-state c) [:contract :looking]))
+
+(defn look-in-flight? "Whether c's look-first child has run and not ended." [c] (contains? (:children (job-state c)) ::look-first))
+
+(defn started? [c] (and (some? (ctx/frozen-call c)) (nil? (looking c))))
 
 (def compiled-forms "{form checker}: a condition form an export or a :checks line is, compiled when first asked." (atom {}))
 
@@ -231,6 +240,15 @@
                      #(cond-> (assoc % :call call :started-ms (now eng)) (:sym def) (assoc :job (:sym def))))
     (when (seq lines) (ctx/emit! c :budget_clamped :debug {:lines lines :call call}))))
 
+(defn start!
+  "Start c's call: freeze it, or after a look-first child keep the call the look ran under, so the look counts against it."
+  [c def]
+  (if (looking c)
+    (let [eng (:engine c)]
+      (when-not (owner? eng (:token c)) (throw (cut-error)))
+      (mem/update-job! (:store eng) (:root c) (:slots c) update :contract dissoc :looking))
+    (freeze! c def)))
+
 (defn done-now
   "What def's done? says for c, as a status (contract/done?); before c's call starts, under the call it would start
   with."
@@ -310,7 +328,7 @@
   [def c d]
   (let [fresh? (not (started? c))
         c (assoc c :job-ways (:ways def))]
-    (when fresh? (freeze! c def))
+    (when fresh? (start! c def))
     (if-let [cause (when (and fresh? (:quote-of def) (not= 1 (:least (ctx/frozen-call c))))
                      (contract/least-cause (ctx/frozen-call c) (await ((:quote c) def (:args c) nil true)) (some-> d (nth 2))))]
       (cond-> (contract/ending :nothing-possible cause nil) d (update :report merge (contract/progress d)))
@@ -346,27 +364,24 @@
   (when-not (= :continue r) (forget-done! c) (note-look! c nil))
   r)
 
-(declare run)
-
 (defn ^:async look-first!
-  "The round of contract job def whose checks passed with a :look-first [job args] child call: the call starts (fresh?:
-  frozen now, so the child gets its :spend and worth), the child runs in slot ::look-first, and once it ends :done the
-  round asks the checks again (run); :continue while it runs, condition-failed :look-first when it ends otherwise."
-  [def c fresh? [job args]]
-  (when fresh? (freeze! c def))
-  (let [r (await (ctx/call c ::look-first job args))]
-    (cond
-      (= :continue r) :continue
-      (= :done (:kind r)) (await (run def c))
-      :else (finish def c (contract/ending :condition-failed {:reason :look-first} nil)))))
+  "The round of contract job def, not started, whose checks' verdict carries child, a :look-first [job args] call (or
+  whose earlier one is still running): the call is frozen without starting, so the child gets its :spend and worth, and
+  the child runs in slot ::look-first. :continue while it runs and once it ends :done, so the next round asks the start
+  checks again as on a first start; condition-failed :look-first when it ends otherwise."
+  [def c child]
+  (let [eng (:engine c)]
+    (when-not (looking c) (freeze! c def))
+    (mem/update-job! (:store eng) (:root c) (:slots c) assoc-in [:contract :looking] child)
+    (let [[job args] child
+          r (await (ctx/call c ::look-first job args))]
+      (cond
+        (= :continue r) :continue
+        (= :done (:kind r)) :continue
+        :else (finish def c (contract/ending :condition-failed {:reason :look-first} nil))))))
 
-(defn ^:async run
-  "One round of contract job def: an ending, or :continue. A goal that holds ends it :done (:already before the start),
-  whatever its checks say but a can-start? :never :bad-args (a done? that throws is told with job.done_failed and counts
-  as not done); else a :never ends it impossible. A :later from its can-start? keeps a listed job
-  not started queued, else ends it condition-failed; one from can-run? yields a listed root job; a reflex and a called child end condition-failed
-  with the status as cause (ctx/returns-on-later?), and the caller decides. The round's ctx asks done? and can-run? between
-  steps (ctx/done, ctx/can-run). Checks that pass with a :look-first child run it first (look-first!)."
+(defn ^:async checked-round
+  "run's round when no look child is running."
   [def c]
   (let [asked (take-asked! c)
         ss (statuses def c asked)
@@ -378,20 +393,34 @@
         [start-s run-s] (if done? ss (await (looked def c ss)))
         s (contract/all [start-s run-s])
         counted #(if fresh? (cond-> % d (update :report merge (contract/progress d))) (progress-ending c d %))
-        failed #(counted (contract/ending :condition-failed (contract/status-cause %) nil))]
+        failed #(counted (contract/ending :condition-failed (contract/status-cause %) nil))
+        floor #(when fresh? (limits/floor-cause c (fn [] (first (call-of c def)))))
+        child (when fresh? (:look-first (nth s 2)))]
     (ended! c
      (cond
        done? (done-ending d fresh?)
+       child (if-let [f (floor)] (counted (contract/ending :condition-failed f nil)) (await (look-first! def c child)))
        (= :never (first s)) (contract/ending :impossible (contract/status-cause s) nil)
        (= :later (first start-s)) (if (stays-listed? c) :continue (failed start-s))
        (= :later (first run-s)) (if (ctx/returns-on-later? c) (failed run-s) :continue)
-       :else (if-let [floor (when-not (started? c) (limits/floor-cause c #(first (call-of c def))))]
-               (counted (contract/ending :condition-failed floor nil))
-               (if-let [child (:look-first (nth s 2))]
-                 (await (look-first! def c fresh? child))
-                 (await (started-round def (assoc c :can-run #(contract/verdict c (select-keys def [:can-run?]))
-                                                  :done #(done-between def c))
-                                       d))))))))
+       :else (if-let [f (floor)]
+               (counted (contract/ending :condition-failed f nil))
+               (await (started-round def (assoc c :can-run #(contract/verdict c (select-keys def [:can-run?]))
+                                                :done #(done-between def c))
+                                     d)))))))
+
+(defn ^:async run
+  "One round of contract job def: an ending, or :continue. A goal that holds ends it :done (:already before the start),
+  whatever its checks say but a can-start? :never :bad-args (a done? that throws is told with job.done_failed and counts
+  as not done); else a :never ends it impossible. A :later from its can-start? keeps a listed job
+  not started queued, else ends it condition-failed; one from can-run? yields a listed root job; a reflex and a called child end condition-failed
+  with the status as cause (ctx/returns-on-later?), and the caller decides. The round's ctx asks done? and can-run? between
+  steps (ctx/done, ctx/can-run). Before the start, statuses whose verdict carries a :look-first child run it first, whatever
+  their kind (look-first!); once started, the kind stands. A look child still running goes on before anything is asked."
+  [def c]
+  (if (look-in-flight? c)
+    (ended! c (await (look-first! def c (looking c))))
+    (await (checked-round def c))))
 
 (defn spent?
   "Whether a started job's spend or deadline line is crossed (a floor is not: below one it waits)."
@@ -403,27 +432,31 @@
   "A contract job waits while its checks say :later (can-start? until it starts, can-run? always),
   then while the body is below a floor of its call. A :never, a :look or a goal that holds passes: the round ends the
   job, or looks. A started job waiting on can-run? whose spend or deadline is crossed passes too, so its round ends it:
-  waiting is bounded by the call's limits, :wall-time among them."
+  waiting is bounded by the call's limits, :wall-time among them. Before the start a verdict with a :look-first child passes,
+  and so does a look-first child still running: the round runs it."
   [def c]
-  (let [fresh? (not (started? c))
-        raw (if fresh? (zipmap [:start :run] (statuses def c)) {:run (run-status def c)})
-        look? (= :look (first (contract/all (vals raw))))
-        _ (when-not look? (note-look! c nil))
-        asked (cond-> raw (and look? (looked? c (look-key c (vals raw)))) (update-vals #(first (later-looks [%]))))
-        {start-s :start run-s :run} asked
-        s (if fresh? (contract/all [start-s run-s]) run-s)
-        later? (= :later (first s))
-        w (or (when later? (contract/status-cause s))
-              (some-> (limits/floor-cause c #(or (ctx/frozen-call c) (first (call-of c def)))) limits/floor-wait))
-        de (when (and w (not= :never (first s))) (done-or-error def c))]
-    (remember-asked! c (cond-> asked de (assoc :done de)))
-    (remember-done! c (first de))
-    (cond
-      (or (nil? w) (= :never (first s))) true
-      (some-> (first de) ends?) true
-      fresh? (ctx/wait c w)
-      (and later? (spent? c)) true
-      :else (ctx/wait c w))))
+  (if (look-in-flight? c)
+    true
+    (let [fresh? (not (started? c))
+          raw (if fresh? (zipmap [:start :run] (statuses def c)) {:run (run-status def c)})
+          look? (= :look (first (contract/all (vals raw))))
+          _ (when-not look? (note-look! c nil))
+          asked (cond-> raw (and look? (looked? c (look-key c (vals raw)))) (update-vals #(first (later-looks [%]))))
+          {start-s :start run-s :run} asked
+          s (if fresh? (contract/all [start-s run-s]) run-s)
+          later? (= :later (first s))
+          w (or (when later? (contract/status-cause s))
+                (some-> (limits/floor-cause c #(or (ctx/frozen-call c) (first (call-of c def)))) limits/floor-wait))
+          de (when (and w (not= :never (first s))) (done-or-error def c))]
+      (remember-asked! c (cond-> asked de (assoc :done de)))
+      (remember-done! c (first de))
+      (cond
+        (or (nil? w) (= :never (first s))) true
+        (and fresh? (:look-first (nth s 2))) true
+        (some-> (first de) ends?) true
+        fresh? (ctx/wait c w)
+        (and later? (spent? c)) true
+        :else (ctx/wait c w)))))
 
 (defn passed-status
   "The status a check that just passed for c left: its :never or :look, which the check lets through for the round to

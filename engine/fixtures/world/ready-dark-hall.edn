@@ -22,12 +22,13 @@
   {:name "a-long-stay-where-the-body-stands-in-a-short-dark-tunnel-whose-end-is-unseen-walks-to-look-then-starts"
    :blocks [[:fill [2 0 2] [60 6 30] "stone"] [:fill [4 0 16] [20 1 16] "air"]]
    :act [[:job (jobs.debug.ready-probe {:stay-s 5000})]]
-   :expect [{:event {:source :job :kind :job.ready-probe} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :walk-look.ended} :within-s 60}
+            {:event {:source :job :kind :job.ready-probe} :within-s 120 :of-job true}]
    :after [[:body-near [4.5 0 16.5] 2]]}
   {:name "a-long-stay-where-the-body-stands-in-a-long-dark-tunnel-is-refused-after-the-walk-to-look"
    :blocks [[:fill [2 0 2] [60 6 30] "stone"] [:fill [4 0 16] [58 1 16] "air"]]
    :act [[:job (jobs.debug.ready-probe {:stay-s 5000})]]
-   :expect [{:event {:source :job :kind :stopped :message [:contains "farther than 24 blocks"]} :within-s 60 :of-job true}
+   :expect [{:event {:source :job :kind :stopped :message [:contains "farther than 24 blocks"]} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :job.ready-probe} :for-s 25 :of-job true}]
    :after [[:body-near [4.5 0 16.5] 2]]}
   {:name "a-short-stay-at-the-far-end-of-a-long-dark-tunnel-starts"

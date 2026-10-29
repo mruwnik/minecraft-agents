@@ -44,6 +44,7 @@
             [jobs.items.kitchen :as kitchen]
             [jobs.lib.look-edge :as look-edge]
             [jobs.lib.reach.room :as reach-room]
+            [jobs.lib.shore :as shore]
             [jobs.items.get-kit :as get-kit]
             [jobs.items.obtain :as obtain]
             [jobs.gather.mine :as mine]
@@ -545,7 +546,7 @@
 
 (defn own-cell-exposure
   "hall-status where the body stands at the west end of the tunnel world, a dark hall judged by an unseen edge while
-  sides (the unseen sides of the tunnel) are left, [kind reason look-first-child]; walk-looked, the cells a walk-look
+  sides (the unseen sides of the tunnel) are left, [kind reason look-first-child-job]; walk-looked, the cells a walk-look
   already looked at."
   ([world sides] (own-cell-exposure world sides nil))
   ([world sides walk-looked]
@@ -553,7 +554,7 @@
                  reach-room/unseen-sides (constantly sides)
                  sh-inside/dark-hall (fn [& _] (when (seq sides) :roofed))
                  sh-sense/buried? (constantly true)]
-     (lit 0 0 #((juxt first (fn [s] (:reason (nth s 2))) (fn [s] (:look-first (nth s 2))))
+     (lit 0 0 #((juxt first (fn [s] (:reason (nth s 2))) (fn [s] (first (:look-first (nth s 2)))))
                 (ready/hall-status (cond-> (for-iron (ctx-of (assoc world :time st/noon)))
                                      walk-looked (assoc :view (constantly {:now 0 :data (mem/add-entry mem/empty-data :walk-looked {:t 0 :data {:cells walk-looked}} walk-look/walked-policy)})))
                                    nil))))))
@@ -566,16 +567,27 @@
                   {"-1,64,0" "stone" "-1,65,0" "stone" "41,64,0" "stone" "41,65,0" "stone"})})
 
 (deftest a-sealed-dark-tunnel-judged-where-the-body-stands-is-walked-to-look-then-passes
-  (is (= [:ok :look-first ['jobs.movement.walk-look {}]] (own-cell-exposure tunnel [[6 64 0] [6 65 0]]))
-      "the end is unseen and a walk shows it: the check's child walks there to look")
+  (is (= [:never :exposed 'jobs.movement.walk-look] (own-cell-exposure tunnel [[6 64 0] [6 65 0]]))
+      "the end is unseen and a walk shows it: the stay's own verdict, with the child that walks there to look before the start")
   (is (= :ok (first (own-cell-exposure tunnel []))) "looked at and sealed: the stay passes, no second look"))
 
 (deftest an-open-dark-corridor-judged-where-the-body-stands-is-refused-after-the-walk-to-look
-  (is (= [:ok :look-first] (pop (own-cell-exposure long-tunnel [[8 64 0] [8 65 0]]))) "its first unseen stretch is walked to and looked at")
+  (is (= [:never :exposed 'jobs.movement.walk-look] (own-cell-exposure long-tunnel [[8 64 0] [8 65 0]])) "its first unseen stretch is walked to and looked at")
   (is (= [:never :exposed nil] (own-cell-exposure long-tunnel [[30 64 0] [30 65 0]]))
       "looked at, the corridor runs on past what a walk from here reaches: the stay is priced and refused, no look asked again")
   (is (= [:never :exposed nil] (own-cell-exposure long-tunnel [[8 64 0] [8 65 0]] [[8 64 0] [8 65 0]]))
       "a stretch a walk-look looked at from close by and could not make out: another walk shows nothing, the stay is priced"))
+
+(deftest the-walk-to-look-is-one-leg-to-the-far-side-of-the-hall-judged-past-sight-of-it-and-never-beside-the-feet
+  (let [p (:primitives (ctx-of (assoc tunnel :time st/noon)))
+        far (fn [region sides]
+              (with-redefs [lib-look/near-of (constantly 4)
+                            shore/standable? (fn [_ {:keys [x]}] (<= x 6))
+                            reach-room/unseen-sides (fn [_ pos] (when (= region pos) sides))]
+                (look-edge/far-side p {:x 0 :y 64 :z 0} region #{})))]
+    (is (= {:side [12 64 0] :to {:x 6 :y 64 :z 0}} (far {:x 3 :y 64 :z 0} [[12 64 0]]))
+        "the unseen sides of the hall judged; a side 6 past its nearest stand cell, beyond look/near-of, is still walked to")
+    (is (nil? (far {:x 3 :y 64 :z 0} [[-1 64 0]])) "a side whose stand cell is beside the feet: a look from here shows as much")))
 
 (defn unseen-site-redefs
   "Runs f with the tunnel's east end {:x 6 :y 64 :z 0} a dark hall past an unseen edge, the body standing at x, that end seen
@@ -605,7 +617,7 @@
   (let [far (unseen-site-exposure 0 false)]
     (is (= [:ok :look-first] [(first far) (:reason (nth far 2))]) "6 blocks off and unseen: the job's walk there is the look")
     (is (< (:secs (unseen-site-look 3)) (:secs (unseen-site-look 0))) "the look costs the walk there: less from nearer"))
-  (is (= [:ok :look-first ['jobs.movement.walk-look {}]] ((juxt first #(:reason (nth % 2)) #(:look-first (nth % 2))) (unseen-site-exposure 6 true)))
+  (is (= [:never :exposed 'jobs.movement.walk-look] ((juxt first #(:reason (nth % 2)) #(first (:look-first (nth % 2)))) (unseen-site-exposure 6 true)))
       "arrived and seen: the job's walk shows no more, the child walks to look at the unseen west end"))
 
 (deftest a-torch-the-body-carries-beats-the-walk-to-look
