@@ -12,9 +12,9 @@
             [jobs.lib.memory-age :as memory-age]
             [jobs.lib.world-files :as world-files]
             [jobs.lib.breath :as breath]
+            [jobs.lib.cost :as cost]
             [jobs.lib.cost.planner :as planner]
             [jobs.lib.own-builds :as own-builds]
-            [engine.ctx :as ctx]
             [jobs.lib.shore :as shore]
             [jobs.lib.swim :as swim]
             [jobs.survival.breathe :as b]
@@ -1072,10 +1072,10 @@
 
 (defn ^:async cap-run!
   "One breathe run in the capped column; the ending, the fake body, its events and the block reader."
-  [{:keys [block zones args dig-ms inventory entities] :or {block "dirt" zones [] args cap-args dig-ms 0 inventory [] entities []}}]
+  [{:keys [block zones args dig-ms inventory entities extra] :or {block "dirt" zones [] args cap-args dig-ms 0 inventory [] entities []}}]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/seeing-all (tu/fake {:self {:inWater true :oxygen 4} :blocks (capped-world block) :inventory inventory :entities entities}))
+        p (tu/seeing-all (tu/fake {:self {:inWater true :oxygen 4} :blocks (merge (capped-world block) extra) :inventory inventory :entities entities}))
         _ (swap! (fake/state p) assoc :dig-ms dig-ms)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :world (world-files/of-data {} {} zones)
@@ -1161,42 +1161,35 @@
           (is (= [[:completed nil]] ended))
           (is (= "air" (block [0 68 0]))))))))
 
-(defn ^:async priced-cap-run!
-  "cap-run! of block, the cap an own build (own-build-fn) or a kept seal (mem :seal-kept)."
-  [block sealed? opts]
-  (let [mem ctx/mem]
-   (with-redefs [own-builds/own-build-fn (fn [_] (if sealed? (constantly nil) (constantly :plan)))
-                ctx/mem (fn [c] (cond-> (mem c) sealed? (assoc :seal-kept #{[0 68 0]})))]
-    (await (cap-run! (assoc opts :block block))))))
+(def floored "Stone under the capped column: no pocket of the open fake world below it." {"0,63,0" "stone"})
 
 (deftest an-own-build-cap-is-dug-when-drowning
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [r (await (priced-cap-run! "oak_planks" false {}))]
+        (let [r (with-redefs [own-builds/own-build-fn (fn [_] (constantly :plan))]
+                  (await (cap-run! {:block "oak_planks" :extra floored})))]
           (is (= [[:completed nil]] (:ended r)))
           (is (= "air" ((:block r) [0 68 0]))))))))
 
-(deftest a-kept-natural-seal-is-dug-for-its-put-back-alone
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [r (await (priced-cap-run! "dirt" true {}))]
-          (is (= "air" ((:block r) [0 68 0]))))))))
+(deftest the-drowning-loss-follows-the-games-drowning
+  (let [body {:health 20 :absorption 0} death-s 5000 loss (partial air/drown-loss-s body 3 death-s)]
+    (is (= 0 (loss 2.5)) "air reached within the breath")
+    (is (= (cost/hp-cost 20 4) (loss 5.5)) "2 hp a second once the breath is gone")
+    (is (= death-s (loss 13)) "the life gone: the death")
+    (is (= (cost/hp-cost 20 16) (air/drown-loss-s (assoc body :absorption 4) 3 death-s 13)) "absorption takes the first hp")))
 
-(def drowning-body {:health 20 :absorption 0 :level 0 :respawn {:x 0 :y 64 :z 0} :carried 0})
+(defn judge-of
+  "air/judge-fn's verdict on an own-build glass cap (its dig drops nothing: the put-back costs) over the capped column of extra blocks, a body with full breath."
+  [extra]
+  (let [p (tu/seeing-all (tu/fake {:self {:inWater true :oxygen 20} :blocks (merge (capped-world "glass") floored extra)}))
+        c {:primitives p :view (fn [] {:now 0 :data {}}) :root "breathe" :slots [] :args {}}]
+    (with-redefs [own-builds/own-build-fn (fn [_] (fn [cell] (when (= [0 68 0] cell) :plan)))]
+      ((air/judge-fn c) {:x 0 :y 68 :z 0} "glass"))))
 
-(deftest a-threat-known-near-raises-the-price-of-opening-a-seal
-  (let [at {:x 0 :y 64 :z 0}
-        pack (vec (for [i (range 4)] {:mob "zombie" :pos {:x (+ 1 i) :y 64 :z 0} :weight 1 :reach (constantly 1)}))]
-    (is (> (air/opening-s drowning-body pack [0 68 0] at) (air/opening-s drowning-body [] [0 68 0] at)))))
-
-(deftest the-averted-loss-is-a-death-chance-of-the-death-plus-hp
-  (let [death-s 5000
-        averted (air/averted-s drowning-body death-s)]
-    (is (< averted death-s) "a drowning is not a certain death")
-    (is (> averted (* 0.1 death-s)))
-    (is (> (air/averted-s drowning-body (* 2 death-s)) averted) "dearer death, more averted")))
+(deftest an-own-build-cap-is-too-dear-when-air-the-other-way-is-within-the-breath
+  (is (= :too-dear (judge-of {"1,67,0" "water"})) "a swim of 4 blocks beside the cap reaches air")
+  (is (nil? (judge-of {})) "no other way: the drowning is a death"))
 
 (deftest a-protected-cap-is-never-dug
   (async done (never-dug! done "chest" :protected)))

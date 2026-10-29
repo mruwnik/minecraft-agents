@@ -410,6 +410,11 @@
   (settings/ticks->ms (+ (* (settings/get settings ::ticks-per-oxygen) (max 0 (.-oxygen self)))
                          (* (settings/get settings ::ticks-per-health) (max 0 (or (.-health self) 20))))))
 
+(defn drown-hp
+  "Health the game's drowning takes in s seconds past the breath: 2 at every second ::ticks-per-health hit, as air-left-ms counts it."
+  [s]
+  (* 2 (js/Math.floor (/ (* 1000 (max 0 s)) (settings/ticks->ms (* 2 (settings/get settings ::ticks-per-health)))))))
+
 (defn look-until
   "The clock ms the looks for air stop at: the ::look-share of the air left from now."
   [self]

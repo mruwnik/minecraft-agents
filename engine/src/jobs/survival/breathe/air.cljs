@@ -14,8 +14,6 @@
             [jobs.lib.swim :as swim]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.cost :as cost]
-            [jobs.lib.cost.answer :as answer]
-            [jobs.lib.threats :as threats]
             [jobs.lib.own-builds :refer [own-build-fn]]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.tidy :as tidy]
@@ -68,48 +66,49 @@
             true
             :dug)))))
 
-(defn averted-s
-  "Seconds a drowning averts that body ({:health :absorption} and death-body's keys) would take with death-s the cost of
-  dying: the death of its drowning (all its life, in the 2 hp ticks of drowning) at death-s, and the hp it lives through
-  at hp-price."
-  [body death-s]
-  (let [drowning {:damage (+ (or (:health body) 20) (or (:absorption body) 0)) :hit 2}]
-    (+ (* (cost/death-chance body drowning) death-s)
-       (cost/hp-cost (:health body) (answer/lived-damage body drowning)))))
+(defn seen-surface
+  "The nearest seen air-reaching surface within the air-radius setting that go-air! goes to, not one of failed: a
+  column joined by seen water, else the top of a flooded stair; nil if none."
+  [p pos failed]
+  (or (breath/nearest-air p pos (swim/air-radius) (swim/reach) failed false)
+      (breath/flood-air p pos (swim/air-radius) (swim/air-radius) failed)))
 
-(defn opening-s
-  "Seconds opening the seal at cell v costs body with the known threats (jobs.lib.threats/threats-of) about: the hurt and
-  the death they risk (cost/opening-price of the route {:cells [v] :threats}) at `at`."
-  [body threats v at]
-  (let [route {:cells [v] :threats threats}]
-    (cost/opening-price body (:hurt (cost/route-parts body route)) route at)))
+(defn drown-loss-s
+  "Seconds a body ({:health :absorption}) whose breath lasts air-s more seconds loses when it reaches air after s
+  seconds, by the game's drowning (breath/drown-hp): its death at death-s once the hp reach its life, else the hp at hp-price."
+  [{:keys [health absorption]} air-s death-s s]
+  (let [hp (breath/drown-hp (- s air-s))]
+    (if (>= hp (+ health absorption)) death-s (cost/hp-cost health (max 0 (- hp absorption))))))
+
+(defn other-air-s
+  "Seconds to air by the job's other ways from pos: the swim (breath/swim-ms a block) to the seen surface go-air! takes
+  (seen-surface) or the pocket below (breath/nearest-pocket), not failed; ##Inf with neither."
+  [p pos failed]
+  (let [surface (seen-surface p pos failed)
+        pocket (breath/nearest-pocket p pos (swim/air-radius) (depth) failed)
+        steps (cond-> []
+                surface (conj (reduce + (map #(js/Math.abs (- (% surface) (js/Math.floor (% pos)))) [:x :y :z])))
+                pocket (conj (:steps pocket)))]
+    (if (seq steps) (/ (* (apply min steps) (breath/swim-ms)) 1000) ##Inf)))
 
 (defn judge-fn
-  "(judge cell block): why cell may not be the cap, else nil. A kept seal (mem :seal-kept) or an own build is dug when
-  its price (the block put back, jobs.lib.cost.ways/put-back-cost via holes/put-back-s or own-cut-fn, and for a seal
-  the opening-price of the hurt and death of the known threats, jobs.lib.threats/threats-of) is under what the drowning
-  averts (averted-s): else :too-dear. Another owner's zone or claim refuses a non-natural block (:not-natural)."
+  "(judge cell block): why cell may not be the cap, else nil. An own build is dug when its price (own-cut-fn: the block
+  put back) and the drowning while it is dug (drown-loss-s over its dig time) are under the drowning it averts, the loss
+  of reaching air the other way (other-air-s): else :too-dear. Another owner's zone or claim refuses a non-natural
+  block (:not-natural)."
   [c]
   (let [p (:primitives c)
-        zoned (assoc-in c [:args :ignore-zones?] false)
-        may-dig? (holes/may-dig-fn zoned true)
+        may-dig? (holes/may-dig-fn (assoc-in c [:args :ignore-zones?] false) true)
         own-build (own-build-fn c)
         own-cut (own-cut-fn c)
-        kept (:seal-kept (ctx/mem c) #{})
-        body (delay (assoc (threats/death-body c) :absorption (.-absorption (.self p))))
-        averted (delay (averted-s @body (cost/death-s p (ctx/view c))))
-        feet (delay (u/self-pos c))
-        threats (delay (threats/threats-of c))]
+        self (.self p)
+        loss (delay (partial drown-loss-s {:health (or (.-health self) 20) :absorption (or (.-absorption self) 0)}
+                             (breath/air-left-s self) (cost/death-s p (ctx/view c))))
+        other (delay (@loss (other-air-s p (u/self-pos c) (:failed-air (ctx/mem c)))))]
     (fn [cell n]
-      (let [v (u/cell-vec cell)
-            own? (some? (own-build v))
-            sealed? (contains? kept v)]
+      (let [v (u/cell-vec cell)]
         (cond
-          (or own? sealed?)
-          (let [price (+ (own-cut v)
-                         (if (and sealed? (not own?)) (holes/put-back-s p n) 0)
-                         (if sealed? (opening-s @body @threats v @feet) 0))]
-            (when-not (< price @averted) :too-dear))
+          (own-build v) (when-not (< (+ (own-cut v) (@loss (/ (.digTime p (clj->js cell)) 1000))) @other) :too-dear)
           (and (not (rules/natural? n)) (not (may-dig? v))) :not-natural)))))
 
 (defn cap-above
@@ -168,13 +167,6 @@
         unseen (filterv #(dig-look/unknown? p [(:x %) (:y %) (:z %)]) cells)]
     (doseq [cell unseen] (await (dig-look/look-at! c [(:x cell) (:y cell) (:z cell)])))
     (boolean (seq unseen))))
-
-(defn seen-surface
-  "The nearest seen air-reaching surface within the air-radius setting that go-air! goes to, not one of failed: a
-  column joined by seen water, else the top of a flooded stair; nil if none."
-  [p pos failed]
-  (or (breath/nearest-air p pos (swim/air-radius) (swim/reach) failed false)
-      (breath/flood-air p pos (swim/air-radius) (swim/air-radius) failed)))
 
 (defn ^:async go-air!
   "Drowning with no air near: a go-to child to the nearest air-reaching surface within the air-radius setting (also the
