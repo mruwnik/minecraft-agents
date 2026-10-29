@@ -147,7 +147,9 @@
 
 (deftest a-walk-over-dark-open-ground-at-night-is-held-when-its-death-costs-more-than-waiting-for-dawn
   ;; 190 blocks of dark open ground at tick 14000: an 11% death chance; dawn in 473 s, the day walk after it near free.
-  ;; With no bed a death wakes at world spawn: by the hut, the walk back keeps the drops; 5000 blocks off, they are lost.
+  ;; With no bed a death wakes at world spawn: by the hut, the walk back keeps the drops; 5000 blocks off, they are lost,
+  ;; and the kit's walk risks over three times the hp the body may afford (67 against 19): held for dawn, not on a
+  ;; price margin.
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -161,27 +163,27 @@
             (is (= held? (= :risky (:reason (core/waiting eng id)))) (pr-str spawn (mapv :name inventory)))
             (is (not-any? #(= :risky (:reason %)) (st/emitted seen :stopped)) "never ended for its risk")))
         (let [c (ready-test/ctx-of (assoc night-hut :self {:pos inside :health 20 :food 20 :worldSpawn [-5000 64 0]} :inventory diamond-kit))
-              [_ text {:keys [now-s wait-s wait]}] (planned-status c {:x 195 :y 64 :z 0})]
+              [_ text {:keys [wait]}] (planned-status c {:x 195 :y 64 :z 0})]
           (is (= :dawn wait))
-          (is (< wait-s now-s) "the death of a body carrying a kit far from world spawn costs more than the night's wait")
           (is (re-find #"hp" text)))))))
 
 (def hut-bed {"4,64,-1" "red_bed"})
 
 (deftest a-body-whose-sleep-skips-the-night-sleeps-it-away-before-the-walk
-  ;; the night-hut walk above: a bed in the hut, or one carried to put down, skips the night for a few seconds' walk;
+  ;; the night-hut walk above: a bed in the hut, or one carried to put down (its placing), skips the night for a few seconds;
   ;; with another player awake the sleep skips nothing and the prices of the walk and dawn decide
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[blocks inventory] [[hut-bed []] [{} [{:name "red_bed" :count 1}]]]]
+        (doseq [[blocks inventory said] [[hut-bed [] #"to sleep"] [{} [{:name "red_bed" :count 1}] #"waiting 1.5 s to sleep"]]]
           (let [c (ready-test/ctx-of (-> night-hut (update :blocks merge blocks) (assoc :inventory inventory)))
                 [_ text {:keys [wait now-s wait-s]}] (planned-status c {:x 195 :y 64 :z 0})]
             (is (= :sleep wait) (pr-str blocks inventory))
             (is (< wait-s now-s))
-            (is (re-find #"sleep" text))))
-        (is (not= :sleep (:wait (nth (planned-status (ready-test/ctx-of (-> night-hut (update :blocks merge hut-bed) (assoc :players ["Alex"]))) {:x 195 :y 64 :z 0}) 2)))
-            "another player awake: no skip")
+            (is (re-find said text) "a carried bed's sleep waits for its placing")))
+        (is (= [:sleep nil] (mapv #(:wait (nth (planned-status (ready-test/ctx-of (-> night-hut (update :blocks merge hut-bed) (assoc :players %))) {:x 195 :y 64 :z 0}) 2))
+                                  [[] ["Alex"]]))
+            "another player awake: no skip, the walk goes now")
         (let [{:keys [eng p]} (st/setup (update night-hut :blocks merge hut-bed))
               _ (sky/with-sky p)
               _ (st/know-bed! eng {:x 4 :y 64 :z -1})

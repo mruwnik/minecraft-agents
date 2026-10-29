@@ -183,10 +183,12 @@
      :death-chance (:chance (dies met-all)) :dark-s exposed-s :hostiles (count catchers) :threats (mapv #(select-keys % [:mob :pos]) (concat catchers remembered))}))
 
 (defn risk-s
-  "Seconds the hp cost of a walk-risk estimate (its :hp and :lethal-hp, plus `extra-hurt` hp, default 0) costs c's body at its health now (cost/risk-s)."
+  "Seconds the hp cost of a walk-risk estimate (its :hp and :lethal-hp, plus `extra-hurt` hp, default 0) costs c's body at
+  `health` (default its health now) (cost/risk-s)."
   ([c est] (risk-s c est 0))
-  ([c {:keys [hp lethal-hp] :or {hp 0 lethal-hp 0}} extra-hurt]
-   (cost/risk-s (.-health (.self (:primitives c))) (+ (- hp lethal-hp) extra-hurt) lethal-hp)))
+  ([c est extra-hurt] (risk-s c est extra-hurt (.-health (.self (:primitives c)))))
+  ([_ {:keys [hp lethal-hp] :or {hp 0 lethal-hp 0}} extra-hurt health]
+   (cost/risk-s health (+ (- hp lethal-hp) extra-hurt) lethal-hp)))
 
 (defn estimate
   "{:hp :walk-hp :spawn-hp :hostile-hp :death-hp :lethal-hp :death-chance :lava-hp :dark-s :hostiles :threats} of the walk of c's body to `goal` ({:x :y :z})
@@ -272,7 +274,7 @@
   "The ways of waiting where the body stands, then walking the way of estimate-inputs `in` (stay-inputs stay-in): until dawn
   (shelter.clock/night-left-quote's mean) when dawn lowers a cell of it or the way out it leaves (:exit-dawn?); asleep
   when dawn would and the body's sleep skips the night (sh-sleepers/sleepers-short 0) in a bed of sleep-bed, for the
-  seconds its sleep's quote gives (sh-beds/sleep-walk-s), the walk then by day; and until
+  seconds before the sleep (sh-beds/sleep-s, its quote's), the walk then by day; and until
   healed to full when the body can heal. Each {:wait :secs :health :hp :s}: the health healed by then, the walk's hp after it, s the wait's seconds, what staying put risks over them
   (stay-estimate) and the walk after them (estimate-of, cost/risk-s) at the health healed by then (cost.health/heal-s-per-hp
   an hp), by full day's light once the night is over (:sky 0). A threat that may move off is priced as staying: no wait
@@ -293,10 +295,10 @@
                                              #(estimate-of c (assoc-in (if day? @day in) [:body :health] healed)))
                     stay (let [s-in (assoc stay-in :secs secs)] (check-cache/keyed c ::wait-stay s-in #(stay-estimate c s-in)))]
                 {:wait kind :secs secs :health healed :hp (:hp after)
-                 :s (+ secs (risk-s c stay) (cost/risk-s healed (- (:hp after) (:lethal-hp after)) (:lethal-hp after)))}))]
+                 :s (+ secs (risk-s c stay) (risk-s c after 0 healed))}))]
     (cond-> []
       dawn? (conj (way :dawn night-s true))
-      sleep (conj (merge (way :sleep (sh-beds/sleep-walk-s p (:bed sleep)) true) sleep))
+      sleep (conj (merge (way :sleep (sh-beds/sleep-s c (:bed sleep)) true) sleep))
       (and heals? (< health 20)) (conj (let [secs (* per-hp (- 20 health))] (way :heal secs (and dawn? (>= secs night-s))))))))
 
 (defn status

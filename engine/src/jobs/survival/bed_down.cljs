@@ -82,14 +82,6 @@
             (not-empty (filterv stand? (map at [r (add r f -1) (add r f -2) (add [0 0] f -2) (add (neg r) f -2) (add (neg r) f -1) (neg r)])))))
         [head])))
 
-(defn closed-home
-  "The :home of a body outside it when it lies in a closed roofed room (the carried bed goes down there), else nil."
-  [c]
-  (let [p (:primitives c)
-        home (mem/place (ctx/view c) :home)]
-    (when (and home (not (sh-sense/shut-in-room? p (sh-sense/feet p))) (sh-sense/shut-in-room? p home))
-      home)))
-
 (defn seal-cells
   "The cells to fill round a bed layout's row (stand, foot, head) to shut it in: its sides at feet and head height, a
   roof support on the side behind the stand, and the roof over the row; those not seal/sealed? already."
@@ -154,7 +146,7 @@
         stands (if asleep? (wake-cells p) [feet])
         [_ left] (get-in (sh-clock/night-left-quote c) [:uses :job-time])
         lost (if (zero? (sh-sleepers/sleepers-short p view)) 0 left)
-        sheltered? (if (or bed asleep?) (sh-beds/bed-sheltered? p at) (or (sh-beds/bed-sheltered? p feet) (some? (closed-home c))))
+        sheltered? (if (or bed asleep?) (sh-beds/bed-sheltered? p at) (or (sh-beds/bed-sheltered? p feet) (some? (sh-beds/closed-home c))))
         body (respawn-body c)
         sealed (when (and carried? (not sheltered?)) (seal-plan c))
         shelter-s (min left (sh/shelter-here-s))
@@ -235,7 +227,7 @@
     (checks/goal d [:sleeping "already asleep"] [:awake "not asleep"] {:units :sleeps :done (if d 1 0) :left (if d 0 1)})))
 
 (defn quote-of [c]
-  (let [s (sh-beds/sleep-walk-s (:primitives c) (bed-to-use c))]
+  (let [s (sh-beds/sleep-s c (bed-to-use c))]
     {:uses {:job-time [0 s (max (* 3 s) 10)]} :done [0 1 1]}))
 
 (defn ^:async sleep!
@@ -279,7 +271,7 @@
   "A body outside, with a :home that lies in a closed roofed room: walk there so the bed goes down inside it.
   :continue while walking; nil when no such home or the walk failed (the bed then goes down where the body is)."
   [c]
-  (when-let [home (closed-home c)]
+  (when-let [home (sh-beds/closed-home c)]
     (let [w (await (child/call-walk* c :home-walk {:pos home :range 1}))]
       (when (= :continue w) :continue))))
 

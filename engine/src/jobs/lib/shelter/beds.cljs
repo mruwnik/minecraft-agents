@@ -10,6 +10,7 @@
             [jobs.lib.access.zones :as zones]
             [jobs.lib.build.wood :as wood]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.ways :as cw]
             [jobs.lib.danger :as danger]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.price :as price]
@@ -252,6 +253,24 @@
   cost/walk-speed; 0 for nil (a carried bed goes down where the body stands)."
   [p bed]
   (if bed (/ (u/dist (u/self-pos {:primitives p}) bed) cost/walk-speed) 0))
+
+(defn closed-home
+  "The :home of a body outside it when it lies in a closed roofed room (the carried bed goes down there), else nil."
+  [c]
+  (let [p (:primitives c)
+        home (mem/place (ctx/view c) :home)]
+    (when (and home (not (sh-sense/shut-in-room? p (sh-sense/feet p))) (sh-sense/shut-in-room? p home))
+      home)))
+
+(defn sleep-s
+  "Seconds before a sleep in bed (jobs.survival.sleep, bed-down): the walk there (sleep-walk-s); for nil, the carried bed:
+  the walk into a closed home first (closed-home) and its placing (cost.ways/put-back-cost, one block put down); its row's
+  walls left out, as a sleep that skips the night lies in the open (bed-down/answers)."
+  [c bed]
+  (let [p (:primitives c)]
+    (if bed
+      (sleep-walk-s p bed)
+      (+ (sleep-walk-s p (closed-home c)) (cw/put-back-cost 0)))))
 
 (def walk-unsafe-policy
   "Policy of the :bed-walk-unsafe entries {:pos :state} the night job writes for a bed whose walk it priced unsafe: kept
