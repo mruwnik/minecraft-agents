@@ -8,7 +8,8 @@
             [jobs.lib.look :as look :refer [cell-of]]
             [jobs.lib.stair-time :as stair-time]
             [jobs.lib.torch-stock :as stock]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.lib.work-place :as work-place]))
 
 (defn run
   "{:seen [pos] :left n :down n :level n}: the seen blocks of its kinds within :radius it digs first (:seen a way; nearest
@@ -19,7 +20,7 @@
   (let [args (:args c)
         owed (targets/owed c)
         seen (if (and (mw/seen? args) (pos? owed))
-               (mapv :pos (look/seen-blocks (:primitives c) {:names (vec (targets/kinds args)) :radius (or (:radius args) 16) :max owed :live? true}))
+               (mapv :pos (look/seen-blocks (:primitives c) {:names (vec (targets/kinds args)) :radius (or (:radius args) work-place/dig-radius) :max owed :live? true}))
                [])
         left (- owed (count seen))
         feet (:y (cell-of (u/self-pos c)))
@@ -50,10 +51,10 @@
        (if (pos? level) (* left (dig-s (targets/main-block (:args c)))) 0))))
 
 (defn torch-way
-  "The torch way (ready/dark-near-ok) of a call with :torches: one torch at the spot of its seen digs (torches/spot-torch!)
+  "The torch way (ready/dark-near-ok) of a call with :torches: one torch at the spot of its seen digs (torches/spot-torch!, priced as a stretch of its own: torch-gap blocks)
   and the blocks of the stair it cuts and of its tunnel (run), more torches by its own get; nil when it hangs none."
   [c]
   (let [{:keys [seen down level]} (run c)
-        n (+ (if (seq seen) 1 0) (if (mw/stair? (:args c)) down 0) level)]
+        n (+ (if (seq seen) cost/torch-gap 0) (if (mw/stair? (:args c)) down 0) level)]
     (when (and (:torches (:args c)) (pos? n))
       (stock/torch-way c n (stock/fetch-allows? c)))))

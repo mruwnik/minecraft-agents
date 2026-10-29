@@ -571,6 +571,8 @@
     "wall_torch" :ok
     "torch" :ok
     "short_grass" :ok
+    "cobweb" :ok
+    "fire" :buried
     "water" :buried
     "stone" :buried))
 

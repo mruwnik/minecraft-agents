@@ -470,10 +470,11 @@
                                       :args (merge {:block "iron_ore" :count 1 :radius 4 :torches true :tunnel-length 20 :ways #{:seen :strip-tunnel :carried}} args)))
         tunnel-s (stair-time/steps-s :level 20)]
     (are [ore args blocks] (= {:blocks blocks :carried 4} (mine-expect/torch-way (ctx ore torches args)))
-      true {} 1
-      true {:count 3} 21
+      true {} cost/torch-gap
+      true {:count 3} (+ cost/torch-gap 20)
+      true {:count 3 :block "coal_ore" :tunnel-length 1000} (+ cost/torch-gap 28)
       false {} 20
-      true {:count 3 :ways #{:seen :carried}} 1)
+      true {:count 3 :ways #{:seen :carried}} cost/torch-gap)
     (is (< 0 (mine-expect/stay-s (ctx true torches {})) 10) "the seen ore beside the body: its walk and dig")
     (is (< tunnel-s (mine-expect/stay-s (ctx false torches {}))) "none seen: the tunnel")
     (is (< tunnel-s (mine-expect/stay-s (ctx true torches {:count 3}))) "more owed than seen: the tunnel too")

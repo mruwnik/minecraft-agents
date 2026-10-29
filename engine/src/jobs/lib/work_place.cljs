@@ -70,10 +70,12 @@
   (when block
     (some-> (look/seen-blocks (:primitives c) {:names [block] :radius radius :max 1 :live? true}) first :pos (update-vals js/Math.floor))))
 
+(def dig-radius "How far a dig looks for its block when the call sets no :radius." 16)
+
 (defn dig-spot
   "Where a dig works: the place of c's args (spot), else the nearest seen block of :block within :radius."
   [c]
-  (or (spot c) (nearest-block c (:block (:args c)) (or (:radius (:args c)) 16))))
+  (or (spot c) (nearest-block c (:block (:args c)) (or (:radius (:args c)) dig-radius))))
 
 (defn ahead
   "The cell one block along :heading from the tunnel's :origin or the body's cell, nil without a heading."
