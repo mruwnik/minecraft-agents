@@ -6,6 +6,7 @@
             [jobs.lib.blocks :as blocks]
             [jobs.lib.checks :as checks]
             [jobs.lib.ore-pick :as ore-pick]
+            [jobs.lib.pace :as pace]
             [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]))
 
@@ -59,7 +60,8 @@
   (let [t (* s-per-ore (count (seen-cells c (opts-of c))))]
     {:uses {:job-time [0 t (* 3 t)]} :done [0 1 1]}))
 
-(defn ^:async round
+(defn ^:async step
+  "One go at the picking: :continue while a child waits on the world, else the ending."
   [c]
   (let [opts (opts-of c)
         c (update c :args merge (select-keys opts [:ignore-zones? :for-plan]))
@@ -73,3 +75,8 @@
         (if (seq picked)
           (ctx/end c :done nil {:picked picked :text (str "picked up " (count picked) " ore block" (when (> (count picked) 1) "s"))})
           (ctx/end c :nothing-possible :none-picked {:picked [] :text "pick-ores: no ore was dug"}))))))
+
+(defn ^:async round
+  "A reflex run (the :ore-seen trigger) never gives :continue: pace/steps! makes a waiting child another step."
+  [c]
+  (await (pace/steps! c #(step c))))
