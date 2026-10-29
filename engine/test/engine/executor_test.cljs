@@ -533,9 +533,23 @@
     (step 10 64 2 :gap) 10.2 1.0 0.0))
 
 (defn gap-jump-of
-  "The :jump control on the gap step of a course, at a pose."
+  "The :jump control on the gap step of a course, at a pose of a body running at the jump (vx 0.1)."
   [steps ps]
-  (:jump (controls-of (ex/tick p (state-at steps 2) ps))))
+  (:jump (controls-of (ex/tick p (state-at steps 2) (assoc ps :vx 0.1)))))
+
+(deftest gap-jump-from-rest-backs-up-first
+  (let [at-rest (controls-of (ex/tick p (state-at (gap-steps 1) 2) (pose 10.85 64 0.5 {:vx 0})))]
+    (is (true? (:back at-rest)))
+    (is (false? (:jump at-rest)))
+    (is (false? (:forward at-rest)))))
+
+(deftest gap-backing-goes-on-to-the-takeoff-cell-middle-then-runs-up
+  (let [steps (gap-steps 1)
+        state (assoc (state-at steps 2) :backing true)
+        tick (fn [x] (ex/tick p state (pose x 64 0.5 {:vx -0.05})))]
+    (is (true? (:back (controls-of (tick 10.7)))) "still short of the middle")
+    (is (true? (:forward (controls-of (tick 10.55)))) "at the middle: run up")
+    (is (false? (:back (controls-of (tick 10.55)))))))
 
 (deftest gap-jump-at-the-takeoff-edge
   (are [n x expected] (= expected (gap-jump-of (gap-steps n) (pose x 64 0.5)))

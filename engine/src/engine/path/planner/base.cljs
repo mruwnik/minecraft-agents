@@ -82,7 +82,7 @@
   #js [nil
        #js [#js [0 38] #js [0 114]]
        #js [#js [0 38] #js [0 114]]
-       #js [#js [4 38] #js [0 114]]])
+       #js [#js [0 38] #js [0 114]]])
 (defn gap-miss-share
   "The chance a level gap jump falls short by width then run-up (jumps, as GAP-MISS-JUMPS, under a Beta(1,1) prior), times costs.gapMiss"
   [jumps]

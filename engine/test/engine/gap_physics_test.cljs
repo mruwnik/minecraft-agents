@@ -31,6 +31,15 @@
   (are [n] (= :no-plan (walk-with hungry n nil))
     2 3))
 
+(deftest a-jump-begun-at-rest-near-the-edge-backs-up-for-a-run-up
+  (let [{:keys [done poses]} (sp/walk (course 1) [9 64 0] [16 64 0] [9.94 0.5])
+        xs (map :x poses)
+        jump-i (first (keep-indexed (fn [i p] (when (> (:y p) 64.1) i)) poses))
+        run (nth poses (- jump-i 2))]
+    (is (= :arrived (:status done)))
+    (is (< (apply min xs) 9.8) "stepped back from the edge first")
+    (is (> (:vx run) (* (:walk-accel ex/policy) 0.5)) "left the ground with speed")))
+
 (def canopy
   "Leaf platforms at y 94 (feet 95) either side of a 2-cell gap, the far one one block lower."
   [[0 94 0 9 94 4 "oak_leaves" {}] [12 93 0 20 93 4 "oak_leaves" {}]])

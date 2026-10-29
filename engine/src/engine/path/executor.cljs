@@ -503,6 +503,29 @@
                       (< past (:gap-past policy))))
         (jump? policy step pose dist))))
 
+(defn along-speed
+  "The body's horizontal speed in the direction of the step from prev."
+  [prev step {:keys [vx vz]}]
+  (+ (* (or vx 0) (Math/sign (- (:x step) (:x prev)))) (* (or vz 0) (Math/sign (- (:z step) (:z prev))))))
+
+(defn gap-backing?
+  "On the gap step i, on the takeoff cell, the body is within :from of the edge slower than one walking tick has made it (it
+  stands still there: a jump from rest has no run-up, and falls short): back up to the cell's middle, where the planner has the
+  walk begin, and keep backing (backing? from the last tick) until there."
+  [policy steps i backing? {:keys [on-ground collided] :as pose}]
+  (let [prev (nth steps (dec i)) step (nth steps i)
+        past (past-edge prev step pose)
+        accel (:walk-accel policy)
+        ;; ground-speed is 20 x input / (1 - keep) for a speed of 1: what a walking tick leaves of its push is keep
+        one-tick (* accel (- 1 (/ (* 20 accel) (constants/ground-speed accel 1))))]
+    (boolean (and on-ground (not collided)
+                  (< past (:gap-past policy))
+                  (> past (+ -0.5 (:still-xz policy)))
+                  (<= (Math/abs (- (:y pose) (stand-y prev))) (:arrive-y policy))
+                  (or backing?
+                      (and (<= (- (:from (gap-rule policy steps i))) past)
+                           (< (along-speed prev step pose) one-tick)))))))
+
 (def swim-sprint-moves #{:swim :swim-down :climb-down})
 
 (defn swim?
@@ -565,16 +588,18 @@
         prev (when (pos? i) (nth steps (dec i)))
         forward? (and moving?
                       (not (climb-hold? policy step pose)))
-        swim (swim? policy step pose)]
-    {:state (cond-> state moving? (assoc :yaw yaw'))
-     :controls {:forward forward? :back false :left false :right false
+        swim (swim? policy step pose)
+        backing? (and (= :gap (:move step)) (pos? i) (gap-backing? policy steps i (:backing state) pose))]
+    {:state (cond-> (dissoc state :backing) moving? (assoc :yaw yaw') backing? (assoc :backing true))
+     :controls {:forward (and forward? (not backing?)) :back backing? :left false :right false
                 :jump (cond
+                        backing? false
                         (= :gap (:move step)) (gap-jump? policy steps i pose dist)
                         swim false
                         (and (:in-water pose) (not (contains? climb-moves (:move step)))) (swim-jump? policy step pose)
                         :else (or (jump? policy step pose dist) (hop-now? policy prev step pose yaw' forward?)))
                 :sneak false
-                :sprint (sprint? policy steps i pose)}
+                :sprint (and (not backing?) (sprint? policy steps i pose))}
      :yaw yaw' :pitch (if swim (swim-pitch step pose dist) 0)}))
 
 (defn beside-start?
