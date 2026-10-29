@@ -13,6 +13,11 @@
   [c]
   (contains? (need/fetch-how c) :gather))
 
+(defn lit-way?
+  "Whether the job has torches to hang: carried, craftable on the spot, or fetchable through need/ (the call's ways allow a gather)."
+  [c]
+  (or (torch/lightable? (:primitives c)) (fetch-allows? c)))
+
 (defn no-stock-text [held e]
   (let [tried (get-in e [:data :tried])]
     (str "carries " (if (zero? held) "no torches" (str "only " held " torches"))

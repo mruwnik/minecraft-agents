@@ -445,11 +445,14 @@
         near {:x 3 :y 64 :z 0}
         far {:x 40 :y 64 :z 0}]
     (with-redefs [ready/at-status (fn [_ _] hall) ready/hall-status (fn [_ _] hall)]
-      (are [safe args expected] (= expected (first (safe (assoc (ctx-of (assoc tunnel :time st/noon)) :args args))))
-        mine/safe? {:at near} :ok
-        dig-for/safe? {:at near} :ok
-        strip-tunnel/safe? {:heading "east"} :ok
-        mine/safe? {:at far} :never
+      (are [safe args expected] (= expected (first (safe (assoc (ctx-of (assoc tunnel :time st/noon :inventory [{:name "torch" :count 4}])) :args args))))
+        mine/safe? {:at near :torches true :tunnel-length 20} :ok
+        dig-for/safe? {:at near :torches true :tunnel-length 20} :ok
+        strip-tunnel/safe? {:heading "east" :torches true} :ok
+        mine/safe? {:at near :torches false :tunnel-length 20} :never
+        dig-for/safe? {:at near :torches true :tunnel-length 20 :ways #{:seen}} :never
+        strip-tunnel/safe? {:heading "east" :torches false} :never
+        mine/safe? {:at far :torches true :tunnel-length 20} :never
         (ready/safe-at-by-night (constantly near)) {} :never))))
 
 (deftest an-unseen-cell-a-look-would-show-asks-for-a-look-at-it
@@ -835,6 +838,11 @@
   (are [to expected] (= expected (lit 0 15 #(kind (ready/safe-at-build (constantly to)) open-night)))
     {:x 15 :y 64 :z 0} :ok
     {:x 40 :y 64 :z 0} :later))
+
+(deftest the-dark-near-the-body-is-waived-only-for-a-job-that-has-torches-to-hang
+  (are [hangs? expected] (= expected (lit 0 15 #(kind (ready/dark-near-ok (constantly hangs?) (constantly {:x 15 :y 64 :z 0}) (ready/safe-at-by-night (constantly {:x 15 :y 64 :z 0}))) open-night)))
+    true :ok
+    false :later))
 
 (deftest a-light-block-around-the-body-is-placed-in-the-dark
   (are [item pos expected] (= expected (lit 0 15 #(bound place/safe? open-night {:item item :pos pos})))

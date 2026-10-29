@@ -165,13 +165,13 @@
           (is (= :again o))
           (is (= {:no-spot-at [[5 64 0]]} @mem) "a torch source would mark 13 cells round it lit"))))))
 
-(deftest no-torch-in-the-dark-stops-no-torches
+(deftest no-torch-in-the-dark-stops-before-the-first-dig
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p] :as env} (dark-world kit)
               r (await (run! env args))]
-          (is (= {:status :stopped :reason :no-torches} (select-keys r [:status :reason])))
+          (is (= {:status :stopped :reason :exposed} (select-keys r [:status :reason])) "the dark is waived only for a body that carries torches to hang")
           (is (empty? (bd/calls p "dig"))))))))
 
 (deftest the-segment-may-be-given-as-its-id
@@ -294,7 +294,7 @@
         (let [air (set (for [x (range -5 56) y [64 65 66] z [-1 0 1]] (str x "," y "," z)))
               blocks (-> (apply dissoc (tu/box -6 63 -2 56 67 2 "stone") air) (assoc "30,65,2" "spawner"))
               long-seg (assoc seg :to 50 :id (strip/seg-id (assoc seg :to 50)))
-              env (bd/setup-seeing {:self {:pos {:x -3 :y 64 :z 0}} :blocks blocks :drops drops :inventory kit})
+              env (bd/setup-seeing {:self {:pos {:x -3 :y 64 :z 0}} :blocks blocks :drops drops :inventory pick-torches})
               _ (swap! (.. (:p env) -world -state) merge {:light (into {} (for [x (range -5 56) y [64 65 66] z [-1 0 1 2]] [[x y z] [0 0]]))})
               r (await (run! env (assoc args :segment long-seg :spawner :skip)))]
           (is (= :done (:status r)))

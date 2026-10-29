@@ -9,6 +9,7 @@
             [jobs.gather.mine.cause :as cause]
             [jobs.gather.mine.targets :as targets :refer [rules-in step-cell within-own-zone]]
             [jobs.gather.mine.torches :as torches]
+            [jobs.lib.torch-stock :as stock]
             [jobs.gather.mine.tunnel :as tunnel :refer [passable open-start result-of walk-of back-on-line!]]
             [jobs.lib.waits :as waits]
             [jobs.lib.access :as access]
@@ -60,7 +61,7 @@
 
 (def target [:heading])
 
-(def safe? (ready/unless-outmatched (price/staying :long (ready/dark-near-ok work-place/ahead (ready/safe-at-or work-place/ahead ready/safe-if-lit true)))))
+(def safe? (ready/unless-outmatched (price/staying :long (ready/dark-near-ok #(and (:torches (:args %)) (stock/lit-way? %)) work-place/ahead (ready/safe-at-or work-place/ahead ready/safe-if-lit true)))))
 
 (def fit? (ready/fit-for :long))
 

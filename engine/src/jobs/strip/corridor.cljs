@@ -356,7 +356,7 @@
           d (fn [v] (if entry (u/dist entry (cell v)) 0))]
       (cell (if (< (d to) (d from)) to from)))))
 
-(def safe? (price/staying :long (ready/dark-near-ok place (ready/safe-at-by-night place))))
+(def safe? (price/staying :long (ready/dark-near-ok #(pos? (torch/torches-held (:primitives %))) place (ready/safe-at-by-night place))))
 
 (def fit? (ready/fit-for :long))
 

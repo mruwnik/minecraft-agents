@@ -15,6 +15,10 @@
 (defn shaft? [args] (contains? (ways args) :descend-shaft))
 (defn tunnel? [args] (and (contains? (ways args) :strip-tunnel) (pos? (:tunnel-length args))))
 (defn descends? [args] (or (stair? args) (shaft? args)))
+(defn hangs-torches?
+  "Whether the dig the args allow hangs torches: it tunnels or descends and :torches is on."
+  [args]
+  (boolean (and (:torches args) (or (tunnel? args) (descends? args)))))
 
 (defn stay-level?
   "A run that may tunnel but never go down keeps the level it starts at: seen ore only beside the tunnel, breaches sealed."
