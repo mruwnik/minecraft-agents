@@ -118,7 +118,7 @@
   "Seconds a second of the body's walk over cells it has not seen adds here (cost/unseen-share of way-counts and its
   kit): the planner's options.unknown.cell."
   [p]
-  (cost/unseen-share (way-counts p) (kit-of {:primitives p})))
+  (cost/unseen-share (way-counts p) (kit-of p nil)))
 
 (defn- see-depth-now
   "The deepest drop the body sees the landing floor of in the dark from a peek, with what it holds now."
@@ -282,14 +282,17 @@
                       :water (clj->js (into waters (map #(* factor (/ % dark-steps))) (range 1 dark-steps)))}})))
 
 (defn kit-of
-  "{:weapon :equipment :health :absorption :food} of the body: its best default weapon (jobs.lib.combat), the armour worn
-  and what the answers' prices read of it."
-  [c]
-  (let [p (:primitives c)
-        self (.self p)]
-    {:weapon (combat/best-weapon p combat/default-weapons)
-     :equipment (cost/equipment-of (.-equipment self))
-     :health (.-health self) :absorption (.-absorption self) :food (.-food self)}))
+  "{:weapon :equipment :health :absorption :food :respawn :at} of the body: its best default weapon (jobs.lib.combat),
+  the armour worn, what the answers' prices read of it, and where a death would wake (cost/respawn-of; view nil: no spawn
+  bed) and the walk back would lead (its feet to 16 blocks, the kit prices' memo key)."
+  ([c] (kit-of (:primitives c) (when (:view c) (ctx/view c))))
+  ([p view]
+   (let [self (.self p)]
+     {:weapon (combat/best-weapon p combat/default-weapons)
+      :equipment (cost/equipment-of (.-equipment self))
+      :health (.-health self) :absorption (.-absorption self) :food (.-food self)
+      :respawn (cost/respawn-of p view)
+      :at (update-vals (u/self-pos {:primitives p}) #(* 16 (js/Math.floor (/ % 16))))})))
 
 (declare with-tolls with-edges water-read-fn phantom-read-fn)
 

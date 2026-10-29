@@ -34,7 +34,7 @@
    ::deaths-per-hour {:default 1.3 :spec (a/num-in 0 nil)
                       :doc "Deaths an hour of play, every cause: the fresh-start trials of 2026-10-21/22 (Wicken r5, 8 deaths in 6h15; docs/fresh-start-design.md section 1)."}
    ::spawn-walk-blocks {:default 5000 :spec (a/num-in 0 nil)
-                        :doc "Blocks of the walk back priced for a body given with no :respawn (a kit priced for any place, jobs.lib.walk.world/kit-of; death-body always gives one online): a body dropped far out is 5000 or more from world spawn (docs/fresh-start-design.md section 4)."}
+                        :doc "Blocks of the walk back priced for a body given with no :respawn or no place (cost.risk/work-hp's placeless body): a body dropped far out is 5000 or more from world spawn (docs/fresh-start-design.md section 4)."}
    ::spawn-horizon-s {:default 1200 :spec (a/num-in 0 nil)
                       :doc "Seconds a respawn point is priced over (spawn-worth): one in-game day, after which the needs-bed errand comes again."}
    ::memory-ms {:default 7200000 :spec (a/num-in 1 nil)
@@ -66,11 +66,14 @@
   (* (settings/get settings ::seconds-per-level) (or (:level body) 0)))
 
 (defn walk-back-blocks
-  "Blocks from the body's :respawn to `at`; ::spawn-walk-blocks with none."
+  "Blocks from the body's :respawn to `at` (nil: the body's own :at, where a kit was read); ::spawn-walk-blocks with
+  either unknown."
   [body at]
-  (if-let [from (:respawn body)]
-    (js/Math.hypot (- (:x from) (:x at)) (- (:y from) (:y at)) (- (:z from) (:z at)))
-    (settings/get settings ::spawn-walk-blocks)))
+  (let [from (:respawn body)
+        at (or at (:at body))]
+    (if (and from at)
+      (js/Math.hypot (- (:x from) (:x at)) (- (:y from) (:y at)) (- (:z from) (:z at)))
+      (settings/get settings ::spawn-walk-blocks))))
 
 (defn kept?
   "Whether the walk back from the body's :respawn to `at` beats the despawn of what a death there leaves

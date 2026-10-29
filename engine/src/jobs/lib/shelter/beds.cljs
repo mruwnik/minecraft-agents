@@ -207,7 +207,7 @@
   [p view pos]
   {:from (mapv #(js/Math.floor %) ((juxt :x :y :z) (u/self-pos {:primitives p})))
    :mobs (into #{} (map #(.-id %)) (danger/hostiles-near-way p pos (settings/get price/settings ::price/way-radius) {}))
-   :kit (wworld/kit-of {:primitives p})
+   :kit (wworld/kit-of p view)
    :spawn (spawn-light/night-chance p (sh-sense/feet p))
    :in-ground (in-ground? p view)})
 

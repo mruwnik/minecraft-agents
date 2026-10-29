@@ -10,7 +10,8 @@
             [jobs.lib.cost.caught :as caught]
             [jobs.lib.cost.death :as death]
             [jobs.lib.cost.threat :as threat]
-            [jobs.lib.cost.ways :as ways]))
+            [jobs.lib.cost.ways :as ways]
+            [jobs.lib.walk.world :as wworld]))
 
 (defn round2 [x] (/ (js/Math.round (* 100 x)) 100))
 
@@ -447,6 +448,10 @@
     (is (= bed (:respawn (cost/death-body (body [100 70 -40]) bed-view))))
     (is (= {:x 100 :y 70 :z -40} (:respawn (cost/death-body (body [100 70 -40]) none))) "no bed: world spawn")
     (is (nil? (:respawn (cost/death-body (body nil) none))) "a spawn the game has not sent")))
+
+(deftest a-kit-prices-its-death-from-the-body-s-respawn-to-its-feet
+  (is (= 32 (death/walk-back-blocks (wworld/kit-of (fake/create {:self {:pos [40 64 3] :worldSpawn [0 64 0]}}) nil) nil))
+      "to 16 blocks"))
 
 (deftest a-hold-costs-its-seconds-and-hp-lost-and-a-way-out-its-hurt-and-death-risk
   (let [body {:respawn {:x 0 :y 64 :z 0} :level 0 :health 3}
