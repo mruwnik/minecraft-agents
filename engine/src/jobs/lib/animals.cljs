@@ -201,9 +201,11 @@
         (case r
           :there :there
           :partial :partial
-          (do (give-up! c k :unreachable)
-              (bump-row! c)
-              :blocked))))))
+          (if (near/risky-stay? c)
+            :partial
+            (do (give-up! c k :unreachable)
+                (bump-row! c)
+                :blocked)))))))
 
 ;; A click on an animal is a jobs.items.use child (the walk into reach and the click); the job reads :raw for what
 ;; only it knows (love, a lead) and books every other outcome with book-failed!.

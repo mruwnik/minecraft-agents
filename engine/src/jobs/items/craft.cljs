@@ -331,7 +331,7 @@
             (if handed? (give-up! c made :craft :unreachable) :again)
             (let [r (await (near/go-near! c table (reach) {:ways #{:walk :clear-seal}}))]
               (cond
-                (= :partial r) :continue
+                (or (= :partial r) (and (= :blocked r) (near/risky-stay? c))) :continue
                 (and (= :there r) (u/within? (u/self-pos c) table (reach))) :again
                 arg? (give-up! c made :walk :unreachable)
                 :else (do (ctx/update-mem! c #(-> % (update :unreachable-tables (fnil conj #{}) (crafting-table/cell-vec table)) (dissoc :table)))

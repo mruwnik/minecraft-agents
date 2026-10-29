@@ -270,7 +270,7 @@
                                                            (cost/dig-cost (u/seen-name (:primitives c) pos)))
                                             :worth (worth c 1))))]
     (cond
-      (and (= :blocked walked) (= :goal-dangerous (result/why (near/last-walk c)))) :risky
+      (and (= :blocked walked) (near/risky-stay? c)) :risky
       (and (not= :there walked) (u/within? (u/self-pos c) (cell-of pos) (reach))) :there
       :else walked)))
 

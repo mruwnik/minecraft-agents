@@ -324,7 +324,7 @@
   [c furnace owed?]
   (case (await (near/go-near! c furnace 3))
     :partial :continue
-    :blocked (leave-furnace! c furnace)
+    :blocked (if (near/risky-stay? c) :continue (leave-furnace! c furnace))
     (let [state (await (visit! c "read" {}))]
       (case (:status state)
         "ok" (if (and owed? (:ready-at (ctx/mem c)))

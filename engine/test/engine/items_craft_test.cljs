@@ -227,6 +227,21 @@
               (is (= 1 (count (calls p "craft"))) "one failed act, then only the walk until it arrives"))
             (finally (set! child/call-walk* orig))))))))
 
+(deftest craft-waits-for-a-table-whose-stay-is-too-dear-instead-of-giving-it-up-as-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walks (atom 0)
+              orig child/call-walk*]
+          (set! child/call-walk* (fn [_c _slot _args] (swap! walks inc)
+                                   (js/Promise.resolve (contract/ending :condition-failed :goal-dangerous {:why :goal-dangerous :arrived false}))))
+          (try
+            (let [[result p _ _] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks table-block} {:item "bread" :table table}))]
+              (is (< 1 @walks) "asked again in later rounds")
+              (is (not= :unreachable (:reason result)))
+              (is (= 1 (count (calls p "craft"))) "one failed act, then only the walk"))
+            (finally (set! child/call-walk* orig))))))))
+
 (deftest craft-with-a-full-inventory-that-make-room-cannot-free-stops
   (async done
     (tu/run-async done

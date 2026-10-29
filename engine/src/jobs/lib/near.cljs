@@ -11,6 +11,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.price :as price]
+            [jobs.lib.result :as result]
             [jobs.lib.util :as u]
             [engine.memory :as mem]
             [engine.path.executor :as executor]
@@ -246,6 +247,11 @@
   "The cell [x y z] the last go-near! walk that ended went to, nil before any."
   [c]
   (:near-goal (ctx/mem c)))
+
+(defn risky-stay?
+  "Whether the last go-near! was :blocked for the price of the stay there (in-range!, or go-to's goal-danger :end), not for want of a way."
+  [c]
+  (= :goal-dangerous (result/why (last-walk c))))
 
 (defn in-range!
   "go-near!'s answer for a body already within range of cell: :there, or :blocked when the stay there (stay-s, nil: a
