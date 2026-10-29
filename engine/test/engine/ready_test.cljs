@@ -489,7 +489,7 @@
     (let [coal (ctx true torches {:count 3 :block "coal_ore" :tunnel-length 1000})
           level (:level (mine-expect/run coal))]
       (is (< 20 level 1000) "the count still owed sets the tunnel: neither the default nor the length cap")
-      (is (= {:blocks (+ cost/torch-gap level) :carried 4} (mine-expect/torch-way coal)) "the spot's stretch and the tunnel's own blocks"))
+      (is (= {:blocks (+ cost/torch-gap level) :carried 4 :item "torch"} (mine-expect/torch-way coal)) "the spot's stretch and the tunnel's own blocks"))
     (is (< 0 (mine-expect/stay-s (ctx true torches {})) 10) "the seen ore beside the body: its walk and dig")
     (is (< tunnel-s (mine-expect/stay-s (ctx false torches {}))) "none seen: the tunnel")
     (is (< tunnel-s (mine-expect/stay-s (ctx true torches {:count 3}))) "more owed than seen: the tunnel too")
