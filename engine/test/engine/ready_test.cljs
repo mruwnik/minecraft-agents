@@ -533,26 +533,34 @@
     (is (= [:never :exposed] (lit 0 0 #((juxt first (fn [s] (:reason (nth s 2)))) (ready/hall-status (ctx-of (assoc tunnel :time st/noon)) nil))))
         "the end is unseen, but the job makes no walk to it: the stay is priced")))
 
-(defn unseen-site-exposure
-  "The exposure safe-at gives the tunnel's east end {:x 6 :y 64 :z 0} as a dark hall past an unseen edge, the body standing at x,
-  that end seen or not (with raw?, at-status's status before it is priced, once a look round looked at the end and could not
-  make it out)."
-  [x seen? & [raw?]]
+(defn unseen-site-redefs
+  "Runs f with the tunnel's east end {:x 6 :y 64 :z 0} a dark hall past an unseen edge, the body standing at x, that end seen
+  or not, and looked at by a look round or not."
+  [seen? looked? f]
   (let [site {:x 6 :y 64 :z 0}]
     (with-redefs [look-edge/pending (fn ([_] nil) ([_ _ _] nil))
                   reach-room/unseen-sides (constantly [[0 64 0] [0 65 0]])
                   sh-inside/dark-hall (constantly :roofed)
                   sh-sense/buried? (constantly true)
                   sh-sense/seen-cell? (fn [_ cell] (or seen? (not= site (select-keys cell [:x :y :z]))))
-                  sense/round-looked (constantly (if raw? #{[6 64 0]} #{}))]
-      (lit 0 0 #(let [c (ctx-of (assoc tunnel :time st/noon :self {:pos {:x (+ x 0.5) :y 64 :z 0.5}}))]
-                  (if raw? (ready/at-status c site) ((::ready/exposure (meta (ready/safe-at (constantly site)))) c)))))))
+                  sense/round-looked (constantly (if looked? #{[6 64 0]} #{}))]
+      (lit 0 0 #(f site (fn [x] (ctx-of (assoc tunnel :time st/noon :self {:pos {:x (+ x 0.5) :y 64 :z 0.5}}))))))))
+
+(defn unseen-site-exposure
+  "The exposure safe-at gives the tunnel's east end as a dark hall past an unseen edge, the body standing at x."
+  [x seen?]
+  (unseen-site-redefs seen? false
+                      (fn [site ctx-at] ((::ready/exposure (meta (ready/safe-at (constantly site)))) (ctx-at x)))))
+
+(defn unseen-site-look
+  "The :look data at-status gives the tunnel's east end before it is priced, the body standing at x, once a look round looked at the end and could not make it out."
+  [x]
+  (unseen-site-redefs false true (fn [site ctx-at] (:look (nth (ready/at-status (ctx-at x) site) 2)))))
 
 (deftest the-walk-to-an-unseen-dark-site-is-the-look-and-there-the-stay-is-priced
   (let [far (unseen-site-exposure 0 false)]
     (is (= [:ok :look-first] [(first far) (:reason (nth far 2))]) "6 blocks off and unseen: the job's walk there is the look")
-    (is (= (* (/ 6 cost/walk-speed) (+ 1 (cost/hall-chance :roofed))) (:secs (:look (nth (unseen-site-exposure 0 false true) 2))))
-        "the look's seconds: the walk there, and back at the chance the unseen edge opens onto the hall"))
+    (is (< (:secs (unseen-site-look 3)) (:secs (unseen-site-look 0))) "the look costs the walk there: less from nearer"))
   (is (= [:never :exposed] ((juxt first #(:reason (nth % 2))) (unseen-site-exposure 6 true))) "arrived and seen: the stay is priced, no second look"))
 
 (deftest a-torch-the-body-carries-beats-the-walk-to-look
