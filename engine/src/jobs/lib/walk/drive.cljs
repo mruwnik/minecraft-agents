@@ -75,6 +75,16 @@
     {:best (if (or improved? (nil? best)) (or left best) best)
      :stale (inc (if improved? 0 stale))}))
 
+(defn plan-left
+  "Blocks the plan's steps still lead on from step k, plus the straight line from their end to the goal cell to: the way
+  left by the route the body was on, which shrinks along a way that must first lead off (a stair down) and grows along an
+  edge whose every way off proves missing."
+  [steps k to]
+  (let [rest-steps (subvec steps (min (count steps) (max 0 (dec k))))
+        end (peek steps)]
+    (+ (walk/path-length rest-steps)
+       (if (and end to) (js/Math.hypot (- (:px end) (to 0)) (- (:py end) (to 1)) (- (:pz end) (to 2))) 0))))
+
 (defn edge-points
   "The points a look over an edge aims at: the ground round self ({:x :z}) at 3 and 7 blocks in eight directions at height y,
   those whose cell or a neighbour is still unknown (unknown? takes [x y z]); ground already seen is not looked at again."
@@ -153,7 +163,7 @@
   a mob in its way (:mob: wait, plan round it), or a plan cut short of what it does not know yet (:cut-rest, the steps
   after the cut: walked to its end, look at them, then plan again). A replan that proves the goal cut off or enclosed ends the call with that
   no-walk; so does one the caller refused (plan-fn's {:refused true}, with its :stop) for any why but :refresh, whose old
-  plan nothing speaks against. A plan short of the goal (not found, or found over floors the body has not seen: the unseen takes the worse case) whose walk the caller's (:walk-spent? c) says has cost more than the goal is worth (go-to's tour price) ends the call at its next re-plan or cut instead, the done map {:status :tour-spent :at}: two ways whose cuts or budget-cut searches send the body back and forth have no other end. At most max-watch-replans; past that the plan is walked unwatched (a kept plan counts as a replan, and is watched; a re-plan at a cut does not, each walks on to a new cut). A replan with :learned (a gate or the look-ahead gave an unseen cell up or found it solid) is not counted against it, up to free-learned of them: a void edge teaches one column per replan. The max-learned-th learned replan since the body last got a block nearer :to (learned-progress), or one past the replan cap, ends the call instead: the done map with :learn-spent and the cells learned.
+  plan nothing speaks against. A plan short of the goal (not found, or found over floors the body has not seen: the unseen takes the worse case) whose walk the caller's (:walk-spent? c) says has cost more than the goal is worth (go-to's tour price) ends the call at its next re-plan or cut instead, the done map {:status :tour-spent :at}: two ways whose cuts or budget-cut searches send the body back and forth have no other end. At most max-watch-replans; past that the plan is walked unwatched (a kept plan counts as a replan, and is watched; a re-plan at a cut does not, each walks on to a new cut). A replan with :learned (a gate or the look-ahead gave an unseen cell up or found it solid) is not counted against it, up to free-learned of them: a void edge teaches one column per replan. The max-learned-th learned replan since the body last got a block nearer :to (learned-progress), or one past the replan cap, ends the call instead: the done map with :learn-spent, :cells the first 6 cells learned, :learned-cells all of them and :plan-left (plan-left).
   opts: :plan-fn (fn [walls]) -> a plan-walk! result (or a promise of one: plan-walk!) from where the body stands now, the
   cells {:x :y :z} read as walls;
   :walk-fn (fn [steps watch]) -> [done ms] (walk! or jobs.lib.pass/walk!); :to the goal cell; :policy for no-walk;
@@ -231,7 +241,7 @@
           (finish (cond-> {:status :tour-spent :at (:at done)} (:step done) (assoc :step (:step done))) plan walked')
 
           (and (= :replan (:status done)) (:learned done) (or (>= (:stale (learned-progress @track (:at done) to)) (wwatch/max-learned)) (>= spent wwatch/max-watch-replans)))
-          (finish (assoc done :learn-spent true :cells (vec (take 6 (concat (:cells done) (mapcat first @learned))))) plan walked')
+          (finish (assoc done :learn-spent true :cells (vec (take 6 (concat (:cells done) (mapcat first @learned)))) :learned-cells (into (vec (:cells done)) (mapcat first) @learned) :plan-left (plan-left steps k to)) plan walked')
 
           (and (= :replan (:status done)) (< spent wwatch/max-watch-replans))
           (let [_ (wsight/note-missed! (:pw plan) done)

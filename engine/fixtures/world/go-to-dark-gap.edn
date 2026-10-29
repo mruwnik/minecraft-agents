@@ -1,7 +1,7 @@
 ;; Cards 2ab07550, cd3e838f: in the dark a go-to over a gap whose floor it cannot see must end with a named reason in
 ;; seconds, not pace the gap's edge for minutes replanning. A 5-wide, 22-deep gap cuts the dark deck from side to side (no way
 ;; round, too wide to jump), the goal lies beyond it, the body has 11.5 hp (a 22-block fall is lethal) and no torch.
-;; Should-fail (not arrived, a named reason): the walk to the far side. Should-succeed: a 1-wide ledge over the same drop (a slip is a lethal fall).
+;; Should-fail (not arrived, a named reason): the walk to the far side, also carrying torches. Should-succeed: a 1-wide ledge over the same drop (a slip is a lethal fall).
 {:defaults
  {:tags [:movement :go-to :unknown :dark]
   :time :any
@@ -21,4 +21,11 @@
    :act [[:rcon "damage $BODY 8.5 minecraft:generic"]
          [:job (jobs.movement.go-to {:pos #at [40 0 16] :range 1 :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable :why :unseen-floors :cells [:any]}} :within-s 40 :of-job true}]
+   :after [[:body-near [10.5 0 16.5] 16]]}
+  {:name "dark-gap-with-torches-ends-not-arrived-without-pacing-the-rim"
+   ;; ceef2a16: walks along the rim that learn columns no nearer the goal are failed tries, not a look round and the next stretch lit
+   :body {:at [2.5 0 16.5] :yaw 270 :settle-s 3 :inventory [["torch" 16]]}
+   :act [[:rcon "damage $BODY 8.5 minecraft:generic"]
+         [:job (jobs.movement.go-to {:pos #at [40 0 16] :range 1 :ways #{:walk}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable}} :within-s 60 :of-job true}]
    :after [[:body-near [10.5 0 16.5] 16]]}]}

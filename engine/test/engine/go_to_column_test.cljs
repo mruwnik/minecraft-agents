@@ -445,14 +445,17 @@
 (deftest a-column-over-a-void-past-the-rim-ends-once-its-tour-is-spent
   ;; the land ends at x 40: the column at x 44 is seen open far below the rim, its ground never in view; every plan round
   ;; the rim rests on floors not seen, priced worth trying (a floor not there is mostly a step lower), so the walk along it
-  ;; is a tour, and it ends once that tour costs more than a goal worth 50 s pays for, not when the land runs out (379 blocks)
+  ;; is a tour, and it ends once that tour costs more than a goal worth 50 s pays for, or once walks that learn only columns
+  ;; no nearer the goal are tries not worth another (:unseen-floors), not when the land runs out (379 blocks)
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out]} (await (go! {:floor [-30 -10 40 10] :light [15 0] :self {:pos {:x 34 :y 64 :z 0}}}
                                         {:pos {:x 44 :z 0} :range 2 :worth 50 :settings {:jobs.movement.go-to.tuning/goal-danger :end}}))]
-          (is (= {:arrived false :why :explore-spent} (select-keys @out [:arrived :why])) (pr-str @out))
-          (is (< (:explored @out) 150) "ended by the tour's price, not by the land's end (379)"))))))
+          (is (false? (:arrived @out)) (pr-str @out))
+          (is (#{:explore-spent :unseen-floors} (:why @out)) (pr-str @out))
+          (is (< (:explored @out 0) 150) "not by the land's end (379)")
+          (is (> (first (:at @out)) -30) "short of the land's far end"))))))
 
 ;; the ravine past the rim at x 40 is 24 deep, its floor out of sight; the body has seen the void round the land and the
 ;; air over the ravine but by the column; a 2-wide ramp down its west wall leads 24 blocks away from the column (x 44 z 0)

@@ -389,9 +389,21 @@
                                         :text (str "no way found (" (name reason) "), planning again (try " tries " of " (max-blocked) ")")})))
 
 (defn learned-round?
-  "A round that ran out of re-plans while each taught the planner an unseen cell (a void edge, a floor it could not light): the next plan knows more."
+  "A round that ran out of re-plans while each taught the planner an unseen cell (a void edge, a floor it could not light)."
   [{:keys [status learned]}]
   (and (= :replan status) (boolean learned)))
+
+(defn learned-near?
+  "Whether what the round learned is of use to the next plan: a cell it learned (:learned-cells, else :cells) lies a block
+  nearer the goal pos than the body has been (best). Columns learned along an edge no nearer teach it nothing it can use."
+  [{:keys [cells learned-cells]} pos best]
+  (boolean (some #(< (u/dist (zipmap [:x :y :z] %) pos) (dec best)) (or learned-cells cells))))
+
+(defn learn-again?
+  "Whether a failed try after tries in a row (a round that learned nothing near) is tried again: within the call's tries
+  and while another is worth its price (cost/try-again? :walk)."
+  [c tries]
+  (and (< tries (max-blocked)) (< tries (ctx/own-tries c)) (pos? (ctx/tries-left c)) (cost/try-again? c :walk {:fails tries})))
 
 (defn surface-descent
   "The price (s per block) of a plan step down for this round, or nil: the body is not under ground and the goal (a cell,
@@ -463,6 +475,22 @@
     (if (and aimed-pos (not= (:y aimed-pos) (:y pos)))
       (do (ctx/update-mem! c update :column-reaims (fnil inc 0)) true)
       (boolean (await (look/survey! c :near))))))
+
+(defn ^:async learn-spent!
+  "A walk spent its learned replans. One that got a block nearer the goal than the body has been, whether straight
+  (left, best) or along its route (drive/plan-left, mem :plan-best), or learned ground nearer it (learned-near?), looks
+  again (look-or-re-aim-column!); else the round is a failed try (ctx/book-try!, mem :blocked) that looks again while
+  learn-again?. :again, else the give-up or escalation :unseen-floors."
+  [c pos walked status left best]
+  (let [plan-left (:plan-left walked ##Inf)
+        plan-best (:plan-best (ctx/mem c) ##Inf)
+        taught? (or (< left (dec best)) (< plan-left (dec plan-best)) (learned-near? walked pos best))
+        tries (if taught? 0 (inc (:blocked (ctx/mem c) 0)))]
+    (when-not taught? (ctx/book-try! c 'jobs.movement.go-to :unseen-floors))
+    (ctx/update-mem! c assoc :blocked tries :best (if (< left (dec best)) left best) :plan-best (min plan-left plan-best))
+    (if (and (or taught? (learn-again? c tries)) (await (look-or-re-aim-column! c pos)))
+      (do (when-not taught? (retrying! c {:reason :unseen-floors} tries)) :again)
+      (await (esc/give-up-or-escalate! c pos (max-blocked) status (cond-> {:status :no-path :reason :unseen-floors :cells (:cells walked)} (none-held? c) (assoc :torches :none)))))))
 
 (defn ^:async walk! [c0 pos range doors]
   (let [way (own-way c0 pos (dive-floor! c0 pos))
@@ -536,11 +564,8 @@
           (:out-of-time walked)
           (if (search-spent? c) (end/give-up! c pos {:status :no-path :reason :search-spent}) :again)
 
-          (and (:learn-spent walked) (await (look-or-re-aim-column! c pos)))
-          :again
-
           (:learn-spent walked)
-          (await (esc/give-up-or-escalate! c pos (max-blocked) status (cond-> {:status :no-path :reason :unseen-floors :cells (:cells walked)} (none-held? c) (assoc :torches :none))))
+          (await (learn-spent! c pos walked status left best))
 
           (and (= "stair" status) (:risk (:why walked)))
           (reprice/end c (:risk (:why walked)))
@@ -634,7 +659,8 @@
                 result (cond-> result
                          looped? (assoc :status :no-path :reason (if (escape/walk-enclosed? c) :start-enclosed :no-progress))
                          (= :budget (some-> (:reason result) keyword)) (assoc :goal-left left))
-                progress? (and (not looped?) (or (< left (dec best)) explored? nearer? (learned-round? result)))
+                learned? (learned-round? result)
+                progress? (and (not looped?) (or (< left (dec best)) explored? nearer? (and learned? (learned-near? result pos best))))
                 edge-start? (and (not progress?) (:unknown c) (= :budget (some-> (:reason result) keyword)) (not (:edge-mode (ctx/mem c))))
                 ;; land closed by the rock guess is not searched to its end: a call that cannot dig tours its rim first
                 rock-start? (and (not progress?) (not edge-start?) (= :exhausted (some-> (:reason result) keyword)) (not (:rock-edge (ctx/mem c)))
@@ -657,7 +683,7 @@
               (do (ctx/update-mem! c assoc :edge-mode true)
                   (ctx/emit! c :go-to.edge-tour :info {:text "the search over unseen land ran out of nodes: touring to the edge of what the body has seen" :at (mapv #(js/Math.floor (% from)) [:x :y :z])})))
             (if (or unstuck? edge-start?
-                    (and (or progress? (and (< tries (max-blocked)) (< tries (ctx/own-tries c)) (pos? (ctx/tries-left c)))) (not (#{:goal-enclosed :goal-cut-off :goal-on-magma} (:reason result)))))
+                    (and (or progress? (if learned? (learn-again? c tries) (and (< tries (max-blocked)) (< tries (ctx/own-tries c)) (pos? (ctx/tries-left c))))) (not (#{:goal-enclosed :goal-cut-off :goal-on-magma} (:reason result)))))
               (do (when (and (pos? tries) (not unstuck?)) (retrying! c result tries))
                   :again)
               (let [unloaded? (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))

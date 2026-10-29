@@ -1242,3 +1242,17 @@
                                                        {:pos [140 64 8] :range 1 :ways #{:walk :clear-seal} :unknown true} lit-and-looking)))]
           (is (= {:arrived true} (select-keys out [:arrived])) (str (pr-str out) " at " (:pos (fake/self p))))
           (is (= [] @spent) "no walk ends learn-spent"))))))
+
+;; a floor ending in the dark short of the goal, the void past it unseen: each walk learns its edge column by column.
+;; A walk that learned nothing nearer the goal than the body has been is a failed try, so the call gives up on the
+;; unseen floors (old: it looked round and walked the next stretch of edge every round, lighting it until the torches ran out)
+(deftest go-to-past-a-dark-edge-gives-up-once-the-columns-it-learns-come-no-nearer
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen]} (await (run-go-to {:self {:pos {:x 39.5 :y 64 :z -7.5}} :blocks (box -30 63 -10 40 63 10 "stone") :radius 8
+                                                    :inventory [{:name "torch" :count 16}]}
+                                                   {:pos [40 64 -24] :range 1 :unknown true}
+                                                   (looking {:light-default [0 0]})))]
+          (is (= {:arrived false :why :unseen-floors} (select-keys out [:arrived :why])) (pr-str out))
+          (is (seq (filter #(and (= :go-to.retrying (:kind %)) (= :unseen-floors (:reason %))) seen)) "each such walk is a try, and says so"))))))

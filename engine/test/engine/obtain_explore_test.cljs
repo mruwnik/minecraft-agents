@@ -4,7 +4,6 @@
             [engine.core :as core]
             [engine.fetch-test :as f]
             [engine.obtain-iron-test :refer [ore-world obtain!]]
-            [engine.core :as core]
             [engine.fake :as fake]
             [engine.settings :as settings]
             [engine.test-util :as tu]
@@ -161,8 +160,6 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (f/start (ore-world (rock-room 5) [{:name "stone_pickaxe" :count 1} {:name "torch" :count 16}]) [f/own-zone] (assoc f/sight-opts :radius 8))]
-          ;; not under test: after the leave, go-to's walks to a new stair spot over this floorless world learn void columns round after round; only :job-time ends that, and this clock stands still within a tick
-          (add-watch (:seen s) :cut (fn [_ _ _ seen] (when (= :mine.left-zone (:kind (peek seen))) (core/cancel! (:eng s) "j1"))))
           (with-redefs [plan/search-way (fn [_ _] {:way :tunnel :y 68 :cost 1})]
             (await (obtain! s {:item "raw_iron" :count 1 :ways #{:gather}} 100)))
           (let [mine #(re-find #"^j1/gather-raw_iron" (str (:job %)))
