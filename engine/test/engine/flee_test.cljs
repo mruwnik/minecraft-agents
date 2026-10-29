@@ -105,6 +105,11 @@
     (is (= :still (respond.state/stopped-chasing (assoc chasing :still-ms 6000) now now lost-ms)) "a melee mob that stands still is not chasing")
     (is (nil? (respond.state/stopped-chasing (assoc chasing :mob "skeleton" :ranged? true :distance 10 :still-ms 60000) now now lost-ms)) "a shooter stands still and shoots")))
 
+(deftest a-chaser-that-stopped-is-logged-with-how-long-it-chased-and-whether-the-body-moved
+  (let [ch {:id 4 :mob "zombie" :since 2000 :ended :far}]
+    (is (= {:mob "zombie" :id 4 :ended :far :s 3.5 :moved 0 :acted? false} (respond.state/stop-fields ch #{} 5500 0)) "a mob that left range with the body standing")
+    (is (= [:died true 12] ((juxt :ended :acted? :moved) (respond.state/stop-fields (assoc ch :ended :gone) #{4} 5500 12))) "a dead mob, the body having moved")))
+
 (deftest a-low-body-keeps-fleeing-a-ranged-mob-that-lost-its-line-while-near
   (let [now 10000 lost-ms 4000
         witch {:mob "witch" :distance 6 :in-line? false :way? true :ranged? true}]

@@ -224,7 +224,7 @@
 (defn chaser-entry
   "A chaser's flight entry: its id, uuid, name and place (threats/place-of: exact only when seen)."
   [p e now]
-  (merge {:id (.-id e) :uuid (.-uuid e) :mob (.-name e) :seen-t now} (threats/place-of p e)))
+  (merge {:id (.-id e) :uuid (.-uuid e) :mob (.-name e) :seen-t now :since now} (threats/place-of p e)))
 
 (defn look
   "What look! makes of the hostiles from the flight's memory mem, written nowhere: {:on the chasers still on, as JS
@@ -242,7 +242,8 @@
         reached (set (:reached mem))
         joining (remove #(dead (.-id %)) (concat (danger-q/dangers p radius {:ranged-radius ranged-radius} {:sight? false})
                                                  (filter #(reached (.-id %)) live)))
-        chasers (merge (:chasers mem) (into {} (map (juxt #(.-id %) #(chaser-entry p % now))) joining))
+        chasers (merge-with #(assoc %2 :since (:since %1 (:since %2)))
+                            (:chasers mem) (into {} (map (juxt #(.-id %) #(chaser-entry p % now))) joining))
         looked (set (:looked-back mem))
         stills (into {} (keep (fn [e] (when (and (sensed-now? e) (true? (.-visible e)))
                                         (let [pos (u/pos-of (.-pos e)) old (get (:still mem) (.-id e))]
@@ -267,13 +268,26 @@
                   (update :looked-back (fn [ids] (vec (remove (set (keep (fn [{:keys [id e]}] (when (sensed-now? e) id)) judged)) ids))))
                   (update :fled (fnil into []) (map (fn [{:keys [ch why]}] (assoc ch :ended why))) off))}))
 
+(defn stop-fields
+  "Pure: the hostile.stopped fields of a chaser ch that stopped chasing (its :ended why, :since its onset) at now, the body
+  moved `moved` blocks since the flight began: :ended :died when the mob is among the body's dead, else why (stopped-chasing's)."
+  [ch dead now moved]
+  {:mob (:mob ch) :id (:id ch) :ended (if (contains? dead (:id ch)) :died (:ended ch))
+   :s (/ (js/Math.round (/ (- now (:since ch now)) 100)) 10) :moved moved :acted? (>= moved 1)})
+
 (defn look!
   "Update the flight's chasers (job memory :chasers, by id): the real dangers within :radius (ranged :ranged-radius)
-  join or are seen afresh; one that stopped chasing (stopped-chasing) moves to :fled with :ended why. The chasers
-  still on, as JS entities, nearest first. A mob that hurt the body in its refuge (:reached) has a way whatever the map says."
+  join or are seen afresh; one that stopped chasing (stopped-chasing) moves to :fled with :ended why, logged once as
+  info hostile.stopped (stop-fields). The chasers still on, as JS entities, nearest first. A mob that hurt the body in its
+  refuge (:reached) has a way whatever the map says."
   [c]
-  (let [{:keys [on] write :update} (look c (ctx/mem c))]
+  (let [{:keys [on] write :update} (look c (ctx/mem c))
+        before (count (:fled (ctx/mem c)))]
     (ctx/update-mem! c write)
+    (let [{:keys [fled dead flight-from]} (ctx/mem c)
+          moved (if flight-from (js/Math.round (u/dist flight-from (u/self-pos c))) 0)]
+      (doseq [ch (drop before fled)]
+        (ctx/emit! c :hostile.stopped :info (stop-fields ch (set dead) (ctx/now c) moved))))
     on))
 
 (defn ^:async look-back!
