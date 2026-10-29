@@ -379,6 +379,7 @@
   (let [{:keys [min max]} (pen-read/barrier-box cells)
         ys (map (comp second :pos) cells)
         mid (fn [a b] (/ (+ a b 1) 2))
+        ;; cleanup's default fit-armed wants a weapon, which tidying a pen does not
         r (await (ctx/call c :tidy 'jobs.access.cleanup
                            (merge (select-keys (:args c) [:ignore-zones?])
                                   {:of :all :checks {:fit? '(healthy)}

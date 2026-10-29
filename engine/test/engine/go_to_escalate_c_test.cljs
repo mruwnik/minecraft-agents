@@ -841,8 +841,9 @@
             (is (> (second (feet p)) 59) (str floor " feet " (feet p)))))))))
 
 (deftest every-escalation-child-runs-hurt
-  (doseq [e [{:step :pillar :height 2} {:step :stair :heading :east :steps 2} {:step :clear-path :heading :east} {:step :approach :pos [1 64 0]}]]
-    (is (= '(always) (get-in (second (esc/escalation-job e nil false false false)) [:checks :fit?])) (str (:step e)))))
+  (doseq [e [{:step :pillar :height 2} {:step :stair :heading :east :steps 2} {:step :clear-path :heading :east}]]
+    (is (= '(always) (get-in (second (esc/escalation-job e nil false false false)) [:checks :fit?])) (str (:step e))))
+  (is (nil? (:checks (second (esc/escalation-job {:step :approach :pos [1 64 0]} nil false false false)))) "go-to's own fit is ready/ok"))
 
 ;; ------------------------------------------------------------------ ore walls (card f14e177c)
 (def ore-pit

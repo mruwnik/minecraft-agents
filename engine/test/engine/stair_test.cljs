@@ -1636,3 +1636,13 @@
           (is (= :done (:status @out)))
           (is (= "cobblestone" (block-at p lava)))
           (is (= 1 (count (events-of s :stair.sealed)))))))))
+
+(deftest the-bridge-child-keeps-the-callers-checks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [seen (atom nil)]
+          (with-redefs [ctx/mem (fn [_] {:run {:length 2 :item "cobblestone"}})
+                        ctx/call (fn ^:async f [_ _ _ args] (reset! seen args) :continue)]
+            (await (sstep/run-bridge! {:args {:heading :east :dir :up} :primitives (tu/fake {})})))
+          (is (not (contains? @seen :checks)) (pr-str @seen)))))))

@@ -384,7 +384,7 @@
   (let [{:keys [run origin at-step]} (ctx/mem c)
         {:keys [dir heading ignore-zones?]} (:args c)
         e (await (ctx/call c :run 'jobs.access.bridge {:heading heading :length (:length run) :item (:item run) :ways (need/call-ways c)
-                                                      :ignore-zones? ignore-zones? :checks {:fit? '(always)}}))]
+                                                      :ignore-zones? ignore-zones?}))]
     (if (= :continue e)
       :continue
       (let [feet (reach/standing-vec (:primitives c))]

@@ -61,7 +61,8 @@
   "[job args] of the child that carries out escalation e (jobs.lib.escape/choose); tag marks the holes it digs;
   by-hand? digs what no carried tool clears bare-handed;
   fetch? lets a stair fetch a pickaxe (fetch-tool?). The body's own stair cut again (:own) is marked by no tag: it
-  stays open."
+  stays open. The pillar, stair and clear-path children run with :fit? always (and the pillar :safe? always): go-to's
+  own fit is ready/ok, so with their ready/fit defaults they would hold on low health and trap the body they free."
   [{:keys [step] :as e} tag ignore-zones? by-hand? fetch?]
   (case step
     :pillar ['jobs.access.pillar (cond-> {:height (:height e) :ways #{:carried} :ignore-zones? ignore-zones? :checks {:safe? '(always) :fit? '(always)}}
@@ -69,7 +70,7 @@
     :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :not-protected? true :checks {:fit? '(always)} :accept #{:falling-block} :ways (ways-for fetch?) :settings (cond-> {:jobs.lib.trip/spent-uses 0} (:own-cut e) (assoc :jobs.lib.access/spare-own-builds false)) :ignore-zones? ignore-zones? :need-drop (not by-hand?) :leave-drops true :collect (boolean (:own-cut e))}]
     :clear-path ['jobs.access.clear-path (cond-> {:checks {:fit? '(always)} :heading (:heading e) :not-protected? true :ignore-zones? ignore-zones? :need-drop (not by-hand?) :ways #{:carried :craft}}
                                            (:own-cut e) (assoc :settings {:jobs.lib.access/spare-own-builds false} :close-behind true))]
-    :approach ['jobs.movement.go-to {:checks {:fit? '(always)} :pos (zipmap [:x :y :z] (:pos e)) :range 0 :ways #{:walk :clear-seal}}]
+    :approach ['jobs.movement.go-to {:pos (zipmap [:x :y :z] (:pos e)) :range 0 :ways #{:walk :clear-seal}}]
     :fill-gap ['jobs.blocks.place {:pos (zipmap [:x :y :z] (:cell e)) :use {:blocks [(:item e)]} :ways #{:carried} :ignore-zones? ignore-zones?}]))
 
 (defn succeeded? [{:keys [step]} e]
