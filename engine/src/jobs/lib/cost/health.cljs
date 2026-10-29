@@ -6,7 +6,7 @@
   drown-prices: the planner's drownPrices, the cumulative price of each hp of drowning at the health it leaves.
   damage-budget: the hp a walk may spend on certain damage (drops over 3 blocks, plants that hurt on touch): the health
   and absorption over the floor (:min-health, default 12) less a margin of 1, at most :max-damage; less when the food
-  would put the hungry line (jobs.lib.foods/hungry?) over the body after the damage; 0 while burning, poisoned or withered,
+  would put the hungry line (jobs.lib.foods/hungry?) over a body not yet hungry after the damage; 0 while burning, poisoned or withered,
   or with a health or absorption that is not a number.
   survivable-budget: the hp a walk that must arrive may spend: all but 1 (the food cap and the margin dropped), still under
   a caller's :max-damage, and just the damage-budget when the caller set a :min-health (a floor that is never crossed)."
@@ -122,9 +122,9 @@
 
 (defn food-cap
   "The most hp a body with food and health can lose and still not be hungry, less the margin; nil when the food is
-  at or over top-up-food (the line stops rising there)."
+  at or over top-up-food (the line stops rising there) or the body is hungry already (no damage makes it so)."
   [food health]
-  (when (< food foods/top-up-food)
+  (when (and (< food foods/top-up-food) (not (foods/hungry? food health {})))
     (let [fine (count (take-while #(not (foods/hungry? food (- health %) {})) (range 0 21)))]
       (max 0 (- fine 1 (margin))))))
 

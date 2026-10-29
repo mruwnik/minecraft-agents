@@ -53,7 +53,8 @@
     18 7
     12 4
     8 0
-    5 0))
+    ;; (hungry already at 5: no damage makes it so)
+    5 7))
 
 (deftest the-walk-policy-carries-the-budget-weight-and-the-longest-drop-it-survives
   (let [policy (fn [self args] (wworld/body-policy {:primitives (tu/fake {:self self}) :args args}))]
