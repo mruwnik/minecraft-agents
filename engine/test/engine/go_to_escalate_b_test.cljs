@@ -756,6 +756,8 @@
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [14 62 12] :range 0})))]
           (core/submit! eng '(recording-parent) {})
           (await (gt/tick-out! eng 400 #(do (swap! clock + 500) (step))))
+          (let [cells (map :cell (events-of seen :go-to.dug-own-build))]
+            (is (= (count cells) (count (set cells))) "no own cell is cut twice in one call, restored in between"))
           (is (= [:dig-route :stair :approach] (map :step (events-of seen :go-to.escalated)))
               "the dig route is not chosen again once the looks showed glowstone")
           (is (= [false :unreachable] ((juxt :arrived :reason) @out)) "the call ends, a failure, with its reason")
