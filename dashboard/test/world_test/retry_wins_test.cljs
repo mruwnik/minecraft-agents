@@ -24,3 +24,15 @@
 (deftest a-kind-with-no-retry-is-priced-by-its-tries-on-the-uniform-prior
   (is (= {:craft {:win 1 :fail 1 :try-s 2 :won 0 :retries 0 :calls 0}}
          (r/report (keep r/scan-line [(action "j1/craft" :started 1000 nil) (action "j1/craft" :done 3000 "crafted")])))))
+
+(deftest a-kind-with-too-few-calls-takes-the-pooled-spread-of-the-fitted-kinds
+  (let [fails (fn [job n] (concat [(walk job 0 false)] (map #(walk job (* 1000 %) false) (range 1 n))))
+        rows (keep r/scan-line (concat (fails "a" 4) [(walk "a" 9000 true)]
+                                       (fails "b" 3) [(walk "b" 9000 true)]
+                                       (fails "c" 2) [(walk "c" 9000 false)]
+                                       [(action "d/craft" :done 1000 "timeout") (action "d/craft" :done 2000 "crafted")]
+                                       [(action "e/craft" :done 1000 "timeout") (action "e/craft" :done 2000 "timeout")]))
+        {:keys [craft walk]} (r/report rows)]
+    (is (= 2 (:calls craft)) "two calls, one won and one lost, have no spread to fit")
+    (is (< (abs (- (+ (:win walk) (:fail walk)) (+ (:win craft) (:fail craft)))) 0.01) "the craft prior has the walk's spread")
+    (is (= 0.5 (/ (:win craft) (+ (:win craft) (:fail craft)))) "and keeps its own mean")))

@@ -45,15 +45,29 @@
 
 (defn- r3 [x] (/ (js/Math.round (* 1000 x)) 1000))
 
-(defn report
-  "{kind {:win :fail :try-s :won :retries :calls}} of the scanned rows (a kind with no retry and no timed try is left out)."
+(defn- fit
+  "{:kind {:tries :won :shares :s :spread}} of the scanned rows, :spread the moments' pseudo-count total or nil."
   [rows]
-  (into (sorted-map)
-        (for [[kind rs] (group-by :kind rows)
-              :let [tries (retries rs)
-                    won (count (filter :won? tries))
-                    shares (for [[_ ts] (group-by :key tries)] (/ (count (filter :won? ts)) (count ts)))
-                    [win fail] (if (seq tries) (passes/beta-fit shares won (count tries)) [1 1])
-                    s (if (seq tries) (/ (reduce + (map :s tries)) (count tries)) (try-s rs))]
-              :when s]
-          [kind {:win win :fail fail :try-s (r3 s) :won won :retries (count tries) :calls (count shares)}])))
+  (for [[kind rs] (group-by :kind rows)
+        :let [tries (retries rs)
+              shares (for [[_ ts] (group-by :key tries)] (/ (count (filter :won? ts)) (count ts)))]]
+    {:kind kind :rs rs :tries tries :won (count (filter :won? tries)) :shares shares
+     :spread (when (seq tries) (passes/beta-spread shares))}))
+
+(defn report
+  "{kind {:win :fail :try-s :won :retries :calls}} of the scanned rows (a kind with no retry and no timed try is left out). A
+  kind with retries but no fitted spread (too few calls) keeps its pooled mean at the mean pseudo-count total of the kinds
+  that did fit; with none fitted, its pooled counts."
+  [rows]
+  (let [fits (fit rows)
+        spreads (keep :spread fits)
+        pooled (when (seq spreads) (/ (reduce + spreads) (count spreads)))]
+    (into (sorted-map)
+          (for [{:keys [kind rs tries won shares spread]} fits
+                :let [[win fail] (cond (empty? tries) [1 1]
+                                       spread (passes/beta-fit shares won (count tries))
+                                       pooled (let [m (/ won (count tries))] [(r3 (* m pooled)) (r3 (* (- 1 m) pooled))])
+                                       :else (passes/beta-fit shares won (count tries)))
+                      s (if (seq tries) (/ (reduce + (map :s tries)) (count tries)) (try-s rs))]
+                :when s]
+            [kind {:win win :fail fail :try-s (r3 s) :won won :retries (count tries) :calls (count shares)}]))))

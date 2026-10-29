@@ -514,9 +514,9 @@
                          (core/submit! (:eng s) (spec {:block "sand" :count 4 :ways #{:seen} :worth worth}) {})
                          (await (run-ticks s 60))
                          [(count (events-of s :mine.walk-failed)) (:reason (done-event s))]))
-              [cheap-walks cheap-end] (await (failed 20))
+              [cheap-walks cheap-end] (await (failed 400))
               [dear-walks _] (await (failed 5000))]
-          (is (= [1 :gave-up] [cheap-walks cheap-end]) "a cheap goal is not worth a second walk after the first gave up")
+          (is (= [1 :gave-up] [cheap-walks cheap-end]) "a goal of a few hundred seconds is not worth a second walk after the first gave up (a dig retry wins 0.014 on the pooled spread, 0.06 at one pseudo-count)")
           (is (> dear-walks cheap-walks) "a dear goal is"))))))
 
 (deftest cells-a-call-gave-up-on-are-passed-on-and-not-walked-to-again

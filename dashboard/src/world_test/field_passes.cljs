@@ -77,15 +77,21 @@
 
 (defn- r3 [x] (/ (js/Math.round (* 1000 x)) 1000))
 
-(defn beta-fit
-  "[alpha beta] of shares xs fitted by moments; with no spread among them (or too few), their pooled counts k of n."
-  [xs k n]
+(defn beta-spread
+  "The pseudo-count total (alpha + beta) of shares xs fitted by moments, nil with no spread among them (or too few)."
+  [xs]
   (let [m (/ (reduce + xs) (count xs))
         v (/ (reduce + (map #(js/Math.pow (- % m) 2) xs)) (max 1 (dec (count xs))))
         s (when (and (pos? v) (< 0 m 1)) (dec (/ (* m (- 1 m)) v)))]
-    (if (and s (pos? s))
-      [(r3 (* m s)) (r3 (* (- 1 m) s))]
-      [k (- n k)])))
+    (when (and s (pos? s)) s)))
+
+(defn beta-fit
+  "[alpha beta] of shares xs fitted by moments; with no spread among them (or too few), their pooled counts k of n."
+  [xs k n]
+  (if-let [s (beta-spread xs)]
+    (let [m (/ (reduce + xs) (count xs))]
+      [(r3 (* m s)) (r3 (* (- 1 m) s))])
+    [k (- n k)]))
 
 (defn line-fit
   "{:n :fixed-s :per-unit-s} of points [units seconds]: least squares, a negative part set to 0 and the other refitted."
