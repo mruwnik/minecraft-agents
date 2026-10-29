@@ -146,22 +146,18 @@
   over them (walk-risk/stay-estimate) and the act after it (cost/risk-s). now? while the hp are within what the call's worth
   (ctx/worth) buys (price/allowed-hp); best the cheapest wait {:wait :secs :s} whose hp and seconds the worth affords."
   [c hurt lethal light-s]
-  (let [self (.self (:primitives c))
-        health (.-health self)
-        food (.-food self)
+  (let [health (.-health (.self (:primitives c)))
         worth (ctx/worth c)
         hp (+ hurt lethal)
         per-hp (cost-health/heal-s-per-hp)
-        feet (sh-sense/feet (:primitives c))
-        stay-s (fn [secs] (let [in (assoc (walk-risk/stay-inputs c feet 0) :secs secs)]
-                            (walk-risk/risk-s c (check-cache/keyed c ::wait-stay in #(walk-risk/stay-estimate c in)))))
+        stay-in (walk-risk/stay-inputs c (sh-sense/feet (:primitives c)) 0)
         heal-s (when (and (not (price/cannot-heal? c)) (pos? per-hp) (< health 20)) (* per-hp (- 20 health)))
         ways (cond-> []
-               light-s (conj {:wait :light :secs light-s :health health :hp 0 :s (+ light-s (stay-s light-s))})
-               heal-s (conj {:wait :heal :secs heal-s :health 20 :hp hp :s (+ heal-s (stay-s heal-s) (cost/risk-s 20 hurt lethal))}))]
+               light-s (conj (walk-risk/wait-way c :light light-s stay-in health {:hp 0}))
+               heal-s (conj (walk-risk/wait-way c :heal heal-s stay-in 20 {:hp hp :lethal-hp lethal})))]
     {:now-s (cost/risk-s health hurt lethal)
-     :now? (<= hp (price/allowed-hp health food worth true))
-     :best (first (sort-by :s (filter #(and (<= (:hp %) (price/allowed-hp (:health %) food worth true)) (cost/affords? (:s %) worth)) ways)))}))
+     :now? (<= hp (price/allowed-hp health (.-food (.self (:primitives c))) worth true))
+     :best (walk-risk/cheapest-affordable c ways)}))
 
 (defn priced
   "The status s of a place check, priced where it is :later or :never on exposure alone (:exposed with a :chance): the stay's

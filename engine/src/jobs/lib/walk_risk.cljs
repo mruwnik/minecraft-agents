@@ -270,6 +270,23 @@
       bed nil
       (sh-beds/place-wanted? c) {:bed nil})))
 
+(defn wait-way
+  "{:wait kind :secs :health :hp :s} of waiting secs where the body stands, healed to `healed`, then acting with `after`
+  (an estimate: :hp, :lethal-hp): s the seconds, what staying put over them risks (stay-estimate of stay-in) and the act
+  after, at the healed health (risk-s)."
+  [c kind secs stay-in healed after]
+  (let [s-in (assoc stay-in :secs secs)
+        stay (check-cache/keyed c ::wait-stay s-in #(stay-estimate c s-in))]
+    {:wait kind :secs secs :health healed :hp (:hp after) :s (+ secs (risk-s c stay) (risk-s c after 0 healed))}))
+
+(defn cheapest-affordable
+  "The way of ways with the least :s whose hp the call's worth buys at the way's health (price/allowed-hp) and whose
+  seconds it affords, or nil."
+  [c ways]
+  (let [food (.-food (.self (:primitives c)))
+        worth (ctx/worth c)]
+    (first (sort-by :s (filter #(and (<= (:hp %) (price/allowed-hp (:health %) food worth true)) (cost/affords? (:s %) worth)) ways)))))
+
 (defn wait-ways
   "The ways of waiting where the body stands, then walking the way of estimate-inputs `in` (stay-inputs stay-in): until dawn
   (shelter.clock/night-left-quote's mean) when dawn lowers a cell of it or the way out it leaves (:exit-dawn?); asleep
@@ -292,10 +309,8 @@
         way (fn [kind secs day?]
               (let [healed (if heals? (min 20 (+ health (/ secs per-hp))) health)
                     after (check-cache/keyed c ::after [in-key day? healed]
-                                             #(estimate-of c (assoc-in (if day? @day in) [:body :health] healed)))
-                    stay (let [s-in (assoc stay-in :secs secs)] (check-cache/keyed c ::wait-stay s-in #(stay-estimate c s-in)))]
-                {:wait kind :secs secs :health healed :hp (:hp after)
-                 :s (+ secs (risk-s c stay) (risk-s c after 0 healed))}))]
+                                             #(estimate-of c (assoc-in (if day? @day in) [:body :health] healed)))]
+                (wait-way c kind secs stay-in healed after)))]
     (cond-> []
       dawn? (conj (way :dawn night-s true))
       sleep (conj (merge (way :sleep (sh-beds/sleep-s c (:bed sleep)) true) sleep))
@@ -322,10 +337,7 @@
            stay (check-cache/keyed c ::stay stay-in #(stay-estimate c stay-in))
            now-s (risk-s c est)
            now? (<= hp allowed)
-           food (.-food (.self (:primitives c)))
-           best (when (pos? hp)
-                  (first (sort-by :s (filter #(and (<= (:hp %) (price/allowed-hp (:health %) food worth true)) (cost/affords? (:s %) worth))
-                                             (wait-ways c goal plan in stay-in)))))
+           best (when (pos? hp) (cheapest-affordable c (wait-ways c goal plan in stay-in)))
            parts (str (price/round1 dark-s) " s on dark open ground costs " (price/round1 spawn-hp) " hp, "
                       hostiles " hostile(s) by the way that catch it " (price/round1 hostile-hp) " hp, " (price/round1 death-hp) " hp for recent deaths or hides near it, " (price/round1 lethal-hp) " hp for the death they risk, " (price/round1 lava-hp) " hp for seen lava near the way")
            over (str "route risk " (price/round1 hp) " hp over the " (price/round1 allowed) " the body can afford: " parts)
