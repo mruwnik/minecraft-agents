@@ -22,6 +22,6 @@
               w (perception/wrap p per)]
           (aset w "rawWorld" raw)
           (perception/pass! per)
-          (let [{:keys [r]} (await (wplan/plan-within! {:primitives w} (wworld/path-world w (wworld/unknown-spec)) [80 64 0] 2 1.2 executor/policy))]
+          (let [{:keys [r]} (await (wplan/plan-within! {:primitives w} (wworld/path-world w (wworld/without-rock (wworld/unknown-spec))) [80 64 0] 2 1.2 executor/policy))]
             (is (= "found" (.-status r)))
             (is (< (.-expanded r) 400) "the heuristic counts the unseen-land prices, so the search does not flood the land round the way")))))))
