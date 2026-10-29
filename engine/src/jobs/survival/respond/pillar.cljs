@@ -44,8 +44,8 @@
   (boolean (and (pillar-item c) (not (pillar-item c (+ (pillar-height) (pillar-spare)))))))
 
 (defn climbable-top?
-  "Whether a mob could walk up a slope or ledge (steps of one block, over seen blocks) to stand beside the pillar's top
-  (levels 2 to 4 above the start: its hitbox then overlaps the body's)."
+  "Whether a mob beside the pillar's foot could walk up a slope or ledge (steps of one block) to stand beside its top
+  (levels 2 to 4 above the start: its hitbox then overlaps the body's). Ground walled off from the foot is no way up."
   [block-at feet]
   (let [[x y z] feet
         standable? (fn [cell] (and (rules/solid-floor? block-at (escape/up cell -1))
@@ -53,8 +53,7 @@
                                    (pl/clear? (block-at (escape/up cell 1)))))
         near? (fn [[cx _ cz]] (and (<= (abs (- cx x)) (climb-radius)) (<= (abs (- cz z)) (climb-radius))))
         beside-top? (fn [[cx cy cz]] (and (<= (abs (- cx x)) 1) (<= (abs (- cz z)) 1) (not= [x z] [cx cz]) (<= (+ y 2) cy (+ y 4))))
-        start (filter standable? (for [dx (range (- (climb-radius)) (inc (climb-radius))) dz (range (- (climb-radius)) (inc (climb-radius)))
-                                       dy [0 1] :when (not= 0 dx dz)]
+        start (filter standable? (for [dx [-1 0 1] dz [-1 0 1] dy [-1 0 1] :when (not= 0 dx dz)]
                                    [(+ x dx) (+ y dy) (+ z dz)]))]
     (loop [seen (set start) todo (vec start)]
       (let [cell (peek todo)]
@@ -83,13 +82,17 @@
        (not (climbable-top? block-at feet))))
 
 (defn pillar-fits?
-  "pillar-ok? where the body at primitives p stands at feet, a cell it has not sensed read open: plan! looks there before
-  it builds, so a column overhead the body never looked up at is no rock to price the pillar out, nor is a cell behind a
-  wall a floor to a mob's climb."
+  "pillar-ok? where the body at primitives p stands at feet, a cell it has not sensed read open in the column it rises
+  into (plan! looks there before it builds) and elsewhere solid when more likely solid than open (lk/unseen-solid-at-fn)."
   [p feet]
   (let [block-at (escape/block-at-of p)
-        unseen? (escape/unseen-of p)]
-    (pillar-ok? (fn [cell] (if (unseen? cell) "air" (block-at cell))) feet)))
+        unseen? (escape/unseen-of p)
+        solid-at (lk/unseen-solid-at-fn p)
+        rise (set (map #(escape/up feet %) (range 1 (+ 2 (pillar-height)))))
+        cell-at (memoize (fn [cell] (cond (not (unseen? cell)) (block-at cell)
+                                       (or (rise cell) (<= (solid-at cell) 0.5)) "air"
+                                       :else "stone")))]
+    (pillar-ok? cell-at feet)))
 
 (defn cell-map [[x y z]] {:x x :y y :z z})
 
@@ -120,7 +123,7 @@
 (defn ^:async plan!
   "The pillar refuge ({:kind :pillar :item :anchor :cells :class}, :class mob-class as it begins) when a pillar-height pillar fits here, else nil. The cells it
   rises into that the body has not sensed are looked at first, so open sky is not taken for rock; so are the unsensed cells
-  round it when the pillar does not fit, so unseen ground behind the body is not taken for a ledge a mob climbs.
+  round it when the pillar does not fit, where the prior may have read a ledge a mob climbs.
   A pillar through another's zone, claim or plan is planned only with trespass? (the last resort, after every way that keeps off)."
   [c trespass?]
   (let [p (:primitives c)

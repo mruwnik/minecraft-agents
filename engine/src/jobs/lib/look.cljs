@@ -450,6 +450,13 @@
     (let [lit? (feet-lit? p) q (near-share p)]
       (fn [cell-y d] (base-rates/unseen-solid y (- cell-y y) d lit? q)))))
 
+(defn unseen-solid-at-fn
+  "(fn [[x y z]]) the chance an unseen cell is solid: unseen-solid-fn at its height and frontier-distance (1, the likeliest
+  open, without a memory), at its own height as the feet's, in the dark, without a perception."
+  [p]
+  (let [solid-at (or (unseen-solid-fn p) #(base-rates/unseen-solid %1 0 %2 false nil))]
+    (fn [[_ y _ :as cell]] (solid-at y (or (frontier-distance p cell) 1)))))
+
 (defn remembered-light-fn
   "(fn [x y z]) the packed light (sky << 4 | block) of a cell the body has seen, as its memory gives it
   (seen-light/light-fn), but the live light of the cell it stands in, which it sees now; the raw world's own light where

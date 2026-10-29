@@ -29,6 +29,7 @@
             [jobs.survival.respond.cover :as cover]
             [jobs.lib.flee-walk :as flee-walk]
             [jobs.lib.seal :as seal]
+            [jobs.lib.look :as sight]
             [jobs.survival.respond.pillar :as respond.pillar]
             [jobs.survival.wall-placer :as wall-placer]))
 
@@ -664,6 +665,13 @@
           (is (empty? (calls p "jumpPlace")) "no pillar by rule before a flee step")
           (is (seq (calls p "steer")) "the flight walks"))))))
 
+(defn ^:async far-from-frontiers
+  "(f)'s result with every unseen cell 3 from the nearest frontier: the prior reads it solid."
+  [f]
+  (let [d sight/frontier-distance]
+    (set! sight/frontier-distance (constantly 3))
+    (try (await (f)) (finally (set! sight/frontier-distance d)))))
+
 (deftest a-pillar-looks-at-the-ground-round-it-before-taking-unseen-cells-for-a-ledge
   (async done
     (tu/run-async done
@@ -676,8 +684,8 @@
                                       #js {:unknown true}
                                       (sensed q))))
           (core/submit! eng '(test.flight {:cover-way :pillar}) {})
-          (await (core/tick! eng))
-          (is (= 3 (count (calls p "jumpPlace"))) "unseen cells beside the column read as rock; once looked at they are open air, so the pillar stands"))))))
+          (await (far-from-frontiers #(core/tick! eng)))
+          (is (= 3 (count (calls p "jumpPlace"))) "unseen cells beside the column read as rock by the prior; once looked at they are open air, so the pillar stands"))))))
 
 (deftest the-calls-blocks-are-the-only-blocks-a-refuge-uses
   (async done
@@ -1009,7 +1017,17 @@
         sensed (tu/sensed-by p)
         behind? (fn [pos] (and (= 64 (aget pos "y")) (= 2 (js/Math.abs (aget pos "x")))))]
     (tu/set-sensed! p (fn [pos] (if (behind? pos) #js {:unknown true :pos pos} (sensed pos))))
-    (is (true? (respond.pillar/pillar-fits? p [0 64 0])) "the ground the walls hide is no ledge to climb from: the pillar looks round it before it builds")))
+    (is (true? (respond.pillar/pillar-fits? p [0 64 0])) "the ground the walls hide, near where sight was cut, reads open")
+    (is (true? (with-redefs [sight/frontier-distance (constantly 3)] (respond.pillar/pillar-fits? p [0 64 0])))
+        "read solid, it is still no ledge: no mob at the pillar's foot gets past the walls to it")))
+
+(deftest an-unseen-step-up-to-a-wall-beside-the-pillars-top-is-a-ledge-where-the-prior-reads-it-solid
+  (let [p (tu/fake-on-floor {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (wall-cells [[1 0]])})
+        sensed (tu/sensed-by p)
+        fits? (fn [d] (with-redefs [sight/frontier-distance (constantly d)] (respond.pillar/pillar-fits? p [0 64 0])))]
+    (tu/set-sensed! p (fn [pos] (if (= [2 64 0] [(aget pos "x") (aget pos "y") (aget pos "z")]) #js {:unknown true :pos pos} (sensed pos))))
+    (is (false? (fits? 3)) "far from where sight was cut the step is more likely rock: a mob walks round to it and up onto the wall")
+    (is (true? (fits? 1)) "beside where sight was cut it is more likely open: no step")))
 
 (deftest a-pillar-in-a-slot-is-planned-with-the-ground-behind-its-walls-unseen
   (async done

@@ -7,7 +7,6 @@
             [jobs.lib.access.rules :as rules]
             [jobs.lib.blocks :as lb]
             [jobs.lib.danger :as danger-q]
-            [jobs.lib.cost.base-rates :as base-rates]
             [jobs.lib.dig-look :as look]
             [jobs.lib.look :as sight]
             [jobs.lib.escape :as escape]
@@ -277,11 +276,10 @@
 
 (defn shell-fails
   "The chance a dig of cells lays itself open through a cell beside, over or under them, outside keep, the body never
-  sensed (unsensed-cells): each is solid at look/unseen-solid-fn at its distance from the nearest frontier the body
-  remembers (look/frontier-distance; 1, the likeliest open, without a memory), at the dig's height without a perception."
+  sensed (unsensed-cells): each is solid at look/unseen-solid-at-fn."
   [p cells keep]
-  (let [solid-at (or (sight/unseen-solid-fn p) #(base-rates/unseen-solid (:y (first cells)) 0 %2 false nil))]
-    (- 1 (reduce (fn [c {:keys [x y z]}] (* c (solid-at y (or (sight/frontier-distance p [x y z]) 1))))
+  (let [solid-at (sight/unseen-solid-at-fn p)]
+    (- 1 (reduce (fn [c {:keys [x y z]}] (* c (solid-at [x y z])))
                  1 (unsensed-cells p cells keep)))))
 
 (defn ^:async lays-open?
