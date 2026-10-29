@@ -15,6 +15,7 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.movement.go-to.result :as end]
+            [jobs.lib.goal :as goal]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.near :as near]
@@ -1266,7 +1267,7 @@
 (def walker
   "A listed job whose memory holds an open go-to walk to (-10 64 10), as one cut on its way."
   {:round (fn ^:async walker-round [c]
-            (ctx/update-mem! c assoc :children {:go {:open 1 :goal {:x -10 :y 64 :z 10}}})
+            (goal/note! c {:x -10 :y 64 :z 10})
             :continue)})
 
 (deftest the-hostile-reflex-passes-on-the-goal-of-the-walk-it-interrupted

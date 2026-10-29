@@ -1545,7 +1545,7 @@
         near (danger-q/dangers p 16 {:ranged-radius 16} {})
         again (fn [entries] (:again (first (hostile-fight/met-again {:primitives p :root "j1" :slots [] :view (fn [] {:now 1000 :data {:entries entries}})}
                                                                      near (mapv #(hostile-fight/mob-near p %) near)))))
-        cut (fn [goal] {:job/j9 [{:t 900 :data {:job "jobs.movement.go-to" :open 1 :goal goal}}]})]
+        cut (fn [goal] {:walk-goal [{:t 900 :data {:job "j9" :slots [] :goal goal}}]})]
     (is (< 2.5 (again (cut {:x 30 :y 64 :z 0})) 3.5) "the way to a goal past it passes 3 blocks from it")
     (is (< 11.5 (again (cut [-30 64 0])) 12.5) "a goal behind the body: no nearer than it stands")
     (is (nil? (again {})) "no cut walk: met again where it stands")
