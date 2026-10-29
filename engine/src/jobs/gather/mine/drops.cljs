@@ -78,9 +78,9 @@
   (await (blocks/dig-cell! c pos {:accept (ways/accept (:args c)) :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
 
 (defn worth
-  "Seconds n of the call's item are worth (jobs.lib.cost/worth-to: the least of its items; no body: a mine digs for no bed)."
+  "Seconds n of the call's item are worth (jobs.lib.cost/margin-worth: the least of its items): what a cut yields, the gather's walk and look not counted in it twice."
   [c n]
-  (* n (cost/worth-to nil (items (:args c)) (u/self-pos c))))
+  (* n (cost/margin-worth (items (:args c)))))
 
 (defn min-dig-s
   "A dig costs at least the dig of dirt, the softest block a cut meets, whatever the drop yields: a cell that fills again

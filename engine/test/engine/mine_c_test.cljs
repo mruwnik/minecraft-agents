@@ -11,6 +11,7 @@
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
             [jobs.lib.blocks :as lb]
+            [jobs.lib.cost :as cost]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.look :as lk]
             [jobs.lib.tool-kind :as kind]
@@ -603,6 +604,12 @@
     (is (= [[1 64 0]] (cut walled-ore 100)) "the wall cell between is the way")
     (is (not-any? #{[1 64 0]} (cut (assoc walled-ore "1,65,0" "gravel") 100)) "gravel over it would fall on the body walking in: the cut goes round")
     (is (nil? (cut walled-ore 0.01)) "a drop worth less than one cell's dig is not cut to")))
+
+(deftest a-cuts-yield-is-the-items-worth-at-the-margin-not-its-whole-gather
+  (let [c {:primitives (:p (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})) :args {:item "raw_iron"}}
+        margin (:value (cost/item-value [{:name "raw_iron" :count 1}]))]
+    (is (= (* 3 margin) (drops/worth c 3)) "the gather's walk and look are no part of what one more block yields")
+    (is (< margin (:value (cost/goal-value [{:name "raw_iron" :count 1}]))))))
 
 (deftest a-cut-whose-cells-fill-again-pays-each-dig-out-of-the-drops-worth
   ;; the way swaps between two cells for ever (each fills again behind the dig): what is spent stays spent, a round

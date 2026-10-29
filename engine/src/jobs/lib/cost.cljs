@@ -21,7 +21,7 @@
     planner  planner-costs-problem, planner-costs, planner-names: go-to's :costs, the per-move prices it may override; least-block-s: the least a plan prices a block; landing-problem, planner-landing: go-to's :landing, fall damage by landing block; air-profile, water-breathing-s, air-used, air-costs: the planner's air drain and grace from the body's helmet, the air a dive has used; air-left-s, wet-move-s, wet-way-s, wet-spare-s, wet-ok?: the air a walk over unseen water keeps back at its last breath, each move at its measured pace; swim-profile: its swimH from Depth Strider on the boots; gait-problem, gait-costs: go-to's :gait; unknown-prices: the planner's peek and aim prices of unseen cells (jobs.lib.cost.planner); way-on-chance, unseen-share: the one price of walking over unseen cells, a dead end and a mob in the dark at the worse case, from how often the seen ways near the body go on (the planner's :cell); unseen-route-s: that price of a route's unseen steps, unseen-step-s of one, walk-step-s a walked block; stair-leg-pricer, pillar-s: a stair step's and a pillar's seconds with the unseen step on top (go-to's escalations, surface-up, the one-way climb-out); gap-look-cost: a refused gap jump over unseen floors filled now or looked at first; dead-end-cost: what an unseen dead end costs a flight; flight-caught-chance: the chance a flight is caught by its way, from its search's ways.
     tolls    farm-tolls, zone-tolls: go-to's :tolls for planted cells and zone cells to cross only as a last resort; fail-chance,
              failing-step-s: a step the walker failed at, priced by its failures (jobs.lib.cost.tolls).
-    death    experience-cost, death-cost: death as an ordinary cost, the walk back for the items plus the experience; spawn-worth: a respawn point's worth; goal-value (item-value with measured gathers), worth-to, find-worth, items-find-worth, search-radius, wait-price: what a find is worth, how far its legs may go, what waiting for a listed maker costs; opening-price, hold-price: opening a shelter to mobs against holding on in it; death-weight, terrain-danger: a remembered death's fade and the plan cost near a death by terrain (jobs.lib.cost.death).
+    death    experience-cost, death-cost: death as an ordinary cost, the walk back for the items plus the experience; spawn-worth: a respawn point's worth; goal-value (item-value with measured gathers), worth-to, margin-worth, find-worth, items-find-worth, search-radius, wait-price: what a find is worth, how far its legs may go, what waiting for a listed maker costs; opening-price, hold-price: opening a shelter to mobs against holding on in it; death-weight, terrain-danger: a remembered death's fade and the plan cost near a death by terrain (jobs.lib.cost.death).
     base-rates  density, biome-chance, expected-density, peak-density: the ore a block of ground is expected to hold, from the game's
              own placements, host-blocks: the rock its veins replace, and the chance of a biome on ground the body has not seen (jobs.lib.cost.base-rates).
     door     wall-on-chance, door-s: a door's price through a wall whose far side is unseen, from counted wall rows (jobs.lib.cost.door).
@@ -500,6 +500,14 @@
     (apply min (map (fn [n] (+ (:value (goal-value [{:name n :count 1}]))
                                (if (bed? n) (spawn-worth body at at) 0)))
                     names))
+    0))
+
+(defn margin-worth
+  "Seconds one of names is worth at the margin (item-value, not the goal's measured gathers): the least among them; 0 for
+  no names. What a dig or a drop on the ground yields, as against the whole gather worth-to prices."
+  [names]
+  (if (seq names)
+    (apply min (map #(:value (item-value [{:name % :count 1}])) names))
     0))
 
 (defn opening-price
