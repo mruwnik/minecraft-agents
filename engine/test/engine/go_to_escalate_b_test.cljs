@@ -703,7 +703,7 @@
                      :inventory [{:name "dirt" :count 8} {:name "stone_pickaxe" :count 1} {:name "stone_shovel" :count 1}]}
               {:keys [eng p seen step]} (gt/setup world (ew/of-data {"room" room} {} []))
               out (atom :not-done)
-              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [14 62 12] :range 0 :worth 38.8})))]
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [14 62 12] :range 0})))]
           (core/submit! eng '(recording-parent) {})
           (await (gt/tick-out! eng 400 step))
           (let [own (map :cell (events-of seen :go-to.dug-own-build))]
@@ -742,8 +742,8 @@
 
 (deftest go-to-out-of-its-own-room-in-undiggable-rock-stops-cutting-once-the-cuts-show-no-way
   ;; each guess beside a seen light that a look finds a light is evidence: the next route's guesses there are priced
-  ;; over the chance they are rock, past the way without a dig route it is none; a stair or door over guesses is priced
-  ;; so too, against the caller's :worth; the clock moves, so the call ends
+  ;; over the chance they are rock; no caller :worth, so the ways are weighed against each other (past-worth? has its own test)
+  ;; and the call ends once none is left, the clock moving
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -753,13 +753,13 @@
                      :inventory [{:name "dirt" :count 8} {:name "stone_pickaxe" :count 1} {:name "stone_shovel" :count 1}]}
               {:keys [eng p seen step]} (gt/setup world (ew/of-data {"room" room} {} []))
               out (atom :not-done)
-              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [14 62 12] :range 0 :worth 38.8})))]
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [14 62 12] :range 0})))]
           (core/submit! eng '(recording-parent) {})
           (await (gt/tick-out! eng 400 #(do (swap! clock + 500) (step))))
-          (is (<= (count (events-of seen :go-to.dug-own-build)) 4) "two columns of its own wall cut, not a column per guess")
-          (is (= [:dig-route] (map :step (events-of seen :go-to.escalated)))
-              "the dig route is not chosen again, nor a stair over guesses past the goal's worth once the looks showed glowstone")
-          (is (= [false :unreachable :past-worth] ((juxt :arrived :reason (comp :why :escalation)) @out)) "the call ends, a failure, with its reason")
+          (is (<= (count (events-of seen :go-to.dug-own-build)) 6) "a dig route and one stair of its own wall cut, not a column per guess (15 before)")
+          (is (= [:dig-route :stair :approach] (map :step (events-of seen :go-to.escalated)))
+              "the dig route is not chosen again once the looks showed glowstone")
+          (is (= [false :unreachable] ((juxt :arrived :reason) @out)) "the call ends, a failure, with its reason")
           (is (some (comp false? :ok?) (events-of seen :go-to.guess-look)) "a guess look that showed glowstone is told")
           (is (empty? (for [x (range 4 21) y (range 60 70) z (range 4 17)
                             :when (not (and (<= 8 x 12) (<= 61 y 65) (<= 8 z 12)))
