@@ -1003,6 +1003,14 @@
               pillars (keep #(when (= :retreat.cornered (:kind %)) (:pillar (:prices %))) @seen)]
           (is (< (first pillars) (second pillars)) "the refusal it saw is one more failed pillar in the counts"))))))
 
+(deftest a-pillar-in-a-slot-is-priced-with-the-ground-behind-its-walls-unseen
+  (let [slot (wall-cells (concat (for [z (range -1 9)] [-1 z]) (for [z (range -1 9)] [1 z]) [[0 -1]]))
+        p (tu/fake-on-floor {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks slot})
+        sensed (tu/sensed-by p)
+        behind? (fn [pos] (and (= 64 (aget pos "y")) (= 2 (js/Math.abs (aget pos "x")))))]
+    (tu/set-sensed! p (fn [pos] (if (behind? pos) #js {:unknown true :pos pos} (sensed pos))))
+    (is (true? (respond.pillar/pillar-fits? p [0 64 0])) "the ground the walls hide is no ledge to climb from: the pillar looks round it before it builds")))
+
 (deftest a-back-off-with-no-way-past-the-zombies-is-not-priced-after-a-refused-pillar
   (async done
     (tu/run-async done
