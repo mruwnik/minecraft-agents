@@ -870,17 +870,29 @@
     1000 0
     0 0))
 
+(def mid-danger-cases
+  "[why opts logged-out?]: opts are setup's :self, :blocks and extra :entities."
+  [["calm" {} true]
+   ["nil onGround is no fall" {:self {:onGround nil}} true]
+   ["riding" {:self {:onGround false :vehicle {:id 3}}} true]
+   ["burning" {:self {:onFire true}} false]
+   ["off the ground" {:self {:onGround false}} false]
+   ["a hostile near" {:entities [{:id 9 :name "zombie" :kind "hostile" :visible true :pos {:x 2.5 :y 64 :z 0.5}}]} false]
+   ["drowning" {:self {:inWater true :oxygen 4}
+                :blocks {"0,64,0" "water" "0,65,0" "water" "0,66,0" "water" "0,67,0" "water"}} false]])
+
 (deftest another-player-online-and-awake-logs-the-body-out-unless-it-is-mid-danger
   (async done
     (tu/run-async done
       (walls-cheap (fn ^:async t []
-        (let [run (fn ^:async r [self]
-                    (let [{:keys [eng p]} (setup {:time night :self self :players ["Sam"] :entities [awake] :inventory wall-stack :blocks floor})]
+        (let [run (fn ^:async r [{:keys [self blocks entities]}]
+                    (let [{:keys [eng p]} (setup {:time night :self (or self {}) :players ["Sam"] :entities (into [awake] entities)
+                                                  :inventory wall-stack :blocks (merge floor blocks)})]
                       (core/submit! eng '(jobs.survival.night) {})
                       (await (tick-n eng 8))
-                      [(pos? (count (calls p "offline"))) (count (calls p "place"))]))]
-          (is (= [true 0] (await (run {}))) "its staying awake would hold up the other's skip: logged out, not dug in")
-          (is (= false (first (await (run {:onFire true})))) "burning: never logged out")))))))
+                      (pos? (count (calls p "offline")))))]
+          (doseq [[why opts expected] mid-danger-cases]
+            (is (= expected (await (run opts))) why))))))))
 
 (deftest shelter-digs-in-when-the-log-out-fails
   (async done

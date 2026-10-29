@@ -171,21 +171,9 @@
   (when (spawn-lost-unnoted? c)
     (sh-spawn/lose-spawn! c (:lost (sh-spawn/spawn-state (:primitives c) (ctx/view c))) :seen-gone)))
 
-(defn mid-danger?
-  "A hostile near (ready/threatened), burning, short of air in water, or off the ground: a log-out now leaves the danger
-  waiting for the return."
-  [c]
-  (let [p (:primitives c)
-        self (.self p)]
-    (or (not= :ok (first (ready/threatened c)))
-        (body/burning? p)
-        (and (.-inWater self) (< (.-oxygen self) 20))
-        (not (or (.-onGround self) (.-inWater self))))))
-
 (defn log-out-wanted? [c]
   (and (not (:log-out-failed (ctx/mem c)))
-       (sh-sleepers/log-out-for-sleepers? (:primitives c) (ctx/view c))
-       (not (mid-danger? c))))
+       (bed-down/log-out-open? c)))
 
 (defn ^:async log-out-step
   "Someone sleeps: a bite if hungry (hold/eat-if-hungry!; a logged-out body cannot eat), then a log-out stint (jobs.survival.log-out). Ok or cut: :logged-out unless already sheltered, and the

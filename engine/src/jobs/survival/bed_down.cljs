@@ -8,6 +8,8 @@
             [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.checks :as checks]
+            [jobs.lib.body :as body]
+            [jobs.lib.breath :as breath]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
             [jobs.lib.price :as price]
@@ -249,6 +251,23 @@
         [_ left] (get-in (sh-clock/night-left-quote c) [:uses :job-time])]
     (cost/night-walk-bound-s (sh/in-ground? p (ctx/view c)) left (reduce min ##Inf prices))))
 
+(defn mid-danger?
+  "A hostile near (ready/threatened), burning, drowning, or off the ground (not in water, not riding): a log-out now
+  leaves the danger waiting for the return."
+  [c]
+  (let [p (:primitives c)
+        self (.self p)]
+    (or (not= :ok (first (ready/threatened c)))
+        (body/burning? p)
+        (breath/drowning? p)
+        (and (false? (.-onGround self)) (not (.-inWater self)) (nil? (.-vehicle self))))))
+
+(defn log-out-open?
+  "Whether a log-out is an answer now: someone else sleeps or is online (sh-sleepers/log-out-for-sleepers?) and the body is not mid-danger."
+  [c]
+  (and (sh-sleepers/log-out-for-sleepers? (:primitives c) (ctx/view c))
+       (not (mid-danger? c))))
+
 (def answer-order [:bed :sealed :log-out :home :shelter :niche :flee :exposed])
 
 (defn cheapest-priced
@@ -267,7 +286,7 @@
   "Whether to lie in a bed at bed that is not shut in: overdue, or lying there is the cheapest of answers (no walk: the
   body is there)."
   [c bed]
-  (= :bed (cheapest c (await (answers c {:bed bed :log-out? (sh-sleepers/log-out-for-sleepers? (:primitives c) (ctx/view c))})))))
+  (= :bed (cheapest c (await (answers c {:bed bed :log-out? (log-out-open? c)})))))
 
 (defn bed-to-use
   "The :bed argument, else the bed sh-beds/bed-to-use picks."
@@ -463,7 +482,7 @@
   "The caller's :answer, else the cheapest of answers for the carried bed here."
   [c]
   (or (:answer (:args c))
-      (cheapest c (await (answers c {:log-out? (sh-sleepers/log-out-for-sleepers? (:primitives c) (ctx/view c))})))))
+      (cheapest c (await (answers c {:log-out? (log-out-open? c)})))))
 
 (defn ^:async round [c]
   (let [p (:primitives c)
