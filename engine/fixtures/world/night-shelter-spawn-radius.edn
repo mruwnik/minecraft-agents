@@ -18,6 +18,13 @@
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 60}
             {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 30 :until {:source :job :kind :completed :data {:name "jobs.survival.night"}}}]
    :after [[:body-near [13.5 0 13.5] 1.5]]}
+  {:name "lit-room-open-to-the-dark-by-an-iron-door-is-no-shelter"
+   ;; the lit room's south wall holds an open iron door no hand shuts: the dark ground's mobs walk in, so the stay is priced and the body walls in
+   :act [[:job (jobs.survival.night {})]]
+   :blocks [[:set [9 1 9] "torch"] [:set [15 1 9] "torch"] [:set [9 1 15] "torch"] [:set [15 1 15] "torch"]
+            [:set [12 1 9] "torch"] [:set [12 1 15] "torch"]
+            [:set [12 0 8] "iron_door[facing=south,half=lower,hinge=left,open=true]"] [:set [12 1 8] "iron_door[facing=south,half=upper,hinge=left,open=true]"]]
+   :expect [{:event {:source :action :kind :started :data {:name "place"}} :within-s 60}]}
   {:name "dark-5x5-room-is-shelter"
    ;; a body sees no block in the dark: the torches show it the whole room (a look round), then go out and the room is dark but known
    :blocks [[:set [9 1 9] "torch"] [:set [15 1 9] "torch"] [:set [9 1 15] "torch"] [:set [15 1 15] "torch"]
