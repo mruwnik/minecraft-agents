@@ -782,6 +782,24 @@
           (is (every? #(contains? (:ways %) :clear-seal) @asked))
           (is (not= :no-way-out (:why (not-found-of s)))))))))
 
+(deftest a-body-shut-in-a-room-digs-out-toward-the-side-go-to-quotes-cheapest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [quoted (atom [])
+              walked (atom [])
+              arity "cljs$core$IFn$_invoke$arity$3"
+              real (aget ctx/quote arity)
+              _ (aset ctx/quote arity (fn [_ _ args] (js/Promise.resolve {:uses {:job-time (let [n (count (swap! quoted conj (:pos args)))] [(- 100 n) (- 100 n) (- 100 n)])}})))
+              _ (try (with-redefs [sh-sense/shut-in-room? (fn ([_] true) ([_ _] true))
+                                   search/choose-leg (fn [_ _ _ _] {:tried [] :failed [] :skipped 0 :held 0 :unloaded []})
+                                   child/call-walk* (fn [_ _ a] (swap! walked conj (:pos a)) (js/Promise.resolve {:kind :done :data {:arrived true}}))]
+                       (await (search! {:target "diamond_block" :max-distance 23} {} 20)))
+                     (finally (aset ctx/quote arity real)))
+              sides (take 4 @quoted)]
+          (is (= 4 (count (distinct sides))) "every side is quoted")
+          (is (= (last sides) (first @walked)) "the side quoted cheapest is walked, not the first (nearest) one"))))))
+
 (deftest a-search-that-walked-legs-and-stands-shut-in-a-room-ends-distance-not-no-way-out
   (async done
     (tu/run-async done

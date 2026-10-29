@@ -1,6 +1,7 @@
 (ns jobs.explore.search
   (:require [jobs.lib.block-sets :as bs]
             [jobs.lib.reach :as reach]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.ready :as ready]
             [jobs.lib.result :as result]
             [engine.settings :as settings]
@@ -605,21 +606,51 @@
   (let [s (ready/sheltered-dark c)]
     (when (= :later (first s)) s)))
 
-(defn dig-out-leg
-  "{:leg [x y z] :column [x z]} toward the nearest column of the sweep that is not tried, searched or beyond the max-distance,
-  at the feet's height: where a body shut in a closed room with no leg left digs out to (go-to's :clear-seal way, priced
-  and weighed against waiting like any walk), nil when none is left."
+(defn side-of
+  "The side of the offset [dx dy dz] from the body: its dominant axis and sign."
+  [[dx dy dz]]
+  (let [ax (js/Math.abs dx) ay (js/Math.abs dy) az (js/Math.abs dz)]
+    (cond (and (>= ay ax) (>= ay az)) [:y (compare dy 0)]
+          (>= ax az) [:x (compare dx 0)]
+          :else [:z (compare dz 0)])))
+
+(defn dig-out-legs
+  "The legs {:leg [x y z] :column [x z]|nil} a body shut in a closed room with no leg left may dig out to, the nearest of each
+  side: the columns of the sweep that are not tried, searched or beyond the max-distance (at the feet's height), and the
+  cells the room's seen way out reaches (up to the sky too, sh-inside/way-out-cells)."
   [c m names ns]
-  (let [[ox y oz] (here c)
+  (let [p (:primitives c)
+        [ox y oz] (here c)
         origin [((:origin m) 0) ((:origin m) 2)]
         tried (set (:tried m))
-        covering (searched-notes c m ns)]
-    (->> (candidates c m)
-         (remove #(or (tried %) (= % [ox oz]) (> (xz-dist % origin) (distance-limit c))
-                      (some (fn [n] (notes/covers? n % names)) covering)))
-         (sort-by #(xz-dist [ox oz] %))
-         first
-         (#(when % {:leg [(% 0) y (% 1)] :column %})))))
+        covering (searched-notes c m ns)
+        columns (->> (candidates c m)
+                     (remove #(or (tried %) (= % [ox oz]) (> (xz-dist % origin) (distance-limit c))
+                                  (some (fn [n] (notes/covers? n % names)) covering)))
+                     (map (fn [pt] {:leg [(pt 0) y (pt 1)] :column pt})))
+        feet (sh-sense/feet p)
+        outs (->> (some->> (reach-room/room p feet) (sh-inside/way-out-cells p))
+                  (map (fn [{:keys [x z] :as cell}] {:leg [x (:y cell) z] :column (when-not (= [x z] [ox oz]) [x z])})))
+        dist (fn [{[x ly z] :leg}] (+ (xz-dist [ox oz] [x z]) (js/Math.abs (- ly y))))]
+    (->> (concat columns outs)
+         (group-by (fn [{[x ly z] :leg}] (side-of [(- x ox) (- ly y) (- z oz)])))
+         vals
+         (map #(first (sort-by dist %))))))
+
+(defn ^:async dig-out-leg
+  "{:leg [x y z] :column [x z]|nil} of the cheapest of dig-out-legs by go-to's quote of the walk (pick/quoted-s: where a body
+  shut in a closed room with no leg left digs out to, its :clear-seal way), the first with no priced one; :continue while a
+  quote goes on, nil when no side is left."
+  [c m names ns]
+  (let [legs (dig-out-legs c m names ns)
+        quotes (loop [[l & more] legs acc []]
+                 (if-not l
+                   acc
+                   (let [q (await (ctx/quote c 'jobs.movement.go-to (leg-args c (:leg l))))]
+                     (if (:estimate q) :continue (recur more (conj acc [(pick/quoted-s c q) l]))))))]
+    (if (= :continue quotes)
+      :continue
+      (some->> (seq quotes) (sort-by first) first second))))
 
 (defn ^:async walk!
   "One go-to call toward the leg (the last one before the failed legs in a row end the search may dig out); on its end book the leg arrived or failed. :continue when go-to yields or
@@ -733,12 +764,15 @@
               more :again
               (and (empty? unloaded) (pos? held)) (do (ctx/update-mem! c dissoc :blocked) :again)
               (and (empty? unloaded) (sh-sense/shut-in-room? (:primitives c)))
-              (if-let [{:keys [leg column]} (dig-out-leg c m names ns)]
-                (or (await (price-leg! c leg false))
-                    (do (ctx/update-mem! c (fn [m] (-> m (assoc :leg leg :leg-column column) (update :tried (fnil conj []) column) (update :legs (fnil inc 0)))))
-                        (note-leg-start! c leg)
-                        (await (walk! c))))
-                (finish! c :not-found (if (zero? (:legs m 0)) :no-way-out :distance)))
+              (let [dig (await (dig-out-leg c m names ns))]
+                (cond
+                  (= :continue dig) :continue
+                  dig (let [{:keys [leg column]} dig]
+                        (or (await (price-leg! c leg false))
+                            (do (ctx/update-mem! c (fn [m] (-> m (assoc :leg leg :leg-column column) (cond-> column (update :tried (fnil conj []) column)) (update :legs (fnil inc 0)))))
+                                (note-leg-start! c leg)
+                                (await (walk! c)))))
+                  :else (finish! c :not-found (if (zero? (:legs m 0)) :no-way-out :distance))))
               (empty? unloaded) (finish! c :not-found :distance)
               (far-unloaded c unloaded) (or (await (price-leg! c (far-unloaded c unloaded) false))
                                             (do (ctx/update-mem! c assoc :leg (far-unloaded c unloaded) :leg-column nil)
