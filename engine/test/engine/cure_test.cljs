@@ -13,12 +13,12 @@
 
 (defn holds? [world] ((:when (get triggers/all :poisoned)) (tu/fake world) {} {}))
 
-(deftest poisoned-trigger-holds-for-a-hurt-poisoned-body-carrying-a-cure
+(deftest poisoned-trigger-holds-for-a-hurt-poisoned-body-whatever-it-carries
   (are [world expected] (= expected (boolean (holds? world)))
     {:self {:health 6 :effects poison} :inventory milk} true
     {:self {:health 6 :effects poison} :inventory [{:name "golden_apple" :count 1}]} true
-    {:self {:health 6 :effects poison}} false
-    {:self {:health 6 :effects poison} :inventory [{:name "bread" :count 1}]} false
+    {:self {:health 6 :effects poison}} true
+    {:self {:health 6 :effects poison} :inventory [{:name "bread" :count 1}]} true
     {:self {:health 18 :effects poison} :inventory milk} false
     {:self {:health 6 :effects []} :inventory milk} false
     {:self {:health 6 :effects (conj poison {:name "regeneration" :amplifier 1 :duration 100})} :inventory milk} false))
