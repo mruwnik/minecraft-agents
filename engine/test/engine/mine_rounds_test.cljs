@@ -136,29 +136,29 @@
 (def torch-tunnel {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 12})
 (def coal-stick [{:name "iron_pickaxe" :count 1} {:name "coal" :count 1} {:name "stick" :count 1}])
 
-(deftest a-torch-craft-that-makes-nothing-is-not-retried
+(deftest a-torch-craft-the-server-keeps-rejecting-is-retried-until-the-time-spend-ends-the-dig
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (m/start-lit (m/torch-world coal-stick) [0 0] {:call-ms 1000})]
           (.override (.-world (:p s)) "craft" (fn [_ _ _] (js/Promise.resolve #js {:status "failed" :made 0 :reason "server rejected the craft"})))
-          (core/submit! (:eng s) (m/spec (assoc torch-tunnel :worth 60)) {})
+          (core/submit! (:eng s) (m/spec (assoc torch-tunnel :spend {:job-time 120})) {})
           (await (m/run-ticks s 60))
           (is (m/finished? s))
-          (is (= :no-torches (:reason (m/done-event s))))
-          (is (>= 3 (count (m/calls s "craft"))) "bounded: the craft is given up, not retried each round"))))))
+          (is (= :job-time (:reason (m/done-event s))) "at the root's endless worth only the time spend ends it")
+          (is (< 1 (count (m/calls s "craft"))) "a rejected craft is tried again while the goal is worth a try"))))))
 
-(deftest a-stocking-torch-craft-that-makes-nothing-is-not-retried
+(deftest a-stocking-torch-craft-the-server-keeps-rejecting-is-retried-until-the-time-spend-ends-the-trip
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (m/start-lit (m/torch-world coal-stick) [0 0] {:call-ms 1000})]
           (.override (.-world (:p s)) "craft" (fn [_ _ _] (js/Promise.resolve #js {:status "failed" :made 0 :reason "server rejected the craft"})))
-          (core/submit! (:eng s) (m/spec (assoc torch-tunnel :trip true :worth 60)) {})
+          (core/submit! (:eng s) (m/spec (assoc torch-tunnel :trip true :spend {:job-time 120})) {})
           (await (m/run-ticks s 60))
           (is (m/finished? s))
-          (is (= :no-torches (:reason (m/done-event s))))
-          (is (>= 6 (count (m/calls s "craft"))) "bounded: the stocking and the dig each give the craft up once, none retried each round"))))))
+          (is (= :job-time (:reason (m/done-event s))) "at the root's endless worth only the time spend ends it")
+          (is (< 1 (count (m/calls s "craft"))) "a rejected craft is tried again while the goal is worth a try"))))))
 
 (deftest a-collect-that-ends-with-nothing-gained-is-booked-and-does-not-loop
   (async done
