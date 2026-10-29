@@ -315,6 +315,13 @@
   []
   (settings/get settings ::food-worth-per-point))
 
+(defn hunger-s
+  "Seconds the hunger that losing damage hp from health brings a body with food costs: each food point its hungry line
+  (jobs.lib.foods/hungry-line) rises over the food it is short already, at food-point-worth."
+  [food health damage]
+  (let [short #(max 0 (- (foods/hungry-line % {}) food))]
+    (* (food-point-worth) (- (short (- health damage)) (short health)))))
+
 (defn food-search-worth
   "Seconds a search for food is worth while the pack lacks `short` hunger points: food-point-worth each, less one trip."
   [short]

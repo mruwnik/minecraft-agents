@@ -77,7 +77,7 @@
               reason (assoc :detail (str reason)))
     (cond
       (or reason (= :no-path status)) (merge {:why (if reason (keyword reason) :no-path)}
-                                             (select-keys result [:kind :cells :near :one-way :dark-best :torches :heal :health :hp-cost :hp-budget :hungry-food :dip :rise :goal-left :damage-refused :p-absent :turn-back-s :worth-s]))
+                                             (select-keys result [:kind :cells :near :one-way :dark-best :torches :heal :health :hp-cost :hp-budget :dip :rise :goal-left :damage-refused :p-absent :turn-back-s :worth-s]))
       :else {:why :no-progress}))
    (select-keys result [:waypoint-why])))
 
@@ -114,7 +114,7 @@
 
 (defn give-up-words
   "The give-up reason in words, for the :text of the result: no map dumps."
-  [pos {:keys [why kind detail escalation shut-in nearest-hostile nearest-hostile-at sent-backs jumps mob mob-distance explored walks torches waypoint-why hp-cost hp-budget hungry-food low-passage dip rise route straight in-water goal-left damage-refused p-absent turn-back-s worth-s extra-s]}]
+  [pos {:keys [why kind detail escalation shut-in nearest-hostile nearest-hostile-at sent-backs jumps mob mob-distance explored walks torches waypoint-why hp-cost hp-budget low-passage dip rise route straight in-water goal-left damage-refused p-absent turn-back-s worth-s extra-s]}]
   (str "gave up walking to " (if (map? pos) (let [{:keys [x y z]} pos] [x y z]) pos) ": "
        (if (and escalation (not (#{:way-dives :detour} why)))
          (str (if (:into escalation) "the goal is walled in; " "shut in here; ") (escalation-words escalation))
@@ -140,7 +140,6 @@
            :goal-dangerous (str "the goal is in danger: " (str/replace (str mob) "_" " ") " " mob-distance " blocks from it, a mob the body would flee")
            :moved-while-searching (str "the body was pushed about while the path was searched" (when in-water ": it is in water, which moves it; get onto dry land first"))
            :needs-health (str "a way exists but costs " hp-cost " hp, more than the " hp-budget " hp the body may spend"
-                           (when hungry-food (str " (hunger sets that: losing more would make it hungry at food " hungry-food ")"))
                            ", and it cannot heal first")
            :damage-budget (str "the only way costs " hp-cost " hp, more than the " hp-budget " hp the body may spend at full health: healing cannot help; only a :floor {:health 1} or less, or a lower :floor :health, lets it go")
            :budget (if (and goal-left (<= goal-left (tuning/budget-near)))

@@ -5,14 +5,13 @@
   health-scale: the price rises x20/health (at most 4) near zero health (the danger rate's scale too); hp-price: the two together; hp-cost: the price of losing some hp; gain-worth: the worth of gaining some; heal-worth?: whether one more hp is worth the wait and food it costs; risk-s: a walk's risk in seconds.
   drown-prices: the planner's drownPrices, the cumulative price of each hp of drowning at the health it leaves.
   damage-budget: the hp a walk may spend on certain damage (drops over 3 blocks, plants that hurt on touch): the health
-  and absorption over the floor (:min-health, default 12) less a margin of 1, at most :max-damage; less when the food
-  would put the hungry line (jobs.lib.foods/hungry?) over a body not yet hungry after the damage; 0 while burning, poisoned or withered,
+  and absorption over the floor (:min-health, default 12) less a margin of 1, at most :max-damage; 0 while burning, poisoned or withered,
   or with a health or absorption that is not a number.
-  survivable-budget: the hp a walk that must arrive may spend: all but 1 (the food cap and the margin dropped), still under
+  survivable-budget: the hp a walk that must arrive may spend: all but 1 (the margin dropped), still under
   a caller's :max-damage, and just the damage-budget when the caller set a :min-health (a floor that is never crossed)."
   (:require [engine.args :as a]
-            [engine.settings :as settings]
-            [jobs.lib.foods :as foods]))
+            [engine.settings :as settings]))
+
 
 (a/defargs settings
   {::default-min-health {:default 12 :doc "Health a walk does not spend below." :spec (a/int-in 0 nil)}
@@ -120,31 +119,14 @@
                                         + 0 effects))]
     (min health (+ (min (lost "poison" 25) (max 0 (dec health))) (lost "wither" 40)))))
 
-(defn food-cap
-  "The most hp a body with food and health can lose and still not be hungry, less the margin; nil when the food is
-  at or over top-up-food (the line stops rising there) or the body is hungry already (no damage makes it so)."
-  [food health]
-  (when (and (< food foods/top-up-food) (not (foods/hungry? food health {})))
-    (let [fine (count (take-while #(not (foods/hungry? food (- health %) {})) (range 0 21)))]
-      (max 0 (- fine 1 (margin))))))
-
 (defn damage-budget
-  "The hp of certain damage a walk may take: see the ns doc. body {:health :absorption :food :effects (names) :on-fire}
+  "The hp of certain damage a walk may take: see the ns doc. body {:health :absorption :effects (names) :on-fire}
   and settings {:min-health :max-damage} (nil: the defaults)."
-  [{:keys [health absorption food effects on-fire]} {:keys [min-health max-damage]}]
+  [{:keys [health absorption effects on-fire]} {:keys [min-health max-damage]}]
   (if (or on-fire (some ticking-effects effects) (not (js/isFinite health)) (not (js/isFinite (or absorption 0))))
     0
-    (let [room (max 0 (- (+ health (or absorption 0)) (or min-health (default-min-health)) (margin)))
-          cap (when food (food-cap food health))]
-      (cond-> (min room (or max-damage js/Infinity))
-        cap (min cap)))))
-
-(defn food-limited?
-  "Whether the hunger cap (food-cap), not the health floor or :max-damage, sets damage-budget for this body and settings."
-  [{:keys [health absorption food]} {:keys [min-health max-damage]}]
-  (let [cap (when food (food-cap food health))
-        room (max 0 (- (+ health (or absorption 0)) (or min-health (default-min-health)) (margin)))]
-    (boolean (and cap (< cap room) (< cap (or max-damage js/Infinity))))))
+    (min (max 0 (- (+ health (or absorption 0)) (or min-health (default-min-health)) (margin)))
+         (or max-damage js/Infinity))))
 
 (defn survivable-budget
   "The hp a walk may spend and leave the body 1: see the ns doc. Same arguments as damage-budget."

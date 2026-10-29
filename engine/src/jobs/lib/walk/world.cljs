@@ -25,7 +25,7 @@
             [jobs.lib.memory-age :as memory-age]))
 
 (a/defargs settings
-  {::default-food {:default 20 :doc "The food a walk counts on when it has neither a :food arg nor a body food: fed (nothing caps the damage)." :spec (a/int-in 0 nil)}
+  {::default-food {:default 20 :doc "The food a walk counts on when it has neither a :food arg nor a body food: fed (no hunger priced into the damage)." :spec (a/int-in 0 nil)}
    ::min-health {:default false :doc "The health every walk of this body keeps (a floor of 1 to 20), false: the code's default floor. A job's own :min-health wins." :spec (a/or-of false? (a/int-in 1 20))}
    ::max-damage {:default false :doc "The most hp every walk of this body may spend (0 or more), false: no cap but the budget. A job's own :max-damage wins." :spec (a/or-of false? (a/num-in 0 nil))}
    ::dangers {:default true :doc "Whether walks plan to keep away from known dangers; false plans straight past them (a walk up to the hostile being fought)." :spec boolean?}
@@ -466,9 +466,9 @@
      :effects (map #(.-name %) (array-seq (.-effects self)))}))
 
 (defn damage-body
-  "The body's {:health :absorption :food :on-fire :effects} for jobs.lib.cost/damage-budget; the food is the job's (food-of)."
+  "The body's {:health :absorption :on-fire :effects} for jobs.lib.cost/damage-budget."
   [c]
-  (assoc (self-body (:primitives c)) :food (food-of c)))
+  (self-body (:primitives c)))
 
 (defn dangers? "Whether walks keep away from known dangers (the setting ::dangers)." [] (settings/get settings ::dangers))
 (defn zone-tolls? "Whether walks toll other bodies' zones (the setting ::zone-tolls)." [] (settings/get settings ::zone-tolls))
@@ -489,7 +489,7 @@
   (or (:gait (:args c)) (settings/get settings ::gait)))
 
 (defn damage-budget
-  "The hp the body may spend walking now (jobs.lib.cost/damage-budget): its health, food and effects, and the walk-settings
+  "The hp the body may spend walking now (jobs.lib.cost/damage-budget): its health and effects, and the walk-settings
   :min-health and :max-damage (the job's args over the body's settings); with the ctx's :over-budget (go-to chose to go over it) the survivable-budget."
   [c]
   ((if (:over-budget c) cost/survivable-budget cost/damage-budget) (damage-body c) (walk-settings c)))
@@ -533,7 +533,7 @@
 
 (defn body-policy
   "executor/policy for the body: the gait (:walk, :sneak) never sprints; with the walk's food (food-of) 6 or less the client does not sprint, so :sprint is false (a corner jump past
-  a high block is then refused). :damage-budget (hp, damage-budget) and :damage-weight (seconds an hp costs at its health)
+  a high block is then refused). :damage-budget (hp, damage-budget) and :damage-weight (seconds an hp costs at its health, and the hunger it brings, cost/hunger-s)
   price the damage of a walk, :danger-cap the total hp a second its known dangers cost (jobs.lib.cost/danger-cap, more when the job's :danger-max-rate is) (the job's :hp-seconds arg: the seconds an hp costs at full health, default jobs.lib.cost/hp-seconds);
   :max-drop and :fall-factor follow its fall enchantments and the longest drop it survives (the survivable-budget under the job's :max-damage,
   whatever the budget: a drop the budget refuses is a refusal the planner reports as :damageRefused, jobs.lib.cost/fall-profile).
@@ -550,7 +550,7 @@
                    (cost/air-profile (.-equipment self) (array-seq (.-effects self)))
                    (cost/swim-profile (.-equipment self))
                    {:damage-budget (damage-budget c)
-                    :damage-weight (cost/hp-price (.-health self))
+                    :damage-weight (+ (cost/hp-price (.-health self)) (cost/hunger-s food (.-health self) 1))
                     :danger-cap (max cost/danger-cap (:max-rate (cost/danger-opts)))}
                    (when-some [landing (cost/walk-landing)] {:landing landing})
                    {:drop-cost (cost/walk-drop-cost)}
