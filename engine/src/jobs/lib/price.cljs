@@ -58,7 +58,7 @@
   [c category]
   (let [self (.self (:primitives c))
         allowed (allowed c nil)
-        death (cost/death-cost (threats/death-body c) (u/self-pos c))
+        death (cost/death-s (:primitives c) (ctx/view c))
         work (risk/work-hp category (.-health self) death)]
     (when (and (not (cannot-heal? c)) (> work allowed) (<= (risk/work-hp category 20 death) (allowed-hp 20 (.-food self) nil true)))
       {:reason :low-health :health (.-health self) :work-hp (round1 work) :allowed (round1 allowed)
