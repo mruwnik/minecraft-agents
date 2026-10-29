@@ -1,6 +1,6 @@
 (ns engine.ready-test
   "jobs.lib.ready: the safe? and fit? checkers a job binds, as statuses over the shelter, the light and the mobs."
-  (:require [cljs.test :refer [deftest is are]]
+  (:require [cljs.test :refer [deftest is are testing]]
             [engine.hut-shelter-test :as hut]
             [engine.ctx :as ctx]
             [engine.game :as game]
@@ -216,8 +216,11 @@
 (deftest a-job-that-goes-to-its-place-binds-safe-at-that-place
   (are [check args] (= :later (lit 0 15 #(first (check (assoc (ctx-of (assoc open-night :blocks {"1,64,0" "red_bed"})) :args args)))))
     smelt/safe? {:furnace outside}
-    kitchen/safe? {:furnace {:x 40 :y 64 :z 0}}
-    pick-up-loose/safe? {}))
+    pick-up-loose/safe? {})
+  (testing "a stay cheaper than waiting the night out where the body stands, at hp an arrive-worth affords, goes ahead: prices decide"
+    (let [[kind text] (lit 0 15 #(kitchen/safe? (assoc (ctx-of (assoc open-night :blocks {"1,64,0" "red_bed"})) :args {:furnace {:x 40 :y 64 :z 0}})))]
+      (is (= :ok kind))
+      (is (re-find #"exposed, but 61.8 s there" text) "the stay is the walk to the furnace 40 blocks off and back"))))
 
 (deftest a-short-visit-in-the-open-night-goes-ahead-priced-by-its-exposure
   ;; the respawn set beside the body: a death there costs a short walk back
@@ -278,6 +281,14 @@
     {:inventory [{:name "wooden_sword" :count 1}] :entities (zombies-at 10)} [:ok :matched]
     {:inventory [{:name "wooden_sword" :count 1}] :entities (zombies-at 20 21)} [:ok :matched])
   (is (= :ok (first (ready/threatened (ctx-of (merge at-origin {:entities (zombies-at 10 11)}))))) "past the hostile-near radius"))
+
+(deftest act-price-weighs-acting-now-against-healing-first-and-reads-the-worth
+  (let [hurt (ctx-of (merge at-origin {:self {:pos {:x 0 :y 64 :z 0} :health 6 :food 20}}))
+        {:keys [now-s now? best]} (ready/act-price hurt 4 0 nil)]
+    (is now? "4 hp of 6 is within all but 1, an arrive-worth's allowance")
+    (is (= :heal (:wait best)))
+    (is (< (:s best) now-s) "4 hp lost at 6 health cost more than healing to full first and losing them then")
+    (is (= [false nil] ((juxt :now? :best) (ready/act-price (assoc hurt :worth (constantly 0)) 4 0 nil))) "a worth of 0 affords neither")))
 
 (deftest the-long-dig-jobs-wait-while-outmatched
   (are [safe] (= [:later :ok] (for [kit [{:inventory [{:name "wooden_sword" :count 1}]} {:inventory sword :equipment iron-worn}]]
@@ -928,3 +939,4 @@
     (is (< 0.018 dies 0.0195))
     (is (= 1510 (js/Math.round death)))
     (is (< 2.95 (price/stay-hp c 0.005 10) 3.15))))
+

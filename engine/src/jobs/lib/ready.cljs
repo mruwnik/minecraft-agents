@@ -1,6 +1,6 @@
 (ns jobs.lib.ready
   "The readiness checkers a job binds as its safe? and fit? exports: fns of the ctx giving a status (engine.contract).
-  safe-at, safe-at-by-night and safe-if-lit are :later while the place is exposed and the stay there is not affordable (jobs.lib.price/priced; the estimate of jobs.lib.spawn-light/exposure is
+  safe-at, safe-at-by-night and safe-if-lit are :later while the place is exposed and the stay there is not affordable (priced; the estimate of jobs.lib.spawn-light/exposure is
   above ::risk-limit; :look while the light there is unseen and a look from here would show it, else priced as unseen (unseen-status); :never when light is further off than the job waits; a dark hall no sky light reaches is exposed by its spawn chance, :never lowered by a torch; a small dark place is no exposure) or a danger is near
   (threatened); fit? is :later below the risky health or while poisoned (fit-armed also while unarmed); ok never refuses."
   (:require [jobs.lib.cost.health :as cost-health]
@@ -28,7 +28,8 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.storage :as storage]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.lib.walk-risk :as walk-risk]))
 
 (a/defargs settings
   {::risk-limit {:default 0.001 :spec (a/num-in 0 nil)
@@ -70,7 +71,7 @@
   "The exposure of the unseen place `to` no look from here shows, priced as unseen at its chance (Q16): spawn-light/chance-at's
   guess of its light. Dark that dawn lifts (chance-at with caves-free?: dark only the sky lights) waits for dawn
   (::light-patience-s) while what is left once it lifts is within ::risk-limit; other dark is :never lowered by a torch;
-  jobs.lib.price/priced prices either for the stay."
+  priced prices either for the stay."
   [c to]
   (let [p (:primitives c)
         chance (spawn-light/chance-at p to false)
@@ -138,12 +139,62 @@
       (contract/never :exposed (str "dark at " where ", light is " (js/Math.round @wait-s) " s away, over the " (js/Math.round patience) " s it waits") :chance chance)
       :else (dark-status c to))))
 
+(defn act-price
+  "{:now-s :now? :best} of acting now, risking hurt hp and lethal (its death in hp), against waiting where the body stands
+  first, by cost alone whatever the worth: until light (light-s, nil: no wait lights it), the act then risking nothing, and
+  until healed to full while the body can heal, the same risk then at full health. A wait costs its seconds, staying put
+  over them (walk-risk/stay-estimate) and the act after it (cost/risk-s). now? while the hp are within what the call's worth
+  (ctx/worth) buys (price/allowed-hp); best the cheapest wait {:wait :secs :s} whose hp and seconds the worth affords."
+  [c hurt lethal light-s]
+  (let [self (.self (:primitives c))
+        health (.-health self)
+        food (.-food self)
+        worth (ctx/worth c)
+        hp (+ hurt lethal)
+        per-hp (cost-health/heal-s-per-hp)
+        feet (sh-sense/feet (:primitives c))
+        stay-s (fn [secs] (let [in (assoc (walk-risk/stay-inputs c feet 0) :secs secs)]
+                            (walk-risk/risk-s c (check-cache/keyed c ::wait-stay in #(walk-risk/stay-estimate c in)))))
+        heal-s (when (and (not (price/cannot-heal? c)) (pos? per-hp) (< health 20)) (* per-hp (- 20 health)))
+        ways (cond-> []
+               light-s (conj {:wait :light :secs light-s :health health :hp 0 :s (+ light-s (stay-s light-s))})
+               heal-s (conj {:wait :heal :secs heal-s :health 20 :hp hp :s (+ heal-s (stay-s heal-s) (cost/risk-s 20 hurt lethal))}))]
+    {:now-s (cost/risk-s health hurt lethal)
+     :now? (<= hp (price/allowed-hp health food worth true))
+     :best (first (sort-by :s (filter #(and (<= (:hp %) (price/allowed-hp (:health %) food worth true)) (cost/affords? (:s %) worth)) ways)))}))
+
+(defn priced
+  "The status s of a place check, priced where it is :later or :never on exposure alone (:exposed with a :chance): the stay's
+  hp there (price/stay-parts over price/stay-s) acted on now against waiting (act-price; s's :wait-ms is its wait for light).
+  ok :priced while acting now is affordable and no affordable wait is cheaper; a cheaper wait, or the only affordable one,
+  holds :later with both prices (a wait to heal keeps s's data); else s."
+  [c s]
+  (let [[kind _ {:keys [reason chance wait-ms] :as data}] s]
+    (if-not (and (contains? #{:later :never} kind) (= :exposed reason) (number? chance))
+      s
+      (let [secs (price/stay-s c)
+            {:keys [hurt dies death]} (price/stay-parts c chance secs)
+            lethal (cost/lethal-hp {:chance dies :death death})
+            hp (+ hurt lethal)
+            {:keys [now-s now? best]} (act-price c hurt lethal (when (= :later kind) (some-> wait-ms (/ 1000))))
+            wait (fn [{:keys [wait] :as w}]
+                   (if (= :light wait)
+                     (update s 2 assoc :now-s now-s :wait-s (:s w))
+                     (contract/status :later :exposed (str "exposed: " (price/round1 secs) " s there cost " (price/round1 hp) " hp, " (price/round1 now-s)
+                                                           " s now; healing " (price/round1 (:secs w)) " s first costs " (price/round1 (:s w)) " s")
+                                      (assoc data :wait :heal :now-s now-s :wait-s (:s w) :recheck-after-ms walk-risk/recheck-ms))))]
+        (cond
+          (and best (< (:s best) now-s)) (wait best)
+          now? (contract/ok :priced (str "exposed, but " (price/round1 secs) " s there cost " (price/round1 hp) " hp, " (price/round1 now-s) " s, no wait cheaper"))
+          best (wait best)
+          :else s)))))
+
 (defn hall-status
   "The exposure of `to` (nil: here) for a place no check waits for light at (underground): ok unless the body is buried, then dark-status priced like any exposure."
   [c to]
   (let [p (:primitives c)
         to (update-vals (or to (sh-sense/feet p)) js/Math.floor)]
-    (price/priced c (if (sh-sense/buried? p)
+    (priced c (if (sh-sense/buried? p)
                       (dark-status c to)
                       (contract/ok :day "an unseen place's light is no reason to wait")))))
 
@@ -152,7 +203,7 @@
   [c to]
   (let [p (:primitives c)
         to (update-vals (or to (sh-sense/feet p)) js/Math.floor)]
-    (price/priced c (check-cache/cached c [::exposed to (sense/round-looked c)] #(at-status c to)))))
+    (priced c (check-cache/cached c [::exposed to (sense/round-looked c)] #(at-status c to)))))
 
 (defn trigger-args
   "The args of the register's hostile-near entry (muted or not), {} when it has none."
@@ -187,9 +238,9 @@
 
 (defn outmatched
   "Later :outmatched while the fight with every real danger known within ::crowd-radius (jobs.lib.danger/dangers with a way to
-  the body or a line of fire; heard mobs while muted and watched ones left out, as the hostile-near trigger does) would cost the
-  kit carried more than (price/allowed c nil), the share of health (jobs.lib.cost/fight-damage, the hostile reflex's formula): a player with a wooden sword
-  does not dig on in a cave five mobs walk, one in iron does."
+  the body or a line of fire; heard mobs while muted and watched ones left out, as the hostile-near trigger does) is not the
+  cheapest affordable way: its hp with the kit carried (jobs.lib.cost/fight-damage, the hostile reflex's formula) priced now
+  against healing first (act-price): a player with a wooden sword does not dig on in a cave five mobs walk, one in iron does."
   [c]
   (let [p (:primitives c)
         view (ctx/view c)
@@ -201,12 +252,13 @@
                                  :equipment (cost/equipment-of (.-equipment (.self p)))
                                  :mobs (mapv (fn [e] {:name (.-name e) :distance (danger/mob-distance p e) :hits 0}) near)})
              0)
-        ok-hp (price/allowed c nil)]
-    (if (<= hp ok-hp)
+        {:keys [now-s now? best]} (if (pos? hp) (act-price c hp 0 nil) {:now? true})]
+    (if (and now? (not (and best (< (:s best) now-s))))
       (contract/ok :matched "no fight known near that the kit cannot afford")
-      (contract/later :outmatched (str "a fight with the hostiles known near costs " (price/round1 hp) " hp, over the " (price/round1 ok-hp)
-                                       " the body can afford: " (dawn/hostile-text (map #(dawn/describe p %) near)))
-                      :hp hp :allowed ok-hp))))
+      (contract/later :outmatched (str "a fight with the hostiles known near costs " (price/round1 hp) " hp"
+                                       (if now? (str ", " (price/round1 now-s) " s now; healing first costs " (price/round1 (:s best)) " s") ", over what the body can afford")
+                                       ": " (dawn/hostile-text (map #(dawn/describe p %) near)))
+                      :hp hp :now-s now-s :wait-s (:s best)))))
 
 (defn unless-outmatched
   "The checker safe of a long stay, :later too while outmatched; its ::exposure half is safe's."
@@ -324,7 +376,7 @@
   ([f safe] (dark-near-ok nil f safe))
   ([torch-way f safe]
   (let [dark-wait? (fn [[kind _ data]] (and (#{:later :never} kind) (= :exposed (:reason data))
-                                           (or (= :never kind) (contains? (:lowered-by data) :light))))
+                                           (or (= :never kind) (some #{:light :torch} (:lowered-by data)))))
         near? (fn [c] (let [at (f c)] (or (nil? at) (cost/near-body? (:primitives c) at))))
         way (fn [c [_ _ {:keys [chance]}]]
               (when torch-way

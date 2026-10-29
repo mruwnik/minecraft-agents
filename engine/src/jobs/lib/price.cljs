@@ -1,11 +1,9 @@
 (ns jobs.lib.price
   "The one acceptable-risk rule of go-to's walks and the readiness place checks: the hp of expected damage the body may take
-  (allowed), and the price of staying where mobs spawn (stay-hp). A place check that fails only on exposure is ok while the
-  seconds the job stays there (::stay-s of the ctx: its own figure, via stays, else its category's, via staying:
-  cost.risk/work-s) cost no more than allowed (Q380, Q382); the walk to the
-  place is priced by the go-to it runs."
+  (allowed), and the price of staying where mobs spawn (stay-hp) for the seconds the job stays at its place (::stay-s of the
+  ctx: its own figure, via stays, else its category's, via staying: cost.risk/work-s), which jobs.lib.ready/priced weighs
+  against waiting (Q380, Q382); the walk to the place is priced by the go-to it runs."
   (:require [engine.args :as a]
-            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.check-cache :as check-cache]
@@ -97,23 +95,9 @@
 
 (defn stay-s "Seconds c's job stays at its place: its ::stay-s, else a click's." [c] (or (::stay-s c) (risk/work-s :click)))
 
-(defn priced
-  "The status s of a place check, but ok where it is :later or :never on exposure alone (:exposed with a :chance) while the hp the
-  job's stay there costs are within (allowed c nil): the share of health (body fitness; its wait is not priced as a way yet)."
-  [c s]
-  (let [{:keys [reason chance]} (nth s 2 nil)]
-    (if-not (and (contains? #{:later :never} (first s)) (= :exposed reason) (number? chance))
-      s
-      (let [secs (stay-s c)
-            hp (stay-hp c chance secs)
-            ok-hp (allowed c nil)]
-        (if (<= hp ok-hp)
-          (contract/ok :priced (str "exposed, but " (round1 secs) " s there cost " (round1 hp) " hp, within " (round1 ok-hp)))
-          s)))))
-
 (defn stays
   "The checker `safe` of a job that stays put or visits a place, run with (stay-s c) seconds as its stay there: `priced` prices an
-  exposed place by it, so a short act in the dark goes ahead (Q382) and a long one waits."
+  exposed place by it (jobs.lib.ready/priced), so a short act in the dark goes ahead (Q382) and a long one waits."
   [safe stay-s]
   (with-stay safe stay-s false))
 
