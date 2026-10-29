@@ -279,7 +279,8 @@
   go-to's pillar or stair): one go-to call (child/run!*, slot :walk). :arrived, :continue (go-to waits on the world) or :unreachable (go-to's :risky cause kept in the job memory as :walk-fail, see walk-fail)."
   ([c item] (walk-down! c item #{:walk :clear-seal}))
   ([c item ways]
-  (let [r (await (child/run!* c :walk 'jobs.movement.go-to {:pos (item-cell item) :range 1 :ways ways :worth (drops-worth c item)}))]
+  ;; the trip is added back: go-to's tour-worth takes it off, and a drop in sight needs no finding
+  (let [r (await (child/run!* c :walk 'jobs.movement.go-to {:pos (item-cell item) :range 1 :ways ways :worth (+ (drops-worth c item) (cost/trip))}))]
     (cond
       (= :continue r) :continue
       (and (= :done (:kind r)) (:arrived (:data r))) :arrived
@@ -725,7 +726,7 @@
       (or (await (look!))
           (when (> (- (second (u/cell-vec near)) (feet-y c)) 1)
             (let [before (held-counts c)
-                  r (await (child/run!* c :walk 'jobs.movement.go-to {:pos (u/cell-vec near) :range 1 :ways #{:walk :pillar :stair :clear-seal}}))]
+                  r (await (child/run!* c :walk 'jobs.movement.go-to {:pos (u/cell-vec near) :range 1 :ways #{:walk :pillar :stair}}))]
               (book-gained! c before)
               (cond
                 (= :continue r) :continue
