@@ -170,6 +170,21 @@
           (is (= [10 64 0] (feet p)))
           (is (= [:bridge] (map :step (events-of seen :reach.span)))))))))
 
+(def five-gulfs
+  "Stone floors at y 63 over x -20..0, 6, 12, 18, 24 and 30..45, with a 5-wide void between each, z -20..20."
+  (apply merge (map (fn [[x0 x1]] (box x0 63 -20 x1 63 20 "stone")) [[-20 0] [6 6] [12 12] [18 18] [24 24] [30 45]])))
+
+(deftest a-fifth-gap-is-bridged-after-the-four-before-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p seen]} (await (run-job! {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks five-gulfs :inventory [{:name "dirt" :count 64}]}
+                                                    'jobs.movement.reach
+                                                    {:pos [40 64 0] :range 0}))]
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (= [40 64 0] (feet p)))
+          (is (< 4 (count (events-of seen :reach.span))) "more spans than the old cap of four"))))))
+
 (deftest a-walk-only-call-does-not-bridge
   (async done
     (tu/run-async done

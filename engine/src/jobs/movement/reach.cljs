@@ -4,6 +4,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.checks :as checks]
+            [jobs.lib.cost :as cost]
             [jobs.lib.child :as child]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.escape :as escape]
@@ -28,8 +29,8 @@
   {:arrived true}. A walk that finds no way (nothing-possible with a planner :why that proves the world must change) prices the
   stair down and the bridge from where the body stands: when the cheaper of them is no dearer than go-to's own way it is
   built (jobs.access.stair :dir :down, jobs.access.bridge) and the next round walks on; else the whole go-to runs once with
-  all the :ways it allows and its ending is this job's. A span that changed nothing is not tried again; at most the
-  max-rounds setting of them are built. Other endings of the walk (a limit, a refused condition, a danger) pass up unchanged.
+  all the :ways it allows and its ending is this job's. A span that changed nothing is not tried again, and
+  the whole go-to runs once the next one is not worth its price (cost/try-again? :walk of the spans that changed nothing in a row). Other endings of the walk (a limit, a refused condition, a danger) pass up unchanged.
   :ways (default all) are go-to's plus :bridge; :stair covers the stair down. Every cell a span cuts or fills is checked
   against zones and plans (the cells go-to's :ignore-zones? lets through), natural blocks are cut only with :stair.
   Ends: done {:arrived true}; go-to's ending otherwise, with it as :because. :continue while a child waits on the world.
@@ -42,8 +43,7 @@
    :ignore-zones? :shared})
 
 (a/defargs settings
-  {::job-time-s {:default 1800 :doc "Seconds one call may take, its walks and spans included, before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
-   ::max-rounds {:default 4 :doc "The most spans (a stair down or a bridge) one call builds before the whole go-to runs." :spec (a/int-in 1 nil)}})
+  {::job-time-s {:default 1800 :doc "Seconds one call may take, its walks and spans included, before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
 (def ways (conj way-steps/ways :bridge))
 
@@ -201,7 +201,7 @@
   (await (look-ahead! c (feet-of c)))
   (let [m (ctx/mem c)
         goal (mapv #(js/Math.floor %) ((juxt :x :y :z) (goal-of c)))
-        span (when (< (:built m 0) (settings/get settings ::max-rounds)) (span-way c (feet-of c) goal (:skip m #{})))]
+        span (when (or (zero? (u/failures c)) (cost/try-again? c :walk)) (span-way c (feet-of c) goal (:skip m #{})))]
     (when span
       (ctx/emit! c :reach.span :info {:why (walk-why e) :step (:step (or (:then span) span)) :approach (= :approach (:step span)) :at (feet-of c) :text (str "no way on foot: " (name (:step span)) (when (= :approach (:step span)) " to where a stair can start"))}))
     (if (and (not span) (= #{:walk} (disj (set (or (:ways (ctx/frozen-call c)) ways)) :bridge)))
@@ -219,6 +219,7 @@
         r (waits/waiting-out c (await (ctx/call c (keyword (str "span-" (or built 0))) job args)))
         moved? (not= from (feet-of c))]
     (when-not (= :continue r)
+      (if moved? (u/progress! c) (u/failed! c))
       (ctx/update-mem! c #(cond-> (-> % (dissoc :span :from) (update :built (fnil inc 0)))
                             (not moved?) (update :skip (fnil conj #{}) (skip-key span))
                             (and moved? (= :approach (:step span))) (assoc :direct true))))
