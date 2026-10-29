@@ -3,6 +3,7 @@
   (:require [engine.contract :as contract]
             [engine.memory :as mem]
             [jobs.lib.body :as body]
+            [jobs.lib.cost :as cost]
             [jobs.lib.cost.risk :as risk]
             [jobs.lib.meal :as meal]
             [jobs.lib.reserve :as reserve]
@@ -35,7 +36,7 @@
         health (.-health self)]
     (and (not (body/recovery-pending? memory :low-health))
          (pos? health)
-         (risk/too-hurt? health nil :long)
+         (risk/too-hurt? health nil :long (cost/death-s world memory))
          (not (body/burning? world))
          (not (body/poisoned? world))
          (not (sh-sense/sleeping? world))

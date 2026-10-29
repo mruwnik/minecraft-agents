@@ -445,7 +445,7 @@
   "Too hurt for a job's work of category (cost.risk/too-hurt?) with only food able to heal it (cannot-heal?): work that risks the body should wait for food."
   [c category]
   (let [self (.self (:primitives c))]
-    (and (risk/too-hurt? (.-health self) (.-food self) category) (cannot-heal? c))))
+    (and (risk/too-hurt? (.-health self) (.-food self) category (cost/death-s (:primitives c) (ctx/view c))) (cannot-heal? c))))
 
 (defn fed-fit?
   "fit?, and later :low-health while hurt-cannot-heal? for its :work: a hurt body that only food heals gets food before work that roams."
@@ -467,7 +467,7 @@
   of a :long stay without the hungry cut, which the walks' own price applies) with only food able to heal it (cannot-heal?)."
   [c]
   (let [self (.self (:primitives c))]
-    (boolean (or (zero? (.-food self)) (and (risk/too-hurt? (.-health self) nil :long) (cannot-heal? c))))))
+    (boolean (or (zero? (.-food self)) (and (risk/too-hurt? (.-health self) nil :long (cost/death-s (:primitives c) (ctx/view c))) (cannot-heal? c))))))
 
 (defn or-starving
   "The status of `safe` for c, or while starving? the status of threatened when `safe` is not ok (a starving body walks by night)."

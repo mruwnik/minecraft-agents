@@ -1,6 +1,7 @@
 (ns triggers.survival.hungry
   "The hungry trigger, and the condition the get-food job shares with it."
   (:require [jobs.lib.body :as body]
+            [jobs.lib.cost :as cost]
             [jobs.lib.cost.risk :as risk]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -79,7 +80,7 @@
                     (<= (.-food self) (settings/get settings ::urgent-food))
                     (and (foods/hungry? (.-food self) (.-health self) args) (meal/carries-food? self reserved)))]
     (and (not (body/recovery-pending? memory :hungry))
-         (not (risk/too-hurt? (.-health self) nil :long))
+         (not (risk/too-hurt? (.-health self) nil :long (cost/death-s world memory)))
          (meal/wants-meal? self reserved args)
          (not (resting? self memory args))
          (or (meal/carries-food? self reserved)

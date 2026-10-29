@@ -53,7 +53,7 @@
                 (conj kept e)))
             []
             (->> (ctx/entries c :hurt)
-                 (filter #(let [{:keys [health food pos]} (:data %)] (and pos health (risk/too-hurt? health food :long))))
+                 (filter #(let [{:keys [health food pos]} (:data %)] (and pos health (risk/too-hurt? health food :long (cost/death-s (:primitives c) (ctx/view c) pos)))))
                  reverse))))
 
 (defn recent

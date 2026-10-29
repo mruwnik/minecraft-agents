@@ -33,8 +33,6 @@
                           :doc "The scale of the half-Cauchy prior on how far the notice rates of a class's distances spread round its rate, as their coefficient of variation (notice-posterior): weak, the usual prior for a spread over few cases."}
    ::deaths-per-hour {:default 1.3 :spec (a/num-in 0 nil)
                       :doc "Deaths an hour of play, every cause: the fresh-start trials of 2026-10-21/22 (Wicken r5, 8 deaths in 6h15; docs/fresh-start-design.md section 1)."}
-   ::spawn-walk-blocks {:default 5000 :spec (a/num-in 0 nil)
-                        :doc "Blocks of the walk back priced for a body given with no :respawn or no place (cost.risk/work-hp's placeless body): a body dropped far out is 5000 or more from world spawn (docs/fresh-start-design.md section 4)."}
    ::spawn-horizon-s {:default 1200 :spec (a/num-in 0 nil)
                       :doc "Seconds a respawn point is priced over (spawn-worth): one in-game day, after which the needs-bed errand comes again."}
    ::memory-ms {:default 7200000 :spec (a/num-in 1 nil)
@@ -66,14 +64,14 @@
   (* (settings/get settings ::seconds-per-level) (or (:level body) 0)))
 
 (defn walk-back-blocks
-  "Blocks from the body's :respawn to `at` (nil: the body's own :at, where a kit was read); ::spawn-walk-blocks with
-  either unknown."
+  "Blocks from the body's :respawn to `at` (nil: the body's own :at, where a kit was read); 0 with either unknown: a body
+  that knows no respawn is priced as waking where it died."
   [body at]
   (let [from (:respawn body)
         at (or at (:at body))]
     (if (and from at)
       (js/Math.hypot (- (:x from) (:x at)) (- (:y from) (:y at)) (- (:z from) (:z at)))
-      (settings/get settings ::spawn-walk-blocks))))
+      0)))
 
 (defn kept?
   "Whether the walk back from the body's :respawn to `at` beats the despawn of what a death there leaves

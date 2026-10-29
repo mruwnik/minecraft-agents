@@ -307,13 +307,15 @@
   (is (< (cost/dig-cost "dirt") (cost/dig-cost "stone") (cost/dig-cost "obsidian")))
   (is (nil? (cost/dig-cost "bedrock")) "never dug"))
 
+(def spawn-far "A respawn far off: a death costs the walk back." {:x 5000 :y 64 :z 0})
+
 (deftest dark-factor-grows-with-the-danger-to-the-kit
   (let [floor (cost/dark-factor)
-        unarmed (cost/dark-factor {:weapon nil :equipment nil})
-        sword (cost/dark-factor {:weapon "iron_sword" :equipment nil})
-        armed-armoured (cost/dark-factor {:weapon "iron_sword" :equipment iron-set})]
+        unarmed (cost/dark-factor {:weapon nil :equipment nil :respawn spawn-far :at {:x 0 :y 64 :z 0}})
+        sword (cost/dark-factor {:weapon "iron_sword" :equipment nil :respawn spawn-far :at {:x 0 :y 64 :z 0}})
+        armed-armoured (cost/dark-factor {:weapon "iron_sword" :equipment iron-set :respawn spawn-far :at {:x 0 :y 64 :z 0}})]
     (is (zero? floor) "the bare factor is the flat floor")
-    (is (= unarmed (* (cost/spawns-hurt {:weapon nil :equipment nil} 1 nil) (cost/spawn-chance [0 0 0]) (cost/hp-seconds)))
+    (is (= unarmed (* (cost/spawns-hurt {:weapon nil :equipment nil :respawn spawn-far :at {:x 0 :y 64 :z 0}} 1 nil) (cost/spawn-chance [0 0 0]) (cost/hp-seconds)))
         "an unarmed body pays the hurt of the spawn mix, the one spawn price walk-risk uses")
     (is (> unarmed sword armed-armoured floor) "a bare body pays most, armour and a sword less, never below the floor")))
 
@@ -330,7 +332,7 @@
           (is (< rarer once) "by them"))))))
 
 (deftest spawns-hurt-is-at-most-the-life
-  (let [body {:weapon nil :equipment nil :health 6}]
+  (let [body {:weapon nil :equipment nil :health 6 :respawn spawn-far :at {:x 0 :y 64 :z 0}}]
     (is (< (cost/spawns-hurt body 0.1 nil) 6))
     (is (= 6 (cost/spawns-hurt body 50 nil)) "fifty spawns take the life, no more")))
 
@@ -453,6 +455,11 @@
   (is (= 32 (death/walk-back-blocks (wworld/kit-of (fake/create {:self {:pos [40 64 3] :worldSpawn [0 64 0]}}) nil) nil))
       "to 16 blocks"))
 
+(deftest a-death-is-priced-from-the-body-s-own-respawn-not-a-default-walk
+  (let [at #(fake/create {:self {:pos [40 64 3] :worldSpawn %}})]
+    (is (< (cost/death-s (at [40 64 40]) nil) (cost/death-s (at [4000 64 0]) nil)) "a near spawn is a cheap death")
+    (is (< (cost/death-s (at nil) nil) (cost/death-s (at [40 64 40]) nil)) "no known respawn: no walk priced")))
+
 (deftest a-hold-costs-its-seconds-and-hp-lost-and-a-way-out-its-hurt-and-death-risk
   (let [body {:respawn {:x 0 :y 64 :z 0} :level 0 :health 3}
         route {:spawns 0.5}]
@@ -478,9 +485,9 @@
 
 (deftest a-find-is-worth-its-value-a-bed-its-respawn-too-and-no-names-nothing
   (let [here {:x 0 :y 64 :z 0}]
-    (is (> (cost/worth-to {} ["bed"] here) (cost/worth-to {} ["oak_planks"] here)) "a plan's bed block counts as a bed")
-    (is (= (cost/worth-to {} ["white_bed"] here) (cost/worth-to {} ["red_bed" "white_bed"] here)))
-    (is (zero? (cost/worth-to {} [] here)))))
+    (is (> (cost/worth-to {:respawn spawn-far :at {:x 0 :y 64 :z 0}} ["bed"] here) (cost/worth-to {:respawn spawn-far :at {:x 0 :y 64 :z 0}} ["oak_planks"] here)) "a plan's bed block counts as a bed")
+    (is (= (cost/worth-to {:respawn spawn-far :at {:x 0 :y 64 :z 0}} ["white_bed"] here) (cost/worth-to {:respawn spawn-far :at {:x 0 :y 64 :z 0}} ["red_bed" "white_bed"] here)))
+    (is (zero? (cost/worth-to {:respawn spawn-far :at {:x 0 :y 64 :z 0}} [] here)))))
 
 (deftest waiting-costs-the-share-of-the-time-until-needed-all-of-it-from-then
   (is (= 25 (cost/wait-price 100 30 120)))
@@ -498,7 +505,7 @@
     (is (zero? (cost/route-death-cost body {} far)) "no mob met spawning, no known threat: no death")))
 
 (deftest a-known-threat-the-route-meets-costs-the-death-of-the-answer-the-body-would-take
-  (let [fist {:health 20}
+  (let [fist {:health 20 :respawn spawn-far :at {:x 0 :y 64 :z 0}}
         route (fn [n] {:cells (for [x (range n)] {:x x :y 64 :z 0})})
         near-x (fn [x0] (fn [x _ _] (when (<= x0 x) 1)))
         chance (fn [body route & threats] (cost/death-chance body (assoc route :threats threats)))

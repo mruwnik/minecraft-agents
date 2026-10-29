@@ -450,6 +450,11 @@
    :respawn (respawn-of p view)
    :carried (:value (item-value (u/inventory p)))})
 
+(defn death-s
+  "Seconds a death of the body of p costs at `at` (default its feet): death-cost of death-body."
+  ([p view] (death-s p view (some-> (.self p) .-pos u/pos-of)))
+  ([p view at] (death-cost (death-body p view) at)))
+
 (defn bed? [n] (or (= "bed" n) (str/ends-with? n "_bed")))
 
 (defn worth-to
