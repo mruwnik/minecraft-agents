@@ -41,6 +41,7 @@
             [jobs.items.collect-drops :as collect-drops]
             [jobs.items.kitchen :as kitchen]
             [jobs.lib.look-edge :as look-edge]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.items.get-kit :as get-kit]
             [jobs.items.obtain :as obtain]
             [jobs.gather.mine :as mine]
@@ -520,6 +521,16 @@
       (ready/safe-at (constantly {:x 0 :y 63 :z 0})) false
       ready/safe-here-by-night true)))
 
+(deftest a-dark-tunnel-whose-far-end-no-look-shows-is-priced-as-the-walk-to-look
+  (let [status (fn [hall] (with-redefs [look-edge/pending (fn ([_] nil) ([_ _ _] nil))
+                                        reach-room/unseen-sides (constantly [[6 64 0] [6 65 0]])
+                                        sh-inside/dark-hall (constantly hall)
+                                        sh-sense/buried? (constantly true)]
+                            (lit 0 0 #((juxt first (fn [s] (:reason (nth s 2)))) (ready/hall-status (ctx-of (assoc tunnel :time st/noon)) nil)))))]
+    (is (= [:ok :look-first] (status :roofed)) "the end is unseen: the walk to it is affordable, the stay judged on the way")
+    (is (= [:never :exposed] (status :far)) "dark floor seen reaching far: no look changes it")
+    (is (= [:never :exposed] (settings/with-settings {:jobs.lib.cost.risk/risk-share 0} #(status :roofed))) "no risk allowed: a torch lowers it")))
+
 (deftest an-unseen-cell-a-look-round-could-not-show-is-judged-where-a-buried-body-stands
   (are [looked expected] (= expected (with-redefs [sh-sense/seen-cell? (fn [_ c] (not= outside (select-keys c [:x :y :z])))
                                                    sense/round-looked (constantly looked)
@@ -532,7 +543,8 @@
   (are [looked expected] (= expected (with-redefs [sh-sense/seen-cell? (fn [_ c] (not= outside (select-keys c [:x :y :z])))
                                                    sense/round-looked (constantly looked)
                                                    lib-look/look-shows? (constantly true)]
-                                       (kind (ready/safe-at (constantly outside)) open-night)))
+                                       (settings/with-settings {:jobs.lib.cost.risk/risk-share 0}
+                                         #(kind (ready/safe-at (constantly outside)) open-night))))
     #{} :look
     #{[15 64 0]} :never))
 

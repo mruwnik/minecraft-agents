@@ -95,29 +95,49 @@
                                              :recheck-after-ms (* 1000 light-in) :wait-ms (* 1000 light-in))
       :else (contract/never :exposed (str "dark at " where ", light is " (js/Math.round light-in) " s away, over the " (js/Math.round patience) " s it waits") :chance chance))))
 
+(defn farthest-unseen-side
+  "The unseen side cell {:x :y :z} of the room round the feet farthest from them within look-edge/max-edge-walk, nil
+  when none: the far end of a dark tunnel a walk shows."
+  [p]
+  (let [feet (sh-sense/feet p)]
+    (some->> (reach-room/unseen-sides p feet)
+             (map #(zipmap [:x :y :z] %))
+             (filter #(<= (u/dist feet %) look-edge/max-edge-walk))
+             seq
+             (apply max-key #(u/dist feet %)))))
+
 (defn dark-status
   "The exposure of the dark place `to` no wait lights: go-to's spawn chance (spawn-light/chance-at) of the cell the body would
   stand in there (hall-cell), dark only in a dark hall; over ::risk-limit :never, lowered by a torch. Where that cell is
-  the body's own, the unseen walls of its room (look-edge/pending) are looked at first: an unseen wall is an open side."
-  [c to]
-  (let [p (:primitives c)
-        at (spawn-light/hall-cell p to)
-        chance (spawn-light/chance-at p at false)
-        sides (delay (when (u/within? (sh-sense/feet p) at 1) (look-edge/pending c (sense/round-looked c) 0)))]
-    (cond
-      (<= chance (settings/get settings ::risk-limit))
-      (contract/ok :sealed (str "dark at " (place-text to) ", no dark floor reaches beyond " sh-inside/spawn-free-radius " blocks: nothing spawns near the body"))
-      (seq @sides)
-      (contract/look :exposed (str "dark at " (place-text to) ", walls of the room round the body not all seen") :look-at (vec @sides) :room-sides true)
-      :else
-      (contract/never :exposed (str "dark at " (place-text to) ", and a mob can walk from dark floor farther than " sh-inside/spawn-free-radius " blocks off (a hall, or an open side of this room): mobs spawn there, waiting never lights it, a torch does")
-                      :lowered-by #{:torch} :chance chance :at at))))
+  the body's own, the unseen walls of its room (look-edge/pending) are looked at first: an unseen wall is an open side.
+  A hall judged by an unseen edge (sh-inside/dark-hall :roofed or :sky) is also priced as the walk to look (look-first):
+  to `goal` (default `to`), or, where that is the body's cell, to the room's farthest unseen side."
+  ([c to] (dark-status c to to))
+  ([c to goal]
+   (let [p (:primitives c)
+         feet (sh-sense/feet p)
+         at (spawn-light/hall-cell p to)
+         chance (spawn-light/chance-at p at false)
+         sides (delay (when (u/within? feet at 1) (look-edge/pending c (sense/round-looked c) 0)))
+         look-to (delay (when (#{:roofed :sky} (sh-inside/dark-hall p at nil))
+                          (if (u/within? feet goal 1) (farthest-unseen-side p) goal)))]
+     (cond
+       (<= chance (settings/get settings ::risk-limit))
+       (contract/ok :sealed (str "dark at " (place-text to) ", no dark floor reaches beyond " sh-inside/spawn-free-radius " blocks: nothing spawns near the body"))
+       (seq @sides)
+       (contract/look :exposed (str "dark at " (place-text to) ", walls of the room round the body not all seen") :look-at (vec @sides) :room-sides true)
+       :else
+       (cond-> (contract/never :exposed (str "dark at " (place-text to) ", and a mob can walk from dark floor farther than " sh-inside/spawn-free-radius " blocks off (a hall, or an open side of this room): mobs spawn there, waiting never lights it, a torch does")
+                               :lowered-by #{:torch} :chance chance :at at)
+         @look-to (look-first c @look-to (spawn-light/dark-share p at false)))))))
 
 (defn at-status
   "The status of the exposure of the walk of c's body to `to`: ok while sheltered or the chance is within ::risk-limit,
   else by what lowers it. Waiting is for dawn only where it lifts the darkness, as go-to's walk-risk/wait-lowers? has it (the sky
-  of a way out of the shelter, spawn-light/exposure's :light, or spawn-light/dawn-lowers?), and the light comes within ::light-patience-s; other darkness is dark-status's. Unseen light no look from here would show is unseen-status's."
-  [c to]
+  of a way out of the shelter, spawn-light/exposure's :light, or spawn-light/dawn-lowers?), and the light comes within ::light-patience-s; other darkness is dark-status's. Unseen light no look from here would show is unseen-status's.
+  `goal` (default `to`) is where the job goes, when its place is judged at the feet."
+  ([c to] (at-status c to to))
+  ([c to goal]
   (let [p (:primitives c)
         shelter (:data (ctx/latest c :shelter))
         {:keys [chance lowered-by look-at light-in]} (spawn-light/exposure p to shelter)
@@ -135,17 +155,17 @@
       (and (contains? lowered-by :look) (hidden-below? p to))
       (contract/ok :sealed (str "unseen below at " where ": underground, no look shows it and dawn does not light it; only threats count"))
       (and (contains? lowered-by :look) (sense-looked? c look-at) (sh-sense/buried? p) (not (u/within? (sh-sense/feet p) to 0)))
-      (at-status c (sh-sense/feet p))
+      (at-status c (sh-sense/feet p) to)
       (and (contains? lowered-by :look) (not-any? #(look/look-shows? p %) look-at))
       (unseen-status c to)
       (and (contains? lowered-by :look) (sense-looked? c look-at))
-      (dark-status c to)
+      (dark-status c to goal)
       (contains? lowered-by :look) (contract/look :exposed (str "light at " where " not seen") :look-at look-at)
       (and @wait-s (<= @wait-s patience))
       (contract/later :exposed (str "dark at " where " until light") :lowered-by #{:light} :chance chance :recheck-after-ms (* 1000 @wait-s) :wait-ms (* 1000 @wait-s))
       @wait-s
       (contract/never :exposed (str "dark at " where ", light is " (js/Math.round @wait-s) " s away, over the " (js/Math.round patience) " s it waits") :chance chance)
-      :else (dark-status c to))))
+      :else (dark-status c to goal)))))
 
 (defn act-price
   "{:now-s :now? :best} of acting now, risking hurt hp and lethal (its death in hp), against waiting where the body stands
