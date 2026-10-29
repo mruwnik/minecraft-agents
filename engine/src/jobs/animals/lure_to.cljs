@@ -517,12 +517,11 @@
       :else (do (await (watch/watch! c {})) (await (walk! c))))))
 
 (defn ^:async round
-  "The whole attempt: steps until the job ends; yields only while a child waits on the world. One comfort section
-  (ctx/atomic :lure): a chore reflex does not cut in and leave the animal standing, up to its cap."
+  "The whole attempt: steps until the job ends; yields only while a child waits on the world. Each walk leg is a comfort
+  section (escort/walk-legs!), so a limit crossed during one ends the lure when it closes."
   [c]
   (animals/reserve-bait! c (:mob (:args c)))
-  (await (ctx/atomic c :comfort :lure
-                     #(pace/steps! c (fn ^:async s [] (let [r (await (step c))] (if (= :yield r) :continue r)))))))
+  (await (pace/steps! c (fn ^:async s [] (let [r (await (step c))] (if (= :yield r) :continue r))))))
 
 (defn ^:async shut-held!
   "Without :keep-food, the plans whose gates were held open during the run (a gate opened by hand included) are

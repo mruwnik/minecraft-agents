@@ -313,7 +313,7 @@
     (do (ctx/update-mem! c assoc :led-deeper true) :again)))
 
 (defn ^:async walk-legs!
-  "Walk to target (within range) in short go-to legs in child slot, looking at the animal after each (a pull passes
+  "Walk to target (within range) in short go-to legs in child slot (each leg a comfort section: a chore reflex does not leave the animal standing, up to its cap; a limit crossed in a leg ends the call when it closes), looking at the animal after each (a pull passes
   follow-reach as gap: it strains the lead on purpose; a plain walk safe-gap). The body does not
   outrun the animal: when it is out of sight or trails too far the walk answers :catching-up and looks again at the next
   round before the next leg. Answer :arrived, :failed (a leg did not arrive),
@@ -334,8 +334,9 @@
                 searching (and searching (<= (inc (:search-rounds (ctx/mem c) 0)) (max-search-rounds)))
                 leg (or leg (when-not searching (await (quoted-leg! c target gap))))
                 r (when-not searching
-                    (await (child/call-walk* c slot
-                                             {:pos (or leg target) :range (if leg 1 range) :doors :leave-open :ways #{:walk :clear-seal} :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
+                    (await (ctx/atomic c :comfort :leg
+                                       #(child/call-walk* c slot
+                                                          {:pos (or leg target) :range (if leg 1 range) :doors :leave-open :ways #{:walk :clear-seal} :ignore-zones? (boolean (:ignore-zones? (:args c)))}))))]
             (when-not searching (ctx/update-mem! c dissoc :search-rounds))
             (cond
               searching (do (ctx/update-mem! c update :search-rounds (fnil inc 0)) :searching)

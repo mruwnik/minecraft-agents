@@ -65,16 +65,16 @@
     {:sighting {:key "u1" :pos {:x 9 :y 64 :z 0} :at 1000}} ["u1"]
     {:sighting {:key "u2" :pos {:x 9 :y 64 :z 0} :at 1000}} []))
 
-(deftest a-lure-in-progress-is-one-comfort-section-so-chore-reflexes-wait
+(deftest a-lure-leg-is-a-comfort-section-so-chore-reflexes-wait
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p clock]} (h/setup {:floor tu/walk-floor :inventory wheat :entities [(cow 1 3)]} 50)
-              release (.hold (.-world p) "moveTo")]
+              release (.hold (.-world p) "steer")]
           (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal}) {})
           (swap! clock + 700)
           (let [round (core/tick! eng)]
-            (await (js/Promise. (fn [resolve] (js/setTimeout resolve 0))))
+            (dotimes [_ 20] (await (js/Promise. (fn [resolve] (js/setTimeout resolve 5)))))
             (is (= :comfort (activity/section-level eng (:token @(:activity eng)))))
             (release)
             (await round)))))))
