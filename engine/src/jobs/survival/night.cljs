@@ -154,6 +154,8 @@
   (let [[_ mean most] (get-in (sh-clock/night-left-quote c) [:uses :job-time])]
     {:uses {:job-time [0 mean most]}}))
 
+(def worth-of "The loss the night averts (bed-down/worth-of)." bed-down/worth-of)
+
 (def needs-bed-policy {:cap 1 :ttl sh-clock/ms-per-day})
 
 (defn note-needs-bed! [c]

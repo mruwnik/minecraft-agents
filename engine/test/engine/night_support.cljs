@@ -188,8 +188,8 @@
      @log)))
 
 (def walled-home
-  "The home walled in with a built block, which go-to never digs to reach it."
-  (into home-roof (for [x [9 10 11] y [64 65] z [-1 0 1] :when (not= [x z] [10 0])] [(str x "," y "," z) "stone_bricks"])))
+  "The home walled in with an unbreakable block, which go-to never digs to reach it."
+  (into home-roof (for [x [9 10 11] y [64 65] z [-1 0 1] :when (not= [x z] [10 0])] [(str x "," y "," z) "bedrock"])))
 
 (def walled-pen
   "A cell at [10 64 4] walled in with a built block, which go-to never digs to reach it."

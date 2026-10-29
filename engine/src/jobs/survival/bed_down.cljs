@@ -119,6 +119,20 @@
   (* (cost/hp-price (or (.-health (.self (:primitives c))) 20))
      (+ (price/stay-hp c chance secs) (price/way-fight-hp c at))))
 
+(defn open-price
+  "exposed-price of secs in the open at the worst of cells, each at its night-chance."
+  [c cells secs]
+  (let [p (:primitives c)] (apply max (map #(exposed-price c (spawn-light/night-chance p %) secs %) cells))))
+
+(defn stand-cells "Where the body spends the night if it does nothing: its feet, or asleep the cells it gets up to (wake-cells)." [p]
+  (if (sh-sense/sleeping? p) (wake-cells p) [(sh-sense/feet p)]))
+
+(defn worth-of
+  "The loss the night averts: the night left in the open where the body stands (open-price of stand-cells), its hurt and
+  death at cost/hp-price."
+  [c]
+  (open-price c (stand-cells (:primitives c)) (second (get-in (sh-clock/night-left-quote c) [:uses :job-time]))))
+
 (defn respawn-body
   "threats/death-body, its :respawn the bed slept in last when that came after the latest :spawn-bed (lying down sets
   the respawn point)."
@@ -183,7 +197,7 @@
         carried? (and (nil? bed) (not asleep?) (sh-beds/place-wanted? c))
         at (or bed feet)
         chance (spawn-light/night-chance p (sh-sense/feet p))
-        stands (if asleep? (wake-cells p) [feet])
+        stands (stand-cells p)
         [_ left] (get-in (sh-clock/night-left-quote c) [:uses :job-time])
         lost (if (zero? (sh-sleepers/sleepers-short p view)) 0 left)
         refused? (and (not asleep?) (sh-sleepers/monsters-near-bed? p at))
@@ -191,7 +205,7 @@
         bed-open (min left (max bed-lost (if asleep? 0 (+ sh-sleepers/sleep-start-s (if carried? (sh-beds/sleep-s c nil) 0)))))
         in-ground? (sh/in-ground? p view)
         way-s #(cost/night-way-s in-ground? left %)
-        open #(apply max (map (fn [cell] (exposed-price c (spawn-light/night-chance p cell) % cell)) stands))
+        open #(open-price c stands %)
         dig (fn [q] (let [t (min left (sin/time-s q))] (way-s {:busy-s t :risk-s (:risk-s q) :open-s (open t) :morning-s (:morning-s q)})))
         walk (fn [{:keys [cost pos] :as t} after]
                (let [seconds (min cost (or (:seconds t) cost))

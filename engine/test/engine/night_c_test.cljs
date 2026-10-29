@@ -116,6 +116,7 @@
               world (-> base
                         (update :blocks #(merge % ring (shift % 20)))
                         (update :states #(merge % (shift % 20)))
+                        (update :light merge (into {} (for [x (range 3 8) y [64 65] z (range 5 9)] [[x y z] [0 0]])))
                         (assoc :time night :light-default [15 4]))
               {:keys [eng p]} (await (night-at-home world {:x 5 :y 64 :z 0} {} {:home? false}))]
           (aset p "seenBlockAt" (fn [pos] (let [b (.blockAt p pos)] #js {:name (.-name b) :pos pos :age-ms 0 :properties (.-properties b)})))
@@ -401,7 +402,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [j [0.0 0.5 0.99]]
-          (let [{:keys [eng p]} (await (night-at-home (update bed-world :blocks merge walled-home) {:x 10 :y 64 :z 0} {:worth 30} {:rand (constantly j) :ray-deg 1 :radius 14}))
+          (let [{:keys [eng p]} (await (night-at-home (update bed-world :blocks merge walled-home) {:x 10 :y 64 :z 0} {} {:rand (constantly j) :ray-deg 1 :radius 14}))
                 _ (await (tu/run-until-empty eng 60))
                 [placed :as places] (mapv st/arg-pos (bed-places p))]
             (is (= 1 (count places)) (str "one bed put down, sight jitter " j))
@@ -412,7 +413,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (await (night-at-home (-> bed-world (assoc :light-default [15 0]) (update :blocks merge walled-home)) {:x 10 :y 64 :z 0} {:worth 30}))]
+        (let [{:keys [eng p]} (await (night-at-home (-> bed-world (assoc :light-default [15 0]) (update :blocks merge walled-home)) {:x 10 :y 64 :z 0}))]
           (await (tu/run-until-empty eng 60))
           (is (= [] (bed-places p)) "the failed walk into the home does not put the bed down in the dark open, priced as sheltered")
           (is (= [] (st/calls p "sleep")))
@@ -433,7 +434,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [price (fn ^:async p [fails]
-                      (let [{:keys [eng seen]} (await (night-at-home (with-room stone-room) {:x 10 :y 64 :z 0} {:worth 1000}))]
+                      (let [{:keys [eng seen]} (await (night-at-home (with-room stone-room) {:x 10 :y 64 :z 0}))]
                         (dotimes [_ fails] (mem/write! (:store eng) :home-walk-failed {:pos {:x 10 :y 64 :z 0}} sh-beds/home-walk-failed-policy))
                         (await (core/tick! eng))
                         (:prices (first (st/emitted seen :night.answers)))))]
@@ -505,7 +506,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p log]} (await (dug-into-home (update-vals walled-home #(if (= "stone_bricks" %) "stone" %))))]
+        (let [{:keys [p log]} (await (dug-into-home (update-vals walled-home #(if (= "bedrock" %) "stone" %))))]
           (is (= 1 (count (filter #(= :roof-walk (first %)) log))) "walked into the home once, not back and forth with the bed walk")
           (is (= [] (bed-places p)) "no bed in the open beside the home")
           (is (= [] (st/calls p "sleep")) "and no sleep out there"))))))
