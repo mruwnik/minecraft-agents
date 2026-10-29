@@ -9,7 +9,8 @@
             [jobs.lib.cost.answer :as answer]
             [jobs.lib.cost.caught :as caught]
             [jobs.lib.cost.death :as death]
-            [jobs.lib.cost.threat :as threat]))
+            [jobs.lib.cost.threat :as threat]
+            [jobs.lib.cost.ways :as ways]))
 
 (defn round2 [x] (/ (js/Math.round (* 100 x)) 100))
 
@@ -735,3 +736,11 @@
     (is (= 2 (price 0)))
     (is (= (+ 2 (* 2 (/ 0.5 0.5))) (price 0.5)) "every row dug while the wall holds: no dead end is ever reached")
     (is (= ##Inf (price 1)))))
+
+(deftest a-steps-price-adds-its-unseen-seconds-after-the-stair-floor
+  (are [s0 stair? unseen expected] (= expected (round2 (ways/step-price s0 0.3 1 stair? unseen)))
+    0.3 false 0.5 0.8
+    2.3 false 0.5 2.8
+    0.3 true 0.5 1.5
+    2.3 true 0.5 3.5
+    2.3 true 0 3))
