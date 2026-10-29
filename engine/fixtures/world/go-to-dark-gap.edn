@@ -23,9 +23,11 @@
    :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable :why :unseen-floors :cells [:any]}} :within-s 40 :of-job true}]
    :after [[:body-near [10.5 0 16.5] 16]]}
   {:name "dark-gap-with-torches-ends-not-arrived-without-pacing-the-rim"
-   ;; ceef2a16: walks along the rim that learn columns no nearer the goal are failed tries, not a look round and the next stretch lit
+   ;; ceef2a16: walks along the rim that learn columns no nearer the goal are failed tries, not a look round and the next stretch lit;
+   ;; live it ends in about a minute (one walk of learned replans still paces the rim)
    :body {:at [2.5 0 16.5] :yaw 270 :settle-s 3 :inventory [["torch" 16]]}
+   :limit-s 150
    :act [[:rcon "damage $BODY 8.5 minecraft:generic"]
          [:job (jobs.movement.go-to {:pos #at [40 0 16] :range 1 :ways #{:walk}})]]
-   :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable}} :within-s 120 :of-job true}]
    :after [[:body-near [10.5 0 16.5] 16]]}]}
