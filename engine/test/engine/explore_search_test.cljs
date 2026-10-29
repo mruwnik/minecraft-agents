@@ -724,15 +724,30 @@
           (is (finished? s))
           (is (= :job-time (:line (:cause e)))))))))
 
-(deftest three-failed-legs-in-a-row-end-it-stuck
+(def three-sides-blocked (mapv (fn [[x z]] (str x ",64," z)) [[0 -16] [16 0] [0 16]]))
+
+(deftest a-fourth-open-side-is-walked-after-three-failed-legs
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (search! {:target "diamond_block" :max-distance 23} {:unreachable (mapv (fn [[x z]] (str x ",64," z)) (search/spiral-points [0 0] 16 23))}))
-              e (not-found-of s)]
-          (is (= :stuck (:why e)))
-          (is (= [[0 64 -16] [16 64 0] [0 64 16]] (mapv :pos (get-in e [:coverage :failed])))
-              "each next leg lies another way: one within 60 degrees of a failed leg's way is held back"))))))
+        (let [s (await (search! {:target "diamond_block" :max-distance 23}
+                                {:unreachable three-sides-blocked :blocks {"-20,64,0" "diamond_block"} :cone? 8}))]
+          (is (= [[-20 64 0]] (map :pos (:found (found-of s)))) "no count of failed legs ends it while a walk is still worth its price"))))))
+
+(deftest a-dearer-find-walks-on-after-more-failed-legs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [failed (fn ^:async f [worth]
+                       (let [s (await (with-redefs [ctx/worth (constantly worth)]
+                                                 (await (search! {:target "diamond_block" :max-distance 23}
+                                                                 {:unreachable (mapv (fn [[x z]] (str x ",64," z)) (search/spiral-points [0 0] 16 23))}))))
+                             e (not-found-of s)]
+                         (is (= :stuck (:why e)) (pr-str e))
+                         (count (get-in e [:coverage :failed]))))
+              cheap (await (failed 10))
+              dear (await (failed 1000))]
+          (is (< cheap dear) "the next walk is priced against the find, not counted"))))))
 
 (deftest legs-refused-by-the-calls-floor-end-stuck-saying-so
   (async done
@@ -740,7 +755,7 @@
       (fn ^:async t []
         (let [refused {:kind :condition-failed :cause {:floor :health :min 10} :data {}}
               s (with-redefs [child/call-walk* (fn [_ _ _] (js/Promise.resolve refused))]
-                  (await (search! {:target "diamond_block" :max-distance 23} {:self {:pos {:x 0 :y 64 :z 0} :health 8}})))
+                  (await (with-redefs [ctx/worth (constantly 10)] (await (search! {:target "diamond_block" :max-distance 23} {:self {:pos {:x 0 :y 64 :z 0} :health 8}})))))
               e (not-found-of s)]
           (is (= :stuck (:why e)))
           (is (re-find #"every walk was refused: the body's health 8 is under the call's floor 10" (:text e)))
@@ -1085,7 +1100,7 @@
                      (swap! (fake/state @prims) update-in [:self :pos 0] inc)
                      (js/Promise.resolve {:kind :nothing-possible :cause :unreachable :data {}}))
               s (with-redefs [child/call-walk* walk]
-                  (await (search! {:target "diamond_block" :max-distance 23} {} 60 #(reset! prims (:p %)))))
+                  (with-redefs [ctx/worth (constantly 700)] (await (search! {:target "diamond_block" :max-distance 23} {} 60 #(reset! prims (:p %))))))
               e (not-found-of s)]
           (is (= :stuck (:why e)))
           (is (= 3 (get-in e [:coverage :scans])))

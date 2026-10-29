@@ -59,8 +59,8 @@
   in the same round. A loaded column not yet seen (:unseen) is walked toward in steps of up to 12 blocks (not
   counted in max-legs) and looked at again (over water the step swims, glancing ahead as it goes, so a far shore comes into sight; a step ending in water is progress, not a failure); within 3 blocks of it, it is recorded failed. An unloaded column is not tried but looked at again later. When only unloaded ones are
   left the round pauses 2 s (jobs.time.noop, holding :chunks-loading) and yields, until they load or the call's time is spent (a body just logged in has no chunks
-  yet). Unloaded ones farther than ::load-reach (64) from the body (a far :center) are walked toward instead, once the ground under it is loaded. A walk go-to gives up on is recorded :unreachable. Three of those in
-  a row end the search (:stuck); until a leg arrives, a leg within 60 degrees of the way one failed from where the
+  yet). Unloaded ones farther than ::load-reach (64) from the body (a far :center) are walked toward instead, once the ground under it is loaded. A walk go-to gives up on is recorded :unreachable. The next walk after
+  such failures in a row is tried while cost/try-again? :walk says it is worth its price, else the search ends :stuck; until a leg arrives, a leg within 60 degrees of the way one failed from where the
   body stands waits (the same obstacle likely blocks it), and the search ends :stuck when only such legs are left.
   A leg whose goal lies by a mob the body would flee is not walked (go-to :goal-danger
   :end): it is recorded :goal-dangerous, no stuck walk; a step toward an unseen column given up so leaves that column.
@@ -73,7 +73,7 @@
   The ending's data: {:found [{:what :pos :id? (the uuid) :entity-id? (the number entities and combat.attack use) :noted? :by?}] :coverage {:legs :scans
   :failed [{:pos :reason}] :skipped :farthest} :why :text} and the ending:
   - :done: :count found.
-  - :nothing-possible :distance (no leg left), :no-way-out (no leg left, none walked, and the body shut in a closed room with no column left to dig out toward), :no-way-up (animals that live at the surface, the body under rock and no stair up), :legs (::max-legs walked), :stuck (three failed walks in a row) or :price (with :worth, the next walk costs more than is left of it times the chance a look there finds one, cost/look-leg-chance: farm animals' falls with the ground searched round there in vain, ore's is that of the rock seen; 1 for other blocks).
+  - :nothing-possible :distance (no leg left), :no-way-out (no leg left, none walked, and the body shut in a closed room with no column left to dig out toward), :no-way-up (animals that live at the surface, the body under rock and no stair up), :legs (::max-legs walked), :stuck (another walk after the failed ones in a row is not worth its price, cost/try-again? :walk) or :price (with :worth, the next walk costs more than is left of it times the chance a look there finds one, cost/look-leg-chance: farm animals' falls with the ground searched round there in vain, ore's is that of the rock seen; 1 for other blocks).
   - :limit-reached :job-time (the call's :spend :job-time, default ::job-time-s) or :wall-time (default ::wall-time-s); the engine ends it, with the data of done? ({:found :coverage :why}) and neither event; with :least targets found (default 1) the engine ends it :done instead.
   - A call with no :target and no :patch never runs (:bad-args).
 
@@ -115,7 +115,6 @@
    ::animal-searched-ttl-s {:default 120 :doc "Seconds a note of ground searched for farm animals keeps a leg off that ground: they wander, so older ground is looked at again (its note still lowers the chance of a find, cost/look-chance)." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 600 :doc "Seconds from the first round before a search gives up." :spec (a/num-in 0 nil)}
    ::wall-time-s {:default 3600 :doc "Seconds from the first round before a search gives up, waits included." :spec (a/num-in 0 nil)}
-   ::max-failed-in-row {:default 3 :doc "Failed attempts in a row before the search gives up." :spec (a/int-in 0 nil)}
    ::load-reach {:default 64 :doc "Columns still unloaded this far (XZ) from the body are walked toward, since chunks load only near it; nearer ones are waited for." :spec (a/num-in 0 nil)}
    ::wait-ms {:default 2000 :doc "How long the search waits for the world to settle, in ms." :spec (a/int-in 0 nil)}
    ::descent {:default 40 :doc "How far below its feet a leg's ground is looked for, in blocks (go-to does the descent)." :spec (a/int-in 0 nil)}
@@ -138,7 +137,6 @@
       (min (js/Math.ceil (cost/search-radius worth (leg-spacing))) (or within ##Inf))
       (settings/get settings ::max-distance))))
 (defn time-s [] (settings/get settings ::job-time-s))
-(defn max-failed-in-row [] (settings/get settings ::max-failed-in-row))
 (defn wait-ms [] (settings/get settings ::wait-ms))
 (defn rise [] (settings/get settings ::rise))
 (defn descent [] (settings/get settings ::descent))
@@ -577,7 +575,7 @@
   [c [x y z]]
   (cond-> {:pos {:x x :y y :z z} :range 2 :settings {:jobs.movement.go-to.tuning/goal-danger :end}}
     (forage? c) (->> (ready/forage-walk c))
-    (< (:failed-in-row (ctx/mem c) 0) (dec (max-failed-in-row))) (assoc :ways #{:walk :clear-seal})))
+    (< (u/failures c) 2) (assoc :ways #{:walk :clear-seal})))
 
 (defn ^:async price-leg!
   "With :worth, the price of a walk toward leg before it starts (jobs.lib.walk-pick/quoted-s of go-to's quote: its time
@@ -696,7 +694,9 @@
                                                                                     floor (assoc :floor floor)))
                                      (and (not arrived) (not (interrupted? res)) (:leg-column m)) (-> (update :tried (fnil conj []) (:leg-column m))
                                                                               (cond-> (not dangerous?) (update :legs (fnil inc 0)))))))
-        (if (>= in-row (max-failed-in-row)) (finish! c :not-found :stuck) :again)))))
+        (cond arrived (u/progress! c)
+              (not dangerous?) (u/failed! c))
+        (if (and (not arrived) (not dangerous?) (not (cost/try-again? c :walk))) (finish! c :not-found :stuck) :again)))))
 
 (defn ^:async patch-step!
   "Patch mode: look round and scan for a patch (the origin first, then where the body stands; round a given :center always
