@@ -7,7 +7,6 @@
             [engine.sight :as sight]
             [jobs.lib.aim :as aim]
             [jobs.lib.breath :as breath]
-            [jobs.lib.cost.risk :as risk]
             [jobs.lib.places :as places]
             [jobs.lib.reach :as reach]
             [jobs.lib.sense :as sense]
@@ -237,10 +236,10 @@
       (wworld/stand-goal (wworld/path-world (:primitives c) (:unknown c)) pos))))
 
 (defn goal-danger
-  "threats/stay-danger of the goal pos over the call's stay (:stay-s, else cost.risk/work-s of a click act) against what the
+  "threats/stay-danger of the goal pos over the call's stay (:stay-s, else a click's) against what the
   goal is worth (ctx/worth)."
   [c pos]
-  (threats/stay-danger c pos (or (:stay-s (:args c)) (risk/work-s :click)) (ctx/worth c)))
+  (threats/stay-danger c pos (:stay-s (:args c)) (ctx/worth c)))
 
 (defn pre-aim!
   "Before the first walk: a y goal pos (goal-pos) that the planner answers goal-not-standable for alone (no search,

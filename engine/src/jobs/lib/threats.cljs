@@ -15,6 +15,7 @@
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.risk :as risk]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.death-spot :as death-spot]
@@ -228,14 +229,22 @@
             {:mob (:mob t) :mob-pos (select-keys (:pos t) [:x :y :z]) :mob-distance (js/Math.round (u/dist pos (:pos t)))
              :toll (min cap (reduce + (map :toll in)))}))))))
 
+(defn stay-danger-fn
+  "(fn [pos stay-s worth]) of stay-danger over one reading of c's threats, for a caller pricing many positions."
+  [c]
+  (let [near (danger-near-fn c)]
+    (fn [pos stay-s worth]
+      (when-let [{:keys [toll] :as d} (near pos)]
+        (let [stay-s (or stay-s (risk/work-s :click))
+              risk (* toll stay-s)]
+          (when-not (cost/affords? risk worth) (assoc (dissoc d :toll) :stay-s stay-s :risk risk :worth worth)))))))
+
 (defn stay-danger
   "The nearest known threat the body would flee whose field holds pos (danger-near-fn), with :stay-s, :risk and :worth,
-  when its toll over stay-s seconds there (:risk, seconds) costs more than worth; else nil. The one price of staying to
-  work in a threat's field, walked to (go-to) or in reach (jobs.lib.near/go-near!)."
+  when its toll over stay-s seconds there (nil: a click's; :risk, seconds) costs more than worth; else nil. The one price
+  of staying to work in a threat's field, walked to (go-to) or in reach (jobs.lib.near/go-near!)."
   [c pos stay-s worth]
-  (when-let [{:keys [toll] :as d} ((danger-near-fn c) pos)]
-    (let [risk (* toll stay-s)]
-      (when-not (cost/affords? risk worth) (assoc (dissoc d :toll) :stay-s stay-s :risk risk :worth worth)))))
+  ((stay-danger-fn c) pos stay-s worth))
 
 (defn tolls-of
   "go-to's tolls ([{:x :y :z :factor}]) for threats ({:mob :pos :weight}) of c: every cell of each one's field costs

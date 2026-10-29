@@ -154,7 +154,8 @@
 (defn risky-now
   "The targets skip-risky! skipped whose stay still costs more than they are worth."
   [c]
-  (keep (fn [[pos [stay-s worth]]] (when (threats/stay-danger c (cell-of pos) stay-s worth) pos)) (:risky (ctx/mem c))))
+  (let [danger (threats/stay-danger-fn c)]
+    (keep (fn [[pos [stay-s worth]]] (when (danger (cell-of pos) stay-s worth) pos)) (:risky (ctx/mem c)))))
 
 (defn scan
   "{:targets [pos] nearest first (the higher of two as near; next-target! prices the walks, a death or hide spot's mob on the way
