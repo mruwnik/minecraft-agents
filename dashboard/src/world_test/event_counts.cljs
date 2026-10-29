@@ -32,6 +32,7 @@
   walk-pace: the steers of go-to's walks (a job id ending /walk) outside a flight: blocks over the steers' own seconds (cost/walk-speed).
   guess-looks [--agents DIR] (world-test.guess-looks; all bodies) counts from the logs alone: k of n looks of a dig route's guessed rock cells that showed it not diggable, per class (go-to escalation/prior-good-looks).
   retry-wins (world-test.retry-wins; trial bodies only) counts from the logs alone the tries after a failed one per retry kind, won or not, and their seconds (value/::retry-counts).
+  tree-logs (world-test.tree-logs; trial bodies only) counts from the logs alone the logs of each fell-tree :done: n, mean, median (trees/::logs-per-tree is the mean).
   item-costs [--agents DIR] [--counts FILE] (world-test.item-costs; trial bodies only) folds the obtains' mined gathers, seconds and items got, into the counts file (value/::gather-counts).
   unseen-floors (world-test.unseen-floors; all bodies) counts from the logs alone the unseen floors walks looked at, absent and present (value/::unseen-floor-counts).
   gap-miss: the miss rate of gap jumps per [width run-up dy sprint] from go-to's :gap-jump events (world-test.gap-miss; trial bodies only).
@@ -57,6 +58,7 @@
             [world-test.hide-ends :as hide-ends]
             [world-test.respond-calls :as respond-calls]
             [world-test.retry-wins :as retry-wins]
+            [world-test.tree-logs :as tree-logs]
             [world-test.respawn-distance :as respawn-distance]
             [world-test.item-costs :as item-costs]
             [world-test.resight :as resight]
@@ -626,7 +628,7 @@
        (sort-by :t)
        vec))
 
-(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | closing-rate | walk-pace | walk-detour | gap-miss | way-on | guess-looks | unseen-floors | spot-returns | field-passes | arrow-shots | caught-flights | work-hurt | vein-seen | water-lags | surface-heights | floor-neighbours | unseen-solid | dark-reach | tree-spots | resight | wall-sides | far-side-rows | pen-escapes | wall-places | hide-ends | respond-calls | respawn-distance | retry-wins | item-costs [--run ID --animals N --secs S --escaped E] [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N] [--difficulty D]
+(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | closing-rate | walk-pace | walk-detour | gap-miss | way-on | guess-looks | unseen-floors | spot-returns | field-passes | arrow-shots | caught-flights | work-hurt | vein-seen | water-lags | surface-heights | floor-neighbours | unseen-solid | dark-reach | tree-spots | resight | wall-sides | far-side-rows | pen-escapes | wall-places | hide-ends | respond-calls | respawn-distance | retry-wins | tree-logs | item-costs [--run ID --animals N --secs S --escaped E] [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N] [--difficulty D]
   every command first folds the logs into the counts file (default worlds/test/priors-counts.edn), then reports from the file; --since-ms keeps the rows of fights started after it.")
 
 (defn- parse-args [argv]
@@ -797,6 +799,13 @@
                                                                   :when row]
                                                               row))))
                         0)
+       "tree-logs" (do (println (pr-str (tree-logs/report (for [b (array-seq (fs/readdirSync agents))
+                                                                :when (and (not (probe? b)) (fs/existsSync (path/join agents b "engine")))
+                                                                line (event-lines (path/join agents b "engine"))
+                                                                :let [n (tree-logs/scan-line line)]
+                                                                :when n]
+                                                            n))))
+                       0)
        "unseen-floors" (do (println (pr-str (unseen-floors/report (for [b (array-seq (fs/readdirSync agents))
                                                                         :when (fs/existsSync (path/join agents b "engine"))
                                                                         line (event-lines (path/join agents b "engine"))
