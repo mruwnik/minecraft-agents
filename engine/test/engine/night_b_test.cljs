@@ -259,13 +259,15 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (st/setup {:time night :blocks (into {} (filter (fn [[k _]] (.endsWith k ",0"))) west-ground) :inventory [{:name "dirt" :count 12}]
-                                              :light {} :light-default [15 15]})]
+        (let [fence (into {} (for [x (range -30 41) z (range -10 11) y (range 64 68) :when (or (#{-30 40} x) (#{-10 10} z))]
+                               [(str x "," y "," z) "cobblestone"]))
+              {:keys [eng p seen]} (st/setup {:time night :blocks (merge fence (into {} (filter (fn [[k _]] (.endsWith k ",0"))) west-ground))
+                                              :inventory [{:name "dirt" :count 12}] :light {} :light-default [15 15] :sees-all true})]
           (mem/write! (:store eng) :shut-in-failed {:pos {:x 0 :y 64 :z 0} :way :pit :reason :no-floor} {:cap 5 :ttl 600000})
           (with-redefs [threats/known-threats (constantly [{:mob "zombie" :pos {:x -11.5 :y 64 :z 0.5} :weight 1e6}])]
             (core/submit! eng '(jobs.survival.night) {})
             (await (tu/run-until-empty eng 20)))
-          (is (empty? (filterv #(< (:x %) -5) (mapv st/arg-pos (st/calls p "place")))) "the pit is shut-in's only way, its toll dearer than the night here, where nothing spawns")
+          (is (empty? (filterv #(< (:x %) -5) (mapv st/arg-pos (st/calls p "place")))) "the pit is shut-in's only way, its toll dearer than the night here, where nothing spawns or walks in")
           (is (empty? (st/emitted seen :shelter.exposed)) "a priced stay is no failure: no warn")
           (is (empty? (st/entries eng :night-exposed)) "nor is the spot marked given up for the night")
           (swap! (fake/state p) assoc :light-default [15 0])

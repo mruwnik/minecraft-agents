@@ -78,11 +78,14 @@
     (is (= 12 (sin/time-s q)))
     (is (= ##Inf (:seconds (sin/shelter-quote {:uses {:job-time [##Inf ##Inf ##Inf]}}))))))
 
-(deftest on-lit-ground-walling-in-costs-its-morning-more-than-the-night-in-the-open
+(deftest in-a-lit-walled-yard-walling-in-costs-its-morning-more-than-the-night-in-the-open
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (st/setup {:time night :inventory st/wall-stack :light {} :light-default [15 15]})]
+        (let [{:keys [eng seen]} (st/setup {:time night :inventory st/wall-stack :light {} :light-default [15 15] :sees-all true
+                                             :blocks (into {} (for [x (range -3 4) z (range -3 4) y [64 65]
+                                                                    :when (or (#{-3 3} x) (#{-3 3} z))]
+                                                                [(str x "," y "," z) "cobblestone"]))})]
           (core/submit! eng '(jobs.survival.night) {})
           (await (tick-until eng #(seq (st/emitted seen :night.answers)) 20))
           (let [{:keys [pick prices]} (first (st/emitted seen :night.answers))]

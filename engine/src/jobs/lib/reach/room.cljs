@@ -236,6 +236,11 @@
      (let [b (u/seen-block p {:x x :y y :z z})]
        (if (and b (openable? (.-name b))) :solid (kind-of b))))))
 
+(defn door-kind-at
+  "kind-of over the blocks the body has seen, each door, gate and trapdoor as it stands."
+  [p]
+  (memo-kind-at (fn [x y z] (kind-of (u/seen-block p {:x x :y y :z z})))))
+
 (defn room*
   "The closed room around cell pos {:x :y :z}: the cells a walker there reaches with every door, gate and trapdoor shut,
   fewer than room-cells (flood over the blocks the body has seen, room-kind-at; no closed room where it meets an unseen

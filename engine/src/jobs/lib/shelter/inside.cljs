@@ -166,6 +166,15 @@
               (fn [c] (put! (str "spawn|" subtract "|" (aget c 0) "|" (aget c 1) "|" (aget c 2)) region)))
     region))
 
+(defn region-at
+  "spawn-region's region at [x y z] over kind-at, a perch judged by (drop-region p cell subtract) of each cell it drops to."
+  [p [x y z] subtract kind-at put! drop-region]
+  (if (zero? (.-length (reach/backward kind-at x y z)))
+    (let [drops (mapv #(drop-region p {:x (aget % 0) :y (aget % 1) :z (aget % 2)} subtract) (reach/forward kind-at x y z))]
+      {:open? (boolean (some :open? drops)) :dark (reduce (fn [^js a d] (.concat a (:dark d))) #js [] drops)
+       :partial? (boolean (some :partial? drops))})
+    (region-flood p [x y z] subtract kind-at put!)))
+
 (defn spawn-region
   "{:open? :dark :partial?}: the cells a walker reaches `at` ({:x :y :z}) from over the blocks the body has seen, doors
   shut, with no cap (backward steps: a mob on a pit's rim steps down to the body). :open? when one is an unseen-edge?
@@ -176,12 +185,7 @@
   anew. A perch no walker steps to (a tree top) is judged by the ground it drops to."
   [p {:keys [x y z]} subtract]
   (let [k (str "spawn|" subtract "|" x "|" y "|" z)
-        region (fn [kind-at put!]
-                 (if (zero? (.-length (reach/backward kind-at x y z)))
-                   (let [drops (mapv #(spawn-region p {:x (aget % 0) :y (aget % 1) :z (aget % 2)} subtract) (reach/forward kind-at x y z))]
-                     {:open? (boolean (some :open? drops)) :dark (reduce (fn [^js a d] (.concat a (:dark d))) #js [] drops)
-                      :partial? (boolean (some :partial? drops))})
-                   (region-flood p [x y z] subtract kind-at put!)))
+        region #(region-at p [x y z] subtract %1 %2 spawn-region)
         fits? (fn [{:keys [open? dark partial?]}] (or open? (not partial?) (far-dark? dark x y z)))]
     (if-let [^js m *regions*]
       (let [kind-at (or (.get m "kind") (let [f (reach-room/room-kind-at p (reach-room/shut-kind-at p))] (.set m "kind" f) f))
@@ -194,18 +198,31 @@
           kept
           (reach-room/kept-with p (str "own|" k) region))))))
 
+(defn hall-of
+  "dark-hall's verdict on a spawn-region round `at`."
+  [p {:keys [x y z] :as at} {:keys [open? dark]}]
+  (cond (far-dark? dark x y z) :far
+        open? (if (pos? (or (sh-sense/sky-light-at p at) 0)) :sky :roofed)))
+
 (defn dark-hall
   "Whether a mob could spawn on a dark floor farther than spawn-free-radius from `at` ({:x :y :z}) and walk to it, roofed
   or under the sky (owner Q345, Q45), as far as the body has seen: `at` is dark and its spawn-region holds such a floor
   (:far), or ends at an unseen edge past which there may be one (:sky or :roofed, by the sky light at `at`), else nil. A
   small dark tunnel, room or walled yard seen whole is nil; a big cave or an open field is :far. subtract: the sky's
   darkening to judge by (nil: now)."
-  [p {:keys [x y z] :as at} subtract]
+  [p at subtract]
   (let [subtract (or subtract (sh-sense/sky-subtract-now p))]
     (when-not (sh-sense/lit-here? p at subtract)
-      (let [{:keys [open? dark]} (spawn-region p at subtract)]
-        (cond (far-dark? dark x y z) :far
-              open? (if (pos? (or (sh-sense/sky-light-at p at) 0)) :sky :roofed))))))
+      (hall-of p at (spawn-region p at subtract)))))
+
+(defn stay-hall
+  "dark-hall of a stay at `at`, lit or dark, its walkers coming through the doors as they stand: an open door lets them
+  in, a shut one does not (the body shuts it as another way through the night). Not kept: a stay prices a few cells."
+  [p at subtract]
+  (let [subtract (or subtract (sh-sense/sky-subtract-now p))
+        kind-at (reach-room/room-kind-at p (reach-room/door-kind-at p))
+        region (fn region [p {:keys [x y z]} subtract] (region-at p [x y z] subtract kind-at (fn [_ _]) region))]
+    (hall-of p at (region p at subtract))))
 
 (defn safe-room-at?
   "Whether a body at `at` would be safe from the night (owner Q345): walled-off-at? under a roof (sh-sense/room-roofed?).

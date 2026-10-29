@@ -41,9 +41,10 @@
   "The spawn chance per second at `cell`: a seen cell by its light (its own sky light; one that leaves dark is dark by
   the chance it is in a dark hall, hall-chance), an unseen one at the chance it is dark (look/unseen-lit-chance); under caves-free? an unseen one
   only at the chance full day would light it and now does not. subtract: the sky's darkening to judge it by (default:
-  now; 0: full day)."
+  now; 0: full day). stay?: a seen cell, lit or dark, by the chance of its sh-inside/stay-hall."
   ([p cell caves-free?] (chance-at p cell caves-free? nil))
-  ([p cell caves-free? subtract]
+  ([p cell caves-free? subtract] (chance-at p cell caves-free? subtract false))
+  ([p cell caves-free? subtract stay?]
    (let [darkening (or subtract (sh-sense/sky-subtract-now p))
          cell (if (sh-sense/solid-at? p cell) (update cell :y inc) cell)
          block (seen-light p cell)
@@ -52,20 +53,24 @@
          ;; a sky-reached cell with no sky light data is priced as unseen, not as dark
          known (and block (or (not reaches) sky-light))]
      (cond
-       known (let [at-sky #(cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block block :sky %})})]
-               (if (or (look/lit-light? 0 (or sky-light 0) darkening) (>= block (look/dark-light)))
-                 (at-sky 15)
-                 (let [hall (hall-chance p cell darkening)]
-                   (+ (* hall (at-sky 0)) (* (- 1 hall) (at-sky 15))))))
+       known (let [at-sky #(cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block %1 :sky %2})})
+                   lit? (or (look/lit-light? 0 (or sky-light 0) darkening) (>= block (look/dark-light)))]
+               (cond
+                 stay? (let [hall (cost/hall-chance (sh-inside/stay-hall p (hall-cell p cell) darkening))]
+                         (+ (* hall (at-sky (if lit? 0 block) 0)) (* (- 1 hall) (at-sky block 15))))
+                 lit? (at-sky block 15)
+                 :else (let [hall (hall-chance p cell darkening)]
+                         (+ (* hall (at-sky block 0)) (* (- 1 hall) (at-sky block 15))))))
        :else (let [now (look/unseen-lit-chance p cell darkening)
                    ;; caves-free? frees the dark full day leaves too: the chance left is that of dark only the sky lifts
                    dark (if caves-free? (max 0 (- (look/unseen-lit-chance p cell 0) now)) (- 1 now))]
                 (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:dark dark})}))))))
 
 (defn night-chance
-  "chance-at of a stay at cell through the night: the sky darkened as at a clear midnight, or more."
+  "chance-at of a stay at cell through the night: the sky darkened as at a clear midnight, or more; a lit cell a dark
+  floor's mobs walk to through the doors as they stand (sh-inside/stay-hall) is priced as dark by that hall's chance."
   [p cell]
-  (chance-at p cell false (max (sh-sense/sky-subtract-now p) (look/sky-subtract-at 18000 0 0))))
+  (chance-at p cell false (max (sh-sense/sky-subtract-now p) (look/sky-subtract-at 18000 0 0)) true))
 
 (defn dawn-lowers?
   "Whether day would lower chance-at at cell: it is night and the cell's light comes from the sky."

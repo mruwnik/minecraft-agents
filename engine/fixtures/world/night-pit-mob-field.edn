@@ -1,7 +1,8 @@
 ;; Card 8320d746: the night prices a pit across a known mob's field against its other answers. A stone pad the body cannot dig
-;; (no pickaxe), lit by four torches round the start; the only pit ground is a dirt patch 14-22 blocks west. Three dirt carried: the pit's
+;; (no pickaxe), lit by four torches round the start and walled 3 high round them, a shut door west (a lit spot open to the dark
+;; is priced by its dark hall); the only pit ground is a dirt patch 14-22 blocks west. Three dirt carried: the pit's
 ;; roof, too few to wall in. With two zombie deaths remembered on the patch the pit's toll makes it dearer than the night at the lit start
-;; (a priced stay: the round ends :exposed, no shelter.exposed warn, priced again at the next firing). The control has no deaths and no torches: the dark start costs more than the walk to the patch, where the pit is dug.
+;; (a priced stay: the round ends :exposed, no shelter.exposed warn, priced again at the next firing). The control has no deaths, no torches and no wall: the dark start costs more than the walk to the patch, where the pit is dug.
 ;; Needs night: --allow-time, one case per call.
 {:defaults
  {:tags [:night :survival :shelter]
@@ -9,7 +10,9 @@
   :time-why :night-light
   :plot {:height 10 :length 40 :width 24}
   :blocks [[:fill [0 -4 0] [39 -1 23] "stone"] [:fill [4 -4 6] [12 -1 18] "dirt"]
-           [:set [24 0 10] "torch"] [:set [28 0 10] "torch"] [:set [24 0 14] "torch"] [:set [28 0 14] "torch"]]
+           [:set [24 0 10] "torch"] [:set [28 0 10] "torch"] [:set [24 0 14] "torch"] [:set [28 0 14] "torch"]
+           [:fill [21 0 7] [31 2 7] "cobblestone"] [:fill [21 0 17] [31 2 17] "cobblestone"] [:fill [21 0 7] [21 2 17] "cobblestone"] [:fill [31 0 7] [31 2 17] "cobblestone"]
+           [:set [21 0 12] "oak_door[facing=west,half=lower,hinge=left,open=false]"] [:set [21 1 12] "oak_door[facing=west,half=upper,hinge=left,open=false]"]]
   :body {:at [26.5 0 12.5] :effects [["resistance" 600 4]] :inventory [["dirt" 3]] :settle-s 3}
   :limit-s 150}
  :cases
@@ -22,7 +25,8 @@
             {:no-event {:source :job :kind :shelter.exposed} :for-s 90 :until {:source :job :kind :stopped :data {:reason :exposed}}}]
    :after [[:body-near [26.5 0 12.5] 3]]}
   {:name "pit-across-a-clear-field-is-dug-from-a-dark-start"
-   :blocks [[:set [24 0 10] "air"] [:set [28 0 10] "air"] [:set [24 0 14] "air"] [:set [28 0 14] "air"]]
+   :blocks [[:set [24 0 10] "air"] [:set [28 0 10] "air"] [:set [24 0 14] "air"] [:set [28 0 14] "air"]
+            [:fill [21 0 7] [31 2 7] "air"] [:fill [21 0 17] [31 2 17] "air"] [:fill [21 0 7] [21 2 17] "air"] [:fill [31 0 7] [31 2 17] "air"]]
    :act [[:job (jobs.survival.night {})]]
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 120}
             {:no-event {:source :job :kind :shelter.exposed} :for-s 120 :until {:source :job :kind :shut-in.sealed}}]

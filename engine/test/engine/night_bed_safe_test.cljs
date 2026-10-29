@@ -165,10 +165,12 @@
             (finally (set! js/Math.random random))))))))
 
 (def overdue-in-open-lit-tunnel
-  "The tunnel open at both ends and torch-lit, so staying spawns nothing; the far bed stands out on the dark open ground."
+  "The tunnel torch-lit and shut by a door at its east end, so no dark floor's mob walks to the body; the far bed stands
+  out on the dark open ground."
   (-> (tunnel-world buried-light)
-      (update :blocks dissoc "-1,64,0" "-1,65,0" "21,64,0" "21,65,0")
-      (assoc :inventory [{:name "cobblestone" :count 32}])))
+      (update :blocks assoc "21,64,0" "oak_door" "21,65,0" "oak_door")
+      (assoc :states {"21,64,0" {:open false :half "lower" :facing "east"} "21,65,0" {:open false :half "upper" :facing "east"}}
+             :inventory [{:name "cobblestone" :count 32}])))
 
 (deftest an-overdue-miner-in-a-lit-tunnel-does-not-walk-the-dark-to-a-far-bed
   (async done
