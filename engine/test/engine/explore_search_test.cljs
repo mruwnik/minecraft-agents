@@ -596,7 +596,7 @@
 
 ;; a leg whose goal lies by a mob the body would flee is not walked: its price (go-to's quote, the stay by the mob in it)
 ;; passes what is left of the find's worth
-(deftest a-leg-by-a-dangerous-mob-is-recorded-and-not-walked
+(deftest a-leg-by-a-dangerous-mob-is-priced-and-not-walked
   (async done
     (tu/run-async done
       (fn ^:async t []

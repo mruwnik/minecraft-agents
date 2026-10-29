@@ -581,14 +581,14 @@
     (is (< (js/Math.abs (- unseen (+ (cw/pillar-cost 4) (* 4 (cost/unseen-step-s (wworld/unseen-share p)))))) 1e-9)
         "4 blocks over unseen cells: each adds the unseen step")))
 
-;; a drop whose landing is walled by what cannot be dug is a certain trap: no goal is worth it (the wall runs the whole floor: a
+;; a drop whose landing is walled by what cannot be dug is a certain trap: no goal is worth it, arrival (no worth said) neither (the wall runs the whole floor: a
 ;; short one leaves its top walkable and open ground beside it, a drop onto which is no trap)
 (deftest a-landing-with-nothing-to-dig-out-of-is-refused-whatever-the-goal-is-worth
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [walled-landing (merge ledge-to-unloaded (box 3 61 0 47 65 63 "bedrock") (box 1 61 0 1 62 63 "bedrock") (box 2 61 -1 2 65 -1 "bedrock") (box 2 61 64 2 65 64 "bedrock"))
-              plan (await (one-budgeted-call walled-landing {:x 1.5 :y 64 :z 32.5} [120 61 32] 600 {:one-way :open :worth 100000 :world landing-seen}))]
+              plan (await (one-budgeted-call walled-landing {:x 1.5 :y 64 :z 32.5} [120 61 32] 600 {:one-way :open :world landing-seen}))]
           (is (nil? (:one-way-taken plan))))))))
 
 ;; the same ledge with only a closed pit below it (feet 61, x 2..13, z 30..34: 12 blocks nearer) before a wall too high to

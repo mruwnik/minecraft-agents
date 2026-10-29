@@ -439,7 +439,7 @@
                     (nil? (:dig a)) nil
                     (empty? bad) a
                     (< n route-searches) (recur (into refused bad) (inc n))))))]
-    (when (or (= :searching a) (and a (<= (route-s p (:dig a) own? fetch?) (max-route-s)) (<= (expected-s a) (or worth-s ##Inf))))
+    (when (or (= :searching a) (and a (<= (route-s p (:dig a) own? fetch?) (max-route-s)) (cost/affords? (expected-s a) (or worth-s ##Inf))))
       a)))
 
 (defn route-cells
@@ -476,7 +476,7 @@
   "Whether a way priced price-s (its own cells' put-backs too) is dearer than worth-s once priced over the chance each
   of its guesses is diggable (1 - its class's risk in guess-risk {:beside :apart}), as route-answer prices a dig route."
   [price-s guesses {:keys [beside apart] :as guess-risk} worth-s]
-  (> (/ price-s (reduce * 1 (map #(- 1 (if (:beside %) beside apart)) guesses))) worth-s))
+  (not (cost/affords? (/ price-s (reduce * 1 (map #(- 1 (if (:beside %) beside apart)) guesses))) worth-s)))
 
 (def dig-margin
   "Blocks round its two ends a dig route (dig-way, frontier-way, a climb's) may stray. Not a price of guessed cells (unseen-step-s

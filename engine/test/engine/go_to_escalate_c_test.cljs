@@ -767,7 +767,8 @@
     (is (choose/past-worth? 10 guesses risk 31))
     (is (not (choose/past-worth? 10 guesses risk 32)))
     (is (choose/past-worth? 41 guesses {:beside 0 :apart 0} 38.8) "no look has failed: a stair dearer than the worth is still none")
-    (is (not (choose/past-worth? 10 guesses {:beside 0 :apart 0} 10)))))
+    (is (not (choose/past-worth? 10 guesses {:beside 0 :apart 0} 10)))
+    (is (choose/past-worth? 10 guesses {:beside 1 :apart 0} ##Inf) "a guess sure to fail: past any worth, arrival too")))
 
 (deftest the-guesses-a-stair-reached-count-as-looks-the-cell-it-could-not-dig-a-bad-one
   (let [{:keys [eng]} (gt/setup {:blocks {}})

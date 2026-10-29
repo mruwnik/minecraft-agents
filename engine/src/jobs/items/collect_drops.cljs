@@ -267,16 +267,18 @@
     (:value (cost/item-value [{:name name :count (or count 1)}]))))
 
 (defn drops-worth
-  "Seconds the drops in sight round the anchor are worth (jobs.lib.cost/item-value): what a walk to them may risk."
-  [c]
-  (reduce + 0 (map item-worth (candidates c (or (:anchor (ctx/mem c)) (:near (:args c)) (u/self-pos c))))))
+  "Seconds the drops in sight round the anchor are worth (jobs.lib.cost/item-value), the target item among them though it
+  is not a candidate (out of sight, skipped): what a walk to it may risk."
+  [c item]
+  (let [cands (candidates c (or (:anchor (ctx/mem c)) (:near (:args c)) (u/self-pos c)))]
+    (reduce + 0 (map item-worth (if (some #(= (.-id %) (.-id item)) cands) cands (cons item cands))))))
 
 (defn ^:async walk-down!
   "Walk within a block of item, more than a block lower than the feet (or, with ways, higher: a column top is climbed by
   go-to's pillar or stair): one go-to call (child/run!*, slot :walk). :arrived, :continue (go-to waits on the world) or :unreachable."
   ([c item] (walk-down! c item #{:walk :clear-seal}))
   ([c item ways]
-  (let [r (await (child/run!* c :walk 'jobs.movement.go-to {:pos (item-cell item) :range 1 :ways ways :worth (drops-worth c)}))]
+  (let [r (await (child/run!* c :walk 'jobs.movement.go-to {:pos (item-cell item) :range 1 :ways ways :worth (drops-worth c item)}))]
     (cond
       (= :continue r) :continue
       (and (= :done (:kind r)) (:arrived (:data r))) :arrived

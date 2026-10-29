@@ -81,4 +81,4 @@
 (defn taken?
   "Whether the drop from rim to the landing at (both [x y z]) is worth taking toward a goal worth `goal-worth` seconds (ctx/worth)."
   [p rim at small? goal-worth]
-  (<= (price p (zipmap [:x :y :z] rim) (zipmap [:x :y :z] at) small?) goal-worth))
+  (cost/affords? (price p (zipmap [:x :y :z] rim) (zipmap [:x :y :z] at) small?) goal-worth))

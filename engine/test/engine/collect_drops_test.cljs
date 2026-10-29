@@ -13,6 +13,7 @@
             [jobs.items.collect-drops :as job-ns]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
+            [jobs.lib.look :as look]
             [jobs.lib.loose :as loose]
             [jobs.lib.shelter.sense :as sh-sense]))
 
@@ -330,6 +331,17 @@
           (with-redefs [child/run!* record]
             (await (tu/child-outcome eng job {:radius 6 :items ["diamond"]} 10)))
           (is (= (:value (cost/item-value [{:name "diamond" :count 2}])) (:worth (first @walks)))))))))
+
+(deftest a-walk-to-a-drop-that-is-not-a-candidate-may-risk-its-own-worth
+  ;; the target is not among the wanted drops in sight: the walk to it is still worth the target, never 0 ("only if free")
+  (let [p (tu/fake {:self body})
+        _ (drop! p [4 64 0] "diamond")
+        _ (drop! p [5 64 0] "dirt")
+        c {:primitives p :args {:radius 6 :items ["dirt"]} :slots [] :view (fn [] {:now 0 :data {}})}
+        [diamond dirt] (map (fn [n] (first (filter #(= n (.. % -item -name)) (look/seen-items p {:radius 10})))) ["diamond" "dirt"])
+        worth #(:value (cost/item-value %))]
+    (is (= (worth [{:name "dirt" :count 1}]) (job-ns/drops-worth c dirt)) "a candidate target: the drops in sight")
+    (is (= (+ (worth [{:name "dirt" :count 1}]) (worth [{:name "diamond" :count 1}])) (job-ns/drops-worth c diamond)))))
 
 (deftest ids-not-in-sight-are-left-unseen
   (async done

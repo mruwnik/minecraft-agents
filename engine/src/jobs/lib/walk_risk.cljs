@@ -299,7 +299,7 @@
            now? (<= hp allowed)
            food (.-food (.self (:primitives c)))
            best (when (pos? hp)
-                  (first (sort-by :s (filter #(and (<= (:hp %) (price/allowed-hp (:health %) food worth true)) (<= (:s %) worth))
+                  (first (sort-by :s (filter #(and (<= (:hp %) (price/allowed-hp (:health %) food worth true)) (cost/affords? (:s %) worth))
                                              (wait-ways c goal plan in stay-in)))))
            parts (str (price/round1 dark-s) " s on dark open ground costs " (price/round1 spawn-hp) " hp, "
                       hostiles " hostile(s) by the way that catch it " (price/round1 hostile-hp) " hp, " (price/round1 death-hp) " hp for recent deaths or hides near it, " (price/round1 lethal-hp) " hp for the death they risk, " (price/round1 lava-hp) " hp for seen lava near the way")

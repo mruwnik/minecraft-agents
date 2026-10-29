@@ -181,6 +181,11 @@
   [p s]
   (if (zero? p) 0 (* p s)))
 
+(defn affords?
+  "Whether a price of `s` seconds is within `worth`: never a certain failure (##Inf), at any worth, ##Inf (arrive) too."
+  [s worth]
+  (and (js/isFinite s) (<= s worth)))
+
 (defn trip [] (settings/get settings ::trip))
 (defn per-block [] (settings/get settings ::per-block))
 (defn per-dark [] (settings/get settings ::per-dark))
