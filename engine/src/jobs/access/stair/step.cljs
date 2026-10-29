@@ -242,7 +242,7 @@
                     fetch? (and (fetch-tool? c) (lacks-tool? c block))
                     before (carried p)
                     e (await (blocks/dig-cell-ending! c {:x x :y y :z z}
-                                                      (cond-> {:accept #{:fluid-adjacent :lava-adjacent :falling-block} :on-lava :leave :ignore-zones? true :natural-only? (boolean (:natural-only? (:args c)))}
+                                                      (cond-> {:accept #{:fluid-adjacent :lava-adjacent :falling-block} :on-lava :leave :ignore-zones? true :not-protected? (boolean (:not-protected? (:args c)))}
                                                         (= :down (:dir (:args c))) (assoc :checks {:safe? '(not (threatened))})
                                                         fetch? (assoc :ways (need/call-ways c) :need-drop (not (false? (:need-drop (:args c)))))
                                                         (and (:collect (:args c)) (blocks/room-for? p (blocks/item-name {:block block}))) (assoc :collect true))))

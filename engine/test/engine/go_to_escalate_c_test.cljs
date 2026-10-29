@@ -747,7 +747,7 @@
   ;; [2 66 0] under a seen light (class :beside): 10 s holds with 0.8 * 0.8 * 0.5 = 0.32
   (let [p (hiding-with-pickaxe (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "2,67,0" "chest")
                                #{[1 65 0] [1 66 0] [2 66 0]})
-        guesses (choose/way-guesses p {:step :stair :heading :east :steps 2} [0 64 0] (constantly false))
+        guesses (choose/way-guesses p {:step :stair :heading :east :steps 2} [0 64 0])
         risk {:beside 0.5 :apart 0.2}]
     (is (= {[1 65 0] false [1 66 0] false [2 66 0] true} (into {} (map (juxt :cell :beside)) guesses)))
     (is (choose/past-worth? 10 guesses risk 31))

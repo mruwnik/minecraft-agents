@@ -17,6 +17,7 @@
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
+            [jobs.movement.go-to.holes :as holes]
             [jobs.survival.breathe-pocket :as pocket]))
 
 (a/defargs settings
@@ -64,10 +65,10 @@
             :dug)))))
 
 (defn claimed-fn
-  "(claimed? cell): another's zone, claim or plan footprint covers cell (jobs.lib.tidy/refusal); the rules input is read once."
+  "(claimed? cell): go-to's may-dig-fn refuses cell (a zone, claim, plan footprint, kept seal or own build)."
   [c]
-  (let [in (delay (access/rules-input c {:ignore-zones? false}))]
-    (fn [cell] (some? (access/trespass-refusal @in :dig cell)))))
+  (let [may-dig? (holes/may-dig-fn c)]
+    (fn [cell] (not (may-dig? (u/cell-vec cell))))))
 
 (defn cap-above
   "The own column's cap: {:cells [..]} to dig, or {:why kw} when none may be. The first block within 3 above the head

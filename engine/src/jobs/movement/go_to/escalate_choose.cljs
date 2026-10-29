@@ -370,7 +370,7 @@
 (defn beside-undiggable?
   "Whether a seen face-neighbour of cell is solid rock an escalation never digs (escape/diggable?): such rock
   comes in veins and rooms, so a guess beside it is at risk. sensed: cell -> the sensed block or nil."
-  [sensed block-at own? [x y z]]
+  [sensed block-at [x y z]]
   (boolean (some (fn [[dx dy dz]] (let [at [(+ x dx) (+ y dy) (+ z dz)] b (sensed at)]
                                     (and b (not (true? (.-unknown b))) (escape/solid? (.-name b))
                                          (not (escape/diggable? block-at (constantly true) at)))))
@@ -413,7 +413,7 @@
         risk (fn [[x y z :as cell]]
                (cond (not (true? (some-> (sensed x y z) .-unknown))) 0
                      (= beside apart) beside
-                     (beside-undiggable? (fn [[x y z]] (sensed x y z)) block-at own? cell) beside
+                     (beside-undiggable? (fn [[x y z]] (sensed x y z)) block-at cell) beside
                      :else apart))
         opts (fn [refused] (merge prices
                                   {:dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) cell))
@@ -456,13 +456,13 @@
        a (let [sensed #(u/sensed p (zipmap [:x :y :z] %))]
            (mapv (fn [cell] (let [guess (dig-look/unknown? p cell)]
                               (cond-> {:cell cell :block (block-at cell) :guess guess}
-                                (and guess (beside-undiggable? sensed block-at own? cell)) (assoc :beside true))))
+                                (and guess (beside-undiggable? sensed block-at cell)) (assoc :beside true))))
                  (:dig a)))))))
 
 (defn way-guesses
   "[{:cell :beside}]: the cells stair or door e from feet cuts that the body has not sensed (read as rock), :beside
   when beside-undiggable?."
-  [p {:keys [step heading steps]} feet own?]
+  [p {:keys [step heading steps]} feet]
   (let [block-at (escape/block-at-of p)
         unseen? (escape/unseen-of p)
         sensed #(u/sensed p (zipmap [:x :y :z] %))
@@ -470,7 +470,7 @@
                 :stair (escape/stair-cuts feet (escape/heading-dirs heading) steps)
                 :clear-path (:cells (escape/door block-at unseen? feet (escape/heading-dirs heading)))
                 nil)]
-    (vec (for [cell cells :when (unseen? cell)] {:cell cell :beside (beside-undiggable? sensed block-at own? cell)}))))
+    (vec (for [cell cells :when (unseen? cell)] {:cell cell :beside (beside-undiggable? sensed block-at cell)}))))
 
 (defn past-worth?
   "Whether a way priced price-s (its own cells' put-backs too) is dearer than worth-s once priced over the chance each
@@ -686,7 +686,7 @@
         back (:own-floor c)
         cheaper? (and (not (:stair-tried m)) (>= (- (second goal) (second feet)) stair-first-rise))
         retreats? (>= (second goal) (second feet))
-        chosen (delay (escape/choose (:primitives c) feet goal (may-dig-fn c) {:own? (own-placed-fn c) :skip (skips c) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c)}))
+        chosen (delay (escape/choose (:primitives c) feet goal (may-dig-fn c) {:skip (skips c) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c)}))
         stair (delay (when (= :stair (:step @chosen)) @chosen))
         way (delay (not (#{:none :approach} (:step @chosen))))]
     (when (and (ways/way? c :stair) (not (sh-inside/sheltered-in c)) (or cave cheaper? back retreats?))

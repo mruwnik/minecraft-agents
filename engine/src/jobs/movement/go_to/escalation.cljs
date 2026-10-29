@@ -66,8 +66,8 @@
   (case step
     :pillar ['jobs.access.pillar (cond-> {:height (:height e) :ways #{:carried} :ignore-zones? ignore-zones? :checks {:safe? '(always) :fit? '(always)}}
                                    (:item e) (assoc :use {:blocks [(:item e)]}))]
-    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :natural-only? true :checks {:fit? '(always)} :accept #{:falling-block} :ways (ways-for fetch?) :settings (cond-> {:jobs.lib.trip/spent-uses 0} (:own-cut e) (assoc :jobs.lib.access/spare-own-builds false)) :ignore-zones? ignore-zones? :need-drop (not by-hand?) :leave-drops true :collect (boolean (:own-cut e))}]
-    :clear-path ['jobs.access.clear-path (cond-> {:checks {:fit? '(always)} :heading (:heading e) :natural-only? true :ignore-zones? ignore-zones? :need-drop (not by-hand?) :ways #{:carried :craft}}
+    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :not-protected? true :checks {:fit? '(always)} :accept #{:falling-block} :ways (ways-for fetch?) :settings (cond-> {:jobs.lib.trip/spent-uses 0} (:own-cut e) (assoc :jobs.lib.access/spare-own-builds false)) :ignore-zones? ignore-zones? :need-drop (not by-hand?) :leave-drops true :collect (boolean (:own-cut e))}]
+    :clear-path ['jobs.access.clear-path (cond-> {:checks {:fit? '(always)} :heading (:heading e) :not-protected? true :ignore-zones? ignore-zones? :need-drop (not by-hand?) :ways #{:carried :craft}}
                                            (:own-cut e) (assoc :settings {:jobs.lib.access/spare-own-builds false} :close-behind true))]
     :approach ['jobs.movement.go-to {:checks {:fit? '(always)} :pos (zipmap [:x :y :z] (:pos e)) :range 0 :ways #{:walk :clear-seal}}]
     :fill-gap ['jobs.blocks.place {:pos (zipmap [:x :y :z] (:cell e)) :use {:blocks [(:item e)]} :ways #{:carried} :ignore-zones? ignore-zones?}]))
@@ -319,7 +319,7 @@
         spare (may-dig-fn c)
         choose (memoize (fn [may-dig? o] (if gap? (or (gap-dig c result may-dig? o) (choose-by may-dig? o)) (choose-by may-dig? o))))
         ;; a stair or door over guesses priced as a dig route is: past the call's worth it is none
-        guesses #(way-guesses (:primitives c) % feet (own-dig-fn c (:own-cut %)))
+        guesses #(way-guesses (:primitives c) % feet)
         worth-it #(if (and (#{:stair :clear-path} (:step %))
                            (past-worth? (+ (price (:primitives c) feet %) (reduce + 0 (map (:own-s opts) (own-cells (:primitives c) % feet (:own-s opts)))))
                                         (guesses %) (:guess-risk opts) worth))
@@ -538,7 +538,7 @@
              block-at (escape/block-at-of p)
              may-dig? (may-dig-fn c)]
          (not= :none (:step (escape/choose p (end/feet-cell c) goal #(and (may-dig? %) (not (tools/needs-tool-to-clear? p (block-at %))))
-                                           {:own? (own-placed-fn c) :skip (conj (skips c) (skip-key e (:escalation-from (ctx/mem c)))) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c)}))))))
+                                           {:skip (conj (skips c) (skip-key e (:escalation-from (ctx/mem c)))) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c)}))))))
 
 (defn ^:async escalation-failed!
   "The child stopped or would wait: when it changed something, walk again (escalation-stopped!); when it had no tool
@@ -618,7 +618,7 @@
         undiggable? :not-diggable
         :else
         (let [fetch? (fetch-tool? c)
-              args {:ignore-zones? (boolean (:ignore-zones? (:args c))) :ways (ways-for fetch?) :need-drop fetch? :accept #{:lava-adjacent} :natural-only? true}
+              args {:ignore-zones? (boolean (:ignore-zones? (:args c))) :ways (ways-for fetch?) :need-drop fetch? :accept #{:lava-adjacent} :not-protected? true}
               args (cond-> args (own-cut? c) (assoc :settings {:jobs.lib.access/spare-own-builds false}))
               pos (zipmap [:x :y :z] cell)
               e (await (b/dig-cell-ending! c pos args))
