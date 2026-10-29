@@ -26,6 +26,7 @@
   (cond-> {:inventory inventory
            :entities entities
            :time (or time 1000)
+           :light {} :light-default [15 15]
            :raining (boolean raining)
            :self {:pos {:x 0 :y 64 :z 0}}
            :blocks (cond-> (merge (around 2 64 0) (around 2 63 0) {"2,64,0" "campfire" "2,63,0" "stone" "2,66,0" "beehive"})
@@ -42,12 +43,12 @@
 (defn spec [args] (list 'jobs.apiary.maintain (merge {:box box} args)))
 
 (defn ^:async scenario
-  "Submit the job with args in a world; run n ticks 700 ms apart; the setup map. The fake world's rooms read dark, so the steps are asked at :worth ##Inf, which the pass worth (goal-worth-test) does not give."
+  "Submit the job with args in a world; run n ticks 700 ms apart; the setup map."
   ([args w n] (scenario args w n identity))
   ([args w n tweak-jobs]
    (let [s (doto (h/setup w) (-> :p tu/seeing-all) (-> :p bt/calf-per-pair!))
          s (update s :eng #(update % :jobs tweak-jobs))]
-     (core/submit! (:eng s) (spec (merge {:worth ##Inf} args)) {})
+     (core/submit! (:eng s) (spec args) {})
      (await (tu/run-ticks (:eng s) (:clock s) n 700))
      s)))
 
@@ -201,11 +202,19 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (doto (h/setup (world {:inventory kit})) (-> :p tu/seeing-after-look))]
-          (core/submit! (:eng s) (spec {:worth ##Inf}) {})
+          (core/submit! (:eng s) (spec {}) {})
           (await (tu/run-ticks (:eng s) (:clock s) 60 700))
           (is (seq (calls s "look")))
           (is (= 1 (:harvested (step s :harvest))))
           (is (true? (finished? s))))))))
+
+(defn ^:async looks-after
+  "The look calls after n ticks of the engine of s, then after n more."
+  [{:keys [eng clock] :as s} n]
+  (await (tu/run-ticks eng clock n 700))
+  (let [first-n (count (calls s "look"))]
+    (await (tu/run-ticks eng clock n 700))
+    [first-n (count (calls s "look"))]))
 
 (deftest an-apiary-with-nothing-to-do-waits-after-one-look
   (async done
@@ -213,22 +222,23 @@
       (fn ^:async t []
         (let [s (doto (h/setup (world {:inventory (inv "shears" 1) :raised? true})) (-> :p tu/seeing-after-look))]
           (core/submit! (:eng s) (spec {:ways #{:carried}}) {})
-          (await (tu/run-ticks (:eng s) (:clock s) 10 700))
-          (is (= 9 (count (calls s "look"))) "one look around")
+          (let [[first-n later-n] (await (looks-after s 10))]
+            (is (pos? first-n) "the unseen area is looked at")
+            (is (= first-n later-n) "one look around, not one per run"))
           (is (= [:nothing-to-do] (distinct (map :reason (events-of s :waiting)))))
           (is (nil? (done-event s))))))))
 
-(deftest a-body-that-sees-nothing-even-after-looking-waits-on-the-apiary
+(deftest a-body-that-sees-nothing-even-after-looking-finds-the-apiary-in-order
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (doto (h/setup (world {:inventory (inv "shears" 1) :raised? true}))
                   (-> :p (doto tu/blind (aset "sensedAt" (fn [_] #js {:unknown true})))))]
           (core/submit! (:eng s) (spec {:ways #{:carried}}) {})
-          (await (tu/run-ticks (:eng s) (:clock s) 10 700))
-          (is (= 16 (count (calls s "look"))) "one look around, not one per run")
-          (is (= [:nothing-to-do] (distinct (map :reason (events-of s :waiting)))) "a pass over an area nothing of which is seen is worth little: it waits")
-          (is (nil? (done-event s))))))))
+          (let [[first-n later-n] (await (looks-after s 10))]
+            (is (pos? first-n))
+            (is (= first-n later-n) "one look around, not one per run"))
+          (is (= :already (:cause (done-event s)))))))))
 
 (deftest a-fully-seen-idle-apiary-does-not-look
   (async done

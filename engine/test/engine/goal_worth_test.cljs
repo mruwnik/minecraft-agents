@@ -8,7 +8,12 @@
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.test-util :as tu]
+            [jobs.farm.maintain :as farm-maintain]
+            [jobs.farm.tend :as tend]
+            [jobs.forestry.maintain :as forest-maintain]
             [jobs.lib.cost :as cost]
+            [jobs.lib.crops :as crops]
+            [jobs.lib.trees :as forestry]
             [jobs.lib.price :as price]
             [jobs.lib.util :as u]
             [jobs.survival.bed-down :as bed-down]
@@ -87,6 +92,25 @@
     (is (= (+ (worth 'jobs.farm.maintain p args) (:value (cost/goal-value [(item "wheat" 28)])))
            (worth 'jobs.farm.maintain p (assoc args :chest {:x 8 :y 64 :z 0}))) "the wheat above the 2 kept as bait, stored at its goal-value")))
 
+(deftest a-farm-pass-prices-its-steps-beyond-tend-not-inf
+  (let [args {:area field :till false :irrigate false :fertilize false :carry {}}
+        farm #(worth 'jobs.farm.maintain %1 (merge args %2))
+        grown (tu/seeing-all (tu/fake-on-floor (assoc ht/wheat-world :ages (ht/ages 3 (range 2 5) (range 2 5)))))
+        meal (tu/seeing-all (tu/fake-on-floor (assoc ht/wheat-world :ages (ht/ages 3 (range 2 5) (range 2 5)) :inventory [(item "bone_meal" 4)])))
+        base (farm grown {})
+        c (ctx-of grown (merge args {:irrigate true}) {})]
+    (with-redefs [tend/check-facts (let [real tend/check-facts] #(assoc (real %) :dry 5))]
+      (is (= (:worth (tend/pass-price c (tend/check-facts c))) (farm grown {:irrigate true})) "irrigate: the pass price already sows wet, no second gain"))
+    (is (< (farm meal {}) (farm meal {:fertilize true})) "fertilize: the growth seconds bone meal saves on unripe crops")
+    (is (priced? (farm meal {:fertilize true})))
+    (let [seeds (tu/seeing-all (tu/fake-on-floor (assoc ht/wheat-world :inventory [(item "melon_seeds" 100)])))]
+      (is (< (Math/abs (- (* 36 (/ farm-maintain/seed-compost-chance farm-maintain/compost-levels) (:value (cost/goal-value [(item "bone_meal" 1)])))
+                          (- (farm seeds {:composter {:x 8 :y 64 :z 0}}) (farm seeds {}))))
+             1e-6) "compost: the bone meal the seeds above the 64 kept make"))
+    (with-redefs [farm-maintain/facts (constantly {:keep {} :waste [] :stored [] :blocked 3})]
+      (is (= (* 3 (cost/sown-worth "wheat" (crops/stages-per-s false nil)))
+             (farm-maintain/tidy-worth (ctx-of grown (assoc args :area {:plan "p"}) {}))) "tidy: each cleared cell sown after it"))))
+
 (deftest an-apiary-pass-is-worth-the-honeycomb-of-its-ripe-hive-and-the-produce-it-stores
   (let [args {:box am/box :with :either :carry {} :ways #{:carried}}
         apiary #(worth 'jobs.apiary.maintain % args)
@@ -99,14 +123,30 @@
     (is (= (* (cost/field-share :ripe 0 0) (:value (cost/goal-value [(item "honeycomb" 3)])))
            (apiary (doto (tu/blind (tu/fake-on-floor (am/world {:inventory (am/inv "shears" 1)}))) (aset "sensedAt" (fn [_] #js {:unknown true}))))) "an area never seen: one hive at the prior ripe share")))
 
+(deftest an-apiary-pass-prices-guard-and-breed-at-their-settings
+  (let [args {:box am/box :with :either :carry {} :ways #{:carried} :target 3}
+        yield (:value (cost/goal-value [(item "honeycomb" 3)]))
+        apiary #(worth 'jobs.apiary.maintain (tu/seeing-all (tu/fake-on-floor (am/world %))) args)
+        flowers (am/inv "shears" 1 "dandelion" 2)
+        bees [(am/bee 1 1) (am/bee 2 2)]]
+    (is (zero? (apiary {:inventory (am/inv "shears" 1) :level 0 :raised? true :entities bees})) "no bait: no breeding")
+    (is (= yield (apiary {:inventory flowers :level 0 :raised? true :entities bees})) "breed: a hive's yield")
+    (is (= yield (apiary {:inventory (am/inv "shears" 1 "white_carpet" 1) :level 5})) "guard: an open fire smoking a ripe hive, one hive's yield")))
+
 (def forest {:id "forest" :parts [{:id "a" :cells [[3 64 0]] :want {:tree "oak"}}]})
 
 (deftest a-forest-pass-is-worth-the-logs-of-its-grown-trees-and-its-planting
   (let [forestry #(worth 'jobs.forestry.maintain (tu/seeing-all (tu/fake-on-floor %)) {:plan "forest" :accept #{:fluid-adjacent}}
                          {:engine {:world (world/of-data {"forest" forest} {} []) :warned (atom #{})}})]
     (is (= (:value (cost/goal-value [(item "oak_log" 4)])) (forestry oak-world)))
-    (is (< 0 (forestry {:blocks {"3,63,0" "dirt"} :inventory [(item "oak_sapling" 1)]})
-           (:value (cost/goal-value [(item "oak_log" 8.7)]))) "a sapling to plant: less than the mean grown tree")))
+    (is (= (:value (cost/goal-value [(item "oak_log" (forestry/logs-per-tree))]))
+           (forestry {:blocks {"3,63,0" "dirt"} :inventory [(item "oak_sapling" 1)]})) "a sapling to plant: the mean grown tree")))
+
+(deftest a-forest-pass-prices-readying-and-unseen-cells
+  (let [forestry #(worth 'jobs.forestry.maintain % {:plan "forest" :accept #{:fluid-adjacent}} {:engine {:world (world/of-data {"forest" forest} {} []) :warned (atom #{})}})
+        tree (:value (cost/goal-value [(item "oak_log" (forestry/logs-per-tree))]))]
+    (is (= tree (forestry (tu/seeing-all (tu/fake-on-floor {:blocks {"3,63,0" "stone"}})))) "a cell with no ground is readied: a planted tree")
+    (is (= (* (cost/field-share :ripe 0 0) tree) (forestry (doto (tu/blind (tu/fake-on-floor {:blocks {"3,63,0" "dirt"}})) (aset "sensedAt" (fn [_] #js {:unknown true}))))) "a cell never seen: one tree at the prior ripe share")))
 
 (deftest the-night-is-worth-its-exposure-and-the-time-a-sleep-that-skips-it-saves
   (let [night (fn [status] (worth 'jobs.survival.night (tu/seeing-all (tu/fake-on-floor {:time 14000})) {}

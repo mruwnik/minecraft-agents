@@ -117,9 +117,9 @@
 
 (defn tidy-work? [c] (boolean (:call (decide :tidy (:args c) (facts c)))))
 
-(def seed-compost-chance "Chance a composted seed raises the pile a level (the game's 0.3)." 0.3)
-(def compost-levels "Levels a composter fills before it gives a bone meal." 7)
-(def bone-meal-stages "Mean growth stages a bone meal gives a crop (the game's 2 to 5)." 3.5)
+(def seed-compost-chance "Chance a composted seed raises the pile a level (minecraft.wiki/w/Composter: seeds 30%)." 0.3)
+(def compost-levels "Levels a composter fills before it gives a bone meal (minecraft.wiki/w/Composter: level 7 turns into the full level 8)." 7)
+(def bone-meal-stages "Mean growth stages a bone meal gives a crop (minecraft.wiki/w/Bone_Meal: a random 2 to 5)." 3.5)
 
 (defn carried-over
   "[{:name :count}] of the names carried above the keep map."
@@ -128,19 +128,16 @@
     (filterv #(pos? (:count %)) (map (fn [n] {:name n :count (- (get have n 0) (get keep n 0))}) names))))
 
 (defn field-steps-worth
-  "Seconds the field steps tend's pass price leaves out are worth, each only while it would run: irrigate, the sown-worth
-  a wet cell gains over a dry one on each dry cell; fertilize, the growth seconds bone meal saves on each unripe crop at
-  the sown-worth a second of growth earns over the horizon."
+  "Seconds the field step tend's pass price leaves out is worth: fertilize, the growth seconds bone meal saves on each
+  unripe crop at the sown-worth a second of growth earns over the horizon. Irrigate adds nothing: the pass price already
+  sows at the wet rate while :irrigate is on, and irrigate only runs then."
   [c f]
   (let [args (tend/decide-args c)
-        crop (or (tend/sow-crop c) "wheat")
-        sown #(cost/sown-worth crop (crops/stages-per-s % nil))
-        run? #(:call (tend-decide/decide % args f))]
-    (+ (if (run? :irrigate) (* (:dry f) (- (sown true) (sown false))) 0)
-       (if (run? :fertilize)
-         (* (:unripe f) (/ (min bone-meal-stages (get crops/ripe-age crop 7)) (crops/stages-per-s true nil))
-            (/ (sown true) (cost-farm/horizon-s)))
-         0))))
+        crop (or (tend/sow-crop c) "wheat")]
+    (if (:call (tend-decide/decide :fertilize args f))
+      (* (:unripe f) (/ (min bone-meal-stages (get crops/ripe-age crop 7)) (crops/stages-per-s true nil))
+         (/ (cost/sown-worth crop (crops/stages-per-s true nil)) (cost-farm/horizon-s)))
+      0)))
 
 (defn stock-worth
   "Seconds the stock steps are worth, each only while it would run: the goal-value of the farm goods a deposit stores and
@@ -159,7 +156,7 @@
     0))
 
 (defn worth-of
-  "Seconds a root pass is worth: tend's pass-price :worth, what its irrigate and fertilize steps add (field-steps-worth),
+  "Seconds a root pass is worth: tend's pass-price :worth, what its fertilize step adds (field-steps-worth),
   and the tidy and stock steps' own (tidy-worth, stock-worth). Never ##Inf: cells never seen are priced by tend's prior."
   [c]
   (let [f (tend/check-facts c)]

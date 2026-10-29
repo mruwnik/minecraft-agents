@@ -1,7 +1,6 @@
 (ns jobs.forestry.maintain
   (:require [jobs.lib.block-sets :as bs]
             [jobs.lib.cost :as cost]
-            [jobs.lib.cost.farm :as cost-farm]
             [jobs.lib.waits :as waits]
             [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
@@ -423,20 +422,16 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(def sapling-grow-s
-  "Seconds a sapling takes to grow into a tree: two growth events (its stage, then the tree) each at 1/7 of the random ticks
-  a block gets, 3 a game tick of 4096 blocks' section, 20 ticks a second."
-  (/ (* 2 7) (/ (* 3 20) 4096)))
-
 (defn tree-worth
   "Seconds one grown tree of species is worth: the cost/goal-value of its logs (forestry/logs-per-tree)."
   [species]
   (:value (cost/goal-value [{:name (str species "_log") :count (forestry/logs-per-tree)}])))
 
 (defn planting-worth
-  "Seconds planting a sapling of species is worth: its grown tree, less the share of the food horizon its growth takes."
+  "Seconds planting a sapling of species is worth: its grown tree. The tree grows while the body works elsewhere and the
+  goal-value of logs has no horizon to discount by (the food horizon is for crops), so the growth time costs nothing."
   [species]
-  (* (max 0 (- 1 (/ sapling-grow-s (cost-farm/horizon-s)))) (tree-worth species)))
+  (tree-worth species))
 
 (defn worth-of
   "Seconds a root call is worth: the cost/goal-value of the logs standing on the grown trees it would fell; a sapling it

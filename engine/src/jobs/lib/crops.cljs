@@ -17,15 +17,16 @@
 
 (def grow-light "Light (the brighter of block and sky light, the sky's before the night's darkening) under which a crop does not grow." 9)
 
+(def random-ticks-per-s "Random ticks a second a block gets: 3 a game tick among the 4096 blocks of a section, 20 game ticks a second." (/ (* 3 20) 4096))
+
 (defn stages-per-s
-  "Mean growth stages a second of a crop in a field of its own kind, as the game draws them: 3 random ticks a game tick
-  among the 4096 blocks of a section, 20 game ticks a second, and a tick grows the crop a stage with chance
+  "Mean growth stages a second of a crop in a field of its own kind, as the game draws them: random-ticks-per-s, and a tick grows the crop a stage with chance
   1/(floor(25/f)+1), f its growth points, halved by neighbours of its kind: wet farmland under it and round it 10, so 5;
   dry 4, so 2. light: the cell's (nil: unseen, guessed open sky); under grow-light it does not grow."
   [wet? light]
   (if (and light (< light grow-light))
     0
-    (/ (* 3 20) 4096 (inc (js/Math.floor (/ 25 (if wet? 5 2)))))))
+    (/ random-ticks-per-s (inc (js/Math.floor (/ 25 (if wet? 5 2)))))))
 
 (def food-ripe-age
   "The growth stage at which each crop block can be harvested for food. Wheat is left out: only the :field way cuts it, in a field of its own."
