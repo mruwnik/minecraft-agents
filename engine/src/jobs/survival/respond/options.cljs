@@ -198,17 +198,18 @@
   "The cover {:open-s :seconds :fails} of a pillar against hostiles (cost/cover-answer): in a melee mob's reach for ::pillar-s,
   then the hide-out's quiet on top, all of it in a shooter's line of fire; it fails for a mob in its cell by
   ::pillar-mob-fails of the class the body stands in (wall-in/mob-fails, respond.pillar/mob-class), with the refusals this
-  flight saw added (flight/with-seen-fails);
+  flight saw added (flight/with-seen-fails), or for a mob climbing to its top (respond.pillar/pillar-climb);
   nil when no pillar fits here, a climber is near or a shot was felt within ::hurt-window-s (the top stays in that line of fire)."
   [c hostiles]
-  (when (and (pillar/pillar-item c) (not-any? combat/climber? hostiles)
-             (not-any? #(pos? (shots-in %)) (ctx/since c :hurt (- (ctx/now c) (* 1000 (hurt-window-s)))))
-             (pillar/pillar-fits? (:primitives c) (pl/feet-cell c)))
+  (when-let [climb (and (pillar/pillar-item c) (not-any? combat/climber? hostiles)
+                        (not-any? #(pos? (shots-in %)) (ctx/since c :hurt (- (ctx/now c) (* 1000 (hurt-window-s)))))
+                        (pillar/pillar-climb (:primitives c) (pl/feet-cell c)))]
     (let [s (settings/get settings ::pillar-s)
-          seconds (+ s (hide-out/quiet-s))]
+          seconds (+ s (hide-out/quiet-s))
+          refused (wall-in/mob-fails (flight/with-seen-fails c :pillar (settings/get settings ::pillar-mob-fails))
+                                     (= :beside (pillar/mob-class (:primitives c) (pl/feet-cell c))))]
       {:open-s (if (some combat/ranged? hostiles) seconds s) :seconds seconds
-       :fails (wall-in/mob-fails (flight/with-seen-fails c :pillar (settings/get settings ::pillar-mob-fails))
-                                 (= :beside (pillar/mob-class (:primitives c) (pl/feet-cell c))))})))
+       :fails (- 1 (* (- 1 refused) (- 1 climb)))})))
 
 (defn covers-in
   "What shut-in/covers reads past the ways: the body's feet cell, the cells the hostiles near fill and their kinds, its

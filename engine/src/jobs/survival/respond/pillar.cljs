@@ -8,6 +8,7 @@
             [jobs.lib.access.rules :as rules]
             [jobs.lib.blocks :as lb]
             [jobs.lib.cost.threat :as threat]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-look :as look]
             [jobs.lib.escape :as escape]
             [jobs.lib.look :as lk]
@@ -21,8 +22,8 @@
    ::pillar-spare {:default 3 :doc "Blocks a body must carry beyond the pillar's own for it to be the first refuge; with fewer the dig-down comes first (the night's dig-in cannot roof in on a pillar top without blocks)." :spec (a/int-in 0 nil)}
    ::pillar-extend {:default 2 :doc "Blocks a body hit on its pillar raises it by (up to ::pillar-raises times) before it gives the refuge up; 0: it gives up at once." :spec (a/int-in 0 nil)}
    ::pillar-raises {:default 3 :doc "Times a body hit on its pillar raises it before it gives the refuge up: a mob can stand on a block close under the top." :spec (a/int-in 0 nil)}
-   ::climb-radius {:default 4 :doc "Blocks round the pillar within which a mob's climb to its top is looked for." :spec (a/int-in 0 nil)}})
-(defn climb-radius [] (settings/get settings ::climb-radius))
+   ::climb-cells {:default 256 :doc "Cells climb-chance's search takes, likeliest first, before it takes the ground beyond for the world mobs roam: its search budget." :spec (a/int-in 0 nil)}})
+(defn climb-cells [] (settings/get settings ::climb-cells))
 (defn pillar-height [] (settings/get settings ::pillar-height))
 (defn pillar-extend [] (settings/get settings ::pillar-extend))
 (defn pillar-raises [] (settings/get settings ::pillar-raises))
@@ -43,28 +44,37 @@
   [c]
   (boolean (and (pillar-item c) (not (pillar-item c (+ (pillar-height) (pillar-spare)))))))
 
-(defn climbable-top?
-  "Whether a mob beside the pillar's foot could walk up a slope or ledge (steps of one block) to stand beside its top
-  (levels 2 to 4 above the start: its hitbox then overlaps the body's). Ground walled off from the foot is no way up."
-  [block-at feet]
+(defn climb-chance
+  "The chance a mob climbs by steps of one block to stand beside the top of a pillar-height pillar at feet (levels 2 to 4
+  above it: its hitbox then overlaps the body's): that of the likeliest way (the product of its cells' chances) down from
+  there to a cell in mobs (where a mob stands) or to where the search runs out of ::climb-cells, likeliest first (the
+  ground beyond joins the world mobs roam); 0 when the ground round the top is walled off from both. chance-of: cell ->
+  [chance it is a floor, chance it is clear]."
+  [chance-of feet mobs]
   (let [[x y z] feet
-        standable? (fn [cell] (and (rules/solid-floor? block-at (escape/up cell -1))
-                                   (pl/clear? (block-at cell))
-                                   (pl/clear? (block-at (escape/up cell 1)))))
-        near? (fn [[cx _ cz]] (and (<= (abs (- cx x)) (climb-radius)) (<= (abs (- cz z)) (climb-radius))))
-        beside-top? (fn [[cx cy cz]] (and (<= (abs (- cx x)) 1) (<= (abs (- cz z)) 1) (not= [x z] [cx cz]) (<= (+ y 2) cy (+ y 4))))
-        start (filter standable? (for [dx [-1 0 1] dz [-1 0 1] dy [-1 0 1] :when (not= 0 dx dz)]
-                                   [(+ x dx) (+ y dy) (+ z dz)]))]
-    (loop [seen (set start) todo (vec start)]
-      (let [cell (peek todo)]
-        (cond
-          (nil? cell) false
-          (beside-top? cell) true
-          :else
-          (let [[cx cy cz] cell
-                nxt (->> (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]] dy [-1 0 1]] [(+ cx dx) (+ cy dy) (+ cz dz)])
-                         (filter #(and (near? %) (not (seen %)) (not= [x z] [(first %) (nth % 2)]) (standable? %))))]
-            (recur (into seen nxt) (into (pop todo) nxt))))))))
+        standable (fn [cell] (if (mobs cell)
+                               1
+                               (* (first (chance-of (escape/up cell -1))) (second (chance-of cell)) (second (chance-of (escape/up cell 1))))))
+        pillar? (fn [[cx _ cz]] (and (== cx x) (== cz z)))
+        push (fn [[best todo] cell q] (if (> q (max 1e-6 (best cell 0))) [(assoc best cell q) (conj todo [(- q) cell])] [best todo]))
+        tops (for [dx [-1 0 1] dz [-1 0 1] dy [2 3 4] :when (not= 0 dx dz)] [(+ x dx) (+ y dy) (+ z dz)])]
+    (loop [[best todo] (reduce #(push %1 %2 (standable %2)) [{} (sorted-set)] tops) n 0]
+      (if-let [[minus-q cell :as e] (first todo)]
+        (let [q (- minus-q) todo (disj todo e)]
+          (cond
+            (< q (best cell)) (recur [best todo] n)
+            (or (mobs cell) (>= n (climb-cells))) q
+            :else (recur (reduce #(push %1 %2 (* q (standable %2)))
+                                 [best todo]
+                                 (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]] dy [-1 0 1]
+                                       :let [c (escape/add cell [dx dy dz])] :when (not (pillar? c))] c))
+                         (inc n))))
+        0))))
+
+(defn seen-chance
+  "climb-chance's chance-of over block-at, every cell read as it is."
+  [block-at]
+  (fn [cell] [(if (rules/solid-floor? block-at cell) 1 0) (if (pl/clear? (block-at cell)) 1 0)]))
 
 (defn door-beside?
   "Whether a door, gate or trapdoor stands beside the feet or head cell: a column there would shut it."
@@ -72,40 +82,49 @@
   (boolean (some (fn [[dx dy dz]] (some-> (block-at [(+ x dx) (+ y dy) (+ z dz)]) reach/openable?))
                  (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]] dy [0 1]] [dx dy dz]))))
 
-(defn pillar-ok?
-  "Whether a pillar-height pillar fits here: a solid floor, the head cell and every cell the body rises into free, no
-  door beside its foot (the column would shut it) and no ledge beside its top a mob could climb to."
+(defn room?
+  "Whether a pillar-height pillar has room here: a solid floor, the head cell and every cell the body rises into free, no
+  door beside its foot (the column would shut it)."
   [block-at feet]
   (and (rules/solid-floor? block-at (escape/up feet -1))
        (not (door-beside? block-at feet))
-       (every? #(pl/clear? (block-at (escape/up feet %))) (range 1 (+ 2 (pillar-height))))
-       (not (climbable-top? block-at feet))))
+       (every? #(pl/clear? (block-at (escape/up feet %))) (range 1 (+ 2 (pillar-height))))))
 
-(defn pillar-fits?
-  "pillar-ok? where the body at primitives p stands at feet, a cell it has not sensed read open in the column it rises
-  into (plan! looks there before it builds) and elsewhere solid when more likely solid than open (lk/unseen-solid-at-fn)."
+(defn pillar-ok?
+  "Whether a pillar-height pillar fits here, every cell read as block-at gives it: room? and no way up for a mob from
+  the open world (climb-chance)."
+  [block-at feet]
+  (and (room? block-at feet) (zero? (climb-chance (seen-chance block-at) feet #{}))))
+
+(defn mob-cells
+  "The cells the hostiles the body at primitives p knows of stand in."
+  [p]
+  (set (map #(let [{:keys [x y z]} (danger-q/mob-pos p %)] (mapv js/Math.floor [x y z]))
+            (danger-q/known-hostiles p (danger-q/hostile-radius) {}))))
+
+(defn pillar-climb
+  "The chance a mob climbs to the top of a pillar where the body at primitives p stands at feet (climb-chance from the
+  hostiles it knows, a cell it has not sensed solid by lk/unseen-solid-at-fn), nil when the pillar has no room? there
+  (a cell it has not sensed read open: plan! looks at the rise first) or a mob surely climbs to its top."
   [p feet]
   (let [block-at (escape/block-at-of p)
         unseen? (escape/unseen-of p)
+        seen (seen-chance block-at)
         solid-at (lk/unseen-solid-at-fn p)
         rise (set (map #(escape/up feet %) (range 1 (+ 2 (pillar-height)))))
-        cell-at (memoize (fn [cell] (cond (not (unseen? cell)) (block-at cell)
-                                       (or (rise cell) (<= (solid-at cell) 0.5)) "air"
-                                       :else "stone")))]
-    (pillar-ok? cell-at feet)))
+        chance-of (memoize (fn [cell] (cond (not (unseen? cell)) (seen cell)
+                                         (rise cell) [0 1]
+                                         :else (let [s (solid-at cell)] [s (- 1 s)]))))]
+    (when (room? (fn [cell] (if (unseen? cell) "air" (block-at cell))) feet)
+      (let [q (climb-chance chance-of feet (mob-cells p))]
+        (when (< q 1) q)))))
+
+(defn pillar-fits?
+  "Whether a pillar fits where the body at primitives p stands at feet (pillar-climb)."
+  [p feet]
+  (some? (pillar-climb p feet)))
 
 (defn cell-map [[x y z]] {:x x :y y :z z})
-
-(defn unseen-zone
-  "The cells the climb check reads (climb-radius round the pillar, from the floor to above its top) that the body has not sensed, nearest first."
-  [p [x y z]]
-  (let [r (climb-radius)]
-    (->> (for [dx (range (- r) (inc r)) dz (range (- r) (inc r)) dy (range -1 (+ 2 (pillar-height)))
-               :let [cell [(+ x dx) (+ y dy) (+ z dz)]]
-               :when (look/unknown? p cell)]
-           [(+ (* dx dx) (* dz dz) (* dy dy)) cell])
-         (sort-by first)
-         (mapv second))))
 
 (defn melee-hostiles
   "The hostiles seen within 4 that strike (not a shooter, a creeper or an enderman), as look/seen-entities maps."
@@ -122,8 +141,7 @@
 
 (defn ^:async plan!
   "The pillar refuge ({:kind :pillar :item :anchor :cells :class}, :class mob-class as it begins) when a pillar-height pillar fits here, else nil. The cells it
-  rises into that the body has not sensed are looked at first, so open sky is not taken for rock; so are the unsensed cells
-  round it when the pillar does not fit, where the prior may have read a ledge a mob climbs.
+  rises into that the body has not sensed are looked at first, so open sky is not taken for rock.
   A pillar through another's zone, claim or plan is planned only with trespass? (the last resort, after every way that keeps off)."
   [c trespass?]
   (let [p (:primitives c)
@@ -132,9 +150,6 @@
     (when item
       (doseq [cell (map #(escape/up feet %) (range 1 (+ 2 (pillar-height))))]
         (when (look/unknown? p cell) (await (look/look-at! c cell)))))
-    (when (and item (not (pillar-fits? p feet)))
-      (when-let [zone (not-empty (unseen-zone p feet))]
-        (await (look/look-unknown! c zone))))
     (when (and item (pillar-fits? p feet))
       (let [cells (mapv #(escape/up feet %) (range (pillar-height)))
             refusal (some #(access/trespass-refusal (access/rules-input c) :place (cell-map %)) cells)]

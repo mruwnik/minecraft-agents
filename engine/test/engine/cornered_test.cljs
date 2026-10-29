@@ -30,6 +30,7 @@
             [jobs.lib.flee-walk :as flee-walk]
             [jobs.lib.seal :as seal]
             [jobs.lib.look :as sight]
+            [jobs.lib.cost.base-rates :as base-rates]
             [jobs.survival.respond.pillar :as respond.pillar]
             [jobs.survival.wall-placer :as wall-placer]))
 
@@ -1011,30 +1012,56 @@
               pillars (keep #(when (= :retreat.cornered (:kind %)) (:pillar (:prices %))) @seen)]
           (is (< (first pillars) (second pillars)) "the refusal it saw is one more failed pillar in the counts"))))))
 
+(def slot-walls
+  "A 1-wide slot along +z: 2-high walls at x -1 and 1, closed behind the body (z -1), open at z 9."
+  (wall-cells (concat (for [z (range -1 9)] [-1 z]) (for [z (range -1 9)] [1 z]) [[0 -1]])))
+
 (deftest a-pillar-in-a-slot-is-priced-with-the-ground-behind-its-walls-unseen
-  (let [slot (wall-cells (concat (for [z (range -1 9)] [-1 z]) (for [z (range -1 9)] [1 z]) [[0 -1]]))
-        p (tu/fake-on-floor {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks slot})
+  (let [p (tu/fake-on-floor {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks slot-walls})
         sensed (tu/sensed-by p)
         behind? (fn [pos] (and (= 64 (aget pos "y")) (= 2 (js/Math.abs (aget pos "x")))))]
     (tu/set-sensed! p (fn [pos] (if (behind? pos) #js {:unknown true :pos pos} (sensed pos))))
     (is (true? (respond.pillar/pillar-fits? p [0 64 0])) "the ground the walls hide, near where sight was cut, reads open")
-    (is (true? (with-redefs [sight/frontier-distance (constantly 3)] (respond.pillar/pillar-fits? p [0 64 0])))
-        "read solid, it is still no ledge: no mob at the pillar's foot gets past the walls to it")))
+    (is (< 0 (with-redefs [sight/frontier-distance (constantly 3)] (respond.pillar/pillar-climb p [0 64 0])) 1)
+        "read more likely solid, it is a step from the open ground outside onto the wall beside the top: a chance the pillar fails, priced, not a certainty")))
 
-(deftest an-unseen-step-up-to-a-wall-beside-the-pillars-top-is-a-ledge-where-the-prior-reads-it-solid
+(deftest a-ledge-a-mob-reaches-by-walking-round-far-outside-the-slot-is-a-climb
+  (let [p (tu/fake-on-floor {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (assoc slot-walls (key-of 2 64 6) "stone")})]
+    (is (false? (respond.pillar/pillar-fits? p [0 64 0]))
+        "a mob walks round the slot to the step 6 blocks off, up onto the wall and along its top beside the body")))
+
+(deftest ground-walled-off-behind-the-slot-is-no-climb
+  (let [plateau (into {} (for [x [-2 2] z (range -1 9)] [(key-of x 64 z) "stone"]))
+        shell (into {} (concat (for [x [-3 3] z (range -2 10) y [64 65 66]] [(key-of x y z) "stone"])
+                               (for [x [-2 2] z [-2 9] y [64 65 66]] [(key-of x y z) "stone"])))
+        p (tu/fake-on-floor {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (merge slot-walls plateau shell)
+                             :entities [(zombie 0.5 64 4.5)]})]
+    (is (zero? (respond.pillar/pillar-climb p [0 64 0]))
+        "a 1-high ledge beside the walls, shut in by higher walls: neither the zombie in the slot nor one outside gets onto it")))
+
+(deftest a-pillar-in-an-open-field-at-night-is-not-priced-out-by-the-dark-round-it
+  (let [p (tu/fake-on-floor {:self {:pos {:x 0.5 :y 64 :z 0.5}}})
+        sensed (tu/sensed-by p)
+        off (fn [x y z] (max (- (js/Math.abs x) 1) (- (js/Math.abs z) 1) (- 63 y) (- y 66)))]
+    (tu/set-sensed! p (fn [pos] (if (pos? (off (aget pos "x") (aget pos "y") (aget pos "z"))) #js {:unknown true :pos pos} (sensed pos))))
+    (is (> 0.05 (with-redefs [sight/frontier-distance (fn [_ [x y z]] (off x y z))
+                              sight/unseen-solid-fn (fn [_] (fn [cell-y d] (base-rates/unseen-solid 64 (- cell-y 64) d false nil)))]
+                  (respond.pillar/pillar-climb p [0 64 0])))
+        "only the cells beside the body seen, the dark beyond is a measured guess: no likely ledge beside the top")))
+
+(deftest an-unseen-step-up-to-a-wall-beside-the-pillars-top-is-a-ledge-by-the-chance-it-is-rock
   (let [p (tu/fake-on-floor {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (wall-cells [[1 0]])})
         sensed (tu/sensed-by p)
-        fits? (fn [d] (with-redefs [sight/frontier-distance (constantly d)] (respond.pillar/pillar-fits? p [0 64 0])))]
+        climb (fn [d] (with-redefs [sight/frontier-distance (constantly d)] (respond.pillar/pillar-climb p [0 64 0])))]
     (tu/set-sensed! p (fn [pos] (if (= [2 64 0] [(aget pos "x") (aget pos "y") (aget pos "z")]) #js {:unknown true :pos pos} (sensed pos))))
-    (is (false? (fits? 3)) "far from where sight was cut the step is more likely rock: a mob walks round to it and up onto the wall")
-    (is (true? (fits? 1)) "beside where sight was cut it is more likely open: no step")))
+    (is (< 0 (climb 1) (climb 3) 1)
+        "a mob walks round to the step and up onto the wall by the chance it is rock, likelier far from where sight was cut")))
 
 (deftest a-pillar-in-a-slot-is-planned-with-the-ground-behind-its-walls-unseen
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [slot (wall-cells (concat (for [z (range -1 9)] [-1 z]) (for [z (range -1 9)] [1 z]) [[0 -1]]))
-              world {:self {:health 10} :inventory [{:name "dirt" :count 39}] :entities [(zombie 0 64 6)] :blocks slot}
+        (let [world {:self {:health 10} :inventory [{:name "dirt" :count 39}] :entities [(zombie 0 64 6)] :blocks slot-walls}
               prep (fn [p] (let [sensed (.-sensedAt p)]
                              (tu/set-sensed! p (fn [q] (if (and (= 64 (.-y q)) (= 2 (js/Math.abs (.-x q)))) #js {:unknown true} (sensed q))))))
               {:keys [while-hidden]} (await (hidden-round '(test.flight {:cover-way :pillar}) world 0
