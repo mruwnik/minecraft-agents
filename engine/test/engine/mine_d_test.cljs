@@ -378,7 +378,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start {:world {:blocks (merge (soil-over-stone 63 59) {"-1,64,0" "water"}) :drops cobble
+        (let [s (start {:world {:blocks (merge soil-all-round {"-1,64,0" "water"}) :drops cobble
                                 :inventory [{:name "stone_pickaxe" :count 1}]}})]
           (core/submit! (:eng s) (spec {:block "stone" :count 2 :heading "west" :tunnel-length 4}) {})
           (await (run-ticks s 300))
