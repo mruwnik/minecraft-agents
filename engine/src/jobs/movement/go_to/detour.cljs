@@ -36,7 +36,7 @@
 
 (defn price
   "{:extra-s :worth-s} of a refused way (refusal's :route and :straight): the walk past the straight line (cost/walk-cost)
-  and what the goal is worth (cost/tour-worth of straight and the caller's `worth`), tenths of a second."
+  and what the goal is worth (cost/tour-worth of straight and the call's `worth`), tenths of a second."
   [{:keys [route straight]} worth]
   (let [tenths #(/ (js/Math.round (* 10 %)) 10)]
     {:extra-s (tenths (:cost (cost/walk-cost {:distance (max 0 (- route straight))}))) :worth-s (tenths (cost/tour-worth straight worth))}))

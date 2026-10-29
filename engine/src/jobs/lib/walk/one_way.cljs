@@ -78,12 +78,7 @@
   (let [chance (chance p at small?)]
     (if (zero? chance) 0 (* chance (climb-out-s p rim at)))))
 
-(defn worth
-  "What a goal `straight` blocks off is worth to the walk: the caller's `worth` (seconds, above 0), else the tour's worth."
-  [straight worth]
-  (if (pos? worth) worth (cost/tour-worth straight)))
-
 (defn taken?
-  "Whether the drop from rim to the landing at (both [x y z]) is worth taking toward a goal `straight` blocks off, `goal-worth` the caller's :worth."
-  [p rim at small? straight goal-worth]
-  (<= (price p (zipmap [:x :y :z] rim) (zipmap [:x :y :z] at) small?) (worth straight goal-worth)))
+  "Whether the drop from rim to the landing at (both [x y z]) is worth taking toward a goal worth `goal-worth` seconds (ctx/worth)."
+  [p rim at small? goal-worth]
+  (<= (price p (zipmap [:x :y :z] rim) (zipmap [:x :y :z] at) small?) goal-worth))

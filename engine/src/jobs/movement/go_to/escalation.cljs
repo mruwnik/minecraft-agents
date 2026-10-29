@@ -292,8 +292,7 @@
         slice (route-slice (route-owner c))
         shut? (delay (escape/walk-enclosed? c))
         opts (merge (way-opts c feet (fetch-tool? (:primitives c) (:doors (:args c)) shut?) slice) (range-opts c pos))
-        ;; only a worth the caller passed refuses a stair or door: with none the ways are weighed against each other
-        worth (let [w (:worth (:args c))] (when (pos? w) w))
+        worth (ctx/worth c)
         gap? (gap-walled? c result (skips c))
         into? (or (goal-walled? c result shut?) (and gap? (not @shut?)))
         ;; a goal over or ringed by lava is refused: no dig, in or out, makes it acceptable
@@ -321,9 +320,9 @@
         ;; a step up over a gap with nothing to fill it: cutting the riser on the far side makes the jump level
         spare (may-dig-fn c)
         choose (memoize (fn [may-dig? o] (if gap? (or (gap-dig c result may-dig? o) (choose-by may-dig? o)) (choose-by may-dig? o))))
-        ;; a stair or door over guesses priced as a dig route is: past the caller's :worth it is none
+        ;; a stair or door over guesses priced as a dig route is: past the call's worth it is none
         guesses #(way-guesses (:primitives c) % feet (own-dig-fn c (:own-cut %)))
-        worth-it #(if (and worth (#{:stair :clear-path} (:step %))
+        worth-it #(if (and (#{:stair :clear-path} (:step %))
                            (past-worth? (+ (price (:primitives c) feet %) (reduce + 0 (map (:own-s opts) (own-cells (:primitives c) % feet (:own-s opts)))))
                                         (guesses %) (:guess-risk opts) worth))
                     {:step :none :why :past-worth}
@@ -586,7 +585,7 @@
   (let [{:keys [step] :as e} (:escalation (ctx/mem c))
         [job args] (escalation-job e (hole-tag c) (boolean (or (:exit-zone e) (:ignore-zones? (:args c)) (zone-exit? c (end/feet-cell c)))) (boolean (:by-hand (ctx/mem c))) (fetch-tool? c))
         args (cond-> args
-               (= :clear-path step) (assoc :max-dig-s (max 0 (dig-left-s c)))
+               (and (= :clear-path step) (js/isFinite (dig-left-s c))) (assoc :max-dig-s (max 0 (dig-left-s c)))
                ;; the stair's kept drops outlive it: this call's walks must not spend them before the put-back
                (true? (:collect args)) (assoc :collect (:id c)))
         _ (await (torch/return-torch! c))

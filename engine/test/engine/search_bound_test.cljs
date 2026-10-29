@@ -30,8 +30,8 @@
 
 (deftest with-no-way-but-a-dig-route-a-search-is-worth-what-the-goal-is
   (with-redefs [escape/choose (fn ([_ _ _ _] nil) ([_ _ _ _ _] {:step :none}))]
-    (is (close? (cost/tour-worth 20) (sb/fallback-s (ctx-at 0) [0 64 0] [20 64 0] (constantly true) {}))
-        "no :worth said: a tour's worth of the goal, never unbounded")))
+    (is (= 40 (sb/fallback-s (assoc (ctx-at 0) :worth (constantly 40)) [0 64 0] [20 64 0] (constantly true) {})))
+    (is (= ##Inf (sb/fallback-s (ctx-at 0) [0 64 0] [20 64 0] (constantly true) {})) "arrive: the search goes on")))
 
 (deftest dig-route-replans-are-spent-once-they-have-taken-as-long-as-the-way-without-one-costs
   (let [m {:replan-budget {:since 1000 :fallback-s 10}}]
@@ -54,5 +54,6 @@
   (with-redefs [escape/choose (fn ([_ _ _ _] nil) ([_ _ _ _ _] {:step :stair}))
                 choose/price (constantly ##Inf)
                 risk/estimate (fn [& _] {:hp 0 :lethal-hp 0})]
-    (is (close? (cost/tour-worth 20) (sb/fallback-s (ctx-at 0) [0 64 0] [20 64 0] (constantly true) {})))
-    (is (esc/replans-spent? (ctx-at 1e9) {:replan-budget {:since 0 :fallback-s (sb/fallback-s (ctx-at 0) [0 64 0] [20 64 0] (constantly true) {})}}))))
+    (let [c (assoc (ctx-at 0) :worth (constantly 40))]
+      (is (= 40 (sb/fallback-s c [0 64 0] [20 64 0] (constantly true) {})))
+      (is (esc/replans-spent? (ctx-at 1e9) {:replan-budget {:since 0 :fallback-s (sb/fallback-s c [0 64 0] [20 64 0] (constantly true) {})}})))))

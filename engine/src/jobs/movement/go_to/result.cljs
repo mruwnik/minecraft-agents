@@ -132,7 +132,7 @@
            :out-of-sight "no stand within range that sees the block (:see) is reachable from here"
            :goal-unloaded "the goal lies in land that is not loaded and the loaded land leads no nearer"
            :no-progress "the walk ended no nearer"
-           :explore-spent (str "walked " explored " blocks in " walks " walks to the edge of loaded land without coming nearer: more than the goal is worth (the tour-worth setting)")
+           :explore-spent (str "walked " explored " blocks in " walks " walks to the edge of loaded land without coming nearer: more than the goal is worth (the call's :worth)")
            :stuck (str "the body got stuck" (some->> kind name (str " on ")) (some->> detail (str ": ")))
            :off-plan (or detail "the walk left its plan")
            :steer-failed (str "steering failed" (some->> detail (str ": ")))

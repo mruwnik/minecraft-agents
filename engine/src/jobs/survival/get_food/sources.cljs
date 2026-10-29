@@ -127,14 +127,14 @@
   :again)
 
 (defn food-worth
-  "go-to's :worth for a walk to food: what the body's hunger makes reaching it worth."
+  "The :worth of a walk to food: what the body's hunger makes reaching it worth (0 for a fed body)."
   [c]
   (cost/food-worth (.-food (.self (:primitives c)))))
 
 (defn ^:async go-near!
   "Walk within reach of pos by one go-to call: :there, :far (it gave up) or :continue (go-to waits on the world)."
   [c pos]
-  (let [r (await (child/run!* c :goto 'jobs.movement.go-to {:pos pos :range (reach) :worth (food-worth c)} {:max-calls 1}))]
+  (let [r (await (child/run!* c :goto 'jobs.movement.go-to (let [w (food-worth c)] (cond-> {:pos pos :range (reach)} (pos? w) (assoc :worth w))) {:max-calls 1}))]
     (cond
       (= :continue r) :continue
       (<= (u/dist (u/self-pos c) pos) (inc (reach))) :there

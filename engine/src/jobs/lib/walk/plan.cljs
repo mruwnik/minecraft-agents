@@ -363,7 +363,7 @@
       (let [p (:primitives c)
             pos (.-pos (.self p))
             [gx gy gz] to]
-        (and (one-way/taken? p rim at small? (js/Math.hypot (- gx (.-x pos)) (- gy (.-y pos)) (- gz (.-z pos))) (:worth (:args c)))
+        (and (one-way/taken? p rim at small? (ctx/worth c))
              (or small? (not (pit? p (vec at))) (not= {:step :none :why :no-dig} (select-keys (escape/choose p (vec at) to) [:step :why])))))))
 
 (defn drop-index

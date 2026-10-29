@@ -262,15 +262,7 @@
          (cost/cover-tour-s [0 0 0] [[10 0 0] [-6 0 0]] 4))
       "the nearest point first, then on from where that walk stopped"))
 
-(deftest a-goal-is-worth-a-trip-and-more-the-farther-it-lies
-  (is (= (cost/trip) (settings/with-settings {:jobs.lib.cost.value/tour-floor-blocks 0} #(cost/tour-worth 0))))
-  (is (< (cost/tour-worth 40) (cost/tour-worth 80))))
-
-(deftest a-near-goal-is-worth-a-tour-floor-and-the-prices-are-settings
-  (is (= (cost/tour-worth 32) (cost/tour-worth 2)) "under the floor, the floor's worth")
-  (is (< (settings/with-settings {:jobs.lib.cost.value/tour-floor-blocks 0} #(cost/tour-worth 2)) (cost/tour-worth 2)))
-  (is (= (+ (cost/trip) (:cost (cost/walk-cost {:distance 10})))
-         (settings/with-settings {:jobs.lib.cost.value/tour-floor-blocks 0 :jobs.lib.cost.value/tour-ratio 1} #(cost/tour-worth 10))))
+(deftest a-tour-is-priced-per-frontier-walk
   (is (= 7 (:cost (settings/with-settings {:jobs.lib.cost.value/per-frontier-walk 1} #(cost/tour-cost {:explored 0 :walks 7}))))))
 
 (deftest an-unseen-floor-is-absent-at-the-counted-rate-of-its-kind-and-costs-its-look-the-walk-back-and-the-next-way
@@ -295,12 +287,16 @@
                                 (:cost (cost/turn-back-cost [{:look 0.1 :back 2 :p 0.5} {:look 0.1 :back 3 :p 0.25}])))))
         "a later floor is reached only while those before it held")))
 
-(deftest a-goal-worth-the-caller-says-budgets-the-tour-less-the-trip-and-the-walk
+(deftest a-goal-s-worth-budgets-the-tour-less-the-trip-and-the-walk
   (let [walk (:cost (cost/walk-cost {:distance 50}))]
     (is (= 100 (cost/tour-worth 50 (+ 100 (cost/trip) walk))))
-    (is (= (cost/tour-worth 50) (cost/tour-worth 50 0) (cost/tour-worth 50 nil)) "no worth said (0 or nil): the default")
     (is (zero? (cost/tour-worth 50 1)) "worth less than the trip and walk: no tour")
-    (is (= (+ (cost/trip) (* 3 (:cost (cost/walk-cost {:distance 50})))) (cost/tour-worth 50)) "unsaid: a trip and 3 times the walk")))
+    (is (= ##Inf (cost/tour-worth 50 ##Inf)) "arrive: any tour")))
+
+(deftest a-chance-of-0-of-an-unbounded-worth-is-0-not-nan
+  (is (zero? (cost/chance-times 0 ##Inf)))
+  (is (= ##Inf (cost/chance-times 0.5 ##Inf)))
+  (is (zero? (:cost (cost/turn-back-cost [{:look 0 :back 0 :p 0 :extra-s ##Inf}]))) "a floor surely there costs no next way"))
 
 (deftest food-is-worth-more-reaching-the-lower-the-bar
   (is (zero? (cost/food-worth 10)))

@@ -67,7 +67,7 @@
   [world]
   (let [p (cond-> (tu/seeing-all (tu/fake (merge {:floor tu/walk-floor} world))) (not (:light world)) sky/with-sky)]
     (game/select! p)
-    {::price/stay-s 1e6 :id (str (random-uuid)) :slots [] :engine {:warned (atom #{}) :jobs registry/jobs} :primitives p :view (fn [] {:now 0 :data {}})}))
+    {::price/stay-s 1e6 :id (str (random-uuid)) :slots [] :engine {:warned (atom #{}) :jobs registry/jobs} :primitives p :view (fn [] {:now 0 :data {}}) :worth (constantly ##Inf)}))
 
 (def inside {:x 5 :y 64 :z 0})
 (def outside {:x 15 :y 64 :z 0})

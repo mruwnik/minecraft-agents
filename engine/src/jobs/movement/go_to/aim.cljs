@@ -13,7 +13,6 @@
             [jobs.lib.sense :as sense]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
-            [jobs.lib.walk.one-way :as one-way]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.world :as known]
@@ -240,12 +239,12 @@
 (defn goal-danger
   "The nearest known mob the body would flee that has the cell pos within its full-cost radius (threats/danger-near-fn),
   with :stay-s and :worth, when the toll there over the stay (:stay-s, else cost.risk/work-s of a click act) costs more
-  than giving up loses, what the goal is worth (one-way/worth: :worth, else a tour's); else nil."
+  than giving up loses, what the goal is worth (ctx/worth); else nil."
   [c pos]
   (when-let [{:keys [toll] :as d} ((threats/danger-near-fn c) pos)]
-    (let [{:keys [stay-s worth]} (:args c)
+    (let [{:keys [stay-s]} (:args c)
           stay (if stay-s stay-s (risk/work-s :click))
-          w (one-way/worth (u/dist (u/self-pos c) pos) worth)]
+          w (ctx/worth c)]
       (when (> (* toll stay) w) (assoc d :stay-s stay :worth w)))))
 
 (defn pre-aim!

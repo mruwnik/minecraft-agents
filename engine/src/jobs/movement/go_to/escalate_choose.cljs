@@ -531,9 +531,9 @@
       (pos? d) [goal])))
 
 (defn call-budget-s
-  "Seconds the go-to call c may spend on a way: the caller's :worth, else the call's job time left."
+  "Seconds the go-to call c may spend on a way: what the goal is worth (ctx/worth)."
   [c]
-  (or (:worth (:args c)) (get-in (ctx/left c) [:spend :job-time] ##Inf)))
+  (ctx/worth c))
 
 (defn dig-left-s
   "Seconds of digging the go-to call c has left for its next door or dig leg: call-budget-s less what its doors and

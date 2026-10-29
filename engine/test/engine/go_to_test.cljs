@@ -789,10 +789,12 @@
   [m]
   (merge {:open (gcut/session-id) :goal {:x 10 :y 64 :z 0} :last-dist 3} m))
 
+(def cut-worth "The :worth of the goal 10 blocks off the send-backs undo a share of." 100)
+
 (defn sent-back-spots
-  "n send-backs from [5 64 0] (:cut-walks n too), each undoing a share of the worth of a goal 10 blocks off."
+  "n send-backs from [5 64 0] (:cut-walks n too), each undoing a share of the tour a goal 10 blocks off worth cut-worth pays for."
   [n share]
-  {:cut-walks n :sent-backs (vec (repeat n {:at [5 64 0] :lost-s (* share (cost/tour-worth 10 nil))}))})
+  {:cut-walks n :sent-backs (vec (repeat n {:at [5 64 0] :lost-s (* share (cost/tour-worth 10 cut-worth))}))})
 
 (deftest a-new-session-forgets-the-earlier-runs-walks-and-open-calls
   (let [goal {:x 10 :y 64 :z 0}
@@ -810,7 +812,7 @@
       (fn ^:async t []
         ;; the body is 10 from the goal; it got to 3 before and was sent back twice, each losing the goal's worth: the
         ;; chance of a third (3/4) times the walk lost passes it, and the zombie that sent it back still stands near
-        (let [{:keys [out returns eng]} (await (go-returns! {:blocks flat :entities [way-zombie]} {:pos [10 64 0] :range 0}
+        (let [{:keys [out returns eng]} (await (go-returns! {:blocks flat :entities [way-zombie]} {:pos [10 64 0] :range 0 :worth cut-worth}
                                                             (cut-seed (merge {:closest 3 :ref 3} (sent-back-spots 2 1)))))]
           (is (= {:arrived false :reason :unreachable :why :cut-again} (select-keys @out [:arrived :reason :why])) (pr-str @out))
           (is (= "zombie" (:nearest-hostile @out)) (pr-str @out))
@@ -818,14 +820,15 @@
           (is (= 3 (:sent-backs @out)) "the two and the one this restart found")
           (is (= [:done] @returns))
           (is (= [] (moved eng)) "it walked nowhere"))
-        ;; send-backs that undo less than the worth together, however many: it walks on
-        (doseq [[why seed] [["one send-back of the whole worth" (cut-seed (merge {:closest 3 :ref 3} (sent-back-spots 1 1)))]
+        ;; send-backs that undo less than the worth together, however many, or a goal worth arrival: it walks on
+        (doseq [[why seed arrive?] [["one send-back of the whole worth" (cut-seed (merge {:closest 3 :ref 3} (sent-back-spots 1 1)))]
                             ["four of a tenth" (cut-seed (merge {:closest 3 :ref 3} (sent-back-spots 4 0.1)))]
                             ["the closest approach improved 2 blocks since" (cut-seed (merge {:closest 1 :ref 3} (sent-back-spots 3 1)))]
                             ["another goal in the same slot" (cut-seed (merge {:goal {:x 30 :y 64 :z 0} :closest 3 :ref 3} (sent-back-spots 3 1)))]
                             ["left open by an earlier run of the engine" (cut-seed (merge {:open "old-run" :closest 3 :ref 3} (sent-back-spots 3 1)))]
-                            ["the last call ended normally" (dissoc (cut-seed (merge {:closest 3 :ref 3} (sent-back-spots 3 1))) :open)]]]
-          (let [{:keys [out returns]} (await (go-returns! {:blocks flat} {:pos [10 64 0] :range 0} seed))]
+                            ["the last call ended normally" (dissoc (cut-seed (merge {:closest 3 :ref 3} (sent-back-spots 3 1))) :open)]
+                            ["no worth said: arrive" (cut-seed (merge {:closest 3 :ref 3} (sent-back-spots 3 1))) true]]]
+          (let [{:keys [out returns]} (await (go-returns! {:blocks flat} (cond-> {:pos [10 64 0] :range 0} (not arrive?) (assoc :worth cut-worth)) seed))]
             (is (= {:arrived true} @out) (str why " " (pr-str @out)))
             (is (= [:done] @returns) why)))
         ;; the caller's worth counts: the same send-backs undo more than a goal worth little is worth
@@ -1339,12 +1342,14 @@
 ;; once; :end gives up at once with :why :goal-dangerous
 (def goal-zombie {:key "z1" :name "zombie" :pos {:x 11 :y 64 :z 1}})
 
+(def goal-worth "Seconds the caller counts the goal by goal-zombie worth." 30)
+
 (deftest goal-danger-end-gives-up-at-once-naming-the-mob
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (with-redefs [threats/sensed-mobs (constantly [goal-zombie])]
-                  (await (go! {:blocks flat} {:pos [10 64 0] :range 0 :settings {:jobs.movement.go-to.tuning/goal-danger :end}})))]
+                  (await (go! {:blocks flat} {:pos [10 64 0] :range 0 :worth goal-worth :settings {:jobs.movement.go-to.tuning/goal-danger :end}})))]
           (is (= {:arrived false :reason :unreachable :why :goal-dangerous} (select-keys @(:out s) [:arrived :reason :why])) (pr-str @(:out s)))
           (is (= "zombie" (:mob @(:out s))))
           (is (str/includes? (:text @(:out s)) "zombie") (:text @(:out s)))
@@ -1354,7 +1359,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [args [{:pos [10 64 0] :range 0} {:pos [10 64 0] :range 0 :settings {:jobs.movement.go-to.tuning/goal-danger :wait}}]]
+        (doseq [args [{:pos [10 64 0] :range 0 :worth goal-worth} {:pos [10 64 0] :range 0 :worth goal-worth :settings {:jobs.movement.go-to.tuning/goal-danger :wait}}]]
           (let [s (with-redefs [threats/sensed-mobs (constantly [goal-zombie])]
                     (await (go! {:blocks flat} args)))]
             (is (= {:arrived true} @(:out s)) (pr-str args))
@@ -1366,18 +1371,18 @@
       (fn ^:async t []
         (doseq [[weight arrived] [[1 false] [1e-5 true]]]
           (let [s (with-redefs [threats/known-threats (constantly [(assoc goal-zombie :mob "zombie" :weight weight :remembered true :sighted true)])]
-                    (await (go! {:blocks flat} {:pos [10 64 0] :range 0 :settings {:jobs.movement.go-to.tuning/goal-danger :end}})))]
+                    (await (go! {:blocks flat} {:pos [10 64 0] :range 0 :worth goal-worth :settings {:jobs.movement.go-to.tuning/goal-danger :end}})))]
             (is (= arrived (:arrived @(:out s))) (str "weight " weight (pr-str @(:out s))))))))))
 
-;; the goal's danger is a price: the toll over the stay against what giving up loses. A goal worth more than a fresh
-;; zombie's toll over the stay is walked to; a toll under 1 s a second over an hour's stay costs more than a tour's worth.
+;; the goal's danger is a price: the toll over the stay against what giving up loses. A goal worth arrival (no worth
+;; said) is walked to; a toll under 1 s a second over an hour's stay costs more than a goal worth goal-worth.
 ;; The old 1 s a second cut gave the first up and walked the second.
 (deftest goal-danger-end-weighs-the-toll-over-the-stay-against-the-goal-s-worth
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [light (/ 0.5 (cost/threat-factor {:health 20 :equipment nil :weapon nil} "zombie" 1))]
-          (doseq [[weight args arrived] [[1 {:worth 1e9} true] [light {:stay-s 3600} false] [light {} true] [1 {} false] [1 {:stay-s 0} true]]]
+          (doseq [[weight args arrived] [[1 {} true] [light {:stay-s 3600 :worth goal-worth} false] [light {:worth goal-worth} true] [1 {:worth goal-worth} false] [1 {:stay-s 0 :worth goal-worth} true]]]
             (let [s (with-redefs [threats/known-threats (constantly [(assoc goal-zombie :mob "zombie" :weight weight)])]
                       (await (go! {:blocks flat} (merge {:pos [10 64 0] :range 0 :settings {:jobs.movement.go-to.tuning/goal-danger :end}} args))))]
               (is (= arrived (:arrived @(:out s))) (str "weight " weight " " (pr-str args) (pr-str @(:out s)))))))))))
@@ -1390,7 +1395,7 @@
                                     [[{:id 9 :uuid "u9" :name "creeper" :kind "hostile" :visible false :pos {:x 11 :y 64 :z 1}}] false]]]
           (let [{:keys [eng] :as s} (setup {:blocks flat :entities entities})
                 out (atom :not-done)
-                eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out {:pos [10 64 0] :range 0 :settings {:jobs.movement.go-to.tuning/goal-danger :end}})))
+                eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out {:pos [10 64 0] :range 0 :worth goal-worth :settings {:jobs.movement.go-to.tuning/goal-danger :end}})))
                 _ (mem/write! (:store eng) :threat {:mob "creeper" :id 9 :uuid "u9" :key "u9" :pos {:x 11 :y 64 :z 1} :ended 1} threats/threat-policy)]
             (core/submit! eng '(recording-parent) {})
             (await (tick-out! eng 30))
@@ -1402,7 +1407,7 @@
       (fn ^:async t []
         (let [far (assoc goal-zombie :pos {:x 11 :y 64 :z 30})
               s (with-redefs [threats/sensed-mobs (constantly [far])]
-                  (await (go! {:blocks flat} {:pos [10 64 0] :range 0 :settings {:jobs.movement.go-to.tuning/goal-danger :end}})))]
+                  (await (go! {:blocks flat} {:pos [10 64 0] :range 0 :worth goal-worth :settings {:jobs.movement.go-to.tuning/goal-danger :end}})))]
           (is (= {:arrived true} @(:out s))))))))
 
 (deftest approach-step-notes-a-teleport-between-two-ticks-not-a-walk-or-a-knockback
@@ -1476,7 +1481,7 @@
       (fn ^:async t []
         (let [{:keys [eng p] :as s} (setup {:blocks flat :self {:pos [20 64 0]}})
               out (atom :not-done)
-              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out {:pos [38 64 0] :range 0})))]
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out {:pos [38 64 0] :range 0 :worth cut-worth})))]
           ;; every walk's second pose lies 14 blocks off its first, and the body stays where it was
           (.override (.-world p) "steer"
                      (fn [token ^js a impl]
@@ -1491,7 +1496,7 @@
           (is (false? (:arrived @out)) (pr-str @out))
           (is (= :cut-again (:why @out)) (pr-str @out))
           (let [lost (* 14 (cost/walk-step-s))
-                worth (cost/tour-worth 18 nil)
+                worth (cost/tour-worth 18 cut-worth)
                 price (fn [n] (gcut/send-back-price {:cut-walks n :sent-backs (vec (repeat (dec n) {:lost-s lost}))}))
                 expected (first (filter #(> (price %) worth) (iterate inc 2)))]
             (is (= expected (count (events-of s :go-to.jumped))) "one restart per jump, the last the first whose repeats cost more than the goal is worth")))))))

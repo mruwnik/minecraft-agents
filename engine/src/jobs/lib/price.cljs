@@ -35,17 +35,17 @@
 (defn allowed-hp
   "allowed for a body at health and food: see allowed."
   [health food worth waits?]
-  (if (and (number? worth) (pos? worth))
+  (if (and (number? worth) (js/isFinite worth))
     (min (dec health) (/ worth (cost/hp-price health)))
     (let [share (risk/share-hp health food)]
       (if waits? share (max share (dec health))))))
 
 (defn allowed
-  "The hp of expected damage the body may take on a risk now. With `worth` (seconds the caller counts the goal worth, the call's
-  :worth, when above 0): as many hp as that buys at the price of an hp now (dearer when hurt), all but 1 at most; a goal worth
-  little is refused a dear trip, whatever the share of health or the food (death is a cost). Without one: cost.risk/share-hp, all but 1 hp while waiting never lowers the price (`waits?` false; by default while the body
+  "The hp of expected damage the body may take on a risk now. With a finite `worth` (seconds the goal is worth, by default the call's,
+  ctx/worth): as many hp as that buys at the price of an hp now (dearer when hurt), all but 1 at most; a goal worth
+  little is refused a dear trip, whatever the share of health or the food (death is a cost). With ##Inf (arrive: walking now or waiting is a choice of ways, by cost alone) or nil (price/fit): cost.risk/share-hp, all but 1 hp while waiting never lowers the price (`waits?` false; by default while the body
   can not heal by waiting, cannot-heal?)."
-  ([c] (allowed c (:worth (:args c))))
+  ([c] (allowed c (ctx/worth c)))
   ([c worth] (allowed c worth (not (cannot-heal? c))))
   ([c worth waits?]
    (let [self (.self (:primitives c))]

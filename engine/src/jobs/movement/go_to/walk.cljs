@@ -18,8 +18,8 @@
   - A search that runs out of loaded land walks to its frontier (the loaded edge), and a walk that gets nearer that edge
     is progress too: a tour of frontiers ends when every frontier within 1000 blocks of the goal is spent, or at the end of
     a frontier walk, or at a re-plan or cut of a walk short of the goal (drive/follow!'s :walk-spent?), once the tour's price (jobs.lib.cost/tour-cost of the blocks and walks since the body last came nearer its goal than
-    ever in the call) passes what the goal is worth (the setting jobs.lib.cost.value/tour-worth, else jobs.lib.cost/tour-worth of the goal's straight
-    blocks at the call's start and the call's :worth): it gives up :why :explore-spent (:explored the blocks, :walks the walks).
+    ever in the call) passes what the goal is worth (jobs.lib.cost/tour-worth of the goal's straight
+    blocks at the call's start and ctx/worth): it gives up :why :explore-spent (:explored the blocks, :walks the walks).
     A search cut by its budget whose nearest node is no nearer than the body has been tours the edge of what it has seen instead (known-end-check).
   - A walk stuck or off its plan at a cell is a :walker-fault warn; the next plans of the call cost that cell
     (up to 16; after a fall also the cells above it) far more (wworld/with-avoid), so a way round is taken when there is one.
@@ -175,7 +175,7 @@
   priced by cost/turn-back-cost, its look a peek over a drop or an aim (cost/walk-unknown-prices), its walk back the blocks
   from the plan's start to its takeoff, its chance of not being there cost/floor-absent-chance of its kind
   (wsight/floor-kind) over the call's floors of each kind found there or not (mem :floor-counts). :worth is cost/tour-worth
-  of the goal's straight blocks at the call's start and the caller's :worth. No second way is known when the plan is
+  of the goal's straight blocks at the call's start and the call's worth (ctx/worth). No second way is known when the plan is
   made: a floor not there costs, when no lower step has one either (cost/floor-dead-end-chance), the worse case of
   finding one, the tour that worth still pays for (less cost/tour-cost of the call's tour so far), whose end without one
   loses the goal; a lower step's replan adds nothing. A floor not there costs no more than that, so the worth is not
@@ -185,7 +185,7 @@
     (let [steps (vec steps)
           counts (:floor-counts (ctx/mem c))
           {:keys [peek-s aim-s]} (cost/walk-unknown-prices)
-          worth (cost/tour-worth (:detour-from (ctx/mem c) 0) (:worth (:args c)))
+          worth (cost/tour-worth (:detour-from (ctx/mem c) 0) (ctx/worth c))
           left (max 0 (- worth (:cost (cost/tour-cost (tour c)))))
           backs (vec (reductions + 0 (map #(detour/length [%1 %2]) steps (rest steps))))
           floors (keep-indexed (fn [i s]
@@ -193,7 +193,7 @@
                                    (let [kind (wsight/floor-kind steps i)]
                                      {:look (if (#{:down :drop} kind) peek-s aim-s) :back (get backs (max 0 (dec i)))
                                       :p (cost/floor-absent-chance kind (get counts kind))
-                                      :extra-s (* left (cost/floor-dead-end-chance kind counts))
+                                      :extra-s (cost/chance-times (cost/floor-dead-end-chance kind counts) left)
                                       :cell [(js/Math.floor (:x s)) (dec (js/Math.floor (:y s))) (js/Math.floor (:z s))]})))
                                steps)]
       {:cost (:cost (cost/turn-back-cost floors))
@@ -564,7 +564,7 @@
           (let [why (dissoc (:why walked) :detour)]
             (let [e (choose/detour-way c pos)]
               (case (:step e)
-                nil (let [{:keys [extra-s worth-s] :as priced} (detour/price why (:worth (:args c)))]
+                nil (let [{:keys [extra-s worth-s] :as priced} (detour/price why (ctx/worth c))]
                       (if (<= extra-s worth-s)
                         (do (ctx/update-mem! c assoc :detour-ok true) :again)
                         (end/give-up! c pos {:status :no-path :reason :detour} (merge why priced))))

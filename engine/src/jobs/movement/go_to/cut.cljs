@@ -123,9 +123,9 @@
 
 (defn send-backs-spent?
   "Whether the send-backs of m, the call's memory or cut state, cost more (send-back-price) than the goal is worth: the
-  call's :worth, else a tour's (cost/tour-worth)."
+  tour the call's worth pays for (cost/tour-worth of ctx/worth)."
   [c m]
-  (> (send-back-price m) (cost/tour-worth (or (:detour-from (ctx/mem c)) (:last-dist m 0)) (:worth (:args c)))))
+  (> (send-back-price m) (cost/tour-worth (or (:detour-from (ctx/mem c)) (:last-dist m 0)) (ctx/worth c))))
 
 (defn beside
   "The cells round cell [x y z]: the 3 x 3 x 3 block. A side step, a step up or down a block and a diagonal of them are
@@ -156,9 +156,9 @@
 
 (defn tour-spent?
   "Whether the tour so far (tour) costs more than its goal is worth: cost/tour-worth of the goal's
-  straight blocks at the call's start and the caller's :worth (the setting ::tour-worth of jobs.lib.cost.value, when set); the settings there price the tour."
+  straight blocks at the call's start and the call's worth (ctx/worth); the settings of jobs.lib.cost.value price the tour."
   [c]
-  (> (:cost (cost/tour-cost (tour c))) (cost/tour-worth (:detour-from (ctx/mem c) 0) (:worth (:args c)))))
+  (> (:cost (cost/tour-cost (tour c))) (cost/tour-worth (:detour-from (ctx/mem c) 0) (ctx/worth c))))
 
 (defn ^:async start-attempt!
   "Begin a call from the world, with memory as a hint: the counters of an earlier call (cut, or ended :continue) start

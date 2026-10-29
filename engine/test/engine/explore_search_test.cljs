@@ -594,24 +594,22 @@
           (is (= "stopped: wall-time" (:text (ended-of s))))
           (is (= [] (walks s))))))))
 
-;; a leg whose goal lies by a mob the body would flee is not walked: go-to gives it up (:goal-danger :end), it is recorded
-;; :goal-dangerous and does not count as a stuck walk
+;; a leg whose goal lies by a mob the body would flee is not walked: its price (go-to's quote, the stay by the mob in it)
+;; passes what is left of the find's worth
 (deftest a-leg-by-a-dangerous-mob-is-recorded-and-not-walked
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [zombie {:key "z1" :name "zombie" :pos {:x 17 :y 64 :z 1}}
               s (with-redefs [threats/sensed-mobs (constantly [zombie])]
-                  (await (search! {:target "diamond_block" :max-distance 20} {})))
+                  (await (search! {:target "diamond_block" :max-distance 20 :worth 60} {})))
               e (not-found-of s)]
-          (is (= :distance (:why e)) (pr-str e))
-          (is (some #{{:pos [16 64 0] :reason :goal-dangerous}} (get-in e [:coverage :failed])) (pr-str (:coverage e)))
+          (is (= :price (:why e)) (pr-str e))
           (is (not-any? #(= {:x 16 :z 0} (select-keys % [:x :z])) (walks s)) "the leg by the zombie is never walked to")
           (is (= 3 (count (walks s)))))))))
 
-;; a step toward an unseen column whose step point lies by a dangerous mob is given up once: that column is tried, the
-;; search goes on with others and never gives the same step up again
-(deftest a-dangerous-step-toward-an-unseen-column-is-given-up-once
+;; a step toward an unseen column whose step point lies by a dangerous mob is not walked to
+(deftest a-dangerous-step-toward-an-unseen-column-is-not-walked
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -621,10 +619,8 @@
                           (let [at (.-sensedAt p)]
                             (aset p "sensedAt" (fn [pos] (if (far? pos) #js {:unknown true} (at pos))))))
               s (with-redefs [threats/sensed-mobs (constantly [zombie])]
-                  (await (search! {:target "diamond_block" :max-distance 20} {} 80 blind-far)))
-              given-up (filterv #(= :goal-dangerous (:reason %)) (get-in (or (not-found-of s) (found-of s)) [:coverage :failed]))]
+                  (await (search! {:target "diamond_block" :max-distance 20 :worth 60} {} 80 blind-far)))]
           (is (finished? s) "the search ends")
-          (is (= [{:pos [0 64 -6] :reason :goal-dangerous}] given-up) (pr-str (not-found-of s) (walks s)))
           (is (not-any? #(= {:x 0 :z -6} (select-keys % [:x :z])) (walks s)) "the step by the zombie is never walked to"))))))
 
 (deftest a-step-toward-an-unseen-column-that-fails-is-not-repeated

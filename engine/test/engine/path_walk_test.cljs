@@ -508,11 +508,12 @@
           (reset! wsearch/searches {}))))))
 
 (defn ^:async one-budgeted-call
-  "One plan-walk! with budget (chunk-expansions 16) from pos toward goal with opts: its plan."
+  "One plan-walk! with budget (chunk-expansions 16) from pos toward goal with opts (:worth the call's, else ##Inf): its plan."
   [blocks pos goal budget opts]
-  (let [p (tu/fake (merge {:blocks blocks :self {:pos pos}} (:world opts)))]
+  (let [p (tu/fake (merge {:blocks blocks :self {:pos pos}} (:world opts)))
+        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly (:worth opts ##Inf))}]
     (reset! wsearch/searches {})
-    (try (await (tu/with-expansion-budget 16 #(walk/plan-walk! {:primitives p :args (select-keys opts [:worth])} (.pathWorld p) goal 0 (walk/default-weight) (assoc (dissoc opts :worth :world) :budget budget))))
+    (try (await (tu/with-expansion-budget 16 #(walk/plan-walk! c (.pathWorld p) goal 0 (walk/default-weight) (assoc (dissoc opts :worth :world) :budget budget))))
          (finally (reset! wsearch/searches {})))))
 
 ;; a ledge (feet 64, x 0..1, z 0..63) whose first move east is a 3-drop to a floor (feet 61, x 2..47) running on to the

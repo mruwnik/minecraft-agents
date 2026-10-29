@@ -65,10 +65,6 @@
                     :doc "Times the straight line a walk's way is taken to be (detours), for walk-blocks-per-s: 30255 blocks of steers over 23766 of straight line in 1235 walks (go-to walk jobs of 4 blocks or more), trial logs to 2026-10-28; a lower bound (steer chords). Recount: tools/event-counts.mjs walk-detour (:ratio)."}
    ::per-frontier-walk {:default 1 :spec (a/num-in 0 nil)
                         :doc "Each walk of a tour to the edge of loaded land that brought the body no nearer its goal, on top of its blocks, in seconds."}
-   ::tour-ratio {:default 3 :spec (a/num-in 0 nil)
-                 :doc "Times its straight walk a goal whose worth the caller did not say is worth a tour of loaded land on top of a trip: a near goal is worth a short tour."}
-   ::tour-floor-blocks {:default 32 :spec (a/num-in 0 nil)
-                        :doc "Straight blocks a goal counts as at least when worth a tour (about 100 blocks of tour): a near goal behind a ravine is still reached."}
    ::unseen-floor-counts {:default {:level {:absent 2.97 :present 9.84} :down {:absent 1.69 :present 5.71}
                                     :up {:absent 0.06 :present 1.68} :drop {:absent 1.4 :present 0.99}}
                           :spec (a/pred "a map of step kind (:level :down :up :drop) to {:absent n :present n} pseudo-counts >= 0"
@@ -84,8 +80,6 @@
                          :spec (a/pred "a map {:plantable n :unfit n} of pseudo-counts >= 0"
                                        (fn [m] (and (map? m) (every? #(and (number? (get m %)) (<= 0 (get m %))) [:plantable :unfit]))))
                          :doc "The Beta prior that a replant spot the body has not seen the soil, room or light of can be planted (answer/spot-plantable-chance): of the bases of felled trees (a log on soil) in 2009 recorded chunk files (every 40th, the fixture grid left out, 2026-10-29), 3513 of 4448 had the species' growth space free of anything a tree cannot grow through (logs counted felled) and an open side lit 9 or more, 0.79; spread fitted by moments over 482 chunks (effective n 3.1). Recount: node tools/event-counts.mjs tree-spots --stride 40."}
-   ::tour-worth {:default false :spec (a/or-of false? (a/num-in 0 nil))
-                 :doc "Seconds a tour of frontiers may cost whatever its goal; false: from the goal's straight blocks (tour-ratio, tour-floor-blocks)."}
    ::food-worth-per-point {:default 30 :spec (a/num-in 0 nil)
                            :doc "Seconds reaching food is worth per food point the body is under ::food-worth-from."}
    ::food-worth-from {:default 10 :spec (a/num-in 0 20)
@@ -182,6 +176,11 @@
   [value s]
   (if (>= s 1) ##Inf (* value (/ s (- 1 s)))))
 
+(defn chance-times
+  "Chance p of seconds s, the expected seconds: 0 when p is 0, though s be ##Inf (a worth of arrival), where p x s is NaN."
+  [p s]
+  (if (zero? p) 0 (* p s)))
+
 (defn trip [] (settings/get settings ::trip))
 (defn per-block [] (settings/get settings ::per-block))
 (defn per-dark [] (settings/get settings ::per-dark))
@@ -237,7 +236,7 @@
   "Seconds a find worth `worth` is worth to a body whose trip to it ends in death with `chance`: a dead body does not bring it
   back. The trip's death cost (carried kit, walk back) is priced beside it, in the walk's danger."
   [worth chance]
-  (* worth (- 1 (min 1 (max 0 (or chance 0))))))
+  (chance-times (- 1 (min 1 (max 0 (or chance 0)))) worth))
 
 (defn walk-beats-making
   "Whether walking `distance` blocks to something that exists costs no more than making one's own (cost `make`, in seconds)
@@ -267,15 +266,10 @@
             (recur (mapv #(+ %2 (* (- %1 %2) (/ reach gap))) at p) (remove #{p} left) (+ s (:cost (walk-cost {:distance (- gap reach)}))))))))))
 
 (defn tour-worth
-  "Seconds of tour a goal `straight` blocks off is worth. The setting ::tour-worth, when set, is the worth. Else with the
-  caller's `worth` of arrival (seconds, when above 0), that less the trip and the straight walk (0 at least). Else a trip, and tour-ratio
-  times the walk of its straight blocks, at least tour-floor-blocks."
-  ([straight] (tour-worth straight nil))
-  ([straight worth]
-   (cond
-     (settings/get settings ::tour-worth) (settings/get settings ::tour-worth)
-     (pos? worth) (max 0 (- worth (trip) (:cost (walk-cost {:distance straight}))))
-     :else (+ (trip) (* (settings/get settings ::tour-ratio) (:cost (walk-cost {:distance (max straight (settings/get settings ::tour-floor-blocks))})))))))
+  "Seconds of tour a goal `straight` blocks off is worth to a caller counting arrival `worth` seconds (##Inf: arrive):
+  that less the trip and the straight walk, 0 at least."
+  [straight worth]
+  (max 0 (- worth (trip) (:cost (walk-cost {:distance straight})))))
 
 (defn turn-back-cost
   "{:cost :parts {:look :back}} of a way over unseen `floors` [{:look :back :p :extra-s}] in walk order, each not there at
@@ -285,7 +279,7 @@
   (let [parts (:parts (reduce (fn [{:keys [reach] :as acc} {:keys [look back p extra-s]}]
                                 (-> acc
                                     (update-in [:parts :look] + (* reach look))
-                                    (update-in [:parts :back] + (* reach p (+ (:cost (walk-cost {:distance back})) (or extra-s 0))))
+                                    (update-in [:parts :back] + (chance-times (* reach p) (+ (:cost (walk-cost {:distance back})) (or extra-s 0))))
                                     (assoc :reach (* reach (- 1 p)))))
                               {:reach 1 :parts {:look 0 :back 0}}
                               floors))]

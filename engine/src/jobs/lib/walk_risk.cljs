@@ -11,7 +11,7 @@
   by the chance its mob or a like one is there now (death-spot/present-share: one a sun-burning mob left seen sky-lit by day, or one
   the body went far from, is near free).
   Seen lava within jobs.lib.lava-risk/radius of a cell the way steps into adds jobs.lib.lava-risk/hp, scaled by its closeness (a slip beside it is lethal); a body already at the goal, or a way clear of lava, adds none.
-  Acceptable when it stays within jobs.lib.cost.risk/::risk-share of the health the body has now, or, when the caller says what the goal is worth (:worth), within the hp that worth buys (price/allowed)."
+  Acceptable within jobs.lib.cost.risk/::risk-share of the health the body has now, or, with a finite worth (ctx/worth), within the hp that worth buys (price/allowed)."
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -282,5 +282,5 @@
              (and (pos? (:hp stay)) (price/cannot-heal? c)) (contract/never :stranded (str over "; staying here costs " (price/round1 (:hp stay)) " hp and the body cannot heal, so waiting does not help: seal in or go to a nearer refuge") :risk hp :allowed allowed :stay-hp (:hp stay))
              (wait-lowers? c (:cells in) (:exit-dawn? in) est (:heal-s stay)) (contract/later :risky over :risk hp :allowed allowed :recheck-after-ms recheck-ms)
              (pos? (:hp stay)) (contract/ok :cheaper-than-staying (str "route risk " (price/round1 hp) " hp, over the " (price/round1 allowed) " affordable, but waiting here lowers none of it and costs " (price/round1 (:hp stay)) " hp every " (price/round1 (:secs stay)) " s"))
-             (<= hp (price/allowed c (:worth (:args c)) false)) (contract/ok :no-wait-helps (str "route risk " (price/round1 hp) " hp, over the " (price/round1 allowed) " affordable, but waiting here lowers none of it and the body can take it"))
+             (<= hp (price/allowed c (ctx/worth c) false)) (contract/ok :no-wait-helps (str "route risk " (price/round1 hp) " hp, over the " (price/round1 allowed) " affordable, but waiting here lowers none of it and the body can take it"))
              :else (contract/never :risky (str over "; waiting here lowers none of it") :risk hp :allowed allowed))))))))

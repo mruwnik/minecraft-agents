@@ -957,7 +957,7 @@
 
 (deftest a-dig-leg-whose-search-spends-its-slice-goes-on-in-the-next
   (let [p (tu/fake {:blocks (box -2 60 -2 20 70 2 "stone") :inventory [{:name "stone_pickaxe" :count 1}]})
-        c {:primitives p :args {}}
+        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly ##Inf)}
         slice (atom nil)
         leg #(let [s (choose/route-slice "leg-resume")] (reset! slice s) (choose/dig-leg c [0 64 0] [12 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice s}))]
     (with-redefs [ctx/mem (constantly {}) ctx/left (constantly {})]

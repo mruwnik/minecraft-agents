@@ -663,7 +663,7 @@
   (into {} (for [[x z] [[2 0] [4 0] [3 -1] [3 1]] y [64 65 66]] [(str x "," y "," z) "bedrock"])))
 
 (deftest a-drop-needs-a-way-out-only-where-it-lands-in-a-pit
-  (let [priced? (fn [blocks] (wplan/one-way-priced? {:primitives (tu/fake {:self {:pos {:x 0.5 :y 67 :z 0.5}} :floor [-10 -10 10 10] :blocks (merge own-pillar blocks)}) :args {}}
+  (let [priced? (fn [blocks] (wplan/one-way-priced? {:primitives (tu/fake {:self {:pos {:x 0.5 :y 67 :z 0.5}} :floor [-10 -10 10 10] :blocks (merge own-pillar blocks)}) :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly ##Inf)}
                                                     [8 64 0] [2 67 0] [3 64 0] false))]
     (is (true? (priced? {})) "open ground: escape/choose has no wall to dig, which is no trap")
     (is (false? (priced? bedrock-pit)) "a pit with nothing to dig is a certain trap")))
@@ -742,7 +742,7 @@
 
 (deftest go-to-out-of-its-own-room-in-undiggable-rock-stops-cutting-once-the-cuts-show-no-way
   ;; each guess beside a seen light that a look finds a light is evidence: the next route's guesses there are priced
-  ;; over the chance they are rock; no caller :worth, so the ways are weighed against each other (past-worth? has its own test)
+  ;; over the chance they are rock; a goal worth arrival, so past-worth? refuses none and the ways are weighed against each other
   ;; and the call ends once none is left, the clock moving
   (async done
     (tu/run-async done
@@ -758,7 +758,7 @@
           (await (gt/tick-out! eng 400 #(do (swap! clock + 500) (step))))
           (let [cells (map :cell (events-of seen :go-to.dug-own-build))]
             (is (= (count cells) (count (set cells))) "no own cell is cut twice in one call, restored in between"))
-          (is (= [:dig-route :stair :approach] (map :step (events-of seen :go-to.escalated)))
+          (is (= 1 (count (filter #{:dig-route} (map :step (events-of seen :go-to.escalated)))))
               "the dig route is not chosen again once the looks showed glowstone")
           (is (= [false :unreachable] ((juxt :arrived :reason) @out)) "the call ends, a failure, with its reason")
           (is (some (comp false? :ok?) (events-of seen :go-to.guess-look)) "a guess look that showed glowstone is told")

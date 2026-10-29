@@ -575,7 +575,7 @@
 
 ;; two ways cut at their first guessed-dark cell, each cut's look showing nothing that helps: from x 0 the plan cuts at x 3,
 ;; from x 3 at x 0. Nothing in follow! ends that; the caller's tour price (here go-to's: blocks walked away from the goal
-;; against what a goal 9 off is worth) does. The 1000th plan is whole, so the old code ends too, arrived.
+;; against the tour a goal 9 off worth 60 s pays for) does. The 1000th plan is whole, so the old code ends too, arrived.
 (deftest cuts-that-send-the-body-back-and-forth-end-once-the-callers-tour-price-is-spent
   (async done
     (tu/run-async done
@@ -591,7 +591,7 @@
                           (reset! x to)
                           (js/Promise.resolve [{:status :arrived :at [to 64 0]} 1])))
               c {:primitives (tu/fake-on-floor {:floor [-5 -5 20 5]})
-                 :walk-spent? #(> (:cost (cost/tour-cost {:explored @away :walks 0})) (cost/tour-worth 9))}
+                 :walk-spent? #(> (:cost (cost/tour-cost {:explored @away :walks 0})) (cost/tour-worth 9 60))}
               r (await (drive/follow! c east
                                       {:plan-fn (fn [_] (js/Promise.resolve
                                                          (cond (>= (swap! plans inc) 1000) {:status "found" :r #js {} :steps (line 10) :ms 5}

@@ -252,4 +252,5 @@
 
 (deftest a-find-is-worth-its-value-times-the-chance-the-trip-does-not-kill
   (are [chance worth] (= worth (v/survived-worth 1000 chance))
-    0 1000, nil 1000, 0.25 750, 0.5 500, 1 0, 1.5 0))
+    0 1000, nil 1000, 0.25 750, 0.5 500, 1 0, 1.5 0)
+  (is (zero? (v/survived-worth ##Inf 1)) "a sure death brings no find, though it be worth arrival"))
