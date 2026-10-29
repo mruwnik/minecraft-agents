@@ -75,6 +75,8 @@
     (game/select! p)
     {::price/stay-s 1e6 :id (str (random-uuid)) :slots [] :engine {:warned (atom #{}) :jobs registry/jobs} :primitives p :view (fn [] {:now 0 :data {}}) :worth (constantly ##Inf)}))
 
+(defn worthless "ctx c of a goal worth nothing: it affords no risk." [c] (assoc c :worth (constantly 0)))
+
 (def inside {:x 5 :y 64 :z 0})
 (def outside {:x 15 :y 64 :z 0})
 (def barn-roof (tu/box 14 67 -2 16 67 2 "oak_planks"))
@@ -522,14 +524,14 @@
       ready/safe-here-by-night true)))
 
 (deftest a-dark-tunnel-whose-far-end-no-look-shows-is-priced-as-the-walk-to-look
-  (let [status (fn [hall] (with-redefs [look-edge/pending (fn ([_] nil) ([_ _ _] nil))
+  (let [status (fn [hall f] (with-redefs [look-edge/pending (fn ([_] nil) ([_ _ _] nil))
                                         reach-room/unseen-sides (constantly [[6 64 0] [6 65 0]])
                                         sh-inside/dark-hall (constantly hall)
                                         sh-sense/buried? (constantly true)]
-                            (lit 0 0 #((juxt first (fn [s] (:reason (nth s 2)))) (ready/hall-status (ctx-of (assoc tunnel :time st/noon)) nil)))))]
-    (is (= [:ok :look-first] (status :roofed)) "the end is unseen: the walk to it is affordable, the stay judged on the way")
-    (is (= [:never :exposed] (status :far)) "dark floor seen reaching far: no look changes it")
-    (is (= [:never :exposed] (settings/with-settings {:jobs.lib.cost.risk/risk-share 0} #(status :roofed))) "no risk allowed: a torch lowers it")))
+                            (lit 0 0 #((juxt first (fn [s] (:reason (nth s 2)))) (ready/hall-status (f (ctx-of (assoc tunnel :time st/noon))) nil)))))]
+    (is (= [:ok :look-first] (status :roofed identity)) "the end is unseen: the walk to it is affordable, the stay judged on the way")
+    (is (= [:never :exposed] (status :far identity)) "dark floor seen reaching far: no look changes it")
+    (is (= [:never :exposed] (status :roofed worthless)) "a goal worth nothing buys no walk: a torch lowers it")))
 
 (deftest an-unseen-cell-a-look-round-could-not-show-is-judged-where-a-buried-body-stands
   (are [looked expected] (= expected (with-redefs [sh-sense/seen-cell? (fn [_ c] (not= outside (select-keys c [:x :y :z])))
@@ -543,8 +545,7 @@
   (are [looked expected] (= expected (with-redefs [sh-sense/seen-cell? (fn [_ c] (not= outside (select-keys c [:x :y :z])))
                                                    sense/round-looked (constantly looked)
                                                    lib-look/look-shows? (constantly true)]
-                                       (settings/with-settings {:jobs.lib.cost.risk/risk-share 0}
-                                         #(kind (ready/safe-at (constantly outside)) open-night))))
+                                       (first ((ready/safe-at (constantly outside)) (worthless (ctx-of open-night))))))
     #{} :look
     #{[15 64 0]} :never))
 
@@ -571,10 +572,10 @@
     (is (= #{:light} (:lowered-by (nth s 2))) "dawn lifts it")
     (is (re-find #"no look from here shows" (second s))))
   (is (= :ok (kind (ready/safe-at (constantly outside)) (assoc open-night :time st/noon))) "lit by day")
-  (let [cave (fn [] (with-redefs [sh-sense/seen-cell? (constantly false) sh-sense/solid-at? (constantly false)]
-                     ((juxt first #(:reason (nth % 2))) ((::ready/exposure (meta (ready/safe-at (constantly {:x 15 :y 40 :z 0})))) (ctx-of open-night)))))]
-    (is (= [:ok :look-first] (cave)) "a cave guess deep below: the walk there to look is affordable, the stay is judged there")
-    (is (= [:never :exposed] (settings/with-settings {:jobs.lib.cost.risk/risk-share 0} cave)) "no risk allowed: a torch lowers it")))
+  (let [cave (fn [f] (with-redefs [sh-sense/seen-cell? (constantly false) sh-sense/solid-at? (constantly false)]
+                       ((juxt first #(:reason (nth % 2))) ((::ready/exposure (meta (ready/safe-at (constantly {:x 15 :y 40 :z 0})))) (f (ctx-of open-night))))))]
+    (is (= [:ok :look-first] (cave identity)) "a cave guess deep below: the walk there to look is affordable, the stay is judged there")
+    (is (= [:never :exposed] (cave worthless)) "a goal worth nothing buys no walk: a torch lowers it")))
 
 (def escapes
   '[respond-to-hostile block-arrow-gap unwedge breathe extinguish night dig-pocket shut-in])
@@ -705,8 +706,7 @@
 (deftest safe-at-by-night-dug-takes-an-unseen-goal-below-an-unburied-body-as-underground
   (are [goal dug? expected] (= expected (with-redefs [sh-sense/seen-cell? (constantly false)
                                                      ready/roof-over? (constantly false)]
-                                          (settings/with-settings {:jobs.lib.cost.risk/risk-share 0}
-                                            #(kind (ready/safe-at-by-night (constantly goal) false dug?) open-night))))
+                                          (first ((ready/safe-at-by-night (constantly goal) false dug?) (worthless (ctx-of open-night))))))
     {:x 6 :y 57 :z 0} true :ok
     {:x 6 :y 57 :z 0} false :never
     {:x 6 :y 70 :z 0} true :later))
