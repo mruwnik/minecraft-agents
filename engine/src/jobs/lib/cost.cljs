@@ -480,8 +480,8 @@
   (or (when view (sh-spawn/spawn-bed-pos p view)) (some-> (.self p) .-worldSpawn u/pos-of)))
 
 (defn goal-value
-  "item-value of items as a goal: each measured item at its gathers' seconds per item (value/measured-worths), what is
-  made of it after them."
+  "item-value of items as a goal: each measured item at its measured worth (value/measured-worth), what is made of it
+  after them."
   [items]
   (item-value items :overrides (value/measured-worths @game/version)))
 

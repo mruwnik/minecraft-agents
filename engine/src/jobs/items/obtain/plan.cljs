@@ -118,11 +118,11 @@
     (+ (* (craft-step-s) (count crafts)) (* (smelt-item-s) (reduce + 0 (map :count smelts))))))
 
 (defn walk-s
-  "A trip, the straight walk to `at` and back, and its risk there and back (jobs.lib.walk-risk/estimate on the straight way,
+  "The straight walk to `at` and back, and its risk there and back (jobs.lib.walk-risk/estimate on the straight way,
   under the call's :sky, default now) in seconds (walk-risk/risk-s)."
   [c at]
   (let [est (walk-risk/estimate c at {:back? true :sky (:sky (:args c))})]
-    (+ (cost/trip) (:cost (cost/walk-cost {:distance (* 2 (u/dist (u/self-pos c) at))}))
+    (+ (:cost (cost/walk-cost {:distance (* 2 (u/dist (u/self-pos c) at))}))
        (walk-risk/risk-s c est))))
 
 (defn chest-s

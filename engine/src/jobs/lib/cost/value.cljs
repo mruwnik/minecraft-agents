@@ -9,7 +9,7 @@
     block        A block's drops (blockLoot, no silk touch, chance at least :min-drop-chance): (dig + find) / drops.
                  dig = hardness x :hardness-s / the speed of the stone tool (the block's own tier if higher; the base assumes a
                  tool, never the hand);
-                 find = :terrain, :wood for a log, stem, bamboo or bamboo block, or :ores {ore [find drops]} (a nil find: :ore-scan-s over the base-rates density of the ore's best layer), or :find-s for a block. Crafted blocks are no source
+                 find = :terrain, :wood for a log, stem, bamboo or bamboo block, or :ores {ore [find drops]} (a nil find: :ore-scan-s, fitted to the measured ores (measured-worth), over the base-rates density of the ore's best layer), or :find-s for a block. Crafted blocks are no source
                  except :natural ones (granite, clay ...); a block that is no item (redstone_wire) is none.
     crop         A block with an age state: :farm-s / the age-7 yield.
     mob          entityLoot of the mobs in weapon/mob-max-health and passive-max-health: (kill + hurt + find) / expected
@@ -86,10 +86,12 @@
                                  (fn [m] (and (map? m) (every? (fn [{:keys [win fail try-s]}] (and (number? win) (number? fail) (number? try-s) (<= 0 win) (<= 0 fail) (pos? (+ win fail)) (<= 0 try-s)))
                                                                (vals m)))))
                    :doc "The Beta prior per retry kind that a try after a failed one wins (answer/retry-chance; cost/try-again?), and :try-s the seconds that try takes: of the tries after a failed one in the same job in the trial bodies' logs (probes left out, 2026-10-29), :craft a craft action after a timeout, 17 of 20 won in 18 calls; :furnace a furnace action after a busy slot, none counted (the uniform prior, a visit's own seconds); :dig a dig action after a timeout, a failure or an unreachable block, 11 of 92 won in 2 calls (too few calls to fit a spread: the mean 0.12 at the mean pseudo-count total of the kinds that did fit); :place a place action after an occupied cell, no support, a failure or a timeout, or a jumpPlace action (the pillar's) after a partial, a failure or a timeout, 120 of 4856 in 116 calls; :walk a go-to after one that did not arrive, 93 of 882 in 183 calls; spread fitted by moments over the calls (effective n 0.15, 0.11: a call's own failures soon outweigh the pool). :respond (respond-to-hostile's call after calls that changed nothing, :hostile.call): none counted yet, so :pooled, all kinds' retries fitted together, 241 of 5850 in 319 calls; its seconds come from the caller. :risky-stay (jobs.lib.near/risky-wait!'s re-check after a stay refused for its price, :near.risky-wait and :near.risky-over): none counted yet, so :pooled; its seconds are the caller's pause. :comb-look (jobs.apiary.harvest's look for comb after one that took none, :apiary.comb-wait and :apiary.comb-over): none counted yet, so :pooled; its seconds are the comb-wait-s pause. Recount: node tools/event-counts.mjs retry-wins."}
-   ::gather-counts {:default {"cobblestone" {:s 344.247 :got 39} "coal" {:s 76.602 :got 3} "dirt" {:s 160.984 :got 13} "raw_iron" {:s 3750.614 :got 11}}
-                    :spec (a/pred "a map of item name to {:s seconds >= 0 :got items > 0}"
-                                  (fn [m] (and (map? m) (every? (fn [{:keys [s got]}] (and (number? s) (number? got) (<= 0 s) (pos? got))) (vals m)))))
-                    :doc "Seconds and items got of the trial bodies' obtain gathers that mined the item (2026-10-29): cobblestone 39 in 13 gathers, coal 3 in 5, dirt 13 in 2, raw iron 11 in 11, fruitless mines' seconds counted. s / got, the gather's walk and look included, is the item's price as a goal (measured-worths: jobs.lib.cost/find-worth), not at the margin (item-value). Recount: node tools/event-counts.mjs item-costs."}
+   ::gather-counts {:default {"birch_log" {:s 34.417, :got 6, :calls 3}, "birch_sapling" {:s 342.572, :got 9, :calls 7}, "coal" {:s 104.443, :got 7, :calls 6}, "cobblestone" {:s 1408.92, :got 202, :calls 32}, "dirt" {:s 181.444, :got 69, :calls 4}, "log" {:s 5073.127, :got 0, :calls 58}, "oak_log" {:s 65.975, :got 10, :calls 6}, "oak_sapling" {:s 339.004, :got 12, :calls 9}, "raw_iron" {:s 5873.701, :got 28, :calls 21}, "white_wool" {:s 101.411, :got 3, :calls 5}}
+                    :spec (a/pred "a map of item name to {:s seconds >= 0 :got items >= 0}"
+                                  (fn [m] (and (map? m) (every? (fn [{:keys [s got]}] (and (number? s) (number? got) (<= 0 s) (<= 0 got))) (vals m)))))
+                    :doc "Seconds the trial bodies' gathers of an item held the body and the items of it picked up meanwhile, fruitless gathers and their child jobs' seconds counted, a reflex's or an offline body's not (logs to 2026-10-29, probes left out, gathers logged at debug alone: 21 raw iron gathers got 28 in 5874 s, 32 cobblestone 202 in 1409 s, 6 coal 7 in 104 s). A name minecraft-data has not (log: any log) counts for nothing. measured-worth weighs them with the recipe tree. Recount: node tools/event-counts.mjs item-costs (:gather-counts)."}
+   ::gather-prior-items {:default 1.516 :spec (a/num-in 0 nil)
+                         :doc "Items a measured item's recipe-tree price counts as beside its gathers (measured-worth): the shape of the gathers' rates about their item's, fitted by moments over the items with two or more gathers and pooled. Recount: node tools/event-counts.mjs item-costs (:prior-items)."}
    ::food-worth-per-point {:default 30 :spec (a/num-in 0 nil)
                            :doc "Seconds reaching food is worth per food point the body is under ::food-worth-from."}
    ::food-worth-from {:default 10 :spec (a/num-in 0 20)
@@ -142,12 +144,43 @@
                    :else price)]
     {:name name :count n :each each :value (* n each)}))
 
-(defn measured-worths
-  "{item seconds} of ::gather-counts for minecraft-data version, as item-value :overrides: the seconds its measured gathers
-  took per item got; cobblestone's for every stone tool material (jobs.items.recipes/stone-materials), as one gather takes
-  whichever is seen."
+(declare item-value)
+
+(defn- tree-each
+  "Seconds one `n` is worth by the recipe tree alone, ore found at scan seconds per unit of density (0 when none)."
+  [version n scan]
+  (or (:each (first (:items (item-value [{:name n :count 1}] :version version :basis {:find {:ore-scan-s scan}})))) 0))
+
+(def ^:private measured
+  (memoize
+   (fn [version counts k]
+     (let [md (minecraft-data version)
+           rows (for [[n {:keys [s got]}] counts
+                      :when (aget (.-itemsByName md) n)
+                      :let [a (tree-each version n 0)]]
+                  {:n n :s s :got got :a a :b (- (tree-each version n 1) a)})
+           ores (filter #(pos? (:b %)) rows)
+           per (reduce + (map #(* (:got %) (:b %)) ores))
+           scan (when (pos? per) (max 0 (/ (reduce + (map #(- (:s %) (* (:got %) (:a %))) ores)) per)))
+           worth (fn [{:keys [s got a b]}] (/ (+ s (* k (+ a (* b (or scan 0))))) (+ got k)))]
+       {:basis (if scan {:find {:ore-scan-s scan}} {})
+        :ores (into {} (map (juxt :n worth)) ores)
+        :goals (into {} (map (juxt :n worth)) (remove #(pos? (:b %)) rows))}))))
+
+(defn measured-worth
+  "{:basis :ores :goals} of ::gather-counts for minecraft-data version. Each measured item is worth (s + k x tree) / (got
+  + k), its gathers' seconds and items with the recipe tree's price at k = ::gather-prior-items items. :basis's
+  :ore-scan-s is fitted to the measured ores (an item whose tree price grows with it) pooled, so every ore follows by
+  density; :ores, those ores' worths, are item-value's (the margin's and the goal's); :goals, the rest's, the goal's
+  alone (goal-value): at the margin a block is its dig."
   [version]
-  (let [m (into {} (map (fn [[n {:keys [s got]}]] [n (/ s got)])) (settings/get settings ::gather-counts))]
+  (measured version (settings/get settings ::gather-counts) (settings/get settings ::gather-prior-items)))
+
+(defn measured-worths
+  "{item seconds} of the measured items that are not ores (measured-worth :goals), as item-value :overrides for a goal;
+  cobblestone's for every stone tool material (jobs.items.recipes/stone-materials), as one gather takes whichever is seen."
+  [version]
+  (let [m (:goals (measured-worth version))]
     (if-let [cobble (m "cobblestone")]
       (merge (zipmap (recipes/stone-materials version) (repeat cobble)) m)
       m)))
@@ -163,7 +196,9 @@
         group-names #{"ore" "tool" "armor" "food" "block" "unknown"}
         group-overrides (select-keys overrides group-names)
         name-overrides (apply dissoc overrides group-names)
-        table (tbl/table-for version name-overrides basis)
+        {measured-basis :basis ores :ores} (when-not (get-in basis [:find :ore-scan-s]) (measured-worth version))
+        basis (tbl/deep-merge measured-basis basis)
+        table (tbl/table-for version (merge ores name-overrides) basis)
         basis (tbl/deep-merge tbl/default-basis basis)
         named (filter #(string? (:name %)) items)
         merged (map (fn [[k stacks]] (assoc k :count (reduce + 0 (map count-of stacks))))

@@ -176,9 +176,9 @@
 (deftest basis-options-change-the-table
   (is (> (value [{:name "rotten_flesh"}] :basis {:junk-share 1}) (* 5 (each "rotten_flesh"))))
   (is (> (value [{:name "granite"}] :basis {:natural #{}}) (* 10 (each "granite"))) "the natural set is a default")
-  (is (> (value [{:name "diamond"}] :basis {:find {:ores {"diamond" [600 1.5]}}}) (* 1.9 (each "diamond"))))
-  (is (= (each "coal") (value [{:name "coal"}] :basis {:find {:ores {"diamond" [600 1.5]}}})) "the other ores are kept")
-  (is (not= (value [{:name "diamond"}] :basis {:find {:ores {"diamond" [600 1.5]}}}) (each "diamond"))
+  (is (> (value [{:name "diamond"}] :basis {:find {:ores {"diamond" [2000 1.5]}}}) (* 1.9 (each "diamond"))))
+  (is (= (each "coal") (value [{:name "coal"}] :basis {:find {:ores {"diamond" [2000 1.5]}}})) "the other ores are kept")
+  (is (not= (value [{:name "diamond"}] :basis {:find {:ores {"diamond" [2000 1.5]}}}) (each "diamond"))
       "two bases, two tables")
   (is (< (value [{:name "iron_pickaxe"}] :overrides {"iron_ingot" 0} :basis {:junk-share 1}) (each "iron_pickaxe"))
       "a name override still flows through"))
@@ -233,12 +233,12 @@
     (is (> 1 (ratio "dirt" {:distance 8 :climb 7})))))
 
 (deftest an-ore-is-dearer-to-find-where-its-density-is-lower
-  (is (> (each "gold_ingot") (each "iron_ingot")) "gold ground holds less ore than iron ground")
+  (is (> (each "raw_gold") (each "raw_iron")) "gold ground holds less ore than iron ground")
   (is (> (each "diamond") (each "coal")))
   (is (< (value [{:name "coal"}] :basis {:find {:ore-scan-s 0.03}}) (each "coal")) "the find is the scan over the density"))
 
 (deftest a-full-iron-kit-is-worth-hours-of-mining
-  ;; trial bodies spent 100-147 s of mining job time per raw iron, so the kit's 33 iron is 1-1.5 h of mining
+  ;; value/::gather-counts: trial bodies' gathers took about 200 s per raw iron, so the kit's 33 iron is about 2 h of mining
   (let [kit (map #(hash-map :name (str "iron_" %))
                  ["pickaxe" "sword" "axe" "shovel" "helmet" "chestplate" "leggings" "boots"])]
     (is (< 3600 (value kit) (* 4 3600)))))

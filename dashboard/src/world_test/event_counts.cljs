@@ -34,7 +34,7 @@
   retry-wins (world-test.retry-wins; trial bodies only) counts from the logs alone the tries after a failed one per retry kind, won or not, and their seconds (value/::retry-counts).
   tree-logs (world-test.tree-logs; trial bodies only) counts from the logs alone the logs of each fell-tree :done: n, mean, median (trees/::logs-per-tree is the mean).
   swim-times [--agents DIR] [--q Q] (world-test.swim-times; trial bodies only) counts from the logs alone the go-to swims (landed exact, timeout censored at the cap): n, landed, capped and the Q quantile (default 0.95; :lower-bound? when the cap hides it) (go-to ::swim-ms).
-  item-costs [--agents DIR] [--counts FILE] (world-test.item-costs; trial bodies only) folds the obtains' mined gathers, seconds and items got, into the counts file (value/::gather-counts).
+  item-costs [--agents DIR] [--counts FILE] (world-test.item-costs; trial bodies only) folds each gather's seconds holding the body and the items of its kind picked up into the counts file (value/::gather-counts, ::gather-prior-items).
   unseen-floors (world-test.unseen-floors; all bodies) counts from the logs alone the unseen floors walks looked at, absent and present (value/::unseen-floor-counts).
   gap-miss: the miss rate of gap jumps per [width run-up dy sprint] from go-to's :gap-jump events (world-test.gap-miss; trial bodies only).
   Pure parts: scan-line, exchange, starts, starts-by-mob, notices, groups, vein-seen, flee-steps, pace-report, closing-pieces, closing-report, walk-steers, walk-report, walk-detour."
@@ -797,7 +797,7 @@
                                           [(into [b] k) row]))
                           folded (item-costs/fold (load-counts file) rows)]
                       (save-counts! file folded)
-                      (println (pr-str (item-costs/report (:item-costs folded))))
+                      (println (pr-str {:gather-counts (item-costs/report (:item-costs folded)) :prior-items (item-costs/prior-items (:item-costs folded))}))
                       0)
        "retry-wins" (do (println (pr-str (retry-wins/report (for [b (array-seq (fs/readdirSync agents))
                                                                   :when (and (not (probe? b)) (fs/existsSync (path/join agents b "engine")))

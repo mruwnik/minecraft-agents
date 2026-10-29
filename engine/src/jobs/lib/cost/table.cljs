@@ -33,9 +33,8 @@
           :block {"gilded_blackstone" 300}
           :ore-by-tier {1 10 2 30 3 300 4 300}
           ;; seconds of looking per unit of the best layer's ore density (base-rates/peak-density): find = this / density.
-          ;; Measured for iron (trial bodies 2026-10-22: 100-147 s of mining job time per raw iron); other ores follow by
-          ;; density. As a goal (cost/goal-value) a measured item takes value/::gather-counts instead.
-          :ore-scan-s 1.15
+          ;; item-value fits it to the measured ores (value/measured-worth); nil: :ore-by-tier.
+          :ore-scan-s nil
           :ores {"coal" [nil 1.5] "copper" [nil 3.5] "iron" [nil 1] "lapis" [nil 6.5] "redstone" [nil 4.5] "gold" [nil 1]
                  "diamond" [nil 1.5] "emerald" [nil 1] "nether_quartz" [40 1.5] "nether_gold" [60 4]
                  "ancient_debris" [900 1]}} ;; [find drops]: a nil find comes from the base rates, a number is the hand figure of an ore they do not cover
@@ -108,11 +107,11 @@
 (defn wood-block? [name] (boolean (re-find #"(_log|_stem|_wood|_hyphae|^bamboo_block|^bamboo|^bamboo_sapling)$" name)))
 
 (defn ore-find-seconds
-  "Seconds to find ore: its hand figure, else :ore-scan-s over the density of its best layer (nil: no placement)."
+  "Seconds to find ore: its hand figure, else :ore-scan-s over the density of its best layer (nil: no placement or no scan)."
   [{:keys [ores ore-scan-s]} ore]
   (or (first (get ores ore))
       (let [density (base-rates/peak-density ore nil)]
-        (when (pos? density) (/ ore-scan-s density)))))
+        (when (and ore-scan-s (pos? density)) (/ ore-scan-s density)))))
 
 (defn find-seconds [md basis b]
   (let [{:keys [terrain wood block ores ore-by-tier] :as found} (:find basis)

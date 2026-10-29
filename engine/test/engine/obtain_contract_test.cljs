@@ -410,6 +410,6 @@
         (let [day (await (torch-chest-price 6000))
               night (await (torch-chest-price 18000))
               lit-night (await (torch-chest-price 18000 [15 15]))]
-          (is (= day (+ (cost/trip) (:cost (cost/walk-cost {:distance 40})))) "by day the straight walk there and back over sky-lit ground risks nothing")
+          (is (= day (:cost (cost/walk-cost {:distance 40}))) "by day the straight walk there and back over sky-lit ground risks nothing")
           (is (> night day) (str "at night the spawns on the dark ground there and back cost: " night " s against " day " s"))
           (is (= lit-night day) "ground lit by torches risks nothing by night"))))))

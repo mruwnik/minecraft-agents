@@ -609,12 +609,33 @@
 
 (deftest a-measured-item-is-worth-its-gathers-seconds-per-item-as-a-goal-and-what-is-made-of-it-follows
   (let [goal #(:value (cost/goal-value [{:name % :count 1}]))
-        measured (settings/with-settings {:jobs.lib.cost.value/gather-counts {"cobblestone" {:s 900 :got 10}}}
+        margin #(:value (cost/item-value [{:name % :count 1}]))
+        measured (settings/with-settings {:jobs.lib.cost.value/gather-counts {"cobblestone" {:s 9000 :got 100}}}
                    #(mapv goal ["cobblestone" "cobbled_deepslate" "stone_pickaxe"]))]
-    (is (= [90 90] (subvec measured 0 2)) "one gather takes whichever stone material is seen")
-    (is (< (* 3 90) (peek measured)) "three of them and the sticks")
+    (is (= (measured 0) (measured 1)) "one gather takes whichever stone material is seen")
+    (is (< 85 (measured 0) 90) "a hundred items got: near their gathers' 90 s each")
+    (is (< (* 3 (measured 0)) (peek measured)) "three of them and the sticks")
     (is (< 20 (goal "stone_pickaxe")) "the counted gathers: a stone pickaxe is worth a walk, not a leaf's dig")
-    (is (< (:value (cost/item-value [{:name "cobblestone" :count 1}])) (goal "cobblestone")) "at the margin a block is its dig")))
+    (is (< (margin "cobblestone") (goal "cobblestone")) "at the margin a block is its dig")))
+
+(deftest a-thin-measure-leans-on-the-recipe-tree-and-a-fruitless-one-costs-more-than-it
+  (let [goal (fn [counts] (settings/with-settings {:jobs.lib.cost.value/gather-counts counts}
+                            #(:value (cost/goal-value [{:name "dirt" :count 1}]))))
+        tree (goal {})]
+    (is (< tree (goal {"dirt" {:s 90 :got 1}}) 90) "one item got in 90 s: between the tree and the gathers")
+    (is (< (goal {"dirt" {:s 90 :got 1}}) (goal {"dirt" {:s 9000 :got 100}})) "the same rate over a hundred items moves it further")
+    (is (< tree (goal {"dirt" {:s 60 :got 0}})) "fruitless gathers make it dearer")))
+
+(deftest a-measured-ore-has-one-worth-and-the-ores-it-was-not-measured-for-follow-by-density
+  (let [worths (fn [counts] (settings/with-settings {:jobs.lib.cost.value/gather-counts counts}
+                              #(vector (:value (cost/goal-value [{:name "raw_iron" :count 1}]))
+                                       (:value (cost/item-value [{:name "raw_iron" :count 1}]))
+                                       (:value (cost/item-value [{:name "raw_gold" :count 1}])))))
+        [goal margin gold] (worths {"raw_iron" {:s 20000 :got 100}})
+        [_ _ gold-dear] (worths {"raw_iron" {:s 40000 :got 100}})]
+    (is (= goal margin) "the goal and the margin take the same measured raw iron")
+    (is (< 190 goal 210) "a hundred raw iron got in 20000 s")
+    (is (< (* 1.8 gold) gold-dear) "raw gold's find is the same scan over its own density")))
 
 (deftest a-look-for-animals-pays-less-the-more-ground-round-it-showed-none
   (let [note (fn [x z] {:kind :searched :what ["sheep"] :pos [x 64 z] :r 24})

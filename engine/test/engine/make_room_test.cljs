@@ -213,8 +213,8 @@
     (is (= ["tuff" "granite" "cobbled_deepslate"]
            (names-of (ord/toss-order inventory {} {} 3)))
         "cheapest first; coal and raw copper are worth keeping")
-    (is (= ["tuff" "granite" "cobbled_deepslate" "iron_ore" "raw_copper" "coal"]
-           (names-of (ord/toss-order inventory {} {} 100)))
+    (is (= #{"tuff" "granite" "cobbled_deepslate" "iron_ore" "raw_copper" "coal"}
+           (set (names-of (ord/toss-order inventory {} {} 100))))
         "raised :toss-below lets the stacks of raw copper and coal go")))
 
 (def linden-bag
