@@ -159,7 +159,8 @@
   the cells the bed is got up to (wake-cells) when asleep, exposed for its seconds (:shelter: dig-in-s, shut-in's quote; the whole night
   left when it has no way); a body sh/in-ground? works on after, else the night left is lost. :flee (flee, the caller's target with go-to's
   :seconds and :cost of the walk and :risk-s, the hp its dark seconds and the hostiles by the target cost): the walk's seconds and the shelter's
-  on arrival (flee-after-s) lost like a dig's, the walk's cost beyond its seconds, risk-s, and the shelter's seconds exposed at the target. :log-out (log-out?): jobs.survival.log-out's quoted seconds, the night left to the sleepers."
+  on arrival (flee-after-s) lost like a dig's, the walk's cost beyond its seconds, risk-s, and the shelter's seconds exposed at the target. :exposed the night left in the open
+  where the body stands (or the worst cell it gets up to), lost like a dig of no seconds. :log-out (log-out?): jobs.survival.log-out's quoted seconds, the night left to the sleepers."
   [c {:keys [bed walk-s log-out? niche-s flee]}]
   (let [p (:primitives c)
         view (ctx/view c)
@@ -187,9 +188,10 @@
                               seconds (min cost (or (:seconds flee) cost))
                               after (flee-after-s flee here-s)]
                           (+ (night-lost (+ seconds after)) (- cost seconds) (or risk-s 0) (exposed-price c (spawn-light/night-chance p pos) after pos))))
-      (number? out-s) (assoc :log-out out-s))))
+      (number? out-s) (assoc :log-out out-s)
+      true (assoc :exposed (+ (night-lost 0) (apply max (map #(exposed-price c (spawn-light/night-chance p %) left %) stands)))))))
 
-(def answer-order [:bed :sealed :log-out :shelter :niche :flee])
+(def answer-order [:bed :sealed :log-out :shelter :niche :flee :exposed])
 
 (defn cheapest
   "The answer of prices ({answer seconds}) that costs least, the earlier of answer-order at a tie; :bed when overdue for

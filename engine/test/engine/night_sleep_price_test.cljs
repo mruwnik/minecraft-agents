@@ -80,11 +80,13 @@
                           (st/know-bed! eng {:x 2 :y 64 :z 0})
                           (core/submit! eng '(jobs.survival.night) {})
                           (await (tick-until eng #(seq (st/emitted seen :night.answers)) 20))
-                          (get-in (first (st/emitted seen :night.answers)) [:prices :shelter])))
+                          (:prices (first (st/emitted seen :night.answers)))))
               walls (await (shelter st/wall-stack))
               none (await (shelter []))]
-          (is (number? walls))
-          (is (< walls none) "no blocks and stone underfoot: shut-in quotes no way, so the stay is open all night"))))))
+          (is (number? (:shelter walls)))
+          (is (< (:shelter walls) (:shelter none)) "no blocks and stone underfoot: shut-in quotes no way, so the stay is open all night")
+          (is (= (:exposed none) (:shelter none)) "the night left in the open is an answer of its own, priced as that stay")
+          (is (< (:shelter walls) (:exposed walls)) "walls cost less than the night in the open"))))))
 
 (deftest a-bed-that-is-no-longer-there-is-seen-as-gone
   (let [{:keys [p]} (st/setup {:time night :blocks {"2,64,0" "red_bed" "3,64,0" "dirt"}})]
