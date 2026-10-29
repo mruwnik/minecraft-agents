@@ -330,10 +330,13 @@
               p (seen-closed-cell (assoc w :inventory []) true)]
           (is (some? (pit/pit-plan (plan-ctx p) (cell 0 64 0))) "dirt below the surface is not read as stone the bare hand cannot clear"))))))
 
-(deftest walls-with-fewer-blocks-than-open-cells-quote-a-penalty
-  (let [with (fn [n] (plan-ctx (tu/fake {:inventory [{:name "dirt" :count n}]})))]
-    (is (pos? (wall-in/short-penalty (with 3) 10)) "3 blocks for 10 cells would stop half built")
-    (is (zero? (wall-in/short-penalty (with 10) 10)))))
+(deftest walls-with-fewer-blocks-than-open-cells-quote-the-blow-of-a-melee-hostile-that-gets-in
+  (let [zombie {:id 9 :name "zombie" :kind "hostile" :pos {:x 4 :y 64 :z 0} :health 20}
+        with (fn [n mobs] (plan-ctx (tu/seeing-all (tu/fake {:inventory [{:name "dirt" :count n}] :entities mobs}))))]
+    (is (pos? (wall-in/half-built-s (with 3 [zombie]) 10)) "3 blocks for 10 cells would stop half built")
+    (is (zero? (wall-in/half-built-s (with 10 [zombie]) 10)))
+    (is (zero? (wall-in/half-built-s (with 3 []) 10)) "no melee hostile known: nothing gets in")
+    (is (zero? (wall-in/half-built-s (with 3 [(assoc zombie :name "skeleton")]) 10)) "a shooter does not walk in")))
 
 (deftest a-closed-cell-with-walls-it-cannot-dig-gets-no-pit
   (async done

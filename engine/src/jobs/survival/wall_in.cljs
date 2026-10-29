@@ -6,8 +6,10 @@
             [jobs.lib.blocks :as lb]
             [jobs.lib.choose :as choose]
             [jobs.lib.combat :as combat]
+            [jobs.lib.cost :as cost]
             [jobs.lib.cost.answer :as answer]
             [jobs.lib.cost.danger :as cost-danger]
+            [jobs.lib.cost.health :as health]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.ready :as ready]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -24,7 +26,7 @@
   hostile stands in a cell (not with :for :night), no block is left or a place is refused. A place refused for a mob in the cell is waited out
   (jobs.lib.seal/mob-wait-ticks), then fails; one refused otherwise goes after the others (blocks.fill-cells: the walls are placed one cell a step through it, in place, ledgered; a torch in a cell is dug first, an open door shut) and fails with the other failures; a block that stays in a cell is left alone. Every block goes to the scaffold ledger with :for (default :danger, ledger :retreat-plug, taken
   back by jobs.access.cleanup once no hostile is near; :night: ledger :shelter, left alone). Quote: time, a placement per open cell
-  (##Inf with no block carried; ::short-s more with fewer blocks than open cells). With :for :night the quote counts night seconds only (placing), and a block worth more than the ::wall-value setting
+  (##Inf with no block carried; with fewer blocks than open cells, which would stop half built, a melee hostile known gets in by an open cell: its blow's hp-cost added, half-built-s). With :for :night the quote counts night seconds only (placing), and a block worth more than the ::wall-value setting
   (jobs.lib.cost/item-value) adds the dig back at dawn; it needs a carried block for every open cell. A cell another's zone refuses adds plug-way's ::trespass-s.
   Picked by jobs.survival.shut-in, which shuts the body in by the cheapest way.")
 
@@ -37,7 +39,6 @@
 (a/defargs settings
   {::wall-value {:default 3 :doc ":night: a block worth more than this each (jobs.lib.cost/item-value; dirt 0.35, cobblestone 0.85, stone 2.85, planks 3.4, log 12.8) is taken back at dawn, which the quote counts" :spec (a/num-in 0 nil)}
    ::job-time-s {:default 60 :doc "Seconds a walls attempt may take." :spec (a/num-in 0 nil)}
-   ::short-s {:default 60 :doc "Seconds the quote adds when fewer blocks are carried than open cells: the walls would stop half built, so a way that can finish (a pit digs its own plug) is chosen first." :spec (a/num-in 0 nil)}
    ::dear-s {:default 0.4 :doc "Seconds a wall block worth more than ::wall-value adds per cell for the night: it is dug again at dawn." :spec (a/num-in 0 nil)}
    ::mob-fails {:default {:reached {:k 4 :n 7} :clear {:k 0 :n 1}}
                 :spec (a/map-of #{:reached :clear} (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)}))
@@ -79,15 +80,12 @@
     (contract/later :no-blocks "no block to wall the body in with")
     (contract/ok :blocks "a block to wall with")))
 
-(defn short-penalty
-  "::short-s when fewer blocks are carried than open cells, else 0."
-  [c open]
-  (if (< (reduce + (map :count (lb/carried c (flight/blocks c)))) open) (settings/get settings ::short-s) 0))
+(declare half-built-s)
 
 (defn quote-of [c]
   (let [cells (dig-cells/open-cells (:primitives c) (sh-sense/feet (:primitives c)))
         open (count cells)]
-    (way/quote-of c (if (why-not c) ##Inf (+ (* open (cell-seconds c open)) (way/zone-penalty c {:place cells}) (short-penalty c open)))
+    (way/quote-of c (if (why-not c) ##Inf (+ (* open (cell-seconds c open)) (way/zone-penalty c {:place cells}) (half-built-s c open)))
                   (settings/get settings ::job-time-s))))
 
 (defn beside?
@@ -107,19 +105,37 @@
   [counts beside?]
   (answer/counted-chance (get counts (if beside? :beside :clear))))
 
+(defn melee-hostiles
+  "The hostiles the body knows within the hostile radius that walk in through an open cell: not a shooter, a creeper or an enderman."
+  [c]
+  (let [p (:primitives c)]
+    (->> (danger-q/known-hostiles p (danger-q/hostile-radius) {})
+         (remove #(or (combat/ranged? %) (combat/creeper? %) (combat/enderman? %))))))
+
 (defn arrive-s
   "Seconds before the nearest melee hostile the body knows within the hostile radius (not a shooter, a creeper or an
   enderman) can strike it (cost-danger/arrival-s); nil with none."
   [c]
   (let [p (:primitives c)
         at (u/pos-of (.-pos (.self p)))]
-    (some->> (danger-q/known-hostiles p (danger-q/hostile-radius) {})
-             (remove #(or (combat/ranged? %) (combat/creeper? %) (combat/enderman? %)))
+    (some->> (melee-hostiles c)
              (map #(cost-danger/arrival-s (cost-danger/mob-kind %) (danger-q/mob-pos p %) at))
              seq
              (reduce min))))
 
 (defn open-count [c] (count (dig-cells/open-cells (:primitives c) (sh-sense/feet (:primitives c)))))
+
+(defn half-built-s
+  "Seconds a wall left half built (fewer carried blocks than open cells) costs: a melee hostile known gets in by a cell left open
+  (chance 1), each at the hp-cost of its blow (answer/blow, at the body's health and armour); 0 with the blocks for every cell."
+  [c open]
+  (let [have (reduce + (map :count (lb/carried c (flight/blocks c))))
+        self (.self (:primitives c))
+        health (.-health self)
+        stats (cost/armour-stats (cost/equipment-of (.-equipment self)))]
+    (if (>= have open)
+      0
+      (reduce + 0 (map #(health/hp-cost (if (number? health) health 20) (answer/blow stats {:name (.-name %)})) (melee-hostiles c))))))
 
 (defn fails
   "The chance the walls cannot be closed for a mob in a cell: answer/counted-chance of ::mob-fails of the class the body

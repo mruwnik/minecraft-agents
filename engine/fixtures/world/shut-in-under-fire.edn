@@ -19,4 +19,10 @@
   {:name "hurt-body-with-no-danger-pockets-in"
    :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30] [:rcon "damage $BODY 10 minecraft:generic"]
          [:job (jobs.survival.shut-in {:ways #{:walls :pocket}})]]
+   :expect [{:event {:source :job :kind :completed :data {:way :pocket}} :within-s 60 :of-job true}]}
+  {:name "one-block-and-a-zombie-in-sight-pockets-in-not-a-half-built-wall"
+   :body {:inventory [["iron_pickaxe" 1] ["dirt" 1]]}
+   :act [[:summon "zombie" [16.5 0 22.5] "{NoAI:1b}"]
+         [:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30] [:rcon "damage $BODY 10 minecraft:generic"]
+         [:job (jobs.survival.shut-in {:ways #{:walls :pocket}})]]
    :expect [{:event {:source :job :kind :completed :data {:way :pocket}} :within-s 60 :of-job true}]}]}
