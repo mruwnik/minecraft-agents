@@ -349,11 +349,18 @@
             (= :done (:kind e)) :again
             :else (do (book-failed! c w e) :again)))))))
 
-(defn hold-bed!
-  "A bed the plan still has to place, and one carried: reserved for the call's life, so the night does not make it a camp bed."
+(defn hold-carried!
+  "The carried units of the items the plan's missing cells still need, reserved for the call's life, so a craft or
+  smelt for another need (a furnace for a torch) does not spend them, nor the night its bed. The entries follow what is still missing."
   [c cells]
-  (when (and (some #(wood/bed? (:item %)) (missing cells)) (some #(wood/bed? (:name %)) (u/inventory (:primitives c))))
-    (reserve/hold! c (str (:id c) "-bed") {:tag :bed :why "bed for the plan"})))
+  (let [need (frequencies (keep :item (missing cells)))
+        carried (storage/carried-totals (u/inventory (:primitives c)))
+        wanted (for [[item n] (sort need) :let [k (min n (get carried item 0))] :when (pos? k)]
+                 {:id (str (:id c) "-carried-" item) :item item :count k :strength 1 :by (:id c)
+                  :why "carried for the plan's cells"})
+        bed? (and (some #(wood/bed? (:item %)) (missing cells)) (some #(wood/bed? (:name %)) (u/inventory (:primitives c))))]
+    (reserve/set-job-entries! c (cond-> (vec wanted)
+                                  bed? (conj {:id (str (:id c) "-bed") :tag :bed :count 1 :strength 1 :by (:id c) :why "bed for the plan"})))))
 
 (defn ^:async step [c]
   (let [{:keys [trouble wood cells]} (planned c)]
@@ -363,7 +370,7 @@
           ;; before any fetch, so the dirt fetched for the fill is priced as spent
           (when (and (some :fill cells) (not (contains? (ctx/mem c) :fill-carried)))
             (ctx/update-mem! c assoc :fill-carried (get (storage/carried-totals (u/inventory (:primitives c))) "dirt" 0)))
-          (hold-bed! c cells)
+          (hold-carried! c cells)
           (or (await (fetch-step! c))
               (await (light/light! c cells))
               (let [cells (:cells (planned c))]

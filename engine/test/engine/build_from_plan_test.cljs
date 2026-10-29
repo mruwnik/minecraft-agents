@@ -14,6 +14,7 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [jobs.lib.cost :as cost]
+            [jobs.lib.reserve :as reserve]
             [engine.triggers :as triggers]
             [jobs.lib.escape :as escape]
             [jobs.lib.reach.room :as reach-room]
@@ -1980,6 +1981,22 @@
             (await (child-outcome-exploring eng job {:plan "pen"} 20))
             (finally (set! ctx/call orig)))
           (is (some #(and (= "oak_fence" (:item %)) (true? (:explore %)) (= "pen" (:for-plan %)) (vector? (:center %))) @seen) (pr-str @seen)))))))
+
+(deftest the-torch-fetch-of-a-dark-build-leaves-the-items-carried-for-its-cells-reserved
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [orig ctx/call
+              held (atom [])
+              plan {:id "wall" :parts [{:id "wall" :cells [[3 64 3] [4 64 3] [5 64 3]] :want "cobblestone"}]}
+              {:keys [eng]} (start {:inventory [{:name "cobblestone" :count 3}] :time 18000 :light {} :light-default [0 0]} {"wall" plan})]
+          (set! ctx/call (fn [c slot j args]
+                           (when (= 'jobs.items.obtain j) (swap! held conj [(:item args) (reserve/held c :craft)]))
+                           (orig c slot j args)))
+          (try
+            (await (child-outcome eng job {:plan "wall" :explore false} 20))
+            (finally (set! ctx/call orig)))
+          (is (some #(= ["torch" {"cobblestone" 3}] %) @held) (pr-str @held)))))))
 
 (deftest stand-levels-are-the-cells-first-then-the-bodys-when-near
   (are [body cell levels] (= levels (plan/stand-levels body cell))

@@ -1,6 +1,6 @@
 ;; Card bccfad13: jobs.build.from-plan digs and replaces a wrong floor block before it places the wall cell right above it,
 ;; even while the floor item is not yet carried (logs are crafted to planks first), so the floor is never dug from under a wall.
-;; Sealed dark plot (no clock); torches are carried, else the build fetches them and crafts a furnace from the cobblestone the walls need. Should-succeed: dirt-floor-under-wall-is-dug-then-planked-and-walled.
+;; Sealed dark plot (no clock). Should-succeed: dirt-floor-under-wall-is-dug-then-planked-and-walled; with no torch carried, the build holds its cobblestone and the furnace for the torch is made from other stone: torchless-body-keeps-the-wall-cobblestone.
 {:defaults
  {:tags [:build] :time :any
   :plot {:height 8 :light :dark :length 64}
@@ -17,4 +17,14 @@
    :act [[:job (jobs.build.from-plan {:plan "$plan:hut"})]
          [:await {:source :job :kind :completed} 220]]
    :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 220 :of-job true}]
-   :after [[:block [5 0 14] "oak_planks"] [:block [8 0 14] "oak_planks"] [:block [5 1 14] "cobblestone"] [:block [8 1 14] "cobblestone"]]}]}
+   :after [[:block [5 0 14] "oak_planks"] [:block [8 0 14] "oak_planks"] [:block [5 1 14] "cobblestone"] [:block [8 1 14] "cobblestone"]]}
+  {:name "torchless-body-keeps-the-wall-cobblestone"
+   :body {:inventory [["cobblestone" 8] ["oak_log" 3] ["stone_pickaxe" 1]]}
+   :blocks [[:set [12 0 17] "coal_ore"] [:set [12 0 16] "coal_ore"]]
+   :plans [{:id "hut" :metadata {:by "$body"}
+            :parts [{:id "floor" :cells [#at [5 0 14] #at [6 0 14] #at [7 0 14] #at [8 0 14]] :want "oak_planks"}
+                    {:id "wall" :cells [#at [5 1 14] #at [6 1 14] #at [7 1 14] #at [8 1 14]] :want "cobblestone"}]}]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:hut"})]
+         [:await {:source :job :kind :completed} 220]]
+   :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 220 :of-job true}]
+   :after [[:block [5 1 14] "cobblestone"] [:block [8 1 14] "cobblestone"]]}]}
