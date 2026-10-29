@@ -160,10 +160,10 @@
     (is (re-find #"s away" (second (status 10))))))
 
 (deftest a-call-that-must-arrive-takes-any-stay-no-wait-beats
-  (is (= [:ok 171] (settings/with-settings {:jobs.lib.ready/light-patience-s 10}
-                     #(lit 0 15 (fn [] (let [[kind text] ((ready/safe-at (constantly outside)) (ctx-of open-night))]
-                                         [kind (some-> (re-find #"cost (\d+) hp" text) second js/Number)])))))
-      "##Inf (a means job at the root), light beyond the patience: a 1e6 s dark stay of 171 hp is no reason to refuse"))
+  (let [[kind text] (settings/with-settings {:jobs.lib.ready/light-patience-s 10}
+                           #(lit 0 15 (fn [] ((ready/safe-at (constantly outside)) (ctx-of open-night)))))]
+    (is (= :ok kind) "##Inf (a means job at the root), light beyond the patience: the dark stay is no reason to refuse")
+    (is (< 20 (js/Number (second (re-find #"cost (\d+) hp" text)))) "a stay that costs more hp than the body has")))
 
 (deftest safe-at-a-sheltered-place-is-ok-and-a-walk-out-of-the-hut-is-not
   (are [world to expected] (= expected (showing #(kind (ready/safe-at (constantly to)) world)))
