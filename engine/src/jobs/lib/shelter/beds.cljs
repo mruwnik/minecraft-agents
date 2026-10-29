@@ -9,9 +9,11 @@
             [engine.settings :as settings]
             [jobs.lib.access.zones :as zones]
             [jobs.lib.build.wood :as wood]
+            [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.price :as price]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.walk.world :as wworld]
@@ -245,6 +247,12 @@
   [p view radius permit?]
   (first (beds-to-use p view radius permit?)))
 
+(defn sleep-walk-s
+  "Seconds the quote of a sleep at bed (jobs.survival.sleep, bed-down) gives its walk: the straight distance at
+  cost/walk-speed; 0 for nil (a carried bed goes down where the body stands)."
+  [p bed]
+  (if bed (/ (u/dist (u/self-pos {:primitives p}) bed) cost/walk-speed) 0))
+
 (def walk-unsafe-policy
   "Policy of the :bed-walk-unsafe entries {:pos :state} the night job writes for a bed whose walk it priced unsafe: kept
   past the night (walk-unsafe? reads tonight's only, and whether the state it was priced on still holds)."
@@ -276,6 +284,15 @@
                 (not-any? #(near-failed-place? p %) (mem/entries view :bed-place-failed))
                 (empty? (mem/entries view :sleep-failed))
                 (nil? (bed-to-use p view radius permit?)))))
+
+(defn place-wanted?
+  "bed-place-wanted? for the body of c, unless the reserve register holds the carried bed (a plan's, or the agent's) for
+  something else."
+  [c]
+  (let [p (:primitives c)
+        view (ctx/view c)]
+    (and (bed-place-wanted? p view (bed-radius view) (bed-permit p (:world (:engine c))))
+         (boolean (some #(.endsWith (:name %) "_bed") (reserve/free c :night))))))
 
 (defn standing-entries
   "By day: the open ledger entries of view with purpose (a night's :bed or :doorway) whose block still stands (seen) and that no

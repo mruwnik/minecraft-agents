@@ -10,6 +10,7 @@
             [engine.hut-shelter-test :as hut]
             [engine.path.planner-tuned :as planner]
             [engine.ready-test :as ready-test]
+            [engine.scenario :as scenario]
             [engine.settings :as settings]
             [engine.shelter-support :as st]
             [engine.sky-perception :as sky]
@@ -145,23 +146,51 @@
 (def diamond-kit [{:name "diamond_pickaxe" :count 1} {:name "diamond" :count 20}])
 
 (deftest a-walk-over-dark-open-ground-at-night-is-held-when-its-death-costs-more-than-waiting-for-dawn
-  ;; 190 blocks of dark open ground at tick 14000: an 11% death chance; dawn in 473 s, the day walk after it near free
+  ;; 190 blocks of dark open ground at tick 14000: an 11% death chance; dawn in 473 s, the day walk after it near free.
+  ;; With no bed a death wakes at world spawn: by the hut, the walk back keeps the drops; 5000 blocks off, they are lost.
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[inventory held?] [[[] false] [diamond-kit true]]]
-          (let [{:keys [eng p seen]} (let [r (st/setup (assoc night-hut :inventory inventory))] (sky/with-sky (:p r)) r)
-                id (core/submit! eng '(jobs.movement.go-to {:pos [195 64 0]}) {})]
+        (doseq [[spawn inventory held?] [[[0 64 0] [] false] [[0 64 0] diamond-kit false]
+                                         [[-5000 64 0] [] false] [[-5000 64 0] diamond-kit true]]]
+          (let [world (-> night-hut (assoc :inventory inventory) (assoc-in [:self :worldSpawn] spawn))
+                {:keys [eng p seen]} (let [r (st/setup world)] (sky/with-sky (:p r)) r)
+                id (core/submit! eng '(jobs.movement.go-to {:pos [195 64 0]}) {})
+                c (ready-test/ctx-of (assoc world :self {:pos inside :health 20 :food 20 :worldSpawn spawn}))]
             (await (st/tick-n eng 6))
-            (is (= held? (= :risky (:reason (core/waiting eng id)))) (str "carrying " (mapv :name inventory)))
+            (is (= held? (= :risky (:reason (core/waiting eng id)))) (pr-str spawn (mapv :name inventory)))
             (is (not-any? #(= :risky (:reason %)) (st/emitted seen :stopped)) "never ended for its risk")))
-        (let [c (ready-test/ctx-of (assoc night-hut :self {:pos inside :health 20 :food 20} :inventory diamond-kit))
+        (let [c (ready-test/ctx-of (assoc night-hut :self {:pos inside :health 20 :food 20 :worldSpawn [-5000 64 0]} :inventory diamond-kit))
               [_ text {:keys [now-s wait-s wait]}] (planned-status c {:x 195 :y 64 :z 0})]
           (is (= :dawn wait))
-          (is (< wait-s now-s) "the death of a body carrying a kit costs more than the night's wait")
-          (is (re-find #"hp" text)))
-        (is (= :acceptable (:reason (nth (planned-status (ready-test/ctx-of (assoc night-hut :self {:pos inside :health 20 :food 20})) {:x 195 :y 64 :z 0}) 2)))
-            "a bare body's death costs less than the night's wait: it walks")))))
+          (is (< wait-s now-s) "the death of a body carrying a kit far from world spawn costs more than the night's wait")
+          (is (re-find #"hp" text)))))))
+
+(def hut-bed {"4,64,-1" "red_bed"})
+
+(deftest a-body-whose-sleep-skips-the-night-sleeps-it-away-before-the-walk
+  ;; the night-hut walk above: a bed in the hut, or one carried to put down, skips the night for a few seconds' walk;
+  ;; with another player awake the sleep skips nothing and the prices of the walk and dawn decide
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[blocks inventory] [[hut-bed []] [{} [{:name "red_bed" :count 1}]]]]
+          (let [c (ready-test/ctx-of (-> night-hut (update :blocks merge blocks) (assoc :inventory inventory)))
+                [_ text {:keys [wait now-s wait-s]}] (planned-status c {:x 195 :y 64 :z 0})]
+            (is (= :sleep wait) (pr-str blocks inventory))
+            (is (< wait-s now-s))
+            (is (re-find #"sleep" text))))
+        (is (not= :sleep (:wait (nth (planned-status (ready-test/ctx-of (-> night-hut (update :blocks merge hut-bed) (assoc :players ["Alex"]))) {:x 195 :y 64 :z 0}) 2)))
+            "another player awake: no skip")
+        (let [{:keys [eng p]} (st/setup (update night-hut :blocks merge hut-bed))
+              _ (sky/with-sky p)
+              _ (st/know-bed! eng {:x 4 :y 64 :z -1})
+              id (core/submit! eng '(jobs.movement.go-to {:pos [195 64 0]}) {})]
+          (await (st/tick-n eng 4))
+          (is (= [:risky :sleep] ((juxt :reason :wait) (core/waiting eng id))) "go-to holds for the sleep")
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
+          (await (st/tick-n eng 10))
+          (is (= [{:x 4 :y 64 :z -1}] (mapv st/arg-pos (st/calls p "sleep"))) "the night job lies down in the hut's bed"))))))
 
 (def day-world (assoc night-hut :time st/noon))
 (def dark-spot-world "day-world with the death spot of the tests, [80 64 5], dark (a cave): its killer may be there by day too." (assoc day-world :light {[80 64 5] [0 0]}))

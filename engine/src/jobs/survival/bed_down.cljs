@@ -2,7 +2,6 @@
   (:require [jobs.lib.block-sets :as bs]
             [engine.game :as game]
             [jobs.lib.ready :as ready]
-            [jobs.lib.reserve :as reserve]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -91,12 +90,6 @@
     (when (and home (not (sh-sense/shut-in-room? p (sh-sense/feet p))) (sh-sense/shut-in-room? p home))
       home)))
 
-(defn place-wanted?
-  "sh-beds/bed-place-wanted?, unless the reserve register holds the carried bed (a plan's, or the agent's) for something else."
-  [c]
-  (and (sh-beds/bed-place-wanted? (:primitives c) (ctx/view c) (radius c) (bed-permit c))
-       (boolean (some #(.endsWith (:name %) "_bed") (reserve/free c :night)))))
-
 (defn seal-cells
   "The cells to fill round a bed layout's row (stand, foot, head) to shut it in: its sides at feet and head height, a
   roof support on the side behind the stand, and the roof over the row; those not seal/sealed? already."
@@ -155,7 +148,7 @@
         view (ctx/view c)
         feet (sh-sense/feet p)
         asleep? (sh-sense/sleeping? p)
-        carried? (and (nil? bed) (not asleep?) (place-wanted? c))
+        carried? (and (nil? bed) (not asleep?) (sh-beds/place-wanted? c))
         at (or bed feet)
         chance (spawn-light/night-chance p (sh-sense/feet p))
         stands (if asleep? (wake-cells p) [feet])
@@ -213,7 +206,7 @@
 (defn problem
   "The need wait for a bed while there is none to use and none carried to put down, else nil."
   [c]
-  (when-not (or (bed-to-use c) (place-wanted? c))
+  (when-not (or (bed-to-use c) (sh-beds/place-wanted? c))
     {:reason :need :any-of bed-names :count 1}))
 
 (defn bed-status
@@ -242,8 +235,7 @@
     (checks/goal d [:sleeping "already asleep"] [:awake "not asleep"] {:units :sleeps :done (if d 1 0) :left (if d 0 1)})))
 
 (defn quote-of [c]
-  (let [bed (bed-to-use c)
-        s (if bed (/ (u/dist (u/self-pos c) bed) cost/walk-speed) 0)]
+  (let [s (sh-beds/sleep-walk-s (:primitives c) (bed-to-use c))]
     {:uses {:job-time [0 s (max (* 3 s) 10)]} :done [0 1 1]}))
 
 (defn ^:async sleep!
@@ -383,7 +375,7 @@
   (let [p (:primitives c)
         bed (or (some-> (:bed (:args c)) places/parse-pos :pos)
                 (await (sense/decide! c ::bed #(sh-beds/bed-to-use p (ctx/view c) (radius c) (bed-permit c)))))
-        answer (when (and (not bed) (not (:seal (ctx/mem c))) (place-wanted? c)) (await (carried-answer c)))]
+        answer (when (and (not bed) (not (:seal (ctx/mem c))) (sh-beds/place-wanted? c)) (await (carried-answer c)))]
     (cond
       (:seal (ctx/mem c)) (await (seal-and-sleep! c))
       bed (await (sleep! c bed (await (open-sleep-ok? c bed))))

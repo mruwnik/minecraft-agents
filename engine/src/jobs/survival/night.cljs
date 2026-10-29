@@ -487,7 +487,7 @@
                                               escape (assoc :escape escape))))))
 
 (defn carried-bed-wanted? [c]
-  (bed-down/place-wanted? c))
+  (sh-beds/place-wanted? c))
 
 (defn note-bed-kept!
   "Once a night, with a carried bed and a roofed home close that could not be entered: say the bed stays in the bag."

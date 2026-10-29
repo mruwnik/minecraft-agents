@@ -29,9 +29,11 @@
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.sense :as sense]
             [jobs.lib.spawn-light :as spawn-light]
+            [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.shelter.sleepers :as sh-sleepers]
             [jobs.lib.threat-field :as field]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]))
@@ -248,9 +250,29 @@
     {:hp (+ hurt lethal) :lethal-hp lethal :heal-s heal-s :secs secs
      :hostiles (count (filter #((:reach %) (:x feet) (:y feet) (:z feet)) live))}))
 
+(defn sleep-bed
+  "{:bed pos} of the bed a bed-down from here sleeps in (sh-beds/bed-to-use) when the walk there leaves no night out: the
+  bed beside the feet, or in the shelter the body is safe in (not sh-inside/walk-leaves-shelter?), and not by `goal`
+  (a walk to the bed is the sleep's own); {:bed nil} for a carried bed put down here (sh-beds/place-wanted?); else nil."
+  [c goal]
+  (let [p (:primitives c)
+        view (ctx/view c)
+        feet (sh-sense/feet p)
+        bed (sh-beds/bed-to-use p view (sh-beds/bed-radius view) (sh-beds/bed-permit p (:world (:engine c))))
+        near? #(<= (u/dist %1 %2) 3)]
+    (cond
+      (and bed (near? bed goal)) nil
+      (and bed (or (near? bed feet)
+                   (and (sh-inside/safe-from-night? p) (nil? (sh-inside/walk-leaves-shelter? p (:data (ctx/latest c :shelter)) bed 1)))))
+      {:bed bed}
+      bed nil
+      (sh-beds/place-wanted? c) {:bed nil})))
+
 (defn wait-ways
   "The ways of waiting where the body stands, then walking the way of estimate-inputs `in` (stay-inputs stay-in): until dawn
-  (shelter.clock/night-left-quote's mean) when dawn lowers a cell of it or the way out it leaves (:exit-dawn?), and until
+  (shelter.clock/night-left-quote's mean) when dawn lowers a cell of it or the way out it leaves (:exit-dawn?); asleep
+  when dawn would and the body's sleep skips the night (sh-sleepers/sleepers-short 0) in a bed of sleep-bed, for the
+  seconds its sleep's quote gives (sh-beds/sleep-walk-s), the walk then by day; and until
   healed to full when the body can heal. Each {:wait :secs :health :hp :s}: the health healed by then, the walk's hp after it, s the wait's seconds, what staying put risks over them
   (stay-estimate) and the walk after them (estimate-of, cost/risk-s) at the health healed by then (cost.health/heal-s-per-hp
   an hp), by full day's light once the night is over (:sky 0). A threat that may move off is priced as staying: no wait
@@ -264,17 +286,18 @@
         dawn? (and (pos? night-s) (or (:exit-dawn? in) (boolean (some #(spawn-light/dawn-lowers? p %) (:cells in)))))
         in-key (dissoc in :cells :catchers :remembered)
         day (delay (check-cache/keyed c ::day-in in-key #(estimate-inputs c goal {:plan plan :sky 0})))
-        way (fn [kind secs]
+        sleep (when (and dawn? (zero? (sh-sleepers/sleepers-short p (ctx/view c)))) (sleep-bed c goal))
+        way (fn [kind secs day?]
               (let [healed (if heals? (min 20 (+ health (/ secs per-hp))) health)
-                    day? (and dawn? (>= secs night-s))
                     after (check-cache/keyed c ::after [in-key day? healed]
                                              #(estimate-of c (assoc-in (if day? @day in) [:body :health] healed)))
                     stay (let [s-in (assoc stay-in :secs secs)] (check-cache/keyed c ::wait-stay s-in #(stay-estimate c s-in)))]
                 {:wait kind :secs secs :health healed :hp (:hp after)
                  :s (+ secs (risk-s c stay) (cost/risk-s healed (- (:hp after) (:lethal-hp after)) (:lethal-hp after)))}))]
     (cond-> []
-      dawn? (conj (way :dawn night-s))
-      (and heals? (< health 20)) (conj (way :heal (* per-hp (- 20 health)))))))
+      dawn? (conj (way :dawn night-s true))
+      sleep (conj (merge (way :sleep (sh-beds/sleep-walk-s p (:bed sleep)) true) sleep))
+      (and heals? (< health 20)) (conj (let [secs (* per-hp (- 20 health))] (way :heal secs (and dawn? (>= secs night-s))))))))
 
 (defn status
   "Ok while walking to `goal` on plan (go-to's, else the one its round held on, planned) now is the cheapest affordable way
@@ -306,7 +329,7 @@
            over (str "route risk " (price/round1 hp) " hp over the " (price/round1 allowed) " the body can afford: " parts)
            wait (fn [{:keys [secs s] :as w}]
                   (contract/later :risky (str "route risk " (price/round1 hp) " hp (" parts ") costs " (if now? (str (price/round1 now-s) " s now") (str "over the " (price/round1 allowed) " affordable now"))
-                                              "; waiting " (price/round1 secs) " s " (if (= :dawn (:wait w)) "for dawn" "to heal") " and walking then costs " (price/round1 s) " s")
+                                              "; waiting " (price/round1 secs) " s " (case (:wait w) :dawn "for dawn" :sleep "to sleep the night away" "to heal") " and walking then costs " (price/round1 s) " s")
                                   :risk hp :allowed allowed :now-s now-s :wait (:wait w) :wait-s s :recheck-after-ms recheck-ms))]
        (cond
          (and best (< (:s best) now-s)) (wait best)

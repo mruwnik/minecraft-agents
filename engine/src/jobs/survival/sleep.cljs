@@ -8,7 +8,6 @@
             [jobs.lib.child :as child]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
-            [jobs.lib.cost :as cost]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.shelter.clock :as sh-clock]
@@ -126,8 +125,7 @@
     (checks/goal d [:sleeping "already asleep"] [:awake "not asleep"] {:units :sleeps :done (if d 1 0) :left (if d 0 1)})))
 
 (defn quote-of [c]
-  (let [bed (bed-of c)
-        s (if bed (/ (u/dist (u/self-pos c) bed) cost/walk-speed) 0)]
+  (let [s (sh-beds/sleep-walk-s (:primitives c) (bed-of c))]
     {:uses {:job-time [0 s (max (* 3 s) 10)]} :done [0 1 1]}))
 
 (defn give-up-unreachable! [c bed walk]
