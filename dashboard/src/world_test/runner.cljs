@@ -1307,12 +1307,15 @@
 
 (defn clear-plans-on-plot!
   "Deletes any runner plan file (test-*.edn, any body) with a part on the case's plot: plots are exclusive while a case
-  runs, so such a plan is a killed run's leftover, and it would make the body's blocks here refuse as another's."
+  runs, so such a plan is a killed run's leftover, and it would make the body's blocks here refuse as another's. A file
+  gone between the listing and the read (another body's run cleared its own plans) is skipped."
   [opts grid origin]
   (doseq [name (array-seq (fs/readdirSync (plans-dir opts)))
           :let [file (path/join (plans-dir opts) name)]
-          :when (and (str/starts-with? name "test-") (str/ends-with? name ".edn")
-                     (f/plan-on-plot? (str (fs/readFileSync file "utf8")) origin (f/dims grid)))]
+          :when (and (str/starts-with? name "test-") (str/ends-with? name ".edn"))
+          :let [text (try (fs/readFileSync file "utf8")
+                          (catch :default e (when-not (= "ENOENT" (.-code e)) (throw e))))]
+          :when (and text (f/plan-on-plot? text origin (f/dims grid)))]
     (fs/rmSync file #js {:force true})))
 
 (defn write-plans! [opts c]

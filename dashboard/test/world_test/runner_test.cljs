@@ -1044,6 +1044,19 @@
         (.catch (fn [e] (is false (.-message e))))
         (.finally done))))
 
+(deftest clear-plans-on-plot-skips-a-plan-file-gone-before-it-is-read
+  (async done
+    (-> (with-body-dir
+    (fn [opts _]
+      (let [plans (r/plans-dir opts)]
+        (fs/mkdirSync plans #js {:recursive true})
+        (fs/symlinkSync (path/join plans "gone.edn") (path/join plans "test-c-base.edn"))
+        (r/clear-plans-on-plot! opts {:size 32} [0 0 0])
+        (is (= ["test-c-base.edn"] (vec (fs/readdirSync plans))) "listed, then unreadable as missing: left to its own run")
+        (js/Promise.resolve nil))))
+        (.catch (fn [e] (is false (.-message e))))
+        (.finally done))))
+
 (deftest clear-body-notes-drops-only-this-bodys-notes-file-test
   (async done
     (-> (with-body-dir
