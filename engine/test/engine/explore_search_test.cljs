@@ -688,9 +688,15 @@
                           (let [at (.-sensedAt p)]
                             (aset p "sensedAt" (fn [pos] (if (or (> (js/Math.abs (.-x pos)) 8) (> (js/Math.abs (.-z pos)) 8)) #js {:unknown true} (at pos))))))
               pocket (merge (tu/box -12 70 -12 12 120 12 "stone") (tu/box 0 80 0 0 81 0 "air"))
-              s (await (search! {:target "rail" :max-distance 20} {:self {:pos [0.5 80 0.5]} :blocks pocket} 60 blind-far))]
+              asked (atom [])
+              real child/call-walk*
+              s (with-redefs [child/call-walk* (fn [c k a] (swap! asked conj a) (real c k a))]
+                  (await (search! {:target "rail" :max-distance 20} {:self {:pos [0.5 80 0.5]} :blocks pocket} 60 blind-far)))
+              first-walk (first @asked)]
           (is (finished? s))
-          (is (seq (walks s)) "no step into unseen rock, but the closed pocket is dug out of by a priced leg"))))))
+          (is (contains? (:ways first-walk) :clear-seal) "the closed pocket is dug out of by go-to's clear-seal way")
+          (is (= 80 (get-in first-walk [:pos :y])) "at the feet's height, a column of the sweep, not a step into unseen rock")
+          (is (seq (walks s))))))))
 
 (deftest the-last-leg-before-stuck-digs-out-of-a-sealed-pocket
   (async done
