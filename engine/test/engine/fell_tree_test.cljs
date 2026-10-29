@@ -146,7 +146,7 @@
       (fn ^:async t []
         (let [cleanup (assoc (get registry/jobs 'jobs.access.cleanup) :round (fn ^:async f [c] (ctx/end c :nothing-possible :left-open nil)))
               s (with-redefs [registry/jobs (assoc registry/jobs 'jobs.access.cleanup cleanup)]
-                  (await (fell tall {:radius 10 :worth 0} 200)))]
+                  (await (fell tall {:radius 10 :worth 20} 200)))]
           (is (not= :not-done (:out s)) "the job ends instead of cleaning for ever")
           (is (= :tree-blocked (:reason (:out s)))))))))
 

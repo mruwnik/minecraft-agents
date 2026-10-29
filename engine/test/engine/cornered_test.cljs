@@ -129,11 +129,13 @@
 
 (def stair-floors "The floors of stair-cells, as the stairs the body cut." (vec (for [x (range -9 6)] [x (+ 63 x) 0])))
 
-(def retreat '(test.flight))
+(def retreat
+  "A flight whose danger is worth 60 s to escape: a pillar refused again is not tried a sixth time."
+  '(test.flight {:worth 60}))
 
 (def hiding-retreat
   "A retreat that hides on for as long as the test needs (:hide-s far off)."
-  '(test.flight {:settings {:jobs.survival.hide-out/hide-s 100000}}))
+  '(test.flight {:worth 60 :settings {:jobs.survival.hide-out/hide-s 100000}}))
 
 (deftest a-retreat-walks-back-down-the-stair-it-came-up
   (async done
@@ -721,10 +723,23 @@
                      (fn [_token _args _impl] (js/Promise.resolve #js {:status "failed" :placed 0 :reason "not-raised"})))
           (core/submit! eng retreat {})
           (await (core/tick! eng))
-          (is (= 1 (count (calls p "jumpPlace"))) "the pillar ends at its first failed jump; no refusal or knockback names a mob, so the option is tried")
+          (is (< 0 (count (calls p "jumpPlace")) 6) "the pillar ends when another jump is not worth its price; no refusal or knockback names a mob, so the option is tried")
           (is (empty? (pillar-entries eng)) "no block went in")
           (is (not (hiding? seen)) "built under 2: not hidden")
           (is (pos? (count (calls p "attack"))) "hit while sealed: it stops hiding and hits back"))))))
+
+(deftest a-flights-pillar-is-tried-again-at-the-flights-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [jumps (fn ^:async jumps* [worth]
+                      (let [{:keys [eng p]} (setup {:blocks doorway :inventory [{:name "cobblestone" :count 20}] :entities [(zombie 0.5 64 1.6)]})]
+                        (.override (.-world p) "jumpPlace"
+                                   (fn [_token _args _impl] (js/Promise.resolve #js {:status "failed" :placed 0 :reason "not-raised"})))
+                        (core/submit! eng (list 'test.flight {:worth worth}) {})
+                        (await (core/tick! eng))
+                        (count (calls p "jumpPlace"))))]
+          (is (< 0 (await (jumps 60)) (await (jumps 600))) "a dearer danger pays for more jumps"))))))
 
 (deftest a-pillar-refused-for-a-zombie-in-its-cell-strikes-it-and-decides-again-each-time-then-hides
   (async done

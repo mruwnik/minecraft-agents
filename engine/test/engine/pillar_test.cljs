@@ -378,22 +378,26 @@
             (is (= 58 (.-count (first (.-inventory (.self p))))))
             (is (= (column base 6) (:cells (first (of-kind seen :completed)))))))))))
 
-(deftest a-failed-placement-gives-up-at-once-when-the-goal-is-worth-nothing-more
+(deftest a-failed-placement-is-tried-again-for-as-long-as-the-goal-is-worth-the-price
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen] :as s} (setup {})]
-          (.override (.-world p) "jumpPlace"
-                     (fn [_token _args _impl] (js/Promise.resolve #js {:status "failed" :placed 0 :reason "not-raised"})))
-          (core/submit! eng (list job {:height 6 :worth 0}) {})
-          (await (ticks s eng 6))
-          (is (finished? eng))
-          (is (= 1 (count (calls p "jumpPlace"))))
-          (is (empty? (the-ledger eng)) "the intents of blocks that never went in are dropped")
-          (let [g (first (of-kind seen :stopped))]
-            (is (= :place-failed (:reason g)))
-            (is (= "not-raised" (:detail g)))
-            (is (= [0 64 0] (:at g)) "the give-up names the cell it could not place on")))))))
+        (let [placed-at (fn ^:async placed* [worth]
+                          (let [{:keys [eng p seen] :as s} (setup {})]
+                            (.override (.-world p) "jumpPlace"
+                                       (fn [_token _args _impl] (js/Promise.resolve #js {:status "failed" :placed 0 :reason "not-raised"})))
+                            (core/submit! eng (list job {:height 6 :worth worth}) {})
+                            (await (ticks s eng 80))
+                            (assert (finished? eng))
+                            {:calls (count (calls p "jumpPlace")) :ledger (the-ledger eng) :stopped (first (of-kind seen :stopped))}))
+              cheap (await (placed-at 60))
+              dear (await (placed-at 600))]
+          (is (< 0 (:calls cheap) (:calls dear)) "a dearer goal pays for more tries")
+          (doseq [r [cheap dear]]
+            (is (empty? (:ledger r)) "the intents of blocks that never went in are dropped")
+            (is (= :place-failed (:reason (:stopped r))))
+            (is (= "not-raised" (:detail (:stopped r))))
+            (is (= [0 64 0] (:at (:stopped r))) "the give-up names the cell it could not place on")))))))
 
 (deftest a-placement-the-server-refuses-five-times-is-tried-again-at-the-roots-endless-worth
   (async done
@@ -490,7 +494,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {:blocks {"1,63,0" "stone"}})]
           (knock! p 1000 [1 64 0] false)
-          (core/submit! eng (list job {:height 3 :worth 0}) {})
+          (core/submit! eng (list job {:height 3 :worth 60}) {})
           (await (ticks s eng 60))
           (is (finished? eng))
           (is (= :off-column (:reason (first (of-kind seen :stopped))))))))))
@@ -501,7 +505,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {})]
           (knock! p 1000 [0 64.2 0] true)
-          (core/submit! eng (list job {:height 3 :worth 0}) {})
+          (core/submit! eng (list job {:height 3 :worth 60}) {})
           (await (ticks s eng 60))
           (is (finished? eng))
           (is (= :place-failed (:reason (first (of-kind seen :stopped))))))))))
@@ -550,16 +554,15 @@
             (is (= "cow" (:mob g)))
             (is (= [0 64 0] (:at g)))))))))
 
-(deftest a-hostile-in-the-cell-is-not-waited-on-and-a-worthless-goal-gives-up-at-the-first-refusal
+(deftest a-hostile-in-the-cell-is-not-waited-on-and-a-low-worth-goal-gives-up-and-a-hostile-is-not-waited-on
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {:entities [(assoc cow :name "zombie" :kind "hostile" :height 1.95)]})]
           (refuse-while-a-mob-stands-in! p nil)
-          (core/submit! eng (list job {:height 3 :worth 0 :checks {:safe? '(always)}}) {})
+          (core/submit! eng (list job {:height 3 :worth 60 :checks {:safe? '(always)}}) {})
           (await (ticks s eng 20))
           (is (finished? eng))
-          (is (= 1 (count (calls p "jumpPlace"))))
           (is (= :place-failed (:reason (first (of-kind seen :stopped))))))))))
 
 (deftest a-pillar-told-not-to-wait-for-mobs-ends-at-once-naming-it
@@ -686,7 +689,7 @@
           (is (= {:event :stopped :kind :condition-failed :reason :too-few-blocks}
                  (await (ending (list job {:height 6}) {:inventory [{:name "dirt" :count 2}]}))) "short part way")
           (is (= {:event :stopped :kind :nothing-possible :reason :place-failed}
-                 (await (ending (list job {:height 6 :worth 0}) {:before refuse})))))))))
+                 (await (ending (list job {:height 6 :worth 60}) {:before refuse})))))))))
 
 (deftest the-blocks-come-from-the-call
   (async done
