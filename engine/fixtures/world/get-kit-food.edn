@@ -26,7 +26,8 @@
             {:no-event {:source :job :kind :stopped :data {:reason :no-food}} :for-s 40 :until {:source :job :kind :kit.no-food}}]}
   {:name "thin-stomach-with-a-little-bread-and-no-animals-stops-before-mining"
    :body {:inventory [["iron_sword" 1] ["bread" 1]]}
-   :act [[:rcon "effect give $BODY minecraft:hunger 4 255 true"] [:until-effect-gone "hunger" 30]
+   ;; 12 s drains the bar and the setup's saturation to 0 (4 s left it at 20 live, not hungry): the bread brings it to 5, still hungry
+   :act [[:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:until-effect-gone "hunger" 30]
          [:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false})]]
    :expect [{:event {:source :job :kind :kit.no-food :level :warn} :within-s 100 :of-job true}
             {:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 30 :of-job true}]}
