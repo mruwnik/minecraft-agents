@@ -15,6 +15,7 @@
             [engine.perception.rays :as rays]
             [engine.perception.store :as store]
             [jobs.lib.cost.base-rates :as base-rates]
+            [jobs.lib.frontier :as frontier]
             [jobs.lib.memory-age :as memory-age]
             [jobs.lib.seen-light :as seen-light]
             [jobs.lib.walk.rock :as rock]))
@@ -438,34 +439,10 @@
                (let [^js raw (:raw per) l (.lightAt raw x y z)]
                  (and (<= 0 l) (== 1 (aget (light/table-now raw (:seeing-min (:opts per))) l))))))))
 
-(defn frontier-within
-  "The Chebyshev distance from cell [x y z] to the nearest frontier cell the body remembers (open, with a face neighbour
-  it has not seen), d-max when none lies nearer; nil without a perception's memory."
-  [p [x y z] d-max]
-  (when-let [^js st (some-> (aget p "perception") :st)]
-    (when (.-stores st)
-      (let [^js sections (store/store-of st (.-dim st))
-            ^js open (rock/open-ids)
-            id (fn [cx cy cz] (or (some-> (.get sections (store/section-key (bit-shift-right cx 4) (bit-shift-right cy 4) (bit-shift-right cz 4)))
-                                          .-ids (aget (store/cell-index cx cy cz)))
-                                  0))
-            frontier? (fn [cx cy cz]
-                        (let [v (id cx cy cz)]
-                          (and (pos? v) (== 1 (aget open (dec v)))
-                               (some #(zero? (apply id %)) [[(inc cx) cy cz] [(dec cx) cy cz] [cx (inc cy) cz] [cx (dec cy) cz] [cx cy (inc cz)] [cx cy (dec cz)]]))))]
-        (or (some (fn [r]
-                    (when (some (fn [[dx dy dz]] (frontier? (+ x dx) (+ y dy) (+ z dz)))
-                                (for [dx (range (- r) (inc r)) dy (range (- r) (inc r)) dz (range (- r) (inc r))
-                                      :when (== r (max (js/Math.abs dx) (js/Math.abs dy) (js/Math.abs dz)))]
-                                  [dx dy dz]))
-                      r))
-                  (range 1 d-max))
-            d-max)))))
-
 (defn frontier-distance
-  "frontier-within base-rates/unseen-d-max."
+  "frontier/distance: an unseen cell's distance to the nearest frontier, base-rates/unseen-d-max when none is nearer."
   [p cell]
-  (frontier-within p cell base-rates/unseen-d-max))
+  (frontier/distance p cell))
 
 (defn unseen-solid-fn
   "(fn [cell-y d]) base-rates/unseen-solid for the body of primitives p: the chance an unseen cell at height cell-y, d from
@@ -498,7 +475,7 @@
         (if (.has kept k)
           (.get kept k)
           (let [reach (reach-of y)
-                v (> (solid-at y (if (== 1 reach) 1 (or (frontier-within p cell reach) 1))) 0.5)]
+                v (> (solid-at y (if (== 1 reach) 1 (or (frontier/within p cell reach) 1))) 0.5)]
             (.set kept k v)
             v))))))
 
