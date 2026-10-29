@@ -293,6 +293,8 @@
         slice (route-slice (route-owner c))
         shut? (delay (escape/walk-enclosed? c))
         opts (merge (way-opts c feet (fetch-tool? (:primitives c) (:doors (:args c)) shut?) slice) (range-opts c pos))
+        ;; only a worth the caller passed refuses a stair or door: with none the ways are weighed against each other
+        worth (let [w (:worth (:args c))] (when (pos? w) w))
         gap? (gap-walled? c result (skips c))
         into? (or (goal-walled? c result shut?) (and gap? (not @shut?)))
         ;; a goal over or ringed by lava is refused: no dig, in or out, makes it acceptable
@@ -320,10 +322,9 @@
         ;; a step up over a gap with nothing to fill it: cutting the riser on the far side makes the jump level
         spare (may-dig-fn c)
         choose (memoize (fn [may-dig? o] (if gap? (or (gap-dig c result may-dig? o) (choose-by may-dig? o)) (choose-by may-dig? o))))
-        ;; a stair or door over guesses, once a look showed one wrong, priced as a dig route is: past the goal's worth it is none
-        worth (one-way/worth (u/dist (zipmap [:x :y :z] feet) (zipmap [:x :y :z] goal)) (:worth (:args c)))
+        ;; a stair or door over guesses priced as a dig route is: past the caller's :worth it is none
         guesses #(way-guesses (:primitives c) % feet (own-dig-fn c (:own-cut %)))
-        worth-it #(if (and (#{:stair :clear-path} (:step %))
+        worth-it #(if (and worth (#{:stair :clear-path} (:step %))
                            (past-worth? (+ (price (:primitives c) feet %) (reduce + 0 (map (:own-s opts) (own-cells (:primitives c) % feet (:own-s opts)))))
                                         (guesses %) (:guess-risk opts) worth))
                     {:step :none :why :past-worth}

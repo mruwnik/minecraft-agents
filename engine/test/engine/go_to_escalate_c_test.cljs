@@ -756,7 +756,7 @@
     (is (not (priced {:beside 0.5 :apart 0.2} (* 0.99 (/ seconds 0.16384)))))
     (is (= [[2 65 0]] (map :cell (filter :beside (choose/route-cells p [0 64 0] [4 64 0] (constantly true) (constantly false))))))))
 
-(deftest a-stair-over-guesses-is-priced-over-the-chance-they-all-hold-once-a-guess-failed
+(deftest a-stair-over-guesses-is-priced-over-the-chance-they-all-hold-and-at-zero-risk-by-its-price
   ;; the stair east from [0 64 0] two steps cuts [0 66 0] [1 66 0] [1 65 0] [1 67 0] [2 67 0] [2 66 0]; three are hidden,
   ;; [2 66 0] under a seen light (class :beside): 10 s holds with 0.8 * 0.8 * 0.5 = 0.32
   (let [p (hiding-with-pickaxe (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "2,67,0" "glowstone")
@@ -766,7 +766,8 @@
     (is (= {[1 65 0] false [1 66 0] false [2 66 0] true} (into {} (map (juxt :cell :beside)) guesses)))
     (is (choose/past-worth? 10 guesses risk 31))
     (is (not (choose/past-worth? 10 guesses risk 32)))
-    (is (not (choose/past-worth? 10 guesses {:beside 0 :apart 0} 1)) "no look has shown a guess wrong: no bound")))
+    (is (choose/past-worth? 41 guesses {:beside 0 :apart 0} 38.8) "no look has failed: a stair dearer than the worth is still none")
+    (is (not (choose/past-worth? 10 guesses {:beside 0 :apart 0} 10)))))
 
 (deftest the-guesses-a-stair-reached-count-as-looks-the-cell-it-could-not-dig-a-bad-one
   (let [{:keys [eng]} (gt/setup {:blocks {}})

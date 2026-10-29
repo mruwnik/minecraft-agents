@@ -703,7 +703,7 @@
                      :inventory [{:name "dirt" :count 8} {:name "stone_pickaxe" :count 1} {:name "stone_shovel" :count 1}]}
               {:keys [eng p seen step]} (gt/setup world (ew/of-data {"room" room} {} []))
               out (atom :not-done)
-              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [14 62 12] :range 0})))]
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [14 62 12] :range 0 :worth 38.8})))]
           (core/submit! eng '(recording-parent) {})
           (await (gt/tick-out! eng 400 step))
           (let [own (map :cell (events-of seen :go-to.dug-own-build))]
@@ -743,7 +743,7 @@
 (deftest go-to-out-of-its-own-room-in-undiggable-rock-stops-cutting-once-the-cuts-show-no-way
   ;; each guess beside a seen light that a look finds a light is evidence: the next route's guesses there are priced
   ;; over the chance they are rock, past the way without a dig route it is none; a stair or door over guesses is priced
-  ;; so too, against the goal's worth; the clock moves, so the call ends
+  ;; so too, against the caller's :worth; the clock moves, so the call ends
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -753,7 +753,7 @@
                      :inventory [{:name "dirt" :count 8} {:name "stone_pickaxe" :count 1} {:name "stone_shovel" :count 1}]}
               {:keys [eng p seen step]} (gt/setup world (ew/of-data {"room" room} {} []))
               out (atom :not-done)
-              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [14 62 12] :range 0})))]
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [14 62 12] :range 0 :worth 38.8})))]
           (core/submit! eng '(recording-parent) {})
           (await (gt/tick-out! eng 400 #(do (swap! clock + 500) (step))))
           (is (<= (count (events-of seen :go-to.dug-own-build)) 4) "two columns of its own wall cut, not a column per guess")

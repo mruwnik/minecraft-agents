@@ -25,7 +25,7 @@
                   (+ (if (= :approach (:step e))
                        (:cost (cost/walk-cost {:distance (u/dist (cell feet) (cell end))}))
                        (choose/price (:primitives c) feet e))
-                     (cost-planner/rest-s (js/Math.round (js/Math.hypot (- (goal 0) (end 0)) (- (goal 2) (end 2)))))
+                     (cost-planner/rest-s (js/Math.round (js/Math.hypot (- (goal 0) (end 0)) (- (goal 1) (end 1)) (- (goal 2) (end 2)))))
                      (risk/risk-s c (risk/estimate c (cell goal)))))]
       (if (and total (js/isFinite total)) total (worth)))))
 

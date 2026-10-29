@@ -474,11 +474,9 @@
 
 (defn past-worth?
   "Whether a way priced price-s (its own cells' put-backs too) is dearer than worth-s once priced over the chance each
-  of its guesses is diggable (1 - its class's risk in guess-risk {:beside :apart}), as route-answer prices a dig route:
-  only once a look has shown a guess wrong (some risk above 0)."
+  of its guesses is diggable (1 - its class's risk in guess-risk {:beside :apart}), as route-answer prices a dig route."
   [price-s guesses {:keys [beside apart] :as guess-risk} worth-s]
-  (and (some pos? (vals guess-risk))
-       (> (/ price-s (reduce * 1 (map #(- 1 (if (:beside %) beside apart)) guesses))) worth-s)))
+  (> (/ price-s (reduce * 1 (map #(- 1 (if (:beside %) beside apart)) guesses))) worth-s))
 
 (def dig-margin
   "Blocks round its two ends a dig route (dig-way, frontier-way, a climb's) may stray. Not a price of guessed cells (unseen-step-s
@@ -495,7 +493,7 @@
   (cond-> {:ways (into #{} (map (fn [[x y z]] [x (dec y) z])) stands) :margin dig-margin}
     slice (assoc :slice slice) (seq spent) (assoc :spent spent) own-s (assoc :own-s own-s) own-cut (assoc :own-cut true)
     (and range near) (assoc :range range :near near) see (assoc :see see)
-    (some pos? (vals guess-risk)) (assoc :guess-risk guess-risk :worth-s worth-s)))
+    guess-risk (assoc :guess-risk guess-risk :worth-s worth-s)))
 
 (defn range-opts
   "Where the go-to call c's dig routes to pos may end: :range, :near (pos's cell) and under :see :see, the block the end stand must see."

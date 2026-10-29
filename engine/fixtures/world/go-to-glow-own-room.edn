@@ -1,8 +1,8 @@
 ;; Card 5165130a (efebfbf2): a body shut in its own dirt room (an own plan's shell) set in glowstone, which an escalation never
 ;; digs (not natural terrain), its goal a sealed 1x2 pocket in the glowstone. Each guess of the dig route that a look shows to be glowstone
 ;; raises the risk of the next route's guesses: the dig route cuts a few own wall cells (two columns, 4), not a column per guess,
-;; and is not chosen again. A stair or door out is priced over its guesses too once a look showed one wrong: past the goal's
-;; worth it is not begun, so nothing more of the shell is cut (15 before, when the stairs, pillar and clear-path were each tried).
+;; and is not chosen again. A stair or door out is priced over its guesses too: past the caller's :worth (38.8 s) it is not begun,
+;; so nothing more of the shell is cut (15 before, when the stairs, pillar and clear-path were each tried).
 ;; The call ends, a failure with its reason.
 ;; Glowstone x 10..26, y 0..9, z 10..26; the shell x 14..18, y 1..5, z 14..18, hollow (inside x 15..17, y 2..4); goal pocket [20 2..3 18].
 {:name "shut-in-own-room-in-glowstone-gives-up"
@@ -16,7 +16,7 @@
  :body {:at [17.5 2 15.5] :settle-s 2 :effects [["resistance" 600 4]]
         :inventory [["dirt" 8] ["stone_pickaxe" 1] ["stone_shovel" 1]]}
  :limit-s 300
- :act [[:job (jobs.movement.go-to {:pos #at [20 2 18] :range 0})]]
+ :act [[:job (jobs.movement.go-to {:pos #at [20 2 18] :range 0 :worth 38.8})]]
  :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false :reason :unreachable :why [:any]}} :within-s 290 :of-job true}
           {:count-event {:source :job :kind :go-to.dug-own-build} :for-s 290 :at-most 4}
           {:count-event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :for-s 290 :at-most 1}]}
