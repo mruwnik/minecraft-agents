@@ -121,7 +121,7 @@
 
 (defn stays-for-creeper?
   "Whether staying in the refuge is the cheaper of the two with a creeper at it (hostile-loss/loss-over): a plug or pit shuts the blast off
-  the body (it only opens the walls, leaving it ::opened-s exposed to the other hostiles near), so it stays when leaving costs more (::leave-s in the open among them); a pillar takes the blast and is left."
+  the body (it only opens the walls, leaving it ::opened-s exposed to the other hostiles near), so it stays when leaving costs more (::leave-s in the open among them); a pillar takes the blast, with the climbers and shooters that reach its top, for ::leave-s, and ground melee mobs cannot."
   [c]
   (let [p (:primitives c)
         near (flight/near-known p (dead c) (danger-q/hostile-radius) (danger-q/ranged-radius))
@@ -129,7 +129,8 @@
         shielded? (contains? #{:plug :plug-dig :pit} (:kind (:args c)))
         loss #(hostile-loss/loss-over p (ctx/view c) %1 %2)
         leave-s (settings/get settings ::leave-s)
-        stay (if shielded? (loss others (settings/get settings ::opened-s)) (loss near leave-s))]
+        on-top (filter #(or (combat/creeper? %) (combat/climber? %) (combat/ranged? %)) near)
+        stay (if shielded? (loss others (settings/get settings ::opened-s)) (loss on-top leave-s))]
     (< stay (loss others leave-s))))
 
 (defn breaker
