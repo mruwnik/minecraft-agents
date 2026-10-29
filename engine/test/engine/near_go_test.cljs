@@ -7,7 +7,7 @@
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.go-to-escalate-support :as e :refer [in-pit pit stone-pit]]
-            [engine.test-util :refer [floor]]
+            [engine.test-util :as tu :refer [floor]]
             [jobs.lib.near :as near]
             [jobs.lib.result :as result]))
 
@@ -81,6 +81,34 @@
          (await (e/tick-out! eng 1000))
          (is (= [:blocked :continue :blocked false nil] @out))
          (done))))))
+
+(defn ^:async waits-by-a-killer
+  "The pauses a job that re-asks go-near! (a stay by a zombie that killed the body, never fading) takes at the call's worth
+  before risky-wait! hands the refusal back: [pauses answer-of-the-last-wait]."
+  [worth]
+  (let [{:keys [eng clock]} (e/setup {:blocks (floor -2 -3 12 3) :light-default [0 0]})
+        out (atom nil)
+        pauses (atom 0)
+        job {:round (fn ^:async wait-round [c]
+                      (let [r (await (near/go-near! c {:x 2 :y 64 :z 0} 3 {:stay-s 600 :worth 1}))
+                            w (await (near/risky-wait! c r))]
+                        (if w
+                          (do (swap! pauses inc) :continue)
+                          (do (reset! out [r w]) (ctx/end c :done nil)))))}]
+    (mem/write! (:store eng) :deaths {:pos {:x 3 :y 64 :z 0} :cause "zombie" :death-t (- @clock 4000)} core/deaths-policy)
+    (await (tu/child-outcome eng job {:worth worth} 1000))
+    [@pauses @out]))
+
+(deftest a-refused-stay-is-waited-only-while-another-wait-is-worth-its-seconds
+  (async done
+    ((fn ^:async t []
+       (let [[low out-low] (await (waits-by-a-killer 40))
+             [high out-high] (await (waits-by-a-killer 150))]
+         (is (= [:blocked nil] out-low) "a danger that never fades: the refusal goes back to the caller, not the budget's end")
+         (is (= [:blocked nil] out-high))
+         (is (pos? low))
+         (is (< low high) "a goal worth more waits longer for the danger to fade"))
+       (done)))))
 
 (deftest a-target-no-way-leads-to-is-blocked
   (async done
