@@ -292,13 +292,11 @@
         :again))))
 
 (defn torch-way
-  "The seconds of the gather's own torch at a dark hall its child refuses (torch-due): nothing when torches are carried, else
-  the fetch (need/item-price); nil for any other refusal (ready/own-way)."
+  "The seconds of the gather's own torch at a dark hall its child refuses (torch-due): cost/torch-way-s of one torch against
+  those held; nil for any other refusal (ready/own-way)."
   [c s]
   (when (torch-due c (contract/status-cause s))
-    (if (pos? (torch/torches-held (:primitives c)))
-      0
-      (fetch-need/item-price c "torch" 1 (when-let [how (seq (fetch-need/fetch-how c))] {:how (set how)}) nil))))
+    (cost/torch-way-s 1 (torch/torches-held (:primitives c)))))
 
 (defn start-cause
   "The cause of the need's child's start check now, with the gather's torch among the ways the check prices against the walk to look."

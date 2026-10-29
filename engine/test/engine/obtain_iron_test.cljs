@@ -19,6 +19,8 @@
             [jobs.items.obtain.base :as base]
             [jobs.items.obtain.plan :as plan]
             [jobs.lib.cost :as cost]
+            [jobs.lib.torch :as torch]
+            [jobs.items.obtain.need :as need]
             [jobs.items.obtain.table :as table]
             [jobs.items.obtain.why :as why]
             [jobs.lib.look :as look]
@@ -577,12 +579,22 @@
               refuse (fn [def lit]
                        (-> def
                            (update :passed-status (fn [ps] (fn [c]
-                                                             (cond (seq @lit) (ps c)
-                                                                   (seq (::ready/own-ways c)) [:never "dark hall" hall-cause]
-                                                                   :else [:ok :look-first "the walk to look is cheaper"]))))
+                                                             (let [answers {[true true] (ps c) [true false] (ps c)
+                                                                            [false true] [:never "dark hall" hall-cause]
+                                                                            [false false] [:ok :look-first "the walk to look is cheaper"]}]
+                                                               (answers [(boolean (seq @lit)) (boolean (seq (::ready/own-ways c)))])))))
                            (update :round (fn [r] (fn [c] (when (empty? @lit) (swap! walked-unlit inc)) (r c))))))]
           (is (= [[[{:x 0 :y 64 :z 0}]] 1] (await (hall-refusal-run refuse))))
           (is (zero? @walked-unlit) "the mine was not started toward the walk to look before the torch"))))))
+
+(deftest the-gathers-own-torch-is-priced-by-the-one-torch-formula
+  (let [held (atom 0)
+        p (js-obj)]
+    (with-redefs [torch/torches-held (fn [_] @held)
+                  need/torch-due (fn [_ _] [0 64 0])]
+      (is (= [(cost/torch-way-s 1 0) (cost/torch-way-s 1 1)]
+             (for [n [0 1]] (do (reset! held n) (gather/torch-way {:primitives p} [:never "dark hall" hall-cause])))))
+      (is (pos? (cost/torch-way-s 1 1)) "a carried torch is not free"))))
 
 (deftest a-mine-after-a-climb-heads-along-the-stair-until-it-has-cut-tunnel
   (let [need {:key "raw_iron" :job 'jobs.gather.mine :args {:block "iron_ore"}}
