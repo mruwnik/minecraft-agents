@@ -300,7 +300,7 @@
    :self {:pos [0.5 64 0.5]}
    :inventory kit})
 
-(defn plan-ctx [p] {:engine {:warned (js-obj)} :primitives p :view (constantly {:data {} :now 0}) :root 1 :slots [] :args {}})
+(defn plan-ctx [p] {:engine {:warned (atom #{})} :primitives p :view (constantly {:data {} :now 0}) :root 1 :slots [] :args {}})
 
 (defn seen-closed-cell
   "Primitives over world that know every cell but those below y 63 (unknown, as the ground under a body's own floor is) when

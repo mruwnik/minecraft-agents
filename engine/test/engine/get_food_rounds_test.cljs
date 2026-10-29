@@ -745,7 +745,7 @@
   (let [waits? (fn [light]
                  (let [p (tu/with-light-data (tu/fake {:time 15000 :self {:food 8}}))]
                    (swap! (fake/state p) assoc :light-default light)
-                   (get-food/search-waits? {:primitives p :engine {:warned (js-obj)} :id "t" :view (fn [] {:data {} :now 0}) :args {} :now (constantly 0)})))]
+                   (get-food/search-waits? {:primitives p :engine {:warned (atom #{})} :id "t" :view (fn [] {:data {} :now 0}) :args {} :now (constantly 0)})))]
     (is (false? (waits? [15 15])) "night, lit place: the search goes on")
     (is (true? (waits? [15 0])) "night, dark place: it waits")))
 
