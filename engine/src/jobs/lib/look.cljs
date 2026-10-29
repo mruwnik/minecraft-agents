@@ -461,21 +461,16 @@
     (fn [[_ y _ :as cell]] (solid-at y (or (frontier-distance p cell) 1)))))
 
 (defn unseen-solid?-fn
-  "(fn [[x y z]]) whether an unseen cell is more likely solid than open (unseen-solid-at-fn's chance over 0.5), its
-  frontier searched only as far as the answer can still change; kept by cell, the body's state read at the first ask."
+  "(fn [[x y z]]) whether an unseen cell is more likely solid than open (unseen-solid-at-fn's chance over 0.5); kept by
+  cell, the body's state read at the first ask."
   [p]
-  (let [solid-at* (delay (or (unseen-solid-fn p) #(base-rates/unseen-solid %1 0 %2 false nil)))
-        solid-at (fn [y d] (@solid-at* y d))
-        d-max base-rates/unseen-d-max
-        reach-of (memoize (fn [y] (let [far? (> (solid-at y d-max) 0.5)]
-                                    (inc (or (last (filter #(not= far? (> (solid-at y %) 0.5)) (range 1 d-max))) 0)))))
+  (let [solid-at (unseen-solid-at-fn p)
         kept (js/Map.)]
     (fn [[x y z :as cell]]
       (let [k (str x "," y "," z)]
         (if (.has kept k)
           (.get kept k)
-          (let [reach (reach-of y)
-                v (> (solid-at y (if (== 1 reach) 1 (or (frontier/within p cell reach) 1))) 0.5)]
+          (let [v (> (solid-at cell) 0.5)]
             (.set kept k v)
             v))))))
 

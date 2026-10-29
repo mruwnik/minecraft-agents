@@ -51,3 +51,15 @@
     (with-redefs [frontier/block-field (fn [& args] (swap! built inc) (apply f args))]
       (doseq [x (range 8 16) y (range 64 72) z (range 0 8)] (solid-at [x y z])))
     (is (= 1 @built))))
+
+(deftest the-solid-verdict-is-the-chance-over-a-half-from-the-block-distance
+  (let [w (seeing (tu/fake-on-floor {:blocks (assoc cave "3,65,0" "air")}))
+        chance (look/unseen-solid-at-fn w)
+        verdict (look/unseen-solid?-fn w)
+        built (atom 0)
+        f frontier/block-field
+        cells (unseen-cells w)]
+    (with-redefs [frontier/block-field (fn [& args] (swap! built inc) (apply f args))]
+      (is (= (mapv #(> (chance %) 0.5) cells) (mapv verdict cells)))
+      (is (< 1 (count (distinct (map verdict cells)))) "both verdicts occur")
+      (is (pos? @built) "read from the block field, not a search per cell"))))
