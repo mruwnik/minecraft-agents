@@ -87,6 +87,7 @@
   (let [raw-p (tu/fake {:time night :blocks blocks})
         _ (swap! (fake/state raw-p) #(cond-> (assoc % :light-default light-default) light (assoc :light light)))
         per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})]
+    (perception/pass! per)
     (tu/seeing-all (perception/wrap raw-p per))))
 
 (deftest a-closed-room-is-shelter-unless-a-dark-spawnable-cell-lies-beyond-the-spawn-free-radius
@@ -145,9 +146,9 @@
     (is (pos? (chance (box 5 5 true) {:x 2 :y 64 :z 2})) "open sides: a flood too big to close is never safe")))
 
 (deftest one-cell-gives-one-spawn-chance-to-readiness-the-bed-and-the-planner
-  ;; exposure and the night stay are chance-at; the planner's coarse mask reads memory, which this fake does not fill: it may call dark a cell chance-at frees, never lit one it prices
+  ;; exposure and the night stay are chance-at; the planner's coarse mask may call dark a cell chance-at frees, never lit one it prices
   (let [field (into {} (for [x (range -30 31) z (range -30 31)] [(str x ",63," z) "stone"]))]
-    (doseq [[what blocks light at spawns? least-mask] [["a small dark roofed room" (box 5 5 false) [0 0] {:x 2 :y 64 :z 2} false 0]
+    (doseq [[what blocks light at spawns? mask] [["a small dark roofed room" (box 5 5 false) [0 0] {:x 2 :y 64 :z 2} false 1]
                                                 ["a dark roofed hall" (box 1 40 false) [0 0] {:x 0 :y 64 :z 39} true 1]
                                                 ["a torch-lit room" (assoc (box 5 5 false) "2,64,2" "torch") [0 14] {:x 2 :y 64 :z 2} false 0]
                                                 ["open ground under the night sky" field [15 0] {:x 0 :y 64 :z 0} true 1]]]
@@ -155,7 +156,7 @@
             chance (spawn-light/chance-at p at false)]
         (is (= spawns? (pos? chance)) what)
         (is (= chance (:chance (spawn-light/exposure p at)) (spawn-light/night-chance p at)) what)
-        (is (<= least-mask ((:at (look/dark-fn p)) (:x at) (:y at) (:z at))) what)))))
+        (is (= mask ((:at (look/dark-fn p)) (:x at) (:y at) (:z at))) what)))))
 
 (deftest a-one-high-gap-over-a-drop-beside-a-one-cell-pocket-is-no-shelter
   (let [safe? (fn [cells] (sh-inside/safe-from-night? (seen-box (assoc (without-blocks (box 1 1 false) cells) "-1,62,0" "stone") [0 0])))]
