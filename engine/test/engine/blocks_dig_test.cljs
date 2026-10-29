@@ -1213,7 +1213,7 @@
             (is (= :again (await (dig/pillar-up! c pos))) "the second round resumes the child")
             (is (nil? (await (dig/pillar-up! c pos))) "one pillar per call once it ended")))))))
 
-(deftest natural-only-digs-any-block-but-refuses-a-protected-one
+(deftest not-protected-digs-any-block-but-refuses-a-protected-one
   (async done
     (tu/run-async done
       (fn ^:async t []

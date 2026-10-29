@@ -68,7 +68,7 @@
   every way out of the water is spent or the run has gone 3 x the swim-range setting blocks; the searched area (the start and the
   failed headings) is remembered (:breathe-afloat, 5 min), so a refire there swims no leg the run already did;
   :no-blocks when only a step cell was left and no pillar block is carried;
-  :no-air (data :air-radius, :cap why no cap was dug: :not-tried :no-cap :unseen :not-natural :protected :gravity :too-slow :dig-failed,
+  :no-air (data :air-radius, :cap why no cap was dug: :not-tried :no-cap :unseen :not-natural :too-dear :protected :gravity :too-slow :dig-failed,
   :pocket why no pocket gave air: :off :made-near :no-block :afloat :no-wall :too-slow :dig-failed :step-failed :made :not-tried;
   the text names both) or :no-way-out after three failed tries in the run, or many passes. It never holds still while afloat.
   The air search is jobs.survival.breathe.air. Quote: a few seconds to a minute.

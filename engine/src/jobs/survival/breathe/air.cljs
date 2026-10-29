@@ -13,11 +13,14 @@
             [jobs.lib.escape :as escape]
             [jobs.lib.swim :as swim]
             [jobs.lib.access.rules :as rules]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.cost.ways :as cw]
+            [jobs.lib.own-builds :refer [own-build-fn]]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
-            [jobs.movement.go-to.holes :as holes]
+            [jobs.movement.go-to.holes :as holes :refer [own-cut-fn]]
             [jobs.survival.breathe-pocket :as pocket]))
 
 (a/defargs settings
@@ -64,19 +67,45 @@
             true
             :dug)))))
 
-(defn claimed-fn
-  "(claimed? cell): go-to's may-dig-fn refuses cell (a zone, claim, plan footprint, kept seal or own build)."
+(defn death-averted
+  "Seconds the death of a drowning costs (cost/death-s)."
   [c]
-  (let [may-dig? (holes/may-dig-fn c)]
-    (fn [cell] (not (may-dig? (u/cell-vec cell))))))
+  (cost/death-s (:primitives c) (ctx/view c)))
+
+(defn judge-fn
+  "(judge cell block): why cell may not be the cap, else nil. A kept seal (mem :seal-kept) or an own build is dug when
+  its price (the block put back, jobs.lib.cost.ways/put-back-cost of its goal-value or own-cut-fn, and for a seal
+  the opening-price of the exposure) is under the death a drowning averts (cost/death-s): else :too-dear. Another
+  owner's zone or claim, ignore-zones? or not, refuses a non-natural block (:not-natural)."
+  [c]
+  (let [p (:primitives c)
+        zoned (assoc-in c [:args :ignore-zones?] false)
+        may-dig? (holes/may-dig-fn zoned true)
+        own-build (own-build-fn c)
+        own-cut (own-cut-fn c)
+        kept (:seal-kept (ctx/mem c) #{})
+        body (delay (assoc (cost/death-body p (ctx/view c)) :health (.-health (.self p))))
+        averted (delay (death-averted c))
+        feet (delay (u/self-pos c))]
+    (fn [cell n]
+      (let [v (u/cell-vec cell)
+            own? (some? (own-build v))
+            sealed? (contains? kept v)]
+        (cond
+          (or own? sealed?)
+          (let [price (+ (own-cut v)
+                         (if (and sealed? (not own?)) (cw/put-back-cost (:value (cost/goal-value [{:name n :count 1}]))) 0)
+                         (if sealed? (cost/opening-price @body 0 {:cells [v]} @feet) 0))]
+            (when-not (< price @averted) :too-dear))
+          (and (not (rules/natural? n)) (not (may-dig? v))) :not-natural)))))
 
 (defn cap-above
   "The own column's cap: {:cells [..]} to dig, or {:why kw} when none may be. The first block within 3 above the head
   that is neither air nor water is the cap (the only cell read, as seen); it must not be protected, not a falling
-  block and, in a claimed cell (claimed?), natural; a cell not seen (look first, see look-up!) gives :unseen. What lies over the cap is learned by digging,
+  block and not refused by judge (judge-fn); a cell not seen (look first, see look-up!) gives :unseen. What lies over the cap is learned by digging,
   a cell a pass."
-  ([p head] (cap-above p head (constantly false)))
-  ([p head claimed?]
+  ([p head] (cap-above p head (constantly nil)))
+  ([p head judge]
   (let [cell (fn [k] (update head :y + k))]
     (loop [k 0]
       (let [n (when (<= k 3) (breath/seen-water-name p (cell k)))]
@@ -85,9 +114,9 @@
           (nil? n) {:why :unseen}
           (breath/passable-water-or-air? n) (recur (inc k))
           (escape/protected? n) {:why :protected}
-          (and (not (rules/natural? n)) (claimed? (cell k))) {:why :not-natural}
-          (contains? pocket/falling n) {:why :gravity}
-          :else {:cells [(cell k)]}))))))
+          :else (if-let [why (judge (cell k) n)]
+                  {:why why}
+                  (if (contains? pocket/falling n) {:why :gravity} {:cells [(cell k)]}))))))))
 
 (defn ^:async look-up!
   "Look at each cell within 3 above head that the body has not seen, so cap-above reads what is there."
@@ -106,7 +135,7 @@
   (let [p (:primitives c)
         head (breath/eye-cell (.self p))
         _ (await (look-up! c head))
-        {:keys [cells]} (cap-above p head (claimed-fn c))
+        {:keys [cells]} (cap-above p head (judge-fn c))
         ms (reduce + (map #(.digTime p (clj->js %)) cells))]
     (when (and cells (< (:cap-digs (ctx/mem c) 0) (max-cap-digs))
                (<= ms (* (cap-dig-share) (breath/air-left-ms (.self p)))))
@@ -181,7 +210,7 @@
         self (.self p)
         head (breath/eye-cell self)
         _ (await (look-up! c head))
-        {:keys [cells why]} (cap-above p head (claimed-fn c))
+        {:keys [cells why]} (cap-above p head (judge-fn c))
         _ (when (and cells (< (:cap-digs (ctx/mem c) 0) (max-cap-digs))) (await (tools/equip! c (u/seen-name p (first cells)))))
         air-ms (breath/air-left-ms self)
         allowed-ms (* share air-ms)]

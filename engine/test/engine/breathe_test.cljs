@@ -13,6 +13,8 @@
             [jobs.lib.world-files :as world-files]
             [jobs.lib.breath :as breath]
             [jobs.lib.cost.planner :as planner]
+            [jobs.lib.own-builds :as own-builds]
+            [engine.ctx :as ctx]
             [jobs.lib.shore :as shore]
             [jobs.lib.swim :as swim]
             [jobs.survival.breathe :as b]
@@ -1158,6 +1160,37 @@
         (let [{:keys [ended block]} (await (cap-run! {:block "glass"}))]
           (is (= [[:completed nil]] ended))
           (is (= "air" (block [0 68 0]))))))))
+
+(defn ^:async priced-cap-run!
+  "cap-run! of block, the cap an own build (own-build-fn) or a kept seal (mem :seal-kept), a death costing death-s."
+  [block death-s sealed?]
+  (let [mem ctx/mem]
+   (with-redefs [own-builds/own-build-fn (fn [_] (if sealed? (constantly nil) (constantly :plan)))
+                ctx/mem (fn [c] (cond-> (mem c) sealed? (assoc :seal-kept #{[0 68 0]})))
+                air/death-averted (fn [_] death-s)]
+    (await (cap-run! {:block block})))))
+
+(deftest an-own-build-cap-is-dug-when-drowning-is-dearer-and-kept-when-it-is-not
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [dear (await (priced-cap-run! "oak_planks" 1e6 false))
+              cheap (await (priced-cap-run! "oak_planks" 0 false))]
+          (is (= [[:completed nil]] (:ended dear)))
+          (is (= "air" ((:block dear) [0 68 0])))
+          (is (= [[:stopped :no-air]] (:ended cheap)))
+          (is (= :too-dear (:cap (:data cheap))))
+          (is (= "oak_planks" ((:block cheap) [0 68 0]))))))))
+
+(deftest a-kept-natural-seal-is-priced-not-dug-freely
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [dear (await (priced-cap-run! "dirt" 1e6 true))
+              cheap (await (priced-cap-run! "dirt" 0 true))]
+          (is (= "air" ((:block dear) [0 68 0])))
+          (is (= :too-dear (:cap (:data cheap))))
+          (is (= "dirt" ((:block cheap) [0 68 0]))))))))
 
 (deftest a-protected-cap-is-never-dug
   (async done (never-dug! done "chest" :protected)))
