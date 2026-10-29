@@ -1203,6 +1203,13 @@
   (is (holds? {:entities [(skeleton 1 13 0)]} {}) "a skeleton at 13 with the default ranged radius (16)")
   (is (not (holds? {:entities [(skeleton 1 17 0)]} {})) "a skeleton at 17 is beyond the default"))
 
+(deftest hostile-near-leaves-a-skeleton-beyond-its-fire-range
+  (is (holds? {:entities [(skeleton 1 14 0)]} {}) "at 14 its arrows land")
+  (is (not (holds? {:entities [(skeleton 1 16 0)]} {})) "at 16 it is in follow range with a line of fire, but out of the bow's 15: standing still loses nothing"))
+
+(deftest hostile-near-holds-for-a-creeper-walking-up-before-its-blast-range
+  (is (holds? {:entities [(assoc (skeleton 1 7 0) :name "creeper")]} {}) "a creeper at 7 has a way to the body and holds the trigger"))
+
 (deftest hostile-near-counts-every-skeleton-variant-as-ranged
   (doseq [mob ["stray" "parched" "bogged"]]
     (is (holds? {:entities [(assoc (skeleton 1 13 0) :name mob)]} {:radius 8 :ranged-radius 16}) (str mob " at 13"))))
