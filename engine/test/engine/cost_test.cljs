@@ -439,6 +439,15 @@
     (is (= 3000 (lost {:respawn {:x 3000 :y 64 :z 0}})) "a bed too far for the despawn window")
     (is (= 3000 (lost {})) "no bed: world spawn")))
 
+(deftest a-death-wakes-at-the-live-spawn-bed-else-at-world-spawn
+  (let [body #(fake/create {:self {:pos [40 64 3] :worldSpawn %}})
+        bed {:x 7 :y 64 :z 7}
+        bed-view {:data {:entries {:spawn-bed [{:t 1 :data {:pos bed}}]}} :now 2}
+        none {:data {} :now 2}]
+    (is (= bed (:respawn (cost/death-body (body [100 70 -40]) bed-view))))
+    (is (= {:x 100 :y 70 :z -40} (:respawn (cost/death-body (body [100 70 -40]) none))) "no bed: world spawn")
+    (is (nil? (:respawn (cost/death-body (body nil) none))) "a spawn the game has not sent")))
+
 (deftest a-hold-costs-its-seconds-and-hp-lost-and-a-way-out-its-hurt-and-death-risk
   (let [body {:respawn {:x 0 :y 64 :z 0} :level 0 :health 3}
         route {:spawns 0.5}]

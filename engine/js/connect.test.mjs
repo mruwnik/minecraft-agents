@@ -53,6 +53,11 @@ test('the simulation distance is caught from the login packet and kept current b
   assert.equal(sense.serverRules().simulationDistance, 4)
 })
 
+test('the spawn_position packet marks the spawn point known, on each bot', async () => {
+  assert.equal((await dropAfter([])).spawnPointKnown, undefined)
+  assert.equal((await dropAfter([['spawn_position', { location: { x: 1, y: 2, z: 3 } }]])).spawnPointKnown, true)
+})
+
 test('the difficulty packet sets the difficulty name, given as 26.1 names it or as an index', async () => {
   const named = await dropAfter([['difficulty', { difficulty: 'easy', difficultyLocked: false }]])
   assert.equal(createSense({ bot: named, isOffline: () => false }).serverRules().difficulty, 'easy')

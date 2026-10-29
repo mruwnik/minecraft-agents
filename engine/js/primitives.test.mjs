@@ -419,9 +419,12 @@ test('self reports the body in the contract shape', () => {
   assert.deepEqual(s.inventory[0], { name: 'bread', count: 2, slot: 36 })
 })
 
-test('self reports the world spawn the game sent', () => {
+test('self reports the world spawn once the game sent it, none before', () => {
   const { bot, p } = rig(world)
+  bot.spawnPoint = { x: 0, y: 0, z: 0 }
+  assert.equal(p.self().worldSpawn, null)
   bot.spawnPoint = { x: 100, y: 70, z: -40 }
+  bot.spawnPointKnown = true
   assert.deepEqual(p.self().worldSpawn, { x: 100, y: 70, z: -40 })
 })
 

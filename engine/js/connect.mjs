@@ -46,6 +46,8 @@ export function connectBot (params, { timeoutMs = SPAWN_TIMEOUT_MS, create = min
     })
     // Mineflayer keeps no simulation distance; the login packet precedes spawn, so catch it here, on the bot's own client.
     bot._client.on('login', packet => { bot.simulationDistance = packet.simulationDistance ?? bot.simulationDistance })
+    // Mineflayer's bot.spawnPoint reads (0,0,0) until the spawn_position packet: mark when the game has sent it.
+    bot._client.on('spawn_position', () => { bot.spawnPointKnown = true })
     bot._client.on('simulation_distance', packet => { bot.simulationDistance = packet.distance ?? bot.simulationDistance })
     // 26.1's difficulty packet carries the name, which mineflayer's bot.game.difficulty looks up as an index (undefined).
     bot._client.on('difficulty', ({ difficulty: d }) => { bot.difficulty = typeof d === 'string' ? d : DIFFICULTIES[d] ?? null })
