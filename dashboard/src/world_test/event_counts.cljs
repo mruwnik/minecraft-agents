@@ -2,7 +2,7 @@
   "tools/event-counts.mjs: recounts the measured combat priors from the trial bodies' event logs, so a setting can cite its k and n.
   Commands: fold | creeper-exchange | flight-starts | notice-rate | way-on (world-test.way-prior; counts the logs alone, no fold) | drowned-meets (world-test.drowned-meets; trial bodies only) | flee-pace (trial bodies only), each [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S]; each folds the logs into the durable counts file first (rows by run id, so counts only grow as logs rotate).
   spot-returns [--agents DIR] (world-test.spot-returns), field-passes [--agents DIR] (world-test.field-passes), arrow-shots [--agents DIR] [--difficulty D] (world-test.arrow-shots; D the
-  server's, default 1, easy, the trial server's), caught-flights [--agents DIR] (world-test.caught-flights; trial bodies only), hide-ends [--agents DIR] (world-test.hide-ends; trial bodies only), work-hurt [--agents DIR] (world-test.work-hurt) and vein-seen [--agents DIR] count from the logs alone, no fold;
+  server's, default 1, easy, the trial server's), caught-flights [--agents DIR] (world-test.caught-flights; trial bodies only), hide-ends [--agents DIR] (world-test.hide-ends; trial bodies only), respawn-distance [--agents DIR] (world-test.respawn-distance; trial bodies only), work-hurt [--agents DIR] (world-test.work-hurt) and vein-seen [--agents DIR] count from the logs alone, no fold;
   water-lags [--agents DIR] [--stride N] (world-test.water-lags) surface-heights (world-test.surface-heights), floor-neighbours (world-test.floor-neighbours), dark-reach (world-test.dark-reach) unseen-solid (world-test.unseen-solid, JSON for jobs/lib/cost/unseen_solid.json) and tree-spots (world-test.tree-spots) from the recorded chunks beside DIR;
   resight [--agents DIR] [--counts FILE] (world-test.resight) folds the bodies' seen memory against those chunks into the counts file; wall-sides likewise folds the trial bodies' enter-room.arrived events (world-test.wall-sides), far-side-rows their clear-path.far-side events (world-test.far-side-rows), wall-places their flights' walls attempts and pillars, the probes' pillars too (world-test.wall-places).
   vein-seen: the ore blocks one look saw together (26-connected, a vein's plain and deepslate blocks as one ore) per group, from the
@@ -55,6 +55,7 @@
             [world-test.unseen-floors :as unseen-floors]
             [world-test.hide-ends :as hide-ends]
             [world-test.retry-wins :as retry-wins]
+            [world-test.respawn-distance :as respawn-distance]
             [world-test.resight :as resight]
             [world-test.spot-returns :as spot-returns]
             [world-test.surface-heights :as surface-heights]
@@ -622,7 +623,7 @@
        (sort-by :t)
        vec))
 
-(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | closing-rate | walk-pace | walk-detour | gap-miss | way-on | guess-looks | unseen-floors | spot-returns | field-passes | arrow-shots | caught-flights | work-hurt | vein-seen | water-lags | surface-heights | floor-neighbours | unseen-solid | dark-reach | tree-spots | resight | wall-sides | far-side-rows | pen-escapes | wall-places | hide-ends | retry-wins [--run ID --animals N --secs S --escaped E] [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N] [--difficulty D]
+(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | closing-rate | walk-pace | walk-detour | gap-miss | way-on | guess-looks | unseen-floors | spot-returns | field-passes | arrow-shots | caught-flights | work-hurt | vein-seen | water-lags | surface-heights | floor-neighbours | unseen-solid | dark-reach | tree-spots | resight | wall-sides | far-side-rows | pen-escapes | wall-places | hide-ends | respawn-distance | retry-wins [--run ID --animals N --secs S --escaped E] [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N] [--difficulty D]
   every command first folds the logs into the counts file (default worlds/test/priors-counts.edn), then reports from the file; --since-ms keeps the rows of fights started after it.")
 
 (defn- parse-args [argv]
@@ -751,6 +752,11 @@
                        (save-counts! file folded)
                        (println (pr-str (wall-places/report (:wall-places folded))))
                        0)
+       "respawn-distance" (do (println (pr-str (respawn-distance/report (for [b (array-seq (fs/readdirSync agents))
+                                                                                 :when (and (not (probe? b)) (fs/existsSync (path/join agents b "engine")))
+                                                                                 d (respawn-distance/distances (keep respawn-distance/scan-line (event-lines (path/join agents b "engine"))))]
+                                                                             d))))
+                              0)
        "hide-ends" (do (println (pr-str (hide-ends/report (for [b (array-seq (fs/readdirSync agents))
                                                                  :when (and (not (probe? b)) (fs/existsSync (path/join agents b "engine")))
                                                                  line (event-lines (path/join agents b "engine"))
