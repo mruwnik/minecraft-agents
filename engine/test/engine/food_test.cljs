@@ -101,6 +101,13 @@
       {:time 15000 :self {:food 10 :health 20}})
     (is (level {:time 23800 :self {:food 4 :health 20}}) "a healthy body goes at first light")))
 
+(deftest a-hungry-body-is-the-hungry-triggers-unless-too-hurt-then-the-low-health-triggers
+  (let [fires? (fn [trigger world] (boolean ((:when (get triggers/all trigger)) (tu/with-light-data (tu/fake world)) {} {})))
+        too-hurt {:time 6000 :self {:food 4 :health 2}}
+        fit {:time 6000 :self {:food 4 :health 20}}]
+    (is (= [true false] [(fires? :low-health too-hurt) (fires? :hungry too-hurt)]) "too hurt: low-health, not hungry")
+    (is (= [false true] [(fires? :low-health fit) (fires? :hungry fit)]) "hungry and fit: hungry, not low-health")))
+
 ;; ------------------------------------------- the hungry reflex with nothing to eat
 
 (defn none-events [seen] (filterv #(and (= :stopped (:kind %)) (= :no-food (:reason %))) @seen))
