@@ -170,7 +170,7 @@
               cells (mapv (fn [{:keys [x y z]}] [x y z]) inside)]
           (await (sense/look-round! c cells))
           (let [asked (atom [])]
-            (with-redefs [sense/look-at-unknown! (fn ^:async [_ cs & _] (swap! asked conj cs) [0 [] false])]
+            (with-redefs [sense/look-at! (fn ^:async [_ cell & _] (swap! asked conj cell))]
               (await (sense/look-round! c cells)))
-            (is (= [[]] @asked) "a second round on the same cells from the same spot looks at none")))))))
+            (is (empty? @asked) "a second round on the same cells from the same spot looks at none")))))))
 
