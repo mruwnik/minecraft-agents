@@ -116,7 +116,14 @@
         route (dig-route/route-resumed [(:id c) :drop-cut from dug max-s] at from goal prices)]
     (or (:dig route) (#{:searching :too-big} (:problem route)))))
 
-(def look-reach "Cells round the body whose change a look in a cut may show: the rock hides what lies farther." 4)
+(defn open-seen
+  "The cells within radius of the body's feet that it has seen open (perception's seenBlocks; none for a body that senses
+  nothing), as a set of [x y z]."
+  [p radius]
+  (if-let [f (aget p "seenBlocks")]
+    (into #{} (map (fn [^js b] (let [q (.-pos b)] [(.-x q) (.-y q) (.-z q)])))
+          (f #js {:radius radius :match dig-route/open? :max js/Number.MAX_SAFE_INTEGER}))
+    #{}))
 
 (defn ^:async cut-via
   "cut-to-drop! with its steps given: a map over {:drop-cut :dig-cell! :look-at! :mem} (the fns of those names' arguments).
@@ -135,23 +142,24 @@
         ;; what the search priced round the way: its cells, the ones touching them (a falling block over one, a liquid, an
         ;; opening beside it) and the cell dug, as the body saw them when it planned
         around (fn [cells] (set (for [[x y z] cells dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]] [(+ x dx) (+ y dy) (+ z dz)])))
-        ;; and the rock a look reaches from the body (look-reach): a cell it shows open may be a cheaper way
-        reached (fn [[x y z]] (let [r (range (- look-reach) (inc look-reach))] (for [dx r dy r dz r] [(+ x dx) (+ y dy) (+ z dz)])))
+        plan-s (fn [cells] (+ (* step-s (count cells)) (reduce + (map price cells))))
+        ;; a way through an opening is at least its steps to it and on: none farther than the plan's price walks (a walked
+        ;; block is at most sqrt 2 across) can cost less
+        reach (fn [cells] (* js/Math.SQRT2 (/ (plan-s cells) step-s)))
         snapshot (fn [cells]
                    (let [near (around (cons dug cells))]
                      {:cells (vec cells) :near near :me (u/cell-vec (u/self-pos c))
-                      :seen (into {} (map (juxt identity name-at)) (into near (reached (u/cell-vec (u/self-pos c)))))}))
-        ;; the way's cells left, as planned while the cell dug stayed open and a look showed none of them changed nor a cell
-        ;; opened that a way through could cost less than the plan: steps to it and on, against the plan's steps and digs
-        planned (fn [{:keys [cells seen near me]} dug-cell]
+                      :seen (into {} (map (juxt identity name-at)) near)
+                      :open (open-seen p (reach cells))}))
+        ;; the way's cells left, as planned while the cell dug stayed open and a look showed none of them changed nor
+        ;; opened a cell that a way through could cost less than the plan: steps to it and on, against the plan's steps and digs
+        planned (fn [{:keys [cells seen near me open]} dug-cell]
                   (when (and (seq cells) (dig-route/open? (name-at dug-cell))
-                             (let [plan-s (+ (* step-s (count cells)) (reduce + (map price cells)))]
-                               (every? (fn [[cell n]]
-                                         (let [now (name-at cell)]
-                                           (or (= n now)
-                                               (and (not (near cell))
-                                                    (or (not (dig-route/open? now)) (>= (* step-s (+ (walk me cell) (walk cell dug))) plan-s))))))
-                                       seen)))
+                             (every? (fn [[cell n]] (= n (name-at cell))) seen)
+                             (let [s (plan-s cells)]
+                               (not-any? (fn [cell] (and (not (open cell)) (not (near cell))
+                                                         (< (* step-s (+ (walk me cell) (walk cell dug))) s)))
+                                         (open-seen p (reach cells)))))
                     cells))]
     (loop [last-dug nil
            spent (get (:cut-spent (mem c)) dug 0)

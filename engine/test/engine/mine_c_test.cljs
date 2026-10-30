@@ -688,7 +688,11 @@
                                                      :dug))
                            :look-at! (fn [_ cell] (when (= [1 64 0] cell) (after-first-dig seen)))
                            :mem (fn [_] @m)}]
-                (with-redefs [u/seen-name (fn [_ {:keys [x y z]}] (get @seen [x y z]))]
+                (with-redefs [u/seen-name (fn [_ {:keys [x y z]}] (get @seen [x y z]))
+                              ;; the body at [0 64 0]
+                              drops/open-seen (fn [_ radius] (into #{} (comp (filter (comp dig-route/open? val)) (map key)
+                                                                             (filter #(<= (js/Math.hypot (% 0) (- (% 1) 64) (% 2)) radius)))
+                                                                   @seen))]
                   (await (drops/cut-via c steps [2 64 0] 50)))
                 (mapv second @dug)))]
     (async done
@@ -698,6 +702,7 @@
           (is (= [1 2 2] (await (run #(swap! % assoc [1 65 1] "gravel") {}))) "gravel over a planned cell is planned again")
           (is (= [1 2 2] (await (run #(swap! % assoc [2 64 1] "water") {}))) "a liquid beside a planned cell is planned again")
           (is (= [1 2 2] (await (run #(swap! % assoc [3 64 3] "air") hard))) "an opening off the way that costs less to walk through than the way's digs is planned again")
+          (is (= [1 2 2] (await (run #(swap! % assoc [5 64 0] "air") hard))) "so is one five cells off, as far as a look down a tunnel shows")
           (is (= [1 1 1] (await (run #(swap! % assoc [-4 64 -4] "air") {}))) "one a detour too long to beat the way's digs is not")
           (is (= [1 1 1] (await (run #(swap! % assoc [3 64 3] "stone") hard))) "a cell off the way read as the rock it was taken for changes nothing"))))))
 
