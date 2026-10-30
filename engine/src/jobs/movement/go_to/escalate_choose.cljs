@@ -568,21 +568,37 @@
     :approach (>= (second goal) (second from))
     false))
 
+(defn rim-leads-in?
+  "Whether escape-way/choose's rim pillar e from cell from leaves the body on a wall's top (a wall h high, e's height h - 1,
+  then a step onto the rim) from which a walk with no dig reaches goal."
+  [p {:keys [height]} from goal may-dig? opts]
+  (let [block-at (escape/block-at-of p)
+        unseen? (escape/unseen-of p)]
+    (boolean (some (fn [d] (when (= (inc height) (escape/rim-height block-at unseen? from d))
+                             (let [top (escape/up (escape/ahead from d 1) (inc height))]
+                               (= [] (route-cells p top goal (constantly false) (:own? opts) false false (search-opts opts))))))
+                   escape/cardinals))))
+
 (defn goal-way
   "A free body's way into a walled-in goal: escape-way/choose from where it stands, or, while the cell it can walk to
   nearest the goal (nearest-stand) is more than a block nearer, from there, as
-  {:step :approach :pos cell} first. Only a way that leads-in? (a walk along the wall from where it stands only), else
-  the fewest cells dug (dig-way, :searching while its search goes on); else {:step :none :why :no-dig}, from the
-  nearest cell once it has been walked to."
+  {:step :approach :pos cell} first. Only a way that leads-in? (a walk along the wall from where it stands only; a rim
+  pillar to a goal not above only when the wall's top walks on to it), else the fewest cells dug (dig-way, :searching
+  while its search goes on); else {:step :none :why :no-dig}, from the nearest cell once it has been walked to."
   [c feet goal may-dig? opts]
   (let [p (:primitives c)
         to-goal #(u/dist (zipmap [:x :y :z] %) (zipmap [:x :y :z] goal))
         near (nearest-stand p goal 0 (:slice opts))
         here? (or ((:skip opts) :approach) (>= (to-goal near) (dec (to-goal feet))))
         from (if here? feet near)
-        ;; a pillar or stair leads in only to a goal above: priced against the door, a rim hop would win and then be dropped
-        e (escape-way/choose p from goal may-dig? (cond-> opts (<= (second goal) (second from)) (assoc :drop-steps #{:pillar :stair})))
-        in? (and (leads-in? e from goal) (or here? (not= :approach (:step e))))
+        level? (<= (second goal) (second from))
+        e (escape-way/choose p from goal may-dig? opts)
+        ;; a pillar or stair that leads in only to a goal above would be priced against the door and then dropped
+        e (if (and level? (#{:pillar :stair} (:step e)) (not (and (= :pillar (:step e)) (rim-leads-in? p e from goal may-dig? opts))))
+            (escape-way/choose p from goal may-dig? (assoc opts :drop-steps #{:pillar :stair}))
+            e)
+        in? (and (or (leads-in? e from goal) (and level? (= :pillar (:step e))))
+                 (or here? (not= :approach (:step e))))
         e (cond in? e
                 :else (or (dig-way p from goal may-dig? opts)
                           (if (= :none (:step e)) e {:step :none :why :no-dig})))]

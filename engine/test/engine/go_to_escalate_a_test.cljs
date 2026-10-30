@@ -157,10 +157,16 @@
     (is (= {:step :pillar :height 1 :item "dirt"} (escape-way/choose p [2 64 0] [8 64 0] (constantly false)))
         "no dig allowed: over the wall")))
 
-(deftest goal-way-never-weighs-a-rim-pillar-for-a-goal-at-the-feet-level
-  (let [p (tu/fake {:self {:pos {:x 2 :y 64 :z 0}} :blocks plank-yard :inventory [{:name "dirt" :count 9}]})]
-    (is (= :clear-path (:step (ec/goal-way {:primitives p} [2 64 0] [8 64 0] (constantly true) {:skip #{:approach}})))
-        "a pillar leads in only to a goal above: the door is the way in, not the cheaper hop it would be dropped for")))
+(deftest goal-way-pillars-over-a-wall-to-a-level-goal-when-the-top-walks-on-to-it
+  (let [yard (tu/fake {:self {:pos {:x 2 :y 64 :z 0}} :blocks plank-yard :inventory [{:name "dirt" :count 9}]})
+        moat (tu/fake {:self {:pos {:x 2 :y 64 :z 0}} :blocks (merge plank-yard (box 5 63 -6 5 63 6 "air")) :inventory [{:name "dirt" :count 9}]})
+        way #(:step (ec/goal-way {:primitives %} [2 64 0] [8 64 0] (constantly false) {:skip #{:approach}}))]
+    (is (= :pillar (way yard)) "no dig allowed: over the wall and down to the goal")
+    (is (= :none (way moat)) "a drop with no floor beyond the wall is no way in")
+    (is (= :pillar (:step (ec/goal-way {:primitives yard} [2 64 0] [8 64 0] (constantly true) {:skip #{:approach}})))
+        "the hop that walks on to the goal is the cheaper way, priced against the door")
+    (is (= :clear-path (:step (ec/goal-way {:primitives moat} [2 64 0] [8 64 0] (constantly true) {:skip #{:approach}})))
+        "a hop that lands nowhere is not weighed against the door")))
 
 (deftest goal-way-walks-to-the-wall-for-a-level-goal-after-the-door-failed
   (let [p (tu/fake (merge in-room {:blocks room}))]
