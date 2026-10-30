@@ -112,6 +112,12 @@
     (is (= {:step :pillar :height 1 :item "dirt"} (escape/choose p [2 61 2] [2 64 10] (constantly false)))
         "the south wall when the goal is south")))
 
+(deftest escape-choose-pillars-beside-a-column-to-a-goal-on-top-as-it-is-cheaper-than-a-stair
+  ;; a rise-6 stair ends 6 blocks aside, a dig through the column at its foot: both leave the climb to do
+  (let [p (tu/fake {:self {:pos {:x 0 :y 64 :z 0}} :blocks (merge (box -6 63 -6 6 63 6 "stone") (box 1 64 0 1 69 0 "cobblestone"))
+                    :inventory [{:name "cobblestone" :count 16} {:name "stone_pickaxe" :count 1}]})]
+    (is (= {:step :pillar :height 5 :item "cobblestone"} (escape/choose p [0 64 0] [1 70 0])))))
+
 (deftest escape-choose-cuts-the-planks-door-nobody-claims-else-rim-pillars
   (let [p (tu/fake {:self {:pos {:x 2 :y 64 :z 0}} :blocks plank-yard :inventory [{:name "dirt" :count 9}]})]
     (is (= :clear-path (:step (escape/choose p [2 64 0] [8 64 0]))) "the planks are nobody's claim")

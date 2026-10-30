@@ -8,6 +8,7 @@
   - wall-spot: the cheapest cell beside a wall (priced-spot), for a body in a hollow with no wall next to it.
   - stair-cuts: the cells a stair up cuts.
   - door-beside?: whether a door or gate borders the cells the body can walk to (a way out go-to handles).
+  - price: the seconds an escalation's way takes (jobs.lib.cost).
   - choose: the escalation for a body here and a goal.
   Cells are [x y z]. block-at maps a cell to its block name (nil when not loaded)."
   (:require [jobs.lib.choose :as choose]
@@ -18,13 +19,15 @@
             [jobs.lib.block-sets :as bs]
             [jobs.lib.blocks :as b]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.ways :as cw]
             [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.dig-route :as dig-route]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
-            
             [jobs.lib.tidy :as tidy]
+            [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.walk.world :as wworld]))
 
@@ -314,16 +317,23 @@
            (mapcat (fn [d] (map #(up (ahead cell d 1) %) (if climb? [0 -1 1] [0]))))
            (filter #(and (near? %) (reach/standable-cell? p (zipmap [:x :y :z] %) kind-at)))))))
 
+(defn walk-s [a b] (:cost (cost/walk-cost {:distance (apply js/Math.hypot (map - b a))})))
+
+(defn rest-s-fn
+  "(rest-s cell): jobs.lib.cost seconds of the walk on from cell to goal along the straight line, its unseen cells at
+  the unseen price (wworld/unseen-share)."
+  [p goal]
+  (let [kind-at (reach/seen-lookup p reach/kind-of :ground)
+        share (wworld/unseen-share p)]
+    (memoize (fn [cell] (+ (walk-s cell goal) (cost/unseen-route-s share kind-at (map #(zipmap [:x :y :z] %) (line-cells cell goal))))))))
+
 (defn priced-spot
   "The cheapest cell (jobs.lib.cost seconds: the walk there, plus the walk on to goal along the straight line with its
   unseen cells at the unseen price, wworld/unseen-share, rest-s) other than feet and the cells in visited (already walked to)
   for which (take? cell g rest-s), g its walk's seconds, over the cells steps (level-steps) reaches from feet: tried
   cheapest first, at most cap tried (nil: no cap). nil when none."
   [p feet goal steps take? visited cap]
-  (let [kind-at (reach/seen-lookup p reach/kind-of :ground)
-        walk-s (fn [a b] (:cost (cost/walk-cost {:distance (apply js/Math.hypot (map - b a))})))
-        share (wworld/unseen-share p)
-        rest-s (memoize (fn [cell] (+ (walk-s cell goal) (cost/unseen-route-s share kind-at (map #(zipmap [:x :y :z] %) (line-cells cell goal))))))]
+  (let [rest-s (rest-s-fn p goal)]
     (loop [open (sorted-set [(rest-s feet) 0 0 feet]) best {feet 0} n 1 tried 0]
       (when-let [[_ _ g cell :as top] (first open)]
         (let [open (disj open top)
@@ -400,6 +410,54 @@
                      (ok? (up back -1) #(keyword-identical? :solid (%1 %2 %3 %4)))))
           back))))))
 
+(defn carried-build-n
+  "How many blocks of the stair's floor fillers (choose/fillers :build) the body carries."
+  [p]
+  (let [names (set (choose/fillers :build))]
+    (transduce (comp (filter #(names (:name %))) (map :count)) + 0 (u/inventory p))))
+
+(defn stair-route-s
+  "Seconds the stair way e takes from feet, each step as jobs.lib.dig-route (route-answer) prices one: jobs.lib.cost/stair-leg-pricer
+  of its cuts (dig-cost), a fill for an open floor (a fetch of the blocks, with none carried) and an unseen cut or floor,
+  its unseen step in the price (cw/step-price), as the route's search does."
+  [p feet {:keys [heading steps]}]
+  (let [block-at (block-at-of p)
+        unseen? (unseen-of p)
+        leg-s (cost/stair-leg-pricer (wworld/unseen-share p))
+        fill-s (cw/fill-cost (carried-build-n p))
+        cut-s (fn [cell] (let [n (block-at cell)]
+                           (cond (dig-route/open? n) nil
+                                 (nil? (dig-route/cell-cost n)) ##Inf
+                                 :else (or (cost/dig-cost (or n "stone")) ##Inf))))]
+    (reduce (fn [total cuts]
+              (let [floor (add (nth cuts 2) [0 -1 0])
+                    leg (leg-s (map cut-s cuts) (when (dig-route/open? (block-at floor)) fill-s) (boolean (some unseen? (cons floor cuts))))]
+                (+ total leg)))
+            0 (partition 3 (stair-cuts feet (heading-dirs (keyword heading)) steps)))))
+
+(defn price
+  "Seconds way e from feet is reckoned to take (jobs.lib.cost): a stair, a pillar, a bridge or a fill by its blocks, a dug door or
+  route by what its cells take to dig with the tool carried, plus a step a cell; 0 for a step that is no span. A stair,
+  door or route adds what its cuts destroy (cost/destroyed-fn); with own-s, a cell it prices over 0, the body's own build,
+  is left out of that: the caller adds its price."
+  ([p feet e] (price p feet e nil))
+  ([p feet {:keys [step heading] :as e} own-s]
+    (let [block-at (delay (block-at-of p))
+          destroyed (delay (cost/destroyed-fn (fn [[x y z]] (u/sensed p {:x x :y y :z z}))))
+          lost-s (fn [cells] (transduce (comp (remove #(or (dig-route/open? (@block-at %)) (and own-s (pos? (own-s %)))))
+                                              (map #(@destroyed (@block-at %) % false)))
+                                        + 0 cells))
+          dig-s (fn [cells] (+ (cost/dig-cells-s (map #(tools/clear-ms p (@block-at %)) cells)) (lost-s cells)))]
+      (case step
+        :stair (+ (stair-route-s p feet e) (* (:aside e 0) (or (cost/dig-cost "stone") 1))
+                  (lost-s (stair-cuts feet (heading-dirs (keyword heading)) (:steps e))))
+        :pillar (cost/pillar-s (wworld/unseen-share p) (:height e) (unseen-pillar-blocks p feet (:height e)))
+        :bridge (cw/bridge-cost (:length e) (:short e 0))
+        :fill-gap (cw/fill-cost (:count e 1))
+        :dig-route (dig-s (map :cell (:cells e)))
+        :clear-path (dig-s (:cells (door @block-at (unseen-of p) feet (heading-dirs (:heading e)))))
+      0))))
+
 (declare choose)
 
 (def way-spot-cap
@@ -413,7 +471,7 @@
   (case step
     :pillar (up cell height)
     :stair (let [[dx dz] (heading-dirs heading)] (add cell [(* steps dx) steps (* steps dz)]))
-    :clear-path (:through (door (block-at-of p) (unseen-of p) cell (heading cell goal)))
+    :clear-path (:through (door (block-at-of p) (unseen-of p) cell (heading-dirs heading)))
     nil))
 
 (defn way-spot
@@ -437,6 +495,9 @@
   any block in cells (may-dig? cell)
   allows (go-to: no other owner's zone or claim); opts :pillar-item ({:item :count} or nil, escape/pillar-item) replaces the climb block read from the inventory. opts :skip is a set of steps that already failed (a stair heading
   that failed: [:stair :east]): the next one is chosen; opts :approached, the cells an approach already walked to; opts :stands, the feet cells of the body's own stairs (a ledge stair's first floor never lands on one: the stair job refuses :undercuts-way).
+  - under a higher goal, when two or more of the pillar out of a pit, the stair and the rim pillar below
+    can be made from feet: the cheapest, its price plus the walk on from its end (way-end, rest-s-fn) and, ending below
+    the goal, a pillar of the rise left; else the first of these that can be made:
   - {:step :pillar :height n :item}: in a pit d deep with room above the head and at least n pillar blocks carried: n
     the rim-pillar (d - 1, then a step onto the rim), d when no side has a rim to step onto. First only when the
     column over the pit is seen to be clear to the top; with an unseen or solid cell in it, after the dig ways.
@@ -491,8 +552,20 @@
          wall (delay (wall-spot p feet goal approached))
          back (delay (when-not (or (skip :approach) (skip :clear-path)) (door-back p feet approached)))
          door? (and gap (every? #(diggable? block-at may-dig? %) (:cells gap)))
-         rim (when (and rim-n (>= count rim-n)) rim-n)]
+         rim (when (and rim-n (>= count rim-n)) rim-n)
+         up-ways (when (< (second feet) (second goal))
+                   (distinct (cond-> []
+                               (and open-above? headroom?) (conj {:step :pillar :height height :item item})
+                               stair (conj {:step :stair :heading stair :steps rise})
+                               rim (conj {:step :pillar :height rim :item item}))))]
      (cond
+       (next up-ways)
+       (let [rest-s (rest-s-fn p goal)
+             ;; a way that leaves the body below the goal still owes that climb, at least a pillar of it
+             s #(let [end (way-end p feet goal %)]
+                  (+ (price p feet %) (rest-s end) (cw/pillar-cost (max 0 (- (second goal) (second end) 1)))))]
+         (first (sort-by s up-ways)))
+
        (and open-above? headroom?)
        {:step :pillar :height height :item item}
 

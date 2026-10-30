@@ -47,12 +47,12 @@
                   escape/unseen-of (constantly (constantly false))
                   escape/choose (fn ([_ _ _ _] nil) ([_ _ _ _ _] stair))
                   risk/estimate (fn [& _] {:hp 0 :lethal-hp 0})]
-      (is (js/isFinite (choose/stair-route-s p [0 64 0] stair)) "no filler carried: the fill is a fetch, not impossible")
+      (is (js/isFinite (escape/stair-route-s p [0 64 0] stair)) "no filler carried: the fill is a fetch, not impossible")
       (is (js/isFinite (sb/fallback-s c [0 64 0] [0 70 0] (constantly true) {}))))))
 
 (deftest a-step-priced-unpassable-leaves-the-fallback-at-the-goals-worth
   (with-redefs [escape/choose (fn ([_ _ _ _] nil) ([_ _ _ _ _] {:step :stair}))
-                choose/price (fn ([_ _ _] ##Inf) ([_ _ _ _] ##Inf))
+                escape/price (fn ([_ _ _] ##Inf) ([_ _ _ _] ##Inf))
                 risk/estimate (fn [& _] {:hp 0 :lethal-hp 0})]
     (let [c (assoc (ctx-at 0) :worth (constantly 40))]
       (is (= 40 (sb/fallback-s c [0 64 0] [20 64 0] (constantly true) {})))

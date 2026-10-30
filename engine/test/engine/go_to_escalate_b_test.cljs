@@ -90,6 +90,7 @@
                       {"1,64,0" "dirt" "1,65,0" "dirt"})
         p (tu/fake {:self {:pos {:x 0 :y 64 :z 0}} :blocks tunnel})]
     (is (= {:step :clear-path :heading :east} (escape/choose p [0 64 0] [6 64 0])))
+    (is (= [2 64 0] (escape/way-end p [0 64 0] [6 64 0] {:step :clear-path :heading :east})) "the door's far side")
     (is (= :stair (:step (escape/choose p [0 64 0] [6 66 0]))) "a goal above still stairs")))
 
 (deftest escape-choose-stairs-up-out-of-a-sealed-tunnel-to-a-goal-through-thick-rock
@@ -278,7 +279,7 @@
         feet [0 61 0]
         pillar {:step :pillar :height 3}]
     (is (true? (esc/own-may-beat? p feet {:step :none})) "no way spares them")
-    (is (< (cw/put-back-cost 0) (ec/price p feet pillar)))
+    (is (< (cw/put-back-cost 0) (escape/price p feet pillar)))
     (is (true? (esc/own-may-beat? p feet pillar)))
     (is (false? (esc/own-may-beat? p feet {:step :dig-route :cells []})) "a way that costs nothing is never beaten")))
 

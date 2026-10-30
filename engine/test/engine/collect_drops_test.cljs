@@ -780,4 +780,4 @@
                        f)]
           (with-redefs [child/run!* record]
             (await (tu/child-outcome eng job {:radius 6 :near {:x 4 :y 68 :z 0}} 10)))
-          (is (= [#{:walk :pillar :clear-seal}] (distinct @ways)) "pillar beside a column first: a stair needs a run as long as the rise"))))))
+          (is (= [#{:walk :pillar :stair :clear-seal}] (distinct @ways))))))))

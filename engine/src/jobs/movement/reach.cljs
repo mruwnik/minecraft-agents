@@ -82,7 +82,7 @@
   [c k]
   (way-steps/way? c k))
 
-(def price choose/price)
+(def price escape/price)
 
 (defn feet-of [c]
   (mapv #(js/Math.floor %) (let [{:keys [x y z]} (u/self-pos c)] [x y z])))

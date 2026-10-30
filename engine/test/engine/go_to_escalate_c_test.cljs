@@ -392,7 +392,7 @@
     (is (= [:walk] (distinct (map :move (:steps route)))))
     (is (= 3 (count (:steps route))))
     (is (< 0 (:seconds route)))
-    (is (= (:seconds route) (choose/price p [0 64 0] {:step :stair :heading :east :steps 3})))))
+    (is (= (:seconds route) (escape/price p [0 64 0] {:step :stair :heading :east :steps 3})))))
 
 (def open-stair-mass
   "stone-mass with the cells of a 3-step stair east from [0 64 0] already open."
@@ -402,7 +402,7 @@
   (let [p (tu/fake {:blocks open-stair-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}]})
         route (choose/route-answer p [0 64 0] [3 67 0] (constantly true) (constantly false) false false {})]
     (is (= 3 (count (:steps route))))
-    (is (= (:seconds route) (choose/price p [0 64 0] {:step :stair :heading :east :steps 3})))
+    (is (= (:seconds route) (escape/price p [0 64 0] {:step :stair :heading :east :steps 3})))
     (is (< (:seconds route) (cw/stair-cost 3)) "a cut-free step is no dearer than a walk step")))
 
 (deftest a-new-stair-step-is-priced-as-a-step-cut-through-stone-and-dearer-unseen
@@ -410,9 +410,9 @@
         body #(tu/seeing-within (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory inv}) %)
         seen (body 50)
         step {:step :stair :heading :east :steps 1}]
-    (is (= (choose/price (body 1) [0 64 0] step) (choose/new-stair-step-s seen)) "the climb route's price of one unseen stone step")
+    (is (= (escape/price (body 1) [0 64 0] step) (choose/new-stair-step-s seen)) "the climb route's price of one unseen stone step")
     (is (< (cw/stair-step-s) (choose/new-stair-step-s seen)) "the cuts are paid on top of the stair's step")
-    (is (< (choose/price seen [0 64 0] step) (choose/new-stair-step-s seen)) "seen cells cost less")))
+    (is (< (escape/price seen [0 64 0] step) (choose/new-stair-step-s seen)) "seen cells cost less")))
 
 (deftest an-unseen-stair-and-pillar-are-priced-as-the-climb-route-prices-them
   (let [inv [{:name "iron_pickaxe" :count 1}]
@@ -421,9 +421,9 @@
         unseen-s (cost/unseen-route-s (wworld/unseen-share p) (constantly :ground) [{:x 0 :y 0 :z 0}])
         stair {:step :stair :heading :east :steps 3}
         route (choose/route-answer p [0 64 0] [3 67 0] (constantly true) (constantly false) false false {})]
-    (is (= (:seconds route) (choose/price p [0 64 0] stair)))
-    (is (< (choose/price (body 50) [0 64 0] stair) (choose/price p [0 64 0] stair)) "unseen cells cost more")
-    (are [r n] (= (+ (cw/pillar-cost 2) (* n unseen-s)) (choose/price (body r) [0 64 0] {:step :pillar :height 2}))
+    (is (= (:seconds route) (escape/price p [0 64 0] stair)))
+    (is (< (escape/price (body 50) [0 64 0] stair) (escape/price p [0 64 0] stair)) "unseen cells cost more")
+    (are [r n] (= (+ (cw/pillar-cost 2) (* n unseen-s)) (escape/price (body r) [0 64 0] {:step :pillar :height 2}))
       50 0
       2.9 1)))
 
@@ -432,7 +432,7 @@
         fill #(hash-map :step :fill-gap :cell [5 63 0] :item "dirt" :count %)
         stair #(hash-map :step :stair :heading :east :steps %)
         three (stair 3)]
-    (is (< (cw/fill-cost 9) (choose/price p [0 64 0] three)))
+    (is (< (cw/fill-cost 9) (escape/price p [0 64 0] three)))
     (are [way carried expected] (= expected (:step (choose/cheaper-fill p [0 64 0] way (fill carried))))
       three 9 :fill-gap
       {:step :pillar :height 1} 9 :pillar
@@ -1005,10 +1005,10 @@
     (is (= (+ (cost/dig-cost "stone") 5) (dig-s "stone" [2 64 0])))
     (is (= (+ (cost/dig-cost "farmland") (cost/destroyed-s "farmland" "wheat" 3 false)) (dig-s "farmland" [3 63 0]))
         "a route cutting farmland under a standing crop pays the crop with the farmland")
-    (let [farm (choose/price p [3 65 0] {:step :dig-route :cells [{:cell [3 63 0]}]})
-          shaft (choose/price p [3 65 0] {:step :dig-route :cells [{:cell [3 64 0]} {:cell [3 63 0]}]})]
+    (let [farm (escape/price p [3 65 0] {:step :dig-route :cells [{:cell [3 63 0]}]})
+          shaft (escape/price p [3 65 0] {:step :dig-route :cells [{:cell [3 64 0]} {:cell [3 63 0]}]})]
       (is (< (- shaft farm) (cost/destroyed-s "wheat" "air" 3 false))
           "a shaft through the crop then its farmland pays the crop once, with the farmland (the crop is an open cell)"))
-    (is (= (+ (choose/price p [0 64 0] {:step :dig-route :cells planks} (constantly 1)) (cost/put-back-s "oak_planks"))
-           (choose/price p [0 64 0] {:step :dig-route :cells planks}))
+    (is (= (+ (escape/price p [0 64 0] {:step :dig-route :cells planks} (constantly 1)) (cost/put-back-s "oak_planks"))
+           (escape/price p [0 64 0] {:step :dig-route :cells planks}))
         "a way's price holds the put-back of a cell that is not the body's own; the caller prices its own")))

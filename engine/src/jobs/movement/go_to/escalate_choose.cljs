@@ -107,59 +107,11 @@
         (not @shut?))))
 
 
-(defn carried-build-n
-  "How many blocks of the stair's floor fillers (choose/fillers :build) the body carries."
-  [p]
-  (let [names (set (choose/fillers :build))]
-    (transduce (comp (filter #(names (:name %))) (map :count)) + 0 (u/inventory p))))
-
-(defn stair-route-s
-  "Seconds the stair way e takes from feet, each step as jobs.lib.dig-route (route-answer) prices one: jobs.lib.cost/stair-leg-pricer
-  of its cuts (dig-cost), a fill for an open floor (a fetch of the blocks, with none carried) and an unseen cut or floor,
-  its unseen step in the price (cw/step-price), as the route's search does."
-  [p feet {:keys [heading steps]}]
-  (let [block-at (escape/block-at-of p)
-        unseen? (escape/unseen-of p)
-        leg-s (cost/stair-leg-pricer (wworld/unseen-share p))
-        fill-s (cw/fill-cost (carried-build-n p))
-        cut-s (fn [cell] (let [n (block-at cell)]
-                           (cond (dig-route/open? n) nil
-                                 (nil? (dig-route/cell-cost n)) ##Inf
-                                 :else (or (cost/dig-cost (or n "stone")) ##Inf))))]
-    (reduce (fn [total cuts]
-              (let [floor (escape/add (nth cuts 2) [0 -1 0])
-                    leg (leg-s (map cut-s cuts) (when (dig-route/open? (block-at floor)) fill-s) (boolean (some unseen? (cons floor cuts))))]
-                (+ total leg)))
-            0 (partition 3 (escape/stair-cuts feet (escape/heading-dirs (keyword heading)) steps)))))
-
 (defn new-stair-step-s
   "Seconds one step of a stair not yet laid out (no heading chosen) takes: its three cuts priced as stone, and its cells
   unseen (the worse case)."
   [p]
   ((cost/stair-leg-pricer (wworld/unseen-share p)) (repeat 3 (or (cost/dig-cost "stone") 0)) nil true))
-
-(defn price
-  "Seconds way e from feet is reckoned to take (jobs.lib.cost): a stair, a pillar, a bridge or a fill by its blocks, a dug door or
-  route by what its cells take to dig with the tool carried, plus a step a cell; 0 for a step that is no span. A stair,
-  door or route adds what its cuts destroy (cost/destroyed-fn); with own-s, a cell it prices over 0, the body's own build,
-  is left out of that: the caller adds its price."
-  ([p feet e] (price p feet e nil))
-  ([p feet {:keys [step heading] :as e} own-s]
-    (let [block-at (delay (escape/block-at-of p))
-          destroyed (delay (cost/destroyed-fn (fn [[x y z]] (u/sensed p {:x x :y y :z z}))))
-          lost-s (fn [cells] (transduce (comp (remove #(or (dig-route/open? (@block-at %)) (and own-s (pos? (own-s %)))))
-                                              (map #(@destroyed (@block-at %) % false)))
-                                        + 0 cells))
-          dig-s (fn [cells] (+ (cost/dig-cells-s (map #(tools/clear-ms p (@block-at %)) cells)) (lost-s cells)))]
-      (case step
-        :stair (+ (stair-route-s p feet e) (* (:aside e 0) (or (cost/dig-cost "stone") 1))
-                  (lost-s (escape/stair-cuts feet (escape/heading-dirs (keyword heading)) (:steps e))))
-        :pillar (cost/pillar-s (wworld/unseen-share p) (:height e) (escape/unseen-pillar-blocks p feet (:height e)))
-        :bridge (cw/bridge-cost (:length e) (:short e 0))
-        :fill-gap (cw/fill-cost (:count e 1))
-        :dig-route (dig-s (map :cell (:cells e)))
-        :clear-path (dig-s (:cells (escape/door @block-at (escape/unseen-of p) feet (escape/heading-dirs (:heading e)))))
-      0))))
 
 (defn gap-fill
   "{:step :fill-gap :cell :item} when result (a planner no-path) is a gap jump refused for a low ceiling or a gap jump
@@ -755,6 +707,6 @@
   chosen escape); way when it is no priced span (a leave-shelter, an approach, none) or dearer."
   [p feet way & fills]
   (let [fill (first (remove nil? fills))]
-    (if (and fill (or (not (#{:stair :pillar :clear-path :dig-route :bridge} (:step way))) (<= (price p feet fill) (price p feet way))))
+    (if (and fill (or (not (#{:stair :pillar :clear-path :dig-route :bridge} (:step way))) (<= (escape/price p feet fill) (escape/price p feet way))))
       fill
       way)))

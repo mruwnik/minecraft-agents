@@ -44,7 +44,7 @@
             [jobs.movement.go-to.climb-route :as climb-route]
             [jobs.movement.go-to.route-ways :as route-ways]
             [jobs.movement.go-to.escalate-choose :refer [dig-left-s range-opts cheaper-fill climb-on? dive-climb-on? dive? escalate-reason? escalate? fetch-tool? gap-fill
-                                                         goal-way dig-leg dig-way drop-fill out-of-sight? price frontier-way gap-dig gap-walled? goal-lava? leg-ends goal-walled? own-stair route-cells shelter-exit? skips sprint-only?
+                                                         goal-way dig-leg dig-way drop-fill out-of-sight? frontier-way gap-dig gap-walled? goal-lava? leg-ends goal-walled? own-stair route-cells shelter-exit? skips sprint-only?
                                                          route-owner route-slice routes-searching! searching? searching-ends keep-routes! forget-routes! search-opts way-guesses past-worth?]]
             [jobs.lib.own-builds :refer [may-dig-fn own-cut-fn own-dig-fn own-fn own-placed-fn with-own-pen]]
             [jobs.movement.go-to.holes :refer [forget-dug-own! hole-tag note-holes! own-holes planned-cells]]
@@ -222,7 +222,7 @@
 
 (defn own-way
   "The way that cuts the body's own builds (own) when it beats base, the way that spares them: base is none, or a priced
-  way dearer (escalate-choose/price) than own's price plus each own cell's put-back (opts :own-s, own-builds/own-cut-fn).
+  way dearer (escape/price) than own's price plus each own cell's put-back (opts :own-s, own-builds/own-cut-fn).
   It is marked :own-cut (its holes are put back at once, its child may dig own plans). {:step :searching} while own's
   search goes on and base is none; else nil."
   [p feet base own {:keys [own-s]}]
@@ -233,14 +233,14 @@
     :else (let [cut-s (reduce + 0 (map own-s (own-cells p own feet own-s)))]
             (when (and (pos? cut-s)
                        (or (= :none (:step base))
-                           (and (priced-steps (:step base)) (< (+ (price p feet own own-s) cut-s) (price p feet base)))))
+                           (and (priced-steps (:step base)) (< (+ (escape/price p feet own own-s) cut-s) (escape/price p feet base)))))
               (assoc own :own-cut true)))))
 
 (defn own-may-beat?
   "Whether a way cutting the body's own builds may beat base, the way that spares them, so it is worth searching: base is
   none, or dearer (price) than the least such a way adds, one cell's put-back."
   [p feet base]
-  (or (= :none (:step base)) (> (price p feet base) (cw/put-back-cost 0))))
+  (or (= :none (:step base)) (> (escape/price p feet base) (cw/put-back-cost 0))))
 
 (defn search-begun!
   "Note in memory (:route-search) when the dig-route searches kept over rounds from feet began and what the way without
@@ -316,7 +316,7 @@
         ;; a stair or door over guesses priced as a dig route is: past the call's worth it is none
         guesses #(way-guesses (:primitives c) % feet)
         worth-it #(if (and (#{:stair :clear-path} (:step %))
-                           (past-worth? (+ (price (:primitives c) feet % (:own-s opts)) (reduce + 0 (map (:own-s opts) (own-cells (:primitives c) % feet (:own-s opts)))))
+                           (past-worth? (+ (escape/price (:primitives c) feet % (:own-s opts)) (reduce + 0 (map (:own-s opts) (own-cells (:primitives c) % feet (:own-s opts)))))
                                         (guesses %) (:guess-risk opts) worth))
                     {:step :none :why :past-worth}
                     %)
