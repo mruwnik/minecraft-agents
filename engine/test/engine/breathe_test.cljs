@@ -1760,7 +1760,7 @@
           (.override (.-world p) "look" (fn [_ a _]
                                           (swap! looks conj [(- (.. a -pos -x) 0.5) (- (.. a -pos -z) 0.5)])
                                           #js {:status "ok"}))
-          (await (one-run! eng small-args))
+          (await (tu/with-looks-showing #(one-run! eng small-args)))
           (is (seq @looks) "looked before giving up")
           (is (some (fn [[lx lz]] (and (pos? lx) (< (js/Math.abs lz) lx))) @looks) "one look faced the east bank")
           (is (= [[:completed nil]] (ended seen)))
@@ -1779,7 +1779,7 @@
               looked (atom false)]
           (stub-seen! p (fn [[x]] (or @looked (<= (js/Math.abs x) 1))))
           (.override (.-world p) "look" (fn [_ _ _] (reset! looked true) #js {:status "ok"}))
-          (await (one-run! eng defaults))
+          (await (tu/with-looks-showing #(one-run! eng defaults)))
           (is @looked)
           (is (= {:x 4 :y 65 :z 0} (core/self-pos p)) "the ledge, not the wall"))))))
 

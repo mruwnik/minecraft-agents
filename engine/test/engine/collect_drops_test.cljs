@@ -112,7 +112,7 @@
         (let [{:keys [eng p seen]} (bd/setup {:self body :blocks {"0,62,0" "stone" "1,63,0" "lava"}})]
           (aset p "sensedAt" (fn [pos] (if (= [1 63 0] [(.-x pos) (.-y pos) (.-z pos)]) #js {:unknown true} (.blockAt p pos))))
           (drop! p [0 63 0] "dirt")
-          (let [result (await (tu/child-outcome eng job {:radius 6 :holes [[0 63 0]]} 20))]
+          (let [result (await (tu/with-looks-showing #(tu/child-outcome eng job {:radius 6 :holes [[0 63 0]]} 20)))]
             (is (= 0 (:collected result)))
             (is (= [:unseen-cell] (mapv :reason (bd/left-drops seen))))
             (is (seq (filter #(= :sense.looked (:kind %)) @seen)) "it looked before it left the drop")

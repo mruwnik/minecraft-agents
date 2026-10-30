@@ -6,6 +6,7 @@
             [engine.settings :as settings]
             [jobs.lib.clock :as clock]
             [engine.ctx :as ctx]
+            [engine.game :as game]
             [engine.path.blocks :as blocks]
             [engine.path.executor :as executor]
             [jobs.lib.breath :as breath]
@@ -384,10 +385,20 @@
   (first (keep-indexed (fn [i s] (when (pos? i) (when-let [cell (unseen-overhead p s)] (when-not (contains? looked cell) i)))) steps)))
 
 (defn occluded?
-  "Whether no look from here shows cell (look/look-shows?): what it cannot see there is rock, not a place it has failed
-  to look at."
-  [c cell]
-  (not (look/look-shows? (:primitives c) cell)))
+  "Whether a seen solid block lies between the body's eye and the centre of cell: what it cannot see there is rock, not
+  a place it has failed to look at. Not look/look-shows?: a cell a door or a fence hides is no rock."
+  [c [x y z :as cell]]
+  (let [p (:primitives c)
+        {ex :x ey :y ez :z} (let [pos (u/self-pos c)] (update pos :y + game/eye-height))
+        tx (+ x 0.5) ty (+ y 0.5) tz (+ z 0.5)
+        d (js/Math.hypot (- tx ex) (- ty ey) (- tz ez))
+        n (js/Math.ceil (/ d 0.2))]
+    (boolean (some (fn [k]
+                     (let [t (/ k n)
+                           at [(js/Math.floor (+ ex (* t (- tx ex)))) (js/Math.floor (+ ey (* t (- ty ey)))) (js/Math.floor (+ ez (* t (- tz ez))))]]
+                       (and (not= at cell)
+                            (true? (some-> (u/sensed p (zipmap [:x :y :z] at)) .-fullCube)))))
+                   (range 1 n)))))
 
 (def landing-look-drop "A step down of at least this many blocks is looked at before the body drops: the landing and the cells beside it." 2)
 

@@ -57,7 +57,7 @@
                                                      :dismountAt {:x 21 :y 64 :z 10}}]
                                          :self {:vehicle 9 :pos [18.5 63.5 10.5]}})]
           (unseen-until-looked! p [21 64 12])
-          (await (tu/child-outcome eng 'jobs.movement.boat-land {:pos [21 64 12]} 90))
+          (await (tu/with-looks-showing #(tu/child-outcome eng 'jobs.movement.boat-land {:pos [21 64 12]} 90)))
           (is (looked-at? p [21 64 12])))))))
 
 (defn boat-at [x z] {:entities [{:id 9 :name "oak_boat" :uuid "u-9" :kind "other" :pos {:x x :y 63.5 :z z} :yaw 0 :health 1
@@ -116,7 +116,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (lt/setup {:blocks cw-lake :inventory [{:name "oak_boat" :count 1}] :dismountDry true})]
           (unseen-until-looked! p [7 64 0])
-          (let [res (await (tu/child-outcome eng 'jobs.movement.cross-water {:pos [7 64 0] :recover false} 200))]
+          (let [res (await (tu/with-looks-showing #(tu/child-outcome eng 'jobs.movement.cross-water {:pos [7 64 0] :recover false} 200)))]
             (is (= :done (:status res)) (pr-str res))
             (is (looked-at? p [7 64 0]))
             (is (empty? (waiting-events seen)))))))))
