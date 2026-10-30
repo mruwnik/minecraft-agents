@@ -361,7 +361,6 @@
   [["no furnace there" {:inventory [{:name "raw_iron" :count 3} {:name "coal" :count 2}]} "raw_iron" "no-furnace"]
    ["a chest" {:blocks {pos-key "chest"} :inventory [{:name "raw_iron" :count 3} {:name "coal" :count 2}]} "raw_iron" "not-a-furnace"]
    ["no fuel carried" {:blocks {pos-key "furnace"} :inventory [{:name "raw_iron" :count 3}]} "raw_iron" "no-fuel"]
-   ["nothing smeltable" {:blocks {pos-key "furnace"} :inventory [{:name "dirt" :count 3} {:name "coal" :count 2}]} nil "nothing-smeltable"]
    ["the item is not carried" {:blocks {pos-key "furnace"} :inventory [{:name "coal" :count 2}]} "raw_iron" "no-item"]
    ["a smoker given iron" {:blocks {pos-key "smoker"} :inventory [{:name "raw_iron" :count 3} {:name "coal" :count 2}]} "raw_iron" "not-smeltable"]
    ["someone else's different input" {:blocks {pos-key "furnace"} :furnaces {pos-key {:input {:name "beef" :count 2}}}
@@ -1225,7 +1224,10 @@
     (is (= [:look :no-furnace] (reason (status "iron_ingot"))) "a product names its input")
     (is (= :ok (first (status "raw_iron" {:furnace {:x 1 :y 64 :z 0}}))))
     (is (= :ok (first ((:can-start? job) {:primitives (tu/fake-on-floor (assoc base-world :inventory [{:name "furnace" :count 1}])) :args {:item "raw_iron"} :view (fn [] {:now 0 :data {}}) :root "j" :slots []})))
-        "a carried furnace is put down without a look round")))
+        "a carried furnace is put down without a look round")
+    (is (= [:later :nothing-smeltable] (reason ((:can-start? job) {:primitives (tu/fake-on-floor (assoc base-world :inventory [{:name "dirt" :count 1}])) :args {:furnace {:x 1 :y 64 :z 0}} :view (fn [] {:now 0 :data {}}) :root "j" :slots []})))
+        "no item and nothing smeltable carried")
+    (is (= :ok (first (status nil {:furnace {:x 1 :y 64 :z 0}}))) "no item: the first smeltable thing carried")))
 
 (deftest a-give-up-before-any-load-is-a-failed-condition-with-the-reason-as-cause
   (async done

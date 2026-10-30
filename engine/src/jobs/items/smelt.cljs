@@ -487,13 +487,16 @@
 (def defaults {:spend {:job-time default-time :wall-time default-wall-time}})
 
 (defn can-start?
-  "Never when the :item is one no furnace cooks; later :refused while a zone or claim bars the furnace; look (once) when a
+  "Never when the :item is one no furnace cooks; later :nothing-smeltable when no :item is given and nothing carried smelts; later :refused while a zone or claim bars the furnace; look (once) when a
   single item is to be smelted and no furnace is known or carried: the round puts one down or fetches one after that."
   [c]
   (let [item (:item (:args c))]
     (cond
       (and item (not (coll? item)) (not (sp/smeltable? (sp/input-of item (carried c)))))
       (contract/never :not-smeltable (str item " does not smelt") :item item)
+
+      (and (nil? item) (not-any? #(sp/smeltable? (:name %)) (carried c)))
+      (contract/later :nothing-smeltable "nothing smeltable is carried")
 
       (and item (not (coll? item)))
       (contract/all [(furnace-refused c)
