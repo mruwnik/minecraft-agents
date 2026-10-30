@@ -938,7 +938,7 @@
               (await (core/tick! eng)))
             (is (= declined (mapv :reason (filter #(= :lure-to.declined (:kind %)) @seen))) (str "zone at x " zone-x))))))))
 
-(deftest a-noted-animal-whose-cell-is-in-view-and-empty-is-not-walked-to
+(deftest a-noted-animal-whose-cell-is-in-view-within-the-radius-is-not-walked-to
   (let [p (tu/fake-on-floor {})
         note {:kind :seen :what "cow" :id "u1" :pos [10 64 0] :t 1000}
         sighting (fn [visible]
@@ -948,4 +948,4 @@
                                  ctx/now (constantly 2000)]
                      (:key (lure-to/noted-sighting {:primitives p :args {:mob "cow" :radius 20}}))))]
     (is (= "u1" (sighting false)) "a note out of view is still walked to")
-    (is (nil? (sighting true)) "its cell seen empty: the animal is gone")))
+    (is (nil? (sighting true)) "its cell in view within the radius (no seen ids passed): taken as gone")))

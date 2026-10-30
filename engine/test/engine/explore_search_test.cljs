@@ -1147,3 +1147,11 @@
     (is (= #{"u1" "u2"} (departed true [])) "cells in view, no animal there")
     (is (= #{"u2"} (departed true [{:id "u1"}])) "u1 is among the entities seen")
     (is (= #{} (departed false [])) "a cell out of view proves nothing")))
+
+(deftest an-animal-noted-3-blocks-away-flat-but-20-up-a-cliff-is-not-departed-by-a-near-scan
+  (let [p (tu/fake-on-floor {})
+        self (.-pos (.self p))
+        up [(+ (.-x self) 3) (+ (.-y self) 20) (.-z self)]]
+    (tu/set-sensed! p (fn [_] #js {:visible true}))
+    (is (= #{} (search/departed {:primitives p} [{:kind :seen :what "cow" :id "u1" :pos up}] [] 6))
+        "the 3D scan of 6 never reached the cow, so its visible cell proves nothing")))

@@ -40,7 +40,7 @@
   ([c note radius seen-ids]
    (let [pos (zipmap [:x :y :z] (:pos note))]
      (and (not (contains? seen-ids (:id note)))
-          (<= (u/flat-dist (u/self-pos c) pos) radius)
+          (<= (u/dist (u/self-pos c) pos) radius)
           (true? (some-> (u/sensed (:primitives c) pos) .-visible))))))
 
 (defn noted-adults
