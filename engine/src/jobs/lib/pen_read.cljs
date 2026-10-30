@@ -78,7 +78,7 @@
    (let [p (:primitives c)
          answer (read p opts)
          here (u/self-pos c)
-         in-sight (filter #(look/look-shows? p %) (sense/targets p here (:remembered answer) #{}))
+         in-sight (filter #(look/makes-out? p %) (sense/targets p here (:remembered answer) #{}))
          stale (take (sense/cell-looks (sense/fail-price c {:cells in-sight}) in-sight) in-sight)]
      (if (and (empty? stale) (not (retry? answer)))
        answer

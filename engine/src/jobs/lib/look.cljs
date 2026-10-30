@@ -868,16 +868,22 @@
   [p]
   (some-> (aget p "perception") rays/near-of))
 
+(defn lit-or-near?
+  "Whether the cell [x y z] is lit enough for the body of primitives p to see it or within near-of. False without a perception."
+  [p [x y z]]
+  (boolean
+   (when-let [^js eye (some-> (aget p "perception") :raw .eye)]
+     (or (when-let [f (see-lit-fn p)] (= 1 (f x y z)))
+         (<= (js/Math.hypot (- (+ x 0.5) (.-x eye)) (- (+ y 0.5) (.-y eye)) (- (+ z 0.5) (.-z eye))) (near-of p))))))
+
 (defn glimpse?
   "Whether the cell {:x :y :z} could be seen by turning to it: a clear line from the eye (nothing between, no wall) and it is lit enough to see or within near-of.
   False without a perception."
   [p {:keys [x y z]}]
   (boolean
    (when-let [^js raw (some-> (aget p "perception") :raw)]
-     (let [^js eye (.eye raw)
-           lit? (when-let [f (see-lit-fn p)] (= 1 (f x y z)))
-           near? (<= (js/Math.hypot (- (+ x 0.5) (.-x eye)) (- (+ y 0.5) (.-y eye)) (- (+ z 0.5) (.-z eye))) (near-of p))]
-       (and (or lit? near?)
+     (let [^js eye (.eye raw)]
+       (and (lit-or-near? p [x y z])
             (rays/line-clear? raw (.sightTable raw) (.-x eye) (.-y eye) (.-z eye) (+ x 0.5) (+ y 0.5) (+ z 0.5)))))))
 
 (defn look-shows?
@@ -902,6 +908,12 @@
        (and eye
             (<= (js/Math.hypot (- (+ x 0.5) ex) (- (+ y 0.5) ey) (- (+ z 0.5) ez)) (:radius (:opts per)))
             (some (fn [[tx ty tz]] (rays/line-clear? raw (.sightTable raw) ex ey ez tx ty tz)) (faces)))))))
+
+(defn makes-out?
+  "Whether a look from where the body stands would make out the cell [x y z]: it shows (look-shows?) and is lit enough or
+  near (lit-or-near?); a dark cell farther off shows only as dark."
+  [p cell]
+  (and (look-shows? p cell) (lit-or-near? p cell)))
 
 (defn dark-in-sight?
   "Whether a look at the cell {:x :y :z} would show it dark: within sight's :radius, a clear line from the eye, neither lit

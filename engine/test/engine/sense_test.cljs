@@ -72,7 +72,7 @@
 (defn all-seen [p] (= (count inside) (count (keep #(u/seen-name p %) inside))))
 
 (def in-sight
-  "look/look-shows? redefined for a rock's inside to stand for cells in sight that never show: a look there turns nothing."
+  "look/makes-out? redefined for a rock's inside to stand for cells in sight that never show: a look there turns nothing."
   (constantly true))
 
 (deftest hidden-cells-cost-the-looks-the-chance-of-a-turn-pays-and-are-never-looked-at-twice
@@ -84,7 +84,7 @@
             (let [p (seeing {:self {:pos {:x 0 :y 64 :z 0}} :blocks rock})
                   c (stub-ctx p)
                   opts (priced (* 19.5 (cost/look-s 1)))]
-              (with-redefs [look/look-shows? in-sight]
+              (with-redefs [look/makes-out? in-sight]
                 (is (false? (await (sense/decide! c ::rock #(all-seen p) opts))))
                 (is (= 10 (looks p)) "a look turns it at 1/(10 + i) after i fruitless ones: a turn saving 19.5 looks pays ten")
                 (dotimes [_ 4] (await (sense/decide! c ::rock #(all-seen p) opts)))
@@ -98,7 +98,7 @@
           (fn ^:async f []
             (let [p (seeing {:self {:pos {:x 0 :y 64 :z 0}} :blocks rock})
                   c (stub-ctx p)]
-              (with-redefs [look/look-shows? in-sight]
+              (with-redefs [look/makes-out? in-sight]
                 (await (sense/decide! c ::rock #(all-seen p) (priced 1000))))
               (is (= 5 (looks p)) "a turn saving 1000 s pays more looks; the memory of looked cells bounds the call")))))))))
 
@@ -115,7 +115,7 @@
                           c (stub-ctx p)
                           cells (for [x (range 5 13) y (range 63 66) z (range -6 7)] {:x x :y y :z z})
                           seen (fn [] (= (count cells) (count (keep #(u/seen-name p %) cells))))]
-                      (with-redefs [clock/now (constantly 0) look/look-shows? in-sight]
+                      (with-redefs [clock/now (constantly 0) look/makes-out? in-sight]
                         (await (sense/decide! c ::rock seen {:price (constantly price)})))
                       (looks p)))
               close (await (run {:gap 1 :delta 4}))
@@ -135,10 +135,10 @@
                     (let [p (seeing {:self {:pos {:x 0 :y 64 :z 0}} :blocks long-rock})
                           c (assoc (stub-ctx p) :worth (constantly worth))
                           seen (fn [] (= (count cells) (count (keep #(u/seen-name p (zipmap [:x :y :z] %)) cells))))]
-                      (with-redefs [clock/now (constantly 0) look/look-shows? shows?]
+                      (with-redefs [clock/now (constantly 0) look/makes-out? shows?]
                         (await (sense/decide! c ::rock seen {:price (sense/fails-to c)})))
                       [(looks p) p]))
-              [inf p] (await (run ##Inf look/look-shows?))
+              [inf p] (await (run ##Inf look/makes-out?))
               walk (sense/read-walk-s (stub-ctx p) {:cells cells})
               [few] (await (run (+ walk 2.5) in-sight))
               [none] (await (run walk in-sight))]
@@ -188,7 +188,7 @@
                   c (assoc c :worth (constantly (+ walk 1)))
                   saves (sense/savings (sense/fail-price c {:cells cells}) cells)]
               (is (> (first saves) (last saves)) "the far cells of the box save less than the near ones")
-              (with-redefs [clock/now (constantly 0) look/look-shows? in-sight]
+              (with-redefs [clock/now (constantly 0) look/makes-out? in-sight]
                 (await (sense/decide! c ::rock #(= (count cells) (count (keep (fn [cell] (u/seen-name p (zipmap [:x :y :z] cell))) cells))) {:price (sense/fails-to c)})))
               (let [looked (mapcat :cells (filter #(= :sense.looked (:kind %)) @(:events c)))]
                 (is (seq looked))
@@ -220,7 +220,7 @@
               ms (atom 0)
               runs (atom 0)
               decide-ms (* 1000 (cost/look-s 3.5))]
-          (with-redefs [clock/now (fn [] @ms) look/look-shows? in-sight]
+          (with-redefs [clock/now (fn [] @ms) look/makes-out? in-sight]
             (await (sense/decide! c ::rock #(do (swap! runs inc) (swap! ms + decide-ms) (all-seen p)) (priced 1000))))
           (is (= (count inside) (looks p)) "a dear turn: every hidden cell is looked at")
           (is (= 8 @runs) "a decision that takes 3.5 looks' seconds is made again every 4 looks: 1 + ceil(27 / 4), not 28"))))))
@@ -231,7 +231,7 @@
       (fn ^:async t []
         (let [p (seeing {:self {:pos {:x 0 :y 64 :z 0}} :blocks rock})
               c (stub-ctx p)]
-          (with-redefs [look/look-shows? in-sight]
+          (with-redefs [look/makes-out? in-sight]
             (await (sense/decide! c ::rock #(all-seen p) (priced 1000)))
             (dotimes [_ 4] (await (sense/decide! c ::rock #(all-seen p) (priced 1000)))))
           (is (= (count inside) (looks p)) "each hidden cell looked at once, then no more looks"))))))
@@ -300,7 +300,7 @@
               hidden {:x 6 :y 64 :z 0}
               ore-and-guess #(when-let [o (first (look/seen-blocks p {:names ["iron_ore"] :radius 16}))]
                                [(:name o) (u/block-name-or p hidden "air")])]
-          (with-redefs [look/look-shows? in-sight]
+          (with-redefs [look/makes-out? in-sight]
             (is (= ["iron_ore" "air"] (await (sense/decide! c ::ore ore-and-guess (priced 10 {:verify-guesses true}))))))
           (is (= [[6 64 0]] (:cells (first (filter #(= :sense.looked (:kind %)) @(:events c)))))
               "the survey found the ore; the guessed cell is looked at after it"))))))

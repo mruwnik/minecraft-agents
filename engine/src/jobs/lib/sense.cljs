@@ -1,7 +1,7 @@
 (ns jobs.lib.sense
   "Look before concluding. A job's sync decision reads cells and areas through the seen-* helpers (jobs.lib.util,
   jobs.lib.look); a cell the body never looked at reads as unknown, and a decision that ends the job (none, no support,
-  not standable) must not rest on it. decide! records the unknown cells the decision read, looks at those a look can show (look/look-shows?; nearest to the
+  not standable) must not rest on it. decide! records the unknown cells the decision read, looks at those a look can make out (look/makes-out?; nearest to the
   eye first, sight passes after each look) and decides again, bounded: as many looks a call as what a turn saves, by the
   caller's priced alternatives (:price), pays at the chance a look turns the decision (cost/turn-saving, cost/cell-looks),
   each cell at most once per run and body cell, and one look round per run and body cell for an area or entity query
@@ -232,7 +232,7 @@
   "(decide-fn), a sync decision over what the body has seen, decided again after a look at each unknown cell it read,
   until it is positive (not (retry? v)) or no look pays; the last value. A look pays while what a turn saves
   at that cell (savings of (price v reads)) x the chance it turns the decision (cost/cell-looks, falling with each fruitless look)
-  is over its seconds and its share of deciding again: the looks between two decisions cost as much on the clock as one decision's CPU (cost/redo-every). A cell no look from here shows (look/look-shows?) is never looked at.
+  is over its seconds and its share of deciding again: the looks between two decisions cost as much on the clock as one decision's CPU (cost/redo-every). A cell no look from here makes out (look/makes-out?) is never looked at.
   The cells looked at before from this body cell count as fruitless looks; at most (max-looked) of them. A positive that read a guessed cell
   (u/block-name-or) is checked after a look at it too with :verify-guesses true. An area (look/seen-blocks) or entity
   (look/seen-entities) query with no cell left to look at gets one look round (look/survey-until!, per body cell) when
@@ -260,7 +260,7 @@
                  fruitless (+ (count looked0) looks)]
              (if (or (>= (count looked) (max-looked)) (and (not (retry? v)) (not guessed)))
                [v looked surveyed looks]
-               (let [found (into [] (comp (filter #(look/look-shows? p %)) (take (- (max-looked) (count looked))))
+               (let [found (into [] (comp (filter #(look/makes-out? p %)) (take (- (max-looked) (count looked))))
                                  (targets p here (if guessed guessed (:cells reads)) looked))
                      k (if (and batch (not guessed)) (count found) (min (count found) (cost/redo-every redo-s)))
                      n (min k (cell-looks pr found fruitless (/ redo-s (max k 1))))

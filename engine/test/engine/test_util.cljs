@@ -178,11 +178,13 @@
   p)
 
 (defn ^:async with-looks-showing
-  "(f)'s result with a look from here showing every cell: the fake's perception has no loaded cell, so no line from the eye is clear."
+  "(f)'s result with a look from here showing and making out every cell: the fake's perception has no loaded cell, so no
+  line from the eye is clear."
   [f]
-  (let [shows look/look-shows?]
+  (let [shows look/look-shows? makes-out look/makes-out?]
     (set! look/look-shows? (constantly true))
-    (try (await (f)) (finally (set! look/look-shows? shows)))))
+    (set! look/makes-out? (constantly true))
+    (try (await (f)) (finally (set! look/look-shows? shows) (set! look/makes-out? makes-out)))))
 
 (defn blind
   "p with no seenBlocks: a body that has seen nothing, whatever the world holds."
