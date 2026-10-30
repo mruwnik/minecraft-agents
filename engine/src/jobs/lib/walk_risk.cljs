@@ -131,7 +131,7 @@
   darkening the light is judged by (:sky, default now; 0 prices the walk by full day's light), the cells its look round has looked at, and what the way is priced by as perceived now: its cells, the
   seconds of it spent where a mob could spawn (:exit-s those of leaving a shelter at night by the way out's light, :exit-dawn? whether dawn lowers them) and the hp of the lava seen near it, and the reach of the threats it prices
   (:weights, their fields' cells, which change as cells they read are seen anew). :cells, :catchers and :remembered are derived, left out of a key. Its spawn prices share one set of floods (sh-inside/*regions*)."
-  [c goal & [{:keys [plan caves-free? back? stay-s sky]}]]
+  [c goal & [{:keys [plan caves-free? back? stay-s stay-at sky]}]]
   (binding [sh-inside/*regions* (or sh-inside/*regions* (js/Map.))]
     (let [p (:primitives c)
           feet (sh-sense/feet p)
@@ -139,7 +139,7 @@
           shelter (:data (ctx/latest c :shelter))
           there (way feet goal plan)
           stay-s (or stay-s 0)
-          stay-at (dec (count there))
+          stay-at (or stay-at (dec (count there)))
           there (cond-> there (pos? stay-s) (update stay-at assoc :s (+ stay-s (peek (death/cell-seconds there)))))
           cells (cond-> there back? (#(into % (rest (rseq %)))))
           exit (if (sh-inside/walk-leaves-shelter? p shelter goal 1) (exit-dark p there caves-free? sky) {:share 0 :dawn? false})
@@ -203,14 +203,13 @@
 
 (defn way-risk-s
   "Seconds (risk-s) the dangers of a way made through cells ([x y z], from the body's) and then walked straight on to goal
-  ({:x :y :z}) cost: estimate's spawns and known threats on those cells, and spawns over work-s more seconds spent making
-  it, at its cells' mean spawn-light/dark-share."
+  ({:x :y :z}) cost: estimate's spawns and known threats on those cells, the body standing at the way's last cell for the
+  seconds of work-s its cells' walk does not already cover (the making: the walk on from there starts that much later)."
   [c goal cells work-s]
-  (let [p (:primitives c)
-        at (map #(zipmap [:x :y :z] %) cells)
-        in (estimate-inputs c goal {:plan {:status "partial" :steps (vec at)}})
-        dark (/ (transduce (map #(spawn-light/dark-share p % false)) + 0 at) (max 1 (count at)))]
-    (risk-s c (estimate-of c (update in :exposed-s + (* work-s dark))))))
+  (let [at (into [] (dedupe) (map #(zipmap [:x :y :z] %) cells))
+        walked-s (/ (peek (along at)) cost/walk-speed)
+        in (estimate-inputs c goal {:plan {:status "partial" :steps at} :stay-s (max 0 (- work-s walked-s)) :stay-at (dec (count at))})]
+    (risk-s c (estimate-of c in))))
 
 (defn look-way
   "{:hp :lethal-hp :secs} of walking to `goal` to look at it and, at the chance `dark` the look shows it too dark to stay,

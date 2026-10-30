@@ -186,7 +186,7 @@
         work (+ walk (if e (price p from e) 0) (rise-left-s p end goal left))
         top (escape/up end (rise-left end goal))]
     (+ work (rest-s top)
-       (if risk-s (risk-s (vec (dedupe (concat [feet] (if e (way-cells from e end) [from]) [top]))) goal work) 0))))
+       (if risk-s (risk-s (vec (dedupe (concat [feet] (if e (way-cells from e end) [from]) (map #(escape/up end %) (range 1 (inc (rise-left end goal)))) [top]))) goal work) 0))))
 
 (def way-spot-cap
   "Standable cells way-spot tries choose from at most."

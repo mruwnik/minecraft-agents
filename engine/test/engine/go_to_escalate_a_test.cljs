@@ -647,3 +647,12 @@
           (is (= [19 60 16] (feet p)))
           (is (apply distinct? (map :cell (events-of seen :go-to.guess-look))) "a replan searching over rounds counts its guess one look")
           (is (= "air" (block p [19 63 16])) "the glass is dug once the routes round it prove walled"))))))
+
+(deftest way-s-prices-the-climb-left-past-a-doors-far-side-on-its-column-cells
+  (let [p (tu/fake {:self {:pos {:x 0 :y 64 :z 0}} :blocks column-yard
+                    :inventory [{:name "cobblestone" :count 16} {:name "stone_pickaxe" :count 1}]})
+        seen (atom nil)
+        priced {:rest-s (escape-way/rest-s-fn p [1 70 0]) :item "cobblestone" :count 16
+                :risk-s (fn [cells _ _] (reset! seen cells) 0)}]
+    (escape-way/way-s p [0 64 0] [1 70 0] {:step :clear-path :heading :east} priced)
+    (is (every? (set @seen) [[2 65 0] [2 66 0] [2 67 0] [2 68 0]]) "every cell of the climb left from the door's far side is a priced cell")))

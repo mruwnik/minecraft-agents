@@ -933,3 +933,17 @@
           (is (true? (:back @asked)))
           (is (some? (:stay-s @asked))))))))
 
+
+(deftest a-way-priced-for-its-making-does-not-count-the-walked-seconds-twice
+  (let [cells [[0 64 0] [0 65 0] [0 66 0]]
+        goal {:x 4 :y 67 :z 0}
+        night (ready-test/ctx-of (assoc ready-test/open-night :self {:pos {:x 0 :y 64 :z 0} :health 20 :food 20}))]
+    (is (= (risk/way-risk-s night goal cells 0) (risk/way-risk-s night goal cells (/ 2 cost/walk-speed)))
+        "work-s that is only the cells' own walk adds no exposure")))
+
+(deftest a-zombie-that-reaches-a-body-building-for-a-while-is-priced-one-the-quick-walk-leaves-behind-is-not
+  (let [cells [[0 64 0] [0 65 0] [0 66 0]]
+        goal {:x 30 :y 66 :z 0}
+        c (ready-test/ctx-of {:time st/noon :self {:pos {:x 0 :y 64 :z 0} :health 20 :food 20}
+                              :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 12 :y 64 :z 3}}]})]
+    (is (< (risk/way-risk-s c goal cells 0) (risk/way-risk-s c goal cells 20)))))
