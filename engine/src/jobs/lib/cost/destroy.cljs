@@ -44,12 +44,12 @@
 
 (defn destroyed-fn
   "(fn [n cell own? & [dug]]) destroyed-s of digging block n at cell, the block over it and the crop's age read by
-  (sensed cell) (a sensed block or nil: .-name, .-age, .-unknown). dug: the set of cells dug together, default the cell
-  over cell (a dig route opens a crop with its farmland); a crop over cell that is among them is already paid for."
+  (sensed cell) (a sensed block or nil: .-name, .-age, .-unknown). dug: the set of cells dug together, default none (a crop
+  is an open cell: a route cutting farmland under it does not dig it, so the farmland pays it); a crop over cell that
+  is among them is already paid for."
   [sensed]
   (fn [n [x y z :as cell] own? & [dug]]
     (let [above (sensed [x (inc y) z])
-          dug (or dug #{[x (inc y) z]})
-          over (when (and above (not (true? (.-unknown above))) (not (contains? dug [x (inc y) z]))) (.-name above))
+          over (when (and above (not (true? (.-unknown above))) (not (some-> dug (contains? [x (inc y) z])))) (.-name above))
           crop (cond (contains? crops/ripe-age n) (sensed cell) (contains? crops/ripe-age over) above)]
       (destroyed-s n over (some-> crop .-age) own?))))

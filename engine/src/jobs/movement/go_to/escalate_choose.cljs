@@ -148,10 +148,9 @@
   ([p feet {:keys [step heading] :as e} own-s]
     (let [block-at (delay (escape/block-at-of p))
           destroyed (delay (cost/destroyed-fn (fn [[x y z]] (u/sensed p {:x x :y y :z z}))))
-          lost-s (fn [cells] (let [dug (set cells)]
-                               (transduce (comp (remove #(or (dig-route/open? (@block-at %)) (and own-s (pos? (own-s %)))))
-                                                (map #(@destroyed (@block-at %) % false dug)))
-                                          + 0 cells)))
+          lost-s (fn [cells] (transduce (comp (remove #(or (dig-route/open? (@block-at %)) (and own-s (pos? (own-s %)))))
+                                              (map #(@destroyed (@block-at %) % false)))
+                                        + 0 cells))
           dig-s (fn [cells] (+ (cost/dig-cells-s (map #(tools/clear-ms p (@block-at %)) cells)) (lost-s cells)))]
       (case step
         :stair (+ (stair-route-s p feet e) (* (:aside e 0) (or (cost/dig-cost "stone") 1))

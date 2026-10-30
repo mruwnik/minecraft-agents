@@ -989,9 +989,12 @@
         planks [{:cell [1 64 0]}]]
     (is (= (+ (cost/dig-cost "oak_planks") (cost/put-back-s "oak_planks")) (dig-s "oak_planks" [1 64 0])))
     (is (= (+ (cost/dig-cost "stone") 5) (dig-s "stone" [2 64 0])))
-    (is (= (+ (cost/dig-cost "farmland") (cost/destroyed-s "farmland" "air" 3 false)) (dig-s "farmland" [3 63 0]))
-        "the crop over farmland is paid at its own cell, not again with the farmland")
-    (is (= (+ (cost/dig-cost "wheat") (cost/destroyed-s "wheat" "air" 3 false)) (dig-s "wheat" [3 64 0])))
+    (is (= (+ (cost/dig-cost "farmland") (cost/destroyed-s "farmland" "wheat" 3 false)) (dig-s "farmland" [3 63 0]))
+        "a route cutting farmland under a standing crop pays the crop with the farmland")
+    (let [farm (choose/price p [3 65 0] {:step :dig-route :cells [{:cell [3 63 0]}]})
+          shaft (choose/price p [3 65 0] {:step :dig-route :cells [{:cell [3 64 0]} {:cell [3 63 0]}]})]
+      (is (< (- shaft farm) (cost/destroyed-s "wheat" "air" 3 false))
+          "a shaft through the crop then its farmland pays the crop once, with the farmland (the crop is an open cell)"))
     (is (= (+ (choose/price p [0 64 0] {:step :dig-route :cells planks} (constantly 1)) (cost/put-back-s "oak_planks"))
            (choose/price p [0 64 0] {:step :dig-route :cells planks}))
         "a way's price holds the put-back of a cell that is not the body's own; the caller prices its own")))
