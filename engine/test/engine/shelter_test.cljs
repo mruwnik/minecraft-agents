@@ -1656,9 +1656,14 @@
                  :update-mem (fn [f more] (apply swap! mem* f more))}
               cells [[20 64 0] [23 64 0] [30 64 0]]
               log (atom [])
-              walk-result (atom :done)]
-          (with-redefs [dig-look/look-at! (fn [_ cell] (swap! log conj [:look cell]) (js/Promise.resolve true))
-                        ctx/call (fn [_ _ job args] (swap! log conj [:walk job (:pos args)]) (js/Promise.resolve @walk-result))]
+              walk-result (atom :done)
+              orig-look-at! dig-look/look-at!
+              orig-call ctx/call]
+          (with-redefs [dig-look/look-at! (fn [c' cell] (if (identical? c c') (do (swap! log conj [:look cell]) (js/Promise.resolve true)) (orig-look-at! c' cell)))
+                        ctx/call (fn [c' slot job args]
+                                   (if (identical? c c')
+                                     (do (swap! log conj [:walk job (:pos args)]) (js/Promise.resolve @walk-result))
+                                     (orig-call c' slot job args)))]
             (reset! walk-result :continue)
             (await (look-edge/look! c cells))
             (await (look-edge/look! c cells))
