@@ -77,7 +77,8 @@
   ([c opts retry?]
    (let [p (:primitives c)
          answer (read p opts)
-         in-sight (sense/targets p (u/self-pos c) (:remembered answer) #{})
+         here (u/self-pos c)
+         in-sight (remove #(sense/occluded? p here %) (sense/targets p here (:remembered answer) #{}))
          stale (take (sense/cell-looks (sense/fail-price c {:cells in-sight}) (count in-sight)) in-sight)]
      (if (and (empty? stale) (not (retry? answer)))
        answer
