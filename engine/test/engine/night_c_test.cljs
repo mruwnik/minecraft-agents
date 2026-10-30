@@ -550,6 +550,15 @@
           (is (<= (count (filter #(= :enter-room (first %)) log)) 2) "enter-room is not called again for a gap it said :no-blocks to: the night marked it tried")
           (is (empty? (filter #(not= "red_bed" (.-item (.-args %))) (st/calls p "place"))) "nothing placed in the doorway"))))))
 
+(deftest the-doorway-filled-before-a-carried-bed-is-worth-the-cheapest-way-left-with-it-open
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (await (night-at-home (assoc (with-room room-with-doorway) :self {:pos {:x 11 :y 64 :z 0}}) {:x 11 :y 64 :z 0}))
+              log (await (with-child-log #(tu/run-until-empty eng 60)))]
+          (is (pos? (some (fn [[k _ a]] (when (and (= :enter-room k) (not (:place a))) (:worth a))) log))
+              "the fill is worth what the night costs with the doorway open, not the night's loss averted (0 on a lit route)"))))))
+
 (deftest a-doorway-with-an-animal-in-it-is-not-filled
   (async done
     (tu/run-async done

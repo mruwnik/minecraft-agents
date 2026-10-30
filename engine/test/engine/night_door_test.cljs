@@ -6,6 +6,7 @@
             [engine.hut-shelter-test :refer [hut-world door-states door-open? roof door]]
             [engine.fake.raw-world :as fake-raw]
             [engine.memory :as mem]
+            [engine.night-support :refer [with-child-log]]
             [engine.perception :as perception]
             [engine.registry :as registry]
             [jobs.lib.world-files :as ew]
@@ -37,7 +38,9 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup (merge (open-door-hut {:x 5 :y 64 :z 0} {}) {:inventory st/dirt-stack}))]
           (core/submit! eng '(jobs.survival.night) {})
-          (await (tu/run-until-empty eng 8))
+          (let [log (await (with-child-log #(tu/run-until-empty eng 8)))]
+            (is (pos? (some (fn [[k _ a]] (when (= :enter-room k) (:worth a))) log))
+                "the shut is worth the cheapest way left with the door open, not the night's loss averted"))
           (is (false? (door-open? p)) "the door is shut")
           (is (= [] (st/calls p "place")) "nothing placed")
           (is (= [] (st/calls p "dig")) "nothing dug")
