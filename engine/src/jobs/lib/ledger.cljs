@@ -25,7 +25,7 @@
 
   Expiry: remember! stamps each new intent with :until, ::ttl-s on (jobs.lib.expiry). A placer takes its own blocks back
   when it ends (a cleanup :of its id); a root job releases its tree's entries in its cleanup (release-root!) and keeps them
-  alive while it runs (keep-alive!), so ::ttl-s is the backstop for a cleanup that never ran; past :until an entry is an orphan, whoever placed it (no :until: one already).
+  alive while it runs and whenever a job reads them (keep-alive!, entries), so ::ttl-s is the backstop for a cleanup that never ran; past :until an entry is an orphan, whoever placed it (no :until: one already).
 
   The lifecycle functions are pure over the entry vector. open-entries reads it from a memory view, write!
   and remember! store it."
@@ -252,6 +252,13 @@
         mine? #(and (= (:root c) (:root %)) (:until %) (expiry/current? now %) (expiry/due? now ttl %))]
     (when (some mine? l)
       (ctx/remember! c kind {:entries (mapv #(cond-> % (mine? %) (expiry/stamp now ttl)) l)} policy))))
+
+(defn entries
+  "open-entries of c's body memory, after keep-alive!: a job reading the ledger for the floor or scaffold it relies on
+  keeps it from running out under it."
+  [c]
+  (keep-alive! c)
+  (open-entries (ctx/view c)))
 
 (def held-kind :scaffold-held)
 

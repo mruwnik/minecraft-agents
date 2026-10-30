@@ -15,7 +15,7 @@
   block built there later is someone else's."
   [c dug]
   (let [p (:primitives c)
-        l (ledger/open-entries (ctx/view c))
+        l (ledger/entries c)
         gone (set (for [{:keys [cell block]} dug
                         :let [e (ledger/entry-at l (vec cell))]
                         :when (and e (= block (:item e)) (bs/air (u/seen-name p (zipmap [:x :y :z] cell))))]

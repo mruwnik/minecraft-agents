@@ -183,7 +183,7 @@
   "At the call's start: the first step's give-up as a status when it is one of start-facts (the call's own mistake is
   never, the rest later), else ok."
   [c]
-  (let [step (next-step (inputs c (ledger/open-entries (ctx/view c)) (pl/feet-cell c)))
+  (let [step (next-step (inputs c (ledger/entries c) (pl/feet-cell c)))
         fact (dissoc step :step)]
     (cond
       (not (and (= :give-up (:step step)) (start-facts (:reason step)))) (contract/ok :start "the first step is not refused")
@@ -198,7 +198,7 @@
   [c]
   (let [{:keys [heading length]} (:args c)
         start (:start (ctx/mem c))
-        l (ledger/open-entries (ctx/view c))
+        l (ledger/entries c)
         result (result-of c l start heading)
         cells (:placed result)
         i (when start (progress (pl/feet-cell c) start heading))]
@@ -290,7 +290,7 @@
   (await (pillar/land! c))
   (await (look-ahead! c (pl/feet-cell c)))
   (let [block-at (access/sensed-at (:primitives c) nil)
-        seen (ledger/open-entries (ctx/view c))
+        seen (ledger/entries c)
         l (ledger/reconcile seen block-at)
         feet (pl/feet-cell c)
         step (next-step (inputs c l feet))]

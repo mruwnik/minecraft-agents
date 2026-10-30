@@ -397,7 +397,7 @@
   (await (pace/steps! c #(step c))))
 
 (defn cleanup
-  "However the dig ends: its :ore-mark is dropped."
+  "However the dig ends: its :ore-mark is dropped, and a root dig releases its tree's scaffold."
   [c _]
   (ore-pick/release-mark! c)
   (ledger/release-root! c)

@@ -84,7 +84,7 @@
         column (if-let [at (or (:at tree) (:at (:args c)))]
                  (logs-at p at species)
                  (column-logs p radius tree))
-        skip (set (map vec (ledger/cells (ledger/open-entries (ctx/view c)))))
+        skip (set (map vec (ledger/cells (ledger/entries c))))
         skip? #(skip [(:x %) (:y %) (:z %)])
         seeds (->> (into (vec column) (keep #(when (= item (u/seen-name p %)) {:name item :pos %})) logs-seen)
                    (remove (comp skip? :pos))

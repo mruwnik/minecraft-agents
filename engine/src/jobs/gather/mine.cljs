@@ -375,7 +375,7 @@
   (with-next c (await (pace/steps! c #(step c))) (u/cell-vec (u/self-pos c))))
 
 (defn ^:async cleanup
-  "A run cut by the limit, a cancel or a parent's end stays where it is."
+  "However the run ends (a cut too): a root mine releases its tree's scaffold; the body stays where it is."
   [c _]
   (ledger/release-root! c)
   (ctx/end c :done nil {}))

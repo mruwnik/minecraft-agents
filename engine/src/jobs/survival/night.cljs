@@ -144,7 +144,7 @@
                  [:sheltered "sheltered, nothing for the night to do"] [:night "the night is not over"] {:units :nights})))
 
 (defn ^:async cleanup
-  "However the night ends: tonight's failed sites and filled doorway cells someone else changed are forgotten."
+  "However the night ends: tonight's failed sites and filled doorway cells someone else changed are forgotten, and a root night releases its tree's scaffold."
   [c _]
   (ending/forget-night! c)
   (ledger/release-root! c)

@@ -246,7 +246,7 @@
   "Ok once the body stands with its feet at the top (:y, else the base's y plus :height); else the blocks of this job in
   the ledger against the height."
   [c]
-  (let [l (ledger/open-entries (ctx/view c))
+  (let [l (ledger/entries c)
         n (count (built c l))]
     (if (on-top? c)
       (contract/ok :on-top "the feet are at the top" :units :blocks :done n :left 0 :result (result-of c l :done))
@@ -435,7 +435,7 @@
     ;; look from the column, after any walk back: cells seen from the shoved cell are not the column's
     (let [_ (await (look-up! c))
           p (:primitives c)
-          seen (ledger/open-entries (ctx/view c))
+          seen (ledger/entries c)
           l (ledger/reconcile seen (access/sensed-at p nil))
           feet (pl/feet-cell c)
           base (or (:base (ctx/mem c)) feet)
@@ -468,7 +468,7 @@
               (cond
                 (= :continue e) :continue
                 (= :done (:kind e)) nil
-                :else (finish! c (ledger/open-entries (ctx/view c)) (give-up :too-few-blocks :short short)))))))
+                :else (finish! c (ledger/entries c) (give-up :too-few-blocks :short short)))))))
 
 (defn ^:async round
   "The whole pillar: step! until it ends, a pace between blocks, as one urgent section (ctx/atomic :pillar): a night or

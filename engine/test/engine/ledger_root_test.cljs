@@ -45,3 +45,11 @@
     (is (false? (orphan? r (first (entries r)))) "renewed while the root ran")
     (reset! (:clock r) (+ 1000000 (* 3 ttl-ms)))
     (is (true? (orphan? r (first (entries r)))) "the ttl is the backstop once nobody renews")))
+
+(deftest reading-the-ledger-renews-the-roots-entries
+  (let [r (rig) child ((:ctx r) "j1/stair" "j1")]
+    (place! child [0 64 0])
+    (reset! (:clock r) (+ 1000000 (* 0.75 ttl-ms)))
+    (ledger/entries child)
+    (reset! (:clock r) (+ 1000000 (* 1.5 ttl-ms)))
+    (is (false? (orphan? r (first (entries r)))) "a read by a job of the tree renewed the entry")))

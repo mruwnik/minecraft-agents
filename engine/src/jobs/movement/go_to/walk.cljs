@@ -343,7 +343,7 @@
   [c pos result]
   (when (and (ways/way? c :clear-seal) (#{:goal-enclosed :goal-cut-off :exhausted :out-of-sight :ladder-gap :start-enclosed} (some-> (:reason result) keyword)) (not (:seal-cleared (ctx/mem c))))
     (let [at (fn [[x y z]] {:pos {:x (js/Math.floor x) :y (js/Math.floor y) :z (js/Math.floor z)} :radius ledger/seal-clear-radius})
-          entries (ledger/open-entries (ctx/view c))
+          entries (ledger/entries c)
           near (first (filter #(seq (ledger/near-of entries %)) [(at [(:x pos) (:y pos) (:z pos)]) (at (end/feet-cell c))]))]
       (when near
         (ctx/update-mem! c assoc :seal-cleared true)
