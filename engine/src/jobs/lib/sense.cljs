@@ -12,6 +12,8 @@
             [jobs.lib.memory-age :as memory-age]
             [engine.settings :as settings]
             [jobs.lib.look :as look]
+            [jobs.lib.reach.room :as reach-room]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -80,13 +82,19 @@
 
 (defn ^:async look-at-unknown!
   "look-at! each of cells that is still unknown when its turn comes (a look's sight pass shows its neighbours too), at
-  most n looks: [looks cells-passed]."
-  [c cells n]
-  (loop [[cell & more] cells looks 0 passed []]
-    (cond
-      (or (nil? cell) (>= looks n)) [looks passed]
-      (unknown? (:primitives c) cell) (do (await (look-at! c cell)) (recur more (inc looks) (conj passed cell)))
-      :else (recur more looks (conj passed cell)))))
+  most n looks: [looks cells-passed stopped?]. With stop? (a fn of a cell just looked at), the first cell it holds for ends
+  the batch: stopped? is true."
+  ([c cells n] (look-at-unknown! c cells n nil))
+  ([c cells n stop?]
+   (loop [[cell & more] cells looks 0 passed []]
+     (cond
+       (or (nil? cell) (>= looks n)) [looks passed false]
+       (unknown? (:primitives c) cell)
+       (do (await (look-at! c cell))
+           (if (and stop? (stop? cell))
+             [(inc looks) (conj passed cell) true]
+             (recur more (inc looks) (conj passed cell))))
+       :else (recur more looks (conj passed cell))))))
 
 (defn round-looked
   "The cells [x y z] a look round of c's frame already looked at from the body's cell: a :look status asks for them once,
@@ -99,11 +107,15 @@
   "The :look/around hook: look at each unknown one of cells (a :look status's :look-at), at most ::max-looks looks,
   then look-around!: for those cells only, a full pass each look when cells is empty (the check named none). Every one of
   cells counts as round-looked, the ones past the looks or the sight too: the engine gives a :look one round (a second
-  counts as :later), so what it left unseen counts as open."
+  counts as :later), so what it left unseen counts as open. A room wall seen open (reach-room/unseen-sides) ends the
+  batch and the round: the room is open whatever the other walls are."
   [c cells]
-  (let [pending (targets (:primitives c) (u/self-pos c) cells (round-looked c))]
-    (await (look-at-unknown! c pending (max-looks)))
-    (await (look/look-around! c (look/glance-effort) (when (seq cells) {:cells pending})))
+  (let [p (:primitives c)
+        pending (targets p (u/self-pos c) cells (round-looked c))
+        walls (when (seq pending) (set (map vec (reach-room/unseen-sides p (sh-sense/feet p)))))
+        open? (fn [cell] (and (contains? walls cell) (not (unknown? p cell)) (not (sh-sense/solid-at? p (zipmap [:x :y :z] cell)))))
+        [_ _ stopped] (await (look-at-unknown! c pending (max-looks) open?))]
+    (when-not stopped (await (look/look-around! c (look/glance-effort) (when (seq cells) {:cells pending}))))
     (ctx/update-mem! c (fn [m] (let [here (look/cell-of (u/self-pos c))
                                      kept (if (= here (:at (::round-looked m))) (:cells (::round-looked m)) #{})]
                                  (assoc m ::round-looked {:at here :cells (into kept cells)}))))))

@@ -7,6 +7,8 @@
             [engine.perception :as perception]
             [engine.test-util :as tu]
             [jobs.lib.look :as look]
+            [jobs.lib.reach.room :as reach-room]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]))
@@ -144,3 +146,16 @@
           (is (< (sense/max-looks) (count cells)))
           (await (sense/look-round! c cells))
           (is (= (set cells) (sense/round-looked c)) "one round per :look: the cells past its looks count as looked, so the check asks no second"))))))
+
+(deftest look-round-stops-at-a-room-wall-seen-open
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (seeing {:self {:pos {:x 0 :y 64 :z 0}} :blocks rock})
+              c (stub-ctx p)
+              cells [[2 64 0] [-2 64 0] [0 64 2] [0 64 -2]]]
+          (with-redefs [reach-room/unseen-sides (constantly cells)
+                        sh-sense/solid-at? (constantly false)]
+            (await (sense/look-round! c cells)))
+          (is (= 1 (looks p)) "no look after the first open wall")
+          (is (= (set cells) (sense/round-looked c)) "the walls left unlooked count as looked"))))))
