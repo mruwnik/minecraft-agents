@@ -5,6 +5,7 @@
   step read the same to the body; one that changed is dropped."
   (:require [engine.path.executor :as executor]
             [engine.path.planner-tuned :as planner]
+            [jobs.lib.clock :as clock]
             [jobs.lib.cost :as cost]
             [jobs.lib.util :as u]))
 
@@ -51,7 +52,7 @@
                        (cond
                          r (assoc rs k (cond-> (update r :n inc) failed? (update :k inc)))
                          failed? (let [rs (if (>= (count rs) max-records) (dissoc rs (key (apply min-key (comp :t val) rs))) rs)]
-                                   (assoc rs k {:k 1 :n 1 :t (js/Date.now) :cells cells :read (reading p cells)}))
+                                   (assoc rs k {:k 1 :n 1 :t (clock/now) :cells cells :read (reading p cells)}))
                          :else rs)))
                    rs
                    [[[from move to] (cells-round from to)] [[from move nil] (cells-round from from)]]))))

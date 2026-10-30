@@ -29,9 +29,8 @@
 
 (defn refused?
   "Whether another player's zone or claim refuses digging the trunk's base cell (an unread zone list refuses nothing here)."
-  [p kn t]
+  [p kn now t]
   (let [{:keys [x y z]} (:base t)
-        now (.now js/Date)
         v (zones/verdict {:zones (world/zones kn) :claims (world/live-claims (world/area-claims kn) now)
                           :self (.-username (.self p)) :now now :action :dig :cell [x y z]})]
     (contains? #{:zone :claim} (:reason v))))
@@ -50,7 +49,7 @@
 (defn trunks-seen?
   "Whether a part-cut trunk is in sight, as read at most ::recheck-s seconds ago for the same body."
   [p kn view]
-  (let [now (.now js/Date)
+  (let [now (:now view)
         {:keys [body at seen]} @last-read]
     (if (and (identical? body p) (< (- now at) (* 1000 (settings/get settings ::recheck-s))))
       seen
@@ -59,7 +58,7 @@
             seen (let [lacking (needing view (u/inventory p) (map col trunks))
                        given-up (into (recently-unreachable view) lacking) home (sh/home-target view)]
                    (boolean (and (not (lacking :any))
-                                 (seq (remove #(or (refused? p kn %) (too-far? home %) (given-up (col %))) trunks)))))]
+                                 (seq (remove #(or (refused? p kn now %) (too-far? home %) (given-up (col %))) trunks)))))]
         (reset! last-read {:body p :at now :seen seen})
         seen))))
 

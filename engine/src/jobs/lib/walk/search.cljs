@@ -153,9 +153,9 @@
   2)
 
 (defn now
-  "The engine clock of ctx c (ms); the wall clock for a bare ctx without a memory view."
+  "The engine clock of ctx c (ms); the job clock for a bare ctx without a memory view."
   [c]
-  (if (:view c) (ctx/now c) (js/Date.now)))
+  (if (:view c) (ctx/now c) (clock/now)))
 
 (defn goal-flood!
   "The body's kept goal flood memo for searches of to within range (goal-floods), a new one when it held another goal or

@@ -23,4 +23,4 @@
 (defn night
   [world memory args kn]
   (and (not (body/recovery-pending? memory :night))
-       (sh/night-holds? world memory (assoc args :buried-works true) (sh-beds/bed-permit world kn))))
+       (sh/night-holds? world memory (assoc args :buried-works true) (sh-beds/bed-permit world kn (:now memory)))))

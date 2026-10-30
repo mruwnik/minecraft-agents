@@ -15,6 +15,7 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.path.executor :as executor]
+            [jobs.lib.clock :as clock]
             [jobs.lib.memory-age :as memory-age]
             [engine.path.planner.base :as base]
             [engine.path.planner-tuned :as planner]
@@ -458,15 +459,15 @@
   (default: reach, where the chasers give the body up) priced (price!) and scored against chasers ([{:name :pos}]), with covers on
   their routes when covered? is given. opts {:reach :y-margin :covered? :covers :covers-key} (covers: price!'s)."
   [c chasers targets {:keys [covered?] :as opts}]
-  (let [t0 (js/performance.now)
+  (let [t0 (clock/now)
         self (.self (:primitives c))
         from (u/self-pos c)
         chasers (with-ways c chasers)
-        ways-ms (js/Math.round (- (js/performance.now) t0))
+        ways-ms (js/Math.round (- (clock/now) t0))
         r (or (:reach opts) (reach from chasers (.-food self)))
         priced (await (price! c (into (vec targets) (ring from chasers r (settings/get settings ::bearings))) (assoc opts :reach r :chasers chasers)))
         ends (scored chasers from priced)]
-    (ctx/emit! c :retreat.search-work :debug (assoc (meta priced) :ms (js/Math.round (- (js/performance.now) t0)) :ways-ms ways-ms :targets (count targets)))
+    (ctx/emit! c :retreat.search-work :debug (assoc (meta priced) :ms (js/Math.round (- (clock/now) t0)) :ways-ms ways-ms :targets (count targets)))
     (with-meta (cond-> ends covered? (into (covers chasers from covered? ends))) (meta priced))))
 
 (defn unseen-ahead

@@ -77,13 +77,13 @@
 
 (defn others-bed?
   "Whether the bed at pos is another's build: in another owner's zone or live claim, or on the footprint of a plan another body made. kn
-  is the engine world (nil: none known)."
-  [p kn {:keys [x y z]}]
+  is the engine world (nil: none known), now the claims' clock (ms)."
+  [p kn now {:keys [x y z]}]
   (let [me (.-username (.self p))
         cell [x y z]
         by (get (world/plan-authors kn) (get (world/footprints kn nil) cell))]
     (boolean (or (some #(and (zones/in-box? cell %) (zones/foreign-owner? (:owner %) me))
-                       (concat (world/zones kn) (world/live-claims (world/area-claims kn) (.now js/Date))))
+                       (concat (world/zones kn) (world/live-claims (world/area-claims kn) now)))
                  (and by (zones/foreign-owner? by me))))))
 
 (defn bed-free?
@@ -94,11 +94,11 @@
 
 (defn bed-permit
   "A predicate (fn [pos]) for whether the body may use the bed at pos: bed-free? and not others-bed? (sleeping in it would
-  set the body's spawn in another's build). kn is the engine world (nil: no zone known)."
-  [p kn]
+  set the body's spawn in another's build). kn is the engine world (nil: no zone known), now the claims' clock (ms)."
+  [p kn now]
   (fn [pos]
     (and (bed-free? p kn pos)
-         (or (in-own-zone? p kn pos) (not (others-bed? p kn pos))))))
+         (or (in-own-zone? p kn pos) (not (others-bed? p kn now pos))))))
 
 (defn seen-bed
   "A bed block the body can see in its room: found by a flood fill from its feet over free cells at feet height, within
@@ -323,7 +323,7 @@
   [c]
   (let [p (:primitives c)
         view (ctx/view c)]
-    (and (bed-place-wanted? p view (bed-radius view) (bed-permit p (:world (:engine c))))
+    (and (bed-place-wanted? p view (bed-radius view) (bed-permit p (:world (:engine c)) (ctx/now c)))
          (boolean (some #(.endsWith (:name %) "_bed") (reserve/free c :night))))))
 
 (defn standing-entries

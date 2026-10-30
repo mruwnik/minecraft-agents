@@ -39,7 +39,7 @@
     (st/looked-round! eng p)
     (seed! eng)
     (let [view (mem/view (:store eng))]
-      (boolean (sh-beds/bed-to-use p view (sh-beds/bed-radius view) (sh-beds/bed-permit p nil))))))
+      (boolean (sh-beds/bed-to-use p view (sh-beds/bed-radius view) (sh-beds/bed-permit p nil 0))))))
 
 (deftest a-remembered-bed-within-the-radius-is-one-to-use
   (let [world {:time night :floor tu/walk-floor :blocks {"20,64,0" "red_bed" "60,64,0" "red_bed"}}]
@@ -56,17 +56,19 @@
         bed {:x 20 :y 64 :z 0}
         zone (fn [owner] [{:name "z" :owner owner :min [18 60 -2] :max [22 70 2]}])
         plan {"hut" {:id "hut" :parts [{:id "bed" :cells [[20 64 0]] :want "red_bed"}] :metadata {:by "Other"}}}
-        permit? (fn [kn] ((sh-beds/bed-permit p kn) bed))
-        claimed (fn [owner] (let [w (ew/of-data {} {} [])]
+        permit? (fn [kn & [now]] ((sh-beds/bed-permit p kn (or now 0)) bed))
+        claimed (fn [owner & [until]] (let [w (ew/of-data {} {} [])]
                               (swap! (:state w) assoc :area-claims
-                                     {:value [{:id "c" :owner owner :status "active" :until js/Number.MAX_SAFE_INTEGER :min [18 60 -2] :max [22 70 2]}]})
+                                     {:value [{:id "c" :owner owner :status "active" :until (or until js/Number.MAX_SAFE_INTEGER) :min [18 60 -2] :max [22 70 2]}]})
                               w))]
     (is (true? (permit? (ew/of-data {} {} []))) "a bed no one holds")
     (is (false? (permit? (ew/of-data {} {} (zone "Other")))) "in another owner's zone")
     (is (false? (permit? (ew/of-data plan {} []))) "on another body's plan")
     (is (true? (permit? (ew/of-data plan {} (zone "Fake")))) "in the body's own zone")
     (is (false? (permit? (claimed "Other"))) "in another owner's claim")
-    (is (true? (permit? (claimed "Fake"))) "in the body's own claim")))
+    (is (true? (permit? (claimed "Fake"))) "in the body's own claim")
+    (is (false? (permit? (claimed "Other" 100) 50)) "a claim live by the engine clock")
+    (is (true? (permit? (claimed "Other" 100) 200)) "a claim run out by the engine clock")))
 
 (deftest the-live-spawn-bed-is-used-when-the-remembered-bed-is-far
   (let [world {:time night :floor tu/walk-floor :blocks {"20,64,0" "red_bed"}}

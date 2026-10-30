@@ -59,7 +59,7 @@
 (defn bed-permit
   "Whether the body may use a bed (sh-beds/bed-permit over the job's world)."
   [c]
-  (sh-beds/bed-permit (:primitives c) (:world (:engine c))))
+  (sh-beds/bed-permit (:primitives c) (:world (:engine c)) (ctx/now c)))
 
 (defn radius [c] (sh-beds/bed-radius (ctx/view c)))
 
