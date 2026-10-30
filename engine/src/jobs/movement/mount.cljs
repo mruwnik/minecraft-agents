@@ -19,7 +19,7 @@
   By :name it prefers a vehicle with no rider.
   Impossible: :bad-args, :not-mountable (an entity the body cannot ride). Conditions, asked before every round: :no-vehicle while none is in sight, :aboard-other while on another vehicle, :occupied while every seat is taken (a listed call waits, a called one ends condition-failed with that cause). The round yields :continue only when the walk waits on the world.
 
-  Ends done (data {:id :vehicle name}, plus :already true when aboard it already), or
+  Ends done (data {:id :vehicle name}; cause :already when aboard it before the start), or
   condition-failed: the conditions' causes above, :hand-full
   (a mob, with an item in hand that cannot be put away), or
   nothing-possible: :timeout (the server never seated the body), :unreachable (the walk failed ::max-walks (2) times),
