@@ -2,6 +2,7 @@
   "jobs.lib.ready: the safe? and fit? checkers a job binds, as statuses over the shelter, the light and the mobs."
   (:require [jobs.survival.get-food.sources :as get-food-sources]
             [jobs.forestry.harvest-wood :as harvest-wood]
+            [jobs.animals.herd :as herd]
             [cljs.test :refer [deftest is are testing]]
             [engine.hut-shelter-test :as hut]
             [engine.ctx :as ctx]
@@ -1215,3 +1216,8 @@
   (let [fit (ready/trip-fed ready/ok (constantly {:x 40 :y 64 :z 0}) harvest-wood/trip-quote)
         [kind _ {[job] :look-first}] (fit (assoc (trip-ctx 0 nil [3 64 0]) :args {:count 30}))]
     (is (= [:ok 'jobs.survival.get-food] [kind job]) "ten trees of about 22 s each, no food carried: bread from the chest first")))
+
+(deftest the-long-trips-away-from-home-fetch-their-food-first
+  (are [fit args] (= 'jobs.survival.get-food (first (:look-first (nth (fit (assoc (trip-ctx 0 nil [3 64 0]) :args args)) 2))))
+    dig-for/fit? {:block "iron_ore" :count 64}
+    herd/fit? {:mob "cow" :target 20}))

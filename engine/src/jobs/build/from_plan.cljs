@@ -121,7 +121,9 @@
   (check-cache/cached c [:planned (:args c)] #(planned c)))
 
 (def safe? (light/lights-itself (ready/safe-at-build work-place/spot) #(:cells (judged-plan %))))
-(def fit? (ready/fed-fit-for :long))
+(declare quote-of)
+
+(def fit? (ready/trip-fed (ready/fed-fit-for :long) work-place/spot #(quote-of %)))
 
 (defn plan-now
   "The plan as the check or the round reads it: a check (no token) judged once per check-cache window, a round afresh."

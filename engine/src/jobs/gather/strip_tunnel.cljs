@@ -69,7 +69,9 @@
 
 (def safe? (ready/unless-outmatched (price/staying :long (ready/dark-near-ok torch-way work-place/ahead (ready/safe-at-or work-place/ahead ready/safe-if-lit true)))))
 
-(def fit? (ready/fit-for :long))
+(declare quote-of)
+
+(def fit? (ready/trip-fed (ready/fit-for :long) work-place/ahead #(quote-of %)))
 
 (def defaults {:spend {:job-time ::job-time-s}})
 

@@ -112,7 +112,9 @@
 
 (def safe? (ready/unless-outmatched (price/with-stay (ready/dark-near-ok expect/torch-way work-place/dig-spot (ready/safe-at-or-roaming work-place/dig-spot true)) expect/stay-s true)))
 
-(def fit? (ready/fit-for :long))
+(declare quote-of)
+
+(def fit? (ready/trip-fed (ready/fit-for :long) work-place/dig-spot #(quote-of %)))
 
 ;; ------------------------------------------------------------------ the contract
 

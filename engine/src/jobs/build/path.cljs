@@ -64,7 +64,9 @@
 (def target [:from :to :center :radius])
 (def defaults {:use {:tools :shovel} :spend {:job-time ::job-time-s}})
 (def safe? (ready/safe-at-build work-place/spot))
-(def fit? (ready/fed-fit-for :long))
+(declare quote-of)
+
+(def fit? (ready/trip-fed (ready/fed-fit-for :long) work-place/spot #(quote-of %)))
 
 (defn span [a b] (range (min a b) (inc (max a b))))
 (defn span-size [a b] (inc (js/Math.abs (- a b))))

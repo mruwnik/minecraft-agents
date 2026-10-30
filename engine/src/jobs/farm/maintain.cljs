@@ -58,7 +58,9 @@
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds a maintain pass may take: its three steps." :spec (a/num-in 0 nil)}})
 
-(def fit? (ready/fit-for :work))
+(declare quote-of)
+
+(def fit? (ready/trip-fed (ready/fit-for :work) work-place/spot #(quote-of %)))
 (def target [:area])
 (def ways need/fetch-ways)
 (def defaults {:spend {:job-time ::job-time-s}})

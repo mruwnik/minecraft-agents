@@ -145,9 +145,13 @@
 
 (def target [:mob :box])
 
-(def safe? (price/staying :work (ready/safe-at-or-roaming
-            (fn [c] (work-place/nearest-mob c (remove nil? [(:mob (:args c))]) (or (:radius (:args c)) 24))))))
-(def fit? (ready/fed-fit-for :long))
+(defn herd-place [c] (work-place/nearest-mob c (remove nil? [(:mob (:args c))]) (or (:radius (:args c)) 24)))
+
+(def safe? (price/staying :work (ready/safe-at-or-roaming herd-place)))
+
+(declare quote-of)
+
+(def fit? (ready/trip-fed (ready/fed-fit-for :long) herd-place #(quote-of %)))
 
 
 (def defaults {:spend {:job-time ::job-time-s :wall-time ::wall-time-s}})
