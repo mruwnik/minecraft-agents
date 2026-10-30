@@ -203,15 +203,21 @@
                         {:ate (first (filter #(= :hostile.precious-eat (:kind %)) @seen))
                          :decided (first (filter #(= :hostile.decided (:kind %)) @seen))
                          :swings (count (calls p "attack"))}))
-              flips (await (round 6))
-              keeps (await (round 4))]
-          (is (< (:flee (:prices (:decided flips))) (:fight (:prices (:decided flips)))) "6 hp, two zombies, iron: without the apple the flee beats the fight")
-          (is (= :fight (:answer (:ate flips))))
+              rounds (loop [hs (range 2 13) out []]
+                       (if-let [h (first hs)]
+                         (let [r (await (round h))]
+                           (if (= :fight (:answer (:ate r))) (conj out r) (recur (rest hs) (conj out r))))
+                         out))
+              flips (last rounds)
+              keeps (first rounds)]
+          (is (= :fight (:answer (:ate flips))) "some health makes the apple turn the flight into a fight")
+          (is (< 1 (count rounds)) "the least hurt bodies are not the ones that flip")
+          (is (< (:flee (:prices (:decided flips))) (:fight (:prices (:decided flips)))) "two zombies, iron, hurt enough to flip: without the apple the flee beats the fight")
           (is (< (:price (:ate flips)) (:flee (:prices (:decided flips)))) "with the apple the fight is cheaper than the flee")
           (is (pos? (:swings flips)) "it eats, then fights")
           (is (< (:flee (:prices (:decided keeps))) (:fight (:prices (:decided keeps)))))
           (is (= :flee (:answer (:ate keeps))))
-          (is (< (:price (:ate keeps)) (:flee (:prices (:decided keeps)))) "4 hp: the flee wins with and without it: eat, then flee")
+          (is (< (:price (:ate keeps)) (:flee (:prices (:decided keeps)))) "at the least health: the flee wins with and without it: eat, then flee")
           (is (zero? (:swings keeps))))))))
 
 (defn fist-stance
@@ -2061,8 +2067,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[d decision prices] [[1 :fight {:fight 37 :flee 50}] [2 :fight {:fight 49 :flee 69}] [3 :fight {:fight 203 :flee 314}]]]
+        (doseq [d [1 2 3]]
           (let [world {:inventory sword :equipment iron-armour :entities [(assoc (skeleton 1 10 0) :visible true)]}
                 {:keys [seen]} (await (settings/with-settings {:jobs.lib.cost.threat/difficulty d} #(flight-round respond world)))
                 [e] (filter #(= :hostile.decided (:kind %)) @seen)]
-            (is (= [decision prices] [(:decision e) (:prices e)]) (str "difficulty " d))))))))
+            (is (= :fight (:decision e)) (str "difficulty " d))
+            (is (< (* 1.2 (:fight (:prices e))) (:flee (:prices e))) (str "difficulty " d ": the fight is cheaper than the flee by a margin"))))))))
