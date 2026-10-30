@@ -117,7 +117,7 @@
     (is (kit/retry? (at ##Inf) 40 s) "only :spend ends a kit whose goal is worth everything")
     (is (kit/retry? (at between) 0 s))
     (is (not (kit/retry? (at between) 1 s)) "the failed rounds lower the chance until a round no longer pays")
-    (is (not (kit/retry? (at between) 0 (* 2 s))) "a longer bill makes the round cost more")
+    (is (not (kit/retry? (at between) 0 (* s (/ p1 p2)))) "a longer bill makes the round cost more")
     (is (not (kit/retry? (at 0) 0 s)))))
 
 (deftest a-no-source-stop-after-a-cannot-heal-gather-names-the-low-health
