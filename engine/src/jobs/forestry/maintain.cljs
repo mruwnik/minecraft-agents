@@ -455,7 +455,9 @@
 
 (def safe? (price/staying :work (ready/safe-at-by-night plan-place)))
 
-(def fit? (ready/trip-fed ready/fed-fit? plan-place))
+(declare quote-of)
+
+(def fit? (ready/trip-fed ready/fed-fit? plan-place #(quote-of %)))
 
 (defn can-run? [c] (trouble-status (planned c)))
 

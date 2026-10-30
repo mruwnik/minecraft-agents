@@ -120,7 +120,12 @@
 
 (def safe? (price/staying :work (ready/safe-at-or-roaming #(fell-tree/place (update % :args fell-args)))))
 
-(def fit? "ready/fit-to-forage: a body only food heals felling wood (a rod, a hoe) is not held for health." ready/fit-to-forage)
+(declare trip-quote)
+
+(def fit?
+  "ready/fit-to-forage (a body only food heals felling wood (a rod, a hoe) is not held for health), and the trip's food
+  fetched from home first (ready/trip-fed, trip-quote, ending at the first tree)."
+  (ready/trip-fed ready/fit-to-forage #(fell-tree/place (update % :args fell-args)) #(trip-quote %)))
 
 (defn with-fell-args [check] (fn [c] (check (assoc c :args (fell-args (:args c))))))
 
@@ -148,11 +153,22 @@
       (apply contract/ok :harvested (str "harvest-wood: " got " logs got") data)
       (apply contract/later :harvesting (str "harvest-wood: " got " logs, a tree is being felled") data))))
 
-(defn ^:async quote-of [c]
-  (let [e (await (fell-tree/quote-of (assoc c :args (fell-args (:args c)))))
-        trees (max 1 (min 8 (quot (or (:count (:args c)) 3) 3)))
-        t (:job-time (:uses e))
+(defn scaled
+  "The quote of the harvest whose trees each take a fell-tree job-time figure t, and 6 s more."
+  [c t]
+  (let [trees (max 1 (min 8 (quot (or (:count (:args c)) 3) 3)))
         scale #(* trees (+ % 6))]
-    (cond-> {:uses {:job-time [(scale (nth t 0)) (scale (nth t 1)) (max (settings/get settings ::job-time-s) (scale (nth t 2)))]}
-             :done [0 1 1]}
+    {:uses {:job-time [(scale (nth t 0)) (scale (nth t 1)) (max (settings/get settings ::job-time-s) (scale (nth t 2)))]}
+     :done [0 1 1]}))
+
+(defn ^:async quote-of [c]
+  (let [e (await (fell-tree/quote-of (assoc c :args (fell-args (:args c)))))]
+    (cond-> (scaled c (:job-time (:uses e)))
       (:yields e) (assoc :yields (:yields e)))))
+
+(defn trip-quote
+  "quote-of at once, for the trip's food (ready/trip-fed): each tree fell-tree's figure without its walk (go-to's quote
+  waits), of a tree of trees/logs-per-tree logs."
+  [c]
+  (let [mean (+ 2 3 (* 1.5 (trees/logs-per-tree)))]
+    (scaled c [2 mean mean])))

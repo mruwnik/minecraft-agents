@@ -621,21 +621,21 @@
 (def fed-fit? "fed-fit-for a job that works a place for a while (:work)." (fed-fit-for :work))
 
 (defn own-trip
-  "The trip of the job c is a check of: home-food/quote-trip of its own quote (a quote-of export that answers at once),
-  ending at place (a fn of c, or nil); nil when it has none."
-  [c place]
-  (let [q (some-> (get-in c [:def :quote-of]) (apply [c]))]
+  "The trip of the job c is a check of: home-food/quote-trip of its quote (quote-fn, a fn of c that answers at once),
+  ending at place (a fn of c, or nil); nil when it gives no quote."
+  [c place quote-fn]
+  (let [q (quote-fn c)]
     (when (map? q) (home-food/quote-trip c q place))))
 
 (defn trip-fed
   "fit, and while that is ok, ok with a jobs.survival.get-food child (:explore false) as its :look-first call while the
-  trip's food (home-food/fetch-points of own-trip, ending at place) pays a fetch from home: the engine runs it only
-  before the start, so a trip leaves home with its food; a fetch that fails ends the call condition-failed :look-first."
-  [fit place]
+  trip's food (home-food/fetch-points of own-trip, ending at place, by quote-fn) pays a fetch from home: the engine runs
+  it only before the start, so a trip leaves home with its food; a fetch that fails ends the call condition-failed :look-first."
+  [fit place quote-fn]
   (fn [c]
     (let [s (fit c)
           to (when (= :ok (first s))
-               (some->> (own-trip c place) (home-food/fetch-points c)))]
+               (some->> (own-trip c place quote-fn) (home-food/fetch-points c)))]
       (if to
         (contract/ok :trip-food (str "fetching food for the trip first: " to " points")
                      :look-first ['jobs.survival.get-food {:carry to :explore false}])

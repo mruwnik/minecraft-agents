@@ -1,6 +1,7 @@
 (ns engine.ready-test
   "jobs.lib.ready: the safe? and fit? checkers a job binds, as statuses over the shelter, the light and the mobs."
   (:require [jobs.survival.get-food.sources :as get-food-sources]
+            [jobs.forestry.harvest-wood :as harvest-wood]
             [cljs.test :refer [deftest is are testing]]
             [engine.hut-shelter-test :as hut]
             [engine.ctx :as ctx]
@@ -1182,16 +1183,16 @@
     (is (< 2.7 (price/stay-hp c 0.005 10) 2.9))))
 
 (defn trip-ctx
-  "A ctx at the origin carrying bread loaves, its job quoting a trip of figure, with a booked chest of 64 bread at chest (nil:
+  "A ctx at the origin carrying bread loaves, its job's trip the figure (::figure, trip-fed's quote), with a booked chest of 64 bread at chest (nil:
   none), or of {pos loaves} each."
   [bread figure chest]
   (let [chests (if (map? chest) chest (when chest {chest 64}))
         data (reduce (fn [d [pos n]] (mem/add-entry d :fetch/stock {:t 0 :data {:pos pos :items {"bread" n}}} {:cap 64 :ttl :forever}))
                      mem/empty-data chests)]
     {:primitives (tu/fake {:inventory [{:name "bread" :count bread}]}) :view (fn [] {:data data :now 1000})
-     :def {:quote-of (constantly {:uses {:job-time figure}})}}))
+     ::figure figure}))
 
-(def trip-fed (ready/trip-fed ready/ok (constantly {:x 40 :y 64 :z 0})))
+(def trip-fed (ready/trip-fed ready/ok (constantly {:x 40 :y 64 :z 0}) (fn [c] {:uses {:job-time (::figure c)}})))
 
 (deftest a-long-trip-fetches-its-food-from-home-before-it-starts
   (let [[kind _ {:keys [look-first]}] (trip-fed (trip-ctx 2 [0 1800 ##Inf] [3 64 0]))
@@ -1209,3 +1210,8 @@
     (is (= 110 carry) "the 20 loaves near, not the 64 whose 3000-block walk costs more than hunting the rest would")
     (is (= [{:x 3 :y 64 :z 0}] (map (comp :pos :data) (get-food-sources/home-entries (assoc c :args {:carry carry}))))
         "get-food's :source way reads the same list by the same rule")))
+
+(deftest harvest-wood-fetches-its-trips-food-by-a-quote-that-answers-at-once
+  (let [fit (ready/trip-fed ready/ok (constantly {:x 40 :y 64 :z 0}) harvest-wood/trip-quote)
+        [kind _ {[job] :look-first}] (fit (assoc (trip-ctx 0 nil [3 64 0]) :args {:count 30}))]
+    (is (= [:ok 'jobs.survival.get-food] [kind job]) "ten trees of about 22 s each, no food carried: bread from the chest first")))
