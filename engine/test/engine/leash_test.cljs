@@ -6,7 +6,8 @@
             [engine.hostile-test :as h]
             [engine.perception :as perception]
             [engine.look-support :as ls]
-            [engine.test-util :as tu]))
+            [engine.test-util :as tu]
+            [jobs.animals.leash :as leash]))
 
 (defn cow [id x & [more]]
   (merge {:id id :uuid (str "u" id) :name "cow" :kind "passive" :pos {:x x :y 64 :z 0}} more))
@@ -283,7 +284,17 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng] :as s} (h/setup {:inventory lead :entities [(cow 1 7)]} 70000)]
+        (let [{:keys [eng] :as s} (h/setup {:inventory lead :entities [(cow 1 7)]} (* 1000 (inc (leash/default-time {}))))]
           (core/submit! eng '(jobs.animals.leash {:mob "cow"}) {})
           (await (run-ticks s 8 700))
           (is (= :job-time (:reason (done-event s)))))))))
+
+(deftest a-lead-fetched-inside-the-run-does-not-end-it-on-job-time
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup-seeing (chest-world [{:name "lead" :count 2}]) nil 1000)]
+          (perception/pass! (aget (:p s) "perception"))
+          (core/submit! (:eng s) '(jobs.animals.leash {:mob "cow"}) {})
+          (await (run-ticks s 120 700))
+          (is (= :leashed (:reason (done-event s)))))))))

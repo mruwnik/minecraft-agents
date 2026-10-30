@@ -10,6 +10,11 @@
             [jobs.lib.animals :as animals]
             [jobs.lib.escort :as escort]
             [jobs.lib.look :as look]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.cost.fight :as fight]
+            [jobs.lib.sense :as sense]
+            [jobs.lib.use-entity :as use-entity]
+            [jobs.items.obtain :as obtain]
             [jobs.lib.pace :as pace]
             [jobs.lib.need :as need]
             [jobs.lib.util :as u]))
@@ -46,8 +51,7 @@
    :ignore-zones? :shared})
 
 (a/defargs settings
-  {::job-time-s {:default 60 :doc "Seconds of working, fetching included, before leashing gives up: one look round, the walk and the use (a caller's remainder can lower it)." :spec (a/num-in 0 nil)}
-   ::max-in-row {:default 3 :doc "Fruitless animals in a row that end the run." :spec (a/int-in 0 nil)}})
+  {::max-in-row {:default 3 :doc "Fruitless animals in a row that end the run." :spec (a/int-in 0 nil)}})
 (defn max-in-row [] (settings/get settings ::max-in-row))
 
 (def ways need/fetch-ways)
@@ -59,7 +63,16 @@
 (def fit? "Survival mode only: a passive animal cannot hurt the body, so a weak body still brings one to food." checks/survival-mode)
 
 
-(def defaults {:spend {:job-time ::job-time-s}})
+(defn default-time
+  "The call's default :spend :job-time: the lead's fetch (obtain's default time for one), a look round of sense/max-looks
+  looks, the walk across :radius, and the use's worst quote (a caller's remainder can lower it)."
+  [{:keys [radius]}]
+  (+ (obtain/default-time {:count 1})
+     (cost/look-s (sense/max-looks))
+     (/ (or radius 8) fight/walk-speed)
+     (last (get-in (use-entity/quote-of nil) [:uses :job-time]))))
+
+(def defaults {:spend {:job-time default-time}})
 
 (defn can-start?
   "Later :no-lead: no lead carried and ways #{:carried}."
