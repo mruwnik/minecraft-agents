@@ -790,7 +790,10 @@
             (ctx/update-mem! c assoc :enclose (sh-sense/feet p))))
         (cond
           (= :searching bed) (do (hold/busy! c) :again)
-          door (await (enter-room! c nil false nil (await (room-worth c bed bed-wanted bed-way (when (and (map? bed) (bed-in-room? p bed)) :bed)))))
+          door (let [closed (when (and (map? bed) (bed-in-room? p bed)) :bed)
+                     worth (await (room-worth c bed bed-wanted bed-way closed))]
+                 (ctx/emit! c :night.door-shut :debug {:bed (when (map? bed) [(:x bed) (:y bed) (:z bed)]) :in-room (some? closed) :worth (price/round1 worth)})
+                 (await (enter-room! c nil false nil worth)))
           (:bed-down (ctx/mem c)) (let [{:keys [bed answer]} (:bed-down (ctx/mem c))] (await (bed-down-step c bed answer)))
           (and roofed bed-wanted (not bed) (sh-beds/bed-layout c true) (room-lib/gap c)) (await (enter-room! c nil false nil (await (room-worth c bed bed-wanted bed-way :bed))))
           (and (= :searching home) home-way?) :again
