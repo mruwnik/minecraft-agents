@@ -147,8 +147,14 @@ pool_outputs() {
 }
 
 # engine/out/build-id.edn: the commit a body bundle was built from (engine.build reads it at start; a hash with -dirty: tracked files differ from it); the pool slot has no .git, so the checkout writes it
+# engine/out/body-release.src: tools/engine-src-hash as taken before the compile read its sources (src_state), so a land during the compile makes the bundle look stale, never current
+src_state=
+snapshot_src() { src_state=$("$repo/tools/engine-src-hash" "$repo"); }
 write_build_id() {
   local b
+  for b in "${builds[@]}"; do
+    [ "$b" != body-release ] || [ -z "$src_state" ] || echo "$src_state" > "$repo/engine/out/body-release.src"
+  done
   for b in "${builds[@]}"; do
     case "$b" in body|body-release) printf '{:commit "%s"}\n' "$(git -C "$repo" rev-parse --short HEAD)$(git -C "$repo" diff --quiet HEAD -- engine dashboard tools 2>/dev/null || echo -dirty)" > "$repo/engine/out/build-id.edn"; return ;; esac
   done
@@ -204,6 +210,7 @@ pool_compile() {
   fi
   mkdir -p "$slot/dashboard/.shadow-cljs"
   [ -d "$slot/dashboard/.shadow-cljs/builds" ] || "$repo/tools/seed-shadow-cache.sh" "$slot" >/dev/null 2>&1
+  snapshot_src
   rsync -c -p "${pool_sync_opts[@]}" "$repo/" "$slot/" || { fallback="rsync into slot failed"; exec 8>&- 7>&-; return 1; }
   echo "$repo" > "$slot/.last"
   echo "tools/compile: pool slot $slot" >&2
@@ -279,6 +286,7 @@ while :; do
   sleep 0.2
 done
 t1=$(date +%s.%N)
+snapshot_src
 rm -f "$ticket"
 
 cd "$dir" || exit 1

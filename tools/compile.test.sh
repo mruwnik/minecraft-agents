@@ -13,7 +13,7 @@ check() { if [ "$2" = "$3" ]; then echo "ok   $1"; else echo "FAIL $1: want [$3]
 
 # Fake repo: tools copied in, stub npx, a live "server" pid so no server start.
 mkdir -p "$T/repo/tools" "$T/repo/dashboard/.shadow-cljs" "$T/repo/engine/out/test/cljs-runtime" "$T/bin" "$T/res"
-cp "$TOOLS/compile" "$TOOLS/test-engine" "$TOOLS/test-run.mjs" "$TOOLS/res-slot" "$TOOLS/res-slot.mjs" "$TOOLS/res-slot.json" "$TOOLS/compile-idle-watch" "$TOOLS/bundle-jobs-check" "$T/repo/tools/" 2>/dev/null
+cp "$TOOLS/compile" "$TOOLS/test-engine" "$TOOLS/test-run.mjs" "$TOOLS/res-slot" "$TOOLS/res-slot.mjs" "$TOOLS/res-slot.json" "$TOOLS/compile-idle-watch" "$TOOLS/bundle-jobs-check" "$TOOLS/engine-src-hash" "$T/repo/tools/" 2>/dev/null
 printf '{"floorMb":0,"kinds":{"tests":{"needMb":1,"max":1}}}' > "$T/res/cfg.json"
 export RES_SLOT_DIR="$T/res" RES_SLOT_CONFIG="$T/res/cfg.json"
 sleep 300 & SRV=$!; trap 'kill $SRV 2>/dev/null; rm -rf "$T"' EXIT
@@ -46,6 +46,7 @@ bundle_stub() { printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\n[ "$BUNDLE" = 
 bundle_stub
 mkdir -p "$T/repo/engine/out/compile-cache/v"; touch -d '5 days ago' "$T/repo/engine/out/compile-cache/v/old"; touch "$T/repo/engine/out/compile-cache/v/new"
 BUNDLE='jobs.movement.go_to.round=1' timeout 20 "$C" engine body-release >/dev/null 2>&1; check "complete body-release bundle (no unrequired helper in it) is renamed into place" "$(cat "$T/repo/engine/out/body-release.cjs")" 'jobs.movement.go_to.round=1'
+check "body-release records the source hash taken before the compile" "$(cut -d' ' -f1 "$T/repo/engine/out/body-release.src")" "$("$T/repo/tools/engine-src-hash" | cut -d' ' -f1)"
 check "body-release prunes only stale compile-cache entries" "$(ls "$T/repo/engine/out/compile-cache/v")" new
 check "no temp bundle left" "$(ls "$T/repo/engine/out" | grep -c 'body-release.new')" 0
 BUNDLE='jobs.movement.other.x=1' timeout 20 "$C" engine body-release >/dev/null 2>&1; check "bundle missing a job fails the build" "$?" 1

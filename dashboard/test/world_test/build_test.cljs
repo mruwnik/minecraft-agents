@@ -2,14 +2,17 @@
   (:require [cljs.test :refer [deftest is]]
             [world-test.build :as b]))
 
-(deftest stale-when-a-source-is-newer-than-the-build
-  (is (true? (b/stale? 100 [50 101 20])))
-  (is (true? (b/stale? 100 [200]))))
+(deftest a-bundle-recorded-with-another-hash-is-stale
+  (is (true? (b/stale? ["aaaa" "c1"] ["bbbb" "c1"]))))
 
-(deftest fresh-when-no-source-is-newer
-  (is (false? (b/stale? 100 [50 100 20])))
-  (is (false? (b/stale? 100 []))))
+(deftest a-bundle-recorded-with-the-trees-hash-is-current
+  (is (false? (b/stale? ["aaaa" "c1"] ["aaaa" "c2-dirty"]))))
 
-(deftest a-missing-build-is-stale
-  (is (true? (b/stale? nil [1 2])))
-  (is (true? (b/stale? nil []))))
+(deftest a-bundle-without-a-record-is-stale
+  (is (true? (b/stale? nil ["aaaa" "c1"]))))
+
+(deftest parse-src-reads-hash-and-commit
+  (is (= ["0fb3" "76e9-dirty"] (b/parse-src "0fb3 76e9-dirty\n")))
+  (is (nil? (b/parse-src "\n")))
+  (is (true? (b/dirty? ["0fb3" "76e9-dirty"])))
+  (is (false? (b/dirty? ["0fb3" "76e9"]))))

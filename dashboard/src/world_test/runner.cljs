@@ -420,29 +420,36 @@
                                 nil 1)))
     (rcon! [(str "whitelist add " body)])))
 
-(defn source-mtimes
-  "mtimes (ms) of every file under the dirs."
-  [dirs]
-  (letfn [(walk [dir]
-            (mapcat (fn [e]
-                      (let [p (path/join dir (.-name e))]
-                        (cond (.isDirectory e) (walk p)
-                              (.isFile e) [(.-mtimeMs (fs/statSync p))]
-                              :else [])))
-                    (array-seq (fs/readdirSync dir #js {:withFileTypes true}))))]
-    (mapcat #(when (fs/existsSync %) (walk %)) dirs)))
+(defn src-state
+  "[hash commit] of the engine sources under dir (tools/engine-src-hash)."
+  [dir]
+  (build/parse-src (.-stdout (cp/spawnSync (path/join dir "tools" "engine-src-hash") #js [dir] #js {:encoding "utf8"}))))
+
+(defn recorded-src
+  "[hash commit] tools/compile recorded beside the bundle, nil without a record."
+  []
+  (let [f (repo-path "engine" "out" "body-release.src")]
+    (when (fs/existsSync f) (build/parse-src (fs/readFileSync f "utf8")))))
 
 (defn refresh-body-build!
-  "Rebuilds engine/out/body-release.cjs (tools/compile engine body-release) when it is older than a file under engine/src or engine/js.
-  Returns true when the build is current (or was refreshed), false when the compile failed."
+  "Rebuilds engine/out/body-release.cjs (tools/compile engine body-release) unless the source hash tools/compile recorded
+  for it is the tree's (engine/src, engine/js). Logs the commit and hash the run uses, loudly when the tree has
+  uncommitted engine changes. Returns true when the build is current (or was refreshed), false when the compile failed."
   []
-  (let [bundle (repo-path "engine" "out" "body-release.cjs")
-        built (when (fs/existsSync bundle) (.-mtimeMs (fs/statSync bundle)))]
-    (if-not (build/stale? built (source-mtimes [(repo-path "engine" "src") (repo-path "engine" "js")]))
-      true
+  (let [now (src-state (repo-path))
+        report! (fn [how [h c]]
+                  (log! "body bundle " how ": engine sources " h " at commit " c)
+                  (when (build/dirty? [h c])
+                    (log! "WARNING: uncommitted changes under engine/src or engine/js are in this run's bundle; its evidence is not of a commit")))]
+    (if-not (or (nil? now) (build/stale? (recorded-src) now))
+      (do (report! "current" (recorded-src)) true)
       (let [r (cp/spawnSync (repo-path "tools" "compile") #js ["engine" "body-release"] #js {:encoding "utf8"})]
         (if (zero? (.-status r))
-          (do (log! "engine/out/body-release.cjs was stale: rebuilt with tools/compile engine body-release") true)
+          (let [rec (recorded-src)]
+            (report! "rebuilt with tools/compile engine body-release" rec)
+            (when (and rec now (not= (first rec) (first now)))
+              (log! "WARNING: engine sources changed while compiling (bundle " (first rec) ", tree now " (first now) ")"))
+            true)
           (do (log! "engine/out/body-release.cjs is stale and tools/compile engine body-release failed:\n" (.-stdout r) (.-stderr r)) false))))))
 
 (def bodies (atom {}))
