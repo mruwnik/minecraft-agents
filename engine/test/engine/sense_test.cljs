@@ -6,6 +6,7 @@
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
             [engine.test-util :as tu]
+            [jobs.lib.cost.look :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -26,7 +27,7 @@
   [p]
   (let [m (atom {})
         events (atom [])]
-    {:primitives p :root "j1" :slots [] :mem m :events events
+    {:primitives p :worth (constantly ##Inf) :root "j1" :slots [] :mem m :events events
      :view (fn [] {:now 0 :data {:entries {:job/j1 [{:t 0 :data @m}]}}})
      :act (fn [k args] (.call (aget p (name k)) p "t1" args))
      :update-mem (fn [f args] (apply swap! m f args))
@@ -145,8 +146,22 @@
               cells (mapv (fn [{:keys [x y z]}] [x y z]) inside)]
           (is (< (sense/max-looks) (count cells)))
           (await (sense/look-round! c cells))
-          (is (<= (count cells) (looks p)) "every cell is looked at: the caller priced the whole list, a part of it proves no room closed")
+          (is (<= (count cells) (looks p)) "a call worth any seconds looks at every cell")
           (is (= (set cells) (sense/round-looked c)) "one round per :look: the cells asked for count as looked, so the check asks no second"))))))
+
+(deftest look-round-looks-only-as-far-as-the-call-is-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (seeing {:self {:pos {:x 0 :y 64 :z 0}} :blocks rock})
+              asked (atom [])
+              c (assoc (stub-ctx p) :worth (constantly (/ (cost/look-s 3) 2)))
+              cells (mapv (fn [{:keys [x y z]}] [x y z]) inside)]
+          (with-redefs [sense/look-at! (fn ^:async [_ cell & _] (swap! asked conj cell))
+                        look/look-around! (fn ^:async ([_ _ _]) ([_ _]) ([_]))]
+            (await (sense/look-round! c cells)))
+          (is (empty? @asked) "the whole list costs more than the call is worth: no look")
+          (is (= (set cells) (sense/round-looked c)) "still one round: what was not looked at counts as open"))))))
 
 (deftest look-round-stops-at-a-room-wall-seen-open
   (async done

@@ -11,6 +11,7 @@
             [jobs.lib.clock :as clock]
             [jobs.lib.memory-age :as memory-age]
             [engine.settings :as settings]
+            [jobs.lib.cost.look :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -104,8 +105,8 @@
     (if (= (:at m) (look/cell-of (u/self-pos c))) (:cells m) #{})))
 
 (defn ^:async look-round!
-  "The :look/around hook: look at each unknown one of cells (a :look status's :look-at; its caller priced the whole list),
-  then look-around!: for those cells only, a full pass each look when cells is empty (the check named none). Every one of
+  "The :look/around hook: look at each unknown one of cells (a :look status's :look-at), as many as the call's worth pays
+  (cost/round-looks, the room walls among them priced as walls), then look-around!: for those cells only, a full pass each look when cells is empty (the check named none). Every one of
   cells counts as round-looked, the ones past the looks or the sight too: the engine gives a :look one round (a second
   counts as :later), so what it left unseen counts as open. A room wall seen open (reach-room/unseen-sides) ends the
   batch and the round: the room is open whatever the other walls are."
@@ -114,7 +115,9 @@
         pending (targets p (u/self-pos c) cells (round-looked c))
         walls (when (seq pending) (set (map vec (reach-room/unseen-sides p (sh-sense/feet p)))))
         open? (fn [cell] (and (contains? walls cell) (not (unknown? p cell)) (not (sh-sense/solid-at? p (zipmap [:x :y :z] cell)))))
-        [_ _ stopped] (await (look-at-unknown! c pending ##Inf open?))]
+        unknown (filterv #(unknown? p %) pending)
+        n (cost/round-looks (ctx/worth c) (count unknown) (count (filter #(contains? walls %) unknown)))
+        [_ _ stopped] (await (look-at-unknown! c pending n open?))]
     (when-not stopped (await (look/look-around! c (look/glance-effort) (when (seq cells) {:cells pending}))))
     (ctx/update-mem! c (fn [m] (let [here (look/cell-of (u/self-pos c))
                                      kept (if (= here (:at (::round-looked m))) (:cells (::round-looked m)) #{})]
