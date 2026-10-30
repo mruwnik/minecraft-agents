@@ -433,16 +433,17 @@
 
 (defn refresh-body-build!
   "Rebuilds engine/out/body-release.cjs (tools/compile engine body-release) unless the source hash tools/compile recorded
-  for it is the tree's (engine/src, engine/js, the build config); an unreadable tree hash rebuilds. Logs the commit and hash the run uses, loudly when the tree has
-  uncommitted engine changes. Returns true when the build is current (or was refreshed), false when the compile failed."
+  for it is the tree's (engine/src, engine/js, the build config); an unreadable tree hash fails. Logs the commit and hash the run uses, loudly when the tree has
+  uncommitted engine changes. Returns true when the build is current (or was refreshed), false when the compile failed or the tree hash is unreadable."
   []
   (let [now (src-state (repo-path))
         report! (fn [how [h c]]
                   (log! "body bundle " how ": engine sources " h " at commit " c)
                   (when (build/dirty? [h c])
                     (log! "WARNING: uncommitted changes under engine/src or engine/js are in this run's bundle; its evidence is not of a commit")))]
-    (if-not (build/stale? (recorded-src) now)
-      (do (report! "current" (recorded-src)) true)
+    (case (build/decide (recorded-src) now)
+      :unreadable (do (log! "tree hash unreadable: tools/engine-src-hash printed nothing") false)
+      :current (do (report! "current" (recorded-src)) true)
       (let [r (cp/spawnSync (repo-path "tools" "compile") #js ["engine" "body-release"] #js {:encoding "utf8"})]
         (if (zero? (.-status r))
           (let [rec (recorded-src)]

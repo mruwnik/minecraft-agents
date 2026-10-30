@@ -18,4 +18,12 @@
   [recorded current]
   (or (nil? recorded) (not= (first recorded) (first current))))
 
+(defn decide
+  "What the runner does with the bundle: :unreadable (the tree hash is nil, so a rebuild could never be recorded as
+  current), :current or :rebuild."
+  [recorded current]
+  (cond (nil? current) :unreadable
+        (stale? recorded current) :rebuild
+        :else :current))
+
 (defn dirty? [[_ commit]] (boolean (some-> commit (str/ends-with? "-dirty"))))
