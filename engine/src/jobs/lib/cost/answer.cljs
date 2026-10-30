@@ -34,7 +34,7 @@
             [jobs.lib.cost.health :as health]
             [jobs.lib.cost.planner :as planner]
             [jobs.lib.cost.threat :as threat]
-            [jobs.lib.cost.value :as value]
+            [jobs.lib.cost.value :as value :refer [counted-chance]]
             [jobs.lib.cost.weapon :as weapon]))
 
 (a/defargs settings
@@ -133,7 +133,7 @@
   (let [{:keys [dies lived]} (blows-outcome body answer)]
     (assoc body :health (max 1 (- (or health 20) (if (< dies 1) (/ lived (- 1 dies)) 0))))))
 
-(declare repeat-price answer-death-chance counted-chance)
+(declare repeat-price answer-death-chance)
 
 (defn answer-price*
   "answer-price with death the seconds each death costs."
@@ -508,8 +508,6 @@
     (mean (map #(stand-loss body equipment mobs at %) seconds))
     (let [a (stand-answer {:equipment equipment :mobs mobs :seconds seconds})]
       (if (pos? (:damage a)) (answer-price body a at) 0))))
-
-(def counted-chance value/counted-chance)
 
 (defn floor-absent-chance
   "The chance a floor the body has not seen is not there, for a step of kind (jobs.lib.walk.sight/floor-kind): counted-chance

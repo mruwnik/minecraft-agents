@@ -92,9 +92,9 @@
                    (danger-q/known-hostiles p 5 {})))))
 
 (defn mob-fails
-  "The chance a cover fails for a mob: answer/counted-chance of the counts {:beside {:k :n} :clear {:k :n}} of its class."
+  "The chance a cover fails for a mob: cost/counted-chance of the counts {:beside {:k :n} :clear {:k :n}} of its class."
   [counts beside?]
-  (answer/counted-chance (get counts (if beside? :beside :clear))))
+  (cost/counted-chance (get counts (if beside? :beside :clear))))
 
 (defn melee-hostiles
   "The hostiles the body knows within the hostile radius that walk in through an open cell: not a shooter, a creeper or an enderman."
@@ -138,14 +138,14 @@
       (health/hp-cost health (+ known unseen)))))
 
 (defn fails
-  "The chance the walls cannot be closed for a mob in a cell: answer/counted-chance of ::mob-fails of the class the body
+  "The chance the walls cannot be closed for a mob in a cell: cost/counted-chance of ::mob-fails of the class the body
   stands in (:reached when a melee hostile can strike before every open cell is placed, arrive-s); 0 with :for :night (a
   mob in a cell is waited out)."
   [c]
   (if (= :night (:for (:args c)))
     0
     (let [s (arrive-s c)]
-      (answer/counted-chance (get (settings/get settings ::mob-fails) (if (and s (< s (* (way/place-s c) (open-count c)))) :reached :clear))))))
+      (cost/counted-chance (get (settings/get settings ::mob-fails) (if (and s (< s (* (way/place-s c) (open-count c)))) :reached :clear))))))
 
 (defn exposed-s
   "Seconds the body stays open: to a melee hostile, every open cell's placement (it walks to the side still open); to a
