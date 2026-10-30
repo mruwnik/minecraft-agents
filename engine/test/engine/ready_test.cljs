@@ -187,6 +187,13 @@
                   lib-look/look-shows? (constantly true)]
       (is (= [[3 64 0] [15 64 0]] (:look-at (nth (status) 2))) "the site's own look rides the walls' round"))))
 
+(deftest the-looks-at-a-rooms-unseen-walls-stop-where-the-call-is-not-worth-them
+  (let [seen-block u/seen-block
+        hide (fn [pos] (fn [p cell] (when-not (= pos [(:x cell) (:y cell) (:z cell)]) (seen-block p cell))))
+        status #((ready/safe-at (constantly outside)) (-> night-hut ctx-of worthless))]
+    (with-redefs [u/seen-block (hide [3 64 0])]
+      (is (not= :look (first (status))) "a look costs seconds and the goal is worth none"))))
+
 (deftest a-wall-a-look-round-did-not-show-counts-as-open-not-looked-at-again
   (let [seen-block u/seen-block
         hide (fn [pos] (fn [p cell] (when-not (= pos [(:x cell) (:y cell) (:z cell)]) (seen-block p cell))))]

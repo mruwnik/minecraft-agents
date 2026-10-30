@@ -278,3 +278,12 @@
           (core/submit! (:eng s) (list 'jobs.animals.leash {:mob "cow"}) {})
           (await (run-ticks s 8 700))
           (is (= :leashed (:reason (done-event s)))))))))
+
+(deftest a-root-leash-ends-on-its-own-job-time
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng] :as s} (h/setup {:inventory lead :entities [(cow 1 7)]} 70000)]
+          (core/submit! eng '(jobs.animals.leash {:mob "cow"}) {})
+          (await (run-ticks s 8 700))
+          (is (= :job-time (:reason (done-event s)))))))))

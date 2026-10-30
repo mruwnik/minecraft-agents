@@ -103,10 +103,13 @@
 
 (defn room-look
   "A :look at the unseen walls of the room round the body (look-edge/pending) not looked at yet, and at `extra`, nil when
-  no wall is left to look at: an unseen wall is an open side."
+  no wall is left to look at or the looks (cost/look-s of at most sense/max-looks) cost more than the call's worth: an
+  unseen wall is an open side."
   [c text extra]
   (when-let [sides (seq (look-edge/pending c (sense/round-looked c) 0))]
-    (contract/look :exposed text :look-at (into (vec sides) extra) :room-sides true)))
+    (let [cells (into (vec sides) extra)]
+      (when (<= (cost/look-s (min (count cells) (sense/max-looks))) (ctx/worth c))
+        (contract/look :exposed text :look-at cells :room-sides true)))))
 
 (defn air-look
   "Under a seen roof, a :look at the unseen cells beside the seen air round the body (look/room-air-unseen) a look from here
