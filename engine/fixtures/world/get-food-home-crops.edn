@@ -1,6 +1,6 @@
 ;; survival.get-food's :source way takes the home food a trip's food is counted from (jobs.lib.home-food/sources): ripe
 ;; carrots in a zone the body owns, 36 blocks off (past the 24-block hunt radius), on a flat plot it sees them across.
-;; No food carried, hunger drained by RCON (food 9-10), hp 15.
+;; No food carried, hunger drained by RCON (food 9-10), hp 15; :carry 0, so a fed body is done.
 ;; Should-succeed: the zone is the body's own: the carrots are cut and replanted (farm.harvest), the body is fed.
 ;; Should-fail: the zone is someone else's: they are not home food and stay ripe (the :no-food ending).
 {:defaults
@@ -11,7 +11,7 @@
   :body {:at [4.5 0 16.5] :yaw -90 :settle-s 3}
   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
         [:rcon "damage $BODY 5 minecraft:generic"]
-        [:job (jobs.survival.get-food {:explore false})]]
+        [:job (jobs.survival.get-food {:explore false :carry 0})]]
   :limit-s 150}
  :cases
  [{:name "own-carrots-far-off-are-harvested"
