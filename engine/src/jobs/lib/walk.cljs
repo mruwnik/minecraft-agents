@@ -385,20 +385,13 @@
   (first (keep-indexed (fn [i s] (when (pos? i) (when-let [cell (unseen-overhead p s)] (when-not (contains? looked cell) i)))) steps)))
 
 (defn occluded?
-  "Whether a seen solid block lies between the body's eye and the centre of cell: what it cannot see there is rock, not
-  a place it has failed to look at. Not look/look-shows?: a cell a door or a fence hides is no rock."
-  [c [x y z :as cell]]
+  "Whether no line from the body's eye reaches the centre of cell or a face turned to it (look/face-clear?) past the full
+  blocks it has seen: what it cannot see there is rock, not a place it has failed to look at. Only full blocks: a cell
+  a door or a fence hides is no rock."
+  [c cell]
   (let [p (:primitives c)
-        {ex :x ey :y ez :z} (let [pos (u/self-pos c)] (update pos :y + game/eye-height))
-        tx (+ x 0.5) ty (+ y 0.5) tz (+ z 0.5)
-        d (js/Math.hypot (- tx ex) (- ty ey) (- tz ez))
-        n (js/Math.ceil (/ d 0.2))]
-    (boolean (some (fn [k]
-                     (let [t (/ k n)
-                           at [(js/Math.floor (+ ex (* t (- tx ex)))) (js/Math.floor (+ ey (* t (- ty ey)))) (js/Math.floor (+ ez (* t (- tz ez))))]]
-                       (and (not= at cell)
-                            (true? (some-> (u/sensed p (zipmap [:x :y :z] at)) .-fullCube)))))
-                   (range 1 n)))))
+        {ex :x ey :y ez :z} (let [pos (u/self-pos c)] (update pos :y + game/eye-height))]
+    (not (look/face-clear? ex ey ez cell (fn [x y z _ _ _ _ _ _] (true? (some-> (u/sensed p {:x x :y y :z z}) .-fullCube)))))))
 
 (def landing-look-drop "A step down of at least this many blocks is looked at before the body drops: the landing and the cells beside it." 2)
 

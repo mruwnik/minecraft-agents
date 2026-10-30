@@ -203,6 +203,18 @@
     (is (false? (plain? #js {:name "magma_block" :fullCube true})))
     (is (false? (plain? #js {:name "oak_slab" :fullCube false})))))
 
+(deftest an-unseen-cell-is-rock-only-when-no-line-reaches-it-past-seen-full-blocks
+  ;; the body stands at [0 64 0] on a seen stone floor x 0..2; the walk steps down onto x 3, unseen
+  (let [occluded? (fn [solid cell]
+                    (let [p #js {:self (fn [] #js {:pos #js {:x 0.5 :y 64 :z 0.5}})
+                                 :sensedAt (fn [^js a] (if-let [b (solid [(.-x a) (.-y a) (.-z a)])] b #js {:unknown true}))}]
+                      (walk/occluded? {:primitives p} cell)))
+        floor (fn [[x y z]] (when (and (<= 0 x 2) (= 63 y) (zero? z)) #js {:name "stone" :fullCube true}))
+        wall (fn [kind] (fn [[x y z :as cell]] (or (floor cell) (when (and (= 2 x) (<= 64 y 66) (zero? z)) kind))))]
+    (is (not (occluded? floor [3 63 0])) "the floor in front hides its centre, not its top")
+    (is (occluded? (wall #js {:name "stone" :fullCube true}) [4 64 0]) "behind a seen stone wall")
+    (is (not (occluded? (wall #js {:name "oak_door" :fullCube false}) [4 64 0])) "a door hides it, but it is no rock")))
+
 (deftest see-depth-is-the-deepest-dark-drop-seen-from-the-peek
   (is (= 1 (ws/see-depth 4)) "dark, near 4")
   (is (= 4 (ws/see-depth 7)) "a torch in a hand, near 7")
