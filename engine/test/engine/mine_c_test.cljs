@@ -674,8 +674,9 @@
 
 (deftest a-cut-is-planned-again-when-a-look-changes-a-cell-in-or-round-its-way
   (let [way [[1 64 0] [1 64 1] [1 64 2]]
-        run (fn ^:async run* [after-first-dig]
-              (let [seen (atom {})
+        hard {[1 64 1] "obsidian" [1 64 2] "obsidian"}
+        run (fn ^:async run* [after-first-dig init]
+              (let [seen (atom init)
                     plans (atom 0)
                     dug (atom [])
                     m (atom {})
@@ -693,9 +694,12 @@
     (async done
       (tu/run-async done
         (fn ^:async t []
-          (is (= [1 1 1] (await (run (fn [_])))) "unchanged: the digs go on as planned")
-          (is (= [1 2 2] (await (run #(swap! % assoc [1 65 1] "gravel")))) "gravel over a planned cell is planned again")
-          (is (= [1 2 2] (await (run #(swap! % assoc [2 64 1] "water")))) "a liquid beside a planned cell is planned again"))))))
+          (is (= [1 1 1] (await (run (fn [_]) {}))) "unchanged: the digs go on as planned")
+          (is (= [1 2 2] (await (run #(swap! % assoc [1 65 1] "gravel") {}))) "gravel over a planned cell is planned again")
+          (is (= [1 2 2] (await (run #(swap! % assoc [2 64 1] "water") {}))) "a liquid beside a planned cell is planned again")
+          (is (= [1 2 2] (await (run #(swap! % assoc [3 64 3] "air") hard))) "an opening off the way that costs less to walk through than the way's digs is planned again")
+          (is (= [1 1 1] (await (run #(swap! % assoc [-4 64 -4] "air") {}))) "one a detour too long to beat the way's digs is not")
+          (is (= [1 1 1] (await (run #(swap! % assoc [3 64 3] "stone") hard))) "a cell off the way read as the rock it was taken for changes nothing"))))))
 
 (deftest a-cut-whose-dig-fails-books-the-dig-at-its-price
   (async done

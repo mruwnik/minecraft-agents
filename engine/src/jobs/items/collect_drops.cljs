@@ -382,7 +382,6 @@
           :searching :continue
           (:no-route :dearer) :no-route
           :too-big :too-big
-          :budget :no-route
           nil
           (let [d (await (dig-cells! c (:dig r)))]
             (cond
