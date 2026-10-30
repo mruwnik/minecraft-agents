@@ -11,7 +11,6 @@
             [jobs.lib.cost.look :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.reach.room :as reach-room]
-            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]))
@@ -207,18 +206,26 @@
                 (await (sense/look-round! c cells))
                 (is (= 10 (count @asked)) "the ten looks taken from here leave no paid look for a second round"))))))))))
 
-(deftest look-round-stops-at-a-room-wall-seen-open
+(deftest look-round-stops-only-at-a-room-wall-a-mob-can-pass
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [p (seeing {:self {:pos {:x 0 :y 64 :z 0}} :blocks rock})
-              c (stub-ctx p)
-              cells [[2 64 0] [-2 64 0] [0 64 2] [0 64 -2]]]
-          (with-redefs [reach-room/unseen-sides (constantly cells)
-                        sh-sense/solid-at? (constantly false)]
-            (await (sense/look-round! c cells)))
-          (is (= 1 (looks p)) "no look after the first open wall")
-          (is (= (set cells) (sense/round-looked c)) "the walls left unlooked count as looked"))))))
+        (doseq [[near far stops?] [[{} {} true]
+                                   [{"2,64,0" "snow"} {} true]
+                                   [{"2,64,0" "stone"} {"-6,64,0" "stone" "-6,65,0" "stone"} false]
+                                   [{"2,64,0" "oak_leaves"} {"-6,64,0" "stone" "-6,65,0" "stone"} false]
+                                   [{"2,65,0" "stone"} {"-6,64,0" "stone" "-6,65,0" "stone"} false]
+                                   [{"2,64,0" "glass" "2,65,0" "glass"} {"-6,64,0" "stone" "-6,65,0" "stone"} false]
+                                   [{"2,64,0" "stone"} {} true]]]
+          (let [p (seeing {:self {:pos {:x 0 :y 64 :z 0}} :blocks (merge near far)})
+                c (stub-ctx p)
+                cells [[2 64 0] [-6 64 0]]
+                passes (atom 0)]
+            (with-redefs [reach-room/unseen-sides (constantly cells)
+                          look/look-around! (fn ^:async ([_ _ _] (swap! passes inc)) ([_ _] (swap! passes inc)) ([_] (swap! passes inc)))]
+              (await (sense/look-round! c cells)))
+            (is (= (if stops? 0 1) @passes) (str "the round's own look pass follows only when no wall was open, walls " near far))
+            (is (= (set cells) (sense/round-looked c)) "the walls left unlooked count as looked")))))))
 
 (deftest look-round-skips-cells-asked-for-from-this-spot
   (async done

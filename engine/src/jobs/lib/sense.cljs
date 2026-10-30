@@ -87,8 +87,8 @@
 
 (defn ^:async look-at-unknown!
   "look-at! each of cells that is still unknown when its turn comes (a look's sight pass shows its neighbours too), at
-  most n looks: [looks cells-passed stopped?]. With stop? (a fn of a cell just looked at), the first cell it holds for ends
-  the batch: stopped? is true."
+  most n looks: [looks cells-passed stopped?]. With stop? (a fn of a cell just looked at or already known), the first
+  cell it holds for ends the batch: stopped? is true."
   ([c cells n] (look-at-unknown! c cells n nil))
   ([c cells n stop?]
    (loop [[cell & more] cells looks 0 passed []]
@@ -99,7 +99,9 @@
            (if (and stop? (stop? cell))
              [(inc looks) (conj passed cell) true]
              (recur more (inc looks) (conj passed cell))))
-       :else (recur more looks (conj passed cell))))))
+       :else (if (and stop? (stop? cell))
+               [looks (conj passed cell) true]
+               (recur more looks (conj passed cell)))))))
 
 (defn round-mem
   "c's look-round memory {:at :cells :looks} for the body's cell, {} from another."
@@ -139,7 +141,7 @@
   (let [p (:primitives c)
         {:keys [pay unpaid walls]} (round-plan c cells)
         unseen? (some #(unknown? p %) pay)
-        open? (fn [cell] (and (contains? walls cell) (not (unknown? p cell)) (not (sh-sense/solid-at? p (zipmap [:x :y :z] cell)))))
+        open? (fn [cell] (and (contains? walls cell) (pos? (:open (reach-room/open-sides p [cell])))))
         [n _ stopped] (await (look-at-unknown! c (u/nearest-first (u/self-pos c) identity pay) (count pay) open?))]
     (when (and (not stopped) (or (empty? cells) unseen?))
       (await (look/look-around! c (look/glance-effort) (when (seq cells) {:cells pay}))))
