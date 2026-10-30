@@ -1,7 +1,7 @@
 ;; Card 6558d218 (fix 388739808): at night a body roofed in a lit tunnel whose far end bends out of sight judges the tunnel without a priced edge walk
 ;; (look-edge/look! bought from night/look-worth, the cheapest way left): it ends roofed and stays near the start (the first case: the bend makes no
 ;; pending side). With an unseen lit side (the tunnel runs on to x 66) the walk is bought and made; the same tunnel with lava glowing behind a glass wall
-;; makes staying cost nothing (night.look-priced worth 0; the lava starts at x 32, stone-capped away from the bend), the walk is not bought. night never writes :walk-looked (walk-look does).
+;; makes the night in the open cost nothing (the night stops :exposed with prices {:exposed 0}, before any look is priced; with the lava one block farther, from x 31, the light no longer does and the walk is bought), the walk is not bought. night never writes :walk-looked (walk-look does).
 ;; Sky grid (y -6..-1 is stone over void): tunnel along x 4..29 at z 16, y -5..-4, torches; at x 29 it turns north to z 12 (a bend hides the rest).
 ;; Needs night: --allow-time --time-log <the shared time log>.
 {:defaults
@@ -29,9 +29,8 @@
   {:name "unseen-side-walk-is-declined-when-staying-costs-nothing" :plot {:length 72 :width 32}
    :blocks [[:fill [32 -6 8] [70 -1 20] "stone"] [:fill [30 -5 16] [66 -4 16] "air"]
             [:set [36 -5 16] "torch"] [:set [45 -5 16] "torch"] [:set [54 -5 16] "torch"] [:set [63 -5 16] "torch"]
-            [:fill [32 -5 14] [66 -4 14] "lava"] [:fill [32 -5 15] [66 -4 15] "glass"]]
+            [:fill [30 -5 14] [66 -4 14] "lava"] [:fill [30 -5 15] [66 -4 15] "glass"]]
    :act [[:job (jobs.survival.night)]
          [:await {:source :job :kind #{:completed :stopped} :data {:name "jobs.survival.night"}} 60]]
-   :expect [{:event {:source :job :kind :night.look-priced :data {:worth 0}} :within-s 60 :of-job true}
-            {:event {:source :job :kind #{:completed :stopped} :data {:name "jobs.survival.night"}} :within-s 60 :of-job true}
+   :expect [{:event {:source :job :kind :stopped :data {:cause :exposed :prices {:exposed 0}}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :child_started :data {:slot :edge-walk}} :of-job true :for-s 40}]}]}
