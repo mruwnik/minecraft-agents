@@ -625,7 +625,7 @@
                                  (drops/drop-cut {:primitives (:p s)} [2 64 0] worth)))]
     (is (= [[1 64 0]] (cut walled-ore 100)) "the wall cell between is the way")
     (is (not-any? #{[1 64 0]} (cut (assoc walled-ore "1,65,0" "gravel") 100)) "gravel over it would fall on the body walking in: the cut goes round")
-    (is (nil? (cut walled-ore 0.01)) "a drop worth less than one cell's dig is not cut to")))
+    (is (= :dearer (cut walled-ore 0.01)) "a drop worth less than one cell's dig is not cut to")))
 
 (deftest a-cut-whose-route-search-outgrew-the-heap-answers-too-big
   (let [c {:primitives (:p (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})) :args {} :id "j"}]
@@ -709,6 +709,32 @@
           (is (= [1 2 2] (await (run #(swap! % assoc [5 64 0] "air") hard))) "so is one five cells off, as far as a look down a tunnel shows")
           (is (= [1 1 1] (await (run #(swap! % assoc [-4 64 -4] "air") {}))) "one a detour too long to beat the way's digs is not")
           (is (= [1 1 1] (await (run #(swap! % assoc [3 64 3] "stone") hard))) "a cell off the way read as the rock it was taken for changes nothing"))))))
+
+(deftest a-cut-that-costs-more-than-the-drop-walks-to-the-frontier-toward-it-and-plans-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [m (atom {})
+              c {:primitives (:p (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})) :args {:block "stone"} :update-mem (fn [f args] (apply swap! m f args))}
+              run (fn ^:async run* [frontier walk]
+                    (let [plans (atom []) walks (atom []) looks (atom [])
+                          steps {:drop-cut (fn [_ _ max-s] (swap! plans conj max-s) (if (empty? @walks) :dearer []))
+                                 :frontier (fn [_ _ _] frontier)
+                                 :walk-to! (fn [_ cell] (swap! walks conj cell) walk)
+                                 :dig-cell! (fn [_ _] :dug)
+                                 :look-at! (fn [_ cell] (swap! looks conj cell))
+                                 :mem (fn [_] @m)}]
+                      (reset! m {})
+                      {:out (await (drops/cut-via c steps [2 64 0] 5)) :plans @plans :walks @walks :looks @looks}))
+              walked (await (run [-3 64 0] :there))]
+          (is (= :cut (:out walked)) "planned again from the frontier: the way there is open")
+          (is (= [[-3 64 0]] (:walks walked)))
+          (is (= [[2 64 0]] (:looks walked)) "a look at the dug cell from there")
+          (is (= 2 (count (:plans walked))))
+          (is (< (second (:plans walked)) 5) "the walk is paid out of the drop's worth")
+          (is (nil? (:out (await (run nil :there)))) "no frontier to walk to: the cut ends")
+          (is (nil? (:out (await (run [-3 64 0] :blocked)))) "nor when the walk there fails")
+          (is (= :partial (:out (await (run [-3 64 0] :partial)))) "a walk that waits on the world waits"))))))
 
 (deftest a-cut-whose-dig-fails-books-the-dig-at-its-price
   (async done

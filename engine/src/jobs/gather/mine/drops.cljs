@@ -16,6 +16,7 @@
             [jobs.lib.dig-route :as dig-route]
             [jobs.lib.near :as near]
             [jobs.lib.result :as result]
+            [jobs.lib.seen-sections :as seen-sections]
             [jobs.lib.util :as u]
             [jobs.lib.walk :as walk]))
 
@@ -105,7 +106,8 @@
 (defn drop-cut
   "The cells to dig, in walking order, for the cheapest way (jobs.lib.dig-route priced by cut-prices, a cell never seen
   taken for stone) from the body's cell to a stand within 1 of the dug cell, priced at most max-s seconds; nil with no such way,
-  :searching while a search that spent its nodes goes on (kept: ask again), :too-big when it outgrew the heap."
+  :dearer when every way costs more, :searching while a search that spent its nodes goes on (kept: ask again), :too-big
+  when it outgrew the heap."
   [c dug max-s]
   (let [p (:primitives c)
         at (fn [[x y z]] (or (u/seen-name p {:x x :y y :z z}) "stone"))
@@ -114,7 +116,7 @@
         from (u/cell-vec (u/self-pos c))
         goal (mapv + dug [1 0 0])
         route (dig-route/route-resumed [(:id c) :drop-cut from dug max-s] at from goal prices)]
-    (or (:dig route) (#{:searching :too-big} (:problem route)))))
+    (or (:dig route) (#{:searching :too-big :dearer} (:problem route)))))
 
 (defn open-seen
   "The cells within radius of the body's feet that it has seen open (perception's seenBlocks; none for a body that senses
@@ -125,15 +127,32 @@
           (f #js {:radius radius :match dig-route/open? :max js/Number.MAX_SAFE_INTEGER}))
     #{}))
 
+(defn frontier
+  "The remembered frontier cell to walk to and look from toward the dug cell when every cut from here costs more than
+  max-s (seen-sections/toward, the unseen priced at cut-prices' unseen step), nil when none."
+  [c dug max-s]
+  (let [{:keys [max-fall step-s unseen-step-s]} (cut-prices c)]
+    (seen-sections/toward (:primitives c) (u/cell-vec (u/self-pos c)) dug max-fall step-s unseen-step-s max-s)))
+
+(def drop-walk-opts "No dive: a drop sunk into deep water is not swum after (the card-9d1e1c07 rule of the walk to dig)." {:ways #{:walk :clear-seal} :dive false})
+
+(defn ^:async walk-to!
+  "Walk onto cell (near/go-near!, no dive): :there, :partial or :blocked."
+  [c cell]
+  (await (near/go-near! c (zipmap [:x :y :z] cell) 0 drop-walk-opts)))
+
 (defn ^:async cut-via
-  "cut-to-drop! with its steps given: a map over {:drop-cut :dig-cell! :look-at! :mem} (the fns of those names' arguments).
-  Open a way beside the cell dug (drop-cut), one dig child per cell, all the digs priced (cut-prices) at most max-s
-  seconds (what is beside the cell: its drop, or a seen ore and its vein): after each dig and a look at what it laid
-  open the way goes on as planned while the cell stayed open and the cells in and round the way read as they did, else is planned again out of what is left (kept in :cut-spent over rounds, each dig booked at its own price once
-  dug or failed; a cell that fills again is paid for again). :cut (open: walk again),
-:partial (a dig waits on the world), :too-big (the route search outgrew the heap) or nil (no way left, a dig failed, or a dug cell planned again at once: it did not
-  stay open)."
-  [c {:keys [drop-cut dig-cell! look-at! mem]} dug max-s]
+  "cut-to-drop! with its steps given: a map over {:drop-cut :dig-cell! :look-at! :mem :frontier :walk-to!} (the fns of
+  those names' arguments). Open a way beside the cell dug (drop-cut), one dig child per cell, all the digs priced
+  (cut-prices) at most max-s seconds (what is beside the cell: its drop, or a seen ore and its vein): after each dig and a
+  look at what it laid open the way goes on as planned while the cell stayed open and the cells in and round the way read
+  as they did, else is planned again out
+  of what is left (kept in :cut-spent over rounds, each dig booked at its own price once dug or failed; a cell that fills
+  again is paid for again). When every way costs more, a walk to the frontier toward the dug cell (frontier), at its steps'
+  price, and a look at the cell, then planned again. :cut (open: walk again), :partial (a dig or walk waits on the world),
+  :too-big (the route search outgrew the heap) or nil (no way left, a dig or walk failed, or a dug cell planned again at
+  once: it did not stay open)."
+  [c {:keys [drop-cut dig-cell! look-at! mem frontier walk-to!]} dug max-s]
   (let [p (:primitives c)
         {:keys [dig-s step-s]} (cut-prices c)
         name-at (fn [[x y z]] (or (u/seen-name p {:x x :y y :z z}) "stone"))
@@ -160,7 +179,8 @@
                                (not-any? (fn [cell] (and (not (open cell)) (not (near cell))
                                                          (< (* step-s (+ (walk me cell) (walk cell dug))) s)))
                                          (open-seen p (reach cells)))))
-                    cells))]
+                    cells))
+        book! (fn [spent] (ctx/update-mem! c assoc-in [:cut-spent dug] spent))]
     (loop [last-dug nil
            spent (get (:cut-spent (mem c)) dug 0)
            plan nil]
@@ -172,13 +192,24 @@
           (nil? cells) nil
           (= :searching cells) :partial
           (= :too-big cells) :too-big
+          (= :dearer cells)
+          (when-let [f (frontier c dug (- max-s spent))]
+            (let [me (u/cell-vec (u/self-pos c))
+                  w (await (walk-to! c f))]
+              (case w
+                :partial :partial
+                :there (let [spent (+ spent (* step-s (walk me f)))]
+                         (book! spent)
+                         (await (look-at! c dug))
+                         (recur nil spent nil))
+                nil)))
           (empty? cells) :cut
           (= last-dug (first cells)) nil
           :else (let [cell (first cells)
                       plan (update (snapshot (rest cells)) :seen dissoc cell)
                       spent (+ spent (price cell))
                       o (await (dig-cell! c (zipmap [:x :y :z] cell)))]
-                  (when-not (= :continue o) (ctx/update-mem! c assoc-in [:cut-spent dug] spent))
+                  (when-not (= :continue o) (book! spent))
                   (case o
                     :continue :partial
                     (:dug :missing) (do (await (look-at! c cell))
@@ -189,7 +220,8 @@
 (defn ^:async cut-to-drop!
   "Open a way beside the cell dug (cut-via with the real steps). counted: the cells whose worth max-s already holds."
   [c dug max-s counted]
-  (cut-via (assoc c ::counted counted) {:drop-cut drop-cut :dig-cell! dig-cell! :look-at! dig-look/look-at! :mem ctx/mem} dug max-s))
+  (cut-via (assoc c ::counted counted) {:drop-cut drop-cut :dig-cell! dig-cell! :look-at! dig-look/look-at! :mem ctx/mem
+                                        :frontier frontier :walk-to! walk-to!} dug max-s))
 
 (defn lip-point
   "Where the body leans out over the cell it stands beside: its own cell's edge toward dug (a cell [x y z] at its level),
@@ -245,8 +277,6 @@
   [res]
   (boolean (or (result/unreachable-walk? res)
                (contains? (conj search-ended-whys :detour) (result/why res)))))
-
-(def drop-walk-opts "No dive: a drop sunk into deep water is not swum after (the card-9d1e1c07 rule of the walk to dig)." {:ways #{:walk :clear-seal} :dive false})
 
 (defn ^:async walk-to-drop!
   "A dig whose drop did not come in: once per dug cell, walk within 1 of it (near/go-near!, no escalation), where a drop
