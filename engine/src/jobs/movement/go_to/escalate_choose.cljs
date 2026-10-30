@@ -581,7 +581,7 @@
         here? (or ((:skip opts) :approach) (>= (to-goal near) (dec (to-goal feet))))
         from (if here? feet near)
         ;; a pillar or stair leads in only to a goal above: priced against the door, a rim hop would win and then be dropped
-        e (escape-way/choose p from goal may-dig? (cond-> opts (<= (second goal) (second from)) (update :skip into [:pillar :stair])))
+        e (escape-way/choose p from goal may-dig? (cond-> opts (<= (second goal) (second from)) (assoc :drop-steps #{:pillar :stair})))
         in? (and (leads-in? e from goal) (or here? (not= :approach (:step e))))
         e (cond in? e
                 :else (or (dig-way p from goal may-dig? opts)

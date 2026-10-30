@@ -225,7 +225,7 @@
   "How a body at feet (a cell) that cannot walk to goal (a cell) can make a way, cheapest first. It digs
   any block in cells (may-dig? cell)
   allows (go-to: no other owner's zone or claim); opts :pillar-item ({:item :count} or nil, escape/pillar-item) replaces the climb block read from the inventory. opts :skip is a set of steps that already failed (a stair heading
-  that failed: [:stair :east]): the next one is chosen; opts :approached, the cells an approach already walked to; opts :stands, the feet cells of the body's own stairs (a ledge stair's first floor never lands on one: the stair job refuses :undercuts-way).
+  that failed: [:stair :east]): the next one is chosen; opts :drop-steps, steps never weighed among the ways (the wall walk is still offered); opts :approached, the cells an approach already walked to; opts :stands, the feet cells of the body's own stairs (a ledge stair's first floor never lands on one: the stair job refuses :undercuts-way).
   - the cheapest (way-s; opts :risk-s prices their dangers) of the ways that can be made:
     - {:step :pillar :height n :item}: in a pit d deep, the column over it seen clear to the top, at least n pillar
       blocks carried: n the rim-pillar (d - 1, then a step onto the rim), d when no side has a rim to step onto;
@@ -248,7 +248,7 @@
     the block over the head; :no-dig: nothing allowed to dig; :no-wall: no wall to walk to."
   ([p feet goal] (choose p feet goal (constantly true)))
   ([p feet goal may-dig?] (choose p feet goal may-dig? nil))
-  ([p feet goal may-dig? {:keys [skip approached stands] :or {skip #{} approached #{} stands #{}} :as opts}]
+  ([p feet goal may-dig? {:keys [skip approached stands drop-steps] :or {skip #{} approached #{} stands #{}} :as opts}]
    (let [approached (or approached #{})
          block-at (escape/block-at-of p)
          dir (escape/heading feet goal)
@@ -289,7 +289,8 @@
                           door? (conj {:step :clear-path :heading (escape/heading-names dir)})
                           ;; door-spot and door-back stand for a door at feet that cannot be dug
                           (and (not door?) @spot) (conj {:step :approach :pos @spot})
-                          (and (not door?) @back) (conj {:step :approach :pos @back})))]
+                          (and (not door?) @back) (conj {:step :approach :pos @back})))
+         ways (remove #(contains? (set drop-steps) (:step %)) ways)]
      (cond
        (seq ways)
        (let [priced {:rest-s (rest-s-fn p goal) :risk-s (:risk-s opts) :item item :count count :may-dig? may-dig?}]

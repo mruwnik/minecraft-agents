@@ -162,6 +162,12 @@
     (is (= :clear-path (:step (ec/goal-way {:primitives p} [2 64 0] [8 64 0] (constantly true) {:skip #{:approach}})))
         "a pillar leads in only to a goal above: the door is the way in, not the cheaper hop it would be dropped for")))
 
+(deftest goal-way-walks-to-the-wall-for-a-level-goal-after-the-door-failed
+  (let [p (tu/fake (merge in-room {:blocks room}))]
+    (is (= {:step :approach :pos [2 64 0]}
+           (escape-way/choose p [0 64 0] [8 64 0] (constantly true) {:skip #{:clear-path} :drop-steps #{:pillar :stair}}))
+        "dropping the pillar and stair ways must not shut the walk to the wall")))
+
 ;; ------------------------------------------------------------------ go-to escalation
 (deftest go-to-pillars-out-of-a-pit-when-it-carries-blocks
   (async done
