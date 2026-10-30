@@ -14,6 +14,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.escape :as escape]
             [jobs.lib.escape.way :as escape-way]
+            [jobs.lib.look :as look]
             [jobs.movement.go-to.escalate-choose :as ec]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.access.rules :as rules]
@@ -468,6 +469,13 @@
         price #(escape-way/price (tu/fake (merge in-pit {:blocks % :inventory [{:name "stone_pickaxe" :count 1}]})) [0 61 0] {:step :stair :heading :east :steps 3})]
     (is (< (price shaft) (price (merge shaft (box 1 65 0 1 68 0 "gravel")))) "each gravel stacked over the cut falls in and is dug")))
 
+(deftest stair-price-digs-the-unseen-loose-ground-over-a-cut-at-the-chance-it-is-solid
+  (let [shaft (-> (apply dissoc (box -6 60 -6 6 63 6 "stone") pit-cells) (assoc "1,64,0" "gravel"))
+        p (tu/seeing-within (tu/fake (merge in-pit {:blocks shaft :inventory [{:name "stone_pickaxe" :count 1}]})) 3.5)
+        price-at (fn [chance] (with-redefs [look/unseen-solid-at-fn (fn [_] (constantly chance))]
+                                (escape-way/price p [0 61 0] {:step :stair :heading :east :steps 3})))]
+    (is (< (price-at 0) (price-at 0.5)) "the cells over the seen gravel read as gravel, priced at the chance they are there")))
+
 (deftest go-to-with-no-pickaxe-clears-a-door-by-hand
   (async done
     (tu/run-async done
@@ -719,3 +727,10 @@
   ;; a dark shaft shows the body only the cells beside it: the pillar is priced against the door, not left for when nothing else is
   (let [p (tu/seeing-within (tu/fake {:self {:pos {:x 0.5 :y 58 :z 0.5}} :blocks unseen-shaft :inventory [{:name "dirt" :count 8}]}) 1.5)]
     (is (= :pillar (:step (escape-way/choose p [0 58 0] [6 64 0]))))))
+
+(deftest escape-choose-prices-the-unseen-roof-over-a-pit-by-the-chance-it-is-solid
+  (let [p (tu/seeing-within (tu/fake {:self {:pos {:x 0.5 :y 58 :z 0.5}} :blocks unseen-shaft :inventory [{:name "dirt" :count 8}]}) 1.5)
+        at (fn [chance f] (with-redefs [look/unseen-solid-at-fn (fn [_] (constantly chance))] (f)))
+        pillar-s #(escape-way/price p [0 58 0] {:step :pillar :height 6})]
+    (is (< (at 0 pillar-s) (at 0.5 pillar-s)))
+    (is (not= :pillar (at 1 #(:step (escape-way/choose p [0 58 0] [6 64 0])))) "a roof sure to be there is dug by hand: a way through the side is cheaper")))

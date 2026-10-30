@@ -18,6 +18,7 @@
             [jobs.lib.dig-route :as dig-route]
             [jobs.lib.escape :as escape]
             [jobs.lib.escape.way :as escape-way]
+            [jobs.lib.tools :as tools]
             [jobs.lib.near :as near]
             [jobs.movement.go-to.climb-route :as climb-route]
             [jobs.movement.go-to.cut :as gcut]
@@ -453,7 +454,9 @@
         route (choose/route-answer p [0 64 0] [3 67 0] (constantly true) (constantly false) false false {})]
     (is (= (:seconds route) (escape-way/price p [0 64 0] stair)))
     (is (< (escape-way/price (body 50) [0 64 0] stair) (escape-way/price p [0 64 0] stair)) "unseen cells cost more")
-    (are [r n] (= (+ (cw/pillar-cost 2) (* n unseen-s) (escape/pillar-knock (body r) [0 64 0] 2)) (escape-way/price (body r) [0 64 0] {:step :pillar :height 2}))
+    (are [r n] (let [q (body r)
+                     roof-s (* n ((escape/dig-share-fn q) [0 67 0]) (/ (tools/clear-ms q "stone") 1000))]
+                 (= (+ (cw/pillar-cost 2) (* n unseen-s) (escape/pillar-knock q [0 64 0] 2) roof-s) (escape-way/price q [0 64 0] {:step :pillar :height 2})))
       50 0
       2.9 1)))
 

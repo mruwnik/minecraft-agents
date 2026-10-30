@@ -8,6 +8,7 @@
             [jobs.lib.choose :as choose]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.ways :as cw]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.lib.dig-route :as dig-route]
             [jobs.lib.escape :as escape]
             [jobs.lib.reach :as reach]
@@ -82,10 +83,13 @@
   "Seconds the stair way e takes from feet, each step as jobs.lib.dig-route (route-answer) prices one: jobs.lib.cost/stair-leg-pricer
   of its cuts (dig-cost), a fill for an open floor (a fetch of the blocks, with none carried) and an unseen cut or floor,
   its unseen step in the price (cw/step-price), as the route's search does. A falling block (gravel, sand) is dug like any
-  cut (jobs.access.stair digs it again as it falls), and each seen one stacked over a column's top cut is one dig more."
+  cut (jobs.access.stair digs it again as it falls), and each one stacked over a column's top cut is one dig more: a seen
+  one whole, an unseen one read as loose ground (dig-look/rock-name) at the chance it and those under it are solid
+  (escape/dig-share-fn)."
   [p feet {:keys [heading steps]}]
   (let [block-at (escape/block-at-of p)
         unseen? (escape/unseen-of p)
+        solid-share (escape/dig-share-fn p)
         leg-s (cost/stair-leg-pricer (wworld/unseen-share p))
         fill-s (cw/fill-cost (carried-build-n p))
         cut-s (fn [cell] (let [n (block-at cell)]
@@ -94,8 +98,14 @@
                                  :else (or (cost/dig-cost (or n "stone")) ##Inf))))
         cuts (escape/stair-cuts feet (escape/heading-dirs (keyword heading)) steps)
         tops (vals (reduce (fn [m [x y z]] (update m [x z] #(if (and % (> (% 1) y)) % [x y z]))) {} cuts))
-        stack-s (fn [top] (transduce (comp (map #(block-at (escape/add top [0 % 0]))) (take-while rules/falling?) (map #(or (cost/dig-cost %) ##Inf)))
-                                     + 0 (range 1 64)))]
+        stack-s (fn [top]
+                  (loop [k 1 w 1 s 0]
+                    (let [cell (escape/add top [0 k 0])
+                          n (if (unseen? cell) (dig-look/rock-name p (zipmap [:x :y :z] cell)) (block-at cell))
+                          w (* w (if (unseen? cell) (solid-share cell) 1))]
+                      (if (and (< k 64) (pos? w) (rules/falling? n))
+                        (recur (inc k) w (+ s (* w (or (cost/dig-cost n) ##Inf))))
+                        s))))]
     (reduce (fn [total cuts]
               (let [floor (escape/add (nth cuts 2) [0 -1 0])
                     leg (leg-s (map cut-s cuts) (when (dig-route/open? (block-at floor)) fill-s) (boolean (some unseen? (cons floor cuts))))]
@@ -122,6 +132,20 @@
                         hp-s)))
            0)))))
 
+(defn pillar-way-s
+  "Seconds a pillar of height blocks up from feet takes, short of them fetched: cost/pillar-s, its knock
+  (escape/pillar-knock), and a dig of each cell over it the head climbs into that the body has not seen, at the
+  chance it is solid (escape/dig-share-fn)."
+  [p feet height short]
+  (let [block-at (escape/block-at-of p)
+        unseen? (escape/unseen-of p)
+        solid-share (escape/dig-share-fn p)
+        roof-s (transduce (comp (map #(escape/up feet %)) (filter unseen?) (map #(* (solid-share %) (/ (tools/clear-ms p (block-at %)) 1000))))
+                          + 0 (range 2 (+ height 2)))]
+    (+ (cost/pillar-s (wworld/unseen-share p) height (escape/unseen-pillar-blocks p feet height) short)
+       (escape/pillar-knock p feet height)
+       roof-s)))
+
 (defn price
   "Seconds way e from feet is reckoned to take (jobs.lib.cost): a stair, a pillar, a bridge or a fill by its blocks, a dug door or
   route by what its cells take to dig with the tool carried, plus a step a cell; 0 for a step that is no span. A stair,
@@ -138,8 +162,7 @@
       (case step
         :stair (+ (stair-route-s p feet e) (* (:aside e 0) (or (cost/dig-cost "stone") 1))
                   (lost-s (escape/stair-cuts feet (escape/heading-dirs (keyword heading)) (:steps e))))
-        :pillar (+ (cost/pillar-s (wworld/unseen-share p) (:height e) (escape/unseen-pillar-blocks p feet (:height e)))
-                   (escape/pillar-knock p feet (:height e)))
+        :pillar (pillar-way-s p feet (:height e) 0)
         :bridge (cw/bridge-cost (:length e) (:short e 0))
         :fill-gap (cw/fill-cost (:count e 1))
         :dig-route (dig-s (map :cell (:cells e)))
@@ -160,7 +183,7 @@
 
 (defn rise-left-s
   "Seconds the climb from end up rise-left to goal takes: the cheaper of as many new stair steps (new-stair-step-s) and a
-  pillar (cost/pillar-s: its unseen blocks, those past the carried climb blocks left fetched), none when a cell over end
+  pillar (pillar-way-s, the blocks past the carried climb blocks left fetched), none when a cell over end
   it climbs into is seen solid (rock overhead); a stair is none (##Inf) when a seen cell over end is not diggable? (may-dig?)."
   ([p end goal left] (rise-left-s p end goal left (constantly true)))
   ([p end goal left may-dig?]
@@ -172,7 +195,7 @@
         cuttable? (every? #(or (unseen? %) (escape/diggable? block-at may-dig? %)) over)
         stair-s (if cuttable? (* n (new-stair-step-s p)) ##Inf)]
     (cond (zero? n) 0
-          open? (min stair-s (+ (cost/pillar-s (wworld/unseen-share p) n (escape/unseen-pillar-blocks p end n) (max 0 (- n left))) (escape/pillar-knock p end n)))
+          open? (min stair-s (pillar-way-s p end n (max 0 (- n left))))
           :else stair-s))))
 
 (defn stair-floors
