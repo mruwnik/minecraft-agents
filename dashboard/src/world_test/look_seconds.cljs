@@ -6,11 +6,12 @@
             [cljs.reader :as reader]))
 
 (defn scan-line
-  "One log line -> {:looks n :ms wall-ms} of a :sense.looked event that logged its wall time, else nil."
+  "One log line -> {:looks n :ms wall-ms} of a :sense.looked event that logged its wall time, else nil. A :surveyed? one is left
+  out: its wall time holds the survey's turns, not only looks."
   [line]
   (when (str/includes? line ":kind :sense.looked")
-    (let [{:keys [looks wall-ms]} (:data (reader/read-string line))]
-      (when (and (pos? (or looks 0)) wall-ms) {:looks looks :ms wall-ms}))))
+    (let [{:keys [looks wall-ms surveyed?]} (:data (reader/read-string line))]
+      (when (and (pos? (or looks 0)) wall-ms (not surveyed?)) {:looks looks :ms wall-ms}))))
 
 (defn report
   "{:n events :looks total :median s per look over the events :mean s per look :setting}: the median of each event's
