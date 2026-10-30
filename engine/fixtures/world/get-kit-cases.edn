@@ -264,12 +264,13 @@
             {:no-event {:source :job :kind :completed} :for-s 25 :of-job true}]
    :after [[:item "stone_sword" 0]]
    :limit-s 50}
-  ;; e8d5608e: a hostile with no way to the body (a husk, NoAI, shut in a stone cell 16 blocks off) does not hold the unarmed job: the wooden sword is made and the job completes.
+  ;; e8d5608e: a hostile with no way to the body (a husk, NoAI, shut in a lit glass cell 13 blocks off) does not hold the unarmed job: the wooden sword is made and the job completes.
+  ;; The cell is glass and lit, the body faces it (yaw 270), so it has seen every wall: a cell it has not seen counts as a way (reach/mob-lookup), so a stone box seen from outside never proves a mob closed in.
   ;; Should-fail partner: unarmed-waits-while-a-hostile-is-known-near (the husk has a way).
   {:name "unarmed-makes-a-sword-while-a-hostile-is-walled-off"
    :time :any
-   :blocks [[:fill [27 -1 10] [31 3 15] "stone"] [:fill [28 0 11] [30 1 14] "air"]]
-   :body {:inventory [["oak_planks" 3] ["stick" 2] ["cooked_beef" 3]]}
+   :blocks [[:fill [27 -1 10] [31 3 15] "glass"] [:fill [28 0 11] [30 1 14] "air"] [:set [29 2 12] "sea_lantern"]]
+   :body {:yaw 270 :inventory [["oak_planks" 3] ["stick" 2] ["cooked_beef" 3]]}
    :act [[:summon "husk" [29.5 0 12.5] "{UUID:[I;2006103,2,1,2],NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:job (jobs.items.get-kit {:items ["wooden_sword"] :explore false :food false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
