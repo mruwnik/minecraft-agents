@@ -2,6 +2,7 @@
   "jobs.forestry.maintain (a forest plan's tree cells) and fell-tree's :at, against the fake world."
   (:require [engine.child-ends :as ce]
             [cljs.test :refer [deftest is are async]]
+            [engine.settings :as settings]
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.events :as events]
@@ -496,8 +497,8 @@
               refused (atom 6)]
           (.override (.-world (:p s)) "place" (fn ^:async f [token a impl] (if (pos? (swap! refused dec)) #js {:status "occupied"} (await (impl token a)))))
           (core/submit! (:eng s) (list job {:plan "forest"}) {})
-          (await (ticks (:eng s) 30))
-          (is (= 1 (count (places (:p s)))) "one tree's logs do not pay a second try")
+          (await (settings/with-settings {:jobs.lib.trees/logs-per-tree 8.7} #(ticks (:eng s) 30)))
+          (is (= 1 (count (places (:p s)))) "a tree of 8.7 logs does not pay a second try")
           (is (= [{:pos {:x 3 :y 64 :z 0} :reason :no-sapling}] (map #(select-keys % [:pos :reason]) (warns (:seen s) :forest.left)))))))))
 
 ;; ------------------------------------------------------------------ restart

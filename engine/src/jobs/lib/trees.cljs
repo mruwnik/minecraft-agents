@@ -18,7 +18,7 @@
    ::axe-saved-s {:default 1.5 :doc "Seconds an axe saves on one log over bare hands (3 s by hand, 1.5 s with a wooden axe)." :spec (a/num-in 0 nil)}
    ::axe-fetch-minutes {:default 1 :doc "The longest an axe is fetched for, in minutes (an axe is a speed-up: chests and crafting only)." :spec (a/num-in 0.1 nil)}
    ::replant-reach {:default 96 :doc "Blocks (flat) from the body within which a replant debt is acted on; a farther one waits until the body is near." :spec (a/num-in 0 nil)}
-   ::logs-per-tree {:default 8.7 :doc "Logs a felled tree gives, for pricing a harvest before any tree is seen: the mean of 37 fell-tree :done endings (median 6), 2026-10-29. Recount: node tools/event-counts.mjs tree-logs (the mean is the prior)." :spec (a/num-in 0 nil)}
+   ::logs-per-tree {:default 11.45 :doc "Logs a felled tree gives, for pricing a harvest before any tree is seen: the mean of 65 fell-tree :done endings (median 7; no duplicate events), 2026-10-30. Recount: node tools/event-counts.mjs tree-logs (the mean is the prior)." :spec (a/num-in 0 nil)}
    ::max-logs {:default 1024 :doc "The most logs one scan reads." :spec (a/int-in 1 nil)}})
 
 (defn logs-per-tree "Logs a felled tree gives on average (::logs-per-tree)." [] (settings/get settings ::logs-per-tree))
