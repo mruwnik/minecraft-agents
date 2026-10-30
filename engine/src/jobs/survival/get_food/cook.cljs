@@ -90,6 +90,12 @@
                       (boolean (some #(contains? #{"furnace" "smoker"} (:name %)) (u/inventory (:primitives c))))
                       (assoc (cook-costs) :meat-factor (meat-factor-fn c)))))
 
+(defn cook-worth
+  "Seconds cooking raw (the raw foods [{:name :count}]) is worth: the points it adds over eating them raw (cost/cook-gain,
+  at their replacement cost) at cost/food-point-worth. The smelt child's worth, so its walk and stay are priced by it."
+  [c raw]
+  (* (cost/food-point-worth) (cost/cook-gain raw (meat-factor-fn c))))
+
 (defn pending
   "The cooking note (jobs.lib.furnace/note-cooking!) of a load of the body's within ::cook-far-radius: food it put in a furnace and has not taken out."
   [c]
@@ -155,7 +161,8 @@
         (or (:cooking (ctx/mem c))
             (let [{:keys [name count]} (first (raw-carried c))
                   furnace (or cooker (nearest-cooker c))]
-              {:item name :args (cond-> (merge {:item name :count count} extra) furnace (assoc :furnace furnace))}))
+              {:item name :args (cond-> (merge {:item name :count count :worth (cook-worth c [{:name name :count count}])} extra)
+                                  furnace (assoc :furnace furnace))}))
         args (:args cooking)
         _ (ctx/update-mem! c assoc :cooking cooking)]
     (loop [n 1]

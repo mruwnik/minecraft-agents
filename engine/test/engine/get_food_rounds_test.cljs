@@ -983,10 +983,13 @@
       (fn ^:async t []
         (let [pos {:x 5.5 :y 64 :z 0.5}
               w (merge (hs/hut-world pos {"40,64,0" "furnace"})
-                       {:self {:food 2 :health 8 :pos pos} :inventory [{:name "chicken" :count 2} {:name "coal" :count 2}] :time 15000})
-              {:keys [eng p]} (setup w :step-ms 5)]
-          (await (one-round! eng {:explore false}))
-          (is (= [] (calls p "furnace")) "the walk and cook in the dark cost more than the hurt body can afford; by day it goes"))))))
+                       {:self {:food 2 :health 8 :pos pos} :inventory [{:name "chicken" :count 2} {:name "coal" :count 2}]})
+              night (setup (assoc w :time 15000) :step-ms 5)
+              day (setup (assoc w :time 6000) :step-ms 5)]
+          (await (one-round! (:eng night) {:explore false}))
+          (await (one-round! (:eng day) {:explore false}))
+          (is (= [] (calls (:p night) "furnace")) "the walk and cook in the dark cost more than the cook is worth to the hurt body")
+          (is (seq (calls (:p day) "furnace")) "by day it goes"))))))
 
 (deftest raw-chicken-with-no-furnace-touches-no-furnace
   (async done
