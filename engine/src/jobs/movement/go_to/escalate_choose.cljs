@@ -72,11 +72,12 @@
                  (and (= :abilities reason) (= :never doors) (= :open (some-> (:kind result) keyword)))))))
 
 (defn air-pocket?
-  "Whether a give-up with result is a dry body's whose every way is a swim past its air (:air, :air-lethal) from a pocket it can walk out of
+  "Whether a give-up with result is a dry body's whose every way is a swim past its air (:air, :air-lethal), or leads no nearer
+  a goal in unloaded land (:goal-unloaded: the swim's far end not loaded either), from a pocket it can walk out of
   only through water: it digs or builds out as a player would."
   [c result]
   (let [p (:primitives c)]
-    (boolean (and (#{:air :air-lethal} (some-> (:reason result) keyword))
+    (boolean (and (#{:air :air-lethal :goal-unloaded} (some-> (:reason result) keyword))
                   (not (breath/in-water? p))
                   (reach-room/dry-shut-in? p :ground)))))
 

@@ -317,6 +317,12 @@
           (is (= {:arrived true} @out))
           (is (= [:stair] (mapv :step (events-of seen :go-to.escalated)))))))))
 
+(deftest dry-pocket-escalates-when-the-goal-lies-in-unloaded-land
+  ;; the search ends :goal-unloaded, not :air, when the swim and the goal are not loaded: the pocket is still shut in but for the swim
+  (let [c {:primitives (tu/fake {:self {:pos {:x 0 :y 60 :z 0}} :blocks lake-pocket})}]
+    (is (ec/air-pocket? c {:status :no-path :reason :goal-unloaded}))
+    (is (not (ec/air-pocket? c {:status :no-path :reason :goal-enclosed})))))
+
 (deftest go-to-does-not-walk-back-down-its-stair-to-put-it-back
   (async done
     (tu/run-async done
