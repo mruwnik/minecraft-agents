@@ -12,7 +12,7 @@
   :limit-s 120}
  :cases
  [{:name "cows-near-are-hunted-for-the-pack-before-the-work"
-   :act [[:summon "cow" [20.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [21.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [20.5 0 18.5] "{NoAI:1b}"]
+   :act [[:summon "cow" [10.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [11.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [10.5 0 18.5] "{NoAI:1b}"]
          [:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false})]]
    :expect [{:event {:source :job :kind :food.killed} :within-s 100}]}
   {:name "fed-with-no-animals-warns-and-goes-on"
