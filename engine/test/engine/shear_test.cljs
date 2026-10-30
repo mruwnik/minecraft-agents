@@ -57,7 +57,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {} {:inventory shears :entities [(sheep 1 8) (sheep 2 9)]} 1))]
+        (let [s (await (scenario {} {:inventory shears :entities [(sheep 1 8) (sheep 2 9)]} 3))]
           (is (finished? s))
           (is (= :shorn (:reason (done-event s))))
           (is (= [true true] (world-sheared s))))))))
@@ -293,9 +293,10 @@
 
 (defn ^:async turned-away-run
   "Shear with a view cone (facing +x at first, the last look act's target afterwards) and a pen read that leaves the body facing +x."
-  []
+  ([] (turned-away-run [(sheep 1 -20)]))
+  ([entities]
   (let [facing (atom [1 0])
-        s (h/setup {:inventory shears :entities [(sheep 1 -20)]})
+        s (h/setup {:inventory shears :entities entities})
         ^js p (:p s)
         orig (.-entities p)]
     (.override (.-world p) "look" (fn [token a impl]
@@ -312,7 +313,7 @@
                                 ([_ _ _] (reset! facing [1 0]) (js/Promise.resolve {:closed? false :reason :unloaded})))]
       (core/submit! (:eng s) (list 'jobs.animals.shear {:collect false :radius 40}) {})
       (await (tu/run-ticks (:eng s) (:clock s) 30 700)))
-    s))
+    s)))
 
 (deftest a-sheep-the-survey-found-is-looked-for-again-after-the-pen-read-turned-the-body-away
   (async done
@@ -320,3 +321,10 @@
       (fn ^:async t []
         (let [s (await (turned-away-run))]
           (is (= [1] (mapv #(.-id (.-args %)) (calls-of s "interact"))) "the far sheep is shorn, not lost to the turn"))))))
+
+(deftest a-far-sheep-is-looked-for-after-another-was-shorn-and-the-pen-read-turned-the-body-away
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (turned-away-run [(sheep 1 -20) (sheep 2 3)]))]
+          (is (= #{1 2} (set (mapv #(.-id (.-args %)) (calls-of s "interact")))) "the sheep behind is shorn after the near one"))))))
