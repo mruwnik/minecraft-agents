@@ -142,7 +142,7 @@
    :time :any
    :plot {:height 12 :floor "grass_block" :length 64 :width 32}
    :blocks [[:fill [20 -1 14] [30 3 24] "stone"]]
-   :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1] ["stone_sword" 1] ["stick" 2] ["cooked_beef" 3] ["coal" 2] ["crafting_table" 1]]}
+   :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1] ["stone_sword" 1] ["stick" 3] ["cooked_beef" 3] ["coal" 2] ["crafting_table" 1]]}
    :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore true :food false})]]
    :expect [{:event {:source :job :kind :torch.stocked} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-torches}} :for-s 60 :of-job true}]
@@ -164,7 +164,7 @@
    :plot {:height 12 :floor "grass_block"}
    :blocks [[:fill [8 4 21] [10 5 23] "oak_leaves[persistent=true]"] [:fill [9 0 22] [9 4 22] "oak_log"]
             [:fill [10 4 21] [12 5 23] "oak_leaves[persistent=true]"] [:fill [11 0 22] [11 4 22] "oak_log"]
-            [:fill [14 0 10] [19 2 15] "stone"] [:set [18 3 14] "furnace"] [:set [26 0 16] "coal_ore"]]
+            [:fill [14 0 10] [19 2 15] "stone"] [:set [18 3 14] "furnace"] [:set [17 0 21] "coal_ore"]]
    :body {:at [16.5 3 12.5] :inventory [["stone_pickaxe" 1] ["stick" 4] ["cooked_beef" 3]]}
    :act [[:job (jobs.items.obtain {:item "torch" :count 4})]]
    :expect [{:event {:source :job :kind :obtain.gathering :data {:item "coal"}} :within-s 220 :of-job true}
