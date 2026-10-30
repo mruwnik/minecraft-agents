@@ -17,6 +17,7 @@
             [jobs.lib.places :as places]
             [jobs.lib.breath :as breath]
             [jobs.lib.column-kinds :as kinds]
+            [jobs.lib.crops :as crops]
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
@@ -33,6 +34,16 @@
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.tuning :refer [budget-near max-blocked max-route-s]]
             [jobs.movement.go-to.way-steps :as ways]))
+
+(defn crop-loss-s
+  "Seconds digging cell costs in what it destroys, a field's crop: a crop block is lost (cost/crop-worth), farmland under
+  one loses the crop (it pops) and the farmland itself, replaced by a dirt block (cost/goal-value) put down; 0 for any other cell."
+  [block-at [x y z :as cell]]
+  (let [n (block-at cell)
+        over (when (= "farmland" n) (block-at [x (inc y) z]))]
+    (cond (contains? crops/ripe-age n) (cost/crop-worth n)
+          (contains? crops/ripe-age over) (+ (cost/crop-worth over) (cw/put-back-cost (:value (cost/goal-value [{:name "dirt" :count 1}]))))
+          :else 0)))
 
 (defn skips
   "The escalation steps this call does not take: those that failed (memory :skipped-steps) and those of the ways it
@@ -417,7 +428,7 @@
                      :else apart))
         opts (fn [refused] (merge prices
                                   {:dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) cell))
-                                                            (some-> ((:dig-s prices) name cell) (+ (if own-s (own-s cell) 0)))))
+                                                            (some-> ((:dig-s prices) name cell) (+ (if own-s (own-s cell) 0) (crop-loss-s block-at cell)))))
                                    :max-dig-s (max-route-s)}
                                   route-opts
                                   (when-let [cell (:see route-opts)] {:sees (aim/stand-sees-fn p cell)})))

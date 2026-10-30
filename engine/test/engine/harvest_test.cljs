@@ -248,9 +248,9 @@
               {:keys [eng p]} (start {:world world})
               result (await (child-outcome eng job {} 300))]
           (is (= 9 (:cut result)) (pr-str result))
-          (is (= 9 (get (inv p) "wheat")))
-          ;; stone is diggable, so the way out may tunnel through a crop's farmland, which then cannot be sown again
-          (is (= 9 (+ (:replanted result) (count (:bare result)))) (pr-str result)))))))
+          (is (= {"wheat" 9} (inv p)))
+          (is (= 9 (:replanted result)) (pr-str result))
+          (is (empty? (:bare result)) (pr-str result)))))))
 
 (deftest a-body-in-a-pit-that-sees-no-crop-still-walks-out-before-concluding
   ;; the crops are out of sight from the pit: after the look round nothing is seen, yet a shut-in body is not "nothing to do"

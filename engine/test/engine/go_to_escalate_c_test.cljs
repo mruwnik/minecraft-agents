@@ -979,3 +979,12 @@
     [0 58 0] 3 true false
     [10 58 0] 4 true true
     [0 59 0] 2 true false))
+
+(deftest a-dug-crop-or-the-farmland-under-one-is-priced-by-what-is-lost
+  (let [blocks {[0 63 0] "farmland" [0 64 0] "wheat" [1 63 0] "farmland" [1 64 0] "air" [2 64 0] "wheat" [3 63 0] "stone"}
+        at #(get blocks % "air")
+        crop (cost/crop-worth "wheat")]
+    (is (= crop (choose/crop-loss-s at [2 64 0])))
+    (is (< crop (choose/crop-loss-s at [0 63 0])))
+    (is (= 0 (choose/crop-loss-s at [1 63 0])))
+    (is (= 0 (choose/crop-loss-s at [3 63 0])))))
