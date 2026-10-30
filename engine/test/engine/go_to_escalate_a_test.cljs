@@ -179,10 +179,10 @@
         "a hop that lands nowhere is not weighed against the door")))
 
 (deftest goal-way-walks-to-the-wall-for-a-level-goal-after-the-door-failed
-  (let [p (tu/fake (merge in-room {:blocks room}))]
-    (is (= {:step :approach :pos [2 64 0]}
-           (escape-way/choose p [0 64 0] [8 64 0] (constantly true) {:skip #{:clear-path} :drop-steps #{:pillar :stair}}))
-        "dropping the pillar and stair ways must not shut the walk to the wall")))
+  ;; a step from the wall: the nearest stand is no nearer by more than a block, so the way is asked from the feet
+  (let [p (tu/fake {:self {:pos {:x 1 :y 64 :z 0}} :blocks room})]
+    (is (= {:step :approach :pos [2 64 0]} (ec/goal-way {:primitives p} [1 64 0] [8 64 0] (constantly true) {:skip #{:clear-path}}))
+        "the failed door and the dropped pillar and stair leave the walk to the wall, not a dig route")))
 
 (deftest goal-way-never-pillars-out-of-a-pit-to-a-level-goal-the-rim-does-not-walk-on-to
   ;; the pit's rim pillar steps onto ground the goal, sealed in its stone, cannot be walked to from

@@ -570,17 +570,15 @@
 
 (defn rim-leads-in?
   "Whether escape-way/choose's rim pillar e from cell from leaves the body on a wall's top (a wall h high, e's height h - 1,
-  then a step onto the rim) from which a walk with no dig reaches goal; :searching while opts :slice's search goes on
-  and none has."
+  then a step onto the rim: the side toward goal when it is that high, as escape/rim-pillar measures it, else the first
+  that is) from which a walk with no dig reaches goal; :searching while opts :slice's search goes on."
   [p {:keys [height]} from goal opts]
   (let [block-at (escape/block-at-of p)
         unseen? (escape/unseen-of p)
-        walks (for [d escape/cardinals
-                    :when (= (inc height) (escape/rim-height block-at unseen? from d))]
-                (route-cells p (escape/up (escape/ahead from d 1) (inc height)) goal (constantly false) (:own? opts) false false (search-opts opts)))]
-    (cond (some #{[]} walks) true
-          (some #{:searching} walks) :searching
-          :else false)))
+        d (some #(when (= (inc height) (escape/rim-height block-at unseen? from %)) %)
+                (distinct (cond->> escape/cardinals (escape/heading from goal) (cons (escape/heading from goal)))))
+        walk (when d (route-cells p (escape/up (escape/ahead from d 1) (inc height)) goal (constantly false) (:own? opts) false false (search-opts opts)))]
+    (if (= :searching walk) walk (= [] walk))))
 
 (defn goal-way
   "A free body's way into a walled-in goal: escape-way/choose from where it stands, or, while the cell it can walk to
