@@ -23,9 +23,9 @@
                  :doc "Pseudo-counts of the boundary cells closed (k) of all (n) before any is seen: the uniform prior (Laplace's rule of succession). Replace it with `node tools/event-counts.mjs wall-sides`'s :setting once the trial logs hold enter-room.arrived events (none yet: 0 rooms counted)."}})
 
 (def look-tick-s
-  "Seconds one look takes: the look primitive turns at once and waits for the physics tick that sends the rotation, and
-  the sight pass after it reads that tick (one game tick)."
-  0.05)
+  "Seconds one look takes on the job clock: the median of `node tools/event-counts.mjs look-seconds` (0.27 s over 14 look-only
+  rounds; the :sense.looked :wall-ms events recount it). The turn waits for the physics tick that sends it, then the sight pass reads it."
+  0.27)
 
 (defn look-s "Seconds looks looks take." [looks] (* looks look-tick-s))
 

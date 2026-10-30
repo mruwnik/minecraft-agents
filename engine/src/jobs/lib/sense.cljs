@@ -8,6 +8,7 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.perception :as perception]
+            [jobs.lib.clock :as clock]
             [jobs.lib.memory-age :as memory-age]
             [engine.settings :as settings]
             [jobs.lib.look :as look]
@@ -134,6 +135,7 @@
          looked0 (if (= cell (:at mem)) (:cells mem #{}) #{})
          full? (>= (count looked0) (max-looked))
          t0 (step-ms p)
+         start (clock/now)
          [v looked surveyed]
          (loop [looks 0 looked looked0 surveyed false]
            (let [[v reads] (decide decide-fn)
@@ -164,6 +166,6 @@
          (ctx/update-mem! c assoc ::looked {:at cell :cells looked})
          (when surveyed (look/note-surveyed! c cell (:want surveyed)))
          (ctx/emit! c :sense.looked :debug
-                    (cond-> {:decision k :looks (count new) :cells (vec new) :surveyed? (boolean surveyed)}
+                    (cond-> {:decision k :looks (count new) :cells (vec new) :surveyed? (boolean surveyed) :wall-ms (Math/round (- (clock/now) start))}
                       t0 (assoc :step-ms (- total-ms (first t0)) :step-ms-max max-ms)))))
      v)))
