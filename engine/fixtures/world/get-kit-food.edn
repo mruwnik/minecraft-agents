@@ -3,6 +3,7 @@
 ;; Should-succeed: 3 cows near, a sword: a cow is hunted before any mining (food.killed); no sword but cobblestone, sticks and a table:
 ;; a stone sword is made first; fed (food 20), with bread carried or with an empty pack, and no animals anywhere: kit.no-food warns and the kit goes on (no :no-food stop).
 ;; A hungry body (bar under 7 after eating its little bread) with no animals stops :no-food. A hurt body (3 hp) with a fair bar and nothing to eat stops :no-food too.
+;; Cows 17 blocks east, behind a body facing west (past the 16-block hearing): found by the look round.
 ;; Should-fail: a starving body (food 0) with no food anywhere stops :no-food before any mining; :food false runs no food child; no stop :needs-food.
 {:defaults
  {:time :any
@@ -13,6 +14,11 @@
  :cases
  [{:name "cows-near-are-hunted-for-the-pack-before-the-work"
    :act [[:summon "cow" [10.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [11.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [10.5 0 18.5] "{NoAI:1b}"]
+         [:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false})]]
+   :expect [{:event {:source :job :kind :food.killed} :within-s 100}]}
+  {:name "cows-behind-past-hearing-are-found-by-looking-round"
+   :body {:at [4.5 0 16.5] :yaw 90 :inventory [["iron_sword" 1]] :settle-s 2}
+   :act [[:summon "cow" [21.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [22.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [21.5 0 18.5] "{NoAI:1b}"]
          [:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false})]]
    :expect [{:event {:source :job :kind :food.killed} :within-s 100}]}
   {:name "fed-with-no-animals-warns-and-goes-on"
