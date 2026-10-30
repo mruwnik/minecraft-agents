@@ -1002,6 +1002,15 @@
            (is (= {:step :searching} first-leg))
            (is (= :dig-route (:step legs)) (pr-str (:step legs))))))))
 
+(deftest a-flood-is-charged-to-the-slice-at-its-measured-cpu-against-a-search-node
+  (let [p (tu/fake {:blocks (box -20 63 -20 20 63 20 "stone")})
+        slice (choose/route-slice "nearest-flood")
+        before @(:left slice)
+        per-node (/ (cost/search-cell-s) (cost/flood-cell-s))]
+    (choose/nearest-stand p [10 64 10] 0 slice)
+    (let [charged (- before @(:left slice))]
+      (is (<= (/ 1024 per-node) charged (/ 1100 per-node)) "a flood is up to room-cells cells, each a flood cell's seconds over a node's"))))
+
 (deftest frontier-way-charges-its-flood-to-the-slice
   (let [p (tu/fake {:blocks (merge (box -3 63 -3 3 63 3 "stone") (box 5 40 -3 9 40 3 "stone"))})
         slice (choose/route-slice "frontier-flood")

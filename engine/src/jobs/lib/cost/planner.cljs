@@ -200,8 +200,10 @@
   {:peek-s 0.7 :aim-s 0.1 :see-lit-depth 10 :light-depth 5})
 
 (a/defargs settings
-  {::search-cell-s {:default 0.0001 :spec (a/num-in 0 nil)
-                    :doc "Seconds of CPU one cell expanded by a route search costs (dig-route's priced-search; go-to's flood and search slices are charged against it by ratio). Measured 2026-10-30 on the landed code, search to its end in the fake world: 0.035 to 0.083 ms a cell over three bare scenes (a dear shell, a far unseen dig, a diagonal), 0.103 ms (0.92 s over 8910 cells) in mine-a's glass cut, which also reads the seen world through the primitives: the dearest scene is the price. Recount: time dr/search to its end over a scene in a scratch deftest (engine/test/engine/dig_route_test.cljs's worlds)."}
+  {::search-cells-timed {:default [0.37 3676] :spec (a/pred "[seconds cells], both positive" (fn [v] (and (vector? v) (= 2 (count v)) (every? pos? v))))
+                         :doc "Measured CPU of route searches, [seconds cells] (search-cell-s is their quotient): dig-route's priced-search to its end over four scenes read through a fake body's primitives as a cut reads the world, 2026-10-30 (0.37 s over 3676 cells = 0.10 ms a cell; the same scenes read bare run 0.03 to 0.07 ms, mine-a's glass cut 0.103). Recount: run engine.search-recount-test, add the seconds and cells of its RECOUNT :pooled-search line to these."}
+   ::flood-cells-timed {:default [0.52 30720] :spec (a/pred "[seconds cells], both positive" (fn [v] (and (vector? v) (= 2 (count v)) (every? pos? v))))
+                        :doc "Measured CPU of go-to's room floods (nearest-stand), [seconds cells] (flood-cell-s is their quotient): 30 floods of 1024 cells over a flat slab, 2026-10-30 (0.52 s = 0.017 ms a cell). Recount: engine.search-recount-test's RECOUNT :flood line."}
    ::quote-unseen-factor {:default 2 :doc "A go-to quote's mean counts each block still to go past a partial route (or with no route, when the call may change the world) as this many walked blocks of unseen terrain (walk-floor each)." :spec (a/num-in 0 nil)}
    ::drop-cost {:default 1 :doc "Scales the cost of a drop (fall seconds and damage; 1 as is, 0 free, 5 dear); false: no drop of 2 or 3 at all. :one-way :closed instead refuses only a drop the body cannot climb back." :spec (a/or-of (a/num-in 0 nil) false?)}
    ::costs {:default false :doc (str "Map of price name to seconds, overriding the planner's price of a move (" (str/join " " (map name (keys planner-names))) "); a price left out keeps the planner's default. false: none.")
@@ -289,4 +291,8 @@
 (defn walk-unknown-prices "The unknown-prices as set: the defaults over the setting ::unknown-prices." []
   (merge unknown-prices (or (settings/get settings ::unknown-prices) nil)))
 
-(defn search-cell-s "Seconds of CPU one cell of a route search costs (::search-cell-s)." [] (settings/get settings ::search-cell-s))
+(defn timed-cell-s [k] (let [[s cells] (settings/get settings k)] (/ s cells)))
+
+(defn search-cell-s "Seconds of CPU one cell of a route search costs (::search-cells-timed)." [] (timed-cell-s ::search-cells-timed))
+
+(defn flood-cell-s "Seconds of CPU one cell of go-to's room flood costs (::flood-cells-timed)." [] (timed-cell-s ::flood-cells-timed))

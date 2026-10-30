@@ -280,9 +280,10 @@
       (vswap! asked assoc k (or a :searching))
       (or a :searching))))
 
-(def flood-cells-per-node
-  "Flood cells that cost a slice as much as one search node expanded (measured in the fake world: a flood cell about a tenth of a node; a node's own seconds are cost/search-cell-s)."
-  8)
+(defn flood-cells-per-node
+  "Flood cells that cost a slice as much CPU as one search node expanded: cost/search-cell-s over cost/flood-cell-s."
+  []
+  (/ (cost/search-cell-s) (cost/flood-cell-s)))
 
 (defn charge!
   "Charge slice n floods' cells at per cells a node: its searches get that much less of the call, never under half of it
@@ -527,7 +528,7 @@
          best (.reduce cells (fn [a b] (if (< (to-goal b) (to-goal a)) b a)))
          near (+ (to-goal best) slack)
          flat (+ (across best) slack)]
-     (some-> slice (charge! (.-length cells) flood-cells-per-node))
+     (some-> slice (charge! (.-length cells) (flood-cells-per-node)))
      (vec (.find cells #(and (<= (to-goal %) near) (<= (across %) flat)))))))
 
 (defn frontier-way
@@ -541,7 +542,7 @@
     (let [kind-at (reach/seen-lookup p reach-room/body-kind-of)
           ^js cells (:cells (reach-room/flood-visit #(reach/forward kind-at %1 %2 %3) (reach/standing-vec p) reach-room/room-cells))
           land (into #{} (map vec) cells)
-          _ (some-> slice (charge! (.-length cells) flood-cells-per-node))
+          _ (some-> slice (charge! (.-length cells) (flood-cells-per-node)))
           to-goal #(u/dist (zipmap [:x :y :z] %) (zipmap [:x :y :z] goal))
           nearer? #(< (to-goal %) (dec (to-goal feet)))
           stand? (fn [[x y z]] (reach/standable-cell? p {:x x :y y :z z} kind-at))
