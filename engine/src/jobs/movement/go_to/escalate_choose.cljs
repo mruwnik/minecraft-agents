@@ -397,8 +397,8 @@
   :pillar-s, :margin). With :slice (route-slice) a search that spends it goes on at the next call; without, it ends
   at the node budget as no route. With :range (and :near, the cell it is measured from) the route ends on any stand
   within it (with :see, one whose eye sees that block, jobs.lib.aim) and never digs :near. A route is dug again till
-  it holds: priced over the chance each guess on it is diggable (1 - its class's risk, route-opts :guess-risk
-  {:beside :apart}: beside-undiggable? or not), it is none over :worth-s seconds."
+  it holds: each guess on it is dug at its dig's price over the chance it is diggable (1 - its class's risk, route-opts
+  :guess-risk {:beside :apart}: beside-undiggable? or not), in the search; it is none over :worth-s seconds."
   [p from goal may-dig? own? floors-unseen-ok? fetch? {:keys [slice spent] :as route-opts}]
   (let [own-s (:own-s route-opts)
         {:keys [beside apart] :or {beside 0 apart 0}} (:guess-risk route-opts)
@@ -423,18 +423,18 @@
                      (= beside apart) beside
                      (beside-undiggable? (fn [[x y z]] (sensed x y z)) block-at cell) beside
                      :else apart))
+        ;; a guess is dug again till it holds: its dig at the price over the chance it does, once, in the search
+        prices (if (= 0 beside apart) prices (dig-route/by-share prices #(/ 1 (- 1 (risk %)))))
         opts (fn [refused] (merge prices
                                   {:dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) cell))
                                                             ((:dig-s prices) name cell)))
                                    :max-dig-s (max-route-s)}
                                   route-opts
                                   (when-let [cell (:see route-opts)] {:sees (aim/stand-sees-fn p cell)})))
-        ;; a route is dug again till it holds: its price over the chance every guess on it is diggable
-        expected-s (fn [a] (/ (:seconds a) (reduce * 1 (map #(- 1 (risk %)) (:dig a)))))
         ;; the search itself reads no may-dig?: escalate!'s choices with other zone rules share it
         search (fn [refused]
                  (if slice
-                   (sliced-answer slice [from goal floors-unseen-ok? route-opts refused] #(dig-route/search seen-floor from goal (opts refused)))
+                   (sliced-answer slice [from goal floors-unseen-ok? route-opts [beside apart] refused] #(dig-route/search seen-floor from goal (opts refused)))
                    (dig-route/route seen-floor from goal (opts refused))))
         ;; may-dig? (zones, claims, plans) is asked of a found route's cells only, not of every cell the search weighs: it was
         ;; about half a search's time; a refused cell is searched round, at most route-searches times
@@ -447,7 +447,7 @@
                     (nil? (:dig a)) nil
                     (empty? bad) a
                     (< n route-searches) (recur (into refused bad) (inc n))))))]
-    (when (or (= :searching a) (and a (<= (route-s p (:dig a) own? fetch?) (max-route-s)) (cost/affords? (expected-s a) (or worth-s ##Inf))))
+    (when (or (= :searching a) (and a (<= (route-s p (:dig a) own? fetch?) (max-route-s)) (cost/affords? (:seconds a) (or worth-s ##Inf))))
       a)))
 
 (defn route-cells

@@ -170,10 +170,10 @@
                        (dec best))))))
 
 (defn note-guess!
-  "Memory :guess-looks {class {:bad :all}}: a cell the route guessed as rock, of class :beside or :apart
+  "Memory :guess-looks {class {:bad :all}}: cell, which the route guessed as rock, of class :beside or :apart
   (escalate-choose/beside-undiggable?), was looked at, and was (ok?) or was not as guessed."
-  [c beside? ok?]
-  (ctx/emit! c :go-to.guess-look :info {:class (if beside? :beside :apart) :ok? ok?})
+  [c cell beside? ok?]
+  (ctx/emit! c :go-to.guess-look :info {:class (if beside? :beside :apart) :ok? ok? :cell cell})
   (ctx/update-mem! c update-in [:guess-looks (if beside? :beside :apart)]
                    #(-> % (update :all (fnil inc 0)) (update :bad (fnil + 0) (if ok? 0 1)))))
 
@@ -186,7 +186,7 @@
         bad (when (= :not-diggable reason) (some-> cell vec))]
     (doseq [{g :cell beside :beside} guesses
             :when (or (dug g) (= bad g))]
-      (note-guess! c beside (not= bad g)))))
+      (note-guess! c g beside (not= bad g)))))
 
 (def prior-good-looks
   "Good looks a class of guess starts with, none bad: a prior, not measured. Unseen rock apart from seen undiggable rock
@@ -606,15 +606,15 @@
   was planned is someone's) and dig it (b/dig-cell!: no tool needed, the drops left; a cell whose floor is unseen is dug
   on top only after the dig found no side stand to step aside to and look from), noting it as a hole once dug.
   The dig's outcome, :open for a cell open already, :replan for a guessed cell the look shows otherwise (the route
-  was planned over rock that is not there), or :not-diggable."
-  [c {:keys [cell guess block beside] :as planned}]
+  was planned over rock that is not there), or :not-diggable. A guess is counted a look (note-guess!) unless :looked."
+  [c {:keys [cell guess block beside looked] :as planned}]
   (let [p (:primitives c)]
     (when (dig-look/unknown? p cell) (await (dig-look/look-at! c cell)))
     (let [block-at (escape/block-at-of p)
           n (block-at cell)
           undiggable? (or (escape/protected? n) (not (escape/diggable? block-at (may-dig-fn c (own-cut? c)) cell)))]
       (cond
-        (and guess (not (dig-look/unknown? p cell)) (not= n block)) (do (note-guess! c beside (not undiggable?)) :replan)
+        (and guess (not (dig-look/unknown? p cell)) (not= n block)) (do (when-not looked (note-guess! c cell beside (not undiggable?))) :replan)
         (bs/passable? n) :open
         undiggable? :not-diggable
         :else
@@ -631,7 +631,7 @@
             (forget-dug-own! c [dug])
             (note-holes! c [dug])
             (charge-dug! c (cost/dig-cells-s [(tools/clear-ms p n)])))
-          (when guess (note-guess! c beside (not= :not-diggable o)))
+          (when (and guess (not looked)) (note-guess! c cell beside (not= :not-diggable o)))
           (if (and guess (= :not-diggable o)) :replan o))))))
 
 (defn replans-spent?
@@ -714,7 +714,9 @@
             (ctx/update-mem! c update-in [:escalation :cells] (partial mapv #(cond-> % (= cell (:cell %)) (assoc :guess false)))))
           (cond
             (= :continue o) :continue
-            (= :replan o) (await (replan-route! c pos cell))
+            ;; a replan still searching meets the same cell next round: one look
+            (= :replan o) (do (ctx/update-mem! c update-in [:escalation :cells] (partial mapv #(cond-> % (= cell (:cell %)) (assoc :looked true))))
+                              (await (replan-route! c pos cell)))
             (#{:dug :missing :open} o) (recur (rest todo))
             :else (await (escalation-failed! c pos (cond-> {:step :dig-route :reason o :cell cell}
                                                      (= :not-diggable o) (assoc :block ((escape/block-at-of (:primitives c)) cell)))))))

@@ -727,19 +727,23 @@
           (is (= [47 63 29] (feet p)))
           (is (<= (count (filter #{:approach} (map :step (events-of seen :go-to.escalated)))) 4) "it walks to the nearest cell and looks, not round the yard"))))))
 
-(deftest a-dig-route-over-guesses-is-priced-once-over-the-chance-they-all-hold
-  ;; each guess holds with 1 - its class's risk: the route's seconds over the product, against :worth-s; a guess beside
-  ;; seen undiggable rock (a chest) is of class :beside
+(deftest a-dig-route-over-guesses-is-priced-once-in-the-search-at-the-chance-each-holds
+  ;; each guess is dug at its dig's price over 1 - its class's risk, in the search: a route's seconds carry its risk and
+  ;; are held to :worth-s as they are; a guess beside seen undiggable rock (a chest) is of class :beside
   (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "4,64,0" "air" "4,65,0" "air" "2,66,0" "chest")
-        p (hiding-with-pickaxe world #{[1 64 0] [1 65 0] [2 64 0] [2 65 0] [3 64 0] [3 65 0]})
+        hidden #{[1 64 0] [1 65 0] [2 64 0] [2 65 0] [3 64 0] [3 65 0]}
+        p (hiding-with-pickaxe world hidden)
         answer #(choose/route-answer p [0 64 0] [4 64 0] (constantly true) (constantly false) false false %)
-        {:keys [seconds dig]} (answer {})
-        priced (fn [risk worth] (some? (answer {:guess-risk risk :worth-s worth})))]
-    (is (some #{[2 65 0]} dig) "the straight tunnel, under the light")
-    (is (= 6 (count dig)))
-    (is (= seconds (:seconds (answer {:guess-risk {:beside 0.5 :apart 0.2} :worth-s ##Inf}))) "the risk leaves the search alone")
-    (is (priced {:beside 0.5 :apart 0.2} (* 1.01 (/ seconds 0.16384))) "priced once: no second factor on the route")
-    (is (not (priced {:beside 0.5 :apart 0.2} (* 0.99 (/ seconds 0.16384)))))
+        risk {:beside 0.5 :apart 0.2}
+        plain (answer {})
+        {:keys [seconds dig]} (answer {:guess-risk risk :worth-s ##Inf})
+        priced (fn [worth] (some? (answer {:guess-risk risk :worth-s worth})))]
+    (is (= 6 (count (:dig plain))))
+    (is (= (set dig) hidden) "the straight tunnel, under the light, at this risk still the cheapest")
+    (is (> seconds (:seconds plain)) "the risk is in the route's seconds")
+    (is (priced (* 1.01 seconds)) "priced once: no second factor on the route")
+    (is (not (priced (* 0.99 seconds))))
+    (is (not-any? hidden (:dig (answer {:guess-risk {:beside 0.9 :apart 0.9} :worth-s ##Inf}))) "guesses that nearly always fail are dug round through seen rock")
     (is (= [[2 65 0]] (map :cell (filter :beside (choose/route-cells p [0 64 0] [4 64 0] (constantly true) (constantly false))))))))
 
 (deftest a-stair-over-guesses-is-priced-over-the-chance-they-all-hold-and-at-zero-risk-by-its-price

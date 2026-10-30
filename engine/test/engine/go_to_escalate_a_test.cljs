@@ -605,4 +605,5 @@
           (await (tick-out! eng 3000))
           (is (true? (:arrived @out)) (pr-str (select-keys @out [:why :text :escalation])))
           (is (= [19 60 16] (feet p)))
+          (is (apply distinct? (map :cell (events-of seen :go-to.guess-look))) "a replan searching over rounds counts its guess one look")
           (is (= "air" (block p [19 63 16])) "the glass is dug once the routes round it prove walled"))))))
