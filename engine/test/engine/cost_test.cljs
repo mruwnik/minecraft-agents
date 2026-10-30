@@ -888,4 +888,10 @@
           sensed {[0 65 0] crop-cell [0 66 0] nil}
           destroyed (cost/destroyed-fn #(get sensed %))]
       (is (= (+ place till wheat plant) (destroyed "farmland" [0 64 0] false)) "the crop is open, not dug: the farmland pays it"))
+    (let [log (fn [axis] #js {:name "oak_log" :properties #js {:axis axis}})
+          price (fn [sensed cell] ((cost/destroyed-fn #(get sensed %)) "oak_log" cell false))]
+      (is (= 0 (price {[0 64 0] (log "y") [0 65 0] (log "y") [1 64 0] #js {:name "oak_leaves"}} [0 64 0])) "a trunk is free")
+      (is (= place (price {[0 64 0] (log "x")} [0 64 0])) "a horizontal log is placed")
+      (is (= place (price {[0 64 0] (log "y") [0 64 1] (log "y")} [0 64 0])) "a log in a horizontal line is placed")
+      (is (= place (price {[0 64 0] (log "y") [0 64 1] #js {:name "oak_planks"}} [0 64 0])) "a log joined to planks is placed"))
     (is (< (cost/destroyed-s "wheat" "air" 2 false) (cost/destroyed-s "wheat" "air" 5 false)) "a crop grown further loses more")))
