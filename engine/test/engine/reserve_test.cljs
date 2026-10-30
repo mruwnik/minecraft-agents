@@ -76,6 +76,21 @@
     [{:pos [3 64 0] :items {"cobblestone" 64}}] 1200 {"bread" 12}
     [{:pos [900 64 0] :items {"bread" 64}}] 1200 {"bread" 6}))
 
+(deftest home-crops-and-pens-are-read-once-a-round
+  (let [scans (atom 0)
+        c (body [(item "bread" 20)] [])
+        p (:primitives c)
+        entities (.-entities p)
+        _ (set! (.-entities p) (fn [o] (swap! scans inc) (.call entities p o)))
+        eng #js {}
+        in-round (fn [round] (assoc c :engine eng :root "j1" :round round))]
+    (reserve/held (in-round 1) :deposit)
+    (let [first-scans @scans]
+      (reserve/held (in-round 1) :craft)
+      (is (= first-scans @scans) "the second chooser of the round reuses the scan")
+      (reserve/held (in-round 2) :deposit)
+      (is (< first-scans @scans) "a new round reads again"))))
+
 (deftest one-carried-bed-is-held-until-a-home-bed-is-placed
   (let [items [(item "red_bed" 2) (item "white_bed" 1)]]
     (is (= {"red_bed" 1} (reserve/held (body items []) :deposit)))

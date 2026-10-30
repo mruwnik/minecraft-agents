@@ -68,11 +68,27 @@
           :when (pos? spare-n)]
       {:kind :pen :pos (:pos (first as)) :points (* spare-n drops (foods/points meat))})))
 
+(def round-fields
+  "The crop and pen sources of the last round asked: {:engine :root :round :sources}. Their seen-block scan costs 5-16 ms
+  a call over 100-600 remembered sections, and choosers ask the reserve many times a round."
+  (atom nil))
+
+(defn field-sources
+  "crop-sources and pen-sources, read once per round of c's root job (every call without an engine round)."
+  [c]
+  (let [{:keys [engine root round]} c
+        kept @round-fields]
+    (if (and round (identical? engine (:engine kept)) (= root (:root kept)) (= round (:round kept)))
+      (:sources kept)
+      (let [found (vec (concat (crop-sources c) (pen-sources c)))]
+        (when round (reset! round-fields {:engine engine :root root :round round :sources found}))
+        found))))
+
 (defn sources
   "See the ns doc: each with the seconds of the walk to it from far."
   [c far]
   (let [per-s (cost/walk-blocks-per-s)]
-    (for [s (concat (chest-sources c) (crop-sources c) (pen-sources c))]
+    (for [s (concat (chest-sources c) (field-sources c))]
       (assoc s :walk-s (/ (u/dist far (:pos s)) per-s)))))
 
 (defn chain-trip
