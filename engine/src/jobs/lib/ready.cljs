@@ -102,16 +102,12 @@
   (update c ::own-ways (fnil conj []) f))
 
 (defn room-look
-  "A :look at the unseen walls of the room round the body (look-edge/pending) not looked at yet, and at `extra`, taken only
-  when the round pays the call's worth (cost/round-looks over all of them: the hook looks at every cell it is given, and
-  a wall left unlooked counts open), nil when it does not or no wall is left: an unseen wall is an open side."
+  "A :look at the unseen walls of the room round the body (look-edge/pending) not looked at yet, and at `extra`: the ones
+  the hook's sense/round-plan pays for, nil when none or no wall is left: an unseen wall is an open side."
   [c text extra]
   (when-let [sides (seq (look-edge/pending c (sense/round-looked c) 0))]
-    (let [p (:primitives c)
-          cells (into (vec sides) extra)
-          n (cost/round-looks (ctx/worth c) (+ (count sides) (count (filter (partial sense/unknown? p) extra))) (count sides))]
-      (when (pos? n)
-        (contract/look :exposed text :look-at cells :room-sides true)))))
+    (when-let [cells (seq (:pay (sense/round-plan c (into (vec sides) extra))))]
+      (contract/look :exposed text :look-at (vec cells) :room-sides true))))
 
 (defn air-look
   "Under a seen roof, a :look at the unseen cells beside the seen air round the body (look/room-air-unseen) a look from here
@@ -121,8 +117,8 @@
   (let [p (:primitives c)]
     (when-let [cells (and (sh-sense/roofed? p (sh-sense/room-roof-height))
                           (seq (filter #(and (not ((sense/round-looked c) %)) (look/look-shows? p %)) (look/room-air-unseen p))))]
-      (when (pos? (cost/round-looks (ctx/worth c) (count cells) 0))
-        (contract/look :exposed text :look-at (vec cells))))))
+      (when-let [paid (seq (:pay (sense/round-plan c cells)))]
+        (contract/look :exposed text :look-at (vec paid))))))
 
 (defn unseen-status
   "The exposure of the unseen place `to` no look from here shows, priced as unseen at its chance (Q16): spawn-light/chance-at's

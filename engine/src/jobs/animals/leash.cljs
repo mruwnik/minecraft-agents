@@ -69,7 +69,7 @@
   "The call's default :spend :job-time: the lead's fetch (::lead-fetch-s), one look round, the walk across :radius, and the use's worst quote (a caller's remainder can lower it)."
   [{:keys [radius]}]
   (+ (settings/get settings ::lead-fetch-s)
-     (cost/look-s look/round-size)
+     (cost/look-s (look/round-size))
      (/ (or radius default-radius) fight/walk-speed)
      (last (get-in (use-entity/quote-of nil) [:uses :job-time]))))
 

@@ -407,16 +407,16 @@
     (is (= n (cost/round-looks (* 1.01 break-even) n)) "above it the whole round is")
     (is (every? #(pays-at (* 1.01 break-even) %) (range n)) "each closed wall seen leaves a round that still pays")))
 
-(deftest a-call-pays-for-the-looks-its-worth-covers
-  (is (= 3 (cost/paid-looks (* 3.5 (cost/look-s 1)))))
-  (is (= 0 (cost/paid-looks (* 0.5 (cost/look-s 1)))))
-  (is (> (cost/paid-looks ##Inf) 1000000)))
-
-(deftest the-looks-past-the-walls-of-a-round-are-not-priced-as-walls
-  (let [walls 6 looks 8
-        worth (* 1.01 (/ (cost/look-s looks) (cost/closed-chance 0 walls)))]
-    (is (= looks (cost/round-looks worth looks walls)) "the cost of every look is paid, the chance only over the walls")
-    (is (= 0 (cost/round-looks worth looks looks)) "priced as walls, the same round does not pay: 8 walls closed is less likely than 6")))
+(deftest looks-at-unknown-cells-pay-while-the-falling-chance-of-a-turn-covers-them
+  (settings/with-settings {::glance/turn-prior {:a 1 :b 9}}
+    #(let [worth (* 19.5 (cost/look-s 1))]
+       (is (= 10 (cost/cell-looks worth 30)) "the next look turns the decision at 1/(10 + i): worth 19.5 looks pays while i < 9.5")
+       (is (= 5 (cost/cell-looks worth 30 5 0)) "five fruitless looks taken before leave five")
+       (is (= 0 (cost/cell-looks worth 30 0 (cost/look-s 1))) "deciding again after each look doubles its price")
+       (is (= 30 (cost/cell-looks ##Inf 30)) "arrive: every cell pays, the cells are the bound")
+       (is (= 0 (cost/cell-looks 0 30)))))
+  (is (= 1 (cost/redo-every 0)) "a free decision is made again after every look")
+  (is (= 4 (cost/redo-every (* 3.5 (cost/look-s 1)))) "one that takes 3.5 looks' seconds waits 4 looks"))
 
 (deftest a-swim-to-a-shore-whose-land-may-go-on-is-caught-at-the-chance-it-ends
   (let [m (mob "drowned" 3 35)

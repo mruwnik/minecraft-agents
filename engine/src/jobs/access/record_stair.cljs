@@ -7,6 +7,8 @@
             [jobs.lib.stair-memory :as smem]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
+            [jobs.lib.clock :as clock]
+            [jobs.lib.cost :as cost]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.ready :as ready]
             [jobs.lib.reach :as reach]
@@ -106,18 +108,26 @@
      cell)))
 
 (defn ^:async see-ends!
-  "Look at the unseen cells beyond the ends of the runs through the body's cell, nearest first, each once, at most
-  as many looks as the call pays for (a cell behind rock stays unseen)."
+  "Look at the unseen cells beyond the ends of the runs through the body's cell, nearest first, each once, as many as
+  the call pays for (sense/cell-looks), reading the runs again after as many looks as one read costs on the clock
+  (cost/redo-every; a cell behind rock stays unseen)."
   [c]
   (let [p (:primitives c)
         feet (reach/standing-vec p)
         headings (case (:heading (:args c)) nil [:east :south] (:east :west) [:east] [:south])]
     (loop [tried #{} n 0]
-      (let [lines (lines-through (access/seen-at p) feet headings (settings/get settings ::max-steps))
-            todo (remove tried (filter #(dig-look/unknown? p %) (frontier lines)))]
-        (when (and (seq todo) (< n (sense/paid-looks c)))
-          (await (dig-look/look-at! c (first todo)))
-          (recur (conj tried (first todo)) (inc n)))))))
+      (let [t (clock/now)
+            lines (lines-through (access/seen-at p) feet headings (settings/get settings ::max-steps))
+            todo (vec (remove tried (filter #(dig-look/unknown? p %) (frontier lines))))
+            redo-s (/ (- (clock/now) t) 1000)
+            k (min (count todo) (cost/redo-every redo-s))
+            batch (take (min k (sense/cell-looks c (count todo) n (/ redo-s (max k 1)))) todo)]
+        (when (seq batch)
+          (loop [[cell & more] batch]
+            (when cell
+              (await (dig-look/look-at! c cell))
+              (recur more)))
+          (recur (into tried batch) (+ n (count batch))))))))
 
 (defn ^:async round [c]
   (let [feet (reach/standing-vec (:primitives c))

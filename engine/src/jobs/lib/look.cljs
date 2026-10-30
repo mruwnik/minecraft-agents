@@ -39,7 +39,6 @@
 (defn search-effort [] (settings/get settings ::search-effort))
 
 (def headings {"north" [0 -1] "south" [0 1] "east" [1 0] "west" [-1 0]})
-(def round-size "Looks of one look round (look-around!): level, ahead, down and up along each heading." (* 3 (count headings)))
 (def heading-short {"n" "north" "s" "south" "e" "east" "w" "west"})
 
 (defn cell-of [pos] {:x (js/Math.floor (:x pos)) :y (js/Math.floor (:y pos)) :z (js/Math.floor (:z pos))})
@@ -71,6 +70,14 @@
   [eye [dx dz]]
   [{:x (+ (:x eye) (* (glance-ahead) dx)) :y (:y eye) :z (+ (:z eye) (* (glance-ahead) dz))}
    {:x (+ (:x eye) (* (glance-near) dx)) :y (- (:y eye) game/body-height) :z (+ (:z eye) (* (glance-near) dz))}])
+
+(defn round-steps
+  "The steps of a look round from eye, in order: [point nil] for each glance along a heading, then [nil heading] for its
+  look up (up-glance, skipped when the ray is seen)."
+  [eye]
+  (mapcat (fn [d] (concat (map (fn [pt] [pt]) (glances eye d)) [[nil d]])) (vals headings)))
+
+(defn round-size "The most looks one look round (look-around!) takes." [] (count (round-steps {:x 0 :y 0 :z 0})))
 
 (defn up-cells
   "The cells along the ray from eye up (about 60 degrees) along [dx dz], twice as far as the level look takes in: what stands high beside the body is up there."
@@ -172,7 +179,7 @@
    (let [{:keys [x y z]} (cell-of (u/self-pos c))
          eye {:x (+ x 0.5) :y (+ y game/eye-height) :z (+ z 0.5)}
          p (:primitives c)]
-     (loop [steps (mapcat (fn [d] (concat (map (fn [pt] [pt]) (glances eye d)) [[nil d]])) (vals headings))]
+     (loop [steps (round-steps eye)]
        (if-let [[pt d] (first steps)]
          (if-let [pt (or pt (up-glance p eye d))]
            (do (await (ctx/act c :look (clj->js {:pos pt})))

@@ -1,11 +1,13 @@
 (ns engine.sense-test
   "jobs.lib.sense/decide! over a real perception on the fake world: a sync decision that read cells the body has not
-  seen is decided again after the body looks at them, at most as many looks as the call pays, never twice at one cell."
+  seen is decided again after the body looks at them, as many looks as the call pays, never twice at one cell."
   (:require [cljs.test :refer [deftest is async]]
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
+            [engine.settings :as settings]
             [engine.test-util :as tu]
+            [jobs.lib.clock :as clock]
             [jobs.lib.cost.look :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.reach.room :as reach-room]
@@ -60,27 +62,54 @@
 
 (def inside (for [x [5 6 7] y [63 64 65] z [-1 0 1]] {:x x :y y :z z}))
 
-(deftest occluded-cells-cost-at-most-the-looks-the-call-pays-and-are-never-looked-at-twice
+(defn all-seen [p] (= (count inside) (count (keep #(u/seen-name p %) inside))))
+
+(deftest occluded-cells-cost-the-looks-the-chance-of-a-turn-pays-and-are-never-looked-at-twice
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await (settings/with-settings {::cost/turn-prior {:a 1 :b 9}}
+          (fn ^:async f []
+            (let [p (seeing {:self {:pos {:x 0 :y 64 :z 0}} :blocks rock})
+                  c (assoc (stub-ctx p) :worth (constantly (* 19.5 (cost/look-s 1))))]
+              (is (false? (await (sense/decide! c ::rock #(all-seen p)))))
+              (is (= 10 (looks p)) "a look turns it at 1/(10 + i) after i fruitless ones: worth 19.5 looks pays ten")
+              (dotimes [_ 4] (await (sense/decide! c ::rock #(all-seen p))))
+              (is (= 10 (looks p)) "the cells looked at from here count as fruitless looks: no later call pays one")))))))))
+
+(deftest a-call-at-inf-worth-looks-at-most-max-looked-cells
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await (settings/with-settings {::sense/max-looked 5}
+          (fn ^:async f []
+            (let [p (seeing {:self {:pos {:x 0 :y 64 :z 0}} :blocks rock})
+                  c (stub-ctx p)]
+              (await (sense/decide! c ::rock #(all-seen p)))
+              (is (= 5 (looks p)) "arrive pays every look; the memory of looked cells bounds the call")))))))))
+
+(deftest a-costly-decision-is-made-again-only-after-looks-as-long-as-it
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [p (seeing {:self {:pos {:x 0 :y 64 :z 0}} :blocks rock})
-              c (assoc (stub-ctx p) :worth (constantly (* 3.5 (cost/look-s 1))))
-              all-seen #(= (count inside) (count (keep (fn [cell] (u/seen-name p cell)) inside)))]
-          (is (false? (await (sense/decide! c ::rock all-seen))))
-          (is (= 3 (looks p)) "three looks are paid for, the fourth is not")
-          (dotimes [_ 4] (await (sense/decide! c ::rock all-seen)))
-          (is (= 15 (looks p)) "three looks a call, 5 calls, none at a cell twice (the cube has 27)"))))))
+              c (stub-ctx p)
+              ms (atom 0)
+              runs (atom 0)
+              decide-ms (* 1000 (cost/look-s 3.5))]
+          (with-redefs [clock/now (fn [] @ms)]
+            (await (sense/decide! c ::rock #(do (swap! runs inc) (swap! ms + decide-ms) (all-seen p)))))
+          (is (= (count inside) (looks p)) "arrive: every hidden cell is looked at")
+          (is (= 8 @runs) "a decision that takes 3.5 looks' seconds is made again every 4 looks: 1 + ceil(27 / 4), not 28"))))))
 
 (deftest a-call-worth-every-look-looks-at-each-hidden-cell-once
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [p (seeing {:self {:pos {:x 0 :y 64 :z 0}} :blocks rock})
-              c (stub-ctx p)
-              all-seen #(= (count inside) (count (keep (fn [cell] (u/seen-name p cell)) inside)))]
-          (await (sense/decide! c ::rock all-seen))
-          (dotimes [_ 4] (await (sense/decide! c ::rock all-seen)))
+              c (stub-ctx p)]
+          (await (sense/decide! c ::rock #(all-seen p)))
+          (dotimes [_ 4] (await (sense/decide! c ::rock #(all-seen p))))
           (is (= (count inside) (looks p)) "each hidden cell looked at once, then no more looks"))))))
 
 (deftest an-area-query-with-nothing-near-surveys-once-and-finds-the-block-behind
@@ -159,19 +188,24 @@
           (is (<= (count cells) (looks p)) "a call worth any seconds looks at every cell")
           (is (= (set cells) (sense/round-looked c)) "one round per :look: the cells asked for count as looked, so the check asks no second"))))))
 
-(deftest look-round-looks-only-as-far-as-the-call-is-worth
+(deftest look-round-looks-only-at-the-cells-the-call-pays-for-and-counts-only-those
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [p (seeing {:self {:pos {:x 0 :y 64 :z 0}} :blocks rock})
-              asked (atom [])
-              c (assoc (stub-ctx p) :worth (constantly (/ (cost/look-s 3) 2)))
-              cells (mapv (fn [{:keys [x y z]}] [x y z]) inside)]
-          (with-redefs [sense/look-at! (fn ^:async [_ cell & _] (swap! asked conj cell))
-                        look/look-around! (fn ^:async ([_ _ _]) ([_ _]) ([_]))]
-            (await (sense/look-round! c cells)))
-          (is (empty? @asked) "the whole list costs more than the call is worth: no look")
-          (is (= (set cells) (sense/round-looked c)) "still one round: what was not looked at counts as open"))))))
+        (await (settings/with-settings {::cost/turn-prior {:a 1 :b 9}}
+          (fn ^:async f []
+            (let [p (seeing {:self {:pos {:x 0 :y 64 :z 0}} :blocks rock})
+                  asked (atom [])
+                  c (assoc (stub-ctx p) :worth (constantly (* 19.5 (cost/look-s 1))))
+                  cells (mapv (fn [{:keys [x y z]}] [x y z]) inside)]
+              (with-redefs [sense/look-at! (fn ^:async [_ cell & _] (swap! asked conj cell))
+                            look/look-around! (fn ^:async ([_ _ _]) ([_ _]) ([_]))
+                            reach-room/unseen-sides (constantly [])]
+                (await (sense/look-round! c cells))
+                (is (= 10 (count @asked)) "ten of the 27 cells pay, each at its own falling chance")
+                (is (= (set @asked) (sense/round-looked c)) "only the paid cells count looked; the rest is asked for again")
+                (await (sense/look-round! c cells))
+                (is (= 10 (count @asked)) "the ten looks taken from here leave no paid look for a second round"))))))))))
 
 (deftest look-round-stops-at-a-room-wall-seen-open
   (async done

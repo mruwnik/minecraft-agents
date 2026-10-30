@@ -53,7 +53,6 @@
               _ (await (pen-entry/pens! c))
               n (st/looks p)]
           (is (pos? n) "the first call looks at the hidden floor")
-          (is (<= n (sense/paid-looks c)))
           (await (pen-entry/pens! c))
           (is (= n (st/looks p)) "the second call does not look again"))))))
 

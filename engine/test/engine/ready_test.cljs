@@ -200,19 +200,23 @@
           break-even (/ (cost/look-s n) (cost/closed-chance 0 n))
           looks-at #(some-> (ready/room-look (assoc (ctx-of night-hut) :worth (constantly %)) "dark" nil) (nth 2) :look-at)]
       (with-redefs [look-edge/pending (fn ([_] nil) ([_ _ _] walls))
+                    reach-room/unseen-sides (constantly walls)
                     sense/unknown? (constantly true)]
         (is (nil? (looks-at (* 0.99 break-even))) (str "all " n " walls closed is not worth the looks"))
         (is (= walls (looks-at (* 1.01 break-even))) (str "worth the round: every one of " n " walls is looked at"))))))
 
-(deftest a-room-look-prices-only-the-extra-cells-still-unknown
+(deftest a-room-look-prices-the-walls-as-a-round-and-each-unknown-extra-on-its-own
   (let [walls [[1 64 0] [2 64 0]]
         extra (mapv #(vector % 64 5) (range 22))
         known (set (take 20 extra))
-        worth (* 1.01 (/ (cost/look-s 4) (cost/closed-chance 0 2)))]
+        worth (* 1.01 (/ (cost/look-s 2) (cost/closed-chance 0 2)))
+        look-at #(some-> (ready/room-look (assoc (ctx-of night-hut) :worth (constantly %)) "dark" extra) (nth 2) :look-at)]
     (with-redefs [look-edge/pending (fn ([_] nil) ([_ _ _] walls))
+                  reach-room/unseen-sides (constantly walls)
                   sense/unknown? (fn [_ cell] (not (known cell)))]
-      (is (= (into walls extra) (some-> (ready/room-look (assoc (ctx-of night-hut) :worth (constantly worth)) "dark" extra) (nth 2) :look-at))
-          "20 of the 22 extra cells are known: 2 walls and 2 extras are priced"))))
+      (is (= (into walls (take 20 extra)) (look-at worth))
+          "the walls' round pays; the 20 known extras need no look; the 2 unknown ones, each a 1-in-43 turn, do not pay at well under 3 s")
+      (is (= (into walls extra) (look-at ##Inf)) "arrive pays every one"))))
 
 (deftest a-wall-a-look-round-did-not-show-counts-as-open-not-looked-at-again
   (let [seen-block u/seen-block
