@@ -187,6 +187,16 @@
             (is (empty? (calls p "dig")) what)
             (is (every? #{:approach} (map :step (events-of seen :go-to.escalated))) "at most a walk to the nearest cell, to look")))))))
 
+(deftest a-goal-sealed-in-seen-bedrock-with-no-worth-ends-unreachable-as-no-way-exists
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [bedrock-pocket (into {} (for [[k v] pocket] [k (if (= "stone" v) (if (<= 6 (first (fake/parse-cell k)) 10) "bedrock" v) v)]))
+              {:keys [out]} (await (run-job! (assoc free-by-pocket :blocks bedrock-pocket) {:pos [8 64 0] :range 0}))]
+          (is (false? (:arrived @out)))
+          (is (= :unreachable (:reason @out)) (pr-str @out))
+          (is (= :goal-enclosed (:why @out)) "no search is kept for a way no dig can open"))))))
+
 (deftest a-walk-only-call-walks-to-the-wall-of-a-walled-in-goal-when-its-budget-allows
   (async done
     (tu/run-async done
