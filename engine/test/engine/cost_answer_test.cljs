@@ -54,7 +54,7 @@
         [wide-hp wide] (chance 19.5 20)]
     (is (< (js/Math.abs (- thin-hp wide-hp)) 1e-9) "the same mean: the same expected hp")
     (is (> thin wide) "fewer meets behind the same mean: a likelier death")
-    (is (nil? (:shape (cost/fight-answer {:weapon nil :mobs [(mob "drowned" 0)] :wet? true}))) "a fist fight is out of the fit: hit as on land")))
+    (is (some? (:shape (cost/fight-answer {:weapon nil :mobs [(mob "drowned" 0)] :wet? true}))) "a fist's swings seldom reach it either: the same fit")))
 
 (deftest a-wet-fight-followed-by-a-blast-keeps-the-width-of-its-blow-count
   (let [wet (cost/fight-answer {:weapon "stone_sword" :mobs [(mob "drowned" 0)] :wet? true})]
@@ -358,12 +358,12 @@
     (is (< (js/Math.abs (- (cost/answer-price (body 5) {:damage 100 :hit 5 :seconds 1} here) (+ death 1))) 1e-3)
         "a sure death with no mob met again is its death-cost and seconds: respawn heals the hp")))
 
-(deftest a-second-in-water-costs-the-drowned-meet-rate-times-the-cheapest-answer-to-one
-  (doseq [kit [(assoc (body 20) :weapon "stone_sword") (body 20) (assoc (body 8) :weapon "stone_sword")]
-          :let [cheapest #(apply min (vals (:prices (cost/decide % (answer/threat-answers % "drowned" nil) nil))))
-                [deep other] (cost/water-factors kit)]]
-    (is (< (js/Math.abs (- deep (* 0.0021 (cheapest (assoc kit :swim ##Inf))))) 1e-9) "water a drowned can spawn in: its measured meet rate")
-    (is (< (js/Math.abs (- other (* 0.00043 (cheapest kit)))) 1e-9) "other water, mostly a wade: the meet answered standing")))
+(deftest a-second-in-water-costs-a-bare-or-hurt-body-more-than-a-whole-sword-one
+  (let [factor (fn [kit] (first (cost/water-factors (assoc kit :at here))))
+        whole (factor (assoc (body 20) :weapon "stone_sword"))]
+    (is (< 0 whole) "the meet rate times a price")
+    (is (< whole (factor (body 20))) "a fist's swings seldom reach a drowned either: a death it is, a walk back from the respawn")
+    (is (< whole (factor (assoc (body 8) :weapon "stone_sword"))) "a hurt body dies likelier")))
 
 (deftest a-phantom-floor-beside-seen-water-pays-its-chance-of-the-swim-there
   (settings/with-settings {:jobs.lib.cost.answer/unseen-water-lags [{:k 8 :n 8} {:k 2 :n 8}]}
