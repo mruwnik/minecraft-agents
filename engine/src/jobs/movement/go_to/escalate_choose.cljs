@@ -417,7 +417,7 @@
         sensed #(u/sensed p (zipmap [:x :y :z] %))
         cells (case step
                 :stair (escape/stair-cuts feet (escape/heading-dirs heading) steps)
-                :clear-path (:cells (escape/door block-at unseen? feet (escape/heading-dirs heading)))
+                :clear-path (:cells (escape/door block-at unseen? feet (escape/heading-dirs heading) (escape/drop-limit p)))
                 nil)]
     (vec (for [cell cells :when (unseen? cell)] {:cell cell
                                                 :class (guess-class sensed cell)}))))

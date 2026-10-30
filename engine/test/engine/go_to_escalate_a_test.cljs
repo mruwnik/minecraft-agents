@@ -36,19 +36,19 @@
   (is (= 0 (escape/pit-depth (ba {:blocks room}) [0 64 0])) "the middle of a room is no pit"))
 
 (deftest escape-door-is-the-solid-cells-of-a-thin-wall-with-floor-beyond
-  (is (= {:cells [[3 65 0] [3 64 0]] :through [4 64 0]} (escape/door (ba {:blocks room}) [2 64 0] [1 0])))
-  (is (nil? (escape/door (ba {:blocks room}) [1 64 0] [1 0])) "no wall right in front")
-  (is (nil? (escape/door (ba {:blocks pit}) [0 61 0] [1 0])) "no floor beyond the pit's wall"))
+  (is (= {:cells [[3 65 0] [3 64 0]] :through [4 64 0]} (escape/door (ba {:blocks room}) (constantly false) [2 64 0] [1 0] 3)))
+  (is (nil? (escape/door (ba {:blocks room}) (constantly false) [1 64 0] [1 0] 3)) "no wall right in front")
+  (is (nil? (escape/door (ba {:blocks pit}) (constantly false) [0 61 0] [1 0] 3)) "no floor beyond the pit's wall"))
 
 (deftest escape-door-never-goes-through-a-door-a-bed-or-a-container
   (doseq [b ["iron_door" "oak_door" "spruce_fence_gate" "red_bed" "chest" "barrel" "bedrock"]]
-    (is (nil? (escape/door (ba {:blocks (assoc room "3,64,0" b)}) [2 64 0] [1 0])) b)))
+    (is (nil? (escape/door (ba {:blocks (assoc room "3,64,0" b)}) (constantly false) [2 64 0] [1 0] 3)) b)))
 
 (deftest escape-door-through-a-seen-wall-is-the-whole-wall-however-thick
   ;; how thick a wall is worth digging is the digger's price, not a count of rows
   (let [thick (merge room (box 3 64 -3 8 65 3 "dirt"))]
-    (is (= [9 64 0] (:through (escape/door (ba {:blocks thick}) [2 64 0] [1 0]))))
-    (is (= 12 (count (:cells (escape/door (ba {:blocks thick}) [2 64 0] [1 0])))))))
+    (is (= [9 64 0] (:through (escape/door (ba {:blocks thick}) (constantly false) [2 64 0] [1 0] 3))))
+    (is (= 12 (count (:cells (escape/door (ba {:blocks thick}) (constantly false) [2 64 0] [1 0] 3)))))))
 
 (deftest escape-choose-skips-only-the-door-that-failed
   (let [p (tu/fake (merge in-room {:blocks room}))

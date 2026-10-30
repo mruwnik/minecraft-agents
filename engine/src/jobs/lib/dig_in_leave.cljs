@@ -182,7 +182,7 @@
   "escape/door through the wall from the feet along heading h, or nil."
   [p h]
   (let [{:keys [x y z]} (sh-sense/feet p)]
-    (escape/door (escape/block-at-of p) (escape/unseen-of p) [x y z] (get headings h))))
+    (escape/door (escape/block-at-of p) (escape/unseen-of p) [x y z] (get headings h) (escape/drop-limit p))))
 
 (defn exit-cells
   "The cells of a way out along heading h, as [x y z]: its door's (door-of) and the cell beyond, else the two beside the

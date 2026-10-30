@@ -3,7 +3,7 @@
   way (its escalation; jobs.lib.escape.way prices and chooses one):
   - pit-depth: how many levels up from the feet are walled on at least three sides.
   - rim-pillar: how high to pillar beside a wall to step onto its top (a pit too wide for pit-depth).
-  - door: the cells of a thin wall straight ahead with a floor beyond it, or a landing at most door-max-drop below (jobs.access.clear-path digs them).
+  - door: the cells of a thin wall straight ahead with a floor beyond it, or a landing at most drop-limit below (jobs.access.clear-path digs them).
   - stair-heading: a heading with a solid block in front to stair up on (jobs.access.stair).
   - stair-cuts: the cells a stair up cuts.
   - door-beside?: whether a door or gate borders the cells the body can walk to (a way out go-to handles).
@@ -15,6 +15,7 @@
             [jobs.lib.access.rules :as rules]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.blocks :as b]
+            [jobs.lib.cost :as cost]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
@@ -230,28 +231,37 @@
 
 (defn walled-side? [block-at cell] (boolean (some #(solid? (block-at (ahead cell % 1))) cardinals)))
 
-(def door-max-drop "The longest drop in blocks door-from ends a door at: go-to's walk refuses what the body cannot survive, way-s prices the rest." 6)
+(defn drop-limit
+  "The longest drop in blocks the body at primitives p survives (cost/fall-profile over its survivable hp): the limit of a door's landing."
+  [p]
+  (:max-drop (cost/fall-profile {:equipment (cost/equipment-of (.-equipment (.self p)))
+                                 :damage-budget (cost/survivable-budget (wworld/self-body p) {})})))
 
 (defn landing
-  "The first cell below row (a cell with room for the body and no floor) within door-max-drop with room and a floor, as
-  {:through cell :fall blocks}, or nil when the column under row is not open down to one."
-  [block-at row]
+  "The first cell below row (a cell with room for the body and no floor) within max-drop blocks with room and a floor, or
+  water over a floor or more water, as {:through cell :fall blocks}, plus :water true for water (no fall damage) and
+  :floor-unseen true when unseen? says the floor under it was never sensed (block-at guessed it rock). nil when the
+  column under row is not open down to one."
+  [block-at unseen? row max-drop]
   (loop [d 1]
     (let [cell (up row (- d))
-          names (map block-at [cell (up cell 1)])]
+          below (up cell -1)
+          water? (= "water" (block-at cell))]
       (cond
-        (> d door-max-drop) nil
-        (not-every? bs/passable? names) nil
-        (rules/solid-floor? block-at (up cell -1)) {:through cell :fall d}
+        (> d max-drop) nil
+        (and water? (bs/passable-or-water? (block-at (up cell 1))) (or (= "water" (block-at below)) (rules/solid-floor? block-at below)))
+        (cond-> {:through cell :fall d :water true} (unseen? below) (assoc :floor-unseen true))
+        (not-every? bs/passable? (map block-at [cell (up cell 1)])) nil
+        (rules/solid-floor? block-at below) (cond-> {:through cell :fall d} (unseen? below) (assoc :floor-unseen true))
         :else (recur (inc d))))))
 
 (defn door-from
   "door from row k on (rows before it already open): the wall's solid cells from row k and the first row beyond with
   room for the body and a floor, or, for a row beyond seen open with no floor, the landing below it within
-  door-max-drop (landing: {:fall blocks} too). unseen? (cell -> true for a cell the body has not sensed): a row past
+  max-drop (landing: {:fall blocks} too). unseen? (cell -> true for a cell the body has not sensed): a row past
   the first whose cells are unseen or seen open, at least one unseen (a body seeing over the wall sees only some), is
   taken for the far side, {:unseen true}: the dig shows it, and the digger goes on with door-from there."
-  [block-at unseen? feet dir k]
+  [block-at unseen? feet dir k max-drop]
   (loop [k k cells []]
     (let [row (ahead feet dir k)
           pair [(up row 1) row]
@@ -259,7 +269,7 @@
           floor? (rules/solid-floor? block-at (up row -1))]
       (cond
         (some nil? names) nil
-        (and (not floor?) (> k 1) (every? bs/passable? names)) (some->> (landing block-at row) (merge {:cells cells}))
+        (and (not floor?) (> k 1) (every? bs/passable? names)) (some->> (landing block-at unseen? row max-drop) (merge {:cells cells}))
         (not floor?) nil
         (and (> k 1) (some unseen? pair) (every? #(or (unseen? %) (bs/passable? (block-at %))) pair))
         {:cells cells :through row :unseen true}
@@ -273,9 +283,9 @@
   and head height (head first, row by row) and the first cell beyond with room for the body and a floor. nil when
   the cell in front is open, a row has no floor, or a cell is protected. How thick a wall is worth digging is the
   caller's price (jobs.lib.cost/dig-cells-s), not a count. With unseen?, a far side the body cannot see is guessed
-  (door-from)."
-  ([block-at feet dir] (door block-at (constantly false) feet dir))
-  ([block-at unseen? feet dir] (door-from block-at unseen? feet dir 1)))
+  (door-from), and a drop beyond it is at most max-drop (drop-limit)."
+  [block-at unseen? feet dir max-drop]
+  (door-from block-at unseen? feet dir 1 max-drop))
 
 (defn door-key
   "The skip key of the door from feet along heading (a keyword): a door that failed rules out only itself."

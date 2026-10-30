@@ -83,11 +83,11 @@
 (deftest escape-door-guesses-an-unseen-far-side-and-a-dig-shows-it
   (let [{:keys [p w]} (sensed-only (wall-east 1))]
     (is (= {:cells [[1 65 0] [1 64 0]] :through [2 64 0] :unseen true}
-           (escape/door (escape/block-at-of w) (escape/unseen-of w) [0 64 0] [1 0])))
+           (escape/door (escape/block-at-of w) (escape/unseen-of w) [0 64 0] [1 0] 3)))
     (fake/remove-block! p [1 64 0])
     (fake/remove-block! p [1 65 0])
     (is (= {:cells [] :through [2 64 0]}
-           (escape/door-from (escape/block-at-of w) (escape/unseen-of w) [0 64 0] [1 0] 2))
+           (escape/door-from (escape/block-at-of w) (escape/unseen-of w) [0 64 0] [1 0] 2 3))
         "row one dug: the far side is seen open")))
 
 (deftest escape-door-from-goes-on-through-a-row-seen-solid
@@ -95,26 +95,39 @@
     (fake/remove-block! p [1 64 0])
     (fake/remove-block! p [1 65 0])
     (is (= {:cells [[2 65 0] [2 64 0]] :through [3 64 0] :unseen true}
-           (escape/door-from (escape/block-at-of w) (escape/unseen-of w) [0 64 0] [1 0] 2)))))
+           (escape/door-from (escape/block-at-of w) (escape/unseen-of w) [0 64 0] [1 0] 2 3)))))
 
 (deftest escape-door-from-takes-a-row-seen-open-above-and-unseen-below-for-the-far-side
   (let [block-at #(if (= % [3 65 0]) "air" "stone")]
     (is (= {:cells [[2 65 0] [2 64 0]] :through [3 64 0] :unseen true}
-           (escape/door-from block-at #{[3 64 0]} [0 64 0] [1 0] 2)))))
+           (escape/door-from block-at #{[3 64 0]} [0 64 0] [1 0] 2 3)))))
 
 (deftest escape-door-ends-at-the-landing-of-a-short-drop-beyond-a-thin-wall
   (let [world (fn [floor-y] #(cond (and (= 63 (second %)) (= 0 (nth % 2)) (<= 0 (first %) 1)) "stone"
-                                   (and (= (first %) 2) (= (second %) floor-y) (= 0 (nth % 2))) "stone"
-                                   (and (= (first %) 1) (<= 64 (second %) 65) (= 0 (nth % 2))) "stone"
-                                   :else "air"))
-        door #(escape/door (world %) (constantly false) [0 64 0] [1 0])]
-    (is (= {:cells [[1 65 0] [1 64 0]] :through [2 60 0] :fall 4} (door 59)) "four blocks down beyond a one-block wall")
-    (is (nil? (door 40)) "a drop past door-max-drop is no door")
-    (is (= {:cells [[1 65 0] [1 64 0]] :through [2 64 0]} (door 63)) "a floor at the wall's foot level is as before, no fall")))
+                                             (and (= (first %) 2) (= (second %) floor-y) (= 0 (nth % 2))) "stone"
+                                             (and (= (first %) 1) (<= 64 (second %) 65) (= 0 (nth % 2))) "stone"
+                                             :else "air"))
+        door (fn [floor-y max-drop & [unseen?]] (escape/door (world floor-y) (or unseen? (constantly false)) [0 64 0] [1 0] max-drop))]
+    (is (= {:cells [[1 65 0] [1 64 0]] :through [2 60 0] :fall 4} (door 59 6)) "four blocks down beyond a one-block wall")
+    (is (nil? (door 40 6)) "a drop past the body's limit is no door")
+    (is (= {:cells [[1 65 0] [1 64 0]] :through [2 57 0] :fall 7} (door 56 8)) "a survivable seven-block drop is a door")
+    (is (nil? (door 56 6)) "a drop the body does not survive is none")
+    (is (= {:cells [[1 65 0] [1 64 0]] :through [2 64 0]} (door 63 6)) "a floor at the wall's foot level is as before, no fall")
+    (is (= [2 60 0] (:through (door 59 6 #{[2 59 0]}))))
+    (is (true? (:floor-unseen (door 59 6 #{[2 59 0]}))) "a landing floor never sensed is marked")
+    (is (nil? (:floor-unseen (door 59 6))) "a sensed floor is not")
+    (let [wet (escape/door (fn [c] (case (second c)
+                                     63 (if (<= 0 (first c) 1) "stone" "air")
+                                     (59 58) (if (= (first c) 2) "stone" "air")
+                                     60 (if (= (first c) 2) "water" "air")
+                                     (64 65) (if (= (first c) 1) "stone" "air")
+                                     "air"))
+                           (constantly false) [0 64 0] [1 0] 6)]
+      (is (= {:cells [[1 65 0] [1 64 0]] :through [2 60 0] :fall 4 :water true} wet) "water over a floor is a water landing"))))
 
 (deftest escape-door-over-seen-cells-is-as-before
   (let [{:keys [w]} (sensed-only (assoc (wall-east 1) :blocks ground))]
-    (is (nil? (escape/door (escape/block-at-of w) (escape/unseen-of w) [0 64 0] [1 0])) "open ground seen ahead: no door")))
+    (is (nil? (escape/door (escape/block-at-of w) (escape/unseen-of w) [0 64 0] [1 0] 3)) "open ground seen ahead: no door")))
 
 (defn ^:async run-clear-path
   "Run clear-path :east (with args) over the sensed-only world spec as a child; its result."

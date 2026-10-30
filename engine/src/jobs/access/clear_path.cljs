@@ -90,7 +90,7 @@
   (let [heading (:heading (:args c))
         p (:primitives c)]
     (if (and (headings heading)
-             (nil? (escape/door (escape/block-at-of p) (escape/unseen-of p) (reach/standing-vec p) (headings heading))))
+             (nil? (escape/door (escape/block-at-of p) (escape/unseen-of p) (reach/standing-vec p) (headings heading) (escape/drop-limit p))))
       (contract/later :no-door (no-door-why heading p) :why (no-door-why heading p))
       (contract/ok :door "a wall to clear"))))
 
@@ -102,7 +102,7 @@
   (let [heading (:heading (:args c))
         p (:primitives c)
         {:keys [cells through]} (when (headings heading)
-                                  (escape/door (escape/block-at-of p) (escape/unseen-of p) (reach/standing-vec p) (headings heading)))
+                                  (escape/door (escape/block-at-of p) (escape/unseen-of p) (reach/standing-vec p) (headings heading) (escape/drop-limit p)))
         s (* (count cells) (settings/get settings ::cell-s))]
     (cond-> {:uses {:job-time [s (* 1.5 s) (* 4 s)]}}
       through (assoc :moves-to through))))
@@ -179,7 +179,7 @@
 (defn ^:async plan! [c]
   (let [dir (headings (:heading (:args c)))
         p (:primitives c)
-        gap (escape/door (escape/block-at-of p) (escape/unseen-of p) (reach/standing-vec (:primitives c)) dir)]
+        gap (escape/door (escape/block-at-of p) (escape/unseen-of p) (reach/standing-vec (:primitives c)) dir (escape/drop-limit (:primitives c)))]
     (cond
       (nil? gap) (finish! c :no-door {:why (no-door-why (:heading (:args c)) p)})
       :else (if-let [why (too-dear c gap)]
@@ -346,7 +346,7 @@
             :again))
       (let [block-at (escape/block-at-of p)
             unseen? (escape/unseen-of p)
-            gap (escape/door-from block-at unseen? from dir k)]
+            gap (escape/door-from block-at unseen? from dir k (escape/drop-limit p))]
         (if (= through (:through gap))
           (do (ctx/update-mem! c dissoc :unseen) :again)
           (or (when-not (:dead-end (ctx/mem c))

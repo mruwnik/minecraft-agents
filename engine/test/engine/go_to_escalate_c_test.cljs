@@ -401,6 +401,21 @@
                                               [0 64 0] {:step :clear-path :heading :east}))]
     (is (< (price 63) (price 59)) "the four-block drop beyond the wall adds its hp to the door's price")))
 
+(deftest a-door-over-a-seven-block-drop-is-offered-and-priced
+  (let [blocks (fn [floor-y] (merge (box -1 63 -1 1 63 1 "stone") (box 1 64 -1 1 65 1 "stone") (box 2 floor-y -1 4 floor-y 1 "stone")))
+        p (fn [floor-y] (tu/fake {:blocks (blocks floor-y) :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}]}))
+        e {:step :clear-path :heading :east}]
+    (is (= 57 (second (:through (escape/door (escape/block-at-of (p 56)) (constantly false) [0 64 0] [1 0] (escape/drop-limit (p 56)))))) "a full-health body survives seven blocks")
+    (is (< (escape-way/price (p 59) [0 64 0] e) (escape-way/price (p 56) [0 64 0] e)))))
+
+(deftest a-door-fall-prices-its-hp-unless-it-lands-in-water-and-a-floor-unseen-dearer
+  (let [p (tu/fake {:self {:pos {:x 0.5 :y 64 :z 0.5}}})
+        s #(escape-way/door-fall-s p (merge {:fall 5} %))]
+    (is (= 0 (escape-way/door-fall-s p nil)))
+    (is (pos? (s {})) "five blocks cost two hp")
+    (is (= 0 (s {:water true})) "water takes no fall damage")
+    (is (< (s {}) (s {:floor-unseen true})) "a floor never sensed adds the fall and climb out when it is not there")))
+
 (def open-stair-mass
   "stone-mass with the cells of a 3-step stair east from [0 64 0] already open."
   (apply dissoc stone-mass (map #(str (clojure.string/join "," %)) (escape/stair-cuts [0 64 0] [1 0] 3))))
