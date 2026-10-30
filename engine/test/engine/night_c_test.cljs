@@ -243,10 +243,12 @@
           (is (nothing-placed-at-the-start? p) "10 dim blocks cost more than a lit walk, still under the pit's quote")
           (is (= 10 (js/Math.floor (:x (st/pos-of p)))) "walked home"))))))
 
-(def far-home-world (assoc lit-world :blocks (assoc wide-ground "40,66,0" "stone")))
+(def far-home-world
+  "home-roof moved to x 40: a room whose doorway the night fills."
+  (assoc lit-world :blocks (merge wide-ground (into {} (map (fn [[k v]] [(let [[x y z] (map #(js/parseInt %) (.split k ","))] (str (+ x 30) "," y "," z)) v])) home-roof))))
 
 (def no-flee
-  "The far home is one roof block: no shelter on arrival, so a flight from it would follow; without one the walk's end is seen."
+  "A flight from the far home would follow a walk that does not shelter; without one the walk's end is seen."
   {:jobs.survival.night.sites/flee-radius 0})
 
 (deftest a-home-beyond-the-time-left-before-dark-is-not-walked-to
@@ -272,12 +274,10 @@
       (fn ^:async t []
         (let [quoted (atom [])
               quote! pick/quote!
-              {:keys [eng seen]} (await (night-at-home far-home-world {:x 40 :y 64 :z 0}))]
+              {:keys [eng]} (await (night-at-home (assoc lit-world :blocks (assoc wide-ground "40,66,0" "stone")) {:x 40 :y 64 :z 0}))]
           (set! pick/quote! (fn [c args] (when (and (:floor args) (:pos args)) (swap! quoted conj args)) (quote! c args)))
           (try (await (tu/run-until-empty eng 60))
                (finally (set! pick/quote! quote!)))
-          (is (= [[:roofed-place 40]] (mapv (juxt :target (comp :x :pos)) (st/emitted seen :shelter.fled)))
-              "fled to the home; failing to shut in there, it stays: the home's cell is lit, no night to shelter from, a flight and dig dearer")
           (is (< (count @quoted) 10) "one quote's search ran out of land: one search proves the other 140-odd sites out of reach too, none quoted"))))))
 
 (deftest of-two-far-homes-the-one-go-to-quotes-a-walk-to-is-taken-not-the-straight-line-nearer
@@ -341,6 +341,17 @@
           (await (core/tick! eng))
           (is (seq (st/calls p "place")))
           (is (< (:x (st/pos-of p)) 5)))))))
+
+(deftest a-home-seen-a-roof-on-open-sides-is-not-walked-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [slab (into {} (for [x [9 10 11] z [-1 0 1]] [(str x ",66," z) "stone"]))
+              {:keys [eng p]} (await (night-at-home (assoc lit-world :blocks (merge wide-ground slab)) {:x 10 :y 64 :z 0}))
+              log (await (with-child-log #(tu/run-until-empty eng 40)))]
+          (is (empty? (filter #(= :enter-room (first %)) log)) "no walk is quoted to a roof whose sides are seen open")
+          (is (seq (st/calls p "place")) "the night dug in")
+          (is (< (:x (st/pos-of p)) 5) "where it stands"))))))
 
 (deftest a-roof-hidden-behind-its-near-edge-is-walked-to
   (async done
