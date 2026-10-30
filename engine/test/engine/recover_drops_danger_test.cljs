@@ -131,12 +131,12 @@
                          (map #(hash-map :name (str "iron_" %) :count 1)
                               ["pickaxe" "sword" "axe" "shovel" "helmet" "chestplate" "leggings" "boots"]))
               at {:x 22 :y 64 :z 22}
-              pack (for [i (range 6)] {:id (+ 20 i) :name "skeleton" :kind "hostile" :pos {:x (+ 10.5 i) :y 64 :z 12.5}})
+              pack (for [i (range 12)] {:id (+ 20 i) :name "skeleton" :kind "hostile" :pos {:x (+ 10.5 (mod i 6)) :y 64 :z (+ 12.5 (quot i 6))}})
               {:keys [eng]} (setup {:floor [-10 -10 40 40] :entities (vec (concat (pile-drops pile) pack))})]
           (die! eng {:pos at :inventory pile :cause "skeleton"})
           (core/submit! eng job {})
           (await (run-until-empty eng 20))
-          (is (nil? (recovered eng)) "the collect stands where all six shoot, and their arrows land together")
+          (is (nil? (recovered eng)) "the collect stands where all twelve shoot, and their arrows land together")
           (is (re-find #"^skip: .*danger [1-9][0-9.]*,.*: skeleton" (decided-text eng)) (decided-text eng)))))))
 
 (deftest a-body-with-an-iron-sword-and-armour-goes-for-the-guarded-pile
