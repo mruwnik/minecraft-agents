@@ -10,7 +10,8 @@
             [jobs.lib.cost.base-rates :as base-rates]
             [jobs.lib.look :as look]
             [jobs.lib.shelter.sense :as sh-sense]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [clojure.string :as str]))
 
 (defn seeing
   "Fake primitives over world with a perception (the body's rules, a shorter radius), one sight pass done."
@@ -23,12 +24,26 @@
 
 (def wall (tu/box 3 64 -3 3 66 3 "stone"))
 
+(defn remember!
+  "Memory takes the true state of each cell of blocks (a fake world's :blocks map), as if the body had seen it."
+  [p blocks]
+  (doseq [k (keys blocks)] (perception/touch! (aget p "perception") (mapv js/parseInt (str/split k #","))))
+  p)
+
 (defn names-of [hits] (mapv :name hits))
 
 (deftest a-look-shows-the-top-of-a-floor-block-whose-centre-the-floor-in-front-hides
-  (let [p (seeing {:blocks wall})]
+  (let [p (remember! (seeing {:blocks wall}) wall)]
     (is (look/look-shows? p {:x -4 :y 63 :z 0}) "the floor 4 blocks off: its top is in view")
     (is (not (look/look-shows? p {:x 6 :y 63 :z 0})) "behind the wall neither its centre nor a face is")))
+
+(deftest a-look-shows-a-cell-past-the-cells-the-body-has-not-seen
+  (let [p (tu/fake-on-floor {:blocks wall})
+        unlooked (perception/wrap p (perception/create (fake-raw/create p) {:radius 16 :ray-deg 2}))]
+    (.setOwner p "t1")
+    (is (look/look-shows? unlooked {:x 6 :y 64 :z 0}) "the wall is not seen yet: what lies behind it may show")
+    (remember! unlooked wall)
+    (is (not (look/look-shows? unlooked {:x 6 :y 64 :z 0})) "the wall seen hides it")))
 
 (deftest a-block-behind-a-wall-is-not-seen-and-one-in-view-is
   (let [p (seeing {:blocks (merge wall {"6,64,0" "coal_ore" "0,64,5" "iron_ore"})})]

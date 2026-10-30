@@ -7,7 +7,8 @@
             [jobs.lib.watch :as watch]
             [engine.memory :as mem]
             [engine.perception :as perception]
-            [engine.test-util :as tu]))
+            [engine.test-util :as tu]
+            [clojure.string :as str]))
 
 ;; The body stands at (0.5 64 0.5) facing south (+z); north (-z) is behind it.
 
@@ -78,7 +79,9 @@
          (tu/box -1 66 -1 1 66 20 "stone") (tu/box -1 64 1 1 65 1 "stone")))
 
 (deftest a-tunnel-has-one-look-back-and-open-ground-three
-  (check (fn ^:async t [] (let [{:keys [c looks]} (rig {:blocks tunnel :light [0 0]})]
+  (check (fn ^:async t [] (let [{:keys [c p looks]} (rig {:blocks tunnel :light [0 0]})]
+        ;; the walls the body has seen: an unseen one may be open
+        (doseq [k (keys tunnel)] (perception/touch! (aget p "perception") (mapv js/parseInt (str/split k #","))))
         (await (watch/watch! c {}))
         (is (= 1 (count @looks)))
         (let [{:keys [x z y]} (:pos (first @looks))]

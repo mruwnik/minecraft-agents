@@ -22,7 +22,7 @@
             [engine.settings :as settings]
             [engine.ctx :as ctx]
             [engine.entity-observations :as obs]
-            [engine.perception :as perception]
+            [engine.sight :as sight]
             [jobs.lib.look :as look]))
 
 (a/defargs settings
@@ -84,19 +84,20 @@
   [[(- fx) (- fz)] [(- fz) fx] [fz (- fx)]])
 
 (defn open-heading?
-  "Whether the eye has a clear line three blocks along [dx dz] at eye and at feet height."
-  [raw table ^js eye [dx dz]]
+  "Whether the eye has a clear line three blocks along [dx dz] at eye and at feet height past what the body remembers
+  (look/remembered-sight-blocks): an unseen cell may be open."
+  [blocks? ^js eye [dx dz]]
   (let [ox (.-x eye) oy (.-y eye) oz (.-z eye)
-        clear? (fn [y] (perception/line-clear? raw table ox y oz (+ ox (* (probe-distance) dx)) y (+ oz (* (probe-distance) dz))))]
+        clear? (fn [y] (let [tx (+ ox (* (probe-distance) dx)) tz (+ oz (* (probe-distance) dz))]
+                         (sight/line-clear ox y oz tx y tz #(blocks? %1 %2 %3 ox y oz tx y tz))))]
     (and (clear? oy) (clear? (- oy 1.1)))))
 
 (defn open-headings [c]
   (let [per (perception-of c)
-        raw (:raw per)
-        table (.sightTable raw)
         eye (eye-of c)]
-    (when (and eye table)
-      (filterv #(open-heading? raw table eye %) (headings (forward eye))))))
+    (when (and eye (.sightTable ^js (:raw per)))
+      (let [blocks? (look/remembered-sight-blocks per)]
+        (filterv #(open-heading? blocks? eye %) (headings (forward eye)))))))
 
 (defn look-point [^js eye [dx dz]]
   {:x (+ (.-x eye) (* 4 dx)) :y (.-y eye) :z (+ (.-z eye) (* 4 dz))})

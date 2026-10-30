@@ -142,8 +142,8 @@
               walk (sense/read-walk-s (stub-ctx p) {:cells cells})
               [few] (await (run (+ walk 2.5) in-sight))
               [none] (await (run walk in-sight))]
-          (is (zero? inf) "at ##Inf no look: no look from here shows one of the 312")
-          (is (not-any? #(look/look-shows? p %) cells) "the 312 cells behind the near face")
+          (is (< 0 inf 5) "at ##Inf it looks only behind the near-face cells the sight pass missed: they may be open")
+          (is (not-any? #(look/look-shows? p %) cells) "the 312 cells behind the near face, seen now")
           (is (< 0 few 10) "worth 2.5 s over the walk to the nearest: a few looks of the 312")
           (is (zero? none) "worth no more than the walk to the nearest: no look"))))))
 

@@ -31,10 +31,10 @@
   (boolean (or (some (comp torch/light-items :name) (u/inventory p))
                (torch/light-items (some-> (.self p) .-equipment .-offHand .-name)))))
 
-(defn lit-in-view?
-  "Whether the cell `at` is lit and the body sees it, or could by turning to it (look/glimpse?: a clear line, lit enough to see)."
+(defn seen-lit?
+  "Whether the body has seen the cell `at` lit."
   [p at]
-  (boolean (and (or (sh-sense/cell-light p at) (look/glimpse? p at))
+  (boolean (and (sh-sense/cell-light p at)
                 (look/lit-light? (or (sh-sense/block-light-at p at) 0) (or (sh-sense/sky-light-at p at) 0) (sh-sense/sky-subtract-now p)))))
 
 (defn chance
@@ -46,7 +46,7 @@
   (cond
     (and small? (sh-sense/seen-cell? p (update at :y dec))) 0
     (light-carried? p) (settings/get settings ::lit-chance)
-    (lit-in-view? p at) (settings/get settings ::lit-chance)
+    (seen-lit? p at) (settings/get settings ::lit-chance)
     :else (let [hall (cost/hall-chance (sh-inside/dark-hall p at nil))]
             (+ (* hall (settings/get settings ::hall-chance)) (* (- 1 hall) (settings/get settings ::dark-chance))))))
 

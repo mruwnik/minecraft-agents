@@ -136,12 +136,16 @@
   (when-let [block (block-light-at p cell)]
     (max block (- (or (sky-light-at p cell) 0) (sky-subtract-now p)))))
 
-(defn cell-light
-  "light-at for a cell the body has seen (its own cell is always known); nil for any other."
+(defn known-cell?
+  "Whether the body has seen the cell or stands in it (its own cell is always known)."
   [p {:keys [x y z] :as cell}]
   (let [own (when (.-pos (.self p)) (feet p))]
-    (when (or (= [x y z] [(:x own) (:y own) (:z own)]) (seen-cell? p cell))
-      (light-at p cell))))
+    (or (= [x y z] [(:x own) (:y own) (:z own)]) (seen-cell? p cell))))
+
+(defn cell-light
+  "light-at for a cell the body knows (known-cell?); nil for any other."
+  [p cell]
+  (when (known-cell? p cell) (light-at p cell)))
 
 (defn lit-here?
   "Whether the cell is lit enough that monsters cannot spawn (look/lit-light?: any source, dawn or a torch) as the body knows

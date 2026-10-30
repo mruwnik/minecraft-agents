@@ -286,7 +286,7 @@
         goal {:x 70 :y 64 :z 0}
         dark-s #(:dark-s (risk/estimate c goal {:plan {:status "partial" :steps (for [x (range 3 11)] {:x x :y 64 :z 0})}}))]
     (is (zero? (dark-s)) "the rest is a seen, torch-lit line at night")
-    (is (pos? (with-redefs [sh-sense/seen-cell? (constantly false) look/glimpse? (constantly false)] (dark-s))) "an unseen rest is open ground at night")))
+    (is (pos? (with-redefs [sh-sense/seen-cell? (constantly false)] (dark-s))) "an unseen rest is open ground at night")))
 
 (deftest unseen-ground-is-priced-by-the-light-the-body-perceives-not-by-its-depth-or-the-clock
   (let [open {:time st/noon :self {:pos {:x 0.5 :y 64 :z 0.5}}}
@@ -297,7 +297,7 @@
         dark-night (lit-by (ready-test/ctx-of (assoc open :time st/night)) [0 0])
         dark-s #(:dark-s (risk/estimate %1 %2))]
     ;; nothing seen but the body's own cell: priced by the measured shares of open ground the sky lights, by height
-    (with-redefs [sh-sense/seen-cell? (constantly false) look/glimpse? (constantly false)]
+    (with-redefs [sh-sense/seen-cell? (constantly false)]
       (is (< (* 3 (dark-s c {:x 95 :y 64 :z 0})) (dark-s sealed {:x 95 :y 64 :z 0}))
           "unseen open ground by day is mostly lit by the sky, round a body no sky light reaches mostly dark")
       (is (< (dark-s c {:x 95 :y 84 :z 0}) (dark-s c {:x 95 :y 64 :z 0})) "a goal above the body makes no cave of the ground at its level")
@@ -879,7 +879,7 @@
         status-with (fn [feet-light worth]
                       (with-redefs [sh-sense/sky-reaches-from-above? (constantly false)
                                     sh-sense/sky-light-at (constantly 0)
-                                    look/glimpse? (constantly true)
+                                    sh-sense/seen-cell? (constantly true)
                                     sh-sense/block-light-at (fn [_ {:keys [x]}] (if (zero? x) feet-light 0))
                                     spawn-light/hall-chance (constantly 1)]
                         (let [c (assoc c :worth (constantly worth))

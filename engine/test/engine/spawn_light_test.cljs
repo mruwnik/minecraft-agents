@@ -24,18 +24,17 @@
       (is (= {:chance open-night-chance :lowered-by #{:light}} (dissoc e :light-in)))
       (is (pos? (:light-in e)) "and the seconds till light"))))
 
-(deftest exposure-of-a-walk-out-of-shelter-judges-an-unseen-cell-only-where-it-could-be-seen
+(deftest exposure-of-a-walk-out-of-shelter-judges-a-cell-by-its-light-only-once-seen
   (let [p (sky/with-sky (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks pit}))
-        exposure (fn [glimpse? to] (with-redefs [sh-sense/seen-cell? (constantly false) sh-sense/block-light-at (constantly 14) look/glimpse? (constantly glimpse?)]
-                                     (spawn-light/exposure p to)))]
-    (is (= {:chance 0.0 :lowered-by #{}} (exposure true {:x 3 :y 64 :z 0})) "a lit cell in clear line is made out")
-    (is (pos? (:chance (exposure false {:x 3 :y 64 :z 0}))) "a lit cell behind a wall stays unknown, so dark")))
+        exposure (fn [seen? to] (with-redefs [sh-sense/seen-cell? (constantly seen?) sh-sense/block-light-at (constantly 14)]
+                                  (spawn-light/exposure p to)))]
+    (is (= {:chance 0.0 :lowered-by #{}} (exposure true {:x 3 :y 64 :z 0})) "a lit cell seen is made out")
+    (is (pos? (:chance (exposure false {:x 3 :y 64 :z 0}))) "a lit cell not seen stays unknown, so dark")))
 
 (deftest exposure-of-a-seen-log-under-unseen-ones-is-judged-by-the-seen-air-over-the-pile
   (let [p (sky/with-sky (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}}}))]
     (is (= [[3 67 0]] (with-redefs [sh-sense/solid-at? (fn [_ c] (= 64 (:y c)))
-                                    sh-sense/seen-cell? (fn [_ c] (or (= 64 (:y c)) (= 67 (:y c))))
-                                    look/glimpse? (constantly false)]
+                                    sh-sense/seen-cell? (fn [_ c] (or (= 64 (:y c)) (= 67 (:y c))))]
                         (:look-at (spawn-light/exposure p {:x 3 :y 64 :z 0})))))))
 
 (deftest exposure-of-a-walk-in-the-open-is-the-spawn-chance-at-its-end

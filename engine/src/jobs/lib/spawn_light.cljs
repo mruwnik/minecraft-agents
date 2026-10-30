@@ -31,9 +31,9 @@
   (cost/hall-chance (sh-inside/dark-hall p (hall-cell p to) subtract)))
 
 (defn seen-light
-  "The block light of cell, nil when the body has not seen it and cannot see it by turning to it."
+  "The block light of cell, nil when the body does not know it (sh-sense/known-cell?)."
   [p cell]
-  (when (or (sh-sense/seen-cell? p cell) (look/glimpse? p cell)) (sh-sense/block-light-at p cell)))
+  (when (sh-sense/known-cell? p cell) (sh-sense/block-light-at p cell)))
 
 (defn- night? [p] (not (look/lit-light? 0 15 (sh-sense/sky-subtract-now p))))
 

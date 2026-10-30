@@ -14,6 +14,7 @@
             [engine.perception.light :as light]
             [engine.perception.rays :as rays]
             [engine.perception.store :as store]
+            [engine.sight :as sight]
             [jobs.lib.cost.base-rates :as base-rates]
             [jobs.lib.frontier :as frontier]
             [jobs.lib.memory-age :as memory-age]
@@ -583,14 +584,16 @@
   none seen over it, base-rates/sky-share at the sky light it needs, of the open cells seen in the 27 sections round its
   own (none seen there: round the feet's, at its height) outside the seen air sealed round the feet (no light reaches
   through its walls, so its dark says nothing of the light outside). Kept per cell.
-  subtract: the sky's darkening to judge it by (default: now; 0: by full day)."
+  subtract: the sky's darkening to judge it by (default: now; 0: by full day). needs: [sky block], the light of each kind
+  that lights the cell (default lit-light?'s: dark-light over subtract, and 1)."
   ([p] (unseen-lit-chance-fn p nil))
-  ([p subtract]
+  ([p subtract] (unseen-lit-chance-fn p subtract nil))
+  ([p subtract needs]
    (when-let [^js raw (raw-of p)]
      (let [^js sections (when-let [^js st (some-> (aget p "perception") :st)] (when (.-stores st) (store/store-of st (.-dim st))))
            subtract (or subtract (sky-subtract raw))
            light (remembered-light-fn p raw)
-           sky-need (+ (dark-light) subtract)
+           [sky-need block-need] (or needs [(+ (dark-light) subtract) 1])
            ids-at (fn [cx sy cz] (some-> sections (.get (store/section-key cx sy cz)) .-ids))
            [ox oy oz] (or (feet-cell p) [0 0 0])
            ;; the light of the body's own cell when the memory has not got it (else it is seen there); none offline
@@ -722,7 +725,7 @@
          (let [k (str x "," y "," z)]
            (if (.has memo k)
              (.get memo k)
-             (let [block (spread x y z 0 1)
+             (let [block (spread x y z 0 block-need)
                    c (if (or (== 1 block) (> sky-need 15))
                        block
                        (let [sky (column x y z)]
@@ -735,18 +738,21 @@
 (defn- lit-chance-fn
   "unseen-lit-chance-fn of p by subtract, kept while what the body has seen, the sky's darkening, the body's cell and its
   light hold (made anew each call without a perception's memory); (constantly 1) without a raw world (nothing is known,
-  so nothing is dark)."
-  [p subtract]
-  (let [^js raw (raw-of p)
-        ^js st (some-> (aget p "perception") :st)
-        subtract (when raw (or subtract (sky-subtract raw)))
-        k (when (and st (.-stores st))
-            (let [[x y z :as feet] (feet-cell p)]
-              [(.-dim st) (memory-age/epoch st) subtract feet (when feet (.lightAt raw x y z))]))
-        hit (when k (.get guesses st))]
-    (cond (nil? raw) (constantly 1)
-          (and k (= k (:k hit))) (:f hit)
-          :else (let [f (unseen-lit-chance-fn p subtract)] (when k (.set guesses st {:k k :f f})) f))))
+  so nothing is dark). One kept per needs."
+  ([p subtract] (lit-chance-fn p subtract nil))
+  ([p subtract needs]
+   (let [^js raw (raw-of p)
+         ^js st (some-> (aget p "perception") :st)
+         subtract (when raw (or subtract (sky-subtract raw)))
+         k (when (and st (.-stores st))
+             (let [[x y z :as feet] (feet-cell p)]
+               [(.-dim st) (memory-age/epoch st) subtract feet (when feet (.lightAt raw x y z))]))
+         hit (when k (get (.get guesses st) needs))]
+     (cond (nil? raw) (constantly 1)
+           (and k (= k (:k hit))) (:f hit)
+           :else (let [f (unseen-lit-chance-fn p subtract needs)]
+                   (when k (.set guesses st (assoc (.get guesses st) needs {:k k :f f})))
+                   f)))))
 
 (defn unseen-lit-chance
   "unseen-lit-chance-fn's chance for the cell {:x :y :z}, 1 without a raw world. subtract as unseen-lit-chance-fn's."
@@ -873,46 +879,69 @@
   [p]
   (some-> (aget p "perception") rays/near-of))
 
+(defn seeing-needs
+  "[sky block]: the least sky light alone and block light alone the body makes out under the sky now (perception's
+  seeing-min), 16 for none."
+  [raw seeing-min]
+  (let [^js visible (light/table-now raw seeing-min)
+        least (fn [packed] (or (first (filter #(== 1 (aget visible (packed %))) (range 16))) 16))]
+    [(least #(bit-shift-left % 4)) (least identity)]))
+
 (defn lit-or-near?
-  "Whether the cell [x y z] is lit enough for the body of primitives p to see it or within near-of. False without a perception."
+  "Whether the cell [x y z] is lit enough for the body of primitives p to see it or within near-of, as it knows it: a
+  seen cell by its remembered light (remembered-light-fn) under the sky now, an unseen one more likely so than not
+  (unseen-lit-chance-fn at seeing-needs). False without a perception."
   [p [x y z]]
   (boolean
-   (when-let [^js eye (some-> (aget p "perception") :raw .eye)]
-     (or (when-let [f (see-lit-fn p)] (= 1 (f x y z)))
-         (<= (js/Math.hypot (- (+ x 0.5) (.-x eye)) (- (+ y 0.5) (.-y eye)) (- (+ z 0.5) (.-z eye))) (near-of p))))))
+   (when-let [per (aget p "perception")]
+     (when-let [^js eye (some-> ^js (:raw per) .eye)]
+       (let [^js raw (:raw per)]
+         (or (<= (js/Math.hypot (- (+ x 0.5) (.-x eye)) (- (+ y 0.5) (.-y eye)) (- (+ z 0.5) (.-z eye))) (near-of p))
+             (if (or (>= (store/remembered-id (:st per) x y z) 0) (= [x y z] (feet-cell p)))
+               (let [l ((remembered-light-fn p raw) x y z)]
+                 (and (>= l 0) (== 1 (aget (light/table-now raw (:seeing-min (:opts per))) l))))
+               (> ((lit-chance-fn p nil (seeing-needs raw (:seeing-min (:opts per)))) x y z) 0.5))))))))
 
-(defn glimpse?
-  "Whether the cell {:x :y :z} could be seen by turning to it: a clear line from the eye (nothing between, no wall) and it is lit enough to see or within near-of.
-  False without a perception."
-  [p {:keys [x y z]}]
-  (boolean
-   (when-let [^js raw (some-> (aget p "perception") :raw)]
-     (let [^js eye (.eye raw)]
-       (and (lit-or-near? p [x y z])
-            (rays/line-clear? raw (.sightTable raw) (.-x eye) (.-y eye) (.-z eye) (+ x 0.5) (+ y 0.5) (+ z 0.5)))))))
+(defn face-clear?
+  "Whether a line from the eye at (ex ey ez) to the cell [x y z]'s centre or to a face turned to the eye passes no cell
+  that (blocks? x y z fx fy fz tx ty tz) says stops the segment. A floor block a few blocks off shows its top though the
+  floor in front hides its centre."
+  [ex ey ez [x y z] blocks?]
+  ;; a face's centre, just inside the cell: the line ends in the cell, so only what lies before it can hide it
+  (let [faces (cond-> [[(+ x 0.5) (+ y 0.5) (+ z 0.5)]]
+                (> ey (inc y)) (conj [(+ x 0.5) (+ y 0.99) (+ z 0.5)])
+                (< ey y) (conj [(+ x 0.5) (+ y 0.01) (+ z 0.5)])
+                (> ex (inc x)) (conj [(+ x 0.99) (+ y 0.5) (+ z 0.5)])
+                (< ex x) (conj [(+ x 0.01) (+ y 0.5) (+ z 0.5)])
+                (> ez (inc z)) (conj [(+ x 0.5) (+ y 0.5) (+ z 0.99)])
+                (< ez z) (conj [(+ x 0.5) (+ y 0.5) (+ z 0.01)]))]
+    (boolean (some (fn [[tx ty tz]] (sight/line-clear ex ey ez tx ty tz #(blocks? %1 %2 %3 ex ey ez tx ty tz))) faces))))
+
+(defn remembered-sight-blocks
+  "face-clear?'s blocks? for the body of perception per: a cell it remembers holding a state that stops the segment
+  (rays/blocks-line?: a thin block only where the segment meets it), or one not loaded (the edge of the world it is
+  shown). A loaded cell it never saw stops nothing: it may be open."
+  [per]
+  (let [^js raw (:raw per) ^js st (:st per) ^js table (.sightTable raw)]
+    (fn [x y z fx fy fz tx ty tz]
+      (let [id (store/remembered-id st x y z)]
+        (if (>= id 0)
+          (rays/blocks-line? raw table id x y z fx fy fz tx ty tz)
+          (< (.stateAt raw x y z) 0))))))
 
 (defn look-shows?
-  "Whether a look from where the body stands would show the cell {:x :y :z} or [x y z]: within sight's :radius and a clear
-  line from the eye to its centre or to a face turned to the eye (lit, it is seen; dark, it is seen dark). A floor block
-  a few blocks off shows its top though the floor in front hides its centre. False without a perception."
+  "Whether a look from where the body stands would show the cell {:x :y :z} or [x y z], as far as it knows: loaded,
+  within sight's :radius and face-clear? past what it remembers (remembered-sight-blocks; lit, it is seen; dark, it is seen
+  dark). False without a perception."
   [p cell]
   (boolean
    (when-let [per (aget p "perception")]
-     (let [[x y z] (if (map? cell) [(:x cell) (:y cell) (:z cell)] cell)
-           ^js raw (:raw per)
-           ^js eye (.eye raw)
-           ex (when eye (.-x eye)) ey (when eye (.-y eye)) ez (when eye (.-z eye))
-           ;; a face's centre, just inside the cell: the line ends in the cell, so only what lies before it can hide it
-           faces (fn [] (cond-> [[(+ x 0.5) (+ y 0.5) (+ z 0.5)]]
-                          (> ey (inc y)) (conj [(+ x 0.5) (+ y 0.99) (+ z 0.5)])
-                          (< ey y) (conj [(+ x 0.5) (+ y 0.01) (+ z 0.5)])
-                          (> ex (inc x)) (conj [(+ x 0.99) (+ y 0.5) (+ z 0.5)])
-                          (< ex x) (conj [(+ x 0.01) (+ y 0.5) (+ z 0.5)])
-                          (> ez (inc z)) (conj [(+ x 0.5) (+ y 0.5) (+ z 0.99)])
-                          (< ez z) (conj [(+ x 0.5) (+ y 0.5) (+ z 0.01)])))]
-       (and eye
-            (<= (js/Math.hypot (- (+ x 0.5) ex) (- (+ y 0.5) ey) (- (+ z 0.5) ez)) (:radius (:opts per)))
-            (some (fn [[tx ty tz]] (rays/line-clear? raw (.sightTable raw) ex ey ez tx ty tz)) (faces)))))))
+     (when-let [^js eye (.eye ^js (:raw per))]
+       (let [[x y z] (if (map? cell) [(:x cell) (:y cell) (:z cell)] cell)
+             ex (.-x eye) ey (.-y eye) ez (.-z eye)]
+         (and (<= (js/Math.hypot (- (+ x 0.5) ex) (- (+ y 0.5) ey) (- (+ z 0.5) ez)) (:radius (:opts per)))
+              (>= (.stateAt ^js (:raw per) x y z) 0)
+              (face-clear? ex ey ez [x y z] (remembered-sight-blocks per))))))))
 
 (defn makes-out?
   "Whether a look from where the body stands would make out the cell [x y z]: it shows (look-shows?) and is lit enough or
@@ -921,17 +950,10 @@
   (and (look-shows? p cell) (lit-or-near? p cell)))
 
 (defn dark-in-sight?
-  "Whether a look at the cell {:x :y :z} would show it dark: within sight's :radius, a clear line from the eye, neither lit
-  enough to see nor within near-of. False without a perception."
-  [p {:keys [x y z]}]
-  (boolean
-   (when-let [per (aget p "perception")]
-     (let [^js raw (:raw per)
-           ^js eye (.eye raw)
-           d (js/Math.hypot (- (+ x 0.5) (.-x eye)) (- (+ y 0.5) (.-y eye)) (- (+ z 0.5) (.-z eye)))]
-       (and (<= d (:radius (:opts per))) (> d (near-of p))
-            (not= 1 ((see-lit-fn p) x y z))
-            (rays/line-clear? raw (.sightTable raw) (.-x eye) (.-y eye) (.-z eye) (+ x 0.5) (+ y 0.5) (+ z 0.5)))))))
+  "Whether a look at the cell {:x :y :z} would show it only dark: it shows (look-shows?) but is neither lit enough to see
+  nor within near-of (lit-or-near?)."
+  [p {:keys [x y z] :as cell}]
+  (and (look-shows? p cell) (not (lit-or-near? p [x y z]))))
 
 (defn drops
   "Item entities of name within radius as [{:id :pos :count}], nearest first; only those within toss-reach of near
