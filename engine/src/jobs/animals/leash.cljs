@@ -46,7 +46,7 @@
    :ignore-zones? :shared})
 
 (a/defargs settings
-  {::job-time-s {:default 30 :doc "Seconds of working, fetching included, before leashing gives up." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default ##Inf :doc "Seconds of working, fetching included, before leashing gives up (the caller's remainder bounds it by default)." :spec (a/num-in 0 nil)}
    ::max-in-row {:default 3 :doc "Fruitless animals in a row that end the run." :spec (a/int-in 0 nil)}})
 (defn max-in-row [] (settings/get settings ::max-in-row))
 
