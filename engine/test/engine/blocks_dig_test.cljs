@@ -490,13 +490,18 @@
         (let [ways-of (fn ^:async ways-of* [args]
                         (let [seen (atom [])
                               env (setup {:self body :blocks {"12,64,0" "dirt"}})
+                              _ (when (:seal args)
+                                  (ledger/write! (:store (:eng env)) [{:cell [2 64 0] :item "dirt" :before "air" :job "j9" :purpose :shelter :state :placed}]))
+                              args (dissoc args :seal)
                               go-to (get (:jobs (:eng env)) 'jobs.movement.go-to)
                               stub (fn ^:async spy [c] (swap! seen conj (:ways (:args c))) (ctx/end c :done nil {:arrived false :why :no-path}))
                               env (assoc-in env [:eng :jobs 'jobs.movement.go-to] (assoc go-to :round stub))]
                           (await (tu/child-outcome (:eng env) job (merge {:pos [12 64 0]} args) 6))
                           (first @seen)))]
           (is (contains? (await (ways-of {})) :clear-seal) "by default a walk may dig its own seal")
-          (is (= #{:walk} (await (ways-of {:clear-seal false}))) "a seal cleanup's own dig starts no cleanup of its own"))))))
+          (is (= #{:walk} (await (ways-of {:clear-seal false}))) "a seal cleanup's own dig starts no cleanup of its own")
+          (is (= #{:walk} (await (ways-of {:clear-seal false :seal true}))) "nor does its walk escalate by the seal beside it (dig-out, pillar)")
+          (is (contains? (await (ways-of {:seal true})) :dig-out) "any other dig beside its seal may leave the shaft"))))))
 
 (defn after-walks
   "env with jobs.movement.go-to replaced by the real one followed by (f p): the world changes during the walk."

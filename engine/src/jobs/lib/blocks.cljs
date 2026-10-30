@@ -257,10 +257,12 @@
 (def seal-radius "Blocks from the feet within which an own ledger block counts as the body's seal." 3)
 
 (defn walk-ways
-  "The ways of a block job's walk: :walk and, unless the call's :clear-seal is false, :clear-seal; with own ledger blocks round the feet (a dig-in's seal) also :dig-out and :pillar, to leave the shaft they shut."
+  "The ways of a block job's walk: :walk and :clear-seal; with own ledger blocks round the feet (a dig-in's seal) also :dig-out and :pillar, to leave the shaft they shut. A call with :clear-seal false (a seal cleanup's own dig) walks with :walk only: no way of it may start another cleanup."
   [c]
-  (cond-> (if (false? (:clear-seal (:args c))) #{:walk} #{:walk :clear-seal})
-    (seq (ledger/near-of (ledger/open-entries (ctx/view c)) {:pos (u/self-pos c) :radius seal-radius})) (into [:dig-out :pillar])))
+  (if (false? (:clear-seal (:args c)))
+    #{:walk}
+    (cond-> #{:walk :clear-seal}
+      (seq (ledger/near-of (ledger/open-entries (ctx/view c)) {:pos (u/self-pos c) :radius seal-radius})) (into [:dig-out :pillar]))))
 
 (defn ^:async walk-request
   "[pens go-to-args] of the walk to pos: range (default 3), its walk-ways, and (unless the :enter-pens setting) keeping out of the
