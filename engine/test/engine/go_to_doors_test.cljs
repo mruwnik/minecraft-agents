@@ -102,7 +102,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p eng]} (await (go! (gate-world false) {:pos [10 64 0] :range 0 :doors :never}))]
+        (let [{:keys [out p eng]} (await (go! (gate-world false) {:pos [10 64 0] :range 0 :doors :never :ways #{:walk}}))]
           (is (= {:arrived false :reason :unreachable} (select-keys @out [:arrived :reason])))
           (is (< (first (at p)) 5) "the body stays on its side")
           (is (zero? (clicks p)))
