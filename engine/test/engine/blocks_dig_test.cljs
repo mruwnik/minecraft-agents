@@ -181,12 +181,12 @@
         (await (unseen-from-waits-no-tool 1))
         (await (unseen-from-waits-no-tool 3))))))
 
-(deftest an-unseen-block-is-looked-at-only-while-the-call-is-worth-the-look-else-the-no-tool-check-judges-its-guess
+(deftest an-unseen-block-is-looked-at-only-while-the-call-is-worth-the-look
   (let [c (fn [worth] (assoc (st/stub-ctx (tu/fake {})) :args {:pos at :need-drop true} :worth (constantly worth)))]
     (with-redefs [dig/fetch-limits (constantly nil) dig-look/unknown? (constantly true) sense/unknown? (constantly true)
                   dig/tool-problem (constantly {:reason :no-tool :needs "wooden_pickaxe"})]
       (is (= [:look :unseen] (tu/kind-reason (dig/no-tool-unfetched (c ##Inf)))))
-      (is (= [:later :no-tool] (tu/kind-reason (dig/no-tool-unfetched (c 0)))) "a call worth nothing pays no look: no price, no look"))))
+      (is (= [:later :unseen] (tu/kind-reason (dig/no-tool-unfetched (c 0)))) "a call worth nothing pays no look: no price, no look; it waits as after a fruitless look"))))
 
 (deftest the-no-tool-wait-says-need-drop-false-digs-by-hand
   (async done

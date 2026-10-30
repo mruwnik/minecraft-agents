@@ -192,13 +192,12 @@
 (def no-tool-refusal (checks/refusing :tool "a tool is carried or fetched" #(when-not (fetch-limits %) (tool-problem %))))
 
 (defn no-tool-unfetched
-  "no-tool-refusal, but a cell not yet seen is looked at first (:look, while it pays: sense/paid-look-at) when no fetch could make good a missing tool: the
+  "no-tool-refusal, but a cell not yet seen is looked at first (:look while it pays, else :later: sense/look-or-later) when no fetch could make good a missing tool: the
   round would otherwise start and end the call, where a listed one waits."
   [c]
   (let [{:keys [pos error]} (b/parse (:args c))]
-    (if-let [paid (and (not error) (:need-drop (:args c)) (not (fetch-limits c)) (not (:dug (b/mem-for c pos))) (look/unknown? (:primitives c) (b/cell pos))
-                       (seq (sense/paid-look-at c [(b/cell pos)])))]
-      (contract/look :unseen "the block to dig was not seen" :look-at (vec paid))
+    (if (and (not error) (:need-drop (:args c)) (not (fetch-limits c)) (not (:dug (b/mem-for c pos))) (look/unknown? (:primitives c) (b/cell pos)))
+      (sense/look-or-later c :unseen "the block to dig was not seen" [(b/cell pos)])
       (no-tool-refusal c))))
 
 (defn shelter-kept
