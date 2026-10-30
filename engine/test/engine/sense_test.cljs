@@ -175,6 +175,16 @@
     (is (= (cost/cell-looks (- 30 (sense/read-walk-s (stub-ctx (tu/fake {:self {:pos feet}})) reads)) 50) (looks 30))
         "worth 30 s: the find spares that less the walk")))
 
+(deftest a-look-saves-the-worth-less-the-whole-way-through-its-cell
+  (let [c (assoc (stub-ctx (tu/fake {:self {:pos feet}})) :worth (constantly 30))
+        reads {:cells [[3 64 0]]}
+        cell [3 64 0]
+        saving (fn [rest-s] (first (sense/savings (sense/fail-price c reads rest-s) [cell])))]
+    (is (= (- 30 (sense/walk-s feet cell)) (saving nil)) "no plan past the cell: the walk there")
+    (is (= (- 30 (sense/walk-s feet cell) 4) (saving 4)) "a number: the plan's cost past every cell")
+    (is (= (- 30 (sense/walk-s feet cell) (sense/walk-between-s cell [13 64 0])) (saving #(sense/walk-between-s % [13 64 0]))) "a fn of the cell")
+    (is (< (sense/cell-looks ((sense/find-price c 1000 nil 1000) nil reads) [cell]) 1) "a way dearer than the find spares: no look")))
+
 (deftest a-look-at-a-cell-the-call-fails-without-saves-the-worth-less-the-walk-to-that-cell
   (async done
     (tu/run-async done

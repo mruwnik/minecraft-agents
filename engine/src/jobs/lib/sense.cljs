@@ -31,6 +31,11 @@
   [here cell]
   (:cost (value/walk-cost {:distance (u/eye-dist here cell)})))
 
+(defn walk-between-s
+  "Seconds of the walk (value/walk-cost) from cell a to cell b, both [x y z]."
+  [a b]
+  (:cost (value/walk-cost {:distance (js/Math.hypot (- (nth a 0) (nth b 0)) (- (nth a 1) (nth b 1)) (- (nth a 2) (nth b 2)))})))
+
 (defn savings
   "What a turn saves (cost/turn-saving) for a look at each of cells, in look order, under a decision's price {:gap :delta}:
   with :gap-at (a fn of a cell to its own gap) one each, lazily, else the one saving."
@@ -56,25 +61,28 @@
 
 (defn find-price
   "decide!'s :price for a find whose other way costs other-s seconds: a look that shows the find at a cell saves that, at
-  most the call's worth (ctx/worth: a turn spares no more than giving the goal up), less the walk there (:gap-at, walk-s:
-  the least the plan through it costs); :gap the walk to the nearest cell read (read-walk-s), for an area query. chance: the kind's chance a look shows one after i fruitless looks (cost/cell-looks), nil turn-chance."
+  most the call's worth (ctx/worth: a turn spares no more than giving the goal up), less the way through that cell
+  (:gap-at: walk-s there plus rest-s, the plan's cost past it, a number or a fn of the cell, default 0); :gap the walk to
+  the nearest cell read (read-walk-s), for an area query. chance: the kind's chance a look shows one after i fruitless looks (cost/cell-looks), nil turn-chance."
   ([c other-s] (find-price c other-s nil))
-  ([c other-s chance]
+  ([c other-s chance] (find-price c other-s chance nil))
+  ([c other-s chance rest-s]
    (fn [_ reads]
      (when-let [w (read-walk-s c reads)]
-       (let [here (u/self-pos c)]
-         (cond-> {:gap w :delta (min other-s (ctx/worth c)) :gap-at #(walk-s here %)} chance (assoc :chance chance)))))))
+       (let [here (u/self-pos c)
+             rest-of (cond (fn? rest-s) rest-s rest-s (constantly rest-s) :else (constantly 0))]
+         (cond-> {:gap w :delta (min other-s (ctx/worth c)) :gap-at #(+ (walk-s here %) (rest-of %))} chance (assoc :chance chance)))))))
 
 (defn fail-price
   "The price of a decision whose negative ends the job, after it read reads (decide's): a find whose other way is the
-  caller's next way, the call's worth (ctx/worth) (find-price)."
-  [c reads]
-  ((find-price c (ctx/worth c)) nil reads))
+  caller's next way, the call's worth (ctx/worth) (find-price, rest-s as there)."
+  ([c reads] (fail-price c reads nil))
+  ([c reads rest-s] ((find-price c (ctx/worth c) nil rest-s) nil reads)))
 
 (defn fails-to
-  "decide!'s :price for a decision whose negative ends the job (fail-price)."
-  [c]
-  (fn [_ reads] (fail-price c reads)))
+  "decide!'s :price for a decision whose negative ends the job (fail-price, rest-s as there)."
+  ([c] (fails-to c nil))
+  ([c rest-s] (fn [_ reads] (fail-price c reads rest-s))))
 
 (defn max-looked [] (settings/get settings ::max-looked))
 (defn passes [] (settings/get settings ::passes))

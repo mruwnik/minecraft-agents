@@ -340,7 +340,7 @@
     (if (bad-target? target)
       (finish! c :bad-args {:why "target must be [x y z] of integers"})
       (let [a (await (sense/decide! c ::approach #(ln/approach (assoc (dissoc (judge/rules-in c feet) :feet) :heading-reads (settings/get settings ::heading-reads) :filler? (some? (choose/filler c :build))) target feet max-length (set accept) (:heading (:args c)))
-                                    {:retry? #(not (:entry %)) :price (sense/fails-to c)}))]
+                                    {:retry? #(not (:entry %)) :price (sense/fails-to c #(sense/walk-between-s % target))}))]
         (if-let [w (when (or (not (:entry a)) (ln/far-entry? a feet))
                      (when (or (:entry a) (#{:too-far :read-bound :no-approach} (:reason a)))
                        (ln/leg-target (:block-at (judge/rules-in c feet)) feet target max-length (:leg-swap (ctx/mem c)))))]
