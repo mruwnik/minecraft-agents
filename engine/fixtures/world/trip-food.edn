@@ -1,9 +1,10 @@
-;; A long trip fetches its food from home before it starts (jobs.lib.ready/trip-fed, jobs.lib.home-food/fetch-points).
+;; A long trip fetches its food from home before it starts (jobs.lib.ready/trip-fed, jobs.lib.home-food/trip-fetch).
 ;; A mine for 64 iron ore with none in sight: about 6 s an item, open-ended, its far end unknown, so running out is priced
 ;; at the food short got on the way (cost.food ::field-point-s) and the chest's bread, which costs only its fetch, is taken
 ;; until the trip's tail is covered: far more than 2 loaves.
 ;; Should-succeed: 2 loaves and a chest of bread it booked 4 blocks off: get-food takes bread from the chest before the mine's work.
 ;; Should-fail: 30 loaves cover the trip: no bread is taken.
+;; A chest booked full but found empty: get-food ends done short (:least, the 2 loaves carried), the mine goes on, no :look-first stop.
 {:defaults
  {:time :any
   :tags [:mine :food :trip]
@@ -20,4 +21,10 @@
    :body {:inventory [["stone_pickaxe" 1] ["iron_sword" 1] ["bread" 30]]}
    :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :count 64 :level false :tunnel-length 0 :radius 8})]]
    :expect [{:no-event {:source :job :kind :food.took-from-chest} :for-s 40}]
-   :after [[:item "bread" 30]]}]}
+   :after [[:item "bread" 30]]}
+  {:name "a-mine-whose-booked-chest-is-empty-goes-on-with-its-own-bread"
+   :blocks [[:set [8 0 16] "chest"]]
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :count 64 :level false :tunnel-length 0 :radius 8})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.get-food"}} :within-s 60}
+            {:no-event {:source :job :kind :stopped :data {:reason :look-first}} :for-s 70}]
+   :after [[:item "bread" 2]]}]}
