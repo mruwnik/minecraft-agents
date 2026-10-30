@@ -14,7 +14,8 @@
   a cell beside it still in range (jobs.lib.near/step-out!) so the block can be shut; with none, it stays.
 
   Every block the walker opens gets an :opened memory entry {:cell {:x :y :z} :by job-id :t ms :shut? bool} before the
-  click (:shut? false: the policy leaves it open). The entry is dropped when the block is shut.
+  click (:shut? false: the policy leaves it open, on purpose until :until, ::leave-open-s on: jobs.lib.expiry). The entry
+  is dropped when the block is shut.
   A walk cut between the open and the shut leaves the entry. The next round of the same job shuts it
   (shut-leftovers!), or the door-left trigger (triggers.maintenance.door-left) does, with jobs.maintenance.shut.
   A block that stays open (an animal stands in its cell, so the walker waits and tries again but never pushes; or the
@@ -27,6 +28,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
             [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.expiry :as expiry]
             [jobs.lib.util :as u]
             [engine.memory :as mem]
             [jobs.lib.walk :as walk]
@@ -35,6 +37,7 @@
 (a/defargs settings
   {::shut-waits {:default 4 :doc "Tries to shut a block with an animal in its cell, after the first." :spec (a/int-in 0 nil)}
    ::shut-wait-ms {:default 500 :doc "Wait between those tries, in ms." :spec (a/int-in 0 nil)}
+   ::leave-open-s {:default 600 :doc "Seconds a block a :leave-open walk opened stays open on purpose; then the door-left trigger may shut it. Twice the longest escort call's job time (lure-to's 300 s), its cuts allowed for." :spec (a/num-in 0 nil)}
    ::leftover-reach {:default 4 :doc "A leftover :opened entry is shut when the body is this near." :spec (a/int-in 0 nil)}
    ::await-polls {:default 6 :doc "Reads of a door a button or plate was to open." :spec (a/int-in 1 nil)}
    ::await-poll-ms {:default 100 :doc "Wait between those reads, in ms." :spec (a/int-in 0 nil)}
@@ -143,7 +146,9 @@
       (not= :openable (click/kind-of name)) {:result :stuck}
       (click/reached? :open props) {:result :was-open}
       :else
-      (do (ctx/remember! c :opened {:cell cell :by (:id c) :t (ctx/now c) :shut? shut?} opened-policy)
+      (do (ctx/remember! c :opened (cond-> {:cell cell :by (:id c) :t (ctx/now c) :shut? shut?}
+                                     (not shut?) (expiry/stamp (ctx/now c) (* 1000 (settings/get settings ::leave-open-s))))
+                         opened-policy)
           (let [{:keys [outcome]} (await (click/click! c cell :open name))]
             (if (= :changed outcome)
               {:result :opened :column (column-of cell props)}

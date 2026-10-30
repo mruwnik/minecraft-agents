@@ -39,7 +39,7 @@
   memory).
 
   Which entries (:of):
-  - :orphans (default): entries whose placing job is no longer live and that no cleanup held in the last 10 minutes.
+  - :orphans (default): entries past their :until (jobs.lib.ledger ::ttl-s) that no cleanup held in the last 10 minutes.
   - an instance id: that instance's and its children's. A parent cleaning up after its own pillar passes its
     own id.
   - :all: every entry.
@@ -105,7 +105,7 @@
   never seen). Quote: from the entries it would work on.")
 
 (a/defargs args
-  {:of {:doc ":orphans: entries no live job owns; \"jN\": that instance's and its children's; :all: every entry" :spec (a/or-of #{:orphans :all} a/name?) :default :orphans}
+  {:of {:doc ":orphans: entries past their :until; \"jN\": that instance's and its children's; :all: every entry" :spec (a/or-of #{:orphans :all} a/name?) :default :orphans}
    :near {:doc "only the entries within :radius of :pos (default the body's position now); {:radius 32} for :orphans when absent" :spec (a/map-with {:pos a/point? :radius (a/num-in 0 nil)}) :default nil}
    :purpose {:doc "only the entries of these purposes (a keyword or a set), e.g. :doorway; nil: any" :spec (a/or-of keyword? (a/coll-of keyword?)) :default nil}
    :accept {:doc "dig hazards accepted: :fluid-adjacent (water beside), :lava-adjacent, :falling-block"

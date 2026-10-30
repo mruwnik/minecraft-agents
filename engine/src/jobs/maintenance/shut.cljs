@@ -26,7 +26,7 @@
   (written by jobs.lib.pass when a walk opens a block, dropped when it shuts it), whatever their age. With the unrecorded? setting (default off)
   wooden doors (never gates or trapdoors) seen open without an entry count too, but only those of the body's own building: inside the footprint
   of a plan it made, or within the home-radius setting (8) of its :home place. Blocks a :leave-open walk left open on purpose are left alone
-  while that walk's job lives. The block is shut as the walker does (pass/shut-column!). A recorded block the body still has not seen after the
+  until their time runs out (jobs.lib.pass ::leave-open-s). The block is shut as the walker does (pass/shut-column!). A recorded block the body still has not seen after the
   look is left as :unseen (entry untouched). A block that cannot be reached is dropped at once; one that is not shut after the tries setting (3)
   clicks, or that the body stands in the column of, fails this run (shut.gave-up, warn the first time) and keeps its entry with a fail
   counted (the trigger waits :open-s per fail) until the attempts setting (5) runs have failed: then it is dropped with a last warn. A block an

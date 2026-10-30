@@ -2,7 +2,7 @@
   "The scaffold-left trigger. It holds when a zone list has been read and the scaffold ledger (jobs.lib.ledger)
   has an open entry that:
     lies in a loaded cell
-    belongs to a job that is no longer live (its job memory is gone: done, cancelled, discarded)
+    is past its :until (jobs.lib.ledger ::ttl-s after it was written; its placer takes it back itself when it ends)
     no cleanup held in the last 10 minutes
     within :near's :radius (32) of the body, so a far scaffold never drags the body back to it
     not deeper below the feet than jobs.lib.ledger/max-below, not within jobs.lib.ledger/died-radius of a place the body died, not roofed (a solid block within jobs.lib.ledger/roof-height above it) while the body is in the open (jobs.lib.ledger/walk-blocker)

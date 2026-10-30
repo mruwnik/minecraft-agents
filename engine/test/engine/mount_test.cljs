@@ -44,8 +44,7 @@
           (is (= :done (:kind (:r o))))
           (is (= {:status :done :id 9 :vehicle "oak_boat"} (result-of o)))
           (is (some? (vehicle/vehicle-of (.self (:p o)))))
-          (is (not-any? #(= :vehicle.mounted (first %)) (:seen o)) "the ending carries it")
-          (is (some #{[:remember :vehicle-hold {:job "j1"}]} (:seen o)) "holds the vehicle"))))))
+          (is (not-any? #(= :vehicle.mounted (first %)) (:seen o)) "the ending carries it"))))))
 
 (deftest already-aboard-is-done
   (async done
@@ -55,12 +54,9 @@
           (is (= :done (:status (result-of o))))
           (is (true? (:already (result-of o)))))))))
 
-(deftest aboard-already-ends-before-the-start-only-once-the-root-holds-the-vehicle
-  (let [p (tu/fake {:self {:vehicle 9} :entities [boat]})
-        held (fn [job] (assoc (bare-ctx p {:id 9}) :view (fn [] {:data {:entries {:vehicle-hold [{:t 0 :data {:job job}}]}} :now 0})))]
-    (is (= [:later :holding] (tu/kind-reason (mount/done? (bare-ctx p {:id 9})))) "no hold yet: the round holds it first")
-    (is (= [:ok :aboard] (tu/kind-reason (mount/done? (held "j1")))))
-    (is (= [:later :holding] (tu/kind-reason (mount/done? (held "other")))) "another job's hold is not this root's")))
+(deftest aboard-already-ends-before-the-start
+  (is (= [:ok :aboard] (tu/kind-reason (mount/done? (bare-ctx (tu/fake {:self {:vehicle 9} :entities [boat]}) {:id 9})))))
+  (is (= [:later :ashore] (tu/kind-reason (mount/done? (bare-ctx (tu/fake {:entities [boat]}) {:id 9}))))))
 
 (deftest refusals-stop-with-the-reason
   (async done
@@ -180,8 +176,3 @@
                                              (js/Promise. (fn [res _] (js/setTimeout #(res {:hung true}) 200)))]))]
           (is (nil? (:hung o)) "no endless re-walk")
           (is (= :unreachable (:reason (result-of o)))))))))
-
-(deftest hold-policy-follows-its-settings
-  (is (= {:cap 8 :ttl 86400000} (vehicle/hold-policy)))
-  (is (= {:cap 3 :ttl 5000}
-         (settings/with-settings {:jobs.lib.vehicle/hold-cap 3 :jobs.lib.vehicle/hold-ttl-ms 5000} vehicle/hold-policy))))

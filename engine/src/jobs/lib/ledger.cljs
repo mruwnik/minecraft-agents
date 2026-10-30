@@ -4,7 +4,7 @@
 
   Storage: body memory, not job memory (a discarded job's memory is gone, its blocks are not). One entry of
   kind :scaffold (cap 1, forever) with data {:entries [entry ...]}. An entry is
-    {:cell [x y z] :item \"dirt\" :before \"air\" :job \"j4\" :purpose :pillar :state :intent|:placed|:removing}
+    {:cell [x y z] :item \"dirt\" :before \"air\" :job \"j4\" :purpose :pillar :state :intent|:placed|:removing :until ms}
   with at most one entry per cell. Every entry stays open until a cleanup drops it.
 
   Placing: a job writes the entry as :intent before the placing act (act saves memory before it calls the
@@ -23,8 +23,8 @@
   Cells a cleanup could not take are held (kind :scaffold-held, 10 minutes) so the standing offer does not
   repeat them every tick.
 
-  Owner: the root instance of an entry's :job (j4 for j4/pillar). It is live while body memory holds that
-  instance's job memory (listed, or a running reflex).
+  Expiry: remember! stamps each new intent with :until, ::ttl-s on (jobs.lib.expiry). A placer takes its own blocks back
+  when it ends (a cleanup :of its id); past :until an entry is an orphan, whoever placed it (no :until: one already).
 
   The lifecycle functions are pure over the entry vector. open-entries reads it from a memory view, write!
   and remember! store it."
@@ -36,6 +36,7 @@
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
+            [jobs.lib.expiry :as expiry]
             [jobs.lib.shelter.spawn :as sh-spawn]
             [jobs.lib.util :as u]))
 
@@ -43,6 +44,7 @@
   {::max-below {:default 4 :doc "Blocks below the body a scaffold may lie to be walked to; the scaffold-left trigger ignores a deeper one (a cave, a pit)." :spec (a/int-in 0 nil)}
    ::roof-height {:default 4 :doc "Blocks above a scaffold block within which a solid block (not scaffold) roofs it; the scaffold-left trigger does not offer a roofed one from the open." :spec (a/int-in 0 nil)}
    ::reach {:default u/bucket-reach :doc "Cells whose centre is this close to the eye are dug from where the body stands, in blocks (jobs.access.cleanup digs them; the scaffold-left trigger walks to the rest)." :spec (a/num-in 0 nil)}
+   ::ttl-s {:default 3600 :doc "Seconds a scaffold entry stays its placer's before it is an orphan (the scaffold-left trigger takes it back). Twice the longest placing call's job time (go-to, stair, build from-plan: 1800 s), its cuts allowed for." :spec (a/num-in 1 nil)}
    ::died-radius {:default 24 :doc "Blocks around a place the body died within which the scaffold-left trigger does not offer a scaffold." :spec (a/num-in 0 nil)}})
 
 (defn max-below [] (settings/get settings ::max-below))
@@ -161,9 +163,11 @@
   (mem/write! store kind {:entries (vec l)} policy))
 
 (defn remember!
-  "Store l in body memory from a job's round."
+  "Store l in body memory from a job's round, its new intents stamped with :until (expiry): an entry a cleanup rewrites
+  keeps the time it had."
   [c l]
-  (ctx/remember! c kind {:entries (vec l)} policy))
+  (let [now (ctx/now c) ttl (* 1000 (settings/get settings ::ttl-s))]
+    (ctx/remember! c kind {:entries (mapv #(if (or (:until %) (not= :intent (:state %))) % (expiry/stamp % now ttl)) l)} policy)))
 
 ;; ------------------------------------------------------------------ cleanup
 
@@ -200,21 +204,18 @@
           {:ledger [] :removed [] :dropped []}
           l))
 
-(defn owner
-  "The root instance id of an entry's :job: \"j4\" for \"j4\" and \"j4/pillar\"."
-  [e]
-  (first (str/split (str (:job e)) #"/")))
-
-(defn owner-live?
-  "Whether the instance that owns e still has job memory in the view (listed, or a running reflex)."
-  [view e]
-  (some? (mem/latest view (mem/job-kind (owner e)))))
-
 (defn of-instance?
   "Whether e was placed by instance id or one of its children."
   [id e]
   (let [j (str (:job e))]
     (or (= id j) (str/starts-with? j (str id "/")))))
+
+(defn release!
+  "End the time of the entries of this ctx's instance and its children (of-instance?): orphans now, for the scaffold-left trigger."
+  [c]
+  (let [l (:entries (:data (mem/latest (ctx/view c) kind))) now (ctx/now c)]
+    (when (some #(of-instance? (:id c) %) l)
+      (ctx/remember! c kind {:entries (mapv #(cond-> % (of-instance? (:id c) %) (assoc :until now)) l)} policy))))
 
 (def held-kind :scaffold-held)
 
@@ -231,7 +232,7 @@
       (filterv (fn [{[cx cy cz] :cell}] (<= (js/Math.hypot (- (+ cx 0.5) x) (- cy y) (- (+ cz 0.5) z)) (:radius near))) l))))
 
 (defn select
-  "The entries of l a cleanup with :of of works on: :orphans, those whose owner is not live and that are not held (a dig-in's :shelter blocks stay: the dig-in's leave takes them back); :all,
+  "The entries of l a cleanup with :of of works on: :orphans, those past their :until (expiry) and not held (a dig-in's :shelter blocks stay: the dig-in's leave takes them back); :all,
   every one; an instance id, those of that instance and its children. near narrows them to a pos and radius (near-of); purposes (a set), to those of
   that :purpose."
   ([l view of] (select l view of nil nil))
@@ -239,7 +240,7 @@
   ([l view of near purposes]
    (cond->> (near-of (cond
                        (or (nil? of) (= :orphans of)) (let [held (held-cells view)]
-                                    (filterv #(and (not= :shelter (:purpose %)) (not (owner-live? view %)) (not (held (:cell %)))) l))
+                                    (filterv #(and (not= :shelter (:purpose %)) (not (expiry/current? (:now view) %)) (not (held (:cell %)))) l))
                        (= :all of) (vec l)
                        :else (filterv #(of-instance? of %) l))
                      near)

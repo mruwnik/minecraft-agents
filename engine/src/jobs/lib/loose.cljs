@@ -8,7 +8,8 @@
     :thrown       the body threw it (make-room's junk, a give), ever; any item of a kind make-room tossed under :dumped-s ago; another player threw it under :thrown-s ago
                   (thrower: from the spawn engine/js records; the body's own toss by item and time, a player's by its drop point);
     :zone         it lies in another's zone or claim (a :take verdict; no zone list never blocks);
-    :collecting   a live job's collect-drops is collecting round it (the :collecting hold, written by collect-drops);
+    :collecting   another job's collect-drops is collecting round it (the :collecting hold, written by collect-drops, dropped in
+                  its cleanup, ::hold-ttl-s at most);
     :owed         it appeared under :owed-s ago while some other job runs: that job's own drop (a felled log, a dug ore);
     :left         a run left it (:loose-left, not reached or not picked up) in the last :left-s (longer than
                   :thrown-s and :owed-s: a spot a run failed on stays failed, where those two only guess at ownership)."
@@ -139,15 +140,16 @@
                              :cell (mapv js/Math.floor [(:x pos) (:y pos) (:z pos)])})))))
 
 (defn judge
-  "Why entity e is left (a keyword, see the ns doc), or nil when it is taken. live is the set of live job ids; :zone stands for a zone or a claim."
-  [{:keys [view kn o self feet live left]} e]
+  "Why entity e is left (a keyword, see the ns doc), or nil when it is taken. live is the set of live job ids, except
+  the caller's own job id; :zone stands for a zone or a claim."
+  [{:keys [view kn o self feet live left except]} e]
   (let [now (:now view)
         name (some-> (.-item e) .-name)
         pos (item-pos e)
         spawn (.-spawn e)
         age (when-let [t (some-> spawn .-at)] (- now t))
         by (if (contains? (dumped-names o view) name) self (thrower o self name spawn))
-        holds (filter #(contains? live (:job %)) (map :data (mem/entries view hold-kind)))]
+        holds (remove #(= except (:job %)) (map :data (mem/entries view hold-kind)))]
     (cond
       (nil? name) :unknown
       (some #{name} (:never o)) :never
@@ -169,7 +171,7 @@
   (let [o (options args)
         feet (u/pos-of (.-pos (.self p)))
         env {:view view :kn kn :o o :self (.-username (.self p)) :feet feet
-             :live (live-ids view except) :left (left-ids view)}
+             :live (live-ids view except) :left (left-ids view) :except except}
         near (seen p o)
         near-ids (set (map #(.-id %) near))
         beyond (->> (look/seen-items p {:radius (:check-radius o) :max 32})
@@ -186,5 +188,5 @@
   [p view kn args except]
   (let [o (options args)
         env {:view view :kn kn :o o :self (.-username (.self p)) :feet (u/pos-of (.-pos (.self p)))
-             :live (live-ids view except) :left (left-ids view)}]
+             :live (live-ids view except) :left (left-ids view) :except except}]
     (filterv #(nil? (judge env %)) (seen p o))))

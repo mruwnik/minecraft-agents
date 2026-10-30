@@ -217,10 +217,11 @@
   ([p s zones] (fires? p s zones {}))
   ([p s zones args] (scaffold-left/scaffold-left p (mem/view s) args (world/of-data {} {} zones))))
 
-(deftest the-trigger-offers-cleanup-for-blocks-no-live-job-owns
+(deftest the-trigger-offers-cleanup-for-blocks-past-their-time
   (let [p (tu/fake {:blocks {"0,64,0" "dirt"} :unloaded ["50,64,0"]})]
     (is (true? (fires? p (trigger-store [(entry [0 64 0])] []) [])))
-    (is (false? (fires? p (trigger-store [(entry [0 64 0] :job "j4/pillar")] ["j4"]) [])) "the owner is still listed")
+    (is (true? (fires? p (trigger-store [(entry [0 64 0] :job "j4/pillar" :until 1000)] ["j4"]) [])) "its time is out, its owner listed or not")
+    (is (false? (fires? p (trigger-store [(entry [0 64 0] :job "j4/pillar" :until 1001)] []) [])) "its time is not out, its owner gone or not")
     (is (false? (fires? p (trigger-store [] []) [])) "nothing open")
     (is (false? (fires? p (trigger-store [(entry [0 64 0])] []) nil)) "no zone list")
     (is (false? (fires? p (trigger-store [(entry [50 64 0])] []) [])) "the cell is not loaded")

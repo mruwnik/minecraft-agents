@@ -75,19 +75,13 @@
     (aset p "sensedAt" (fn [pos] #js {:unknown true :pos pos}))
     (is (nil? (doors/seen-open-block p gate-cell)) "neither felt nor remembered: not read")))
 
-(defn with-owner
-  "view with job memory for the root job j1 (it lives)."
-  [view]
-  (update view :data mem/add-entry (mem/job-kind "j1") {:t 0 :data {:args {} :children {}}} {:cap 1 :ttl :forever}))
-
-(deftest a-block-a-live-walk-left-open-on-purpose-is-not-the-triggers-business
+(deftest a-block-left-open-on-purpose-is-the-triggers-only-once-its-time-runs-out
   (let [p (tu/seeing-all (tu/fake (gate-world true 9 0)))
         holds? #(dl/door-left p % (:args (:door-left triggers/all)) nil)]
-    (is (false? (holds? (with-owner (view-with 60000 0 {:shut? false})))) "a :leave-open walk's entry, its job lives")
-    (is (true? (holds? (view-with 60000 0 {:shut? false}))) "the job is gone (cancelled): the gate is a leftover")
-    (is (true? (holds? (view-with 60000 0 {:shut? false :by "j1/walk"}))) "a child id of a gone job")
-    (is (false? (holds? (with-owner (view-with 60000 0 {:shut? false :by "j1/walk"})))) "a child id of a live job")
-    (is (true? (holds? (view-with 60000 0 {}))))))
+    (is (false? (holds? (view-with 60000 0 {:shut? false :until 60001}))) "a :leave-open walk's entry, its time not out, whether its job lives or not")
+    (is (true? (holds? (view-with 60000 0 {:shut? false :until 60000}))) "its time is out: the gate is a leftover")
+    (is (true? (holds? (view-with 60000 0 {:shut? false}))) "no time: a leftover")
+    (is (true? (holds? (view-with 60000 0 {:until 70000}))) "an entry the walk meant to shut")))
 
 (deftest the-trigger-is-registered-with-the-job-that-shuts-doors
   (is (= dl/door-left (:when (:door-left triggers/all))))
@@ -287,7 +281,8 @@
                          (await (impl token args))))
             (core/submit! eng '(walker) {})
             (await (tick-until s #(empty? (:list (core/state eng))) 10))
-            (is (= shut? (first @seen)) (str doors))))))))
+            (is (= shut? (first @seen)) (str doors))
+            (is (= (not shut?) (some? (:until (first (opened eng))))) "only a :leave-open entry has a time")))))))
 
 (def gate2-cell {:x 5 :y 64 :z 4})
 

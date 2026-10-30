@@ -1,0 +1,37 @@
+;; Card 605ba82d (Q71): a gate left open on purpose and scaffold are common-memory records with an expiry (jobs.lib.expiry),
+;; never a lease on the job that wrote them. A stone wall across the plot at x 16 with a gate in it; the body 6 west of it.
+;; Should-succeed: a :leave-open walk's gate is shut by the door-left reflex once jobs.lib.pass/leave-open-s (20 here) is out;
+;; a pillar a finished job left stands until jobs.lib.ledger/ttl-s (30 here) is out, then the scaffold-left reflex takes it back.
+;; Should-fail: with the default 600 s the gate stays open and door-left never fires.
+{:defaults
+ {:tags [:door :cleanup :scaffold-left :memory]
+  :plot {:height 10}
+  :blocks [[:fill [16 0 0] [16 3 31] "stone"] [:fill [0 0 0] [31 3 0] "stone"] [:fill [0 0 31] [31 3 31] "stone"]
+           [:fill [0 0 0] [0 3 31] "stone"] [:fill [31 0 0] [31 3 31] "stone"]
+           [:set [16 0 16] "oak_fence_gate[facing=east,open=false]"] [:set [16 1 16] "air"]]
+  :body {:at [10.5 0 16.5] :inventory [["iron_pickaxe" 1] ["cobblestone" 4] ["iron_sword" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 120}
+ :cases
+ [{:name "leave-open-gate-shut-once-its-time-is-out"
+   :register [{:trigger :door-left}]
+   :settings {:jobs.lib.pass/leave-open-s 20}
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :doors :leave-open})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}
+            {:event {:source :reflex :kind :fired :context {:reflex-id :door-left}} :within-s 80}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :door-left} :data {:outcome :done}} :within-s 110}]
+   :after [[:block [16 0 16] "oak_fence_gate[open=false]"]]}
+  {:name "leave-open-gate-kept-open-within-its-time"
+   :register [{:trigger :door-left}]
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :doors :leave-open})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}
+            {:no-event {:source :reflex :kind :fired :context {:reflex-id :door-left}} :for-s 50}]
+   :after [[:block [16 0 16] "oak_fence_gate[open=true]"]]
+   :limit-s 60}
+  {:name "a-finished-pillar-is-taken-back-once-its-time-is-out"
+   :register [{:trigger :scaffold-left}]
+   :settings {:jobs.lib.ledger/ttl-s 30}
+   :act [[:job (jobs.access.pillar {:height 2 :use {:blocks ["cobblestone"]} :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}
+            {:no-event {:source :reflex :kind :fired :context {:reflex-id :scaffold-left}} :for-s 25}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :scaffold-left} :data {:removed [[:any] [:any]]}} :within-s 110}]
+   :after [[:not-block [10 0 16] "cobblestone"] [:not-block [10 1 16] "cobblestone"]]}]}

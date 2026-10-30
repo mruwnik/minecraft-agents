@@ -4,7 +4,6 @@
   stop and never walk back, so this is what gets an idle body out of a hole. It holds only after the body has been in that state
   :idle-s seconds (a clock kept per body here, reset whenever the state ends), so the gap between two agent calls walks nowhere. It needs a remembered home or bed, and holds nothing while a job is listed, the body sleeps or a death is unrecovered."
   (:require [jobs.lib.body :as body]
-            [jobs.lib.loose :as loose]
             [jobs.lib.shelter :as sh]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]))
@@ -16,14 +15,14 @@
   (js/WeakMap.))
 
 (defn stuck-underground
-  [p view args _kn _live]
+  [p view args _kn live]
   (let [{:keys [below idle-s]} (merge defaults args)
         pos (sh/home-target view)
         feet (u/self-pos {:primitives p})
         stuck? (and pos
                     (not (body/recovery-pending? view :stuck-underground))
                     (not (sh-sense/sleeping? p))
-                    (empty? (loose/live-ids view nil))
+                    (empty? live)
                     (>= (- (:y pos) (:y feet)) below)
                     (sh-sense/buried? p))]
     (when-not stuck? (.delete since p))

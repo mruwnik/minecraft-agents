@@ -133,12 +133,6 @@
     (is (= [a] (mapv :cell (:removed r))))
     (is (= [[[0 66 0] "stone"]] (mapv (juxt :cell :found) (:dropped r))))))
 
-(deftest the-owner-is-the-root-instance
-  (are [job root] (= root (ledger/owner {:job job}))
-    "j4" "j4"
-    "j4/kid" "j4"
-    "j4/c0/pillar" "j4"))
-
 (deftest an-entry-belongs-to-an-instance-and-its-children
   (are [job yes?] (= yes? (ledger/of-instance? "j4" {:job job}))
     "j4" true
@@ -147,19 +141,9 @@
     "j41/kid" false
     "j5" false))
 
-(defn view-with-jobs [& ids]
-  (let [s (store (tu/tmp-dir))]
-    (doseq [id ids] (mem/write! s (mem/job-kind id) {:args {} :children {}} {:cap 1 :ttl :forever}))
-    (mem/view s)))
-
-(deftest the-owner-is-live-while-its-job-memory-exists
-  (let [v (view-with-jobs "j4")]
-    (is (ledger/owner-live? v {:job "j4/kid"}))
-    (is (not (ledger/owner-live? v {:job "j5"})))))
-
 (deftest select-picks-by-the-job-argument
-  (let [v (view-with-jobs "j4")
-        l [(entry a :job "j4/kid") (entry b :job "j5") (entry [0 66 0] :job "j41")]]
+  (let [v {:data {} :now 1000}
+        l [(entry a :job "j4/kid" :until 1001) (entry b :job "j5" :until 1000) (entry [0 66 0] :job "j41")]]
     (are [job cells] (= cells (mapv :cell (ledger/select l v job)))
       :orphans [b [0 66 0]]
       :all [a b [0 66 0]]
@@ -174,6 +158,12 @@
     (ledger/hold! s [b])
     (is (= [a] (mapv :cell (ledger/offered (mem/view s) (world a "dirt" b "air") :orphans))) "a held cell is not offered")
     (is (= [] (ledger/offered (mem/view s) (world a "dirt" b "air") "j8")))))
+
+(deftest a-round-stamps-new-intents-with-the-ttl-and-keeps-old-stamps
+  (let [written (atom nil)
+        c {:view (fn [] {:data {} :now 5000}) :remember (fn [_ d _] (reset! written d))}]
+    (ledger/remember! c [(entry a :state :intent) (entry b :state :intent :until 7) (entry [0 66 0] :state :removing)])
+    (is (= [(+ 5000 (* 1000 3600)) 7 nil] (mapv :until (:entries @written))) "a cleanup's rewrite of an old entry gives it no time")))
 
 (deftest held-cells-are-forgotten-after-a-while
   (let [clock (atom 1000)

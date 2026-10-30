@@ -258,9 +258,11 @@
 
 (defn ^:async cleanup
   "However the call ended (a cut too): the planned cells of an escalation child cut mid-round are noted to the tidy
-  ledger, the off-hand torch goes back and the planner's kept state is released."
+  ledger, the off-hand torch goes back and the planner's kept state is released. A root go-to's scaffold (a pillar,
+  a bridge) is released (ledger/release!): the scaffold-left trigger takes it back; under a caller it keeps its time."
   [c _]
   (when-not (:own (:escalation (ctx/mem c))) (note-holes! c (:planned (ctx/mem c))))
+  (when (= (:id c) (:root c)) (ledger/release! c))
   (wsearch/release! c)
   (goal/clear! c)
   (choose/forget-routes! (:route-owner (ctx/mem c)))

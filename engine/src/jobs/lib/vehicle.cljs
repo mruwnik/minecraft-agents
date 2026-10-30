@@ -1,28 +1,10 @@
 (ns jobs.lib.vehicle
-  "Vehicles from the job side: what the body rides (self().vehicle, see engine/js/vehicle.mjs), the vehicle hold, and
-  where to step off.
-
-  A job that means to ride (launch, drive, land, cross-water) calls hold! before it mounts and release! after it is
-  off. The hold is body memory :vehicle-hold {:job root-id}. It counts only while that root job's memory
-  (kind :job/<id>) exists, so a cancelled holder stops holding at once. The :mounted trigger fires on a body aboard
-  that nothing holds."
-  (:require [engine.args :as a]
-            [engine.ctx :as ctx]
-            [engine.settings :as settings]
-            [jobs.lib.util :as u]
-            [engine.memory :as mem]
+  "Vehicles from the job side: what the body rides (self().vehicle, see engine/js/vehicle.mjs) and where to step off."
+  (:require [jobs.lib.util :as u]
             [jobs.lib.land :as land]
             [shadow.resource :as rc]))
 
 (def ^:private seat-table (js/JSON.parse (rc/inline "jobs/lib/vehicle-seats.json")))
-
-(def hold-kind :vehicle-hold)
-
-(a/defargs settings
-  {::hold-cap {:default 8 :doc "Most vehicle-hold entries the body's memory keeps." :spec (a/int-in 1 nil)}
-   ::hold-ttl-ms {:default (* 24 60 60 1000) :doc "How long a vehicle hold stays in memory, in ms." :spec (a/int-in 1 nil)}})
-
-(defn hold-policy [] {:cap (settings/get settings ::hold-cap) :ttl (settings/get settings ::hold-ttl-ms)})
 
 (defn vehicle-of
   "{:id :uuid :name} of what a sensed self (JS, from primitives.self()) rides, or nil (on foot or offline)."
@@ -39,29 +21,6 @@
     (re-find #"_chest_(boat|raft)$" name) (unchecked-get seat-table "chestBoatSeats")
     (re-find #"_(boat|raft)$" name) (unchecked-get seat-table "boatSeats")
     :else (or (unchecked-get (unchecked-get seat-table "mountSeats") name) 0)))
-
-(defn live-job? [view id] (boolean (seq (mem/entries view (mem/job-kind id)))))
-
-(defn held?
-  "True when some :vehicle-hold entry belongs to a job that still lives."
-  [view]
-  (boolean (some #(live-job? view (:job (:data %))) (mem/entries view hold-kind))))
-
-(defn held-by-root?
-  "True when this ctx's root job holds the vehicle."
-  [c]
-  (boolean (some #(= (:root c) (:job (:data %))) (ctx/entries c hold-kind))))
-
-(defn hold!
-  "Mark the vehicle as this ctx's root job's to ride; once per job."
-  [c]
-  (when-not (held-by-root? c)
-    (ctx/remember! c hold-kind {:job (:root c)} (hold-policy))))
-
-(defn release!
-  "Drop this ctx's root job's hold."
-  [c]
-  (ctx/forget-where! c hold-kind #(= (:root c) (:job %))))
 
 (defn yaw-toward
   "Minecraft yaw in degrees (0 south +z, 90 west -x, 180 north, 270 east) from from to to, by x and z."

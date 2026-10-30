@@ -207,6 +207,16 @@
           (is (= :not-collected (contract/cause-key (:because (:because (:ending res))))) (pr-str res))
           (is (child-ended? seen :land)))))))
 
+(deftest a-crossing-that-fails-aboard-steps-off-in-its-cleanup
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (lt/setup aboard-world)
+              _ (.override (.-world p) "paddle" (fn [_ _ _] #js {:status "not-a-boat"}))
+              res (await (tu/child-outcome eng 'jobs.movement.cross-water {:pos [7 64 0]} 200))]
+          (is (not= :done (:status res)) (pr-str res))
+          (is (not (aboard? p)) "the ride is no other job's"))))))
+
 (deftest no-boat-carries-the-launch-cause
   (async done
     (tu/run-async done

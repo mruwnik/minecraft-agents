@@ -1,5 +1,5 @@
 (ns engine.vehicle-test
-  "jobs.lib.vehicle (what the body rides, the vehicle hold), the :mounted trigger and
+  "jobs.lib.vehicle (what the body rides), the :mounted trigger and
   jobs.movement.leave-vehicle against the fake world."
   (:require [cljs.test :refer [deftest is async]]
             [engine.settings :as settings]
@@ -61,32 +61,12 @@
 
 (defn setup-owner [p] (.setOwner p "t") p)
 
-;; ------------------------------------------------------------------- sensing and the hold
+;; ------------------------------------------------------------------- sensing
 
 (deftest vehicle-of-reads-self
   (is (nil? (vehicle/vehicle-of (.self (tu/fake {})))))
   (is (= {:id 9 :uuid "u-9" :name "oak_boat"} (vehicle/vehicle-of (.self (aboard)))))
   (is (nil? (vehicle/vehicle-of #js {:status "offline"})) "an offline self rides nothing"))
-
-(deftest held-only-while-the-holding-job-lives
-  (doseq [[label entries expected]
-          [["no hold" {} false]
-           ["hold by a live job" {(mem/job-kind "j1") [{}] vehicle/hold-kind [{:job "j1"}]} true]
-           ["hold by a job that is gone" {vehicle/hold-kind [{:job "j1"}]} false]
-           ["one live hold among stale ones" {(mem/job-kind "j2") [{}] vehicle/hold-kind [{:job "j1"} {:job "j2"}]} true]]]
-    (is (= expected (vehicle/held? (view entries))) label)))
-
-(deftest hold-and-release-write-the-root-job
-  (let [written (atom [])
-        c {:root "j7"
-           :view (fn [] {:data {:entries {vehicle/hold-kind (mapv (fn [d] {:t 1 :data d}) @written)}} :now 2})
-           :remember (fn [kind data _policy] (swap! written conj (assoc data :kind kind)))
-           :forget (fn [kind pred] (swap! written #(filterv (fn [d] (not (and (= kind (:kind d)) (pred d)))) %)))}]
-    (vehicle/hold! c)
-    (vehicle/hold! c)
-    (is (= [{:job "j7" :kind vehicle/hold-kind}] @written) "held once")
-    (vehicle/release! c)
-    (is (= [] @written))))
 
 (deftest yaw-toward-is-minecraft-degrees
   (doseq [[to expected] [[{:x 0 :z 5} 0] [{:x -5 :z 0} 90] [{:x 0 :z -5} 180] [{:x 5 :z 0} 270]]]
@@ -94,13 +74,12 @@
 
 ;; ------------------------------------------------------------------- the trigger
 
-(deftest mounted-holds-aboard-unless-a-live-job-holds-the-vehicle
-  (doseq [[label p entries expected]
-          [["on foot" (tu/fake {}) {} false]
-           ["aboard" (aboard) {} true]
-           ["aboard, held by a live job" (aboard) {(mem/job-kind "j1") [{}] vehicle/hold-kind [{:job "j1"}]} false]
-           ["aboard, held by a gone job" (aboard) {vehicle/hold-kind [{:job "j1"}]} true]]]
-    (is (= expected (mounted/mounted p (view entries) {})) label)))
+(deftest mounted-holds-aboard-only-with-no-job-listed
+  (doseq [[label p live expected]
+          [["on foot" (tu/fake {}) #{} false]
+           ["aboard" (aboard) #{} true]
+           ["aboard, a job listed" (aboard) #{"j1"} false]]]
+    (is (= expected (mounted/mounted p (view {}) {} nil live)) label)))
 
 (deftest mounted-is-registered-with-leave-vehicle
   (is (= mounted/mounted (:when (:mounted triggers/all))))

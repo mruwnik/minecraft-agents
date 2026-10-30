@@ -28,6 +28,7 @@
   condition-failed :no-boat (none carried and none could be fetched), :boat-not-seen (the placed boat is not in sight), the launch's other causes (:refused, :no-support,
   :unreachable, :occupied, :board-failed, :failed) and the landing's (:blocked, :drive-failed, :not-landed, :recover-failed, :no-shore); or nothing-possible :not-landed (on foot after the launch, not on the far shore).
   Done (:already before the start) when the body stands on the far shore with no recovery owed.
+  However it ends, a body still aboard steps off (cleanup).
   Resumes safely: aboard it goes on to the landing; on foot after the launch it lets boat-land finish or recover, and ends done only when the body stands on the far shore
   (else :not-landed). Quote: time by the straight distance to the far shore.
 
@@ -196,6 +197,13 @@
         d (if land (u/dist (u/self-pos c) (vehicle/centre land)) (radius))
         s (+ (settings/get settings ::launch-s) (/ d (settings/get settings ::boat-speed)))]
     {:uses {:job-time [s s (* 3 s)]}}))
+
+(defn ^:async cleanup
+  "However the crossing ends, a body still aboard steps off (jobs.movement.leave-vehicle): the ride is no other job's."
+  [c _]
+  (when (vehicle/mounted? (:primitives c))
+    (await (ctx/call c :leave 'jobs.movement.leave-vehicle {})))
+  (ctx/end c :done nil {}))
 
 (defn ^:async round [c]
   (let [p (:primitives c)

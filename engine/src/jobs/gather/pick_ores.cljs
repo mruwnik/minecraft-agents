@@ -5,7 +5,6 @@
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.checks :as checks]
-            [jobs.lib.loose :as loose]
             [jobs.lib.ore-pick :as ore-pick]
             [jobs.lib.pace :as pace]
             [jobs.lib.price :as price]
@@ -32,7 +31,7 @@
 (def s-per-ore 4)
 
 (defn opts-of [c]
-  (let [m (ore-pick/merged (ore-pick/marks (ctx/view c) (loose/live-ids (ctx/view c) nil)))]
+  (let [m (ore-pick/merged (ore-pick/marks (ctx/view c) nil))]
     (assoc m :left (ore-pick/left-cells (ctx/view c)))))
 
 (defn seen-cells

@@ -8,11 +8,9 @@
   trigger reads whether a block stands open as the body last saw it (perception's memory), never through a wall."
   (:require [jobs.lib.click :as click]
             [jobs.lib.look :as look]
-            [clojure.string :as str]
-            [engine.ctx :as ctx]
             [engine.memory :as mem]
+            [jobs.lib.expiry :as expiry]
             [jobs.lib.pass :as pass]
-            
             [jobs.lib.util :as u]))
 
 (def defaults {:radius 16 :open-s 10})
@@ -46,23 +44,21 @@
     (when (and name (= :openable (click/kind-of name)) (click/reached? :open properties))
       {:cell cell :column (pass/column-of cell properties)})))
 
-(defn owner-live?
-  "Whether the root job of the walk id `by` (\"j4\" for \"j4/walk\") still has job memory in the view."
-  [view by]
-  (some? (mem/latest view (mem/job-kind (first (str/split (str by) #"/"))))))
+(defn on-purpose?
+  "Whether an :opened entry is one a :leave-open walk left open on purpose and its time (jobs.lib.expiry) has not run out."
+  [view e]
+  (and (false? (:shut? e)) (expiry/current? (:now view) e)))
 
 (defn recorded
-  "The :opened entries' data in view at least open-ms old (times 1 + its :fails: the retry pace), minus those a :leave-open walk of a job that still lives left on purpose."
+  "The :opened entries' data in view at least open-ms old (times 1 + its :fails: the retry pace), minus those open on purpose (on-purpose?)."
   [view open-ms]
   (->> (mem/entries view :opened)
        (map :data)
        (filter (fn [{:keys [t fails]}] (>= (- (:now view) t) (* open-ms (inc (or fails 0))))))
-       (remove #(and (false? (:shut? %)) (owner-live? view (:by %))))))
+       (remove #(on-purpose? view %))))
 
 (defn left-open
-  "The blocks the walker opened to shut again (:opened entries in view, not those a :leave-open walk of a job that still
-  lives left on purpose) that
-  stand open, whose entry is at least open-ms old, within radius of the body: [{:cell :column :by :dist}] nearest first,
+  "The blocks the walker opened to shut again (:opened entries in view, not those open on purpose) that stand open, whose entry is at least open-ms old, within radius of the body: [{:cell :column :by :dist}] nearest first,
   one per cell. read is open-block or seen-open-block."
   ([p view args open-ms] (left-open p view args open-ms open-block))
   ([p view {:keys [radius]} open-ms read]

@@ -15,12 +15,11 @@
 (def doc
   "Get on the boat, raft, minecart or rideable mob :id, or the nearest one in sight named :name (e.g. oak_boat, pig). One call is the whole attempt: find the entity in sight, walk
   into reach (jobs.movement.go-to, range 2, no escalation), mount (a mob needs an empty hand, a boat or minecart does not), wait for the server to seat the body.
-  Holds the vehicle (jobs.lib.vehicle) while the job lives, so the :mounted trigger does not step the body off:
-  the body stays aboard only during an exclusive run, otherwise the hold ends with the job and the trigger steps it off ~30 s later.
+  The body stays aboard for its caller; with no job listed the :mounted trigger steps it off.
   By :name it prefers a vehicle with no rider.
   Impossible: :bad-args, :not-mountable (an entity the body cannot ride). Conditions, asked before every round: :no-vehicle while none is in sight, :aboard-other while on another vehicle, :occupied while every seat is taken (a listed call waits, a called one ends condition-failed with that cause). The round yields :continue only when the walk waits on the world.
 
-  Ends done (data {:id :vehicle name}, plus :already true when aboard it already and the root job did not yet hold it; cause :already when it did), or
+  Ends done (data {:id :vehicle name}, plus :already true when aboard it already), or
   condition-failed: the conditions' causes above, :hand-full
   (a mob, with an item in hand that cannot be put away), or
   nothing-possible: :timeout (the server never seated the body), :unreachable (the walk failed ::max-walks (2) times),
@@ -67,17 +66,14 @@
 
 
 (defn done?
-  "Done when aboard the wanted vehicle (:id its entity id, :name its entity name) and the root job holds it; aboard
-  without the hold stays later, so the round takes the hold before it ends."
+  "Done when aboard the wanted vehicle (:id its entity id, :name its entity name)."
   [c]
   (let [{:keys [id] wanted :name} (:args c)
         ride (vehicle/vehicle-of (.self (:primitives c)))
         aboard (and ride (if id (= id (:id ride)) (or (nil? wanted) (= wanted (:name ride)))))]
-    (if (and aboard (vehicle/held-by-root? c))
+    (if aboard
       (contract/ok :aboard "aboard the vehicle" :units :vehicles :done 1 :left 0 :result {:id (:id ride) :vehicle (:name ride)})
-      (if aboard
-        (contract/later :holding "aboard, the vehicle is not yet held" :units :vehicles :done 1 :left 0)
-        (contract/later :ashore "not aboard the vehicle" :units :vehicles :done 0 :left 1)))))
+      (contract/later :ashore "not aboard the vehicle" :units :vehicles :done 0 :left 1))))
 
 (defn nearest-named
   "The id of the nearest sensed entity named name, a free one before an occupied one, or nil."
@@ -153,7 +149,7 @@
       (some? (vehicle/vehicle-of (.self p)))
       (let [v (vehicle/vehicle-of (.self p))]
         (if (= id (:id v))
-          (do (vehicle/hold! c) (done! c {:id id :vehicle (:name v) :already true}))
+          (done! c {:id id :vehicle (:name v) :already true})
           :continue))
       :else
       (loop [fails 0]
@@ -167,14 +163,13 @@
                 (>= (inc fails) (max-walks)) (stop! c id :nothing-possible :unreachable {:why (contract/cause-key r)})
                 :else (recur (inc fails))))
             :else
-            (do (vehicle/hold! c)
-                (let [r (await (ctx/act c :mount #js {:id id}))
-                      status (.-status r)]
-                  (case status
-                    "mounted" (done! c {:id id :vehicle (.-name (.-vehicle r))})
-                    "already-mounted" (done! c {:id id :vehicle (.-name (.-vehicle r)) :already true})
-                    ("gone" "not-mountable" "occupied") :continue ; the world changed since can-run? looked: it asks again
-                    "hand-full" (stop! c id :condition-failed :hand-full)
-                    "timeout" (stop! c id :nothing-possible :timeout {:seen (js->clj (.-vehicle r) :keywordize-keys true)})
-                    "out-of-reach" (if (>= (inc fails) (max-walks)) (stop! c id :nothing-possible :unreachable) (recur (inc fails)))
-                    (stop! c id :nothing-possible :failed {:mount status}))))))))))
+            (let [r (await (ctx/act c :mount #js {:id id}))
+                  status (.-status r)]
+              (case status
+                "mounted" (done! c {:id id :vehicle (.-name (.-vehicle r))})
+                "already-mounted" (done! c {:id id :vehicle (.-name (.-vehicle r)) :already true})
+                ("gone" "not-mountable" "occupied") :continue ; the world changed since can-run? looked: it asks again
+                "hand-full" (stop! c id :condition-failed :hand-full)
+                "timeout" (stop! c id :nothing-possible :timeout {:seen (js->clj (.-vehicle r) :keywordize-keys true)})
+                "out-of-reach" (if (>= (inc fails) (max-walks)) (stop! c id :nothing-possible :unreachable) (recur (inc fails)))
+                (stop! c id :nothing-possible :failed {:mount status})))))))))

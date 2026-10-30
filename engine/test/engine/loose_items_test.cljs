@@ -122,10 +122,9 @@
     (is (true? (holds? (world log-near) {:zones (zone "Fake")})))
     (is (true? (holds? (world log-near) {:zones nil})) "no zone list never blocks a pick-up")))
 
-(deftest items-a-live-job-collects-are-left
+(deftest items-a-collect-drops-holds-are-left
   (let [hold [:collecting {:job "j1" :anchor {:x 3 :y 64 :z 0} :radius 4}]]
-    (is (false? (holds? (world log-near) {:memory [hold live-j1]})) "inside a running collect-drops' area")
-    (is (true? (holds? (world log-near) {:memory [hold]})) "its job ended"))
+    (is (false? (holds? (world log-near) {:memory [hold]})) "inside a collect-drops' area until its cleanup drops the hold, listed or not"))
   (let [fresh (assoc log-near :spawn {:at (- now 5000)})]
     (is (false? (holds? (world fresh) {:memory [live-j1]})) "just dropped while a job runs: that job's to collect")
     (is (true? (holds? (world fresh))) "just dropped with no job running")

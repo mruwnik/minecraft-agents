@@ -8,18 +8,16 @@
 (def roof {"0,52,0" "stone"})
 
 (defn holds?
-  "The trigger over a fake body at (0 50 0) under a roof, with places [[kind x y z] ..] remembered and job memory [id ..] listed, read at each of the wall times ts (ms) in turn: the result at the last."
+  "The trigger over a fake body at (0 50 0) under a roof, with places [[kind x y z] ..] remembered and the jobs [id ..] listed (the trigger's live input), read at each of the wall times ts (ms) in turn: the result at the last."
   [places & [over jobs ts]]
   (let [now (atom 1000)
         store (mem/open (tu/tmp-dir) {:now #(deref now)})
         p (tu/seeing-all (tu/fake-on-floor (merge {:floor [-4 -4 4 4] :self {:pos {:x 0.5 :y 50 :z 0.5}} :blocks roof} over)))]
     (doseq [[kind x y z] places]
       (mem/write! store kind {:pos {:x x :y y :z z}} mem/place-policy))
-    (doseq [id jobs]
-      (mem/write! store (mem/job-kind id) {:started true} mem/place-policy))
     (last (for [t (or ts [1000])]
             (do (reset! now t)
-                (su/stuck-underground p (mem/view store) (assoc su/defaults :idle-s 120) nil nil))))))
+                (su/stuck-underground p (mem/view store) (assoc su/defaults :idle-s 120) nil (set jobs)))))))
 
 (deftest an-idle-buried-body-far-below-its-home-is-stuck
   (are [places expected] (= expected (holds? places nil nil [1000 130000]))
@@ -44,11 +42,9 @@
   (let [now (atom 1000)
         store (mem/open (tu/tmp-dir) {:now #(deref now)})
         p (tu/seeing-all (tu/fake-on-floor {:floor [-4 -4 4 4] :self {:pos {:x 0.5 :y 50 :z 0.5}} :blocks roof}))
-        read (fn [t] (reset! now t) (su/stuck-underground p (mem/view store) su/defaults nil nil))]
+        read (fn [t live] (reset! now t) (su/stuck-underground p (mem/view store) su/defaults nil live))]
     (mem/write! store :home {:pos {:x 30 :y 64 :z 0}} mem/place-policy)
-    (read 1000)
-    (mem/write! store (mem/job-kind "j1") {:started true} mem/place-policy)
-    (read 100000)
-    (mem/forget! store (mem/job-kind "j1"))
-    (is (false? (read 125000)))
-    (is (true? (read 250000)))))
+    (read 1000 #{})
+    (read 100000 #{"j1"})
+    (is (false? (read 125000 #{})))
+    (is (true? (read 250000 #{})))))

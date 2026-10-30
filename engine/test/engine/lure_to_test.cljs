@@ -845,7 +845,7 @@
               other-gate #(:open (js->clj (.-properties (.blockAt p #js {:x -20 :y 64 :z 0})) :keywordize-keys true))
               opened (watch-gate! s #(core/cancel! eng (first (:list (core/state eng)))))]
           (tu/seeing-all p)
-          (swap! store update :data mem/add-entry :opened {:t ((:now @store)) :data {:cell {:x -20 :y 64 :z 0} :by "other-job/1" :shut? false}} nil)
+          (swap! store update :data mem/add-entry :opened {:t ((:now @store)) :data {:cell {:x -20 :y 64 :z 0} :by "other-job/1" :shut? false :until (+ ((:now @store)) 600000)}} nil)
           (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal}) {})
           (await (tick-n s 40))
           (is (true? @opened) "the legs opened the gate")
