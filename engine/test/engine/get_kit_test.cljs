@@ -11,6 +11,7 @@
             [engine.fetch-test :as f]
             [engine.obtain-contract-test :as oc]
             [engine.game :as game]
+            [jobs.lib.cost :as cost]
             [jobs.lib.death-spot :as death-spot]
             [engine.memory :as mem]
             [engine.perception :as perception]
@@ -98,17 +99,26 @@
 
 (deftest a-gathering-that-ended-is-tried-again-while-another-round-pays
   (let [r {:reason :no-source :gathered :no-plan :why "no source for iron_helmet, whatever the wording"}
-        at (fn [worth] {:quote-call {:worth worth}})]
-    (is (kit/retry? (at ##Inf) r 0 true))
-    (is (kit/retry? (at ##Inf) r 40 true) "only :spend ends a kit whose goal is worth everything")
-    (is (kit/retry? (at 1000) r 0 true))
-    (is (not (kit/retry? (at 1000) r 1 true)) "the failed rounds lower the chance until a round no longer pays")
-    (is (not (kit/retry? (at 0) r 0 true)))
-    (is (not (kit/retry? (at ##Inf) r 0 false)) "without :explore nothing new can be found")
-    (is (not (kit/retry? (at ##Inf) (assoc r :gathered :none-seen) 0 true)))
-    (is (not (kit/retry? (at ##Inf) (dissoc r :gathered) 0 true)) "no gather tried: the wording of :why is not read")
-    (is (not (kit/retry? (at ##Inf) {:reason :no-source :why "gathering was tried and ended :no-plan"} 0 true)))
-    (is (not (kit/retry? (at ##Inf) nil 0 true)))))
+        ended? #(kit/gathering-ended? % true)]
+    (is (ended? r))
+    (is (not (kit/gathering-ended? r false)) "without :explore nothing new can be found")
+    (is (not (ended? (assoc r :gathered :none-seen))))
+    (is (not (ended? (dissoc r :gathered))) "no gather tried: the wording of :why is not read")
+    (is (not (ended? {:reason :no-source :why "gathering was tried and ended :no-plan"})))
+    (is (not (ended? nil)))))
+
+(deftest another-bill-round-is-priced-as-the-rest-plus-the-bill
+  (let [at (fn [worth] {:quote-call {:worth worth}})
+        p1 (cost/retry-chance :kit-later 1)
+        p2 (cost/retry-chance :kit-later 2)
+        s 130
+        between (/ s (Math/sqrt (* p1 p2)))]
+    (is (kit/retry? (at ##Inf) 0 s))
+    (is (kit/retry? (at ##Inf) 40 s) "only :spend ends a kit whose goal is worth everything")
+    (is (kit/retry? (at between) 0 s))
+    (is (not (kit/retry? (at between) 1 s)) "the failed rounds lower the chance until a round no longer pays")
+    (is (not (kit/retry? (at between) 0 (* 2 s))) "a longer bill makes the round cost more")
+    (is (not (kit/retry? (at 0) 0 s)))))
 
 (deftest a-no-source-stop-after-a-cannot-heal-gather-names-the-low-health
   (let [c {:primitives #js {:self (fn [] #js {:health 8 :food 9})}}

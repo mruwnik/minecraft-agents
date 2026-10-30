@@ -280,14 +280,24 @@
       (= :done (:kind e)) nil
       :else {:cause (contract/cause-key e) :why (why-of e)})))
 
-(defn retry?
-  "Whether the bill's stop r is a gathering try that ended (r's :gathered, obtain's data :tried :gather: a mine that stopped, no way up ..) and the kit may run the bill again: it was searching (:explore), and another round after the fruitless ones is worth its price (cost/try-again? :kit-later at the kit's worth)."
-  [c r tries explore]
+(defn gathering-ended?
+  "Whether the bill's stop r is a gathering try that ended (r's :gathered, obtain's data :tried :gather: a mine that stopped, no way up ..) while the kit was searching (:explore)."
+  [r explore]
   (boolean (and r explore
                 (= :no-source (:reason r))
                 (some? (:gathered r))
-                (not= :none-seen (:gathered r))
-                (cost/try-again? c :kit-later {:fails (inc tries)}))))
+                (not= :none-seen (:gathered r)))))
+
+(defn ^:async round-s
+  "Seconds another bill round takes: the rest (cost/retry-s :kit-later) plus the bill's quoted mean job time (a round runs the whole bill again)."
+  [c bill]
+  (let [q (await (ctx/quote c 'jobs.items.obtain {:bill bill :explore (:explore (:args c))}))]
+    (+ (cost/retry-s :kit-later) (or (get-in q [:uses :job-time 1]) ##Inf))))
+
+(defn retry?
+  "Whether another bill round of round-s seconds is worth its price after tries fruitless ones (cost/try-again? :kit-later at the kit's worth)."
+  [c tries round-s]
+  (cost/try-again? c :kit-later {:fails (inc tries) :try-s round-s}))
 
 (defn later-wait-s
   "Seconds the kit rests after the bill's :later stop r before running it again: the refusal's recheck, else the :kit-later try seconds."
@@ -424,7 +434,7 @@
                 r (await (run-bill! c (if (zero? round) :bill (keyword (str "bill" round))) (bill-of c)))]
             (when-not (= :continue r) (later-over! c r))
             (cond (= :continue r) :continue
-                  (retry? c r tries (:explore a)) (retry! c r tries)
+                  (and (gathering-ended? r (:explore a)) (retry? c tries (await (round-s c (bill-of c))))) (retry! c r tries)
                   (and r (not (:covered-done (ctx/mem c))) (seq (covered-of version (:partial-first a) todo (:carried (state c)))))
                   (do (ctx/update-mem! c (fn [m] (-> m (dissoc :covered :bill) (update :bill-round (fnil inc 0)))))
                       :again)
