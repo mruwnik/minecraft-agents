@@ -83,9 +83,13 @@
            [:submit body goal-spec]]))))
 
 (defn joined?
-  "Whether events (from since-ms on) show the body on the server: it spawned or came online."
+  "Whether events (from since-ms on) show the body on the server. The first join emits no :spawned (the bot spawns
+  before its events are bound) but the engine's :started/:restored, which comes only after the spawn; :online is a reconnect."
   [events since-ms]
-  (boolean (some #(and (contains? #{:spawned :online} (:kind %)) (>= (or (ms %) 0) since-ms)) events)))
+  (boolean (some #(and (or (contains? #{:spawned :online} (:kind %))
+                           (and (= :system (:source %)) (contains? #{:started :restored} (:kind %))))
+                       (>= (or (ms %) 0) since-ms))
+                 events)))
 
 (defn wait-until
   "probe (-> bool), {:timeout-ms :interval-ms :sleep (ms -> promise)} -> promise of true, or false once the timeout has passed."
@@ -273,16 +277,22 @@
     :file (let [[f text] a, p (path/join (repo) f)]
             (fs/mkdirSync (path/dirname p) #js {:recursive true})
             (fs/writeFileSync p text))
-    :workspace (let [[body world] a]
-                 (run-node! "engine/tools/workspace.mjs" [(path/join "worlds" world "agents" body) "--body" body "--world" world "--adopt-existing"]))
+    :workspace (let [[body world] a
+                     ;; --adopt-existing refuses symlinked parents, and a worktree's worlds/ is a symlink
+                     worlds (fs/realpathSync (path/join (repo) "worlds"))]
+                 (run-node! "engine/tools/workspace.mjs" [(path/join worlds world "agents" body) "--body" body "--world" world "--worlds" worlds "--adopt-existing"]))
     :body-start (let [[body {:keys [world build]}] a
+                      ;; a body that dies (a V8 heap abort is exit 134) says why only on stderr
+                      log (let [d (path/join (repo) (run-dir world body))]
+                            (fs/mkdirSync d #js {:recursive true})
+                            (fs/openSync (path/join d "body.log") "a"))
                       child (cp/spawn "sh"
                                       (into-array (concat ["-c" "while :; do \"$@\"; [ $? -eq 75 ] || break; sleep 20; done" "sh" (path/join (repo) "tools/res-slot")
                                                            "body" "--" js/process.execPath] wb/body-v8-flags
                                                           ["out/body-release.cjs" "--agent" body "--world" world
                                                            "--scenario" (path/join build "engine/scenarios/survival.edn")
                                                            "--worlds" (path/join (repo) "worlds") "--blueprints" (path/join (repo) "blueprints") "--fresh"]))
-                                      #js {:cwd (path/join build "engine") :detached true :stdio "ignore"
+                                      #js {:cwd (path/join build "engine") :detached true :stdio #js ["ignore" log log]
                                            :env (js/Object.assign #js {} js/process.env #js {:NODE_COMPILE_CACHE (path/join (repo) "engine/out/compile-cache")})})]
                   (.unref child))
     :rcon (run-node! "tools/rcon-raw.mjs" (str/split (first a) #" "))

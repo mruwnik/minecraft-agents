@@ -97,10 +97,13 @@
     (is (= [:wait-join "KitOak02" t0 k/join-timeout-ms] (nth ss (inc (.indexOf kinds :body-start)))))
     (is (< (.indexOf kinds :wait-join) (.indexOf kinds :rcon)))))
 
-(deftest a-join-is-a-spawned-or-online-event-since-the-start
+(deftest a-join-is-the-engine-start-or-a-spawned-or-online-event-since-the-start
+  (is (k/joined? [(ev 1 :started :source :system)] t0) "a first join logs only the engine's start")
+  (is (k/joined? [(ev 1 :restored :source :system)] t0))
   (is (k/joined? [(ev 1 :spawned)] t0))
   (is (k/joined? [(ev 1 :online)] t0))
-  (is (not (k/joined? [(ev -5 :spawned) (ev 1 :planned)] t0))))
+  (is (not (k/joined? [(ev 1 :started)] t0)) "a job's start is not the engine's")
+  (is (not (k/joined? [(ev -5 :spawned) (ev -5 :started :source :system) (ev 1 :planned)] t0))))
 
 (deftest wait-until-sees-a-late-join-and-gives-up-on-none
   (let [calls (atom 0)
