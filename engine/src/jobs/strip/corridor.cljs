@@ -288,11 +288,13 @@
         found (strip/targets [] seg {:entry (some-> entry a/cell ((juxt :x :y :z))) :take (cond-> (set take) (= :break spawner) (conj :spawner)) :block-at (access/seen-at p)})
         dug (set (:dug (ctx/mem c)))
         fresh (fn [xs] (first (remove #(dug [(:x (:pos %)) (:y (:pos %)) (:z (:pos %))]) xs)))
+        ;; a torch hung where a support was dug stands in a dug cell
+        hung (set (:torches (ctx/mem c)))
         target (fresh (:targets found))]
     {:target target
      :sealed-spawner (when (= :seal spawner) (first (spawners c seg)))
      :cart (first (carts c seg))
-     :torch (fresh (torch-cells c seg))
+     :torch (first (remove #(let [k [(:x (:pos %)) (:y (:pos %)) (:z (:pos %))]] (and (dug k) (not (hung k)))) (torch-cells c seg)))
      :mouth (mouth-of c seg)
      :dark (if (= :light spawner)
              (some #(dark-near c seg (:pos %)) (spawners c seg))

@@ -174,6 +174,12 @@
           (is (= :again o))
           (is (= {:no-spot-at [[5 64 0]]} @mem) "a torch source would mark 13 cells round it lit"))))))
 
+(deftest a-torch-hung-where-a-support-was-dug-is-taken-back
+  (let [{:keys [p]} (world :blocks (assoc corridor "6,64,1" "torch"))
+        c {:primitives p :root "j1" :slots [] :args args
+           :view (fn [] {:now 0 :data {:entries {:job/j1 [{:t 0 :data {:dug [[6 64 1]] :torches [[6 64 1]]}}]}}})}]
+    (is (= {:x 6 :y 64 :z 1} (:pos (:torch (corridor/owed c seg)))))))
+
 (deftest no-torch-in-the-dark-stops-no-torches
   (async done
     (tu/run-async done
