@@ -163,6 +163,14 @@
         (let [{:keys [p]} (await (run-set-spawn {:time noon} {} (constantly nil)))]
           (is (pos? (sense/looks p))))))))
 
+(deftest set-spawn-does-not-look-round-with-a-hostile-near
+  (async done
+    (run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (run-set-spawn {:time noon :entities [{:id 1 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0} :health 20}]}
+                                                {} (constantly nil)))]
+          (is (zero? (sense/looks p))))))))
+
 (deftest set-spawn-does-not-click-again-when-the-spawn-bed-is-known
   (async done
     (run-async done

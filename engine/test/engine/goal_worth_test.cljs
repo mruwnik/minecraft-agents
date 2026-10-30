@@ -90,6 +90,15 @@
 
 (def field {:min {:x 2 :y 63 :z 2} :max {:x 4 :y 64 :z 4}})
 
+(deftest a-plant-is-worth-its-bare-cells-more-on-a-watered-field
+  (let [bare (into {} (for [x (range 2 5) z (range 2 5)] [(str x ",63," z) "farmland"]))
+        seeds [(item "wheat_seeds" 9)]
+        plant #(worth 'jobs.farm.plant (tu/seeing-all (tu/fake-on-floor {:blocks (merge bare %) :inventory seeds}))
+                      {:area {:min {:x 2 :y 63 :z 2} :max {:x 4 :y 63 :z 4}} :seed "wheat_seeds"})
+        dry (plant {})]
+    (is (priced? dry))
+    (is (> (plant {"3,63,5" "water"}) dry) "water beside the field: it grows faster")))
+
 (deftest a-farm-pass-is-worth-its-tend-and-the-stock-it-stores
   (let [p (tu/seeing-all (tu/fake-on-floor (assoc ht/wheat-world :inventory [(item "wheat" 30)])))
         args {:area field :till false :irrigate false :fertilize false :carry {}}]

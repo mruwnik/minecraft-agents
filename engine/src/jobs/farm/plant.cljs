@@ -12,6 +12,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
             [jobs.lib.cost :as cost]
+            [jobs.lib.crop-worth :as cw]
             [jobs.lib.reserve :as reserve]
             [jobs.lib.crops :as crops]
             [jobs.lib.gate :as gate]
@@ -244,18 +245,24 @@
       (contract/ok :planted (str "plant done: " sown " sown, no bare cell left") :units :cells :done sown :left 0 :result (result-of c nil)))))
 
 (defn worth-of
-  "Seconds a root call is worth: each bare cell sown, cost/sown-worth of its crop at the dry rate (the worse case); a plan's
-  cell has its own crop, a box's has the one of the seed it would sow, else the least of any crop's."
+  "Seconds a root call is worth: each bare cell sown, cost/sown-worth of its crop at the cell's growth rate (cw/growth-rate,
+  as harvest prices the same cells: wet by seen water, light as seen); a plan's cell has its own crop, a box's has the one
+  of the seed it would sow, else the least of any crop's."
   [c]
-  (let [rate (crops/stages-per-s false nil)
+  (let [p (:primitives c)
+        plan? (boolean (fa/plan c))
         seed->crop (into {} (map (fn [[crop seed]] [seed crop])) crops/seed-of)
-        worth #(cost/sown-worth % rate)
-        box-worth (if-let [seed (pick-seed (:seed (:args c)) c)]
-                    (worth (seed->crop seed))
-                    (apply min (map worth (keys crops/seed-of))))]
-    (if (fa/plan c)
-      (reduce + 0 (map #(worth (seed->crop (:seed %))) (unsown c)))
-      (* box-worth (count (unsown c))))))
+        cells (map (fn [cell] (if plan? cell {:pos (update cell :y inc)})) (unsown c))
+        ws (cw/waters c (map #(update (:pos %) :y dec) cells))
+        worth (fn [crop pos] (cost/sown-worth crop (cw/growth-rate p ws pos)))
+        box-crop (some-> (pick-seed (:seed (:args c)) c) seed->crop)]
+    (reduce + 0 (map (fn [{:keys [pos seed]}]
+                       (if plan?
+                         (worth (seed->crop seed) pos)
+                         (if box-crop
+                           (worth box-crop pos)
+                           (apply min (map #(worth % pos) (keys crops/seed-of))))))
+                     cells))))
 
 (defn quote-of [c]
   (let [n (count (unsown c))
