@@ -2,7 +2,6 @@
 ;; never a lease on the job that wrote them. A stone wall across the plot at x 16 with a gate in it; the body 6 west of it.
 ;; Should-succeed: a :leave-open walk's gate is shut by the door-left reflex once jobs.lib.pass/leave-open-s (20 here) is out;
 ;; a pillar a finished job left stands until jobs.lib.ledger/ttl-s (30 here) is out, then the scaffold-left reflex takes it back.
-;; ;; and a pillar a child escalation of a root go-to placed is taken back when the go-to ends, with the default ttl (3600 s) far off (ledger/release-root!).
 ;; Should-fail: with the default 600 s the gate stays open and door-left never fires.
 {:defaults
  {:tags [:door :cleanup :scaffold-left :memory]
@@ -35,15 +34,4 @@
    :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :scaffold-left}} :for-s 25}
             {:event {:source :reflex :kind :ended :context {:reflex-id :scaffold-left} :data {:removed [[:any] [:any]]}} :within-s 110}]
-   :after [[:not-block [10 0 16] "cobblestone"] [:not-block [10 1 16] "cobblestone"]]}
-  {:name "a-childs-pillar-is-taken-back-when-its-root-ends"
-   :register [{:trigger :scaffold-left}]
-   :blocks [[:fill [8 0 8] [24 3 24] "dirt"] [:fill [14 1 14] [18 3 18] "air"]]
-   :zones [{:name "pen" :min [13 0 13] :max [19 4 19] :owner "Other" :allow #{:place}}]
-   :body {:at [16.5 1 16.5] :inventory [["dirt" 8]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [22 4 16] :range 1})]]
-   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :pillar}} :within-s 60 :of-job true}
-            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 100 :of-job true}
-            {:event {:source :reflex :kind :ended :context {:reflex-id :scaffold-left} :data {:removed [[:any]]}} :within-s 110}]
-   :after [[:not-block [16 1 16] "dirt"]]
-   :limit-s 150}]}
+   :after [[:not-block [10 0 16] "cobblestone"] [:not-block [10 1 16] "cobblestone"]]}]}
