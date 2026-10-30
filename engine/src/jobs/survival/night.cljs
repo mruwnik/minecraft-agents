@@ -56,7 +56,7 @@
   - light outside and no bed term of the trigger (over?): a furnace the hold put down is dug up once more; then the night is over: done {:night :slept|:dug-in|:logged-out|:roofed :fled n}, or nothing-possible :exposed after a night with no shelter.
   - asleep: hold (:sleeping), priced again whenever what it was priced on changes (asleep!): up (night.bed-left) when staying in bed is no longer the cheapest answer.
   - afloat: swim to the nearest dry land first (surface-up/leave-water!); none seen: nothing-possible :in-water. A swimmer is never roofed or sheltered.
-  - roofed or buried in a closed region with sides never seen: a look at the nearest, else a walk to it (look-edge/look!: priced, within max-edge-walk of where the walks began) (an unseen side is open until seen: a lit tunnel with its walls seen is shelter, one with an unseen branch is not).
+  - roofed or buried in a closed region with sides never seen: a look at the nearest, else a walk to it (look-edge/look!: each walk priced, the walks before it spent from the night's worth) (an unseen side is open until seen: a lit tunnel with its walls seen is shelter, one with an unseen branch is not).
   - sheltered (slept, dug in, shut in): log out for a stint while someone else sleeps or is online (log-out-wanted?), else end so the queue runs (no all-night hold: listed jobs run when their own start checks pass).
   - a remembered roofed :roofed-places place not seen a roof on open sides (enter-room/unclosable?) whose walk go-to quotes cheapest (walkable-home: only those whose straight walk fits the time left before the dark plus a margin, night.sites home-walk-*, and bed-down/home-bound-s, are quoted best-first; a quote is asked once a pass), with no place remembered a closed room the body has seen (its walk plus the chance it is open times the dig-in's quote; a room not seen inside yet has the chance cost/closed-chance of its seen and unseen sides, a closed one 1), the body not roofed: when :home (a whole route found that fits that time, or any quoted with a carried bed) is the cheapest of bed-down/answers (night-answer), jobs.survival.enter-room walks in, worth what the next answer costs more than the home once there (one try tonight). Farther or dearer places are left to shut-in's :room way, priced against digging in.
   - an open door of the closed room the body stands in is shut; the room's doorway is filled before a carried bed goes down (ledger :doorway; one that cannot be filled for want of blocks, or was filled, is :doorway-tried, not tried again tonight).
@@ -69,7 +69,7 @@
   Fleeing (the night.sites ::flee-radius setting, 0 never; at most max-flees walks): to the not-yet-tried candidate whose walk go-to quotes cheapest (walk-pick/cheapest!): a known bed, a :roofed-places place, a seen cave or overhang cell (walled in on arrival), or seen natural ground the carried tools dig. shelter.fled on arrival, shelter.flee_failed otherwise.
   Only sleep holds (declared, ctx/hold-still!, hold-ms per wait; night.hold cooks, eats or runs get-food first).
   An overdue body warns needs_bed once a day; a respawn bed seen gone is written :spawn-lost (warn spawn_lost once).
-  Memory: body memory :night-exposed (where the night ended with no shelter: later firings there go straight to the exposed log-out); job memory :edge-looked, :edge-phase, :enclose, :enclose-failed (feet cells where walling in failed), :sheltered, :log-out-failed, :no-site, :shut-ins, :digging, :place-other-s, :bed-down, :pit-trapped, :roof-walk-failed, :left; body memory :doorway-tried and shut-in's :shut-in-failed (forgotten when the night ends, at most ten minutes).
+  Memory: body memory :night-exposed (where the night ended with no shelter: later firings there go straight to the exposed log-out); job memory :edge-looked, :edge-phase, :edge-spent, :enclose, :enclose-failed (feet cells where walling in failed), :sheltered, :log-out-failed, :no-site, :shut-ins, :digging, :place-other-s, :bed-down, :pit-trapped, :roof-walk-failed, :left; body memory :doorway-tried and shut-in's :shut-in-failed (forgotten when the night ends, at most ten minutes).
   Muting :night does not end a running night job: cancel it too.")
 
 (a/defargs args
@@ -144,9 +144,10 @@
                  [:sheltered "sheltered, nothing for the night to do"] [:night "the night is not over"] {:units :nights})))
 
 (defn ^:async cleanup
-  "However the night ends: tonight's failed sites and filled doorway cells someone else changed are forgotten, and a root night releases its tree's scaffold."
+  "However the night ends: tonight's failed sites, edge walks spent and filled doorway cells someone else changed are forgotten, and a root night releases its tree's scaffold."
   [c _]
   (ending/forget-night! c)
+  (look-edge/forget! c)
   (ledger/release-root! c)
   (ctx/end c :done nil))
 

@@ -1641,7 +1641,7 @@
     (tu/set-sensed! p (fn [pos] (if (seen? (.-x pos) (.-y pos) (.-z pos)) (.blockAt (tu/oracle raw-p) pos) #js {:unknown true})))
     (is (= #{[14 65 1] [14 66 0]} (set (look-edge/pending {:primitives p} #{}))) "the two missed cells, no rock behind them")))
 
-(deftest the-edge-walk-is-bought-by-its-hp-not-counted
+(deftest the-edge-walk-is-bought-by-its-price-not-counted
   (let [c {:primitives (tunnel-edge-body nil)}
         cell (first (look-edge/pending c #{}))
         many (set (map (fn [i] [i 100 100]) (range 40)))]
@@ -1649,21 +1649,19 @@
     (is (seq (look-edge/pending c many)) "no count of cells tried ends the look at the edge")
     (with-redefs [walk-risk/look-way (fn [_ _ _] {:hp 0 :secs 1})
                   ctx/worth (constantly 100)]
-      (is (look-edge/walk-bought? c cell) "a walk costing no hp is bought"))
+      (is (= 1 (look-edge/walk-price c cell 0)) "a walk costing no hp is bought at its seconds")
+      (is (nil? (look-edge/walk-price c cell 99.5)) "not once the walks before it spent the worth"))
+    (with-redefs [walk-risk/look-way (fn [_ _ _] {:hp 0 :secs 200})
+                  ctx/worth (constantly 100)]
+      (is (nil? (look-edge/walk-price c cell 0)) "seconds more than the call's worth are not bought, however safe"))
     (with-redefs [walk-risk/look-way (fn [_ _ _] {:hp 19 :secs 1})
                   ctx/worth (constantly 0.01)]
-      (is (not (look-edge/walk-bought? c cell)) "hp more than the call's worth buys are not"))))
+      (is (nil? (look-edge/walk-price c cell 0)) "hp more than the call's worth buys are not"))))
 
 (deftest walkable-near-is-the-reachable-ground-nearest-the-cell
   (let [p (tunnel-seen-body)]
     (is (= {:x 19 :y 64 :z 0} (look-edge/walkable-near p [23 64 0])) "the farthest cell whose roof was seen, not past the dead end")
     (is (= {:x 5 :y 64 :z 0} (look-edge/walkable-near p [5 64 3])))))
-
-(deftest walkable-near-is-nil-when-the-ground-is-farther-than-an-edge-walk-may-go
-  (let [p (tunnel-seen-body)]
-    (with-redefs [look-edge/max-edge-walk 10]
-      (is (nil? (look-edge/walkable-near p [23 64 0])))
-      (is (= {:x 5 :y 64 :z 0} (look-edge/walkable-near p [5 64 3]))))))
 
 (deftest walkable-near-stays-inside-the-closed-region-and-does-not-open-its-door
   (let [{:keys [blocks light]} (lit-tunnel-box false)
@@ -1709,28 +1707,27 @@
           (is (= 19 (:x (nth (nth @log 1) 2))) "the stride reaches the cell 3 away, not the one 10 away")
           (is (= #{[20 64 0]} (:edge-looked @mem*))))))))
 
-(deftest edge-walks-count-their-reach-from-where-they-began-so-they-do-not-creep-down-a-tunnel
+(deftest edge-walks-are-bought-from-what-the-walks-before-them-spent-so-they-do-not-creep-down-a-tunnel
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [walks (fn ^:async walks [from]
-                      (let [mem* (atom {:edge-from from})
+        (let [walks (fn ^:async walks [spent]
+                      (let [mem* (atom {:edge-spent spent})
                             c {:primitives (tunnel-seen-body) :id "edge-stub" :root "edge-stub" :slots []
                                :view (fn [] {:now 1000000 :data {:entries {(mem/job-kind "edge-stub") [{:t 1000000 :data @mem*}]}
                                                                   :policies {(mem/job-kind "edge-stub") mem/job-policy}}})
                                :update-mem (fn [f more] (apply swap! mem* f more))}
                             log (atom [])
                             orig-call ctx/call]
-                        (with-redefs [walk-risk/look-way (constantly {:hp 0 :secs 1})
-                                      ctx/worth (constantly 100)
+                        (with-redefs [walk-risk/look-way (constantly {:hp 0 :secs 3})
+                                      ctx/worth (constantly 10)
                                       dig-look/look-at! (fn [_ _] (js/Promise.resolve true))
                                       ctx/call (fn [c' slot job args]
-                                                 (if (identical? c c') (do (swap! log conj (:pos args)) (js/Promise.resolve :done)) (orig-call c' slot job args)))]
-                          (await (look-edge/look! c [[20 64 0]]))
-                          (await (look-edge/look! c [[20 64 0]])))
-                        @log))]
-          (is (empty? (await (walks {:x -10 :y 64 :z 0}))) "the ground by the cell is 29 from where the walks began: no walk")
-          (is (= [19] (map :x (await (walks {:x -40 :y 64 :z 0})))) "begun far from here (moved since): counted from the feet"))))))
+                                                 (if (identical? c c') (do (swap! log conj (:pos args)) (js/Promise.resolve :continue)) (orig-call c' slot job args)))]
+                          (dotimes [_ 4] (await (look-edge/look! c [[20 64 0]]))))
+                        [(map :x @log) (:edge-spent @mem*)]))]
+          (is (= [[19 19 19] 3] (await (walks 0))) "one walk bought, its seconds spent once however many passes it walks")
+          (is (= [[] 8] (await (walks 8))) "8 of the worth's 10 s spent by walks before: a 3 s walk is not bought"))))))
 
 (deftest the-night-looks-at-the-unseen-sides-of-a-lit-tunnel-and-is-done-without-digging
   (async done

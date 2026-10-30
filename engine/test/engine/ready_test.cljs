@@ -690,8 +690,8 @@
 
 (deftest an-open-dark-corridor-judged-where-the-body-stands-is-refused-after-the-walk-to-look
   (is (= [:never :exposed 'jobs.movement.walk-look] (own-cell-exposure long-tunnel [[8 64 0] [8 65 0]])) "its first unseen stretch is walked to and looked at")
-  (is (= [:never :exposed nil] (own-cell-exposure long-tunnel [[30 64 0] [30 65 0]]))
-      "looked at, the corridor runs on past what a walk from here reaches: the stay is priced and refused, no look asked again")
+  (is (= [:never :exposed 'jobs.movement.walk-look] (own-cell-exposure long-tunnel [[30 64 0] [30 65 0]]))
+      "a stretch 30 blocks down is walked to by its price, as a near one: no radius refuses the walk")
   (is (= [:never :exposed nil] (own-cell-exposure long-tunnel [[8 64 0] [8 65 0]] [[8 64 0] [8 65 0]]))
       "a stretch a walk-look looked at from close by and could not make out: another walk shows nothing, the stay is priced"))
 

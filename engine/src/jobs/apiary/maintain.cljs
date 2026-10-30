@@ -251,12 +251,12 @@
 
 (defn unseen-status
   "Nothing to do in what was seen, a look round near here made, part of the area still unseen: the walk to look at it
-  (look-leg), priced as walk-risk/look-way there and back (ready/look-cost) against the job's worth (worth-of: the unseen
+  (look-leg), priced as walk-risk/look-way there and back (walk-risk/look-cost) against the job's worth (worth-of: the unseen
   part's share of a hive): later :unseen with the walk-look leg as its :look-first child while the worth pays it, later
   :not-worth {:worth :look-s} while not, later :nothing-to-do {:unseen true} when no leg is left."
   [c]
   (if-let [{:keys [side to]} (look-leg c)]
-    (let [cost (ready/look-cost c (walk-risk/look-way c to 1))
+    (let [cost (walk-risk/look-cost c (walk-risk/look-way c to 1))
           worth (ctx/worth c)]
       (if (and cost (<= cost worth))
         (contract/later :unseen (str "part of the apiary was never seen: the walk to look costs " (price/round1 cost) " s of its " (price/round1 worth) " s")

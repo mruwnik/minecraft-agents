@@ -88,14 +88,6 @@
       (assoc-in s [2 :look] (assoc (walk-risk/look-way c to 1) :child ['jobs.movement.walk-look {:side side :to to}]))
       s)))
 
-(defn look-cost
-  "Seconds the walk to look `way` (walk-risk/look-way) costs c's body: its hp priced (walk-risk/risk-s) plus its seconds;
-  nil while the hp are more than the call's worth buys (walk-risk/buys-hp)."
-  [c way]
-  (let [self (.self (:primitives c))]
-    (when (<= (:hp way) (walk-risk/buys-hp (.-health self) (.-food self) (ctx/worth c)))
-      (+ (walk-risk/risk-s c way) (:secs way)))))
-
 (defn own-way
   "c with (f c s) among the ways its job answers a refusal s on exposure itself (its torches, a wait for dawn): seconds,
   nil none. priced takes the walk to look only while it is cheaper than each of them."
@@ -164,7 +156,7 @@
   stand in there (hall-cell), dark only in a dark hall; over ::risk-limit :never, lowered by a torch. Where that cell is
   the body's own, the unseen walls of its room are looked at first (room-look). A hall judged by an unseen edge
   (sh-inside/dark-hall :roofed or :sky) is also priced as the walk to look at `goal` (default `to`; look-first), back
-  at the chance the edge is open (cost/hall-chance); a seen `goal` within look-edge/max-edge-walk, as the walk to look at the far side of the hall's region (walk-look)."
+  at the chance the edge is open (cost/hall-chance); a seen `goal`, as the walk to look at the far side of the hall's region (walk-look)."
   ([c to] (dark-status c to to))
   ([c to goal]
    (let [p (:primitives c)
@@ -181,7 +173,7 @@
        (cond-> (contract/never :exposed (str "dark at " where ", and a mob can walk from dark floor farther than " sh-inside/spawn-free-radius " blocks off (a hall, or an open side of this room): mobs spawn there, waiting never lights it, a torch does")
                                :lowered-by #{:torch} :chance chance :at at)
          (#{:roofed :sky} @hall) (as-> s (if (sh-sense/seen-cell? p goal)
-                                             (cond-> s (u/within? (sh-sense/feet p) goal look-edge/max-edge-walk) (walk-look c at))
+                                             (walk-look s c at)
                                              (look-first s c goal (cost/hall-chance @hall)))))))))
 
 (defn at-status
@@ -260,7 +252,7 @@
             lethal (cost/lethal-hp {:chance dies :death death})
             hp (+ hurt lethal)
             {:keys [now-s now? best]} (act-price c hurt lethal (when (= :later kind) (some-> wait-ms (/ 1000))))
-            look-s (some->> look-way (look-cost c))
+            look-s (some->> look-way (walk-risk/look-cost c))
             own-s (keep #(% (dissoc c ::own-ways) s) (::own-ways c))
             own? (fn [than] (some #(< % than) own-s))
             look (when (and look-s (every? #(< look-s %) own-s)) {:s look-s})
