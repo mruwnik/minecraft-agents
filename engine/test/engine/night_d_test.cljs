@@ -21,6 +21,9 @@
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [jobs.lib.price :as price]
+            [jobs.lib.sense :as sense]
+            [engine.sense-test :as sense-t]
+            [jobs.survival.night.hold :as hold]
             [jobs.lib.util :as u]
             [engine.triggers :as triggers]
             
@@ -368,3 +371,23 @@
         (is (false? (await (log-out-asked {:self {:inWater true :oxygen 4} :blocks {"0,64,0" "water" "0,65,0" "water" "0,66,0" "water" "0,67,0" "water"}})))
             "drowning")
         (is (false? (await (log-out-asked {:self {:onGround false}}))) "off the ground in the air")))))
+
+(deftest a-roofed-place-look-is-priced-by-the-way-it-spares-the-dig-in-else-the-cheapest-other
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [c (sense-t/stub-ctx (tu/fake {:self {:pos {:x 0 :y 64 :z 0}}}))
+              reads {:cells [[3 64 0]]}
+              delta (fn ^:async delta [dig-s prices]
+                      (let [opts (atom nil)]
+                        (with-redefs [bed-down/dig-in-s (fn ^:async q [_] dig-s)
+                                      night/shelter-prices (fn ^:async sp [_] prices)
+                                      sense/decide! (fn ([_ _ _] (js/Promise.resolve nil)) ([_ _ _ o] (reset! opts o) (js/Promise.resolve nil)))
+                                      night/dig-in! (fn ^:async di [_ _] :again)
+                                      hold/busy! (fn [_])]
+                          (await (night/shelter! c)))
+                        (some-> (:price @opts) (apply [nil reads]) :delta)))]
+          (is (= 12 (await (delta 12 [{:niche 50 :stay 30} nil]))) "a dig-in quoted: a place spares it")
+          (is (= 30 (await (delta ##Inf [{:niche 50 :stay 30} nil]))) "none quoted: the cheapest other way, not ##Inf")
+          (is (= ##Inf (await (delta ##Inf [{} nil]))) "no way priced at all: only sight bounds the looks")
+          (is (nil? (await (delta ##Inf :searching))) "the other ways still searching: no look this pass"))))))

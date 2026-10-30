@@ -426,15 +426,29 @@
     :again))
 
 
+(declare shelter-prices)
+
+(defn ^:async place-other-s
+  "Seconds of the way through the night a roofed place found spares: digging in here (dig-s, bed-down/dig-in-s), else, shut-in
+  quoting none, the cheapest other way (shelter-prices); nil while that is still searching, ##Inf when none is priced."
+  [c dig-s]
+  (if (js/isFinite dig-s)
+    dig-s
+    (let [r (await (shelter-prices c))]
+      (when-not (= :searching r) (apply min ##Inf (vals (first r)))))))
+
 (defn ^:async shelter!
   "No bed, nobody asleep, not roofed: dig in here (dig-in!), shut-in pricing a walk into the roofed place whose walk go-to quotes cheapest
-  (cheapest-walk!, only those no dearer than digging in is quoted, bed-down/dig-in-s, which also prices the looks for a
-  place, sense/find-price, at the chance a guessed roof cell is closed, cost/closed-cell-chance); a quote still searching waits a pass."
+  (cheapest-walk!, only those no dearer than digging in is quoted, bed-down/dig-in-s); the looks for a place are priced by
+  what one spares (place-other-s, no look while unknown; sense/find-price), at the chance a guessed roof cell is closed
+  (cost/closed-cell-chance); a quote still searching waits a pass."
   [c]
   (hold/busy! c)
   (let [dig-s (await (bed-down/dig-in-s c))
+        other-s (await (place-other-s c dig-s))
         places (when-not (:roof-walk-failed (ctx/mem c))
-                 (await (sense/decide! c ::roofed-place #(seq (room-lib/roofed-places-in c (:args c) ##Inf)) {:verify-guesses true :price (sense/find-price c dig-s cost/closed-cell-chance)})))
+                 (await (sense/decide! c ::roofed-place #(seq (room-lib/roofed-places-in c (:args c) ##Inf))
+                                       (cond-> {:verify-guesses true} other-s (assoc :price (sense/find-price c other-s cost/closed-cell-chance))))))
         pick (when (seq places) (await (cheapest-walk! c places {:target place-walk-target :walk enter-room/walk-args :limit-s dig-s})))]
     (if (= :searching pick)
       :again
