@@ -1683,6 +1683,29 @@
           (is (= 19 (:x (nth (nth @log 1) 2))) "the stride reaches the cell 3 away, not the one 10 away")
           (is (= #{[20 64 0]} (:edge-looked @mem*))))))))
 
+(deftest edge-walks-count-their-reach-from-where-they-began-so-they-do-not-creep-down-a-tunnel
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walks (fn ^:async walks [from]
+                      (let [mem* (atom {:edge-from from})
+                            c {:primitives (tunnel-seen-body) :id "edge-stub" :root "edge-stub" :slots []
+                               :view (fn [] {:now 1000000 :data {:entries {(mem/job-kind "edge-stub") [{:t 1000000 :data @mem*}]}
+                                                                  :policies {(mem/job-kind "edge-stub") mem/job-policy}}})
+                               :update-mem (fn [f more] (apply swap! mem* f more))}
+                            log (atom [])
+                            orig-call ctx/call]
+                        (with-redefs [walk-risk/look-way (constantly {:hp 0 :secs 1})
+                                      ctx/worth (constantly 100)
+                                      dig-look/look-at! (fn [_ _] (js/Promise.resolve true))
+                                      ctx/call (fn [c' slot job args]
+                                                 (if (identical? c c') (do (swap! log conj (:pos args)) (js/Promise.resolve :done)) (orig-call c' slot job args)))]
+                          (await (look-edge/look! c [[20 64 0]]))
+                          (await (look-edge/look! c [[20 64 0]])))
+                        @log))]
+          (is (empty? (await (walks {:x -10 :y 64 :z 0}))) "the ground by the cell is 29 from where the walks began: no walk")
+          (is (= [19] (map :x (await (walks {:x -40 :y 64 :z 0})))) "begun far from here (moved since): counted from the feet"))))))
+
 (deftest the-night-looks-at-the-unseen-sides-of-a-lit-tunnel-and-is-done-without-digging
   (async done
     (tu/run-async done

@@ -2,7 +2,7 @@
   "Look first, judge after: an unseen cell is open until looked at (a player walks up and looks). The unseen sides of the
   closed region the body stands in under a cover, and the unseen cells of a roof column, are looked at, nearest first, and
   walked towards when a look cannot show them, a walk only while its hp (walk-risk/look-way) are bought by the call's worth.
-  Memory keys :edge-looked, :edge-phase are the calling job's."
+  Memory keys :edge-looked, :edge-phase, :edge-from are the calling job's."
   (:require [jobs.lib.cost.health :as cost-health]
             [engine.ctx :as ctx]
             [jobs.lib.dig-look :as dig-look]
@@ -115,6 +115,8 @@
   "A closed region with sides never seen is not yet known shut (an unseen cell may be an opening). The nearest of cells is
   looked at; what the look shows is read on the next pass, once the sight has settled. A side it did not show (a far wall
   of a long tunnel) is walked towards, on foot (walkable-near, edge-stride) and looked at again, as a player would; :again.
+  max-edge-walk counts from :edge-from, where the walks began (the feet again once the body is farther off), so walks
+  one after another do not creep down a tunnel.
   The cell counts as tried when that second look has been read and the cell is still unseen. `to`: the cell to walk to, in
   place of walkable-near's."
   ([c cells] (look! c cells nil))
@@ -124,8 +126,13 @@
          advance! #(ctx/update-mem! c assoc-in [:edge-phase cell] %)]
      (case phase
        0 (do (advance! 1) (await (dig-look/look-at! c cell)))
-       1 (let [reach-to (last (take-while #(<= (u/dist {:x (first cell) :y (second cell) :z (nth cell 2)} {:x (first %) :y (second %) :z (nth % 2)}) edge-stride) cells))
-               near (or to (walkable-near (:primitives c) reach-to))
+       1 (let [p (:primitives c)
+               feet (sh-sense/feet p)
+               kept (:edge-from (ctx/mem c))
+               from (if (and kept (u/within? feet kept (+ max-edge-walk 2))) kept feet)
+               _ (ctx/update-mem! c assoc :edge-from from)
+               reach-to (last (filter #(<= (u/dist {:x (first cell) :y (second cell) :z (nth cell 2)} {:x (first %) :y (second %) :z (nth % 2)}) edge-stride) cells))
+               near (or to ((walkable-near-fn p from feet) reach-to))
                w (if (and near (walk-bought? c near)) (await (ctx/call c :edge-walk 'jobs.movement.go-to {:pos near :range 0 :ways #{:walk} :floor cost-health/spend-down})) :none)]
            (when (not= :continue w) (advance! 2)))
        2 (do (advance! 3) (await (dig-look/look-at! c cell)))

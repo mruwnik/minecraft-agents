@@ -27,17 +27,19 @@
    :after [[:block [16 -1 16] "dirt"]]
    :limit-s 140}
   ;; Card b7d85dd0. A body roofed in the middle of a lit tunnel 96 long, whose ends it has not seen, must not walk to them to look
-  ;; (look-edge/max-edge-walk), as the flood of a cave once carried a body 150 blocks. Both ends are over 24 blocks away.
+  ;; (look-edge/max-edge-walk), as the flood of a cave once carried a body 150 blocks. Both ends are over 24 blocks away; short
+  ;; priced looks nearer are allowed. On the sky grid the fill hangs over void (an underground cell's shell stops at y -2, so the
+  ;; fill there reaches natural rock and caves). The lit, roofed body may end roofed or stay the night in the open by price.
   {:name "pit-opening-onto-a-long-tunnel-does-not-edge-walk-down-it"
-   :time :any
+   :time-why :night-light
    :plot {:length 96}
    :blocks [[:fill [0 -6 14] [95 -1 18] "stone"] [:fill [0 -5 16] [95 -4 16] "air"]
             [:set [8 -5 16] "torch"] [:set [24 -5 16] "torch"] [:set [40 -5 16] "torch"] [:set [56 -5 16] "torch"] [:set [72 -5 16] "torch"] [:set [88 -5 16] "torch"]]
    :body {:at [48.5 -5 16.5] :inventory [["iron_pickaxe" 1] ["cobblestone" 8]]}
    :act [[:job (jobs.survival.night)]
-         [:await {:source :job :kind :completed :data {:name "jobs.survival.night"}} 150]]
-   :expect [{:no-event {:source :job :kind :child_started :data {:slot :edge-walk}} :for-s 150 :until {:source :job :kind :completed :data {:name "jobs.survival.night"}}}
-            {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 150 :of-job true}]
+         [:await {:source :job :kind #{:completed :stopped} :data {:name "jobs.survival.night" :reason #{nil :exposed}}} 150]]
+   :expect [{:no-event {:source :job :data {:pos [:not #{nil [:near #at [48.5 -5 16.5] 26]}]}} :of-job true :for-s 150}
+            {:event {:source :job :kind #{:completed :stopped} :data {:name "jobs.survival.night" :reason #{nil :exposed}}} :within-s 150 :of-job true}]
    :after [[:body-near [48.5 -5 16.5] 8]]
    :limit-s 170}
   {:name "no-site-logs-out-and-ends-exposed"
