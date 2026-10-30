@@ -419,14 +419,6 @@
                    shown (if (== 1 (aget sight id)) (max-light light prev) light)]
                (or (== 1 (aget visible shown)) (<= dist (near-of per)))))))))
 
-(defn line-clear?
-  "Whether the eye at (ox oy oz) has a clear line to the point (tx ty tz): no cell strictly between the eye's cell and
-  the point's cell blocks the line (blocks-line?) or is unloaded. No cone and no light rule:
-  this answers whether a thing there could be seen by turning to it."
-  [^js raw ^js table ox oy oz tx ty tz]
-  (sight/line-clear ox oy oz tx ty tz
-                    (fn [x y z] (let [id (.stateAt raw x y z)] (or (< id 0) (blocks-line? raw table id x y z ox oy oz tx ty tz))))))
-
 (defn on-change!
   "A block changed in the raw world: memory takes the new state only if the body sees the cell now."
   [{:keys [raw opts st] :as per} x y z id]

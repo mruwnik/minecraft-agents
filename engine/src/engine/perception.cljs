@@ -76,7 +76,6 @@
 (def section-bytes store/section-bytes)
 (def seen-block store/seen-block)
 (def seen-blocks store/seen-blocks)
-(def line-clear? rays/line-clear?)
 (def pass! rays/pass!)
 (def look-for! rays/look-for!)
 (def step! rays/step!)
