@@ -133,6 +133,25 @@
       (field/field-of c {:mob "zombie" :pos {:x 20.5 :y 64 :z 10.5}})
       (is (= 1 (.-size (.-fields mem))) "the other dimension's fields are dropped"))))
 
+(deftest a-roaming-mob-keeps-at-most-max-fields-the-least-recently-used-dropped
+  (let [{:keys [c look!]} (seen-body {})
+        zombie (fn [x] {:mob "zombie" :pos {:x (+ x 0.5) :y 64 :z 0.5}})]
+    (look!)
+    (let [home (field/field-of c (zombie -30))]
+      (doseq [x (range -27 30 3)]
+        (field/field-of c (zombie -30))
+        (field/field-of c (zombie x)))
+      (is (= field/max-fields (.-size (.-fields ^js (.get field/memories (:primitives c))))) "20 places walked, max-fields kept")
+      (is (identical? home (field/field-of c (zombie -30))) "the place asked all along is still kept"))))
+
+(deftest a-shared-value-past-the-ttl-is-dropped-at-the-next-miss
+  (let [now (atom 0)
+        c {:primitives #js {} :view (fn [] {:now @now :data {}})}]
+    (field/shared c [:a] (constantly 1))
+    (reset! now (inc (check-cache/ttl-ms)))
+    (field/shared c [:b] (constantly 2))
+    (is (= ["[:b]"] (vec (es6-iterator-seq (.keys ^js (.get field/bodies (:primitives c)))))) "a value no check can hit is not held")))
+
 (deftest the-time-a-route-spends-in-a-zombies-field-prices-with-how-close-it-comes
   (let [body {:health 20}
         threats [{:mob "zombie" :weight 1 :reach (reach-of {} "zombie" {:x -20.5 :y 64 :z 0.5})}]

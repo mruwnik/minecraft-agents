@@ -295,7 +295,8 @@
     (if (and hit (not (::check-cache/fresh c)) (<= 0 (- now (:t hit)) (check-cache/ttl-ms)))
       (:v hit)
       (let [v (thunk)]
-        (doseq [[key e] (es6-iterator-seq (.entries kept))] (when (> (- now (:t e)) (* 10 (check-cache/ttl-ms))) (.delete kept key)))
+        ;; an entry past the ttl is never hit again; each holds a whole toll vector (MBs of cells)
+        (doseq [[key e] (es6-iterator-seq (.entries kept))] (when-not (<= 0 (- now (:t e)) (check-cache/ttl-ms)) (.delete kept key)))
         (.set kept (pr-str k) {:t now :v v})
         v))))
 
@@ -311,7 +312,10 @@
           :else 0)))
 
 (def max-sections "Sections of kept reads (16 KB each) one body keeps." 512)
-(def max-fields "Fields one body keeps (a mob roaming leaves one per place)." 64)
+(def max-fields
+  "Fields one body keeps, the least recently used dropped first: twice threats/::max-threats (8), the most one price reads.
+  A walker's is ~2.5 MB of heap and ~2.2 MB of dense grids, so a mob roaming (one per place) must not fill the heap."
+  16)
 
 (defn ageing-step
   "memory-age/section-flips of section cx sy cz and the 6 beside it (a cell's reading flips when it becomes likelier
@@ -434,18 +438,21 @@
   (let [^js fields (.-fields mem)
         cleared? (.-cleared ^js (aget reads 4))]
     ;; secs cleared (past max-sections): the kept fields' reads are no longer refreshed
-    (when (or cleared? (>= (.-size fields) max-fields)) (.clear fields))
-    (if (or cleared? (pos? (.-size (aget reads 3))))
-      (.delete fields ks)
+    (when cleared? (.clear fields))
+    (.delete fields ks)
+    (when-not (or cleared? (pos? (.-size (aget reads 3))))
       (let [es (vec (es6-iterator-seq (.values (aget reads 2))))]
         (run! #(adopt! per %) es)
+        (while (>= (.-size fields) max-fields) (.delete fields (.-value (.next (.keys fields)))))
         (.set fields ks #js [v (mapv (fn [^js e] #js [e (.-version e)]) es) reads])))))
 
 (defn kept-hit
   "The entry kept under ks in mem while no cell of memory its reads kept changed (refresh!), else nil."
   [per ^js mem ks]
-  (let [^js hit (.get (.-fields mem) ks)]
+  (let [^js fields (.-fields mem)
+        ^js hit (.get fields ks)]
     (when (and hit (every? (fn [^js d] (let [^js e (refresh! per (.-secs mem) (aget d 0))] (== (aget d 1) (.-version e)))) (aget hit 1)))
+      (doto fields (.delete ks) (.set ks hit))
       hit)))
 
 (defn kept
