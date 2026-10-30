@@ -21,6 +21,7 @@
             [jobs.movement.look-around :as look-around]
             [jobs.movement.walk-look :as walk-look]
             [jobs.access.stair :as stair]
+            [jobs.access.tunnel :as tunnel-job]
             [jobs.build.light-area :as light-area]
             [jobs.build.from-plan.light :as fp-light]
             [jobs.access.toggle :as toggle]
@@ -379,6 +380,11 @@
   (are [dir expected] (= expected (first (stair/fit? (assoc (ctx-of (assoc at-origin :self {:pos {:x 0 :y 64 :z 0} :health 0.5})) :args {:dir dir}))))
     :up :ok
     :down :later))
+
+(deftest a-tunnel-waits-for-food-when-hurt-and-only-food-heals
+  (are [world expected] (= expected (first (tunnel-job/fit? (ctx-of (merge at-origin world)))))
+    {:self {:pos {:x 0 :y 64 :z 0} :health 3 :food 11}} :later
+    {:self {:pos {:x 0 :y 64 :z 0} :health 20 :food 11}} :ok))
 
 (deftest a-job-whose-checks-default-to-armed-and-healthy-runs-them-from-the-declared-forms
   (are [world expected] (= expected (first (ending/run-status (get registry/jobs 'jobs.access.cleanup) (ctx-of (merge at-origin world)))))
