@@ -413,8 +413,9 @@
         s #(escape-way/door-fall-s p (merge {:fall 5} %))]
     (is (= 0 (escape-way/door-fall-s p nil)))
     (is (pos? (s {})) "five blocks cost two hp")
-    (is (= 0 (s {:water true})) "water takes no fall damage")
-    (is (< (s {}) (s {:floor-unseen true})) "a floor never sensed adds the fall and climb out when it is not there")))
+    (is (= 0 (s {:on "water"})) "water takes no fall damage")
+    (is (< (s {:on "hay_block"}) (s {:on "stone"})) "hay takes most of the fall off")
+    (is (< (s {:on "stone"}) (s {:on "stone" :floor-unseen true})) "a floor never sensed adds the fall and climb out when it is not there")))
 
 (def open-stair-mass
   "stone-mass with the cells of a 3-step stair east from [0 64 0] already open."

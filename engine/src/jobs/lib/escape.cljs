@@ -232,14 +232,13 @@
 (defn walled-side? [block-at cell] (boolean (some #(solid? (block-at (ahead cell % 1))) cardinals)))
 
 (defn drop-limit
-  "The longest drop in blocks the body at primitives p survives (cost/fall-profile over its survivable hp): the limit of a door's landing."
-  [p]
-  (:max-drop (cost/fall-profile {:equipment (cost/equipment-of (.-equipment (.self p)))
-                                 :damage-budget (cost/survivable-budget (wworld/self-body p) {})})))
+  "The longest drop in blocks the body at primitives p survives within the walk's settings (cost/drop-limit; default the body's), the limit of a door's landing."
+  ([p] (drop-limit p (wworld/walk-settings {})))
+  ([p settings] (cost/drop-limit (cost/equipment-of (.-equipment (.self p))) (wworld/self-body p) settings)))
 
 (defn landing
   "The first cell below row (a cell with room for the body and no floor) within max-drop blocks with room and a floor, or
-  water over a floor or more water, as {:through cell :fall blocks}, plus :water true for water (no fall damage) and
+  water over a floor or more water, as {:through cell :fall blocks :on block}, :on the block name landed on (\"water\", or the floor's: cost/landing-factor) and
   :floor-unseen true when unseen? says the floor under it was never sensed (block-at guessed it rock). nil when the
   column under row is not open down to one."
   [block-at unseen? row max-drop]
@@ -250,9 +249,9 @@
       (cond
         (> d max-drop) nil
         (and water? (bs/passable-or-water? (block-at (up cell 1))) (or (= "water" (block-at below)) (rules/solid-floor? block-at below)))
-        (cond-> {:through cell :fall d :water true} (unseen? below) (assoc :floor-unseen true))
+        (cond-> {:through cell :fall d :on "water"} (unseen? below) (assoc :floor-unseen true))
         (not-every? bs/passable? (map block-at [cell (up cell 1)])) nil
-        (rules/solid-floor? block-at below) (cond-> {:through cell :fall d} (unseen? below) (assoc :floor-unseen true))
+        (rules/solid-floor? block-at below) (cond-> {:through cell :fall d :on (block-at below)} (unseen? below) (assoc :floor-unseen true))
         :else (recur (inc d))))))
 
 (defn door-from

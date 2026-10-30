@@ -191,8 +191,7 @@
           equipment (cost/equipment-of (.-equipment self))
           fall {:health (.-health self) :equipment equipment :carried (:count (escape/carried-pillar-item p) 0)
                 :share (wworld/unseen-share p)
-                :max-drop (:max-drop (cost/fall-profile {:equipment equipment
-                                                         :damage-budget (cost/survivable-budget (wworld/damage-body c) (select-keys (wworld/walk-settings c) [:max-damage]))}))}
+                :max-drop (cost/drop-limit equipment (wworld/damage-body c) (wworld/walk-settings c))}
           worth (cost/tour-worth (:detour-from (ctx/mem c) 0) (ctx/worth c))
           left (max 0 (- worth (:cost (cost/tour-cost (tour c)))))
           backs (vec (reductions + 0 (map #(detour/length [%1 %2]) steps (rest steps))))

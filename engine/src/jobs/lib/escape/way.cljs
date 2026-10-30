@@ -97,14 +97,15 @@
             0 (partition 3 (escape/stair-cuts feet (escape/heading-dirs (keyword heading)) steps)))))
 
 (defn door-fall-s
-  "Seconds the drop beyond a door ({:fall :water :floor-unseen}, escape/landing) takes: its hp (none into water) at cost/hp-cost, and for a
+  "Seconds the drop beyond a door ({:fall :on :floor-unseen}, escape/landing) takes: its hp by the block landed on
+  (cost/landing-factor: none into water) at cost/hp-cost, and for a
   floor the body has not seen cost/unseen-fall-s, the fall and the climb out when it is not there."
-  [p {:keys [fall water floor-unseen]}]
+  [p {:keys [fall on floor-unseen]}]
   (if-not fall
     0
     (let [self (.self p)
           equipment (cost/equipment-of (.-equipment self))
-          hp-s (if water 0 (cost/hp-cost (.-health self) (cost/fall-damage equipment fall)))]
+          hp-s (cost/hp-cost (.-health self) (* (cost/landing-factor on) (cost/fall-damage equipment fall)))]
       (+ hp-s
          (if floor-unseen
            (cost/unseen-fall-s (if (= 1 fall) :down :drop) fall

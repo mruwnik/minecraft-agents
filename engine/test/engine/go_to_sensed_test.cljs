@@ -108,9 +108,9 @@
                                              (and (= (first %) 1) (<= 64 (second %) 65) (= 0 (nth % 2))) "stone"
                                              :else "air"))
         door (fn [floor-y max-drop & [unseen?]] (escape/door (world floor-y) (or unseen? (constantly false)) [0 64 0] [1 0] max-drop))]
-    (is (= {:cells [[1 65 0] [1 64 0]] :through [2 60 0] :fall 4} (door 59 6)) "four blocks down beyond a one-block wall")
+    (is (= {:cells [[1 65 0] [1 64 0]] :through [2 60 0] :fall 4 :on "stone"} (door 59 6)) "four blocks down beyond a one-block wall")
     (is (nil? (door 40 6)) "a drop past the body's limit is no door")
-    (is (= {:cells [[1 65 0] [1 64 0]] :through [2 57 0] :fall 7} (door 56 8)) "a survivable seven-block drop is a door")
+    (is (= {:cells [[1 65 0] [1 64 0]] :through [2 57 0] :fall 7 :on "stone"} (door 56 8)) "a survivable seven-block drop is a door")
     (is (nil? (door 56 6)) "a drop the body does not survive is none")
     (is (= {:cells [[1 65 0] [1 64 0]] :through [2 64 0]} (door 63 6)) "a floor at the wall's foot level is as before, no fall")
     (is (= [2 60 0] (:through (door 59 6 #{[2 59 0]}))))
@@ -124,7 +124,7 @@
                                      (64 65) (if (= (first c) 1) "stone" "air")
                                      "air"))
                            (constantly false) [0 64 0] [1 0] 6)]
-      (is (= {:cells [[1 65 0] [1 64 0]] :through [2 60 0] :fall 4 :water true} wet) "water over a floor is a water landing"))))
+      (is (= {:cells [[1 65 0] [1 64 0]] :through [2 60 0] :fall 4 :on "water"} wet) "water over a floor is a water landing"))))
 
 (deftest escape-door-over-seen-cells-is-as-before
   (let [{:keys [w]} (sensed-only (assoc (wall-east 1) :blocks ground))]

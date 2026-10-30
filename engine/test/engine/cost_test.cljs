@@ -979,3 +979,15 @@
       {:k 21 :n 1165 :s 12.39} true
       {:k 0 :n 0 :s 12} false
       {:k 5 :n 3 :s 12} false)))
+
+(deftest landing-factor-is-none-on-water-the-table-entry-or-all
+  (is (= 0 (cost/landing-factor "water")))
+  (is (= 0.2 (cost/landing-factor "hay_block")))
+  (is (= 1 (cost/landing-factor "stone")))
+  (is (= 0 (cost/landing-factor "slime_block")) "a bounce takes no damage")
+  (is (= 0.5 (cost/landing-factor "stone" {"stone" 0.5})) "go-to's :landing overrides"))
+
+(deftest drop-limit-follows-the-body-and-the-walks-max-damage
+  (let [body {:health 20 :absorption 0}]
+    (is (< (cost/drop-limit nil body {:max-damage 2}) (cost/drop-limit nil body nil)) "a walk capped to 2 hp takes a shorter drop")
+    (is (< (cost/drop-limit nil (assoc body :health 5) nil) (cost/drop-limit nil body nil)))))

@@ -171,6 +171,15 @@
                       (not (and (number? v) (js/isFinite v))) (str ":landing " k " must be a number, got " (pr-str v))))
                   landing))))
 
+(defn landing-factor
+  "The share of a fall's damage a body takes landing on block `on` (a block name; water takes none): go-to's :landing over
+  default-landing, 1 for a block not in it, 0 for a bounce (negative)."
+  ([on] (landing-factor on nil))
+  ([on landing]
+   (if (= "water" on)
+     0
+     (max 0 (get (merge default-landing landing) on 1)))))
+
 (defn planner-landing
   "The planner's options.landing (a Map of state id to damage factor) for the go-to :landing map over default-landing. Under
   the :sneak gait a negative factor is 1: a sneaking body does not bounce, it takes the full fall."

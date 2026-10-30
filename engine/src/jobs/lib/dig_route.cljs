@@ -337,7 +337,7 @@
          dig-cost (memoize cost/dig-cost)
          destroyed (cost/destroyed-fn (or sensed (fn [[x y z]] (u/sensed p {:x x :y y :z z}))))
          cut-s (fn [name cell] (let [own (if own-s (own-s cell) 0)] (if (pos? own) own (destroyed name cell false))))]
-     {:max-fall (:max-drop (cost/fall-profile {:equipment equipment :damage-budget (cost/survivable-budget (wworld/self-body p) {})}))
+     {:max-fall (cost/drop-limit equipment (wworld/self-body p) (wworld/walk-settings {}))
       :fall-s (fn [blocks] (cost/hp-cost (.-health self) (cost/fall-damage equipment blocks)))
       :dig-s (fn [name cell] (some-> (dig-cost name) (+ (cut-s name cell))))
       :step-s (cost/walk-step-s)
