@@ -430,12 +430,16 @@
            (tu/box 10 67 -2 14 67 2 "birch_planks")
            {"12,64,0" "white_bed" "13,64,0" "white_bed"})))
 
+(def walled-bed-hut-zones
+  "Another owner's claim over the hut's walls and roof: go-to may not dig built blocks there."
+  [{:name "hut" :owner "Other" :min [10 64 -2] :max [14 67 2]}])
+
 (deftest sleep-says-why-the-walk-to-a-walled-in-bed-failed
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:time night :self {:pos {:x 12 :y 64 :z -8}}
-                                           :blocks walled-bed-hut})]
+                                           :blocks walled-bed-hut :zones walled-bed-hut-zones})]
           (know-bed! eng {:x 12 :y 64 :z 0})
           (core/submit! eng '(jobs.survival.sleep) {})
           (await (run-until-empty eng 20))

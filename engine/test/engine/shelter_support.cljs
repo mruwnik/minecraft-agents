@@ -8,6 +8,7 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [jobs.lib.world-files :as ew]
             [jobs.lib.shelter :as sh]
             [jobs.lib.shelter.sense :as sh-sense]))
 (def day-ms 1200000)
@@ -47,10 +48,11 @@
 (defn setup [world]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake (merge {:offlineScale 0.0001 :floor tu/walk-floor} world))
+        p (tu/fake (merge {:offlineScale 0.0001 :floor tu/walk-floor} (dissoc world :zones)))
         _ (dawn-after! p default-dawn)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                           :now #(deref clock)
+                          :world (ew/of-data {} {} (:zones world []))
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen :clock clock}))
 
