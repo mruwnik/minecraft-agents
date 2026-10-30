@@ -231,6 +231,20 @@
           (is (seq (st/calls p "look")))
           (is (= [:ground] (mapv :target (st/emitted seen :shelter.fled)))))))))
 
+(deftest the-flee-skips-seen-ground-with-water-under-it-for-ground-a-pit-fits-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [wet-patch (into {} (for [x (range 8 13) z (range -2 3) y (range 60 63)] [(str x "," y "," z) "water"]))
+              {:keys [eng p seen]} (st/setup {:time night :inventory st/dirt-stack :blocks (merge stone-and-dirt-patch wet-patch)})]
+          (tu/seeing-all p)
+          (st/dawn-after! p 12)
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tu/run-until-empty eng 160))
+          (let [fled (st/emitted seen :shelter.fled)]
+            (is (= [:ground] (mapv :target fled)))
+            (is (<= 27 (:x (:pos (first fled)))) "the solid patch, not the nearer ground over water")))))))
+
 ;; ------------------------------------------------------------------ a bed not yet looked at
 (deftest a-bed-in-the-room-not-yet-looked-at-is-slept-in-not-replaced-by-the-carried-bed
   (async done
