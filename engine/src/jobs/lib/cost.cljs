@@ -288,11 +288,17 @@
    (+ (ways/pillar-cost height short) (* (unseen-step-s share) unseen-blocks))))
 
 (defn pillar-knock-s
-  "Seconds of hp a pillar of height blocks costs in expectation: at each block ways/::pillar-knock-chance that a blow
+  "Seconds of hp a pillar of height blocks costs in expectation: at each block value/pillar-knock-chance that a blow
   shoves the body off it, a fall from the height built so far (fall-damage at hp-cost from health)."
   [health equipment height]
-  (* (settings/get ways/settings ::ways/pillar-knock-chance)
+  (* (value/pillar-knock-chance)
      (transduce (map #(health/hp-cost health (fall-damage equipment %))) + 0 (range 1 (inc height)))))
+
+(defn pillar-knock-of
+  "pillar-knock-s of a pillar of height blocks for body p's health and kit."
+  [p height]
+  (let [self (.self p)]
+    (pillar-knock-s (.-health self) (equipment-of (.-equipment self)) height)))
 
 (defn unseen-fall-s
   "Seconds a step drop-by blocks down (kind :down or :drop) onto a floor the body has not seen costs on top of turning

@@ -452,9 +452,15 @@
         route (choose/route-answer p [0 64 0] [3 67 0] (constantly true) (constantly false) false false {})]
     (is (= (:seconds route) (escape-way/price p [0 64 0] stair)))
     (is (< (escape-way/price (body 50) [0 64 0] stair) (escape-way/price p [0 64 0] stair)) "unseen cells cost more")
-    (are [r n] (= (+ (cw/pillar-cost 2) (* n unseen-s)) (escape-way/price (body r) [0 64 0] {:step :pillar :height 2}))
+    (are [r n] (= (+ (cw/pillar-cost 2) (* n unseen-s) (cost/pillar-knock-of (body r) 2)) (escape-way/price (body r) [0 64 0] {:step :pillar :height 2}))
       50 0
       2.9 1)))
+
+(deftest a-pillar-way-prices-the-knock-off-fall-at-the-chance
+  (let [p (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}]})
+        price #(escape-way/price p [0 64 0] {:step :pillar :height 8})
+        at (fn [knock] (settings/with-settings {:jobs.lib.cost.value/pillar-knock-counts {:knock knock :kept 1}} price))]
+    (is (< (at 0) (at 1)) "a dearer chance of a knock-off dears the pillar")))
 
 (deftest a-fill-competes-by-price-with-the-stair-and-the-pillar
   (let [p (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}]})

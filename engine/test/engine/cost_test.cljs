@@ -341,7 +341,7 @@
         (is (= 0 (cost/unseen-fall-s :down 1 (assoc body :max-drop 0))) "a body that takes no drop never falls on")))))
 
 (deftest a-pillar-prices-the-fall-of-a-knock-off-at-each-block-by-its-chance
-  (settings/with-settings {:jobs.lib.cost.ways/pillar-knock-chance 0.5}
+  (settings/with-settings {:jobs.lib.cost.value/pillar-knock-counts {:knock 1 :kept 1}}
     (fn []
       (let [hp #(cost/hp-cost 20 (cost/fall-damage nil %))]
         (is (= 0 (cost/pillar-knock-s 20 nil 0)))

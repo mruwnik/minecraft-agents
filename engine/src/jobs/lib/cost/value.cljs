@@ -95,6 +95,10 @@
                          :spec (a/pred "a map {:plantable n :unfit n} of pseudo-counts >= 0"
                                        (fn [m] (and (map? m) (every? #(and (number? (get m %)) (<= 0 (get m %))) [:plantable :unfit]))))
                          :doc "The Beta prior that a replant spot the body has not seen the soil, room or light of can be planted (answer/spot-plantable-chance): of the bases of felled trees (a log on soil) in 2009 recorded chunk files (every 40th, the fixture grid left out, 2026-10-29), 3513 of 4448 had the species' growth space free of anything a tree cannot grow through (logs counted felled) and an open side lit 9 or more, 0.79; spread fitted by moments over 482 chunks (effective n 3.1). Recount: node tools/event-counts.mjs tree-spots --stride 40."}
+   ::pillar-knock-counts {:default {:knock 0.116 :kept 4.741}
+                          :spec (a/pred "a map {:knock n :kept n} of pseudo-counts >= 0"
+                                        (fn [m] (and (map? m) (every? #(and (number? (get m %)) (<= 0 (get m %))) [:knock :kept]))))
+                          :doc "The Beta prior that a blow shoves the body off a pillar for each block placed (cost/pillar-knock-s): 1 off-column ending in 99 blocks placed (pillar.done and pillar.gave-up of 7 bodies' logs, 2026-10-30; no pillar.knockback logged yet, so a lower bound), spread fitted by moments over the bodies' shares (effective n 4.9). Recount: node tools/event-counts.mjs pillar-knocks (:prior)."}
    ::retry-counts {:default {:craft {:win 0.141 :fail 0.013 :try-s 3.677} :dig {:win 0.022 :fail 0.163 :try-s 10.764} :furnace {:win 1 :fail 1 :try-s 0.293} :place {:win 0.095 :fail 0.104 :try-s 8.968} :walk {:win 0.031 :fail 0.101 :try-s 17.148} :walk-round {:win 0.016 :fail 0.241 :try-s 1.816} :respond {:win 0.043 :fail 0.093 :try-s 9.054} :risky-stay {:win 0.043 :fail 0.093 :try-s 5} :comb-look {:win 0.043 :fail 0.093 :try-s 5} :kit-later {:win 0.043 :fail 0.093 :try-s 30}}
                    :spec (a/pred "a map of retry kind to {:win n :fail n :try-s s}, pseudo-counts >= 0 not both 0 and seconds >= 0"
                                  (fn [m] (and (map? m) (every? (fn [{:keys [win fail try-s]}] (and (number? win) (number? fail) (number? try-s) (<= 0 win) (<= 0 fail) (pos? (+ win fail)) (<= 0 try-s)))
@@ -221,6 +225,12 @@
   [{:keys [k n prior]}]
   (let [[a b] (or prior [1 1])]
     (/ (+ k a) (+ n a b))))
+
+(defn pillar-knock-chance
+  "The chance a blow shoves the body off a pillar for each block placed: the mean of ::pillar-knock-counts."
+  []
+  (let [{:keys [knock kept]} (settings/get settings ::pillar-knock-counts)]
+    (counted-chance {:k 0 :n 0 :prior [knock kept]})))
 
 (defn retry-chance
   "The chance the next try of kind wins after fails tries of the call failed in a row: counted-chance of no win in the

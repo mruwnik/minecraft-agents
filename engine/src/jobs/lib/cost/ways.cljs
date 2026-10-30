@@ -8,7 +8,6 @@
 (a/defargs settings
   {::stair-step-s {:default 3 :doc "Seconds one step of a stair, up or down, is reckoned to take." :spec (a/num-in 0 nil)}
    ::pillar-block-s {:default 1.5 :doc "Seconds one block of a pillar is reckoned to take (jump, place)." :spec (a/num-in 0 nil)}
-   ::pillar-knock-chance {:default 0.01 :doc "The chance a blow shoves the body off a pillar for each block placed: 1 off-column ending in 99 blocks placed (pillar.done and pillar.gave-up, trial and probe bodies' logs, 2026-10-30); a knockback the pillar recovered from was not logged then (pillar.knockback is now), so a lower bound. Recount: node tools/event-counts.mjs pillar-knocks." :spec (a/num-in 0 1)}
    ::bridge-block-s {:default 1.5 :doc "Seconds one block of a bridge is reckoned to take (place, step)." :spec (a/num-in 0 nil)}
    ::place-s {:default 0.72 :doc "Seconds placing one block where the body stands takes: the mean gap between two placements of one walls attempt of a flight, n=62 gaps in the trial bodies' logs on 2026-10-28. Recount: node tools/event-counts.mjs wall-places (:gap)." :spec (a/num-in 0 nil)}
    ::fill-place-s {:default 1.5 :doc "Seconds laying one carried block over a gap or a drop is reckoned to take (place, step)." :spec (a/num-in 0 nil)}

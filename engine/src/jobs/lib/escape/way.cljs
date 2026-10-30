@@ -116,12 +116,6 @@
                         hp-s)))
            0)))))
 
-(defn knock-s
-  "Seconds of hp the knock-off falls of a pillar of n blocks cost the body (cost/pillar-knock-s)."
-  [p n]
-  (let [self (.self p)]
-    (cost/pillar-knock-s (.-health self) (cost/equipment-of (.-equipment self)) n)))
-
 (defn price
   "Seconds way e from feet is reckoned to take (jobs.lib.cost): a stair, a pillar, a bridge or a fill by its blocks, a dug door or
   route by what its cells take to dig with the tool carried, plus a step a cell; 0 for a step that is no span. A stair,
@@ -139,7 +133,7 @@
         :stair (+ (stair-route-s p feet e) (* (:aside e 0) (or (cost/dig-cost "stone") 1))
                   (lost-s (escape/stair-cuts feet (escape/heading-dirs (keyword heading)) (:steps e))))
         :pillar (+ (cost/pillar-s (wworld/unseen-share p) (:height e) (escape/unseen-pillar-blocks p feet (:height e)))
-                   (knock-s p (:height e)))
+                   (cost/pillar-knock-of p (:height e)))
         :bridge (cw/bridge-cost (:length e) (:short e 0))
         :fill-gap (cw/fill-cost (:count e 1))
         :dig-route (dig-s (map :cell (:cells e)))
@@ -172,7 +166,7 @@
         cuttable? (every? #(or (unseen? %) (escape/diggable? block-at may-dig? %)) over)
         stair-s (if cuttable? (* n (new-stair-step-s p)) ##Inf)]
     (cond (zero? n) 0
-          open? (min stair-s (+ (cost/pillar-s (wworld/unseen-share p) n (escape/unseen-pillar-blocks p end n) (max 0 (- n left))) (knock-s p n)))
+          open? (min stair-s (+ (cost/pillar-s (wworld/unseen-share p) n (escape/unseen-pillar-blocks p end n) (max 0 (- n left))) (cost/pillar-knock-of p n)))
           :else stair-s))))
 
 (defn stair-floors

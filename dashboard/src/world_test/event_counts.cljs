@@ -856,7 +856,7 @@
                                                                          line (event-lines (path/join agents b "engine"))
                                                                          :let [row (pillar-knocks/scan-line line)]
                                                                          :when row]
-                                                                     row))))
+                                                                     (assoc row :body b)))))
                            0)
        "swim-times" (do (println (pr-str (swim-times/report (vec (for [b (array-seq (fs/readdirSync agents))
                                                                        :when (and (not (probe? b)) (fs/existsSync (path/join agents b "engine")))

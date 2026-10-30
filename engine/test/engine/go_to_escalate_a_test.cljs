@@ -152,8 +152,8 @@
   (let [p (tu/fake {:self {:pos {:x 0 :y 64 :z 0}} :blocks (merge (box -6 63 -6 6 63 6 "stone") {"0,67,0" "stone"})
                     :inventory [{:name "cobblestone" :count 16}]})
         share (wworld/unseen-share p)]
-    (is (= (cost/pillar-s share 3 0) (escape-way/rise-left-s p [1 64 0] [1 68 0] 3)) "3 blocks left for a rise of 3")
-    (is (= (cost/pillar-s share 3 0 2) (escape-way/rise-left-s p [1 64 0] [1 68 0] 1)) "2 of them fetched")
+    (is (= (+ (cost/pillar-s share 3 0) (cost/pillar-knock-of p 3)) (escape-way/rise-left-s p [1 64 0] [1 68 0] 3)) "3 blocks left for a rise of 3")
+    (is (= (+ (cost/pillar-s share 3 0 2) (cost/pillar-knock-of p 3)) (escape-way/rise-left-s p [1 64 0] [1 68 0] 1)) "2 of them fetched")
     (is (< (cost/pillar-s share 3 0) (cost/pillar-s share 3 0 2)))
     (is (= (* 3 (escape-way/new-stair-step-s p)) (escape-way/rise-left-s p [0 64 0] [0 68 0] 3)) "rock over the head: a pillar cannot climb")
     (is (= ##Inf (escape-way/rise-left-s p [0 64 0] [0 68 0] 3 (constantly false))) "rock over the head that may not be cut: no climb")
@@ -602,9 +602,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out seen]} (await (run-job! {:self {:pos {:x 0 :y 46 :z 0}} :blocks deep-shaft
-                                                   :inventory [{:name "dirt" :count 64}]}
-                                              {:pos [10 64 0] :range 1}))
+        (let [{:keys [out seen]} (await (settings/with-settings {:jobs.lib.cost.value/pillar-knock-counts {:knock 0 :kept 1}} ; the walls hold the body on the column: the pillar competes by time
+                                          #(run-job! {:self {:pos {:x 0 :y 46 :z 0}} :blocks deep-shaft
+                                                      :inventory [{:name "dirt" :count 64}]}
+                                                     {:pos [10 64 0] :range 1})))
               escalated (events-of seen :go-to.escalated)]
           (is (= {:arrived true} @out))
           (is (= [:pillar] (map :step escalated)) "the climb is one pillar of 18")
