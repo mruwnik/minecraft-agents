@@ -62,7 +62,7 @@
                 pos {:x x :y y :z z}]
           :when (and age (>= age (crops/ripe-age (.-name b))) (access/in-own-area? c pos))
           :let [[item share] food]]
-      {:kind :crop :pos pos :points (* share (foods/points item))})))
+      {:kind :crop :pos pos :name (.-name b) :points (* share (foods/points item))})))
 
 (defn pen-sources [c]
   (let [p (:primitives c)
@@ -106,7 +106,7 @@
     (concat crops (pen-sources c))))
 
 (defn sources
-  "See the ns doc, the ripe crops of a 16-block column as one field: each with :blocks and the seconds (:walk-s) of the
+  "See the ns doc, the ripe crops of a 16-block column as one field (its :box of cells and their :crops): each with :blocks and the seconds (:walk-s) of the
   walk to it from far, and the seconds of fetching it from here (:fetch-s: a trip and the walk, cost.value/trip and
   walk-cost) and of each point's work (:point-s: a crop's harvest step, cost/field-step-s; a pen animal's kill, at the
   field's price, cost.food/field-point-s; a chest's none)."
@@ -117,7 +117,10 @@
          {crops true others false} (group-by #(= :crop (:kind %)) (concat (chest-sources c) (field-sources c)))
          fields (for [[_ cells] (group-by (fn [{{:keys [x z]} :pos}] [(js/Math.floor (/ x 16)) (js/Math.floor (/ z 16))]) crops)
                       :let [points (reduce + (map :points cells))]]
-                  {:kind :crop :pos (:pos (first cells)) :points points :point-s (/ (* crop-s (count cells)) points)})]
+                  {:kind :crop :pos (:pos (first cells)) :points points :point-s (/ (* crop-s (count cells)) points)
+                   :box {:min (update (apply mapv min (map (comp (juxt :x :y :z) :pos) cells)) 1 dec)
+                         :max (apply mapv max (map (comp (juxt :x :y :z) :pos) cells))}
+                   :crops (vec (distinct (map :name cells)))})]
      (for [s (concat others fields)
            :let [blocks (u/dist far (:pos s))]]
        (assoc s :blocks blocks :walk-s (/ blocks per-s)

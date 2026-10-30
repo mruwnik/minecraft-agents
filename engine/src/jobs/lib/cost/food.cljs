@@ -114,6 +114,12 @@
             (let [k (inc k) ck (trip-cost trip sp k)]
               (if (< ck best-cost) (recur k k ck) (recur k best best-cost)))))))))
 
+(defn point-price
+  "Seconds a point of home food source {:points :fetch-s :point-s} costs, taken whole: the order the trip's lots and
+  get-food take home food in."
+  [{:keys [points fetch-s point-s]}]
+  (/ (+ (or fetch-s 0) (* (or point-s 0) points)) points))
+
 (defn priced-trip
   "Trip {:figure :health :death-s :far? :had :field? :slots} over home food [{:points :walk-s :blocks :fetch-s :point-s}]
   (seen stocked chests, ripe crops, pen surplus; walk-s and blocks the walk to it from the trip's far end, fetch-s the
@@ -127,9 +133,8 @@
            :point-cost (death-loss (or health 20) (second figure))
            :back-s (or (:walk-s near) 0)
            :walk-out (if (and near far?) (+ (value/trip) (:cost (value/walk-cost {:distance (:blocks near)}))) ##Inf)
-           :lots (->> home
-                      (map (fn [{:keys [points fetch-s point-s]}] {:points points :fixed (or fetch-s 0) :per (or point-s 0)}))
-                      (sort-by #(/ (+ (:fixed %) (* (:per %) (:points %))) (:points %)))))))
+           :lots (->> (sort-by point-price home)
+                      (map (fn [{:keys [points fetch-s point-s]}] {:points points :fixed (or fetch-s 0) :per (or point-s 0)}))))))
 
 (defn carry-points
   "Food points the body must carry on trip (priced-trip's args) with home food: trip-points, and at least the 3-day
@@ -138,12 +143,29 @@
   (let [stored (reduce + (map #(max 0 (- (:points %) (* (:walk-s %) points-per-s))) (filter (comp pos? :points) home)))]
     (max (trip-points (priced-trip home trip)) (- reserve-points stored))))
 
+(defn worth-fetching?
+  "Whether home food source {:points :fetch-s :point-s} pays its fetch for want points: its fetch and work for the points
+  it gives toward them cost less than getting them in the field (field-point-s a point)."
+  [{:keys [points fetch-s point-s]} want]
+  (let [n (min points want)]
+    (and (pos? n) (< (+ fetch-s (* point-s n)) (* n (field-point-s))))))
+
+(defn fetchable
+  "The home food sources get-food takes for want points, in its order: cheapest a point first (point-price), each while
+  it is worth-fetching? for the points still wanted."
+  [home want]
+  (loop [[s & more :as ss] (sort-by point-price (filter (comp pos? :points) home)) want want out []]
+    (cond (or (empty? ss) (<= want 0)) out
+          (worth-fetching? s want) (recur more (- want (:points s)) (conj out s))
+          :else (recur more want out))))
+
 (defn fetch-points
   "The food points to fill the pack to before trip (priced-trip's args, :had the carried points), or nil: carry-points,
-  at most the carried food and the home food, when that is more than is carried."
+  at most the carried food and the home food get-food takes for the rest (fetchable), when that is more than is carried."
   [home trip]
   (let [had (or (:had trip) 0)
-        to (min (carry-points home trip) (+ had (reduce + (map :points (filter (comp pos? :points) home)))))]
+        want (carry-points home trip)
+        to (min want (+ had (reduce + (map :points (fetchable home (- want had))))))]
     (when (> to had) to)))
 
 (defn reserve-food?

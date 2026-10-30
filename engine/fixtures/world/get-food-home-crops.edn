@@ -1,0 +1,24 @@
+;; survival.get-food's :source way takes the home food a trip's food is counted from (jobs.lib.home-food/sources): ripe
+;; carrots in a zone the body owns, 36 blocks off (past the 24-block hunt radius), on a flat plot it sees them across.
+;; No food carried, hunger drained by RCON (food 9-10), hp 15.
+;; Should-succeed: the zone is the body's own: the carrots are cut and replanted (farm.harvest), the body is fed.
+;; Should-fail: the zone is someone else's: they are not home food and stay ripe (the :no-food ending).
+{:defaults
+ {:tags [:survival :get-food :farm :zones]
+  :plot {:height 6 :floor "grass_block" :length 48}
+  :blocks [[:fill [40 -1 16] [43 -1 16] "farmland[moisture=7]"] [:fill [40 -2 17] [43 -2 17] "stone"] [:fill [40 -1 17] [43 -1 17] "water"]
+           [:fill [40 0 16] [43 0 16] "carrots[age=7]"]]
+  :body {:at [4.5 0 16.5] :yaw -90 :settle-s 3}
+  :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
+        [:rcon "damage $BODY 5 minecraft:generic"]
+        [:job (jobs.survival.get-food {:explore false})]]
+  :limit-s 150}
+ :cases
+ [{:name "own-carrots-far-off-are-harvested"
+   :zones [{:name "field" :min [39 -2 15] :max [44 3 18] :owner "$body"}]
+   :expect [{:event {:source :job :kind :completed} :within-s 140 :of-job true}]
+   :after [[:block [40 0 16] "carrots[age=0]"]]}
+  {:name "carrots-in-another-zone-are-left"
+   :zones [{:name "field" :min [39 -2 15] :max [44 3 18] :owner "SomeoneElse"}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 120}]
+   :after [[:block [40 0 16] "carrots[age=7]"]]}]}

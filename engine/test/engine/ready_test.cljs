@@ -1,6 +1,7 @@
 (ns engine.ready-test
   "jobs.lib.ready: the safe? and fit? checkers a job binds, as statuses over the shelter, the light and the mobs."
-  (:require [cljs.test :refer [deftest is are testing]]
+  (:require [jobs.survival.get-food.sources :as get-food-sources]
+            [cljs.test :refer [deftest is are testing]]
             [engine.hut-shelter-test :as hut]
             [engine.ctx :as ctx]
             [engine.game :as game]
@@ -1181,10 +1182,12 @@
     (is (< 2.7 (price/stay-hp c 0.005 10) 2.9))))
 
 (defn trip-ctx
-  "A ctx at the origin carrying bread loaves, its job quoting a trip of figure, with a booked chest of 64 bread at chest (nil: none)."
+  "A ctx at the origin carrying bread loaves, its job quoting a trip of figure, with a booked chest of 64 bread at chest (nil:
+  none), or of {pos loaves} each."
   [bread figure chest]
-  (let [data (cond-> mem/empty-data
-               chest (mem/add-entry :fetch/stock {:t 0 :data {:pos chest :items {"bread" 64}}} {:cap 64 :ttl :forever}))]
+  (let [chests (if (map? chest) chest (when chest {chest 64}))
+        data (reduce (fn [d [pos n]] (mem/add-entry d :fetch/stock {:t 0 :data {:pos pos :items {"bread" n}}} {:cap 64 :ttl :forever}))
+                     mem/empty-data chests)]
     {:primitives (tu/fake {:inventory [{:name "bread" :count bread}]}) :view (fn [] {:data data :now 1000})
      :def {:quote-of (constantly {:uses {:job-time figure}})}}))
 
@@ -1199,3 +1202,10 @@
     (trip-ctx 40 [0 1800 ##Inf] [3 64 0])
     (trip-ctx 2 [0 1800 ##Inf] nil)
     (trip-ctx 2 [0 30 60] [3 64 0])))
+
+(deftest a-trip-fetches-only-the-home-food-get-food-takes
+  (let [c (trip-ctx 2 [0 1800 ##Inf] {[3 64 0] 20 [3000 64 0] 64})
+        [_ _ {[_ {:keys [carry]}] :look-first}] (trip-fed c)]
+    (is (= 110 carry) "the 20 loaves near, not the 64 whose 3000-block walk costs more than hunting the rest would")
+    (is (= [{:x 3 :y 64 :z 0}] (map (comp :pos :data) (get-food-sources/home-entries (assoc c :args {:carry carry}))))
+        "get-food's :source way reads the same list by the same rule")))

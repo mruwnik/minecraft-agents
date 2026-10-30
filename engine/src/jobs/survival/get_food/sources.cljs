@@ -9,8 +9,10 @@
             [jobs.lib.child :as child]
             [jobs.lib.chests :as chests]
             [jobs.lib.crops :as crops]
-            [jobs.lib.stock :as stock]
+            [jobs.lib.cost.food :as food]
+            [jobs.lib.food-animals :as animals]
             [jobs.lib.foods :as foods]
+            [jobs.lib.home-food :as home-food]
             [jobs.lib.meal :as meal]
             [jobs.lib.look :as look]
             [jobs.lib.storage :as storage]
@@ -20,8 +22,7 @@
 (a/defargs settings
   {::reach {:default 3 :doc "How near a food source the body stands to use it, in blocks." :spec (a/int-in 0 nil)}
    ::source-radius {:default 64 :doc "How far away a remembered food source still counts, in blocks." :spec (a/num-in 0 nil)}
-   ::take {:default 16 :doc "Most items to withdraw from a chest in one go." :spec (a/int-in 1 nil)}
-   ::stock-radius {:default 256 :doc "Blocks within which a chest the body booked food in (memory :fetch/stock, what it saw when it opened it) counts as a food source." :spec (a/int-in 0 nil)}})
+   ::take {:default 16 :doc "Most items to withdraw from a chest in one go." :spec (a/int-in 1 nil)}})
 
 (defn reach [] (settings/get settings ::reach))
 
@@ -39,43 +40,38 @@
                         (assoc fields :pos pos :text (str "skipped the chest at " (pr-str pos) ": " (access/refusal-text fields))))))
     (boolean v)))
 
-(defn stock-entries
-  "The chests the body booked food in (memory :fetch/stock, latest per chest) within ::stock-radius, as :food-source-shaped
-  entries {:t :data {:pos {:x :y :z} :kind :chest}}: its own stores count as sources though nothing wrote a :food-source."
+(defn wanted-points
+  "Food points this call still wants: the pack's gap to :carry (food-animals/carry) or the bar's to top-up-food, the more."
   [c]
-  (let [here (u/self-pos c)]
-    (->> (ctx/entries c stock/stock-kind)
-         (reduce (fn [m e] (assoc m (:pos (:data e)) e)) {})
-         vals
-         (filter (fn [{:keys [data]}] (and (some foods/edible? (keys (:items data))) (<= (u/dist here (zipmap [:x :y :z] (:pos data))) (settings/get settings ::stock-radius)))))
-         (map (fn [{:keys [t data]}] {:t t :data {:pos (zipmap [:x :y :z] (:pos data)) :kind :chest}})))))
+  (let [p (:primitives c)]
+    (max (- (animals/carry c) (foods/stock-points (u/inventory p))) (- foods/top-up-food (.-food (.self p))))))
+
+(defn home-entries
+  "The home food (home-food/sources, the one list a trip's food is counted from) this call takes for the points it still
+  wants (cost.food/fetchable), in that order, as :food-source-shaped entries {:data {:pos :kind :box :crops}}: chests
+  the body booked food in, its own fields' ripe crops, its own pens' surplus."
+  [c]
+  (map (fn [s] {:data (select-keys s [:pos :kind :box :crops])})
+       (food/fetchable (home-food/sources c (u/self-pos c)) (wanted-points c))))
 
 (defn usable-entries
-  "The :food-source entries within ::source-radius and the chests booked with food within ::stock-radius, newest first,
-  not tried in this job and not another's chest."
+  "The :food-source entries within ::source-radius, newest first, then home-entries, not tried in this job and not
+  another's chest."
   [c]
   (let [tried (set (:tried-sources (ctx/mem c)))
-        noted (filter (fn [{:keys [data]}] (<= (u/dist (u/self-pos c) (:pos data)) (settings/get settings ::source-radius))) (ctx/entries c :food-source))
+        noted (->> (ctx/entries c :food-source)
+                   (filter (fn [{:keys [data]}] (<= (u/dist (u/self-pos c) (:pos data)) (settings/get settings ::source-radius))))
+                   (sort-by :t >))
         known (set (map (comp :pos :data) noted))]
-    (->> (concat noted (remove #(known (:pos (:data %))) (stock-entries c)))
-         (sort-by :t >)
+    (->> (concat noted (remove #(known (:pos (:data %))) (home-entries c)))
          (filter (fn [{:keys [data]}]
                    (and (not (tried (:pos data)))
                         (not (foreign-chest? c data))))))))
 
 (defn known-source
-  "The newest usable :food-source entry's data (see usable-entries)."
+  "The first usable entry's data (see usable-entries)."
   [c]
   (:data (first (usable-entries c))))
-
-(defn fresh-source
-  "known-source, when its entry is strictly newer than the latest :hungry
-  entry: a source the last fruitless search never had in front of it."
-  [c]
-  (let [{source :data learned :t} (first (usable-entries c))
-        gave-up (:t (ctx/latest c :hungry))]
-    (when (and source learned gave-up (> learned gave-up))
-      source)))
 
 (defn box-middle [[lo hi]]
   (zipmap [:x :y :z] (map #(js/Math.floor (/ (+ %1 %2) 2)) lo hi)))

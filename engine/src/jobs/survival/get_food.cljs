@@ -38,11 +38,13 @@
          to pay for making one (jobs.lib.cost/cook-worth?): cook it (the smelt job, which fetches a furnace and fuel, waiting out the cook in
          the round), then eat it. Done before eating unless a danger is sensed or food is 0 and health would not outlast the cook plus cook's ::cook-margin-hp. Not while the night
          handler holds. A failed cook is not retried in this job (jobs.survival.get-food.cook).
-  :source  The newest :food-source entry {:pos :kind} within ::source-radius, or a chest it booked food in (memory :fetch/stock) within sources' ::stock-radius (256), reached by go-to:
+  :source  The newest :food-source entry {:pos :kind} within ::source-radius, else its home food (jobs.lib.home-food/sources, the list a trip's food is counted from) worth its walk for the points still wanted (cost.food/worth-fetching?), cheapest a point first, reached by go-to:
          :farm: dig its mature crops (blocks.dig, which collects the drops). It does not replant.
          :chest: withdraw its best food (storage.withdraw); with no food but 3 or more wheat, wheat in multiples of 3,
          enough for the hunger, for :bake.
          :animals: hunt there (:hunt).
+         :crop: its own field's ripe crops (a 16-block column of them), cut and replanted (jobs.farm.harvest).
+         :pen: its own pen's surplus, hunted there (:pen's cull).
          A chest found empty or a source go-to cannot reach is forgotten; a farm with nothing ripe is passed over.
   :collect  Harvest items lying within 8 blocks (collect-drops).
   :hunt  The nearest passive food animal within ::hunt-radius (combat.hunt over the animal's kind, which collects its drops).
@@ -285,6 +287,14 @@
                :continue :continue
                :far (sources/bury-source! c (:pos source))
                (do (sources/pass-over! c (:pos source)) (await (hunt! c false))))
+    :crop (do (sources/pass-over! c (:pos source))
+              (let [{lo :min hi :max} (:box source)
+                    e (await (child/run!* c :home-field 'jobs.farm.harvest {:area {:min (zipmap [:x :y :z] lo) :max (zipmap [:x :y :z] hi)} :crops (:crops source)}))]
+                (if (= :continue e) :continue :again)))
+    :pen (case (await (sources/go-near! c (:pos source)))
+           :continue :continue
+           :far (sources/bury-source! c (:pos source))
+           (do (sources/pass-over! c (:pos source)) (or (await (hunt! c true)) :again)))
     nil))
 
 (defn ^:async pen!
