@@ -1158,3 +1158,23 @@
     (is (< 0.0165 dies 0.0178))
     (is (= 1510 (js/Math.round death)))
     (is (< 2.7 (price/stay-hp c 0.005 10) 2.9))))
+
+(defn trip-ctx
+  "A ctx at the origin carrying bread loaves, its job quoting a trip of figure, with a booked chest of 64 bread at chest (nil: none)."
+  [bread figure chest]
+  (let [data (cond-> mem/empty-data
+               chest (mem/add-entry :fetch/stock {:t 0 :data {:pos chest :items {"bread" 64}}} {:cap 64 :ttl :forever}))]
+    {:primitives (tu/fake {:inventory [{:name "bread" :count bread}]}) :view (fn [] {:data data :now 1000})
+     :def {:quote-of (constantly {:uses {:job-time figure}})}}))
+
+(def trip-fed (ready/trip-fed ready/ok (constantly {:x 40 :y 64 :z 0})))
+
+(deftest a-long-trip-fetches-its-food-from-home-before-it-starts
+  (let [[kind _ {:keys [look-first]}] (trip-fed (trip-ctx 2 [0 1800 ##Inf] [3 64 0]))
+        [job {:keys [carry explore]}] look-first]
+    (is (= [:ok 'jobs.survival.get-food false] [kind job explore]))
+    (is (< (/ 1800 60) carry (* 64 5)) "more than the mean trip's hunger, no more than the chest and the pack hold"))
+  (are [c] (nil? (:look-first (nth (trip-fed c) 2)))
+    (trip-ctx 40 [0 1800 ##Inf] [3 64 0])
+    (trip-ctx 2 [0 1800 ##Inf] nil)
+    (trip-ctx 2 [0 30 60] [3 64 0])))

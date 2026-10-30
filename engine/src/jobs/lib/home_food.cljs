@@ -148,3 +148,18 @@
   its home food (sources from far) and the trip with-prices."
   ([c] (carry-points c (chain-trip c)))
   ([c trip] (food/carry-points (sources c (:far trip)) (with-prices c trip))))
+
+(defn fetch-points
+  "The food points to fill the pack to before trip, or nil: the trip's food (food/trip-points), at most the carried food
+  and all the home food, when the carried food is less and the fall in the trip's food/trip-cost pays the fetch: a
+  trip (cost/trip) and the walk to the nearest home food from here (cost/walk-cost)."
+  [c trip]
+  (let [home (filter (comp pos? :points) (sources c (:far trip)))
+        priced (food/priced-trip home (with-prices c trip))
+        had (foods/stock-points (u/inventory (:primitives c)))
+        to (min (food/trip-points priced) (+ had (reduce + (map :points home))))
+        here (u/self-pos c)
+        fetch (when (seq home)
+                (+ (cost/trip) (:cost (cost/walk-cost {:distance (apply min (map #(u/dist here (:pos %)) home))}))))]
+    (when (and fetch (> to had) (> (- (food/trip-cost priced had) (food/trip-cost priced to)) fetch))
+      to)))

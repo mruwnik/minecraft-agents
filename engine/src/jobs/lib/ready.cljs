@@ -17,6 +17,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.risk :as risk]
             [jobs.lib.danger :as danger]
+            [jobs.lib.home-food :as home-food]
             [jobs.lib.hostile-loss :as hostile-loss]
             [jobs.lib.price :as price]
             [jobs.lib.dawn :as dawn]
@@ -613,6 +614,27 @@
         (fit c)))))
 
 (def fed-fit? "fed-fit-for a job that works a place for a while (:work)." (fed-fit-for :work))
+
+(defn own-trip
+  "The trip of the job c is a check of: home-food/quote-trip of its own quote (a quote-of export that answers at once),
+  ending at place (a fn of c, or nil); nil when it has none."
+  [c place]
+  (let [q (some-> (get-in c [:def :quote-of]) (apply [c]))]
+    (when (map? q) (home-food/quote-trip c q place))))
+
+(defn trip-fed
+  "fit, and while that is ok, ok with a jobs.survival.get-food child (:explore false) as its :look-first call while the
+  trip's food (home-food/fetch-points of own-trip, ending at place) pays a fetch from home: the engine runs it only
+  before the start, so a trip leaves home with its food; a fetch that fails ends the call condition-failed :look-first."
+  [fit place]
+  (fn [c]
+    (let [s (fit c)
+          to (when (= :ok (first s))
+               (some->> (own-trip c place) (home-food/fetch-points c)))]
+      (if to
+        (contract/ok :trip-food (str "fetching food for the trip first: " to " points")
+                     :look-first ['jobs.survival.get-food {:carry to :explore false}])
+        s))))
 
 (defn fit-to-forage
   "The fit? of a job that looks for food: fit?, but a :low-health wait is lifted while the body can not heal (cannot-heal?), else it would never end."

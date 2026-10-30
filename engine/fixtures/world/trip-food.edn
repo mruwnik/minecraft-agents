@@ -1,0 +1,22 @@
+;; A long trip fetches its food from home before it starts (jobs.lib.ready/trip-fed, jobs.lib.home-food/fetch-points).
+;; A mine for 64 iron ore with none in sight: about 6 s an item, open-ended, its far end unknown, so running out is priced
+;; at a death and the trip's food is far more than 2 loaves.
+;; Should-succeed: 2 loaves and a chest of bread it booked 4 blocks off: get-food takes bread from the chest before the mine's work.
+;; Should-fail: 30 loaves cover the trip: no bread is taken.
+{:defaults
+ {:time :any
+  :tags [:mine :food :trip]
+  :blocks [[:set [8 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:bread\",count:40}]}"]]
+  :memory [{:kind :fetch/stock :data {:pos #at [8 0 16] :items {"bread" 40}} :policy {:cap 64 :ttl :forever}}]
+  :body {:at [4.5 0 16.5] :inventory [["stone_pickaxe" 1] ["iron_sword" 1] ["bread" 2]] :effects [["resistance" 600 4]] :settle-s 2}
+  :limit-s 90}
+ :cases
+ [{:name "a-mine-leaves-home-with-bread-from-the-stocked-chest"
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :count 64 :level false :tunnel-length 0 :radius 8})]]
+   :expect [{:event {:source :job :kind :food.took-from-chest} :within-s 60}]
+   :after [[:item "bread" [:>= 10]]]}
+  {:name "a-mine-with-bread-for-its-trip-takes-none"
+   :body {:inventory [["stone_pickaxe" 1] ["iron_sword" 1] ["bread" 30]]}
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :count 64 :level false :tunnel-length 0 :radius 8})]]
+   :expect [{:no-event {:source :job :kind :food.took-from-chest} :for-s 40}]
+   :after [[:item "bread" 30]]}]}
