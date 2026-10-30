@@ -117,12 +117,12 @@
           (is (empty? (filter #(= :no-tree (:reason %)) (f/events-of s :stopped))) "not stopped no-tree before that"))))))
 
 (def sealed-cave
-  "Stone to y 70 over x -22..48, z -22..22, with a hollow 5x2x5 inside it where the body stands: no way out but through rock. A tree stands on the stone 40 blocks off."
+  "Stone to y 70 over x -22..48, z -22..22, with a hollow 5x2x5 inside it where the body stands: no way out but through rock. A tree stands on the stone on each side, 20 to 24 blocks off: which way the search sorts first must not decide the test."
   (merge (into {} (for [x (range -22 49) z (range -22 23) y (range 63 71)
                          :when (not (and (<= -2 x 2) (<= -2 z 2) (<= 64 y 65)))]
                     [(str x "," y "," z) (if (= y 63) "andesite" "stone")]))
-         (into {} (for [y [71 72 73 74]] [(str "24," y ",0") "oak_log"]))
-         {"24,75,0" "oak_leaves"}))
+         (into {} (for [[x z] [[24 0] [-20 0] [0 20] [0 -20]] y [71 72 73 74]] [(str x "," y "," z) "oak_log"]))
+         {"24,75,0" "oak_leaves" "-20,75,0" "oak_leaves" "0,75,20" "oak_leaves" "0,75,-20" "oak_leaves"}))
 
 (deftest a-body-sealed-in-a-cave-stairs-up-to-the-sky-before-it-looks-for-trees
   (async done
