@@ -377,18 +377,18 @@
 (defn ^:async dig-to!
   "Dig the route to item (jobs.lib.dig-route). A dig that fails after others of its route were dug (a cell beyond the light was
   never seen) is planned again from where the body now stands, at most ::replans times; when every route costs more than the
-  drop is worth, a walk onto the remembered frontier toward it (seen-sections/toward) and a plan from there. :dug when every cell is open now,
+  drop is worth, a walk onto the remembered frontier toward it (seen-sections/toward) and a plan from there, the walk's steps booked out of the worth the next plan gets. :dug when every cell is open now,
   :continue while a dig waits on the world, else why not: :no-route, :too-big (the route search outgrew the heap) or the failed dig's outcome (:refused, :cannot, :unreachable ...)."
   [c item]
   (let [p (:primitives c)]
-    (loop [pass 0]
+    (loop [pass 0 spent 0]
       (let [from (u/cell-vec (u/self-pos c))
             _ (await (look-pit! c from (item-cell item)))
             seen-name (fn [[x y z]] (u/seen-name p {:x x :y y :z z}))
             wanted (set (:items (:args c)))
             yield (fn [n _] (let [i (blocks/item-name {:block n})] (if (contains? wanted i) (cost/worth-to nil [i] (u/self-pos c)) 0)))
             prices (dig-route/by-share (dig-route/less-yield (dig-route/body-prices p #(nil? (seen-name %))) yield) (escape/dig-share-fn p))
-            worth (item-worth c item)
+            worth (- (item-worth c item) spent)
             r (drop-route prices worth (:id c) seen-name (look/unseen-solid?-fn p) from (item-cell item))]
         (case (:problem r)
           :searching :continue
@@ -396,7 +396,7 @@
           :dearer (if-let [f (seen-sections/toward p from (item-cell item) (:max-fall prices) (:step-s prices) (:unseen-step-s prices) worth)]
                     (case (await (walk-onto! c f worth))
                       :continue :continue
-                      :arrived (recur pass)
+                      :arrived (recur pass (+ spent (* (:step-s prices) (seen-sections/walk-steps from f))))
                       :no-route)
                     :no-route)
           :too-big :too-big
@@ -405,11 +405,11 @@
             (cond
               (= :dug d) :dug
               (and (pos? (:n d)) (< pass (replans)) (not= :continue (:out d)))
-              (do (await (dig-look/look-at! c (:cell d))) (recur (inc pass)))
+              (do (await (dig-look/look-at! c (:cell d))) (recur (inc pass) spent))
               (= :unseen (:out d))
               (let [l (await (light-here! c))]
                 (if l
-                  (if (= :continue l) :continue (do (await (look-pit! c from (item-cell item))) (recur pass)))
+                  (if (= :continue l) :continue (do (await (look-pit! c from (item-cell item))) (recur pass spent)))
                   :unseen))
               :else (:out d))))))))
 

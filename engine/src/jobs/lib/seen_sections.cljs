@@ -94,6 +94,11 @@
                               (.push out [x y z]))))))
         (vec out)))))
 
+(defn walk-steps
+  "Steps of a straight walk between two cells: the larger of the sideways and the vertical run; what a walk costs at least, times a step's seconds."
+  [[ax ay az] [bx by bz]]
+  (max (+ (js/Math.abs (- ax bx)) (js/Math.abs (- az bz))) (js/Math.abs (- ay by))))
+
 (defn toward
   "The remembered frontier cell (open, its head open, a seen floor that is not, a face neighbour never seen) to walk to and
   look from nearest goal: fewer steps from goal than from, within the memory's reach of from (perception's

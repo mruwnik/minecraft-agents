@@ -148,7 +148,7 @@
         {:keys [dig-s step-s]} (cut-prices c)
         name-at (fn [[x y z]] (or (u/seen-name p {:x x :y y :z z}) "stone"))
         price (fn [cell] (or (dig-s (name-at cell) cell) 0))
-        walk (fn [[ax ay az] [bx by bz]] (max (+ (js/Math.abs (- ax bx)) (js/Math.abs (- az bz))) (js/Math.abs (- ay by))))
+        walk seen-sections/walk-steps
         ;; what the search priced round the way: its cells, the ones touching them (a falling block over one, a liquid, an
         ;; opening beside it) and the cell dug, as the body saw them when it planned
         around (fn [cells] (set (for [[x y z] cells dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]] [(+ x dx) (+ y dy) (+ z dz)])))
