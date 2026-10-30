@@ -712,6 +712,17 @@
           (await (core/tick! eng))
           (is (= 1 (count (filter #(= :reverted (:kind %)) @seen)))))))))
 
+(deftest a-host-suspend-is-not-charged-as-round-time
+  (let [{:keys [eng clock]} (setup)
+        mono (atom @clock)
+        eng (assoc eng :mono #(deref mono))
+        m (base/mark eng)]
+    (swap! clock + 3600000)
+    (is (zero? (base/since eng m)) "the wall clock jumped an hour, the monotonic one stood still")
+    (swap! clock + 2000)
+    (swap! mono + 2000)
+    (is (= 2000 (base/since eng m)))))
+
 (deftest built-in-reflexes-cannot-be-removed
   (let [{:keys [eng]} (setup)]
     (core/register-reflex! eng {:trigger :hurt :builtin? true})

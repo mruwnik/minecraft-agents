@@ -85,20 +85,6 @@
 
 (defn now [eng] ((:now eng)))
 
-(defn mark
-  "Where a round's time is counted from: [game ms, CPU ms]."
-  [eng]
-  [(now eng) (if-let [cpu (:cpu eng)] (cpu) 0)])
-
-(defn elapsed
-  "The round time from mark m (nil: none) to mark n: the larger of the game time and the CPU time passed, so a loop
-  that never acts is charged under a frozen game clock, and a round whose game time already holds its CPU time (the
-  live wall clock) is not charged twice."
-  [n m]
-  (if m (max (- (first n) (first m)) (- (second n) (second m))) 0))
-
-(defn since [eng m] (elapsed (mark eng) m))
-
 (def suspend-gap-ms
   "Wall-clock time beyond the monotonic clock's that counts as a host suspend, not jitter."
   5000)
@@ -117,6 +103,20 @@
         (when (> excess suspend-gap-ms)
           (swap! (:state eng) update :clock-lag (fnil + 0) excess))))
     (- wall (:clock-lag @(:state eng) 0))))
+
+(defn mark
+  "Where a round's time is counted from: [wall ms less host suspends, CPU ms]."
+  [eng]
+  [(ttl-now eng) (if-let [cpu (:cpu eng)] (cpu) 0)])
+
+(defn elapsed
+  "The round time from mark m (nil: none) to mark n: the larger of the game time and the CPU time passed, so a loop
+  that never acts is charged under a frozen game clock, and a round whose game time already holds its CPU time (the
+  live wall clock) is not charged twice."
+  [n m]
+  (if m (max (- (first n) (first m)) (- (second n) (second m))) 0))
+
+(defn since [eng m] (elapsed (mark eng) m))
 
 (defn job-of
   "[def args] of instance inst, from its parsed spec."
