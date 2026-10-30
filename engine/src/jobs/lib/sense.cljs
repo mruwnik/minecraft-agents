@@ -7,6 +7,7 @@
   each cell at most once per run and body cell, and one look round per run and body cell for an area or entity query
   that found nothing, when its first look pays. A decision with no price takes no look. Only looks: never moves, digs or places, and sees nothing a player could not."
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.game :as game]
             [engine.perception :as perception]
@@ -179,6 +180,19 @@
                              (drop (cost/cell-looks saving (count other) (:looks (round-mem c) 0) 0) other)))
          in-sight (set asked)]
      {:pay (filterv #(and (in-sight %) (not (unpaid %))) cells) :unpaid (filterv unpaid cells) :walls walls :asked asked})))
+
+(defn paid-look-at
+  "The cells of cells a check's verdict waits on that a look round from here pays for (round-plan), the check's negative
+  ending the call: fail-price at the call's worth."
+  [c cells]
+  (:pay (round-plan c cells (fail-price c {:cells cells}))))
+
+(defn look-or-later
+  "A check's :look (reason, text) at the cells of cells a look pays for (paid-look-at), :later when none does."
+  [c reason text cells]
+  (if-let [paid (seq (paid-look-at c cells))]
+    (contract/look reason text :look-at (vec paid))
+    (contract/later reason (str text "; no look at them pays"))))
 
 (defn ^:async look-round!
   "The :look/around hook: look at the cells of cells (a :look status's :look-at) in sight (round-plan), then look-around! for
