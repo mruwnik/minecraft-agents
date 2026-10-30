@@ -174,10 +174,10 @@
   "(f)'s result with a look from here showing and making out every cell: the fake's perception has no loaded cell, so no
   line from the eye is clear."
   [f]
-  (let [shows look/look-shows? makes-out look/makes-out?]
+  (let [shows look/look-shows? makes-out look/makes-out-fn]
     (set! look/look-shows? (constantly true))
-    (set! look/makes-out? (constantly true))
-    (try (await (f)) (finally (set! look/look-shows? shows) (set! look/makes-out? makes-out)))))
+    (set! look/makes-out-fn (constantly (constantly true)))
+    (try (await (f)) (finally (set! look/look-shows? shows) (set! look/makes-out-fn makes-out)))))
 
 (defn blind
   "p with no seenBlocks: a body that has seen nothing, whatever the world holds."

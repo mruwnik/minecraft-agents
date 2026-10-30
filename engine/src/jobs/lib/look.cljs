@@ -882,25 +882,36 @@
 (defn seeing-needs
   "[sky block]: the least sky light alone and block light alone the body makes out under the sky now (perception's
   seeing-min), 16 for none."
-  [raw seeing-min]
-  (let [^js visible (light/table-now raw seeing-min)
-        least (fn [packed] (or (first (filter #(== 1 (aget visible (packed %))) (range 16))) 16))]
-    [(least #(bit-shift-left % 4)) (least identity)]))
+  ([raw seeing-min] (seeing-needs raw seeing-min (light/table-now raw seeing-min)))
+  ([raw seeing-min ^js visible]
+   (let [least (fn [packed] (or (first (filter #(== 1 (aget visible (packed %))) (range 16))) 16))]
+     [(least #(bit-shift-left % 4)) (least identity)])))
+
+(defn lit-or-near-fn
+  "(fn [[x y z]]) lit-or-near? for the body of primitives p, its light table, needs and light lookups built once; a
+  perception's memory is read at each call. Always false without a perception."
+  [p]
+  (let [per (aget p "perception") ^js raw (:raw per)]
+    (if-not (and per raw)
+      (constantly false)
+      (let [seeing-min (:seeing-min (:opts per))
+            ^js visible (light/table-now raw seeing-min)
+            light (remembered-light-fn p raw)
+            chance (lit-chance-fn p nil (seeing-needs raw seeing-min visible))]
+        (fn [[x y z]]
+          (boolean
+           (when-let [^js eye (.eye raw)]
+             (or (<= (js/Math.hypot (- (+ x 0.5) (.-x eye)) (- (+ y 0.5) (.-y eye)) (- (+ z 0.5) (.-z eye))) (near-of p))
+                 (if (or (>= (store/remembered-id (:st per) x y z) 0) (= [x y z] (feet-cell p)))
+                   (let [l (light x y z)] (and (>= l 0) (== 1 (aget visible l))))
+                   (> (chance x y z) 0.5))))))))))
 
 (defn lit-or-near?
   "Whether the cell [x y z] is lit enough for the body of primitives p to see it or within near-of, as it knows it: a
   seen cell by its remembered light (remembered-light-fn) under the sky now, an unseen one more likely so than not
-  (unseen-lit-chance-fn at seeing-needs). False without a perception."
-  [p [x y z]]
-  (boolean
-   (when-let [per (aget p "perception")]
-     (when-let [^js eye (some-> ^js (:raw per) .eye)]
-       (let [^js raw (:raw per)]
-         (or (<= (js/Math.hypot (- (+ x 0.5) (.-x eye)) (- (+ y 0.5) (.-y eye)) (- (+ z 0.5) (.-z eye))) (near-of p))
-             (if (or (>= (store/remembered-id (:st per) x y z) 0) (= [x y z] (feet-cell p)))
-               (let [l ((remembered-light-fn p raw) x y z)]
-                 (and (>= l 0) (== 1 (aget (light/table-now raw (:seeing-min (:opts per))) l))))
-               (> ((lit-chance-fn p nil (seeing-needs raw (:seeing-min (:opts per)))) x y z) 0.5))))))))
+  (unseen-lit-chance-fn at seeing-needs). False without a perception. Over many cells use lit-or-near-fn."
+  [p cell]
+  ((lit-or-near-fn p) cell))
 
 (defn face-clear?
   "Whether a line from the eye at (ex ey ez) to the cell [x y z]'s centre or to a face turned to the eye passes no cell
@@ -943,11 +954,17 @@
               (>= (.stateAt ^js (:raw per) x y z) 0)
               (face-clear? ex ey ez [x y z] (remembered-sight-blocks per))))))))
 
+(defn makes-out-fn
+  "(fn [cell]) makes-out? for the body of primitives p, its lit-or-near-fn built once; use it over many cells."
+  [p]
+  (let [lit? (lit-or-near-fn p)]
+    (fn [cell] (and (look-shows? p cell) (lit? cell)))))
+
 (defn makes-out?
   "Whether a look from where the body stands would make out the cell [x y z]: it shows (look-shows?) and is lit enough or
   near (lit-or-near?); a dark cell farther off shows only as dark."
   [p cell]
-  (and (look-shows? p cell) (lit-or-near? p cell)))
+  ((makes-out-fn p) cell))
 
 (defn dark-in-sight?
   "Whether a look at the cell {:x :y :z} would show it only dark: it shows (look-shows?) but is neither lit enough to see

@@ -8,6 +8,7 @@
             [engine.fake.raw-world :as fake-raw]
             [engine.path.blocks :as blocks]
             [engine.perception :as perception]
+            [engine.perception.light :as light]
             [engine.perception.rays :as rays]
             [engine.settings :as settings]
             [engine.test-util :as tu :refer [box]]
@@ -108,6 +109,18 @@
     (is (= 1 (lit? 1 64 0)) "daylight")
     (swap! (fake/state p) assoc :light-default [0 0])
     (is (= 0 ((look/see-lit-fn w) 1 64 0)) "dark")))
+
+(deftest lit-or-near-fn-builds-the-light-table-once-for-all-its-cells
+  (let [{:keys [w]} (sensed wall-world)
+        tables (atom 0)
+        table-now light/table-now
+        cells (for [x (range 1 6)] [x 64 0])]
+    (with-redefs [light/table-now (fn [& args] (swap! tables inc) (apply table-now args))]
+      (let [lit? (look/lit-or-near-fn w)
+            built @tables
+            each (doall (map lit? cells))]
+        (is (= built @tables) "asking the cells builds no table")
+        (is (= each (map #(look/lit-or-near? w %) cells)))))))
 
 (deftest a-masked-plan-at-night-prices-unseen-cells-once
   (let [{:keys [p w]} (sensed wall-world)]

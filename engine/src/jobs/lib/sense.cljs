@@ -268,7 +268,7 @@
                  fruitless (+ (count looked0) looks)]
              (if (or (>= (count looked) (max-looked)) (and (not (retry? v)) (not guessed)))
                [v looked surveyed looks]
-               (let [found (into [] (comp (filter #(look/makes-out? p %)) (take (- (max-looked) (count looked))))
+               (let [found (into [] (comp (filter (look/makes-out-fn p)) (take (- (max-looked) (count looked))))
                                  (targets p here (if guessed guessed (:cells reads)) looked))
                      k (if (and batch (not guessed)) (count found) (min (count found) (cost/redo-every redo-s)))
                      n (min k (cell-looks pr found fruitless (/ redo-s (max k 1))))
