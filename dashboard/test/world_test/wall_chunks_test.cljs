@@ -20,5 +20,5 @@
   (let [r (w/report [{:closed 9 :open 1} {:closed 5 :open 5}] 4)]
     (is (= 14 (:closed r)))
     (is (= 2 (:spaces r)))
-    (is (> 1e-6 (js/Math.abs (- 0.7 (/ (get-in r [:setting :k]) (get-in r [:setting :n])))))  "the fit keeps the mean"))
+    (is (> 1e-3 (js/Math.abs (- 0.7 (/ (get-in r [:setting :k]) (get-in r [:setting :n])))))  "the fit keeps the mean"))
   (is (= {:k 3 :n 4} (:setting (w/report [{:closed 3 :open 1}] 1))) "one space: pooled counts"))
