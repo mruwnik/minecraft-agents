@@ -68,3 +68,12 @@
         report (fn [status] (:place (r/report (keep r/scan-line [(place 1000 status) (place 3000 "done")]))))]
     (is (= 1 (:retries (report "partial"))))
     (is (not (pos? (:retries (report "done") 0))) "a finished pillar is no failed try")))
+
+(defn retrying [job t]
+  (pr-str {:generation-id "g" :time-ms t :source :job :kind :go-to.retrying :context {:job-id job} :data {:reason :no-path :try 1}}))
+
+(deftest a-round-after-a-go-to-retrying-counts-as-its-own-kind-apart-from-the-pool
+  (let [{:keys [walk-round pooled]} (r/report (keep r/scan-line [(retrying "j1/go-to" 0) (retrying "j1/go-to" 2000) (walk "j1/go-to" 5000 true)
+                                                                 (walk "j2/go-to" 0 false) (walk "j2/go-to" 4000 true)]))]
+    (is (= {:won 2 :retries 3 :calls 2} (select-keys walk-round [:won :retries :calls])) "the retrying rounds and the results that follow")
+    (is (= {:won 1 :retries 1 :calls 1} (select-keys pooled [:won :retries :calls])) "only the walk's own retry pools")))

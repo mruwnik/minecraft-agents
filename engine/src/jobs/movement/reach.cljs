@@ -29,7 +29,7 @@
   stair down and the bridge from where the body stands: when the cheaper of them is no dearer than go-to's own way it is
   built (jobs.access.stair :dir :down, jobs.access.bridge) and the next round walks on; else the whole go-to runs once with
   all the :ways it allows and its ending is this job's. A span that changed nothing is not tried again, and
-  the whole go-to runs once the next one is not worth its price (cost/try-again? :walk of the spans that changed nothing in a row). Other endings of the walk (a limit, a refused condition, a danger) pass up unchanged.
+  the whole go-to runs once the next one is not worth its price (cost/try-again? :walk-round of the spans that changed nothing in a row). Other endings of the walk (a limit, a refused condition, a danger) pass up unchanged.
   :ways (default all) are go-to's plus :bridge; :stair covers the stair down. Every cell a span cuts or fills is checked
   against zones and plans (the cells go-to's :ignore-zones? lets through), natural blocks are cut only with :stair.
   Ends: done {:arrived true}; go-to's ending otherwise, with it as :because. :continue while a child waits on the world.
@@ -200,7 +200,7 @@
   (await (look-ahead! c (feet-of c)))
   (let [m (ctx/mem c)
         goal (mapv #(js/Math.floor %) ((juxt :x :y :z) (goal-of c)))
-        span (when (or (zero? (u/failures c)) (cost/try-again? c :walk)) (span-way c (feet-of c) goal (:skip m #{})))]
+        span (when (or (zero? (u/failures c)) (cost/try-again? c :walk-round)) (span-way c (feet-of c) goal (:skip m #{})))]
     (when span
       (ctx/emit! c :reach.span :info {:why (walk-why e) :step (:step (or (:then span) span)) :approach (= :approach (:step span)) :at (feet-of c) :text (str "no way on foot: " (name (:step span)) (when (= :approach (:step span)) " to where a stair can start"))}))
     (if (and (not span) (= #{:walk} (disj (set (or (:ways (ctx/frozen-call c)) ways)) :bridge)))

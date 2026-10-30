@@ -401,9 +401,9 @@
 
 (defn learn-again?
   "Whether a failed try after tries in a row (a round that learned nothing near) is tried again: within the call's tries
-  and while another is worth its price (cost/try-again? :walk)."
+  and while another is worth its price (cost/try-again? :walk-round)."
   [c tries]
-  (and (< tries (max-blocked)) (< tries (ctx/own-tries c)) (pos? (ctx/tries-left c)) (cost/try-again? c :walk {:fails tries})))
+  (and (< tries (max-blocked)) (< tries (ctx/own-tries c)) (pos? (ctx/tries-left c)) (cost/try-again? c :walk-round {:fails tries})))
 
 (defn surface-descent
   "The price (s per block) of a plan step down for this round, or nil: the body is not under ground and the goal (a cell,

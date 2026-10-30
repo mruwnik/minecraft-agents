@@ -8,7 +8,7 @@
   fails), :respond respond-to-hostile's :hostile.call (a call that changed nothing fails), :risky-stay jobs.lib.near/risky-wait!'s
   events (:near.risky-wait a refusal, :near.risky-over the stay allowed after one), :comb-look jobs.apiary.harvest's look
   for comb (:apiary.comb-wait a look that took none, :apiary.comb-over a look that took some after one), :kit-later jobs.items.get-kit's bill after a :later stop (:kit.later-wait a stop rested on, :kit.later-over a bill round that ended otherwise after one); :pooled all kinds' tries together,
-  the prior of a kind with none counted.
+  the prior of a kind with none counted. :walk-round is one round inside a go-to: a go-to.retrying (a fruitless round that plans again) fails, and a go-to result ends the run (won when it arrived); the pooled fit leaves it out.
   Pure parts: scan-line, retries, report."
   (:require [clojure.string :as str]
             [world-test.field-passes :as passes]))
@@ -42,6 +42,9 @@
 
       (str/includes? line ":kind :hostile.call")
       {:kind :respond :key (key) :t (t) :edge :end :fail? (str/includes? line ":changed false")}
+
+      (str/includes? line ":kind :go-to.retrying")
+      {:kind :walk-round :key (key) :t (t) :edge :end :fail? true}
 
       (and (str/includes? line ":kind :result") (re-find #":arrived (true|false)" line))
       {:kind :walk :key (key) :t (t) :edge :end :fail? (= "false" (field line #":arrived (true|false)"))})))
@@ -77,8 +80,9 @@
   kind with retries but no fitted spread (too few calls) keeps its pooled mean at the mean pseudo-count total of the kinds
   that did fit; with none fitted, its pooled counts. :pooled fits all kinds' tries together."
   [rows]
-  (let [fits (fit rows)
-        all (mapcat (fn [{:keys [kind tries]}] (map #(update % :key conj kind) tries)) fits)
+  (let [rows (concat rows (for [r rows :when (and (= :walk (:kind r)) (= :end (:edge r)))] (assoc r :kind :walk-round)))
+        fits (fit rows)
+        all (mapcat (fn [{:keys [kind tries]}] (map #(update % :key conj kind) tries)) (remove #(= :walk-round (:kind %)) fits))
         all-shares (for [[_ ts] (group-by :key all)] (/ (count (filter :won? ts)) (count ts)))
         spreads (keep :spread fits)
         pooled (when (seq spreads) (/ (reduce + spreads) (count spreads)))]
