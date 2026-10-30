@@ -5,7 +5,7 @@
             [engine.game :as game]
             [jobs.items.obtain.base :refer [bill-item-s bill-of carried-of]]
             [jobs.lib.armour :as armour]
-            [jobs.items.recipes :as recipes]
+            [jobs.lib.recipes :as recipes]
             [jobs.lib.game-facts :as facts]
             [jobs.lib.need :as need]
             [jobs.lib.next-call :as next-call]

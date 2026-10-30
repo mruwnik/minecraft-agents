@@ -6,7 +6,7 @@
             [jobs.items.obtain.plan :refer [gather-plan]]
             [jobs.items.obtain.seen :refer [seen-blocks-of seen-of]]
             [jobs.items.obtain.table :refer [animal? gather-needs material-blocks source-opts]]
-            [jobs.items.recipes :as recipes]
+            [jobs.lib.recipes :as recipes]
             [jobs.lib.game-facts :as facts]
             [jobs.lib.look :as look]
             [jobs.lib.next-call :as next-call]

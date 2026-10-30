@@ -55,8 +55,7 @@
    :on-lava {:doc ":seal: lava a dig lays open is filled with a carried block; :stop: the pit or pocket is dropped and the lava left" :spec #{:seal :stop} :default :seal}})
 
 (a/defargs settings
-  {::job-time-s {:default 300 :doc "Seconds a shut-in may take." :spec (a/num-in 0 nil)}
-   ::mean-s {:default 12 :doc "Seconds an enclosing is guessed to take, for the quote." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 300 :doc "Seconds a shut-in may take." :spec (a/num-in 0 nil)}})
 
 (def target [])
 
@@ -167,7 +166,7 @@
   :exposure-s what its price adds under fire to its quoted seconds, and :morning-s its :morning-s."
   [c]
   (let [[_ price risk seconds morning] (when-not (way/enclosed? c) (first (sort-by second (:costs (await (way-costs c))))))
-        s (if (way/enclosed? c) 0 (max (settings/get settings ::mean-s) (or price ##Inf)))
+        s (if (way/enclosed? c) 0 (max (night/mean-s) (or price ##Inf)))
         named? (fn [x] (and (number? x) (pos? x) (js/isFinite s)))]
     (cond-> {:uses {:job-time [s s (max (* 3 s) (settings/get settings ::job-time-s))]} :done (if (infinite? s) [0 0 0] [0 1 1])}
       (named? risk) (assoc :risk-s risk)

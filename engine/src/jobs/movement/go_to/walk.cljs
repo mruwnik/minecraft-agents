@@ -329,7 +329,7 @@
   mouth) or of its feet (a retreat's seal that shuts the body in, once the hostile is gone): one jobs.access.cleanup
   child takes them back: :again, so the walk is planned again. The cells the cleanup left for a known hostile (held
   :hostile-near or :danger: the shelter keeps the hostile out) are kept (mem :seal-kept): no escalation of the call cuts
-  them (holes/may-dig-fn), so the way out it prices goes another side."
+  them (own-builds/may-dig-fn), so the way out it prices goes another side."
   [c pos result]
   (when (and (ways/way? c :clear-seal) (#{:goal-enclosed :goal-cut-off :exhausted :out-of-sight :ladder-gap :start-enclosed} (some-> (:reason result) keyword)) (not (:seal-cleared (ctx/mem c))))
     (let [at (fn [[x y z]] {:pos {:x (js/Math.floor x) :y (js/Math.floor y) :z (js/Math.floor z)} :radius ledger/seal-clear-radius})

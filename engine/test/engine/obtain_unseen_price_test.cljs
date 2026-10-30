@@ -12,7 +12,7 @@
             [jobs.items.obtain.plan :as plan]
             [jobs.items.obtain.price :as price]
             [jobs.items.obtain.table :as table]
-            [jobs.items.recipes :as recipes]
+            [jobs.lib.recipes :as recipes]
             [jobs.lib.cost :as cost]
             [jobs.items.get-kit :as kit]))
 

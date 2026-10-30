@@ -42,7 +42,7 @@
             ["minecraft-data" :as minecraft-data]
             [clojure.set :as set]
             [clojure.string :as str]
-            [jobs.items.recipes :as recipes]
+            [jobs.lib.recipes :as recipes]
             [jobs.lib.cost.table :as tbl]
             [jobs.lib.cost.fight :as fight]
             [jobs.lib.cost.health :as health]
@@ -199,7 +199,7 @@
 
 (defn measured-worths
   "{item seconds} of the measured items (measured-worth :ores and :goals), as item-value :overrides for a goal;
-  cobblestone's for every stone tool material (jobs.items.recipes/stone-materials), as one gather takes whichever is seen."
+  cobblestone's for every stone tool material (jobs.lib.recipes/stone-materials), as one gather takes whichever is seen."
   [version]
   (let [{:keys [ores goals]} (measured-worth version)
         m (merge ores goals)]

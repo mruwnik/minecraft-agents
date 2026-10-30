@@ -5,7 +5,7 @@
             [jobs.lib.least :as least]
             [engine.args :as a]
             [jobs.items.shortfall :as craft]
-            [jobs.items.recipes :as recipes]
+            [jobs.lib.recipes :as recipes]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.game :as game]

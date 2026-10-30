@@ -18,7 +18,6 @@
             [jobs.lib.own-pen :as own-pen]
             [engine.ready-test :as rt]
             [jobs.lib.own-builds :as own-builds]
-            [jobs.movement.go-to.holes :as holes]
             [jobs.movement.go-to.restore :as restore]
             [jobs.lib.reserve :as reserve]
             [jobs.movement.go-to.escalate-choose :as ec]
@@ -294,12 +293,12 @@
                   pen/check (fn [o] (swap! checks inc) (check o))]
       (let [c (own-builds/with-own-pen c)
             back (cw/put-back-cost 0)
-            cut-s ((holes/own-cut-fn c) wall)]
-        (is (false? ((holes/may-dig-fn c) wall)) "the wall is spared unless its cut is chosen")
+            cut-s ((own-builds/own-cut-fn c) wall)]
+        (is (false? ((own-builds/may-dig-fn c) wall)) "the wall is spared unless its cut is chosen")
         (is (true? ((own-builds/own-fn c (constantly false)) wall "dirt")))
         (is (= (+ back (cost/herd-loss ["cow"] (+ back (cost/dig-cost "dirt")))) cut-s))
         (is (< back cut-s) "the herd may walk out while the gap stands open")
-        (is (zero? ((holes/own-cut-fn c) [3 62 0])) "natural ground beyond the wall costs no put-back")
+        (is (zero? ((own-builds/own-cut-fn c) [3 62 0])) "natural ground beyond the wall costs no put-back")
         (is (= 1 @checks))))))
 
 (def thick-pit-pen

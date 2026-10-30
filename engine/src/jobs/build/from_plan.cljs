@@ -1,7 +1,8 @@
 (ns jobs.build.from-plan
   (:require [jobs.lib.build.wood :as wood]
             [jobs.lib.reserve :as reserve]
-            [jobs.items.obtain.plan :as obtain-plan]
+            [jobs.lib.recipes :as recipes]
+            [engine.game :as game]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -353,14 +354,15 @@
 (defn hold-carried!
   "The carried units the plan's missing cells still need, reserved for the call's life, so a craft or smelt for another
   need (a furnace for a torch) does not spend them, nor the night its bed: the cell's own item, and the carried items
-  obtain's craft plan would turn into the rest (logs for planks). Each at the strength that prices a spent unit at
+  a craft chain would turn into the rest (logs for planks). Each at the strength that prices a spent unit at
   getting it back (reserve/replace-strength). The entries follow what is still missing."
   [c cells]
   (let [need (frequencies (keep :item (missing cells)))
         carried (storage/carried-totals (u/inventory (:primitives c)))
+        version (game/version-of (:primitives c))
         held (reduce (fn [m [item n]]
                        (let [have (min n (get carried item 0))
-                             crafted (when (< have n) (:uses (obtain-plan/craft-plan c [item] (- n have))))]
+                             crafted (when (< have n) (:uses (recipes/plan version (storage/usable-totals (u/inventory (:primitives c))) item (- n have) {:table? true})))]
                          (merge-with + m {item have} crafted)))
                      {} (sort need))
         wanted (for [[item n] (sort held) :let [k (min n (get carried item 0))] :when (pos? k)]

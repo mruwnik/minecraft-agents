@@ -28,8 +28,7 @@
             [jobs.lib.walk.world :as wworld]
             [jobs.movement.go-to.aim :as goal-aim]
             [jobs.movement.go-to.climb :as climb]
-            [jobs.lib.own-builds :refer [own-placed-fn]]
-            [jobs.movement.go-to.holes :refer [may-dig-fn]]
+            [jobs.lib.own-builds :refer [may-dig-fn own-placed-fn]]
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.tuning :refer [budget-near max-blocked max-route-s]]
             [jobs.movement.go-to.way-steps :as ways]))
@@ -386,7 +385,7 @@
 (defn route-answer
   "The dig-route answer {:dig :steps} of the cheapest way from feet cell from into goal (jobs.lib.dig-route priced by
   jobs.lib.cost: a step's walk-cost, a fall's hp (fall-damage at hp-cost, the falls the body survives), a block's dig-cost, a stair's step at least its stair-cost, a step's unseen cells at the unseen walk's price
-  (wworld/unseen-share), what each dig destroys (dig-route/body-prices: cost/destroyed-fn; a cell of the body's own builds at route-opts :own-s, holes/own-cut-fn), never a floor of the body's own stairs (route-opts :ways)), every cell to dig escape/diggable?
+  (wworld/unseen-share), what each dig destroys (dig-route/body-prices: cost/destroyed-fn; a cell of the body's own builds at route-opts :own-s, own-builds/own-cut-fn), never a floor of the body's own stairs (route-opts :ways)), every cell to dig escape/diggable?
   and may-dig?; :searching while route-opts :slice's search goes on; nil when there is none, when route-opts :spent
   holds [from goal] (a search search-bound dropped), or when its digging takes the
   body longer than max-route-s (blocks of the body's own, a scaffold it left, not counted) with what it carries, or with

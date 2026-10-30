@@ -14,11 +14,13 @@
             [jobs.survival.dig-in-cells :as dig-cells]))
 
 (a/defargs settings
-  {::take-back-value {:default 0.5 :doc "A placed block worth more than this each (jobs.lib.cost/item-value; dirt 0.35, cobblestone 0.85) is dug again and collected when the shelter is left by day." :spec (a/num-in 0 nil)}
+  {::mean-s {:default 12 :doc "Seconds an enclosing is guessed to take, for shut-in's quote." :spec (a/num-in 0 nil)}
+   ::take-back-value {:default 0.5 :doc "A placed block worth more than this each (jobs.lib.cost/item-value; dirt 0.35, cobblestone 0.85) is dug again and collected when the shelter is left by day." :spec (a/num-in 0 nil)}
    ::futile-radius {:default 8 :doc "Blocks around a site where a way failed that count as the same site." :spec (a/int-in 0 nil)}
    ::max-reseals {:default 3 :doc "Times a night shelter is sealed again at the cell it stands in before that site counts as failed: a seal that is gone again moments after it was placed is not sealed again for ever." :spec (a/int-in 1 nil)}
    ::take-back-gate-range {:default 2 :doc "A cheap seal block this near a door or fence gate some plan wants is taken back with the dear ones: it would box the gate in." :spec (a/int-in 0 nil)}})
 
+(defn mean-s [] (settings/get settings ::mean-s))
 (defn futile-radius [] (settings/get settings ::futile-radius))
 
 (def failed-policy {:cap 5 :ttl 600000})

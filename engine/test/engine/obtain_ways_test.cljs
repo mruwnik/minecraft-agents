@@ -18,7 +18,7 @@
             [jobs.items.craft :as craft]
             [jobs.lib.reserve :as reserve]
             [jobs.items.obtain.table :as table]
-            [jobs.items.recipes :as recipes]))
+            [jobs.lib.recipes :as recipes]))
 
 (defn cow [id x] {:id id :name "cow" :kind "passive" :pos {:x x :y 64 :z 0} :drops [{:name "beef" :count 1}]})
 

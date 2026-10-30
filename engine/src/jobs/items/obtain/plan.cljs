@@ -9,7 +9,7 @@
             [jobs.items.obtain.loose :as loose-way]
             [jobs.items.obtain.seen :refer [seen-of sheep-in-range shears-source]]
             [jobs.items.obtain.table :refer [gather-needs grass-seeds hand-dug leaves-of material-blocks need-way searchable? source-opts stalks wool-color wool?]]
-            [jobs.items.recipes :as recipes]
+            [jobs.lib.recipes :as recipes]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.cost :as cost]

@@ -25,7 +25,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.ready :as ready]
             [jobs.lib.shelter.inside :as sh-inside]
-            [jobs.items.recipes :as recipes]))
+            [jobs.lib.recipes :as recipes]))
 
 (defn ore-world
   "Ore blocks south of the body (where it faces, so the first sight pass sees them), carrying inv."

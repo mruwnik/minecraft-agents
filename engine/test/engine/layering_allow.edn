@@ -18,7 +18,6 @@
  {:from jobs.storage.haul :to jobs.storage.deposit :rule :job-requires-same-family-job :why "a sibling job required for its code: move the shared part to jobs.lib or the family helper, and call the job as a child"}
  {:from jobs.storage.haul :to jobs.storage.withdraw :rule :job-requires-same-family-job :why "a sibling job required for its code: move the shared part to jobs.lib or the family helper, and call the job as a child"}
  {:from jobs.strip.all :to jobs.strip.site :rule :job-requires-same-family-job :why "a sibling job required for its code: move the shared part to jobs.lib or the family helper, and call the job as a child"}
- {:from jobs.survival.bed-down :to jobs.survival.wall-in :rule :job-requires-same-family-job :why "a sibling job required for its code: move the shared part to jobs.lib or the family helper, and call the job as a child"}
  {:from jobs.survival.extinguish :to jobs.survival.eat :rule :job-requires-same-family-job :why "a sibling job required for its code: move the shared part to jobs.lib or the family helper, and call the job as a child"}
  {:from jobs.survival.get-food :to jobs.survival.eat :rule :job-requires-same-family-job :why "a sibling job required for its code: move the shared part to jobs.lib or the family helper, and call the job as a child"}
  {:from jobs.survival.log-out :to jobs.survival.shut-in :rule :job-requires-same-family-job :why "a sibling job required for its code: move the shared part to jobs.lib or the family helper, and call the job as a child"}

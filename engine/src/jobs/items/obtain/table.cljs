@@ -2,7 +2,7 @@
   "Which job gathers which raw item (gather-needs), the item families it knows, and the recipe options of the sources."
   (:require [engine.game :as game]
             [jobs.items.obtain.base :refer [sapling-leaf-limit seen-radius]]
-            [jobs.items.recipes :as recipes]
+            [jobs.lib.recipes :as recipes]
             [jobs.lib.game-facts :as facts]
             [jobs.lib.blocks :as b]
             [jobs.lib.trees :as trees]

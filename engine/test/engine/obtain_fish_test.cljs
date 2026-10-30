@@ -12,7 +12,7 @@
             [jobs.items.obtain :as obtain]
             [jobs.items.obtain.seen :as seen]
             [jobs.items.obtain.table :as table]
-            [jobs.items.recipes :as recipes]))
+            [jobs.lib.recipes :as recipes]))
 
 (defn ^:async obtain [world args]
   (let [{:keys [eng p]} (lt/setup world)

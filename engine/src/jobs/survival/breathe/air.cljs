@@ -14,12 +14,11 @@
             [jobs.lib.swim :as swim]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.cost :as cost]
-            [jobs.lib.own-builds :refer [own-build-fn]]
+            [jobs.lib.own-builds :as own-builds :refer [own-build-fn own-cut-fn]]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
-            [jobs.movement.go-to.holes :as holes :refer [own-cut-fn]]
             [jobs.survival.breathe-pocket :as pocket]))
 
 (a/defargs settings
@@ -98,7 +97,7 @@
   block (:not-natural)."
   [c]
   (let [p (:primitives c)
-        may-dig? (holes/may-dig-fn (assoc-in c [:args :ignore-zones?] false) true)
+        may-dig? (own-builds/may-dig-fn (assoc-in c [:args :ignore-zones?] false) true)
         own-build (own-build-fn c)
         own-cut (own-cut-fn c)
         self (.self p)

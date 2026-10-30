@@ -34,7 +34,6 @@
             [jobs.lib.util :as u]
             [jobs.lib.walk-pick :as pick]
             [jobs.survival.night.sites :as sites]
-            [jobs.survival.shut-in :as shut-in]
             [jobs.survival.shut-in-night :as sin]
             [jobs.survival.plug-way :as way]))
 
@@ -185,7 +184,7 @@
   (cond
     (not (#{:cave :ground} kind)) (sin/shelter-quote {:uses {:job-time [0 0 0]}})
     (js/isFinite (:seconds here)) here
-    :else (sin/shelter-quote {:uses {:job-time [0 (settings/get shut-in/settings ::shut-in/mean-s) 0]}})))
+    :else (sin/shelter-quote {:uses {:job-time [0 (sin/mean-s) 0]}})))
 
 (defn ^:async answers
   "{answer seconds}: the ways through the night from here, each priced by cost/night-way-s (the night's work it loses, its tolls

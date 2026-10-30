@@ -46,8 +46,8 @@
             [jobs.movement.go-to.escalate-choose :refer [dig-left-s range-opts cheaper-fill climb-on? dive-climb-on? dive? escalate-reason? escalate? fetch-tool? gap-fill
                                                          goal-way dig-leg dig-way drop-fill out-of-sight? price frontier-way gap-dig gap-walled? goal-lava? leg-ends goal-walled? own-stair route-cells shelter-exit? skips sprint-only?
                                                          route-owner route-slice routes-searching! searching? searching-ends keep-routes! forget-routes! search-opts way-guesses past-worth?]]
-            [jobs.lib.own-builds :refer [own-dig-fn own-fn own-placed-fn with-own-pen]]
-            [jobs.movement.go-to.holes :refer [forget-dug-own! hole-tag may-dig-fn note-holes! own-cut-fn own-holes planned-cells]]
+            [jobs.lib.own-builds :refer [may-dig-fn own-cut-fn own-dig-fn own-fn own-placed-fn with-own-pen]]
+            [jobs.movement.go-to.holes :refer [forget-dug-own! hole-tag note-holes! own-holes planned-cells]]
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.search-bound :as search-bound]
             [jobs.movement.go-to.torch :as torch]
@@ -222,7 +222,7 @@
 
 (defn own-way
   "The way that cuts the body's own builds (own) when it beats base, the way that spares them: base is none, or a priced
-  way dearer (escalate-choose/price) than own's price plus each own cell's put-back (opts :own-s, holes/own-cut-fn).
+  way dearer (escalate-choose/price) than own's price plus each own cell's put-back (opts :own-s, own-builds/own-cut-fn).
   It is marked :own-cut (its holes are put back at once, its child may dig own plans). {:step :searching} while own's
   search goes on and base is none; else nil."
   [p feet base own {:keys [own-s]}]

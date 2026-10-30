@@ -24,7 +24,7 @@ const eyeDistance = (bot, block) => {
 
 
 // Vanilla takes any member of a tag (#planks) in each slot, but minecraft-data lists one recipe per member. standIns
-// ({name: [names]}, from jobs.items.recipes/interchange) names the members that stand in for each other: a slot takes
+// ({name: [names]}, from jobs.lib.recipes/interchange) names the members that stand in for each other: a slot takes
 // any of them, so 7 cherry + 1 oak plank make a chest. Returns a runnable variant filled from what is carried (most
 // plentiful member first), or null.
 const slotsOf = r => r.inShape ? r.inShape.flat() : r.ingredients
