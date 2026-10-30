@@ -365,7 +365,7 @@
 
 (def safe? (price/staying :long (ready/dark-near-ok torch-way place (ready/safe-at-by-night place))))
 
-(def fit? (ready/fit-for :long))
+(def fit? (ready/fed-fit-for :long))
 
 (def can-start? (cond/and bad-segment not-now))
 

@@ -593,12 +593,16 @@
   (let [self (.self (:primitives c))]
     (and (risk/too-hurt? (.-health self) (.-food self) category (cost/death-s (:primitives c) (ctx/view c))) (cannot-heal? c))))
 
-(defn fed-fit?
-  "fit?, and later :low-health while hurt-cannot-heal? for its :work: a hurt body that only food heals gets food before work that roams."
-  [c]
-  (if (hurt-cannot-heal? c :work)
-    (contract/later :low-health "hurt, and only food heals the body: food first")
-    (fit? c)))
+(defn fed-fit-for
+  "fit-for category, and later :low-health while hurt-cannot-heal? for that category: a hurt body that only food heals gets food before the work."
+  [category]
+  (let [fit (fit-for category)]
+    (fn [c]
+      (if (hurt-cannot-heal? c category)
+        (contract/later :low-health "hurt, and only food heals the body: food first")
+        (fit c)))))
+
+(def fed-fit? "fed-fit-for a job that works a place for a while (:work)." (fed-fit-for :work))
 
 (defn fit-to-forage
   "The fit? of a job that looks for food: fit?, but a :low-health wait is lifted while the body can not heal (cannot-heal?), else it would never end."

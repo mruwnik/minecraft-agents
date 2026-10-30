@@ -22,6 +22,15 @@
             [jobs.movement.walk-look :as walk-look]
             [jobs.access.stair :as stair]
             [jobs.access.tunnel :as tunnel-job]
+            [jobs.gather.shaft-descent :as shaft-descent]
+            [jobs.strip.haul :as strip-haul]
+            [jobs.strip.corridor :as strip-corridor]
+            [jobs.strip.base :as strip-base]
+            [jobs.strip.all :as strip-all]
+            [jobs.strip.smelt :as strip-smelt]
+            [jobs.build.rail-line :as rail-line]
+            [jobs.build.path :as path]
+            [jobs.build.pen :as pen]
             [jobs.build.light-area :as light-area]
             [jobs.build.from-plan.light :as fp-light]
             [jobs.access.toggle :as toggle]
@@ -381,10 +390,30 @@
     :up :ok
     :down :later))
 
-(deftest a-tunnel-waits-for-food-when-hurt-and-only-food-heals
-  (are [world expected] (= expected (first (tunnel-job/fit? (ctx-of (merge at-origin world)))))
-    {:self {:pos {:x 0 :y 64 :z 0} :health 3 :food 11}} :later
-    {:self {:pos {:x 0 :y 64 :z 0} :health 20 :food 11}} :ok))
+(deftest a-long-dig-or-build-waits-for-food-when-hurt-and-only-food-heals-and-keeps-its-long-line-when-fed
+  (are [fit? world expected] (= expected (first (fit? (ctx-of (merge at-origin world)))))
+    tunnel-job/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3 :food 11}} :later
+    tunnel-job/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3.9 :food 11} :inventory [{:name "bread" :count 1}]} :later
+    tunnel-job/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 20 :food 11}} :ok
+    shaft-descent/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3 :food 11}} :later
+    shaft-descent/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3.9 :food 11} :inventory [{:name "bread" :count 1}]} :later
+    strip-haul/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3 :food 11}} :later
+    strip-haul/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3.9 :food 11} :inventory [{:name "bread" :count 1}]} :later
+    strip-corridor/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3 :food 11}} :later
+    strip-corridor/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3.9 :food 11} :inventory [{:name "bread" :count 1}]} :later
+    strip-base/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3 :food 11}} :later
+    strip-base/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3.9 :food 11} :inventory [{:name "bread" :count 1}]} :later
+    strip-all/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3 :food 11}} :later
+    strip-all/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3.9 :food 11} :inventory [{:name "bread" :count 1}]} :later
+    strip-smelt/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3 :food 11}} :later
+    strip-smelt/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3.9 :food 11} :inventory [{:name "bread" :count 1}]} :later
+    rail-line/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3 :food 11}} :later
+    rail-line/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3.9 :food 11} :inventory [{:name "bread" :count 1}]} :later
+    path/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3 :food 11}} :later
+    path/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3.9 :food 11} :inventory [{:name "bread" :count 1}]} :later
+    pen/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3 :food 11}} :later
+    pen/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3.9 :food 11} :inventory [{:name "bread" :count 1}]} :later
+    pen/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 20 :food 11}} :ok))
 
 (deftest a-job-whose-checks-default-to-armed-and-healthy-runs-them-from-the-declared-forms
   (are [world expected] (= expected (first (ending/run-status (get registry/jobs 'jobs.access.cleanup) (ctx-of (merge at-origin world)))))

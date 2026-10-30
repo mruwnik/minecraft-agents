@@ -117,7 +117,7 @@
 
 (def safe? (price/staying :long (ready/safe-at-by-night (fn [c] (a/cell (:target (:args c)))) false true)))
 
-(def fit? ready/fed-fit?)
+(def fit? (ready/fed-fit-for :long))
 
 (def ways need/fetch-ways)
 
