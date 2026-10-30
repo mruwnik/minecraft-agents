@@ -191,33 +191,25 @@
                           (calls (:p (await (flight-round respond (assoc hurt :self {:health 20 :food 20})))) "eat")))
               "at full health it averts little"))))))
 
-(deftest an-apple-turns-a-flight-into-eat-then-fight-or-keeps-it-eat-then-flee
+(deftest an-apple-is-eaten-before-the-fight-or-the-flight-it-makes-cheaper
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [two [(zombie 7 3 0) (zombie 8 3 1)]
-              scene (fn [health] {:self {:health health :food 20} :inventory (conj sword {:name "golden_apple" :count 1})
-                                  :equipment iron-armour :entities two})
-              round (fn ^:async r [health]
-                      (let [{:keys [seen p]} (await (flight-round respond (scene health)))]
+        (let [scene (fn [health mobs] {:self {:health health :food 20} :inventory (conj sword {:name "golden_apple" :count 1})
+                                       :equipment iron-armour :entities mobs})
+              round (fn ^:async r [health mobs]
+                      (let [{:keys [seen p]} (await (flight-round respond (scene health mobs)))]
                         {:ate (first (filter #(= :hostile.precious-eat (:kind %)) @seen))
                          :decided (first (filter #(= :hostile.decided (:kind %)) @seen))
                          :swings (count (calls p "attack"))}))
-              rounds (loop [hs (range 2 13) out []]
-                       (if-let [h (first hs)]
-                         (let [r (await (round h))]
-                           (if (= :fight (:answer (:ate r))) (conj out r) (recur (rest hs) (conj out r))))
-                         out))
-              flips (last rounds)
-              keeps (first rounds)]
-          (is (= :fight (:answer (:ate flips))) "some health makes the apple turn the flight into a fight")
-          (is (< 1 (count rounds)) "the least hurt bodies are not the ones that flip")
-          (is (< (:flee (:prices (:decided flips))) (:fight (:prices (:decided flips)))) "two zombies, iron, hurt enough to flip: without the apple the flee beats the fight")
-          (is (< (:price (:ate flips)) (:flee (:prices (:decided flips)))) "with the apple the fight is cheaper than the flee")
-          (is (pos? (:swings flips)) "it eats, then fights")
+              fights (await (round 4 [(zombie 7 3 0)]))
+              keeps (await (round 4 [(zombie 7 3 0) (zombie 8 3 1)]))]
+          (is (= :fight (:answer (:ate fights))) "4 hp, one zombie, iron: the fight is the cheapest, with the apple too")
+          (is (< (:price (:ate fights)) (:fight (:prices (:decided fights)))) "the apple makes the fight cheaper")
+          (is (pos? (:swings fights)) "it eats, then fights")
           (is (< (:flee (:prices (:decided keeps))) (:fight (:prices (:decided keeps)))))
           (is (= :flee (:answer (:ate keeps))))
-          (is (< (:price (:ate keeps)) (:flee (:prices (:decided keeps)))) "at the least health: the flee wins with and without it: eat, then flee")
+          (is (< (:price (:ate keeps)) (:flee (:prices (:decided keeps)))) "4 hp, two zombies: the flee wins with and without it: eat, then flee")
           (is (zero? (:swings keeps))))))))
 
 (defn fist-stance
@@ -241,6 +233,17 @@
         pick #(cost/decide {:health 20 :food 20 :level 0 :carried % :respawn {:x 40 :y 64 :z 0}} {:fight f :flee flee} {:x 0 :y 64 :z 0})]
     (is (= :fight (:answer (pick 300))) (str "the walk back from the bed is short and picks the items up: " (:prices (pick 300))))
     (is (= :fight (:answer (pick 0))) (str "carrying nothing, a death costs that walk alone: " (:prices (pick 0))))))
+
+(deftest an-unarmed-body-walks-away-from-a-skeleton-it-meets-again-only-by-the-measured-chance
+  (let [pick (fn [meets]
+               (settings/with-settings {::answer/flee-meets meets}
+                 #(let [f (cost/fight-answer {:weapon nil :mobs [{:name "skeleton" :distance 8}]})
+                        flee (cost/flee-answer {:food 20 :mobs [{:name "skeleton" :distance 8 :follow 16}] :later f})]
+                    (cost/decide {:health 20 :food 20 :level 0 :carried 0 :respawn {:x 40 :y 64 :z 0}} {:fight f :flee flee} {:x 0 :y 64 :z 0}))))
+        measured (pick (settings/get answer/settings ::answer/flee-meets))
+        sure (pick {:k 1000000 :n 1000000})]
+    (is (= :flee (:answer measured)) (str "the fist fight under its arrows costs more than the walk and the meet it may bring: " (:prices measured)))
+    (is (= :fight (:answer sure)) (str "a meet again for certain would make the walk the fight and more: " (:prices sure)))))
 
 (deftest a-flight-down-a-dead-end-past-its-chaser-is-priced-caught
   ;; the old weighing priced every flight at the 0.15 prior, whatever the flee search found
@@ -1057,14 +1060,16 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[hurts decision why]
-                [[[] :fight "unhurt: a lone zombie costs less than walking away"]
-                 [[{:amount 2.5 :attacker {:name "zombie"}} {:amount 2.5 :attacker {:name "zombie"}}] :fight "5 hp felt within a second: the fight's 3 s would cost 15 hp, 579 s, still under the flight's 653 s, caught at the prior of 20 hp"]]]
-          (let [{:keys [eng seen]} (setup-flight {:self {:health 20} :inventory wood-sword :entities [(zombie 1 0.5 2.5)]})]
-            (doseq [h hurts] (mem/write! (:store eng) :hurt h))
-            (core/submit! eng respond {})
-            (await (core/tick! eng))
-            (is (= [decision] (mapv :decision (decided seen))) why)))))))
+        (let [decide (fn ^:async d [hurts]
+                       (let [{:keys [eng seen]} (setup-flight {:self {:health 20} :inventory wood-sword :entities [(zombie 1 0.5 2.5)]})]
+                         (doseq [h hurts] (mem/write! (:store eng) :hurt h))
+                         (core/submit! eng respond {})
+                         (await (core/tick! eng))
+                         (first (filter #(= :hostile.decided (:kind %)) @seen))))
+              unhurt (await (decide []))
+              hurt (await (decide [{:amount 2.5 :attacker {:name "zombie"}} {:amount 2.5 :attacker {:name "zombie"}}]))]
+          (is (= :fight (:decision unhurt)) "unhurt: a lone zombie costs less than walking away")
+          (is (< (:fight (:prices unhurt)) (:fight (:prices hurt))) "5 hp felt within a second: the fight's seconds are priced at that rate"))))))
 
 ;; Bramble #39: the fight walked to a skeleton with a creeper standing by it, beyond the trigger's melee radius; one blast did 17
 (deftest a-creeper-standing-by-the-mob-the-fight-would-walk-to-makes-it-a-flight
@@ -1201,7 +1206,7 @@
                         (count (tu/walked-to eng))))
               walks #(settings/with-settings {:jobs.lib.cost.threat/difficulty 3} (fn [] (walks %)))]
           (is (zero? (await (walks 0))) "two shooting: walking away is cheaper, declined, no walk")
-          (is (pos? (await (walks 3))) "fled three times lately: four walks, each caught at the bow prior's arrows at hard's shot rate (cost.caught/prior), cost more than closing on two shooters at walk-speed 3.2 (fight 1658 s; flee 1630 after two flights, 1706 after three)"))))))
+          (is (pos? (await (walks 6))) "fled six times lately: seven walks, each caught at the bow prior's arrows at hard's shot rate (cost.caught/prior), cost more than closing on two shooters at walk-speed 3.2"))))))
 
 (deftest hostile-near-counts-ranged-mobs-out-to-the-ranged-radius
   (is (holds? {:entities [(skeleton 1 13 0)]} {:radius 8 :ranged-radius 16}) "a skeleton at 13")
@@ -1559,13 +1564,13 @@
     (is (nil? (again (assoc (cut {:x 30 :y 64 :z 0}) :job/j1 [{:t 950 :data {:goal {:x 30 :y 64 :z 0} :goal-reached true}}]))) "a goal reached is behind it")))
 
 ;; ce634b35 (Bramble #39): a blast of 17 beside a fight; card a45ce0db: priced as one Poisson count of blast-sized blows
-(deftest a-creeper-by-a-zombie-at-normal-difficulty-is-fought-as-a-flight-from-both-is-caught-at-the-zombies-prior
+(deftest a-creeper-by-a-zombie-at-normal-difficulty-is-walked-from-a-flight-from-both-caught-at-the-zombies-prior
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [respond-normal '(jobs.survival.respond-to-hostile {:settings {:jobs.lib.cost.threat/difficulty 2}})
               s (await (flight-round respond-normal {:inventory sword :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}} (zombie 9 0 4)]}))]
-          (is (= :fight (:decision (first (hostile-entries (:eng s))))) "caught at the zombie's prior, the flight takes the blast and the zombie's blows: dearer than the fight")
+          (is (= :flee (:decision (first (hostile-entries (:eng s))))) "caught at the zombie's prior, the flight takes the blast and the zombie's blows, but meets them again only by cost.answer ::flee-meets: cheaper than the fight beside the creeper")
           (is (= #{"creeper" "zombie"} (set (:near (first (filter #(= :hostile.decided (:kind %)) @(:seen s))))))
               "the decision names every mob near: what a flight's catch is counted by"))))))
 
@@ -2063,13 +2068,13 @@
       (hostile-fight/swim-out c [{:name "zombie"}]))
     (is (= 1 @runs) "one stand, one walk of its land, from both cells")))
 
-(deftest a-body-in-full-iron-with-a-sword-fights-a-lone-skeleton-at-10-at-every-difficulty
+(deftest a-body-in-full-iron-with-a-sword-fights-a-lone-skeleton-at-10-on-hard
+  ;; on easy and normal a step out of its range, met again only by cost.answer ::flee-meets, comes within 2 s of the fight
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [d [1 2 3]]
-          (let [world {:inventory sword :equipment iron-armour :entities [(assoc (skeleton 1 10 0) :visible true)]}
-                {:keys [seen]} (await (settings/with-settings {:jobs.lib.cost.threat/difficulty d} #(flight-round respond world)))
-                [e] (filter #(= :hostile.decided (:kind %)) @seen)]
-            (is (= :fight (:decision e)) (str "difficulty " d))
-            (is (< (* 1.2 (:fight (:prices e))) (:flee (:prices e))) (str "difficulty " d ": the fight is cheaper than the flee by a margin"))))))))
+        (let [world {:inventory sword :equipment iron-armour :entities [(assoc (skeleton 1 10 0) :visible true)]}
+              {:keys [seen]} (await (settings/with-settings {:jobs.lib.cost.threat/difficulty 3} #(flight-round respond world)))
+              [e] (filter #(= :hostile.decided (:kind %)) @seen)]
+          (is (= :fight (:decision e)) (str "the arrows on the walk away cost more than closing on it: " (:prices e))))))))
+

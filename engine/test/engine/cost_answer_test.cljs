@@ -150,7 +150,7 @@
 (deftest the-walk-again-comes-as-one-flight-more
   (let [skeleton (mob "skeleton" 10)
         again (first (:then (cost/flee-answer {:food 20 :mobs [skeleton]})))]
-    (is (= (dissoc (cost/flee-answer {:food 20 :mobs [skeleton] :returns 1}) :then) again)
+    (is (= (dissoc (cost/flee-answer {:food 20 :mobs [skeleton] :returns 1}) :then :stays) again)
         "a mob walked from is met again on the way back: that walk is priced as the next decision would price it, a return")
     (is (nil? (:then again)) "and nothing after it")))
 

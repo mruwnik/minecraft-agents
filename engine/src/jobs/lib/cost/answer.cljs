@@ -44,6 +44,8 @@
                                :doc "As ::drowned-meet-per-s in any other water (one deep, or block-lit to its floor): k=1 in n=4602 s (:prior :other)."}
    ::hide-stays {:default {:k 33 :n 52} :spec (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)})
                  :doc "Of n flights of the trial bodies that ended hidden in a refuge, k handed back with a danger still about (hide-out :hold :spent), 2026-10-28. Recount: node tools/event-counts.mjs hide-ends."}
+   ::flee-meets {:default {:k 56 :n 124} :spec (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)})
+                 :doc "Of n flights of the trial bodies that got away (hostile.fled), k from a mob named again by its id in another run within 600 s (hostile-fight ::return-s), 2026-10-30: a fight names no id, so a few meets go uncounted. Recount: node tools/event-counts.mjs flee-meets."}
    ::unseen-water-lags {:default [{:k 1072482 :n 1095455} {:k 1054916 :n 1093513} {:k 1038865 :n 1091547} {:k 1024204 :n 1089545}
                                   {:k 1010196 :n 1087526} {:k 996729 :n 1085500} {:k 983992 :n 1083481} {:k 971757 :n 1081465}
                                   {:k 960096 :n 1079468} {:k 948840 :n 1077476} {:k 937962 :n 1075465} {:k 927498 :n 1073431}
@@ -131,7 +133,7 @@
   (let [{:keys [dies lived]} (blows-outcome body answer)]
     (assoc body :health (max 1 (- (or health 20) (if (< dies 1) (/ lived (- 1 dies)) 0))))))
 
-(declare repeat-price answer-death-chance)
+(declare repeat-price answer-death-chance counted-chance)
 
 (defn answer-price*
   "answer-price with death the seconds each death costs."
@@ -267,7 +269,8 @@
                   (dissoc :shape :caught :then))
         (:shape clean) (assoc :shape (:shape clean))
         caught (assoc :caught caught)
-        (:then b) (assoc :then (:then b))))
+        (:then b) (assoc :then (:then b))
+        (:stays b) (assoc :stays (:stays b))))
     (assoc a :then [a])))
 
 (defn swim-leg
@@ -377,11 +380,17 @@
                     (assoc-in [:caught :damage] (/ (+ (* c0 (+ (* open d0) (* (- 1 open) end-d))) (* ends end-d)) chance))
                     (update-in [:caught :hit] max (:hit later 0))))))))))
 
+(defn flee-meets
+  "The chance a mob fled from is met again: counted-chance of ::flee-meets."
+  []
+  (counted-chance (settings/get settings ::flee-meets)))
+
 (defn flee-answer-on
   "The answer of a walk away from mobs [flee-mob's] by a body with food wearing equipment, the walk there and back (it
   goes back to its work), times 1 + returns (the flights from such mobs lately: each predicts another); :then the answer
   later (the fight with them, nil none) or the walk again, one return more, from a mob's :again (the distance it is met at
-  on the way back, default its :distance) when nearer. :caught: each flight is caught by its way (caught: the flee
+  on the way back, default its :distance) when nearer, paid by the chance its mobs are met again (:stays: caught, or got away and
+  met again by flee-meets) unless the way back passes one nearer than it stands. :caught: each flight is caught by its way (caught: the flee
   search's chance of it, nil 0), its mobs then landing their blows (a creeper its blast) over the flight, a melee mob over
   caught-s seconds of it (the flee search's race) at reach-rate; or else at the prior of the body's health
   (jobs.lib.cost.caught/prior of its mobs, the likeliest caught), they then landing its blows (the trials counted a
@@ -454,7 +463,8 @@
               spent (set (keep (fn [[m f]] (when (and (= "creeper" (:name m)) (blows? f)) m)) (map vector mobs per)))
               left (remove spent mobs)]
           (cond
-            (empty? spent) (cond-> walk (or again later) (assoc :then (cond-> [] again (conj again) later (conj later))))
+            (empty? spent) (cond-> walk (or again later) (assoc :then (cond-> [] again (conj again) later (conj later)))
+                             (and (or again later) (not-any? #(< (:again % ##Inf) (:distance % 0)) mobs)) (assoc :stays (- 1 (* (- 1 (get-in walk [:caught :chance] 0)) (- 1 (flee-meets))))))
             (seq left) (assoc walk :then (cond-> [(flee-answer-on (assoc args :mobs left :returns times))] later (conj later)))
             :else walk))))))
 
