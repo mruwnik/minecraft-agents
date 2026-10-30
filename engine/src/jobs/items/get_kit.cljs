@@ -38,7 +38,7 @@
   Get a base first.
   A death since the job began (body memory :died) clears the children and the bill; the next round re-plans from
   what is carried. A death keeps the job listed unless it was submitted with --drop-on-death.
-  Needs (condition): :items, else impossible :bad-args. Ends done with {:have [..] :made [..]}. Every other ending has
+  Needs (condition): :items, else impossible :bad-args. Ends done with {:have [..] :made [..]} only with every item (:least :all); a spent :spend ends limit-reached. Every other ending has
   :have, :made, the next :item, a :why, a :text and :next (jobs.lib.next-call: the obtain child's, a get-food for :no-food, then the kit again):
   - the obtain child's kind and cause (:no-source, a walk cause such as :zone-exit, :time ..; :item is then the one it stopped at);
   - nothing-possible {:reason :wear-failed}.
@@ -85,7 +85,7 @@
 (defn safe? [c] (contract/all [(ready/threatened c) (if (arm-next? c) (contract/ok :arming "the sword is made first") (ready/unarmed-threatened c))]))
 (def fit? ready/ok)
 
-(def defaults {:spend {:job-time ::job-time-s}})
+(def defaults {:least :all :spend {:job-time ::job-time-s}})
 
 (defn restarted
   "The job memory after a death: the children and the bill went with the body; the job starts from now."

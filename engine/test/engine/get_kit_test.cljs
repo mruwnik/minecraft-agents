@@ -4,6 +4,7 @@
             [clojure.string :as str]
             [engine.contract :as contract]
             [engine.core :as core]
+            [engine.core.ending :as ending]
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.fake :as fake]
@@ -235,6 +236,14 @@
           (is (empty? (crafted s)))
           (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
                  (select-keys @(:out s) [:status :item :reason]))))))))
+
+(deftest a-spend-that-runs-out-with-part-of-the-kit-ends-limit-reached-not-done
+  (let [call (contract/freeze (get registry/jobs job) {} nil)
+        s (contract/later :kitting "get-kit: 2 of 8 item(s) had" :units :items :done 2 :left 6
+                          :result {:have ["iron_pickaxe" "iron_shovel"]})
+        e (ending/progress-ending {:quote-call call} s (contract/ending :limit-reached {:line :job-time} nil))]
+    (is (= :limit-reached (:kind e)) (pr-str e))
+    (is (= ["iron_pickaxe" "iron_shovel"] (:have (:data e))))))
 
 (deftest a-worn-piece-is-skipped
   (async done
