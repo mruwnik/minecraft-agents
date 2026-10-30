@@ -96,9 +96,9 @@
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:block [19 5 16] "glass"] [:body-near [19.5 2 16.5] 1.5]]}
-  ;; outside a claim a priced build is still dug when it is the only way: the pocket is walled in bedrock but for the glass shaft
+  ;; outside a claim a priced build is still dug when it is the only way: the mass's top is bedrock, seen, but for the glass
   {:name "another-s-glass-is-dug-when-it-is-the-only-way"
-   :blocks [[:fill [17 1 14] [21 5 18] "bedrock"] [:fill [19 2 16] [19 3 16] "air"] [:set [19 4 16] "stone"] [:set [19 5 16] "glass"]]
+   :blocks [[:fill [2 5 2] [30 5 30] "bedrock"] [:set [19 5 16] "glass"]]
    :act [[:job (jobs.movement.go-to {:pos #at [19 2 16] :range 0 :unknown false})]]
    :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:block [19 5 16] "air"] [:body-near [19.5 2 16.5] 1.5]]}]}
