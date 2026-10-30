@@ -19,15 +19,12 @@
             [jobs.lib.cost.threat :as threat]))
 
 (a/defargs settings
-  {::wall-prior {:default {:k 1.529 :n 2.889} :spec (a/map-with {:k (a/num-in 0 nil) :n (a/num-in 0.1 nil)})
+  {::look-tick-s {:default 0.27 :spec (a/num-in 0 nil)
+                  :doc "Seconds one look takes on the job clock: the median of `node tools/event-counts.mjs look-seconds` (0.27 s over n=14 look-only rounds, :sense.looked :wall-ms). The turn waits for the physics tick that sends it, then the sight pass reads it."}
+   ::wall-prior {:default {:k 1.529 :n 2.889} :spec (a/map-with {:k (a/num-in 0 nil) :n (a/num-in 0.1 nil)})
                  :doc "Pseudo-counts of the boundary cells closed (k) of all (n) before any is seen, rule-of-succession style: the Beta fitted by moments over the roofed spaces built of planks, brick, slab, glass, wool and the like in the recorded chunks (`node tools/event-counts.mjs wall-chunks --stride 40`: 510 spaces, 3302 side cells closed of 5930, pooled 0.56; spread among spaces so a space's walls are alike)."}})
 
-(def look-tick-s
-  "Seconds one look takes on the job clock: the median of `node tools/event-counts.mjs look-seconds` (0.27 s over 14 look-only
-  rounds; the :sense.looked :wall-ms events recount it). The turn waits for the physics tick that sends it, then the sight pass reads it."
-  0.27)
-
-(defn look-s "Seconds looks looks take." [looks] (* looks look-tick-s))
+(defn look-s "Seconds looks looks take." [looks] (* looks (settings/get settings ::look-tick-s)))
 
 (defn closed-chance
   "The chance every one of unseen boundary cells is closed when the seen ones are all closed: the rule of succession
