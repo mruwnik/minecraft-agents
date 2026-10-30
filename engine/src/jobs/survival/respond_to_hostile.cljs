@@ -279,7 +279,7 @@
   [c near now now-of sealing then]
   (when-let [{:keys [seen unseen headings] :as room} (doors/room-look c sealing)]
     (let [p (:primitives c)
-          body (hostile/body-of c)
+          body (assoc (hostile/body-of c) :meet (mapv #(.-name %) near))
           equipment (cost/equipment-of (.-equipment (.self p)))
           mobs (mapv #(hostile/mob-near p %) near)
           door-cover (shut-in/door-cover c (:n sealing) (map #(.-name %) near) false)
@@ -375,7 +375,7 @@
         now (merge covers {:fight fight :flee walk})
         now-of (fn [mobs] (merge (cover-answers equipment mobs then fight specs) {:fight fight :flee (when walk (hostile/flee-answer c near fight felt caught mobs))}))
         look (when (seq covers) (look-answer c near now now-of sealing then))
-        weighed (some-> (hostile/weigh c (cond-> now look (assoc :look (:answer look)))) (assoc :way-scan (:way-scan caught)) (eating-answer c))
+        weighed (some-> (hostile/weigh c near (cond-> now look (assoc :look (:answer look)))) (assoc :way-scan (:way-scan caught)) (eating-answer c))
         stay? (and (not (hurt-lately? c)) (stay-under-roof? c near))
         decision (if (or stay? (= :fight (:answer weighed))) :fight :flee)
         cover (when (and (not stay?) (contains? covers (:answer weighed))) (:answer weighed))

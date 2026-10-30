@@ -250,10 +250,10 @@
         specs (if given (select-keys given ways) (covers c ways))
         equipment (cost/equipment-of (.-equipment (.self (:primitives c))))
         mobs (mapv #(hostile/mob-near (:primitives c) %) hostiles)
-        body (hostile/body-of c)
+        body (assoc (hostile/body-of c) :meet (mapv #(.-name %) hostiles))
         at (u/self-pos c)
         answer #(cost/cover-answer {:equipment equipment :mobs mobs} %)
-        death (cost/death-cost body at)
+        death (cost/meet-death body at)
         price #(cost/answer-price* body (answer %) at death)
         cheaper (fn [ways] (some->> (keep specs ways) seq (apply min-key price)))
         pillar (when (open? :pillar) (if given (:pillar given) (pillar-cover c hostiles)))]

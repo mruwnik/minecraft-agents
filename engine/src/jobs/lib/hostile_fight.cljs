@@ -354,16 +354,16 @@
       (and a felt) (update :damage max (* felt (/ (:seconds a) 2)))))))
 
 (defn weigh
-  "cost/decide over answers ({key answer-or-nil}) to hostiles for the body of c where it stands, with :answers; nil
-  when none is open."
-  [c answers]
-  (some-> (cost/decide (body-of c) answers (u/self-pos c)) (assoc :answers answers)))
+  "cost/decide over answers ({key answer-or-nil}) to hostiles hs for the body of c where it stands, a death meeting
+  them again from a near respawn (cost.answer/meet-death), with :answers; nil when none is open."
+  [c hs answers]
+  (some-> (cost/decide (assoc (body-of c) :meet (mapv #(.-name %) hs)) answers (u/self-pos c)) (assoc :answers answers)))
 
 (defn answer
   "weigh fighting near (fight-answer) against walking away from them (flee-answer): {:answer :fight|:flee :prices :answers}."
   [c near struck-of]
   (let [fight (fight-answer c near struck-of)]
-    (weigh c {:fight fight :flee (flee-answer c near fight nil nil)})))
+    (weigh c near {:fight fight :flee (flee-answer c near fight nil nil)})))
 
 (defn too-far-to-chase?
   "Whether a ranged target is better left than walked to with other hostiles in range: answer over them all says :flee."
@@ -421,4 +421,4 @@
   (boolean (and (seq hostiles)
                 (not-any? combat/creeper? hostiles)
                 (not-any? combat/enderman? hostiles)
-                (= :fight (:answer (weigh c answers))))))
+                (= :fight (:answer (weigh c hostiles answers))))))

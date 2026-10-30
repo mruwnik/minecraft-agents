@@ -46,6 +46,8 @@
                  :doc "Of n flights of the trial bodies that ended hidden in a refuge, k handed back with a danger still about (hide-out :hold :spent), 2026-10-28. Recount: node tools/event-counts.mjs hide-ends."}
    ::flee-meets {:default {:k 56 :n 124} :spec (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)})
                  :doc "Of n flights of the trial bodies that got away (hostile.fled), k from a mob named again by its id in another run within 600 s (hostile-fight ::return-s), 2026-10-30: decisions logged before then name no id (hostile.decided :mobs), so a meet answered by a fight goes uncounted (at most 9 more, 65/124, by kind within 40 blocks). Recount: node tools/event-counts.mjs flee-meets."}
+   ::respawn-meets {:default {:k 3 :n 17} :spec (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)})
+                    :doc "Of n deaths of the trial bodies to a mob with the respawn within its give-up range (cost.threat/give-up-range) of the death, k where an event after the respawn names the mob's id again within 600 s, 2026-10-30. Recount: node tools/event-counts.mjs respawn-meets."}
    ::unseen-water-lags {:default [{:k 1072482 :n 1095455} {:k 1054916 :n 1093513} {:k 1038865 :n 1091547} {:k 1024204 :n 1089545}
                                   {:k 1010196 :n 1087526} {:k 996729 :n 1085500} {:k 983992 :n 1083481} {:k 971757 :n 1081465}
                                   {:k 960096 :n 1079468} {:k 948840 :n 1077476} {:k 937962 :n 1075465} {:k 927498 :n 1073431}
@@ -163,20 +165,42 @@
         k (* stays (- 1 (answer-death-chance body base at death)))]
     (if (< k 1) (/ (answer-price* body base at death) (- 1 k)) ##Inf)))
 
+(declare threat-answers)
+
+(defn meet-death
+  "Seconds a death at `at` costs body (death/death-cost) meeting the mobs named in its :meet: when its :respawn lies within
+  the give-up range of one of them, also the meet once more from there by ::respawn-meets, the body healed with nothing
+  (no kit, no xp, nothing carried) and the mobs at the respawn's distance, the cheapest of threat-answers, each death in
+  it costing the same again: D' = min over answers (d + p x price at no death) / (1 - p x death chance)."
+  [{:keys [meet respawn] :as body} at]
+  (let [d0 (death/death-cost body at)
+        far (death/walk-back-blocks body at)]
+    (if-not (and respawn (seq meet) (some #(<= far (threat/give-up-range %)) meet))
+      d0
+      (let [bare (-> (healed (select-keys body [:respawn])) (assoc :level 0 :carried 0 :food 20))
+            d (death/death-cost bare at)
+            p (counted-chance (settings/get settings ::respawn-meets))
+            again (->> (vals (threat-answers (assoc bare :distance far) meet nil))
+                       (keep identity)
+                       (map #(/ (+ d (* p (answer-price* bare % at 0))) (- 1 (* p (answer-death-chance bare % at d)))))
+                       (reduce min ##Inf))]
+        (if (< again ##Inf) (+ d0 (- again d)) d0)))))
+
 (defn answer-price
-  "Seconds answer costs body {:health :absorption, death/death-cost's :respawn :level :carried} at `at` (see the ns
-  doc); :then is priced at full health: the body meets the mob again once it has healed. :outcomes [[chance answer]] (a
+  "Seconds answer costs body {:health :absorption, death/death-cost's :respawn :level :carried, :meet} at `at` (see the
+  ns doc); :then is priced at full health: the body meets the mob again once it has healed. :outcomes [[chance answer]] (a
   look's, jobs.lib.cost.look) are each paid by its chance, at the health the answer's blows leave. Both are paid only by
-  the chance the body lives through the answer's own blows: a death ends the meet (as answer-death-chance)."
+  the chance the body lives through the answer's own blows: a death ends the meet (as answer-death-chance), priced by
+  meet-death."
   [body answer at]
-  (answer-price* body answer at (death/death-cost body at)))
+  (answer-price* body answer at (meet-death body at)))
 
 (defn answer-death-chance
   "The chance answer kills body: its blows (blows-chance), then the cheapest of its :then (answer-price* at `at`, by
   death, default death/death-cost) at full health, or each of its :outcomes by its chance; with :stays, by that chance
   the cheapest at full health of its :then and itself again (repeat-price; again and again: d / (1 - stays x (1 - d)),
   d its own chance); :at-once, its :then at the health it leaves."
-  ([body answer at] (answer-death-chance body answer at (death/death-cost body at)))
+  ([body answer at] (answer-death-chance body answer at (meet-death body at)))
   ([body {:keys [then outcomes stays] :as answer} at death]
    (let [own (blows-chance body answer)
          base (if (seq outcomes)
@@ -197,9 +221,9 @@
 
 (defn decide
   "{:answer key :prices {key seconds} :death}: the cheapest of answers {key answer-or-nil} (nil: not open to the body)
-  by answer-price, death the seconds a death costs (death/death-cost); nil when none is open."
+  by answer-price, death the seconds a death costs (meet-death); nil when none is open."
   [body answers at]
-  (let [death (death/death-cost body at)
+  (let [death (meet-death body at)
         prices (into {} (keep (fn [[k a]] (when a [k (answer-price* body a at death)]))) answers)]
     (when (seq prices)
       {:answer (key (first (sort-by val prices))) :prices prices :death death})))

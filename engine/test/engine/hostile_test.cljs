@@ -234,6 +234,20 @@
     (is (= :fight (:answer (pick 300))) (str "the walk back from the bed is short and picks the items up: " (:prices (pick 300))))
     (is (= :fight (:answer (pick 0))) (str "carrying nothing, a death costs that walk alone: " (:prices (pick 0))))))
 
+(deftest a-death-whose-respawn-is-within-the-zombies-reach-pays-the-meet-once-more-bare-by-the-measured-chance
+  (let [at {:x 0 :y 64 :z 0}
+        body #(merge {:health 20 :food 20 :level 0 :carried 0 :respawn {:x % :y 64 :z 0}} %2)
+        death (fn [x more meets] (settings/with-settings {::answer/respawn-meets meets} #(cost/meet-death (body x more) at)))
+        measured {:k 3 :n 17}]
+    (is (< (cost/death-cost (body 5 {}) at) (death 5 {:meet ["zombie"]} measured)) "5 blocks off it wakes beside the zombie")
+    (is (< (death 5 {:meet ["zombie"]} measured) (death 5 {:meet ["zombie"]} {:k 99 :n 100})) "the likelier the zombie is still there, the dearer")
+    (is (< (death 5 {:meet ["zombie"]} measured) (death 5 {:meet ["zombie" "zombie"]} measured)) "two zombies are a harder meet")
+    (is (= (cost/death-cost (body 5 {}) at) (death 5 {} measured)) "no mob met: the death ends it")
+    (is (= (cost/death-cost (body 40 {}) at) (death 40 {:meet ["zombie"]} measured)) "40 off is past its follow range")
+    (is (= (death 5 {:meet ["zombie"] :level 5 :carried 300} measured)
+           (+ (cost/death-cost (body 5 {:level 5 :carried 300}) at) (- (death 5 {:meet ["zombie"]} measured) (cost/death-cost (body 5 {}) at))))
+        "the meet after the respawn is the same whatever the death lost: the body wakes with nothing")))
+
 (deftest an-unarmed-body-walks-away-from-a-skeleton-it-meets-again-only-by-the-measured-chance
   (let [pick (fn [meets]
                (settings/with-settings {::answer/flee-meets meets}
