@@ -389,11 +389,12 @@
 
 (defn await-event
   "Polls the log from offset until an event matching pattern with :time-ms >= since-ms comes; resolves to it or nil
-  after limit-ms. A pattern with :of-job true matches only events of job-ids (the jobs submitted so far)."
+  after limit-ms. A pattern with :of-job true matches only events of job-ids (the jobs submitted so far); a set pattern
+  (any member matches) carries no such keys."
   [opts offset pattern since-ms limit-ms job-ids]
   (let [until (+ (js/Date.now) limit-ms)
-        own? (:of-job pattern)
-        pattern (dissoc pattern :of-job :after-previous)
+        own? (and (map? pattern) (:of-job pattern))
+        pattern (cond-> pattern (map? pattern) (dissoc :of-job :after-previous))
         events (event-reader (events-file opts) offset)]
     (letfn [(poll []
               (let [hit (some #(when (and (>= (:time-ms % 0) since-ms) (x/matches? pattern %) (or (not own?) (x/of-jobs? job-ids %))) %)

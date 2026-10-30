@@ -244,6 +244,8 @@
       (-> (js/Promise.resolve)
           (.then #(run {:kind :slept}))
           (.then (fn [ids] (is (= #{} ids) "without :of-job any job's event satisfies it")))
+          (.then #(run #{{:kind :woke} {:kind :slept}}))
+          (.then (fn [ids] (is (= #{} ids) "a set pattern is met by an event matching any member")))
           (.then #(.then (run {:kind :slept :of-job true})
                          (fn [_] (is false ":of-job: another job's event must not satisfy it"))
                          (fn [e] (is (re-find #"timed out" (.-message e))))))
