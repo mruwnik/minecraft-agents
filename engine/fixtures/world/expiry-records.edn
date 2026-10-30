@@ -38,16 +38,20 @@
             {:event {:source :reflex :kind :ended :context {:reflex-id :scaffold-left} :data {:removed [[:any] [:any]]}} :within-s 110}]
    :after [[:not-block [10 0 16] "cobblestone"] [:not-block [10 1 16] "cobblestone"]]}
   {:name "a-root-fills-scaffold-is-taken-back-once-its-root-ends"
+   :plot {:height 10 :light :lit}
    :register [{:trigger :scaffold-left}]
-   :act [[:job (jobs.blocks.fill-cells {:cells [#at [12 0 16]] :use {:blocks ["cobblestone"]} :purpose :plug :ignore-zones? true})]]
+   :act [[:job (jobs.movement.look-around)]
+         [:job (jobs.blocks.fill-cells {:cells [#at [11 0 16]] :use {:blocks ["cobblestone"]} :purpose :plug :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}
             {:event {:source :reflex :kind :fired :context {:reflex-id :scaffold-left}} :within-s 60}
             {:event {:source :reflex :kind :ended :context {:reflex-id :scaffold-left} :data {:removed [[:any]]}} :within-s 110}]
-   :after [[:not-block [12 0 16] "cobblestone"]]}
+   :after [[:not-block [11 0 16] "cobblestone"]]}
   {:name "a-root-fill-with-no-purpose-leaves-nothing-for-the-reflex"
+   :plot {:height 10 :light :lit}
    :register [{:trigger :scaffold-left}]
-   :act [[:job (jobs.blocks.fill-cells {:cells [#at [12 0 16]] :use {:blocks ["cobblestone"]} :ignore-zones? true})]]
+   :act [[:job (jobs.movement.look-around)]
+         [:job (jobs.blocks.fill-cells {:cells [#at [11 0 16]] :use {:blocks ["cobblestone"]} :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :scaffold-left}} :for-s 40}]
-   :after [[:block [12 0 16] "cobblestone"]]
+   :after [[:block [11 0 16] "cobblestone"]]
    :limit-s 60}]}
