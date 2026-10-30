@@ -3,7 +3,9 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.death-test :as dt :refer [job recovered pile-drops]]
-            [engine.recover-drops-danger-test :refer [die-noted!]]
+            [engine.recover-drops-danger-test :refer [die-noted! decided-numbers fetch-holds? priced-by-the-cost-lib]]
+            [jobs.lib.cost :as cost]
+            [jobs.survival.recover-drops.config :as cfg]
             [engine.library-test :refer [setup inv]]
             [engine.recover-drops-danger-test :refer [decided-text]]
             [engine.test-util :as tu :refer [run-until-empty]]
@@ -41,32 +43,19 @@
   [n]
   (vec (keep #(case (:slot %) 17 nil 18 (assoc % :count n) %) dt/death-pile-of-the-field-report)))
 
-(defn ^:async fetched-unarmed?
-  "Whether the unarmed body with no chest goes for the pile of n raw iron past the zombie (a skipped one stays open or is a final skip)."
+(defn ^:async unarmed-run
+  "The unarmed body past the zombie with no chest and the field-report pile of n raw iron."
   [n]
-  (let [{:keys [eng]} (await ((run-with-chest nil false "zombie" (iron-pile n))))]
-    (= :collected (:decision (recovered eng)))))
+  (:eng (await ((run-with-chest nil false "zombie" (iron-pile n))))))
 
-(def edge-memo (atom nil))
+(defn short-count
+  "The most raw iron of the field-report pile whose cost-lib worth times the chance of living through the walk past the zombie and back
+  (the decision numbers of the full pile's fetch) is at or under the walk's cost: the unarmed body leaves that pile."
+  [{:keys [chance cost]}]
+  (let [worth (fn [n] (cost/survived-worth (:value (cost/item-value (iron-pile n))) chance))]
+    (last (take-while #(<= (worth %) (+ cost (cfg/margin))) (range 1 25)))))
 
-(defn ^:async worth-edge
-  "The smallest raw iron count whose pile the unarmed body fetches past the zombie, found by asking the job's own decision
-  (value x survival chance against the walk's cost) so no price is copied here; the decision is monotone in the count."
-  []
-  (or @edge-memo
-      (do (assert (not (await (fetched-unarmed? 1))) "one iron is the skipped side")
-          (assert (await (fetched-unarmed? 24)) "the whole pile is the fetched side")
-          (loop [lo 1 hi 24]
-            (if (= 1 (- hi lo))
-              (reset! edge-memo hi)
-              (let [mid (quot (+ lo hi) 2)]
-                (if (await (fetched-unarmed? mid)) (recur lo mid) (recur mid hi))))))))
-
-(defn ^:async short-pile
-  "The field-report pile one raw iron under the edge: worth, times the chance of living through the walk past a zombie and back,
-  under what that walk costs an unarmed body."
-  []
-  (iron-pile (dec (await (worth-edge)))))
+(defn ^:async short-pile [] (iron-pile (short-count (decided-numbers (await (unarmed-run 24))))))
 
 (deftest an-unarmed-body-fetches-a-sword-and-a-helmet-before-the-zombie-trip
   (async done
@@ -86,13 +75,19 @@
           (is (nil? (recovered eng)) "a danger skip stays open")
           (is (nil? (get (inv p) "iron_sword"))))))))
 
-(deftest the-edge-pile-is-fetched-unarmed-and-one-iron-under-it-is-skipped
+(deftest the-unarmed-body-fetches-a-pile-worth-the-trip-and-leaves-one-that-is-not
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [edge (await (worth-edge))]
-          (is (not (await (fetched-unarmed? (dec edge)))) "one raw iron under the edge is left")
-          (is (await (fetched-unarmed? edge)) "the edge pile is fetched"))))))
+        (let [whole (await (unarmed-run 24))
+              n (short-count (decided-numbers whole))
+              left (await (unarmed-run n))]
+          (is (= :collected (:decision (recovered whole))))
+          (is (fetch-holds? (decided-numbers whole)))
+          (priced-by-the-cost-lib (iron-pile 24) (decided-numbers whole))
+          (is (nil? (recovered left)) "a danger skip stays open")
+          (is (not (fetch-holds? (decided-numbers left))))
+          (priced-by-the-cost-lib (iron-pile n) (decided-numbers left)))))))
 
 (deftest a-chest-whose-stock-is-unknown-is-not-searched
   (async done

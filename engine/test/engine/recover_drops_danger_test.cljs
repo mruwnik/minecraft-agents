@@ -51,6 +51,38 @@
       (let [r (recovered eng)]
         (estimate/decision-text (if (= :skip (:decision r)) :skip :fetch) r (cfg/margin)))))
 
+(defn num-after [re text] (some-> (re-find re text) second js/parseFloat))
+
+(defn decided-numbers
+  "{:value :chance :cost :parts} the run's decision text records (to one decimal), a danger skip's too."
+  [eng]
+  (let [text (decided-text eng)]
+    {:value (num-after #"value ([0-9.]+)" text)
+     :chance (- 1 (/ (or (num-after #"x ([0-9.]+)% survive" text) 100) 100))
+     :cost (num-after #", cost ([0-9.]+)" text)
+     :parts (into {} (for [k [:trip :walk :danger :collect]
+                           :let [n (num-after (re-pattern (str "(?:\\(|, )" (name k) " ([0-9.]+)")) text)]
+                           :when n]
+                       [k n]))}))
+
+(defn near? [a b] (< (js/Math.abs (- a b)) 0.2))
+
+(defn fetch-holds?
+  "Whether the recorded decision numbers make the fetch: the pile's value times the chance of living through the trip over its cost and the margin."
+  [{:keys [value chance cost]}]
+  (> (cost/survived-worth value chance) (+ cost (cfg/margin))))
+
+(defn priced-by-the-cost-lib
+  "The decision's recorded numbers against the cost lib: the value is the item price of the pile, and the cost is fetch-cost of the walk it records
+  (its walk part at the per-block price, back and forth) with the danger and collect it records."
+  [pile {:keys [value cost parts] :as numbers}]
+  (let [{:keys [walk danger collect]} parts
+        priced (cost/fetch-cost {:distance (/ walk (* 2 (cost/per-block))) :danger-s (or danger 0) :elapsed-ms 5000 :back? true :stay-s collect})]
+    [(is (near? value (:value (cost/item-value pile))) "value is the cost lib's item price")
+     (is (near? cost (:cost priced)) "cost is the cost lib's fetch-cost of the recorded walk")
+     (is (near? (:trip parts) (cost/trip)))
+     (is (every? parts [:walk :trip]))]))
+
 (deftest a-skeleton-killer-is-priced-at-the-pile
   (async done
     (tu/run-async done
@@ -128,8 +160,8 @@
         (map #(hash-map :name (str "iron_" %) :count 1)
              ["pickaxe" "sword" "axe" "shovel" "helmet" "chestplate" "leggings" "boots"])))
 
-(defn ^:async pack-left?
-  "Whether the unarmed body leaves the kit pile at the far corner to a pack of n skeletons around the walk (a danger skip stays open)."
+(defn ^:async kit-run
+  "Die at the far corner over the kit pile with n skeletons standing round the walk; the unarmed body's decision."
   [n]
   (let [at {:x 22 :y 64 :z 22}
         pack (for [i (range n)] {:id (+ 20 i) :name "skeleton" :kind "hostile" :pos {:x (+ 10.5 (mod i 6)) :y 64 :z (+ 12.5 (quot i 6))}})
@@ -137,29 +169,23 @@
     (die! eng {:pos at :inventory kit-pile :cause "skeleton"})
     (core/submit! eng job {})
     (await (run-until-empty eng 20))
-    (and (nil? (recovered eng)) (boolean (re-find #"^skip: .*danger [1-9][0-9.]*,.*: skeleton" (decided-text eng))))))
-
-(def pack-edge-memo (atom nil))
-
-(defn ^:async pack-edge
-  "The smallest pack of skeletons that makes the unarmed body leave the kit pile, found by asking the job's own decision (monotone in the count)."
-  []
-  (or @pack-edge-memo
-      (do (assert (not (await (pack-left? 0))) "no pack: the pile is fetched")
-          (assert (await (pack-left? 40)) "a large pack: the pile is left")
-          (loop [lo 0 hi 40]
-            (if (= 1 (- hi lo))
-              (reset! pack-edge-memo hi)
-              (let [mid (quot (+ lo hi) 2)]
-                (if (await (pack-left? mid)) (recur lo mid) (recur mid hi))))))))
+    eng))
 
 (deftest a-kit-pile-inside-a-skeleton-packs-range-is-left-though-the-walk-skirts-it
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [edge (await (pack-edge))]
-          (is (await (pack-left? edge)) "the collect stands where the pack shoots, and their arrows land together")
-          (is (not (await (pack-left? (dec edge)))) "one skeleton fewer and the pile is fetched"))))))
+        (let [guarded (await (kit-run 12))
+              free (await (kit-run 0))
+              left (decided-numbers guarded)
+              taken (decided-numbers free)]
+          (is (nil? (recovered guarded)) "a danger skip stays open")
+          (is (not (fetch-holds? left)) "the pack's chance of killing the body outweighs the pile")
+          (is (pos? (:chance left)))
+          (priced-by-the-cost-lib kit-pile left)
+          (is (re-find #"^fetch: " (decided-text free)) "no pack: the pile is fetched")
+          (is (fetch-holds? taken))
+          (priced-by-the-cost-lib kit-pile taken))))))
 
 (deftest a-body-with-an-iron-sword-and-armour-goes-for-the-guarded-pile
   (async done
