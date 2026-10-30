@@ -14,7 +14,7 @@
             [jobs.items.obtain.craft :refer [craft-step!]]
             [jobs.items.obtain.gather :refer [finish-tree! gather-step!]]
             [jobs.items.obtain.need :refer [explorable? gather-held gather-viable?]]
-            [jobs.items.obtain.plan :refer [craft-plan gather-plan]]
+            [jobs.items.obtain.plan :refer [craft-plan gather-plan smelt-s]]
             [jobs.items.obtain.price :refer [price-of]]
             [jobs.items.obtain.why :refer [gather-fix no-source-why tried-text]]
             [jobs.lib.look :as look]
@@ -193,7 +193,7 @@
         smelts (reduce + 0 (map :count (filter #(= :smelt (:op %)) steps)))
         gathers (count (:gather pl))
         step-s (cost/craft-step)
-        mean (+ (* step-s (count (remove #(= :smelt (:op %)) steps))) (* (cost/smelt-step) smelts) (* (gather-need-s) gathers))
+        mean (+ (* step-s (count (remove #(= :smelt (:op %)) steps))) (smelt-s c smelts) (* (gather-need-s) gathers))
         item (or (:item pl) (first names))]
     {:uses {:job-time [0 (max step-s mean) (if (or (nil? pl) (pos? gathers)) ##Inf (* 3 (max step-s mean)))]}
      :yields {:items {item [0 n n]}}}))

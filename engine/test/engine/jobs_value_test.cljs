@@ -266,3 +266,9 @@
         "a changed ::craft-step rebuilds the table")
     (is (not (identical? t (settings/with-settings {:jobs.lib.cost.table/smelt-step 1000} #(table/table-for "1.20.4" {} {}))))
         "and a changed ::smelt-step")))
+
+(deftest the-worth-table-converges-with-the-fuel-share-a-smelt-adds
+  (let [price (v/smelt-price)]
+    (is (js/isFinite price))
+    (is (> price (table/smelt-step)))
+    (is (= (+ (each "potato") price) (each "baked_potato")) "the table's smelt step is the shared price")))

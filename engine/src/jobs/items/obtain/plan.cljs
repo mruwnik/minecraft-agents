@@ -111,11 +111,16 @@
          (filter open?)
          (every? #(torch/perceived-dark? p %)))))
 
+(defn smelt-s
+  "Seconds n smelted items take, fuel included (the plan holds no fuel fetch: the smelt child gets its own)."
+  [c n]
+  (* n (cost/smelt-price :version (game/version-of (:primitives c)))))
+
 (defn steps-s
   "Seconds the craft and smelt steps of a plan take."
-  [pl]
+  [c pl]
   (let [{smelts true crafts false} (group-by #(= :smelt (:op %)) (:steps pl))]
-    (+ (* (cost/craft-step) (count crafts)) (* (cost/smelt-step) (reduce + 0 (map :count smelts))))))
+    (+ (* (cost/craft-step) (count crafts)) (smelt-s c (reduce + 0 (map :count smelts))))))
 
 (defn walk-s
   "The straight walk to `at` and back, and its risk there and back (jobs.lib.walk-risk/estimate on the straight way,
@@ -138,7 +143,7 @@
 
 (defn craft-s [c names n]
   (when (makes? c)
-    (some-> (craft-plan c names n) steps-s)))
+    (some->> (craft-plan c names n) (steps-s c))))
 
 (declare gather-plan gathered-s)
 
@@ -290,7 +295,7 @@
         stock (if (< 1 tunnels) (stock-s c) 0)]
     (+ (reduce + 0 (map #(if-let [w %2] (:cost w) (need-cost c %)) needs ways))
        (if (infinite? stock) 0 (- (* (dec tunnels) stock)))
-       (* (cost/smelt-step) (reduce + 0 (map :count (filter #(= :smelt (:op %)) (:steps pl))))))))
+       (smelt-s c (reduce + 0 (map :count (filter #(= :smelt (:op %)) (:steps pl))))))))
 
 (defn gathered-s
   "Seconds a gather plan takes: its plan-cost (the death each walk risks with it) and its craft steps."

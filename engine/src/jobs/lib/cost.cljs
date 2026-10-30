@@ -307,6 +307,7 @@
 (def dig-cost table/dig-cost)
 (def kill-drops table/kill-drops)
 (def smelt-step table/smelt-step)
+(def smelt-price value/smelt-price)
 (def craft-step table/craft-step)
 (def detour-cost value/detour-cost)
 (def tour-cost value/tour-cost)

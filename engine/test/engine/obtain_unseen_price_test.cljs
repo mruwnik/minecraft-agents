@@ -232,3 +232,13 @@
 (deftest a-root-wooden-pickaxe-is-worth-the-walk-to-a-tree-at-the-edge-of-sight
   (is (nil? (seen-check "wooden_pickaxe" #{:craft :gather} (into {} (for [y (range 64 68)] [(str "40," y ",0") "oak_log"]))))
       "its three logs and six crafts from nothing are worth more than a walk of 40 blocks"))
+
+(deftest a-plans-smelts-cost-the-smelt-price-fuel-included-in-the-steps-the-quote-and-the-gather-cost
+  (let [c (ctx {:inventory (kit 0)})
+        v (game/version-of (:primitives c))
+        smelts {:steps [{:op :smelt :count 3}]}
+        price (cost/smelt-price :version v)]
+    (is (> price (cost/smelt-step)) "the worth table's fuel share is in it")
+    (is (= (* 3 price) (plan/steps-s c smelts)))
+    (is (= (* 3 price) (plan/plan-cost c v (assoc smelts :gather {}))))
+    (is (= (* 3 price) (plan/smelt-s c 3)))))

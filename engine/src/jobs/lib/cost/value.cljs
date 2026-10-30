@@ -219,6 +219,12 @@
 
 (def ^:private fuel-each (memoize tbl/fuel-each))
 
+(defn smelt-price
+  "Seconds one smelted item takes: ::smelt-step and the cheapest fuel's share of it (fuel-each). Options :version, :basis."
+  [& {:keys [version basis]}]
+  (let [[table basis] (table-basis (or version @game/version) {} basis)]
+    (+ (:smelt-step basis) (fuel-each table))))
+
 (defn- made
   "{:s :stations} of n of name made from nothing at the table's worths (m: :version :table :basis, :stations-s the
   seconds of a set of stations): an item cheaper got than made (its table worth below every way's) n x its worth, else
