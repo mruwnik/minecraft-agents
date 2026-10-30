@@ -547,11 +547,14 @@
 
 (defn waits-then-has-the-pickaxe
   "An obtain whose first call ends condition-failed with cause (a seen source's child said :later); the next one puts an
-  iron pickaxe in the pack and is done, or with give-up? ends nothing-possible. calls counts the bill's (the sword's obtain runs for real)."
+  iron pickaxe in the pack and is done, or with give-up? ends nothing-possible. calls counts the bill's (the sword's obtain runs for real); bill-s is the bill's quoted job time."
   ([cause calls] (waits-then-has-the-pickaxe cause calls false))
-  ([cause calls give-up?]
+  ([cause calls give-up?] (waits-then-has-the-pickaxe cause calls give-up? 1))
+  ([cause calls give-up? bill-s]
   (let [real (get registry/jobs 'jobs.items.obtain)]
-    (assoc real :round
+    (assoc real
+           :quote-of (fn [c] (if (:bill (:args c)) {:uses {:job-time [0 bill-s bill-s]}} ((:quote-of real) c)))
+           :round
            (fn ^:async stub-round [c]
              (cond
                (not (:bill (:args c))) (await ((:round real) c))
@@ -576,6 +579,21 @@
               (when (and (< i 200) (= :not-done @(:out s))) (recur (inc i))))
             (is (= 2 @calls) reason)
             (is (= :done (:status @(:out s))) reason)))))))
+
+(deftest a-later-wait-is-priced-with-the-bills-quote-not-the-bare-rest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[job-time waits] [[1 1] [1e9 0]]]
+          (let [calls (atom 0)
+                cause {:reason :occupied :text "taken" :recheck-after-ms 2000}
+                obtain (waits-then-has-the-pickaxe cause calls false job-time)
+                s (start (world [{:name "stick" :count 2}] {}) {:items ["iron_pickaxe"] :explore false :food false} f/sight-opts
+                         {'jobs.items.obtain obtain})]
+            (loop [i 0]
+              (await (f/run-ticks s 1))
+              (when (and (< i 200) (= :not-done @(:out s))) (recur (inc i))))
+            (is (= waits (count (f/events-of s :kit.later-wait))) (str "a bill quoted at " job-time " s"))))))))
 
 (deftest a-later-wait-is-won-only-by-a-done-bill
   (async done

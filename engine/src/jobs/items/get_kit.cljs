@@ -288,11 +288,16 @@
                 (some? (:gathered r))
                 (not= :none-seen (:gathered r)))))
 
-(defn ^:async round-s
-  "Seconds another bill round takes: the rest (cost/retry-s :kit-later) plus the bill's quoted mean job time (a round runs the whole bill again)."
+(defn ^:async bill-s
+  "The bill's quoted mean job time: what a round that runs the whole bill again takes."
   [c bill]
   (let [q (await (ctx/quote c 'jobs.items.obtain {:bill bill :explore (:explore (:args c))}))]
-    (+ (cost/retry-s :kit-later) (or (get-in q [:uses :job-time 1]) ##Inf))))
+    (or (get-in q [:uses :job-time 1]) ##Inf)))
+
+(defn ^:async round-s
+  "Seconds another bill round takes: the rest (cost/retry-s :kit-later) plus bill-s."
+  [c bill]
+  (+ (cost/retry-s :kit-later) (await (bill-s c bill))))
 
 (defn retry?
   "Whether another bill round of round-s seconds is worth its price after tries fruitless ones (cost/try-again? :kit-later at the kit's worth)."
@@ -307,29 +312,30 @@
 (defn rest-later!
   "For a child's stop r ({:kind :reason :why :cause}) when it ended condition-failed for a :later (the world may lift it; not
   obtain's :no-source, nothing seen and no search, nor a pack that stayed full) and another try is worth its price
-  (cost/try-again? :kit-later, after the later stops in a row counted under fails-key, a try the rest's seconds): the kit
-  waits with r's cause, rested for later-wait-s, and :continue; else nil. what and again name the try in the text."
-  [c r fails-key what again]
+  (cost/try-again? :kit-later, after the later stops in a row counted under fails-key, a try the rest's seconds plus run-s,
+  what the work run again takes): the kit waits with r's cause, rested for later-wait-s, and :continue; else nil. what and
+  again name the try in the text."
+  [c r fails-key what again run-s]
   (let [fails (inc (get (ctx/mem c) fails-key 0))
         s (later-wait-s r)]
-    (when (and (= :condition-failed (:kind r)) (not (#{:no-source :inventory-full} (:reason r))) (cost/try-again? c :kit-later {:fails fails :try-s s}))
+    (when (and (= :condition-failed (:kind r)) (not (#{:no-source :inventory-full} (:reason r))) (cost/try-again? c :kit-later {:fails fails :try-s (+ s run-s)}))
       (ctx/update-mem! c assoc fails-key fails)
       (ctx/emit! c :kit.later-wait :info {:cause (:reason r) :why (:why r) :fails fails :wait-s s
                                           :text (str what " waits (" (:why r) "): " again " in " (js/Math.round s) " s")})
       (some-> (:child-wait c) (reset! (assoc (if (map? (:cause r)) (:cause r) {:reason (:reason r)}) :recheck-after-ms (* 1000 s))))
       :continue)))
 
-(defn wait-later!
-  "rest-later! for the bill's stop r; a rest runs the bill again in a fresh round."
+(defn ^:async wait-later!
+  "rest-later! for the bill's stop r, a try priced with the bill's quote (bill-s) as retry? does; a rest runs the bill again in a fresh round."
   [c r]
-  (when-let [w (rest-later! c r :later-fails "gathering" "running the bill again")]
+  (when-let [w (rest-later! c r :later-fails "gathering" "running the bill again" (if (= :condition-failed (:kind r)) (await (bill-s c (bill-of c))) 0))]
     (ctx/update-mem! c (fn [m] (-> m (dissoc :covered :covered-done :bill) (update :bill-round (fnil inc 0)))))
     w))
 
 (defn food-later!
   "rest-later! for get-food's stop r (:too-dangerous while the body is fragile with a hostile near): the food is looked for again after the rest."
   [c r]
-  (rest-later! c r :food-later-fails "food" "looking for food again"))
+  (rest-later! c r :food-later-fails "food" "looking for food again" 0))
 
 (defn food-over!
   "Clear the food's later stops in a row once get-food ends other than condition-failed; the wait won (:kit.later-over) when the body was fed."
@@ -461,7 +467,7 @@
                   (and r (not (:covered-done (ctx/mem c))) (seq (covered-of version (:partial-first a) todo (:carried (state c)))))
                   (do (ctx/update-mem! c (fn [m] (-> m (dissoc :covered :bill) (update :bill-round (fnil inc 0)))))
                       :again)
-                  (wait-later! c r) :continue
+                  (await (wait-later! c r)) :continue
                   (some? r) (stop-after-wear! c (update r :item #(or % (first todo))))
                   :else (do (ctx/update-mem! c assoc :bill-done true)
                             (ctx/emit! c :kit.progress :info {:text (str "got " (str/join ", " todo))})
