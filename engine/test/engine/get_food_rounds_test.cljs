@@ -790,18 +790,14 @@
           (await (one-round! eng {}))
           (is (= 2 (count (searches seen))) "the 10 min rest is cut short when starving"))))))
 
-(deftest each-give-up-widens-the-next-search
+(deftest a-herd-past-the-old-24-block-radius-is-hunted-while-the-walk-pays
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen clock]} (setup {:self {:food 4 :health 20}} :step-ms 5)
-              radii (fn [] (mapv #(re-find #"within \d+ blocks" (str (:text %))) (none-endings seen)))]
-          (await (one-round! eng {:explore false}))
-          (swap! clock + 700000)
-          (await (one-round! eng {:explore false}))
-          (swap! clock + 700000)
-          (await (one-round! eng {:explore false}))
-          (is (= ["within 24 blocks" "within 48 blocks" "within 72 blocks"] (radii))))))))
+        (let [far (mapv #(update-in % [:pos :x] + 55) herd)
+              {:keys [eng p]} (setup {:self {:food 2} :floor [-30 -10 100 10] :entities far})]
+          (await (one-round! eng {:explore false :settings {:jobs.lib.combat/attack-gap-ms 0}}))
+          (is (seq (calls p "attack")) "60 blocks off: one kill's points cost more in the field than the walk"))))))
 
 (deftest starving-with-only-rotten-flesh-eats-it-as-a-last-resort
   (async done

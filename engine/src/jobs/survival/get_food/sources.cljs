@@ -21,7 +21,6 @@
 
 (a/defargs settings
   {::reach {:default 3 :doc "How near a food source the body stands to use it, in blocks." :spec (a/int-in 0 nil)}
-   ::source-radius {:default 64 :doc "How far away a remembered food source still counts, in blocks." :spec (a/num-in 0 nil)}
    ::take {:default 16 :doc "Most items to withdraw from a chest in one go." :spec (a/int-in 1 nil)}})
 
 (defn reach [] (settings/get settings ::reach))
@@ -46,6 +45,12 @@
   (let [p (:primitives c)]
     (max (- (animals/carry c) (foods/stock-points (u/inventory p))) (- foods/top-up-food (.-food (.self p))))))
 
+(defn walk-reach
+  "Blocks a walk to food may take while it pays for the points still wanted (wanted-points), at most most of them:
+  cost.food/walk-reach."
+  ([c] (walk-reach c ##Inf))
+  ([c most] (food/walk-reach (min most (wanted-points c)))))
+
 (defn home-entries
   "The home food (home-food/sources, the one list a trip's food is counted from) this call takes for the points it still
   wants (cost.food/fetchable), in that order, as :food-source-shaped entries {:data {:pos :kind :box :crops}}: chests
@@ -55,12 +60,13 @@
        (food/fetchable (home-food/sources c (u/self-pos c)) (wanted-points c))))
 
 (defn usable-entries
-  "The :food-source entries within ::source-radius, newest first, then home-entries, not tried in this job and not
+  "The :food-source entries whose walk pays (walk-reach), newest first, then home-entries, not tried in this job and not
   another's chest."
   [c]
   (let [tried (set (:tried-sources (ctx/mem c)))
+        reach (walk-reach c)
         noted (->> (ctx/entries c :food-source)
-                   (filter (fn [{:keys [data]}] (<= (u/dist (u/self-pos c) (:pos data)) (settings/get settings ::source-radius))))
+                   (filter (fn [{:keys [data]}] (<= (u/dist (u/self-pos c) (:pos data)) reach)))
                    (sort-by :t >))
         known (set (map (comp :pos :data) noted))]
     (->> (concat noted (remove #(known (:pos (:data %))) (home-entries c)))
@@ -77,13 +83,14 @@
   (zipmap [:x :y :z] (map #(js/Math.floor (/ (+ %1 %2) 2)) lo hi)))
 
 (defn own-boxes
-  "The [min max] cells of the zones this body owns and of the plans it made (their footprints), within ::source-radius
-  of their middle, not in this job's memory list tried-key, nearest first: its own pens and farms, which it knows without
+  "The [min max] cells of the zones this body owns and of the plans it made (their footprints) whose middle's walk
+  pays (walk-reach), not in this job's memory list tried-key, nearest first: its own pens and farms, which it knows without
   seeing them."
   [c tried-key]
   (let [self (ctx/self-name c)
         here (u/self-pos c)
         tried (set (tried-key (ctx/mem c)))
+        reach (walk-reach c)
         zoned (->> (known/zones c)
                    (filter #(zones/same-owner? (:owner %) self))
                    (map (juxt :min :max)))
@@ -96,7 +103,7 @@
     (->> (concat zoned planned)
          distinct
          (remove (comp tried box-middle))
-         (filter #(<= (u/dist here (box-middle %)) (settings/get settings ::source-radius)))
+         (filter #(<= (u/dist here (box-middle %)) reach))
          (sort-by #(u/dist here (box-middle %))))))
 
 (defn box-around

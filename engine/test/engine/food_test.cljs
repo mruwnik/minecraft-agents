@@ -572,12 +572,12 @@
           (is (= 10 (food p)))
           (is (empty? (none-events seen))))))))
 
-(deftest get-food-ignores-a-source-beyond-its-radius
+(deftest get-food-ignores-a-source-whose-walk-costs-more-than-the-field
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:self {:food 0}})]
-          (know-source! eng {:x 500 :y 64 :z 0} :farm)
+          (know-source! eng {:x 2000 :y 64 :z 0} :farm)
           (core/submit! eng '(jobs.survival.get-food {:carry 0 :explore false}) {})
           (await (run-until-empty eng 10))
           (is (= [] (tu/walk-calls p))))))))

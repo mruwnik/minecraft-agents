@@ -9,7 +9,7 @@
   :body {:at [4.5 0 4.5] :settle-s 2}
   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY foodLevel" "data: ([0-9]|1[01])$" 20]
         [:rcon "damage $BODY 14 minecraft:generic"]
-        [:job (jobs.survival.get-food {:carry 0 :explore false :settings {:jobs.survival.get-food/hunt-radius 4 :jobs.survival.get-food/eat-bad-food 12}})]]
+        [:job (jobs.survival.get-food {:carry 0 :explore false :settings {:jobs.survival.get-food/eat-bad-food 12}})]]
   :limit-s 90}
  :cases
  [{:name "spider-eyes-are-left-when-poison-would-leave-the-body-fragile"

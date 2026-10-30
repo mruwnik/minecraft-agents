@@ -25,6 +25,7 @@
             [jobs.survival.get-food.report :as report]
             [jobs.survival.get-food.risk :as risk]
             [jobs.lib.crops :as crops]
+            [jobs.lib.home-food :as home-food]
             [jobs.survival.get-food.sources :as sources]))
 
 (def doc
@@ -38,7 +39,7 @@
          to pay for making one (jobs.lib.cost/cook-worth?): cook it (the smelt job, which fetches a furnace and fuel, waiting out the cook in
          the round), then eat it. Done before eating unless a danger is sensed or food is 0 and health would not outlast the cook plus cook's ::cook-margin-hp. Not while the night
          handler holds. A failed cook is not retried in this job (jobs.survival.get-food.cook).
-  :source  The newest :food-source entry {:pos :kind} within ::source-radius, else its home food (jobs.lib.home-food/sources, the list a trip's food is counted from) worth its walk for the points still wanted (cost.food/worth-fetching?), cheapest a point first, reached by go-to:
+  :source  The newest :food-source entry {:pos :kind} whose walk pays (sources/walk-reach: cost.food/walk-reach of the points still wanted), else its home food (jobs.lib.home-food/sources, the list a trip's food is counted from) worth its walk for the points still wanted (cost.food/worth-fetching?), cheapest a point first, reached by go-to:
          :farm: dig its mature crops (blocks.dig, which collects the drops). It does not replant.
          :chest: withdraw its best food (storage.withdraw); with no food but 3 or more wheat, wheat in multiples of 3,
          enough for the hunger, for :bake.
@@ -47,18 +48,18 @@
          :pen: its own pen's surplus, hunted there (:pen's cull).
          A chest found empty or a source go-to cannot reach is forgotten; a farm with nothing ripe is passed over.
   :collect  Harvest items lying within 8 blocks (collect-drops).
-  :hunt  The nearest passive food animal within ::hunt-radius (combat.hunt over the animal's kind, which collects its drops).
-  :crops  Mature crops, sweet berry bushes or melons within ::hunt-radius (blocks.dig).
+  :hunt  The nearest passive food animal within hunt-radius, the walk one kill pays (sources/walk-reach of home-food/best-kill-points) (combat.hunt over the animal's kind, which collects its drops).
+  :crops  Mature crops, sweet berry bushes or melons within crop-radius, the walk the points still wanted pay, within the blocks perception remembers (look/memory-radius) (blocks.dig).
   :fish  Nothing left: with a fishing rod carried, once per job it fishes two (jobs.food.fish, which looks for a bank beside water within its ::bank-radius) and eats or cooks them.
   :pen   The surplus of its own pens: an animal in a zone or plan of its own in sight, else it walks (go-to) to the
-         nearest zone or plan of its own within ::source-radius it has not visited in this job and culls there (animals.cull over its box, keeping
+         nearest zone or plan of its own whose walk pays (sources/walk-reach) it has not visited in this job and culls there (animals.cull over its box, keeping
          the pair; the kill's rule is :own-pen). Its stock is its reserve: taken after the wild food in reach, before fishing and the search.
   :field Last: it walks to the nearest zone or plan of its own it has not visited in this job and cuts and replants the ripe wheat there
          (jobs.farm.harvest); the wheat is baked next (:bake).
   Then, once per job (:explore, default on; a starving body again after foods/::starving-rest-ms) it searches for food animals and crops (jobs.explore.search, the
   priced by what food is worth the body (food-animals/search-benefit); not while the search would wait (dark sky, danger near)) and goes on if it found some (an animal only a note gave, with none in sight, is walked toward once the search found nothing, the cheapest note at any distance, under the same checks as the search, each note once a job; a hungry body under rock climbs out first, jobs.lib.surface-up); at ::eat-bad-food (6) or below it then eats harmful food carried (rotten
   flesh, with :allow-bad). Still nothing: it ends nothing-possible :no-food (the text says what was searched, the nearest known source) and writes
-  :hungry, which widens the hunt radius; the hungry trigger rests after that ending (its :rest-s).
+  :hungry; the hungry trigger rests after that ending (its :rest-s).
   :eat false: only gathers, done when the pack holds :carry food points (jobs.survival.eat fetches this way; a job cannot call its own caller).
   :carry n (default the body's reserve, jobs.lib.home-food/carry-points over its call chain's trip; 0: only feed): a fed body also takes the ways until the pack holds n food points, else ends nothing-possible :no-carry, or :done {:short true} while the pack holds :least points.
   A fed body (not hungry, nothing to top up with, no :carry short) is done at once.
@@ -91,18 +92,8 @@
 
 (def hungry-policy {:cap 10 :ttl (* 60 60 1000)})
 
-(def widen-max
-  "The search grows with each recent give-up (:hungry entry) up to this many times its size."
-  3)
-
-(defn widen
-  "How many times the search radius is multiplied: 1 plus the :hungry give-ups within the policy ttl, at most widen-max."
-  [c]
-  (min widen-max (inc (ctx/count-in c :hungry (:ttl hungry-policy)))))
-
 (a/defargs settings
-  {::hunt-radius {:default 24 :doc "How far to look for animals and wild crops, in blocks (widened by recent give-ups)." :spec (a/num-in 0 nil)}
-   ::job-time-s {:default 1800 :doc "Seconds one attempt at getting fed may take: a hunt, a search, a cook." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 1800 :doc "Seconds one attempt at getting fed may take: a hunt, a search, a cook." :spec (a/num-in 0 nil)}
    ::drop-radius {:default 8 :doc "Blocks around the body in which dropped food is picked up." :spec (a/int-in 0 nil)}
    ::kept-lifted-below {:default -1 :doc "At this much food or less, with no food carried, the last adults of a kind (kept for breeding) are hunted too; -1 (default) never." :spec (a/int-in -1 20)}
    ::eat-bad-food {:default 6 :doc "At this much food or less the last resort eats harmful food carried (rotten flesh); above it harmful food is not food." :spec (a/num-in 0 20)}
@@ -110,9 +101,16 @@
    ::max-ways {:default 12 :doc "Ways one call tries without getting fed before it ends :still-hungry." :spec (a/int-in 0 nil)}})
 
 (defn hunt-radius
-  "How far the hunt and the crop way look: the widened ::hunt-radius, or as far as the search saw what it found (:found-reach), so a find at the edge is not out of reach."
+  "How far the hunt looks: the walk one kill of the best food animal pays (sources/walk-reach at home-food/best-kill-points),
+  or as far as the search saw what it found (:found-reach), so a find at the edge is not out of reach."
   [c]
-  (max (* (widen c) (settings/get settings ::hunt-radius)) (:found-reach (ctx/mem c) 0)))
+  (max (sources/walk-reach c (home-food/best-kill-points (:primitives c))) (:found-reach (ctx/mem c) 0)))
+
+(defn crop-radius
+  "How far the crop way looks: the walk the points still wanted pay (sources/walk-reach), within the blocks perception
+  remembers (look/memory-radius), or :found-reach."
+  [c]
+  (max (min (sources/walk-reach c) look/memory-radius) (:found-reach (ctx/mem c) 0)))
 
 (defn drop-radius [] (settings/get settings ::drop-radius))
 
@@ -323,7 +321,7 @@
 
 (defn ^:async dig-crops!
   [c last-resort?]
-  (sources/dig-ripe! c (merge crops/food-ripe-age crops/wild-food) (u/self-pos c) (hunt-radius c) last-resort?))
+  (sources/dig-ripe! c (merge crops/food-ripe-age crops/wild-food) (u/self-pos c) (crop-radius c) last-resort?))
 
 (defn ^:async next-way!
   "The first allowed way with something to do: :again (try eating, then the ways, again), :continue (yield), or nil when
@@ -513,7 +511,7 @@
   (ctx/end c :nothing-possible reason (merge {:text text} extra)))
 
 (defn none!
-  "End :no-food (what was searched, what was passed over) and write :hungry, which widens the next search."
+  "End :no-food (what was searched, what was passed over) and write :hungry."
   [c]
   (let [food (food-level c)
         around (animals/nearby c (hunt-radius c))

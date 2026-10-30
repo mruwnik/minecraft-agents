@@ -150,6 +150,12 @@
   (let [n (min points want)]
     (and (pos? n) (< (+ fetch-s (* point-s n)) (* n (field-point-s))))))
 
+(defn walk-reach
+  "Blocks a walk to food giving points may take while it pays (worth-fetching? with no work a point): its trip and walk
+  (cost.value/trip, per-block) cost less than the points got in the field."
+  [points]
+  (max 0 (/ (- (* points (field-point-s)) (value/trip)) (value/per-block))))
+
 (defn fetchable
   "The home food sources get-food takes for want points, in its order: cheapest a point first (point-price), each while
   it is worth-fetching? for the points still wanted."

@@ -252,6 +252,11 @@
 
 ;; ------------------------------------------------------------------ what the body has seen
 
+(def memory-radius
+  "Blocks round the body within which perception remembers the blocks it saw (store/max-seen-radius): a block query or
+  a look for blocks past it finds nothing more."
+  store/max-seen-radius)
+
 (defn seen-blocks
   "The blocks the body has seen (perception's memory, radius capped at 64, never x-ray), nearest first, as
   {:name :pos :age-ms (:properties)}. q: :names (coll) or :match (name -> truthy), :radius (default 16), :max (64);

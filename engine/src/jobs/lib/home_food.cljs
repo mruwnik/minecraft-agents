@@ -64,6 +64,14 @@
           :let [[item share] food]]
       {:kind :crop :pos pos :name (.-name b) :points (* share (foods/points item))})))
 
+(defn kill-points
+  "Food points a kill of a food animal kind gives: its expected meat drops (cost/kill-drops) at the raw meat's points."
+  [p kind]
+  (let [meat (meat-of kind)]
+    (* (or (cost/kill-drops kind meat :version (game/version-of p)) cost/expected-drops) (foods/points meat))))
+
+(defn best-kill-points "The most food points one kill of a food animal gives (kill-points)." [p] (apply max (map #(kill-points p %) (keys meat-of))))
+
 (defn pen-sources [c]
   (let [p (:primitives c)
         seen (remove #(true? (.-baby %)) (look/seen-objs p {:radius 64 :kind "passive" :names (vec (keys meat-of)) :max 64}))
@@ -75,11 +83,9 @@
         own (filter #(access/in-own-area? c (:pos %))
                     (concat (map (fn [e] {:kind (.-name e) :pos (u/pos-of (.-pos e))}) seen) noted))]
     (for [[kind as] (group-by :kind own)
-          :let [meat (meat-of kind)
-                drops (or (cost/kill-drops kind meat :version (game/version-of p)) cost/expected-drops)
-                spare-n (spare/takeable-adults (spare/keep-adults) (count as))]
+          :let [spare-n (spare/takeable-adults (spare/keep-adults) (count as))]
           :when (pos? spare-n)]
-      {:kind :pen :pos (:pos (first as)) :points (* spare-n drops (foods/points meat))})))
+      {:kind :pen :pos (:pos (first as)) :points (* spare-n (kill-points p kind))})))
 
 (def kept-crops
   "The crop sources of the last ask: {:key :sources}. Their seen-block reads cost ms over a field's cells, and choosers

@@ -184,6 +184,12 @@
     (is (<= (food-cost/trip-cost t k) (food-cost/trip-cost t (inc k))))
     (is (= 82 (:walk-out t)) "the walk home and out again: a trip of 10 s and 240 blocks at 0.3")))
 
+(deftest a-walk-to-food-reaches-as-far-as-worth-fetching-pays
+  (let [d (food-cost/walk-reach 6)
+        at (fn [blocks] (food-cost/worth-fetching? {:points 6 :fetch-s (+ 10 (* 0.3 blocks)) :point-s 0} 6))]
+    (is (= [true false] [(at (- d 1)) (at (+ d 1))]) "the reach is the walk at which 6 points cost what the field asks")
+    (is (< 200 d 300) "one cow's 6 points pay a walk of some 240 blocks")))
+
 (def ff-boots (fn [lvl] {:feet {:name "iron_boots" :enchants [{:name "feather_falling" :lvl lvl}]}}))
 
 (deftest fall-damage-is-vanillas-and-armour-points-do-not-reduce-it

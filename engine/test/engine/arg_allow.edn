@@ -241,9 +241,7 @@
  :jobs.movement.cross-water/min-cross
  :jobs.survival.breathe/search-radius
  :jobs.survival.breathe/swim-range
- :jobs.survival.get-food.sources/source-radius
  :jobs.survival.get-food/eat-bad-food
- :jobs.survival.get-food/hunt-radius
  :jobs.survival.hide-out/hide-s
  :jobs.survival.hide-out/quiet-s
  :jobs.survival.night.sites/flee-radius
