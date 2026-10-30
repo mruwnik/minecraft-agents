@@ -233,29 +233,62 @@
     (is (< (:seconds deep) 130))
     (is (< deep-cells 400) (str "a goal 70 blocks down (" deep-cells " cells)"))))
 
+(defn same-price?
+  "Whether search prices each [from goal opts] of rows the same with the unseen-priced bound, bounded by that price (a
+  bound over the way's price anywhere on it ends :dearer), as with the walk bound alone, over the cells of seen (never seen
+  below y 10 but for them), seen-steps and seen-cells measured to its cells: [row ok?]."
+  [seen rows]
+  (let [rho (fn [mf] (fn [x y z] (reduce min ##Inf (for [[[a b c]] seen] (max (+ (js/Math.abs (- x a)) (js/Math.abs (- z c))) (js/Math.ceil (/ (js/Math.abs (- y b)) mf)))))))
+        price (fn [from goal opts prior?] (:seconds (first ((dr/search (world seen) from goal (assoc opts :prior-h? prior?)) 100000))))]
+    (for [[from goal extra] rows
+          :let [opts (merge (assoc (unseen-opts seen (memoize (rho 3)) (memoize (rho 1)) 1000) :max-fall 3 :margin 3) extra)
+                walk (price from goal opts false)]]
+      [[from goal] (and (number? walk) (< (js/Math.abs (- walk (price from goal (assoc opts :max-s (+ walk 1e-6)) true))) 1e-9))])))
+
+(defn stand
+  "A seen 2-high stand at feet cell: its floor stone, feet and head air."
+  [[x y z]]
+  {[x (dec y) z] "stone" [x y z] "air" [x (inc y) z] "air"})
+
 (deftest the-unseen-priced-bound-finds-the-way-the-walk-bound-alone-finds
   ;; seen tunnels and seen rock in unseen stone, ways up, down, across, by pillar and to a range: a bound over any way's
   ;; price, or one that rose more than a step's price from cell to cell, would end on a dearer way
   (let [seen (into {} (concat (for [x (range -2 9) z [3]] [[x 4 z] "air"])
                               (for [x [6] y (range -2 4) z (range 0 4)] [[x y z] "air"])
                               (for [x (range -3 3) y [0 1] z [-4]] [[x y z] "air"])
-                              (for [x (range 1 5) y [6] z (range -3 0)] [[x y z] "stone"])))
-        rho (fn [x y z] (reduce min ##Inf (for [[[a b c]] seen] (max (+ (js/Math.abs (- x a)) (js/Math.abs (- z c))) (js/Math.abs (- y b))))))
-        steps (fn [x y z] (reduce min ##Inf (for [[[a b c]] seen] (max (+ (js/Math.abs (- x a)) (js/Math.abs (- z c))) (js/Math.ceil (/ (js/Math.abs (- y b)) 3))))))
-        base (assoc (unseen-opts seen (memoize steps) (memoize rho) 1000) :max-fall 3 :margin 3)
-        price (fn [from goal opts prior?] (:seconds (first ((dr/search (world seen) from goal (assoc opts :prior-h? prior?)) 100000))))]
-    (doseq [[from goal opts] [[[0 10 0] [6 -2 0] base]
-                              [[0 10 0] [12 -14 5] base]
-                              [[0 10 0] [-1 -16 0] base]
-                              [[-20 10 0] [-30 -6 0] base]
-                              [[0 10 0] [-3 0 -4] base]
-                              [[6 -2 1] [0 10 0] base]
-                              [[6 -2 1] [0 10 0] (assoc base :pillar-s 0.4 :place-s 0.4)]
-                              [[-3 0 -4] [8 4 3] base]
-                              [[0 10 0] [2 -1 -6] (assoc base :range 1 :near [2 -1 -6])]
-                              [[-2 4 3] [4 5 -2] (assoc base :pillar-s 0.4)]]]
-      (let [walk (price from goal opts false)]
-        (is (and (number? walk) (< (js/Math.abs (- walk (price from goal opts true))) 1e-9)) (str from " to " goal))))))
+                              (for [x (range 1 5) y [6] z (range -3 0)] [[x y z] "stone"])))]
+    (is (= [] (remove second (same-price? seen [[[0 10 0] [6 -2 0]]
+                                               [[0 10 0] [12 -14 5]]
+                                               [[0 10 0] [-1 -16 0]]
+                                               [[-20 10 0] [-30 -6 0]]
+                                               [[0 10 0] [-3 0 -4]]
+                                               [[6 -2 1] [0 10 0]]
+                                               [[6 -2 1] [0 10 0] {:pillar-s 0.4 :place-s 0.4}]
+                                               [[-3 0 -4] [8 4 3]]
+                                               [[0 10 0] [2 -1 -6] {:range 1 :near [2 -1 -6]}]
+                                               [[-2 4 3] [4 5 -2] {:pillar-s 0.4}]]))))))
+
+(deftest the-unseen-priced-bound-prices-seen-steps-at-a-ways-start-end-or-both-as-the-walk-bound-alone
+  ;; seen steps (floor, feet and head seen) at the start, the end or both, so the unseen steps before the first seen one and
+  ;; after the last are added
+  (let [floored (merge (into {} (mapcat #(stand [% 4 6]) (range -2 11)))
+                       (into {} (for [x (range 12 17) z (range -2 3)] [[x -3 z] "stone"]))
+                       (into {} (for [x (range 12 17) y [-2 -1] z (range -2 3)] [[x y z] "air"]))
+                       {[3 -4 -6] "stone"}
+                       (stand [-6 -10 0]) {[-6 -8 0] "stone"})]
+    (is (= [] (remove second (same-price? floored [[[0 10 0] [8 4 6]]
+                                                  [[-2 4 6] [14 -2 0]]
+                                                  [[14 -2 0] [0 10 0]]
+                                                  [[14 -2 0] [-2 4 6]]
+                                                  [[0 10 0] [3 -7 -6]]
+                                                  [[0 10 0] [3 -8 -6]]
+                                                  [[-6 -10 0] [-6 2 0] {:pillar-s 0.4 :place-s 0.4}]
+                                                  [[-6 -10 0] [8 4 6] {:pillar-s 0.4}]
+                                                  [[14 -2 0] [8 4 6] {:range 1 :near [8 4 6]}]]))))
+    ;; digs free, so only the unseen steps' count is left to price the way at all
+    (is (= [] (remove second (same-price? floored (for [[from goal] [[[0 10 0] [8 4 6]] [[-2 4 6] [14 -2 0]] [[14 -2 0] [0 10 0]]
+                                                                     [[0 10 0] [3 -8 -6]] [[-6 -10 0] [8 4 6]] [[8 4 6] [-6 -10 0]]]]
+                                                    [from goal {:dig-s (constantly 0) :unseen-dig-s 0}])))))))
 
 (deftest a-resumed-search-reads-the-memory-its-bound-was-made-from
   ;; a tunnel seen while the search goes on, where its bound (made at the start) priced unseen rock: read as seen, its cells
