@@ -18,6 +18,7 @@
             [jobs.items.craft :as craft]
             [jobs.lib.reserve :as reserve]
             [jobs.items.obtain.table :as table]
+            [jobs.lib.sources :as sources]
             [jobs.lib.recipes :as recipes]))
 
 (defn cow [id x] {:id id :name "cow" :kind "passive" :pos {:x x :y 64 :z 0} :drops [{:name "beef" :count 1}]})
@@ -33,7 +34,7 @@
 (def herd {:inventory h/sword :entities [(cow 1 3) (cow 2 6) (cow 3 8) (cow 4 10)]})
 
 (deftest raw-meat-is-a-hunt-need-and-cooked-meat-gathers-it
-  (is (= {"beef" 2} (:gather (recipes/plan game/default-version {} "cooked_beef" 2 (merge (table/source-opts) {:gather? true :table? true})))))
+  (is (= {"beef" 2} (:gather (recipes/plan game/default-version {} "cooked_beef" 2 (merge (sources/source-opts) {:gather? true :table? true})))))
   (is (= [:hunt :hunt] (map (comp table/need-way first table/gather-needs) [{"beef" 1} {"porkchop" 1}]))))
 
 (deftest a-field-crop-is-a-crops-need-and-a-block-is-a-gather-need
@@ -183,8 +184,8 @@
     (is (= :ok (first (obtain/done? c))))))
 
 (deftest every-gather-need-passes-only-args-its-job-has
-  (let [items (concat (keys table/mob-drops) (keys table/crop-blocks) (keys table/grass-seeds) table/stalks
-                      (keys table/hand-dug) table/ore-drops table/fish-items
+  (let [items (concat (keys sources/mob-drops) (keys sources/crop-blocks) (keys table/grass-seeds) table/stalks
+                      (keys sources/hand-dug) sources/ore-drops sources/fish-items
                       ["log" "oak_log" "oak_sapling" "cobblestone" "obsidian" "bone_meal" "water_bucket" "white_wool"])]
     (doseq [item items
             need (table/gather-needs {item 1})]

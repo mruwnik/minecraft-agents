@@ -4,11 +4,12 @@
             [engine.game :as game]
             [engine.notes :as notes]
             [jobs.lib.crafting-table :as crafting-table]
-            [jobs.items.obtain.base :refer [craft-radius explore-opts gathers? makes? plan-allowed? search-names search-scan-radius search-worth seen-radius way?]]
+            [jobs.items.obtain.base :refer [explore-opts gathers? makes? plan-allowed? search-names search-scan-radius search-worth seen-radius way?]]
             [jobs.items.obtain.chest :refer [candidates]]
             [jobs.items.obtain.loose :as loose-way]
             [jobs.items.obtain.seen :refer [seen-of sheep-in-range shears-source]]
-            [jobs.items.obtain.table :refer [gather-needs grass-seeds hand-dug leaves-of material-blocks need-way searchable? source-opts stalks wool-color wool?]]
+            [jobs.items.obtain.table :refer [gather-needs grass-seeds leaves-of material-blocks need-way searchable? stalks wool-color wool?]]
+            [jobs.lib.sources :refer [hand-dug source-opts]]
             [jobs.lib.recipes :as recipes]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.animal-spare :as spare]
@@ -40,7 +41,7 @@
         have (storage/usable-totals (u/inventory p))
         mem (ctx/mem c)
         table? (and (not (get-in mem [:craft :table-unreachable]))
-                    (boolean (or (:table mem) (crafting-table/nearest p (craft-radius)))))
+                    (crafting-table/at-hand? p mem))
         version (game/version-of p)]
     (furnace-free
      (keep (fn [name]
@@ -347,7 +348,7 @@
                               (seq (look/seen-blocks p {:names (vec seen-of-name) :radius (seen-radius) :max 1})))
                       {:steps [] :gather {name n} :item name})
                     (let [opts (merge (source-opts)
-                                      {:table? (boolean (or (:table (ctx/mem c)) (crafting-table/nearest p (craft-radius))))
+                                      {:table? (crafting-table/at-hand? p (ctx/mem c))
                                        :gather? true :materials materials})]
                       (when-let [pl (preferred c version (recipes/plan version have name n opts) have name n opts)]
                         (when (plan-allowed? c pl)

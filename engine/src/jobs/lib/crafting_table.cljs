@@ -1,6 +1,11 @@
 (ns jobs.lib.crafting-table
   "Finding a crafting table the body has seen; shared by craft and obtain's plan."
-  (:require [jobs.lib.look :as look]))
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
+            [jobs.lib.look :as look]))
+
+(a/defargs settings
+  {::radius {:default 32 :doc "Blocks within which a crafting table counts as at hand when a craft plan is made." :spec (a/int-in 0 nil)}})
 
 (defn cell-vec [pos] (mapv #(js/Math.floor %) [(:x pos) (:y pos) (:z pos)]))
 
@@ -12,3 +17,8 @@
         (map :pos)
         (remove #(contains? skip (cell-vec %)))
         first)))
+
+(defn at-hand?
+  "Whether a craft plan can count on a table: the one named in mem :table, else one seen within ::radius."
+  [p mem]
+  (boolean (or (:table mem) (nearest p (settings/get settings ::radius)))))

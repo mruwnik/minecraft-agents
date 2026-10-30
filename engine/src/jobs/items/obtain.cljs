@@ -3,6 +3,7 @@
             [jobs.lib.ready :as ready]
             [jobs.lib.checks :as checks]
             [jobs.lib.cost :as cost]
+            [jobs.lib.fetch-time :as fetch-time]
             [engine.contract :as contract]
             [engine.args :as a]
             [engine.ctx :as ctx]
@@ -40,7 +41,7 @@
 
   Needs: valid :item or :any-of and :count, or a :bill (else impossible :bad-args); a source (else condition-failed :no-source with :why naming what each way lacks); a way priced within the call's worth (jobs.items.obtain.price/price-of: walk there and back, the death it risks; else :later :not-worth; no way known is :not-worth only at a given :worth).
   Worth (ctx/worth): the caller's, at the root worth-of; each walk of a search for an unseen need is priced against it, within the job time left.
-  Returns :done {:got n :item name} only with the count carried (the call's :least, default :all, may name fewer) (a bill: {:have [items]}); nothing-possible :no-source, :table-unreachable or the gather's walk cause (:zone-exit ..) when every allowed way was tried; the start refusal of a seen source's child (:exposed ..: nothing-possible for its :never, condition-failed for its :later), data {:got :tried :why :next} (:next: jobs.lib.next-call, the gather for the first unseen raw need); limit-reached :timeout after :spend :job-time (default-time: ::job-time-s, ::unit-s more per unit of :count beyond the first; a bill ::bill-item-s per item).
+  Returns :done {:got n :item name} only with the count carried (the call's :least, default :all, may name fewer) (a bill: {:have [items]}); nothing-possible :no-source, :table-unreachable or the gather's walk cause (:zone-exit ..) when every allowed way was tried; the start refusal of a seen source's child (:exposed ..: nothing-possible for its :never, condition-failed for its :later), data {:got :tried :why :next} (:next: jobs.lib.next-call, the gather for the first unseen raw need); limit-reached :timeout after :spend :job-time (default-time: fetch-time/one-unit-s, ::unit-s more per unit of :count beyond the first; a bill ::bill-item-s per item).
   Quote: the count as yield, time a guess per step, no most for a gather; a bill two gathers' time per missing item.")
 
 (a/defargs args
@@ -55,16 +56,14 @@
    :explore {:doc "false drops the :search way (the search, priced by what the need is worth, for a raw need not seen): fails :no-source instead" :spec boolean? :default true}})
 
 (a/defargs settings
-  {::job-time-s {:default 600 :doc "Seconds an obtain of one unit may run (its default :spend :job-time)." :spec (a/num-in 0 nil)}
-   ::unit-s {:default 60 :doc "Seconds the default :spend :job-time grows by for each unit of :count beyond the first." :spec (a/num-in 0 nil)}})
-(defn time-s [] (settings/get settings ::job-time-s))
+  {::unit-s {:default 60 :doc "Seconds the default :spend :job-time grows by for each unit of :count beyond the first." :spec (a/num-in 0 nil)}})
 
 (defn default-time
-  "The call's default :spend :job-time: ::job-time-s, plus ::unit-s for each unit of the count beyond the first (27 raw iron are many mines, not one); a bill the ::bill-item-s each of its items' children get."
+  "The call's default :spend :job-time: fetch-time/one-unit-s, plus ::unit-s for each unit of the count beyond the first (27 raw iron are many mines, not one); a bill the ::bill-item-s each of its items' children get."
   [{:keys [count bill]}]
   (if (seq bill)
     (* (bill-item-s) (clojure.core/count bill))
-    (+ (time-s) (* (settings/get settings ::unit-s) (max 0 (dec (or count 1)))))))
+    (+ (fetch-time/one-unit-s) (* (settings/get settings ::unit-s) (max 0 (dec (or count 1)))))))
 
 (def target [:item :any-of :bill])
 

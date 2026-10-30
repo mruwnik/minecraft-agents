@@ -2,6 +2,8 @@
   (:require [jobs.lib.build.wood :as wood]
             [jobs.lib.reserve :as reserve]
             [jobs.lib.recipes :as recipes]
+            [jobs.lib.sources :as sources]
+            [jobs.lib.crafting-table :as crafting-table]
             [engine.game :as game]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -360,9 +362,10 @@
   (let [need (frequencies (keep :item (missing cells)))
         carried (storage/carried-totals (u/inventory (:primitives c)))
         version (game/version-of (:primitives c))
+        opts (assoc (sources/source-opts) :table? (crafting-table/at-hand? (:primitives c) nil))
         held (reduce (fn [m [item n]]
                        (let [have (min n (get carried item 0))
-                             crafted (when (< have n) (:uses (recipes/plan version (storage/usable-totals (u/inventory (:primitives c))) item (- n have) {:table? true})))]
+                             crafted (when (< have n) (:uses (recipes/plan version (storage/usable-totals (u/inventory (:primitives c))) item (- n have) opts)))]
                          (merge-with + m {item have} crafted)))
                      {} (sort need))
         wanted (for [[item n] (sort held) :let [k (min n (get carried item 0))] :when (pos? k)]

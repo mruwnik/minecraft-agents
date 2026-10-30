@@ -483,11 +483,13 @@
           (is (= 64 (js/Math.floor (second (at p)))) "it never set off down the ramp"))))))
 
 (deftest a-way-down-a-ramp-onto-unseen-floors-is-not-tried-for-a-goal-worth-less-than-turning-back
-  ;; a goal worth 1 s: less than the walk back from floors that may be absent
+  ;; the first walk, at a goal worth little, names what turning back costs; a goal worth half of that is refused the same way
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p]} (await (go! ravine {:pos {:x 44 :z 0} :range 2 :worth 1 :settings {:jobs.movement.go-to.tuning/goal-danger :end}}))]
+        (let [go (fn ^:async go-at [worth] (await (go! ravine {:pos {:x 44 :z 0} :range 2 :worth worth :settings {:jobs.movement.go-to.tuning/goal-danger :end}})))
+              probe (await (go 1))
+              {:keys [out p]} (await (go (/ (:turn-back-s @(:out probe)) 2)))]
           (is (= {:arrived false :why :unseen-floors} (select-keys @out [:arrived :why])) (pr-str @out))
           (is (< 0 (:p-absent @out) 1) "floors that may be absent")
           (is (> (:turn-back-s @out) (:worth-s @out)))

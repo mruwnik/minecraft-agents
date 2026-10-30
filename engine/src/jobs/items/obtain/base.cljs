@@ -10,7 +10,6 @@
 
 (a/defargs settings
   {:jobs.items.obtain.base/max-inspections {:default 4 :doc "Looks at a place before the search for it gives up." :spec (a/int-in 0 nil)}
-   :jobs.items.obtain.base/craft-radius {:default 32 :doc "Blocks within which a crafting table is looked for." :spec (a/int-in 0 nil)}
    :jobs.items.obtain.base/seen-radius {:default 48 :doc "Blocks within which a seen raw block (ore, dirt, leaves) counts as a source; the gather gets the same radius." :spec (a/int-in 0 64)}
    :jobs.items.obtain.base/near-chest {:default 10 :doc "Blocks within which a chest is worth the walk even when a craft from what is carried would do." :spec (a/num-in 0 nil)}
    :jobs.items.obtain.base/far-chest {:default 160 :doc "Blocks beyond which a remembered chest is not walked to while a craft or gather way could get the item instead (with only the chest way it is walked to however far)." :spec (a/num-in 0 nil)}
@@ -27,7 +26,6 @@
 (defn search-scan-radius [] (settings/get settings :jobs.items.obtain.base/search-scan-radius))
 (defn gather-need-s [] (settings/get settings :jobs.items.obtain.base/gather-need-s))
 (defn seen-radius [] (settings/get settings :jobs.items.obtain.base/seen-radius))
-(defn craft-radius [] (settings/get settings :jobs.items.obtain.base/craft-radius))
 (defn loose-radius [] (settings/get settings :jobs.items.obtain.base/loose-radius))
 (defn bill-item-s [] (settings/get settings :jobs.items.obtain.base/bill-item-s))
 (defn site-radius [] (settings/get settings :jobs.items.obtain.base/site-radius))

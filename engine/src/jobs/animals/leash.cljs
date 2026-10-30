@@ -11,6 +11,7 @@
             [jobs.lib.escort :as escort]
             [jobs.lib.look :as look]
             [jobs.lib.cost :as cost]
+            [jobs.lib.fetch-time :as fetch-time]
             [jobs.lib.cost.fight :as fight]
             [jobs.lib.sense :as sense]
             [jobs.lib.use-entity :as use-entity]
@@ -50,8 +51,7 @@
    :ignore-zones? :shared})
 
 (a/defargs settings
-  {::max-in-row {:default 3 :doc "Fruitless animals in a row that end the run." :spec (a/int-in 0 nil)}
-   ::lead-fetch-s {:default 600 :doc "Seconds the default :spend :job-time allows for fetching the lead." :spec (a/num-in 0 nil)}})
+  {::max-in-row {:default 3 :doc "Fruitless animals in a row that end the run." :spec (a/int-in 0 nil)}})
 (defn max-in-row [] (settings/get settings ::max-in-row))
 
 (def default-radius (:radius (a/defaults args)))
@@ -66,9 +66,9 @@
 
 
 (defn default-time
-  "The call's default :spend :job-time: the lead's fetch (::lead-fetch-s), one look round, the walk across :radius, and the use's worst quote (a caller's remainder can lower it)."
+  "The call's default :spend :job-time: the lead's fetch (fetch-time/one-unit-s), one look round, the walk across :radius, and the use's worst quote (a caller's remainder can lower it)."
   [{:keys [radius]}]
-  (+ (settings/get settings ::lead-fetch-s)
+  (+ (fetch-time/one-unit-s)
      (cost/look-s (look/round-size))
      (/ (or radius default-radius) fight/walk-speed)
      (last (get-in (use-entity/quote-of nil) [:uses :job-time]))))

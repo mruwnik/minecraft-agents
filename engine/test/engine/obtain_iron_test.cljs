@@ -20,7 +20,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.torch :as torch]
             [jobs.items.obtain.need :as need]
-            [jobs.items.obtain.table :as table]
+            [jobs.lib.sources :as sources]
             [jobs.items.obtain.why :as why]
             [jobs.lib.look :as look]
             [jobs.lib.ready :as ready]
@@ -55,19 +55,19 @@
 (defn mine-events [s] (filterv #(re-find #"^mine\." (name (:kind %))) @(:seen s)))
 
 (deftest the-plan-for-an-iron-chestplate-from-nothing-gathers-raw-iron-and-smelts
-  (let [pl (recipes/plan game/default-version {} "iron_chestplate" 1 (assoc (table/source-opts) :gather? true))]
+  (let [pl (recipes/plan game/default-version {} "iron_chestplate" 1 (assoc (sources/source-opts) :gather? true))]
     (is (= 8 (get-in pl [:gather "raw_iron"])))
     (is (some #(and (= :smelt (:op %)) (= "iron_ingot" (:item %))) (:steps pl)))))
 
 (deftest the-plan-for-glass-panes-from-nothing-gathers-sand-and-smelts
-  (let [pl (recipes/plan game/default-version {} "glass_pane" 16 (assoc (table/source-opts) :gather? true))]
+  (let [pl (recipes/plan game/default-version {} "glass_pane" 16 (assoc (sources/source-opts) :gather? true))]
     (is (= 6 (get-in pl [:gather "sand"])))
     (is (some #(and (= :smelt (:op %)) (= "glass" (:item %))) (:steps pl)))))
 
 (deftest the-plan-for-a-white-bed-gathers-wool-or-string
-  (let [pl (recipes/plan game/default-version {"oak_planks" 3} "white_bed" 1 (assoc (table/source-opts) :gather? true))]
+  (let [pl (recipes/plan game/default-version {"oak_planks" 3} "white_bed" 1 (assoc (sources/source-opts) :gather? true))]
     (is (= 3 (get-in pl [:gather "white_wool"])) (pr-str pl)))
-  (let [pl (recipes/plan game/default-version {"oak_planks" 3 "string" 12} "white_bed" 1 (assoc (table/source-opts) :gather? true))]
+  (let [pl (recipes/plan game/default-version {"oak_planks" 3 "string" 12} "white_bed" 1 (assoc (sources/source-opts) :gather? true))]
     (is (= 0 (get-in pl [:gather "white_wool"] 0)) (pr-str pl))))
 
 (deftest raw-iron-is-mined-from-a-seen-iron-ore
