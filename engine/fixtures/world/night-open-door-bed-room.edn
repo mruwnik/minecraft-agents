@@ -1,0 +1,30 @@
+;; Card f69ae894 (fix 675df59db): at night a body in a closed room whose door stands open shuts the door (jobs.survival.enter-room) instead of digging in,
+;; the shut worth being the cheapest way left over the bed's answer when the bed lies in the room; a bed known outside the room does not make it unworthy.
+;; Hut: stone x 8..16, z 8..16, y 0..3, room 9..15, torches, door [12 0..1 16] open. Needs night: --allow-time --time-log <the shared time log>.
+{:defaults
+ {:tags [:night :survival :shelter :sleep]
+  :time :night-exclusive :time-why :sleep
+  :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
+           [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]
+           [:fill [12 0 16] [12 1 16] "air"]
+           [:set [12 0 16] "oak_door[facing=south,half=lower,hinge=left,open=true]"]
+           [:set [12 1 16] "oak_door[facing=south,half=upper,hinge=left,open=true]"]]
+  :body {:at [13.5 0 13.5] :effects [["resistance" 600 4]] :settle-s 3 :inventory [["dirt" 20]]}
+  :limit-s 150}
+ :cases
+ [{:name "open-door-with-a-bed-in-the-room-is-shut-and-the-bed-slept-in"
+   :blocks [[:set [10 0 12] "red_bed[facing=east,part=foot]"] [:set [11 0 12] "red_bed[facing=east,part=head]"]]
+   :act [[:job (jobs.survival.night)]
+         [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 120]]
+   :expect [{:event {:source :job :kind :child_started :data {:slot :enter-room}} :within-s 60 :of-job true}
+            {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 120}
+            {:no-event {:source :job :kind :shut-in.sealed} :for-s 60}]
+   :after [[:block [12 0 16] "oak_door[open=false]"]]}
+  {:name "open-door-with-a-bed-outside-the-room-is-still-shut"
+   :blocks [[:set [20 0 12] "red_bed[facing=east,part=foot]"] [:set [21 0 12] "red_bed[facing=east,part=head]"] [:set [19 1 12] "torch"]]
+   :act [[:job (jobs.survival.night)]
+         [:await {:source :job :kind :child_started :data {:slot :enter-room}} 60]
+         [:wait-s 15]] ; deliberate hold: the shut door must stay shut once the night job has looked at the outside bed
+   :expect [{:event {:source :job :kind :child_started :data {:slot :enter-room}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :shut-in.sealed} :for-s 60}]
+   :after [[:block [12 0 16] "oak_door[open=false]"]]}]}
