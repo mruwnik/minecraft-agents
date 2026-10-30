@@ -267,6 +267,12 @@
     (is (not (identical? t (settings/with-settings {:jobs.lib.cost.table/smelt-step 1000} #(table/table-for "1.20.4" {} {}))))
         "and a changed ::smelt-step")))
 
+(deftest the-worth-table-prices-a-craft-step-as-obtain-does-with-its-timeouts
+  (let [basis-of #(second (@#'v/table-basis "1.20.4" {} %))]
+    (is (= (v/craft-step-s) (:craft-step (basis-of {}))) "one craft price: the step with its timeouts and retries")
+    (is (> (v/craft-step-s) (table/craft-step)))
+    (is (= 7 (:craft-step (basis-of {:craft-step 7}))) "a caller's basis wins")))
+
 (deftest the-worth-table-converges-with-the-fuel-share-a-smelt-adds
   (let [price (v/smelt-price)]
     (is (js/isFinite price))

@@ -499,20 +499,7 @@
     (let [a (stand-answer {:equipment equipment :mobs mobs :seconds seconds})]
       (if (pos? (:damage a)) (answer-price body a at) 0))))
 
-(defn counted-chance
-  "The chance of a measured share, k of n counted {:k :n}, under a Beta(a, b) prior of pseudo-counts :prior [a b] (a of the
-  share, b of the rest; default the uniform [1 1]): (k + a) / (n + a + b)."
-  [{:keys [k n prior]}]
-  (let [[a b] (or prior [1 1])]
-    (/ (+ k a) (+ n a b))))
-
-(defn retry-chance
-  "The chance the next try of kind wins after fails tries of the call failed in a row: counted-chance of no win in the
-  fails after the first over value/::retry-counts' pseudo-counts of kind. Those are counted over tries that followed a
-  failed one, so the first failure is their condition, not evidence: the first retry wins at the prior's mean."
-  [kind fails]
-  (let [{:keys [win fail]} (get (settings/get value/settings ::value/retry-counts) kind)]
-    (counted-chance {:k 0 :n (max 0 (dec fails)) :prior [win fail]})))
+(def counted-chance value/counted-chance)
 
 (defn floor-absent-chance
   "The chance a floor the body has not seen is not there, for a step of kind (jobs.lib.walk.sight/floor-kind): counted-chance

@@ -1,6 +1,7 @@
 (ns engine.cost-test
   "jobs.lib.cost: one armour formula (vanilla's) under every calculator: fight cost, mob threat and the planner's rate."
   (:require [cljs.test :refer [deftest is are use-fixtures]]
+            [engine.args :as a]
             [engine.constants :as constants]
             [engine.fake :as fake]
             [engine.game :as game]
@@ -909,4 +910,8 @@
         with #(settings/with-settings {:jobs.lib.cost.table/craft-timeouts {:k 10 :n 100 :s 12}} cost/craft-step-s)]
     (is (= (cost/craft-step) (no-timeouts)) "none timed out: the finished step's seconds")
     (is (= (+ (* 0.9 (cost/craft-step)) (* 0.1 (+ 12 (/ (cost/retry-s :craft) (cost/retry-chance :craft 1))))) (with)))
-    (is (> (cost/craft-step-s) (cost/craft-step)))))
+    (is (> (cost/craft-step-s) (cost/craft-step)))
+    (are [m ok?] (= ok? (nil? (a/problem :jobs.lib.cost.table/craft-timeouts m)))
+      {:k 21 :n 1165 :s 12.39} true
+      {:k 0 :n 0 :s 12} false
+      {:k 5 :n 3 :s 12} false)))

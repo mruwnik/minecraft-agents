@@ -16,10 +16,10 @@
             [engine.game :as game]))
 
 (a/defargs settings
-  {::craft-timeouts {:default {:k 21 :n 1165 :s 12.39} :spec (a/pred "{:k timeouts :n started :s seconds each}" (fn [m] (every? number? (vals m))))
-                     :doc "Craft actions that timed out: k of n started, taking s seconds each (same counts as ::craft-step, `node tools/event-counts.mjs craft-steps`). jobs.lib.cost/craft-step-s prices them."}
+  {::craft-timeouts {:default {:k 21 :n 1165 :s 12.39} :spec (a/pred "{:k timeouts :n started (> 0) :s seconds each, k <= n}" (fn [{:keys [k n s]}] (and (number? k) (number? n) (number? s) (<= 0 k n) (pos? n) (<= 0 s))))
+                     :doc "Craft actions that timed out: k of n started, taking s seconds each (same counts as ::craft-step, `node tools/event-counts.mjs craft-steps`). jobs.lib.cost.value/craft-step-s prices them into every craft step."}
    ::craft-step {:default 0.905 :spec (a/num-in 0 nil)
-                 :doc "Seconds one craft action takes beyond its ingredients, the walk to the table not in it. Counted over n = 1144 finished craft actions of the trial bodies' logs (21 timeouts left out), 0.906 s each (recount: `node tools/event-counts.mjs craft-steps`, dashboard/src/world_test/craft_steps.cljs)."}
+                 :doc "Seconds one craft action takes beyond its ingredients, the walk to the table not in it. Counted over n = 1144 finished craft actions of the trial bodies' logs (21 timeouts left out), 0.905 s each (recount: `node tools/event-counts.mjs craft-steps`, dashboard/src/world_test/craft_steps.cljs)."}
    ::smelt-step {:default 10.3 :spec (a/num-in 0 nil)
                  :doc "Seconds one item takes in a furnace beyond its input, fuel and the furnace apart: vanilla cooks it in 10 s; 18 raw iron in one smelt job (furnace placed) took 185.4 s wall, 10.3 each (trial logs to 2026-10-30; the 2-item probe runs of 51-74 s include making the furnace)."}})
 

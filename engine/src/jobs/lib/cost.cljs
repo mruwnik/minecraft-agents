@@ -9,7 +9,7 @@
     weapon   attack-gap-ms, weapon-damage, remaining-health, mob-max-health, ranged-mobs: the fight inputs; the one tool-material table
              (tool-tier, weapon-rank, cheapness) (jobs.lib.cost.weapon).
     fight    fight-damage, fight-seconds: the damage (and length) of a fight with the current kit (jobs.lib.cost.fight).
-    answer   fight-answer, followed, small (an answer's small blows, the ones its :shape is the width of), flee-answer, build-answer, stand-loss (what doing nothing about mobs costs: the loss a reflex averts), cover-answer, cover-answers, cornered-answers, answer-price, decide: what each answer to hostiles costs and the cheapest; kill-price: a kill of one mob; route-death, death-chance, route-death-cost, route-parts (the death chance and hurt of a route's threats, each pair met in one answer by the chance the second comes while the first is answered), threat-hurt, spawn-kill, spawns-chance, spawns-hurt, lethal-hp: the one chance of dying (threat-hurt one mob met; water-factors the planner's price of a second in water, a drowned met there, unseen-water-factors a phantom floor's by the seen water near it; spawns-chance that of mobs spawned beside the body (spawn-kill one's, with what its death costs), spawns-hurt their hurt, lethal-hp a death chance in hp) (a known threat priced by the answer the body would take) and a route's death price; blast-hurt: a creeper's blast; counted-chance, floor-absent-chance, guess-bad-chance, floor-dead-end-chance, hall-chance, spot-plantable-chance, retry-chance: a counted share over its prior (jobs.lib.cost.answer); try-again?: whether another try of a call is worth its price.
+    answer   fight-answer, followed, small (an answer's small blows, the ones its :shape is the width of), flee-answer, build-answer, stand-loss (what doing nothing about mobs costs: the loss a reflex averts), cover-answer, cover-answers, cornered-answers, answer-price, decide: what each answer to hostiles costs and the cheapest; kill-price: a kill of one mob; route-death, death-chance, route-death-cost, route-parts (the death chance and hurt of a route's threats, each pair met in one answer by the chance the second comes while the first is answered), threat-hurt, spawn-kill, spawns-chance, spawns-hurt, lethal-hp: the one chance of dying (threat-hurt one mob met; water-factors the planner's price of a second in water, a drowned met there, unseen-water-factors a phantom floor's by the seen water near it; spawns-chance that of mobs spawned beside the body (spawn-kill one's, with what its death costs), spawns-hurt their hurt, lethal-hp a death chance in hp) (a known threat priced by the answer the body would take) and a route's death price; blast-hurt: a creeper's blast; counted-chance, floor-absent-chance, guess-bad-chance, floor-dead-end-chance, hall-chance, spot-plantable-chance, retry-chance: a counted share over its prior (jobs.lib.cost.value), craft-step-s: the seconds of a craft step with its timeouts; try-again?: whether another try of a call is worth its price.
     danger   route-danger: the danger of a walk past mobs; hurt-rate: the hp a second a mob takes; stance, danger-rate, threat-factor: go-to's
              planner dangers; reach-first?, wins-race?: a body's race to a refuge against its chasers; catches?, caught-on?: whether a chaser hits a walk (straight, or a timed route) before it is past; reach-s: the seconds it is within its blow of a timed route; arrival-s: a chaser's seconds to a point (over its way when given); body-speed; flee-walk-speed, flee-stop-s: a flight's measured pace, its steps and the stops between them (jobs.lib.cost.danger).
     health   hp-seconds, health-scale, hp-price, risk-s (a walk's hurt and death chance in seconds), commute-s (a walk there and back against sheltering here), night-lost-s (the work a way through the night costs), night-way-s (the one price of a way through the night), night-walk-bound-s (the longest walk that price could still take), drown-prices, damage-budget, survivable-budget: what an hp costs and how many a walk may spend (jobs.lib.cost.health).
@@ -320,12 +320,10 @@
 (def floor-dead-end-chance answer/floor-dead-end-chance)
 (def hall-chance answer/hall-chance)
 (def spot-plantable-chance answer/spot-plantable-chance)
-(def retry-chance answer/retry-chance)
+(def retry-chance value/retry-chance)
+(def craft-step-s value/craft-step-s)
 
-(defn retry-s
-  "The measured seconds one try of kind takes (value/::retry-counts :try-s)."
-  [kind]
-  (:try-s (get (settings/get value/settings ::value/retry-counts) kind)))
+(def retry-s value/retry-s)
 
 (defn try-again?
   "Whether call c's next try of kind (a key of value/::retry-counts) is worth its price: its retry-chance after the call's
@@ -336,14 +334,6 @@
   ([c kind {:keys [fails try-s]}]
    (> (value/chance-times (retry-chance kind (or fails (u/failures c))) (ctx/worth c))
       (or try-s (retry-s kind)))))
-
-(defn craft-step-s
-  "Expected seconds one craft step takes: a finished one's ::craft-step, or with the measured timeout share, a timeout's
-  seconds and the retries after it (retry-s :craft over the chance each wins, retry-chance :craft after the first failure)."
-  []
-  (let [{:keys [k n s]} (table/craft-timeouts)
-        p (/ k n)]
-    (+ (* (- 1 p) (craft-step)) (* p (+ s (/ (retry-s :craft) (retry-chance :craft 1)))))))
 
 (def turn-back-cost value/turn-back-cost)
 (def cover-tour-s value/cover-tour-s)
