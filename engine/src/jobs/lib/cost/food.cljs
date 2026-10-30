@@ -160,11 +160,12 @@
           :else (recur more want out))))
 
 (defn fetch-points
-  "The food points to fill the pack to before trip (priced-trip's args, :had the carried points), or nil: carry-points,
-  at most the carried food and the home food get-food takes for the rest (fetchable), when that is more than is carried."
+  "The food points to fill the pack to before trip (priced-trip's args, :had the carried points), or nil: trip-points (home
+  food counts toward the 3-day reserve already, so moving it into the pack meets only the trip's own need), at most the
+  carried food and the home food get-food takes for the rest (fetchable), when that is more than is carried."
   [home trip]
   (let [had (or (:had trip) 0)
-        want (carry-points home trip)
+        want (trip-points (priced-trip home trip))
         to (min want (+ had (reduce + (map :points (fetchable home (- want had))))))]
     (when (> to had) to)))
 

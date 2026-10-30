@@ -1209,7 +1209,13 @@
   (are [c] (nil? (:look-first (nth (trip-fed c) 2)))
     (trip-ctx 40 [0 1800 ##Inf] [3 64 0])
     (trip-ctx 2 [0 1800 ##Inf] nil)
-    (trip-ctx 2 [0 30 60] [3 64 0])))
+    (trip-ctx 2 [0 30 60] [3 64 0])
+    (trip-ctx 2 [0 30 60] {[3 64 0] 5})))
+
+(deftest a-trip-fetches-only-its-own-need-so-a-child-of-a-fed-trip-fetches-none
+  (let [{:keys [carry]} (second (:look-first (nth (trip-fed (trip-ctx 2 [0 1800 ##Inf] [3 64 0])) 2)))]
+    (is (nil? (:look-first (nth (trip-fed (trip-ctx (js/Math.ceil (/ carry 5)) [0 600 1800] [3 64 0])) 2)))
+        "the parent's fetched food is carried: the child's shorter trip needs no more")))
 
 (deftest a-trip-fetches-only-the-home-food-get-food-takes
   (let [c (trip-ctx 2 [0 1800 ##Inf] {[3 64 0] 20 [3000 64 0] 64})
