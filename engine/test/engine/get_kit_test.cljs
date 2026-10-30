@@ -508,18 +508,22 @@
 
 (defn waits-then-has-the-pickaxe
   "An obtain whose first call ends condition-failed with cause (a seen source's child said :later); the next one puts an
-  iron pickaxe in the pack and is done. calls counts them."
-  [cause calls]
+  iron pickaxe in the pack and is done, or with give-up? ends nothing-possible. calls counts the bill's (the sword's obtain runs for real)."
+  ([cause calls] (waits-then-has-the-pickaxe cause calls false))
+  ([cause calls give-up?]
   (let [real (get registry/jobs 'jobs.items.obtain)]
     (assoc real :round
            (fn ^:async stub-round [c]
-             (if (= 1 (swap! calls inc))
+             (cond
+               (not (:bill (:args c))) (await ((:round real) c))
+               (= 1 (swap! calls inc))
                (ctx/end c :condition-failed cause {:item "iron_ingot" :got 0 :tried {:gather (:reason cause)}})
-               (do (swap! (fake/state (:primitives c)) fake/give "iron_pickaxe" 1)
-                   (ctx/end c :done nil {:have ["iron_pickaxe"]})))))))
+               give-up? (ctx/end c :nothing-possible {:reason :no-iron :why "no iron anywhere"})
+               :else (do (swap! (fake/state (:primitives c)) fake/give "iron_pickaxe" 1)
+                   (ctx/end c :done nil {:have ["iron_pickaxe"]}))))))))
 
 (deftest a-bill-that-stops-on-a-later-is-run-again-after-the-wait
-  ;; :exposed is a wait reason need/call! waits out; :occupied is not, and the kit rests on it itself
+  ;; need/call! waits out :exposed itself (the kit never rests on it); the kit rests on :occupied
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -533,6 +537,21 @@
               (when (and (< i 200) (= :not-done @(:out s))) (recur (inc i))))
             (is (= 2 @calls) reason)
             (is (= :done (:status @(:out s))) reason)))))))
+
+(deftest a-later-wait-is-won-only-by-a-done-bill
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[give-up? won] [[false 1] [true 0]]]
+          (let [calls (atom 0)
+                cause {:reason :occupied :text "taken" :recheck-after-ms 2000}
+                s (start (world [{:name "stick" :count 2}] {}) {:items ["iron_pickaxe"] :explore false :food false} f/sight-opts
+                         {'jobs.items.obtain (waits-then-has-the-pickaxe cause calls give-up?)})]
+            (loop [i 0]
+              (await (f/run-ticks s 1))
+              (when (and (< i 200) (= :not-done @(:out s))) (recur (inc i))))
+            (is (= 2 @calls) give-up?)
+            (is (= [1 won] [(count (f/events-of s :kit.later-wait)) (count (f/events-of s :kit.later-over))]) give-up?)))))))
 
 (deftest seen-stone-the-mine-will-never-take-ends-the-kit-with-that-refusal
   (async done
