@@ -88,22 +88,24 @@
       (unknown? (:primitives c) cell) (do (await (look-at! c cell)) (recur more (inc looks) (conj passed cell)))
       :else (recur more looks (conj passed cell)))))
 
-(defn ^:async look-round!
-  "The :look/around hook: look at each unknown one of cells (a :look status's :look-at), at most ::max-looks looks,
-  then look-around!: for those cells only, a full pass each look when cells is empty (the check named none)."
-  [c cells]
-  (await (look-at-unknown! c (targets (:primitives c) (u/self-pos c) cells #{}) (max-looks)))
-  (await (look/look-around! c (look/glance-effort) (when (seq cells) {:cells (targets (:primitives c) (u/self-pos c) cells #{})})))
-  (ctx/update-mem! c (fn [m] (let [here (look/cell-of (u/self-pos c))
-                                   kept (if (= here (:at (::round-looked m))) (:cells (::round-looked m)) #{})]
-                               (assoc m ::round-looked {:at here :cells (into kept cells)})))))
-
 (defn round-looked
   "The cells [x y z] a look round of c's frame already looked at from the body's cell: a :look status asks for them once,
   then the wall they hide counts as open (Q345)."
   [c]
   (let [m (::round-looked (ctx/mem c))]
     (if (= (:at m) (look/cell-of (u/self-pos c))) (:cells m) #{})))
+
+(defn ^:async look-round!
+  "The :look/around hook: look at each unknown one of cells (a :look status's :look-at), at most ::max-looks looks,
+  then look-around!: for those cells only, a full pass each look when cells is empty (the check named none). Only the cells
+  looked at (or already known) count as round-looked; the rest stay pending for the next round."
+  [c cells]
+  (let [pending (targets (:primitives c) (u/self-pos c) cells (round-looked c))
+        [_ passed] (await (look-at-unknown! c pending (max-looks)))]
+    (await (look/look-around! c (look/glance-effort) (when (seq cells) {:cells pending})))
+    (ctx/update-mem! c (fn [m] (let [here (look/cell-of (u/self-pos c))
+                                     kept (if (= here (:at (::round-looked m))) (:cells (::round-looked m)) #{})]
+                                 (assoc m ::round-looked {:at here :cells (into kept passed)}))))))
 
 (defn known-memory
   "memory-age/epoch of the body's memory: the same while all it knows of the world is (no cell written, no remembered

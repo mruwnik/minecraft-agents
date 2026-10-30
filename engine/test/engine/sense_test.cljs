@@ -133,3 +133,15 @@
           (is (= ["iron_ore" "air"] (await (sense/decide! c ::ore ore-and-guess {:verify-guesses true}))))
           (is (= [[6 64 0]] (:cells (first (filter #(= :sense.looked (:kind %)) @(:events c)))))
               "the survey found the ore; the guessed cell is looked at after it"))))))
+
+(deftest look-round-marks-only-the-cells-it-looked-at
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (seeing {:self {:pos {:x 0 :y 64 :z 0}} :blocks rock})
+              c (stub-ctx p)
+              cells (mapv (fn [{:keys [x y z]}] [x y z]) inside)]
+          (await (sense/look-round! c cells))
+          (is (= (sense/max-looks) (count (sense/round-looked c))) "a round marks the looks it took; the rest stay pending")
+          (await (sense/look-round! c cells))
+          (is (= (min (count cells) (* 2 (sense/max-looks))) (count (sense/round-looked c))) "the next round looks at the rest"))))))
