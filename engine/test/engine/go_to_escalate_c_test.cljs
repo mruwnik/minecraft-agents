@@ -494,6 +494,12 @@
     (is (= 0 (escape/pillar-knock walled [0 64 0] 3)) "a shaft prices no knock-off")
     (is (= (cost/pillar-knock-of open [1 1 1]) (escape/pillar-knock open [0 64 0] 3)) "open ground pays the full rate")))
 
+(deftest a-pillars-unseen-side-cells-are-held-at-the-measured-chance-they-are-solid
+  (let [shaft (merge stone-mass (box 0 64 0 0 70 0 "air"))
+        sides (escape/pillar-open-sides (tu/seeing-within (tu/fake {:blocks shaft :self {:pos {:x 0.5 :y 64 :z 0.5}}}) 2.6) [0 64 0] 6)]
+    (is (= [0 0 0] (subvec sides 0 3)) "the seen walls hold")
+    (is (every? #(< 0 % 4) (subvec sides 3)) "unseen walls are neither held nor open")))
+
 (deftest a-tall-pillar-costs-more-in-the-open-than-in-a-shaft
   (let [mass (box -1 40 -2 30 90 2 "stone")
         col (fn [walls] (merge (if walls mass (box -1 40 -2 30 90 2 "air")) (box 0 64 0 0 90 0 "air") (box -1 40 -2 30 63 2 "stone")))

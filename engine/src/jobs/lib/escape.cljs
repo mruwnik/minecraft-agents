@@ -81,13 +81,15 @@
   (boolean (and n (not (bs/passable? n)) (not (bs/fluids n)))))
 
 (defn open-sides-fn
-  "(fn [cell]) how many of the four sides of a body's feet and head cells at cell are not held by a seen solid block (an
-  unseen cell holds none)."
+  "(fn [cell]) how many of the four sides of a body's feet and head cells at cell are expected open: a side is held by a
+  solid block at feet or head, a seen cell solid or not, an unseen one at the measured chance it is solid
+  (look/unseen-solid-at-fn)."
   [p]
   (let [block-at (block-at-of p)
         unseen? (unseen-of p)
-        held? (fn [cell] (and (not (unseen? cell)) (solid? (block-at cell))))]
-    (fn [cell] (count (remove (fn [[dx dz]] (some #(held? (add (up cell %) [dx 0 dz])) [0 1])) cardinals)))))
+        solid-at (look/unseen-solid-at-fn p)
+        held (fn [cell] (cond (unseen? cell) (solid-at cell) (solid? (block-at cell)) 1 :else 0))]
+    (fn [cell] (transduce (map (fn [[dx dz]] (* (- 1 (held (add cell [dx 0 dz]))) (- 1 (held (add (up cell 1) [dx 0 dz])))))) + 0 cardinals))))
 
 (defn pillar-open-sides
   "[n ...]: open-sides-fn at each of the height blocks of a pillar up from feet, the cells before each block."
