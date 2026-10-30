@@ -14,9 +14,9 @@
    :time :day :time-why :sunlit-ground
    :act [[:job (jobs.debug.ready-probe {:at #at [11 0 16] :stay-s 30})]]
    :expect [{:event {:source :job :kind :job.ready-probe} :within-s 90 :of-job true}
-            {:no-event {:source :job :kind :job.ready-probe :data {:status [:has #{:exposed "exposed"}]}} :for-s 20 :of-job true}]}
+            {:no-event {:source :job :kind :job.ready-probe :data {:status [:has :exposed]}} :for-s 20 :of-job true}]}
   {:name "a-spot-behind-a-wall-at-night-reads-exposed"
    :time :night :time-why :night-light
    :act [[:job (jobs.debug.ready-probe {:at #at [11 0 16] :stay-s 30})]]
-   :expect [{:event {:source :job :kind :job.ready-probe :data {:status [:has #{:exposed "exposed"}]}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :job.ready-probe :data {:status [:has :exposed]}} :within-s 60 :of-job true}]
    :limit-s 100}]}
