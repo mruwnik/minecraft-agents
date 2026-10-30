@@ -1,21 +1,25 @@
 ;; Cards 8a53ec5b, 12f7a938: an unarmed body whose respawn is near (a death walks it back a few blocks) answers a mob in the dark. A walk away
 ;; pays the meet that may follow it by the measured chance its mob is met again (cost.answer ::flee-meets), not for certain, so the fist fight
-;; under a skeleton's arrows is not the cheapest; with that chance set to 1 (the old price) it is. A zombie is answered without a death.
-;; Dark plot 48 wide, mobs helmeted (no sun burn), AI on; body at [24.5 0 24.5], spawn point at [20 0 24].
+;; under a skeleton's arrows is not the cheapest; with that chance set to 1 (the old price) it is. A zombie in the dark is answered without a death.
+;; Plot 48 wide (dark for the zombie; lit for the skeleton cases, which must see it: one only heard is another decision), mobs helmeted (no sun burn), AI on; body at [24.5 0 24.5], its spawn bed at [20 0 24] (a death there costs a short walk).
 {:defaults
  {:tags [:hostile :survival :flee]
   :time :any
   :mobs :keep
   :plot {:width 48 :length 48 :height 8 :light :dark}
   :register [{:trigger :hostile-near}]
+  :blocks [[:set [20 0 24] "red_bed[facing=east,part=foot]"] [:set [21 0 24] "red_bed[facing=east,part=head]"]]
+  :memory [{:kind :spawn-bed :data {:pos #xyz [20 0 24]} :policy {:cap 1 :ttl :forever}}]
   :body {:at [24.5 0 24.5] :yaw 0 :inventory [] :spawnpoint [20 0 24]}
   :limit-s 60}
  :cases
- [{:name "unarmed-body-walks-away-from-a-skeleton-in-the-dark"
+ [{:name "unarmed-body-walks-away-from-a-seen-skeleton"
+   :plot {:width 48 :length 48 :height 8 :light :lit}
    :act [[:summon "skeleton" [24.5 0 32.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :hostile.decided :data {:mob "skeleton" :decision :flee}} :within-s 20}
             {:no-event {:source :job :kind :hostile.decided :data {:decision :fight}} :for-s 20}]}
   {:name "unarmed-body-sure-to-meet-the-skeleton-again-fights-it"
+   :plot {:width 48 :length 48 :height 8 :light :lit}
    :settings {:jobs.lib.cost.answer/flee-meets {:k 1000000 :n 1000000}}
    :act [[:summon "skeleton" [24.5 0 32.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :hostile.decided :data {:mob "skeleton" :decision :fight}} :within-s 20}]}
