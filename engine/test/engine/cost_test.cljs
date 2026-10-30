@@ -364,9 +364,11 @@
   (settings/with-settings {:jobs.lib.cost.value/pillar-knock-counts {:knock 1 :kept 1}}
     (fn []
       (let [hp #(cost/hp-cost 20 (cost/fall-damage nil %))]
-        (is (= 0 (cost/pillar-knock-s 20 nil 0)))
-        (is (= (* 0.5 (+ (hp 1) (hp 2) (hp 3))) (cost/pillar-knock-s 20 nil 3)) "each block's height is a fall, at the chance")
-        (is (< 0 (cost/pillar-knock-s 20 nil 4) (cost/pillar-knock-s 20 nil 8)) "a taller pillar falls farther")))))
+        (is (= 0 (cost/pillar-knock-s 20 nil [])))
+        (is (= (* 0.5 (+ (hp 1) (hp 2) (hp 3))) (cost/pillar-knock-s 20 nil [1 1 1])) "each block's height is a fall, at the chance")
+        (is (< 0 (cost/pillar-knock-s 20 nil (repeat 4 1)) (cost/pillar-knock-s 20 nil (repeat 8 1))) "a taller pillar falls farther")
+        (is (= 0 (cost/pillar-knock-s 20 nil [0 0 0])) "a column held on every side is never knocked off")
+        (is (= (* 0.5 (+ (* 0.25 (hp 1)) (* 0.5 (hp 2)))) (cost/pillar-knock-s 20 nil [0.25 0.5])) "a block's chance is its open share")))))
 
 (deftest a-guess-is-rock-never-dug-at-the-measured-rate-of-its-class-moved-by-the-calls-own-looks
   (settings/with-settings {:jobs.lib.cost.value/guess-rock-counts {:layer-62 {:bad 3 :ok 1} :apart {:bad 0 :ok 99}}}

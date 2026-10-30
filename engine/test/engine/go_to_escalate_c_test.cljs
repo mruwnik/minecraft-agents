@@ -453,20 +453,54 @@
         route (choose/route-answer p [0 64 0] [3 67 0] (constantly true) (constantly false) false false {})]
     (is (= (:seconds route) (escape-way/price p [0 64 0] stair)))
     (is (< (escape-way/price (body 50) [0 64 0] stair) (escape-way/price p [0 64 0] stair)) "unseen cells cost more")
-    (are [r n] (= (+ (cw/pillar-cost 2) (* n unseen-s) (cost/pillar-knock-of (body r) 2)) (escape-way/price (body r) [0 64 0] {:step :pillar :height 2}))
+    (are [r n] (= (+ (cw/pillar-cost 2) (* n unseen-s) (escape/pillar-knock (body r) [0 64 0] 2)) (escape-way/price (body r) [0 64 0] {:step :pillar :height 2}))
       50 0
       2.9 1)))
 
+(def open-ground
+  "Air x -1..12, y 64..80, z -2..2 over a stone floor at y 63."
+  (merge (box -1 64 -2 12 80 2 "air") (box -1 63 -2 12 63 2 "stone")))
+
 (deftest a-pillar-way-prices-the-knock-off-fall-at-the-chance
-  (let [p (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}]})
+  (let [p (tu/fake {:blocks open-ground :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}]})
         price #(escape-way/price p [0 64 0] {:step :pillar :height 8})
         at (fn [knock] (settings/with-settings {:jobs.lib.cost.value/pillar-knock-counts {:knock knock :kept 1}} price))]
     (is (< (at 0) (at 1)) "a dearer chance of a knock-off dears the pillar")))
 
-(deftest the-climb-routes-pillar-block-adds-its-share-of-the-knock-off-falls
-  (let [p (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}}})]
-    (is (= (+ (cw/pillar-cost 1) (/ (cost/pillar-knock-of p 6) 6)) (climb-route/pillar-block-s p 6)))
-    (is (< (cw/pillar-cost 1) (climb-route/pillar-block-s p 6)))))
+(deftest the-climb-routes-pillar-blocks-cost-by-their-place-in-a-run-and-the-open-sides
+  (let [open (tu/fake {:blocks open-ground :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+        walled (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+        block-s (fn [p] (climb-route/pillar-block-s p))]
+    (is (= (cw/pillar-cost 1) ((block-s open) 1 0 64 0)) "the first block falls no hurt")
+    (is (= (+ (cw/pillar-cost 1) (cost/pillar-knock-of open [0 0 0 0 0 1])) ((block-s open) 6 0 64 0)) "the sixth, on open sides, falls six")
+    (is (< ((block-s open) 3 0 64 0) ((block-s open) 6 0 64 0)) "a taller run falls farther")
+    (is (= (cw/pillar-cost 1) ((block-s walled) 6 0 64 0)) "a walled column is never knocked off")))
+
+(deftest climb-way-gives-the-search-the-pillar-block-price-at-the-measured-chance
+  (let [p (tu/fake {:blocks open-ground :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+        block-6 (fn [knock]
+                  (settings/with-settings {:jobs.lib.cost.value/pillar-knock-counts {:knock knock :kept 1}}
+                    #(let [seen (atom nil)]
+                       (with-redefs [choose/route-answer (fn [_ _ _ _ _ _ _ opts] (reset! seen (:pillar-s opts)) nil)]
+                         (climb-route/climb-way p [0 64 0] [0 70 0] (constantly true) {:skip #{} :pillar-item {:item "dirt" :count 8}}))
+                       (@seen 6 0 64 0))))]
+    (is (< (block-6 0) (block-6 1)) "a dearer chance of a knock-off dears the search's pillar block")))
+
+(deftest an-open-pillar-pays-the-knock-off-chance-at-every-block-and-a-walled-one-none
+  (let [open (tu/fake {:blocks open-ground :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+        walled (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}}})]
+    (is (= [4 4 4] (escape/pillar-open-sides open [0 64 0] 3)))
+    (is (= [0 0 0] (escape/pillar-open-sides walled [0 64 0] 3)))
+    (is (= 0 (escape/pillar-knock walled [0 64 0] 3)) "a shaft prices no knock-off")
+    (is (= (cost/pillar-knock-of open [1 1 1]) (escape/pillar-knock open [0 64 0] 3)) "open ground pays the full rate")))
+
+(deftest a-tall-pillar-costs-more-in-the-open-than-in-a-shaft
+  (let [mass (box -1 40 -2 30 90 2 "stone")
+        col (fn [walls] (merge (if walls mass (box -1 40 -2 30 90 2 "air")) (box 0 64 0 0 90 0 "air") (box -1 40 -2 30 63 2 "stone")))
+        inv [{:name "dirt" :count 32} {:name "iron_pickaxe" :count 1}]
+        price (fn [walls step] (escape-way/price (tu/fake {:blocks (col walls) :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory inv}) [0 64 0] step))
+        pillar {:step :pillar :height 18}]
+    (is (< (price true pillar) (price false pillar)) "open sides add the knock-off falls")))
 
 (deftest a-fill-competes-by-price-with-the-stair-and-the-pillar
   (let [p (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}]})
@@ -1030,6 +1064,17 @@
         opts {:own? (constantly false) :skip (constantly false) :slice slice}]
     (choose/frontier-way p [0 64 0] [40 40 0] (constantly true) opts)
     (is (< @(:left slice) before) "the flood of the land's cells came off the slice")))
+
+(deftest a-fresh-pillar-fn-each-call-resumes-the-sliced-search-rather-than-restarting-it
+  (let [p (tu/fake {:blocks open-ground :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+        slice (choose/route-slice "pillar-fn-resume")
+        ask #(choose/route-answer p [0 64 0] [10 70 0] (constantly true) (constantly false) false false
+                                  {:slice slice :pillar-s (fn [_ _ _ _] 1.5) :place-s 1})]
+    (ask)
+    (is (= 1 (count (get @choose/kept-routes (:id slice)))) "the search is kept under one key")
+    (vreset! (:asked slice) {})
+    (ask)
+    (is (= 1 (count (get @choose/kept-routes (:id slice)))) "a new fn is the same search")))
 
 (deftest a-dig-route-past-the-count-needs-an-end-more-than-a-block-nearer-than-any-way-before
   (are [end best dive? ok?] (= ok? (esc/dig-progress? {:cells [{:cell [0 60 0]} {:cell end}]} [10 60 0] best dive?))

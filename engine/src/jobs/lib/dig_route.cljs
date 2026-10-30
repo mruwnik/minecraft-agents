@@ -165,7 +165,9 @@
                                         (or a b c d e) :unseen))))
         ;; what a move costs before the cells it opens, falls and unseen steps: the forward search adds those, the back search
         ;; (a lower bound) leaves out falls and the refusals of open-cell! (a falling block over a cell, the body's own ways)
-        base-s (fn [move] (case move :walk step-s :laid (+ step-s place-s) :pillar pillar-s))
+        base-s (fn [move] (case move :walk step-s :laid (+ step-s place-s) :pillar (if (fn? pillar-s) (pillar-s 1 0 0 0) pillar-s)))
+        ;; a pillar block's seconds as the n-th of a run of them from cell x y z
+        pillar-at (fn [^js node x y z] (if (fn? pillar-s) (pillar-s (inc (if (keyword-identical? :pillar (aget node 4)) (aget node 7) 0)) x y z) pillar-s))
         ;; seconds to open cell x y z (0 when open), nil when no step opens it
         open-s (fn [x y z] (let [^js k (at x y z) d (.-cost k)] (cond (nil? d) nil (zero? d) 0 :else (dig-at (.-name k) x y z))))
         ;; the cost of opening cell x y z for a step, accumulated in acc #js [seconds digs dig-seconds dug-keys]; false when it may not be
@@ -196,7 +198,7 @@
                            nd (+ (aget from-node 0) (cw/step-price (aget acc 0) step-s stair-s stair? unseen-s))
                            ^js old (.get best nk)]
                        (when (or (nil? old) (< nd (aget old 0)))
-                         (.set best nk #js [nd k ds ck move placed (let [dug (aget from-node 6) ks (aget acc 3)] (if (zero? (alength ks)) dug (into dug (array-seq ks))))])
+                         (.set best nk #js [nd k ds ck move placed (let [dug (aget from-node 6) ks (aget acc 3)] (if (zero? (alength ks)) dug (into dug (array-seq ks)))) (if (keyword-identical? :pillar move) (inc (if (keyword-identical? :pillar (aget from-node 4)) (aget from-node 7) 0)) 0)])
                          (when (and (< nd (aget incumbent 0)) (end-key? nk)) (aset incumbent 0 nd) (aset incumbent 1 nk))
                          ;; among equal bounds the farthest along first: under prior-h a straight way's cells all bound alike
                          (heap-push! queue #js [(+ nd (heuristic nx ny nz)) (if prior? (- nd) @tick) nk])
@@ -221,7 +223,7 @@
                                              (boolean (and stair-s (> ny my) (not= :pillar move) (or (= :laid move) (pos? (aget acc 1)))))
                                              face-s)))))]
                     (when-let [pf (and pillar-s (placeable mx my mz))]
-                      (try! mx (inc my) mz :pillar (base-s :pillar) true 0 1 (= :unseen pf)))
+                      (try! mx (inc my) mz :pillar (pillar-at node mx my mz) true 0 1 (= :unseen pf)))
                     (loop [i 0]
                       (when (< i 8)
                         (let [nx (+ mx (aget dirs i)) nz (+ mz (aget dirs (inc i)))
@@ -315,7 +317,7 @@
                                    (if (.has back-done k)
                                      (.get back-best k)
                                      (if-let [^js t (aget back-queue 0)] (max 0 (- (aget t 0) (to-start x z))) 0)))))
-    (.set best start-key #js [0 0 0 nil nil 0 #{}])
+    (.set best start-key #js [0 0 0 nil nil 0 #{} 0])
     (heap-push! queue #js [(heuristic fx (from 1) fz) 0 start-key])
     (vreset! seeds (sort-by (fn [[x _ z]] (to-start x z))
                             (cons goal (when r
@@ -384,7 +386,7 @@
   :place-s prices laying one (against a face, the stair job's floor). A* with the walked steps' price as the lower bound.
   Priced :step-s a step, (:dig-s name cell) a cell dug (default 0 and 1: the fewest digs), a step up that digs or
   lays its floor at least :stair-s (a stair's step) and :place-s a floor laid,
-  :pillar-s a jump-placed block (a step straight up; none without it) and :unseen-step-s a step whose feet, head or
+  :pillar-s a jump-placed block (a step straight up; none without it; or a fn [n x y z] of the seconds of the n-th block of a run of them, from cell x y z, n 1 the least) and :unseen-step-s a step whose feet, head or
   floor is (:unseen? cell), or on a step up the cell over the head it leaves, or every face its placed block rests on; a
   block :dig-s prices nil is not dug, nor a cell under sand or gravel (it would fall on the body walking in), nor a
   floor of :ways (the floors of the body's own stairs), on which nothing is placed either. Bounds, each only when

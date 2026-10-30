@@ -15,6 +15,7 @@
             [jobs.lib.need :as need]
             [jobs.lib.access :as access]
             [jobs.lib.dig-look :as look]
+            [jobs.lib.escape :as escape]
             [jobs.lib.look :as sight]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.pace :as pace]
@@ -332,6 +333,15 @@
         :again)
     (finish! c l (give-up :mob-in-cell :at cell :mob (:name mob)))))
 
+(defn knockback-data
+  "The data of a pillar.knockback: where the body is, the base column, and the open sides (of four) of the column at the
+  height of each block placed so far (:sides; :open-sides the last), for a recount of the knock chance by open sides."
+  [c base]
+  (let [[bx by bz] base
+        [_ fy _] (pl/feet-cell c)
+        sides (escape/pillar-open-sides (:primitives c) [bx by bz] (max 1 (- fy by)))]
+    {:at (pl/feet-cell c) :base base :open-sides (peek sides) :sides sides}))
+
 (defn ^:async place!
   "Write the intent, jump-place one block, confirm it when the jump reports it (the sensed cell may lag). A failed jump is a failure in a
   row (retry?), a knockback too (the body shoved off or airborne); one with a mob in the cell is not (until mob-waits of such waits)."
@@ -348,7 +358,7 @@
       (let [shoved? (displaced? c (:base (ctx/mem c)) (:home (ctx/mem c)))
             _ (when shoved?
                 (ctx/update-mem! c assoc :counted true)
-                (ctx/emit! c :pillar.knockback :info {:at (pl/feet-cell c) :base (:base (ctx/mem c))}))
+                (ctx/emit! c :pillar.knockback :info (knockback-data c (:base (ctx/mem c)))))
             _ (when (or shoved? (not (and (mob-in-cell c cell) (mob-wait! c)))) (u/failed! c))]
         (if (retry? c)
           :again
@@ -369,7 +379,7 @@
         [fx _ fz] (pl/feet-cell c)
         off? (and base home (not (centred? c [bx bz] home)))
         _ (when (and off? (not counted) (not walking))
-            (ctx/emit! c :pillar.knockback :info {:at (pl/feet-cell c) :base base})
+            (ctx/emit! c :pillar.knockback :info (knockback-data c base))
             (u/failed! c))
         walk? (and off? (retry? c))]
     (ctx/update-mem! c #(-> % (dissoc :counted) (assoc :walking (boolean walk?))))

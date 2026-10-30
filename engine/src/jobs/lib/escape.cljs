@@ -80,6 +80,26 @@
   [n]
   (boolean (and n (not (bs/passable? n)) (not (bs/fluids n)))))
 
+(defn open-sides-fn
+  "(fn [cell]) how many of the four sides of a body's feet and head cells at cell are not held by a seen solid block (an
+  unseen cell holds none)."
+  [p]
+  (let [block-at (block-at-of p)
+        unseen? (unseen-of p)
+        held? (fn [cell] (and (not (unseen? cell)) (solid? (block-at cell))))]
+    (fn [cell] (count (remove (fn [[dx dz]] (some #(held? (add (up cell %) [dx 0 dz])) [0 1])) cardinals)))))
+
+(defn pillar-open-sides
+  "[n ...]: open-sides-fn at each of the height blocks of a pillar up from feet, the cells before each block."
+  [p feet height]
+  (let [open-sides (open-sides-fn p)]
+    (mapv #(open-sides (up feet %)) (range height))))
+
+(defn pillar-knock
+  "cost/pillar-knock-of a pillar of height blocks up from feet: each block's open sides of four share its chance."
+  [p feet height]
+  (cost/pillar-knock-of p (map #(/ % 4) (pillar-open-sides p feet height))))
+
 (defn protected? [n] (boolean (and n (re-find protected n))))
 
 (def layer-top "Cells below this y are in the overworld's bedrock layer (the nether's bedrock is not classed: no job goes there)." -59)

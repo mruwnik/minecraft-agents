@@ -75,6 +75,14 @@
     (is (= [] (:dig (dr/route w [0 8 0] [1 10 0] {:pillar-s 0.5 :step-s 0.2 :margin 2}))))
     (is (not-any? #{:pillar} (moves (dr/route w [0 8 0] [1 10 0] {:step-s 0.2 :margin 2}))) "no block, no pillar")))
 
+(deftest a-pillar-fn-prices-each-block-by-its-place-in-the-run
+  (let [w (world {[0 8 0] "air" [0 9 0] "air" [0 10 0] "air"})
+        calls (atom #{})
+        pillar-s (fn [n x y z] (swap! calls conj [n x y z]) 0.5)
+        r (dr/route w [0 8 0] [0 10 0] {:pillar-s pillar-s :step-s 0.2 :margin 2})]
+    (is (= [:pillar :pillar] (map :move (:steps r))))
+    (is (contains? @calls [2 0 9 0]) "the second block of the run is priced as the second")))
+
 (deftest a-step-up-lays-its-floor-against-a-face
   (let [w (fn [[_ y _ :as c]] (or ({[2 11 0] "stone"} c) (if (< y 10) "stone" "air")))
         r (dr/route w [0 10 0] [2 12 0] {:place-s 1 :step-s 0.2 :margin 2})]

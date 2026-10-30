@@ -338,7 +338,7 @@
   a wooden pickaxe when fetch? (the dig fetches one, fetch-tool?), else bare-handed (a player does not punch a tunnel
   through rock). A floor never seen under a cell seen open may be a void: dig-route reads it as no floor, unless
   floors-unseen-ok? (a pocket's floor shows only from inside it). Other route-opts go to the search (:place-s,
-  :pillar-s, :margin). With :slice (route-slice) a search that spends it goes on at the next call; without, it ends
+  :pillar-s (a fn is rebuilt each call: not part of the slice's key), :margin). With :slice (route-slice) a search that spends it goes on at the next call; without, it ends
   at the node budget as no route. With :range (and :near, the cell it is measured from) the route ends on any stand
   within it (with :see, one whose eye sees that block, jobs.lib.aim) and never digs :near. A route is dug again till
   it holds: each guess on it is dug at its dig's price over the chance it is diggable (1 - its class's risk, route-opts
@@ -376,7 +376,7 @@
         ;; the search itself reads no may-dig?: escalate!'s choices with other zone rules share it
         search (fn [refused]
                  (if slice
-                   (sliced-answer slice [from goal floors-unseen-ok? route-opts guess-risk refused] #(dig-route/search seen-floor from goal (opts refused)))
+                   (sliced-answer slice [from goal floors-unseen-ok? (dissoc route-opts :pillar-s) guess-risk refused] #(dig-route/search seen-floor from goal (opts refused)))
                    (dig-route/route seen-floor from goal (opts refused))))
         ;; may-dig? (zones, claims, plans) is asked of a found route's cells only, not of every cell the search weighs: it was
         ;; about half a search's time; a refused cell is searched round, at most route-searches times

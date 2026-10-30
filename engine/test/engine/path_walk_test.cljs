@@ -2,6 +2,7 @@
   "jobs.lib.walk (the shared walk driver) against the fake world: one call plans, walks and re-plans to a goal."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
+            [jobs.lib.escape :as escape]
             [engine.path.blocks :as blocks]
             [engine.path.executor :as executor]
             [engine.path.fixture :as fx]
@@ -577,8 +578,8 @@
                                          #js {:unknown true :pos pos}
                                          (sensed pos))))
         unseen (climb)]
-    (is (= (+ (cw/pillar-cost 4) (cost/pillar-knock-of p 4)) seen) "seen cells: the pillar's blocks and its knock-off falls only")
-    (is (< (js/Math.abs (- unseen (+ (cw/pillar-cost 4) (cost/pillar-knock-of p 4) (* 4 (cost/unseen-step-s (wworld/unseen-share p)))))) 1e-9)
+    (is (= (+ (cw/pillar-cost 4) (escape/pillar-knock p [0 61 0] 4)) seen) "seen cells: the pillar's blocks and its knock-off falls only")
+    (is (< (js/Math.abs (- unseen (+ (cw/pillar-cost 4) (escape/pillar-knock p [0 61 0] 4) (* 4 (cost/unseen-step-s (wworld/unseen-share p)))))) 1e-9)
         "4 blocks over unseen cells: each adds the unseen step")))
 
 ;; a drop whose landing is walled by what cannot be dug is a certain trap: no goal is worth it, arrival (no worth said) neither (the wall runs the whole floor: a

@@ -287,18 +287,22 @@
   ([share height unseen-blocks short]
    (+ (ways/pillar-cost height short) (* (unseen-step-s share) unseen-blocks))))
 
+(defn pillar-knock-block-s
+  "Seconds of hp the n-th block of a pillar costs in expectation: value/pillar-knock-chance, times the open share (0..1)
+  of the column's sides there, that a blow shoves the body off it, a fall of n blocks (fall-damage at hp-cost from health)."
+  [health equipment n open]
+  (* (value/pillar-knock-chance) open (health/hp-cost health (fall-damage equipment n))))
+
 (defn pillar-knock-s
-  "Seconds of hp a pillar of height blocks costs in expectation: at each block value/pillar-knock-chance that a blow
-  shoves the body off it, a fall from the height built so far (fall-damage at hp-cost from health)."
-  [health equipment height]
-  (* (value/pillar-knock-chance)
-     (transduce (map #(health/hp-cost health (fall-damage equipment %))) + 0 (range 1 (inc height)))))
+  "Seconds of hp a pillar costs in expectation: the sum of pillar-knock-block-s of its blocks, opens their open shares."
+  [health equipment opens]
+  (transduce (map-indexed (fn [i open] (pillar-knock-block-s health equipment (inc i) open))) + 0 opens))
 
 (defn pillar-knock-of
-  "pillar-knock-s of a pillar of height blocks for body p's health and kit."
-  [p height]
+  "pillar-knock-s of opens for body p's health and kit."
+  [p opens]
   (let [self (.self p)]
-    (pillar-knock-s (.-health self) (equipment-of (.-equipment self)) height)))
+    (pillar-knock-s (.-health self) (equipment-of (.-equipment self)) opens)))
 
 (defn unseen-fall-s
   "Seconds a step drop-by blocks down (kind :down or :drop) onto a floor the body has not seen costs on top of turning

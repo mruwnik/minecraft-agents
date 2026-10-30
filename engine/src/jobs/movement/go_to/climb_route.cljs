@@ -9,10 +9,17 @@
             [jobs.movement.go-to.route-ways :as route-ways]))
 
 (defn pillar-block-s
-  "Seconds a block of a pillar up a climb of rise blocks takes: cw/pillar-cost 1 and its share of the knock-off falls
-  (cost/pillar-knock-of over the rise's blocks)."
-  [p rise]
-  (+ (cw/pillar-cost 1) (/ (cost/pillar-knock-of p rise) (max 1 rise))))
+  "(fn [n x y z]) the seconds of the n-th block of a pillar run from cell x y z: cw/pillar-cost 1 and its knock-off fall of n
+  blocks (cost/pillar-knock-block-s) at the cell's open sides, so a run costs by its own height."
+  [p]
+  (let [self (.self p)
+        health (.-health self)
+        equipment (cost/equipment-of (.-equipment self))
+        open-sides (escape/open-sides-fn p)
+        shares (js/Map.)
+        share (fn [x y z] (let [k (str x "," y "," z)]
+                            (if (.has shares k) (.get shares k) (let [v (/ (open-sides [x y z]) 4)] (.set shares k v) v))))]
+    (fn [n x y z] (+ (cw/pillar-cost 1) (if (== 1 n) 0 (cost/pillar-knock-block-s health equipment n (share x y z)))))))
 
 (defn climb-way
   "The way up for a shut-in body at feet to goal above it, its stair, pillar and dig route allowed (not in opts :skip):
@@ -24,7 +31,7 @@
     (let [n (:count pillar-item 0)
           a (choose/route-answer p feet goal may-dig? own? false fetch?
                                  (cond-> (choose/search-opts opts)
-                                   (pos? n) (assoc :place-s (cw/fill-cost n) :pillar-s (pillar-block-s p (- (goal 1) (feet 1))) :max-places n)))]
+                                   (pos? n) (assoc :place-s (cw/fill-cost n) :pillar-s (pillar-block-s p) :max-places n)))]
       (cond
         (= :searching a) {:step :searching}
         (seq (:steps a))
