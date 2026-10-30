@@ -1512,10 +1512,12 @@
           (is (nil? (:vehicle (js->clj (.self p) :keywordize-keys true))) "got off the boat")
           (is (> (first (at p)) 5) "walked on foot"))))))
 
-(deftest go-to-aboard-that-cannot-get-off-ends-condition-failed
+(deftest go-to-aboard-that-cannot-get-off-ends-nothing-possible-with-the-childs-ending
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p]} (await (go! {:blocks flat :self {:pos start :vehicle 9} :entities [boat] :dismountFails true} {:pos [10 64 0] :range 1}))]
           (is (= false (:arrived @out)))
-          (is (= [0 64 0] (at p))))))))
+          (is (= [0 64 0] (at p)))
+          (let [e (:ending (meta @out))]
+            (is (= [:nothing-possible :aboard :dismount-failed] [(:kind e) (:cause e) (:cause (:because e))]))))))))

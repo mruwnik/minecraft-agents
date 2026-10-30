@@ -30,7 +30,7 @@
 
 (def refusal-kinds
   "The ending kind of a refusal other than :condition-failed: args or a body that can never do it are impossible."
-  {:no-way :nothing-possible :bad-args :impossible :bad-pos :impossible :bad-name :impossible :unsupported :impossible})
+  {:no-way :nothing-possible :aboard :nothing-possible :bad-args :impossible :bad-pos :impossible :bad-name :impossible :unsupported :impossible})
 
 (defn ending
   "The ending of result, the call's result map: arrived is :done; a give-up (:reason :unreachable) is

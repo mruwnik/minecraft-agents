@@ -54,7 +54,7 @@
     its own shelter).
   - Its safe? is: no hostile near (a walk leading away from every hostile near is not held, unless one catches the walk (ready/melee-catches?) or has hurt the body lately) and the walk's risk acceptable (jobs.lib.walk-risk: the expected damage of mobs spawning on dark open stretches by the light seen, of the hostiles near the way that catch it, and of a recent death by the goal, within a share of the health; else later :risky with the figures; no wait for dawn); always ok with the head under water (it swims up for air first). The risk is priced on go-to's plan: its round asks it of the first plan before a step of it, and again mid-walk on a re-plan that knows of a new hostile near the way or a blow by a mob not felt before (jobs.movement.go-to.reprice): when it fails the round ends as a failed can-run? would, the plan kept for the start check to hold on; a plan to where an unfinished search has got to searches on instead. A caller's :checks (an escape job's
     defaults, an agent's own) replace it.
-  - A body aboard a vehicle when the call starts gets off first (jobs.movement.leave-vehicle child); one that cannot ends condition-failed :aboard.
+  - A body aboard a vehicle when the call starts gets off first (jobs.movement.leave-vehicle child); one that cannot ends nothing-possible :aboard, the child's ending its :because.
   - A body already within :range of a goal with a y (not in water or hanging; under :see seeing it) ends :done, cause :already, before any round: no plan, no arrival look (done?).
   - One call is one whole attempt: it plans and walks (jobs.lib.walk: slices of about 100 ms of search, walks of at
     most 60 s each) until it arrives or gives up. A search that needs more slices walks on toward where it has got
@@ -232,7 +232,9 @@
       (cond
         (= :continue r) :continue
         (= :done (:kind r)) nil
-        :else (end/refuse! c {:reason :aboard :message "the body rides a vehicle it could not get off"})))))
+        :else (contract/with-because
+               (end/refuse! c {:reason :aboard :message (str "the body rides a vehicle it could not get off: " (name (or (contract/cause-key r) :failed)))})
+               r)))))
 
 (defn ^:async walk-attempt!
   "The walk of an attempt: restart notes, the torch back, the cycle give-up, the goal-danger check, then the steps."
