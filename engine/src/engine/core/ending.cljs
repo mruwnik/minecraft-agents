@@ -378,7 +378,7 @@
       (cond
         (= :continue r) :continue
         (= :done (:kind r)) :continue
-        :else (finish def c (contract/with-because (contract/ending :condition-failed {:reason :look-first} nil) r))))))
+        :else (finish def c (contract/ending :condition-failed {:reason :look-first} nil))))))
 
 (defn ^:async checked-round
   "run's round when no look child is running."
