@@ -411,19 +411,21 @@
                  (select-keys @(:out s) [:status :item :reason]))))))))
 
 (defn ^:async stocked-home-kit
-  "The no-food warnings of a one-pickaxe kit with a booked chest of 40 bread at home and bread carried."
+  "The no-food warnings, ending and register food holds of a one-pickaxe kit with a booked chest of 40 bread at home and bread carried."
   [bread]
   (let [s (start (hungry-world [{:name "bread" :count bread}] 16) {:items ["iron_pickaxe"] :explore false})]
     (mem/write! (:store (:eng s)) :fetch/stock {:pos [4 64 4] :items {"bread" 40}} {:cap 64 :ttl :forever})
     (await (f/run-ticks s 80))
-    {:no-food (mapv :cause (f/events-of s :kit.no-food)) :out (select-keys @(:out s) [:status :item :reason])}))
+    {:no-food (mapv :cause (f/events-of s :kit.no-food)) :out (select-keys @(:out s) [:status :item :reason])
+     :held (into {} (keep (fn [{:keys [data]}] (when (= "food for the kit's trip" (:why data)) [(:item data) (:count data)])))
+                 (mem/entries (mem/view (:store (:eng s))) :reserve))}))
 
 (deftest with-a-stocked-chest-at-home-the-kit-carries-the-food-for-its-trip
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= {:no-food [] :out {:status :stopped :item "iron_ingot" :reason :no-source}} (await (stocked-home-kit 10)))
-            "no get-food child: 50 points cover the kit's 120 s quote and its spread up to the 10800 s spend (44 points)")
+        (is (= {:no-food [] :out {:status :stopped :item "iron_ingot" :reason :no-source} :held {"bread" 9}} (await (stocked-home-kit 10)))
+            "no get-food child: 50 points cover the kit's 120 s quote and its spread up to the 10800 s spend (44 points), and the register holds those 9 loaves for the kit")
         (is (= [:no-carry] (:no-food (await (stocked-home-kit 5))))
             "25 points cover the walk back to the chest but not the kit's own time")))))
 

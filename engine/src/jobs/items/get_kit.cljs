@@ -20,6 +20,7 @@
             [jobs.lib.need :as need]
             [jobs.lib.next-call :as next-call]
             [jobs.lib.pace :as pace]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -31,7 +32,7 @@
   (jobs.items.obtain.bill: the furnace material all pieces need together first, so the ore is mined and smelted in one go, then
   one piece after the other), with a :spend :job-time of ::job-time-s; the pieces are worn when it is done.
   While furnace material is still short (mining or smelting ahead; pure crafting needs no food) and fewer than
-  the kit's food (kit-carry: jobs.lib.home-food/carry-points of the kit's quote-trip: the hunger of the kit's time and the walk back to home food, at least 3 days less that food) is carried (harmful food does not count), one jobs.survival.get-food child (with :explore and that :carry) runs before the bill (:food false: none). A child that stops warns kit.no-food; a hungry body (foods/hungry?, the hungry trigger's line) then stops {:reason :no-food}, a fed one goes on (the hungry trigger feeds it later) and tries again after the next bill round that ends in a retry. A body that cannot heal (food 0, or ready/hurt-cannot-heal? of a mine's :long work: too hurt for it with no food carried and the bar under 18) asks get-food before more work (once more if it is still so after a fed answer), and stops {:reason :no-food} when it finds none.
+  the kit's food (kit-carry: jobs.lib.home-food/carry-points of the kit's quote-trip: the hunger of the kit's time and the walk back to home food, at least 3 days less that food) is carried (harmful food does not count), one jobs.survival.get-food child (with :explore and that :carry) runs before the bill, and the reserve register holds that food for the kit (hold-food!: its children's shorter trips do not put it away) (:food false: none). A child that stops warns kit.no-food; a hungry body (foods/hungry?, the hungry trigger's line) then stops {:reason :no-food}, a fed one goes on (the hungry trigger feeds it later) and tries again after the next bill round that ends in a retry. A body that cannot heal (food 0, or ready/hurt-cannot-heal? of a mine's :long work: too hurt for it with no food carried and the bar under 18) asks get-food before more work (once more if it is still so after a fed answer), and stops {:reason :no-food} when it finds none.
   With furnace material short and no weapon carried, one jobs.items.obtain child first makes a sword (iron, stone or wooden); if it cannot, kit.unarmed warns and the work goes on.
   Items that need no furnace material, and those the carried material covers, are made first (:partial-first, the default) so the job stops naming only the shortfall; with :partial-first false the list order rules and the job stops at the first item that cannot be made.
   With :explore, a bill that stops because a gathering ended (a mine that stopped, no way up) runs again (kit.retry, the pieces newly covered made first), while another is worth its price (cost/try-again? :kit-later). A bill that stops condition-failed for a child's :later (one the world may lift, not :no-source; one with a wait reason, such as :exposed, jobs.lib.need/call! waits out itself) rests with that cause (kit.later-wait; its :recheck-after-ms, else the measured seconds of value/::retry-counts :kit-later) and runs again while another round is worth its price (cost/try-again? :kit-later at the kit's worth); a :never stop ends the kit with its cause.
@@ -251,6 +252,14 @@
   [c]
   (home-food/carry-points c (home-food/quote-trip c (quote-of c))))
 
+(defn hold-food!
+  "Hold the carried food kit-carry needs in the reserve register while the kit lives, so a child on a shorter trip (a
+  deposit, make-room) does not put it away; meals (:eat) may eat it."
+  [c inv]
+  (reserve/set-job-entries! c (vec (for [[n k] (cost/food-reserve inv (kit-carry c))]
+                                     {:id (str (:id c) "-food-" n) :item n :count k :strength 1 :by (:id c)
+                                      :why "food for the kit's trip" :not #{:eat}}))))
+
 (defn food-args
   "The get-food child's args: feed the body, then fill the pack to kit-carry."
   [c]
@@ -407,6 +416,7 @@
             have (filterv #(had? (:carried st) (:worn st) %) items)
             todo (remove (set have) items)
             fp (foods/stock-points (:inv st))]
+        (when (:food a) (hold-food! c (:inv st)))
         (cond
           wear
           (let [out (wear-outcome (await (ctx/call c :wear 'jobs.items.equip {:item wear})))]
