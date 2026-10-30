@@ -1,8 +1,8 @@
 (ns jobs.lib.home-food
   "The food a body has at home, from what it sensed: chests it booked food in (memory :fetch/stock) that zones and
   claims let it take from, ripe crops it saw in its own zones and plans, and the surplus of the food animals it saw or
-  noted there (animal-spare's keep rule: the breeders stay). (sources c) [{:kind :pos :points :walk-s}];
-  (carry-points c) what the body must carry (jobs.lib.cost.food/carry-points over them)."
+  noted there (animal-spare's keep rule: the breeders stay). (sources c far) [{:kind :pos :points :walk-s}], walk-s
+  from far; (carry-points c trip) what the body must carry on trip (jobs.lib.cost.food/carry-points over them)."
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.game :as game]
@@ -65,16 +65,31 @@
       {:kind :pen :pos (:pos (first as)) :points (* spare-n drops (foods/points meat))})))
 
 (defn sources
-  "See the ns doc: within ::radius, each with the seconds of the walk back to it."
-  [c]
-  (let [here (u/self-pos c)
-        per-s (cost/walk-blocks-per-s)]
+  "See the ns doc: within ::radius of far, each with the seconds of the walk to it from far."
+  [c far]
+  (let [per-s (cost/walk-blocks-per-s)]
     (for [s (concat (chest-sources c) (crop-sources c) (pen-sources c))
-          :let [d (u/dist here (:pos s))]
+          :let [d (u/dist far (:pos s))]
           :when (<= d (settings/get settings ::radius))]
       (assoc s :walk-s (/ d per-s)))))
 
-(defn carry-points
-  "Food points the body must carry: jobs.lib.cost.food/carry-points of its home food (sources)."
+(defn chain-trip
+  "The trip c's call chain is on when the caller names none: as long as its job-time spend left (ctx/left; ##Inf when
+  no line bounds it, nil with no engine behind c), ending where the body stands."
   [c]
-  (food/carry-points (sources c)))
+  {:s (when (:left c) (get-in (ctx/left c) [:spend :job-time] ##Inf)) :far (u/self-pos c)})
+
+(defn quote-trip
+  "The trip of c's own job, by its quote q: food/trip-s of q's job-time, its most held to the spend left, ending at q's
+  :moves-to, else where the body stands."
+  [c q]
+  (let [[least mean most] (get-in q [:uses :job-time] [0 0 ##Inf])
+        most (min most (or (:s (chain-trip c)) ##Inf))]
+    {:s (food/trip-s [(min least most) (min mean most) most])
+     :far (if-let [[x y z] (:moves-to q)] {:x x :y y :z z} (u/self-pos c))}))
+
+(defn carry-points
+  "Food points the body must carry on trip {:s :far} (default chain-trip): jobs.lib.cost.food/carry-points of its home
+  food (sources from far) and the trip's seconds."
+  ([c] (carry-points c (chain-trip c)))
+  ([c {:keys [s far]}] (food/carry-points (sources c far) s)))

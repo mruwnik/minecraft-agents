@@ -2,6 +2,7 @@
 ;; 12 bread) never blocks replanting what a harvest cut, but holds back sowing cells that were already bare and food taken
 ;; or put away. Carrots: 3 points each, so 5 carried plus the drops of two cut plants stay under 20.
 ;; Should-succeed: both cut cells replanted below the reserve; get-food :carry tops the food up to the reserve (12 bread) from a booked chest and deposit stocks another chest with it.
+;; Deposit of everything at home: the bread put away is home food, so only the deposit's own time and the walk back to it stay carried.
 ;; Should-fail: already-bare planned cells stay unsown below the reserve; make-room (no chest: it tosses junk) never tosses the reserve food.
 ;; Floor y -1 is the ground layer; farmland at y -1 with water beside, crops at y 0.
 {:defaults
@@ -29,6 +30,12 @@
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.get-food"}} :within-s 60}
             {:event {:source :job :kind :completed :data {:name "jobs.storage.deposit"}} :within-s 90}]
    :after [[:item "bread" 0] [:block [14 0 16] "chest{Items:[{id:\"minecraft:bread\",count:24}]}"] [:block [9 0 16] "chest{Items:[{id:\"minecraft:bread\",count:21}]}"]]}
+  {:name "deposit-at-home-keeps-only-the-food-for-its-own-trip"
+   :blocks [[:set [9 0 16] "chest"]]
+   :body {:at [12.5 0 16.5] :inventory [["bread" 20] ["dirt" 16]]}
+   :act [[:job (jobs.storage.deposit {:chest #xyz [9 0 16]})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.storage.deposit"}} :within-s 60}]
+   :after [[:item "bread" [:<= 3]] [:item "dirt" 0]]}
   {:name "make-room-keeps-the-food-reserve"
    :body {:at [12.5 0 16.5] :inventory [["bread" 20] ["cobblestone" 64] ["dirt" 64] ["gravel" 64]]}
    :act [[:job (jobs.storage.make-room {:free 34})]]

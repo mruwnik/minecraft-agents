@@ -9,8 +9,8 @@
 (defn item [name count] {:name name :count count})
 
 (defn body
-  "A ctx holding items, with register entries (maps) at time 1000 and live job instances (ids)."
-  [items entries & {:keys [jobs overrides home-bed stock]}]
+  "A ctx holding items, with register entries (maps) at time 1000 and live job instances (ids); left-s the job-time its call chain has left."
+  [items entries & {:keys [jobs overrides home-bed stock left-s]}]
   (let [add (fn [d kind data policy] (mem/add-entry d kind {:t 0 :data data} policy))
         data (as-> mem/empty-data d
                (reduce #(add %1 :reserve %2 reserve/policy) d entries)
@@ -18,7 +18,8 @@
                (reduce #(add %1 :choose/override %2 {:cap 20 :ttl :forever}) d overrides)
                (cond-> d home-bed (add :bed {:pos home-bed} mem/place-policy))
                (reduce #(add %1 :fetch/stock %2 {:cap 64 :ttl :forever}) d stock))]
-    {:primitives (tu/fake {:inventory items}) :view (fn [] {:data data :now 1000})}))
+    (cond-> {:primitives (tu/fake {:inventory items}) :view (fn [] {:data data :now 1000})}
+      left-s (assoc :left (fn [] {:spend {:job-time left-s}})))))
 
 (deftest reserve-cost-is-value-times-odds
   (are [s cost-of] (= cost-of (Math/round (cost/reserve-cost 10 s)))
@@ -65,13 +66,15 @@
                 [])]
     (is (= {"golden_apple" 2 "bread" 4} (reserve/held c :tools)))))
 
-(deftest the-food-reserve-counts-a-booked-chest-of-food-the-body-can-walk-back-to
-  (are [stock held] (= held (reserve/held (body [(item "bread" 20)] [] :stock stock) :deposit))
-    [] {"bread" 12}
-    [{:pos [3 64 0] :items {"bread" 64}}] {"bread" 5}
-    [{:pos [3 64 0] :items {"wheat" 90}}] {"bread" 5}
-    [{:pos [3 64 0] :items {"cobblestone" 64}}] {"bread" 12}
-    [{:pos [900 64 0] :items {"bread" 64}}] {"bread" 12}))
+(deftest the-food-reserve-carries-the-job-time-left-and-counts-a-booked-chest-of-food-for-the-rest
+  (are [stock left-s held] (= held (reserve/held (body [(item "bread" 20)] [] :stock stock :left-s left-s) :deposit))
+    [] 600 {"bread" 12}
+    [] 7200 {"bread" 20}
+    [{:pos [3 64 0] :items {"bread" 64}}] 1200 {"bread" 5}
+    [{:pos [3 64 0] :items {"bread" 64}}] 3600 {"bread" 13}
+    [{:pos [3 64 0] :items {"wheat" 90}}] 1200 {"bread" 5}
+    [{:pos [3 64 0] :items {"cobblestone" 64}}] 1200 {"bread" 12}
+    [{:pos [900 64 0] :items {"bread" 64}}] 1200 {"bread" 12}))
 
 (deftest one-carried-bed-is-held-until-a-home-bed-is-placed
   (let [items [(item "red_bed" 2) (item "white_bed" 1)]]

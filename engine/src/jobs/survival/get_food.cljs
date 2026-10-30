@@ -58,7 +58,7 @@
   flesh, with :allow-bad). Still nothing: it ends nothing-possible :no-food (the text says what was searched, the nearest known source) and writes
   :hungry, which widens the hunt radius; the hungry trigger rests after that ending (its :rest-s).
   :eat false: only gathers, done when the pack holds :carry food points (jobs.survival.eat fetches this way; a job cannot call its own caller).
-  :carry n (default the body's reserve, jobs.lib.home-food/carry-points: 3 days less the home food it can walk back to; 0: only feed): a fed body also takes the ways until the pack holds n food points, else ends nothing-possible :no-carry.
+  :carry n (default the body's reserve, jobs.lib.home-food/carry-points over its call chain's trip; 0: only feed): a fed body also takes the ways until the pack holds n food points, else ends nothing-possible :no-carry.
   A fed body (not hungry, nothing to top up with, no :carry short) is done at once.
   A go-to that waits on the world, or a child still going after jobs.lib.child's call cap, yields :continue; a reflex
   call (it never yields) waits it out in the round.

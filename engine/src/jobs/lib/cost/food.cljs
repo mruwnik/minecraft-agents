@@ -18,19 +18,30 @@
 
 (def day-s "Seconds a Minecraft day lasts." 1200)
 
-(def margin-points "Food a trip carries beyond the walk back to home food: a day, for the delays on the way." points-per-day)
+(def points-per-s "Hunger points a second: points-per-day over day-s." (/ points-per-day day-s))
+
+(defn trip-s
+  "Seconds a trip whose time is the figure [least mean most] keeps food for: its mean plus one standard deviation of a
+  triangular spread over [least most] peaking at the mean, never past most; ##Inf when most is."
+  [[least mean most]]
+  (if (js/isFinite most)
+    (min most (+ mean (js/Math.sqrt (/ (- (+ (* least least) (* mean mean) (* most most)) (* least mean) (* least most) (* mean most))
+                                       18))))
+    ##Inf))
 
 (defn carry-points
   "Food points the body must carry, given its home food [{:points :walk-s}] (seen stocked chests, ripe crops, pen
-  surplus; walk-s the walk back to it): the 3-day reserve less that food, but never less than the hunger of the walk
-  back to the nearest of it at points-per-day plus margin-points, nor more than the reserve. No home food: the reserve."
-  [home]
-  (let [home (filter (comp pos? :points) home)]
-    (if (empty? home)
-      reserve-points
+  surplus; walk-s the walk to it from the trip's far end) and the trip's seconds (trip-s; nil: no trip): the hunger of
+  the trip and the walk back to the nearest home food, and at least the 3-day reserve less that food (each source less
+  the hunger of its walk). No home food, or a trip with no bound (##Inf): the trip's hunger, never under the reserve."
+  [home trip]
+  (let [home (filter (comp pos? :points) home)
+        trip (or trip 0)]
+    (if (or (empty? home) (not (js/isFinite trip)))
+      (max reserve-points (if (js/isFinite trip) (* trip points-per-s) 0))
       (let [back (apply min (map :walk-s home))
-            trip (+ margin-points (* back (/ points-per-day day-s)))]
-        (min reserve-points (max trip (- reserve-points (reduce + (map :points home)))))))))
+            stored (reduce + (map #(max 0 (- (:points %) (* (:walk-s %) points-per-s))) home))]
+        (max (* (+ trip back) points-per-s) (- reserve-points stored))))))
 
 (defn reserve-food?
   "Food that counts toward the reserve: edible and not precious."

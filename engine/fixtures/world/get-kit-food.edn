@@ -2,7 +2,8 @@
 ;; with no iron near: mining/smelting is ahead, so a get-food child with :carry stocks the pack first.
 ;; Should-succeed: 3 cows near, a sword: a cow is hunted before any mining (food.killed); no sword but cobblestone, sticks and a table:
 ;; a stone sword is made first; fed (food 20), with bread carried or with an empty pack, and no animals anywhere: kit.no-food warns and the kit goes on (no :no-food stop);
-;; 5 bread and a chest of bread it booked 4 blocks off: no food child at all (the chest counts toward the reserve).
+;; 12 bread and a chest of bread it booked 4 blocks off: no food child for the whole kit (its quoted time, and the chest for the rest of 3 days);
+;; 5 bread and that chest: the kit's time needs more, taken from the chest.
 ;; A hungry body (bar under 7 after eating its little bread) with no animals stops :no-food. A hurt body (3 hp) with a fair bar and nothing to eat stops :no-food too.
 ;; Cows 17 blocks east, behind a body facing west (past the 16-block hearing): found by the look round.
 ;; Should-fail: 5 bread with no home food still tops up (kit.no-food); a starving body (food 0) with no food anywhere stops :no-food before any mining; :food false runs no food child; no stop :needs-food.
@@ -27,15 +28,24 @@
    :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false})]]
    :expect [{:event {:source :job :kind :kit.no-food :level :warn} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-food}} :for-s 40 :until {:source :job :kind :kit.no-food}}]}
-  {:name "five-loaves-and-a-stocked-chest-at-home-skip-the-food-search"
-   ;; 25 points carried cover a day plus the walk back to the chest it booked: no get-food child (home-food/carry-points)
+  {:name "twelve-loaves-and-a-stocked-chest-at-home-carry-the-whole-kits-trip"
+   ;; the 7 missing pieces quote 840 s, spread up to the 10800 s spend: 55 points (kit-carry); 60 carried cover it, so no get-food child
+   :body {:inventory [["iron_sword" 1] ["bread" 12]]}
+   :blocks [[:set [8 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:bread\",count:40}]}"]]
+   :memory [{:kind :fetch/stock :data {:pos #at [8 0 16] :items {"bread" 40}} :policy {:cap 64 :ttl :forever}}]
+   :act [[:job (jobs.items.get-kit {:explore false})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :kit.no-food} :for-s 60 :until {:source :job :kind :stopped}}]
+   :after [[:item "bread" 12]]}
+  {:name "five-loaves-and-a-stocked-chest-at-home-take-bread-for-the-kits-trip"
+   ;; 25 points cover the walk back to the chest but not the kit's own time (44 points for one piece): get-food takes bread from the chest
    :body {:inventory [["iron_sword" 1] ["bread" 5]]}
    :blocks [[:set [8 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:bread\",count:40}]}"]]
    :memory [{:kind :fetch/stock :data {:pos #at [8 0 16] :items {"bread" 40}} :policy {:cap 64 :ttl :forever}}]
    :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :kit.no-food} :for-s 60 :until {:source :job :kind :stopped}}]
-   :after [[:item "bread" 5]]}
+   :expect [{:event {:source :job :kind :food.took-from-chest} :within-s 60}
+            {:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 90 :of-job true}]
+   :after [[:item "bread" [:>= 9]]]}
   {:name "five-loaves-and-no-home-food-still-top-up"
    :body {:inventory [["iron_sword" 1] ["bread" 5]]}
    :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false})]]

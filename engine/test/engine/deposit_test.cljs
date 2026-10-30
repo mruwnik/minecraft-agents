@@ -60,7 +60,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (wt/setup {:inventory [{:name "dirt" :count 5} {:name "bread" :count 20}] :containers {"10,64,0" []}})
               result (await (wt/ending-of eng job {:chest chest} 16))]
-          (is (= {"bread" 5} (wt/inv p)) "the bread put in the chest is home food: a day and the walk back to it (5 bread) stay carried; the dirt and 15 bread go")
+          (is (= {"bread" 2} (wt/inv p)) "the bread put in the chest is home food: the hunger of the deposit's 300 s and the walk back to it (2 bread) stay carried; the dirt and 18 bread go")
           (is (= :done (:kind result))))))))
 
 (deftest deposit-of-everything-keeps-the-units-the-register-holds

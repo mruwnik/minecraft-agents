@@ -116,15 +116,24 @@
   (is (= {} (cost/food-reserve (stack "golden_apple" 3 "enchanted_golden_apple" 1))))
   (is (= {} (cost/food-reserve []))))
 
-(deftest carry-points-takes-home-food-off-the-reserve-down-to-the-walk-back
-  (are [home points] (= points (food-cost/carry-points home))
-    [] 60
-    [{:points 0 :walk-s 10}] 60
-    [{:points 320 :walk-s 0}] 20
-    [{:points 320 :walk-s 600}] 30
-    [{:points 25 :walk-s 0}] 35
-    [{:points 25 :walk-s 0} {:points 25 :walk-s 60}] 20
-    [{:points 320 :walk-s 6000}] 60))
+(deftest carry-points-carries-the-trip-and-takes-home-food-off-the-reserve
+  (are [home trip points] (= points (food-cost/carry-points home trip))
+    [] nil 60
+    [] 7200 120
+    [{:points 0 :walk-s 10}] 600 60
+    [{:points 320 :walk-s 0}] nil 0
+    [{:points 320 :walk-s 0}] 3600 60
+    [{:points 320 :walk-s 600}] 0 10
+    [{:points 25 :walk-s 0}] 0 35
+    [{:points 25 :walk-s 0} {:points 25 :walk-s 0}] 600 10
+    [{:points 320 :walk-s 0}] ##Inf 60))
+
+(deftest a-trip-keeps-food-for-its-mean-time-and-a-deviation-within-its-most
+  (are [fig s] (= s (Math/round (food-cost/trip-s fig)))
+    [0 960 10800] 3400
+    [10 10 10] 10
+    [0 600 700] 700
+    [0 30 ##Inf] ##Inf))
 
 (def ff-boots (fn [lvl] {:feet {:name "iron_boots" :enchants [{:name "feather_falling" :lvl lvl}]}}))
 
