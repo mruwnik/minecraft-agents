@@ -46,6 +46,17 @@
           (is (= [] (st/calls p "dig")) "nothing dug")
           (is (= [] (st/entries eng :shelter)) "no dig-in shelter"))))))
 
+(deftest night-door-shut-with-a-bed-in-the-room-is-worth-the-cheapest-way-left-over-the-bed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (st/setup (merge (open-door-hut {:x 5 :y 64 :z 0} {"6,64,0" "red_bed"}) {:inventory st/dirt-stack}))]
+          (st/know-bed! eng {:x 6 :y 64 :z 0})
+          (core/submit! eng '(jobs.survival.night) {})
+          (let [log (await (with-child-log #(tu/run-until-empty eng 8)))]
+            (is (pos? (some (fn [[k _ a]] (when (= :enter-room k) (:worth a))) log))
+                "the bed's negative price is the shut room's answer, not floored away")))))))
+
 (defn seeing-setup
   "st/setup over a body that has seen only what its sight passes showed (perception over the fake), as live."
   [world]

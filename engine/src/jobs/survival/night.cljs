@@ -670,7 +670,7 @@
 (defn ^:async room-worth
   "Seconds shutting the room the body stands in is worth (Q54), as home-worth: what the cheapest way left while it stays
   open costs more than the night once it is shut, at least 0. closed: the answer the shut room is (:bed, the carried bed
-  put down behind its filled doorway), nil for an open door shut (a shut room costs nothing more)."
+  put down behind its filled doorway; for an open door shut, :bed when a bed lies in the room), nil when the shut room costs nothing more."
   [c bed carried? bed-way closed]
   (let [prices (await (night-prices c bed carried? bed-way nil))]
     (max 0 (- (apply min ##Inf (vals (dissoc prices closed))) (get prices closed 0)))))
@@ -784,7 +784,7 @@
             (ctx/update-mem! c assoc :enclose (sh-sense/feet p))))
         (cond
           (= :searching bed) (do (hold/busy! c) :again)
-          door (await (enter-room! c nil false nil (await (room-worth c bed bed-wanted bed-way nil))))
+          door (await (enter-room! c nil false nil (await (room-worth c bed bed-wanted bed-way (when bed :bed)))))
           (:bed-down (ctx/mem c)) (let [{:keys [bed answer]} (:bed-down (ctx/mem c))] (await (bed-down-step c bed answer)))
           (and roofed bed-wanted (not bed) (sh-beds/bed-layout c true) (room-lib/gap c)) (await (enter-room! c nil false nil (await (room-worth c bed bed-wanted bed-way :bed))))
           (and (= :searching home) home-way?) :again
