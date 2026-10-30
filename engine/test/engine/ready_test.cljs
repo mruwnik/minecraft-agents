@@ -205,6 +205,15 @@
       (is (= :look (first (status identity))) "a dark stay costs hp: the unseen wall is worth a look")
       (is (not= :look (first (status worthless))) "a goal worth nothing: giving it up spares the stay, so a wall seen closed would spare nothing"))))
 
+(deftest a-look-at-a-stays-unseen-walls-is-priced-against-the-jobs-cheapest-own-way
+  (let [c (ctx-of night-hut)
+        price #(ready/stay-look-price % 0.5)]
+    (is (= 0 (:gap (price c))) "no own way: nothing stands between")
+    (is (= 0 (:gap (price (ready/own-way c (fn [_ _] nil))))) "an own way that does not answer the dark")
+    (is (= 5 (:gap (price (-> c (ready/own-way (fn [_ _] 9)) (ready/own-way (fn [_ [_ _ {:keys [lowered-by]}]] (when (lowered-by :torch) 5)))))))
+        "a torch at 5 s: a wall seen open spares only what the stay's exposure passes it by")
+    (is (= (:delta (price c)) (:delta (price (ready/own-way c (fn [_ _] 5))))))))
+
 (defn room-look-at
   "The :look-at of ready/room-look of night-hut's ctx over extra, its stay's exposure priced at saving seconds."
   [extra saving]
