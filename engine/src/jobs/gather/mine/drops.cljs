@@ -120,7 +120,7 @@
   "cut-to-drop! with its steps given: a map over {:drop-cut :dig-cell! :look-at! :mem} (the fns of those names' arguments).
   Open a way beside the cell dug (drop-cut), one dig child per cell, all the digs priced (cut-prices) at most max-s
   seconds (what is beside the cell: its drop, or a seen ore and its vein): after each dig and a look at what it laid
-  open the way goes on as planned while the cell stayed open and its other cells read as they did, else is planned again out of what is left (kept in :cut-spent over rounds, each dig booked at its own price once
+  open the way goes on as planned while the cell stayed open and the cells in and round the way read as they did, else is planned again out of what is left (kept in :cut-spent over rounds, each dig booked at its own price once
   dug or failed; a cell that fills again is paid for again). :cut (open: walk again),
 :partial (a dig waits on the world), :too-big (the route search outgrew the heap) or nil (no way left, a dig failed, or a dug cell planned again at once: it did not
   stay open)."
@@ -129,9 +129,14 @@
         dig-s (:dig-s (cut-prices c))
         name-at (fn [[x y z]] (or (u/seen-name p {:x x :y y :z z}) "stone"))
         price (fn [cell] (or (dig-s (name-at cell) cell) 0))
-        ;; the way's cells left, as planned while the cell dug stayed open and the look showed each of them as it was
-        planned (fn [plan dug-cell] (when (and (seq plan) (dig-route/open? (name-at dug-cell)) (every? (fn [[cell n]] (= n (name-at cell))) plan))
-                                      (mapv first plan)))]
+        ;; what the search priced round the way: its cells, the ones touching them (a falling block over one, a liquid, an
+        ;; opening beside it) and the cell dug, as the body saw them when it planned
+        around (fn [cells] (set (for [[x y z] cells dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]] [(+ x dx) (+ y dy) (+ z dz)])))
+        snapshot (fn [cells] (into {} (map (juxt identity name-at)) (around (cons dug cells))))
+        ;; the way's cells left, as planned while the cell dug stayed open and a look showed none of them changed
+        planned (fn [{:keys [cells seen]} dug-cell]
+                  (when (and (seq cells) (dig-route/open? (name-at dug-cell)) (every? (fn [[cell n]] (= n (name-at cell))) seen))
+                    cells))]
     (loop [last-dug nil
            spent (get (:cut-spent (mem c)) dug 0)
            plan nil]
@@ -143,7 +148,7 @@
           (empty? cells) :cut
           (= last-dug (first cells)) nil
           :else (let [cell (first cells)
-                      plan (mapv (juxt identity name-at) (rest cells))
+                      plan {:cells (vec (rest cells)) :seen (dissoc (snapshot (rest cells)) cell)}
                       spent (+ spent (price cell))
                       o (await (dig-cell! c (zipmap [:x :y :z] cell)))]
                   (when-not (= :continue o) (ctx/update-mem! c assoc-in [:cut-spent dug] spent))

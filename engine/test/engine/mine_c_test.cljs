@@ -672,6 +672,31 @@
           (is (= (- (nth @budgets 0) stone-s) (nth @budgets 1)) "a dig is booked at the price it was planned at (cut-prices)")
           (is (apply > (dedupe @budgets)) "each way is planned out of less"))))))
 
+(deftest a-cut-is-planned-again-when-a-look-changes-a-cell-in-or-round-its-way
+  (let [way [[1 64 0] [1 64 1] [1 64 2]]
+        run (fn ^:async run* [after-first-dig]
+              (let [seen (atom {})
+                    plans (atom 0)
+                    dug (atom [])
+                    m (atom {})
+                    c {:primitives (:p (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})) :args {:block "stone"} :update-mem (fn [f args] (apply swap! m f args))}
+                    steps {:drop-cut (fn [_ _ _] (swap! plans inc) (vec (remove (set (map first @dug)) way)))
+                           :dig-cell! (fn [_ cell] (let [at [(:x cell) (:y cell) (:z cell)]]
+                                                     (swap! dug conj [at @plans])
+                                                     (swap! seen assoc at "air")
+                                                     :dug))
+                           :look-at! (fn [_ cell] (when (= [1 64 0] cell) (after-first-dig seen)))
+                           :mem (fn [_] @m)}]
+                (with-redefs [u/seen-name (fn [_ {:keys [x y z]}] (get @seen [x y z]))]
+                  (await (drops/cut-via c steps [2 64 0] 50)))
+                (mapv second @dug)))]
+    (async done
+      (tu/run-async done
+        (fn ^:async t []
+          (is (= [1 1 1] (await (run (fn [_])))) "unchanged: the digs go on as planned")
+          (is (= [1 2 2] (await (run #(swap! % assoc [1 65 1] "gravel")))) "gravel over a planned cell is planned again")
+          (is (= [1 2 2] (await (run #(swap! % assoc [2 64 1] "water")))) "a liquid beside a planned cell is planned again"))))))
+
 (deftest a-cut-whose-dig-fails-books-the-dig-at-its-price
   (async done
     (tu/run-async done
