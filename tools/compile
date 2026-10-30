@@ -153,7 +153,7 @@ snapshot_src() { src_state=$("$repo/tools/engine-src-hash" "$repo"); }
 write_build_id() {
   local b
   for b in "${builds[@]}"; do
-    [ "$b" != body-release ] || [ -z "$src_state" ] || echo "$src_state" > "$repo/engine/out/body-release.src"
+    [ "$b" != body-release ] || [ -z "$src_state" ] || { echo "$src_state" > "$repo/engine/out/body-release.src.new" && mv -f "$repo/engine/out/body-release.src.new" "$repo/engine/out/body-release.src"; }
   done
   for b in "${builds[@]}"; do
     case "$b" in body|body-release) printf '{:commit "%s"}\n' "$(git -C "$repo" rev-parse --short HEAD)$(git -C "$repo" diff --quiet HEAD -- engine dashboard tools 2>/dev/null || echo -dirty)" > "$repo/engine/out/build-id.edn"; return ;; esac
@@ -219,7 +219,6 @@ pool_compile() {
   MC_COMPILE_FROM=$repo MC_COMPILE_PICK_WAIT_S=$pick_wait MC_COMPILE_IN_POOL=1 MC_COMPILE_MAIN_IDLE_S=${MC_COMPILE_POOL_IDLE_S:-300} "$slot/tools/compile" "$project" "${args[@]}" 7>&- 8>&- 2>&1 | sed -u "s|$slot|$repo|g"
   code=${PIPESTATUS[0]}
   if [ "$code" = 0 ]; then
-    write_build_id
     out=$(pool_outputs "${builds[@]}")
     [ -z "$outdir" ] || out="$out"$'\n'"$outdir"
     for o in $out; do
@@ -228,6 +227,7 @@ pool_compile() {
       mkdir -p "$(dirname "$dir/$o")"
       if [ -d "$slot/dashboard/$o" ]; then rsync -a --delete "$slot/dashboard/$o/" "$dir/$o/"; else rsync -a "$slot/dashboard/$o" "$dir/$o" && sed -i "s|$slot/dashboard|$dir|g" "$dir/$o"; fi
     done
+    write_build_id
   fi
   exec 8>&- 7>&-
   [ "$code" = 76 ] && { fallback="slot server did not start"; return 1; }

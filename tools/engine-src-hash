@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # tools/engine-src-hash [repo]: prints "<hash> <commit>[-dirty]" for the engine sources a body bundle is built from
-# (every file under engine/src and engine/js, by content). tools/compile records it beside the bundle
-# (engine/out/body-release.src); the world-test runner compares it. -dirty: engine/src or engine/js differ from HEAD.
+# (every file under engine/src and engine/js plus the build config dashboard/shadow-cljs.edn, package.json and package-lock.json, by content). tools/compile records it beside the bundle
+# (engine/out/body-release.src); the world-test runner compares it. -dirty: those files differ from HEAD.
 set -u
 repo="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 cd "$repo" || exit 1
-hash=$(find engine/src engine/js -type f -print0 2>/dev/null | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -c1-16)
+hash=$(find engine/src engine/js dashboard/shadow-cljs.edn dashboard/package.json dashboard/package-lock.json -type f -print0 2>/dev/null | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -c1-16)
 commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
-[ -z "$(git status --porcelain -- engine/src engine/js 2>/dev/null)" ] || commit="$commit-dirty"
+[ -z "$(git status --porcelain -- engine/src engine/js dashboard/shadow-cljs.edn dashboard/package.json dashboard/package-lock.json 2>/dev/null)" ] || commit="$commit-dirty"
 echo "$hash $commit"

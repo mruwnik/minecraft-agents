@@ -16,3 +16,6 @@
   (is (nil? (b/parse-src "\n")))
   (is (true? (b/dirty? ["0fb3" "76e9-dirty"])))
   (is (false? (b/dirty? ["0fb3" "76e9"]))))
+
+(deftest an-unreadable-tree-hash-is-stale
+  (is (true? (b/stale? ["aaaa" "c1"] nil))))

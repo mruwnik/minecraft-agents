@@ -47,6 +47,13 @@ bundle_stub
 mkdir -p "$T/repo/engine/out/compile-cache/v"; touch -d '5 days ago' "$T/repo/engine/out/compile-cache/v/old"; touch "$T/repo/engine/out/compile-cache/v/new"
 BUNDLE='jobs.movement.go_to.round=1' timeout 20 "$C" engine body-release >/dev/null 2>&1; check "complete body-release bundle (no unrequired helper in it) is renamed into place" "$(cat "$T/repo/engine/out/body-release.cjs")" 'jobs.movement.go_to.round=1'
 check "body-release records the source hash taken before the compile" "$(cut -d' ' -f1 "$T/repo/engine/out/body-release.src")" "$("$T/repo/tools/engine-src-hash" | cut -d' ' -f1)"
+# a source edited while the compile runs: the record keeps the hash taken before it
+printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\necho edited >> ../engine/src/jobs/lib/unrequired.cljs\necho "$BUNDLE" > ../engine/out/body-release.new.cjs\n' "$T" > "$T/bin/npx"
+before=$("$T/repo/tools/engine-src-hash" | cut -d' ' -f1)
+BUNDLE='jobs.movement.go_to.round=1' timeout 20 "$C" engine body-release >/dev/null 2>&1
+check "body-release record keeps the hash from before a mid-compile edit" "$(cut -d' ' -f1 "$T/repo/engine/out/body-release.src")" "$before"
+check "the mid-compile edit changed the tree hash" "$([ "$("$T/repo/tools/engine-src-hash" | cut -d' ' -f1)" != "$before" ] && echo yes)" yes
+bundle_stub
 check "body-release prunes only stale compile-cache entries" "$(ls "$T/repo/engine/out/compile-cache/v")" new
 check "no temp bundle left" "$(ls "$T/repo/engine/out" | grep -c 'body-release.new')" 0
 BUNDLE='jobs.movement.other.x=1' timeout 20 "$C" engine body-release >/dev/null 2>&1; check "bundle missing a job fails the build" "$?" 1
@@ -285,6 +292,17 @@ echo elsewhere > "$T/pool/1/.last"; kill "$(cat "$T/pool/1/dashboard/.shadow-clj
 MC_COMPILE_POOL_SIZE=2 timeout 60 "$T/wt/tools/compile" engine test >/dev/null 2>&1
 check "pool pick: nearest free slot wins over first and last-used" "$(cut -d' ' -f1 "$T/pool-npx.log")" "$T/pool/1/dashboard"
 kill "$(cat "$T/pool/1/dashboard/.shadow-cljs/server.pid")" 2>/dev/null
+# pool body-release: the record is written after the bundle is copied back, through a temp file, so a reader never sees the record without its bundle
+mkdir -p "$T/wt/engine/src/jobs/movement"; printf '(ns jobs.movement.go-to)\n' > "$T/wt/engine/src/jobs/movement/go_to.cljs"
+printf '{:builds\n {:body-release {:target :node-script\n         :output-to "../engine/out/body-release.cjs"\n         :output-dir "../engine/out/body-release"}}}\n' > "$T/wt/dashboard/shadow-cljs.edn"
+cp "$TOOLS/bundle-jobs-check" "$TOOLS/engine-src-hash" "$T/wt/tools/"
+printf '#!/bin/sh\ncase "$1 $2" in "shadow-cljs server") echo $$ > .shadow-cljs/server.pid; echo 1 > .shadow-cljs/nrepl.port; echo 1 > .shadow-cljs/http.port; exec sleep 300;; esac\nmkdir -p ../engine/out; echo "jobs.movement.go_to.round=1 fresh" > ../engine/out/body-release.new.cjs\n' > "$T/bin/npx"
+printf '#!/bin/sh\ncase "$*" in *body-release.src.new*) echo "bundle at record: $(cat "%s/wt/engine/out/body-release.cjs")" >> "%s/mv.log";; esac\nexec /usr/bin/mv "$@"\n' "$T" "$T" > "$T/bin/mv"; chmod +x "$T/bin/mv"
+echo stale > "$T/wt/engine/out/body-release.cjs"; rm -f "$T/wt/engine/out/body-release.src"
+timeout 60 "$T/wt/tools/compile" engine body-release >"$T/pool-br.out" 2>&1; rc=$?; tail -5 "$T/pool-br.out"; check "pool body-release rc" "$rc" 0
+check "pool body-release: bundle copied back before the record is written" "$(cat "$T/mv.log" 2>/dev/null)" "bundle at record: jobs.movement.go_to.round=1 fresh"
+check "pool body-release: record present, no temp left" "$(ls "$T/wt/engine/out" | grep -c 'body-release.src$')/$(ls "$T/wt/engine/out" | grep -c 'src.new')" 1/0
+rm -f "$T/bin/mv"; kill "$(cat "$T/pool/0/dashboard/.shadow-cljs/server.pid")" 2>/dev/null
 export MC_COMPILE_POOL_SIZE=0; unset MC_COMPILE_POOL_DIR MC_COMPILE_MIN_START_MB MC_COMPILE_POOL_WAIT_S
 
 # the idle watcher kills only the server it was started for (pid + start time), and never while a compile runs
