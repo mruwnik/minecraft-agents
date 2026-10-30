@@ -149,11 +149,12 @@
         items (:items (:args c))
         had (filterv #(had? (:carried st) (:worn st) %) items)
         n (count had)
-        data [:units :items :done n :left (- (count items) n) :result {:have had :made (made-of c had)}]
+        unworn (if (:wear (:args c)) (count (to-wear items st)) 0)
+        data [:units :items :done n :left (+ (- (count items) n) unworn) :result {:have had :made (made-of c had)}]
         text (str "get-kit: " n " of " (count items) " item(s) had")]
     (cond
       (checks/child-under-way? c) (apply contract/later :wrapping-up text data)
-      (and (= n (count items)) (not (and (:wear (:args c)) (seq (to-wear items st))))) (apply contract/ok :kitted text data)
+      (and (= n (count items)) (zero? unworn)) (apply contract/ok :kitted text data)
       :else (apply contract/later :kitting text data))))
 
 (defn quote-of

@@ -245,6 +245,13 @@
     (is (= :limit-reached (:kind e)) (pr-str e))
     (is (= ["iron_pickaxe" "iron_shovel"] (:have (:data e))))))
 
+(deftest a-spend-that-runs-out-with-a-carried-piece-still-to-wear-ends-limit-reached-not-done
+  (let [p (tu/fake (world [{:name "iron_boots" :count 1}] {}))
+        call (contract/freeze (get registry/jobs job) {:items ["iron_boots"]} nil)
+        s ((:done? (get registry/jobs job)) {:primitives p :args {:items ["iron_boots"] :wear true} :view (fn [] {:data {} :now 0}) :root "j1" :slots []})
+        e (ending/progress-ending {:quote-call call} s (contract/ending :limit-reached {:line :job-time} nil))]
+    (is (= :limit-reached (:kind e)) (pr-str s e))))
+
 (deftest a-worn-piece-is-skipped
   (async done
     (tu/run-async done
