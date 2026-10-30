@@ -184,7 +184,7 @@
 (def approach-range "Blocks from an :approach goal its walk ends within." 8)
 
 (defn ^:async search-walk!
-  "Walk and look for need (a jobs.explore.search child): :again once it is seen (also when a found tree set :approach for the next round to walk to); a search that finds none stops the
+  "Walk and look for need (a jobs.explore.search child): :again once it is seen (a found tree sets :approach for the next round to walk to); a search that finds none stops the
   gather source, as does the search for one need, unless at its start (other-way?) said the plan gathers something else
   once this search is spent (it was priced as tried before that seen way, obtain.plan/search-cost): then the body walks
   back to where the search started (:approach), where that way was seen, and :again. Also :again when none is found and the body is still under rock (the next round stairs up), and after a search that ran out of its own time (no verdict: not counted, the next round looks from where the body stands). A tunnelled need (a cave looked over first,

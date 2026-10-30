@@ -277,7 +277,7 @@
       (fn ^:async t []
         (let [s (f/start (ore-world narrow-cave []) [f/own-zone])]
           (swap! (fake/state (:p s)) assoc :light (into {} (for [x (range -20 21) z (range -20 21) y (range 64 71)] [[x y z] [0 0]])))
-          (await (obtain! s {:worth (logs-worth 60) :item "oak_log" :count 1 :explore true} 900)) ; the failed legs add walking a 20-log bill does not pay
+          (await (obtain! s {:worth (logs-worth 50) :item "oak_log" :count 1 :explore true} 900)) ; the failed legs and the dark walks are priced by their risk, not walk-cost: a 40-log bill refuses
           (is (<= 1 (get (f/inv s) "oak_log" 0)) "the tree the search saw was felled, not named a stop"))))))
 
 (deftest a-tree-the-search-found-but-the-walk-cannot-reach-ends-the-gather-not-a-loop
@@ -287,6 +287,8 @@
         (let [trunk (for [y [64 65 66 67]] (str "30," y ",4"))
               s (f/start (assoc (ore-world (into {"30,68,4" "oak_leaves" "31,67,4" "oak_leaves"} (map #(vector % "oak_log") trunk)) []) :unreachable (vec trunk)) [f/own-zone])]
           (await (obtain! s {:worth (logs-worth 20) :item "oak_log" :count 1 :ways #{:gather} :explore true} 900))
-          (is (seq (f/events-of s :stopped)) "the gather ended instead of searching and walking on")
-          (is (>= 6 (count (f/events-of s :obtain.exploring))) "a bounded number of searches")
+          (let [stop (first (f/events-of s :stopped))]
+            (is (= :no-source (:reason stop)) "the gather ended instead of searching and walking on")
+            (is (= {:gather :none-seen} (:tried stop)))
+            (is (= :tree-unreachable (get-in stop [:because :cause])) "its cause is the tree the walk could not reach"))
           (is (zero? (get (f/inv s) "oak_log" 0))))))))
