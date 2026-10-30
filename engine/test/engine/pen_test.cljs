@@ -274,10 +274,11 @@
     (is (= #{} (:inside r)))))
 
 (deftest unloaded-leaks-list-the-cells-nearest-to-near-first
-  (let [cells (reduce #(assoc %1 %2 :unloaded) fence-ring (map (fn [x] [x 64 3]) (range 0 6)))
-        xs (fn [opts] (mapv (comp :x :pos) (:leaks (check cells opts))))]
-    (is (= [0 1 2 3 4] (xs {})) "by coordinate without :near")
-    (is (= [4 3 2 1 0] (xs {:near [4 64 3]})) "nearest first with :near")))
+  (let [cells (reduce #(assoc %1 %2 :unloaded) fence-ring (for [x (range 0 5) z [1 3]] [x 64 z]))
+        xs (fn [opts] (mapv (comp (juxt :x :z) :pos) (:leaks (check cells opts))))]
+    (is (= [[0 1] [0 3] [1 1] [1 3]] (take 4 (xs {}))) "by coordinate without :near")
+    (is (= [[4 3] [3 3] [2 3] [4 1]] (take 4 (xs {:near [4 64 3]}))) "nearest first with :near")
+    (is (= 10 (count (xs {}))) "none is cut off after the fifth: a caller prices the looks")))
 
 (deftest an-unloaded-wall-cell-cannot-be-proven-closed
   (let [r (check (assoc fence-ring [5 64 3] :unloaded))]

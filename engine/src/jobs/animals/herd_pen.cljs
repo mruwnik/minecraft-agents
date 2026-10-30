@@ -6,6 +6,9 @@
             [jobs.lib.click :as click]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.sense :as sense]
+            [jobs.lib.walk-pick :as pick]
             [jobs.lib.near :as near]
             [jobs.lib.pen-blocks :as pen]
             [jobs.lib.util :as u]
@@ -200,6 +203,18 @@
   (filterv #(not= (cell (:pos %)) (cell g)) (:leaks answer)))
 
 (defn look-range [] (settings/get settings ::look-range))
+
+(defn ^:async unseen-cell!
+  "The cell of answer's :unloaded leaks (never seen), not in looked ([x y z] set), the body walks cheapest to see from
+  (walk-pick), or nil. Offered are the nearest cells a look pays for (sense/cell-looks: the animal's worth less its trip
+  against the walk, the earlier looks counted fruitless)."
+  [c answer looked]
+  (let [cells (->> (:leaks answer) (filter #(= :unloaded (:why %))) (map :pos) (remove #(contains? looked (cell %))) distinct)
+        ks (u/nearest-first (u/self-pos c) identity (mapv cell cells))
+        price ((sense/find-price c (- (cost/animal-worth (:mob (:args c))) (cost/trip))) nil {:cells ks})
+        offered (set (take (sense/cell-looks price ks (count looked) 0) ks))]
+    (await (pick/pick-walk! c (filter #(offered (cell %)) cells)
+                            (fn [pos] {:pos pos :range (look-range) :doors :never :ways #{:walk :clear-seal}})))))
 
 (defn gate-look-range [] (settings/get settings ::gate-look-range))
 

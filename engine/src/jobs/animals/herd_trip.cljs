@@ -18,7 +18,7 @@
             [jobs.lib.near :as near]
             [jobs.lib.bait :as bait]
             [jobs.animals.herd-run :refer [animal-now deepest end! finish! gate-open? held-by-me? in-pen-adults lure? near-pen out-1 read-pen set-phase! stage]]
-            [jobs.animals.herd-pen :refer [look-range animal-pos nearer-stage! pinned-ms settle-at! step-in-step]]))
+            [jobs.animals.herd-pen :refer [look-range unseen-cell! animal-pos nearer-stage! pinned-ms settle-at! step-in-step]]))
 
 
 (a/defargs settings
@@ -98,18 +98,6 @@
                               (animals/adults (:primitives c) mob listed))
                      {:penned-ok? true})))
 
-(def max-pit-looks 12)
-
-(defn ^:async unseen-wall!
-  "The cell of answer's :unloaded leaks (never seen) not yet looked at the body walks cheapest to see from (walk-pick), or nil."
-  [c answer]
-  (let [looked (set (:looked-pit (ctx/mem c)))]
-    (await (pick/pick-walk! c (->> (:leaks answer) (filter #(= :unloaded (:why %))) (map :pos)
-                                   (remove #(contains? looked [(:x %) (:y %) (:z %)]))
-                                   distinct
-                                   (take (- max-pit-looks (count looked))))
-                            (fn [pos] {:pos pos :range (look-range) :doors :never :ways #{:walk :clear-seal}})))))
-
 (defn ^:async trapped?
   "Whether animal a stands in a closed pocket of ground (a pit it cannot step out of) that does not hold the staging cell:
   true, false, or :walking when a round went on walking to or looking at a wall cell of the pocket never seen (a wall faces
@@ -119,7 +107,7 @@
         at {:x (js/Math.floor x) :y (js/Math.floor (+ y 0.01)) :z (js/Math.floor z)}
         answer (pen-read/read (:primitives c) {:at at :near [(:x at) (:y at) (:z at)]
                                                :max-cells (settings/get spare/settings ::spare/pen-max-cells)})
-        unk (when (= :unloaded (:reason answer)) (await (unseen-wall! c answer)))]
+        unk (when (= :unloaded (:reason answer)) (await (unseen-cell! c answer (set (:looked-pit (ctx/mem c))))))]
     (if unk
       (let [cell [(:x unk) (:y unk) (:z unk)]
             r (await (near/go-near! c unk (look-range) {:doors :never :ways #{:walk :clear-seal} :see true}))]

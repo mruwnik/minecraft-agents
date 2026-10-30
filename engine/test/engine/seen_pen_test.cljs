@@ -94,12 +94,14 @@
         (assoc :floor floor)
         (update :blocks #(apply dissoc % (keys (apply dissoc ht/ground (keys (apply tu/floor floor)))))))))
 
+(def lit-xs "The x columns of the lit ground round the cow and past the gate." (concat (range 2 7) (range 12 17)))
+
 (defn dark-run
   "A herd run in a pitch-dark pen: a cell is made out only within 4 blocks (perception's near). The ground round the cow and past the gate is lit: a dark
   place with unseen edges is exposed, which ends the run."
   []
   (let [s (ht/clock-on-wait! (h/setup-seeing (small-dark-world {:entities [(ht/cow 1 4 3)]}) [0 0] 700))]
-    (swap! (fake/state (:p s)) assoc :light (into {} (for [x (concat (range 2 7) (range 12 17)) y [64 65] z (range 0 8)] [[x y z] [0 14]])))
+    (swap! (fake/state (:p s)) assoc :light (into {} (for [x lit-xs y [64 65] z (range 0 8)] [[x y z] [0 14]])))
     (ht/submit! s {:target 1})))
 
 (deftest a-dark-pen-is-looked-at-then-the-run-ends
@@ -108,7 +110,7 @@
       (fn ^:async t []
         (let [s (dark-run)
               _ (await (ht/run-ticks s 40))]
-          (is (some #(and (:seen %) (<= 11 (:x (:goal %)) 15)) (ht/events-of s :go-to.lookout)) "the dark pen cells are walked near and looked at")
+          (is (some #(and (:seen %) (not ((set lit-xs) (:x (:goal %))))) (ht/events-of s :go-to.lookout)) "the dark pen cells are walked near and looked at")
           (is (= :brought (:reason (ht/done-event s))) "within 4 blocks no light is needed: read up close, the run brings, never :unreachable"))))))
 
 (defn blind-pen!
@@ -126,7 +128,8 @@
         (let [s (blind-pen! (ht/clock-on-wait! (h/setup-seeing (coarse-world {:entities [(ht/cow 1 4 3)]}) [0 0] 700)))
               _ (ht/submit! s {:target 1})
               _ (await (ht/run-ticks s 60))]
-          (is (= :no-pen (:reason (ht/done-event s))) "nothing can be read: the run ends :no-pen, never :unreachable, never brings"))))))
+          (is (= :no-pen (:reason (ht/done-event s))) "nothing can be read: the run ends :no-pen, never :unreachable, never brings")
+          (is (< 5 (count (h/calls (:p s) "look"))) "the looks are priced, not cut off after five cells"))))))
 
 (defn aged-run
   "A herd run with the gate aged to unknown (seeing), after f was applied to the setup."

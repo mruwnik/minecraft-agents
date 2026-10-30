@@ -13,7 +13,7 @@
             [jobs.lib.animals :as animals]
             [jobs.lib.util :as u]
             [jobs.lib.walk-pick :as pick]
-            [jobs.animals.herd-pen :refer [approach-cells approach-free? axis depth usable-gates free-floor? gate-diagnosis gate-look-range look-range max-approach-walks open-stage other-leaks precheck?]]
+            [jobs.animals.herd-pen :refer [unseen-cell! approach-cells approach-free? axis depth usable-gates free-floor? gate-diagnosis gate-look-range look-range max-approach-walks open-stage other-leaks precheck?]]
             [jobs.animals.herd-run :refer [approach-range box-centre cell detail-text pen-box finish! in-pen-adults near-pen pen-opts read-pen]]))
 
 (defn box-gates
@@ -57,8 +57,7 @@
   [c answer]
   (let [here (u/self-pos c)
         looked (set (:looked-pen (ctx/mem c)))
-        unk (await (pick/pick-walk! c (->> (:leaks answer) (filter #(= :unloaded (:why %))) (map :pos) (remove #(contains? looked (cell %))) distinct)
-                                    (fn [pos] {:pos pos :range (look-range) :doors :never :ways #{:walk :clear-seal}})))]
+        unk (await (unseen-cell! c answer looked))]
     (cond
       (nil? unk) (await (look-from-gate! c answer))
       (not (u/within? here unk (look-range)))
