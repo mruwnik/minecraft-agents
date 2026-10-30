@@ -368,14 +368,14 @@
     (await (run-until-empty eng 6))
     (distinct (map :reason (events-of seen :waiting)))))
 
-;; the plan's cells are in the open: a night walk to them waits for dawn at a real worth (a root call at ##Inf takes any stay)
+;; the plan's cells are in the open: a night walk to them waits for dawn at the job's own worth (a root call at ##Inf takes any stay)
 (deftest a-plan-across-open-ground-at-night-waits-for-dawn
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (start {:blocks (farmland (range 2 4) [2]) :inventory (inv "wheat_seeds" 6) :floor tu/walk-floor :time st/night}
                                           (ew/of-data (shared-plans []) {} []))]
-          (core/submit! eng (list job {:area {:plan "mix"} :worth 51}) {})
+          (core/submit! eng (list job {:area {:plan "mix"}}) {})
           (await (run-until-empty eng 6))
           (is (empty? (calls p "place")) "nothing planted at night")
           (is (seq (:list (core/state eng))) "the job stays listed until dawn"))))))

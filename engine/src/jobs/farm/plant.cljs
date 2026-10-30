@@ -243,6 +243,20 @@
       (contract/later waiting (str "plant: " sown " sown, " bare " bare") :units :cells :done sown :left bare :result (result-of c nil))
       (contract/ok :planted (str "plant done: " sown " sown, no bare cell left") :units :cells :done sown :left 0 :result (result-of c nil)))))
 
+(defn worth-of
+  "Seconds a root call is worth: each bare cell sown, cost/sown-worth of its crop at the dry rate (the worse case); a plan's
+  cell has its own crop, a box's has the one of the seed it would sow, else the least of any crop's."
+  [c]
+  (let [rate (crops/stages-per-s false nil)
+        seed->crop (into {} (map (fn [[crop seed]] [seed crop])) crops/seed-of)
+        worth #(cost/sown-worth % rate)
+        box-worth (if-let [seed (pick-seed (:seed (:args c)) c)]
+                    (worth (seed->crop seed))
+                    (apply min (map worth (keys crops/seed-of))))]
+    (if (fa/plan c)
+      (reduce + 0 (map #(worth (seed->crop (:seed %))) (unsown c)))
+      (* box-worth (count (unsown c))))))
+
 (defn quote-of [c]
   (let [n (count (unsown c))
         seed (pick-seed (:seed (:args c)) c)]

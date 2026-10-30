@@ -78,7 +78,7 @@
 (deftest set-spawn-is-worth-the-respawn-at-its-bed
   (let [p (tu/seeing-all (tu/fake-on-floor {:blocks {"6,64,0" "red_bed"}}))]
     (is (priced? (worth 'jobs.survival.set-spawn p {:bed {:x 6 :y 64 :z 0}})))
-    (is (zero? (worth 'jobs.survival.set-spawn (tu/fake-on-floor {}) {})) "no bed")))
+    (is (priced? (worth 'jobs.survival.set-spawn (tu/fake-on-floor {}) {})) "no bed: a bed where the body stands")))
 
 (deftest a-harvest-is-worth-its-ripe-crops-and-their-replanting
   (let [seen (tu/seeing-all (tu/fake-on-floor ht/wheat-world))
