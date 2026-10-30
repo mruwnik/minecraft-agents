@@ -3,6 +3,7 @@
   make out, and back."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.registry :as registry]
@@ -18,14 +19,16 @@
 (defn ^:async walk-look
   "Runs walk-look for the side [8 64 0] from {:x 6}; the side shows once the body has stood within `sight` blocks of it
   (nil: never). [farthest x the body reached, the cell it ended in, the :walk-looked cells, its ending kinds]."
-  [sight]
+  ([sight] (walk-look sight ##Inf))
+  ([sight worth]
   (let [reached (atom 0)
         [seen sink] (tu/capture-sink)
         clock (atom 1000000)
         p (tu/seeing-all (tu/fake-on-floor tunnel))
         eng (core/create {:primitives p :dir (tu/tmp-dir) :now #(deref clock) :jobs registry/jobs
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    (with-redefs [look/unseen? (fn [p _]
+    (with-redefs [ctx/worth (constantly worth)
+                  look/unseen? (fn [p _]
                                  (swap! reached max (.-x (.-pos (.self p))))
                                  (not (and sight (<= (- 8 @reached) sight))))]
       (core/submit! eng '(jobs.movement.walk-look {:side [8 64 0] :to [6 64 0]}) {})
@@ -33,7 +36,7 @@
     [(js/Math.floor @reached)
      (mapv js/Math.floor ((juxt #(.-x %) #(.-y %) #(.-z %)) (.-pos (.self p))))
      (:cells (:data (mem/latest (mem/view (:store eng)) :walk-looked)))
-     (into [] (comp (filter #(and (= :job (:source %)) (#{:completed :stopped} (:kind %)) (= "jobs.movement.walk-look" (:name (:data %))))) (map :kind)) @seen)]))
+     (into [] (comp (filter #(and (= :job (:source %)) (#{:completed :stopped} (:kind %)) (= "jobs.movement.walk-look" (:name (:data %))))) (map :kind)) @seen)])))
 
 (deftest a-walk-to-look-walks-the-leg-it-was-priced-for-then-back
   (async done
@@ -42,4 +45,6 @@
         (is (= [6 [0 64 0] nil [:completed]] (await (walk-look 2)))
             "it walks to its :to, no farther, sees the side there and comes back; a side that shows is not remembered")
         (is (= [6 [0 64 0] [[8 64 0]] [:completed]] (await (walk-look nil)))
-            "a side still unseen from close by is remembered, so no walk is offered for it again")))))
+            "a side still unseen from close by is remembered, so no walk is offered for it again")
+        (is (= [0 [0 64 0] nil [:completed]] (await (walk-look nil 0)))
+            "a walk the worth does not buy is not walked, and the side is not remembered as looked at from close by")))))

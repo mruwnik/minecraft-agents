@@ -13,7 +13,7 @@
 (def doc
   "Walk to look, as a player judging a dark tunnel does, one leg: the unseen `:side` cell is looked at, walked to at `:to`
   (go-to, on foot) and looked at again (look-edge/look!), then the body walks back to where the call began. A side still
-  unseen then is written to body memory (:walk-looked {:cells}, walked-policy): from close by it stayed unseen, so no later
+  unseen after the walk is written to body memory (:walk-looked {:cells}, walked-policy): from close by it stayed unseen, so no later
   walk-look is offered for it (jobs.lib.ready/walk-look). Readiness runs it as a check's :look-first child, the leg priced
   (walk-risk/look-way there and back); the check after it offers the next leg the walk opened. Needs nothing; ends :done
   (also when the side shows before the walk), condition-failed :no-way-back {:from} when the walk back fails. Info
@@ -50,7 +50,7 @@
   [c kind cause]
   (let [side (:side (:args c))
         unseen? (look/unseen? (:primitives c) [side])]
-    (when unseen? (ctx/remember! c :walk-looked {:cells [(cell-of side)]} walked-policy))
+    (when (and unseen? (:edge-walked (ctx/mem c))) (ctx/remember! c :walk-looked {:cells [(cell-of side)]} walked-policy))
     (ctx/emit! c :walk-look.ended :info {:side side :unseen unseen?
                                          :text (if unseen? "walked to look: the side stayed unseen" "walked to look: the side shows")}))
   (ctx/end c kind cause))

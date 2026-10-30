@@ -69,7 +69,7 @@
   Fleeing (the night.sites ::flee-radius setting, 0 never; at most max-flees walks): to the not-yet-tried candidate whose walk go-to quotes cheapest (walk-pick/cheapest!): a known bed, a :roofed-places place, a seen cave or overhang cell (walled in on arrival), or seen natural ground the carried tools dig. shelter.fled on arrival, shelter.flee_failed otherwise.
   Only sleep holds (declared, ctx/hold-still!, hold-ms per wait; night.hold cooks, eats or runs get-food first).
   An overdue body warns needs_bed once a day; a respawn bed seen gone is written :spawn-lost (warn spawn_lost once).
-  Memory: body memory :night-exposed (where the night ended with no shelter: later firings there go straight to the exposed log-out); job memory :edge-looked, :edge-phase, :edge-spent, :enclose, :enclose-failed (feet cells where walling in failed), :sheltered, :log-out-failed, :no-site, :shut-ins, :digging, :place-other-s, :bed-down, :pit-trapped, :roof-walk-failed, :left; body memory :doorway-tried and shut-in's :shut-in-failed (forgotten when the night ends, at most ten minutes).
+  Memory: body memory :night-exposed (where the night ended with no shelter: later firings there go straight to the exposed log-out); job memory :edge-looked, :edge-phase, :edge-spent, :edge-walked, :enclose, :enclose-failed (feet cells where walling in failed), :sheltered, :log-out-failed, :no-site, :shut-ins, :digging, :place-other-s, :bed-down, :pit-trapped, :roof-walk-failed, :left; body memory :doorway-tried and shut-in's :shut-in-failed (forgotten when the night ends, at most ten minutes).
   Muting :night does not end a running night job: cancel it too.")
 
 (a/defargs args
@@ -147,7 +147,6 @@
   "However the night ends: tonight's failed sites, edge walks spent and filled doorway cells someone else changed are forgotten, and a root night releases its tree's scaffold."
   [c _]
   (ending/forget-night! c)
-  (look-edge/forget! c)
   (ledger/release-root! c)
   (ctx/end c :done nil))
 
@@ -676,6 +675,11 @@
   (let [prices (await (night-prices c bed carried? bed-way nil))]
     (max 0 (- (apply min ##Inf (vals (dissoc prices closed))) (get prices closed 0)))))
 
+(defn ^:async look-worth
+  "What an edge walk to look is bought from (Q54): the cheapest way the night has without the look (night-prices, no bed)."
+  [c bed-way]
+  (apply min ##Inf (vals (await (night-prices c nil false bed-way nil)))))
+
 (defn sleep-inputs
   "What staying asleep is priced on, read now (bed-down/answers): who else must still lie down (sh-sleepers/sleepers-short),
   whether the bed is sheltered, the spawn chance at the feet and at the cell the body gets up to, the fight with the
@@ -759,7 +763,7 @@
                              (cond (not= :out w) w
                                    (breath/in-water? p) (ending/end-in-water! c)
                                    :else :again))
-      (and (not sheltered) (seq @edge)) (do (hold/busy! c) (await (look-edge/look! c @edge)))
+      (and (not sheltered) (seq @edge)) (do (hold/busy! c) (await (look-edge/look! c @edge nil (await (look-worth c bed-way)))))
       (and roofed (or (#{:slept :dug-in} sheltered) (dig-leave/sheltered-in c)) (not (and bed-way (await (walkable-bed c)))))
       (do (when-not sheltered (hold/sheltered! c :dug-in))
           (cond

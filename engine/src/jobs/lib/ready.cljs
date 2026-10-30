@@ -252,7 +252,7 @@
             lethal (cost/lethal-hp {:chance dies :death death})
             hp (+ hurt lethal)
             {:keys [now-s now? best]} (act-price c hurt lethal (when (= :later kind) (some-> wait-ms (/ 1000))))
-            look-s (some->> look-way (walk-risk/look-cost c))
+            look-s (some->> look-way (walk-risk/look-cost c) (#(when (cost/affords? % (ctx/worth c)) %)))
             own-s (keep #(% (dissoc c ::own-ways) s) (::own-ways c))
             own? (fn [than] (some #(< % than) own-s))
             look (when (and look-s (every? #(< look-s %) own-s)) {:s look-s})

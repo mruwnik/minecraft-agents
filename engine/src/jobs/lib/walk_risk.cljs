@@ -309,11 +309,12 @@
 
 (defn look-cost
   "Seconds the walk to look `way` (look-way) costs c's body: its hp priced (risk-s) plus its seconds; nil while the hp are
-  more than the call's worth buys (buys-hp)."
-  [c way]
-  (let [self (.self (:primitives c))]
-    (when (<= (:hp way) (buys-hp (.-health self) (.-food self) (ctx/worth c)))
-      (+ (risk-s c way) (:secs way)))))
+  more than the call's worth (or `worth`) buys (buys-hp)."
+  ([c way] (look-cost c way (ctx/worth c)))
+  ([c way worth]
+   (let [self (.self (:primitives c))]
+     (when (<= (:hp way) (buys-hp (.-health self) (.-food self) worth))
+       (+ (risk-s c way) (:secs way))))))
 
 (defn cheapest-affordable
   "The way of ways with the least :s whose hp the call's worth buys at the way's health (buys-hp) and whose

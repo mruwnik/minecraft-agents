@@ -2,7 +2,7 @@
   "Look first, judge after: an unseen cell is open until looked at (a player walks up and looks). The unseen sides of the
   closed region the body stands in under a cover, and the unseen cells of a roof column, are looked at, nearest first, and
   walked towards when a look cannot show them, a walk only while its price (walk-risk/look-cost) and the walks before it
-  are bought by the call's worth. Memory keys :edge-looked, :edge-phase, :edge-spent are the calling job's (forget! at its end)."
+  are bought by the call's worth. Memory keys :edge-looked, :edge-phase, :edge-spent, :edge-walked are the calling job's."
   (:require [jobs.lib.cost :as cost]
             [jobs.lib.cost.health :as cost-health]
             [engine.ctx :as ctx]
@@ -107,17 +107,12 @@
              (apply max-key #(u/dist from (:to %))))))
 
 (defn walk-price
-  "Seconds the walk to look at cell `to` and back costs (walk-risk/look-cost), nil when it is not bought: its hp more than the
-  call's worth buys, or its seconds and `spent` (the seconds of the edge walks before it) over that worth. A walk toward
-  an unseen wall is priced, not counted."
-  [c to spent]
-  (let [s (walk-risk/look-cost c (walk-risk/look-way c to 1))]
-    (when (and s (cost/affords? (+ s spent) (ctx/worth c))) s)))
-
-(defn forget!
-  "Drop the seconds the job's edge walks spent (:edge-spent): a job calls it at its end, so a later run's walks are priced afresh."
-  [c]
-  (ctx/update-mem! c dissoc :edge-spent))
+  "Seconds the walk to look at cell `to` and back costs (walk-risk/look-cost), nil when it is not bought: its hp more than
+  `worth` buys, or its seconds and `spent` (the seconds of the edge walks before it) over it. A walk toward an unseen wall
+  is priced, not counted."
+  [c to spent worth]
+  (let [s (walk-risk/look-cost c (walk-risk/look-way c to 1) worth)]
+    (when (and s (cost/affords? (+ s spent) worth)) s)))
 
 (defn ^:async look!
   "A closed region with sides never seen is not yet known shut (an unseen cell may be an opening). The nearest of cells is
@@ -126,9 +121,10 @@
   A walk is priced once, at its start, with the seconds the job's walks spent before it (:edge-spent), so walks one after
   another are bought from what the call's worth leaves.
   The cell counts as tried when that second look has been read and the cell is still unseen. `to`: the cell to walk to, in
-  place of walkable-near's."
+  place of walkable-near's. `worth`: what the walks are bought from, the call's (ctx/worth) unless given."
   ([c cells] (look! c cells nil))
-  ([c cells to]
+  ([c cells to] (look! c cells to (ctx/worth c)))
+  ([c cells to worth]
    (let [cell (first cells)
          phase (get-in (ctx/mem c) [:edge-phase cell] 0)
          advance! #(ctx/update-mem! c assoc-in [:edge-phase cell] %)]
@@ -138,8 +134,9 @@
                    reach-to (last (filter #(<= (u/dist {:x (first cell) :y (second cell) :z (nth cell 2)} {:x (first %) :y (second %) :z (nth % 2)}) edge-stride) cells))
                    near (or to ((walkable-near-fn p (sh-sense/feet p)) reach-to))
                    spent (:edge-spent (ctx/mem c) 0)
-                   price (when (and near (= 1 phase)) (walk-price c near spent))
+                   price (when (and near (= 1 phase)) (walk-price c near spent worth))
                    _ (when price (ctx/update-mem! c assoc :edge-spent (+ spent price)))
+                   _ (when price (ctx/update-mem! c assoc :edge-walked true))
                    w (if (and near (or price (= 2 phase)))
                        (await (ctx/call c :edge-walk 'jobs.movement.go-to {:pos near :range 0 :ways #{:walk} :floor cost-health/spend-down}))
                        :none)]
