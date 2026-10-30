@@ -364,7 +364,7 @@
 
 (def safe? (price/staying :work (ready/safe-at-by-night (fn [c] (some-> (field/planned c) :trees keys first)))))
 
-(def fit? (ready/fit-for :work))
+(def fit? ready/fed-fit?)
 
 (defn can-run? [c] (lib/trouble-status (field/planned c)))
 

@@ -426,10 +426,21 @@
 (deftest a-roaming-or-working-job-waits-for-food-when-hurt-and-only-food-heals
   (doseq [j '[jobs.strip.site jobs.strip.loot-cart jobs.build.from-plan jobs.build.rail jobs.access.clear-path jobs.access.bridge jobs.animals.herd
               jobs.gather.get-seeds jobs.gather.cast-obsidian jobs.blocks.clear-cells jobs.village.breed jobs.village.roll jobs.forestry.maintain
-              jobs.apiary.maintain jobs.apiary.guard jobs.survival.restore-broken]
+              jobs.apiary.maintain jobs.apiary.guard jobs.apiary.harvest jobs.forestry.prepare jobs.survival.restore-broken]
           :let [fit (:fit? (get registry/jobs j))]]
     (is (= :later (kind fit {:self {:pos {:x 0 :y 64 :z 0} :health 3 :food 11}})) (str j))
     (is (= :ok (kind fit {:self {:pos {:x 0 :y 64 :z 0} :health 20 :food 11}})) (str j))))
+
+(deftest a-hurt-body-only-food-heals-may-work-a-place-but-not-roam-or-dig-long
+  ;; food 11, none carried; h: the least health (0.05 steps) a :work job passes at, under the :long cut point
+  (let [at (fn [j h] (kind (:fit? (get registry/jobs j)) {:self {:pos {:x 0 :y 64 :z 0} :health h :food 11}}))
+        h (first (filter #(= :ok (at 'jobs.village.roll %)) (range 1 20 0.05)))]
+    (doseq [[js expected] [['[jobs.gather.cast-obsidian jobs.blocks.clear-cells jobs.village.breed jobs.forestry.maintain jobs.forestry.prepare
+                              jobs.apiary.maintain jobs.apiary.guard jobs.apiary.harvest jobs.survival.restore-broken jobs.access.pillar] :ok]
+                           ['[jobs.strip.site jobs.strip.loot-cart jobs.build.from-plan jobs.build.rail jobs.access.clear-path jobs.access.bridge
+                              jobs.animals.herd jobs.gather.get-seeds jobs.access.tunnel] :later]]
+            j js]
+      (is (= expected (at j h)) (str j " at " h)))))
 
 (deftest a-job-whose-checks-default-to-armed-and-healthy-runs-them-from-the-declared-forms
   (are [world expected] (= expected (first (ending/run-status (get registry/jobs 'jobs.access.cleanup) (ctx-of (merge at-origin world)))))
