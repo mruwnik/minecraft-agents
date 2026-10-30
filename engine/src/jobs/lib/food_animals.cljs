@@ -143,14 +143,6 @@
   [c opts]
   (->> (in-sight c opts) (remove :why) first))
 
-(defn still-sighted
-  "The nearest entry to hunt; target itself when the read of its surroundings turned the body away so that it left the view cone (out of sight is no verdict on it)."
-  [c opts target]
-  (let [uuid (.-uuid (:entity target))]
-    (if (some #(= uuid (.-uuid (:entity %))) (in-sight c opts))
-      (nearest c opts)
-      target)))
-
 (defn ^:async pen-looked
   "The nearest entry to hunt (or :continue while the walk is not done) after the body has looked at the cells of any
   enclosure round the target that a first read left unseen, walking within sight range of it when they lie beyond:
@@ -162,11 +154,11 @@
                                                                      :max-cells (settings/get spare/settings ::spare/pen-max-cells)}
                                                                   #(= :unloaded (:reason %)))))))]
     (if-not (await (undecided?))
-      (still-sighted c opts target)
+      (nearest c opts)
       (let [e (await (child/run!* c :pen-look 'jobs.movement.go-to {:pos pos :range (settings/get settings ::pen-look-range) :ways #{:walk}}))]
         (if (= :continue e)
           :continue
-          (do (await (undecided?)) (still-sighted c opts target)))))))
+          (do (await (undecided?)) (nearest c opts)))))))
 
 (defn cell-of
   "The rounded cell [x y z] of a position map or JS object, or nil when the sighting gave none."

@@ -25,7 +25,10 @@
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
             [jobs.lib.food-animals :as animals]
+            [jobs.lib.access :as access]
             [jobs.lib.look :as look]
+            [jobs.lib.animal-spare :as spare]
+            [jobs.lib.pen-read :as pen-read]
             [jobs.lib.pace :as pace]
             [jobs.survival.get-food :as get-food]))
 
@@ -1400,3 +1403,26 @@
           (await (core/tick! eng))
           (is (= 1 (count (filter #(and (= :child_started (:kind %)) (= :cook (:slot %))) @seen))) "a cook that waits on the dark is not called again")
           (is (> (food p) 5) "the mutton was eaten raw"))))))
+
+(deftest a-hunt-target-that-left-the-view-in-the-pen-read-is-not-hunted-and-stays-noted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/fake-on-floor {})
+              cow (fn [i] #js {:name "cow" :uuid (str "u" i) :id i :baby false :pos #js {:x (+ 4 i) :y 64 :z 0}})
+              herd (clj->js (mapv cow [1 2 3]))]
+          (doseq [[penned-by-read? listed-after-read?] [[true true] [true false] [false false]]]
+            (let [read? (atom false)
+                  notes-seen (atom [])]
+              (with-redefs [look/seen-objs (fn [_ _] (if (or listed-after-read? (not @read?)) herd #js []))
+                            pen-read/read! (fn ([c o] (reset! read? true) (js/Promise.resolve {:closed? false :reason :open}))
+                                             ([c o r] (reset! read? true) (js/Promise.resolve {:closed? false :reason :open})))
+                            spare/penned? (fn [& _] (and penned-by-read? @read?))
+                            access/trespass-refusal (constantly nil)
+                            ctx/now (constantly 1000)
+                            ctx/mem (constantly {})
+                            notes/notes (fn [_] @notes-seen)
+                            notes/note! (fn [_ ns] (swap! notes-seen into ns))]
+                (is (nil? (await (animals/nearest-or-look {:primitives p :args {}} {:radius 20 :lift 0})))
+                    (pr-str [penned-by-read? listed-after-read?]))
+                (is (= ["u1" "u2" "u3"] (distinct (map :id @notes-seen))) "the cow stays a :seen note for the noted-walk path")))))))))
