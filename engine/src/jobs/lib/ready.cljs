@@ -101,21 +101,14 @@
   [c f]
   (update c ::own-ways (fnil conj []) f))
 
-(defn paying-looks
-  "How many of looks looks (at most sense/max-looks) pay: the i-th is taken while the call's worth times the chance it
-  shows an open wall (1 less cost/closed-chance after the i-1 before it all closed) is over cost/look-s of one look."
-  [c looks]
-  (let [worth (ctx/worth c)
-        pays? #(> (* worth (- 1 (cost/closed-chance % 1))) (cost/look-s 1))]
-    (count (take-while pays? (range (min looks (sense/max-looks)))))))
-
 (defn room-look
-  "A :look at the unseen walls of the room round the body (look-edge/pending) not looked at yet, and at `extra`, cut to the
-  looks that pay the call's worth (paying-looks), nil when none do or no wall is left: an unseen wall is an open side."
+  "A :look at the unseen walls of the room round the body (look-edge/pending) not looked at yet, and at `extra`, taken only
+  when the round pays the call's worth (cost/round-looks, at most sense/max-looks), nil when it does not or no wall is left:
+  an unseen wall is an open side."
   [c text extra]
   (when-let [sides (seq (look-edge/pending c (sense/round-looked c) 0))]
     (let [cells (into (vec sides) extra)
-          n (paying-looks c (count cells))]
+          n (cost/round-looks (ctx/worth c) (min (count cells) (sense/max-looks)))]
       (when (pos? n)
         (contract/look :exposed text :look-at (vec (take n cells)) :room-sides true)))))
 

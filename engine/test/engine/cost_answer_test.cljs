@@ -385,6 +385,14 @@
     (is (= (/ 12 13) (cost/closed-chance 11 1)) "one unseen of twelve: the rule of succession")
     (is (> (cost/closed-chance 11 1) (cost/closed-chance 2 1) (cost/closed-chance 2 3)))))
 
+(deftest a-round-of-looks-pays-at-every-wall-seen-closed-once-it-pays-at-the-first
+  (doseq [n [1 2 4 6]
+          :let [pays-at (fn [worth seen] (> (* worth (cost/closed-chance seen (- n seen))) (cost/look-s (- n seen))))
+                break-even (/ (cost/look-s n) (cost/closed-chance 0 n))]]
+    (is (= 0 (cost/round-looks (* 0.99 break-even) n)) "below the break-even worth none of the round is looked at")
+    (is (= n (cost/round-looks (* 1.01 break-even) n)) "above it the whole round is")
+    (is (every? #(pays-at (* 1.01 break-even) %) (range n)) "each closed wall seen leaves a round that still pays")))
+
 (deftest a-swim-to-a-shore-whose-land-may-go-on-is-caught-at-the-chance-it-ends
   (let [m (mob "drowned" 3 35)
         known (cost/flee-answer {:food 20 :mobs [m] :swim 4 :land 0})

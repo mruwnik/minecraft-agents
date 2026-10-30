@@ -54,12 +54,14 @@
   {::max-in-row {:default 3 :doc "Fruitless animals in a row that end the run." :spec (a/int-in 0 nil)}})
 (defn max-in-row [] (settings/get settings ::max-in-row))
 
+(def default-radius (:radius (a/defaults args)))
+
 (def ways need/fetch-ways)
 
 (def target [:mob])
 
 (def safe? (price/staying :work (ready/safe-at-or-roaming
-            (fn [c] (work-place/nearest-mob c (remove nil? [(:mob (:args c))]) (or (:radius (:args c)) 8))))))
+            (fn [c] (work-place/nearest-mob c (remove nil? [(:mob (:args c))]) (or (:radius (:args c)) default-radius))))))
 (def fit? "Survival mode only: a passive animal cannot hurt the body, so a weak body still brings one to food." checks/survival-mode)
 
 
@@ -69,7 +71,7 @@
   [{:keys [radius]}]
   (+ (obtain/default-time {:count 1})
      (cost/look-s (sense/max-looks))
-     (/ (or radius 8) fight/walk-speed)
+     (/ (or radius default-radius) fight/walk-speed)
      (last (get-in (use-entity/quote-of nil) [:uses :job-time]))))
 
 (def defaults {:spend {:job-time default-time}})

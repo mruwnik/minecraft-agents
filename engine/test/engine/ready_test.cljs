@@ -194,13 +194,13 @@
     (with-redefs [u/seen-block (hide [3 64 0])]
       (is (not= :look (first (status))) "a look costs seconds and the goal is worth none"))))
 
-(deftest a-dear-round-of-looks-keeps-the-looks-that-pay
-  (let [need (fn [seen] (/ (cost/look-s 1) (- 1 (cost/closed-chance seen 1))))
-        worth (/ (+ (need 1) (need 2)) 2)
-        walls [[1 64 0] [2 64 0] [3 64 0] [4 64 0]]
-        c (assoc (ctx-of night-hut) :worth (constantly worth))]
+(deftest a-round-of-looks-is-taken-whole-or-not-at-all-around-its-break-even-worth
+  (let [walls [[1 64 0] [2 64 0] [3 64 0] [4 64 0]]
+        break-even (/ (cost/look-s (count walls)) (cost/closed-chance 0 (count walls)))
+        looks-at #(some-> (ready/room-look (assoc (ctx-of night-hut) :worth (constantly %)) "dark" nil) (nth 2) :look-at)]
     (with-redefs [look-edge/pending (fn ([_] nil) ([_ _ _] walls))]
-      (is (= (take 2 walls) (:look-at (nth (ready/room-look c "dark" nil) 2))) "the third look's chance to show an open wall is worth less than it costs"))))
+      (is (nil? (looks-at (* 0.99 break-even))) "all four walls closed is not worth the four looks")
+      (is (= walls (looks-at (* 1.01 break-even))) "worth the round: every wall is looked at"))))
 
 (deftest a-wall-a-look-round-did-not-show-counts-as-open-not-looked-at-again
   (let [seen-block u/seen-block

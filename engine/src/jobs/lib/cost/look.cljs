@@ -6,6 +6,7 @@
   the mobs come nearer meanwhile (approached; answer/decide): an answer with :outcomes, priced by answer/answer-price beside the answers open now, so decide takes
   the look exactly when look-value's :value is over its :cost.
   closed-chance: the chance the unseen part of a boundary is closed, given its seen part is (a room's walls).
+  round-looks: how many looks of a round that stops at the first open wall pay a call's worth.
 
   Callers: respond's cover-answers (an unseen room cell, the door). Others it fits: shut-in's :room way and enter-room
   (an unseen room judged open), look-edge's look at a region's unseen sides, a pit or pocket's unsensed cells
@@ -34,6 +35,14 @@
   [seen unseen]
   (let [{:keys [k n]} (settings/get settings ::wall-prior)]
     (reduce * 1 (map #(/ (+ k seen %) (+ n seen %)) (range unseen)))))
+
+(defn round-looks
+  "How many of looks looks to take in a round that stops at its first open wall, for a call worth `worth` seconds. A look
+  buys nothing alone: the call starts only if every wall still unseen proves closed, so with i walls seen closed it
+  goes on while worth x (closed-chance i (looks - i)) is over look-s of the looks - i left. The chance rises and the
+  cost falls with every closed wall, so a round that pays at its start pays to its end: all of looks or none."
+  [worth looks]
+  (count (take-while #(> (* worth (closed-chance % (- looks %))) (look-s (- looks %))) (range looks))))
 
 (defn approached
   "mobs [answer/flee-mob's] seconds later: each melee one (not threat/ranged?) nearer by seconds of its chase speed, not
