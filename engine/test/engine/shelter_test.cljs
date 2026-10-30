@@ -1644,17 +1644,19 @@
 (deftest the-edge-walk-is-bought-by-its-price-not-counted
   (let [c {:primitives (tunnel-edge-body nil)}
         cell (first (look-edge/pending c #{}))
-        many (set (map (fn [i] [i 100 100]) (range 40)))]
+        many (set (map (fn [i] [i 100 100]) (range 40)))
+        walk-price-after (fn [spent cell & [worth]]
+                           (with-redefs [ctx/mem (constantly {:edge-spent spent})] (look-edge/walk-price c cell (or worth 100))))]
     (is (some? cell))
     (is (seq (look-edge/pending c many)) "no count of cells tried ends the look at the edge")
     (with-redefs [walk-risk/look-way (fn [_ _ _] {:hp 0 :secs 1})
                   ctx/worth (constantly 0)]
-      (is (= 1 (look-edge/walk-price c cell 0 100)) "a walk costing no hp is bought at its seconds from the worth given, not the call's (0 on a lit route)")
-      (is (nil? (look-edge/walk-price c cell 99.5 100)) "not once the walks before it spent the worth"))
+      (is (= 1 (walk-price-after 0 cell)) "a walk costing no hp is bought at its seconds from the worth given, not the call's (0 on a lit route)")
+      (is (nil? (walk-price-after 99.5 cell)) "not once the walks before it spent the worth"))
     (with-redefs [walk-risk/look-way (fn [_ _ _] {:hp 0 :secs 200})]
-      (is (nil? (look-edge/walk-price c cell 0 100)) "seconds more than the worth are not bought, however safe"))
+      (is (nil? (walk-price-after 0 cell)) "seconds more than the worth are not bought, however safe"))
     (with-redefs [walk-risk/look-way (fn [_ _ _] {:hp 19 :secs 1})]
-      (is (nil? (look-edge/walk-price c cell 0 0.01)) "hp more than the worth buys are not"))))
+      (is (nil? (walk-price-after 0 cell 0.01)) "hp more than the worth buys are not"))))
 
 (deftest walkable-near-is-the-reachable-ground-nearest-the-cell
   (let [p (tunnel-seen-body)]

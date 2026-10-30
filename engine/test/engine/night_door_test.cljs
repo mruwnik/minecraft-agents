@@ -14,7 +14,8 @@
             [jobs.lib.shelter.beds :as sh-beds]
             [engine.shelter-support :as st]
             [engine.test-util :as tu :refer [box]]
-            [engine.triggers :as triggers]))
+            [engine.triggers :as triggers]
+            [jobs.survival.night :as night]))
 
 (def open-door-states (update-vals door-states #(assoc % :open true)))
 
@@ -56,6 +57,31 @@
           (let [log (await (with-child-log #(tu/run-until-empty eng 8)))]
             (is (pos? (some (fn [[k _ a]] (when (= :enter-room k) (:worth a))) log))
                 "the bed's negative price is the shut room's answer, not floored away")))))))
+
+(defn ^:async door-shut-worth
+  "The :worth of the night's enter-room over an open-door hut with extra blocks and a bed known at bed (when given)."
+  [extra bed]
+  (let [{:keys [eng]} (st/setup (merge (open-door-hut {:x 5 :y 64 :z 0} extra) {:inventory st/dirt-stack}))]
+    (when bed (st/know-bed! eng bed))
+    (core/submit! eng '(jobs.survival.night) {})
+    (let [log (await (with-child-log #(tu/run-until-empty eng 8)))]
+      (some (fn [[k _ a]] (when (= :enter-room k) (:worth a))) log))))
+
+(deftest night-door-shut-with-a-bed-outside-the-room-is-worth-no-more-than-without-a-bed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [none (await (door-shut-worth {} nil))
+              outside (await (door-shut-worth {"30,64,0" "red_bed"} {:x 30 :y 64 :z 0}))]
+          (is (pos? none))
+          (is (<= outside none) "a bed elsewhere is not the shut room's answer, so it does not raise the worth"))))))
+
+(deftest look-worth-is-never-below-zero
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (with-redefs [night/night-prices (fn ^:async [& _] {:bed -305})]
+          (is (= 0 (await (night/look-worth {} true)))))))))
 
 (defn seeing-setup
   "st/setup over a body that has seen only what its sight passes showed (perception over the fake), as live."

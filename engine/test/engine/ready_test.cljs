@@ -737,6 +737,12 @@
   (is (= [:never :exposed 'jobs.movement.walk-look] ((juxt first #(:reason (nth % 2)) #(first (:look-first (nth % 2)))) (unseen-site-exposure 6 true)))
       "arrived and seen: the job's walk shows no more, the child walks to look at the unseen west end"))
 
+(deftest the-walk-to-look-is-bought-from-the-worth-the-job-s-earlier-edge-walks-left
+  (are [spent expected] (= expected (with-redefs [ctx/mem (constantly {:edge-spent spent})]
+                                      (= :ok (first (unseen-site-exposure 0 false)))))
+    0 true
+    1e9 false))
+
 (deftest a-torch-the-body-carries-beats-the-walk-to-look
   (with-redefs [sh-sense/seen-cell? (constantly false) sh-sense/solid-at? (constantly false) ctx/mem (constantly {})]
     (let [safe (fp-light/lights-itself (ready/safe-at (constantly {:x 15 :y 40 :z 0})) (constantly []))]

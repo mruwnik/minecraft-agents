@@ -106,13 +106,18 @@
              seq
              (apply max-key #(u/dist from (:to %))))))
 
+(defn affords-walk?
+  "Whether a walk of s seconds is bought from `worth` after the seconds the job's edge walks before it spent (:edge-spent)."
+  [c s worth]
+  (cost/affords? (+ s (:edge-spent (ctx/mem c) 0)) worth))
+
 (defn walk-price
   "Seconds the walk to look at cell `to` and back costs (walk-risk/look-cost), nil when it is not bought: its hp more than
-  `worth` buys, or its seconds and `spent` (the seconds of the edge walks before it) over it. A walk toward an unseen wall
-  is priced, not counted."
-  [c to spent worth]
+  `worth` buys, or its seconds and the walks before it (affords-walk?) over it. A walk toward an unseen wall is priced,
+  not counted."
+  [c to worth]
   (let [s (walk-risk/look-cost c (walk-risk/look-way c to 1) worth)]
-    (when (and s (cost/affords? (+ s spent) worth)) s)))
+    (when (and s (affords-walk? c s worth)) s)))
 
 (defn ^:async look!
   "A closed region with sides never seen is not yet known shut (an unseen cell may be an opening). The nearest of cells is
@@ -134,7 +139,7 @@
                    reach-to (last (filter #(<= (u/dist {:x (first cell) :y (second cell) :z (nth cell 2)} {:x (first %) :y (second %) :z (nth % 2)}) edge-stride) cells))
                    near (or to ((walkable-near-fn p (sh-sense/feet p)) reach-to))
                    spent (:edge-spent (ctx/mem c) 0)
-                   price (when (and near (= 1 phase)) (walk-price c near spent worth))
+                   price (when (and near (= 1 phase)) (walk-price c near worth))
                    _ (when price (ctx/update-mem! c assoc :edge-spent (+ spent price)))
                    _ (when price (ctx/update-mem! c assoc :edge-walked true))
                    w (if (and near (or price (= 2 phase)))
