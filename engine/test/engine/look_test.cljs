@@ -14,10 +14,11 @@
             [clojure.string :as str]))
 
 (defn seeing
-  "Fake primitives over world with a perception (the body's rules, a shorter radius), one sight pass done."
+  "Fake primitives over world with a perception (the body's rules, a shorter radius), one sight pass done. world's :rand
+  pins the ray jitter."
   [world]
   (let [p (tu/fake-on-floor world)
-        wrapped (perception/wrap p (perception/create (fake-raw/create p) {:radius 16 :ray-deg 2}))]
+        wrapped (perception/wrap p (perception/create (fake-raw/create p) (merge {:radius 16 :ray-deg 2} (select-keys world [:rand]))))]
     (.setOwner p "t1")
     (perception/pass! (aget wrapped "perception"))
     wrapped))
@@ -287,7 +288,7 @@
   ;; a shaft down from a hole in the floor by day, seen open to the sky round the body: under the hole's seen air, past
   ;; every seen light's reach, the measured chance under a hole (the old guess: the open ground's sky share at that
   ;; height, lit)
-  (let [p (seeing {:time day :blocks {"0,63,5" "air" "0,63,6" "air" "0,63,7" "air"}})
+  (let [p (seeing {:time day :rand (constantly 0.5) :blocks {"0,63,5" "air" "0,63,6" "air" "0,63,7" "air"}})
         top (first (filter #(sh-sense/seen-cell? p {:x 0 :y % :z 7}) (range 49 64)))
         chance (look/unseen-lit-chance p {:x 0 :y 48 :z 7})]
     (is (< 52 top) "the hole is seen, the shaft under it not")
