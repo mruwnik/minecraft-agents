@@ -1,6 +1,11 @@
 (ns engine.core.clock
   "The engine's clocks: wall time, and the TTL clock (wall time less host suspends).")
 
+(goog-define ^{:doc "Set in the :test build: the CPU clock and the clock jobs time their own work by stand still, so how much
+  work a call does cannot hang on the machine's load (a define, not a test helper's side effect, so a test namespace
+  built alone gets it too)."}
+  frozen false)
+
 (defn now [eng] ((:now eng)))
 
 (def suspend-gap-ms

@@ -14,13 +14,10 @@
             [engine.fast-pace :as fast-pace]
             [engine.fsutil :as fsu]
             [engine.memory :as mem]
-            [jobs.lib.clock :as clock]
             [jobs.lib.look :as look]
             [jobs.lib.waits :as waits]
             [jobs.lib.near :as near]
             [jobs.lib.walk.plan :as wplan]))
-
-(reset! core/default-cpu (constantly 0))
 
 (def require-here node/require-here)
 
@@ -45,10 +42,6 @@
                              (write! file data))))
     (set! fsu/read-edn (fn [file] (if (and (mem-file? file) (contains? @saved file)) (@saved file) (read-edn file))))
     saved))
-
-;; Work timed by the wall clock (a search round's cut, a refresh's interval, a steer's time left) differs with the machine's
-;; load, and the job then takes another path (one var cost 51-392 s of CPU on the same code): tests stop that clock.
-(defonce stopped-clock (set! clock/now (constantly 0)))
 
 (def real-memory-disk-fixture
   "A :once fixture for the namespaces that read or break memory.edn on disk: the engine's memory saves are otherwise

@@ -10,6 +10,7 @@
             [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.test-util :as tu]
+            [jobs.lib.clock :as clock]
             [jobs.lib.pace :as pace]))
 
 (def world (atom {}))
@@ -107,6 +108,10 @@
       (fn ^:async t []
         (await (spends-larger-of 10 100))
         (await (spends-larger-of 100 10))))))
+
+(deftest the-test-build-stops-the-cpu-clock-and-the-job-clock
+  (is (= [0 0] [(core/default-cpu) (core/default-cpu)]) "an engine's default CPU clock")
+  (is (= [0 0] [(clock/now) (clock/now)]) "the clock jobs time their work by"))
 
 (def waits
   {:round (fn [_] (swap! world update :wait-rounds (fnil inc 0)) :continue)})

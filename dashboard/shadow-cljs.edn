@@ -24,6 +24,7 @@
          :output-dir "../engine/out/test"
          :ns-regexp "^(engine|jobs|plan)\\..*-test$"
          :autorun false
+         :closure-defines {engine.core.clock/frozen true}
          :build-hooks [(engine.build-hooks/add-job-namespaces)]
          :compiler-options {:infer-externs false :static-fns true :fn-invoke-direct true}}
   ;; Opt-in: the planner's recorded pins (planner-*-golden namespaces), run when planner code changes: `tools/test-engine --golden`.
@@ -32,6 +33,7 @@
                 :output-dir "../engine/out/test-golden"
                 :ns-regexp "-golden$|^engine\\.timing-test$"
                 :autorun false
+                :closure-defines {engine.core.clock/frozen true}
                 :build-hooks [(engine.build-hooks/add-job-namespaces)]
                 :compiler-options {:infer-externs false :static-fns true :fn-invoke-direct true}}
   ;; Re-records test/planner-bench.json (`npm run record:planner-bench`).
