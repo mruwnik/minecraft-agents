@@ -131,38 +131,58 @@
     [0 600 700]
     [100 400 1000]
     [10 30 ##Inf])
+  (are [fig] (let [[least mean] fig
+                   t (/ (+ least mean) 2)
+                   tail (:tail (food-cost/trip-spread fig))
+                   top (if (js/isFinite (nth fig 2)) (nth fig 2) (+ least (* 40 (- mean least))))
+                   dt (/ (- top t) 20000)
+                   integral (* dt (reduce + (map #(tail (+ t (* dt (+ % 0.5)))) (range 20000))))]
+               (< (abs (- integral ((:beyond (food-cost/trip-spread fig)) t))) (* 0.002 mean)))
+    [0 960 10800]
+    [0 120 10800]
+    [0 600 700]
+    [100 400 1000]
+    [10 30 ##Inf])
   (are [fig t p] (= p (food-cost/outlasts fig t))
     [10 10 10] 9 1
     [10 10 10] 10 0
     [0 600 700] 700 0))
 
-(def trip {:point-cost 0.01 :death-s 600 :far? true})
+(def trip {:health 20 :death-s 600 :far? true :field? true})
 
 (defn carry [home fig & {:as more}] (food-cost/carry-points home (merge trip {:figure fig} more)))
+
+(def chest (fn [points & {:as more}] (merge {:points points :walk-s 1 :blocks 4 :fetch-s 11.2 :point-s 0} more)))
 
 (deftest carry-points-prices-the-trip-and-takes-home-food-off-the-reserve
   (are [home fig points] (= points (carry home fig))
     [] nil 60
-    [{:points 320 :walk-s 0 :blocks 0}] nil 0
-    [{:points 0 :walk-s 10 :blocks 40}] nil 60
-    [{:points 25 :walk-s 0 :blocks 0}] nil 35
-    [] [7200 7200 7200] 120
-    [{:points 320 :walk-s 600 :blocks 2400}] [0 0 0] 10)
-  (let [home [{:points 320 :walk-s 60 :blocks 240}]]
-    (is (< 60 (carry home [0 960 ##Inf]) (carry [] [0 960 ##Inf])) "an unbounded trip counts home food: the walk back is cheaper than the death")
-    (is (< (carry home [0 960 ##Inf]) (carry home [0 960 ##Inf] :far? false)) "with no known far end only the death prices running out")
-    (is (< (carry [] [0 960 ##Inf]) (carry [] [0 960 ##Inf] :death-s 6000)))
-    (is (= (carry home [0 960 ##Inf]) (carry home [0 960 ##Inf] :death-s 6000)) "the walk back is the cheaper way out")
-    (is (< (carry home [0 960 ##Inf] :point-cost 1) (carry home [0 960 ##Inf])))
+    [(chest 320 :walk-s 0 :blocks 0)] nil 0
+    [(chest 0 :walk-s 10 :blocks 40)] nil 60
+    [(chest 25 :walk-s 0 :blocks 0)] nil 35
+    [] [7200 7200 7200] 60
+    [(chest 320 :walk-s 600 :blocks 2400)] [0 0 0] 10)
+  (let [home [(chest 320 :walk-s 60 :blocks 240)]]
+    (is (< 60 (carry home [0 960 ##Inf])) "home food near is fetched for the trip's tail")
     (is (<= (carry home [0 960 10800]) (carry home [0 960 ##Inf])) "a most only cuts the tail")
     (is (> (carry home [0 960 10800]) (* 960 food-cost/points-per-s)) "more than the mean's hunger")))
 
+(deftest a-carried-point-is-priced-at-what-getting-it-costs
+  (let [kit [0 840 10800]]
+    (is (= 100 (carry [(chest 100)] kit :far? false)) "a 7-piece kit takes all 20 loaves of a chest near: they cost only the fetch")
+    (is (< (carry [(chest 320)] kit :far? false) 160) "from a stack of 64 only what the trip's tail pays for at a point's death loss")
+    (is (= 60 (carry [] kit :far? false)) "no home food: a point hunted before the trip costs what one hunted on the way does, so the 3-day floor")
+    (is (zero? (food-cost/trip-points (food-cost/priced-trip [(chest 100 :fetch-s 2000)] (assoc trip :figure kit :far? false))))
+        "a chest whose fetch costs more than running out saves is not fetched")
+    (is (< (carry [(chest 320)] kit :far? false :slots {:free 2 :loot 2 :worth 30 :stack-points 64}) (carry [(chest 320)] kit :far? false))
+        "a trip whose loot fills the pack carries less: each slot of food costs the loot it would hold")))
+
 (deftest the-trip-carry-is-where-a-point-more-stops-paying
-  (let [t (food-cost/priced-trip [{:points 320 :walk-s 60 :blocks 240}] (assoc trip :figure [0 960 ##Inf]))
+  (let [t (food-cost/priced-trip [(chest 320 :walk-s 60 :blocks 240)] (assoc trip :figure [0 960 ##Inf]))
         k (food-cost/trip-points t)]
     (is (< (food-cost/trip-cost t k) (food-cost/trip-cost t (dec k))))
     (is (<= (food-cost/trip-cost t k) (food-cost/trip-cost t (inc k))))
-    (is (= 82 (:run-out t)) "the walk home and out again: a trip of 10 s and 240 blocks at 0.3")))
+    (is (= 82 (:walk-out t)) "the walk home and out again: a trip of 10 s and 240 blocks at 0.3")))
 
 (def ff-boots (fn [lvl] {:feet {:name "iron_boots" :enchants [{:name "feather_falling" :lvl lvl}]}}))
 

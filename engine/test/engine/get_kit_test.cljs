@@ -411,9 +411,10 @@
                  (select-keys @(:out s) [:status :item :reason]))))))))
 
 (defn ^:async stocked-home-kit
-  "The no-food warnings, ending and register food holds of a one-pickaxe kit with a booked chest of 40 bread at home and bread carried."
-  [bread]
-  (let [s (start (hungry-world [{:name "bread" :count bread}] 16) {:items ["iron_pickaxe"] :explore false})]
+  "The no-food warnings, ending and register food holds of a kit of items with a booked chest of
+  40 bread at home and bread carried."
+  [bread items]
+  (let [s (start (hungry-world [{:name "bread" :count bread}] 16) {:items items :explore false})]
     (mem/write! (:store (:eng s)) :fetch/stock {:pos [4 64 4] :items {"bread" 40}} {:cap 64 :ttl :forever})
     (await (f/run-ticks s 80))
     {:no-food (mapv :cause (f/events-of s :kit.no-food)) :out (select-keys @(:out s) [:status :item :reason])
@@ -424,10 +425,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= {:no-food [] :out {:status :stopped :item "iron_ingot" :reason :no-source} :held {"bread" 7}} (await (stocked-home-kit 10)))
-            "no get-food child: 50 points cover the kit's 120 s quote priced (the chance it outlasts them against a death, the far end unknown; about 35 points), and the register holds those 7 loaves for the kit")
-        (is (= [:no-carry] (:no-food (await (stocked-home-kit 5))))
-            "25 points cover the walk back to the chest but not the kit's own time")))))
+        (is (= {:no-food [] :out {:status :stopped :item "iron_ingot" :reason :no-source} :held {"bread" 6}} (await (stocked-home-kit 10 ["iron_pickaxe"])))
+            "no get-food child: a one-piece kit's 120 s quote is priced at about 30 points (running out costs the food short at the field's price), and the register holds those 6 loaves for the kit")
+        (is (= [] (:no-food (await (stocked-home-kit 5 ["iron_pickaxe"]))))
+            "25 points cover a one-piece kit: a fetch from the chest costs more than the tail it covers")
+        (is (= [] (:no-food (await (stocked-home-kit 12 kit/iron-kit))))
+            "60 points cover the eight-piece iron kit's 960 s quote: its tail past them saves less than the fetch costs")
+        (is (= [:no-carry] (:no-food (await (stocked-home-kit 5 kit/iron-kit))))
+            "25 points do not: the kit asks get-food for bread from the chest (this fake chest holds none)")))))
 
 (deftest a-fed-body-with-an-empty-pack-and-no-source-warns-and-goes-on
   (async done

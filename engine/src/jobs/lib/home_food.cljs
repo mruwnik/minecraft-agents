@@ -13,9 +13,9 @@
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.food :as food]
-            [jobs.lib.cost.risk :as risk]
             [jobs.lib.crops :as crops]
             [jobs.lib.foods :as foods]
+            [jobs.lib.game-facts :as facts]
             [jobs.lib.look :as look]
             [jobs.lib.stock :as stock]
             [jobs.lib.util :as u]
@@ -106,12 +106,23 @@
     (concat crops (pen-sources c))))
 
 (defn sources
-  "See the ns doc: each with :blocks and the seconds (:walk-s) of the walk to it from far."
-  [c far]
-  (let [per-s (cost/walk-blocks-per-s)]
-    (for [s (concat (chest-sources c) (field-sources c))
-          :let [blocks (u/dist far (:pos s))]]
-      (assoc s :blocks blocks :walk-s (/ blocks per-s)))))
+  "See the ns doc, the ripe crops of a 16-block column as one field: each with :blocks and the seconds (:walk-s) of the
+  walk to it from far, and the seconds of fetching it from here (:fetch-s: a trip and the walk, cost.value/trip and
+  walk-cost) and of each point's work (:point-s: a crop's harvest step, cost/field-step-s; a pen animal's kill, at the
+  field's price, cost.food/field-point-s; a chest's none)."
+  ([c far] (sources c far (u/self-pos c)))
+  ([c far here]
+   (let [per-s (cost/walk-blocks-per-s)
+         crop-s (cost/field-step-s :harvest 1)
+         {crops true others false} (group-by #(= :crop (:kind %)) (concat (chest-sources c) (field-sources c)))
+         fields (for [[_ cells] (group-by (fn [{{:keys [x z]} :pos}] [(js/Math.floor (/ x 16)) (js/Math.floor (/ z 16))]) crops)
+                      :let [points (reduce + (map :points cells))]]
+                  {:kind :crop :pos (:pos (first cells)) :points points :point-s (/ (* crop-s (count cells)) points)})]
+     (for [s (concat others fields)
+           :let [blocks (u/dist far (:pos s))]]
+       (assoc s :blocks blocks :walk-s (/ blocks per-s)
+              :fetch-s (+ (cost/trip) (:cost (cost/walk-cost {:distance (u/dist here (:pos s))})))
+              :point-s (case (:kind s) :chest 0 :crop (:point-s s) (food/field-point-s)))))))
 
 (defn chain-trip
   "The trip c's call chain is on when the caller names none: its job-time spend left (ctx/left), taken whole, ending
@@ -121,45 +132,49 @@
   (let [s (when (:left c) (get-in (ctx/left c) [:spend :job-time]))]
     {:figure (when s [s s s]) :far (u/self-pos c) :far? true}))
 
+(defn loot-slots
+  "{:free :loot :worth :stack-points} of the pack on a trip that yields items {name [least mean most]}: its free slots, the
+  slots the loot's mean fills, what the loot holds a slot (cost.value/item-value), and the food points a stack of the
+  best carried food holds (bread's with none); nil without a yield."
+  [c yields]
+  (let [p (:primitives c)
+        loot (for [[n [_ mean]] yields :when (pos? mean)] {:name n :count mean})
+        n (reduce + (map #(js/Math.ceil (/ (:count %) facts/stack-size)) loot))
+        best (apply max (foods/points "bread") (keep #(when (food/reserve-food? (:name %)) (foods/points (:name %))) (u/inventory p)))]
+    (when (pos? n)
+      {:free (u/free-slots p) :loot n :worth (/ (:value (cost/item-value loot)) n) :stack-points (* facts/stack-size best)})))
+
 (defn quote-trip
   "The trip of c's own job, by its quote q: q's job-time figure, its most held to the spend left, ending at q's
   :moves-to, else at place (a fn of c, the job's work place) when given, else unknown (far? false: the walk is
-  from where the body stands)."
+  from where the body stands); :slots, the pack's room for q's yield (loot-slots)."
   ([c q] (quote-trip c q nil))
   ([c q place]
    (let [[least mean most] (get-in q [:uses :job-time] [0 0 ##Inf])
          most (min most (or (get-in (chain-trip c) [:figure 2]) ##Inf))
          to (or (when-let [[x y z] (:moves-to q)] {:x x :y y :z z}) (when place (some-> (place c) a/cell)))]
-     {:figure [(min least most) (min mean most) most] :far (or to (u/self-pos c)) :far? (some? to)})))
+     (cond-> {:figure [(min least most) (min mean most) most] :far (or to (u/self-pos c)) :far? (some? to)}
+       (get-in q [:yields :items]) (assoc :slots (loot-slots c (get-in q [:yields :items])))))))
 
-(defn with-prices
-  "trip {:figure :far :far?} with the prices food/priced-trip reads: a death at far (cost/death-s), and each carried point
-  lost by it at food-point-worth with the chance a :long work of the trip's mean seconds kills the body
-  (cost.risk/work-death-chance)."
-  [c {:keys [figure far] :as trip}]
-  (let [p (:primitives c)
-        health (or (some-> (.self p) .-health) 20)]
+(defn priced
+  "trip {:figure :far :far? :slots} with what cost.food/priced-trip reads of the body: its health, the carried food points
+  (:had), a death at far (cost/death-s), and field? (food is got in the field past the home food)."
+  [c {:keys [far] :as trip} field?]
+  (let [p (:primitives c)]
     (assoc trip
+           :health (or (some-> (.self p) .-health) 20)
+           :had (foods/stock-points (u/inventory p))
            :death-s (cost/death-s p (ctx/view c) far)
-           :point-cost (* (cost/food-point-worth) (risk/work-death-chance :long health (or (second figure) 0))))))
+           :field? field?)))
 
 (defn carry-points
   "Food points the body must carry on trip {:figure :far :far?} (default chain-trip): jobs.lib.cost.food/carry-points of
-  its home food (sources from far) and the trip with-prices."
+  its home food (sources from far) and the trip priced, food got in the field past it."
   ([c] (carry-points c (chain-trip c)))
-  ([c trip] (food/carry-points (sources c (:far trip)) (with-prices c trip))))
+  ([c trip] (food/carry-points (sources c (:far trip)) (priced c trip true))))
 
 (defn fetch-points
-  "The food points to fill the pack to before trip, or nil: the trip's food (food/trip-points), at most the carried food
-  and all the home food, when the carried food is less and the fall in the trip's food/trip-cost pays the fetch: a
-  trip (cost/trip) and the walk to the nearest home food from here (cost/walk-cost)."
+  "The food points to fill the pack to from home before trip, or nil: jobs.lib.cost.food/fetch-points of the home food
+  (sources from the trip's far end) and the trip priced, no field food."
   [c trip]
-  (let [home (filter (comp pos? :points) (sources c (:far trip)))
-        priced (food/priced-trip home (with-prices c trip))
-        had (foods/stock-points (u/inventory (:primitives c)))
-        to (min (food/trip-points priced) (+ had (reduce + (map :points home))))
-        here (u/self-pos c)
-        fetch (when (seq home)
-                (+ (cost/trip) (:cost (cost/walk-cost {:distance (apply min (map #(u/dist here (:pos %)) home))}))))]
-    (when (and fetch (> to had) (> (- (food/trip-cost priced had) (food/trip-cost priced to)) fetch))
-      to)))
+  (food/fetch-points (sources c (:far trip)) (priced c trip false)))

@@ -256,11 +256,20 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng] :as env} (pt/start (pt/field-world (pt/inv "carrot" 3)))
-              _ (mem/write! (:store eng) :fetch/stock {:pos [6 64 6] :items {"bread" 40}} {:cap 64 :ttl :forever})
+              _ (mem/write! (:store eng) :fetch/stock {:pos [300 64 300] :items {"bread" 40}} {:cap 64 :ttl :forever})
               e (await (ending-of env plant {:area pt/field-box :seed "carrot"} 20))
               cause (:cause (kcm e))]
           (is (= {:reason :food-reserve :seed "carrot" :held 3 :kept 3} (dissoc cause :reserve-points)))
-          (is (< 0 (:reserve-points cause) 12) "the stocked chest leaves the hunger of the plant's 600 s and the walk back to it (10 points and a little)"))))))
+          (is (< 0 (:reserve-points cause) 12) "a stocked chest 420 blocks off leaves the hunger of the plant's 600 s (10 points and a little): food short is dearer than the 9 carried"))))))
+
+(deftest a-stocked-chest-near-lets-the-food-seed-be-sown
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng] :as env} (pt/start (pt/field-world (pt/inv "carrot" 3)))
+              _ (mem/write! (:store eng) :fetch/stock {:pos [6 64 6] :items {"bread" 40}} {:cap 64 :ttl :forever})
+              e (await (ending-of env plant {:area pt/field-box :seed "carrot"} 20))]
+          (is (not= :food-reserve (contract/cause-key e)) "running out costs one walk to the chest, whatever is kept, so nothing is held"))))))
 
 (deftest plant-every-cell-skipped-is-nothing-possible-and-fewer-seeds-than-least-is-not-done
   (async done

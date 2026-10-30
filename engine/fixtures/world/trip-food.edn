@@ -1,6 +1,7 @@
 ;; A long trip fetches its food from home before it starts (jobs.lib.ready/trip-fed, jobs.lib.home-food/fetch-points).
 ;; A mine for 64 iron ore with none in sight: about 6 s an item, open-ended, its far end unknown, so running out is priced
-;; at a death and the trip's food is far more than 2 loaves.
+;; at the food short got on the way (cost.food ::field-point-s) and the chest's bread, which costs only its fetch, is taken
+;; until the trip's tail is covered: far more than 2 loaves.
 ;; Should-succeed: 2 loaves and a chest of bread it booked 4 blocks off: get-food takes bread from the chest before the mine's work.
 ;; Should-fail: 30 loaves cover the trip: no bread is taken.
 {:defaults
