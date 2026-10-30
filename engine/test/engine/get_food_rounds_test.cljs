@@ -651,6 +651,17 @@
           (await (one-round! eng {}))
           (is (empty? (calls p "attack")) "two known cows are the last pair, though only one is in sight"))))))
 
+(deftest a-cow-seen-with-two-more-noted-is-hunted-as-the-surplus
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [notes [{:kind :seen :what "cow" :id "u1" :pos [20 64 0] :by "Other" :t 999900 :until 9e15}
+                     {:kind :seen :what "cow" :id "u3" :pos [22 64 3] :by "Other" :t 999900 :until 9e15}]
+              {:keys [eng p seen]} (setup {:time 6000 :self {:food 8 :health 10} :entities [(assoc cow :uuid "u2")]} :step-ms 5 :other-notes notes)]
+          (await (one-round! eng {:settings {:jobs.lib.combat/attack-gap-ms 0}}))
+          (is (seq (calls p "attack")) "the hunt counts the noted pair as get-food does: the cow in sight is the surplus")
+          (is (= [{:name "cow" :adults 3 :keep 2}] (mapv #(select-keys % [:name :adults :keep]) (filterv #(= :food.killed (:kind %)) @seen)))))))))
+
 (defn see-only-ahead!
   "Passive mobs count only on the side the body last looked at (a look act's target), facing +x at first: a view cone."
   [^js p]

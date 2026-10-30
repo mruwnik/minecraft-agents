@@ -4,6 +4,7 @@
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [engine.ctx :as ctx]
+            [engine.notes :as notes]
             [jobs.lib.access :as access]
             [jobs.lib.built :as built]
             [jobs.lib.pen :as pen]
@@ -32,6 +33,22 @@
   (cond (contains? (off-limits) kind) :off-limits
         (and (spare-pens?) in-own-area?) :pen
         (and (<= 2 adults-of-kind keep) (not starved?)) :kept))
+
+(defn noted-adults
+  "The uuids of adult animals of `kind` that live :seen notes (any body's) place within radius of the body and that are not among `seen-uuids`: a pair standing out of each other's sight is still a pair."
+  [c kind seen-uuids radius]
+  (let [me (u/self-pos c)]
+    (into #{}
+          (comp (filter #(and (= :seen (:kind %)) (= kind (:what %)) (:id %) (not (:baby %)) (not (seen-uuids (:id %)))
+                              (<= (u/flat-dist me (zipmap [:x :y :z] (:pos %))) radius)))
+                (map :id))
+          (notes/notes c))))
+
+(defn adults-of-kind
+  "The adults of `kind` the keep rule counts: the adult entities of it in sight (`adults`) plus the noted ones not in sight within
+  radius (noted-adults; `seen-uuids` every entity in sight). get-food and combat.hunt both count so, so the pair the one keeps is the pair the other spares."
+  [c kind adults seen-uuids radius]
+  (+ (count (filter #(= kind (.-name %)) adults)) (count (noted-adults c kind seen-uuids radius))))
 
 (def wool-keep "Sheep of a colour combat.hunt spares (its :keep default for animals); shears spare them all." 2)
 

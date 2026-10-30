@@ -1,5 +1,7 @@
 ;; Card 0915c022: the last pair is counted from what the body saw and noted, not only from the animals in view of one of them:
 ;; two cows in far corners of the plot, seen earlier by a search that noted them, are still a pair and are kept (get-food-last-pair.edn: the pair side by side).
+;; Should-succeed: a third cow beside the body is the surplus though the noted pair is out of its view: get-food and combat.hunt
+;; count the same (card 42fe4fd2: the hunt counted only the cows in view and refused :too-few, 0 meat).
 ;; Hunger is drained by RCON (food 9-10), hp 15; only a sword.
 {:defaults
  {:tags [:survival :get-food :animals]
@@ -17,4 +19,15 @@
          [:wait-s 8]
          [:job (jobs.survival.get-food {})]]
    :expect [{:no-event {:source :job :kind :food.killed} :for-s 90 :until {:source :job :kind :stopped :data {:reason :no-food}}}]
+   :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 2]]}
+  {:name "a-third-cow-is-hunted-and-the-pair-apart-kept"
+   :time :any
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 5 minecraft:generic"]
+         [:summon "cow" [20.5 0 28.5] "{NoAI:1b}"] [:summon "cow" [2.5 0 2.5] "{NoAI:1b}"] [:summon "cow" [9.5 0 16.5] "{NoAI:1b}"]
+         [:wait-s 3]
+         [:job (jobs.explore.search {:target "cow" :count 3 :scan-radius 24 :use-notes false :settings {:jobs.explore.search/max-legs 0}})]
+         [:wait-s 8]
+         [:job (jobs.survival.get-food {})]]
+   :expect [{:event {:source :job :kind :food.killed :data {:adults 3 :keep 2}} :within-s 90}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 2]]}]}

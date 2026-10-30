@@ -68,7 +68,7 @@
   Fragile (health at or below foods/::fragile-health, 6) with no food carried, it searches unknown ground only in the light with no hostile known near; walks to known food are priced by go-to's start check (all but 1 hp may be spent). With nothing else to try it writes a :food-too-dangerous entry (no :hungry) and ends condition-failed
   :too-dangerous after a refused search; the hungry trigger then rests (its :rest-s) while the body stays fragile
   (jobs.survival.get-food.risk). Not shut in a shelter, it first looks around from where it stands (once per place) so hostiles outside its view count.
-  Wheat is cut only by :field, in a zone or plan of its own. Babies, animals in another's zone or claim, animals in a zone or plan of the body's own (but for the :pen way) or inside a closed enclosure (::spare-pens), kinds in ::off-limits, and a breeding pair (2 up to ::keep-adults (2) adults of a kind in sight; a lone adult is hunted; kept even when starving, unless ::kept-lifted-below lifts it) are never hunted (:ignore-zones? lifts the others' zone only). Each animal chosen is a food.killed info with its name, cell, adults counted, :keep, food and the rule that allowed it; the data carries :killed. A chest in another's zone or claim is skipped and never taken from, even when starving
+  Wheat is cut only by :field, in a zone or plan of its own. Babies, animals in another's zone or claim, animals in a zone or plan of the body's own (but for the :pen way) or inside a closed enclosure (::spare-pens), kinds in ::off-limits, and a breeding pair (2 up to ::keep-adults (2) adults of a kind in sight and noted, counted as combat.hunt counts, jobs.lib.animal-spare/adults-of-kind; a lone adult is hunted; kept even when starving, unless ::kept-lifted-below lifts it) are never hunted (:ignore-zones? lifts the others' zone only). Each animal a hunt killed is a food.killed info with its name, cell, adults counted, :keep, food and the rule that allowed it; the data carries :killed. A chest in another's zone or claim is skipped and never taken from, even when starving
   (one get-food.skipped warning). A crop in another's zone or claim is dug only when the caller passed :ignore-zones?, as the last way, when no permitted crop, field or other way is left and the body is hungry with nothing edible carried (one
   get-food.trespass-last-resort warning). Without :ignore-zones? the foreign crops and chests seen are left and named in the no-food text.
   A cut call starts again from the world: carried food first, then the ways.
@@ -223,7 +223,7 @@
             (ctx/update-mem! c assoc-in [:chases id] tries)
             (when (or (not= :gave-up (:reason (:data e))) (>= tries (max-chases)))
               (ctx/update-mem! c update :skipped-animals (fnil conj []) id))
-            (animals/note-kill! c target)
+            (when (pos? (:killed (:data e) 0)) (animals/note-kill! c target))
             :again))))))
 
 ;; ------------------------------------------------------------------ bread

@@ -27,16 +27,6 @@
 
 (def food-animals #{"cow" "pig" "sheep" "chicken" "rabbit"})
 
-(defn noted-adults
-  "The uuids of adult animals of `kind` that live :seen notes (any body's) place within radius of the body and that are not among `seen-uuids`: a pair standing out of each other's sight is still a pair."
-  [c kind seen-uuids radius]
-  (let [me (u/self-pos c)]
-    (into #{}
-          (comp (filter #(and (= :seen (:kind %)) (= kind (:what %)) (:id %) (not (:baby %)) (not (seen-uuids (:id %)))
-                              (<= (u/flat-dist me (zipmap [:x :y :z] (:pos %))) radius)))
-                (map :id))
-          (notes/notes c))))
-
 (def meat "The raw meat each food animal drops." {"cow" "beef" "pig" "porkchop" "sheep" "mutton" "chicken" "chicken" "rabbit" "rabbit"})
 
 (def noted-range "Blocks from an animal another body noted that the walk toward it ends; its place is then looked at." 12)
@@ -128,8 +118,7 @@
         seen (look/seen-objs (:primitives c) {:radius radius :kind "passive" :names food-animals :max 16})
         adult-es (remove #(true? (.-baby %)) seen)
         seen-uuids (set (map #(.-uuid %) seen))
-        adults (merge-with + (frequencies (map #(.-name %) adult-es))
-                           (into {} (map (fn [k] [k (count (noted-adults c k seen-uuids radius))])) (distinct (map #(.-name %) adult-es))))
+        adults (into {} (map (fn [k] [k (spare/adults-of-kind c k adult-es seen-uuids radius)])) (distinct (map #(.-name %) adult-es)))
         self (.self (:primitives c))
         pens (atom [])
         starved? (and (<= (.-food self) lift) (not (meal/carries-food? self)))]
@@ -214,14 +203,13 @@
     (if (= :own-pen (:rule target)) target (await (pen-looked c opts target)))))
 
 (defn note-kill!
-  "Say which animal the hunt attacked and where, with the adults of its kind counted, the keep threshold, the food level
+  "Say which animal the hunt killed and where, with the adults of its kind counted, the keep threshold, the food level
   and the rule that allowed it, and keep it for the result."
   [c {animal :entity :keys [adults rule]}]
   (let [p (u/pos-of (.-pos animal))
         cell (mapv #(js/Math.floor %) [(:x p) (:y p) (:z p)])
         food (.-food (.self (:primitives c)))
         why {:adults adults :keep (spare/keep-adults) :food food :rule rule}]
-    (notes/note! c [{:kind :seen :what (.-name animal) :id (.-uuid animal) :pos cell :ttl-ms 0}])
     (ctx/update-mem! c update :killed (fnil conj []) (merge {:name (.-name animal) :pos cell} why))
     (ctx/emit! c :food.killed :info (merge {:name (.-name animal) :pos cell
                                             :text (str "hunted a " (.-name animal) " at " (pr-str cell)

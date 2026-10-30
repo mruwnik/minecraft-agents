@@ -4,6 +4,7 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.game :as game]
+            [engine.notes :as notes]
             [engine.settings :as settings]
             [jobs.lib.animals :as animals]
             [jobs.lib.foods :as foods]
@@ -72,10 +73,11 @@
                         :cell (mapv #(js/Math.floor %) [(:x p) (:y p) (:z p)])}))))
 
 (defn kill-event!
-  "Info animal.killed for the passive target last seen, when it died."
+  "Info animal.killed for the passive target last seen, when it died; its :seen note ends, so the pair a keep rule counts (jobs.lib.animal-spare/adults-of-kind) no longer holds it."
   [c target]
   (when-let [seen (:target-seen (ctx/mem c))]
     (when (= target (:entity seen))
+      (when (:uuid seen) (notes/note! c [{:kind :seen :what (:animal seen) :id (:uuid seen) :pos (:cell seen) :ttl-ms 0}]))
       (ctx/emit! c :animal.killed :info
                  (assoc seen :text (str (:by seen) " killed a " (:animal seen) " at " (pr-str (:cell seen)) " (" (name (:rule seen)) ")"))))))
 

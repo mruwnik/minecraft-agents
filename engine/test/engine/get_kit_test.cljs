@@ -414,6 +414,32 @@
           (is (= {:status :stopped :item "iron_pickaxe" :reason :no-food}
                  (select-keys @(:out s) [:status :item :reason]))))))))
 
+(defn too-dangerous-then-bread
+  "A get-food whose first call ends condition-failed :too-dangerous (fragile, a hostile near: a :later); the next one puts bread in the pack and is done."
+  [calls]
+  (assoc (get registry/jobs 'jobs.survival.get-food) :round
+         (fn ^:async stub-round [c]
+           (if (= 1 (swap! calls inc))
+             (ctx/end c :condition-failed {:reason :too-dangerous :why "zombie seen"})
+             (do (swap! (fake/state (:primitives c)) fake/give "bread" 12)
+                 (ctx/end c :done nil {:food 5}))))))
+
+(deftest a-hungry-body-refused-food-for-a-danger-waits-and-asks-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom 0)
+              s (start (hungry-world [] 5) {:items ["iron_pickaxe"] :explore false} f/sight-opts
+                       {'jobs.survival.get-food (too-dangerous-then-bread calls)})]
+          (loop [i 0]
+            (await (f/run-ticks s 1))
+            (when (and (< i 200) (= :not-done @(:out s))) (recur (inc i))))
+          (is (= 2 @calls) "the :too-dangerous refusal is waited out, then get-food runs again")
+          (is (= [1 1] [(count (f/events-of s :kit.later-wait)) (count (f/events-of s :kit.later-over))]))
+          (is (empty? (f/events-of s :kit.no-food)))
+          (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
+                 (select-keys @(:out s) [:status :item :reason]))))))))
+
 (deftest a-hurt-body-that-cannot-heal-stops-before-the-mining-even-with-a-fair-bar
   (async done
     (tu/run-async done

@@ -90,7 +90,7 @@
 (defn restarted
   "The job memory after a death: the children and the bill went with the body; the job starts from now."
   [m now]
-  (-> m (dissoc :children :bill :bill-done :covered :covered-done :fed :stop :bill-tries :bill-round :bill-material :later-fails) (assoc :since now)))
+  (-> m (dissoc :children :bill :bill-done :covered :covered-done :fed :stop :bill-tries :bill-round :bill-material :later-fails :food-later-fails) (assoc :since now)))
 
 (defn why-of
   "The text a child ending e gives for its stop: its data's :why, else its cause map's."
@@ -262,14 +262,14 @@
     (foods/hungry? (.-food self) (.-health self) nil)))
 
 (defn ^:async run-food!
-  "One get-food child round: :continue, nil when the body is fed or not hungry, or {:cause :why} when it could not be fed."
+  "One get-food child round: :continue, nil when the body is fed or not hungry, or {:kind :reason :cause :why} when it could not be fed."
   [c]
   (let [e (await (ctx/call c :food 'jobs.survival.get-food (food-args c)))
         cause (contract/cause-key e)]
     (cond
       (= :continue e) :continue
       (or (= :done (:kind e)) (= :not-hungry cause)) nil
-      :else {:cause cause :why (why-of e)})))
+      :else {:kind (:kind e) :reason cause :cause (:cause e) :why (why-of e)})))
 
 (defn ^:async run-arm!
   "One obtain child round for a sword (the best it can make), its worth the kit's: :continue, nil when armed, or {:cause :why} when it could not."
@@ -304,21 +304,39 @@
   [r]
   (or (some-> (get-in r [:cause :recheck-after-ms]) (/ 1000)) (cost/retry-s :kit-later)))
 
-(defn wait-later!
-  "For the bill's stop r when it ended condition-failed for a child's :later (the world may lift it; not obtain's
-  :no-source, nothing seen and no search, nor a pack that stayed full) and another bill round
-  is worth its price (cost/try-again? :kit-later, after the later stops in a row, a try the rest's seconds): the kit
-  waits with r's cause, rested for later-wait-s, and :continue; else nil."
-  [c r]
-  (let [fails (inc (:later-fails (ctx/mem c) 0))
+(defn rest-later!
+  "For a child's stop r ({:kind :reason :why :cause}) when it ended condition-failed for a :later (the world may lift it; not
+  obtain's :no-source, nothing seen and no search, nor a pack that stayed full) and another try is worth its price
+  (cost/try-again? :kit-later, after the later stops in a row counted under fails-key, a try the rest's seconds): the kit
+  waits with r's cause, rested for later-wait-s, and :continue; else nil. what and again name the try in the text."
+  [c r fails-key what again]
+  (let [fails (inc (get (ctx/mem c) fails-key 0))
         s (later-wait-s r)]
     (when (and (= :condition-failed (:kind r)) (not (#{:no-source :inventory-full} (:reason r))) (cost/try-again? c :kit-later {:fails fails :try-s s}))
-      (ctx/update-mem! c (fn [m] (-> m (dissoc :covered :covered-done :bill) (assoc :later-fails fails)
-                                     (update :bill-round (fnil inc 0)))))
+      (ctx/update-mem! c assoc fails-key fails)
       (ctx/emit! c :kit.later-wait :info {:cause (:reason r) :why (:why r) :fails fails :wait-s s
-                                          :text (str "gathering waits (" (:why r) "): running the bill again in " (js/Math.round s) " s")})
+                                          :text (str what " waits (" (:why r) "): " again " in " (js/Math.round s) " s")})
       (some-> (:child-wait c) (reset! (assoc (if (map? (:cause r)) (:cause r) {:reason (:reason r)}) :recheck-after-ms (* 1000 s))))
       :continue)))
+
+(defn wait-later!
+  "rest-later! for the bill's stop r; a rest runs the bill again in a fresh round."
+  [c r]
+  (when-let [w (rest-later! c r :later-fails "gathering" "running the bill again")]
+    (ctx/update-mem! c (fn [m] (-> m (dissoc :covered :covered-done :bill) (update :bill-round (fnil inc 0)))))
+    w))
+
+(defn food-later!
+  "rest-later! for get-food's stop r (:too-dangerous while the body is fragile with a hostile near): the food is looked for again after the rest."
+  [c r]
+  (rest-later! c r :food-later-fails "food" "looking for food again"))
+
+(defn food-over!
+  "Clear the food's later stops in a row once get-food ends other than condition-failed; the wait won (:kit.later-over) when the body was fed."
+  [c r]
+  (when (and (:food-later-fails (ctx/mem c)) (not= :condition-failed (:kind r)))
+    (when (nil? r) (ctx/emit! c :kit.later-over :info {:fails (:food-later-fails (ctx/mem c))}))
+    (ctx/update-mem! c dissoc :food-later-fails)))
 
 (defn later-over!
   "Clear the kit's later stops in a row once a bill round ends otherwise; the wait won (:kit.later-over) only when the bill is done."
@@ -384,11 +402,13 @@
 
           (and (:food a) (not (:hurt-fed (ctx/mem c))) (food-first? c))
           (let [r (await (run-food! c))]
+            (when-not (= :continue r) (food-over! c r))
             (cond (= :continue r) :continue
                   (nil? r) (do (when (food-first? c) (ctx/update-mem! c assoc :hurt-fed true)) :again)
-                  :else (do (ctx/emit! c :kit.no-food :warn {:cause (:cause r) :why (:why r) :food fp
-                                             :text (str "no food found (" (name (:cause r)) ")")})
-                            (finish! c items have (assoc (stop-of :nothing-possible {:reason :no-food} (str "hurt with no food to heal on, and none found (" (or (:why r) (name (:cause r))) "); mining on would risk death"))
+                  (food-later! c r) :continue
+                  :else (do (ctx/emit! c :kit.no-food :warn {:cause (:reason r) :why (:why r) :food fp
+                                             :text (str "no food found (" (name (:reason r)) ")")})
+                            (finish! c items have (assoc (stop-of :nothing-possible {:reason :no-food} (str "hurt with no food to heal on, and none found (" (or (:why r) (name (:reason r))) "); mining on would risk death"))
                                                          :item (first todo))))))
 
           (and (not (:covered-done (ctx/mem c))) (seq (or (:covered (ctx/mem c)) (covered-of version (:partial-first a) todo (:carried st)))))
@@ -413,14 +433,17 @@
           (and (:food a) (< fp food-cost/reserve-points) (not (:fed (ctx/mem c)))
                (seq (bill/furnace-short version todo (with-raw (:carried st)))))
           (let [r (await (run-food! c))]
-            (if (= :continue r)
-              :continue
+            (when-not (= :continue r) (food-over! c r))
+            (cond
+              (= :continue r) :continue
+              (and r (hungry? c) (food-later! c r)) :continue
+              :else
               (do (ctx/update-mem! c assoc :fed true)
                   (when r
-                    (ctx/emit! c :kit.no-food :warn {:cause (:cause r) :why (:why r) :food fp
-                                                     :text (str "no food found (" (name (:cause r)) ")")}))
+                    (ctx/emit! c :kit.no-food :warn {:cause (:reason r) :why (:why r) :food fp
+                                                     :text (str "no food found (" (name (:reason r)) ")")}))
                   (if (and r (hungry? c))
-                    (finish! c items have (assoc (stop-of :nothing-possible {:reason :no-food} (str "hungry with no food carried and none found (" (or (:why r) (name (:cause r))) "); mining ahead needs some"))
+                    (finish! c items have (assoc (stop-of :nothing-possible {:reason :no-food} (str "hungry with no food carried and none found (" (or (:why r) (name (:reason r))) "); mining ahead needs some"))
                                                  :item (first todo)))
                     :again))))
 

@@ -29,7 +29,7 @@
   within :radius of :center (the body's place at the first run),
   collecting the drops until :count of it are carried, in one call that yields only while a child waits on the world. The mobs come from the drops table
   (jobs.lib.hunting/raw-drops); an item no mob drops is impossible (:bad-args). A wool item hunts only sheep of that colour.
-  Never takes the last :keep adults of the kind (nil: 2 for animals, 0 for hostile mobs; with :keep nil a lone adult is taken, it is no pair); babies are never targets. Animals the body
+  Never takes the last :keep adults of the kind, counted in sight and, for a passive kind with no wool colour, noted out of sight as get-food counts (jobs.lib.animal-spare/adults-of-kind) (nil: 2 for animals, 0 for hostile mobs; with :keep nil a lone adult is taken, it is no pair); babies are never targets. Animals the body
   spares (jobs.lib.animal-spare: kinds in ::off-limits, animals in a zone or plan of its own or a closed enclosure unless ::spare-pens
   is false) are never targets either. Weapons: the call's :use :tools (default the best carried); a hostile kind with none gets a sword
   first (jobs.lib.need; a failed fetch ends the job with its cause).
@@ -99,6 +99,16 @@
   [c]
   (vec (coloured c (present-any c))))
 
+(defn adults-counted
+  "The adults the keep rule counts: those present, plus for a passive kind with no wool colour the noted ones out of sight
+  (jobs.lib.animal-spare/adults-of-kind, get-food's count)."
+  [c]
+  (let [es (present-any c)]
+    (if (or (color-of c) (hostile? c))
+      (count (present c))
+      (let [uuids (set (map #(.-uuid %) es))]
+        (reduce + (map #(spare/adults-of-kind c % es uuids (:radius (:args c))) (mobs c)))))))
+
 (defn spare-rules
   "The present animals of the :color the body leaves alone, as {id rule} (jobs.lib.animal-spare/why: :off-limits or :pen);
   the pair rule is :keep's."
@@ -140,7 +150,7 @@
         mob (mob-name c)
         seen (some-> (first (adults-within c (max radius (settings/get settings ::sight-radius)))) .-distance)
         nearest (if seen (min seen (:nearest-seen (ctx/mem c) ##Inf)) (:nearest-seen (ctx/mem c)))]
-    (cond-> {:reason :too-few :mob mob :keep (keep-of c) :in-range (count (present c)) :radius radius}
+    (cond-> {:reason :too-few :mob mob :keep (keep-of c) :in-range (adults-counted c) :radius radius}
       nearest (assoc :nearest (js/Math.round nearest)))))
 
 (defn note-nearest!
@@ -206,10 +216,10 @@
     {:reason :unarmed :killed 0 :mob (mob-name c) :text (str "hunt stopped: no weapon carried for a hostile " (mob-name c))}))
 
 (defn kept-back?
-  "Whether the present adults are all held back by the keep rule: at most `keep` of them, but a lone adult is no pair and
+  "Whether the adults counted (adults-counted) are all held back by the keep rule: at most `keep` of them, but a lone adult is no pair and
   is taken when :keep was not given (jobs.lib.animal-spare/allowed-by :lone)."
   [c keep]
-  (let [n (count (present c))]
+  (let [n (adults-counted c)]
     (and (<= n keep)
          (not (and (= 1 n) (nil? (:keep (:args c))))))))
 
@@ -299,7 +309,7 @@
 (defn allowed-by
   "Which animal-spare rule let the hunt take the adult e: :pen-taken, :surplus or :starved."
   [c e]
-  (let [adults (count (adults-within c (:radius (:args c))))]
+  (let [adults (adults-counted c)]
     (spare/allowed-by (keep-of c) adults (spare/penned? c (atom []) e))))
 
 (defn attack-opts
