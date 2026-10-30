@@ -632,6 +632,9 @@
     (is (= [["jobs.blocks.seal-opening" {:at [1 2 3]}] ["jobs.gather.mine" {:block "sand" :count 2}]] (nxt :flooded)))
     (is (= [["jobs.gather.mine" {:block "sand" :count 2}]] (nxt :no-tool)))))
 
+;; a sand measured cheap to get: the stay beside a killer is dearer than its worth
+(def cheap-sand {:jobs.lib.cost.value/gather-counts {"sand" {:s 1 :got 10}}})
+
 ;; the sand east is within reach (no walk to it), but a zombie killed the body beside it seconds ago: the dig's seconds there are priced
 (defn near-sand-by-a-death
   "The sand east within reach in the dark, a zombie death beside it age-ms ago (nil: none), sand west at -12, mine for n
@@ -652,7 +655,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (near-sand-by-a-death 4000 1)]
-          (await (run-ticks s 30))
+          (await (settings/with-settings cheap-sand (fn ^:async run [] (await (run-ticks s 30)))))
           (is (= [-12 64 0] (first (dug-cells s))))
           (is (= 1 (count (events-of s :near.risky-stay))))
           (is (some #(and (= -12 (:x (:pos %))) (pos? (:stay-s %))) @(:go-tos s)) (pr-str @(:go-tos s)))
@@ -677,7 +680,7 @@
       (fn ^:async t []
         (let [s (near-sand-by-a-death 4000 2)
               back? (fn [] (some #(= 3 (:x (:pos %))) @(:go-tos s)))]
-          (await (settings/with-settings {:jobs.lib.cost.death/memory-ms 10000}
+          (await (settings/with-settings (assoc cheap-sand :jobs.lib.cost.death/memory-ms 10000)
                    (fn ^:async run []
                      (await (run-until s 60 #(some #{[-12 64 0]} (dug-cells %))))
                      (is (not (back?)) "skipped while the death is fresh")

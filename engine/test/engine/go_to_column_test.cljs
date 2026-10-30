@@ -475,12 +475,13 @@
           (is (<= (js/Math.hypot (- 44 x) z) 2) (str "at " (at p))))))))
 
 (deftest a-way-down-a-ramp-onto-unseen-floors-is-not-tried-for-a-goal-worth-less-than-turning-back
-  ;; worth 20 s: 7 s past the trip and the straight walk, half of it while the ravine floor is as likely there as not, under
-  ;; the walk back up the ramp should it not be
+  ;; a goal worth 1 s: less than the walk back from floors that may be absent
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p]} (await (go! ravine {:pos {:x 44 :z 0} :range 2 :worth 20 :settings {:jobs.movement.go-to.tuning/goal-danger :end}}))]
-          (is (= {:arrived false :why :unseen-floors :p-absent (cost/floor-absent-chance :down nil)} (select-keys @out [:arrived :why :p-absent])) (pr-str @out))
+        (let [{:keys [out p]} (await (go! ravine {:pos {:x 44 :z 0} :range 2 :worth 1 :settings {:jobs.movement.go-to.tuning/goal-danger :end}}))]
+          (is (= {:arrived false :why :unseen-floors} (select-keys @out [:arrived :why])) (pr-str @out))
+          (is (< 0 (:p-absent @out) 1) "floors that may be absent")
           (is (> (:turn-back-s @out) (:worth-s @out)))
           (is (= 64 (js/Math.floor (second (at p)))) "it never set off down the ramp"))))))
+

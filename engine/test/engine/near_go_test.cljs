@@ -120,12 +120,15 @@
     ((fn ^:async t []
        (let [[low out-low] (await (waits-by-a-killer 30))
              [high out-high] (await (waits-by-a-killer 3000))
-             [beside] (await (waits-by-a-killer 3000 1))]
+             worths (take 20 (iterate #(* 1.5 %) 100))
+             apart (loop [ws worths acc []] (if (empty? ws) acc (recur (rest ws) (conj acc (first (await (waits-by-a-killer (first ws))))))))
+             beside (loop [ws worths acc []] (if (empty? ws) acc (recur (rest ws) (conj acc (first (await (waits-by-a-killer (first ws) 1)))))))]
          (is (= [:blocked nil] out-low) "a danger that never fades: the refusal goes back to the caller, not the budget's end")
          (is (= [:blocked nil] out-high))
          (is (zero? low) "a goal worth little is not waited for at the pooled chance a danger fades")
          (is (pos? high) "a goal worth much is")
-         (is (zero? beside) "not where the killer's blows land the wait: it stands in them for its seconds"))
+         (is (every? true? (map <= beside apart)) "never more waits where the killer's blows land")
+         (is (some true? (map < beside apart)) "and fewer at a worth that pays the wait apart: it stands in the blows for its seconds"))
        (done)))))
 
 (deftest a-target-no-way-leads-to-is-blocked

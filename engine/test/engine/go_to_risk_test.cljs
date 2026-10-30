@@ -22,6 +22,7 @@
             [jobs.lib.lava-risk :as lava-risk]
             [jobs.lib.look :as look]
             [jobs.lib.price :as price]
+            [jobs.lib.shelter.beds :as beds]
             [jobs.lib.reach :as reach]
             [jobs.lib.threat-field :as field]
             [jobs.lib.threats :as threats]
@@ -185,9 +186,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[blocks inventory said] [[hut-bed [] #"to sleep"] [{} [{:name "red_bed" :count 1}] #"waiting 1.5 s to sleep"]]]
+        (doseq [[blocks inventory carried?] [[hut-bed [] false] [{} [{:name "red_bed" :count 1}] true]]]
           (let [c (ready-test/ctx-of (-> night-hut (update :blocks merge blocks) (assoc :inventory inventory)))
-                [_ text {:keys [wait now-s wait-s]}] (planned-status c {:x 195 :y 64 :z 0})]
+                [_ text {:keys [wait now-s wait-s]}] (planned-status c {:x 195 :y 64 :z 0})
+                said (re-pattern (if carried? (str "waiting " (price/round1 (beds/sleep-s c nil)) " s to sleep") "to sleep"))]
             (is (= :sleep wait) (pr-str blocks inventory))
             (is (< wait-s now-s))
             (is (re-find said text) "a carried bed's sleep waits for its placing")))
