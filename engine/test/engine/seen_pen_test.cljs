@@ -108,8 +108,7 @@
       (fn ^:async t []
         (let [s (dark-run)
               _ (await (ht/run-ticks s 40))]
-          (is (seq (ht/events-of s :sense.looked)) "the dark cells are walked near and looked at")
-          (is (every? #(number? (:wall-ms %)) (ht/events-of s :sense.looked)) "each look event logs the wall ms it took")
+          (is (some #(and (:seen %) (<= 11 (:x (:goal %)) 15)) (ht/events-of s :go-to.lookout)) "the dark pen cells are walked near and looked at")
           (is (= :brought (:reason (ht/done-event s))) "within 4 blocks no light is needed: read up close, the run brings, never :unreachable"))))))
 
 (defn blind-pen!

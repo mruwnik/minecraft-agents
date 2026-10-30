@@ -116,7 +116,8 @@
   away from the rim on its far side). A cell still unknown after its look is no wall: the animal is not judged trapped."
   [c a]
   (let [{:keys [x y z]} (u/pos-of (.-pos a))
-        answer (pen-read/read (:primitives c) {:at {:x (js/Math.floor x) :y (js/Math.floor (+ y 0.01)) :z (js/Math.floor z)}
+        at {:x (js/Math.floor x) :y (js/Math.floor (+ y 0.01)) :z (js/Math.floor z)}
+        answer (pen-read/read (:primitives c) {:at at :near [(:x at) (:y at) (:z at)]
                                                :max-cells (settings/get spare/settings ::spare/pen-max-cells)})
         unk (when (= :unloaded (:reason answer)) (await (unseen-wall! c answer)))]
     (if unk
