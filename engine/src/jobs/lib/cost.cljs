@@ -309,6 +309,7 @@
 (def smelt-step table/smelt-step)
 (def smelt-price value/smelt-price)
 (def craft-step table/craft-step)
+
 (def detour-cost value/detour-cost)
 (def tour-cost value/tour-cost)
 (def tour-worth value/tour-worth)
@@ -333,6 +334,14 @@
   ([c kind {:keys [fails try-s]}]
    (> (value/chance-times (retry-chance kind (or fails (u/failures c))) (ctx/worth c))
       (or try-s (retry-s kind)))))
+
+(defn craft-step-s
+  "Expected seconds one craft step takes: a finished one's ::craft-step, or with the measured timeout share, a timeout's
+  seconds and the retries after it (retry-s :craft over the chance each wins, retry-chance :craft after the first failure)."
+  []
+  (let [{:keys [k n s]} (table/craft-timeouts)
+        p (/ k n)]
+    (+ (* (- 1 p) (craft-step)) (* p (+ s (/ (retry-s :craft) (retry-chance :craft 1)))))))
 
 (def turn-back-cost value/turn-back-cost)
 (def cover-tour-s value/cover-tour-s)

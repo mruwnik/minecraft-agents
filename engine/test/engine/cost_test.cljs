@@ -903,3 +903,10 @@
                ["a 2x2 of logs beside a pane" place {[0 64 0] (log "y") [0 64 1] (log "y") [0 65 0] (log "y") [1 64 0] #js {:name "glass_pane"}}]]]
         (is (= expected (price sensed [0 64 0])) what)))
     (is (< (cost/destroyed-s "wheat" "air" 2 false) (cost/destroyed-s "wheat" "air" 5 false)) "a crop grown further loses more")))
+
+(deftest a-craft-step-is-priced-with-its-timeouts-and-the-retries-after-them
+  (let [no-timeouts #(settings/with-settings {:jobs.lib.cost.table/craft-timeouts {:k 0 :n 100 :s 12}} cost/craft-step-s)
+        with #(settings/with-settings {:jobs.lib.cost.table/craft-timeouts {:k 10 :n 100 :s 12}} cost/craft-step-s)]
+    (is (= (cost/craft-step) (no-timeouts)) "none timed out: the finished step's seconds")
+    (is (= (+ (* 0.9 (cost/craft-step)) (* 0.1 (+ 12 (/ (cost/retry-s :craft) (cost/retry-chance :craft 1))))) (with)))
+    (is (> (cost/craft-step-s) (cost/craft-step)))))
