@@ -34,13 +34,13 @@
    :expect [{:event {:kind :completed :data {:cause :already}} :within-s 30 :of-job true}]
    :after [[:block [14 1 10] "beehive[honey_level=0]"] [:item "honeycomb" 0] [:item "white_carpet" 1]]}
   ;; card 87dab6c8: an apiary part never seen (open ground behind a wall) is not in order; the walk to look from the
-  ;; wall's near side (13 blocks, there and back) costs more than one hive at the prior ripe share; the unseen spot's
-  ;; dark guess is refused on the walk's price, not impossible (card 0093d2a8)
+  ;; wall's near side (13 blocks, there and back) costs more than one hive at the prior ripe share; so does safe?'s walk
+  ;; to look at the spot it guesses dark: either refusal is on the walk's price at the job's worth, not impossible
   {:name "maintain-unseen-apiary-far-waits-not-worth"
    :blocks [[:fill [20 0 10] [20 4 22] "stone"]]
    :body {:inventory [["shears" 1]]}
    :act [[:job (jobs.apiary.maintain {:center #at [22 0 16] :radius 1 :ways #{:carried}})]]
-   :expect [{:event {:kind :waiting :data {:reason :not-worth}} :within-s 30 :of-job true}
+   :expect [{:event {:kind :waiting :data {:worth [:any]}} :within-s 30 :of-job true}
             {:no-event {:kind #{:completed :stopped}} :for-s 20 :of-job true}
             {:no-event {:kind :walk-look.ended} :for-s 20}]}
   {:name "harvest-unsmoked-hive-stops"

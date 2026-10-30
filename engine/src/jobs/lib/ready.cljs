@@ -262,8 +262,8 @@
             look-text (str "the walk to look costs " (price/round1 (:hp look-way)) " hp, " (some-> (:s look) price/round1) " s")]
         (cond
           (and look-way (nil? look-s) (= :never (first stay)))
-          (contract/status :later :exposed (str (second stay) "; the walk to look costs " (price/round1 (:hp look-way)) " hp, more than its "
-                                                (price/round1 (ctx/worth c)) " s buy")
+          (contract/status :later :exposed (str (second stay) "; the walk to look costs " (price/round1 (:hp look-way)) " hp, more than the goal's "
+                                                (price/round1 (ctx/worth c)) " s buys")
                            (assoc data :worth (ctx/worth c) :recheck-after-ms walk-risk/recheck-ms))
           (not (look? stay-s)) stay
           (:child look-way) (-> stay
