@@ -295,6 +295,9 @@
                           (and (not door?) @back) (conj {:step :approach :pos @back})))
          ways (remove #(contains? (set drop-steps) (:step %)) ways)]
      (cond
+       (and (seq ways) (not (next ways)))
+       (first ways)
+
        (seq ways)
        (let [priced {:rest-s (rest-s-fn p goal) :risk-s (:risk-s opts) :item item :count count :may-dig? may-dig?}]
          (second (reduce (fn [[best-s best :as cur] w] (let [s (way-s p feet goal w priced)] (if (< s best-s) [s w] cur)))
