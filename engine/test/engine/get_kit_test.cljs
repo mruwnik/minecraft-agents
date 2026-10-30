@@ -410,6 +410,17 @@
           (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
                  (select-keys @(:out s) [:status :item :reason]))))))))
 
+(deftest with-a-stocked-chest-at-home-the-food-carried-for-the-walk-back-is-enough
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (hungry-world [{:name "bread" :count 5}] 16) {:items ["iron_pickaxe"] :explore false})]
+          (mem/write! (:store (:eng s)) :fetch/stock {:pos [4 64 4] :items {"bread" 40}} {:cap 64 :ttl :forever})
+          (await (f/run-ticks s 80))
+          (is (empty? (f/events-of s :kit.no-food)) "no get-food child: 25 points carry the body back to the chest")
+          (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
+                 (select-keys @(:out s) [:status :item :reason]))))))))
+
 (deftest a-fed-body-with-an-empty-pack-and-no-source-warns-and-goes-on
   (async done
     (tu/run-async done

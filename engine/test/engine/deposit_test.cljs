@@ -54,13 +54,13 @@
             (is (= {:kind :nothing-possible :cause :nothing-moved} (select-keys result [:kind :cause])))
             (is (<= (count (wt/calls p "transfer")) 3))))))))
 
-(deftest deposit-of-everything-keeps-the-three-day-food-reserve
+(deftest deposit-of-everything-keeps-the-food-reserve-less-what-it-put-away
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (wt/setup {:inventory [{:name "dirt" :count 5} {:name "bread" :count 20}] :containers {"10,64,0" []}})
               result (await (wt/ending-of eng job {:chest chest} 16))]
-          (is (= {"bread" 12} (wt/inv p)) "bread 12 is the 60 points; dirt and the 8 spare bread go")
+          (is (= {"bread" 5} (wt/inv p)) "the bread put in the chest is home food: a day and the walk back to it (5 bread) stay carried; the dirt and 15 bread go")
           (is (= :done (:kind result))))))))
 
 (deftest deposit-of-everything-keeps-the-units-the-register-holds

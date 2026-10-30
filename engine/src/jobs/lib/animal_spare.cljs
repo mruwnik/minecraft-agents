@@ -8,7 +8,6 @@
             [jobs.lib.access :as access]
             [jobs.lib.built :as built]
             [jobs.lib.pen :as pen]
-            [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -68,8 +67,9 @@
 (defn shears-at-hand
   "How the inventory gives shears: :carried, :craft (2 iron ingots), else nil."
   [inv]
-  (cond (pos? (storage/carried inv "shears")) :carried
-        (>= (storage/carried inv "iron_ingot") 2) :craft))
+  (let [carried (fn [n] (reduce + 0 (keep #(when (= n (:name %)) (:count %)) inv)))]
+    (cond (pos? (carried "shears")) :carried
+          (>= (carried "iron_ingot") 2) :craft)))
 
 (defn allowed-by
   "Which rule let a hunt take an adult why left alone: :pen-taken (::spare-pens false and it stood in a pen), :lone (the only

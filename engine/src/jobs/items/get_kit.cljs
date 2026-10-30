@@ -14,7 +14,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
-            [jobs.lib.cost.food :as food-cost]
+            [jobs.lib.home-food :as home-food]
             [jobs.lib.foods :as foods]
             [jobs.lib.need :as need]
             [jobs.lib.next-call :as next-call]
@@ -30,8 +30,8 @@
   (jobs.items.obtain.bill: the furnace material all pieces need together first, so the ore is mined and smelted in one go, then
   one piece after the other), with a :spend :job-time of ::job-time-s; the pieces are worn when it is done.
   While furnace material is still short (mining or smelting ahead; pure crafting needs no food) and fewer than
-  the 3-day food reserve (60 points) are carried (harmful food does not count), one jobs.survival.get-food child (with :explore;
-  it fills the pack to its :carry default, the reserve) runs before the bill (:food false: none). A child that stops warns kit.no-food; a hungry body (foods/hungry?, the hungry trigger's line) then stops {:reason :no-food}, a fed one goes on (the hungry trigger feeds it later) and tries again after the next bill round that ends in a retry. A body that cannot heal (food 0, or ready/hurt-cannot-heal? of a mine's :long work: too hurt for it with no food carried and the bar under 18) asks get-food before more work (once more if it is still so after a fed answer), and stops {:reason :no-food} when it finds none.
+  the body's food reserve (jobs.lib.home-food/carry-points: 3 days, less the home food it can walk back to) is carried (harmful food does not count), one jobs.survival.get-food child (with :explore;
+  it fills the pack to its :carry default, that reserve) runs before the bill (:food false: none). A child that stops warns kit.no-food; a hungry body (foods/hungry?, the hungry trigger's line) then stops {:reason :no-food}, a fed one goes on (the hungry trigger feeds it later) and tries again after the next bill round that ends in a retry. A body that cannot heal (food 0, or ready/hurt-cannot-heal? of a mine's :long work: too hurt for it with no food carried and the bar under 18) asks get-food before more work (once more if it is still so after a fed answer), and stops {:reason :no-food} when it finds none.
   With furnace material short and no weapon carried, one jobs.items.obtain child first makes a sword (iron, stone or wooden); if it cannot, kit.unarmed warns and the work goes on.
   Items that need no furnace material, and those the carried material covers, are made first (:partial-first, the default) so the job stops naming only the shortfall; with :partial-first false the list order rules and the job stops at the first item that cannot be made.
   With :explore, a bill that stops because a gathering ended (a mine that stopped, no way up) runs again (kit.retry, the pieces newly covered made first), while another is worth its price (cost/try-again? :kit-later). A bill that stops condition-failed for a child's :later (one the world may lift, not :no-source; one with a wait reason, such as :exposed, jobs.lib.need/call! waits out itself) rests with that cause (kit.later-wait; its :recheck-after-ms, else the measured seconds of value/::retry-counts :kit-later) and runs again while another round is worth its price (cost/try-again? :kit-later at the kit's worth); a :never stop ends the kit with its cause.
@@ -443,7 +443,7 @@
                                                      :text (str "no sword could be made (" (name (:cause r)) "), going on unarmed")}))
                   :again)))
 
-          (and (:food a) (< fp food-cost/reserve-points) (not (:fed (ctx/mem c)))
+          (and (:food a) (< fp (home-food/carry-points c)) (not (:fed (ctx/mem c)))
                (seq (bill/furnace-short version todo (with-raw (:carried st)))))
           (let [r (await (run-food! c))]
             (when-not (= :continue r) (food-over! c r))

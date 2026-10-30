@@ -43,7 +43,7 @@
 
 (defn keep-counts
   "{name n}: how many of each carried name stay carried. Protected names keep
-  their whole total; food names share carry-food, best food-points first;
+  their whole total; food names share carry-food, best food-points first (nil: held keeps the reserve);
   shelter-blocks keep up to carry-blocks each, seeds up to carry-seeds each, carry-items whole, held ({name n}, the reserve
   register) at least n; the rest 0."
   [inventory {:keys [carry-food carry-blocks carry-seeds carry-items]} held]
@@ -52,9 +52,7 @@
         food (->> names
                   (filter #(and (not (protected? %)) (foods/edible? %)))
                   (sort-by (juxt #(- (foods/points %)) identity)))
-        food-floors (if carry-food
-                      (shared-floors food totals carry-food)
-                      (select-keys (cost/food-reserve inventory) food))
+        food-floors (when carry-food (shared-floors food totals carry-food))
         capped (fn [pred n] (into {} (for [[k v] totals :when (pred k)] [k (min v (or n 0))])))]
     (merge-with max
                 (merge (zipmap names (repeat 0))

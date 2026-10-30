@@ -3,7 +3,7 @@
   :by \"agent\"|job instance id :why :until ms|nil :not #{chooser..} the choosers it does not bind}. Writing an id replaces its entry. An entry counts while :until has
   not passed and its :by job still lives. It covers carried units only.
   (entries view) the live entries. (rows c chooser) [{:name :count :strength}] of the carried units reserved, strongest
-  first: the register plus the built-in rules (the 3-day food reserve, precious food, one carried bed while no home bed is placed (not for the :night chooser: that bed is the camp bed), a chooser's
+  first: the register plus the built-in rules (the food reserve, jobs.lib.home-food/carry-points, precious food, one carried bed while no home bed is placed (not for the :night chooser: that bed is the camp bed), a chooser's
   :choose/override :avoid names), each at strength 1. (held c chooser) {name count} of those units, the one answer to
   \"what may this chooser not use\". (price c name n) the extra cost of using n units of name: the units over the free
   surplus, lowest strength first, each (cost/reserve-cost value strength); ##Inf when one is strength 1.
@@ -16,6 +16,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.food :as food]
             [jobs.lib.foods :as foods]
+            [jobs.lib.home-food :as home-food]
             [jobs.lib.util :as u]
             [clojure.string :as str]))
 
@@ -66,7 +67,7 @@
     (merge-with max
                 (when (and bed (not= :night chooser) (not (mem/place (ctx/view c) :bed))) {bed 1})
                 (whole (filter foods/precious (map :name inv)))
-                (food/food-reserve inv)
+                (when (some (comp food/reserve-food? :name) inv) (food/food-reserve inv (home-food/carry-points c)))
                 (whole (:avoid (overrides c chooser))))))
 
 (defn hold!

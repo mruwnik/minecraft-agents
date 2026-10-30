@@ -154,11 +154,11 @@
            (ord/keep-counts inventory {:carry-food 16 :carry-blocks 64 :carry-seeds 16} nil))
         "beef (8 points) keeps its 12, bread (5) the 4 left of 16; cobblestone, dirt and planks each keep up to 64, other blocks none")))
 
-(deftest keep-counts-without-carry-food-uses-the-food-reserve
+(deftest keep-counts-without-carry-food-keeps-the-food-the-reserve-holds
   (is (= {"bread" 12 "apple" 0 "golden_apple" 2 "dirt" 0}
          (ord/keep-counts [{:name "bread" :count 20} {:name "apple" :count 5} {:name "golden_apple" :count 2} {:name "dirt" :count 9}]
-                         {:carry-food nil :carry-blocks 0} nil))
-      "the 60-point reserve is 12 bread; golden apples are kept whole, outside the reserve")
+                         {:carry-food nil :carry-blocks 0} {"bread" 12}))
+      "the reserve register's food (12 bread) stays; golden apples are kept whole, outside the reserve")
   (is (= {"golden_apple" 2 "bread" 0}
          (ord/keep-counts [{:name "golden_apple" :count 2} {:name "bread" :count 3}] {:carry-food 0 :carry-blocks 0} nil))))
 

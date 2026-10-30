@@ -10,6 +10,7 @@
             [jobs.lib.escape :as escape]
             [jobs.lib.cost.answer :as answer]
             [jobs.lib.cost.caught :as caught]
+            [jobs.lib.cost.food :as food-cost]
             [jobs.lib.cost.death :as death]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.cost.ways :as ways]
@@ -115,11 +116,15 @@
   (is (= {} (cost/food-reserve (stack "golden_apple" 3 "enchanted_golden_apple" 1))))
   (is (= {} (cost/food-reserve []))))
 
-(deftest food-short-is-the-points-missing-from-the-reserve
-  (is (= 60 (cost/food-short [])))
-  (is (= 35 (cost/food-short (stack "bread" 5))))
-  (is (= 0 (cost/food-short (stack "bread" 20))))
-  (is (= 60 (cost/food-short (stack "golden_apple" 3 "rotten_flesh" 9)))))
+(deftest carry-points-takes-home-food-off-the-reserve-down-to-the-walk-back
+  (are [home points] (= points (food-cost/carry-points home))
+    [] 60
+    [{:points 0 :walk-s 10}] 60
+    [{:points 320 :walk-s 0}] 20
+    [{:points 320 :walk-s 600}] 30
+    [{:points 25 :walk-s 0}] 35
+    [{:points 25 :walk-s 0} {:points 25 :walk-s 60}] 20
+    [{:points 320 :walk-s 6000}] 60))
 
 (def ff-boots (fn [lvl] {:feet {:name "iron_boots" :enchants [{:name "feather_falling" :lvl lvl}]}}))
 

@@ -36,7 +36,7 @@
     pumpkin, hay, cocoa) are carried above the keep. Tools, bread and other non-crop food are never stored.
   The keep, per name, is the largest of: the sowing reserve (twice the number of beds, farmland or untilled ground cells of
   a box, or twice the planned cells of each crop of a plan), a backup stack (64) of each seed type, the units the reserve
-  register holds (jobs.lib.reserve: the 3-day food reserve, best food first; agent entries) and the :carry entry. Harvested
+  register holds (jobs.lib.reserve: the food reserve, best food first; agent entries) and the :carry entry. Harvested
   crops above it are stored; seed above it is composted.
   Skipped steps are booked {:skipped reason}: :nothing-blocked, :no-composter, :no-surplus-seed, :no-chest, :nothing-to-store, or
   :declined when the child declined.

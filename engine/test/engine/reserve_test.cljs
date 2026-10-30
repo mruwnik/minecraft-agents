@@ -10,13 +10,14 @@
 
 (defn body
   "A ctx holding items, with register entries (maps) at time 1000 and live job instances (ids)."
-  [items entries & {:keys [jobs overrides home-bed]}]
+  [items entries & {:keys [jobs overrides home-bed stock]}]
   (let [add (fn [d kind data policy] (mem/add-entry d kind {:t 0 :data data} policy))
         data (as-> mem/empty-data d
                (reduce #(add %1 :reserve %2 reserve/policy) d entries)
                (reduce #(add %1 (mem/job-kind (first %2)) (second %2) mem/job-policy) d (map #(if (string? %) [% {}] %) jobs))
                (reduce #(add %1 :choose/override %2 {:cap 20 :ttl :forever}) d overrides)
-               (cond-> d home-bed (add :bed {:pos home-bed} mem/place-policy)))]
+               (cond-> d home-bed (add :bed {:pos home-bed} mem/place-policy))
+               (reduce #(add %1 :fetch/stock %2 {:cap 64 :ttl :forever}) d stock))]
     {:primitives (tu/fake {:inventory items}) :view (fn [] {:data data :now 1000})}))
 
 (deftest reserve-cost-is-value-times-odds
@@ -63,6 +64,14 @@
   (let [c (body [(item "golden_apple" 2) (item "stone_pickaxe" 1) (item "bread" 4)]
                 [])]
     (is (= {"golden_apple" 2 "bread" 4} (reserve/held c :tools)))))
+
+(deftest the-food-reserve-counts-a-booked-chest-of-food-the-body-can-walk-back-to
+  (are [stock held] (= held (reserve/held (body [(item "bread" 20)] [] :stock stock) :deposit))
+    [] {"bread" 12}
+    [{:pos [3 64 0] :items {"bread" 64}}] {"bread" 5}
+    [{:pos [3 64 0] :items {"wheat" 90}}] {"bread" 5}
+    [{:pos [3 64 0] :items {"cobblestone" 64}}] {"bread" 12}
+    [{:pos [900 64 0] :items {"bread" 64}}] {"bread" 12}))
 
 (deftest one-carried-bed-is-held-until-a-home-bed-is-placed
   (let [items [(item "red_bed" 2) (item "white_bed" 1)]]

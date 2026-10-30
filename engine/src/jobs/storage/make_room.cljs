@@ -30,7 +30,7 @@
   What is thrown, like a player: names with no keep first, cheapest worth first (granite, tuff and gravel before flowers,
   saplings and leaf litter; worth is jobs.lib.cost item-value), then the surplus above the
   keep of cobblestone, dirt and planks; ores, fuel and the like are not thrown (below the toss-below setting only). Never put away or thrown: tools, weapons, armour and buckets. Food is never thrown and is put away only above
-  :carry-food (best food-points first; the body's 3-day food reserve when nil). Golden apples are never put away.
+  :carry-food (best food-points first; the body's food reserve, jobs.lib.reserve, when nil). Golden apples are never put away.
   Cobblestone, dirt and each kind of planks (what shelter, mend, furnace and tool jobs spend) are each kept up to
   :carry-blocks; seeds up to :carry-seeds each; other blocks are not kept. Names in :carry-items are kept whole.
   Steps, in order:
@@ -62,7 +62,7 @@
 
 (a/defargs args
   {:free {:doc "done once at least this many slots are free (above the trigger's 2, so it does not refire at once)" :spec (a/int-in 0 nil) :default 4}
-   :carry-food {:doc "food items kept carried (best food by points first); the body's food reserve (jobs.lib.cost/food-reserve) when nil" :spec (a/int-in 0 nil) :default (:carry-food ord/keep-defaults)}
+   :carry-food {:doc "food items kept carried (best food by points first); the body's food reserve (jobs.lib.reserve) when nil" :spec (a/int-in 0 nil) :default (:carry-food ord/keep-defaults)}
    :carry-blocks {:doc "cobblestone, dirt and each kind of planks kept carried, each up to this many" :spec (a/int-in 0 nil) :default (:carry-blocks ord/keep-defaults)}
    :carry-items {:doc "item names kept carried whole, never put away or thrown (a caller's own inputs)" :spec (a/coll-of a/name?) :default (:carry-items ord/keep-defaults)}
    :carry-seeds {:doc "each kind of seeds kept carried up to this many (a farming body sows them)" :spec (a/int-in 0 nil) :default (:carry-seeds ord/keep-defaults)}

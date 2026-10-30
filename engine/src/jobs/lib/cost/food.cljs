@@ -16,33 +16,43 @@
 
 (def reserve-points (* days points-per-day))
 
+(def day-s "Seconds a Minecraft day lasts." 1200)
+
+(def margin-points "Food a trip carries beyond the walk back to home food: a day, for the delays on the way." points-per-day)
+
+(defn carry-points
+  "Food points the body must carry, given its home food [{:points :walk-s}] (seen stocked chests, ripe crops, pen
+  surplus; walk-s the walk back to it): the 3-day reserve less that food, but never less than the hunger of the walk
+  back to the nearest of it at points-per-day plus margin-points, nor more than the reserve. No home food: the reserve."
+  [home]
+  (let [home (filter (comp pos? :points) home)]
+    (if (empty? home)
+      reserve-points
+      (let [back (apply min (map :walk-s home))
+            trip (+ margin-points (* back (/ points-per-day day-s)))]
+        (min reserve-points (max trip (- reserve-points (reduce + (map :points home)))))))))
+
 (defn reserve-food?
   "Food that counts toward the reserve: edible and not precious."
   [name]
   (and (foods/edible? name) (not (contains? foods/precious name))))
 
 (defn food-reserve
-  "{name count}: the carried food to keep, best (most hunger points) first, until it holds reserve-points; the last
-  name keeps only what is still needed."
-  [inventory]
+  "{name count}: the carried food to keep, best (most hunger points) first, until it holds points (default
+  reserve-points); the last name keeps only what is still needed."
+  ([inventory] (food-reserve inventory reserve-points))
+  ([inventory points]
   (let [totals (reduce (fn [m {:keys [name count]}] (cond-> m (reserve-food? name) (update name (fnil + 0) count)))
                        {} inventory)]
     (loop [names (sort-by (juxt #(- (foods/points %)) identity) (keys totals))
-           need reserve-points
+           need points
            kept {}]
       (if (or (empty? names) (<= need 0))
         kept
         (let [n (first names)
               per (foods/points n)
               take-n (min (totals n) (js/Math.ceil (/ need (max per 1))))]
-          (recur (rest names) (- need (* per take-n)) (assoc kept n take-n)))))))
-
-(defn food-short
-  "Hunger points the inventory lacks to hold the reserve (0 when it holds it)."
-  [inventory]
-  (let [held (reduce (fn [n {:keys [name count]}] (cond-> n (reserve-food? name) (+ (* count (foods/points name)))))
-                     0 inventory)]
-    (max 0 (- reserve-points held))))
+          (recur (rest names) (- need (* per take-n)) (assoc kept n take-n))))))))
 
 (defn precious-worth
   "Seconds what precious food item gives body is worth, one sum: the hp it adds (precious/hp-worth: its regeneration up

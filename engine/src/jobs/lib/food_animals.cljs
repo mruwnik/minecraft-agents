@@ -4,13 +4,13 @@
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
-            [jobs.lib.cost.food :as food-cost]
             [engine.game :as game]
             [engine.notes :as notes]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.foods :as foods]
+            [jobs.lib.home-food :as home-food]
             [jobs.lib.meal :as meal]
             [jobs.lib.look :as look]
             [jobs.lib.pen-read :as pen-read]
@@ -28,6 +28,11 @@
 (def food-animals #{"cow" "pig" "sheep" "chicken" "rabbit"})
 
 (def meat "The raw meat each food animal drops." {"cow" "beef" "pig" "porkchop" "sheep" "mutton" "chicken" "chicken" "rabbit" "rabbit"})
+
+(defn carry
+  "The food points get-food fills the pack to: its :carry, else the body's reserve (home-food/carry-points)."
+  [c]
+  (or (:carry (:args c)) (home-food/carry-points c)))
 
 (def noted-range "Blocks from an animal another body noted that the walk toward it ends; its place is then looked at." 12)
 
@@ -63,7 +68,7 @@
   (let [p (:primitives c)
         pts (or (foods/points item) 1)
         drops (or (cost/kill-drops (cost/meat-animal item) item :version (game/version-of p)) cost/expected-drops)
-        short (max 0 (- (:carry (:args c) food-cost/reserve-points) (foods/stock-points (u/inventory p))))
+        short (max 0 (- (carry c) (foods/stock-points (u/inventory p))))
         n (min drops (/ short pts))
         stock (* (cost/meat-factor (animals-seen c (cost/meat-animal item)) (meat-opts))
                  (:value (cost/item-value [{:name item :count n}])))]
@@ -79,14 +84,15 @@
   points the pack lacks of the :carry reserve."
   [c]
   (let [p (:primitives c)
-        short (max 0 (- (:carry (:args c) food-cost/reserve-points) (foods/stock-points (u/inventory p))))]
+        short (max 0 (- (carry c) (foods/stock-points (u/inventory p))))]
     (max (cost/food-worth (.-food (.self p)) (.-health (.self p))) (cost/food-search-worth short))))
 
 (defn noted-targets
   "The food animals a :seen note (any body's) places anywhere whose meat may be worth the walk (noted-benefit over
   noted-cost), as the notes, cheapest first by noted-price, skipping the ids in `done`, babies, the animals tried and those proven gone (spare/gone? within the scan `radius`); not cut at a radius."
   [c done radius]
-  (let [me (u/self-pos c)
+  (let [c (assoc-in c [:args :carry] (carry c))
+        me (u/self-pos c)
         skipped (set (:skipped-animals (ctx/mem c)))]
     (->> (notes/notes c)
          (filter #(and (= :seen (:kind %)) (contains? food-animals (:what %)) (:id %) (:pos %) (not (:baby %))
