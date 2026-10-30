@@ -133,16 +133,19 @@
 (defn rise-left-s
   "Seconds the climb from end up rise-left to goal takes: the cheaper of as many new stair steps (new-stair-step-s) and a
   pillar (cost/pillar-s: its unseen blocks, those past the carried climb blocks left fetched), none when a cell over end
-  it climbs into is seen solid (rock overhead)."
-  [p end goal left]
+  it climbs into is seen solid (rock overhead); a stair is none (##Inf) when a seen cell over end is not diggable? (may-dig?)."
+  ([p end goal left] (rise-left-s p end goal left (constantly true)))
+  ([p end goal left may-dig?]
   (let [n (rise-left end goal)
         block-at (escape/block-at-of p)
         unseen? (escape/unseen-of p)
-        open? (every? #(or (unseen? %) (bs/passable? (block-at %))) (map #(escape/up end %) (range 2 (+ n 2))))
-        stair-s (* n (new-stair-step-s p))]
+        over (map #(escape/up end %) (range 2 (+ n 2)))
+        open? (every? #(or (unseen? %) (bs/passable? (block-at %))) over)
+        cuttable? (every? #(or (unseen? %) (escape/diggable? block-at may-dig? %)) over)
+        stair-s (if cuttable? (* n (new-stair-step-s p)) ##Inf)]
     (cond (zero? n) 0
           open? (min stair-s (cost/pillar-s (wworld/unseen-share p) n (escape/unseen-pillar-blocks p end n) (max 0 (- n left))))
-          :else stair-s)))
+          :else stair-s))))
 
 (defn stair-floors
   "The floor cells of stair way e's steps from feet."
@@ -175,7 +178,7 @@
   the door toward goal from its cell when there is one), the climb left from where it leaves the body (rise-left-s, with
   the count of carried climb block item it leaves), the walk on from the top of that climb (rest-s, rest-s-fn), and, with
   risk-s, what the dangers on its cells cost over those seconds ((risk-s cells goal work-s): go-to's :risk-s)."
-  [p feet goal e {:keys [rest-s risk-s item count]}]
+  [p feet goal e {:keys [rest-s risk-s item count may-dig?] :or {may-dig? (constantly true)}}]
   (let [[walk from e] (if (= :approach (:step e))
                         (let [pos (:pos e)
                               door (some->> (escape/heading pos goal) escape/heading-names (hash-map :step :clear-path :heading))]
@@ -183,7 +186,7 @@
                         [0 feet e])
         end (if e (way-end p from goal e) from)
         left (- (or count 0) (if e (spent-blocks p from item e) 0))
-        work (+ walk (if e (price p from e) 0) (rise-left-s p end goal left))
+        work (+ walk (if e (price p from e) 0) (rise-left-s p end goal left may-dig?))
         top (escape/up end (rise-left end goal))]
     (+ work (rest-s top)
        (if risk-s (risk-s (vec (dedupe (concat [feet] (if e (way-cells from e end) [from]) (map #(escape/up end %) (range 1 (inc (rise-left end goal)))) [top]))) goal work) 0))))
@@ -289,7 +292,7 @@
                           (and (not door?) @back) (conj {:step :approach :pos @back})))]
      (cond
        (seq ways)
-       (let [priced {:rest-s (rest-s-fn p goal) :risk-s (:risk-s opts) :item item :count count}]
+       (let [priced {:rest-s (rest-s-fn p goal) :risk-s (:risk-s opts) :item item :count count :may-dig? may-dig?}]
          (second (reduce (fn [[best-s best :as cur] w] (let [s (way-s p feet goal w priced)] (if (< s best-s) [s w] cur)))
                          [##Inf (first ways)] ways)))
 

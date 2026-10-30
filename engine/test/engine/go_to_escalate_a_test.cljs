@@ -146,6 +146,7 @@
     (is (= (cost/pillar-s share 3 0 2) (escape-way/rise-left-s p [1 64 0] [1 68 0] 1)) "2 of them fetched")
     (is (< (cost/pillar-s share 3 0) (cost/pillar-s share 3 0 2)))
     (is (= (* 3 (escape-way/new-stair-step-s p)) (escape-way/rise-left-s p [0 64 0] [0 68 0] 3)) "rock over the head: a pillar cannot climb")
+    (is (= ##Inf (escape-way/rise-left-s p [0 64 0] [0 68 0] 3 (constantly false))) "rock over the head that may not be cut: no climb")
     (is (zero? (escape-way/rise-left-s p [0 64 0] [0 65 0] 0)) "a step up is a walk")))
 
 (deftest escape-choose-cuts-the-planks-door-nobody-claims-else-rim-pillars
