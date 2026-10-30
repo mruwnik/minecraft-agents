@@ -163,6 +163,11 @@
       (seq mobs) (assoc :seen-mobs mobs)
       (seq named) (assoc :top-mobs (vec (take (cfg/top-n) named)))))))
 
+(defn numbers
+  "The priced numbers of a decision ({:value :chance :cost :parts}), as every entry that records one carries them."
+  [decided]
+  (select-keys decided [:value :chance :cost :parts]))
+
 (defn ev-worth
   "Seconds the pile of estimate e is worth the body that fetches it: its value times the chance of surviving the trip
   (jobs.lib.cost/survived-worth), to be set against the cost, whose danger prices the death."

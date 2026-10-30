@@ -51,19 +51,10 @@
       (let [r (recovered eng)]
         (estimate/decision-text (if (= :skip (:decision r)) :skip :fetch) r (cfg/margin)))))
 
-(defn num-after [re text] (some-> (re-find re text) second js/parseFloat))
-
 (defn decided-numbers
-  "{:value :chance :cost :parts} the run's decision text records (to one decimal), a danger skip's too."
+  "{:value :chance :cost :parts} the run's decision records: a danger skip's remembered entry, else the :recovered entry."
   [eng]
-  (let [text (decided-text eng)]
-    {:value (num-after #"value ([0-9.]+)" text)
-     :chance (- 1 (/ (or (num-after #"x ([0-9.]+)% survive" text) 100) 100))
-     :cost (num-after #", cost ([0-9.]+)" text)
-     :parts (into {} (for [k [:trip :walk :danger :collect]
-                           :let [n (num-after (re-pattern (str "(?:\\(|, )" (name k) " ([0-9.]+)")) text)]
-                           :when n]
-                       [k n]))}))
+  (estimate/numbers (or (dt/danger-remembered eng) (recovered eng))))
 
 (defn near? [a b] (< (js/Math.abs (- a b)) 0.2))
 
@@ -171,11 +162,20 @@
     (await (run-until-empty eng 20))
     eng))
 
+(defn ^:async smallest-guarding-pack
+  "The least pack (doubling from one skeleton, up to 32) whose recorded decision no longer holds the fetch by the cost lib's worth of the pile times the chance of living through the walk."
+  []
+  (loop [n 1]
+    (let [eng (await (kit-run n))]
+      (if (or (>= n 32) (not (fetch-holds? (decided-numbers eng))))
+        n
+        (recur (* 2 n))))))
+
 (deftest a-kit-pile-inside-a-skeleton-packs-range-is-left-though-the-walk-skirts-it
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [guarded (await (kit-run 12))
+        (let [guarded (await (kit-run (await (smallest-guarding-pack))))
               free (await (kit-run 0))
               left (decided-numbers guarded)
               taken (decided-numbers free)]

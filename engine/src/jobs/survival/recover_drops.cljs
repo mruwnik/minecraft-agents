@@ -141,7 +141,9 @@
   [c entry decided hold-ms]
   (ctx/update-mem! c #(-> % (dissoc :decided) (assoc :hostile-cut true)))
   (dth/save-trip! c)
-  (ctx/remember! c :recover-danger {:death-t (:t entry) :until (+ (ctx/now c) hold-ms) :text (est/decision-text :skip decided (cfg/margin)) :mobs (:seen-mobs decided)} cfg/danger-policy)
+  (ctx/remember! c :recover-danger (merge (est/numbers decided)
+                                          {:death-t (:t entry) :until (+ (ctx/now c) hold-ms) :text (est/decision-text :skip decided (cfg/margin)) :mobs (:seen-mobs decided)})
+                 cfg/danger-policy)
   (if (:retry (:args c))
     (ctx/end c :condition-failed :danger {:top-mobs (:top-mobs decided) :hold-s (js/Math.round (/ hold-ms 1000)) :pos (:pos (:data entry))})
     :next))
