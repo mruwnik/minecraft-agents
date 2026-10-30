@@ -66,6 +66,16 @@
                       (let [s (ctx/child-status c (gather-slot need) (:job need) (:args need))]
                         (or (composite/startable? s) (lights-itself? c (contract/status-cause s))))))))))
 
+(defn seen-refusal
+  "The start status of the first seen raw need's child when it declines to start (its readiness or price), else nil:
+  a seen source the gather cannot take now is not one never seen."
+  [c names n]
+  (when-let [need (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c))) first)]
+    (when (and (seen-of c need) (not (tools-wanted c names need)))
+      (let [need (with-block c need)
+            s (ctx/child-status c (gather-slot need) (:job need) (:args need))]
+        (when-not (composite/startable? s) s)))))
+
 (defn trees-unreachable?
   "Whether a seen log need's child declines :no-tree (the logs seen are not ones it can fell): the search looks
   elsewhere."
