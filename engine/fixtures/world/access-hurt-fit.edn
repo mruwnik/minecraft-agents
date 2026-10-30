@@ -59,4 +59,17 @@
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :pillar}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :low-health}} :for-s 40 :until {:source :job :kind :go-to.escalated}}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 80 :of-job true}]
-   :after [[:body-near [22.5 4 16.5] 2]]}]}
+   :after [[:body-near [22.5 4 16.5] 2]]}
+  {:name "hurt-body-stair-down-bridges-flat-over-a-void"
+   ;; 3 hp, food under 18 and none carried: only food heals; the stair passes its own fit and its flat bridge over the void
+   ;; (x 11..13 at y 9, void under) runs under it, not under the bridge's own :long food wait
+   :plot {:height 24}
+   :blocks [[:fill [2 0 8] [30 9 24] "stone"] [:fill [7 0 8] [13 8 24] "air"] [:fill [11 9 8] [13 9 24] "air"]]
+   :body {:at [10.5 10 16.5] :yaw 270 :inventory [["iron_pickaxe" 1] ["cobblestone" 16] ["torch" 8]] :effects [["hunger" 4 255]]}
+   :act [[:wait-s 6]
+         [:rcon "damage $BODY 17 minecraft:generic"]
+         [:job (jobs.access.stair {:dir :down :heading :east :steps 4 :ways #{:carried}})]]
+   :expect [{:event {:source :job :kind :completed :data {:steps 4}} :within-s 150 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason :low-health}} :for-s 150 :until {:source :job :kind :completed}}]
+   :after [[:not-block [11 9 16] "air"] [:not-block [12 9 16] "air"]]
+   :limit-s 160}]}
