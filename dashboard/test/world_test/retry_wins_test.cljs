@@ -46,15 +46,14 @@
     (is (< (abs (- (+ (:win walk) (:fail walk)) (+ (:win craft) (:fail craft)))) 0.01) "the craft prior has the walk's spread")
     (is (= 0.5 (/ (:win craft) (+ (:win craft) (:fail craft)))) "and keeps its own mean")))
 
-(deftest a-risky-wait-refusal-then-the-stay-allowed-is-a-won-risky-stay-retry
-  (let [ev (fn [kind t] (pr-str {:generation-id "g" :time-ms t :source :job :kind kind :context {:job-id "j/x"} :data {}}))
-        {:keys [risky-stay]} (r/report (keep r/scan-line [(ev :near.risky-wait 0) (ev :near.risky-wait 5000) (ev :near.risky-over 10000)]))]
-    (is (= {:won 1 :retries 2 :calls 1 :try-s 5} (select-keys risky-stay [:won :retries :calls :try-s])))))
-
-(deftest a-comb-look-that-took-none-then-some-is-a-won-comb-look-retry
-  (let [ev (fn [kind t] (pr-str {:generation-id "g" :time-ms t :source :job :kind kind :context {:job-id "j/x"} :data {}}))
-        {:keys [comb-look]} (r/report (keep r/scan-line [(ev :apiary.comb-wait 0) (ev :apiary.comb-wait 5000) (ev :apiary.comb-over 10000)]))]
-    (is (= {:won 1 :retries 2 :calls 1 :try-s 5} (select-keys comb-look [:won :retries :calls :try-s])))))
+(deftest a-wait-event-twice-then-the-over-event-is-one-won-retry-of-its-kind
+  (let [ev (fn [kind t] (pr-str {:generation-id "g" :time-ms t :source :job :kind kind :context {:job-id "j/x"} :data {}}))]
+    (doseq [[kind wait over] [[:risky-stay :near.risky-wait :near.risky-over]
+                              [:comb-look :apiary.comb-wait :apiary.comb-over]
+                              [:kit-later :kit.later-wait :kit.later-over]]]
+      (is (= {:won 1 :retries 2 :calls 1 :try-s 5}
+             (select-keys (kind (r/report (keep r/scan-line [(ev wait 0) (ev wait 5000) (ev over 10000)]))) [:won :retries :calls :try-s]))
+          kind))))
 
 (deftest a-place-refused-then-placed-is-a-won-retry-of-the-place-kind
   (doseq [action ["place" "jumpPlace"]

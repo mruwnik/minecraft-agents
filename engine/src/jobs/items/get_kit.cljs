@@ -34,7 +34,7 @@
   it fills the pack to its :carry default, the reserve) runs before the bill (:food false: none). A child that stops warns kit.no-food; a hungry body (foods/hungry?, the hungry trigger's line) then stops {:reason :no-food}, a fed one goes on (the hungry trigger feeds it later) and tries again after the next bill round that ends in a retry. A body that cannot heal (food 0, or ready/hurt-cannot-heal? of a mine's :long work: too hurt for it with no food carried and the bar under 18) asks get-food before more work (once more if it is still so after a fed answer), and stops {:reason :no-food} when it finds none.
   With furnace material short and no weapon carried, one jobs.items.obtain child first makes a sword (iron, stone or wooden); if it cannot, kit.unarmed warns and the work goes on.
   Items that need no furnace material, and those the carried material covers, are made first (:partial-first, the default) so the job stops naming only the shortfall; with :partial-first false the list order rules and the job stops at the first item that cannot be made.
-  With :explore, a bill that stops because a gathering ended (a mine that stopped, no way up) runs again (kit.retry, the pieces newly covered made first), up to 3 rounds without new furnace material.
+  With :explore, a bill that stops because a gathering ended (a mine that stopped, no way up) runs again (kit.retry, the pieces newly covered made first), up to 3 rounds without new furnace material. A bill that stops condition-failed for a child's :later (one the world may lift, not :no-source; one with a wait reason, such as :exposed, jobs.lib.need/call! waits out itself) rests with that cause (kit.later-wait; its :recheck-after-ms, else ::later-wait-s) and runs again while another round is worth its price (cost/try-again? :kit-later at the kit's worth); a :never stop ends the kit with its cause.
   Get a base first.
   A death since the job began (body memory :died) clears the children and the bill; the next round re-plans from
   what is carried. A death keeps the job listed unless it was submitted with --drop-on-death.
@@ -56,6 +56,7 @@
 
 (a/defargs settings
   {::job-time-s {:default 10800 :doc "Seconds a kit may last: every child of every piece (the bill's obtain child too)." :spec (a/num-in 0 nil)}
+   ::later-wait-s {:default 30 :doc "Seconds the kit rests after a :later stop of its bill that names no recheck, before it runs the bill again." :spec (a/num-in 0 nil)}
    ::item-s {:default 120 :doc "Seconds a quote counts for each missing item of the kit." :spec (a/num-in 0 nil)}})
 
 (def target [:items])
@@ -90,7 +91,7 @@
 (defn restarted
   "The job memory after a death: the children and the bill went with the body; the job starts from now."
   [m now]
-  (-> m (dissoc :children :bill :bill-done :covered :covered-done :fed :stop :bill-tries :bill-round :bill-material) (assoc :since now)))
+  (-> m (dissoc :children :bill :bill-done :covered :covered-done :fed :stop :bill-tries :bill-round :bill-material :later-fails) (assoc :since now)))
 
 (defn why-of
   "The text a child ending e gives for its stop: its data's :why, else its cause map's."
@@ -292,6 +293,34 @@
                 (some? (:gathered r))
                 (not= :none-seen (:gathered r)))))
 
+(defn later-wait-s
+  "Seconds the kit rests after the bill's :later stop r before running it again: the refusal's recheck, else ::later-wait-s."
+  [r]
+  (or (some-> (get-in r [:cause :recheck-after-ms]) (/ 1000)) (settings/get settings ::later-wait-s)))
+
+(defn wait-later!
+  "For the bill's stop r when it ended condition-failed for a child's :later (the world may lift it; not obtain's
+  :no-source, nothing seen and no search, nor a pack that stayed full) and another bill round
+  is worth its price (cost/try-again? :kit-later, after the later stops in a row, a try the rest's seconds): the kit
+  waits with r's cause, rested for later-wait-s, and :continue; else nil."
+  [c r]
+  (let [fails (inc (:later-fails (ctx/mem c) 0))
+        s (later-wait-s r)]
+    (when (and (= :condition-failed (:kind r)) (not (#{:no-source :inventory-full} (:reason r))) (cost/try-again? c :kit-later {:fails fails :try-s s}))
+      (ctx/update-mem! c (fn [m] (-> m (dissoc :covered :covered-done :bill) (assoc :later-fails fails)
+                                     (update :bill-round (fnil inc 0)))))
+      (ctx/emit! c :kit.later-wait :info {:cause (:reason r) :why (:why r) :fails fails :wait-s s
+                                          :text (str "gathering waits (" (:why r) "): running the bill again in " (js/Math.round s) " s")})
+      (some-> (:child-wait c) (reset! (assoc (if (map? (:cause r)) (:cause r) {:reason (:reason r)}) :recheck-after-ms (* 1000 s))))
+      :continue)))
+
+(defn later-over!
+  "Clear the kit's later stops in a row once a bill round ends otherwise (:kit.later-over: the wait won)."
+  [c r]
+  (when (and (:later-fails (ctx/mem c)) (not= :condition-failed (:kind r)))
+    (ctx/emit! c :kit.later-over :info {:fails (:later-fails (ctx/mem c))})
+    (ctx/update-mem! c dissoc :later-fails)))
+
 (defn material-of
   "The furnace material the items' bill needs (ingots, counting raw ore) carried, to tell whether a bill round gained any;
   cobblestone counts only for a bill that needs stone."
@@ -396,11 +425,13 @@
                 round (:bill-round (ctx/mem c) 0)
                 _ (when-not (:bill-material (ctx/mem c)) (ctx/update-mem! c assoc :bill-material (material-of version (:items a) st)))
                 r (await (run-bill! c (if (zero? round) :bill (keyword (str "bill" round))) (bill-of c)))]
+            (when-not (= :continue r) (later-over! c r))
             (cond (= :continue r) :continue
                   (retry? r tries (:explore a)) (retry! c r tries)
                   (and r (not (:covered-done (ctx/mem c))) (seq (covered-of version (:partial-first a) todo (:carried (state c)))))
                   (do (ctx/update-mem! c (fn [m] (-> m (dissoc :covered :bill) (update :bill-round (fnil inc 0)))))
                       :again)
+                  (wait-later! c r) :continue
                   (some? r) (stop-after-wear! c (update r :item #(or % (first todo))))
                   :else (do (ctx/update-mem! c assoc :bill-done true)
                             (ctx/emit! c :kit.progress :info {:text (str "got " (str/join ", " todo))})

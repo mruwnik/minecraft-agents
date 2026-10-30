@@ -284,4 +284,15 @@
          [:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false :food false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 90 :of-job true}]
    :after [[:item "wooden_sword" 1]]
-   :limit-s 110}]}
+   :limit-s 110}
+  ;; card 15224505: shut in an unlit bedrock box, stone seen through a glass window: the kit stops with the mine's own refusal (or its :unreachable), never :no-source, and does not run the bill round after round
+  {:name "stone-seen-through-a-window-of-a-sealed-box-stops-the-kit-not-no-source"
+   :time :any
+   :plot {:height 12 :floor "grass_block"}
+   :blocks [[:fill [14 -1 14] [18 3 18] "bedrock"] [:fill [15 0 15] [17 2 17] "air"] [:set [16 1 18] "glass"]
+            [:fill [12 -1 19] [20 3 24] "stone"]]
+   :body {:at [16.5 0 16.5] :yaw 0 :inventory [["wooden_pickaxe" 1] ["stick" 2] ["crafting_table" 1] ["cooked_beef" 3]] :effects [["resistance" 600 4]]}
+   :act [[:job (jobs.items.get-kit {:items ["stone_pickaxe"] :explore false :food false})]]
+   :expect [{:event {:source :job :kind :stopped} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :no-source}} :for-s 120 :of-job true :until {:source :job :kind :stopped}}]
+   :limit-s 140}]}

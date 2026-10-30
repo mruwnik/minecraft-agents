@@ -9,6 +9,7 @@
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
             [engine.fetch-test :as f]
+            [engine.obtain-contract-test :as oc]
             [engine.game :as game]
             [jobs.lib.death-spot :as death-spot]
             [engine.memory :as mem]
@@ -504,3 +505,46 @@
 (deftest a-restart-drops-the-stop-booked-in-the-earlier-life
   (let [m (kit/restarted {:since 1 :stop {:reason :no-iron} :bill {:a 1} :fed true} 9)]
     (is (= {:since 9} m))))
+
+(defn waits-then-has-the-pickaxe
+  "An obtain whose first call ends condition-failed with cause (a seen source's child said :later); the next one puts an
+  iron pickaxe in the pack and is done. calls counts them."
+  [cause calls]
+  (let [real (get registry/jobs 'jobs.items.obtain)]
+    (assoc real :round
+           (fn ^:async stub-round [c]
+             (if (= 1 (swap! calls inc))
+               (ctx/end c :condition-failed cause {:item "iron_ingot" :got 0 :tried {:gather (:reason cause)}})
+               (do (swap! (fake/state (:primitives c)) fake/give "iron_pickaxe" 1)
+                   (ctx/end c :done nil {:have ["iron_pickaxe"]})))))))
+
+(deftest a-bill-that-stops-on-a-later-is-run-again-after-the-wait
+  ;; :exposed is a wait reason need/call! waits out; :occupied is not, and the kit rests on it itself
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [reason [:exposed :occupied]]
+          (let [calls (atom 0)
+                cause {:reason reason :text "dark at 3,60,4 until light" :recheck-after-ms 2000}
+                s (start (world [{:name "stick" :count 2}] {}) {:items ["iron_pickaxe"] :explore false :food false} f/sight-opts
+                         {'jobs.items.obtain (waits-then-has-the-pickaxe cause calls)})]
+            (loop [i 0]
+              (await (f/run-ticks s 1))
+              (when (and (< i 200) (= :not-done @(:out s))) (recur (inc i))))
+            (is (= 2 @calls) reason)
+            (is (= :done (:status @(:out s))) reason)))))))
+
+(deftest seen-stone-the-mine-will-never-take-ends-the-kit-with-that-refusal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (-> (world [{:name "wooden_pickaxe" :count 1} {:name "stick" :count 2} {:name "crafting_table" :count 1}] {})
+                    (update :blocks merge oc/walled-in)
+                    (assoc-in [:recipes "stone_pickaxe"] {:count 1 :needs {"cobblestone" 3 "stick" 2} :table true}))
+              s (start w {:items ["stone_pickaxe"] :explore false :food false} f/sight-opts)]
+          (loop [i 0]
+            (await (f/run-ticks s 1))
+            (.advance (.-world (:p s)) 40)
+            (when (and (< i 400) (= :not-done @(:out s))) (recur (inc i))))
+          (is (= {:status :stopped :kind :nothing-possible :reason :exposed} (select-keys @(:out s) [:status :kind :reason])))
+          (is (re-find #"jobs.gather.mine declines to start" (str (:why @(:out s))))))))))
