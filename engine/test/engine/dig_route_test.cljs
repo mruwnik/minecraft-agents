@@ -229,9 +229,33 @@
     (is (= {:problem :dearer} far))
     (is (< far-cells 100) (str "a goal 300 blocks off through unseen rock is dearer than 208 s at once (" far-cells " cells)"))
     (is (< (:seconds wall) 90) "the way over a glass plane 600 wide is found")
-    (is (< wall-cells 10000) (str wall-cells " cells"))
+    (is (< wall-cells 100) (str wall-cells " cells"))
     (is (< (:seconds deep) 130))
-    (is (< deep-cells 60000) (str "a goal 70 blocks down (" deep-cells " cells)"))))
+    (is (< deep-cells 400) (str "a goal 70 blocks down (" deep-cells " cells)"))))
+
+(deftest the-unseen-priced-bound-finds-the-way-the-walk-bound-alone-finds
+  ;; seen tunnels and seen rock in unseen stone, ways up, down, across, by pillar and to a range: a bound over any way's
+  ;; price, or one that rose more than a step's price from cell to cell, would end on a dearer way
+  (let [seen (into {} (concat (for [x (range -2 9) z [3]] [[x 4 z] "air"])
+                              (for [x [6] y (range -2 4) z (range 0 4)] [[x y z] "air"])
+                              (for [x (range -3 3) y [0 1] z [-4]] [[x y z] "air"])
+                              (for [x (range 1 5) y [6] z (range -3 0)] [[x y z] "stone"])))
+        rho (fn [x y z] (reduce min ##Inf (for [[[a b c]] seen] (max (+ (js/Math.abs (- x a)) (js/Math.abs (- z c))) (js/Math.abs (- y b))))))
+        steps (fn [x y z] (reduce min ##Inf (for [[[a b c]] seen] (max (+ (js/Math.abs (- x a)) (js/Math.abs (- z c))) (js/Math.ceil (/ (js/Math.abs (- y b)) 3))))))
+        base (assoc (unseen-opts seen (memoize steps) (memoize rho) 1000) :max-fall 3 :margin 3)
+        price (fn [from goal opts prior?] (:seconds (first ((dr/search (world seen) from goal (assoc opts :prior-h? prior?)) 100000))))]
+    (doseq [[from goal opts] [[[0 10 0] [6 -2 0] base]
+                              [[0 10 0] [12 -14 5] base]
+                              [[0 10 0] [-1 -16 0] base]
+                              [[-20 10 0] [-30 -6 0] base]
+                              [[0 10 0] [-3 0 -4] base]
+                              [[6 -2 1] [0 10 0] base]
+                              [[6 -2 1] [0 10 0] (assoc base :pillar-s 0.4 :place-s 0.4)]
+                              [[-3 0 -4] [8 4 3] base]
+                              [[0 10 0] [2 -1 -6] (assoc base :range 1 :near [2 -1 -6])]
+                              [[-2 4 3] [4 5 -2] (assoc base :pillar-s 0.4)]]]
+      (let [walk (price from goal opts false)]
+        (is (and (number? walk) (< (js/Math.abs (- walk (price from goal opts true))) 1e-9)) (str from " to " goal))))))
 
 (deftest a-seen-cave-past-unseen-rock-is-priced-as-seen
   ;; a seen cave 60 long (its floor and walls seen) behind 5 blocks of unseen rock: priced as if the rest were unseen

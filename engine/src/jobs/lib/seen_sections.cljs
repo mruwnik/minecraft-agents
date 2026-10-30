@@ -18,32 +18,63 @@
   [dx dy dz mf]
   (max (+ dx dz) (js/Math.ceil (/ dy mf))))
 
+(defonce ^{:doc "section -> #js [wrote x0 y0 z0 x1 y1 z1]: the box of its remembered cells as of its last write."} extents (js/WeakMap.))
+
+(defn- extent
+  "The box [x0 y0 z0 x1 y1 z1] of the cells section s remembers, nil with none: scanned once a write."
+  [^js s]
+  (let [^js e (.get extents s)]
+    (if (and e (identical? (aget e 0) (.-wrote s)))
+      (when (<= (aget e 1) (aget e 4)) e)
+      (let [^js ids (.-ids s)
+            e #js [(.-wrote s) 16 16 16 -1 -1 -1]]
+        (dotimes [i 4096]
+          (when-not (zero? (aget ids i))
+            (let [x (bit-and i 15) y (bit-shift-right i 8) z (bit-and (bit-shift-right i 4) 15)]
+              (aset e 1 (min (aget e 1) x)) (aset e 2 (min (aget e 2) y)) (aset e 3 (min (aget e 3) z))
+              (aset e 4 (max (aget e 4) x)) (aset e 5 (max (aget e 5) y)) (aset e 6 (max (aget e 6) z)))))
+        (let [bx (* 16 (.-cx s)) by (* 16 (.-sy s)) bz (* 16 (.-cz s))]
+          (doseq [[i o] [[1 bx] [2 by] [3 bz] [4 bx] [5 by] [6 bz]]] (aset e i (+ o (aget e i)))))
+        (.set extents s e)
+        (when (<= (aget e 1) (aget e 4)) e)))))
+
 (defn steps-fn
   "A fn [x y z] of the fewest steps (each at most one cell across, one up or max-fall down) between the cell and any cell
-  the body remembers, by the sections that hold them (##Inf with none): within one of a neighbour cell's, so a search may
-  price on it. nil without a memory. The sections are the memory's when first asked."
+  the body remembers, by the box of each section's remembered cells (##Inf with none): within one of a neighbour cell's,
+  so a search may price on it. nil without a memory. The sections are the memory's when first asked."
   [p max-fall]
   (when-let [st (st-of p)]
     (let [mf (max 1 max-fall)
-          boxes (delay (let [a #js []] (.forEach (sections st) (fn [^js s] (.push a #js [(* 16 (.-cx s)) (* 16 (.-sy s)) (* 16 (.-cz s))]))) a))
-          box-gap (fn [o lo] (max 0 (- lo (+ o 15)) (- o (+ lo 15))))
+          ;; x0 y0 z0 x1 y1 z1 a box, in one array of plain numbers
+          boxes (delay (let [a #js []] (.forEach (sections st) (fn [^js s] (when-let [e (extent s)] (.push a (aget e 1) (aget e 2) (aget e 3) (aget e 4) (aget e 5) (aget e 6))))) (js/Float64Array.from a)))
+          span (fn [a lo hi] (max 0 (- lo a) (- a hi)))
           ;; by a cell's section, the boxes nearest it first, each with the fewest steps from the section to it: a cell's
-          ;; nearest box is one before the first whose steps from the section pass the best found
+          ;; nearest box is one before the first whose steps from the section pass the best found. An order is steps x n +
+          ;; the box's index, sorted as plain numbers
           orders (js/Map.)]
       (fn [x y z]
         (let [cx (bit-shift-right x 4) sy (bit-shift-right y 4) cz (bit-shift-right z 4)
               k (store/section-key cx sy cz)
+              ^js bs @boxes
+              n (/ (.-length bs) 6)
               ^js order (or (.get orders k)
                             (let [ox (* 16 cx) oy (* 16 sy) oz (* 16 cz)
-                                  o (.map ^js @boxes (fn [^js b] #js [(steps (box-gap ox (aget b 0)) (box-gap oy (aget b 1)) (box-gap oz (aget b 2)) mf) b]))]
-                              (.sort o (fn [a b] (- (aget a 0) (aget b 0))))
+                                  box-gap (fn [o lo hi] (max 0 (- lo (+ o 15)) (- o hi)))
+                                  o (js/Float64Array. n)]
+                              (dotimes [i n]
+                                (let [b (* 6 i)]
+                                  (aset o i (+ (* n (steps (box-gap ox (aget bs b) (aget bs (+ b 3))) (box-gap oy (aget bs (+ b 1)) (aget bs (+ b 4)))
+                                                           (box-gap oz (aget bs (+ b 2)) (aget bs (+ b 5))) mf))
+                                               i))))
+                              (.sort o)
                               (.set orders k o)
                               o))]
           (loop [i 0 best ##Inf]
-            (if (or (>= i (.-length order)) (>= (aget order i 0) best))
+            (if (or (>= i n) (>= (js/Math.floor (/ (aget order i) n)) best))
               best
-              (let [^js b (aget order i 1)]
-                (recur (inc i) (min best (steps (gap x (aget b 0)) (gap y (aget b 1)) (gap z (aget b 2)) mf)))))))))))
+              (let [b (* 6 (mod (aget order i) n))]
+                (recur (inc i) (min best (steps (span x (aget bs b) (aget bs (+ b 3))) (span y (aget bs (+ b 1)) (aget bs (+ b 4)))
+                                                (span z (aget bs (+ b 2)) (aget bs (+ b 5))) mf)))))))))))
 
 (defn- section-keys
   "The keys of the sections a box [lo hi] of cells touches."

@@ -133,23 +133,34 @@
         back-lb (volatile! (constantly 0))
         ;; with prior-h?, the unseen a way must cross priced on: each step into a cell whose step is unseen pays unseen-step-s
         ;; (seen-steps: the fewest steps from a cell to one whose step is seen) and each cell it opens whose block is unseen
-        ;; at least unseen-dig-s (seen-cells: the fewest cells, max(across, up or down), to one whose block is seen); of either,
-        ;; the first that many less one of them and, from the last seen on, the end's that many. Each within its share of a
-        ;; step's price of a neighbour's: a lower bound in which seen ground or a seen cave past the unseen is priced as seen
+        ;; at least unseen-dig-s (seen-cells: the fewest cells, max(across, up or down), to one whose block is seen). The steps
+        ;; before the first seen one and those after the last are apart, so their two counts add; a way that never meets the
+        ;; seen takes them all. A step opens a cell per block it rises or falls and two more when it moves across (a pillar
+        ;; none), so a way down d opens at least d and two a fall. Each within its share of a step's price of a neighbour's:
+        ;; a consistent lower bound in which seen ground or a seen cave past the unseen is priced as seen
         [px py pz] (if r [ax ay az] goal)
         pm (if r (* 2 r) 0)
         mf (max 1 max-fall)
         across-to (fn [x z] (+ (js/Math.abs (- x px)) (js/Math.abs (- z pz))))
         steps-to (fn [x y z] (max 0 (- (max (across-to x z) (- py y) (js/Math.ceil (/ (- y py) mf))) pm)))
-        cells-to (fn [x y z] (max 0 (- (max (across-to x z) (js/Math.abs (- y py))) pm)))
+        digs-of (fn [a dn up] (+ dn up (* 2 (max a (js/Math.ceil (/ dn mf)) (if pillar-s 0 up)))))
+        digs-to (fn [x y z] (digs-of (max 0 (- (across-to x z) pm)) (max 0 (- y py pm)) (max 0 (- py y pm))))
         least-step (if pillar-s (min step-s pillar-s) step-s)
         prior? (boolean (and prior-h? unseen? unseen-step-s seen-steps seen-cells))
         end-steps (when prior? (max 0 (- (seen-steps px py pz) pm)))
-        end-cells (when prior? (max 0 (- (seen-cells px py pz) pm)))
-        prior-h (fn [x y z] (let [n (steps-to x y z) k (cells-to x y z)]
+        ;; the fewest unseen cells opened after the last seen one: the step that opened it ends at most a fall and a head
+        ;; under it (e - mf - 1 over the end), across e - 1 or e under it; with that step's own unseen cells under the seen
+        ;; one, last-digs (which the first steps' count cannot add to: they may be that one step's)
+        [end-digs last-digs] (when prior?
+                               (let [e (seen-cells px py pz) t (max 0 (- e pm)) under (if pillar-s t (* 3 t))]
+                                 [(min (digs-of (max 0 (- e 1 pm)) 0 0) (digs-of 0 (max 0 (- e mf 1 pm)) 0) under)
+                                  (min (max 0 (dec (* 2 t))) (+ t (* 2 (js/Math.ceil (/ (max 0 (- t mf 1)) mf)))) under)]))
+        ;; the first steps open a cell seen-cells less one away, a pillar's first two over the feet
+        lead (if pillar-s 2 1)
+        prior-h (fn [x y z] (let [n (steps-to x y z)]
                               (+ (* least-step n)
-                                 (* unseen-step-s (max (min (dec (seen-steps x y z)) n) (min end-steps n)))
-                                 (* unseen-dig-s (max (min (dec (seen-cells x y z)) k) (min end-cells k))))))
+                                 (* unseen-step-s (min n (+ (max 0 (dec (seen-steps x y z))) end-steps)))
+                                 (* unseen-dig-s (min (digs-to x y z) (max (+ (max 0 (- (seen-cells x y z) lead)) end-digs) last-digs))))))
         heuristic (let [h (if back-h? (fn [x y z] (max (step-h x y z) (@back-lb x y z))) step-h)]
                     (if prior? (fn [x y z] (max (h x y z) (prior-h x y z))) h))
         end? (fn [ck] (let [[x y z] (cell-of ck)]

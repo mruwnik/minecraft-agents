@@ -18,12 +18,19 @@
 
 (defn remembered? [w [x y z]] (not (neg? (store/remembered-id (st w) x y z))))
 
-(deftest a-cell-s-steps-to-the-memory-are-the-fewest-to-a-remembered-section-and-change-by-one-a-step
+(deftest a-cell-s-steps-to-the-memory-are-the-fewest-to-the-box-of-a-section-s-remembered-cells-and-change-by-one-a-step
   (let [w (seeing (tu/fake-on-floor {}))
         f (seen/steps-fn w 3)
-        secs (let [a (atom [])] (.forEach (store/store-of (st w) (.-dim (st w))) (fn [^js s] (swap! a conj [(* 16 (.-cx s)) (* 16 (.-sy s)) (* 16 (.-cz s))]))) @a)
-        gap (fn [a lo] (max 0 (- lo a) (- a (+ lo 15))))
-        oracle (fn [[x y z]] (reduce min ##Inf (for [[bx by bz] secs] (max (+ (gap x bx) (gap z bz)) (js/Math.ceil (/ (gap y by) 3))))))
+        ;; each section's remembered cells' box, [lo hi]
+        secs (let [a (atom [])]
+               (.forEach (store/store-of (st w) (.-dim (st w)))
+                         (fn [^js s] (let [o [(* 16 (.-cx s)) (* 16 (.-sy s)) (* 16 (.-cz s))]
+                                           cells (for [dx (range 16) dy (range 16) dz (range 16) :let [c (mapv + o [dx dy dz])] :when (remembered? w c)] c)]
+                                       (when (seq cells) (swap! a conj [(apply mapv min cells) (apply mapv max cells)])))))
+               @a)
+        gap (fn [a lo hi] (max 0 (- lo a) (- a hi)))
+        oracle (fn [[x y z]] (reduce min ##Inf (for [[[lx ly lz] [hx hy hz]] secs]
+                                                 (max (+ (gap x lx hx) (gap z lz hz)) (js/Math.ceil (/ (gap y ly hy) 3))))))
         cells (for [x (range -60 61 7) y (range 0 130 9) z (range -60 61 11)] [x y z])]
     (is (seq secs))
     (is (= (map oracle cells) (map #(apply f %) cells)))
@@ -31,6 +38,13 @@
     (is (every? (fn [[x y z]] (every? #(<= (js/Math.abs (- (f x y z) (apply f %))) 1) [[(inc x) y z] [x y (inc z)] [x (inc y) z]])) cells)
         "within one of each neighbour's")
     (is (nil? (seen/steps-fn (tu/fake {}) 3)) "no memory, no fn")))
+
+(deftest a-cell-remembered-since-counts-in-the-next-fn-s-boxes
+  (let [w (seeing (tu/fake-on-floor {}))
+        before ((seen/steps-fn w 1) 0 0 0)]
+    (is (< 48 before) "the floor's section remembers nothing as low as y 48")
+    (store/record! (st w) (store/store-of (st w) (.-dim (st w))) 0 48 0 1 1000000)
+    (is (= 48 ((seen/steps-fn w 1) 0 0 0)))))
 
 (deftest the-openings-since-a-mark-are-the-cells-seen-open-that-were-not
   (let [p (tu/fake-on-floor {})
