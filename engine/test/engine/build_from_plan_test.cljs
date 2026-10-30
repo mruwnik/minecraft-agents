@@ -629,19 +629,20 @@
           (is (= {} (:given-up result)))
           (is (= 1 (:placed result))))))))
 
-(deftest an-unseen-floor-with-nothing-carried-is-looked-at-then-the-check-says-no-items
+(deftest an-unseen-floor-with-nothing-carried-is-looked-at-while-the-call-is-worth-it-then-the-check-says-no-items
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[seen sink] (tu/legacy-capture-sink)
-              p (tu/seeing-after-look (tu/fake-on-floor {:inventory []}))
-              eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref h/clock)
-                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref h/clock)})
-                                :world (world/of-data {"pen" (pen-plan)} {} [])})
-              result (await (child-outcome eng job {:plan "pen" :ways #{:carried}} 60))]
-          (is (seq (h/calls p "look")))
-          (is (= :no-items (:reason result)))
-          (is (= 0 (count (h/calls p "place")))))))))
+        (doseq [[worth looks?] [[##Inf true] [0 false]]]
+          (let [[seen sink] (tu/legacy-capture-sink)
+                p (tu/seeing-after-look (tu/fake-on-floor {:inventory []}))
+                eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref h/clock)
+                                  :events (events/make {:body "Fake" :sinks [sink] :now #(deref h/clock)})
+                                  :world (world/of-data {"pen" (pen-plan)} {} [])})
+                result (with-redefs [ctx/worth (constantly worth)] (await (child-outcome eng job {:plan "pen" :ways #{:carried}} 60)))]
+            (is (= looks? (boolean (seq (h/calls p "look")))) (str "worth " worth ": a call worth nothing pays no look"))
+            (is (= :no-items (:reason result)))
+            (is (= 0 (count (h/calls p "place"))))))))))
 
 (deftest a-cell-still-unseen-after-the-look-does-not-stop-the-start-while-a-fetch-is-due
   (async done

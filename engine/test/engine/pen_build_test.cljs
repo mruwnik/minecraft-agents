@@ -357,11 +357,13 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p] :as w} (b/start (spec []) {"pen" (ring-plan)} [])
-              _ (tu/seeing-after-look p)
-              e (await (ending-of w job {:plan "pen" :ways #{:carried :patch}} 100))]
-          (is (empty? (h/calls p "place")))
-          (is (= [:condition-failed :no-items {"oak_fence" 7 "oak_fence_gate" 1}] [(:kind e) (get-in e [:cause :reason]) (get-in e [:cause :needs])])))))))
+        (doseq [[worth looks?] [[##Inf true] [0 false]]]
+          (let [{:keys [p] :as w} (b/start (spec []) {"pen" (ring-plan)} [])
+                _ (tu/seeing-after-look p)
+                e (with-redefs [ctx/worth (constantly worth)] (await (ending-of w job {:plan "pen" :ways #{:carried :patch}} 100)))]
+            (is (= looks? (boolean (seq (h/calls p "look")))) (str "worth " worth ": a call worth nothing pays no look"))
+            (is (empty? (h/calls p "place")))
+            (is (= [:condition-failed :no-items {"oak_fence" 7 "oak_fence_gate" 1}] [(:kind e) (get-in e [:cause :reason]) (get-in e [:cause :needs])]))))))))
 
 (deftest the-default-fetch-explores-for-fences-that-are-short
   (async done

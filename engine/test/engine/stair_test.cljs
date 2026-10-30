@@ -30,6 +30,10 @@
             [jobs.access.stair.limits :as sset]
             [jobs.lib.walk.drive :as drive]
             [jobs.lib.walk.plan :as wplan]
+            [jobs.access.stair.judge :as judge]
+            [jobs.lib.sense :as sense]
+            [jobs.lib.tools :as tools]
+            [engine.sense-test :as st]
             [plan.shape :as shape]))
 
 (def job 'jobs.access.stair)
@@ -1473,6 +1477,14 @@
           (is (re-find #":need-drop false" (:hint (core/waiting eng id))) "the wait says how to dig it by hand")
           (is (= :no-tool (:reason (core/waiting eng id))) "listed: it waits, it does not start and end")
           (is (empty? (digs p))))))))
+
+(deftest a-pickaxe-less-stairs-unseen-cut-is-looked-at-only-while-the-call-is-worth-the-look
+  (let [c (fn [worth] (assoc (st/stub-ctx (tu/fake {})) :args {:need-drop true} :worth (constantly worth)))]
+    (with-redefs [judge/unmet (constantly nil) judge/next-cut (constantly [[1 65 0] [1 64 0]]) judge/fetch? (constantly false)
+                  dig-look/unknown? (constantly true) sense/unknown? (constantly true) ore-pick/face-names (constantly ["air"])
+                  tools/needs-tool-to-clear? (constantly true)]
+      (is (= [:look :unseen] (tu/kind-reason (stair/not-lacking (c ##Inf)))))
+      (is (= [:later :unseen] (tu/kind-reason (stair/not-lacking (c 0)))) "a call worth nothing pays no look: no price, no look"))))
 
 (deftest a-stair-with-only-a-spent-pickaxe-stops-tool-spent-unless-told-otherwise
   (async done

@@ -3,6 +3,7 @@
             [jobs.lib.bridge :as bridge]
             [engine.args :as a]
             [jobs.lib.price :as price]
+            [jobs.lib.sense :as sense]
             [jobs.lib.stair-time :as stair-time]
             [jobs.lib.ready :as ready]
             [jobs.lib.spent :as spent]
@@ -176,7 +177,7 @@
 
 (defn not-lacking
   "Later with what the next dig lacks that this call cannot make good (:no-tool, :no-free-slot); cells not yet seen are
-  looked at first (only those with a seen air face, a look never shows a buried one) when no fetch could make good a missing pickaxe and none is carried (else the round would start and
+  looked at first while a look pays (sense/look-or-later) (only those with a seen air face, a look never shows a buried one) when no fetch could make good a missing pickaxe and none is carried (else the round would start and
   end the call)."
   [c]
   (if-let [lack (judge/unmet c)]
@@ -184,7 +185,7 @@
     (let [p (:primitives c)
           unseen (filterv #(and (unknown? p %) (some bs/air (ore-pick/face-names p %))) (judge/next-cut c))]
       (if (and (seq unseen) (not (false? (:need-drop (:args c)))) (not (judge/fetch? c)) (tools/needs-tool-to-clear? p blocks/hidden-guess))
-        (contract/look :unseen "the cells to cut were not seen" :look-at unseen)
+        (sense/look-or-later c :unseen "the cells to cut were not seen" unseen)
         (contract/ok :supplied "nothing lacking")))))
 
 (defn pack-has-room

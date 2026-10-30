@@ -145,7 +145,8 @@
 
 (defn no-items-cause
   "Why there is nothing to build, dig, fetch or look at: the cells' items are not carried and no fetch is due. While the
-  cells are unseen but all unknown and within ::look-range, the cause carries :look-at them: the verdict waits for a look."
+  cells are unseen but all unknown and within ::look-range, the cause carries :look-at those a look round pays for
+  (sense/paid-look-at): the verdict waits for a look."
   [c]
   (let [closed (merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
         cached (judged-plan c)
@@ -160,13 +161,14 @@
                   (seq (buildable cells carried {}))
                   (seq (digging cells)))
       (let [here (u/self-pos c)
-            near (filter #(and (<= (u/eye-dist here %) (look-range)) (sense/unknown? (:primitives c) %)) (sense/targets (:primitives c) here cells-of #{}))]
+            near (filter #(and (<= (u/eye-dist here %) (look-range)) (sense/unknown? (:primitives c) %)) (sense/targets (:primitives c) here cells-of #{}))
+            paid (sense/paid-look-at c (vec near))]
         (cond
           (some? (need-of c cells)) nil
           (and (seq hidden) (not= (count near) (count cells-of))) nil
           :else (cond-> {:reason :no-items :plan (:plan (:args c)) :part (:part (:args c))
                          :needs (into {} (shortage (owed cells) carried))}
-                  (seq hidden) (assoc :look-at (vec near))))))))
+                  (seq paid) (assoc :look-at paid)))))))
 
 (def no-items
   "Later :no-items {:plan :part :needs} when there is nothing to build, dig, fetch or look at: the cells' items are

@@ -110,10 +110,11 @@
   (let [field (field/planned c)]
     (if (:trouble field)
       (checks/cause-status :later {:reason :plan-trouble :why (:trouble field)})
-      (let [states (states-of c field (lib/field-cells field))]
+      (let [states (states-of c field (lib/field-cells field))
+            unseen (unseen-room c states)]
         (cond
           (seq (field/todo c states)) (contract/ok :work "a step can be taken on a planned cell")
-          (seq (unseen-room c states)) (contract/look :unseen-room "cells never seen are looked at" :look-at (unseen-room c states))
+          (seq unseen) (sense/look-or-later c :unseen-room "cells never seen are looked at" unseen)
           (receding? states) (checks/cause-status :later {:reason :receding})
           :else (checks/cause-status :later (or (blocked-reason states) {:reason :nothing-to-do})))))))
 

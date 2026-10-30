@@ -16,7 +16,9 @@
             [jobs.lib.forestry :as flib]
             [jobs.forestry.prepare :as prepare]
             [jobs.forestry.prepare-field :as field]
-            [jobs.lib.look :as look]))
+            [jobs.lib.look :as look]
+            [jobs.lib.sense :as sense]
+            [engine.sense-test :as st]))
 
 (defn ^:async ending-of
   "Run job with args as a ctx/call child of a recording parent on eng, at most n ticks: the child's {:kind :cause :data}
@@ -195,9 +197,10 @@
     (is (= [:look :nothing-to-do] (tu/kind-reason (status false))))
     (is (= [:later :nothing-to-do] (tu/kind-reason (status true))))))
 
-(deftest prepare-with-only-an-unseen-cell-asks-a-look-at-it
-  (let [c {:primitives (tu/fake {}) :args {}}]
+(deftest prepare-with-only-an-unseen-cell-asks-a-look-at-it-while-the-call-is-worth-the-look
+  (let [c (fn [worth] (assoc (st/stub-ctx (tu/fake {})) :args {} :worth (constantly worth)))]
     (with-redefs [field/planned (constantly {}) prepare/states-of (constantly {}) flib/field-cells (constantly [])
-                  field/todo (constantly []) prepare/unseen-room (constantly [[1 65 2]])]
-      (is (= [:look :unseen-room] (tu/kind-reason (prepare/not-ready c))))
-      (is (= [[1 65 2]] (:look-at (nth (prepare/not-ready c) 2)))))))
+                  field/todo (constantly []) prepare/unseen-room (constantly [[1 65 2]]) sense/unknown? (constantly true)]
+      (is (= [:look :unseen-room] (tu/kind-reason (prepare/not-ready (c ##Inf)))))
+      (is (= [[1 65 2]] (:look-at (nth (prepare/not-ready (c ##Inf)) 2))))
+      (is (= [:later :unseen-room] (tu/kind-reason (prepare/not-ready (c 0)))) "a call worth nothing pays no look: no price, no look"))))
