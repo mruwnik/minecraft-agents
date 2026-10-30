@@ -1,5 +1,6 @@
 (ns jobs.strip.all
-  (:require [jobs.lib.price :as price]
+  (:require [jobs.lib.ledger :as ledger]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -148,6 +149,7 @@
   "However the call ends: :home and the respawn bed go back to :was. Done, or nothing-possible with the failed child's
   reason."
   [c _]
+  (ledger/release-root! c)
   (let [was (:was (run c))
         f (when was (await (run-all! c (restore-steps was))))]
     (cond (= :continue f) :continue

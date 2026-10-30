@@ -1,5 +1,6 @@
 (ns jobs.gather.mine
-  (:require [clojure.string :as str]
+  (:require [jobs.lib.ledger :as ledger]
+            [clojure.string :as str]
             [engine.args :as a]
             [jobs.lib.work-place :as work-place]
             [jobs.lib.waits :as waits]
@@ -376,6 +377,7 @@
 (defn ^:async cleanup
   "A run cut by the limit, a cancel or a parent's end stays where it is."
   [c _]
+  (ledger/release-root! c)
   (ctx/end c :done nil {}))
 
 (def meta {:tags [:goal :mine :dig :ore :light] :position-bound? true})

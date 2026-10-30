@@ -16,6 +16,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.home-food :as home-food]
             [jobs.lib.foods :as foods]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.need :as need]
             [jobs.lib.next-call :as next-call]
             [jobs.lib.pace :as pace]
@@ -479,5 +480,11 @@
                   :else (do (ctx/update-mem! c assoc :bill-done true)
                             (ctx/emit! c :kit.progress :info {:text (str "got " (str/join ", " todo))})
                             :again)))))))))
+
+(defn cleanup
+  "However the call ends: the scaffold its tree placed is released to the scaffold-left trigger."
+  [c _]
+  (ledger/release-root! c)
+  (ctx/end c :done nil))
 
 (def meta {:tags [:goal :craft]})

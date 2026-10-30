@@ -400,6 +400,7 @@
   "However the dig ends: its :ore-mark is dropped."
   [c _]
   (ore-pick/release-mark! c)
+  (ledger/release-root! c)
   (ctx/end c :done nil))
 
 (def meta {:tags [:mine :dig :ore :light] :position-bound? true})

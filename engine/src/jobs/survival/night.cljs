@@ -1,5 +1,6 @@
 (ns jobs.survival.night
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.ledger :as ledger]
+            [jobs.lib.ready :as ready]
             [jobs.survival.log-out :as log-out]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -146,6 +147,7 @@
   "However the night ends: tonight's failed sites and filled doorway cells someone else changed are forgotten."
   [c _]
   (ending/forget-night! c)
+  (ledger/release-root! c)
   (ctx/end c :done nil))
 
 (defn quote-of

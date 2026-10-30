@@ -24,7 +24,8 @@
   repeat them every tick.
 
   Expiry: remember! stamps each new intent with :until, ::ttl-s on (jobs.lib.expiry). A placer takes its own blocks back
-  when it ends (a cleanup :of its id); past :until an entry is an orphan, whoever placed it (no :until: one already).
+  when it ends (a cleanup :of its id); a root job releases its tree's entries in its cleanup (release-root!) and keeps them
+  alive while it runs (keep-alive!), so ::ttl-s is the backstop for a cleanup that never ran; past :until an entry is an orphan, whoever placed it (no :until: one already).
 
   The lifecycle functions are pure over the entry vector. open-entries reads it from a memory view, write!
   and remember! store it."
@@ -163,19 +164,25 @@
   (mem/write! store kind {:entries (vec l)} policy))
 
 (defn remember!
-  "Store l in body memory from a job's round, a new intent stamped with :until (expiry). Any other entry with no :until
-  keeps the one memory holds for its cell (a caller confirms its own copy of the intent), or none (a cleanup's rewrite
-  of an old entry). A placer's timed entries share its latest :until, so its scaffold (a pillar) runs out as one."
+  "Store l in body memory from a job's round, a new intent stamped with :until (expiry) and the :root of the job tree
+  placing it. Any other entry with no :until or :root keeps the one memory holds for its cell (a caller confirms its
+  own copy of the intent), or none (a cleanup's rewrite of an old entry). A root's timed entries share its latest
+  :until (a placer's own, for an entry with no root), so its scaffold runs out as one, and a root still placing keeps
+  what it placed before."
   [c l]
   (let [now (ctx/now c) ttl (* 1000 (settings/get settings ::ttl-s))
-        stored (into {} (keep #(when (:until %) [(:cell %) (:until %)])) (:entries (:data (mem/latest (ctx/view c) kind))))
-        timed (mapv #(cond (:until %) %
-                           (= :intent (:state %)) (expiry/stamp % now ttl)
-                           (stored (:cell %)) (assoc % :until (stored (:cell %)))
-                           :else %)
+        stored (into {} (map (juxt :cell identity)) (:entries (:data (mem/latest (ctx/view c) kind))))
+        timed (mapv (fn [e]
+                      (let [s (stored (:cell e))]
+                        (cond-> e
+                          (and (not (:until e)) (= :intent (:state e))) (expiry/stamp now ttl)
+                          (and (not (:until e)) (not= :intent (:state e)) (:until s)) (assoc :until (:until s))
+                          (and (not (:root e)) (= :intent (:state e))) (assoc :root (:root c))
+                          (and (not (:root e)) (not= :intent (:state e)) (:root s)) (assoc :root (:root s)))))
                     l)
-        latest (reduce (fn [m {:keys [job until]}] (cond-> m until (update job (fnil max until) until))) {} timed)]
-    (ctx/remember! c kind {:entries (mapv #(cond-> % (:until %) (assoc :until (latest (:job %)))) timed)} policy)))
+        owner #(or (:root %) (:job %))
+        latest (reduce (fn [m {:keys [until] :as e}] (cond-> m until (update (owner e) (fnil max until) until))) {} timed)]
+    (ctx/remember! c kind {:entries (mapv #(cond-> % (:until %) (assoc :until (latest (owner %)))) timed)} policy)))
 
 ;; ------------------------------------------------------------------ cleanup
 
@@ -218,12 +225,33 @@
   (let [j (str (:job e))]
     (or (= id j) (str/starts-with? j (str id "/")))))
 
+(defn placed-by?
+  "Whether e was placed by the job tree rooted at ctx c's instance, or by c's instance or its children."
+  [c e]
+  (or (= (:id c) (:root e)) (of-instance? (:id c) e)))
+
 (defn release!
-  "End the time of the entries of this ctx's instance and its children (of-instance?): orphans now, for the scaffold-left trigger."
+  "End the time of the entries c's instance and its children placed, and, when c is a root, of its whole tree
+  (placed-by?): orphans now, for the scaffold-left trigger. A root calls it in its cleanup."
   [c]
   (let [l (:entries (:data (mem/latest (ctx/view c) kind))) now (ctx/now c)]
-    (when (some #(of-instance? (:id c) %) l)
-      (ctx/remember! c kind {:entries (mapv #(cond-> % (of-instance? (:id c) %) (assoc :until now)) l)} policy))))
+    (when (some #(placed-by? c %) l)
+      (ctx/remember! c kind {:entries (mapv #(cond-> % (placed-by? c %) (expiry/expire now)) l)} policy))))
+
+(defn release-root!
+  "release! when c is the root of its tree; a job's cleanup calls it."
+  [c]
+  (when (= (:id c) (:root c)) (release! c)))
+
+(defn keep-alive!
+  "Stamp the entries of c's root that run out within half the ttl anew (expiry/stamp): a root still running keeps the
+  scaffold its tree uses past the ttl, which is only the backstop for a cleanup that never ran."
+  [c]
+  (let [now (ctx/now c) ttl (* 1000 (settings/get settings ::ttl-s))
+        l (:entries (:data (mem/latest (ctx/view c) kind)))
+        mine? #(and (= (:root c) (:root %)) (:until %) (expiry/current? now %) (expiry/due? now ttl %))]
+    (when (some mine? l)
+      (ctx/remember! c kind {:entries (mapv #(cond-> % (mine? %) (expiry/stamp now ttl)) l)} policy))))
 
 (def held-kind :scaffold-held)
 

@@ -272,6 +272,7 @@
 (defn ^:async round
   "One attempt (see attempt)."
   [c]
+  (ledger/keep-alive! c)
   (await (attempt (with-limits c))))
 
 (defn ^:async cleanup
@@ -280,7 +281,7 @@
   a bridge) is released (ledger/release!): the scaffold-left trigger takes it back; under a caller it keeps its time."
   [c _]
   (when-not (:own (:escalation (ctx/mem c))) (note-holes! c (:planned (ctx/mem c))))
-  (when (= (:id c) (:root c)) (ledger/release! c))
+  (ledger/release-root! c)
   (wsearch/release! c)
   (goal/clear! c)
   (choose/forget-routes! (:route-owner (ctx/mem c)))
