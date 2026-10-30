@@ -121,7 +121,8 @@
   (let [p (:primitives c)]
     (when-let [cells (and (sh-sense/roofed? p (sh-sense/room-roof-height))
                           (seq (filter #(and (not ((sense/round-looked c) %)) (look/look-shows? p %)) (look/room-air-unseen p))))]
-      (contract/look :exposed text :look-at (vec (take (sense/max-looks) cells))))))
+      (when (pos? (cost/round-looks (ctx/worth c) (count cells) 0))
+        (contract/look :exposed text :look-at (vec cells))))))
 
 (defn unseen-status
   "The exposure of the unseen place `to` no look from here shows, priced as unseen at its chance (Q16): spawn-light/chance-at's

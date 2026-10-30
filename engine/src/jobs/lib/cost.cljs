@@ -26,7 +26,7 @@
              own placements, host-blocks: the rock its veins replace, and the chance of a biome on ground the body has not seen (jobs.lib.cost.base-rates).
     destroy  destroyed-s, destroyed-fn: what digging a cell destroys, in seconds of replacing it (a crop's growth, farmland's dirt and till, a build put back with put-back-s; natural terrain and tree wood nothing, a log that looks placed (horizontal, in a line, joined to planks or glass) a build) (jobs.lib.cost.destroy).
     door     wall-on-chance, door-s: a door's price through a wall whose far side is unseen, from counted wall rows (jobs.lib.cost.door).
-    look     look-answer, look-value, closed-chance, round-looks, look-s: the value of a look before deciding, a boundary's unseen part closed (jobs.lib.cost.look).
+    look     look-answer, look-value, closed-chance, round-looks, paid-looks, look-s: the value of a look before deciding, a boundary's unseen part closed (jobs.lib.cost.look).
     find     look-chance, find-chance, searched-for?: the chance a look round finds the animals a search is for, from their base rate and the ground already searched in vain, looked-area: that ground; ore-of, seen-ore, tunnel-ore, ore-chance: an ore's blocks expected among the faces a look sees or a tunnel cuts and the chance of a vein there; ore-level: the height a tunnel for it runs at; leg-chance, look-leg-chance (from what the body saw), tunnel-chance: a search leg's or a tunnel leg's chance of a find, tunnel-rate: a tunnel's blocks of ore per second over the cells it cuts (a heading's price), chance-of: leg i's; leg-stops?: a search's :price stop; search-s: its seconds per find, leg-spacing: the blocks between its legs (jobs.lib.cost.find).
     farm     field-share: the share of a field's unseen cells ripe or sowable, from the measured passes and its seen cells; ripe-chance: a cell seen growing ripe by now, at the game's growth rate, growing-s: the seconds of them within the server's simulation distance of the body; harvests, sown-worth: the harvests a crop still to grow is worth now and what a sown cell is worth (its food at food-point-worth); field-step-s: the measured seconds of a tend step, earthwork-s: levelling a patch's cells off height (jobs.lib.cost.farm).
     pen      gap-loss: the animal worth a herd loses through fence gaps till the next pass, from a Gamma prior on the escape rate (jobs.lib.cost.pen); herd-loss, through one gap open a while.
@@ -105,6 +105,7 @@
 (def closed-chance glance/closed-chance)
 (def look-s glance/look-s)
 (def round-looks glance/round-looks)
+(def paid-looks glance/paid-looks)
 (def blast-hurt answer/blast-hurt)
 (def swell-start answer/swell-start)
 (def leaves-reserve? fight/leaves-reserve?)

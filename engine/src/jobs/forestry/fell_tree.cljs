@@ -315,7 +315,7 @@
       (empty? logs)
       (if-let [unseen (not-empty (relook-cells c))]
         (do (ctx/update-mem! c assoc :relooked true)
-            (await (sense/look-at-unknown! c unseen (sense/max-looks)))
+            (await (sense/look-at-unknown! c unseen (sense/paid-looks c)))
             :again)
         (if-let [stop (or (when (= :continue (await (come-down! c))) :continue) (await (collect-logs! c)))]
           stop

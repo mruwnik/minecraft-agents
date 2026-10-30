@@ -6,6 +6,7 @@
   the mobs come nearer meanwhile (approached; answer/decide): an answer with :outcomes, priced by answer/answer-price beside the answers open now, so decide takes
   the look exactly when look-value's :value is over its :cost.
   closed-chance: the chance the unseen part of a boundary is closed, given its seen part is (a room's walls); chance-closed under any prior.
+  paid-looks: how many looks a call's worth pays when any of them may settle the question.
   round-looks: how many looks of a round that stops at the first open wall pay a call's worth.
 
   Callers: respond's cover-answers (an unseen room cell, the door). Others it fits: shut-in's :room way and enter-room
@@ -33,6 +34,12 @@
   [{:keys [k n sealed]} seen unseen]
   (let [alike (fn [cells] (reduce * 1 (map #(/ (+ k %) (+ n %)) (range cells))))]
     (/ (+ sealed (* (- 1 sealed) (alike (+ seen unseen)))) (+ sealed (* (- 1 sealed) (alike seen))))))
+
+(defn paid-looks
+  "How many looks a call worth `worth` seconds pays for: each costs look-s, and a look is taken only while the call is
+  worth more than the looks so far."
+  [worth]
+  (if (< worth ##Inf) (long (Math/floor (/ worth (look-s 1)))) js/Number.MAX_SAFE_INTEGER))
 
 (defn closed-chance
   "chance-closed under ::wall-prior."

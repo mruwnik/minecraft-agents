@@ -1,6 +1,6 @@
 (ns engine.sense-test
   "jobs.lib.sense/decide! over a real perception on the fake world: a sync decision that read cells the body has not
-  seen is decided again after the body looks at them, at most max-looks looks, never twice at one cell."
+  seen is decided again after the body looks at them, at most as many looks as the call pays, never twice at one cell."
   (:require [cljs.test :refer [deftest is async]]
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
@@ -60,15 +60,26 @@
 
 (def inside (for [x [5 6 7] y [63 64 65] z [-1 0 1]] {:x x :y y :z z}))
 
-(deftest occluded-cells-cost-at-most-max-looks-and-are-never-looked-at-twice
+(deftest occluded-cells-cost-at-most-the-looks-the-call-pays-and-are-never-looked-at-twice
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (seeing {:self {:pos {:x 0 :y 64 :z 0}} :blocks rock})
+              c (assoc (stub-ctx p) :worth (constantly (* 3.5 (cost/look-s 1))))
+              all-seen #(= (count inside) (count (keep (fn [cell] (u/seen-name p cell)) inside)))]
+          (is (false? (await (sense/decide! c ::rock all-seen))))
+          (is (= 3 (looks p)) "three looks are paid for, the fourth is not")
+          (dotimes [_ 4] (await (sense/decide! c ::rock all-seen)))
+          (is (= 15 (looks p)) "three looks a call, 5 calls, none at a cell twice (the cube has 27)"))))))
+
+(deftest a-call-worth-every-look-looks-at-each-hidden-cell-once
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [p (seeing {:self {:pos {:x 0 :y 64 :z 0}} :blocks rock})
               c (stub-ctx p)
               all-seen #(= (count inside) (count (keep (fn [cell] (u/seen-name p cell)) inside)))]
-          (is (false? (await (sense/decide! c ::rock all-seen))))
-          (is (= (sense/max-looks) (looks p)) "the bound")
+          (await (sense/decide! c ::rock all-seen))
           (dotimes [_ 4] (await (sense/decide! c ::rock all-seen)))
           (is (= (count inside) (looks p)) "each hidden cell looked at once, then no more looks"))))))
 
@@ -144,7 +155,6 @@
         (let [p (seeing {:self {:pos {:x 0 :y 64 :z 0}} :blocks rock})
               c (stub-ctx p)
               cells (mapv (fn [{:keys [x y z]}] [x y z]) inside)]
-          (is (< (sense/max-looks) (count cells)))
           (await (sense/look-round! c cells))
           (is (<= (count cells) (looks p)) "a call worth any seconds looks at every cell")
           (is (= (set cells) (sense/round-looked c)) "one round per :look: the cells asked for count as looked, so the check asks no second"))))))

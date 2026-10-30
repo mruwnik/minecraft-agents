@@ -10,6 +10,7 @@
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.ready :as ready]
             [jobs.lib.reach :as reach]
+            [jobs.lib.sense :as sense]
             [plan.shape :as shape]))
 
 (def doc
@@ -31,7 +32,6 @@
 (a/defargs settings
   {::job-time-s {:default 30 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
    ::min-steps {:default 2 :doc "Steps a run needs to count as a stair, not a hop." :spec (a/int-in 1 nil)}
-   ::max-looks {:default 40 :doc "Looks at cells beyond the ends of the runs before it reads what it has seen." :spec (a/int-in 0 nil)}
    ::max-steps {:default 400 :doc "Steps read along a line each way before it is cut off." :spec (a/int-in 1 nil)}})
 
 (def target [])
@@ -107,7 +107,7 @@
 
 (defn ^:async see-ends!
   "Look at the unseen cells beyond the ends of the runs through the body's cell, nearest first, each once, at most
-  ::max-looks looks (a cell behind rock stays unseen)."
+  as many looks as the call pays for (a cell behind rock stays unseen)."
   [c]
   (let [p (:primitives c)
         feet (reach/standing-vec p)
@@ -115,7 +115,7 @@
     (loop [tried #{} n 0]
       (let [lines (lines-through (access/seen-at p) feet headings (settings/get settings ::max-steps))
             todo (remove tried (filter #(dig-look/unknown? p %) (frontier lines)))]
-        (when (and (seq todo) (< n (settings/get settings ::max-looks)))
+        (when (and (seq todo) (< n (sense/paid-looks c)))
           (await (dig-look/look-at! c (first todo)))
           (recur (conj tried (first todo)) (inc n)))))))
 

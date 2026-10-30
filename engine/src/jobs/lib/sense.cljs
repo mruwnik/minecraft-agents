@@ -2,7 +2,7 @@
   "Look before concluding. A job's sync decision reads cells and areas through the seen-* helpers (jobs.lib.util,
   jobs.lib.look); a cell the body never looked at reads as unknown, and a decision that ends the job (none, no support,
   not standable) must not rest on it. decide! records the unknown cells the decision read, looks at them (nearest to the
-  eye first, sight passes after each look) and decides again, bounded: at most ::max-looks looks a call, each cell at
+  eye first, sight passes after each look) and decides again, bounded: as many looks a call as its worth pays (paid-looks), each cell at
   most once per run and body cell, and one look round per run and body cell for an area or entity query that found
   nothing. Only looks: never moves, digs or places, and sees nothing a player could not."
   (:require [engine.args :as a]
@@ -18,13 +18,16 @@
             [jobs.lib.util :as u]))
 
 (a/defargs settings
-  {::max-looks {:default 8 :spec (a/int-in 0 nil) :doc "Most looks at unknown cells one decide! takes."}
-   ::passes {:default 3 :spec (a/int-in 1 nil)
+  {::passes {:default 3 :spec (a/int-in 1 nil)
              :doc "Most sight passes a look takes while its cell stays unknown: a floor seen edge-on shows in some passes only."}
    ::max-looked {:default 512 :spec (a/int-in 1 nil)
                  :doc "Most cells a job remembers looking at from one cell; past it decide! looks no more there."}})
 
-(defn max-looks [] (settings/get settings ::max-looks))
+(defn paid-looks
+  "How many looks c's call pays for (cost/paid-looks over its worth)."
+  [c]
+  (cost/paid-looks (ctx/worth c)))
+
 (defn max-looked [] (settings/get settings ::max-looked))
 (defn passes [] (settings/get settings ::passes))
 
@@ -151,6 +154,7 @@
          cell (look/cell-of here)
          mem (::looked (ctx/mem c))
          looked0 (if (= cell (:at mem)) (:cells mem #{}) #{})
+         budget (paid-looks c)
          full? (>= (count looked0) (max-looked))
          t0 (step-ms p)
          start (clock/now)
@@ -164,11 +168,11 @@
                      target (first found)
                      ask (when (retry? v) (or (seq (:area reads)) (seq (:entities reads))))]
                  (cond
-                   (and target batch (< looks (max-looks)))
-                   (let [[n passed] (await (look-at-unknown! c found (- (max-looks) looks)))]
+                   (and target batch (< looks budget))
+                   (let [[n passed] (await (look-at-unknown! c found (- budget looks)))]
                      (recur (+ looks (max n 1)) (into looked passed) surveyed))
 
-                   (and target (< looks (max-looks)))
+                   (and target (< looks budget))
                    (do (await (look-at! c target))
                        (recur (inc looks) (conj looked target) surveyed))
 

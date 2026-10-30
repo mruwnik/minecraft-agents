@@ -407,6 +407,11 @@
     (is (= n (cost/round-looks (* 1.01 break-even) n)) "above it the whole round is")
     (is (every? #(pays-at (* 1.01 break-even) %) (range n)) "each closed wall seen leaves a round that still pays")))
 
+(deftest a-call-pays-for-the-looks-its-worth-covers
+  (is (= 3 (cost/paid-looks (* 3.5 (cost/look-s 1)))))
+  (is (= 0 (cost/paid-looks (* 0.5 (cost/look-s 1)))))
+  (is (> (cost/paid-looks ##Inf) 1000000)))
+
 (deftest the-looks-past-the-walls-of-a-round-are-not-priced-as-walls
   (let [walls 6 looks 8
         worth (* 1.01 (/ (cost/look-s looks) (cost/closed-chance 0 walls)))]

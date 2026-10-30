@@ -39,6 +39,7 @@
 (defn search-effort [] (settings/get settings ::search-effort))
 
 (def headings {"north" [0 -1] "south" [0 1] "east" [1 0] "west" [-1 0]})
+(def round-size "Looks of one look round (look-around!): level, ahead, down and up along each heading." (* 3 (count headings)))
 (def heading-short {"n" "north" "s" "south" "e" "east" "w" "west"})
 
 (defn cell-of [pos] {:x (js/Math.floor (:x pos)) :y (js/Math.floor (:y pos)) :z (js/Math.floor (:z pos))})

@@ -1,7 +1,7 @@
 (ns jobs.lib.pen-read
   "The one way a job reads a pen: jobs.lib.pen/check over the cells the body sees now or remembers. A remembered cell may
   have changed since (a blast, a cow-proof fence taken down), so read! looks at the remembered cells in sight range
-  before it answers, nearest first, at most sense/max-looks looks. The answer carries :remembered, the cells it read
+  before it answers, nearest first, as many as the call pays for (sense/paid-looks). The answer carries :remembered, the cells it read
   from memory that stay out of view."
   (:require [clojure.string :as str]
             [engine.args :as a]
@@ -77,7 +77,7 @@
   ([c opts retry?]
    (let [p (:primitives c)
          answer (read p opts)
-         stale (take (sense/max-looks) (sense/targets p (u/self-pos c) (:remembered answer) #{}))]
+         stale (take (sense/paid-looks c) (sense/targets p (u/self-pos c) (:remembered answer) #{}))]
      (if (and (empty? stale) (not (retry? answer)))
        answer
        (do (when-not (and (retry? answer) (await (if (:early? opts) (look/survey-until! c :cell (positive-every p opts retry?)) (look/survey! c :cell))))
