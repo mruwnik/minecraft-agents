@@ -384,10 +384,10 @@
   (first (keep-indexed (fn [i s] (when (pos? i) (when-let [cell (unseen-overhead p s)] (when-not (contains? looked cell) i)))) steps)))
 
 (defn occluded?
-  "Whether a seen solid block lies between the body's eye and the centre of cell (sense/occluded?): what it cannot see
-  there is rock, not a place it has failed to look at."
+  "Whether no look from here shows cell (look/look-shows?): what it cannot see there is rock, not a place it has failed
+  to look at."
   [c cell]
-  (sense/occluded? (:primitives c) (u/self-pos c) cell))
+  (not (look/look-shows? (:primitives c) cell)))
 
 (def landing-look-drop "A step down of at least this many blocks is looked at before the body drops: the landing and the cells beside it." 2)
 
