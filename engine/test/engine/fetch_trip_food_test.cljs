@@ -42,3 +42,22 @@
               e (await (ending-of eng {:carry 8}))]
           (is (= :done (:kind e)))
           (is (nil? (get-in e [:data :short]))))))))
+
+(deftest a-holder-that-goes-on-still-gets-every-ending-but-no-carry-passed-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[kind cause] [[:nothing-possible :no-food] [:nothing-possible :still-hungry] [:impossible :no-way]]]
+          (let [{:keys [eng]} (setup {:self {:food 20} :inventory [{:name "bread" :count 1}]})
+                eng (assoc-in eng [:jobs 'jobs.survival.get-food] {:round (fn ^:async stub [c] (ctx/end c kind cause))})
+                e (await (ending-of eng {:carry 8 :go-on? true}))]
+            (is (= [kind cause] [(:kind e) (:cause e)]) (str kind " " cause " is not the pack falling short"))
+            (is (nil? (get-in e [:data :short])))))))))
+
+(deftest a-hungry-body-with-nothing-to-eat-is-not-sent-on-short
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:self {:food 5}})
+              e (await (ending-of eng {:carry 8 :go-on? true}))]
+          (is (= [:nothing-possible :no-food] [(:kind e) (:cause e)])))))))

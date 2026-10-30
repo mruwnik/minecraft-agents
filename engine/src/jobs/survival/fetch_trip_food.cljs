@@ -12,14 +12,14 @@
 
 (def doc
   "Fetch food for a trip: a jobs.survival.get-food child (:carry n, no search), which ends by its own goal.
-  Done when the pack holds :carry food points (also at once), or when get-food ends otherwise and :go-on? says going on with the pack is
+  Done when the pack holds :carry food points (also at once), or when get-food ends nothing-possible :no-carry (the pack stays short of :carry) and :go-on? says going on with the pack is
   cheaper than stopping (the caller priced it): done {:short true :have points :cause get-food's cause}, the child's
-  ending as its :because. Without :go-on? get-food's ending is passed up.
+  ending as its :because. Without :go-on?, and for any other ending (no food, still hungry, failed), get-food's ending is passed up.
   Quote: get-food's; done 1 fetch.")
 
 (a/defargs args
   {:carry {:doc "food points the pack should hold" :spec (a/num-in 0 nil) :default 0}
-   :go-on? {:doc "the caller priced going on with the pack as it is: a fetch that falls short ends done short" :spec boolean? :default false}})
+   :go-on? {:doc "the caller priced going on with the pack as it is: a fetch that ends :no-carry (pack short of :carry) ends done short" :spec boolean? :default false}})
 
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds the fetch may take (get-food's own bound)." :spec (a/num-in 0 nil)}})
@@ -48,7 +48,7 @@
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) (ctx/end c :done nil {:have (have c)})
-      (:go-on? (:args c)) (contract/with-because
+      (and (:go-on? (:args c)) (= [:nothing-possible :no-carry] [(:kind e) (:cause e)])) (contract/with-because
                             (ctx/end c :done nil {:short true :have (have c) :cause (contract/cause-key e)
                                                   :text (str "the fetch fell short (" (name (contract/cause-key e)) "): going on with " (have c) " food points")})
                             e)
