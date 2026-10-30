@@ -777,12 +777,34 @@
           (with-redefs [job-ns/look-pit! (fn [_ _ _] nil)
                         dig-look/look-at! (fn [_ _] nil)
                         u/seen-name (fn [_ _] nil)
+                        blocks/hidden-guess "obsidian"
                         job-ns/drop-route (fn [prices worth _ _ _ _ _] (reset! priced prices) (swap! worths conj worth) (if (= 1 (swap! routes inc)) {:dig cells} {:dig []}))
                         job-ns/dig-cells! (fn [_ cells] (if (= 1 @routes) {:out :unreachable :cell (nth cells 2) :n 2} :dug))]
             (is (= :dug (await (job-ns/dig-to! c item))))
             (let [[w1 w2] @worths
                   guess (reduce + (map #((:dig-s @priced) blocks/hidden-guess %) cells))]
+              (is (not= guess (reduce + (map #((:dig-s @priced) "stone" %) cells))) "the guess is pinned apart from stone")
               (is (< (js/Math.abs (- guess (- w1 w2))) 1e-6) "all three cells (two dug, one failed), unseen, at the guess the plan used, come out of the worth"))))))))
+
+(deftest an-unseen-first-cell-books-the-failed-attempt-so-a-retry-is-not-free
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [c {:primitives (tu/fake-on-floor {}) :args {:items ["diamond"]} :id "j" :view (fn [] {:now 0})}
+              item #js {:id 1 :pos #js {:x 8.5 :y 64 :z 0.5} :item #js {:name "diamond" :count 1}}
+              routes (atom 0) worths (atom []) priced (atom nil)
+              cells [[1 70 0]]]
+          (with-redefs [job-ns/look-pit! (fn [_ _ _] nil)
+                        u/seen-name (fn [_ _] nil)
+                        blocks/hidden-guess "obsidian"
+                        job-ns/light-here! (fn [_] :lit)
+                        job-ns/drop-route (fn [prices worth _ _ _ _ _] (reset! priced prices) (swap! worths conj worth) (if (= 1 (swap! routes inc)) {:dig cells} {:dig []}))
+                        job-ns/dig-cells! (fn [_ _] (if (= 1 @routes) {:out :unseen :cell (first cells) :n 0} :dug))]
+            (is (= :dug (await (job-ns/dig-to! c item))))
+            (let [[w1 w2] @worths
+                  guess ((:dig-s @priced) "obsidian" (first cells))]
+              (is (pos? guess))
+              (is (< (js/Math.abs (- guess (- w1 w2))) 1e-6) "the failed unseen attempt comes out of the worth of the next plan"))))))))
 
 (deftest a-drop-route-that-spends-its-nodes-goes-on-at-the-next-call
   (let [seen (fn [[x y z]] (cond (and (<= 16 x 22) (<= 0 y 1) (= z 16)) "air"

@@ -658,7 +658,7 @@
               m (atom {})
               budgets (atom [])
               digs (atom 0)
-              c {:primitives (:p s) :args {:block "stone"} :update-mem (fn [f args] (apply swap! m f args))}
+              c {:primitives (:p s) :args {:block "stone"} :update-mem (fn [f args] (apply swap! m f args)) :view (fn [] {:now 0})}
               stone-s ((:dig-s (drops/cut-prices c)) "stone" nil)
               steps {:drop-cut (fn [_ _ max-s]
                                  (swap! budgets conj max-s)
@@ -682,7 +682,7 @@
                     plans (atom 0)
                     dug (atom [])
                     m (atom {})
-                    c {:primitives (:p (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})) :args {:block "stone"} :update-mem (fn [f args] (apply swap! m f args)) :emit (fn [kind _ _] (reset! told kind))}
+                    c {:primitives (:p (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})) :args {:block "stone"} :update-mem (fn [f args] (apply swap! m f args)) :view (fn [] {:now 0}) :emit (fn [kind _ _] (reset! told kind))}
                     steps {:drop-cut (fn [_ _ _] (swap! plans inc) (vec (remove (set (map first @dug)) way)))
                            :dig-cell! (fn [_ cell] (let [at [(:x cell) (:y cell) (:z cell)]]
                                                      (swap! dug conj [at @plans])
@@ -747,7 +747,7 @@
       (fn ^:async t []
         (let [s (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})
               m (atom {})
-              c {:primitives (:p s) :args {:block "stone"} :update-mem (fn [f args] (apply swap! m f args))}
+              c {:primitives (:p s) :args {:block "stone"} :update-mem (fn [f args] (apply swap! m f args)) :view (fn [] {:now 0})}
               steps {:drop-cut (fn [_ _ _] [[1 64 0]])
                      :dig-cell! (fn [_ _] nil)
                      :look-at! (fn [_ _] nil)
@@ -755,6 +755,21 @@
               stone-s ((:dig-s (drops/cut-prices c)) "stone" nil)]
           (is (nil? (await (drops/cut-via c steps [2 64 0] 5))) "a failed dig ends the cut")
           (is (= stone-s (get-in @m [:cut-spent [2 64 0]])) "and is booked: the next round plans out of what is left"))))))
+
+(deftest a-cut-dig-is-booked-at-the-clock-seconds-it-took-never-under-its-plan-price
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})
+              m (atom {})
+              now (atom 0)
+              c {:primitives (:p s) :args {:block "stone"} :update-mem (fn [f args] (apply swap! m f args)) :view (fn [] {:now @now})}
+              steps {:drop-cut (fn [_ _ _] [[1 64 0]])
+                     :dig-cell! (fn [_ _] (swap! now + 60000) nil)
+                     :look-at! (fn [_ _] nil)
+                     :mem (fn [_] @m)}]
+          (await (drops/cut-via c steps [2 64 0] 500))
+          (is (<= 60 (get-in @m [:cut-spent [2 64 0]])) "the minute the dig took, as a dig-to! leg books it"))))))
 
 (deftest a-mine-that-ends-short-of-its-count-is-stopped-not-completed
   (async done

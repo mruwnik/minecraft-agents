@@ -406,7 +406,7 @@
                 start (cost/leg-start c)
                 d (await (dig-cells! c (:dig r)))
                 ;; the failing cell's attempt is paid for too; the plan's price is the least the dig leg cost
-                booked (fn [] (cost/leg-price c start 1 (reduce + (take (inc (:n d)) priced))))]
+                booked (fn [] (cost/dig-leg-price c start (take (inc (:n d)) priced)))]
             (cond
               (= :dug d) :dug
               (and (pos? (:n d)) (< pass (replans)) (not= :continue (:out d)))
@@ -414,7 +414,7 @@
               (= :unseen (:out d))
               (let [l (await (light-here! c))]
                 (if l
-                  (if (= :continue l) :continue (do (await (look-pit! c from (item-cell item))) (recur pass spent)))
+                  (if (= :continue l) :continue (do (await (look-pit! c from (item-cell item))) (recur pass (+ spent (booked)))))
                   :unseen))
               :else (:out d))))))))
 

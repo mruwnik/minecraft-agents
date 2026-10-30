@@ -110,7 +110,7 @@
   when it outgrew the heap."
   [c dug max-s]
   (let [p (:primitives c)
-        at (fn [[x y z]] (or (u/seen-name p {:x x :y y :z z}) "stone"))
+        at (fn [[x y z]] (or (u/seen-name p {:x x :y y :z z}) blocks/hidden-guess))
         ;; one search ends on any of the six stands beside dug
         prices (assoc (cut-prices c) :max-s max-s :range 1 :near dug :sees (fn [x y z] (not= [x y z] dug)) :unseen-dig-s (min-dig-s))
         from (u/cell-vec (u/self-pos c))
@@ -146,7 +146,7 @@
   [c {:keys [drop-cut dig-cell! look-at! mem frontier walk-to!]} dug max-s]
   (let [p (:primitives c)
         {:keys [dig-s step-s]} (cut-prices c)
-        name-at (fn [[x y z]] (or (u/seen-name p {:x x :y y :z z}) "stone"))
+        name-at (fn [[x y z]] (or (u/seen-name p {:x x :y y :z z}) blocks/hidden-guess))
         price (fn [cell] (or (dig-s (name-at cell) cell) 0))
         walk seen-sections/walk-steps
         ;; what the search priced round the way: its cells, the ones touching them (a falling block over one, a liquid, an
@@ -201,8 +201,9 @@
           (= last-dug (first cells)) nil
           :else (let [cell (first cells)
                       plan (update (snapshot (rest cells)) :seen dissoc cell)
-                      spent (+ spent (price cell))
-                      o (await (dig-cell! c (zipmap [:x :y :z] cell)))]
+                      start (cost/leg-start c)
+                      o (await (dig-cell! c (zipmap [:x :y :z] cell)))
+                      spent (if (= :continue o) spent (+ spent (cost/dig-leg-price c start [(price cell)])))]
                   (when-not (= :continue o) (book! spent))
                   (case o
                     :continue :partial
