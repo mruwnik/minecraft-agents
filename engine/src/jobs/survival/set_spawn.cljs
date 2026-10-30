@@ -20,7 +20,7 @@
   "Set the respawn point at a bed without sleeping: by day, click the bed (jobs.items.use walks to within 2 cells where the eye sees it (the server sets the point only within 3 blocks), through the door of a hut) and the
   server answers \"respawn point set\".
   Needs a bed: the :bed argument, else the remembered :bed within the default-bed-radius setting (forgotten when its block is seen to be gone), else the nearest bed the body has seen (memory, still a bed as last seen) within that radius.
-  Conditions (at the start only): not night (at night the sleep job sets it), else it waits :night; a bed: with none the start check looks round first (safe? has no place to price), then waits (:later); with none found it ends condition-failed :no-bed.
+  Conditions (at the start only): not night (at night the sleep job sets it), else it waits :night; a bed: with none the start check looks round first, then waits (:later); with none found it ends condition-failed :no-bed.
   Done at once (:already) when the :spawn-bed it writes is recorded at the bed. Done {:spawn pos} when the server set the point, or at once with :why :unchanged when the spawn is already
   known at that bed (jobs.lib.shelter.spawn/spawn-known?: :spawn-bed or :spawn-set near it, not reset since). A click that reached the bed
   and changed nothing means the server already has the spawn there (it answers only when the point moves): done :why :unchanged. Any other click that did not set it
@@ -48,11 +48,10 @@
 
 (defn worth-of
   "Seconds a root call is worth: the respawn point at the bed, cost/spawn-worth (the walks back it shortens from deaths
-  where the body stands, as it works here); 0 with no bed."
+  where the body stands, as it works here); with no bed, a bed where the body stands."
   [c]
-  (if-let [bed (bed-of c)]
-    (cost/spawn-worth (cost/death-body (:primitives c) (ctx/view c)) bed (u/self-pos c))
-    0))
+  (let [here (u/self-pos c)]
+    (cost/spawn-worth (cost/death-body (:primitives c) (ctx/view c)) (or (bed-of c) here) here)))
 
 (a/defargs settings
   {::job-time-s {:default 60 :doc "Seconds the walk to the bed and the click may take." :spec (a/num-in 0 nil)}
@@ -66,10 +65,7 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(def safe?
-  (let [at-bed (price/stays (ready/safe-at-by-night bed-of) (price/trip-s bed-of 3))]
-    (with-meta (fn [c] (if (bed-of c) (at-bed c) (contract/ok :no-place "no bed, so no place to be exposed at")))
-               (meta at-bed))))
+(def safe? (price/stays (ready/safe-at-by-night bed-of) (price/trip-s bed-of 3)))
 
 (def fit? ready/ok)
 
