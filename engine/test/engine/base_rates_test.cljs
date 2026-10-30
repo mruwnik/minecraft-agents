@@ -67,3 +67,7 @@
   (is (< (rates/sky-share 70 8 0 50) 0.1) "a hall seen shaded at the surface")
   (is (> (rates/sky-share 20 8 50 50) 0.9) "a ravine seen sky-lit deep down")
   (is (> (rates/sky-share 70 8 0 0) (rates/sky-share 70 15 0 0)) "more open blocks have some sky light than the open sky"))
+
+(deftest sky-under-falls-with-the-light-level-asked-for
+  (doseq [narrow? [true false] n (range 1 8)]
+    (is (apply >= (map #(rates/sky-under n % narrow?) (range 1 16))))))
