@@ -81,7 +81,7 @@
     (when-not (= :continue r)
       (sh-spawn/retract-bed! c (:removed (:data r)))
       (warn-stuck! c (let [held (ledger/held-cells (ctx/view c))]
-                       (filterv #(held (:cell %)) (ledger/open-entries (ctx/view c))))))
+                       (filterv #(held (:cell %)) (ledger/entries c)))))
     :again))
 
 (def seal-purposes "Ledger purposes of the blocks that shut a body in for the night." #{:shelter :retreat-plug})
@@ -95,7 +95,7 @@
       (let [{:keys [x y z]} (sh-sense/feet p)
             held (ledger/held-cells (ctx/view c))]
         (seq (remove (some-fn (comp held :cell) (complement (comp seal-purposes :purpose)))
-                     (ledger/near-of (ledger/open-entries (ctx/view c)) {:pos {:x x :y y :z z} :radius ledger/seal-clear-radius})))))))
+                     (ledger/near-of (ledger/entries c) {:pos {:x x :y y :z z} :radius ledger/seal-clear-radius})))))))
 
 (defn opened-cells
   "The cells a way out may open: the shelter's own blocks near the feet (seal-purposes) and every side and the top of
@@ -103,7 +103,7 @@
   [c]
   (let [{:keys [x y z]} (sh-sense/feet (:primitives c))
         own (keep #(when (seal-purposes (:purpose %)) (:cell %))
-                  (ledger/near-of (ledger/open-entries (ctx/view c)) {:pos {:x x :y y :z z} :radius ledger/seal-clear-radius}))]
+                  (ledger/near-of (ledger/entries c) {:pos {:x x :y y :z z} :radius ledger/seal-clear-radius}))]
     (concat (map vec own)
             [[x (+ y 2) z]]
             (for [dy [0 1] [dx dz] [[1 0] [-1 0] [0 1] [0 -1]]] [(+ x dx) (+ y dy) (+ z dz)]))))

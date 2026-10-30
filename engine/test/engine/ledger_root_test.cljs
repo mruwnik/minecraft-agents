@@ -53,3 +53,11 @@
     (ledger/entries child)
     (reset! (:clock r) (+ 1000000 (* 1.5 ttl-ms)))
     (is (false? (orphan? r (first (entries r)))) "a read by a job of the tree renewed the entry")))
+
+(deftest a-read-from-another-root-leaves-the-expiry-alone
+  (let [r (rig)]
+    (place! ((:ctx r) "j1/stair" "j1") [0 64 0])
+    (reset! (:clock r) (+ 1000000 (* 0.75 ttl-ms)))
+    (ledger/entries ((:ctx r) "j9/scan" "j9"))
+    (reset! (:clock r) (+ 1000000 (* 1.5 ttl-ms)))
+    (is (true? (orphan? r (first (entries r)))) "a job of another root did not renew the entry")))

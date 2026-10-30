@@ -262,7 +262,7 @@
   (if (false? (:clear-seal (:args c)))
     #{:walk}
     (cond-> #{:walk :clear-seal}
-      (seq (ledger/near-of (ledger/open-entries (ctx/view c)) {:pos (u/self-pos c) :radius seal-radius})) (into [:dig-out :pillar]))))
+      (seq (ledger/near-of (ledger/entries c) {:pos (u/self-pos c) :radius seal-radius})) (into [:dig-out :pillar]))))
 
 (defn ^:async walk-request
   "[pens go-to-args] of the walk to pos: range (default 3), its walk-ways, and (unless the :enter-pens setting) keeping out of the

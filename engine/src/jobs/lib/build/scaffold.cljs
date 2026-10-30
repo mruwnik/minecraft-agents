@@ -23,7 +23,7 @@
 (defn open?
   "Whether this job's scaffold ledger entries (its own or a child's) are still open."
   [c]
-  (boolean (some #(ledger/of-instance? (:id c) %) (ledger/open-entries (ctx/view c)))))
+  (boolean (some #(ledger/of-instance? (:id c) %) (ledger/entries c))))
 
 (defn avoid-cells
   "The cells no stand or base may be: a planned cell, or the one below it (its head would be in the plan), and the
