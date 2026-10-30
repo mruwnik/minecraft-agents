@@ -314,8 +314,8 @@
       (fn ^:async t []
         (let [s (f/start (-> (f/bare [{:name "wooden_pickaxe" :count 1}]) (update :blocks merge walled-in)) [])
               _ (is (seq (look/seen-blocks (:p s) {:names ["stone"] :radius 16 :max 1})) "the stone is seen through the window")
-              e (await (ending-of s 'jobs.items.obtain {:item "cobblestone" :count 4 :explore false :worth 3600} 120))]
-          (is (= {:kind :nothing-possible :cause :unreachable} (kc e)) "worth the dark, the mine finds no way in")
+              e (await (ending-of s 'jobs.items.obtain {:item "cobblestone" :count 3 :explore false :worth (cost/find-worth nil ["raw_iron"] nil 1)} 120))]
+          (is (= {:kind :nothing-possible :cause :unreachable} (kc e)) "a stone pickaxe's stone for a raw iron is worth the dark: the mine finds no way in")
           (is (re-find #"could not get to a source of" (get-in e [:cause :why]))))
         (let [s (f/start (-> (f/bare [{:name "wooden_pickaxe" :count 1}]) (update :blocks merge walled-in)) [])
               e (await (ending-of s 'jobs.items.obtain {:item "cobblestone" :count 4 :explore false} 120))]
