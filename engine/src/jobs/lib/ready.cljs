@@ -111,7 +111,7 @@
           looks (min (count cells) (sense/max-looks))
           n (cost/round-looks (ctx/worth c) looks (min (count sides) looks))]
       (when (pos? n)
-        (contract/look :exposed text :look-at (vec (take n cells)) :room-sides true)))))
+        (contract/look :exposed text :look-at cells :room-sides true)))))
 
 (defn air-look
   "Under a seen roof, a :look at the unseen cells beside the seen air round the body (look/room-air-unseen) a look from here
