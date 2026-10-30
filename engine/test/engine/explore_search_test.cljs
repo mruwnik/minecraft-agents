@@ -1137,3 +1137,13 @@
           (let [e (not-found-of s)]
             (is (= :stuck (:why e)) (pr-str (dissoc e :coverage)))
             (is (< (get-in e [:coverage :legs]) 16) "not a walk toward each of the ~450 unseen columns past the edge")))))))
+
+(deftest an-animal-noted-near-is-departed-only-when-its-cell-is-in-view-and-it-is-not-among-those-seen
+  (let [p (tu/fake-on-floor {})
+        ns [{:kind :seen :what "cow" :id "u1" :pos [3 64 3]} {:kind :seen :what "cow" :id "u2" :pos [3 64 4]}]
+        departed (fn [visible seen]
+                   (tu/set-sensed! p (fn [_] #js {:visible visible}))
+                   (search/departed {:primitives p} ns seen 20))]
+    (is (= #{"u1" "u2"} (departed true [])) "cells in view, no animal there")
+    (is (= #{"u2"} (departed true [{:id "u1"}])) "u1 is among the entities seen")
+    (is (= #{} (departed false [])) "a cell out of view proves nothing")))

@@ -1,5 +1,6 @@
 (ns jobs.animals.lure-to
-  (:require [jobs.lib.checks :as checks]
+  (:require [jobs.lib.animal-spare :as spare]
+            [jobs.lib.checks :as checks]
             [jobs.lib.work-place :as work-place]
             [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
@@ -326,7 +327,7 @@
         at (fn [n] (let [[x y z] (:pos n)] {:x x :y y :z z}))]
     (when-let [n (->> (notes/notes c)
                       (filter #(and (= :seen (:kind %)) (= mob (:what %)) (:id %) (not (contains? (set noted-tried) (:id %)))
-                                    (< (- now (:t %)) (note-age-ms)) (<= (u/flat-dist origin (at %)) radius)))
+                                    (< (- now (:t %)) (note-age-ms)) (<= (u/flat-dist origin (at %)) radius) (not (spare/gone? c % radius))))
                       (sort-by #(u/flat-dist me (at %)))
                       first)]
       {:key (:id n) :pos (at n) :at now :note-id (:id n)})))

@@ -254,12 +254,10 @@
     (boolean (and seen (not= seen (:what n))))))
 
 (defn departed
-  "The ids of entity notes lying within near blocks of the body at [x y z] whose animal is not among the entities seen
-  there now (killed or gone), since a look this close misses none."
-  [ns seen [x y z] near]
-  (let [here (set (keep :id seen))]
-    (into #{} (comp (filter #(and (= :seen (:kind %)) (:id %) (not (here (:id %)))
-                                  (<= (js/Math.hypot (- ((:pos %) 0) x) (- ((:pos %) 1) y) (- ((:pos %) 2) z)) near)))
+  "The ids of entity notes (:seen, with an :id) that are proven gone (spare/gone?): their cell is in view within `near` of the body now and their animal is not among the entities `seen` there."
+  [c ns seen near]
+  (let [in-sight (into #{} (keep :id) seen)]
+    (into #{} (comp (filter #(and (= :seen (:kind %)) (:id %) (spare/gone? c % near in-sight)))
                     (map :id))
           ns)))
 
@@ -727,7 +725,7 @@
     (let [p (:primitives c)
           me (here c)
           near (min (:scan-radius (:args c)) (near-sight))
-          gone (if (pos? near) (departed ns (sense p names near) me near) #{})]
+          gone (if (pos? near) (departed c ns (sense p names near) near) #{})]
       (->> (noted p ns names (:origin m) (distance-limit c) gone (ctx/now c) (fresh-ms) (set (:revisited m)) true)
            (takeable c)
            (sort-by #(xz-dist [(me 0) (me 2)] [((:pos %) 0) ((:pos %) 2)]))
@@ -821,7 +819,7 @@
         ns (notes/notes c)
         m (ctx/mem c)
         near (min (:scan-radius (:args c)) (near-sight))
-        gone (if (pos? near) (departed ns (sense (:primitives c) names near) (here c) near) #{})
+        gone (if (pos? near) (departed c ns (sense (:primitives c) names near) near) #{})
         found (cond-> (cond-> (:found m)
                         (not resumed) (add-found (takeable c (remembered (:primitives c) names (:origin m) max-distance)) want))
                 use-notes (add-found (takeable c (noted (:primitives c) ns names (:origin m) max-distance gone (ctx/now c) (fresh-ms) #{} false)) want))]

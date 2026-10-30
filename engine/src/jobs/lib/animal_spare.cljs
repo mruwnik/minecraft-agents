@@ -35,11 +35,13 @@
         (and (<= 2 adults-of-kind keep) (not starved?)) :kept))
 
 (defn gone?
-  "Whether a :seen note's animal, not among the entities in sight, is proven gone: its cell is in view now and within the `radius` the entity scan covers."
-  [c note radius]
-  (let [pos (zipmap [:x :y :z] (:pos note))]
-    (and (<= (u/flat-dist (u/self-pos c) pos) radius)
-         (true? (some-> (u/sensed (:primitives c) pos) .-visible)))))
+  "Whether a :seen note's animal is proven gone: its cell is in view now and within the `radius` the entity scan covers, and the animal is not among `seen-ids` (the uuids in sight: a visible animal a hunt skips is not gone)."
+  ([c note radius] (gone? c note radius #{}))
+  ([c note radius seen-ids]
+   (let [pos (zipmap [:x :y :z] (:pos note))]
+     (and (not (contains? seen-ids (:id note)))
+          (<= (u/flat-dist (u/self-pos c) pos) radius)
+          (true? (some-> (u/sensed (:primitives c) pos) .-visible))))))
 
 (defn noted-adults
   "The uuids of adult animals of `kind` that live :seen notes (any body's) place anywhere and that are not among `seen-uuids`: a pair standing out of each other's sight is still a pair wherever the body stands. A note whose cell is in view with no such animal there (gone?) is dropped; the rest age out with their ttl."

@@ -11,6 +11,7 @@
             [engine.hostile-test :as h]
             [engine.hunt-test :as hunt-test]
             [engine.memory :as mem]
+            [engine.notes :as notes]
             [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.lib.escort :as escort]
@@ -936,3 +937,15 @@
               (swap! clock + 700)
               (await (core/tick! eng)))
             (is (= declined (mapv :reason (filter #(= :lure-to.declined (:kind %)) @seen))) (str "zone at x " zone-x))))))))
+
+(deftest a-noted-animal-whose-cell-is-in-view-and-empty-is-not-walked-to
+  (let [p (tu/fake-on-floor {})
+        note {:kind :seen :what "cow" :id "u1" :pos [10 64 0] :t 1000}
+        sighting (fn [visible]
+                   (tu/set-sensed! p (fn [_] #js {:visible visible}))
+                   (with-redefs [notes/notes (constantly [note])
+                                 ctx/mem (constantly {:origin {:x 0 :y 64 :z 0}})
+                                 ctx/now (constantly 2000)]
+                     (:key (lure-to/noted-sighting {:primitives p :args {:mob "cow" :radius 20}}))))]
+    (is (= "u1" (sighting false)) "a note out of view is still walked to")
+    (is (nil? (sighting true)) "its cell seen empty: the animal is gone")))
