@@ -460,14 +460,15 @@
   (max 0 (- worth (:cost (walk-cost {:distance straight})))))
 
 (defn turn-back-cost
-  "{:cost :parts {:look :back}} of a way over unseen `floors` [{:look :back :p :extra-s}] in walk order, each not there at
+  "{:cost :parts {:look :back}} of a way over unseen `floors` [{:look :back :p :extra-s :fall-s}] in walk order, each not there at
   chance p: the way reaches a floor while those before it held, pays its look (seconds), and when it is not there walks
-  back to the way's start (:back blocks) and takes the next-best way, :extra-s seconds dearer."
+  back to the way's start (:back blocks) and takes the next-best way, :extra-s seconds dearer; a step down that falls
+  further first climbs out of where it lands, :fall-s seconds."
   [floors]
-  (let [parts (:parts (reduce (fn [{:keys [reach] :as acc} {:keys [look back p extra-s]}]
+  (let [parts (:parts (reduce (fn [{:keys [reach] :as acc} {:keys [look back p extra-s fall-s]}]
                                 (-> acc
                                     (update-in [:parts :look] + (* reach look))
-                                    (update-in [:parts :back] + (chance-times (* reach p) (+ (:cost (walk-cost {:distance back})) (or extra-s 0))))
+                                    (update-in [:parts :back] + (chance-times (* reach p) (+ (:cost (walk-cost {:distance back})) (or extra-s 0) (or fall-s 0))))
                                     (assoc :reach (* reach (- 1 p)))))
                               {:reach 1 :parts {:look 0 :back 0}}
                               floors))]

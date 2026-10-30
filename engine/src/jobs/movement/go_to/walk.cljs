@@ -29,6 +29,7 @@
             [jobs.lib.breath :as breath]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.ways :as cw]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
@@ -173,7 +174,8 @@
 (defn turn-back
   "{:cost :worth :p :cells} of a plan's floors the body has not seen (steps with :unseen-floor; nil when none): each
   priced by cost/turn-back-cost, its look a peek over a drop or an aim (cost/walk-unknown-prices), its walk back the blocks
-  from the plan's start to its takeoff, its chance of not being there cost/floor-absent-chance of its kind
+  from the plan's start to its takeoff (a step down first climbs out of the deeper fall it lands in, a pillar one block
+  higher than the step's drop: cw/pillar-cost; never, when the call's :ways leave out :pillar and :stair), its chance of not being there cost/floor-absent-chance of its kind
   (wsight/floor-kind) over the call's floors of each kind found there or not (cut/floor-counts). :worth is cost/tour-worth
   of the goal's straight blocks at the call's start and the call's worth (ctx/worth). No second way is known when the plan is
   made: a floor not there costs, when no lower step has one either (cost/floor-dead-end-chance), the worse case of
@@ -185,13 +187,16 @@
     (let [steps (vec steps)
           counts (cut/floor-counts c)
           {:keys [peek-s aim-s]} (cost/walk-unknown-prices)
+          climb? (or (ways/way? c :pillar) (ways/way? c :stair))
           worth (cost/tour-worth (:detour-from (ctx/mem c) 0) (ctx/worth c))
           left (max 0 (- worth (:cost (cost/tour-cost (tour c)))))
           backs (vec (reductions + 0 (map #(detour/length [%1 %2]) steps (rest steps))))
           floors (keep-indexed (fn [i s]
                                  (when (:unseen-floor s)
-                                   (let [kind (wsight/floor-kind steps i)]
-                                     {:look (if (#{:down :drop} kind) peek-s aim-s) :back (get backs (max 0 (dec i)))
+                                   (let [kind (wsight/floor-kind steps i)
+                                         drop-by (js/Math.round (- (:y (steps (dec i))) (:y s)))]
+                                     {:fall-s (when (#{:down :drop} kind) (if climb? (cw/pillar-cost (inc drop-by)) ##Inf))
+                                      :look (if (#{:down :drop} kind) peek-s aim-s) :back (get backs (max 0 (dec i)))
                                       :p (cost/floor-absent-chance kind (get counts kind))
                                       :extra-s (cost/chance-times (cost/floor-dead-end-chance kind counts) left)
                                       :cell [(js/Math.floor (:x s)) (dec (js/Math.floor (:y s))) (js/Math.floor (:z s))]})))

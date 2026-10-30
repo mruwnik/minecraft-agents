@@ -474,6 +474,14 @@
           (is (= 40 (js/Math.floor y)) (str "on the ravine floor: at " (at p)))
           (is (<= (js/Math.hypot (- 44 x) z) 2) (str "at " (at p))))))))
 
+(deftest a-way-down-onto-unseen-floors-is-not-tried-by-a-walk-that-could-not-climb-out-of-a-deeper-fall
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (go! ravine {:pos {:x 44 :z 0} :range 2 :worth 500 :ways #{:walk} :settings {:jobs.movement.go-to.tuning/goal-danger :end}}))]
+          (is (= {:arrived false :why :unseen-floors} (select-keys @out [:arrived :why])) (pr-str @out))
+          (is (= 64 (js/Math.floor (second (at p)))) "it never set off down the ramp"))))))
+
 (deftest a-way-down-a-ramp-onto-unseen-floors-is-not-tried-for-a-goal-worth-less-than-turning-back
   ;; a goal worth 1 s: less than the walk back from floors that may be absent
   (async done

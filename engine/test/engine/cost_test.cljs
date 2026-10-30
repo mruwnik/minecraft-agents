@@ -276,6 +276,7 @@
   (let [walk #(:cost (cost/walk-cost {:distance %}))]
     (is (= (+ 0.7 (* 0.5 (walk 10))) (:cost (cost/turn-back-cost [{:look 0.7 :back 10 :p 0.5}]))))
     (is (= (+ 0.7 (* 0.5 (+ (walk 10) 4))) (:cost (cost/turn-back-cost [{:look 0.7 :back 10 :p 0.5 :extra-s 4}]))) "the next-best way's extra seconds on top")
+    (is (= (+ 0.7 (* 0.5 (+ (walk 10) 4.5))) (:cost (cost/turn-back-cost [{:look 0.7 :back 10 :p 0.5 :fall-s 4.5}]))) "a step down that falls further climbs out first")
     (is (< (:cost (cost/turn-back-cost [{:look 0.1 :back 2 :p 0.5}])) (:cost (cost/turn-back-cost [{:look 0.1 :back 40 :p 0.5}])))
         "the farther the walk back, the dearer")
     (is (< (:cost (cost/turn-back-cost [{:look 0.1 :back 10 :p 0.1}])) (:cost (cost/turn-back-cost [{:look 0.1 :back 10 :p 0.9}])))
