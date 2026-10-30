@@ -30,7 +30,7 @@
   Needs: the input, the fuel (the :fuel item, else coal, charcoal or planks, sized by what one item smelts; a wood input with no other fuel burns some of itself) and a furnace. With fetching ways
   (the call's :ways minus :carried, default all; jobs.lib.need) a furnace comes first (a seen one, a carried one put down, else one fetched), then what else is
   missing is fetched by obtain children; the fetch's ending is the :because. :ways #{:carried} skips it.
-  can-start?: never :not-smeltable for an item no furnace cooks. can-start? and can-run?: later :refused {:zones :claims} while a zone
+  can-start?: never :not-smeltable for an item no furnace cooks; later :nothing-smeltable with no :item and nothing smeltable carried. can-start? and can-run?: later :refused {:zones :claims} while a zone
   or claim of another bars :put or :take at the furnace (:ignore-zones? skips it); a cooking job yields until the cook is due,
   without touching the furnace.
   Quote: the cook time of the count, the input, fuel and product items; open-ended with no furnace given or seen. Default :spend

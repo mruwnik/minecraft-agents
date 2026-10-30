@@ -383,6 +383,18 @@
                     (is (not (some #{"load"} (ops p))) label)
                     (is (= before (inv-of p)) label)))))))))
 
+(deftest a-smeltable-item-lost-before-the-start-is-refused-not-walked-for
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks {"20,64,0" "furnace"} :inventory [{:name "raw_iron" :count 3} {:name "coal" :count 2}]})]
+          (core/submit! eng '(jobs.items.smelt {:furnace {:x 20 :y 64 :z 0}}) {})
+          (swap! (fake/state p) assoc :inventory [{:name "coal" :count 2}])
+          (await (ticks eng 6))
+          (is (empty? (tu/walk-calls p)) "no walk toward a furnace with nothing to cook")
+          (is (not (some #{"load"} (ops p))))
+          (is (= {"coal" 2} (inv-of p))))))))
+
 (deftest fuel-the-register-holds-is-not-loaded
   (async done
     (tu/run-async done
