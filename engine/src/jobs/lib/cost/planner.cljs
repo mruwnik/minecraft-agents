@@ -191,7 +191,9 @@
   {:peek-s 0.7 :aim-s 0.1 :see-lit-depth 10 :light-depth 5})
 
 (a/defargs settings
-  {::quote-unseen-factor {:default 2 :doc "A go-to quote's mean counts each block still to go past a partial route (or with no route, when the call may change the world) as this many walked blocks of unseen terrain (walk-floor each)." :spec (a/num-in 0 nil)}
+  {::search-cell-s {:default 0.0001 :spec (a/num-in 0 nil)
+                    :doc "Seconds of CPU one cell expanded by a route search costs (dig-route's priced-search; go-to's flood and search slices are charged against it by ratio). Measured 2026-10-30 on the landed code, search to its end in the fake world: 0.035 to 0.083 ms a cell over three bare scenes (a dear shell, a far unseen dig, a diagonal), 0.103 ms (0.92 s over 8910 cells) in mine-a's glass cut, which also reads the seen world through the primitives: the dearest scene is the price. Recount: time dr/search to its end over a scene in a scratch deftest (engine/test/engine/dig_route_test.cljs's worlds)."}
+   ::quote-unseen-factor {:default 2 :doc "A go-to quote's mean counts each block still to go past a partial route (or with no route, when the call may change the world) as this many walked blocks of unseen terrain (walk-floor each)." :spec (a/num-in 0 nil)}
    ::drop-cost {:default 1 :doc "Scales the cost of a drop (fall seconds and damage; 1 as is, 0 free, 5 dear); false: no drop of 2 or 3 at all. :one-way :closed instead refuses only a drop the body cannot climb back." :spec (a/or-of (a/num-in 0 nil) false?)}
    ::costs {:default false :doc (str "Map of price name to seconds, overriding the planner's price of a move (" (str/join " " (map name (keys planner-names))) "); a price left out keeps the planner's default. false: none.")
             :spec (a/or-of false? (a/valid-by "a map of planner price name to a number of seconds >= 0" #(planner-costs-problem %)))}
@@ -277,3 +279,5 @@
 (defn walk-drop-cost "The setting ::drop-cost." [] (settings/get settings ::drop-cost))
 (defn walk-unknown-prices "The unknown-prices as set: the defaults over the setting ::unknown-prices." []
   (merge unknown-prices (or (settings/get settings ::unknown-prices) nil)))
+
+(defn search-cell-s "Seconds of CPU one cell of a route search costs (::search-cell-s)." [] (settings/get settings ::search-cell-s))

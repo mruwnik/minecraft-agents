@@ -1,6 +1,7 @@
 (ns engine.dig-route-test
   (:require [cljs.test :refer [deftest is testing]]
             [engine.settings :as settings]
+            [jobs.lib.cost :as cost]
             [jobs.lib.dig-route :as dr]))
 
 (defn world
@@ -139,8 +140,9 @@
         opts {:dig-s (fn [n _] (if (= "obsidian" n) 50 1)) :step-s 0.3 :max-s 1000}
         to-end (fn [run] (loop [cells 0] (let [[a e] (run 500)] (if a [a (+ cells e)] (recur (+ cells e))))))
         [exact exact-cells] (to-end (dr/search w [0 10 0] [0 5 6] opts))
+        _ (.clear dr/kept)
         [priced priced-cells] (to-end (dr/priced-search w [0 10 0] [0 5 6] opts))]
-    (is (<= (:seconds priced) (+ (:seconds exact) (* (settings/get dr/settings ::dr/node-s) priced-cells)))
+    (is (<= (:seconds priced) (+ (:seconds exact) (* (cost/search-cell-s) priced-cells)))
         (str "dearer than the cheapest by at most the CPU it spent (" priced-cells " cells, the exact search " exact-cells ")"))
     (is (< (* 2 priced-cells) exact-cells) "for less than half the cells")
     (doseq [i (range 20)] (dr/route-resumed [:t 2 i] w [0 10 0] [0 5 6] (assoc opts :max-nodes 1)))

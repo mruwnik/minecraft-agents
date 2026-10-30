@@ -281,7 +281,7 @@
       (or a :searching))))
 
 (def flood-cells-per-node
-  "Flood cells that cost a slice as much as one search node expanded (measured in the fake world: a node about 0.2 ms, a flood cell 0.02 ms)."
+  "Flood cells that cost a slice as much as one search node expanded (measured in the fake world: a flood cell about a tenth of a node; a node's own seconds are cost/search-cell-s)."
   8)
 
 (defn charge!

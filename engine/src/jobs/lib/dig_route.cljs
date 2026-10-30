@@ -1,8 +1,8 @@
 (ns jobs.lib.dig-route
   "The cheapest walkable way, cells dug included, from one feet cell to another through stone: a pure search over what the
   caller says each cell is (block-at cell -> name, or nil when never seen)."
-  (:require [engine.args :as a]
-            [engine.heap :as heap]
+  (:require ["v8" :as v8]
+            [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.block-sets :as bs]
@@ -16,10 +16,6 @@
 
 (a/defargs settings
   {::max-nodes {:default 500 :doc "The most cells a route search expands before it gives up (:budget)." :spec (a/int-in 1 nil)}
-   ::node-s {:default 0.0001 :spec (a/num-in 0 nil)
-             :doc "Seconds of CPU one cell a search expands costs, its back-search steps with it: 0.92 s for 8910 cells in the fake world (mine-a's glass wall cut, 2026-10-30)."}
-   ::round-s {:default 0.08 :spec (a/num-in 0 nil)
-              :doc "CPU seconds one route-resumed call may search: within the ~100 ms a round searches (walk.search's round-ms)."}
    ::heap-full {:default 0.75 :spec (a/num-in 0 1)
                 :doc "The share of the heap's limit used past which a kept search grows no more: past it V8 collects ever more often and the body runs out of memory (a 1.4 GB heap did, 2026-10-30)."}})
 
@@ -388,17 +384,17 @@
 (defn heap-full?
   "Whether the heap is past ::heap-full of its limit."
   []
-  (let [{:keys [heap-used heap-limit]} (heap/sample)]
-    (> heap-used (* heap-limit (settings/get settings ::heap-full)))))
+  (let [h (v8/getHeapStatistics)]
+    (> (.-used_heap_size h) (* (.-heap_size_limit h) (settings/get settings ::heap-full)))))
 
 (defn priced-search
-  "search with its CPU priced (::node-s), the back search's bound in its heuristic (:back-h?), grown only while the
+  "search with its CPU priced (cost/search-cell-s), the back search's bound in its heuristic (:back-h?), grown only while the
   heap has room (heap-full?). A fn of n as search's."
   [block-at from goal opts]
-  (search block-at from goal (assoc opts :node-s (settings/get settings ::node-s) :back-h? true :full? heap-full?)))
+  (search block-at from goal (assoc opts :node-s (cost/search-cell-s) :back-h? true :full? heap-full?)))
 
 (defn route-resumed
-  "route, but a search that spends its nodes (:max-nodes, at most ::round-s of CPU at ::node-s) is kept under key and
+  "route, but a search that spends its nodes (:max-nodes) is kept under key and
   gone on by the next call with the same key: {:problem :searching} till it ends, priced as priced-search ({:problem
   :too-big} once the heap is full with no route in hand). A key names the caller and the search ([job-id :kind from goal]):
   the caller's search under another key is dropped (its question changed), and one never asked again falls out of kept."
@@ -407,8 +403,7 @@
         key (pr-str key)
         [k run] (.get kept caller)
         run (or (when (= k key) run) (priced-search block-at from goal opts))
-        nodes (min (get opts :max-nodes (settings/get settings ::max-nodes))
-                   (js/Math.ceil (/ (settings/get settings ::round-s) (settings/get settings ::node-s))))
+        nodes (get opts :max-nodes (settings/get settings ::max-nodes))
         [a] (run nodes)]
     (.delete kept caller)
     (when-not a
