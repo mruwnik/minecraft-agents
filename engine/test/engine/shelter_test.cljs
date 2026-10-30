@@ -1127,30 +1127,20 @@
           (is (= 1 (count (emitted seen :shut-in.sealed))) "walled in with placed blocks")
           (is (every? #(>= (:y (arg-pos %)) 64) (calls p "dig")) "no dig below the surface: the only digs are the placed wall, taken down by day"))))))
 
-(deftest an-unsheltered-hold-does-not-rerun-a-failing-dig-in
+(deftest an-unsheltered-hold-does-not-call-a-dig-in-whose-quote-finds-no-way
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[blocks reason] [[{"0,63,0" "stone" "0,62,0" "air"} :no-floor]
-                                 [{"0,63,0" "stone" "0,62,0" "water"} :no-floor]
-                                 [{"0,63,0" "water"} :hazard-below]]]
+        (doseq [blocks [{"0,63,0" "stone" "0,62,0" "air"}
+                        {"0,63,0" "stone" "0,62,0" "water"}
+                        {"0,63,0" "water"}]]
           (let [{:keys [eng p seen]} (setup {:time night :blocks blocks :inventory [{:name "dirt" :count 1} {:name "iron_pickaxe" :count 1}]})]
             (core/submit! eng '(jobs.survival.night) {})
             (await (tick-n eng 3))
             (is (= [] (calls p "dig")) (pr-str blocks))
-            (is (= 4 (count (no-way-stops seen))) (str (pr-str blocks) ": one try at the site, then max-sites sites in all; no niche, whose quote finds no face to dig"))
-            (is (= reason (:reason (first (entries eng :shut-in-failed)))) (str (pr-str blocks) ": dig-in's futile entry written and kept for the next firing in the dark"))))))))
-
-(deftest night-over-an-open-floor-walks-to-another-site-before-holding
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:time night :inventory [{:name "dirt" :count 1} {:name "iron_pickaxe" :count 1}]
-                                           :blocks {"0,63,0" "stone" "0,62,0" "air"}})]
-          (core/submit! eng '(jobs.survival.night) {})
-          (await (tick-n eng 30))
-          (let [pos (pos-of p)]
-            (is (> (js/Math.hypot (:x pos) (:z pos)) 9) "left the site whose floor is hollow (a player cannot see that, dig-in finds out)")))))))
+            (is (= [] (calls p "place")) (pr-str blocks))
+            (is (= [] (no-way-stops seen)) (str (pr-str blocks) ": a quote of no way is not run to see it fail"))
+            (is (= 1 (count (emitted seen :shelter.exposed))) (pr-str blocks))))))))
 
 (deftest an-unsheltered-hold-sleeps-in-a-bed-given-or-seen-later
   (async done
