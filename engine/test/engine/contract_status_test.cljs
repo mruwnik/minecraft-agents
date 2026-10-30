@@ -296,6 +296,19 @@
           (await (core/tick! eng))
           (is (= {:rounds 2} (select-keys @world [:rounds :look-rounds]))))))))
 
+(deftest a-look-child-that-ends-otherwise-than-done-ends-the-job-condition-failed-look-first-with-its-ending-as-the-because
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {'stayer (stayer #(contract/ok :seen "seen"))
+                                         'looker {:round (fn [c] (ctx/end c :nothing-possible {:reason :no-carry :text "no food to carry"} nil))}})]
+          (core/submit! eng '(stayer) {})
+          (await (core/tick! eng))
+          (await (core/tick! eng))
+          (let [e (:data (first (job-ev seen :stopped)))]
+            (is (= [:condition-failed :look-first] [(:kind e) (:reason (:cause e))]))
+            (is (= [:nothing-possible :no-carry] [(:kind (:because e)) (contract/cause-key (:because e))]))))))))
+
 (deftest a-called-child-whose-can-run-turns-later-ends-condition-failed-for-its-parent
   (async done
     (tu/run-async done

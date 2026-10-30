@@ -368,7 +368,7 @@
   "The round of contract job def, not started, whose checks' verdict carries child, a :look-first [job args] call (or
   whose earlier one is still running): the call is frozen without starting, so the child gets its :spend and worth, and
   the child runs in slot ::look-first. :continue while it runs and once it ends :done, so the next round asks the start
-  checks again as on a first start; condition-failed :look-first when it ends otherwise."
+  checks again as on a first start; condition-failed :look-first, the child's ending as its :because, when it ends otherwise."
   [def c child]
   (let [eng (:engine c)]
     (when-not (looking c) (freeze! c def))
@@ -378,7 +378,7 @@
       (cond
         (= :continue r) :continue
         (= :done (:kind r)) :continue
-        :else (finish def c (contract/ending :condition-failed {:reason :look-first} nil))))))
+        :else (finish def c (contract/with-because (contract/ending :condition-failed {:reason :look-first} nil) r))))))
 
 (defn ^:async checked-round
   "run's round when no look child is running."
