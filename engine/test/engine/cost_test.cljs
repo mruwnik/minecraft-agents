@@ -11,6 +11,7 @@
             [jobs.lib.cost.death :as death]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.cost.ways :as ways]
+            [jobs.lib.game-facts :as facts]
             [jobs.lib.walk.world :as wworld]))
 
 (defn round2 [x] (/ (js/Math.round (* 100 x)) 100))
@@ -633,6 +634,17 @@
     (is (< (* 3 (measured 0)) (peek measured)) "three of them and the sticks")
     (is (< 20 (goal "stone_pickaxe")) "the counted gathers: a stone pickaxe is worth a walk, not a leaf's dig")
     (is (< (margin "cobblestone") (goal "cobblestone")) "at the margin a block is its dig")))
+
+(deftest a-made-goal-is-worth-at-least-its-whole-crafts-and-stations-from-nothing
+  (let [goal #(:value (cost/goal-value %))
+        one #(goal [{:name % :count 1}])]
+    (is (<= (apply min (map #(goal [{:name % :count 3}]) facts/log-names)) (one "wooden_pickaxe")) "a log for the table, one for the planks, one for the sticks")
+    (is (<= (one "oak_log") (one "oak_planks")) "one plank takes a whole log")
+    (is (<= (goal [{:name "raw_iron" :count 1} {:name "furnace" :count 1}]) (one "iron_ingot")) "and the furnace it is smelted in")
+    (is (<= (goal [{:name "iron_ingot" :count 3} {:name "stick" :count 2}]) (one "iron_pickaxe")))
+    (is (< (one "wooden_pickaxe") (one "stone_pickaxe") (one "iron_pickaxe")))
+    (is (< (goal [{:name "crafting_table" :count 1} {:name "wooden_pickaxe" :count 1}]) (+ (one "crafting_table") (one "wooden_pickaxe")))
+        "one table for all a goal's crafts")))
 
 (deftest a-thin-measure-leans-on-the-recipe-tree-and-a-fruitless-one-costs-more-than-it
   (let [goal (fn [counts] (settings/with-settings {:jobs.lib.cost.value/gather-counts counts}

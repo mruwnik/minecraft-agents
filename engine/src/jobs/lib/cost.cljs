@@ -306,6 +306,7 @@
 (def dig-cost table/dig-cost)
 (def kill-drops table/kill-drops)
 (def smelt-step "Seconds one smelt step takes beyond its input." (:smelt-step table/default-basis))
+(def craft-step "Seconds one craft step takes beyond its ingredients." (:craft-step table/default-basis))
 (def detour-cost value/detour-cost)
 (def tour-cost value/tour-cost)
 (def tour-worth value/tour-worth)
@@ -482,10 +483,10 @@
   (or (when view (sh-spawn/spawn-bed-pos p view)) (some-> (.self p) .-worldSpawn u/pos-of)))
 
 (defn goal-value
-  "item-value of items as a goal: each measured item at its measured worth (value/measured-worth), what is made of it
-  after them."
+  "value/made-value of items as a goal: each measured item at its measured worth (value/measured-worth), what is made of
+  it after them, whole crafts and their stations from nothing."
   [items]
-  (item-value items :overrides (value/measured-worths @game/version) :basis (:goal-basis (value/measured-worth @game/version))))
+  (value/made-value items :overrides (value/measured-worths @game/version) :basis (:goal-basis (value/measured-worth @game/version))))
 
 (defn death-body
   "The body of p as the death costs read it: :level, :respawn (respawn-of) and :carried (the goal-value of the inventory, its replacement cost)."
@@ -502,14 +503,15 @@
 (defn bed? [n] (or (= "bed" n) (str/ends-with? n "_bed")))
 
 (defn worth-to
-  "Seconds getting one of names is worth to body at `at`: the least goal-value among them, a bed (it sets the respawn)
-  with its spawn-worth on top, put down and died near at `at`; 0 for no names."
-  [body names at]
-  (if (seq names)
-    (apply min (map (fn [n] (+ (:value (goal-value [{:name n :count 1}]))
-                               (if (bed? n) (spawn-worth body at at) 0)))
-                    names))
-    0))
+  "Seconds getting k (default 1) of one of names is worth to body at `at`: the least goal-value among them, a bed (it
+  sets the respawn) with its spawn-worth on top, put down and died near at `at`; 0 for no names."
+  ([body names at] (worth-to body names at 1))
+  ([body names at k]
+   (if (seq names)
+     (apply min (map (fn [n] (+ (:value (goal-value [{:name n :count k}]))
+                                (if (bed? n) (* k (spawn-worth body at at)) 0)))
+                     names))
+     0)))
 
 (defn opening-price
   "Seconds a way out costs body (death-body keys and :health): the hurt hp it expects (route-danger's :danger of the way),
@@ -531,7 +533,7 @@
 (defn find-worth
   "Seconds getting `n` of names is worth to body at `at` (worth-to): a root obtain's worth. Its walks price their own trip."
   [body names at n]
-  (* n (worth-to body names at)))
+  (worth-to body names at n))
 
 (defn items-find-worth
   "Seconds getting all of `items` ({name n}: a bill, a plan's shortage) is worth (goal-value): a root kit's or bill's worth."

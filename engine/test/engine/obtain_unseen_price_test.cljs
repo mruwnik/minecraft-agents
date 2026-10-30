@@ -213,16 +213,22 @@
     (is (nil? (price/gather-s (no-gather seen) ["white_bed"] 1)))
     (is (nil? (price/search-s (no-gather unseen) ["white_bed"] 1)))))
 
-(defn seen-sand-check
-  "obtain/not-worth of a root call for 1 sand by a body that sees one x blocks off."
-  [x]
-  (let [p (tu/seeing-all (tu/fake-on-floor {:blocks {(str x ",64,0") "sand"}}))
+(defn seen-check
+  "obtain/not-worth of a root call for 1 item by a body that sees the blocks ({cell name}), and nothing else."
+  [item ways blocks]
+  (let [p (tu/seeing-all (tu/fake-on-floor {:blocks blocks}))
         view (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)}))
-        c (rooted {:primitives p :view (constantly view) :args {:item "sand" :count 1 :ways #{:gather} :explore false :ignore-zones? true}})]
+        c (rooted {:primitives p :view (constantly view) :args {:item item :count 1 :ways ways :explore false :ignore-zones? true}})]
     (with-redefs [ctx/mem (constantly {}) ctx/entries (constantly [])
                   need/gather-viable? (fn [c names n] (boolean (seq (:gather (plan/gather-plan c names n)))))]
       (obtain/not-worth c))))
 
+(defn seen-sand-check [x] (seen-check "sand" #{:gather} {(str x ",64,0") "sand"}))
+
 (deftest a-root-obtain-gathers-a-seen-source-only-within-what-the-item-is-worth
   (is (nil? (seen-sand-check 3)) "a few blocks off: within the walk a terrain block usually takes")
   (is (= :not-worth (:reason (seen-sand-check 40))) "at the edge of what is seen: far dearer than sand usually is"))
+
+(deftest a-root-wooden-pickaxe-is-worth-the-walk-to-a-tree-at-the-edge-of-sight
+  (is (nil? (seen-check "wooden_pickaxe" #{:craft :gather} (into {} (for [y (range 64 68)] [(str "40," y ",0") "oak_log"]))))
+      "its three logs and six crafts from nothing are worth more than a walk of 40 blocks"))

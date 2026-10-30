@@ -18,7 +18,7 @@
    :no-source-each 4 ;; one item of a 64-stack that no block, mob or recipe yields
    :per-enchant-level 30
    :min-durability-share 0.1
-   :craft-step 1
+   :craft-step 1 ;; one craft step, a walk to the table in it: 43 craft children of the trial bodies took 0.94 s wall each (logs to 2026-10-30)
    :smelt-step 2
    :unsourced-food-health 10 ;; the health a precious food that nothing yields is priced at: what it heals a body there
    :gear {:ref-mob "zombie" :ref-block "stone"} ;; one use of a tool, weapon or armour piece saves, against the stone tool or the bare body: the zombie (its hit rate is the one counted) hits and has hp, the kit trial digs stone most (gear/use-saved)

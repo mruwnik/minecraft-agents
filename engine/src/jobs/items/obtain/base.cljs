@@ -16,7 +16,6 @@
    :jobs.items.obtain.base/far-chest {:default 160 :doc "Blocks beyond which a remembered chest is not walked to while a craft or gather way could get the item instead (with only the chest way it is walked to however far)." :spec (a/num-in 0 nil)}
    :jobs.items.obtain.base/sapling-leaf-limit {:default 60 :doc "Leaves broken for one sapling at most (a drop is about 1 in 20); one run, no retries." :spec (a/int-in 1 nil)}
    :jobs.items.obtain.base/search-scan-radius {:default 16 :doc "How far round the body each look of a search for a raw need reaches." :spec (a/num-in 0 nil)}
-   :jobs.items.obtain.base/craft-step-s {:default 5 :doc "Guess of the seconds one craft step takes, walks included (the quote)." :spec (a/num-in 0 nil)}
    :jobs.items.obtain.base/smelt-item-s {:default 15 :doc "Guess of the seconds one smelt step takes per item, the furnace's 10 s and its fetches (the quote)." :spec (a/num-in 0 nil)}
    :jobs.items.obtain.base/gather-need-s {:default 60 :doc "Guess of the seconds one raw need takes to gather: a walk, a fell or a dig (the quote)." :spec (a/num-in 0 nil)}
    :jobs.items.obtain.base/loose-radius {:default 16 :doc "Blocks within which a loose item of the wanted kind is picked up (the :loose way)." :spec (a/num-in 0 32)}
@@ -27,7 +26,6 @@
 (defn far-chest [] (settings/get settings :jobs.items.obtain.base/far-chest))
 (defn sapling-leaf-limit [] (settings/get settings :jobs.items.obtain.base/sapling-leaf-limit))
 (defn search-scan-radius [] (settings/get settings :jobs.items.obtain.base/search-scan-radius))
-(defn craft-step-s [] (settings/get settings :jobs.items.obtain.base/craft-step-s))
 (defn smelt-item-s [] (settings/get settings :jobs.items.obtain.base/smelt-item-s))
 (defn gather-need-s [] (settings/get settings :jobs.items.obtain.base/gather-need-s))
 (defn seen-radius [] (settings/get settings :jobs.items.obtain.base/seen-radius))

@@ -46,7 +46,7 @@
     (is (priced? (fish 2 [])))
     (is (= (fish 2 []) (fish 3 [(item "cod" 1)])) "a fish carried is caught already")
     (is (priced? (trade 1)))
-    (is (= (* 4 (trade 1)) (trade 4)))
+    (is (< (trade 1) (trade 4) (* 4 (trade 1))) "four breads: four times the wheat, one crafting table")
     (is (= (* 2 (breed 1)) (breed 2)) "a calf a pair")
     (is (priced? (worth 'jobs.animals.bring (tu/fake {}) {:mob "cow"})))
     (is (= (worth 'jobs.combat.hunt (tu/fake {}) {:item "beef" :count 1})
@@ -122,7 +122,7 @@
              1e-6) "fertilize: nine unripe wheat cells, each the stages a bone meal gives over the stage rate, at the sown-worth share of the horizon"))
     (is (priced? (farm meal {:fertilize true})))
     (let [seeds (tu/seeing-all (tu/fake-on-floor (assoc ht/wheat-world :inventory [(item "melon_seeds" 100)])))]
-      (is (< (Math/abs (- (* 36 (/ farm-maintain/seed-compost-chance farm-maintain/compost-levels) (:value (cost/goal-value [(item "bone_meal" 1)])))
+      (is (< (Math/abs (- (:value (cost/goal-value [(item "bone_meal" (* 36 (/ farm-maintain/seed-compost-chance farm-maintain/compost-levels)))]))
                           (- (farm seeds {:composter {:x 8 :y 64 :z 0}}) (farm seeds {}))))
              1e-6) "compost: the bone meal the seeds above the 64 kept make"))
     (let [stray (tu/seeing-all (tu/fake-on-floor ft/tidy-spec))

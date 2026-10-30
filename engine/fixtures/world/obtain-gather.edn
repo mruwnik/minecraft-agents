@@ -4,7 +4,7 @@
 ;; Should-succeed: the stone pickaxe is carried. Should-fail: without stone in view the obtain ends :no-source and the text names the
 ;; raw need not seen (cobblestone from stone), not the log that is seen; andesite/diorite/granite are no cobblestone source
 ;; (only stone drops cobblestone); with nothing in view the text names both needs; :how without :gather has no gather text.
-;; An empty bucket carried and a pond in view (a water source at [18 -1 20]) is filled there; with no pond in view the obtain waits :no-source naming water. Sand in view is dug by hand; sand 40 blocks off is more walk than a sand is worth, so the root obtain waits :not-worth.
+;; An empty bucket carried and a pond in view (a water source at [18 -1 20]) is filled there; with no pond in view the obtain waits :no-source naming water. Sand in view is dug by hand; sand 40 blocks off is more walk than a sand is worth, so the root obtain waits :not-worth; a wooden pickaxe (its logs and crafts from nothing) is worth the walk to a tree 40 blocks off.
 {:defaults
  {:tags [:fetch :gather :mining]
   :plot {:height 12 :floor "grass_block" :isolate true}
@@ -62,6 +62,14 @@
    :act [[:job (jobs.items.obtain {:item "sand" :count 1 :explore false})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :not-worth}} :within-s 30 :of-job true}]
    :after [[:item "sand" 0]]}
+  {:name "a-wooden-pickaxe-is-worth-the-walk-to-a-tree-far-off"
+   :plot {:height 12 :floor "grass_block" :isolate true :length 32 :width 64}
+   :blocks [[:fill [15 4 51] [17 5 53] "oak_leaves[persistent=true]"] [:fill [16 0 52] [16 4 52] "oak_log"]]
+   :act [[:job (jobs.items.obtain {:item "wooden_pickaxe" :count 1 :explore false})]]
+   :limit-s 150
+   :expect [{:event {:source :job :kind :completed} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason :not-worth}} :for-s 30}]
+   :after [[:item "wooden_pickaxe" 1]]}
   {:name "an-empty-bucket-with-no-pond-in-view-waits-naming-water"
    :body {:inventory [["bucket" 1]]}
    :act [[:job (jobs.items.obtain {:item "water_bucket" :explore false})]]

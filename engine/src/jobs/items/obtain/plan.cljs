@@ -4,7 +4,7 @@
             [engine.game :as game]
             [engine.notes :as notes]
             [jobs.lib.crafting-table :as crafting-table]
-            [jobs.items.obtain.base :refer [craft-radius craft-step-s explore-opts gathers? makes? plan-allowed? search-names search-scan-radius search-worth seen-radius smelt-item-s way?]]
+            [jobs.items.obtain.base :refer [craft-radius explore-opts gathers? makes? plan-allowed? search-names search-scan-radius search-worth seen-radius smelt-item-s way?]]
             [jobs.items.obtain.chest :refer [candidates]]
             [jobs.items.obtain.loose :as loose-way]
             [jobs.items.obtain.seen :refer [seen-of sheep-in-range shears-source]]
@@ -115,7 +115,7 @@
   "Seconds the craft and smelt steps of a plan take."
   [pl]
   (let [{smelts true crafts false} (group-by #(= :smelt (:op %)) (:steps pl))]
-    (+ (* (craft-step-s) (count crafts)) (* (smelt-item-s) (reduce + 0 (map :count smelts))))))
+    (+ (* cost/craft-step (count crafts)) (* (smelt-item-s) (reduce + 0 (map :count smelts))))))
 
 (defn walk-s
   "The straight walk to `at` and back, and its risk there and back (jobs.lib.walk-risk/estimate on the straight way,
@@ -126,14 +126,15 @@
        (walk-risk/risk-s c est))))
 
 (defn chest-s
-  "The walk to the nearest chest the chest way would try: one booked as holding a name, or a seen one not looked into yet."
+  "The cheapest walk to a chest the chest way would try (it picks by the walk and its risk): one booked as holding a
+  name, or a seen one not looked into yet."
   [c names]
   (when (way? c :chest)
-    (some->> (candidates c names) first :pos (walk-s c))))
+    (some->> (seq (candidates c names)) (map #(walk-s c (:pos %))) (apply min))))
 
 (defn loose-s [c names]
   (when (way? c :loose)
-    (some->> (loose-way/seen c names) first .-position u/pos-of (walk-s c))))
+    (some->> (seq (loose-way/seen c names)) (map #(walk-s c (u/pos-of (.-pos %)))) (apply min))))
 
 (defn craft-s [c names n]
   (when (makes? c)
@@ -185,17 +186,6 @@
     (if (and (:ore? need) (below? c need) (unlit? p pos))
       (+ dig (cost/dark-way-s walk d (threats/body-of p)))
       (+ walk dig))))
-
-(defn seen-walk-s
-  "Seconds of the straight walk to the farthest of a gather plan's needs seen (nearest block or animal each), nil with none."
-  [c pl]
-  (let [needs (some-> pl :gather (gather-needs (game/version-of (:primitives c))))
-        walks (for [need needs
-                    :let [src (seen-of c need)
-                          pos (if (map? src) (:pos src) (some-> src .-pos u/pos-of))]
-                    :when pos]
-                (:cost (cost/walk-cost {:distance (u/dist (u/self-pos c) pos)})))]
-    (when (seq walks) (apply max walks))))
 
 (defn look-cost
   "Seconds per find of a search for an unseen need (cost/search-s): legs of the search's spacing, each its walk (its
@@ -306,7 +296,7 @@
   "Seconds a gather plan takes: its plan-cost (the death each walk risks with it) and its craft steps."
   [c pl]
   (+ (plan-cost c (game/version-of (:primitives c)) pl)
-     (* (craft-step-s) (count (remove #(= :smelt (:op %)) (:steps pl))))))
+     (* cost/craft-step (count (remove #(= :smelt (:op %)) (:steps pl))))))
 
 (defn preferred
   "The gather plan pl, or when it gathers a need with no source seen, or mines an ore seen below the feet, and the same

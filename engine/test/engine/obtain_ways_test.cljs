@@ -51,9 +51,11 @@
           (is (seq (attacked s)) "a cow was attacked")
           (is (= 'jobs.combat.hunt (:via (first (filter #(= :obtain.gathering (:kind %)) @(:seen s)))))))))))
 
-(defn ^:async gathered-via [world]
+(defn ^:async gathered-via
+  "The child an obtain of one wheat, worth what a caller's bread is (a lone wheat is not worth growing a field), gathers by."
+  [world]
   (let [s (grow/setup world)
-        _ (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wheat" :count 1 :ways #{:crops}}) {})
+        _ (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wheat" :count 1 :ways #{:crops} :worth 100}) {})
         _ (await (tu/run-ticks (:eng s) (:clock s) 6 700))]
     (:via (first (filter #(= :obtain.gathering (:kind %)) @(:seen s))))))
 
@@ -72,7 +74,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (grow/setup {:blocks {"25,63,0" "farmland" "25,64,0" "wheat"} :ages {"25,64,0" 7}})
-              _ (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wheat" :count 1 :ways #{:crops}}) {})
+              _ (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wheat" :count 1 :ways #{:crops} :worth 100}) {})
               _ (await (tu/run-ticks (:eng s) (:clock s) 40 700))]
           (is (not-any? #(= :no-crop-seen (get-in % [:data :cause :cause])) @(:seen s))))))))
 

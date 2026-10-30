@@ -18,6 +18,7 @@
                  name rule (raw_X -> X_ingot, X -> cooked_X, ancient_debris -> netherite_scrap, cobblestone -> stone,
                  sand -> glass, clay_ball -> brick): the input plus :smelt-step. The table is a fixpoint, then each tool
                  is raised to at least the next weaker material's tool of its kind plus :craft-step.
+    goal         made-value: a goal's count at least made from nothing, whole crafts and each station once.
     unused       A sourced item that is no tool, armour, edible food, block or ingredient is worth :junk-share of that.
     food         An edible food is worth at least its points x :food-point-s.
     no source    :no-source-each (4) x 64 / stack size (a 64-stack 4, a 16-stack 16, an unstackable 256); a precious food nothing yields: jobs.lib.cost.precious/hp-worth at :unsourced-food-health (10). A tool, weapon or armour piece nothing yields: its durability x what a use saves (jobs.lib.cost.gear, :gear).
@@ -205,6 +206,78 @@
       (merge (zipmap (recipes/stone-materials version) (repeat cobble)) m)
       m)))
 
+(def ^:private group-names #{"ore" "tool" "armor" "food" "block" "unknown"})
+
+(defn- table-basis
+  "[table basis] item-value prices by: the worth table of the name overrides and the whole basis."
+  [version name-overrides basis]
+  (let [basis (tbl/deep-merge (when-not (get-in basis [:find :ore-scan-s]) (:basis (measured-worth version))) basis)]
+    [(tbl/table-for version name-overrides basis) (tbl/deep-merge tbl/default-basis basis)]))
+
+(def ^:private smelts-of (memoize (fn [version] (tbl/smelt-sources (map #(.-name %) (array-seq (.-itemsArray (minecraft-data version))))))))
+
+(defn- made
+  "{:s :stations} of n of name made from nothing at the table's worths (m: :version :table :basis, :stations-s the
+  seconds of a set of stations): an item cheaper got than made (its table worth below every way's) n x its worth, else
+  the way (recipe or smelt) whose whole crafts, a craft step each, and stations (crafting table, furnace) cost least;
+  Infinity for an item made of itself up the chain (an ingot of nuggets of ingots)."
+  [{:keys [version table basis stations-s] :as m} name n chain]
+  (let [unit (get table name js/Infinity)
+        step (:craft-step basis)
+        ways (filter #(js/isFinite (:per %))
+                     (concat (for [r (get (recipes/recipes-for version) name)]
+                               {:per (/ (+ step (reduce + (map (fn [[k v]] (* v (get table k js/Infinity))) (:needs r)))) (:count r)) :r r})
+                             (for [i (get (smelts-of version) name)] {:per (+ (:smelt-step basis) (get table i js/Infinity)) :smelt i})))
+        within (conj chain name)
+        made-way (fn [{:keys [r smelt]}]
+                   (if smelt
+                     (let [in (made m smelt n within)]
+                       {:s (+ (* n (:smelt-step basis)) (:s in)) :stations (conj (:stations in) "furnace")})
+                     (let [ins (map (fn [[k v]] (made m k (* v (js/Math.ceil (/ n (:count r)))) within)) (:needs r))]
+                       {:s (+ step (reduce + (map :s ins)))
+                        :stations (cond-> (reduce set/union #{} (map :stations ins)) (:table? r) (conj recipes/table-item))})))]
+    (cond
+      (contains? chain name) {:s js/Infinity :stations #{}}
+      (or (empty? ways) (< unit (* (apply min (map :per ways)) (- 1 1e-9)))) {:s (* n unit) :stations #{}}
+      :else (apply min-key #(+ (:s %) (stations-s (:stations %))) (map made-way ways)))))
+
+(def ^:private station-base
+  "made of station st, its own stations priced at their table worths, so pricing one never needs itself."
+  (memoize (fn [version table basis st] (made {:version version :table table :basis basis :stations-s #(reduce + 0 (map table %))} st 1 #{}))))
+
+(defn- stations-closure
+  "Stations st and the stations making them needs."
+  [version table basis st]
+  (let [more (reduce set/union st (map #(:stations (station-base version table basis %)) st))]
+    (if (= more st) st (recur version table basis more))))
+
+(def ^:private made-memo
+  (memoize (fn [version table basis name n]
+             (made {:version version :table table :basis basis
+                    :stations-s (fn [st] (reduce + 0 (map #(:s (station-base version table basis %)) (stations-closure version table basis st))))}
+                   name n #{}))))
+
+(declare item-value)
+
+(defn made-value
+  "item-value of items as a goal from a reference start, nothing carried and no station near: each plain stack (no
+  durability, enchantments or nbt) at least what making its count takes (made), and each crafting table or furnace
+  those crafts and smelts need, and what those need, once, unless the items hold it. Options as item-value's but :prices."
+  [items & {:keys [overrides version basis] :as opts}]
+  (let [version (or version @game/version)
+        [table basis] (table-basis version (apply dissoc (tbl/normal-overrides overrides) group-names) basis)
+        named (group-by :name (filter #(string? (:name %)) items))
+        plain (set (keep (fn [[n es]] (when (every? (fn [e] (not-any? #(some? (get e %)) [:durability :enchants :nbt])) es) n)) named))
+        rows (map (fn [{:keys [name count value] :as row}]
+                    (if (plain name)
+                      (let [{:keys [s stations]} (made-memo version table basis name count) v (max value s)]
+                        (assoc row :value v :each (/ v count) :stations stations))
+                      row))
+                  (:items (apply item-value items (mapcat identity (dissoc opts :prices)))))
+        stations (stations-closure version table basis (reduce set/union #{} (keep :stations rows)))]
+    {:value (+ (reduce + 0 (map :value rows)) (reduce + 0 (map #(:s (station-base version table basis %)) (remove (set (keys named)) stations))))
+     :items (vec (sort-by :value > (map #(dissoc % :stations) rows)))}))
+
 (defn item-value
   "{:value total :items [{:name :count :each :value} ...]} of items ([{:name :count ...}], inventory or drop shape),
   main contributors first. Stacks of one name with the same durability, enchantments and :nbt are added. See the ns doc.
@@ -213,12 +286,9 @@
   [items & {:keys [overrides prices else enchanted version basis]}]
   (let [version (or version @game/version)
         overrides (tbl/normal-overrides overrides)
-        group-names #{"ore" "tool" "armor" "food" "block" "unknown"}
         group-overrides (select-keys overrides group-names)
         name-overrides (apply dissoc overrides group-names)
-        basis (tbl/deep-merge (when-not (get-in basis [:find :ore-scan-s]) (:basis (measured-worth version))) basis)
-        table (tbl/table-for version name-overrides basis)
-        basis (tbl/deep-merge tbl/default-basis basis)
+        [table basis] (table-basis version name-overrides basis)
         named (filter #(string? (:name %)) items)
         merged (map (fn [[k stacks]] (assoc k :count (reduce + 0 (map count-of stacks))))
                     (group-by #(select-keys % [:name :durability :enchants :nbt]) named))

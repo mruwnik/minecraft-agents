@@ -3,7 +3,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.items.obtain.base :refer [gathers? names-of shortfall]]
             [jobs.items.obtain.need :refer [climbs-first? explorable-needs gather-viable?]]
-            [jobs.items.obtain.plan :refer [chest-s craft-s gather-plan gathered-s loose-s seen-walk-s]]
+            [jobs.items.obtain.plan :refer [chest-s craft-s gather-plan gathered-s loose-s]]
             [jobs.lib.cost :as cost]
             [jobs.lib.game-facts :as facts]
             [jobs.lib.util :as u]
@@ -37,12 +37,3 @@
     (if (zero? n)
       0
       (apply min ##Inf (keep identity [(chest-s c names) (loose-s c names) (craft-s c names n) (gather-s c names n) (search-s c names n)])))))
-
-(defn gather-walk-s
-  "The longest walk to a seen need when a gather of seen needs is the cheapest way (price-of), else nil."
-  [c]
-  (let [names (names-of (:args c))
-        n (shortfall c names)]
-    (when (and (pos? n) (gathers? c) (gather-viable? c names n)
-               (= (gather-s c names n) (price-of c)))
-      (seen-walk-s c (gather-plan c names n)))))
