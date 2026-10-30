@@ -9,6 +9,7 @@
   {::stair-step-s {:default 3 :doc "Seconds one step of a stair, up or down, is reckoned to take." :spec (a/num-in 0 nil)}
    ::pillar-block-s {:default 1.5 :doc "Seconds one block of a pillar is reckoned to take (jump, place)." :spec (a/num-in 0 nil)}
    ::bridge-block-s {:default 1.5 :doc "Seconds one block of a bridge is reckoned to take (place, step)." :spec (a/num-in 0 nil)}
+   ::place-s {:default 0.72 :doc "Seconds placing one block where the body stands takes: the mean gap between two placements of one walls attempt of a flight, n=62 gaps in the trial bodies' logs on 2026-10-28. Recount: node tools/event-counts.mjs wall-places (:gap)." :spec (a/num-in 0 nil)}
    ::fill-place-s {:default 1.5 :doc "Seconds laying one carried block over a gap or a drop is reckoned to take (place, step)." :spec (a/num-in 0 nil)}
    ::fill-spent-s {:default 1 :doc "Seconds the one block a fill spends is reckoned to be worth (the block is not recovered)." :spec (a/num-in 0 nil)}
    ::fill-scarce {:default 2 :doc "A fill leaving fewer than this many blocks carried adds ::fetch-block-s: the pack is nearly out." :spec (a/num-in 0 nil)}
@@ -55,8 +56,10 @@
   (+ (settings/get settings ::fill-place-s) (settings/get settings ::fill-spent-s)
      (if (< (dec carried) (settings/get settings ::fill-scarce)) (settings/get settings ::fetch-block-s) 0)))
 
+(defn place-s [] (settings/get settings ::place-s))
+
 (defn put-back-cost
-  "Seconds putting a dug block back takes: the place and the step to it (as a fill's), and lost-s, the block's worth when
-  its dig dropped something else."
+  "Seconds putting a dug block back takes: its placing (place-s), and lost-s, the block's worth when its dig dropped
+  something else."
   [lost-s]
-  (+ (settings/get settings ::fill-place-s) lost-s))
+  (+ (place-s) lost-s))

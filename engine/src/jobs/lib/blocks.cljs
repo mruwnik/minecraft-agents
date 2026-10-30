@@ -2,12 +2,12 @@
   "Shared parts of jobs.blocks.dig and jobs.blocks.place, and what a parent needs to run them as children.
   body-wait? tells a reason about the body (tool, item, free slot:
   the parent waits too) from one about the cell (the parent skips that cell)."
-  (:require ["minecraft-data" :as minecraft-data]
-            [clojure.set :as set]
+  (:require [clojure.set :as set]
             [clojure.string :as str]
             [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.block-sets :as bs]
+            [jobs.lib.cost.table :as table]
             [jobs.lib.aim :as aim]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -57,19 +57,11 @@
   (block-sets/replaceable, less air and fluids) and small flowers, which a placement does not overwrite."
   (into (set/difference bs/replaceable bs/air bs/fluids) bs/flowers))
 
-(def drops-table
-  "{block name [item name ..]} of what minecraft-data lists each block drops for a version (memoised)."
-  (memoize
-   (fn [version]
-     (let [data (minecraft-data version)]
-       (into {} (map (fn [b] [(.-name b) (vec (keep #(some-> (aget data "items" %) .-name) (array-seq (aget b "drops"))))]))
-             (array-seq (aget data "blocksArray")))))))
-
 (defn drops-of
   "The item names block-name drops by minecraft-data (tool and enchantment ignored), or the block's own name when
   the data does not list it."
   [p block-name]
-  (get (drops-table (game/version-of p)) block-name [block-name]))
+  (get (table/drops-table (game/version-of p)) block-name [block-name]))
 
 (defn recoverable?
   "Whether the placed block can be dug out again by this body for the same item: it drops itself and the carried

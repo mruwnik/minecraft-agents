@@ -9,6 +9,7 @@
             [jobs.lib.blocks :as lb]
             [jobs.lib.checks :as checks]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.ways :as cw]
             [jobs.lib.pace :as pace]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.shelter :as sh]
@@ -22,8 +23,7 @@
             [jobs.survival.wall-placer :as wall-placer]))
 
 (a/defargs settings
-  {::place-s {:default 0.72 :doc "Seconds a placement takes, for a way's quote: the mean gap between two placements of one walls attempt of a flight, n=62 gaps in the trial bodies' logs on 2026-10-28. Recount: node tools/event-counts.mjs wall-places (:gap)." :spec (a/num-in 0 nil)}
-   ::night-place-s {:default 1 :doc "Seconds a placement (aim, place, settle) takes for a night's shelter; the dig back at dawn is priced apart (morning-s)." :spec (a/num-in 0 nil)}
+  {::night-place-s {:default 1 :doc "Seconds a placement (aim, place, settle) takes for a night's shelter; the dig back at dawn is priced apart (morning-s)." :spec (a/num-in 0 nil)}
    ::trespass-s {:default 1000 :doc "Seconds a way's quote adds when a cell it digs or fills is another's (zone, claim or plan): a last resort, after every way that keeps off." :spec (a/num-in 0 nil)}})
 
 
@@ -36,9 +36,9 @@
                  (some #(access/trespass-refusal (assoc in :feet nil) :place %) plug)))))
 
 (defn place-s
-  "Seconds a placement is priced at in a way's quote: only the placing for a night's shelter."
+  "Seconds a placement is priced at in a way's quote (jobs.lib.cost.ways/place-s): only the placing for a night's shelter."
   [c]
-  (settings/get settings (if (= :night (:for (:args c))) ::night-place-s ::place-s)))
+  (if (= :night (:for (:args c))) (settings/get settings ::night-place-s) (cw/place-s)))
 
 
 (defn zone-penalty

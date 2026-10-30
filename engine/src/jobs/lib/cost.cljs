@@ -24,6 +24,7 @@
     death    experience-cost, death-cost: death as an ordinary cost, the walk back for the items plus the experience; spawn-worth: a respawn point's worth; goal-value (item-value with measured gathers), worth-to, find-worth, items-find-worth, search-radius: what a find is worth, how far its legs may go; opening-price, hold-price: opening a shelter to mobs against holding on in it; death-weight, terrain-danger: a remembered death's fade and the plan cost near a death by terrain (jobs.lib.cost.death).
     base-rates  density, biome-chance, expected-density, peak-density: the ore a block of ground is expected to hold, from the game's
              own placements, host-blocks: the rock its veins replace, and the chance of a biome on ground the body has not seen (jobs.lib.cost.base-rates).
+    destroy  destroyed-s, destroyed-fn: what digging a cell destroys, in seconds of replacing it (a crop's growth, farmland's dirt and till, a build put back with put-back-s; natural terrain nothing) (jobs.lib.cost.destroy).
     door     wall-on-chance, door-s: a door's price through a wall whose far side is unseen, from counted wall rows (jobs.lib.cost.door).
     look     look-answer, look-value, closed-chance, look-s: the value of a look before deciding, a boundary's unseen part closed (jobs.lib.cost.look).
     find     look-chance, find-chance, searched-for?: the chance a look round finds the animals a search is for, from their base rate and the ground already searched in vain, looked-area: that ground; ore-of, seen-ore, tunnel-ore, ore-chance: an ore's blocks expected among the faces a look sees or a tunnel cuts and the chance of a vein there; ore-level: the height a tunnel for it runs at; leg-chance, look-leg-chance (from what the body saw), tunnel-chance: a search leg's or a tunnel leg's chance of a find, tunnel-rate: a tunnel's blocks of ore per second over the cells it cuts (a heading's price), chance-of: leg i's; leg-stops?: a search's :price stop; search-s: its seconds per find, leg-spacing: the blocks between its legs (jobs.lib.cost.find).
@@ -39,6 +40,7 @@
             [jobs.lib.cost.base-rates :as base-rates]
             [jobs.lib.cost.danger :as danger]
             [jobs.lib.cost.death :as death]
+            [jobs.lib.cost.destroy :as destroy]
             [jobs.lib.cost.door :as door]
             [jobs.lib.cost.farm :as farm]
             [jobs.lib.cost.fight :as fight]
@@ -343,6 +345,9 @@
 (def harvests farm/harvests)
 (def sown-worth farm/sown-worth)
 (def field-step-s farm/step-s)
+(def destroyed-s destroy/destroyed-s)
+(def destroyed-fn destroy/destroyed-fn)
+(def put-back-s destroy/put-back-s)
 (def gap-loss pen/gap-loss)
 (def herd-loss pen/herd-loss)
 (def earthwork-s farm/earthwork-s)

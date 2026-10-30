@@ -17,7 +17,6 @@
             [jobs.lib.places :as places]
             [jobs.lib.breath :as breath]
             [jobs.lib.column-kinds :as kinds]
-            [jobs.lib.crops :as crops]
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
@@ -34,16 +33,6 @@
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.tuning :refer [budget-near max-blocked max-route-s]]
             [jobs.movement.go-to.way-steps :as ways]))
-
-(defn crop-loss-s
-  "Seconds digging cell costs in what it destroys, a field's crop: a crop block is lost (cost/crop-worth), farmland under
-  one loses the crop (it pops) and the farmland itself, replaced by a dirt block (cost/goal-value) put down; 0 for any other cell."
-  [block-at [x y z :as cell]]
-  (let [n (block-at cell)
-        over (when (= "farmland" n) (block-at [x (inc y) z]))]
-    (cond (contains? crops/ripe-age n) (cost/crop-worth n)
-          (contains? crops/ripe-age over) (+ (cost/crop-worth over) (cw/put-back-cost (:value (cost/goal-value [{:name "dirt" :count 1}]))))
-          :else 0)))
 
 (defn skips
   "The escalation steps this call does not take: those that failed (memory :skipped-steps) and those of the ways it
@@ -150,20 +139,31 @@
   [p]
   ((cost/stair-leg-pricer (wworld/unseen-share p)) (repeat 3 (or (cost/dig-cost "stone") 0)) nil true))
 
-(defn price
-  "Seconds way e from feet is reckoned to take (jobs.lib.cost): a stair, a pillar, a bridge or a fill by its blocks, a dug door or
-  route by what its cells take to dig with the tool carried, plus a step a cell; 0 for a step that is no span."
-  [p feet {:keys [step] :as e}]
+(defn price-with-own
+  "price, a cell (own-s cell) prices over 0, the body's own build, left out of what the cuts destroy: the caller adds its price."
+  [p feet {:keys [step heading] :as e} own-s]
   (let [block-at (delay (escape/block-at-of p))
-        dig-s (fn [cells] (cost/dig-cells-s (map #(tools/clear-ms p (@block-at %)) cells)))]
+        destroyed (delay (cost/destroyed-fn (fn [[x y z]] (u/sensed p {:x x :y y :z z}))))
+        lost-s (fn [cells] (transduce (comp (remove #(or (dig-route/open? (@block-at %)) (and own-s (pos? (own-s %)))))
+                                            (map #(@destroyed (@block-at %) % false)))
+                                      + 0 cells))
+        dig-s (fn [cells] (+ (cost/dig-cells-s (map #(tools/clear-ms p (@block-at %)) cells)) (lost-s cells)))]
     (case step
-      :stair (+ (stair-route-s p feet e) (* (:aside e 0) (or (cost/dig-cost "stone") 1)))
+      :stair (+ (stair-route-s p feet e) (* (:aside e 0) (or (cost/dig-cost "stone") 1))
+                (lost-s (escape/stair-cuts feet (escape/heading-dirs (keyword heading)) (:steps e))))
       :pillar (cost/pillar-s (wworld/unseen-share p) (:height e) (escape/unseen-pillar-blocks p feet (:height e)))
       :bridge (cw/bridge-cost (:length e) (:short e 0))
       :fill-gap (cw/fill-cost (:count e 1))
       :dig-route (dig-s (map :cell (:cells e)))
       :clear-path (dig-s (:cells (escape/door @block-at (escape/unseen-of p) feet (escape/heading-dirs (:heading e)))))
       0)))
+
+(defn price
+  "Seconds way e from feet is reckoned to take (jobs.lib.cost): a stair, a pillar, a bridge or a fill by its blocks, a dug door or
+  route by what its cells take to dig with the tool carried, plus a step a cell; 0 for a step that is no span. A stair,
+  door or route adds what its cuts destroy (cost/destroyed-fn): price-with-own with no own cells."
+  [p feet e]
+  (price-with-own p feet e nil))
 
 (defn gap-fill
   "{:step :fill-gap :cell :item} when result (a planner no-path) is a gap jump refused for a low ceiling or a gap jump
@@ -390,7 +390,7 @@
 (defn route-answer
   "The dig-route answer {:dig :steps} of the cheapest way from feet cell from into goal (jobs.lib.dig-route priced by
   jobs.lib.cost: a step's walk-cost, a fall's hp (fall-damage at hp-cost, the falls the body survives), a block's dig-cost, a stair's step at least its stair-cost, a step's unseen cells at the unseen walk's price
-  (wworld/unseen-share), a cell of the body's own builds at its put-back too (route-opts :own-s, holes/own-cut-fn), never a floor of the body's own stairs (route-opts :ways)), every cell to dig escape/diggable?
+  (wworld/unseen-share), what each dig destroys (dig-route/body-prices: cost/destroyed-fn; a cell of the body's own builds at route-opts :own-s, holes/own-cut-fn), never a floor of the body's own stairs (route-opts :ways)), every cell to dig escape/diggable?
   and may-dig?; :searching while route-opts :slice's search goes on; nil when there is none, when route-opts :spent
   holds [from goal] (a search search-bound dropped), or when its digging takes the
   body longer than max-route-s (blocks of the body's own, a scaffold it left, not counted) with what it carries, or with
@@ -420,7 +420,7 @@
                          (let [a (when-not floors-unseen-ok? (sensed x (inc y) z))]
                            (when-not (and a (not (true? (.-unknown a))) (dig-route/open? (.-name a)))
                              access/hidden-guess)))))
-        prices (dig-route/body-prices p (fn [[x y z]] (true? (some-> (sensed x y z) .-unknown))))
+        prices (dig-route/body-prices p (fn [[x y z]] (true? (some-> (sensed x y z) .-unknown))) {:sensed (fn [[x y z]] (sensed x y z)) :own-s own-s})
         risk (fn [[x y z :as cell]]
                (cond (not (true? (some-> (sensed x y z) .-unknown))) 0
                      (= beside apart) beside
@@ -428,7 +428,7 @@
                      :else apart))
         opts (fn [refused] (merge prices
                                   {:dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) cell))
-                                                            (some-> ((:dig-s prices) name cell) (+ (if own-s (own-s cell) 0) (crop-loss-s block-at cell)))))
+                                                            ((:dig-s prices) name cell)))
                                    :max-dig-s (max-route-s)}
                                   route-opts
                                   (when-let [cell (:see route-opts)] {:sees (aim/stand-sees-fn p cell)})))

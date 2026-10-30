@@ -10,6 +10,7 @@
             [jobs.lib.cost.ways :as cw]
             [jobs.lib.per-body :as per-body]
             [jobs.lib.reach :as reach]
+            [jobs.lib.util :as u]
             [jobs.lib.walk.world :as wworld]))
 
 (a/defargs settings
@@ -302,18 +303,23 @@
 (defn body-prices
   "route's prices for the body of primitives p, as go-to prices its walks: a step's walk-cost, a fall's hp (fall-damage at
   hp-cost, at most the falls it survives), a block's dig-cost (nil: never dug; a nameless cell
-  has none), a stair's step at least its stair-cost, and a step whose cell is (unseen? cell) at the unseen walk's price (wworld/unseen-share)."
-  [p unseen?]
-  (let [self (.self p)
-        equipment (cost/equipment-of (.-equipment self))
-        dig-cost (memoize cost/dig-cost)]
-    {:max-fall (:max-drop (cost/fall-profile {:equipment equipment :damage-budget (cost/survivable-budget (wworld/self-body p) {})}))
-     :fall-s (fn [blocks] (cost/hp-cost (.-health self) (cost/fall-damage equipment blocks)))
-     :dig-s (fn [name _] (dig-cost name))
-     :step-s (cost/walk-step-s)
-     :stair-s (cw/stair-cost 1)
-     :unseen? unseen?
-     :unseen-step-s (cost/unseen-step-s (wworld/unseen-share p))}))
+  has none) with what the dig destroys (cost/destroyed-fn over opts :sensed, (fn [cell]) a sensed block, default the
+  body's; a cell (opts :own-s cell) prices over 0, the body's own build, at that instead), a stair's step at least its
+  stair-cost, and a step whose cell is (unseen? cell) at the unseen walk's price (wworld/unseen-share)."
+  ([p unseen?] (body-prices p unseen? {}))
+  ([p unseen? {:keys [sensed own-s]}]
+   (let [self (.self p)
+         equipment (cost/equipment-of (.-equipment self))
+         dig-cost (memoize cost/dig-cost)
+         destroyed (cost/destroyed-fn (or sensed (fn [[x y z]] (u/sensed p {:x x :y y :z z}))))
+         cut-s (fn [name cell] (let [own (if own-s (own-s cell) 0)] (if (pos? own) own (destroyed name cell false))))]
+     {:max-fall (:max-drop (cost/fall-profile {:equipment equipment :damage-budget (cost/survivable-budget (wworld/self-body p) {})}))
+      :fall-s (fn [blocks] (cost/hp-cost (.-health self) (cost/fall-damage equipment blocks)))
+      :dig-s (fn [name cell] (some-> (dig-cost name) (+ (cut-s name cell))))
+      :step-s (cost/walk-step-s)
+      :stair-s (cw/stair-cost 1)
+      :unseen? unseen?
+      :unseen-step-s (cost/unseen-step-s (wworld/unseen-share p))})))
 
 (defn by-share
   "prices with each cell's dig priced at (share cell) of its price (escape/dig-share-fn: an unseen cell is dug only at the chance it is solid)."

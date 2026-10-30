@@ -795,3 +795,26 @@
     0.3 true 0.5 1.5
     2.3 true 0.5 3.5
     2.3 true 0 3))
+
+(deftest a-dig-costs-the-replacement-of-what-it-destroys
+  ;; natural ground is nobody's; a build is put back; a crop loses the growth it had and its sowing; farmland's dig
+  ;; drops the dirt it is put back with, so only the placing and the till are paid, never a dirt block's worth
+  (let [place (ways/place-s)
+        plant (cost/field-step-s :plant 1)
+        till (cost/field-step-s :till 1)
+        wheat (cost/crop-worth "wheat")]
+    (are [n over age own? s] (= s (cost/destroyed-s n over age own?))
+      "stone"      "air"   nil false 0
+      "dirt"       "air"   nil false 0
+      nil          "air"   nil false 0
+      "short_grass" "air"  nil false 0
+      "dirt"       "air"   nil true  place
+      nil          "air"   nil true  place
+      "oak_planks" "air"   nil false place
+      "glass"      "air"   nil false (+ place (:value (cost/item-value [{:name "glass" :count 1}])))
+      "wheat"      "air"   0   false plant
+      "wheat"      "air"   7   false (+ wheat plant)
+      "wheat"      "air"   nil false (+ wheat plant)
+      "farmland"   "air"   nil false (+ place till)
+      "farmland"   "wheat" 0   false (+ place till plant))
+    (is (< (cost/destroyed-s "wheat" "air" 2 false) (cost/destroyed-s "wheat" "air" 5 false)) "a crop grown further loses more")))

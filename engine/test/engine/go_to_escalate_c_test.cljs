@@ -980,11 +980,16 @@
     [10 58 0] 4 true true
     [0 59 0] 2 true false))
 
-(deftest a-dug-crop-or-the-farmland-under-one-is-priced-by-what-is-lost
-  (let [blocks {[0 63 0] "farmland" [0 64 0] "wheat" [1 63 0] "farmland" [1 64 0] "air" [2 64 0] "wheat" [3 63 0] "stone"}
-        at #(get blocks % "air")
-        crop (cost/crop-worth "wheat")]
-    (is (= crop (choose/crop-loss-s at [2 64 0])))
-    (is (< crop (choose/crop-loss-s at [0 63 0])))
-    (is (= 0 (choose/crop-loss-s at [1 63 0])))
-    (is (= 0 (choose/crop-loss-s at [3 63 0])))))
+(deftest a-dig-route-and-a-way-price-each-dug-cell-by-what-it-destroys
+  ;; another's planks are put back, the stone round them costs nothing; farmland under a growing crop costs its
+  ;; replacing and the crop's growth; the body's own build costs its own price (:own-s) in place of that
+  (let [p (tu/fake {:blocks {"1,64,0" "oak_planks" "2,64,0" "stone" "3,63,0" "farmland" "3,64,0" "wheat"}
+                    :ages {"3,64,0" 3}})
+        dig-s (:dig-s (dig-route/body-prices p (constantly false) {:own-s #(if (= [2 64 0] %) 5 0)}))
+        planks [{:cell [1 64 0]}]]
+    (is (= (+ (cost/dig-cost "oak_planks") (cost/put-back-s "oak_planks")) (dig-s "oak_planks" [1 64 0])))
+    (is (= (+ (cost/dig-cost "stone") 5) (dig-s "stone" [2 64 0])))
+    (is (= (+ (cost/dig-cost "farmland") (cost/destroyed-s "farmland" "wheat" 3 false)) (dig-s "farmland" [3 63 0])))
+    (is (= (+ (choose/price-with-own p [0 64 0] {:step :dig-route :cells planks} (constantly 1)) (cost/put-back-s "oak_planks"))
+           (choose/price p [0 64 0] {:step :dig-route :cells planks}))
+        "a way's price holds the put-back of a cell that is not the body's own; the caller prices its own")))

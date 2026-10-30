@@ -4,9 +4,7 @@
   (:require [jobs.lib.block-sets :as bs]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
-            [jobs.lib.blocks :as b]
             [jobs.lib.cost :as cost]
-            [jobs.lib.cost.ways :as cw]
             [jobs.lib.escape :as escape]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.own-builds :as own :refer [own-build-fn own-plan-fn pen-of]]
@@ -29,24 +27,20 @@
             (nil? (own-build cell))
             (or (boolean (:ignore-zones? (:args c))) (nil? (access/trespass-refusal @rules :dig (zipmap [:x :y :z] cell)))))))))
 
-(defn put-back-s
-  "Seconds putting back block n costs (jobs.lib.cost.ways/put-back-cost of its worth): 0 for a block its dig drops itself (nil: not seen)."
-  [p n]
-  (cw/put-back-cost (if (or (nil? n) (some #{n} (b/drops-of p n))) 0 (:value (cost/item-value [{:name n :count 1}])))))
-
 (defn own-cut-fn
-  "(cut-s cell): seconds cutting cell costs on top of its dig when it is the body's own build (own-build-fn): putting it
-  back (jobs.lib.cost.ways/put-back-cost, the block's worth when it drops something else) and, for the wall of its stocked
+  "(cut-s cell): seconds cutting cell costs on top of its dig when it is the body's own build (own-build-fn): what the
+  cut destroys, put back whatever the block (jobs.lib.cost/destroyed-fn, own?) and, for the wall of its stocked
   pen, what the herd may lose through the gap while it stands open (jobs.lib.cost/herd-loss over the dig and the put-back);
   0 for any other cell."
   [c]
   (let [p (:primitives c)
         own-build (own-build-fn c)
+        destroyed (cost/destroyed-fn (fn [[x y z]] (u/sensed p {:x x :y y :z z})))
         herd (delay (map :kind @(:herd (pen-of c))))]
     (fn [cell]
       (if-let [kind (own-build cell)]
         (let [n (u/seen-name p (zipmap [:x :y :z] cell))
-              back (put-back-s p n)]
+              back (destroyed n cell true)]
           (+ back (if (= :pen kind) (cost/herd-loss @herd (+ back (or (some-> n cost/dig-cost) 0))) 0)))
         0))))
 

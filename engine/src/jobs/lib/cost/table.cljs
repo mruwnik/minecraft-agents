@@ -80,6 +80,14 @@
   (let [dig (:dig basis)]
     (gear/dig-time dig (gear/tier-speed dig (block-tier md b)) (.-hardness b))))
 
+(def drops-table
+  "{block name [item name ..]} of what minecraft-data lists each block drops for a version (memoised)."
+  (memoize
+   (fn [version]
+     (let [data (minecraft-data version)]
+       (into {} (map (fn [b] [(.-name b) (vec (keep #(some-> (aget data "items" %) .-name) (array-seq (aget b "drops"))))]))
+             (array-seq (aget data "blocksArray")))))))
+
 (defn dig-cost
   "Seconds digging the block name takes, the item base's dig term (dig-seconds); nil for a block never dug (bedrock) or
   one minecraft-data does not know. Options :version and :basis as item-value's."

@@ -1,5 +1,5 @@
 (ns world-test.wall-places
-  "tools/event-counts.mjs wall-places: counts the measured priors behind jobs.survival.plug-way ::place-s,
+  "tools/event-counts.mjs wall-places: counts the measured priors behind jobs.lib.cost.ways ::place-s,
   jobs.survival.wall-in ::mob-fails and jobs.survival.respond.options ::pillar-mob-fails from the trial bodies' debug logs:
   each walls attempt of a flight (a /plug/walls or /shut-in/walls child under the hostile-near reflex) and each pillar (a
   /pillar child), its class: walls by the melee hostiles of the flee choice (retreat.choice) logged within choice-ms
@@ -13,9 +13,9 @@
   (:require [cljs.reader :as reader]
             [clojure.string :as str]
             [jobs.lib.cost.danger :as danger]
+            [jobs.lib.cost.ways :as cw]
             [jobs.lib.cost.threat :as threat]
-            [engine.settings :as settings]
-            [jobs.survival.plug-way :as plug-way]))
+            [engine.settings :as settings]))
 
 (def choice-ms "Longest age of the flee choice an attempt's class is read from." 3000)
 
@@ -43,7 +43,7 @@
   with no :open count, logged before it was emitted, under its seconds), :clear otherwise."
   [{:keys [arrive-s t end-t mob? open]}]
   (let [placing-s (if open
-                    (* open (settings/get plug-way/settings ::plug-way/place-s))
+                    (* open (settings/get cw/settings ::cw/place-s))
                     (/ (- end-t t) 1000))]
     (if (or mob? (and arrive-s (< arrive-s placing-s))) :reached :clear)))
 
