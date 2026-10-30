@@ -386,7 +386,7 @@
     (let [e (await (bait/food! c (- (wanted c) (count (:fed (ctx/mem c))))))]
       (cond
         (= :continue e) :continue
-        (= :ok e) :again
+        (= :ok e) (do (look/forget-survey! c) :again) ; the fetch moved the body: animals count only while in view, so look round again
         :else (await (no-food! c e))))))
 
 (defn pen-cell
