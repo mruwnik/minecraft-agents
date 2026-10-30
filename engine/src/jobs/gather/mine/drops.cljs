@@ -112,7 +112,8 @@
   (let [p (:primitives c)
         at (fn [[x y z]] (or (u/seen-name p {:x x :y y :z z}) blocks/hidden-guess))
         ;; one search ends on any of the six stands beside dug
-        prices (assoc (cut-prices c) :max-s max-s :range 1 :near dug :sees (fn [x y z] (not= [x y z] dug)) :unseen-dig-s (min-dig-s))
+        prices (assoc (cut-prices c) :max-s max-s :range 1 :near dug :sees (fn [x y z] (not= [x y z] dug)) :unseen-dig-s (min-dig-s)
+                      :guess (constantly "stone"))
         from (u/cell-vec (u/self-pos c))
         goal (mapv + dug [1 0 0])
         route (dig-route/route-resumed [(:id c) :drop-cut from dug max-s] at from goal prices)]

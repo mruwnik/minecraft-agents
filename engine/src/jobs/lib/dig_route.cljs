@@ -89,8 +89,12 @@
   "route's search begun: a fn of n that runs it on for at most n more cells expanded, [answer expanded]: answer route's
   once the search has ended (the same each run after), nil while it goes on; expanded the cells this run expanded.
   Plain numbers throughout (a cell is a key, its reads are cached by key): a climb expands about 10k cells."
-  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-dig-s max-s margin near sees node-s back-h? full? prior-h? seen-steps seen-cells unseen-dig-s] r :range :or {dig-s (constantly 1) step-s 0 ways #{} unseen-dig-s 0} :as opts}]
+  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-dig-s max-s margin near sees node-s back-h? full? prior-h? seen-steps seen-cells unseen-dig-s guess] r :range :or {dig-s (constantly 1) step-s 0 ways #{} unseen-dig-s 0 guess (constantly nil)} :as opts}]
   (let [[fx _ fz] from
+        prior? (boolean (and prior-h? unseen? unseen-step-s seen-steps seen-cells))
+        ;; under prior-h the search reads the memory its bound was made from: a cell seen since (outside every box
+        ;; seen-cells measured) is read as never seen, else the bound could price it dearer than the search does
+        unboxed? (fn [x y z] (and prior? (pos? (seen-cells x y z))))
         [gx gy gz] goal
         r (when (and r (pos? r)) r)
         [ax ay az] (or near goal)
@@ -108,10 +112,10 @@
                                          :fluid (boolean (bs/fluids n)) :falling (boolean (falling n))}]
                               (.set kinds n k) k)))
         read (js/Map.)
-        at (fn [x y z] (let [i (key x y z)] (or (.get read i) (let [k (kind-of (block-at [x y z]))] (.set read i k) k))))
+        at (fn [x y z] (let [i (key x y z)] (or (.get read i) (let [k (kind-of (if (unboxed? x y z) (guess [x y z]) (block-at [x y z])))] (.set read i k) k))))
         priced (js/Map.)
         dig-at (fn [n x y z] (let [i (key x y z)] (if (.has priced i) (.get priced i) (let [s (dig-s n [x y z])] (.set priced i s) s))))
-        unseen-cell? (let [m (js/Map.)] (fn [x y z] (let [i (key x y z) u (.get m i)] (if (some? u) u (let [u (boolean (unseen? [x y z]))] (.set m i u) u)))))
+        unseen-cell? (let [m (js/Map.)] (fn [x y z] (let [i (key x y z) u (.get m i)] (if (some? u) u (let [u (or (unboxed? x y z) (boolean (unseen? [x y z])))] (.set m i u) u)))))
         ;; a step whose feet, head or floor is unseen, as cost/unseen-route-s prices one
         unseen-at (fn [x y z] (if (and unseen? (or (unseen-cell? x y z) (unseen-cell? x (inc y) z) (unseen-cell? x (dec y) z))) unseen-step-s 0))
         way-keys (let [s (js/Set.)] (doseq [[x y z] ways] (.add s (key x y z))) s)
@@ -146,7 +150,6 @@
         digs-of (fn [a dn up] (+ dn up (* 2 (max a (js/Math.ceil (/ dn mf)) (if pillar-s 0 up)))))
         digs-to (fn [x y z] (digs-of (max 0 (- (across-to x z) pm)) (max 0 (- y py pm)) (max 0 (- py y pm))))
         least-step (if pillar-s (min step-s pillar-s) step-s)
-        prior? (boolean (and prior-h? unseen? unseen-step-s seen-steps seen-cells))
         end-steps (when prior? (max 0 (- (seen-steps px py pz) pm)))
         ;; the fewest unseen cells opened after the last seen one: the step that opened it ends at most a fall and a head
         ;; under it (e - mf - 1 over the end), across e - 1 or e under it; with that step's own unseen cells under the seen
@@ -411,7 +414,8 @@
   :node-s seconds of CPU a cell expanded (priced-search), :back-h? the back search's bound in the heuristic, :prior-h? with
   :seen-steps and :seen-cells (fns [x y z], each within 1 of a neighbour's: the fewest steps from the cell to one whose step
   is seen, the fewest cells across, up or down to one whose block is seen) the unseen steps and digs a way must take priced
-  in the bound (:unseen-dig-s the least a dig of an unseen cell costs, default 0), :full? (fn []) true when the heap holds no more.
+  in the bound (:unseen-dig-s the least a dig of an unseen cell costs, default 0; a cell seen since the search began read
+  as never seen, by :guess, a fn [cell] of block-at's name for a cell never seen, default nil), :full? (fn []) true when the heap holds no more.
   {:dig [cell ..] :steps [{:to feet :move :walk|:laid|:pillar :dig [cell ..] :place cell} ..] :seconds the route's price}, {:problem :no-route},
   {:problem :dearer} when every route costs more than :max-s, {:problem :too-big} when :full? with no route in hand, or {:problem :budget} when :max-nodes cells were expanded first (search goes on past it)."
   [block-at from goal opts]

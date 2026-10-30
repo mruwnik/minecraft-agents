@@ -210,12 +210,12 @@
   (loop [cells 0] (let [[a e] (run 500) cells (+ cells e)] (if (or a (> cells 100000)) [a cells] (recur cells)))))
 
 (defn unseen-opts
-  "Prices over rock below y 10 never seen but for the cells of seen (taken for stone): seen-steps the fewest steps to a cell
+  "Prices over rock below y 10 never seen but for the cells of seen (a fn of a cell; never seen taken for stone): seen-steps the fewest steps to a cell
   whose step is seen, seen-cells the fewest cells to one seen (the air over y 10 or seen's)."
   [seen seen-steps seen-cells max-s]
   {:dig-s (fn [n _] (if (= "glass" n) 13 0.5)) :step-s 0.3 :unseen-step-s 1 :unseen-dig-s 0.5 :max-s max-s
    :seen-steps seen-steps :seen-cells (fn [x y z] (min (max 0 (- 10 y)) (seen-cells x y z)))
-   :unseen? (fn [[_ y _ :as c]] (and (< y 10) (not (seen c))))})
+   :unseen? (fn [[_ y _ :as c]] (and (< y 10) (not (seen c)))) :guess (constantly "stone")})
 
 (deftest a-priced-search-toward-a-far-goal-through-unseen-rock-prices-the-rock-and-searches-no-ball-of-it
   ;; rock below y 10 never seen (taken for stone): the walk's price alone (step-s a block) leaves a ball of rock open that a
@@ -256,6 +256,27 @@
                               [[-2 4 3] [4 5 -2] (assoc base :pillar-s 0.4)]]]
       (let [walk (price from goal opts false)]
         (is (and (number? walk) (< (js/Math.abs (- walk (price from goal opts true))) 1e-9)) (str from " to " goal))))))
+
+(deftest a-resumed-search-reads-the-memory-its-bound-was-made-from
+  ;; a tunnel seen while the search goes on, where its bound (made at the start) priced unseen rock: read as seen, its cells
+  ;; would cost less than the bound says, and the search could end on a dearer way
+  (let [mem (atom {})
+        w (fn [[_ y _ :as c]] (or (@mem c) (if (< y 10) "stone" "air")))
+        ;; the memory's cells as the search's first call finds them, as seen-sections/steps-fn measures
+        opts (fn [] (let [snap @mem
+                          to (fn [mf] (memoize (fn [x y z] (reduce min ##Inf (for [[[a b c]] snap] (max (+ (js/Math.abs (- x a)) (js/Math.abs (- z c))) (js/Math.ceil (/ (js/Math.abs (- y b)) mf))))))))]
+                      (assoc (unseen-opts #(@mem %) (to 3) (to 1) 1000) :max-fall 3 :max-nodes 3)))
+        tunnel (into {} (for [x (range 1 21) y [3 4 5]] [[x y 0] (if (= 3 y) "stone" "air")]))
+        resumed (fn [k] (loop [i 0] (let [r (dr/route-resumed k w [0 10 0] [20 4 0] (opts))]
+                                      (when (zero? i) (reset! mem tunnel))
+                                      (if (and (= {:problem :searching} r) (< i 1000)) (recur (inc i)) [r i]))))
+        before (first ((dr/priced-search w [0 10 0] [20 4 0] (opts)) 100000))
+        during (resumed [:t 4])
+        after (resumed [:t 5])]
+    (.clear dr/kept)
+    (is (< 2 (second during)) "the search spans calls")
+    (is (= (select-keys before [:seconds :dig]) (select-keys (first during) [:seconds :dig])) "the way the memory at its start gives")
+    (is (< (:seconds (first after)) (:seconds before)) "a search begun once the tunnel is seen takes it")))
 
 (deftest a-seen-cave-past-unseen-rock-is-priced-as-seen
   ;; a seen cave 60 long (its floor and walls seen) behind 5 blocks of unseen rock: priced as if the rest were unseen
