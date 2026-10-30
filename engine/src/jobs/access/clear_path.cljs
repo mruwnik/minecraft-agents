@@ -39,7 +39,8 @@
     from the second as soon as both are dug, before the far side opens, so nothing follows the body through (go-to's
     break-out of its own pen); a cell it cannot fill (an animal in it) is left to go-to's put-back, and a dead end digs it
     open again to walk back.
-  - Then it walks into the cell beyond (a go-to child).
+  - Then it walks into the cell beyond (a go-to child); landing under a guessed landing in its column is through, and a
+    walk that ends elsewhere plans on from what the body knows then.
   One call is the whole door; it yields :continue only while a dig child waits on the world.
   Needs nothing carried (a tool the dig child cannot find is its :dig-waits). Quote: the door's cells times the time of a
   cell, ending at the far side.
@@ -47,7 +48,7 @@
   :no-door (no such wall here), :protected (a block it never digs), :not-diggable (:not-protected? and a protected block), :footprint (a cell of a plan this body made,
   unless the spare-own-builds setting is false) and :dig-waits (the dig child's wait or decline, its ending the :because); :too-dear (the price over :max-dig-s); :nothing-possible for
   :dig-failed (its ending the :because), :refills (a cell dug stair.limits/max-digs times, e.g. sand falling in) and :step-failed
-  (the walk through did not arrive). Data {:dug [{:cell :block}] :at [x y z] :through [x y z]}, :shut [cells put back] with :close-behind.
+  (the walk through did not arrive and nothing new was learned). Data {:dug [{:cell :block}] :at [x y z] :through [x y z]}, :shut [cells put back] with :close-behind.
   It does not put the blocks back: jobs.movement.go-to does that once through.
   A tool the dig lacks is fetched (jobs.lib.need, from the call's :ways) unless they are only #{:carried}; a block no carried tool harvests
   is dug bare-handed (slow, the drop is lost) when no fetch is allowed or one failed, or at once with :need-drop false; :need-drop true stops :dig-waits :no-tool instead.")
@@ -244,13 +245,6 @@
           :else (do (done!)
                     (finish! c :dig-failed {:cell cell :block block})))))))
 
-(defn ^:async step-through! [c through]
-  (let [r (await (child/walk-into!* c :walk through))]
-    (cond
-      (= :continue r) :continue
-      (and (:arrived (:data r)) (= through (reach/standing-vec (:primitives c)))) (finish! c :done {})
-      :else (finish! c :step-failed {:cell through}))))
-
 (defn side-cells
   "Cells beside the dug cells (not dug themselves), the deepest dug cell first."
   [dir dug]
@@ -323,6 +317,34 @@
     (do (ctx/update-mem! c assoc :cells (:cells gap) :through (:through gap) :unseen (:unseen gap) :from from)
         :again)))
 
+(defn row-k
+  "How many rows ahead of from the far side through is."
+  [through from]
+  (+ (js/Math.abs (- (first through) (first from))) (js/Math.abs (- (nth through 2) (nth from 2)))))
+
+(defn landed?
+  "Whether feet stand in through's column at or under it: a guessed landing's floor may lie lower than guessed."
+  [[x y z] [fx fy fz]]
+  (and (= x fx) (= z fz) (<= fy y)))
+
+(defn ^:async step-through!
+  "Walk into the far side. Standing in its column at or under it is through (memory :through the cell stood in); a
+  walk that ends elsewhere plans on from what the body knows now (plan-on!) when that is another far side, else
+  ends :step-failed."
+  [c through]
+  (let [r (await (child/walk-into!* c :walk through))
+        p (:primitives c)
+        feet (reach/standing-vec p)
+        from (:from (ctx/mem c))]
+    (cond
+      (= :continue r) :continue
+      (landed? through feet) (do (ctx/update-mem! c assoc :through feet) (finish! c :done {}))
+      :else (let [gap (escape/door-from (escape/block-at-of p) (escape/unseen-of p) from (headings (:heading (:args c)))
+                                        (row-k through from) (escape/drop-limit p))]
+              (if (and gap (not= through (:through gap)))
+                (await (plan-on! c gap from))
+                (finish! c :step-failed {:cell through}))))))
+
 (defn ^:async replan!
   "The far side was a guess (:unseen) and the cells before it are dug: step into the deepest dug cell, so the row is
   in sight, look at that row's unseen cells (memory :looked-at), then plan on from it with what the body sees
@@ -334,7 +356,7 @@
   (let [{:keys [through from]} (ctx/mem c)
         dir (headings (:heading (:args c)))
         p (:primitives c)
-        k (+ (js/Math.abs (- (first through) (first from))) (js/Math.abs (- (nth through 2) (nth from 2))))]
+        k (row-k through from)]
     (if (not= through (:looked-at (ctx/mem c)))
       (if (= :continue (await (step-in! c)))
         :continue

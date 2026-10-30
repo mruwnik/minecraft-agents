@@ -34,19 +34,28 @@
     (tu/set-sensed! p (fn [pos] (if (@hidden (cell-of pos)) #js {:unknown true :pos pos} (sensed pos))))
     p))
 
+(defn hidden-while
+  "p sensing the cells in the atom hidden as never seen, looks or not."
+  [p hidden]
+  (let [sensed (tu/sensed-by p)
+        cell-of (fn [pos] (mapv #(js/Math.floor (aget pos %)) ["x" "y" "z"]))]
+    (tu/set-sensed! p (fn [pos] (if (@hidden (cell-of pos)) #js {:unknown true :pos pos} (sensed pos))))
+    p))
+
 (defn ^:async run-door
   "Run clear-path over world (stub: a replacement round for jobs.blocks.dig, or nil) as a child, :east
   unless args says otherwise; its result. World keys :p-out and :seen-out (atoms) get the primitives and the events;
-  :hide cells are unseen until looked at."
+  :hide cells are unseen until looked at, the cells in the atom :hidden while they are in it."
   ([world stub] (run-door world stub {:heading :east}))
   ([world stub args] (run-door world stub args nil))
   ([world stub args rounds] (run-door world stub args rounds tu/outcome))
   ([world stub args rounds f]
    (let [clock (atom 1000000)
          [seen sink] (tu/legacy-capture-sink)
-         p (cond-> (tu/fake (dissoc world :plans :sight :hide :p-out :seen-out))
+         p (cond-> (tu/fake (dissoc world :plans :sight :hide :hidden :p-out :seen-out))
              (:sight world) (tu/seeing-within (:sight world))
-             (:hide world) (hidden-until-looked-at (:hide world)))
+             (:hide world) (hidden-until-looked-at (:hide world))
+             (:hidden world) (hidden-while (:hidden world)))
          _ (some-> (:p-out world) (reset! p))
          _ (some-> (:seen-out world) (reset! seen))
          out (atom :not-done)
@@ -233,6 +242,34 @@
                                  {:heading :east} {'jobs.movement.go-to go-to} identity))]
           (is (= [:nothing-possible :step-failed] [(:kind r) (contract/cause-key r)]) (pr-str r))
           (is (= [[3 64 0] 0 #{:walk :clear-seal}] ((juxt :pos :range :ways) @asked)) (pr-str @asked)))))))
+
+(deftest a-guessed-landing-is-through-when-the-body-lands-lower-and-plans-on-when-the-walk-learns-more
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [guessed [2 61 0]
+              landing [2 60 0]
+              run (fn ^:async run [on-guess]
+                    (let [p-out (atom nil)
+                          hidden (atom #{landing})
+                          walk (get-in registry/jobs ['jobs.movement.go-to :round])
+                          land! (fn [c] (swap! (fake/state @p-out) assoc-in [:self :pos] [2.5 60 0.5]) (ctx/end c :done nil {:arrived true}))
+                          go-to (fn ^:async stub-go-to [c]
+                                  (condp = (:pos (:args c))
+                                    guessed (on-guess c hidden land!)
+                                    landing (land! c)
+                                    (await (walk c))))]
+                      (await (run-door {:self {:pos {:x 0 :y 64 :z 0}} :inventory [{:name "wooden_pickaxe" :count 1}]
+                                        :blocks (merge (box -2 63 -2 1 63 2 "stone") (box 5 63 -2 8 63 2 "stone")
+                                                       (box 2 59 -2 4 59 2 "stone") (box 1 64 -1 1 65 1 "stone"))
+                                        :hidden hidden :p-out p-out}
+                                       nil {:heading :east} {'jobs.movement.go-to go-to}))))
+              lower (await (run (fn [c _ land!] (land! c))))
+              learned (await (run (fn [c hidden _] (swap! hidden disj landing) (ctx/end c :nothing-possible :unreachable {:arrived false}))))]
+          (is (= [:done landing landing] ((juxt :status :through :at) lower))
+              "the floor under the guessed landing was not there: the body fell to the real one, which is through")
+          (is (= [:done landing landing] ((juxt :status :through :at) learned))
+              "a refused walk that showed the landing cell open plans on to the landing under it"))))))
 
 (deftest a-missing-heading-is-impossible
   (async done
