@@ -25,6 +25,11 @@
 
 (def target [:side])
 
+(def defaults {:spend {:job-time ::job-time-s}})
+
+(a/defargs settings
+  {::job-time-s {:default 120 :doc "Seconds a look-and-back walk may take." :spec (a/num-in 0 nil)}})
+
 (defn can-start? [c]
   (if (and (:side (:args c)) (:to (:args c)))
     (contract/ok :args "a side and a cell to look from")
