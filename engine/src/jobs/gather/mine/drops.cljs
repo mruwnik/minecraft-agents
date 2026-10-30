@@ -164,7 +164,10 @@
     (loop [last-dug nil
            spent (get (:cut-spent (mem c)) dug 0)
            plan nil]
-      (let [cells (or (planned plan last-dug) (drop-cut c dug (- max-s spent)))]
+      (let [kept (planned plan last-dug)
+            _ (when (and plan (not kept) (seq (:cells plan)))
+                (ctx/emit! c :mine.cut-replanned :info {:pos dug :text (str "mine plans its cut toward " (str/join "," dug) " again: a look changed a cell in or round the way")}))
+            cells (or kept (drop-cut c dug (- max-s spent)))]
         (cond
           (nil? cells) nil
           (= :searching cells) :partial

@@ -16,4 +16,11 @@
    :blocks [[:fill [20 0 0] [24 12 31] "stone"] [:fill [20 0 16] [24 1 16] "glass"] [:set [21 2 16] "gravel"] [:set [26 0 16] "iron_ore"]]
    :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :item "raw_iron" :count 1 :radius 12 :ways #{:seen}})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 150 :of-job true}]
-   :after [[:item "raw_iron" 1] [:not-block [26 0 16] "iron_ore"] [:block [21 2 16] "gravel"]]}]}
+   :after [[:item "raw_iron" 1] [:not-block [26 0 16] "iron_ore"] [:block [21 2 16] "gravel"]]}
+  {:name "seen-vein-behind-bars-is-cut-to-though-one-block-is-not-worth-the-dig"
+   :doc "A vein of eight clay seen through an iron-bars wall spanning the plot: go-to's escalation prices the wall against one clay ball and declines it, the mine's cut against the whole vein and digs it. Pins mine.cut-toward."
+   :blocks [[:fill [20 0 0] [20 12 31] "iron_bars"] [:fill [22 0 15] [23 1 16] "clay"]]
+   :act [[:job (jobs.gather.mine {:torches false :block "clay" :item "clay_ball" :count 1 :radius 12 :ways #{:seen}})]]
+   :expect [{:event {:source :job :kind :mine.cut-toward :data {:result :cut}} :within-s 100 :of-job true}
+            {:event {:source :job :kind #{:completed :stopped} :data {:got 4}} :within-s 100 :of-job true}]
+   :after [[:item "clay_ball" 4]]}]}
