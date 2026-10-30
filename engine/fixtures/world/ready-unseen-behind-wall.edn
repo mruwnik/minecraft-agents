@@ -1,0 +1,15 @@
+;; Card d71f9264: open ground hidden behind a 5-high wall by day is guessed by the measured sky prior under the seen
+;; sky over the wall (base-rates/sky-under, about 0.65 lit), not as five rock guesses in a row (about 0.06).
+;; Should-succeed: a probe for the spot just behind the wall walks round to look, sees it sunlit and starts.
+;; Should-fail: apiary-rounds/maintain-unseen-apiary-far-waits-not-worth (the walk to look costs more than the job is worth).
+{:defaults
+ {:tags [:readiness :light]
+  :plot {:height 8}
+  :blocks [[:fill [10 0 12] [10 4 20] "stone"]]
+  :body {:at [6.5 0 16.5] :settle-s 2}
+  :limit-s 120}
+ :cases
+ [{:name "a-spot-behind-a-wall-by-day-is-looked-at-then-starts"
+   :act [[:job (jobs.debug.ready-probe {:at #at [11 0 16] :stay-s 30})]]
+   :expect [{:event {:source :job :kind :job.ready-probe} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 30 :of-job true :until {:source :job :kind :job.ready-probe}}]}]}

@@ -565,8 +565,8 @@
   light alike, through unseen cells: a seen cell of light L lights one d steps off at L - d, at the chance the d - 1
   between are all open (base-rates/open-run-chance at the feet's height, light and near-share, the rock guess's), the
   nearest such cell counted. Sky light 15 reaches it down its column when the first seen cell over it has it and none
-  lies unseen between, not when that cell has less (a roof); past unseen cells, the chance every one is open (the same,
-  the seen cell lit); with
+  lies unseen between, not when that cell has less (a roof); past unseen cells, base-rates/sky-under's measured chance
+  by their count and whether a side of that seen cell is seen solid; with
   none seen over it, base-rates/sky-share at the sky light it needs, of the open cells seen in the 27 sections round its
   own (none seen there: round the feet's, at its height) outside the seen air sealed round the feet (no light reaches
   through its walls, so its dark says nothing of the light outside). Kept per cell.
@@ -689,6 +689,9 @@
                         (let [[n sky] (let [own-w (window (bit-shift-right x 4) (bit-shift-right y 4) (bit-shift-right z 4))]
                                         (if (pos? (first own-w)) own-w (window (bit-shift-right ox 4) (bit-shift-right y 4) (bit-shift-right oz 4))))]
                           (base-rates/sky-share y sky-need sky n)))
+           seen-solid? (fn [x y z] (when-let [^js ids (ids-at (bit-shift-right x 4) (bit-shift-right y 4) (bit-shift-right z 4))]
+                                     (let [v (aget ids (store/cell-index x y z))] (and (pos? v) (not= 1 (aget open (dec v)))))))
+           narrow? (fn [x y z] (boolean (some (fn [[dx dz]] (seen-solid? (+ x dx) y (+ z dz))) [[1 0] [-1 0] [0 1] [0 -1]])))
            ;; the chance the open sky reaches x y z down its column
            column (fn [x y z]
                     (loop [y' (inc y)]
@@ -699,7 +702,7 @@
                             (cond (or (nil? v) (neg? v)) (recur (inc y'))
                                   (not= 15 (bit-shift-right v 4)) 0
                                   (== y' (inc y)) 1
-                                  :else (base-rates/open-run-chance oy (- (inc y) oy) (- y' y 1) true q)))
+                                  :else (base-rates/sky-under (- y' y 1) sky-need (narrow? x y' z))))
                           (let [up (* 16 (inc (bit-shift-right y' 4)))] (recur up))))))
            memo (js/Map.)]
        (fn [x y z]

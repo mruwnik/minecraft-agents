@@ -270,15 +270,26 @@
 
 (deftest an-unseen-gap-under-seen-open-sky-is-priced-not-free
   ;; a shaft down from a hole in the floor by day, seen open to the sky round the body: under the hole's seen air, past
-  ;; every seen light's reach, the sky gets down only if every unseen cell between is open (the old guess: the open
-  ;; ground's sky share at that height, lit)
+  ;; every seen light's reach, the measured chance under a hole (the old guess: the open ground's sky share at that
+  ;; height, lit)
   (let [p (seeing {:time day :blocks {"0,63,5" "air" "0,63,6" "air" "0,63,7" "air"}})
         top (first (filter #(sh-sense/seen-cell? p {:x 0 :y % :z 7}) (range 49 64)))
         chance (look/unseen-lit-chance p {:x 0 :y 48 :z 7})]
     (is (< 52 top) "the hole is seen, the shaft under it not")
-    (is (= (let [y (js/Math.floor (:y (sh-sense/feet p)))] (base-rates/open-run-chance y (- 49 y) (- top 49) true (look/near-share p))) chance)
-        "each cell open at its distance under the seen sky")
+    (is (= (base-rates/sky-under (- top 49) (look/dark-light) true) chance) "the seen floor beside the hole: narrow")
     (is (< chance 0.5))))
+
+(deftest unseen-ground-behind-a-wall-by-day-is-priced-by-the-open-sky-seen-over-it
+  ;; the old guess took each unseen cell under the seen sky over the wall as a rock guess of its own, so the ground just
+  ;; behind a 5-high wall read about 0.06 lit by full day
+  (let [p (seeing {:time day :blocks (tu/box 6 64 -8 6 68 8 "stone")})]
+    (doseq [yaw [0 90 180 270]]
+      (swap! (fake/state p) assoc :yaw yaw)
+      (perception/pass! (aget p "perception")))
+    (let [top (first (filter #(sh-sense/seen-cell? p {:x 7 :y % :z 0}) (range 65 90)))]
+      (is (= 69 top) "the sky over the wall is seen, the ground behind it not")
+      (is (= (base-rates/sky-under 4 (look/dark-light) false) (look/unseen-lit-chance p {:x 7 :y 64 :z 0} 0)))
+      (is (true? (look/unseen-lit? p {:x 7 :y 64 :z 0} 0)) "more likely lit than not"))))
 
 (deftest an-unseen-cell-under-open-sky-is-lit-by-day-only
   (is (true? (look/unseen-lit? (seeing {:time day}) {:x 40 :y 64 :z 0})) "far past sight, where the seen ground is under open sky")

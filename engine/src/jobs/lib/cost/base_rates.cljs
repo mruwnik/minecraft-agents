@@ -149,6 +149,18 @@
   (let [{:keys [a b]} (prior-at sky-shares y #(nth (:a %) (dec level)) #(nth (:b %) (dec level)))]
     (/ (+ a lit) (+ a b open))))
 
+(def ^:private sky-under-data (table-of (rc/inline "jobs/lib/cost/unseen_sky.json")))
+
+(defn sky-under
+  "The chance an open cell a body has not seen, under a seen open cell of sky light 15 with n unseen cells between, has
+  sky light `level` (1-15) or more, narrow? when a side of that seen cell is seen solid (a hole in a roof): the mean of a
+  Beta measured by casting the body's sight over the recorded chunks (unseen_sky.json, node tools/event-counts.mjs
+  unseen-sky); more than its :n-max cells read as that many."
+  [n level narrow?]
+  (let [{:keys [a b]} (nth (get sky-under-data (if narrow? :narrow :wide)) (dec (-> n (max 1) (min (:n-max sky-under-data)))))
+        a (nth a (dec level)) b (nth b (dec level))]
+    (if (pos? (+ a b)) (/ a (+ a b)) 0.5)))
+
 (def unseen-d-max "The farthest distance unseen-solid tells apart: a cell farther off reads as this far." (count (:dark (first unseen-sections))))
 
 (defonce ^:private unseen-kept (js/Map.))
