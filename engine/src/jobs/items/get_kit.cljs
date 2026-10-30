@@ -34,7 +34,7 @@
   it fills the pack to its :carry default, the reserve) runs before the bill (:food false: none). A child that stops warns kit.no-food; a hungry body (foods/hungry?, the hungry trigger's line) then stops {:reason :no-food}, a fed one goes on (the hungry trigger feeds it later) and tries again after the next bill round that ends in a retry. A body that cannot heal (food 0, or ready/hurt-cannot-heal? of a mine's :long work: too hurt for it with no food carried and the bar under 18) asks get-food before more work (once more if it is still so after a fed answer), and stops {:reason :no-food} when it finds none.
   With furnace material short and no weapon carried, one jobs.items.obtain child first makes a sword (iron, stone or wooden); if it cannot, kit.unarmed warns and the work goes on.
   Items that need no furnace material, and those the carried material covers, are made first (:partial-first, the default) so the job stops naming only the shortfall; with :partial-first false the list order rules and the job stops at the first item that cannot be made.
-  With :explore, a bill that stops because a gathering ended (a mine that stopped, no way up) runs again (kit.retry, the pieces newly covered made first), up to 3 rounds without new furnace material. A bill that stops condition-failed for a child's :later (one the world may lift, not :no-source; one with a wait reason, such as :exposed, jobs.lib.need/call! waits out itself) rests with that cause (kit.later-wait; its :recheck-after-ms, else the measured seconds of value/::retry-counts :kit-later) and runs again while another round is worth its price (cost/try-again? :kit-later at the kit's worth); a :never stop ends the kit with its cause.
+  With :explore, a bill that stops because a gathering ended (a mine that stopped, no way up) runs again (kit.retry, the pieces newly covered made first), while another is worth its price (cost/try-again? :kit-later). A bill that stops condition-failed for a child's :later (one the world may lift, not :no-source; one with a wait reason, such as :exposed, jobs.lib.need/call! waits out itself) rests with that cause (kit.later-wait; its :recheck-after-ms, else the measured seconds of value/::retry-counts :kit-later) and runs again while another round is worth its price (cost/try-again? :kit-later at the kit's worth); a :never stop ends the kit with its cause.
   Get a base first.
   A death since the job began (body memory :died) clears the children and the bill; the next round re-plans from
   what is carried. A death keeps the job listed unless it was submitted with --drop-on-death.
@@ -280,17 +280,14 @@
       (= :done (:kind e)) nil
       :else {:cause (contract/cause-key e) :why (why-of e)})))
 
-(def max-bill-tries
-  "Bill rounds a kit runs before a gathering that keeps ending without material is final."
-  3)
-
 (defn retry?
-  "Whether the bill's stop r is a gathering try that ended (r's :gathered, obtain's data :tried :gather: a mine that stopped, no way up ..) and the kit may run the bill again: it was searching (:explore), and fewer than max-bill-tries fruitless rounds passed."
-  [r tries explore]
-  (boolean (and r explore (< (inc tries) max-bill-tries)
+  "Whether the bill's stop r is a gathering try that ended (r's :gathered, obtain's data :tried :gather: a mine that stopped, no way up ..) and the kit may run the bill again: it was searching (:explore), and another round after the fruitless ones is worth its price (cost/try-again? :kit-later at the kit's worth)."
+  [c r tries explore]
+  (boolean (and r explore
                 (= :no-source (:reason r))
                 (some? (:gathered r))
-                (not= :none-seen (:gathered r)))))
+                (not= :none-seen (:gathered r))
+                (cost/try-again? c :kit-later {:fails (inc tries)}))))
 
 (defn later-wait-s
   "Seconds the kit rests after the bill's :later stop r before running it again: the refusal's recheck, else the :kit-later try seconds."
@@ -427,7 +424,7 @@
                 r (await (run-bill! c (if (zero? round) :bill (keyword (str "bill" round))) (bill-of c)))]
             (when-not (= :continue r) (later-over! c r))
             (cond (= :continue r) :continue
-                  (retry? r tries (:explore a)) (retry! c r tries)
+                  (retry? c r tries (:explore a)) (retry! c r tries)
                   (and r (not (:covered-done (ctx/mem c))) (seq (covered-of version (:partial-first a) todo (:carried (state c)))))
                   (do (ctx/update-mem! c (fn [m] (-> m (dissoc :covered :bill) (update :bill-round (fnil inc 0)))))
                       :again)
