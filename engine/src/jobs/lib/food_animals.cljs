@@ -84,17 +84,17 @@
 
 (defn noted-targets
   "The food animals a :seen note (any body's) places anywhere whose meat may be worth the walk (noted-benefit over
-  noted-cost), as the notes, cheapest first by noted-price, skipping the ids in `done`, babies and the animals tried; not cut at a radius."
-  [c done]
+  noted-cost), as the notes, cheapest first by noted-price, skipping the ids in `done`, babies, the animals tried and those proven gone (spare/gone? within the scan `radius`); not cut at a radius."
+  [c done radius]
   (let [me (u/self-pos c)
         skipped (set (:skipped-animals (ctx/mem c)))]
     (->> (notes/notes c)
          (filter #(and (= :seen (:kind %)) (contains? food-animals (:what %)) (:id %) (:pos %) (not (:baby %))
-                       (not (done (:id %))) (not (skipped (:id %)))
+                       (not (done (:id %))) (not (skipped (:id %))) (not (spare/gone? c % radius))
                        (> (noted-benefit c %) (noted-cost me %))))
          (sort-by #(noted-price me %)))))
 
-(defn noted-target "The first of noted-targets, nil when none." [c done] (first (noted-targets c done)))
+(defn noted-target "The first of noted-targets, nil when none." [c done radius] (first (noted-targets c done radius)))
 
 (defn note-seen!
   "Write the adults and babies of food animals in sight as :seen notes, so a later look at one of a pair counts the other."

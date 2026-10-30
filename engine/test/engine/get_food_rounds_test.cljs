@@ -681,6 +681,17 @@
           (await (one-round! eng {:settings {:jobs.lib.combat/attack-gap-ms 0}}))
           (is (seq (calls p "attack")) "the note's cell is seen empty: the one in sight is alone and is hunted"))))))
 
+(deftest a-noted-cow-whose-cell-is-in-view-with-no-cow-there-is-not-walked-toward
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [note [{:kind :seen :what "cow" :id "u1" :pos [20 64 0] :by "Other" :t 999900 :until 9e15}]
+              {:keys [eng seen p]} (setup {:time 6000 :self {:food 8 :health 10}} :step-ms 5 :other-notes note)
+              sensed (.-sensedAt p)]
+          (tu/set-sensed! p (fn [pos] (let [b (sensed pos)] (when b (aset b "visible" true)) b)))
+          (await (one-round! eng {}))
+          (is (not-any? #(= :noted-walk (:slot %)) (events-of seen :child_started)) "the note's cell is seen empty: its animal is gone, no walk to it"))))))
+
 (deftest a-cow-seen-with-two-more-noted-is-hunted-as-the-surplus
   (async done
     (tu/run-async done
