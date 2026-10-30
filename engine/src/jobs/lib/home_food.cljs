@@ -1,7 +1,7 @@
 (ns jobs.lib.home-food
   "The food a body has at home, from what it sensed: chests it booked food in (memory :fetch/stock) that zones and
-  claims let it take from, ripe crops it saw in its own zones (within the seen-block memory's 64-block reach) and on
-  the crop cells of its own plans (anywhere), and the surplus of the food animals it saw or
+  claims let it take from, ripe crops it saw in its own zones and on the crop
+  cells of its own plans (anywhere), and the surplus of the food animals it saw or
   noted there (animal-spare's keep rule: the breeders stay). (sources c far) [{:kind :pos :points :blocks :walk-s}], the
   walk from far; (carry-points c trip) what the body must carry on trip (jobs.lib.cost.food/carry-points over them)."
   (:require [engine.ctx :as ctx]
@@ -9,6 +9,7 @@
             [engine.notes :as notes]
             [engine.args :as a]
             [jobs.lib.access :as access]
+            [jobs.lib.access.zones :as zones]
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.food :as food]
@@ -40,17 +41,27 @@
         :when (and (pos? points) (not (access/container-refusal c :take pos)))]
     {:kind :chest :pos pos :points points}))
 
-(defn crop-sources [c]
-  (let [p (:primitives c)
-        planned (keep (fn [cell]
-                        (let [{:keys [name properties]} (look/seen-block p (zipmap [:x :y :z] cell))]
-                          (when (crop-food name)
-                            {:name name :pos (zipmap [:x :y :z] cell) :age (some-> (:age properties) js/Number)})))
-                      (known/crop-cells c))
-        near (crops/seen-crops p (keys crop-food) 64 256)]
-    (for [{:keys [name pos age]} (vals (into {} (map (juxt (comp u/cell-vec :pos) identity)) (concat near planned)))
-          :when (and age (>= age (crops/ripe-age name)) (access/in-own-area? c pos))
-          :let [[item share] (crop-food name)]]
+(defn own-zone-cells
+  "The cells of the zones the body owns."
+  [c]
+  (let [self (ctx/self-name c)]
+    (for [{[x0 y0 z0] :min [x1 y1 z1] :max :as zn} (known/zones c)
+          :when (zones/same-owner? (:owner zn) self)
+          x (range x0 (inc x1)) y (range y0 (inc y1)) z (range z0 (inc z1))]
+      [x y z])))
+
+(defn crop-sources
+  "Ripe crops of the body's own zones and plans' crop cells, read from memory (seenBlockAt): a cell's name first, its
+  age only for a crop."
+  [c]
+  (when-let [at (aget (:primitives c) "seenBlockAt")]
+    (for [[x y z] (distinct (concat (own-zone-cells c) (known/crop-cells c)))
+          :let [^js b (.call at (:primitives c) #js {:x x :y y :z z})
+                food (some-> b .-name crop-food)
+                age (when food (some-> b .-properties (aget "age") js/Number))
+                pos {:x x :y y :z z}]
+          :when (and age (>= age (crops/ripe-age (.-name b))) (access/in-own-area? c pos))
+          :let [[item share] food]]
       {:kind :crop :pos pos :points (* share (foods/points item))})))
 
 (defn pen-sources [c]
@@ -70,21 +81,29 @@
           :when (pos? spare-n)]
       {:kind :pen :pos (:pos (first as)) :points (* spare-n drops (foods/points meat))})))
 
-(def round-fields
-  "The crop and pen sources of the last round asked: {:engine :root :round :sources}. Their seen-block scan costs 5-16 ms
-  a call over 100-600 remembered sections, and choosers ask the reserve many times a round."
+(def kept-crops
+  "The crop sources of the last ask: {:key :sources}. Their seen-block reads cost ms over a field's cells, and choosers
+  ask the reserve many times a round."
   (atom nil))
 
-(defn field-sources
-  "crop-sources and pen-sources, read once per round of c's root job (every call without an engine round)."
+(defn crops-key
+  "What the crop sources depend on: the perception's remembered blocks (its write count moves when a dug or sensed cell
+  changes), the zones, the plans' crop cells and the body; nil without a perception (no memo)."
   [c]
-  (let [{:keys [engine root round]} c
-        kept @round-fields]
-    (if (and round (identical? engine (:engine kept)) (= root (:root kept)) (= round (:round kept)))
-      (:sources kept)
-      (let [found (vec (concat (crop-sources c) (pen-sources c)))]
-        (when round (reset! round-fields {:engine engine :root root :round round :sources found}))
-        found))))
+  (when-let [^js st (some-> (aget (:primitives c) "perception") :st)]
+    [st (.-writes st) (known/zones c) (known/crop-cells c) (ctx/self-name c)]))
+
+(defn field-sources
+  "crop-sources, read again whenever crops-key moves, and pen-sources."
+  [c]
+  (let [k (crops-key c)
+        kept @kept-crops
+        crops (if (and k (= k (:key kept)))
+                (:sources kept)
+                (let [found (vec (crop-sources c))]
+                  (when k (reset! kept-crops {:key k :sources found}))
+                  found))]
+    (concat crops (pen-sources c))))
 
 (defn sources
   "See the ns doc: each with :blocks and the seconds (:walk-s) of the walk to it from far."
