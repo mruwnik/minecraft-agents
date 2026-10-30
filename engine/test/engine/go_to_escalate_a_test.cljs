@@ -14,6 +14,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.escape :as escape]
             [jobs.lib.escape.way :as escape-way]
+            [jobs.movement.go-to.escalate-choose :as ec]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.tools :as tools]
@@ -154,6 +155,11 @@
     (is (= {:step :pillar :height 1 :item "dirt"} (escape-way/choose p [2 64 0] [8 64 0])) "a block up and over the wall costs less than the two planks' cut and put-back")
     (is (= {:step :pillar :height 1 :item "dirt"} (escape-way/choose p [2 64 0] [8 64 0] (constantly false)))
         "no dig allowed: over the wall")))
+
+(deftest goal-way-never-weighs-a-rim-pillar-for-a-goal-at-the-feet-level
+  (let [p (tu/fake {:self {:pos {:x 2 :y 64 :z 0}} :blocks plank-yard :inventory [{:name "dirt" :count 9}]})]
+    (is (= :clear-path (:step (ec/goal-way {:primitives p} [2 64 0] [8 64 0] (constantly true) {:skip #{:approach}})))
+        "a pillar leads in only to a goal above: the door is the way in, not the cheaper hop it would be dropped for")))
 
 ;; ------------------------------------------------------------------ go-to escalation
 (deftest go-to-pillars-out-of-a-pit-when-it-carries-blocks
