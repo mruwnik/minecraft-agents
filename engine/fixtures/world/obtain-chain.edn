@@ -115,14 +115,14 @@
   {:name "seen-obsidian-is-mined-with-a-diamond-pickaxe"
    :blocks [[:fill [22 0 14] [26 2 18] "stone"] [:set [22 0 16] "obsidian"]]
    :body {:inventory [["diamond_pickaxe" 1]]}
-   :act [[:job (jobs.items.obtain {:item "obsidian" :count 1 :explore false})]]
+   :act [[:job (jobs.items.obtain {:item "obsidian" :count 1 :explore false :worth 300})]]
    :expect [{:event {:source :job :kind :completed} :within-s 110 :of-job true}]
    :after [[:item "obsidian" [:>= 1]]]
    :limit-s 130}
   {:name "water-on-a-seen-lava-source-makes-obsidian"
    :blocks [[:fill [22 0 14] [26 0 18] "stone"] [:set [24 0 16] "lava"]]
    :body {:inventory [["diamond_pickaxe" 1] ["water_bucket" 1]]}
-   :act [[:job (jobs.items.obtain {:item "obsidian" :count 1 :explore false})]]
+   :act [[:job (jobs.items.obtain {:item "obsidian" :count 1 :explore false :worth 300})]]
    :expect [{:event {:source :job :kind :completed} :within-s 110 :of-job true}]
    :after [[:item "obsidian" [:>= 1]]]
    :limit-s 130}

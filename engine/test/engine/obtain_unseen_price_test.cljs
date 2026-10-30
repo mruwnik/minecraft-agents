@@ -225,4 +225,4 @@
 
 (deftest a-root-obtain-gathers-a-seen-source-only-within-what-the-item-is-worth
   (is (nil? (seen-sand-check 3)) "a few blocks off: within the walk a terrain block usually takes")
-  (is (= :not-worth (:reason (seen-sand-check 60))) "60 blocks there and back: far dearer than sand usually is"))
+  (is (= :not-worth (:reason (seen-sand-check 40))) "at the edge of what is seen: far dearer than sand usually is"))

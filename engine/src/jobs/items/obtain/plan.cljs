@@ -186,6 +186,17 @@
       (+ dig (cost/dark-way-s walk d (threats/body-of p)))
       (+ walk dig))))
 
+(defn seen-walk-s
+  "Seconds of the straight walk to the farthest of a gather plan's needs seen (nearest block or animal each), nil with none."
+  [c pl]
+  (let [needs (some-> pl :gather (gather-needs (game/version-of (:primitives c))))
+        walks (for [need needs
+                    :let [src (seen-of c need)
+                          pos (if (map? src) (:pos src) (some-> src .-pos u/pos-of))]
+                    :when pos]
+                (:cost (cost/walk-cost {:distance (u/dist (u/self-pos c) pos)})))]
+    (when (seq walks) (apply max walks))))
+
 (defn look-cost
   "Seconds per find of a search for an unseen need (cost/search-s): legs of the search's spacing, each its walk (its
   danger is go-to's quote's, priced as the search walks it), a look of the gather's scan radius (cost/look-leg-chance), within the call's search-worth, then

@@ -25,15 +25,8 @@
 
 (defn ^:async obtain [w]
   (let [{:keys [eng p]} (lt/setup w)
-        args {:item "obsidian" :count 1}
-        out (atom :not-done)
-        ;; at the root's worth: obtain's own worth-of, as when an agent submits it
-        parent (assoc (tu/recording-parent 'jobs.items.obtain args out)
-                      :worth-of #((:worth-of (get registry/jobs 'jobs.items.obtain)) (assoc % :args args)))
-        eng (assoc-in eng [:jobs 'root-parent] parent)
-        _ (core/submit! eng '(root-parent) {})
-        _ (await (tu/run-until-empty eng 300))
-        res @out]
+        ;; obsidian's table worth is its dig, not the diamond pickaxe and the lava's risk: the agent says what one is worth
+        res (await (tu/child-outcome eng 'jobs.items.obtain {:item "obsidian" :count 1 :worth 300} 300))]
     {:res res :p p}))
 
 (defn carried [p name] (reduce + (map #(.-count %) (filter #(= name (.-name %)) (array-seq (.-inventory (.self p)))))))
