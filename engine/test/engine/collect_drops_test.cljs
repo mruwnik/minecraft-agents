@@ -781,3 +781,7 @@
           (with-redefs [child/run!* record]
             (await (tu/child-outcome eng job {:radius 6 :near {:x 4 :y 68 :z 0}} 10)))
           (is (= [#{:walk :pillar :stair :clear-seal}] (distinct @ways))))))))
+
+(deftest a-drop-walk-offers-the-stair-only-with-dig
+  (is (= #{:walk :pillar :clear-seal} (job-ns/drop-walk-ways {:args {}})))
+  (is (= #{:walk :pillar :clear-seal :stair} (job-ns/drop-walk-ways {:args {:dig true}}))))

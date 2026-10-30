@@ -44,7 +44,7 @@
   blocks are tried. With :dig a body shut in a room digs out by go-to's priced escalation (:clear-path :stair :dig-out). A search that go-to made wait :search-waits calls in a row ends with :reason :search-waited.
   While it runs it holds its work area (jobs.lib.loose :collecting), so the :loose-items reflex leaves those drops to it.
   With :ids, ids not in sight when none is left to try are booked as one :left {:reason :unseen :ids [...] :last {id [x y z]}}, the cell each was last seen in.
-  A drop more than a block above the feet that the act cannot reach (a column top) is walked up to with go-to's :pillar and :stair ways, then collected; one go-to cannot stand beside (a wall niche) is pillared to from the feet when it lies 2 to 6 above and within 1 cell sideways (carried blocks).
+  A drop more than a block above the feet that the act cannot reach (a column top) is walked up to with go-to's :pillar way (and :stair with :dig), then collected; one go-to cannot stand beside (a wall niche) is pillared to from the feet when it lies 2 to 6 above and within 1 cell sideways (carried blocks).
   With :dig, a drop go-to cannot reach, or one too deep in the dug hole, is dug to once: the cheapest dig route (jobs.lib.dig-route
   priced as go-to's, over the blocks the body has seen, an unseen one taken for stone) that opens a way to it, each a jobs.blocks.dig child (zones, claims, hazards
   are its rules), then the walk is tried again. A dig that ends :unseen (the dark hides the cell) sets a carried torch in the body's cell once per call, looks again and digs on. No such way leaves the drop :no-route, a dig that fails with that dig's outcome (:refused, :cannot, :unreachable ...).
@@ -274,11 +274,17 @@
   (let [cands (candidates c (or (:anchor (ctx/mem c)) (:near (:args c)) (u/self-pos c)))]
     (reduce + 0 (map #(item-worth c %) (if (some #(= (.-id %) (.-id item)) cands) cands (cons item cands))))))
 
+(defn drop-walk-ways
+  "go-to ways of a walk to a drop: pillar always, :stair (a way that digs) only with :dig."
+  [c]
+  (cond-> #{:walk :pillar :clear-seal}
+    (:dig (:args c)) (conj :stair)))
+
 (defn ^:async walk-down!
-  "Walk within a block of item, lower or higher than the feet, with go-to's walk, stair and pillar ways (a drop in a pit or
+  "Walk within a block of item, lower or higher than the feet, with go-to's drop-walk-ways (a drop in a pit or
   on a column top; go-to prices each): one go-to call (child/run!*, slot :walk). :arrived, :continue (go-to waits on the world) or :unreachable (go-to's :risky cause kept in the job memory as :walk-fail, see walk-fail)."
   [c item]
-  (let [r (await (child/run!* c :walk 'jobs.movement.go-to {:pos (item-cell item) :range 1 :ways #{:walk :pillar :stair :clear-seal} :worth (drops-worth c item)}))]
+  (let [r (await (child/run!* c :walk 'jobs.movement.go-to {:pos (item-cell item) :range 1 :ways (drop-walk-ways c) :worth (drops-worth c item)}))]
     (cond
       (= :continue r) :continue
       (and (= :done (:kind r)) (:arrived (:data r))) :arrived
