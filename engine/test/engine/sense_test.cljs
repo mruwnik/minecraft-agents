@@ -144,8 +144,7 @@
               [none] (await (run walk in-sight))]
           (is (zero? inf) "at ##Inf no look: no look from here shows one of the 312")
           (is (not-any? #(look/look-shows? p %) cells) "the 312 cells behind the near face")
-          (is (= (cost/cell-looks 2.5 312) few) "worth 2.5 s over the walk to the nearest: a few looks of the 312")
-          (is (< 0 few 10))
+          (is (< 0 few 10) "worth 2.5 s over the walk to the nearest: a few looks of the 312")
           (is (zero? none) "worth no more than the walk to the nearest: no look"))))))
 
 (deftest the-walk-a-find-pays-is-to-the-nearest-cell-it-read-an-area-or-entity-query-round-the-body-is-here
@@ -162,19 +161,39 @@
         reads {:cells [[3 64 0]]}
         saving 2
         priced (fn [chance] ((sense/find-price c (+ saving (sense/read-walk-s c reads)) chance) nil reads))]
-    (is (= (cost/cell-looks saving 50) (sense/cell-looks (priced nil) 50)) "no kind's chance: turn-chance")
-    (is (= (cost/cell-looks saving 50 0 0 cost/closed-cell-chance) (sense/cell-looks (priced cost/closed-cell-chance) 50)))
-    (is (< (sense/cell-looks (priced nil) 50) (sense/cell-looks (priced cost/closed-cell-chance) 50))
+    (is (= (cost/cell-looks saving 50) (sense/cell-looks (priced nil) (repeat 50 [3 64 0]))) "no kind's chance: turn-chance")
+    (is (= (cost/cell-looks saving 50 0 0 cost/closed-cell-chance) (sense/cell-looks (priced cost/closed-cell-chance) (repeat 50 [3 64 0]))))
+    (is (< (sense/cell-looks (priced nil) (repeat 50 [3 64 0])) (sense/cell-looks (priced cost/closed-cell-chance) (repeat 50 [3 64 0])))
         "a roof cell is closed at the roofed-room prior's ~0.6, far over the turn prior's 1/43: more looks pay")))
 
 (deftest a-find-spares-at-most-the-calls-worth
   (let [reads {:cells [[3 64 0]]}
         looks (fn [worth] (let [c (assoc (stub-ctx (tu/fake {:self {:pos feet}})) :worth (constantly worth))]
-                            (sense/cell-looks ((sense/find-price c 1000) nil reads) 50)))]
+                            (sense/cell-looks ((sense/find-price c 1000) nil reads) (repeat 50 [3 64 0]))))]
     (is (pos? (looks ##Inf)) "a dear other way pays looks")
     (is (zero? (looks 0)) "a call worth nothing: giving it up spares the other way, so no look pays")
     (is (= (cost/cell-looks (- 30 (sense/read-walk-s (stub-ctx (tu/fake {:self {:pos feet}})) reads)) 50) (looks 30))
         "worth 30 s: the find spares that less the walk")))
+
+(deftest a-look-at-a-cell-the-call-fails-without-saves-the-worth-less-the-walk-to-that-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await (settings/with-settings {::cost/turn-prior {:a 1000 :b 1}}
+          (fn ^:async f []
+            (let [p (seeing {:self {:pos {:x 0 :y 64 :z 0}} :blocks long-rock})
+                  c (stub-ctx p)
+                  cells (sense/targets p feet (for [x (range 5 13) y (range 63 66) z (range -6 7)] [x y z]) #{})
+                  walk (sense/walk-s feet (first cells))
+                  c (assoc c :worth (constantly (+ walk 1)))
+                  saves (sense/savings (sense/fail-price c {:cells cells}) cells)]
+              (is (> (first saves) (last saves)) "the far cells of the box save less than the near ones")
+              (with-redefs [clock/now (constantly 0) look/look-shows? in-sight]
+                (await (sense/decide! c ::rock #(= (count cells) (count (keep (fn [cell] (u/seen-name p (zipmap [:x :y :z] cell))) cells))) {:price (sense/fails-to c)})))
+              (let [looked (mapcat :cells (filter #(= :sense.looked (:kind %)) @(:events c)))]
+                (is (seq looked))
+                (is (< (count looked) (count cells)) "a turn nearly sure: still the far cells are not paid")
+                (is (every? #(< (sense/walk-s feet %) (+ walk 1)) looked) "only cells whose own walk is under the worth"))))))))))
 
 (def wall (tu/box 3 64 -3 3 66 3 "stone"))
 

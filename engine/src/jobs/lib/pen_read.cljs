@@ -79,7 +79,7 @@
          answer (read p opts)
          here (u/self-pos c)
          in-sight (filter #(look/look-shows? p %) (sense/targets p here (:remembered answer) #{}))
-         stale (take (sense/cell-looks (sense/fail-price c {:cells in-sight}) (count in-sight)) in-sight)]
+         stale (take (sense/cell-looks (sense/fail-price c {:cells in-sight}) in-sight) in-sight)]
      (if (and (empty? stale) (not (retry? answer)))
        answer
        (do (when-not (and (retry? answer) (await (if (:early? opts) (look/survey-until! c :cell (positive-every p opts retry?)) (look/survey! c :cell))))

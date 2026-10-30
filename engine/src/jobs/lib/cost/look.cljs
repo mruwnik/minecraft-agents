@@ -55,15 +55,16 @@
   (if (and gap delta) (max 0 (- delta gap)) 0))
 
 (defn cell-looks
-  "How many of `looks` looks at unknown cells pay a turn saving `saving` seconds (turn-saving), `looked` fruitless looks
-  taken before them, each costing look-s plus redo-s (its share of deciding again): the next is taken while saving x
-  chance (a fn of the fruitless looks before, default turn-chance) is over that. The chance falls with each fruitless
-  look, so a finite saving stops."
+  "How many of `looks` looks at unknown cells pay a turn saving `saving` seconds (turn-saving; a seq: each look's own),
+  `looked` fruitless looks taken before them, each costing look-s plus redo-s (its share of deciding again): the next is
+  taken while its saving x chance (a fn of the fruitless looks before, default turn-chance) is over that. The chance
+  falls with each fruitless look, so a finite saving stops."
   ([saving looks] (cell-looks saving looks 0 0))
   ([saving looks looked redo-s] (cell-looks saving looks looked redo-s nil))
   ([saving looks looked redo-s chance]
    (let [chance (or chance turn-chance)]
-     (count (take-while #(> (* saving (chance (+ looked %))) (+ (look-s 1) redo-s)) (range looks))))))
+     (count (take-while (fn [[s i]] (> (* s (chance (+ looked i))) (+ (look-s 1) redo-s)))
+                        (map vector (if (number? saving) (repeat saving) saving) (range looks)))))))
 
 (defn closed-cell-chance
   "The chance a look at one more unseen boundary cell of a roofed room shows it closed, after `looked` shown open:
