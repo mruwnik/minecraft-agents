@@ -290,7 +290,8 @@
      (cond
        (seq ways)
        (let [priced {:rest-s (rest-s-fn p goal) :risk-s (:risk-s opts) :item item :count count}]
-         (first (sort-by #(way-s p feet goal % priced) ways)))
+         (second (reduce (fn [[best-s best :as cur] w] (let [s (way-s p feet goal w priced)] (if (< s best-s) [s w] cur)))
+                         [##Inf (first ways)] ways)))
 
        (and (not (skip :approach)) (not (and (skip :clear-path) (skip :stair))) (not (escape/walled-side? block-at feet)) @wall)
        {:step :approach :pos @wall}
