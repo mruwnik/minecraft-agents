@@ -28,26 +28,26 @@
                  :doc "Most cells a job remembers looking at from one cell; past it decide! looks no more there."}})
 
 (defn cell-looks
-  "How many of n looks at unknown cells a decision priced {:gap :delta} (cost/turn-saving) pays for, after looked
-  fruitless ones each followed by redo-s of deciding again."
+  "How many of n looks at unknown cells a decision priced {:gap :delta :chance} (cost/turn-saving) pays for, after looked
+  fruitless ones each followed by redo-s of deciding again: at :chance's chance a look shows what turns it, else turn-chance."
   ([price n] (cell-looks price n 0 0))
-  ([price n looked redo-s] (cost/cell-looks (cost/turn-saving price) n looked redo-s)))
+  ([price n looked redo-s] (cost/cell-looks (cost/turn-saving price) n looked redo-s (:chance price))))
 
 (defn read-walk-s
-  "Seconds of the walk (value/walk-cost) from here to the nearest cell a decision read unknown (reads' :cells), else across
-  its area and entity queries (their :radius); nil with nothing read."
-  [c {:keys [cells area entities]}]
+  "Seconds of the walk (value/walk-cost) from here to the nearest cell a decision read unknown or guessed (reads' :cells,
+  :guessed); an area or entity query is round the body, so its nearest cell is here. nil with nothing read."
+  [c {:keys [cells guessed area entities]}]
   (let [here (u/self-pos c)
-        d (if (seq cells)
-            (apply min (map #(u/eye-dist here %) cells))
-            (some->> (concat area entities) seq (map #(or (:radius %) 16)) (apply max)))]
-    (when d (:cost (value/walk-cost {:distance d})))))
+        ds (concat (map #(u/eye-dist here %) (concat cells guessed)) (when (seq (concat area entities)) [0]))]
+    (when (seq ds) (:cost (value/walk-cost {:distance (apply min ds)})))))
 
 (defn find-price
   "decide!'s :price for a find whose other way costs other-s seconds: a look that shows the find saves that, less the walk
-  to it (read-walk-s, its least price: the gap)."
-  [c other-s]
-  (fn [_ reads] (when-let [w (read-walk-s c reads)] {:gap w :delta other-s})))
+  to it (read-walk-s, its least price: the gap). chance: the kind's chance a look shows one after i fruitless looks
+  (cost/cell-looks), nil turn-chance."
+  ([c other-s] (find-price c other-s nil))
+  ([c other-s chance]
+   (fn [_ reads] (when-let [w (read-walk-s c reads)] (cond-> {:gap w :delta other-s} chance (assoc :chance chance))))))
 
 (defn fail-price
   "The {:gap :delta} of a decision whose negative ends the job, after it read reads (decide's): a find whose other way
@@ -177,7 +177,7 @@
          {wall :wall other :other} (group-by #(cond (contains? walls %) :wall (unknown? p %) :other :else :known) asked)
          saving (cost/turn-saving price)
          unpaid (set (concat (when-not (= (count wall) (cost/round-looks saving (count wall))) wall)
-                             (drop (cost/cell-looks saving (count other) (:looks (round-mem c) 0) 0) other)))
+                             (drop (cost/cell-looks saving (count other) (:looks (round-mem c) 0) 0 (:chance price)) other)))
          in-sight (set asked)]
      {:pay (filterv #(and (in-sight %) (not (unpaid %))) cells) :unpaid (filterv unpaid cells) :walls walls :asked asked})))
 
@@ -256,15 +256,16 @@
                  [v reads] (decide decide-fn)
                  redo-s (/ (- (clock/now) t) 1000)
                  guessed (when (and verify-guesses (not (retry? v))) (seq (remove looked (:guessed reads))))
-                 saves (cost/turn-saving (when price (price v reads)))
+                 pr (when price (price v reads))
+                 saves (cost/turn-saving pr)
                  fruitless (+ (count looked0) looks)]
              (if (or (>= (count looked) (max-looked)) (and (not (retry? v)) (not guessed)))
                [v looked surveyed looks]
                (let [found (into [] (comp (remove #(occluded? p here %)) (take (- (max-looked) (count looked))))
                                  (targets p here (if guessed guessed (:cells reads)) looked))
                      k (if (and batch (not guessed)) (count found) (min (count found) (cost/redo-every redo-s)))
-                     n (min k (cost/cell-looks saves (count found) fruitless (/ redo-s (max k 1))))
-                     ask (when (and (retry? v) (pos? (cost/cell-looks saves 1 fruitless redo-s)))
+                     n (min k (cost/cell-looks saves (count found) fruitless (/ redo-s (max k 1)) (:chance pr)))
+                     ask (when (and (retry? v) (pos? (cost/cell-looks saves 1 fruitless redo-s (:chance pr))))
                            (or (seq (:area reads)) (seq (:entities reads))))]
                  (cond
                    (and guessed (pos? n))

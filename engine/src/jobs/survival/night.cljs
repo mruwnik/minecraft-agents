@@ -429,12 +429,12 @@
 (defn ^:async shelter!
   "No bed, nobody asleep, not roofed: dig in here (dig-in!), shut-in pricing a walk into the roofed place whose walk go-to quotes cheapest
   (cheapest-walk!, only those no dearer than digging in is quoted, bed-down/dig-in-s, which also prices the looks for a
-  place, sense/find-price); a quote still searching waits a pass."
+  place, sense/find-price, at the chance a guessed roof cell is closed, cost/closed-cell-chance); a quote still searching waits a pass."
   [c]
   (hold/busy! c)
   (let [dig-s (await (bed-down/dig-in-s c))
         places (when-not (:roof-walk-failed (ctx/mem c))
-                 (await (sense/decide! c ::roofed-place #(seq (room-lib/roofed-places-in c (:args c) ##Inf)) {:verify-guesses true :price (sense/find-price c dig-s)})))
+                 (await (sense/decide! c ::roofed-place #(seq (room-lib/roofed-places-in c (:args c) ##Inf)) {:verify-guesses true :price (sense/find-price c dig-s cost/closed-cell-chance)})))
         pick (when (seq places) (await (cheapest-walk! c places {:target place-walk-target :walk enter-room/walk-args :limit-s dig-s})))]
     (if (= :searching pick)
       :again

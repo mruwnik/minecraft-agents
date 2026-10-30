@@ -57,10 +57,20 @@
 (defn cell-looks
   "How many of `looks` looks at unknown cells pay a turn saving `saving` seconds (turn-saving), `looked` fruitless looks
   taken before them, each costing look-s plus redo-s (its share of deciding again): the next is taken while saving x
-  turn-chance is over that. The chance falls with each fruitless look, so a finite saving stops."
+  chance (a fn of the fruitless looks before, default turn-chance) is over that. The chance falls with each fruitless
+  look, so a finite saving stops."
   ([saving looks] (cell-looks saving looks 0 0))
-  ([saving looks looked redo-s]
-   (count (take-while #(> (* saving (turn-chance (+ looked %))) (+ (look-s 1) redo-s)) (range looks)))))
+  ([saving looks looked redo-s] (cell-looks saving looks looked redo-s nil))
+  ([saving looks looked redo-s chance]
+   (let [chance (or chance turn-chance)]
+     (count (take-while #(> (* saving (chance (+ looked %))) (+ (look-s 1) redo-s)) (range looks))))))
+
+(defn closed-cell-chance
+  "The chance a look at one more unseen boundary cell of a roofed room shows it closed, after `looked` shown open:
+  ::wall-prior's rule of succession (k / (n + looked))."
+  [looked]
+  (let [{:keys [k n]} (settings/get settings ::wall-prior)]
+    (/ k (+ n looked))))
 
 (defn redo-every
   "Looks to take between two decisions when one takes redo-s seconds of CPU: a round costs max(game clock, CPU), so

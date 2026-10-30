@@ -9,6 +9,7 @@
             [engine.test-util :as tu]
             [jobs.lib.clock :as clock]
             [jobs.lib.cost.look :as cost]
+            [jobs.lib.cost.value :as value]
             [jobs.lib.look :as look]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.sense :as sense]
@@ -146,6 +147,25 @@
           (is (= (cost/cell-looks 2.5 312) few) "worth 2.5 s over the walk to the nearest: a few looks of the 312")
           (is (< 0 few 10))
           (is (zero? none) "worth no more than the walk to the nearest: no look"))))))
+
+(deftest the-walk-a-find-pays-is-to-the-nearest-cell-it-read-an-area-or-entity-query-round-the-body-is-here
+  (let [c (stub-ctx (tu/fake {:self {:pos feet}}))
+        walk #(:cost (value/walk-cost {:distance (u/eye-dist feet %)}))]
+    (is (= (walk [3 64 0]) (sense/read-walk-s c {:cells [[9 64 0] [3 64 0]]})) "cells: the nearest")
+    (is (= (walk [2 64 0]) (sense/read-walk-s c {:cells [[9 64 0]] :guessed [[2 64 0]]})) "a guessed cell is read too")
+    (is (= (:cost (value/walk-cost {:distance 0})) (sense/read-walk-s c {:area [{:radius 16}]}) (sense/read-walk-s c {:cells [[9 64 0]] :entities [{:radius 32}]}))
+        "an area or entity query round the body: its nearest cell is here, whatever its radius")
+    (is (nil? (sense/read-walk-s c {})) "nothing read: no walk, no price")))
+
+(deftest a-find-looks-at-its-kinds-chance-not-the-turn-prior
+  (let [c (stub-ctx (tu/fake {:self {:pos feet}}))
+        reads {:cells [[3 64 0]]}
+        saving 2
+        priced (fn [chance] ((sense/find-price c (+ saving (sense/read-walk-s c reads)) chance) nil reads))]
+    (is (= (cost/cell-looks saving 50) (sense/cell-looks (priced nil) 50)) "no kind's chance: turn-chance")
+    (is (= (cost/cell-looks saving 50 0 0 cost/closed-cell-chance) (sense/cell-looks (priced cost/closed-cell-chance) 50)))
+    (is (< (sense/cell-looks (priced nil) 50) (sense/cell-looks (priced cost/closed-cell-chance) 50))
+        "a roof cell is closed at the roofed-room prior's ~0.6, far over the turn prior's 1/43: more looks pay")))
 
 (deftest a-costly-decision-is-made-again-only-after-looks-as-long-as-it
   (async done
