@@ -3,14 +3,17 @@
   chunk columns (worlds/<world>/chunks): the roofed spaces a body can walk (cells with air at feet and head, a solid floor and a
   block built of (built?) 2..6 above: reach.room's flood, same level, 4 directions, at most room-cells), and of each one's side cells
   (the feet cells beside it not in it) how many are closed (a solid block at feet or head) and how many open (passable: the
-  space ends where the roof or floor does). A space of the cap or more, or with a side not recorded, is left out. Each space is
-  one row, so the prior's spread is fitted by moments over spaces (a call looks at one room). Every stride-th column file in name
-  order is read, the fixture plot grid left out; a space is counted by the chunk of its lowest-x, lowest-z cell at its lowest y.
-  Pure parts: spaces, report."
+  space ends where the roof or floor does; a door or gate is a block, so closed). A space of the cap or more, or with a side not
+  recorded, is left out. Each space is one row (a call looks at one room). The prior is fitted over the rows under open sky
+  (nothing above the roof but built blocks and leaves: a mineshaft, stronghold or trial chamber lies under rock) whose roof is
+  not a natural structure's material (natural-roof?). Every stride-th column file in name order is read, the fixture plot grid
+  left out; a space is counted by the chunk of its lowest-x, lowest-z cell at its lowest y. Pure parts: spaces, report."
   (:require ["fs" :as fs]
+            [clojure.string :as str]
+            [jobs.lib.cost.look :as look]
             [jobs.lib.escape :as escape]
-            [world-test.field-passes :as field-passes]
-            [world-test.water-lags :as water-lags]))
+            [world-test.water-lags :as water-lags]
+            [world-test.way-prior :as way-prior]))
 
 (def bottom-y -64)
 (def top-y 319)
@@ -22,13 +25,29 @@
   [name]
   (boolean (and name (re-find #"planks|slab|brick|glass|wool|terracotta|concrete|cobblestone|thatch" name))))
 
+(def natural-roof?
+  "Whether a roof block is one only a natural structure has: trial chambers (tuff, copper), ancient cities (deepslate), strongholds and
+  ruins (infested, cracked, mossy, chiseled, stone bricks), monuments (prismarine), mansions (dark oak)."
+  (comp boolean #(and % (re-find #"tuff|deepslate|prismarine|copper|infested|mossy|cracked|chiseled|stone_brick|dark_oak" %))))
+
+(defn sky-above?
+  "Whether nothing above the feet cell x y z but built blocks and leaves stands over the roof (y + 2 up)."
+  [name-at x y z]
+  (every? #(let [n (name-at x % z)] (or (not (escape/solid? n)) (built? n) (str/ends-with? n "_leaves")))
+          (range (+ y 2) (inc top-y))))
+
+(defn roof-of
+  "The name of the first built block 2..6 above the feet cell x y z, or nil."
+  [name-at x y z]
+  (first (filter built? (map #(name-at x (+ y %) z) (range 2 7)))))
+
 (defn standable
   "Whether the feet cell x y z is one a walker stands in under a roof: :yes, :no, or :unknown when a cell is not recorded."
   [name-at x y z]
   (let [floor (name-at x (dec y) z) feet (name-at x y z) head (name-at x (inc y) z)]
     (cond (not (and floor feet head)) :unknown
           (and (escape/solid? floor) (not (escape/solid? feet)) (not (escape/solid? head))
-               (some #(built? (name-at x (+ y %) z)) (range 2 7))) :yes
+               (roof-of name-at x y z)) :yes
           :else :no)))
 
 (defn closed?
@@ -74,22 +93,56 @@
               low (first (sort (map (fn [[x y z]] [y x z]) cs)))]
           (recur more (into done cs)
                  (if (and f (= low (let [[x y z] c] [y x z])) (> (count cs) 1))
-                   (conj rows (select-keys f [:closed :open]))
+                   (conj rows (assoc (select-keys f [:closed :open]) :roof (apply roof-of name-at c) :sky (apply sky-above? name-at c)))
                    rows))))
       rows)))
 
+(defn all-closed
+  "The chance all l sides of a space are closed under the fit (jobs.lib.cost.look/chance-closed from none seen)."
+  [a b w l]
+  (look/chance-closed {:k a :n (+ a b) :sealed w} 0 l))
+
+(defn log-likelihood
+  "Of rows {:closed :open} given w (the share of spaces sealed), Beta(a, b) among the rest: a sealed space is all closed, any other
+  has each side closed by the beta-binomial."
+  [rows w a b]
+  (reduce + (for [[[c o] times] (frequencies (map (juxt :closed :open) rows))
+                  :let [t (- (+ (way-prior/ln-gamma (+ a c)) (way-prior/ln-gamma (+ b o)) (way-prior/ln-gamma (+ a b)))
+                             (+ (way-prior/ln-gamma a) (way-prior/ln-gamma b) (way-prior/ln-gamma (+ a b c o))))]]
+              (* times (if (zero? o) (js/Math.log (+ w (* (- 1 w) (js/Math.exp t)))) (+ (js/Math.log (- 1 w)) t))))))
+
+(defn fit
+  "{:w :a :b} maximising log-likelihood over rows, by a grid over w (0 to 0.5), the mean and ln of a + b; with w 0 allowed, so
+  the plain beta-binomial is among the candidates."
+  [rows]
+  (let [cand (for [w (map #(/ % 40) (range 0 21)) m (map #(/ % 40) (range 1 40)) u (map #(/ % 6) (range -12 36))
+                   :let [s (js/Math.exp u)]]
+               {:w w :a (* m s) :b (* (- 1 m) s)})]
+    (apply max-key #(log-likelihood rows (:w %) (:a %) (:b %)) cand)))
+
+(defn round3 [x] (/ (js/Math.round (* 1000 x)) 1000))
+
 (defn report
-  "Of rows: the spaces, sides :closed and :open pooled, and :setting {:k :n} for ::wall-prior: a Beta fitted by moments over the
-  spaces with at least min-n sides (field-passes/beta-fit), n their sum."
+  "Of rows {:closed :open :roof :sky}: the spaces, sides :closed and :open pooled over all, and over the population (:sky rows with
+  a roof not natural-roof?) :setting {:k :n :sealed} for ::wall-prior (the fit over the spaces with at least min-n sides, as k/n
+  the mean of the Beta times its a + b), :by-size {sides [spaces sealed predicted]} (predicted: spaces x all-closed under the
+  fit, to compare) and :pooled {:spaces :sealed :closed :open}; :by-roof {roof-name [spaces sealed closed open sky-spaces]} over
+  all rows."
   [rows min-n]
-  (let [k (reduce + (map :closed rows))
-        open (reduce + (map :open rows))
-        sized (filter #(>= (+ (:closed %) (:open %)) min-n) rows)
-        shares (map #(/ (:closed %) (+ (:closed %) (:open %))) sized)
-        [a b] (if (> (count shares) 1) (field-passes/beta-fit shares k (+ k open)) [k open])]
-    {:sealed (count (filter (comp zero? :open) rows)) :rows (frequencies (map (juxt :closed :open) rows))
-     :spaces (count rows) :closed k :open open :p-closed (/ k (max 1 (+ k open)))
-     :setting {:k (/ (js/Math.round (* 1000 a)) 1000) :n (/ (js/Math.round (* 1000 (+ a b))) 1000)}}))
+  (let [pop (filter #(and (:sky %) (not (natural-roof? (:roof %)))) rows)
+        sized (filter #(>= (+ (:closed %) (:open %)) min-n) pop)
+        {:keys [w a b]} (if (> (count sized) 1) (fit sized) {:w 0 :a (reduce + (map :closed pop)) :b (reduce + (map :open pop))})
+        sealed #(count (filter (comp zero? :open) %))
+        sum #(reduce + (map % %2))]
+    {:setting {:k (round3 a) :n (round3 (+ a b)) :sealed w}
+     :pooled {:spaces (count pop) :sealed (sealed pop) :closed (sum :closed pop) :open (sum :open pop)}
+     :by-size (into (sorted-map)
+                    (map (fn [[l rs]] [l [(count rs) (sealed rs) (round3 (* (count rs) (all-closed a b w l)))]]))
+                    (group-by #(+ (:closed %) (:open %)) sized))
+     :by-roof (into (sorted-map)
+                    (map (fn [[r rs]] [r [(count rs) (sealed rs) (sum :closed rs) (sum :open rs) (count (filter :sky rs))]]))
+                    (group-by :roof rows))
+     :spaces (count rows) :all {:sealed (sealed rows) :closed (sum :closed rows) :open (sum :open rows)}}))
 
 (defn count-in
   "report of every stride-th recorded column file in dir, read by at (fn [x y z] -> {:name ...} or nil)."

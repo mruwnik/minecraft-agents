@@ -5,7 +5,7 @@
   takes), then, by the chance of each thing it may show, the cheapest answer the body has once it has seen that, with
   the mobs come nearer meanwhile (approached; answer/decide): an answer with :outcomes, priced by answer/answer-price beside the answers open now, so decide takes
   the look exactly when look-value's :value is over its :cost.
-  closed-chance: the chance the unseen part of a boundary is closed, given its seen part is (a room's walls).
+  closed-chance: the chance the unseen part of a boundary is closed, given its seen part is (a room's walls); chance-closed under any prior.
   round-looks: how many looks of a round that stops at the first open wall pay a call's worth.
 
   Callers: respond's cover-answers (an unseen room cell, the door). Others it fits: shut-in's :room way and enter-room
@@ -19,19 +19,25 @@
             [jobs.lib.cost.threat :as threat]))
 
 (a/defargs settings
-  {::look-tick-s {:default 0.27 :spec (a/num-in 0 nil)
-                  :doc "Seconds one look takes on the job clock: the median of `node tools/event-counts.mjs look-seconds` (0.27 s over n=14 look-only rounds, :sense.looked :wall-ms). The turn waits for the physics tick that sends it, then the sight pass reads it."}
-   ::wall-prior {:default {:k 1.529 :n 2.889} :spec (a/map-with {:k (a/num-in 0 nil) :n (a/num-in 0.1 nil)})
-                 :doc "Pseudo-counts of the boundary cells closed (k) of all (n) before any is seen, rule-of-succession style: the Beta fitted by moments over the roofed spaces built of planks, brick, slab, glass, wool and the like in the recorded chunks (`node tools/event-counts.mjs wall-chunks --stride 40`: 510 spaces, 3302 side cells closed of 5930, pooled 0.56; spread among spaces so a space's walls are alike)."}})
+  {::look-tick-s {:default 0.054 :spec (a/num-in 0 nil)
+                  :doc "Seconds one look takes on the job clock: the median of `node tools/event-counts.mjs look-seconds` (0.054 s over n=4 look-only rounds, once survey rounds are left out; one physics tick, :sense.looked :wall-ms). The turn waits for the physics tick that sends it, then the sight pass reads it."}
+   ::wall-prior {:default {:k 5.237 :n 8.729 :sealed 0.15} :spec (a/map-with {:k (a/num-in 0 nil) :n (a/num-in 0.1 nil) :sealed (a/num-in 0 1)})
+                 :doc "Roofed-room prior: pseudo-counts of the boundary cells closed (k) of all (n) before any is seen, rule-of-succession style, and the share :sealed of rooms closed whole (chance-closed). Fitted by the beta-binomial likelihood with a sealed share (a room is either sealed or not, so its sides are not independent) over the 19 rooms in the recorded chunks that stand under open sky with a roof of planks, slab, glass, wool, cobblestone or the like, natural structures' bricks left out (`node tools/event-counts.mjs wall-chunks --stride 40`: 107 side cells closed of 169, 4 rooms sealed; of the 510 roofed spaces 45 are sealed, 232 have a built roof and only those 19 sky, the mineshafts and caves the rest). A thin count: refit as the chunks grow."}})
 
 (defn look-s "Seconds looks looks take." [looks] (* looks (settings/get settings ::look-tick-s)))
 
+(defn chance-closed
+  "The chance every one of unseen boundary cells is closed when the seen ones are all closed, under prior {:k :n :sealed}: a share
+  :sealed of boundaries is closed whole, the rest has each cell closed by the rule of succession ((k + i) / (n + i), i the
+  cells before it, seen or not). 1 with none unseen."
+  [{:keys [k n sealed]} seen unseen]
+  (let [alike (fn [cells] (reduce * 1 (map #(/ (+ k %) (+ n %)) (range cells))))]
+    (/ (+ sealed (* (- 1 sealed) (alike (+ seen unseen)))) (+ sealed (* (- 1 sealed) (alike seen))))))
+
 (defn closed-chance
-  "The chance every one of unseen boundary cells is closed when the seen ones are all closed: the rule of succession
-  over ::wall-prior, each unseen cell in turn ((k + seen + i) / (n + seen + i)). 1 with none unseen."
+  "chance-closed under ::wall-prior."
   [seen unseen]
-  (let [{:keys [k n]} (settings/get settings ::wall-prior)]
-    (reduce * 1 (map #(/ (+ k seen %) (+ n seen %)) (range unseen)))))
+  (chance-closed (settings/get settings ::wall-prior) seen unseen))
 
 (defn round-looks
   "How many of looks looks to take in a round that stops at its first open wall, for a call worth `worth` seconds; the

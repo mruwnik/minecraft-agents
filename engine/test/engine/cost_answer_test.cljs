@@ -379,8 +379,10 @@
     (is (= :look (:answer (cost/decide (body 5) (assoc now :look (look [] 0.9)) here))) "decide takes it")
     (is (> (:value (value [] 0.9)) (:value (value [] 0.2))) "the less likely the door, the less the look is worth")
     (is (= 1 (cost/closed-chance 11 0)) "all seen: closed")
-    (let [{:keys [k n]} (settings/get glance/settings ::glance/wall-prior)]
-      (is (= (/ (+ k 11) (+ n 11)) (cost/closed-chance 11 1)) "one unseen after eleven closed: the rule of succession over the prior"))
+    (settings/with-settings {::glance/wall-prior {:k 1 :n 2 :sealed 0}}
+      #(is (< (js/Math.abs (- (/ 12 13) (cost/closed-chance 11 1))) 1e-12) "one unseen after eleven closed: the rule of succession over the prior"))
+    (settings/with-settings {::glance/wall-prior {:k 1 :n 2 :sealed 0.2}}
+      #(is (< 0.2 (cost/closed-chance 0 12) (cost/closed-chance 11 1)) "a share of rooms is sealed whole: twelve walls closed are at least that likely, and likelier once eleven are seen"))
     (is (> (cost/closed-chance 11 1) (cost/closed-chance 2 1) (cost/closed-chance 2 3)))))
 
 (deftest a-round-of-looks-pays-at-every-wall-seen-closed-once-it-pays-at-the-first
