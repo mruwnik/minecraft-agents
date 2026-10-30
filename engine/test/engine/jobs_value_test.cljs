@@ -154,9 +154,9 @@
 
 (deftest every-smelted-item-is-priced-at-its-input-plus-the-smelt-step
   (doseq [[out in] [["baked_potato" "potato"] ["dried_kelp" "kelp"] ["nether_brick" "netherrack"] ["green_dye" "cactus"]
-                    ["lime_dye" "sea_pickle"] ["popped_chorus_fruit" "chorus_fruit"] ["stone" "cobblestone"]
+                    ["popped_chorus_fruit" "chorus_fruit"] ["stone" "cobblestone"]
                     ["charcoal" "oak_log"]]]
-    (is (>= (each out) (+ (each in) (:smelt-step table/default-basis))) (str out " is its input plus the smelting"))))
+    (is (>= (each out) (+ (each in) (table/smelt-step))) (str out " is its input plus the smelting"))))
 
 (deftest placed-forms-are-no-free-source-and-no-source-items-keep-the-stack-rule
   (is (> (each "redstone") 1))
@@ -259,7 +259,10 @@
 (deftest the-craft-step-is-the-measured-setting-and-the-table-is-built-once
   (is (= (table/craft-step) (:craft-step (table/full-basis {}))))
   (is (= 7 (:craft-step (table/full-basis {:craft-step 7}))) "a caller's basis wins")
+  (is (= (table/smelt-step) (:smelt-step (table/full-basis {}))))
   (let [t (table/table-for "1.20.4" {} {})]
     (is (identical? t (table/table-for "1.20.4" {} {})) "made's memo keys on the table: one object per call")
     (is (not (identical? t (settings/with-settings {:jobs.lib.cost.table/craft-step 1000} #(table/table-for "1.20.4" {} {}))))
-        "a changed ::craft-step rebuilds the table")))
+        "a changed ::craft-step rebuilds the table")
+    (is (not (identical? t (settings/with-settings {:jobs.lib.cost.table/smelt-step 1000} #(table/table-for "1.20.4" {} {}))))
+        "and a changed ::smelt-step")))

@@ -9,6 +9,7 @@
             [jobs.lib.cost.precious :as precious]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.foods :as foods]
+            [jobs.lib.fuel :as fuel]
             [jobs.lib.game-facts :as facts]
             [engine.args :as a]
             [engine.settings :as settings]
@@ -16,7 +17,14 @@
 
 (a/defargs settings
   {::craft-step {:default 0.905 :spec (a/num-in 0 nil)
-                 :doc "Seconds one craft action takes beyond its ingredients, the walk to the table not in it. Counted over n = 1148 finished craft actions of the trial bodies' logs (21 timeouts left out), 0.905 s each (recount: `node tools/event-counts.mjs craft-steps`, dashboard/src/world_test/craft_steps.cljs)."}})
+                 :doc "Seconds one craft action takes beyond its ingredients, the walk to the table not in it. Counted over n = 1148 finished craft actions of the trial bodies' logs (21 timeouts left out), 0.905 s each (recount: `node tools/event-counts.mjs craft-steps`, dashboard/src/world_test/craft_steps.cljs)."}
+   ::smelt-step {:default 10.3 :spec (a/num-in 0 nil)
+                 :doc "Seconds one item takes in a furnace beyond its input, fuel and the furnace apart: vanilla cooks it in 10 s; 18 raw iron in one smelt job (furnace placed) took 185.4 s wall, 10.3 each (trial logs to 2026-10-30; the 2-item probe runs of 51-74 s include making the furnace)."}})
+
+(defn fuel-each
+  "Seconds of the cheapest fuel one smelted item burns: a fuel's worth in table over the items it cooks."
+  [table]
+  (transduce (keep (fn [[n w]] (when-let [per (fuel/fuel-per-unit :furnace n)] (/ w per)))) min js/Infinity table))
 
 (def default-basis
   "Every constant of the item base; item-value's :basis is deep-merged over it."
@@ -24,7 +32,6 @@
    :no-source-each 4 ;; one item of a 64-stack that no block, mob or recipe yields
    :per-enchant-level 30
    :min-durability-share 0.1
-   :smelt-step 2
    :unsourced-food-health 10 ;; the health a precious food that nothing yields is priced at: what it heals a body there
    :gear {:ref-mob "zombie" :ref-block "stone"} ;; one use of a tool, weapon or armour piece saves, against the stone tool or the bare body: the zombie (its hit rate is the one counted) hits and has hp, the kit trial digs stone most (gear/use-saved)
    :junk-share 0.1
@@ -52,15 +59,19 @@
   "Seconds one craft step takes beyond its ingredients (::craft-step)."
   [] (settings/get settings ::craft-step))
 
+(defn smelt-step
+  "Seconds one smelt step takes per item beyond its input (::smelt-step)."
+  [] (settings/get settings ::smelt-step))
+
 (defn deep-merge [a b]
   (cond (nil? b) a
         (and (map? a) (map? b)) (merge-with deep-merge a b)
         :else b))
 
 (defn full-basis
-  "default-basis with the measured :craft-step, the deep-merged basis over it."
+  "default-basis with the measured :craft-step and :smelt-step, the deep-merged basis over it."
   [basis]
-  (deep-merge (assoc default-basis :craft-step (craft-step)) basis))
+  (deep-merge (assoc default-basis :craft-step (craft-step) :smelt-step (smelt-step)) basis))
 
 (defn smelt-sources
   "{output [input names]} of what the furnaces cook (facts/smelt-inputs), over the item
@@ -291,14 +302,15 @@
                                                 :else (* (:no-source-each basis) (/ 64 (max 1 (.-stackSize i)))))])))
                          items)
         step (fn [natural table]
+               (let [smelt-s (+ (:smelt-step basis) (fuel-each table))]
                (into {} (map (fn [n]
                                (let [via-recipe (some->> (by-result n)
                                                          (map (fn [[_ k ins]] (/ (+ (:craft-step basis) (reduce + (map #(get table % js/Infinity) ins))) k)))
                                                          (apply min))
-                                     via-smelt (some->> (smelts n) (map #(+ (:smelt-step basis) (get table % js/Infinity))) (apply min))
+                                     via-smelt (some->> (smelts n) (map #(+ smelt-s (get table % js/Infinity))) (apply min))
                                      w (min (get natural n js/Infinity) (or via-recipe js/Infinity) (or via-smelt js/Infinity))]
                                  [n (pin n (if (js/isFinite w) (max w (food-floor n)) w))])))
-                     names))
+                     names)))
         fixpoint (fn [natural]
                    (loop [t (into {} (map (fn [n] [n (pin n (get natural n js/Infinity))])) names) i 0]
                      (let [t' (step natural t)]
@@ -314,7 +326,7 @@
   "build-table, memoized on what it reads: its arguments and the settings the hp and fall prices come from."
   (let [built (memoize build-table)]
     (fn [version overrides basis]
-      (built version overrides basis (health/walk-hp-seconds) (health/max-scale) (health/heal-s-per-hp) (armour/max-fall) (craft-step)))))
+      (built version overrides basis (health/walk-hp-seconds) (health/max-scale) (health/heal-s-per-hp) (armour/max-fall) (craft-step) (smelt-step)))))
 
 (defn groups-of
   "The override groups item name belongs to."

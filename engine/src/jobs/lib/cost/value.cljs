@@ -16,9 +16,9 @@
                  drops; kill = the stone sword's hits, hurt = :hurt-hp-per-hp x health x :danger hp, each at health/walk-hp-seconds, find by hostile or passive.
     made         The cheapest recipe: the ingredients plus :craft-step, divided by the result count; or smelting by
                  name rule (raw_X -> X_ingot, X -> cooked_X, ancient_debris -> netherite_scrap, cobblestone -> stone,
-                 sand -> glass, clay_ball -> brick): the input plus :smelt-step. The table is a fixpoint, then each tool
+                 sand -> glass, clay_ball -> brick): the input plus :smelt-step and the cheapest fuel's share (fuel-each). The table is a fixpoint, then each tool
                  is raised to at least the next weaker material's tool of its kind plus :craft-step.
-    goal         made-value: a goal's count at least made from nothing, whole crafts and each station once.
+    goal         made-value: a goal's count at least made from nothing, whole crafts and each station once, smelts with their fuel.
     unused       A sourced item that is no tool, armour, edible food, block or ingredient is worth :junk-share of that.
     food         An edible food is worth at least its points x :food-point-s.
     no source    :no-source-each (4) x 64 / stack size (a 64-stack 4, a 16-stack 16, an unstackable 256); a precious food nothing yields: jobs.lib.cost.precious/hp-worth at :unsourced-food-health (10). A tool, weapon or armour piece nothing yields: its durability x what a use saves (jobs.lib.cost.gear, :gear).
@@ -217,23 +217,27 @@
 
 (def ^:private smelts-of (memoize (fn [version] (tbl/smelt-sources (map #(.-name %) (array-seq (.-itemsArray (minecraft-data version))))))))
 
+(def ^:private fuel-each (memoize tbl/fuel-each))
+
 (defn- made
   "{:s :stations} of n of name made from nothing at the table's worths (m: :version :table :basis, :stations-s the
   seconds of a set of stations): an item cheaper got than made (its table worth below every way's) n x its worth, else
-  the way (recipe or smelt) whose whole crafts, a craft step each, and stations (crafting table, furnace) cost least;
+  the way (recipe or smelt) whose whole crafts, a craft step each, and stations (crafting table, furnace) cost least,
+  a smelt costing its step and its fuel per item;
   Infinity for an item made of itself up the chain (an ingot of nuggets of ingots)."
   [{:keys [version table basis stations-s] :as m} name n chain]
   (let [unit (get table name js/Infinity)
         step (:craft-step basis)
+        smelt-s (+ (:smelt-step basis) (fuel-each table))
         ways (filter #(js/isFinite (:per %))
                      (concat (for [r (get (recipes/recipes-for version) name)]
                                {:per (/ (+ step (reduce + (map (fn [[k v]] (* v (get table k js/Infinity))) (:needs r)))) (:count r)) :r r})
-                             (for [i (get (smelts-of version) name)] {:per (+ (:smelt-step basis) (get table i js/Infinity)) :smelt i})))
+                             (for [i (get (smelts-of version) name)] {:per (+ smelt-s (get table i js/Infinity)) :smelt i})))
         within (conj chain name)
         made-way (fn [{:keys [r smelt]}]
                    (if smelt
                      (let [in (made m smelt n within)]
-                       {:s (+ (* n (:smelt-step basis)) (:s in)) :stations (conj (:stations in) "furnace")})
+                       {:s (+ (* n smelt-s) (:s in)) :stations (conj (:stations in) "furnace")})
                      (let [ins (map (fn [[k v]] (made m k (* v (js/Math.ceil (/ n (:count r)))) within)) (:needs r))]
                        {:s (+ step (reduce + (map :s ins)))
                         :stations (cond-> (reduce set/union #{} (map :stations ins)) (:table? r) (conj recipes/table-item))})))]

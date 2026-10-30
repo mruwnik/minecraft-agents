@@ -305,7 +305,7 @@
 (defn per-block [] (value/per-block))
 (def dig-cost table/dig-cost)
 (def kill-drops table/kill-drops)
-(def smelt-step "Seconds one smelt step takes beyond its input." (:smelt-step table/default-basis))
+(def smelt-step table/smelt-step)
 (def craft-step table/craft-step)
 (def detour-cost value/detour-cost)
 (def tour-cost value/tour-cost)

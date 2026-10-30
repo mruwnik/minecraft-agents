@@ -7,7 +7,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.items.obtain.base :refer [args-error carried-of bill-item-s gather-need-s gathers? holds makes? max-inspections names-of near-chest own-worth smelt-item-s shortfall tried! wanted-fields way?]]
+            [jobs.items.obtain.base :refer [args-error carried-of bill-item-s gather-need-s gathers? holds makes? max-inspections names-of near-chest own-worth shortfall tried! wanted-fields way?]]
             [jobs.items.obtain.bill :as bill]
             [jobs.items.obtain.loose :as loose-way]
             [jobs.items.obtain.chest :refer [blocked-text candidates cheapest! inspect! withdraw!]]
@@ -193,7 +193,7 @@
         smelts (reduce + 0 (map :count (filter #(= :smelt (:op %)) steps)))
         gathers (count (:gather pl))
         step-s (cost/craft-step)
-        mean (+ (* step-s (count (remove #(= :smelt (:op %)) steps))) (* (smelt-item-s) smelts) (* (gather-need-s) gathers))
+        mean (+ (* step-s (count (remove #(= :smelt (:op %)) steps))) (* (cost/smelt-step) smelts) (* (gather-need-s) gathers))
         item (or (:item pl) (first names))]
     {:uses {:job-time [0 (max step-s mean) (if (or (nil? pl) (pos? gathers)) ##Inf (* 3 (max step-s mean)))]}
      :yields {:items {item [0 n n]}}}))

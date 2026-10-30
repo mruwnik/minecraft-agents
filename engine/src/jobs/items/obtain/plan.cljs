@@ -4,7 +4,7 @@
             [engine.game :as game]
             [engine.notes :as notes]
             [jobs.lib.crafting-table :as crafting-table]
-            [jobs.items.obtain.base :refer [craft-radius explore-opts gathers? makes? plan-allowed? search-names search-scan-radius search-worth seen-radius smelt-item-s way?]]
+            [jobs.items.obtain.base :refer [craft-radius explore-opts gathers? makes? plan-allowed? search-names search-scan-radius search-worth seen-radius way?]]
             [jobs.items.obtain.chest :refer [candidates]]
             [jobs.items.obtain.loose :as loose-way]
             [jobs.items.obtain.seen :refer [seen-of sheep-in-range shears-source]]
@@ -115,7 +115,7 @@
   "Seconds the craft and smelt steps of a plan take."
   [pl]
   (let [{smelts true crafts false} (group-by #(= :smelt (:op %)) (:steps pl))]
-    (+ (* (cost/craft-step) (count crafts)) (* (smelt-item-s) (reduce + 0 (map :count smelts))))))
+    (+ (* (cost/craft-step) (count crafts)) (* (cost/smelt-step) (reduce + 0 (map :count smelts))))))
 
 (defn walk-s
   "The straight walk to `at` and back, and its risk there and back (jobs.lib.walk-risk/estimate on the straight way,
@@ -290,7 +290,7 @@
         stock (if (< 1 tunnels) (stock-s c) 0)]
     (+ (reduce + 0 (map #(if-let [w %2] (:cost w) (need-cost c %)) needs ways))
        (if (infinite? stock) 0 (- (* (dec tunnels) stock)))
-       (* cost/smelt-step (count (filter #(= :smelt (:op %)) (:steps pl)))))))
+       (* (cost/smelt-step) (reduce + 0 (map :count (filter #(= :smelt (:op %)) (:steps pl))))))))
 
 (defn gathered-s
   "Seconds a gather plan takes: its plan-cost (the death each walk risks with it) and its craft steps."

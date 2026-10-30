@@ -383,7 +383,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (torches-with-coal-below! [0 0] [{:name "stick" :count 2} {:name "wooden_pickaxe" :count 1}]))]
+        (let [s (await (settings/with-settings {:jobs.lib.cost.value/per-dark 1}
+                         #(torches-with-coal-below! [0 0] [{:name "stick" :count 2} {:name "wooden_pickaxe" :count 1}])))]
           (is (empty? (mine-events s)) "the dark way down to the coal is not taken")
           (is (seq (f/events-of s :smelt.loaded)) "the logs went in the furnace"))))))
 

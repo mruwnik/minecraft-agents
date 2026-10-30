@@ -380,7 +380,7 @@
 
 (deftest a-dark-stay-is-lit-when-its-torches-cost-less-than-its-hurt
   (let [way {:blocks 20 :carried 4}]
-    (is (= (- (cost/torch-way-s 20 0) (cost/torch-way-s 20 4)) (cost/trip)) "one trip for all the torches when none is carried")
+    (is (< (abs (- (cost/torch-way-s 20 0) (cost/torch-way-s 20 4) (cost/trip))) 1e-6) "one trip for all the torches when none is carried")
     (is (= :lit (:way (cost/dark-or-lit 5 20 way))) "five hp of hurt cost more than three torches")
     (is (= :dark (:way (cost/dark-or-lit 0 20 way))) "a dark that hurts nothing costs less than any torch")
     (is (= :dark (:way (cost/dark-or-lit 5 20 nil))) "a job that hangs no torches stays dark")))
@@ -656,6 +656,8 @@
     (is (<= (one "oak_log") (one "oak_planks")) "one plank takes a whole log")
     (is (<= (goal [{:name "raw_iron" :count 1} {:name "furnace" :count 1}]) (one "iron_ingot")) "and the furnace it is smelted in")
     (is (<= (goal [{:name "iron_ingot" :count 3} {:name "stick" :count 2}]) (one "iron_pickaxe")))
+    (is (< (+ (goal [{:name "raw_iron" :count 1} {:name "furnace" :count 1}]) (cost/smelt-step))
+           (one "iron_ingot")) "and the smelt step and a fuel's share of the item")
     (is (< (one "wooden_pickaxe") (one "stone_pickaxe") (one "iron_pickaxe")))
     (is (< (goal [{:name "crafting_table" :count 1} {:name "wooden_pickaxe" :count 1}]) (+ (one "crafting_table") (one "wooden_pickaxe")))
         "one table for all a goal's crafts")))
