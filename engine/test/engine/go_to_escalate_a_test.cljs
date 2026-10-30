@@ -125,9 +125,16 @@
         s #(escape/way-s p [0 64 0] [1 70 0] % priced)]
     (is (= {:step :pillar :height 5 :item "cobblestone"} (escape/choose p [0 64 0] [1 70 0])))
     (is (< (* 2 (s {:step :pillar :height 5})) (s {:step :stair :heading :east :steps 6})) "no knife edge: the stair costs twice the pillar and more")
-    (is (= {:step :stair :heading :east :steps 6}
+    (is (= {:step :clear-path :heading :east}
            (escape/choose p [0 64 0] [1 70 0] (constantly true) {:risk-s (fn [cells _ _] (if (some #{[0 66 0]} cells) 1000 0))}))
-        "a danger on the pillar's column turns it")))
+        "a danger on the pillar's column turns it: through the column's foot and up its far side")))
+
+(deftest escape-choose-prices-a-lone-rim-pillar-against-the-door-through-its-wall
+  ;; no stair: the door through the 3-high wall leaves the climb onto it to do, the rim pillar steps onto the goal
+  (let [p (tu/fake {:self {:pos {:x 0 :y 64 :z 0}} :blocks (merge (box -6 63 -6 6 63 6 "stone") (box 1 64 -3 1 66 3 "cobblestone"))
+                    :inventory [{:name "cobblestone" :count 16}]})]
+    (is (= :clear-path (:step (escape/choose p [0 64 0] [1 67 0] (constantly true) {:skip #{:stair :pillar}}))) "the door is a way here")
+    (is (= {:step :pillar :height 2 :item "cobblestone"} (escape/choose p [0 64 0] [1 67 0] (constantly true) {:skip #{:stair}})))))
 
 (deftest escape-the-climb-left-after-a-way-is-a-pillar-of-the-blocks-left-under-open-sky-else-new-stair-steps
   (let [p (tu/fake {:self {:pos {:x 0 :y 64 :z 0}} :blocks (merge (box -6 63 -6 6 63 6 "stone") {"0,67,0" "stone"})
@@ -141,7 +148,9 @@
 
 (deftest escape-choose-cuts-the-planks-door-nobody-claims-else-rim-pillars
   (let [p (tu/fake {:self {:pos {:x 2 :y 64 :z 0}} :blocks plank-yard :inventory [{:name "dirt" :count 9}]})]
-    (is (= :clear-path (:step (escape/choose p [2 64 0] [8 64 0]))) "the planks are nobody's claim")
+    (is (= :clear-path (:step (escape/choose (tu/fake {:self {:pos {:x 2 :y 64 :z 0}} :blocks plank-yard}) [2 64 0] [8 64 0])))
+        "the planks are nobody's claim")
+    (is (= {:step :pillar :height 1 :item "dirt"} (escape/choose p [2 64 0] [8 64 0])) "a block up and over the wall costs less than the two planks' cut and put-back")
     (is (= {:step :pillar :height 1 :item "dirt"} (escape/choose p [2 64 0] [8 64 0] (constantly false)))
         "no dig allowed: over the wall")))
 

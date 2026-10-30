@@ -91,7 +91,8 @@
         p (tu/fake {:self {:pos {:x 0 :y 64 :z 0}} :blocks tunnel})]
     (is (= {:step :clear-path :heading :east} (escape/choose p [0 64 0] [6 64 0])))
     (is (= [2 64 0] (escape/way-end p [0 64 0] [6 64 0] {:step :clear-path :heading :east})) "the door's far side")
-    (is (= :stair (:step (escape/choose p [0 64 0] [6 66 0]))) "a goal above still stairs")))
+    (is (= {:step :clear-path :heading :east} (escape/choose p [0 64 0] [6 66 0]))
+        "a goal above: the plug's door and a step up from its far side cost less than a stair up the 4-deep tunnel's rock")))
 
 (deftest escape-choose-stairs-up-out-of-a-sealed-tunnel-to-a-goal-through-thick-rock
   ;; Rowan #22: a 1-wide pocket (two sides walled, pit depth 0), goal on its level behind rock with no floor beyond
