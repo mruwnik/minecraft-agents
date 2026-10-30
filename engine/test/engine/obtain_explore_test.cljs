@@ -174,7 +174,8 @@
                 left (first (filter mine (f/events-of s :mine.left-zone)))
                 backs (filter #(and (mine %) (= :back (:slot %)) (< (:seq %) (:seq left))) (f/events-of s :child_started))]
             (is left "the mine shut in after the climb walked out of its zone")
-            (is (empty? backs) "and never back to where it started on the way: each try goes on from where the last one ended")))))))
+            (is (empty? backs) "and never back to where it started on the way: each try goes on from where the last one ended")
+            (is (<= (count (f/events-of s :obtain.strip-on)) 2) "and a mine that keeps stopping :descent-stopped is not restarted unpriced (cost/try-again? :dig)")))))))
 
 (deftest an-ore-whose-tunnel-is-priced-above-the-feet-is-climbed-to-once
   (let [p (tu/seeing-all (tu/fake-on-floor {:inventory [{:name "stone_pickaxe" :count 1}]}))

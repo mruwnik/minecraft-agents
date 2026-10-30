@@ -331,18 +331,23 @@
   "A mine for an ore not seen whose run's cut ({:down :level :back}, jobs.gather.mine) laid bare new rock and found
   none: the cut's seconds (plan/cut-s) are booked as spent on it (memory [:gather :dug key]) and the next run is not
   counted fruitless while way-left still pays: a tunnel mines on from where the body stands (info obtain.strip-on), a
-  look round is the next round's search (info obtain.strip-look). :again, else false."
-  [c need cut]
-  (let [{:keys [blocks spent]} (get-in (ctx/mem c) [:gather :dug (:key need)])
+  look round is the next round's search (info obtain.strip-look). A run that stopped (stopped?: :descent-stopped) mines on
+  only while another run is worth its price (cost/try-again? :dig of the stops so far). :again, else false."
+  [c need cut stopped?]
+  (let [{:keys [blocks spent stops]} (get-in (ctx/mem c) [:gather :dug (:key need)])
         n (u/cut-cells cut)
         total (+ n (or blocks 0))
-        _ (ctx/update-mem! c #(-> % (assoc-in [:gather :dug (:key need)] {:blocks total :spent (+ (cut-s cut) (or spent 0))}) (update :gather dissoc :climb-heading)))
+        stops (+ (or stops 0) (if stopped? 1 0))
+        _ (ctx/update-mem! c #(-> % (assoc-in [:gather :dug (:key need)] {:blocks total :spent (+ (cut-s cut) (or spent 0)) :stops stops}) (update :gather dissoc :climb-heading)))
         way (way-left c need)
         y (js/Math.floor (:y (u/self-pos c)))
         saw (str "mine cut " n " blocks at y " y " and saw no " (:key need))]
     (cond
       (not (js/isFinite (:cost way)))
       (do (ctx/update-mem! c assoc-in [:gather :why] (str "cut " total " blocks down to y " y " and saw no " (:key need) ": another run is worth less than it costs"))
+          false)
+      (and stopped? (not (cost/try-again? c :dig {:fails stops})))
+      (do (ctx/update-mem! c assoc-in [:gather :why] (str "cut " total " blocks down to y " y " and saw no " (:key need) ", the mine stopped " stops " times: another run is worth less than it costs"))
           false)
       (= :look (:way way))
       (do (child/progress! c :gather)
@@ -450,7 +455,7 @@
                         (light-settling? c (:cause e)) :again
                         (and (#{:flooded :wet :exposed :hazard} (contract/cause-key e)) at)
                         (do (ctx/update-mem! c update :cut-off (fnil conj #{}) at) :again)
-                        (and (:tunnel? need) (not at) (pos? (u/cut-cells (:cut res))) (strip-on! c need (:cut res))) :again
+                        (and (:tunnel? need) (not at) (pos? (u/cut-cells (:cut res))) (strip-on! c need (:cut res) (= :descent-stopped (contract/cause-key e)))) :again
                         :else (do (when-not (and (:tunnel? need) (not at) (pos? (u/cut-cells (:cut res)))) ; else the barren verdict stands
                                     (ctx/update-mem! c update :gather dissoc :dug))
                                   (gather-failed! c names need (if (= :done (:kind e)) :nothing-gathered (contract/cause-key e)) e))))))))))))
