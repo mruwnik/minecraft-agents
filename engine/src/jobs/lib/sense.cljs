@@ -136,12 +136,13 @@
   those cells (a full pass when cells is empty: the check named none). Every one of cells counts as round-looked: the
   engine gives a :look one round (a second counts as :later), so what it left unseen, unpaid ones too, counts as unseen
   (a wall open). Each unknown paid cell the batch reached counts as a fruitless look. A room wall seen open ends the
-  batch and the round: the room is open whatever the other walls are."
+  batch and the round when the cells are walls only: the room is open whatever the other walls are."
   [c cells]
   (let [p (:primitives c)
         {:keys [pay walls]} (round-plan c cells)
         unknown (set (filter #(unknown? p %) pay))
-        open? (fn [cell] (and (contains? walls cell) (pos? (:open (reach-room/open-sides p [cell])))))
+        only-walls? (every? walls pay)
+        open? (fn [cell] (and only-walls? (contains? walls cell) (pos? (:open (reach-room/open-sides p [cell])))))
         [_ passed stopped] (await (look-at-unknown! c (u/nearest-first (u/self-pos c) identity pay) (count pay) open?))
         n (count (filter unknown passed))]
     (when (and (not stopped) (or (empty? cells) (seq unknown)))
