@@ -269,7 +269,7 @@
           floor? (rules/solid-floor? block-at (up row -1))]
       (cond
         (some nil? names) nil
-        (and (not floor?) (> k 1) (every? bs/passable? names)) (some->> (landing block-at unseen? row max-drop) (merge {:cells cells}))
+        (and (not floor?) (> k 1) (every? bs/passable? names)) (some->> (landing block-at unseen? row max-drop) (merge {:cells cells}) (#(cond-> % (:floor-unseen %) (assoc :unseen true))))
         (not floor?) nil
         (and (> k 1) (some unseen? pair) (every? #(or (unseen? %) (bs/passable? (block-at %))) pair))
         {:cells cells :through row :unseen true}

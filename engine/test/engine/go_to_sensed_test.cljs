@@ -115,6 +115,7 @@
     (is (= {:cells [[1 65 0] [1 64 0]] :through [2 64 0]} (door 63 6)) "a floor at the wall's foot level is as before, no fall")
     (is (= [2 60 0] (:through (door 59 6 #{[2 59 0]}))))
     (is (true? (:floor-unseen (door 59 6 #{[2 59 0]}))) "a landing floor never sensed is marked")
+    (is (true? (:unseen (door 59 6 #{[2 59 0]}))) "and is a guess clear-path looks at")
     (is (nil? (:floor-unseen (door 59 6))) "a sensed floor is not")
     (let [wet (escape/door (fn [c] (case (second c)
                                      63 (if (<= 0 (first c) 1) "stone" "air")
