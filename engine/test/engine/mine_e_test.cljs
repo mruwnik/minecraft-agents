@@ -10,6 +10,7 @@
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
             [jobs.lib.blocks :as lb]
+            [jobs.lib.cost :as cost]
             [jobs.lib.look :as lk]
             [jobs.lib.tool-kind :as kind]
             [jobs.lib.tools :as tools]
@@ -274,7 +275,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [w (ew/of-data {} {} [home-zone])
-              s (await (zoned {:block "sand" :count 2 :ways #{:seen} :trip true :worth 1000} {:floor [-30 -30 40 30] :blocks {"6,64,11" "sand" "7,64,11" "sand"}} w 60))
+              s (await (zoned {:block "sand" :count 400 :ways #{:seen} :trip true :worth (cost/items-find-worth {"sand" 400})} {:floor [-30 -30 40 30] :blocks {"6,64,11" "sand" "7,64,11" "sand"}} w 60))
               left (first (events-of s :mine.left-zone))
               first-dig (first (dug-cells s))]
           (is (= "home" (:zone left)))
@@ -509,14 +510,14 @@
     (tu/run-async done
       (fn ^:async t []
         (let [stub {:round (fn [c] (ctx/end c :nothing-possible {:reason :unreachable :why :no-progress} {:arrived false}))}
-              failed (fn ^:async f [worth]
+              failed (fn ^:async f [n]
                        (let [s (start {:world {:blocks (cells "sand" [15] [64] [-1 0 1 2])} :jobs (assoc registry/jobs 'jobs.movement.go-to stub)})]
-                         (core/submit! (:eng s) (spec {:block "sand" :count 4 :ways #{:seen} :worth worth}) {})
+                         (core/submit! (:eng s) (spec {:block "sand" :count n :ways #{:seen} :worth (cost/items-find-worth {"sand" n})}) {})
                          (await (run-ticks s 60))
                          [(count (events-of s :mine.walk-failed)) (:reason (done-event s))]))
-              [cheap-walks cheap-end] (await (failed 400))
-              [dear-walks _] (await (failed 5000))]
-          (is (= [1 :gave-up] [cheap-walks cheap-end]) "a goal of a few hundred seconds is not worth a second walk after the first gave up (a dig retry wins 0.014 on the pooled spread, 0.06 at one pseudo-count)")
+              [cheap-walks cheap-end] (await (failed 4))
+              [dear-walks _] (await (failed 4000))]
+          (is (= [1 :gave-up] [cheap-walks cheap-end]) "4 sand (1.4 s at the measured worth) is not worth a second walk after the first gave up (a dig retry wins 0.014 on the pooled spread, 0.06 at one pseudo-count)")
           (is (> dear-walks cheap-walks) "a dear goal is"))))))
 
 (deftest cells-a-call-gave-up-on-are-passed-on-and-not-walked-to-again
@@ -550,7 +551,7 @@
               s (start {:world {:floor [-30 -30 40 30]} :shared (ew/of-data {} {} [home-zone])
                         :jobs (assoc registry/jobs 'jobs.gather.dig-for stub)})]
           (reset! sref s)
-          (core/submit! (:eng s) (spec {:block "sand" :count 1 :ways #{:seen} :trip true :worth 1000}) {})
+          (core/submit! (:eng s) (spec {:block "sand" :count 400 :ways #{:seen} :trip true :worth (cost/items-find-worth {"sand" 400})}) {})
           (await (run-ticks s 200))
           (is (= 2 @calls) "the dig is called again")
           (is (= 2 (count (events-of s :mine.left-zone))) "the body walked out of the zone again before the second dig"))))))
