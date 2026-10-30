@@ -19,8 +19,8 @@
             [jobs.lib.cost.threat :as threat]))
 
 (a/defargs settings
-  {::wall-prior {:default {:k 1 :n 2} :spec (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 1 nil)})
-                 :doc "Pseudo-counts of the boundary cells closed (k) of all (n) before any is seen: the uniform prior (Laplace's rule of succession). Replace it with `node tools/event-counts.mjs wall-sides`'s :setting once the trial logs hold enter-room.arrived events (none yet: 0 rooms counted)."}})
+  {::wall-prior {:default {:k 1.529 :n 2.889} :spec (a/map-with {:k (a/num-in 0 nil) :n (a/num-in 0.1 nil)})
+                 :doc "Pseudo-counts of the boundary cells closed (k) of all (n) before any is seen, rule-of-succession style: the Beta fitted by moments over the roofed spaces built of planks, brick, slab, glass, wool and the like in the recorded chunks (`node tools/event-counts.mjs wall-chunks --stride 40`: 510 spaces, 3302 side cells closed of 5930, pooled 0.56; spread among spaces so a space's walls are alike)."}})
 
 (def look-tick-s
   "Seconds one look takes on the job clock: the median of `node tools/event-counts.mjs look-seconds` (0.27 s over 14 look-only
@@ -37,12 +37,14 @@
     (reduce * 1 (map #(/ (+ k seen %) (+ n seen %)) (range unseen)))))
 
 (defn round-looks
-  "How many of looks looks to take in a round that stops at its first open wall, for a call worth `worth` seconds. A look
-  buys nothing alone: the call starts only if every wall still unseen proves closed, so with i walls seen closed it
-  goes on while worth x (closed-chance i (looks - i)) is over look-s of the looks - i left. The chance rises and the
-  cost falls with every closed wall, so a round that pays at its start pays to its end: all of looks or none."
-  [worth looks]
-  (count (take-while #(> (* worth (closed-chance % (- looks %))) (look-s (- looks %))) (range looks))))
+  "How many of looks looks to take in a round that stops at its first open wall, for a call worth `worth` seconds; the
+  first `walls` of them (default all) look at walls, the rest at other cells that are no part of the closing. A look
+  buys nothing alone: the call starts only if every wall still unseen proves closed, so with i looks taken it goes on
+  while worth x (closed-chance of the walls seen and left) is over look-s of the looks - i left. The chance rises and the
+  cost falls with every look, so a round that pays at its start pays to its end: all of looks or none."
+  ([worth looks] (round-looks worth looks looks))
+  ([worth looks walls]
+   (count (take-while #(> (* worth (closed-chance (min % walls) (max 0 (- walls %)))) (look-s (- looks %))) (range looks)))))
 
 (defn approached
   "mobs [answer/flee-mob's] seconds later: each melee one (not threat/ranged?) nearer by seconds of its chase speed, not

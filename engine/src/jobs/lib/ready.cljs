@@ -108,7 +108,8 @@
   [c text extra]
   (when-let [sides (seq (look-edge/pending c (sense/round-looked c) 0))]
     (let [cells (into (vec sides) extra)
-          n (cost/round-looks (ctx/worth c) (min (count cells) (sense/max-looks)))]
+          looks (min (count cells) (sense/max-looks))
+          n (cost/round-looks (ctx/worth c) looks (min (count sides) looks))]
       (when (pos? n)
         (contract/look :exposed text :look-at (vec (take n cells)) :room-sides true)))))
 

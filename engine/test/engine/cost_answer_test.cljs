@@ -382,7 +382,8 @@
     (is (= :look (:answer (cost/decide (body 5) (assoc now :look (look [] 0.9)) here))) "decide takes it")
     (is (> (:value (value [] 0.9)) (:value (value [] 0.2))) "the less likely the door, the less the look is worth")
     (is (= 1 (cost/closed-chance 11 0)) "all seen: closed")
-    (is (= (/ 12 13) (cost/closed-chance 11 1)) "one unseen of twelve: the rule of succession")
+    (let [{:keys [k n]} (settings/get glance/settings ::glance/wall-prior)]
+      (is (= (/ (+ k 11) (+ n 11)) (cost/closed-chance 11 1)) "one unseen after eleven closed: the rule of succession over the prior"))
     (is (> (cost/closed-chance 11 1) (cost/closed-chance 2 1) (cost/closed-chance 2 3)))))
 
 (deftest a-round-of-looks-pays-at-every-wall-seen-closed-once-it-pays-at-the-first
@@ -392,6 +393,12 @@
     (is (= 0 (cost/round-looks (* 0.99 break-even) n)) "below the break-even worth none of the round is looked at")
     (is (= n (cost/round-looks (* 1.01 break-even) n)) "above it the whole round is")
     (is (every? #(pays-at (* 1.01 break-even) %) (range n)) "each closed wall seen leaves a round that still pays")))
+
+(deftest the-looks-past-the-walls-of-a-round-are-not-priced-as-walls
+  (let [walls 6 looks 8
+        worth (* 1.01 (/ (cost/look-s looks) (cost/closed-chance 0 walls)))]
+    (is (= looks (cost/round-looks worth looks walls)) "the cost of every look is paid, the chance only over the walls")
+    (is (= 0 (cost/round-looks worth looks looks)) "priced as walls, the same round does not pay: 8 walls closed is less likely than 6")))
 
 (deftest a-swim-to-a-shore-whose-land-may-go-on-is-caught-at-the-chance-it-ends
   (let [m (mob "drowned" 3 35)
