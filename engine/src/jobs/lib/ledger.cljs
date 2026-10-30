@@ -163,11 +163,17 @@
   (mem/write! store kind {:entries (vec l)} policy))
 
 (defn remember!
-  "Store l in body memory from a job's round, its new intents stamped with :until (expiry): an entry a cleanup rewrites
-  keeps the time it had."
+  "Store l in body memory from a job's round, a new intent stamped with :until (expiry). Any other entry with no :until
+  keeps the one memory holds for its cell (a caller confirms its own copy of the intent), or none (a cleanup's rewrite
+  of an old entry)."
   [c l]
-  (let [now (ctx/now c) ttl (* 1000 (settings/get settings ::ttl-s))]
-    (ctx/remember! c kind {:entries (mapv #(if (or (:until %) (not= :intent (:state %))) % (expiry/stamp % now ttl)) l)} policy)))
+  (let [now (ctx/now c) ttl (* 1000 (settings/get settings ::ttl-s))
+        stored (into {} (keep #(when (:until %) [(:cell %) (:until %)])) (:entries (:data (mem/latest (ctx/view c) kind))))
+        timed (fn [e] (cond (:until e) e
+                            (= :intent (:state e)) (expiry/stamp e now ttl)
+                            (stored (:cell e)) (assoc e :until (stored (:cell e)))
+                            :else e))]
+    (ctx/remember! c kind {:entries (mapv timed l)} policy)))
 
 ;; ------------------------------------------------------------------ cleanup
 

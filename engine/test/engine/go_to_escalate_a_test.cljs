@@ -10,6 +10,7 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.memory :as mem]
+            [engine.settings :as settings]
             [jobs.lib.cost :as cost]
             [jobs.lib.escape :as escape]
             [jobs.lib.access.rules :as rules]
@@ -139,17 +140,19 @@
               {:keys [out seen]} (await (run-job! world {:pos [1 65 1] :range 0}))]
           (is (seq (events-of seen :go-to.escalated)) (pr-str @out)))))))
 
-(deftest go-to-s-pillar-on-open-land-is-taken-back-once-it-ended
+(deftest go-to-s-pillar-on-open-land-is-taken-back-once-its-time-is-out
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng out p]} (await (run-job! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 5} {:name "iron_sword" :count 1}]})
-                                                   'jobs.movement.go-to {:pos [10 64 0] :range 1} []))
+        (let [{:keys [eng out p clock]} (await (settings/with-settings {:jobs.lib.ledger/ttl-s 1}
+                                           #(run-job! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 5} {:name "iron_sword" :count 1}]})
+                                                      'jobs.movement.go-to {:pos [10 64 0] :range 1} [])))
               column [[0 61 0] [0 62 0]]]
           (is (= {:arrived true} @out))
           (is (every? #(= "dirt" (block p %)) column) "the pillar stands")
+          (swap! clock + 1000)
           (is (true? (scaffold-left/scaffold-left p (mem/view (:store eng)) {} (ew/of-data {} {} [])))
-              "the scaffold-left trigger offers it once go-to ended")
+              "the scaffold-left trigger offers it once its time is out")
           (core/submit! eng '(jobs.access.cleanup) {})
           (await (tick-out! eng 600))
           (is (every? #(= "air" (block p %)) column) "cleanup took every pillar block back"))))))

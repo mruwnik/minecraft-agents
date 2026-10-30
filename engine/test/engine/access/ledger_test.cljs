@@ -165,6 +165,14 @@
     (ledger/remember! c [(entry a :state :intent) (entry b :state :intent :until 7) (entry [0 66 0] :state :removing)])
     (is (= [(+ 5000 (* 1000 3600)) 7 nil] (mapv :until (:entries @written))) "a cleanup's rewrite of an old entry gives it no time")))
 
+(deftest a-confirmed-copy-of-an-intent-keeps-the-time-memory-holds-for-its-cell
+  (let [written (atom nil)
+        stored [(assoc (entry a) :state :intent :until 9000)]
+        c {:view (fn [] {:data {:entries {ledger/kind [{:t 0 :data {:entries stored}}]} :policies {ledger/kind ledger/policy}} :now 5000})
+           :remember (fn [_ d _] (reset! written d))}]
+    (ledger/remember! c (ledger/confirm [(assoc (entry a) :state :intent)] a))
+    (is (= [9000] (mapv :until (:entries @written))))))
+
 (deftest held-cells-are-forgotten-after-a-while
   (let [clock (atom 1000)
         s (mem/open (tu/tmp-dir) {:now #(deref clock)})]
