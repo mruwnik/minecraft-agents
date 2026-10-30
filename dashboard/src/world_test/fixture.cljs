@@ -207,14 +207,20 @@
   (not (and next-case (= :keep (body-start-plan next-case false)))))
 
 (defn memory-entries
-  "A case's :memory entries, and for a night case a :log-out \"unsupported\" entry (unless the case names log-out or keeps
-  memory): other probe bodies sleep in the same night, and the night job would log out for them instead of doing what the case tests."
+  "A case's :memory entries, and for a night case (unless it names log-out or keeps memory) two entries for the other
+  bodies online, which count as players: a :log-out \"unsupported\" one (they sleep in the same night, and the night job
+  would log out for them instead of doing what the case tests) and, unless the case sleeps (:sleep-skip, :time-why
+  :sleep) or names sleep-status, a :sleep-status needing more players than there are (the runner's skip rule, which
+  shows only once someone lies down), so staying awake costs no skip and the awake ways are priced as before."
   [c]
-  (cond-> (vec (:memory c))
-    (and (#{:night :night-x} (lease/time-phase c))
-         (not (:keep-memory c))
-         (not (str/includes? (pr-str (dissoc c :id :file)) "log-out")))
-    (conj {:kind :log-out :data {:status "unsupported"}})))
+  (let [text (pr-str (dissoc c :id :file))
+        night? (and (#{:night :night-x} (lease/time-phase c))
+                    (not (:keep-memory c))
+                    (not (str/includes? text "log-out")))
+        sleeps? (or (:sleep-skip c) (= :sleep (:time-why c)) (str/includes? text "sleep-status"))]
+    (cond-> (vec (:memory c))
+      night? (conj {:kind :log-out :data {:status "unsupported"}})
+      (and night? (not sleeps?)) (conj {:kind :sleep-status :data {:sleeping 0 :needed 100}}))))
 
 (def default-memory-policy
   "The engine's default policy for a memory kind (engine.memory/default-policy): 50 entries, one hour."

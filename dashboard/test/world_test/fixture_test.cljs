@@ -622,7 +622,15 @@
     (is (not (log-out? {:time :day})))
     (is (not (log-out? {:time :night :keep-memory true})))
     (is (not (log-out? {:time :night :act [[:job '(jobs.survival.log-out)]]})))
-    (is (= [:bed :log-out] (mapv :kind (f/memory-entries {:time :night :memory [{:kind :bed :data {}}]}))))))
+    (is (= [:bed :log-out :sleep-status] (mapv :kind (f/memory-entries {:time :night :memory [{:kind :bed :data {}}]}))))))
+
+(deftest memory-entries-tell-night-cases-no-skip-is-possible-unless-the-case-sleeps
+  (let [status? #(some (comp #{:sleep-status} :kind) (f/memory-entries %))]
+    (is (status? {:time :night}))
+    (is (not (status? {:time :night-exclusive :sleep-skip true})))
+    (is (not (status? {:time :night :time-why :sleep})))
+    (is (= [{:sleeping 1 :needed 2}] (map :data (filter (comp #{:sleep-status} :kind) (f/memory-entries {:time :night :memory [{:kind :sleep-status :data {:sleeping 1 :needed 2}}]})))) "the case's own count is the only one")
+    (is (not (status? {:time :day})))))
 
 (deftest memory-seed-age-s-backdates-an-entry
   (let [data (f/memory-seed [{:kind :spawn-set :data {} :age-s 7200} {:kind :spawn-set :data {}}] 10000000)]
