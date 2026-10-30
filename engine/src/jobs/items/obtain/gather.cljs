@@ -231,7 +231,7 @@
           (when (and pos (not lead?) (< 12 (let [now (.-pos (.self (:primitives c)))] (js/Math.hypot (- x (.-x now)) (- z (.-z now))))))
             (ctx/update-mem! c assoc :approach {:x x :y y :z z}))
           (cond
-            (or (and found? (seen-of c need)) (:tunnel? need) (surfacing? c need) out-of-time?) :again
+            (or (and found? (or (seen-of c need) (:approach (ctx/mem c)))) (:tunnel? need) (surfacing? c need) out-of-time?) :again
             lead? (do (ctx/emit! c :obtain.lead :info {:message (str "found " (str/join "/" targets) " at " (str/join " " pos) " out of sight: walking to it") :pos pos})
                       (ctx/update-mem! c assoc-in [:gather :lead] {:key (:key need) :pos pos})
                       :again)

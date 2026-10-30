@@ -24,6 +24,11 @@
   {:blocks (into {} (for [y [64 65 66]] [(str "3," y ",4") "oak_log"]))
    :zones [f/own-zone {:name "village" :min [2 60 3] :max [4 70 5] :owner "Miles"}]})
 
+(defn logs-worth
+  "The worth of a root bill of n logs (cost/items-find-worth): a walk to a far tree pays from a bill of a few logs on, not for one."
+  [n]
+  (cost/items-find-worth {"oak_log" n}))
+
 (defn ^:async obtain-small! [s args n]
   (await (obtain! s args n)))
 
@@ -57,7 +62,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (f/start (ore-world (:blocks village-trunk) []) (:zones village-trunk))]
-          (await (obtain-small! s {:worth 500 :any-of ["oak_log" "birch_log"] :count 2 :ways #{:gather} :explore true} 12))
+          (await (obtain-small! s {:any-of ["oak_log" "birch_log"] :count 2 :ways #{:gather} :explore true} 12))
           (is (seq (f/events-of s :obtain.exploring)) "walks to look for logs it may take")
           (await (f/run-ticks s 600))
           (is (re-find #"seen but not taken.*zone" (str (:why (first (f/events-of s :stopped))))) "when exploring fails the stop names the refusal"))))))
@@ -68,7 +73,7 @@
       (fn ^:async t []
         (let [free (free-trees)
               s (f/start (ore-world (merge (:blocks village-trunk) free) []) (:zones village-trunk))]
-          (await (obtain! s {:worth 500 :any-of ["oak_log"] :count 2 :ways #{:gather} :explore true} 400))
+          (await (obtain! s {:worth (logs-worth 20) :any-of ["oak_log"] :count 2 :ways #{:gather} :explore true} 400))
           (is (<= 2 (get (f/inv s) "oak_log" 0)) "logs were got from the tree outside the zone"))))))
 
 (def arity1 "access/rules-input is called through its 1-arity property" "cljs$core$IFn$_invoke$arity$1")
@@ -92,7 +97,7 @@
       (fn ^:async t []
         (let [free (free-trees)
               s (f/start (assoc (ore-world (merge f/tree-blocks free) []) :unreachable ["0,64,4" "0,65,4" "0,66,4" "0,67,4"]) [f/own-zone])]
-          (await (obtain! s {:worth 500 :any-of ["oak_log"] :count 2 :ways #{:gather} :explore true} 600))
+          (await (obtain! s {:worth (logs-worth 20) :any-of ["oak_log"] :count 2 :ways #{:gather} :explore true} 600))
           (is (<= 2 (get (f/inv s) "oak_log" 0)) "logs were got from the reachable tree"))))))
 
 (deftest raw-iron-seen-38-blocks-away-sends-the-mine-not-a-search
@@ -100,7 +105,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (f/start (ore-world (into (into {} (for [x (range -2 5) z (range 0 38)] [(str x ",63," z) "stone"])) (for [x [0 1 2] y [63 64 65]] [(str x "," y ",38") "iron_ore"])) [{:name "stone_pickaxe" :count 1}]) [] (assoc f/sight-opts :radius 48 :ray-deg 4))]
-          (await (obtain! s {:worth 500 :item "raw_iron" :ways #{:craft :smelt :gather}} 200))
+          (await (obtain! s {:item "raw_iron" :ways #{:craft :smelt :gather}} 200))
           (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))))
           (is (empty? (f/events-of s :obtain.exploring)))
           (is (<= 1 (get (f/inv s) "raw_iron" 0)) "the mine went for the ore and got it"))))))
@@ -112,17 +117,17 @@
         (let [pillar (into {} (concat (for [y (range 63 67)] [(str "0," y ",4") "bedrock"])
                                       (for [y (range 67 73)] [(str "0," y ",4") "oak_log"])))
               s (f/start (ore-world pillar []) [f/own-zone])]
-          (await (obtain-small! s {:worth 500 :item "oak_log" :count 2 :explore true} 60))
+          (await (obtain-small! s {:item "oak_log" :count 2 :explore true} 60))
           (is (seq (f/events-of s :obtain.exploring)) "walks to look for other logs")
           (is (empty? (filter #(= :no-tree (:reason %)) (f/events-of s :stopped))) "not stopped no-tree before that"))))))
 
 (def sealed-cave
-  "Stone to y 70 over x -22..48, z -22..22, with a hollow 5x2x5 inside it where the body stands: no way out but through rock. A tree stands on the stone on each side, 20 to 24 blocks off: which way the search sorts first must not decide the test."
-  (merge (into {} (for [x (range -22 49) z (range -22 23) y (range 63 71)
+  "Stone to y 70 over x -32..48, z -32..32 (the search's legs lie 24 blocks out on every side and must stand on stone, else they fail and end it :stuck), with a hollow 5x2x5 inside it where the body stands: no way out but through rock. A tree stands on the stone 24 blocks east."
+  (merge (into {} (for [x (range -32 49) z (range -32 33) y (range 63 71)
                          :when (not (and (<= -2 x 2) (<= -2 z 2) (<= 64 y 65)))]
                     [(str x "," y "," z) (if (= y 63) "andesite" "stone")]))
-         (into {} (for [[x z] [[24 0] [-20 0] [0 20] [0 -20]] y [71 72 73 74]] [(str x "," y "," z) "oak_log"]))
-         {"24,75,0" "oak_leaves" "-20,75,0" "oak_leaves" "0,75,20" "oak_leaves" "0,75,-20" "oak_leaves"}))
+         (into {} (for [y [71 72 73 74]] [(str "24," y ",0") "oak_log"]))
+         {"24,75,0" "oak_leaves"}))
 
 (deftest a-body-sealed-in-a-cave-stairs-up-to-the-sky-before-it-looks-for-trees
   (async done
@@ -130,7 +135,7 @@
       (fn ^:async t []
         (let [s (f/start (ore-world sealed-cave []) [f/own-zone])]
           (swap! (fake/state (:p s)) assoc :light (into {} (for [x (range -20 21) z (range -20 21) y (range 64 71)] [[x y z] [0 0]])))
-          (await (obtain! s {:worth 500 :item "oak_log" :count 1 :explore true} 900))
+          (await (obtain! s {:worth (logs-worth 20) :item "oak_log" :count 1 :explore true} 900))
           (is (seq (f/events-of s :stair.step)) "a stair was cut up through the roof")
           (is (every? #(<= 70 (get-in % [:from 1])) (f/events-of s :obtain.exploring)) "no walk to look for trees starts under the roof (the stone tops at y 70: the stair's last cut has its head in the open)")
           (is (<= 1 (get (f/inv s) "oak_log" 0)) "and the tree outside was felled"))))))
@@ -185,7 +190,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (f/start (update (ore-world {} []) :self assoc :health 1 :food 0) [f/own-zone])]
-          (await (obtain-small! s {:worth 500 :item "oak_log" :count 1 :ways #{:gather} :explore true} 60))
+          (await (obtain-small! s {:item "oak_log" :count 1 :ways #{:gather} :explore true} 60))
           (is (seq (f/events-of s :waiting)) "the hurt, foodless body's search waits")
           (is (= 1 (count (f/events-of s :obtain.exploring))) "and the notice is said once, not each round"))))))
 
@@ -214,7 +219,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (f/start (ore-world {} []) [f/own-zone])]
-          (await (obtain-small! s {:worth 500 :any-of ["oak_planks" "spruce_planks" "birch_planks"] :count 2 :ways #{:gather :craft} :explore true} 200))
+          (await (obtain-small! s {:worth (logs-worth 20) :any-of ["oak_planks" "spruce_planks" "birch_planks"] :count 2 :ways #{:gather :craft} :explore true} 200))
           (is (seq (f/events-of s :obtain.exploring)))
           (is (every? #(< 1 (count (:for %))) (f/events-of s :obtain.exploring)) "searches for logs of every species, not oak alone"))))))
 
@@ -224,7 +229,7 @@
       (fn ^:async t []
         (let [s (f/start (ore-world {} []) [f/own-zone])
               short {:jobs.explore.search/job-time-s 0.01}]
-          (await (settings/with-settings short #(obtain! s {:worth 500 :any-of ["oak_log"] :count 1 :ways #{:gather} :explore true} 400)))
+          (await (settings/with-settings short #(obtain! s {:any-of ["oak_log"] :count 1 :ways #{:gather} :explore true} 400)))
           (is (= 1 (count (f/events-of s :obtain.exploring))) "one search, repeated while it runs out of time, then the gather ends")
           (is (= :no-source (:reason (first (f/events-of s :stopped))))))))))
 
@@ -233,7 +238,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (f/start (assoc (update (f/bare [{:name "bucket" :count 1}]) :blocks merge {"30,63,4" "water"}) :floor [-60 -60 60 60]) [f/own-zone])]
-          (await (obtain! s {:worth 500 :item "water_bucket" :explore true} 2000))
+          (await (obtain! s {:item "water_bucket" :explore true} 2000))
           (is (seq (f/events-of s :obtain.exploring)) "walks to look for water")
           (is (= 1 (get (f/inv s) "water_bucket" 0))))))))
 
@@ -258,3 +263,20 @@
             (is (= :again (await (gather/explore-walk! c coal (constantly false))))))
           (is (nil? (:explore-start @m)))
           (is (= "coal" (get-in @m [:tried :gather :searched])) "the coal search's verdict is kept, not lost to a walk back to the log search's start"))))))
+
+(def narrow-cave
+  "sealed-cave with the stone ending 22 blocks out west, north and south: the legs there lie off it."
+  (merge (into {} (for [x (range -22 49) z (range -22 23) y (range 63 71)
+                         :when (not (and (<= -2 x 2) (<= -2 z 2) (<= 64 y 65)))]
+                    [(str x "," y "," z) (if (= y 63) "andesite" "stone")]))
+         (into {} (for [y [71 72 73 74]] [(str "24," y ",0") "oak_log"]))
+         {"24,75,0" "oak_leaves"}))
+
+(deftest a-tree-the-search-found-before-its-last-leg-failed-is-walked-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (ore-world narrow-cave []) [f/own-zone])]
+          (swap! (fake/state (:p s)) assoc :light (into {} (for [x (range -20 21) z (range -20 21) y (range 64 71)] [[x y z] [0 0]])))
+          (await (obtain! s {:worth 500 :item "oak_log" :count 1 :explore true} 900)) ; a worth the walks do not bind: the search ends on its found tree, not on price
+          (is (<= 1 (get (f/inv s) "oak_log" 0)) "the tree the search saw was felled, not named a stop"))))))
