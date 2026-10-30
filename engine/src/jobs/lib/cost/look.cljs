@@ -6,10 +6,10 @@
   the mobs come nearer meanwhile (approached; answer/decide): an answer with :outcomes, priced by answer/answer-price beside the answers open now, so decide takes
   the look exactly when look-value's :value is over its :cost.
   closed-chance: the chance the unseen part of a boundary is closed, given its seen part is (a room's walls); chance-closed under any prior.
-  turn-chance: the chance the next look turns a decision, after the fruitless ones; cell-looks: how many looks at unknown
-  cells pay a call's worth at that chance; redo-every: the looks between two decisions, so deciding again costs no more
-  CPU than the looks take on the clock.
-  round-looks: whether a round that stops at the first open wall pays a call's worth: all of its looks or none.
+  turn-chance: the chance the next look turns a decision, after the fruitless ones; turn-gap: the seconds a turn saves;
+  cell-looks: how many looks at unknown cells pay that gap at that chance; redo-every: the looks between two decisions,
+  so deciding again costs no more CPU than the looks take on the clock.
+  round-looks: whether a round that stops at the first open wall pays a turn's gap: all of its looks or none.
 
   Callers: respond's cover-answers (an unseen room cell, the door). Others it fits: shut-in's :room way and enter-room
   (an unseen room judged open), look-edge's look at a region's unseen sides, a pit or pocket's unsensed cells
@@ -19,7 +19,8 @@
             [jobs.lib.cost.answer :as answer]
             [jobs.lib.cost.danger :as danger]
             [jobs.lib.cost.death :as death]
-            [jobs.lib.cost.threat :as threat]))
+            [jobs.lib.cost.threat :as threat]
+            [jobs.lib.cost.value :as value]))
 
 (a/defargs settings
   {::look-tick-s {:default 0.054 :spec (a/num-in 0 nil)
@@ -45,14 +46,20 @@
   (let [{:keys [a b]} (settings/get settings ::turn-prior)]
     (/ a (+ a b looked))))
 
+(defn turn-gap
+  "The seconds a turn of a decision saves in a call worth `worth`: gap, the runner-up's price less the chosen plan's (0
+  when no look can turn it), else the caller's other way, a try after a failed one (value/retry-s :walk); at most the
+  worth. The goal's worth decides whether to do the goal, not what a look buys: at ##Inf the gap stays finite."
+  [worth gap]
+  (min worth (if (some? gap) gap (value/retry-s :walk))))
+
 (defn cell-looks
-  "How many of `looks` looks at unknown cells pay a call worth `worth` seconds, `looked` fruitless looks taken before
-  them, each costing look-s plus redo-s (its share of deciding again): the next is taken while worth x turn-chance is
-  over that. The chance falls with each fruitless look, so a finite worth stops; at ##Inf (arrive) every one pays, and
-  the bound is the cells: those the decision read, within sight."
-  ([worth looks] (cell-looks worth looks 0 0))
-  ([worth looks looked redo-s]
-   (count (take-while #(> (* worth (turn-chance (+ looked %))) (+ (look-s 1) redo-s)) (range looks)))))
+  "How many of `looks` looks at unknown cells pay a turn saving `gap` seconds (turn-gap), `looked` fruitless looks
+  taken before them, each costing look-s plus redo-s (its share of deciding again): the next is taken while gap x
+  turn-chance is over that. The chance falls with each fruitless look, so a finite gap stops."
+  ([gap looks] (cell-looks gap looks 0 0))
+  ([gap looks looked redo-s]
+   (count (take-while #(> (* gap (turn-chance (+ looked %))) (+ (look-s 1) redo-s)) (range looks)))))
 
 (defn redo-every
   "Looks to take between two decisions when one takes redo-s seconds of CPU: a round costs max(game clock, CPU), so
@@ -66,12 +73,12 @@
   (chance-closed (settings/get settings ::wall-prior) seen unseen))
 
 (defn round-looks
-  "How many of `walls` looks at the unseen walls of a room pay a call worth `worth` seconds. A look buys nothing alone:
-  the call starts only if every wall still unseen proves closed, so with i seen it goes on while worth x (closed-chance
+  "How many of `walls` looks at the unseen walls of a room pay a turn saving `gap` seconds (turn-gap). A look buys nothing alone:
+  the call starts only if every wall still unseen proves closed, so with i seen it goes on while gap x (closed-chance
   of the walls seen and left) is over look-s of the looks left. The chance rises and the cost falls with every look, so
   a round that pays at its start pays to its end: all or none."
-  [worth walls]
-  (count (take-while #(> (* worth (closed-chance % (- walls %))) (look-s (- walls %))) (range walls))))
+  [gap walls]
+  (count (take-while #(> (* gap (closed-chance % (- walls %))) (look-s (- walls %))) (range walls))))
 
 (defn approached
   "mobs [answer/flee-mob's] seconds later: each melee one (not threat/ranged?) nearer by seconds of its chase speed, not

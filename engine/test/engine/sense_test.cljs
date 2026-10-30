@@ -85,7 +85,27 @@
             (let [p (seeing {:self {:pos {:x 0 :y 64 :z 0}} :blocks rock})
                   c (stub-ctx p)]
               (await (sense/decide! c ::rock #(all-seen p)))
-              (is (= 5 (looks p)) "arrive pays every look; the memory of looked cells bounds the call")))))))))
+              (is (= 5 (looks p)) "arrive's unpriced gap pays more looks; the memory of looked cells bounds the call")))))))))
+
+(def long-rock
+  "A solid stone box x 4..13, y 62..66, z -7..7: 8 x 3 x 13 = 312 cells inside that never show."
+  (tu/box 4 62 -7 13 66 7 "stone"))
+
+(deftest a-call-at-inf-worth-looks-while-the-gap-to-the-runner-up-pays
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[gap n why] [[0 0 "a single alternative: no look turns it"]
+                             [1 0 "a runner-up 1 s off: under the 43 looks' seconds the first turn chance asks"]
+                             [4 (cost/cell-looks 4 312) "4 s off: the looks the gap pays, a few of the 312"]]]
+          (let [p (seeing {:self {:pos {:x 0 :y 64 :z 0}} :blocks long-rock})
+                c (stub-ctx p)
+                cells (for [x (range 5 13) y (range 63 66) z (range -6 7)] {:x x :y y :z z})
+                seen (fn [] (= (count cells) (count (keep #(u/seen-name p %) cells))))]
+            (with-redefs [clock/now (constantly 0)]
+              (await (sense/decide! c ::rock seen {:gap (constantly gap)})))
+            (is (= n (looks p)) why)
+            (is (< (looks p) 40) "far short of the hidden cells")))))))
 
 (deftest a-costly-decision-is-made-again-only-after-looks-as-long-as-it
   (async done
@@ -125,7 +145,10 @@
             (is (nil? (await (sense/decide! c ::iron-again #(first (remove (constantly true) (look/seen-blocks p {:names ["iron_ore"] :radius 16})))))))
             (is (= before (looks p)) "surveyed for iron from this cell already: no second survey")
             (is (nil? (await (sense/decide! c ::gold #(first (look/seen-blocks p {:names ["gold_ore"] :radius 16}))))))
-            (is (< before (looks p)) "a look for iron is no look for gold: it surveys again")))))))
+            (is (< before (looks p)) "a look for iron is no look for gold: it surveys again")
+            (let [before (looks p)]
+              (is (nil? (await (sense/decide! c ::coal #(first (look/seen-blocks p {:names ["coal_ore"] :radius 16})) {:gap (constantly 0)}))))
+              (is (= before (looks p)) "a survey no turn pays is not taken"))))))))
 
 (deftest an-entity-query-stops-at-the-first-look-that-shows-it
   (async done
@@ -187,7 +210,7 @@
           (is (<= (count cells) (looks p)) "a call worth any seconds looks at every cell")
           (is (= (set cells) (sense/round-looked c)) "one round per :look: the cells asked for count as looked, so the check asks no second"))))))
 
-(deftest look-round-looks-only-at-the-cells-the-call-pays-for-and-counts-only-those
+(deftest look-round-looks-only-at-the-cells-the-call-pays-for-and-counts-every-one
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -202,7 +225,7 @@
                             reach-room/unseen-sides (constantly [])]
                 (await (sense/look-round! c cells))
                 (is (= 10 (count @asked)) "ten of the 27 cells pay, each at its own falling chance")
-                (is (= (set @asked) (sense/round-looked c)) "only the paid cells count looked; the rest is asked for again")
+                (is (= (set cells) (sense/round-looked c)) "every cell asked for counts looked, the unpaid ones priced as unseen: the check asks no second")
                 (await (sense/look-round! c cells))
                 (is (= 10 (count @asked)) "the ten looks taken from here leave no paid look for a second round"))))))))))
 
