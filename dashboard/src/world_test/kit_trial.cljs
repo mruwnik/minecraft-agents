@@ -278,21 +278,21 @@
             (fs/mkdirSync (path/dirname p) #js {:recursive true})
             (fs/writeFileSync p text))
     :workspace (let [[body world] a
-                     ;; --adopt-existing refuses symlinked parents, and a worktree's worlds/ is a symlink
-                     worlds (fs/realpathSync (path/join (repo) "worlds"))]
+                     ;; --adopt-existing refuses symlinked parents, and a worktree's worlds/ or worlds/<world> is a symlink
+                     worlds (path/dirname (fs/realpathSync (path/join (repo) "worlds" world)))]
                  (run-node! "engine/tools/workspace.mjs" [(path/join worlds world "agents" body) "--body" body "--world" world "--worlds" worlds "--adopt-existing"]))
     :body-start (let [[body {:keys [world build]}] a
                       ;; a body that dies (a V8 heap abort is exit 134) says why only on stderr
                       log (let [d (path/join (repo) (run-dir world body))]
                             (fs/mkdirSync d #js {:recursive true})
-                            (fs/openSync (path/join d "body.log") "a"))
+                            (fs/openSync (path/join d "body.err") "a"))
                       child (cp/spawn "sh"
                                       (into-array (concat ["-c" "while :; do \"$@\"; [ $? -eq 75 ] || break; sleep 20; done" "sh" (path/join (repo) "tools/res-slot")
                                                            "body" "--" js/process.execPath] wb/body-v8-flags
                                                           ["out/body-release.cjs" "--agent" body "--world" world
                                                            "--scenario" (path/join build "engine/scenarios/survival.edn")
                                                            "--worlds" (path/join (repo) "worlds") "--blueprints" (path/join (repo) "blueprints") "--fresh"]))
-                                      #js {:cwd (path/join build "engine") :detached true :stdio #js ["ignore" log log]
+                                      #js {:cwd (path/join build "engine") :detached true :stdio #js ["ignore" "ignore" log]
                                            :env (js/Object.assign #js {} js/process.env #js {:NODE_COMPILE_CACHE (path/join (repo) "engine/out/compile-cache")})})]
                   (.unref child))
     :rcon (run-node! "tools/rcon-raw.mjs" (str/split (first a) #" "))
