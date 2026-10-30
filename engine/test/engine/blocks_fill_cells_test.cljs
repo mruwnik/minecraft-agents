@@ -5,7 +5,10 @@
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.ctx :as ctx]
+            [engine.memory :as mem]
             [engine.settings :as settings]
+            [jobs.lib.expiry :as expiry]
+            [jobs.lib.ledger :as ledger]
             [engine.test-util :as tu]))
 
 (def job 'jobs.blocks.fill-cells)
@@ -241,3 +244,16 @@
               [_ scaffold] (await (shell-text {} {:purpose :plug}))]
           (is (not (re-find #"not protected" zoned)))
           (is (not (re-find #"not protected" scaffold))))))))
+
+(deftest a-root-fill-hands-its-purpose-blocks-to-the-scaffold-left-trigger
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (bd/setup {:self body :inventory [{:name "dirt" :count 5}]})
+              eng (:eng env)]
+          (core/submit! eng (list job {:cells [(first cells)] :use {:blocks ["dirt"]} :purpose :plug}) {})
+          (await (tu/run-until-empty eng 20))
+          (let [v (mem/view (:store eng)) l (ledger/open-entries v)]
+            (is (= 1 (count (bd/calls (:p env) "place"))) "the cell was filled")
+            (is (= [:plug] (mapv :purpose l)))
+            (is (= [false] (mapv #(expiry/current? (:now v) %) l)))))))))

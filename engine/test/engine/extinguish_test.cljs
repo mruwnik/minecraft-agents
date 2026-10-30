@@ -6,6 +6,7 @@
             [engine.zones-survival-test :as zs]
             [engine.fake :as fake]
             [engine.events :as events]
+            [jobs.lib.expiry :as expiry]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.util :as u]
             [engine.memory :as mem]
@@ -530,6 +531,20 @@
           (is (= [] (:list (core/state eng))))
           (is (= ["water_bucket" "bucket"] (mapv (comp :item call-args) (calls p "place"))) "scooped by the cleanup")
           (is (= [] (pours eng))))))))
+
+(deftest a-cut-run-hands-its-pour-to-the-scaffold-left-trigger-at-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:onFire true}
+                                      :inventory [{:name "water_bucket" :count 1}]
+                                      :blocks (floor 6)})]
+          (on-place! p "water_bucket" (fn [s _] (swap! s assoc-in [:self :onFire] true)))
+          (on-wait! p (fn [n _] ((get {1 #(core/cut! eng (core/holder eng) :test nil)} n (fn [])))))
+          (core/submit! eng '(jobs.survival.extinguish) {})
+          (await (run-until-empty eng 3))
+          (let [v (mem/view (:store eng))]
+            (is (= [false] (mapv #(expiry/current? (:now v) %) (pours eng))) "a root's pour is an orphan the moment the run ends")))))))
 
 (deftest every-ending-of-a-run-is-done-never-continue
   (async done

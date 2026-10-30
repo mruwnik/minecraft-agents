@@ -334,3 +334,9 @@
 
 (defn ^:async round [c]
   (await (pace/steps! c #(step! c))))
+
+(defn cleanup
+  "However the run ends: a root run releases its tree's scaffold (the scaffold-left trigger takes it back)."
+  [c _]
+  (ledger/release-root! c)
+  (ctx/end c :done nil))

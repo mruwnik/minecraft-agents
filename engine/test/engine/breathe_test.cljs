@@ -8,6 +8,7 @@
             [engine.registry :as registry]
             [engine.settings :as settings]
             [engine.seek-contract-test :as sc]
+            [jobs.lib.expiry :as expiry]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.memory-age :as memory-age]
             [jobs.lib.world-files :as world-files]
@@ -1016,6 +1017,7 @@
           (is (= [[:completed nil]] ended))
           (is (empty? more) "one step block")
           (is (= [:breathe-step :placed "dirt"] ((juxt :purpose :state :item) e)))
+          (is (not (expiry/current? 1000000 e)) "a root run hands its step block to the scaffold-left trigger at its end")
           (is (= "dirt" (block [x y z])))
           (is (< (max (js/Math.abs x) (js/Math.abs z)) 3) "inside the wall ring")
           (is (not (.-inWater (.self p))))

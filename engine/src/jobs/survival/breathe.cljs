@@ -452,3 +452,9 @@
                 :again (do (await (pace/pace! c)) (recur (inc i)))
                 :done (ctx/end c :done nil)
                 r)))))
+
+(defn cleanup
+  "However the run ends: a root run releases its tree's scaffold (the scaffold-left trigger takes it back)."
+  [c _]
+  (ledger/release-root! c)
+  (ctx/end c :done nil))

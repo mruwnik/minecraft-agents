@@ -517,3 +517,9 @@
                 :done (let [failed (:scoop-failed (ctx/mem c))]
                         (ctx/end c :done nil (when (seq failed) {:scoop-failed failed :text (str/join "; " (map :text failed))})))
                 r)))))
+
+(defn cleanup
+  "However the run ends: a root run releases its tree's scaffold (the scaffold-left trigger takes it back)."
+  [c _]
+  (ledger/release-root! c)
+  (ctx/end c :done nil))
