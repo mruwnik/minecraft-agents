@@ -165,15 +165,17 @@
 (defn remember!
   "Store l in body memory from a job's round, a new intent stamped with :until (expiry). Any other entry with no :until
   keeps the one memory holds for its cell (a caller confirms its own copy of the intent), or none (a cleanup's rewrite
-  of an old entry)."
+  of an old entry). A placer's timed entries share its latest :until, so its scaffold (a pillar) runs out as one."
   [c l]
   (let [now (ctx/now c) ttl (* 1000 (settings/get settings ::ttl-s))
         stored (into {} (keep #(when (:until %) [(:cell %) (:until %)])) (:entries (:data (mem/latest (ctx/view c) kind))))
-        timed (fn [e] (cond (:until e) e
-                            (= :intent (:state e)) (expiry/stamp e now ttl)
-                            (stored (:cell e)) (assoc e :until (stored (:cell e)))
-                            :else e))]
-    (ctx/remember! c kind {:entries (mapv timed l)} policy)))
+        timed (mapv #(cond (:until %) %
+                           (= :intent (:state %)) (expiry/stamp % now ttl)
+                           (stored (:cell %)) (assoc % :until (stored (:cell %)))
+                           :else %)
+                    l)
+        latest (reduce (fn [m {:keys [job until]}] (cond-> m until (update job (fnil max until) until))) {} timed)]
+    (ctx/remember! c kind {:entries (mapv #(cond-> % (:until %) (assoc :until (latest (:job %)))) timed)} policy)))
 
 ;; ------------------------------------------------------------------ cleanup
 

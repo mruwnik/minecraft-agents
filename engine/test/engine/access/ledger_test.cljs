@@ -162,7 +162,7 @@
 (deftest a-round-stamps-new-intents-with-the-ttl-and-keeps-old-stamps
   (let [written (atom nil)
         c {:view (fn [] {:data {} :now 5000}) :remember (fn [_ d _] (reset! written d))}]
-    (ledger/remember! c [(entry a :state :intent) (entry b :state :intent :until 7) (entry [0 66 0] :state :removing)])
+    (ledger/remember! c [(entry a :state :intent) (entry b :job "j2" :state :intent :until 7) (entry [0 66 0] :state :removing)])
     (is (= [(+ 5000 (* 1000 3600)) 7 nil] (mapv :until (:entries @written))) "a cleanup's rewrite of an old entry gives it no time")))
 
 (deftest a-confirmed-copy-of-an-intent-keeps-the-time-memory-holds-for-its-cell
@@ -172,6 +172,12 @@
            :remember (fn [_ d _] (reset! written d))}]
     (ledger/remember! c (ledger/confirm [(assoc (entry a) :state :intent)] a))
     (is (= [9000] (mapv :until (:entries @written))))))
+
+(deftest a-placers-entries-run-out-together-at-its-latest-time
+  (let [written (atom nil)
+        c {:view (fn [] {:data {} :now 5000}) :remember (fn [_ d _] (reset! written d))}]
+    (ledger/remember! c [(entry a :state :placed :until 6000) (entry b :state :intent) (entry [0 66 0] :job "j2" :state :placed :until 6000)])
+    (is (= [(+ 5000 (* 1000 3600)) (+ 5000 (* 1000 3600)) 6000] (mapv :until (:entries @written))) "j1's pillar block a takes its new block's time; j2's keeps its own")))
 
 (deftest held-cells-are-forgotten-after-a-while
   (let [clock (atom 1000)
