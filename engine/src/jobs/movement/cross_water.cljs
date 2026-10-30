@@ -211,7 +211,7 @@
         saved (crossing c)]
     (if saved
       (await (land! c (:land saved)))
-      (let [spot (await (sense/decide! c :cross-water.shore #(target-spot c)))
+      (let [spot (await (sense/decide! c :cross-water.shore #(target-spot c) {:price (sense/fails-to :walk)}))
             ;; a given far shore still not made out after the look: cross toward it, the landing drives nearer
             spot (or spot (spot-of c))]
         (cond

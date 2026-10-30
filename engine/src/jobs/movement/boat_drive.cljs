@@ -160,5 +160,5 @@
         p (:primitives c)
         st (atom {:strokes 0 :blocked 0 :looked-from nil})]
     (when (and cell (vehicle/mounted? p))
-      (await (sense/decide! c :boat-drive.cell #(u/seen-name p cell))))
+      (await (sense/decide! c :boat-drive.cell #(u/seen-name p cell) {:price (sense/fails-to :walk)})))
     (await (pace/steps! c #(stroke! c st)))))

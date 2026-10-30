@@ -110,7 +110,7 @@
   [c]
   (if (:pos (:args c))
     (launch-pos c)
-    (await (sense/decide! c ::water #(find-water c) {:verify-guesses true}))))
+    (await (sense/decide! c ::water #(find-water c) {:verify-guesses true :price (sense/fails-to :walk)}))))
 
 (def bad-args
   "Never :bad-args for an item that is no boat or onto a :pos that names no cell."

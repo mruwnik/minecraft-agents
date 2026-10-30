@@ -101,23 +101,32 @@
   [c f]
   (update c ::own-ways (fnil conj []) f))
 
+(defn stay-look-price
+  "The {:gap :delta} of a look at the unseen cells a stay exposed at chance rests on: one seen bad leaves the stay its
+  exposure (price/stay-parts acted on now, cost/risk-s), one seen closed none; no other plan stands between (gap 0)."
+  [c chance]
+  (let [{:keys [hurt dies death]} (price/stay-parts c chance (price/stay-s c))]
+    {:gap 0 :delta (cost/risk-s (.-health (.self (:primitives c))) hurt (cost/lethal-hp {:chance dies :death death}))}))
+
 (defn room-look
   "A :look at the unseen walls of the room round the body (look-edge/pending) not looked at yet, and at `extra`: the ones
-  the hook's sense/round-plan pays for, nil when none or no wall is left: an unseen wall is an open side."
-  [c text extra]
+  sense/round-plan pays for at the stay's price at chance (stay-look-price), nil when none or no wall is left: an unseen
+  wall is an open side."
+  [c text extra chance]
   (when-let [sides (seq (look-edge/pending c (sense/round-looked c) 0))]
-    (when-let [cells (seq (:pay (sense/round-plan c (into (vec sides) extra))))]
+    (when-let [cells (seq (:pay (sense/round-plan c (into (vec sides) extra) (stay-look-price c chance))))]
       (contract/look :exposed text :look-at (vec cells) :room-sides true))))
 
 (defn air-look
   "Under a seen roof, a :look at the unseen cells beside the seen air round the body (look/room-air-unseen) a look from here
-  shows and no look round looked at yet, nil when none is left: once none is unseen, that air's own dark is no evidence for
-  the light outside. Open ground has no such room to seal."
-  [c text]
+  shows and no look round looked at yet and sense/round-plan pays for at the stay's price at chance (stay-look-price),
+  nil when none is left: once none is unseen, that air's own dark is no evidence for the light outside. Open ground has
+  no such room to seal."
+  [c text chance]
   (let [p (:primitives c)]
     (when-let [cells (and (sh-sense/roofed? p (sh-sense/room-roof-height))
                           (seq (filter #(and (not ((sense/round-looked c) %)) (look/look-shows? p %)) (look/room-air-unseen p))))]
-      (when-let [paid (seq (:pay (sense/round-plan c cells)))]
+      (when-let [paid (seq (:pay (sense/round-plan c cells (stay-look-price c chance))))]
         (contract/look :exposed text :look-at (vec paid))))))
 
 (defn unseen-status
@@ -136,8 +145,8 @@
         where (str "unseen " (place-text to) ", which no look from here shows")]
     (cond
       (<= chance limit) (contract/ok :unexposed (str "no spawn risk at " where ": guessed lit"))
-      (> left limit) (or (room-look c (str "dark at " where ", walls of the room round the body not all seen") nil)
-                         (air-look c (str "dark at " where ", the air round the body not seen sealed"))
+      (> left limit) (or (room-look c (str "dark at " where ", walls of the room round the body not all seen") nil chance)
+                         (air-look c (str "dark at " where ", the air round the body not seen sealed") chance)
                          (-> (contract/never :exposed (str "dark at " where ": guessed " (js/Math.round (* 100 (spawn-light/dark-share p to false 0))) "% dark even by full day, so dawn does not light it") :lowered-by #{:torch} :chance chance)
                              (look-first c to (spawn-light/dark-share p to false))))
       (<= light-in patience) (contract/later :exposed (str "dark at " where ": guessed open ground, dark until light") :lowered-by #{:light} :chance chance
@@ -157,7 +166,7 @@
          chance (spawn-light/chance-at p at false)
          where (place-text to)
          hall (delay (sh-inside/dark-hall p at nil))
-         look (delay (when (u/within? (sh-sense/feet p) at 1) (room-look c (str "dark at " where ", walls of the room round the body not all seen") nil)))]
+         look (delay (when (u/within? (sh-sense/feet p) at 1) (room-look c (str "dark at " where ", walls of the room round the body not all seen") nil chance)))]
      (cond
        (<= chance (settings/get settings ::risk-limit))
        (contract/ok :sealed (str "dark at " where ", no dark floor reaches beyond " sh-inside/spawn-free-radius " blocks: nothing spawns near the body"))
@@ -183,7 +192,8 @@
          where (place-text to)
          room (delay (when-not (u/within? (sh-sense/feet p) to 1)
                        (room-look c (str "walls of the room round the body not all seen; at " where)
-                                  (when (and (contains? lowered-by :look) (some #(look/look-shows? p %) look-at)) look-at))))
+                                  (when (and (contains? lowered-by :look) (some #(look/look-shows? p %) look-at)) look-at)
+                                  chance)))
          wait-s (delay (cond (contains? lowered-by :light) light-in (spawn-light/dawn-lowers? p to) (sh-sense/light-in p to)))]
      (cond
        (and (sh-sense/dark-outside? p) (sh-inside/safe-from-night? p) (not (sh-inside/walk-leaves-shelter? p shelter to 1)))

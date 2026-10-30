@@ -310,12 +310,12 @@
   "One piece of the tree from the ground: the axe, the next log dug (walking in reach first), the tree ended when no log
   is left. :again, :continue or the ending."
   [c radius]
-  (let [logs (await (sense/decide! c ::logs #(tree-logs c radius) {:retry? empty?}))]
+  (let [logs (await (sense/decide! c ::logs #(tree-logs c radius) {:retry? empty? :price (sense/fails-to :walk)}))]
     (cond
       (empty? logs)
       (if-let [unseen (not-empty (relook-cells c))]
         (do (ctx/update-mem! c assoc :relooked true)
-            (await (sense/look-at-unknown! c unseen (sense/cell-looks c (count unseen))))
+            (await (sense/look-at-unknown! c unseen (sense/cell-looks (sense/fail-price :walk) (count unseen))))
             :again)
         (if-let [stop (or (when (= :continue (await (come-down! c))) :continue) (await (collect-logs! c)))]
           stop

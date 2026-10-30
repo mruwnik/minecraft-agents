@@ -428,12 +428,14 @@
 
 (defn ^:async shelter!
   "No bed, nobody asleep, not roofed: dig in here (dig-in!), shut-in pricing a walk into the roofed place whose walk go-to quotes cheapest
-  (cheapest-walk!, only those no dearer than digging in is quoted, bed-down/dig-in-s); a quote still searching waits a pass."
+  (cheapest-walk!, only those no dearer than digging in is quoted, bed-down/dig-in-s, which also prices the looks for a
+  place, sense/find-price); a quote still searching waits a pass."
   [c]
   (hold/busy! c)
-  (let [places (when-not (:roof-walk-failed (ctx/mem c))
-                 (await (sense/decide! c ::roofed-place #(seq (room-lib/roofed-places-in c (:args c) ##Inf)) {:verify-guesses true})))
-        pick (when (seq places) (await (cheapest-walk! c places {:target place-walk-target :walk enter-room/walk-args :limit-s (await (bed-down/dig-in-s c))})))]
+  (let [dig-s (await (bed-down/dig-in-s c))
+        places (when-not (:roof-walk-failed (ctx/mem c))
+                 (await (sense/decide! c ::roofed-place #(seq (room-lib/roofed-places-in c (:args c) ##Inf)) {:verify-guesses true :price (sense/find-price c dig-s)})))
+        pick (when (seq places) (await (cheapest-walk! c places {:target place-walk-target :walk enter-room/walk-args :limit-s dig-s})))]
     (if (= :searching pick)
       :again
       (await (dig-in! c (:name (:pick pick)))))))
@@ -536,7 +538,7 @@
   when none is priced; no time limit, a far bed's walk is weighed against staying by bed-walk-safe?), if its walk bed-walk-safe? finds fine, unless a bed-down is already under way; :searching while a quote's search goes on; else nil."
   [c]
   (let [p (:primitives c)
-        beds (await (sense/decide! c ::bed #(seq (sh-beds/beds-to-use p (ctx/view c) (bed-down/radius c) (bed-down/bed-permit c)))))
+        beds (await (sense/decide! c ::bed #(seq (sh-beds/beds-to-use p (ctx/view c) (bed-down/radius c) (bed-down/bed-permit c))) {:price (sense/fails-to :walk)}))
         walk #(hash-map :pos % :range 2)
         picked (when (seq beds) (await (cheapest-walk! c beds {:target walk :walk walk :limit-s ##Inf})))
         bed (if (map? picked) (:pick picked) (first beds))]

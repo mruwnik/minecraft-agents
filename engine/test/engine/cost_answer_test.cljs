@@ -13,7 +13,6 @@
             [jobs.lib.cost.fight :as fight]
             [jobs.lib.cost.look :as glance]
             [jobs.lib.cost.threat :as threat]
-            [jobs.lib.cost.value :as value]
             [engine.settings :as settings]))
 
 (use-fixtures :each {:before #(game/select! (fake/create {}))})
@@ -410,18 +409,19 @@
 
 (deftest looks-at-unknown-cells-pay-while-the-falling-chance-of-a-turn-covers-them
   (settings/with-settings {::glance/turn-prior {:a 1 :b 9}}
-    #(let [gap (* 19.5 (cost/look-s 1))]
-       (is (= 10 (cost/cell-looks gap 30)) "the next look turns the decision at 1/(10 + i): a gap of 19.5 looks pays while i < 9.5")
-       (is (= 5 (cost/cell-looks gap 30 5 0)) "five fruitless looks taken before leave five")
-       (is (= 0 (cost/cell-looks gap 30 0 (cost/look-s 1))) "deciding again after each look doubles its price")
+    #(let [saving (* 19.5 (cost/look-s 1))]
+       (is (= 10 (cost/cell-looks saving 30)) "the next look turns the decision at 1/(10 + i): a turn saving 19.5 looks pays while i < 9.5")
+       (is (= 5 (cost/cell-looks saving 30 5 0)) "five fruitless looks taken before leave five")
+       (is (= 0 (cost/cell-looks saving 30 0 (cost/look-s 1))) "deciding again after each look doubles its price")
        (is (= 0 (cost/cell-looks 0 30)) "a decision no look can turn takes none")))
   (is (= 1 (cost/redo-every 0)) "a free decision is made again after every look")
   (is (= 4 (cost/redo-every (* 3.5 (cost/look-s 1)))) "one that takes 3.5 looks' seconds waits 4 looks"))
 
-(deftest a-turn-saves-the-gap-to-the-runner-up-not-the-goal-s-worth
-  (is (= 3 (cost/turn-gap ##Inf 3)) "arrive: the gap between the plans, not ##Inf")
-  (is (= 2 (cost/turn-gap 2 3)) "a turn saves no more than the call is worth")
-  (is (= (value/retry-s :walk) (cost/turn-gap ##Inf nil)) "unpriced: the caller's other way, a try after a failed one"))
+(deftest a-turn-saves-what-a-bad-cell-passes-the-runner-up-by
+  (is (= 3 (cost/turn-saving {:gap 1 :delta 4})) "a bad cell 4 s dearer turns a plan 1 s ahead: the turn saves 3 s")
+  (is (> (cost/turn-saving {:gap 1 :delta 4}) (cost/turn-saving {:gap 3 :delta 4})) "far-apart plans gain less from a turn than close ones")
+  (is (= 0 (cost/turn-saving {:gap 5 :delta 4})) "a bad cell that leaves the plan ahead turns nothing")
+  (is (= 0 (cost/turn-saving nil)) "no priced runner-up: nothing to turn to"))
 
 (deftest a-swim-to-a-shore-whose-land-may-go-on-is-caught-at-the-chance-it-ends
   (let [m (mob "drowned" 3 35)

@@ -181,7 +181,7 @@
   ([c blocks]
    (let [p (:primitives c)
          feet (sh-sense/feet p)
-         _ (await (sense/decide! c ::roof-support #(dig-cells/dig-plan p feet)))
+         _ (await (sense/decide! c ::roof-support #(dig-cells/dig-plan p feet) {:price (sense/fails-to :walk)}))
          plan #(pit-plan c feet blocks)]
      (or (plan)
          (do (await (look/look-unknown! c (for [[dx dz] dig-cells/sides, dy [0 -1 1]]

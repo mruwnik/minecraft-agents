@@ -197,18 +197,26 @@
                   lib-look/look-shows? (constantly true)]
       (is (= [[3 64 0] [15 64 0]] (:look-at (nth (status) 2))) "the site's own look rides the walls' round"))))
 
-(deftest the-looks-at-a-rooms-unseen-walls-stop-where-the-call-is-not-worth-them
+(deftest the-looks-at-a-rooms-unseen-walls-stop-where-the-stay-they-could-spare-costs-nothing
   (let [seen-block u/seen-block
         hide (fn [pos] (fn [p cell] (when-not (= pos [(:x cell) (:y cell) (:z cell)]) (seen-block p cell))))
-        status #((ready/safe-at (constantly outside)) (-> night-hut ctx-of worthless))]
+        status #((ready/safe-at (constantly outside)) (ctx-of night-hut))]
     (with-redefs [u/seen-block (hide [3 64 0])]
-      (is (not= :look (first (status))) "a look costs seconds and the goal is worth none"))))
+      (is (= :look (first (status))) "a dark stay costs hp: the unseen wall is worth a look")
+      (with-redefs [ready/stay-look-price (constantly {:gap 0 :delta 0})]
+        (is (not= :look (first (status))) "a look costs seconds and a wall seen closed would spare none")))))
 
-(deftest a-round-of-looks-is-taken-whole-or-not-at-all-around-its-break-even-worth
+(defn room-look-at
+  "The :look-at of ready/room-look of night-hut's ctx over extra, its stay's exposure priced at saving seconds."
+  [extra saving]
+  (with-redefs [ready/stay-look-price (constantly {:gap 0 :delta saving})]
+    (some-> (ready/room-look (ctx-of night-hut) "dark" extra 0.5) (nth 2) :look-at)))
+
+(deftest a-round-of-looks-is-taken-whole-or-not-at-all-around-its-break-even-saving
   (doseq [n [4 24]]
     (let [walls (mapv #(vector % 64 0) (range 1 (inc n)))
           break-even (/ (cost/look-s n) (cost/closed-chance 0 n))
-          looks-at #(some-> (ready/room-look (assoc (ctx-of night-hut) :worth (constantly %)) "dark" nil) (nth 2) :look-at)]
+          looks-at #(room-look-at nil %)]
       (with-redefs [look-edge/pending (fn ([_] nil) ([_ _ _] walls))
                     reach-room/unseen-sides (constantly walls)
                     sense/unknown? (constantly true)]
@@ -219,14 +227,14 @@
   (let [walls [[1 64 0] [2 64 0]]
         extra (mapv #(vector % 64 5) (range 22))
         known (set (take 20 extra))
-        worth (* 1.01 (/ (cost/look-s 2) (cost/closed-chance 0 2)))
-        look-at #(some-> (ready/room-look (assoc (ctx-of night-hut) :worth (constantly %)) "dark" extra) (nth 2) :look-at)]
+        saving (* 1.01 (/ (cost/look-s 2) (cost/closed-chance 0 2)))
+        look-at #(room-look-at extra %)]
     (with-redefs [look-edge/pending (fn ([_] nil) ([_ _ _] walls))
                   reach-room/unseen-sides (constantly walls)
                   sense/unknown? (fn [_ cell] (not (known cell)))]
-      (is (= (into walls (take 20 extra)) (look-at worth))
+      (is (= (into walls (take 20 extra)) (look-at saving))
           "the walls' round pays; the 20 known extras need no look; the 2 unknown ones, each a 1-in-43 turn, do not pay at well under 3 s")
-      (is (= (into walls extra) (look-at ##Inf)) "arrive pays every one"))))
+      (is (= (into walls extra) (look-at ##Inf)) "a stay that could cost everything pays every one"))))
 
 (deftest a-wall-a-look-round-did-not-show-counts-as-open-not-looked-at-again
   (let [seen-block u/seen-block

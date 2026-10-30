@@ -344,7 +344,8 @@
         ;; a way out is looked for in the cells the decision read and the body never saw before the run gives up
         {:keys [shore land stepcell bankcell legs]} (await (sense/decide! c :breathe-land ways
                                                                  {:retry? (fn [w] (not (or (:shore w) (:land w)
-                                                                                           (and carried? (:stepcell w)) (:bankcell w))))}))]
+                                                                                           (and carried? (:stepcell w)) (:bankcell w))))
+                                                                  :price (sense/fails-to :walk)}))]
     (cond
       bankcell (await (bank/dig! c bankcell (air/cap-dig-share)))
 

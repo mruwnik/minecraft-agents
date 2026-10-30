@@ -2,9 +2,10 @@
   "Look before concluding. A job's sync decision reads cells and areas through the seen-* helpers (jobs.lib.util,
   jobs.lib.look); a cell the body never looked at reads as unknown, and a decision that ends the job (none, no support,
   not standable) must not rest on it. decide! records the unknown cells the decision read, looks at them (nearest to the
-  eye first, sight passes after each look) and decides again, bounded: as many looks a call as what a turn saves pays at
-  the chance a look turns the decision (cost/turn-gap, cost/cell-looks), each cell at most once per run and body cell,
-  and one look round per run and body cell for an area or entity query that found nothing, when its first look pays. Only looks: never moves, digs or places, and sees nothing a player could not."
+  eye first, sight passes after each look) and decides again, bounded: as many looks a call as what a turn saves, by the
+  caller's priced alternatives (:price), pays at the chance a look turns the decision (cost/turn-saving, cost/cell-looks),
+  each cell at most once per run and body cell, and one look round per run and body cell for an area or entity query
+  that found nothing, when its first look pays. A decision with no price takes no look. Only looks: never moves, digs or places, and sees nothing a player could not."
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.perception :as perception]
@@ -12,6 +13,7 @@
             [jobs.lib.memory-age :as memory-age]
             [engine.settings :as settings]
             [jobs.lib.cost.look :as cost]
+            [jobs.lib.cost.value :as value]
             [jobs.lib.look :as look]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -24,10 +26,37 @@
                  :doc "Most cells a job remembers looking at from one cell; past it decide! looks no more there."}})
 
 (defn cell-looks
-  "How many of n looks at unknown cells c's call pays for (cost/cell-looks over cost/turn-gap of its worth, the decision
-  unpriced), after looked fruitless ones each followed by redo-s of deciding again."
-  ([c n] (cell-looks c n 0 0))
-  ([c n looked redo-s] (cost/cell-looks (cost/turn-gap (ctx/worth c) nil) n looked redo-s)))
+  "How many of n looks at unknown cells a decision priced {:gap :delta} (cost/turn-saving) pays for, after looked
+  fruitless ones each followed by redo-s of deciding again."
+  ([price n] (cell-looks price n 0 0))
+  ([price n looked redo-s] (cost/cell-looks (cost/turn-saving price) n looked redo-s)))
+
+(defn read-walk-s
+  "Seconds of the walk (value/walk-cost) from here to the nearest cell a decision read unknown (reads' :cells), else across
+  its area and entity queries (their :radius); nil with nothing read."
+  [c {:keys [cells area entities]}]
+  (let [here (u/self-pos c)
+        d (if (seq cells)
+            (apply min (map #(u/eye-dist here %) cells))
+            (some->> (concat area entities) seq (map #(or (:radius %) 16)) (apply max)))]
+    (when d (:cost (value/walk-cost {:distance d})))))
+
+(defn fail-price
+  "The {:gap :delta} of a decision whose negative ends the job: its caller's next try of kind (value/retry-s, measured)
+  is what a turn spares; nothing else stands between the two (gap 0)."
+  [kind]
+  {:gap 0 :delta (value/retry-s kind)})
+
+(defn fails-to
+  "decide!'s :price for a decision whose negative ends the job (fail-price of kind)."
+  [kind]
+  (constantly (fail-price kind)))
+
+(defn find-price
+  "decide!'s :price for a find whose other way costs other-s seconds: a look that shows the find saves that, less the walk
+  to it (read-walk-s, its least price: the gap)."
+  [c other-s]
+  (fn [_ reads] (when-let [w (read-walk-s c reads)] {:gap w :delta other-s})))
 
 (defn max-looked [] (settings/get settings ::max-looked))
 (defn passes [] (settings/get settings ::passes))
@@ -117,24 +146,28 @@
 
 (defn round-plan
   "{:pay :unpaid :walls} for a look round at cells from here, of those in sight not round-looked, in the order of cells:
-  :pay the room walls among them (reach-room/unseen-sides, :walls) when their round pays the call's worth
-  (cost/round-looks), the other known ones (no look needed), and the nearest other unknown ones as many as cost/cell-looks pays after the looks
-  this spot's rounds took, both at cost/turn-gap of the call's worth; :unpaid the rest."
-  [c cells]
-  (let [p (:primitives c)
-        asked (targets p (u/self-pos c) cells (round-looked c))
-        walls (if (seq asked) (set (map vec (reach-room/unseen-sides p (sh-sense/feet p)))) #{})
-        {wall :wall other :other} (group-by #(cond (contains? walls %) :wall (unknown? p %) :other :else :known) asked)
-        gap (cost/turn-gap (ctx/worth c) nil)
-        unpaid (set (concat (when-not (= (count wall) (cost/round-looks gap (count wall))) wall)
-                            (drop (cost/cell-looks gap (count other) (:looks (round-mem c) 0) 0) other)))
-        in-sight (set asked)]
-    {:pay (filterv #(and (in-sight %) (not (unpaid %))) cells) :unpaid (filterv unpaid cells) :walls walls}))
+  :pay the room walls among them (reach-room/unseen-sides, :walls) when their round pays (cost/round-looks), the other
+  known ones (no look needed), and the nearest other unknown ones as many as cost/cell-looks pays after the looks this
+  spot's rounds took, both at cost/turn-saving of the check's price {:gap :delta}; :unpaid the rest. Without a price
+  (the hook: the check that named the cells priced them) it pays every one in sight."
+  ([c cells]
+   (let [asked (targets (:primitives c) (u/self-pos c) cells (round-looked c))
+         walls (if (seq asked) (set (map vec (reach-room/unseen-sides (:primitives c) (sh-sense/feet (:primitives c))))) #{})]
+     {:pay (filterv (set asked) cells) :unpaid [] :walls walls :asked asked}))
+  ([c cells price]
+   (let [p (:primitives c)
+         {:keys [asked walls]} (round-plan c cells)
+         {wall :wall other :other} (group-by #(cond (contains? walls %) :wall (unknown? p %) :other :else :known) asked)
+         saving (cost/turn-saving price)
+         unpaid (set (concat (when-not (= (count wall) (cost/round-looks saving (count wall))) wall)
+                             (drop (cost/cell-looks saving (count other) (:looks (round-mem c) 0) 0) other)))
+         in-sight (set asked)]
+     {:pay (filterv #(and (in-sight %) (not (unpaid %))) cells) :unpaid (filterv unpaid cells) :walls walls :asked asked})))
 
 (defn ^:async look-round!
-  "The :look/around hook: look at the cells of cells (a :look status's :look-at) round-plan pays for, then look-around! for
+  "The :look/around hook: look at the cells of cells (a :look status's :look-at) in sight (round-plan), then look-around! for
   those cells (a full pass when cells is empty: the check named none). Every one of cells counts as round-looked: the
-  engine gives a :look one round (a second counts as :later), so what it left unseen, unpaid ones too, counts as unseen
+  engine gives a :look one round (a second counts as :later), so what it left unseen counts as unseen
   (a wall open). Each unknown paid cell the batch reached counts as a fruitless look. A room wall seen open ends the
   batch and the round when the cells are walls only: the room is open whatever the other walls are."
   [c cells]
@@ -167,25 +200,24 @@
 
 (defn ^:async decide!
   "(decide-fn), a sync decision over what the body has seen, decided again after a look at each unknown cell it read,
-  until it is positive (not (retry? v)) or no look pays; the last value. A look pays while what a turn saves (cost/turn-gap
-  of the call's worth and (gap v)) x the chance it turns the decision (cost/cell-looks, falling with each fruitless look)
+  until it is positive (not (retry? v)) or no look pays; the last value. A look pays while what a turn saves
+  (cost/turn-saving of (price v reads)) x the chance it turns the decision (cost/cell-looks, falling with each fruitless look)
   is over its seconds and its share of deciding again: the looks between two decisions cost as much on the clock as one decision's CPU (cost/redo-every).
   The cells looked at before from this body cell count as fruitless looks; at most (max-looked) of them. A positive that read a guessed cell
   (u/block-name-or) is checked after a look at it too with :verify-guesses true. An area (look/seen-blocks) or entity
   (look/seen-entities) query with no cell left to look at gets one look round (look/survey-until!, per body cell) when
   its first look pays, stopping at the first look that makes the decision positive. Unloaded cells are never looked at. k names the
   decision in the :sense.looked debug event, emitted when the call looked. opts: :retry? (default negative?),
-  :verify-guesses, :batch (look at every unknown cell it read that pays, nearest first, before deciding again), :gap (a
-  fn of the value: the seconds a turn saves, its runner-up's price less the chosen plan's; nil unpriced). Call it
-  from a round only: it acts."
+  :verify-guesses, :batch (look at every unknown cell it read that pays, nearest first, before deciding again), :price (a
+  fn of the value and its reads to the decision's priced alternatives {:gap :delta}, cost/turn-saving; fails-to for one
+  whose negative ends the job, find-price for a find with another way; none: no look). Call it from a round only: it acts."
   ([c k decide-fn] (decide! c k decide-fn {}))
-  ([c k decide-fn {:keys [retry? verify-guesses batch gap] :or {retry? negative?}}]
+  ([c k decide-fn {:keys [retry? verify-guesses batch price] :or {retry? negative?}}]
    (let [p (:primitives c)
          here (u/self-pos c)
          cell (look/cell-of here)
          mem (::looked (ctx/mem c))
          looked0 (if (= cell (:at mem)) (:cells mem #{}) #{})
-         worth (ctx/worth c)
          t0 (step-ms p)
          start (clock/now)
          [v looked surveyed looks]
@@ -194,7 +226,7 @@
                  [v reads] (decide decide-fn)
                  redo-s (/ (- (clock/now) t) 1000)
                  guessed (when (and verify-guesses (not (retry? v))) (seq (remove looked (:guessed reads))))
-                 saves (cost/turn-gap worth (when gap (gap v)))
+                 saves (cost/turn-saving (when price (price v reads)))
                  fruitless (+ (count looked0) looks)]
              (if (or (>= (count looked) (max-looked)) (and (not (retry? v)) (not guessed)))
                [v looked surveyed looks]

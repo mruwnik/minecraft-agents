@@ -187,10 +187,10 @@
         landed (landed-boat c)]
     (if (and landed (not (vehicle/mounted? p)))
       (await (recover! c (:land landed) (:boat landed)))
-      (let [found (await (sense/decide! c :boat-land.shore #(candidates c) {:retry? empty?}))
+      (let [found (await (sense/decide! c :boat-land.shore #(candidates c) {:retry? empty? :price (sense/fails-to :walk)}))
             [_ reads] (sense/decide #(candidates c))
             approached (when (empty? found) (await (approach! c reads)))
-            found (if (= :approached approached) (await (sense/decide! c :boat-land.shore #(candidates c) {:retry? empty?})) found)
+            found (if (= :approached approached) (await (sense/decide! c :boat-land.shore #(candidates c) {:retry? empty? :price (sense/fails-to :walk)})) found)
             [_ reads] (if (= :approached approached) (sense/decide #(candidates c)) [nil reads])
             spots (take (max-spots) found)]
         (cond

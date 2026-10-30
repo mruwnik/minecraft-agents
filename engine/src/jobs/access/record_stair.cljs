@@ -121,7 +121,7 @@
             todo (vec (remove tried (filter #(dig-look/unknown? p %) (frontier lines))))
             redo-s (/ (- (clock/now) t) 1000)
             k (min (count todo) (cost/redo-every redo-s))
-            batch (take (min k (sense/cell-looks c (count todo) n (/ redo-s (max k 1)))) todo)]
+            batch (take (min k (sense/cell-looks (sense/fail-price :walk) (count todo) n (/ redo-s (max k 1)))) todo)]
         (when (seq batch)
           (loop [[cell & more] batch]
             (when cell

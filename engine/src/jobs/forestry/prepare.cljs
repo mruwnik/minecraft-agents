@@ -340,7 +340,7 @@
             (when-not (:begun (ctx/mem c))
               (ctx/update-mem! c assoc :begun true))
             (let [states (await (sense/decide! c ::states #(field/assessments c field)
-                                               {:retry? (fn [states] (some #(= :unloaded (:state %)) (vals states)))}))
+                                               {:retry? (fn [states] (some #(= :unloaded (:state %)) (vals states))) :price (sense/fails-to :walk)}))
                   work (field/todo c states)
                   target (first work)
                   owed (:collect (ctx/mem c))]
