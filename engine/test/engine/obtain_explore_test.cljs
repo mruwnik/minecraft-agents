@@ -276,7 +276,7 @@
       (fn ^:async t []
         (let [s (f/start (ore-world narrow-cave []) [f/own-zone])]
           (swap! (fake/state (:p s)) assoc :light (into {} (for [x (range -20 21) z (range -20 21) y (range 64 71)] [[x y z] [0 0]])))
-          (await (obtain! s {:worth (logs-worth 50) :item "oak_log" :count 1 :explore true} 900)) ; the failed legs and the dark walks are priced by their risk, not walk-cost: a 40-log bill refuses
+          (await (obtain! s {:worth (logs-worth 20) :item "oak_log" :count 1 :explore true} 900)) ; after the failed last leg, one more look sees the tree: a first retry wins at the measured mean (answer/retry-chance)
           (is (<= 1 (get (f/inv s) "oak_log" 0)) "the tree the search saw was felled, not named a stop"))))))
 
 (deftest a-tree-the-search-found-but-the-walk-cannot-reach-ends-the-gather-not-a-loop

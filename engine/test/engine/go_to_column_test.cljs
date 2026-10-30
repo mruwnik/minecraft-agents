@@ -454,7 +454,7 @@
                                         {:pos {:x 44 :z 0} :range 2 :worth 50 :settings {:jobs.movement.go-to.tuning/goal-danger :end}}))]
           (is (false? (:arrived @out)) (pr-str @out))
           (is (#{:explore-spent :unseen-floors} (:why @out)) (pr-str @out))
-          (is (< (:explored @out 0) 150) "not by the land's end (379)")
+          (is (< (:explored @out 0) 190) "not by the land's end (379)")
           (is (> (first (:at @out)) -30) "short of the land's far end"))))))
 
 ;; the ravine past the rim at x 40 is 24 deep, its floor out of sight; the body has seen the void round the land and the

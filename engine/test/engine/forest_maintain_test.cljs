@@ -497,8 +497,8 @@
               refused (atom 6)]
           (.override (.-world (:p s)) "place" (fn ^:async f [token a impl] (if (pos? (swap! refused dec)) #js {:status "occupied"} (await (impl token a)))))
           (core/submit! (:eng s) (list job {:plan "forest"}) {})
-          (await (settings/with-settings {:jobs.lib.trees/logs-per-tree 8.7} #(ticks (:eng s) 30)))
-          (is (= 1 (count (places (:p s)))) "a tree of 8.7 logs does not pay a second try")
+          (await (settings/with-settings {:jobs.lib.trees/logs-per-tree 2} #(ticks (:eng s) 30)))
+          (is (= 1 (count (places (:p s)))) "a tree of 2 logs does not pay a second try")
           (is (= [{:pos {:x 3 :y 64 :z 0} :reason :no-sapling}] (map #(select-keys % [:pos :reason]) (warns (:seen s) :forest.left)))))))))
 
 ;; ------------------------------------------------------------------ restart

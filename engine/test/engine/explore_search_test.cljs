@@ -1103,7 +1103,7 @@
                   (with-redefs [ctx/worth (constantly 700)] (await (search! {:target "diamond_block" :max-distance 23} {} 60 #(reset! prims (:p %))))))
               e (not-found-of s)]
           (is (= :stuck (:why e)))
-          (is (= 3 (get-in e [:coverage :scans])))
+          (is (= 4 (get-in e [:coverage :scans])) "the first walk and the three retries a 700 s goal pays for")
           (is (= 8 (looks s)) "one look round (four headings, level and down) at the first spot only"))))))
 
 (deftest done-carries-the-found-and-coverage-for-a-limit-ending

@@ -48,5 +48,10 @@
 (deftest a-caller-that-counts-its-own-tries-passes-them-as-opts
   (let [[rs] (with-mem (fn [c] (with-redefs [ctx/worth (constantly 300)]
                                  (mapv #(cost/try-again? c :respond %)
-                                       [{:fails 1 :try-s 5} {:fails 4 :try-s 5} {:fails 1 :try-s 500}]))))]
+                                       [{:fails 1 :try-s 5} {:fails 5 :try-s 5} {:fails 1 :try-s 500}]))))]
     (is (= [true false false] rs))))
+
+(deftest the-first-retry-wins-at-the-measured-mean
+  (let [{:keys [win fail]} (get-in (settings/get value/settings ::value/retry-counts) [:walk])]
+    (is (= (/ win (+ win fail)) (cost/retry-chance :walk 1)) "the failure a retry follows is the condition the prior was counted under, not a failed retry")
+    (is (= (/ win (+ win fail 1)) (cost/retry-chance :walk 2)))))

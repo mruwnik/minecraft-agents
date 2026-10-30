@@ -120,7 +120,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[low out-low] (await (pauses-for-a-comb-that-never-shows 30))
+        (let [[low out-low] (await (pauses-for-a-comb-that-never-shows 10))
               [high out-high] (await (pauses-for-a-comb-that-never-shows 1000))]
           (is (zero? low) "a goal worth little is not waited on at the pooled chance a comb shows")
           (is (< 1 high) "a goal worth much is, look after look")
