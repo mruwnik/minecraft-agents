@@ -27,7 +27,7 @@
    :after [[:body-near [4.5 0 16.5] 2]]}
   {:name "a-long-stay-where-the-body-stands-in-a-long-dark-tunnel-is-refused-after-the-walk-to-look"
    :blocks [[:fill [2 0 2] [60 6 30] "stone"] [:fill [4 0 16] [58 1 16] "air"]]
-   :act [[:job (jobs.debug.ready-probe {:stay-s 5000 :worth 341})]]
+   :act [[:job (jobs.debug.ready-probe {:stay-s 5000 :worth 208})]]
    :expect [{:event {:source :job :kind :stopped :message [:contains "farther than 24 blocks"]} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :job.ready-probe} :for-s 25 :of-job true}]
    :after [[:body-near [4.5 0 16.5] 2]]}
@@ -41,6 +41,6 @@
    :blocks [[:fill [2 0 2] [60 6 30] "stone"] [:fill [4 0 16] [58 1 16] "air"]]
    :act [[:job (jobs.movement.go-to {:pos #at [40 0 16]})]
          [:await {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} 60]
-         [:job (jobs.debug.ready-probe {:stay-s 5000 :worth 341})]]
+         [:job (jobs.debug.ready-probe {:stay-s 5000 :worth 208})]]
    :expect [{:no-event {:source :job :kind :job.ready-probe} :for-s 25 :of-job true}]
    :after [[:body-near [40.5 0 16.5] 3]]}]}
