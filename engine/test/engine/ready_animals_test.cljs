@@ -80,8 +80,8 @@
     guard/safe? {:box {:min hut-cell :max hut-cell}} :ok
     guard/safe? {:box {:min far-cell :max far-cell}} :later
     harvest/safe? {:center far-cell} :later
-    apiary-maintain/safe? {:center hut-cell} :ok
-    apiary-maintain/safe? {:center far-cell} :later
+    apiary-maintain/safe? {:box {:min hut-cell :max hut-cell}} :ok
+    apiary-maintain/safe? {:box {:min far-cell :max far-cell}} :later
     roll/safe? {:pos [5 64 0]} :ok
     roll/safe? {:pos [15 64 0]} :later))
 

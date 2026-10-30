@@ -16,7 +16,7 @@
   [{:keys [area]} {:keys [ripe]}]
   (if (zero? ripe)
     {:skip :no-ripe}
-    {:call {:slot :harvest :job (jobs :harvest)
+    {:call {:slot :harvest :job 'jobs.farm.harvest
             :args (if (:plan area)
                     {:area (select-keys area [:plan :part]) :replant true :replant-bare false}
                     {:area area :replant true})}}))
