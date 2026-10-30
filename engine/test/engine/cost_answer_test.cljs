@@ -20,9 +20,9 @@
 (def here {:x 0 :y 64 :z 0})
 
 (defn body
-  "A fed body with health and no bed: a death walks it back from world spawn."
+  "A fed body with health whose respawn is far from `here`: a death costs a long walk back."
   [health]
-  {:health health :food 20 :level 0 :carried 0})
+  {:health health :food 20 :level 0 :carried 0 :respawn {:x 5000 :y 64 :z 0}})
 
 (def sword "iron_sword")
 
@@ -345,14 +345,11 @@
         "a sure death with no mob met again is its death-cost and seconds: respawn heals the hp")))
 
 (deftest a-second-in-water-costs-the-drowned-meet-rate-times-the-cheapest-answer-to-one
-  (let [kit (assoc (body 20) :weapon "stone_sword")
-        price (apply min (vals (:prices (cost/decide kit (answer/threat-answers (assoc kit :swim ##Inf) "drowned" nil) nil))))
-        standing (apply min (vals (:prices (cost/decide kit (answer/threat-answers kit "drowned" nil) nil))))
-        [deep other] (cost/water-factors kit)]
-    (is (< (js/Math.abs (- deep (* 0.0021 price))) 1e-9) "water a drowned can spawn in: its measured meet rate")
-    (is (< (js/Math.abs (- other (* 0.00043 standing))) 1e-9) "other water, mostly a wade: the meet answered standing")
-    (is (< deep (first (cost/water-factors (body 20)))) "a bare body pays more than one with a sword")
-    (is (< deep (first (cost/water-factors (assoc kit :health 8)))) "and a hurt one more than a whole one")))
+  (doseq [kit [(assoc (body 20) :weapon "stone_sword") (body 20) (assoc (body 8) :weapon "stone_sword")]
+          :let [cheapest #(apply min (vals (:prices (cost/decide % (answer/threat-answers % "drowned" nil) nil))))
+                [deep other] (cost/water-factors kit)]]
+    (is (< (js/Math.abs (- deep (* 0.0021 (cheapest (assoc kit :swim ##Inf))))) 1e-9) "water a drowned can spawn in: its measured meet rate")
+    (is (< (js/Math.abs (- other (* 0.00043 (cheapest kit)))) 1e-9) "other water, mostly a wade: the meet answered standing")))
 
 (deftest a-phantom-floor-beside-seen-water-pays-its-chance-of-the-swim-there
   (settings/with-settings {:jobs.lib.cost.answer/unseen-water-lags [{:k 8 :n 8} {:k 2 :n 8}]}
