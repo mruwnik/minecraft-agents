@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import prismarineRegistry from 'prismarine-registry'
-import { botOptions, connectBot, DEFAULTS } from './connect.mjs'
+import { botOptions, connectBot, installTickEnd, DEFAULTS } from './connect.mjs'
 import { createSense } from './prim-sense.mjs'
 
 test('botOptions passes the default view distance to mineflayer', () => {
@@ -63,4 +63,19 @@ test('the difficulty packet sets the difficulty name, given as 26.1 names it or 
   assert.equal(createSense({ bot: named, isOffline: () => false }).serverRules().difficulty, 'easy')
   const indexed = await dropAfter([['difficulty', { difficulty: 3, difficultyLocked: false }]])
   assert.equal(indexed.difficulty, 'hard')
+})
+
+test('installTickEnd writes one tick_end per physics tick when the protocol has the packet, none otherwise', () => {
+  const make = registry => {
+    const writes = []
+    return { bot: Object.assign(new EventEmitter(), { registry, _client: { write: (name, body) => writes.push([name, body]) } }), writes }
+  }
+  const withPacket = make(prismarineRegistry(DEFAULTS.version))
+  installTickEnd(withPacket.bot)
+  withPacket.bot.emit('physicsTick'); withPacket.bot.emit('physicsTick')
+  assert.deepEqual(withPacket.writes, [['tick_end', {}], ['tick_end', {}]])
+  const without = make({ protocol: { play: { toServer: { types: {} } } } })
+  installTickEnd(without.bot)
+  without.bot.emit('physicsTick')
+  assert.deepEqual(without.writes, [])
 })

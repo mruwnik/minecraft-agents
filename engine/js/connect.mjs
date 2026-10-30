@@ -27,6 +27,13 @@ export function botOptions ({ host, port, username, auth = DEFAULTS.auth, versio
   return followTickRate ? { ...options, plugins: { physics: tickRatePhysics() } } : options
 }
 
+// Since 1.21.3 the server clears its "had a position this tick" flag only on a serverbound tick_end, and a 26.3 server
+// kicks the second position packet without one (invalid_player_movement, ~1 s after spawn). Mineflayer never sends it.
+export function installTickEnd (bot) {
+  if (!bot.registry?.protocol?.play?.toServer?.types?.packet_tick_end) return
+  bot.on('physicsTick', () => bot._client.write('tick_end', {}))
+}
+
 // Resolves with the bot once it has spawned and the pathfinder has movements that never dig or build and
 // steer clear of hazards (see movements.mjs): a primitive that walks must not quietly break blocks or wade into
 // lava. Rejects when the server refuses, drops the connection or stays silent.
@@ -39,6 +46,7 @@ export function connectBot (params, { timeoutMs = SPAWN_TIMEOUT_MS, create = min
     const bot = create(botOptions(params))
     if (bot._client?.removeAllListeners) installFastBlockUpdatesOnInject(bot)
     params.gameClock?.attach(bot._client)
+    installTickEnd(bot)
     bot.loadPlugin(pathfinder)
     // Mineflayer does not keep the damage_type registry; primitives names a damage packet's type from it.
     bot._client.on('registry_data', packet => {
