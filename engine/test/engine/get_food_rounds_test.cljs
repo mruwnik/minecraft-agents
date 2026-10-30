@@ -570,6 +570,16 @@
           (is (= 1 (count (searches seen))) "one search for animals and crops")
           (is (re-find #"explored" (str (:text (first (none-endings seen)))))))))))
 
+(deftest a-hurt-body-the-bar-has-not-made-hungry-searches-for-the-food-that-lets-it-heal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; KitOak05: the hungry reflex's call at food 14, health 2.4, nothing carried
+        (let [{:keys [eng seen]} (setup {:self {:food 14 :health 2.4}} :step-ms 5)]
+          (await (one-round! eng {:food 6 :carry 0}))
+          (is (= 1 (count (searches seen))) "searched: under 18 food only food heals it")
+          (is (not (re-find #"worth no walk" (str (:text (first (none-endings seen))))))))))))
+
 (deftest an-animal-only-another-body-noted-is-walked-toward-not-given-up-on
   (async done
     (tu/run-async done

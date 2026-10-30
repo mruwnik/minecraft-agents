@@ -11,6 +11,7 @@
             [jobs.lib.cost.death :as death]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.cost.ways :as ways]
+            [jobs.lib.foods :as foods]
             [jobs.lib.game-facts :as facts]
             [jobs.lib.walk.world :as wworld]))
 
@@ -309,8 +310,15 @@
   (is (zero? (:cost (cost/turn-back-cost [{:look 0 :back 0 :p 0 :extra-s ##Inf}]))) "a floor surely there costs no next way"))
 
 (deftest food-is-worth-more-reaching-the-lower-the-bar
-  (is (zero? (cost/food-worth 10)))
-  (is (< 0 (cost/food-worth 8) (cost/food-worth 2) (cost/food-worth 0))))
+  (is (zero? (cost/food-worth 10 20)))
+  (is (< 0 (cost/food-worth 8 20) (cost/food-worth 2 20) (cost/food-worth 0 20))))
+
+(deftest food-is-worth-the-hp-it-lets-a-hurt-body-heal
+  (let [top-up foods/top-up-food]
+    (is (< 0 (cost/food-worth (dec top-up) 2.4)) "hurt at food 17 (KitOak05): only food lets it heal, so reaching food is worth a walk")
+    (is (< (cost/food-worth (dec top-up) 10) (cost/food-worth (dec top-up) 2.4)) "the more hurt, the more")
+    (is (zero? (cost/food-worth top-up 2.4)) "at the top-up line it heals by waiting: food adds nothing")
+    (is (zero? (cost/food-worth (dec top-up) 20)) "unhurt: nothing to heal")))
 
 (deftest dig-cost-is-the-item-base-s-dig-term
   (is (< (cost/dig-cost "dirt") (cost/dig-cost "stone") (cost/dig-cost "obsidian")))

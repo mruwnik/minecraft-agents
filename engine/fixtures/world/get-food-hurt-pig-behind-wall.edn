@@ -4,7 +4,8 @@
 ;; A stone wall x 10, z 10..22, y 0..2 stands between the body (x 4) and the pig (x 14); the body walks round its end.
 ;; Should-succeed: the pig is hunted and eaten; a fragile body walks out only past the dawn grace, so the call starts at noon, with no :low-health wait.
 ;; Dark case (Q334: darkness is no refusal of its own): a dark cell, a pig 10 blocks off, no hostile: a hurt body that cannot heal walks to it and eats.
-;; Should-fail: none (a negative needs a world with no animals; the search walks off the plot).
+;; Heal worth (card 28a867fe): the hungry reflex's call (:carry 0) at food 10-17 searches for the pig only because the body is
+;; hurt (only food lets it heal); unhurt at the same food it is not hungry and walks nowhere (should-fail).
 {:defaults
  {:tags [:survival :get-food :hurt]
   :time :day :time-why :dawn-decision
@@ -27,4 +28,18 @@
          [:rcon "damage $BODY 18 minecraft:generic"]
          [:job (jobs.survival.get-food {})]]
    :expect [{:event {:source :job :kind :food.killed} :within-s 100}
-            {:no-event {:source :job :kind :waiting :data {:reason #{:low-health :exposed :dark}}} :for-s 20 :until {:source :job :kind :food.killed}}]}]}
+            {:no-event {:source :job :kind :waiting :data {:reason #{:low-health :exposed :dark}}} :for-s 20 :until {:source :job :kind :food.killed}}]}
+  {:name "hurt-body-the-reflex-calls-without-a-reserve-hunts-the-pig-behind-a-wall"
+   :blocks [[:fill [10 0 10] [10 2 22] "stone"]]
+   :act [[:time-set 6000] [:summon "pig" [14.5 0 16.5] "{NoAI:1b}"]
+         [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 18 minecraft:generic"]
+         [:job (jobs.survival.get-food {:food 6 :carry 0})]]
+   :expect [{:event {:source :job :kind :food.killed} :within-s 100}]}
+  {:name "unhurt-body-the-reflex-calls-without-a-reserve-leaves-the-pig"
+   :blocks [[:fill [10 0 10] [10 2 22] "stone"]]
+   :act [[:time-set 6000] [:summon "pig" [14.5 0 16.5] "{NoAI:1b}"]
+         [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
+         [:job (jobs.survival.get-food {:food 6 :carry 0})]]
+   :expect [{:no-event {:source :job :kind :food.killed} :for-s 30 :until {:source :job :kind :done}}]
+   :after [[:entities "type=pig,tag=wt" [[0 0 0] [39 5 31]] 1]]}]}

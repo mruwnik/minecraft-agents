@@ -452,9 +452,13 @@
   (max 0 (- (* (food-point-worth) short) (trip))))
 
 (defn food-worth
-  "Seconds reaching food is worth to a body with `food` points: rising as the bar falls, 0 from ::food-worth-from up."
-  [food]
-  (* (settings/get settings ::food-worth-per-point) (max 0 (- (settings/get settings ::food-worth-from) food))))
+  "Seconds reaching food is worth to a body with `food` points and `health`: rising as the bar falls, 0 from
+  ::food-worth-from up; under foods/top-up-food, where only food lets it heal, also the hp it lacks, each at what it is
+  worth over healing it by waiting (cost.health/gain-worth without and with waiting)."
+  [food health]
+  (let [missing (if (< food foods/top-up-food) (js/Math.floor (- 20 health)) 0)]
+    (+ (* (settings/get settings ::food-worth-per-point) (max 0 (- (settings/get settings ::food-worth-from) food)))
+       (- (health/gain-worth health missing false) (health/gain-worth health missing true)))))
 
 (def meal-points
   "{item hunger points} per item of the items a crafting recipe of that item alone makes a food of (3 wheat a bread: 5/3 a wheat), memoised per version."

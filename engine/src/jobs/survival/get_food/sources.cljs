@@ -127,9 +127,10 @@
   :again)
 
 (defn food-worth
-  "The :worth of a walk to food: what the body's hunger makes reaching it worth (0 for a fed body)."
+  "The :worth of a walk to food: what the body's hunger and the hp only food lets it heal make reaching it worth (0 for a fed body)."
   [c]
-  (cost/food-worth (.-food (.self (:primitives c)))))
+  (let [self (.self (:primitives c))]
+    (cost/food-worth (.-food self) (.-health self))))
 
 (defn ^:async go-near!
   "Walk within reach of pos by one go-to call: :there, :far (it gave up) or :continue (go-to waits on the world)."

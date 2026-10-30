@@ -538,8 +538,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        ;; the agent passes the hunt what food is worth to a hungry body (cost/food-worth at food 6, as get-food prices it)
-        (let [s (await (tu/with-looks-showing #(scenario {:item "beef" :count 1 :keep 0 :worth (cost/food-worth 6)} {:inventory h/sword :self {:food 6} :time st/night :entities [(cow 1 3)]} 10)))]
+        ;; the agent passes the hunt what food is worth to a hungry body (cost/food-worth at food 6 and full health, as get-food prices it)
+        (let [s (await (tu/with-looks-showing #(scenario {:item "beef" :count 1 :keep 0 :worth (cost/food-worth 6 20)} {:inventory h/sword :self {:food 6} :time st/night :entities [(cow 1 3)]} 10)))]
           (is (seq (attacked s)) "one dark cell at 0.005 spawns/s over the 120 s work stay costs less than food is worth to a hungry body"))))))
 
 (deftest the-calls-checks-reach-the-attack-child
