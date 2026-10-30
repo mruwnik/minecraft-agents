@@ -222,7 +222,7 @@
 (defn ^:async hole-problem!
   "hole-problem of item, decided again after a look at each cell it found unseen (jobs.lib.sense/decide!)."
   [c item]
-  (await (sense/decide! c :collect-drops.hole #(hole-problem c item) {:retry? some? :price (sense/fails-to c)})))
+  (await (sense/decide! c :collect-drops.hole #(hole-problem c item) {:retry? some? :price (sense/fails-to c #(sense/walk-between-s % (item-cell item)))})))
 
 (defn high? [c item] (boolean (and (.-pos item) (> (- (second (item-cell item)) (feet-y c)) 1))))
 
