@@ -121,13 +121,16 @@
           (is (seq (f/events-of s :obtain.exploring)) "walks to look for other logs")
           (is (empty? (filter #(= :no-tree (:reason %)) (f/events-of s :stopped))) "not stopped no-tree before that"))))))
 
-(def sealed-cave
-  "Stone to y 70 over x -32..48, z -32..32 (the search's legs lie 24 blocks out on every side and must stand on stone, else they fail and end it :stuck), with a hollow 5x2x5 inside it where the body stands: no way out but through rock. A tree stands on the stone 24 blocks east."
-  (merge (into {} (for [x (range -32 49) z (range -32 33) y (range 63 71)
+(defn cave
+  "Stone to y 70 from x -w..48 and z -w..w (the search's legs lie 24 blocks out on every side and must stand on stone, else they fail and end it :stuck), with a hollow 5x2x5 inside it where the body stands: no way out but through rock. A tree stands on the stone 24 blocks east."
+  [w]
+  (merge (into {} (for [x (range (- w) 49) z (range (- w) (inc w)) y (range 63 71)
                          :when (not (and (<= -2 x 2) (<= -2 z 2) (<= 64 y 65)))]
                     [(str x "," y "," z) (if (= y 63) "andesite" "stone")]))
          (into {} (for [y [71 72 73 74]] [(str "24," y ",0") "oak_log"]))
          {"24,75,0" "oak_leaves"}))
+
+(def sealed-cave (cave 32))
 
 (deftest a-body-sealed-in-a-cave-stairs-up-to-the-sky-before-it-looks-for-trees
   (async done
@@ -265,12 +268,8 @@
           (is (= "coal" (get-in @m [:tried :gather :searched])) "the coal search's verdict is kept, not lost to a walk back to the log search's start"))))))
 
 (def narrow-cave
-  "sealed-cave with the stone ending 22 blocks out west, north and south: the legs there lie off it."
-  (merge (into {} (for [x (range -22 49) z (range -22 23) y (range 63 71)
-                         :when (not (and (<= -2 x 2) (<= -2 z 2) (<= 64 y 65)))]
-                    [(str x "," y "," z) (if (= y 63) "andesite" "stone")]))
-         (into {} (for [y [71 72 73 74]] [(str "24," y ",0") "oak_log"]))
-         {"24,75,0" "oak_leaves"}))
+  "The cave with the stone ending 22 blocks out west, north and south: the legs there lie off it."
+  (cave 22))
 
 (deftest a-tree-the-search-found-before-its-last-leg-failed-is-walked-to
   (async done
@@ -278,5 +277,16 @@
       (fn ^:async t []
         (let [s (f/start (ore-world narrow-cave []) [f/own-zone])]
           (swap! (fake/state (:p s)) assoc :light (into {} (for [x (range -20 21) z (range -20 21) y (range 64 71)] [[x y z] [0 0]])))
-          (await (obtain! s {:worth 500 :item "oak_log" :count 1 :explore true} 900)) ; a worth the walks do not bind: the search ends on its found tree, not on price
+          (await (obtain! s {:worth (logs-worth 60) :item "oak_log" :count 1 :explore true} 900)) ; the failed legs add walking a 20-log bill does not pay
           (is (<= 1 (get (f/inv s) "oak_log" 0)) "the tree the search saw was felled, not named a stop"))))))
+
+(deftest a-tree-the-search-found-but-the-walk-cannot-reach-ends-the-gather-not-a-loop
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [trunk (for [y [64 65 66 67]] (str "30," y ",4"))
+              s (f/start (assoc (ore-world (into {"30,68,4" "oak_leaves" "31,67,4" "oak_leaves"} (map #(vector % "oak_log") trunk)) []) :unreachable (vec trunk)) [f/own-zone])]
+          (await (obtain! s {:worth (logs-worth 20) :item "oak_log" :count 1 :ways #{:gather} :explore true} 900))
+          (is (seq (f/events-of s :stopped)) "the gather ended instead of searching and walking on")
+          (is (>= 6 (count (f/events-of s :obtain.exploring))) "a bounded number of searches")
+          (is (zero? (get (f/inv s) "oak_log" 0))))))))
