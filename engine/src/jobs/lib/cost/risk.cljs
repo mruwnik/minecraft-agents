@@ -51,9 +51,10 @@
 
 (defn work-death-chance
   "The chance a job's work of category kills a body at health: a hit of at least health (exp(-health / hit-mean)) among
-  its hits (hit-rate) over work-s."
-  [category health]
-  (- 1 (js/Math.exp (- (* (work-s category) (hit-rate category) (js/Math.exp (- (/ health (hit-mean)))))))))
+  its hits (hit-rate) over s seconds (default work-s)."
+  ([category health] (work-death-chance category health (work-s category)))
+  ([category health s]
+   (- 1 (js/Math.exp (- (* s (hit-rate category) (js/Math.exp (- (/ health (hit-mean))))))))))
 
 (defn work-hurt
   "hp a job's work of category hurts a body on average: hit-rate x hit-mean over work-s."

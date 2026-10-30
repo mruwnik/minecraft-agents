@@ -20,28 +20,74 @@
 
 (def points-per-s "Hunger points a second: points-per-day over day-s." (/ points-per-day day-s))
 
-(defn trip-s
-  "Seconds a trip whose time is the figure [least mean most] keeps food for: its mean plus one standard deviation of a
-  triangular spread over [least most] peaking at the mean, never past most; ##Inf when most is."
+(defn outlasting
+  "(fn [t]) the chance a trip whose time is the figure [least mean most] lasts more than t seconds, under the spread of
+  most entropy over [least most] with that mean (a truncated exponential; past least a plain one when most is ##Inf), so
+  the spread's mean is the figure's."
   [[least mean most]]
-  (if (js/isFinite most)
-    (min most (+ mean (js/Math.sqrt (/ (- (+ (* least least) (* mean mean) (* most most)) (* least mean) (* least most) (* mean most))
-                                       18))))
-    ##Inf))
+  (let [span (- most least)
+        m (- mean least)
+        tail (cond
+               (<= m 0) (constantly 0)
+               (>= m span) (constantly 1)
+               (not (js/isFinite span)) #(js/Math.exp (- (/ % m)))
+               :else
+               (let [r (/ m span)
+                     share #(if (< (abs %) 1e-6) (- 0.5 (/ % 12)) (- (/ 1 %) (/ 1 (js/Math.expm1 %))))
+                     x (loop [lo -700 hi 700 i 0]
+                         (let [mid (/ (+ lo hi) 2)]
+                           (cond (= i 60) mid
+                                 (> (share mid) r) (recur mid hi (inc i))
+                                 :else (recur lo mid (inc i)))))]
+                 (if (< (abs x) 1e-6)
+                   #(- 1 (/ % span))
+                   #(/ (js/Math.expm1 (* x (- 1 (/ % span)))) (js/Math.expm1 x)))))]
+    (fn [t]
+      (cond (< t least) 1
+            (>= t most) 0
+            :else (tail (- t least))))))
+
+(defn outlasts "outlasting's chance for figure at t." [figure t] ((outlasting figure) t))
+
+(defn trip-cost
+  "Expected seconds k food points carried on trip cost: point-cost each (the carried food a death on the trip loses),
+  plus run-out seconds times the chance the trip's time (figure, outlasts) and back-s seconds of walk back outlast them."
+  ([trip k] (trip-cost trip (outlasting (:figure trip)) k))
+  ([{:keys [back-s point-cost run-out]} outlast k]
+   (+ (* point-cost k) (value/chance-times (outlast (- (/ k points-per-s) back-s)) run-out))))
+
+(defn trip-points
+  "The food points whose trip-cost is least on trip; 0 without a trip (nil figure) or a price of running out."
+  [{:keys [figure point-cost run-out] :as trip}]
+  (if-not (and figure (js/isFinite run-out))
+    0
+    (let [outlast (outlasting figure)]
+      (loop [k 0 best 0 best-cost (trip-cost trip outlast 0)]
+        (let [tail (value/chance-times (outlast (- (/ k points-per-s) (:back-s trip))) run-out)]
+          (if (or (zero? tail) (< tail point-cost))
+            best
+            (let [k (inc k) ck (trip-cost trip outlast k)]
+              (if (< ck best-cost) (recur k k ck) (recur k best best-cost)))))))))
+
+(defn priced-trip
+  "Trip {:figure :point-cost :death-s :far?} over home food [{:points :walk-s :blocks}] (seen stocked chests, ripe
+  crops, pen surplus; walk-s and blocks the walk to it from the trip's far end), with :back-s, the walk to the nearest,
+  and :run-out, the price of running out: the cheaper of the death (death-s) and, with home food and a known far end
+  (far?), the walk to the nearest and back (cost.value/trip and walk-cost)."
+  [home {:keys [death-s far? point-cost] :as trip}]
+  (let [near (first (sort-by :walk-s (filter (comp pos? :points) home)))]
+    (assoc trip
+           :point-cost (or point-cost 0)
+           :back-s (or (:walk-s near) 0)
+           :run-out (min (or death-s ##Inf)
+                         (if (and near far?) (+ (value/trip) (:cost (value/walk-cost {:distance (:blocks near)}))) ##Inf)))))
 
 (defn carry-points
-  "Food points the body must carry, given its home food [{:points :walk-s}] (seen stocked chests, ripe crops, pen
-  surplus; walk-s the walk to it from the trip's far end) and the trip's seconds (trip-s; nil: no trip): the hunger of
-  the trip and the walk back to the nearest home food, and at least the 3-day reserve less that food (each source less
-  the hunger of its walk). No home food, or a trip with no bound (##Inf): the trip's hunger, never under the reserve."
+  "Food points the body must carry on trip (priced-trip's args; nil: no trip) with home food: trip-points, and at least
+  the 3-day reserve less the home food (each source less the hunger of its walk)."
   [home trip]
-  (let [home (filter (comp pos? :points) home)
-        trip (or trip 0)]
-    (if (or (empty? home) (not (js/isFinite trip)))
-      (max reserve-points (if (js/isFinite trip) (* trip points-per-s) 0))
-      (let [back (apply min (map :walk-s home))
-            stored (reduce + (map #(max 0 (- (:points %) (* (:walk-s %) points-per-s))) home))]
-        (max (* (+ trip back) points-per-s) (- reserve-points stored))))))
+  (let [stored (reduce + (map #(max 0 (- (:points %) (* (:walk-s %) points-per-s))) (filter (comp pos? :points) home)))]
+    (max (trip-points (priced-trip home trip)) (- reserve-points stored))))
 
 (defn reserve-food?
   "Food that counts toward the reserve: edible and not precious."

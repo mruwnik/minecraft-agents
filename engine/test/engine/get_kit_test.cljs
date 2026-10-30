@@ -424,8 +424,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= {:no-food [] :out {:status :stopped :item "iron_ingot" :reason :no-source} :held {"bread" 9}} (await (stocked-home-kit 10)))
-            "no get-food child: 50 points cover the kit's 120 s quote and its spread up to the 10800 s spend (44 points), and the register holds those 9 loaves for the kit")
+        (is (= {:no-food [] :out {:status :stopped :item "iron_ingot" :reason :no-source} :held {"bread" 7}} (await (stocked-home-kit 10)))
+            "no get-food child: 50 points cover the kit's 120 s quote priced (the chance it outlasts them against a death, the far end unknown; about 35 points), and the register holds those 7 loaves for the kit")
         (is (= [:no-carry] (:no-food (await (stocked-home-kit 5))))
             "25 points cover the walk back to the chest but not the kit's own time")))))
 

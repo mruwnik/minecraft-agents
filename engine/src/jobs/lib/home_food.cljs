@@ -2,15 +2,17 @@
   "The food a body has at home, from what it sensed: chests it booked food in (memory :fetch/stock) that zones and
   claims let it take from, ripe crops it saw in its own zones (within the seen-block memory's 64-block reach) and on
   the crop cells of its own plans (anywhere), and the surplus of the food animals it saw or
-  noted there (animal-spare's keep rule: the breeders stay). (sources c far) [{:kind :pos :points :walk-s}], walk-s
-  from far; (carry-points c trip) what the body must carry on trip (jobs.lib.cost.food/carry-points over them)."
+  noted there (animal-spare's keep rule: the breeders stay). (sources c far) [{:kind :pos :points :blocks :walk-s}], the
+  walk from far; (carry-points c trip) what the body must carry on trip (jobs.lib.cost.food/carry-points over them)."
   (:require [engine.ctx :as ctx]
             [engine.game :as game]
             [engine.notes :as notes]
+            [engine.args :as a]
             [jobs.lib.access :as access]
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.food :as food]
+            [jobs.lib.cost.risk :as risk]
             [jobs.lib.crops :as crops]
             [jobs.lib.foods :as foods]
             [jobs.lib.look :as look]
@@ -85,30 +87,45 @@
         found))))
 
 (defn sources
-  "See the ns doc: each with the seconds of the walk to it from far."
+  "See the ns doc: each with :blocks and the seconds (:walk-s) of the walk to it from far."
   [c far]
   (let [per-s (cost/walk-blocks-per-s)]
-    (for [s (concat (chest-sources c) (field-sources c))]
-      (assoc s :walk-s (/ (u/dist far (:pos s)) per-s)))))
+    (for [s (concat (chest-sources c) (field-sources c))
+          :let [blocks (u/dist far (:pos s))]]
+      (assoc s :blocks blocks :walk-s (/ blocks per-s)))))
 
 (defn chain-trip
-  "The trip c's call chain is on when the caller names none: as long as its job-time spend left (ctx/left), ending
-  where the body stands; nil (no trip ahead known: the walk back alone) when no line bounds it yet, as in a check
-  before the job's first round, or with no engine behind c."
+  "The trip c's call chain is on when the caller names none: its job-time spend left (ctx/left), taken whole, ending
+  where the body stands; no trip (the walk back alone) when no line bounds it yet, as in a check before the job's first
+  round, or with no engine behind c."
   [c]
-  {:s (when (:left c) (get-in (ctx/left c) [:spend :job-time])) :far (u/self-pos c)})
+  (let [s (when (:left c) (get-in (ctx/left c) [:spend :job-time]))]
+    {:figure (when s [s s s]) :far (u/self-pos c) :far? true}))
 
 (defn quote-trip
-  "The trip of c's own job, by its quote q: food/trip-s of q's job-time, its most held to the spend left, ending at q's
-  :moves-to, else where the body stands."
-  [c q]
-  (let [[least mean most] (get-in q [:uses :job-time] [0 0 ##Inf])
-        most (min most (or (:s (chain-trip c)) ##Inf))]
-    {:s (food/trip-s [(min least most) (min mean most) most])
-     :far (if-let [[x y z] (:moves-to q)] {:x x :y y :z z} (u/self-pos c))}))
+  "The trip of c's own job, by its quote q: q's job-time figure, its most held to the spend left, ending at q's
+  :moves-to, else at place (a fn of c, the job's work place) when given, else unknown (far? false: the walk is
+  from where the body stands)."
+  ([c q] (quote-trip c q nil))
+  ([c q place]
+   (let [[least mean most] (get-in q [:uses :job-time] [0 0 ##Inf])
+         most (min most (or (get-in (chain-trip c) [:figure 2]) ##Inf))
+         to (or (when-let [[x y z] (:moves-to q)] {:x x :y y :z z}) (when place (some-> (place c) a/cell)))]
+     {:figure [(min least most) (min mean most) most] :far (or to (u/self-pos c)) :far? (some? to)})))
+
+(defn with-prices
+  "trip {:figure :far :far?} with the prices food/priced-trip reads: a death at far (cost/death-s), and each carried point
+  lost by it at food-point-worth with the chance a :long work of the trip's mean seconds kills the body
+  (cost.risk/work-death-chance)."
+  [c {:keys [figure far] :as trip}]
+  (let [p (:primitives c)
+        health (or (some-> (.self p) .-health) 20)]
+    (assoc trip
+           :death-s (cost/death-s p (ctx/view c) far)
+           :point-cost (* (cost/food-point-worth) (risk/work-death-chance :long health (or (second figure) 0))))))
 
 (defn carry-points
-  "Food points the body must carry on trip {:s :far} (default chain-trip): jobs.lib.cost.food/carry-points of its home
-  food (sources from far) and the trip's seconds."
+  "Food points the body must carry on trip {:figure :far :far?} (default chain-trip): jobs.lib.cost.food/carry-points of
+  its home food (sources from far) and the trip with-prices."
   ([c] (carry-points c (chain-trip c)))
-  ([c {:keys [s far]}] (food/carry-points (sources c far) s)))
+  ([c trip] (food/carry-points (sources c (:far trip)) (with-prices c trip))))

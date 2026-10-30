@@ -116,24 +116,53 @@
   (is (= {} (cost/food-reserve (stack "golden_apple" 3 "enchanted_golden_apple" 1))))
   (is (= {} (cost/food-reserve []))))
 
-(deftest carry-points-carries-the-trip-and-takes-home-food-off-the-reserve
-  (are [home trip points] (= points (food-cost/carry-points home trip))
-    [] nil 60
-    [] 7200 120
-    [{:points 0 :walk-s 10}] 600 60
-    [{:points 320 :walk-s 0}] nil 0
-    [{:points 320 :walk-s 0}] 3600 60
-    [{:points 320 :walk-s 600}] 0 10
-    [{:points 25 :walk-s 0}] 0 35
-    [{:points 25 :walk-s 0} {:points 25 :walk-s 0}] 600 10
-    [{:points 320 :walk-s 0}] ##Inf 60))
+(defn spread-mean
+  "least plus the integral of food-cost/outlasts over [least most] (most ##Inf: to least + 40 x the mean's excess)."
+  [[least mean most :as fig]]
+  (let [top (if (js/isFinite most) most (+ least (* 40 (- mean least))))
+        n 20000
+        dt (/ (- top least) n)]
+    (+ least (* dt (reduce + (map #(food-cost/outlasts fig (+ least (* dt (+ % 0.5)))) (range n)))))))
 
-(deftest a-trip-keeps-food-for-its-mean-time-and-a-deviation-within-its-most
-  (are [fig s] (= s (Math/round (food-cost/trip-s fig)))
-    [0 960 10800] 3400
-    [10 10 10] 10
-    [0 600 700] 700
-    [0 30 ##Inf] ##Inf))
+(deftest a-trips-spread-has-the-quotes-mean
+  (are [fig] (< (abs (- (second fig) (spread-mean fig))) (* 0.002 (second fig)))
+    [0 960 10800]
+    [0 120 10800]
+    [0 600 700]
+    [100 400 1000]
+    [10 30 ##Inf])
+  (are [fig t p] (= p (food-cost/outlasts fig t))
+    [10 10 10] 9 1
+    [10 10 10] 10 0
+    [0 600 700] 700 0))
+
+(def trip {:point-cost 0.01 :death-s 600 :far? true})
+
+(defn carry [home fig & {:as more}] (food-cost/carry-points home (merge trip {:figure fig} more)))
+
+(deftest carry-points-prices-the-trip-and-takes-home-food-off-the-reserve
+  (are [home fig points] (= points (carry home fig))
+    [] nil 60
+    [{:points 320 :walk-s 0 :blocks 0}] nil 0
+    [{:points 0 :walk-s 10 :blocks 40}] nil 60
+    [{:points 25 :walk-s 0 :blocks 0}] nil 35
+    [] [7200 7200 7200] 120
+    [{:points 320 :walk-s 600 :blocks 2400}] [0 0 0] 10)
+  (let [home [{:points 320 :walk-s 60 :blocks 240}]]
+    (is (< 60 (carry home [0 960 ##Inf]) (carry [] [0 960 ##Inf])) "an unbounded trip counts home food: the walk back is cheaper than the death")
+    (is (< (carry home [0 960 ##Inf]) (carry home [0 960 ##Inf] :far? false)) "with no known far end only the death prices running out")
+    (is (< (carry [] [0 960 ##Inf]) (carry [] [0 960 ##Inf] :death-s 6000)))
+    (is (= (carry home [0 960 ##Inf]) (carry home [0 960 ##Inf] :death-s 6000)) "the walk back is the cheaper way out")
+    (is (< (carry home [0 960 ##Inf] :point-cost 1) (carry home [0 960 ##Inf])))
+    (is (<= (carry home [0 960 10800]) (carry home [0 960 ##Inf])) "a most only cuts the tail")
+    (is (> (carry home [0 960 10800]) (* 960 food-cost/points-per-s)) "more than the mean's hunger")))
+
+(deftest the-trip-carry-is-where-a-point-more-stops-paying
+  (let [t (food-cost/priced-trip [{:points 320 :walk-s 60 :blocks 240}] (assoc trip :figure [0 960 ##Inf]))
+        k (food-cost/trip-points t)]
+    (is (< (food-cost/trip-cost t k) (food-cost/trip-cost t (dec k))))
+    (is (<= (food-cost/trip-cost t k) (food-cost/trip-cost t (inc k))))
+    (is (= 82 (:run-out t)) "the walk home and out again: a trip of 10 s and 240 blocks at 0.3")))
 
 (def ff-boots (fn [lvl] {:feet {:name "iron_boots" :enchants [{:name "feather_falling" :lvl lvl}]}}))
 
