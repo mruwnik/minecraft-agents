@@ -110,13 +110,11 @@
                    (range 1 n)))))
 
 (defn targets
-  "The cells of cells ([x y z]) not in looked, within sight radius of the feet here and not occluded? from there,
-  nearest to the eye first: the cells a look can show."
+  "The cells of cells ([x y z]) not in looked and within sight radius of the feet here, nearest to the eye first."
   [p here cells looked]
   (->> cells
        (remove looked)
        (filter #(<= (u/eye-dist here %) (radius p)))
-       (remove #(occluded? p here %))
        (u/nearest-first here identity)))
 
 (defn unknown? [p [x y z]] (true? (some-> (u/sensed p {:x x :y y :z z}) .-unknown)))
@@ -220,7 +218,7 @@
   "(decide-fn), a sync decision over what the body has seen, decided again after a look at each unknown cell it read,
   until it is positive (not (retry? v)) or no look pays; the last value. A look pays while what a turn saves
   (cost/turn-saving of (price v reads)) x the chance it turns the decision (cost/cell-looks, falling with each fruitless look)
-  is over its seconds and its share of deciding again: the looks between two decisions cost as much on the clock as one decision's CPU (cost/redo-every).
+  is over its seconds and its share of deciding again: the looks between two decisions cost as much on the clock as one decision's CPU (cost/redo-every). A cell behind seen rock (occluded?) is never looked at: no look from here shows it.
   The cells looked at before from this body cell count as fruitless looks; at most (max-looked) of them. A positive that read a guessed cell
   (u/block-name-or) is checked after a look at it too with :verify-guesses true. An area (look/seen-blocks) or entity
   (look/seen-entities) query with no cell left to look at gets one look round (look/survey-until!, per body cell) when
@@ -248,7 +246,8 @@
                  fruitless (+ (count looked0) looks)]
              (if (or (>= (count looked) (max-looked)) (and (not (retry? v)) (not guessed)))
                [v looked surveyed looks]
-               (let [found (vec (take (- (max-looked) (count looked)) (targets p here (if guessed guessed (:cells reads)) looked)))
+               (let [found (into [] (comp (remove #(occluded? p here %)) (take (- (max-looked) (count looked))))
+                                 (targets p here (if guessed guessed (:cells reads)) looked))
                      k (if (and batch (not guessed)) (count found) (min (count found) (cost/redo-every redo-s)))
                      n (min k (cost/cell-looks saves (count found) fruitless (/ redo-s (max k 1))))
                      ask (when (and (retry? v) (pos? (cost/cell-looks saves 1 fruitless redo-s)))
