@@ -521,6 +521,13 @@
         prior (get (settings/get value/settings ::value/unseen-floor-counts) kind)]
     (counted-chance {:k absent :n (+ absent present) :prior [(:absent prior) (:present prior)]})))
 
+(defn guess-bad-chance
+  "The chance a guessed cell of class (:beside or :apart, escalate-choose/beside-undiggable?) is rock never dug: counted-chance
+  of the call's own `looks` {:bad :all} of that class over value/::guess-rock-counts' pseudo-counts of it."
+  [class {:keys [bad all]}]
+  (let [prior (get (settings/get value/settings ::value/guess-rock-counts) class)]
+    (counted-chance {:k (or bad 0) :n (or all 0) :prior [(:bad prior) (:ok prior)]})))
+
 (defn floor-dead-end-chance
   "The chance that, an unseen floor of a step of kind not being there, no lower step from its takeoff has one either, so
   the walk's next plan has no way on from there: floor-absent-chance of each lower kind in turn (a drop 2 and 3 lower)

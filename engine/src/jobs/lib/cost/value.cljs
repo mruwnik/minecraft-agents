@@ -66,6 +66,11 @@
                     :doc "Times the straight line a walk's way is taken to be (detours), for walk-blocks-per-s: 30255 blocks of steers over 23766 of straight line in 1235 walks (go-to walk jobs of 4 blocks or more), trial logs to 2026-10-28; a lower bound (steer chords). Recount: tools/event-counts.mjs walk-detour (:ratio)."}
    ::per-frontier-walk {:default 1 :spec (a/num-in 0 nil)
                         :doc "Each walk of a tour to the edge of loaded land that brought the body no nearer its goal, on top of its blocks, in seconds."}
+   ::guess-rock-counts {:default {:beside {:bad 974.085 :ok 653.299} :apart {:bad 0.106 :ok 143.944}}
+                        :spec (a/pred "a map of :beside and :apart to {:bad n :ok n} pseudo-counts >= 0"
+                                      (fn [m] (and (map? m) (every? (fn [k] (let [c (get m k)] (and (map? c) (every? #(and (number? (get c %)) (<= 0 (get c %))) [:bad :ok]))))
+                                                                    [:beside :apart]))))
+                        :doc "The Beta prior per class of a go-to dig route's guess (an unseen cell read as rock) of it being rock an escalation never digs (bedrock and the like), the call's own looks on top (answer/guess-bad-chance): the solid cells of 1807 sections of 16 blocks of recorded chunk files (every 400th, the fixture grid left out, 2026-10-30), :beside those with a face neighbour of that rock (0.60 of them, nearly all in the bedrock layer), :apart the rest (5.9e-4; 3.7e-6 over the bedrock layer); spread fitted by moments over the sections, as a call digs in one place (effective n 1627, 144). Recount: node tools/event-counts.mjs guess-rock --stride 400; the bodies' own looks: guess-looks."}
    ::unseen-floor-counts {:default {:level {:absent 2.97 :present 9.84} :down {:absent 1.69 :present 5.71}
                                     :up {:absent 0.06 :present 1.68} :drop {:absent 1.4 :present 0.99}}
                           :spec (a/pred "a map of step kind (:level :down :up :drop) to {:absent n :present n} pseudo-counts >= 0"

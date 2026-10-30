@@ -188,18 +188,13 @@
             :when (or (dug g) (= bad g))]
       (note-guess! c g beside (not= bad g)))))
 
-(def prior-good-looks
-  "Good looks a class of guess starts with, none bad: a prior, not measured. Unseen rock apart from seen undiggable rock
-  is nearly always rock, so one bedrock cell does not make every guess dear; beside it, the next looks decide."
-  {:beside 1 :apart 10})
-
 (defn guess-risk
-  "{:beside :apart}: the chance a guess of each class is not diggable, from those this call looked at: bad over all
-  and the class's prior-good-looks."
+  "{:beside :apart}: the chance a guess of each class is not diggable (cost/guess-bad-chance): those this call looked at
+  on top of the measured prior."
   [c]
   (let [looks (:guess-looks (ctx/mem c))]
-    (into {} (map (fn [[k prior]] (let [{:keys [bad all]} (get looks k)] [k (/ (or bad 0) (+ prior (or all 0)))])))
-          prior-good-looks)))
+    {:beside (cost/guess-bad-chance :beside (:beside looks))
+     :apart (cost/guess-bad-chance :apart (:apart looks))}))
 
 (defn way-opts
   "The opts of go-to call c's choice of a way from feet (escape/choose and the dig ways): a search that stood the body

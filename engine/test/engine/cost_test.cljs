@@ -280,6 +280,14 @@
                                 (:cost (cost/turn-back-cost [{:look 0.1 :back 2 :p 0.5} {:look 0.1 :back 3 :p 0.25}])))))
         "a later floor is reached only while those before it held")))
 
+(deftest a-guess-is-rock-never-dug-at-the-measured-rate-of-its-class-moved-by-the-calls-own-looks
+  (settings/with-settings {:jobs.lib.cost.value/guess-rock-counts {:beside {:bad 3 :ok 1} :apart {:bad 0 :ok 99}}}
+    (fn []
+      (is (= 0.75 (cost/guess-bad-chance :beside nil)) "no look: the measured prior, not 0")
+      (is (= 0 (cost/guess-bad-chance :apart nil)))
+      (is (= 0.25 (cost/guess-bad-chance :apart {:bad 33 :all 33})) "looks that were all bad move a rare class far")
+      (is (= 0.6 (cost/guess-bad-chance :beside {:bad 0 :all 1})) "a good look lowers a class"))))
+
 (deftest a-goal-s-worth-budgets-the-tour-less-the-walk
   (let [walk (:cost (cost/walk-cost {:distance 50}))]
     (is (= 100 (cost/tour-worth 50 (+ 100 walk))) "no trip is taken off: the goal is known")

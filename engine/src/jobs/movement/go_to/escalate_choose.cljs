@@ -482,7 +482,7 @@
 
 (defn past-worth?
   "Whether a way priced price-s (its own cells' put-backs too) is dearer than worth-s once priced over the chance each
-  of its guesses is diggable (1 - its class's risk in guess-risk {:beside :apart}), as route-answer prices a dig route."
+  of its guesses is diggable (1 - its class's risk in guess-risk {:beside :apart}): the stair or door has no search to price them in."
   [price-s guesses {:keys [beside apart] :as guess-risk} worth-s]
   (not (cost/affords? (/ price-s (reduce * 1 (map #(- 1 (if (:beside %) beside apart)) guesses))) worth-s)))
 
