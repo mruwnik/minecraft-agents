@@ -145,7 +145,8 @@
               cells (mapv (fn [{:keys [x y z]}] [x y z]) inside)]
           (is (< (sense/max-looks) (count cells)))
           (await (sense/look-round! c cells))
-          (is (= (set cells) (sense/round-looked c)) "one round per :look: the cells past its looks count as looked, so the check asks no second"))))))
+          (is (<= (count cells) (looks p)) "every cell is looked at: the caller priced the whole list, a part of it proves no room closed")
+          (is (= (set cells) (sense/round-looked c)) "one round per :look: the cells asked for count as looked, so the check asks no second"))))))
 
 (deftest look-round-stops-at-a-room-wall-seen-open
   (async done
@@ -159,3 +160,17 @@
             (await (sense/look-round! c cells)))
           (is (= 1 (looks p)) "no look after the first open wall")
           (is (= (set cells) (sense/round-looked c)) "the walls left unlooked count as looked"))))))
+
+(deftest look-round-skips-cells-asked-for-from-this-spot
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (seeing {:self {:pos {:x 0 :y 64 :z 0}} :blocks rock})
+              c (stub-ctx p)
+              cells (mapv (fn [{:keys [x y z]}] [x y z]) inside)]
+          (await (sense/look-round! c cells))
+          (let [asked (atom [])]
+            (with-redefs [sense/look-at-unknown! (fn ^:async [_ cs & _] (swap! asked conj cs) [0 [] false])]
+              (await (sense/look-round! c cells)))
+            (is (= [[]] @asked) "a second round on the same cells from the same spot looks at none")))))))
+

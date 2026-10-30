@@ -202,11 +202,11 @@
       (is (nil? (looks-at (* 0.99 break-even))) "all four walls closed is not worth the four looks")
       (is (= walls (looks-at (* 1.01 break-even))) "worth the round: every wall is looked at"))))
 
-(deftest a-paying-round-passes-every-unseen-wall-on-for-the-look-hook-to-pick-from
+(deftest a-paying-round-passes-every-unseen-wall-on-for-the-look-hook
   (let [walls (mapv #(vector % 64 0) (range (inc (sense/max-looks))))]
     (with-redefs [look-edge/pending (fn ([_] nil) ([_ _ _] walls))]
       (is (= walls (some-> (ready/room-look (ctx-of night-hut) "dark" nil) (nth 2) :look-at))
-          "the hook takes the nearest max-looks of them; a cut by list order would leave the near ones unlooked"))))
+          "more walls than max-looks: all priced, all looked at in the one hook call"))))
 
 (deftest a-wall-a-look-round-did-not-show-counts-as-open-not-looked-at-again
   (let [seen-block u/seen-block
