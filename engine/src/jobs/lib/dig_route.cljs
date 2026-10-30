@@ -2,6 +2,7 @@
   "The cheapest walkable way, cells dug included, from one feet cell to another through stone: a pure search over what the
   caller says each cell is (block-at cell -> name, or nil when never seen)."
   (:require [engine.args :as a]
+            [engine.heap :as heap]
             [engine.settings :as settings]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.block-sets :as bs]
@@ -14,7 +15,13 @@
             [jobs.lib.walk.world :as wworld]))
 
 (a/defargs settings
-  {::max-nodes {:default 500 :doc "The most cells a route search expands before it gives up (:budget)." :spec (a/int-in 1 nil)}})
+  {::max-nodes {:default 500 :doc "The most cells a route search expands before it gives up (:budget)." :spec (a/int-in 1 nil)}
+   ::node-s {:default 0.0001 :spec (a/num-in 0 nil)
+             :doc "Seconds of CPU one cell a search expands costs, its back-search steps with it: 0.92 s for 8910 cells in the fake world (mine-a's glass wall cut, 2026-10-30)."}
+   ::round-s {:default 0.08 :spec (a/num-in 0 nil)
+              :doc "CPU seconds one route-resumed call may search: within the ~100 ms a round searches (walk.search's round-ms)."}
+   ::heap-full {:default 0.75 :spec (a/num-in 0 1)
+                :doc "The share of the heap's limit used past which a kept search grows no more: past it V8 collects ever more often and the body runs out of memory (a 1.4 GB heap did, 2026-10-30)."}})
 
 (def falling #{"sand" "red_sand" "gravel"})
 
@@ -85,7 +92,7 @@
   "route's search begun: a fn of n that runs it on for at most n more cells expanded, [answer expanded]: answer route's
   once the search has ended (the same each run after), nil while it goes on; expanded the cells this run expanded.
   Plain numbers throughout (a cell is a key, its reads are cached by key): a climb expands about 10k cells."
-  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-dig-s max-s margin near sees] r :range :or {dig-s (constantly 1) step-s 0 ways #{}} :as opts}]
+  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-dig-s max-s margin near sees node-s back-h? full?] r :range :or {dig-s (constantly 1) step-s 0 ways #{}} :as opts}]
   (let [[fx _ fz] from
         [gx gy gz] goal
         r (when (and r (pos? r)) r)
@@ -121,10 +128,13 @@
         inside? (fn [x y z] (or (nil? margin) (and (<= lx x hx) (<= ly y hy) (<= lz z hz))))
         to-goal (fn [x y z] (* step-s (max (+ (js/Math.abs (- x gx)) (js/Math.abs (- z gz))) (- gy y))))
         ;; a cell within range of near is at most 2 range across and below it
-        heuristic (if r
-                    (fn [x y z] (min (to-goal x y z)
-                                     (* step-s (max 0 (- (max (+ (js/Math.abs (- x ax)) (js/Math.abs (- z az))) (- ay y)) (* 2 r))))))
-                    to-goal)
+        step-h (if r
+                 (fn [x y z] (min (to-goal x y z)
+                                  (* step-s (max 0 (- (max (+ (js/Math.abs (- x ax)) (js/Math.abs (- z az))) (- ay y)) (* 2 r))))))
+                 to-goal)
+        ;; with back-h?, the back search's bound too (back-lb): a dear wall round the goal is priced before the rock round it is searched
+        back-lb (volatile! (constantly 0))
+        heuristic (if back-h? (fn [x y z] (max (step-h x y z) (@back-lb x y z))) step-h)
         end? (fn [ck] (let [[x y z] (cell-of ck)]
                         (and (<= (+ (* (- x ax) (- x ax)) (* (- y ay) (- y ay)) (* (- z az) (- z az))) (* r r))
                              (or (nil? sees) (sees x y z)))))
@@ -156,6 +166,10 @@
         best (js/Map.) done (js/Set.) queue #js []
         tick (volatile! 1)
         answer (volatile! nil)
+        goal-key (key gx gy gz)
+        end-key? (fn [k] (or (== k goal-key) (and r (end? k))))
+        ;; #js [seconds key] of the cheapest end cell any step reached so far: a route in hand before the search proves it cheapest
+        incumbent #js [##Inf nil]
         relax! (fn [ck ^js from-node ^js acc nx ny nz move stair? face-s]
                  (let [nk (key nx ny nz)
                        k (+ (aget from-node 1) (aget acc 1)) ds (+ (aget from-node 2) (aget acc 2))
@@ -167,6 +181,7 @@
                            ^js old (.get best nk)]
                        (when (or (nil? old) (< nd (aget old 0)))
                          (.set best nk #js [nd k ds ck move placed (let [dug (aget from-node 6) ks (aget acc 3)] (if (zero? (alength ks)) dug (into dug (array-seq ks))))])
+                         (when (and (< nd (aget incumbent 0)) (end-key? nk)) (aset incumbent 0 nd) (aset incumbent 1 nk))
                          (heap-push! queue #js [(+ nd (heuristic nx ny nz)) @tick nk])
                          (vswap! tick inc))))))
         ;; whether a step of the way to the cell of key k opened cell x y z: a floor the route itself digs away is none (a
@@ -212,6 +227,22 @@
                                   (recur (inc dy) (and clear? below-open?))))))
                           (recur (+ i 2)))))))
         start-key (key fx (from 1) fz)
+        route-to (fn [ck]
+                   (let [path (mapv cell-of (reverse (take-while some? (iterate #(aget (.get best %) 3) ck))))
+                         steps (mapv (fn [m n]
+                                       (let [move (aget (.get best (apply key n)) 4)]
+                                         (cond-> {:to n :move move
+                                                  :dig (vec (filter #(pos? (.-cost ^js (apply at %))) (sort-by #(- (% 1)) (step-cells m n))))}
+                                           (= :laid move) (assoc :place (update n 1 dec))
+                                           (= :pillar move) (assoc :place m))))
+                                     path (rest path))]
+                     {:dig (vec (distinct (mapcat :dig steps))) :steps steps :seconds (aget (.get best ck) 0)}))
+        ;; with node-s, the search's CPU is a cost of the route it finds: it goes on only while what is left to find may
+        ;; still save more than the search has spent (a ski rental's rule: at worst twice the best), against the route in
+        ;; hand (its cheapest end reached) or max-s
+        spent-s (fn [] (if node-s (* node-s (.-size done)) 0))
+        bound-s (fn [] (min (or max-s ##Inf) (aget incumbent 0)))
+        ended (fn [] (if (<= (aget incumbent 0) (or max-s ##Inf)) (route-to (aget incumbent 1)) {:problem :dearer}))
         ;; a lower bound of every route's price, searched back from the goal toward the start: a body's two cells per node,
         ;; each step priced base-s of its cheapest move and the cells it opens (across: the two cells entered; up across: the cell
         ;; over the head too; down: the cell entered; a pillar: the cell over the head), floors, falls and refusals left out. Its frontier exhausted is no route; its cheapest entry past max-s, every route dearer.
@@ -244,7 +275,7 @@
                            k (some-> top (aget 2))]
                        (cond
                          (nil? top) {:problem :no-route}
-                         (and max-s (> (aget top 0) max-s)) {:problem :dearer}
+                         (> (+ (aget top 0) (spent-s)) (bound-s)) (ended)
                          (.has back-done k) nil
                          (== k start-key) (do (vreset! back-over true) nil)
                          :else
@@ -262,6 +293,11 @@
                            (back-into! g x (inc y) z feet)
                            (when pillar-s (back-into! g x (dec y) z (+ (base-s :pillar) head)))
                            nil))))]
+    ;; a cell the back search expanded is priced exactly, any other at least the back queue's least bound less its way to the start
+    (vreset! back-lb (fn [x y z] (let [k (key x y z)]
+                                   (if (.has back-done k)
+                                     (.get back-best k)
+                                     (if-let [^js t (aget back-queue 0)] (max 0 (- (aget t 0) (to-start x z))) 0)))))
     (.set best start-key #js [0 0 0 nil nil 0 #{}])
     (heap-push! queue #js [(heuristic fx (from 1) fz) 0 start-key])
     (vreset! seeds (sort-by (fn [[x _ z]] (to-start x z))
@@ -272,8 +308,9 @@
     (fn [n]
       (let [start (.-size done)
             limit (+ start n)
-            goal-key (key gx gy gz)
             a (or @answer
+                  ;; a physical limit: the heap holds no more
+                  (when (and full? (full?)) (let [e (ended)] (if (:dig e) e {:problem :too-big})))
                   (loop []
                     (or
                      (loop [i 0] (when (and (< i back-pace) (not @back-over)) (or (back-step!) (recur (inc i)))))
@@ -282,18 +319,9 @@
                       (cond
                         (nil? top) {:problem :no-route}
                         ;; the heuristic is a lower bound: every route left costs more
-                        (and max-s (> (aget top 0) max-s)) {:problem :dearer}
+                        (> (+ (aget top 0) (spent-s)) (bound-s)) (ended)
                         (.has done ck) (recur)
-                        (or (== ck goal-key) (and r (end? ck)))
-                        (let [path (mapv cell-of (reverse (take-while some? (iterate #(aget (.get best %) 3) ck))))
-                              steps (mapv (fn [m n]
-                                            (let [move (aget (.get best (apply key n)) 4)]
-                                              (cond-> {:to n :move move
-                                                       :dig (vec (filter #(pos? (.-cost ^js (apply at %))) (sort-by #(- (% 1)) (step-cells m n))))}
-                                                (= :laid move) (assoc :place (update n 1 dec))
-                                                (= :pillar move) (assoc :place m))))
-                                          path (rest path))]
-                          {:dig (vec (distinct (mapcat :dig steps))) :steps steps :seconds (aget (.get best ck) 0)})
+                        (end-key? ck) (route-to ck)
                         ;; the popped cell goes back: the next run expands it first
                         (>= (.-size done) limit) (do (heap-push! queue top) nil)
                         :else (do (.add done ck) (expand! ck) (recur)))))))]
@@ -344,28 +372,46 @@
   block :dig-s prices nil is not dug, nor a cell under sand or gravel (it would fall on the body walking in), nor a
   floor of :ways (the floors of the body's own stairs), on which nothing is placed either. Bounds, each only when
   given: :max-dig-s seconds of digging, :max-s seconds of the whole route, :max-places blocks laid or jump-placed (the blocks carried),
-  :margin cells round the two ends; :range r (> 0) also ends it on any feet cell within r of :near (default goal) that :sees (fn [x y z], when given) passes.
+  :margin cells round the two ends; :range r (> 0) also ends it on any feet cell within r of :near (default goal) that :sees (fn [x y z], when given) passes;
+  :node-s seconds of CPU a cell expanded (priced-search), :back-h? the back search's bound in the heuristic, :full? (fn []) true when the heap holds no more.
   {:dig [cell ..] :steps [{:to feet :move :walk|:laid|:pillar :dig [cell ..] :place cell} ..] :seconds the route's price}, {:problem :no-route},
-  {:problem :dearer} when every route costs more than :max-s, or {:problem :budget} when :max-nodes cells were expanded first (search goes on past it)."
+  {:problem :dearer} when every route costs more than :max-s, {:problem :too-big} when :full? with no route in hand, or {:problem :budget} when :max-nodes cells were expanded first (search goes on past it)."
   [block-at from goal opts]
   (or (first ((search block-at from goal opts) (get opts :max-nodes (settings/get settings ::max-nodes)))) {:problem :budget}))
 
-(defonce ^{:doc "{key search-fn} of the searches route-resumed left unfinished, the oldest dropped past kept-max."} kept (js/Map.))
+(defonce ^{:doc "{caller [key search-fn]} of the searches route-resumed left unfinished, one a caller, the oldest dropped past kept-max."} kept (js/Map.))
 
 (per-body/store! ::kept #(.clear kept))
 
 (def kept-max 16)
 
+(defn heap-full?
+  "Whether the heap is past ::heap-full of its limit."
+  []
+  (let [{:keys [heap-used heap-limit]} (heap/sample)]
+    (> heap-used (* heap-limit (settings/get settings ::heap-full)))))
+
+(defn priced-search
+  "search with its CPU priced (::node-s), the back search's bound in its heuristic (:back-h?), grown only while the
+  heap has room (heap-full?). A fn of n as search's."
+  [block-at from goal opts]
+  (search block-at from goal (assoc opts :node-s (settings/get settings ::node-s) :back-h? true :full? heap-full?)))
+
 (defn route-resumed
-  "route, but a search that spends :max-nodes is kept under key and gone on by the next call with the same key:
-  {:problem :searching} till it ends. A key names the caller and the search ([job-id :kind from goal]); a search never
-  asked again falls out of kept."
+  "route, but a search that spends its nodes (:max-nodes, at most ::round-s of CPU at ::node-s) is kept under key and
+  gone on by the next call with the same key: {:problem :searching} till it ends, priced as priced-search ({:problem
+  :too-big} once the heap is full with no route in hand). A key names the caller and the search ([job-id :kind from goal]):
+  the caller's search under another key is dropped (its question changed), and one never asked again falls out of kept."
   [key block-at from goal opts]
-  (let [key (pr-str key)
-        run (or (.get kept key) (search block-at from goal opts))
-        [a] (run (get opts :max-nodes (settings/get settings ::max-nodes)))]
-    (.delete kept key)
+  (let [caller (pr-str (vec (take 2 key)))
+        key (pr-str key)
+        [k run] (.get kept caller)
+        run (or (when (= k key) run) (priced-search block-at from goal opts))
+        nodes (min (get opts :max-nodes (settings/get settings ::max-nodes))
+                   (js/Math.ceil (/ (settings/get settings ::round-s) (settings/get settings ::node-s))))
+        [a] (run nodes)]
+    (.delete kept caller)
     (when-not a
-      (.set kept key run)
+      (.set kept caller [key run])
       (when (> (.-size kept) kept-max) (.delete kept (.-value (.next (.keys kept))))))
     (or a {:problem :searching})))

@@ -95,10 +95,12 @@
   [c]
   (let [p (:primitives c)
         one (worth c 1)
-        counted (::counted c)]
+        counted (::counted c)
+        mined (kinds (:args c))
+        least (min-dig-s)]
     (-> (dig-route/body-prices p (fn [[x y z]] (nil? (u/seen-name p {:x x :y y :z z}))))
-        (dig-route/less-yield (fn [name cell] (if (and (contains? (kinds (:args c)) name) (not (contains? counted cell))) one 0)))
-        (update :dig-s (fn [dig-s] (fn [name cell] (some-> (dig-s name cell) (max (min-dig-s)))))))))
+        (dig-route/less-yield (fn [name cell] (if (and (contains? mined name) (not (contains? counted cell))) one 0)))
+        (update :dig-s (fn [dig-s] (fn [name cell] (some-> (dig-s name cell) (max least))))))))
 
 (defn drop-cut
   "The cells to dig, in walking order, for the cheapest way (jobs.lib.dig-route priced by cut-prices, a cell never seen
@@ -107,35 +109,40 @@
   [c dug max-s]
   (let [p (:primitives c)
         at (fn [[x y z]] (or (u/seen-name p {:x x :y y :z z}) "stone"))
-        prices (assoc (cut-prices c) :max-s max-s)
+        ;; one search ends on any of the six stands beside dug
+        prices (assoc (cut-prices c) :max-s max-s :range 1 :near dug :sees (fn [x y z] (not= [x y z] dug)))
         from (u/cell-vec (u/self-pos c))
-        routes (mapv #(let [goal (mapv + dug %)]
-                        (dig-route/route-resumed [(:id c) :drop-cut from goal max-s] at from goal prices))
-                     [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 -1 0] [0 1 0]])]
-    (or (->> routes (filter :dig) (sort-by :seconds) (map :dig) first)
-        (when (some #{:searching} (map :problem routes)) :searching))))
+        goal (mapv + dug [1 0 0])
+        route (dig-route/route-resumed [(:id c) :drop-cut from dug max-s] at from goal prices)]
+    (or (:dig route) (when (= :searching (:problem route)) :searching))))
 
 (defn ^:async cut-via
   "cut-to-drop! with its steps given: a map over {:drop-cut :dig-cell! :look-at! :mem} (the fns of those names' arguments).
   Open a way beside the cell dug (drop-cut), one dig child per cell, all the digs priced (cut-prices) at most max-s
-  seconds (what is beside the cell: its drop, or a seen ore and its vein): the way is planned again after each dig and a
-  look at what it laid open, out of what is left (kept in :cut-spent over rounds, each dig booked at its own price once
+  seconds (what is beside the cell: its drop, or a seen ore and its vein): after each dig and a look at what it laid
+  open the way goes on as planned while the cell stayed open and its other cells read as they did, else is planned again out of what is left (kept in :cut-spent over rounds, each dig booked at its own price once
   dug or failed; a cell that fills again is paid for again). :cut (open: walk again),
   :partial (a dig waits on the world) or nil (no way left, a dig failed, or a dug cell planned again at once: it did not
   stay open)."
   [c {:keys [drop-cut dig-cell! look-at! mem]} dug max-s]
   (let [p (:primitives c)
         dig-s (:dig-s (cut-prices c))
-        price (fn [[x y z :as cell]] (or (dig-s (or (u/seen-name p {:x x :y y :z z}) "stone") cell) 0))]
+        name-at (fn [[x y z]] (or (u/seen-name p {:x x :y y :z z}) "stone"))
+        price (fn [cell] (or (dig-s (name-at cell) cell) 0))
+        ;; the way's cells left, as planned while the cell dug stayed open and the look showed each of them as it was
+        planned (fn [plan dug-cell] (when (and (seq plan) (dig-route/open? (name-at dug-cell)) (every? (fn [[cell n]] (= n (name-at cell))) plan))
+                                      (mapv first plan)))]
     (loop [last-dug nil
-           spent (get (:cut-spent (mem c)) dug 0)]
-      (let [cells (drop-cut c dug (- max-s spent))]
+           spent (get (:cut-spent (mem c)) dug 0)
+           plan nil]
+      (let [cells (or (planned plan last-dug) (drop-cut c dug (- max-s spent)))]
         (cond
           (nil? cells) nil
           (= :searching cells) :partial
           (empty? cells) :cut
           (= last-dug (first cells)) nil
           :else (let [cell (first cells)
+                      plan (mapv (juxt identity name-at) (rest cells))
                       spent (+ spent (price cell))
                       o (await (dig-cell! c (zipmap [:x :y :z] cell)))]
                   (when-not (= :continue o) (ctx/update-mem! c assoc-in [:cut-spent dug] spent))
@@ -143,7 +150,7 @@
                     :continue :partial
                     (:dug :missing) (do (await (look-at! c cell))
                                         (await (look-at! c (update cell 1 dec)))
-                                        (recur cell spent))
+                                        (recur cell spent plan))
                     nil)))))))
 
 (defn ^:async cut-to-drop!

@@ -272,13 +272,15 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        ;; ore, not sand: a cut is dug only when the vein is worth more than the cut costs. Leaves, not glass: glass is priced as a smelted item,
-        ;; dear enough that the cut's route search goes round it and does not end
+        ;; ore, not sand: a cut is dug only when the vein is worth more than the cut costs. Glass is dear (a smelted item), and
+        ;; every way beside the ore digs some, the cheap ones round it through unseen rock too: the cut's search still ends,
+        ;; and the glass is dug at its price
         (let [ore (cells "iron_ore" [8] [64] [0])
-              wall (cells "oak_leaves" (range 3 10) [64 65 66] (range -6 7))
+              wall (cells "glass" (range 3 10) [64 65 66] (range -6 7))
               s (await (scenario {:block "iron_ore" :count 1 :ways #{:seen}}
-                                 {:blocks (merge floor wall ore) :drops {"iron_ore" "raw_iron"} :inventory pickaxe :unreachable (vec (keys ore))} 60))]
-          (is (<= 2 (dig-count s)) "rock was dug toward the ore")
+                                 {:blocks (merge floor wall ore) :drops {"iron_ore" "raw_iron"} :inventory pickaxe :unreachable (vec (keys ore))} 200))]
+          (is (<= 2 (dig-count s)) "the wall was dug toward the ore")
+          (is (every? #(= "glass" (get wall (clojure.string/join "," %))) (dug-cells s)) "glass only, no detour through the rock")
           (is (= 1 (count (events-of s :mine.unreachable))) "then it was skipped, no failure")
           (is (zero? (:jobs.lib.util/failures (job-mem s) 0)))
           (is (finished? s)))))))

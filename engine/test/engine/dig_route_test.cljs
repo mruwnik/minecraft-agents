@@ -1,5 +1,6 @@
 (ns engine.dig-route-test
   (:require [cljs.test :refer [deftest is testing]]
+            [engine.settings :as settings]
             [jobs.lib.dig-route :as dr]))
 
 (defn world
@@ -129,6 +130,25 @@
         done (peek asks)]
     (is (< 3 (count asks)) "each call is one slice")
     (is (= (dr/route w [0 10 0] [20 4 6] (assoc opts :max-nodes 100000)) done))))
+
+(deftest a-resumed-search-past-a-dear-wall-prices-the-wall-first-and-keeps-one-search-a-caller
+  ;; the goal in an obsidian shell in rock: every way digs obsidian, and a search that learns it only on reaching the
+  ;; shell searches the ball of rock cheaper than that first
+  (let [shell (into {} (for [x (range -1 2) y (range 4 7) z (range 5 8) :when (not= [x y z] [0 5 6])] [[x y z] "obsidian"]))
+        w (world (assoc shell [0 5 6] "air"))
+        opts {:dig-s (fn [n _] (if (= "obsidian" n) 50 1)) :step-s 0.3 :max-s 1000}
+        to-end (fn [run] (loop [cells 0] (let [[a e] (run 500)] (if a [a (+ cells e)] (recur (+ cells e))))))
+        [exact exact-cells] (to-end (dr/search w [0 10 0] [0 5 6] opts))
+        [priced priced-cells] (to-end (dr/priced-search w [0 10 0] [0 5 6] opts))]
+    (is (<= (:seconds priced) (+ (:seconds exact) (* (settings/get dr/settings ::dr/node-s) priced-cells)))
+        (str "dearer than the cheapest by at most the CPU it spent (" priced-cells " cells, the exact search " exact-cells ")"))
+    (is (< (* 2 priced-cells) exact-cells) "for less than half the cells")
+    (doseq [i (range 20)] (dr/route-resumed [:t 2 i] w [0 10 0] [0 5 6] (assoc opts :max-nodes 1)))
+    (is (= 1 (.-size dr/kept)) "round after round, each new question of the caller drops its old search")
+    (.clear dr/kept)
+    (with-redefs [dr/heap-full? (constantly true)]
+      (is (= {:problem :too-big} (dr/route-resumed [:t 3] w [0 10 0] [0 5 6] opts)) "a full heap grows no search"))
+    (.clear dr/kept)))
 
 (deftest a-steps-guessed-cells-over-the-head-it-leaves-and-under-a-laid-block-are-priced
   (let [flat (world {})
