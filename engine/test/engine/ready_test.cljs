@@ -205,14 +205,27 @@
       (is (= :look (first (status identity))) "a dark stay costs hp: the unseen wall is worth a look")
       (is (not= :look (first (status worthless))) "a goal worth nothing: giving it up spares the stay, so a wall seen closed would spare nothing"))))
 
-(deftest a-look-at-a-stays-unseen-walls-is-priced-against-the-jobs-cheapest-own-way
+(deftest a-room-seen-closed-spares-the-cheapest-of-the-stays-exposure-the-jobs-own-ways-and-the-worth
   (let [c (ctx-of night-hut)
-        price #(ready/stay-look-price % 0.5)]
-    (is (= 0 (:gap (price c))) "no own way: nothing stands between")
-    (is (= 0 (:gap (price (ready/own-way c (fn [_ _] nil))))) "an own way that does not answer the dark")
-    (is (= 5 (:gap (price (-> c (ready/own-way (fn [_ _] 9)) (ready/own-way (fn [_ [_ _ {:keys [lowered-by]}]] (when (lowered-by :torch) 5)))))))
-        "a torch at 5 s: a wall seen open spares only what the stay's exposure passes it by")
-    (is (= (:delta (price c)) (:delta (price (ready/own-way c (fn [_ _] 5))))))))
+        price #(ready/stay-look-price % 0.5)
+        torch (fn [s] (fn [_ [_ _ {:keys [lowered-by]}]] (when (lowered-by :torch) s)))
+        exposure (:delta (price c))
+        walls [[1 64 0] [2 64 0]]
+        break-even (/ (cost/look-s 2) (cost/closed-chance 0 2))
+        looks-at #(some-> (ready/room-look (ready/own-way c (torch %)) "dark" nil 0.5) (nth 2) :look-at)]
+    (is (< (* 2 break-even) exposure) "the stay's exposure passes the round's break-even")
+    (is (= {:gap 0 :delta exposure} (price c)) "no own way: a closed room spares the exposure")
+    (is (= {:gap 0 :delta exposure} (price (ready/own-way c (fn [_ _] nil)))) "an own way that does not answer the dark")
+    (is (= {:gap 0 :delta 5} (price (-> c (ready/own-way (fn [_ _] 9)) (ready/own-way (torch 5)))))
+        "a torch at 5 s: a closed room spares only the torch")
+    (is (= {:gap 0 :delta exposure} (price (ready/own-way c (torch (* 2 exposure))))) "an own way dearer than the stay")
+    (is (= {:gap 0 :delta 3} (price (assoc (ready/own-way c (torch 5)) :worth (constantly 3)))) "giving the goal up is cheaper still")
+    (with-redefs [look-edge/pending (fn ([_] nil) ([_ _] walls))
+                  reach-room/unseen-sides (constantly walls)
+                  sense/unknown? (constantly true)]
+      (is (nil? (looks-at 0)) "a 0 s torch: no look")
+      (is (nil? (looks-at (* 0.99 break-even))) "a torch under the round's break-even: no look")
+      (is (= walls (looks-at (* 1.01 break-even))) "a dearer torch pays the round"))))
 
 (defn room-look-at
   "The :look-at of ready/room-look of night-hut's ctx over extra, its stay's exposure priced at saving seconds."

@@ -103,16 +103,16 @@
   (update c ::own-ways (fnil conj []) f))
 
 (defn stay-look-price
-  "The {:gap :delta} of a look at the unseen cells a stay exposed at chance rests on: one seen bad leaves the stay its
-  exposure (price/stay-parts acted on now, cost/risk-s), at most the call's worth (ctx/worth: giving the goal up spares
-  the rest), one seen closed none; the gap is the cheapest of the job's own answers (own-way) to the dark a torch lowers
-  that an open side leaves, 0 with none."
+  "The {:gap :delta} of a look at the unseen cells a stay exposed at chance rests on, paid at P(closed): unlooked, an unseen
+  wall is an open side, so the job takes the cheapest of the stay's exposure (price/stay-parts acted on now, cost/risk-s),
+  its own answers to the dark a torch lowers (own-way) and giving the goal up (ctx/worth); a room seen closed spares that,
+  gap 0."
   [c chance]
   (let [{:keys [hurt dies death]} (price/stay-parts c chance (price/stay-s c))
         open (contract/never :exposed "an open side leaves the stay dark" :lowered-by #{:torch} :chance chance)
         own (keep #(% (dissoc c ::own-ways) open) (::own-ways c))]
-    {:gap (if (seq own) (apply min own) 0)
-     :delta (min (ctx/worth c) (cost/risk-s (.-health (.self (:primitives c))) hurt (cost/lethal-hp {:chance dies :death death})))}))
+    {:gap 0
+     :delta (apply min (ctx/worth c) (cost/risk-s (.-health (.self (:primitives c))) hurt (cost/lethal-hp {:chance dies :death death})) own)}))
 
 (defn room-look
   "A :look at the unseen walls of the room round the body (look-edge/pending) not looked at yet, and at `extra`: the ones
