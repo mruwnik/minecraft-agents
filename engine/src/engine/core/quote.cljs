@@ -5,7 +5,7 @@
   is refused as ctx/call refuses it. A job with no quote-of quotes the mean time of its :job-report entries. ctx/next-way
   picks a contract job's next way and books the ways that failed."
   (:require [engine.contract :as contract]
-            [engine.core.base :refer [now owner?]]
+            [engine.core.base :refer [now owner? ttl-now]]
             [engine.core.ending :as ending]
             [engine.core.limits :as limits]
             [engine.ctx :as ctx]
@@ -64,7 +64,7 @@
                             (cond
                               (nil? q) nil
                               (contract/ending? q) (or (:cause q) :ending)
-                              :else (contract/breaks q left levels (now eng)))))]
+                              :else (contract/breaks q left levels (ttl-now eng)))))]
           (if why
             (recur more (assoc dropped w why))
             (do (when (owner? eng (:token c))

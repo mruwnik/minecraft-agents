@@ -8,7 +8,7 @@
   (:require [engine.args :as a]
             [engine.condition :as condition]
             [engine.contract :as contract]
-            [engine.core.base :refer [cut-error elapsed exclusive-job mark now owner?]]
+            [engine.core.base :refer [cut-error elapsed exclusive-job mark now owner? ttl-now]]
             [engine.core.limits :as limits]
             [engine.ctx :as ctx]
             [engine.hooks :as hooks]
@@ -237,7 +237,7 @@
         [call lines] (call-of c def)]
     (when-not (owner? eng (:token c)) (throw (cut-error)))
     (mem/update-job! (:store eng) (:root c) (:slots c) update :contract
-                     #(cond-> (assoc % :call call :started-ms (now eng)) (:sym def) (assoc :job (:sym def))))
+                     #(cond-> (assoc % :call call :started-ms (ttl-now eng)) (:sym def) (assoc :job (:sym def))))
     (when (seq lines) (ctx/emit! c :budget_clamped :debug {:lines lines :call call}))))
 
 (defn start!

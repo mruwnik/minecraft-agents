@@ -1,7 +1,7 @@
 (ns engine.core.round
   "One round: the ctx a round or check receives, the act wrapper (token check, memory saves, action
   events) and ctx/call."
-  (:require [engine.core.base :refer [cut-error cut? cut-off! cut-off-dropped! distance emit! job-of exclusive-job mark normalize-result now offline-cut-error offline? owner? save-memory-soon! self-pos since elapsed]]
+  (:require [engine.core.base :refer [cut-error cut? cut-off! cut-off-dropped! distance emit! job-of exclusive-job mark normalize-result now offline-cut-error offline? owner? save-memory-soon! self-pos since elapsed ttl-now]]
             [engine.core.attention :refer [request-attention! resolve-attention!]]
             [engine.core.fruitless :refer [record-act!]]
             [engine.core.activity :refer [act-ended! act-started! body-act! close-section! hold-still! log-out-record open-section! useful-act?]]
@@ -237,7 +237,7 @@
             id (mem/path->id (:root base) (conj (:slots base) slot))
             c (child-ctx eng (cond-> b ident (update :quoting (fnil conj []) [ident id])) slot args)
             call (first (ending/call-of c def))]
-        (assoc c :quote-call call :left (constantly (contract/left {:call call} (now eng) 0)) :job-ways (:ways def))))))
+        (assoc c :quote-call call :left (constantly (contract/left {:call call} (ttl-now eng) 0)) :job-ways (:ways def))))))
 
 (defn ^:async call
   "One round of job def as the child in slot under parent base (ctx/call): :continue, or its ending with the :report;

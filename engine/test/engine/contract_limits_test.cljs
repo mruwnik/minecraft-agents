@@ -3,6 +3,7 @@
   the outermost crossed frame ends :limit-reached and job.limit_reached tells the line, its amount and the report."
   (:require [cljs.test :refer [deftest is async]]
             [engine.contract :as contract]
+            [engine.core.base :as base]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -128,6 +129,49 @@
           (is (= 3 (:wait-rounds @world)))
           (is (= {:kind :limit-reached :cause {:line :wall-time :spend 10}} (stopped seen)))
           (is (= {:job-time 0 :wall-time 11} (get-in (first (job-ev seen :limit_reached)) [:data :report :uses]))))))))
+
+(defn after-a-suspend
+  "setup with a monotonic clock, after a host suspend of an hour that the TTL clock has seen."
+  [jobs]
+  (let [{:keys [eng] :as s} (setup jobs)
+        mono (atom @clock)
+        eng (assoc eng :mono #(deref mono))]
+    (swap! clock + 3600000)
+    (is (pos? (do (base/ttl-now eng) (:clock-lag (core/state eng)))))
+    (assoc s :eng eng :mono mono)))
+
+(defn pass!
+  "Let ms of the game pass, on the wall clock and the monotonic one."
+  [{:keys [mono]} ms]
+  (swap! clock + ms)
+  (swap! mono + ms))
+
+(deftest wall-time-and-deadline-leave-out-a-host-suspend-seen-before-the-call
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen] :as s} (after-a-suspend {'waits waits})
+              deadline (+ (base/ttl-now eng) 20000)]
+          (core/submit! eng (list 'waits {:spend {:wall-time 10} :deadline deadline}) {})
+          (await (core/tick! eng))
+          (pass! s 4000)
+          (await (core/tick! eng))
+          (is (empty? (job-ev seen :limit_reached)) "4 s into a 10 s wall-time and a 20 s deadline")
+          (pass! s 7000)
+          (await (core/tick! eng))
+          (is (= {:kind :limit-reached :cause {:line :wall-time :spend 10}} (stopped seen)))
+          (is (= 11 (get-in (first (job-ev seen :limit_reached)) [:data :report :uses :wall-time]))))))))
+
+(deftest a-deadline-is-reached-by-game-time-after-a-host-suspend
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen] :as s} (after-a-suspend {'waits waits})]
+          (core/submit! eng (list 'waits {:deadline (+ (base/ttl-now eng) 5000)}) {})
+          (await (core/tick! eng))
+          (pass! s 6000)
+          (await (core/tick! eng))
+          (is (= :deadline (:line (:cause (stopped seen))))))))))
 
 (defn slow-wait!
   "Make the fake body's wait take ms of the test clock."

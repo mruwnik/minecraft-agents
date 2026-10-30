@@ -1,7 +1,7 @@
 (ns engine.contract
   "The job contract (docs/goals-and-actions.md), pure parts. A frame's :contract state in its job memory is
   {:call {call keys, frozen at call start} :tally {:uses {:items {name n} :wear {tool uses} :health hp}
-  :yields {:items {name n}}} :ran-ms n :started-ms wall-clock ms its call froze}."
+  :yields {:items {name n}}} :ran-ms n :started-ms ms on the TTL clock (engine.core.base/ttl-now) its call froze}."
   (:require [clojure.string :as str]
             [clojure.walk :as walk]
             [engine.args :as a]))
@@ -62,7 +62,7 @@
 (defn add [a b] (merge-with (fn [x y] (if (map? x) (add x y) (+ x y))) a b))
 
 (defn used
-  "What a frame's :contract state has used of each spend line at wall-clock now: :job-time the s its rounds ran (plus
+  "What a frame's :contract state has used of each spend line at TTL-clock now: :job-time the s its rounds ran (plus
   extra-ms, the round in flight's), :wall-time the s since its call started, yields and waits included."
   [{:keys [tally ran-ms started-ms]} now extra-ms]
   (cond-> (assoc (:uses tally) :job-time (/ (+ (or ran-ms 0) extra-ms) 1000))
@@ -233,7 +233,7 @@
                                      (not-every? seq? (vals %)) "a value not a form"))}
    :settings {:doc "tuning settings for this run and the jobs it calls, {setting-key value}, each a declared setting; they beat the world's and the body's" :default nil
               :spec (a/valid-by "a map {setting-key value} of declared settings" #(when-not (map? %) "not a map"))}
-   :deadline {:doc "the wall-clock ms by which the call must have ended; default the caller's" :default nil
+   :deadline {:doc "the ms on the TTL clock (wall time less host suspends) by which the call must have ended; default the caller's" :default nil
               :spec (a/num-in 0 nil)}
    :worth {:doc "what the goal is worth, in seconds of the body's time, ##Inf for \"arrive\"; default the caller's, at the root the job's worth-of, else ##Inf" :default nil
            :spec (a/or-of (a/num-in 0 nil) #{##Inf})}

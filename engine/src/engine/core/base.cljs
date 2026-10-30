@@ -2,6 +2,7 @@
   "The engine's shared plumbing: the empty state, cuts as errors, accessors of the engine map, events,
   state and memory saves, ids and instances, and small predicates (paused?, stopped-result?, wait-reason)."
   (:require [engine.args :as a]
+            [engine.core.clock :as clock]
             [engine.composite :as composite]
             [engine.contract :as contract]
             [engine.core.tally :as tally]
@@ -83,26 +84,9 @@
   (let [w (get @(:waiting eng) id)]
     (when-not (and (:child (meta w)) (= id (:id (running eng)))) w)))
 
-(defn now [eng] ((:now eng)))
-
-(def suspend-gap-ms
-  "Wall-clock time beyond the monotonic clock's that counts as a host suspend, not jitter."
-  5000)
-
-(defn ttl-now
-  "The clock of TTLs (mutes, moves, entry :ttl-s): wall time minus the host suspends seen so far, so a suspend
-  or clock jump cannot end a TTL early. The suspended total is state :clock-lag, saved with the state, so
-  :until values stay comparable after a restart; the monotonic clock (:mono) is read at each call and the
-  excess of wall time over it since the last call is added to the lag."
-  [eng]
-  (let [wall (now eng)]
-    (when-let [mono-fn (:mono eng)]
-      (let [mono (mono-fn)
-            [wall0 mono0] (first (reset-vals! (:clock-mark eng) [wall mono]))
-            excess (- (- wall wall0) (- mono mono0))]
-        (when (> excess suspend-gap-ms)
-          (swap! (:state eng) update :clock-lag (fnil + 0) excess))))
-    (- wall (:clock-lag @(:state eng) 0))))
+(def now clock/now)
+(def suspend-gap-ms clock/suspend-gap-ms)
+(def ttl-now clock/ttl-now)
 
 (defn mark
   "Where a round's time is counted from: [wall ms less host suspends, CPU ms]."
@@ -280,7 +264,7 @@
       (emit! eng {:source :job :kind :child_ended :level :debug :job id :slot slot
                   :chain (mapv #(mem/path->id root (subvec slots 0 %)) (range (inc (count slots))))
                   :status :cut-off :ending {:kind :cut-off :cause cause}
-                  :report (contract/report (:contract child) (now eng))}))
+                  :report (contract/report (:contract child) (ttl-now eng))}))
     (cut-off! eng root slots child cause)))
 
 (defn cut-off-dropped!

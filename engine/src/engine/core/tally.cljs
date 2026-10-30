@@ -3,6 +3,7 @@
   time to its own frame, kept in job memory under :contract so they survive a cut and a restart; a frame that ends
   hands out its report."
   (:require [engine.contract :as contract]
+            [engine.core.clock :refer [ttl-now]]
             [engine.hurt :as hurt]
             [engine.memory :as mem]))
 
@@ -58,7 +59,7 @@
     (update-frames! eng root (frame-paths slots) #(update % :ran-ms (fnil + 0) ms))))
 
 (defn report [eng root slots]
-  (contract/report (:contract (mem/job-mem (mem/view (:store eng)) root slots)) ((:now eng))))
+  (contract/report (:contract (mem/job-mem (mem/view (:store eng)) root slots)) (ttl-now eng)))
 
 (defn remember!
   "Keep {:job sym :report report} (and :target, the args the job's target names, and the :kind and :cause of its
