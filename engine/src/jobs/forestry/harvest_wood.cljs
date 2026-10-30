@@ -167,8 +167,8 @@
       (:yields e) (assoc :yields (:yields e)))))
 
 (defn trip-quote
-  "quote-of at once, for the trip's food (ready/trip-fed): each tree fell-tree's figure without its walk (go-to's quote
-  waits), of a tree of trees/logs-per-tree logs."
+  "quote-of at once, for the trip's food (ready/trip-fed): each tree fell-tree's figure (fell-tree/fell-s) without its
+  walk (go-to's quote waits), of a tree of trees/logs-per-tree logs."
   [c]
-  (let [mean (+ 2 3 (* 1.5 (trees/logs-per-tree)))]
-    (scaled c [2 mean mean])))
+  (let [[least mean] (fell-tree/fell-s [0 0] (trees/logs-per-tree))]
+    (scaled c [least mean mean])))

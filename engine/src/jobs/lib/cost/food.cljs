@@ -66,22 +66,57 @@
   [health mean]
   (* (value/food-point-worth) (risk/work-death-chance :long health (or mean 0))))
 
+(defn point-price
+  "Seconds a point of home food source {:points :fetch-s :point-s} costs, taken whole: the order the trip's lots and
+  get-food take home food in."
+  [{:keys [points fetch-s point-s]}]
+  (/ (+ (or fetch-s 0) (* (or point-s 0) points)) points))
+
+(defn worth-fetching?
+  "Whether home food source {:points :fetch-s :point-s} pays its fetch for want points: its fetch and work for the points
+  it gives toward them cost less than getting them in the field (field-point-s a point)."
+  [{:keys [points fetch-s point-s]} want]
+  (let [n (min points want)]
+    (and (pos? n) (< (+ fetch-s (* point-s n)) (* n (field-point-s))))))
+
+(defn walk-reach
+  "Blocks a walk to food giving points may take while it pays (worth-fetching? with no work a point): its trip and walk
+  (cost.value/trip, per-block) cost less than the points got in the field."
+  [points]
+  (max 0 (/ (- (* points (field-point-s)) (value/trip)) (value/per-block))))
+
+(defn fetchable
+  "The home food sources get-food takes for want points, in its order: cheapest a point first (point-price), each while
+  it is worth-fetching? for the points still wanted."
+  [home want]
+  (loop [[s & more :as ss] (sort-by point-price (filter (comp pos? :points) home)) want want out []]
+    (cond (or (empty? ss) (<= want 0)) out
+          (worth-fetching? s want) (recur more (- want (:points s)) (conj out s))
+          :else (recur more want out))))
+
 (defn acquire-s
-  "Seconds getting the food points past had up to k takes, by lots [{:points :fixed :per}] taken in order (a lot's :fixed
-  once any of it is taken, :per a point), then field-point-s a point while field?, else ##Inf; 0 up to had."
+  "Seconds getting the food points past had up to k takes: the home food lots get-food takes for them (fetchable, the
+  one rule: a lot only while it is cheaper than the field), each its :fetch-s once and :point-s a point, then
+  field-point-s a point while field?, else ##Inf; 0 up to had."
   [{:keys [had lots field?]} k]
-  (loop [need (- k (or had 0)) [{:keys [points fixed per]} & more :as ls] lots s 0]
-    (cond (<= need 0) s
-          (empty? ls) (if field? (+ s (* need (field-point-s))) ##Inf)
-          :else (let [n (min need points)] (recur (- need n) more (+ s fixed (* per n)))))))
+  (let [want (- k (or had 0))]
+    (loop [need want [{:keys [points fetch-s point-s]} & more :as ls] (fetchable lots want) s 0]
+      (cond (<= need 0) s
+            (empty? ls) (if field? (+ s (* need (field-point-s))) ##Inf)
+            :else (let [n (min need points)] (recur (- need n) more (+ s (or fetch-s 0) (* (or point-s 0) n))))))))
 
 (defn slot-s
-  "Seconds k food points cost in pack slots: each slot more than had's that the food needs (a stack of :stack-points), past
-  the free slots the trip's loot leaves, costs the loot a slot holds (:worth); 0 without :slots."
+  "Seconds k food points cost in pack slots: the slots more than had's stacks fill (a stack of :stack-points), past the
+  free slots the trip's loot and spoil leave, each push out the cheapest loot slot (:worths, a slot's worth each,
+  cheapest first: a full pack drops its cheapest stack); ##Inf past the whole pack; 0 without :slots."
   [{:keys [had slots]} k]
-  (let [{:keys [free loot worth stack-points]} slots]
+  (let [{:keys [free worths stack-points]} slots
+        stacks #(js/Math.ceil (/ (max 0 %) stack-points))]
     (if (and slots (pos? stack-points))
-      (* worth (max 0 (- (js/Math.ceil (/ (max 0 (- k (or had 0))) stack-points)) (max 0 (- free loot)))))
+      (let [over (- (- (stacks k) (stacks (or had 0))) (max 0 (- free (count worths))))]
+        (cond (<= over 0) 0
+              (> over (count worths)) ##Inf
+              :else (reduce + (take over worths))))
       0)))
 
 (defn run-out-s
@@ -114,18 +149,12 @@
             (let [k (inc k) ck (trip-cost trip sp k)]
               (if (< ck best-cost) (recur k k ck) (recur k best best-cost)))))))))
 
-(defn point-price
-  "Seconds a point of home food source {:points :fetch-s :point-s} costs, taken whole: the order the trip's lots and
-  get-food take home food in."
-  [{:keys [points fetch-s point-s]}]
-  (/ (+ (or fetch-s 0) (* (or point-s 0) points)) points))
-
 (defn priced-trip
   "Trip {:figure :health :death-s :far? :had :field? :slots} over home food [{:points :walk-s :blocks :fetch-s :point-s}]
   (seen stocked chests, ripe crops, pen surplus; walk-s and blocks the walk to it from the trip's far end, fetch-s the
   fetch of it from here, point-s each point's work) with :point-cost (death-loss over the figure's mean), :back-s (the walk
   to the nearest), :walk-out (with a known far end, far?: that walk and back, cost.value/trip and walk-cost) and :lots
-  (the home food, cheapest a point first)."
+  (the home food, whose order and choice are fetchable's)."
   [home {:keys [figure health far?] :as trip}]
   (let [home (filter (comp pos? :points) home)
         near (first (sort-by :walk-s home))]
@@ -133,8 +162,7 @@
            :point-cost (death-loss (or health 20) (second figure))
            :back-s (or (:walk-s near) 0)
            :walk-out (if (and near far?) (+ (value/trip) (:cost (value/walk-cost {:distance (:blocks near)}))) ##Inf)
-           :lots (->> (sort-by point-price home)
-                      (map (fn [{:keys [points fetch-s point-s]}] {:points points :fixed (or fetch-s 0) :per (or point-s 0)}))))))
+           :lots home)))
 
 (defn carry-points
   "Food points the body must carry on trip (priced-trip's args) with home food: trip-points, and at least the 3-day
@@ -142,28 +170,6 @@
   [home trip]
   (let [stored (reduce + (map #(max 0 (- (:points %) (* (:walk-s %) points-per-s))) (filter (comp pos? :points) home)))]
     (max (trip-points (priced-trip home trip)) (- reserve-points stored))))
-
-(defn worth-fetching?
-  "Whether home food source {:points :fetch-s :point-s} pays its fetch for want points: its fetch and work for the points
-  it gives toward them cost less than getting them in the field (field-point-s a point)."
-  [{:keys [points fetch-s point-s]} want]
-  (let [n (min points want)]
-    (and (pos? n) (< (+ fetch-s (* point-s n)) (* n (field-point-s))))))
-
-(defn walk-reach
-  "Blocks a walk to food giving points may take while it pays (worth-fetching? with no work a point): its trip and walk
-  (cost.value/trip, per-block) cost less than the points got in the field."
-  [points]
-  (max 0 (/ (- (* points (field-point-s)) (value/trip)) (value/per-block))))
-
-(defn fetchable
-  "The home food sources get-food takes for want points, in its order: cheapest a point first (point-price), each while
-  it is worth-fetching? for the points still wanted."
-  [home want]
-  (loop [[s & more :as ss] (sort-by point-price (filter (comp pos? :points) home)) want want out []]
-    (cond (or (empty? ss) (<= want 0)) out
-          (worth-fetching? s want) (recur more (- want (:points s)) (conj out s))
-          :else (recur more want out))))
 
 (defn trip-fetch
   "{:to :had :go-on-s} before trip (priced-trip's args, :had the carried points), or nil when to is not more than had: to

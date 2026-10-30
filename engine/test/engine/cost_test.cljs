@@ -174,7 +174,7 @@
     (is (= 60 (carry [] kit :far? false)) "no home food: a point hunted before the trip costs what one hunted on the way does, so the 3-day floor")
     (is (zero? (food-cost/trip-points (food-cost/priced-trip [(chest 100 :fetch-s 2000)] (assoc trip :figure kit :far? false))))
         "a chest whose fetch costs more than running out saves is not fetched")
-    (is (< (carry [(chest 320)] kit :far? false :slots {:free 2 :loot 2 :worth 30 :stack-points 64}) (carry [(chest 320)] kit :far? false))
+    (is (< (carry [(chest 320)] kit :far? false :slots {:free 2 :worths [30 30] :stack-points 64}) (carry [(chest 320)] kit :far? false))
         "a trip whose loot fills the pack carries less: each slot of food costs the loot it would hold")))
 
 (deftest the-trip-carry-is-where-a-point-more-stops-paying
@@ -183,6 +183,19 @@
     (is (< (food-cost/trip-cost t k) (food-cost/trip-cost t (dec k))))
     (is (<= (food-cost/trip-cost t k) (food-cost/trip-cost t (inc k))))
     (is (= 82 (:walk-out t)) "the walk home and out again: a trip of 10 s and 240 blocks at 0.3")))
+
+(deftest home-food-is-taken-by-one-rule-only-while-cheaper-than-the-field
+  (let [dear (chest 100 :fetch-s 2000)
+        t (food-cost/priced-trip [dear] (assoc trip :figure [0 840 10800]))]
+    (is (= [] (food-cost/fetchable [dear] 10)) "get-food skips a lot dearer a point than the field")
+    (is (= (* 10 (food-cost/field-point-s)) (food-cost/acquire-s t 10)) "and so does the trip's price: the field's")))
+
+(deftest a-food-slot-pushes-out-the-cheapest-loot-and-fills-carried-stacks-first
+  (let [slots {:free 3 :worths [1 1 40] :stack-points 320}
+        s #(food-cost/slot-s {:had %1 :slots slots} %2)]
+    (is (zero? (s 10 300)) "the carried stack has room for the rest")
+    (is (= 1 (s 10 330)) "a second stack pushes out a slot of spoil, not the ore")
+    (is (= ##Inf (s 0 1300)) "past the whole pack")))
 
 (deftest a-walk-to-food-reaches-as-far-as-worth-fetching-pays
   (let [d (food-cost/walk-reach 6)

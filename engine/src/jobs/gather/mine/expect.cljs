@@ -1,7 +1,8 @@
 (ns jobs.gather.mine.expect
   "What a mine or dig-for call is expected to do from where the body stands, for its start check (safe?): the seconds it
   stays at its place (stay-s) and the torches it hangs (torch-way)."
-  (:require [jobs.gather.mine.descent :as descent]
+  (:require [engine.game :as game]
+            [jobs.gather.mine.descent :as descent]
             [jobs.gather.mine.targets :as targets]
             [jobs.gather.mine.way-set :as mw]
             [jobs.lib.cost :as cost]
@@ -50,6 +51,18 @@
        (if (mw/stair? (:args c)) (stair-time/steps-s :down down) (* down (cost/walk-step-s)))
        (stair-time/steps-s :level level)
        (if (pos? level) (* left (dig-s (targets/main-block (:args c)))) 0))))
+
+(defn spoil
+  "{name fig} of the stone n steps of stair or tunnel dig up and pick up: the cells a step clears to the body's height."
+  [n]
+  (let [k (* n (js/Math.ceil game/body-height))]
+    (when (pos? k) {"cobblestone" [0 k k]})))
+
+(defn trip-quote
+  "Quote q of a mine or dig-for call with its :spoil (the stair and tunnel of run), for the trip's food (ready/trip-fed)."
+  [c q]
+  (let [{:keys [down level]} (run c)]
+    (cond-> q (spoil (+ down level)) (assoc :spoil (spoil (+ down level))))))
 
 (defn torch-way
   "The torch way (ready/dark-near-ok) of a call with :torches: one torch at the spot of its seen digs (torches/spot-torch!, priced as a stretch of its own: torch-gap blocks)

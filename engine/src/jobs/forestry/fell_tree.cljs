@@ -468,16 +468,21 @@
       (apply contract/ok :felled (str "fell-tree: the tree is down, " dug " logs dug") data)
       (apply contract/later :felling (str "fell-tree: " dug " logs dug") data))))
 
+(defn fell-s
+  "[least mean] seconds felling a tree of n logs takes after a walk of [least mean] seconds: 2 s, the walk, then 3 s and
+  1.5 s a log."
+  [[wl wm] n]
+  [(+ 2 wl) (+ 2 wm 3 (* 1.5 n))])
+
 (defn ^:async quote-of
-  "The walk to the tree's base as go-to quotes it, then 3 s and 1.5 s a log, and the wear of the axe on the logs. The
+  "The walk to the tree's base as go-to quotes it, then fell-s, and the wear of the axe on the logs. The
   logs are picked up: one log item per log of the tree."
   [c]
   (let [{:keys [species radius at]} (:args c)
         t (if at (tree-at (:primitives c) at) (tree-near (:primitives c) radius species #{} (:leafless? (:args c))))
         n (if t (count (log/tree-logs c radius t)) 0)
         [wl wm] (or (when t (get-in (await (ctx/quote c 'jobs.movement.go-to {:pos (walk-target (:primitives c) t) :range 2})) [:uses :job-time])) [0 0])
-        least (+ 2 wl)
-        mean (+ 2 wm 3 (* 1.5 n))]
+        [least mean] (fell-s [wl wm] n)]
     (cond-> {:uses {:job-time [least mean (max mean (time-s))]} :done [0 1 1]}
       (pos? n) (-> (assoc-in [:uses :wear] (choose/dig-wear c (repeat n (str (:species t) "_log"))))
                    (assoc :yields {:items {(str (:species t) "_log") [0 n n]}})))))

@@ -142,28 +142,33 @@
     {:figure (when s [s s s]) :far (u/self-pos c) :far? true}))
 
 (defn loot-slots
-  "{:free :loot :worth :stack-points} of the pack on a trip that yields items {name [least mean most]}: its free slots, the
-  slots the loot's mean fills, what the loot holds a slot (cost.value/item-value), and the food points a stack of the
-  best carried food holds (bread's with none); nil without a yield."
-  [c yields]
+  "{:free :worths :stack-points} of the pack on a trip that yields items {name [least mean most]} (its loot and the spoil
+  it digs up): its free slots, the worth of each slot the items' means fill (cost.value/item-value of a stack's share),
+  cheapest first, and the food points a stack of the best carried food holds (bread's with none); nil without items."
+  [c items]
   (let [p (:primitives c)
-        loot (for [[n [_ mean]] yields :when (pos? mean)] {:name n :count mean})
-        n (reduce + (map #(js/Math.ceil (/ (:count %) facts/stack-size)) loot))
+        worths (sort (for [[n [_ mean]] items :when (pos? mean)
+                           :let [k (js/Math.ceil (/ mean facts/stack-size))
+                                 w (/ (:value (cost/item-value [{:name n :count mean}])) k)]
+                           _ (range k)]
+                       w))
         best (apply max (foods/points "bread") (keep #(when (food/reserve-food? (:name %)) (foods/points (:name %))) (u/inventory p)))]
-    (when (pos? n)
-      {:free (u/free-slots p) :loot n :worth (/ (:value (cost/item-value loot)) n) :stack-points (* facts/stack-size best)})))
+    (when (seq worths)
+      {:free (u/free-slots p) :worths (vec worths) :stack-points (* facts/stack-size best)})))
 
 (defn quote-trip
   "The trip of c's own job, by its quote q: q's job-time figure, its most held to the spend left, ending at q's
   :moves-to, else at place (a fn of c, the job's work place) when given, else unknown (far? false: the walk is
-  from where the body stands); :slots, the pack's room for q's yield (loot-slots)."
+  from where the body stands); :slots, the pack's room for q's yield and its :spoil {name fig} (the blocks the work
+  digs up and picks up beside its yield, a trip quote's own key) (loot-slots)."
   ([c q] (quote-trip c q nil))
   ([c q place]
    (let [[least mean most] (get-in q [:uses :job-time] [0 0 ##Inf])
          most (min most (or (get-in (chain-trip c) [:figure 2]) ##Inf))
-         to (or (when-let [[x y z] (:moves-to q)] {:x x :y y :z z}) (when place (some-> (place c) a/cell)))]
+         to (or (when-let [[x y z] (:moves-to q)] {:x x :y y :z z}) (when place (some-> (place c) a/cell)))
+         items (merge-with #(mapv + %1 %2) (get-in q [:yields :items]) (:spoil q))]
      (cond-> {:figure [(min least most) (min mean most) most] :far (or to (u/self-pos c)) :far? (some? to)}
-       (get-in q [:yields :items]) (assoc :slots (loot-slots c (get-in q [:yields :items])))))))
+       (seq items) (assoc :slots (loot-slots c items))))))
 
 (defn priced
   "trip {:figure :far :far? :slots} with what cost.food/priced-trip reads of the body: its health, the carried food points

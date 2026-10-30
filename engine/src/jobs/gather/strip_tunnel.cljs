@@ -7,6 +7,7 @@
             [engine.settings :as settings]
             [jobs.gather.mine-stay :as stay]
             [jobs.gather.mine.cause :as cause]
+            [jobs.gather.mine.expect :as expect]
             [jobs.gather.mine.targets :as targets :refer [rules-in step-cell within-own-zone]]
             [jobs.gather.mine.torches :as torches]
             [jobs.lib.torch-stock :as stock]
@@ -69,9 +70,9 @@
 
 (def safe? (ready/unless-outmatched (price/staying :long (ready/dark-near-ok torch-way work-place/ahead (ready/safe-at-or work-place/ahead ready/safe-if-lit true)))))
 
-(declare quote-of)
+(declare quote-of trip-quote)
 
-(def fit? (ready/trip-fed (ready/fit-for :long) work-place/ahead #(quote-of %)))
+(def fit? (ready/trip-fed (ready/fit-for :long) work-place/ahead #(trip-quote %)))
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
@@ -246,10 +247,15 @@
     (contract/ok :done "the stretch of tunnel is cut" :units :tunnels :done 1 :left 0)
     (contract/later :cutting "the tunnel is being cut" :units :tunnels :done 0 :left 1)))
 
+(defn steps-left [c] (max 0 (- (:limit (:args c)) (:steps (:args c) 0))))
+
 (defn quote-of [c]
-  (let [n (max 0 (- (:limit (:args c)) (:steps (:args c) 0)))
+  (let [n (steps-left c)
         s (* n 2 1.2)]
     {:uses {:job-time [(* 0.5 s) s (* 4 s)]} :done [0 1 1]}))
+
+(defn trip-quote "quote-of with the stone of the steps left as its :spoil (mine.expect/spoil), for the trip's food." [c]
+  (cond-> (quote-of c) (expect/spoil (steps-left c)) (assoc :spoil (expect/spoil (steps-left c)))))
 
 (defn ^:async round [c] (await (pace/steps! c #(step c))))
 

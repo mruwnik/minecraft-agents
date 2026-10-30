@@ -3,6 +3,9 @@
   (:require [jobs.survival.get-food.sources :as get-food-sources]
             [jobs.forestry.harvest-wood :as harvest-wood]
             [jobs.animals.herd :as herd]
+            [jobs.farm.maintain :as farm-maintain]
+            [jobs.forestry.maintain :as forestry-maintain]
+            [jobs.lib.home-food :as home-food]
             [cljs.test :refer [deftest is are testing]]
             [engine.hut-shelter-test :as hut]
             [engine.ctx :as ctx]
@@ -1232,11 +1235,23 @@
         "get-food's :source way reads the same list by the same rule")))
 
 (deftest harvest-wood-fetches-its-trips-food-by-a-quote-that-answers-at-once
-  (let [fit (ready/trip-fed ready/ok (constantly {:x 40 :y 64 :z 0}) harvest-wood/trip-quote)
-        [kind _ {[job] :look-first}] (fit (assoc (trip-ctx 0 nil [3 64 0]) :args {:count 30}))]
-    (is (= [:ok 'jobs.survival.get-food] [kind job]) "ten trees of about 22 s each, no food carried: bread from the chest first")))
+  (let [[kind _ {[job] :look-first}] (harvest-wood/fit? (assoc (trip-ctx 0 nil [3 64 0]) :args {:count 30}))]
+    (is (= [:ok 'jobs.survival.get-food] [kind job]) "eight trees of about 25 s each, no food carried: bread from the chest first")))
 
 (deftest the-long-trips-away-from-home-fetch-their-food-first
   (are [fit args] (= 'jobs.survival.get-food (first (:look-first (nth (fit (assoc (trip-ctx 0 nil [3 64 0]) :args args)) 2))))
+    mine/fit? {:block "iron_ore" :count 64}
     dig-for/fit? {:block "iron_ore" :count 64}
+    tunnel-job/fit? {:target {:x 400 :y 64 :z 0}}
+    path/fit? {:from {:x 300 :y 64 :z 0} :to {:x 307 :y 64 :z 63}}
+    farm-maintain/fit? {}
+    forestry-maintain/fit? {}
     herd/fit? {:mob "cow" :target 20}))
+
+(deftest a-trip-prices-the-spoil-it-digs-up-as-the-cheapest-slots
+  (let [{:keys [worths]} (:slots (home-food/quote-trip (trip-ctx 0 nil nil)
+                                                       {:uses {:job-time [0 600 1800]} :yields {:items {"iron_ore" [0 8 8]}}
+                                                        :spoil {"cobblestone" [0 128 128]}}))]
+    (is (= 3 (count worths)) "two stacks of stone and one of ore")
+    (is (< (first worths) (last worths)) "a stone slot is the cheapest: a food stack pushes it out first")))
+
