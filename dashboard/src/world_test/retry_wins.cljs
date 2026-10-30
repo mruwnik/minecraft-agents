@@ -6,7 +6,7 @@
   one try, start to end). Kinds (`kinds`): :craft the craft action (a timeout fails), :furnace the furnace action (a busy
   slot fails), :dig the dig action (a timeout, a failure or an unreachable block fails), :place the place action (an occupied cell, no support, a failure or a timeout fails) and jumpPlace (no block raised, or part of them, fails), :walk a go-to's end (not arrived
   fails; read from the :result of logs before 2026-10-19, after it from the root go-to's :completed/:stopped and from a
-  job.child_ended of a job id that has a go-to.retrying, in the debug log: `covered` drops a body's go-to rows between its last
+  job.child_ended of a job id that has any go-to.* event, in the debug log: `covered` drops a body's go-to rows between its last
   :result and its first child_ended, which no log shows an end of), :respond respond-to-hostile's :hostile.call (a call that changed nothing fails), :risky-stay jobs.lib.near/risky-wait!'s
   events (:near.risky-wait a refusal, :near.risky-over the stay allowed after one), :comb-look jobs.apiary.harvest's look
   for comb (:apiary.comb-wait a look that took none, :apiary.comb-over a look that took some after one), :kit-later jobs.items.get-kit's bill after a :later stop (:kit.later-wait a stop rested on, :kit.later-over a bill round that ended otherwise after one); :pooled all kinds' tries together,
@@ -64,7 +64,10 @@
 
       (str/includes? line ":kind :child_ended")
       (when-some [arrived (ending-arrived line)]
-        {:kind :walk :key (key) :t (t) :edge :end :fail? (false? arrived) :child? true}))))
+        {:kind :walk :key (key) :t (t) :edge :end :fail? (false? arrived) :child? true})
+
+      (str/includes? line ":kind :go-to.")
+      {:kind :go-to-mark :key (key) :t (t) :edge :mark})))
 
 (defn retries
   "{:key :won? :s} of each try that followed a failed one, from the scanned ends of one kind."
@@ -83,14 +86,15 @@
 
 (defn- go-to-ends
   "The :walk rows of the scanned rows once: an end from the root go-to or a child_ended duplicates a :result within a second
-  of it (logs of 2026-10-14 to 19 hold both); a child_ended counts only for a job id that has a go-to.retrying (other jobs'
-  endings carry :arrived too)."
+  of it (logs of 2026-10-14 to 19 hold both); a child_ended counts only for a job id that has any go-to.* event (other jobs'
+  endings carry :arrived too; go-to.retrying alone would keep only the calls that planned again). The marks are dropped."
   [rows]
-  (let [retrying (into #{} (comp (filter #(= :walk-round (:kind %))) (map :key)) rows)
+  (let [retrying (into #{} (comp (filter #(#{:walk-round :go-to-mark} (:kind %))) (map :key)) rows)
         results (group-by :key (filter :result? rows))]
-    (remove #(and (= :walk (:kind %)) (not (:result? %))
+    (remove #(or (= :go-to-mark (:kind %))
+                 (and (= :walk (:kind %)) (not (:result? %))
                   (or (and (:child? %) (not (retrying (:key %))))
-                      (some (fn [r] (< (abs (- (:t r) (:t %))) 1000)) (results (:key %)))))
+                      (some (fn [r] (< (abs (- (:t r) (:t %))) 1000)) (results (:key %))))))
             rows)))
 
 (defn- rounds

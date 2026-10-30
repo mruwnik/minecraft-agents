@@ -111,3 +111,9 @@
   (let [rows (keep r/scan-line [(walk "j1/walk" 1000 true) (retrying-try "j1/walk" 2000 1) (root-end 3000 :stopped {:arrived false}) (retrying-try "j2/walk" 4000 1) (child-end "j2/walk" 5000 {:arrived true}) (retrying-try "j2/walk" 6000 1)])]
     (is (= [1000 5000] (map :t (filter #(= :walk (:kind %)) (r/covered rows)))))
     (is (= [6000] (map :t (filter #(= :walk-round (:kind %)) (r/covered rows)))))))
+
+(deftest a-child-ending-counts-for-a-job-id-with-any-go-to-event
+  (let [mark (pr-str {:generation-id "g" :time-ms 0 :source :job :kind :go-to.escalated :context {:job-id "j1/walk"} :data {}})
+        rows (keep r/scan-line [mark (child-end "j1/walk" 1000 {:arrived false}) (child-end "j1/walk" 5000 {:arrived true})])]
+    (is (= {:won 1 :retries 1 :calls 1} (select-keys (:walk (r/report rows)) [:won :retries :calls])) "a call that never re-planned is kept")
+    (is (nil? (:go-to-mark (r/report rows))))))
