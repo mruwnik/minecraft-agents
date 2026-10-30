@@ -474,13 +474,14 @@
           (is (= 40 (js/Math.floor y)) (str "on the ravine floor: at " (at p)))
           (is (<= (js/Math.hypot (- 44 x) z) 2) (str "at " (at p))))))))
 
-(deftest a-way-down-onto-unseen-floors-is-not-tried-by-a-walk-that-could-not-climb-out-of-a-deeper-fall
+(deftest a-way-down-onto-unseen-floors-is-walked-without-stair-or-pillar-ways-at-a-finite-worth
+  ;; a floor not there a step down is priced as the fall under it and the climb back out whatever the call's :ways
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p]} (await (go! ravine {:pos {:x 44 :z 0} :range 2 :worth 500 :ways #{:walk} :settings {:jobs.movement.go-to.tuning/goal-danger :end}}))]
-          (is (= {:arrived false :why :unseen-floors} (select-keys @out [:arrived :why])) (pr-str @out))
-          (is (= 64 (js/Math.floor (second (at p)))) "it never set off down the ramp"))))))
+          (is (:arrived @out) (pr-str @out))
+          (is (= 40 (js/Math.floor (second (at p)))) (str "on the ravine floor: at " (at p))))))))
 
 (deftest a-way-down-a-ramp-onto-unseen-floors-is-not-tried-for-a-goal-worth-less-than-turning-back
   ;; the first walk, at a goal worth little, names what turning back costs; a goal worth half of that is refused the same way

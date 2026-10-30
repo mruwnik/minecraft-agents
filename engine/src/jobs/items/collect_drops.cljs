@@ -30,7 +30,7 @@
   does not move it, so drops far away, e.g. other bodies', are never chased).
   An item is tried once; one that is gone, cannot be reached or picked up is skipped. A drop that slid to another cell while the body
   walked or dug to it is judged again there (at most ::max-moves times).
-  An item more than 2 blocks off (not above the feet), or more than a block lower than the feet, is walked to first (a jobs.movement.go-to child, range 1, which prices
+  An item more than 2 blocks off (not above the feet), or more than a block lower than the feet, is walked to first (a jobs.movement.go-to child, range 1, ways walk, stair and pillar, which prices
   falls and dangers against the worth of the drops in sight, :worth); one it cannot reach is left, with a debug collect-drops.left {:reason :unreachable}, or {:reason :risky :risk :allowed} when go-to declined the walk for its route risk (also in the stop's :left). A nearer one whose
   straight way crosses a drop (a shaft between) is walked to the same way. A body whose centre overhangs a drop first steps onto
   the block holding it up; failing that the drop is left {:reason :unsafe-floor}.
@@ -275,16 +275,15 @@
     (reduce + 0 (map #(item-worth c %) (if (some #(= (.-id %) (.-id item)) cands) cands (cons item cands))))))
 
 (defn ^:async walk-down!
-  "Walk within a block of item, more than a block lower than the feet (or, with ways, higher: a column top is climbed by
-  go-to's pillar or stair): one go-to call (child/run!*, slot :walk). :arrived, :continue (go-to waits on the world) or :unreachable (go-to's :risky cause kept in the job memory as :walk-fail, see walk-fail)."
-  ([c item] (walk-down! c item #{:walk :clear-seal}))
-  ([c item ways]
-  (let [r (await (child/run!* c :walk 'jobs.movement.go-to {:pos (item-cell item) :range 1 :ways ways :worth (drops-worth c item)}))]
+  "Walk within a block of item, lower or higher than the feet, with go-to's walk, stair and pillar ways (a drop in a pit or
+  on a column top; go-to prices each): one go-to call (child/run!*, slot :walk). :arrived, :continue (go-to waits on the world) or :unreachable (go-to's :risky cause kept in the job memory as :walk-fail, see walk-fail)."
+  [c item]
+  (let [r (await (child/run!* c :walk 'jobs.movement.go-to {:pos (item-cell item) :range 1 :ways #{:walk :pillar :stair :clear-seal} :worth (drops-worth c item)}))]
     (cond
       (= :continue r) :continue
       (and (= :done (:kind r)) (:arrived (:data r))) :arrived
       :else (do (ctx/update-mem! c assoc :walk-fail (select-keys (:cause r) [:reason :risk :allowed]))
-                :unreachable)))))
+                :unreachable))))
 
 (defn walk-fail
   "Why a drop no walk reaches is left: :risky with go-to's risk and allowed when its last walk was declined for route risk, else :unreachable. {:reason ...}"
@@ -651,7 +650,7 @@
         r (when-not (or moving? (= :continue walk) (= :continue dug) why (= :unreachable walk)) (await (collect!)))
         stuck? (and r (= "unreachable" (.-status r)))
         up? (and stuck? (high? c item))
-        walked-up (when up? (await (walk-down! c item #{:walk :pillar :stair :clear-seal})))
+        walked-up (when up? (await (walk-down! c item)))
         up (if (= :unreachable walked-up) (or (await (pillar-to! c item)) walked-up) walked-up)
         near-walk (when (and stuck? (not up?) (nil? walk)) (await (walk-down! c item)))
         dug2 (when (and stuck? (not up?) (not= :arrived near-walk) (:dig (:args c))) (await (dig-to! c item)))

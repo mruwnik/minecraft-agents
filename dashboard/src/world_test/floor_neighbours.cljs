@@ -4,7 +4,9 @@
   fluid or ice, jobs.lib.surface), the floor of the next stand one block over (x or z, inside the chunk), by the kind of the
   step (jobs.lib.walk.sight/floor-kind): :level (its feet and head open), :up (its feet and head open, and the cell over
   the stand's head), :down (open from over its head down to its feet one lower), :drop (likewise two or three lower).
-  Present: the step's floor is a floor; absent: anything else. Split by the stand's sky light (:lit over 0, :dark 0), as
+  Present: the step's floor is a floor; absent: anything else, and for a :down or :drop step :below, the blocks under its
+  floor to the first cell that is not open (what a walk that goes on down from there lands on), at most max-below + 1.
+  Split by the stand's sky light (:lit over 0, :dark 0), as
   surface and caves differ. Per chunk the shares are kept so the prior's spread is fitted by moments over chunks (a call
   walks one place). Every stride-th column file in name order is read, the fixture plot grid left out. Pure parts: tally,
   report."
@@ -16,6 +18,7 @@
 
 (def bottom-y -63)
 (def top-y 318)
+(def max-below 16)
 
 (defn open? [n] (boolean (and n (surface/open? n))))
 (defn floor? [n] (boolean (and n (not (surface/open? n)) (not (surface/canopy? n)) (not (surface/no-floor n)) (not (bs/fluids n)))))
@@ -38,9 +41,16 @@
         (recur (inc d) (conj out [(if (= 1 d) :down :drop) (- y d 1)]))
         out))))
 
+(defn below
+  "Blocks under floor y fy of column b to the first cell that is not open, at most max-below + 1."
+  [b fy]
+  (or (first (filter #(not (open? (b (- fy %)))) (range (inc max-below)))) (inc max-below)))
+
+(defn merge-tallies [& ts] (apply merge-with (partial merge-with #(if (map? %1) (merge-with + %1 %2) (+ %1 %2))) {} ts))
+
 (defn tally
-  "{[kind light] {:present n :absent n}} of the steps out of every stand of columns a (fn [y] -> name or nil) to their
-  neighbours bs, sky (fn [y] -> sky light) of a's feet."
+  "{[kind light] {:present n :absent n :below {blocks n}}} of the steps out of every stand of columns a (fn [y] -> name or
+  nil) to their neighbours bs, sky (fn [y] -> sky light) of a's feet."
   [a sky bs]
   (reduce (fn [m y]
             (if-not (and (floor? (a (dec y))) (open? (a y)) (open? (a (inc y))))
@@ -48,7 +58,10 @@
               (let [light (if (pos? (or (sky y) 0)) :lit :dark)]
                 (reduce (fn [m b]
                           (reduce (fn [m [kind fy]]
-                                    (update-in m [[kind light] (if (floor? (b fy)) :present :absent)] (fnil inc 0)))
+                                    (if (floor? (b fy))
+                                      (update-in m [[kind light] :present] (fnil inc 0))
+                                      (cond-> (update-in m [[kind light] :absent] (fnil inc 0))
+                                        (#{:down :drop} kind) (update-in [[kind light] :below (below b fy)] (fnil inc 0)))))
                                   m (concat (some-> (step-floor a b y) vector) (down-floors b y))))
                         m bs))))
           {} (range bottom-y top-y)))
@@ -58,8 +71,7 @@
   [at cx cz]
   (let [col (memoize (fn [x z] (let [names (into {} (map (fn [y] [y (:name (at (+ (* 16 cx) x) y (+ (* 16 cz) z)))])) (range (- bottom-y 5) (+ top-y 4)))] names)))
         sky (fn [x z] (fn [y] (:sky (at (+ (* 16 cx) x) y (+ (* 16 cz) z)))))]
-    (apply merge-with (partial merge-with +)
-           {}
+    (apply merge-tallies
            (for [x (range 16) z (range 16)
                  :let [bs (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
                                 :let [x' (+ x dx) z' (+ z dz)]
@@ -68,8 +80,9 @@
              (tally (col x z) (sky x z) bs)))))
 
 (defn report
-  "Of chunk tallies: per [kind light] the pooled {:present :absent}, :p-absent pooled, and :prior [absent present] Beta
-  pseudo-counts fitted by moments over the chunks with at least min-n steps of it (field-passes/beta-fit), with :n their sum."
+  "Of chunk tallies: per [kind light] the pooled {:present :absent}, :p-absent pooled, :below pooled (absent floors by the
+  blocks under them, below), and :prior [absent present] Beta pseudo-counts fitted by moments over the chunks with at
+  least min-n steps of it (field-passes/beta-fit), with :n their sum."
   [tallies min-n]
   (into {}
         (for [k (distinct (mapcat keys tallies))
@@ -81,6 +94,7 @@
                                  rows)
                     [a b] (if (> (count shares) 1) (field-passes/beta-fit shares absent (+ absent present)) [absent present])]]
           [k {:absent absent :present present :chunks (count shares)
+              :below (into (sorted-map) (apply merge-with + {} (keep :below rows)))
               :p-absent (/ (js/Math.round (* 1000 (/ absent (max 1 (+ absent present))))) 1000)
               :prior [a b] :n (/ (js/Math.round (* 10 (+ a b))) 10)}])))
 

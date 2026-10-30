@@ -290,6 +290,18 @@
                                 (:cost (cost/turn-back-cost [{:look 0.1 :back 2 :p 0.5} {:look 0.1 :back 3 :p 0.25}])))))
         "a later floor is reached only while those before it held")))
 
+(deftest an-unseen-floor-not-there-a-step-down-costs-the-survivable-falls-under-it-and-the-climb-back-out
+  (settings/with-settings {:jobs.lib.cost.value/unseen-fall-counts {:down {0 1 5 1 30 2} :drop {0 1}}}
+    (fn []
+      (let [body {:health 20 :equipment nil :max-drop 8 :carried 64 :share 0}
+            out #(+ (cost/hp-cost 20 (cost/fall-damage nil %)) (cost/pillar-s 0 % %))]
+        (is (= (+ (* 0.25 (out 1)) (* 0.25 (out 6))) (cost/unseen-fall-s :down 1 body))
+            "a 1-block step: each depth under it by its share, the 31-block fall past max-drop never taken")
+        (is (= (out 3) (cost/unseen-fall-s :drop 3 body)))
+        (is (< 0 (cost/unseen-fall-s :down 1 body) (cost/unseen-fall-s :down 1 (assoc body :carried 0)) ##Inf)
+            "finite, and dearer with the pillar's blocks to fetch")
+        (is (= 0 (cost/unseen-fall-s :down 1 (assoc body :max-drop 0))) "a body that takes no drop never falls on")))))
+
 (deftest a-guess-is-rock-never-dug-at-the-measured-rate-of-its-class-moved-by-the-calls-own-looks
   (settings/with-settings {:jobs.lib.cost.value/guess-rock-counts {:layer-62 {:bad 3 :ok 1} :apart {:bad 0 :ok 99}}}
     (fn []

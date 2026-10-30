@@ -14,9 +14,11 @@
   (is (= {[:up :lit] {:present 1}} (w/tally (column 63) lit [(column 64)])))
   (is (= {[:level :lit] {:absent 1} [:down :lit] {:present 1}} (w/tally (column 63) lit [(column 62)]))
       "a floor one lower is a level step's floor not there and a down step's floor there")
-  (is (= {[:level :lit] {:absent 1} [:down :lit] {:absent 1} [:drop :lit] {:absent 2}} (w/tally (column 63) lit [(column 40)]))
-      "a void: no floor in any step's reach")
-  (is (= {[:level :lit] {:absent 1} [:down :lit] {:absent 1}} (w/tally (column 63) lit [(column 62 62)])) "water is no floor"))
+  (is (= {[:level :lit] {:absent 1} [:down :lit] {:absent 1 :below {17 1}} [:drop :lit] {:absent 2 :below {17 2}}} (w/tally (column 63) lit [(column 40)]))
+      "a void: no floor in any step's reach, and none within max-below under them")
+  (is (= {[:level :lit] {:absent 1} [:down :lit] {:absent 1 :below {7 1}} [:drop :lit] {:absent 2 :below {6 1 5 1}}} (w/tally (column 63) lit [(column 55)]))
+      "a pit: each absent floor counts the blocks under it to the pit's floor")
+  (is (= {[:level :lit] {:absent 1} [:down :lit] {:absent 1 :below {0 1}}} (w/tally (column 63) lit [(column 62 62)])) "water is no floor"))
 
 (deftest a-stand-under-no-sky-counts-dark-and-one-with-no-floor-or-room-counts-nothing
   (is (= {[:level :dark] {:present 1}} (w/tally (column 63) (constantly 0) [(column 63)])))
@@ -27,5 +29,7 @@
   (let [r (w/report [{[:level :lit] {:absent 1 :present 9}} {[:level :lit] {:absent 3 :present 7}}] 1)]
     (is (= {:absent 4 :present 16 :chunks 2 :p-absent 0.2} (select-keys (get r [:level :lit]) [:absent :present :chunks :p-absent])))
     (is (> 1e-9 (js/Math.abs (- 0.2 (let [[a b] (:prior (get r [:level :lit]))] (/ a (+ a b)))))) "the fit keeps the mean"))
+  (is (= {2 3 5 1} (:below (get (w/report [{[:drop :dark] {:absent 2 :below {2 2}}} {[:drop :dark] {:absent 2 :below {2 1 5 1}}}] 1) [:drop :dark])))
+      "the blocks under absent floors pool over chunks")
   (is (= [4 16] (:prior (get (w/report [{[:up :dark] {:absent 2 :present 8}} {[:up :dark] {:absent 2 :present 8}}] 1) [:up :dark])))
       "chunks that agree: their pooled counts"))
