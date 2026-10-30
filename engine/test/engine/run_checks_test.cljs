@@ -165,13 +165,14 @@
         (let [worths (atom #{})
               triggers {:r {:name :r :job '(reflex) :persistence :retry :when (fn [_ _ _] true)}}
               {:keys [eng]} (setup {'reflex {:worth-of (fn [_] 7)
+                                             :can-start? (fn [c] (swap! worths conj (ctx/worth c)) (contract/ok :open "open"))
                                              :safe? (fn [c] (swap! worths conj (ctx/worth c)) (contract/later :dark "dark"))
                                              :round (count-round :reflex-rounds)}}
                                    triggers)]
           (core/register-reflex! eng {:trigger :r})
           (await (core/tick! eng))
           (is (= :dark (:reason (core/held-trigger eng :r))))
-          (is (= #{7} @worths) "the job's worth-of, not the root's ##Inf"))))))
+          (is (= #{7} @worths) "safe? and can-start? read the job's worth-of, not the root's ##Inf"))))))
 
 (defn raw-mem [eng root slots] (mem/job-mem (mem/view (:store eng)) root slots))
 

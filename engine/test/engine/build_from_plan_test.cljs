@@ -2354,6 +2354,7 @@
 
 (defn dark-wait [s] (contract/later :exposed "dark at 1 65 1 until light" :lowered-by #{:light} :chance 0.005 :recheck-after-ms (* 1000 s) :wait-ms (* 1000 s)))
 (def no-light (contract/never :exposed "dark at 1 65 1, a hall of dark floor" :lowered-by #{:torch} :chance 0.005))
+(def later-by-torch (contract/later :exposed "dark at 1 65 1" :lowered-by #{:torch} :chance 0.005))
 
 (defn lit-check-status
   "The start status lights-itself makes of status for a body with torches? and a fetch allowed when fetch?, whose torch obtain for
@@ -2377,6 +2378,9 @@
     (dark-wait 3000) false true (contract/ok :ready "ready") {:torches-tried true} :later
     (dark-wait 300) false true not-worth {} :later
     no-light false true (contract/ok :ready "ready") {} :ok
+    no-light true false nil {} :ok
+    later-by-torch true false nil {} :ok
+    later-by-torch false false nil {} :later
     no-light false true not-worth {} :never
     no-light false false nil {} :never)
    (let [worths (atom [])]
