@@ -138,6 +138,16 @@
     (is (= :clear-path (:step (escape-way/choose p [0 64 0] [1 67 0] (constantly true) {:skip #{:stair :pillar}}))) "the door is a way here")
     (is (= {:step :pillar :height 2 :item "cobblestone"} (escape-way/choose p [0 64 0] [1 67 0] (constantly true) {:skip #{:stair}})))))
 
+(deftest escape-choose-leaves-the-door-whose-climb-left-is-rock-it-may-not-cut-for-the-rim-pillar
+  ;; a danger on the pillar's column turns it to the door; rock over the door's far side then makes that climb none
+  (let [p (tu/fake {:self {:pos {:x 0 :y 64 :z 0}} :blocks (merge (box -6 63 -6 6 63 6 "stone") (box 1 64 -3 1 66 3 "cobblestone")
+                                                               (box 2 66 0 2 68 0 "stone"))
+                    :inventory [{:name "cobblestone" :count 16}]})
+        risk-s (fn [cells _ _] (if (some #{[0 65 0]} cells) 1000 0))
+        far-side? (fn [[x y z]] (and (= x 2) (= z 0) (> y 65)))]
+    (is (= :clear-path (:step (escape-way/choose p [0 64 0] [1 67 0] (constantly true) {:skip #{:stair} :risk-s risk-s}))))
+    (is (= :pillar (:step (escape-way/choose p [0 64 0] [1 67 0] (complement far-side?) {:skip #{:stair} :risk-s risk-s}))))))
+
 (deftest escape-the-climb-left-after-a-way-is-a-pillar-of-the-blocks-left-under-open-sky-else-new-stair-steps
   (let [p (tu/fake {:self {:pos {:x 0 :y 64 :z 0}} :blocks (merge (box -6 63 -6 6 63 6 "stone") {"0,67,0" "stone"})
                     :inventory [{:name "cobblestone" :count 16}]})
