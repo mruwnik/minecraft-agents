@@ -391,3 +391,21 @@
           (is (= 30 (await (delta ##Inf [{:niche 50 :stay 30} nil]))) "none quoted: the cheapest other way, not ##Inf")
           (is (= ##Inf (await (delta ##Inf [{} nil]))) "no way priced at all: only sight bounds the looks")
           (is (nil? (await (delta ##Inf :searching))) "the other ways still searching: no look this pass"))))))
+
+(deftest the-other-ways-a-place-spares-are-priced-once-a-dig-in-and-not-when-no-look-follows
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [priced (fn ^:async priced [mem passes]
+                       (let [c (sense-t/stub-ctx (tu/fake {:self {:pos {:x 0 :y 64 :z 0}}}))
+                             n (atom 0)]
+                         (reset! (:mem c) mem)
+                         (with-redefs [bed-down/dig-in-s (fn ^:async q [_] ##Inf)
+                                       night/shelter-prices (fn ^:async sp [_] (swap! n inc) [{:stay 30} nil])
+                                       sense/decide! (fn ([_ _ _] (js/Promise.resolve nil)) ([_ _ _ _] (js/Promise.resolve nil)))
+                                       night/dig-in! (fn ^:async di [_ _] :again)
+                                       hold/busy! (fn [_])]
+                           (dotimes [_ passes] (await (night/shelter! c))))
+                         @n))]
+          (is (= 1 (await (priced {:digging [0 64 0]} 3))) "three passes of one dig-in: priced on the first")
+          (is (= 0 (await (priced {:digging [0 64 0] :roof-walk-failed true} 2))) "no look for a place tonight: nothing to price"))))))
