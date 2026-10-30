@@ -27,6 +27,7 @@
             [jobs.movement.go-to.reprice :as reprice]
             [jobs.movement.go-to.restore :as restore]
             [jobs.movement.go-to.preview :as preview]
+            [jobs.lib.vehicle :as vehicle]
             [jobs.lib.walk-risk :as risk]
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.tuning :as tuning]
@@ -53,6 +54,7 @@
     its own shelter).
   - Its safe? is: no hostile near (a walk leading away from every hostile near is not held, unless one catches the walk (ready/melee-catches?) or has hurt the body lately) and the walk's risk acceptable (jobs.lib.walk-risk: the expected damage of mobs spawning on dark open stretches by the light seen, of the hostiles near the way that catch it, and of a recent death by the goal, within a share of the health; else later :risky with the figures; no wait for dawn); always ok with the head under water (it swims up for air first). The risk is priced on go-to's plan: its round asks it of the first plan before a step of it, and again mid-walk on a re-plan that knows of a new hostile near the way or a blow by a mob not felt before (jobs.movement.go-to.reprice): when it fails the round ends as a failed can-run? would, the plan kept for the start check to hold on; a plan to where an unfinished search has got to searches on instead. A caller's :checks (an escape job's
     defaults, an agent's own) replace it.
+  - A body aboard a vehicle when the call starts gets off first (jobs.movement.leave-vehicle child); one that cannot ends condition-failed :aboard.
   - A body already within :range of a goal with a y (not in water or hanging; under :see seeing it) ends :done, cause :already, before any round: no plan, no arrival look (done?).
   - One call is one whole attempt: it plans and walks (jobs.lib.walk: slices of about 100 ms of search, walks of at
     most 60 s each) until it arrives or gives up. A search that needs more slices walks on toward where it has got
@@ -221,6 +223,35 @@
     (when (ctx/alive? c) (drop-record! c) (goal/clear! c) (ctx/update-mem! c dissoc :open :jump-at))
     r))
 
+(defn ^:async step-off!
+  "Nil when the body is on foot or got off the vehicle it rides (go-to never rides, and a walk does nothing aboard);
+  else :continue or the call's ending."
+  [c]
+  (when (vehicle/mounted? (:primitives c))
+    (let [r (await (ctx/call c :leave 'jobs.movement.leave-vehicle {}))]
+      (cond
+        (= :continue r) :continue
+        (= :done (:kind r)) nil
+        :else (end/refuse! c {:reason :aboard :message "the body rides a vehicle it could not get off"})))))
+
+(defn ^:async walk-attempt!
+  "The walk of an attempt: restart notes, the torch back, the cycle give-up, the goal-danger check, then the steps."
+  [c goal pos]
+  (let [state (note-restart! c pos)
+        cycle? (send-backs-spent? c state)]
+    (await (torch/return-torch! c))
+    (await (start-attempt! c pos))
+    (if cycle?
+      (do (goal/clear! c)
+          (ctx/update-mem! c #(-> % (dissoc :open :goal :closest :ref :last-dist) (assoc :cut-walks 0 :sent-backs [])))
+          (await (end/give-up! c pos {:reason :cut-again} (assoc (or (nearest-hostile c pos) {}) :sent-backs (count (:sent-backs state))))))
+      (let [danger (goal-danger c pos)]
+        (when danger (ctx/emit! c :goal-in-danger :info (assoc danger :target pos)))
+        (if (and danger (= :end (tuning/goal-danger)))
+          (await (end/give-up! c pos {:reason :goal-dangerous} danger))
+          (do (pre-aim! c goal pos)
+              (await (run-steps! c goal))))))))
+
 (defn ^:async attempt
   "One whole attempt: step! until it arrives, gives up, or waits on a child (:continue), with pace! between steps. A
   cut ends it at once (ctx/alive? per iteration, else at the next memory write or act, which throws). A goal inside a
@@ -236,20 +267,7 @@
       refusal (end/refuse! c refusal)
       (not (ways/way? c :walk)) (end/refuse! c {:reason :no-way :message "the call's :ways leave out :walk"})
       :else
-      (let [state (note-restart! c pos)
-            cycle? (send-backs-spent? c state)]
-        (await (torch/return-torch! c))
-        (await (start-attempt! c pos))
-        (if cycle?
-          (do (goal/clear! c)
-              (ctx/update-mem! c #(-> % (dissoc :open :goal :closest :ref :last-dist) (assoc :cut-walks 0 :sent-backs [])))
-              (await (end/give-up! c pos {:reason :cut-again} (assoc (or (nearest-hostile c pos) {}) :sent-backs (count (:sent-backs state))))))
-          (let [danger (goal-danger c pos)]
-            (when danger (ctx/emit! c :goal-in-danger :info (assoc danger :target pos)))
-            (if (and danger (= :end (tuning/goal-danger)))
-              (await (end/give-up! c pos {:reason :goal-dangerous} danger))
-              (do (pre-aim! c goal pos)
-                  (await (run-steps! c goal))))))))))
+      (or (await (step-off! c)) (await (walk-attempt! c goal pos))))))
 
 (defn ^:async round
   "One attempt (see attempt)."

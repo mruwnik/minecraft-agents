@@ -1500,3 +1500,22 @@
                 expected (first (filter #(> (price %) worth) (iterate inc 2)))]
             ;; the walk each jump undoes is a few tenths off 14 blocks, so the count may land one off where the price crosses the worth
             (is (<= (dec expected) (count (events-of s :go-to.jumped)) (inc expected)) "one restart per jump, the last the first whose repeats cost more than the goal is worth")))))))
+
+(def boat {:id 9 :name "oak_boat" :uuid "u-9" :kind "other" :pos {:x 0.5 :y 64 :z 0.5}})
+
+(deftest go-to-aboard-steps-off-then-walks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (go! {:blocks flat :self {:pos start :vehicle 9} :entities [boat]} {:pos [10 64 0] :range 1}))]
+          (is (= {:arrived true} @out))
+          (is (nil? (:vehicle (js->clj (.self p) :keywordize-keys true))) "got off the boat")
+          (is (> (first (at p)) 5) "walked on foot"))))))
+
+(deftest go-to-aboard-that-cannot-get-off-ends-condition-failed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (go! {:blocks flat :self {:pos start :vehicle 9} :entities [boat] :dismountFails true} {:pos [10 64 0] :range 1}))]
+          (is (= false (:arrived @out)))
+          (is (= [0 64 0] (at p))))))))

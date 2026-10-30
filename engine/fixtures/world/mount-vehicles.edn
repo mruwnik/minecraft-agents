@@ -2,6 +2,7 @@
 ;; Should-succeed: boat on land 6 away (walks, mounts); mount a boat in a pool then dismount onto the water (completed, landed :in-water);
 ;; saddled pig; mounting twice is :already (a boat, and a one-seat minecart).
 ;; Should-fail: cow (not-mountable), occupied minecart (waits :occupied), no such entity (waits :no-vehicle), full inventory with an item in hand and a saddled pig (hand-full).
+;; Should-succeed: a go-to listed after the mount, the body still aboard, gets off first and arrives (go-to-aboard-walks).
 ;; Should-succeed too: the same full inventory still boards a boat (no hand needed).
 ;; Not a fixture: logout while mounted, the server never seating the body (timeout; unit and fake only).
 {:defaults
@@ -22,6 +23,11 @@
          [:job (jobs.movement.leave-vehicle {})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.mount"}} :within-s 40 :of-job true}
             {:event {:source :job :kind :completed :data {:landed :in-water}} :within-s 40 :of-job true}]}
+  {:name "go-to-aboard-walks"
+   :act [[:summon "oak_boat" [11.5 0 16.5] "{}"]
+         [:job (jobs.movement.mount {:name "oak_boat"})]
+         [:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to" :arrived true}} :within-s 50 :of-job true}]}
   {:name "mount-saddled-pig"
    :act [[:summon "pig" [12.5 0 16.5] "{equipment:{saddle:{id:\"minecraft:saddle\",count:1}}}"]
          [:job (jobs.movement.mount {:name "pig"})]]
