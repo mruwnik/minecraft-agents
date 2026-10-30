@@ -402,12 +402,15 @@
                     :no-route)
           :too-big :too-big
           nil
-          (let [priced (mapv (fn [cell] ((:dig-s prices) (or (seen-name cell) "stone") cell)) (:dig r))
-                d (await (dig-cells! c (:dig r)))]
+          (let [priced (mapv (fn [cell] ((:dig-s prices) (or (seen-name cell) blocks/hidden-guess) cell)) (:dig r))
+                start (cost/leg-start c)
+                d (await (dig-cells! c (:dig r)))
+                ;; the failing cell's attempt is paid for too; the plan's price is the least the dig leg cost
+                booked (fn [] (cost/leg-price c start 1 (reduce + (take (inc (:n d)) priced))))]
             (cond
               (= :dug d) :dug
               (and (pos? (:n d)) (< pass (replans)) (not= :continue (:out d)))
-              (do (await (dig-look/look-at! c (:cell d))) (recur (inc pass) (+ spent (reduce + (take (:n d) priced)))))
+              (do (await (dig-look/look-at! c (:cell d))) (recur (inc pass) (+ spent (booked))))
               (= :unseen (:out d))
               (let [l (await (light-here! c))]
                 (if l
