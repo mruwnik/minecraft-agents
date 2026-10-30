@@ -1,7 +1,7 @@
 ;; Card fe612df0 (d71f9264): open ground hidden behind a 5-high wall is guessed by the measured sky prior under the seen sky over the
 ;; wall (base-rates/sky-under, about 0.65 lit by day), not as five rock guesses in a row (about 0.06). Open sky plot, so the case needs the clock.
-;; Should-succeed: by day a probe for the spot just behind the wall starts with a status that is not "exposed ... no wait cheaper" (the spot reads lit, or at least worth a look: "no spawn risk" or "the stay is judged once looked").
-;; Should-fail: at night the same probe's status reads the spot "exposed" (dark), never "no spawn risk".
+;; Should-succeed: by day a probe for the spot just behind the wall starts with a status whose tag is not :exposed (the spot reads lit, or at least worth a look).
+;; Should-fail: at night the same probe's status is tagged :exposed (dark).
 ;; Needs time: run with --allow-time --time-log <the shared time log>.
 {:defaults
  {:tags [:readiness :light]
@@ -14,9 +14,9 @@
    :time :day :time-why :sunlit-ground
    :act [[:job (jobs.debug.ready-probe {:at #at [11 0 16] :stay-s 30})]]
    :expect [{:event {:source :job :kind :job.ready-probe} :within-s 90 :of-job true}
-            {:no-event {:source :job :kind :job.ready-probe :data {:status [:has [:contains "no wait cheaper"]]}} :for-s 20 :of-job true}]}
+            {:no-event {:source :job :kind :job.ready-probe :data {:status [:has #{:exposed "exposed"}]}} :for-s 20 :of-job true}]}
   {:name "a-spot-behind-a-wall-at-night-reads-exposed"
    :time :night :time-why :night-light
    :act [[:job (jobs.debug.ready-probe {:at #at [11 0 16] :stay-s 30})]]
-   :expect [{:event {:source :job :kind :job.ready-probe :data {:status [:has [:contains "exposed"]]}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :job.ready-probe :data {:status [:has #{:exposed "exposed"}]}} :within-s 60 :of-job true}]
    :limit-s 100}]}

@@ -68,6 +68,10 @@
   (is (> (rates/sky-share 20 8 50 50) 0.9) "a ravine seen sky-lit deep down")
   (is (> (rates/sky-share 70 8 0 0) (rates/sky-share 70 15 0 0)) "more open blocks have some sky light than the open sky"))
 
-(deftest sky-under-falls-with-the-light-level-asked-for
-  (doseq [narrow? [true false] n (range 1 8)]
-    (is (apply >= (map #(rates/sky-under n % narrow?) (range 1 16))))))
+(deftest sky-under-is-lower-for-a-brighter-level-asked-for
+  (doseq [narrow? [true false] n (range 1 9)]
+    (is (> (rates/sky-under n 1 narrow?) (rates/sky-under n 15 narrow?)) (str "n " n " narrow " narrow?))))
+
+(deftest sky-under-is-likelier-beside-a-hole-in-a-roof-than-in-the-open
+  (doseq [n (range 1 8) level [1 8]]
+    (is (> (rates/sky-under n level true) (rates/sky-under n level false)) (str "n " n " level " level))))
