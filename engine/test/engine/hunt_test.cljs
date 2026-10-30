@@ -458,6 +458,14 @@
           (is (= 1 (get (inv s) "white_wool")))
           (is (= :count (:reason (done-event s)))))))))
 
+(deftest a-colour-hunt-counts-only-sheep-of-that-colour-for-the-rule-that-allowed-the-kill
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:item "white_wool" :count 1} {:inventory h/sword :entities [(sheep 1 3 "white") (sheep 2 5 "brown") (sheep 3 6 "brown")]} 30))]
+          (is (= [:lone] (mapv :rule (events-of s :animal.killed))) "one white sheep is no pair, the browns do not count")
+          (is (= #{2 3} (world-ids s))))))))
+
 (deftest a-colour-hunt-with-no-such-sheep-waits-naming-the-colours-seen
   (async done
     (tu/run-async done

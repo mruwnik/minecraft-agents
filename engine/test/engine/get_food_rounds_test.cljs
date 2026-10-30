@@ -661,6 +661,26 @@
           (await (one-round! eng {}))
           (is (empty? (calls p "attack")) "two known cows are the last pair, though only one is in sight"))))))
 
+(deftest a-pair-mate-noted-beyond-the-hunt-radius-of-the-body-still-keeps-the-pair
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [note [{:kind :seen :what "cow" :id "u1" :pos [60 64 0] :by "Other" :t 999900 :until 9e15}]
+              {:keys [eng p]} (setup {:time 6000 :self {:food 8 :health 10} :entities [(assoc cow :uuid "u2")]} :step-ms 5 :other-notes note)]
+          (await (one-round! eng {}))
+          (is (empty? (calls p "attack")) "the note counts by where the animal was seen, not by its distance from the body"))))))
+
+(deftest a-noted-cow-whose-cell-is-in-view-with-no-cow-there-is-gone-and-the-seen-one-is-lone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [note [{:kind :seen :what "cow" :id "u1" :pos [20 64 0] :by "Other" :t 999900 :until 9e15}]
+              {:keys [eng p]} (setup {:time 6000 :self {:food 8 :health 10} :entities [(assoc cow :uuid "u2")]} :step-ms 5 :other-notes note)
+              sensed (.-sensedAt p)]
+          (tu/set-sensed! p (fn [pos] (let [b (sensed pos)] (when b (aset b "visible" true)) b)))
+          (await (one-round! eng {:settings {:jobs.lib.combat/attack-gap-ms 0}}))
+          (is (seq (calls p "attack")) "the note's cell is seen empty: the one in sight is alone and is hunted"))))))
+
 (deftest a-cow-seen-with-two-more-noted-is-hunted-as-the-surplus
   (async done
     (tu/run-async done
