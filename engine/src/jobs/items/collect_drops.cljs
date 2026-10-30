@@ -47,7 +47,7 @@
   A drop more than a block above the feet that the act cannot reach (a column top) is walked up to with go-to's :pillar way (and :stair with :dig), then collected; one go-to cannot stand beside (a wall niche) is pillared to from the feet when it lies 2 to 6 above and within 1 cell sideways (carried blocks).
   With :dig, a drop go-to cannot reach, or one too deep in the dug hole, is dug to once: the cheapest dig route (jobs.lib.dig-route
   priced as go-to's, over the blocks the body has seen, an unseen one taken for stone) that opens a way to it, each a jobs.blocks.dig child (zones, claims, hazards
-  are its rules), then the walk is tried again. A dig that ends :unseen (the dark hides the cell) sets a carried torch in the body's cell once per call, looks again and digs on. No such way leaves the drop :no-route, a dig that fails with that dig's outcome (:refused, :cannot, :unreachable ...).
+  are its rules), then the walk is tried again. A dig that ends :unseen (the dark hides the cell) sets a carried torch in the body's cell once per call, looks again and digs on. No such way leaves the drop :no-route (:too-big when the search outgrew the heap), a dig that fails with that dig's outcome (:refused, :cannot, :unreachable ...).
   With :near, a sweep that sees no drop first looks at that spot, and climbs to it (go-to :pillar/:stair) when it lies over a block above the feet, and counts the items it picks up on the way. A sweep without :ids that sees no drop turns round once from each cell it ends in (entities are sensed only in the view cone) before it ends; a dig's :ids sweep does not (the dig looked already, and a danger's time is short).
   With :expect n, a sweep that took fewer than n waits ::expect-wait-ms and sweeps again, at most ::expect-rounds times (a drop still falling or not yet seen); the call is not done while it waits.
   Needs nothing; the sweep is the whole job. Ends :done with data {:collected n}, the number of items that entered the
@@ -368,7 +368,7 @@
 (defn ^:async dig-to!
   "Dig the route to item (jobs.lib.dig-route). A dig that fails after others of its route were dug (a cell beyond the light was
   never seen) is planned again from where the body now stands, at most ::replans times. :dug when every cell is open now,
-  :continue while a dig waits on the world, else why not: :no-route or the failed dig's outcome (:refused, :cannot, :unreachable ...)."
+  :continue while a dig waits on the world, else why not: :no-route, :too-big (the route search outgrew the heap) or the failed dig's outcome (:refused, :cannot, :unreachable ...)."
   [c item]
   (let [p (:primitives c)]
     (loop [pass 0]
@@ -381,6 +381,8 @@
         (case (:problem r)
           :searching :continue
           (:no-route :dearer) :no-route
+          :too-big :too-big
+          :budget :no-route
           nil
           (let [d (await (dig-cells! c (:dig r)))]
             (cond

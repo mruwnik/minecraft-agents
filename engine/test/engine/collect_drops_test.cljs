@@ -450,6 +450,21 @@
             (is (= 1 (bd/carried p "diamond")))
             (is (empty? (:left result)))))))))
 
+(deftest a-drop-whose-route-search-outgrew-the-heap-is-left-too-big-not-thrown
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pocket (into {} (for [x (range -1 9) y (range 56 64) z [-2 -1 0 1 2]
+                                    :when (not= [5 58 0] [x y z])]
+                                [(str x "," y "," z) "stone"]))
+              {:keys [eng p seen]} (bd/setup {:self body :inventory [{:name "wooden_pickaxe" :count 1}] :blocks pocket})]
+          (drop! p [5 58 0] "diamond")
+          (seen-from-above! p)
+          (with-redefs [dig-route/heap-full? (constantly true)]
+            (let [result (await (tu/child-outcome eng job {:radius 8 :dig true} 80))]
+              (is (= [:too-big] (mapv :reason (:left result))) "the reason is passed up")
+              (is (zero? (bd/carried p "diamond"))))))))))
+
 (deftest a-route-dug-to-a-drop-reads-unseen-cells-by-the-body-s-prior
   (async done
     (tu/run-async done

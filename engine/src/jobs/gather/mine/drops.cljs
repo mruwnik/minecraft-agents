@@ -105,7 +105,7 @@
 (defn drop-cut
   "The cells to dig, in walking order, for the cheapest way (jobs.lib.dig-route priced by cut-prices, a cell never seen
   taken for stone) from the body's cell to a stand within 1 of the dug cell, priced at most max-s seconds; nil with no such way,
-  :searching while a search that spent its nodes goes on (kept: ask again)."
+  :searching while a search that spent its nodes goes on (kept: ask again), :too-big when it outgrew the heap."
   [c dug max-s]
   (let [p (:primitives c)
         at (fn [[x y z]] (or (u/seen-name p {:x x :y y :z z}) "stone"))
@@ -114,7 +114,7 @@
         from (u/cell-vec (u/self-pos c))
         goal (mapv + dug [1 0 0])
         route (dig-route/route-resumed [(:id c) :drop-cut from dug max-s] at from goal prices)]
-    (or (:dig route) (when (= :searching (:problem route)) :searching))))
+    (or (:dig route) (#{:searching :too-big} (:problem route)))))
 
 (defn ^:async cut-via
   "cut-to-drop! with its steps given: a map over {:drop-cut :dig-cell! :look-at! :mem} (the fns of those names' arguments).
@@ -122,7 +122,7 @@
   seconds (what is beside the cell: its drop, or a seen ore and its vein): after each dig and a look at what it laid
   open the way goes on as planned while the cell stayed open and its other cells read as they did, else is planned again out of what is left (kept in :cut-spent over rounds, each dig booked at its own price once
   dug or failed; a cell that fills again is paid for again). :cut (open: walk again),
-  :partial (a dig waits on the world) or nil (no way left, a dig failed, or a dug cell planned again at once: it did not
+:partial (a dig waits on the world), :too-big (the route search outgrew the heap) or nil (no way left, a dig failed, or a dug cell planned again at once: it did not
   stay open)."
   [c {:keys [drop-cut dig-cell! look-at! mem]} dug max-s]
   (let [p (:primitives c)
@@ -139,6 +139,7 @@
         (cond
           (nil? cells) nil
           (= :searching cells) :partial
+          (= :too-big cells) :too-big
           (empty? cells) :cut
           (= last-dug (first cells)) nil
           :else (let [cell (first cells)
@@ -229,6 +230,7 @@
             w (if (and (= :blocked w) (await (look-floor-toward! c dug-at))) (await (go!)) w)
             cut (when (and (= :blocked w) (not (ways/stay-level? (:args c))) (cut-after? (near/last-walk c)))
                   (await (cut-to-drop! c dug-at (worth c 1) #{dug-at})))
+            _ (when (= :too-big cut) (ctx/emit! c :mine.cut-too-big :info {:pos dug-at :text (str "mine's cut toward " (str/join "," dug-at) " outgrew the heap: the drop is left")}))
             w (case cut :cut (await (go!)) :partial :partial w)]
         (when (= :there w) (await (peek-over-lip! c dug-at)))
         (when-not (= :partial w) (ctx/update-mem! c assoc :drop-walked dug-at))

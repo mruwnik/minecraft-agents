@@ -13,6 +13,7 @@
             [jobs.lib.blocks :as lb]
             [jobs.lib.cost :as cost]
             [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.dig-route :as dig-route]
             [jobs.lib.look :as lk]
             [jobs.lib.tool-kind :as kind]
             [jobs.lib.tools :as tools]
@@ -625,6 +626,17 @@
     (is (= [[1 64 0]] (cut walled-ore 100)) "the wall cell between is the way")
     (is (not-any? #{[1 64 0]} (cut (assoc walled-ore "1,65,0" "gravel") 100)) "gravel over it would fall on the body walking in: the cut goes round")
     (is (nil? (cut walled-ore 0.01)) "a drop worth less than one cell's dig is not cut to")))
+
+(deftest a-cut-whose-route-search-outgrew-the-heap-answers-too-big
+  (let [c {:primitives (:p (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})) :args {} :id "j"}]
+    (with-redefs [dig-route/heap-full? (constantly true)]
+      (is (= :too-big (drops/drop-cut c [2 64 0] 100)) "drop-cut keeps the reason")))
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [c {:primitives (:p (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}}))}
+              steps {:drop-cut (fn [_ _ _] :too-big) :dig-cell! (fn [_ _] :dug) :look-at! (fn [_ _] nil) :mem (fn [_] {})}]
+          (is (= :too-big (await (drops/cut-via c steps [2 64 0] 5))) "cut-via passes it up, not nil"))))))
 
 (deftest a-drops-worth-is-its-replacement-cost-and-a-goal-ore-dug-on-the-way-is-an-extra-item
   (let [c {:primitives (:p (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})) :args {:item "raw_iron"}}
