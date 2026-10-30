@@ -272,9 +272,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        ;; ore, not sand: a cut is dug only when the vein is worth more than the cut costs
+        ;; ore, not sand: a cut is dug only when the vein is worth more than the cut costs. Leaves, not glass: glass is priced as a smelted item,
+        ;; dear enough that the cut's route search goes round it and does not end
         (let [ore (cells "iron_ore" [8] [64] [0])
-              wall (cells "glass" (range 3 10) [64 65 66] (range -6 7))
+              wall (cells "oak_leaves" (range 3 10) [64 65 66] (range -6 7))
               s (await (scenario {:block "iron_ore" :count 1 :ways #{:seen}}
                                  {:blocks (merge floor wall ore) :drops {"iron_ore" "raw_iron"} :inventory pickaxe :unreachable (vec (keys ore))} 60))]
           (is (<= 2 (dig-count s)) "rock was dug toward the ore")
