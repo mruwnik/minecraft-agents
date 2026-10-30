@@ -231,7 +231,8 @@
   seen (:look, look-first) has a third way: walk there to look, its hp priced (walk-risk/risk-s) plus its seconds, ok
   :look-first while it is affordable and cheaper than the other ways and than the job's own answers to s (own-way); a way
   with a :child (walk-look) keeps the status those ways give, with the child as its :look-first call, run before the start.
-  An own answer cheaper than the way taken leaves s to the job."
+  A :never resting on such a guess whose walk to look costs more hp than the worth buys holds :later: the refusal is on
+  price, not impossible. An own answer cheaper than the way taken leaves s to the job."
   [c s]
   (let [[kind _ {:keys [reason chance wait-ms] look-way :look :as data}] s]
     (if-not (and (contains? #{:later :never} kind) (= :exposed reason) (number? chance))
@@ -260,6 +261,10 @@
             stay (if (and stay-s (own? stay-s)) s stay)
             look-text (str "the walk to look costs " (price/round1 (:hp look-way)) " hp, " (some-> (:s look) price/round1) " s")]
         (cond
+          (and look-way (nil? look-s) (= :never (first stay)))
+          (contract/status :later :exposed (str (second stay) "; the walk to look costs " (price/round1 (:hp look-way)) " hp, more than its "
+                                                (price/round1 (ctx/worth c)) " s buy")
+                           (assoc data :worth (ctx/worth c) :recheck-after-ms walk-risk/recheck-ms))
           (not (look? stay-s)) stay
           (:child look-way) (-> stay
                                 (update 1 str "; " look-text ", so it walks to look first")

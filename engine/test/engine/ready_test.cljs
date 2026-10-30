@@ -624,7 +624,9 @@
   (with-redefs [sh-sense/seen-cell? (constantly false) sh-sense/solid-at? (constantly false) ctx/mem (constantly {})]
     (let [safe (fp-light/lights-itself (ready/safe-at (constantly {:x 15 :y 40 :z 0})) (constantly []))]
       (is (= [:ok :torches] ((juxt first #(:reason (nth % 2))) (safe (ctx-of (assoc open-night :inventory [{:name "torch" :count 4}])))))
-          "hanging the torches carried costs nothing: the build lights the dark cave guess, it does not walk to look first"))))
+          "hanging the torches carried costs nothing: the build lights the dark cave guess, it does not walk to look first")
+      (is (= [:ok :torches] ((juxt first #(:reason (nth % 2))) (safe (worthless (ctx-of (assoc open-night :inventory [{:name "torch" :count 4}]))))))
+          "a goal worth no walk to look still hangs its torches"))))
 
 (deftest an-unseen-cell-a-look-round-could-not-show-is-judged-where-a-buried-body-stands
   (are [looked expected] (= expected (with-redefs [sh-sense/seen-cell? (fn [_ c] (not= outside (select-keys c [:x :y :z])))
@@ -640,7 +642,7 @@
                                                    lib-look/look-shows? (constantly true)]
                                        (first ((ready/safe-at (constantly outside)) (worthless (ctx-of open-night))))))
     #{} :look
-    #{[15 64 0]} :never))
+    #{[15 64 0]} :later))
 
 (deftest an-unseen-cell-well-below-the-feet-under-a-seen-roof-is-underground-and-asks-no-look-or-dawn
   (are [to expected] (= expected (with-redefs [sh-sense/seen-cell? (constantly false)
@@ -668,7 +670,7 @@
   (let [cave (fn [f] (with-redefs [sh-sense/seen-cell? (constantly false) sh-sense/solid-at? (constantly false)]
                        ((juxt first #(:reason (nth % 2))) ((::ready/exposure (meta (ready/safe-at (constantly {:x 15 :y 40 :z 0})))) (f (ctx-of open-night))))))]
     (is (= [:ok :look-first] (cave identity)) "a cave guess deep below: the walk there to look is affordable, the stay is judged there")
-    (is (= [:never :exposed] (cave worthless)) "a goal worth nothing buys no walk: a torch lowers it")))
+    (is (= [:later :exposed] (cave worthless)) "a goal worth nothing buys no walk to look: refused on price, not impossible on a guess")))
 
 (def escapes
   '[respond-to-hostile block-arrow-gap unwedge breathe extinguish night dig-pocket shut-in])
@@ -803,7 +805,7 @@
                                                      ready/roof-over? (constantly false)]
                                           (first ((ready/safe-at-by-night (constantly goal) false dug?) (worthless (ctx-of open-night))))))
     {:x 6 :y 57 :z 0} true :ok
-    {:x 6 :y 57 :z 0} false :never
+    {:x 6 :y 57 :z 0} false :later
     {:x 6 :y 70 :z 0} true :later))
 
 (defn kind-in-shelter [check world shelter]

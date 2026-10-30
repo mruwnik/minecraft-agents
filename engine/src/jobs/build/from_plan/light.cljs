@@ -66,7 +66,7 @@
   [safe cells-of]
   (let [exposed? (fn [[_ _ data]] (= :exposed (:reason data)))
         wait-for-light? (fn [[kind :as s]] (and (= :later kind) (exposed? s) (contains? (:lowered-by (nth s 2)) :light)))
-        no-light? (fn [[kind :as s]] (and (= :never kind) (exposed? s) (contains? (:lowered-by (nth s 2)) :torch)))
+        no-light? (fn [[kind :as s]] (and (#{:never :later} kind) (exposed? s) (contains? (:lowered-by (nth s 2)) :torch)))
         wait-s (fn [[_ _ data]] (some-> (:wait-ms data) (/ 1000)))
         dawn-s (fn [c] (let [s (sense/sky-in (:primitives c))] (when (pos? (or s 0)) s)))
         fetch? (fn [c s] (fetch-due? c (if (wait-for-light? s) (wait-worth (wait-s s)) (night-worth c (dawn-s c))) (plan/owed (cells-of c))))
