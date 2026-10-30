@@ -1,7 +1,6 @@
 [
  jobs.access.bridge
  jobs.access.cleanup
- jobs.access.clear-path
  jobs.access.record-stair
  jobs.access.stair
  jobs.access.toggle
