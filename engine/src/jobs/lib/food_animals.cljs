@@ -149,33 +149,37 @@
   [c opts]
   (->> (in-sight c opts) (remove :why) first))
 
-(declare look-for-animals!)
+(declare look-for-animals! pen-looked)
 
 (defn ^:async resighted
   "The nearest entry to hunt after the pen read; when the read turned the body so that `target` left the view cone, the body looks
-  round again from where it stands (out of sight is no verdict on it, and a kept target would skip the spare and pen rules)."
-  [c opts target]
+  round again from where it stands (out of sight is no verdict on it, and a kept target would skip the spare and pen rules).
+  An animal that look finds gets its own pen read, once: `relooked?` stops a second look round."
+  [c opts target relooked?]
   (let [uuid (.-uuid (:entity target))]
-    (if (some #(= uuid (.-uuid (:entity %))) (in-sight c opts))
-      (nearest c opts)
-      (do (look/forget-survey! c) (await (look-for-animals! c opts))))))
+    (cond
+      (some #(= uuid (.-uuid (:entity %))) (in-sight c opts)) (nearest c opts)
+      relooked? (nearest c opts)
+      :else (do (look/forget-survey! c)
+                (when-let [found (await (look-for-animals! c opts))]
+                  (if (= :own-pen (:rule found)) found (await (pen-looked c opts found true))))))))
 
 (defn ^:async pen-looked
   "The nearest entry to hunt (or :continue while the walk is not done) after the body has looked at the cells of any
   enclosure round the target that a first read left unseen, walking within sight range of it when they lie beyond:
-  a fenced pen is no wild surplus, and the spare check reads seen cells only."
-  [c opts target]
+  a fenced pen is no wild surplus, and the spare check reads seen cells only. `relooked?`: the target came from a look round already."
+  [c opts target relooked?]
   (let [{:keys [x y z] :as pos} (u/pos-of (.-pos (:entity target)))
         undecided? (fn ^:async undecided []
                      (= :unloaded (:reason (await (pen-read/read! c {:at {:x (js/Math.floor x) :y (js/Math.floor (+ y 0.01)) :z (js/Math.floor z)}
                                                                      :max-cells (settings/get spare/settings ::spare/pen-max-cells)}
                                                                   #(= :unloaded (:reason %)))))))]
     (if-not (await (undecided?))
-      (await (resighted c opts target))
+      (await (resighted c opts target relooked?))
       (let [e (await (child/run!* c :pen-look 'jobs.movement.go-to {:pos pos :range (settings/get settings ::pen-look-range) :ways #{:walk}}))]
         (if (= :continue e)
           :continue
-          (do (await (undecided?)) (await (resighted c opts target))))))))
+          (do (await (undecided?)) (await (resighted c opts target relooked?))))))))
 
 (defn cell-of
   "The rounded cell [x y z] of a position map or JS object, or nil when the sighting gave none."
@@ -217,7 +221,7 @@
   [c opts]
   (note-seen! c opts)
   (when-let [target (or (let [t (nearest c opts)] (when-not (lone? t) t)) (await (look-for-animals! c opts)))]
-    (if (= :own-pen (:rule target)) target (await (pen-looked c opts target)))))
+    (if (= :own-pen (:rule target)) target (await (pen-looked c opts target false)))))
 
 (defn note-kill!
   "Say which animal the hunt killed and where, with the adults of its kind counted, the keep threshold, the food level

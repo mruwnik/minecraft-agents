@@ -1432,3 +1432,27 @@
                 (is (= hunted? (some? (await (animals/nearest-or-look {:primitives p :args {}} {:radius 20 :lift 0}))))
                     (pr-str [penned-by-read? listed-after-read? relook-finds?]))
                 (is (= ["u1" "u2" "u3"] (distinct (map :id @notes-seen))) "the cows stay :seen notes")))))))))
+
+(deftest an-animal-the-look-round-finds-after-the-pen-read-gets-its-own-pen-read
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/fake-on-floor {})
+              herd (clj->js [#js {:name "cow" :uuid "u1" :id 1 :baby false :pos #js {:x 5 :y 64 :z 0}}])
+              reads (atom 0)
+              relooked? (atom false)]
+          (with-redefs [look/seen-objs (fn [_ _] (if (or (zero? @reads) @relooked?) herd #js []))
+                        look/forget-survey! (constantly nil)
+                        look/survey-until! (fn ([_ _ test-fn] (when (pos? @reads) (reset! relooked? true)) (js/Promise.resolve (test-fn)))
+                                               ([_ _ test-fn _ _] (when (pos? @reads) (reset! relooked? true)) (js/Promise.resolve (test-fn))))
+                        pen-read/read! (fn ([c o] (swap! reads inc) (js/Promise.resolve {:closed? false :reason :open}))
+                                         ([c o r] (swap! reads inc) (js/Promise.resolve {:closed? false :reason :open})))
+                        spare/penned? (fn [& _] (>= @reads 2))
+                        access/trespass-refusal (constantly nil)
+                        ctx/now (constantly 1000)
+                        ctx/mem (constantly {})
+                        ctx/update-mem! (constantly nil)
+                        notes/notes (constantly [])
+                        notes/note! (constantly nil)]
+            (is (nil? (await (animals/nearest-or-look {:primitives p :args {}} {:radius 20 :lift 0}))) "the cow found by the relook is read as penned, not hunted")
+            (is (= 2 @reads) "one read for the first target, one for the one found")))))))
