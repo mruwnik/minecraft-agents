@@ -6,6 +6,7 @@
             [engine.game :as game]
             [engine.settings :as settings]
             [jobs.lib.cost :as cost]
+            [jobs.lib.escape :as escape]
             [jobs.lib.cost.answer :as answer]
             [jobs.lib.cost.caught :as caught]
             [jobs.lib.cost.death :as death]
@@ -283,17 +284,22 @@
         "a later floor is reached only while those before it held")))
 
 (deftest a-guess-is-rock-never-dug-at-the-measured-rate-of-its-class-moved-by-the-calls-own-looks
-  (settings/with-settings {:jobs.lib.cost.value/guess-rock-counts {:layer-beside {:bad 3 :ok 1} :apart {:bad 0 :ok 99}}}
+  (settings/with-settings {:jobs.lib.cost.value/guess-rock-counts {:layer-62 {:bad 3 :ok 1} :apart {:bad 0 :ok 99}}}
     (fn []
-      (is (= 0.75 (cost/guess-bad-chance :layer-beside nil)) "no look: the measured prior, not 0")
+      (is (= 0.75 (cost/guess-bad-chance :layer-62 nil)) "no look: the measured prior, not 0")
       (is (= 0 (cost/guess-bad-chance :apart nil)))
       (is (= 0.25 (cost/guess-bad-chance :apart {:bad 33 :all 33})) "looks that were all bad move a rare class far")
-      (is (= 0.6 (cost/guess-bad-chance :layer-beside {:bad 0 :all 1})) "a good look lowers a class"))))
+      (is (= 0.6 (cost/guess-bad-chance :layer-62 {:bad 0 :all 1})) "a good look lowers a class"))))
 
 (deftest the-measured-guess-priors-are-learned-from-by-the-calls-looks
-  (let [p0 (cost/guess-bad-chance :layer-beside nil)]
-    (is (< 0.5 p0 0.7) "beside bedrock in the layer: most guesses are rock never dug")
-    (is (< (cost/guess-bad-chance :layer-beside {:bad 0 :all 300}) (- p0 0.05)) "300 good looks in a row move it well down")
+  (let [p0 (cost/guess-bad-chance :layer-62 nil)]
+    (is (< 0.55 p0 0.65) "three up in the layer: most guesses are rock never dug")
+    (is (< (cost/guess-bad-chance :layer-62 {:bad 0 :all 300}) (- p0 0.05)) "300 good looks in a row move it well down")
+    (is (< 0.99 (cost/guess-bad-chance :layer-64 {:bad 0 :all 300})) "the bottom level is bedrock: 300 looks hardly move it")
+    (is (= [:layer-64 :layer-62 :layer-60 :placed] (map #(escape/guess-class % ["stone" "chest"]) [-70 -62 -60 -59]))
+        "a layer cell is classed by its y alone, a build beside only counts above it")
+    (is (= :apart (escape/guess-class -59 ["bedrock"])))
+    (is (apply > (map #(cost/guess-bad-chance % nil) [:layer-64 :layer-63 :layer-62 :layer-61 :layer-60 :placed])) "the rate falls with y through the layer")
     (is (< (cost/guess-bad-chance :apart nil) 0.001) "a cell above the layer is nearly never")
     (is (> (cost/guess-bad-chance :apart {:bad 3 :all 3}) 0.005) "a few bad looks lift a rare class by orders")
     (is (< (cost/guess-bad-chance :placed nil) 0.2) "beside a build (not bedrock) is no rock room")))

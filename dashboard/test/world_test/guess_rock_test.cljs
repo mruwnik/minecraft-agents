@@ -13,9 +13,9 @@
         :else "stone"))
 
 (deftest a-solid-cell-counts-by-its-guess-class
-  (is (= {:layer-beside {:all 18 :bad 9} :layer-apart {:all 9 :bad 0}}
+  (is (= {:layer-64 {:all 9 :bad 9} :layer-63 {:all 9 :bad 0} :layer-62 {:all 9 :bad 0}}
          (w/tally world 0 2 -64 -62 0 2))
-      "bedrock at -64 and the stone on it (3x3 each) have bedrock beside, and only the first is rock never dug; stone two up has none")
+      "bedrock at -64 and the stone on it (3x3 each): one class per y in the layer, only the first is rock never dug")
   (is (= {:placed {:all 1 :bad 0} :apart {:all 1 :bad 1}}
          (w/tally world 0 0 9 10 0 0))
       "above the layer: the stone under the chest is :placed; the chest, with only stone beside, is :apart and itself rock never dug"))

@@ -475,7 +475,7 @@
                 :stair (escape/stair-cuts feet (escape/heading-dirs heading) steps)
                 :clear-path (:cells (escape/door block-at unseen? feet (escape/heading-dirs heading)))
                 nil)]
-    (vec (for [cell cells :when (unseen? cell)] {:cell cell 
+    (vec (for [cell cells :when (unseen? cell)] {:cell cell
                                                 :class (guess-class sensed cell)}))))
 
 (defn past-worth?

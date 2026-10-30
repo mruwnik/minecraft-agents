@@ -2,7 +2,7 @@
   "tools/event-counts.mjs guess-rock: counts the measured prior jobs.lib.cost.value/::guess-rock-counts from the recorded
   chunk columns (worlds/<world>/chunks): of the solid cells of a chunk (jobs.lib.escape/solid?), those that are rock an
   escalation never digs (escape/protected?: bedrock and the like) over those that are not, split by go-to's guess class
-  (escape/guess-class: in the bedrock layer or not, beside a protected block or not). Per 16x16x16
+  (escape/guess-class: the height in the bedrock layer, else beside a protected block or not). Per 16x16x16
   section the shares are kept so the prior's spread is fitted by moments over sections (a call digs in one place; rock
   never dug comes in pockets). Every stride-th
   column file in name order is read, the fixture plot grid left out. Pure parts: tally, report."
