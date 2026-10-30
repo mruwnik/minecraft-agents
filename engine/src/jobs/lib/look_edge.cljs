@@ -7,6 +7,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.look :as look]
+            [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.shore :as shore]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -24,18 +25,19 @@
   24)
 
 (defn lit-side?
-  "A predicate on an unseen side cell [x y z]: within near-of of the feet (a dark wall that close shows), or some flood cell beside
-  it is bright enough to be seen, so a look or a walk can show it. A side of a dark stretch farther off is never shown (a dark
-  cell is not recorded), so the region stays open there."
+  "A predicate on an unseen cell [x y z]: a cell the body has seen open is beside it (a look shows a face only across open
+  air: a cell inside rock, reached by the flood over unseen cells, never shows), and that cell is bright enough to be seen
+  or the unseen cell is within near-of of the feet (a dark wall that close shows). A side of a dark stretch farther off is
+  never shown (a dark cell is not recorded), so the region stays open there."
   [p feet]
   (let [see-lit (look/see-lit-fn p)
         near (look/near-of p)
-        cells (set (map vec (:cells (reach-room/room-flood p (reach-room/room-kind-at p (reach-room/shut-kind-at p)) (:x feet) (:y feet) (:z feet)))))]
+        open-seen? (fn [x y z] (let [b (u/seen-block p {:x x :y y :z z})] (and b (not= :solid (reach/kind-of b)))))]
     (fn [[x y z]]
-      (or (nil? see-lit)
-          (and near (<= (u/dist feet {:x x :y y :z z}) near))
-          (some (fn [[dx dz]] (and (contains? cells [(+ x dx) y (+ z dz)]) (== 1 (see-lit (+ x dx) y (+ z dz)))))
-                [[1 0] [-1 0] [0 1] [0 -1]])))))
+      (let [near? (and near (<= (u/dist feet {:x x :y y :z z}) near))]
+        (some (fn [[dx dy dz]] (let [nx (+ x dx) ny (+ y dy) nz (+ z dz)]
+                                 (and (open-seen? nx ny nz) (or (nil? see-lit) near? (== 1 (see-lit nx ny nz))))))
+              [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])))))
 
 (defn unseen-roof?
   "Whether a cell in the roof column over the {:x :y :z} cell (2..6 above it) is unseen with no seen block under it: a roof
@@ -57,14 +59,20 @@
 
 (defn pending
   "The cells [x y z] to look at before the body's region is judged: unseen cells beside the closed region the body stands in
-  under a cover, nearest first, not looked at in c's job memory. A dark cell stays unseen after a look and
+  under a cover, and its unseen ground (the flood stands on seen blocks under unseen cells), that lit-side? shows, nearest
+  first, not looked at in c's job memory. A dark cell stays unseen after a look and
   is not looked at twice. Reads no memory of a frame without a job: pass `looked` then."
   ([c] (pending c (:edge-looked (ctx/mem c) #{})))
   ([c looked]
    (let [p (:primitives c)
          feet (sh-sense/feet p)]
      (when (covered? p)
-       (->> (reach-room/unseen-sides p feet)
+       (->> (reach-room/room-flood p (reach-room/room-kind-at p (reach-room/shut-kind-at p)) (:x feet) (:y feet) (:z feet))
+            :cells
+            (map vec)
+            (filter (fn [[x y z]] (nil? (u/seen-block p {:x x :y y :z z}))))
+            (concat (reach-room/unseen-sides p feet))
+            distinct
             (remove looked)
             (filter (lit-side? p feet))
             (sort-by (fn [[x y z]] (u/dist feet {:x x :y y :z z})))

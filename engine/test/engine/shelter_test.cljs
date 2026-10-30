@@ -20,6 +20,7 @@
             [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.util :as u]
             [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.torch :as torch]
             [jobs.survival.dig-in-cells :as dig-cells]
@@ -1614,6 +1615,31 @@
           shown (look-edge/pending {:primitives dark} #{})]
       (is (seq shown) "a dark wall within near-of is looked at")
       (is (every? near? shown)))))
+
+(deftest a-wall-cell-looked-at-from-beside-it-reads-as-seen
+  (let [{:keys [blocks light]} (lit-tunnel-box false)
+        raw-p (tu/fake {:time night :yaw 0 :pitch 40 :self {:pos {:x 10.5 :y 64 :z 0.5}} :blocks blocks})
+        _ (swap! (fake/state raw-p) assoc :light-default [0 0] :light light)
+        per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})
+        p (perception/wrap raw-p per)]
+    (perception/pass! per)
+    (is (= ["stone" "stone"] (map #(u/seen-name p {:x 10 :y % :z 1}) [64 65])))))
+
+(deftest unseen-cells-inside-the-rock-are-not-looked-at-but-the-missed-cells-of-the-tunnels-shell-are
+  ;; The 1-wide tunnel's shell is seen but for one ceiling cell and the head-high wall beside it: the flood steps up into
+  ;; that wall cell and on over the unseen rock (standing on the seen shell), whose cells no look shows.
+  (let [air? (fn [x y z] (and (zero? z) (<= 0 x 19) (#{64 65} y)))
+        shell? (fn [x y z] (some (fn [[dx dy dz]] (air? (+ x dx) (+ y dy) (+ z dz))) [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]))
+        missed #{[14 66 0] [14 65 1]}
+        raw-p (tu/fake {:time night :self {:pos {:x 10.5 :y 64 :z 0.5}}
+                        :blocks (into {} (for [x (range -3 23) y (range 61 71) z (range -3 4) :when (not (air? x y z))] [(str x "," y "," z) "stone"]))})
+        seen? (fn [x y z] (and (or (air? x y z) (shell? x y z)) (not (missed [x y z]))))
+        p (doto raw-p
+            (aset "seenBlockAt" (fn [pos] (if (seen? (.-x pos) (.-y pos) (.-z pos))
+                                            (let [b (.blockAt (tu/oracle raw-p) pos)] #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0})
+                                            #js {:unknown true :pos pos}))))]
+    (tu/set-sensed! p (fn [pos] (if (seen? (.-x pos) (.-y pos) (.-z pos)) (.blockAt (tu/oracle raw-p) pos) #js {:unknown true})))
+    (is (= #{[14 65 1] [14 66 0]} (set (look-edge/pending {:primitives p} #{}))) "the two missed cells, no rock behind them")))
 
 (deftest the-edge-walk-is-bought-by-its-hp-not-counted
   (let [c {:primitives (tunnel-edge-body nil)}
