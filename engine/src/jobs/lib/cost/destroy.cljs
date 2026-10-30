@@ -42,20 +42,26 @@
     (or (nil? n) (rules/natural? n) (rules/tree-wood? n) (contains? bs/replaceable n)) 0
     :else (put-back-s n)))
 
-(def built-block #"(?:planks|slab|stairs|glass|door|fence|fence_gate|bricks|cobblestone|ladder|chest|torch|sign|crafting_table|furnace|bed)$")
+(def built-block #"(?:planks|slab|stairs|glass|glass_pane|door|fence|fence_gate|bricks|cobblestone|ladder|chest|torch|sign|crafting_table|furnace|bed)$")
 
 (defn placed-log?
-  "True when the tree wood at cell looks placed: a horizontal axis, a log beside it in a horizontal line, or a built block
-  (planks, glass, doors...) touching it. (sensed cell) is a sensed block or nil."
+  "True when the tree wood at cell looks placed: a built block (planks, glass, doors...) touching it, or, with no leaves
+  touching it and no vertical log stacked on or under a vertical one, a horizontal axis or a log beside it in a horizontal
+  line. Leaves and stacked trunks mark a tree (2x2 trunks, branches, trunks grown together). (sensed cell) is a sensed
+  block or nil."
   [sensed [x y z]]
   (let [name-at (fn [c] (let [b (sensed c)] (when-not (or (nil? b) (true? (.-unknown b))) (.-name b))))
         props (some-> (sensed [x y z]) .-properties)
+        vertical? (not (contains? #{"x" "z"} (some-> props .-axis)))
         side [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1]]
+        up-down [[0 1 0] [0 -1 0]]
         at (fn [[dx dy dz]] (name-at [(+ x dx) (+ y dy) (+ z dz)]))]
     (boolean
-     (or (contains? #{"x" "z"} (some-> props .-axis))
-         (some #(rules/tree-wood? (at %)) side)
-         (some #(some->> (at %) (re-find built-block)) (conj side [0 1 0] [0 -1 0]))))))
+     (or (some #(some->> (at %) (re-find built-block)) (concat side up-down))
+         (and (not-any? #(some->> (at %) (re-find #"leaves$")) (concat side up-down))
+              (not (and vertical? (some #(rules/tree-wood? (at %)) up-down)))
+              (or (not vertical?)
+                  (some #(rules/tree-wood? (at %)) side)))))))
 
 (defn destroyed-fn
   "(fn [n cell own?]) destroyed-s of digging block n at cell, the block over it and the crop's age read by

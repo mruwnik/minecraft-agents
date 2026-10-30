@@ -893,5 +893,13 @@
       (is (= 0 (price {[0 64 0] (log "y") [0 65 0] (log "y") [1 64 0] #js {:name "oak_leaves"}} [0 64 0])) "a trunk is free")
       (is (= place (price {[0 64 0] (log "x")} [0 64 0])) "a horizontal log is placed")
       (is (= place (price {[0 64 0] (log "y") [0 64 1] (log "y")} [0 64 0])) "a log in a horizontal line is placed")
-      (is (= place (price {[0 64 0] (log "y") [0 64 1] #js {:name "oak_planks"}} [0 64 0])) "a log joined to planks is placed"))
+      (is (= place (price {[0 64 0] (log "y") [0 64 1] #js {:name "oak_planks"}} [0 64 0])) "a log joined to planks is placed")
+      (doseq [[what expected sensed]
+              [["a 2x2 trunk's lower log" 0 {[0 64 0] (log "y") [0 64 1] (log "y") [0 65 0] (log "y")}]
+               ["a 2x2 trunk's top log, leaves over it" 0 {[0 64 0] (log "y") [0 64 1] (log "y") [0 65 0] #js {:name "dark_oak_leaves"}}]
+               ["a branch log under leaves" 0 {[0 64 0] (log "x") [1 64 0] (log "x") [0 65 0] #js {:name "oak_leaves"}}]
+               ["1x1 trunks grown together" 0 {[0 64 0] (log "y") [0 64 1] (log "y") [0 65 0] (log "y") [0 65 1] (log "y")}]
+               ["a bare horizontal log" place {[0 64 0] (log "x")}]
+               ["a 2x2 of logs beside a pane" place {[0 64 0] (log "y") [0 64 1] (log "y") [0 65 0] (log "y") [1 64 0] #js {:name "glass_pane"}}]]]
+        (is (= expected (price sensed [0 64 0])) what)))
     (is (< (cost/destroyed-s "wheat" "air" 2 false) (cost/destroyed-s "wheat" "air" 5 false)) "a crop grown further loses more")))
