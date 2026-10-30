@@ -458,7 +458,76 @@
         :clear-path (dig-s (:cells (door @block-at (unseen-of p) feet (heading-dirs (:heading e)))))
       0))))
 
-(declare choose)
+(defn new-stair-step-s
+  "Seconds one step of a stair not yet laid out (no heading chosen) takes: its three cuts priced as stone, and its cells
+  unseen (the worse case)."
+  [p]
+  ((cost/stair-leg-pricer (wworld/unseen-share p)) (repeat 3 (or (cost/dig-cost "stone") 0)) nil true))
+
+(defn rise-left
+  "Blocks from end ([x y z]) up to the stand a step below goal's height."
+  [end goal]
+  (max 0 (- (second goal) (second end) 1)))
+
+(defn rise-left-s
+  "Seconds the climb from end up rise-left to goal takes: the cheaper of as many new stair steps (new-stair-step-s) and a
+  pillar (cost/pillar-s: its unseen blocks, those past the carried climb blocks left fetched), none when a cell over end
+  it climbs into is seen solid (rock overhead)."
+  [p end goal left]
+  (let [n (rise-left end goal)
+        block-at (block-at-of p)
+        unseen? (unseen-of p)
+        open? (every? #(or (unseen? %) (bs/passable? (block-at %))) (map #(up end %) (range 2 (+ n 2))))
+        stair-s (* n (new-stair-step-s p))]
+    (cond (zero? n) 0
+          open? (min stair-s (cost/pillar-s (wworld/unseen-share p) n (unseen-pillar-blocks p end n) (max 0 (- n left))))
+          :else stair-s)))
+
+(defn stair-floors
+  "The floor cells of stair way e's steps from feet."
+  [feet {:keys [heading steps]}]
+  (map #(add (nth % 2) [0 -1 0]) (partition 3 (stair-cuts feet (heading-dirs (keyword heading)) steps))))
+
+(defn spent-blocks
+  "How many of the carried climb block item way e from feet places: a pillar's height, a stair's open floors when item
+  is one of its floor fillers."
+  [p feet item e]
+  (case (:step e)
+    :pillar (:height e)
+    :stair (if (some #{item} (choose/fillers :build))
+             (count (filter #(dig-route/open? ((block-at-of p) %)) (stair-floors feet e)))
+             0)
+    0))
+
+(defn way-cells
+  "The cells way e from feet takes the body through, feet first: a pillar's column, a stair's steps, else end (a door's far
+  side)."
+  [feet {:keys [step height heading steps]} end]
+  (into [feet]
+        (case step
+          :pillar (map #(up feet %) (range 1 (inc height)))
+          :stair (let [[dx dz] (heading-dirs (keyword heading))] (map #(add feet [(* % dx) % (* % dz)]) (range 1 (inc steps))))
+          [end])))
+
+(declare choose way-end)
+
+(defn way-s
+  "Seconds way e (choose's) made from feet takes the body to goal (jobs.lib.cost): its price (an approach: its walk, then
+  the door toward goal from its cell when there is one), the climb left from where it leaves the body (rise-left-s, with
+  the count of carried climb block item it leaves), the walk on from the top of that climb (rest-s, rest-s-fn), and, with
+  risk-s, what the dangers on its cells cost over those seconds ((risk-s cells goal work-s): go-to's :risk-s)."
+  [p feet goal e {:keys [rest-s risk-s item count]}]
+  (let [[walk from e] (if (= :approach (:step e))
+                        (let [pos (:pos e)
+                              door (some->> (heading pos goal) heading-names (hash-map :step :clear-path :heading))]
+                          [(walk-s feet pos) pos (when (and door (way-end p pos goal door)) door)])
+                        [0 feet e])
+        end (if e (way-end p from goal e) from)
+        left (- (or count 0) (if e (spent-blocks p from item e) 0))
+        work (+ walk (if e (price p from e) 0) (rise-left-s p end goal left))
+        top (up end (rise-left end goal))]
+    (+ work (rest-s top)
+       (if risk-s (risk-s (vec (dedupe (concat [feet] (if e (way-cells from e end) [from]) [top]))) goal work) 0))))
 
 (def way-spot-cap
   "Standable cells way-spot tries choose from at most."
@@ -496,8 +565,7 @@
   allows (go-to: no other owner's zone or claim); opts :pillar-item ({:item :count} or nil, escape/pillar-item) replaces the climb block read from the inventory. opts :skip is a set of steps that already failed (a stair heading
   that failed: [:stair :east]): the next one is chosen; opts :approached, the cells an approach already walked to; opts :stands, the feet cells of the body's own stairs (a ledge stair's first floor never lands on one: the stair job refuses :undercuts-way).
   - under a higher goal, when two or more of the pillar out of a pit, the stair and the rim pillar below
-    can be made from feet: the cheapest, its price plus the walk on from its end (way-end, rest-s-fn) and, ending below
-    the goal, a pillar of the rise left; else the first of these that can be made:
+    can be made from feet: the cheapest (way-s; opts :risk-s prices their dangers); else the first of these that can be made:
   - {:step :pillar :height n :item}: in a pit d deep with room above the head and at least n pillar blocks carried: n
     the rim-pillar (d - 1, then a step onto the rim), d when no side has a rim to step onto. First only when the
     column over the pit is seen to be clear to the top; with an unseen or solid cell in it, after the dig ways.
@@ -560,11 +628,8 @@
                                rim (conj {:step :pillar :height rim :item item}))))]
      (cond
        (next up-ways)
-       (let [rest-s (rest-s-fn p goal)
-             ;; a way that leaves the body below the goal still owes that climb, at least a pillar of it
-             s #(let [end (way-end p feet goal %)]
-                  (+ (price p feet %) (rest-s end) (cw/pillar-cost (max 0 (- (second goal) (second end) 1)))))]
-         (first (sort-by s up-ways)))
+       (let [priced {:rest-s (rest-s-fn p goal) :risk-s (:risk-s opts) :item item :count count}]
+         (first (sort-by #(way-s p feet goal % priced) up-ways)))
 
        (and open-above? headroom?)
        {:step :pillar :height height :item item}

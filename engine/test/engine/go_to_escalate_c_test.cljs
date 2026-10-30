@@ -410,9 +410,9 @@
         body #(tu/seeing-within (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory inv}) %)
         seen (body 50)
         step {:step :stair :heading :east :steps 1}]
-    (is (= (escape/price (body 1) [0 64 0] step) (choose/new-stair-step-s seen)) "the climb route's price of one unseen stone step")
-    (is (< (cw/stair-step-s) (choose/new-stair-step-s seen)) "the cuts are paid on top of the stair's step")
-    (is (< (escape/price seen [0 64 0] step) (choose/new-stair-step-s seen)) "seen cells cost less")))
+    (is (= (escape/price (body 1) [0 64 0] step) (escape/new-stair-step-s seen)) "the climb route's price of one unseen stone step")
+    (is (< (cw/stair-step-s) (escape/new-stair-step-s seen)) "the cuts are paid on top of the stair's step")
+    (is (< (escape/price seen [0 64 0] step) (escape/new-stair-step-s seen)) "seen cells cost less")))
 
 (deftest an-unseen-stair-and-pillar-are-priced-as-the-climb-route-prices-them
   (let [inv [{:name "iron_pickaxe" :count 1}]

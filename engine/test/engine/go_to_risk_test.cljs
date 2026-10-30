@@ -91,6 +91,16 @@
     (is (pos? walk))
     (is (= walk (spawn-light/spawns-over p (spawn-light/walked (sh-sense/feet p) (:steps plan)) nil)))))
 
+(deftest a-way-made-in-the-dark-prices-the-spawns-over-the-seconds-of-its-making
+  (let [cells [[0 64 0] [0 65 0] [0 66 0]]
+        goal {:x 4 :y 67 :z 0}
+        night (ready-test/ctx-of (assoc ready-test/open-night :self {:pos {:x 0 :y 64 :z 0} :health 20 :food 20}))
+        noon (ready-test/ctx-of (assoc ready-test/open-night :time st/noon :self {:pos {:x 0 :y 64 :z 0} :health 20 :food 20}))]
+    (is (< (risk/way-risk-s night goal cells 0) (risk/way-risk-s night goal cells 60)))
+    (is (< (- (risk/way-risk-s noon goal cells 60) (risk/way-risk-s noon goal cells 0))
+           (- (risk/way-risk-s night goal cells 60) (risk/way-risk-s night goal cells 0)))
+        "by day the open ground is lit")))
+
 (deftest a-dark-way-by-day-is-not-exposed
   ;; nothing seen: by day only the measured share of open ground the sky does not light at its height is priced
   (let [hp #(:hp (risk/estimate (ready-test/ctx-of (assoc night-hut :time %)) {:x 95 :y 64 :z 0}))]

@@ -270,10 +270,11 @@
       (ways/stair-step-cost step-s (ways/stair-cost 1) (cond-> (vec cuts-s) fill-s (conj fill-s)) (if unseen? unseen-s 0)))))
 
 (defn pillar-s
-  "Seconds a pillar of height blocks takes: ways/pillar-cost, and unseen-step-s for each of the unseen-blocks whose cell or
-  the two over it is unseen."
-  [share height unseen-blocks]
-  (+ (ways/pillar-cost height) (* (unseen-step-s share) unseen-blocks)))
+  "Seconds a pillar of height blocks takes: ways/pillar-cost (short of them fetched, default none), and unseen-step-s for
+  each of the unseen-blocks whose cell or the two over it is unseen."
+  ([share height unseen-blocks] (pillar-s share height unseen-blocks 0))
+  ([share height unseen-blocks short]
+   (+ (ways/pillar-cost height short) (* (unseen-step-s share) unseen-blocks))))
 
 (defn gap-look-cost
   "{:fill :look} seconds a gap jump the walker refuses over n floors the body has not seen adds (the worse case: none is

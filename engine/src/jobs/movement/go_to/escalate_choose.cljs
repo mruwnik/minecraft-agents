@@ -107,12 +107,6 @@
         (not @shut?))))
 
 
-(defn new-stair-step-s
-  "Seconds one step of a stair not yet laid out (no heading chosen) takes: its three cuts priced as stone, and its cells
-  unseen (the worse case)."
-  [p]
-  ((cost/stair-leg-pricer (wworld/unseen-share p)) (repeat 3 (or (cost/dig-cost "stone") 0)) nil true))
-
 (defn gap-fill
   "{:step :fill-gap :cell :item} when result (a planner no-path) is a gap jump refused for a low ceiling or a gap jump
   up, a carried pillar block can fill the gap's floor (at the takeoff's height: a step up is then walkable), and no zone
@@ -635,7 +629,7 @@
   re-plan inside a walk is held to :dives only), when escalating is on, the body is not in its shelter and escape/choose would stair (steps n):
   - :dives: under a cave floor (c :cave-floor, with c :dive-stair) the plan goes below it on a cell that is no stair of
     the body's own (climb/dives?), or below c :own-floor back down a stair of its own (climb/returns?);
-  - :cheaper: it is a whole path costing more seconds than cutting a new stair up to the goal's height (new-stair-step-s a step; a stair cut in the dark costs as much more as the dark walk does), the goal is stair-first-rise or more above
+  - :cheaper: it is a whole path costing more seconds than cutting a new stair up to the goal's height (escape/new-stair-step-s a step; a stair cut in the dark costs as much more as the dark walk does), the goal is stair-first-rise or more above
     the feet and the stair has not been tried this call.
   - :retreats: it is a partial plan (the way on is shut), a re-plan too, that goes down the body's own stair, for a goal no lower than
     the feet, and escape/choose has a way that changes the world: the stair was cut to get up, not to go back down.
@@ -658,7 +652,7 @@
             (and cave (climb/dives? steps cave (ledger/ways-of c)) @stair) :dives
             (and back (climb/returns? steps back (ledger/stair-stands c)) @stair) :dives
             (and retreats? (= "partial" status) (climb/returns? steps (second feet) (ledger/stair-stands c)) @way) :retreats
-            (and first? cheaper? (= "found" status) (number? seconds) @stair (> seconds (* (stair-dark-factor c) (- (second goal) (second feet)) (new-stair-step-s (:primitives c))))) :cheaper))))))
+            (and first? cheaper? (= "found" status) (number? seconds) @stair (> seconds (* (stair-dark-factor c) (- (second goal) (second feet)) (escape/new-stair-step-s (:primitives c))))) :cheaper))))))
 
 (defn escalate?
   "Whether a give-up after tries fruitless walks with result may escalate instead: a carried block fills the 1-cell gap it was refused (gap-fill), its only way dives (dive?), the goal is walled in (goal-walled?), or the walker failed max-blocked walks running (walker-fault?; one stuck walk of a :tries 1 caller is no proof) and no door or gate borders where it can walk

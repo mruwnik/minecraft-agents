@@ -13,6 +13,7 @@
             [engine.settings :as settings]
             [jobs.lib.cost :as cost]
             [jobs.lib.escape :as escape]
+            [jobs.lib.walk.world :as wworld]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.tools :as tools]
             [jobs.lib.step-off :as step-off]
@@ -112,11 +113,31 @@
     (is (= {:step :pillar :height 1 :item "dirt"} (escape/choose p [2 61 2] [2 64 10] (constantly false)))
         "the south wall when the goal is south")))
 
+(def column-yard
+  "A stone floor with a 6-high cobblestone column east of the body at [0 64 0]."
+  (merge (box -6 63 -6 6 63 6 "stone") (box 1 64 0 1 69 0 "cobblestone")))
+
 (deftest escape-choose-pillars-beside-a-column-to-a-goal-on-top-as-it-is-cheaper-than-a-stair
   ;; a rise-6 stair ends 6 blocks aside, a dig through the column at its foot: both leave the climb to do
-  (let [p (tu/fake {:self {:pos {:x 0 :y 64 :z 0}} :blocks (merge (box -6 63 -6 6 63 6 "stone") (box 1 64 0 1 69 0 "cobblestone"))
-                    :inventory [{:name "cobblestone" :count 16} {:name "stone_pickaxe" :count 1}]})]
-    (is (= {:step :pillar :height 5 :item "cobblestone"} (escape/choose p [0 64 0] [1 70 0])))))
+  (let [p (tu/fake {:self {:pos {:x 0 :y 64 :z 0}} :blocks column-yard
+                    :inventory [{:name "cobblestone" :count 16} {:name "stone_pickaxe" :count 1}]})
+        priced {:rest-s (escape/rest-s-fn p [1 70 0]) :item "cobblestone" :count 16}
+        s #(escape/way-s p [0 64 0] [1 70 0] % priced)]
+    (is (= {:step :pillar :height 5 :item "cobblestone"} (escape/choose p [0 64 0] [1 70 0])))
+    (is (< (* 2 (s {:step :pillar :height 5})) (s {:step :stair :heading :east :steps 6})) "no knife edge: the stair costs twice the pillar and more")
+    (is (= {:step :stair :heading :east :steps 6}
+           (escape/choose p [0 64 0] [1 70 0] (constantly true) {:risk-s (fn [cells _ _] (if (some #{[0 66 0]} cells) 1000 0))}))
+        "a danger on the pillar's column turns it")))
+
+(deftest escape-the-climb-left-after-a-way-is-a-pillar-of-the-blocks-left-under-open-sky-else-new-stair-steps
+  (let [p (tu/fake {:self {:pos {:x 0 :y 64 :z 0}} :blocks (merge (box -6 63 -6 6 63 6 "stone") {"0,67,0" "stone"})
+                    :inventory [{:name "cobblestone" :count 16}]})
+        share (wworld/unseen-share p)]
+    (is (= (cost/pillar-s share 3 0) (escape/rise-left-s p [1 64 0] [1 68 0] 3)) "3 blocks left for a rise of 3")
+    (is (= (cost/pillar-s share 3 0 2) (escape/rise-left-s p [1 64 0] [1 68 0] 1)) "2 of them fetched")
+    (is (< (cost/pillar-s share 3 0) (cost/pillar-s share 3 0 2)))
+    (is (= (* 3 (escape/new-stair-step-s p)) (escape/rise-left-s p [0 64 0] [0 68 0] 3)) "rock over the head: a pillar cannot climb")
+    (is (zero? (escape/rise-left-s p [0 64 0] [0 65 0] 0)) "a step up is a walk")))
 
 (deftest escape-choose-cuts-the-planks-door-nobody-claims-else-rim-pillars
   (let [p (tu/fake {:self {:pos {:x 2 :y 64 :z 0}} :blocks plank-yard :inventory [{:name "dirt" :count 9}]})]

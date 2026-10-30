@@ -38,6 +38,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.trip :as trip]
             [jobs.lib.walk.world :as wworld]
+            [jobs.lib.walk-risk :as risk]
             [jobs.lib.access :as access]
             [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.movement.go-to.climb :as climb]
@@ -198,11 +199,12 @@
 (defn way-opts
   "The opts of go-to call c's choice of a way from feet (escape/choose and the dig ways): a search that stood the body
   still past its worth (search-bound, memory :spent-routes) is not begun again; a dig route prices a cell of the body's
-  own builds at its put-back (:own-s)."
+  own builds at its put-back (:own-s); escape/choose prices a way's dangers by walk-risk/way-risk-s (:risk-s)."
   [c feet fetch? slice]
   {:own? (own-placed-fn c) :skip (skips c) :spent (:spent-routes (ctx/mem c) #{}) :fetch? fetch? :own-s (own-cut-fn c)
    :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c) :slice slice
-   :guess-risk (guess-risk c) :worth-s (:fallback-s (:replan-budget (ctx/mem c)))})
+   :guess-risk (guess-risk c) :worth-s (:fallback-s (:replan-budget (ctx/mem c)))
+   :risk-s (fn [cells goal work-s] (risk/way-risk-s c (zipmap [:x :y :z] goal) cells work-s))})
 
 (defn own-cut?
   "Whether the escalation under way may cut the body's own builds (:own-cut, chosen by own-way)."

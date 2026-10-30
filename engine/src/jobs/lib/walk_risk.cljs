@@ -201,6 +201,17 @@
   [c goal & [opts]]
   (estimate-of c (estimate-inputs c goal opts)))
 
+(defn way-risk-s
+  "Seconds (risk-s) the dangers of a way made through cells ([x y z], from the body's) and then walked straight on to goal
+  ({:x :y :z}) cost: estimate's spawns and known threats on those cells, and spawns over work-s more seconds spent making
+  it, at its cells' mean spawn-light/dark-share."
+  [c goal cells work-s]
+  (let [p (:primitives c)
+        at (map #(zipmap [:x :y :z] %) cells)
+        in (estimate-inputs c goal {:plan {:status "partial" :steps (vec at)}})
+        dark (/ (transduce (map #(spawn-light/dark-share p % false)) + 0 at) (max 1 (count at)))]
+    (risk-s c (estimate-of c (update in :exposed-s + (* work-s dark))))))
+
 (defn look-way
   "{:hp :lethal-hp :secs} of walking to `goal` to look at it and, at the chance `dark` the look shows it too dark to stay,
   back the same way (cost/look-first of estimate's hp, and of the straight walk's seconds at cost/walk-speed), cached for
