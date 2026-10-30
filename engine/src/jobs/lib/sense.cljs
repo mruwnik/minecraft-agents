@@ -97,15 +97,16 @@
 
 (defn ^:async look-round!
   "The :look/around hook: look at each unknown one of cells (a :look status's :look-at), at most ::max-looks looks,
-  then look-around!: for those cells only, a full pass each look when cells is empty (the check named none). Only the cells
-  looked at (or already known) count as round-looked; the rest stay pending for the next round."
+  then look-around!: for those cells only, a full pass each look when cells is empty (the check named none). Every one of
+  cells counts as round-looked, the ones past the looks or the sight too: the engine gives a :look one round (a second
+  counts as :later), so what it left unseen counts as open."
   [c cells]
-  (let [pending (targets (:primitives c) (u/self-pos c) cells (round-looked c))
-        [_ passed] (await (look-at-unknown! c pending (max-looks)))]
+  (let [pending (targets (:primitives c) (u/self-pos c) cells (round-looked c))]
+    (await (look-at-unknown! c pending (max-looks)))
     (await (look/look-around! c (look/glance-effort) (when (seq cells) {:cells pending})))
     (ctx/update-mem! c (fn [m] (let [here (look/cell-of (u/self-pos c))
                                      kept (if (= here (:at (::round-looked m))) (:cells (::round-looked m)) #{})]
-                                 (assoc m ::round-looked {:at here :cells (into kept passed)}))))))
+                                 (assoc m ::round-looked {:at here :cells (into kept cells)}))))))
 
 (defn known-memory
   "memory-age/epoch of the body's memory: the same while all it knows of the world is (no cell written, no remembered

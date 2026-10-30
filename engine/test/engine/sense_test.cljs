@@ -134,14 +134,13 @@
           (is (= [[6 64 0]] (:cells (first (filter #(= :sense.looked (:kind %)) @(:events c)))))
               "the survey found the ore; the guessed cell is looked at after it"))))))
 
-(deftest look-round-marks-only-the-cells-it-looked-at
+(deftest look-round-marks-every-cell-it-was-given
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [p (seeing {:self {:pos {:x 0 :y 64 :z 0}} :blocks rock})
               c (stub-ctx p)
               cells (mapv (fn [{:keys [x y z]}] [x y z]) inside)]
+          (is (< (sense/max-looks) (count cells)))
           (await (sense/look-round! c cells))
-          (is (= (sense/max-looks) (count (sense/round-looked c))) "a round marks the looks it took; the rest stay pending")
-          (await (sense/look-round! c cells))
-          (is (= (min (count cells) (* 2 (sense/max-looks))) (count (sense/round-looked c))) "the next round looks at the rest"))))))
+          (is (= (set cells) (sense/round-looked c)) "one round per :look: the cells past its looks count as looked, so the check asks no second"))))))
