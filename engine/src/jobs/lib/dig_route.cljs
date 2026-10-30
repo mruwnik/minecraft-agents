@@ -88,7 +88,7 @@
   "route's search begun: a fn of n that runs it on for at most n more cells expanded, [answer expanded]: answer route's
   once the search has ended (the same each run after), nil while it goes on; expanded the cells this run expanded.
   Plain numbers throughout (a cell is a key, its reads are cached by key): a climb expands about 10k cells."
-  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-dig-s max-s margin near sees node-s back-h? full?] r :range :or {dig-s (constantly 1) step-s 0 ways #{}} :as opts}]
+  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-dig-s max-s margin near sees node-s back-h? full? prior-h? unseen-dig-s] r :range :or {dig-s (constantly 1) step-s 0 ways #{} unseen-dig-s 0} :as opts}]
   (let [[fx _ fz] from
         [gx gy gz] goal
         r (when (and r (pos? r)) r)
@@ -130,7 +130,27 @@
                  to-goal)
         ;; with back-h?, the back search's bound too (back-lb): a dear wall round the goal is priced before the rock round it is searched
         back-lb (volatile! (constantly 0))
-        heuristic (if back-h? (fn [x y z] (max (step-h x y z) (@back-lb x y z))) step-h)
+        ;; with prior-h?, a cell whose step is unseen is priced on as if the rest of the way were unseen too, each block across
+        ;; at least its step, its unseen step and, with the cell's feet and head unseen, the two cells it digs (unseen-dig-s
+        ;; each), each block up or down a cell more; and a way much deeper than it is long at least its drops of max-fall
+        ;; (or climbs) each. A bound only of ways through the unseen: an opening seen farther on is left out (a way
+        ;; through it may be missed by what it saves), so the unseen rock is not searched as the ball a walk's price leaves open
+        [px py pz] (if r [ax ay az] goal)
+        pm (if r (* 2 r) 0)
+        prior-h (fn [x y z] (let [dug (if (and (unseen-cell? x y z) (unseen-cell? x (inc y) z)) (* 2 unseen-dig-s) 0)
+                                  across (+ step-s unseen-step-s dug)
+                                  h (max 0 (- (+ (js/Math.abs (- x px)) (js/Math.abs (- z pz))) pm))
+                                  dy (- py y)
+                                  v (max 0 (- (js/Math.abs dy) pm))
+                                  per-v (if (pos? dy)
+                                          (+ unseen-dig-s (if pillar-s (min across (+ pillar-s unseen-step-s)) across))
+                                          (+ unseen-dig-s (/ across (max 1 max-fall))))]
+                              (max (+ (* across h) (* unseen-dig-s v)) (* per-v v))))
+        prior? (boolean (and prior-h? unseen? unseen-step-s))
+        heuristic (let [h (if back-h? (fn [x y z] (max (step-h x y z) (@back-lb x y z))) step-h)]
+                    (if prior?
+                      (fn [x y z] (if (pos? (unseen-at x y z)) (max (h x y z) (prior-h x y z)) (h x y z)))
+                      h))
         end? (fn [ck] (let [[x y z] (cell-of ck)]
                         (and (<= (+ (* (- x ax) (- x ax)) (* (- y ay) (- y ay)) (* (- z az) (- z az))) (* r r))
                              (or (nil? sees) (sees x y z)))))
@@ -178,7 +198,8 @@
                        (when (or (nil? old) (< nd (aget old 0)))
                          (.set best nk #js [nd k ds ck move placed (let [dug (aget from-node 6) ks (aget acc 3)] (if (zero? (alength ks)) dug (into dug (array-seq ks))))])
                          (when (and (< nd (aget incumbent 0)) (end-key? nk)) (aset incumbent 0 nd) (aset incumbent 1 nk))
-                         (heap-push! queue #js [(+ nd (heuristic nx ny nz)) @tick nk])
+                         ;; among equal bounds the farthest along first: under prior-h a straight way's cells all bound alike
+                         (heap-push! queue #js [(+ nd (heuristic nx ny nz)) (if prior? (- nd) @tick) nk])
                          (vswap! tick inc))))))
         ;; whether a step of the way to the cell of key k opened cell x y z: a floor the route itself digs away is none (a
         ;; stair that turns back over its own cut)
@@ -369,7 +390,8 @@
   floor of :ways (the floors of the body's own stairs), on which nothing is placed either. Bounds, each only when
   given: :max-dig-s seconds of digging, :max-s seconds of the whole route, :max-places blocks laid or jump-placed (the blocks carried),
   :margin cells round the two ends; :range r (> 0) also ends it on any feet cell within r of :near (default goal) that :sees (fn [x y z], when given) passes;
-  :node-s seconds of CPU a cell expanded (priced-search), :back-h? the back search's bound in the heuristic, :full? (fn []) true when the heap holds no more.
+  :node-s seconds of CPU a cell expanded (priced-search), :back-h? the back search's bound in the heuristic, :prior-h? a cell whose step
+  is unseen bounded as if the rest of the way were unseen (:unseen-dig-s the least a dig of an unseen cell costs, default 0), :full? (fn []) true when the heap holds no more.
   {:dig [cell ..] :steps [{:to feet :move :walk|:laid|:pillar :dig [cell ..] :place cell} ..] :seconds the route's price}, {:problem :no-route},
   {:problem :dearer} when every route costs more than :max-s, {:problem :too-big} when :full? with no route in hand, or {:problem :budget} when :max-nodes cells were expanded first (search goes on past it)."
   [block-at from goal opts]
@@ -388,10 +410,10 @@
     (> (.-used_heap_size h) (* (.-heap_size_limit h) (settings/get settings ::heap-full)))))
 
 (defn priced-search
-  "search with its CPU priced (cost/search-cell-s), the back search's bound in its heuristic (:back-h?), grown only while the
-  heap has room (heap-full?). A fn of n as search's."
+  "search with its CPU priced (cost/search-cell-s), the back search's bound in its heuristic (:back-h?), an unseen step's way
+  on priced as unseen (:prior-h?), grown only while the heap has room (heap-full?). A fn of n as search's."
   [block-at from goal opts]
-  (search block-at from goal (assoc opts :node-s (cost/search-cell-s) :back-h? true :full? heap-full?)))
+  (search block-at from goal (assoc opts :node-s (cost/search-cell-s) :back-h? true :prior-h? true :full? heap-full?)))
 
 (defn route-resumed
   "route, but a search that spends its nodes (:max-nodes) is kept under key and

@@ -195,3 +195,20 @@
     (is (= 2.5 ((:dig-s prices) "stone" [0 0 0])))
     (is (= 10 ((:dig-s prices) "stone" [1 0 0])))
     (is (nil? ((:dig-s prices) "bedrock" [0 0 0])) "a cell never dug stays so")))
+
+(deftest a-priced-search-toward-a-far-goal-through-unseen-rock-prices-the-rock-and-searches-no-ball-of-it
+  ;; rock below y 10 never seen (taken for stone): the walk's price alone (step-s a block) leaves a ball of rock open that a
+  ;; way through the unseen costs far more than
+  (let [glass (into {} (for [z (range -300 301) y (range 0 10)] [[30 y z] "glass"]))
+        opts (fn [seen max-s] {:dig-s (fn [n _] (if (= "glass" n) 13 0.5)) :step-s 0.3 :unseen-step-s 1 :unseen-dig-s 0.5 :max-s max-s
+                               :unseen? (fn [[_ y _ :as c]] (and (< y 10) (not (seen c))))})
+        to-end (fn [run] (loop [cells 0] (let [[a e] (run 500)] (if (or a (> cells 20000)) [a (+ cells e)] (recur (+ cells e))))))
+        [far far-cells] (to-end (dr/priced-search (world {}) [0 10 0] [300 4 0] (opts {} 208)))
+        [wall wall-cells] (to-end (dr/priced-search (world glass) [0 10 0] [60 4 0] (opts glass 208)))
+        [deep deep-cells] (to-end (dr/priced-search (world {}) [0 10 0] [40 -60 10] (opts {} 208)))]
+    (is (= {:problem :dearer} far))
+    (is (< far-cells 100) (str "a goal 300 blocks off through unseen rock is dearer than 208 s at once (" far-cells " cells)"))
+    (is (< (:seconds wall) 90) "the way over a glass plane 600 wide is found")
+    (is (< wall-cells 1000) (str wall-cells " cells"))
+    (is (< (:seconds deep) 130))
+    (is (< deep-cells 5000) (str "a goal 70 blocks down, its drops priced (" deep-cells " cells)"))))
