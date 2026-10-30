@@ -346,7 +346,9 @@
           (ctx/update-mem! c dissoc :mob-waits)
           :again)
       (let [shoved? (displaced? c (:base (ctx/mem c)) (:home (ctx/mem c)))
-            _ (when shoved? (ctx/update-mem! c assoc :counted true))
+            _ (when shoved?
+                (ctx/update-mem! c assoc :counted true)
+                (ctx/emit! c :pillar.knockback :info {:at (pl/feet-cell c) :base (:base (ctx/mem c))}))
             _ (when (or shoved? (not (and (mob-in-cell c cell) (mob-wait! c)))) (u/failed! c))]
         (if (retry? c)
           :again
@@ -366,7 +368,9 @@
         [bx _ bz] base
         [fx _ fz] (pl/feet-cell c)
         off? (and base home (not (centred? c [bx bz] home)))
-        _ (when (and off? (not counted) (not walking)) (u/failed! c))
+        _ (when (and off? (not counted) (not walking))
+            (ctx/emit! c :pillar.knockback :info {:at (pl/feet-cell c) :base base})
+            (u/failed! c))
         walk? (and off? (retry? c))]
     (ctx/update-mem! c #(-> % (dissoc :counted) (assoc :walking (boolean walk?))))
     (when (and walk? stand)

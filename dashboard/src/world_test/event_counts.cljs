@@ -35,6 +35,7 @@
   retry-wins (world-test.retry-wins; trial bodies only) counts from the logs alone the tries after a failed one per retry kind, won or not, and their seconds (value/::retry-counts).
   craft-steps (world-test.craft-steps; trial bodies only) counts from the logs alone the seconds of each craft action: n, mean (cost.table/::craft-step).
   tree-logs (world-test.tree-logs; trial bodies only) counts from the logs alone the logs of each fell-tree :done: n, mean, median (trees/::logs-per-tree is the mean).
+  pillar-knocks (world-test.pillar-knocks; all bodies) counts from the logs alone the pillar knock-offs per block a pillar placed (cost.ways/::pillar-knock-chance).
   swim-times [--agents DIR] [--q Q] (world-test.swim-times; trial bodies only) counts from the logs alone the go-to swims (landed exact, timeout censored at the cap): n, landed, capped and the Q quantile (default 0.95; :lower-bound? when the cap hides it) (go-to ::swim-ms).
   item-costs [--agents DIR] [--counts FILE] (world-test.item-costs; trial bodies only) folds each gather's seconds holding the body and the items of its kind picked up into the counts file (value/::gather-counts, ::gather-prior-items).
   unseen-floors (world-test.unseen-floors; all bodies) counts from the logs alone the unseen floors walks looked at, absent and present (value/::unseen-floor-counts).
@@ -66,6 +67,7 @@
             [world-test.retry-wins :as retry-wins]
             [world-test.swim-times :as swim-times]
             [world-test.tree-logs :as tree-logs]
+            [world-test.pillar-knocks :as pillar-knocks]
             [world-test.respawn-distance :as respawn-distance]
             [world-test.respawn-meets :as respawn-meets]
             [world-test.item-costs :as item-costs]
@@ -639,7 +641,7 @@
        (sort-by :t)
        vec))
 
-(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | closing-rate | walk-pace | walk-detour | gap-miss | way-on | guess-looks | look-seconds | unseen-floors | spot-returns | field-passes | arrow-shots | caught-flights | work-hurt | vein-seen | water-lags | surface-heights | floor-neighbours | unseen-solid | guess-rock | unseen-sky | dark-reach | tree-spots | resight | wall-sides | wall-chunks | far-side-rows | pen-escapes | wall-places | hide-ends | flee-meets | respond-calls | respawn-distance | respawn-meets | retry-wins | craft-steps | tree-logs | swim-times | item-costs [--run ID --animals N --secs S --escaped E] [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N] [--difficulty D]
+(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | closing-rate | walk-pace | walk-detour | gap-miss | way-on | guess-looks | look-seconds | unseen-floors | spot-returns | field-passes | arrow-shots | caught-flights | work-hurt | vein-seen | water-lags | surface-heights | floor-neighbours | unseen-solid | guess-rock | unseen-sky | dark-reach | tree-spots | resight | wall-sides | wall-chunks | far-side-rows | pen-escapes | wall-places | hide-ends | flee-meets | respond-calls | respawn-distance | respawn-meets | retry-wins | craft-steps | tree-logs | pillar-knocks | swim-times | item-costs [--run ID --animals N --secs S --escaped E] [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N] [--difficulty D]
   every command first folds the logs into the counts file (default worlds/test/priors-counts.edn), then reports from the file; --since-ms keeps the rows of fights started after it.")
 
 (defn- parse-args [argv]
@@ -849,6 +851,13 @@
                                                                 :when n]
                                                             n))))
                        0)
+       "pillar-knocks" (do (println (pr-str (pillar-knocks/report (for [b (array-seq (fs/readdirSync agents))
+                                                                         :when (fs/existsSync (path/join agents b "engine"))
+                                                                         line (event-lines (path/join agents b "engine"))
+                                                                         :let [row (pillar-knocks/scan-line line)]
+                                                                         :when row]
+                                                                     row))))
+                           0)
        "swim-times" (do (println (pr-str (swim-times/report (vec (for [b (array-seq (fs/readdirSync agents))
                                                                        :when (and (not (probe? b)) (fs/existsSync (path/join agents b "engine")))
                                                                        row (swim-times/swims (vec (event-lines (path/join agents b "engine"))))]

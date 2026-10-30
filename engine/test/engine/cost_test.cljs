@@ -340,6 +340,14 @@
             "finite, and dearer with the pillar's blocks to fetch")
         (is (= 0 (cost/unseen-fall-s :down 1 (assoc body :max-drop 0))) "a body that takes no drop never falls on")))))
 
+(deftest a-pillar-prices-the-fall-of-a-knock-off-at-each-block-by-its-chance
+  (settings/with-settings {:jobs.lib.cost.ways/pillar-knock-chance 0.5}
+    (fn []
+      (let [hp #(cost/hp-cost 20 (cost/fall-damage nil %))]
+        (is (= 0 (cost/pillar-knock-s 20 nil 0)))
+        (is (= (* 0.5 (+ (hp 1) (hp 2) (hp 3))) (cost/pillar-knock-s 20 nil 3)) "each block's height is a fall, at the chance")
+        (is (< 0 (cost/pillar-knock-s 20 nil 4) (cost/pillar-knock-s 20 nil 8)) "a taller pillar falls farther")))))
+
 (deftest a-guess-is-rock-never-dug-at-the-measured-rate-of-its-class-moved-by-the-calls-own-looks
   (settings/with-settings {:jobs.lib.cost.value/guess-rock-counts {:layer-62 {:bad 3 :ok 1} :apart {:bad 0 :ok 99}}}
     (fn []
