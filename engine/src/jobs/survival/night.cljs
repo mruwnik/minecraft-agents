@@ -58,7 +58,7 @@
   - afloat: swim to the nearest dry land first (surface-up/leave-water!); none seen: nothing-possible :in-water. A swimmer is never roofed or sheltered.
   - roofed or buried in a closed region with sides never seen: a look at the nearest, else a walk to it (look-edge/look!: priced, within max-edge-walk of where the walks began) (an unseen side is open until seen: a lit tunnel with its walls seen is shelter, one with an unseen branch is not).
   - sheltered (slept, dug in, shut in): log out for a stint while someone else sleeps or is online (log-out-wanted?), else end so the queue runs (no all-night hold: listed jobs run when their own start checks pass).
-  - a remembered roofed :roofed-places place whose walk go-to quotes cheapest (walkable-home: only those whose straight walk fits the time left before the dark plus a margin, night.sites home-walk-*, and bed-down/home-bound-s, are quoted best-first; a quote is asked once a pass), with no place remembered a closed room the body has seen (its walk plus the chance it is open times the dig-in's quote; a room not seen inside yet has the chance cost/closed-chance of its seen and unseen sides, a closed one 1), the body not roofed: when :home (a whole route found that fits that time, or any quoted with a carried bed) is the cheapest of bed-down/answers (night-answer), jobs.survival.enter-room walks in (one try tonight). Farther or dearer places are left to shut-in's :room way, priced against digging in.
+  - a remembered roofed :roofed-places place whose walk go-to quotes cheapest (walkable-home: only those whose straight walk fits the time left before the dark plus a margin, night.sites home-walk-*, and bed-down/home-bound-s, are quoted best-first; a quote is asked once a pass), with no place remembered a closed room the body has seen (its walk plus the chance it is open times the dig-in's quote; a room not seen inside yet has the chance cost/closed-chance of its seen and unseen sides, a closed one 1), the body not roofed: when :home (a whole route found that fits that time, or any quoted with a carried bed) is the cheapest of bed-down/answers (night-answer), jobs.survival.enter-room walks in, worth what the next answer costs more than the home once there (one try tonight). Farther or dearer places are left to shut-in's :room way, priced against digging in.
   - an open door of the closed room the body stands in is shut; the room's doorway is filled before a carried bed goes down (ledger :doorway; one that cannot be filled for want of blocks, or was filled, is :doorway-tried, not tried again tonight).
   - a bed to use (sh-beds/beds-to-use, the one whose walk go-to quotes cheapest) whose walk is safe (bed-walk-safe?: a whole route priced no dearer than staying put), a carried bed, or someone else asleep or online (log-out-wanted?, never mid-danger?): the cheapest of bed-down/answers (night-answer, debug night.answers): lie in the bed (its walk priced in) or the carried one put down here, put the carried bed down and shut its row in first (:sealed), jobs.survival.log-out (a 30 s stint, till morning when coming back costs more, log-out/back-unsafe; not retried tonight when not ok), or shelter (on below). A bed is jobs.survival.bed-down, called again until it ends; one that stops hostile-near ends the round nothing-possible :monsters-near (the trigger fires again after its cooldown).
   - the sky not dark yet (dusk, a bed term started it): done; the shelter ways below wait for the dark.
@@ -221,14 +221,15 @@
 (defn ^:async enter-room!
   "jobs.survival.enter-room (into the :place if given, else the home or a closed room seen: walks, shuts its doors, fills its doorway or roof hole); :again. A
   walk (a place given, or walk? for the room seen) is made once a night: once its call ends, :roof-walk-failed is set whatever came of it (a body that got in is roofed, and
-  no walk is wanted)."
+  no walk is wanted). worth is the call's :worth (home-worth; nil: the night's own)."
   ([c place] (enter-room! c place (some? place)))
-  ([c place walk?] (enter-room! c place walk? nil))
-  ([c place walk? at]
+  ([c place walk?] (enter-room! c place walk? nil nil))
+  ([c place walk? at worth]
    (hold/busy! c)
    (let [w (await (ctx/call c :enter-room 'jobs.survival.enter-room (cond-> {}
                                                                       place (assoc :place place)
-                                                                      at (assoc :at at))))]
+                                                                      at (assoc :at at)
+                                                                      worth (assoc :worth worth))))]
      (when (and walk? (not= :continue w))
        (ctx/update-mem! c assoc :roof-walk-failed true))
      (when (and (map? w) (= :no-blocks (contract/cause-key w)))
@@ -642,14 +643,20 @@
     (if (or bed carried?) prices (dissoc prices :bed :sealed))))
 
 (defn ^:async night-answer
-  "The cheapest of night-prices (bed-down/cheapest; debug night.answers): :bed, :sealed, :log-out, :home, :shelter or :exposed; nil when
-  there is neither a bed, a log-out nor a home to weigh."
+  "[pick prices]: the cheapest of night-prices (bed-down/cheapest; debug night.answers), :bed, :sealed, :log-out, :home, :shelter
+  or :exposed; nil when there is neither a bed, a log-out nor a home to weigh."
   [c bed carried? bed-way home]
   (when (or bed carried? (and bed-way (log-out-wanted? c)) home)
     (let [prices (await (night-prices c bed carried? bed-way home))
           pick (bed-down/cheapest c prices)]
       (emit-answers! c pick prices)
-      pick)))
+      [pick prices])))
+
+(defn home-worth
+  "Seconds the walk into home (walkable-home's, :cost its walk's price) is worth (Q54): what the next way (the cheapest of
+  prices but :home) costs more than the home once there, ##Inf with none."
+  [prices home]
+  (max 0 (- (apply min ##Inf (vals (dissoc prices :home))) (- (:home prices) (:cost home)))))
 
 (defn sleep-inputs
   "What staying asleep is priced on, read now (bed-down/answers): who else must still lie down (sh-sleepers/sleepers-short),
@@ -759,9 +766,9 @@
           (:bed-down (ctx/mem c)) (let [{:keys [bed answer]} (:bed-down (ctx/mem c))] (await (bed-down-step c bed answer)))
           (and roofed bed-wanted (not bed) (sh-beds/bed-layout c true) (room-lib/gap c)) (await (enter-room! c nil))
           (and (= :searching home) home-way?) :again
-          :else (let [pick (when (or bed-way offered) (await (night-answer c bed bed-wanted bed-way offered)))]
+          :else (let [[pick prices] (when (or bed-way offered) (await (night-answer c bed bed-wanted bed-way offered)))]
                   (if (= :home pick)
-                    (await (enter-room! c (:name home) true (:at home)))
+                    (await (enter-room! c (:name home) true (:at home) (home-worth prices home)))
                     (await (answer-pass c sheltered bed (when bed-way pick))))))))))
 
 (defn ^:async round

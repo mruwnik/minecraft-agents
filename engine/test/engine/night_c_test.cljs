@@ -79,11 +79,13 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (await (night-at-home lit-world {:x 10 :y 64 :z 0}))]
-          (await (core/tick! eng))
+        (let [{:keys [eng seen]} (await (night-at-home lit-world {:x 10 :y 64 :z 0}))
+              log (await (with-child-log #(core/tick! eng)))]
           (let [{:keys [pick prices]} (first (st/emitted seen :night.answers))]
             (is (= :home pick) "the lit walk home, priced among the ways through the night")
-            (is (< (:home prices) (:shelter prices)) "cheaper than digging in, whose morning and dark cell are priced")))))))
+            (is (< (:home prices) (:shelter prices)) "cheaper than digging in, whose morning and dark cell are priced")
+            (is (< (- (:shelter prices) (:home prices)) (first (keep (fn [[k _ a]] (when (= :enter-room k) (:worth a))) log)) (:shelter prices))
+                "the walk in is worth what digging in costs more than the home once there, not the night's loss averted (0 on a lit route)")))))))
 
 (defn ^:async night-at-seen-hut
   "The night with no home set, the body outside the hut of hut-shelter-test (door at z 2) at dusk with extra items and
