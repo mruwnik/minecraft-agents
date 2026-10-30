@@ -823,5 +823,6 @@
           sensed {[0 65 0] crop-cell [0 66 0] nil}
           destroyed (cost/destroyed-fn #(get sensed %))]
       (is (= (+ place till) (destroyed "farmland" [0 64 0] false #{[0 65 0]})) "the crop over it is paid when its own cell is dug")
-      (is (= (+ place till wheat plant) (destroyed "farmland" [0 64 0] false)) "else it is paid with the farmland"))
+      (is (= (+ place till wheat plant) (destroyed "farmland" [0 64 0] false #{})) "else it is paid with the farmland")
+      (is (= (+ place till) (destroyed "farmland" [0 64 0] false)) "by default the crop over it is dug with it"))
     (is (< (cost/destroyed-s "wheat" "air" 2 false) (cost/destroyed-s "wheat" "air" 5 false)) "a crop grown further loses more")))

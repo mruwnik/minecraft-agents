@@ -146,21 +146,21 @@
   is left out of that: the caller adds its price."
   ([p feet e] (price p feet e nil))
   ([p feet {:keys [step heading] :as e} own-s]
-  (let [block-at (delay (escape/block-at-of p))
-        destroyed (delay (cost/destroyed-fn (fn [[x y z]] (u/sensed p {:x x :y y :z z}))))
-        lost-s (fn [cells] (let [dug (set cells)]
-                             (transduce (comp (remove #(or (dig-route/open? (@block-at %)) (and own-s (pos? (own-s %)))))
-                                              (map #(@destroyed (@block-at %) % false dug)))
-                                        + 0 cells)))
-        dig-s (fn [cells] (+ (cost/dig-cells-s (map #(tools/clear-ms p (@block-at %)) cells)) (lost-s cells)))]
-    (case step
-      :stair (+ (stair-route-s p feet e) (* (:aside e 0) (or (cost/dig-cost "stone") 1))
-                (lost-s (escape/stair-cuts feet (escape/heading-dirs (keyword heading)) (:steps e))))
-      :pillar (cost/pillar-s (wworld/unseen-share p) (:height e) (escape/unseen-pillar-blocks p feet (:height e)))
-      :bridge (cw/bridge-cost (:length e) (:short e 0))
-      :fill-gap (cw/fill-cost (:count e 1))
-      :dig-route (dig-s (map :cell (:cells e)))
-      :clear-path (dig-s (:cells (escape/door @block-at (escape/unseen-of p) feet (escape/heading-dirs (:heading e)))))
+    (let [block-at (delay (escape/block-at-of p))
+          destroyed (delay (cost/destroyed-fn (fn [[x y z]] (u/sensed p {:x x :y y :z z}))))
+          lost-s (fn [cells] (let [dug (set cells)]
+                               (transduce (comp (remove #(or (dig-route/open? (@block-at %)) (and own-s (pos? (own-s %)))))
+                                                (map #(@destroyed (@block-at %) % false dug)))
+                                          + 0 cells)))
+          dig-s (fn [cells] (+ (cost/dig-cells-s (map #(tools/clear-ms p (@block-at %)) cells)) (lost-s cells)))]
+      (case step
+        :stair (+ (stair-route-s p feet e) (* (:aside e 0) (or (cost/dig-cost "stone") 1))
+                  (lost-s (escape/stair-cuts feet (escape/heading-dirs (keyword heading)) (:steps e))))
+        :pillar (cost/pillar-s (wworld/unseen-share p) (:height e) (escape/unseen-pillar-blocks p feet (:height e)))
+        :bridge (cw/bridge-cost (:length e) (:short e 0))
+        :fill-gap (cw/fill-cost (:count e 1))
+        :dig-route (dig-s (map :cell (:cells e)))
+        :clear-path (dig-s (:cells (escape/door @block-at (escape/unseen-of p) feet (escape/heading-dirs (:heading e)))))
       0))))
 
 (defn gap-fill

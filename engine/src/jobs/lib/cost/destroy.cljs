@@ -11,12 +11,6 @@
             [jobs.lib.cost.ways :as ways]
             [jobs.lib.crops :as crops]))
 
-(defn tree-wood?
-  "True for a trunk or stem as a tree grows it (not stripped): natural terrain outside claims. Kept apart from
-  rules/natural?, which also guards claimed cells."
-  [n]
-  (boolean (and n (re-find #"^(?!stripped_)[a-z_]+_(?:log|wood|stem|hyphae)$" n))))
-
 (defn put-back-s
   "Seconds putting block n back costs (ways/put-back-cost): its placing, and its worth (value/item-value) when its dig
   drops something else; the placing only for nil (not seen)."
@@ -45,16 +39,17 @@
     (= "farmland" n) (+ (ways/put-back-cost 0) (farm/step-s :till 1)
                         (if (contains? crops/ripe-age over) (crop-lost-s over crop-age) 0))
     own? (put-back-s n)
-    (or (nil? n) (rules/natural? n) (tree-wood? n) (contains? bs/replaceable n)) 0
+    (or (nil? n) (rules/natural? n) (rules/tree-wood? n) (contains? bs/replaceable n)) 0
     :else (put-back-s n)))
 
 (defn destroyed-fn
   "(fn [n cell own? & [dug]]) destroyed-s of digging block n at cell, the block over it and the crop's age read by
-  (sensed cell) (a sensed block or nil: .-name, .-age, .-unknown). dug: the set of cells dug together; a crop over cell
-  that is among them is already paid for."
+  (sensed cell) (a sensed block or nil: .-name, .-age, .-unknown). dug: the set of cells dug together, default the cell
+  over cell (a dig route opens a crop with its farmland); a crop over cell that is among them is already paid for."
   [sensed]
   (fn [n [x y z :as cell] own? & [dug]]
     (let [above (sensed [x (inc y) z])
-          over (when (and above (not (true? (.-unknown above))) (not (some-> dug (contains? [x (inc y) z])))) (.-name above))
+          dug (or dug #{[x (inc y) z]})
+          over (when (and above (not (true? (.-unknown above))) (not (contains? dug [x (inc y) z]))) (.-name above))
           crop (cond (contains? crops/ripe-age n) (sensed cell) (contains? crops/ripe-age over) above)]
       (destroyed-s n over (some-> crop .-age) own?))))
