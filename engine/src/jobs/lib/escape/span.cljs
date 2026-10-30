@@ -1,5 +1,5 @@
 (ns jobs.lib.escape.span
-  "The ways of go-to that cross to a goal below or beyond a gap (jobs.lib.escape/choose only climbs and digs out): a stair
+  "The ways of go-to that cross to a goal below or beyond a gap (jobs.lib.escape.way/choose only climbs and digs out): a stair
   down, a bridge over a gap. Pure over block-at and the cells the body has sensed."
   (:require [engine.args :as a]
             [engine.settings :as settings]

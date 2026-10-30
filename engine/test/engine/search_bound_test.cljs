@@ -5,6 +5,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.planner :as cost-planner]
             [jobs.lib.escape :as escape]
+            [jobs.lib.escape.way :as escape-way]
             [jobs.movement.go-to.escalate-choose :as choose]
             [jobs.lib.walk-risk :as risk]
             [jobs.movement.go-to.escalation :as esc]
@@ -16,7 +17,7 @@
 
 (deftest the-fallback-is-priced-as-its-whole-way-to-the-goal-and-its-risk
   (let [c (ctx-at 0)]
-    (with-redefs [escape/choose (fn ([_ _ _ _] nil) ([_ _ _ _ _] {:step :approach :pos [3 64 0]}))
+    (with-redefs [escape-way/choose (fn ([_ _ _ _] nil) ([_ _ _ _ _] {:step :approach :pos [3 64 0]}))
                   risk/estimate (fn [& _] {:hp 4 :lethal-hp 1})]
       (is (close? (+ (:cost (cost/walk-cost {:distance 3})) (cost-planner/rest-s 17) (cost/risk-s 14 3 1))
                   (sb/fallback-s c [0 64 0] [20 64 0] (constantly true) {}))
@@ -29,7 +30,7 @@
           "two seconds stood and the stay's hurt and death at cost/risk-s"))))
 
 (deftest with-no-way-but-a-dig-route-a-search-is-worth-what-the-goal-is
-  (with-redefs [escape/choose (fn ([_ _ _ _] nil) ([_ _ _ _ _] {:step :none}))]
+  (with-redefs [escape-way/choose (fn ([_ _ _ _] nil) ([_ _ _ _ _] {:step :none}))]
     (is (= 40 (sb/fallback-s (assoc (ctx-at 0) :worth (constantly 40)) [0 64 0] [20 64 0] (constantly true) {})))
     (is (= ##Inf (sb/fallback-s (ctx-at 0) [0 64 0] [20 64 0] (constantly true) {})) "arrive: the search goes on")))
 
@@ -45,14 +46,14 @@
         stair {:step :stair :heading "north" :steps 2}]
     (with-redefs [escape/block-at-of (constantly (constantly "air"))
                   escape/unseen-of (constantly (constantly false))
-                  escape/choose (fn ([_ _ _ _] nil) ([_ _ _ _ _] stair))
+                  escape-way/choose (fn ([_ _ _ _] nil) ([_ _ _ _ _] stair))
                   risk/estimate (fn [& _] {:hp 0 :lethal-hp 0})]
-      (is (js/isFinite (escape/stair-route-s p [0 64 0] stair)) "no filler carried: the fill is a fetch, not impossible")
+      (is (js/isFinite (escape-way/stair-route-s p [0 64 0] stair)) "no filler carried: the fill is a fetch, not impossible")
       (is (js/isFinite (sb/fallback-s c [0 64 0] [0 70 0] (constantly true) {}))))))
 
 (deftest a-step-priced-unpassable-leaves-the-fallback-at-the-goals-worth
-  (with-redefs [escape/choose (fn ([_ _ _ _] nil) ([_ _ _ _ _] {:step :stair}))
-                escape/price (fn ([_ _ _] ##Inf) ([_ _ _ _] ##Inf))
+  (with-redefs [escape-way/choose (fn ([_ _ _ _] nil) ([_ _ _ _ _] {:step :stair}))
+                escape-way/price (fn ([_ _ _] ##Inf) ([_ _ _ _] ##Inf))
                 risk/estimate (fn [& _] {:hp 0 :lethal-hp 0})]
     (let [c (assoc (ctx-at 0) :worth (constantly 40))]
       (is (= 40 (sb/fallback-s c [0 64 0] [20 64 0] (constantly true) {})))

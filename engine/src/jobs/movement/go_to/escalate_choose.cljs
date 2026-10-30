@@ -5,13 +5,12 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.cost :as cost]
-            [jobs.lib.choose :as choose]
-            [jobs.lib.cost.ways :as cw]
             [jobs.lib.access :as access]
             [jobs.lib.aim :as aim]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.dig-route :as dig-route]
             [jobs.lib.escape :as escape]
+            [jobs.lib.escape.way :as escape-way]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.per-body :as per-body]
             [jobs.lib.places :as places]
@@ -560,7 +559,7 @@
           (some->> @edge (hash-map :step :approach :pos))))))
 
 (defn leads-in?
-  "Whether escape/choose's way e from cell from leads into a walled-in goal: a door, a stair or pillar up to a higher
+  "Whether escape-way/choose's way e from cell from leads into a walled-in goal: a door, a stair or pillar up to a higher
   goal, a walk along the wall to a goal not below it."
   [{:keys [step]} from goal]
   (case step
@@ -570,7 +569,7 @@
     false))
 
 (defn goal-way
-  "A free body's way into a walled-in goal: escape/choose from where it stands, or, while the cell it can walk to
+  "A free body's way into a walled-in goal: escape-way/choose from where it stands, or, while the cell it can walk to
   nearest the goal (nearest-stand) is more than a block nearer, from there, as
   {:step :approach :pos cell} first. Only a way that leads-in? (a walk along the wall from where it stands only), else
   the fewest cells dug (dig-way, :searching while its search goes on); else {:step :none :why :no-dig}, from the
@@ -581,7 +580,7 @@
         near (nearest-stand p goal 0 (:slice opts))
         here? (or ((:skip opts) :approach) (>= (to-goal near) (dec (to-goal feet))))
         from (if here? feet near)
-        e (escape/choose p from goal may-dig? opts)
+        e (escape-way/choose p from goal may-dig? opts)
         in? (and (leads-in? e from goal) (or here? (not= :approach (:step e))))
         e (cond in? e
                 :else (or (dig-way p from goal may-dig? opts)
@@ -611,7 +610,7 @@
       (keep-routes! slice)
       (or e
           (when (> (second goal) (second feet))
-            (let [e (escape/choose p feet goal may-dig? opts)]
+            (let [e (escape-way/choose p feet goal may-dig? opts)]
               (when (= :stair (:step e)) e)))))))
 
 (def stair-first-rise
@@ -626,13 +625,13 @@
 
 (defn stair-check
   "A fn of a plan and whether it is the first of its round, saying why it is not walked and a stair up is cut instead (a
-  re-plan inside a walk is held to :dives only), when escalating is on, the body is not in its shelter and escape/choose would stair (steps n):
+  re-plan inside a walk is held to :dives only), when escalating is on, the body is not in its shelter and escape-way/choose would stair (steps n):
   - :dives: under a cave floor (c :cave-floor, with c :dive-stair) the plan goes below it on a cell that is no stair of
     the body's own (climb/dives?), or below c :own-floor back down a stair of its own (climb/returns?);
-  - :cheaper: it is a whole path costing more seconds than cutting a new stair up to the goal's height (escape/new-stair-step-s a step; a stair cut in the dark costs as much more as the dark walk does), the goal is stair-first-rise or more above
+  - :cheaper: it is a whole path costing more seconds than cutting a new stair up to the goal's height (escape-way/new-stair-step-s a step; a stair cut in the dark costs as much more as the dark walk does), the goal is stair-first-rise or more above
     the feet and the stair has not been tried this call.
   - :retreats: it is a partial plan (the way on is shut), a re-plan too, that goes down the body's own stair, for a goal no lower than
-    the feet, and escape/choose has a way that changes the world: the stair was cut to get up, not to go back down.
+    the feet, and escape-way/choose has a way that changes the world: the stair was cut to get up, not to go back down.
   Else nil."
   [c pos]
   (let [m (ctx/mem c)
@@ -642,7 +641,7 @@
         back (:own-floor c)
         cheaper? (and (not (:stair-tried m)) (>= (- (second goal) (second feet)) stair-first-rise))
         retreats? (>= (second goal) (second feet))
-        chosen (delay (escape/choose (:primitives c) feet goal (may-dig-fn c) {:skip (skips c) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c)}))
+        chosen (delay (escape-way/choose (:primitives c) feet goal (may-dig-fn c) {:skip (skips c) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c)}))
         stair (delay (when (= :stair (:step @chosen)) @chosen))
         way (delay (not (#{:none :approach} (:step @chosen))))]
     (when (and (ways/way? c :stair) (not (sh-inside/sheltered-in c)) (or cave cheaper? back retreats?))
@@ -652,7 +651,7 @@
             (and cave (climb/dives? steps cave (ledger/ways-of c)) @stair) :dives
             (and back (climb/returns? steps back (ledger/stair-stands c)) @stair) :dives
             (and retreats? (= "partial" status) (climb/returns? steps (second feet) (ledger/stair-stands c)) @way) :retreats
-            (and first? cheaper? (= "found" status) (number? seconds) @stair (> seconds (* (stair-dark-factor c) (- (second goal) (second feet)) (escape/new-stair-step-s (:primitives c))))) :cheaper))))))
+            (and first? cheaper? (= "found" status) (number? seconds) @stair (> seconds (* (stair-dark-factor c) (- (second goal) (second feet)) (escape-way/new-stair-step-s (:primitives c))))) :cheaper))))))
 
 (defn escalate?
   "Whether a give-up after tries fruitless walks with result may escalate instead: a carried block fills the 1-cell gap it was refused (gap-fill), its only way dives (dive?), the goal is walled in (goal-walled?), or the walker failed max-blocked walks running (walker-fault?; one stuck walk of a :tries 1 caller is no proof) and no door or gate borders where it can walk
@@ -701,6 +700,6 @@
   chosen escape); way when it is no priced span (a leave-shelter, an approach, none) or dearer."
   [p feet way & fills]
   (let [fill (first (remove nil? fills))]
-    (if (and fill (or (not (#{:stair :pillar :clear-path :dig-route :bridge} (:step way))) (<= (escape/price p feet fill) (escape/price p feet way))))
+    (if (and fill (or (not (#{:stair :pillar :clear-path :dig-route :bridge} (:step way))) (<= (escape-way/price p feet fill) (escape-way/price p feet way))))
       fill
       way)))

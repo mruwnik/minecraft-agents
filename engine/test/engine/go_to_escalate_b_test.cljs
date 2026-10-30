@@ -14,6 +14,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.ways :as cw]
             [jobs.lib.escape :as escape]
+            [jobs.lib.escape.way :as escape-way]
             [jobs.lib.pen :as pen]
             [jobs.lib.own-pen :as own-pen]
             [engine.ready-test :as rt]
@@ -47,12 +48,12 @@
 
 (deftest escape-choose-digs-any-built-block-nobody-claims
   (doseq [wall ["oak_planks" "bricks" "glass" "white_wool" "cobblestone" "stone_bricks"]]
-    (is (= :clear-path (:step (escape/choose (tu/fake {:self {:pos {:x 2 :y 64 :z 0}} :blocks (built-wall wall)}) [2 64 0] [8 64 0])))
+    (is (= :clear-path (:step (escape-way/choose (tu/fake {:self {:pos {:x 2 :y 64 :z 0}} :blocks (built-wall wall)}) [2 64 0] [8 64 0])))
         wall)))
 
 (deftest escape-choose-never-digs-built-blocks-in-a-claimed-zone
   (doseq [wall ["oak_planks" "bricks" "glass" "white_wool" "cobblestone" "stone_bricks"]]
-    (is (= {:step :none :why :no-dig} (escape/choose (tu/fake {:self {:pos {:x 2 :y 64 :z 0}} :blocks (built-wall wall)})
+    (is (= {:step :none :why :no-dig} (escape-way/choose (tu/fake {:self {:pos {:x 2 :y 64 :z 0}} :blocks (built-wall wall)})
                                                      [2 64 0] [8 64 0] (constantly false)))
         wall)))
 
@@ -63,8 +64,8 @@
 
 (deftest escape-choose-breaks-out-of-a-glass-shaft-nobody-claims-and-not-one-in-a-claim
   (let [p (tu/fake {:self {:pos {:x 0.5 :y 60 :z 0.5}} :blocks glass-shaft})]
-    (is (contains? #{:clear-path :stair} (:step (escape/choose p [0 60 0] [6 60 0]))) "no claim: glass breaks by hand")
-    (is (= {:step :none :why :no-dig} (escape/choose p [0 60 0] [6 60 0] (constantly false))) "claimed: a build stays")))
+    (is (contains? #{:clear-path :stair} (:step (escape-way/choose p [0 60 0] [6 60 0]))) "no claim: glass breaks by hand")
+    (is (= {:step :none :why :no-dig} (escape-way/choose p [0 60 0] [6 60 0] (constantly false))) "claimed: a build stays")))
 
 (deftest go-to-breaks-out-of-a-glass-shaft-with-an-empty-pack
   (async done
@@ -76,12 +77,12 @@
 
 (deftest escape-choose-never-digs-a-protected-block-nobody-claims
   (doseq [wall ["oak_door" "chest" "white_bed"]]
-    (is (= {:step :none :why :no-dig} (escape/choose (tu/fake {:self {:pos {:x 2 :y 64 :z 0}} :blocks (built-wall wall)}) [2 64 0] [8 64 0]))
+    (is (= {:step :none :why :no-dig} (escape-way/choose (tu/fake {:self {:pos {:x 2 :y 64 :z 0}} :blocks (built-wall wall)}) [2 64 0] [8 64 0]))
         wall)))
 
 (deftest escape-choose-prefers-a-stair-to-a-clear-path
   (let [hill (merge room (box 3 64 -3 8 66 3 "dirt"))]
-    (is (= :stair (:step (escape/choose (tu/fake {:self {:pos {:x 2 :y 64 :z 0}} :blocks hill}) [2 64 0] [8 67 0]))))))
+    (is (= :stair (:step (escape-way/choose (tu/fake {:self {:pos {:x 2 :y 64 :z 0}} :blocks hill}) [2 64 0] [8 67 0]))))))
 
 (deftest escape-choose-digs-through-a-thin-wall-in-a-tunnel-to-a-goal-on-its-level
   ;; Juniper #47: a 1-wide tunnel sealed by one dirt block read as a pit, and the stair climbed 18 blocks
@@ -89,20 +90,20 @@
                              (for [x (range -6 7) :when (not= x 1) y [64 65]] (str x "," y ",0")))
                       {"1,64,0" "dirt" "1,65,0" "dirt"})
         p (tu/fake {:self {:pos {:x 0 :y 64 :z 0}} :blocks tunnel})]
-    (is (= {:step :clear-path :heading :east} (escape/choose p [0 64 0] [6 64 0])))
-    (is (= [2 64 0] (escape/way-end p [0 64 0] [6 64 0] {:step :clear-path :heading :east})) "the door's far side")
-    (is (= {:step :clear-path :heading :east} (escape/choose p [0 64 0] [6 66 0]))
+    (is (= {:step :clear-path :heading :east} (escape-way/choose p [0 64 0] [6 64 0])))
+    (is (= [2 64 0] (escape-way/way-end p [0 64 0] [6 64 0] {:step :clear-path :heading :east})) "the door's far side")
+    (is (= {:step :clear-path :heading :east} (escape-way/choose p [0 64 0] [6 66 0]))
         "a goal above: the plug's door and a step up from its far side cost less than a stair up the 4-deep tunnel's rock")))
 
 (deftest escape-choose-stairs-up-out-of-a-sealed-tunnel-to-a-goal-through-thick-rock
   ;; Rowan #22: a 1-wide pocket (two sides walled, pit depth 0), goal on its level behind rock with no floor beyond
   (let [pocket (apply dissoc (box -8 62 -2 8 67 2 "stone") (for [x (range -2 1) y [64 65]] (str x "," y ",0")))
         p (tu/fake {:self {:pos {:x -1 :y 64 :z 0}} :blocks pocket})]
-    (is (= :stair (:step (escape/choose p [-1 64 0] [6 64 0]))))))
+    (is (= :stair (:step (escape-way/choose p [-1 64 0] [6 64 0]))))))
 
 (deftest escape-choose-stair-checks-every-step
   (let [ba-pit (assoc pit "2,63,0" "bricks")]
-    (is (not= :east (:heading (escape/choose (tu/fake (merge in-pit {:blocks ba-pit})) [0 61 0] [10 64 0] #(not= [2 63 0] (vec %)))))
+    (is (not= :east (:heading (escape-way/choose (tu/fake (merge in-pit {:blocks ba-pit})) [0 61 0] [10 64 0] #(not= [2 63 0] (vec %)))))
         "the second step east would cut a claimed cell: another heading")))
 
 (deftest go-to-does-not-dig-through-a-built-wall-in-a-claimed-zone
@@ -280,7 +281,7 @@
         feet [0 61 0]
         pillar {:step :pillar :height 3}]
     (is (true? (esc/own-may-beat? p feet {:step :none})) "no way spares them")
-    (is (< (cw/put-back-cost 0) (escape/price p feet pillar)))
+    (is (< (cw/put-back-cost 0) (escape-way/price p feet pillar)))
     (is (true? (esc/own-may-beat? p feet pillar)))
     (is (false? (esc/own-may-beat? p feet {:step :dig-route :cells []})) "a way that costs nothing is never beaten")))
 
@@ -520,16 +521,16 @@
 
 (deftest escape-choose-skips-failed-steps
   (let [with-dirt (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 3}]})]
-    (is (= :pillar (:step (escape/choose (tu/fake with-dirt) [0 61 0] [10 64 0]))))
+    (is (= :pillar (:step (escape-way/choose (tu/fake with-dirt) [0 61 0] [10 64 0]))))
     (is (= {:step :stair :heading :east :steps 3}
-           (escape/choose (tu/fake with-dirt) [0 61 0] [10 64 0] (constantly true) {:skip #{:pillar}})))
-    (is (= :none (:step (escape/choose (tu/fake with-dirt) [0 61 0] [10 64 0] (constantly true)
+           (escape-way/choose (tu/fake with-dirt) [0 61 0] [10 64 0] (constantly true) {:skip #{:pillar}})))
+    (is (= :none (:step (escape-way/choose (tu/fake with-dirt) [0 61 0] [10 64 0] (constantly true)
                                        {:skip #{:pillar :stair :clear-path :approach}}))))))
 
 (deftest escape-choose-offers-no-approach-when-clear-path-is-barred
   (let [p (tu/fake {:self {:pos {:x 1 :y 64 :z 0}} :blocks room})]
-    (is (= :approach (:step (escape/choose p [1 64 0] [8 64 0] (constantly true) {:skip #{:stair :pillar}}))) "the door spot, when digging is allowed")
-    (is (= :none (:step (escape/choose p [1 64 0] [8 64 0] (constantly true) {:skip #{:stair :pillar :clear-path}}))) "no walk to a door that may not be dug")))
+    (is (= :approach (:step (escape-way/choose p [1 64 0] [8 64 0] (constantly true) {:skip #{:stair :pillar}}))) "the door spot, when digging is allowed")
+    (is (= :none (:step (escape-way/choose p [1 64 0] [8 64 0] (constantly true) {:skip #{:stair :pillar :clear-path}}))) "no walk to a door that may not be dug")))
 
 (deftest escape-door-beside-counts-only-doors-the-body-can-open
   (let [at (fn [b] (tu/fake {:self {:pos {:x 0 :y 64 :z 0}} :blocks (assoc room "3,64,0" b)}))
@@ -665,7 +666,7 @@
 (deftest a-drop-needs-a-way-out-only-where-it-lands-in-a-pit
   (let [priced? (fn [blocks] (wplan/one-way-priced? {:primitives (tu/fake {:self {:pos {:x 0.5 :y 67 :z 0.5}} :floor [-10 -10 10 10] :blocks (merge own-pillar blocks)}) :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly ##Inf)}
                                                     [8 64 0] [2 67 0] [3 64 0] false))]
-    (is (true? (priced? {})) "open ground: escape/choose has no wall to dig, which is no trap")
+    (is (true? (priced? {})) "open ground: escape-way/choose has no wall to dig, which is no trap")
     (is (false? (priced? bedrock-pit)) "a pit with nothing to dig is a certain trap")))
 
 (def fence-pen

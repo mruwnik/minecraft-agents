@@ -17,6 +17,7 @@
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.dig-route :as dig-route]
             [jobs.lib.escape :as escape]
+            [jobs.lib.escape.way :as escape-way]
             [jobs.lib.near :as near]
             [jobs.movement.go-to.cut :as gcut]
             [jobs.lib.ledger :as ledger]
@@ -33,16 +34,16 @@
 
 (deftest escape-choose-walks-along-the-wall-when-the-wall-in-line-is-an-iron-door
   (let [iron (-> room (assoc "3,64,0" "iron_door" "3,65,0" "iron_door"))
-        c (escape/choose (tu/fake (merge in-room {:blocks iron :self {:pos {:x 2 :y 64 :z 0}}})) [2 64 0] [8 64 0])]
+        c (escape-way/choose (tu/fake (merge in-room {:blocks iron :self {:pos {:x 2 :y 64 :z 0}}})) [2 64 0] [8 64 0])]
     (is (= :approach (:step c)))
     (is (not= [2 64 0] (:pos c)))))
 
 (deftest escape-choose-searches-for-a-door-spot-once
   (let [iron (-> room (assoc "3,64,0" "iron_door" "3,65,0" "iron_door"))
         calls (atom 0)
-        real escape/door-spot]
-    (with-redefs [escape/door-spot (fn [& args] (swap! calls inc) (apply real args))]
-      (escape/choose (tu/fake (merge in-room {:blocks iron :self {:pos {:x 2 :y 64 :z 0}}})) [2 64 0] [8 64 0]))
+        real escape-way/door-spot]
+    (with-redefs [escape-way/door-spot (fn [& args] (swap! calls inc) (apply real args))]
+      (escape-way/choose (tu/fake (merge in-room {:blocks iron :self {:pos {:x 2 :y 64 :z 0}}})) [2 64 0] [8 64 0]))
     (is (= 1 @calls))))
 
 (deftest go-to-escalates-on-a-door-that-doors-never-refuses
@@ -64,8 +65,8 @@
 ;; ------------------------------------------------------------------ other headings (card 4ad29ed7)
 (deftest escape-choose-skips-only-the-refused-stair-heading
   (let [p (tu/fake (merge in-pit {:blocks pit}))
-        first-heading (:heading (escape/choose p [0 61 0] [10 64 0]))
-        again (escape/choose p [0 61 0] [10 64 0] (constantly true) {:skip #{[:stair first-heading]}})]
+        first-heading (:heading (escape-way/choose p [0 61 0] [10 64 0]))
+        again (escape-way/choose p [0 61 0] [10 64 0] (constantly true) {:skip #{[:stair first-heading]}})]
     (is (= :east first-heading))
     (is (= :stair (:step again)))
     (is (not= first-heading (:heading again)))))
@@ -354,22 +355,22 @@
         door-seen (tu/fake {:blocks hall :self {:pos {:x 0.5 :y 64 :z 0.5}} :states {"3,64,0" {:open false :half "lower" :facing "east"} "3,65,0" {:open false :half "upper" :facing "east"}}})
         door-dark (tu/fake {:blocks hall :self {:pos {:x 0.5 :y 64 :z 0.5}} :states {"3,64,0" {:open false :half "lower" :facing "east"} "3,65,0" {:open false :half "upper" :facing "east"}}})
         _ (dark-at door-dark [[2 64 0]])]
-    (is (= [2 64 0] (escape/wall-spot seen [0 64 0] [9 64 0])))
-    (is (not= [2 64 0] (escape/wall-spot dark [0 64 0] [9 64 0])) "the cell it would stand in never seen: not offered")
+    (is (= [2 64 0] (escape-way/wall-spot seen [0 64 0] [9 64 0])))
+    (is (not= [2 64 0] (escape-way/wall-spot dark [0 64 0] [9 64 0])) "the cell it would stand in never seen: not offered")
     (is (true? (escape/open-door-beside? door-seen [0 64 0])))
     (is (false? (escape/open-door-beside? door-dark [0 64 0])) "the only way to the door runs through a cell never seen")))
 
 (deftest door-spot-is-the-cheapest-cell-whose-door-leaves-the-body-cheaper-off-toward-the-goal
   (let [yard (merge (box -12 63 -8 12 63 8 "stone") (box 5 64 -8 5 65 8 "stone") (box -5 64 -8 -5 65 8 "stone"))
         p (tu/fake {:blocks yard :self {:pos {:x 0.5 :y 64 :z 0.5}}})]
-    (is (= [4 64 0] (escape/door-spot p [0 64 0] [10 64 0] (constantly true) #{})) "the wall ahead is the door; the one behind is not")
-    (is (nil? (escape/door-spot p [0 64 0] [10 64 0] (constantly false) #{})) "a wall that may not be dug is no door")
-    (is (not= [4 64 0] (escape/door-spot p [0 64 0] [10 64 0] (constantly true) #{[4 64 0]})) "a cell walked to already is not offered again")))
+    (is (= [4 64 0] (escape-way/door-spot p [0 64 0] [10 64 0] (constantly true) #{})) "the wall ahead is the door; the one behind is not")
+    (is (nil? (escape-way/door-spot p [0 64 0] [10 64 0] (constantly false) #{})) "a wall that may not be dug is no door")
+    (is (not= [4 64 0] (escape-way/door-spot p [0 64 0] [10 64 0] (constantly true) #{[4 64 0]})) "a cell walked to already is not offered again")))
 
 (deftest wall-spot-is-the-cheapest-wall-toward-the-goal-not-the-nearest
   (let [yard (merge (box -12 63 -8 12 63 8 "stone") (box -2 64 2 -2 65 2 "stone") (box 7 64 0 7 65 0 "stone"))
         p (tu/fake {:blocks yard :self {:pos {:x 0.5 :y 64 :z 0.5}}})]
-    (is (= [6 64 0] (escape/wall-spot p [0 64 0] [10 64 0])) "a wall 6 steps off on the way beats one 5 steps off behind the body")))
+    (is (= [6 64 0] (escape-way/wall-spot p [0 64 0] [10 64 0])) "a wall 6 steps off on the way beats one 5 steps off behind the body")))
 
 (deftest go-to-fills-a-one-cell-gap-under-a-low-ceiling-with-a-carried-block
   (async done
@@ -392,7 +393,7 @@
     (is (= [:walk] (distinct (map :move (:steps route)))))
     (is (= 3 (count (:steps route))))
     (is (< 0 (:seconds route)))
-    (is (= (:seconds route) (escape/price p [0 64 0] {:step :stair :heading :east :steps 3})))))
+    (is (= (:seconds route) (escape-way/price p [0 64 0] {:step :stair :heading :east :steps 3})))))
 
 (def open-stair-mass
   "stone-mass with the cells of a 3-step stair east from [0 64 0] already open."
@@ -402,7 +403,7 @@
   (let [p (tu/fake {:blocks open-stair-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}]})
         route (choose/route-answer p [0 64 0] [3 67 0] (constantly true) (constantly false) false false {})]
     (is (= 3 (count (:steps route))))
-    (is (= (:seconds route) (escape/price p [0 64 0] {:step :stair :heading :east :steps 3})))
+    (is (= (:seconds route) (escape-way/price p [0 64 0] {:step :stair :heading :east :steps 3})))
     (is (< (:seconds route) (cw/stair-cost 3)) "a cut-free step is no dearer than a walk step")))
 
 (deftest a-new-stair-step-is-priced-as-a-step-cut-through-stone-and-dearer-unseen
@@ -410,9 +411,9 @@
         body #(tu/seeing-within (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory inv}) %)
         seen (body 50)
         step {:step :stair :heading :east :steps 1}]
-    (is (= (escape/price (body 1) [0 64 0] step) (escape/new-stair-step-s seen)) "the climb route's price of one unseen stone step")
-    (is (< (cw/stair-step-s) (escape/new-stair-step-s seen)) "the cuts are paid on top of the stair's step")
-    (is (< (escape/price seen [0 64 0] step) (escape/new-stair-step-s seen)) "seen cells cost less")))
+    (is (= (escape-way/price (body 1) [0 64 0] step) (escape-way/new-stair-step-s seen)) "the climb route's price of one unseen stone step")
+    (is (< (cw/stair-step-s) (escape-way/new-stair-step-s seen)) "the cuts are paid on top of the stair's step")
+    (is (< (escape-way/price seen [0 64 0] step) (escape-way/new-stair-step-s seen)) "seen cells cost less")))
 
 (deftest an-unseen-stair-and-pillar-are-priced-as-the-climb-route-prices-them
   (let [inv [{:name "iron_pickaxe" :count 1}]
@@ -421,9 +422,9 @@
         unseen-s (cost/unseen-route-s (wworld/unseen-share p) (constantly :ground) [{:x 0 :y 0 :z 0}])
         stair {:step :stair :heading :east :steps 3}
         route (choose/route-answer p [0 64 0] [3 67 0] (constantly true) (constantly false) false false {})]
-    (is (= (:seconds route) (escape/price p [0 64 0] stair)))
-    (is (< (escape/price (body 50) [0 64 0] stair) (escape/price p [0 64 0] stair)) "unseen cells cost more")
-    (are [r n] (= (+ (cw/pillar-cost 2) (* n unseen-s)) (escape/price (body r) [0 64 0] {:step :pillar :height 2}))
+    (is (= (:seconds route) (escape-way/price p [0 64 0] stair)))
+    (is (< (escape-way/price (body 50) [0 64 0] stair) (escape-way/price p [0 64 0] stair)) "unseen cells cost more")
+    (are [r n] (= (+ (cw/pillar-cost 2) (* n unseen-s)) (escape-way/price (body r) [0 64 0] {:step :pillar :height 2}))
       50 0
       2.9 1)))
 
@@ -432,7 +433,7 @@
         fill #(hash-map :step :fill-gap :cell [5 63 0] :item "dirt" :count %)
         stair #(hash-map :step :stair :heading :east :steps %)
         three (stair 3)]
-    (is (< (cw/fill-cost 9) (escape/price p [0 64 0] three)))
+    (is (< (cw/fill-cost 9) (escape-way/price p [0 64 0] three)))
     (are [way carried expected] (= expected (:step (choose/cheaper-fill p [0 64 0] way (fill carried))))
       three 9 :fill-gap
       {:step :pillar :height 1} 9 :pillar
@@ -1005,10 +1006,10 @@
     (is (= (+ (cost/dig-cost "stone") 5) (dig-s "stone" [2 64 0])))
     (is (= (+ (cost/dig-cost "farmland") (cost/destroyed-s "farmland" "wheat" 3 false)) (dig-s "farmland" [3 63 0]))
         "a route cutting farmland under a standing crop pays the crop with the farmland")
-    (let [farm (escape/price p [3 65 0] {:step :dig-route :cells [{:cell [3 63 0]}]})
-          shaft (escape/price p [3 65 0] {:step :dig-route :cells [{:cell [3 64 0]} {:cell [3 63 0]}]})]
+    (let [farm (escape-way/price p [3 65 0] {:step :dig-route :cells [{:cell [3 63 0]}]})
+          shaft (escape-way/price p [3 65 0] {:step :dig-route :cells [{:cell [3 64 0]} {:cell [3 63 0]}]})]
       (is (< (- shaft farm) (cost/destroyed-s "wheat" "air" 3 false))
           "a shaft through the crop then its farmland pays the crop once, with the farmland (the crop is an open cell)"))
-    (is (= (+ (escape/price p [0 64 0] {:step :dig-route :cells planks} (constantly 1)) (cost/put-back-s "oak_planks"))
-           (escape/price p [0 64 0] {:step :dig-route :cells planks}))
+    (is (= (+ (escape-way/price p [0 64 0] {:step :dig-route :cells planks} (constantly 1)) (cost/put-back-s "oak_planks"))
+           (escape-way/price p [0 64 0] {:step :dig-route :cells planks}))
         "a way's price holds the put-back of a cell that is not the body's own; the caller prices its own")))

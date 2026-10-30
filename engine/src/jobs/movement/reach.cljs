@@ -8,6 +8,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.escape :as escape]
+            [jobs.lib.escape.way :as escape-way]
             [jobs.lib.escape.span :as span]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.places :as places]
@@ -82,7 +83,7 @@
   [c k]
   (way-steps/way? c k))
 
-(def price escape/price)
+(def price escape-way/price)
 
 (defn feet-of [c]
   (mapv #(js/Math.floor %) (let [{:keys [x y z]} (u/self-pos c)] [x y z])))
@@ -103,7 +104,7 @@
 
 (defn span-way
   "The cheapest span from feet toward goal that the call allows and that is no dearer than the way go-to itself would make
-  (dig route, else escape/choose's pillar, stair up or dug door); nil when there is none. A stair down that starts too
+  (dig route, else escape-way/choose's pillar, stair up or dug door); nil when there is none. A stair down that starts too
   far from the goal's column to end at it starts at a cell the body can walk to instead: {:step :approach :pos cell :then stair}; likewise to the edge a bridge starts from."
   [c feet goal skip]
   (let [p (:primitives c)
@@ -126,7 +127,7 @@
         spans (into [] (remove nil?) [stair bridge])
         priced (fn [e] (price p feet (or (:then e) e)))
         real (or (choose/dig-way p feet goal may-dig? opts)
-                 (let [e (escape/choose p feet goal may-dig? opts)]
+                 (let [e (escape-way/choose p feet goal may-dig? opts)]
                    (when-not (#{:none :approach} (:step e)) e)))]
     (when (seq spans)
       (let [best (apply min-key priced spans)]
