@@ -25,6 +25,7 @@
             [engine.triggers :as triggers]
             
             [jobs.lib.targets :as targets]
+            [jobs.survival.bed-down :as bed-down]
             [jobs.survival.night :as night]
             [jobs.survival.night.flee :as flee]
             [jobs.survival.night.sites :as sites]
@@ -330,3 +331,26 @@
           (await (st/tick-n eng 3))
           (is (empty? (:list (core/state eng))) "the wall time bounds the hold")
           (is (empty? (st/calls p "sleep"))))))))
+
+(defn ^:async log-out-asked
+  "The :log-out? bed-down/carried-answer hands answers, for a body at night with another player online and world's extra entities."
+  [world]
+  (let [asked (atom nil)
+        c {:primitives (tu/seeing-all (tu/fake-on-floor (merge {:time night :players ["Sam"]} world))) :args {} :id "j" :root "j" :slots []
+           :view (fn [] {:now 0 :data mem/empty-data}) :engine {:warned (atom #{})}}]
+    (with-redefs [bed-down/answers (fn ^:async answers [_ opts] (reset! asked (:log-out? opts)) {:exposed 1})]
+      (await (bed-down/carried-answer c)))
+    @asked))
+
+(deftest a-log-out-is-priced-only-while-the-body-is-out-of-danger
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (true? (await (log-out-asked {}))) "calm: the log-out is one of the answers")
+        (is (false? (await (log-out-asked {:entities [zombie]}))) "a hostile near: it is not priced")
+        (is (true? (await (log-out-asked {:self {:inWater true :oxygen 10} :blocks {"0,64,0" "water" "0,65,0" "water"}})))
+            "low air in water with air reachable is no drowning")
+        (is (true? (await (log-out-asked {:self {:inWater true :onGround false}}))) "off the ground in water is no fall")
+        (is (false? (await (log-out-asked {:self {:inWater true :oxygen 4} :blocks {"0,64,0" "water" "0,65,0" "water" "0,66,0" "water" "0,67,0" "water"}})))
+            "drowning")
+        (is (false? (await (log-out-asked {:self {:onGround false}}))) "off the ground in the air")))))

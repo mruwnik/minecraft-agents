@@ -6,7 +6,6 @@
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [jobs.lib.checks :as checks]
-            [jobs.lib.body :as body]
             [jobs.lib.breath :as breath]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
