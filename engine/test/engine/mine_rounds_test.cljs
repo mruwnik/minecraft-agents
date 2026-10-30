@@ -151,7 +151,7 @@
           (is (= :job-time (:reason (m/done-event s))) "at the root's endless worth only the time spend ends it")
           (is (< 1 (count (m/calls s "craft"))) "a rejected craft is tried again while the goal is worth a try"))))))
 
-(deftest a-stocking-torch-craft-the-server-keeps-rejecting-is-retried-until-the-time-spend-ends-the-trip
+(deftest a-stocking-torch-craft-the-server-keeps-rejecting-is-retried-while-the-goal-pays-then-ends-the-trip-no-torches
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -160,7 +160,7 @@
           (core/submit! (:eng s) (m/spec (assoc torch-tunnel :trip true :spend {:job-time 120})) {})
           (await (m/run-ticks s 60))
           (is (m/finished? s))
-          (is (= :job-time (:reason (m/done-event s))) "at the root's endless worth only the time spend ends it")
+          (is (= :no-torches (:reason (m/done-event s))) "a root mine is worth its items (about 200 s for an iron ore), so the retries end when another craft no longer pays")
           (is (< 1 (count (m/calls s "craft"))) "a rejected craft is tried again while the goal is worth a try"))))))
 
 (deftest a-collect-that-ends-with-nothing-gained-is-booked-and-does-not-loop
