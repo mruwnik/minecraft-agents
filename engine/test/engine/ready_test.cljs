@@ -1212,10 +1212,17 @@
     (trip-ctx 2 [0 30 60] [3 64 0])
     (trip-ctx 2 [0 30 60] {[3 64 0] 5})))
 
+(defn fetch-args [c] (second (:look-first (nth (trip-fed c) 2))))
+
 (deftest a-trip-fetches-only-its-own-need-so-a-child-of-a-fed-trip-fetches-none
-  (let [{:keys [carry]} (second (:look-first (nth (trip-fed (trip-ctx 2 [0 1800 ##Inf] [3 64 0])) 2)))]
-    (is (nil? (:look-first (nth (trip-fed (trip-ctx (js/Math.ceil (/ carry 5)) [0 600 1800] [3 64 0])) 2)))
+  (let [{:keys [carry]} (fetch-args (trip-ctx 2 [0 1800 ##Inf] [3 64 0]))]
+    (is (nil? (fetch-args (trip-ctx (js/Math.ceil (/ carry 5)) [0 600 1800] [3 64 0])))
         "the parent's fetched food is carried: the child's shorter trip needs no more")))
+
+(deftest a-fetch-that-comes-back-short-stops-the-call-only-when-going-on-costs-more
+  (let [c (trip-ctx 2 [0 1800 ##Inf] [3 64 0])]
+    (is (= 10 (:least (fetch-args c))) "worth ##Inf: running out on the 2 loaves is cheaper than stopping")
+    (is (nil? (:least (fetch-args (assoc c :worth (constantly 1) :quote-call {:worth 1})))) "worth 1 s: stopping is cheaper")))
 
 (deftest a-trip-fetches-only-the-home-food-get-food-takes
   (let [c (trip-ctx 2 [0 1800 ##Inf] {[3 64 0] 20 [3000 64 0] 64})

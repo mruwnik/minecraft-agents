@@ -60,7 +60,7 @@
   flesh, with :allow-bad). Still nothing: it ends nothing-possible :no-food (the text says what was searched, the nearest known source) and writes
   :hungry, which widens the hunt radius; the hungry trigger rests after that ending (its :rest-s).
   :eat false: only gathers, done when the pack holds :carry food points (jobs.survival.eat fetches this way; a job cannot call its own caller).
-  :carry n (default the body's reserve, jobs.lib.home-food/carry-points over its call chain's trip; 0: only feed): a fed body also takes the ways until the pack holds n food points, else ends nothing-possible :no-carry.
+  :carry n (default the body's reserve, jobs.lib.home-food/carry-points over its call chain's trip; 0: only feed): a fed body also takes the ways until the pack holds n food points, else ends nothing-possible :no-carry, or :done {:short true} while the pack holds :least points.
   A fed body (not hungry, nothing to top up with, no :carry short) is done at once.
   A go-to that waits on the world, or a child still going after jobs.lib.child's call cap, yields :continue; a reflex
   call (it never yields) waits it out in the round.
@@ -81,6 +81,7 @@
    :health {:doc "below this health eat up to a full bar" :spec (a/num-in 0 20) :default foods/default-health}
    :explore {:doc "with nothing known or seen, walk and look for food animals and crops once per job (a starving body again after foods/::starving-rest-ms; a hungry body under rock first climbs out; a starving one searches there): false, true (a search priced by what food is worth the body now) or a map of the search's options over it (:max-distance, :spend; not :radius)" :spec (a/or-of boolean? map?) :default true}
    :carry {:doc "carry food worth this many hunger points: a fed body takes the ways below until the pack holds it (0: only feed)" :spec (a/num-in 0 nil) :default nil}
+   :least {:doc "with :carry: done short of it, once no way is left, while the pack holds this many food points (a caller that goes on with less)" :spec (a/num-in 0 nil) :default nil}
    :eat {:doc "eat what is carried and what the ways bring: false only gathers (the way jobs.survival.eat fetches: it is the caller, and a job cannot call its own caller), done when the pack holds :carry food points" :spec boolean? :default true}
    :ignore-zones? :shared})
 
@@ -523,14 +524,16 @@
            :food food :animals passed :nearby around)))
 
 (defn carry-stop!
-  "Fed but the pack cannot be filled: end :no-carry (no :hungry entry, the body is not hungry)."
+  "Fed but the pack cannot be filled: end :no-carry (no :hungry entry, the body is not hungry), or :done short while it holds :least."
   [c]
   (let [have (foods/stock-points (u/inventory (:primitives c)))]
-    (stop! c :no-carry (str "not hungry (food " (food-level c) ", nothing eaten) but carries " have " of " (animals/carry c)
-                            " food points and found no more in sight or searched for" (when (:noted-lost (ctx/mem c)) (str ", a noted animal could not be reached: " (:why (:noted-lost (ctx/mem c)))))
-                            (when-let [x (:explored (ctx/mem c))] (str ", explored: " x))
-                            (report/animals-text (animals/passed-over c (animal-opts c false)) (animals/nearby c (hunt-radius c))))
-           :food (food-level c) :carry (animals/carry c) :have have)))
+    (if (>= have (or (:least (:args c)) ##Inf))
+      (ctx/end c :done nil {:food (food-level c) :carry (animals/carry c) :have have :short true})
+      (stop! c :no-carry (str "not hungry (food " (food-level c) ", nothing eaten) but carries " have " of " (animals/carry c)
+                              " food points and found no more in sight or searched for" (when (:noted-lost (ctx/mem c)) (str ", a noted animal could not be reached: " (:why (:noted-lost (ctx/mem c)))))
+                              (when-let [x (:explored (ctx/mem c))] (str ", explored: " x))
+                              (report/animals-text (animals/passed-over c (animal-opts c false)) (animals/nearby c (hunt-radius c))))
+             :food (food-level c) :carry (animals/carry c) :have have))))
 
 (defn ^:async round
   "One whole attempt: eat, then while hungry take the next way and eat again. A step that yields (:continue) is

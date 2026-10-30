@@ -176,8 +176,8 @@
   ([c] (carry-points c (chain-trip c)))
   ([c trip] (food/carry-points (sources c (:far trip)) (priced c trip true))))
 
-(defn fetch-points
-  "The food points to fill the pack to from home before trip, or nil: jobs.lib.cost.food/fetch-points of the home food
-  (sources from the trip's far end) and the trip priced, no field food."
+(defn trip-fetch
+  "jobs.lib.cost.food/trip-fetch of the home food (sources from the trip's far end) and trip priced, no field food: what
+  to fill the pack to from home before trip, or nil."
   [c trip]
-  (food/fetch-points (sources c (:far trip)) (priced c trip false)))
+  (food/trip-fetch (sources c (:far trip)) (priced c trip false)))

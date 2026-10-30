@@ -159,15 +159,17 @@
           (worth-fetching? s want) (recur more (- want (:points s)) (conj out s))
           :else (recur more want out))))
 
-(defn fetch-points
-  "The food points to fill the pack to before trip (priced-trip's args, :had the carried points), or nil: trip-points (home
-  food counts toward the 3-day reserve already, so moving it into the pack meets only the trip's own need), at most the
-  carried food and the home food get-food takes for the rest (fetchable), when that is more than is carried."
+(defn trip-fetch
+  "{:to :had :go-on-s} before trip (priced-trip's args, :had the carried points), or nil when to is not more than had: to
+  the food points to fill the pack to, trip-points (home food counts toward the 3-day reserve already, so moving it into
+  the pack meets only the trip's own need) at most the carried food and the home food get-food takes for the rest
+  (fetchable); go-on-s what the trip costs on the carried food alone (trip-cost at had: running out, mostly)."
   [home trip]
-  (let [had (or (:had trip) 0)
-        want (trip-points (priced-trip home trip))
+  (let [t (priced-trip home trip)
+        had (or (:had t) 0)
+        want (trip-points t)
         to (min want (+ had (reduce + (map :points (fetchable home (- want had))))))]
-    (when (> to had) to)))
+    (when (> to had) {:to to :had had :go-on-s (trip-cost t had)})))
 
 (defn reserve-food?
   "Food that counts toward the reserve: edible and not precious."

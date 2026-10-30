@@ -68,6 +68,14 @@
           (is (= {:kind :nothing-possible :cause :no-carry} (kc e)))
           (is (= 8 (get-in e [:data :carry]))))))))
 
+(deftest an-unmet-carry-holding-its-least-ends-done-short
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:self {:food 20} :inventory [{:name "bread" :count 1}]})
+              e (await (ending-of eng {:carry 8 :least 5 :explore false}))]
+          (is (= [:done true 5] [(:kind e) (get-in e [:data :short]) (get-in e [:data :have])])))))))
+
 (deftest a-body-above-the-hungry-line-is-done-already
   (async done
     (tu/run-async done
