@@ -295,16 +295,18 @@
     (is (some #{(:gap MOVE)} (moves r)))
     (is (< 0.04 (cost r :damage) 0.05) "1/116 x the 5 hp fall")))
 
+;; The planner's own prior of a level gap jump's miss, by width then run-up (index 0 the takeoff cell only, 1 a run-up).
+(defn miss [width run-up] (get-in (js->clj (base/gap-miss-share base/GAP-MISS-JUMPS)) [width run-up]))
+
 (defn from-takeoff [width options]
   (run (hole width) (near (+ 4 width) 64 2) options {:x 2 :y 64 :z 2}))
 
-(deftest a-3-wide-jump-from-the-takeoff-cell-is-missed-far-more-often-than-after-a-run-up
+(deftest a-3-wide-jump-from-the-takeoff-cell-is-priced-by-the-miss-prior-of-its-run-up
   (let [opts {:damageBudget 1 :damageWeight 1}
-        short-run (cost (from-takeoff 3 opts) :damage)
-        run-up (cost (over-hole 3 opts) :damage)]
-    (is (< 0.6 short-run 0.65) "5/40 x the 5 hp fall")
-    (is (< 0.04 run-up 0.05) "1/116 x the 5 hp fall")
-    (is (< 0.12 (cost (from-takeoff 2 opts) :damage) 0.13) "1/40 x the 5 hp fall")))
+        near? (fn [expected actual] (< (Math/abs (- expected actual)) 0.005))]
+    (is (near? (* 5 (miss 3 0)) (cost (from-takeoff 3 opts) :damage)) "the takeoff-cell prior x the 5 hp fall")
+    (is (near? (* 5 (miss 3 1)) (cost (over-hole 3 opts) :damage)) "the run-up prior x the 5 hp fall")
+    (is (near? (* 5 (miss 2 0)) (cost (from-takeoff 2 opts) :damage)))))
 
 (deftest a-jump-up-is-missed-twice-as-often
   (let [level (over-hole 2 0 {:damageBudget 1 :damageWeight 1})
@@ -317,5 +319,5 @@
   (let [risk (fn [w x] (let [r (run (pf/world {:fill [[5 60 -2 (+ 4 w) 63 40 "air"] [5 55 -2 (+ 4 w) 55 40 "stone"]]}) (near (+ 5 w 3) 64 2) {:health 4} {:x x :y 64 :z 2})]
                          (is (= 1 (cost r :jumps)))
                          (cost r :risk)))]
-    (is (< 14 (/ (risk 3 4) (risk 3 3)) 15) "5/40 against 1/116")
+    (is (< (Math/abs (- (/ (miss 3 0) (miss 3 1)) (/ (risk 3 4) (risk 3 3)))) 0.05) "the takeoff-cell prior against the run-up's")
     (is (= (risk 1 3) (risk 3 3)))))
