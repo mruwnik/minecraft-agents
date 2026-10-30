@@ -69,7 +69,7 @@
                     (let [floor (escape/add (nth cuts 2) [0 -1 0])]
                       (leg-s (map cut-s cuts) (when (bs/passable? (block-at floor)) fill-s) (some unseen? (cons floor cuts)))))
         stair (fn [d] (transduce (map step-cost) + 0 (partition 3 (escape/stair-cuts at d h))))
-        pillar (if (<= h (:count (escape/carried-pillar-item p) 0)) (cost/pillar-s (wworld/unseen-share p) h (escape/unseen-pillar-blocks p at h)) ##Inf)]
+        pillar (if (<= h (:count (escape/carried-pillar-item p) 0)) (+ (cost/pillar-s (wworld/unseen-share p) h (escape/unseen-pillar-blocks p at h)) (cost/pillar-knock-of p h)) ##Inf)]
     (apply min pillar (map stair escape/cardinals))))
 
 (defn price

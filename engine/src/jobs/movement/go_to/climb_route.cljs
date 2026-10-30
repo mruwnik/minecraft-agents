@@ -1,11 +1,18 @@
 (ns jobs.movement.go-to.climb-route
   "A shut-in body's climb to a goal above it: the cheapest route of digs, laid floors and pillar blocks
   (escalate-choose/route-answer), run as its ways (route-ways/segments)."
-  (:require [jobs.lib.cost.ways :as cw]
+  (:require [jobs.lib.cost :as cost]
+            [jobs.lib.cost.ways :as cw]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.escape :as escape]
             [jobs.movement.go-to.escalate-choose :as choose]
             [jobs.movement.go-to.route-ways :as route-ways]))
+
+(defn pillar-block-s
+  "Seconds a block of a pillar up a climb of rise blocks takes: cw/pillar-cost 1 and its share of the knock-off falls
+  (cost/pillar-knock-of over the rise's blocks)."
+  [p rise]
+  (+ (cw/pillar-cost 1) (/ (cost/pillar-knock-of p rise) (max 1 rise))))
 
 (defn climb-way
   "The way up for a shut-in body at feet to goal above it, its stair, pillar and dig route allowed (not in opts :skip):
@@ -17,7 +24,7 @@
     (let [n (:count pillar-item 0)
           a (choose/route-answer p feet goal may-dig? own? false fetch?
                                  (cond-> (choose/search-opts opts)
-                                   (pos? n) (assoc :place-s (cw/fill-cost n) :pillar-s (cw/pillar-cost 1) :max-places n)))]
+                                   (pos? n) (assoc :place-s (cw/fill-cost n) :pillar-s (pillar-block-s p (- (goal 1) (feet 1))) :max-places n)))]
       (cond
         (= :searching a) {:step :searching}
         (seq (:steps a))

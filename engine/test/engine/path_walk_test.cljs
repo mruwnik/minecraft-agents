@@ -577,8 +577,8 @@
                                          #js {:unknown true :pos pos}
                                          (sensed pos))))
         unseen (climb)]
-    (is (= (cw/pillar-cost 4) seen) "seen cells: the pillar's blocks only")
-    (is (< (js/Math.abs (- unseen (+ (cw/pillar-cost 4) (* 4 (cost/unseen-step-s (wworld/unseen-share p)))))) 1e-9)
+    (is (= (+ (cw/pillar-cost 4) (cost/pillar-knock-of p 4)) seen) "seen cells: the pillar's blocks and its knock-off falls only")
+    (is (< (js/Math.abs (- unseen (+ (cw/pillar-cost 4) (cost/pillar-knock-of p 4) (* 4 (cost/unseen-step-s (wworld/unseen-share p)))))) 1e-9)
         "4 blocks over unseen cells: each adds the unseen step")))
 
 ;; a drop whose landing is walled by what cannot be dug is a certain trap: no goal is worth it, arrival (no worth said) neither (the wall runs the whole floor: a

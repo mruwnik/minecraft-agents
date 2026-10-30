@@ -19,6 +19,7 @@
             [jobs.lib.escape :as escape]
             [jobs.lib.escape.way :as escape-way]
             [jobs.lib.near :as near]
+            [jobs.movement.go-to.climb-route :as climb-route]
             [jobs.movement.go-to.cut :as gcut]
             [jobs.lib.ledger :as ledger]
             [plan.shape :as shape]
@@ -461,6 +462,11 @@
         price #(escape-way/price p [0 64 0] {:step :pillar :height 8})
         at (fn [knock] (settings/with-settings {:jobs.lib.cost.value/pillar-knock-counts {:knock knock :kept 1}} price))]
     (is (< (at 0) (at 1)) "a dearer chance of a knock-off dears the pillar")))
+
+(deftest the-climb-routes-pillar-block-adds-its-share-of-the-knock-off-falls
+  (let [p (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}}})]
+    (is (= (+ (cw/pillar-cost 1) (/ (cost/pillar-knock-of p 6) 6)) (climb-route/pillar-block-s p 6)))
+    (is (< (cw/pillar-cost 1) (climb-route/pillar-block-s p 6)))))
 
 (deftest a-fill-competes-by-price-with-the-stair-and-the-pillar
   (let [p (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}]})
