@@ -318,6 +318,17 @@
           (is (= {:arrived true} @out))
           (is (= [:stair] (mapv :step (events-of seen :go-to.escalated)))))))))
 
+(deftest go-to-giving-up-in-a-dry-pockets-tunnel-lands-and-stairs-out
+  ;; a partial plan led the body into the tunnel before it learned the swim fits no breath (live: or leads nowhere
+  ;; loaded): a give-up under water cannot read the pocket as shut in, so it lands first and is judged there
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen]} (await (run-job! {:self {:pos {:x 2.5 :y 60 :z 0.5}} :blocks lake-pocket}
+                                                  'jobs.movement.go-to {:pos [66 63 0] :range 1 :ways #{:walk :stair}}))]
+          (is (= {:arrived true} @out))
+          (is (= [:stair] (mapv :step (events-of seen :go-to.escalated)))))))))
+
 (deftest dry-pocket-escalates-when-the-goal-lies-in-unloaded-land
   ;; the search ends :goal-unloaded, not :air, when the swim and the goal are not loaded: the pocket is still shut in but for the swim
   (let [c {:primitives (tu/fake {:self {:pos {:x 0 :y 60 :z 0}} :blocks lake-pocket})}]
