@@ -394,10 +394,11 @@
           :searching :continue
           :no-route :no-route
           :dearer (if-let [f (seen-sections/toward p from (item-cell item) (:max-fall prices) (:step-s prices) (:unseen-step-s prices) worth)]
-                    (case (await (walk-onto! c f worth))
-                      :continue :continue
-                      :arrived (recur pass (+ spent (* (:step-s prices) (seen-sections/walk-steps from f))))
-                      :no-route)
+                    (let [start (cost/leg-start c)]
+                      (case (await (walk-onto! c f worth))
+                        :continue :continue
+                        :arrived (recur pass (+ spent (cost/leg-price c start (seen-sections/walk-steps from f) (:step-s prices))))
+                        :no-route))
                     :no-route)
           :too-big :too-big
           nil

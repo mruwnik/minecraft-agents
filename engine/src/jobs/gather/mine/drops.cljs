@@ -188,10 +188,11 @@
           (= :dearer cells)
           (when-let [f (frontier c dug (- max-s spent))]
             (let [me (u/cell-vec (u/self-pos c))
+                  start (cost/leg-start c)
                   w (await (walk-to! c f))]
               (case w
                 :partial :partial
-                :there (let [spent (+ spent (* step-s (walk me f)))]
+                :there (let [spent (+ spent (cost/leg-price c start (walk me f) step-s))]
                          (book! spent)
                          (await (look-at! c dug))
                          (recur nil spent nil))

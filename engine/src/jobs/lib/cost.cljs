@@ -21,7 +21,7 @@
     planner  planner-costs-problem, planner-costs, planner-names: go-to's :costs, the per-move prices it may override; least-block-s: the least a plan prices a block; search-cell-s, flood-cell-s: the CPU seconds of one cell a route search expands, of one cell go-to's room flood visits (measured, engine.search-recount-test); landing-problem, planner-landing, landing-factor: go-to's :landing, fall damage by landing block; air-profile, water-breathing-s, air-used, air-costs: the planner's air drain and grace from the body's helmet, the air a dive has used; air-left-s, wet-move-s, wet-way-s, wet-spare-s, wet-ok?: the air a walk over unseen water keeps back at its last breath, each move at its measured pace; swim-profile: its swimH from Depth Strider on the boots; gait-problem, gait-costs: go-to's :gait; unknown-prices: the planner's peek and aim prices of unseen cells (jobs.lib.cost.planner); way-on-chance, unseen-share: the one price of walking over unseen cells, a dead end and a mob in the dark at the worse case, from how often the seen ways near the body go on (the planner's :cell); unseen-route-s: that price of a route's unseen steps, unseen-step-s of one, walk-step-s a walked block; stair-leg-pricer, pillar-s: a stair step's and a pillar's seconds with the unseen step on top (go-to's escalations, surface-up, the one-way climb-out); unseen-fall-s: the fall and climb out when an unseen floor a step down is not there; gap-look-cost: a refused gap jump over unseen floors filled now or looked at first; dead-end-cost: what an unseen dead end costs a flight; flight-caught-chance: the chance a flight is caught by its way, from its search's ways.
     tolls    farm-tolls, zone-tolls: go-to's :tolls for planted cells and zone cells to cross only as a last resort; fail-chance,
              failing-step-s: a step the walker failed at, priced by its failures (jobs.lib.cost.tolls).
-    death    experience-cost, death-cost: death as an ordinary cost, the walk back for the items plus the experience and the ::extra-s setting (default 0); spawn-worth: a respawn point's worth; goal-value (item-value with measured gathers), worth-to, find-worth, items-find-worth, search-radius: what a find is worth, how far its legs may go; opening-price, hold-price: opening a shelter to mobs against holding on in it; death-weight, terrain-danger: a remembered death's fade and the plan cost near a death by terrain (jobs.lib.cost.death).
+    death    experience-cost, death-cost: death as an ordinary cost, the walk back for the items plus the experience and the ::extra-s setting (default 0); spawn-worth: a respawn point's worth; goal-value (item-value with measured gathers), worth-to, find-worth, items-find-worth, search-radius: what a find is worth, how far its legs may go; opening-price, hold-price: opening a shelter to mobs against holding on in it; leg-start, leg-price: a walk leg's clock seconds and hp lost, never under its straight line; death-weight, terrain-danger: a remembered death's fade and the plan cost near a death by terrain (jobs.lib.cost.death).
     base-rates  density, biome-chance, expected-density, peak-density: the ore a block of ground is expected to hold, from the game's
              own placements, host-blocks: the rock its veins replace, and the chance of a biome on ground the body has not seen (jobs.lib.cost.base-rates).
     destroy  destroyed-s, destroyed-fn: what digging a cell destroys, in seconds of replacing it (a crop's growth, farmland's dirt and till, a build put back with put-back-s; natural terrain and tree wood nothing, a log that looks placed (horizontal, in a line, joined to planks or glass) a build) (jobs.lib.cost.destroy).
@@ -574,6 +574,19 @@
   "Seconds a hold has cost: the seconds held and the hp lost meanwhile (hunger), each at hp-price of the health left."
   [{:keys [held-s hp-lost health]}]
   (+ held-s (* (max 0 hp-lost) (hp-price health))))
+
+(defn leg-start
+  "The clock and health of the body now, for leg-price once a walk or dig leg ends."
+  [c]
+  {:at (ctx/now c) :health (.-health (.self (:primitives c)))})
+
+(defn leg-price
+  "Seconds a leg from `start` (leg-start) to now cost c: the clock seconds it took and the hp it lost (hold-price), never
+  under its `steps` at `step-s` (the straight-line walk)."
+  [c start steps step-s]
+  (let [{:keys [health]} (leg-start c)]
+    (max (* steps step-s)
+         (hold-price {:held-s (/ (- (ctx/now c) (:at start)) 1000) :hp-lost (- (:health start) health) :health health}))))
 
 (defn light-wait-worth
   "Seconds fetching n torches to light a site is worth instead of waiting wait-s for light: the wait less placing them (light-cost)."

@@ -718,12 +718,14 @@
     (tu/run-async done
       (fn ^:async t []
         (let [m (atom {})
-              c {:primitives (:p (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})) :args {:block "stone"} :update-mem (fn [f args] (apply swap! m f args))}
+              now (atom 0)
+              c {:primitives (:p (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})) :args {:block "stone"} :update-mem (fn [f args] (apply swap! m f args))
+                 :view (fn [] {:now @now})}
               run (fn ^:async run* [frontier walk]
                     (let [plans (atom []) walks (atom []) looks (atom [])
                           steps {:drop-cut (fn [_ _ max-s] (swap! plans conj max-s) (if (empty? @walks) :dearer []))
                                  :frontier (fn [_ _ _] frontier)
-                                 :walk-to! (fn [_ cell] (swap! walks conj cell) walk)
+                                 :walk-to! (fn [_ cell] (swap! walks conj cell) (swap! now + 60000) walk)
                                  :dig-cell! (fn [_ _] :dug)
                                  :look-at! (fn [_ cell] (swap! looks conj cell))
                                  :mem (fn [_] @m)}]
@@ -734,7 +736,7 @@
           (is (= [[-3 64 0]] (:walks walked)))
           (is (= [[2 64 0]] (:looks walked)) "a look at the dug cell from there")
           (is (= 2 (count (:plans walked))))
-          (is (< (second (:plans walked)) 5) "the walk is paid out of the drop's worth")
+          (is (<= (second (:plans walked)) -55) "the walk is paid out of the drop's worth at the clock seconds it took, not its steps")
           (is (nil? (:out (await (run nil :there)))) "no frontier to walk to: the cut ends")
           (is (nil? (:out (await (run [-3 64 0] :blocked)))) "nor when the walk there fails")
           (is (= :partial (:out (await (run [-3 64 0] :partial)))) "a walk that waits on the world waits"))))))
