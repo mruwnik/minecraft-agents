@@ -1,6 +1,6 @@
 (ns jobs.lib.seen-sections
-  "The body's memory a section (16 cells a side) at a time: the fewest steps from a cell to any cell it remembers and the
-  frontier it could walk to nearest a goal."
+  "The body's memory a section (16 cells a side) at a time: the fewest steps from a cell to any cell it remembers, the
+  openings it saw since a mark, and the frontier it could walk to nearest a goal."
   (:require [engine.perception.store :as store]
             [jobs.lib.walk.rock :as rock]))
 
@@ -53,6 +53,17 @@
         cz (range (bit-shift-right lz 4) (inc (bit-shift-right hz 4)))]
     (store/section-key cx sy cz)))
 
+(defn mark
+  "What the body remembers in the box of cells lo hi now, for opened: the memory's write count and a copy of each section's
+  cells. nil without a memory."
+  [p lo hi]
+  (when-let [st (st-of p)]
+    (let [secs (sections st)
+          ids (js/Map.)]
+      (doseq [k (section-keys lo hi)]
+        (when-let [^js s (.get secs k)] (.set ids k (.slice (.-ids s)))))
+      #js {:writes (.-writes st) :ids ids})))
+
 (defn- each-cell!
   "(f x y z i) over the 4096 cells of section s."
   [^js s f]
@@ -61,6 +72,27 @@
 
 (defn- open-fn []
   (let [^js open (rock/open-ids)] (fn [v] (and (pos? v) (== 1 (aget open (dec v)))))))
+
+(defn opened
+  "The cells of the box lo hi the body remembers open now but did not at mark (unseen then, or seen solid): only the
+  sections written since are read."
+  [p ^js mark lo hi]
+  (let [st (st-of p)]
+    (if (or (nil? mark) (nil? st) (== (.-writes st) (.-writes mark)))
+      []
+      (let [secs (sections st)
+            open? (open-fn)
+            [lx ly lz] lo [hx hy hz] hi
+            out #js []]
+        (doseq [k (section-keys lo hi)
+                :let [^js s (.get secs k)]
+                :when (and s (> (.-wrote s) (.-writes mark)))]
+          (let [^js now (.-ids s) ^js was (.get (.-ids mark) k)]
+            (each-cell! s (fn [x y z i]
+                            (when (and (open? (aget now i)) (not (and was (open? (aget was i))))
+                                       (<= lx x hx) (<= ly y hy) (<= lz z hz))
+                              (.push out [x y z]))))))
+        (vec out)))))
 
 (defn toward
   "The remembered frontier cell (open, its head open, a seen floor that is not, a face neighbour never seen) to walk to and

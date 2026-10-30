@@ -32,6 +32,22 @@
         "within one of each neighbour's")
     (is (nil? (seen/steps-fn (tu/fake {}) 3)) "no memory, no fn")))
 
+(deftest the-openings-since-a-mark-are-the-cells-seen-open-that-were-not
+  (let [p (tu/fake-on-floor {})
+        w (seeing p)
+        lo [-8 60 -8] hi [8 70 8]
+        m (seen/mark w lo hi)]
+    (is (remembered? w [-6 63 6]) "the floor ahead of the body")
+    (is (= [] (seen/opened w m lo hi)) "nothing written since")
+    (perception/pass! (aget w "perception"))
+    (is (= [] (seen/opened w m lo hi)) "a look that shows the same is no opening")
+    (fake/remove-block! p {:x -6 :y 63 :z 6})
+    (perception/pass! (aget w "perception"))
+    (is (some #{[-6 63 6]} (seen/opened w m lo hi)) "the floor cell taken away")
+    (is (not-any? #{[0 64 0] [1 64 0] [1 63 0]} (seen/opened w m lo hi)) "not one open or solid as it was")
+    (is (= [] (seen/opened w m [-5 60 -8] hi)) "outside the box")
+    (is (= [] (seen/opened w (seen/mark w lo hi) lo hi)) "against a fresh mark")))
+
 (deftest the-frontier-toward-a-goal-is-a-seen-stand-at-sight-s-edge-on-the-goal-s-side
   (let [w (seeing (tu/fake-on-floor {}))
         ;; the body looks west and south

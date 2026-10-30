@@ -15,6 +15,7 @@
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.dig-route :as dig-route]
             [jobs.lib.look :as lk]
+            [jobs.lib.seen-sections :as seen-sections]
             [jobs.lib.tool-kind :as kind]
             [jobs.lib.tools :as tools]
             [engine.memory :as mem]
@@ -690,10 +691,12 @@
                            :look-at! (fn [_ cell] (when (= [1 64 0] cell) (after-first-dig seen)))
                            :mem (fn [_] @m)}]
                 (with-redefs [u/seen-name (fn [_ {:keys [x y z]}] (get @seen [x y z]))
-                              ;; the body at [0 64 0]
-                              drops/open-seen (fn [_ radius] (into #{} (comp (filter (comp dig-route/open? val)) (map key)
-                                                                             (filter #(<= (js/Math.hypot (% 0) (- (% 1) 64) (% 2)) radius)))
-                                                                   @seen))]
+                              seen-sections/mark (fn [_ _ _] @seen)
+                              seen-sections/opened (fn [_ was [lx ly lz] [hx hy hz]]
+                                                     (for [[[x y z :as cell] n] @seen
+                                                           :when (and (dig-route/open? n) (not (dig-route/open? (was cell)))
+                                                                      (<= lx x hx) (<= ly y hy) (<= lz z hz))]
+                                                       cell))]
                   (await (drops/cut-via c steps [2 64 0] 50)))
                 (mapv second @dug)))
         replans-of (fn ^:async f [after-first-dig init] (reset! told nil) (await (run after-first-dig init)) @told)]

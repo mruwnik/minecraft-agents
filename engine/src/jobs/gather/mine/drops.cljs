@@ -118,15 +118,6 @@
         route (dig-route/route-resumed [(:id c) :drop-cut from dug max-s] at from goal prices)]
     (or (:dig route) (#{:searching :too-big :dearer} (:problem route)))))
 
-(defn open-seen
-  "The cells within radius of the body's feet that it has seen open (perception's seenBlocks; none for a body that senses
-  nothing), as a set of [x y z]."
-  [p radius]
-  (if-let [f (aget p "seenBlocks")]
-    (into #{} (map (fn [^js b] (let [q (.-pos b)] [(.-x q) (.-y q) (.-z q)])))
-          (f #js {:radius radius :match dig-route/open? :max js/Number.MAX_SAFE_INTEGER}))
-    #{}))
-
 (defn frontier
   "The remembered frontier cell to walk to and look from toward the dug cell when every cut from here costs more than
   max-s (seen-sections/toward, the unseen priced at cut-prices' unseen step), nil when none."
@@ -146,7 +137,7 @@
   those names' arguments). Open a way beside the cell dug (drop-cut), one dig child per cell, all the digs priced
   (cut-prices) at most max-s seconds (what is beside the cell: its drop, or a seen ore and its vein): after each dig and a
   look at what it laid open the way goes on as planned while the cell stayed open and the cells in and round the way read
-  as they did, else is planned again out
+  as they did and no cell seen opened since (seen-sections/opened) lets a way through cost less, else is planned again out
   of what is left (kept in :cut-spent over rounds, each dig booked at its own price once dug or failed; a cell that fills
   again is paid for again). When every way costs more, a walk to the frontier toward the dug cell (frontier), at its steps'
   price, and a look at the cell, then planned again. :cut (open: walk again), :partial (a dig or walk waits on the world),
@@ -162,23 +153,25 @@
         ;; opening beside it) and the cell dug, as the body saw them when it planned
         around (fn [cells] (set (for [[x y z] cells dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]] [(+ x dx) (+ y dy) (+ z dz)])))
         plan-s (fn [cells] (+ (* step-s (count cells)) (reduce + (map price cells))))
-        ;; a way through an opening is at least its steps to it and on: none farther than the plan's price walks (a walked
-        ;; block is at most sqrt 2 across) can cost less
-        reach (fn [cells] (* js/Math.SQRT2 (/ (plan-s cells) step-s)))
+        ;; a way through an opening is at least its steps to it and on: an opening outside the box of the cells whose walk from
+        ;; me and on to dug is under the plan's price (each axis's two legs at most the walk's) cannot cost less
+        region (fn [me cells] (let [l (/ (plan-s cells) step-s)]
+                                [(mapv #(js/Math.floor (/ (- (+ %1 %2) l) 2)) me dug) (mapv #(js/Math.ceil (/ (+ %1 %2 l) 2)) me dug)]))
         snapshot (fn [cells]
-                   (let [near (around (cons dug cells))]
-                     {:cells (vec cells) :near near :me (u/cell-vec (u/self-pos c))
+                   (let [near (around (cons dug cells))
+                         me (u/cell-vec (u/self-pos c))
+                         [lo hi] (region me cells)]
+                     {:cells (vec cells) :near near :me me :lo lo :hi hi
                       :seen (into {} (map (juxt identity name-at)) near)
-                      :open (open-seen p (reach cells))}))
+                      :mark (seen-sections/mark p lo hi)}))
         ;; the way's cells left, as planned while the cell dug stayed open and a look showed none of them changed nor
         ;; opened a cell that a way through could cost less than the plan: steps to it and on, against the plan's steps and digs
-        planned (fn [{:keys [cells seen near me open]} dug-cell]
+        planned (fn [{:keys [cells seen near me lo hi mark]} dug-cell]
                   (when (and (seq cells) (dig-route/open? (name-at dug-cell))
                              (every? (fn [[cell n]] (= n (name-at cell))) seen)
                              (let [s (plan-s cells)]
-                               (not-any? (fn [cell] (and (not (open cell)) (not (near cell))
-                                                         (< (* step-s (+ (walk me cell) (walk cell dug))) s)))
-                                         (open-seen p (reach cells)))))
+                               (not-any? (fn [cell] (and (not (near cell)) (< (* step-s (+ (walk me cell) (walk cell dug))) s)))
+                                         (seen-sections/opened p mark lo hi))))
                     cells))
         book! (fn [spent] (ctx/update-mem! c assoc-in [:cut-spent dug] spent))]
     (loop [last-dug nil
