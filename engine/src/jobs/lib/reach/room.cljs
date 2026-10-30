@@ -323,9 +323,9 @@
 (defn open-sides
   "{:open n :closed n} of the feet cells [[x y z]] (boundary's :unseen, seen by now) by their columns (feet and head): open
   when both are seen and a walker could pass, closed when a seen one blocks; a column with an unseen cell and no seen
-  blocker is in neither count."
+  blocker is in neither count. A door, gate or trapdoor counts as it stands: open lets a mob pass, shut does not."
   [p cells]
-  (let [kind-at (shut-kind-at p)
+  (let [kind-at (door-kind-at p)
         verdict (fn [[x y z]]
                   (let [col (map (fn [dy] [(some? (u/seen-block p {:x x :y (+ y dy) :z z})) (passable? kind-at x (+ y dy) z)]) [0 1])]
                     (cond (some (fn [[seen ok]] (and seen (not ok))) col) :closed

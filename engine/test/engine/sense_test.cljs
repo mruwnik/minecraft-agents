@@ -206,18 +206,27 @@
                 (await (sense/look-round! c cells))
                 (is (= 10 (count @asked)) "the ten looks taken from here leave no paid look for a second round"))))))))))
 
+(def far-wall {"-6,64,0" "stone" "-6,65,0" "stone"})
+(def open-door {:blocks {"2,64,0" "oak_door" "2,65,0" "oak_door"} :states {"2,64,0" {:open true} "2,65,0" {:open true}}})
+(def open-gate {:blocks {"2,64,0" "oak_fence_gate"} :states {"2,64,0" {:open true}}})
+
 (deftest look-round-stops-only-at-a-room-wall-a-mob-can-pass
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [[near far stops?] [[{} {} true]
                                    [{"2,64,0" "snow"} {} true]
-                                   [{"2,64,0" "stone"} {"-6,64,0" "stone" "-6,65,0" "stone"} false]
-                                   [{"2,64,0" "oak_leaves"} {"-6,64,0" "stone" "-6,65,0" "stone"} false]
-                                   [{"2,65,0" "stone"} {"-6,64,0" "stone" "-6,65,0" "stone"} false]
-                                   [{"2,64,0" "glass" "2,65,0" "glass"} {"-6,64,0" "stone" "-6,65,0" "stone"} false]
-                                   [{"2,64,0" "stone"} {} true]]]
-          (let [p (seeing {:self {:pos {:x 0 :y 64 :z 0}} :blocks (merge near far)})
+                                   [{"2,64,0" "stone"} {} true]
+                                   [{"2,64,0" "water"} {} true]
+                                   [open-door {} true]
+                                   [open-gate {} true]
+                                   [{"2,64,0" "stone"} far-wall false]
+                                   [{"2,64,0" "oak_leaves"} far-wall false]
+                                   [{"2,65,0" "stone"} far-wall false]
+                                   [{"2,64,0" "glass" "2,65,0" "glass"} far-wall false]
+                                   [{"2,64,0" "oak_door" "2,65,0" "oak_door"} far-wall false]
+                                   [{"2,64,0" "iron_door" "2,65,0" "iron_door"} far-wall false]]]
+          (let [p (seeing {:self {:pos {:x 0 :y 64 :z 0}} :blocks (merge (or (:blocks near) near) far) :states (:states near)})
                 c (stub-ctx p)
                 cells [[2 64 0] [-6 64 0]]
                 passes (atom 0)]
