@@ -184,6 +184,11 @@
            (escape-way/choose p [0 64 0] [8 64 0] (constantly true) {:skip #{:clear-path} :drop-steps #{:pillar :stair}}))
         "dropping the pillar and stair ways must not shut the walk to the wall")))
 
+(deftest goal-way-never-pillars-out-of-a-pit-to-a-level-goal-the-rim-does-not-walk-on-to
+  ;; the pit's rim pillar steps onto ground the goal, sealed in its stone, cannot be walked to from
+  (let [p (tu/fake (merge in-pit {:blocks (dissoc pit "10,61,0" "10,62,0") :inventory [{:name "dirt" :count 5}]}))]
+    (is (= {:step :none :why :no-dig} (ec/goal-way {:primitives p} [0 61 0] [10 61 0] (constantly false) {:skip #{}})))))
+
 ;; ------------------------------------------------------------------ go-to escalation
 (deftest go-to-pillars-out-of-a-pit-when-it-carries-blocks
   (async done

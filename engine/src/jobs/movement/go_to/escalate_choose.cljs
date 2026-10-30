@@ -570,14 +570,17 @@
 
 (defn rim-leads-in?
   "Whether escape-way/choose's rim pillar e from cell from leaves the body on a wall's top (a wall h high, e's height h - 1,
-  then a step onto the rim) from which a walk with no dig reaches goal."
-  [p {:keys [height]} from goal may-dig? opts]
+  then a step onto the rim) from which a walk with no dig reaches goal; :searching while opts :slice's search goes on
+  and none has."
+  [p {:keys [height]} from goal opts]
   (let [block-at (escape/block-at-of p)
-        unseen? (escape/unseen-of p)]
-    (boolean (some (fn [d] (when (= (inc height) (escape/rim-height block-at unseen? from d))
-                             (let [top (escape/up (escape/ahead from d 1) (inc height))]
-                               (= [] (route-cells p top goal (constantly false) (:own? opts) false false (search-opts opts))))))
-                   escape/cardinals))))
+        unseen? (escape/unseen-of p)
+        walks (for [d escape/cardinals
+                    :when (= (inc height) (escape/rim-height block-at unseen? from d))]
+                (route-cells p (escape/up (escape/ahead from d 1) (inc height)) goal (constantly false) (:own? opts) false false (search-opts opts)))]
+    (cond (some #{[]} walks) true
+          (some #{:searching} walks) :searching
+          :else false)))
 
 (defn goal-way
   "A free body's way into a walled-in goal: escape-way/choose from where it stands, or, while the cell it can walk to
@@ -592,12 +595,14 @@
         here? (or ((:skip opts) :approach) (>= (to-goal near) (dec (to-goal feet))))
         from (if here? feet near)
         level? (<= (second goal) (second from))
-        e (escape-way/choose p from goal may-dig? opts)
-        ;; a pillar or stair that leads in only to a goal above would be priced against the door and then dropped
-        e (if (and level? (#{:pillar :stair} (:step e)) (not (and (= :pillar (:step e)) (rim-leads-in? p e from goal may-dig? opts))))
-            (escape-way/choose p from goal may-dig? (assoc opts :drop-steps #{:pillar :stair}))
-            e)
-        in? (and (or (leads-in? e from goal) (and level? (= :pillar (:step e))))
+        ;; a stair, and a pillar but a rim one that walks on, lead in only to a goal above: priced against the door they
+        ;; would win and then be dropped
+        e (escape-way/choose p from goal may-dig? (cond-> opts level? (assoc :drop-steps #{:stair})))
+        rim (when (and level? (= :pillar (:step e))) (rim-leads-in? p e from goal opts))
+        e (cond (= :searching rim) {:step :searching}
+                (false? rim) (escape-way/choose p from goal may-dig? (assoc opts :drop-steps #{:pillar :stair}))
+                :else e)
+        in? (and (or (leads-in? e from goal) (true? rim) (= :searching (:step e)))
                  (or here? (not= :approach (:step e))))
         e (cond in? e
                 :else (or (dig-way p from goal may-dig? opts)

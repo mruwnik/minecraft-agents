@@ -228,7 +228,7 @@
   "How a body at feet (a cell) that cannot walk to goal (a cell) can make a way, cheapest first. It digs
   any block in cells (may-dig? cell)
   allows (go-to: no other owner's zone or claim); opts :pillar-item ({:item :count} or nil, escape/pillar-item) replaces the climb block read from the inventory. opts :skip is a set of steps that already failed (a stair heading
-  that failed: [:stair :east]): the next one is chosen; opts :drop-steps, steps never weighed among the ways (the wall walk is still offered); opts :approached, the cells an approach already walked to; opts :stands, the feet cells of the body's own stairs (a ledge stair's first floor never lands on one: the stair job refuses :undercuts-way).
+  that failed: [:stair :east]): the next one is chosen; opts :drop-steps, of :pillar and :stair the ones never chosen, as if skipped, but the wall walk is still offered; opts :approached, the cells an approach already walked to; opts :stands, the feet cells of the body's own stairs (a ledge stair's first floor never lands on one: the stair job refuses :undercuts-way).
   - the cheapest (way-s; opts :risk-s prices their dangers) of the ways that can be made:
     - {:step :pillar :height n :item}: in a pit d deep, the column over it seen clear to the top, at least n pillar
       blocks carried: n the rim-pillar (d - 1, then a step onto the rim), d when no side has a rim to step onto;
@@ -253,26 +253,28 @@
   ([p feet goal may-dig?] (choose p feet goal may-dig? nil))
   ([p feet goal may-dig? {:keys [skip approached stands drop-steps] :or {skip #{} approached #{} stands #{}} :as opts}]
    (let [approached (or approached #{})
+         ;; a dropped step is gone from every branch; only the wall walk's gate reads skip alone (failed steps)
+         off (into skip drop-steps)
          block-at (escape/block-at-of p)
          dir (escape/heading feet goal)
          depth (escape/pit-depth block-at (escape/unseen-of p) feet)
          {:keys [item count]} (if (contains? opts :pillar-item) (:pillar-item opts) (escape/carried-pillar-item p))
-         rim-n (when (and item (not (skip :pillar))) (escape/rim-pillar block-at (escape/unseen-of p) feet dir))
+         rim-n (when (and item (not (off :pillar))) (escape/rim-pillar block-at (escape/unseen-of p) feet dir))
          height (when (pos? depth) (min depth (or rim-n depth)))
-         pillar-blocks? (and (not (skip :pillar)) height item (>= count height))
+         pillar-blocks? (and (not (off :pillar)) height item (>= count height))
          headroom? (bs/passable? (block-at (escape/up feet 2)))
          open-above? (and pillar-blocks? (every? #(bs/passable? (block-at (escape/up feet %))) (range 2 (+ height 2))))
          rise (min (escape/max-depth) (max depth (- (second goal) (second feet))))
          stair-dirs (remove #(skip [:stair (escape/heading-names %)]) (distinct (cond->> escape/cardinals dir (cons dir))))
-         [stair rise] (if (or (skip :stair) (not (pos? rise)))
+         [stair rise] (if (or (off :stair) (not (pos? rise)))
                         [nil rise]
                         (or (some (fn [n] (some-> (escape/stair-heading block-at feet stair-dirs n may-dig?) (vector n)))
                                   (distinct (filter pos? [rise depth])))
                             [nil rise]))
-         climb (delay (when-not (or (skip :stair) (pos? rise))
+         climb (delay (when-not (or (off :stair) (pos? rise))
                         (some (fn [n] (some-> (escape/stair-heading block-at feet stair-dirs n may-dig?) (vector n)))
                               (range (escape/max-depth) 0 -1))))
-         ledge (delay (when (and item (not (skip :stair)) (pos? rise) (not (escape/walled-side? block-at feet)))
+         ledge (delay (when (and item (not (off :stair)) (pos? rise) (not (escape/walled-side? block-at feet)))
                         (escape/stair-heading block-at feet (remove #(contains? stands (escape/ahead feet % 1)) stair-dirs) rise may-dig? true)))
          door-failed? (and dir (skip (escape/door-key feet (escape/heading-names dir))))
          gap (when (and dir (not (skip :clear-path)) (not door-failed?))
@@ -292,8 +294,7 @@
                           door? (conj {:step :clear-path :heading (escape/heading-names dir)})
                           ;; door-spot and door-back stand for a door at feet that cannot be dug
                           (and (not door?) @spot) (conj {:step :approach :pos @spot})
-                          (and (not door?) @back) (conj {:step :approach :pos @back})))
-         ways (remove #(contains? (set drop-steps) (:step %)) ways)]
+                          (and (not door?) @back) (conj {:step :approach :pos @back})))]
      (cond
        (and (seq ways) (not (next ways)))
        (first ways)
