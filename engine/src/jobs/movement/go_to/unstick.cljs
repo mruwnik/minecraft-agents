@@ -12,7 +12,7 @@
 
 (a/defargs settings
   {::swims {:default 2 :doc "Swims at a bank a go-to call makes at most for a body its walk left stuck in water." :spec (a/int-in 0 nil)}
-   ::swim-ms {:default 2500 :doc "Milliseconds one such swim holds forward and jump before it counts as failed. Measured, 2026-10-30: 30 swims that landed took 250-2480 ms (median 1955, 7 over 2250), so a shorter hold would cut landings." :spec (a/int-in 1 nil)}})
+   ::swim-ms {:default 2500 :doc "Milliseconds one such swim holds forward and jump before it counts as failed. Measured, 2026-10-30 (event-counts swim-times): of 11 logged swims 7 landed (504-2075 ms, median 1955) and 4 ran into this cap, so the p95 is past it and unobserved; kept until a run with a longer hold gives an uncensored quantile." :spec (a/int-in 1 nil)}})
 
 (defn banks
   "The dry stands a body in water at feet cell [x y z] can swim onto: cells beside it (the 8 round it), level with it or
