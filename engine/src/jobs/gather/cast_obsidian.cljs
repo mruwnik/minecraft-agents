@@ -352,7 +352,7 @@
 
 (def safe? ready/safe-roaming)
 
-(def fit? ready/fit?)
+(def fit? ready/fed-fit?)
 
 (defn bucket-cause
   "Cause :no-bucket before the start (the round's own ending covers it later): no water bucket carried and no bucket with water seen to fill; none when a bucket can be fetched."

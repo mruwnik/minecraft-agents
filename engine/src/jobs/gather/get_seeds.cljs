@@ -88,7 +88,7 @@
 
 (def safe? ready/safe-roaming)
 
-(def fit? ready/fit?)
+(def fit? (ready/fed-fit-for :long))
 
 (def materials
   {"wheat_seeds" {:from :grass :sources ["short_grass" "tall_grass"]}

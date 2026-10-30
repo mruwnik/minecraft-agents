@@ -70,7 +70,7 @@
 
 (def safe? (price/staying :work ready/safe-here-by-night))
 
-(def fit? ready/fit?)
+(def fit? (ready/fed-fit-for :long))
 
 (def ways need/fetch-ways)
 

@@ -455,7 +455,7 @@
 
 (def safe? (price/staying :work (ready/safe-at-by-night plan-place)))
 
-(def fit? ready/fit?)
+(def fit? ready/fed-fit?)
 
 (defn can-run? [c] (trouble-status (planned c)))
 

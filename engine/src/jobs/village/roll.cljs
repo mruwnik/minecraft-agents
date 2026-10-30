@@ -68,7 +68,7 @@
 (def target [:villager :pos])
 
 (def safe? (price/staying :work (ready/safe-at-by-night (fn [c] (a/cell (:pos (:args c)))))))
-(def fit? ready/fit?)
+(def fit? ready/fed-fit?)
 
 
 (def defaults {:spend {:job-time ::job-time-s :wall-time ::wall-time-s}})

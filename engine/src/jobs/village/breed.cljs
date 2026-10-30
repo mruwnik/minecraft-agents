@@ -87,7 +87,7 @@
 
 (def safe? (price/staying :work (ready/safe-at-or-roaming
             (fn [c] (work-place/nearest-mob c (remove nil? ["villager"]) (or (:radius (:args c)) 16))))))
-(def fit? ready/fit?)
+(def fit? ready/fed-fit?)
 
 
 (def defaults {:spend {:job-time ::job-time-s}})

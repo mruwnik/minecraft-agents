@@ -169,7 +169,7 @@
 
 (def safe? ready/safe-roaming)
 
-(def fit? ready/fit?)
+(def fit? ready/fed-fit?)
 
 
 (defn done?

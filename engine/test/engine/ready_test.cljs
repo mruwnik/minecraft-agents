@@ -423,6 +423,14 @@
     pen/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3.9 :food 11} :inventory [{:name "bread" :count 1}]} :later
     pen/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 20 :food 11}} :ok))
 
+(deftest a-roaming-or-working-job-waits-for-food-when-hurt-and-only-food-heals
+  (doseq [j '[jobs.strip.site jobs.strip.loot-cart jobs.build.from-plan jobs.build.rail jobs.access.clear-path jobs.access.bridge jobs.animals.herd
+              jobs.gather.get-seeds jobs.gather.cast-obsidian jobs.blocks.clear-cells jobs.village.breed jobs.village.roll jobs.forestry.maintain
+              jobs.apiary.maintain jobs.apiary.guard jobs.survival.restore-broken]
+          :let [fit (:fit? (get registry/jobs j))]]
+    (is (= :later (kind fit {:self {:pos {:x 0 :y 64 :z 0} :health 3 :food 11}})) (str j))
+    (is (= :ok (kind fit {:self {:pos {:x 0 :y 64 :z 0} :health 20 :food 11}})) (str j))))
+
 (deftest a-job-whose-checks-default-to-armed-and-healthy-runs-them-from-the-declared-forms
   (are [world expected] (= expected (first (ending/run-status (get registry/jobs 'jobs.access.cleanup) (ctx-of (merge at-origin world)))))
     {:inventory sword} :ok

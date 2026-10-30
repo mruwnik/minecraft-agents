@@ -65,7 +65,7 @@
 
 (def safe? (price/staying :work ready/safe-at-from))
 
-(def fit? ready/fit?)
+(def fit? (ready/fed-fit-for :long))
 
 (def ways need/fetch-ways)
 

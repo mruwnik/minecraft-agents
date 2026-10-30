@@ -60,7 +60,7 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 (def safe? (ready/safe-at-build work-place/spot))
-(def fit? ready/fit?)
+(def fit? (ready/fed-fit-for :long))
 
 (declare cells-of wrong-shapes)
 

@@ -277,7 +277,7 @@
 
 (def safe? (price/staying :long (ready/safe-at-by-night #(a/cell (or (:at (:args %)) (:at (site %)))))))
 
-(def fit? ready/fit?)
+(def fit? (ready/fed-fit-for :long))
 
 (def ways need/fetch-ways)
 

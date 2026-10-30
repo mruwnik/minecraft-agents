@@ -42,7 +42,7 @@
 
 (def safe? (price/staying :long (ready/safe-at-or #(a/cell (:near (:args %))) ready/safe-if-lit)))
 
-(def fit? ready/fit?)
+(def fit? (ready/fed-fit-for :long))
 
 (defn carts
   "The chest minecarts in sight within radius of the anchor (:near, else the body), nearest first."

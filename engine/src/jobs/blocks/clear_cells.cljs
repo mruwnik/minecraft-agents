@@ -168,7 +168,7 @@
 (def target [:area])
 (def defaults {:spend {:job-time ::job-time-s}})
 (def safe? (ready/safe-at-build work-place/spot))
-(def fit? ready/fit?)
+(def fit? ready/fed-fit?)
 (def can-start? (cond/and bad-args no-zones all-refused))
 (def can-run? no-zones)
 

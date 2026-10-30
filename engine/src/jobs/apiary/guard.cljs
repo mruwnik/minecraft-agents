@@ -281,7 +281,7 @@
 (def meta {:category :phase :part-of '[jobs.apiary.maintain]})
 
 (def safe? (price/staying :work (ready/safe-at-by-night work-place/spot)))
-(def fit? ready/fit?)
+(def fit? ready/fed-fit?)
 
 
 (def defaults {:least 1 :spend {:job-time ::job-time-s}})

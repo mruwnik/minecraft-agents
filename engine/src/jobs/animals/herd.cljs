@@ -147,7 +147,7 @@
 
 (def safe? (price/staying :work (ready/safe-at-or-roaming
             (fn [c] (work-place/nearest-mob c (remove nil? [(:mob (:args c))]) (or (:radius (:args c)) 24))))))
-(def fit? ready/fit?)
+(def fit? (ready/fed-fit-for :long))
 
 
 (def defaults {:spend {:job-time ::job-time-s :wall-time ::wall-time-s}})
