@@ -311,7 +311,7 @@
          (apply dissoc (box -6 64 -6 6 65 6 "stone") (for [x (range -2 3) z (range -2 3) y [64 65]] (str x "," y "," z)))))
 
 (deftest go-to-mends-a-dead-end-cut-of-its-own-pen-before-the-next-way
-  ;; a door whose far side, past what the body saw, has no floor ends in a dead end; its cut opens the pen, so it is put back before the next way
+  ;; a door whose far side, past what the body saw, has no floor (water, no landing) ends in a dead end; its cut opens the pen, so it is put back before the next way
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -320,7 +320,7 @@
               kept (atom [])
               done! restore/restore-done!
               {:keys [out p seen]} (with-redefs [restore/restore-done! (fn [c] (swap! kept conj (filterv #(= "the put-back of the stair's cut" (:why %)) (reserve/entries (ctx/view c)))) (done! c))]
-                                     (await (run-job! {:sight 3 :self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (dissoc thick-pit-pen "7,63,0") :entities [cow]
+                                     (await (run-job! {:sight 3 :self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (assoc thick-pit-pen "7,63,0" "water") :entities [cow]
                                                        :inventory [{:name "stone_pickaxe" :count 1}]}
                                                       'jobs.movement.go-to {:pos [10 64 0] :range 1} zones true)))]
           (is (= {:arrived true} @out))

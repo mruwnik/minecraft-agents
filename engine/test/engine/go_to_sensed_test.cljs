@@ -102,6 +102,16 @@
     (is (= {:cells [[2 65 0] [2 64 0]] :through [3 64 0] :unseen true}
            (escape/door-from block-at #{[3 64 0]} [0 64 0] [1 0] 2)))))
 
+(deftest escape-door-ends-at-the-landing-of-a-short-drop-beyond-a-thin-wall
+  (let [world (fn [floor-y] #(cond (and (= 63 (second %)) (= 0 (nth % 2)) (<= 0 (first %) 1)) "stone"
+                                   (and (= (first %) 2) (= (second %) floor-y) (= 0 (nth % 2))) "stone"
+                                   (and (= (first %) 1) (<= 64 (second %) 65) (= 0 (nth % 2))) "stone"
+                                   :else "air"))
+        door #(escape/door (world %) (constantly false) [0 64 0] [1 0])]
+    (is (= {:cells [[1 65 0] [1 64 0]] :through [2 60 0] :fall 4} (door 59)) "four blocks down beyond a one-block wall")
+    (is (nil? (door 40)) "a drop past door-max-drop is no door")
+    (is (= {:cells [[1 65 0] [1 64 0]] :through [2 64 0]} (door 63)) "a floor at the wall's foot level is as before, no fall")))
+
 (deftest escape-door-over-seen-cells-is-as-before
   (let [{:keys [w]} (sensed-only (assoc (wall-east 1) :blocks ground))]
     (is (nil? (escape/door (escape/block-at-of w) (escape/unseen-of w) [0 64 0] [1 0])) "open ground seen ahead: no door")))

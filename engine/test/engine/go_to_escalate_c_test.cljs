@@ -395,6 +395,12 @@
     (is (< 0 (:seconds route)))
     (is (= (:seconds route) (escape-way/price p [0 64 0] {:step :stair :heading :east :steps 3})))))
 
+(deftest a-door-over-a-drop-is-priced-with-the-falls-hp
+  (let [blocks (fn [floor-y] (merge (box -1 63 -1 1 63 1 "stone") (box 1 64 -1 1 65 1 "stone") (box 2 floor-y -1 4 floor-y 1 "stone")))
+        price (fn [floor-y] (escape-way/price (tu/fake {:blocks (blocks floor-y) :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}]})
+                                              [0 64 0] {:step :clear-path :heading :east}))]
+    (is (< (price 63) (price 59)) "the four-block drop beyond the wall adds its hp to the door's price")))
+
 (def open-stair-mass
   "stone-mass with the cells of a 3-step stair east from [0 64 0] already open."
   (apply dissoc stone-mass (map #(str (clojure.string/join "," %)) (escape/stair-cuts [0 64 0] [1 0] 3))))

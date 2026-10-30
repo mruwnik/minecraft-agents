@@ -20,6 +20,12 @@
    :act [[:job (jobs.access.clear-path {:heading :east :max-dig-s 60})]]
    :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
    :after [[:block [11 0 16] "air"] [:body-near [12.5 0 16.5] 1]]}
+  ;; Card ea4fafe7: a thin wall with a short drop beyond is a door: it ends at the landing four blocks down, the fall priced in hp
+  {:name "a-thin-wall-over-a-short-drop-is-dug-and-dropped-through"
+   :blocks [[:fill [7 -4 15] [12 -1 17] "air"] [:fill [7 -5 15] [12 -5 17] "stone"] [:fill [7 0 15] [25 1 17] "air"]]
+   :act [[:job (jobs.access.clear-path {:heading :east :max-dig-s 60})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
+   :after [[:block [6 0 16] "air"] [:body-near [7.5 -4 16.5] 1]]}
   ;; should fail: a 20-thick wall over 12 s of digging: it digs rows while the next plan fits, then walks back :too-dear
   {:name "a-wall-dearer-than-its-price-part-way-stops-and-walks-back"
    :act [[:job (jobs.access.clear-path {:heading :east :max-dig-s 12})]]

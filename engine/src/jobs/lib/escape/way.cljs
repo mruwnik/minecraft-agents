@@ -116,7 +116,10 @@
         :bridge (cw/bridge-cost (:length e) (:short e 0))
         :fill-gap (cw/fill-cost (:count e 1))
         :dig-route (dig-s (map :cell (:cells e)))
-        :clear-path (dig-s (:cells (escape/door @block-at (escape/unseen-of p) feet (escape/heading-dirs (:heading e)))))
+        :clear-path (let [{:keys [cells fall]} (escape/door @block-at (escape/unseen-of p) feet (escape/heading-dirs (:heading e)))
+                          self (.self p)]
+                      (+ (dig-s cells)
+                         (if fall (cost/hp-cost (.-health self) (cost/fall-damage (cost/equipment-of (.-equipment self)) fall)) 0)))
       0))))
 
 (defn new-stair-step-s

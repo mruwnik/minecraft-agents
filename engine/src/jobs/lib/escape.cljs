@@ -3,7 +3,7 @@
   way (its escalation; jobs.lib.escape.way prices and chooses one):
   - pit-depth: how many levels up from the feet are walled on at least three sides.
   - rim-pillar: how high to pillar beside a wall to step onto its top (a pit too wide for pit-depth).
-  - door: the cells of a thin wall straight ahead with a floor beyond it (jobs.access.clear-path digs them).
+  - door: the cells of a thin wall straight ahead with a floor beyond it, or a landing at most door-max-drop below (jobs.access.clear-path digs them).
   - stair-heading: a heading with a solid block in front to stair up on (jobs.access.stair).
   - stair-cuts: the cells a stair up cuts.
   - door-beside?: whether a door or gate borders the cells the body can walk to (a way out go-to handles).
@@ -230,19 +230,37 @@
 
 (defn walled-side? [block-at cell] (boolean (some #(solid? (block-at (ahead cell % 1))) cardinals)))
 
+(def door-max-drop "The longest drop in blocks door-from ends a door at: go-to's walk refuses what the body cannot survive, way-s prices the rest." 6)
+
+(defn landing
+  "The first cell below row (a cell with room for the body and no floor) within door-max-drop with room and a floor, as
+  {:through cell :fall blocks}, or nil when the column under row is not open down to one."
+  [block-at row]
+  (loop [d 1]
+    (let [cell (up row (- d))
+          names (map block-at [cell (up cell 1)])]
+      (cond
+        (> d door-max-drop) nil
+        (not-every? bs/passable? names) nil
+        (rules/solid-floor? block-at (up cell -1)) {:through cell :fall d}
+        :else (recur (inc d))))))
+
 (defn door-from
   "door from row k on (rows before it already open): the wall's solid cells from row k and the first row beyond with
-  room for the body and a floor. unseen? (cell -> true for a cell the body has not sensed): a row past the first whose
-  cells are unseen or seen open, at least one unseen (a body seeing over the wall sees only some), is taken for the far
-  side, {:unseen true}: the dig shows it, and the digger goes on with door-from there."
+  room for the body and a floor, or, for a row beyond seen open with no floor, the landing below it within
+  door-max-drop (landing: {:fall blocks} too). unseen? (cell -> true for a cell the body has not sensed): a row past
+  the first whose cells are unseen or seen open, at least one unseen (a body seeing over the wall sees only some), is
+  taken for the far side, {:unseen true}: the dig shows it, and the digger goes on with door-from there."
   [block-at unseen? feet dir k]
   (loop [k k cells []]
     (let [row (ahead feet dir k)
           pair [(up row 1) row]
-          names (map block-at pair)]
+          names (map block-at pair)
+          floor? (rules/solid-floor? block-at (up row -1))]
       (cond
-        (not (rules/solid-floor? block-at (up row -1))) nil
         (some nil? names) nil
+        (and (not floor?) (> k 1) (every? bs/passable? names)) (some->> (landing block-at row) (merge {:cells cells}))
+        (not floor?) nil
         (and (> k 1) (some unseen? pair) (every? #(or (unseen? %) (bs/passable? (block-at %))) pair))
         {:cells cells :through row :unseen true}
         (every? bs/passable? names) (when (> k 1) {:cells cells :through row})
