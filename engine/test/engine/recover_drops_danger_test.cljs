@@ -156,7 +156,7 @@
   [n]
   (let [at {:x 22 :y 64 :z 22}
         pack (for [i (range n)] {:id (+ 20 i) :name "skeleton" :kind "hostile" :pos {:x (+ 10.5 (mod i 6)) :y 64 :z (+ 12.5 (quot i 6))}})
-        {:keys [eng]} (setup {:floor [-10 -10 40 40] :entities (vec (concat (pile-drops kit-pile) pack))})]
+        {:keys [eng]} (setup {:floor [-10 -10 40 40] :entities (vec (concat (map #(assoc % :pos at) (pile-drops kit-pile)) pack))})]
     (die! eng {:pos at :inventory kit-pile :cause "skeleton"})
     (core/submit! eng job {})
     (await (run-until-empty eng 20))
@@ -185,6 +185,7 @@
           (priced-by-the-cost-lib kit-pile left)
           (is (re-find #"^fetch: " (decided-text free)) "no pack: the pile is fetched")
           (is (fetch-holds? taken))
+          (is (= :collected (:decision (recovered free))) "the drops lie where the body died")
           (priced-by-the-cost-lib kit-pile taken))))))
 
 (deftest a-body-with-an-iron-sword-and-armour-goes-for-the-guarded-pile
