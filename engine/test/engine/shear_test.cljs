@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [jobs.animals.shear :as shear]
+            [jobs.lib.pen-read :as pen-read]
             [engine.hostile-test :as h]
             [engine.perception :as perception]
             [engine.fake :as fake]
@@ -289,3 +290,33 @@
         names (fn [args] (mapv #(.-name %) (shear/shearable-in-radius {:primitives p :args (merge {:radius 16} args)})))]
     (is (= #{"sheep" "mooshroom"} (set (names {}))))
     (is (= ["sheep"] (names {:color "white"})))))
+
+(defn ^:async turned-away-run
+  "Shear with a view cone (facing +x at first, the last look act's target afterwards) and a pen read that leaves the body facing +x."
+  []
+  (let [facing (atom [1 0])
+        s (h/setup {:inventory shears :entities [(sheep 1 -20)]})
+        ^js p (:p s)
+        orig (.-entities p)]
+    (.override (.-world p) "look" (fn [token a impl]
+                                    (let [me (.-pos (.self p))]
+                                      (reset! facing [(- (.-x (.-pos a)) (.-x me)) (- (.-z (.-pos a)) (.-z me))]))
+                                    (impl token a)))
+    (set! (.-entities p)
+          (fn [opts]
+            (let [me (.-pos (.self p)) [fx fz] @facing]
+              (.filter (.call orig p opts)
+                       #(or (< (js/Math.abs (- (.-x (.-pos %)) (.-x me))) 6) ; close by it is in reach whichever way the body faces
+                            (pos? (+ (* fx (- (.-x (.-pos %)) (.-x me))) (* fz (- (.-z (.-pos %)) (.-z me))))))))))
+    (with-redefs [pen-read/read! (fn ([_ _] (reset! facing [1 0]) (js/Promise.resolve {:closed? false :reason :unloaded}))
+                                ([_ _ _] (reset! facing [1 0]) (js/Promise.resolve {:closed? false :reason :unloaded})))]
+      (core/submit! (:eng s) (list 'jobs.animals.shear {:collect false :radius 40}) {})
+      (await (tu/run-ticks (:eng s) (:clock s) 30 700)))
+    s))
+
+(deftest a-sheep-the-survey-found-is-looked-for-again-after-the-pen-read-turned-the-body-away
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (turned-away-run))]
+          (is (= [1] (mapv #(.-id (.-args %)) (calls-of s "interact"))) "the far sheep is shorn, not lost to the turn"))))))

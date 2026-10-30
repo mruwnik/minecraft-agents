@@ -230,7 +230,7 @@
       :else (let [sheep (animals/pick c cands)
                   r (await (animals/pen-looked! c sheep))]
               (cond (= :continue r) :continue
-                    r :again
+                    r (do (look/forget-survey! c) :again) ; the pen read may have turned the body from the sheep: look round again
                     :else (await (engage! c sheep)))))))
 
 (defn ^:async round
