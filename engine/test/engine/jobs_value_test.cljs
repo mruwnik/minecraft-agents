@@ -254,3 +254,8 @@
   (are [chance worth] (= worth (v/survived-worth 1000 chance))
     0 1000, nil 1000, 0.25 750, 0.5 500, 1 0, 1.5 0)
   (is (zero? (v/survived-worth ##Inf 1)) "a sure death brings no find, though it be worth arrival"))
+
+(deftest the-craft-step-is-the-measured-setting-and-the-table-is-built-once
+  (is (= (table/craft-step) (:craft-step (table/full-basis {}))))
+  (is (= 7 (:craft-step (table/full-basis {:craft-step 7}))) "a caller's basis wins")
+  (is (identical? (table/table-for "1.20.4" {} {}) (table/table-for "1.20.4" {} {})) "made's memo keys on the table: one object per call"))

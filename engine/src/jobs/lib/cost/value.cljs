@@ -212,7 +212,7 @@
   "[table basis] item-value prices by: the worth table of the name overrides and the whole basis."
   [version name-overrides basis]
   (let [basis (tbl/deep-merge (when-not (get-in basis [:find :ore-scan-s]) (:basis (measured-worth version))) basis)]
-    [(tbl/table-for version name-overrides basis) (tbl/deep-merge tbl/default-basis basis)]))
+    [(tbl/table-for version name-overrides basis) (tbl/full-basis basis)]))
 
 (def ^:private smelts-of (memoize (fn [version] (tbl/smelt-sources (map #(.-name %) (array-seq (.-itemsArray (minecraft-data version))))))))
 

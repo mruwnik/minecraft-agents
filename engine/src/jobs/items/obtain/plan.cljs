@@ -115,7 +115,7 @@
   "Seconds the craft and smelt steps of a plan take."
   [pl]
   (let [{smelts true crafts false} (group-by #(= :smelt (:op %)) (:steps pl))]
-    (+ (* cost/craft-step (count crafts)) (* (smelt-item-s) (reduce + 0 (map :count smelts))))))
+    (+ (* (cost/craft-step) (count crafts)) (* (smelt-item-s) (reduce + 0 (map :count smelts))))))
 
 (defn walk-s
   "The straight walk to `at` and back, and its risk there and back (jobs.lib.walk-risk/estimate on the straight way,
@@ -296,7 +296,7 @@
   "Seconds a gather plan takes: its plan-cost (the death each walk risks with it) and its craft steps."
   [c pl]
   (+ (plan-cost c (game/version-of (:primitives c)) pl)
-     (* cost/craft-step (count (remove #(= :smelt (:op %)) (:steps pl))))))
+     (* (cost/craft-step) (count (remove #(= :smelt (:op %)) (:steps pl))))))
 
 (defn preferred
   "The gather plan pl, or when it gathers a need with no source seen, or mines an ore seen below the feet, and the same

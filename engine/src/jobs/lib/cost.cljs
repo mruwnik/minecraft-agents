@@ -306,7 +306,7 @@
 (def dig-cost table/dig-cost)
 (def kill-drops table/kill-drops)
 (def smelt-step "Seconds one smelt step takes beyond its input." (:smelt-step table/default-basis))
-(def craft-step "Seconds one craft step takes beyond its ingredients." (:craft-step table/default-basis))
+(def craft-step table/craft-step)
 (def detour-cost value/detour-cost)
 (def tour-cost value/tour-cost)
 (def tour-worth value/tour-worth)

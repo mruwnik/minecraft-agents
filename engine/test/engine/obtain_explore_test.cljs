@@ -213,8 +213,9 @@
           (is (< 0 (:worth (first (f/events-of s :obtain.exploring))) (inc (cost/items-find-worth {"wooden_sword" 1})))
               "a root sword looks at its own goal worth"))
         (let [s (f/start (ore-world {} []) [f/own-zone])]
-          (await (obtain! s {:item "stick" :count 1 :explore true :worth 2} 60))
-          (is (empty? (f/events-of s :obtain.exploring)) "a stick at 2 s is worth less than one walk to look for logs: no walk"))))))
+          (await (obtain! s {:item "stick" :count 1 :explore true} 60))
+          (is (= (:value (cost/goal-value [{:name "stick" :count 1}])) (:worth (first (f/events-of s :obtain.exploring))))
+              "a root stick looks at its own goal worth, the logs it is made from"))))))
 
 (deftest planks-of-any-species-search-for-any-log
   (async done
