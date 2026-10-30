@@ -274,7 +274,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [w (ew/of-data {} {} [home-zone])
-              s (await (zoned {:block "sand" :count 2 :ways #{:seen} :trip true} {:floor [-30 -30 40 30] :blocks {"6,64,11" "sand" "7,64,11" "sand"}} w 60))
+              s (await (zoned {:block "sand" :count 2 :ways #{:seen} :trip true :worth 1000} {:floor [-30 -30 40 30] :blocks {"6,64,11" "sand" "7,64,11" "sand"}} w 60))
               left (first (events-of s :mine.left-zone))
               first-dig (first (dug-cells s))]
           (is (= "home" (:zone left)))
@@ -550,7 +550,7 @@
               s (start {:world {:floor [-30 -30 40 30]} :shared (ew/of-data {} {} [home-zone])
                         :jobs (assoc registry/jobs 'jobs.gather.dig-for stub)})]
           (reset! sref s)
-          (core/submit! (:eng s) (spec {:block "sand" :count 1 :ways #{:seen} :trip true}) {})
+          (core/submit! (:eng s) (spec {:block "sand" :count 1 :ways #{:seen} :trip true :worth 1000}) {})
           (await (run-ticks s 200))
           (is (= 2 @calls) "the dig is called again")
           (is (= 2 (count (events-of s :mine.left-zone))) "the body walked out of the zone again before the second dig"))))))
