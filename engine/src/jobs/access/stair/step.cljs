@@ -21,6 +21,7 @@
             [jobs.lib.escape.span :as span]
             [jobs.lib.lava :as lava]
             [jobs.lib.reach :as reach]
+            [jobs.lib.ready :as ready]
             [jobs.lib.reserve :as reserve]
             [jobs.lib.tools :as tools]
             [jobs.lib.torch-stock :as stock]
@@ -379,12 +380,13 @@
 (defn ^:async run-bridge!
   "The flat bridge of memory :run (a jobs.access.bridge child along the heading): :continue while it works. Once done the
   stair goes on from the bridge's end, which is its new origin (the cells above it are recorded as a way); :again, or a
-  stop map when the bridge failed."
+  stop map when the bridge failed. It runs under the stair's fit (asked at the stair's start), not the bridge's own :long
+  one, which would hold a stair a hurt body may cut; a :fit? form from the stair's callers still flows down."
   [c]
   (let [{:keys [run origin at-step]} (ctx/mem c)
         {:keys [dir heading ignore-zones?]} (:args c)
         e (await (ctx/call c :run 'jobs.access.bridge {:heading heading :length (:length run) :item (:item run) :ways (need/call-ways c)
-                                                      :ignore-zones? ignore-zones?}))]
+                                                      :ignore-zones? ignore-zones? :checks (ready/unforced c {:fit? '(always)})}))]
     (if (= :continue e)
       :continue
       (let [feet (reach/standing-vec (:primitives c))]

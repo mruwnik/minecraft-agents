@@ -912,15 +912,17 @@
                                (for [x (range 1 6) z (range -2 3)] (str x ",64," z)))))
 
 (deftest a-stair-down-on-a-ledge-over-a-void-bridges-flat-to-the-far-side-and-goes-on
+  ;; hurt, food 11 and none carried: only food heals, and the bridge (fed-fit-for :long) must not hold the stair that passed its own fit
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [inv (conj pick {:name "cobblestone" :count 16})
-              {:keys [out p]} (await (stair! {:blocks ledge-over-void :inventory inv} east (fn [_])))]
-          (is (= :done (:status @out)) (pr-str (dissoc @out :dug)))
-          (is (every? #(not= "air" (block-at p [% 64 0])) [1 2 3 4]) "the flat bridge over the void")
-          (is (= 3 (:steps @out)) "the three steps asked, counted from the bridge's end")
-          (is (= [7 62 0] (:at @out))))))))
+        (doseq [self [{:pos {:x 0 :y 65 :z 0}} {:pos {:x 0 :y 65 :z 0} :health 3 :food 11}]]
+          (let [inv (conj pick {:name "cobblestone" :count 16})
+                {:keys [out p]} (await (stair! {:blocks ledge-over-void :inventory inv :self self} east (fn [_])))]
+            (is (= :done (:status @out)) (pr-str self (dissoc @out :dug)))
+            (is (every? #(not= "air" (block-at p [% 64 0])) [1 2 3 4]) "the flat bridge over the void")
+            (is (= 3 (:steps @out)) "the three steps asked, counted from the bridge's end")
+            (is (= [7 62 0] (:at @out)))))))))
 
 (deftest a-floor-the-world-keeps-refusing-ends-place-failed
   (async done
@@ -1640,12 +1642,14 @@
           (is (= "cobblestone" (block-at p lava)))
           (is (= 1 (count (events-of s :stair.sealed)))))))))
 
-(deftest the-bridge-child-keeps-the-callers-checks
+(deftest the-bridge-child-runs-under-the-stairs-fit-and-keeps-the-callers-checks
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [seen (atom nil)]
-          (with-redefs [ctx/mem (fn [_] {:run {:length 2 :item "cobblestone"}})
-                        ctx/call (fn ^:async f [_ _ _ args] (reset! seen args) :continue)]
-            (await (sstep/run-bridge! {:args {:heading :east :dir :up} :primitives (tu/fake {})})))
-          (is (not (contains? @seen :checks)) (pr-str @seen)))))))
+        (doseq [[caller want] [[nil {:fit? '(always)}] [{:fit? '(healthy)} {}]]]
+          (let [seen (atom nil)]
+            (with-redefs [ctx/mem (fn [_] {:run {:length 2 :item "cobblestone"}})
+                          ctx/frozen-call (fn [_] {:checks caller})
+                          ctx/call (fn ^:async f [_ _ _ args] (reset! seen args) :continue)]
+              (await (sstep/run-bridge! {:args {:heading :east :dir :up} :primitives (tu/fake {})})))
+            (is (= want (:checks @seen)) (pr-str caller @seen))))))))
