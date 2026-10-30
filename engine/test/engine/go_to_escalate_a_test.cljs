@@ -581,3 +581,28 @@
                       (recur (conj seen (:pos e)) (conj out e)))))]
       (is (= {:step :none :why :no-dig} (last steps)))
       (is (apply distinct? (map :pos (butlast steps)))))))
+
+(deftest a-dig-route-that-meets-buried-bedrock-is-planned-again-till-it-takes-the-glass-it-went-round
+  ;; another's glass shaft is the one way into a pocket walled in bedrock whose top is seen and whose sides, buried in
+  ;; the stone, are not (guessed rock). A pillar out of the route's own hole leads no nearer a walled-in goal, so it
+  ;; sets no bound on the replans: they go on till one goes in.
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pocket #{[19 60 16] [19 61 16]}
+              faces (fn [q] (map #(mapv + q %) [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]))
+              blocks (merge (box 2 58 2 30 63 30 "stone") (box 17 59 14 21 63 18 "bedrock")
+                            {"19,60,16" "air" "19,61,16" "air" "19,62,16" "stone" "19,63,16" "glass"})
+              {:keys [eng p seen]} (setup {:self {:pos {:x 16.5 :y 64 :z 16.5}} :blocks blocks
+                                           :inventory [{:name "stone_pickaxe" :count 1} {:name "cobblestone" :count 4}]})
+              ;; the body sees a cell open to the air it stands in, and the faces round one; the pocket's air only once opened
+              open? (fn [q] (and (= "air" (block p q)) (or (not (pocket q)) (some #(and (not (pocket %)) (= "air" (block p %))) (faces q)))))
+              out (atom :not-done)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [19 60 16] :range 0 :unknown false})))]
+          (tu/set-sensed! p (fn [q] (let [cell (mapv js/Math.floor [(.-x q) (.-y q) (.-z q)])]
+                                      (if (some open? (cons cell (faces cell))) (.blockAt p q) #js {:unknown true :pos q}))))
+          (core/submit! eng '(recording-parent) {})
+          (await (tick-out! eng 3000))
+          (is (true? (:arrived @out)) (pr-str (select-keys @out [:why :text :escalation])))
+          (is (= [19 60 16] (feet p)))
+          (is (= "air" (block p [19 63 16])) "the glass is dug once the routes round it prove walled"))))))

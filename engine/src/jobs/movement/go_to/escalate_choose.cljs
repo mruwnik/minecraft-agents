@@ -620,12 +620,22 @@
                               (seq cells) {:step :dig-route :cells (vec cells)}))))
           (some->> @edge (hash-map :step :approach :pos))))))
 
+(defn leads-in?
+  "Whether escape/choose's way e from cell from leads into a walled-in goal: a door, a stair or pillar up to a higher
+  goal, a walk along the wall to a goal not below it."
+  [{:keys [step]} from goal]
+  (case step
+    :clear-path true
+    (:stair :pillar) (> (second goal) (second from))
+    :approach (>= (second goal) (second from))
+    false))
+
 (defn goal-way
   "A free body's way into a walled-in goal: escape/choose from where it stands, or, while the cell it can walk to
   nearest the goal (nearest-stand) is more than a block nearer, from there, as
-  {:step :approach :pos cell} first. Only a door, or a stair or pillar up to a higher goal, leads in (a walk along
-  the wall too, from where it stands, to a goal not below it), else the fewest cells dug (dig-way, :searching while its
-  search goes on); else {:step :none :why :no-dig}, from the nearest cell once it has been walked to."
+  {:step :approach :pos cell} first. Only a way that leads-in? (a walk along the wall from where it stands only), else
+  the fewest cells dug (dig-way, :searching while its search goes on); else {:step :none :why :no-dig}, from the
+  nearest cell once it has been walked to."
   [c feet goal may-dig? opts]
   (let [p (:primitives c)
         to-goal #(u/dist (zipmap [:x :y :z] %) (zipmap [:x :y :z] goal))
@@ -633,11 +643,7 @@
         here? (or ((:skip opts) :approach) (>= (to-goal near) (dec (to-goal feet))))
         from (if here? feet near)
         e (escape/choose p from goal may-dig? opts)
-        in? (case (:step e)
-              :clear-path true
-              (:stair :pillar) (> (second goal) (second from))
-              :approach (and here? (>= (second goal) (second from)))
-              false)
+        in? (and (leads-in? e from goal) (or here? (not= :approach (:step e))))
         e (cond in? e
                 :else (or (dig-way p from goal may-dig? opts)
                           (if (= :none (:step e)) e {:step :none :why :no-dig})))]
