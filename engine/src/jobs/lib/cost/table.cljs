@@ -29,6 +29,7 @@
    :drop-chance {"apple" 0.005 "wheat_seeds" 0.125 "stick" 0.02} ;; vanilla's, where minecraft-data lists 1 (leaves' sticks)
    :dig {:hardness-s 1.5 :unfit-s 5 :max-hardness 5 :min-s 0.25 :default-tier 2} ;; seconds of dig per hardness at speed 1: 30 ticks with the block's tool tier, 100 without (vanilla)
    :find {:terrain 0.1
+          :crop 0 ;; the walk to a ripe crop: none at the margin (the field is the farm's); a goal's is value/measured-worth's
           :wood 12 ;; a log, stem, hyphae, wood or bamboo block, or bamboo itself (jungles alone): the walk to a tree
           :block {"gilded_blackstone" 300}
           :ore-by-tier {1 10 2 30 3 300 4 300}
@@ -165,7 +166,7 @@
                         (not (or crop (item? name))))
                   acc
                   (let [cost (if crop
-                               (:farm-s basis)
+                               (+ (:farm-s basis) (get-in basis [:find :crop]))
                                (+ (dig-seconds md basis b) (find-seconds md basis b)))]
                     (reduce (fn [acc [item n]] (if (pos? n) (update acc item #(min (or % js/Infinity) (/ cost n))) acc))
                             acc (block-yields md basis b loot crop))))))

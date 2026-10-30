@@ -11,7 +11,7 @@
   posterior of every counted flight and fight group (caught/prior: the first masked plan's unseen-share prices spawns with them)."
   []
   (value/item-value [{:name "stone"}])
-  (value/item-value [{:name "stone"}] :overrides (value/measured-worths @game/version))
+  (value/item-value [{:name "stone"}] :overrides (value/measured-worths @game/version) :basis (:goal-basis (value/measured-worth @game/version)))
   (blocks/default-state-table)
   (doseq [which [::caught/flights ::caught/fights]
           counts (vals (settings/get caught/settings which))]

@@ -483,7 +483,7 @@
   "item-value of items as a goal: each measured item at its measured worth (value/measured-worth), what is made of it
   after them."
   [items]
-  (item-value items :overrides (value/measured-worths @game/version)))
+  (item-value items :overrides (value/measured-worths @game/version) :basis (:goal-basis (value/measured-worth @game/version))))
 
 (defn death-body
   "The body of p as the death costs read it: :level, :respawn (respawn-of) and :carried (the goal-value of the inventory, its replacement cost)."

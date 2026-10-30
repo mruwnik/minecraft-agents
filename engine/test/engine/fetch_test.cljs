@@ -1109,8 +1109,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (assoc (update (bare []) :blocks merge leaf-blocks) :drops {"oak_leaves" "oak_sapling"}) [own-zone])]
-          ;; a sapling alone is worth less than the leaf's walk and dig: the agent says what it is worth to it
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_sapling" :worth 60}) {})
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_sapling"}) {})
           (await (run-ticks s 80))
           (is (empty? (listed s)))
           (is (pos? (get (inv s) "oak_sapling" 0)))

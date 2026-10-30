@@ -11,7 +11,7 @@
                  tool, never the hand);
                  find = :terrain, :wood for a log, stem, bamboo or bamboo block, or :ores {ore [find drops]} (a nil find: :ore-scan-s, fitted to the measured ores (measured-worth), over the base-rates density of the ore's best layer), or :find-s for a block. Crafted blocks are no source
                  except :natural ones (granite, clay ...); a block that is no item (redstone_wire) is none.
-    crop         A block with an age state: :farm-s / the age-7 yield.
+    crop         A block with an age state: (:farm-s + :find :crop) / the age-7 yield.
     mob          entityLoot of the mobs in weapon/mob-max-health and passive-max-health: (kill + hurt + find) / expected
                  drops; kill = the stone sword's hits, hurt = :hurt-hp-per-hp x health x :danger hp, each at health/walk-hp-seconds, find by hostile or passive.
     made         The cheapest recipe: the ingredients plus :craft-step, divided by the result count; or smelting by
@@ -147,32 +147,45 @@
 (declare item-value)
 
 (defn- tree-each
-  "Seconds one `n` is worth by the recipe tree alone, ore found at scan seconds per unit of density (0 when none)."
-  [version n scan]
-  (or (:each (first (:items (item-value [{:name n :count 1}] :version version :basis {:find {:ore-scan-s scan}})))) 0))
+  "Seconds one `n` is worth by the recipe tree alone, its find seconds from `find` (over :find in default-basis)."
+  [version n find]
+  (or (:each (first (:items (item-value [{:name n :count 1}] :version version :basis {:find find})))) 0))
+
+(defn- fit
+  "Seconds per unit of find, fitted pooled to rows {:s :got :a :b} whose tree price is a + b x the unit: nil with none."
+  [rows]
+  (let [per (reduce + (map #(* (:got %) (:b %)) rows))]
+    (when (pos? per) (max 0 (/ (reduce + (map #(- (:s %) (* (:got %) (:a %))) rows)) per)))))
 
 (def ^:private measured
   (memoize
    (fn [version counts k]
      (let [md (minecraft-data version)
+           terrain (get-in tbl/default-basis [:find :terrain])
+           tree #(tree-each version %1 {:ore-scan-s %2 :terrain %3})
            rows (for [[n {:keys [s got]}] counts
                       :when (aget (.-itemsByName md) n)
-                      :let [a (tree-each version n 0)]]
-                  {:n n :s s :got got :a a :b (- (tree-each version n 1) a)})
+                      :let [a (tree n 0 terrain) at (tree n 0 0)]]
+                  {:n n :s s :got got :a a :b (- (tree n 1 terrain) a) :at at :bt (- (tree n 0 1) at)})
            ores (filter #(pos? (:b %)) rows)
-           per (reduce + (map #(* (:got %) (:b %)) ores))
-           scan (when (pos? per) (max 0 (/ (reduce + (map #(- (:s %) (* (:got %) (:a %))) ores)) per)))
-           worth (fn [{:keys [s got a b]}] (/ (+ s (* k (+ a (* b (or scan 0))))) (+ got k)))]
+           others (remove #(pos? (:b %)) rows)
+           scan (fit ores)
+           find (fit (map #(assoc % :a (:at %) :b (:bt %)) (filter #(< 0 (:bt %) 1.001) others)))
+           worth (fn [{:keys [s got]} tree-s] (/ (+ s (* k tree-s)) (+ got k)))]
        {:basis (if scan {:find {:ore-scan-s scan}} {})
-        :ores (into {} (map (juxt :n worth)) ores)
-        :goals (into {} (map (juxt :n worth)) (remove #(pos? (:b %)) rows))}))))
+        :goal-basis (if find {:find {:terrain find :crop find}} {})
+        :ores (into {} (map (fn [r] [(:n r) (worth r (+ (:a r) (* (:b r) (or scan 0))))])) ores)
+        :goals (into {} (map (fn [r] [(:n r) (worth r (+ (:at r) (* (:bt r) (or find terrain))))])) others)}))))
 
 (defn measured-worth
-  "{:basis :ores :goals} of ::gather-counts for minecraft-data version. Each measured item is worth (s + k x tree) / (got
-  + k), its gathers' seconds and items with the recipe tree's price at k = ::gather-prior-items items. :basis's
-  :ore-scan-s is fitted to the measured ores (an item whose tree price grows with it) pooled, so every ore follows by
-  density at the margin too (item-value); :ores, those ores' worths, and :goals, the rest's, are the goal's alone
-  (goal-value): at the margin a block is its dig and find (an ore's at the fitted scan), its fruitless runs not counted."
+  "{:basis :goal-basis :ores :goals} of ::gather-counts for minecraft-data version. Each measured item is worth (s + k x
+  tree) / (got + k), its gathers' seconds and items with the recipe tree's price at k = ::gather-prior-items items.
+  :basis's :ore-scan-s is fitted to the measured ores (an item whose tree price grows with it) pooled, so every ore
+  follows by density at the margin too (item-value); :ores are those ores' worths. :goal-basis's :terrain
+  is the find fitted so to the measured terrain blocks one of which gives an item (cobblestone, dirt; not a sapling of
+  leaves, dug many at one find), a goal's walk to the block, a ripe crop's (:crop) too; :goals, the
+  other measured items' worths with it. Both are the goal's alone (goal-value): at the margin a block is its dig and
+  its find (an ore's at the fitted scan), its fruitless runs not counted."
   [version]
   (measured version (settings/get settings ::gather-counts) (settings/get settings ::gather-prior-items)))
 

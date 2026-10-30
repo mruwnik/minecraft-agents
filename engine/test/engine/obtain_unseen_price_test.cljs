@@ -213,3 +213,16 @@
     (is (nil? (price/gather-s (no-gather seen) ["white_bed"] 1)))
     (is (nil? (price/search-s (no-gather unseen) ["white_bed"] 1)))))
 
+(defn seen-sand-check
+  "obtain/not-worth of a root call for 1 sand by a body that sees one x blocks off."
+  [x]
+  (let [p (tu/seeing-all (tu/fake-on-floor {:blocks {(str x ",64,0") "sand"}}))
+        view (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)}))
+        c (rooted {:primitives p :view (constantly view) :args {:item "sand" :count 1 :ways #{:gather} :explore false :ignore-zones? true}})]
+    (with-redefs [ctx/mem (constantly {}) ctx/entries (constantly [])
+                  need/gather-viable? (fn [c names n] (boolean (seq (:gather (plan/gather-plan c names n)))))]
+      (obtain/not-worth c))))
+
+(deftest a-root-obtain-gathers-a-seen-source-only-within-what-the-item-is-worth
+  (is (nil? (seen-sand-check 3)) "a few blocks off: within the walk a terrain block usually takes")
+  (is (= :not-worth (:reason (seen-sand-check 60))) "60 blocks there and back: far dearer than sand usually is"))

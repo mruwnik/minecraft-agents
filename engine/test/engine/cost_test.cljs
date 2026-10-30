@@ -613,7 +613,7 @@
         measured (settings/with-settings {:jobs.lib.cost.value/gather-counts {"cobblestone" {:s 9000 :got 100}}}
                    #(mapv goal ["cobblestone" "cobbled_deepslate" "stone_pickaxe"]))]
     (is (= (measured 0) (measured 1)) "one gather takes whichever stone material is seen")
-    (is (< 85 (measured 0) 90) "a hundred items got: near their gathers' 90 s each")
+    (is (< 89.9 (measured 0) 90.1) "cobblestone the one terrain block measured: the goal's find is fitted to it, so its gathers' 90 s each")
     (is (< (* 3 (measured 0)) (peek measured)) "three of them and the sticks")
     (is (< 20 (goal "stone_pickaxe")) "the counted gathers: a stone pickaxe is worth a walk, not a leaf's dig")
     (is (< (margin "cobblestone") (goal "cobblestone")) "at the margin a block is its dig")))
