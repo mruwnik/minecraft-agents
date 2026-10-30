@@ -12,7 +12,7 @@
   :limit-s 120}
  :cases
  [{:name "dark-pit-body-pillars-out-to-the-rim"
-   :act [[:job (jobs.movement.go-to {:pos #at [22 3 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [22 3 16] :range 1 :ways #{:walk :pillar}})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :pillar}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :data {:arrived true}} :within-s 100 :of-job true}]
    :after [[:body-near [22.5 3 16.5] 2]]}]}

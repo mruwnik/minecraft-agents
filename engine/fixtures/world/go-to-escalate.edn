@@ -28,7 +28,7 @@
                                                      #at [19 1 16] #at [19 2 16] #at [19 3 16]]
                                  :want [:any "stone"]}]}]
    :body {:inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1 :ignore-zones? true})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1 :ignore-zones? true :ways #{:walk :stair}})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 60 :of-job true}
             {:event {:source :job :kind :go-to.restore-skipped} :within-s 120 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}
@@ -40,7 +40,7 @@
    ;; at and above its feet, never the ore below them whose cell under is air (the rock under x 16..17 is hollowed; a hole beside the stair is one the body can fall into and not climb out of)
    :blocks [[:fill [15 0 15] [17 3 17] "coal_ore"] [:fill [16 2 16] [16 3 16] "air"] [:fill [18 0 15] [20 2 17] "air"] [:fill [16 0 15] [17 0 17] "air"]]
    :body {:at [16.5 2 16.5] :inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [23 4 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [23 4 16] :range 1 :ways #{:walk :stair}})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:block [17 1 16] "coal_ore"] [:block [17 1 15] "coal_ore"] [:body-near [23.5 4 16.5] 2]]}
@@ -182,7 +182,7 @@
    ;; out east; that stair is in natural ground outside the plan, so its holes stay and nothing is put back
    :plans [{:id "other" :parts [{:id "shaft" :cells [#at [16 0 16] #at [16 1 16] #at [16 2 16] #at [16 3 16]] :want [:any "cobblestone"]}]}]
    :body {:inventory [["dirt" 8] ["stone_pickaxe" 1]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1 :ways #{:walk :pillar :stair}})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 90 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 160 :of-job true}
             {:no-event {:source :job :kind :go-to.restored} :for-s 160 :until {:source :job :kind :completed :data {:arrived true}}}
@@ -222,7 +222,7 @@
    ;; the body dies after the first stair step: the job is cancelled, nothing is refilled under it, and the dug cells
    ;; stay as :tidy entries with :escalation true (check worlds/.../memory.edn) for restore-broken
    :body {:inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1})]
+   :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1 :ways #{:walk :stair}})]
          [:await {:source :job :kind :stair.step} 60]
          [:kill-body]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 60 :of-job true}
@@ -354,7 +354,7 @@
                                               {:cell #at [20 2 16] :item "cobblestone" :before "air" :job "j1" :purpose :pillar :state :placed}]}}]
    :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1] ["dirt" 8]]}
    :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1 :checks {:safe? (not (threatened))} :ways #{:walk :clear-path :pillar :stair :dig-out}})]]
-   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :clear-path}} :within-s 60 :of-job true}
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:body-near [24.5 1 16.5] 2]]}
   ;; with :clear-seal the walk takes the ledger blocks back (cleanup) before any escalation
@@ -375,7 +375,7 @@
                                               {:cell #at [20 2 16] :item "cobblestone" :before "air" :job "j1" :purpose :pillar :state :intent}]}}]
    :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1] ["dirt" 8]]}
    :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1 :checks {:safe? (not (threatened))} :ways #{:walk :clear-path :pillar :stair :dig-out}})]]
-   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :clear-path}} :within-s 60 :of-job true}
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:body-near [24.5 1 16.5] 2] [:block [20 1 16] "air"] [:block [20 2 16] "air"]]}
   {:name "intent-for-another-block-is-never-dug"

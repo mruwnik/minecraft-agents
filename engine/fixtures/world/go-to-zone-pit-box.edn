@@ -29,7 +29,7 @@
    :zones [{:name "w" :min [10 0 10] :max [15 2 22] :owner "SomeoneElse"} {:name "e" :min [17 0 10] :max [22 2 22] :owner "SomeoneElse"}
           {:name "n" :min [16 0 10] :max [16 2 15] :owner "SomeoneElse"} {:name "s" :min [16 0 17] :max [16 2 22] :owner "SomeoneElse"}
           {:name "roof" :min [16 2 16] :max [16 2 16] :owner "SomeoneElse"}]
-   :act [[:job (jobs.movement.go-to {:pos #at [20 3 16] :range 1 :ignore-zones? true})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [20 3 16] :range 1 :ignore-zones? true :ways #{:walk :stair}})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 90 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:body-near [20.5 3 16.5] 2]]}]}
