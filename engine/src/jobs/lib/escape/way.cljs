@@ -11,6 +11,7 @@
             [jobs.lib.dig-route :as dig-route]
             [jobs.lib.escape :as escape]
             [jobs.lib.reach :as reach]
+            [jobs.lib.access.rules :as rules]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.walk.world :as wworld]))
@@ -80,7 +81,8 @@
 (defn stair-route-s
   "Seconds the stair way e takes from feet, each step as jobs.lib.dig-route (route-answer) prices one: jobs.lib.cost/stair-leg-pricer
   of its cuts (dig-cost), a fill for an open floor (a fetch of the blocks, with none carried) and an unseen cut or floor,
-  its unseen step in the price (cw/step-price), as the route's search does."
+  its unseen step in the price (cw/step-price), as the route's search does. A falling block (gravel, sand) is dug like any
+  cut (jobs.access.stair digs it again as it falls), and each seen one stacked over a column's top cut is one dig more."
   [p feet {:keys [heading steps]}]
   (let [block-at (escape/block-at-of p)
         unseen? (escape/unseen-of p)
@@ -88,13 +90,17 @@
         fill-s (cw/fill-cost (carried-build-n p))
         cut-s (fn [cell] (let [n (block-at cell)]
                            (cond (dig-route/open? n) nil
-                                 (nil? (dig-route/cell-cost n)) ##Inf
-                                 :else (or (cost/dig-cost (or n "stone")) ##Inf))))]
+                                 (and (nil? (dig-route/cell-cost n)) (not (rules/falling? n))) ##Inf
+                                 :else (or (cost/dig-cost (or n "stone")) ##Inf))))
+        cuts (escape/stair-cuts feet (escape/heading-dirs (keyword heading)) steps)
+        tops (vals (reduce (fn [m [x y z]] (update m [x z] #(if (and % (> (% 1) y)) % [x y z]))) {} cuts))
+        stack-s (fn [top] (transduce (comp (map #(block-at (escape/add top [0 % 0]))) (take-while rules/falling?) (map #(or (cost/dig-cost %) ##Inf)))
+                                     + 0 (range 1 64)))]
     (reduce (fn [total cuts]
               (let [floor (escape/add (nth cuts 2) [0 -1 0])
                     leg (leg-s (map cut-s cuts) (when (dig-route/open? (block-at floor)) fill-s) (boolean (some unseen? (cons floor cuts))))]
                 (+ total leg)))
-            0 (partition 3 (escape/stair-cuts feet (escape/heading-dirs (keyword heading)) steps)))))
+            (transduce (map stack-s) + 0 tops) (partition 3 cuts))))
 
 (defn door-fall-s
   "Seconds the drop beyond a door ({:fall :on :floor-unseen}, escape/landing) takes: its hp once, by the block landed on

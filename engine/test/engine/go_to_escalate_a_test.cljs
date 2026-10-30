@@ -448,6 +448,20 @@
           (is (= [:stair :stair] (mapv :step (events-of seen :go-to.escalated))))
           (is (not (contains? (dug-cells p) [1 63 0])) "the cell under the gravel stays"))))))
 
+(deftest go-to-stairs-through-gravel-over-the-next-column
+  ;; a stair is the only way allowed: its cut through the gravel is dug again as it falls, never priced past an arrival
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [shaft (-> (apply dissoc (box -6 60 -6 6 63 6 "stone") pit-cells) (assoc "1,64,0" "gravel"))
+              {:keys [out seen]} (await (run-job! (merge in-pit {:blocks shaft :inventory [{:name "stone_pickaxe" :count 1}]})
+                                                  'jobs.movement.go-to {:pos [4 64 0] :range 1 :ways #{:walk :stair}} nil true))]
+          (is (= {:arrived true} @out))
+          (is (= [:stair] (mapv :step (events-of seen :go-to.escalated))))))))
+  (let [shaft (-> (apply dissoc (box -6 60 -6 6 63 6 "stone") pit-cells) (assoc "1,64,0" "gravel"))
+        price #(escape-way/price (tu/fake (merge in-pit {:blocks % :inventory [{:name "stone_pickaxe" :count 1}]})) [0 61 0] {:step :stair :heading :east :steps 3})]
+    (is (< (price shaft) (price (merge shaft (box 1 65 0 1 68 0 "gravel")))) "each gravel stacked over the cut falls in and is dug")))
+
 (deftest go-to-with-no-pickaxe-clears-a-door-by-hand
   (async done
     (tu/run-async done
