@@ -251,6 +251,17 @@
           (is (empty? (filter #(= :need (:slot %)) (pt/events-of seen :child_started))))
           (is (= {"carrot" 6} (pt/inv-of p))))))))
 
+(deftest a-held-back-seed-reports-the-reserve-the-register-keeps-not-three-days
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng] :as env} (pt/start (pt/field-world (pt/inv "carrot" 3)))
+              _ (mem/write! (:store eng) :fetch/stock {:pos [6 64 6] :items {"bread" 40}} {:cap 64 :ttl :forever})
+              e (await (ending-of env plant {:area pt/field-box :seed "carrot"} 20))
+              cause (:cause (kcm e))]
+          (is (= {:reason :food-reserve :seed "carrot" :held 3 :kept 3} (dissoc cause :reserve-points)))
+          (is (< 0 (:reserve-points cause) 12) "the stocked chest leaves the hunger of the plant's 600 s and the walk back to it (10 points and a little)"))))))
+
 (deftest plant-every-cell-skipped-is-nothing-possible-and-fewer-seeds-than-least-is-not-done
   (async done
     (tu/run-async done

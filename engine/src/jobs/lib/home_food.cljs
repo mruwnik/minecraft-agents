@@ -1,13 +1,12 @@
 (ns jobs.lib.home-food
   "The food a body has at home, from what it sensed: chests it booked food in (memory :fetch/stock) that zones and
-  claims let it take from, ripe crops it saw in its own zones and plans, and the surplus of the food animals it saw or
+  claims let it take from, ripe crops it saw in its own zones (within the seen-block memory's 64-block reach) and on
+  the crop cells of its own plans (anywhere), and the surplus of the food animals it saw or
   noted there (animal-spare's keep rule: the breeders stay). (sources c far) [{:kind :pos :points :walk-s}], walk-s
   from far; (carry-points c trip) what the body must carry on trip (jobs.lib.cost.food/carry-points over them)."
-  (:require [engine.args :as a]
-            [engine.ctx :as ctx]
+  (:require [engine.ctx :as ctx]
             [engine.game :as game]
             [engine.notes :as notes]
-            [engine.settings :as settings]
             [jobs.lib.access :as access]
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.cost :as cost]
@@ -16,10 +15,8 @@
             [jobs.lib.foods :as foods]
             [jobs.lib.look :as look]
             [jobs.lib.stock :as stock]
-            [jobs.lib.util :as u]))
-
-(a/defargs settings
-  {::radius {:default 256 :doc "Blocks within which food at home counts toward the carried reserve; farther it is out of a trip's reach." :spec (a/num-in 0 nil)}})
+            [jobs.lib.util :as u]
+            [jobs.lib.world :as known]))
 
 (def crop-food
   "Per field crop: the food one ripe crop gives (at least one item, of the dropped item; wheat as a third of a loaf)."
@@ -42,10 +39,17 @@
     {:kind :chest :pos pos :points points}))
 
 (defn crop-sources [c]
-  (for [{:keys [name pos age]} (crops/seen-crops (:primitives c) (keys crop-food) 64 256)
-        :when (and age (>= age (crops/ripe-age name)) (access/in-own-area? c pos))
-        :let [[item share] (crop-food name)]]
-    {:kind :crop :pos pos :points (* share (foods/points item))}))
+  (let [p (:primitives c)
+        planned (keep (fn [cell]
+                        (let [{:keys [name properties]} (look/seen-block p (zipmap [:x :y :z] cell))]
+                          (when (crop-food name)
+                            {:name name :pos (zipmap [:x :y :z] cell) :age (some-> (:age properties) js/Number)})))
+                      (known/crop-cells c))
+        near (crops/seen-crops p (keys crop-food) 64 256)]
+    (for [{:keys [name pos age]} (vals (into {} (map (juxt (comp u/cell-vec :pos) identity)) (concat near planned)))
+          :when (and age (>= age (crops/ripe-age name)) (access/in-own-area? c pos))
+          :let [[item share] (crop-food name)]]
+      {:kind :crop :pos pos :points (* share (foods/points item))})))
 
 (defn pen-sources [c]
   (let [p (:primitives c)
@@ -65,19 +69,18 @@
       {:kind :pen :pos (:pos (first as)) :points (* spare-n drops (foods/points meat))})))
 
 (defn sources
-  "See the ns doc: within ::radius of far, each with the seconds of the walk to it from far."
+  "See the ns doc: each with the seconds of the walk to it from far."
   [c far]
   (let [per-s (cost/walk-blocks-per-s)]
-    (for [s (concat (chest-sources c) (crop-sources c) (pen-sources c))
-          :let [d (u/dist far (:pos s))]
-          :when (<= d (settings/get settings ::radius))]
-      (assoc s :walk-s (/ d per-s)))))
+    (for [s (concat (chest-sources c) (crop-sources c) (pen-sources c))]
+      (assoc s :walk-s (/ (u/dist far (:pos s)) per-s)))))
 
 (defn chain-trip
-  "The trip c's call chain is on when the caller names none: as long as its job-time spend left (ctx/left; ##Inf when
-  no line bounds it, nil with no engine behind c), ending where the body stands."
+  "The trip c's call chain is on when the caller names none: as long as its job-time spend left (ctx/left), ending
+  where the body stands; nil (no trip ahead known: the walk back alone) when no line bounds it yet, as in a check
+  before the job's first round, or with no engine behind c."
   [c]
-  {:s (when (:left c) (get-in (ctx/left c) [:spend :job-time] ##Inf)) :far (u/self-pos c)})
+  {:s (when (:left c) (get-in (ctx/left c) [:spend :job-time])) :far (u/self-pos c)})
 
 (defn quote-trip
   "The trip of c's own job, by its quote q: food/trip-s of q's job-time, its most held to the spend left, ending at q's

@@ -74,7 +74,7 @@
     [{:pos [3 64 0] :items {"bread" 64}}] 3600 {"bread" 13}
     [{:pos [3 64 0] :items {"wheat" 90}}] 1200 {"bread" 5}
     [{:pos [3 64 0] :items {"cobblestone" 64}}] 1200 {"bread" 12}
-    [{:pos [900 64 0] :items {"bread" 64}}] 1200 {"bread" 12}))
+    [{:pos [900 64 0] :items {"bread" 64}}] 1200 {"bread" 6}))
 
 (deftest one-carried-bed-is-held-until-a-home-bed-is-placed
   (let [items [(item "red_bed" 2) (item "white_bed" 1)]]

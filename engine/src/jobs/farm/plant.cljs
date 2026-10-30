@@ -16,6 +16,7 @@
             [jobs.lib.reserve :as reserve]
             [jobs.lib.crops :as crops]
             [jobs.lib.gate :as gate]
+            [jobs.lib.home-food :as home-food]
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
@@ -86,7 +87,7 @@
 
 (defn held-back
   "{:seed :held :kept :reserve-points} when no seed may be sown but a seed (seed, else any) is carried and the
-  reserve register keeps it; else nil."
+  reserve register keeps it (:reserve-points its food reserve, home-food/carry-points); else nil."
   [seed c]
   (when-not (pick-seed seed c)
     (let [carried (into {} (map (juxt :name :count)) (u/inventory (:primitives c)))
@@ -94,7 +95,7 @@
           names (if seed [seed] (vals crops/seed-of))]
       (when-let [n (->> names (filter #(and (pos? (get carried % 0)) (pos? (get kept % 0))))
                         (sort-by #(- (carried %))) first)]
-        {:seed n :held (carried n) :kept (kept n) :reserve-points cost/food-reserve-points}))))
+        {:seed n :held (carried n) :kept (kept n) :reserve-points (home-food/carry-points c)}))))
 
 (declare planned sowing)
 
