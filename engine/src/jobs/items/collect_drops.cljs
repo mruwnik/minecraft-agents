@@ -727,7 +727,10 @@
       (or (await (look!))
           (when (> (- (second (u/cell-vec near)) (feet-y c)) 1)
             (let [before (held-counts c)
-                  r (await (child/run!* c :walk 'jobs.movement.go-to {:pos (u/cell-vec near) :range 1 :ways #{:walk :pillar :stair :clear-seal}}))]
+                  climb! (fn ^:async climb* [ways] (await (child/run!* c :walk 'jobs.movement.go-to {:pos (u/cell-vec near) :range 1 :ways ways})))
+                  ;; a pile on a column is reached by pillaring beside it; a stair needs a run as long as the rise
+                  r (await (climb! #{:walk :pillar :clear-seal}))
+                  r (if (or (= :continue r) (and (= :done (:kind r)) (:arrived (:data r)))) r (await (climb! #{:walk :stair :clear-seal})))]
               (book-gained! c before)
               (cond
                 (= :continue r) :continue
