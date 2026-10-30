@@ -271,15 +271,20 @@
                                          (some->> (:why detail) (str ": ")))))
                    data)))))
 
+(def step-margin "Blocks below the lower of body and step a walk into the cut step may plan: a step is a block off." 2)
+
+(defn step-walk [next-feet]
+  (assoc-in (child/walk-into-args :walk next-feet) [:settings :jobs.lib.walk.world/y-margin] step-margin))
+
 (defn ^:async step!
-  "Walk into the cut step. :again, :continue while the walk waits, or a stop map. A step on the goal cell of a go-to up the
+  "Walk into the cut step (a way into it dipping more than step-margin, round a mob in it through a cave, is none). :again, :continue while the walk waits, or a stop map. A step on the goal cell of a go-to up the
   chain is the same call as that go-to (a duplicate), so it is walked to the cell's centre: the same place. A cut cell
   that filled again while the body walked in (gravel landing in the head or feet cell) is dug again."
   [c next-feet cut]
   (when (= :up (:dir (:args c))) (await (sstep/clear-jump-edge! c next-feet)))
-  (let [r (await (child/walk-into!* c :walk next-feet))
+  (let [r (await (child/call-walk* c :walk (step-walk next-feet)))
         r (if (= :duplicate-call (when (= :condition-failed (:kind r)) (contract/cause-key r)))
-            (await (child/call-walk* c :walk-centre (update (ready/forage-walk c (child/walk-into-args :walk next-feet)) :pos (fn [[x y z]] [(+ x 0.5) y (+ z 0.5)]))))
+            (await (child/call-walk* c :walk-centre (update (ready/forage-walk c (step-walk next-feet)) :pos (fn [[x y z]] [(+ x 0.5) y (+ z 0.5)]))))
             r)]
     (cond
       (= :continue r) :continue
