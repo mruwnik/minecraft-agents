@@ -251,7 +251,7 @@
 (defn stub-ctx
   "A go-to ctx over primitives p whose job memory is the atom mem*, events into emitted, children waiting."
   [p mem* emitted args]
-  {:primitives p :args args :id "j1" :root "j1" :slots [] :engine {:jobs registry/jobs}
+  {:primitives p :args args :id "j1" :root "j1" :slots [] :engine {:jobs registry/jobs} :worth (constantly ##Inf)
    :view (fn [] {:now 1000000 :data {:entries {(mem/job-kind "j1") [{:t 1000000 :data @mem*}]}
                                      :policies {(mem/job-kind "j1") mem/job-policy}}})
    :update-mem (fn [f more] (apply swap! mem* f more))

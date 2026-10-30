@@ -16,7 +16,7 @@
   [sym export args]
   (let [job (get registry/jobs sym)
         defaults (second (expr/leaf registry/jobs sym {}))
-        c {:primitives (tu/fake-on-floor {}) :args (merge defaults args) :root "j" :slots [] :id "j" :sym sym :emit (fn [& _])
+        c {:primitives (tu/fake-on-floor {}) :args (merge defaults args) :root "j" :slots [] :id "j" :sym sym :worth (constantly ##Inf) :left (constantly {}) :emit (fn [& _])
            :engine {:warned (atom #{}) :world (world/of-data {} {} []) :state (atom {}) :jobs registry/jobs}
            :view (fn [] {:now 1000 :data {:entries {} :policies {}}})}]
     (try (contract/verdict c (select-keys job [export])) nil
